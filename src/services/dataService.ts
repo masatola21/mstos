@@ -123,6 +123,23 @@ export async function fetchLeadsList(): Promise<Lead[]> {
   }
 }
 
+// 会社IDから既存顧客レコードを取得（重複チェック用）
+export async function fetchCustomerByCompanyId(companyId: string): Promise<Customer | null> {
+  const supabase = getSupabase();
+  if (!supabase || !companyId) return null;
+  try {
+    const { data, error } = await supabase
+      .from('customers')
+      .select('*')
+      .eq('company_id', companyId)
+      .maybeSingle();
+    if (error || !data) return null;
+    return data as Customer;
+  } catch {
+    return null;
+  }
+}
+
 // テーブルデータ取得＋外部キーリレーション情報結合
 export async function fetchTableData(
   tableKey: TableKey

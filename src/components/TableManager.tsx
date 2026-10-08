@@ -3,6 +3,8 @@ import { TableKey, TABLE_CONFIGS } from '../types/database';
 import { fetchTableData, DataFetchError } from '../services/dataService';
 import { RecordDetailModal } from './RecordDetailModal';
 import { RecordFormModal } from './RecordFormModal';
+import { StageTransitionModal, TransitionType } from './StageTransitionModal';
+import { Customer } from '../types/database';
 import { 
   Search, 
   Plus, 
@@ -20,7 +22,11 @@ import {
   Phone,
   Mail,
   Tag,
-  CheckCircle2
+  CheckCircle2,
+  Layers,
+  Briefcase,
+  UserCheck,
+  Check
 } from 'lucide-react';
 
 interface TableManagerProps {
@@ -42,12 +48,45 @@ export const TableManager: React.FC<TableManagerProps> = ({
   const [error, setError] = useState<DataFetchError | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState('ALL');
+  const [successBanner, setSuccessBanner] = useState<string | null>(null);
 
   // Modals state
   const [selectedRecord, setSelectedRecord] = useState<any | null>(null);
   const [isDetailOpen, setIsDetailOpen] = useState(false);
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [editRecord, setEditRecord] = useState<any | null>(null);
+
+  // ステージ移行モーダル状態
+  const [transitionOpen, setTransitionOpen] = useState(false);
+  const [transitionType, setTransitionType] = useState<TransitionType>('prospect_to_lead');
+  const [transitionSourceRecord, setTransitionSourceRecord] = useState<any>(null);
+
+  const handleOpenTransition = (type: TransitionType, record: any) => {
+    setTransitionType(type);
+    setTransitionSourceRecord(record);
+    setTransitionOpen(true);
+  };
+
+  const handleTransitionSuccess = (targetTable: 'leads' | 'deals' | 'customers', recordId?: string | number) => {
+    setTransitionOpen(false);
+    onTableChange(targetTable);
+    const messages = {
+      leads: '見込み企業からリードを作成しました。会社IDを引き継いで連携しています。',
+      deals: 'リードから商談を作成しました。リードID・会社IDを引き継いで連携しています。',
+      customers: '商談から顧客レコードを作成しました。1社1件の契約として管理されます。',
+    };
+    setSuccessBanner(messages[targetTable]);
+    setTimeout(() => {
+      setSuccessBanner(null);
+    }, 6000);
+  };
+
+  const handleViewExistingCustomer = (customer: Customer) => {
+    setTransitionOpen(false);
+    onTableChange('customers');
+    setSelectedRecord(customer);
+    setIsDetailOpen(true);
+  };
 
   const loadData = async () => {
     setLoading(true);
@@ -226,6 +265,22 @@ export const TableManager: React.FC<TableManagerProps> = ({
           表示: <strong className="text-white font-mono">{filteredData.length}</strong> / {data.length} 件
         </div>
       </div>
+
+      {/* Success Notification Banner */}
+      {successBanner && (
+        <div className="p-4 rounded-2xl bg-emerald-500/10 border border-emerald-500/30 text-emerald-200 flex items-center justify-between gap-3 animate-fade-in shadow-lg">
+          <div className="flex items-center gap-2.5 text-xs">
+            <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
+            <span className="font-semibold">{successBanner}</span>
+          </div>
+          <button
+            onClick={() => setSuccessBanner(null)}
+            className="text-xs text-emerald-400 hover:text-emerald-200"
+          >
+            閉じる
+          </button>
+        </div>
+      )}
 
       {/* =========================================================================
           DISTINCT STATE RENDERING:
@@ -483,9 +538,39 @@ export const TableManager: React.FC<TableManagerProps> = ({
                         );
                       })}
 
-                      {/* Row Actions (View & Edit, STRICTLY NO DELETE) */}
+                      {/* Row Actions (View, Stage Progression & Edit, STRICTLY NO DELETE) */}
                       <td className="py-3 px-4 text-right whitespace-nowrap" onClick={(e) => e.stopPropagation()}>
                         <div className="flex items-center justify-end gap-1.5">
+                          {currentTable === 'prospects' && (
+                            <button
+                              onClick={() => handleOpenTransition('prospect_to_lead', item)}
+                              className="px-2.5 py-1 rounded-lg text-xs font-semibold bg-cyan-600/20 text-cyan-300 hover:bg-cyan-600 hover:text-white border border-cyan-500/30 flex items-center gap-1 transition-colors"
+                              title="見込み企業からリードへ進める"
+                            >
+                              <Layers className="w-3.5 h-3.5" />
+                              <span>リードへ進める</span>
+                            </button>
+                          )}
+                          {currentTable === 'leads' && (
+                            <button
+                              onClick={() => handleOpenTransition('lead_to_deal', item)}
+                              className="px-2.5 py-1 rounded-lg text-xs font-semibold bg-emerald-600/20 text-emerald-300 hover:bg-emerald-600 hover:text-white border border-emerald-500/30 flex items-center gap-1 transition-colors"
+                              title="リードから商談を作成する"
+                            >
+                              <Briefcase className="w-3.5 h-3.5" />
+                              <span>商談を作成</span>
+                            </button>
+                          )}
+                          {currentTable === 'deals' && (
+                            <button
+                              onClick={() => handleOpenTransition('deal_to_customer', item)}
+                              className="px-2.5 py-1 rounded-lg text-xs font-semibold bg-pink-600/20 text-pink-300 hover:bg-pink-600 hover:text-white border border-pink-500/30 flex items-center gap-1 transition-colors"
+                              title="商談から顧客として登録する"
+                            >
+                              <UserCheck className="w-3.5 h-3.5" />
+                              <span>顧客として登録</span>
+                            </button>
+                          )}
                           <button
                             onClick={() => handleOpenDetail(item)}
                             className="p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 transition-colors"
@@ -569,7 +654,34 @@ export const TableManager: React.FC<TableManagerProps> = ({
                   onClick={(e) => e.stopPropagation()}
                 >
                   <span className="text-slate-500 text-[11px]">タップして詳細確認</span>
-                  <div className="flex gap-2">
+                  <div className="flex flex-wrap items-center gap-1.5">
+                    {currentTable === 'prospects' && (
+                      <button
+                        onClick={() => handleOpenTransition('prospect_to_lead', item)}
+                        className="px-2 py-1 rounded-lg bg-cyan-600/20 text-cyan-300 hover:bg-cyan-600 hover:text-white border border-cyan-500/30 flex items-center gap-1 text-[11px] font-semibold"
+                      >
+                        <Layers className="w-3 h-3" />
+                        <span>リードへ進める</span>
+                      </button>
+                    )}
+                    {currentTable === 'leads' && (
+                      <button
+                        onClick={() => handleOpenTransition('lead_to_deal', item)}
+                        className="px-2 py-1 rounded-lg bg-emerald-600/20 text-emerald-300 hover:bg-emerald-600 hover:text-white border border-emerald-500/30 flex items-center gap-1 text-[11px] font-semibold"
+                      >
+                        <Briefcase className="w-3 h-3" />
+                        <span>商談を作成</span>
+                      </button>
+                    )}
+                    {currentTable === 'deals' && (
+                      <button
+                        onClick={() => handleOpenTransition('deal_to_customer', item)}
+                        className="px-2 py-1 rounded-lg bg-pink-600/20 text-pink-300 hover:bg-pink-600 hover:text-white border border-pink-500/30 flex items-center gap-1 text-[11px] font-semibold"
+                      >
+                        <UserCheck className="w-3 h-3" />
+                        <span>顧客として登録</span>
+                      </button>
+                    )}
                     <button
                       onClick={() => handleOpenEdit(item)}
                       className="px-2.5 py-1 rounded-lg bg-slate-800 text-slate-300 hover:text-white flex items-center gap-1"
@@ -595,6 +707,7 @@ export const TableManager: React.FC<TableManagerProps> = ({
             setIsDetailOpen(false);
             handleOpenEdit(record);
           }}
+          onTransitionStage={handleOpenTransition}
         />
       )}
 
@@ -608,6 +721,18 @@ export const TableManager: React.FC<TableManagerProps> = ({
           onSuccess={() => {
             loadData();
           }}
+        />
+      )}
+
+      {/* Stage Transition Modal */}
+      {transitionOpen && (
+        <StageTransitionModal
+          isOpen={transitionOpen}
+          type={transitionType}
+          sourceRecord={transitionSourceRecord}
+          onClose={() => setTransitionOpen(false)}
+          onSuccess={handleTransitionSuccess}
+          onViewExistingCustomer={handleViewExistingCustomer}
         />
       )}
     </div>

@@ -11,14 +11,19 @@ import {
   Phone, 
   ExternalLink,
   Layers,
-  Info
+  Info,
+  ArrowRight,
+  Briefcase,
+  UserCheck
 } from 'lucide-react';
+import { TransitionType } from './StageTransitionModal';
 
 interface RecordDetailModalProps {
   tableKey: TableKey;
   record: any | null;
   onClose: () => void;
   onEdit: (record: any) => void;
+  onTransitionStage?: (type: TransitionType, record: any) => void;
 }
 
 export const RecordDetailModal: React.FC<RecordDetailModalProps> = ({
@@ -26,6 +31,7 @@ export const RecordDetailModal: React.FC<RecordDetailModalProps> = ({
   record,
   onClose,
   onEdit,
+  onTransitionStage,
 }) => {
   if (!record) return null;
   const config = TABLE_CONFIGS[tableKey];
@@ -84,6 +90,69 @@ export const RecordDetailModal: React.FC<RecordDetailModalProps> = ({
 
         {/* Content Body */}
         <div className="p-6 overflow-y-auto space-y-6 text-sm text-slate-200">
+          {/* Stage Progression Action Banner */}
+          {['prospects', 'leads', 'deals'].includes(tableKey) && onTransitionStage && (
+            <div className="p-4 rounded-2xl bg-gradient-to-r from-slate-900 to-slate-800/90 border border-slate-700/80 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 shadow-md">
+              <div className="space-y-0.5">
+                <div className="text-xs font-bold text-white flex items-center gap-1.5">
+                  <ArrowRight className="w-3.5 h-3.5 text-blue-400" />
+                  <span>
+                    {tableKey === 'prospects' && '次の営業ステップ：リードへ進める'}
+                    {tableKey === 'leads' && '次の営業ステップ：商談を作成する'}
+                    {tableKey === 'deals' && '次の営業ステップ：顧客として登録する'}
+                  </span>
+                </div>
+                <p className="text-[11px] text-slate-400">
+                  {tableKey === 'prospects' && 'この見込み企業の会社情報・アプローチ履歴を引き継いで案件リードを起票します。'}
+                  {tableKey === 'leads' && 'このリードに紐づく商談パイプラインレコードを作成し、具体的な提案に入ります。'}
+                  {tableKey === 'deals' && 'この商談の受注・合意に伴い、契約会社としての顧客レコードを登録します。'}
+                </p>
+              </div>
+
+              {tableKey === 'prospects' && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    onClose();
+                    onTransitionStage('prospect_to_lead', record);
+                  }}
+                  className="px-3.5 py-2 rounded-xl text-xs font-bold bg-cyan-600 hover:bg-cyan-500 text-white shadow-md shadow-cyan-600/30 flex items-center gap-1.5 transition-colors shrink-0"
+                >
+                  <Layers className="w-3.5 h-3.5" />
+                  <span>リードへ進める</span>
+                </button>
+              )}
+
+              {tableKey === 'leads' && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    onClose();
+                    onTransitionStage('lead_to_deal', record);
+                  }}
+                  className="px-3.5 py-2 rounded-xl text-xs font-bold bg-emerald-600 hover:bg-emerald-500 text-white shadow-md shadow-emerald-600/30 flex items-center gap-1.5 transition-colors shrink-0"
+                >
+                  <Briefcase className="w-3.5 h-3.5" />
+                  <span>商談を作成</span>
+                </button>
+              )}
+
+              {tableKey === 'deals' && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    onClose();
+                    onTransitionStage('deal_to_customer', record);
+                  }}
+                  className="px-3.5 py-2 rounded-xl text-xs font-bold bg-pink-600 hover:bg-pink-500 text-white shadow-md shadow-pink-600/30 flex items-center gap-1.5 transition-colors shrink-0"
+                >
+                  <UserCheck className="w-3.5 h-3.5" />
+                  <span>顧客として登録</span>
+                </button>
+              )}
+            </div>
+          )}
+
           {/* Main Attributes */}
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             {config.fields.map((field) => {
