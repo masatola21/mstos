@@ -23,8 +23,13 @@ export const RlsGuideModal: React.FC<RlsGuideModalProps> = ({ isOpen, onClose })
   const rlsSqlContent = `-- ==============================================================================
 -- MST AI経営OS: Supabase Row Level Security (RLS) 推奨設定SQL
 -- ==============================================================================
--- 目的: 認証された社内ユーザー（authenticated）のみが業務データを閲覧・登録・更新できるように保護します。
--- 注意:
+-- 【重要: アクセス権限のスコープについて】
+-- 本設定で使用している \`TO authenticated USING (true)\` は、
+-- Supabase Auth に招待・ログインしたすべての社内ユーザーが、全テーブルの
+-- 全レコードを閲覧（SELECT）・登録（INSERT）・更新（UPDATE）できる
+-- 「全社共有型（社内オープン）」のアクセス権限設定です。
+--
+-- 【注意】
 -- 1. このSQLはテーブルの作成や既存データの削除・変更を行いません。
 -- 2. DROP TABLE や DELETE などの破壊的な文は一切含まれていません。
 -- 3. 実行は Supabase Dashboard の「SQL Editor」で行ってください。
@@ -38,7 +43,8 @@ ALTER TABLE IF EXISTS public.products ENABLE ROW LEVEL SECURITY;
 ALTER TABLE IF EXISTS public.deals ENABLE ROW LEVEL SECURITY;
 ALTER TABLE IF EXISTS public.customers ENABLE ROW LEVEL SECURITY;
 
--- 2. 接続テスト用の不要な anon ポリシーの削除（もし存在する場合）
+-- 2. 接続テスト用の不要な anon ポリシーの削除（実際に作成済みのテストポリシーを含む）
+DROP POLICY IF EXISTS "anon_select_companies_for_test" ON public.companies;
 DROP POLICY IF EXISTS "Allow anon read companies" ON public.companies;
 DROP POLICY IF EXISTS "Anon can select companies" ON public.companies;
 
