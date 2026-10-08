@@ -1,0 +1,271 @@
+import React from 'react';
+import { TableKey, TABLE_CONFIGS } from '../types/database';
+import { 
+  X, 
+  Edit3, 
+  Building2, 
+  Calendar, 
+  DollarSign, 
+  Tag, 
+  Mail, 
+  Phone, 
+  ExternalLink,
+  Layers,
+  Info
+} from 'lucide-react';
+
+interface RecordDetailModalProps {
+  tableKey: TableKey;
+  record: any | null;
+  onClose: () => void;
+  onEdit: (record: any) => void;
+}
+
+export const RecordDetailModal: React.FC<RecordDetailModalProps> = ({
+  tableKey,
+  record,
+  onClose,
+  onEdit,
+}) => {
+  if (!record) return null;
+  const config = TABLE_CONFIGS[tableKey];
+
+  // 標準フィールド一覧のキー
+  const knownFieldKeys = new Set(config.fields.map(f => f.key));
+  knownFieldKeys.add('id');
+  knownFieldKeys.add('created_at');
+  knownFieldKeys.add('updated_at');
+  knownFieldKeys.add('company');
+  knownFieldKeys.add('product');
+  knownFieldKeys.add('lead');
+
+  // 未定義の追加カラムを抽出
+  const extraFields = Object.keys(record).filter(k => !knownFieldKeys.has(k));
+
+  const formatFieldValue = (val: any) => {
+    if (val === null || val === undefined || val === '') {
+      return <span className="text-slate-500 italic">未設定</span>;
+    }
+    if (typeof val === 'boolean') {
+      return val ? '有効' : '無効';
+    }
+    if (typeof val === 'object') {
+      return <pre className="text-[11px] font-mono bg-slate-950 p-2 rounded">{JSON.stringify(val, null, 2)}</pre>;
+    }
+    return String(val);
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-fade-in">
+      <div className="bg-slate-900 border border-slate-800 rounded-3xl max-w-2xl w-full shadow-2xl overflow-hidden flex flex-col max-h-[90vh]">
+        {/* Header */}
+        <div className="px-6 py-4 border-b border-slate-800 flex items-center justify-between bg-slate-900/90 sticky top-0">
+          <div className="flex items-center gap-2.5">
+            <div className="p-2 bg-blue-500/10 border border-blue-500/20 rounded-xl text-blue-400">
+              <Building2 className="w-5 h-5" />
+            </div>
+            <div>
+              <div className="flex items-center gap-2">
+                <h2 className="text-lg font-bold text-white">{config.label} 詳細</h2>
+                <span className="text-xs px-2 py-0.5 rounded-full bg-slate-800 text-slate-300 font-mono">
+                  ID: {record.id}
+                </span>
+              </div>
+              <p className="text-xs text-slate-400 font-mono">テーブル: {tableKey}</p>
+            </div>
+          </div>
+          <button
+            onClick={onClose}
+            className="p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 transition-colors"
+          >
+            <X className="w-5 h-5" />
+          </button>
+        </div>
+
+        {/* Content Body */}
+        <div className="p-6 overflow-y-auto space-y-6 text-sm text-slate-200">
+          {/* Main Attributes */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            {config.fields.map((field) => {
+              const rawValue = record[field.key];
+
+              // 会社リレーション表示の特別扱い
+              if (field.type === 'fk_company') {
+                const linkedComp = record.company;
+                return (
+                  <div key={field.key} className="sm:col-span-2 bg-slate-950/60 p-3.5 rounded-2xl border border-slate-800/80 space-y-1">
+                    <div className="flex items-center justify-between text-xs text-slate-400">
+                      <span className="font-semibold text-blue-300">{field.label} ({field.key})</span>
+                      <span className="font-mono text-[11px]">会社ID: {rawValue || '未設定'}</span>
+                    </div>
+                    {linkedComp ? (
+                      <div className="pt-1 text-white font-bold text-base flex items-center justify-between">
+                        <span>{linkedComp.company_name}</span>
+                        {linkedComp.industry && (
+                          <span className="text-xs font-normal px-2 py-0.5 rounded-full bg-slate-800 text-slate-300">
+                            {linkedComp.industry}
+                          </span>
+                        )}
+                      </div>
+                    ) : (
+                      <div className="text-slate-400 text-xs font-mono">{rawValue || '未設定'}</div>
+                    )}
+                  </div>
+                );
+              }
+
+              // 商品リレーション表示
+              if (field.type === 'fk_product') {
+                const linkedProd = record.product;
+                return (
+                  <div key={field.key} className="sm:col-span-2 bg-slate-950/60 p-3.5 rounded-2xl border border-slate-800/80 space-y-1">
+                    <div className="flex items-center justify-between text-xs text-slate-400">
+                      <span className="font-semibold text-purple-300">{field.label} ({field.key})</span>
+                      <span className="font-mono text-[11px]">商品ID: {rawValue || '未設定'}</span>
+                    </div>
+                    {linkedProd ? (
+                      <div className="pt-1 text-white font-bold flex items-center justify-between">
+                        <span>{linkedProd.product_name}</span>
+                        <span className="text-xs font-mono font-medium text-emerald-400">
+                          月額: ¥{Number(linkedProd.monthly_fee || 0).toLocaleString()}
+                        </span>
+                      </div>
+                    ) : (
+                      <div className="text-slate-400 text-xs font-mono">{rawValue || '未設定'}</div>
+                    )}
+                  </div>
+                );
+              }
+
+              // リードリレーション表示
+              if (field.type === 'fk_lead') {
+                const linkedLead = record.lead;
+                return (
+                  <div key={field.key} className="sm:col-span-2 bg-slate-950/60 p-3.5 rounded-2xl border border-slate-800/80 space-y-1">
+                    <div className="flex items-center justify-between text-xs text-slate-400">
+                      <span className="font-semibold text-cyan-300">{field.label} ({field.key})</span>
+                      <span className="font-mono text-[11px]">リードID: {rawValue || '未設定'}</span>
+                    </div>
+                    {linkedLead ? (
+                      <div className="pt-1 text-white text-xs space-y-0.5">
+                        <div className="font-bold">
+                          {linkedLead.service_type || linkedLead.source ? `${linkedLead.service_type || linkedLead.source} (${linkedLead.status || 'ステータス未設定'})` : `リード ID: ${linkedLead.id}`}
+                        </div>
+                        {linkedLead.priority_channel && (
+                          <div className="text-slate-400 text-[11px]">優先チャネル: {linkedLead.priority_channel}</div>
+                        )}
+                      </div>
+                    ) : (
+                      <div className="text-slate-400 text-xs font-mono">{rawValue || '未設定'}</div>
+                    )}
+                  </div>
+                );
+              }
+
+              // 通常フィールド表示
+              const isFullWidth = field.type === 'textarea' || field.key === 'company_name' || field.key === 'proposal_plan_name';
+
+              return (
+                <div 
+                  key={field.key} 
+                  className={`bg-slate-950/40 p-3 rounded-xl border border-slate-800/60 space-y-1 ${
+                    isFullWidth ? 'sm:col-span-2' : ''
+                  }`}
+                >
+                  <div className="text-[11px] font-semibold text-slate-400 flex items-center justify-between">
+                    <span>{field.label}</span>
+                    <span className="font-mono text-[10px] text-slate-500">{field.key}</span>
+                  </div>
+                  <div className="font-medium text-white break-words">
+                    {field.key === 'ai_score' && rawValue !== null && rawValue !== undefined ? (
+                      <span className="font-mono text-blue-300 font-bold">
+                        {rawValue} 点
+                      </span>
+                    ) : field.type === 'number' && typeof rawValue === 'number' ? (
+                      <span className="font-mono text-emerald-300">
+                        ¥{rawValue.toLocaleString()}
+                      </span>
+                    ) : field.type === 'url' && rawValue ? (
+                      <a 
+                        href={rawValue} 
+                        target="_blank" 
+                        rel="noreferrer" 
+                        className="text-blue-400 hover:underline flex items-center gap-1 inline-flex"
+                      >
+                        <span>{rawValue}</span>
+                        <ExternalLink className="w-3 h-3" />
+                      </a>
+                    ) : (
+                      formatFieldValue(rawValue)
+                    )}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+
+          {/* Timestamps */}
+          {(record.created_at || record.updated_at) && (
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-3 border-t border-slate-800/80 text-xs text-slate-400 font-mono">
+              {record.created_at && (
+                <div>
+                  <span className="text-slate-500">作成日時 (created_at): </span>
+                  <span className="text-slate-300">{new Date(record.created_at).toLocaleString('ja-JP')}</span>
+                </div>
+              )}
+              {record.updated_at && (
+                <div>
+                  <span className="text-slate-500">更新日時 (updated_at): </span>
+                  <span className="text-slate-300">{new Date(record.updated_at).toLocaleString('ja-JP')}</span>
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* Additional Columns from live DB */}
+          {extraFields.length > 0 && (
+            <div className="pt-4 border-t border-slate-800 space-y-3">
+              <div className="flex items-center gap-1.5 text-xs font-semibold text-slate-400">
+                <Info className="w-4 h-4 text-blue-400" />
+                <span>その他の追加列 (データベースの実スキーマより検出)</span>
+              </div>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                {extraFields.map((key) => (
+                  <div key={key} className="bg-slate-950/40 p-2.5 rounded-xl border border-slate-800 text-xs space-y-1">
+                    <div className="font-mono text-slate-400 text-[10px]">{key}</div>
+                    <div className="text-slate-200">{formatFieldValue(record[key])}</div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
+
+        {/* Footer Actions - STRICTLY NO DELETE BUTTON */}
+        <div className="px-6 py-4 border-t border-slate-800 bg-slate-900 flex items-center justify-between">
+          <span className="text-xs text-slate-500">
+            ※ 社内ポリシーによりデータの削除機能は提供されていません。
+          </span>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={onClose}
+              className="px-4 py-2 rounded-xl text-xs font-medium text-slate-300 hover:bg-slate-800 border border-slate-700 transition-colors"
+            >
+              閉じる
+            </button>
+            <button
+              onClick={() => {
+                onClose();
+                onEdit(record);
+              }}
+              className="px-4 py-2 rounded-xl text-xs font-semibold bg-blue-600 hover:bg-blue-500 text-white shadow-md shadow-blue-600/30 flex items-center gap-1.5 transition-colors"
+            >
+              <Edit3 className="w-3.5 h-3.5" />
+              <span>このレコードを編集</span>
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+};

@@ -1,0 +1,6 @@
+{
+  "name": "MST AI経営OS",
+  "description": "社内向け営業管理・経営意思決定支援プラットフォーム。Supabaseの既存6テーブル（会社・見込み・リード・商品・商談・顧客）と連携し、セキュアな営業パイプライン管理を実現します。",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
