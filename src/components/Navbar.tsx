@@ -8,13 +8,16 @@ import {
   FileCode2, 
   CheckCircle2, 
   AlertTriangle,
-  UserCheck
+  UserCheck,
+  ClipboardList
 } from 'lucide-react';
 import { TableKey, TABLE_CONFIGS } from '../types/database';
 
+export type AppTab = 'dashboard' | 'diagnoses' | TableKey;
+
 interface NavbarProps {
-  currentTab: 'dashboard' | TableKey;
-  onTabChange: (tab: 'dashboard' | TableKey) => void;
+  currentTab: AppTab;
+  onTabChange: (tab: AppTab) => void;
   onOpenConfig: () => void;
   onOpenRls: () => void;
   onOpenCreate: (table: TableKey) => void;
@@ -129,6 +132,18 @@ export const Navbar: React.FC<NavbarProps> = ({
               }`}
             >
               📊 ホーム / 業務概要
+            </button>
+            <button
+              onClick={() => onTabChange('diagnoses')}
+              className={`px-3 py-1.5 rounded-lg whitespace-nowrap transition-colors flex items-center gap-1.5 ${
+                currentTab === 'diagnoses'
+                  ? 'bg-blue-600 text-white font-semibold shadow-sm'
+                  : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800'
+              }`}
+            >
+              <ClipboardList className="w-3.5 h-3.5 text-blue-400" />
+              <span className="font-medium">診断管理</span>
+              <span className="text-[10px] px-1 rounded bg-blue-500/20 text-blue-300 border border-blue-500/30">Phase 1-C</span>
             </button>
             {(Object.keys(TABLE_CONFIGS) as TableKey[]).map((key) => {
               const cfg = TABLE_CONFIGS[key];

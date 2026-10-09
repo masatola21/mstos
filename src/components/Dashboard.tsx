@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
-import { TableKey, TABLE_CONFIGS } from '../types/database';
-import { fetchTableCounts, fetchTableData, DataFetchError } from '../services/dataService';
+import { TableKey, TABLE_CONFIGS, DiagnosisStatus } from '../types/database';
+import { fetchTableCounts, fetchTableData, fetchDiagnosisCounts, DataFetchError } from '../services/dataService';
 import { 
   Building2, 
   Target, 
@@ -16,11 +16,12 @@ import {
   DollarSign,
   Briefcase,
   Layers,
-  ChevronRight
+  ChevronRight,
+  ClipboardList
 } from 'lucide-react';
 
 interface DashboardProps {
-  onNavigateTab: (tab: TableKey) => void;
+  onNavigateTab: (tab: any) => void;
   onOpenCreate: (tab: TableKey) => void;
   onOpenRls: () => void;
 }
@@ -57,6 +58,10 @@ export const Dashboard: React.FC<DashboardProps> = ({
     customers: 0,
   });
   const [recentDeals, setRecentDeals] = useState<any[]>([]);
+  const [diagnosisStats, setDiagnosisStats] = useState<{ total: number; byStatus: Record<DiagnosisStatus, number> }>({
+    total: 0,
+    byStatus: { draft: 0, in_progress: 0, completed: 0, generating: 0, reported: 0 }
+  });
   const [loading, setLoading] = useState(true);
   const [fetchError, setFetchError] = useState<DataFetchError | null>(null);
 
@@ -64,17 +69,24 @@ export const Dashboard: React.FC<DashboardProps> = ({
     setLoading(true);
     setFetchError(null);
     try {
-      const { counts: loadedCounts, error } = await fetchTableCounts();
-      if (error) {
-        setFetchError(error);
+      const [tableRes, diagRes, dealsRes] = await Promise.all([
+        fetchTableCounts(),
+        fetchDiagnosisCounts(),
+        fetchTableData('deals'),
+      ]);
+
+      if (tableRes.error) {
+        setFetchError(tableRes.error);
       } else {
-        setCounts(loadedCounts);
+        setCounts(tableRes.counts);
       }
 
-      // 商談の概要データを取得
-      const { data: dealsData } = await fetchTableData('deals');
-      if (dealsData) {
-        setRecentDeals(dealsData.slice(0, 5));
+      if (diagRes) {
+        setDiagnosisStats({ total: diagRes.total, byStatus: diagRes.byStatus });
+      }
+
+      if (dealsRes.data) {
+        setRecentDeals(dealsRes.data.slice(0, 5));
       }
     } catch (err: any) {
       setFetchError({
@@ -143,6 +155,55 @@ export const Dashboard: React.FC<DashboardProps> = ({
           )}
         </div>
       )}
+
+      {/* Phase 1-C: Diagnoses & AI Reports Summary Banner */}
+      <section className="bg-gradient-to-r from-blue-950/60 via-indigo-950/40 to-slate-900 border border-blue-500/30 rounded-3xl p-6 shadow-xl relative overflow-hidden">
+        <div className="absolute top-0 right-0 w-96 h-96 bg-blue-500/5 rounded-full blur-3xl -z-10 pointer-events-none" />
+        <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-6">
+          <div className="space-y-2">
+            <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-blue-500/20 text-blue-300 border border-blue-500/30 text-xs font-semibold">
+              <ClipboardList className="w-3.5 h-3.5" />
+              <span>Phase 1-C 実装完了</span>
+            </div>
+            <h2 className="text-xl sm:text-2xl font-bold text-white tracking-tight flex items-center gap-2">
+              診断＆AIレポート機能（diagnoses / ai_reports）
+            </h2>
+            <p className="text-xs sm:text-sm text-slate-300 max-w-2xl leading-relaxed">
+              取引先企業のヒアリング回答収集、5カテゴリ回答評価、AIレポート発行パイプライン。設問仕様確定までの安全ガードにより、completed への誤完了を確実に防止しながら下書き保存・回答変更を運用できます。
+            </p>
+          </div>
+
+          <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-4 shrink-0">
+            {/* Quick Status Stats */}
+            <div className="grid grid-cols-3 gap-2 bg-slate-950/70 p-3 rounded-2xl border border-slate-800/80 text-center">
+              <div className="px-3">
+                <span className="text-[10px] text-slate-400 block">診断総数</span>
+                <span className="text-lg font-black text-white">{loading ? '...' : diagnosisStats.total}</span>
+              </div>
+              <div className="px-3 border-x border-slate-800">
+                <span className="text-[10px] text-sky-400 block">実施・下書き</span>
+                <span className="text-lg font-black text-sky-300">
+                  {loading ? '...' : (diagnosisStats.byStatus.draft + diagnosisStats.byStatus.in_progress)}
+                </span>
+              </div>
+              <div className="px-3">
+                <span className="text-[10px] text-indigo-400 block">レポート発行</span>
+                <span className="text-lg font-black text-indigo-300">
+                  {loading ? '...' : diagnosisStats.byStatus.reported}
+                </span>
+              </div>
+            </div>
+
+            <button
+              onClick={() => onNavigateTab('diagnoses')}
+              className="px-5 py-3 rounded-xl bg-blue-600 hover:bg-blue-500 text-white font-semibold text-xs sm:text-sm shadow-lg shadow-blue-500/25 flex items-center justify-center gap-2 transition-all active:scale-95 cursor-pointer whitespace-nowrap"
+            >
+              <span>診断一覧・回答入力へ</span>
+              <ChevronRight className="w-4 h-4" />
+            </button>
+          </div>
+        </div>
+      </section>
 
       {/* 6 Tables Count Cards Grid */}
       <section className="space-y-4">

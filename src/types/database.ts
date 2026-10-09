@@ -114,6 +114,128 @@ export interface Customer {
   [key: string]: unknown;
 }
 
+export type DiagnosisStatus = 'draft' | 'in_progress' | 'completed' | 'generating' | 'reported';
+export type AiReportStatus = 'pending' | 'generating' | 'generated' | 'superseded' | 'failed' | 'reviewed';
+
+export interface Diagnosis {
+  id: string; // uuid
+  company_id: string; // references companies.id
+  lead_id?: string; // references leads.id
+  diagnosis_type: string; // 'standard' | 'comprehensive' | 'quick'
+  status: DiagnosisStatus;
+  questionnaire_version: string; // 'v1.0'
+  answers: Record<string, unknown>; // jsonb
+  score?: number | null;
+  category_scores?: Record<string, number> | null;
+  memo?: string | null;
+  conducted_at?: string | null;
+  created_at?: string;
+  updated_at?: string;
+  // Enriched
+  company?: Company;
+  lead?: Lead;
+  latest_report?: AiReport | null;
+  [key: string]: unknown;
+}
+
+export interface AiReport {
+  id: string; // uuid
+  diagnosis_id: string; // references diagnoses.id
+  version: number;
+  is_latest: boolean;
+  status: AiReportStatus;
+  title: string;
+  model_name: string;
+  prompt_version: string;
+  summary?: string | null;
+  strengths?: unknown;
+  challenges?: unknown;
+  recommendations?: unknown;
+  recommended_product_id?: string | null;
+  full_report_text?: string | null;
+  storage_path?: string | null;
+  error_message?: string | null;
+  generated_at?: string | null;
+  reviewed_at?: string | null;
+  reviewed_by?: string | null;
+  created_at?: string;
+  updated_at?: string;
+  // Enriched
+  recommended_product?: Product;
+  [key: string]: unknown;
+}
+
+// ============================================================================
+// Phase 1-D: 回答者向け公開受付 & 専用URL招待（Intake & Invitations）
+// ============================================================================
+
+export type InvitationStatus = 'active' | 'submitted' | 'revoked' | 'expired';
+
+export interface DiagnosisInvitation {
+  id: string; // uuid
+  diagnosis_id: string; // references diagnoses.id
+  token_hash: string; // SHA-256 hash
+  expires_at: string;
+  status: InvitationStatus;
+  created_by?: string | null;
+  created_at: string;
+  used_at?: string | null;
+  revoked_at?: string | null;
+  revoked_by?: string | null;
+  metadata?: Record<string, unknown>;
+  // Enriched
+  diagnosis?: Diagnosis;
+}
+
+export type IntakeStatus = 'pending_review' | 'approved' | 'rejected' | 'merged';
+export type IntakeSource = 'line_rich_menu' | 'line_flex' | 'email' | 'lp' | 'other';
+
+export interface TrafficSourceInfo {
+  source: IntakeSource;
+  utm_source?: string | null;
+  utm_medium?: string | null;
+  utm_campaign?: string | null;
+  landing_path?: string | null;
+}
+
+export interface DiagnosisIntake {
+  id: string; // uuid
+  status: IntakeStatus;
+  company_name: string;
+  contact_name: string;
+  contact_email: string;
+  contact_phone?: string | null;
+  answers: Record<string, unknown>;
+  score?: number | null;
+  category_scores?: Record<string, number> | null;
+  questionnaire_version: string;
+  privacy_agreed_at: string;
+  source: IntakeSource;
+  utm_source?: string | null;
+  utm_medium?: string | null;
+  utm_campaign?: string | null;
+  landing_path?: string | null;
+  reviewer_memo?: string | null;
+  reviewed_by?: string | null;
+  reviewed_at?: string | null;
+  linked_company_id?: string | null;
+  linked_diagnosis_id?: string | null;
+  created_at: string;
+  updated_at: string;
+  // Enriched
+  linked_company?: Company;
+  linked_diagnosis?: Diagnosis;
+}
+
+export interface VerifyInvitationResult {
+  valid: boolean;
+  message?: string;
+  expires_at?: string;
+  questionnaire_version?: string;
+  company_name_masked?: string;
+}
+
+
 export type TableKey = 'companies' | 'prospects' | 'leads' | 'products' | 'deals' | 'customers';
 
 export interface FieldDefinition {

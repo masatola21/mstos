@@ -1,8 +1,9 @@
 import React, { useState } from 'react';
 import { AuthProvider, useAuth } from './context/AuthContext';
-import { Navbar } from './components/Navbar';
+import { Navbar, AppTab } from './components/Navbar';
 import { Dashboard } from './components/Dashboard';
 import { TableManager } from './components/TableManager';
+import { DiagnosisManager } from './components/DiagnosisManager';
 import { AuthScreen } from './components/AuthScreen';
 import { ConfigGuideModal } from './components/ConfigGuideModal';
 import { RlsGuideModal } from './components/RlsGuideModal';
@@ -12,7 +13,7 @@ import { Loader2 } from 'lucide-react';
 
 function AppContent() {
   const { user, isLoading } = useAuth();
-  const [currentTab, setCurrentTab] = useState<'dashboard' | TableKey>('dashboard');
+  const [currentTab, setCurrentTab] = useState<AppTab>('dashboard');
   const [isConfigOpen, setIsConfigOpen] = useState(false);
   const [isRlsOpen, setIsRlsOpen] = useState(false);
 
@@ -69,13 +70,17 @@ function AppContent() {
       <main className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-6">
         {currentTab === 'dashboard' ? (
           <Dashboard
-            onNavigateTab={(tab) => setCurrentTab(tab)}
+            onNavigateTab={(tab) => setCurrentTab(tab as AppTab)}
             onOpenCreate={handleOpenCreate}
+            onOpenRls={() => setIsRlsOpen(true)}
+          />
+        ) : currentTab === 'diagnoses' ? (
+          <DiagnosisManager
             onOpenRls={() => setIsRlsOpen(true)}
           />
         ) : (
           <TableManager
-            currentTable={currentTab}
+            currentTable={currentTab as TableKey}
             onTableChange={(tab) => setCurrentTab(tab)}
             onOpenRls={() => setIsRlsOpen(true)}
           />
