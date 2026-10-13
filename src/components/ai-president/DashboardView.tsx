@@ -28,7 +28,7 @@ import {
   TokenUsageRecord,
   ModelPricingRate,
 } from '../types';
-import { getMonthlyTokenSummary } from '../utils/storage';
+import { getMonthlyTokenSummary } from '../../utils/storage';
 
 interface DashboardViewProps {
   topGoal: string;

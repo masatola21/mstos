@@ -14,7 +14,7 @@ import {
   ArrowRight,
 } from 'lucide-react';
 import { CharacterConfig, AvatarColor, UserProfile, ApiUsageData } from '../types';
-import { getColorScheme } from '../utils/theme';
+import { getColorScheme } from '../../utils/theme';
 
 interface CharacterEditorProps {
   character: CharacterConfig;

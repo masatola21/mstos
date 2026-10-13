@@ -15,7 +15,7 @@ import {
   Download,
 } from 'lucide-react';
 import { CharacterConfig } from '../types';
-import { getColorScheme } from '../utils/theme';
+import { getColorScheme } from '../../utils/theme';
 
 export type AppTab =
   | 'dashboard'

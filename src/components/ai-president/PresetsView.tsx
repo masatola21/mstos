@@ -1,8 +1,8 @@
 import React from 'react';
 import { Library, MessageSquare, Copy, Check, ArrowRight } from 'lucide-react';
-import { PRESET_CHARACTERS } from '../data/presets';
+import { PRESET_CHARACTERS } from '../../data/presets';
 import { CharacterConfig } from '../types';
-import { getColorScheme } from '../utils/theme';
+import { getColorScheme } from '../../utils/theme';
 
 interface PresetsViewProps {
   onSelectAndChat: (preset: CharacterConfig) => void;
@@ -34,7 +34,7 @@ export const PresetsView: React.FC<PresetsViewProps> = ({
 
       {/* Cards Grid */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-        {PRESET_CHARACTERS.map((preset) => {
+        {PRESET_CHARACTERS.map((preset: CharacterConfig) => {
           const scheme = getColorScheme(preset.avatarColor);
           const isActive = preset.id === activeCharacterId;
 

@@ -10,12 +10,12 @@ import {
   ModelPricingRate,
   TokenUsageRecord,
 } from '../types';
-import { PRESET_CHARACTERS } from '../data/presets';
+import { PRESET_CHARACTERS } from '../../data/presets';
 import {
   DEFAULT_USER_PROFILE,
   DEFAULT_TOP_GOAL,
   DEFAULT_PRICING_RATES,
-} from '../utils/storage';
+} from '../../utils/storage';
 
 interface BackupModalProps {
   isOpen: boolean;

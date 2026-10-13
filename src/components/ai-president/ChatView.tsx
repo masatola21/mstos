@@ -19,7 +19,7 @@ import {
 } from 'lucide-react';
 import { CharacterConfig, ChatMessage, UserProfile, ProposedPlan, ApiUsageData } from '../types';
 import { ChatMessageContent } from './ChatMessageContent';
-import { getColorScheme } from '../utils/theme';
+import { getColorScheme } from '../../utils/theme';
 
 interface ChatViewProps {
   character: CharacterConfig;
