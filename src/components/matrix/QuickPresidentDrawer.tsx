@@ -11,7 +11,7 @@ import {
   CheckCircle2, 
   Maximize2 
 } from 'lucide-react';
-import { CharacterConfig, ChatMessage, UserProfile } from '../../types/ai-president';
+import { ApiUsageData, CharacterConfig, ChatMessage, UserProfile } from '../../types/ai-president';
 
 interface QuickPresidentDrawerProps {
   isOpen: boolean;
@@ -20,6 +20,7 @@ interface QuickPresidentDrawerProps {
   userProfile: UserProfile;
   onOpenFullChat: () => void;
   onOpenPlanProposal?: (plan: any) => void;
+  onRecordUsage?: (params: { endpoint: 'chat'; endpointName: string; model?: string; usage: ApiUsageData }) => void;
 }
 
 export const QuickPresidentDrawer: React.FC<QuickPresidentDrawerProps> = ({
@@ -29,6 +30,7 @@ export const QuickPresidentDrawer: React.FC<QuickPresidentDrawerProps> = ({
   userProfile,
   onOpenFullChat,
   onOpenPlanProposal,
+  onRecordUsage,
 }) => {
   const [messages, setMessages] = useState<ChatMessage[]>([
     {
@@ -81,6 +83,14 @@ export const QuickPresidentDrawer: React.FC<QuickPresidentDrawerProps> = ({
       });
 
       const data = await response.json();
+      if (data.usage) {
+        onRecordUsage?.({
+          endpoint: 'chat',
+          endpointName: 'AI社長クイック相談',
+          model: data.model,
+          usage: data.usage,
+        });
+      }
       const assistantMsg: ChatMessage = {
         id: `asst-${Date.now()}`,
         role: 'assistant',
@@ -226,3 +236,4 @@ export const QuickPresidentDrawer: React.FC<QuickPresidentDrawerProps> = ({
     </div>
   );
 };
+
