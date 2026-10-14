@@ -29,6 +29,7 @@ import { ProductHubView } from './components/matrix/ProductHubView';
 import { CategoryHubView } from './components/matrix/CategoryHubView';
 import { CustomListManager } from './components/matrix/CustomListManager';
 import { AutomationView } from './components/matrix/AutomationView';
+import { DocumentTemplateView } from './components/matrix/DocumentTemplateView';
 import { QuickPresidentDrawer } from './components/matrix/QuickPresidentDrawer';
 
 // Storage and Types
@@ -806,6 +807,10 @@ function AppContent() {
               setActivityLogs(loadActivityLogs());
             }}
           />
+        )}
+
+        {currentTab === 'document_templates' && (
+          <DocumentTemplateView />
         )}
 
         {/* ================= SECTION 3: AI PRESIDENT & STRATEGY ================= */}

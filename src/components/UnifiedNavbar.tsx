@@ -33,6 +33,7 @@ export type UnifiedNavTab =
   | 'category_hub'
   | 'custom_lists'
   | 'automations'
+  | 'document_templates'
   // AI President
   | 'ai_dashboard'
   | 'ai_chat'
@@ -90,7 +91,8 @@ export const UnifiedNavbar: React.FC<UnifiedNavbarProps> = ({
       currentTab === 'product_hub' ||
       currentTab === 'category_hub' ||
       currentTab === 'custom_lists' ||
-      currentTab === 'automations'
+      currentTab === 'automations' ||
+      currentTab === 'document_templates'
     ) {
       return 'matrix';
     }
@@ -349,6 +351,18 @@ export const UnifiedNavbar: React.FC<UnifiedNavbarProps> = ({
               >
                 <Zap className="w-3.5 h-3.5 text-amber-400" />
                 <span>非AI業務自動化</span>
+              </button>
+
+              <button
+                onClick={() => onTabChange('document_templates')}
+                className={`px-3 py-1.5 rounded-lg whitespace-nowrap transition-colors flex items-center gap-1.5 ${
+                  currentTab === 'document_templates'
+                    ? 'bg-cyan-600 text-white font-semibold shadow-sm'
+                    : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800'
+                }`}
+              >
+                <FileCheck2 className="w-3.5 h-3.5 text-emerald-400" />
+                <span>文書・帳票自動流し込み</span>
               </button>
             </>
           )}

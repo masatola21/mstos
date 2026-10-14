@@ -1,0 +1,560 @@
+import React, { useState } from 'react';
+import { 
+  FileText, 
+  FileCheck2, 
+  Receipt, 
+  ClipboardCheck, 
+  Printer, 
+  Download, 
+  Copy, 
+  Check, 
+  Sliders, 
+  Edit3, 
+  Save, 
+  RefreshCw,
+  FileCode
+} from 'lucide-react';
+
+export type DocTemplateType = 'contract' | 'proposal' | 'invoice' | 'report';
+
+interface DocTemplate {
+  id: string;
+  type: DocTemplateType;
+  title: string;
+  description: string;
+  htmlContent: string;
+  variables: { key: string; label: string; defaultValue: string }[];
+}
+
+const DEFAULT_TEMPLATES: DocTemplate[] = [
+  {
+    id: 'tpl-contract-01',
+    type: 'contract',
+    title: '業務委託基本契約書 (標準ひな形)',
+    description: 'システム開発およびコンサルティング業務に関する標準契約書ひな形',
+    htmlContent: `<div style="font-family: 'Helvetica Neue', Arial, sans-serif; padding: 40px; color: #1e293b; max-width: 800px; margin: 0 auto; line-height: 1.8;">
+  <h1 style="text-align: center; font-size: 22px; margin-bottom: 30px; border-bottom: 2px solid #0f172a; padding-bottom: 10px;">業務委託基本契約書</h1>
+  
+  <p>発注者である <strong>{{client_company}}</strong>（以下「甲」という。）と、受注者である <strong>{{my_company}}</strong>（以下「乙」という。）は、以下の通り業務委託基本契約（以下「本契約」という。）を締結する。</p>
+
+  <h3 style="margin-top: 20px; font-size: 16px; border-left: 4px solid #2563eb; padding-left: 8px;">第1条（目的および委託業務）</h3>
+  <p>甲は、乙に対し、<strong>{{project_name}}</strong>に関する業務（以下「本件業務」という。）を委託し、乙はこれを受託する。</p>
+
+  <h3 style="margin-top: 20px; font-size: 16px; border-left: 4px solid #2563eb; padding-left: 8px;">第2条（委託料および支払方法）</h3>
+  <p>本件業務の委託料総額は、金 <strong>{{total_amount}}</strong> 円（消費税込み 金 {{tax_amount}} 円）とする。<br>
+  支払条件：{{payment_terms}}</p>
+
+  <h3 style="margin-top: 20px; font-size: 16px; border-left: 4px solid #2563eb; padding-left: 8px;">第3条（契約期間）</h3>
+  <p>本契約の有効期間は、<strong>{{start_date}}</strong> から <strong>{{end_date}}</strong> までとする。</p>
+
+  <div style="margin-top: 50px; display: flex; justify-content: space-between;">
+    <div style="width: 45%;">
+      <p><strong>発注者（甲）</strong></p>
+      <p>住所: {{client_address}}</p>
+      <p>会社名: {{client_company}}</p>
+      <p>代表者: {{client_rep}} 印</p>
+    </div>
+    <div style="width: 45%;">
+      <p><strong>受注者（乙）</strong></p>
+      <p>住所: {{my_address}}</p>
+      <p>会社名: {{my_company}}</p>
+      <p>代表者: {{my_rep}} 印</p>
+    </div>
+  </div>
+</div>`,
+    variables: [
+      { key: 'client_company', label: '顧客会社名 (甲)', defaultValue: 'テックイノベーション株式会社' },
+      { key: 'my_company', label: '自社会社名 (乙)', defaultValue: 'MST AI経営ソリューションズ' },
+      { key: 'project_name', label: 'プロジェクト名', defaultValue: 'AI統合基幹システム受託開発' },
+      { key: 'total_amount', label: '委託料総額 (円)', defaultValue: '3,500,000' },
+      { key: 'tax_amount', label: '消費税額 (円)', defaultValue: '350,000' },
+      { key: 'payment_terms', label: '支払条件', defaultValue: '着手金50%（2026年9月末）、検収後50%（2026年12月末）' },
+      { key: 'start_date', label: '契約開始日', defaultValue: '2026年9月1日' },
+      { key: 'end_date', label: '契約終了日', defaultValue: '2026年12月31日' },
+      { key: 'client_address', label: '甲 住所', defaultValue: '東京都千代田区大手町1-1-1' },
+      { key: 'client_rep', label: '甲 代表者名', defaultValue: '山田 太郎' },
+      { key: 'my_address', label: '乙 住所', defaultValue: '東京都渋谷区道玄坂2-29-1' },
+      { key: 'my_rep', label: '乙 代表者名', defaultValue: '佐藤 一郎' },
+    ],
+  },
+  {
+    id: 'tpl-proposal-01',
+    type: 'proposal',
+    title: 'AI経営変革 提案書 (標準ひな形)',
+    description: 'クライアント向け課題解決型システム・顧問支援の提案書ひな形',
+    htmlContent: `<div style="font-family: 'Helvetica Neue', Arial, sans-serif; padding: 40px; color: #1e293b; max-width: 800px; margin: 0 auto; line-height: 1.8;">
+  <div style="background: #0f172a; color: white; padding: 30px; border-radius: 12px; margin-bottom: 30px;">
+    <p style="font-size: 14px; color: #38bdf8; text-transform: uppercase; letter-spacing: 1px; margin-bottom: 5px;">Business Proposal</p>
+    <h1 style="font-size: 24px; margin: 0; font-weight: 700;">{{proposal_title}}</h1>
+    <p style="margin-top: 10px; color: #94a3b8; font-size: 14px;">宛先: {{client_company}} 御中 / 提案日: {{issue_date}}</p>
+  </div>
+
+  <h3 style="font-size: 18px; border-left: 4px solid #2563eb; padding-left: 8px; margin-top: 20px;">1. 現状の課題と経営インパクト</h3>
+  <p>{{current_challenge}}</p>
+
+  <h3 style="font-size: 18px; border-left: 4px solid #2563eb; padding-left: 8px; margin-top: 20px;">2. 提案ソリューション・システム概要</h3>
+  <p>{{solution_overview}}</p>
+
+  <h3 style="font-size: 18px; border-left: 4px solid #2563eb; padding-left: 8px; margin-top: 20px;">3. 期待される導入効果</h3>
+  <p>{{expected_outcome}}</p>
+
+  <h3 style="font-size: 18px; border-left: 4px solid #2563eb; padding-left: 8px; margin-top: 20px;">4. 費用お見積もり</h3>
+  <div style="background: #f8fafc; border: 1px solid #e2e8f0; padding: 15px; border-radius: 8px; margin-top: 10px;">
+    <p style="margin: 0; font-size: 16px;"><strong>総額: {{total_amount}} 円（税別）</strong></p>
+    <p style="margin: 5px 0 0 0; font-size: 13px; color: #64748b;">内訳: {{cost_breakdown}}</p>
+  </div>
+
+  <div style="margin-top: 40px; text-align: right; border-top: 1px solid #e2e8f0; padding-top: 20px;">
+    <p><strong>提案責任者:</strong> {{sender_name}}</p>
+    <p style="color: #64748b; font-size: 13px;">{{sender_company}}</p>
+  </div>
+</div>`,
+    variables: [
+      { key: 'proposal_title', label: '提案書タイトル', defaultValue: 'AI統合基幹システム導入および業務自動化のご提案' },
+      { key: 'client_company', label: '宛先企業名', defaultValue: 'テックイノベーション株式会社' },
+      { key: 'issue_date', label: '提案日付', defaultValue: '2026年10月13日' },
+      { key: 'current_challenge', label: '現状の課題', defaultValue: '手作業による受注・契約管理および顧客情報の分断による業務ロスが発生しております。' },
+      { key: 'solution_overview', label: '提案ソリューション', defaultValue: 'MST AI経営OSを活用し、営業パイプライン、契約・請求管理、AI社長による自動提案をワンストップで統合します。' },
+      { key: 'expected_outcome', label: '期待される効果', defaultValue: '事務工数の約60%削減、およびデータに基づくリアルタイムの意思決定迅速化を実現します。' },
+      { key: 'total_amount', label: 'お見積もり総額 (円)', defaultValue: '3,500,000' },
+      { key: 'cost_breakdown', label: '費用内訳', defaultValue: '基本設計・開発費 2,500,000円 / 導入支援・AIチューニング 1,000,000円' },
+      { key: 'sender_name', label: '提案責任者名', defaultValue: '鈴木 経営コンサルタント' },
+      { key: 'sender_company', label: '提案者組織名', defaultValue: 'MST AI経営ソリューションズ' },
+    ],
+  },
+  {
+    id: 'tpl-invoice-01',
+    type: 'invoice',
+    title: 'ご請求書 (標準ひな形)',
+    description: '企業間取引・お仕事の請求書ひな形',
+    htmlContent: `<div style="font-family: 'Helvetica Neue', Arial, sans-serif; padding: 40px; color: #1e293b; max-width: 800px; margin: 0 auto; line-height: 1.6;">
+  <div style="display: flex; justify-content: space-between; border-bottom: 2px solid #0f172a; padding-bottom: 20px; margin-bottom: 30px;">
+    <div>
+      <h1 style="font-size: 26px; margin: 0; color: #0f172a;">御 請求 書</h1>
+      <p style="margin: 5px 0 0 0; color: #64748b; font-size: 14px;">請求書番号: {{invoice_number}}</p>
+    </div>
+    <div style="text-align: right;">
+      <p style="margin: 0; font-weight: bold;">発行日: {{issue_date}}</p>
+      <p style="margin: 5px 0 0 0; color: #dc2626; font-weight: bold;">お支払い期限: {{due_date}}</p>
+    </div>
+  </div>
+
+  <div style="margin-bottom: 30px;">
+    <h2 style="font-size: 18px; border-bottom: 1px solid #e2e8f0; padding-bottom: 5px; margin-bottom: 10px;">{{client_company}} 御中</h2>
+    <p>平素は格別のお引き立てを賜り、厚く御礼申し上げます。<br>下記の通りご請求申し上げます。</p>
+    <div style="background: #f1f5f9; padding: 15px; border-radius: 8px; margin-top: 15px;">
+      <p style="margin: 0; font-size: 14px; color: #64748b;">ご請求金額合計（税込）</p>
+      <p style="margin: 5px 0 0 0; font-size: 28px; font-weight: bold; color: #0f172a;">￥{{total_amount}}</p>
+    </div>
+  </div>
+
+  <table style="width: 100%; border-collapse: collapse; margin-bottom: 30px; font-size: 14px;">
+    <thead>
+      <tr style="background: #0f172a; color: white;">
+        <th style="padding: 10px; text-align: left;">摘要 / 品名</th>
+        <th style="padding: 10px; text-align: center;">数量</th>
+        <th style="padding: 10px; text-align: right;">単価 (円)</th>
+        <th style="padding: 10px; text-align: right;">金額 (円)</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr style="border-bottom: 1px solid #e2e8f0;">
+        <td style="padding: 12px 10px;">{{item_name_1}}</td>
+        <td style="padding: 12px 10px; text-align: center;">{{item_qty_1}}</td>
+        <td style="padding: 12px 10px; text-align: right;">{{item_price_1}}</td>
+        <td style="padding: 12px 10px; text-align: right;">{{item_amount_1}}</td>
+      </tr>
+      <tr style="border-bottom: 1px solid #e2e8f0;">
+        <td style="padding: 12px 10px;">{{item_name_2}}</td>
+        <td style="padding: 12px 10px; text-align: center;">{{item_qty_2}}</td>
+        <td style="padding: 12px 10px; text-align: right;">{{item_price_2}}</td>
+        <td style="padding: 12px 10px; text-align: right;">{{item_amount_2}}</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <div style="display: flex; justify-content: flex-end; margin-bottom: 40px;">
+    <div style="width: 300px; font-size: 14px;">
+      <div style="display: flex; justify-content: space-between; padding: 5px 0;">
+        <span>小計:</span>
+        <span>￥{{subtotal_amount}}</span>
+      </div>
+      <div style="display: flex; justify-content: space-between; padding: 5px 0; border-bottom: 1px solid #e2e8f0;">
+        <span>消費税 (10%):</span>
+        <span>￥{{tax_amount}}</span>
+      </div>
+      <div style="display: flex; justify-content: space-between; padding: 8px 0; font-weight: bold; font-size: 16px;">
+        <span>合計金額:</span>
+        <span>￥{{total_amount}}</span>
+      </div>
+    </div>
+  </div>
+
+  <div style="border-top: 1px solid #e2e8f0; padding-top: 20px; font-size: 13px; color: #64748b;">
+    <p><strong>【お振込先】</strong> {{bank_account_info}}</p>
+    <p>※誠に恐れ入りますが、振込手数料は貴社ご負担にてお願い申し上げます。</p>
+  </div>
+</div>`,
+    variables: [
+      { key: 'invoice_number', label: '請求書番号', defaultValue: 'INV-202610-001' },
+      { key: 'issue_date', label: '発行日', defaultValue: '2026年10月13日' },
+      { key: 'due_date', label: 'お支払い期限', defaultValue: '2026年10月31日' },
+      { key: 'client_company', label: '宛先企業名', defaultValue: 'テックイノベーション株式会社' },
+      { key: 'total_amount', label: '合計金額 (税込)', defaultValue: '1,925,000' },
+      { key: 'subtotal_amount', label: '小計 (税抜)', defaultValue: '1,750,000' },
+      { key: 'tax_amount', label: '消費税額 (10%)', defaultValue: '175,000' },
+      { key: 'item_name_1', label: '品名 1', defaultValue: 'AI基幹システム受託開発 着手金（50%）' },
+      { key: 'item_qty_1', label: '数量 1', defaultValue: '1' },
+      { key: 'item_price_1', label: '単価 1', defaultValue: '1,750,000' },
+      { key: 'item_amount_1', label: '金額 1', defaultValue: '1,750,000' },
+      { key: 'item_name_2', label: '品名 2', defaultValue: '（予備項目 / なし）' },
+      { key: 'item_qty_2', label: '数量 2', defaultValue: '0' },
+      { key: 'item_price_2', label: '単価 2', defaultValue: '0' },
+      { key: 'item_amount_2', label: '金額 2', defaultValue: '0' },
+      { key: 'bank_account_info', label: '振込先口座情報', defaultValue: '三井住友銀行 渋谷支店 (普通) 1234567 カ）エムエスティエイケイエイソリューションズ' },
+    ],
+  },
+  {
+    id: 'tpl-report-01',
+    type: 'report',
+    title: '経営診断レポート (標準ひな形)',
+    description: '企業向け経営体力・デジタル化診断レポートのひな形',
+    htmlContent: `<div style="font-family: 'Helvetica Neue', Arial, sans-serif; padding: 40px; color: #1e293b; max-width: 800px; margin: 0 auto; line-height: 1.8;">
+  <div style="border-bottom: 2px solid #2563eb; padding-bottom: 15px; margin-bottom: 30px; display: flex; justify-content: space-between; align-items: flex-end;">
+    <div>
+      <p style="color: #2563eb; font-weight: bold; font-size: 13px; margin: 0; text-transform: uppercase;">Diagnostic Report</p>
+      <h1 style="font-size: 24px; margin: 5px 0 0 0; color: #0f172a;">経営体力・DX推進 診断レポート</h1>
+    </div>
+    <div style="text-align: right; font-size: 13px; color: #64748b;">
+      <p style="margin: 0;">診断対象: <strong>{{client_company}}</strong></p>
+      <p style="margin: 3px 0 0 0;">実施日: {{conducted_date}}</p>
+    </div>
+  </div>
+
+  <div style="background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 12px; padding: 25px; margin-bottom: 30px; text-align: center;">
+    <p style="margin: 0; font-size: 14px; color: #64748b;">総合経営スコア</p>
+    <p style="font-size: 48px; font-weight: 900; color: #2563eb; margin: 10px 0;">{{overall_score}} <span style="font-size: 20px; color: #64748b;">/ 100点</span></p>
+    <p style="margin: 0; font-size: 15px; font-weight: bold; color: #0f172a;">判定ランク: {{score_rank}}（{{rank_description}}）</p>
+  </div>
+
+  <h3 style="font-size: 18px; border-left: 4px solid #2563eb; padding-left: 8px; margin-top: 25px;">1. カテゴリ別評価サマリー</h3>
+  <ul style="padding-left: 20px; color: #334155;">
+    <li style="margin-bottom: 8px;"><strong>営業・パイプライン管理:</strong> {{score_sales}}点 - {{comment_sales}}</li>
+    <li style="margin-bottom: 8px;"><strong>契約・請求管理:</strong> {{score_finance}}点 - {{comment_finance}}</li>
+    <li style="margin-bottom: 8px;"><strong>AI・業務自動化度:</strong> {{score_automation}}点 - {{comment_automation}}</li>
+  </ul>
+
+  <h3 style="font-size: 18px; border-left: 4px solid #2563eb; padding-left: 8px; margin-top: 25px;">2. 優先改善提案 (Action Items)</h3>
+  <p>{{action_recommendation}}</p>
+
+  <div style="margin-top: 40px; background: #eff6ff; border: 1px solid #bfdbfe; padding: 20px; border-radius: 8px;">
+    <p style="margin: 0; font-weight: bold; color: #1e40af;">推奨導入プロダクト: {{recommended_product}}</p>
+    <p style="margin: 5px 0 0 0; font-size: 14px; color: #1e3a8a;">上記課題を迅速に解決するため、当社の専門サポートパッケージの導入を強く推奨いたします。</p>
+  </div>
+</div>`,
+    variables: [
+      { key: 'client_company', label: '診断対象企業名', defaultValue: 'テックイノベーション株式会社' },
+      { key: 'conducted_date', label: '診断実施日', defaultValue: '2026年10月13日' },
+      { key: 'overall_score', label: '総合スコア (0-100)', defaultValue: '78' },
+      { key: 'score_rank', label: '判定ランク', defaultValue: 'B+ ランク' },
+      { key: 'rank_description', label: 'ランク解説', defaultValue: 'DX推進の基礎は確立されているが、自動化・データ連携に改善余地あり' },
+      { key: 'score_sales', label: '営業スコア', defaultValue: '82' },
+      { key: 'comment_sales', label: '営業コメント', defaultValue: '見込み客管理が整備されており良好です。' },
+      { key: 'score_finance', label: '財務スコア', defaultValue: '70' },
+      { key: 'comment_finance', label: '財務コメント', defaultValue: '請求・入金管理のデジタル化により工数削減の余地があります。' },
+      { key: 'score_automation', label: '自動化スコア', defaultValue: '72' },
+      { key: 'comment_automation', label: '自動化コメント', defaultValue: '非AI業務の自動化ルール導入でさらに効率化できます。' },
+      { key: 'action_recommendation', label: '優先改善提案', defaultValue: '請求・契約書の自動流し込みツールの導入、および定期顧問サポートによる伴走体制の構築。' },
+      { key: 'recommended_product', label: '推奨プロダクト', defaultValue: 'AI統合基幹システム受託開発 ＆ 月額AI経営顧問' },
+    ],
+  },
+];
+
+export const DocumentTemplateView: React.FC = () => {
+  const [templates, setTemplates] = useState<DocTemplate[]>(DEFAULT_TEMPLATES);
+  const [selectedTemplateId, setSelectedTemplateId] = useState<string>(DEFAULT_TEMPLATES[0].id);
+  const [isEditingTemplate, setIsEditingTemplate] = useState<boolean>(false);
+  const [copied, setCopied] = useState<boolean>(false);
+
+  // Active template
+  const currentTemplate = templates.find((t) => t.id === selectedTemplateId) || templates[0];
+
+  // Variable inputs state
+  const [variableValues, setVariableValues] = useState<Record<string, string>>(() => {
+    const initial: Record<string, string> = {};
+    DEFAULT_TEMPLATES[0].variables.forEach((v) => {
+      initial[v.key] = v.defaultValue;
+    });
+    return initial;
+  });
+
+  // When switching template, load its default variables
+  const handleSelectTemplate = (id: string) => {
+    setSelectedTemplateId(id);
+    const target = templates.find((t) => t.id === id);
+    if (target) {
+      const newVals: Record<string, string> = {};
+      target.variables.forEach((v) => {
+        newVals[v.key] = v.defaultValue;
+      });
+      setVariableValues(newVals);
+    }
+    setIsEditingTemplate(false);
+  };
+
+  const handleVariableChange = (key: string, value: string) => {
+    setVariableValues((prev) => ({ ...prev, [key]: value }));
+  };
+
+  // Perform deterministic template auto-population
+  const getPopulatedHtml = (): string => {
+    let result = currentTemplate.htmlContent;
+    Object.entries(variableValues).forEach(([key, val]) => {
+      const regex = new RegExp(`{{${key}}}`, 'g');
+      result = result.replace(regex, val || '');
+    });
+    return result;
+  };
+
+  const populatedHtml = getPopulatedHtml();
+
+  const handlePrintPdf = () => {
+    const printWindow = window.open('', '_blank');
+    if (!printWindow) {
+      alert('ポップアップがブロックされました。ブラウザの設定をご確認ください。');
+      return;
+    }
+    printWindow.document.write(`
+      <html>
+        <head>
+          <title>${currentTemplate.title}</title>
+          <style>
+            body { margin: 0; padding: 20px; }
+            @media print {
+              body { padding: 0; }
+            }
+          </style>
+        </head>
+        <body>
+          ${populatedHtml}
+          <script>
+            window.onload = function() { window.print(); };
+          </script>
+        </body>
+      </html>
+    `);
+    printWindow.document.close();
+  };
+
+  const handleDownloadHtml = () => {
+    const blob = new Blob([populatedHtml], { type: 'text/html;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `${currentTemplate.type}_${Date.now()}.html`;
+    a.click();
+    URL.revokeObjectURL(url);
+  };
+
+  const handleCopyHtml = () => {
+    navigator.clipboard.writeText(populatedHtml);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+  };
+
+  const handleSaveTemplateChanges = (newHtml: string) => {
+    setTemplates((prev) =>
+      prev.map((t) => (t.id === currentTemplate.id ? { ...t, htmlContent: newHtml } : t))
+    );
+    setIsEditingTemplate(false);
+  };
+
+  return (
+    <div className="space-y-6">
+      {/* Header Banner */}
+      <div className="bg-slate-900 border border-slate-800 rounded-2xl p-6 shadow-xl flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
+        <div>
+          <div className="flex items-center gap-2">
+            <span className="px-3 py-1 rounded-full bg-cyan-500/20 text-cyan-400 text-xs font-semibold border border-cyan-500/30">
+              決定論的オートメーション
+            </span>
+            <span className="text-xs text-slate-400">AI不使用・100%正確な一括流し込み</span>
+          </div>
+          <h1 className="text-2xl font-bold text-white tracking-tight mt-1">文書・帳票自動流し込みハブ</h1>
+          <p className="text-sm text-slate-400 mt-1">
+            契約書、提案書、請求書、診断レポートのひな形にデータを瞬時に流し込み、PDF印刷・出力を行います。
+          </p>
+        </div>
+
+        <div className="flex items-center gap-3">
+          <button
+            onClick={handlePrintPdf}
+            className="px-4 py-2.5 rounded-xl bg-blue-600 hover:bg-blue-500 text-white font-semibold text-xs flex items-center gap-2 shadow-lg shadow-blue-600/25 transition-all cursor-pointer"
+          >
+            <Printer className="w-4 h-4" />
+            <span>PDF印刷・プレビュー</span>
+          </button>
+          <button
+            onClick={handleDownloadHtml}
+            className="px-4 py-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 font-semibold text-xs flex items-center gap-2 border border-slate-700 transition-all cursor-pointer"
+          >
+            <Download className="w-4 h-4" />
+            <span>HTML保存</span>
+          </button>
+        </div>
+      </div>
+
+      {/* Template Selector Tabs */}
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+        {templates.map((tpl) => {
+          const isSelected = tpl.id === selectedTemplateId;
+          const icons = {
+            contract: <FileCheck2 className="w-4 h-4 text-emerald-400" />,
+            proposal: <FileText className="w-4 h-4 text-blue-400" />,
+            invoice: <Receipt className="w-4 h-4 text-amber-400" />,
+            report: <ClipboardCheck className="w-4 h-4 text-purple-400" />,
+          };
+          return (
+            <button
+              key={tpl.id}
+              onClick={() => handleSelectTemplate(tpl.id)}
+              className={`p-4 rounded-xl border text-left transition-all cursor-pointer flex flex-col justify-between ${
+                isSelected
+                  ? 'bg-slate-900 border-cyan-500 shadow-md shadow-cyan-500/10 ring-1 ring-cyan-500'
+                  : 'bg-slate-900/60 border-slate-800 hover:border-slate-700 text-slate-400 hover:text-slate-200'
+              }`}
+            >
+              <div className="flex items-center justify-between mb-2">
+                <span className="p-2 rounded-lg bg-slate-800/80">{icons[tpl.type]}</span>
+                <span className="text-[10px] px-2 py-0.5 rounded-full bg-slate-800 text-slate-300 font-mono uppercase">
+                  {tpl.type}
+                </span>
+              </div>
+              <div>
+                <h3 className={`font-bold text-sm ${isSelected ? 'text-white' : 'text-slate-300'}`}>
+                  {tpl.title}
+                </h3>
+                <p className="text-xs text-slate-500 line-clamp-1 mt-0.5">{tpl.description}</p>
+              </div>
+            </button>
+          );
+        })}
+      </div>
+
+      {/* Main Workspace Split: Left Form Inputs / Right Preview */}
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
+        {/* Left Form / Variable Panel (5 Cols) */}
+        <div className="lg:col-span-5 bg-slate-900 border border-slate-800 rounded-2xl p-5 shadow-xl flex flex-col justify-between">
+          <div>
+            <div className="flex items-center justify-between pb-3 border-b border-slate-800 mb-4">
+              <div className="flex items-center gap-2">
+                <Sliders className="w-4 h-4 text-cyan-400" />
+                <h2 className="font-bold text-sm text-white">データ流し込み変数</h2>
+              </div>
+              <button
+                onClick={() => setIsEditingTemplate(!isEditingTemplate)}
+                className={`text-xs px-2.5 py-1 rounded-lg border flex items-center gap-1 transition-colors cursor-pointer ${
+                  isEditingTemplate
+                    ? 'bg-amber-500/20 border-amber-500/40 text-amber-300'
+                    : 'bg-slate-800 border-slate-700 text-slate-300 hover:text-white'
+                }`}
+              >
+                <FileCode className="w-3.5 h-3.5" />
+                <span>{isEditingTemplate ? 'フォームに戻る' : 'HTMLひな形編集'}</span>
+              </button>
+            </div>
+
+            {isEditingTemplate ? (
+              <div className="space-y-3">
+                <p className="text-xs text-slate-400">
+                  HTMLソースと変数タグ（例: <code className="text-cyan-400">{'{{variable_name}}'}</code>）を直接編集できます。
+                </p>
+                <textarea
+                  defaultValue={currentTemplate.htmlContent}
+                  id="raw-html-editor"
+                  rows={18}
+                  className="w-full bg-slate-950 border border-slate-800 rounded-xl p-3 text-xs font-mono text-slate-200 focus:outline-none focus:border-cyan-500"
+                />
+                <button
+                  onClick={() => {
+                    const el = document.getElementById('raw-html-editor') as HTMLTextAreaElement;
+                    if (el) handleSaveTemplateChanges(el.value);
+                  }}
+                  className="w-full py-2.5 rounded-xl bg-cyan-600 hover:bg-cyan-500 text-white font-semibold text-xs flex items-center justify-center gap-2 transition-all cursor-pointer shadow-md"
+                >
+                  <Save className="w-4 h-4" />
+                  <span>ひな形HTMLを保存</span>
+                </button>
+              </div>
+            ) : (
+              <div className="space-y-4 max-h-[550px] overflow-y-auto pr-1">
+                <p className="text-xs text-slate-400">
+                  以下のフォームに入力すると、右側の文書ひな形にリアルタイムで自動反映されます。
+                </p>
+                {currentTemplate.variables.map((v) => (
+                  <div key={v.key} className="space-y-1">
+                    <label className="block text-xs font-medium text-slate-300 flex items-center justify-between">
+                      <span>{v.label}</span>
+                      <span className="text-[10px] font-mono text-cyan-400 bg-cyan-950/40 px-1.5 py-0.5 rounded border border-cyan-800/40">
+                        {`{{${v.key}}}`}
+                      </span>
+                    </label>
+                    <input
+                      type="text"
+                      value={variableValues[v.key] ?? ''}
+                      onChange={(e) => handleVariableChange(v.key, e.target.value)}
+                      className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-cyan-500 transition-colors"
+                      placeholder={`${v.label}を入力...`}
+                    />
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+
+          <div className="mt-6 pt-4 border-t border-slate-800 flex items-center justify-between text-xs text-slate-500">
+            <span>変数置換完了: 100% 確定</span>
+            <button
+              onClick={() => handleSelectTemplate(currentTemplate.id)}
+              className="text-cyan-400 hover:text-cyan-300 flex items-center gap-1 cursor-pointer"
+            >
+              <RefreshCw className="w-3 h-3" />
+              <span>初期値に戻す</span>
+            </button>
+          </div>
+        </div>
+
+        {/* Right Live Preview Panel (7 Cols) */}
+        <div className="lg:col-span-7 bg-slate-900 border border-slate-800 rounded-2xl p-5 shadow-xl flex flex-col">
+          <div className="flex items-center justify-between pb-3 border-b border-slate-800 mb-4">
+            <div className="flex items-center gap-2">
+              <FileCheck2 className="w-4 h-4 text-emerald-400" />
+              <h2 className="font-bold text-sm text-white">リアルタイムプレビュー</h2>
+            </div>
+            <div className="flex items-center gap-2">
+              <button
+                onClick={handleCopyHtml}
+                className="px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-semibold flex items-center gap-1.5 transition-colors cursor-pointer"
+              >
+                {copied ? <Check className="w-3.5 h-3.5 text-emerald-400" /> : <Copy className="w-3.5 h-3.5" />}
+                <span>{copied ? 'コピー完了!' : 'HTMLコピー'}</span>
+              </button>
+              <button
+                onClick={handlePrintPdf}
+                className="px-3 py-1.5 rounded-lg bg-blue-600 hover:bg-blue-500 text-white text-xs font-semibold flex items-center gap-1.5 transition-colors cursor-pointer shadow-md"
+              >
+                <Printer className="w-3.5 h-3.5" />
+                <span>印刷 / PDF</span>
+              </button>
+            </div>
+          </div>
+
+          {/* Rendered HTML Container */}
+          <div className="flex-1 bg-white rounded-xl shadow-inner overflow-hidden min-h-[600px] max-h-[700px] overflow-y-auto border border-slate-700">
+            <div dangerouslySetInnerHTML={{ __html: populatedHtml }} />
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+};
