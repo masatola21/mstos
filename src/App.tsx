@@ -76,6 +76,11 @@ import {
 } from './utils/storage';
 import { PRESET_CHARACTERS } from './data/presets';
 import { matrixService } from './services/matrixService';
+import {
+  loadOrMigrateWorkspaceData,
+  saveWorkspaceData,
+  WorkspaceData,
+} from './services/workspaceStateService';
 import { 
   ManagedProduct, 
   ManagedContract, 
@@ -85,9 +90,32 @@ import {
   AutomationRule 
 } from './types/matrix';
 
+const MAX_CHAT_CONTEXT_MESSAGES = 12;
+const MAX_CHAT_CONTEXT_CHARACTERS = 16000;
+
+function buildBoundedChatContext(messages: ChatMessage[]) {
+  const context = messages.slice(-MAX_CHAT_CONTEXT_MESSAGES).map(({ role, content }) => ({ role, content }));
+  let totalCharacters = context.reduce((total, message) => total + message.content.length, 0);
+
+  while (context.length > 1 && totalCharacters > MAX_CHAT_CONTEXT_CHARACTERS) {
+    totalCharacters -= context.shift()!.content.length;
+  }
+
+  if (context.length === 1 && context[0].content.length > MAX_CHAT_CONTEXT_CHARACTERS) {
+    context[0].content = context[0].content.slice(-MAX_CHAT_CONTEXT_CHARACTERS);
+  }
+
+  return context;
+}
+
 function AppContent() {
   const { user, isLoading } = useAuth();
   const [currentTab, setCurrentTab] = useState<UnifiedNavTab>('mst_dashboard');
+  const [workspaceReady, setWorkspaceReady] = useState(false);
+  const [workspaceSyncStatus, setWorkspaceSyncStatus] = useState<'loading' | 'saving' | 'saved' | 'error'>('loading');
+  const lastSavedWorkspaceRef = useRef('');
+  const workspaceSaveRevisionRef = useRef(0);
+  const workspaceSyncEnabledRef = useRef(false);
 
   // MST Modals
   const [isConfigOpen, setIsConfigOpen] = useState(false);
@@ -132,6 +160,104 @@ function AppContent() {
   const [tools, setTools] = useState<ManagedToolAsset[]>(() => matrixService.loadTools());
   const [customLists, setCustomLists] = useState<CustomListDefinition[]>(() => matrixService.loadCustomLists());
   const [automations, setAutomations] = useState<AutomationRule[]>(() => matrixService.loadAutomations());
+
+  // AI社長とMatrixのデータをユーザー単位でSupabaseに同期し、初回は既存LocalStorageを移行する。
+  useEffect(() => {
+    let cancelled = false;
+    workspaceSyncEnabledRef.current = false;
+    workspaceSaveRevisionRef.current += 1;
+    setWorkspaceReady(false);
+    setWorkspaceSyncStatus('loading');
+
+    if (!user) return () => { cancelled = true; };
+
+    loadOrMigrateWorkspaceData(user.id)
+      .then((data) => {
+        if (cancelled) return;
+        setTopGoal(data.topGoal);
+        setProjects(data.projects);
+        setTasks(data.tasks);
+        setApprovals(data.approvals);
+        setActivityLogs(data.activityLogs);
+        setPricingRates(data.pricingRates);
+        setTokenUsageRecords(data.tokenUsage);
+        setProducts(data.products);
+        setContracts(data.contracts);
+        setInvoices(data.invoices);
+        setTools(data.tools);
+        setCustomLists(data.customLists);
+        setAutomations(data.automations);
+        lastSavedWorkspaceRef.current = JSON.stringify(data);
+        workspaceSyncEnabledRef.current = true;
+        setWorkspaceSyncStatus('saved');
+        setWorkspaceReady(true);
+      })
+      .catch((error) => {
+        if (cancelled) return;
+        console.error('Workspace cloud load failed:', error);
+        workspaceSyncEnabledRef.current = false;
+        setWorkspaceSyncStatus('error');
+        setWorkspaceReady(true);
+      });
+
+    return () => { cancelled = true; };
+  }, [user?.id]);
+
+  useEffect(() => {
+    if (!user || !workspaceReady || !workspaceSyncEnabledRef.current) return;
+
+    const workspaceData: WorkspaceData = {
+      topGoal,
+      projects,
+      tasks,
+      approvals,
+      activityLogs,
+      pricingRates,
+      tokenUsage: tokenUsageRecords,
+      products,
+      contracts,
+      invoices,
+      tools,
+      customLists,
+      automations,
+    };
+    const snapshot = JSON.stringify(workspaceData);
+    if (snapshot === lastSavedWorkspaceRef.current) return;
+
+    const revision = ++workspaceSaveRevisionRef.current;
+    setWorkspaceSyncStatus('saving');
+    const timer = window.setTimeout(() => {
+      saveWorkspaceData(user.id, workspaceData)
+        .then(() => {
+          if (revision !== workspaceSaveRevisionRef.current) return;
+          lastSavedWorkspaceRef.current = snapshot;
+          setWorkspaceSyncStatus('saved');
+        })
+        .catch((error) => {
+          if (revision !== workspaceSaveRevisionRef.current) return;
+          console.error('Workspace cloud save failed:', error);
+          setWorkspaceSyncStatus('error');
+        });
+    }, 700);
+
+    return () => window.clearTimeout(timer);
+  }, [
+    user?.id,
+    workspaceReady,
+    topGoal,
+    projects,
+    tasks,
+    approvals,
+    activityLogs,
+    pricingRates,
+    tokenUsageRecords,
+    products,
+    contracts,
+    invoices,
+    tools,
+    customLists,
+    automations,
+  ]);
 
   // Active character
   const activeCharacter =
@@ -506,10 +632,7 @@ function AppContent() {
         headers: { 'Content-Type': 'application/json' },
         signal: abortController.signal,
         body: JSON.stringify({
-          messages: newHistory.map((m) => ({
-            role: m.role,
-            content: m.content,
-          })),
+          messages: buildBoundedChatContext(newHistory),
           character: {
             ...activeCharacter,
             userProfile,
@@ -668,12 +791,102 @@ function AppContent() {
     setAutomations(matrixService.loadAutomations());
   };
 
-  const handleTriggerAutomation = (id: string) => {
+  const handleTriggerAutomation = (id: string): string => {
+    const rule = automations.find((candidate) => candidate.id === id);
+    if (!rule || !rule.isActive) throw new Error('有効な自動化ルールが見つかりません。');
+
+    const now = Date.now();
+    let resultSummary = '';
+
+    if (rule.actionType === 'create_task') {
+      let project = projects[0];
+      let nextProjects = projects;
+      if (!project) {
+        project = {
+          id: `proj-automation-${now}`,
+          name: '自動化タスク',
+          objective: '業務自動化によって作成されたタスクを管理する',
+          status: 'in_progress',
+          priority: 'medium',
+          dueDate: '',
+          createdAt: now,
+          updatedAt: now,
+        };
+        nextProjects = [project, ...projects];
+        setProjects(nextProjects);
+        saveProjects(nextProjects);
+      }
+
+      const task: TaskItem = {
+        id: `task-auto-${now}`,
+        projectId: project.id,
+        title: rule.actionConfig.taskTitle || rule.name,
+        description: `${rule.description}\n\n自動化ルール: ${rule.name}`,
+        priority: rule.actionConfig.priority || 'medium',
+        assignee: { type: 'human', name: rule.actionConfig.assignee === 'human' ? '人間 (あなた)' : 'AI社長' },
+        status: 'waiting',
+        completionCriteria: '担当者が内容を確認し、完了結果を記録すること',
+        sourceAutomationId: rule.id,
+        createdAt: now,
+        updatedAt: now,
+      };
+      const nextTasks = [task, ...tasks];
+      setTasks(nextTasks);
+      saveTasks(nextTasks);
+      resultSummary = `タスク「${task.title}」を作成しました`;
+    } else if (rule.actionType === 'create_invoice_draft') {
+      const signedContract = contracts.find((contract) => contract.status === 'signed');
+      const issueDate = new Date(now);
+      const dueDate = new Date(now);
+      dueDate.setDate(dueDate.getDate() + 30);
+      const invoice: ManagedInvoice = {
+        id: `inv-auto-${now}`,
+        invoiceNumber: `AUTO-${issueDate.toISOString().slice(0, 10).replace(/-/g, '')}-${String(now).slice(-4)}`,
+        title: rule.actionConfig.taskTitle || `【自動作成】${signedContract?.title || '請求書ドラフト'}`,
+        productId: signedContract?.productId,
+        companyId: signedContract?.companyId,
+        recipientName: signedContract?.counterpartyName || '要入力',
+        amount: signedContract?.amount || 0,
+        status: 'draft',
+        issueDate: issueDate.toISOString().slice(0, 10),
+        dueDate: dueDate.toISOString().slice(0, 10),
+        notes: signedContract ? `締結済み契約「${signedContract.title}」をもとに自動作成。発行前に金額・宛先を確認してください。` : '自動作成ドラフトです。宛先と金額を入力してから発行してください。',
+        sourceAutomationId: rule.id,
+        createdAt: now,
+        updatedAt: now,
+      };
+      matrixService.addInvoice(invoice);
+      setInvoices(matrixService.loadInvoices());
+      resultSummary = `請求書ドラフト「${invoice.invoiceNumber}」を作成しました（宛先・金額の確認が必要です）`;
+    } else if (rule.actionType === 'notify_president') {
+      const existingApproval = approvals.find((approval) => approval.sourceAutomationId === rule.id && approval.status === 'pending');
+      if (existingApproval) throw new Error('このルールの承認依頼はすでに未処理です。');
+      const approval: ApprovalItem = {
+        id: `appr-auto-${now}`,
+        taskTitle: rule.actionConfig.taskTitle || rule.name,
+        actionTitle: `自動化ルール「${rule.name}」の確認`,
+        reason: rule.actionConfig.messageTemplate || rule.description,
+        status: 'pending',
+        requestedBy: 'システム（自動化エンジン）',
+        sourceAutomationId: rule.id,
+        createdAt: now,
+      };
+      const nextApprovals = [approval, ...approvals];
+      setApprovals(nextApprovals);
+      saveApprovals(nextApprovals);
+      resultSummary = `AI社長の承認待ちに「${approval.taskTitle}」を追加しました`;
+    } else {
+      resultSummary = rule.actionConfig.messageTemplate || rule.description;
+    }
+
     matrixService.triggerAutomation(id);
     setAutomations(matrixService.loadAutomations());
+    recordActivityLog('task_created', `自動化ルール「${rule.name}」を実行: ${resultSummary}`, 'システム（自動化エンジン）');
+    setActivityLogs(loadActivityLogs());
+    return resultSummary;
   };
 
-  if (isLoading) {
+  if (isLoading || (user && !workspaceReady)) {
     return (
       <div className="min-h-screen bg-slate-950 flex flex-col items-center justify-center text-slate-300 space-y-3">
         <Loader2 className="w-8 h-8 animate-spin text-blue-500" />
@@ -757,6 +970,7 @@ function AppContent() {
             projects={projects}
             onAddProduct={handleAddProduct}
             onUpdateProduct={handleUpdateProduct}
+            onRecordUsage={handleRecordUsage}
             onAddProjectWithTasks={(newProject, newTasks) => {
               setProjects([newProject, ...projects]);
               saveProjects([newProject, ...projects]);
@@ -802,10 +1016,6 @@ function AppContent() {
             automations={automations}
             onToggleAutomation={handleToggleAutomation}
             onTriggerAutomation={handleTriggerAutomation}
-            onAddActivityLog={(log) => {
-              recordActivityLog(log.actionType, log.summary, log.actor);
-              setActivityLogs(loadActivityLogs());
-            }}
           />
         )}
 
@@ -1059,6 +1269,7 @@ function AppContent() {
         userProfile={userProfile}
         onOpenFullChat={() => setCurrentTab('ai_chat')}
         onOpenPlanProposal={(plan) => setActivePlanForModal(plan)}
+        onRecordUsage={handleRecordUsage}
       />
 
       {/* Footer */}
@@ -1066,6 +1277,13 @@ function AppContent() {
         <div className="max-w-7xl mx-auto flex flex-col sm:flex-row items-center justify-between gap-2">
           <span>MST AI経営OS × MyAI Studio 統合基盤</span>
           <div className="flex items-center gap-3">
+            <span
+              className={`text-xs ${workspaceSyncStatus === 'error' ? 'text-rose-400' : workspaceSyncStatus === 'saving' ? 'text-amber-300' : 'text-emerald-400'}`}
+              title={workspaceSyncStatus === 'error' ? 'Supabaseへの同期に失敗しました。接続設定と mst_workspace_state テーブルのマイグレーションを確認してください。' : undefined}
+            >
+              {workspaceSyncStatus === 'saving' ? 'クラウド保存中' : workspaceSyncStatus === 'saved' ? 'クラウド保存済み' : 'クラウド同期エラー'}
+            </span>
+            <span>•</span>
             <button
               onClick={() => setIsPricingModalOpen(true)}
               className="hover:text-slate-300 transition-colors"
@@ -1100,3 +1318,4 @@ export default function App() {
     </AuthProvider>
   );
 }
+

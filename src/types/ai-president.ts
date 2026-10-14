@@ -74,6 +74,7 @@ export interface TaskItem {
   status: TaskStatus;
   completionCriteria: string; // 完了条件
   resultNotes?: string; // 結果・成果メモ
+  sourceAutomationId?: string;
   createdAt: number;
   updatedAt: number;
 }
@@ -90,6 +91,7 @@ export interface ApprovalItem {
   requestedBy: string; // 申請者 (例: "AI社長", "人間")
   resolvedAt?: number;
   resolutionNote?: string;
+  sourceAutomationId?: string;
   createdAt: number;
 }
 
@@ -164,3 +166,4 @@ export interface TokenUsageRecord {
   };
   estimatedCost?: number | null; // 単価未設定または未取得の場合は null
 }
+

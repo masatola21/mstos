@@ -17,18 +17,20 @@ import {
   DollarSign
 } from 'lucide-react';
 import { ProductArchetype, PRODUCT_ARCHETYPES, ManagedProduct } from '../../types/matrix';
-import { Project, TaskItem } from '../../types/ai-president';
+import { ApiUsageData, Project, TaskItem } from '../../types/ai-president';
 
 interface ProductCoCreationWizardProps {
   isOpen: boolean;
   onClose: () => void;
   onComplete: (product: ManagedProduct, project?: Project, tasks?: TaskItem[]) => void;
+  onRecordUsage?: (params: { endpoint: 'chat'; endpointName: string; model?: string; usage: ApiUsageData }) => void;
 }
 
 export const ProductCoCreationWizard: React.FC<ProductCoCreationWizardProps> = ({
   isOpen,
   onClose,
   onComplete,
+  onRecordUsage,
 }) => {
   const [step, setStep] = useState<number>(1);
   const [archetype, setArchetype] = useState<ProductArchetype>('service_project');
@@ -97,6 +99,9 @@ export const ProductCoCreationWizard: React.FC<ProductCoCreationWizardProps> = (
       });
 
       const data = await response.json();
+      if (data.usage) {
+        onRecordUsage?.({ endpoint: 'chat', endpointName: '商品企画AI生成', model: data.model, usage: data.usage });
+      }
       const content = data.text || '';
       const match = content.match(/```json\s*([\s\S]*?)\s*```/);
       if (match) {
@@ -569,3 +574,4 @@ export const ProductCoCreationWizard: React.FC<ProductCoCreationWizardProps> = (
     </div>
   );
 };
+

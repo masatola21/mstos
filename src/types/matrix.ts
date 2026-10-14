@@ -180,6 +180,7 @@ export interface ManagedInvoice {
   dueDate: string;
   paidDate?: string;
   notes?: string;
+  sourceAutomationId?: string;
   createdAt: number;
   updatedAt: number;
 }
@@ -241,3 +242,4 @@ export interface AutomationRule {
   triggerCount: number;
   lastTriggeredAt?: number;
 }
+
