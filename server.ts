@@ -9,8 +9,29 @@ dotenv.config();
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const app = express();
 const port = process.env.PORT || 3000;
+const MAX_CHAT_CONTEXT_MESSAGES = 12;
+const MAX_CHAT_CONTEXT_CHARACTERS = 16000;
 
 app.use(express.json({ limit: '10mb' }));
+
+function boundChatMessages(input: Array<{ role?: unknown; content?: unknown }> = []) {
+  const messages = input
+    .filter((message) => typeof message.content === 'string')
+    .map((message) => ({
+      role: message.role === 'assistant' || message.role === 'model' ? 'model' : 'user',
+      content: message.content as string,
+    }))
+    .slice(-MAX_CHAT_CONTEXT_MESSAGES);
+
+  let totalCharacters = messages.reduce((total, message) => total + message.content.length, 0);
+  while (messages.length > 1 && totalCharacters > MAX_CHAT_CONTEXT_CHARACTERS) {
+    totalCharacters -= messages.shift()!.content.length;
+  }
+  if (messages.length === 1 && messages[0].content.length > MAX_CHAT_CONTEXT_CHARACTERS) {
+    messages[0].content = messages[0].content.slice(-MAX_CHAT_CONTEXT_CHARACTERS);
+  }
+  return messages;
+}
 
 // Initialize GoogleGenAI
 const ai = new GoogleGenAI({
@@ -125,9 +146,16 @@ function buildSystemInstruction(char: CharacterConfig): string {
 // 1. Chat Completion / Streaming
 app.post('/api/chat', async (req, res) => {
   try {
-    const { messages, character, stream } = req.body;
+    const { messages, message, history, character, stream } = req.body;
+    const requestedMessages = Array.isArray(messages)
+      ? messages
+      : [
+          ...(Array.isArray(history) ? history : []),
+          ...(typeof message === 'string' ? [{ role: 'user', content: message }] : []),
+        ];
+    const boundedMessages = boundChatMessages(requestedMessages);
 
-    if (!messages || !Array.isArray(messages) || messages.length === 0) {
+    if (boundedMessages.length === 0) {
       return res.status(400).json({ error: 'messages array is required' });
     }
 
@@ -139,9 +167,9 @@ app.post('/api/chat', async (req, res) => {
     });
 
     // Format contents for Gemini
-    const contents = messages.map((m: { role: string; content: string }) => ({
-      role: m.role === 'assistant' || m.role === 'model' ? 'model' : 'user',
-      parts: [{ text: m.content || '' }],
+    const contents = boundedMessages.map((m) => ({
+      role: m.role,
+      parts: [{ text: m.content }],
     }));
 
     if (stream) {
@@ -398,3 +426,4 @@ if (process.env.NODE_ENV !== 'production') {
 app.listen(port, () => {
   console.log(`Server listening on port ${port}`);
 });
+
