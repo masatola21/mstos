@@ -14,44 +14,45 @@ import {
   Check
 } from 'lucide-react';
 import { AutomationRule } from '../../types/matrix';
-import { ActivityLog } from '../../types/ai-president';
 
 interface AutomationViewProps {
   automations: AutomationRule[];
   onToggleAutomation: (id: string) => void;
-  onTriggerAutomation: (id: string) => void;
-  onAddActivityLog?: (log: Omit<ActivityLog, 'id' | 'timestamp'>) => void;
+  onTriggerAutomation: (id: string) => string;
 }
 
 export const AutomationView: React.FC<AutomationViewProps> = ({
   automations,
   onToggleAutomation,
   onTriggerAutomation,
-  onAddActivityLog,
 }) => {
-  const [successToast, setSuccessToast] = useState<string | null>(null);
+  const [toast, setToast] = useState<{ message: string; isError: boolean } | null>(null);
 
   const handleTestRun = (rule: AutomationRule) => {
-    onTriggerAutomation(rule.id);
-    if (onAddActivityLog) {
-      onAddActivityLog({
-        actionType: 'task_created',
-        summary: `非AI自動化ルール実行: 「${rule.name}」`,
-        details: `トリガー: ${rule.triggerEvent} -> アクション: ${rule.actionType} が正常に実行されました。`,
-        actor: 'システム（自動化エンジン）',
-      });
+    const actionLabels: Record<AutomationRule['actionType'], string> = {
+      create_task: 'タスクを作成',
+      create_invoice_draft: '請求書ドラフトを作成',
+      create_activity_log: '活動履歴を記録',
+      notify_president: 'AI社長の承認待ちに追加',
+    };
+    if (!window.confirm(`「${rule.name}」を今すぐ実行します。\n${actionLabels[rule.actionType]}します。続けますか？`)) return;
+
+    try {
+      const result = onTriggerAutomation(rule.id);
+      setToast({ message: result, isError: false });
+    } catch (error) {
+      setToast({ message: error instanceof Error ? error.message : '自動化を実行できませんでした。', isError: true });
     }
-    setSuccessToast(`ルール「${rule.name}」をテスト実行しました（実行回数 +1）`);
-    setTimeout(() => setSuccessToast(null), 3500);
+    setTimeout(() => setToast(null), 3500);
   };
 
   return (
     <div className="space-y-6">
       {/* Toast */}
-      {successToast && (
-        <div className="fixed bottom-6 right-6 z-50 bg-emerald-950 border border-emerald-500/50 text-emerald-200 px-4 py-3 rounded-xl shadow-2xl flex items-center gap-2 text-xs animate-bounce">
-          <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
-          <span>{successToast}</span>
+      {toast && (
+        <div className={`fixed bottom-6 right-6 z-50 ${toast.isError ? 'bg-rose-950 border-rose-500/50 text-rose-200' : 'bg-emerald-950 border-emerald-500/50 text-emerald-200'} border px-4 py-3 rounded-xl shadow-2xl flex items-center gap-2 text-xs animate-bounce`}>
+          <CheckCircle2 className={`w-4 h-4 ${toast.isError ? 'text-rose-400' : 'text-emerald-400'} shrink-0`} />
+          <span>{toast.message}</span>
         </div>
       )}
 
@@ -68,7 +69,7 @@ export const AutomationView: React.FC<AutomationViewProps> = ({
             </span>
           </div>
           <p className="text-xs text-slate-400 mt-1">
-            APIトークンを消費せず、ステータス変更や期日に連動してタスク生成・請求起案・通知を自動実行
+            APIトークンを使わずに、今すぐ実行したルールに応じてタスク・請求書ドラフト・承認依頼・履歴を作成します。
           </p>
         </div>
 
@@ -158,10 +159,11 @@ export const AutomationView: React.FC<AutomationViewProps> = ({
 
                 <button
                   onClick={() => handleTestRun(rule)}
-                  className="px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-amber-600 hover:text-white text-slate-300 border border-slate-700 text-xs font-semibold flex items-center gap-1.5 transition-colors cursor-pointer"
+                  disabled={!rule.isActive}
+                  className="px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-amber-600 hover:text-white text-slate-300 border border-slate-700 text-xs font-semibold flex items-center gap-1.5 transition-colors cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
                 >
                   <Play className="w-3 h-3" />
-                  <span>テスト実行</span>
+                  <span>今すぐ実行</span>
                 </button>
               </div>
             </div>
@@ -171,3 +173,4 @@ export const AutomationView: React.FC<AutomationViewProps> = ({
     </div>
   );
 };
+
