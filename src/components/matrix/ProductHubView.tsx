@@ -21,7 +21,7 @@ import {
   Edit2
 } from 'lucide-react';
 import { ManagedProduct, PRODUCT_ARCHETYPES, ProductArchetype, ManagedContract, ManagedInvoice, ManagedToolAsset } from '../../types/matrix';
-import { Project, TaskItem } from '../../types/ai-president';
+import { ApiUsageData, Project, TaskItem } from '../../types/ai-president';
 import { ProductCoCreationWizard } from './ProductCoCreationWizard';
 
 interface ProductHubViewProps {
@@ -34,6 +34,7 @@ interface ProductHubViewProps {
   onAddProduct: (product: Omit<ManagedProduct, 'id' | 'createdAt' | 'updatedAt'>) => void;
   onUpdateProduct: (id: string, updates: Partial<ManagedProduct>) => void;
   onAddProjectWithTasks?: (project: Project, tasks: TaskItem[]) => void;
+  onRecordUsage?: (params: { endpoint: 'chat'; endpointName: string; model?: string; usage: ApiUsageData }) => void;
 }
 
 export const ProductHubView: React.FC<ProductHubViewProps> = ({
@@ -46,6 +47,7 @@ export const ProductHubView: React.FC<ProductHubViewProps> = ({
   onAddProduct,
   onUpdateProduct,
   onAddProjectWithTasks,
+  onRecordUsage,
 }) => {
   const [selectedProductId, setSelectedProductId] = useState<string>(products[0]?.id || '');
   const [activeTab, setActiveTab] = useState<'overview' | 'tasks' | 'marketing' | 'finance'>('overview');
@@ -509,6 +511,7 @@ export const ProductHubView: React.FC<ProductHubViewProps> = ({
         <ProductCoCreationWizard
           isOpen={isWizardOpen}
           onClose={() => setIsWizardOpen(false)}
+          onRecordUsage={onRecordUsage}
           onComplete={(newProduct, newProject, newTasks) => {
             onAddProduct(newProduct);
             if (newProject && newTasks && onAddProjectWithTasks) {
@@ -596,3 +599,4 @@ export const ProductHubView: React.FC<ProductHubViewProps> = ({
     </div>
   );
 };
+
