@@ -887,6 +887,34 @@ COMMENT ON COLUMN public.deals.proposal_plan_name IS '提案プラン名・商�
 COMMENT ON COLUMN public.deals.total_amount IS '想定商談総額 (円)';
 COMMENT ON COLUMN public.customers.last_updated_at IS '顧客レコード最終更新日時';
 
+-- Part 13: AI社長・Matrixのユーザー別クラウド保存
+CREATE TABLE IF NOT EXISTS public.mst_workspace_state (
+  user_id uuid PRIMARY KEY REFERENCES auth.users(id) ON DELETE CASCADE,
+  data jsonb NOT NULL DEFAULT '{}'::jsonb,
+  updated_at timestamptz NOT NULL DEFAULT now()
+);
+
+ALTER TABLE public.mst_workspace_state ENABLE ROW LEVEL SECURITY;
+
+DROP POLICY IF EXISTS "Users can read their own workspace state" ON public.mst_workspace_state;
+CREATE POLICY "Users can read their own workspace state"
+  ON public.mst_workspace_state FOR SELECT TO authenticated
+  USING (auth.uid() = user_id);
+
+DROP POLICY IF EXISTS "Users can insert their own workspace state" ON public.mst_workspace_state;
+CREATE POLICY "Users can insert their own workspace state"
+  ON public.mst_workspace_state FOR INSERT TO authenticated
+  WITH CHECK (auth.uid() = user_id);
+
+DROP POLICY IF EXISTS "Users can update their own workspace state" ON public.mst_workspace_state;
+CREATE POLICY "Users can update their own workspace state"
+  ON public.mst_workspace_state FOR UPDATE TO authenticated
+  USING (auth.uid() = user_id)
+  WITH CHECK (auth.uid() = user_id);
+
+GRANT SELECT, INSERT, UPDATE ON public.mst_workspace_state TO authenticated;
+
 -- ==============================================================================
 -- 完了
 -- ==============================================================================
+
