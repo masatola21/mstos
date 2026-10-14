@@ -15,6 +15,7 @@ interface AuthContextType {
   isLoading: boolean;
   config: SupabaseConfigInfo;
   signIn: (email: string, password: string) => Promise<SignInResult>;
+  signUp: (email: string, password: string) => Promise<SignInResult>;
   signOut: () => Promise<void>;
   refreshConfig: () => void;
 }
@@ -120,6 +121,46 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   };
 
+  const signUp = async (email: string, password: string): Promise<SignInResult> => {
+    const supabase = getSupabase();
+    if (!supabase) {
+      return {
+        error: 'Supabaseの接続情報が設定されていません。',
+        solution: '画面上部の「接続設定」から設定してください。'
+      };
+    }
+
+    try {
+      const { data, error } = await supabase.auth.signUp({
+        email: email.trim(),
+        password,
+      });
+
+      if (error) {
+        return {
+          error: error.message,
+          rawMessage: error.message,
+          solution: 'パスワードは6文字以上で入力してください。'
+        };
+      }
+
+      if (data.session) {
+        setSession(data.session);
+        setUser(data.user);
+        return {};
+      }
+
+      return {
+        error: 'アカウントが作成されました。ログインしてください。',
+      };
+    } catch (err: any) {
+      return {
+        error: err?.message || 'アカウント作成中にエラーが発生しました。',
+        rawMessage: String(err),
+      };
+    }
+  };
+
   const signOut = async () => {
     const supabase = getSupabase();
     if (supabase) {
@@ -137,6 +178,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         isLoading,
         config,
         signIn,
+        signUp,
         signOut,
         refreshConfig,
       }}

@@ -1,14 +1,15 @@
 import React, { useState } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { getSupabase } from '../lib/supabaseClient';
-import { 
-  Lock, 
-  Mail, 
-  ShieldCheck, 
-  AlertCircle, 
-  SlidersHorizontal, 
+import {
+  Lock,
+  Mail,
+  ShieldCheck,
+  AlertCircle,
+  SlidersHorizontal,
   Database,
   ArrowRight,
+  UserPlus,
   FileCode2,
   CheckCircle2,
   Loader2,
@@ -22,9 +23,11 @@ interface AuthScreenProps {
 }
 
 export const AuthScreen: React.FC<AuthScreenProps> = ({ onOpenConfig, onOpenRls }) => {
-  const { signIn, config } = useAuth();
+  const { signIn, signUp, config } = useAuth();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [isSignUp, setIsSignUp] = useState(false);
+  const [signUpResult, setSignUpResult] = useState<string | null>(null);
   const [errorDetails, setErrorDetails] = useState<{
     message: string;
     solution?: string;
@@ -73,6 +76,28 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({ onOpenConfig, onOpenRls 
     }
 
     setIsSubmitting(true);
+
+    if (isSignUp) {
+      const result = await signUp(email, password);
+      setIsSubmitting(false);
+      if (result.error) {
+        if (result.error.includes('アカウントが作成されました')) {
+          setSignUpResult(result.error);
+          setIsSignUp(false);
+        } else {
+          setErrorDetails({
+            message: result.error,
+            solution: result.solution,
+            rawMessage: result.rawMessage,
+            code: result.errorCode,
+          });
+        }
+      } else {
+        setSignUpResult('アカウントが作成されました。自動的にログインしました。');
+      }
+      return;
+    }
+
     const result = await signIn(email, password);
     setIsSubmitting(false);
 
@@ -166,7 +191,7 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({ onOpenConfig, onOpenRls 
               <div className="inline-flex p-3 rounded-2xl bg-blue-500/10 border border-blue-500/20 text-blue-400 mb-2 shadow-inner">
                 <Lock className="w-6 h-6" />
               </div>
-              <h1 className="text-2xl font-black tracking-tight text-white">社内メンバーログイン</h1>
+              <h1 className="text-2xl font-black tracking-tight text-white">{isSignUp ? 'アカウント作成' : '社内メンバーログイン'}</h1>
               <p className="text-xs text-slate-400 leading-relaxed">
                 MST AI経営OSへアクセスするには社内アカウントで認証を行ってください。未ログイン状態では業務データは表示されません。
               </p>
@@ -270,6 +295,13 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({ onOpenConfig, onOpenRls 
                 </div>
               )}
 
+              {signUpResult && (
+                <div className="p-3 rounded-xl bg-emerald-500/10 border border-emerald-500/30 text-emerald-300 text-xs flex items-center gap-2 animate-fade-in">
+                  <CheckCircle2 className="w-4 h-4 shrink-0" />
+                  <span>{signUpResult}</span>
+                </div>
+              )}
+
               <button
                 type="submit"
                 disabled={isSubmitting}
@@ -278,7 +310,12 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({ onOpenConfig, onOpenRls 
                 {isSubmitting ? (
                   <>
                     <Loader2 className="w-4 h-4 animate-spin" />
-                    <span>認証中...</span>
+                    <span>処理中...</span>
+                  </>
+                ) : isSignUp ? (
+                  <>
+                    <UserPlus className="w-4 h-4" />
+                    <span>アカウントを作成</span>
                   </>
                 ) : (
                   <>
@@ -287,6 +324,20 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({ onOpenConfig, onOpenRls 
                   </>
                 )}
               </button>
+
+              <div className="text-center pt-1">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setIsSignUp(!isSignUp);
+                    setErrorDetails(null);
+                    setSignUpResult(null);
+                  }}
+                  className="text-xs text-blue-400 hover:text-blue-300 transition-colors"
+                >
+                  {isSignUp ? 'ログイン画面に戻る' : '初めての方はアカウントを作成'}
+                </button>
+              </div>
             </form>
 
             {/* Internal System Policy notice */}
