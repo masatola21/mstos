@@ -25,7 +25,7 @@ export const PresetsView: React.FC<PresetsViewProps> = ({
   onEditCharacter,
   onDeleteCharacter,
 }) => {
-  const roleModes = AI_WORK_MODES.filter((mode) => mode.id !== 'president');
+  const roleModes = AI_WORK_MODES;
   const registeredCharacters = (Array.isArray(characters) ? characters : []).filter((character) => character && character.id !== 'preset-ceo');
 
   return (
