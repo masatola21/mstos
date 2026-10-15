@@ -572,6 +572,7 @@ function AppContent() {
   };
 
   const handleRunAssignedTask = async (task: TaskItem) => {
+    if (task.status === 'pending_approval') throw new Error('このタスクは承認待ちです。承認または却下後に再実行できます。');
     if (taskExecutionInProgress.current) throw new Error('別の担当AIタスクを実行中です。完了後にもう一度お試しください。');
     taskExecutionInProgress.current = true;
     try {
@@ -586,8 +587,12 @@ function AppContent() {
     if (!agentCharacter) throw new Error('このタスクに割り当てられた登録済みAIが見つかりません。担当を選び直してください。');
     const runtime = resolveChatRuntime(workModeId, agentCharacter);
     const resolvedMode = resolveWorkMode(mode, aiModelSettings.roleOverrides);
+    const latestRejection = approvals
+      .filter((approval) => approval.taskId === task.id && approval.status === 'rejected')
+      .sort((a, b) => (b.resolvedAt || b.createdAt) - (a.resolvedAt || a.createdAt))[0];
     const prompt = [
       `担当タスク: ${task.title}`,
+      latestRejection?.resolutionNote ? `前回のレビュー指摘（今回反映してください）: ${latestRejection.resolutionNote}` : '',
       task.description ? `目的・背景: ${task.description}` : '',
       task.completionCriteria ? `完了条件: ${task.completionCriteria}` : '',
       'このタスクの成果物を作成してください。まず与えられた情報だけで進め、不足する前提は明記してください。外部への送信・公開や本番変更は行わず、レビュー可能な草案・成果として提示してください。',
@@ -658,6 +663,7 @@ function AppContent() {
       reason: `${resolvedMode.name}が成果物を作成しました。内容を確認し、承認後にナレッジへ登録します。`,
       status: 'pending',
       requestedBy: resolvedMode.name,
+      reviewArtifact: draftArtifact,
       createdAt: now,
     };
     const nextApprovals = [approval, ...approvals];
@@ -816,8 +822,9 @@ function AppContent() {
     let approvedKnowledge: KnowledgeItem | undefined;
     let nextKnowledge = knowledgeItems;
 
-    if (status === 'approved' && taskForApproval?.draftArtifact) {
-      const draft = taskForApproval.draftArtifact;
+    const reviewArtifact = targetApproval.reviewArtifact || taskForApproval?.draftArtifact;
+    if (status === 'approved' && taskForApproval && reviewArtifact) {
+      const draft = reviewArtifact;
       const existing = taskForApproval.knowledgeItemId
         ? knowledgeItems.find((item) => item.id === taskForApproval.knowledgeItemId)
         : knowledgeItems.find((item) => item.sourceTaskId === taskForApproval.id);
@@ -855,7 +862,7 @@ function AppContent() {
     if (targetApproval.taskId) {
       const updatedTasks = tasks.map((task) => {
         if (task.id !== targetApproval.taskId) return task;
-        const isApprovedDraft = status === 'approved' && Boolean(task.draftArtifact);
+        const isApprovedDraft = status === 'approved' && Boolean(reviewArtifact);
         return {
           ...task,
           status: status === 'approved' ? ('completed' as const) : ('in_progress' as const),
@@ -863,7 +870,7 @@ function AppContent() {
             ? `承認済み。成果物をナレッジ「${approvedKnowledge.title}」に登録しました。`
             : task.resultNotes,
           knowledgeItemId: approvedKnowledge?.id || task.knowledgeItemId,
-          draftArtifact: isApprovedDraft ? undefined : task.draftArtifact,
+          draftArtifact: isApprovedDraft && task.draftArtifact?.content === reviewArtifact?.content ? undefined : task.draftArtifact,
           updatedAt: now,
         };
       });
