@@ -44,13 +44,16 @@ export const DiagnosisFormsWorkspace: React.FC = () => {
     catch { setError('設問定義はJSONオブジェクトで入力してください。'); return; }
     setError(''); setNotice('');
     const slug=(name.trim().toLowerCase().replace(/[^a-z0-9ぁ-んァ-ヶ一-龠]+/g,'-').replace(/^-|-$/g,'')||'diagnosis')+'-'+crypto.randomUUID().slice(0,8);
-    const {error:insertError}=await supabase.from('diagnosis_forms').insert({
-      name:name.trim(),public_slug:slug,status:'draft',questionnaire_version:'v1.0',
-      definition,privacy_notice:privacyNotice.trim()||null
-    });
-    if(insertError){setError(insertError.message);return;}
-    setName('');setPrivacyNotice('');setDefinitionText('{"questions":[]}');
-    setNotice('下書きフォームを保存しました。公開フォームURLと回答受付は、公開画面を設定するまで有効になりません。');
+    const payload = {
+      name:name.trim(), questionnaire_version:'v1.0', definition,
+      privacy_notice:privacyNotice.trim()||null
+    };
+    const result = selectedId
+      ? await supabase.from('diagnosis_forms').update(payload).eq('id',selectedId)
+      : await supabase.from('diagnosis_forms').insert({...payload,public_slug:slug,status:'draft'});
+    if(result.error){setError(result.error.message);return;}
+    setSelectedId('');setName('');setPrivacyNotice('');setDefinitionText('{"questions":[]}');
+    setNotice('フォーム定義を保存しました。公開フォームURLと回答受付は、公開画面を設定するまで有効になりません。');
     await load();
   };
 
@@ -99,17 +102,17 @@ export const DiagnosisFormsWorkspace: React.FC = () => {
         </div>}
       </section>
       <form onSubmit={saveForm} className="space-y-3 rounded-xl border border-slate-800 bg-slate-900 p-4">
-        <h3 className="font-semibold text-white"><Plus className="mr-1 inline h-4 w-4"/>新しいフォーム定義</h3>
+        <div className="mb-2 flex items-center justify-between"><h3 className="font-semibold text-white"><Plus className="mr-1 inline h-4 w-4"/>{selectedId?'フォーム定義を編集':'新しいフォーム定義'}</h3>{selectedId&&<button type="button" onClick={()=>{setSelectedId('');setName('');setPrivacyNotice('');setDefinitionText('{\"questions\":[]}');}} className="text-xs text-blue-300">新規フォーム</button>}</div>
         <label className="block text-xs text-slate-400">フォーム名<input required value={name} onChange={e=>setName(e.target.value)} className="mt-1 w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-white" placeholder="例：AI経営診断フォーム"/></label>
         <label className="block text-xs text-slate-400">個人情報の取り扱い案内<textarea value={privacyNotice} onChange={e=>setPrivacyNotice(e.target.value)} rows={2} className="mt-1 w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-white"/></label>
         <label className="block text-xs text-slate-400">設問定義（JSON）<textarea value={definitionText} onChange={e=>setDefinitionText(e.target.value)} rows={8} className="mt-1 w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 font-mono text-xs text-white"/></label>
-        <button disabled={loading} className="flex items-center gap-2 rounded-lg bg-blue-600 px-3 py-2 text-sm font-semibold text-white disabled:opacity-50"><Save className="h-4 w-4"/>下書き保存</button>
+        <button disabled={loading} className="flex items-center gap-2 rounded-lg bg-blue-600 px-3 py-2 text-sm font-semibold text-white disabled:opacity-50"><Save className="h-4 w-4"/>{selectedId?'変更を保存':'下書き保存'}</button>
         <p className="text-xs text-amber-300">公開フォーム画面と匿名回答APIは未接続のため、ここでは公開状態にできません。回答受付は公開エンドポイント接続後に有効化します。</p>
       </form>
     </div>}
     {section==='answers'&&<section className="overflow-hidden rounded-xl border border-slate-800 bg-slate-900">
-      {loading?<p className="p-4 text-sm text-slate-400">読み込み中…</p>:answers.length===0?<p className="p-6 text-center text-sm text-slate-400">フォーム回答はまだありません。</p>:<div className="overflow-x-auto"><table className="w-full text-left text-sm"><thead className="text-xs text-slate-400"><tr className="border-b border-slate-800"><th className="p-3">回答者</th><th className="p-3">フォーム</th><th className="p-3">受付日時</th><th className="p-3">スコア</th><th className="p-3">状態</th><th className="p-3">確認</th></tr></thead><tbody>{answers.map(answer=><tr key={answer.id} className="border-b border-slate-800/70"><td className="p-3 text-white">{answer.respondent_name||answer.respondent_email||'回答者未特定'}<div className="text-xs text-slate-500">{answer.respondent_email||''}</div></td><td className="p-3 text-slate-300">{forms.find(form=>form.id===answer.form_id)?.name||answer.form_id.slice(0,8)}</td><td className="p-3 text-slate-400">{new Date(answer.submitted_at).toLocaleString('ja-JP')}</td><td className="p-3 text-slate-300">{answer.score??'—'}</td><td className="p-3 text-slate-300">{answer.status}</td><td className="p-3"><select value={answer.status} onChange={e=>void updateSubmission(answer,e.target.value as Submission['status'])} className="rounded border border-slate-700 bg-slate-950 px-2 py-1 text-xs text-white"><option value="received">受付</option><option value="reviewing">確認中</option><option value="converted">CRM反映済</option><option value="rejected">対象外</option></select></td></tr>)}</tbody></table></div>}
-      <p className="border-t border-slate-800 p-3 text-xs text-slate-400">回答をCRMへ反映する処理は、担当者・会社の重複照合と承認を通して行います。回答一覧では状態管理のみ行います。</p>
+      {loading?<p className="p-4 text-sm text-slate-400">読み込み中…</p>:answers.length===0?<p className="p-6 text-center text-sm text-slate-400">フォーム回答はまだありません。</p>:<div className="overflow-x-auto"><table className="w-full text-left text-sm"><thead className="text-xs text-slate-400"><tr className="border-b border-slate-800"><th className="p-3">回答者</th><th className="p-3">フォーム</th><th className="p-3">受付日時</th><th className="p-3">スコア</th><th className="p-3">状態</th><th className="p-3">確認</th></tr></thead><tbody>{answers.map(answer=><tr key={answer.id} className="border-b border-slate-800/70"><td className="p-3 text-white">{answer.respondent_name||answer.respondent_email||'回答者未特定'}<div className="text-xs text-slate-500">{answer.respondent_email||''}</div></td><td className="p-3 text-slate-300">{forms.find(form=>form.id===answer.form_id)?.name||answer.form_id.slice(0,8)}</td><td className="p-3 text-slate-400">{new Date(answer.submitted_at).toLocaleString('ja-JP')}</td><td className="p-3 text-slate-300">{answer.score??'—'}</td><td className="p-3 text-slate-300">{answer.status}</td><td className="p-3"><select value={answer.status} onChange={e=>void updateSubmission(answer,e.target.value as Submission['status'])} className="rounded border border-slate-700 bg-slate-950 px-2 py-1 text-xs text-white"><option value="received">受付</option><option value="reviewing">確認中</option><option value="rejected">対象外</option></select></td></tr>)}</tbody></table></div>}
+      <p className="border-t border-slate-800 p-3 text-xs text-slate-400">公開回答API・CRMとの自動照合は未接続です。現時点では回答状態の確認のみ行えます。</p>
     </section>}
   </div>;
 };
