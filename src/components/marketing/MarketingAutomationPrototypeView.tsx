@@ -8,15 +8,85 @@ interface Props {
 }
 
 const triggerOptions: Array<{ value: MarketingTrigger; label: string }> = [
+  { value: 'prospect_selected', label: '営業対象に選ばれた時' },
   { value: 'lead_created', label: '見込み客が登録された時' },
+  { value: 'line_registered', label: 'LINE登録された時' },
+  { value: 'diagnosis_invited', label: '診断案内を送った時' },
   { value: 'diagnosis_completed', label: '診断が完了した時' },
+  { value: 'report_approved', label: '診断レポートが承認された時' },
+  { value: 'meeting_completed', label: '面談が完了した時' },
   { value: 'tag_added', label: '指定タグが付いた時' },
   { value: 'booking_created', label: '予約が登録された時' },
+  { value: 'deal_stage_changed', label: '商談ステージが変わった時' },
   { value: 'deal_won', label: '商談が成約した時' },
+  { value: 'proposal_approved', label: '提案書が承認された時' },
+  { value: 'contract_sent', label: '契約書を送付した時' },
+  { value: 'contract_signed', label: '契約が締結された時' },
+  { value: 'invoice_due', label: '請求予定日になった時' },
+  { value: 'invoice_overdue', label: '請求期日を超過した時' },
+  { value: 'retainer_period', label: '顧問サポート時期になった時' },
+  { value: 'project_milestone', label: '構築工程の節目に到達した時' },
   { value: 'manual', label: '手動で開始' },
 ];
 const channelLabels: Record<MarketingChannel, string> = { line: 'LINE', email: 'メール', both: 'LINE + メール' };
 const lineMessageLabels: Record<MarketingLineMessageType, string> = { text: 'テキスト', image: '画像', flex: 'Flex' };
+
+const workflowStages = [
+  {
+    title: '見込み企業の調査・営業',
+    trigger: '企業を調査し、営業対象を選ぶ',
+    automation: '企業・担当者の登録、対象リスト作成、選択した宛先への一括配信、配信履歴と停止対象の管理',
+    ai: '企業情報の要約、優先度や適合理由の整理、個社別メール文案の作成',
+    approval: '送信先と初回文案を人が確認してから配信',
+    data: '会社・見込み企業・配信同意・営業履歴',
+    status: '接続・実行処理が必要',
+  },
+  {
+    title: '登録・診断案内',
+    trigger: 'LINE登録、手動リード登録、相談申込',
+    automation: 'リード化、登録シナリオ開始、診断URL発行、メール/LINE案内、回答の保存と重複防止',
+    ai: '顧客に合わせた案内文の調整（必要な場合のみ）',
+    approval: '案内テンプレートは事前承認し、個別送信時は必要に応じて確認',
+    data: 'リード・LINE連携・診断フォーム・配信履歴',
+    status: '診断管理あり / 公開フォーム・配信未接続',
+  },
+  {
+    title: '診断・レポート',
+    trigger: '顧客がURLから診断を回答',
+    automation: '必須回答チェック、点数計算、回答の保存、診断と会社/リードの紐付け',
+    ai: '回答の解釈、根拠付き所見、改善提案、商品マスタに基づく推奨案とレポート草案',
+    approval: '人がレポートを確認・承認してから顧客へ送付',
+    data: '設問マスタ・診断回答・商品マスタ・レポート',
+    status: '社内診断・AIレポート基盤あり / 公開回答URL未実装',
+  },
+  {
+    title: '面談・商談',
+    trigger: '相談希望、診断結果、顧客の予約',
+    automation: 'カレンダー候補提示、予約登録、確認/リマインド、商談レコード作成、次回タスク発行',
+    ai: '面談前の顧客・診断要約、議事録の整理、次の提案候補',
+    approval: '日時確定と商談ステージ判断は人が行う',
+    data: 'リード・予約・商談・面談記録',
+    status: '顧客/商談台帳あり / カレンダー接続未実装',
+  },
+  {
+    title: '提案・契約',
+    trigger: '商談ステージ更新、提案作成依頼',
+    automation: '商品マスタと提案テンプレートから金額・項目を反映、書類生成、送付状態/返信状態の記録',
+    ai: '顧客課題に沿った提案説明・FAQ・メール文案の作成',
+    approval: '提案内容・金額・契約条件を人が承認してから送付',
+    data: '商談・商品・提案テンプレート・契約・送付履歴',
+    status: '台帳・テンプレート画面あり / 送付・返信連携未実装',
+  },
+  {
+    title: '請求・顧問・構築支援',
+    trigger: '契約締結、請求日、顧問日、工程の節目',
+    automation: '契約条件から請求書/月額請求を生成、期日通知、顧問/構築面談の案内とタスク発行',
+    ai: '顧問面談の論点整理、進捗報告やサポート案内の草案（必要な場合のみ）',
+    approval: '請求額・送信内容・契約変更など重要事項を人が承認',
+    data: '契約・請求・商品/料金・顧問予定・プロジェクト工程',
+    status: '契約/請求台帳あり / 定期実行・送信連携未実装',
+  },
+];
 
 function isHttpsUrl(value: string): boolean {
   try {
@@ -47,7 +117,7 @@ const emptyScenario = (): Omit<MarketingScenario, 'id' | 'updatedAt'> => ({
 });
 
 export const MarketingAutomationPrototypeView: React.FC<Props> = ({ scenarios, onScenariosChange }) => {
-  const [activeTab, setActiveTab] = useState<'overview' | 'scenarios' | 'connections'>('overview');
+  const [activeTab, setActiveTab] = useState<'overview' | 'workflow' | 'scenarios' | 'connections'>('overview');
   const [editing, setEditing] = useState<MarketingScenario | null>(null);
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [form, setForm] = useState(emptyScenario());
@@ -140,6 +210,7 @@ export const MarketingAutomationPrototypeView: React.FC<Props> = ({ scenarios, o
 
   const tabs = [
     { id: 'overview' as const, label: '顧客導線', icon: GitBranch },
+    { id: 'workflow' as const, label: '業務とAIの役割', icon: Users },
     { id: 'scenarios' as const, label: 'シナリオ設定', icon: Zap },
     { id: 'connections' as const, label: 'LINE・メール接続', icon: Webhook },
   ];
@@ -189,6 +260,32 @@ export const MarketingAutomationPrototypeView: React.FC<Props> = ({ scenarios, o
         <section className="rounded-2xl border border-slate-800 bg-slate-900 p-5"><div className="flex items-center gap-2"><Activity className="h-4 w-4 text-indigo-300" /><h2 className="font-bold text-white">保存先と接続状態</h2></div><p className="mt-2 text-sm text-slate-300">シナリオはユーザー別のSupabaseワークスペースに保存します。LINE・メールの認証情報はブラウザーには保存せず、サーバー側の接続設定後に実配信を追加します。</p><button onClick={() => setActiveTab('connections')} className="mt-3 text-xs font-semibold text-indigo-300 hover:text-indigo-200">接続状況を確認 →</button></section>
       </>}
 
+      {activeTab === 'workflow' && <div className="space-y-4">
+        <section className="rounded-2xl border border-indigo-500/30 bg-indigo-950/25 p-5">
+          <h2 className="text-lg font-bold text-white">営業・顧客対応を一つの流れで管理</h2>
+          <p className="mt-2 text-sm leading-6 text-slate-300">条件判定・計算・保存・定型通知はOSが処理し、調査・解釈・文章案が必要な時だけ専門AIを呼び出します。顧客への送信、金額や契約条件の確定は承認を通します。</p>
+          <div className="mt-4 flex flex-wrap gap-2 text-[11px]">
+            <span className="rounded-full bg-cyan-500/10 px-3 py-1.5 text-cyan-200">自動処理：ルールで実行、AI費用なし</span>
+            <span className="rounded-full bg-purple-500/10 px-3 py-1.5 text-purple-200">AI：必要な場面だけ呼び出し</span>
+            <span className="rounded-full bg-amber-500/10 px-3 py-1.5 text-amber-200">承認：顧客送信・金額・契約</span>
+          </div>
+        </section>
+        <div className="space-y-3">
+          {workflowStages.map((stage, index) => <article key={stage.title} className="rounded-2xl border border-slate-800 bg-slate-900 p-5">
+            <div className="flex flex-wrap items-start justify-between gap-3">
+              <div className="flex items-start gap-3"><span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-xl bg-indigo-500/15 text-sm font-black text-indigo-200">{index + 1}</span><div><h3 className="font-bold text-white">{stage.title}</h3><p className="mt-1 text-xs text-slate-400">開始条件：{stage.trigger}</p></div></div>
+              <span className="rounded-full border border-slate-700 bg-slate-950 px-2.5 py-1 text-[10px] text-slate-300">{stage.status}</span>
+            </div>
+            <div className="mt-4 grid gap-3 md:grid-cols-3">
+              <div className="rounded-xl border border-cyan-500/15 bg-cyan-950/20 p-3"><div className="text-[11px] font-bold text-cyan-200">OSの自動処理</div><p className="mt-2 text-xs leading-5 text-slate-300">{stage.automation}</p></div>
+              <div className="rounded-xl border border-purple-500/15 bg-purple-950/20 p-3"><div className="text-[11px] font-bold text-purple-200">必要な時だけAI</div><p className="mt-2 text-xs leading-5 text-slate-300">{stage.ai}</p></div>
+              <div className="rounded-xl border border-amber-500/15 bg-amber-950/20 p-3"><div className="text-[11px] font-bold text-amber-200">人の確認・保存データ</div><p className="mt-2 text-xs leading-5 text-slate-300">{stage.approval}</p><p className="mt-2 border-t border-slate-800 pt-2 text-[10px] leading-4 text-slate-500">記録：{stage.data}</p></div>
+            </div>
+          </article>)}
+        </div>
+        <p className="rounded-xl border border-amber-500/20 bg-amber-950/20 p-4 text-xs leading-5 text-amber-100/80">この画面は業務分担と接続状況を示します。現在、シナリオの保存はできますが、LINE/メールの実配信、公開診断フォーム、カレンダー、契約返信確認、定期請求の自動実行は接続・実装が必要です。</p>
+      </div>}
+
       {activeTab === 'scenarios' && <div className="space-y-4">
         {isFormOpen ? (
           <form onSubmit={saveScenario} className="rounded-2xl border border-indigo-500/30 bg-slate-900 p-5">
@@ -224,3 +321,4 @@ export const MarketingAutomationPrototypeView: React.FC<Props> = ({ scenarios, o
     </div>
   );
 };
+

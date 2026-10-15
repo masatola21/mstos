@@ -1,9 +1,22 @@
 export type MarketingTrigger =
+  | 'prospect_selected'
   | 'lead_created'
+  | 'line_registered'
+  | 'diagnosis_invited'
   | 'diagnosis_completed'
+  | 'report_approved'
+  | 'meeting_completed'
   | 'tag_added'
   | 'booking_created'
+  | 'deal_stage_changed'
   | 'deal_won'
+  | 'proposal_approved'
+  | 'contract_sent'
+  | 'contract_signed'
+  | 'invoice_due'
+  | 'invoice_overdue'
+  | 'retainer_period'
+  | 'project_milestone'
   | 'manual';
 
 export type MarketingChannel = 'line' | 'email' | 'both';
