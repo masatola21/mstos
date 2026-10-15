@@ -62,11 +62,12 @@ export interface Project {
 
 export type TaskStatus = 'waiting' | 'in_progress' | 'pending_approval' | 'completed' | 'blocked';
 
-export type TaskAssigneeType = 'human' | 'ai_ceo' | 'custom_ai' | 'dev_agent';
+export type TaskAssigneeType = 'human' | 'ai_ceo' | 'role_ai' | 'custom_ai' | 'dev_agent';
 
 export interface TaskAssignee {
   type: TaskAssigneeType;
   id?: string; // custom_ai の場合のキャラID
+  workModeId?: string; // role_ai の場合の役割ID
   name: string; // 表示名: "人間 (あなた)", "AI社長", "クロエ (テックコーチ)", "開発エージェント"
 }
 
@@ -80,6 +81,8 @@ export interface TaskItem {
   status: TaskStatus;
   completionCriteria: string; // 完了条件
   resultNotes?: string; // 結果・成果メモ
+  artifactUrl?: string; // 外部に保存した成果物へのリンク
+  knowledgeItemId?: string; // AIの実行成果を保存したナレッジ
   sourceAutomationId?: string;
   createdAt: number;
   updatedAt: number;
@@ -147,6 +150,8 @@ export interface KnowledgeItem {
   tags: string[];
   createdAt: number;
   updatedAt: number;
+  sourceTaskId?: string;
+  sourceRoleId?: string;
 }
 
 // --- APIトークン利用量・料金単価管理データ型 ---
@@ -186,4 +191,5 @@ export interface TokenUsageRecord {
   };
   estimatedCost?: number | null; // 単価未設定または未取得の場合は null
 }
+
 
