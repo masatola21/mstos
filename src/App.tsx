@@ -45,6 +45,7 @@ import {
   ProposedPlan,
   Priority,
   TaskAssignee,
+  TaskDraftArtifact,
   ModelPricingRate,
   TokenUsageRecord,
   ApiUsageData,
