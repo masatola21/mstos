@@ -60,13 +60,13 @@ export async function fetchTableCounts(): Promise<{ counts: Record<TableKey, num
   const supabase = getSupabase();
   if (!supabase) {
     return {
-      counts: { companies: 0, prospects: 0, leads: 0, products: 0, deals: 0, customers: 0 },
+      counts: { companies: 0, contacts: 0, prospects: 0, leads: 0, products: 0, deals: 0, customers: 0 },
       error: { type: 'NOT_CONFIGURED', message: 'Supabaseが初期化されていません。' }
     };
   }
 
-  const tables: TableKey[] = ['companies', 'prospects', 'leads', 'products', 'deals', 'customers'];
-  const counts: Record<TableKey, number> = { companies: 0, prospects: 0, leads: 0, products: 0, deals: 0, customers: 0 };
+  const tables: TableKey[] = ['companies', 'contacts', 'prospects', 'leads', 'products', 'deals', 'customers'];
+  const counts: Record<TableKey, number> = { companies: 0, contacts: 0, prospects: 0, leads: 0, products: 0, deals: 0, customers: 0 };
   let detectedError: DataFetchError | undefined;
 
   for (const table of tables) {
@@ -163,7 +163,7 @@ export async function fetchTableData(
     // 関連テーブルのルックアップを行い、会社名や商品名を人間に見やすい形で付与
     let enrichedData = [...data];
 
-    if (['prospects', 'leads', 'deals', 'customers'].includes(tableKey)) {
+    if (['contacts', 'prospects', 'leads', 'deals', 'customers'].includes(tableKey)) {
       const companies = await fetchCompaniesList();
       const compMap = new Map(companies.map(c => [String(c.id), c]));
       enrichedData = enrichedData.map(item => ({
@@ -221,7 +221,7 @@ export async function insertRecord(
     }
 
     // 自動生成UUIDテーブルの場合、空のidは確実に削除してDB自動採番に任せる
-    if (['prospects', 'leads', 'customers'].includes(tableKey)) {
+    if (['contacts', 'prospects', 'leads', 'customers'].includes(tableKey)) {
       delete payload.id;
     }
 
