@@ -1376,6 +1376,7 @@ function AppContent() {
           tokenUsageRecords={tokenUsageRecords}
           knowledgeItems={knowledgeItems}
           workModeHistories={workModeHistories}
+          marketingScenarios={marketingScenarios}
           onRestoreData={(restored) => {
             if (restored.characters) setCharacters(restored.characters);
             if (restored.userProfile) setUserProfile(restored.userProfile);
@@ -1390,6 +1391,7 @@ function AppContent() {
               setKnowledgeItems(restored.knowledgeItems);
               saveKnowledgeItems(restored.knowledgeItems);
             }
+            if (restored.marketingScenarios) setMarketingScenarios(restored.marketingScenarios);
             if (restored.workModeHistories) {
               setWorkModeHistories(restored.workModeHistories);
               Object.entries(restored.workModeHistories).forEach(([key, history]) => saveChatHistory(key, history));
