@@ -11,6 +11,20 @@ CREATE TABLE IF NOT EXISTS public.crm_segments (
   updated_at timestamptz NOT NULL DEFAULT now()
 );
 
+CREATE TABLE IF NOT EXISTS public.customer_document_templates (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  owner_id uuid NOT NULL DEFAULT auth.uid() REFERENCES auth.users(id) ON DELETE CASCADE,
+  template_key text NOT NULL,
+  document_type text NOT NULL CHECK (document_type IN ('proposal','diagnosis_report','contract','invoice','other')),
+  title text NOT NULL,
+  description text NOT NULL DEFAULT '',
+  body_html text NOT NULL DEFAULT '',
+  variables jsonb NOT NULL DEFAULT '[]'::jsonb,
+  created_at timestamptz NOT NULL DEFAULT now(),
+  updated_at timestamptz NOT NULL DEFAULT now(),
+  UNIQUE(owner_id, template_key)
+);
+
 CREATE TABLE IF NOT EXISTS public.customer_documents (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
   owner_id uuid NOT NULL DEFAULT auth.uid() REFERENCES auth.users(id) ON DELETE CASCADE,
@@ -114,7 +128,7 @@ DO $$
 DECLARE table_name text;
 BEGIN
   FOREACH table_name IN ARRAY ARRAY[
-    'crm_segments','customer_documents','customer_contracts','customer_invoices',
+    'crm_segments','customer_document_templates','customer_documents','customer_contracts','customer_invoices',
     'customer_service_engagements','communication_outbox'
   ] LOOP
     EXECUTE format('ALTER TABLE public.%I ENABLE ROW LEVEL SECURITY', table_name);
@@ -128,6 +142,7 @@ BEGIN
 END $$;
 
 CREATE INDEX IF NOT EXISTS idx_crm_segments_owner ON public.crm_segments(owner_id, entity_type);
+CREATE INDEX IF NOT EXISTS idx_customer_document_templates_owner ON public.customer_document_templates(owner_id, document_type);
 CREATE INDEX IF NOT EXISTS idx_customer_documents_owner_status ON public.customer_documents(owner_id, status, created_at DESC);
 CREATE INDEX IF NOT EXISTS idx_customer_contracts_owner_status ON public.customer_contracts(owner_id, status);
 CREATE INDEX IF NOT EXISTS idx_customer_invoices_owner_due ON public.customer_invoices(owner_id, due_date);
@@ -135,6 +150,7 @@ CREATE INDEX IF NOT EXISTS idx_customer_services_owner_type ON public.customer_s
 CREATE INDEX IF NOT EXISTS idx_communication_outbox_owner_status ON public.communication_outbox(owner_id, status, scheduled_at);
 
 COMMENT ON TABLE public.crm_segments IS 'Saved CRM filters; stores conditions only, never duplicated contact rows.';
+COMMENT ON TABLE public.customer_document_templates IS 'Owner-scoped reusable templates used to generate customer documents.';
 COMMENT ON TABLE public.customer_documents IS 'Generated customer documents linked to their CRM source records.';
 COMMENT ON TABLE public.customer_contracts IS 'Post-sale contract lifecycle linked to company, contact, deal, product and document.';
 COMMENT ON TABLE public.customer_invoices IS 'Invoice lifecycle and payment state; notices are sent through communication_outbox.';
