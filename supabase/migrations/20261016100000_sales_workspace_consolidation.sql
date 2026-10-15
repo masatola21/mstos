@@ -178,8 +178,16 @@ SELECT
   NULLIF(item->>'startDate','')::date,
   NULLIF(item->>'endDate','')::date,
   NULLIF(item->>'notes',''),
-  CASE WHEN COALESCE(item->>'createdAt','') ~ '^[0-9]{13}
-  CASE WHEN COALESCE(item->>'updatedAt','') ~ '^[0-9]{13}
+  CASE
+    WHEN COALESCE(item->>'createdAt','') ~ '^[0-9]{13}$'
+      THEN to_timestamp((item->>'createdAt')::double precision / 1000)
+    ELSE COALESCE(NULLIF(item->>'createdAt','')::timestamptz, now())
+  END,
+  CASE
+    WHEN COALESCE(item->>'updatedAt','') ~ '^[0-9]{13}$'
+      THEN to_timestamp((item->>'updatedAt')::double precision / 1000)
+    ELSE COALESCE(NULLIF(item->>'updatedAt','')::timestamptz, now())
+  END
 FROM public.mst_workspace_state ws
 CROSS JOIN LATERAL jsonb_array_elements(COALESCE(ws.data->'contracts','[]'::jsonb)) item
 WHERE NULLIF(item->>'id','') IS NOT NULL
@@ -200,91 +208,16 @@ SELECT
   NULLIF(item->>'issueDate','')::date,
   NULLIF(item->>'dueDate','')::date,
   NULLIF(item->>'paidDate','')::date,
-  COALESCE(NULLIF(item->>'createdAt','')::timestamptz, now()),
-  COALESCE(NULLIF(item->>'updatedAt','')::timestamptz, now())
-FROM public.mst_workspace_state ws
-CROSS JOIN LATERAL jsonb_array_elements(COALESCE(ws.data->'invoices','[]'::jsonb)) item
-WHERE NULLIF(item->>'id','') IS NOT NULL
-ON CONFLICT (owner_id, legacy_id) WHERE legacy_id IS NOT NULL DO NOTHING;
- THEN to_timestamp((item->>'createdAt')::double precision / 1000) ELSE COALESCE(NULLIF(item->>'createdAt','')::timestamptz, now()) END,
-  COALESCE(NULLIF(item->>'updatedAt','')::timestamptz, now())
-FROM public.mst_workspace_state ws
-CROSS JOIN LATERAL jsonb_array_elements(COALESCE(ws.data->'contracts','[]'::jsonb)) item
-WHERE NULLIF(item->>'id','') IS NOT NULL
-ON CONFLICT (owner_id, legacy_id) WHERE legacy_id IS NOT NULL DO NOTHING;
-
-INSERT INTO public.customer_invoices
-  (owner_id, legacy_id, invoice_number, title, recipient_name, status, company_id, product_id, amount, issue_date, due_date, paid_at, created_at, updated_at)
-SELECT
-  ws.user_id,
-  item->>'id',
-  COALESCE(NULLIF(item->>'invoiceNumber',''), 'LEGACY-' || left(item->>'id', 24)),
-  COALESCE(NULLIF(item->>'title',''), '旧請求'),
-  NULLIF(item->>'recipientName',''),
-  CASE WHEN item->>'status' IN ('draft','awaiting_approval','issued','paid','overdue','canceled') THEN item->>'status' ELSE 'draft' END,
-  NULLIF(item->>'companyId',''),
-  NULLIF(item->>'productId',''),
-  COALESCE(NULLIF(item->>'amount','')::numeric, 0),
-  NULLIF(item->>'issueDate','')::date,
-  NULLIF(item->>'dueDate','')::date,
-  NULLIF(item->>'paidDate','')::date,
-  COALESCE(NULLIF(item->>'createdAt','')::timestamptz, now()),
-  COALESCE(NULLIF(item->>'updatedAt','')::timestamptz, now())
-FROM public.mst_workspace_state ws
-CROSS JOIN LATERAL jsonb_array_elements(COALESCE(ws.data->'invoices','[]'::jsonb)) item
-WHERE NULLIF(item->>'id','') IS NOT NULL
-ON CONFLICT (owner_id, legacy_id) WHERE legacy_id IS NOT NULL DO NOTHING;
- THEN to_timestamp((item->>'updatedAt')::double precision / 1000) ELSE COALESCE(NULLIF(item->>'updatedAt','')::timestamptz, now()) END
-FROM public.mst_workspace_state ws
-CROSS JOIN LATERAL jsonb_array_elements(COALESCE(ws.data->'contracts','[]'::jsonb)) item
-WHERE NULLIF(item->>'id','') IS NOT NULL
-ON CONFLICT (owner_id, legacy_id) WHERE legacy_id IS NOT NULL DO NOTHING;
-
-INSERT INTO public.customer_invoices
-  (owner_id, legacy_id, invoice_number, title, recipient_name, status, company_id, product_id, amount, issue_date, due_date, paid_at, created_at, updated_at)
-SELECT
-  ws.user_id,
-  item->>'id',
-  COALESCE(NULLIF(item->>'invoiceNumber',''), 'LEGACY-' || left(item->>'id', 24)),
-  COALESCE(NULLIF(item->>'title',''), '旧請求'),
-  NULLIF(item->>'recipientName',''),
-  CASE WHEN item->>'status' IN ('draft','awaiting_approval','issued','paid','overdue','canceled') THEN item->>'status' ELSE 'draft' END,
-  NULLIF(item->>'companyId',''),
-  NULLIF(item->>'productId',''),
-  COALESCE(NULLIF(item->>'amount','')::numeric, 0),
-  NULLIF(item->>'issueDate','')::date,
-  NULLIF(item->>'dueDate','')::date,
-  NULLIF(item->>'paidDate','')::date,
-  COALESCE(NULLIF(item->>'createdAt','')::timestamptz, now()),
-  COALESCE(NULLIF(item->>'updatedAt','')::timestamptz, now())
-FROM public.mst_workspace_state ws
-CROSS JOIN LATERAL jsonb_array_elements(COALESCE(ws.data->'invoices','[]'::jsonb)) item
-WHERE NULLIF(item->>'id','') IS NOT NULL
-ON CONFLICT (owner_id, legacy_id) WHERE legacy_id IS NOT NULL DO NOTHING;
- THEN to_timestamp((item->>'createdAt')::double precision / 1000) ELSE COALESCE(NULLIF(item->>'createdAt','')::timestamptz, now()) END,
-  COALESCE(NULLIF(item->>'updatedAt','')::timestamptz, now())
-FROM public.mst_workspace_state ws
-CROSS JOIN LATERAL jsonb_array_elements(COALESCE(ws.data->'contracts','[]'::jsonb)) item
-WHERE NULLIF(item->>'id','') IS NOT NULL
-ON CONFLICT (owner_id, legacy_id) WHERE legacy_id IS NOT NULL DO NOTHING;
-
-INSERT INTO public.customer_invoices
-  (owner_id, legacy_id, invoice_number, title, recipient_name, status, company_id, product_id, amount, issue_date, due_date, paid_at, created_at, updated_at)
-SELECT
-  ws.user_id,
-  item->>'id',
-  COALESCE(NULLIF(item->>'invoiceNumber',''), 'LEGACY-' || left(item->>'id', 24)),
-  COALESCE(NULLIF(item->>'title',''), '旧請求'),
-  NULLIF(item->>'recipientName',''),
-  CASE WHEN item->>'status' IN ('draft','awaiting_approval','issued','paid','overdue','canceled') THEN item->>'status' ELSE 'draft' END,
-  NULLIF(item->>'companyId',''),
-  NULLIF(item->>'productId',''),
-  COALESCE(NULLIF(item->>'amount','')::numeric, 0),
-  NULLIF(item->>'issueDate','')::date,
-  NULLIF(item->>'dueDate','')::date,
-  NULLIF(item->>'paidDate','')::date,
-  COALESCE(NULLIF(item->>'createdAt','')::timestamptz, now()),
-  COALESCE(NULLIF(item->>'updatedAt','')::timestamptz, now())
+  CASE
+    WHEN COALESCE(item->>'createdAt','') ~ '^[0-9]{13}$'
+      THEN to_timestamp((item->>'createdAt')::double precision / 1000)
+    ELSE COALESCE(NULLIF(item->>'createdAt','')::timestamptz, now())
+  END,
+  CASE
+    WHEN COALESCE(item->>'updatedAt','') ~ '^[0-9]{13}$'
+      THEN to_timestamp((item->>'updatedAt')::double precision / 1000)
+    ELSE COALESCE(NULLIF(item->>'updatedAt','')::timestamptz, now())
+  END
 FROM public.mst_workspace_state ws
 CROSS JOIN LATERAL jsonb_array_elements(COALESCE(ws.data->'invoices','[]'::jsonb)) item
 WHERE NULLIF(item->>'id','') IS NOT NULL
