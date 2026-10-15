@@ -15,6 +15,8 @@ import {
 } from 'lucide-react';
 import { CharacterConfig, AvatarColor, UserProfile, ApiUsageData } from '../types';
 import { getColorScheme } from '../../utils/theme';
+import { ModelSettingEditor, useProviderStatus } from './ModelSettingEditor';
+import { AIModelSetting, DEFAULT_MODEL_SETTING, sanitizeModelSetting } from '../../data/aiModels';
 
 interface CharacterEditorProps {
   character: CharacterConfig;
@@ -23,6 +25,9 @@ interface CharacterEditorProps {
   onDeleteCharacter: (id: string) => void;
   onDuplicateCharacter: (char: CharacterConfig) => void;
   onStartChat: (char: CharacterConfig) => void;
+  onClose: () => void;
+  /** 全体のデフォルトモデル（AI生成・プロンプト改善にも使う） */
+  defaultModelSetting?: AIModelSetting;
   onRecordUsage?: (params: {
     endpoint: 'chat' | 'generate-character' | 'extract-memory' | 'refine-prompt';
     endpointName: string;
@@ -52,6 +57,34 @@ const PROMPT_SUGGESTION_IDEAS = [
   '英語学習をスパルタだけど親身に添削してくれるネイティブ講師',
 ];
 
+// 古い保存データや手編集で項目が欠けていても、編集画面が落ちないように補完する
+function normalizeCharacter(character: Partial<CharacterConfig>): CharacterConfig {
+  const text = (value: unknown, fallback = '') => (typeof value === 'string' ? value : fallback);
+  const list = (value: unknown) => (Array.isArray(value) ? value.filter((v): v is string => typeof v === 'string') : []);
+  return {
+    ...(character as CharacterConfig),
+    id: text(character.id, `custom-${Date.now()}`),
+    name: text(character.name),
+    role: text(character.role),
+    tagline: text(character.tagline),
+    avatarEmoji: text(character.avatarEmoji, '🤖'),
+    avatarColor: (character.avatarColor as AvatarColor) || 'indigo',
+    personality: text(character.personality),
+    tone: text(character.tone),
+    firstPerson: text(character.firstPerson),
+    secondPerson: text(character.secondPerson),
+    speechStyle: text(character.speechStyle),
+    behaviorRules: list(character.behaviorRules),
+    responseLength:
+      character.responseLength === 'short' || character.responseLength === 'detailed' ? character.responseLength : 'medium',
+    customInstructions: text(character.customInstructions),
+    greetingMessage: text(character.greetingMessage),
+    suggestedTopics: list(character.suggestedTopics),
+    modelSetting: sanitizeModelSetting(character.modelSetting) ?? undefined,
+    createdAt: typeof character.createdAt === 'number' ? character.createdAt : Date.now(),
+  };
+}
+
 export const CharacterEditor: React.FC<CharacterEditorProps> = ({
   character,
   userProfile,
@@ -59,9 +92,13 @@ export const CharacterEditor: React.FC<CharacterEditorProps> = ({
   onDeleteCharacter,
   onDuplicateCharacter,
   onStartChat,
+  onClose,
+  defaultModelSetting = DEFAULT_MODEL_SETTING,
   onRecordUsage,
 }) => {
-  const [formData, setFormData] = useState<CharacterConfig>({ ...character });
+  const [formData, setFormData] = useState<CharacterConfig>(() => normalizeCharacter(character));
+  const { providers: providerStatuses } = useProviderStatus();
+  const [modelError, setModelError] = useState('');
   const [activeSubTab, setActiveSubTab] = useState<'magic' | 'manual'>('magic');
   const [aiPromptConcept, setAiPromptConcept] = useState('');
   const [isGenerating, setIsGenerating] = useState(false);
@@ -81,6 +118,7 @@ export const CharacterEditor: React.FC<CharacterEditorProps> = ({
         body: JSON.stringify({
           concept: conceptPrompt,
           userProfile,
+          modelSetting: defaultModelSetting,
         }),
       });
 
@@ -133,7 +171,7 @@ export const CharacterEditor: React.FC<CharacterEditorProps> = ({
       const res = await fetch('/api/refine-prompt', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ character: formData }),
+        body: JSON.stringify({ character: formData, modelSetting: defaultModelSetting }),
       });
       const data = await res.json();
 
@@ -160,12 +198,22 @@ export const CharacterEditor: React.FC<CharacterEditorProps> = ({
   };
 
   const handleSave = () => {
+    if (formData.modelSetting && !sanitizeModelSetting(formData.modelSetting)) {
+      setModelError('モデル名が正しくありません。半角の英数字と . _ : / - のみ使えます。');
+      return;
+    }
+    setModelError('');
     onSaveCharacter(formData);
     setSaveSuccessNotice(true);
     setTimeout(() => setSaveSuccessNotice(false), 2500);
   };
 
   const handleSaveAndChat = () => {
+    if (formData.modelSetting && !sanitizeModelSetting(formData.modelSetting)) {
+      setModelError('モデル名が正しくありません。半角の英数字と . _ : / - のみ使えます。');
+      return;
+    }
+    setModelError('');
     onSaveCharacter(formData);
     onStartChat(formData);
   };
@@ -205,7 +253,7 @@ export const CharacterEditor: React.FC<CharacterEditorProps> = ({
   const scheme = getColorScheme(formData.avatarColor);
 
   return (
-    <div className="max-w-5xl mx-auto px-4 py-6 space-y-6">
+    <div className="max-w-5xl mx-auto px-4 pt-12 pb-6 space-y-6">
       {/* Top Banner & Mode Toggle */}
       <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 p-5 rounded-3xl bg-slate-900 border border-slate-800 shadow-xl">
         <div className="flex items-center gap-3.5">
@@ -665,6 +713,31 @@ export const CharacterEditor: React.FC<CharacterEditorProps> = ({
               placeholder="Geminiのシステム指示に追加したい任意の詳細設定（世界観、秘密の設定、特殊な専門知識など）を入力できます。"
               className="w-full rounded-xl bg-slate-950 border border-slate-800 p-3 text-xs md:text-sm text-slate-200 focus:outline-none focus:border-indigo-500 font-mono leading-relaxed"
             />
+          </div>
+
+          {/* Section 6: Model */}
+          <div className="p-5 rounded-3xl bg-slate-900 border border-slate-800 space-y-4">
+            <h3 className="text-sm font-bold text-indigo-300 uppercase tracking-wider">
+              <span>6. 使用するAIモデル</span>
+            </h3>
+            <label className="flex items-center gap-2 text-xs text-slate-300">
+              <input
+                type="checkbox"
+                checked={!formData.modelSetting}
+                onChange={(e) =>
+                  setFormData({ ...formData, modelSetting: e.target.checked ? undefined : defaultModelSetting })
+                }
+              />
+              全体のデフォルト設定を使う（現在: {defaultModelSetting.primary.model}）
+            </label>
+            {formData.modelSetting && (
+              <ModelSettingEditor
+                value={formData.modelSetting}
+                onChange={(modelSetting) => setFormData({ ...formData, modelSetting })}
+                statuses={providerStatuses}
+              />
+            )}
+            {modelError && <p className="rounded-lg bg-rose-950/60 p-3 text-xs text-rose-200">{modelError}</p>}
           </div>
 
           {/* Bottom Actions */}

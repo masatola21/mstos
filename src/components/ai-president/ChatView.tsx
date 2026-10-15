@@ -19,7 +19,7 @@ import {
 import { CharacterConfig, ChatMessage, UserProfile, ProposedPlan, ApiUsageData } from '../types';
 import { ChatMessageContent } from './ChatMessageContent';
 import { getColorScheme } from '../../utils/theme';
-import { AI_WORK_MODES, AIWorkModeId, getAIWorkMode } from '../../data/aiWorkModes';
+import { AI_WORK_MODES, AIWorkModeId, RoleAIOverrides, getAIWorkMode, resolveWorkMode } from '../../data/aiWorkModes';
 
 interface ChatViewProps {
   character: CharacterConfig;
@@ -28,6 +28,7 @@ interface ChatViewProps {
   userProfile: UserProfile;
   messages: ChatMessage[];
   selectedWorkModeId: AIWorkModeId;
+  roleOverrides?: RoleAIOverrides;
   onSelectWorkMode: (id: AIWorkModeId) => void;
   onSendMessage: (text: string, workModeId?: AIWorkModeId) => void;
   onClearMessages: () => void;
@@ -50,6 +51,7 @@ export const ChatView: React.FC<ChatViewProps> = ({
   userProfile,
   messages,
   selectedWorkModeId,
+  roleOverrides,
   onSelectWorkMode,
   onSendMessage,
   onClearMessages,
@@ -71,7 +73,7 @@ export const ChatView: React.FC<ChatViewProps> = ({
   const recognitionRef = useRef<any>(null);
 
   const scheme = getColorScheme(character.avatarColor);
-  const selectedWorkMode = getAIWorkMode(selectedWorkModeId);
+  const selectedWorkMode = resolveWorkMode(getAIWorkMode(selectedWorkModeId), roleOverrides);
 
   // Auto scroll
   useEffect(() => {
@@ -315,9 +317,10 @@ export const ChatView: React.FC<ChatViewProps> = ({
             className="max-w-full sm:max-w-72 rounded-lg border border-slate-700 bg-slate-900 px-2.5 py-1 text-[11px] font-semibold text-white focus:outline-none focus:border-indigo-500 disabled:opacity-50"
           >
             <optgroup label="専門の役割">
-              {AI_WORK_MODES.map((mode) => (
-                <option key={mode.id} value={`mode:${mode.id}`}>{mode.avatarEmoji} {mode.name}｜{mode.label}</option>
-              ))}
+              {AI_WORK_MODES.map((baseMode) => {
+                const mode = resolveWorkMode(baseMode, roleOverrides);
+                return <option key={mode.id} value={`mode:${mode.id}`}>{mode.avatarEmoji} {mode.name}｜{mode.label}</option>;
+              })}
             </optgroup>
             <optgroup label="登録済みAI">
               {characters.filter((registeredCharacter) => registeredCharacter.id !== 'preset-ceo').map((registeredCharacter) => (
@@ -459,6 +462,10 @@ export const ChatView: React.FC<ChatViewProps> = ({
                       />
                     )}
                   </div>
+
+                  {!isUser && msg.modelLabel && (
+                    <p className="mt-1 pl-1 text-[10px] text-slate-500">使用モデル: {msg.modelLabel}</p>
+                  )}
 
                   {/* Actions under bubble */}
                   {!isUser && (

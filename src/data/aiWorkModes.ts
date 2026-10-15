@@ -1,3 +1,5 @@
+import { AIModelSetting, sanitizeModelSetting } from './aiModels';
+
 export const AI_WORK_MODES = [
   {
     id: 'president',
@@ -62,4 +64,83 @@ export type AIWorkMode = (typeof AI_WORK_MODES)[number];
 
 export function getAIWorkMode(id: unknown): AIWorkMode {
   return AI_WORK_MODES.find((mode) => mode.id === id) ?? AI_WORK_MODES[0];
+}
+
+// --- 役割AIごとの詳細設定（ユーザーが上書きできる項目） ---
+
+export type RoleResponseLength = 'short' | 'medium' | 'detailed';
+
+export interface RoleAIOverride {
+  name?: string;
+  avatarEmoji?: string;
+  description?: string;
+  tone?: string;
+  responseLength?: RoleResponseLength;
+  behaviorRules?: string[];
+  /** 標準の役割指示に「追加」する指示（標準指示は置き換えない） */
+  extraInstruction?: string;
+  /** 未設定なら全体のデフォルトモデルを使う */
+  modelSetting?: AIModelSetting;
+}
+
+export type RoleAIOverrides = Record<string, RoleAIOverride>;
+
+const LIMITS = { name: 30, avatarEmoji: 8, description: 200, tone: 200, rule: 200, rules: 10, extra: 4000 };
+
+function cleanText(value: unknown, max: number): string | undefined {
+  if (typeof value !== 'string') return undefined;
+  const trimmed = value.trim().slice(0, max);
+  return trimmed || undefined;
+}
+
+/** クライアント保存時・サーバー受信時の両方で使う。不正な値は取り除く。 */
+export function sanitizeRoleOverride(input: unknown): RoleAIOverride {
+  if (!input || typeof input !== 'object') return {};
+  const raw = input as Record<string, unknown>;
+  const result: RoleAIOverride = {};
+  const name = cleanText(raw.name, LIMITS.name);
+  const avatarEmoji = cleanText(raw.avatarEmoji, LIMITS.avatarEmoji);
+  const description = cleanText(raw.description, LIMITS.description);
+  const tone = cleanText(raw.tone, LIMITS.tone);
+  const extraInstruction = cleanText(raw.extraInstruction, LIMITS.extra);
+  if (name) result.name = name;
+  if (avatarEmoji) result.avatarEmoji = avatarEmoji;
+  if (description) result.description = description;
+  if (tone) result.tone = tone;
+  if (extraInstruction) result.extraInstruction = extraInstruction;
+  if (raw.responseLength === 'short' || raw.responseLength === 'medium' || raw.responseLength === 'detailed') {
+    result.responseLength = raw.responseLength;
+  }
+  if (Array.isArray(raw.behaviorRules)) {
+    const rules = raw.behaviorRules
+      .map((rule) => cleanText(rule, LIMITS.rule))
+      .filter((rule): rule is string => Boolean(rule))
+      .slice(0, LIMITS.rules);
+    if (rules.length) result.behaviorRules = rules;
+  }
+  const modelSetting = sanitizeModelSetting(raw.modelSetting);
+  if (modelSetting) result.modelSetting = modelSetting;
+  return result;
+}
+
+export interface ResolvedAIWorkMode {
+  id: AIWorkModeId;
+  label: string;
+  name: string;
+  avatarEmoji: string;
+  description: string;
+  systemInstruction: string;
+  override: RoleAIOverride;
+}
+
+/** 標準の役割定義に、ユーザーの上書き設定を重ねた表示・実行用の役割を返す。 */
+export function resolveWorkMode(mode: AIWorkMode, overrides?: RoleAIOverrides | null): ResolvedAIWorkMode {
+  const override = sanitizeRoleOverride(overrides?.[mode.id]);
+  return {
+    ...mode,
+    name: override.name ?? mode.name,
+    avatarEmoji: override.avatarEmoji ?? mode.avatarEmoji,
+    description: override.description ?? mode.description,
+    override,
+  };
 }

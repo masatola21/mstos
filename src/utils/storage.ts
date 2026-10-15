@@ -13,6 +13,7 @@ import {
   KnowledgeItem,
 } from '../types';
 import { PRESET_CHARACTERS } from '../data/presets';
+import type { AIProviderId } from '../data/aiModels';
 
 const STORAGE_KEYS = {
   CHARACTERS: 'myai_characters_v1',
@@ -468,11 +469,14 @@ export function recordTokenUsage(params: {
   endpoint: 'chat' | 'generate-character' | 'extract-memory' | 'refine-prompt';
   endpointName: string;
   model?: string;
+  provider?: AIProviderId;
+  fallbackFrom?: string;
   usage: ApiUsageData;
 }): TokenUsageRecord {
   const modelName = params.model || 'gemini-3.8-flash';
   const pricingRates = loadPricingRates();
-  const activeRate = pricingRates.find((r) => r.model === modelName) || pricingRates[0];
+  // 単価はモデル名が一致するものだけを使う。別モデルの単価で料金目安を出さない（未設定なら null）。
+  const activeRate = pricingRates.find((r) => r.model === modelName);
 
   let estimatedCost: number | null = null;
   let rateSnapshot: TokenUsageRecord['rateSnapshot'] = undefined;
@@ -505,6 +509,8 @@ export function recordTokenUsage(params: {
     endpoint: params.endpoint,
     endpointName: params.endpointName,
     model: modelName,
+    provider: params.provider,
+    fallbackFrom: params.fallbackFrom,
     status: params.usage.status,
     promptTokens: params.usage.promptTokens,
     candidatesTokens: params.usage.candidatesTokens,

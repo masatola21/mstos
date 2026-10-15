@@ -1,3 +1,5 @@
+import type { AIModelSetting, AIProviderId } from '../data/aiModels';
+
 export interface UserProfile {
   userName: string;
   userOccupation: string;
@@ -26,6 +28,8 @@ export interface CharacterConfig {
   customInstructions: string;
   greetingMessage: string;
   suggestedTopics: string[];
+  /** 未設定なら全体のデフォルトモデルを使う */
+  modelSetting?: AIModelSetting;
   createdAt: number;
 }
 
@@ -34,6 +38,8 @@ export interface ChatMessage {
   role: 'user' | 'assistant';
   content: string;
   timestamp: number;
+  /** この返信を生成した接続先（表示用）。切り替えが起きた場合は理由も含む */
+  modelLabel?: string;
 }
 
 // --- AI社長 / 業務管理システム用データ型 ---
@@ -166,6 +172,8 @@ export interface TokenUsageRecord {
   endpoint: 'chat' | 'generate-character' | 'extract-memory' | 'refine-prompt';
   endpointName: string; // 表示用 ("AI社長チャット", "キャラクター生成", "記憶抽出", "プロンプト改善")
   model: string; // 例: "gemini-3.8-flash"
+  provider?: AIProviderId;
+  fallbackFrom?: string; // 切り替え前のモデル（切り替えが発生した場合のみ）
   status: 'acquired' | 'unacquired';
   promptTokens: number | null;
   candidatesTokens: number | null;
