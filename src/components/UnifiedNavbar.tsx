@@ -80,9 +80,6 @@ export const UnifiedNavbar: React.FC<UnifiedNavbarProps> = ({
     if (
       currentTab === 'ai_dashboard' ||
       currentTab === 'ai_chat' ||
-      currentTab === 'ai_projects' ||
-      currentTab === 'ai_tasks' ||
-      currentTab === 'ai_approvals' ||
       currentTab === 'ai_presets' ||
       currentTab === 'ai_knowledge' ||
       currentTab === 'automations'
@@ -92,7 +89,10 @@ export const UnifiedNavbar: React.FC<UnifiedNavbarProps> = ({
     if (currentTab === 'customer_operations') return 'mst';
     if (
       currentTab === 'product_hub' ||
-      currentTab === 'category_hub'
+      currentTab === 'category_hub' ||
+      currentTab === 'ai_projects' ||
+      currentTab === 'ai_tasks' ||
+      currentTab === 'ai_approvals'
     ) {
       return 'matrix';
     }
@@ -151,7 +151,7 @@ export const UnifiedNavbar: React.FC<UnifiedNavbarProps> = ({
                 }`}
               >
                 <Layers className="w-3.5 h-3.5" />
-                <span>商品・サービス</span>
+                <span>事業運営</span>
               </button>
 
               <button
@@ -270,9 +270,14 @@ export const UnifiedNavbar: React.FC<UnifiedNavbarProps> = ({
 
           {/* 商品・サービス: 商品定義と開発情報 */}
           {activeSection === 'matrix' && (
-            <>
-              <button onClick={() => onTabChange('product_hub')} className={`px-3 py-1.5 rounded-lg whitespace-nowrap transition-colors flex items-center gap-1.5 ${currentTab === 'product_hub' ? 'bg-cyan-600 text-white font-semibold shadow-sm' : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800'}`}><Package className="w-3.5 h-3.5 text-cyan-400" /><span>商品・サービス一覧</span></button>
-            </>
+            <div className="flex min-w-0 items-center gap-1.5 overflow-x-auto pb-1">
+              <button onClick={() => onTabChange('product_hub')} aria-current={currentTab === 'product_hub' ? 'page' : undefined} className={`px-3 py-1.5 rounded-lg whitespace-nowrap transition-colors flex items-center gap-1.5 ${currentTab === 'product_hub' ? 'bg-cyan-600 text-white font-semibold shadow-sm' : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800'}`}><Package className="w-3.5 h-3.5 text-cyan-400" /><span>商品・サービス</span></button>
+              <button onClick={() => onTabChange('ai_projects')} aria-current={currentTab === 'ai_projects' ? 'page' : undefined} className={`px-3 py-1.5 rounded-lg whitespace-nowrap transition-colors ${currentTab === 'ai_projects' ? 'bg-cyan-600 text-white font-semibold shadow-sm' : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800'}`}>プロジェクト</button>
+              <button onClick={() => onTabChange('ai_tasks')} aria-current={currentTab === 'ai_tasks' || currentTab === 'ai_approvals' ? 'page' : undefined} className={`px-3 py-1.5 rounded-lg whitespace-nowrap transition-colors inline-flex items-center gap-1.5 ${currentTab === 'ai_tasks' || currentTab === 'ai_approvals' ? 'bg-cyan-600 text-white font-semibold shadow-sm' : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800'}`}>
+                <ListTodo className="w-3.5 h-3.5" /><span>共通タスク</span>
+                {pendingApprovalsCount > 0 && <span className="rounded bg-amber-500 px-1 text-[10px] font-bold text-slate-950">{pendingApprovalsCount}</span>}
+              </button>
+            </div>
           )}
 
           {/* 3. AI President Section Subtabs */}
@@ -308,33 +313,9 @@ export const UnifiedNavbar: React.FC<UnifiedNavbarProps> = ({
                 💬 指示・チャット対話
               </button>
 
-              <button
-                onClick={() => onTabChange('ai_projects')}
-                className={`px-3 py-1.5 rounded-lg whitespace-nowrap transition-colors flex items-center gap-1.5 ${
-                  currentTab === 'ai_projects'
-                    ? 'bg-purple-600 text-white font-semibold shadow-sm'
-                    : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800'
-                }`}
-              >
-                📁 プロジェクト管理
-              </button>
 
-              <button
-                onClick={() => onTabChange('ai_tasks')}
-                className={`px-3 py-1.5 rounded-lg whitespace-nowrap transition-colors flex items-center gap-1.5 ${
-                  currentTab === 'ai_tasks' || currentTab === 'ai_approvals'
-                    ? 'bg-purple-600 text-white font-semibold shadow-sm'
-                    : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800'
-                }`}
-              >
-                <ListTodo className="w-3.5 h-3.5" />
-                <span>タスク</span>
-                {pendingApprovalsCount > 0 && (
-                  <span className="px-1 rounded bg-amber-500 text-slate-950 font-bold text-[10px]">
-                    {pendingApprovalsCount}
-                  </span>
-                )}
-              </button>
+
+
 
               <button
                 onClick={() => onTabChange('ai_knowledge')}
