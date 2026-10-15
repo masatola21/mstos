@@ -81,7 +81,13 @@ import {
 } from './utils/storage';
 import { loadMarketingScenarios, saveMarketingScenarios } from './utils/marketingStorage';
 import { PRESET_CHARACTERS } from './data/presets';
-import { getAIWorkMode, AIWorkModeId } from './data/aiWorkModes';
+import { AI_WORK_MODES, getAIWorkMode, resolveWorkMode, AIWorkModeId, RoleAIOverride } from './data/aiWorkModes';
+import { AIModelSetting, AIProviderId, AI_PROVIDERS, isProviderId } from './data/aiModels';
+import { loadAIModelSettings, saveAIModelSettings, AIModelSettings } from './utils/aiSettingsStorage';
+import { ModalShell } from './components/ModalShell';
+import { RoleAIEditor } from './components/ai-president/RoleAIEditor';
+import { ModelSettingsModal } from './components/ai-president/ModelSettingsModal';
+import { useProviderStatus } from './components/ai-president/ModelSettingEditor';
 import { matrixService } from './services/matrixService';
 import {
   loadOrMigrateWorkspaceData,
@@ -193,6 +199,12 @@ function AppContent() {
   const [isBackupModalOpen, setIsBackupModalOpen] = useState(false);
   const [isProfileModalOpen, setIsProfileModalOpen] = useState(false);
   const [isCharacterEditorOpen, setIsCharacterEditorOpen] = useState(false);
+  // 編集対象は「チャットで選択中のAI」とは独立させる（編集ボタンでチャットが切り替わらないようにする）
+  const [editingCharacterId, setEditingCharacterId] = useState<string | null>(null);
+  const [aiModelSettings, setAiModelSettings] = useState<AIModelSettings>(() => loadAIModelSettings());
+  const [editingRoleId, setEditingRoleId] = useState<AIWorkModeId | null>(null);
+  const [isModelSettingsOpen, setIsModelSettingsOpen] = useState(false);
+  const { providers: providerStatuses } = useProviderStatus();
   const [isQuickDrawerOpen, setIsQuickDrawerOpen] = useState(false);
   const [activePlanForModal, setActivePlanForModal] = useState<ProposedPlan | null>(null);
   const [selectedProjectIdForTasks, setSelectedProjectIdForTasks] = useState<string | null>(null);
@@ -322,6 +334,42 @@ function AppContent() {
     characters.find((c) => c.id === activeCharacterId) || characters[0] || PRESET_CHARACTERS[0];
   const presidentCharacter =
     characters.find((c) => c.id === 'preset-ceo') || PRESET_CHARACTERS[0];
+  // 標準のAI社長を選んでいるときは、役割設定で変更した名前・絵文字を画面表示に反映する
+  const presidentOverride = aiModelSettings.roleOverrides.president;
+  const chatCharacter =
+    activeWorkModeId === 'president' && activeCharacter.id === 'preset-ceo' && presidentOverride
+      ? {
+          ...activeCharacter,
+          name: presidentOverride.name ?? activeCharacter.name,
+          avatarEmoji: presidentOverride.avatarEmoji ?? activeCharacter.avatarEmoji,
+        }
+      : activeCharacter;
+  const editingCharacter = editingCharacterId ? characters.find((c) => c.id === editingCharacterId) : undefined;
+
+  const updateAiModelSettings = (next: AIModelSettings) => {
+    setAiModelSettings(next);
+    saveAIModelSettings(next);
+  };
+
+  const handleSaveRoleOverride = (roleId: AIWorkModeId, override: RoleAIOverride | null) => {
+    const roleOverrides = { ...aiModelSettings.roleOverrides };
+    if (override && Object.keys(override).length > 0) roleOverrides[roleId] = override;
+    else delete roleOverrides[roleId];
+    updateAiModelSettings({ ...aiModelSettings, roleOverrides });
+    setEditingRoleId(null);
+  };
+
+  /** 今のチャットで使う「役割の上書き設定」と「モデル設定」を決める */
+  const resolveChatRuntime = (workModeId: AIWorkModeId): { roleOverride?: RoleAIOverride; modelSetting: AIModelSetting } => {
+    const { roleOverrides, defaultSetting } = aiModelSettings;
+    // AI社長モードは、標準のAI社長(preset-ceo)のときだけ役割設定を適用し、登録済みAIには適用しない
+    const usesRoleSettings = workModeId !== 'president' || activeCharacter.id === 'preset-ceo';
+    if (usesRoleSettings) {
+      const roleOverride = roleOverrides[workModeId];
+      return { roleOverride, modelSetting: roleOverride?.modelSetting ?? defaultSetting };
+    }
+    return { modelSetting: activeCharacter.modelSetting ?? defaultSetting };
+  };
 
   useEffect(() => {
     const key = `${activeCharacter.id}:${activeWorkModeId}`;
@@ -380,13 +428,18 @@ function AppContent() {
     saveCharacters(newChars);
   };
 
+  const closeCharacterEditor = () => {
+    setIsCharacterEditorOpen(false);
+    setEditingCharacterId(null);
+  };
+
   const handleSaveCharacter = (updated: CharacterConfig) => {
     const exists = characters.some((c) => c.id === updated.id);
     const updatedList = exists
       ? characters.map((c) => (c.id === updated.id ? updated : c))
       : [updated, ...characters];
     handleUpdateCharacters(updatedList);
-    setIsCharacterEditorOpen(false);
+    closeCharacterEditor();
   };
 
   const handleCreateNewCharacter = () => {
@@ -414,6 +467,7 @@ function AppContent() {
     saveActiveCharacterId(newChar.id);
     setActiveWorkModeId('president');
     setMessages([]);
+    setEditingCharacterId(newChar.id);
     setIsCharacterEditorOpen(true);
   };
 
@@ -428,6 +482,7 @@ function AppContent() {
     setActiveCharacterId(copy.id);
     saveActiveCharacterId(copy.id);
     setMessages([]);
+    setEditingCharacterId(copy.id);
     setIsCharacterEditorOpen(true);
   };
 
@@ -438,6 +493,7 @@ function AppContent() {
     }
     const filtered = characters.filter((c) => c.id !== id);
     handleUpdateCharacters(filtered);
+    if (editingCharacterId === id) closeCharacterEditor();
     if (activeCharacterId === id) {
       const nextId = filtered[0].id;
       setActiveCharacterId(nextId);
@@ -465,6 +521,8 @@ function AppContent() {
     endpoint: 'chat' | 'generate-character' | 'extract-memory' | 'refine-prompt';
     endpointName: string;
     model?: string;
+    provider?: AIProviderId;
+    fallbackFrom?: string;
     usage: ApiUsageData;
   }) => {
     recordTokenUsage(params);
@@ -715,7 +773,10 @@ function AppContent() {
       totalTokens: null,
       status: 'unacquired',
     };
-    let responseModel = 'gemini-3.8-flash';
+    let responseModel: string = aiModelSettings.defaultSetting.primary.model;
+    let responseProvider: AIProviderId | undefined;
+    let fallbackFromLabel: string | undefined;
+    const runtime = resolveChatRuntime(workModeId);
 
     setMessages((prev) => [
       ...prev,
@@ -739,13 +800,17 @@ function AppContent() {
             userProfile,
           },
           workModeId,
+          roleOverride: runtime.roleOverride,
+          modelSetting: runtime.modelSetting,
           knowledgeContext: selectKnowledgeContext(knowledgeItems, text),
           stream: true,
         }),
       });
 
       if (!response.ok) {
-        throw new Error(`HTTP error ${response.status}`);
+        // サーバーが理由（APIキー未設定・上限到達など）を返していれば、そのまま画面に出す
+        const detail = await response.json().catch(() => null);
+        throw new Error(detail?.error || `HTTP error ${response.status}`);
       }
 
       const reader = response.body?.getReader();
@@ -774,6 +839,10 @@ function AppContent() {
               if (parsed.type === 'usage' && parsed.usage) {
                 streamUsage = parsed.usage;
                 if (parsed.model) responseModel = parsed.model;
+                if (isProviderId(parsed.provider)) responseProvider = parsed.provider;
+                if (parsed.fallbackFrom?.model) {
+                  fallbackFromLabel = `${AI_PROVIDERS[parsed.fallbackFrom.provider as AIProviderId]?.label ?? parsed.fallbackFrom.provider} / ${parsed.fallbackFrom.model}`;
+                }
               } else if (parsed.text) {
                 accumulatedContent += parsed.text;
                 setMessages((prev) =>
@@ -800,8 +869,15 @@ function AppContent() {
         endpoint: 'chat',
         endpointName: `AI業務モデル：${getAIWorkMode(workModeId).label}`,
         model: responseModel,
+        provider: responseProvider,
+        fallbackFrom: fallbackFromLabel,
         usage: streamUsage,
       });
+
+      const modelLabel = responseProvider
+        ? `${AI_PROVIDERS[responseProvider].label} / ${responseModel}${fallbackFromLabel ? `（${fallbackFromLabel} が使えないため切り替え）` : ''}`
+        : undefined;
+      setMessages((prev) => prev.map((m) => (m.id === assistantMsgId ? { ...m, modelLabel } : m)));
 
       const updatedHistory = [
         ...newHistory,
@@ -810,6 +886,7 @@ function AppContent() {
           role: 'assistant' as const,
           content: accumulatedContent,
           timestamp: Date.now(),
+          modelLabel,
         },
       ];
       saveChatHistory(chatKey, updatedHistory);
@@ -824,7 +901,7 @@ function AppContent() {
                   ...m,
                   content:
                     accumulatedContent ||
-                    '申し訳ございません。通信に問題が発生しました。時間をおいてお試しください。',
+                    `申し訳ございません。AIから応答を取得できませんでした。\n⚠️ ${err?.message || '通信に問題が発生しました。'}\n設定画面で使用モデルや切り替え先を確認してください。`,
                 }
               : m
           )
@@ -1162,7 +1239,8 @@ function AppContent() {
 
         {currentTab === 'ai_chat' && (
           <ChatView
-            character={activeCharacter}
+            character={chatCharacter}
+            roleOverrides={aiModelSettings.roleOverrides}
             characters={characters}
             onSelectCharacter={handleSelectChatCharacter}
             userProfile={userProfile}
@@ -1233,9 +1311,13 @@ function AppContent() {
             }}
             onCreateCharacter={handleCreateNewCharacter}
             onEditCharacter={(id) => {
-              handleSelectChatCharacter(id);
+              setEditingCharacterId(id);
               setIsCharacterEditorOpen(true);
             }}
+            roleOverrides={aiModelSettings.roleOverrides}
+            defaultModelSetting={aiModelSettings.defaultSetting}
+            onEditRole={setEditingRoleId}
+            onOpenModelSettings={() => setIsModelSettingsOpen(true)}
             onDeleteCharacter={handleDeleteCharacter}
           />
         )}
@@ -1267,19 +1349,48 @@ function AppContent() {
       )}
 
       {/* AI President Modals */}
-      {isCharacterEditorOpen && (
-        <CharacterEditor
-          character={activeCharacter}
-          userProfile={userProfile}
-          onSaveCharacter={handleSaveCharacter}
-          onDeleteCharacter={handleDeleteCharacter}
-          onDuplicateCharacter={handleDuplicateCharacter}
-          onStartChat={(char) => {
-            handleSelectCharacter(char.id);
-            setIsCharacterEditorOpen(false);
-            setCurrentTab('ai_chat');
+      {isCharacterEditorOpen && editingCharacter && (
+        <ModalShell title="専門AIの編集" onClose={closeCharacterEditor}>
+          <CharacterEditor
+            key={editingCharacter.id}
+            character={editingCharacter}
+            userProfile={userProfile}
+            defaultModelSetting={aiModelSettings.defaultSetting}
+            onSaveCharacter={handleSaveCharacter}
+            onDeleteCharacter={handleDeleteCharacter}
+            onDuplicateCharacter={handleDuplicateCharacter}
+            onStartChat={(char) => {
+              handleSelectCharacter(char.id);
+              closeCharacterEditor();
+              setCurrentTab('ai_chat');
+            }}
+            onClose={closeCharacterEditor}
+            onRecordUsage={handleRecordUsage}
+          />
+        </ModalShell>
+      )}
+
+      {editingRoleId && (
+        <RoleAIEditor
+          key={editingRoleId}
+          mode={getAIWorkMode(editingRoleId)}
+          override={aiModelSettings.roleOverrides[editingRoleId] ?? {}}
+          defaultSetting={aiModelSettings.defaultSetting}
+          statuses={providerStatuses}
+          onSave={(override) => handleSaveRoleOverride(editingRoleId, override)}
+          onReset={() => handleSaveRoleOverride(editingRoleId, null)}
+          onClose={() => setEditingRoleId(null)}
+        />
+      )}
+
+      {isModelSettingsOpen && (
+        <ModelSettingsModal
+          defaultSetting={aiModelSettings.defaultSetting}
+          onSave={(defaultSetting) => {
+            updateAiModelSettings({ ...aiModelSettings, defaultSetting });
+            setIsModelSettingsOpen(false);
           }}
-          onRecordUsage={handleRecordUsage}
+          onClose={() => setIsModelSettingsOpen(false)}
         />
       )}
 
