@@ -304,22 +304,23 @@ export const ChatView: React.FC<ChatViewProps> = ({
           </label>
           <select
             id="ai-work-mode"
-            value={selectedWorkModeId === 'president' ? `character:${character.id}` : `mode:${selectedWorkModeId}`}
+            value={selectedWorkModeId === 'president' && character.id === 'preset-ceo' ? 'mode:president' : selectedWorkModeId === 'president' ? `character:${character.id}` : `mode:${selectedWorkModeId}`}
             onChange={(event) => {
               const [kind, id] = event.target.value.split(':', 2);
-              if (kind === 'mode') onSelectWorkMode(id as AIWorkModeId);
+              if (kind === 'mode' && id === 'president') onSelectCharacter('preset-ceo');
+              else if (kind === 'mode') onSelectWorkMode(id as AIWorkModeId);
               else if (kind === 'character') onSelectCharacter(id);
             }}
             disabled={isStreaming}
             className="max-w-full sm:max-w-72 rounded-lg border border-slate-700 bg-slate-900 px-2.5 py-1 text-[11px] font-semibold text-white focus:outline-none focus:border-indigo-500 disabled:opacity-50"
           >
             <optgroup label="専門の役割">
-              {AI_WORK_MODES.filter((mode) => mode.id !== 'president').map((mode) => (
+              {AI_WORK_MODES.map((mode) => (
                 <option key={mode.id} value={`mode:${mode.id}`}>{mode.avatarEmoji} {mode.name}｜{mode.label}</option>
               ))}
             </optgroup>
             <optgroup label="登録済みAI">
-              {characters.map((registeredCharacter) => (
+              {characters.filter((registeredCharacter) => registeredCharacter.id !== 'preset-ceo').map((registeredCharacter) => (
                 <option key={registeredCharacter.id} value={`character:${registeredCharacter.id}`}>
                   {registeredCharacter.avatarEmoji} {registeredCharacter.name}｜{registeredCharacter.role}
                 </option>
