@@ -34,12 +34,14 @@ interface TableManagerProps {
   onTableChange: (table: TableKey) => void;
   onOpenRls: () => void;
   onOpenCreateTrigger?: boolean;
+  onStageTransitionTask?: (event: { transitionType: TransitionType; sourceRecord: any; targetTable: 'leads' | 'deals' | 'customers'; targetRecordId?: string | number }) => void;
 }
 
 export const TableManager: React.FC<TableManagerProps> = ({
   currentTable,
   onTableChange,
   onOpenRls,
+  onStageTransitionTask,
 }) => {
   const config = TABLE_CONFIGS[currentTable];
 
@@ -68,6 +70,7 @@ export const TableManager: React.FC<TableManagerProps> = ({
   };
 
   const handleTransitionSuccess = (targetTable: 'leads' | 'deals' | 'customers', recordId?: string | number) => {
+    onStageTransitionTask?.({ transitionType, sourceRecord: transitionSourceRecord, targetTable, targetRecordId: recordId });
     setTransitionOpen(false);
     onTableChange(targetTable);
     const messages = {
