@@ -215,7 +215,7 @@ export const ContactsLineHub: React.FC = () => {
           <div>
             <div className="flex items-center gap-2">
               <h1 className="text-2xl font-black text-white">連絡先・LINE</h1>
-              <span className="rounded-full border border-amber-400/30 bg-amber-500/10 px-2 py-1 text-[11px] font-semibold text-amber-300">LINE送受信API未接続</span>
+              <span className="rounded-full border border-amber-400/30 bg-amber-500/10 px-2 py-1 text-[11px] font-semibold text-amber-300">配信・個別チャット未実装</span>
             </div>
             <p className="mt-2 max-w-3xl text-sm leading-6 text-slate-300">
               人の基本情報とLINE上の状態を同じ一覧で管理します。LINE友だち追加だけではリードになりません。
@@ -335,7 +335,7 @@ export const ContactsLineHub: React.FC = () => {
         </section>
         <aside className="rounded-2xl border border-amber-500/20 bg-amber-950/10 p-4">
           <h3 className="text-xs font-bold text-amber-200">LINE接続状態</h3>
-          <p className="mt-2 text-xs leading-5 text-amber-100/70">この画面は連絡先とLINE上の情報・タグをまとめて表示します。個別チャット、一斉配信、Flex/画像送信、リッチメニューは未接続です。</p>
+          <p className="mt-2 text-xs leading-5 text-amber-100/70">友だちのWebhook取込とタグ管理に対応しています。個別チャット、一斉配信、Flex/画像送信、リッチメニューはまだ利用できません。</p>
         </aside>
       </div>
 
