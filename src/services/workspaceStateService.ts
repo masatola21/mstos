@@ -5,9 +5,14 @@ import {
   Project,
   TaskItem,
   TokenUsageRecord,
+  ChatMessage,
+  KnowledgeItem,
 } from '../types';
 import {
   loadActivityLogs,
+  loadAllChatHistories,
+  saveChatHistory,
+  loadKnowledgeItems,
   loadApprovals,
   loadPricingRates,
   loadProjects,
@@ -15,6 +20,7 @@ import {
   loadTokenUsageRecords,
   loadTopGoal,
   saveActivityLogs,
+  saveKnowledgeItems,
   saveApprovals,
   savePricingRates,
   saveProjects,
@@ -47,6 +53,8 @@ export interface WorkspaceData {
   tools: ManagedToolAsset[];
   customLists: CustomListDefinition[];
   automations: AutomationRule[];
+  workModeHistories: Record<string, ChatMessage[]>;
+  knowledgeItems: KnowledgeItem[];
 }
 
 const WORKSPACE_STATE_TABLE = 'mst_workspace_state';
@@ -64,6 +72,40 @@ function mergeRecords<T extends { id: string }>(remoteRecords: T[], localRecords
   return [...localOnlyRecords, ...remoteRecords];
 }
 
+function mergeChatHistories(
+  remoteHistories: Record<string, ChatMessage[]>,
+  localHistories: Record<string, ChatMessage[]>,
+  baselineHistories: Record<string, ChatMessage[]>
+): Record<string, ChatMessage[]> {
+  const keys = new Set([...Object.keys(remoteHistories), ...Object.keys(localHistories)]);
+  const merged: Record<string, ChatMessage[]> = {};
+  keys.forEach((key) => {
+    const remote = remoteHistories[key] || [];
+    const local = localHistories[key] || [];
+    const baseline = baselineHistories[key] || [];
+    const remoteById = new Map<string, ChatMessage>(remote.map((message): [string, ChatMessage] => [message.id, message]));
+    const localById = new Map<string, ChatMessage>(local.map((message): [string, ChatMessage] => [message.id, message]));
+    const baselineById = new Map<string, ChatMessage>(baseline.map((message): [string, ChatMessage] => [message.id, message]));
+    const combined = new Map(remoteById);
+
+    // Honor local deletions only for messages unchanged in the last synchronized snapshot.
+    baseline.forEach((message) => {
+      if (localById.has(message.id)) return;
+      const remoteMessage = remoteById.get(message.id);
+      if (remoteMessage && JSON.stringify(remoteMessage) === JSON.stringify(message)) combined.delete(message.id);
+    });
+    // Preserve messages newly added or edited locally while retaining independent remote additions.
+    local.forEach((message) => {
+      const previous = baselineById.get(message.id);
+      if (!previous || JSON.stringify(previous) !== JSON.stringify(message)) combined.set(message.id, message);
+    });
+
+    merged[key] = [...combined.values()]
+      .sort((a, b) => a.timestamp - b.timestamp)
+      .slice(-100);
+  });
+  return merged;
+}
 function loadLastSyncedData(userId: string): Partial<WorkspaceData> {
   try {
     const raw = localStorage.getItem(`${LAST_SYNC_PREFIX}${userId}`);
@@ -88,6 +130,8 @@ export function loadLocalWorkspaceData(): WorkspaceData {
     tools: matrixService.loadTools(),
     customLists: matrixService.loadCustomLists(),
     automations: matrixService.loadAutomations(),
+    workModeHistories: loadAllChatHistories(),
+    knowledgeItems: loadKnowledgeItems(),
   };
 }
 
@@ -105,6 +149,8 @@ export function applyWorkspaceData(data: WorkspaceData): void {
   matrixService.saveTools(data.tools);
   matrixService.saveCustomLists(data.customLists);
   matrixService.saveAutomations(data.automations);
+  saveKnowledgeItems(data.knowledgeItems || []);
+  Object.entries(data.workModeHistories || {}).forEach(([key, messages]) => saveChatHistory(key, messages));
 }
 
 function getSupabaseClient() {
@@ -143,6 +189,12 @@ export async function loadOrMigrateWorkspaceData(userId: string): Promise<Worksp
       tools: mergeRecords(remote.tools || [], localDefaults.tools, baseline.tools || []),
       customLists: mergeRecords(remote.customLists || [], localDefaults.customLists, baseline.customLists || []),
       automations: mergeRecords(remote.automations || [], localDefaults.automations, baseline.automations || []),
+      workModeHistories: mergeChatHistories(
+        remote.workModeHistories || {},
+        localDefaults.workModeHistories,
+        baseline.workModeHistories || {}
+      ),
+      knowledgeItems: mergeRecords(remote.knowledgeItems || [], localDefaults.knowledgeItems, baseline.knowledgeItems || []),
     };
     applyWorkspaceData(merged);
     // 別ブラウザーに残っている未同期レコードも既存クラウドデータと統合して保存する。

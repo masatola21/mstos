@@ -131,6 +131,18 @@ export interface ProposedPlan {
   tasks: ProposedPlanTask[];
 }
 
+export type KnowledgeCategory = 'business' | 'product' | 'customer' | 'decision' | 'research' | 'deliverable';
+
+export interface KnowledgeItem {
+  id: string;
+  title: string;
+  category: KnowledgeCategory;
+  content: string;
+  tags: string[];
+  createdAt: number;
+  updatedAt: number;
+}
+
 // --- APIトークン利用量・料金単価管理データ型 ---
 
 export interface ApiUsageData {

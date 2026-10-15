@@ -9,6 +9,8 @@ import {
   ActivityLog,
   ModelPricingRate,
   TokenUsageRecord,
+  ChatMessage,
+  KnowledgeItem,
 } from '../types';
 import { PRESET_CHARACTERS } from '../../data/presets';
 import {
@@ -29,6 +31,8 @@ interface BackupModalProps {
   topGoal: string;
   pricingRates: ModelPricingRate[];
   tokenUsageRecords: TokenUsageRecord[];
+  knowledgeItems: KnowledgeItem[];
+  workModeHistories: Record<string, ChatMessage[]>;
   onRestoreData: (data: {
     characters: CharacterConfig[];
     userProfile: UserProfile;
@@ -39,6 +43,8 @@ interface BackupModalProps {
     topGoal: string;
     pricingRates: ModelPricingRate[];
     tokenUsageRecords: TokenUsageRecord[];
+    knowledgeItems: KnowledgeItem[];
+    workModeHistories: Record<string, ChatMessage[]>;
   }) => void;
 }
 
@@ -54,6 +60,8 @@ export const BackupModal: React.FC<BackupModalProps> = ({
   topGoal,
   pricingRates,
   tokenUsageRecords,
+  knowledgeItems,
+  workModeHistories,
   onRestoreData,
 }) => {
   const [copied, setCopied] = useState(false);
@@ -64,7 +72,7 @@ export const BackupModal: React.FC<BackupModalProps> = ({
 
   const currentExportJson = JSON.stringify(
     {
-      version: '2.1',
+      version: '2.2',
       exportedAt: new Date().toISOString(),
       topGoal,
       projects,
@@ -73,6 +81,8 @@ export const BackupModal: React.FC<BackupModalProps> = ({
       activityLogs,
       pricingRates,
       tokenUsage: tokenUsageRecords,
+      knowledgeItems,
+      workModeHistories,
       characters,
       userProfile,
     },
@@ -112,6 +122,8 @@ export const BackupModal: React.FC<BackupModalProps> = ({
       const restoredLogs = Array.isArray(parsed.activityLogs) ? parsed.activityLogs : activityLogs;
       const restoredGoal = parsed.topGoal || topGoal || DEFAULT_TOP_GOAL;
       const restoredPricing = Array.isArray(parsed.pricingRates) ? parsed.pricingRates : pricingRates;
+      const restoredKnowledge = Array.isArray(parsed.knowledgeItems) ? parsed.knowledgeItems : knowledgeItems;
+      const restoredHistories = parsed.workModeHistories && typeof parsed.workModeHistories === 'object' ? parsed.workModeHistories : workModeHistories;
       const restoredUsage = Array.isArray(parsed.tokenUsage)
         ? parsed.tokenUsage
         : Array.isArray(parsed.tokenUsageRecords)
@@ -128,6 +140,8 @@ export const BackupModal: React.FC<BackupModalProps> = ({
         topGoal: restoredGoal,
         pricingRates: restoredPricing,
         tokenUsageRecords: restoredUsage,
+        knowledgeItems: restoredKnowledge,
+        workModeHistories: restoredHistories,
       });
 
       setImportStatus('✅ データのインポートと復元に成功しました！');
@@ -156,6 +170,8 @@ export const BackupModal: React.FC<BackupModalProps> = ({
         topGoal: DEFAULT_TOP_GOAL,
         pricingRates: DEFAULT_PRICING_RATES,
         tokenUsageRecords: [],
+        knowledgeItems: [],
+        workModeHistories: {},
       });
       onClose();
     }

@@ -10,6 +10,7 @@ import {
   ModelPricingRate,
   TokenUsageRecord,
   ApiUsageData,
+  KnowledgeItem,
 } from '../types';
 import { PRESET_CHARACTERS } from '../data/presets';
 
@@ -245,6 +246,17 @@ export function loadChatHistory(charId: string): ChatMessage[] {
     console.error('Failed to load chat history', e);
   }
   return [];
+}
+
+export function loadAllChatHistories(): Record<string, ChatMessage[]> {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEYS.CHAT_MESSAGES);
+    const parsed = raw ? JSON.parse(raw) : {};
+    return parsed && typeof parsed === 'object' && !Array.isArray(parsed) ? parsed : {};
+  } catch (e) {
+    console.error('Failed to load all chat histories', e);
+    return {};
+  }
 }
 
 export function saveChatHistory(charId: string, messages: ChatMessage[]): void {
@@ -566,7 +578,7 @@ export function getMonthlyTokenSummary(records: TokenUsageRecord[], targetDate: 
 
 export function exportAllData(): string {
   const data = {
-    version: '2.1',
+    version: '2.2',
     exportedAt: new Date().toISOString(),
     topGoal: loadTopGoal(),
     projects: loadProjects(),
@@ -575,8 +587,33 @@ export function exportAllData(): string {
     activityLogs: loadActivityLogs(),
     pricingRates: loadPricingRates(),
     tokenUsage: loadTokenUsageRecords(),
+    knowledgeItems: loadKnowledgeItems(),
+    workModeHistories: loadAllChatHistories(),
     characters: loadCharacters(),
     userProfile: loadUserProfile(),
   };
   return JSON.stringify(data, null, 2);
+}
+
+
+// --- Knowledge Library Storage ---
+const KNOWLEDGE_LIBRARY_KEY = 'mst_knowledge_library_v1';
+
+export function loadKnowledgeItems(): KnowledgeItem[] {
+  try {
+    const raw = localStorage.getItem(KNOWLEDGE_LIBRARY_KEY);
+    const parsed = raw ? JSON.parse(raw) : [];
+    return Array.isArray(parsed) ? parsed : [];
+  } catch (e) {
+    console.error('Failed to load knowledge items', e);
+    return [];
+  }
+}
+
+export function saveKnowledgeItems(items: KnowledgeItem[]): void {
+  try {
+    localStorage.setItem(KNOWLEDGE_LIBRARY_KEY, JSON.stringify(items));
+  } catch (e) {
+    console.error('Failed to save knowledge items', e);
+  }
 }

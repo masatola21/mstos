@@ -14,6 +14,7 @@ import { Loader2 } from 'lucide-react';
 // AI President Views and Modals
 import { DashboardView } from './components/ai-president/DashboardView';
 import { ChatView } from './components/ai-president/ChatView';
+import { KnowledgeHubView } from './components/ai-president/KnowledgeHubView';
 import { ProjectsView } from './components/ai-president/ProjectsView';
 import { TasksView } from './components/ai-president/TasksView';
 import { ApprovalsView } from './components/ai-president/ApprovalsView';
@@ -47,6 +48,7 @@ import {
   ModelPricingRate,
   TokenUsageRecord,
   ApiUsageData,
+  KnowledgeItem,
 } from './types';
 import {
   loadCharacters,
@@ -56,6 +58,8 @@ import {
   loadUserProfile,
   saveUserProfile,
   loadChatHistory,
+  loadKnowledgeItems,
+  saveKnowledgeItems,
   saveChatHistory,
   loadProjects,
   saveProjects,
@@ -94,6 +98,37 @@ import {
 const MAX_CHAT_CONTEXT_MESSAGES = 12;
 const MAX_CHAT_CONTEXT_CHARACTERS = 16000;
 
+function selectKnowledgeContext(items: KnowledgeItem[], request: string): string {
+  if (!items.length) return '';
+  const normalize = (value: string) => value.toLowerCase().replace(/[\s、。,.!?！？・「」『』（）【】]/g, '');
+  const bigrams = (value: string) => {
+    const chars = Array.from(normalize(value));
+    const pairs = new Set<string>();
+    for (let i = 0; i < chars.length - 1; i += 1) pairs.add(chars[i] + chars[i + 1]);
+    return pairs;
+  };
+  const queryPairs = bigrams(request);
+  const ranked = items.map((item) => {
+    const title = normalize(item.title);
+    const tags = normalize(item.tags.join(' '));
+    const content = normalize(item.content);
+    let titleHits = 0;
+    let tagHits = 0;
+    let contentHits = 0;
+    queryPairs.forEach((pair) => {
+      if (title.includes(pair)) titleHits += 1;
+      else if (tags.includes(pair)) tagHits += 1;
+      else if (content.includes(pair)) contentHits += 1;
+    });
+    const score = titleHits * 4 + tagHits * 3 + contentHits + (item.category === 'business' ? 1 : 0);
+    return { item, score };
+  }).filter(({ score }) => score > 0)
+    .sort((a, b) => b.score - a.score || b.item.updatedAt - a.item.updatedAt)
+    .slice(0, 3);
+  return ranked.map(({ item }) =>
+    '【' + item.title + ' / ' + item.category + '】\n' + item.content.slice(0, 2400)
+  ).join('\n\n');
+}
 function buildBoundedChatContext(messages: ChatMessage[]) {
   const context = messages.slice(-MAX_CHAT_CONTEXT_MESSAGES).map(({ role, content }) => ({ role, content }));
   let totalCharacters = context.reduce((total, message) => total + message.content.length, 0);
@@ -139,9 +174,15 @@ function AppContent() {
   const [tokenUsageRecords, setTokenUsageRecords] = useState<TokenUsageRecord[]>(() =>
     loadTokenUsageRecords()
   );
+  const [knowledgeItems, setKnowledgeItems] = useState<KnowledgeItem[]>(() => loadKnowledgeItems());
+  const [workModeHistories, setWorkModeHistories] = useState<Record<string, ChatMessage[]>>({});
+  const [activeWorkModeId, setActiveWorkModeId] = useState<AIWorkModeId>('president');
 
-  // Chat States
-  const [messages, setMessages] = useState<ChatMessage[]>(() => loadChatHistory(activeCharacterId));
+  // Chat States: role and character each have an independent history.
+  const [messages, setMessages] = useState<ChatMessage[]>(() => {
+    const current = loadChatHistory(`${activeCharacterId}:president`);
+    return current.length ? current : loadChatHistory(activeCharacterId);
+  });
   const [isStreaming, setIsStreaming] = useState(false);
   const activeAbortController = useRef<AbortController | null>(null);
 
@@ -188,6 +229,11 @@ function AppContent() {
         setTools(data.tools);
         setCustomLists(data.customLists);
         setAutomations(data.automations);
+        setKnowledgeItems(data.knowledgeItems || []);
+        setWorkModeHistories(data.workModeHistories || {});
+        const initialChatKey = `${activeCharacterId}:${activeWorkModeId}`;
+        const savedChat = data.workModeHistories?.[initialChatKey] || loadChatHistory(initialChatKey);
+        setMessages(savedChat.length ? savedChat : activeWorkModeId === 'president' ? loadChatHistory(activeCharacterId) : []);
         lastSavedWorkspaceRef.current = JSON.stringify(data);
         workspaceSyncEnabledRef.current = true;
         setWorkspaceSyncStatus('saved');
@@ -221,6 +267,8 @@ function AppContent() {
       tools,
       customLists,
       automations,
+      workModeHistories,
+      knowledgeItems,
     };
     const snapshot = JSON.stringify(workspaceData);
     if (snapshot === lastSavedWorkspaceRef.current) return;
@@ -258,11 +306,43 @@ function AppContent() {
     tools,
     customLists,
     automations,
+    workModeHistories,
+    knowledgeItems,
   ]);
 
   // Active character
   const activeCharacter =
     characters.find((c) => c.id === activeCharacterId) || characters[0] || PRESET_CHARACTERS[0];
+
+  useEffect(() => {
+    const key = `${activeCharacter.id}:${activeWorkModeId}`;
+    saveChatHistory(key, messages);
+    if (isStreaming) return;
+    setWorkModeHistories((current) =>
+      current[key] === messages ? current : { ...current, [key]: messages.slice(-100) }
+    );
+  }, [activeCharacter.id, activeWorkModeId, messages, isStreaming]);
+
+  const handleSelectWorkMode = (id: AIWorkModeId) => {
+    setActiveWorkModeId(id);
+    const key = `${activeCharacter.id}:${id}`;
+    setMessages(workModeHistories[key] || loadChatHistory(key));
+  };
+
+  const handleSaveKnowledgeItem = (item: KnowledgeItem) => {
+    const exists = knowledgeItems.some((current) => current.id === item.id);
+    const next = exists
+      ? knowledgeItems.map((current) => current.id === item.id ? item : current)
+      : [item, ...knowledgeItems];
+    setKnowledgeItems(next);
+    saveKnowledgeItems(next);
+  };
+
+  const handleDeleteKnowledgeItem = (id: string) => {
+    const next = knowledgeItems.filter((item) => item.id !== id);
+    setKnowledgeItems(next);
+    saveKnowledgeItems(next);
+  };
 
   // Quick Create Handler for MST
   const handleOpenCreate = (table: TableKey) => {
@@ -274,7 +354,8 @@ function AppContent() {
   const handleSelectCharacter = (id: string) => {
     setActiveCharacterId(id);
     saveActiveCharacterId(id);
-    setMessages(loadChatHistory(id));
+    const history = loadChatHistory(`${id}:${activeWorkModeId}`);
+    setMessages(history.length ? history : activeWorkModeId === 'president' ? loadChatHistory(id) : []);
   };
 
   const handleUpdateCharacters = (newChars: CharacterConfig[]) => {
@@ -343,7 +424,7 @@ function AppContent() {
       const nextId = filtered[0].id;
       setActiveCharacterId(nextId);
       saveActiveCharacterId(nextId);
-      setMessages(loadChatHistory(nextId));
+      setMessages(loadChatHistory(`${nextId}:${activeWorkModeId}`));
     }
   };
 
@@ -599,9 +680,10 @@ function AppContent() {
       timestamp: Date.now(),
     };
 
+    const chatKey = `${activeCharacter.id}:${workModeId}`;
     const newHistory = [...messages, userMsg];
     setMessages(newHistory);
-    saveChatHistory(activeCharacter.id, newHistory);
+    saveChatHistory(chatKey, newHistory);
     setIsStreaming(true);
 
     const abortController = new AbortController();
@@ -639,6 +721,7 @@ function AppContent() {
             userProfile,
           },
           workModeId,
+          knowledgeContext: selectKnowledgeContext(knowledgeItems, text),
           stream: true,
         }),
       });
@@ -744,7 +827,7 @@ function AppContent() {
 
   const handleClearMessages = () => {
     setMessages([]);
-    saveChatHistory(activeCharacter.id, []);
+    saveChatHistory(`${activeCharacter.id}:${activeWorkModeId}`, []);
   };
 
   // Matrix handlers
@@ -1055,6 +1138,8 @@ function AppContent() {
             userProfile={userProfile}
             messages={messages}
             onSendMessage={handleSendMessage}
+            selectedWorkModeId={activeWorkModeId}
+            onSelectWorkMode={handleSelectWorkMode}
             onClearMessages={handleClearMessages}
             onEditCharacter={() => setIsCharacterEditorOpen(true)}
             onUpdateUserProfile={handleUpdateUserProfile}
@@ -1063,6 +1148,10 @@ function AppContent() {
             onOpenPlanProposal={(plan) => setActivePlanForModal(plan)}
             onRecordUsage={handleRecordUsage}
           />
+        )}
+
+        {currentTab === 'ai_knowledge' && (
+          <KnowledgeHubView items={knowledgeItems} onSave={handleSaveKnowledgeItem} onDelete={handleDeleteKnowledgeItem} />
         )}
 
         {currentTab === 'ai_projects' && (
@@ -1248,6 +1337,8 @@ function AppContent() {
           topGoal={topGoal}
           pricingRates={pricingRates}
           tokenUsageRecords={tokenUsageRecords}
+          knowledgeItems={knowledgeItems}
+          workModeHistories={workModeHistories}
           onRestoreData={(restored) => {
             if (restored.characters) setCharacters(restored.characters);
             if (restored.userProfile) setUserProfile(restored.userProfile);
@@ -1258,6 +1349,15 @@ function AppContent() {
             if (restored.topGoal) setTopGoal(restored.topGoal);
             if (restored.pricingRates) setPricingRates(restored.pricingRates);
             if (restored.tokenUsageRecords) setTokenUsageRecords(restored.tokenUsageRecords);
+            if (restored.knowledgeItems) {
+              setKnowledgeItems(restored.knowledgeItems);
+              saveKnowledgeItems(restored.knowledgeItems);
+            }
+            if (restored.workModeHistories) {
+              setWorkModeHistories(restored.workModeHistories);
+              Object.entries(restored.workModeHistories).forEach(([key, history]) => saveChatHistory(key, history));
+              setMessages(restored.workModeHistories[`${activeCharacter.id}:${activeWorkModeId}`] || []);
+            }
             setIsBackupModalOpen(false);
           }}
         />
