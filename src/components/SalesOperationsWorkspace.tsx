@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { getSupabase } from '../lib/supabaseClient';
+import { ManagedContract, ManagedInvoice } from '../types/matrix';
 import { FileText, Plus, RefreshCw, Receipt, Wrench } from 'lucide-react';
 
 type WorkspaceTab = 'segments' | 'documents' | 'operations';
@@ -16,9 +17,9 @@ const opsTabs = [
   { key: 'services', label: '顧問・構築支援', table: 'customer_service_engagements', icon: Wrench },
 ] as const;
 
-interface Props { tab: WorkspaceTab; }
+interface Props { tab: WorkspaceTab; onOperationalRecordsChange?: (contracts: ManagedContract[], invoices: ManagedInvoice[]) => void; }
 
-export const SalesOperationsWorkspace: React.FC<Props> = ({ tab }) => {
+export const SalesOperationsWorkspace: React.FC<Props> = ({ tab, onOperationalRecordsChange }) => {
   const [segments, setSegments] = useState<Segment[]>([]);
   const [documents, setDocuments] = useState<RecordRow[]>([]);
   const [outbox, setOutbox] = useState<RecordRow[]>([]);
@@ -68,13 +69,22 @@ export const SalesOperationsWorkspace: React.FC<Props> = ({ tab }) => {
         if (contactResult.error) throw contactResult.error;
         setDocuments(docs.data || []); setOutbox(messages.data || []); setContacts(contactResult.data || []);
       } else {
-        const [recordsResult, companyResult] = await Promise.all([
+        const [recordsResult, companyResult, contractsResult, invoicesResult] = await Promise.all([
           supabase.from(selectedOps.table).select('*').order('created_at', { ascending: false }),
           supabase.from('companies').select('id,company_name').order('company_name'),
+          supabase.from('customer_contracts').select('*').order('created_at', { ascending: false }),
+          supabase.from('customer_invoices').select('*').order('created_at', { ascending: false }),
         ]);
         if (recordsResult.error) throw recordsResult.error;
         if (companyResult.error) throw companyResult.error;
+        if (contractsResult.error) throw contractsResult.error;
+        if (invoicesResult.error) throw invoicesResult.error;
         setRecords(recordsResult.data || []); setCompanies(companyResult.data || []);
+        const asTime = (value:string|null|undefined) => value ? (Date.parse(value)||Date.now()) : Date.now();
+        onOperationalRecordsChange?.(
+          (contractsResult.data||[]).map((row:any)=>({id:row.legacy_id||row.id,title:row.title,type:row.contract_type,productId:row.product_id||undefined,companyId:row.company_id||undefined,counterpartyName:row.counterparty_name||'',status:row.status,startDate:row.start_date||undefined,endDate:row.end_date||undefined,amount:Number(row.amount||0),notes:row.notes||undefined,createdAt:asTime(row.created_at),updatedAt:asTime(row.updated_at)})) as ManagedContract[],
+          (invoicesResult.data||[]).map((row:any)=>({id:row.legacy_id||row.id,invoiceNumber:row.invoice_number,title:row.title,productId:row.product_id||undefined,companyId:row.company_id||undefined,recipientName:row.recipient_name||'',amount:Number(row.amount||0),taxAmount:row.tax_amount==null?undefined:Number(row.tax_amount),status:row.status,issueDate:row.issue_date||'',dueDate:row.due_date||'',paidDate:row.paid_at||undefined,notes:row.notes||undefined,createdAt:asTime(row.created_at),updatedAt:asTime(row.updated_at)})) as ManagedInvoice[]
+        );
       }
     } catch (e: any) { setError(e?.message || 'データを読み込めませんでした。'); }
     finally { setLoading(false); }
