@@ -142,6 +142,15 @@ export interface ProposedPlan {
 
 export type KnowledgeCategory = 'business' | 'product' | 'customer' | 'decision' | 'research' | 'deliverable';
 
+export interface KnowledgeAttachment {
+  id: string;
+  fileName: string;
+  storagePath: string;
+  contentType: string;
+  size: number;
+  uploadedAt: number;
+}
+
 export interface KnowledgeItem {
   id: string;
   title: string;
@@ -152,6 +161,7 @@ export interface KnowledgeItem {
   updatedAt: number;
   sourceTaskId?: string;
   sourceRoleId?: string;
+  attachments?: KnowledgeAttachment[];
 }
 
 // --- APIトークン利用量・料金単価管理データ型 ---
