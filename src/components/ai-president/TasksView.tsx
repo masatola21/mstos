@@ -36,6 +36,25 @@ import {
 import { ApprovalsView } from './ApprovalsView';
 import { AI_WORK_MODES, AIWorkModeId, RoleAIOverrides, resolveWorkMode } from '../../data/aiWorkModes';
 
+const TASK_WORK_AREAS: { value: TaskWorkArea; label: string }[] = [
+  { value: 'sales_customer', label: '営業・顧客' },
+  { value: 'product_development', label: '商品開発' },
+  { value: 'project', label: 'プロジェクト' },
+  { value: 'post_contract_support', label: '契約後支援' },
+];
+const TASK_KINDS: { value: TaskKind; label: string }[] = [
+  { value: 'response', label: '対応' },
+  { value: 'review', label: '判断・確認' },
+  { value: 'creation_analysis', label: '作成・分析' },
+  { value: 'recurring', label: '定期業務' },
+];
+const RELATED_RECORD_TYPES: { value: TaskRelatedRecordType | 'none'; label: string }[] = [
+  { value: 'none', label: '関連先なし' }, { value: 'company', label: '会社' },
+  { value: 'contact', label: '連絡先' }, { value: 'prospect', label: '見込み企業' },
+  { value: 'lead', label: 'リード' }, { value: 'deal', label: '商談' },
+  { value: 'customer', label: '顧客' }, { value: 'product', label: '商品・サービス' },
+];
+
 interface TasksViewProps {
   tasks: TaskItem[];
   projects: Project[];
@@ -454,12 +473,28 @@ export const TasksView: React.FC<TasksViewProps> = ({
             onChange={(e) => setFilterProject(e.target.value)}
             className="rounded-xl bg-slate-950 border border-slate-800 px-2.5 py-1.5 text-xs text-slate-200 focus:outline-none cursor-pointer"
           >
-            <option value="all">すべてのプロジェクト ({tasks.length})</option>
+            <option value="all">すべて ({tasks.length})</option>
+            <option value="none">プロジェクト未設定</option>
             {projects.map((p) => (
               <option key={p.id} value={p.id}>
                 {p.name}
               </option>
             ))}
+          </select>
+        </div>
+
+        <div className="flex items-center gap-1.5">
+          <span className="text-slate-400 text-[11px] font-semibold">領域:</span>
+          <select value={filterWorkArea} onChange={(e) => setFilterWorkArea(e.target.value)} className="rounded-xl bg-slate-950 border border-slate-800 px-2.5 py-1.5 text-xs text-slate-200 focus:outline-none cursor-pointer">
+            <option value="all">すべての領域</option>
+            {TASK_WORK_AREAS.map((item) => <option key={item.value} value={item.value}>{item.label}</option>)}
+          </select>
+        </div>
+        <div className="flex items-center gap-1.5">
+          <span className="text-slate-400 text-[11px] font-semibold">種類:</span>
+          <select value={filterTaskKind} onChange={(e) => setFilterTaskKind(e.target.value)} className="rounded-xl bg-slate-950 border border-slate-800 px-2.5 py-1.5 text-xs text-slate-200 focus:outline-none cursor-pointer">
+            <option value="all">すべての種類</option>
+            {TASK_KINDS.map((item) => <option key={item.value} value={item.value}>{item.label}</option>)}
           </select>
         </div>
 
@@ -545,6 +580,9 @@ export const TasksView: React.FC<TasksViewProps> = ({
                   <div className="flex items-center gap-2 flex-wrap">
                     {getStatusBadge(task.status)}
                     {getAssigneeBadge(task.assignee)}
+                    <span className="rounded bg-indigo-500/10 px-2 py-0.5 text-[10px] text-indigo-200">{TASK_WORK_AREAS.find((item) => item.value === (task.workArea || 'project'))?.label || 'プロジェクト'}</span>
+                    <span className="rounded bg-cyan-500/10 px-2 py-0.5 text-[10px] text-cyan-200">{TASK_KINDS.find((item) => item.value === (task.taskKind || 'response'))?.label || '対応'}</span>
+                    {task.relatedRecord?.label && <span className="rounded bg-slate-950 px-2 py-0.5 text-[10px] text-slate-300">関連: {task.relatedRecord.label}</span>}
                     <span
                       className={`px-2 py-0.5 rounded text-[10px] font-bold ${
                         task.priority === 'high'
@@ -782,19 +820,39 @@ export const TasksView: React.FC<TasksViewProps> = ({
 
               <div>
                 <label className="block text-xs font-semibold text-slate-300 mb-1">
-                  所属プロジェクト <span className="text-rose-400">*</span>
+                  関連プロジェクト <span className="text-slate-500">任意</span>
                 </label>
                 <select
                   value={projectId}
                   onChange={(e) => setProjectId(e.target.value)}
                   className="w-full rounded-xl bg-slate-950 border border-slate-800 px-3 py-2 text-xs text-slate-100 focus:outline-none focus:border-indigo-500 cursor-pointer"
                 >
-                  {projects.map((p) => (
-                    <option key={p.id} value={p.id}>
-                      {p.name}
-                    </option>
-                  ))}
+                  <option value="">プロジェクトに紐付けない</option>
+                  {projects.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
                 </select>
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <label className="block text-xs font-semibold text-slate-300">仕事の領域
+                  <select value={workArea} onChange={(e) => setWorkArea(e.target.value as TaskWorkArea)} className="mt-1 w-full rounded-xl bg-slate-950 border border-slate-800 px-3 py-2 text-xs text-slate-100">
+                    {TASK_WORK_AREAS.map((item) => <option key={item.value} value={item.value}>{item.label}</option>)}
+                  </select>
+                </label>
+                <label className="block text-xs font-semibold text-slate-300">作業の種類
+                  <select value={taskKind} onChange={(e) => setTaskKind(e.target.value as TaskKind)} className="mt-1 w-full rounded-xl bg-slate-950 border border-slate-800 px-3 py-2 text-xs text-slate-100">
+                    {TASK_KINDS.map((item) => <option key={item.value} value={item.value}>{item.label}</option>)}
+                  </select>
+                </label>
+              </div>
+              <div className="rounded-xl border border-slate-800 p-3 space-y-2">
+                <label className="block text-xs font-semibold text-slate-300">関連するCRMレコード／商品
+                  <select value={relatedRecordType} onChange={(e) => setRelatedRecordType(e.target.value as TaskRelatedRecordType | 'none')} className="mt-1 w-full rounded-xl bg-slate-950 border border-slate-800 px-3 py-2 text-xs text-slate-100">
+                    {RELATED_RECORD_TYPES.map((item) => <option key={item.value} value={item.value}>{item.label}</option>)}
+                  </select>
+                </label>
+                {relatedRecordType !== 'none' && <div className="grid grid-cols-2 gap-2">
+                  <input value={relatedRecordLabel} onChange={(e) => setRelatedRecordLabel(e.target.value)} placeholder="関連先の名前" className="w-full rounded-lg bg-slate-950 border border-slate-800 px-3 py-2 text-xs text-slate-100" />
+                  <input value={relatedRecordId} onChange={(e) => setRelatedRecordId(e.target.value)} placeholder="レコードID（自動連携用）" className="w-full rounded-lg bg-slate-950 border border-slate-800 px-3 py-2 text-xs text-slate-100" />
+                </div>}
               </div>
 
               <div>
