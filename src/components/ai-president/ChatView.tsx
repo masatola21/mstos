@@ -23,6 +23,8 @@ import { AI_WORK_MODES, AIWorkModeId, getAIWorkMode } from '../../data/aiWorkMod
 
 interface ChatViewProps {
   character: CharacterConfig;
+  characters: CharacterConfig[];
+  onSelectCharacter: (id: string) => void;
   userProfile: UserProfile;
   messages: ChatMessage[];
   selectedWorkModeId: AIWorkModeId;
@@ -43,6 +45,8 @@ interface ChatViewProps {
 
 export const ChatView: React.FC<ChatViewProps> = ({
   character,
+  characters,
+  onSelectCharacter,
   userProfile,
   messages,
   selectedWorkModeId,
@@ -300,14 +304,27 @@ export const ChatView: React.FC<ChatViewProps> = ({
           </label>
           <select
             id="ai-work-mode"
-            value={selectedWorkModeId}
-            onChange={(event) => onSelectWorkMode(event.target.value as AIWorkModeId)}
+            value={selectedWorkModeId === 'president' ? `character:${character.id}` : `mode:${selectedWorkModeId}`}
+            onChange={(event) => {
+              const [kind, id] = event.target.value.split(':', 2);
+              if (kind === 'mode') onSelectWorkMode(id as AIWorkModeId);
+              else if (kind === 'character') onSelectCharacter(id);
+            }}
             disabled={isStreaming}
             className="max-w-full sm:max-w-72 rounded-lg border border-slate-700 bg-slate-900 px-3 py-1.5 text-xs font-semibold text-white focus:outline-none focus:border-indigo-500 disabled:opacity-50"
           >
-            {AI_WORK_MODES.map((mode) => (
-              <option key={mode.id} value={mode.id}>{mode.avatarEmoji} {mode.name}｜{mode.label}</option>
-            ))}
+            <optgroup label="専門の役割">
+              {AI_WORK_MODES.filter((mode) => mode.id !== 'president').map((mode) => (
+                <option key={mode.id} value={`mode:${mode.id}`}>{mode.avatarEmoji} {mode.name}｜{mode.label}</option>
+              ))}
+            </optgroup>
+            <optgroup label="登録済みAI">
+              {characters.map((registeredCharacter) => (
+                <option key={registeredCharacter.id} value={`character:${registeredCharacter.id}`}>
+                  {registeredCharacter.avatarEmoji} {registeredCharacter.name}｜{registeredCharacter.role}
+                </option>
+              ))}
+            </optgroup>
           </select>
           <p className="min-w-0 flex-1 text-[11px] text-slate-400">{selectedWorkMode.description}</p>
         </div>
