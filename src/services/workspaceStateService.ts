@@ -41,6 +41,59 @@ import {
   ManagedToolAsset,
 } from '../types/matrix';
 
+type RelationalSalesOperations = { contracts: ManagedContract[]; invoices: ManagedInvoice[] };
+
+function toTimestamp(value: string | null | undefined): number {
+  if (!value) return Date.now();
+  const parsed = Date.parse(value);
+  return Number.isFinite(parsed) ? parsed : Date.now();
+}
+
+async function loadRelationalSalesOperations(): Promise<RelationalSalesOperations | null> {
+  const supabase = getSupabaseClient();
+  const [contractResult, invoiceResult] = await Promise.all([
+    supabase.from('customer_contracts').select('*').order('created_at',{ascending:false}),
+    supabase.from('customer_invoices').select('*').order('created_at',{ascending:false}),
+  ]);
+  // Older deployments continue using the compatible workspace snapshot until the migration is applied.
+  if (contractResult.error || invoiceResult.error) return null;
+  return {
+    contracts: (contractResult.data || []).map((row: any) => ({
+      id: row.legacy_id || row.id,
+      title: row.title,
+      type: row.contract_type,
+      productId: row.product_id || undefined,
+      companyId: row.company_id || undefined,
+      counterpartyName: row.counterparty_name || '',
+      status: row.status,
+      startDate: row.start_date || undefined,
+      endDate: row.end_date || undefined,
+      amount: Number(row.amount || 0),
+      documentUrl: undefined,
+      notes: row.notes || undefined,
+      createdAt: toTimestamp(row.created_at),
+      updatedAt: toTimestamp(row.updated_at),
+    })) as ManagedContract[],
+    invoices: (invoiceResult.data || []).map((row: any) => ({
+      id: row.legacy_id || row.id,
+      invoiceNumber: row.invoice_number,
+      title: row.title,
+      productId: row.product_id || undefined,
+      companyId: row.company_id || undefined,
+      recipientName: row.recipient_name || '',
+      amount: Number(row.amount || 0),
+      taxAmount: row.tax_amount == null ? undefined : Number(row.tax_amount),
+      status: row.status,
+      issueDate: row.issue_date || '',
+      dueDate: row.due_date || '',
+      paidDate: row.paid_at || undefined,
+      notes: row.notes || undefined,
+      createdAt: toTimestamp(row.created_at),
+      updatedAt: toTimestamp(row.updated_at),
+    })) as ManagedInvoice[],
+  };
+}
+
 export interface WorkspaceData {
   topGoal: string;
   projects: Project[];
@@ -202,6 +255,11 @@ export async function loadOrMigrateWorkspaceData(userId: string): Promise<Worksp
       knowledgeItems: mergeRecords(remote.knowledgeItems || [], localDefaults.knowledgeItems, baseline.knowledgeItems || []),
       marketingScenarios: mergeRecords(remote.marketingScenarios || [], localDefaults.marketingScenarios, baseline.marketingScenarios || []),
     };
+    const relationalSales = await loadRelationalSalesOperations();
+    if (relationalSales && (relationalSales.contracts.length > 0 || relationalSales.invoices.length > 0 || (merged.contracts.length === 0 && merged.invoices.length === 0))) {
+      merged.contracts = relationalSales.contracts;
+      merged.invoices = relationalSales.invoices;
+    }
     applyWorkspaceData(merged);
     // 別ブラウザーに残っている未同期レコードも既存クラウドデータと統合して保存する。
     await saveWorkspaceData(userId, merged);
@@ -210,6 +268,11 @@ export async function loadOrMigrateWorkspaceData(userId: string): Promise<Worksp
 
   // 初回サインインでは既存ブラウザのデータをクラウドへ移行する。
   const localData = loadLocalWorkspaceData();
+  const relationalSales = await loadRelationalSalesOperations();
+  if (relationalSales && (relationalSales.contracts.length > 0 || relationalSales.invoices.length > 0 || (localData.contracts.length === 0 && localData.invoices.length === 0))) {
+    localData.contracts = relationalSales.contracts;
+    localData.invoices = relationalSales.invoices;
+  }
   await saveWorkspaceData(userId, localData);
   return localData;
 }
