@@ -5,6 +5,8 @@ import { fileURLToPath } from 'url';
 import { getAIWorkMode, sanitizeRoleOverride } from './src/data/aiWorkModes';
 import { AIModelSetting, DEFAULT_MODEL_SETTING, sanitizeModelSetting } from './src/data/aiModels';
 import { getProviderStatus, runWithFallback } from './server/aiProviders';
+import { createHmac, timingSafeEqual, createHash } from 'node:crypto';
+import { createClient } from '@supabase/supabase-js';
 
 dotenv.config();
 
@@ -13,6 +15,180 @@ const app = express();
 const port = process.env.PORT || 3000;
 const MAX_CHAT_CONTEXT_MESSAGES = 12;
 const MAX_CHAT_CONTEXT_CHARACTERS = 16000;
+
+
+const lineSupabaseUrl = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL || '';
+const lineServiceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY || '';
+const lineChannelSecret = process.env.LINE_CHANNEL_SECRET || '';
+const lineChannelAccessToken = process.env.LINE_CHANNEL_ACCESS_TOKEN || '';
+const lineSupabase = lineSupabaseUrl && lineServiceRoleKey
+  ? createClient(lineSupabaseUrl, lineServiceRoleKey, { auth: { persistSession: false, autoRefreshToken: false } })
+  : null;
+
+async function getLineDisplayName(userId: string): Promise<string | undefined> {
+  if (!lineChannelAccessToken) return undefined;
+  try {
+    const response = await fetch(`https://api.line.me/v2/bot/profile/${encodeURIComponent(userId)}`, {
+      headers: { Authorization: `Bearer ${lineChannelAccessToken}` },
+    });
+    if (!response.ok) return undefined;
+    const profile = await response.json() as { displayName?: string };
+    return profile.displayName;
+  } catch {
+    return undefined;
+  }
+}
+
+async function resolveLineContact(userId: string) {
+  if (!lineSupabase) throw new Error('Supabase server credentials are missing.');
+  const { data: existing, error: lookupError } = await lineSupabase
+    .from('contacts').select('id, full_name').eq('line_user_id', userId).maybeSingle();
+  if (lookupError) throw lookupError;
+  if (existing) return existing;
+
+  const displayName = await getLineDisplayName(userId);
+  const { data: inserted, error: insertError } = await lineSupabase
+    .from('contacts')
+    .insert({ line_user_id: userId, full_name: displayName || 'LINE友だち', source: 'line_webhook' })
+    .select('id, full_name')
+    .single();
+  if (!insertError && inserted) return inserted;
+
+  // A concurrent webhook may have created the same contact between lookup and insert.
+  if (insertError?.code === '23505') {
+    const { data: concurrent, error } = await lineSupabase
+      .from('contacts').select('id, full_name').eq('line_user_id', userId).single();
+    if (!error && concurrent) return concurrent;
+  }
+  throw insertError || new Error('Unable to create LINE contact.');
+}
+
+async function processLineWebhookEvent(event: any) {
+  if (!lineSupabase) throw new Error('Supabase server credentials are missing.');
+  const stableEventId = typeof event.webhookEventId === 'string'
+    ? event.webhookEventId
+    : createHash('sha256').update(JSON.stringify(event)).digest('hex');
+  const { data: existingEvent, error: lookupError } = await lineSupabase
+    .from('crm_ingestion_events')
+    .select('id, processed_at')
+    .eq('source', 'line')
+    .eq('source_event_id', stableEventId)
+    .maybeSingle();
+  if (lookupError) throw lookupError;
+  if (existingEvent?.processed_at) return;
+
+  let eventRowId = existingEvent?.id as string | undefined;
+  if (!eventRowId) {
+    const { data: insertedEvent, error: insertEventError } = await lineSupabase
+      .from('crm_ingestion_events')
+      .insert({
+        source: 'line',
+        source_event_id: stableEventId,
+        event_type: String(event.type || 'unknown'),
+        payload: event,
+      })
+      .select('id')
+      .single();
+    if (insertEventError?.code === '23505') {
+      const { data: racedEvent, error } = await lineSupabase.from('crm_ingestion_events')
+        .select('id, processed_at').eq('source', 'line').eq('source_event_id', stableEventId).single();
+      if (error) throw error;
+      if (racedEvent.processed_at) return;
+      eventRowId = racedEvent.id;
+    } else if (insertEventError || !insertedEvent) {
+      throw insertEventError || new Error('Unable to record LINE event.');
+    } else {
+      eventRowId = insertedEvent.id;
+    }
+  }
+
+  try {
+    const userId = typeof event.source?.userId === 'string' ? event.source.userId : '';
+    if (userId) {
+      const contact = await resolveLineContact(userId);
+      const eventTime = typeof event.timestamp === 'number' ? new Date(event.timestamp).toISOString() : new Date().toISOString();
+      const update: Record<string, unknown> = {
+        contact_id: contact.id,
+        line_user_id: userId,
+        status: event.type === 'unfollow' ? 'blocked' : 'active',
+      };
+      if (event.type === 'follow') {
+        update.followed_at = eventTime;
+        update.unfollowed_at = null;
+      } else if (event.type === 'unfollow') {
+        update.unfollowed_at = eventTime;
+      } else if (event.type === 'message') {
+        update.last_message_at = eventTime;
+      }
+      if (contact.full_name) update.display_name = contact.full_name;
+      const { error: friendError } = await lineSupabase
+        .from('line_friends').upsert(update, { onConflict: 'line_user_id' });
+      if (friendError) throw friendError;
+
+      // Link an existing lead for the same LINE ID without creating a lead for follows.
+      if (event.type === 'follow' || event.type === 'message') {
+        const { error: leadError } = await lineSupabase.from('leads')
+          .update({ contact_id: contact.id, line_user_id: userId })
+          .eq('line_user_id', userId)
+          .is('contact_id', null);
+        if (leadError) throw leadError;
+      }
+    }
+
+    if (eventRowId) {
+      const { error: completeError } = await lineSupabase
+        .from('crm_ingestion_events')
+        .update({ processed_at: new Date().toISOString(), processing_error: null })
+        .eq('id', eventRowId);
+      if (completeError) throw completeError;
+    }
+  } catch (error) {
+    if (eventRowId) {
+      await lineSupabase.from('crm_ingestion_events')
+        .update({ processing_error: error instanceof Error ? error.message : 'Processing failed' })
+        .eq('id', eventRowId);
+    }
+    throw error;
+  }
+}
+
+app.post('/api/line/webhook', express.raw({ type: 'application/json', limit: '1mb' }), async (req, res) => {
+  if (!lineChannelSecret || !lineSupabase) {
+    return res.status(503).json({ error: 'LINE webhook server configuration is incomplete.' });
+  }
+  if (!Buffer.isBuffer(req.body)) {
+    return res.status(400).json({ error: 'Expected raw application/json request body.' });
+  }
+  const signature = req.header('x-line-signature') || '';
+  if (!signature) return res.status(401).json({ error: 'Missing LINE signature.' });
+
+  const expectedSignature = createHmac('sha256', lineChannelSecret).update(req.body).digest();
+  let receivedSignature: Buffer;
+  try {
+    receivedSignature = Buffer.from(signature, 'base64');
+  } catch {
+    return res.status(401).json({ error: 'Invalid LINE signature.' });
+  }
+  if (receivedSignature.length !== expectedSignature.length || !timingSafeEqual(receivedSignature, expectedSignature)) {
+    return res.status(401).json({ error: 'Invalid LINE signature.' });
+  }
+
+  let webhook: { events?: unknown[] };
+  try {
+    webhook = JSON.parse(req.body.toString('utf8'));
+  } catch {
+    return res.status(400).json({ error: 'Invalid JSON body.' });
+  }
+  if (!Array.isArray(webhook.events)) return res.status(400).json({ error: 'Webhook events array is required.' });
+
+  try {
+    for (const event of webhook.events) await processLineWebhookEvent(event);
+    return res.sendStatus(200);
+  } catch (error) {
+    console.error('LINE webhook event processing failed:', error instanceof Error ? error.message : 'unknown error');
+    return res.status(500).json({ error: 'LINE webhook event could not be stored.' });
+  }
+});
 
 app.use(express.json({ limit: '10mb' }));
 
