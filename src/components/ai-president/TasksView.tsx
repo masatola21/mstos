@@ -978,6 +978,7 @@ export const TasksView: React.FC<TasksViewProps> = ({
 
       {(activeSection === 'approvals' || activeSection === 'logs') && (
         <ApprovalsView
+          tasks={tasks}
           approvals={approvals}
           activityLogs={activityLogs}
           onResolveApproval={onResolveApproval}
