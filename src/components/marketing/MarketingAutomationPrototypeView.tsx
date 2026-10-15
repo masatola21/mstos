@@ -16,6 +16,7 @@ const triggerOptions: Array<{ value: MarketingTrigger; label: string }> = [
   { value: 'manual', label: '手動で開始' },
 ];
 const channelLabels: Record<MarketingChannel, string> = { line: 'LINE', email: 'メール', both: 'LINE + メール' };
+const lineMessageLabels: Record<MarketingLineMessageType, string> = { text: 'テキスト', image: '画像', flex: 'Flex' };
 
 function isHttpsUrl(value: string): boolean {
   try {
@@ -75,7 +76,7 @@ export const MarketingAutomationPrototypeView: React.FC<Props> = ({ scenarios, o
       emailSubject: scenario.emailSubject,
       messageBody: scenario.messageBody || '',
       emailBody: scenario.emailBody || '',
-      lineMessageType: scenario.lineMessageType || 'text',
+      lineMessageType: lineMessageLabels[scenario.lineMessageType || 'text'],
       lineImageUrl: scenario.lineImageUrl || '',
       linePreviewImageUrl: scenario.linePreviewImageUrl || scenario.lineImageUrl || '',
       flexAltText: scenario.flexAltText || '',
@@ -90,6 +91,10 @@ export const MarketingAutomationPrototypeView: React.FC<Props> = ({ scenarios, o
     event.preventDefault();
     if (form.channel !== 'email' && form.lineMessageType === 'image' && (!isHttpsUrl(form.lineImageUrl) || !isHttpsUrl(form.linePreviewImageUrl))) {
       setNotice('画像URLはHTTPSで公開されているURLを指定してください。');
+      return;
+    }
+    if (form.channel !== 'email' && form.lineMessageType === 'flex' && Boolean(form.flexButtonLabel) !== Boolean(form.flexButtonUrl)) {
+      setNotice('Flexのボタン名とURLは両方入力するか、両方空欄にしてください。');
       return;
     }
     if (form.channel !== 'email' && form.lineMessageType === 'flex' && form.flexButtonUrl && !isHttpsUrl(form.flexButtonUrl)) {
