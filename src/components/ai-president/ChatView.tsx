@@ -244,7 +244,7 @@ export const ChatView: React.FC<ChatViewProps> = ({
                 >
                   {selectedWorkModeId === 'president' ? character.role : selectedWorkMode.label}
                 </span>
-                {character.speechStyle && (
+                {selectedWorkModeId === 'president' && character.speechStyle && (
                   <span className="hidden sm:inline-block text-[11px] text-slate-400 bg-slate-800/70 px-2 py-0.5 rounded-full border border-slate-700/60 truncate max-w-[200px]">
                     口癖: {character.speechStyle}
                   </span>
@@ -329,14 +329,15 @@ export const ChatView: React.FC<ChatViewProps> = ({
                 <div
                   className={`w-16 h-16 rounded-3xl bg-gradient-to-tr ${scheme.bgGradient} flex items-center justify-center text-4xl shadow-xl ${scheme.glow} mx-auto mb-4 border border-white/20`}
                 >
-                  {character.avatarEmoji || '🤖'}
+                  {selectedWorkModeId === 'president' ? character.avatarEmoji || '🤖' : selectedWorkMode.avatarEmoji}
                 </div>
                 <h3 className="text-xl font-extrabold text-white mb-1">{selectedWorkModeId === 'president' ? character.name : selectedWorkMode.name}</h3>
                 <p className="text-sm font-medium text-indigo-300 mb-2">{selectedWorkModeId === 'president' ? character.role : selectedWorkMode.label}</p>
                 <p className="text-xs text-slate-400 max-w-md mx-auto leading-relaxed mb-4">
-                  {character.tagline || character.personality}
+                  {selectedWorkModeId === 'president' ? character.tagline || character.personality : selectedWorkMode.description}
                 </p>
 
+                {selectedWorkModeId === 'president' && <>
                 {/* Character Traits Pills */}
                 <div className="flex flex-wrap items-center justify-center gap-1.5 max-w-lg mx-auto mb-6">
                   {character.firstPerson && (
@@ -361,14 +362,16 @@ export const ChatView: React.FC<ChatViewProps> = ({
                   )}
                 </div>
 
+                </>}
+
                 {/* Greeting Speech Bubble */}
                 <div className="p-4 rounded-2xl bg-slate-800/80 border border-slate-700/70 text-left max-w-xl mx-auto shadow-md">
                   <div className="text-xs font-semibold text-indigo-400 mb-1 flex items-center gap-1">
                     <Sparkles className="w-3.5 h-3.5" />
-                    <span>{character.name} からのメッセージ</span>
+                    <span>{selectedWorkModeId === 'president' ? character.name : selectedWorkMode.name} からのメッセージ</span>
                   </div>
                   <p className="text-sm text-slate-200 leading-relaxed">
-                    {character.greetingMessage || 'こんにちは！今日もよろしくお願いします。何でも話してくださいね。'}
+                    {selectedWorkModeId === 'president' ? character.greetingMessage || 'こんにちは！今日もよろしくお願いします。何でも話してくださいね。' : selectedWorkMode.description}
                   </p>
                 </div>
               </div>
@@ -408,7 +411,7 @@ export const ChatView: React.FC<ChatViewProps> = ({
                   <div
                     className={`w-9 h-9 rounded-xl bg-gradient-to-tr ${scheme.bgGradient} flex items-center justify-center text-lg shadow-md shrink-0 border border-white/10 mt-1`}
                   >
-                    {character.avatarEmoji || '🤖'}
+                    {selectedWorkModeId === 'president' ? character.avatarEmoji || '🤖' : selectedWorkMode.avatarEmoji}
                   </div>
                 )}
 
