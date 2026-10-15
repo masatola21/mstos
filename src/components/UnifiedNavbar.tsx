@@ -40,7 +40,8 @@ export type UnifiedNavTab =
   | 'ai_projects'
   | 'ai_tasks'
   | 'ai_approvals'
-  | 'ai_presets';
+  | 'ai_presets'
+  | 'ai_knowledge';
 
 export type NavSection = 'mst' | 'matrix' | 'ai_president';
 
@@ -83,7 +84,8 @@ export const UnifiedNavbar: React.FC<UnifiedNavbarProps> = ({
       currentTab === 'ai_projects' ||
       currentTab === 'ai_tasks' ||
       currentTab === 'ai_approvals' ||
-      currentTab === 'ai_presets'
+      currentTab === 'ai_presets' ||
+      currentTab === 'ai_knowledge'
     ) {
       return 'ai_president';
     }
@@ -430,6 +432,17 @@ export const UnifiedNavbar: React.FC<UnifiedNavbarProps> = ({
                     {pendingApprovalsCount}
                   </span>
                 )}
+              </button>
+
+              <button
+                onClick={() => onTabChange('ai_knowledge')}
+                className={`px-3 py-1.5 rounded-lg whitespace-nowrap transition-colors flex items-center gap-1.5 ${
+                  currentTab === 'ai_knowledge'
+                    ? 'bg-purple-600 text-white font-semibold shadow-sm'
+                    : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800'
+                }`}
+              >
+                📚 ナレッジ・成果物
               </button>
 
               <button
