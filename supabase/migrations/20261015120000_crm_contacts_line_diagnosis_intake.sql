@@ -11,6 +11,7 @@ CREATE TABLE IF NOT EXISTS public.contacts (
   phone text,
   role_title text,
   preferred_channel text,
+  line_user_id text UNIQUE,
   source text NOT NULL DEFAULT 'manual',
   notes text,
   created_at timestamptz NOT NULL DEFAULT now(),
@@ -106,30 +107,24 @@ CREATE TABLE IF NOT EXISTS public.crm_ingestion_events (
 );
 
 -- Preserve legacy LINE identifiers currently stored on lead rows.
-WITH legacy AS (
-  SELECT DISTINCT ON (l.line_user_id)
-    l.line_user_id,
-    l.company_id,
-    COALESCE(NULLIF(c.contact_name, ''), NULLIF(c.company_name, ''), 'LINE登録者') AS full_name,
-    c.email,
-    c.phone
-  FROM public.leads l
-  LEFT JOIN public.companies c ON c.id = l.company_id
-  WHERE l.line_user_id IS NOT NULL AND btrim(l.line_user_id) <> ''
-  ORDER BY l.line_user_id, l.created_at NULLS LAST
-), inserted_contacts AS (
-  INSERT INTO public.contacts (company_id, full_name, email, phone, source)
-  SELECT company_id, full_name, email, phone, 'legacy_line_lead'
-  FROM legacy
-  RETURNING id, email, phone, company_id
-)
+INSERT INTO public.contacts (company_id, full_name, email, phone, line_user_id, source)
+SELECT DISTINCT ON (l.line_user_id)
+  l.company_id,
+  COALESCE(NULLIF(c.contact_name, ''), NULLIF(c.company_name, ''), 'LINE登録者'),
+  c.email,
+  c.phone,
+  l.line_user_id,
+  'legacy_line_lead'
+FROM public.leads l
+LEFT JOIN public.companies c ON c.id = l.company_id
+WHERE l.line_user_id IS NOT NULL AND btrim(l.line_user_id) <> ''
+ORDER BY l.line_user_id, l.created_at NULLS LAST
+ON CONFLICT (line_user_id) DO NOTHING;
+
 INSERT INTO public.line_friends (contact_id, line_user_id, status, source)
-SELECT ic.id, legacy.line_user_id, 'unknown', 'legacy_lead'
-FROM legacy
-JOIN inserted_contacts ic
-  ON ic.company_id IS NOT DISTINCT FROM legacy.company_id
- AND ic.email IS NOT DISTINCT FROM legacy.email
- AND ic.phone IS NOT DISTINCT FROM legacy.phone
+SELECT c.id, c.line_user_id, 'unknown', 'legacy_lead'
+FROM public.contacts c
+WHERE c.line_user_id IS NOT NULL
 ON CONFLICT (line_user_id) DO NOTHING;
 
 CREATE INDEX IF NOT EXISTS idx_contacts_company_id ON public.contacts(company_id);
