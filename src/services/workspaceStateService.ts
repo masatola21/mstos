@@ -5,9 +5,14 @@ import {
   Project,
   TaskItem,
   TokenUsageRecord,
+  ChatMessage,
+  KnowledgeItem,
 } from '../types';
 import {
   loadActivityLogs,
+  loadAllChatHistories,
+  saveChatHistory,
+  loadKnowledgeItems,
   loadApprovals,
   loadPricingRates,
   loadProjects,
@@ -15,6 +20,7 @@ import {
   loadTokenUsageRecords,
   loadTopGoal,
   saveActivityLogs,
+  saveKnowledgeItems,
   saveApprovals,
   savePricingRates,
   saveProjects,
@@ -47,6 +53,8 @@ export interface WorkspaceData {
   tools: ManagedToolAsset[];
   customLists: CustomListDefinition[];
   automations: AutomationRule[];
+  workModeHistories: Record<string, ChatMessage[]>;
+  knowledgeItems: KnowledgeItem[];
 }
 
 const WORKSPACE_STATE_TABLE = 'mst_workspace_state';
@@ -88,6 +96,8 @@ export function loadLocalWorkspaceData(): WorkspaceData {
     tools: matrixService.loadTools(),
     customLists: matrixService.loadCustomLists(),
     automations: matrixService.loadAutomations(),
+    workModeHistories: loadAllChatHistories(),
+    knowledgeItems: loadKnowledgeItems(),
   };
 }
 
@@ -105,6 +115,8 @@ export function applyWorkspaceData(data: WorkspaceData): void {
   matrixService.saveTools(data.tools);
   matrixService.saveCustomLists(data.customLists);
   matrixService.saveAutomations(data.automations);
+  saveKnowledgeItems(data.knowledgeItems || []);
+  Object.entries(data.workModeHistories || {}).forEach(([key, messages]) => saveChatHistory(key, messages));
 }
 
 function getSupabaseClient() {
@@ -143,6 +155,8 @@ export async function loadOrMigrateWorkspaceData(userId: string): Promise<Worksp
       tools: mergeRecords(remote.tools || [], localDefaults.tools, baseline.tools || []),
       customLists: mergeRecords(remote.customLists || [], localDefaults.customLists, baseline.customLists || []),
       automations: mergeRecords(remote.automations || [], localDefaults.automations, baseline.automations || []),
+      workModeHistories: { ...localDefaults.workModeHistories, ...(remote.workModeHistories || {}) },
+      knowledgeItems: mergeRecords(remote.knowledgeItems || [], localDefaults.knowledgeItems, baseline.knowledgeItems || []),
     };
     applyWorkspaceData(merged);
     // 別ブラウザーに残っている未同期レコードも既存クラウドデータと統合して保存する。
