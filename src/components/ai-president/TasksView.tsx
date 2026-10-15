@@ -581,23 +581,35 @@ export const TasksView: React.FC<TasksViewProps> = ({
                 {/* Title & Description */}
                 <div>
                   <div className="flex items-center gap-2">
-                    {task.draftArtifact ? (
+                    {task.draftArtifact || task.knowledgeItemId ? (
                       <button
                         type="button"
-                        aria-expanded={expandedDraftTaskIds.has(task.id)}
-                        onClick={() => setExpandedDraftTaskIds((current) => {
-                          const next = new Set(current);
-                          if (next.has(task.id)) next.delete(task.id);
-                          else next.add(task.id);
-                          return next;
-                        })}
+                        aria-expanded={task.draftArtifact ? expandedDraftTaskIds.has(task.id) : undefined}
+                        onClick={() => {
+                          if (task.draftArtifact) {
+                            setExpandedDraftTaskIds((current) => {
+                              const next = new Set(current);
+                              if (next.has(task.id)) next.delete(task.id);
+                              else next.add(task.id);
+                              return next;
+                            });
+                          } else if (task.knowledgeItemId) {
+                            onOpenKnowledgeItem(task.knowledgeItemId);
+                          }
+                        }}
                         className="flex items-center gap-1.5 text-left text-sm sm:text-base font-bold text-white hover:text-indigo-200 cursor-pointer"
                       >
                         <span>{task.title}</span>
                         <span className="text-[10px] font-semibold text-indigo-300">
-                          {expandedDraftTaskIds.has(task.id) ? '成果物を閉じる' : '成果物を確認'}
+                          {task.draftArtifact
+                            ? expandedDraftTaskIds.has(task.id) ? '成果物を閉じる' : '成果物を確認'
+                            : '保存済み成果物を開く'}
                         </span>
-                        <ChevronDown className={`w-4 h-4 text-indigo-300 transition-transform ${expandedDraftTaskIds.has(task.id) ? 'rotate-180' : ''}`} />
+                        {task.draftArtifact ? (
+                          <ChevronDown className={`w-4 h-4 text-indigo-300 transition-transform ${expandedDraftTaskIds.has(task.id) ? 'rotate-180' : ''}`} />
+                        ) : (
+                          <ArrowRight className="w-4 h-4 text-indigo-300" />
+                        )}
                       </button>
                     ) : (
                       <h3 className="text-sm sm:text-base font-bold text-white">{task.title}</h3>
