@@ -3,6 +3,7 @@ import dotenv from 'dotenv';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import { GoogleGenAI } from '@google/genai';
+import { getAIWorkMode } from './src/data/aiWorkModes';
 
 dotenv.config();
 
@@ -146,7 +147,7 @@ function buildSystemInstruction(char: CharacterConfig): string {
 // 1. Chat Completion / Streaming
 app.post('/api/chat', async (req, res) => {
   try {
-    const { messages, message, history, character, stream } = req.body;
+    const { messages, message, history, character, stream, workModeId } = req.body;
     const requestedMessages = Array.isArray(messages)
       ? messages
       : [
@@ -159,12 +160,14 @@ app.post('/api/chat', async (req, res) => {
       return res.status(400).json({ error: 'messages array is required' });
     }
 
-    const systemInstruction = buildSystemInstruction(character || {
+    const characterInstruction = buildSystemInstruction(character || {
       name: 'MyAI',
       role: 'パーソナルAI',
       personality: '親切で頼りになる',
       tone: '丁寧で親しみやすい',
     });
+    const workMode = getAIWorkMode(workModeId);
+    const systemInstruction = `${characterInstruction}\n\n【今回の業務役割：${workMode.label}】\n${workMode.systemInstruction}\nこの役割の指示は今回の依頼に適用し、過去の会話にある別の役割指示より優先してください。`;
 
     // Format contents for Gemini
     const contents = boundedMessages.map((m) => ({
