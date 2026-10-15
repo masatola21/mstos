@@ -5,7 +5,6 @@ import {
   Volume2,
   VolumeX,
   Trash2,
-  Sliders,
   Sparkles,
   Mic,
   MicOff,
@@ -24,13 +23,14 @@ import { AI_WORK_MODES, AIWorkModeId, getAIWorkMode } from '../../data/aiWorkMod
 
 interface ChatViewProps {
   character: CharacterConfig;
+  characters: CharacterConfig[];
+  onSelectCharacter: (id: string) => void;
   userProfile: UserProfile;
   messages: ChatMessage[];
   selectedWorkModeId: AIWorkModeId;
   onSelectWorkMode: (id: AIWorkModeId) => void;
   onSendMessage: (text: string, workModeId?: AIWorkModeId) => void;
   onClearMessages: () => void;
-  onEditCharacter: () => void;
   onUpdateUserProfile: (profile: UserProfile) => void;
   isStreaming: boolean;
   onStopStreaming: () => void;
@@ -45,13 +45,14 @@ interface ChatViewProps {
 
 export const ChatView: React.FC<ChatViewProps> = ({
   character,
+  characters,
+  onSelectCharacter,
   userProfile,
   messages,
   selectedWorkModeId,
   onSelectWorkMode,
   onSendMessage,
   onClearMessages,
-  onEditCharacter,
   onUpdateUserProfile,
   isStreaming,
   onStopStreaming,
@@ -282,15 +283,6 @@ export const ChatView: React.FC<ChatViewProps> = ({
 
             <button
               type="button"
-              onClick={onEditCharacter}
-              title="このAIを編集・調整"
-              className="p-2 rounded-xl text-slate-400 hover:text-slate-200 bg-slate-800/60 hover:bg-slate-800 border border-slate-700/60 transition-colors cursor-pointer"
-            >
-              <Sliders className="w-4 h-4" />
-            </button>
-
-            <button
-              type="button"
               onClick={() => {
                 if (window.confirm('このキャラクターとの対話履歴をリセットしますか？')) {
                   onClearMessages();
@@ -304,7 +296,41 @@ export const ChatView: React.FC<ChatViewProps> = ({
           </div>
         </div>
 
-        {/* Memory Notification Banner */}
+        {/* Unified assigned AI selector */}
+      <div className="border-b border-slate-800/70 bg-slate-950 px-4 py-2">
+        <div className="max-w-4xl mx-auto flex flex-wrap items-center gap-2">
+          <label htmlFor="ai-work-mode" className="shrink-0 text-xs font-bold text-indigo-300">
+            担当AI
+          </label>
+          <select
+            id="ai-work-mode"
+            value={selectedWorkModeId === 'president' ? `character:${character.id}` : `mode:${selectedWorkModeId}`}
+            onChange={(event) => {
+              const [kind, id] = event.target.value.split(':', 2);
+              if (kind === 'mode') onSelectWorkMode(id as AIWorkModeId);
+              else if (kind === 'character') onSelectCharacter(id);
+            }}
+            disabled={isStreaming}
+            className="max-w-full sm:max-w-72 rounded-lg border border-slate-700 bg-slate-900 px-3 py-1.5 text-xs font-semibold text-white focus:outline-none focus:border-indigo-500 disabled:opacity-50"
+          >
+            <optgroup label="専門の役割">
+              {AI_WORK_MODES.filter((mode) => mode.id !== 'president').map((mode) => (
+                <option key={mode.id} value={`mode:${mode.id}`}>{mode.avatarEmoji} {mode.name}｜{mode.label}</option>
+              ))}
+            </optgroup>
+            <optgroup label="登録済みAI">
+              {characters.map((registeredCharacter) => (
+                <option key={registeredCharacter.id} value={`character:${registeredCharacter.id}`}>
+                  {registeredCharacter.avatarEmoji} {registeredCharacter.name}｜{registeredCharacter.role}
+                </option>
+              ))}
+            </optgroup>
+          </select>
+          <p className="min-w-0 flex-1 text-[11px] text-slate-400">{selectedWorkMode.description}</p>
+        </div>
+      </div>
+
+      {/* Memory Notification Banner */}
         {memoryNotification && (
           <div className="max-w-4xl mx-auto mt-2 px-3 py-1.5 rounded-lg bg-indigo-950/80 border border-indigo-500/40 text-xs text-indigo-200 flex items-center justify-between animate-in fade-in">
             <span>{memoryNotification}</span>
@@ -492,25 +518,6 @@ export const ChatView: React.FC<ChatViewProps> = ({
       {/* Input Box Bottom Bar */}
       <div className="border-t border-slate-800/80 bg-slate-900/90 p-3 sm:p-4 backdrop-blur-md">
         <div className="max-w-4xl mx-auto space-y-2">
-          <div className="flex flex-col sm:flex-row sm:items-center gap-2 rounded-xl border border-slate-800 bg-slate-950/80 px-3 py-2">
-            <label htmlFor="ai-work-mode" className="shrink-0 text-[11px] font-semibold text-indigo-300">
-              担当する役割
-            </label>
-            <select
-              id="ai-work-mode"
-              value={selectedWorkModeId}
-              onChange={(event) => onSelectWorkMode(event.target.value as AIWorkModeId)}
-              disabled={isStreaming}
-              className="max-w-full sm:max-w-52 rounded-lg border border-slate-700 bg-slate-900 px-2.5 py-1.5 text-xs font-semibold text-white focus:outline-none focus:border-indigo-500 disabled:opacity-50"
-            >
-              {AI_WORK_MODES.map((mode) => (
-                <option key={mode.id} value={mode.id}>{mode.avatarEmoji} {mode.name}｜{mode.label}</option>
-              ))}
-            </select>
-            <p className="min-w-0 flex-1 text-[11px] text-slate-400">{selectedWorkMode.description}</p>
-            <span className="shrink-0 text-[10px] text-slate-500">1回のAI呼び出し</span>
-          </div>
-
           {/* Quick AI President Action Chips */}
           <div className="flex items-center gap-1.5 overflow-x-auto pb-1 text-[11px] no-scrollbar">
             <span className="text-slate-400 shrink-0 font-semibold">クイック指示:</span>

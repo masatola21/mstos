@@ -54,9 +54,7 @@ interface UnifiedNavbarProps {
   onOpenBackup: () => void;
   onOpenProfile: () => void;
   onOpenQuickDrawer: () => void;
-  characters: CharacterConfig[];
   activeCharacter: CharacterConfig;
-  onSelectCharacter: (id: string) => void;
   pendingApprovalsCount: number;
 }
 
@@ -69,9 +67,7 @@ export const UnifiedNavbar: React.FC<UnifiedNavbarProps> = ({
   onOpenBackup,
   onOpenProfile,
   onOpenQuickDrawer,
-  characters,
   activeCharacter,
-  onSelectCharacter,
   pendingApprovalsCount,
 }) => {
   const { user, signOut, config } = useAuth();
@@ -183,22 +179,6 @@ export const UnifiedNavbar: React.FC<UnifiedNavbarProps> = ({
               <span className="text-sm">{activeCharacter.avatarEmoji || '👔'}</span>
               <span className="hidden sm:inline">AI社長に相談</span>
             </button>
-
-            {/* Character Switcher Dropdown */}
-            <div className="hidden md:flex items-center bg-slate-950 border border-slate-800 rounded-xl px-2 py-1">
-              <Bot className="w-3.5 h-3.5 text-indigo-400 mr-1.5" />
-              <select
-                value={activeCharacter.id}
-                onChange={(e) => onSelectCharacter(e.target.value)}
-                className="bg-transparent text-xs text-slate-200 focus:outline-none cursor-pointer max-w-[120px] truncate"
-              >
-                {characters.map((c) => (
-                  <option key={c.id} value={c.id} className="bg-slate-900 text-white">
-                    {c.avatarEmoji} {c.name}
-                  </option>
-                ))}
-              </select>
-            </div>
 
             {/* Token Pricing & Usage Modal */}
             <button
@@ -454,7 +434,7 @@ export const UnifiedNavbar: React.FC<UnifiedNavbarProps> = ({
                 }`}
               >
                 <Bot className="w-3.5 h-3.5" />
-                <span>専門AI参謀一覧</span>
+                <span>専門AI一覧</span>
               </button>
             </>
           )}

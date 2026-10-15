@@ -313,6 +313,8 @@ function AppContent() {
   // Active character
   const activeCharacter =
     characters.find((c) => c.id === activeCharacterId) || characters[0] || PRESET_CHARACTERS[0];
+  const presidentCharacter =
+    characters.find((c) => c.id === 'preset-ceo') || PRESET_CHARACTERS[0];
 
   useEffect(() => {
     const key = `${activeCharacter.id}:${activeWorkModeId}`;
@@ -358,6 +360,14 @@ function AppContent() {
     setMessages(history.length ? history : activeWorkModeId === 'president' ? loadChatHistory(id) : []);
   };
 
+  const handleSelectChatCharacter = (id: string) => {
+    setActiveCharacterId(id);
+    saveActiveCharacterId(id);
+    setActiveWorkModeId('president');
+    const history = loadChatHistory(`${id}:president`);
+    setMessages(history.length ? history : loadChatHistory(id));
+  };
+
   const handleUpdateCharacters = (newChars: CharacterConfig[]) => {
     setCharacters(newChars);
     saveCharacters(newChars);
@@ -395,6 +405,7 @@ function AppContent() {
     handleUpdateCharacters([newChar, ...characters]);
     setActiveCharacterId(newChar.id);
     saveActiveCharacterId(newChar.id);
+    setActiveWorkModeId('president');
     setMessages([]);
     setIsCharacterEditorOpen(true);
   };
@@ -794,7 +805,7 @@ function AppContent() {
           timestamp: Date.now(),
         },
       ];
-      saveChatHistory(activeCharacter.id, updatedHistory);
+      saveChatHistory(chatKey, updatedHistory);
     } catch (err: any) {
       if (err.name === 'AbortError') {
         // Aborted by user
@@ -1012,9 +1023,7 @@ function AppContent() {
         onOpenBackup={() => setIsBackupModalOpen(true)}
         onOpenProfile={() => setIsProfileModalOpen(true)}
         onOpenQuickDrawer={() => setIsQuickDrawerOpen(true)}
-        characters={characters}
-        activeCharacter={activeCharacter}
-        onSelectCharacter={handleSelectCharacter}
+        activeCharacter={presidentCharacter}
         pendingApprovalsCount={approvals.filter((a) => a.status === 'pending').length}
       />
 
@@ -1135,13 +1144,14 @@ function AppContent() {
         {currentTab === 'ai_chat' && (
           <ChatView
             character={activeCharacter}
+            characters={characters}
+            onSelectCharacter={handleSelectChatCharacter}
             userProfile={userProfile}
             messages={messages}
             onSendMessage={handleSendMessage}
             selectedWorkModeId={activeWorkModeId}
             onSelectWorkMode={handleSelectWorkMode}
             onClearMessages={handleClearMessages}
-            onEditCharacter={() => setIsCharacterEditorOpen(true)}
             onUpdateUserProfile={handleUpdateUserProfile}
             isStreaming={isStreaming}
             onStopStreaming={handleStopStreaming}
@@ -1192,14 +1202,23 @@ function AppContent() {
 
         {currentTab === 'ai_presets' && (
           <PresetsView
-            onSelectAndChat={(preset) => {
-              handleSelectCharacter(preset.id);
+            characters={characters}
+            activeCharacterId={activeCharacterId}
+            activeWorkModeId={activeWorkModeId}
+            onSelectCharacter={(id) => {
+              handleSelectChatCharacter(id);
               setCurrentTab('ai_chat');
             }}
-            onDuplicateAndEdit={(preset) => {
-              handleDuplicateCharacter(preset);
+            onSelectWorkMode={(id) => {
+              handleSelectWorkMode(id);
+              setCurrentTab('ai_chat');
             }}
-            activeCharacterId={activeCharacterId}
+            onCreateCharacter={handleCreateNewCharacter}
+            onEditCharacter={(id) => {
+              handleSelectChatCharacter(id);
+              setIsCharacterEditorOpen(true);
+            }}
+            onDeleteCharacter={handleDeleteCharacter}
           />
         )}
       </main>
@@ -1367,7 +1386,7 @@ function AppContent() {
       <QuickPresidentDrawer
         isOpen={isQuickDrawerOpen}
         onClose={() => setIsQuickDrawerOpen(false)}
-        character={activeCharacter}
+        character={presidentCharacter}
         userProfile={userProfile}
         onOpenFullChat={() => setCurrentTab('ai_chat')}
         onOpenPlanProposal={(plan) => setActivePlanForModal(plan)}
