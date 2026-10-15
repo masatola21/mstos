@@ -274,7 +274,6 @@ export const UnifiedNavbar: React.FC<UnifiedNavbarProps> = ({
                 <span>自動化ルール</span>
               </button>
 
-            <>
               <button
                 onClick={() => onTabChange('ai_dashboard')}
                 className={`px-3 py-1.5 rounded-lg whitespace-nowrap transition-colors flex items-center gap-1.5 ${
