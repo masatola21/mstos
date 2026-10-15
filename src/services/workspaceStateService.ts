@@ -29,6 +29,8 @@ import {
   saveTopGoal,
 } from '../utils/storage';
 import { getSupabase } from '../lib/supabaseClient';
+import { MarketingScenario } from '../types/marketing';
+import { loadMarketingScenarios, saveMarketingScenarios } from '../utils/marketingStorage';
 import { matrixService } from './matrixService';
 import {
   AutomationRule,
@@ -55,6 +57,7 @@ export interface WorkspaceData {
   automations: AutomationRule[];
   workModeHistories: Record<string, ChatMessage[]>;
   knowledgeItems: KnowledgeItem[];
+  marketingScenarios: MarketingScenario[];
 }
 
 const WORKSPACE_STATE_TABLE = 'mst_workspace_state';
@@ -132,6 +135,7 @@ export function loadLocalWorkspaceData(): WorkspaceData {
     automations: matrixService.loadAutomations(),
     workModeHistories: loadAllChatHistories(),
     knowledgeItems: loadKnowledgeItems(),
+    marketingScenarios: loadMarketingScenarios(),
   };
 }
 
@@ -150,6 +154,7 @@ export function applyWorkspaceData(data: WorkspaceData): void {
   matrixService.saveCustomLists(data.customLists);
   matrixService.saveAutomations(data.automations);
   saveKnowledgeItems(data.knowledgeItems || []);
+  saveMarketingScenarios(data.marketingScenarios || []);
   Object.entries(data.workModeHistories || {}).forEach(([key, messages]) => saveChatHistory(key, messages));
 }
 
@@ -195,6 +200,7 @@ export async function loadOrMigrateWorkspaceData(userId: string): Promise<Worksp
         baseline.workModeHistories || {}
       ),
       knowledgeItems: mergeRecords(remote.knowledgeItems || [], localDefaults.knowledgeItems, baseline.knowledgeItems || []),
+      marketingScenarios: mergeRecords(remote.marketingScenarios || [], localDefaults.marketingScenarios, baseline.marketingScenarios || []),
     };
     applyWorkspaceData(merged);
     // 別ブラウザーに残っている未同期レコードも既存クラウドデータと統合して保存する。

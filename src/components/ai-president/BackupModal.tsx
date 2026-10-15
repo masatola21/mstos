@@ -13,6 +13,7 @@ import {
   KnowledgeItem,
 } from '../types';
 import { PRESET_CHARACTERS } from '../../data/presets';
+import { MarketingScenario } from '../../types/marketing';
 import {
   DEFAULT_USER_PROFILE,
   DEFAULT_TOP_GOAL,
@@ -33,6 +34,7 @@ interface BackupModalProps {
   tokenUsageRecords: TokenUsageRecord[];
   knowledgeItems: KnowledgeItem[];
   workModeHistories: Record<string, ChatMessage[]>;
+  marketingScenarios: MarketingScenario[];
   onRestoreData: (data: {
     characters: CharacterConfig[];
     userProfile: UserProfile;
@@ -45,6 +47,7 @@ interface BackupModalProps {
     tokenUsageRecords: TokenUsageRecord[];
     knowledgeItems: KnowledgeItem[];
     workModeHistories: Record<string, ChatMessage[]>;
+    marketingScenarios: MarketingScenario[];
   }) => void;
 }
 
@@ -62,6 +65,7 @@ export const BackupModal: React.FC<BackupModalProps> = ({
   tokenUsageRecords,
   knowledgeItems,
   workModeHistories,
+  marketingScenarios,
   onRestoreData,
 }) => {
   const [copied, setCopied] = useState(false);
@@ -83,6 +87,7 @@ export const BackupModal: React.FC<BackupModalProps> = ({
       tokenUsage: tokenUsageRecords,
       knowledgeItems,
       workModeHistories,
+      marketingScenarios,
       characters,
       userProfile,
     },
@@ -124,6 +129,7 @@ export const BackupModal: React.FC<BackupModalProps> = ({
       const restoredPricing = Array.isArray(parsed.pricingRates) ? parsed.pricingRates : pricingRates;
       const restoredKnowledge = Array.isArray(parsed.knowledgeItems) ? parsed.knowledgeItems : knowledgeItems;
       const restoredHistories = parsed.workModeHistories && typeof parsed.workModeHistories === 'object' ? parsed.workModeHistories : workModeHistories;
+      const restoredMarketingScenarios = Array.isArray(parsed.marketingScenarios) ? parsed.marketingScenarios : marketingScenarios;
       const restoredUsage = Array.isArray(parsed.tokenUsage)
         ? parsed.tokenUsage
         : Array.isArray(parsed.tokenUsageRecords)
@@ -142,6 +148,7 @@ export const BackupModal: React.FC<BackupModalProps> = ({
         tokenUsageRecords: restoredUsage,
         knowledgeItems: restoredKnowledge,
         workModeHistories: restoredHistories,
+        marketingScenarios: restoredMarketingScenarios,
       });
 
       setImportStatus('✅ データのインポートと復元に成功しました！');
@@ -172,6 +179,7 @@ export const BackupModal: React.FC<BackupModalProps> = ({
         tokenUsageRecords: [],
         knowledgeItems: [],
         workModeHistories: {},
+        marketingScenarios: [],
       });
       onClose();
     }
