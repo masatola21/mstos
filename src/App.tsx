@@ -45,6 +45,7 @@ import {
   ProposedPlan,
   Priority,
   TaskAssignee,
+  TaskDraftArtifact,
   ModelPricingRate,
   TokenUsageRecord,
   ApiUsageData,
@@ -571,6 +572,7 @@ function AppContent() {
   };
 
   const handleRunAssignedTask = async (task: TaskItem) => {
+    if (task.status === 'pending_approval') throw new Error('このタスクは承認待ちです。承認または却下後に再実行できます。');
     if (taskExecutionInProgress.current) throw new Error('別の担当AIタスクを実行中です。完了後にもう一度お試しください。');
     taskExecutionInProgress.current = true;
     try {
@@ -585,8 +587,12 @@ function AppContent() {
     if (!agentCharacter) throw new Error('このタスクに割り当てられた登録済みAIが見つかりません。担当を選び直してください。');
     const runtime = resolveChatRuntime(workModeId, agentCharacter);
     const resolvedMode = resolveWorkMode(mode, aiModelSettings.roleOverrides);
+    const latestRejection = approvals
+      .filter((approval) => approval.taskId === task.id && approval.status === 'rejected')
+      .sort((a, b) => (b.resolvedAt || b.createdAt) - (a.resolvedAt || a.createdAt))[0];
     const prompt = [
       `担当タスク: ${task.title}`,
+      latestRejection?.resolutionNote ? `前回のレビュー指摘（今回反映してください）: ${latestRejection.resolutionNote}` : '',
       task.description ? `目的・背景: ${task.description}` : '',
       task.completionCriteria ? `完了条件: ${task.completionCriteria}` : '',
       'このタスクの成果物を作成してください。まず与えられた情報だけで進め、不足する前提は明記してください。外部への送信・公開や本番変更は行わず、レビュー可能な草案・成果として提示してください。',
@@ -623,9 +629,6 @@ function AppContent() {
     });
 
     const now = Date.now();
-    const existingKnowledge = task.knowledgeItemId
-      ? knowledgeItems.find((item) => item.id === task.knowledgeItemId)
-      : knowledgeItems.find((item) => item.sourceTaskId === task.id);
     const category: KnowledgeItem['category'] = workModeId === 'research' || workModeId === 'diagnosis'
       ? 'research'
       : workModeId === 'customer_product'
@@ -633,28 +636,19 @@ function AppContent() {
         : workModeId === 'new_product' || workModeId === 'marketing_strategy'
           ? 'product'
           : 'deliverable';
-    const knowledgeItem: KnowledgeItem = {
-      id: existingKnowledge?.id || `knowledge-task-${task.id}`,
+    const draftArtifact: TaskDraftArtifact = {
       title: `成果物：${task.title}`,
       category,
       content: result,
-      tags: [...new Set([...(existingKnowledge?.tags || []), 'AI作成', resolvedMode.label])],
-      createdAt: existingKnowledge?.createdAt || now,
-      updatedAt: now,
-      sourceTaskId: task.id,
+      tags: ['AI作成', resolvedMode.label],
+      createdAt: now,
       sourceRoleId: task.assignee.type === 'custom_ai' ? task.assignee.id : workModeId,
     };
-    const nextKnowledge = existingKnowledge
-      ? knowledgeItems.map((item) => item.id === knowledgeItem.id ? knowledgeItem : item)
-      : [knowledgeItem, ...knowledgeItems];
-    setKnowledgeItems(nextKnowledge);
-    saveKnowledgeItems(nextKnowledge);
-
     const updatedTask: TaskItem = {
       ...task,
       status: 'pending_approval',
-      resultNotes: `成果物を「${knowledgeItem.title}」としてナレッジに保存しました。内容を確認し、承認してください。`,
-      knowledgeItemId: knowledgeItem.id,
+      resultNotes: `${resolvedMode.name}の成果物を確認してください。承認後にナレッジへ登録されます。`,
+      draftArtifact,
       updatedAt: now,
     };
     const nextTasks = tasks.map((item) => item.id === task.id ? updatedTask : item);
@@ -666,15 +660,16 @@ function AppContent() {
       taskId: task.id,
       taskTitle: task.title,
       actionTitle: `担当AIの成果物レビュー：${task.title}`,
-      reason: `${resolvedMode.name}が成果物を作成し、ナレッジ「${knowledgeItem.title}」に保存しました。内容を確認してください。`,
+      reason: `${resolvedMode.name}が成果物を作成しました。内容を確認し、承認後にナレッジへ登録します。`,
       status: 'pending',
       requestedBy: resolvedMode.name,
+      reviewArtifact: draftArtifact,
       createdAt: now,
     };
     const nextApprovals = [approval, ...approvals];
     setApprovals(nextApprovals);
     saveApprovals(nextApprovals);
-    recordActivityLog('task_updated', `${resolvedMode.name}がタスク「${task.title}」を実行し、成果物をナレッジに保存しました`, resolvedMode.name);
+    recordActivityLog('task_updated', `${resolvedMode.name}がタスク「${task.title}」を実行し、レビュー用成果物を保存しました`, resolvedMode.name);
     recordActivityLog('approval_requested', `タスク「${task.title}」のAI成果物レビューが承認待ちです`, resolvedMode.name);
     setActivityLogs(loadActivityLogs());
     } finally {
@@ -820,13 +815,44 @@ function AppContent() {
     const targetApproval = approvals.find((a) => a.id === id);
     if (!targetApproval) return;
 
+    const now = Date.now();
+    const taskForApproval = targetApproval.taskId
+      ? tasks.find((task) => task.id === targetApproval.taskId)
+      : undefined;
+    let approvedKnowledge: KnowledgeItem | undefined;
+    let nextKnowledge = knowledgeItems;
+
+    const reviewArtifact = targetApproval.reviewArtifact || taskForApproval?.draftArtifact;
+    if (status === 'approved' && taskForApproval && reviewArtifact) {
+      const draft = reviewArtifact;
+      const existing = taskForApproval.knowledgeItemId
+        ? knowledgeItems.find((item) => item.id === taskForApproval.knowledgeItemId)
+        : knowledgeItems.find((item) => item.sourceTaskId === taskForApproval.id);
+      approvedKnowledge = {
+        id: existing?.id || `knowledge-task-${taskForApproval.id}`,
+        title: draft.title,
+        category: draft.category,
+        content: draft.content,
+        tags: [...new Set([...(existing?.tags || []), ...draft.tags])],
+        createdAt: existing?.createdAt || draft.createdAt,
+        updatedAt: now,
+        sourceTaskId: taskForApproval.id,
+        sourceRoleId: draft.sourceRoleId,
+      };
+      nextKnowledge = existing
+        ? knowledgeItems.map((item) => item.id === approvedKnowledge!.id ? approvedKnowledge! : item)
+        : [approvedKnowledge, ...knowledgeItems];
+      setKnowledgeItems(nextKnowledge);
+      saveKnowledgeItems(nextKnowledge);
+    }
+
     const updatedApprovals = approvals.map((a) =>
       a.id === id
         ? {
             ...a,
             status,
             resolutionNote: note,
-            resolvedAt: Date.now(),
+            resolvedAt: now,
           }
         : a
     );
@@ -834,15 +860,19 @@ function AppContent() {
     saveApprovals(updatedApprovals);
 
     if (targetApproval.taskId) {
-      const updatedTasks = tasks.map((t) => {
-        if (t.id === targetApproval.taskId) {
-          return {
-            ...t,
-            status: status === 'approved' ? ('completed' as const) : ('in_progress' as const),
-            updatedAt: Date.now(),
-          };
-        }
-        return t;
+      const updatedTasks = tasks.map((task) => {
+        if (task.id !== targetApproval.taskId) return task;
+        const isApprovedDraft = status === 'approved' && Boolean(reviewArtifact);
+        return {
+          ...task,
+          status: status === 'approved' ? ('completed' as const) : ('in_progress' as const),
+          resultNotes: isApprovedDraft && approvedKnowledge
+            ? `承認済み。成果物をナレッジ「${approvedKnowledge.title}」に登録しました。`
+            : task.resultNotes,
+          knowledgeItemId: approvedKnowledge?.id || task.knowledgeItemId,
+          draftArtifact: isApprovedDraft && task.draftArtifact?.content === reviewArtifact?.content ? undefined : task.draftArtifact,
+          updatedAt: now,
+        };
       });
       setTasks(updatedTasks);
       saveTasks(updatedTasks);
@@ -850,12 +880,13 @@ function AppContent() {
 
     recordActivityLog(
       'approval_resolved',
-      `申請「${targetApproval.actionTitle}」が【${status === 'approved' ? '承認' : '却下'}】されました`,
+      approvedKnowledge
+        ? `成果物「${approvedKnowledge.title}」が承認され、ナレッジに登録されました`
+        : `申請「${targetApproval.actionTitle}」が【${status === 'approved' ? '承認' : '却下'}】されました`,
       '人間'
     );
     setActivityLogs(loadActivityLogs());
   };
-
   // --- Plan Import from Chat ---
   const handleImportPlan = (plan: ProposedPlan) => {
     const newProject: Project = {

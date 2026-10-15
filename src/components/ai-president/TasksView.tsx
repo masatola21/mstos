@@ -633,7 +633,7 @@ export const TasksView: React.FC<TasksViewProps> = ({
 
                   <div className="flex items-center gap-1.5 flex-wrap">
                     <span className="text-[11px] text-slate-400 mr-1">状態変更:</span>
-                    {(task.assignee.type === 'role_ai' || task.assignee.type === 'ai_ceo' || task.assignee.type === 'custom_ai') && (
+                    {task.status !== 'pending_approval' && (task.assignee.type === 'role_ai' || task.assignee.type === 'ai_ceo' || task.assignee.type === 'custom_ai') && (
                       <button
                         type="button"
                         disabled={runningTaskIds.has(task.id)}
@@ -978,6 +978,7 @@ export const TasksView: React.FC<TasksViewProps> = ({
 
       {(activeSection === 'approvals' || activeSection === 'logs') && (
         <ApprovalsView
+          tasks={tasks}
           approvals={approvals}
           activityLogs={activityLogs}
           onResolveApproval={onResolveApproval}
