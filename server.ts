@@ -34,15 +34,18 @@ function boundChatMessages(input: Array<{ role?: unknown; content?: unknown }> =
   return messages;
 }
 
-// Initialize GoogleGenAI
-const ai = new GoogleGenAI({
-  apiKey: process.env.GEMINI_API_KEY,
-  httpOptions: {
-    headers: {
-      'User-Agent': 'aistudio-build',
-    },
-  },
-});
+// Initialize Gemini lazily so other providers can run without a Gemini key.
+let geminiClient: GoogleGenAI | null = null;
+function getGeminiAI(): GoogleGenAI {
+  if (!process.env.GEMINI_API_KEY) throw new Error('GEMINI_API_KEY is not configured');
+  if (!geminiClient) {
+    geminiClient = new GoogleGenAI({
+      apiKey: process.env.GEMINI_API_KEY,
+      httpOptions: { headers: { 'User-Agent': 'aistudio-build' } },
+    });
+  }
+  return geminiClient;
+}
 
 interface UserProfile {
   userName?: string;
@@ -69,6 +72,22 @@ interface CharacterConfig {
   behaviorRules?: string[];
   customInstructions?: string;
   responseLength?: 'short' | 'medium' | 'detailed';
+}
+
+
+type AIProvider = 'gemini' | 'groq' | 'openrouter';
+function resolveChatModel(input: any) {
+  const provider: AIProvider = ['groq', 'openrouter'].includes(input?.provider) ? input.provider : 'gemini';
+  const defaults: Record<AIProvider, string> = { gemini: 'gemini-3.8-flash', groq: 'qwen/qwen3.8-27b', openrouter: 'openrouter/free' };
+  const model = typeof input?.model === 'string' && input.model.trim() ? input.model.trim().slice(0, 160) : defaults[provider];
+  if (provider === 'openrouter' && model !== 'openrouter/free' && !model.endsWith(':free')) throw new Error('OpenRouterの無料モデルID（openrouter/free または :free 付き）を指定してください。');
+  const apiKey = provider === 'groq' ? process.env.GROQ_API_KEY : provider === 'openrouter' ? process.env.OPENROUTER_API_KEY : process.env.GEMINI_API_KEY;
+  const endpoint = provider === 'groq' ? 'https://api.groq.com/openai/v1/chat/completions' : provider === 'openrouter' ? 'https://openrouter.ai/api/v1/chat/completions' : '';
+  return { provider, model, apiKey, endpoint };
+}
+function mapOpenAIUsage(usage: any) {
+  if (!usage || usage.total_tokens == null) return extractUsage(null);
+  return { promptTokens: usage.prompt_tokens ?? null, candidatesTokens: usage.completion_tokens ?? null, totalTokens: usage.total_tokens ?? null, status: 'acquired' };
 }
 
 function extractUsage(usageMetadata: any) {
@@ -147,7 +166,7 @@ function buildSystemInstruction(char: CharacterConfig): string {
 // 1. Chat Completion / Streaming
 app.post('/api/chat', async (req, res) => {
   try {
-    const { messages, message, history, character, stream, workModeId, knowledgeContext } = req.body;
+    const { messages, message, history, character, stream, workModeId, knowledgeContext, modelSelection } = req.body;
     const requestedMessages = Array.isArray(messages)
       ? messages
       : [
@@ -161,6 +180,8 @@ app.post('/api/chat', async (req, res) => {
     }
 
     const workMode = getAIWorkMode(workModeId);
+    const selectedModel = resolveChatModel(modelSelection);
+    if (!selectedModel.apiKey) return res.status(503).json({ error: selectedModel.provider.toUpperCase() + ' APIキーが未設定です。サーバー環境変数を設定してください。' });
     const activeCharacter = character || {
       name: 'MyAI',
       role: 'パーソナルAI',
@@ -200,56 +221,70 @@ app.post('/api/chat', async (req, res) => {
       }
     }
 
+
+    const providerLabel = selectedModel.provider;
+    const responseModel = selectedModel.provider === 'gemini' ? selectedModel.model : selectedModel.provider + ':' + selectedModel.model;
+    const chatMessages = [{ role: 'system', content: systemInstruction }, ...contents.map((item) => ({ role: item.role === 'model' ? 'assistant' : 'user', content: item.parts[0].text }))];
+    if (selectedModel.provider === 'gemini') {
+      if (stream) {
+        res.setHeader('Content-Type', 'text/event-stream');
+        res.setHeader('Cache-Control', 'no-cache');
+        res.setHeader('Connection', 'keep-alive');
+        const responseStream = await getGeminiAI().models.generateContentStream({ model: selectedModel.model, contents, config: { systemInstruction, temperature: 0.85 } });
+        let latestUsageMetadata = null;
+        for await (const chunk of responseStream) {
+          if (chunk.usageMetadata) latestUsageMetadata = chunk.usageMetadata;
+          if (chunk.text) res.write('data: ' + JSON.stringify({ text: chunk.text }) + '\n\n');
+        }
+        res.write('data: ' + JSON.stringify({ type: 'usage', usage: extractUsage(latestUsageMetadata), model: responseModel, provider: providerLabel }) + '\n\n');
+        res.write('data: [DONE]\n\n');
+        return res.end();
+      }
+      const response = await getGeminiAI().models.generateContent({ model: selectedModel.model, contents, config: { systemInstruction, temperature: 0.85 } });
+      return res.json({ text: response.text || '', usage: extractUsage(response.usageMetadata), model: responseModel, provider: providerLabel });
+    }
+    const requestBody: any = { model: selectedModel.model, messages: chatMessages, temperature: 0.85, stream: Boolean(stream) };
+    if (stream && selectedModel.provider === 'openrouter') requestBody.stream_options = { include_usage: true };
+    const upstream = await fetch(selectedModel.endpoint, {
+      method: 'POST',
+      headers: { Authorization: 'Bearer ' + selectedModel.apiKey, 'Content-Type': 'application/json',
+        ...(selectedModel.provider === 'openrouter' ? { 'HTTP-Referer': process.env.APP_URL || 'https://mstos.app', 'X-Title': 'MST経営OS' } : {}) },
+      body: JSON.stringify(requestBody),
+    });
+    if (!upstream.ok) throw new Error(selectedModel.provider + ' API error (' + upstream.status + '): ' + (await upstream.text()).slice(0, 500));
     if (stream) {
       res.setHeader('Content-Type', 'text/event-stream');
       res.setHeader('Cache-Control', 'no-cache');
       res.setHeader('Connection', 'keep-alive');
-
-      const responseStream = await ai.models.generateContentStream({
-        model: 'gemini-3.8-flash',
-        contents,
-        config: {
-          systemInstruction,
-          temperature: 0.85,
-        },
-      });
-
-      let latestUsageMetadata = null;
-
-      for await (const chunk of responseStream) {
-        if (chunk.usageMetadata) {
-          latestUsageMetadata = chunk.usageMetadata;
-        }
-        if (chunk.text) {
-          res.write(`data: ${JSON.stringify({ text: chunk.text })}\n\n`);
+      const reader = upstream.body?.getReader();
+      if (!reader) throw new Error('AI provider returned an empty stream');
+      const decoder = new TextDecoder();
+      let buffer = '';
+      let latestUsage: any = null;
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        buffer += decoder.decode(value, { stream: true });
+        const lines = buffer.split('\n');
+        buffer = lines.pop() || '';
+        for (const line of lines) {
+          if (!line.startsWith('data: ')) continue;
+          const raw = line.slice(6).trim();
+          if (!raw || raw === '[DONE]') continue;
+          try {
+            const event = JSON.parse(raw);
+            if (event.usage) latestUsage = event.usage;
+            const text = event.choices?.[0]?.delta?.content;
+            if (typeof text === 'string' && text) res.write('data: ' + JSON.stringify({ text }) + '\n\n');
+          } catch { /* Ignore keepalive frames. */ }
         }
       }
-
-      // ストリーム完了後に使用量情報を専用のSSEイベントとして送信
-      res.write(
-        `data: ${JSON.stringify({
-          type: 'usage',
-          usage: extractUsage(latestUsageMetadata),
-          model: 'gemini-3.8-flash',
-        })}\n\n`
-      );
-
-      res.write(`data: [DONE]\n\n`);
-      res.end();
-    } else {
-      const response = await ai.models.generateContent({
-        model: 'gemini-3.8-flash',
-        contents,
-        config: {
-          systemInstruction,
-          temperature: 0.85,
-        },
-      });
-
-      const text = response.text || '';
-      const usage = extractUsage(response.usageMetadata);
-      return res.json({ text, usage, model: 'gemini-3.8-flash' });
+      res.write('data: ' + JSON.stringify({ type: 'usage', usage: mapOpenAIUsage(latestUsage), model: responseModel, provider: providerLabel }) + '\n\n');
+      res.write('data: [DONE]\n\n');
+      return res.end();
     }
+    const payload: any = await upstream.json();
+    return res.json({ text: payload.choices?.[0]?.message?.content || '', usage: mapOpenAIUsage(payload.usage), model: responseModel, provider: providerLabel });
   } catch (err: any) {
     console.error('Error in /api/chat:', err);
     if (!res.headersSent) {

@@ -23,6 +23,7 @@ import { UserProfileEditor } from './components/ai-president/UserProfileEditor';
 import { PlanRegistrationModal } from './components/ai-president/PlanRegistrationModal';
 import { BackupModal } from './components/ai-president/BackupModal';
 import { PricingSettingsModal } from './components/ai-president/PricingSettingsModal';
+import { ModelProviderSettingsModal, AIModelSelections } from './components/ai-president/ModelProviderSettingsModal';
 
 // Matrix & Universal Product Views
 import { ProductHubView } from './components/matrix/ProductHubView';
@@ -190,6 +191,11 @@ function AppContent() {
 
   // AI President Modals
   const [isPricingModalOpen, setIsPricingModalOpen] = useState(false);
+  const [isModelSettingsOpen, setIsModelSettingsOpen] = useState(false);
+  const [aiModelSelections, setAIModelSelections] = useState<AIModelSelections>(() => {
+    try { return JSON.parse(localStorage.getItem('mst_ai_model_selections_v1') || '{}'); }
+    catch { return {}; }
+  });
   const [isBackupModalOpen, setIsBackupModalOpen] = useState(false);
   const [isProfileModalOpen, setIsProfileModalOpen] = useState(false);
   const [isCharacterEditorOpen, setIsCharacterEditorOpen] = useState(false);
@@ -235,6 +241,7 @@ function AppContent() {
         setAutomations(data.automations);
         setMarketingScenarios(data.marketingScenarios || []);
         setKnowledgeItems(data.knowledgeItems || []);
+        if (data.modelSelections) setAIModelSelections(data.modelSelections);
         setWorkModeHistories(data.workModeHistories || {});
         const initialChatKey = `${activeCharacterId}:${activeWorkModeId}`;
         const savedChat = data.workModeHistories?.[initialChatKey] || loadChatHistory(initialChatKey);
@@ -275,6 +282,7 @@ function AppContent() {
       marketingScenarios,
       workModeHistories,
       knowledgeItems,
+      modelSelections: aiModelSelections,
     };
     const snapshot = JSON.stringify(workspaceData);
     if (snapshot === lastSavedWorkspaceRef.current) return;
@@ -315,6 +323,7 @@ function AppContent() {
     marketingScenarios,
     workModeHistories,
     knowledgeItems,
+    aiModelSelections,
   ]);
 
   // Active character
@@ -739,6 +748,7 @@ function AppContent() {
             userProfile,
           },
           workModeId,
+          modelSelection: aiModelSelections[workModeId],
           knowledgeContext: selectKnowledgeContext(knowledgeItems, text),
           stream: true,
         }),
@@ -1350,6 +1360,16 @@ function AppContent() {
         />
       )}
 
+      <ModelProviderSettingsModal
+        isOpen={isModelSettingsOpen}
+        selections={aiModelSelections}
+        onClose={() => setIsModelSettingsOpen(false)}
+        onSave={(next) => {
+          setAIModelSelections(next);
+          localStorage.setItem('mst_ai_model_selections_v1', JSON.stringify(next));
+        }}
+      />
+
       {isPricingModalOpen && (
         <PricingSettingsModal
           isOpen={isPricingModalOpen}
@@ -1424,6 +1444,10 @@ function AppContent() {
             >
               {workspaceSyncStatus === 'saving' ? 'クラウド保存中' : workspaceSyncStatus === 'saved' ? 'クラウド保存済み' : 'クラウド同期エラー'}
             </span>
+            <span>•</span>
+            <button onClick={() => setIsModelSettingsOpen(true)} className="hover:text-slate-300 transition-colors">
+              AIモデル設定
+            </button>
             <span>•</span>
             <button
               onClick={() => setIsPricingModalOpen(true)}

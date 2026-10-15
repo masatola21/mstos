@@ -58,6 +58,7 @@ export interface WorkspaceData {
   workModeHistories: Record<string, ChatMessage[]>;
   knowledgeItems: KnowledgeItem[];
   marketingScenarios: MarketingScenario[];
+  modelSelections?: Record<string, { provider: 'gemini' | 'groq' | 'openrouter'; model: string }>;
 }
 
 const WORKSPACE_STATE_TABLE = 'mst_workspace_state';
@@ -136,6 +137,7 @@ export function loadLocalWorkspaceData(): WorkspaceData {
     workModeHistories: loadAllChatHistories(),
     knowledgeItems: loadKnowledgeItems(),
     marketingScenarios: loadMarketingScenarios(),
+    modelSelections: (() => { try { return JSON.parse(localStorage.getItem('mst_ai_model_selections_v1') || '{}'); } catch { return {}; } })(),
   };
 }
 
@@ -155,6 +157,7 @@ export function applyWorkspaceData(data: WorkspaceData): void {
   matrixService.saveAutomations(data.automations);
   saveKnowledgeItems(data.knowledgeItems || []);
   saveMarketingScenarios(data.marketingScenarios || []);
+  try { localStorage.setItem('mst_ai_model_selections_v1', JSON.stringify(data.modelSelections || {})); } catch (error) { console.warn('Could not save model selections locally:', error); }
   Object.entries(data.workModeHistories || {}).forEach(([key, messages]) => saveChatHistory(key, messages));
 }
 
