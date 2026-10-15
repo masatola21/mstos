@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Activity, ArrowRight, BadgeCheck, CalendarDays, CheckCircle2, CirclePlay, Clock3, GitBranch, Mail, MessageCircle, MousePointerClick, Plus, Radio, Search, Settings2, Tags, Users, Webhook, Zap } from 'lucide-react';
+import { Activity, ArrowRight, BadgeCheck, CalendarDays, CheckCircle2, CirclePlay, GitBranch, MessageCircle, MousePointerClick, Plus, Radio, Tags, Users, Webhook, Zap } from 'lucide-react';
 
 type Scenario = { id: number; name: string; trigger: string; path: string; status: '稼働中' | '下書き'; runs: number; };
 const initialScenarios: Scenario[] = [
