@@ -120,8 +120,7 @@ async function processLineWebhookEvent(event: any) {
       } else if (event.type === 'message') {
         update.last_message_at = eventTime;
       }
-      const displayName = await getLineDisplayName(userId);
-      if (displayName) update.display_name = displayName;
+      if (contact.full_name) update.display_name = contact.full_name;
       const { error: friendError } = await lineSupabase
         .from('line_friends').upsert(update, { onConflict: 'line_user_id' });
       if (friendError) throw friendError;
