@@ -273,6 +273,7 @@ const DEFAULT_TEMPLATES: DocTemplate[] = [
 
 export const DocumentTemplateView: React.FC = () => {
   const [templates, setTemplates] = useState<DocTemplate[]>(DEFAULT_TEMPLATES);
+  const [templateStatus, setTemplateStatus] = useState('');
   const [selectedTemplateId, setSelectedTemplateId] = useState<string>(DEFAULT_TEMPLATES[0].id);
   const [isEditingTemplate, setIsEditingTemplate] = useState<boolean>(false);
   const [copied, setCopied] = useState<boolean>(false);
@@ -315,6 +316,41 @@ export const DocumentTemplateView: React.FC = () => {
     if (error) { setSaveMessage(`保存できませんでした: ${error.message}`); return; }
     setSaveMessage('確認待ち書類として保存しました。承認後、送信画面から送信依頼を作成できます。');
   };
+
+  useEffect(() => {
+    const loadTemplates = async () => {
+      const supabase = getSupabase();
+      if (!supabase) return;
+      const { data, error } = await supabase.from('customer_document_templates').select('*').order('created_at');
+      if (error) { setTemplateStatus('テンプレート共有には最新のSupabase SQL適用が必要です。'); return; }
+      if (data?.length) {
+        setTemplates(data.map((row:any)=>({
+          id:row.template_key,
+          type:row.document_type==='diagnosis_report'?'report':row.document_type,
+          title:row.title,description:row.description||'',htmlContent:row.body_html||'',
+          variables:Array.isArray(row.variables)?row.variables:[],
+        })) as DocTemplate[]);
+        setSelectedTemplateId(data[0].template_key);
+        setTemplateStatus('テンプレートをSupabaseから読み込みました。');
+        return;
+      }
+      const defaults=DEFAULT_TEMPLATES.map((template)=>({
+        template_key:template.id,
+        document_type:template.type==='report'?'diagnosis_report':template.type,
+        title:template.title,description:template.description,
+        body_html:template.htmlContent,variables:template.variables,
+      }));
+      const {data:seeded,error:seedError}=await supabase.from('customer_document_templates').insert(defaults).select('*');
+      if (seedError) { setTemplateStatus('標準テンプレートを共有できませんでした。SQL・権限を確認してください。'); return; }
+      if (seeded?.length) setTemplates(seeded.map((row:any)=>({
+        id:row.template_key,type:row.document_type==='diagnosis_report'?'report':row.document_type,
+        title:row.title,description:row.description,htmlContent:row.body_html,
+        variables:Array.isArray(row.variables)?row.variables:[],
+      })) as DocTemplate[]);
+      setTemplateStatus('標準テンプレートをワークスペースに登録しました。');
+    };
+    void loadTemplates();
+  }, []);
 
   // Active template
   const currentTemplate = templates.find((t) => t.id === selectedTemplateId) || templates[0];
@@ -402,10 +438,13 @@ export const DocumentTemplateView: React.FC = () => {
     setTimeout(() => setCopied(false), 2000);
   };
 
-  const handleSaveTemplateChanges = (newHtml: string) => {
-    setTemplates((prev) =>
-      prev.map((t) => (t.id === currentTemplate.id ? { ...t, htmlContent: newHtml } : t))
-    );
+  const handleSaveTemplateChanges = async (newHtml: string) => {
+    const supabase=getSupabase();
+    if(!supabase){setTemplateStatus('Supabase接続後にテンプレートを共有できます。');return;}
+    const {error}=await supabase.from('customer_document_templates').update({body_html:newHtml}).eq('template_key',currentTemplate.id);
+    if(error){setTemplateStatus(`テンプレートを保存できませんでした: ${error.message}`);return;}
+    setTemplates((prev) => prev.map((t) => (t.id === currentTemplate.id ? { ...t, htmlContent: newHtml } : t)));
+    setTemplateStatus('テンプレートを保存しました。');
     setIsEditingTemplate(false);
   };
 
@@ -453,6 +492,8 @@ export const DocumentTemplateView: React.FC = () => {
         </div>
         <div className="mt-3 flex flex-wrap items-center gap-3"><button onClick={()=>void saveGeneratedDocument()} className="flex items-center gap-2 rounded-lg bg-emerald-700 px-3 py-2 text-xs font-semibold text-white hover:bg-emerald-600"><Save className="h-4 w-4"/>生成内容を確認待ちで保存</button>{saveMessage&&<p role="status" className="text-xs text-slate-300">{saveMessage}</p>}</div>
       </section>
+
+      {templateStatus&&<p role="status" className="rounded-lg border border-slate-800 bg-slate-900 px-3 py-2 text-xs text-slate-300">{templateStatus}</p>}
 
       {/* Template Selector Tabs */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
