@@ -246,6 +246,11 @@ export const TasksView: React.FC<TasksViewProps> = ({
     }
 
     const assignee = resolveAssignee(assigneeType);
+    const nextStatus: TaskStatus = assignee.type !== 'human'
+      && status === 'completed'
+      && editingTask?.assignee.type === 'human'
+      ? 'in_progress'
+      : status;
 
     if (editingTask) {
       onUpdateTask({
@@ -254,7 +259,7 @@ export const TasksView: React.FC<TasksViewProps> = ({
         description: description.trim(),
         projectId,
         priority,
-        status,
+        status: nextStatus,
         assignee,
         completionCriteria: completionCriteria.trim(),
         resultNotes: resultNotes.trim(),
@@ -278,6 +283,7 @@ export const TasksView: React.FC<TasksViewProps> = ({
   };
 
   const handleQuickStatusChange = (task: TaskItem, newStatus: TaskStatus) => {
+    if (newStatus === 'completed' && task.assignee.type !== 'human') return;
     if (newStatus === 'pending_approval') {
       setApprovalModalTask(task);
       setApprovalReason(`タスク「${task.title}」の完了条件を満たしたため、結果の承認を求めます。`);
@@ -469,7 +475,9 @@ export const TasksView: React.FC<TasksViewProps> = ({
             <option value="waiting">待機中</option>
             <option value="in_progress">進行中</option>
             <option value="pending_approval">承認待ち</option>
-            <option value="completed">完了</option>
+            {(assigneeType === 'human' || status === 'completed') && (
+                      <option value="completed" disabled={assigneeType !== 'human'}>完了</option>
+                    )}
             <option value="blocked">問題あり</option>
           </select>
         </div>
@@ -713,7 +721,7 @@ export const TasksView: React.FC<TasksViewProps> = ({
                       </button>
                     )}
 
-                    {task.status !== 'completed' && (
+                    {task.status !== 'completed' && task.assignee.type === 'human' && (
                       <button
                         type="button"
                         onClick={() => handleQuickStatusChange(task, 'completed')}
