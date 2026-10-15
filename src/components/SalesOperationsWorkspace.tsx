@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { getSupabase } from '../lib/supabaseClient';
 import { FileText, Plus, RefreshCw, Receipt, Wrench } from 'lucide-react';
 
@@ -115,6 +115,14 @@ export const SalesOperationsWorkspace: React.FC<Props> = ({ tab }) => {
     if (!consentConfirmed || !consentBasis.trim()) { setError('配信同意の確認と根拠メモを入力してください。'); return; }
     const address = sendChannel === 'email' ? contact.email : contact.line_user_id;
     if (!address) { setError(sendChannel === 'email' ? '選択した連絡先にメールアドレスがありません。' : '選択した連絡先にLINE user IDがありません。'); return; }
+    if (sendChannel === 'line') {
+      const { data: lineFriend, error: lineLookupError } = await supabase.from('line_friends').select('status,consent_status').eq('line_user_id', address).maybeSingle();
+      if (lineLookupError) { setError(lineLookupError.message); return; }
+      if (!lineFriend || lineFriend.status !== 'active' || lineFriend.consent_status !== 'opted_in') {
+        setError('LINEの友だち状態が有効で、配信同意が確認できる連絡先のみ送信依頼を作成できます。');
+        return;
+      }
+    }
     setError('');
     const { error: insertError } = await supabase.from('communication_outbox').insert({
       channel: sendChannel, recipient_contact_id: contact.id, recipient_address: address,
