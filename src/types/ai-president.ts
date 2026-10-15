@@ -91,7 +91,8 @@ export interface TaskItem {
   completionCriteria: string; // 完了条件
   resultNotes?: string; // 結果・成果メモ
   artifactUrl?: string; // 外部に保存した成果物へのリンク
-  knowledgeItemId?: string; // 承認後に正式登録されたナレッジ\n  draftArtifact?: TaskDraftArtifact; // 承認前のレビュー用成果物
+  knowledgeItemId?: string; // 承認後に正式登録されたナレッジ
+  draftArtifact?: TaskDraftArtifact; // 承認前のレビュー用成果物
   attachments?: WorkspaceAttachment[]; // タスクに直接添付したファイル
   sourceAutomationId?: string;
   createdAt: number;
