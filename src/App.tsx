@@ -100,21 +100,35 @@ const MAX_CHAT_CONTEXT_CHARACTERS = 16000;
 
 function selectKnowledgeContext(items: KnowledgeItem[], request: string): string {
   if (!items.length) return '';
-  const normalized = request.toLowerCase();
-  const terms = normalized.split(/[\\s、。,.!?！？・]+/).filter((term) => term.length >= 2);
+  const normalize = (value: string) => value.toLowerCase().replace(/[\s、。,.!?！？・「」『』（）【】]/g, '');
+  const bigrams = (value: string) => {
+    const chars = Array.from(normalize(value));
+    const pairs = new Set<string>();
+    for (let i = 0; i < chars.length - 1; i += 1) pairs.add(chars[i] + chars[i + 1]);
+    return pairs;
+  };
+  const queryPairs = bigrams(request);
   const ranked = items.map((item) => {
-    const searchable = `${item.title} ${item.tags.join(' ')} ${item.content}`.toLowerCase();
-    const score = (item.category === 'business' ? 1 : 0) +
-      terms.reduce((total, term) => total + (searchable.includes(term) ? 1 : 0), 0);
+    const title = normalize(item.title);
+    const tags = normalize(item.tags.join(' '));
+    const content = normalize(item.content);
+    let titleHits = 0;
+    let tagHits = 0;
+    let contentHits = 0;
+    queryPairs.forEach((pair) => {
+      if (title.includes(pair)) titleHits += 1;
+      else if (tags.includes(pair)) tagHits += 1;
+      else if (content.includes(pair)) contentHits += 1;
+    });
+    const score = titleHits * 4 + tagHits * 3 + contentHits + (item.category === 'business' ? 1 : 0);
     return { item, score };
   }).filter(({ score }) => score > 0)
     .sort((a, b) => b.score - a.score || b.item.updatedAt - a.item.updatedAt)
     .slice(0, 3);
   return ranked.map(({ item }) =>
-    `【${item.title} / ${item.category}】\\n${item.content.slice(0, 2400)}`
-  ).join('\\n\\n');
+    '【' + item.title + ' / ' + item.category + '】\n' + item.content.slice(0, 2400)
+  ).join('\n\n');
 }
-
 function buildBoundedChatContext(messages: ChatMessage[]) {
   const context = messages.slice(-MAX_CHAT_CONTEXT_MESSAGES).map(({ role, content }) => ({ role, content }));
   let totalCharacters = context.reduce((total, message) => total + message.content.length, 0);
