@@ -805,7 +805,7 @@ function AppContent() {
           timestamp: Date.now(),
         },
       ];
-      saveChatHistory(activeCharacter.id, updatedHistory);
+      saveChatHistory(chatKey, updatedHistory);
     } catch (err: any) {
       if (err.name === 'AbortError') {
         // Aborted by user
