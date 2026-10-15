@@ -9,6 +9,7 @@ import { ConfigGuideModal } from './components/ConfigGuideModal';
 import { RlsGuideModal } from './components/RlsGuideModal';
 import { RecordFormModal } from './components/RecordFormModal';
 import { TableKey } from './types/database';
+import { getSupabase } from './lib/supabaseClient';
 import { Loader2 } from 'lucide-react';
 
 // AI President Views and Modals
@@ -54,6 +55,9 @@ import {
   KnowledgeItem,
   KnowledgeAttachment,
   WorkspaceAttachment,
+  TaskWorkArea,
+  TaskKind,
+  TaskRelatedRecordType,
 } from './types';
 import { MarketingScenario } from './types/marketing';
 import {
@@ -156,6 +160,37 @@ function buildBoundedChatContext(messages: ChatMessage[]) {
   }
 
   return context;
+}
+
+
+async function loadTaskRelatedContext(task: TaskItem): Promise<string> {
+  const related = task.relatedRecord;
+  if (!related?.id) return '';
+  const tableByType: Record<TaskRelatedRecordType, string> = {
+    company: 'companies', contact: 'contacts', prospect: 'prospects', lead: 'leads',
+    deal: 'deals', customer: 'customers', product: 'products',
+  };
+  const supabase = getSupabase();
+  if (!supabase) return '関連レコードは設定されていますが、データベースに接続できませんでした。';
+  try {
+    const { data, error } = await supabase.from(tableByType[related.type]).select('*').eq('id', related.id).maybeSingle();
+    if (error || !data) return '関連レコードは設定されていますが、現在の情報を取得できませんでした。';
+    const fieldsByType: Record<TaskRelatedRecordType, string[]> = {
+      company: ['company_name', 'industry', 'status', 'source'],
+      prospect: ['company_name', 'industry', 'status', 'source', 'approach_method', 'ai_reason'],
+      contact: ['contact_name', 'position', 'department', 'status'],
+      lead: ['status', 'source', 'service_type', 'priority_channel'],
+      deal: ['proposal_plan_name', 'proposal_status', 'proposal_type', 'total_amount', 'meeting_date'],
+      customer: ['contract_status', 'contract_start_date'],
+      product: ['product_name', 'product_type', 'target_customer', 'description'],
+    };
+    const fields = fieldsByType[related.type]
+      .filter((key) => data[key] !== null && data[key] !== undefined && String(data[key]).trim())
+      .map((key) => `${key}: ${String(data[key]).slice(0, 300)}`);
+    return [`関連先: ${related.label || related.type} (ID: ${related.id})`, ...fields].join('\\n').slice(0, 1800);
+  } catch {
+    return '関連レコードは設定されていますが、現在の情報を取得できませんでした。';
+  }
 }
 
 function AppContent() {
@@ -592,8 +627,10 @@ function AppContent() {
     const latestRejection = approvals
       .filter((approval) => approval.taskId === task.id && approval.status === 'rejected')
       .sort((a, b) => (b.resolvedAt || b.createdAt) - (a.resolvedAt || a.createdAt))[0];
+    const relatedRecordContext = await loadTaskRelatedContext(task);
     const prompt = [
       `担当タスク: ${task.title}`,
+      relatedRecordContext ? `関連する業務情報:\\n${relatedRecordContext}` : '',
       latestRejection?.resolutionNote ? `前回のレビュー指摘（今回反映してください）: ${latestRejection.resolutionNote}` : '',
       task.description ? `目的・背景: ${task.description}` : '',
       task.completionCriteria ? `完了条件: ${task.completionCriteria}` : '',
@@ -732,6 +769,57 @@ function AppContent() {
   };
 
   // --- Tasks Operations ---
+
+  const handleCrmStageTransition = (event: {
+    transitionType: 'prospect_to_lead' | 'lead_to_deal' | 'deal_to_customer';
+    sourceRecord: any;
+    targetTable: 'leads' | 'deals' | 'customers';
+    targetRecordId?: string | number;
+  }) => {
+    const now = Date.now();
+    const presets = {
+      prospect_to_lead: {
+        title: 'リードの初回対応・診断案内を準備する', workArea: 'sales_customer' as TaskWorkArea,
+        taskKind: 'response' as TaskKind, relatedType: 'lead' as TaskRelatedRecordType,
+        assigneeMode: 'marketing_execution', criteria: 'リード情報を確認し、必要な案内文の草案と確認事項を作成する。送信は人間の確認後に行う。',
+      },
+      lead_to_deal: {
+        title: '商談の提案内容と確認事項を整理する', workArea: 'sales_customer' as TaskWorkArea,
+        taskKind: 'creation_analysis' as TaskKind, relatedType: 'deal' as TaskRelatedRecordType,
+        assigneeMode: 'customer_product', criteria: '商談情報に基づく提案草案と不足情報を整理する。顧客への送付は人間の確認後に行う。',
+      },
+      deal_to_customer: {
+        title: '契約後の初回案内・支援開始を準備する', workArea: 'post_contract_support' as TaskWorkArea,
+        taskKind: 'response' as TaskKind, relatedType: 'customer' as TaskRelatedRecordType,
+        assigneeMode: 'president', criteria: '契約・顧客情報を確認し、初回案内と支援開始に必要な確認事項を整理する。送信は人間の確認後に行う。',
+      },
+    };
+    const preset = presets[event.transitionType];
+    const sourceLabel = event.sourceRecord?.company?.company_name || event.sourceRecord?.company_name || event.sourceRecord?.proposal_plan_name || event.sourceRecord?.id || '関連レコード';
+    const assigneeMode = AI_WORK_MODES.find((mode) => mode.id === preset.assigneeMode)!;
+    const resolvedAssignee = resolveWorkMode(assigneeMode, aiModelSettings.roleOverrides);
+    const task: TaskItem = {
+      id: `task-crm-${now}-${Math.random().toString(36).slice(2, 7)}`,
+      title: preset.title,
+      description: `${sourceLabel}の業務段階が進みました。関連情報を確認して草案・次の対応を準備してください。顧客への送信や外部公開は行わないでください。`,
+      projectId: '',
+      workArea: preset.workArea,
+      taskKind: preset.taskKind,
+      relatedRecord: { type: preset.relatedType, id: event.targetRecordId ? String(event.targetRecordId) : undefined, label: sourceLabel },
+      priority: 'medium',
+      assignee: { type: 'role_ai', workModeId: preset.assigneeMode, name: `${resolvedAssignee.name}（${assigneeMode.label}）` },
+      status: 'waiting',
+      completionCriteria: preset.criteria,
+      createdAt: now,
+      updatedAt: now,
+    };
+    const nextTasks = [task, ...tasks];
+    setTasks(nextTasks);
+    saveTasks(nextTasks);
+    recordActivityLog('task_created', `CRMの段階移行からタスク「${task.title}」を作成しました（関連: ${sourceLabel}）`, 'システム');
+    setActivityLogs(loadActivityLogs());
+  };
+
   const handleCreateTask = (taskData: Omit<TaskItem, 'id' | 'createdAt' | 'updatedAt'>) => {
     const newTask: TaskItem = {
       ...taskData,
@@ -1324,6 +1412,7 @@ function AppContent() {
             }}
             onOpenCreate={handleOpenCreate}
             onOpenRls={() => setIsRlsOpen(true)}
+            onStageTransitionTask={handleCrmStageTransition}
           />
         )}
 
