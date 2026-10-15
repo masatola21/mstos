@@ -26,6 +26,8 @@ export const SalesOperationsWorkspace: React.FC<Props> = ({ tab }) => {
   const [companies, setCompanies] = useState<RecordRow[]>([]);
   const [sendContactId, setSendContactId] = useState('');
   const [sendChannel, setSendChannel] = useState<'email'|'line'>('email');
+  const [consentConfirmed, setConsentConfirmed] = useState(false);
+  const [consentBasis, setConsentBasis] = useState('');
   const [records, setRecords] = useState<RecordRow[]>([]);
   const [activeOpsTab, setActiveOpsTab] = useState<(typeof opsTabs)[number]['key']>('contracts');
   const [loading, setLoading] = useState(false);
@@ -94,6 +96,12 @@ export const SalesOperationsWorkspace: React.FC<Props> = ({ tab }) => {
     await load();
   };
 
+  const updateOutboxStatus = async (messageId: string, status: 'queued'|'canceled') => {
+    const supabase=getSupabase();if(!supabase)return;
+    const {error:updateError}=await supabase.from('communication_outbox').update({status}).eq('id',messageId);
+    if(updateError)setError(updateError.message);else{setNotice(status==='queued'?'承認しました。送信待ちに登録しました（実送信は未接続）。':'送信依頼を取り消しました。');await load();}
+  };
+
   const updateDocumentStatus = async (documentId: string, status: string) => {
     const supabase = getSupabase(); if (!supabase) return;
     const { error: updateError } = await supabase.from('customer_documents').update({ status }).eq('id', documentId);
@@ -104,6 +112,7 @@ export const SalesOperationsWorkspace: React.FC<Props> = ({ tab }) => {
     const supabase = getSupabase();
     const contact = contacts.find((item) => item.id === sendContactId);
     if (!supabase || !contact) { setError('送信先の連絡先を選択してください。'); return; }
+    if (!consentConfirmed || !consentBasis.trim()) { setError('配信同意の確認と根拠メモを入力してください。'); return; }
     const address = sendChannel === 'email' ? contact.email : contact.line_user_id;
     if (!address) { setError(sendChannel === 'email' ? '選択した連絡先にメールアドレスがありません。' : '選択した連絡先にLINE user IDがありません。'); return; }
     setError('');
@@ -111,9 +120,11 @@ export const SalesOperationsWorkspace: React.FC<Props> = ({ tab }) => {
       channel: sendChannel, recipient_contact_id: contact.id, recipient_address: address,
       subject: document.title, body_text: `書類「${document.title}」の送付依頼です。`,
       document_id: document.id, source_type: 'customer_document',
+      consent_confirmed_at: new Date().toISOString(), consent_basis: consentBasis.trim(),
       status: 'awaiting_approval',
     });
     if (insertError) { setError(insertError.message); return; }
+    setConsentConfirmed(false); setConsentBasis('');
     setNotice('送信承認待ちに登録しました。外部サービスへはまだ送信していません。');
     await load();
   };
@@ -200,8 +211,8 @@ export const SalesOperationsWorkspace: React.FC<Props> = ({ tab }) => {
     </div>}
 
     {tab === 'documents' && <div className="grid gap-5 xl:grid-cols-2">
-      <section className="rounded-xl border border-slate-800 bg-slate-900 p-4"><h2 className="mb-3 font-semibold text-white">生成済み書類</h2>{loading ? <p className="text-sm text-slate-400">読み込み中…</p> : documents.length === 0 ? <p className="text-sm text-slate-400">書類ひな形から保存した書類がここに表示されます。</p> : <ul className="divide-y divide-slate-800">{documents.map((doc) => <li key={doc.id} className="py-3"><div className="flex flex-wrap items-center justify-between gap-2"><span className="font-medium text-white">{doc.title}</span><select aria-label={`${doc.title}の状態`} value={doc.status} onChange={(e)=>void updateDocumentStatus(doc.id,e.target.value)} className="rounded border border-slate-700 bg-slate-950 px-2 py-1 text-xs text-white"><option value="draft">下書き</option><option value="awaiting_approval">確認待ち</option><option value="approved">承認済み</option><option value="queued">送信待ち</option><option value="sent">送信済み</option><option value="failed">送信失敗</option><option value="archived">保管</option></select></div><div className="mt-1 text-xs text-slate-500">{doc.document_type} · {new Date(doc.created_at).toLocaleString('ja-JP')}</div>{doc.status==='approved'&&<div className="mt-2 flex flex-wrap items-center gap-2"><select value={sendContactId} onChange={(e)=>setSendContactId(e.target.value)} className="rounded border border-slate-700 bg-slate-950 px-2 py-1 text-xs text-white"><option value="">送信先を選択</option>{contacts.map(contact=><option key={contact.id} value={contact.id}>{contact.full_name}</option>)}</select><select value={sendChannel} onChange={(e)=>setSendChannel(e.target.value as 'email'|'line')} className="rounded border border-slate-700 bg-slate-950 px-2 py-1 text-xs text-white"><option value="email">メール</option><option value="line">LINE</option></select><button onClick={()=>void requestDocumentSend(doc)} className="rounded bg-indigo-700 px-2 py-1 text-xs text-white">送信承認を申請</button></div>}</li>)}</ul>}</section>
-      <section className="rounded-xl border border-slate-800 bg-slate-900 p-4"><h2 className="mb-3 font-semibold text-white">送信履歴・送信待ち</h2>{loading ? <p className="text-sm text-slate-400">読み込み中…</p> : outbox.length === 0 ? <p className="text-sm text-slate-400">個別送信・一斉配信・書類送付は、同じ送信台帳に集約します。</p> : <ul className="divide-y divide-slate-800">{outbox.map((msg) => <li key={msg.id} className="py-3"><div className="flex items-center justify-between gap-2"><span className="font-medium text-white">{msg.subject || msg.recipient_address}</span><span className="text-xs text-slate-400">{msg.channel} · {msg.status}</span></div><div className="mt-1 text-xs text-slate-500">{new Date(msg.created_at).toLocaleString('ja-JP')}</div></li>)}</ul>}<p className="mt-3 text-xs text-amber-300">実送信はサーバー側のLINE・メール接続が必要です。この一覧への登録だけで配信完了にはなりません。</p></section>
+      <section className="rounded-xl border border-slate-800 bg-slate-900 p-4"><h2 className="mb-3 font-semibold text-white">生成済み書類</h2>{loading ? <p className="text-sm text-slate-400">読み込み中…</p> : documents.length === 0 ? <p className="text-sm text-slate-400">書類ひな形から保存した書類がここに表示されます。</p> : <ul className="divide-y divide-slate-800">{documents.map((doc) => <li key={doc.id} className="py-3"><div className="flex flex-wrap items-center justify-between gap-2"><span className="font-medium text-white">{doc.title}</span><select aria-label={`${doc.title}の状態`} value={doc.status} onChange={(e)=>void updateDocumentStatus(doc.id,e.target.value)} className="rounded border border-slate-700 bg-slate-950 px-2 py-1 text-xs text-white"><option value="draft">下書き</option><option value="awaiting_approval">確認待ち</option><option value="approved">承認済み</option><option value="archived">保管</option></select></div><div className="mt-1 text-xs text-slate-500">{doc.document_type} · {new Date(doc.created_at).toLocaleString('ja-JP')}</div>{doc.status==='approved'&&<div className="mt-2 flex flex-wrap items-center gap-2"><select value={sendContactId} onChange={(e)=>setSendContactId(e.target.value)} className="rounded border border-slate-700 bg-slate-950 px-2 py-1 text-xs text-white"><option value="">送信先を選択</option>{contacts.map(contact=><option key={contact.id} value={contact.id}>{contact.full_name}</option>)}</select><select value={sendChannel} onChange={(e)=>setSendChannel(e.target.value as 'email'|'line')} className="rounded border border-slate-700 bg-slate-950 px-2 py-1 text-xs text-white"><option value="email">メール</option><option value="line">LINE</option></select><label className="flex items-center gap-1 text-[11px] text-slate-300"><input type="checkbox" checked={consentConfirmed} onChange={(e)=>setConsentConfirmed(e.target.checked)}/>配信同意を確認</label><input value={consentBasis} onChange={(e)=>setConsentBasis(e.target.value)} placeholder="同意の根拠" className="max-w-40 rounded border border-slate-700 bg-slate-950 px-2 py-1 text-xs text-white"/><button onClick={()=>void requestDocumentSend(doc)} className="rounded bg-indigo-700 px-2 py-1 text-xs text-white">送信承認を申請</button></div>}</li>)}</ul>}</section>
+      <section className="rounded-xl border border-slate-800 bg-slate-900 p-4"><h2 className="mb-3 font-semibold text-white">送信履歴・送信待ち</h2>{loading ? <p className="text-sm text-slate-400">読み込み中…</p> : outbox.length === 0 ? <p className="text-sm text-slate-400">個別送信・一斉配信・書類送付は、同じ送信台帳に集約します。</p> : <ul className="divide-y divide-slate-800">{outbox.map((msg) => <li key={msg.id} className="py-3"><div className="flex flex-wrap items-center justify-between gap-2"><span className="font-medium text-white">{msg.subject || msg.recipient_address}</span><span className="text-xs text-slate-400">{msg.channel} · {msg.status}</span></div><div className="mt-1 text-xs text-slate-500">{new Date(msg.created_at).toLocaleString('ja-JP')} · 同意根拠: {msg.consent_basis || '記録なし'}</div>{msg.status==='awaiting_approval'&&<div className="mt-2 flex gap-2"><button onClick={()=>void updateOutboxStatus(msg.id,'queued')} className="rounded bg-emerald-700 px-2 py-1 text-xs text-white">承認して送信待ちへ</button><button onClick={()=>void updateOutboxStatus(msg.id,'canceled')} className="rounded border border-slate-700 px-2 py-1 text-xs text-slate-300">取り消す</button></div>}</li>)}</ul>}<p className="mt-3 text-xs text-amber-300">実送信はサーバー側のLINE・メール接続が必要です。この一覧への登録だけで配信完了にはなりません。</p></section>
     </div>}
 
     {tab === 'operations' && <section className="space-y-4 rounded-xl border border-slate-800 bg-slate-900 p-4">
