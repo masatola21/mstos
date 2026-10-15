@@ -1,4 +1,5 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
+import { getSupabase } from '../../lib/supabaseClient';
 import { 
   FileText, 
   FileCheck2, 
@@ -275,6 +276,45 @@ export const DocumentTemplateView: React.FC = () => {
   const [selectedTemplateId, setSelectedTemplateId] = useState<string>(DEFAULT_TEMPLATES[0].id);
   const [isEditingTemplate, setIsEditingTemplate] = useState<boolean>(false);
   const [copied, setCopied] = useState<boolean>(false);
+  const [companies, setCompanies] = useState<Array<{id:string;company_name:string}>>([]);
+  const [contacts, setContacts] = useState<Array<{id:string;full_name:string;company_id?:string|null}>>([]);
+  const [deals, setDeals] = useState<Array<{id:string;proposal_plan_name:string;company_id?:string|null}>>([]);
+  const [companyId, setCompanyId] = useState('');
+  const [contactId, setContactId] = useState('');
+  const [dealId, setDealId] = useState('');
+  const [saveMessage, setSaveMessage] = useState('');
+
+  useEffect(() => {
+    const supabase = getSupabase();
+    if (!supabase) return;
+    void Promise.all([
+      supabase.from('companies').select('id,company_name').order('company_name'),
+      supabase.from('contacts').select('id,full_name,company_id').order('full_name'),
+      supabase.from('deals').select('id,proposal_plan_name,company_id').order('created_at',{ascending:false}),
+    ]).then(([companyResult,contactResult,dealResult]) => {
+      if (!companyResult.error) setCompanies(companyResult.data || []);
+      if (!contactResult.error) setContacts(contactResult.data || []);
+      if (!dealResult.error) setDeals(dealResult.data || []);
+    });
+  }, []);
+
+  const saveGeneratedDocument = async () => {
+    const supabase = getSupabase();
+    if (!supabase) { setSaveMessage('Supabase接続後に保存できます。'); return; }
+    setSaveMessage('');
+    const documentType = currentTemplate.type === 'report' ? 'diagnosis_report' : currentTemplate.type;
+    const { error } = await supabase.from('customer_documents').insert({
+      document_type: documentType,
+      title: currentTemplate.title,
+      status: 'awaiting_approval',
+      body_html: populatedHtml,
+      company_id: companyId || null,
+      contact_id: contactId || null,
+      deal_id: dealId || null,
+    });
+    if (error) { setSaveMessage(`保存できませんでした: ${error.message}`); return; }
+    setSaveMessage('確認待ち書類として保存しました。承認後、送信画面から送信依頼を作成できます。');
+  };
 
   // Active template
   const currentTemplate = templates.find((t) => t.id === selectedTemplateId) || templates[0];
@@ -403,6 +443,16 @@ export const DocumentTemplateView: React.FC = () => {
           </button>
         </div>
       </div>
+
+      <section className="rounded-xl border border-slate-800 bg-slate-900 p-4">
+        <div className="mb-3"><h2 className="font-semibold text-white">顧客情報との紐付け</h2><p className="mt-1 text-xs text-slate-400">書類の保存時に会社・担当者・商談IDを関連付けます。入力情報の複製ではなく、CRMレコードを参照します。</p></div>
+        <div className="grid gap-3 md:grid-cols-3">
+          <label className="text-xs text-slate-400">会社<select value={companyId} onChange={(e)=>{setCompanyId(e.target.value);setContactId('');}} className="mt-1 w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-white"><option value="">未選択</option>{companies.map((company)=><option key={company.id} value={company.id}>{company.company_name}</option>)}</select></label>
+          <label className="text-xs text-slate-400">担当者<select value={contactId} onChange={(e)=>setContactId(e.target.value)} className="mt-1 w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-white"><option value="">未選択</option>{contacts.filter((contact)=>!companyId||contact.company_id===companyId).map((contact)=><option key={contact.id} value={contact.id}>{contact.full_name}</option>)}</select></label>
+          <label className="text-xs text-slate-400">商談<select value={dealId} onChange={(e)=>setDealId(e.target.value)} className="mt-1 w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-white"><option value="">未選択</option>{deals.filter((deal)=>!companyId||deal.company_id===companyId).map((deal)=><option key={deal.id} value={deal.id}>{deal.proposal_plan_name}</option>)}</select></label>
+        </div>
+        <div className="mt-3 flex flex-wrap items-center gap-3"><button onClick={()=>void saveGeneratedDocument()} className="flex items-center gap-2 rounded-lg bg-emerald-700 px-3 py-2 text-xs font-semibold text-white hover:bg-emerald-600"><Save className="h-4 w-4"/>生成内容を確認待ちで保存</button>{saveMessage&&<p role="status" className="text-xs text-slate-300">{saveMessage}</p>}</div>
+      </section>
 
       {/* Template Selector Tabs */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
