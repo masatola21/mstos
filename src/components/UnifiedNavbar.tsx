@@ -24,16 +24,18 @@ import { TableKey, TABLE_CONFIGS } from '../types/database';
 import { CharacterConfig } from '../types/ai-president';
 
 export type UnifiedNavTab = 
-  // MST OS
+  // 営業・顧客管理
   | 'mst_dashboard'
   | 'mst_diagnoses'
+  | 'marketing_automation'
+  | 'custom_lists'
+  | 'document_templates'
   | TableKey
-  // Matrix & Product
+  // 商品・サービス
   | 'product_hub'
   | 'category_hub'
-  | 'custom_lists'
+  // 経営・AI社長
   | 'automations'
-  | 'document_templates'
   // AI President
   | 'ai_dashboard'
   | 'ai_chat'
@@ -81,16 +83,14 @@ export const UnifiedNavbar: React.FC<UnifiedNavbarProps> = ({
       currentTab === 'ai_tasks' ||
       currentTab === 'ai_approvals' ||
       currentTab === 'ai_presets' ||
-      currentTab === 'ai_knowledge'
+      currentTab === 'ai_knowledge' ||
+      currentTab === 'automations'
     ) {
       return 'ai_president';
     }
     if (
       currentTab === 'product_hub' ||
-      currentTab === 'category_hub' ||
-      currentTab === 'custom_lists' ||
-      currentTab === 'automations' ||
-      currentTab === 'document_templates'
+      currentTab === 'category_hub'
     ) {
       return 'matrix';
     }
@@ -149,7 +149,7 @@ export const UnifiedNavbar: React.FC<UnifiedNavbarProps> = ({
                 }`}
               >
                 <Layers className="w-3.5 h-3.5" />
-                <span>商品・マトリクス</span>
+                <span>商品・サービス</span>
               </button>
 
               <button
@@ -161,7 +161,7 @@ export const UnifiedNavbar: React.FC<UnifiedNavbarProps> = ({
                 }`}
               >
                 <Sparkles className="w-3.5 h-3.5" />
-                <span>AI社長・戦略実行</span>
+                <span>経営・AI社長</span>
                 {pendingApprovalsCount > 0 && (
                   <span className="w-2 h-2 rounded-full bg-amber-400 animate-pulse" />
                 )}
@@ -240,117 +240,40 @@ export const UnifiedNavbar: React.FC<UnifiedNavbarProps> = ({
 
         {/* Sub Navigation Bar - dynamically shows based on activeSection */}
         <nav className="flex space-x-1 overflow-x-auto py-2 scrollbar-none border-t border-slate-800/70 text-xs font-medium">
-          {/* 1. MST Section Subtabs */}
+          {/* 営業・顧客管理: 顧客獲得から契約後までを一元管理 */}
           {activeSection === 'mst' && (
             <>
-              <button
-                onClick={() => onTabChange('mst_dashboard')}
-                className={`px-3 py-1.5 rounded-lg whitespace-nowrap transition-colors ${
-                  currentTab === 'mst_dashboard'
-                    ? 'bg-blue-600 text-white font-semibold shadow-sm'
-                    : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800'
-                }`}
-              >
-                📊 営業ダッシュボード
-              </button>
-              <button
-                onClick={() => onTabChange('mst_diagnoses')}
-                className={`px-3 py-1.5 rounded-lg whitespace-nowrap transition-colors flex items-center gap-1.5 ${
-                  currentTab === 'mst_diagnoses'
-                    ? 'bg-blue-600 text-white font-semibold shadow-sm'
-                    : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800'
-                }`}
-              >
-                <ClipboardList className="w-3.5 h-3.5 text-blue-400" />
-                <span>診断管理</span>
-              </button>
+              <button onClick={() => onTabChange('mst_dashboard')} className={`px-3 py-1.5 rounded-lg whitespace-nowrap transition-colors ${currentTab === 'mst_dashboard' ? 'bg-blue-600 text-white font-semibold shadow-sm' : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800'}`}>📊 営業ダッシュボード</button>
+              <button onClick={() => onTabChange('mst_diagnoses')} className={`px-3 py-1.5 rounded-lg whitespace-nowrap transition-colors flex items-center gap-1.5 ${currentTab === 'mst_diagnoses' ? 'bg-blue-600 text-white font-semibold shadow-sm' : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800'}`}><ClipboardList className="w-3.5 h-3.5 text-blue-400" /><span>診断管理</span></button>
+              <button onClick={() => onTabChange('marketing_automation')} className={`px-3 py-1.5 rounded-lg whitespace-nowrap transition-colors flex items-center gap-1.5 ${currentTab === 'marketing_automation' ? 'bg-blue-600 text-white font-semibold shadow-sm' : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800'}`}><Zap className="w-3.5 h-3.5 text-amber-400" /><span>マーケティングオートメーション</span></button>
               {(Object.keys(TABLE_CONFIGS) as TableKey[]).map((key) => {
                 const cfg = TABLE_CONFIGS[key];
                 const isActive = currentTab === key;
-                return (
-                  <button
-                    key={key}
-                    onClick={() => onTabChange(key)}
-                    className={`px-3 py-1.5 rounded-lg whitespace-nowrap transition-colors flex items-center gap-1.5 ${
-                      isActive
-                        ? 'bg-blue-600 text-white font-semibold shadow-sm'
-                        : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800'
-                    }`}
-                  >
-                    <span>{cfg.label}</span>
-                  </button>
-                );
+                return <button key={key} onClick={() => onTabChange(key)} className={`px-3 py-1.5 rounded-lg whitespace-nowrap transition-colors flex items-center gap-1.5 ${isActive ? 'bg-blue-600 text-white font-semibold shadow-sm' : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800'}`}><span>{cfg.label}</span></button>;
               })}
+              <button onClick={() => onTabChange('custom_lists')} className={`px-3 py-1.5 rounded-lg whitespace-nowrap transition-colors ${currentTab === 'custom_lists' ? 'bg-blue-600 text-white font-semibold shadow-sm' : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800'}`}>リスト・顧客区分</button>
+              <button onClick={() => onTabChange('document_templates')} className={`px-3 py-1.5 rounded-lg whitespace-nowrap transition-colors ${currentTab === 'document_templates' ? 'bg-blue-600 text-white font-semibold shadow-sm' : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800'}`}>顧客書類作成</button>
             </>
           )}
 
-          {/* 2. Matrix Section Subtabs */}
+          {/* 商品・サービス: 商品定義と開発情報 */}
           {activeSection === 'matrix' && (
             <>
-              <button
-                onClick={() => onTabChange('product_hub')}
-                className={`px-3 py-1.5 rounded-lg whitespace-nowrap transition-colors flex items-center gap-1.5 ${
-                  currentTab === 'product_hub'
-                    ? 'bg-cyan-600 text-white font-semibold shadow-sm'
-                    : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800'
-                }`}
-              >
-                <Package className="w-3.5 h-3.5 text-cyan-400" />
-                <span>商品別ハブ（縦串串刺し）</span>
-              </button>
-
-              <button
-                onClick={() => onTabChange('category_hub')}
-                className={`px-3 py-1.5 rounded-lg whitespace-nowrap transition-colors flex items-center gap-1.5 ${
-                  currentTab === 'category_hub'
-                    ? 'bg-cyan-600 text-white font-semibold shadow-sm'
-                    : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800'
-                }`}
-              >
-                <Layers className="w-3.5 h-3.5 text-emerald-400" />
-                <span>業務機能カテゴリー（横軸）</span>
-              </button>
-
-              <button
-                onClick={() => onTabChange('custom_lists')}
-                className={`px-3 py-1.5 rounded-lg whitespace-nowrap transition-colors flex items-center gap-1.5 ${
-                  currentTab === 'custom_lists'
-                    ? 'bg-cyan-600 text-white font-semibold shadow-sm'
-                    : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800'
-                }`}
-              >
-                <ClipboardList className="w-3.5 h-3.5 text-blue-400" />
-                <span>リスト＆カテゴリー管理</span>
-              </button>
-
-              <button
-                onClick={() => onTabChange('automations')}
-                className={`px-3 py-1.5 rounded-lg whitespace-nowrap transition-colors flex items-center gap-1.5 ${
-                  currentTab === 'automations'
-                    ? 'bg-cyan-600 text-white font-semibold shadow-sm'
-                    : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800'
-                }`}
-              >
-                <Zap className="w-3.5 h-3.5 text-amber-400" />
-                <span>非AI業務自動化</span>
-              </button>
-
-              <button
-                onClick={() => onTabChange('document_templates')}
-                className={`px-3 py-1.5 rounded-lg whitespace-nowrap transition-colors flex items-center gap-1.5 ${
-                  currentTab === 'document_templates'
-                    ? 'bg-cyan-600 text-white font-semibold shadow-sm'
-                    : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800'
-                }`}
-              >
-                <FileCheck2 className="w-3.5 h-3.5 text-emerald-400" />
-                <span>文書・帳票自動流し込み</span>
-              </button>
+              <button onClick={() => onTabChange('product_hub')} className={`px-3 py-1.5 rounded-lg whitespace-nowrap transition-colors flex items-center gap-1.5 ${currentTab === 'product_hub' ? 'bg-cyan-600 text-white font-semibold shadow-sm' : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800'}`}><Package className="w-3.5 h-3.5 text-cyan-400" /><span>商品・サービス一覧</span></button>
             </>
           )}
 
           {/* 3. AI President Section Subtabs */}
           {activeSection === 'ai_president' && (
+            <>
+              <button
+                onClick={() => onTabChange('automations')}
+                className={`px-3 py-1.5 rounded-lg whitespace-nowrap transition-colors flex items-center gap-1.5 ${currentTab === 'automations' ? 'bg-purple-600 text-white font-semibold shadow-sm' : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800'}`}
+              >
+                <Zap className="w-3.5 h-3.5 text-amber-400" />
+                <span>自動化ルール</span>
+              </button>
+
             <>
               <button
                 onClick={() => onTabChange('ai_dashboard')}
