@@ -31,6 +31,8 @@ CREATE TABLE IF NOT EXISTS public.customer_contracts (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
   owner_id uuid NOT NULL DEFAULT auth.uid() REFERENCES auth.users(id) ON DELETE CASCADE,
   title text NOT NULL,
+  legacy_id text,
+  counterparty_name text,
   contract_type text NOT NULL DEFAULT 'service_agreement',
   status text NOT NULL DEFAULT 'draft' CHECK (status IN ('draft','under_review','sent','signed','expired','canceled')),
   company_id text REFERENCES public.companies(id) ON DELETE SET NULL,
@@ -50,7 +52,9 @@ CREATE TABLE IF NOT EXISTS public.customer_invoices (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
   owner_id uuid NOT NULL DEFAULT auth.uid() REFERENCES auth.users(id) ON DELETE CASCADE,
   invoice_number text NOT NULL,
+  legacy_id text,
   title text NOT NULL,
+  recipient_name text,
   status text NOT NULL DEFAULT 'draft' CHECK (status IN ('draft','awaiting_approval','issued','paid','overdue','canceled')),
   company_id text REFERENCES public.companies(id) ON DELETE SET NULL,
   contact_id uuid REFERENCES public.contacts(id) ON DELETE SET NULL,
@@ -133,3 +137,53 @@ COMMENT ON TABLE public.customer_contracts IS 'Post-sale contract lifecycle link
 COMMENT ON TABLE public.customer_invoices IS 'Invoice lifecycle and payment state; notices are sent through communication_outbox.';
 COMMENT ON TABLE public.customer_service_engagements IS 'Retainer and implementation-support delivery after contract.';
 COMMENT ON TABLE public.communication_outbox IS 'Single auditable queue for LINE/email and document sends.';
+
+
+-- Preserve contracts and invoices already stored in the synchronized workspace JSON.
+-- legacy_id makes the import idempotent and allows the old workspace state to remain recoverable.
+CREATE UNIQUE INDEX IF NOT EXISTS idx_customer_contracts_legacy_id ON public.customer_contracts(owner_id, legacy_id) WHERE legacy_id IS NOT NULL;
+CREATE UNIQUE INDEX IF NOT EXISTS idx_customer_invoices_legacy_id ON public.customer_invoices(owner_id, legacy_id) WHERE legacy_id IS NOT NULL;
+
+INSERT INTO public.customer_contracts
+  (owner_id, legacy_id, title, counterparty_name, contract_type, status, company_id, product_id, amount, start_date, end_date, notes, created_at, updated_at)
+SELECT
+  ws.user_id,
+  item->>'id',
+  COALESCE(NULLIF(item->>'title',''), '旧契約'),
+  NULLIF(item->>'counterpartyName',''),
+  COALESCE(NULLIF(item->>'type',''), 'service_agreement'),
+  CASE WHEN item->>'status' IN ('draft','under_review','sent','signed','expired','canceled') THEN item->>'status' ELSE 'draft' END,
+  NULLIF(item->>'companyId',''),
+  NULLIF(item->>'productId',''),
+  COALESCE(NULLIF(item->>'amount','')::numeric, 0),
+  NULLIF(item->>'startDate','')::date,
+  NULLIF(item->>'endDate','')::date,
+  NULLIF(item->>'notes',''),
+  COALESCE(NULLIF(item->>'createdAt','')::timestamptz, now()),
+  COALESCE(NULLIF(item->>'updatedAt','')::timestamptz, now())
+FROM public.mst_workspace_state ws
+CROSS JOIN LATERAL jsonb_array_elements(COALESCE(ws.data->'contracts','[]'::jsonb)) item
+WHERE NULLIF(item->>'id','') IS NOT NULL
+ON CONFLICT (owner_id, legacy_id) WHERE legacy_id IS NOT NULL DO NOTHING;
+
+INSERT INTO public.customer_invoices
+  (owner_id, legacy_id, invoice_number, title, recipient_name, status, company_id, product_id, amount, issue_date, due_date, paid_at, created_at, updated_at)
+SELECT
+  ws.user_id,
+  item->>'id',
+  COALESCE(NULLIF(item->>'invoiceNumber',''), 'LEGACY-' || left(item->>'id', 24)),
+  COALESCE(NULLIF(item->>'title',''), '旧請求'),
+  NULLIF(item->>'recipientName',''),
+  CASE WHEN item->>'status' IN ('draft','awaiting_approval','issued','paid','overdue','canceled') THEN item->>'status' ELSE 'draft' END,
+  NULLIF(item->>'companyId',''),
+  NULLIF(item->>'productId',''),
+  COALESCE(NULLIF(item->>'amount','')::numeric, 0),
+  NULLIF(item->>'issueDate','')::date,
+  NULLIF(item->>'dueDate','')::date,
+  NULLIF(item->>'paidDate','')::date,
+  COALESCE(NULLIF(item->>'createdAt','')::timestamptz, now()),
+  COALESCE(NULLIF(item->>'updatedAt','')::timestamptz, now())
+FROM public.mst_workspace_state ws
+CROSS JOIN LATERAL jsonb_array_elements(COALESCE(ws.data->'invoices','[]'::jsonb)) item
+WHERE NULLIF(item->>'id','') IS NOT NULL
+ON CONFLICT (owner_id, legacy_id) WHERE legacy_id IS NOT NULL DO NOTHING;
