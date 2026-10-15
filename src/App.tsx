@@ -193,6 +193,7 @@ function AppContent() {
   const [isQuickDrawerOpen, setIsQuickDrawerOpen] = useState(false);
   const [activePlanForModal, setActivePlanForModal] = useState<ProposedPlan | null>(null);
   const [selectedProjectIdForTasks, setSelectedProjectIdForTasks] = useState<string | null>(null);
+  const [selectedTaskWorkspaceSection, setSelectedTaskWorkspaceSection] = useState<'tasks' | 'approvals' | 'logs'>('tasks');
 
   // Matrix & Product States
   const [products, setProducts] = useState<ManagedProduct[]>(() => matrixService.loadProducts());
@@ -1015,7 +1016,10 @@ function AppContent() {
       {/* Unified Navigation Bar */}
       <UnifiedNavbar
         currentTab={currentTab}
-        onTabChange={(tab) => setCurrentTab(tab)}
+        onTabChange={(tab) => {
+          if (tab === 'ai_tasks') setSelectedTaskWorkspaceSection('tasks');
+          setCurrentTab(tab);
+        }}
         onOpenConfig={() => setIsConfigOpen(true)}
         onOpenRls={() => setIsRlsOpen(true)}
         onOpenPricing={() => setIsPricingModalOpen(true)}
@@ -1130,8 +1134,13 @@ function AppContent() {
             onNavigateTab={(tab) => {
               if (tab === 'chat') setCurrentTab('ai_chat');
               else if (tab === 'projects') setCurrentTab('ai_projects');
-              else if (tab === 'tasks') setCurrentTab('ai_tasks');
-              else if (tab === 'approvals') setCurrentTab('ai_approvals');
+              else if (tab === 'tasks') {
+                setSelectedTaskWorkspaceSection('tasks');
+                setCurrentTab('ai_tasks');
+              } else if (tab === 'approvals') {
+                setSelectedTaskWorkspaceSection('approvals');
+                setCurrentTab('ai_tasks');
+              }
               else if (tab === 'presets') setCurrentTab('ai_presets');
               else setCurrentTab(tab as any);
             }}
@@ -1172,12 +1181,13 @@ function AppContent() {
             onDeleteProject={handleDeleteProject}
             onNavigateToTasksWithFilter={(projId) => {
               setSelectedProjectIdForTasks(projId);
+              setSelectedTaskWorkspaceSection('tasks');
               setCurrentTab('ai_tasks');
             }}
           />
         )}
 
-        {(currentTab === 'ai_tasks' || currentTab === 'ai_approvals') && (
+        {currentTab === 'ai_tasks' && (
           <TasksView
             tasks={tasks}
             projects={projects}
@@ -1191,8 +1201,8 @@ function AppContent() {
             approvals={approvals}
             activityLogs={activityLogs}
             onResolveApproval={handleResolveApproval}
-            initialSection={currentTab === 'ai_approvals' ? 'approvals' : 'tasks'}
-            onSectionChange={(section) => setCurrentTab(section === 'tasks' ? 'ai_tasks' : 'ai_approvals')}
+            initialSection={selectedTaskWorkspaceSection}
+            onSectionChange={setSelectedTaskWorkspaceSection}
           />
         )}
 
