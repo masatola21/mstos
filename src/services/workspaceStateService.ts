@@ -72,6 +72,40 @@ function mergeRecords<T extends { id: string }>(remoteRecords: T[], localRecords
   return [...localOnlyRecords, ...remoteRecords];
 }
 
+function mergeChatHistories(
+  remoteHistories: Record<string, ChatMessage[]>,
+  localHistories: Record<string, ChatMessage[]>,
+  baselineHistories: Record<string, ChatMessage[]>
+): Record<string, ChatMessage[]> {
+  const keys = new Set([...Object.keys(remoteHistories), ...Object.keys(localHistories)]);
+  const merged: Record<string, ChatMessage[]> = {};
+  keys.forEach((key) => {
+    const remote = remoteHistories[key] || [];
+    const local = localHistories[key] || [];
+    const baseline = baselineHistories[key] || [];
+    const remoteById = new Map(remote.map((message) => [message.id, message]));
+    const localById = new Map(local.map((message) => [message.id, message]));
+    const baselineById = new Map(baseline.map((message) => [message.id, message]));
+    const combined = new Map(remoteById);
+
+    // Honor local deletions only for messages unchanged in the last synchronized snapshot.
+    baseline.forEach((message) => {
+      if (localById.has(message.id)) return;
+      const remoteMessage = remoteById.get(message.id);
+      if (remoteMessage && JSON.stringify(remoteMessage) === JSON.stringify(message)) combined.delete(message.id);
+    });
+    // Preserve messages newly added or edited locally while retaining independent remote additions.
+    local.forEach((message) => {
+      const previous = baselineById.get(message.id);
+      if (!previous || JSON.stringify(previous) !== JSON.stringify(message)) combined.set(message.id, message);
+    });
+
+    merged[key] = [...combined.values()]
+      .sort((a, b) => a.timestamp - b.timestamp)
+      .slice(-100);
+  });
+  return merged;
+}
 function loadLastSyncedData(userId: string): Partial<WorkspaceData> {
   try {
     const raw = localStorage.getItem(`${LAST_SYNC_PREFIX}${userId}`);
@@ -155,7 +189,11 @@ export async function loadOrMigrateWorkspaceData(userId: string): Promise<Worksp
       tools: mergeRecords(remote.tools || [], localDefaults.tools, baseline.tools || []),
       customLists: mergeRecords(remote.customLists || [], localDefaults.customLists, baseline.customLists || []),
       automations: mergeRecords(remote.automations || [], localDefaults.automations, baseline.automations || []),
-      workModeHistories: { ...localDefaults.workModeHistories, ...(remote.workModeHistories || {}) },
+      workModeHistories: mergeChatHistories(
+        remote.workModeHistories || {},
+        localDefaults.workModeHistories,
+        baseline.workModeHistories || {}
+      ),
       knowledgeItems: mergeRecords(remote.knowledgeItems || [], localDefaults.knowledgeItems, baseline.knowledgeItems || []),
     };
     applyWorkspaceData(merged);
