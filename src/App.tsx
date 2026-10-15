@@ -183,6 +183,7 @@ function AppContent() {
     loadTokenUsageRecords()
   );
   const [knowledgeItems, setKnowledgeItems] = useState<KnowledgeItem[]>(() => loadKnowledgeItems());
+  const [selectedKnowledgeItemId, setSelectedKnowledgeItemId] = useState<string | null>(null);
   const [workModeHistories, setWorkModeHistories] = useState<Record<string, ChatMessage[]>>({});
   const [activeWorkModeId, setActiveWorkModeId] = useState<AIWorkModeId>('president');
 
@@ -1385,7 +1386,7 @@ function AppContent() {
         )}
 
         {currentTab === 'ai_knowledge' && (
-          <KnowledgeHubView items={knowledgeItems} onSave={handleSaveKnowledgeItem} onDelete={handleDeleteKnowledgeItem} />
+          <KnowledgeHubView items={knowledgeItems} onSave={handleSaveKnowledgeItem} onDelete={handleDeleteKnowledgeItem} selectedItemId={selectedKnowledgeItemId} />
         )}
 
         {currentTab === 'ai_projects' && (
@@ -1415,7 +1416,10 @@ function AppContent() {
             onUpdateTask={handleUpdateTask}
             onDeleteTask={handleDeleteTask}
             onRunTask={handleRunAssignedTask}
-            onOpenKnowledgeItem={() => setCurrentTab('ai_knowledge')}
+            onOpenKnowledgeItem={(id) => {
+              setSelectedKnowledgeItemId(id);
+              setCurrentTab('ai_knowledge');
+            }}
             onRequestApproval={handleRequestApproval}
             approvals={approvals}
             activityLogs={activityLogs}

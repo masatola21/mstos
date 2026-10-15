@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { Bot, Briefcase, Plus, MessageSquare, Pencil, Trash2, Settings2, Cpu } from 'lucide-react';
 import { CharacterConfig } from '../types';
 import { AI_WORK_MODES, AIWorkModeId, RoleAIOverrides, resolveWorkMode } from '../../data/aiWorkModes';
@@ -34,6 +34,7 @@ export const PresetsView: React.FC<PresetsViewProps> = ({
   onEditRole,
   onOpenModelSettings,
 }) => {
+  const [characterToDelete, setCharacterToDelete] = useState<CharacterConfig | null>(null);
   const roleModes = AI_WORK_MODES.map((mode) => resolveWorkMode(mode, roleOverrides));
   const registeredCharacters = (Array.isArray(characters) ? characters : []).filter((character) => character && character.id !== 'preset-ceo');
 
@@ -162,11 +163,7 @@ export const PresetsView: React.FC<PresetsViewProps> = ({
                     </button>
                     <button
                       type="button"
-                      onClick={() => {
-                        if (window.confirm(`「${character.name}」を一覧から削除しますか？会話履歴は残ります。`)) {
-                          onDeleteCharacter(character.id);
-                        }
-                      }}
+                      onClick={() => setCharacterToDelete(character)}
                       className="inline-flex items-center justify-center gap-1 rounded-lg bg-rose-950/50 hover:bg-rose-900/70 px-2 py-2 text-[11px] font-semibold text-rose-300"
                     >
                       <Trash2 className="w-3 h-3" /> 削除
@@ -178,6 +175,20 @@ export const PresetsView: React.FC<PresetsViewProps> = ({
           </div>
         )}
       </section>
+
+      {characterToDelete && (
+        <div className="fixed inset-0 z-[80] flex items-center justify-center bg-slate-950/80 p-4 backdrop-blur-sm" role="presentation">
+          <section role="dialog" aria-modal="true" aria-labelledby="delete-character-title" className="w-full max-w-md rounded-2xl border border-slate-700 bg-slate-900 p-6 shadow-2xl">
+            <h2 id="delete-character-title" className="text-base font-bold text-white">専門AIを削除しますか？</h2>
+            <p className="mt-3 text-sm text-slate-300">「{characterToDelete.name}」を一覧から削除します。会話履歴は残ります。</p>
+            <div className="mt-6 flex justify-end gap-2">
+              <button type="button" onClick={() => setCharacterToDelete(null)} className="rounded-xl border border-slate-700 px-4 py-2 text-sm text-slate-300 hover:bg-slate-800">キャンセル</button>
+              <button type="button" onClick={() => { onDeleteCharacter(characterToDelete.id); setCharacterToDelete(null); }} className="rounded-xl bg-rose-600 px-4 py-2 text-sm font-semibold text-white hover:bg-rose-500">削除する</button>
+            </div>
+          </section>
+        </div>
+      )}
     </div>
   );
 };
+
