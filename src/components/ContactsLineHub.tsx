@@ -1,7 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { Check, Loader2, Plus, RefreshCw, Search, Tag, Users, UserRound, Wifi, WifiOff, Pencil } from 'lucide-react';
 import { Contact, TableKey } from '../types/database';
-import { DataFetchError, fetchTableData } from '../services/dataService';
+import { fetchTableData } from '../services/dataService';
 import { getSupabase } from '../lib/supabaseClient';
 import { RecordFormModal } from './RecordFormModal';
 
