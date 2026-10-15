@@ -1,115 +1,148 @@
 import React from 'react';
-import { Library, MessageSquare, Copy, Check, ArrowRight } from 'lucide-react';
-import { PRESET_CHARACTERS } from '../../data/presets';
+import { Bot, BriefcaseBusiness, Plus, MessageSquare, Pencil, Trash2 } from 'lucide-react';
 import { CharacterConfig } from '../types';
+import { AI_WORK_MODES, AIWorkModeId } from '../../data/aiWorkModes';
 import { getColorScheme } from '../../utils/theme';
 
 interface PresetsViewProps {
-  onSelectAndChat: (preset: CharacterConfig) => void;
-  onDuplicateAndEdit: (preset: CharacterConfig) => void;
+  characters: CharacterConfig[];
   activeCharacterId: string;
+  activeWorkModeId: AIWorkModeId;
+  onSelectCharacter: (id: string) => void;
+  onSelectWorkMode: (id: AIWorkModeId) => void;
+  onCreateCharacter: () => void;
+  onEditCharacter: (id: string) => void;
+  onDeleteCharacter: (id: string) => void;
 }
 
 export const PresetsView: React.FC<PresetsViewProps> = ({
-  onSelectAndChat,
-  onDuplicateAndEdit,
+  characters,
   activeCharacterId,
+  activeWorkModeId,
+  onSelectCharacter,
+  onSelectWorkMode,
+  onCreateCharacter,
+  onEditCharacter,
+  onDeleteCharacter,
 }) => {
+  const roleModes = AI_WORK_MODES.filter((mode) => mode.id !== 'president');
+  const registeredCharacters = characters.filter((character) => character.id !== 'preset-ceo');
+
   return (
     <div className="max-w-6xl mx-auto px-4 py-6 space-y-6">
-      {/* Header Banner */}
-      <div className="p-6 rounded-3xl bg-slate-900 border border-slate-800 flex items-center justify-between gap-4">
+      <div className="p-6 rounded-3xl bg-slate-900 border border-slate-800 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div className="flex items-center gap-3">
           <div className="w-12 h-12 rounded-2xl bg-gradient-to-tr from-indigo-500 to-purple-600 flex items-center justify-center text-white shadow-lg shadow-indigo-500/20">
-            <Library className="w-6 h-6" />
+            <Bot className="w-6 h-6" />
           </div>
           <div>
-            <h1 className="text-lg font-extrabold text-white">AIキャラクター・テンプレート集</h1>
+            <h1 className="text-lg font-extrabold text-white">専門AI一覧</h1>
             <p className="text-xs text-slate-400 mt-0.5">
-              厳選された個性豊かなAIたち。そのまま会話を始めることも、複製してあなた好みにカスタムすることも可能です。
+              役割AIと登録済みAIをここでまとめて管理します。AI社長が全体を統括します。
             </p>
           </div>
         </div>
+        <button
+          type="button"
+          onClick={onCreateCharacter}
+          className="inline-flex items-center justify-center gap-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 px-4 py-2.5 text-xs font-bold text-white shadow-md shadow-indigo-600/20"
+        >
+          <Plus className="w-4 h-4" />
+          専門AIを作成
+        </button>
       </div>
 
-      {/* Cards Grid */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-        {PRESET_CHARACTERS.map((preset: CharacterConfig) => {
-          const scheme = getColorScheme(preset.avatarColor);
-          const isActive = preset.id === activeCharacterId;
+      <section className="space-y-3">
+        <div className="flex items-center gap-2">
+          <BriefcaseBusiness className="w-4 h-4 text-indigo-300" />
+          <h2 className="text-sm font-bold text-white">役割AI</h2>
+          <span className="text-[11px] text-slate-500">選ぶとチャットの担当が切り替わります</span>
+        </div>
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+          {roleModes.map((mode) => {
+            const selected = activeWorkModeId === mode.id;
+            return (
+              <article key={mode.id} className={`p-5 rounded-2xl bg-slate-900 border ${selected ? 'border-indigo-500/70' : 'border-slate-800'} flex flex-col`}>
+                <div className="flex items-start justify-between gap-3">
+                  <span className="text-2xl">{mode.avatarEmoji}</span>
+                  {selected && <span className="text-[10px] rounded-full bg-indigo-500/20 text-indigo-200 px-2 py-1">チャットで選択中</span>}
+                </div>
+                <h3 className="mt-3 text-sm font-bold text-white">{mode.name}</h3>
+                <p className="text-xs text-indigo-300 mt-0.5">{mode.label}</p>
+                <p className="text-xs text-slate-400 leading-relaxed mt-3 flex-1">{mode.description}</p>
+                <button
+                  type="button"
+                  onClick={() => onSelectWorkMode(mode.id)}
+                  className="mt-4 inline-flex items-center justify-center gap-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 px-3 py-2 text-xs font-bold text-white"
+                >
+                  <MessageSquare className="w-3.5 h-3.5" />
+                  この役割でチャット
+                </button>
+              </article>
+            );
+          })}
+        </div>
+      </section>
 
-          return (
-            <div
-              key={preset.id}
-              className={`p-5 rounded-3xl bg-slate-900 border transition-all flex flex-col justify-between group ${
-                isActive ? 'border-indigo-500/60 shadow-lg shadow-indigo-500/10' : 'border-slate-800 hover:border-slate-700'
-              }`}
-            >
-              <div className="space-y-3">
-                <div className="flex items-start justify-between">
-                  <div
-                    className={`w-12 h-12 rounded-2xl bg-gradient-to-tr ${scheme.bgGradient} flex items-center justify-center text-2xl shadow-md ${scheme.glow} border border-white/20`}
-                  >
-                    {preset.avatarEmoji}
+      <section className="space-y-3">
+        <div className="flex items-center gap-2">
+          <Bot className="w-4 h-4 text-cyan-300" />
+          <h2 className="text-sm font-bold text-white">登録済みAI</h2>
+          <span className="text-[11px] text-slate-500">不要なAIはここから削除できます</span>
+        </div>
+        {registeredCharacters.length === 0 ? (
+          <div className="rounded-2xl border border-dashed border-slate-700 p-8 text-center text-sm text-slate-400">
+            登録済みAIはまだありません。「専門AIを作成」から追加できます。
+          </div>
+        ) : (
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            {registeredCharacters.map((character) => {
+              const scheme = getColorScheme(character.avatarColor);
+              const selected = activeWorkModeId === 'president' && activeCharacterId === character.id;
+              return (
+                <article key={character.id} className={`p-5 rounded-2xl bg-slate-900 border ${selected ? 'border-indigo-500/70' : 'border-slate-800'} flex flex-col`}>
+                  <div className="flex items-start justify-between gap-3">
+                    <div className={`w-11 h-11 rounded-xl bg-gradient-to-tr ${scheme.bgGradient} flex items-center justify-center text-2xl border border-white/10`}>
+                      {character.avatarEmoji || '🤖'}
+                    </div>
+                    {selected && <span className="text-[10px] rounded-full bg-indigo-500/20 text-indigo-200 px-2 py-1">チャットで選択中</span>}
                   </div>
-                  <span
-                    className={`text-[11px] font-semibold px-2.5 py-0.5 rounded-full ${scheme.badgeBg} ${scheme.badgeText}`}
-                  >
-                    {preset.role}
-                  </span>
-                </div>
-
-                <div>
-                  <h3 className="text-base font-bold text-white flex items-center gap-2">
-                    <span>{preset.name}</span>
-                    {isActive && (
-                      <span className="text-[10px] bg-indigo-500/20 text-indigo-300 px-2 py-0.5 rounded-full font-medium">
-                        選択中
-                      </span>
-                    )}
-                  </h3>
-                  <p className="text-xs text-indigo-300/80 font-medium mt-0.5">{preset.tagline}</p>
-                </div>
-
-                <p className="text-xs text-slate-400 leading-relaxed line-clamp-3">
-                  {preset.personality}
-                </p>
-
-                {/* Trait badges */}
-                <div className="flex flex-wrap gap-1 pt-1">
-                  <span className="text-[10px] px-2 py-0.5 rounded-lg bg-slate-950 text-slate-300 border border-slate-800">
-                    口調: {preset.speechStyle?.split('、')[0] || preset.tone}
-                  </span>
-                  <span className="text-[10px] px-2 py-0.5 rounded-lg bg-slate-950 text-slate-300 border border-slate-800">
-                    一人称: {preset.firstPerson}
-                  </span>
-                </div>
-              </div>
-
-              {/* Actions */}
-              <div className="flex items-center gap-2 pt-4 mt-4 border-t border-slate-800/80">
-                <button
-                  type="button"
-                  onClick={() => onDuplicateAndEdit(preset)}
-                  className="flex-1 py-2 px-3 rounded-xl bg-slate-800 hover:bg-slate-750 text-slate-200 text-xs font-semibold flex items-center justify-center gap-1.5 transition-colors cursor-pointer border border-slate-700/60"
-                >
-                  <Copy className="w-3.5 h-3.5" />
-                  <span>カスタム複製</span>
-                </button>
-
-                <button
-                  type="button"
-                  onClick={() => onSelectAndChat(preset)}
-                  className="flex-1 py-2 px-3 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-bold flex items-center justify-center gap-1 transition-colors cursor-pointer shadow-md shadow-indigo-600/20"
-                >
-                  <span>対話する</span>
-                  <ArrowRight className="w-3.5 h-3.5" />
-                </button>
-              </div>
-            </div>
-          );
-        })}
-      </div>
+                  <h3 className="mt-3 text-sm font-bold text-white">{character.name}</h3>
+                  <p className="text-xs text-indigo-300 mt-0.5">{character.role}</p>
+                  <p className="text-xs text-slate-400 leading-relaxed mt-3 flex-1 line-clamp-3">{character.tagline || character.personality}</p>
+                  <div className="grid grid-cols-3 gap-2 mt-4">
+                    <button
+                      type="button"
+                      onClick={() => onSelectCharacter(character.id)}
+                      className="inline-flex items-center justify-center gap-1 rounded-lg bg-indigo-600 hover:bg-indigo-500 px-2 py-2 text-[11px] font-bold text-white"
+                    >
+                      <MessageSquare className="w-3 h-3" /> 呼び出す
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => onEditCharacter(character.id)}
+                      className="inline-flex items-center justify-center gap-1 rounded-lg bg-slate-800 hover:bg-slate-700 px-2 py-2 text-[11px] font-semibold text-slate-200"
+                    >
+                      <Pencil className="w-3 h-3" /> 編集
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        if (window.confirm(`「${character.name}」を一覧から削除しますか？会話履歴は残ります。`)) {
+                          onDeleteCharacter(character.id);
+                        }
+                      }}
+                      className="inline-flex items-center justify-center gap-1 rounded-lg bg-rose-950/50 hover:bg-rose-900/70 px-2 py-2 text-[11px] font-semibold text-rose-300"
+                    >
+                      <Trash2 className="w-3 h-3" /> 削除
+                    </button>
+                  </div>
+                </article>
+              );
+            })}
+          </div>
+        )}
+      </section>
     </div>
   );
 };
