@@ -83,6 +83,7 @@ export interface TaskItem {
   resultNotes?: string; // 結果・成果メモ
   artifactUrl?: string; // 外部に保存した成果物へのリンク
   knowledgeItemId?: string; // AIの実行成果を保存したナレッジ
+  attachments?: WorkspaceAttachment[]; // タスクに直接添付したファイル
   sourceAutomationId?: string;
   createdAt: number;
   updatedAt: number;
@@ -142,7 +143,7 @@ export interface ProposedPlan {
 
 export type KnowledgeCategory = 'business' | 'product' | 'customer' | 'decision' | 'research' | 'deliverable';
 
-export interface KnowledgeAttachment {
+export interface WorkspaceAttachment {
   id: string;
   fileName: string;
   storagePath: string;
@@ -150,6 +151,8 @@ export interface KnowledgeAttachment {
   size: number;
   uploadedAt: number;
 }
+
+export type KnowledgeAttachment = WorkspaceAttachment;
 
 export interface KnowledgeItem {
   id: string;

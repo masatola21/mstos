@@ -1,15 +1,15 @@
 import { getSupabase } from '../lib/supabaseClient';
-import { KnowledgeAttachment } from '../types';
+import { WorkspaceAttachment } from '../types';
 
-export const KNOWLEDGE_FILES_BUCKET = 'mst-knowledge-files';
-export const MAX_KNOWLEDGE_ATTACHMENT_BYTES = 20 * 1024 * 1024;
+export const WORKSPACE_FILES_BUCKET = 'mst-knowledge-files';
+export const MAX_WORKSPACE_ATTACHMENT_BYTES = 20 * 1024 * 1024;
 
-export async function uploadKnowledgeAttachment(
+export async function uploadWorkspaceAttachment(
   userId: string,
-  knowledgeItemId: string,
+  recordId: string,
   file: File,
-): Promise<KnowledgeAttachment> {
-  if (file.size > MAX_KNOWLEDGE_ATTACHMENT_BYTES) {
+): Promise<WorkspaceAttachment> {
+  if (file.size > MAX_WORKSPACE_ATTACHMENT_BYTES) {
     throw new Error('添付ファイルは20MB以下にしてください。');
   }
   const supabase = getSupabase();
@@ -19,8 +19,8 @@ export async function uploadKnowledgeAttachment(
   const uniqueId = typeof crypto !== 'undefined' && 'randomUUID' in crypto
     ? crypto.randomUUID()
     : `${Date.now()}-${Math.random().toString(36).slice(2)}`;
-  const storagePath = `${userId}/${knowledgeItemId}/${uniqueId}-${safeName}`;
-  const { error } = await supabase.storage.from(KNOWLEDGE_FILES_BUCKET).upload(storagePath, file, {
+  const storagePath = `${userId}/${recordId}/${uniqueId}-${safeName}`;
+  const { error } = await supabase.storage.from(WORKSPACE_FILES_BUCKET).upload(storagePath, file, {
     contentType: file.type || 'application/octet-stream',
     upsert: false,
   });
@@ -36,18 +36,18 @@ export async function uploadKnowledgeAttachment(
   };
 }
 
-export async function downloadKnowledgeAttachment(attachment: KnowledgeAttachment): Promise<Blob> {
+export async function downloadWorkspaceAttachment(attachment: WorkspaceAttachment): Promise<Blob> {
   const supabase = getSupabase();
   if (!supabase) throw new Error('Supabaseに接続できません。接続設定を確認してください。');
-  const { data, error } = await supabase.storage.from(KNOWLEDGE_FILES_BUCKET).download(attachment.storagePath);
+  const { data, error } = await supabase.storage.from(WORKSPACE_FILES_BUCKET).download(attachment.storagePath);
   if (error) throw new Error(`ファイルをダウンロードできませんでした: ${error.message}`);
   return data;
 }
 
-export async function deleteKnowledgeAttachment(attachment: KnowledgeAttachment): Promise<void> {
+export async function deleteWorkspaceAttachment(attachment: WorkspaceAttachment): Promise<void> {
   const supabase = getSupabase();
   if (!supabase) throw new Error('Supabaseに接続できません。接続設定を確認してください。');
-  const { error } = await supabase.storage.from(KNOWLEDGE_FILES_BUCKET).remove([attachment.storagePath]);
+  const { error } = await supabase.storage.from(WORKSPACE_FILES_BUCKET).remove([attachment.storagePath]);
   if (error) throw new Error(`ファイルを削除できませんでした: ${error.message}`);
 }
 
