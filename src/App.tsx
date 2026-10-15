@@ -28,6 +28,7 @@ import { PricingSettingsModal } from './components/ai-president/PricingSettingsM
 import { ProductHubView } from './components/matrix/ProductHubView';
 import { CategoryHubView } from './components/matrix/CategoryHubView';
 import { CustomListManager } from './components/matrix/CustomListManager';
+import { SalesOperationsWorkspace } from './components/SalesOperationsWorkspace';
 import { AutomationView } from './components/matrix/AutomationView';
 import { DocumentTemplateView } from './components/matrix/DocumentTemplateView';
 import { MarketingAutomationPrototypeView } from './components/marketing/MarketingAutomationPrototypeView';
@@ -1375,20 +1376,9 @@ function AppContent() {
           />
         )}
 
-        {currentTab === 'custom_lists' && (
-          <CustomListManager
-            customLists={customLists}
-            contracts={contracts}
-            invoices={invoices}
-            tools={tools}
-            tasks={tasks}
-            products={products}
-            onAddContract={handleAddContract}
-            onAddInvoice={handleAddInvoice}
-            onAddTool={handleAddTool}
-            onUpdateInvoiceStatus={handleUpdateInvoiceStatus}
-          />
-        )}
+        {currentTab === 'custom_lists' && <SalesOperationsWorkspace tab="segments" />}
+
+        {currentTab === 'customer_operations' && <SalesOperationsWorkspace tab="operations" />}
 
         {currentTab === 'automations' && (
           <AutomationView
@@ -1399,7 +1389,10 @@ function AppContent() {
         )}
 
         {currentTab === 'document_templates' && (
-          <DocumentTemplateView />
+          <>
+            <DocumentTemplateView />
+            <SalesOperationsWorkspace tab="documents" />
+          </>
         )}
 
         {currentTab === 'contacts' && <ContactsLineHub />}
