@@ -452,9 +452,9 @@ export const TasksView: React.FC<TasksViewProps> = ({
             <CheckSquare className="w-5 h-5" />
           </div>
           <div>
-            <h1 className="text-lg font-extrabold text-white">タスク</h1>
+            <h1 className="text-lg font-extrabold text-white">共通タスク</h1>
             <p className="text-xs text-slate-400 mt-0.5">
-              各タスクの担当（人間 / AI社長 / 登録AI / 開発エージェント）と進捗状態を管理
+              営業・顧客、商品開発、プロジェクト、契約後支援の仕事を同じ一覧で管理
             </p>
           </div>
         </div>
