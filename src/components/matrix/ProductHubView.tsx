@@ -120,7 +120,7 @@ export const ProductHubView: React.FC<ProductHubViewProps> = ({
             </span>
           </div>
           <p className="text-xs text-slate-400 mt-1">
-            システム受託・顧問・デジタル商材・メディアアフィリエイト等、全商材の開発・マーケ・契約・請求を1箇所で串刺し管理
+            商品・サービスの定義、開発状況、販促素材を管理します。顧客ごとの契約・請求は営業・顧客管理で扱います。
           </p>
         </div>
 
@@ -235,7 +235,7 @@ export const ProductHubView: React.FC<ProductHubViewProps> = ({
                 { id: 'overview', label: '① 概要・カスタム属性', icon: Layers },
                 { id: 'tasks', label: '② 開発・WBSタスク', icon: Code2 },
                 { id: 'marketing', label: '③ マーケティング・販促', icon: TrendingUp },
-                { id: 'finance', label: '④ 契約書・請求書', icon: FileCheck2 },
+                
               ].map((tab) => {
                 const Icon = tab.icon;
                 const isActive = activeTab === tab.id;
