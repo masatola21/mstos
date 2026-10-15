@@ -313,6 +313,8 @@ function AppContent() {
   // Active character
   const activeCharacter =
     characters.find((c) => c.id === activeCharacterId) || characters[0] || PRESET_CHARACTERS[0];
+  const presidentCharacter =
+    characters.find((c) => c.id === 'preset-ceo') || PRESET_CHARACTERS[0];
 
   useEffect(() => {
     const key = `${activeCharacter.id}:${activeWorkModeId}`;
@@ -1021,7 +1023,7 @@ function AppContent() {
         onOpenBackup={() => setIsBackupModalOpen(true)}
         onOpenProfile={() => setIsProfileModalOpen(true)}
         onOpenQuickDrawer={() => setIsQuickDrawerOpen(true)}
-        activeCharacter={activeCharacter}
+        activeCharacter={presidentCharacter}
         pendingApprovalsCount={approvals.filter((a) => a.status === 'pending').length}
       />
 
@@ -1384,7 +1386,7 @@ function AppContent() {
       <QuickPresidentDrawer
         isOpen={isQuickDrawerOpen}
         onClose={() => setIsQuickDrawerOpen(false)}
-        character={activeCharacter}
+        character={presidentCharacter}
         userProfile={userProfile}
         onOpenFullChat={() => setCurrentTab('ai_chat')}
         onOpenPlanProposal={(plan) => setActivePlanForModal(plan)}
