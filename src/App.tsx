@@ -75,6 +75,7 @@ import {
   recordTokenUsage,
 } from './utils/storage';
 import { PRESET_CHARACTERS } from './data/presets';
+import { getAIWorkMode, AIWorkModeId } from './data/aiWorkModes';
 import { matrixService } from './services/matrixService';
 import {
   loadOrMigrateWorkspaceData,
@@ -588,7 +589,7 @@ function AppContent() {
   };
 
   // --- Chat Messaging & Streaming ---
-  const handleSendMessage = async (text: string) => {
+  const handleSendMessage = async (text: string, workModeId: AIWorkModeId = 'president') => {
     if (!text.trim() || isStreaming) return;
 
     const userMsg: ChatMessage = {
@@ -637,6 +638,7 @@ function AppContent() {
             ...activeCharacter,
             userProfile,
           },
+          workModeId,
           stream: true,
         }),
       });
@@ -695,7 +697,7 @@ function AppContent() {
 
       handleRecordUsage({
         endpoint: 'chat',
-        endpointName: 'AI社長チャット',
+        endpointName: `AI業務モデル：${getAIWorkMode(workModeId).label}`,
         model: responseModel,
         usage: streamUsage,
       });
