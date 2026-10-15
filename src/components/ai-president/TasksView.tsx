@@ -20,6 +20,7 @@ import {
   Loader2,
   Paperclip,
   Download,
+  ChevronDown,
 } from 'lucide-react';
 import {
   TaskItem,
@@ -104,6 +105,7 @@ export const TasksView: React.FC<TasksViewProps> = ({
   const [resultNotes, setResultNotes] = useState('');
   const [artifactUrl, setArtifactUrl] = useState('');
   const [runningTaskIds, setRunningTaskIds] = useState<Set<string>>(() => new Set());
+  const [expandedDraftTaskIds, setExpandedDraftTaskIds] = useState<Set<string>>(() => new Set());
   const [isUploadingAttachment, setIsUploadingAttachment] = useState(false);
   const [attachmentError, setAttachmentError] = useState('');
 
@@ -578,11 +580,46 @@ export const TasksView: React.FC<TasksViewProps> = ({
 
                 {/* Title & Description */}
                 <div>
-                  <h3 className="text-sm sm:text-base font-bold text-white">{task.title}</h3>
+                  <div className="flex items-center gap-2">
+                    {task.draftArtifact ? (
+                      <button
+                        type="button"
+                        aria-expanded={expandedDraftTaskIds.has(task.id)}
+                        onClick={() => setExpandedDraftTaskIds((current) => {
+                          const next = new Set(current);
+                          if (next.has(task.id)) next.delete(task.id);
+                          else next.add(task.id);
+                          return next;
+                        })}
+                        className="flex items-center gap-1.5 text-left text-sm sm:text-base font-bold text-white hover:text-indigo-200 cursor-pointer"
+                      >
+                        <span>{task.title}</span>
+                        <span className="text-[10px] font-semibold text-indigo-300">
+                          {expandedDraftTaskIds.has(task.id) ? '成果物を閉じる' : '成果物を確認'}
+                        </span>
+                        <ChevronDown className={`w-4 h-4 text-indigo-300 transition-transform ${expandedDraftTaskIds.has(task.id) ? 'rotate-180' : ''}`} />
+                      </button>
+                    ) : (
+                      <h3 className="text-sm sm:text-base font-bold text-white">{task.title}</h3>
+                    )}
+                  </div>
                   {task.description && (
                     <p className="text-xs text-slate-300 mt-1 leading-relaxed">
                       {task.description}
                     </p>
+                  )}
+                  {task.draftArtifact && expandedDraftTaskIds.has(task.id) && (
+                    <section className="mt-3 rounded-xl border border-indigo-500/30 bg-slate-950 overflow-hidden">
+                      <div className="px-3 py-2 border-b border-slate-800 text-xs font-bold text-indigo-300">
+                        レビュー用成果物（承認前）
+                      </div>
+                      <div className="max-h-[520px] overflow-y-auto p-4 text-sm text-slate-200 whitespace-pre-wrap break-words">
+                        {task.draftArtifact.content}
+                      </div>
+                      <p className="px-3 py-2 border-t border-slate-800 text-[11px] text-slate-400">
+                        承認画面で確認・承認するとナレッジに登録されます。
+                      </p>
+                    </section>
                   )}
                 </div>
 
