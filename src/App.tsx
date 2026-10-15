@@ -1450,7 +1450,7 @@ function AppContent() {
             </button>
             <span>•</span>
             <button
-              onClick={() => setIsPricingModalOpen(true)
+              onClick={() => setIsPricingModalOpen(true)}
               className="hover:text-slate-300 transition-colors"
             >
               APIトークン利用量
