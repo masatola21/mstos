@@ -17,7 +17,8 @@ import {
   Briefcase,
   Layers,
   ChevronRight,
-  ClipboardList
+  ClipboardList,
+  Users
 } from 'lucide-react';
 
 interface DashboardProps {
@@ -26,8 +27,9 @@ interface DashboardProps {
   onOpenRls: () => void;
 }
 
-const TABLE_ICONS: Record<TableKey, React.ReactNode> = {
+const TABLE_ICONS: Partial<Record<TableKey, React.ReactNode>> = {
   companies: <Building2 className="w-5 h-5 text-blue-400" />,
+  contacts: <Users className="w-5 h-5 text-teal-400" />,
   prospects: <Target className="w-5 h-5 text-amber-400" />,
   leads: <Layers className="w-5 h-5 text-cyan-400" />,
   products: <Package className="w-5 h-5 text-purple-400" />,
@@ -35,8 +37,9 @@ const TABLE_ICONS: Record<TableKey, React.ReactNode> = {
   customers: <UserCheck className="w-5 h-5 text-pink-400" />,
 };
 
-const TABLE_THEMES: Record<TableKey, { bg: string; border: string; text: string }> = {
+const TABLE_THEMES: Partial<Record<TableKey, { bg: string; border: string; text: string }>> = {
   companies: { bg: 'bg-blue-500/10', border: 'border-blue-500/20', text: 'text-blue-400' },
+  contacts: { bg: 'bg-teal-500/10', border: 'border-teal-500/20', text: 'text-teal-400' },
   prospects: { bg: 'bg-amber-500/10', border: 'border-amber-500/20', text: 'text-amber-400' },
   leads: { bg: 'bg-cyan-500/10', border: 'border-cyan-500/20', text: 'text-cyan-400' },
   products: { bg: 'bg-purple-500/10', border: 'border-purple-500/20', text: 'text-purple-400' },
@@ -51,6 +54,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
 }) => {
   const [counts, setCounts] = useState<Record<TableKey, number>>({
     companies: 0,
+    contacts: 0,
     prospects: 0,
     leads: 0,
     products: 0,
@@ -116,7 +120,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
             経営＆営業ダッシュボード
           </h1>
           <p className="text-slate-400 text-sm mt-1">
-            Supabase既存6テーブルと連携した統合営業データ管理・モニタリング
+            Supabase既存7テーブルと連携した統合営業データ管理・モニタリング
           </p>
         </div>
 
@@ -205,21 +209,21 @@ export const Dashboard: React.FC<DashboardProps> = ({
         </div>
       </section>
 
-      {/* 6 Tables Count Cards Grid */}
+      {/* 7 Tables Count Cards Grid */}
       <section className="space-y-4">
         <div className="flex items-center justify-between">
           <h2 className="text-base font-bold text-white flex items-center gap-2">
             <Briefcase className="w-4 h-4 text-blue-400" />
             管理対象テーブル一覧 &amp; レコード件数
           </h2>
-          <span className="text-xs text-slate-400">全6テーブル</span>
+          <span className="text-xs text-slate-400">全7テーブル</span>
         </div>
 
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
           {(Object.keys(TABLE_CONFIGS) as TableKey[]).map((key) => {
             const cfg = TABLE_CONFIGS[key];
             const count = counts[key] || 0;
-            const theme = TABLE_THEMES[key];
+            const theme = TABLE_THEMES[key] ?? { bg: 'bg-slate-500/10', border: 'border-slate-500/20', text: 'text-slate-400' };
 
             return (
               <div
@@ -228,7 +232,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
               >
                 <div className="flex items-start justify-between">
                   <div className={`p-2.5 rounded-xl ${theme.bg} ${theme.border} border`}>
-                    {TABLE_ICONS[key]}
+                    {TABLE_ICONS[key] ?? <Layers className="w-5 h-5 text-slate-400" />}
                   </div>
                   <div className="flex items-center gap-1">
                     <button
