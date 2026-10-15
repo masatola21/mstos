@@ -83,9 +83,9 @@ function mergeChatHistories(
     const remote = remoteHistories[key] || [];
     const local = localHistories[key] || [];
     const baseline = baselineHistories[key] || [];
-    const remoteById = new Map(remote.map((message) => [message.id, message]));
-    const localById = new Map(local.map((message) => [message.id, message]));
-    const baselineById = new Map(baseline.map((message) => [message.id, message]));
+    const remoteById = new Map<string, ChatMessage>(remote.map((message): [string, ChatMessage] => [message.id, message]));
+    const localById = new Map<string, ChatMessage>(local.map((message): [string, ChatMessage] => [message.id, message]));
+    const baselineById = new Map<string, ChatMessage>(baseline.map((message): [string, ChatMessage] => [message.id, message]));
     const combined = new Map(remoteById);
 
     // Honor local deletions only for messages unchanged in the last synchronized snapshot.
