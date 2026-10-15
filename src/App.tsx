@@ -1210,7 +1210,8 @@ function AppContent() {
               setCurrentTab('ai_chat');
             }}
             onSelectWorkMode={(id) => {
-              handleSelectWorkMode(id);
+              if (id === 'president') handleSelectChatCharacter('preset-ceo');
+              else handleSelectWorkMode(id);
               setCurrentTab('ai_chat');
             }}
             onCreateCharacter={handleCreateNewCharacter}
