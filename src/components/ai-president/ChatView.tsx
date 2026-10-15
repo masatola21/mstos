@@ -26,6 +26,8 @@ interface ChatViewProps {
   character: CharacterConfig;
   userProfile: UserProfile;
   messages: ChatMessage[];
+  selectedWorkModeId: AIWorkModeId;
+  onSelectWorkMode: (id: AIWorkModeId) => void;
   onSendMessage: (text: string, workModeId?: AIWorkModeId) => void;
   onClearMessages: () => void;
   onEditCharacter: () => void;
@@ -45,6 +47,8 @@ export const ChatView: React.FC<ChatViewProps> = ({
   character,
   userProfile,
   messages,
+  selectedWorkModeId,
+  onSelectWorkMode,
   onSendMessage,
   onClearMessages,
   onEditCharacter,
@@ -60,7 +64,6 @@ export const ChatView: React.FC<ChatViewProps> = ({
   const [copiedId, setCopiedId] = useState<string | null>(null);
   const [isExtractingMemory, setIsExtractingMemory] = useState(false);
   const [memoryNotification, setMemoryNotification] = useState<string | null>(null);
-  const [selectedWorkModeId, setSelectedWorkModeId] = useState<AIWorkModeId>('president');
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
@@ -235,11 +238,11 @@ export const ChatView: React.FC<ChatViewProps> = ({
             </div>
             <div className="min-w-0">
               <div className="flex items-center gap-2 flex-wrap">
-                <h2 className="text-base font-bold text-white tracking-tight truncate">{character.name}</h2>
+                <h2 className="text-base font-bold text-white tracking-tight truncate">{selectedWorkModeId === 'president' ? character.name : selectedWorkMode.name}</h2>
                 <span
                   className={`text-[11px] font-semibold px-2 py-0.5 rounded-full ${scheme.badgeBg} ${scheme.badgeText} border ${scheme.border}`}
                 >
-                  {character.role}
+                  {selectedWorkModeId === 'president' ? character.role : selectedWorkMode.label}
                 </span>
                 {character.speechStyle && (
                   <span className="hidden sm:inline-block text-[11px] text-slate-400 bg-slate-800/70 px-2 py-0.5 rounded-full border border-slate-700/60 truncate max-w-[200px]">
@@ -247,7 +250,7 @@ export const ChatView: React.FC<ChatViewProps> = ({
                   </span>
                 )}
               </div>
-              <p className="text-xs text-slate-400 truncate">{character.tagline || character.personality}</p>
+              <p className="text-xs text-slate-400 truncate">{selectedWorkModeId === 'president' ? character.tagline || character.personality : selectedWorkMode.description}</p>
             </div>
           </div>
 
@@ -328,8 +331,8 @@ export const ChatView: React.FC<ChatViewProps> = ({
                 >
                   {character.avatarEmoji || '🤖'}
                 </div>
-                <h3 className="text-xl font-extrabold text-white mb-1">{character.name}</h3>
-                <p className="text-sm font-medium text-indigo-300 mb-2">{character.role}</p>
+                <h3 className="text-xl font-extrabold text-white mb-1">{selectedWorkModeId === 'president' ? character.name : selectedWorkMode.name}</h3>
+                <p className="text-sm font-medium text-indigo-300 mb-2">{selectedWorkModeId === 'president' ? character.role : selectedWorkMode.label}</p>
                 <p className="text-xs text-slate-400 max-w-md mx-auto leading-relaxed mb-4">
                   {character.tagline || character.personality}
                 </p>
@@ -493,12 +496,12 @@ export const ChatView: React.FC<ChatViewProps> = ({
             <select
               id="ai-work-mode"
               value={selectedWorkModeId}
-              onChange={(event) => setSelectedWorkModeId(event.target.value as AIWorkModeId)}
+              onChange={(event) => onSelectWorkMode(event.target.value as AIWorkModeId)}
               disabled={isStreaming}
               className="max-w-full sm:max-w-52 rounded-lg border border-slate-700 bg-slate-900 px-2.5 py-1.5 text-xs font-semibold text-white focus:outline-none focus:border-indigo-500 disabled:opacity-50"
             >
               {AI_WORK_MODES.map((mode) => (
-                <option key={mode.id} value={mode.id}>{mode.label}</option>
+                <option key={mode.id} value={mode.id}>{mode.avatarEmoji} {mode.name}｜{mode.label}</option>
               ))}
             </select>
             <p className="min-w-0 flex-1 text-[11px] text-slate-400">{selectedWorkMode.description}</p>
