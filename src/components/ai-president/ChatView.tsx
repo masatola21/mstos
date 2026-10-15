@@ -20,12 +20,13 @@ import {
 import { CharacterConfig, ChatMessage, UserProfile, ProposedPlan, ApiUsageData } from '../types';
 import { ChatMessageContent } from './ChatMessageContent';
 import { getColorScheme } from '../../utils/theme';
+import { AI_WORK_MODES, AIWorkModeId, getAIWorkMode } from '../../data/aiWorkModes';
 
 interface ChatViewProps {
   character: CharacterConfig;
   userProfile: UserProfile;
   messages: ChatMessage[];
-  onSendMessage: (text: string) => void;
+  onSendMessage: (text: string, workModeId?: AIWorkModeId) => void;
   onClearMessages: () => void;
   onEditCharacter: () => void;
   onUpdateUserProfile: (profile: UserProfile) => void;
@@ -59,12 +60,14 @@ export const ChatView: React.FC<ChatViewProps> = ({
   const [copiedId, setCopiedId] = useState<string | null>(null);
   const [isExtractingMemory, setIsExtractingMemory] = useState(false);
   const [memoryNotification, setMemoryNotification] = useState<string | null>(null);
+  const [selectedWorkModeId, setSelectedWorkModeId] = useState<AIWorkModeId>('president');
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const recognitionRef = useRef<any>(null);
 
   const scheme = getColorScheme(character.avatarColor);
+  const selectedWorkMode = getAIWorkMode(selectedWorkModeId);
 
   // Auto scroll
   useEffect(() => {
@@ -142,7 +145,7 @@ export const ChatView: React.FC<ChatViewProps> = ({
   const handleSubmit = (e?: React.FormEvent) => {
     if (e) e.preventDefault();
     if (!inputText.trim() || isStreaming) return;
-    onSendMessage(inputText.trim());
+    onSendMessage(inputText.trim(), selectedWorkModeId);
     setInputText('');
     if (textareaRef.current) {
       textareaRef.current.style.height = 'auto';
@@ -378,7 +381,7 @@ export const ChatView: React.FC<ChatViewProps> = ({
                       <button
                         key={i}
                         type="button"
-                        onClick={() => onSendMessage(topic)}
+                        onClick={() => onSendMessage(topic, selectedWorkModeId)}
                         className="px-3.5 py-2 rounded-xl text-xs font-medium bg-slate-900 hover:bg-slate-800 text-slate-300 hover:text-white border border-slate-800 hover:border-indigo-500/40 shadow-sm transition-all cursor-pointer text-left"
                       >
                         💬 {topic}
@@ -483,6 +486,25 @@ export const ChatView: React.FC<ChatViewProps> = ({
       {/* Input Box Bottom Bar */}
       <div className="border-t border-slate-800/80 bg-slate-900/90 p-3 sm:p-4 backdrop-blur-md">
         <div className="max-w-4xl mx-auto space-y-2">
+          <div className="flex flex-col sm:flex-row sm:items-center gap-2 rounded-xl border border-slate-800 bg-slate-950/80 px-3 py-2">
+            <label htmlFor="ai-work-mode" className="shrink-0 text-[11px] font-semibold text-indigo-300">
+              担当する役割
+            </label>
+            <select
+              id="ai-work-mode"
+              value={selectedWorkModeId}
+              onChange={(event) => setSelectedWorkModeId(event.target.value as AIWorkModeId)}
+              disabled={isStreaming}
+              className="max-w-full sm:max-w-52 rounded-lg border border-slate-700 bg-slate-900 px-2.5 py-1.5 text-xs font-semibold text-white focus:outline-none focus:border-indigo-500 disabled:opacity-50"
+            >
+              {AI_WORK_MODES.map((mode) => (
+                <option key={mode.id} value={mode.id}>{mode.label}</option>
+              ))}
+            </select>
+            <p className="min-w-0 flex-1 text-[11px] text-slate-400">{selectedWorkMode.description}</p>
+            <span className="shrink-0 text-[10px] text-slate-500">1回のAI呼び出し</span>
+          </div>
+
           {/* Quick AI President Action Chips */}
           <div className="flex items-center gap-1.5 overflow-x-auto pb-1 text-[11px] no-scrollbar">
             <span className="text-slate-400 shrink-0 font-semibold">クイック指示:</span>
