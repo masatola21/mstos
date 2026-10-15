@@ -17,7 +17,6 @@ import { ChatView } from './components/ai-president/ChatView';
 import { KnowledgeHubView } from './components/ai-president/KnowledgeHubView';
 import { ProjectsView } from './components/ai-president/ProjectsView';
 import { TasksView } from './components/ai-president/TasksView';
-import { ApprovalsView } from './components/ai-president/ApprovalsView';
 import { PresetsView } from './components/ai-president/PresetsView';
 import { CharacterEditor } from './components/ai-president/CharacterEditor';
 import { UserProfileEditor } from './components/ai-president/UserProfileEditor';
@@ -1178,7 +1177,7 @@ function AppContent() {
           />
         )}
 
-        {currentTab === 'ai_tasks' && (
+        {(currentTab === 'ai_tasks' || currentTab === 'ai_approvals') && (
           <TasksView
             tasks={tasks}
             projects={projects}
@@ -1189,14 +1188,11 @@ function AppContent() {
             onUpdateTask={handleUpdateTask}
             onDeleteTask={handleDeleteTask}
             onRequestApproval={handleRequestApproval}
-          />
-        )}
-
-        {currentTab === 'ai_approvals' && (
-          <ApprovalsView
             approvals={approvals}
             activityLogs={activityLogs}
             onResolveApproval={handleResolveApproval}
+            initialSection={currentTab === 'ai_approvals' ? 'approvals' : 'tasks'}
+            onSectionChange={(section) => setCurrentTab(section === 'tasks' ? 'ai_tasks' : 'ai_approvals')}
           />
         )}
 
