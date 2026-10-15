@@ -1,5 +1,5 @@
 import React from 'react';
-import { Bot, BriefcaseBusiness, Plus, MessageSquare, Pencil, Trash2 } from 'lucide-react';
+import { Bot, Briefcase, Plus, MessageSquare, Pencil, Trash2 } from 'lucide-react';
 import { CharacterConfig } from '../types';
 import { AI_WORK_MODES, AIWorkModeId } from '../../data/aiWorkModes';
 import { getColorScheme } from '../../utils/theme';
