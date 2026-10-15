@@ -40,6 +40,9 @@ export const SalesOperationsWorkspace: React.FC<Props> = ({ tab }) => {
   const [recordCompany, setRecordCompany] = useState('');
   const [recordAmount, setRecordAmount] = useState('');
   const [recordDate, setRecordDate] = useState('');
+  const [serviceType, setServiceType] = useState<'retainer'|'implementation_support'>('retainer');
+  const [previewSegmentId, setPreviewSegmentId] = useState('');
+  const [previewRows, setPreviewRows] = useState<RecordRow[]>([]);
 
   const selectedOps = opsTabs.find((item) => item.key === activeOpsTab) || opsTabs[0];
 
@@ -115,6 +118,22 @@ export const SalesOperationsWorkspace: React.FC<Props> = ({ tab }) => {
     await load();
   };
 
+  const updateOperationStatus = async (record: RecordRow, status: string) => {
+    const supabase=getSupabase(); if(!supabase)return;
+    const {error:updateError}=await supabase.from(selectedOps.table).update({status}).eq('id',record.id);
+    if(updateError)setError(updateError.message);else await load();
+  };
+
+  const previewSegment = async (segment: Segment) => {
+    const supabase=getSupabase(); if(!supabase)return;
+    setError('');setPreviewSegmentId(segment.id);
+    const {data,error:queryError}=await supabase.from(segment.entity_type).select('*');
+    if(queryError){setError(queryError.message);return;}
+    const field=segment.conditions.field||'';
+    const value=String(segment.conditions.value||'').toLowerCase();
+    setPreviewRows((data||[]).filter((row:RecordRow)=>String(row[field]??'').toLowerCase().includes(value)));
+  };
+
   const createOperation = async (event: React.FormEvent) => {
     event.preventDefault();
     const supabase = getSupabase();
@@ -122,17 +141,19 @@ export const SalesOperationsWorkspace: React.FC<Props> = ({ tab }) => {
     const payload: RecordRow = { title: recordTitle.trim(), company_id: recordCompany || null };
     if (activeOpsTab === 'contracts') {
       payload.amount = Number(recordAmount) || 0;
+      payload.counterparty_name = companies.find((company)=>company.id===recordCompany)?.company_name || null;
       payload.start_date = recordDate || null;
       payload.status = 'draft';
       payload.contract_type = 'service_agreement';
     } else if (activeOpsTab === 'invoices') {
       payload.invoice_number = `INV-${new Date().toISOString().slice(0, 10).replaceAll('-', '')}-${crypto.randomUUID().slice(0, 6).toUpperCase()}`;
       payload.amount = Number(recordAmount) || 0;
+      payload.recipient_name = companies.find((company)=>company.id===recordCompany)?.company_name || null;
       payload.due_date = recordDate || null;
       payload.issue_date = new Date().toISOString().slice(0, 10);
       payload.status = 'draft';
     } else {
-      payload.service_type = 'retainer';
+      payload.service_type = serviceType;
       payload.status = 'planned';
       payload.next_meeting_at = recordDate ? new Date(recordDate).toISOString() : null;
     }
@@ -172,7 +193,8 @@ export const SalesOperationsWorkspace: React.FC<Props> = ({ tab }) => {
       <section className="rounded-xl border border-slate-800 bg-slate-900 p-4">
         <h2 className="mb-3 font-semibold text-white">保存した区分</h2>
         {loading ? <p className="text-sm text-slate-400">読み込み中…</p> : segments.length === 0 ? <p className="text-sm text-slate-400">まだ保存ビューはありません。</p> :
-          <ul className="divide-y divide-slate-800">{segments.map((segment) => <li key={segment.id} className="flex flex-wrap items-center justify-between gap-2 py-3"><div><div className="font-medium text-white">{segment.name}</div><div className="text-xs text-slate-400">{entityOptions.find(([key]) => key === segment.entity_type)?.[1] || segment.entity_type} · {segment.conditions.field} に「{segment.conditions.value}」を含む</div></div><button onClick={async () => { const { error: deleteError } = await getSupabase()!.from('crm_segments').delete().eq('id', segment.id); if (deleteError) setError(deleteError.message); else await load(); }} className="rounded border border-slate-700 px-2 py-1 text-xs text-slate-300 hover:bg-slate-800">削除</button></li>)}</ul>}
+          <ul className="divide-y divide-slate-800">{segments.map((segment) => <li key={segment.id} className="flex flex-wrap items-center justify-between gap-2 py-3"><div><div className="font-medium text-white">{segment.name}</div><div className="text-xs text-slate-400">{entityOptions.find(([key]) => key === segment.entity_type)?.[1] || segment.entity_type} · {segment.conditions.field} に「{segment.conditions.value}」を含む</div></div><div className="flex gap-2"><button onClick={()=>void previewSegment(segment)} className="rounded border border-blue-700 px-2 py-1 text-xs text-blue-200 hover:bg-blue-950/40">対象を確認</button><button onClick={async () => { const { error: deleteError } = await getSupabase()!.from('crm_segments').delete().eq('id', segment.id); if (deleteError) setError(deleteError.message); else { if(previewSegmentId===segment.id){setPreviewSegmentId('');setPreviewRows([]);} await load(); } }} className="rounded border border-slate-700 px-2 py-1 text-xs text-slate-300 hover:bg-slate-800">削除</button></div></li>)}</ul>}
+        {previewSegmentId&&<div className="mt-4 rounded-lg border border-slate-800 bg-slate-950 p-3"><div className="font-medium text-white">対象レコード {previewRows.length}件</div><ul className="mt-2 max-h-40 space-y-1 overflow-auto text-xs text-slate-300">{previewRows.slice(0,50).map((row,index)=><li key={String(row.id||index)}>{row.full_name||row.company_name||row.proposal_plan_name||row.id||'レコード'}</li>)}</ul></div>}
         <p className="mt-3 text-xs text-amber-300">配信直前に条件から対象を抽出します。送信時点の宛先スナップショットと同意状態の確認は、配信実行機能の接続時に記録します。</p>
       </section>
     </div>}
@@ -187,11 +209,12 @@ export const SalesOperationsWorkspace: React.FC<Props> = ({ tab }) => {
       {formOpen && <form onSubmit={createOperation} className="grid gap-3 rounded-lg border border-slate-800 bg-slate-950 p-4 md:grid-cols-2">
         <label className="text-xs text-slate-400">名称<input required value={recordTitle} onChange={(e)=>setRecordTitle(e.target.value)} className="mt-1 w-full rounded border border-slate-700 bg-slate-900 px-3 py-2 text-sm text-white" /></label>
         <label className="text-xs text-slate-400">会社<select value={recordCompany} onChange={(e)=>setRecordCompany(e.target.value)} className="mt-1 w-full rounded border border-slate-700 bg-slate-900 px-3 py-2 text-sm text-white"><option value="">会社を選択</option>{companies.map(company=><option key={company.id} value={company.id}>{company.company_name}</option>)}</select></label>
+        {activeOpsTab === 'services' && <label className="text-xs text-slate-400">支援種別<select value={serviceType} onChange={(e)=>setServiceType(e.target.value as 'retainer'|'implementation_support')} className="mt-1 w-full rounded border border-slate-700 bg-slate-900 px-3 py-2 text-sm text-white"><option value="retainer">顧問</option><option value="implementation_support">構築支援</option></select></label>}
         {activeOpsTab !== 'services' && <label className="text-xs text-slate-400">金額<input type="number" min="0" value={recordAmount} onChange={(e)=>setRecordAmount(e.target.value)} className="mt-1 w-full rounded border border-slate-700 bg-slate-900 px-3 py-2 text-sm text-white" /></label>}
         <label className="text-xs text-slate-400">{activeOpsTab==='contracts'?'開始日':activeOpsTab==='invoices'?'支払期限':'次回面談'}<input type={activeOpsTab==='services'?'datetime-local':'date'} value={recordDate} onChange={(e)=>setRecordDate(e.target.value)} className="mt-1 w-full rounded border border-slate-700 bg-slate-900 px-3 py-2 text-sm text-white" /></label>
         <div className="md:col-span-2"><button className="rounded-lg bg-emerald-700 px-3 py-2 text-sm font-semibold text-white">保存</button></div>
       </form>}
-      {loading ? <p className="text-sm text-slate-400">読み込み中…</p> : records.length === 0 ? <p className="py-8 text-center text-sm text-slate-400">登録データはありません。</p> : <div className="overflow-x-auto"><table className="w-full text-left text-sm"><thead><tr className="border-b border-slate-800 text-xs text-slate-400"><th className="p-2">名称</th><th className="p-2">会社</th><th className="p-2">状態</th><th className="p-2">金額</th><th className="p-2">日付</th></tr></thead><tbody>{records.map((record)=><tr key={record.id} className="border-b border-slate-800/70 text-slate-200"><td className="p-2">{record.title || record.invoice_number}</td><td className="p-2">{record.company_id || '—'}</td><td className="p-2">{record.status}</td><td className="p-2">{record.amount == null?'—':Number(record.amount).toLocaleString('ja-JP')+'円'}</td><td className="p-2">{record.due_date || record.start_date || (record.next_meeting_at ? new Date(record.next_meeting_at).toLocaleString('ja-JP') : '—')}</td></tr>)}</tbody></table></div>}
+      {loading ? <p className="text-sm text-slate-400">読み込み中…</p> : records.length === 0 ? <p className="py-8 text-center text-sm text-slate-400">登録データはありません。</p> : <div className="overflow-x-auto"><table className="w-full text-left text-sm"><thead><tr className="border-b border-slate-800 text-xs text-slate-400"><th className="p-2">名称</th><th className="p-2">会社</th><th className="p-2">状態</th><th className="p-2">金額</th><th className="p-2">日付</th></tr></thead><tbody>{records.map((record)=><tr key={record.id} className="border-b border-slate-800/70 text-slate-200"><td className="p-2">{record.title || record.invoice_number}</td><td className="p-2">{record.company_id || '—'}</td><td className="p-2"><select aria-label={`${record.title||record.invoice_number}の状態`} value={record.status} onChange={(e)=>void updateOperationStatus(record,e.target.value)} className="rounded border border-slate-700 bg-slate-950 px-2 py-1 text-xs text-white">{(activeOpsTab==='contracts'?['draft','under_review','sent','signed','expired','canceled']:activeOpsTab==='invoices'?['draft','awaiting_approval','issued','paid','overdue','canceled']:['planned','active','paused','completed','canceled']).map(status=><option key={status} value={status}>{status}</option>)}</select></td><td className="p-2">{record.amount == null?'—':Number(record.amount).toLocaleString('ja-JP')+'円'}</td><td className="p-2">{record.due_date || record.start_date || (record.next_meeting_at ? new Date(record.next_meeting_at).toLocaleString('ja-JP') : '—')}</td></tr>)}</tbody></table></div>}
     </section>}
   </div>;
 };
