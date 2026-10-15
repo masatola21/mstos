@@ -1378,7 +1378,15 @@ function AppContent() {
 
         {currentTab === 'custom_lists' && <SalesOperationsWorkspace tab="segments" />}
 
-        {currentTab === 'customer_operations' && <SalesOperationsWorkspace tab="operations" />}
+        {currentTab === 'customer_operations' && (
+          <SalesOperationsWorkspace
+            tab="operations"
+            onOperationalRecordsChange={(nextContracts, nextInvoices) => {
+              setContracts(nextContracts);
+              setInvoices(nextInvoices);
+            }}
+          />
+        )}
 
         {currentTab === 'automations' && (
           <AutomationView
