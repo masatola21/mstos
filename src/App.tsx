@@ -166,7 +166,7 @@ function buildBoundedChatContext(messages: ChatMessage[]) {
 async function loadTaskRelatedContext(task: TaskItem): Promise<string> {
   const related = task.relatedRecord;
   if (!related?.id) return '';
-  const tableByType: Record<TaskRelatedRecordType, string> = {
+  const tableByType: Record<TaskRelatedRecordType, TableKey> = {
     company: 'companies', contact: 'contacts', prospect: 'prospects', lead: 'leads',
     deal: 'deals', customer: 'customers', product: 'products',
   };
@@ -187,7 +187,7 @@ async function loadTaskRelatedContext(task: TaskItem): Promise<string> {
     const fields = fieldsByType[related.type]
       .filter((key) => data[key] !== null && data[key] !== undefined && String(data[key]).trim())
       .map((key) => `${key}: ${String(data[key]).slice(0, 300)}`);
-    return [`関連先: ${related.label || related.type} (ID: ${related.id})`, ...fields].join('\\n').slice(0, 1800);
+    return [`関連先: ${related.label || related.type} (ID: ${related.id})`, ...fields].join('\n').slice(0, 1800);
   } catch {
     return '関連レコードは設定されていますが、現在の情報を取得できませんでした。';
   }
@@ -630,7 +630,7 @@ function AppContent() {
     const relatedRecordContext = await loadTaskRelatedContext(task);
     const prompt = [
       `担当タスク: ${task.title}`,
-      relatedRecordContext ? `関連する業務情報:\\n${relatedRecordContext}` : '',
+      relatedRecordContext ? `関連する業務情報:\n${relatedRecordContext}` : '',
       latestRejection?.resolutionNote ? `前回のレビュー指摘（今回反映してください）: ${latestRejection.resolutionNote}` : '',
       task.description ? `目的・背景: ${task.description}` : '',
       task.completionCriteria ? `完了条件: ${task.completionCriteria}` : '',
