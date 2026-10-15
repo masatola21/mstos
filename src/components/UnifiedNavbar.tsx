@@ -28,6 +28,7 @@ export type UnifiedNavTab =
   | 'mst_dashboard'
   | 'mst_diagnoses'
   | 'marketing_automation'
+  | 'line_friends'
   | 'custom_lists'
   | 'document_templates'
   | TableKey
@@ -246,6 +247,7 @@ export const UnifiedNavbar: React.FC<UnifiedNavbarProps> = ({
               <button onClick={() => onTabChange('mst_dashboard')} className={`px-3 py-1.5 rounded-lg whitespace-nowrap transition-colors ${currentTab === 'mst_dashboard' ? 'bg-blue-600 text-white font-semibold shadow-sm' : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800'}`}>📊 営業ダッシュボード</button>
               <button onClick={() => onTabChange('mst_diagnoses')} className={`px-3 py-1.5 rounded-lg whitespace-nowrap transition-colors flex items-center gap-1.5 ${currentTab === 'mst_diagnoses' ? 'bg-blue-600 text-white font-semibold shadow-sm' : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800'}`}><ClipboardList className="w-3.5 h-3.5 text-blue-400" /><span>診断管理</span></button>
               <button onClick={() => onTabChange('marketing_automation')} className={`px-3 py-1.5 rounded-lg whitespace-nowrap transition-colors flex items-center gap-1.5 ${currentTab === 'marketing_automation' ? 'bg-blue-600 text-white font-semibold shadow-sm' : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800'}`}><Zap className="w-3.5 h-3.5 text-amber-400" /><span>マーケティングオートメーション</span></button>
+              <button onClick={() => onTabChange('line_friends')} className={`px-3 py-1.5 rounded-lg whitespace-nowrap transition-colors flex items-center gap-1.5 ${currentTab === 'line_friends' ? 'bg-blue-600 text-white font-semibold shadow-sm' : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800'}`}><Users className="w-3.5 h-3.5 text-emerald-400" /><span>LINE友だち・タグ</span></button>
               {(Object.keys(TABLE_CONFIGS) as TableKey[]).map((key) => {
                 const cfg = TABLE_CONFIGS[key];
                 const isActive = currentTab === key;
