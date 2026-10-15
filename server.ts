@@ -77,6 +77,7 @@ function resolveChatModel(input: any) {
   const provider: AIProvider = ['groq', 'openrouter'].includes(input?.provider) ? input.provider : 'gemini';
   const defaults: Record<AIProvider, string> = { gemini: 'gemini-3.8-flash', groq: 'llama-3.3-70b-versatile', openrouter: 'meta-llama/llama-3.3-70b-instruct:free' };
   const model = typeof input?.model === 'string' && input.model.trim() ? input.model.trim().slice(0, 160) : defaults[provider];
+  if (provider === 'openrouter' && model !== 'openrouter/free' && !model.endsWith(':free')) throw new Error('OpenRouterの無料モデルID（openrouter/free または :free 付き）を指定してください。');
   const apiKey = provider === 'groq' ? process.env.GROQ_API_KEY : provider === 'openrouter' ? process.env.OPENROUTER_API_KEY : process.env.GEMINI_API_KEY;
   const endpoint = provider === 'groq' ? 'https://api.groq.com/openai/v1/chat/completions' : provider === 'openrouter' ? 'https://openrouter.ai/api/v1/chat/completions' : '';
   return { provider, model, apiKey, endpoint };
@@ -219,7 +220,7 @@ app.post('/api/chat', async (req, res) => {
 
 
     const providerLabel = selectedModel.provider;
-    const responseModel = selectedModel.provider + ':' + selectedModel.model;
+    const responseModel = selectedModel.provider === 'gemini' ? selectedModel.model : selectedModel.provider + ':' + selectedModel.model;
     const chatMessages = [{ role: 'system', content: systemInstruction }, ...contents.map((item) => ({ role: item.role === 'model' ? 'assistant' : 'user', content: item.parts[0].text }))];
     if (selectedModel.provider === 'gemini') {
       if (stream) {
