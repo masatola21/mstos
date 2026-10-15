@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { BookOpen, FilePlus2, Search, Trash2, Save } from 'lucide-react';
 import { KnowledgeCategory, KnowledgeItem } from '../types';
 
@@ -6,6 +6,7 @@ interface KnowledgeHubViewProps {
   items: KnowledgeItem[];
   onSave: (item: KnowledgeItem) => void;
   onDelete: (id: string) => void;
+  selectedItemId?: string | null;
 }
 
 const CATEGORIES: { id: KnowledgeCategory; label: string }[] = [
@@ -27,11 +28,21 @@ const blankItem = (): KnowledgeItem => ({
   updatedAt: Date.now(),
 });
 
-export const KnowledgeHubView: React.FC<KnowledgeHubViewProps> = ({ items, onSave, onDelete }) => {
+export const KnowledgeHubView: React.FC<KnowledgeHubViewProps> = ({ items, onSave, onDelete, selectedItemId }) => {
   const [activeCategory, setActiveCategory] = useState<KnowledgeCategory | 'all'>('all');
   const [query, setQuery] = useState('');
   const [editing, setEditing] = useState<KnowledgeItem | null>(null);
   const [tagText, setTagText] = useState('');
+
+  useEffect(() => {
+    if (!selectedItemId) return;
+    const selectedItem = items.find((item) => item.id === selectedItemId);
+    if (!selectedItem) return;
+    setActiveCategory('all');
+    setQuery('');
+    setEditing({ ...selectedItem });
+    setTagText(selectedItem.tags.join(', '));
+  }, [selectedItemId]);
 
   const visibleItems = useMemo(() => items.filter((item) => {
     const categoryMatches = activeCategory === 'all' || item.category === activeCategory;
