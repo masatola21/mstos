@@ -71,6 +71,15 @@ export interface TaskAssignee {
   name: string; // 表示名: "人間 (あなた)", "AI社長", "クロエ (テックコーチ)", "開発エージェント"
 }
 
+export interface TaskDraftArtifact {
+  title: string;
+  category: KnowledgeCategory;
+  content: string;
+  tags: string[];
+  createdAt: number;
+  sourceRoleId?: string;
+}
+
 export interface TaskItem {
   id: string;
   title: string;
@@ -82,7 +91,7 @@ export interface TaskItem {
   completionCriteria: string; // 完了条件
   resultNotes?: string; // 結果・成果メモ
   artifactUrl?: string; // 外部に保存した成果物へのリンク
-  knowledgeItemId?: string; // AIの実行成果を保存したナレッジ
+  knowledgeItemId?: string; // 承認後に正式登録されたナレッジ\n  draftArtifact?: TaskDraftArtifact; // 承認前のレビュー用成果物
   attachments?: WorkspaceAttachment[]; // タスクに直接添付したファイル
   sourceAutomationId?: string;
   createdAt: number;
