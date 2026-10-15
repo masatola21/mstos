@@ -358,6 +358,14 @@ function AppContent() {
     setMessages(history.length ? history : activeWorkModeId === 'president' ? loadChatHistory(id) : []);
   };
 
+  const handleSelectChatCharacter = (id: string) => {
+    setActiveCharacterId(id);
+    saveActiveCharacterId(id);
+    setActiveWorkModeId('president');
+    const history = loadChatHistory(`${id}:president`);
+    setMessages(history.length ? history : loadChatHistory(id));
+  };
+
   const handleUpdateCharacters = (newChars: CharacterConfig[]) => {
     setCharacters(newChars);
     saveCharacters(newChars);
@@ -1012,9 +1020,7 @@ function AppContent() {
         onOpenBackup={() => setIsBackupModalOpen(true)}
         onOpenProfile={() => setIsProfileModalOpen(true)}
         onOpenQuickDrawer={() => setIsQuickDrawerOpen(true)}
-        characters={characters}
         activeCharacter={activeCharacter}
-        onSelectCharacter={handleSelectCharacter}
         pendingApprovalsCount={approvals.filter((a) => a.status === 'pending').length}
       />
 
@@ -1135,13 +1141,14 @@ function AppContent() {
         {currentTab === 'ai_chat' && (
           <ChatView
             character={activeCharacter}
+            characters={characters}
+            onSelectCharacter={handleSelectChatCharacter}
             userProfile={userProfile}
             messages={messages}
             onSendMessage={handleSendMessage}
             selectedWorkModeId={activeWorkModeId}
             onSelectWorkMode={handleSelectWorkMode}
             onClearMessages={handleClearMessages}
-            onEditCharacter={() => setIsCharacterEditorOpen(true)}
             onUpdateUserProfile={handleUpdateUserProfile}
             isStreaming={isStreaming}
             onStopStreaming={handleStopStreaming}
@@ -1192,14 +1199,23 @@ function AppContent() {
 
         {currentTab === 'ai_presets' && (
           <PresetsView
-            onSelectAndChat={(preset) => {
-              handleSelectCharacter(preset.id);
+            characters={characters}
+            activeCharacterId={activeCharacterId}
+            activeWorkModeId={activeWorkModeId}
+            onSelectCharacter={(id) => {
+              handleSelectChatCharacter(id);
               setCurrentTab('ai_chat');
             }}
-            onDuplicateAndEdit={(preset) => {
-              handleDuplicateCharacter(preset);
+            onSelectWorkMode={(id) => {
+              handleSelectWorkMode(id);
+              setCurrentTab('ai_chat');
             }}
-            activeCharacterId={activeCharacterId}
+            onCreateCharacter={handleCreateNewCharacter}
+            onEditCharacter={(id) => {
+              handleSelectChatCharacter(id);
+              setIsCharacterEditorOpen(true);
+            }}
+            onDeleteCharacter={handleDeleteCharacter}
           />
         )}
       </main>
