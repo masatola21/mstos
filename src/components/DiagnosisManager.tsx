@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { DiagnosisFormsWorkspace } from './DiagnosisFormsWorkspace';
 import { Diagnosis, DiagnosisStatus, Company, Lead, AiReport } from '../types/database';
 import { 
   fetchDiagnosesList, 
@@ -89,7 +90,7 @@ const DIAGNOSIS_TYPE_LABELS: Record<string, string> = {
   quick: 'クイック簡易診断'
 };
 
-export const DiagnosisManager: React.FC<DiagnosisManagerProps> = ({ onOpenRls }) => {
+const DiagnosisRecordsView: React.FC<DiagnosisManagerProps> = ({ onOpenRls }) => {
   const [diagnoses, setDiagnoses] = useState<Diagnosis[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<DataFetchError | null>(null);
@@ -1081,6 +1082,26 @@ const DiagnosisDetailModal: React.FC<DiagnosisDetailModalProps> = ({
           </div>
         </div>
       </div>
+    </div>
+  );
+};
+
+
+export const DiagnosisManager: React.FC<DiagnosisManagerProps> = (props) => {
+  const [section, setSection] = useState<'forms' | 'diagnoses'>('forms');
+  return (
+    <div className="space-y-4">
+      <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-slate-800 bg-slate-900 p-3">
+        <div>
+          <h1 className="text-lg font-bold text-white">フォーム・診断</h1>
+          <p className="text-xs text-slate-400">フォーム設定・受付回答と、社内診断・レポートを一つの管理領域にまとめます。</p>
+        </div>
+        <div className="flex gap-2">
+          <button onClick={() => setSection('forms')} className={`rounded-lg px-3 py-2 text-sm ${section === 'forms' ? 'bg-blue-600 text-white' : 'text-slate-300 hover:bg-slate-800'}`}>フォーム・回答</button>
+          <button onClick={() => setSection('diagnoses')} className={`rounded-lg px-3 py-2 text-sm ${section === 'diagnoses' ? 'bg-blue-600 text-white' : 'text-slate-300 hover:bg-slate-800'}`}>診断・レポート</button>
+        </div>
+      </div>
+      {section === 'forms' ? <DiagnosisFormsWorkspace /> : <DiagnosisRecordsView {...props} />}
     </div>
   );
 };
