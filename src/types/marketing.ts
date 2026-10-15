@@ -7,6 +7,7 @@ export type MarketingTrigger =
   | 'manual';
 
 export type MarketingChannel = 'line' | 'email' | 'both';
+export type MarketingLineMessageType = 'text' | 'image' | 'flex';
 export type MarketingScenarioStatus = 'draft' | 'prepared';
 
 export interface MarketingScenario {
@@ -18,6 +19,15 @@ export interface MarketingScenario {
   waitMinutes: number;
   emailSubject: string;
   messageBody: string;
+  emailBody: string;
+  lineMessageType: MarketingLineMessageType;
+  lineImageUrl: string;
+  linePreviewImageUrl: string;
+  flexAltText: string;
+  flexTitle: string;
+  flexBody: string;
+  flexButtonLabel: string;
+  flexButtonUrl: string;
   status: MarketingScenarioStatus;
   updatedAt: number;
 }
