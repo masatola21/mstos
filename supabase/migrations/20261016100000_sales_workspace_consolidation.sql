@@ -59,8 +59,11 @@ CREATE TABLE IF NOT EXISTS public.customer_invoices (
   company_id text REFERENCES public.companies(id) ON DELETE SET NULL,
   contact_id uuid REFERENCES public.contacts(id) ON DELETE SET NULL,
   contract_id uuid REFERENCES public.customer_contracts(id) ON DELETE SET NULL,
+  product_id text, -- Matrix product ID; product master is currently persisted in workspace state
   document_id uuid REFERENCES public.customer_documents(id) ON DELETE SET NULL,
   amount numeric(14,2) NOT NULL DEFAULT 0,
+  tax_amount numeric(14,2),
+  notes text,
   issue_date date,
   due_date date,
   paid_at date,
