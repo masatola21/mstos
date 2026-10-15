@@ -17,6 +17,7 @@ import {
   ArrowRight,
   ShieldCheck,
   FileEdit,
+  Loader2,
 } from 'lucide-react';
 import {
   TaskItem,
@@ -29,16 +30,20 @@ import {
   ActivityLog,
 } from '../types';
 import { ApprovalsView } from './ApprovalsView';
+import { AI_WORK_MODES, AIWorkModeId, RoleAIOverrides, resolveWorkMode } from '../../data/aiWorkModes';
 
 interface TasksViewProps {
   tasks: TaskItem[];
   projects: Project[];
   characters: CharacterConfig[];
+  roleOverrides: RoleAIOverrides;
   selectedProjectId?: string | null;
   onClearProjectFilter?: () => void;
   onCreateTask: (task: Omit<TaskItem, 'id' | 'createdAt' | 'updatedAt'>) => void;
   onUpdateTask: (task: TaskItem) => void;
   onDeleteTask: (id: string) => void;
+  onRunTask: (task: TaskItem) => Promise<void>;
+  onOpenKnowledgeItem: (id: string) => void;
   onRequestApproval: (task: TaskItem, reason: string) => void;
   approvals: ApprovalItem[];
   activityLogs: ActivityLog[];
@@ -51,11 +56,14 @@ export const TasksView: React.FC<TasksViewProps> = ({
   tasks,
   projects,
   characters,
+  roleOverrides,
   selectedProjectId,
   onClearProjectFilter,
   onCreateTask,
   onUpdateTask,
   onDeleteTask,
+  onRunTask,
+  onOpenKnowledgeItem,
   onRequestApproval,
   approvals,
   activityLogs,
@@ -85,6 +93,8 @@ export const TasksView: React.FC<TasksViewProps> = ({
   const [assigneeType, setAssigneeType] = useState<string>('human');
   const [completionCriteria, setCompletionCriteria] = useState('');
   const [resultNotes, setResultNotes] = useState('');
+  const [artifactUrl, setArtifactUrl] = useState('');
+  const [runningTaskIds, setRunningTaskIds] = useState<Set<string>>(() => new Set());
 
   // Approval Request Modal State
   const [approvalModalTask, setApprovalModalTask] = useState<TaskItem | null>(null);
@@ -100,6 +110,7 @@ export const TasksView: React.FC<TasksViewProps> = ({
     setAssigneeType('human');
     setCompletionCriteria('');
     setResultNotes('');
+    setArtifactUrl('');
     setIsModalOpen(true);
   };
 
@@ -110,9 +121,10 @@ export const TasksView: React.FC<TasksViewProps> = ({
     setProjectId(t.projectId);
     setPriority(t.priority);
     setStatus(t.status);
-    setAssigneeType(t.assignee.type === 'custom_ai' ? t.assignee.id || 'custom_ai' : t.assignee.type);
+    setAssigneeType(t.assignee.type === 'custom_ai' ? t.assignee.id || 'human' : t.assignee.type === 'role_ai' || t.assignee.type === 'ai_ceo' ? `role:${t.assignee.workModeId || 'president'}` : t.assignee.type);
     setCompletionCriteria(t.completionCriteria || '');
     setResultNotes(t.resultNotes || '');
+    setArtifactUrl(t.artifactUrl || '');
     setIsModalOpen(true);
   };
 
@@ -120,6 +132,14 @@ export const TasksView: React.FC<TasksViewProps> = ({
     if (rawVal === 'human') return { type: 'human', name: '人間 (あなた)' };
     if (rawVal === 'ai_ceo') return { type: 'ai_ceo', name: 'AI社長' };
     if (rawVal === 'dev_agent') return { type: 'dev_agent', name: '開発エージェント' };
+    if (rawVal.startsWith('role:')) {
+      const workModeId = rawVal.slice('role:'.length) as AIWorkModeId;
+      const mode = AI_WORK_MODES.find((item) => item.id === workModeId);
+      if (mode) {
+        const resolved = resolveWorkMode(mode, roleOverrides);
+        return { type: 'role_ai', workModeId, name: `${resolved.name}（${resolved.label}）` };
+      }
+    }
     const foundChar = characters.find((c) => c.id === rawVal);
     if (foundChar) {
       return { type: 'custom_ai', id: foundChar.id, name: foundChar.name };
@@ -150,6 +170,7 @@ export const TasksView: React.FC<TasksViewProps> = ({
         assignee,
         completionCriteria: completionCriteria.trim(),
         resultNotes: resultNotes.trim(),
+        artifactUrl: artifactUrl.trim(),
         updatedAt: Date.now(),
       });
     } else {
@@ -162,6 +183,7 @@ export const TasksView: React.FC<TasksViewProps> = ({
         assignee,
         completionCriteria: completionCriteria.trim(),
         resultNotes: resultNotes.trim(),
+        artifactUrl: artifactUrl.trim(),
       });
     }
     setIsModalOpen(false);
@@ -186,12 +208,28 @@ export const TasksView: React.FC<TasksViewProps> = ({
     setApprovalModalTask(null);
   };
 
+  const runTask = async (task: TaskItem) => {
+    setRunningTaskIds((current) => new Set(current).add(task.id));
+    try {
+      await onRunTask(task);
+    } catch (error) {
+      alert(error instanceof Error ? error.message : 'AIの実行に失敗しました。');
+    } finally {
+      setRunningTaskIds((current) => {
+        const next = new Set(current);
+        next.delete(task.id);
+        return next;
+      });
+    }
+  };
+
   const filteredTasks = tasks.filter((t) => {
     if (filterProject !== 'all' && t.projectId !== filterProject) return false;
     if (filterStatus !== 'all' && t.status !== filterStatus) return false;
     if (filterAssignee !== 'all') {
       if (filterAssignee === 'human' && t.assignee.type !== 'human') return false;
       if (filterAssignee === 'ai_ceo' && t.assignee.type !== 'ai_ceo') return false;
+      if (filterAssignee === 'role_ai' && t.assignee.type !== 'role_ai') return false;
       if (filterAssignee === 'dev_agent' && t.assignee.type !== 'dev_agent') return false;
       if (filterAssignee === 'custom_ai' && t.assignee.type !== 'custom_ai') return false;
     }
@@ -257,6 +295,12 @@ export const TasksView: React.FC<TasksViewProps> = ({
         return (
           <span className="flex items-center gap-1 px-2 py-0.5 rounded-md text-[11px] bg-purple-950/70 text-purple-300 border border-purple-500/40">
             <Bot className="w-3 h-3 text-purple-400" /> {assignee.name}
+          </span>
+        );
+      case 'role_ai':
+        return (
+          <span className="flex items-center gap-1 px-2 py-0.5 rounded-md text-[11px] bg-violet-950/70 text-violet-300 border border-violet-500/40">
+            <Bot className="w-3 h-3 text-violet-400" /> {assignee.name}
           </span>
         );
     }
@@ -353,6 +397,7 @@ export const TasksView: React.FC<TasksViewProps> = ({
             <option value="all">全担当</option>
             <option value="human">👤 人間 (あなた)</option>
             <option value="ai_ceo">👔 AI社長</option>
+            <option value="role_ai">🧭 役割AI</option>
             <option value="dev_agent">⚙️ 開発エージェント</option>
             <option value="custom_ai">🤖 登録専門AI</option>
           </select>
@@ -458,7 +503,7 @@ export const TasksView: React.FC<TasksViewProps> = ({
                 </div>
 
                 {/* Completion Criteria & Result Notes */}
-                {(task.completionCriteria || task.resultNotes) && (
+                {(task.completionCriteria || task.resultNotes || task.artifactUrl || task.knowledgeItemId) && (
                   <div className="p-3 rounded-xl bg-slate-950 border border-slate-800/80 text-xs space-y-1.5">
                     {task.completionCriteria && (
                       <div className="flex items-start gap-1.5 text-slate-300">
@@ -472,6 +517,16 @@ export const TasksView: React.FC<TasksViewProps> = ({
                         <span>{task.resultNotes}</span>
                       </div>
                     )}
+                    {task.knowledgeItemId && (
+                      <button type="button" onClick={() => onOpenKnowledgeItem(task.knowledgeItemId!)} className="text-[11px] font-semibold text-indigo-300 hover:text-indigo-200">
+                        保存した成果物をナレッジで開く →
+                      </button>
+                    )}
+                    {task.artifactUrl && (
+                      <a href={task.artifactUrl} target="_blank" rel="noreferrer" className="block text-[11px] font-semibold text-cyan-300 hover:text-cyan-200">
+                        外部成果物を開く →
+                      </a>
+                    )}
                   </div>
                 )}
 
@@ -483,6 +538,17 @@ export const TasksView: React.FC<TasksViewProps> = ({
 
                   <div className="flex items-center gap-1.5 flex-wrap">
                     <span className="text-[11px] text-slate-400 mr-1">状態変更:</span>
+                    {(task.assignee.type === 'role_ai' || task.assignee.type === 'ai_ceo' || task.assignee.type === 'custom_ai') && (
+                      <button
+                        type="button"
+                        disabled={runningTaskIds.has(task.id)}
+                        onClick={() => void runTask(task)}
+                        className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-indigo-950/70 hover:bg-indigo-900/70 disabled:opacity-50 text-indigo-200 border border-indigo-500/30 text-[11px] font-semibold cursor-pointer"
+                      >
+                        {runningTaskIds.has(task.id) ? <Loader2 className="w-3 h-3 animate-spin" /> : <Bot className="w-3 h-3" />}
+                        {runningTaskIds.has(task.id) ? '実行中…' : '担当AIに依頼'}
+                      </button>
+                    )}
                     {task.status !== 'in_progress' && (
                       <button
                         type="button"
@@ -603,8 +669,14 @@ export const TasksView: React.FC<TasksViewProps> = ({
                     className="w-full rounded-xl bg-slate-950 border border-slate-800 px-3 py-2 text-xs text-slate-100 focus:outline-none focus:border-indigo-500 cursor-pointer"
                   >
                     <option value="human">👤 人間 (あなた)</option>
-                    <option value="ai_ceo">👔 AI社長 (シドウ)</option>
                     <option value="dev_agent">⚙️ 開発エージェント</option>
+                    <optgroup label="役割AI">
+                      {AI_WORK_MODES.map((mode) => {
+                        const resolved = resolveWorkMode(mode, roleOverrides);
+                        return <option key={mode.id} value={`role:${mode.id}`}>{resolved.avatarEmoji} {resolved.name}（{resolved.label}）</option>;
+                      })}
+                    </optgroup>
+                    <optgroup label="登録済みAI">
                     {characters
                       .filter((c) => c.id !== 'preset-ceo')
                       .map((c) => (
@@ -612,6 +684,7 @@ export const TasksView: React.FC<TasksViewProps> = ({
                           {c.avatarEmoji || '🤖'} {c.name} ({c.role})
                         </option>
                       ))}
+                    </optgroup>
                   </select>
                 </div>
 
@@ -673,6 +746,17 @@ export const TasksView: React.FC<TasksViewProps> = ({
                   onChange={(e) => setResultNotes(e.target.value)}
                   placeholder="実行結果、成果物へのリンク、留意点など"
                   className="w-full rounded-xl bg-slate-950 border border-slate-800 p-2 text-xs text-slate-100 focus:outline-none focus:border-indigo-500"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-slate-300 mb-1">外部成果物URL（Drive等）</label>
+                <input
+                  type="url"
+                  value={artifactUrl}
+                  onChange={(e) => setArtifactUrl(e.target.value)}
+                  placeholder="https://..."
+                  className="w-full rounded-xl bg-slate-950 border border-slate-800 px-3 py-2 text-xs text-slate-100 focus:outline-none focus:border-indigo-500"
                 />
               </div>
             </div>
@@ -767,3 +851,4 @@ export const TasksView: React.FC<TasksViewProps> = ({
     </div>
   );
 };
+
