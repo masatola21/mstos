@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
   CheckSquare,
   Plus,
@@ -25,7 +25,10 @@ import {
   TaskStatus,
   Priority,
   TaskAssignee,
+  ApprovalItem,
+  ActivityLog,
 } from '../types';
+import { ApprovalsView } from './ApprovalsView';
 
 interface TasksViewProps {
   tasks: TaskItem[];
@@ -37,6 +40,11 @@ interface TasksViewProps {
   onUpdateTask: (task: TaskItem) => void;
   onDeleteTask: (id: string) => void;
   onRequestApproval: (task: TaskItem, reason: string) => void;
+  approvals: ApprovalItem[];
+  activityLogs: ActivityLog[];
+  onResolveApproval: (id: string, status: 'approved' | 'rejected', note?: string) => void;
+  initialSection?: 'tasks' | 'approvals' | 'logs';
+  onSectionChange?: (section: 'tasks' | 'approvals' | 'logs') => void;
 }
 
 export const TasksView: React.FC<TasksViewProps> = ({
@@ -49,7 +57,18 @@ export const TasksView: React.FC<TasksViewProps> = ({
   onUpdateTask,
   onDeleteTask,
   onRequestApproval,
+  approvals,
+  activityLogs,
+  onResolveApproval,
+  initialSection = 'tasks',
+  onSectionChange,
 }) => {
+  const [activeSection, setActiveSection] = useState<'tasks' | 'approvals' | 'logs'>(initialSection);
+  useEffect(() => setActiveSection(initialSection), [initialSection]);
+  const selectSection = (section: 'tasks' | 'approvals' | 'logs') => {
+    setActiveSection(section);
+    onSectionChange?.(section);
+  };
   const [filterProject, setFilterProject] = useState<string>(selectedProjectId || 'all');
   const [filterStatus, setFilterStatus] = useState<string>('all');
   const [filterAssignee, setFilterAssignee] = useState<string>('all');
@@ -252,23 +271,41 @@ export const TasksView: React.FC<TasksViewProps> = ({
             <CheckSquare className="w-5 h-5" />
           </div>
           <div>
-            <h1 className="text-lg font-extrabold text-white">タスク管理</h1>
+            <h1 className="text-lg font-extrabold text-white">タスク</h1>
             <p className="text-xs text-slate-400 mt-0.5">
               各タスクの担当（人間 / AI社長 / 登録AI / 開発エージェント）と進捗状態を管理
             </p>
           </div>
         </div>
 
-        <button
+        {activeSection === 'tasks' && <button
           type="button"
           onClick={openCreateModal}
           className="flex items-center gap-1.5 px-4 py-2 rounded-xl bg-gradient-to-r from-indigo-500 to-purple-600 hover:from-indigo-600 hover:to-purple-700 text-white text-xs font-bold transition-all shadow-md shadow-indigo-500/20 cursor-pointer"
         >
           <Plus className="w-3.5 h-3.5" />
           <span>新規タスクを作成</span>
-        </button>
+        </button>}
       </div>
 
+      <div className="flex flex-wrap gap-2 border-b border-slate-800 pb-3">
+        {([
+          { id: 'tasks', label: `タスク (${tasks.length})` },
+          { id: 'approvals', label: `承認待ち・判断 (${approvals.filter((item) => item.status === 'pending').length})` },
+          { id: 'logs', label: `活動履歴 (${activityLogs.length})` },
+        ] as const).map((section) => (
+          <button
+            key={section.id}
+            type="button"
+            onClick={() => selectSection(section.id)}
+            className={`px-3 py-2 rounded-xl text-xs font-bold transition-colors ${activeSection === section.id ? 'bg-indigo-600 text-white' : 'bg-slate-900 text-slate-400 hover:text-slate-200 border border-slate-800'}`}
+          >
+            {section.label}
+          </button>
+        ))}
+      </div>
+
+      {activeSection === 'tasks' && <>
       {/* Filter Bar */}
       <div className="p-4 rounded-2xl bg-slate-900/70 border border-slate-800 flex flex-wrap items-center gap-3 text-xs">
         {/* Project selector */}
@@ -715,6 +752,17 @@ export const TasksView: React.FC<TasksViewProps> = ({
             </div>
           </div>
         </div>
+      )}
+      </>}
+
+      {(activeSection === 'approvals' || activeSection === 'logs') && (
+        <ApprovalsView
+          approvals={approvals}
+          activityLogs={activityLogs}
+          onResolveApproval={onResolveApproval}
+          initialTab={activeSection === 'logs' ? 'logs' : 'approvals'}
+          embedded
+        />
       )}
     </div>
   );

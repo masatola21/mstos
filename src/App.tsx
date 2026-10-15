@@ -17,7 +17,6 @@ import { ChatView } from './components/ai-president/ChatView';
 import { KnowledgeHubView } from './components/ai-president/KnowledgeHubView';
 import { ProjectsView } from './components/ai-president/ProjectsView';
 import { TasksView } from './components/ai-president/TasksView';
-import { ApprovalsView } from './components/ai-president/ApprovalsView';
 import { PresetsView } from './components/ai-president/PresetsView';
 import { CharacterEditor } from './components/ai-president/CharacterEditor';
 import { UserProfileEditor } from './components/ai-president/UserProfileEditor';
@@ -194,6 +193,7 @@ function AppContent() {
   const [isQuickDrawerOpen, setIsQuickDrawerOpen] = useState(false);
   const [activePlanForModal, setActivePlanForModal] = useState<ProposedPlan | null>(null);
   const [selectedProjectIdForTasks, setSelectedProjectIdForTasks] = useState<string | null>(null);
+  const [selectedTaskWorkspaceSection, setSelectedTaskWorkspaceSection] = useState<'tasks' | 'approvals' | 'logs'>('tasks');
 
   // Matrix & Product States
   const [products, setProducts] = useState<ManagedProduct[]>(() => matrixService.loadProducts());
@@ -1016,7 +1016,10 @@ function AppContent() {
       {/* Unified Navigation Bar */}
       <UnifiedNavbar
         currentTab={currentTab}
-        onTabChange={(tab) => setCurrentTab(tab)}
+        onTabChange={(tab) => {
+          if (tab === 'ai_tasks') setSelectedTaskWorkspaceSection('tasks');
+          setCurrentTab(tab);
+        }}
         onOpenConfig={() => setIsConfigOpen(true)}
         onOpenRls={() => setIsRlsOpen(true)}
         onOpenPricing={() => setIsPricingModalOpen(true)}
@@ -1131,8 +1134,13 @@ function AppContent() {
             onNavigateTab={(tab) => {
               if (tab === 'chat') setCurrentTab('ai_chat');
               else if (tab === 'projects') setCurrentTab('ai_projects');
-              else if (tab === 'tasks') setCurrentTab('ai_tasks');
-              else if (tab === 'approvals') setCurrentTab('ai_approvals');
+              else if (tab === 'tasks') {
+                setSelectedTaskWorkspaceSection('tasks');
+                setCurrentTab('ai_tasks');
+              } else if (tab === 'approvals') {
+                setSelectedTaskWorkspaceSection('approvals');
+                setCurrentTab('ai_tasks');
+              }
               else if (tab === 'presets') setCurrentTab('ai_presets');
               else setCurrentTab(tab as any);
             }}
@@ -1173,6 +1181,7 @@ function AppContent() {
             onDeleteProject={handleDeleteProject}
             onNavigateToTasksWithFilter={(projId) => {
               setSelectedProjectIdForTasks(projId);
+              setSelectedTaskWorkspaceSection('tasks');
               setCurrentTab('ai_tasks');
             }}
           />
@@ -1189,14 +1198,11 @@ function AppContent() {
             onUpdateTask={handleUpdateTask}
             onDeleteTask={handleDeleteTask}
             onRequestApproval={handleRequestApproval}
-          />
-        )}
-
-        {currentTab === 'ai_approvals' && (
-          <ApprovalsView
             approvals={approvals}
             activityLogs={activityLogs}
             onResolveApproval={handleResolveApproval}
+            initialSection={selectedTaskWorkspaceSection}
+            onSectionChange={setSelectedTaskWorkspaceSection}
           />
         )}
 
@@ -1210,7 +1216,8 @@ function AppContent() {
               setCurrentTab('ai_chat');
             }}
             onSelectWorkMode={(id) => {
-              handleSelectWorkMode(id);
+              if (id === 'president') handleSelectChatCharacter('preset-ceo');
+              else handleSelectWorkMode(id);
               setCurrentTab('ai_chat');
             }}
             onCreateCharacter={handleCreateNewCharacter}

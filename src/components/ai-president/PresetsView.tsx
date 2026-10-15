@@ -25,8 +25,8 @@ export const PresetsView: React.FC<PresetsViewProps> = ({
   onEditCharacter,
   onDeleteCharacter,
 }) => {
-  const roleModes = AI_WORK_MODES.filter((mode) => mode.id !== 'president');
-  const registeredCharacters = characters.filter((character) => character.id !== 'preset-ceo');
+  const roleModes = AI_WORK_MODES;
+  const registeredCharacters = (Array.isArray(characters) ? characters : []).filter((character) => character && character.id !== 'preset-ceo');
 
   return (
     <div className="max-w-6xl mx-auto px-4 py-6 space-y-6">
@@ -54,7 +54,7 @@ export const PresetsView: React.FC<PresetsViewProps> = ({
 
       <section className="space-y-3">
         <div className="flex items-center gap-2">
-          <BriefcaseBusiness className="w-4 h-4 text-indigo-300" />
+          <Briefcase className="w-4 h-4 text-indigo-300" />
           <h2 className="text-sm font-bold text-white">役割AI</h2>
           <span className="text-[11px] text-slate-500">選ぶとチャットの担当が切り替わります</span>
         </div>

@@ -227,13 +227,13 @@ export const ChatView: React.FC<ChatViewProps> = ({
   };
 
   return (
-    <div className="flex flex-col h-[calc(100vh-61px)] bg-slate-950">
+    <div className="flex flex-col h-[calc(100vh-180px)] min-h-[420px] bg-slate-950">
       {/* Character Profile Top Banner */}
-      <div className="border-b border-slate-800/80 bg-slate-900/60 px-4 py-2.5 backdrop-blur-sm">
-        <div className="max-w-4xl mx-auto flex items-center justify-between gap-3">
+      <div className="border-b border-slate-800/80 bg-slate-900/60 px-4 py-1.5 backdrop-blur-sm">
+        <div className="max-w-4xl mx-auto flex items-center justify-between gap-2">
           <div className="flex items-center gap-3 min-w-0">
             <div
-              className={`w-11 h-11 rounded-2xl bg-gradient-to-tr ${scheme.bgGradient} flex items-center justify-center text-2xl shadow-lg ${scheme.glow} border border-white/10 shrink-0`}
+              className={`w-9 h-9 rounded-xl bg-gradient-to-tr ${scheme.bgGradient} flex items-center justify-center text-2xl shadow-lg ${scheme.glow} border border-white/10 shrink-0`}
             >
               {character.avatarEmoji || '🤖'}
             </div>
@@ -297,29 +297,30 @@ export const ChatView: React.FC<ChatViewProps> = ({
         </div>
 
         {/* Unified assigned AI selector */}
-      <div className="border-b border-slate-800/70 bg-slate-950 px-4 py-2">
-        <div className="max-w-4xl mx-auto flex flex-wrap items-center gap-2">
+      <div className="border-b border-slate-800/70 bg-slate-950 px-4 py-1">
+        <div className="max-w-4xl mx-auto flex flex-wrap items-center gap-1.5">
           <label htmlFor="ai-work-mode" className="shrink-0 text-xs font-bold text-indigo-300">
             担当AI
           </label>
           <select
             id="ai-work-mode"
-            value={selectedWorkModeId === 'president' ? `character:${character.id}` : `mode:${selectedWorkModeId}`}
+            value={selectedWorkModeId === 'president' && character.id === 'preset-ceo' ? 'mode:president' : selectedWorkModeId === 'president' ? `character:${character.id}` : `mode:${selectedWorkModeId}`}
             onChange={(event) => {
               const [kind, id] = event.target.value.split(':', 2);
-              if (kind === 'mode') onSelectWorkMode(id as AIWorkModeId);
+              if (kind === 'mode' && id === 'president') onSelectCharacter('preset-ceo');
+              else if (kind === 'mode') onSelectWorkMode(id as AIWorkModeId);
               else if (kind === 'character') onSelectCharacter(id);
             }}
             disabled={isStreaming}
-            className="max-w-full sm:max-w-72 rounded-lg border border-slate-700 bg-slate-900 px-3 py-1.5 text-xs font-semibold text-white focus:outline-none focus:border-indigo-500 disabled:opacity-50"
+            className="max-w-full sm:max-w-72 rounded-lg border border-slate-700 bg-slate-900 px-2.5 py-1 text-[11px] font-semibold text-white focus:outline-none focus:border-indigo-500 disabled:opacity-50"
           >
             <optgroup label="専門の役割">
-              {AI_WORK_MODES.filter((mode) => mode.id !== 'president').map((mode) => (
+              {AI_WORK_MODES.map((mode) => (
                 <option key={mode.id} value={`mode:${mode.id}`}>{mode.avatarEmoji} {mode.name}｜{mode.label}</option>
               ))}
             </optgroup>
             <optgroup label="登録済みAI">
-              {characters.map((registeredCharacter) => (
+              {characters.filter((registeredCharacter) => registeredCharacter.id !== 'preset-ceo').map((registeredCharacter) => (
                 <option key={registeredCharacter.id} value={`character:${registeredCharacter.id}`}>
                   {registeredCharacter.avatarEmoji} {registeredCharacter.name}｜{registeredCharacter.role}
                 </option>
@@ -346,14 +347,14 @@ export const ChatView: React.FC<ChatViewProps> = ({
       </div>
 
       {/* Messages Scroll Area */}
-      <div className="flex-1 overflow-y-auto px-3 sm:px-6 py-6 space-y-6">
-        <div className="max-w-4xl mx-auto space-y-6">
+      <div className="flex-1 min-h-0 overflow-y-auto px-3 sm:px-6 py-3 space-y-4">
+        <div className="max-w-4xl mx-auto space-y-4">
           {/* Welcome Card & Greeting */}
           {messages.length === 0 && (
-            <div className="space-y-6 py-6 animate-in fade-in slide-in-from-bottom-2 duration-300">
-              <div className="p-6 rounded-3xl bg-gradient-to-b from-slate-900/90 to-slate-900/40 border border-slate-800 text-center shadow-xl">
+            <div className="space-y-4 py-3 animate-in fade-in slide-in-from-bottom-2 duration-300">
+              <div className="p-4 rounded-2xl bg-gradient-to-b from-slate-900/90 to-slate-900/40 border border-slate-800 text-center shadow-xl">
                 <div
-                  className={`w-16 h-16 rounded-3xl bg-gradient-to-tr ${scheme.bgGradient} flex items-center justify-center text-4xl shadow-xl ${scheme.glow} mx-auto mb-4 border border-white/20`}
+                  className={`w-12 h-12 rounded-2xl bg-gradient-to-tr ${scheme.bgGradient} flex items-center justify-center text-3xl shadow-xl ${scheme.glow} mx-auto mb-4 border border-white/20`}
                 >
                   {selectedWorkModeId === 'president' ? character.avatarEmoji || '🤖' : selectedWorkMode.avatarEmoji}
                 </div>
@@ -391,7 +392,7 @@ export const ChatView: React.FC<ChatViewProps> = ({
                 </>}
 
                 {/* Greeting Speech Bubble */}
-                <div className="p-4 rounded-2xl bg-slate-800/80 border border-slate-700/70 text-left max-w-xl mx-auto shadow-md">
+                <div className="p-3 rounded-xl bg-slate-800/80 border border-slate-700/70 text-left max-w-xl mx-auto shadow-md">
                   <div className="text-xs font-semibold text-indigo-400 mb-1 flex items-center gap-1">
                     <Sparkles className="w-3.5 h-3.5" />
                     <span>{selectedWorkModeId === 'president' ? character.name : selectedWorkMode.name} からのメッセージ</span>
@@ -443,7 +444,7 @@ export const ChatView: React.FC<ChatViewProps> = ({
 
                 <div className={`max-w-[88%] sm:max-w-[78%] group relative`}>
                   <div
-                    className={`p-4 rounded-2xl shadow-md ${
+                    className={`p-3 rounded-xl shadow-md ${
                       isUser
                         ? 'bg-gradient-to-r from-indigo-600 to-indigo-700 text-white rounded-tr-xs'
                         : 'bg-slate-900 border border-slate-800/90 text-slate-200 rounded-tl-xs'
@@ -516,8 +517,8 @@ export const ChatView: React.FC<ChatViewProps> = ({
       </div>
 
       {/* Input Box Bottom Bar */}
-      <div className="border-t border-slate-800/80 bg-slate-900/90 p-3 sm:p-4 backdrop-blur-md">
-        <div className="max-w-4xl mx-auto space-y-2">
+      <div className="border-t border-slate-800/80 bg-slate-900/90 p-2 sm:p-3 backdrop-blur-md">
+        <div className="max-w-4xl mx-auto space-y-1.5">
           {/* Quick AI President Action Chips */}
           <div className="flex items-center gap-1.5 overflow-x-auto pb-1 text-[11px] no-scrollbar">
             <span className="text-slate-400 shrink-0 font-semibold">クイック指示:</span>
