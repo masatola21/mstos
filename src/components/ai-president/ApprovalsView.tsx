@@ -127,6 +127,7 @@ export const ApprovalsView: React.FC<ApprovalsViewProps> = ({
             <div className="space-y-3">
               {filteredApprovals.map((item) => {
                 const relatedTask = item.taskId ? tasks.find((task) => task.id === item.taskId) : undefined;
+                const reviewArtifact = item.reviewArtifact || relatedTask?.draftArtifact;
                 return (
                 <div
                   key={item.id}
@@ -172,14 +173,14 @@ export const ApprovalsView: React.FC<ApprovalsViewProps> = ({
                     )}
                   </div>
 
-                  {relatedTask?.draftArtifact && (
+                  {reviewArtifact && (
                     <section className="rounded-xl border border-indigo-500/30 bg-slate-950 overflow-hidden">
                       <div className="px-3 py-2 border-b border-slate-800 flex flex-wrap items-center justify-between gap-2">
                         <h3 className="text-xs font-bold text-indigo-300">担当AIの成果物（承認前）</h3>
-                        <span className="text-[10px] text-slate-400">{relatedTask.draftArtifact.category}</span>
+                        <span className="text-[10px] text-slate-400">{reviewArtifact.category}</span>
                       </div>
                       <div className="max-h-[520px] overflow-y-auto p-4 text-sm text-slate-200 whitespace-pre-wrap break-words">
-                        {relatedTask.draftArtifact.content}
+                        {reviewArtifact.content}
                       </div>
                       {item.status === 'pending' && (
                         <p className="px-3 py-2 border-t border-slate-800 text-[11px] text-slate-400">
