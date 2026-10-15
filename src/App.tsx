@@ -50,6 +50,7 @@ import {
   ApiUsageData,
   KnowledgeItem,
 } from './types';
+import { MarketingScenario } from './types/marketing';
 import {
   loadCharacters,
   saveCharacters,
@@ -78,6 +79,7 @@ import {
   saveTokenUsageRecords,
   recordTokenUsage,
 } from './utils/storage';
+import { loadMarketingScenarios, saveMarketingScenarios } from './utils/marketingStorage';
 import { PRESET_CHARACTERS } from './data/presets';
 import { getAIWorkMode, AIWorkModeId } from './data/aiWorkModes';
 import { matrixService } from './services/matrixService';
@@ -203,6 +205,7 @@ function AppContent() {
   const [tools, setTools] = useState<ManagedToolAsset[]>(() => matrixService.loadTools());
   const [customLists, setCustomLists] = useState<CustomListDefinition[]>(() => matrixService.loadCustomLists());
   const [automations, setAutomations] = useState<AutomationRule[]>(() => matrixService.loadAutomations());
+  const [marketingScenarios, setMarketingScenarios] = useState<MarketingScenario[]>(() => loadMarketingScenarios());
 
   // AI社長とMatrixのデータをユーザー単位でSupabaseに同期し、初回は既存LocalStorageを移行する。
   useEffect(() => {
@@ -230,6 +233,7 @@ function AppContent() {
         setTools(data.tools);
         setCustomLists(data.customLists);
         setAutomations(data.automations);
+        setMarketingScenarios(data.marketingScenarios || []);
         setKnowledgeItems(data.knowledgeItems || []);
         setWorkModeHistories(data.workModeHistories || {});
         const initialChatKey = `${activeCharacterId}:${activeWorkModeId}`;
@@ -268,6 +272,7 @@ function AppContent() {
       tools,
       customLists,
       automations,
+      marketingScenarios,
       workModeHistories,
       knowledgeItems,
     };
@@ -307,6 +312,7 @@ function AppContent() {
     tools,
     customLists,
     automations,
+    marketingScenarios,
     workModeHistories,
     knowledgeItems,
   ]);
@@ -1122,7 +1128,7 @@ function AppContent() {
         )}
 
         {currentTab === 'marketing_automation' && (
-          <MarketingAutomationPrototypeView />
+          <MarketingAutomationPrototypeView scenarios={marketingScenarios} onScenariosChange={setMarketingScenarios} />
         )}
 
         {/* ================= SECTION 3: AI PRESIDENT & STRATEGY ================= */}
