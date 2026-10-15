@@ -92,6 +92,7 @@ export const KnowledgeHubView: React.FC<KnowledgeHubViewProps> = ({ items, onSav
               <button onClick={() => startEdit(item)} className="text-left min-w-0 flex-1">
                 <span className="text-[10px] text-indigo-300">{CATEGORIES.find((category) => category.id === item.category)?.label}</span>
                 <h2 className="font-bold text-white truncate">{item.title}</h2>
+                {item.sourceTaskId && <span className="mt-1 inline-block text-[10px] text-emerald-300">タスク成果物 · {item.sourceRoleId || '担当AI'}</span>}
               </button>
               <button onClick={() => { if (window.confirm(`「${item.title}」を削除しますか？`)) onDelete(item.id); }} title="削除" className="p-2 text-slate-500 hover:text-rose-400"><Trash2 className="w-4 h-4" /></button>
             </div>
@@ -105,3 +106,4 @@ export const KnowledgeHubView: React.FC<KnowledgeHubViewProps> = ({ items, onSav
     </div>
   );
 };
+
