@@ -49,6 +49,7 @@ import {
   TokenUsageRecord,
   ApiUsageData,
   KnowledgeItem,
+  KnowledgeAttachment,
 } from './types';
 import { MarketingScenario } from './types/marketing';
 import {
@@ -89,6 +90,7 @@ import { RoleAIEditor } from './components/ai-president/RoleAIEditor';
 import { ModelSettingsModal } from './components/ai-president/ModelSettingsModal';
 import { useProviderStatus } from './components/ai-president/ModelSettingEditor';
 import { matrixService } from './services/matrixService';
+import { deleteKnowledgeAttachment, downloadKnowledgeAttachment, uploadKnowledgeAttachment } from './services/knowledgeAttachmentService';
 import {
   loadOrMigrateWorkspaceData,
   saveWorkspaceData,
@@ -398,10 +400,31 @@ function AppContent() {
   };
 
   const handleDeleteKnowledgeItem = (id: string) => {
-    const next = knowledgeItems.filter((item) => item.id !== id);
-    setKnowledgeItems(next);
-    saveKnowledgeItems(next);
+    void (async () => {
+      const target = knowledgeItems.find((item) => item.id === id);
+      try {
+        await Promise.all((target?.attachments || []).map((attachment) => deleteKnowledgeAttachment(attachment)));
+      } catch (error) {
+        console.error('Knowledge attachment cleanup failed:', error);
+        window.alert(error instanceof Error ? error.message : '添付ファイルを削除できませんでした。');
+        return;
+      }
+      const next = knowledgeItems.filter((item) => item.id !== id);
+      setKnowledgeItems(next);
+      saveKnowledgeItems(next);
+    })();
   };
+
+  const handleUploadKnowledgeAttachment = (itemId: string, file: File): Promise<KnowledgeAttachment> => {
+    if (!user?.id) return Promise.reject(new Error('ログイン状態を確認してください。'));
+    return uploadKnowledgeAttachment(user.id, itemId, file);
+  };
+
+  const handleDownloadKnowledgeAttachment = (attachment: KnowledgeAttachment): Promise<Blob> =>
+    downloadKnowledgeAttachment(attachment);
+
+  const handleRemoveKnowledgeAttachment = (attachment: KnowledgeAttachment): Promise<void> =>
+    deleteKnowledgeAttachment(attachment);
 
   // Quick Create Handler for MST
   const handleOpenCreate = (table: TableKey) => {
@@ -1386,7 +1409,15 @@ function AppContent() {
         )}
 
         {currentTab === 'ai_knowledge' && (
-          <KnowledgeHubView items={knowledgeItems} onSave={handleSaveKnowledgeItem} onDelete={handleDeleteKnowledgeItem} selectedItemId={selectedKnowledgeItemId} />
+          <KnowledgeHubView
+            items={knowledgeItems}
+            onSave={handleSaveKnowledgeItem}
+            onDelete={handleDeleteKnowledgeItem}
+            selectedItemId={selectedKnowledgeItemId}
+            onUploadAttachment={handleUploadKnowledgeAttachment}
+            onDownloadAttachment={handleDownloadKnowledgeAttachment}
+            onDeleteAttachment={handleRemoveKnowledgeAttachment}
+          />
         )}
 
         {currentTab === 'ai_projects' && (
