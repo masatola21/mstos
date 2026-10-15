@@ -34,15 +34,18 @@ function boundChatMessages(input: Array<{ role?: unknown; content?: unknown }> =
   return messages;
 }
 
-// Initialize GoogleGenAI
-const ai = new GoogleGenAI({
-  apiKey: process.env.GEMINI_API_KEY,
-  httpOptions: {
-    headers: {
-      'User-Agent': 'aistudio-build',
-    },
-  },
-});
+// Initialize Gemini lazily so other providers can run without a Gemini key.
+let geminiClient: GoogleGenAI | null = null;
+function getGeminiAI(): GoogleGenAI {
+  if (!process.env.GEMINI_API_KEY) throw new Error('GEMINI_API_KEY is not configured');
+  if (!geminiClient) {
+    geminiClient = new GoogleGenAI({
+      apiKey: process.env.GEMINI_API_KEY,
+      httpOptions: { headers: { 'User-Agent': 'aistudio-build' } },
+    });
+  }
+  return geminiClient;
+}
 
 interface UserProfile {
   userName?: string;
@@ -227,7 +230,7 @@ app.post('/api/chat', async (req, res) => {
         res.setHeader('Content-Type', 'text/event-stream');
         res.setHeader('Cache-Control', 'no-cache');
         res.setHeader('Connection', 'keep-alive');
-        const responseStream = await ai.models.generateContentStream({ model: selectedModel.model, contents, config: { systemInstruction, temperature: 0.85 } });
+        const responseStream = await getGeminiAI().models.generateContentStream({ model: selectedModel.model, contents, config: { systemInstruction, temperature: 0.85 } });
         let latestUsageMetadata = null;
         for await (const chunk of responseStream) {
           if (chunk.usageMetadata) latestUsageMetadata = chunk.usageMetadata;
