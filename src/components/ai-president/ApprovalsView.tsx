@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
   ShieldAlert,
   ShieldCheck,
@@ -18,14 +18,19 @@ interface ApprovalsViewProps {
   approvals: ApprovalItem[];
   activityLogs: ActivityLog[];
   onResolveApproval: (id: string, status: 'approved' | 'rejected', note?: string) => void;
+  initialTab?: 'approvals' | 'logs';
+  embedded?: boolean;
 }
 
 export const ApprovalsView: React.FC<ApprovalsViewProps> = ({
   approvals,
   activityLogs,
   onResolveApproval,
+  initialTab = 'approvals',
+  embedded = false,
 }) => {
-  const [activeTab, setActiveTab] = useState<'approvals' | 'logs'>('approvals');
+  const [activeTab, setActiveTab] = useState<'approvals' | 'logs'>(initialTab);
+  useEffect(() => setActiveTab(initialTab), [initialTab]);
   const [approvalFilter, setApprovalFilter] = useState<string>('all');
   const [resolutionNote, setResolutionNote] = useState<Record<string, string>>({});
 
@@ -41,6 +46,7 @@ export const ApprovalsView: React.FC<ApprovalsViewProps> = ({
 
   return (
     <div className="max-w-6xl mx-auto px-4 sm:px-6 py-6 space-y-6">
+      {!embedded && <>
       {/* Top Banner */}
       <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 p-5 rounded-3xl bg-slate-900 border border-slate-800 shadow-xl">
         <div className="flex items-center gap-3">
@@ -54,6 +60,7 @@ export const ApprovalsView: React.FC<ApprovalsViewProps> = ({
             </p>
           </div>
         </div>
+      </>}
 
         {/* Tab Switcher */}
         <div className="flex items-center bg-slate-950 p-1 rounded-xl border border-slate-800">
