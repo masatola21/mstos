@@ -1,12 +1,14 @@
 import React, { useState } from 'react';
 import { X, Check, ClipboardList, Plus, Trash2, AlertCircle, ArrowRight } from 'lucide-react';
 import { ProposedPlan, Priority, TaskAssignee, CharacterConfig } from '../types';
+import { AI_WORK_MODES, AIWorkModeId, RoleAIOverrides, resolveWorkMode } from '../../data/aiWorkModes';
 
 interface PlanRegistrationModalProps {
   plan: ProposedPlan;
   isOpen: boolean;
   onClose: () => void;
   characters: CharacterConfig[];
+  roleOverrides?: RoleAIOverrides;
   onConfirmRegistration: (
     projectName: string,
     projectObjective: string,
@@ -27,6 +29,7 @@ export const PlanRegistrationModal: React.FC<PlanRegistrationModalProps> = ({
   isOpen,
   onClose,
   characters,
+  roleOverrides = {},
   onConfirmRegistration,
 }) => {
   const [projectName, setProjectName] = useState(plan.projectName || '新規プロジェクト');
@@ -36,14 +39,21 @@ export const PlanRegistrationModal: React.FC<PlanRegistrationModalProps> = ({
 
   const [tasks, setTasks] = useState(
     plan.tasks.map((t) => {
-      let assignee: TaskAssignee = { type: 'ai_ceo', name: 'AI社長' };
+      let assignee: TaskAssignee = { type: 'role_ai', workModeId: 'president', name: 'シドウ（AI社長・統括）' };
       if (t.suggestedAssignee?.includes('人間') || t.suggestedAssignee?.includes('あなた')) {
         assignee = { type: 'human', name: '人間 (あなた)' };
       } else if (t.suggestedAssignee?.includes('開発エージェント')) {
         assignee = { type: 'dev_agent', name: '開発エージェント' };
       } else {
+        const foundMode = AI_WORK_MODES.find((mode) => {
+          const resolved = resolveWorkMode(mode, roleOverrides);
+          return t.suggestedAssignee?.includes(mode.label) || t.suggestedAssignee?.includes(mode.name) || t.suggestedAssignee?.includes(resolved.name) || (mode.id === 'president' && /AI社長|社長/.test(t.suggestedAssignee || ''));
+        });
         const found = characters.find((c) => t.suggestedAssignee?.includes(c.name));
-        if (found) {
+        if (foundMode) {
+          const resolved = resolveWorkMode(foundMode, roleOverrides);
+          assignee = { type: 'role_ai', workModeId: foundMode.id, name: `${resolved.name}（${resolved.label}）` };
+        } else if (found) {
           assignee = { type: 'custom_ai', id: found.id, name: found.name };
         }
       }
@@ -74,6 +84,13 @@ export const PlanRegistrationModal: React.FC<PlanRegistrationModalProps> = ({
       assignee = { type: 'ai_ceo', name: 'AI社長' };
     } else if (rawVal === 'dev_agent') {
       assignee = { type: 'dev_agent', name: '開発エージェント' };
+    } else if (rawVal.startsWith('role:')) {
+      const workModeId = rawVal.slice('role:'.length) as AIWorkModeId;
+      const mode = AI_WORK_MODES.find((item) => item.id === workModeId);
+      const resolved = mode ? resolveWorkMode(mode, roleOverrides) : undefined;
+      assignee = mode && resolved
+        ? { type: 'role_ai', workModeId, name: `${resolved.name}（${resolved.label}）` }
+        : { type: 'ai_ceo', name: 'AI社長' };
     } else {
       const char = characters.find((c) => c.id === rawVal);
       assignee = {
@@ -290,14 +307,22 @@ export const PlanRegistrationModal: React.FC<PlanRegistrationModalProps> = ({
                         value={
                           task.assignee.type === 'custom_ai'
                             ? task.assignee.id || 'custom'
-                            : task.assignee.type
+                            : task.assignee.type === 'role_ai'
+                              ? `role:${task.assignee.workModeId || 'president'}`
+                              : task.assignee.type
                         }
                         onChange={(e) => handleAssigneeChange(idx, e.target.value)}
                         className="w-full rounded-lg bg-slate-900 border border-slate-800 px-2 py-1 text-xs text-slate-100 focus:outline-none focus:border-indigo-500 cursor-pointer"
                       >
                         <option value="human">👤 人間 (あなた)</option>
-                        <option value="ai_ceo">👔 AI社長 (シドウ)</option>
                         <option value="dev_agent">⚙️ 開発エージェント</option>
+                        <optgroup label="役割AI">
+                          {AI_WORK_MODES.map((mode) => {
+                            const resolved = resolveWorkMode(mode, roleOverrides);
+                            return <option key={mode.id} value={`role:${mode.id}`}>{resolved.avatarEmoji} {resolved.name}（{resolved.label}）</option>;
+                          })}
+                        </optgroup>
+                        <optgroup label="登録済みAI">
                         {characters
                           .filter((c) => c.id !== 'preset-ceo')
                           .map((c) => (
@@ -305,6 +330,7 @@ export const PlanRegistrationModal: React.FC<PlanRegistrationModalProps> = ({
                               {c.avatarEmoji || '🤖'} {c.name} ({c.role})
                             </option>
                           ))}
+                        </optgroup>
                       </select>
                     </div>
                     <div>
@@ -364,3 +390,4 @@ export const PlanRegistrationModal: React.FC<PlanRegistrationModalProps> = ({
     </div>
   );
 };
+

@@ -193,6 +193,7 @@ function AppContent() {
   });
   const [isStreaming, setIsStreaming] = useState(false);
   const activeAbortController = useRef<AbortController | null>(null);
+  const taskExecutionInProgress = useRef(false);
 
   // AI President Modals
   const [isPricingModalOpen, setIsPricingModalOpen] = useState(false);
@@ -360,15 +361,15 @@ function AppContent() {
   };
 
   /** 今のチャットで使う「役割の上書き設定」と「モデル設定」を決める */
-  const resolveChatRuntime = (workModeId: AIWorkModeId): { roleOverride?: RoleAIOverride; modelSetting: AIModelSetting } => {
+  const resolveChatRuntime = (workModeId: AIWorkModeId, character: CharacterConfig = activeCharacter): { roleOverride?: RoleAIOverride; modelSetting: AIModelSetting } => {
     const { roleOverrides, defaultSetting } = aiModelSettings;
     // AI社長モードは、標準のAI社長(preset-ceo)のときだけ役割設定を適用し、登録済みAIには適用しない
-    const usesRoleSettings = workModeId !== 'president' || activeCharacter.id === 'preset-ceo';
+    const usesRoleSettings = workModeId !== 'president' || character.id === 'preset-ceo';
     if (usesRoleSettings) {
       const roleOverride = roleOverrides[workModeId];
       return { roleOverride, modelSetting: roleOverride?.modelSetting ?? defaultSetting };
     }
-    return { modelSetting: activeCharacter.modelSetting ?? defaultSetting };
+    return { modelSetting: character.modelSetting ?? defaultSetting };
   };
 
   useEffect(() => {
@@ -487,11 +488,15 @@ function AppContent() {
   };
 
   const handleDeleteCharacter = (id: string) => {
-    if (characters.length <= 1) {
-      alert('最低1体のAIキャラクターが必要です。');
+    if (id === 'preset-ceo') {
+      alert('標準のAI社長は削除できません。');
       return;
     }
-    const filtered = characters.filter((c) => c.id !== id);
+    if (!characters.some((character) => character.id === id)) return;
+    const remaining = characters.filter((c) => c.id !== id);
+    const filtered = remaining.length > 0
+      ? remaining
+      : [PRESET_CHARACTERS.find((character) => character.id === 'preset-ceo') || PRESET_CHARACTERS[0]];
     handleUpdateCharacters(filtered);
     if (editingCharacterId === id) closeCharacterEditor();
     if (activeCharacterId === id) {
@@ -527,6 +532,118 @@ function AppContent() {
   }) => {
     recordTokenUsage(params);
     setTokenUsageRecords(loadTokenUsageRecords());
+  };
+
+  const handleRunAssignedTask = async (task: TaskItem) => {
+    if (taskExecutionInProgress.current) throw new Error('別の担当AIタスクを実行中です。完了後にもう一度お試しください。');
+    taskExecutionInProgress.current = true;
+    try {
+    const requestedModeId = task.assignee.type === 'role_ai'
+      ? (task.assignee.workModeId as AIWorkModeId) || 'president'
+      : 'president';
+    const workModeId: AIWorkModeId = AI_WORK_MODES.some((mode) => mode.id === requestedModeId) ? requestedModeId : 'president';
+    const mode = getAIWorkMode(workModeId);
+    const agentCharacter = task.assignee.type === 'custom_ai'
+      ? characters.find((character) => character.id === task.assignee.id)
+      : presidentCharacter;
+    if (!agentCharacter) throw new Error('このタスクに割り当てられた登録済みAIが見つかりません。担当を選び直してください。');
+    const runtime = resolveChatRuntime(workModeId, agentCharacter);
+    const resolvedMode = resolveWorkMode(mode, aiModelSettings.roleOverrides);
+    const prompt = [
+      `担当タスク: ${task.title}`,
+      task.description ? `目的・背景: ${task.description}` : '',
+      task.completionCriteria ? `完了条件: ${task.completionCriteria}` : '',
+      'このタスクの成果物を作成してください。まず与えられた情報だけで進め、不足する前提は明記してください。外部への送信・公開や本番変更は行わず、レビュー可能な草案・成果として提示してください。',
+    ].filter(Boolean).join('\n');
+
+    const response = await fetch('/api/chat', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        messages: [{ role: 'user', content: prompt }],
+        character: { ...agentCharacter, userProfile },
+        workModeId,
+        roleOverride: runtime.roleOverride,
+        modelSetting: runtime.modelSetting,
+        knowledgeContext: selectKnowledgeContext(knowledgeItems, `${task.title}\n${task.description}\n${task.completionCriteria}`),
+        stream: false,
+      }),
+    });
+    const data = await response.json().catch(() => null);
+    if (!response.ok) throw new Error(data?.error || `担当AIの実行に失敗しました (HTTP ${response.status})`);
+    const result = typeof data?.text === 'string' ? data.text.trim() : '';
+    if (!result) throw new Error('担当AIから成果物を受け取れませんでした。');
+
+    const usage = data?.usage && typeof data.usage === 'object'
+      ? data.usage as ApiUsageData
+      : { promptTokens: null, candidatesTokens: null, totalTokens: null, status: 'unacquired' as const };
+    handleRecordUsage({
+      endpoint: 'chat',
+      endpointName: `タスク実行：${resolvedMode.label}`,
+      model: data?.model,
+      provider: data?.provider,
+      fallbackFrom: data?.fallbackFrom ? `${data.fallbackFrom.provider || ''}/${data.fallbackFrom.model || ''}` : undefined,
+      usage,
+    });
+
+    const now = Date.now();
+    const existingKnowledge = task.knowledgeItemId
+      ? knowledgeItems.find((item) => item.id === task.knowledgeItemId)
+      : knowledgeItems.find((item) => item.sourceTaskId === task.id);
+    const category: KnowledgeItem['category'] = workModeId === 'research' || workModeId === 'diagnosis'
+      ? 'research'
+      : workModeId === 'customer_product'
+        ? 'customer'
+        : workModeId === 'new_product' || workModeId === 'marketing_strategy'
+          ? 'product'
+          : 'deliverable';
+    const knowledgeItem: KnowledgeItem = {
+      id: existingKnowledge?.id || `knowledge-task-${task.id}`,
+      title: `成果物：${task.title}`,
+      category,
+      content: result,
+      tags: [...new Set([...(existingKnowledge?.tags || []), 'AI作成', resolvedMode.label])],
+      createdAt: existingKnowledge?.createdAt || now,
+      updatedAt: now,
+      sourceTaskId: task.id,
+      sourceRoleId: task.assignee.type === 'custom_ai' ? task.assignee.id : workModeId,
+    };
+    const nextKnowledge = existingKnowledge
+      ? knowledgeItems.map((item) => item.id === knowledgeItem.id ? knowledgeItem : item)
+      : [knowledgeItem, ...knowledgeItems];
+    setKnowledgeItems(nextKnowledge);
+    saveKnowledgeItems(nextKnowledge);
+
+    const updatedTask: TaskItem = {
+      ...task,
+      status: 'pending_approval',
+      resultNotes: `成果物を「${knowledgeItem.title}」としてナレッジに保存しました。内容を確認し、承認してください。`,
+      knowledgeItemId: knowledgeItem.id,
+      updatedAt: now,
+    };
+    const nextTasks = tasks.map((item) => item.id === task.id ? updatedTask : item);
+    setTasks(nextTasks);
+    saveTasks(nextTasks);
+
+    const approval: ApprovalItem = {
+      id: `appr-${now}`,
+      taskId: task.id,
+      taskTitle: task.title,
+      actionTitle: `担当AIの成果物レビュー：${task.title}`,
+      reason: `${resolvedMode.name}が成果物を作成し、ナレッジ「${knowledgeItem.title}」に保存しました。内容を確認してください。`,
+      status: 'pending',
+      requestedBy: resolvedMode.name,
+      createdAt: now,
+    };
+    const nextApprovals = [approval, ...approvals];
+    setApprovals(nextApprovals);
+    saveApprovals(nextApprovals);
+    recordActivityLog('task_updated', `${resolvedMode.name}がタスク「${task.title}」を実行し、成果物をナレッジに保存しました`, resolvedMode.name);
+    recordActivityLog('approval_requested', `タスク「${task.title}」のAI成果物レビューが承認待ちです`, resolvedMode.name);
+    setActivityLogs(loadActivityLogs());
+    } finally {
+      taskExecutionInProgress.current = false;
+    }
   };
 
   // --- Pricing Settings ---
@@ -716,21 +833,31 @@ function AppContent() {
     setProjects(updatedProjects);
     saveProjects(updatedProjects);
 
-    const newTasks: TaskItem[] = plan.tasks.map((pt, idx) => ({
+    const newTasks: TaskItem[] = plan.tasks.map((pt, idx) => {
+      const suggested = (pt.suggestedAssignee || '').trim();
+      const suggestedMode = AI_WORK_MODES.find((mode) => {
+        const resolved = resolveWorkMode(mode, aiModelSettings.roleOverrides);
+        return mode.id === suggested || mode.label === suggested || mode.name === suggested || resolved.name === suggested || (mode.id === 'president' && /AI社長|社長/.test(suggested));
+      });
+      const suggestedCharacter = characters.find((character) => character.name === suggested);
+      const assignee: TaskAssignee = suggestedMode
+        ? { type: 'role_ai', workModeId: suggestedMode.id, name: `${resolveWorkMode(suggestedMode, aiModelSettings.roleOverrides).name}（${suggestedMode.label}）` }
+        : suggestedCharacter
+          ? { type: 'custom_ai', id: suggestedCharacter.id, name: suggestedCharacter.name }
+          : { type: 'ai_ceo', name: suggested || 'AI社長' };
+      return ({
       id: `task-${Date.now()}-${idx}`,
       projectId: newProject.id,
       title: pt.title,
       description: pt.objective,
       status: 'waiting',
       priority: pt.priority,
-      assignee: {
-        type: 'ai_ceo',
-        name: pt.suggestedAssignee || 'AI社長',
-      },
+      assignee,
       completionCriteria: pt.completionCriteria,
       createdAt: Date.now() + idx,
       updatedAt: Date.now() + idx,
-    }));
+    });
+    });
     const updatedTasks = [...tasks, ...newTasks];
     setTasks(updatedTasks);
     saveTasks(updatedTasks);
@@ -1281,11 +1408,14 @@ function AppContent() {
             tasks={tasks}
             projects={projects}
             characters={characters}
+            roleOverrides={aiModelSettings.roleOverrides}
             selectedProjectId={selectedProjectIdForTasks}
             onClearProjectFilter={() => setSelectedProjectIdForTasks(null)}
             onCreateTask={handleCreateTask}
             onUpdateTask={handleUpdateTask}
             onDeleteTask={handleDeleteTask}
+            onRunTask={handleRunAssignedTask}
+            onOpenKnowledgeItem={() => setCurrentTab('ai_knowledge')}
             onRequestApproval={handleRequestApproval}
             approvals={approvals}
             activityLogs={activityLogs}
@@ -1420,6 +1550,7 @@ function AppContent() {
           isOpen={true}
           onClose={() => setActivePlanForModal(null)}
           characters={characters}
+          roleOverrides={aiModelSettings.roleOverrides}
           onConfirmRegistration={(pName, pObj, pPri, pDue, pTasks) => {
             const newProject: Project = {
               id: `proj-${Date.now()}`,
@@ -1570,4 +1701,5 @@ export default function App() {
     </AuthProvider>
   );
 }
+
 
