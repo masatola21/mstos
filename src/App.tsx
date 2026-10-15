@@ -1330,7 +1330,7 @@ function AppContent() {
           <DiagnosisManager onOpenRls={() => setIsRlsOpen(true)} />
         )}
 
-        {['companies', 'prospects', 'leads', 'products', 'deals', 'customers'].includes(currentTab) && (
+        {['companies', 'contacts', 'prospects', 'leads', 'products', 'deals', 'customers'].includes(currentTab) && (
           <TableManager
             currentTable={currentTab as TableKey}
             onTableChange={(tab) => setCurrentTab(tab as UnifiedNavTab)}
