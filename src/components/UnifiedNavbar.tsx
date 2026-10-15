@@ -29,6 +29,7 @@ export type UnifiedNavTab =
   | 'mst_diagnoses'
   | 'marketing_automation'
   | 'custom_lists'
+  | 'customer_operations'
   | 'document_templates'
   | TableKey
   // 商品・サービス
@@ -88,6 +89,7 @@ export const UnifiedNavbar: React.FC<UnifiedNavbarProps> = ({
     ) {
       return 'ai_president';
     }
+    if (currentTab === 'customer_operations') return 'mst';
     if (
       currentTab === 'product_hub' ||
       currentTab === 'category_hub'
@@ -239,22 +241,32 @@ export const UnifiedNavbar: React.FC<UnifiedNavbarProps> = ({
         </div>
 
         {/* Sub Navigation Bar - dynamically shows based on activeSection */}
-        <nav className="flex space-x-1 overflow-x-auto py-2 scrollbar-none border-t border-slate-800/70 text-xs font-medium">
-          {/* 営業・顧客管理: 顧客獲得から契約後までを一元管理 */}
-          {activeSection === 'mst' && (
-            <>
-              <button onClick={() => onTabChange('mst_dashboard')} className={`px-3 py-1.5 rounded-lg whitespace-nowrap transition-colors ${currentTab === 'mst_dashboard' ? 'bg-blue-600 text-white font-semibold shadow-sm' : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800'}`}>📊 営業ダッシュボード</button>
-              <button onClick={() => onTabChange('mst_diagnoses')} className={`px-3 py-1.5 rounded-lg whitespace-nowrap transition-colors flex items-center gap-1.5 ${currentTab === 'mst_diagnoses' ? 'bg-blue-600 text-white font-semibold shadow-sm' : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800'}`}><ClipboardList className="w-3.5 h-3.5 text-blue-400" /><span>診断管理</span></button>
-              <button onClick={() => onTabChange('marketing_automation')} className={`px-3 py-1.5 rounded-lg whitespace-nowrap transition-colors flex items-center gap-1.5 ${currentTab === 'marketing_automation' ? 'bg-blue-600 text-white font-semibold shadow-sm' : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800'}`}><Zap className="w-3.5 h-3.5 text-amber-400" /><span>マーケティングオートメーション</span></button>
-              {(Object.keys(TABLE_CONFIGS) as TableKey[]).map((key) => {
-                const cfg = TABLE_CONFIGS[key];
-                const isActive = currentTab === key;
-                return <button key={key} onClick={() => onTabChange(key)} className={`px-3 py-1.5 rounded-lg whitespace-nowrap transition-colors flex items-center gap-1.5 ${isActive ? 'bg-blue-600 text-white font-semibold shadow-sm' : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800'}`}><span>{cfg.label}</span></button>;
-              })}
-              <button onClick={() => onTabChange('custom_lists')} className={`px-3 py-1.5 rounded-lg whitespace-nowrap transition-colors ${currentTab === 'custom_lists' ? 'bg-blue-600 text-white font-semibold shadow-sm' : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800'}`}>リスト・顧客区分</button>
-              <button onClick={() => onTabChange('document_templates')} className={`px-3 py-1.5 rounded-lg whitespace-nowrap transition-colors ${currentTab === 'document_templates' ? 'bg-blue-600 text-white font-semibold shadow-sm' : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800'}`}>顧客書類作成</button>
-            </>
-          )}
+        <nav className="border-t border-slate-800/70 py-2 text-xs font-medium">
+          {activeSection === 'mst' && (() => {
+            const groups = [
+              { id: 'crm', label: '顧客・営業', items: (['mst_dashboard','companies','contacts','prospects','leads','deals','customers','products'] as UnifiedNavTab[]) },
+              { id: 'intake', label: 'フォーム・配信', items: (['mst_diagnoses','custom_lists','marketing_automation'] as UnifiedNavTab[]) },
+              { id: 'delivery', label: '書類・契約後', items: (['document_templates','customer_operations'] as UnifiedNavTab[]) },
+            ];
+            const activeGroup = groups.find((group) => group.items.includes(currentTab)) || groups[0];
+            const labelFor = (tab: UnifiedNavTab) => {
+              if (tab === 'mst_dashboard') return '営業ダッシュボード';
+              if (tab === 'mst_diagnoses') return 'フォーム・診断';
+              if (tab === 'custom_lists') return 'リスト・顧客区分';
+              if (tab === 'marketing_automation') return 'LINE・メール配信';
+              if (tab === 'document_templates') return '顧客書類';
+              if (tab === 'customer_operations') return '契約・請求・支援';
+              return TABLE_CONFIGS[tab as TableKey]?.label || String(tab);
+            };
+            return <div className="space-y-2">
+              <div className="flex flex-wrap gap-1.5" role="tablist" aria-label="営業・顧客管理の機能グループ">
+                {groups.map((group) => <button key={group.id} onClick={() => onTabChange(group.items[0])} aria-current={activeGroup.id === group.id ? 'page' : undefined} className={`rounded-lg px-3 py-1.5 transition-colors ${activeGroup.id === group.id ? 'bg-slate-700 text-white' : 'text-slate-400 hover:bg-slate-800 hover:text-white'}`}>{group.label}</button>)}
+              </div>
+              <div className="flex flex-wrap gap-1.5" aria-label={activeGroup.label}>
+                {activeGroup.items.map((tab) => <button key={tab} onClick={() => onTabChange(tab)} aria-current={currentTab === tab ? 'page' : undefined} className={`rounded-lg px-3 py-1.5 transition-colors ${currentTab === tab ? 'bg-blue-600 font-semibold text-white' : 'text-slate-400 hover:bg-slate-800 hover:text-slate-200'}`}>{labelFor(tab)}</button>)}
+              </div>
+            </div>;
+          })()}
 
           {/* 商品・サービス: 商品定義と開発情報 */}
           {activeSection === 'matrix' && (
