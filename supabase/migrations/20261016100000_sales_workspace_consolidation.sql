@@ -38,7 +38,7 @@ CREATE TABLE IF NOT EXISTS public.customer_contracts (
   company_id text REFERENCES public.companies(id) ON DELETE SET NULL,
   contact_id uuid REFERENCES public.contacts(id) ON DELETE SET NULL,
   deal_id text REFERENCES public.deals(id) ON DELETE SET NULL,
-  product_id text REFERENCES public.products(id) ON DELETE SET NULL,
+  product_id text, -- Matrix product ID; product master is currently persisted in workspace state
   document_id uuid REFERENCES public.customer_documents(id) ON DELETE SET NULL,
   amount numeric(14,2) NOT NULL DEFAULT 0,
   start_date date,
