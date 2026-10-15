@@ -272,7 +272,7 @@ export const UnifiedNavbar: React.FC<UnifiedNavbarProps> = ({
           {activeSection === 'matrix' && (
             <>
               <button onClick={() => onTabChange('product_hub')} className={`px-3 py-1.5 rounded-lg whitespace-nowrap transition-colors flex items-center gap-1.5 ${currentTab === 'product_hub' ? 'bg-cyan-600 text-white font-semibold shadow-sm' : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800'}`}><Package className="w-3.5 h-3.5 text-cyan-400" /><span>商品・サービス一覧</span></button>
-            </div>
+            </>
           )}
 
           {/* 3. AI President Section Subtabs */}
@@ -358,7 +358,7 @@ export const UnifiedNavbar: React.FC<UnifiedNavbarProps> = ({
                 <Bot className="w-3.5 h-3.5" />
                 <span>専門AI一覧</span>
               </button>
-            </>
+            </div>
           )}
         </nav>
       </div>
