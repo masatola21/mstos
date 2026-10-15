@@ -32,6 +32,9 @@ import {
   ApprovalItem,
   ActivityLog,
   WorkspaceAttachment,
+  TaskWorkArea,
+  TaskKind,
+  TaskRelatedRecordType,
 } from '../types';
 import { ApprovalsView } from './ApprovalsView';
 import { AI_WORK_MODES, AIWorkModeId, RoleAIOverrides, resolveWorkMode } from '../../data/aiWorkModes';
@@ -109,6 +112,8 @@ export const TasksView: React.FC<TasksViewProps> = ({
   const [filterProject, setFilterProject] = useState<string>(selectedProjectId || 'all');
   const [filterStatus, setFilterStatus] = useState<string>('all');
   const [filterAssignee, setFilterAssignee] = useState<string>('all');
+  const [filterWorkArea, setFilterWorkArea] = useState<string>('all');
+  const [filterTaskKind, setFilterTaskKind] = useState<string>('all');
 
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingTask, setEditingTask] = useState<TaskItem | null>(null);
@@ -117,6 +122,11 @@ export const TasksView: React.FC<TasksViewProps> = ({
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
   const [projectId, setProjectId] = useState<string>(projects[0]?.id || '');
+  const [workArea, setWorkArea] = useState<TaskWorkArea>('project');
+  const [taskKind, setTaskKind] = useState<TaskKind>('response');
+  const [relatedRecordType, setRelatedRecordType] = useState<TaskRelatedRecordType | 'none'>('none');
+  const [relatedRecordId, setRelatedRecordId] = useState('');
+  const [relatedRecordLabel, setRelatedRecordLabel] = useState('');
   const [priority, setPriority] = useState<Priority>('medium');
   const [status, setStatus] = useState<TaskStatus>('waiting');
   const [assigneeType, setAssigneeType] = useState<string>('human');
@@ -139,7 +149,12 @@ export const TasksView: React.FC<TasksViewProps> = ({
     setEditingTask(null);
     setTitle('');
     setDescription('');
-    setProjectId(filterProject !== 'all' ? filterProject : projects[0]?.id || '');
+    setProjectId(filterProject !== 'all' && filterProject !== 'none' ? filterProject : projects[0]?.id || '');
+    setWorkArea('project');
+    setTaskKind('response');
+    setRelatedRecordType('none');
+    setRelatedRecordId('');
+    setRelatedRecordLabel('');
     setPriority('medium');
     setStatus('waiting');
     setAssigneeType('human');
@@ -154,7 +169,12 @@ export const TasksView: React.FC<TasksViewProps> = ({
     setEditingTask(t);
     setTitle(t.title);
     setDescription(t.description);
-    setProjectId(t.projectId);
+    setProjectId(t.projectId || '');
+    setWorkArea(t.workArea || 'project');
+    setTaskKind(t.taskKind || 'response');
+    setRelatedRecordType(t.relatedRecord?.type || 'none');
+    setRelatedRecordId(t.relatedRecord?.id || '');
+    setRelatedRecordLabel(t.relatedRecord?.label || '');
     setPriority(t.priority);
     setStatus(t.status);
     setAssigneeType(t.assignee.type === 'custom_ai' ? t.assignee.id || 'human' : t.assignee.type === 'role_ai' || t.assignee.type === 'ai_ceo' ? `role:${t.assignee.workModeId || 'president'}` : t.assignee.type);
@@ -259,11 +279,6 @@ export const TasksView: React.FC<TasksViewProps> = ({
       alert('タスク名を入力してください。');
       return;
     }
-    if (!projectId) {
-      alert('所属プロジェクトを選択してください。');
-      return;
-    }
-
     const assignee = resolveAssignee(assigneeType);
     const nextStatus: TaskStatus = assignee.type !== 'human'
       && status === 'completed'
@@ -277,6 +292,9 @@ export const TasksView: React.FC<TasksViewProps> = ({
         title: title.trim(),
         description: description.trim(),
         projectId,
+        workArea,
+        taskKind,
+        relatedRecord: relatedRecordType === 'none' ? undefined : { type: relatedRecordType, id: relatedRecordId.trim() || undefined, label: relatedRecordLabel.trim() || undefined },
         priority,
         status: nextStatus,
         assignee,
@@ -290,6 +308,9 @@ export const TasksView: React.FC<TasksViewProps> = ({
         title: title.trim(),
         description: description.trim(),
         projectId,
+        workArea,
+        taskKind,
+        relatedRecord: relatedRecordType === 'none' ? undefined : { type: relatedRecordType, id: relatedRecordId.trim() || undefined, label: relatedRecordLabel.trim() || undefined },
         priority,
         status,
         assignee,
@@ -337,7 +358,10 @@ export const TasksView: React.FC<TasksViewProps> = ({
   };
 
   const filteredTasks = tasks.filter((t) => {
-    if (filterProject !== 'all' && t.projectId !== filterProject) return false;
+    if (filterProject === 'none' && Boolean(t.projectId)) return false;
+    if (filterProject !== 'all' && filterProject !== 'none' && t.projectId !== filterProject) return false;
+    if (filterWorkArea !== 'all' && (t.workArea || 'project') !== filterWorkArea) return false;
+    if (filterTaskKind !== 'all' && (t.taskKind || 'response') !== filterTaskKind) return false;
     if (filterStatus !== 'all' && t.status !== filterStatus) return false;
     if (filterAssignee !== 'all') {
       if (filterAssignee === 'human' && t.assignee.type !== 'human') return false;
