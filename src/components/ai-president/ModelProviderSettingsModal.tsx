@@ -9,7 +9,7 @@ export type AIModelSelections = Partial<Record<AIWorkModeId, AIModelSelection>>;
 const defaults: Record<AIModelProvider, string> = {
   gemini: 'gemini-3.8-flash',
   groq: 'llama-3.3-70b-versatile',
-  openrouter: 'meta-llama/llama-3.3-70b-instruct:free',
+  openrouter: 'openrouter/free',
 };
 
 interface Props {
