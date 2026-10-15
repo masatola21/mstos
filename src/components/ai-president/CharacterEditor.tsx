@@ -104,6 +104,7 @@ export const CharacterEditor: React.FC<CharacterEditorProps> = ({
   const [isGenerating, setIsGenerating] = useState(false);
   const [isRefiningPrompt, setIsRefiningPrompt] = useState(false);
   const [saveSuccessNotice, setSaveSuccessNotice] = useState(false);
+  const [isDeleteConfirmOpen, setIsDeleteConfirmOpen] = useState(false);
   const [ruleInput, setRuleInput] = useState('');
   const [topicInput, setTopicInput] = useState('');
 
@@ -752,11 +753,7 @@ export const CharacterEditor: React.FC<CharacterEditorProps> = ({
               </button>
               <button
                 type="button"
-                onClick={() => {
-                  if (window.confirm(`「${formData.name}」を削除してもよろしいですか？`)) {
-                    onDeleteCharacter(formData.id);
-                  }
-                }}
+                onClick={() => setIsDeleteConfirmOpen(true)}
                 className="px-3.5 py-2 rounded-xl text-rose-400 hover:bg-rose-950/40 text-xs font-semibold transition-colors cursor-pointer"
               >
                 削除
@@ -774,6 +771,19 @@ export const CharacterEditor: React.FC<CharacterEditorProps> = ({
           </div>
         </div>
       )}
+      {isDeleteConfirmOpen && (
+        <div className="fixed inset-0 z-[90] flex items-center justify-center bg-slate-950/80 p-4 backdrop-blur-sm" role="presentation">
+          <section role="dialog" aria-modal="true" aria-labelledby="editor-delete-character-title" className="w-full max-w-md rounded-2xl border border-slate-700 bg-slate-900 p-6 shadow-2xl">
+            <h2 id="editor-delete-character-title" className="text-base font-bold text-white">専門AIを削除しますか？</h2>
+            <p className="mt-3 text-sm text-slate-300">「{formData.name}」を一覧から削除します。会話履歴は残ります。</p>
+            <div className="mt-6 flex justify-end gap-2">
+              <button type="button" onClick={() => setIsDeleteConfirmOpen(false)} className="rounded-xl border border-slate-700 px-4 py-2 text-sm text-slate-300 hover:bg-slate-800">キャンセル</button>
+              <button type="button" onClick={() => onDeleteCharacter(formData.id)} className="rounded-xl bg-rose-600 px-4 py-2 text-sm font-semibold text-white hover:bg-rose-500">削除する</button>
+            </div>
+          </section>
+        </div>
+      )}
     </div>
   );
 };
+
