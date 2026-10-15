@@ -46,48 +46,46 @@ export const ApprovalsView: React.FC<ApprovalsViewProps> = ({
 
   return (
     <div className="max-w-6xl mx-auto px-4 sm:px-6 py-6 space-y-6">
-      {!embedded && <>
-      {/* Top Banner */}
-      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 p-5 rounded-3xl bg-slate-900 border border-slate-800 shadow-xl">
-        <div className="flex items-center gap-3">
-          <div className="w-11 h-11 rounded-2xl bg-amber-600/20 border border-amber-500/30 flex items-center justify-center text-amber-400">
-            <ShieldAlert className="w-5 h-5" />
+      {!embedded && (
+        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 p-5 rounded-3xl bg-slate-900 border border-slate-800 shadow-xl">
+          <div className="flex items-center gap-3">
+            <div className="w-11 h-11 rounded-2xl bg-amber-600/20 border border-amber-500/30 flex items-center justify-center text-amber-400">
+              <ShieldAlert className="w-5 h-5" />
+            </div>
+            <div>
+              <h1 className="text-lg font-extrabold text-white">承認・活動履歴</h1>
+              <p className="text-xs text-slate-400 mt-0.5">
+                人間の判断・意思決定が必要な承認待ち項目と、アプリ内で実際に起きた操作の監査ログ
+              </p>
+            </div>
           </div>
-          <div>
-            <h1 className="text-lg font-extrabold text-white">承認・活動履歴</h1>
-            <p className="text-xs text-slate-400 mt-0.5">
-              人間の判断・意思決定が必要な承認待ち項目と、アプリ内で実際に起きた操作の監査ログ
-            </p>
-          </div>
-        </div>
-      </>}
 
-        {/* Tab Switcher */}
-        <div className="flex items-center bg-slate-950 p-1 rounded-xl border border-slate-800">
-          <button
-            type="button"
-            onClick={() => setActiveTab('approvals')}
-            className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
-              activeTab === 'approvals'
-                ? 'bg-indigo-600 text-white shadow-sm'
-                : 'text-slate-400 hover:text-slate-200'
-            }`}
-          >
-            承認管理 ({approvals.filter((a) => a.status === 'pending').length}件待ち)
-          </button>
-          <button
-            type="button"
-            onClick={() => setActiveTab('logs')}
-            className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
-              activeTab === 'logs'
-                ? 'bg-indigo-600 text-white shadow-sm'
-                : 'text-slate-400 hover:text-slate-200'
-            }`}
-          >
-            活動・監査ログ ({activityLogs.length}件)
-          </button>
+          <div className="flex items-center bg-slate-950 p-1 rounded-xl border border-slate-800">
+            <button
+              type="button"
+              onClick={() => setActiveTab('approvals')}
+              className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                activeTab === 'approvals'
+                  ? 'bg-indigo-600 text-white shadow-sm'
+                  : 'text-slate-400 hover:text-slate-200'
+              }`}
+            >
+              承認管理 ({approvals.filter((a) => a.status === 'pending').length}件待ち)
+            </button>
+            <button
+              type="button"
+              onClick={() => setActiveTab('logs')}
+              className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                activeTab === 'logs'
+                  ? 'bg-indigo-600 text-white shadow-sm'
+                  : 'text-slate-400 hover:text-slate-200'
+              }`}
+            >
+              活動・監査ログ ({activityLogs.length}件)
+            </button>
+          </div>
         </div>
-      </div>
+      )}
 
       {/* Tab: Approvals */}
       {activeTab === 'approvals' && (
