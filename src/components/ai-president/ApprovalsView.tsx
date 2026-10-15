@@ -12,9 +12,10 @@ import {
   X,
   FileText,
 } from 'lucide-react';
-import { ApprovalItem, ActivityLog, ApprovalStatus } from '../types';
+import { ApprovalItem, ActivityLog, ApprovalStatus, TaskItem } from '../types';
 
 interface ApprovalsViewProps {
+  tasks: TaskItem[];
   approvals: ApprovalItem[];
   activityLogs: ActivityLog[];
   onResolveApproval: (id: string, status: 'approved' | 'rejected', note?: string) => void;
@@ -23,6 +24,7 @@ interface ApprovalsViewProps {
 }
 
 export const ApprovalsView: React.FC<ApprovalsViewProps> = ({
+  tasks,
   approvals,
   activityLogs,
   onResolveApproval,
@@ -123,7 +125,9 @@ export const ApprovalsView: React.FC<ApprovalsViewProps> = ({
             </div>
           ) : (
             <div className="space-y-3">
-              {filteredApprovals.map((item) => (
+              {filteredApprovals.map((item) => {
+                const relatedTask = item.taskId ? tasks.find((task) => task.id === item.taskId) : undefined;
+                return (
                 <div
                   key={item.id}
                   className="p-5 rounded-2xl bg-slate-900 border border-slate-800 space-y-3 shadow-sm"
@@ -168,6 +172,23 @@ export const ApprovalsView: React.FC<ApprovalsViewProps> = ({
                     )}
                   </div>
 
+                  {relatedTask?.draftArtifact && (
+                    <section className="rounded-xl border border-indigo-500/30 bg-slate-950 overflow-hidden">
+                      <div className="px-3 py-2 border-b border-slate-800 flex flex-wrap items-center justify-between gap-2">
+                        <h3 className="text-xs font-bold text-indigo-300">担当AIの成果物（承認前）</h3>
+                        <span className="text-[10px] text-slate-400">{relatedTask.draftArtifact.category}</span>
+                      </div>
+                      <div className="max-h-[520px] overflow-y-auto p-4 text-sm text-slate-200 whitespace-pre-wrap break-words">
+                        {relatedTask.draftArtifact.content}
+                      </div>
+                      {item.status === 'pending' && (
+                        <p className="px-3 py-2 border-t border-slate-800 text-[11px] text-slate-400">
+                          承認すると、この成果物をナレッジに正式登録してタスクを完了します。
+                        </p>
+                      )}
+                    </section>
+                  )}
+
                   {item.status === 'pending' && (
                     <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 pt-2 border-t border-slate-800/60">
                       <input
@@ -198,7 +219,8 @@ export const ApprovalsView: React.FC<ApprovalsViewProps> = ({
                     </div>
                   )}
                 </div>
-              ))}
+                );
+              })}
             </div>
           )}
         </div>
