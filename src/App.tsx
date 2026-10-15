@@ -403,6 +403,7 @@ function AppContent() {
     handleUpdateCharacters([newChar, ...characters]);
     setActiveCharacterId(newChar.id);
     saveActiveCharacterId(newChar.id);
+    setActiveWorkModeId('president');
     setMessages([]);
     setIsCharacterEditorOpen(true);
   };
