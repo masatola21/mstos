@@ -388,25 +388,13 @@ export const UnifiedNavbar: React.FC<UnifiedNavbarProps> = ({
               <button
                 onClick={() => onTabChange('ai_tasks')}
                 className={`px-3 py-1.5 rounded-lg whitespace-nowrap transition-colors flex items-center gap-1.5 ${
-                  currentTab === 'ai_tasks'
+                  currentTab === 'ai_tasks' || currentTab === 'ai_approvals'
                     ? 'bg-purple-600 text-white font-semibold shadow-sm'
                     : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800'
                 }`}
               >
                 <ListTodo className="w-3.5 h-3.5" />
-                <span>タスク・カンバン</span>
-              </button>
-
-              <button
-                onClick={() => onTabChange('ai_approvals')}
-                className={`px-3 py-1.5 rounded-lg whitespace-nowrap transition-colors flex items-center gap-1.5 ${
-                  currentTab === 'ai_approvals'
-                    ? 'bg-purple-600 text-white font-semibold shadow-sm'
-                    : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800'
-                }`}
-              >
-                <CheckCircle2 className="w-3.5 h-3.5" />
-                <span>承認・活動履歴</span>
+                <span>タスク</span>
                 {pendingApprovalsCount > 0 && (
                   <span className="px-1 rounded bg-amber-500 text-slate-950 font-bold text-[10px]">
                     {pendingApprovalsCount}
