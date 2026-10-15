@@ -434,7 +434,7 @@ export const UnifiedNavbar: React.FC<UnifiedNavbarProps> = ({
                 }`}
               >
                 <Bot className="w-3.5 h-3.5" />
-                <span>専門AI参謀一覧</span>
+                <span>専門AI一覧</span>
               </button>
             </>
           )}
