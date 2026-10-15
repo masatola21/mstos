@@ -104,6 +104,7 @@ export type ApprovalStatus = 'pending' | 'approved' | 'rejected';
 export interface ApprovalItem {
   id: string;
   taskId?: string;
+  reviewArtifact?: TaskDraftArtifact; // この承認に紐づく成果物のスナップショット
   taskTitle: string;
   actionTitle: string; // 実行予定の内容
   reason: string; // 理由・目的
