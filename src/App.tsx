@@ -31,7 +31,7 @@ import { CustomListManager } from './components/matrix/CustomListManager';
 import { AutomationView } from './components/matrix/AutomationView';
 import { DocumentTemplateView } from './components/matrix/DocumentTemplateView';
 import { MarketingAutomationPrototypeView } from './components/marketing/MarketingAutomationPrototypeView';
-import { LineFriendManager } from './components/marketing/LineFriendManager';
+import { ContactsLineHub } from './components/ContactsLineHub';
 import { QuickPresidentDrawer } from './components/matrix/QuickPresidentDrawer';
 
 // Storage and Types
@@ -1330,7 +1330,7 @@ function AppContent() {
           <DiagnosisManager onOpenRls={() => setIsRlsOpen(true)} />
         )}
 
-        {['companies', 'contacts', 'prospects', 'leads', 'products', 'deals', 'customers'].includes(currentTab) && (
+        {['companies', 'prospects', 'leads', 'products', 'deals', 'customers'].includes(currentTab) && (
           <TableManager
             currentTable={currentTab as TableKey}
             onTableChange={(tab) => setCurrentTab(tab as UnifiedNavTab)}
@@ -1402,7 +1402,7 @@ function AppContent() {
           <DocumentTemplateView />
         )}
 
-        {currentTab === 'line_friends' && <LineFriendManager />}
+        {currentTab === 'contacts' && <ContactsLineHub />}
 
         {currentTab === 'marketing_automation' && (
           <MarketingAutomationPrototypeView scenarios={marketingScenarios} onScenariosChange={setMarketingScenarios} />
