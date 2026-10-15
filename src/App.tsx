@@ -241,6 +241,7 @@ function AppContent() {
         setAutomations(data.automations);
         setMarketingScenarios(data.marketingScenarios || []);
         setKnowledgeItems(data.knowledgeItems || []);
+        if (data.modelSelections) setAIModelSelections(data.modelSelections);
         setWorkModeHistories(data.workModeHistories || {});
         const initialChatKey = `${activeCharacterId}:${activeWorkModeId}`;
         const savedChat = data.workModeHistories?.[initialChatKey] || loadChatHistory(initialChatKey);
@@ -281,6 +282,7 @@ function AppContent() {
       marketingScenarios,
       workModeHistories,
       knowledgeItems,
+      modelSelections: aiModelSelections,
     };
     const snapshot = JSON.stringify(workspaceData);
     if (snapshot === lastSavedWorkspaceRef.current) return;
@@ -321,6 +323,7 @@ function AppContent() {
     marketingScenarios,
     workModeHistories,
     knowledgeItems,
+    aiModelSelections,
   ]);
 
   // Active character
