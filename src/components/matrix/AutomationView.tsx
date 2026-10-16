@@ -17,8 +17,8 @@ const triggerLabels: Record<AutomationRule['triggerEvent'], string> = {
 
 const aiModeLabels: Record<AutomationRule['aiMode'], string> = {
   suggest: '提案する',
-  prepare: '初稿・準備を作る',
-  execute: '自動で実行する',
+  prepare: '担当AIを設定する（実行はタスクから）',
+  execute: '自動実行（未接続・現在はタスク作成のみ）',
 };
 
 const approvalLabels: Record<AutomationRule['approvalPolicy'], string> = {
@@ -48,7 +48,7 @@ export const AutomationView: React.FC<AutomationViewProps> = ({ automations, onU
         <div className="mt-4 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-amber-700/40 bg-amber-950/30 p-3">
           <div className="flex items-start gap-2 text-xs leading-5 text-amber-100">
             <Clock3 className="mt-0.5 h-4 w-4 shrink-0 text-amber-300" />
-            <span>現在はルール設定の保存までです。業務イベントによる自動起動と実行履歴は未接続のため、ここで有効にしても業務処理は実行されません。</span>
+            <span>現在は「商談成約後」のルールのみ、商談から顧客への移行時に既存タスクへ期限を設定します（初期値は3日）。他の業務イベントと、承認ポリシーの自動適用・実行履歴は未接続です。タスク作成時にAI APIは自動実行せず、担当者がタスクから開始します。</span>
           </div>
           <span className="whitespace-nowrap text-xs text-slate-400">有効設定 {enabledCount} / {automations.length}</span>
         </div>
@@ -85,6 +85,13 @@ export const AutomationView: React.FC<AutomationViewProps> = ({ automations, onU
             </div>
 
             <div className="grid gap-3 sm:grid-cols-2">
+              <label className="block text-xs font-medium text-slate-300">
+                <span className="mb-1.5 flex items-center gap-1.5"><Clock3 className="h-3.5 w-3.5 text-amber-300" />タスク期限（発生後の日数）</span>
+                <input type="number" min={1} max={90} value={rule.taskDueInDays} onChange={(event) => {
+                  const value = Number(event.target.value);
+                  if (Number.isFinite(value)) onUpdateAutomation(rule.id, { taskDueInDays: Math.min(90, Math.max(1, Math.floor(value))), updatedAt: Date.now() });
+                }} className="w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-xs text-white" />
+              </label>
               <label className="block text-xs font-medium text-slate-300">
                 <span className="mb-1.5 flex items-center gap-1.5"><Bot className="h-3.5 w-3.5 text-indigo-300" />AIに任せる範囲</span>
                 <select

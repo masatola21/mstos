@@ -272,11 +272,11 @@ const INITIAL_TOOLS: ManagedToolAsset[] = [
 
 // --- 標準AI自動化・承認ルール（未接続の設定テンプレート） ---
 const INITIAL_AUTOMATIONS: AutomationRule[] = [
-  { id: 'workflow-diagnosis-submitted', name: '診断回答の確認・分析', description: '診断フォームの回答を整理し、課題・追加確認事項・改善案をまとめる。', triggerEvent: 'diagnosis_submitted', aiMode: 'prepare', approvalPolicy: 'always', isEnabled: false },
-  { id: 'workflow-deal-won', name: '商談成約後の準備', description: '成約した商談から契約・キックオフの準備項目を作成する。顧客への連絡前に担当者が確認する。', triggerEvent: 'deal_won', aiMode: 'prepare', approvalPolicy: 'external_actions', isEnabled: false },
-  { id: 'workflow-contract-signed', name: '契約締結後の請求準備', description: '締結済み契約をもとに請求内容の初稿を準備し、発行前に担当者が確認する。', triggerEvent: 'contract_signed', aiMode: 'prepare', approvalPolicy: 'always', isEnabled: false },
-  { id: 'workflow-invoice-overdue', name: '請求期限超過の対応案', description: '期限を過ぎた請求を検出し、社内通知や顧客への連絡案を作成する。', triggerEvent: 'invoice_overdue', aiMode: 'suggest', approvalPolicy: 'always', isEnabled: false },
-  { id: 'workflow-project-milestone', name: '支援マイルストーンの振り返り', description: '支援の節目に進捗・課題を要約し、次の対応案を提示する。', triggerEvent: 'project_milestone', aiMode: 'suggest', approvalPolicy: 'external_actions', isEnabled: false },
+  { id: 'workflow-diagnosis-submitted', name: '診断回答の確認・分析', description: '診断フォームの回答を整理し、課題・追加確認事項・改善案をまとめる。', triggerEvent: 'diagnosis_submitted', aiMode: 'prepare', approvalPolicy: 'always', isEnabled: false, taskDueInDays: 3 },
+  { id: 'workflow-deal-won', name: '商談成約後の準備', description: '成約した商談から契約・キックオフの準備項目を作成する。顧客への連絡前に担当者が確認する。', triggerEvent: 'deal_won', aiMode: 'prepare', approvalPolicy: 'external_actions', isEnabled: false, taskDueInDays: 3 },
+  { id: 'workflow-contract-signed', name: '契約締結後の請求準備', description: '締結済み契約をもとに請求内容の初稿を準備し、発行前に担当者が確認する。', triggerEvent: 'contract_signed', aiMode: 'prepare', approvalPolicy: 'always', isEnabled: false, taskDueInDays: 3 },
+  { id: 'workflow-invoice-overdue', name: '請求期限超過の対応案', description: '期限を過ぎた請求を検出し、社内通知や顧客への連絡案を作成する。', triggerEvent: 'invoice_overdue', aiMode: 'suggest', approvalPolicy: 'always', isEnabled: false, taskDueInDays: 1 },
+  { id: 'workflow-project-milestone', name: '支援マイルストーンの振り返り', description: '支援の節目に進捗・課題を要約し、次の対応案を提示する。', triggerEvent: 'project_milestone', aiMode: 'suggest', approvalPolicy: 'external_actions', isEnabled: false, taskDueInDays: 3 },
 ];
 
 export function normalizeAutomationRules(value: unknown): AutomationRule[] {
@@ -286,7 +286,8 @@ export function normalizeAutomationRules(value: unknown): AutomationRule[] {
     if (!existing || !('aiMode' in existing) || !('approvalPolicy' in existing) || !('isEnabled' in existing)) return { ...preset };
     const aiMode = existing.aiMode === 'suggest' || existing.aiMode === 'prepare' || existing.aiMode === 'execute' ? existing.aiMode : preset.aiMode;
     const approvalPolicy = existing.approvalPolicy === 'always' || existing.approvalPolicy === 'external_actions' || existing.approvalPolicy === 'none' ? existing.approvalPolicy : preset.approvalPolicy;
-    return { ...preset, aiMode, approvalPolicy, isEnabled: Boolean(existing.isEnabled), updatedAt: existing.updatedAt };
+    const dueDays = Number.isFinite(Number(existing.taskDueInDays)) ? Math.min(90, Math.max(1, Math.floor(Number(existing.taskDueInDays)))) : preset.taskDueInDays;
+    return { ...preset, aiMode, approvalPolicy, isEnabled: Boolean(existing.isEnabled), taskDueInDays: dueDays, updatedAt: existing.updatedAt };
   });
 }
 

@@ -817,10 +817,36 @@ function AppContent() {
       createdAt: now,
       updatedAt: now,
     };
-    const nextTasks = [task, ...tasks];
+    const automationRule = event.transitionType === 'deal_to_customer'
+      ? automations.find((rule) => rule.id === 'workflow-deal-won' && rule.isEnabled)
+      : undefined;
+    const targetRecordId = event.targetRecordId ? String(event.targetRecordId) : undefined;
+    const duplicateAutomationTask = automationRule && targetRecordId
+      ? tasks.some((item) => item.sourceAutomationId === automationRule.id && item.relatedRecord?.id === targetRecordId)
+      : false;
+    if (duplicateAutomationTask) return;
+    const taskWithRule: TaskItem = automationRule
+      ? {
+          ...task,
+          description: `${task.description} 自動化ルール「${automationRule.name}」: ${automationRule.description}`,
+          assignee: automationRule.aiMode === 'suggest'
+            ? { type: 'human', name: '人間 (あなた)' }
+            : task.assignee,
+          sourceAutomationId: automationRule.id,
+          dueDate: (() => {
+            const due = new Date();
+            due.setDate(due.getDate() + automationRule.taskDueInDays);
+            return `${due.getFullYear()}-${String(due.getMonth() + 1).padStart(2, '0')}-${String(due.getDate()).padStart(2, '0')}`;
+          })(),
+        }
+      : task;
+    const nextTasks = [taskWithRule, ...tasks];
     setTasks(nextTasks);
     saveTasks(nextTasks);
-    recordActivityLog('task_created', `CRMの段階移行からタスク「${task.title}」を作成しました（関連: ${sourceLabel}）`, 'システム');
+    recordActivityLog('task_created', `CRMの段階移行からタスク「${taskWithRule.title}」を作成しました（関連: ${sourceLabel}）`, 'システム');
+    if (automationRule) {
+      recordActivityLog('task_created', `自動化ルール「${automationRule.name}」を適用し、期限付きタスクを作成しました（期限: ${taskWithRule.dueDate}）`, 'システム');
+    }
     setActivityLogs(loadActivityLogs());
   };
 
