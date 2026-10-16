@@ -14,7 +14,8 @@ import {
   Info,
   ArrowRight,
   Briefcase,
-  UserCheck
+  UserCheck,
+  FileText
 } from 'lucide-react';
 import { TransitionType } from './StageTransitionModal';
 
@@ -24,6 +25,7 @@ interface RecordDetailModalProps {
   onClose: () => void;
   onEdit: (record: any) => void;
   onTransitionStage?: (type: TransitionType, record: any) => void;
+  onOpenCustomerWorkspace?: (companyId: string, destination: 'documents' | 'operations') => void;
 }
 
 export const RecordDetailModal: React.FC<RecordDetailModalProps> = ({
@@ -32,6 +34,7 @@ export const RecordDetailModal: React.FC<RecordDetailModalProps> = ({
   onClose,
   onEdit,
   onTransitionStage,
+  onOpenCustomerWorkspace,
 }) => {
   if (!record) return null;
   const config = TABLE_CONFIGS[tableKey];
@@ -315,7 +318,25 @@ export const RecordDetailModal: React.FC<RecordDetailModalProps> = ({
           <span className="text-xs text-slate-500">
             ※ 社内ポリシーによりデータの削除機能は提供されていません。
           </span>
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 flex-wrap">
+            {tableKey === 'customers' && onOpenCustomerWorkspace && record.company_id && (
+              <>
+                <button
+                  onClick={() => { onClose(); onOpenCustomerWorkspace(String(record.company_id), 'documents'); }}
+                  className="px-3 py-2 rounded-xl text-xs font-medium text-cyan-200 hover:bg-cyan-950/40 border border-cyan-800 transition-colors flex items-center gap-1.5"
+                >
+                  <FileText className="w-3.5 h-3.5" />
+                  <span>顧客書類</span>
+                </button>
+                <button
+                  onClick={() => { onClose(); onOpenCustomerWorkspace(String(record.company_id), 'operations'); }}
+                  className="px-3 py-2 rounded-xl text-xs font-medium text-emerald-200 hover:bg-emerald-950/40 border border-emerald-800 transition-colors flex items-center gap-1.5"
+                >
+                  <Briefcase className="w-3.5 h-3.5" />
+                  <span>契約・請求・支援</span>
+                </button>
+              </>
+            )}
             <button
               onClick={onClose}
               className="px-4 py-2 rounded-xl text-xs font-medium text-slate-300 hover:bg-slate-800 border border-slate-700 transition-colors"
