@@ -68,6 +68,15 @@ CREATE TABLE IF NOT EXISTS public.mst_ai_activity_logs (
   PRIMARY KEY (user_id, id)
 );
 
+CREATE TABLE IF NOT EXISTS public.mst_ai_user_preferences (
+  user_id uuid PRIMARY KEY REFERENCES auth.users(id) ON DELETE CASCADE,
+  active_character_id text,
+  characters jsonb NOT NULL DEFAULT '[]'::jsonb,
+  user_profile jsonb NOT NULL DEFAULT '{}'::jsonb,
+  ai_model_settings jsonb NOT NULL DEFAULT '{}'::jsonb,
+  updated_at timestamptz NOT NULL DEFAULT now()
+);
+
 CREATE TABLE IF NOT EXISTS public.mst_ai_operations_sync_state (
   user_id uuid PRIMARY KEY REFERENCES auth.users(id) ON DELETE CASCADE,
   migrated_at timestamptz NOT NULL DEFAULT now(),
@@ -96,6 +105,7 @@ ALTER TABLE public.mst_ai_approvals ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.mst_ai_automation_rules ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.mst_ai_activity_logs ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.mst_ai_operations_sync_state ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.mst_ai_user_preferences ENABLE ROW LEVEL SECURITY;
 
 DO $$
 DECLARE
@@ -107,7 +117,8 @@ BEGIN
     'mst_ai_approvals',
     'mst_ai_automation_rules',
     'mst_ai_activity_logs',
-    'mst_ai_operations_sync_state'
+    'mst_ai_operations_sync_state',
+    'mst_ai_user_preferences'
   ] LOOP
     EXECUTE format('DROP POLICY IF EXISTS %I ON public.%I', 'Users can manage own ' || table_name, table_name);
     EXECUTE format(
@@ -125,7 +136,11 @@ CREATE OR REPLACE FUNCTION public.mst_save_ai_operations(
   p_tasks jsonb,
   p_approvals jsonb,
   p_automation_rules jsonb,
-  p_activity_logs jsonb
+  p_activity_logs jsonb,
+  p_user_profile jsonb,
+  p_characters jsonb,
+  p_active_character_id text,
+  p_ai_model_settings jsonb
 )
 RETURNS void
 LANGUAGE plpgsql
@@ -137,6 +152,9 @@ DECLARE
   v_approvals jsonb := COALESCE(p_approvals, '[]'::jsonb);
   v_automation_rules jsonb := COALESCE(p_automation_rules, '[]'::jsonb);
   v_activity_logs jsonb := COALESCE(p_activity_logs, '[]'::jsonb);
+  v_user_profile jsonb := COALESCE(p_user_profile, '{}'::jsonb);
+  v_characters jsonb := COALESCE(p_characters, '[]'::jsonb);
+  v_ai_model_settings jsonb := COALESCE(p_ai_model_settings, '{}'::jsonb);
 BEGIN
   IF auth.uid() IS DISTINCT FROM p_user_id THEN
     RAISE EXCEPTION 'ユーザーの業務データを更新する権限がありません';
@@ -145,9 +163,24 @@ BEGIN
     OR pg_catalog.jsonb_typeof(v_tasks) <> 'array'
     OR pg_catalog.jsonb_typeof(v_approvals) <> 'array'
     OR pg_catalog.jsonb_typeof(v_automation_rules) <> 'array'
-    OR pg_catalog.jsonb_typeof(v_activity_logs) <> 'array' THEN
-    RAISE EXCEPTION 'AI業務データは配列で指定してください';
+    OR pg_catalog.jsonb_typeof(v_activity_logs) <> 'array'
+    OR pg_catalog.jsonb_typeof(v_user_profile) <> 'object'
+    OR pg_catalog.jsonb_typeof(v_characters) <> 'array'
+    OR pg_catalog.jsonb_typeof(v_ai_model_settings) <> 'object' THEN
+    RAISE EXCEPTION 'AI業務データまたはユーザー設定の形式が正しくありません';
   END IF;
+
+  INSERT INTO public.mst_ai_user_preferences (
+    user_id, active_character_id, characters, user_profile, ai_model_settings, updated_at
+  ) VALUES (
+    p_user_id, NULLIF(p_active_character_id, ''), v_characters, v_user_profile, v_ai_model_settings, pg_catalog.now()
+  )
+  ON CONFLICT (user_id) DO UPDATE SET
+    active_character_id = EXCLUDED.active_character_id,
+    characters = EXCLUDED.characters,
+    user_profile = EXCLUDED.user_profile,
+    ai_model_settings = EXCLUDED.ai_model_settings,
+    updated_at = EXCLUDED.updated_at;
 
   INSERT INTO public.mst_ai_projects (
     user_id, id, name, status, priority, due_date, created_at, updated_at, payload
@@ -318,5 +351,5 @@ BEGIN
 END;
 $$;
 
-REVOKE ALL ON FUNCTION public.mst_save_ai_operations(uuid, jsonb, jsonb, jsonb, jsonb, jsonb) FROM PUBLIC, anon;
-GRANT EXECUTE ON FUNCTION public.mst_save_ai_operations(uuid, jsonb, jsonb, jsonb, jsonb, jsonb) TO authenticated;
+REVOKE ALL ON FUNCTION public.mst_save_ai_operations(uuid, jsonb, jsonb, jsonb, jsonb, jsonb, jsonb, jsonb, text, jsonb) FROM PUBLIC, anon;
+GRANT EXECUTE ON FUNCTION public.mst_save_ai_operations(uuid, jsonb, jsonb, jsonb, jsonb, jsonb, jsonb, jsonb, text, jsonb) TO authenticated;
