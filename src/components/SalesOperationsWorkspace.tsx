@@ -19,6 +19,18 @@ const opsTabs = [
   { key: 'services', label: '顧問・構築支援', table: 'customer_service_engagements', icon: Wrench },
 ] as const;
 
+const localDateString = (date = new Date()) => {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+};
+const defaultInvoiceDueDate = (date = new Date()) => {
+  const due = new Date(date.getFullYear(), date.getMonth(), 25);
+  if (date.getDate() >= 25) due.setMonth(due.getMonth() + 1);
+  return localDateString(due);
+};
+
 interface Props { tab: WorkspaceTab; companyId?: string; leadId?: string; dealId?: string; onClearCompanyFilter?: () => void; onOperationalRecordsChange?: (contracts: ManagedContract[], invoices: ManagedInvoice[]) => void; }
 
 export const SalesOperationsWorkspace: React.FC<Props> = ({ tab, companyId, leadId, dealId, onClearCompanyFilter, onOperationalRecordsChange }) => {
@@ -55,6 +67,21 @@ export const SalesOperationsWorkspace: React.FC<Props> = ({ tab, companyId, lead
   const [previewRows, setPreviewRows] = useState<RecordRow[]>([]);
 
   const selectedOps = opsTabs.find((item) => item.key === activeOpsTab) || opsTabs[0];
+
+  useEffect(() => {
+    if (!formOpen || activeOpsTab === 'services') return;
+    const supabase = getSupabase();
+    setRecordDate(activeOpsTab === 'invoices' ? defaultInvoiceDueDate() : localDateString());
+    setRecordTitle(activeOpsTab === 'invoices' ? '請求書' : '契約書');
+    if (!dealId || !supabase) { setRecordAmount(''); return; }
+    let cancelled = false;
+    void supabase.from('deals').select('*').eq('id', dealId).maybeSingle().then(({data}) => {
+      if (cancelled || !data) return;
+      setRecordTitle(data.deal_name || data.proposal_plan_name || (activeOpsTab === 'invoices' ? '請求書' : '契約書'));
+      setRecordAmount(data.total_amount == null ? '' : String(data.total_amount));
+    });
+    return () => { cancelled = true; };
+  }, [formOpen, activeOpsTab, dealId]);
 
   const load = async () => {
     const supabase = getSupabase();
@@ -203,11 +230,11 @@ export const SalesOperationsWorkspace: React.FC<Props> = ({ tab, companyId, lead
       payload.status = 'draft';
       payload.contract_type = 'service_agreement';
     } else if (activeOpsTab === 'invoices') {
-      payload.invoice_number = `INV-${new Date().toISOString().slice(0, 10).replaceAll('-', '')}-${crypto.randomUUID().slice(0, 6).toUpperCase()}`;
+      payload.invoice_number = `INV-${localDateString().replaceAll('-', '')}-${crypto.randomUUID().slice(0, 6).toUpperCase()}`;
       payload.amount = Number(recordAmount) || 0;
       payload.recipient_name = companies.find((company)=>company.id===operationCompanyId)?.company_name || null;
       payload.due_date = recordDate || null;
-      payload.issue_date = new Date().toISOString().slice(0, 10);
+      payload.issue_date = localDateString();
       payload.status = 'draft';
     } else {
       payload.service_type = serviceType;
@@ -279,11 +306,11 @@ export const SalesOperationsWorkspace: React.FC<Props> = ({ tab, companyId, lead
       </div>}
       <div className="flex flex-wrap items-center justify-between gap-3"><div className="flex flex-wrap gap-2">{opsTabs.map(({key,label,icon:Icon}) => <button key={key} onClick={() => setActiveOpsTab(key)} className={`flex items-center gap-2 rounded-lg px-3 py-2 text-sm ${activeOpsTab===key?'bg-blue-600 text-white':'border border-slate-700 text-slate-300 hover:bg-slate-800'}`}><Icon className="h-4 w-4" />{label}</button>)}</div><button onClick={() => setFormOpen((value) => !value)} className="flex items-center gap-2 rounded-lg bg-blue-600 px-3 py-2 text-sm font-semibold text-white"><Plus className="h-4 w-4" />新規登録</button></div>
       {formOpen && <form onSubmit={createOperation} className="grid gap-3 rounded-lg border border-slate-800 bg-slate-950 p-4 md:grid-cols-2">
-        <label className="text-xs text-slate-400">名称<input required value={recordTitle} onChange={(e)=>setRecordTitle(e.target.value)} className="mt-1 w-full rounded border border-slate-700 bg-slate-900 px-3 py-2 text-sm text-white" /></label>
+        <label className="text-xs text-slate-400">名称（初期入力済み・必要な場合のみ修正）<input required value={recordTitle} onChange={(e)=>setRecordTitle(e.target.value)} className="mt-1 w-full rounded border border-slate-700 bg-slate-900 px-3 py-2 text-sm text-white" /></label>
         <label className="text-xs text-slate-400">会社<select value={companyId || recordCompany} disabled={Boolean(companyId)} onChange={(e)=>setRecordCompany(e.target.value)} className="mt-1 w-full rounded border border-slate-700 bg-slate-900 px-3 py-2 text-sm text-white disabled:opacity-70"><option value="">会社を選択</option>{companies.map(company=><option key={company.id} value={company.id}>{company.company_name}</option>)}</select></label>
         {activeOpsTab === 'services' && <label className="text-xs text-slate-400">支援種別<select value={serviceType} onChange={(e)=>setServiceType(e.target.value as 'retainer'|'implementation_support')} className="mt-1 w-full rounded border border-slate-700 bg-slate-900 px-3 py-2 text-sm text-white"><option value="retainer">顧問</option><option value="implementation_support">構築支援</option></select></label>}
-        {activeOpsTab !== 'services' && <label className="text-xs text-slate-400">金額<input type="number" min="0" value={recordAmount} onChange={(e)=>setRecordAmount(e.target.value)} className="mt-1 w-full rounded border border-slate-700 bg-slate-900 px-3 py-2 text-sm text-white" /></label>}
-        <label className="text-xs text-slate-400">{activeOpsTab==='contracts'?'開始日':activeOpsTab==='invoices'?'支払期限':'次回面談'}<input type={activeOpsTab==='services'?'datetime-local':'date'} value={recordDate} onChange={(e)=>setRecordDate(e.target.value)} className="mt-1 w-full rounded border border-slate-700 bg-slate-900 px-3 py-2 text-sm text-white" /></label>
+        {activeOpsTab !== 'services' && <label className="text-xs text-slate-400">金額（商談から初期入力・必要な場合のみ修正）<input type="number" min="0" value={recordAmount} onChange={(e)=>setRecordAmount(e.target.value)} className="mt-1 w-full rounded border border-slate-700 bg-slate-900 px-3 py-2 text-sm text-white" /></label>}
+        <label className="text-xs text-slate-400">{activeOpsTab==='contracts'?'開始日':activeOpsTab==='invoices'?'支払期限（当月25日／25日以降は翌月25日）':'次回面談'}<input type={activeOpsTab==='services'?'datetime-local':'date'} value={recordDate} onChange={(e)=>setRecordDate(e.target.value)} className="mt-1 w-full rounded border border-slate-700 bg-slate-900 px-3 py-2 text-sm text-white" /></label>
         <div className="md:col-span-2"><button className="rounded-lg bg-emerald-700 px-3 py-2 text-sm font-semibold text-white">保存</button></div>
       </form>}
       {loading ? <p className="text-sm text-slate-400">読み込み中…</p> : records.length === 0 ? <p className="py-8 text-center text-sm text-slate-400">登録データはありません。</p> : <div className="overflow-x-auto"><table className="w-full text-left text-sm"><thead><tr className="border-b border-slate-800 text-xs text-slate-400"><th className="p-2">名称</th><th className="p-2">会社</th><th className="p-2">状態</th><th className="p-2">金額</th><th className="p-2">日付</th></tr></thead><tbody>{records.map((record)=><tr key={record.id} className="border-b border-slate-800/70 text-slate-200"><td className="p-2">{record.title || record.invoice_number}</td><td className="p-2">{record.company_id || '—'}</td><td className="p-2"><select aria-label={`${record.title||record.invoice_number}の状態`} value={record.status} onChange={(e)=>void updateOperationStatus(record,e.target.value)} className="rounded border border-slate-700 bg-slate-950 px-2 py-1 text-xs text-white">{(activeOpsTab==='contracts'?['draft','under_review','sent','signed','expired','canceled']:activeOpsTab==='invoices'?['draft','awaiting_approval','issued','paid','overdue','canceled']:['planned','active','paused','completed','canceled']).map(status=><option key={status} value={status}>{status}</option>)}</select></td><td className="p-2">{record.amount == null?'—':Number(record.amount).toLocaleString('ja-JP')+'円'}</td><td className="p-2">{record.due_date || record.start_date || (record.next_meeting_at ? new Date(record.next_meeting_at).toLocaleString('ja-JP') : '—')}</td></tr>)}</tbody></table></div>}

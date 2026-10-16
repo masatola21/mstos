@@ -18,6 +18,25 @@ import {
 
 export type DocTemplateType = 'contract' | 'proposal' | 'invoice' | 'report';
 
+const localDateString = (date = new Date()) => {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+};
+const addOneMonthDate = (date: Date) => {
+  const target = new Date(date.getFullYear(), date.getMonth() + 1, 1);
+  const lastDay = new Date(target.getFullYear(), target.getMonth() + 1, 0).getDate();
+  target.setDate(Math.min(date.getDate(), lastDay));
+  return localDateString(target);
+};
+const invoiceDueDate = (date = new Date()) => {
+  const due = new Date(date.getFullYear(), date.getMonth(), 25);
+  if (date.getDate() >= 25) due.setMonth(due.getMonth() + 1);
+  return localDateString(due);
+};
+const formatDocumentDate = (value: string) => value ? value.replace(/^(\d{4})-(\d{2})-(\d{2})$/, '$1年$2月$3日') : '';
+
 interface DocTemplate {
   id: string;
   type: DocTemplateType;
@@ -406,10 +425,12 @@ export const DocumentTemplateView: React.FC<DocumentTemplateViewProps> = ({ init
         leadId ? supabase.from('leads').select('*').eq('id', leadId).maybeSingle() : Promise.resolve({data:null}),
         dealId ? supabase.from('deals').select('*').eq('id', dealId).maybeSingle() : Promise.resolve({data:null}),
       ]);
-      const company = companyResult.data;
       const lead = leadResult.data;
       const deal = dealResult.data;
       const resolvedCompanyId = companyId || deal?.company_id || lead?.company_id || '';
+      const company = companyResult.data || (resolvedCompanyId
+        ? (await supabase.from('companies').select('*').eq('id', resolvedCompanyId).maybeSingle()).data
+        : null);
       let diagnosis: any = null;
       if (leadId || resolvedCompanyId) {
         let diagnosisQuery = supabase.from('diagnoses').select('*').order('created_at', {ascending:false}).limit(1);
@@ -434,19 +455,32 @@ export const DocumentTemplateView: React.FC<DocumentTemplateViewProps> = ({ init
       const recommendationText = Array.isArray(recommendations)
         ? recommendations.map((item:any) => typeof item === 'string' ? item : item?.title || item?.description || JSON.stringify(item)).join(' / ')
         : typeof recommendations === 'string' ? recommendations : '';
-      const today = new Date().toISOString().slice(0, 10);
+      const today = localDateString();
+      const quoteExpiry = addOneMonthDate(new Date());
+      const invoiceDue = invoiceDueDate();
+      const amount = Number(deal?.total_amount ?? 0);
+      const initialFee = Number(deal?.initial_fee ?? 0);
+      const monthlyFee = Number(deal?.monthly_fee ?? 0);
+      const tax = Math.round(amount / 11);
+      const invoiceNumber = `INV-${today.replaceAll('-', '')}-${(deal?.id || crypto.randomUUID()).slice(0, 6).toUpperCase()}`;
       const values: Record<string, string> = {
         client_company: company?.company_name || '',
         client_name: company?.contact_name || '',
-        sender_company: company?.company_name || '',
-        proposal_title: deal?.proposal_plan_name || deal?.deal_name || '',
-        project_name: deal?.proposal_plan_name || deal?.deal_name || '',
-        total_amount: deal?.total_amount == null ? '' : Number(deal.total_amount).toLocaleString('ja-JP'),
-        initial_fee: deal?.initial_fee == null ? '' : Number(deal.initial_fee).toLocaleString('ja-JP'),
-        monthly_fee: deal?.monthly_fee == null ? '' : Number(deal.monthly_fee).toLocaleString('ja-JP'),
-        issue_date: today,
-        conducted_date: diagnosis?.conducted_at ? String(diagnosis.conducted_at).slice(0,10) : today,
-        due_date: '',
+        sender_company: '',
+        proposal_title: deal?.proposal_plan_name || deal?.deal_name || 'お見積り',
+        project_name: deal?.proposal_plan_name || deal?.deal_name || productName || 'サービス',
+        total_amount: amount.toLocaleString('ja-JP'),
+        subtotal_amount: Math.max(0, amount - tax).toLocaleString('ja-JP'),
+        tax_amount: tax.toLocaleString('ja-JP'),
+        initial_fee: initialFee.toLocaleString('ja-JP'),
+        monthly_fee: monthlyFee.toLocaleString('ja-JP'),
+        invoice_number: invoiceNumber,
+        item_name_1: deal?.proposal_plan_name || deal?.deal_name || productName || 'サービス提供費',
+        item_qty_1: '1', item_price_1: Math.max(0, amount - tax).toLocaleString('ja-JP'), item_amount_1: Math.max(0, amount - tax).toLocaleString('ja-JP'),
+        item_name_2: 'なし', item_qty_2: '0', item_price_2: '0', item_amount_2: '0',
+        issue_date: formatDocumentDate(today),
+        conducted_date: formatDocumentDate(diagnosis?.conducted_at ? String(diagnosis.conducted_at).slice(0,10) : today),
+        due_date: formatDocumentDate(selectedTemplateId === 'tpl-estimate-01' ? quoteExpiry : invoiceDue),
         overall_score: score == null ? '' : String(score),
         score_rank: score == null ? '' : score >= 80 ? 'A' : score >= 60 ? 'B' : score >= 40 ? 'C' : 'D',
         rank_description: report?.summary || '',
@@ -458,20 +492,21 @@ export const DocumentTemplateView: React.FC<DocumentTemplateViewProps> = ({ init
         comment_sales: report?.summary || '',
         comment_automation: recommendationText,
       };
-      setVariableValues((prev) => ({...prev, ...Object.fromEntries(Object.entries(values).filter(([,value]) => value !== ''))}));
+      setVariableValues((prev) => ({...prev, ...values}));
     };
     void populate();
     return () => { cancelled = true; };
-  }, [companyId, leadId, dealId]);
+  }, [companyId, leadId, dealId, selectedTemplateId]);
 
   // Active template
   const currentTemplate = templates.find((t) => t.id === selectedTemplateId) || templates[0];
 
   // Variable inputs state
   const [variableValues, setVariableValues] = useState<Record<string, string>>(() => {
+    const today = localDateString();
     const initial: Record<string, string> = {};
     (DEFAULT_TEMPLATES.find((template) => template.type === 'report') || DEFAULT_TEMPLATES[0]).variables.forEach((v) => {
-      initial[v.key] = v.defaultValue;
+      initial[v.key] = v.key === 'issue_date' || v.key === 'conducted_date' ? formatDocumentDate(today) : '';
     });
     return initial;
   });
@@ -481,9 +516,18 @@ export const DocumentTemplateView: React.FC<DocumentTemplateViewProps> = ({ init
     setSelectedTemplateId(id);
     const target = templates.find((t) => t.id === id);
     if (target) {
+      const today = localDateString();
       const newVals: Record<string, string> = {};
       target.variables.forEach((v) => {
-        newVals[v.key] = v.defaultValue;
+        const fallbackByKey: Record<string, string> = {
+          issue_date: formatDocumentDate(today), conducted_date: formatDocumentDate(today),
+          due_date: formatDocumentDate(target.id === 'tpl-estimate-01' ? addOneMonthDate(new Date()) : target.type === 'invoice' ? invoiceDueDate() : ''),
+          invoice_number: `INV-${today.replaceAll('-', '')}-${crypto.randomUUID().slice(0, 6).toUpperCase()}`,
+          item_qty_1: '1', item_price_1: '0', item_amount_1: '0', item_name_1: 'サービス提供費',
+          item_qty_2: '0', item_price_2: '0', item_amount_2: '0', item_name_2: 'なし',
+          total_amount: '0', subtotal_amount: '0', tax_amount: '0', initial_fee: '0', monthly_fee: '0',
+        };
+        newVals[v.key] = fallbackByKey[v.key] ?? '';
       });
       setVariableValues(newVals);
     }
@@ -693,7 +737,7 @@ export const DocumentTemplateView: React.FC<DocumentTemplateViewProps> = ({ init
             ) : (
               <div className="space-y-4 max-h-[550px] overflow-y-auto pr-1">
                 <p className="text-xs text-slate-400">
-                  以下のフォームに入力すると、右側の文書ひな形にリアルタイムで自動反映されます。
+                  顧客・商談情報と日付ルールを初期反映しています。内容を確認し、必要な箇所だけ修正してください。
                 </p>
                 {currentTemplate.variables.map((v) => (
                   <div key={v.key} className="space-y-1">
@@ -708,7 +752,7 @@ export const DocumentTemplateView: React.FC<DocumentTemplateViewProps> = ({ init
                       value={variableValues[v.key] ?? ''}
                       onChange={(e) => handleVariableChange(v.key, e.target.value)}
                       className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-cyan-500 transition-colors"
-                      placeholder={`${v.label}を入力...`}
+                      placeholder={`${v.label}（自動入力済み。必要な場合のみ修正）`}
                     />
                   </div>
                 ))}
