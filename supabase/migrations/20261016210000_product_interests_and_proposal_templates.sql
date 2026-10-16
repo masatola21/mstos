@@ -39,6 +39,8 @@ ALTER TABLE public.deals
 
 ALTER TABLE public.proposal_plan_templates ENABLE ROW LEVEL SECURITY;
 
+GRANT SELECT, INSERT, UPDATE, DELETE ON public.proposal_plan_templates TO authenticated;
+
 DROP POLICY IF EXISTS "Owners manage proposal plan templates" ON public.proposal_plan_templates;
 CREATE POLICY "Owners manage proposal plan templates"
   ON public.proposal_plan_templates
