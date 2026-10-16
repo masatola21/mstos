@@ -6,6 +6,7 @@ type FormType = 'diagnosis' | 'consultation' | 'meeting';
 type DiagnosisForm = { id: string; name: string; public_slug: string; form_type: FormType; status: 'draft'|'published'|'paused'|'archived'; questionnaire_version: string; definition: Record<string, unknown>; privacy_notice: string|null; created_at: string };
 type Submission = { id: string; form_id: string; contact_id: string|null; company_id: string|null; lead_id: string|null; status: 'received'|'reviewing'|'converted'|'rejected'; respondent_name: string|null; respondent_email: string|null; answers: Record<string, unknown>; score: number|null; submitted_at: string; reviewer_memo: string|null };
 
+const DEFAULT_PRIVACY_NOTICE = 'ご入力いただいた情報は、診断・相談・面談のお申し込みへの対応および関連するご案内のために利用します。個人情報の取り扱いに関するお問い合わせは、運営者までご連絡ください。なお、この文案は初期例です。実際の利用目的・保管方法・問い合わせ先に合わせて編集してください。';
 const FORM_TYPES: { value: FormType; label: string }[] = [
   { value: 'diagnosis', label: '診断申込' },
   { value: 'consultation', label: '相談申込' },
@@ -33,7 +34,7 @@ export const DiagnosisFormsWorkspace: React.FC = () => {
   const [name, setName] = useState('');
   const [formType, setFormType] = useState<FormType>('diagnosis');
   const [definitionText, setDefinitionText] = useState(JSON.stringify(QUESTION_EXAMPLES.diagnosis, null, 2));
-  const [privacyNotice, setPrivacyNotice] = useState('');
+  const [privacyNotice, setPrivacyNotice] = useState(DEFAULT_PRIVACY_NOTICE);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [notice, setNotice] = useState('');
@@ -59,7 +60,7 @@ export const DiagnosisFormsWorkspace: React.FC = () => {
 
   const resetForm = () => {
     setSelectedId(''); setName(''); setFormType('diagnosis');
-    setPrivacyNotice(''); setDefinitionText(JSON.stringify(QUESTION_EXAMPLES.diagnosis, null, 2));
+    setPrivacyNotice(DEFAULT_PRIVACY_NOTICE); setDefinitionText(JSON.stringify(QUESTION_EXAMPLES.diagnosis, null, 2));
   };
 
   const saveForm = async (event: React.FormEvent) => {
@@ -130,7 +131,7 @@ export const DiagnosisFormsWorkspace: React.FC = () => {
 
   const selectForm=(form:DiagnosisForm)=>{
     setSelectedId(form.id);setName(form.name);setFormType(form.form_type || 'diagnosis');
-    setPrivacyNotice(form.privacy_notice||'');
+    setPrivacyNotice(form.privacy_notice||DEFAULT_PRIVACY_NOTICE);
     setDefinitionText(JSON.stringify(form.definition,null,2));
   };
 
@@ -178,7 +179,7 @@ export const DiagnosisFormsWorkspace: React.FC = () => {
         <div className="mb-2 flex items-center justify-between"><h3 className="font-semibold text-white"><Plus className="mr-1 inline h-4 w-4"/>{selectedId?'フォーム定義を編集':'新しいフォーム定義'}</h3>{selectedId&&<button type="button" onClick={resetForm} className="text-xs text-blue-300">新規フォーム</button>}</div>
         <label className="block text-xs text-slate-400">受付の種類<select value={formType} onChange={e=>{const next=e.target.value as FormType;setFormType(next);if(!selectedId)setDefinitionText(JSON.stringify(QUESTION_EXAMPLES[next],null,2));}} className="mt-1 w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-white">{FORM_TYPES.map(type=><option key={type.value} value={type.value}>{type.label}</option>)}</select></label>
         <label className="block text-xs text-slate-400">フォーム名<input required value={name} onChange={e=>setName(e.target.value)} className="mt-1 w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-white" placeholder="例：介護保険外開業診断"/></label>
-        <label className="block text-xs text-slate-400">個人情報の取り扱い案内<textarea required value={privacyNotice} onChange={e=>setPrivacyNotice(e.target.value)} rows={3} className="mt-1 w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-white" placeholder="利用目的、保管方法、問い合わせ先など"/></label>
+        <label className="block text-xs text-slate-400">個人情報の取り扱い案内<textarea required value={privacyNotice} onChange={e=>setPrivacyNotice(e.target.value)} rows={3} className="mt-1 w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-white" placeholder="初期文案です。実際の利用目的・保管方法・問い合わせ先に合わせて編集してください。"/></label>
         <label className="block text-xs text-slate-400">フォーム説明・設問（JSON）<textarea value={definitionText} onChange={e=>setDefinitionText(e.target.value)} rows={12} className="mt-1 w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 font-mono text-xs text-white"/></label>
         <p className="text-xs leading-5 text-slate-500">設問はJSONの questions に設定します。型: text / textarea / select / radio / checkbox / date。各設問に id・label・type・required を指定し、選択式には options を追加します。</p>
         <button disabled={loading} className="flex items-center gap-2 rounded-lg bg-blue-600 px-3 py-2 text-sm font-semibold text-white disabled:opacity-50"><Save className="h-4 w-4"/>{selectedId?'変更を保存':'下書き保存'}</button>
