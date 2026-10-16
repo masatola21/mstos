@@ -18,9 +18,9 @@ const opsTabs = [
   { key: 'services', label: '顧問・構築支援', table: 'customer_service_engagements', icon: Wrench },
 ] as const;
 
-interface Props { tab: WorkspaceTab; onOperationalRecordsChange?: (contracts: ManagedContract[], invoices: ManagedInvoice[]) => void; }
+interface Props { tab: WorkspaceTab; companyId?: string; onClearCompanyFilter?: () => void; onOperationalRecordsChange?: (contracts: ManagedContract[], invoices: ManagedInvoice[]) => void; }
 
-export const SalesOperationsWorkspace: React.FC<Props> = ({ tab, onOperationalRecordsChange }) => {
+export const SalesOperationsWorkspace: React.FC<Props> = ({ tab, companyId, onClearCompanyFilter, onOperationalRecordsChange }) => {
   const [segments, setSegments] = useState<Segment[]>([]);
   const [documents, setDocuments] = useState<RecordRow[]>([]);
   const [outbox, setOutbox] = useState<RecordRow[]>([]);
@@ -60,8 +60,10 @@ export const SalesOperationsWorkspace: React.FC<Props> = ({ tab, onOperationalRe
         if (queryError) throw queryError;
         setSegments((data || []) as Segment[]);
       } else if (tab === 'documents') {
+        let documentsQuery = supabase.from('customer_documents').select('*').order('created_at', { ascending: false }).limit(100);
+        if (companyId) documentsQuery = documentsQuery.eq('company_id', companyId);
         const [docs, messages, contactResult] = await Promise.all([
-          supabase.from('customer_documents').select('*').order('created_at', { ascending: false }).limit(100),
+          documentsQuery,
           supabase.from('communication_outbox').select('*').order('created_at', { ascending: false }).limit(100),
           supabase.from('contacts').select('id,full_name,email,line_user_id').order('full_name'),
         ]);
@@ -70,8 +72,10 @@ export const SalesOperationsWorkspace: React.FC<Props> = ({ tab, onOperationalRe
         if (contactResult.error) throw contactResult.error;
         setDocuments(docs.data || []); setOutbox(messages.data || []); setContacts(contactResult.data || []);
       } else {
+        let recordsQuery = supabase.from(selectedOps.table).select('*').order('created_at', { ascending: false });
+        if (companyId) recordsQuery = recordsQuery.eq('company_id', companyId);
         const [recordsResult, companyResult, contractsResult, invoicesResult] = await Promise.all([
-          supabase.from(selectedOps.table).select('*').order('created_at', { ascending: false }),
+          recordsQuery,
           supabase.from('companies').select('id,company_name').order('company_name'),
           supabase.from('customer_contracts').select('*').order('created_at', { ascending: false }),
           supabase.from('customer_invoices').select('*').order('created_at', { ascending: false }),
@@ -91,7 +95,7 @@ export const SalesOperationsWorkspace: React.FC<Props> = ({ tab, onOperationalRe
     finally { setLoading(false); }
   };
 
-  useEffect(() => { if (tab !== 'invitations') void load(); }, [tab, activeOpsTab]);
+  useEffect(() => { if (tab !== 'invitations') void load(); }, [tab, activeOpsTab, companyId]);
 
   const createSegment = async (event: React.FormEvent) => {
     event.preventDefault();
@@ -168,17 +172,18 @@ export const SalesOperationsWorkspace: React.FC<Props> = ({ tab, onOperationalRe
     event.preventDefault();
     const supabase = getSupabase();
     if (!supabase || !recordTitle.trim()) return;
-    const payload: RecordRow = { title: recordTitle.trim(), company_id: recordCompany || null };
+    const operationCompanyId = companyId || recordCompany;
+    const payload: RecordRow = { title: recordTitle.trim(), company_id: operationCompanyId || null };
     if (activeOpsTab === 'contracts') {
       payload.amount = Number(recordAmount) || 0;
-      payload.counterparty_name = companies.find((company)=>company.id===recordCompany)?.company_name || null;
+      payload.counterparty_name = companies.find((company)=>company.id===operationCompanyId)?.company_name || null;
       payload.start_date = recordDate || null;
       payload.status = 'draft';
       payload.contract_type = 'service_agreement';
     } else if (activeOpsTab === 'invoices') {
       payload.invoice_number = `INV-${new Date().toISOString().slice(0, 10).replaceAll('-', '')}-${crypto.randomUUID().slice(0, 6).toUpperCase()}`;
       payload.amount = Number(recordAmount) || 0;
-      payload.recipient_name = companies.find((company)=>company.id===recordCompany)?.company_name || null;
+      payload.recipient_name = companies.find((company)=>company.id===operationCompanyId)?.company_name || null;
       payload.due_date = recordDate || null;
       payload.issue_date = new Date().toISOString().slice(0, 10);
       payload.status = 'draft';
@@ -239,10 +244,14 @@ export const SalesOperationsWorkspace: React.FC<Props> = ({ tab, onOperationalRe
     {tab === 'invitations' && <DealInvitationPanel />}
 
     {tab === 'operations' && <section className="space-y-4 rounded-xl border border-slate-800 bg-slate-900 p-4">
+      {companyId && <div className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-cyan-900/70 bg-cyan-950/30 px-3 py-2 text-xs">
+        <span className="text-cyan-100">顧客に関連する契約・請求・支援を表示中：{companies.find((company)=>company.id===companyId)?.company_name || companyId}</span>
+        {onClearCompanyFilter && <button type="button" onClick={onClearCompanyFilter} className="rounded border border-cyan-800 px-2 py-1 text-cyan-100 hover:bg-cyan-900/50">全顧客を表示</button>}
+      </div>}
       <div className="flex flex-wrap items-center justify-between gap-3"><div className="flex flex-wrap gap-2">{opsTabs.map(({key,label,icon:Icon}) => <button key={key} onClick={() => setActiveOpsTab(key)} className={`flex items-center gap-2 rounded-lg px-3 py-2 text-sm ${activeOpsTab===key?'bg-blue-600 text-white':'border border-slate-700 text-slate-300 hover:bg-slate-800'}`}><Icon className="h-4 w-4" />{label}</button>)}</div><button onClick={() => setFormOpen((value) => !value)} className="flex items-center gap-2 rounded-lg bg-blue-600 px-3 py-2 text-sm font-semibold text-white"><Plus className="h-4 w-4" />新規登録</button></div>
       {formOpen && <form onSubmit={createOperation} className="grid gap-3 rounded-lg border border-slate-800 bg-slate-950 p-4 md:grid-cols-2">
         <label className="text-xs text-slate-400">名称<input required value={recordTitle} onChange={(e)=>setRecordTitle(e.target.value)} className="mt-1 w-full rounded border border-slate-700 bg-slate-900 px-3 py-2 text-sm text-white" /></label>
-        <label className="text-xs text-slate-400">会社<select value={recordCompany} onChange={(e)=>setRecordCompany(e.target.value)} className="mt-1 w-full rounded border border-slate-700 bg-slate-900 px-3 py-2 text-sm text-white"><option value="">会社を選択</option>{companies.map(company=><option key={company.id} value={company.id}>{company.company_name}</option>)}</select></label>
+        <label className="text-xs text-slate-400">会社<select value={companyId || recordCompany} disabled={Boolean(companyId)} onChange={(e)=>setRecordCompany(e.target.value)} className="mt-1 w-full rounded border border-slate-700 bg-slate-900 px-3 py-2 text-sm text-white disabled:opacity-70"><option value="">会社を選択</option>{companies.map(company=><option key={company.id} value={company.id}>{company.company_name}</option>)}</select></label>
         {activeOpsTab === 'services' && <label className="text-xs text-slate-400">支援種別<select value={serviceType} onChange={(e)=>setServiceType(e.target.value as 'retainer'|'implementation_support')} className="mt-1 w-full rounded border border-slate-700 bg-slate-900 px-3 py-2 text-sm text-white"><option value="retainer">顧問</option><option value="implementation_support">構築支援</option></select></label>}
         {activeOpsTab !== 'services' && <label className="text-xs text-slate-400">金額<input type="number" min="0" value={recordAmount} onChange={(e)=>setRecordAmount(e.target.value)} className="mt-1 w-full rounded border border-slate-700 bg-slate-900 px-3 py-2 text-sm text-white" /></label>}
         <label className="text-xs text-slate-400">{activeOpsTab==='contracts'?'開始日':activeOpsTab==='invoices'?'支払期限':'次回面談'}<input type={activeOpsTab==='services'?'datetime-local':'date'} value={recordDate} onChange={(e)=>setRecordDate(e.target.value)} className="mt-1 w-full rounded border border-slate-700 bg-slate-900 px-3 py-2 text-sm text-white" /></label>
