@@ -245,8 +245,9 @@ export const UnifiedNavbar: React.FC<UnifiedNavbarProps> = ({
         <nav className="border-t border-slate-800/70 py-2 text-xs font-medium">
           {activeSection === 'mst' && (() => {
             const groups = [
+              { id: 'marketing', label: 'マーケティング', items: (['marketing_automation','custom_lists'] as UnifiedNavTab[]) },
               { id: 'crm', label: '顧客・営業', items: (['mst_dashboard','companies','contacts','prospects','leads','deals','customers','products'] as UnifiedNavTab[]) },
-              { id: 'intake', label: 'フォーム・配信', items: (['mst_diagnoses','deal_invitations','custom_lists','marketing_automation'] as UnifiedNavTab[]) },
+              { id: 'intake', label: 'フォーム・配信', items: (['mst_diagnoses','deal_invitations'] as UnifiedNavTab[]) },
               { id: 'delivery', label: '書類・契約後', items: (['document_templates','customer_operations'] as UnifiedNavTab[]) },
             ];
             const activeGroup = groups.find((group) => group.items.includes(currentTab)) || groups[0];
@@ -254,8 +255,8 @@ export const UnifiedNavbar: React.FC<UnifiedNavbarProps> = ({
               if (tab === 'mst_dashboard') return '営業ダッシュボード';
               if (tab === 'mst_diagnoses') return 'フォーム・診断';
               if (tab === 'deal_invitations') return '商談案内';
-              if (tab === 'custom_lists') return 'リスト・顧客区分';
-              if (tab === 'marketing_automation') return 'LINE・メール配信';
+              if (tab === 'custom_lists') return '配信対象';
+              if (tab === 'marketing_automation') return '配信・自動化';
               if (tab === 'document_templates') return '顧客書類';
               if (tab === 'customer_operations') return '契約・請求・支援';
               return TABLE_CONFIGS[tab as TableKey]?.label || String(tab);
