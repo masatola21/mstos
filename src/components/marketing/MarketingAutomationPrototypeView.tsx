@@ -227,9 +227,9 @@ export const MarketingAutomationPrototypeView: React.FC<Props> = ({ scenarios, o
       '開始条件は次の値から選択: ' + triggerOptions.map((option) => option.value).join(', '),
       '画像URLやボタンURLは、具体的な公開URLが指定されていない場合は空欄にしてください。',
       '目的・依頼内容: ' + (externalGoal || '（未入力。現在の設定をもとに改善案を作成）'),
-      '現在の設定: ' + JSON.stringify({ trigger: form.trigger, channel: form.channel, audience: form.audience, waitMinutes: form.waitMinutes, lineMessageType: form.lineMessageType }),
+      '現在の設定: ' + JSON.stringify({ trigger: form.trigger, channel: form.channel, audience: form.audience.startsWith('segment:') ? '保存済みセグメント' : form.audience, waitMinutes: form.waitMinutes, lineMessageType: form.lineMessageType }),
       'JSON例: {"name":"診断後フォロー","trigger":"diagnosis_completed","channel":"email","audience":"診断完了者","waitMinutes":0,"emailSubject":"診断結果のご案内","emailBody":"本文","messageBody":"","lineMessageType":"text","flexAltText":"","flexTitle":"","flexBody":"","flexButtonLabel":"","flexButtonUrl":""}',
-    ].join('\\n');
+    ].join('\n');
     try {
       await navigator.clipboard.writeText(prompt);
       setNotice('外部AIへの依頼文をコピーしました。外部AIの回答を下の欄に貼り付けてください。');
@@ -239,7 +239,7 @@ export const MarketingAutomationPrototypeView: React.FC<Props> = ({ scenarios, o
   };
   const applyExternalResult = () => {
     try {
-      const jsonText = externalResult.replace(/^\\s*```(?:json)?\\s*/i, '').replace(/\\s*```\\s*$/, '').trim();
+      const jsonText = externalResult.replace(/^\s*```(?:json)?\s*/i, '').replace(/\s*```\s*$/, '').trim();
       const parsed = JSON.parse(jsonText);
       if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) throw new Error('object');
       const next = { ...form };
