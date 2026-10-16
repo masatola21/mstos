@@ -216,30 +216,19 @@ export interface CustomListDefinition {
   createdAt: number;
 }
 
-// --- 非AI業務自動化ルール ---
+// --- AI自動化・承認ルール ---
+export type AutomationTriggerEvent = 'diagnosis_submitted' | 'deal_won' | 'contract_signed' | 'invoice_overdue' | 'project_milestone';
+export type AutomationAiMode = 'suggest' | 'prepare' | 'execute';
+export type AutomationApprovalPolicy = 'always' | 'external_actions' | 'none';
+
 export interface AutomationRule {
   id: string;
   name: string;
   description: string;
-  triggerEvent: 
-    | 'deal_won'               // 商談が成約した時
-    | 'contract_signed'        // 契約が締結された時
-    | 'invoice_overdue'        // 請求期日を超過した時
-    | 'diagnosis_completed'    // 診断が完了した時
-    | 'project_milestone';     // プロジェクトのマイルストーン到達
-  actionType:
-    | 'create_task'            // 自動でタスクを発行
-    | 'create_invoice_draft'   // 請求書ドラフトを自動生成
-    | 'create_activity_log'    // 活動履歴に記録
-    | 'notify_president';      // AI社長の承認リストに通知
-  actionConfig: {
-    taskTitle?: string;
-    assignee?: string;
-    priority?: 'high' | 'medium' | 'low';
-    messageTemplate?: string;
-  };
-  isActive: boolean;
-  triggerCount: number;
-  lastTriggeredAt?: number;
+  triggerEvent: AutomationTriggerEvent;
+  aiMode: AutomationAiMode;
+  approvalPolicy: AutomationApprovalPolicy;
+  isEnabled: boolean;
+  updatedAt?: number;
 }
 
