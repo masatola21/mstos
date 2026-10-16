@@ -157,6 +157,10 @@ export const StageTransitionModal: React.FC<StageTransitionModalProps> = ({
       setInitialFee(initF);
       setMonthlyFee(monthF);
       setTotalAmount(Number(initF) + Number(monthF));
+    } else {
+      setInitialFee('');
+      setMonthlyFee('');
+      setTotalAmount('');
     }
   };
 
