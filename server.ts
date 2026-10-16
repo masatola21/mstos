@@ -198,6 +198,11 @@ const defaultPublicQuestionIds: Record<string, string[]> = {
   consultation: ['consultation_topic'],
   meeting: ['meeting_date', 'meeting_topic'],
 };
+const defaultPublicRequiredQuestionIds: Record<string, string[]> = {
+  diagnosis: ['opening_timing', 'current_challenge'],
+  consultation: ['consultation_topic'],
+  meeting: ['meeting_date', 'meeting_topic'],
+};
 const publicFormSourceLabels: Record<string, string> = {
   diagnosis: '診断フォーム',
   consultation: '相談申込フォーム',
@@ -308,17 +313,19 @@ app.post('/api/public/forms/:slug/submissions', async (req, res) => {
       return res.status(400).json({ error: 'フォームの設問が更新されています。ページを再読み込みして再入力してください。' });
     }
     const cleanAnswers = Object.fromEntries(Object.entries(answers).filter(([key]) => allowedQuestionIds.has(key)));
-    for (const question of configuredQuestions as any[]) {
-      if (question?.required && typeof question.id === 'string') {
-        const answer = cleanAnswers[question.id];
-        if (answer === undefined || answer === '' || answer === false) return res.status(400).json({ error: '必須の設問に回答してください。' });
-      }
+    const requiredQuestionIds = configuredQuestions.length
+      ? (configuredQuestions as any[]).filter((question) => question?.required && typeof question.id === 'string').map((question) => question.id as string)
+      : defaultPublicRequiredQuestionIds[form.form_type];
+    for (const questionId of requiredQuestionIds) {
+      const answer = cleanAnswers[questionId];
+      if (answer === undefined || answer === '' || answer === false) return res.status(400).json({ error: '必須の設問に回答してください。' });
     }
 
+    const escapedEmail = email.replace(/\\/g, '\\\\').replace(/%/g, '\\%').replace(/_/g, '\\_');
     const { data: matchingContacts, error: contactLookupError } = await lineSupabase
       .from('contacts')
       .select('id, full_name, email, phone')
-      .eq('email', email)
+      .ilike('email', escapedEmail)
       .order('created_at', { ascending: true })
       .limit(1);
     if (contactLookupError) throw contactLookupError;
