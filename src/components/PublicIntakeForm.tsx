@@ -39,6 +39,7 @@ export const PublicIntakeForm: React.FC<{ slug: string }> = ({ slug }) => {
   const [form, setForm] = useState<PublicForm | null>(null);
   const [answers, setAnswers] = useState<Record<string, string | boolean>>({});
   const [name, setName] = useState('');
+  const [companyName, setCompanyName] = useState('');
   const [email, setEmail] = useState('');
   const [phone, setPhone] = useState('');
   const [privacyAgreed, setPrivacyAgreed] = useState(false);
@@ -83,7 +84,7 @@ export const PublicIntakeForm: React.FC<{ slug: string }> = ({ slug }) => {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          requestId, name, email, phone, answers, privacyAgreed, utm,
+          requestId, name, companyName, email, phone, answers, privacyAgreed, utm,
         }),
       });
       const payload = await response.json().catch(() => null);
@@ -124,6 +125,7 @@ export const PublicIntakeForm: React.FC<{ slug: string }> = ({ slug }) => {
             <section className="space-y-4 rounded-2xl border border-slate-200 bg-white p-5 shadow-sm sm:p-7">
               <h2 className="text-lg font-bold text-slate-900">お客様情報</h2>
               <label className="block text-sm font-medium text-slate-700">お名前 <span className="text-rose-600">*</span><input required autoComplete="name" maxLength={120} value={name} onChange={(event) => setName(event.target.value)} className={inputClass}/></label>
+              <label className="block text-sm font-medium text-slate-700">会社名・屋号（任意）<input type="text" autoComplete="organization" maxLength={200} value={companyName} onChange={(event) => setCompanyName(event.target.value)} className={inputClass}/><span className="mt-1 block text-xs font-normal text-slate-500">開業準備中の方は予定名でも構いません。未定の場合は空欄で進められます。</span></label>
               <label className="block text-sm font-medium text-slate-700">メールアドレス <span className="text-rose-600">*</span><input required type="email" autoComplete="email" maxLength={254} value={email} onChange={(event) => setEmail(event.target.value)} className={inputClass}/><span className="mt-1 block text-xs font-normal text-slate-500">既にご登録がある場合、同じメールアドレスで情報を紐付けます。</span></label>
               <label className="block text-sm font-medium text-slate-700">電話番号<input type="tel" autoComplete="tel" maxLength={40} value={phone} onChange={(event) => setPhone(event.target.value)} className={inputClass}/></label>
             </section>
