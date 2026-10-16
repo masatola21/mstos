@@ -46,6 +46,11 @@ const TASK_WORK_AREAS: { value: TaskWorkArea; label: string }[] = [
   { value: 'project', label: 'プロジェクト' },
   { value: 'post_contract_support', label: '契約後支援' },
 ];
+const TASK_SOURCE_CATEGORIES: { value: TaskSourceCategory; label: string }[] = [
+  { value: 'sales_customer', label: '営業・顧客' },
+  { value: 'business_operations', label: '事業運営' },
+  { value: 'ai_president', label: '経営・AI社長' },
+];
 const TASK_KINDS: { value: TaskKind; label: string }[] = [
   { value: 'response', label: '対応' },
   { value: 'review', label: '判断・確認' },
@@ -617,6 +622,8 @@ export const TasksView: React.FC<TasksViewProps> = ({
                     {getAssigneeBadge(task.assignee)}
                     <span className="rounded bg-indigo-500/10 px-2 py-0.5 text-[10px] text-indigo-200">{TASK_WORK_AREAS.find((item) => item.value === (task.workArea || 'project'))?.label || 'プロジェクト'}</span>
                     <span className="rounded bg-cyan-500/10 px-2 py-0.5 text-[10px] text-cyan-200">{TASK_KINDS.find((item) => item.value === (task.taskKind || 'response'))?.label || '対応'}</span>
+                    <span className="rounded bg-slate-800 px-2 py-0.5 text-[10px] text-slate-300">{TASK_SOURCE_CATEGORIES.find((item) => item.value === task.sourceCategory)?.label || '経営・AI社長'}</span>
+                    {task.dueDate && <span className={`rounded px-2 py-0.5 text-[10px] ${task.dueDate < new Date().toISOString().slice(0, 10) && task.status !== 'completed' ? 'bg-rose-500/15 text-rose-300' : 'bg-slate-800 text-slate-300'}`}>期限: {task.dueDate}</span>}
                     {task.relatedRecord?.label && <span className="rounded bg-slate-950 px-2 py-0.5 text-[10px] text-slate-300">関連: {task.relatedRecord.label}</span>}
                     <span
                       className={`px-2 py-0.5 rounded text-[10px] font-bold ${
@@ -869,9 +876,7 @@ export const TasksView: React.FC<TasksViewProps> = ({
               <div className="grid grid-cols-2 gap-3">
                 <label className="block text-xs font-semibold text-slate-300">発生カテゴリー
                   <select value={sourceCategory} onChange={(e) => setSourceCategory(e.target.value as TaskSourceCategory)} className="mt-1 w-full rounded-xl bg-slate-950 border border-slate-800 px-3 py-2 text-xs text-slate-100">
-                    <option value="sales_customer">営業・顧客</option>
-                    <option value="business_operations">事業運営</option>
-                    <option value="ai_president">経営・AI社長</option>
+                    {TASK_SOURCE_CATEGORIES.map((item) => <option key={item.value} value={item.value}>{item.label}</option>)}
                   </select>
                 </label>
                 <label className="block text-xs font-semibold text-slate-300">期限
