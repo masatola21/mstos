@@ -25,7 +25,7 @@ interface RecordDetailModalProps {
   onClose: () => void;
   onEdit: (record: any) => void;
   onTransitionStage?: (type: TransitionType, record: any) => void;
-  onOpenCustomerWorkspace?: (companyId: string, destination: 'documents' | 'operations') => void;
+  onOpenCustomerWorkspace?: (companyId: string, destination: 'documents' | 'operations' | 'diagnoses', recordContext?: { tableKey: TableKey; recordId: string; leadId?: string }) => void;
 }
 
 export const RecordDetailModal: React.FC<RecordDetailModalProps> = ({
@@ -319,22 +319,29 @@ export const RecordDetailModal: React.FC<RecordDetailModalProps> = ({
             ※ 社内ポリシーによりデータの削除機能は提供されていません。
           </span>
           <div className="flex items-center gap-2 flex-wrap">
-            {tableKey === 'customers' && onOpenCustomerWorkspace && record.company_id && (
+            {['leads', 'deals', 'customers'].includes(tableKey) && onOpenCustomerWorkspace && record.company_id && (
               <>
                 <button
-                  onClick={() => { onClose(); onOpenCustomerWorkspace(String(record.company_id), 'documents'); }}
+                  onClick={() => { onClose(); onOpenCustomerWorkspace(String(record.company_id), 'documents', { tableKey, recordId: String(record.id), leadId: record.lead_id ? String(record.lead_id) : undefined }); }}
                   className="px-3 py-2 rounded-xl text-xs font-medium text-cyan-200 hover:bg-cyan-950/40 border border-cyan-800 transition-colors flex items-center gap-1.5"
                 >
                   <FileText className="w-3.5 h-3.5" />
-                  <span>顧客書類</span>
+                  <span>{tableKey === 'customers' ? '顧客書類' : '関連書類'}</span>
                 </button>
                 <button
-                  onClick={() => { onClose(); onOpenCustomerWorkspace(String(record.company_id), 'operations'); }}
+                  onClick={() => { onClose(); onOpenCustomerWorkspace(String(record.company_id), 'diagnoses', { tableKey, recordId: String(record.id), leadId: record.lead_id ? String(record.lead_id) : undefined }); }}
+                  className="px-3 py-2 rounded-xl text-xs font-medium text-indigo-200 hover:bg-indigo-950/40 border border-indigo-800 transition-colors flex items-center gap-1.5"
+                >
+                  <FileText className="w-3.5 h-3.5" />
+                  <span>診断レポート</span>
+                </button>
+                {tableKey === 'customers' && <button
+                  onClick={() => { onClose(); onOpenCustomerWorkspace(String(record.company_id), 'operations', { tableKey, recordId: String(record.id) }); }}
                   className="px-3 py-2 rounded-xl text-xs font-medium text-emerald-200 hover:bg-emerald-950/40 border border-emerald-800 transition-colors flex items-center gap-1.5"
                 >
                   <Briefcase className="w-3.5 h-3.5" />
                   <span>契約・請求・支援</span>
-                </button>
+                </button>}
               </>
             )}
             <button
