@@ -364,13 +364,15 @@ export const DocumentTemplateView: React.FC<DocumentTemplateViewProps> = ({ init
       const { data, error } = await supabase.from('customer_document_templates').select('*').order('created_at');
       if (error) { setTemplateStatus('テンプレート共有には最新のSupabase SQL適用が必要です。'); return; }
       if (data?.length) {
-        setTemplates(orderTemplatesByWorkflow(data.map((row:any)=>({
+        const loadedTemplates = data.map((row:any)=>({
           id:row.template_key,
           type:row.document_type==='diagnosis_report'?'report':row.document_type,
           title:row.title,description:row.description||'',htmlContent:row.body_html||'',
           variables:Array.isArray(row.variables)?row.variables:[],
-        })) as DocTemplate[]));
-        setSelectedTemplateId(data.find((row:any)=>row.document_type==='diagnosis_report')?.template_key || data[0].template_key);
+        })) as DocTemplate[];
+        const loadedKeys = new Set(loadedTemplates.map((template)=>template.id));
+        setTemplates(orderTemplatesByWorkflow([...loadedTemplates, ...DEFAULT_TEMPLATES.filter((template)=>!loadedKeys.has(template.id))]));
+        setSelectedTemplateId(initialDealId ? 'tpl-estimate-01' : (data.find((row:any)=>row.document_type==='diagnosis_report')?.template_key || data[0].template_key));
         setTemplateStatus('テンプレートをSupabaseから読み込みました。');
         return;
       }
