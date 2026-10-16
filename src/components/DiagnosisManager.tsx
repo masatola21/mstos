@@ -44,6 +44,8 @@ import {
 interface DiagnosisManagerProps {
   onOpenCreateTrigger?: boolean;
   onOpenRls?: () => void;
+  initialLeadId?: string;
+  initialCompanyId?: string;
 }
 
 const STATUS_LABELS: Record<DiagnosisStatus, { label: string; color: string; bg: string; border: string; icon: React.ReactNode }> = {
@@ -90,7 +92,7 @@ const DIAGNOSIS_TYPE_LABELS: Record<string, string> = {
   quick: 'クイック簡易診断'
 };
 
-const DiagnosisRecordsView: React.FC<DiagnosisManagerProps> = ({ onOpenRls }) => {
+const DiagnosisRecordsView: React.FC<DiagnosisManagerProps> = ({ onOpenRls, initialLeadId, initialCompanyId }) => {
   const [diagnoses, setDiagnoses] = useState<Diagnosis[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<DataFetchError | null>(null);
@@ -159,6 +161,8 @@ const DiagnosisRecordsView: React.FC<DiagnosisManagerProps> = ({ onOpenRls }) =>
 
   // フィルタ処理
   const filteredDiagnoses = diagnoses.filter(d => {
+    if (initialLeadId && d.lead_id !== initialLeadId) return false;
+    if (!initialLeadId && initialCompanyId && d.company_id !== initialCompanyId) return false;
     if (statusFilter !== 'ALL' && d.status !== statusFilter) return false;
     if (!searchQuery) return true;
     const q = searchQuery.toLowerCase();
@@ -943,6 +947,17 @@ const DiagnosisDetailModal: React.FC<DiagnosisDetailModalProps> = ({
             </div>
           </div>
 
+          {reports[0] && (
+            <details className="rounded-2xl border border-indigo-800/70 bg-indigo-950/20 p-4">
+              <summary className="cursor-pointer text-sm font-semibold text-indigo-100">
+                最新のAI診断レポートを確認（v{reports[0].version}）
+              </summary>
+              <div className="mt-3 max-h-[32rem] overflow-y-auto whitespace-pre-wrap rounded-xl bg-slate-950/70 p-4 text-sm leading-7 text-slate-200">
+                {reports[0].full_report_text || reports[0].summary || 'レポート本文はまだ作成されていません。'}
+              </div>
+            </details>
+          )}
+
           {/* 設問回答フォーム（カテゴリ別） */}
           <div className="space-y-6">
             <div className="flex items-center justify-between border-b border-slate-800 pb-2">
@@ -1088,7 +1103,7 @@ const DiagnosisDetailModal: React.FC<DiagnosisDetailModalProps> = ({
 
 
 export const DiagnosisManager: React.FC<DiagnosisManagerProps> = (props) => {
-  const [section, setSection] = useState<'forms' | 'diagnoses'>('forms');
+  const [section, setSection] = useState<'forms' | 'diagnoses'>(() => props.initialLeadId || props.initialCompanyId ? 'diagnoses' : 'forms');
   return (
     <div className="space-y-4">
       <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-slate-800 bg-slate-900 p-3">
