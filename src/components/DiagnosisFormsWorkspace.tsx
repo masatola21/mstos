@@ -23,11 +23,28 @@ const QUESTION_TYPES: { value: QuestionType; label: string }[] = [
   { value: 'checkbox', label: 'チェックボックス' },
   { value: 'date', label: '日付' },
 ];
+const STANDARD_DIAGNOSIS_FORM_SLUG = 'standard-business-diagnosis-v1';
+const DEFAULT_DIAGNOSIS_FORM: FormDefinition = {
+  description: '会社の現状、顧客・案件・見積・請求の管理方法、経営上の課題をお聞かせください。回答をもとに担当者が診断内容を確認し、改善案をご提案します。',
+  questions: [
+    { id: 'industry', label: '業種', type: 'text', required: true, options: [] },
+    { id: 'employee_count', label: '従業員数', type: 'select', required: true, options: ['1〜5名', '6〜20名', '21〜50名', '51〜100名', '101〜300名', '301名以上', '不明'] },
+    { id: 'annual_sales', label: '年商', type: 'select', required: false, options: ['1,000万円未満', '1,000万〜5,000万円', '5,000万〜1億円', '1億〜5億円', '5億〜10億円', '10億円以上', '不明'] },
+    { id: 'acquisition_channels', label: '現在の集客方法（複数選択可）', type: 'checkbox', required: false, options: ['紹介', 'Web検索・SEO', 'Web広告', 'SNS', '展示会・セミナー', '既存顧客からの紹介', 'その他'] },
+    { id: 'current_challenges', label: '現在、感じている課題', type: 'textarea', required: true, options: [] },
+    { id: 'most_important_challenge', label: '最も解決したい課題', type: 'textarea', required: true, options: [] },
+    { id: 'customer_management_method', label: '顧客管理方法', type: 'select', required: true, options: ['専用システム', 'Excel・スプレッドシート', '紙・メール', '担当者ごとの個別管理', '特に管理していない', 'その他'] },
+    { id: 'project_management_method', label: '案件管理方法', type: 'select', required: true, options: ['専用システム', 'Excel・スプレッドシート', '紙・メール', '担当者ごとの個別管理', '特に管理していない', 'その他'] },
+    { id: 'estimate_management_method', label: '見積管理方法', type: 'select', required: true, options: ['専用システム', 'Excel・スプレッドシート', '紙・メール', '担当者ごとの個別管理', '特に管理していない', 'その他'] },
+    { id: 'invoice_management_method', label: '請求管理方法', type: 'select', required: true, options: ['専用システム', 'Excel・スプレッドシート', '紙・メール', '担当者ごとの個別管理', '特に管理していない', 'その他'] },
+    { id: 'management_challenges', label: '経営上の課題', type: 'textarea', required: false, options: [] },
+    { id: 'president_dependent_tasks', label: '社長に集中している業務・社長依存の業務', type: 'textarea', required: false, options: [] },
+    { id: 'current_issues_free_text', label: '現状の課題（自由記述）', type: 'textarea', required: false, options: [] },
+    { id: 'other_consultation', label: 'その他相談したい内容', type: 'textarea', required: false, options: [] },
+  ],
+};
 const QUESTION_EXAMPLES: Record<FormType, FormDefinition> = {
-  diagnosis: { description: '介護保険外サービスの開業準備状況をお聞かせください。回答を確認後、診断結果と相談案内をご連絡します。', questions: [
-    { id: 'opening_timing', label: '開業・事業開始の希望時期', type: 'select', required: true, options: ['3か月以内', '半年以内', '1年以内', '情報収集中'] },
-    { id: 'current_challenge', label: '現在、特に知りたいこと・お困りのこと', type: 'textarea', required: true, options: [] },
-  ] },
+  diagnosis: DEFAULT_DIAGNOSIS_FORM,
   consultation: { description: 'ご相談内容をお送りください。担当者が確認し、ご連絡します。', questions: [
     { id: 'consultation_topic', label: '相談したい内容', type: 'textarea', required: true, options: [] },
   ] },
@@ -92,7 +109,31 @@ export const DiagnosisFormsWorkspace: React.FC<DiagnosisFormsWorkspaceProps> = (
       ]);
       if (formResult.error) throw formResult.error;
       if (answerResult.error) throw answerResult.error;
-      setForms((formResult.data||[]) as DiagnosisForm[]);
+      let loadedForms = (formResult.data || []) as DiagnosisForm[];
+      if (!loadedForms.some((form) => form.public_slug === STANDARD_DIAGNOSIS_FORM_SLUG)) {
+        const { data: seededForm, error: seedError } = await supabase.from('diagnosis_forms').insert({
+          name: '経営課題・業務診断フォーム（標準）',
+          public_slug: STANDARD_DIAGNOSIS_FORM_SLUG,
+          form_type: 'diagnosis',
+          questionnaire_version: 'v2.0',
+          definition: DEFAULT_DIAGNOSIS_FORM,
+          privacy_notice: DEFAULT_PRIVACY_NOTICE,
+          status: 'draft',
+        }).select('*').single();
+        if (seedError && seedError.code !== '23505') throw seedError;
+        if (seededForm) loadedForms = [seededForm as DiagnosisForm, ...loadedForms];
+      }
+      setForms(loadedForms);
+      const defaultForm = loadedForms.find((form) => form.public_slug === STANDARD_DIAGNOSIS_FORM_SLUG);
+      if (defaultForm && !selectedId) {
+        const definition = readDefinition(defaultForm.definition, 'diagnosis');
+        setSelectedId(defaultForm.id);
+        setName(defaultForm.name);
+        setFormType('diagnosis');
+        setDescription(definition.description);
+        setQuestions(definition.questions);
+        setPrivacyNotice(defaultForm.privacy_notice || DEFAULT_PRIVACY_NOTICE);
+      }
       setAnswers((answerResult.data||[]) as Submission[]);
     } catch (e:any) { setError(e?.message||'フォーム・回答を読み込めませんでした。'); }
     finally { setLoading(false); }
@@ -100,7 +141,7 @@ export const DiagnosisFormsWorkspace: React.FC<DiagnosisFormsWorkspaceProps> = (
   useEffect(()=>{ void load(); },[]);
 
   const resetForm = () => {
-    setSelectedId(''); setName(''); setFormType('diagnosis');
+    setSelectedId(''); setName('経営課題・業務診断フォーム（標準）'); setFormType('diagnosis');
     setDescription(QUESTION_EXAMPLES.diagnosis.description);
     setQuestions(QUESTION_EXAMPLES.diagnosis.questions.map((question) => ({ ...question, options: [...question.options] })));
     setPrivacyNotice(DEFAULT_PRIVACY_NOTICE);
