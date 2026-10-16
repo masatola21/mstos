@@ -1,10 +1,12 @@
 import React from 'react';
 import { Bot, Check, Clock3, GitBranch, ShieldCheck, Sparkles, Zap } from 'lucide-react';
 import { AutomationRule } from '../../types/matrix';
+import { ActivityLog } from '../../types';
 import { AI_WORK_MODES } from '../../data/aiWorkModes';
 
 interface AutomationViewProps {
   automations: AutomationRule[];
+  activityLogs: ActivityLog[];
   onUpdateAutomation: (id: string, updates: Partial<AutomationRule>) => void;
 }
 
@@ -30,8 +32,12 @@ const approvalLabels: Record<AutomationRule['approvalPolicy'], string> = {
   none: '人の承認なしで進める',
 };
 
-export const AutomationView: React.FC<AutomationViewProps> = ({ automations, onUpdateAutomation }) => {
+export const AutomationView: React.FC<AutomationViewProps> = ({ automations, activityLogs, onUpdateAutomation }) => {
   const enabledCount = automations.filter((rule) => rule.isEnabled).length;
+  const taskCreationHistory = activityLogs
+    .filter((log) => log.actionType === 'task_created' && log.summary.includes('自動化ルール「'))
+    .sort((left, right) => right.timestamp - left.timestamp)
+    .slice(0, 20);
 
   return (
     <div className="space-y-6">
@@ -130,6 +136,28 @@ export const AutomationView: React.FC<AutomationViewProps> = ({ automations, onU
             </div>
           </article>
         ))}
+      </section>
+
+      <section className="rounded-2xl border border-slate-800 bg-slate-900 p-5">
+        <div className="flex flex-wrap items-start justify-between gap-2">
+          <div>
+            <h3 className="font-bold text-white">イベント起点のタスク作成履歴</h3>
+            <p className="mt-1 text-xs text-slate-400">ルールにより作成されたタスクの記録です。AIの実行結果や承認履歴は含みません。</p>
+          </div>
+          <span className="text-xs text-slate-500">直近 {taskCreationHistory.length} 件</span>
+        </div>
+        {taskCreationHistory.length === 0 ? (
+          <p className="mt-4 rounded-xl border border-slate-800 bg-slate-950/60 p-4 text-xs text-slate-500">まだイベント起点のタスク作成履歴はありません。</p>
+        ) : (
+          <ol className="mt-4 divide-y divide-slate-800">
+            {taskCreationHistory.map((log) => (
+              <li key={log.id} className="flex flex-col gap-1 py-3 sm:flex-row sm:items-start sm:justify-between sm:gap-4">
+                <p className="text-xs leading-5 text-slate-200">{log.summary}</p>
+                <time className="shrink-0 text-[11px] text-slate-500">{new Date(log.timestamp).toLocaleString('ja-JP')}</time>
+              </li>
+            ))}
+          </ol>
+        )}
       </section>
     </div>
   );
