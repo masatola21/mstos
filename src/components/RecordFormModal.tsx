@@ -382,8 +382,8 @@ export const RecordFormModal: React.FC<RecordFormModalProps> = ({
                 // 商品リレーション（プルダウン）
                 if (field.type === 'fk_product') {
                   return (
-                    <>
-                      <div key={field.key} className={`space-y-1.5 ${isFullWidth ? 'sm:col-span-2' : ''}`}>
+                    <React.Fragment key={field.key}>
+                      <div className={`space-y-1.5 ${isFullWidth ? 'sm:col-span-2' : ''}`}>
                         <label className="block text-xs font-semibold text-slate-300 flex items-center justify-between">
                           <span>{field.label} {field.required && <span className="text-rose-400">*</span>}</span>
                           <span className="font-mono text-[10px] text-slate-500">{field.key}</span>
@@ -422,7 +422,7 @@ export const RecordFormModal: React.FC<RecordFormModalProps> = ({
                           }}
                         />
                       )}
-                    </>
+                    </React.Fragment>
                   );
                 }
 
