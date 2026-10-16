@@ -271,16 +271,21 @@ const DEFAULT_TEMPLATES: DocTemplate[] = [
   },
 ];
 
-export const DocumentTemplateView: React.FC = () => {
+const templateWorkflowOrder: Record<DocTemplateType, number> = { report: 0, proposal: 1, contract: 2, invoice: 3 };
+const orderTemplatesByWorkflow = (items: DocTemplate[]) => [...items].sort((a, b) => templateWorkflowOrder[a.type] - templateWorkflowOrder[b.type]);
+
+interface DocumentTemplateViewProps { initialCompanyId?: string; }
+
+export const DocumentTemplateView: React.FC<DocumentTemplateViewProps> = ({ initialCompanyId }) => {
   const [templates, setTemplates] = useState<DocTemplate[]>(DEFAULT_TEMPLATES);
   const [templateStatus, setTemplateStatus] = useState('');
-  const [selectedTemplateId, setSelectedTemplateId] = useState<string>(DEFAULT_TEMPLATES[0].id);
+  const [selectedTemplateId, setSelectedTemplateId] = useState<string>('tpl-report-01');
   const [isEditingTemplate, setIsEditingTemplate] = useState<boolean>(false);
   const [copied, setCopied] = useState<boolean>(false);
   const [companies, setCompanies] = useState<Array<{id:string;company_name:string}>>([]);
   const [contacts, setContacts] = useState<Array<{id:string;full_name:string;company_id?:string|null}>>([]);
   const [deals, setDeals] = useState<Array<{id:string;proposal_plan_name:string;company_id?:string|null}>>([]);
-  const [companyId, setCompanyId] = useState('');
+  const [companyId, setCompanyId] = useState(initialCompanyId || '');
   const [contactId, setContactId] = useState('');
   const [dealId, setDealId] = useState('');
   const [saveMessage, setSaveMessage] = useState('');
@@ -324,13 +329,13 @@ export const DocumentTemplateView: React.FC = () => {
       const { data, error } = await supabase.from('customer_document_templates').select('*').order('created_at');
       if (error) { setTemplateStatus('テンプレート共有には最新のSupabase SQL適用が必要です。'); return; }
       if (data?.length) {
-        setTemplates(data.map((row:any)=>({
+        setTemplates(orderTemplatesByWorkflow(data.map((row:any)=>({
           id:row.template_key,
           type:row.document_type==='diagnosis_report'?'report':row.document_type,
           title:row.title,description:row.description||'',htmlContent:row.body_html||'',
           variables:Array.isArray(row.variables)?row.variables:[],
-        })) as DocTemplate[]);
-        setSelectedTemplateId(data[0].template_key);
+        })) as DocTemplate[]));
+        setSelectedTemplateId(data.find((row:any)=>row.document_type==='diagnosis_report')?.template_key || data[0].template_key);
         setTemplateStatus('テンプレートをSupabaseから読み込みました。');
         return;
       }
@@ -358,7 +363,7 @@ export const DocumentTemplateView: React.FC = () => {
   // Variable inputs state
   const [variableValues, setVariableValues] = useState<Record<string, string>>(() => {
     const initial: Record<string, string> = {};
-    DEFAULT_TEMPLATES[0].variables.forEach((v) => {
+    (DEFAULT_TEMPLATES.find((template) => template.type === 'report') || DEFAULT_TEMPLATES[0]).variables.forEach((v) => {
       initial[v.key] = v.defaultValue;
     });
     return initial;
@@ -497,7 +502,7 @@ export const DocumentTemplateView: React.FC = () => {
 
       {/* Template Selector Tabs */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-        {templates.map((tpl) => {
+        {orderTemplatesByWorkflow(templates).map((tpl) => {
           const isSelected = tpl.id === selectedTemplateId;
           const icons = {
             contract: <FileCheck2 className="w-4 h-4 text-emerald-400" />,
