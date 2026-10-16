@@ -178,8 +178,8 @@ export const TasksView: React.FC<TasksViewProps> = ({
 
   const openProspectResearchTask = () => {
     setEditingTask(null);
-    setTitle('見込み企業の調査・候補リスト作成');
-    setDescription('調査対象の業種・地域・企業規模・条件をこの欄に追記してください。\n\n公開情報を使って条件に合う企業候補を調査し、各候補について会社名、所在地、事業概要、条件に合う理由、根拠となる情報源URL、調査日を整理してください。確認できない情報は推測で補わず「不明」とし、営業連絡やCRMへの登録は行わないでください。');
+    setTitle('見込み企業の公開情報調査（外部AI）');
+    setDescription('調査対象の業種・地域・企業規模・条件をこの欄に追記してください。\n\n公開情報を使って条件に合う企業候補を調査し、各候補について会社名、所在地、事業概要、条件に合う理由、根拠となる情報源URL、調査日を整理してください。確認できない情報は推測で補わず「不明」としてください。このタスクでは営業連絡もCRM登録も行いません。調査結果をOSへ登録する場合は、別途、社内AIで既存CRMとの重複や登録内容を確認し、人の承認後に反映する工程が必要です。');
     setProjectId('');
     setWorkArea('sales_customer');
     setSourceCategory('sales_customer');
@@ -531,7 +531,7 @@ export const TasksView: React.FC<TasksViewProps> = ({
             className="flex items-center gap-1.5 px-4 py-2 rounded-xl border border-amber-500/40 bg-amber-500/10 text-amber-200 hover:bg-amber-500/20 text-xs font-bold transition-all cursor-pointer"
           >
             <Bot className="w-3.5 h-3.5" />
-            <span>見込み企業調査を依頼</span>
+            <span>公開情報を外部AIで調査</span>
           </button>
           <button
             type="button"
