@@ -28,10 +28,8 @@ import {
   Layers, 
   ChevronRight, 
   Lock, 
-  Unlock, 
-  Save, 
-  RotateCcw, 
-  Sparkles, 
+Save, 
+Sparkles, 
   X, 
   Info, 
   Check, 
@@ -51,19 +49,12 @@ interface DiagnosisManagerProps {
 }
 
 const STATUS_LABELS: Record<DiagnosisStatus, { label: string; color: string; bg: string; border: string; icon: React.ReactNode }> = {
-  draft: {
-    label: '下書き',
-    color: 'text-slate-300',
-    bg: 'bg-slate-800/80',
-    border: 'border-slate-700',
-    icon: <Clock className="w-3.5 h-3.5 text-slate-400" />
-  },
-  in_progress: {
-    label: '診断実施中',
-    color: 'text-sky-300',
-    bg: 'bg-sky-950/60',
-    border: 'border-sky-700/50',
-    icon: <Clock className="w-3.5 h-3.5 text-sky-400 animate-pulse" />
+  received: {
+    label: '未確認',
+    color: 'text-amber-300',
+    bg: 'bg-amber-950/60',
+    border: 'border-amber-700/50',
+    icon: <Clock className="w-3.5 h-3.5 text-amber-400" />
   },
   completed: {
     label: '回答完了',
@@ -272,7 +263,7 @@ const DiagnosisRecordsView: React.FC<DiagnosisManagerProps> = ({ onOpenRls, init
         </div>
 
         <div className="flex items-center gap-1 overflow-x-auto pb-1 sm:pb-0 scrollbar-none text-xs">
-          {(['ALL', 'draft', 'in_progress', 'completed', 'generating', 'reported'] as const).map((st) => {
+          {(['ALL', 'received', 'completed', 'generating', 'reported'] as const).map((st) => {
             const isActive = statusFilter === st;
             const label = st === 'ALL' ? 'すべて' : STATUS_LABELS[st as DiagnosisStatus]?.label || st;
             return (
@@ -334,7 +325,7 @@ const DiagnosisRecordsView: React.FC<DiagnosisManagerProps> = ({ onOpenRls, init
                 </tr>
               ) : (
                 filteredDiagnoses.map((diag) => {
-                  const statusInfo = STATUS_LABELS[diag.status] || STATUS_LABELS.draft;
+                  const statusInfo = STATUS_LABELS[diag.status] || STATUS_LABELS.received;
                   const answersCount = Object.keys(diag.answers || {}).length;
                   const { totalQuestions } = calculateScores(diag.answers || {});
 
@@ -642,7 +633,7 @@ const DiagnosisCreateModal: React.FC<DiagnosisCreateModalProps> = ({
               起票時のステータスについて
             </p>
             <p>
-              診断はデータベース権限制約（列レベル権限保護）に基づき、初期ステータス <strong>「draft (下書き)」</strong> で安全に作成されます。
+              診断はデータベース権限制約（列レベル権限保護）に基づき、初期ステータス <strong>「未確認」</strong> で作成されます。
             </p>
           </div>
 
@@ -706,7 +697,6 @@ const DiagnosisDetailModal: React.FC<DiagnosisDetailModalProps> = ({
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
   // ステータス差し戻し状態
-  const [reverting, setReverting] = useState(false);
   const [generatingReport, setGeneratingReport] = useState(false);
 
   // 関連レポート一覧
@@ -749,142 +739,29 @@ const DiagnosisDetailModal: React.FC<DiagnosisDetailModalProps> = ({
     }));
   };
 
-  // 回答保存処理（draft または in_progress として保存）
-  const handleSaveAnswers = async (targetStatus?: 'draft' | 'in_progress') => {
+  // 回答内容・社内メモを保存します。診断状態は「未確認」のまま維持します。
+  const handleSaveAnswers = async () => {
     if (!diagnosis) return;
     setSaving(true);
     setErrorMsg(null);
     setSaveSuccessMsg(null);
-
     try {
-      // 1. 回答内容・スコア・メモを更新（UPDATE）
       const saveRes = await saveDiagnosisAnswers(diagnosis.id, answers, {
         memo,
         diagnosis_type: diagnosisType,
         score: currentScores.totalScore,
         category_scores: currentScores.categoryScores,
-        conducted_at: new Date().toISOString(),
       });
-
       if (saveRes.error) {
         setErrorMsg(saveRes.error.message);
-        setSaving(false);
         return;
       }
-
-      // 2. ステータス変更が要求されている場合、update_diagnosis_status RPC を呼び出し
-      if (targetStatus && targetStatus !== diagnosis.status) {
-        const rpcRes = await updateDiagnosisStatus(diagnosis.id, targetStatus);
-        if (rpcRes.error) {
-          setErrorMsg(rpcRes.error.message);
-          setSaving(false);
-          return;
-        }
-      }
-
-      setSaveSuccessMsg('回答内容を安全に保存しました！');
+      setSaveSuccessMsg('回答内容を保存しました。');
       onUpdated();
-      setTimeout(() => setSaveSuccessMsg(null), 4000);
     } catch (err: any) {
       setErrorMsg(err.message || '保存中にエラーが発生しました。');
     } finally {
       setSaving(false);
-    }
-  };
-
-  // Complete the diagnosis, create a reviewed-ready report, then sync report and proposal drafts via DB trigger.
-  const handleGenerateReport = async () => {
-    if (!diagnosis || !['completed', 'reported'].includes(diagnosis.status)) return;
-    const supabase = getSupabase();
-    if (!supabase) { setErrorMsg('Supabaseに接続してください。'); return; }
-    setGeneratingReport(true);
-    setErrorMsg(null);
-    setSaveSuccessMsg(null);
-    try {
-      const categories = QUESTIONNAIRE_V1.map((category) => ({
-        key: category.key,
-        name: category.name,
-        score: currentScores.categoryScores[category.key] || 0,
-      }));
-      const strengths = categories.filter((category) => category.score >= 80).map((category) => ({category: category.name, score: category.score}));
-      const challenges = categories.filter((category) => category.score > 0 && category.score < 60).map((category) => ({category: category.name, score: category.score}));
-      const recommendations = (challenges.length ? challenges : categories.filter((category) => category.score > 0 && category.score < 80))
-        .map((category) => ({priority: category.score < 60 ? 'high' : 'medium', category: category.name, description: `${category.name}の現状を確認し、改善目標と担当・期限を定めた実行計画を作成してください。`}));
-      const summary = `総合スコアは${currentScores.totalScore}/100点です。回答${currentScores.answeredCount}/${currentScores.totalQuestions}問をもとに、${challenges.length ? '優先課題の改善計画を検討してください。' : '現在の取り組みを継続し、次の改善機会を確認してください。'}`;
-      const fullReport = [
-        '診断結果サマリー',
-        summary,
-        '',
-        'カテゴリ別スコア',
-        ...categories.map((category) => `・${category.name}: ${category.score}/100`),
-        '',
-        '強み',
-        ...(strengths.length ? strengths.map((item) => `・${item.category}（${item.score}/100）`) : ['・現時点で80点以上のカテゴリはありません。']),
-        '',
-        '優先課題',
-        ...(challenges.length ? challenges.map((item) => `・${item.category}（${item.score}/100）`) : ['・60点未満のカテゴリはありません。']),
-        '',
-        '推奨アクション',
-        ...(recommendations.length ? recommendations.map((item) => `・${item.category}: ${item.description}`) : ['・現状維持と定期的な効果測定を推奨します。']),
-        '',
-        '確認事項',
-        'このレポート初稿を担当者が確認し、必要に応じて内容を修正してください。',
-      ].join('\n');
-      const draft = await supabase.rpc('create_ai_report_draft', {
-        p_diagnosis_id: diagnosis.id,
-        p_model_name: 'MST診断レポート初稿',
-        p_prompt_version: 'score-summary-v1',
-        p_title: '診断結果レポート',
-      });
-      if (draft.error) throw draft.error;
-      const reportId = typeof draft.data === 'string' ? draft.data : draft.data?.id;
-      if (!reportId) throw new Error('レポートIDを取得できませんでした。');
-      const completed = await supabase.rpc('complete_and_activate_ai_report', {
-        p_report_id: reportId,
-        p_diagnosis_id: diagnosis.id,
-        p_summary: summary,
-        p_strengths: strengths,
-        p_challenges: challenges,
-        p_recommendations: recommendations,
-        p_full_report_text: fullReport,
-        p_storage_path: null,
-        p_recommended_product_id: null,
-      });
-      if (completed.error) throw completed.error;
-      const refreshed = await fetchAiReportsByDiagnosisId(diagnosis.id);
-      setReports(refreshed.data);
-      setDiagnosis({...diagnosis, status: 'reported'});
-      setSaveSuccessMsg('診断レポート初稿と提案書案を顧客書類に作成しました。内容を確認・編集してから送付してください。');
-      onUpdated();
-    } catch (err: any) {
-      setErrorMsg(err?.message || '診断レポートの作成に失敗しました。');
-    } finally {
-      setGeneratingReport(false);
-    }
-  };
-
-  // completed -> draft への差し戻し（RPC経由）
-  const handleRevertToDraft = async () => {
-    if (!diagnosis) return;
-    if (!confirm('回答を再編集するために、ステータスを下書き（draft）に差し戻しますか？\n（確定済みのスコアおよび完了日時はリセットされます）')) {
-      return;
-    }
-
-    setReverting(true);
-    setErrorMsg(null);
-
-    try {
-      const res = await updateDiagnosisStatus(diagnosis.id, 'draft');
-      if (res.error) {
-        setErrorMsg(res.error.message);
-      } else {
-        setSaveSuccessMsg('ステータスを draft に差し戻しました。回答の編集が可能になりました。');
-        onUpdated();
-      }
-    } catch (err: any) {
-      setErrorMsg(err.message || '差し戻し中にエラーが発生しました。');
-    } finally {
-      setReverting(false);
     }
   };
 
@@ -899,7 +776,7 @@ const DiagnosisDetailModal: React.FC<DiagnosisDetailModalProps> = ({
     );
   }
 
-  const statusInfo = STATUS_LABELS[diagnosis.status] || STATUS_LABELS.draft;
+  const statusInfo = STATUS_LABELS[diagnosis.status] || STATUS_LABELS.received;
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-2 sm:p-4 bg-slate-950/80 backdrop-blur-sm animate-fade-in overflow-y-auto">
@@ -952,7 +829,7 @@ const DiagnosisDetailModal: React.FC<DiagnosisDetailModalProps> = ({
               <span>必須設問に回答すると診断を完了できます</span>
             </div>
             <p className="text-xs text-amber-200/80 leading-relaxed pl-6">
-              回答データは自由に入力・変更し、<strong>「下書きとして保存」</strong> または <strong>「実施中として保存」</strong> を実行できます。必須設問は12項目です。すべて回答してから診断を完了し、レポート初稿を作成してください。
+              送信済みのフォーム回答を「未確認」として引き継ぎます。内容を確認して必要な修正を保存してください。
             </p>
           </div>
 
@@ -971,16 +848,6 @@ const DiagnosisDetailModal: React.FC<DiagnosisDetailModalProps> = ({
                 </div>
               </div>
 
-              {diagnosis.status === 'completed' && (
-                <button
-                  onClick={handleRevertToDraft}
-                  disabled={reverting}
-                  className="px-3.5 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-amber-300 text-xs font-medium border border-slate-700 transition-colors shrink-0 flex items-center gap-1.5 cursor-pointer"
-                >
-                  <RotateCcw className={`w-3.5 h-3.5 ${reverting ? 'animate-spin' : ''}`} />
-                  <span>draft に差し戻して再編集</span>
-                </button>
-              )}
             </div>
           )}
 
@@ -1131,27 +998,7 @@ const DiagnosisDetailModal: React.FC<DiagnosisDetailModalProps> = ({
               閉じる
             </button>
 
-            {/* 下書き保存ボタン */}
-            <button
-              type="button"
-              disabled={saving || isLockedForDirectEdit}
-              onClick={() => handleSaveAnswers('draft')}
-              className="px-4 py-2 rounded-xl text-xs sm:text-sm font-medium bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 transition-colors flex items-center gap-1.5 disabled:opacity-50 cursor-pointer"
-            >
-              <Save className="w-3.5 h-3.5 text-slate-400" />
-              <span>下書き保存 (draft)</span>
-            </button>
-
-            {/* 実施中として保存ボタン */}
-            <button
-              type="button"
-              disabled={saving || isLockedForDirectEdit}
-              onClick={() => handleSaveAnswers('in_progress')}
-              className="px-4 py-2 rounded-xl text-xs sm:text-sm font-medium bg-sky-700 hover:bg-sky-600 text-white shadow-md shadow-sky-600/20 transition-colors flex items-center gap-1.5 disabled:opacity-50 cursor-pointer"
-            >
-              <Save className="w-3.5 h-3.5 text-sky-200" />
-              <span>回答を保存 (in_progress)</span>
-            </button>
+            <button type="button" disabled={saving || isLockedForDirectEdit} onClick={() => handleSaveAnswers()} className="px-4 py-2 rounded-xl text-xs sm:text-sm font-medium bg-blue-700 hover:bg-blue-600 text-white transition-colors flex items-center gap-1.5 disabled:opacity-50 cursor-pointer"><Save className="w-3.5 h-3.5 text-blue-200" /><span>回答を保存</span></button>
 
             {/* 診断完了ボタン（安全ガードによりロック・ツールチップ案内） */}
             <div className="relative group">
