@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import {
   CheckSquare,
+  ClipboardCopy,
   Plus,
   Edit2,
   Trash2,
@@ -268,6 +269,7 @@ export const TasksView: React.FC<TasksViewProps> = ({
   };
 
   const resolveAssignee = (rawVal: string): TaskAssignee => {
+    if (rawVal === 'external_ai') return { type: 'external_ai', name: '外部AI（手動依頼）' };
     if (rawVal === 'human') return { type: 'human', name: '人間 (あなた)' };
     if (rawVal === 'ai_ceo') return { type: 'ai_ceo', name: 'AI社長' };
     if (rawVal === 'dev_agent') return { type: 'dev_agent', name: '開発エージェント' };
@@ -338,8 +340,26 @@ export const TasksView: React.FC<TasksViewProps> = ({
     setIsModalOpen(false);
   };
 
+  const handleCopyExternalTaskRequest = async (task: TaskItem) => {
+    const request = [
+      `依頼: ${task.title}`,
+      task.description && `依頼内容:\n${task.description}`,
+      task.completionCriteria && `完了条件:\n${task.completionCriteria}`,
+    ].filter(Boolean).join('\n\n');
+    try {
+      await navigator.clipboard.writeText(request);
+      alert('外部AIへの依頼文をコピーしました。');
+    } catch {
+      alert('依頼文をコピーできませんでした。タスク内容を手動でコピーしてください。');
+    }
+  };
+
   const handleQuickStatusChange = (task: TaskItem, newStatus: TaskStatus) => {
-    if (newStatus === 'completed' && task.assignee.type !== 'human') return;
+    if (newStatus === 'completed' && task.assignee.type !== 'human' && task.assignee.type !== 'external_ai') return;
+    if (newStatus === 'completed' && task.assignee.type === 'external_ai' && !task.resultNotes?.trim() && !task.artifactUrl && !task.attachments?.length) {
+      alert('外部AIの回答を成果メモに貼り付けるか、成果物を添付してから完了にしてください。');
+      return;
+    }
     if (newStatus === 'pending_approval') {
       setApprovalModalTask(task);
       setApprovalReason(`タスク「${task.title}」の完了条件を満たしたため、結果の承認を求めます。`);
@@ -381,6 +401,7 @@ export const TasksView: React.FC<TasksViewProps> = ({
     if (filterStatus !== 'all' && t.status !== filterStatus) return false;
     if (filterAssignee !== 'all') {
       if (filterAssignee === 'human' && t.assignee.type !== 'human') return false;
+      if (filterAssignee === 'external_ai' && t.assignee.type !== 'external_ai') return false;
       if (filterAssignee === 'ai_ceo' && t.assignee.type !== 'ai_ceo') return false;
       if (filterAssignee === 'role_ai' && t.assignee.type !== 'role_ai') return false;
       if (filterAssignee === 'dev_agent' && t.assignee.type !== 'dev_agent') return false;
@@ -426,6 +447,12 @@ export const TasksView: React.FC<TasksViewProps> = ({
 
   const getAssigneeBadge = (assignee: TaskAssignee) => {
     switch (assignee.type) {
+      case 'external_ai':
+        return (
+          <span className="flex items-center gap-1 px-2 py-0.5 rounded-md text-[11px] bg-amber-950/70 text-amber-200 border border-amber-500/40">
+            🌐 {assignee.name}
+          </span>
+        );
       case 'human':
         return (
           <span className="flex items-center gap-1 px-2 py-0.5 rounded-md text-[11px] bg-slate-800 text-slate-200 border border-slate-700">
@@ -567,6 +594,7 @@ export const TasksView: React.FC<TasksViewProps> = ({
           >
             <option value="all">全担当</option>
             <option value="human">👤 人間 (あなた)</option>
+            <option value="external_ai">🌐 外部AI（手動依頼）</option>
             <option value="ai_ceo">👔 AI社長</option>
             <option value="role_ai">🧭 役割AI</option>
             <option value="dev_agent">⚙️ 開発エージェント</option>
@@ -708,6 +736,12 @@ export const TasksView: React.FC<TasksViewProps> = ({
                       {task.description}
                     </p>
                   )}
+                  {task.assignee.type === 'external_ai' && (
+                    <div className="mt-2 flex flex-wrap items-center gap-2">
+                      <button type="button" onClick={() => void handleCopyExternalTaskRequest(task)} className="inline-flex items-center gap-1 rounded-lg border border-amber-500/30 bg-amber-950/40 px-2.5 py-1 text-[11px] font-semibold text-amber-200 hover:bg-amber-900/60"><ClipboardCopy className="h-3 w-3" />外部AIへの依頼文をコピー</button>
+                      <span className="text-[10px] text-slate-500">回答は成果・メモへ貼り付けるか、タスクを編集してファイル添付</span>
+                    </div>
+                  )}
                   {task.draftArtifact && expandedDraftTaskIds.has(task.id) && (
                     <section className="mt-3 rounded-xl border border-indigo-500/30 bg-slate-950 overflow-hidden">
                       <div className="px-3 py-2 border-b border-slate-800 text-xs font-bold text-indigo-300">
@@ -801,7 +835,7 @@ export const TasksView: React.FC<TasksViewProps> = ({
                       </button>
                     )}
 
-                    {task.status !== 'completed' && task.assignee.type === 'human' && (
+                    {task.status !== 'completed' && (task.assignee.type === 'human' || task.assignee.type === 'external_ai') && (
                       <button
                         type="button"
                         onClick={() => handleQuickStatusChange(task, 'completed')}
@@ -915,9 +949,10 @@ export const TasksView: React.FC<TasksViewProps> = ({
                   rows={2}
                   value={description}
                   onChange={(e) => setDescription(e.target.value)}
-                  placeholder="タスクの具体的な背景や目的を記載"
+                  placeholder={assigneeType === 'external_ai' ? '外部AIへ依頼する内容を記載（機密情報は含めない）' : 'タスクの具体的な背景や目的を記載'}
                   className="w-full rounded-xl bg-slate-950 border border-slate-800 p-2.5 text-xs text-slate-100 focus:outline-none focus:border-indigo-500"
                 />
+                {assigneeType === 'external_ai' && <p className="mt-1 text-[10px] text-amber-300">外部サービスへ貼り付ける文面です。顧客の個人情報・機密情報は入れず、共有可能な内容だけを記載してください。</p>}
               </div>
 
               <div className="grid grid-cols-2 gap-3">
@@ -931,6 +966,7 @@ export const TasksView: React.FC<TasksViewProps> = ({
                     className="w-full rounded-xl bg-slate-950 border border-slate-800 px-3 py-2 text-xs text-slate-100 focus:outline-none focus:border-indigo-500 cursor-pointer"
                   >
                     <option value="human">👤 人間 (あなた)</option>
+                    <option value="external_ai">🌐 外部AI（手動依頼）</option>
                     <option value="dev_agent">⚙️ 開発エージェント</option>
                     <optgroup label="役割AI">
                       {AI_WORK_MODES.map((mode) => {

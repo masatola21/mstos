@@ -68,7 +68,7 @@ export type TaskKind = 'response' | 'review' | 'creation_analysis' | 'recurring'
 export type TaskRelatedRecordType = 'company' | 'contact' | 'prospect' | 'lead' | 'deal' | 'customer' | 'product';
 export interface TaskRelatedRecord { type: TaskRelatedRecordType; id?: string; label?: string; }
 
-export type TaskAssigneeType = 'human' | 'ai_ceo' | 'role_ai' | 'custom_ai' | 'dev_agent';
+export type TaskAssigneeType = 'human' | 'external_ai' | 'ai_ceo' | 'role_ai' | 'custom_ai' | 'dev_agent';
 
 export interface TaskAssignee {
   type: TaskAssigneeType;
