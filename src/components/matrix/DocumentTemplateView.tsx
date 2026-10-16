@@ -425,10 +425,12 @@ export const DocumentTemplateView: React.FC<DocumentTemplateViewProps> = ({ init
         leadId ? supabase.from('leads').select('*').eq('id', leadId).maybeSingle() : Promise.resolve({data:null}),
         dealId ? supabase.from('deals').select('*').eq('id', dealId).maybeSingle() : Promise.resolve({data:null}),
       ]);
-      const company = companyResult.data;
       const lead = leadResult.data;
       const deal = dealResult.data;
       const resolvedCompanyId = companyId || deal?.company_id || lead?.company_id || '';
+      const company = companyResult.data || (resolvedCompanyId
+        ? (await supabase.from('companies').select('*').eq('id', resolvedCompanyId).maybeSingle()).data
+        : null);
       let diagnosis: any = null;
       if (leadId || resolvedCompanyId) {
         let diagnosisQuery = supabase.from('diagnoses').select('*').order('created_at', {ascending:false}).limit(1);
@@ -490,7 +492,7 @@ export const DocumentTemplateView: React.FC<DocumentTemplateViewProps> = ({ init
         comment_sales: report?.summary || '',
         comment_automation: recommendationText,
       };
-      setVariableValues((prev) => ({...prev, ...Object.fromEntries(Object.entries(values).filter(([,value]) => value !== ''))}));
+      setVariableValues((prev) => ({...prev, ...values}));
     };
     void populate();
     return () => { cancelled = true; };
@@ -501,9 +503,10 @@ export const DocumentTemplateView: React.FC<DocumentTemplateViewProps> = ({ init
 
   // Variable inputs state
   const [variableValues, setVariableValues] = useState<Record<string, string>>(() => {
+    const today = localDateString();
     const initial: Record<string, string> = {};
     (DEFAULT_TEMPLATES.find((template) => template.type === 'report') || DEFAULT_TEMPLATES[0]).variables.forEach((v) => {
-      initial[v.key] = v.defaultValue;
+      initial[v.key] = v.key === 'issue_date' || v.key === 'conducted_date' ? formatDocumentDate(today) : '';
     });
     return initial;
   });
