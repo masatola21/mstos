@@ -115,6 +115,8 @@ import {
   AutomationRule 
 } from './types/matrix';
 
+type DiagnosisSubmissionAutomationEvent = { id: string; form_id: string; lead_id: string | null; company_id: string | null; diagnosis_id?: string | null };
+
 const MAX_CHAT_CONTEXT_MESSAGES = 12;
 const MAX_CHAT_CONTEXT_CHARACTERS = 16000;
 
@@ -264,6 +266,7 @@ function AppContent() {
   const [tools, setTools] = useState<ManagedToolAsset[]>(() => matrixService.loadTools());
   const [customLists, setCustomLists] = useState<CustomListDefinition[]>(() => matrixService.loadCustomLists());
   const [automations, setAutomations] = useState<AutomationRule[]>(() => matrixService.loadAutomations());
+  const automationSubmissionHandlerRef = useRef<(event: DiagnosisSubmissionAutomationEvent) => void>(() => {});
   const [marketingScenarios, setMarketingScenarios] = useState<MarketingScenario[]>(() => loadMarketingScenarios());
 
   // AI社長とMatrixのデータをユーザー単位でSupabaseに同期し、初回は既存LocalStorageを移行する。
@@ -1272,13 +1275,14 @@ function AppContent() {
   }) => {
     const rule = automations.find((item) => item.id === input.ruleId && item.isEnabled);
     if (!rule || tasks.some((item) => item.sourceAutomationId === rule.id && item.sourceAutomationRecordId === input.recordId)) return;
-    const mode = AI_WORK_MODES.find((item) => item.id === input.workModeId) || AI_WORK_MODES[0];
+    const assignedWorkModeId = rule.workModeId || input.workModeId;
+    const mode = AI_WORK_MODES.find((item) => item.id === assignedWorkModeId) || AI_WORK_MODES[0];
     const resolved = resolveWorkMode(mode, aiModelSettings.roleOverrides);
     const due = new Date();
     due.setDate(due.getDate() + rule.taskDueInDays);
     const dueDate = `${due.getFullYear()}-${String(due.getMonth() + 1).padStart(2, '0')}-${String(due.getDate()).padStart(2, '0')}`;
     const task: TaskItem = {
-      id: `task-automation-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
+      id: `task-automation-${rule.id}-${input.recordId}`,
       title: input.title,
       description: `${input.description} 自動化ルール「${rule.name}」に基づくタスクです。顧客への連絡・外部処理は実行せず、担当者が内容を確認してください。`,
       projectId: '',
@@ -1304,6 +1308,27 @@ function AppContent() {
     recordActivityLog('task_created', `自動化ルール「${rule.name}」から期限付きタスク「${task.title}」を作成しました（期限: ${dueDate}）`, 'システム');
     setActivityLogs(loadActivityLogs());
   };
+
+  const handleDiagnosisSubmissionAutomation = (event: DiagnosisSubmissionAutomationEvent) => {
+    createAutomationTask({
+      ruleId: 'workflow-diagnosis-submitted',
+      recordId: event.id,
+      title: '診断回答を確認・分析する',
+      description: `公開診断フォームに新しい回答が届きました。診断レコード（${event.diagnosis_id || '未作成'}）とリード情報を開き、回答を確認して追加確認事項を整理してください。`,
+      workArea: 'sales_customer',
+      sourceCategory: 'sales_customer',
+      taskKind: 'creation_analysis',
+      priority: 'medium',
+      completionCriteria: 'フォーム回答と診断レコードを確認し、根拠のある所見・追加質問・次の対応を整理する。診断レポートの生成・顧客送信は担当者の確認後に行う。',
+      workModeId: 'diagnosis',
+      relatedRecord: event.lead_id
+        ? { type: 'lead', id: event.lead_id, label: '診断回答のリード' }
+        : event.company_id
+          ? { type: 'company', id: event.company_id, label: '診断回答の会社' }
+          : undefined,
+    });
+  };
+  automationSubmissionHandlerRef.current = handleDiagnosisSubmissionAutomation;
 
   const handleAddContract = (c: Omit<ManagedContract, 'id' | 'createdAt' | 'updatedAt'>) => {
     const created = matrixService.addContract(c);
@@ -1371,6 +1396,32 @@ function AppContent() {
     setAutomations(updated);
     matrixService.saveAutomations(updated);
   };
+
+  useEffect(() => {
+    if (!user || !workspaceReady) return;
+    const supabase = getSupabase();
+    if (!supabase) return;
+    const channel = supabase
+      .channel(`automation-diagnosis-submissions-${user.id}`)
+      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'diagnosis_submissions' }, (payload) => {
+        const event = payload.new as DiagnosisSubmissionAutomationEvent;
+        if (!event?.id || !event.form_id) return;
+        void supabase.from('diagnosis_forms').select('form_type').eq('id', event.form_id).maybeSingle()
+          .then(({ data, error }) => {
+            if (error) {
+              console.warn('Could not identify diagnosis submission type:', error.message);
+              return;
+            }
+            if (data?.form_type === 'diagnosis') automationSubmissionHandlerRef.current(event);
+          });
+      })
+      .subscribe((status) => {
+        if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') {
+          console.warn('Diagnosis submission automation realtime channel is unavailable.');
+        }
+      });
+    return () => { void supabase.removeChannel(channel); };
+  }, [user?.id, workspaceReady]);
 
   if (isLoading || (user && !workspaceReady)) {
     return (
