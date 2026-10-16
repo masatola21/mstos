@@ -106,6 +106,7 @@ export interface TaskItem {
   draftArtifact?: TaskDraftArtifact; // 承認前のレビュー用成果物
   attachments?: WorkspaceAttachment[]; // タスクに直接添付したファイル
   sourceAutomationId?: string;
+  sourceAutomationRecordId?: string; // 自動化タスクの重複防止に使う発生元レコードID
   createdAt: number;
   updatedAt: number;
 }
