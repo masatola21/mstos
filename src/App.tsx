@@ -310,7 +310,7 @@ function AppContent() {
         setWorkModeHistories(data.workModeHistories || {});
         const initialChatKey = `${nextActiveCharacterId}:${activeWorkModeId}`;
         const savedChat = data.workModeHistories?.[initialChatKey] || loadChatHistory(initialChatKey);
-        setMessages(savedChat.length ? savedChat : activeWorkModeId === 'president' ? loadChatHistory(activeCharacterId) : []);
+        setMessages(savedChat.length ? savedChat : activeWorkModeId === 'president' ? loadChatHistory(nextActiveCharacterId) : []);
         lastSavedWorkspaceRef.current = JSON.stringify(data);
         workspaceSyncEnabledRef.current = true;
         setWorkspaceSyncStatus('saved');
