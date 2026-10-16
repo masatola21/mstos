@@ -496,7 +496,7 @@ export const DocumentTemplateView: React.FC<DocumentTemplateViewProps> = ({ init
     };
     void populate();
     return () => { cancelled = true; };
-  }, [companyId, leadId, dealId]);
+  }, [companyId, leadId, dealId, selectedTemplateId]);
 
   // Active template
   const currentTemplate = templates.find((t) => t.id === selectedTemplateId) || templates[0];
