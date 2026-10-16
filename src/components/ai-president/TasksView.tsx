@@ -33,6 +33,7 @@ import {
   ActivityLog,
   WorkspaceAttachment,
   TaskWorkArea,
+  TaskSourceCategory,
   TaskKind,
   TaskRelatedRecordType,
 } from '../types';
@@ -123,6 +124,8 @@ export const TasksView: React.FC<TasksViewProps> = ({
   const [description, setDescription] = useState('');
   const [projectId, setProjectId] = useState<string>(projects[0]?.id || '');
   const [workArea, setWorkArea] = useState<TaskWorkArea>('project');
+  const [sourceCategory, setSourceCategory] = useState<TaskSourceCategory>('ai_president');
+  const [dueDate, setDueDate] = useState('');
   const [taskKind, setTaskKind] = useState<TaskKind>('response');
   const [relatedRecordType, setRelatedRecordType] = useState<TaskRelatedRecordType | 'none'>('none');
   const [relatedRecordId, setRelatedRecordId] = useState('');
@@ -151,6 +154,8 @@ export const TasksView: React.FC<TasksViewProps> = ({
     setDescription('');
     setProjectId(filterProject !== 'all' && filterProject !== 'none' ? filterProject : projects[0]?.id || '');
     setWorkArea('project');
+    setSourceCategory('ai_president');
+    setDueDate('');
     setTaskKind('response');
     setRelatedRecordType('none');
     setRelatedRecordId('');
@@ -171,6 +176,8 @@ export const TasksView: React.FC<TasksViewProps> = ({
     setDescription(t.description);
     setProjectId(t.projectId || '');
     setWorkArea(t.workArea || 'project');
+    setSourceCategory(t.sourceCategory || 'ai_president');
+    setDueDate(t.dueDate || '');
     setTaskKind(t.taskKind || 'response');
     setRelatedRecordType(t.relatedRecord?.type || 'none');
     setRelatedRecordId(t.relatedRecord?.id || '');
@@ -293,6 +300,8 @@ export const TasksView: React.FC<TasksViewProps> = ({
         description: description.trim(),
         projectId,
         workArea,
+        sourceCategory,
+        dueDate: dueDate || undefined,
         taskKind,
         relatedRecord: relatedRecordType === 'none' ? undefined : { type: relatedRecordType, id: relatedRecordId.trim() || undefined, label: relatedRecordLabel.trim() || undefined },
         priority,
@@ -309,6 +318,8 @@ export const TasksView: React.FC<TasksViewProps> = ({
         description: description.trim(),
         projectId,
         workArea,
+        sourceCategory,
+        dueDate: dueDate || undefined,
         taskKind,
         relatedRecord: relatedRecordType === 'none' ? undefined : { type: relatedRecordType, id: relatedRecordId.trim() || undefined, label: relatedRecordLabel.trim() || undefined },
         priority,
@@ -854,6 +865,18 @@ export const TasksView: React.FC<TasksViewProps> = ({
                   <option value="">プロジェクトに紐付けない</option>
                   {projects.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
                 </select>
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <label className="block text-xs font-semibold text-slate-300">発生カテゴリー
+                  <select value={sourceCategory} onChange={(e) => setSourceCategory(e.target.value as TaskSourceCategory)} className="mt-1 w-full rounded-xl bg-slate-950 border border-slate-800 px-3 py-2 text-xs text-slate-100">
+                    <option value="sales_customer">営業・顧客</option>
+                    <option value="business_operations">事業運営</option>
+                    <option value="ai_president">経営・AI社長</option>
+                  </select>
+                </label>
+                <label className="block text-xs font-semibold text-slate-300">期限
+                  <input type="date" value={dueDate} onChange={(e) => setDueDate(e.target.value)} className="mt-1 w-full rounded-xl bg-slate-950 border border-slate-800 px-3 py-2 text-xs text-slate-100" />
+                </label>
               </div>
               <div className="grid grid-cols-2 gap-3">
                 <label className="block text-xs font-semibold text-slate-300">仕事の領域
