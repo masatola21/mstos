@@ -7,6 +7,8 @@ import {
   insertRecord, 
   updateRecord 
 } from '../services/dataService';
+import { ProposalPlanTemplatePicker } from './ProposalPlanTemplatePicker';
+import type { ProposalPlanTemplate } from './ProposalPlanTemplatePicker';
 import { 
   X, 
   Check, 
@@ -46,6 +48,8 @@ export const RecordFormModal: React.FC<RecordFormModalProps> = ({
   const [products, setProducts] = useState<Product[]>([]);
   const [leads, setLeads] = useState<Lead[]>([]);
   const [loadingLookups, setLoadingLookups] = useState(false);
+  const [leadProductChoice, setLeadProductChoice] = useState('');
+  const [proposalPlanTemplateId, setProposalPlanTemplateId] = useState('');
 
   // 初期化
   useEffect(() => {
@@ -66,6 +70,11 @@ export const RecordFormModal: React.FC<RecordFormModalProps> = ({
         setCompanies(comps);
         setProducts(prods);
         setLeads(lds);
+        if (tableKey === 'leads') {
+          const selected = prods.find((product) => product.id === editRecord?.interested_product_id)
+            || prods.find((product) => product.product_name === editRecord?.service_type);
+          setLeadProductChoice(selected?.id || (editRecord?.service_type ? '__custom' : ''));
+        }
       } catch (err) {
         console.warn('Failed to load foreign lookups', err);
       } finally {
@@ -85,7 +94,10 @@ export const RecordFormModal: React.FC<RecordFormModalProps> = ({
         initial.id = editRecord.id;
       }
       setFormData(initial);
+      setProposalPlanTemplateId(editRecord.proposal_plan_template_id || '');
     } else {
+      setLeadProductChoice('');
+      setProposalPlanTemplateId('');
       // 新規登録時: デフォルト値
       const initial: Record<string, any> = {};
       config.fields.forEach((f) => {
@@ -105,6 +117,18 @@ export const RecordFormModal: React.FC<RecordFormModalProps> = ({
   if (!isOpen) return null;
 
   const handleInputChange = (fieldKey: string, value: any) => {
+    if (tableKey === 'deals' && fieldKey === 'product_id' && value !== formData.product_id) {
+      setProposalPlanTemplateId('');
+      const product = products.find((item) => item.id === value);
+      setFormData((prev) => ({
+        ...prev,
+        [fieldKey]: value,
+        initial_fee: product?.initial_fee ?? '',
+        monthly_fee: product?.monthly_fee ?? '',
+        total_amount: product ? Number(product.initial_fee || 0) + Number(product.monthly_fee || 0) : '',
+      }));
+      return;
+    }
     setFormData((prev) => ({
       ...prev,
       [fieldKey]: value,
@@ -210,6 +234,12 @@ export const RecordFormModal: React.FC<RecordFormModalProps> = ({
     }
     if (tableKey === 'deals' && formData.id) {
       payload.id = formData.id.trim();
+    }
+    if (tableKey === 'leads') {
+      payload.interested_product_id = leadProductChoice && leadProductChoice !== '__custom' ? leadProductChoice : null;
+    }
+    if (tableKey === 'deals') {
+      payload.proposal_plan_template_id = proposalPlanTemplateId || null;
     }
 
     try {
@@ -327,33 +357,83 @@ export const RecordFormModal: React.FC<RecordFormModalProps> = ({
                   );
                 }
 
+                if (tableKey === 'leads' && field.key === 'service_type') {
+                  return (
+                    <div key={field.key} className="space-y-1.5">
+                      <label className="block text-xs font-semibold text-slate-300">検討サービス種別</label>
+                      <select
+                        value={leadProductChoice}
+                        onChange={(e) => {
+                          const choice = e.target.value;
+                          setLeadProductChoice(choice);
+                          const product = products.find((item) => item.id === choice);
+                          handleInputChange('interested_product_id', product?.id || '');
+                          handleInputChange('service_type', product?.product_name || '');
+                        }}
+                        className="w-full px-3 py-2 rounded-xl bg-slate-950 border border-slate-700/80 text-slate-200 text-xs outline-none focus:border-blue-500"
+                      >
+                        <option value="">商品を選択（未定）</option>
+                        {products.map((product) => <option key={product.id} value={product.id}>{product.product_name}</option>)}
+                        <option value="__custom">その他（自由入力）</option>
+                      </select>
+                      {leadProductChoice === '__custom' && (
+                        <input
+                          type="text"
+                          value={value}
+                          onChange={(e) => handleInputChange('service_type', e.target.value)}
+                          placeholder="サービス名を入力"
+                          className="w-full px-3 py-2 rounded-xl bg-slate-950 border border-slate-700/80 text-slate-200 text-xs outline-none focus:border-blue-500"
+                        />
+                      )}
+                      {error && <p className="text-[11px] text-rose-400">{error}</p>}
+                    </div>
+                  );
+                }
+
                 // 商品リレーション（プルダウン）
                 if (field.type === 'fk_product') {
                   return (
-                    <div key={field.key} className={`space-y-1.5 ${isFullWidth ? 'sm:col-span-2' : ''}`}>
-                      <label className="block text-xs font-semibold text-slate-300 flex items-center justify-between">
-                        <span>
-                          {field.label} {field.required && <span className="text-rose-400">*</span>}
-                        </span>
-                        <span className="font-mono text-[10px] text-slate-500">{field.key}</span>
-                      </label>
-
-                      <select
-                        value={value}
-                        onChange={(e) => handleInputChange(field.key, e.target.value)}
-                        className={`w-full px-3 py-2 rounded-xl bg-slate-950 border ${
-                          error ? 'border-rose-500' : 'border-slate-700/80'
-                        } text-slate-200 text-xs outline-none focus:border-blue-500`}
-                      >
-                        <option value="">-- 提案商品を選択（未定可） --</option>
-                        {products.map((p) => (
-                          <option key={p.id} value={p.id}>
-                            {p.product_name} (月額: ¥{Number(p.monthly_fee || 0).toLocaleString()})
-                          </option>
-                        ))}
-                      </select>
-                      {error && <p className="text-[11px] text-rose-400">{error}</p>}
-                    </div>
+                    <React.Fragment key={field.key}>
+                      <div className={`space-y-1.5 ${isFullWidth ? 'sm:col-span-2' : ''}`}>
+                        <label className="block text-xs font-semibold text-slate-300 flex items-center justify-between">
+                          <span>{field.label} {field.required && <span className="text-rose-400">*</span>}</span>
+                          <span className="font-mono text-[10px] text-slate-500">{field.key}</span>
+                        </label>
+                        <select
+                          value={value}
+                          onChange={(e) => handleInputChange(field.key, e.target.value)}
+                          className={`w-full px-3 py-2 rounded-xl bg-slate-950 border ${error ? 'border-rose-500' : 'border-slate-700/80'} text-slate-200 text-xs outline-none focus:border-blue-500`}
+                        >
+                          <option value="">-- 提案商品を選択（未定可） --</option>
+                          {products.map((p) => <option key={p.id} value={p.id}>{p.product_name} (月額: ¥{Number(p.monthly_fee || 0).toLocaleString()})</option>)}
+                        </select>
+                        {error && <p className="text-[11px] text-rose-400">{error}</p>}
+                      </div>
+                      {tableKey === 'deals' && field.key === 'product_id' && (
+                        <ProposalPlanTemplatePicker
+                          productId={String(formData.product_id || '')}
+                          selectedTemplateId={proposalPlanTemplateId}
+                          name={String(formData.proposal_plan_name || '')}
+                          description={String(formData.memo || '')}
+                          initialFee={formData.initial_fee ?? ''}
+                          monthlyFee={formData.monthly_fee ?? ''}
+                          totalAmount={formData.total_amount ?? ''}
+                          onApply={(template?: ProposalPlanTemplate) => {
+                            setProposalPlanTemplateId(template?.id || '');
+                            if (template) setFormData((prev) => ({
+                              ...prev,
+                              proposal_plan_template_id: template.id,
+                              product_id: template.product_id,
+                              proposal_plan_name: template.name,
+                              memo: template.description || prev.memo,
+                              initial_fee: template.initial_fee ?? '',
+                              monthly_fee: template.monthly_fee ?? '',
+                              total_amount: template.total_amount ?? '',
+                            }));
+                          }}
+                        />
+                      )}
+                    </React.Fragment>
                   );
                 }
 
@@ -411,6 +491,25 @@ export const RecordFormModal: React.FC<RecordFormModalProps> = ({
                           </option>
                         ))}
                       </select>
+                      {error && <p className="text-[11px] text-rose-400">{error}</p>}
+                    </div>
+                  );
+                }
+
+                if (tableKey === 'deals' && field.key === 'proposal_plan_name') {
+                  return (
+                    <div key={field.key} className="space-y-1.5 sm:col-span-2">
+                      <label className="block text-xs font-semibold text-slate-300">
+                        {field.label} {field.required && <span className="text-rose-400">*</span>}
+                      </label>
+                      <input
+                        type="text"
+                        value={value}
+                        placeholder={field.placeholder}
+                        onChange={(e) => handleInputChange(field.key, e.target.value)}
+                        className={`w-full px-3 py-2 rounded-xl bg-slate-950 border ${error ? 'border-rose-500' : 'border-slate-700/80'} text-slate-200 text-xs outline-none focus:border-blue-500`}
+                      />
+
                       {error && <p className="text-[11px] text-rose-400">{error}</p>}
                     </div>
                   );
