@@ -7,7 +7,8 @@ import {
   insertRecord, 
   updateRecord 
 } from '../services/dataService';
-import { ProposalPlanTemplatePicker, ProposalPlanTemplate } from './ProposalPlanTemplatePicker';
+import { ProposalPlanTemplatePicker } from './ProposalPlanTemplatePicker';
+import type { ProposalPlanTemplate } from './ProposalPlanTemplatePicker';
 import { 
   X, 
   Check, 
