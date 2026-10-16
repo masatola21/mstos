@@ -807,6 +807,7 @@ function AppContent() {
       description: `${sourceLabel}の業務段階が進みました。関連情報を確認して草案・次の対応を準備してください。顧客への送信や外部公開は行わないでください。`,
       projectId: '',
       workArea: preset.workArea,
+      sourceCategory: 'sales_customer',
       taskKind: preset.taskKind,
       relatedRecord: { type: preset.relatedType, id: event.targetRecordId ? String(event.targetRecordId) : undefined, label: sourceLabel },
       priority: 'medium',
@@ -1011,6 +1012,7 @@ function AppContent() {
       return ({
       id: `task-${Date.now()}-${idx}`,
       projectId: newProject.id,
+      sourceCategory: 'ai_president',
       title: pt.title,
       description: pt.objective,
       status: 'waiting',
@@ -1669,6 +1671,7 @@ function AppContent() {
             const generatedTasks: TaskItem[] = pTasks.map((t, idx) => ({
               id: `task-${Date.now()}-${idx}`,
               projectId: newProject.id,
+              sourceCategory: 'ai_president',
               title: t.title,
               description: t.description,
               status: 'waiting',

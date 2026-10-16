@@ -63,6 +63,7 @@ export interface Project {
 export type TaskStatus = 'waiting' | 'in_progress' | 'pending_approval' | 'completed' | 'blocked';
 
 export type TaskWorkArea = 'sales_customer' | 'product_development' | 'project' | 'post_contract_support';
+export type TaskSourceCategory = 'sales_customer' | 'business_operations' | 'ai_president';
 export type TaskKind = 'response' | 'review' | 'creation_analysis' | 'recurring';
 export type TaskRelatedRecordType = 'company' | 'contact' | 'prospect' | 'lead' | 'deal' | 'customer' | 'product';
 export interface TaskRelatedRecord { type: TaskRelatedRecordType; id?: string; label?: string; }
@@ -90,7 +91,9 @@ export interface TaskItem {
   title: string;
   description: string;
   projectId: string; // 所属プロジェクトID（プロジェクト外のタスクは空文字）
-  workArea?: TaskWorkArea; // 業務領域。旧データは project 扱い
+  workArea?: TaskWorkArea; // 作業内容の領域。旧データは project 扱い
+  sourceCategory?: TaskSourceCategory; // タスクが発生したカテゴリー
+  dueDate?: string; // 対応期限 (YYYY-MM-DD)
   taskKind?: TaskKind; // 作業種別。旧データは response 扱い
   relatedRecord?: TaskRelatedRecord; // CRM・商品などの関連先
   priority: Priority;
