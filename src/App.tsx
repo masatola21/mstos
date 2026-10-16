@@ -197,6 +197,7 @@ async function loadTaskRelatedContext(task: TaskItem): Promise<string> {
 function AppContent() {
   const { user, isLoading } = useAuth();
   const [currentTab, setCurrentTab] = useState<UnifiedNavTab>('mst_dashboard');
+  const [customerWorkspaceCompanyId, setCustomerWorkspaceCompanyId] = useState<string | undefined>();
   const [workspaceReady, setWorkspaceReady] = useState(false);
   const [workspaceSyncStatus, setWorkspaceSyncStatus] = useState<'loading' | 'saving' | 'saved' | 'error'>('loading');
   const lastSavedWorkspaceRef = useRef('');
@@ -1428,6 +1429,10 @@ function AppContent() {
             currentTable={currentTab as TableKey}
             onTableChange={(tab) => setCurrentTab(tab as UnifiedNavTab)}
             onOpenRls={() => setIsRlsOpen(true)}
+            onOpenCustomerWorkspace={(companyId, destination) => {
+              setCustomerWorkspaceCompanyId(companyId);
+              setCurrentTab(destination === 'documents' ? 'document_templates' : 'customer_operations');
+            }}
           />
         )}
 
@@ -1473,6 +1478,8 @@ function AppContent() {
         {currentTab === 'customer_operations' && (
           <SalesOperationsWorkspace
             tab="operations"
+            companyId={customerWorkspaceCompanyId}
+            onClearCompanyFilter={() => setCustomerWorkspaceCompanyId(undefined)}
             onOperationalRecordsChange={(nextContracts, nextInvoices) => {
               setContracts(nextContracts);
               setInvoices(nextInvoices);
@@ -1490,8 +1497,8 @@ function AppContent() {
 
         {currentTab === 'document_templates' && (
           <>
-            <DocumentTemplateView />
-            <SalesOperationsWorkspace tab="documents" />
+            <DocumentTemplateView initialCompanyId={customerWorkspaceCompanyId} />
+            <SalesOperationsWorkspace tab="documents" companyId={customerWorkspaceCompanyId} />
           </>
         )}
 
