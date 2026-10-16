@@ -1,6 +1,8 @@
 import {
   ActivityLog,
   ApprovalItem,
+  CharacterConfig,
+  UserProfile,
   ModelPricingRate,
   Project,
   TaskItem,
@@ -10,7 +12,10 @@ import {
 } from '../types';
 import {
   loadActivityLogs,
+  loadActiveCharacterId,
   loadAllChatHistories,
+  loadCharacters,
+  loadUserProfile,
   saveChatHistory,
   loadKnowledgeItems,
   loadApprovals,
@@ -20,6 +25,9 @@ import {
   loadTokenUsageRecords,
   loadTopGoal,
   saveActivityLogs,
+  saveActiveCharacterId,
+  saveCharacters,
+  saveUserProfile,
   saveKnowledgeItems,
   saveApprovals,
   savePricingRates,
@@ -31,6 +39,7 @@ import {
 import { getSupabase } from '../lib/supabaseClient';
 import { MarketingScenario } from '../types/marketing';
 import { loadMarketingScenarios, saveMarketingScenarios } from '../utils/marketingStorage';
+import { AIModelSettings, loadAIModelSettings, saveAIModelSettings } from '../utils/aiSettingsStorage';
 import { matrixService } from './matrixService';
 import {
   AutomationRule,
@@ -96,6 +105,10 @@ async function loadRelationalSalesOperations(): Promise<RelationalSalesOperation
 
 export interface WorkspaceData {
   topGoal: string;
+  characters: CharacterConfig[];
+  activeCharacterId: string;
+  userProfile: UserProfile;
+  aiModelSettings: AIModelSettings;
   projects: Project[];
   tasks: TaskItem[];
   approvals: ApprovalItem[];
@@ -111,6 +124,24 @@ export interface WorkspaceData {
   workModeHistories: Record<string, ChatMessage[]>;
   knowledgeItems: KnowledgeItem[];
   marketingScenarios: MarketingScenario[];
+}
+
+type RelationalAIOperations = Pick<WorkspaceData,
+  | 'topGoal'
+  | 'characters'
+  | 'activeCharacterId'
+  | 'userProfile'
+  | 'aiModelSettings'
+  | 'projects'
+  | 'tasks'
+  | 'approvals'
+  | 'activityLogs'
+  | 'pricingRates'
+  | 'tokenUsage'
+  | 'automations'
+  | 'workModeHistories'
+  | 'knowledgeItems'
+>;
 }
 
 const WORKSPACE_STATE_TABLE = 'mst_workspace_state';
@@ -129,23 +160,40 @@ async function loadRelationalAIOperations(userId: string): Promise<RelationalAIO
   if (syncStateError) throw syncStateError;
   if (!syncState) return null;
 
-  const [projects, tasks, approvals, automations, activityLogs] = await Promise.all([
+  const [preferences, projects, tasks, approvals, automations, activityLogs, pricingRates, tokenUsage, chats, knowledge] = await Promise.all([
+    supabase.from('mst_ai_user_preferences').select('*').eq('user_id', userId).maybeSingle(),
     supabase.from('mst_ai_projects').select('payload').eq('user_id', userId).order('created_at', { ascending: false }),
     supabase.from('mst_ai_tasks').select('payload').eq('user_id', userId).order('created_at', { ascending: false }),
     supabase.from('mst_ai_approvals').select('payload').eq('user_id', userId).order('created_at', { ascending: false }),
     supabase.from('mst_ai_automation_rules').select('payload').eq('user_id', userId).order('updated_at', { ascending: false }),
     supabase.from('mst_ai_activity_logs').select('payload').eq('user_id', userId).order('occurred_at', { ascending: false }),
+    supabase.from('mst_ai_model_pricing').select('payload').eq('user_id', userId).order('model'),
+    supabase.from('mst_ai_token_usage_records').select('payload').eq('user_id', userId).order('occurred_at', { ascending: false }),
+    supabase.from('mst_ai_chat_conversations').select('conversation_key, messages').eq('user_id', userId),
+    supabase.from('mst_ai_knowledge_items').select('payload').eq('user_id', userId).order('updated_at', { ascending: false }),
   ]);
-  const queryError = [projects, tasks, approvals, automations, activityLogs].find((result) => result.error)?.error;
+  const queryError = [preferences, projects, tasks, approvals, automations, activityLogs, pricingRates, tokenUsage, chats, knowledge]
+    .find((result) => result.error)?.error;
   if (queryError) throw queryError;
 
   const records = (rows: Array<{ payload: unknown }> | null | undefined) => (rows || []).map((row) => row.payload);
+  const characters = (preferences.data?.characters || []) as CharacterConfig[];
+  const histories = Object.fromEntries((chats.data || []).map((row) => [row.conversation_key, row.messages as ChatMessage[]]));
   return {
+    topGoal: preferences.data?.top_goal || '',
+    characters,
+    activeCharacterId: preferences.data?.active_character_id || characters[0]?.id || '',
+    userProfile: (preferences.data?.user_profile || {}) as UserProfile,
+    aiModelSettings: (preferences.data?.ai_model_settings || {}) as AIModelSettings,
     projects: records(projects.data) as Project[],
     tasks: records(tasks.data) as TaskItem[],
     approvals: records(approvals.data) as ApprovalItem[],
     automations: records(automations.data) as AutomationRule[],
     activityLogs: records(activityLogs.data) as ActivityLog[],
+    pricingRates: records(pricingRates.data) as ModelPricingRate[],
+    tokenUsage: records(tokenUsage.data) as TokenUsageRecord[],
+    workModeHistories: histories,
+    knowledgeItems: records(knowledge.data) as KnowledgeItem[],
   };
 }
 
@@ -158,6 +206,15 @@ async function saveRelationalAIOperations(userId: string, data: WorkspaceData): 
     p_approvals: data.approvals,
     p_automation_rules: data.automations,
     p_activity_logs: data.activityLogs,
+    p_user_profile: data.userProfile,
+    p_characters: data.characters,
+    p_active_character_id: data.activeCharacterId,
+    p_ai_model_settings: data.aiModelSettings,
+    p_top_goal: data.topGoal,
+    p_token_usage_records: data.tokenUsage,
+    p_model_pricing: data.pricingRates,
+    p_chat_histories: data.workModeHistories,
+    p_knowledge_items: data.knowledgeItems,
   });
   if (error) throw error;
 }
@@ -208,6 +265,12 @@ function mergeChatHistories(
   });
   return merged;
 }
+function mergePreference<T>(remoteValue: T | undefined, localValue: T, baselineValue: T | undefined): T {
+  if (baselineValue !== undefined && JSON.stringify(localValue) !== JSON.stringify(baselineValue)
+    && JSON.stringify(remoteValue) === JSON.stringify(baselineValue)) return localValue;
+  return remoteValue ?? localValue;
+}
+
 function loadLastSyncedData(userId: string): Partial<WorkspaceData> {
   try {
     const raw = localStorage.getItem(`${LAST_SYNC_PREFIX}${userId}`);
@@ -218,8 +281,13 @@ function loadLastSyncedData(userId: string): Partial<WorkspaceData> {
 }
 
 export function loadLocalWorkspaceData(): WorkspaceData {
+  const characters = loadCharacters();
   return {
     topGoal: loadTopGoal(),
+    characters,
+    activeCharacterId: loadActiveCharacterId(characters),
+    userProfile: loadUserProfile(),
+    aiModelSettings: loadAIModelSettings(),
     projects: loadProjects(),
     tasks: loadTasks(),
     approvals: loadApprovals(),
@@ -240,6 +308,10 @@ export function loadLocalWorkspaceData(): WorkspaceData {
 
 export function applyWorkspaceData(data: WorkspaceData): void {
   saveTopGoal(data.topGoal);
+  saveCharacters(data.characters);
+  saveActiveCharacterId(data.activeCharacterId);
+  saveUserProfile(data.userProfile);
+  saveAIModelSettings(data.aiModelSettings);
   saveProjects(data.projects);
   saveTasks(data.tasks);
   saveApprovals(data.approvals);
@@ -308,6 +380,15 @@ export async function loadOrMigrateWorkspaceData(userId: string): Promise<Worksp
   // The sync-state row marks the normalized tables as authoritative, including when a user intentionally has zero records.
   const relationalAI = await loadRelationalAIOperations(userId);
   if (relationalAI) {
+    merged.topGoal = mergePreference(relationalAI.topGoal, localDefaults.topGoal, baseline.topGoal);
+    merged.characters = mergeRecords(relationalAI.characters, localDefaults.characters, baseline.characters || []);
+    merged.activeCharacterId = mergePreference(relationalAI.activeCharacterId, localDefaults.activeCharacterId, baseline.activeCharacterId);
+    merged.userProfile = mergePreference(relationalAI.userProfile, localDefaults.userProfile, baseline.userProfile);
+    merged.aiModelSettings = mergePreference(relationalAI.aiModelSettings, localDefaults.aiModelSettings, baseline.aiModelSettings);
+    merged.pricingRates = mergeRecords(relationalAI.pricingRates, localDefaults.pricingRates, baseline.pricingRates || []);
+    merged.tokenUsage = mergeRecords(relationalAI.tokenUsage, localDefaults.tokenUsage, baseline.tokenUsage || []).slice(0, 300);
+    merged.workModeHistories = mergeChatHistories(relationalAI.workModeHistories, localDefaults.workModeHistories, baseline.workModeHistories || {});
+    merged.knowledgeItems = mergeRecords(relationalAI.knowledgeItems, localDefaults.knowledgeItems, baseline.knowledgeItems || []);
     merged.projects = mergeRecords(relationalAI.projects, localDefaults.projects, baseline.projects || []);
     merged.tasks = mergeRecords(relationalAI.tasks, localDefaults.tasks, baseline.tasks || []);
     merged.approvals = mergeRecords(relationalAI.approvals, localDefaults.approvals, baseline.approvals || []);
@@ -333,11 +414,20 @@ export async function saveWorkspaceData(userId: string, data: WorkspaceData): Pr
   // Keep non-operational preferences and supporting workspace data in the compatibility snapshot.
   // AI work records above are stored only in user-scoped relational tables.
   const snapshotData = { ...data } as Partial<WorkspaceData>;
+  delete snapshotData.topGoal;
+  delete snapshotData.characters;
+  delete snapshotData.activeCharacterId;
+  delete snapshotData.userProfile;
+  delete snapshotData.aiModelSettings;
   delete snapshotData.projects;
   delete snapshotData.tasks;
   delete snapshotData.approvals;
   delete snapshotData.automations;
   delete snapshotData.activityLogs;
+  delete snapshotData.pricingRates;
+  delete snapshotData.tokenUsage;
+  delete snapshotData.workModeHistories;
+  delete snapshotData.knowledgeItems;
   const { error } = await supabase
     .from(WORKSPACE_STATE_TABLE)
     .upsert({ user_id: userId, data: snapshotData, updated_at: new Date().toISOString() }, { onConflict: 'user_id' });
