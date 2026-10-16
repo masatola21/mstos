@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { getSupabase } from '../lib/supabaseClient';
-import { CalendarDays, CheckCircle2, Loader2, Mail, Save } from 'lucide-react';
+import { CalendarDays, Loader2, Mail, Save } from 'lucide-react';
 
 type Customer = {
   id: string;
