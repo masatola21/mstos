@@ -67,7 +67,7 @@ async function loadRelationalSalesOperations(): Promise<RelationalSalesOperation
   // Older deployments continue using the compatible workspace snapshot until the migration is applied.
   if (contractResult.error || invoiceResult.error) return null;
   return {
-    contracts: (contractResult.data || []).map((row: any) => ({
+    contracts: (contractResult.data || []).map((row: any) => row.payload || ({
       id: row.legacy_id || row.id,
       title: row.title,
       type: row.contract_type,
@@ -83,7 +83,7 @@ async function loadRelationalSalesOperations(): Promise<RelationalSalesOperation
       createdAt: toTimestamp(row.created_at),
       updatedAt: toTimestamp(row.updated_at),
     })) as ManagedContract[],
-    invoices: (invoiceResult.data || []).map((row: any) => ({
+    invoices: (invoiceResult.data || []).map((row: any) => row.payload || ({
       id: row.legacy_id || row.id,
       invoiceNumber: row.invoice_number,
       title: row.title,
@@ -142,6 +142,49 @@ type RelationalAIOperations = Pick<WorkspaceData,
   | 'workModeHistories'
   | 'knowledgeItems'
 >;
+
+type RelationalMatrixWorkspace = Pick<WorkspaceData, 'products' | 'tools' | 'customLists' | 'marketingScenarios'>;
+
+async function loadRelationalMatrixWorkspace(userId: string): Promise<RelationalMatrixWorkspace | null> {
+  const supabase = getSupabaseClient();
+  const { data: syncState, error: syncStateError } = await supabase
+    .from('mst_matrix_workspace_sync_state')
+    .select('user_id')
+    .eq('user_id', userId)
+    .maybeSingle();
+  if (syncStateError) throw syncStateError;
+  if (!syncState) return null;
+
+  const [products, tools, customLists, marketingScenarios] = await Promise.all([
+    supabase.from('mst_managed_products').select('payload').eq('user_id', userId).order('updated_at', { ascending: false }),
+    supabase.from('mst_managed_tools').select('payload').eq('user_id', userId).order('updated_at', { ascending: false }),
+    supabase.from('mst_custom_list_definitions').select('payload').eq('user_id', userId).order('created_at', { ascending: false }),
+    supabase.from('mst_marketing_scenarios').select('payload').eq('user_id', userId).order('updated_at', { ascending: false }),
+  ]);
+  const queryError = [products, tools, customLists, marketingScenarios].find((result) => result.error)?.error;
+  if (queryError) throw queryError;
+  const records = (rows: Array<{ payload: unknown }> | null | undefined) => (rows || []).map((row) => row.payload);
+  return {
+    products: records(products.data) as ManagedProduct[],
+    tools: records(tools.data) as ManagedToolAsset[],
+    customLists: records(customLists.data) as CustomListDefinition[],
+    marketingScenarios: records(marketingScenarios.data) as MarketingScenario[],
+  };
+}
+
+async function saveRelationalMatrixWorkspace(userId: string, data: WorkspaceData): Promise<void> {
+  const supabase = getSupabaseClient();
+  const { error } = await supabase.rpc('mst_save_matrix_workspace', {
+    p_user_id: userId,
+    p_products: data.products,
+    p_contracts: data.contracts,
+    p_invoices: data.invoices,
+    p_tools: data.tools,
+    p_custom_lists: data.customLists,
+    p_marketing_scenarios: data.marketingScenarios,
+  });
+  if (error) throw error;
+}
 
 const WORKSPACE_STATE_TABLE = 'mst_workspace_state';
 const AI_OPERATIONS_SYNC_STATE_TABLE = 'mst_ai_operations_sync_state';
@@ -397,6 +440,14 @@ export async function loadOrMigrateWorkspaceData(userId: string): Promise<Worksp
     merged.activityLogs = mergeRecords(relationalAI.activityLogs, localDefaults.activityLogs, baseline.activityLogs || []).slice(0, 100);
   }
 
+  const relationalMatrix = await loadRelationalMatrixWorkspace(userId);
+  if (relationalMatrix) {
+    merged.products = mergeRecords(relationalMatrix.products, localDefaults.products, baseline.products || []);
+    merged.tools = mergeRecords(relationalMatrix.tools, localDefaults.tools, baseline.tools || []);
+    merged.customLists = mergeRecords(relationalMatrix.customLists, localDefaults.customLists, baseline.customLists || []);
+    merged.marketingScenarios = mergeRecords(relationalMatrix.marketingScenarios, localDefaults.marketingScenarios, baseline.marketingScenarios || []);
+  }
+
   const relationalSales = await loadRelationalSalesOperations();
   if (relationalSales && (relationalSales.contracts.length > 0 || relationalSales.invoices.length > 0 || (merged.contracts.length === 0 && merged.invoices.length === 0))) {
     merged.contracts = relationalSales.contracts;
@@ -411,9 +462,10 @@ export async function loadOrMigrateWorkspaceData(userId: string): Promise<Worksp
 export async function saveWorkspaceData(userId: string, data: WorkspaceData): Promise<void> {
   const supabase = getSupabaseClient();
   await saveRelationalAIOperations(userId, data);
+  await saveRelationalMatrixWorkspace(userId, data);
 
-  // Keep non-operational preferences and supporting workspace data in the compatibility snapshot.
-  // AI work records above are stored only in user-scoped relational tables.
+  // AI and Matrix business records are stored in user-scoped relational tables.
+  // The compatibility snapshot retains only auxiliary workspace state.
   const snapshotData = { ...data } as Partial<WorkspaceData>;
   delete snapshotData.topGoal;
   delete snapshotData.characters;
@@ -429,6 +481,13 @@ export async function saveWorkspaceData(userId: string, data: WorkspaceData): Pr
   delete snapshotData.tokenUsage;
   delete snapshotData.workModeHistories;
   delete snapshotData.knowledgeItems;
+  delete snapshotData.products;
+  delete snapshotData.contracts;
+  delete snapshotData.invoices;
+  delete snapshotData.tools;
+  delete snapshotData.customLists;
+  delete snapshotData.marketingScenarios;
+
   const { error } = await supabase
     .from(WORKSPACE_STATE_TABLE)
     .upsert({ user_id: userId, data: snapshotData, updated_at: new Date().toISOString() }, { onConflict: 'user_id' });
