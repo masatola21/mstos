@@ -57,6 +57,7 @@ import {
   KnowledgeAttachment,
   WorkspaceAttachment,
   TaskWorkArea,
+  TaskSourceCategory,
   TaskKind,
   TaskRelatedRecordType,
 } from './types';
@@ -1256,11 +1257,74 @@ function AppContent() {
     setProducts(matrixService.loadProducts());
   };
 
+  const createAutomationTask = (input: {
+    ruleId: string;
+    recordId: string;
+    title: string;
+    description: string;
+    workArea: TaskWorkArea;
+    sourceCategory: TaskSourceCategory;
+    taskKind: TaskKind;
+    priority: Priority;
+    completionCriteria: string;
+    workModeId: string;
+    relatedRecord?: TaskItem['relatedRecord'];
+  }) => {
+    const rule = automations.find((item) => item.id === input.ruleId && item.isEnabled);
+    if (!rule || tasks.some((item) => item.sourceAutomationId === rule.id && item.sourceAutomationRecordId === input.recordId)) return;
+    const mode = AI_WORK_MODES.find((item) => item.id === input.workModeId) || AI_WORK_MODES[0];
+    const resolved = resolveWorkMode(mode, aiModelSettings.roleOverrides);
+    const due = new Date();
+    due.setDate(due.getDate() + rule.taskDueInDays);
+    const dueDate = `${due.getFullYear()}-${String(due.getMonth() + 1).padStart(2, '0')}-${String(due.getDate()).padStart(2, '0')}`;
+    const task: TaskItem = {
+      id: `task-automation-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
+      title: input.title,
+      description: `${input.description} 自動化ルール「${rule.name}」に基づくタスクです。顧客への連絡・外部処理は実行せず、担当者が内容を確認してください。`,
+      projectId: '',
+      workArea: input.workArea,
+      sourceCategory: input.sourceCategory,
+      taskKind: input.taskKind,
+      relatedRecord: input.relatedRecord,
+      priority: input.priority,
+      assignee: rule.aiMode === 'suggest'
+        ? { type: 'human', name: '人間 (あなた)' }
+        : { type: 'role_ai', workModeId: mode.id, name: `${resolved.name}（${mode.label}）` },
+      status: 'waiting',
+      completionCriteria: input.completionCriteria,
+      sourceAutomationId: rule.id,
+      sourceAutomationRecordId: input.recordId,
+      createdAt: Date.now(),
+      updatedAt: Date.now(),
+      dueDate,
+    };
+    const nextTasks = [task, ...tasks];
+    setTasks(nextTasks);
+    saveTasks(nextTasks);
+    recordActivityLog('task_created', `自動化ルール「${rule.name}」から期限付きタスク「${task.title}」を作成しました（期限: ${dueDate}）`, 'システム');
+    setActivityLogs(loadActivityLogs());
+  };
+
   const handleAddContract = (c: Omit<ManagedContract, 'id' | 'createdAt' | 'updatedAt'>) => {
     const created = matrixService.addContract(c);
     setContracts(matrixService.loadContracts());
     recordActivityLog('task_created', `契約書「${created.title}」を登録しました`, '人間');
     setActivityLogs(loadActivityLogs());
+    if (created.status === 'signed') {
+      createAutomationTask({
+        ruleId: 'workflow-contract-signed',
+        recordId: created.id,
+        title: `契約締結後の請求・提供準備：${created.counterpartyName}`,
+        description: `契約「${created.title}」が締結済みとして登録されました。契約内容と開始日・金額を確認し、請求やサービス開始に必要な準備を整理してください。`,
+        workArea: 'post_contract_support',
+        sourceCategory: 'sales_customer',
+        taskKind: 'creation_analysis',
+        priority: 'medium',
+        completionCriteria: '契約条件を確認し、請求・サービス提供開始に必要な準備項目を整理する。顧客への送付や請求発行は人の確認後に行う。',
+        workModeId: 'customer_product',
+        relatedRecord: created.companyId ? { type: 'company', id: String(created.companyId), label: created.counterpartyName } : undefined,
+      });
+    }
   };
 
   const handleAddInvoice = (i: Omit<ManagedInvoice, 'id' | 'createdAt' | 'updatedAt'>) => {
@@ -1278,10 +1342,26 @@ function AppContent() {
   };
 
   const handleUpdateInvoiceStatus = (id: string, status: any) => {
+    const current = invoices.find((invoice) => invoice.id === id);
     matrixService.updateInvoice(id, { status, paidDate: status === 'paid' ? new Date().toISOString().split('T')[0] : undefined });
     setInvoices(matrixService.loadInvoices());
     recordActivityLog('task_status_changed', `請求書ステータスが更新されました`, '人間');
     setActivityLogs(loadActivityLogs());
+    if (current && status === 'overdue' && current.status !== 'overdue') {
+      createAutomationTask({
+        ruleId: 'workflow-invoice-overdue',
+        recordId: current.id,
+        title: `請求期限超過の対応案：${current.recipientName}`,
+        description: `請求書「${current.title}」（請求番号: ${current.invoiceNumber}、金額: ${current.amount.toLocaleString()}円、期限: ${current.dueDate}）が期限超過として登録されました。入金状況と社内対応を確認し、必要なら連絡文案を作成してください。`,
+        workArea: 'sales_customer',
+        sourceCategory: 'business_operations',
+        taskKind: 'response',
+        priority: 'high',
+        completionCriteria: '入金状況を確認し、社内対応と必要な顧客連絡の草案を整理する。顧客への連絡・請求処理は人が確認してから行う。',
+        workModeId: 'president',
+        relatedRecord: current.companyId ? { type: 'customer', id: String(current.companyId), label: current.recipientName } : undefined,
+      });
+    }
   };
 
   const handleUpdateAutomation = (id: string, updates: Partial<AutomationRule>) => {

@@ -21,6 +21,8 @@ const aiModeLabels: Record<AutomationRule['aiMode'], string> = {
   execute: '自動実行（未接続・現在はタスク作成のみ）',
 };
 
+const connectedTriggerEvents = new Set<AutomationRule['triggerEvent']>(['deal_won', 'contract_signed', 'invoice_overdue']);
+
 const approvalLabels: Record<AutomationRule['approvalPolicy'], string> = {
   always: '毎回、人が確認してから進める',
   external_actions: '顧客への連絡・外部処理の前に確認する',
@@ -48,7 +50,7 @@ export const AutomationView: React.FC<AutomationViewProps> = ({ automations, onU
         <div className="mt-4 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-amber-700/40 bg-amber-950/30 p-3">
           <div className="flex items-start gap-2 text-xs leading-5 text-amber-100">
             <Clock3 className="mt-0.5 h-4 w-4 shrink-0 text-amber-300" />
-            <span>現在は「商談成約後」のルールのみ、商談から顧客への移行時に既存タスクへ期限を設定します（初期値は3日）。他の業務イベントと、承認ポリシーの自動適用・実行履歴は未接続です。タスク作成時にAI APIは自動実行せず、担当者がタスクから開始します。</span>
+            <span>イベント連携済み：商談から顧客への移行時、締結済み契約の登録時、請求書を期限超過へ変更した時に、ルールが有効なら期限付きタスクを作成します。同一レコードからの重複作成は防止します。診断回答・支援マイルストーンの連携、承認ポリシーの自動適用、実行履歴は未接続です。AI APIや顧客連絡は自動実行せず、タスクから担当者が開始します。</span>
           </div>
           <span className="whitespace-nowrap text-xs text-slate-400">有効設定 {enabledCount} / {automations.length}</span>
         </div>
@@ -116,7 +118,7 @@ export const AutomationView: React.FC<AutomationViewProps> = ({ automations, onU
 
             <div className="flex items-center gap-2 border-t border-slate-800 pt-3 text-[11px] text-slate-500">
               {rule.isEnabled ? <Check className="h-3.5 w-3.5 text-emerald-400" /> : <Clock3 className="h-3.5 w-3.5" />}
-              {rule.isEnabled ? '設定を有効にしました（業務連携後に適用）' : '停止中'}
+              {rule.isEnabled ? (connectedTriggerEvents.has(rule.triggerEvent) ? '有効（イベント発生時に期限付きタスクを作成）' : '設定を有効にしました（業務連携後に適用）') : '停止中'}
               {rule.aiMode === 'execute' && rule.approvalPolicy === 'none' && <span className="ml-auto inline-flex items-center gap-1 text-amber-300"><Sparkles className="h-3 w-3" />承認なしで自動実行する設定</span>}
             </div>
           </article>
