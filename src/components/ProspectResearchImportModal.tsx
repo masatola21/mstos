@@ -145,6 +145,8 @@ JSONオブジェクトのみを返してください。形式: {"candidates":[{"
         imported += 1;
       }
       setNotice(`${imported}社を会社マスタと見込み企業に登録しました。`);
+      setCandidates([]);
+      setRawResearch('');
       onImported();
     } catch (saveError: any) {
       setError(saveError?.message || 'CRM登録に失敗しました。');
