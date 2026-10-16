@@ -325,7 +325,7 @@ export const DiagnosisFormsWorkspace: React.FC<DiagnosisFormsWorkspaceProps> = (
                 </div>;
               })}</dl>;
             })()}{answer.reviewer_memo&&<p className="mt-2 text-xs text-slate-400">確認メモ: {answer.reviewer_memo}</p>}</details></td></tr></Fragment>)}</tbody></table></div>}
-      <p className="border-t border-slate-800 p-3 text-xs text-slate-400">回答内容は診断・相談・面談の受付記録として保存され、連絡先とリードに紐付きます。診断結果の作成・送付は後続の工程です。</p>
+      <p className="border-t border-slate-800 p-3 text-xs text-slate-400">診断フォームの回答は、対象会社が紐付いている場合に「未確認」の診断として自動作成されます。回答行の「診断を開く」から内容を確認できます。会社を特定できない回答は受付記録に保持します。</p>
     </section>}
   </div>;
 };
