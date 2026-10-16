@@ -88,11 +88,11 @@ JSONオブジェクトのみを返してください。形式: {"candidates":[{"
           || (item.duplicate_company_id ? byId.get(item.duplicate_company_id) as any : undefined);
         const alreadyProspect = Boolean(matchedCompany && activeProspectCompanyIds.has(matchedCompany.id));
         const warning = typeof item.duplicate_reason === 'string' ? item.duplicate_reason : '';
-        const sourceUrl = typeof item.source_url === 'string' && /^https?:\\/\\//i.test(item.source_url) ? item.source_url : '';
+        const sourceUrl = typeof item.source_url === 'string' && /^https?:\/\//i.test(item.source_url) ? item.source_url : '';
         return {
           company_name: item.company_name.trim().slice(0, 200),
           industry: typeof item.industry === 'string' ? item.industry.slice(0, 200) : '',
-          website: typeof item.website === 'string' && /^https?:\\/\\//i.test(item.website) ? item.website : '',
+          website: typeof item.website === 'string' && /^https?:\/\//i.test(item.website) ? item.website : '',
           address: typeof item.address === 'string' ? item.address.slice(0, 500) : '',
           source_url: sourceUrl,
           reason: typeof item.reason === 'string' ? item.reason.slice(0, 2000) : '',
