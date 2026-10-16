@@ -64,7 +64,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
   const [recentDeals, setRecentDeals] = useState<any[]>([]);
   const [diagnosisStats, setDiagnosisStats] = useState<{ total: number; byStatus: Record<DiagnosisStatus, number> }>({
     total: 0,
-    byStatus: { draft: 0, in_progress: 0, completed: 0, generating: 0, reported: 0 }
+    byStatus: { received: 0, completed: 0, generating: 0, reported: 0 }
   });
   const [loading, setLoading] = useState(true);
   const [fetchError, setFetchError] = useState<DataFetchError | null>(null);
@@ -185,9 +185,9 @@ export const Dashboard: React.FC<DashboardProps> = ({
                 <span className="text-lg font-black text-white">{loading ? '...' : diagnosisStats.total}</span>
               </div>
               <div className="px-3 border-x border-slate-800">
-                <span className="text-[10px] text-sky-400 block">実施・下書き</span>
+                <span className="text-[10px] text-sky-400 block">未確認の回答</span>
                 <span className="text-lg font-black text-sky-300">
-                  {loading ? '...' : (diagnosisStats.byStatus.draft + diagnosisStats.byStatus.in_progress)}
+                  {loading ? '...' : diagnosisStats.byStatus.received}
                 </span>
               </div>
               <div className="px-3">
