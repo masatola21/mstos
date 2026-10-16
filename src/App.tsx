@@ -1257,13 +1257,11 @@ function AppContent() {
   };
 
   const handleUpdateAutomation = (id: string, updates: Partial<AutomationRule>) => {
-    setAutomations((current) => {
-      const updated = matrixService.normalizeAutomationRules(
-        current.map((rule) => rule.id === id ? { ...rule, ...updates } : rule)
-      );
-      matrixService.saveAutomations(updated);
-      return updated;
-    });
+    const updated = matrixService.normalizeAutomationRules(
+      automations.map((rule) => rule.id === id ? { ...rule, ...updates } : rule)
+    );
+    setAutomations(updated);
+    matrixService.saveAutomations(updated);
   };
 
   if (isLoading || (user && !workspaceReady)) {
