@@ -229,6 +229,7 @@ export interface AutomationRule {
   aiMode: AutomationAiMode;
   approvalPolicy: AutomationApprovalPolicy;
   isEnabled: boolean;
+  taskDueInDays: number; // トリガー発生からタスク期限までの日数
   updatedAt?: number;
 }
 
