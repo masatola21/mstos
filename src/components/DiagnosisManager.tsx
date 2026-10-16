@@ -814,7 +814,8 @@ const DiagnosisDetailModal: React.FC<DiagnosisDetailModalProps> = ({
 構成は「診断サマリー」「現状の強み」「主なボトルネック」「優先課題」「改善ロードマップ（短期・中期・長期）」「推奨する対応」「次の確認事項」。各項目を読みやすく記述し、回答の根拠がない項目はその旨を記載してください。
 この出力は社内確認前の草案です。Markdown見出しを使い、前置きは付けず本文だけ出力してください。
 
-【社内データ】\n${JSON.stringify(context, null, 2)}`;
+【社内データ】
+${JSON.stringify(context, null, 2)}`;
 
       const response = await fetch('/api/chat', {
         method: 'POST',
