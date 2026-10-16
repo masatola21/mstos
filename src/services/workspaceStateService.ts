@@ -449,7 +449,7 @@ export async function loadOrMigrateWorkspaceData(userId: string): Promise<Worksp
   }
 
   const relationalSales = await loadRelationalSalesOperations();
-  if (relationalSales && (relationalSales.contracts.length > 0 || relationalSales.invoices.length > 0 || (merged.contracts.length === 0 && merged.invoices.length === 0))) {
+  if (relationalSales && (relationalMatrix || relationalSales.contracts.length > 0 || relationalSales.invoices.length > 0 || (merged.contracts.length === 0 && merged.invoices.length === 0))) {
     merged.contracts = relationalSales.contracts;
     merged.invoices = relationalSales.invoices;
   }
