@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { getSupabase } from '../../lib/supabaseClient';
-import { Activity, ArrowRight, BadgeCheck, CalendarDays, CheckCircle2, Copy, GitBranch, Image as ImageIcon, Mail, MessageCircle, MousePointerClick, Plus, Radio, Save, Tags, Trash2, Users, Webhook, Zap } from 'lucide-react';
+import { Activity, ArrowRight, CheckCircle2, Copy, GitBranch, Image as ImageIcon, Mail, MessageCircle, MousePointerClick, Plus, Radio, Save, Tags, Trash2, Webhook, Zap } from 'lucide-react';
 import { MarketingChannel, MarketingLineMessageType, MarketingScenario, MarketingTrigger } from '../../types/marketing';
 
 interface Props {
@@ -36,58 +36,31 @@ const lineMessageLabels: Record<MarketingLineMessageType, string> = { text: 'テ
 
 const workflowStages = [
   {
-    title: '見込み企業の調査・営業',
-    trigger: '企業を調査し、営業対象を選ぶ',
-    automation: '企業・担当者の登録、対象リスト作成、選択した宛先への一括配信、配信履歴と停止対象の管理',
-    ai: '企業情報の要約、優先度や適合理由の整理、個社別メール文案の作成',
-    approval: '送信先と初回文案を人が確認してから配信',
-    data: '会社・見込み企業・配信同意・営業履歴',
-    status: '接続・実行処理が必要',
+    title: '配信対象と開始条件を設定',
+    trigger: 'CRMセグメント、または登録した開始条件を選ぶ',
+    automation: 'CRMセグメントの選択と、シナリオ条件の保存ができます。イベントを受けた自動起動は未接続です。',
+    ai: '対象者の条件を整理し、必要なら外部AIで施策案を作成できます。顧客データを外部AIへ貼り付けないでください。',
+    approval: '配信対象と開始条件を人が確認します。',
+    data: 'CRMセグメント・シナリオ設定',
+    status: '条件保存まで / 自動起動未接続',
   },
   {
-    title: '登録・診断案内',
-    trigger: 'LINE登録、手動リード登録、相談申込',
-    automation: 'リード化、登録シナリオ開始、診断URL発行、メール/LINE案内、回答の保存と重複防止',
-    ai: '顧客に合わせた案内文の調整（必要な場合のみ）',
-    approval: '案内テンプレートは事前承認し、個別送信時は必要に応じて確認',
-    data: 'リード・LINE連携・診断フォーム・配信履歴',
-    status: '診断管理あり / 公開フォーム・配信未接続',
+    title: 'LINE・メールの文案を準備',
+    trigger: 'シナリオを新規作成、または編集する',
+    automation: 'LINE・メールの本文やカードを入力し、下書きとして保存できます。',
+    ai: '定型外の施策は外部AIで草案を作り、JSONを取り込んで内容を編集できます。アプリ内AI APIは呼び出しません。',
+    approval: '宛先に合わせた文面・リンク・添付内容を人が確認します。',
+    data: 'シナリオ・配信文案',
+    status: '文案保存まで / 実配信未接続',
   },
   {
-    title: '診断・レポート',
-    trigger: '顧客がURLから診断を回答',
-    automation: '必須回答チェック、点数計算、回答の保存、診断と会社/リードの紐付け',
-    ai: '回答の解釈、根拠付き所見、改善提案、商品マスタに基づく推奨案とレポート草案',
-    approval: '人がレポートを確認・承認してから顧客へ送付',
-    data: '設問マスタ・診断回答・商品マスタ・レポート',
-    status: '社内診断・AIレポート基盤あり / 公開回答URL未実装',
-  },
-  {
-    title: '面談・商談',
-    trigger: '相談希望、診断結果、顧客の予約',
-    automation: 'カレンダー候補提示、予約登録、確認/リマインド、商談レコード作成、次回タスク発行',
-    ai: '面談前の顧客・診断要約、議事録の整理、次の提案候補',
-    approval: '日時確定と商談ステージ判断は人が行う',
-    data: 'リード・予約・商談・面談記録',
-    status: '顧客/商談台帳あり / カレンダー接続未実装',
-  },
-  {
-    title: '提案・契約',
-    trigger: '商談ステージ更新、提案作成依頼',
-    automation: '商品マスタと提案テンプレートから金額・項目を反映、書類生成、送付状態/返信状態の記録',
-    ai: '顧客課題に沿った提案説明・FAQ・メール文案の作成',
-    approval: '提案内容・金額・契約条件を人が承認してから送付',
-    data: '商談・商品・提案テンプレート・契約・送付履歴',
-    status: '台帳・テンプレート画面あり / 送付・返信連携未実装',
-  },
-  {
-    title: '請求・顧問・構築支援',
-    trigger: '契約締結、請求日、顧問日、工程の節目',
-    automation: '契約条件から請求書/月額請求を生成、期日通知、顧問/構築面談の案内とタスク発行',
-    ai: '顧問面談の論点整理、進捗報告やサポート案内の草案（必要な場合のみ）',
-    approval: '請求額・送信内容・契約変更など重要事項を人が承認',
-    data: '契約・請求・商品/料金・顧問予定・プロジェクト工程',
-    status: '契約/請求台帳あり / 定期実行・送信連携未実装',
+    title: '確認して配信へ進む',
+    trigger: '文案を確認し、シナリオを準備済みにする',
+    automation: '準備状態を記録できます。現在は配信実行や送信履歴の記録は行いません。',
+    ai: 'AIは送信を実行しません。必要な文章作成を補助する場合も、送信前に人が確認します。',
+    approval: '配信同意・停止対象・宛先・本文を確認してから実配信できる設計にします。',
+    data: '準備状態・配信同意・送信履歴（送信機能は未接続）',
+    status: '準備状態のみ / 承認・送信連携未接続',
   },
 ];
 
@@ -278,7 +251,7 @@ export const MarketingAutomationPrototypeView: React.FC<Props> = ({ scenarios, o
   const tabs = [
     { id: 'overview' as const, label: '全体像', icon: GitBranch },
     { id: 'channels' as const, label: 'チャネルと役割', icon: Radio },
-    { id: 'workflow' as const, label: '業務とAIの役割', icon: Users },
+    { id: 'workflow' as const, label: '施策の設定範囲', icon: Zap },
     { id: 'scenarios' as const, label: 'シナリオ設定', icon: Zap },
     { id: 'connections' as const, label: 'LINE・メール接続', icon: Webhook },
   ];
@@ -292,7 +265,7 @@ export const MarketingAutomationPrototypeView: React.FC<Props> = ({ scenarios, o
               <h1 className="text-2xl font-black text-white">マーケティングオートメーション</h1>
               <span className="rounded-full border border-amber-400/30 bg-amber-500/10 px-2.5 py-1 text-xs font-semibold text-amber-300">段階導入</span>
             </div>
-            <p className="max-w-3xl text-sm leading-6 text-slate-300">MSTの顧客情報を起点に、診断・案内・予約・商談・契約後フォローをシナリオ化します。定型条件はルールで動かし、文案や判断が必要な時だけAIを使います。</p>
+            <p className="max-w-3xl text-sm leading-6 text-slate-300">CRMの配信対象と開始条件を選び、LINE・メールの案内シナリオと文案を準備します。顧客・商談・契約などの業務記録は各管理画面を正本にします。</p>
           </div>
           <button onClick={startNew} className="flex shrink-0 items-center justify-center gap-2 rounded-xl bg-indigo-600 px-4 py-2.5 text-sm font-semibold text-white hover:bg-indigo-500"><Plus className="h-4 w-4" />シナリオ作成</button>
         </div>
@@ -313,16 +286,13 @@ export const MarketingAutomationPrototypeView: React.FC<Props> = ({ scenarios, o
           ].map(({ label, value, note, icon: Icon, color }) => <div key={label} className="rounded-xl border border-slate-800 bg-slate-900 p-4"><div className="flex items-center justify-between text-xs text-slate-400"><span>{label}</span><Icon className={`h-4 w-4 ${color}`} /></div><div className="mt-2 text-2xl font-black text-white">{value}</div><div className="mt-1 text-[11px] text-slate-500">{note}</div></div>)}
         </div>
         <section className="rounded-2xl border border-slate-800 bg-slate-900 p-5">
-          <div className="mb-5 flex items-center justify-between"><div><h2 className="font-bold text-white">顧客導線</h2><p className="mt-1 text-xs text-slate-400">一つの顧客情報を中心に、連絡と営業業務をつなぎます。</p></div><span className="rounded-full bg-emerald-500/10 px-2 py-1 text-[10px] text-emerald-300">定型処理はAI不要</span></div>
-          <div className="grid gap-3 md:grid-cols-3 xl:grid-cols-6">
+          <div className="mb-5"><h2 className="font-bold text-white">マーケティングで設定するもの</h2><p className="mt-1 text-xs text-slate-400">顧客・商談・契約などの記録は各機能に置き、ここでは配信施策を準備します。</p></div>
+          <div className="grid gap-3 md:grid-cols-3">
             {[
-              { title: '集客・登録', detail: '広告 / SNS / 紹介', icon: MousePointerClick },
-              { title: 'フォーム・診断', detail: '回答・所見保存', icon: CheckCircle2 },
-              { title: 'タグ・区分', detail: '条件で自動分類', icon: Tags },
-              { title: 'LINE・メール', detail: 'シナリオ配信', icon: MessageCircle },
-              { title: '予約・商談', detail: '案内・担当タスク', icon: CalendarDays },
-              { title: '契約後フォロー', detail: '契約・請求・支援', icon: BadgeCheck },
-            ].map(({ title, detail, icon: Icon }, index) => <div key={title} className="relative rounded-xl border border-slate-800 bg-slate-950/70 p-4"><Icon className="mb-3 h-5 w-5 text-indigo-300" /><div className="text-sm font-bold text-white">{title}</div><div className="mt-1 text-[11px] text-slate-400">{detail}</div>{index < 5 && <ArrowRight className="absolute -right-3 top-1/2 z-10 hidden h-5 w-5 -translate-y-1/2 text-slate-600 xl:block" />}</div>)}
+              { title: '配信対象', detail: 'CRMセグメントから選択', icon: Tags },
+              { title: '開始条件', detail: 'シナリオの起点を設定', icon: GitBranch },
+              { title: '案内文案', detail: 'LINE・メールを準備', icon: MessageCircle },
+            ].map(({ title, detail, icon: Icon }) => <div key={title} className="rounded-xl border border-slate-800 bg-slate-950/70 p-4"><Icon className="mb-3 h-5 w-5 text-indigo-300" /><div className="text-sm font-bold text-white">{title}</div><div className="mt-1 text-[11px] text-slate-400">{detail}</div></div>)}
           </div>
         </section>
         <section className="rounded-2xl border border-slate-800 bg-slate-900 p-5"><div className="flex items-center gap-2"><Activity className="h-4 w-4 text-indigo-300" /><h2 className="font-bold text-white">保存先と接続状態</h2></div><p className="mt-2 text-sm text-slate-300">シナリオはユーザー別のSupabaseワークスペースに保存します。LINE・メールの認証情報はブラウザーには保存せず、サーバー側の接続設定後に実配信を追加します。</p><button onClick={() => setActiveTab('connections')} className="mt-3 text-xs font-semibold text-indigo-300 hover:text-indigo-200">接続状況を確認 →</button></section>
@@ -357,19 +327,19 @@ export const MarketingAutomationPrototypeView: React.FC<Props> = ({ scenarios, o
           </article>
         </div>
         <section className="rounded-2xl border border-slate-800 bg-slate-900 p-5">
-          <h3 className="font-bold text-white">契約後の案内も送信経路は共通</h3>
-          <p className="mt-2 text-sm leading-6 text-slate-300">契約・請求・顧問・構築支援の状態は「契約・請求・支援」で管理します。そこから送る案内や書類の送信も共通のLINE・メール送信基盤と履歴を使い、業務の状態そのものはマーケティング側に複製しません。</p>
+          <h3 className="font-bold text-white">顧客・契約の記録場所</h3>
+          <p className="mt-2 text-sm leading-6 text-slate-300">契約・請求・顧問・構築支援の状態は「契約・請求・支援」で管理します。この画面は配信チャネルと施策の設定を扱い、顧客の業務状態は複製しません。個別書類の送付は対象顧客の書類画面から行います。</p>
         </section>
       </div>}
 
       {activeTab === 'workflow' && <div className="space-y-4">
         <section className="rounded-2xl border border-indigo-500/30 bg-indigo-950/25 p-5">
-          <h2 className="text-lg font-bold text-white">営業・顧客対応を一つの流れで管理</h2>
-          <p className="mt-2 text-sm leading-6 text-slate-300">条件判定・計算・保存・定型通知はOSが処理し、調査・解釈・文章案が必要な時だけ専門AIを呼び出します。顧客への送信、金額や契約条件の確定は承認を通します。</p>
+          <h2 className="text-lg font-bold text-white">マーケティング施策の設定から配信準備まで</h2>
+          <p className="mt-2 text-sm leading-6 text-slate-300">ここでは配信対象・開始条件・案内文案を管理します。シナリオの保存と準備状態の記録はできますが、イベントによる自動起動や実配信は未接続です。</p>
           <div className="mt-4 flex flex-wrap gap-2 text-[11px]">
-            <span className="rounded-full bg-cyan-500/10 px-3 py-1.5 text-cyan-200">自動処理：ルールで実行、AI費用なし</span>
-            <span className="rounded-full bg-purple-500/10 px-3 py-1.5 text-purple-200">AI：必要な場面だけ呼び出し</span>
-            <span className="rounded-full bg-amber-500/10 px-3 py-1.5 text-amber-200">承認：顧客送信・金額・契約</span>
+            <span className="rounded-full bg-cyan-500/10 px-3 py-1.5 text-cyan-200">CRM：顧客情報の正本</span>
+            <span className="rounded-full bg-purple-500/10 px-3 py-1.5 text-purple-200">外部AI：任意の草案作成</span>
+            <span className="rounded-full bg-amber-500/10 px-3 py-1.5 text-amber-200">送信：接続・承認処理が必要</span>
           </div>
         </section>
         <div className="space-y-3">
@@ -385,7 +355,7 @@ export const MarketingAutomationPrototypeView: React.FC<Props> = ({ scenarios, o
             </div>
           </article>)}
         </div>
-        <p className="rounded-xl border border-amber-500/20 bg-amber-950/20 p-4 text-xs leading-5 text-amber-100/80">この画面は業務分担と接続状況を示します。現在、シナリオの保存はできますが、LINE/メールの実配信、公開診断フォーム、カレンダー、契約返信確認、定期請求の自動実行は接続・実装が必要です。</p>
+        <p className="rounded-xl border border-amber-500/20 bg-amber-950/20 p-4 text-xs leading-5 text-amber-100/80">この画面でできるのは配信対象・シナリオ・文案の準備です。イベントによる自動起動、LINE/メール送信、送信履歴、配信停止処理は未接続です。診断・商談・契約・請求の状態はそれぞれの管理画面で確認します。</p>
       </div>}
 
       {activeTab === 'scenarios' && <div className="space-y-4">
