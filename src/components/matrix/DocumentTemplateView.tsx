@@ -35,7 +35,7 @@ const invoiceDueDate = (date = new Date()) => {
   if (date.getDate() >= 25) due.setMonth(due.getMonth() + 1);
   return localDateString(due);
 };
-const formatDocumentDate = (value: string) => value ? value.replace(/^(\\d{4})-(\\d{2})-(\\d{2})$/, '$1年$2月$3日') : '';
+const formatDocumentDate = (value: string) => value ? value.replace(/^(\d{4})-(\d{2})-(\d{2})$/, '$1年$2月$3日') : '';
 
 interface DocTemplate {
   id: string;
@@ -459,7 +459,7 @@ export const DocumentTemplateView: React.FC<DocumentTemplateViewProps> = ({ init
       const amount = Number(deal?.total_amount ?? 0);
       const initialFee = Number(deal?.initial_fee ?? 0);
       const monthlyFee = Number(deal?.monthly_fee ?? 0);
-      const tax = Math.round(amount * 0.1);
+      const tax = Math.round(amount / 11);
       const invoiceNumber = `INV-${today.replaceAll('-', '')}-${(deal?.id || crypto.randomUUID()).slice(0, 6).toUpperCase()}`;
       const values: Record<string, string> = {
         client_company: company?.company_name || '',
@@ -474,7 +474,7 @@ export const DocumentTemplateView: React.FC<DocumentTemplateViewProps> = ({ init
         monthly_fee: monthlyFee.toLocaleString('ja-JP'),
         invoice_number: invoiceNumber,
         item_name_1: deal?.proposal_plan_name || deal?.deal_name || productName || 'サービス提供費',
-        item_qty_1: '1', item_price_1: amount.toLocaleString('ja-JP'), item_amount_1: amount.toLocaleString('ja-JP'),
+        item_qty_1: '1', item_price_1: Math.max(0, amount - tax).toLocaleString('ja-JP'), item_amount_1: Math.max(0, amount - tax).toLocaleString('ja-JP'),
         item_name_2: 'なし', item_qty_2: '0', item_price_2: '0', item_amount_2: '0',
         issue_date: formatDocumentDate(today),
         conducted_date: formatDocumentDate(diagnosis?.conducted_at ? String(diagnosis.conducted_at).slice(0,10) : today),
