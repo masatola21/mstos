@@ -1497,8 +1497,12 @@ function AppContent() {
 
         {currentTab === 'contacts' && <ContactsLineHub />}
 
-        {currentTab === 'marketing_automation' && (
-          <MarketingAutomationPrototypeView scenarios={marketingScenarios} onScenariosChange={setMarketingScenarios} />
+        {(currentTab === 'marketing_automation' || currentTab === 'sales_followups') && (
+          <MarketingAutomationPrototypeView
+            scenarios={marketingScenarios}
+            onScenariosChange={setMarketingScenarios}
+            initialTab={currentTab === 'sales_followups' ? 'followups' : 'overview'}
+          />
         )}
 
         {/* ================= SECTION 3: AI PRESIDENT & STRATEGY ================= */}
