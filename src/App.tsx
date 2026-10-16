@@ -286,6 +286,13 @@ function AppContent() {
       .then((data) => {
         if (cancelled) return;
         setTopGoal(data.topGoal);
+        setCharacters(data.characters);
+        const nextActiveCharacterId = data.characters.some((character) => character.id === data.activeCharacterId)
+          ? data.activeCharacterId
+          : data.characters[0]?.id || activeCharacterId;
+        setActiveCharacterId(nextActiveCharacterId);
+        setUserProfile(data.userProfile);
+        setAiModelSettings(data.aiModelSettings);
         setProjects(data.projects);
         setTasks(data.tasks);
         setApprovals(data.approvals);
@@ -301,7 +308,7 @@ function AppContent() {
         setMarketingScenarios(data.marketingScenarios || []);
         setKnowledgeItems(data.knowledgeItems || []);
         setWorkModeHistories(data.workModeHistories || {});
-        const initialChatKey = `${activeCharacterId}:${activeWorkModeId}`;
+        const initialChatKey = `${nextActiveCharacterId}:${activeWorkModeId}`;
         const savedChat = data.workModeHistories?.[initialChatKey] || loadChatHistory(initialChatKey);
         setMessages(savedChat.length ? savedChat : activeWorkModeId === 'president' ? loadChatHistory(activeCharacterId) : []);
         lastSavedWorkspaceRef.current = JSON.stringify(data);
@@ -325,6 +332,10 @@ function AppContent() {
 
     const workspaceData: WorkspaceData = {
       topGoal,
+      characters,
+      activeCharacterId,
+      userProfile,
+      aiModelSettings,
       projects,
       tasks,
       approvals,
@@ -365,6 +376,10 @@ function AppContent() {
     user?.id,
     workspaceReady,
     topGoal,
+    characters,
+    activeCharacterId,
+    userProfile,
+    aiModelSettings,
     projects,
     tasks,
     approvals,
