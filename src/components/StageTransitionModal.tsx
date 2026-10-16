@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Company, Product, Lead, Customer } from '../types/database';
-import { ProposalPlanTemplatePicker, ProposalPlanTemplate } from './ProposalPlanTemplatePicker';
+import { ProposalPlanTemplatePicker } from './ProposalPlanTemplatePicker';
+import type { ProposalPlanTemplate } from './ProposalPlanTemplatePicker';
 import { 
   fetchProductsList, 
   fetchCustomerByCompanyId, 
