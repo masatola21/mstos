@@ -900,6 +900,20 @@ const DiagnosisDetailModal: React.FC<DiagnosisDetailModalProps> = ({
           )}
 
           {/* 設問回答フォーム（カテゴリ別） */}
+          {diagnosis.questionnaire_version.startsWith('form-') ? (
+            <section className="space-y-3 rounded-2xl border border-slate-800 bg-slate-950/40 p-4">
+              <h3 className="text-sm font-bold text-slate-200">フォーム回答（送信済み）</h3>
+              <dl className="space-y-2">
+                {Object.entries(answers).filter(([key]) => key !== '_intake').map(([key, value]) => (
+                  <div key={key} className="grid gap-1 rounded-xl border border-slate-800 bg-slate-900/60 p-3 sm:grid-cols-[minmax(180px,0.8fr)_minmax(0,1.2fr)]">
+                    <dt className="text-xs font-medium text-slate-400">{key}</dt>
+                    <dd className="whitespace-pre-wrap break-words text-sm text-slate-200">{typeof value === 'string' ? value : JSON.stringify(value)}</dd>
+                  </div>
+                ))}
+              </dl>
+              {Boolean(answers._intake) && <details className="text-xs text-slate-500"><summary className="cursor-pointer">受付情報</summary><pre className="mt-2 whitespace-pre-wrap">{JSON.stringify(answers._intake, null, 2)}</pre></details>}
+            </section>
+          ) : (
           <div className="space-y-6">
             <div className="flex items-center justify-between border-b border-slate-800 pb-2">
               <h3 className="text-sm font-bold text-slate-200 flex items-center gap-2">
@@ -965,6 +979,7 @@ const DiagnosisDetailModal: React.FC<DiagnosisDetailModalProps> = ({
               );
             })}
           </div>
+          )}
 
           {/* 社内メモの編集 */}
           <div className="space-y-2 pt-2 border-t border-slate-800">
