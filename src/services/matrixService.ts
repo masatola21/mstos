@@ -336,6 +336,7 @@ const INITIAL_CUSTOM_LISTS: CustomListDefinition[] = [
 ];
 
 export const matrixService = {
+  normalizeAutomationRules,
   // Products
   loadProducts(): ManagedProduct[] {
     try {
