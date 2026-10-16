@@ -71,10 +71,65 @@ CREATE TABLE IF NOT EXISTS public.mst_ai_activity_logs (
 CREATE TABLE IF NOT EXISTS public.mst_ai_user_preferences (
   user_id uuid PRIMARY KEY REFERENCES auth.users(id) ON DELETE CASCADE,
   active_character_id text,
+  top_goal text NOT NULL DEFAULT '',
   characters jsonb NOT NULL DEFAULT '[]'::jsonb,
   user_profile jsonb NOT NULL DEFAULT '{}'::jsonb,
   ai_model_settings jsonb NOT NULL DEFAULT '{}'::jsonb,
   updated_at timestamptz NOT NULL DEFAULT now()
+);
+
+CREATE TABLE IF NOT EXISTS public.mst_ai_chat_conversations (
+  user_id uuid NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
+  conversation_key text NOT NULL,
+  messages jsonb NOT NULL DEFAULT '[]'::jsonb,
+  updated_at timestamptz NOT NULL DEFAULT now(),
+  PRIMARY KEY (user_id, conversation_key)
+);
+
+CREATE TABLE IF NOT EXISTS public.mst_ai_knowledge_items (
+  user_id uuid NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
+  id text NOT NULL,
+  title text NOT NULL,
+  category text NOT NULL CHECK (category IN ('business', 'product', 'customer', 'decision', 'research', 'deliverable')),
+  content text NOT NULL DEFAULT '',
+  tags jsonb NOT NULL DEFAULT '[]'::jsonb,
+  source_task_id text,
+  source_role_id text,
+  attachments jsonb NOT NULL DEFAULT '[]'::jsonb,
+  created_at timestamptz NOT NULL DEFAULT now(),
+  updated_at timestamptz NOT NULL DEFAULT now(),
+  payload jsonb NOT NULL,
+  PRIMARY KEY (user_id, id)
+);
+
+CREATE TABLE IF NOT EXISTS public.mst_ai_token_usage_records (
+  user_id uuid NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
+  id text NOT NULL,
+  occurred_at timestamptz NOT NULL DEFAULT now(),
+  endpoint text NOT NULL,
+  endpoint_name text NOT NULL,
+  model text NOT NULL,
+  provider text,
+  fallback_from text,
+  status text NOT NULL CHECK (status IN ('acquired', 'unacquired')),
+  prompt_tokens bigint,
+  candidates_tokens bigint,
+  total_tokens bigint,
+  estimated_cost numeric,
+  currency text,
+  payload jsonb NOT NULL,
+  PRIMARY KEY (user_id, id)
+);
+
+CREATE TABLE IF NOT EXISTS public.mst_ai_model_pricing (
+  user_id uuid NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
+  model text NOT NULL,
+  currency text NOT NULL CHECK (currency IN ('JPY', 'USD')),
+  input_price_per_million numeric,
+  output_price_per_million numeric,
+  updated_at timestamptz NOT NULL,
+  payload jsonb NOT NULL,
+  PRIMARY KEY (user_id, model)
 );
 
 CREATE TABLE IF NOT EXISTS public.mst_ai_operations_sync_state (
@@ -98,6 +153,12 @@ CREATE INDEX IF NOT EXISTS idx_mst_ai_automation_rules_user_trigger
   ON public.mst_ai_automation_rules(user_id, is_enabled, trigger_event);
 CREATE INDEX IF NOT EXISTS idx_mst_ai_activity_logs_user_time
   ON public.mst_ai_activity_logs(user_id, occurred_at DESC);
+CREATE INDEX IF NOT EXISTS idx_mst_ai_chat_conversations_updated
+  ON public.mst_ai_chat_conversations(user_id, updated_at DESC);
+CREATE INDEX IF NOT EXISTS idx_mst_ai_knowledge_category
+  ON public.mst_ai_knowledge_items(user_id, category, updated_at DESC);
+CREATE INDEX IF NOT EXISTS idx_mst_ai_token_usage_time
+  ON public.mst_ai_token_usage_records(user_id, occurred_at DESC);
 
 ALTER TABLE public.mst_ai_projects ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.mst_ai_tasks ENABLE ROW LEVEL SECURITY;
@@ -106,6 +167,10 @@ ALTER TABLE public.mst_ai_automation_rules ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.mst_ai_activity_logs ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.mst_ai_operations_sync_state ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.mst_ai_user_preferences ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.mst_ai_chat_conversations ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.mst_ai_knowledge_items ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.mst_ai_token_usage_records ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.mst_ai_model_pricing ENABLE ROW LEVEL SECURITY;
 
 DO $$
 DECLARE
@@ -118,7 +183,11 @@ BEGIN
     'mst_ai_automation_rules',
     'mst_ai_activity_logs',
     'mst_ai_operations_sync_state',
-    'mst_ai_user_preferences'
+    'mst_ai_user_preferences',
+    'mst_ai_chat_conversations',
+    'mst_ai_knowledge_items',
+    'mst_ai_token_usage_records',
+    'mst_ai_model_pricing'
   ] LOOP
     EXECUTE format('DROP POLICY IF EXISTS %I ON public.%I', 'Users can manage own ' || table_name, table_name);
     EXECUTE format(
@@ -140,7 +209,12 @@ CREATE OR REPLACE FUNCTION public.mst_save_ai_operations(
   p_user_profile jsonb,
   p_characters jsonb,
   p_active_character_id text,
-  p_ai_model_settings jsonb
+  p_ai_model_settings jsonb,
+  p_top_goal text,
+  p_token_usage_records jsonb,
+  p_model_pricing jsonb,
+  p_chat_histories jsonb,
+  p_knowledge_items jsonb
 )
 RETURNS void
 LANGUAGE plpgsql
@@ -155,6 +229,10 @@ DECLARE
   v_user_profile jsonb := COALESCE(p_user_profile, '{}'::jsonb);
   v_characters jsonb := COALESCE(p_characters, '[]'::jsonb);
   v_ai_model_settings jsonb := COALESCE(p_ai_model_settings, '{}'::jsonb);
+  v_token_usage_records jsonb := COALESCE(p_token_usage_records, '[]'::jsonb);
+  v_model_pricing jsonb := COALESCE(p_model_pricing, '[]'::jsonb);
+  v_chat_histories jsonb := COALESCE(p_chat_histories, '{}'::jsonb);
+  v_knowledge_items jsonb := COALESCE(p_knowledge_items, '[]'::jsonb);
 BEGIN
   IF auth.uid() IS DISTINCT FROM p_user_id THEN
     RAISE EXCEPTION 'ユーザーの業務データを更新する権限がありません';
@@ -166,17 +244,22 @@ BEGIN
     OR pg_catalog.jsonb_typeof(v_activity_logs) <> 'array'
     OR pg_catalog.jsonb_typeof(v_user_profile) <> 'object'
     OR pg_catalog.jsonb_typeof(v_characters) <> 'array'
-    OR pg_catalog.jsonb_typeof(v_ai_model_settings) <> 'object' THEN
+    OR pg_catalog.jsonb_typeof(v_ai_model_settings) <> 'object'
+    OR pg_catalog.jsonb_typeof(v_token_usage_records) <> 'array'
+    OR pg_catalog.jsonb_typeof(v_model_pricing) <> 'array'
+    OR pg_catalog.jsonb_typeof(v_chat_histories) <> 'object'
+    OR pg_catalog.jsonb_typeof(v_knowledge_items) <> 'array' THEN
     RAISE EXCEPTION 'AI業務データまたはユーザー設定の形式が正しくありません';
   END IF;
 
   INSERT INTO public.mst_ai_user_preferences (
-    user_id, active_character_id, characters, user_profile, ai_model_settings, updated_at
+    user_id, active_character_id, top_goal, characters, user_profile, ai_model_settings, updated_at
   ) VALUES (
-    p_user_id, NULLIF(p_active_character_id, ''), v_characters, v_user_profile, v_ai_model_settings, pg_catalog.now()
+    p_user_id, NULLIF(p_active_character_id, ''), COALESCE(p_top_goal, ''), v_characters, v_user_profile, v_ai_model_settings, pg_catalog.now()
   )
   ON CONFLICT (user_id) DO UPDATE SET
     active_character_id = EXCLUDED.active_character_id,
+    top_goal = EXCLUDED.top_goal,
     characters = EXCLUDED.characters,
     user_profile = EXCLUDED.user_profile,
     ai_model_settings = EXCLUDED.ai_model_settings,
@@ -314,6 +397,107 @@ BEGIN
     summary = EXCLUDED.summary,
     payload = EXCLUDED.payload;
 
+  INSERT INTO public.mst_ai_knowledge_items (
+    user_id, id, title, category, content, tags, source_task_id, source_role_id, attachments,
+    created_at, updated_at, payload
+  )
+  SELECT
+    p_user_id, item.payload->>'id',
+    COALESCE(NULLIF(item.payload->>'title', ''), '名称未設定'),
+    COALESCE(NULLIF(item.payload->>'category', ''), 'business'),
+    COALESCE(item.payload->>'content', ''),
+    COALESCE(item.payload->'tags', '[]'::jsonb),
+    NULLIF(item.payload->>'sourceTaskId', ''),
+    NULLIF(item.payload->>'sourceRoleId', ''),
+    COALESCE(item.payload->'attachments', '[]'::jsonb),
+    COALESCE(pg_catalog.to_timestamp(NULLIF(item.payload->>'createdAt', '')::double precision / 1000), pg_catalog.now()),
+    COALESCE(pg_catalog.to_timestamp(NULLIF(item.payload->>'updatedAt', '')::double precision / 1000), pg_catalog.now()),
+    item.payload
+  FROM pg_catalog.jsonb_array_elements(v_knowledge_items) AS item(payload)
+  WHERE NULLIF(item.payload->>'id', '') IS NOT NULL
+  ON CONFLICT (user_id, id) DO UPDATE SET
+    title = EXCLUDED.title, category = EXCLUDED.category, content = EXCLUDED.content,
+    tags = EXCLUDED.tags, source_task_id = EXCLUDED.source_task_id, source_role_id = EXCLUDED.source_role_id,
+    attachments = EXCLUDED.attachments, created_at = EXCLUDED.created_at,
+    updated_at = EXCLUDED.updated_at, payload = EXCLUDED.payload;
+
+  INSERT INTO public.mst_ai_token_usage_records (
+    user_id, id, occurred_at, endpoint, endpoint_name, model, provider, fallback_from, status,
+    prompt_tokens, candidates_tokens, total_tokens, estimated_cost, currency, payload
+  )
+  SELECT
+    p_user_id, item.payload->>'id',
+    COALESCE(pg_catalog.to_timestamp(NULLIF(item.payload->>'timestamp', '')::double precision / 1000), pg_catalog.now()),
+    COALESCE(NULLIF(item.payload->>'endpoint', ''), 'chat'),
+    COALESCE(NULLIF(item.payload->>'endpointName', ''), 'AI利用'),
+    COALESCE(NULLIF(item.payload->>'model', ''), 'unknown'),
+    NULLIF(item.payload->>'provider', ''),
+    NULLIF(item.payload->>'fallbackFrom', ''),
+    COALESCE(NULLIF(item.payload->>'status', ''), 'unacquired'),
+    NULLIF(item.payload->>'promptTokens', '')::bigint,
+    NULLIF(item.payload->>'candidatesTokens', '')::bigint,
+    NULLIF(item.payload->>'totalTokens', '')::bigint,
+    NULLIF(item.payload->>'estimatedCost', '')::numeric,
+    NULLIF(item.payload#>>'{rateSnapshot,currency}', ''),
+    item.payload
+  FROM pg_catalog.jsonb_array_elements(v_token_usage_records) AS item(payload)
+  WHERE NULLIF(item.payload->>'id', '') IS NOT NULL
+  ON CONFLICT (user_id, id) DO UPDATE SET
+    occurred_at = EXCLUDED.occurred_at, endpoint = EXCLUDED.endpoint, endpoint_name = EXCLUDED.endpoint_name,
+    model = EXCLUDED.model, provider = EXCLUDED.provider, fallback_from = EXCLUDED.fallback_from,
+    status = EXCLUDED.status, prompt_tokens = EXCLUDED.prompt_tokens,
+    candidates_tokens = EXCLUDED.candidates_tokens, total_tokens = EXCLUDED.total_tokens,
+    estimated_cost = EXCLUDED.estimated_cost, currency = EXCLUDED.currency, payload = EXCLUDED.payload;
+
+  INSERT INTO public.mst_ai_model_pricing (
+    user_id, model, currency, input_price_per_million, output_price_per_million, updated_at, payload
+  )
+  SELECT
+    p_user_id, item.payload->>'model',
+    COALESCE(NULLIF(item.payload->>'currency', ''), 'JPY'),
+    NULLIF(item.payload->>'inputPricePerMillion', '')::numeric,
+    NULLIF(item.payload->>'outputPricePerMillion', '')::numeric,
+    COALESCE(pg_catalog.to_timestamp(NULLIF(item.payload->>'updatedAt', '')::double precision / 1000), pg_catalog.now()),
+    item.payload
+  FROM pg_catalog.jsonb_array_elements(v_model_pricing) AS item(payload)
+  WHERE NULLIF(item.payload->>'model', '') IS NOT NULL
+  ON CONFLICT (user_id, model) DO UPDATE SET
+    currency = EXCLUDED.currency, input_price_per_million = EXCLUDED.input_price_per_million,
+    output_price_per_million = EXCLUDED.output_price_per_million,
+    updated_at = EXCLUDED.updated_at, payload = EXCLUDED.payload;
+
+  INSERT INTO public.mst_ai_chat_conversations (user_id, conversation_key, messages, updated_at)
+  SELECT p_user_id, history.key, history.value, pg_catalog.now()
+  FROM pg_catalog.jsonb_each(v_chat_histories) AS history(key, value)
+  WHERE pg_catalog.jsonb_typeof(history.value) = 'array'
+  ON CONFLICT (user_id, conversation_key) DO UPDATE SET
+    messages = EXCLUDED.messages, updated_at = EXCLUDED.updated_at;
+
+  DELETE FROM public.mst_ai_chat_conversations current_row
+  WHERE current_row.user_id = p_user_id
+    AND NOT EXISTS (
+      SELECT 1 FROM pg_catalog.jsonb_each(v_chat_histories) AS desired(key, value)
+      WHERE desired.key = current_row.conversation_key
+    );
+  DELETE FROM public.mst_ai_knowledge_items current_row
+  WHERE current_row.user_id = p_user_id
+    AND NOT EXISTS (
+      SELECT 1 FROM pg_catalog.jsonb_array_elements(v_knowledge_items) AS desired(payload)
+      WHERE desired.payload->>'id' = current_row.id
+    );
+  DELETE FROM public.mst_ai_token_usage_records current_row
+  WHERE current_row.user_id = p_user_id
+    AND NOT EXISTS (
+      SELECT 1 FROM pg_catalog.jsonb_array_elements(v_token_usage_records) AS desired(payload)
+      WHERE desired.payload->>'id' = current_row.id
+    );
+  DELETE FROM public.mst_ai_model_pricing current_row
+  WHERE current_row.user_id = p_user_id
+    AND NOT EXISTS (
+      SELECT 1 FROM pg_catalog.jsonb_array_elements(v_model_pricing) AS desired(payload)
+      WHERE desired.payload->>'model' = current_row.model
+    );
+
   DELETE FROM public.mst_ai_approvals current_row
   WHERE current_row.user_id = p_user_id
     AND NOT EXISTS (
@@ -351,5 +535,5 @@ BEGIN
 END;
 $$;
 
-REVOKE ALL ON FUNCTION public.mst_save_ai_operations(uuid, jsonb, jsonb, jsonb, jsonb, jsonb, jsonb, jsonb, text, jsonb) FROM PUBLIC, anon;
-GRANT EXECUTE ON FUNCTION public.mst_save_ai_operations(uuid, jsonb, jsonb, jsonb, jsonb, jsonb, jsonb, jsonb, text, jsonb) TO authenticated;
+REVOKE ALL ON FUNCTION public.mst_save_ai_operations(uuid, jsonb, jsonb, jsonb, jsonb, jsonb, jsonb, jsonb, text, jsonb, text, jsonb, jsonb, jsonb, jsonb) FROM PUBLIC, anon;
+GRANT EXECUTE ON FUNCTION public.mst_save_ai_operations(uuid, jsonb, jsonb, jsonb, jsonb, jsonb, jsonb, jsonb, text, jsonb, text, jsonb, jsonb, jsonb, jsonb) TO authenticated;
