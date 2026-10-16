@@ -57,6 +57,7 @@ import {
   KnowledgeAttachment,
   WorkspaceAttachment,
   TaskWorkArea,
+  TaskSourceCategory,
   TaskKind,
   TaskRelatedRecordType,
 } from './types';
