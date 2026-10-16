@@ -315,12 +315,10 @@ app.post('/api/public/forms/:slug/submissions', async (req, res) => {
       }
     }
 
-    const escapedEmail = email.replace(/[\\%_]/g, '\\app.use(express.json({ limit: '10mb' }));
-');
     const { data: matchingContacts, error: contactLookupError } = await lineSupabase
       .from('contacts')
       .select('id, full_name, email, phone')
-      .ilike('email', escapedEmail)
+      .eq('email', email)
       .order('created_at', { ascending: true })
       .limit(1);
     if (contactLookupError) throw contactLookupError;
@@ -349,7 +347,7 @@ app.post('/api/public/forms/:slug/submissions', async (req, res) => {
     const sourceLabel = publicFormSourceLabels[form.form_type];
     const originLabel = utm.source ? `（流入: ${utm.source.slice(0, 80)}）` : '';
     const requestMarker = `[申込 ${requestId}]`;
-    const noteEntry = `${requestMarker} ${form.name}${originLabel} / ${new Date().toISOString()}\\n${answerSummary}`;
+    const noteEntry = `${requestMarker} ${form.name}${originLabel} / ${new Date().toISOString()}\n${answerSummary}`;
     const { data: existingLeads, error: leadLookupError } = await lineSupabase
       .from('leads')
       .select('id, notes, source, status, service_type, meeting_date')
@@ -359,12 +357,12 @@ app.post('/api/public/forms/:slug/submissions', async (req, res) => {
     if (leadLookupError) throw leadLookupError;
 
     let lead = existingLeads?.[0];
-    const meetingDate = typeof cleanAnswers.meeting_date === 'string' && /^\\d{4}-\\d{2}-\\d{2}$/.test(cleanAnswers.meeting_date)
+    const meetingDate = typeof cleanAnswers.meeting_date === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(cleanAnswers.meeting_date)
       ? cleanAnswers.meeting_date
       : null;
     if (lead) {
       if (typeof lead.notes !== 'string' || !lead.notes.includes(requestMarker)) {
-        const notes = [lead.notes, noteEntry].filter(Boolean).join('\\n\\n').slice(-12_000);
+        const notes = [lead.notes, noteEntry].filter(Boolean).join('\n\n').slice(-12_000);
         const { data: updatedLead, error: updateLeadError } = await lineSupabase
           .from('leads')
           .update({
