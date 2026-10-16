@@ -27,6 +27,7 @@ export type UnifiedNavTab =
   // 営業・顧客管理
   | 'mst_dashboard'
   | 'mst_diagnoses'
+  | 'deal_invitations'
   | 'marketing_automation'
   | 'custom_lists'
   | 'customer_operations'
@@ -245,13 +246,14 @@ export const UnifiedNavbar: React.FC<UnifiedNavbarProps> = ({
           {activeSection === 'mst' && (() => {
             const groups = [
               { id: 'crm', label: '顧客・営業', items: (['mst_dashboard','companies','contacts','prospects','leads','deals','customers','products'] as UnifiedNavTab[]) },
-              { id: 'intake', label: 'フォーム・配信', items: (['mst_diagnoses','custom_lists','marketing_automation'] as UnifiedNavTab[]) },
+              { id: 'intake', label: 'フォーム・配信', items: (['mst_diagnoses','deal_invitations','custom_lists','marketing_automation'] as UnifiedNavTab[]) },
               { id: 'delivery', label: '書類・契約後', items: (['document_templates','customer_operations'] as UnifiedNavTab[]) },
             ];
             const activeGroup = groups.find((group) => group.items.includes(currentTab)) || groups[0];
             const labelFor = (tab: UnifiedNavTab) => {
               if (tab === 'mst_dashboard') return '営業ダッシュボード';
               if (tab === 'mst_diagnoses') return 'フォーム・診断';
+              if (tab === 'deal_invitations') return '商談案内';
               if (tab === 'custom_lists') return 'リスト・顧客区分';
               if (tab === 'marketing_automation') return 'LINE・メール配信';
               if (tab === 'document_templates') return '顧客書類';
