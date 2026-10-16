@@ -7,7 +7,6 @@ import {
   fetchDiagnosisById, 
   createDiagnosis, 
   saveDiagnosisAnswers, 
-  updateDiagnosisStatus,
   fetchCompaniesList, 
   fetchLeadsList, 
   fetchAiReportsByDiagnosisId,
@@ -46,6 +45,7 @@ interface DiagnosisManagerProps {
   initialLeadId?: string;
   initialCompanyId?: string;
   initialSection?: 'forms' | 'diagnoses';
+  initialDiagnosisId?: string;
 }
 
 const STATUS_LABELS: Record<DiagnosisStatus, { label: string; color: string; bg: string; border: string; icon: React.ReactNode }> = {
@@ -85,7 +85,7 @@ const DIAGNOSIS_TYPE_LABELS: Record<string, string> = {
   quick: 'クイック簡易診断'
 };
 
-const DiagnosisRecordsView: React.FC<DiagnosisManagerProps> = ({ onOpenRls, initialLeadId, initialCompanyId }) => {
+const DiagnosisRecordsView: React.FC<DiagnosisManagerProps> = ({ onOpenRls, initialLeadId, initialCompanyId, initialDiagnosisId }) => {
   const [diagnoses, setDiagnoses] = useState<Diagnosis[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<DataFetchError | null>(null);
@@ -151,6 +151,10 @@ const DiagnosisRecordsView: React.FC<DiagnosisManagerProps> = ({ onOpenRls, init
       setDetailLoading(false);
     }
   };
+
+  useEffect(() => {
+    if (initialDiagnosisId) void handleOpenDetail(initialDiagnosisId);
+  }, [initialDiagnosisId]);
 
   // フィルタ処理
   const filteredDiagnoses = diagnoses.filter(d => {
@@ -1040,6 +1044,7 @@ const DiagnosisDetailModal: React.FC<DiagnosisDetailModalProps> = ({
 
 export const DiagnosisManager: React.FC<DiagnosisManagerProps> = (props) => {
   const [section, setSection] = useState<'forms' | 'diagnoses'>(() => props.initialSection || (props.initialLeadId || props.initialCompanyId ? 'diagnoses' : 'forms'));
+  const [requestedDiagnosisId, setRequestedDiagnosisId] = useState<string | null>(null);
   return (
     <div className="space-y-4">
       <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-slate-800 bg-slate-900 p-3">
@@ -1052,7 +1057,7 @@ export const DiagnosisManager: React.FC<DiagnosisManagerProps> = (props) => {
           <button onClick={() => setSection('diagnoses')} className={`rounded-lg px-3 py-2 text-sm ${section === 'diagnoses' ? 'bg-blue-600 text-white' : 'text-slate-300 hover:bg-slate-800'}`}>診断・レポート</button>
         </div>
       </div>
-      {section === 'forms' ? <DiagnosisFormsWorkspace initialLeadId={props.initialLeadId} initialCompanyId={props.initialCompanyId} initialSection={props.initialLeadId || props.initialCompanyId ? 'answers' : undefined} /> : <DiagnosisRecordsView {...props} />}
+      {section === 'forms' ? <DiagnosisFormsWorkspace initialLeadId={props.initialLeadId} initialCompanyId={props.initialCompanyId} initialSection={props.initialLeadId || props.initialCompanyId ? 'answers' : undefined} onOpenDiagnosis={(id) => { setRequestedDiagnosisId(id); setSection('diagnoses'); }} /> : <DiagnosisRecordsView {...props} initialDiagnosisId={requestedDiagnosisId || undefined} />}
     </div>
   );
 };
