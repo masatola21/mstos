@@ -1564,6 +1564,7 @@ function AppContent() {
         {currentTab === 'automations' && (
           <AutomationView
             automations={automations}
+            activityLogs={activityLogs}
             onUpdateAutomation={handleUpdateAutomation}
           />
         )}
