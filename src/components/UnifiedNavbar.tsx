@@ -264,7 +264,7 @@ export const UnifiedNavbar: React.FC<UnifiedNavbarProps> = ({
               <div className="flex flex-wrap gap-1.5" role="tablist" aria-label="営業・顧客管理の機能グループ">
                 {groups.map((group) => <button key={group.id} onClick={() => onTabChange(group.items[0])} aria-current={activeGroup.id === group.id ? 'page' : undefined} className={`rounded-lg px-3 py-1.5 transition-colors ${activeGroup.id === group.id ? 'bg-slate-700 text-white' : 'text-slate-400 hover:bg-slate-800 hover:text-white'}`}>{group.label}</button>)}
               </div>
-              <div className="flex flex-wrap gap-1.5" aria-label={activeGroup.label}>
+              <div className="flex min-w-0 items-center gap-1.5 overflow-x-auto pb-1" aria-label={activeGroup.label}>
                 {activeGroup.items.map((tab) => <button key={tab} onClick={() => onTabChange(tab)} aria-current={currentTab === tab ? 'page' : undefined} className={`rounded-lg px-3 py-1.5 transition-colors ${currentTab === tab ? 'bg-blue-600 font-semibold text-white' : 'text-slate-400 hover:bg-slate-800 hover:text-slate-200'}`}>{labelFor(tab)}</button>)}
               </div>
             </div>;
