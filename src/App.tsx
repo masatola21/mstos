@@ -1424,6 +1424,7 @@ function AppContent() {
         )}
 
         {currentTab === 'deal_invitations' && <SalesOperationsWorkspace tab="invitations" />}
+        {currentTab === 'customer_meeting_invitations' && <SalesOperationsWorkspace tab="customer_invitations" />}
 
         {['companies', 'prospects', 'leads', 'products', 'deals', 'customers'].includes(currentTab) && (
           <TableManager
