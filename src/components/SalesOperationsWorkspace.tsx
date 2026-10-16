@@ -3,8 +3,9 @@ import { getSupabase } from '../lib/supabaseClient';
 import { ManagedContract, ManagedInvoice } from '../types/matrix';
 import { FileText, Plus, RefreshCw, Receipt, Wrench } from 'lucide-react';
 import { DealInvitationPanel } from './DealInvitationPanel';
+import { CustomerMeetingInvitationPanel } from './CustomerMeetingInvitationPanel';
 
-type WorkspaceTab = 'segments' | 'documents' | 'operations' | 'invitations';
+type WorkspaceTab = 'segments' | 'documents' | 'operations' | 'invitations' | 'customer_invitations';
 type Segment = { id: string; name: string; entity_type: string; conditions: { field?: string; value?: string }; created_at: string };
 type RecordRow = Record<string, any>;
 
@@ -256,6 +257,7 @@ export const SalesOperationsWorkspace: React.FC<Props> = ({ tab, companyId, lead
     </div>}
 
     {tab === 'invitations' && <DealInvitationPanel />}
+    {tab === 'customer_invitations' && <CustomerMeetingInvitationPanel />}
 
     {tab === 'operations' && <section className="space-y-4 rounded-xl border border-slate-800 bg-slate-900 p-4">
       {companyId && <div className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-cyan-900/70 bg-cyan-950/30 px-3 py-2 text-xs">
