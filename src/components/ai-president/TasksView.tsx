@@ -176,28 +176,6 @@ export const TasksView: React.FC<TasksViewProps> = ({
     setIsModalOpen(true);
   };
 
-  const openProspectResearchTask = () => {
-    setEditingTask(null);
-    setTitle('見込み企業の調査・候補リスト作成');
-    setDescription('調査対象の業種・地域・企業規模・条件をこの欄に追記してください。\n\n公開情報を使って条件に合う企業候補を調査し、各候補について会社名、所在地、事業概要、条件に合う理由、根拠となる情報源URL、調査日を整理してください。確認できない情報は推測で補わず「不明」とし、営業連絡やCRMへの登録は行わないでください。');
-    setProjectId('');
-    setWorkArea('sales_customer');
-    setSourceCategory('sales_customer');
-    setDueDate('');
-    setTaskKind('creation_analysis');
-    setRelatedRecordType('none');
-    setRelatedRecordId('');
-    setRelatedRecordLabel('');
-    setPriority('medium');
-    setStatus('waiting');
-    setAssigneeType('external_ai');
-    setCompletionCriteria('候補ごとに公開情報の根拠URLと調査日が記載され、条件適合理由と未確認項目が分かる。人が内容を確認し、CRM登録の要否を判断できる。');
-    setResultNotes('');
-    setArtifactUrl('');
-    setAttachmentError('');
-    setIsModalOpen(true);
-  };
-
   const openEditModal = (t: TaskItem) => {
     setEditingTask(t);
     setTitle(t.title);
@@ -524,24 +502,14 @@ export const TasksView: React.FC<TasksViewProps> = ({
           </div>
         </div>
 
-        {activeSection === 'tasks' && <div className="flex flex-wrap gap-2">
-          <button
-            type="button"
-            onClick={openProspectResearchTask}
-            className="flex items-center gap-1.5 px-4 py-2 rounded-xl border border-amber-500/40 bg-amber-500/10 text-amber-200 hover:bg-amber-500/20 text-xs font-bold transition-all cursor-pointer"
-          >
-            <Bot className="w-3.5 h-3.5" />
-            <span>見込み企業調査を依頼</span>
-          </button>
-          <button
-            type="button"
-            onClick={openCreateModal}
-            className="flex items-center gap-1.5 px-4 py-2 rounded-xl bg-gradient-to-r from-indigo-500 to-purple-600 hover:from-indigo-600 hover:to-purple-700 text-white text-xs font-bold transition-all shadow-md shadow-indigo-500/20 cursor-pointer"
-          >
-            <Plus className="w-3.5 h-3.5" />
-            <span>新規タスクを作成</span>
-          </button>
-        </div>}
+        {activeSection === 'tasks' && <button
+          type="button"
+          onClick={openCreateModal}
+          className="flex items-center gap-1.5 px-4 py-2 rounded-xl bg-gradient-to-r from-indigo-500 to-purple-600 hover:from-indigo-600 hover:to-purple-700 text-white text-xs font-bold transition-all shadow-md shadow-indigo-500/20 cursor-pointer"
+        >
+          <Plus className="w-3.5 h-3.5" />
+          <span>新規タスクを作成</span>
+        </button>}
       </div>
 
       <div className="flex flex-wrap gap-2 border-b border-slate-800 pb-3">
