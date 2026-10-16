@@ -302,7 +302,15 @@ app.post('/api/public/forms/:slug/submissions', async (req, res) => {
       .eq('idempotency_key', requestId)
       .maybeSingle();
     if (priorError) throw priorError;
-    if (priorSubmission) return res.json({ success: true, duplicate: true, leadId: priorSubmission.lead_id });
+    if (priorSubmission) {
+      let diagnosisId: string | null = null;
+      if (form.form_type === 'diagnosis') {
+        const { data, error } = await lineSupabase.rpc('create_diagnosis_from_form_submission', { p_submission_id: priorSubmission.id });
+        if (error) console.error('Diagnosis handoff retry failed:', error.message);
+        else diagnosisId = data || null;
+      }
+      return res.json({ success: true, duplicate: true, leadId: priorSubmission.lead_id, diagnosisId });
+    }
 
     const definition = form.definition && typeof form.definition === 'object' ? form.definition as Record<string, unknown> : {};
     const configuredQuestions = Array.isArray(definition.questions) ? definition.questions : [];
@@ -447,7 +455,19 @@ app.post('/api/public/forms/:slug/submissions', async (req, res) => {
       }
       throw submissionError;
     }
-    return res.status(201).json({ success: true, submissionId: submission.id, leadId: lead.id });
+    let diagnosisId: string | null = null;
+    if (form.form_type === 'diagnosis') {
+      const { data, error } = await lineSupabase.rpc('create_diagnosis_from_form_submission', { p_submission_id: submission.id });
+      if (error) console.error('Diagnosis handoff failed:', error.message);
+      else diagnosisId = data || null;
+    }
+    return res.status(201).json({
+      success: true,
+      submissionId: submission.id,
+      leadId: lead.id,
+      diagnosisId,
+      diagnosisPending: form.form_type === 'diagnosis' && !diagnosisId,
+    });
   } catch (error) {
     console.error('Public intake submission failed:', error instanceof Error ? error.message : 'unknown error');
     return res.status(500).json({ error: '申込を保存できませんでした。時間をおいて再度お試しください。' });
