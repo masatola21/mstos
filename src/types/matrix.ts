@@ -1,3 +1,5 @@
+import type { AIWorkModeId } from '../data/aiWorkModes';
+
 export type BusinessCategory = 
   | 'management'        // 経営管理（財務・KPI・意思決定）
   | 'product_dev'       // 商品開発（要件・仕様・ツール作成）
@@ -230,6 +232,7 @@ export interface AutomationRule {
   approvalPolicy: AutomationApprovalPolicy;
   isEnabled: boolean;
   taskDueInDays: number; // トリガー発生からタスク期限までの日数
+  workModeId?: AIWorkModeId; // タスク実行時に使う役割AI
   updatedAt?: number;
 }
 
