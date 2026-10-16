@@ -10,6 +10,7 @@ type Candidate = {
   source_url?: string;
   reason: string;
   duplicate_company_id?: string;
+  existing_company_id?: string;
   duplicate_reason?: string;
   selected: boolean;
 };
@@ -133,7 +134,7 @@ JSONオブジェクトのみを返してください。形式: {"candidates":[{"
           ai_reason: sourceMemo,
           memo: candidate.source_url ? `調査根拠URL: ${candidate.source_url}` : null,
         });
-        if (prospectError) throw new Error(`${candidate.company_name} の見込み企業登録に失敗: 会社（${companyId}）は作成済みです。続きは手動で登録してください。詳細: ${prospectError.message}`);
+        if (prospectError) throw new Error(`${candidate.company_name} の見込み企業登録に失敗しました。既存会社（${companyId}）はそのまま残ります。詳細: ${prospectError.message}`);
         imported += 1;
       }
       setNotice(`${imported}社を会社マスタと見込み企業に登録しました。`);
@@ -178,7 +179,7 @@ JSONオブジェクトのみを返してください。形式: {"candidates":[{"
                   <div className="flex gap-3">
                     <input type="checkbox" checked={candidate.selected} disabled={Boolean(candidate.duplicate_company_id)} onChange={(event) => setCandidates((items) => items.map((item, i) => i === index ? { ...item, selected: event.target.checked } : item))} className="mt-1 h-4 w-4 accent-indigo-500" />
                     <div className="min-w-0 flex-1 space-y-1 text-xs">
-                      <p className="font-bold text-white">{candidate.company_name}{candidate.duplicate_company_id && <span className="ml-2 text-amber-300">重複候補</span>}</p>
+                      <p className="font-bold text-white">{candidate.company_name}{candidate.duplicate_company_id && <span className="ml-2 text-amber-300">既存見込み企業</span>}{candidate.existing_company_id && <span className="ml-2 text-sky-300">既存会社を利用</span>}</p>
                       {candidate.duplicate_reason && <p className="text-amber-200">{candidate.duplicate_reason}</p>}
                       <p className="text-slate-300">{candidate.industry || '業種未確認'}{candidate.website ? ` · ${candidate.website}` : ''}{candidate.address ? ` · ${candidate.address}` : ''}</p>
                       <p className="leading-5 text-slate-400">{candidate.reason || '適合理由なし'}{candidate.source_url && <> · <a className="text-sky-300 underline" href={candidate.source_url} target="_blank" rel="noreferrer">根拠URL</a></>}</p>
