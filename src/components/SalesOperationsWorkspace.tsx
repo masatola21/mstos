@@ -198,7 +198,7 @@ export const SalesOperationsWorkspace: React.FC<Props> = ({ tab, onOperationalRe
   const description = tab === 'segments'
     ? 'CRMレコードを条件で抽出する保存ビューです。会社・連絡先の複製は作りません。'
     : tab === 'documents'
-      ? '生成済み書類と送信履歴を同じ顧客・商談に紐付けて追跡します.'
+      ? '生成済み書類と送信履歴を同じ顧客・商談に紐付けて追跡します。'
       : tab === 'invitations'
         ? 'Google予約ページを案内し、面談予約を受け付けます。'
         : '契約・請求・顧問・構築支援の状態を管理します。顧客への連絡は配信機能へ渡します。';
