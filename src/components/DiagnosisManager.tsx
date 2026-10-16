@@ -703,6 +703,9 @@ const DiagnosisDetailModal: React.FC<DiagnosisDetailModalProps> = ({
   // ステータス差し戻し状態
   const [generatingReport, setGeneratingReport] = useState(false);
 
+  const [reportDraft, setReportDraft] = useState<{ text: string; modelName: string; recommendedProductId: string | null } | null>(null);
+  const [savingReport, setSavingReport] = useState(false);
+
   // 関連レポート一覧
   const [reports, setReports] = useState<AiReport[]>([]);
   const [reportsLoading, setReportsLoading] = useState(false);
@@ -765,6 +768,126 @@ const DiagnosisDetailModal: React.FC<DiagnosisDetailModalProps> = ({
       setErrorMsg(err.message || '保存中にエラーが発生しました。');
     } finally {
       setSaving(false);
+    }
+  };
+
+  const handleGenerateReportDraft = async () => {
+    if (!diagnosis) return;
+    const supabase = getSupabase();
+    if (!supabase) {
+      setErrorMsg('データベースに接続できません。設定を確認してください。');
+      return;
+    }
+    const answerEntries = Object.entries(answers).filter(([key, value]) => key !== '_intake' && value !== null && value !== undefined && String(value).trim() !== '');
+    if (answerEntries.length === 0) {
+      setErrorMsg('診断回答がありません。フォーム回答を確認してください。');
+      return;
+    }
+
+    setGeneratingReport(true);
+    setErrorMsg(null);
+    setReportDraft(null);
+    try {
+      const [{ data: company }, { data: lead }, { data: deal }] = await Promise.all([
+        supabase.from('companies').select('company_name, industry, contact_name, email, phone, website').eq('id', diagnosis.company_id).maybeSingle(),
+        diagnosis.lead_id
+          ? supabase.from('leads').select('source, service_type, status, notes, interested_product_id').eq('id', diagnosis.lead_id).maybeSingle()
+          : Promise.resolve({ data: null }),
+        supabase.from('deals').select('proposal_plan_name, proposal_status, proposal_type, total_amount, initial_fee, monthly_fee, product_id, memo').eq('company_id', diagnosis.company_id).order('created_at', { ascending: false }).limit(1).maybeSingle(),
+      ]);
+
+      const context = {
+        company: company || diagnosis.company || { company_id: diagnosis.company_id },
+        lead,
+        latestDeal: deal,
+        diagnosis: {
+          type: diagnosis.diagnosis_type,
+          questionnaireVersion: diagnosis.questionnaire_version,
+          answers: Object.fromEntries(answerEntries),
+          internalMemo: memo,
+          score: diagnosis.questionnaire_version.startsWith('form-') ? null : diagnosis.score ?? currentScores.totalScore,
+          categoryScores: diagnosis.questionnaire_version.startsWith('form-') ? null : diagnosis.category_scores ?? currentScores.categoryScores,
+        },
+      };
+      const prompt = `あなたは中小企業向け経営診断レポートの作成担当です。以下の社内CRM情報と診断回答だけを根拠に、日本語で顧客向けの診断レポート草案を作成してください。
+情報にない事実、効果、数値、契約条件を推測で補わず、「要確認」と明記してください。営業色を抑え、回答内容に基づいて具体的にまとめてください。
+構成は「診断サマリー」「現状の強み」「主なボトルネック」「優先課題」「改善ロードマップ（短期・中期・長期）」「推奨する対応」「次の確認事項」。各項目を読みやすく記述し、回答の根拠がない項目はその旨を記載してください。
+この出力は社内確認前の草案です。Markdown見出しを使い、前置きは付けず本文だけ出力してください。
+
+【社内データ】
+${JSON.stringify(context, null, 2)}`;
+
+      const response = await fetch('/api/chat', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          messages: [{ role: 'user', content: prompt }],
+          character: { name: '経営診断レポート作成AI', role: '診断レポート作成専門AI', personality: '事実に忠実で慎重', tone: '明確で丁寧' },
+          stream: false,
+        }),
+      });
+      const result = await response.json();
+      if (!response.ok || typeof result.text !== 'string' || !result.text.trim()) {
+        throw new Error(result.error || '診断レポートを生成できませんでした。');
+      }
+      setReportDraft({
+        text: result.text.trim(),
+        modelName: [result.provider, result.model].filter(Boolean).join('/') || 'configured-model',
+        recommendedProductId: lead?.interested_product_id || deal?.product_id || null,
+      });
+    } catch (error: any) {
+      setErrorMsg(error.message || '診断レポートの生成に失敗しました。');
+    } finally {
+      setGeneratingReport(false);
+    }
+  };
+
+  const handleSaveGeneratedReport = async () => {
+    if (!diagnosis || !reportDraft) return;
+    const supabase = getSupabase();
+    if (!supabase) {
+      setErrorMsg('データベースに接続できません。設定を確認してください。');
+      return;
+    }
+    setSavingReport(true);
+    setErrorMsg(null);
+    try {
+      const previousLatest = reports.find((report) => report.is_latest);
+      if (previousLatest) {
+        const { error: supersedeError } = await supabase.from('ai_reports')
+          .update({ is_latest: false, status: 'superseded' }).eq('id', previousLatest.id);
+        if (supersedeError) throw supersedeError;
+      }
+
+      const { data, error } = await supabase.from('ai_reports').insert([{
+        diagnosis_id: diagnosis.id,
+        version: Math.max(0, ...reports.map((report) => report.version)) + 1,
+        is_latest: true,
+        status: 'generated',
+        title: `${diagnosis.company?.company_name || diagnosis.company_id} 経営診断レポート`,
+        model_name: reportDraft.modelName,
+        prompt_version: 'diagnosis-report-v1',
+        summary: reportDraft.text.slice(0, 1200),
+        recommendations: [reportDraft.text],
+        recommended_product_id: reportDraft.recommendedProductId,
+        full_report_text: reportDraft.text,
+        generated_at: new Date().toISOString(),
+      }]).select('*').single();
+
+      if (error) {
+        if (previousLatest) {
+          await supabase.from('ai_reports').update({ is_latest: true, status: previousLatest.status }).eq('id', previousLatest.id);
+        }
+        throw error;
+      }
+      setReports((current) => [data as AiReport, ...current.filter((report) => report.id !== previousLatest?.id)]);
+      setReportDraft(null);
+      setSaveSuccessMsg('診断レポートを保存しました。顧客書類にレポートと提案書の草案を作成しました。');
+      onUpdated();
+    } catch (error: any) {
+      setErrorMsg(error.message || '診断レポートを保存できませんでした。');
+    } finally {
+      setSavingReport(false);
     }
   };
 
@@ -910,6 +1033,38 @@ const DiagnosisDetailModal: React.FC<DiagnosisDetailModalProps> = ({
           )}
           </>
           )}
+
+          <section className="space-y-3 rounded-2xl border border-indigo-800/60 bg-indigo-950/10 p-4">
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <div>
+                <h3 className="text-sm font-bold text-indigo-100">診断レポート</h3>
+                <p className="mt-1 text-xs text-slate-400">フォーム回答と社内CRM情報から草案を生成します。内容を確認・修正して保存すると、顧客書類にレポートと提案書の草案を作成します。</p>
+              </div>
+              <button type="button" onClick={handleGenerateReportDraft} disabled={generatingReport || savingReport} className="inline-flex items-center gap-2 rounded-xl bg-indigo-600 px-4 py-2 text-xs font-semibold text-white hover:bg-indigo-500 disabled:cursor-not-allowed disabled:opacity-50">
+                {generatingReport ? <RefreshCw className="h-4 w-4 animate-spin" /> : <Sparkles className="h-4 w-4" />}
+                {generatingReport ? '草案を生成中…' : 'AIで草案を生成'}
+              </button>
+            </div>
+            {reportDraft && (
+              <div className="space-y-3 rounded-xl border border-slate-700 bg-slate-950/70 p-3">
+                <label className="block text-xs font-medium text-slate-300">草案（保存前に編集できます）</label>
+                <textarea value={reportDraft.text} onChange={(event) => setReportDraft({ ...reportDraft, text: event.target.value })} rows={16} className="w-full resize-y rounded-lg border border-slate-700 bg-slate-950 p-3 text-sm leading-6 text-slate-200" />
+                <div className="flex justify-end gap-2">
+                  <button type="button" onClick={() => setReportDraft(null)} className="rounded-lg px-3 py-2 text-xs text-slate-300 hover:bg-slate-800">破棄</button>
+                  <button type="button" onClick={handleSaveGeneratedReport} disabled={savingReport || !reportDraft.text.trim()} className="inline-flex items-center gap-2 rounded-lg bg-emerald-600 px-4 py-2 text-xs font-semibold text-white hover:bg-emerald-500 disabled:opacity-50">
+                    {savingReport && <RefreshCw className="h-3.5 w-3.5 animate-spin" />}
+                    顧客書類に保存
+                  </button>
+                </div>
+              </div>
+            )}
+            {reports[0] && !reportDraft && (
+              <details className="rounded-xl border border-slate-800 bg-slate-950/60 p-3">
+                <summary className="cursor-pointer text-xs font-semibold text-indigo-100">保存済みレポート v{reports[0].version} を確認</summary>
+                <div className="mt-3 max-h-96 overflow-y-auto whitespace-pre-wrap rounded-lg bg-slate-950 p-3 text-sm leading-6 text-slate-200">{reports[0].full_report_text || reports[0].summary || 'レポート本文がありません。'}</div>
+              </details>
+            )}
+          </section>
 
           {/* 設問回答フォーム（カテゴリ別） */}
           {diagnosis.questionnaire_version.startsWith('form-') ? (
