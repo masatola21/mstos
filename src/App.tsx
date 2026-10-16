@@ -1421,6 +1421,8 @@ function AppContent() {
           <DiagnosisManager onOpenRls={() => setIsRlsOpen(true)} />
         )}
 
+        {currentTab === 'deal_invitations' && <SalesOperationsWorkspace tab="invitations" />}
+
         {['companies', 'prospects', 'leads', 'products', 'deals', 'customers'].includes(currentTab) && (
           <TableManager
             currentTable={currentTab as TableKey}

@@ -4,7 +4,7 @@ import { ManagedContract, ManagedInvoice } from '../types/matrix';
 import { FileText, Plus, RefreshCw, Receipt, Wrench } from 'lucide-react';
 import { DealInvitationPanel } from './DealInvitationPanel';
 
-type WorkspaceTab = 'segments' | 'documents' | 'operations';
+type WorkspaceTab = 'segments' | 'documents' | 'operations' | 'invitations';
 type Segment = { id: string; name: string; entity_type: string; conditions: { field?: string; value?: string }; created_at: string };
 type RecordRow = Record<string, any>;
 
@@ -91,7 +91,7 @@ export const SalesOperationsWorkspace: React.FC<Props> = ({ tab, onOperationalRe
     finally { setLoading(false); }
   };
 
-  useEffect(() => { void load(); }, [tab, activeOpsTab]);
+  useEffect(() => { if (tab !== 'invitations') void load(); }, [tab, activeOpsTab]);
 
   const createSegment = async (event: React.FormEvent) => {
     event.preventDefault();
@@ -194,12 +194,14 @@ export const SalesOperationsWorkspace: React.FC<Props> = ({ tab, onOperationalRe
     await load();
   };
 
-  const title = tab === 'segments' ? 'リスト・顧客区分' : tab === 'documents' ? '顧客書類・送付履歴' : '契約後の顧客運営';
+  const title = tab === 'segments' ? 'リスト・顧客区分' : tab === 'documents' ? '顧客書類・送付履歴' : tab === 'invitations' ? '商談案内' : '契約後の顧客運営';
   const description = tab === 'segments'
     ? 'CRMレコードを条件で抽出する保存ビューです。会社・連絡先の複製は作りません。'
     : tab === 'documents'
       ? '生成済み書類と送信履歴を同じ顧客・商談に紐付けて追跡します。'
-      : '契約・請求・顧問・構築支援の状態を管理します。顧客への連絡は配信機能へ渡します。';
+      : tab === 'invitations'
+        ? 'Google予約ページを案内し、面談予約を受け付けます。'
+        : '契約・請求・顧問・構築支援の状態を管理します。顧客への連絡は配信機能へ渡します。';
 
   return <div className="space-y-5">
     <header className="rounded-2xl border border-slate-800 bg-slate-900 p-5">
@@ -234,7 +236,7 @@ export const SalesOperationsWorkspace: React.FC<Props> = ({ tab, onOperationalRe
       <section className="rounded-xl border border-slate-800 bg-slate-900 p-4"><h2 className="mb-3 font-semibold text-white">送信履歴・送信待ち</h2>{loading ? <p className="text-sm text-slate-400">読み込み中…</p> : outbox.length === 0 ? <p className="text-sm text-slate-400">個別送信・一斉配信・書類送付は、同じ送信台帳に集約します。</p> : <ul className="divide-y divide-slate-800">{outbox.map((msg) => <li key={msg.id} className="py-3"><div className="flex flex-wrap items-center justify-between gap-2"><span className="font-medium text-white">{msg.subject || msg.recipient_address}</span><span className="text-xs text-slate-400">{msg.channel} · {msg.status}</span></div><div className="mt-1 text-xs text-slate-500">{new Date(msg.created_at).toLocaleString('ja-JP')} · 同意根拠: {msg.consent_basis || '記録なし'}</div>{msg.status==='awaiting_approval'&&<div className="mt-2 flex gap-2"><button onClick={()=>void updateOutboxStatus(msg.id,'queued')} className="rounded bg-emerald-700 px-2 py-1 text-xs text-white">承認して送信待ちへ</button><button onClick={()=>void updateOutboxStatus(msg.id,'canceled')} className="rounded border border-slate-700 px-2 py-1 text-xs text-slate-300">取り消す</button></div>}</li>)}</ul>}<p className="mt-3 text-xs text-amber-300">実送信はサーバー側のLINE・メール接続が必要です。この一覧への登録だけで配信完了にはなりません。</p></section>
     </div>}
 
-    {tab === 'documents' && <DealInvitationPanel />}
+    {tab === 'invitations' && <DealInvitationPanel />}
 
     {tab === 'operations' && <section className="space-y-4 rounded-xl border border-slate-800 bg-slate-900 p-4">
       <div className="flex flex-wrap items-center justify-between gap-3"><div className="flex flex-wrap gap-2">{opsTabs.map(({key,label,icon:Icon}) => <button key={key} onClick={() => setActiveOpsTab(key)} className={`flex items-center gap-2 rounded-lg px-3 py-2 text-sm ${activeOpsTab===key?'bg-blue-600 text-white':'border border-slate-700 text-slate-300 hover:bg-slate-800'}`}><Icon className="h-4 w-4" />{label}</button>)}</div><button onClick={() => setFormOpen((value) => !value)} className="flex items-center gap-2 rounded-lg bg-blue-600 px-3 py-2 text-sm font-semibold text-white"><Plus className="h-4 w-4" />新規登録</button></div>
