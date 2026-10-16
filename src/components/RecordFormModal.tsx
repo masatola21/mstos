@@ -117,7 +117,20 @@ export const RecordFormModal: React.FC<RecordFormModalProps> = ({
   if (!isOpen) return null;
 
   const handleInputChange = (fieldKey: string, value: any) => {
-    if (tableKey === 'deals' && fieldKey === 'product_id' && value !== formData.product_id) setProposalPlanTemplateId('');
+    if (tableKey === 'deals' && fieldKey === 'product_id' && value !== formData.product_id) {
+      setProposalPlanTemplateId('');
+      const product = products.find((item) => item.id === value);
+      if (product) {
+        setFormData((prev) => ({
+          ...prev,
+          [fieldKey]: value,
+          initial_fee: product.initial_fee ?? '',
+          monthly_fee: product.monthly_fee ?? '',
+          total_amount: Number(product.initial_fee || 0) + Number(product.monthly_fee || 0),
+        }));
+        return;
+      }
+    }
     setFormData((prev) => ({
       ...prev,
       [fieldKey]: value,
