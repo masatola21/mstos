@@ -107,6 +107,7 @@ export interface TaskItem {
   attachments?: WorkspaceAttachment[]; // タスクに直接添付したファイル
   sourceAutomationId?: string;
   sourceAutomationRecordId?: string; // 自動化タスクの重複防止に使う発生元レコードID
+  automationAutoRun?: boolean; // イベント発生時に自動実行するルール起点タスク
   createdAt: number;
   updatedAt: number;
 }
