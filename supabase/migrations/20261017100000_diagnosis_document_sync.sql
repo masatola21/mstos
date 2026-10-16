@@ -87,3 +87,67 @@ CREATE TRIGGER trg_sync_generated_ai_report_to_customer_documents
 AFTER INSERT OR UPDATE OF status, is_latest ON public.ai_reports
 FOR EACH ROW
 EXECUTE FUNCTION public.sync_generated_ai_report_to_customer_documents();
+
+-- The active v1.0 questionnaire now has a concrete required-key set, enabling safe completion.
+CREATE OR REPLACE FUNCTION public.update_diagnosis_status(p_diagnosis_id pg_catalog.uuid, p_status pg_catalog.text)
+RETURNS pg_catalog.jsonb LANGUAGE plpgsql SECURITY DEFINER SET search_path = ''
+AS $$
+DECLARE
+  v_current_status pg_catalog.text; v_questionnaire_version pg_catalog.text;
+  v_answers pg_catalog.jsonb; v_conducted_at pg_catalog.timestamptz;
+  v_required_keys pg_catalog.text[]; v_missing_keys pg_catalog.text[];
+BEGIN
+  IF p_status NOT IN ('draft', 'in_progress', 'completed') THEN
+    RAISE EXCEPTION '不正なステータス変更要求: %', p_status;
+  END IF;
+  SELECT status, questionnaire_version, answers, conducted_at
+    INTO v_current_status, v_questionnaire_version, v_answers, v_conducted_at
+  FROM public.diagnoses WHERE id = p_diagnosis_id FOR UPDATE;
+  IF NOT FOUND THEN RAISE EXCEPTION '指定された診断が見つかりません: %', p_diagnosis_id; END IF;
+  IF v_current_status = p_status THEN
+    RETURN pg_catalog.jsonb_build_object('success', true, 'message', 'ステータスに変更はありません');
+  END IF;
+  IF v_current_status = 'generating' THEN RAISE EXCEPTION 'AIレポート生成中のため変更不可'; END IF;
+  IF v_current_status = 'reported' THEN RAISE EXCEPTION 'レポート発行済みの診断は戻せません: %', p_status; END IF;
+  IF NOT (
+    (v_current_status = 'draft' AND p_status IN ('in_progress', 'completed')) OR
+    (v_current_status = 'in_progress' AND p_status IN ('draft', 'completed')) OR
+    (v_current_status = 'completed' AND p_status IN ('draft', 'in_progress'))
+  ) THEN
+    RAISE EXCEPTION '不正な状態遷移: % から % への遷移は許可されていません', v_current_status, p_status;
+  END IF;
+  IF p_status = 'completed' THEN
+    IF v_answers IS NULL OR pg_catalog.jsonb_typeof(v_answers) <> 'object' THEN
+      RAISE EXCEPTION '回答データが存在しません: %', p_diagnosis_id;
+    END IF;
+    CASE v_questionnaire_version
+      WHEN 'v1.0' THEN v_required_keys := ARRAY[
+        'q_strat_vision','q_strat_investment','q_strat_leadership',
+        'q_data_crm','q_data_cloud','q_data_security',
+        'q_ops_standardization','q_ops_automation',
+        'q_lit_mindset','q_lit_ai_usage',
+        'q_sales_followup','q_sales_analytics'
+      ]::pg_catalog.text[];
+      ELSE RAISE EXCEPTION '未対応の設問バージョンです: %', v_questionnaire_version;
+    END CASE;
+    SELECT pg_catalog.array_agg(k) INTO v_missing_keys
+    FROM pg_catalog.unnest(v_required_keys) AS k
+    WHERE (v_answers -> k) IS NULL
+       OR (v_answers -> k) = 'null'::jsonb
+       OR (pg_catalog.jsonb_typeof(v_answers -> k) = 'string' AND pg_catalog.btrim(v_answers ->> k) = '');
+    IF v_missing_keys IS NOT NULL THEN
+      RAISE EXCEPTION '必須回答項目が不足: % (未回答: %)', v_questionnaire_version, pg_catalog.array_to_string(v_missing_keys, ', ');
+    END IF;
+    UPDATE public.diagnoses SET status = 'completed', conducted_at = COALESCE(v_conducted_at, pg_catalog.now()), updated_at = pg_catalog.now()
+    WHERE id = p_diagnosis_id;
+  ELSIF v_current_status = 'completed' AND p_status IN ('draft', 'in_progress') THEN
+    UPDATE public.diagnoses SET status = p_status, conducted_at = NULL, score = NULL, category_scores = NULL, updated_at = pg_catalog.now()
+    WHERE id = p_diagnosis_id;
+  ELSE
+    UPDATE public.diagnoses SET status = p_status, updated_at = pg_catalog.now() WHERE id = p_diagnosis_id;
+  END IF;
+  RETURN pg_catalog.jsonb_build_object('success', true, 'previous_status', v_current_status, 'new_status', p_status);
+END;
+$$;
+
+GRANT EXECUTE ON FUNCTION public.update_diagnosis_status(pg_catalog.uuid, pg_catalog.text) TO authenticated;
