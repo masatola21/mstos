@@ -114,7 +114,53 @@ export interface WorkspaceData {
 }
 
 const WORKSPACE_STATE_TABLE = 'mst_workspace_state';
+const AI_OPERATIONS_SYNC_STATE_TABLE = 'mst_ai_operations_sync_state';
 const LAST_SYNC_PREFIX = 'mst_workspace_last_synced_v1:';
+
+type RelationalAIOperations = Pick<WorkspaceData, 'projects' | 'tasks' | 'approvals' | 'automations' | 'activityLogs'>;
+
+async function loadRelationalAIOperations(userId: string): Promise<RelationalAIOperations | null> {
+  const supabase = getSupabaseClient();
+  const { data: syncState, error: syncStateError } = await supabase
+    .from(AI_OPERATIONS_SYNC_STATE_TABLE)
+    .select('user_id')
+    .eq('user_id', userId)
+    .maybeSingle();
+  if (syncStateError) throw syncStateError;
+  if (!syncState) return null;
+
+  const [projects, tasks, approvals, automations, activityLogs] = await Promise.all([
+    supabase.from('mst_ai_projects').select('payload').eq('user_id', userId).order('created_at', { ascending: false }),
+    supabase.from('mst_ai_tasks').select('payload').eq('user_id', userId).order('created_at', { ascending: false }),
+    supabase.from('mst_ai_approvals').select('payload').eq('user_id', userId).order('created_at', { ascending: false }),
+    supabase.from('mst_ai_automation_rules').select('payload').eq('user_id', userId).order('updated_at', { ascending: false }),
+    supabase.from('mst_ai_activity_logs').select('payload').eq('user_id', userId).order('occurred_at', { ascending: false }),
+  ]);
+  const queryError = [projects, tasks, approvals, automations, activityLogs].find((result) => result.error)?.error;
+  if (queryError) throw queryError;
+
+  const records = (rows: Array<{ payload: unknown }> | null | undefined) => (rows || []).map((row) => row.payload);
+  return {
+    projects: records(projects.data) as Project[],
+    tasks: records(tasks.data) as TaskItem[],
+    approvals: records(approvals.data) as ApprovalItem[],
+    automations: records(automations.data) as AutomationRule[],
+    activityLogs: records(activityLogs.data) as ActivityLog[],
+  };
+}
+
+async function saveRelationalAIOperations(userId: string, data: WorkspaceData): Promise<void> {
+  const supabase = getSupabaseClient();
+  const { error } = await supabase.rpc('mst_save_ai_operations', {
+    p_user_id: userId,
+    p_projects: data.projects,
+    p_tasks: data.tasks,
+    p_approvals: data.approvals,
+    p_automation_rules: data.automations,
+    p_activity_logs: data.activityLogs,
+  });
+  if (error) throw error;
+}
 
 function mergeRecords<T extends { id: string }>(remoteRecords: T[], localRecords: T[], baselineRecords: T[]): T[] {
   const remoteIds = new Set(remoteRecords.map((record) => record.id));
@@ -226,62 +272,75 @@ export async function loadOrMigrateWorkspaceData(userId: string): Promise<Worksp
     .select('data')
     .eq('user_id', userId)
     .maybeSingle();
-
   if (error) throw error;
 
-  if (row?.data && typeof row.data === 'object' && !Array.isArray(row.data)) {
-    const localDefaults = loadLocalWorkspaceData();
-    const remote = row.data as Partial<WorkspaceData>;
-    const baseline = loadLastSyncedData(userId);
-    const merged: WorkspaceData = {
-      ...localDefaults,
-      ...remote,
-      projects: mergeRecords(remote.projects || [], localDefaults.projects, baseline.projects || []),
-      tasks: mergeRecords(remote.tasks || [], localDefaults.tasks, baseline.tasks || []),
-      approvals: mergeRecords(remote.approvals || [], localDefaults.approvals, baseline.approvals || []),
-      activityLogs: mergeRecords(remote.activityLogs || [], localDefaults.activityLogs, baseline.activityLogs || []).slice(0, 100),
-      tokenUsage: mergeRecords(remote.tokenUsage || [], localDefaults.tokenUsage, baseline.tokenUsage || []).slice(0, 300),
-      products: mergeRecords(remote.products || [], localDefaults.products, baseline.products || []),
-      contracts: mergeRecords(remote.contracts || [], localDefaults.contracts, baseline.contracts || []),
-      invoices: mergeRecords(remote.invoices || [], localDefaults.invoices, baseline.invoices || []),
-      tools: mergeRecords(remote.tools || [], localDefaults.tools, baseline.tools || []),
-      customLists: mergeRecords(remote.customLists || [], localDefaults.customLists, baseline.customLists || []),
-      automations: mergeRecords(remote.automations || [], localDefaults.automations, baseline.automations || []),
-      workModeHistories: mergeChatHistories(
-        remote.workModeHistories || {},
-        localDefaults.workModeHistories,
-        baseline.workModeHistories || {}
-      ),
-      knowledgeItems: mergeRecords(remote.knowledgeItems || [], localDefaults.knowledgeItems, baseline.knowledgeItems || []),
-      marketingScenarios: mergeRecords(remote.marketingScenarios || [], localDefaults.marketingScenarios, baseline.marketingScenarios || []),
-    };
-    const relationalSales = await loadRelationalSalesOperations();
-    if (relationalSales && (relationalSales.contracts.length > 0 || relationalSales.invoices.length > 0 || (merged.contracts.length === 0 && merged.invoices.length === 0))) {
-      merged.contracts = relationalSales.contracts;
-      merged.invoices = relationalSales.invoices;
-    }
-    applyWorkspaceData(merged);
-    // 別ブラウザーに残っている未同期レコードも既存クラウドデータと統合して保存する。
-    await saveWorkspaceData(userId, merged);
-    return merged;
+  const localDefaults = loadLocalWorkspaceData();
+  const baseline = loadLastSyncedData(userId);
+  const remote = row?.data && typeof row.data === 'object' && !Array.isArray(row.data)
+    ? row.data as Partial<WorkspaceData>
+    : null;
+
+  const merged: WorkspaceData = remote
+    ? {
+        ...localDefaults,
+        ...remote,
+        projects: mergeRecords(remote.projects || [], localDefaults.projects, baseline.projects || []),
+        tasks: mergeRecords(remote.tasks || [], localDefaults.tasks, baseline.tasks || []),
+        approvals: mergeRecords(remote.approvals || [], localDefaults.approvals, baseline.approvals || []),
+        activityLogs: mergeRecords(remote.activityLogs || [], localDefaults.activityLogs, baseline.activityLogs || []).slice(0, 100),
+        tokenUsage: mergeRecords(remote.tokenUsage || [], localDefaults.tokenUsage, baseline.tokenUsage || []).slice(0, 300),
+        products: mergeRecords(remote.products || [], localDefaults.products, baseline.products || []),
+        contracts: mergeRecords(remote.contracts || [], localDefaults.contracts, baseline.contracts || []),
+        invoices: mergeRecords(remote.invoices || [], localDefaults.invoices, baseline.invoices || []),
+        tools: mergeRecords(remote.tools || [], localDefaults.tools, baseline.tools || []),
+        customLists: mergeRecords(remote.customLists || [], localDefaults.customLists, baseline.customLists || []),
+        automations: mergeRecords(remote.automations || [], localDefaults.automations, baseline.automations || []),
+        workModeHistories: mergeChatHistories(
+          remote.workModeHistories || {},
+          localDefaults.workModeHistories,
+          baseline.workModeHistories || {}
+        ),
+        knowledgeItems: mergeRecords(remote.knowledgeItems || [], localDefaults.knowledgeItems, baseline.knowledgeItems || []),
+        marketingScenarios: mergeRecords(remote.marketingScenarios || [], localDefaults.marketingScenarios, baseline.marketingScenarios || []),
+      }
+    : localDefaults;
+
+  // The sync-state row marks the normalized tables as authoritative, including when a user intentionally has zero records.
+  const relationalAI = await loadRelationalAIOperations(userId);
+  if (relationalAI) {
+    merged.projects = mergeRecords(relationalAI.projects, localDefaults.projects, baseline.projects || []);
+    merged.tasks = mergeRecords(relationalAI.tasks, localDefaults.tasks, baseline.tasks || []);
+    merged.approvals = mergeRecords(relationalAI.approvals, localDefaults.approvals, baseline.approvals || []);
+    merged.automations = mergeRecords(relationalAI.automations, localDefaults.automations, baseline.automations || []);
+    merged.activityLogs = mergeRecords(relationalAI.activityLogs, localDefaults.activityLogs, baseline.activityLogs || []).slice(0, 100);
   }
 
-  // 初回サインインでは既存ブラウザのデータをクラウドへ移行する。
-  const localData = loadLocalWorkspaceData();
   const relationalSales = await loadRelationalSalesOperations();
-  if (relationalSales && (relationalSales.contracts.length > 0 || relationalSales.invoices.length > 0 || (localData.contracts.length === 0 && localData.invoices.length === 0))) {
-    localData.contracts = relationalSales.contracts;
-    localData.invoices = relationalSales.invoices;
+  if (relationalSales && (relationalSales.contracts.length > 0 || relationalSales.invoices.length > 0 || (merged.contracts.length === 0 && merged.invoices.length === 0))) {
+    merged.contracts = relationalSales.contracts;
+    merged.invoices = relationalSales.invoices;
   }
-  await saveWorkspaceData(userId, localData);
-  return localData;
+
+  applyWorkspaceData(merged);
+  await saveWorkspaceData(userId, merged);
+  return merged;
 }
 
 export async function saveWorkspaceData(userId: string, data: WorkspaceData): Promise<void> {
   const supabase = getSupabaseClient();
+  await saveRelationalAIOperations(userId, data);
+
+  // Keep non-operational preferences and supporting workspace data in the compatibility snapshot.
+  // AI work records above are stored only in user-scoped relational tables.
+  const snapshotData = { ...data } as Partial<WorkspaceData>;
+  delete snapshotData.projects;
+  delete snapshotData.tasks;
+  delete snapshotData.approvals;
+  delete snapshotData.automations;
+  delete snapshotData.activityLogs;
   const { error } = await supabase
     .from(WORKSPACE_STATE_TABLE)
-    .upsert({ user_id: userId, data, updated_at: new Date().toISOString() }, { onConflict: 'user_id' });
+    .upsert({ user_id: userId, data: snapshotData, updated_at: new Date().toISOString() }, { onConflict: 'user_id' });
   if (error) throw error;
   try {
     localStorage.setItem(`${LAST_SYNC_PREFIX}${userId}`, JSON.stringify(data));
