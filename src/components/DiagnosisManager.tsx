@@ -46,6 +46,7 @@ interface DiagnosisManagerProps {
   onOpenRls?: () => void;
   initialLeadId?: string;
   initialCompanyId?: string;
+  initialSection?: 'forms' | 'diagnoses';
 }
 
 const STATUS_LABELS: Record<DiagnosisStatus, { label: string; color: string; bg: string; border: string; icon: React.ReactNode }> = {
@@ -1103,7 +1104,7 @@ const DiagnosisDetailModal: React.FC<DiagnosisDetailModalProps> = ({
 
 
 export const DiagnosisManager: React.FC<DiagnosisManagerProps> = (props) => {
-  const [section, setSection] = useState<'forms' | 'diagnoses'>(() => props.initialLeadId || props.initialCompanyId ? 'diagnoses' : 'forms');
+  const [section, setSection] = useState<'forms' | 'diagnoses'>(() => props.initialSection || (props.initialLeadId || props.initialCompanyId ? 'diagnoses' : 'forms'));
   return (
     <div className="space-y-4">
       <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-slate-800 bg-slate-900 p-3">
@@ -1116,7 +1117,7 @@ export const DiagnosisManager: React.FC<DiagnosisManagerProps> = (props) => {
           <button onClick={() => setSection('diagnoses')} className={`rounded-lg px-3 py-2 text-sm ${section === 'diagnoses' ? 'bg-blue-600 text-white' : 'text-slate-300 hover:bg-slate-800'}`}>診断・レポート</button>
         </div>
       </div>
-      {section === 'forms' ? <DiagnosisFormsWorkspace /> : <DiagnosisRecordsView {...props} />}
+      {section === 'forms' ? <DiagnosisFormsWorkspace initialLeadId={props.initialLeadId} initialCompanyId={props.initialCompanyId} initialSection={props.initialLeadId || props.initialCompanyId ? 'answers' : undefined} /> : <DiagnosisRecordsView {...props} />}
     </div>
   );
 };
