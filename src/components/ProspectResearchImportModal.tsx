@@ -197,14 +197,18 @@ JSONオブジェクトのみを返してください。形式: {"candidates":[{"
                 </article>
               ))}
             </div>
-            <div className="flex flex-wrap items-center justify-between gap-3 border-t border-slate-800 pt-4">
-              <p className="text-[11px] text-slate-500">選択した候補を会社マスタと見込み企業に登録します。登録後の営業連絡は行いません。</p>
-              <button onClick={importSelected} disabled={isSaving || selectedCount === 0} className="flex items-center gap-2 rounded-lg bg-emerald-600 px-4 py-2.5 text-xs font-bold text-white disabled:opacity-50">
-                {isSaving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Check className="h-4 w-4" />}確認した{selectedCount}社を登録
-              </button>
-            </div>
+            <p className="border-t border-slate-800 pt-3 text-[11px] text-slate-500">選択した候補を会社マスタと見込み企業に登録します。登録後の営業連絡は行いません。</p>
           </section>}
         </div>
+        <footer className="flex shrink-0 flex-wrap items-center justify-between gap-3 border-t border-slate-800 bg-slate-950 px-5 py-3">
+          <p className="text-[11px] text-slate-500">候補の確認中も、このボタンで画面を閉じられます。</p>
+          <div className="flex items-center gap-2">
+            <button type="button" onClick={onClose} className="rounded-lg border border-slate-700 px-4 py-2.5 text-xs font-semibold text-slate-300 hover:bg-slate-800">閉じる</button>
+            {candidates.length > 0 && <button onClick={importSelected} disabled={isSaving || selectedCount === 0} className="flex items-center gap-2 rounded-lg bg-emerald-600 px-4 py-2.5 text-xs font-bold text-white disabled:opacity-50">
+              {isSaving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Check className="h-4 w-4" />}確認した{selectedCount}社を登録
+            </button>}
+          </div>
+        </footer>
       </div>
     </div>
   );
