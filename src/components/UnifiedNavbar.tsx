@@ -34,7 +34,7 @@ export type UnifiedNavTab =
   | 'customer_operations'
   | 'document_templates'
   | TableKey
-  // 商品・サービス
+  // AIプロダクト設計
   | 'product_hub'
   | 'category_hub'
   // 経営・AI社長
@@ -273,10 +273,10 @@ export const UnifiedNavbar: React.FC<UnifiedNavbarProps> = ({
             </div>;
           })()}
 
-          {/* 商品・サービス: 商品定義と開発情報 */}
+          {/* AIプロダクト設計: AIとの共創を中心に、設計済みプロダクトも管理 */}
           {activeSection === 'matrix' && (
             <div className="flex min-w-0 items-center gap-1.5 overflow-x-auto pb-1">
-              <button onClick={() => onTabChange('product_hub')} aria-current={currentTab === 'product_hub' ? 'page' : undefined} className={`px-3 py-1.5 rounded-lg whitespace-nowrap transition-colors flex items-center gap-1.5 ${currentTab === 'product_hub' ? 'bg-cyan-600 text-white font-semibold shadow-sm' : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800'}`}><Package className="w-3.5 h-3.5 text-cyan-400" /><span>商品・サービス</span></button>
+              <button onClick={() => onTabChange('product_hub')} aria-current={currentTab === 'product_hub' ? 'page' : undefined} className={`px-3 py-1.5 rounded-lg whitespace-nowrap transition-colors flex items-center gap-1.5 ${currentTab === 'product_hub' ? 'bg-cyan-600 text-white font-semibold shadow-sm' : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800'}`}><Package className="w-3.5 h-3.5 text-cyan-400" /><span>AIプロダクト設計</span></button>
               <button onClick={() => onTabChange('ai_projects')} aria-current={currentTab === 'ai_projects' ? 'page' : undefined} className={`px-3 py-1.5 rounded-lg whitespace-nowrap transition-colors ${currentTab === 'ai_projects' ? 'bg-cyan-600 text-white font-semibold shadow-sm' : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800'}`}>プロジェクト</button>
               <button onClick={() => onTabChange('ai_tasks')} aria-current={currentTab === 'ai_tasks' || currentTab === 'ai_approvals' ? 'page' : undefined} className={`px-3 py-1.5 rounded-lg whitespace-nowrap transition-colors inline-flex items-center gap-1.5 ${currentTab === 'ai_tasks' || currentTab === 'ai_approvals' ? 'bg-cyan-600 text-white font-semibold shadow-sm' : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800'}`}>
                 <ListTodo className="w-3.5 h-3.5" /><span>共通タスク</span>
