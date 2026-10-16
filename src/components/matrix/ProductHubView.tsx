@@ -113,14 +113,14 @@ export const ProductHubView: React.FC<ProductHubViewProps> = ({
           <div className="flex items-center gap-2">
             <h2 className="text-xl font-black text-white tracking-tight flex items-center gap-2">
               <Package className="w-6 h-6 text-indigo-400" />
-              商品別ハブ (プロダクト・全業種管理)
+              AIプロダクト設計
             </h2>
             <span className="text-xs px-2 py-0.5 rounded-full bg-indigo-500/20 text-indigo-300 border border-indigo-500/30 font-medium">
-              マトリクス縦串ビュー
+              AI共創ワークスペース
             </span>
           </div>
           <p className="text-xs text-slate-400 mt-1">
-            商品・サービスの定義、開発状況、販促素材を管理します。顧客ごとの契約・請求は営業・顧客管理で扱います。
+            AIと対話しながら事業アイデアをプロダクトとして設計し、仕様・提供内容・開発タスクを具体化します。設計したプロダクトの情報や販促素材も管理できます。顧客ごとの契約・請求は営業・顧客管理で扱います。
           </p>
         </div>
 
@@ -130,14 +130,14 @@ export const ProductHubView: React.FC<ProductHubViewProps> = ({
             className="px-4 py-2.5 rounded-xl bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 text-white font-semibold text-xs shadow-lg shadow-purple-600/30 flex items-center gap-2 transition-all cursor-pointer"
           >
             <Sparkles className="w-4 h-4" />
-            <span>AI社長と新商品を共創する</span>
+            <span>AIとプロダクトを設計する</span>
           </button>
           <button
             onClick={() => setIsNewProductModalOpen(true)}
             className="px-3.5 py-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 font-medium text-xs flex items-center gap-1.5 transition-colors cursor-pointer"
           >
             <Plus className="w-4 h-4" />
-            <span>商品手動登録</span>
+            <span>設計済みプロダクトを登録</span>
           </button>
         </div>
       </div>
@@ -526,7 +526,7 @@ export const ProductHubView: React.FC<ProductHubViewProps> = ({
       {isNewProductModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-sm">
           <div className="bg-slate-900 border border-slate-800 rounded-2xl w-full max-w-lg p-6 shadow-2xl">
-            <h3 className="text-base font-bold text-white mb-4">新規商品を手動登録</h3>
+            <h3 className="text-base font-bold text-white mb-4">プロダクトを登録</h3>
             <form onSubmit={handleManualCreate} className="space-y-4">
               <div>
                 <label className="block text-xs font-medium text-slate-300 mb-1">商品名</label>
@@ -571,7 +571,7 @@ export const ProductHubView: React.FC<ProductHubViewProps> = ({
                 <textarea
                   value={manualDesc}
                   onChange={(e) => setManualDesc(e.target.value)}
-                  placeholder="商品やサービスの内容を入力"
+                  placeholder="プロダクトの内容を入力"
                   rows={3}
                   className="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-indigo-500"
                 />
