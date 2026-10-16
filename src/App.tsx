@@ -243,6 +243,7 @@ function AppContent() {
   const activeAbortController = useRef<AbortController | null>(null);
   const taskExecutionInProgress = useRef(false);
   const autoRunTaskIdsRef = useRef<Set<string>>(new Set());
+  const [autoRunQueueRevision, setAutoRunQueueRevision] = useState(0);
 
   // AI President Modals
   const [isPricingModalOpen, setIsPricingModalOpen] = useState(false);
@@ -780,8 +781,11 @@ function AppContent() {
         recordActivityLog('task_updated', `自動化実行:「${rule.name}」のタスク「${candidate.title}」が失敗しました（${message}）`, 'システム');
         setActivityLogs(loadActivityLogs());
       })
-      .finally(() => autoRunTaskIdsRef.current.delete(candidate.id));
-  }, [tasks, automations, workspaceReady, user?.id, handleRunAssignedTask]);
+      .finally(() => {
+        autoRunTaskIdsRef.current.delete(candidate.id);
+        setAutoRunQueueRevision((revision) => revision + 1);
+      });
+  }, [tasks, automations, workspaceReady, user?.id, handleRunAssignedTask, autoRunQueueRevision]);
 
   // --- Pricing Settings ---
   const handleSavePricingRates = (newRates: ModelPricingRate[]) => {
