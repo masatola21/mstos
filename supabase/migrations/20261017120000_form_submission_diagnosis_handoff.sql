@@ -26,6 +26,7 @@ DECLARE
   v_current_status pg_catalog.text;
   v_questionnaire_version pg_catalog.text;
   v_answers pg_catalog.jsonb;
+  v_respondent_phone pg_catalog.text;
   v_conducted_at pg_catalog.timestamptz;
   v_required_keys pg_catalog.text[];
   v_missing_keys pg_catalog.text[];
@@ -116,6 +117,10 @@ BEGIN
     RETURN NULL;
   END IF;
 
+  SELECT phone INTO v_respondent_phone
+  FROM public.contacts
+  WHERE id = v_submission.contact_id;
+
   v_answers := COALESCE(v_submission.answers, '{}'::jsonb) ||
     pg_catalog.jsonb_build_object('_intake', pg_catalog.jsonb_build_object(
       'submissionId', v_submission.id,
@@ -123,6 +128,7 @@ BEGIN
       'submittedAt', v_submission.submitted_at,
       'respondentName', v_submission.respondent_name,
       'respondentEmail', v_submission.respondent_email,
+      'respondentPhone', v_respondent_phone,
       'companyName', v_submission.respondent_company_name
     ));
 
