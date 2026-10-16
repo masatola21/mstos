@@ -60,8 +60,10 @@ function readDefinition(value: Record<string, unknown> | null | undefined, formT
   };
 }
 
-export const DiagnosisFormsWorkspace: React.FC = () => {
-  const [section, setSection] = useState<'forms'|'answers'>('forms');
+interface DiagnosisFormsWorkspaceProps { initialLeadId?: string; initialCompanyId?: string; initialSection?: 'forms'|'answers'; }
+
+export const DiagnosisFormsWorkspace: React.FC<DiagnosisFormsWorkspaceProps> = ({ initialLeadId, initialCompanyId, initialSection }) => {
+  const [section, setSection] = useState<'forms'|'answers'>(initialSection || (initialLeadId || initialCompanyId ? 'answers' : 'forms'));
   const [forms, setForms] = useState<DiagnosisForm[]>([]);
   const [answers, setAnswers] = useState<Submission[]>([]);
   const [selectedId, setSelectedId] = useState('');
@@ -74,6 +76,10 @@ export const DiagnosisFormsWorkspace: React.FC = () => {
   const [error, setError] = useState('');
   const [notice, setNotice] = useState('');
   const [copiedId, setCopiedId] = useState('');
+  const visibleAnswers = answers.filter((answer) =>
+    (!initialLeadId || answer.lead_id === initialLeadId) &&
+    (!initialCompanyId || answer.company_id === initialCompanyId)
+  );
 
   const load = async () => {
     const supabase = getSupabase();
@@ -201,7 +207,7 @@ export const DiagnosisFormsWorkspace: React.FC = () => {
       <div><h2 className="font-bold text-white">フォーム・診断の受付管理</h2><p className="mt-1 text-xs text-slate-400">診断・相談・面談フォームの作成、公開URL、回答をまとめて管理します。</p></div>
       <div className="flex gap-2">
         <button onClick={()=>setSection('forms')} className={'rounded-lg px-3 py-2 text-sm '+(section==='forms'?'bg-blue-600 text-white':'text-slate-300 hover:bg-slate-800')}>フォーム設定</button>
-        <button onClick={()=>setSection('answers')} className={'rounded-lg px-3 py-2 text-sm '+(section==='answers'?'bg-blue-600 text-white':'text-slate-300 hover:bg-slate-800')}>フォーム回答 ({answers.length})</button>
+        <button onClick={()=>setSection('answers')} className={'rounded-lg px-3 py-2 text-sm '+(section==='answers'?'bg-blue-600 text-white':'text-slate-300 hover:bg-slate-800')}>フォーム回答 ({visibleAnswers.length})</button>
         <button onClick={()=>void load()} title="更新" className="rounded-lg border border-slate-700 px-3 py-2 text-slate-300"><RefreshCw className="h-4 w-4"/></button>
       </div>
     </div>
@@ -261,7 +267,7 @@ export const DiagnosisFormsWorkspace: React.FC = () => {
       </form>
     </div>}
     {section==='answers'&&<section className="overflow-hidden rounded-xl border border-slate-800 bg-slate-900">
-      {loading?<p className="p-4 text-sm text-slate-400">読み込み中…</p>:answers.length===0?<p className="p-6 text-center text-sm text-slate-400">フォーム回答はまだありません。</p>:<div className="overflow-x-auto"><table className="w-full text-left text-sm"><thead className="text-xs text-slate-400"><tr className="border-b border-slate-800"><th className="p-3">回答者</th><th className="p-3">フォーム</th><th className="p-3">受付日時</th><th className="p-3">状態</th><th className="p-3">確認</th></tr></thead><tbody>{answers.map(answer=><Fragment key={answer.id}><tr className="border-b border-slate-800/70"><td className="p-3 text-white">{answer.respondent_name||answer.respondent_email||'回答者未特定'}<div className="text-xs text-slate-500">{answer.respondent_email||''}</div>{answer.respondent_company_name&&<div className="mt-1 text-xs text-sky-300">会社名・屋号: {answer.respondent_company_name}</div>}</td><td className="p-3 text-slate-300">{forms.find(form=>form.id===answer.form_id)?.name||answer.form_id.slice(0,8)}</td><td className="p-3 text-slate-400">{new Date(answer.submitted_at).toLocaleString('ja-JP')}</td><td className="p-3 text-slate-300">{answer.status}</td><td className="p-3"><select value={answer.status} onChange={event=>void updateSubmission(answer,event.target.value as Submission['status'])} className="rounded border border-slate-700 bg-slate-950 px-2 py-1 text-xs text-white"><option value="received">受付</option><option value="reviewing">対応中</option><option value="completed">完了</option><option value="rejected">対象外</option></select></td></tr><tr className="border-b border-slate-800/70"><td colSpan={5} className="px-3 pb-3"><details><summary className="cursor-pointer text-xs text-blue-300">回答内容を確認</summary>{(() => {
+      {loading?<p className="p-4 text-sm text-slate-400">読み込み中…</p>:visibleAnswers.length===0?<p className="p-6 text-center text-sm text-slate-400">フォーム回答はまだありません。</p>:<div className="overflow-x-auto"><table className="w-full text-left text-sm"><thead className="text-xs text-slate-400"><tr className="border-b border-slate-800"><th className="p-3">回答者</th><th className="p-3">フォーム</th><th className="p-3">受付日時</th><th className="p-3">状態</th><th className="p-3">確認</th></tr></thead><tbody>{visibleAnswers.map(answer=><Fragment key={answer.id}><tr className="border-b border-slate-800/70"><td className="p-3 text-white">{answer.respondent_name||answer.respondent_email||'回答者未特定'}<div className="text-xs text-slate-500">{answer.respondent_email||''}</div>{answer.respondent_company_name&&<div className="mt-1 text-xs text-sky-300">会社名・屋号: {answer.respondent_company_name}</div>}</td><td className="p-3 text-slate-300">{forms.find(form=>form.id===answer.form_id)?.name||answer.form_id.slice(0,8)}</td><td className="p-3 text-slate-400">{new Date(answer.submitted_at).toLocaleString('ja-JP')}</td><td className="p-3 text-slate-300">{answer.status}</td><td className="p-3"><select value={answer.status} onChange={event=>void updateSubmission(answer,event.target.value as Submission['status'])} className="rounded border border-slate-700 bg-slate-950 px-2 py-1 text-xs text-white"><option value="received">受付</option><option value="reviewing">対応中</option><option value="completed">完了</option><option value="rejected">対象外</option></select></td></tr><tr className="border-b border-slate-800/70"><td colSpan={5} className="px-3 pb-3"><details><summary className="cursor-pointer text-xs text-blue-300">回答内容を確認</summary>{(() => {
               const form = forms.find(item => item.id === answer.form_id);
               const questions = readDefinition(form?.definition, form?.form_type || 'diagnosis').questions;
               const questionById = new Map(questions.map(question => [question.id, question]));
