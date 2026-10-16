@@ -214,7 +214,7 @@ const DiagnosisRecordsView: React.FC<DiagnosisManagerProps> = ({ onOpenRls, init
             【安全ガード作動中】設問定義・必須設問IDが未確定のため、完了（completed）への確定遷移は安全のため意図的にロックされています
           </p>
           <p className="text-amber-200/80 leading-relaxed text-xs">
-            回答の下書き保存（draft / in_progress）および回答変更は通常通り安全にご利用いただけます。設問ID一覧がDB上で確定されるまでは、1〜2問の途中回答で誤って完了化されることを防ぐため、二重の安全防壁で保護されています。
+送信済みフォーム回答は「未確認」として診断に引き継がれます。内容を確認して必要な修正を保存してください。
           </p>
         </div>
       </div>
