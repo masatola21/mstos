@@ -348,7 +348,7 @@ app.post('/api/public/forms/:slug/submissions', async (req, res) => {
     if (contact) {
       const { data: updatedContact, error: updateContactError } = await lineSupabase
         .from('contacts')
-        .update({ full_name: name, ...(phone ? { phone } : {}), ...(matchedCompanyId && !matchingContacts?.[0]?.company_id ? { company_id: matchedCompanyId } : {}) })
+        .update({ full_name: name, ...(phone ? { phone } : {}), ...(matchedCompanyId && !contact.company_id ? { company_id: matchedCompanyId } : {}) })
         .eq('id', contact.id)
         .select('id, full_name, email, phone, company_id')
         .single();
@@ -358,7 +358,7 @@ app.post('/api/public/forms/:slug/submissions', async (req, res) => {
       const { data: insertedContact, error: insertContactError } = await lineSupabase
         .from('contacts')
         .insert({ full_name: name, email, phone: phone || null, company_id: matchedCompanyId, source: 'public_form' })
-        .select('id, full_name, email, phone')
+        .select('id, full_name, email, phone, company_id')
         .single();
       if (insertContactError) throw insertContactError;
       contact = insertedContact;
@@ -369,7 +369,7 @@ app.post('/api/public/forms/:slug/submissions', async (req, res) => {
     const sourceLabel = publicFormSourceLabels[form.form_type];
     const originLabel = utm.source ? `（流入: ${utm.source.slice(0, 80)}）` : '';
     const requestMarker = `[申込 ${requestId}]`;
-    const noteEntry = `${requestMarker} ${form.name}${originLabel} / ${new Date().toISOString()}\n${answerSummary}`;
+    const noteEntry = `${requestMarker} ${form.name}${originLabel} / ${new Date().toISOString()}\n${companyName ? `会社名・屋号（申込時）: ${companyName}\n` : ''}${answerSummary}`;
     const { data: existingLeads, error: leadLookupError } = await lineSupabase
       .from('leads')
       .select('id, notes, source, status, service_type, meeting_date, company_id')
