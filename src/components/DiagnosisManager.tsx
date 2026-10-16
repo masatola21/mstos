@@ -330,7 +330,7 @@ const DiagnosisRecordsView: React.FC<DiagnosisManagerProps> = ({ onOpenRls, init
               ) : (
                 filteredDiagnoses.map((diag) => {
                   const statusInfo = STATUS_LABELS[diag.status] || STATUS_LABELS.received;
-                  const answersCount = Object.keys(diag.answers || {}).length;
+                  const answersCount = Object.keys(diag.answers || {}).filter((key) => key !== '_intake').length;
                   const { totalQuestions } = calculateScores(diag.answers || {});
 
                   return (
@@ -753,8 +753,7 @@ const DiagnosisDetailModal: React.FC<DiagnosisDetailModalProps> = ({
       const saveRes = await saveDiagnosisAnswers(diagnosis.id, answers, {
         memo,
         diagnosis_type: diagnosisType,
-        score: currentScores.totalScore,
-        category_scores: currentScores.categoryScores,
+        ...(isFormDiagnosis ? {} : { score: currentScores.totalScore, category_scores: currentScores.categoryScores }),
       });
       if (saveRes.error) {
         setErrorMsg(saveRes.error.message);
@@ -781,6 +780,7 @@ const DiagnosisDetailModal: React.FC<DiagnosisDetailModalProps> = ({
   }
 
   const statusInfo = STATUS_LABELS[diagnosis.status] || STATUS_LABELS.received;
+  const isFormDiagnosis = diagnosis.questionnaire_version.startsWith('form-');
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-2 sm:p-4 bg-slate-950/80 backdrop-blur-sm animate-fade-in overflow-y-auto">
@@ -855,6 +855,12 @@ const DiagnosisDetailModal: React.FC<DiagnosisDetailModalProps> = ({
             </div>
           )}
 
+          {isFormDiagnosis ? (
+            <div className="rounded-2xl border border-slate-800 bg-slate-950/60 p-4 text-sm text-slate-300">
+              送信済みのフォーム回答を受け付けました。内容を確認してから、診断結果やレポートを作成できます。
+            </div>
+          ) : (
+          <>
           {/* スコア・進捗サマリーカード */}
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 bg-slate-950/60 p-4 rounded-2xl border border-slate-800">
             <div className="space-y-1">
@@ -901,6 +907,8 @@ const DiagnosisDetailModal: React.FC<DiagnosisDetailModalProps> = ({
                 {reports[0].full_report_text || reports[0].summary || 'レポート本文はまだ作成されていません。'}
               </div>
             </details>
+          )}
+          </>
           )}
 
           {/* 設問回答フォーム（カテゴリ別） */}
