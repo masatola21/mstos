@@ -215,13 +215,13 @@ export const ProductCoCreationWizard: React.FC<ProductCoCreationWizardProps> = (
             </div>
             <div>
               <h3 className="font-bold text-white text-base flex items-center gap-2">
-                AI社長と新商品を共創する（新商品開発ウィザード）
+                AIプロダクト設計（新規プロダクトの共創）
                 <span className="text-[10px] px-2 py-0.5 rounded-full bg-purple-500/20 text-purple-300 border border-purple-500/30">
                   全業種対応
                 </span>
               </h3>
               <p className="text-xs text-slate-400">
-                ビジネスモデル選定から要件定義・タスクWBS・マーケ計画までAIと対話で構築
+                構想をAIと対話し、ビジネスモデル・仕様・開発タスク・マーケティング計画まで具体化します。
               </p>
             </div>
           </div>
@@ -268,7 +268,7 @@ export const ProductCoCreationWizard: React.FC<ProductCoCreationWizardProps> = (
             <div className="space-y-4">
               <div>
                 <h4 className="text-sm font-semibold text-white mb-1">
-                  Step 1. どのようなビジネスモデルの商品を開発しますか？
+                  Step 1. どのようなビジネスモデルのプロダクトを設計しますか？
                 </h4>
                 <p className="text-xs text-slate-400">
                   本OSはあらゆる商材に対応しています。最適なテンプレートを選択してください。
@@ -322,10 +322,10 @@ export const ProductCoCreationWizard: React.FC<ProductCoCreationWizardProps> = (
             <div className="space-y-4">
               <div>
                 <h4 className="text-sm font-semibold text-white mb-1">
-                  Step 2. 商品の構想と対象顧客を教えてください
+                  Step 2. プロダクトの構想と対象顧客を教えてください
                 </h4>
                 <p className="text-xs text-slate-400">
-                  大まかなアイデアで構いません。AI社長が具体的なサービス体系とタスクに展開します。
+                  大まかなアイデアで構いません。AIと一緒にサービス体系や開発タスクまで具体化します。
                 </p>
               </div>
 
@@ -407,10 +407,10 @@ export const ProductCoCreationWizard: React.FC<ProductCoCreationWizardProps> = (
               </div>
               <div>
                 <h4 className="text-base font-bold text-white mb-1">
-                  AI社長「シドウ」と商品企画エンジンを起動します
+                  AI社長「シドウ」とプロダクト設計を始めます
                 </h4>
                 <p className="text-xs text-slate-400 max-w-md mx-auto">
-                  入力された構想をもとに、商品仕様、キャッチコピー、WBS開発タスク、マーケティング計画、契約形態を一括設計します。
+                  入力された構想をもとに、プロダクト仕様、キャッチコピー、開発タスク、マーケティング計画、契約形態をAIと一緒に設計します。
                 </p>
               </div>
 
@@ -423,12 +423,12 @@ export const ProductCoCreationWizard: React.FC<ProductCoCreationWizardProps> = (
                   {isGenerating ? (
                     <>
                       <Loader2 className="w-4 h-4 animate-spin" />
-                      <span>AI社長が商品仕様・WBSを策定中...</span>
+                      <span>AIがプロダクト仕様・開発タスクを作成中...</span>
                     </>
                   ) : (
                     <>
                       <Zap className="w-4 h-4" />
-                      <span>AI共創で仕様・タスクを生成する</span>
+                      <span>AIと一緒に仕様・タスクを設計する</span>
                     </>
                   )}
                 </button>
@@ -442,7 +442,7 @@ export const ProductCoCreationWizard: React.FC<ProductCoCreationWizardProps> = (
               <div className="flex items-center justify-between">
                 <div>
                   <h4 className="text-sm font-semibold text-white">
-                    Step 4. AI社長による商品開発プランの確認
+                    Step 4. AIと作成したプロダクト設計案の確認
                   </h4>
                   <p className="text-xs text-slate-400">
                     内容を確認し、問題なければOSに登録して開発プロジェクトを開始します。
@@ -565,7 +565,7 @@ export const ProductCoCreationWizard: React.FC<ProductCoCreationWizardProps> = (
                 className="px-5 py-2.5 rounded-lg text-xs font-bold bg-emerald-600 hover:bg-emerald-500 text-white transition-colors flex items-center gap-1.5 shadow-lg shadow-emerald-600/30 cursor-pointer"
               >
                 <CheckCircle2 className="w-4 h-4" />
-                OSに登録して商品開発を開始する
+                設計内容を登録してプロダクト開発を開始する
               </button>
             )}
           </div>
