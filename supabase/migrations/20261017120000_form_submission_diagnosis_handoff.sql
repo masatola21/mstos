@@ -2,12 +2,13 @@
 ALTER TABLE public.diagnoses
   ALTER COLUMN status SET DEFAULT 'received';
 
+ALTER TABLE public.diagnoses
+  DROP CONSTRAINT IF EXISTS chk_diagnoses_status;
+
 UPDATE public.diagnoses
 SET status = 'received'
 WHERE status IN ('draft', 'in_progress');
 
-ALTER TABLE public.diagnoses
-  DROP CONSTRAINT IF EXISTS chk_diagnoses_status;
 ALTER TABLE public.diagnoses
   ADD CONSTRAINT chk_diagnoses_status
   CHECK (status IN ('received', 'completed', 'generating', 'reported'));
