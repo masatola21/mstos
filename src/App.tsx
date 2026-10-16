@@ -1497,8 +1497,8 @@ function AppContent() {
 
         {currentTab === 'document_templates' && (
           <>
-            <DocumentTemplateView initialCompanyId={customerWorkspaceCompanyId} />
-            <SalesOperationsWorkspace tab="documents" companyId={customerWorkspaceCompanyId} />
+            <DocumentTemplateView key={customerWorkspaceCompanyId || 'all'} initialCompanyId={customerWorkspaceCompanyId} />
+            <SalesOperationsWorkspace tab="documents" companyId={customerWorkspaceCompanyId} onClearCompanyFilter={() => setCustomerWorkspaceCompanyId(undefined)} />
           </>
         )}
 
