@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { getSupabase } from '../../lib/supabaseClient';
-import { Activity, ArrowRight, BadgeCheck, CalendarDays, CheckCircle2, GitBranch, Image as ImageIcon, Mail, MessageCircle, MousePointerClick, Plus, Radio, Save, Tags, Trash2, Users, Webhook, Zap } from 'lucide-react';
+import { Activity, ArrowRight, BadgeCheck, CalendarDays, CheckCircle2, Copy, GitBranch, Image as ImageIcon, Mail, MessageCircle, MousePointerClick, Plus, Radio, Save, Tags, Trash2, Users, Webhook, Zap } from 'lucide-react';
 import { MarketingChannel, MarketingLineMessageType, MarketingScenario, MarketingTrigger } from '../../types/marketing';
 
 interface Props {
@@ -136,6 +136,8 @@ export const MarketingAutomationPrototypeView: React.FC<Props> = ({ scenarios, o
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [form, setForm] = useState(emptyScenario());
   const [notice, setNotice] = useState('');
+  const [externalGoal, setExternalGoal] = useState('');
+  const [externalResult, setExternalResult] = useState('');
   const preparedCount = scenarios.filter((scenario) => scenario.status === 'prepared').length;
   const lineCount = scenarios.filter((scenario) => scenario.channel !== 'email').length;
   const emailCount = scenarios.filter((scenario) => scenario.channel !== 'line').length;
@@ -145,12 +147,16 @@ export const MarketingAutomationPrototypeView: React.FC<Props> = ({ scenarios, o
     setEditing(null);
     setIsFormOpen(true);
     setForm(emptyScenario());
+    setExternalGoal('');
+    setExternalResult('');
     setActiveTab('scenarios');
     setNotice('');
   };
   const startEdit = (scenario: MarketingScenario) => {
     setEditing(scenario);
     setIsFormOpen(true);
+    setExternalGoal('');
+    setExternalResult('');
     setForm({
       name: scenario.name,
       trigger: scenario.trigger,
@@ -211,6 +217,53 @@ export const MarketingAutomationPrototypeView: React.FC<Props> = ({ scenarios, o
   };
   const update = <K extends keyof ReturnType<typeof emptyScenario>>(key: K, value: ReturnType<typeof emptyScenario>[K]) => {
     setForm((current) => ({ ...current, [key]: value }));
+  };
+
+  const copyExternalPrompt = async () => {
+    const prompt = [
+      'あなたはマーケティング施策の設計者です。以下の目的と条件に沿って、配信シナリオの草案を日本語で作成してください。',
+      '個人情報や実在顧客の情報は使わず、汎用的な案にしてください。指定したJSONだけを返し、コードフェンスや説明文は付けないでください。',
+      'JSON項目: name（シナリオ名）, trigger（開始条件の値）, channel（line/email/both）, audience（配信対象）, waitMinutes（待機分）, emailSubject, emailBody, messageBody（LINE本文）, lineMessageType（text/image/flex）, flexAltText, flexTitle, flexBody, flexButtonLabel, flexButtonUrl',
+      '開始条件は次の値から選択: ' + triggerOptions.map((option) => option.value).join(', '),
+      '画像URLやボタンURLは、具体的な公開URLが指定されていない場合は空欄にしてください。',
+      '目的・依頼内容: ' + (externalGoal || '（未入力。現在の設定をもとに改善案を作成）'),
+      '現在の設定: ' + JSON.stringify({ trigger: form.trigger, channel: form.channel, audience: form.audience, waitMinutes: form.waitMinutes, lineMessageType: form.lineMessageType }),
+      'JSON例: {"name":"診断後フォロー","trigger":"diagnosis_completed","channel":"email","audience":"診断完了者","waitMinutes":0,"emailSubject":"診断結果のご案内","emailBody":"本文","messageBody":"","lineMessageType":"text","flexAltText":"","flexTitle":"","flexBody":"","flexButtonLabel":"","flexButtonUrl":""}',
+    ].join('\\n');
+    try {
+      await navigator.clipboard.writeText(prompt);
+      setNotice('外部AIへの依頼文をコピーしました。外部AIの回答を下の欄に貼り付けてください。');
+    } catch {
+      setNotice('コピーできませんでした。ブラウザーのクリップボード権限を確認してください。');
+    }
+  };
+  const applyExternalResult = () => {
+    try {
+      const jsonText = externalResult.replace(/^\\s*```(?:json)?\\s*/i, '').replace(/\\s*```\\s*$/, '').trim();
+      const parsed = JSON.parse(jsonText);
+      if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) throw new Error('object');
+      const next = { ...form };
+      if (typeof parsed.name === 'string') next.name = parsed.name.slice(0, 100);
+      if (typeof parsed.trigger === 'string' && triggerOptions.some((option) => option.value === parsed.trigger)) next.trigger = parsed.trigger;
+      if (parsed.channel === 'line' || parsed.channel === 'email' || parsed.channel === 'both') next.channel = parsed.channel;
+      if (typeof parsed.audience === 'string') next.audience = parsed.audience.slice(0, 160);
+      if (typeof parsed.waitMinutes === 'number' && Number.isFinite(parsed.waitMinutes)) next.waitMinutes = Math.min(525600, Math.max(0, Math.round(parsed.waitMinutes)));
+      if (typeof parsed.emailSubject === 'string') next.emailSubject = parsed.emailSubject.slice(0, 200);
+      if (typeof parsed.emailBody === 'string') next.emailBody = parsed.emailBody.slice(0, 10000);
+      if (typeof parsed.messageBody === 'string') next.messageBody = parsed.messageBody.slice(0, 5000);
+      if (parsed.lineMessageType === 'text' || parsed.lineMessageType === 'image' || parsed.lineMessageType === 'flex') next.lineMessageType = parsed.lineMessageType;
+      if (typeof parsed.lineImageUrl === 'string') next.lineImageUrl = parsed.lineImageUrl;
+      if (typeof parsed.linePreviewImageUrl === 'string') next.linePreviewImageUrl = parsed.linePreviewImageUrl;
+      if (typeof parsed.flexAltText === 'string') next.flexAltText = parsed.flexAltText.slice(0, 400);
+      if (typeof parsed.flexTitle === 'string') next.flexTitle = parsed.flexTitle.slice(0, 120);
+      if (typeof parsed.flexBody === 'string') next.flexBody = parsed.flexBody.slice(0, 800);
+      if (typeof parsed.flexButtonLabel === 'string') next.flexButtonLabel = parsed.flexButtonLabel.slice(0, 20);
+      if (typeof parsed.flexButtonUrl === 'string') next.flexButtonUrl = parsed.flexButtonUrl;
+      setForm(next);
+      setNotice('草案をシナリオ設定に反映しました。内容を確認・編集してから保存してください。');
+    } catch {
+      setNotice('JSONを読み取れませんでした。外部AIの回答をJSON形式で貼り付けてください。');
+    }
   };
 
   const flexPayload = {
@@ -339,6 +392,14 @@ export const MarketingAutomationPrototypeView: React.FC<Props> = ({ scenarios, o
         {isFormOpen ? (
           <form onSubmit={saveScenario} className="rounded-2xl border border-indigo-500/30 bg-slate-900 p-5">
             <div className="mb-4 flex items-center justify-between"><h2 className="font-bold text-white">{editing ? 'シナリオを編集' : '新しいシナリオ'}</h2><button type="button" onClick={() => { setEditing(null); setIsFormOpen(false); setNotice(''); }} className="text-xs text-slate-400 hover:text-white">閉じる</button></div>
+            <section className="mb-4 rounded-xl border border-indigo-500/20 bg-indigo-950/20 p-4">
+              <h3 className="text-sm font-bold text-indigo-100">外部AIでシナリオ草案を作る</h3>
+              <p className="mt-1 text-xs leading-5 text-slate-400">ここではAI APIを呼び出しません。依頼文をコピーして外部AIに貼り、回答を取り込んで確認・編集できます。顧客個人情報は入力しないでください。</p>
+              <label className="mt-3 block text-xs text-slate-300">施策の目的・依頼内容<textarea rows={3} maxLength={3000} value={externalGoal} onChange={(e) => setExternalGoal(e.target.value)} placeholder="例：診断完了後、面談予約につながる案内を3日後にメールで送る" className="mt-1 w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-white" /></label>
+              <button type="button" onClick={() => void copyExternalPrompt()} className="mt-3 flex items-center gap-2 rounded-lg border border-indigo-400/30 px-3 py-2 text-xs font-semibold text-indigo-200 hover:bg-indigo-500/10"><Copy className="h-4 w-4" />外部AIへの依頼文をコピー</button>
+              <label className="mt-4 block text-xs text-slate-300">外部AIの回答（JSON）<textarea rows={5} value={externalResult} onChange={(e) => setExternalResult(e.target.value)} placeholder='{"name":"診断後フォロー","trigger":"diagnosis_completed","channel":"email"}' className="mt-1 w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 font-mono text-xs text-white" /></label>
+              <button type="button" disabled={!externalResult.trim()} onClick={applyExternalResult} className="mt-2 rounded-lg bg-indigo-600 px-3 py-2 text-xs font-semibold text-white hover:bg-indigo-500 disabled:cursor-not-allowed disabled:opacity-50">草案をフォームに反映</button>
+            </section>
             <div className="grid gap-4 md:grid-cols-2">
               <label className="text-xs text-slate-300">シナリオ名<input required maxLength={100} value={form.name} onChange={(e) => update('name', e.target.value)} placeholder="例：診断完了後のフォロー" className="mt-1 w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-white" /></label>
               <label className="text-xs text-slate-300">開始条件<select value={form.trigger} onChange={(e) => update('trigger', e.target.value as MarketingTrigger)} className="mt-1 w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-white">{triggerOptions.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}</select></label>
