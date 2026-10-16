@@ -805,8 +805,8 @@ const DiagnosisDetailModal: React.FC<DiagnosisDetailModalProps> = ({
           questionnaireVersion: diagnosis.questionnaire_version,
           answers: Object.fromEntries(answerEntries),
           internalMemo: memo,
-          score: diagnosis.score ?? currentScores.totalScore,
-          categoryScores: diagnosis.category_scores ?? currentScores.categoryScores,
+          score: diagnosis.questionnaire_version.startsWith('form-') ? null : diagnosis.score ?? currentScores.totalScore,
+          categoryScores: diagnosis.questionnaire_version.startsWith('form-') ? null : diagnosis.category_scores ?? currentScores.categoryScores,
         },
       };
       const prompt = `あなたは中小企業向け経営診断レポートの作成担当です。以下の社内CRM情報と診断回答だけを根拠に、日本語で顧客向けの診断レポート草案を作成してください。
