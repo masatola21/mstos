@@ -454,7 +454,7 @@ export async function createDiagnosis(params: {
   }
 }
 
-// 診断の回答保存（下書き保存・回答変更）
+// 診断の回答保存（回答内容の変更）
 // 【重要】status 列は直接更新不可。answers, memo, category_scores, score 等のみを更新。
 // completed / reported の場合はDB側トリガーで直接編集が拒否されます。
 export async function saveDiagnosisAnswers(
@@ -504,9 +504,8 @@ export async function saveDiagnosisAnswers(
 
 // 診断ステータス変更 RPC 呼び出し
 // 【重要】statusの更新は update_diagnosis_status RPC 経由に限定。
-// 許可ステータス: 'draft' | 'in_progress' | 'completed'
-// completed 遷移時は設問ID未確定安全ガードによりエラーが返されます。
-// completed -> draft / in_progress 差し戻し時は score, category_scores, conducted_at が自動リセットされます。
+// 許可ステータス: 'received' | 'completed'
+// completed 遷移時は必須設問の回答を確認します。
 export async function updateDiagnosisStatus(
   diagnosisId: string,
   newStatus: DiagnosisStatus
@@ -568,7 +567,7 @@ export async function fetchDiagnosisCounts(): Promise<{
   if (!supabase) {
     return {
       total: 0,
-      byStatus: { draft: 0, in_progress: 0, completed: 0, generating: 0, reported: 0 },
+      byStatus: { received: 0, completed: 0, generating: 0, reported: 0 },
       error: { type: 'NOT_CONFIGURED', message: 'Supabaseが初期化されていません。' }
     };
   }
@@ -578,14 +577,13 @@ export async function fetchDiagnosisCounts(): Promise<{
     if (error) {
       return {
         total: 0,
-        byStatus: { draft: 0, in_progress: 0, completed: 0, generating: 0, reported: 0 },
+        byStatus: { received: 0, completed: 0, generating: 0, reported: 0 },
         error: parseSupabaseError(error)
       };
     }
 
     const byStatus: Record<DiagnosisStatus, number> = {
-      draft: 0,
-      in_progress: 0,
+      received: 0,
       completed: 0,
       generating: 0,
       reported: 0
@@ -605,7 +603,7 @@ export async function fetchDiagnosisCounts(): Promise<{
   } catch (err: any) {
     return {
       total: 0,
-      byStatus: { draft: 0, in_progress: 0, completed: 0, generating: 0, reported: 0 },
+      byStatus: { received: 0, completed: 0, generating: 0, reported: 0 },
       error: parseSupabaseError(err)
     };
   }
