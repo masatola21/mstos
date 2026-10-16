@@ -227,7 +227,7 @@ export const MarketingAutomationPrototypeView: React.FC<Props> = ({ scenarios, o
       '開始条件は次の値から選択: ' + triggerOptions.map((option) => option.value).join(', '),
       '画像URLやボタンURLは、具体的な公開URLが指定されていない場合は空欄にしてください。',
       '目的・依頼内容: ' + (externalGoal || '（未入力。現在の設定をもとに改善案を作成）'),
-      '現在の設定: ' + JSON.stringify({ trigger: form.trigger, channel: form.channel, audience: form.audience.startsWith('segment:') ? '保存済みセグメント' : form.audience, waitMinutes: form.waitMinutes, lineMessageType: form.lineMessageType }),
+      '現在の設定: ' + JSON.stringify({ trigger: form.trigger, channel: form.channel, waitMinutes: form.waitMinutes, lineMessageType: form.lineMessageType }),
       'JSON例: {"name":"診断後フォロー","trigger":"diagnosis_completed","channel":"email","audience":"診断完了者","waitMinutes":0,"emailSubject":"診断結果のご案内","emailBody":"本文","messageBody":"","lineMessageType":"text","flexAltText":"","flexTitle":"","flexBody":"","flexButtonLabel":"","flexButtonUrl":""}',
     ].join('\n');
     try {
@@ -246,7 +246,7 @@ export const MarketingAutomationPrototypeView: React.FC<Props> = ({ scenarios, o
       if (typeof parsed.name === 'string') next.name = parsed.name.slice(0, 100);
       if (typeof parsed.trigger === 'string' && triggerOptions.some((option) => option.value === parsed.trigger)) next.trigger = parsed.trigger;
       if (parsed.channel === 'line' || parsed.channel === 'email' || parsed.channel === 'both') next.channel = parsed.channel;
-      if (typeof parsed.audience === 'string') next.audience = parsed.audience.slice(0, 160);
+      if (typeof parsed.audience === 'string' && !form.audience.startsWith('segment:')) next.audience = parsed.audience.slice(0, 160);
       if (typeof parsed.waitMinutes === 'number' && Number.isFinite(parsed.waitMinutes)) next.waitMinutes = Math.min(525600, Math.max(0, Math.round(parsed.waitMinutes)));
       if (typeof parsed.emailSubject === 'string') next.emailSubject = parsed.emailSubject.slice(0, 200);
       if (typeof parsed.emailBody === 'string') next.emailBody = parsed.emailBody.slice(0, 10000);
