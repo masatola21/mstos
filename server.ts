@@ -192,6 +192,252 @@ app.post('/api/line/webhook', express.raw({ type: 'application/json', limit: '1m
 
 app.use(express.json({ limit: '10mb' }));
 
+const publicFormRateLimits = new Map<string, { count: number; resetAt: number }>();
+const defaultPublicQuestionIds: Record<string, string[]> = {
+  diagnosis: ['opening_timing', 'current_challenge'],
+  consultation: ['consultation_topic'],
+  meeting: ['meeting_date', 'meeting_topic'],
+};
+const defaultPublicRequiredQuestionIds: Record<string, string[]> = {
+  diagnosis: ['opening_timing', 'current_challenge'],
+  consultation: ['consultation_topic'],
+  meeting: ['meeting_date', 'meeting_topic'],
+};
+const publicFormSourceLabels: Record<string, string> = {
+  diagnosis: '診断フォーム',
+  consultation: '相談申込フォーム',
+  meeting: '面談申込フォーム',
+};
+const validPublicFormTypes = new Set(['diagnosis', 'consultation', 'meeting']);
+
+function isPublicUuid(value: unknown): value is string {
+  return typeof value === 'string' && /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value);
+}
+
+function publicFormRateLimited(ip: string): boolean {
+  const now = Date.now();
+  const current = publicFormRateLimits.get(ip);
+  if (!current || current.resetAt <= now) {
+    publicFormRateLimits.set(ip, { count: 1, resetAt: now + 60_000 });
+    if (publicFormRateLimits.size > 5_000) {
+      for (const [key, value] of publicFormRateLimits) if (value.resetAt <= now) publicFormRateLimits.delete(key);
+    }
+    return false;
+  }
+  current.count += 1;
+  return current.count > 10;
+}
+
+app.get('/api/public/forms/:slug', async (req, res) => {
+  if (!lineSupabase) return res.status(503).json({ error: 'フォーム受付サーバーが設定されていません。' });
+  const slug = String(req.params.slug || '');
+  if (!/^[a-z0-9ぁ-んァ-ヶ一-龠-]{1,120}$/i.test(slug)) return res.status(404).json({ error: 'フォームが見つかりません。' });
+  try {
+    const { data: form, error } = await lineSupabase
+      .from('diagnosis_forms')
+      .select('name, form_type, definition, privacy_notice')
+      .eq('public_slug', slug)
+      .eq('status', 'published')
+      .maybeSingle();
+    if (error) throw error;
+    if (!form || !validPublicFormTypes.has(form.form_type)) return res.status(404).json({ error: 'このフォームは公開されていないか、受付を終了しています。' });
+    return res.json({
+      form: {
+        name: form.name,
+        formType: form.form_type,
+        definition: form.definition && typeof form.definition === 'object' ? form.definition : {},
+        privacyNotice: form.privacy_notice || '',
+      },
+    });
+  } catch (error) {
+    console.error('Public form lookup failed:', error instanceof Error ? error.message : 'unknown error');
+    return res.status(500).json({ error: 'フォームを読み込めませんでした。' });
+  }
+});
+
+app.post('/api/public/forms/:slug/submissions', async (req, res) => {
+  if (!lineSupabase) return res.status(503).json({ error: 'フォーム受付サーバーが設定されていません。' });
+  const ip = req.ip || req.socket.remoteAddress || 'unknown';
+  if (publicFormRateLimited(ip)) return res.status(429).json({ error: '送信回数が上限に達しました。少し時間をおいて再度お試しください。' });
+
+  const slug = String(req.params.slug || '');
+  const body = req.body && typeof req.body === 'object' && !Array.isArray(req.body) ? req.body : {};
+  const serializedBody = JSON.stringify(body);
+  if (serializedBody.length > 50_000) return res.status(413).json({ error: '入力内容が大きすぎます。' });
+  if (!/^[a-z0-9ぁ-んァ-ヶ一-龠-]{1,120}$/i.test(slug)) return res.status(404).json({ error: 'フォームが見つかりません。' });
+
+  const name = typeof body.name === 'string' ? body.name.trim().slice(0, 120) : '';
+  const email = typeof body.email === 'string' ? body.email.trim().toLowerCase().slice(0, 254) : '';
+  const phone = typeof body.phone === 'string' ? body.phone.trim().slice(0, 40) : '';
+  const requestId = body.requestId;
+  if (!name || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email) || !isPublicUuid(requestId) || body.privacyAgreed !== true) {
+    return res.status(400).json({ error: 'お名前・有効なメールアドレス・個人情報の同意をご確認ください。' });
+  }
+  const answers = body.answers && typeof body.answers === 'object' && !Array.isArray(body.answers) ? body.answers as Record<string, unknown> : {};
+  if (Object.values(answers).some((value) => typeof value !== 'string' && typeof value !== 'boolean') ||
+      Object.values(answers).some((value) => typeof value === 'string' && value.length > 4_000)) {
+    return res.status(400).json({ error: '回答内容を確認してください。' });
+  }
+  const utmInput = body.utm && typeof body.utm === 'object' && !Array.isArray(body.utm) ? body.utm as Record<string, unknown> : {};
+  const utm: Record<string, string> = {};
+  for (const key of ['source', 'utm_source', 'utm_medium', 'utm_campaign']) {
+    const value = utmInput[key];
+    if (typeof value === 'string' && value.trim()) utm[key] = value.trim().slice(0, 120);
+  }
+
+  try {
+    const { data: form, error: formError } = await lineSupabase
+      .from('diagnosis_forms')
+      .select('id, name, form_type, definition, status')
+      .eq('public_slug', slug)
+      .eq('status', 'published')
+      .maybeSingle();
+    if (formError) throw formError;
+    if (!form || !validPublicFormTypes.has(form.form_type)) return res.status(404).json({ error: 'このフォームは公開されていないか、受付を終了しています。' });
+
+    const { data: priorSubmission, error: priorError } = await lineSupabase
+      .from('diagnosis_submissions')
+      .select('id, lead_id')
+      .eq('idempotency_key', requestId)
+      .maybeSingle();
+    if (priorError) throw priorError;
+    if (priorSubmission) return res.json({ success: true, duplicate: true, leadId: priorSubmission.lead_id });
+
+    const definition = form.definition && typeof form.definition === 'object' ? form.definition as Record<string, unknown> : {};
+    const configuredQuestions = Array.isArray(definition.questions) ? definition.questions : [];
+    const questionIds = configuredQuestions
+      .filter((question: any) => question && typeof question.id === 'string')
+      .map((question: any) => question.id as string);
+    const allowedQuestionIds = new Set(questionIds.length ? questionIds : defaultPublicQuestionIds[form.form_type]);
+    if (Object.keys(answers).some((key) => !allowedQuestionIds.has(key))) {
+      return res.status(400).json({ error: 'フォームの設問が更新されています。ページを再読み込みして再入力してください。' });
+    }
+    const cleanAnswers = Object.fromEntries(Object.entries(answers).filter(([key]) => allowedQuestionIds.has(key)));
+    const requiredQuestionIds = configuredQuestions.length
+      ? (configuredQuestions as any[]).filter((question) => question?.required && typeof question.id === 'string').map((question) => question.id as string)
+      : defaultPublicRequiredQuestionIds[form.form_type];
+    for (const questionId of requiredQuestionIds) {
+      const answer = cleanAnswers[questionId];
+      if (answer === undefined || answer === '' || answer === false) return res.status(400).json({ error: '必須の設問に回答してください。' });
+    }
+
+    const escapedEmail = email.replace(/\\/g, '\\\\').replace(/%/g, '\\%').replace(/_/g, '\\_');
+    const { data: matchingContacts, error: contactLookupError } = await lineSupabase
+      .from('contacts')
+      .select('id, full_name, email, phone')
+      .ilike('email', escapedEmail)
+      .order('created_at', { ascending: true })
+      .limit(1);
+    if (contactLookupError) throw contactLookupError;
+
+    let contact = matchingContacts?.[0];
+    if (contact) {
+      const { data: updatedContact, error: updateContactError } = await lineSupabase
+        .from('contacts')
+        .update({ full_name: name, ...(phone ? { phone } : {}) })
+        .eq('id', contact.id)
+        .select('id, full_name, email, phone')
+        .single();
+      if (updateContactError) throw updateContactError;
+      contact = updatedContact;
+    } else {
+      const { data: insertedContact, error: insertContactError } = await lineSupabase
+        .from('contacts')
+        .insert({ full_name: name, email, phone: phone || null, source: 'public_form' })
+        .select('id, full_name, email, phone')
+        .single();
+      if (insertContactError) throw insertContactError;
+      contact = insertedContact;
+    }
+
+    const answerSummary = JSON.stringify(cleanAnswers).slice(0, 6_000);
+    const sourceLabel = publicFormSourceLabels[form.form_type];
+    const originLabel = utm.source ? `（流入: ${utm.source.slice(0, 80)}）` : '';
+    const requestMarker = `[申込 ${requestId}]`;
+    const noteEntry = `${requestMarker} ${form.name}${originLabel} / ${new Date().toISOString()}\n${answerSummary}`;
+    const { data: existingLeads, error: leadLookupError } = await lineSupabase
+      .from('leads')
+      .select('id, notes, source, status, service_type, meeting_date')
+      .eq('contact_id', contact.id)
+      .order('created_at', { ascending: false })
+      .limit(1);
+    if (leadLookupError) throw leadLookupError;
+
+    let lead = existingLeads?.[0];
+    const meetingDate = typeof cleanAnswers.meeting_date === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(cleanAnswers.meeting_date)
+      ? cleanAnswers.meeting_date
+      : null;
+    if (lead) {
+      if (typeof lead.notes !== 'string' || !lead.notes.includes(requestMarker)) {
+        const notes = [lead.notes, noteEntry].filter(Boolean).join('\n\n').slice(-12_000);
+        const { data: updatedLead, error: updateLeadError } = await lineSupabase
+          .from('leads')
+          .update({
+            notes,
+            last_contacted_at: new Date().toISOString(),
+            ...(lead.service_type ? {} : { service_type: '介護保険外開業パッケージ' }),
+            ...(meetingDate ? { meeting_date: meetingDate } : {}),
+          })
+          .eq('id', lead.id)
+          .select('id')
+          .single();
+        if (updateLeadError) throw updateLeadError;
+        lead = { ...lead, id: updatedLead.id };
+      }
+    } else {
+      const { data: insertedLead, error: insertLeadError } = await lineSupabase
+        .from('leads')
+        .insert({
+          contact_id: contact.id,
+          company_id: null,
+          source: `${sourceLabel}${originLabel}`,
+          service_type: '介護保険外開業パッケージ',
+          priority_channel: utm.source === 'line' || utm.utm_source === 'line' ? 'LINE' : 'メール',
+          status: form.form_type === 'diagnosis' ? '診断申込' : form.form_type === 'consultation' ? '相談申込' : '面談申込',
+          first_registered_at: new Date().toISOString(),
+          last_contacted_at: new Date().toISOString(),
+          ...(meetingDate ? { meeting_date: meetingDate } : {}),
+          notes: noteEntry,
+        })
+        .select('id')
+        .single();
+      if (insertLeadError) throw insertLeadError;
+      lead = { id: insertedLead.id };
+    }
+
+    const { data: submission, error: submissionError } = await lineSupabase
+      .from('diagnosis_submissions')
+      .insert({
+        form_id: form.id,
+        contact_id: contact.id,
+        company_id: null,
+        lead_id: lead.id,
+        respondent_name: name,
+        respondent_email: email,
+        answers: cleanAnswers,
+        privacy_agreed_at: new Date().toISOString(),
+        source: 'public_form',
+        utm,
+        idempotency_key: requestId,
+      })
+      .select('id')
+      .single();
+    if (submissionError) {
+      if (submissionError.code === '23505') {
+        const { data: duplicate } = await lineSupabase.from('diagnosis_submissions')
+          .select('id, lead_id').eq('idempotency_key', requestId).maybeSingle();
+        if (duplicate) return res.json({ success: true, duplicate: true, leadId: duplicate.lead_id });
+      }
+      throw submissionError;
+    }
+    return res.status(201).json({ success: true, submissionId: submission.id, leadId: lead.id });
+  } catch (error) {
+    console.error('Public intake submission failed:', error instanceof Error ? error.message : 'unknown error');
+    return res.status(500).json({ error: '申込を保存できませんでした。時間をおいて再度お試しください。' });
+  }
+});
+
+
 function boundChatMessages(input: Array<{ role?: unknown; content?: unknown }> = []) {
   const messages = input
     .filter((message) => typeof message.content === 'string')
