@@ -97,6 +97,27 @@ export const DiagnosisFormsWorkspace: React.FC = () => {
     await load();
   };
 
+  const publishSelectedForm=()=>{
+    const form=forms.find(item=>item.id===selectedId);
+    if(!form)return;
+    let definition:Record<string,unknown>;
+    try {
+      definition=JSON.parse(definitionText);
+      if(!definition||typeof definition!=='object'||Array.isArray(definition))throw new Error();
+    } catch {
+      setError('設問定義はJSONオブジェクトで入力してください。');
+      return;
+    }
+    const hasUnsavedChanges=name.trim()!==form.name||formType!==(form.form_type||'diagnosis')||
+      privacyNotice.trim()!==(form.privacy_notice||'')||
+      JSON.stringify(definition)!==JSON.stringify(form.definition||{});
+    if(hasUnsavedChanges){
+      setError('公開前にフォームの変更を保存してください。');
+      return;
+    }
+    void updateStatus(form,'published');
+  };
+
   const updateSubmission=async(submission:Submission,status:Submission['status'])=>{
     const supabase=getSupabase();if(!supabase)return;
     setError('');
@@ -147,7 +168,7 @@ export const DiagnosisFormsWorkspace: React.FC = () => {
         </li>)}</ul>}
         {selectedId&&<div className="mt-4 flex flex-wrap gap-2 border-t border-slate-800 pt-3">
           {forms.find(x=>x.id===selectedId)?.status!=='published'
-            ? <button onClick={()=>{const f=forms.find(x=>x.id===selectedId);if(f)void updateStatus(f,'published')}} className="rounded bg-emerald-700 px-3 py-1.5 text-xs font-semibold text-white">公開する</button>
+            ? <button onClick={publishSelectedForm} className="rounded bg-emerald-700 px-3 py-1.5 text-xs font-semibold text-white">公開する</button>
             : <button onClick={()=>{const f=forms.find(x=>x.id===selectedId);if(f)void updateStatus(f,'paused')}} className="rounded border border-amber-800 px-3 py-1.5 text-xs text-amber-300">受付停止</button>}
           <button onClick={()=>{const f=forms.find(x=>x.id===selectedId);if(f)void updateStatus(f,'archived')}} className="rounded border border-rose-800 px-3 py-1.5 text-xs text-rose-300">アーカイブ</button>
           <button onClick={()=>{const f=forms.find(x=>x.id===selectedId);if(f)void updateStatus(f,'draft')}} className="rounded border border-slate-700 px-3 py-1.5 text-xs text-slate-300">下書きに戻す</button>
