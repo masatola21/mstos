@@ -17,8 +17,8 @@ const triggerLabels: Record<AutomationRule['triggerEvent'], string> = {
 
 const aiModeLabels: Record<AutomationRule['aiMode'], string> = {
   suggest: '提案する',
-  prepare: 'AIに初稿作成を依頼する（実行はタスクから）',
-  execute: '担当AIタスクを作成する（実行はタスクから）',
+  prepare: '担当AIを設定する（実行はタスクから）',
+  execute: '自動実行（未接続・現在はタスク作成のみ）',
 };
 
 const approvalLabels: Record<AutomationRule['approvalPolicy'], string> = {
