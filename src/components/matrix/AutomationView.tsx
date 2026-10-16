@@ -1,6 +1,7 @@
 import React from 'react';
 import { Bot, Check, Clock3, GitBranch, ShieldCheck, Sparkles, Zap } from 'lucide-react';
 import { AutomationRule } from '../../types/matrix';
+import { AI_WORK_MODES } from '../../data/aiWorkModes';
 
 interface AutomationViewProps {
   automations: AutomationRule[];
@@ -21,7 +22,7 @@ const aiModeLabels: Record<AutomationRule['aiMode'], string> = {
   execute: '自動実行（未接続・現在はタスク作成のみ）',
 };
 
-const connectedTriggerEvents = new Set<AutomationRule['triggerEvent']>(['deal_won', 'contract_signed', 'invoice_overdue']);
+const connectedTriggerEvents = new Set<AutomationRule['triggerEvent']>(['diagnosis_submitted', 'deal_won', 'contract_signed', 'invoice_overdue']);
 
 const approvalLabels: Record<AutomationRule['approvalPolicy'], string> = {
   always: '毎回、人が確認してから進める',
@@ -50,7 +51,7 @@ export const AutomationView: React.FC<AutomationViewProps> = ({ automations, onU
         <div className="mt-4 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-amber-700/40 bg-amber-950/30 p-3">
           <div className="flex items-start gap-2 text-xs leading-5 text-amber-100">
             <Clock3 className="mt-0.5 h-4 w-4 shrink-0 text-amber-300" />
-            <span>イベント連携済み：商談から顧客への移行時、締結済み契約の登録時、請求書を期限超過へ変更した時に、ルールが有効なら期限付きタスクを作成します。同一レコードからの重複作成は防止します。診断回答・支援マイルストーンの連携、承認ポリシーの自動適用、実行履歴は未接続です。AI APIや顧客連絡は自動実行せず、タスクから担当者が開始します。</span>
+            <span>イベント連携済み：ログイン中にアプリが起動している間、診断フォーム回答をリアルタイム受信します。また、商談から顧客への移行、締結済み契約の登録、請求書を期限超過へ変更した時に、ルールが有効なら期限付きタスクを作成します。同一レコードからの重複作成を防止します。アプリ停止中のバックグラウンド受信、支援マイルストーン、承認ポリシーの自動適用、実行履歴は未接続です。AI APIや顧客連絡は自動実行せず、タスクから担当者が開始します。</span>
           </div>
           <span className="whitespace-nowrap text-xs text-slate-400">有効設定 {enabledCount} / {automations.length}</span>
         </div>
@@ -86,7 +87,7 @@ export const AutomationView: React.FC<AutomationViewProps> = ({ automations, onU
               <p className="mt-1 text-sm text-slate-200">{triggerLabels[rule.triggerEvent]}</p>
             </div>
 
-            <div className="grid gap-3 sm:grid-cols-2">
+            <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
               <label className="block text-xs font-medium text-slate-300">
                 <span className="mb-1.5 flex items-center gap-1.5"><Clock3 className="h-3.5 w-3.5 text-amber-300" />タスク期限（発生後の日数）</span>
                 <input type="number" min={1} max={90} value={rule.taskDueInDays} onChange={(event) => {
@@ -102,6 +103,12 @@ export const AutomationView: React.FC<AutomationViewProps> = ({ automations, onU
                   className="w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-xs text-white"
                 >
                   {Object.entries(aiModeLabels).map(([value, label]) => <option key={value} value={value}>{label}</option>)}
+                </select>
+              </label>
+              <label className="block text-xs font-medium text-slate-300">
+                <span className="mb-1.5 flex items-center gap-1.5"><Bot className="h-3.5 w-3.5 text-indigo-300" />担当役割AI（提案モードは人が担当）</span>
+                <select value={rule.workModeId || 'president'} onChange={(event) => onUpdateAutomation(rule.id, { workModeId: event.target.value as AutomationRule['workModeId'], updatedAt: Date.now() })} className="w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-xs text-white">
+                  {AI_WORK_MODES.map((mode) => <option key={mode.id} value={mode.id}>{mode.label}（{mode.name}）</option>)}
                 </select>
               </label>
               <label className="block text-xs font-medium text-slate-300">
