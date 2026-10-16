@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Company, Product, Lead, Customer } from '../types/database';
+import { ProposalPlanTemplatePicker, ProposalPlanTemplate } from './ProposalPlanTemplatePicker';
 import { 
   fetchProductsList, 
   fetchCustomerByCompanyId, 
@@ -51,7 +52,8 @@ export const StageTransitionModal: React.FC<StageTransitionModalProps> = ({
   // Form states for target record creation
   // For Prospect -> Lead
   const [leadSource, setLeadSource] = useState('');
-  const [serviceType, setServiceType] = useState('AI経営OS');
+  const [serviceType, setServiceType] = useState('');
+  const [serviceTypeProductChoice, setServiceTypeProductChoice] = useState('');
   const [priorityChannel, setPriorityChannel] = useState('メール');
   const [leadStatus, setLeadStatus] = useState('新規');
   const [leadNotes, setLeadNotes] = useState('');
@@ -59,6 +61,7 @@ export const StageTransitionModal: React.FC<StageTransitionModalProps> = ({
   // For Lead -> Deal
   const [dealId, setDealId] = useState('');
   const [proposalPlanName, setProposalPlanName] = useState('');
+  const [proposalPlanTemplateId, setProposalPlanTemplateId] = useState('');
   const [proposalStatus, setProposalStatus] = useState('初回面談');
   const [productId, setProductId] = useState('');
   const [initialFee, setInitialFee] = useState<number | string>('');
@@ -84,26 +87,43 @@ export const StageTransitionModal: React.FC<StageTransitionModalProps> = ({
 
     if (type === 'prospect_to_lead') {
       setLeadSource(sourceRecord.source || '見込みアプローチ');
-      setServiceType('AI経営OS Standard');
+      setServiceType(sourceRecord.service_type || '');
+      setServiceTypeProductChoice('');
       setPriorityChannel(sourceRecord.approach_method === 'LINE' ? 'LINE' : 'メール');
       setLeadStatus('新規');
       setLeadNotes(sourceRecord.memo ? `【見込み時メモ引継ぎ】\n${sourceRecord.memo}` : '');
+      void fetchProductsList().then((prods) => {
+        setProducts(prods);
+        const suggestedId = sourceRecord.recommended_product_id || sourceRecord.product_id || '';
+        const matched = prods.find((product) => product.id === suggestedId)
+          || prods.find((product) => product.product_name === sourceRecord.service_type);
+        setServiceTypeProductChoice(matched?.id || (sourceRecord.service_type ? '__custom' : ''));
+        if (matched) setServiceType(matched.product_name);
+      });
     } else if (type === 'lead_to_deal') {
       const randomCode = Math.floor(1000 + Math.random() * 9000);
       setDealId(`DEAL-${randomCode}`);
       setProposalPlanName(sourceRecord.service_type ? `${sourceRecord.service_type} 導入提案` : '新規導入提案');
+      setProposalPlanTemplateId('');
       setProposalStatus('初回面談');
       setDealMemo(sourceRecord.notes ? `【リード相談引継ぎ】\n${sourceRecord.notes}` : '');
       setMeetingDate(sourceRecord.meeting_date || '');
 
-      fetchProductsList().then((prods) => {
+      void fetchProductsList().then((prods) => {
         setProducts(prods);
-        if (prods.length > 0) {
-          const first = prods[0];
-          setProductId(first.id);
-          setInitialFee(first.initial_fee ?? 0);
-          setMonthlyFee(first.monthly_fee ?? 0);
-          setTotalAmount((Number(first.initial_fee || 0) + Number(first.monthly_fee || 0)));
+        const suggestedId = sourceRecord.interested_product_id || sourceRecord.product_id || '';
+        const selected = prods.find((product) => product.id === suggestedId)
+          || prods.find((product) => product.product_name === sourceRecord.service_type);
+        if (selected) {
+          setProductId(selected.id);
+          setInitialFee(selected.initial_fee ?? 0);
+          setMonthlyFee(selected.monthly_fee ?? 0);
+          setTotalAmount(Number(selected.initial_fee || 0) + Number(selected.monthly_fee || 0));
+        } else {
+          setProductId('');
+          setInitialFee('');
+          setMonthlyFee('');
+          setTotalAmount('');
         }
       });
     } else if (type === 'deal_to_customer') {
@@ -128,6 +148,7 @@ export const StageTransitionModal: React.FC<StageTransitionModalProps> = ({
   // 商品変更時に金額を連動
   const handleProductChange = (newProductId: string) => {
     setProductId(newProductId);
+    setProposalPlanTemplateId('');
     const selected = products.find(p => p.id === newProductId);
     if (selected) {
       const initF = selected.initial_fee ?? 0;
@@ -153,6 +174,7 @@ export const StageTransitionModal: React.FC<StageTransitionModalProps> = ({
           company_id: companyId,
           source: leadSource.trim() || '見込みアプローチ',
           service_type: serviceType.trim() || null,
+          interested_product_id: serviceTypeProductChoice && serviceTypeProductChoice !== '__custom' ? serviceTypeProductChoice : null,
           priority_channel: priorityChannel || 'メール',
           status: leadStatus || '新規',
           notes: leadNotes.trim() || null,
@@ -188,6 +210,7 @@ export const StageTransitionModal: React.FC<StageTransitionModalProps> = ({
           company_id: companyId || null,
           lead_id: sourceRecord.id, // lead_id を引き継ぎ
           proposal_plan_name: proposalPlanName.trim(),
+          proposal_plan_template_id: proposalPlanTemplateId || null,
           proposal_type: selectedProd?.product_type || '月額サブスク',
           proposal_status: proposalStatus,
           product_id: productId || null,
@@ -403,13 +426,29 @@ export const StageTransitionModal: React.FC<StageTransitionModalProps> = ({
                     <label className="block text-xs font-semibold text-slate-300 mb-1">
                       検討サービス種別 (service_type)
                     </label>
-                    <input
-                      type="text"
-                      value={serviceType}
-                      onChange={(e) => setServiceType(e.target.value)}
-                      placeholder="AI経営OS Standard"
+                    <select
+                      value={serviceTypeProductChoice}
+                      onChange={(e) => {
+                        const choice = e.target.value;
+                        const product = products.find((item) => item.id === choice);
+                        setServiceTypeProductChoice(choice);
+                        setServiceType(product?.product_name || '');
+                      }}
                       className="w-full px-3 py-2 rounded-xl bg-slate-950 border border-slate-700 text-slate-200 text-xs outline-none focus:border-blue-500"
-                    />
+                    >
+                      <option value="">商品を選択（未定）</option>
+                      {products.map((product) => <option key={product.id} value={product.id}>{product.product_name}</option>)}
+                      <option value="__custom">その他（自由入力）</option>
+                    </select>
+                    {serviceTypeProductChoice === '__custom' && (
+                      <input
+                        type="text"
+                        value={serviceType}
+                        onChange={(e) => setServiceType(e.target.value)}
+                        placeholder="サービス名を入力"
+                        className="mt-2 w-full px-3 py-2 rounded-xl bg-slate-950 border border-slate-700 text-slate-200 text-xs outline-none focus:border-blue-500"
+                      />
+                    )}
                   </div>
 
                   <div>
@@ -519,6 +558,27 @@ export const StageTransitionModal: React.FC<StageTransitionModalProps> = ({
                       ))}
                     </select>
                   </div>
+
+                  <ProposalPlanTemplatePicker
+                    productId={productId}
+                    selectedTemplateId={proposalPlanTemplateId}
+                    name={proposalPlanName}
+                    description={dealMemo}
+                    initialFee={initialFee}
+                    monthlyFee={monthlyFee}
+                    totalAmount={totalAmount}
+                    onApply={(template?: ProposalPlanTemplate) => {
+                      setProposalPlanTemplateId(template?.id || '');
+                      if (template) {
+                        setProductId(template.product_id);
+                        setProposalPlanName(template.name);
+                        setDealMemo(template.description || '');
+                        setInitialFee(template.initial_fee ?? '');
+                        setMonthlyFee(template.monthly_fee ?? '');
+                        setTotalAmount(template.total_amount ?? '');
+                      }
+                    }}
+                  />
 
                   <div>
                     <label className="block text-xs font-semibold text-slate-300 mb-1">
