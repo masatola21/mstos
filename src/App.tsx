@@ -268,7 +268,8 @@ function AppContent() {
   const [tools, setTools] = useState<ManagedToolAsset[]>(() => matrixService.loadTools());
   const [customLists, setCustomLists] = useState<CustomListDefinition[]>(() => matrixService.loadCustomLists());
   const [automations, setAutomations] = useState<AutomationRule[]>(() => matrixService.loadAutomations());
-  const automationSubmissionHandlerRef = useRef<(event: DiagnosisSubmissionAutomationEvent) => void>(() => {});
+  const automationSubmissionHandlerRef = useRef<(event: DiagnosisSubmissionAutomationEvent) => boolean>(() => false);
+  const processedDiagnosisSubmissionIdsRef = useRef<Set<string>>(new Set());
   const [marketingScenarios, setMarketingScenarios] = useState<MarketingScenario[]>(() => loadMarketingScenarios());
 
   // AI社長とMatrixのデータをユーザー単位でSupabaseに同期し、初回は既存LocalStorageを移行する。
@@ -1343,7 +1344,7 @@ function AppContent() {
     relatedRecord?: TaskItem['relatedRecord'];
   }) => {
     const rule = automations.find((item) => item.id === input.ruleId && item.isEnabled);
-    if (!rule || tasks.some((item) => item.sourceAutomationId === rule.id && item.sourceAutomationRecordId === input.recordId)) return;
+    if (!rule || tasks.some((item) => item.sourceAutomationId === rule.id && item.sourceAutomationRecordId === input.recordId)) return false;
     const assignedWorkModeId = rule.workModeId || input.workModeId;
     const mode = AI_WORK_MODES.find((item) => item.id === assignedWorkModeId) || AI_WORK_MODES[0];
     const resolved = resolveWorkMode(mode, aiModelSettings.roleOverrides);
@@ -1377,10 +1378,11 @@ function AppContent() {
     saveTasks(nextTasks);
     recordActivityLog('task_created', `自動化ルール「${rule.name}」から期限付きタスク「${task.title}」を作成しました（期限: ${dueDate}）`, 'システム');
     setActivityLogs(loadActivityLogs());
+    return true;
   };
 
-  const handleDiagnosisSubmissionAutomation = (event: DiagnosisSubmissionAutomationEvent) => {
-    createAutomationTask({
+  const handleDiagnosisSubmissionAutomation = (event: DiagnosisSubmissionAutomationEvent): boolean => {
+    return createAutomationTask({
       ruleId: 'workflow-diagnosis-submitted',
       recordId: event.id,
       title: '診断回答を確認・分析する',
@@ -1471,6 +1473,46 @@ function AppContent() {
     if (!user || !workspaceReady) return;
     const supabase = getSupabase();
     if (!supabase) return;
+    let catchUpStarted = false;
+
+    const processSubmission = (event: DiagnosisSubmissionAutomationEvent) => {
+      if (!event?.id || processedDiagnosisSubmissionIdsRef.current.has(event.id)) return;
+      const created = automationSubmissionHandlerRef.current(event);
+      if (created) processedDiagnosisSubmissionIdsRef.current.add(event.id);
+    };
+
+    const catchUpMissedSubmissions = async () => {
+      const { data: diagnosisForms, error: formsError } = await supabase
+        .from('diagnosis_forms')
+        .select('id')
+        .eq('form_type', 'diagnosis');
+      if (formsError) {
+        console.warn('Could not load diagnosis forms for automation catch-up:', formsError.message);
+        return;
+      }
+      const formIds = (diagnosisForms || []).map((form) => form.id);
+      if (formIds.length === 0) return;
+
+      const pageSize = 500;
+      let offset = 0;
+      while (true) {
+        const { data: submissions, error } = await supabase
+          .from('diagnosis_submissions')
+          .select('id, form_id, lead_id, company_id, diagnosis_id')
+          .in('form_id', formIds)
+          .order('submitted_at', { ascending: true })
+          .range(offset, offset + pageSize - 1);
+        if (error) {
+          console.warn('Could not catch up diagnosis submissions:', error.message);
+          return;
+        }
+        const batch = submissions || [];
+        batch.forEach((submission) => processSubmission(submission as DiagnosisSubmissionAutomationEvent));
+        if (batch.length < pageSize) return;
+        offset += pageSize;
+      }
+    };
+
     const channel = supabase
       .channel(`automation-diagnosis-submissions-${user.id}`)
       .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'diagnosis_submissions' }, (payload) => {
@@ -1482,10 +1524,14 @@ function AppContent() {
               console.warn('Could not identify diagnosis submission type:', error.message);
               return;
             }
-            if (data?.form_type === 'diagnosis') automationSubmissionHandlerRef.current(event);
+            if (data?.form_type === 'diagnosis') processSubmission(event);
           });
       })
       .subscribe((status) => {
+        if (status === 'SUBSCRIBED' && !catchUpStarted) {
+          catchUpStarted = true;
+          void catchUpMissedSubmissions();
+        }
         if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') {
           console.warn('Diagnosis submission automation realtime channel is unavailable.');
         }
