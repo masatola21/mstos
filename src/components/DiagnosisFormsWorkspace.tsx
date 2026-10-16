@@ -7,7 +7,7 @@ type QuestionType = 'text' | 'textarea' | 'select' | 'radio' | 'checkbox' | 'dat
 type FormQuestion = { id: string; label: string; type: QuestionType; required: boolean; options: string[] };
 type FormDefinition = { description: string; questions: FormQuestion[] };
 type DiagnosisForm = { id: string; name: string; public_slug: string; form_type: FormType; status: 'draft'|'published'|'paused'|'archived'; questionnaire_version: string; definition: Record<string, unknown>; privacy_notice: string|null; created_at: string };
-type Submission = { id: string; form_id: string; contact_id: string|null; company_id: string|null; respondent_company_name: string|null; lead_id: string|null; status: 'received'|'reviewing'|'completed'|'rejected'; respondent_name: string|null; respondent_email: string|null; answers: Record<string, unknown>; score: number|null; submitted_at: string; reviewer_memo: string|null };
+type Submission = { id: string; form_id: string; contact_id: string|null; company_id: string|null; respondent_company_name: string|null; lead_id: string|null; diagnosis_id?: string|null; status: 'received'|'reviewing'|'completed'|'rejected'; respondent_name: string|null; respondent_email: string|null; answers: Record<string, unknown>; score: number|null; submitted_at: string; reviewer_memo: string|null };
 
 const DEFAULT_PRIVACY_NOTICE = 'ご入力いただいた情報は、診断・相談・面談のお申し込みへの対応および関連するご案内のために利用します。個人情報の取り扱いに関するお問い合わせは、運営者までご連絡ください。なお、この文案は初期例です。実際の利用目的・保管方法・問い合わせ先に合わせて編集してください。';
 const FORM_TYPES: { value: FormType; label: string }[] = [
@@ -77,9 +77,9 @@ function readDefinition(value: Record<string, unknown> | null | undefined, formT
   };
 }
 
-interface DiagnosisFormsWorkspaceProps { initialLeadId?: string; initialCompanyId?: string; initialSection?: 'forms'|'answers'; }
+interface DiagnosisFormsWorkspaceProps { initialLeadId?: string; initialCompanyId?: string; initialSection?: 'forms'|'answers'; onOpenDiagnosis?: (diagnosisId: string) => void; }
 
-export const DiagnosisFormsWorkspace: React.FC<DiagnosisFormsWorkspaceProps> = ({ initialLeadId, initialCompanyId, initialSection }) => {
+export const DiagnosisFormsWorkspace: React.FC<DiagnosisFormsWorkspaceProps> = ({ initialLeadId, initialCompanyId, initialSection, onOpenDiagnosis }) => {
   const [section, setSection] = useState<'forms'|'answers'>(initialSection || (initialLeadId || initialCompanyId ? 'answers' : 'forms'));
   const [forms, setForms] = useState<DiagnosisForm[]>([]);
   const [answers, setAnswers] = useState<Submission[]>([]);
@@ -308,7 +308,7 @@ export const DiagnosisFormsWorkspace: React.FC<DiagnosisFormsWorkspaceProps> = (
       </form>
     </div>}
     {section==='answers'&&<section className="overflow-hidden rounded-xl border border-slate-800 bg-slate-900">
-      {loading?<p className="p-4 text-sm text-slate-400">読み込み中…</p>:visibleAnswers.length===0?<p className="p-6 text-center text-sm text-slate-400">フォーム回答はまだありません。</p>:<div className="overflow-x-auto"><table className="w-full text-left text-sm"><thead className="text-xs text-slate-400"><tr className="border-b border-slate-800"><th className="p-3">回答者</th><th className="p-3">フォーム</th><th className="p-3">受付日時</th><th className="p-3">状態</th><th className="p-3">確認</th></tr></thead><tbody>{visibleAnswers.map(answer=><Fragment key={answer.id}><tr className="border-b border-slate-800/70"><td className="p-3 text-white">{answer.respondent_name||answer.respondent_email||'回答者未特定'}<div className="text-xs text-slate-500">{answer.respondent_email||''}</div>{answer.respondent_company_name&&<div className="mt-1 text-xs text-sky-300">会社名・屋号: {answer.respondent_company_name}</div>}</td><td className="p-3 text-slate-300">{forms.find(form=>form.id===answer.form_id)?.name||answer.form_id.slice(0,8)}</td><td className="p-3 text-slate-400">{new Date(answer.submitted_at).toLocaleString('ja-JP')}</td><td className="p-3 text-slate-300">{answer.status}</td><td className="p-3"><select value={answer.status} onChange={event=>void updateSubmission(answer,event.target.value as Submission['status'])} className="rounded border border-slate-700 bg-slate-950 px-2 py-1 text-xs text-white"><option value="received">受付</option><option value="reviewing">対応中</option><option value="completed">完了</option><option value="rejected">対象外</option></select></td></tr><tr className="border-b border-slate-800/70"><td colSpan={5} className="px-3 pb-3"><details><summary className="cursor-pointer text-xs text-blue-300">回答内容を確認</summary>{(() => {
+      {loading?<p className="p-4 text-sm text-slate-400">読み込み中…</p>:visibleAnswers.length===0?<p className="p-6 text-center text-sm text-slate-400">フォーム回答はまだありません。</p>:<div className="overflow-x-auto"><table className="w-full text-left text-sm"><thead className="text-xs text-slate-400"><tr className="border-b border-slate-800"><th className="p-3">回答者</th><th className="p-3">フォーム</th><th className="p-3">受付日時</th><th className="p-3">状態</th><th className="p-3">確認</th></tr></thead><tbody>{visibleAnswers.map(answer=><Fragment key={answer.id}><tr className="border-b border-slate-800/70"><td className="p-3 text-white">{answer.respondent_name||answer.respondent_email||'回答者未特定'}<div className="text-xs text-slate-500">{answer.respondent_email||''}</div>{answer.respondent_company_name&&<div className="mt-1 text-xs text-sky-300">会社名・屋号: {answer.respondent_company_name}</div>}</td><td className="p-3 text-slate-300">{forms.find(form=>form.id===answer.form_id)?.name||answer.form_id.slice(0,8)}<div className="mt-1 text-xs">{answer.diagnosis_id ? <button type="button" onClick={()=>onOpenDiagnosis?.(answer.diagnosis_id!)} className="text-sky-300 hover:text-sky-200 underline">診断を開く</button> : forms.find(form=>form.id===answer.form_id)?.form_type==='diagnosis' ? <span className="text-amber-300">{answer.company_id ? '診断未作成' : '会社未紐付け'}</span> : null}</div></td><td className="p-3 text-slate-400">{new Date(answer.submitted_at).toLocaleString('ja-JP')}</td><td className="p-3 text-slate-300">{answer.status}</td><td className="p-3"><select value={answer.status} onChange={event=>void updateSubmission(answer,event.target.value as Submission['status'])} className="rounded border border-slate-700 bg-slate-950 px-2 py-1 text-xs text-white"><option value="received">受付</option><option value="reviewing">対応中</option><option value="completed">完了</option><option value="rejected">対象外</option></select></td></tr><tr className="border-b border-slate-800/70"><td colSpan={5} className="px-3 pb-3"><details><summary className="cursor-pointer text-xs text-blue-300">回答内容を確認</summary>{(() => {
               const form = forms.find(item => item.id === answer.form_id);
               const questions = readDefinition(form?.definition, form?.form_type || 'diagnosis').questions;
               const questionById = new Map(questions.map(question => [question.id, question]));
@@ -325,7 +325,7 @@ export const DiagnosisFormsWorkspace: React.FC<DiagnosisFormsWorkspaceProps> = (
                 </div>;
               })}</dl>;
             })()}{answer.reviewer_memo&&<p className="mt-2 text-xs text-slate-400">確認メモ: {answer.reviewer_memo}</p>}</details></td></tr></Fragment>)}</tbody></table></div>}
-      <p className="border-t border-slate-800 p-3 text-xs text-slate-400">回答内容は診断・相談・面談の受付記録として保存され、連絡先とリードに紐付きます。診断結果の作成・送付は後続の工程です。</p>
+      <p className="border-t border-slate-800 p-3 text-xs text-slate-400">診断フォームの回答は、対象会社が紐付いている場合に「未確認」の診断として自動作成されます。回答行の「診断を開く」から内容を確認できます。会社を特定できない回答は受付記録に保持します。</p>
     </section>}
   </div>;
 };

@@ -134,7 +134,7 @@ export interface Customer {
   [key: string]: unknown;
 }
 
-export type DiagnosisStatus = 'draft' | 'in_progress' | 'completed' | 'generating' | 'reported';
+export type DiagnosisStatus = 'received' | 'completed' | 'generating' | 'reported';
 export type AiReportStatus = 'pending' | 'generating' | 'generated' | 'superseded' | 'failed' | 'reviewed';
 
 export interface Diagnosis {
