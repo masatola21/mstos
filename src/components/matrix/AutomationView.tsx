@@ -17,8 +17,8 @@ const triggerLabels: Record<AutomationRule['triggerEvent'], string> = {
 
 const aiModeLabels: Record<AutomationRule['aiMode'], string> = {
   suggest: '提案する',
-  prepare: '初稿・準備を作る',
-  execute: '自動で実行する',
+  prepare: 'AIに初稿作成を依頼する（実行はタスクから）',
+  execute: '担当AIタスクを作成する（実行はタスクから）',
 };
 
 const approvalLabels: Record<AutomationRule['approvalPolicy'], string> = {
@@ -85,6 +85,13 @@ export const AutomationView: React.FC<AutomationViewProps> = ({ automations, onU
             </div>
 
             <div className="grid gap-3 sm:grid-cols-2">
+              <label className="block text-xs font-medium text-slate-300">
+                <span className="mb-1.5 flex items-center gap-1.5"><Clock3 className="h-3.5 w-3.5 text-amber-300" />タスク期限（発生後の日数）</span>
+                <input type="number" min={1} max={90} value={rule.taskDueInDays} onChange={(event) => {
+                  const value = Number(event.target.value);
+                  if (Number.isFinite(value)) onUpdateAutomation(rule.id, { taskDueInDays: Math.min(90, Math.max(1, Math.floor(value))), updatedAt: Date.now() });
+                }} className="w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-xs text-white" />
+              </label>
               <label className="block text-xs font-medium text-slate-300">
                 <span className="mb-1.5 flex items-center gap-1.5"><Bot className="h-3.5 w-3.5 text-indigo-300" />AIに任せる範囲</span>
                 <select
