@@ -270,52 +270,25 @@ const INITIAL_TOOLS: ManagedToolAsset[] = [
   },
 ];
 
-// --- Initial Seed Automations ---
+// --- 標準AI自動化・承認ルール（未接続の設定テンプレート） ---
 const INITIAL_AUTOMATIONS: AutomationRule[] = [
-  {
-    id: 'auto-01',
-    name: '商談成約時の受託・顧問タスク自動発行',
-    description: '商談ステータスが「成約 (Won)」に変更された際、初期キックオフおよび契約書送付タスクを自動生成',
-    triggerEvent: 'deal_won',
-    actionType: 'create_task',
-    actionConfig: {
-      taskTitle: '【自動生成】成約案件の初期契約書作成およびキックオフ準備',
-      priority: 'high',
-      assignee: 'human',
-    },
-    isActive: true,
-    triggerCount: 8,
-    lastTriggeredAt: Date.now() - 2 * 86400000,
-  },
-  {
-    id: 'auto-02',
-    name: '契約締結時の初回請求書ドラフト自動作成',
-    description: '契約書が「締結済 (Signed)」になった際、経理担当向けに請求書ドラフトを自動生成',
-    triggerEvent: 'contract_signed',
-    actionType: 'create_invoice_draft',
-    actionConfig: {
-      taskTitle: '請求書ドラフト生成',
-      priority: 'medium',
-    },
-    isActive: true,
-    triggerCount: 5,
-    lastTriggeredAt: Date.now() - 7 * 86400000,
-  },
-  {
-    id: 'auto-03',
-    name: '診断完了時のAI社長レビュー通知',
-    description: '新規顧客の診断が送信された時、AI社長の承認・アクション候補リストに自動で起案',
-    triggerEvent: 'diagnosis_completed',
-    actionType: 'notify_president',
-    actionConfig: {
-      taskTitle: '診断結果に基づく改善提案タスクの承認依頼',
-      priority: 'high',
-    },
-    isActive: true,
-    triggerCount: 14,
-    lastTriggeredAt: Date.now() - 1 * 86400000,
-  },
+  { id: 'workflow-diagnosis-submitted', name: '診断回答の確認・分析', description: '診断フォームの回答を整理し、課題・追加確認事項・改善案をまとめる。', triggerEvent: 'diagnosis_submitted', aiMode: 'prepare', approvalPolicy: 'always', isEnabled: false },
+  { id: 'workflow-deal-won', name: '商談成約後の準備', description: '成約した商談から契約・キックオフの準備項目を作成する。顧客への連絡前に担当者が確認する。', triggerEvent: 'deal_won', aiMode: 'prepare', approvalPolicy: 'external_actions', isEnabled: false },
+  { id: 'workflow-contract-signed', name: '契約締結後の請求準備', description: '締結済み契約をもとに請求内容の初稿を準備し、発行前に担当者が確認する。', triggerEvent: 'contract_signed', aiMode: 'prepare', approvalPolicy: 'always', isEnabled: false },
+  { id: 'workflow-invoice-overdue', name: '請求期限超過の対応案', description: '期限を過ぎた請求を検出し、社内通知や顧客への連絡案を作成する。', triggerEvent: 'invoice_overdue', aiMode: 'suggest', approvalPolicy: 'always', isEnabled: false },
+  { id: 'workflow-project-milestone', name: '支援マイルストーンの振り返り', description: '支援の節目に進捗・課題を要約し、次の対応案を提示する。', triggerEvent: 'project_milestone', aiMode: 'suggest', approvalPolicy: 'external_actions', isEnabled: false },
 ];
+
+export function normalizeAutomationRules(value: unknown): AutomationRule[] {
+  const saved = Array.isArray(value) ? value as Partial<AutomationRule>[] : [];
+  return INITIAL_AUTOMATIONS.map((preset) => {
+    const existing = saved.find((item) => item && item.id === preset.id);
+    if (!existing || !('aiMode' in existing) || !('approvalPolicy' in existing) || !('isEnabled' in existing)) return { ...preset };
+    const aiMode = existing.aiMode === 'suggest' || existing.aiMode === 'prepare' || existing.aiMode === 'execute' ? existing.aiMode : preset.aiMode;
+    const approvalPolicy = existing.approvalPolicy === 'always' || existing.approvalPolicy === 'external_actions' || existing.approvalPolicy === 'none' ? existing.approvalPolicy : preset.approvalPolicy;
+    return { ...preset, aiMode, approvalPolicy, isEnabled: Boolean(existing.isEnabled), updatedAt: existing.updatedAt };
+  });
+}
 
 // --- Initial Custom Lists ---
 const INITIAL_CUSTOM_LISTS: CustomListDefinition[] = [
@@ -490,34 +463,17 @@ export const matrixService = {
     return newTool;
   },
 
-  // Automations
+  // AI automation and approval settings
   loadAutomations(): AutomationRule[] {
     try {
       const data = localStorage.getItem(MATRIX_STORAGE_KEYS.AUTOMATIONS);
-      return data ? JSON.parse(data) : INITIAL_AUTOMATIONS;
+      return normalizeAutomationRules(data ? JSON.parse(data) : null);
     } catch {
-      return INITIAL_AUTOMATIONS;
+      return normalizeAutomationRules(null);
     }
   },
   saveAutomations(rules: AutomationRule[]) {
-    localStorage.setItem(MATRIX_STORAGE_KEYS.AUTOMATIONS, JSON.stringify(rules));
-  },
-  toggleAutomation(id: string) {
-    const list = this.loadAutomations();
-    const rule = list.find((r) => r.id === id);
-    if (rule) {
-      rule.isActive = !rule.isActive;
-      this.saveAutomations(list);
-    }
-  },
-  triggerAutomation(id: string) {
-    const list = this.loadAutomations();
-    const rule = list.find((r) => r.id === id);
-    if (rule) {
-      rule.triggerCount += 1;
-      rule.lastTriggeredAt = Date.now();
-      this.saveAutomations(list);
-    }
+    localStorage.setItem(MATRIX_STORAGE_KEYS.AUTOMATIONS, JSON.stringify(normalizeAutomationRules(rules)));
   },
 
   // Custom Lists
