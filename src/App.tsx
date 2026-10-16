@@ -242,6 +242,7 @@ function AppContent() {
   const [isStreaming, setIsStreaming] = useState(false);
   const activeAbortController = useRef<AbortController | null>(null);
   const taskExecutionInProgress = useRef(false);
+  const autoRunTaskIdsRef = useRef<Set<string>>(new Set());
 
   // AI President Modals
   const [isPricingModalOpen, setIsPricingModalOpen] = useState(false);
@@ -690,10 +691,17 @@ function AppContent() {
       createdAt: now,
       sourceRoleId: task.assignee.type === 'custom_ai' ? task.assignee.id : workModeId,
     };
+    const sourceAutomationRule = task.sourceAutomationId
+      ? automations.find((rule) => rule.id === task.sourceAutomationId)
+      : undefined;
+    const requiresArtifactApproval = !task.sourceAutomationId || !sourceAutomationRule || sourceAutomationRule.approvalPolicy === 'always';
     const updatedTask: TaskItem = {
       ...task,
-      status: 'pending_approval',
-      resultNotes: `${resolvedMode.name}の成果物を確認してください。承認後にナレッジへ登録されます。`,
+      status: requiresArtifactApproval ? 'pending_approval' : 'completed',
+      automationAutoRun: false,
+      resultNotes: requiresArtifactApproval
+        ? `${resolvedMode.name}の成果物を確認してください。承認後にナレッジへ登録されます。`
+        : 'AI草案をタスクに保存しました。顧客への連絡・外部処理は実行していません。',
       draftArtifact,
       updatedAt: now,
     };
@@ -701,27 +709,79 @@ function AppContent() {
     setTasks(nextTasks);
     saveTasks(nextTasks);
 
-    const approval: ApprovalItem = {
-      id: `appr-${now}`,
-      taskId: task.id,
-      taskTitle: task.title,
-      actionTitle: `担当AIの成果物レビュー：${task.title}`,
-      reason: `${resolvedMode.name}が成果物を作成しました。内容を確認し、承認後にナレッジへ登録します。`,
-      status: 'pending',
-      requestedBy: resolvedMode.name,
-      reviewArtifact: draftArtifact,
-      createdAt: now,
-    };
-    const nextApprovals = [approval, ...approvals];
-    setApprovals(nextApprovals);
-    saveApprovals(nextApprovals);
-    recordActivityLog('task_updated', `${resolvedMode.name}がタスク「${task.title}」を実行し、レビュー用成果物を保存しました`, resolvedMode.name);
-    recordActivityLog('approval_requested', `タスク「${task.title}」のAI成果物レビューが承認待ちです`, resolvedMode.name);
+    if (requiresArtifactApproval) {
+      const approval: ApprovalItem = {
+        id: `appr-${now}`,
+        taskId: task.id,
+        taskTitle: task.title,
+        actionTitle: `担当AIの成果物レビュー：${task.title}`,
+        reason: `${resolvedMode.name}が成果物を作成しました。内容を確認し、承認後にナレッジへ登録します。`,
+        status: 'pending',
+        requestedBy: resolvedMode.name,
+        reviewArtifact: draftArtifact,
+        sourceAutomationId: task.sourceAutomationId,
+        createdAt: now,
+      };
+      const nextApprovals = [approval, ...approvals];
+      setApprovals(nextApprovals);
+      saveApprovals(nextApprovals);
+      recordActivityLog('approval_requested', sourceAutomationRule
+        ? `自動化実行:「${sourceAutomationRule.name}」の成果物レビューが承認待ちです（タスク「${task.title}」）`
+        : `タスク「${task.title}」のAI成果物レビューが承認待ちです`, resolvedMode.name);
+    }
+    recordActivityLog('task_updated', sourceAutomationRule
+      ? `自動化実行:「${sourceAutomationRule.name}」が${resolvedMode.name}でタスク「${task.title}」の草案を作成しました`
+      : `${resolvedMode.name}がタスク「${task.title}」を実行し、レビュー用成果物を保存しました`, resolvedMode.name);
     setActivityLogs(loadActivityLogs());
     } finally {
       taskExecutionInProgress.current = false;
     }
   };
+
+  useEffect(() => {
+    if (!user || !workspaceReady) return;
+    const candidate = tasks.find((task) => {
+      if (!task.sourceAutomationId || !task.automationAutoRun || !['waiting', 'in_progress'].includes(task.status)) return false;
+      const rule = automations.find((item) => item.id === task.sourceAutomationId);
+      if (!rule || rule.aiMode !== 'execute') return false;
+      return task.status === 'in_progress' || rule.isEnabled;
+    });
+    if (!candidate || taskExecutionInProgress.current || autoRunTaskIdsRef.current.has(candidate.id)) return;
+
+    const rule = automations.find((item) => item.id === candidate.sourceAutomationId);
+    if (!rule) return;
+    autoRunTaskIdsRef.current.add(candidate.id);
+    const now = Date.now();
+    const runningTask: TaskItem = {
+      ...candidate,
+      status: 'in_progress',
+      resultNotes: '自動化ルールにより担当AIが処理中です。',
+      updatedAt: now,
+    };
+    const nextTasks = tasks.map((task) => task.id === candidate.id ? runningTask : task);
+    setTasks(nextTasks);
+    saveTasks(nextTasks);
+    recordActivityLog('task_updated', `自動化実行:「${rule.name}」がタスク「${candidate.title}」のAI処理を開始しました`, 'システム');
+    setActivityLogs(loadActivityLogs());
+
+    void handleRunAssignedTask(runningTask)
+      .catch((error) => {
+        const message = error instanceof Error ? error.message : '担当AIの実行に失敗しました。';
+        const failedTask: TaskItem = {
+          ...runningTask,
+          status: 'blocked',
+          automationAutoRun: false,
+          resultNotes: `自動実行に失敗しました: ${message}`,
+          updatedAt: Date.now(),
+        };
+        const failedTasks = nextTasks.map((task) => task.id === failedTask.id ? failedTask : task);
+        setTasks(failedTasks);
+        saveTasks(failedTasks);
+        recordActivityLog('task_updated', `自動化実行:「${rule.name}」のタスク「${candidate.title}」が失敗しました（${message}）`, 'システム');
+        setActivityLogs(loadActivityLogs());
+      })
+      .finally(() => autoRunTaskIdsRef.current.delete(candidate.id));
+  }, [tasks, automations, workspaceReady, user?.id, handleRunAssignedTask]);
 
   // --- Pricing Settings ---
   const handleSavePricingRates = (newRates: ModelPricingRate[]) => {
@@ -1002,11 +1062,16 @@ function AppContent() {
       saveTasks(updatedTasks);
     }
 
+    const approvalRuleName = targetApproval.sourceAutomationId
+      ? automations.find((rule) => rule.id === targetApproval.sourceAutomationId)?.name
+      : undefined;
     recordActivityLog(
       'approval_resolved',
-      approvedKnowledge
-        ? `成果物「${approvedKnowledge.title}」が承認され、ナレッジに登録されました`
-        : `申請「${targetApproval.actionTitle}」が【${status === 'approved' ? '承認' : '却下'}】されました`,
+      approvalRuleName
+        ? `自動化実行:「${approvalRuleName}」の成果物が【${status === 'approved' ? '承認' : '却下'}】されました${approvedKnowledge ? `。ナレッジ「${approvedKnowledge.title}」に登録しました` : ''}`
+        : approvedKnowledge
+          ? `成果物「${approvedKnowledge.title}」が承認され、ナレッジに登録されました`
+          : `申請「${targetApproval.actionTitle}」が【${status === 'approved' ? '承認' : '却下'}】されました`,
       '人間'
     );
     setActivityLogs(loadActivityLogs());
@@ -1298,6 +1363,7 @@ function AppContent() {
       completionCriteria: input.completionCriteria,
       sourceAutomationId: rule.id,
       sourceAutomationRecordId: input.recordId,
+      automationAutoRun: rule.aiMode === 'execute',
       createdAt: Date.now(),
       updatedAt: Date.now(),
       dueDate,
