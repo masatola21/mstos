@@ -50,7 +50,7 @@ export const AutomationView: React.FC<AutomationViewProps> = ({ automations, onU
         <div className="mt-4 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-amber-700/40 bg-amber-950/30 p-3">
           <div className="flex items-start gap-2 text-xs leading-5 text-amber-100">
             <Clock3 className="mt-0.5 h-4 w-4 shrink-0 text-amber-300" />
-            <span>イベント連携済み：商談成約時、締結済み契約の登録時、請求書を期限超過へ変更した時に、ルールが有効なら期限付きタスクを作成します。同一レコードからの重複作成は防止します。診断回答・支援マイルストーンの連携、承認ポリシーの自動適用、実行履歴は未接続です。AI APIや顧客連絡は自動実行せず、タスクから担当者が開始します。</span>
+            <span>イベント連携済み：商談から顧客への移行時、締結済み契約の登録時、請求書を期限超過へ変更した時に、ルールが有効なら期限付きタスクを作成します。同一レコードからの重複作成は防止します。診断回答・支援マイルストーンの連携、承認ポリシーの自動適用、実行履歴は未接続です。AI APIや顧客連絡は自動実行せず、タスクから担当者が開始します。</span>
           </div>
           <span className="whitespace-nowrap text-xs text-slate-400">有効設定 {enabledCount} / {automations.length}</span>
         </div>
