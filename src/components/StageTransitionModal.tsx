@@ -185,7 +185,7 @@ export const StageTransitionModal: React.FC<StageTransitionModalProps> = ({
 
         const payload: Record<string, any> = {
           id: dealId.trim(),
-          company_id: companyId,
+          company_id: companyId || null,
           lead_id: sourceRecord.id, // lead_id を引き継ぎ
           proposal_plan_name: proposalPlanName.trim(),
           proposal_type: selectedProd?.product_type || '月額サブスク',
