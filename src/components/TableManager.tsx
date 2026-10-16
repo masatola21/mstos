@@ -4,6 +4,7 @@ import { fetchTableData, DataFetchError } from '../services/dataService';
 import { RecordDetailModal } from './RecordDetailModal';
 import { RecordFormModal } from './RecordFormModal';
 import { StageTransitionModal, TransitionType } from './StageTransitionModal';
+import { ProspectResearchImportModal } from './ProspectResearchImportModal';
 import { Customer } from '../types/database';
 import { 
   Search, 
@@ -53,6 +54,7 @@ export const TableManager: React.FC<TableManagerProps> = ({
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState('ALL');
   const [successBanner, setSuccessBanner] = useState<string | null>(null);
+  const [isProspectImportOpen, setIsProspectImportOpen] = useState(false);
 
   // Modals state
   const [selectedRecord, setSelectedRecord] = useState<any | null>(null);
@@ -206,6 +208,14 @@ export const TableManager: React.FC<TableManagerProps> = ({
 
         {/* Action Button: 新規登録 */}
         <div className="flex items-center gap-2">
+          {currentTable === 'prospects' && (
+            <button
+              onClick={() => setIsProspectImportOpen(true)}
+              className="px-3 py-2.5 rounded-xl font-bold text-xs bg-indigo-600/20 hover:bg-indigo-600/30 text-indigo-200 border border-indigo-500/40 flex items-center gap-2 transition-colors"
+            >
+              <span>調査結果を社内AIで確認・登録</span>
+            </button>
+          )}
           <button
             onClick={loadData}
             disabled={loading}
@@ -727,6 +737,13 @@ export const TableManager: React.FC<TableManagerProps> = ({
           onSuccess={() => {
             loadData();
           }}
+        />
+      )}
+
+      {isProspectImportOpen && currentTable === 'prospects' && (
+        <ProspectResearchImportModal
+          onClose={() => setIsProspectImportOpen(false)}
+          onImported={() => { void loadData(); }}
         />
       )}
 
