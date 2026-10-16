@@ -824,38 +824,28 @@ function AppContent() {
     const duplicateAutomationTask = automationRule && targetRecordId
       ? tasks.some((item) => item.sourceAutomationId === automationRule.id && item.relatedRecord?.id === targetRecordId)
       : false;
-    const automationTask: TaskItem | undefined = automationRule && !duplicateAutomationTask
+    if (duplicateAutomationTask) return;
+    const taskWithRule: TaskItem = automationRule
       ? {
-          id: `task-auto-${automationRule.id}-${now}`,
-          title: automationRule.name,
-          description: `${sourceLabel}の商談成約後の準備を進めてください。ルール説明: ${automationRule.description}。このタスク作成ではAI APIを自動実行せず、担当者がタスクから実行します。`,
-          projectId: '',
-          workArea: 'post_contract_support',
-          sourceCategory: 'sales_customer',
-          taskKind: 'response',
-          relatedRecord: { type: 'customer', id: targetRecordId, label: sourceLabel },
-          priority: 'medium',
+          ...task,
+          description: `${task.description} 自動化ルール「${automationRule.name}」: ${automationRule.description}`,
           assignee: automationRule.aiMode === 'suggest'
             ? { type: 'human', name: '人間 (あなた)' }
-            : { type: 'role_ai', workModeId: 'president', name: 'AI社長' },
-          status: 'waiting',
-          completionCriteria: '契約・キックオフ準備案をタスク成果物としてまとめ、顧客連絡前に人が確認する。',
+            : task.assignee,
           sourceAutomationId: automationRule.id,
           dueDate: (() => {
             const due = new Date();
             due.setDate(due.getDate() + automationRule.taskDueInDays);
             return `${due.getFullYear()}-${String(due.getMonth() + 1).padStart(2, '0')}-${String(due.getDate()).padStart(2, '0')}`;
           })(),
-          createdAt: now,
-          updatedAt: now,
         }
-      : undefined;
-    const nextTasks = [task, ...(automationTask ? [automationTask] : []), ...tasks];
+      : task;
+    const nextTasks = [taskWithRule, ...tasks];
     setTasks(nextTasks);
     saveTasks(nextTasks);
-    recordActivityLog('task_created', `CRMの段階移行からタスク「${task.title}」を作成しました（関連: ${sourceLabel}）`, 'システム');
-    if (automationTask) {
-      recordActivityLog('task_created', `自動化ルール「${automationRule!.name}」から期限付きタスクを作成しました（期限: ${automationTask.dueDate}）`, 'システム');
+    recordActivityLog('task_created', `CRMの段階移行からタスク「${taskWithRule.title}」を作成しました（関連: ${sourceLabel}）`, 'システム');
+    if (automationRule) {
+      recordActivityLog('task_created', `自動化ルール「${automationRule.name}」を適用し、期限付きタスクを作成しました（期限: ${taskWithRule.dueDate}）`, 'システム');
     }
     setActivityLogs(loadActivityLogs());
   };
