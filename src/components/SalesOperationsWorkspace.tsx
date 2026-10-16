@@ -62,15 +62,17 @@ export const SalesOperationsWorkspace: React.FC<Props> = ({ tab, companyId, onCl
       } else if (tab === 'documents') {
         let documentsQuery = supabase.from('customer_documents').select('*').order('created_at', { ascending: false }).limit(100);
         if (companyId) documentsQuery = documentsQuery.eq('company_id', companyId);
+        let contactsQuery = supabase.from('contacts').select('id,full_name,email,line_user_id,company_id').order('full_name');
+        if (companyId) contactsQuery = contactsQuery.eq('company_id', companyId);
         const [docs, messages, contactResult] = await Promise.all([
           documentsQuery,
           supabase.from('communication_outbox').select('*').order('created_at', { ascending: false }).limit(100),
-          supabase.from('contacts').select('id,full_name,email,line_user_id').order('full_name'),
+          contactsQuery,
         ]);
         if (docs.error) throw docs.error;
         if (messages.error) throw messages.error;
         if (contactResult.error) throw contactResult.error;
-        setDocuments(docs.data || []); setOutbox(messages.data || []); setContacts(contactResult.data || []);
+        setDocuments(docs.data || []); setOutbox(companyId ? (messages.data || []).filter((message:any) => (docs.data || []).some((doc:any) => doc.id === message.document_id)) : messages.data || []); setContacts(contactResult.data || []);
       } else {
         let recordsQuery = supabase.from(selectedOps.table).select('*').order('created_at', { ascending: false });
         if (companyId) recordsQuery = recordsQuery.eq('company_id', companyId);
@@ -236,9 +238,15 @@ export const SalesOperationsWorkspace: React.FC<Props> = ({ tab, companyId, onCl
       </section>
     </div>}
 
-    {tab === 'documents' && <div className="grid gap-5 xl:grid-cols-2">
+    {tab === 'documents' && <div className="space-y-4">
+      {companyId && <div className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-cyan-900/70 bg-cyan-950/30 px-3 py-2 text-xs">
+        <span className="text-cyan-100">この顧客に関連する書類を表示中（会社ID: {companyId}）</span>
+        {onClearCompanyFilter && <button type="button" onClick={onClearCompanyFilter} className="rounded border border-cyan-800 px-2 py-1 text-cyan-100 hover:bg-cyan-900/50">全顧客を表示</button>}
+      </div>}
+      <div className="grid gap-5 xl:grid-cols-2">
       <section className="rounded-xl border border-slate-800 bg-slate-900 p-4"><h2 className="mb-3 font-semibold text-white">生成済み書類</h2>{loading ? <p className="text-sm text-slate-400">読み込み中…</p> : documents.length === 0 ? <p className="text-sm text-slate-400">書類ひな形から保存した書類がここに表示されます。</p> : <ul className="divide-y divide-slate-800">{documents.map((doc) => <li key={doc.id} className="py-3"><div className="flex flex-wrap items-center justify-between gap-2"><span className="font-medium text-white">{doc.title}</span><select aria-label={`${doc.title}の状態`} value={doc.status} onChange={(e)=>void updateDocumentStatus(doc.id,e.target.value)} className="rounded border border-slate-700 bg-slate-950 px-2 py-1 text-xs text-white"><option value="draft">下書き</option><option value="awaiting_approval">確認待ち</option><option value="approved">承認済み</option><option value="archived">保管</option></select></div><div className="mt-1 text-xs text-slate-500">{doc.document_type} · {new Date(doc.created_at).toLocaleString('ja-JP')}</div>{doc.status==='approved'&&<div className="mt-2 flex flex-wrap items-center gap-2"><select value={sendContactId} onChange={(e)=>setSendContactId(e.target.value)} className="rounded border border-slate-700 bg-slate-950 px-2 py-1 text-xs text-white"><option value="">送信先を選択</option>{contacts.map(contact=><option key={contact.id} value={contact.id}>{contact.full_name}</option>)}</select><select value={sendChannel} onChange={(e)=>setSendChannel(e.target.value as 'email'|'line')} className="rounded border border-slate-700 bg-slate-950 px-2 py-1 text-xs text-white"><option value="email">メール</option><option value="line">LINE</option></select><label className="flex items-center gap-1 text-[11px] text-slate-300"><input type="checkbox" checked={consentConfirmed} onChange={(e)=>setConsentConfirmed(e.target.checked)}/>配信同意を確認</label><input value={consentBasis} onChange={(e)=>setConsentBasis(e.target.value)} placeholder="同意の根拠" className="max-w-40 rounded border border-slate-700 bg-slate-950 px-2 py-1 text-xs text-white"/><button onClick={()=>void requestDocumentSend(doc)} className="rounded bg-indigo-700 px-2 py-1 text-xs text-white">送信承認を申請</button></div>}</li>)}</ul>}</section>
       <section className="rounded-xl border border-slate-800 bg-slate-900 p-4"><h2 className="mb-3 font-semibold text-white">送信履歴・送信待ち</h2>{loading ? <p className="text-sm text-slate-400">読み込み中…</p> : outbox.length === 0 ? <p className="text-sm text-slate-400">個別送信・一斉配信・書類送付は、同じ送信台帳に集約します。</p> : <ul className="divide-y divide-slate-800">{outbox.map((msg) => <li key={msg.id} className="py-3"><div className="flex flex-wrap items-center justify-between gap-2"><span className="font-medium text-white">{msg.subject || msg.recipient_address}</span><span className="text-xs text-slate-400">{msg.channel} · {msg.status}</span></div><div className="mt-1 text-xs text-slate-500">{new Date(msg.created_at).toLocaleString('ja-JP')} · 同意根拠: {msg.consent_basis || '記録なし'}</div>{msg.status==='awaiting_approval'&&<div className="mt-2 flex gap-2"><button onClick={()=>void updateOutboxStatus(msg.id,'queued')} className="rounded bg-emerald-700 px-2 py-1 text-xs text-white">承認して送信待ちへ</button><button onClick={()=>void updateOutboxStatus(msg.id,'canceled')} className="rounded border border-slate-700 px-2 py-1 text-xs text-slate-300">取り消す</button></div>}</li>)}</ul>}<p className="mt-3 text-xs text-amber-300">実送信はサーバー側のLINE・メール接続が必要です。この一覧への登録だけで配信完了にはなりません。</p></section>
+      </div>
     </div>}
 
     {tab === 'invitations' && <DealInvitationPanel />}
