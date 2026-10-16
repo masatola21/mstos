@@ -290,7 +290,7 @@ function AppContent() {
         setInvoices(data.invoices);
         setTools(data.tools);
         setCustomLists(data.customLists);
-        setAutomations(data.automations);
+        setAutomations(matrixService.normalizeAutomationRules(data.automations));
         setMarketingScenarios(data.marketingScenarios || []);
         setKnowledgeItems(data.knowledgeItems || []);
         setWorkModeHistories(data.workModeHistories || {});
@@ -1256,104 +1256,12 @@ function AppContent() {
     setActivityLogs(loadActivityLogs());
   };
 
-  const handleToggleAutomation = (id: string) => {
-    matrixService.toggleAutomation(id);
-    setAutomations(matrixService.loadAutomations());
-  };
-
-  const handleTriggerAutomation = (id: string): string => {
-    const rule = automations.find((candidate) => candidate.id === id);
-    if (!rule || !rule.isActive) throw new Error('有効な自動化ルールが見つかりません。');
-
-    const now = Date.now();
-    let resultSummary = '';
-
-    if (rule.actionType === 'create_task') {
-      let project = projects[0];
-      let nextProjects = projects;
-      if (!project) {
-        project = {
-          id: `proj-automation-${now}`,
-          name: '自動化タスク',
-          objective: '業務自動化によって作成されたタスクを管理する',
-          status: 'in_progress',
-          priority: 'medium',
-          dueDate: '',
-          createdAt: now,
-          updatedAt: now,
-        };
-        nextProjects = [project, ...projects];
-        setProjects(nextProjects);
-        saveProjects(nextProjects);
-      }
-
-      const task: TaskItem = {
-        id: `task-auto-${now}`,
-        projectId: project.id,
-        title: rule.actionConfig.taskTitle || rule.name,
-        description: `${rule.description}\n\n自動化ルール: ${rule.name}`,
-        priority: rule.actionConfig.priority || 'medium',
-        assignee: { type: 'human', name: rule.actionConfig.assignee === 'human' ? '人間 (あなた)' : 'AI社長' },
-        status: 'waiting',
-        completionCriteria: '担当者が内容を確認し、完了結果を記録すること',
-        sourceAutomationId: rule.id,
-        createdAt: now,
-        updatedAt: now,
-      };
-      const nextTasks = [task, ...tasks];
-      setTasks(nextTasks);
-      saveTasks(nextTasks);
-      resultSummary = `タスク「${task.title}」を作成しました`;
-    } else if (rule.actionType === 'create_invoice_draft') {
-      const signedContract = contracts.find((contract) => contract.status === 'signed');
-      const issueDate = new Date(now);
-      const dueDate = new Date(now);
-      dueDate.setDate(dueDate.getDate() + 30);
-      const invoice: ManagedInvoice = {
-        id: `inv-auto-${now}`,
-        invoiceNumber: `AUTO-${issueDate.toISOString().slice(0, 10).replace(/-/g, '')}-${String(now).slice(-4)}`,
-        title: rule.actionConfig.taskTitle || `【自動作成】${signedContract?.title || '請求書ドラフト'}`,
-        productId: signedContract?.productId,
-        companyId: signedContract?.companyId,
-        recipientName: signedContract?.counterpartyName || '要入力',
-        amount: signedContract?.amount || 0,
-        status: 'draft',
-        issueDate: issueDate.toISOString().slice(0, 10),
-        dueDate: dueDate.toISOString().slice(0, 10),
-        notes: signedContract ? `締結済み契約「${signedContract.title}」をもとに自動作成。発行前に金額・宛先を確認してください。` : '自動作成ドラフトです。宛先と金額を入力してから発行してください。',
-        sourceAutomationId: rule.id,
-        createdAt: now,
-        updatedAt: now,
-      };
-      matrixService.addInvoice(invoice);
-      setInvoices(matrixService.loadInvoices());
-      resultSummary = `請求書ドラフト「${invoice.invoiceNumber}」を作成しました（宛先・金額の確認が必要です）`;
-    } else if (rule.actionType === 'notify_president') {
-      const existingApproval = approvals.find((approval) => approval.sourceAutomationId === rule.id && approval.status === 'pending');
-      if (existingApproval) throw new Error('このルールの承認依頼はすでに未処理です。');
-      const approval: ApprovalItem = {
-        id: `appr-auto-${now}`,
-        taskTitle: rule.actionConfig.taskTitle || rule.name,
-        actionTitle: `自動化ルール「${rule.name}」の確認`,
-        reason: rule.actionConfig.messageTemplate || rule.description,
-        status: 'pending',
-        requestedBy: 'システム（自動化エンジン）',
-        sourceAutomationId: rule.id,
-        createdAt: now,
-      };
-      const nextApprovals = [approval, ...approvals];
-      setApprovals(nextApprovals);
-      saveApprovals(nextApprovals);
-      resultSummary = `AI社長の承認待ちに「${approval.taskTitle}」を追加しました`;
-    } else {
-      resultSummary = rule.actionConfig.messageTemplate || rule.description;
-    }
-
-    matrixService.triggerAutomation(id);
-    setAutomations(matrixService.loadAutomations());
-    recordActivityLog('task_created', `自動化ルール「${rule.name}」を実行: ${resultSummary}`, 'システム（自動化エンジン）');
-    setActivityLogs(loadActivityLogs());
-    return resultSummary;
+  const handleUpdateAutomation = (id: string, updates: Partial<AutomationRule>) => {
+    const updated = matrixService.normalizeAutomationRules(
+      automations.map((rule) => rule.id === id ? { ...rule, ...updates } : rule)
+    );
+    setAutomations(updated);
+    matrixService.saveAutomations(updated);
   };
 
   if (isLoading || (user && !workspaceReady)) {
@@ -1497,8 +1405,7 @@ function AppContent() {
         {currentTab === 'automations' && (
           <AutomationView
             automations={automations}
-            onToggleAutomation={handleToggleAutomation}
-            onTriggerAutomation={handleTriggerAutomation}
+            onUpdateAutomation={handleUpdateAutomation}
           />
         )}
 

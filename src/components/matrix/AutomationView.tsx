@@ -1,176 +1,120 @@
-import React, { useState } from 'react';
-import { 
-  Zap, 
-  Play, 
-  CheckCircle2, 
-  Clock, 
-  Plus, 
-  Power, 
-  ArrowRight, 
-  FileCheck2, 
-  Receipt, 
-  Target,
-  Sliders,
-  Check
-} from 'lucide-react';
+import React from 'react';
+import { Bot, Check, Clock3, GitBranch, ShieldCheck, Sparkles, Zap } from 'lucide-react';
 import { AutomationRule } from '../../types/matrix';
 
 interface AutomationViewProps {
   automations: AutomationRule[];
-  onToggleAutomation: (id: string) => void;
-  onTriggerAutomation: (id: string) => string;
+  onUpdateAutomation: (id: string, updates: Partial<AutomationRule>) => void;
 }
 
-export const AutomationView: React.FC<AutomationViewProps> = ({
-  automations,
-  onToggleAutomation,
-  onTriggerAutomation,
-}) => {
-  const [toast, setToast] = useState<{ message: string; isError: boolean } | null>(null);
+const triggerLabels: Record<AutomationRule['triggerEvent'], string> = {
+  diagnosis_submitted: '診断フォームの回答を受信したとき',
+  deal_won: '商談が成約したとき',
+  contract_signed: '契約が締結されたとき',
+  invoice_overdue: '請求期限を過ぎたとき',
+  project_milestone: '支援の節目に到達したとき',
+};
 
-  const handleTestRun = (rule: AutomationRule) => {
-    const actionLabels: Record<AutomationRule['actionType'], string> = {
-      create_task: 'タスクを作成',
-      create_invoice_draft: '請求書ドラフトを作成',
-      create_activity_log: '活動履歴を記録',
-      notify_president: 'AI社長の承認待ちに追加',
-    };
-    if (!window.confirm(`「${rule.name}」を今すぐ実行します。\n${actionLabels[rule.actionType]}します。続けますか？`)) return;
+const aiModeLabels: Record<AutomationRule['aiMode'], string> = {
+  suggest: '提案する',
+  prepare: '初稿・準備を作る',
+  execute: '自動で実行する',
+};
 
-    try {
-      const result = onTriggerAutomation(rule.id);
-      setToast({ message: result, isError: false });
-    } catch (error) {
-      setToast({ message: error instanceof Error ? error.message : '自動化を実行できませんでした。', isError: true });
-    }
-    setTimeout(() => setToast(null), 3500);
-  };
+const approvalLabels: Record<AutomationRule['approvalPolicy'], string> = {
+  always: '毎回、人が確認してから進める',
+  external_actions: '顧客への連絡・外部処理の前に確認する',
+  none: '人の承認なしで進める',
+};
+
+export const AutomationView: React.FC<AutomationViewProps> = ({ automations, onUpdateAutomation }) => {
+  const enabledCount = automations.filter((rule) => rule.isEnabled).length;
 
   return (
     <div className="space-y-6">
-      {/* Toast */}
-      {toast && (
-        <div className={`fixed bottom-6 right-6 z-50 ${toast.isError ? 'bg-rose-950 border-rose-500/50 text-rose-200' : 'bg-emerald-950 border-emerald-500/50 text-emerald-200'} border px-4 py-3 rounded-xl shadow-2xl flex items-center gap-2 text-xs animate-bounce`}>
-          <CheckCircle2 className={`w-4 h-4 ${toast.isError ? 'text-rose-400' : 'text-emerald-400'} shrink-0`} />
-          <span>{toast.message}</span>
-        </div>
-      )}
-
-      {/* Header */}
-      <div className="bg-slate-900 border border-slate-800 p-5 rounded-2xl shadow-xl flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-        <div>
-          <div className="flex items-center gap-2">
-            <h2 className="text-xl font-black text-white tracking-tight flex items-center gap-2">
-              <Zap className="w-6 h-6 text-amber-400" />
-              非AI業務自動化（ルールベース・トリガーエンジン）
-            </h2>
-            <span className="text-xs px-2 py-0.5 rounded-full bg-amber-500/20 text-amber-300 border border-amber-500/30 font-medium">
-              確実・低コスト運用
-            </span>
-          </div>
-          <p className="text-xs text-slate-400 mt-1">
-            APIトークンを使わずに、今すぐ実行したルールに応じてタスク・請求書ドラフト・承認依頼・履歴を作成します。
-          </p>
-        </div>
-
+      <header className="rounded-2xl border border-slate-800 bg-slate-900 p-5 shadow-xl">
         <div className="flex items-center gap-2">
-          <span className="text-xs text-slate-400">
-            稼働中ルール: {automations.filter((a) => a.isActive).length} / {automations.length} 件
+          <h2 className="flex items-center gap-2 text-xl font-black tracking-tight text-white">
+            <Zap className="h-6 w-6 text-amber-400" />
+            AI自動化・承認ルール
+          </h2>
+          <span className="rounded-full border border-blue-500/30 bg-blue-500/10 px-2 py-0.5 text-xs font-medium text-blue-300">
+            標準テンプレート
           </span>
         </div>
-      </div>
+        <p className="mt-2 text-sm text-slate-300">
+          業務の開始条件ごとに、AIへ任せる範囲と人が確認する箇所を設定します。
+        </p>
+        <div className="mt-4 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-amber-700/40 bg-amber-950/30 p-3">
+          <div className="flex items-start gap-2 text-xs leading-5 text-amber-100">
+            <Clock3 className="mt-0.5 h-4 w-4 shrink-0 text-amber-300" />
+            <span>現在はルール設定の保存までです。業務イベントによる自動起動と実行履歴は未接続のため、ここで有効にしても業務処理は実行されません。</span>
+          </div>
+          <span className="whitespace-nowrap text-xs text-slate-400">有効設定 {enabledCount} / {automations.length}</span>
+        </div>
+      </header>
 
-      {/* Rule Cards Grid */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        {automations.map((rule) => {
-          return (
-            <div
-              key={rule.id}
-              className={`p-5 rounded-2xl border transition-all ${
-                rule.isActive
-                  ? 'bg-slate-900 border-slate-800 hover:border-slate-700 shadow-lg'
-                  : 'bg-slate-950/40 border-slate-800/60 opacity-60'
-              }`}
-            >
-              <div className="flex items-start justify-between gap-3 mb-3">
-                <div className="flex items-center gap-2">
-                  <div
-                    className={`p-2 rounded-xl ${
-                      rule.isActive ? 'bg-amber-500/20 text-amber-400' : 'bg-slate-800 text-slate-500'
-                    }`}
-                  >
-                    <Zap className="w-4 h-4" />
-                  </div>
-                  <div>
-                    <h3 className="font-bold text-sm text-white">{rule.name}</h3>
-                    <span className="text-[10px] text-slate-400">ID: {rule.id}</span>
-                  </div>
+      <section className="grid grid-cols-1 gap-4 xl:grid-cols-2">
+        {automations.map((rule) => (
+          <article key={rule.id} className="space-y-4 rounded-2xl border border-slate-800 bg-slate-900 p-5">
+            <div className="flex items-start justify-between gap-3">
+              <div className="flex items-start gap-3">
+                <span className="rounded-xl bg-indigo-500/15 p-2 text-indigo-300"><GitBranch className="h-4 w-4" /></span>
+                <div>
+                  <h3 className="font-bold text-white">{rule.name}</h3>
+                  <p className="mt-1 text-xs leading-5 text-slate-400">{rule.description}</p>
                 </div>
-
-                {/* Toggle Active Button */}
-                <button
-                  onClick={() => onToggleAutomation(rule.id)}
-                  className={`p-1.5 rounded-lg border transition-colors cursor-pointer ${
-                    rule.isActive
-                      ? 'bg-emerald-500/20 border-emerald-500/40 text-emerald-300'
-                      : 'bg-slate-800 border-slate-700 text-slate-400 hover:text-white'
-                  }`}
-                  title={rule.isActive ? 'ルール停止' : 'ルール有効化'}
-                >
-                  <Power className="w-3.5 h-3.5" />
-                </button>
               </div>
-
-              <p className="text-xs text-slate-300 leading-relaxed mb-4">
-                {rule.description}
-              </p>
-
-              {/* Trigger & Action visualization */}
-              <div className="p-3 rounded-xl bg-slate-950 border border-slate-800/80 mb-4 text-xs space-y-2">
-                <div className="flex items-center gap-2 text-slate-400">
-                  <span className="text-[10px] font-semibold text-amber-400 uppercase tracking-wider">
-                    トリガー:
-                  </span>
-                  <span className="text-slate-200 font-mono text-[11px]">{rule.triggerEvent}</span>
-                </div>
-                <div className="flex items-center gap-2 text-slate-400">
-                  <span className="text-[10px] font-semibold text-blue-400 uppercase tracking-wider">
-                    自動実行:
-                  </span>
-                  <span className="text-slate-200 font-mono text-[11px]">{rule.actionType}</span>
-                </div>
-                {rule.actionConfig?.taskTitle && (
-                  <div className="text-[10px] text-slate-400 pt-1 border-t border-slate-900">
-                    発行内容: {rule.actionConfig.taskTitle}
-                  </div>
-                )}
-              </div>
-
-              {/* Bottom stats & Test run */}
-              <div className="flex items-center justify-between pt-2 border-t border-slate-800/60 text-xs">
-                <div className="text-[10px] text-slate-500">
-                  実行実績: <span className="text-slate-300 font-bold">{rule.triggerCount} 回</span>
-                  {rule.lastTriggeredAt && (
-                    <span className="ml-2">
-                      (最終: {new Date(rule.lastTriggeredAt).toLocaleDateString()})
-                    </span>
-                  )}
-                </div>
-
-                <button
-                  onClick={() => handleTestRun(rule)}
-                  disabled={!rule.isActive}
-                  className="px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-amber-600 hover:text-white text-slate-300 border border-slate-700 text-xs font-semibold flex items-center gap-1.5 transition-colors cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
-                >
-                  <Play className="w-3 h-3" />
-                  <span>今すぐ実行</span>
-                </button>
-              </div>
+              <label className="flex shrink-0 items-center gap-2 text-xs text-slate-300">
+                <input
+                  type="checkbox"
+                  checked={rule.isEnabled}
+                  onChange={(event) => onUpdateAutomation(rule.id, { isEnabled: event.target.checked, updatedAt: Date.now() })}
+                  className="h-4 w-4 accent-blue-500"
+                  aria-label={rule.name + 'の有効設定'}
+                />
+                設定を有効化
+              </label>
             </div>
-          );
-        })}
-      </div>
+
+            <div className="rounded-xl border border-slate-800 bg-slate-950/70 p-3">
+              <div className="flex items-center gap-2 text-xs font-semibold text-amber-300">
+                <Zap className="h-3.5 w-3.5" />開始条件
+              </div>
+              <p className="mt-1 text-sm text-slate-200">{triggerLabels[rule.triggerEvent]}</p>
+            </div>
+
+            <div className="grid gap-3 sm:grid-cols-2">
+              <label className="block text-xs font-medium text-slate-300">
+                <span className="mb-1.5 flex items-center gap-1.5"><Bot className="h-3.5 w-3.5 text-indigo-300" />AIに任せる範囲</span>
+                <select
+                  value={rule.aiMode}
+                  onChange={(event) => onUpdateAutomation(rule.id, { aiMode: event.target.value as AutomationRule['aiMode'], updatedAt: Date.now() })}
+                  className="w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-xs text-white"
+                >
+                  {Object.entries(aiModeLabels).map(([value, label]) => <option key={value} value={value}>{label}</option>)}
+                </select>
+              </label>
+              <label className="block text-xs font-medium text-slate-300">
+                <span className="mb-1.5 flex items-center gap-1.5"><ShieldCheck className="h-3.5 w-3.5 text-emerald-300" />人の承認</span>
+                <select
+                  value={rule.approvalPolicy}
+                  onChange={(event) => onUpdateAutomation(rule.id, { approvalPolicy: event.target.value as AutomationRule['approvalPolicy'], updatedAt: Date.now() })}
+                  className="w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-xs text-white"
+                >
+                  {Object.entries(approvalLabels).map(([value, label]) => <option key={value} value={value}>{label}</option>)}
+                </select>
+              </label>
+            </div>
+
+            <div className="flex items-center gap-2 border-t border-slate-800 pt-3 text-[11px] text-slate-500">
+              {rule.isEnabled ? <Check className="h-3.5 w-3.5 text-emerald-400" /> : <Clock3 className="h-3.5 w-3.5" />}
+              {rule.isEnabled ? '設定を有効にしました（業務連携後に適用）' : '停止中'}
+              {rule.aiMode === 'execute' && rule.approvalPolicy === 'none' && <span className="ml-auto inline-flex items-center gap-1 text-amber-300"><Sparkles className="h-3 w-3" />承認なしで自動実行する設定</span>}
+            </div>
+          </article>
+        ))}
+      </section>
     </div>
   );
 };
-

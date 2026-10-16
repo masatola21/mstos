@@ -289,14 +289,6 @@ export const UnifiedNavbar: React.FC<UnifiedNavbarProps> = ({
           {activeSection === 'ai_president' && (
             <div className="flex min-w-0 items-center gap-1.5 overflow-x-auto pb-1">
               <button
-                onClick={() => onTabChange('automations')}
-                className={`px-3 py-1.5 rounded-lg whitespace-nowrap transition-colors flex items-center gap-1.5 ${currentTab === 'automations' ? 'bg-purple-600 text-white font-semibold shadow-sm' : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800'}`}
-              >
-                <Zap className="w-3.5 h-3.5 text-amber-400" />
-                <span>自動化ルール</span>
-              </button>
-
-              <button
                 onClick={() => onTabChange('ai_dashboard')}
                 className={`px-3 py-1.5 rounded-lg whitespace-nowrap transition-colors flex items-center gap-1.5 ${
                   currentTab === 'ai_dashboard'
@@ -344,6 +336,14 @@ export const UnifiedNavbar: React.FC<UnifiedNavbarProps> = ({
                 <Bot className="w-3.5 h-3.5" />
                 <span>専門AI一覧</span>
               </button>
+              <button
+                onClick={() => onTabChange('automations')}
+                className={`px-3 py-1.5 rounded-lg whitespace-nowrap transition-colors flex items-center gap-1.5 ${currentTab === 'automations' ? 'bg-purple-600 text-white font-semibold shadow-sm' : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800'}`}
+              >
+                <Zap className="w-3.5 h-3.5 text-amber-400" />
+                <span>AI自動化・承認ルール</span>
+              </button>
+
             </div>
           )}
         </nav>
