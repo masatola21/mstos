@@ -81,21 +81,25 @@ JSONオブジェクトのみを返してください。形式: {"candidates":[{"
       if (!Array.isArray(parsed.candidates)) throw new Error('AIの返答に候補一覧がありません。再度実行してください。');
       const byName = new Map(existingCompanies.map((company: any) => [normalizeName(company.company_name || ''), company]));
       const byDomain = new Map(existingCompanies.map((company: any) => [domainOf(company.website), company]).filter(([domain]) => Boolean(domain)));
+      const byId = new Map(existingCompanies.map((company: any) => [company.id, company]));
       const reviewed: Candidate[] = parsed.candidates.slice(0, 50).filter((item: any) => typeof item.company_name === 'string' && item.company_name.trim()).map((item: any) => {
-        const exact = byName.get(normalizeName(item.company_name.trim())) as any;
-        const domainMatch = domainOf(item.website) ? byDomain.get(domainOf(item.website)) as any : undefined;
-        const duplicate = exact || domainMatch || (item.duplicate_company_id ? existingCompanies.find((company: any) => company.id === item.duplicate_company_id) : undefined);
-        const sourceUrl = typeof item.source_url === 'string' && /^https?:\/\//i.test(item.source_url) ? item.source_url : '';
+        const matchedCompany = (byName.get(normalizeName(item.company_name.trim())) as any)
+          || (domainOf(item.website) ? byDomain.get(domainOf(item.website)) as any : undefined)
+          || (item.duplicate_company_id ? byId.get(item.duplicate_company_id) as any : undefined);
+        const alreadyProspect = Boolean(matchedCompany && activeProspectCompanyIds.has(matchedCompany.id));
+        const warning = typeof item.duplicate_reason === 'string' ? item.duplicate_reason : '';
+        const sourceUrl = typeof item.source_url === 'string' && /^https?:\\/\\//i.test(item.source_url) ? item.source_url : '';
         return {
           company_name: item.company_name.trim().slice(0, 200),
           industry: typeof item.industry === 'string' ? item.industry.slice(0, 200) : '',
-          website: typeof item.website === 'string' && /^https?:\/\//i.test(item.website) ? item.website : '',
+          website: typeof item.website === 'string' && /^https?:\\/\\//i.test(item.website) ? item.website : '',
           address: typeof item.address === 'string' ? item.address.slice(0, 500) : '',
           source_url: sourceUrl,
           reason: typeof item.reason === 'string' ? item.reason.slice(0, 2000) : '',
-          duplicate_company_id: duplicate?.id,
-          duplicate_reason: duplicate ? `既存会社「${duplicate.company_name}」（${duplicate.id}）と名称またはWebサイトが一致` : (typeof item.duplicate_reason === 'string' ? item.duplicate_reason : ''),
-          selected: !duplicate && !item.duplicate_company_id,
+          duplicate_company_id: alreadyProspect ? matchedCompany.id : undefined,
+          existing_company_id: matchedCompany && !alreadyProspect ? matchedCompany.id : undefined,
+          duplicate_reason: alreadyProspect ? `既存の見込み企業「${matchedCompany.company_name}」（${matchedCompany.id}）と一致` : warning,
+          selected: !alreadyProspect && !warning,
         };
       });
       if (!reviewed.length) throw new Error('登録候補を読み取れませんでした。調査結果の形式を確認してください。');
@@ -116,15 +120,18 @@ JSONオブジェクトのみを返してください。形式: {"candidates":[{"
       if (lookupError) throw lookupError;
       let nextNumber = Math.max(0, ...(existing || []).map((row: any) => Number(String(row.id).match(/^CID-(\d+)$/)?.[1] || 0))) + 1;
       for (const candidate of candidates.filter((item) => item.selected && !item.duplicate_company_id)) {
-        const companyId = `CID-${String(nextNumber++).padStart(3, '0')}`;
-        const { error: companyError } = await supabase.from('companies').insert({
-          id: companyId,
-          company_name: candidate.company_name,
-          industry: candidate.industry || null,
-          website: candidate.website || null,
-          address: candidate.address || null,
-        });
-        if (companyError) throw new Error(`${candidate.company_name} の会社登録に失敗: ${companyError.message}`);
+        let companyId = candidate.existing_company_id;
+        if (!companyId) {
+          companyId = `CID-${String(nextNumber++).padStart(3, '0')}`;
+          const { error: companyError } = await supabase.from('companies').insert({
+            id: companyId,
+            company_name: candidate.company_name,
+            industry: candidate.industry || null,
+            website: candidate.website || null,
+            address: candidate.address || null,
+          });
+          if (companyError) throw new Error(`${candidate.company_name} の会社登録に失敗: ${companyError.message}`);
+        }
         const sourceMemo = [candidate.reason, candidate.source_url ? `調査根拠: ${candidate.source_url}` : '調査根拠URL: 未入力'].filter(Boolean).join('\n');
         const { error: prospectError } = await supabase.from('prospects').insert({
           company_id: companyId,
