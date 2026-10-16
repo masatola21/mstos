@@ -197,7 +197,8 @@ async function loadTaskRelatedContext(task: TaskItem): Promise<string> {
 function AppContent() {
   const { user, isLoading } = useAuth();
   const [currentTab, setCurrentTab] = useState<UnifiedNavTab>('mst_dashboard');
-  const [customerWorkspaceCompanyId, setCustomerWorkspaceCompanyId] = useState<string | undefined>();
+  const [customerWorkspaceContext, setCustomerWorkspaceContext] = useState<{ companyId: string; leadId?: string; dealId?: string } | undefined>();
+  const customerWorkspaceCompanyId = customerWorkspaceContext?.companyId;
   const [workspaceReady, setWorkspaceReady] = useState(false);
   const [workspaceSyncStatus, setWorkspaceSyncStatus] = useState<'loading' | 'saving' | 'saved' | 'error'>('loading');
   const lastSavedWorkspaceRef = useRef('');
@@ -1419,7 +1420,7 @@ function AppContent() {
         )}
 
         {currentTab === 'mst_diagnoses' && (
-          <DiagnosisManager onOpenRls={() => setIsRlsOpen(true)} />
+          <DiagnosisManager onOpenRls={() => setIsRlsOpen(true)} initialLeadId={customerWorkspaceContext?.leadId} initialCompanyId={customerWorkspaceContext?.companyId} />
         )}
 
         {currentTab === 'deal_invitations' && <SalesOperationsWorkspace tab="invitations" />}
@@ -1429,9 +1430,13 @@ function AppContent() {
             currentTable={currentTab as TableKey}
             onTableChange={(tab) => setCurrentTab(tab as UnifiedNavTab)}
             onOpenRls={() => setIsRlsOpen(true)}
-            onOpenCustomerWorkspace={(companyId, destination) => {
-              setCustomerWorkspaceCompanyId(companyId);
-              setCurrentTab(destination === 'documents' ? 'document_templates' : 'customer_operations');
+            onOpenCustomerWorkspace={(companyId, destination, recordContext) => {
+              setCustomerWorkspaceContext({
+                companyId,
+                leadId: recordContext?.tableKey === 'leads' ? recordContext.recordId : recordContext?.leadId,
+                dealId: recordContext?.tableKey === 'deals' ? recordContext.recordId : undefined,
+              });
+              setCurrentTab(destination === 'documents' ? 'document_templates' : destination === 'diagnoses' ? 'mst_diagnoses' : 'customer_operations');
             }}
           />
         )}
@@ -1479,7 +1484,7 @@ function AppContent() {
           <SalesOperationsWorkspace
             tab="operations"
             companyId={customerWorkspaceCompanyId}
-            onClearCompanyFilter={() => setCustomerWorkspaceCompanyId(undefined)}
+            onClearCompanyFilter={() => setCustomerWorkspaceContext(undefined)}
             onOperationalRecordsChange={(nextContracts, nextInvoices) => {
               setContracts(nextContracts);
               setInvoices(nextInvoices);
@@ -1497,8 +1502,8 @@ function AppContent() {
 
         {currentTab === 'document_templates' && (
           <>
-            <DocumentTemplateView key={customerWorkspaceCompanyId || 'all'} initialCompanyId={customerWorkspaceCompanyId} />
-            <SalesOperationsWorkspace tab="documents" companyId={customerWorkspaceCompanyId} onClearCompanyFilter={() => setCustomerWorkspaceCompanyId(undefined)} />
+            <DocumentTemplateView key={`${customerWorkspaceCompanyId || 'all'}:${customerWorkspaceContext?.leadId || ''}:${customerWorkspaceContext?.dealId || ''}`} initialCompanyId={customerWorkspaceCompanyId} initialLeadId={customerWorkspaceContext?.leadId} initialDealId={customerWorkspaceContext?.dealId} />
+            <SalesOperationsWorkspace tab="documents" companyId={customerWorkspaceCompanyId} leadId={customerWorkspaceContext?.leadId} dealId={customerWorkspaceContext?.dealId} onClearCompanyFilter={() => setCustomerWorkspaceContext(undefined)} />
           </>
         )}
 

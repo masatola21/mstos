@@ -274,9 +274,9 @@ const DEFAULT_TEMPLATES: DocTemplate[] = [
 const templateWorkflowOrder: Record<DocTemplateType, number> = { report: 0, proposal: 1, contract: 2, invoice: 3 };
 const orderTemplatesByWorkflow = (items: DocTemplate[]) => [...items].sort((a, b) => templateWorkflowOrder[a.type] - templateWorkflowOrder[b.type]);
 
-interface DocumentTemplateViewProps { initialCompanyId?: string; }
+interface DocumentTemplateViewProps { initialCompanyId?: string; initialLeadId?: string; initialDealId?: string; }
 
-export const DocumentTemplateView: React.FC<DocumentTemplateViewProps> = ({ initialCompanyId }) => {
+export const DocumentTemplateView: React.FC<DocumentTemplateViewProps> = ({ initialCompanyId, initialLeadId, initialDealId }) => {
   const [templates, setTemplates] = useState<DocTemplate[]>(DEFAULT_TEMPLATES);
   const [templateStatus, setTemplateStatus] = useState('');
   const [selectedTemplateId, setSelectedTemplateId] = useState<string>('tpl-report-01');
@@ -284,10 +284,12 @@ export const DocumentTemplateView: React.FC<DocumentTemplateViewProps> = ({ init
   const [copied, setCopied] = useState<boolean>(false);
   const [companies, setCompanies] = useState<Array<{id:string;company_name:string}>>([]);
   const [contacts, setContacts] = useState<Array<{id:string;full_name:string;company_id?:string|null}>>([]);
-  const [deals, setDeals] = useState<Array<{id:string;proposal_plan_name:string;company_id?:string|null}>>([]);
+  const [deals, setDeals] = useState<Array<{id:string;proposal_plan_name:string;company_id?:string|null;lead_id?:string|null}>>([]);
+  const [leads, setLeads] = useState<Array<{id:string;source?:string|null;status?:string|null;company_id?:string|null}>>([]);
   const [companyId, setCompanyId] = useState(initialCompanyId || '');
+  const [leadId, setLeadId] = useState(initialLeadId || '');
   const [contactId, setContactId] = useState('');
-  const [dealId, setDealId] = useState('');
+  const [dealId, setDealId] = useState(initialDealId || '');
   const [saveMessage, setSaveMessage] = useState('');
 
   useEffect(() => {
@@ -296,11 +298,13 @@ export const DocumentTemplateView: React.FC<DocumentTemplateViewProps> = ({ init
     void Promise.all([
       supabase.from('companies').select('id,company_name').order('company_name'),
       supabase.from('contacts').select('id,full_name,company_id').order('full_name'),
-      supabase.from('deals').select('id,proposal_plan_name,company_id').order('created_at',{ascending:false}),
-    ]).then(([companyResult,contactResult,dealResult]) => {
+      supabase.from('deals').select('id,proposal_plan_name,company_id,lead_id').order('created_at',{ascending:false}),
+      supabase.from('leads').select('id,source,status,company_id').order('created_at',{ascending:false}),
+    ]).then(([companyResult,contactResult,dealResult,leadResult]) => {
       if (!companyResult.error) setCompanies(companyResult.data || []);
       if (!contactResult.error) setContacts(contactResult.data || []);
       if (!dealResult.error) setDeals(dealResult.data || []);
+      if (!leadResult.error) setLeads(leadResult.data || []);
     });
   }, []);
 
@@ -316,6 +320,7 @@ export const DocumentTemplateView: React.FC<DocumentTemplateViewProps> = ({ init
       body_html: populatedHtml,
       company_id: companyId || null,
       contact_id: contactId || null,
+      lead_id: leadId || null,
       deal_id: dealId || null,
     });
     if (error) { setSaveMessage(`保存できませんでした: ${error.message}`); return; }
@@ -489,11 +494,12 @@ export const DocumentTemplateView: React.FC<DocumentTemplateViewProps> = ({ init
       </div>
 
       <section className="rounded-xl border border-slate-800 bg-slate-900 p-4">
-        <div className="mb-3"><h2 className="font-semibold text-white">顧客情報との紐付け</h2><p className="mt-1 text-xs text-slate-400">書類の保存時に会社・担当者・商談IDを関連付けます。入力情報の複製ではなく、CRMレコードを参照します。</p></div>
-        <div className="grid gap-3 md:grid-cols-3">
+        <div className="mb-3"><h2 className="font-semibold text-white">営業レコードとの紐付け</h2><p className="mt-1 text-xs text-slate-400">リード・商談・顧客の各段階から、同じ書類レコードに関連付けます。</p></div>
+        <div className="grid gap-3 md:grid-cols-4">
           <label className="text-xs text-slate-400">会社<select value={companyId} disabled={Boolean(initialCompanyId)} onChange={(e)=>{setCompanyId(e.target.value);setContactId('');}} className="mt-1 w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-white disabled:opacity-70"><option value="">未選択</option>{companies.map((company)=><option key={company.id} value={company.id}>{company.company_name}</option>)}</select></label>
+          <label className="text-xs text-slate-400">リード<select value={leadId} disabled={Boolean(initialLeadId || initialDealId)} onChange={(e)=>setLeadId(e.target.value)} className="mt-1 w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-white disabled:opacity-70"><option value="">未選択</option>{leads.filter((lead)=>!companyId||lead.company_id===companyId).map((lead)=><option key={lead.id} value={lead.id}>{lead.source || 'リード'} · {lead.status || lead.id.slice(0,8)}</option>)}</select></label>
           <label className="text-xs text-slate-400">担当者<select value={contactId} onChange={(e)=>setContactId(e.target.value)} className="mt-1 w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-white"><option value="">未選択</option>{contacts.filter((contact)=>!companyId||contact.company_id===companyId).map((contact)=><option key={contact.id} value={contact.id}>{contact.full_name}</option>)}</select></label>
-          <label className="text-xs text-slate-400">商談<select value={dealId} onChange={(e)=>setDealId(e.target.value)} className="mt-1 w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-white"><option value="">未選択</option>{deals.filter((deal)=>!companyId||deal.company_id===companyId).map((deal)=><option key={deal.id} value={deal.id}>{deal.proposal_plan_name}</option>)}</select></label>
+          <label className="text-xs text-slate-400">商談<select value={dealId} disabled={Boolean(initialDealId)} onChange={(e)=>setDealId(e.target.value)} className="mt-1 w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-white"><option value="">未選択</option>{deals.filter((deal)=>(!companyId||deal.company_id===companyId)&&(!leadId||deal.lead_id===leadId)).map((deal)=><option key={deal.id} value={deal.id}>{deal.proposal_plan_name}</option>)}</select></label>
         </div>
         <div className="mt-3 flex flex-wrap items-center gap-3"><button onClick={()=>void saveGeneratedDocument()} className="flex items-center gap-2 rounded-lg bg-emerald-700 px-3 py-2 text-xs font-semibold text-white hover:bg-emerald-600"><Save className="h-4 w-4"/>生成内容を確認待ちで保存</button>{saveMessage&&<p role="status" className="text-xs text-slate-300">{saveMessage}</p>}</div>
       </section>

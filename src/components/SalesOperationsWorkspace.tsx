@@ -18,9 +18,9 @@ const opsTabs = [
   { key: 'services', label: '顧問・構築支援', table: 'customer_service_engagements', icon: Wrench },
 ] as const;
 
-interface Props { tab: WorkspaceTab; companyId?: string; onClearCompanyFilter?: () => void; onOperationalRecordsChange?: (contracts: ManagedContract[], invoices: ManagedInvoice[]) => void; }
+interface Props { tab: WorkspaceTab; companyId?: string; leadId?: string; dealId?: string; onClearCompanyFilter?: () => void; onOperationalRecordsChange?: (contracts: ManagedContract[], invoices: ManagedInvoice[]) => void; }
 
-export const SalesOperationsWorkspace: React.FC<Props> = ({ tab, companyId, onClearCompanyFilter, onOperationalRecordsChange }) => {
+export const SalesOperationsWorkspace: React.FC<Props> = ({ tab, companyId, leadId, dealId, onClearCompanyFilter, onOperationalRecordsChange }) => {
   const [segments, setSegments] = useState<Segment[]>([]);
   const [documents, setDocuments] = useState<RecordRow[]>([]);
   const [outbox, setOutbox] = useState<RecordRow[]>([]);
@@ -28,6 +28,9 @@ export const SalesOperationsWorkspace: React.FC<Props> = ({ tab, companyId, onCl
   const [companies, setCompanies] = useState<RecordRow[]>([]);
   const [sendContactId, setSendContactId] = useState('');
   const [sendChannel, setSendChannel] = useState<'email'|'line'>('email');
+  const [sendDocumentId, setSendDocumentId] = useState('');
+  const [sendSubject, setSendSubject] = useState('');
+  const [sendBodyText, setSendBodyText] = useState('');
   const [consentConfirmed, setConsentConfirmed] = useState(false);
   const [consentBasis, setConsentBasis] = useState('');
   const [records, setRecords] = useState<RecordRow[]>([]);
@@ -61,7 +64,9 @@ export const SalesOperationsWorkspace: React.FC<Props> = ({ tab, companyId, onCl
         setSegments((data || []) as Segment[]);
       } else if (tab === 'documents') {
         let documentsQuery = supabase.from('customer_documents').select('*').order('created_at', { ascending: false }).limit(100);
-        if (companyId) documentsQuery = documentsQuery.eq('company_id', companyId);
+        if (leadId) documentsQuery = documentsQuery.or(`lead_id.eq.${leadId},and(lead_id.is.null,deal_id.is.null,company_id.eq.${companyId})`);
+        else if (dealId) documentsQuery = documentsQuery.or(`deal_id.eq.${dealId},and(deal_id.is.null,company_id.eq.${companyId})`);
+        else if (companyId) documentsQuery = documentsQuery.eq('company_id', companyId);
         let contactsQuery = supabase.from('contacts').select('id,full_name,email,line_user_id,company_id').order('full_name');
         if (companyId) contactsQuery = contactsQuery.eq('company_id', companyId);
         const [docs, messages, contactResult] = await Promise.all([
@@ -97,7 +102,7 @@ export const SalesOperationsWorkspace: React.FC<Props> = ({ tab, companyId, onCl
     finally { setLoading(false); }
   };
 
-  useEffect(() => { if (tab !== 'invitations') void load(); }, [tab, activeOpsTab, companyId]);
+  useEffect(() => { if (tab !== 'invitations') void load(); }, [tab, activeOpsTab, companyId, leadId, dealId]);
 
   const createSegment = async (event: React.FormEvent) => {
     event.preventDefault();
@@ -129,6 +134,7 @@ export const SalesOperationsWorkspace: React.FC<Props> = ({ tab, companyId, onCl
     const supabase = getSupabase();
     const contact = contacts.find((item) => item.id === sendContactId);
     if (!supabase || !contact) { setError('送信先の連絡先を選択してください。'); return; }
+    if (!sendSubject.trim() || !sendBodyText.trim()) { setError('顧客向け件名と本文を入力してください。'); return; }
     if (!consentConfirmed || !consentBasis.trim()) { setError('配信同意の確認と根拠メモを入力してください。'); return; }
     const address = sendChannel === 'email' ? contact.email : contact.line_user_id;
     if (!address) { setError(sendChannel === 'email' ? '選択した連絡先にメールアドレスがありません。' : '選択した連絡先にLINE user IDがありません。'); return; }
@@ -143,14 +149,14 @@ export const SalesOperationsWorkspace: React.FC<Props> = ({ tab, companyId, onCl
     setError('');
     const { error: insertError } = await supabase.from('communication_outbox').insert({
       channel: sendChannel, recipient_contact_id: contact.id, recipient_address: address,
-      subject: document.title, body_text: `書類「${document.title}」の送付依頼です。`,
+      subject: sendSubject.trim(), body_text: sendBodyText.trim(),
       document_id: document.id, source_type: 'customer_document',
       consent_confirmed_at: new Date().toISOString(), consent_basis: consentBasis.trim(),
       status: 'awaiting_approval',
     });
     if (insertError) { setError(insertError.message); return; }
-    setConsentConfirmed(false); setConsentBasis('');
-    setNotice('送信承認待ちに登録しました。外部サービスへはまだ送信していません。');
+    setConsentConfirmed(false); setConsentBasis(''); setSendDocumentId(''); setSendSubject(''); setSendBodyText('');
+    setNotice('送信承認待ちに登録しました。書類を添付対象として紐付けています。外部サービスへはまだ送信していません。');
     await load();
   };
 
@@ -240,11 +246,11 @@ export const SalesOperationsWorkspace: React.FC<Props> = ({ tab, companyId, onCl
 
     {tab === 'documents' && <div className="space-y-4">
       {companyId && <div className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-cyan-900/70 bg-cyan-950/30 px-3 py-2 text-xs">
-        <span className="text-cyan-100">この顧客に関連する書類を表示中（会社ID: {companyId}）</span>
+        <span className="text-cyan-100">{leadId ? `リードに関連する書類を表示中（ID: ${leadId}）` : dealId ? `商談に関連する書類を表示中（ID: ${dealId}）` : `この顧客に関連する書類を表示中（会社ID: ${companyId}）`}</span>
         {onClearCompanyFilter && <button type="button" onClick={onClearCompanyFilter} className="rounded border border-cyan-800 px-2 py-1 text-cyan-100 hover:bg-cyan-900/50">全顧客を表示</button>}
       </div>}
       <div className="grid gap-5 xl:grid-cols-2">
-      <section className="rounded-xl border border-slate-800 bg-slate-900 p-4"><h2 className="mb-3 font-semibold text-white">生成済み書類</h2>{loading ? <p className="text-sm text-slate-400">読み込み中…</p> : documents.length === 0 ? <p className="text-sm text-slate-400">書類ひな形から保存した書類がここに表示されます。</p> : <ul className="divide-y divide-slate-800">{documents.map((doc) => <li key={doc.id} className="py-3"><div className="flex flex-wrap items-center justify-between gap-2"><span className="font-medium text-white">{doc.title}</span><select aria-label={`${doc.title}の状態`} value={doc.status} onChange={(e)=>void updateDocumentStatus(doc.id,e.target.value)} className="rounded border border-slate-700 bg-slate-950 px-2 py-1 text-xs text-white"><option value="draft">下書き</option><option value="awaiting_approval">確認待ち</option><option value="approved">承認済み</option><option value="archived">保管</option></select></div><div className="mt-1 text-xs text-slate-500">{doc.document_type} · {new Date(doc.created_at).toLocaleString('ja-JP')}</div>{doc.status==='approved'&&<div className="mt-2 flex flex-wrap items-center gap-2"><select value={sendContactId} onChange={(e)=>setSendContactId(e.target.value)} className="rounded border border-slate-700 bg-slate-950 px-2 py-1 text-xs text-white"><option value="">送信先を選択</option>{contacts.map(contact=><option key={contact.id} value={contact.id}>{contact.full_name}</option>)}</select><select value={sendChannel} onChange={(e)=>setSendChannel(e.target.value as 'email'|'line')} className="rounded border border-slate-700 bg-slate-950 px-2 py-1 text-xs text-white"><option value="email">メール</option><option value="line">LINE</option></select><label className="flex items-center gap-1 text-[11px] text-slate-300"><input type="checkbox" checked={consentConfirmed} onChange={(e)=>setConsentConfirmed(e.target.checked)}/>配信同意を確認</label><input value={consentBasis} onChange={(e)=>setConsentBasis(e.target.value)} placeholder="同意の根拠" className="max-w-40 rounded border border-slate-700 bg-slate-950 px-2 py-1 text-xs text-white"/><button onClick={()=>void requestDocumentSend(doc)} className="rounded bg-indigo-700 px-2 py-1 text-xs text-white">送信承認を申請</button></div>}</li>)}</ul>}</section>
+      <section className="rounded-xl border border-slate-800 bg-slate-900 p-4"><h2 className="mb-3 font-semibold text-white">生成済み書類</h2><p className="mb-3 text-xs text-slate-400">承認済み書類の「送付内容を設定」から宛先・本文・配信同意をまとめて入力します。選択した書類は送信依頼に添付対象として紐付きます。</p>{loading ? <p className="text-sm text-slate-400">読み込み中…</p> : documents.length === 0 ? <p className="text-sm text-slate-400">書類ひな形から保存した書類がここに表示されます。</p> : <ul className="divide-y divide-slate-800">{documents.map((doc) => <li key={doc.id} className="py-3"><div className="flex flex-wrap items-center justify-between gap-2"><span className="font-medium text-white">{doc.title}</span><select aria-label={`${doc.title}の状態`} value={doc.status} onChange={(e)=>void updateDocumentStatus(doc.id,e.target.value)} className="rounded border border-slate-700 bg-slate-950 px-2 py-1 text-xs text-white"><option value="draft">下書き</option><option value="awaiting_approval">確認待ち</option><option value="approved">承認済み</option><option value="archived">保管</option></select></div><div className="mt-1 text-xs text-slate-500">{doc.document_type} · {new Date(doc.created_at).toLocaleString('ja-JP')}</div>{doc.status==='approved'&&<div className="mt-2"><button type="button" onClick={()=>{setSendDocumentId(doc.id);setSendSubject(doc.title);setSendBodyText(`お世話になっております。\n\n「${doc.title}」をお送りします。\n内容をご確認いただき、ご不明点がございましたらご連絡ください。\n\nよろしくお願いいたします。`);setError('');}} className="rounded bg-indigo-700 px-3 py-2 text-xs font-semibold text-white">送付内容を設定</button>{sendDocumentId===doc.id&&<div className="mt-3 grid gap-3 rounded-lg border border-slate-700 bg-slate-950 p-3"><div className="text-xs text-cyan-200">添付対象：{doc.title}</div><div className="grid gap-3 md:grid-cols-2"><label className="text-xs text-slate-300">送信先<select value={sendContactId} onChange={(e)=>setSendContactId(e.target.value)} className="mt-1 w-full rounded border border-slate-700 bg-slate-900 px-3 py-2 text-sm text-white"><option value="">送信先を選択</option>{contacts.map(contact=><option key={contact.id} value={contact.id}>{contact.full_name} · {sendChannel==='email'?contact.email||'メール未登録':contact.line_user_id||'LINE未連携'}</option>)}</select></label><label className="text-xs text-slate-300">配信方法<select value={sendChannel} onChange={(e)=>setSendChannel(e.target.value as 'email'|'line')} className="mt-1 w-full rounded border border-slate-700 bg-slate-900 px-3 py-2 text-sm text-white"><option value="email">メール</option><option value="line">LINE</option></select></label></div>{sendChannel==='email'&&<label className="text-xs text-slate-300">件名<input value={sendSubject} onChange={(e)=>setSendSubject(e.target.value)} maxLength={200} className="mt-1 w-full rounded border border-slate-700 bg-slate-900 px-3 py-2 text-sm text-white"/></label>}<label className="text-xs text-slate-300">顧客向け本文<textarea value={sendBodyText} onChange={(e)=>setSendBodyText(e.target.value)} required maxLength={10000} rows={6} className="mt-1 w-full rounded border border-slate-700 bg-slate-900 px-3 py-2 text-sm leading-6 text-white"/></label><div className="flex flex-wrap items-center gap-3"><label className="flex items-center gap-2 text-xs text-slate-300"><input type="checkbox" checked={consentConfirmed} onChange={(e)=>setConsentConfirmed(e.target.checked)}/>配信同意を確認</label><input value={consentBasis} onChange={(e)=>setConsentBasis(e.target.value)} placeholder="同意の根拠" className="min-w-48 rounded border border-slate-700 bg-slate-900 px-3 py-2 text-xs text-white"/></div><div className="flex gap-2"><button type="button" onClick={()=>void requestDocumentSend(doc)} className="rounded bg-emerald-700 px-3 py-2 text-xs font-semibold text-white">内容を保存して送信承認を申請</button><button type="button" onClick={()=>setSendDocumentId('')} className="rounded border border-slate-700 px-3 py-2 text-xs text-slate-300">閉じる</button></div></div>}</div>}</li>)}</ul>}</section>
       <section className="rounded-xl border border-slate-800 bg-slate-900 p-4"><h2 className="mb-3 font-semibold text-white">送信履歴・送信待ち</h2>{loading ? <p className="text-sm text-slate-400">読み込み中…</p> : outbox.length === 0 ? <p className="text-sm text-slate-400">個別送信・一斉配信・書類送付は、同じ送信台帳に集約します。</p> : <ul className="divide-y divide-slate-800">{outbox.map((msg) => <li key={msg.id} className="py-3"><div className="flex flex-wrap items-center justify-between gap-2"><span className="font-medium text-white">{msg.subject || msg.recipient_address}</span><span className="text-xs text-slate-400">{msg.channel} · {msg.status}</span></div><div className="mt-1 text-xs text-slate-500">{new Date(msg.created_at).toLocaleString('ja-JP')} · 同意根拠: {msg.consent_basis || '記録なし'}</div>{msg.status==='awaiting_approval'&&<div className="mt-2 flex gap-2"><button onClick={()=>void updateOutboxStatus(msg.id,'queued')} className="rounded bg-emerald-700 px-2 py-1 text-xs text-white">承認して送信待ちへ</button><button onClick={()=>void updateOutboxStatus(msg.id,'canceled')} className="rounded border border-slate-700 px-2 py-1 text-xs text-slate-300">取り消す</button></div>}</li>)}</ul>}<p className="mt-3 text-xs text-amber-300">実送信はサーバー側のLINE・メール接続が必要です。この一覧への登録だけで配信完了にはなりません。</p></section>
       </div>
     </div>}
