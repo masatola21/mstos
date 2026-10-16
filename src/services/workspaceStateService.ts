@@ -142,13 +142,10 @@ type RelationalAIOperations = Pick<WorkspaceData,
   | 'workModeHistories'
   | 'knowledgeItems'
 >;
-}
 
 const WORKSPACE_STATE_TABLE = 'mst_workspace_state';
 const AI_OPERATIONS_SYNC_STATE_TABLE = 'mst_ai_operations_sync_state';
 const LAST_SYNC_PREFIX = 'mst_workspace_last_synced_v1:';
-
-type RelationalAIOperations = Pick<WorkspaceData, 'projects' | 'tasks' | 'approvals' | 'automations' | 'activityLogs'>;
 
 async function loadRelationalAIOperations(userId: string): Promise<RelationalAIOperations | null> {
   const supabase = getSupabaseClient();
