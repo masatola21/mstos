@@ -7,6 +7,19 @@ ALTER TABLE public.leads
   ADD COLUMN IF NOT EXISTS interested_product_id text
     REFERENCES public.products(id) ON DELETE SET NULL;
 
+-- Preserve existing free-text service names while linking exact, unambiguous catalog matches.
+WITH unique_products AS (
+  SELECT min(id) AS id, product_name
+  FROM public.products
+  GROUP BY product_name
+  HAVING count(*) = 1
+)
+UPDATE public.leads AS lead
+SET interested_product_id = product.id
+FROM unique_products AS product
+WHERE lead.interested_product_id IS NULL
+  AND trim(lead.service_type) = product.product_name;
+
 CREATE TABLE IF NOT EXISTS public.proposal_plan_templates (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
   owner_id uuid NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
