@@ -577,7 +577,7 @@ export async function fetchDiagnosisCounts(): Promise<{
     if (error) {
       return {
         total: 0,
-        byStatus: { draft: 0, in_progress: 0, completed: 0, generating: 0, reported: 0 },
+        byStatus: { received: 0, completed: 0, generating: 0, reported: 0 },
         error: parseSupabaseError(error)
       };
     }
@@ -603,7 +603,7 @@ export async function fetchDiagnosisCounts(): Promise<{
   } catch (err: any) {
     return {
       total: 0,
-      byStatus: { draft: 0, in_progress: 0, completed: 0, generating: 0, reported: 0 },
+      byStatus: { received: 0, completed: 0, generating: 0, reported: 0 },
       error: parseSupabaseError(err)
     };
   }
