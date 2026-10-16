@@ -174,14 +174,18 @@ async function loadRelationalAIOperations(userId: string): Promise<RelationalAIO
   if (queryError) throw queryError;
 
   const records = (rows: Array<{ payload: unknown }> | null | undefined) => (rows || []).map((row) => row.payload);
-  const characters = (preferences.data?.characters || []) as CharacterConfig[];
+  const characters = (preferences.data?.characters || loadCharacters()) as CharacterConfig[];
   const histories = Object.fromEntries((chats.data || []).map((row) => [row.conversation_key, row.messages as ChatMessage[]]));
+  const savedModelSettings = preferences.data?.ai_model_settings as AIModelSettings | null;
+  const aiModelSettings = savedModelSettings?.defaultSetting && savedModelSettings?.roleOverrides
+    ? savedModelSettings
+    : loadAIModelSettings();
   return {
-    topGoal: preferences.data?.top_goal || '',
+    topGoal: preferences.data?.top_goal ?? loadTopGoal(),
     characters,
-    activeCharacterId: preferences.data?.active_character_id || characters[0]?.id || '',
-    userProfile: (preferences.data?.user_profile || {}) as UserProfile,
-    aiModelSettings: (preferences.data?.ai_model_settings || {}) as AIModelSettings,
+    activeCharacterId: preferences.data?.active_character_id || characters[0]?.id || loadActiveCharacterId(characters),
+    userProfile: (preferences.data?.user_profile || loadUserProfile()) as UserProfile,
+    aiModelSettings,
     projects: records(projects.data) as Project[],
     tasks: records(tasks.data) as TaskItem[],
     approvals: records(approvals.data) as ApprovalItem[],
