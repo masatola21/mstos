@@ -21,21 +21,21 @@ const triggerLabels: Record<AutomationRule['triggerEvent'], string> = {
 const aiModeLabels: Record<AutomationRule['aiMode'], string> = {
   suggest: '提案する',
   prepare: '担当AIを設定する（実行はタスクから）',
-  execute: '自動実行（未接続・現在はタスク作成のみ）',
+  execute: '自動実行（イベント発生時に担当AIが草案を作成）',
 };
 
 const connectedTriggerEvents = new Set<AutomationRule['triggerEvent']>(['diagnosis_submitted', 'deal_won', 'contract_signed', 'invoice_overdue']);
 
 const approvalLabels: Record<AutomationRule['approvalPolicy'], string> = {
-  always: '毎回、人が確認してから進める',
-  external_actions: '顧客への連絡・外部処理の前に確認する',
-  none: '人の承認なしで進める',
+  always: 'AIの草案ごとに人が確認する',
+  external_actions: '顧客への連絡・外部処理だけ人が確認する',
+  none: 'AI草案に人の承認を求めない',
 };
 
 export const AutomationView: React.FC<AutomationViewProps> = ({ automations, activityLogs, onUpdateAutomation }) => {
   const enabledCount = automations.filter((rule) => rule.isEnabled).length;
-  const taskCreationHistory = activityLogs
-    .filter((log) => log.actionType === 'task_created' && log.summary.includes('自動化ルール「'))
+  const automationHistory = activityLogs
+    .filter((log) => log.summary.includes('自動化ルール「') || log.summary.includes('自動化実行:'))
     .sort((left, right) => right.timestamp - left.timestamp)
     .slice(0, 20);
 
@@ -57,7 +57,7 @@ export const AutomationView: React.FC<AutomationViewProps> = ({ automations, act
         <div className="mt-4 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-amber-700/40 bg-amber-950/30 p-3">
           <div className="flex items-start gap-2 text-xs leading-5 text-amber-100">
             <Clock3 className="mt-0.5 h-4 w-4 shrink-0 text-amber-300" />
-            <span>イベント連携済み：Realtime用のmigration適用後、ログイン中にアプリが起動している間、診断フォーム回答をリアルタイム受信します。また、商談から顧客への移行、締結済み契約の登録、請求書を期限超過へ変更した時に、ルールが有効なら期限付きタスクを作成します。同一レコードからの重複作成を防止します。アプリ停止中のバックグラウンド受信、支援マイルストーン、承認ポリシーの自動適用、実行履歴は未接続です。AI APIや顧客連絡は自動実行せず、タスクから担当者が開始します。</span>
+            <span>診断フォーム回答（Realtime）、商談の成約、契約締結、請求期限超過を検知して期限付きタスクを作成します。「担当AIを設定」はタスクから手動実行、「自動実行」はイベント発生時にAIが草案を作成します。「AIの草案ごとに人が確認する」を選ぶと成果物が承認待ちになり、承認後にナレッジへ登録されます。アプリ停止中の診断回答受信と支援マイルストーンは未接続です。顧客への送信や外部処理は自動実行しません。</span>
           </div>
           <span className="whitespace-nowrap text-xs text-slate-400">有効設定 {enabledCount} / {automations.length}</span>
         </div>
@@ -131,8 +131,8 @@ export const AutomationView: React.FC<AutomationViewProps> = ({ automations, act
 
             <div className="flex items-center gap-2 border-t border-slate-800 pt-3 text-[11px] text-slate-500">
               {rule.isEnabled ? <Check className="h-3.5 w-3.5 text-emerald-400" /> : <Clock3 className="h-3.5 w-3.5" />}
-              {rule.isEnabled ? (connectedTriggerEvents.has(rule.triggerEvent) ? '有効（イベント発生時に期限付きタスクを作成）' : '設定を有効にしました（業務連携後に適用）') : '停止中'}
-              {rule.aiMode === 'execute' && rule.approvalPolicy === 'none' && <span className="ml-auto inline-flex items-center gap-1 text-amber-300"><Sparkles className="h-3 w-3" />承認なしで自動実行する設定</span>}
+              {rule.isEnabled ? (connectedTriggerEvents.has(rule.triggerEvent) ? '有効（期限付きタスクを作成し、設定に応じてAI処理）' : '設定を有効にしました（業務連携後に適用）') : '停止中'}
+              {rule.aiMode === 'execute' && <span className="ml-auto inline-flex items-center gap-1 text-amber-300"><Sparkles className="h-3 w-3" />草案を自動作成・外部送信はしません</span>}
             </div>
           </article>
         ))}
@@ -141,16 +141,16 @@ export const AutomationView: React.FC<AutomationViewProps> = ({ automations, act
       <section className="rounded-2xl border border-slate-800 bg-slate-900 p-5">
         <div className="flex flex-wrap items-start justify-between gap-2">
           <div>
-            <h3 className="font-bold text-white">イベント起点のタスク作成履歴</h3>
-            <p className="mt-1 text-xs text-slate-400">ルールにより作成されたタスクの記録です。AIの実行結果や承認履歴は含みません。</p>
+            <h3 className="font-bold text-white">自動化イベント・AI実行・承認履歴</h3>
+            <p className="mt-1 text-xs text-slate-400">ルールからのタスク作成、担当AIの実行結果、成果物の承認・却下を記録します。</p>
           </div>
-          <span className="text-xs text-slate-500">直近 {taskCreationHistory.length} 件</span>
+          <span className="text-xs text-slate-500">直近 {automationHistory.length} 件</span>
         </div>
-        {taskCreationHistory.length === 0 ? (
+        {automationHistory.length === 0 ? (
           <p className="mt-4 rounded-xl border border-slate-800 bg-slate-950/60 p-4 text-xs text-slate-500">まだイベント起点のタスク作成履歴はありません。</p>
         ) : (
           <ol className="mt-4 divide-y divide-slate-800">
-            {taskCreationHistory.map((log) => (
+            {automationHistory.map((log) => (
               <li key={log.id} className="flex flex-col gap-1 py-3 sm:flex-row sm:items-start sm:justify-between sm:gap-4">
                 <p className="text-xs leading-5 text-slate-200">{log.summary}</p>
                 <time className="shrink-0 text-[11px] text-slate-500">{new Date(log.timestamp).toLocaleString('ja-JP')}</time>
