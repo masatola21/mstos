@@ -6,6 +6,7 @@ import { MarketingChannel, MarketingLineMessageType, MarketingScenario, Marketin
 interface Props {
   scenarios: MarketingScenario[];
   onScenariosChange: (scenarios: MarketingScenario[]) => void;
+  initialTab?: 'overview' | 'followups';
 }
 
 const triggerOptions: Array<{ value: MarketingTrigger; label: string }> = [
@@ -15,12 +16,14 @@ const triggerOptions: Array<{ value: MarketingTrigger; label: string }> = [
   { value: 'diagnosis_invited', label: '診断案内を送った時' },
   { value: 'diagnosis_completed', label: '診断が完了した時' },
   { value: 'report_approved', label: '診断レポートが承認された時' },
+  { value: 'report_sent', label: '診断レポートを送付した時' },
   { value: 'meeting_completed', label: '面談が完了した時' },
   { value: 'tag_added', label: '指定タグが付いた時' },
   { value: 'booking_created', label: '予約が登録された時' },
   { value: 'deal_stage_changed', label: '商談ステージが変わった時' },
   { value: 'deal_won', label: '商談が成約した時' },
   { value: 'proposal_approved', label: '提案書が承認された時' },
+  { value: 'proposal_sent', label: '提案書を送付した時' },
   { value: 'contract_sent', label: '契約書を送付した時' },
   { value: 'contract_signed', label: '契約が締結された時' },
   { value: 'invoice_due', label: '請求予定日になった時' },
@@ -117,7 +120,7 @@ const emptyScenario = (): Omit<MarketingScenario, 'id' | 'updatedAt'> => ({
   status: 'draft',
 });
 
-export const MarketingAutomationPrototypeView: React.FC<Props> = ({ scenarios, onScenariosChange }) => {
+export const MarketingAutomationPrototypeView: React.FC<Props> = ({ scenarios, onScenariosChange, initialTab = 'overview' }) => {
   const [segments, setSegments] = useState<Array<{id:string;name:string;entity_type:string}>>([]);
   useEffect(() => {
     const supabase = getSupabase();
@@ -139,10 +142,10 @@ export const MarketingAutomationPrototypeView: React.FC<Props> = ({ scenarios, o
   const emailCount = scenarios.filter((scenario) => scenario.channel !== 'line').length;
   const triggerLabel = useMemo(() => Object.fromEntries(triggerOptions.map((option) => [option.value, option.label])) as Record<MarketingTrigger, string>, []);
 
-  const startNew = () => {
+  const startNew = (trigger: MarketingTrigger = 'lead_created', name = '') => {
     setEditing(null);
     setIsFormOpen(true);
-    setForm(emptyScenario());
+    setForm({ ...emptyScenario(), trigger, name });
     setActiveTab('scenarios');
     setNotice('');
   };
@@ -304,6 +307,36 @@ export const MarketingAutomationPrototypeView: React.FC<Props> = ({ scenarios, o
         <section className="rounded-2xl border border-slate-800 bg-slate-900 p-5">
           <h3 className="font-bold text-white">契約後の案内も送信経路は共通</h3>
           <p className="mt-2 text-sm leading-6 text-slate-300">契約・請求・顧問・構築支援の状態は「契約・請求・支援」で管理します。そこから送る案内や書類の送信も共通のLINE・メール送信基盤と履歴を使い、業務の状態そのものはマーケティング側に複製しません。</p>
+        </section>
+      </div>}
+
+      {activeTab === 'followups' && <div className="space-y-4">
+        <section className="rounded-2xl border border-indigo-500/30 bg-indigo-950/25 p-5">
+          <h2 className="text-lg font-bold text-white">段階ごとのフォロー営業</h2>
+          <p className="mt-2 text-sm leading-6 text-slate-300">受付から商談後まで、顧客の進行イベントを起点にフォローシナリオを準備します。ここで作るのは配信内容と開始条件の設定です。返信・予約・契約などによる自動停止とLINE／メール送信は、実行基盤の接続後に有効になります。</p>
+        </section>
+        <div className="space-y-3">
+          {[
+            { title: 'フォーム受付後', trigger: 'lead_created' as MarketingTrigger, description: '受付確認と次の案内。診断・相談申込の内容に合わせてCRMに登録されたリードへ対応します。' },
+            { title: '診断完了後', trigger: 'diagnosis_completed' as MarketingTrigger, description: '診断結果の案内後、相談・面談への案内を送ります。診断結果やレポートは人が確認してから送付します。' },
+            { title: '診断レポート送付後', trigger: 'report_sent' as MarketingTrigger, description: 'レポート確認のフォローと、必要に応じた相談案内を行います。' },
+            { title: '提案書送付後', trigger: 'proposal_sent' as MarketingTrigger, description: '提案内容の確認時期に合わせて連絡し、回答待ちの場合は担当者タスクにつなぎます。' },
+            { title: '商談・面談後', trigger: 'meeting_completed' as MarketingTrigger, description: 'お礼と合意した次の手順を案内し、提案待ち・回答待ちなどの次工程を管理します。' },
+          ].map((stage) => {
+            const stageScenarios = scenarios.filter((scenario) => scenario.trigger === stage.trigger);
+            return <article key={stage.trigger} className="grid gap-4 rounded-2xl border border-slate-800 bg-slate-900 p-5 md:grid-cols-[1fr_auto] md:items-center">
+              <div>
+                <div className="flex flex-wrap items-center gap-2"><h3 className="font-bold text-white">{stage.title}</h3><span className="rounded-full bg-slate-800 px-2 py-1 text-[10px] text-slate-300">{stageScenarios.length}件の設定</span></div>
+                <p className="mt-2 text-sm leading-5 text-slate-400">{stage.description}</p>
+                {stageScenarios.length > 0 && <p className="mt-2 text-xs text-indigo-200">{stageScenarios.map((scenario) => scenario.name).join('、')}</p>}
+              </div>
+              <button onClick={() => startNew(stage.trigger, stage.title + 'のフォロー')} className="inline-flex shrink-0 items-center justify-center gap-2 rounded-lg bg-indigo-600 px-3 py-2 text-xs font-semibold text-white hover:bg-indigo-500"><Plus className="h-4 w-4" />この段階のシナリオを作成</button>
+            </article>;
+          })}
+        </div>
+        <section className="rounded-2xl border border-amber-500/25 bg-amber-950/20 p-5">
+          <h3 className="font-bold text-amber-100">共通の停止条件（実行連携時に適用）</h3>
+          <p className="mt-2 text-sm leading-6 text-amber-100/80">返信があった、予約・商談に進んだ、契約が成立した、または配信停止になった場合は、その段階のフォローを止めます。自動送信は行わず、現在はシナリオ設定の保存までです。</p>
         </section>
       </div>}
 
