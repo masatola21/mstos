@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { DiagnosisFormsWorkspace } from './DiagnosisFormsWorkspace';
+import { getSupabase } from '../lib/supabaseClient';
 import { Diagnosis, DiagnosisStatus, Company, Lead, AiReport } from '../types/database';
 import { 
   fetchDiagnosesList, 
@@ -46,6 +47,7 @@ interface DiagnosisManagerProps {
   onOpenRls?: () => void;
   initialLeadId?: string;
   initialCompanyId?: string;
+  initialSection?: 'forms' | 'diagnoses';
 }
 
 const STATUS_LABELS: Record<DiagnosisStatus, { label: string; color: string; bg: string; border: string; icon: React.ReactNode }> = {
@@ -705,6 +707,7 @@ const DiagnosisDetailModal: React.FC<DiagnosisDetailModalProps> = ({
 
   // ステータス差し戻し状態
   const [reverting, setReverting] = useState(false);
+  const [generatingReport, setGeneratingReport] = useState(false);
 
   // 関連レポート一覧
   const [reports, setReports] = useState<AiReport[]>([]);
@@ -786,6 +789,77 @@ const DiagnosisDetailModal: React.FC<DiagnosisDetailModalProps> = ({
       setErrorMsg(err.message || '保存中にエラーが発生しました。');
     } finally {
       setSaving(false);
+    }
+  };
+
+  // Complete the diagnosis, create a reviewed-ready report, then sync report and proposal drafts via DB trigger.
+  const handleGenerateReport = async () => {
+    if (!diagnosis || !['completed', 'reported'].includes(diagnosis.status)) return;
+    const supabase = getSupabase();
+    if (!supabase) { setErrorMsg('Supabaseに接続してください。'); return; }
+    setGeneratingReport(true);
+    setErrorMsg(null);
+    setSaveSuccessMsg(null);
+    try {
+      const categories = QUESTIONNAIRE_V1.map((category) => ({
+        key: category.key,
+        name: category.name,
+        score: currentScores.categoryScores[category.key] || 0,
+      }));
+      const strengths = categories.filter((category) => category.score >= 80).map((category) => ({category: category.name, score: category.score}));
+      const challenges = categories.filter((category) => category.score > 0 && category.score < 60).map((category) => ({category: category.name, score: category.score}));
+      const recommendations = (challenges.length ? challenges : categories.filter((category) => category.score > 0 && category.score < 80))
+        .map((category) => ({priority: category.score < 60 ? 'high' : 'medium', category: category.name, description: `${category.name}の現状を確認し、改善目標と担当・期限を定めた実行計画を作成してください。`}));
+      const summary = `総合スコアは${currentScores.totalScore}/100点です。回答${currentScores.answeredCount}/${currentScores.totalQuestions}問をもとに、${challenges.length ? '優先課題の改善計画を検討してください。' : '現在の取り組みを継続し、次の改善機会を確認してください。'}`;
+      const fullReport = [
+        '診断結果サマリー',
+        summary,
+        '',
+        'カテゴリ別スコア',
+        ...categories.map((category) => `・${category.name}: ${category.score}/100`),
+        '',
+        '強み',
+        ...(strengths.length ? strengths.map((item) => `・${item.category}（${item.score}/100）`) : ['・現時点で80点以上のカテゴリはありません。']),
+        '',
+        '優先課題',
+        ...(challenges.length ? challenges.map((item) => `・${item.category}（${item.score}/100）`) : ['・60点未満のカテゴリはありません。']),
+        '',
+        '推奨アクション',
+        ...(recommendations.length ? recommendations.map((item) => `・${item.category}: ${item.description}`) : ['・現状維持と定期的な効果測定を推奨します。']),
+        '',
+        '確認事項',
+        'このレポート初稿を担当者が確認し、必要に応じて内容を修正してください。',
+      ].join('\n');
+      const draft = await supabase.rpc('create_ai_report_draft', {
+        p_diagnosis_id: diagnosis.id,
+        p_model_name: 'MST診断レポート初稿',
+        p_prompt_version: 'score-summary-v1',
+        p_title: '診断結果レポート',
+      });
+      if (draft.error) throw draft.error;
+      const reportId = typeof draft.data === 'string' ? draft.data : draft.data?.id;
+      if (!reportId) throw new Error('レポートIDを取得できませんでした。');
+      const completed = await supabase.rpc('complete_and_activate_ai_report', {
+        p_report_id: reportId,
+        p_diagnosis_id: diagnosis.id,
+        p_summary: summary,
+        p_strengths: strengths,
+        p_challenges: challenges,
+        p_recommendations: recommendations,
+        p_full_report_text: fullReport,
+        p_storage_path: null,
+        p_recommended_product_id: null,
+      });
+      if (completed.error) throw completed.error;
+      const refreshed = await fetchAiReportsByDiagnosisId(diagnosis.id);
+      setReports(refreshed.data);
+      setDiagnosis({...diagnosis, status: 'reported'});
+      setSaveSuccessMsg('診断レポート初稿と提案書案を顧客書類に作成しました。内容を確認・編集してから送付してください。');
+      onUpdated();
+    } catch (err: any) {
+      setErrorMsg(err?.message || '診断レポートの作成に失敗しました。');
+    } finally {
+      setGeneratingReport(false);
     }
   };
 
@@ -875,10 +949,10 @@ const DiagnosisDetailModal: React.FC<DiagnosisDetailModalProps> = ({
           <div className="bg-amber-950/30 border border-amber-500/30 rounded-2xl p-4 text-amber-200 space-y-1">
             <div className="flex items-center gap-2 text-amber-300 font-semibold text-xs sm:text-sm">
               <ShieldCheck className="w-4 h-4 text-amber-400" />
-              <span>【安全ガード維持中】必須設問ID定義が未確定のため、completed への遷移はロックされています</span>
+              <span>必須設問に回答すると診断を完了できます</span>
             </div>
             <p className="text-xs text-amber-200/80 leading-relaxed pl-6">
-              回答データは自由に入力・変更し、<strong>「下書きとして保存」</strong> または <strong>「実施中として保存」</strong> を実行できます。設問確定前に誤って完了扱いにされるのを防ぐため、データベースRPCおよび本画面の双方で completed への遷移を確実にガードしています。
+              回答データは自由に入力・変更し、<strong>「下書きとして保存」</strong> または <strong>「実施中として保存」</strong> を実行できます。必須設問は12項目です。すべて回答してから診断を完了し、レポート初稿を作成してください。
             </p>
           </div>
 
@@ -1103,7 +1177,7 @@ const DiagnosisDetailModal: React.FC<DiagnosisDetailModalProps> = ({
 
 
 export const DiagnosisManager: React.FC<DiagnosisManagerProps> = (props) => {
-  const [section, setSection] = useState<'forms' | 'diagnoses'>(() => props.initialLeadId || props.initialCompanyId ? 'diagnoses' : 'forms');
+  const [section, setSection] = useState<'forms' | 'diagnoses'>(() => props.initialSection || (props.initialLeadId || props.initialCompanyId ? 'diagnoses' : 'forms'));
   return (
     <div className="space-y-4">
       <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-slate-800 bg-slate-900 p-3">
@@ -1116,7 +1190,7 @@ export const DiagnosisManager: React.FC<DiagnosisManagerProps> = (props) => {
           <button onClick={() => setSection('diagnoses')} className={`rounded-lg px-3 py-2 text-sm ${section === 'diagnoses' ? 'bg-blue-600 text-white' : 'text-slate-300 hover:bg-slate-800'}`}>診断・レポート</button>
         </div>
       </div>
-      {section === 'forms' ? <DiagnosisFormsWorkspace /> : <DiagnosisRecordsView {...props} />}
+      {section === 'forms' ? <DiagnosisFormsWorkspace initialLeadId={props.initialLeadId} initialCompanyId={props.initialCompanyId} initialSection={props.initialLeadId || props.initialCompanyId ? 'answers' : undefined} /> : <DiagnosisRecordsView {...props} />}
     </div>
   );
 };

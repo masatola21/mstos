@@ -197,7 +197,7 @@ async function loadTaskRelatedContext(task: TaskItem): Promise<string> {
 function AppContent() {
   const { user, isLoading } = useAuth();
   const [currentTab, setCurrentTab] = useState<UnifiedNavTab>('mst_dashboard');
-  const [customerWorkspaceContext, setCustomerWorkspaceContext] = useState<{ companyId: string; leadId?: string; dealId?: string } | undefined>();
+  const [customerWorkspaceContext, setCustomerWorkspaceContext] = useState<{ companyId: string; leadId?: string; dealId?: string; section?: 'forms' | 'diagnoses' } | undefined>();
   const customerWorkspaceCompanyId = customerWorkspaceContext?.companyId;
   const [workspaceReady, setWorkspaceReady] = useState(false);
   const [workspaceSyncStatus, setWorkspaceSyncStatus] = useState<'loading' | 'saving' | 'saved' | 'error'>('loading');
@@ -1420,7 +1420,7 @@ function AppContent() {
         )}
 
         {currentTab === 'mst_diagnoses' && (
-          <DiagnosisManager onOpenRls={() => setIsRlsOpen(true)} initialLeadId={customerWorkspaceContext?.leadId} initialCompanyId={customerWorkspaceContext?.companyId} />
+          <DiagnosisManager onOpenRls={() => setIsRlsOpen(true)} initialLeadId={customerWorkspaceContext?.leadId} initialCompanyId={customerWorkspaceContext?.companyId} initialSection={customerWorkspaceContext?.section} />
         )}
 
         {currentTab === 'deal_invitations' && <SalesOperationsWorkspace tab="invitations" />}
@@ -1436,8 +1436,9 @@ function AppContent() {
                 companyId,
                 leadId: recordContext?.tableKey === 'leads' ? recordContext.recordId : recordContext?.leadId,
                 dealId: recordContext?.tableKey === 'deals' ? recordContext.recordId : undefined,
+                section: destination === 'forms' ? 'forms' : destination === 'diagnoses' ? 'diagnoses' : undefined,
               });
-              setCurrentTab(destination === 'documents' ? 'document_templates' : destination === 'diagnoses' ? 'mst_diagnoses' : 'customer_operations');
+              setCurrentTab(destination === 'documents' ? 'document_templates' : destination === 'diagnoses' || destination === 'forms' ? 'mst_diagnoses' : 'customer_operations');
             }}
           />
         )}
