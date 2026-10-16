@@ -269,6 +269,36 @@ const DEFAULT_TEMPLATES: DocTemplate[] = [
       { key: 'recommended_product', label: '推奨プロダクト', defaultValue: 'AI統合基幹システム受託開発 ＆ 月額AI経営顧問' },
     ],
   },
+  {
+    id: 'tpl-estimate-01',
+    type: 'proposal',
+    title: '見積書（商談情報から作成）',
+    description: '診断を行わず、商談のプラン・金額だけで作成する見積書',
+    htmlContent: `<div style="font-family: Arial, sans-serif; max-width: 760px; margin: 0 auto; padding: 40px; color: #1e293b; line-height: 1.8">
+  <h1 style="text-align:center">御見積書</h1>
+  <p>{{client_company}} 御中</p>
+  <p>下記のとおりお見積り申し上げます。</p>
+  <h2>{{proposal_title}}</h2>
+  <table style="width:100%; border-collapse:collapse">
+    <tr><th style="text-align:left;border-bottom:1px solid #94a3b8">項目</th><th style="text-align:right;border-bottom:1px solid #94a3b8">金額</th></tr>
+    <tr><td style="padding:10px 0">{{project_name}}</td><td style="text-align:right">初期費用 {{initial_fee}} 円</td></tr>
+    <tr><td style="padding:10px 0">月額費用</td><td style="text-align:right">{{monthly_fee}} 円</td></tr>
+  </table>
+  <h2 style="text-align:right">合計 {{total_amount}} 円</h2>
+  <p>発行日：{{issue_date}}　有効期限：{{due_date}}</p>
+  <p>※記載内容をご確認のうえ、ご不明点があればお問い合わせください。</p>
+</div>`,
+    variables: [
+      { key: 'client_company', label: '宛先企業名', defaultValue: '' },
+      { key: 'proposal_title', label: '見積件名', defaultValue: '' },
+      { key: 'project_name', label: '提案プラン・商談名', defaultValue: '' },
+      { key: 'initial_fee', label: '初期費用', defaultValue: '' },
+      { key: 'monthly_fee', label: '月額費用', defaultValue: '' },
+      { key: 'total_amount', label: '合計金額', defaultValue: '' },
+      { key: 'issue_date', label: '発行日', defaultValue: '' },
+      { key: 'due_date', label: '有効期限', defaultValue: '' },
+    ],
+  },
 ];
 
 const templateWorkflowOrder: Record<DocTemplateType, number> = { report: 0, proposal: 1, contract: 2, invoice: 3 };
@@ -279,7 +309,7 @@ interface DocumentTemplateViewProps { initialCompanyId?: string; initialLeadId?:
 export const DocumentTemplateView: React.FC<DocumentTemplateViewProps> = ({ initialCompanyId, initialLeadId, initialDealId }) => {
   const [templates, setTemplates] = useState<DocTemplate[]>(DEFAULT_TEMPLATES);
   const [templateStatus, setTemplateStatus] = useState('');
-  const [selectedTemplateId, setSelectedTemplateId] = useState<string>('tpl-report-01');
+  const [selectedTemplateId, setSelectedTemplateId] = useState<string>(initialDealId ? 'tpl-estimate-01' : 'tpl-report-01');
   const [isEditingTemplate, setIsEditingTemplate] = useState<boolean>(false);
   const [copied, setCopied] = useState<boolean>(false);
   const [companies, setCompanies] = useState<Array<{id:string;company_name:string}>>([]);
@@ -361,6 +391,76 @@ export const DocumentTemplateView: React.FC<DocumentTemplateViewProps> = ({ init
     };
     void loadTemplates();
   }, []);
+
+
+  // Pull CRM, deal, and latest diagnosis data into matching template variables.
+  useEffect(() => {
+    const supabase = getSupabase();
+    if (!supabase || (!companyId && !leadId && !dealId)) return;
+    let cancelled = false;
+    const populate = async () => {
+      const [companyResult, leadResult, dealResult] = await Promise.all([
+        companyId ? supabase.from('companies').select('*').eq('id', companyId).maybeSingle() : Promise.resolve({data:null}),
+        leadId ? supabase.from('leads').select('*').eq('id', leadId).maybeSingle() : Promise.resolve({data:null}),
+        dealId ? supabase.from('deals').select('*').eq('id', dealId).maybeSingle() : Promise.resolve({data:null}),
+      ]);
+      const company = companyResult.data;
+      const lead = leadResult.data;
+      const deal = dealResult.data;
+      const resolvedCompanyId = companyId || deal?.company_id || lead?.company_id || '';
+      let diagnosis: any = null;
+      if (leadId || resolvedCompanyId) {
+        let diagnosisQuery = supabase.from('diagnoses').select('*').order('created_at', {ascending:false}).limit(1);
+        diagnosisQuery = leadId ? diagnosisQuery.eq('lead_id', leadId) : diagnosisQuery.eq('company_id', resolvedCompanyId);
+        const result = await diagnosisQuery.maybeSingle();
+        diagnosis = result.data;
+      }
+      let report: any = null;
+      if (diagnosis?.id) {
+        const result = await supabase.from('ai_reports').select('*').eq('diagnosis_id', diagnosis.id).eq('is_latest', true).maybeSingle();
+        report = result.data;
+      }
+      let productName = '';
+      if (deal?.product_id) {
+        const result = await supabase.from('products').select('product_name').eq('id', deal.product_id).maybeSingle();
+        productName = result.data?.product_name || '';
+      }
+      if (cancelled) return;
+      const score = diagnosis?.score;
+      const categoryScores = diagnosis?.category_scores || {};
+      const recommendations = report?.recommendations;
+      const recommendationText = Array.isArray(recommendations)
+        ? recommendations.map((item:any) => typeof item === 'string' ? item : item?.title || item?.description || JSON.stringify(item)).join(' / ')
+        : typeof recommendations === 'string' ? recommendations : '';
+      const today = new Date().toISOString().slice(0, 10);
+      const values: Record<string, string> = {
+        client_company: company?.company_name || '',
+        client_name: company?.contact_name || '',
+        sender_company: company?.company_name || '',
+        proposal_title: deal?.proposal_plan_name || deal?.deal_name || '',
+        project_name: deal?.proposal_plan_name || deal?.deal_name || '',
+        total_amount: deal?.total_amount == null ? '' : Number(deal.total_amount).toLocaleString('ja-JP'),
+        initial_fee: deal?.initial_fee == null ? '' : Number(deal.initial_fee).toLocaleString('ja-JP'),
+        monthly_fee: deal?.monthly_fee == null ? '' : Number(deal.monthly_fee).toLocaleString('ja-JP'),
+        issue_date: today,
+        conducted_date: diagnosis?.conducted_at ? String(diagnosis.conducted_at).slice(0,10) : today,
+        due_date: '',
+        overall_score: score == null ? '' : String(score),
+        score_rank: score == null ? '' : score >= 80 ? 'A' : score >= 60 ? 'B' : score >= 40 ? 'C' : 'D',
+        rank_description: report?.summary || '',
+        current_challenge: report?.challenges ? JSON.stringify(report.challenges) : '',
+        action_recommendation: recommendationText,
+        recommended_product: productName || report?.recommended_product_id || '',
+        score_sales: categoryScores.sales_marketing == null ? '' : String(categoryScores.sales_marketing),
+        score_automation: categoryScores.operation == null ? '' : String(categoryScores.operation),
+        comment_sales: report?.summary || '',
+        comment_automation: recommendationText,
+      };
+      setVariableValues((prev) => ({...prev, ...Object.fromEntries(Object.entries(values).filter(([,value]) => value !== ''))}));
+    };
+    void populate();
+    return () => { cancelled = true; };
+  }, [companyId, leadId, dealId]);
 
   // Active template
   const currentTemplate = templates.find((t) => t.id === selectedTemplateId) || templates[0];
