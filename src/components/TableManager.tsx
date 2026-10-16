@@ -35,6 +35,7 @@ interface TableManagerProps {
   onOpenRls: () => void;
   onOpenCreateTrigger?: boolean;
   onStageTransitionTask?: (event: { transitionType: TransitionType; sourceRecord: any; targetTable: 'leads' | 'deals' | 'customers'; targetRecordId?: string | number }) => void;
+  onOpenCustomerWorkspace?: (companyId: string, destination: 'documents' | 'operations') => void;
 }
 
 export const TableManager: React.FC<TableManagerProps> = ({
@@ -42,6 +43,7 @@ export const TableManager: React.FC<TableManagerProps> = ({
   onTableChange,
   onOpenRls,
   onStageTransitionTask,
+  onOpenCustomerWorkspace,
 }) => {
   const config = TABLE_CONFIGS[currentTable];
 
@@ -711,6 +713,7 @@ export const TableManager: React.FC<TableManagerProps> = ({
             handleOpenEdit(record);
           }}
           onTransitionStage={handleOpenTransition}
+          onOpenCustomerWorkspace={onOpenCustomerWorkspace}
         />
       )}
 

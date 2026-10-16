@@ -271,16 +271,21 @@ const DEFAULT_TEMPLATES: DocTemplate[] = [
   },
 ];
 
-export const DocumentTemplateView: React.FC = () => {
+const templateWorkflowOrder: Record<DocTemplateType, number> = { report: 0, proposal: 1, contract: 2, invoice: 3 };
+const orderTemplatesByWorkflow = (items: DocTemplate[]) => [...items].sort((a, b) => templateWorkflowOrder[a.type] - templateWorkflowOrder[b.type]);
+
+interface DocumentTemplateViewProps { initialCompanyId?: string; }
+
+export const DocumentTemplateView: React.FC<DocumentTemplateViewProps> = ({ initialCompanyId }) => {
   const [templates, setTemplates] = useState<DocTemplate[]>(DEFAULT_TEMPLATES);
   const [templateStatus, setTemplateStatus] = useState('');
-  const [selectedTemplateId, setSelectedTemplateId] = useState<string>(DEFAULT_TEMPLATES[0].id);
+  const [selectedTemplateId, setSelectedTemplateId] = useState<string>('tpl-report-01');
   const [isEditingTemplate, setIsEditingTemplate] = useState<boolean>(false);
   const [copied, setCopied] = useState<boolean>(false);
   const [companies, setCompanies] = useState<Array<{id:string;company_name:string}>>([]);
   const [contacts, setContacts] = useState<Array<{id:string;full_name:string;company_id?:string|null}>>([]);
   const [deals, setDeals] = useState<Array<{id:string;proposal_plan_name:string;company_id?:string|null}>>([]);
-  const [companyId, setCompanyId] = useState('');
+  const [companyId, setCompanyId] = useState(initialCompanyId || '');
   const [contactId, setContactId] = useState('');
   const [dealId, setDealId] = useState('');
   const [saveMessage, setSaveMessage] = useState('');
@@ -324,13 +329,13 @@ export const DocumentTemplateView: React.FC = () => {
       const { data, error } = await supabase.from('customer_document_templates').select('*').order('created_at');
       if (error) { setTemplateStatus('テンプレート共有には最新のSupabase SQL適用が必要です。'); return; }
       if (data?.length) {
-        setTemplates(data.map((row:any)=>({
+        setTemplates(orderTemplatesByWorkflow(data.map((row:any)=>({
           id:row.template_key,
           type:row.document_type==='diagnosis_report'?'report':row.document_type,
           title:row.title,description:row.description||'',htmlContent:row.body_html||'',
           variables:Array.isArray(row.variables)?row.variables:[],
-        })) as DocTemplate[]);
-        setSelectedTemplateId(data[0].template_key);
+        })) as DocTemplate[]));
+        setSelectedTemplateId(data.find((row:any)=>row.document_type==='diagnosis_report')?.template_key || data[0].template_key);
         setTemplateStatus('テンプレートをSupabaseから読み込みました。');
         return;
       }
@@ -358,7 +363,7 @@ export const DocumentTemplateView: React.FC = () => {
   // Variable inputs state
   const [variableValues, setVariableValues] = useState<Record<string, string>>(() => {
     const initial: Record<string, string> = {};
-    DEFAULT_TEMPLATES[0].variables.forEach((v) => {
+    (DEFAULT_TEMPLATES.find((template) => template.type === 'report') || DEFAULT_TEMPLATES[0]).variables.forEach((v) => {
       initial[v.key] = v.defaultValue;
     });
     return initial;
@@ -486,7 +491,7 @@ export const DocumentTemplateView: React.FC = () => {
       <section className="rounded-xl border border-slate-800 bg-slate-900 p-4">
         <div className="mb-3"><h2 className="font-semibold text-white">顧客情報との紐付け</h2><p className="mt-1 text-xs text-slate-400">書類の保存時に会社・担当者・商談IDを関連付けます。入力情報の複製ではなく、CRMレコードを参照します。</p></div>
         <div className="grid gap-3 md:grid-cols-3">
-          <label className="text-xs text-slate-400">会社<select value={companyId} onChange={(e)=>{setCompanyId(e.target.value);setContactId('');}} className="mt-1 w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-white"><option value="">未選択</option>{companies.map((company)=><option key={company.id} value={company.id}>{company.company_name}</option>)}</select></label>
+          <label className="text-xs text-slate-400">会社<select value={companyId} disabled={Boolean(initialCompanyId)} onChange={(e)=>{setCompanyId(e.target.value);setContactId('');}} className="mt-1 w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-white disabled:opacity-70"><option value="">未選択</option>{companies.map((company)=><option key={company.id} value={company.id}>{company.company_name}</option>)}</select></label>
           <label className="text-xs text-slate-400">担当者<select value={contactId} onChange={(e)=>setContactId(e.target.value)} className="mt-1 w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-white"><option value="">未選択</option>{contacts.filter((contact)=>!companyId||contact.company_id===companyId).map((contact)=><option key={contact.id} value={contact.id}>{contact.full_name}</option>)}</select></label>
           <label className="text-xs text-slate-400">商談<select value={dealId} onChange={(e)=>setDealId(e.target.value)} className="mt-1 w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-white"><option value="">未選択</option>{deals.filter((deal)=>!companyId||deal.company_id===companyId).map((deal)=><option key={deal.id} value={deal.id}>{deal.proposal_plan_name}</option>)}</select></label>
         </div>
@@ -497,7 +502,7 @@ export const DocumentTemplateView: React.FC = () => {
 
       {/* Template Selector Tabs */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-        {templates.map((tpl) => {
+        {orderTemplatesByWorkflow(templates).map((tpl) => {
           const isSelected = tpl.id === selectedTemplateId;
           const icons = {
             contract: <FileCheck2 className="w-4 h-4 text-emerald-400" />,
