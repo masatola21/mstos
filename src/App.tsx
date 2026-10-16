@@ -4,6 +4,7 @@ import { UnifiedNavbar, UnifiedNavTab } from './components/UnifiedNavbar';
 import { Dashboard } from './components/Dashboard';
 import { TableManager } from './components/TableManager';
 import { DiagnosisManager } from './components/DiagnosisManager';
+import { PublicIntakeForm } from './components/PublicIntakeForm';
 import { AuthScreen } from './components/AuthScreen';
 import { ConfigGuideModal } from './components/ConfigGuideModal';
 import { RlsGuideModal } from './components/RlsGuideModal';
@@ -1872,6 +1873,13 @@ function AppContent() {
 }
 
 export default function App() {
+  const publicFormMatch = window.location.pathname.match(/^\/f\/([^/]+)\/?$/);
+  if (publicFormMatch) {
+    let slug = publicFormMatch[1];
+    try { slug = decodeURIComponent(slug); } catch { /* Keep the raw path segment for the server's validation. */ }
+    return <PublicIntakeForm slug={slug} />;
+  }
+
   return (
     <AuthProvider>
       <AppContent />
