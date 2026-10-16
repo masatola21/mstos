@@ -48,7 +48,7 @@ export const AutomationView: React.FC<AutomationViewProps> = ({ automations, onU
         <div className="mt-4 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-amber-700/40 bg-amber-950/30 p-3">
           <div className="flex items-start gap-2 text-xs leading-5 text-amber-100">
             <Clock3 className="mt-0.5 h-4 w-4 shrink-0 text-amber-300" />
-            <span>現在はルール設定の保存までです。業務イベントによる自動起動と実行履歴は未接続のため、ここで有効にしても業務処理は実行されません。</span>
+            <span>現在は「商談成約後」のルールのみ、商談から顧客への移行時に既存タスクへ期限を設定します（初期値は3日）。他の業務イベントと、承認ポリシーの自動適用・実行履歴は未接続です。タスク作成時にAI APIは自動実行せず、担当者がタスクから開始します。</span>
           </div>
           <span className="whitespace-nowrap text-xs text-slate-400">有効設定 {enabledCount} / {automations.length}</span>
         </div>
