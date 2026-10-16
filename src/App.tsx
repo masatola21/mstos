@@ -34,6 +34,7 @@ import { SalesOperationsWorkspace } from './components/SalesOperationsWorkspace'
 import { AutomationView } from './components/matrix/AutomationView';
 import { DocumentTemplateView } from './components/matrix/DocumentTemplateView';
 import { MarketingAutomationPrototypeView } from './components/marketing/MarketingAutomationPrototypeView';
+import { SalesFollowupWorkspace } from './components/SalesFollowupWorkspace';
 import { ContactsLineHub } from './components/ContactsLineHub';
 import { QuickPresidentDrawer } from './components/matrix/QuickPresidentDrawer';
 
@@ -1497,12 +1498,12 @@ function AppContent() {
 
         {currentTab === 'contacts' && <ContactsLineHub />}
 
-        {(currentTab === 'marketing_automation' || currentTab === 'sales_followups') && (
-          <MarketingAutomationPrototypeView
-            scenarios={marketingScenarios}
-            onScenariosChange={setMarketingScenarios}
-            initialTab={currentTab === 'sales_followups' ? 'followups' : 'overview'}
-          />
+        {currentTab === 'marketing_automation' && (
+          <MarketingAutomationPrototypeView scenarios={marketingScenarios} onScenariosChange={setMarketingScenarios} />
+        )}
+
+        {currentTab === 'sales_followups' && (
+          <SalesFollowupWorkspace scenarios={marketingScenarios} onScenariosChange={setMarketingScenarios} />
         )}
 
         {/* ================= SECTION 3: AI PRESIDENT & STRATEGY ================= */}
