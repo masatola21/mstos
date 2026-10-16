@@ -267,6 +267,7 @@ app.post('/api/public/forms/:slug/submissions', async (req, res) => {
   if (!/^[a-z0-9ぁ-んァ-ヶ一-龠-]{1,120}$/i.test(slug)) return res.status(404).json({ error: 'フォームが見つかりません。' });
 
   const name = typeof body.name === 'string' ? body.name.trim().slice(0, 120) : '';
+  const companyName = typeof body.companyName === 'string' ? body.companyName.trim().slice(0, 200) : '';
   const email = typeof body.email === 'string' ? body.email.trim().toLowerCase().slice(0, 254) : '';
   const phone = typeof body.phone === 'string' ? body.phone.trim().slice(0, 40) : '';
   const requestId = body.requestId;
@@ -321,10 +322,23 @@ app.post('/api/public/forms/:slug/submissions', async (req, res) => {
       if (answer === undefined || answer === '' || answer === false) return res.status(400).json({ error: '必須の設問に回答してください。' });
     }
 
+    let matchedCompanyId: string | null = null;
+    if (companyName) {
+      const escapedCompanyName = companyName.replace(/\\/g, '\\\\').replace(/%/g, '\\%').replace(/_/g, '\\_');
+      const { data: matchingCompanies, error: companyLookupError } = await lineSupabase
+        .from('companies')
+        .select('id, company_name')
+        .ilike('company_name', escapedCompanyName)
+        .limit(10);
+      if (companyLookupError) throw companyLookupError;
+      matchedCompanyId = matchingCompanies?.find((company) =>
+        typeof company.company_name === 'string' && company.company_name.trim().toLocaleLowerCase() === companyName.toLocaleLowerCase()
+      )?.id ?? null;
+    }
     const escapedEmail = email.replace(/\\/g, '\\\\').replace(/%/g, '\\%').replace(/_/g, '\\_');
     const { data: matchingContacts, error: contactLookupError } = await lineSupabase
       .from('contacts')
-      .select('id, full_name, email, phone')
+      .select('id, full_name, email, phone, company_id')
       .ilike('email', escapedEmail)
       .order('created_at', { ascending: true })
       .limit(1);
@@ -334,22 +348,23 @@ app.post('/api/public/forms/:slug/submissions', async (req, res) => {
     if (contact) {
       const { data: updatedContact, error: updateContactError } = await lineSupabase
         .from('contacts')
-        .update({ full_name: name, ...(phone ? { phone } : {}) })
+        .update({ full_name: name, ...(phone ? { phone } : {}), ...(matchedCompanyId && !matchingContacts?.[0]?.company_id ? { company_id: matchedCompanyId } : {}) })
         .eq('id', contact.id)
-        .select('id, full_name, email, phone')
+        .select('id, full_name, email, phone, company_id')
         .single();
       if (updateContactError) throw updateContactError;
       contact = updatedContact;
     } else {
       const { data: insertedContact, error: insertContactError } = await lineSupabase
         .from('contacts')
-        .insert({ full_name: name, email, phone: phone || null, source: 'public_form' })
+        .insert({ full_name: name, email, phone: phone || null, company_id: matchedCompanyId, source: 'public_form' })
         .select('id, full_name, email, phone')
         .single();
       if (insertContactError) throw insertContactError;
       contact = insertedContact;
     }
 
+    const resolvedCompanyId = matchedCompanyId || contact.company_id || null;
     const answerSummary = JSON.stringify(cleanAnswers).slice(0, 6_000);
     const sourceLabel = publicFormSourceLabels[form.form_type];
     const originLabel = utm.source ? `（流入: ${utm.source.slice(0, 80)}）` : '';
@@ -357,7 +372,7 @@ app.post('/api/public/forms/:slug/submissions', async (req, res) => {
     const noteEntry = `${requestMarker} ${form.name}${originLabel} / ${new Date().toISOString()}\n${answerSummary}`;
     const { data: existingLeads, error: leadLookupError } = await lineSupabase
       .from('leads')
-      .select('id, notes, source, status, service_type, meeting_date')
+      .select('id, notes, source, status, service_type, meeting_date, company_id')
       .eq('contact_id', contact.id)
       .order('created_at', { ascending: false })
       .limit(1);
@@ -375,6 +390,7 @@ app.post('/api/public/forms/:slug/submissions', async (req, res) => {
           .update({
             notes,
             last_contacted_at: new Date().toISOString(),
+            ...(resolvedCompanyId && !lead.company_id ? { company_id: resolvedCompanyId } : {}),
             ...(lead.service_type ? {} : { service_type: '介護保険外開業パッケージ' }),
             ...(meetingDate ? { meeting_date: meetingDate } : {}),
           })
@@ -389,7 +405,7 @@ app.post('/api/public/forms/:slug/submissions', async (req, res) => {
         .from('leads')
         .insert({
           contact_id: contact.id,
-          company_id: null,
+          company_id: resolvedCompanyId,
           source: `${sourceLabel}${originLabel}`,
           service_type: '介護保険外開業パッケージ',
           priority_channel: utm.source === 'line' || utm.utm_source === 'line' ? 'LINE' : 'メール',
@@ -410,7 +426,8 @@ app.post('/api/public/forms/:slug/submissions', async (req, res) => {
       .insert({
         form_id: form.id,
         contact_id: contact.id,
-        company_id: null,
+        company_id: resolvedCompanyId,
+        respondent_company_name: companyName || null,
         lead_id: lead.id,
         respondent_name: name,
         respondent_email: email,
