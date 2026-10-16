@@ -1,4 +1,8 @@
 -- Keep both customer-facing outputs for one diagnosis report.
+-- Make this migration safe to run even if the earlier document-link migration was not applied.
+ALTER TABLE public.customer_documents
+  ADD COLUMN IF NOT EXISTS ai_report_id uuid REFERENCES public.ai_reports(id) ON DELETE SET NULL;
+
 DROP INDEX IF EXISTS public.customer_documents_owner_ai_report_unique;
 CREATE UNIQUE INDEX IF NOT EXISTS customer_documents_owner_ai_report_type_unique
   ON public.customer_documents(owner_id, ai_report_id, document_type)
