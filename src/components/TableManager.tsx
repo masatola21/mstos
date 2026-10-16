@@ -213,7 +213,7 @@ export const TableManager: React.FC<TableManagerProps> = ({
               onClick={() => setIsProspectImportOpen(true)}
               className="px-3 py-2.5 rounded-xl font-bold text-xs bg-indigo-600/20 hover:bg-indigo-600/30 text-indigo-200 border border-indigo-500/40 flex items-center gap-2 transition-colors"
             >
-              <span>調査結果を社内AIで確認・登録</span>
+              <span>見込み企業調査</span>
             </button>
           )}
           <button
