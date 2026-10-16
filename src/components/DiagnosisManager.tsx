@@ -919,7 +919,7 @@ const DiagnosisDetailModal: React.FC<DiagnosisDetailModalProps> = ({
                 {Object.entries(answers).filter(([key]) => key !== '_intake').map(([key, value]) => (
                   <div key={key} className="grid gap-1 rounded-xl border border-slate-800 bg-slate-900/60 p-3 sm:grid-cols-[minmax(180px,0.8fr)_minmax(0,1.2fr)]">
                     <dt className="text-xs font-medium text-slate-400">{key}</dt>
-                    <dd className="whitespace-pre-wrap break-words text-sm text-slate-200">{typeof value === 'string' ? value : JSON.stringify(value)}</dd>
+                    <dd><textarea value={typeof value === 'string' ? value : Array.isArray(value) ? value.join('、') : JSON.stringify(value)} onChange={(event) => handleAnswerChange(key, event.target.value)} disabled={isLockedForDirectEdit} rows={Math.min(6, Math.max(2, String(value ?? '').split('\n').length))} className="w-full resize-y rounded-lg border border-slate-800 bg-slate-950 p-2 text-sm text-slate-200 disabled:opacity-60" /></dd>
                   </div>
                 ))}
               </dl>
@@ -1013,7 +1013,7 @@ const DiagnosisDetailModal: React.FC<DiagnosisDetailModalProps> = ({
         <div className="px-6 py-4 border-t border-slate-800 bg-slate-950/80 flex flex-col sm:flex-row items-center justify-between gap-3 shrink-0">
           <div className="text-xs text-slate-400 flex items-center gap-1.5">
             <Info className="w-4 h-4 text-slate-500" />
-            <span>回答変更時はスコアが自動更新されます</span>
+            <span>回答内容や社内メモを変更した後は「回答を保存」を押してください</span>
           </div>
 
           <div className="flex items-center gap-2.5 w-full sm:w-auto justify-end">
