@@ -6,33 +6,19 @@ type Question = { id: string; label: string; type: 'text' | 'textarea' | 'select
 type PublicForm = { name: string; formType: FormType; definition: Record<string, unknown>; privacyNotice: string };
 
 const TYPE_LABELS: Record<FormType, string> = {
-  diagnosis: '開業診断',
-  consultation: '相談申込',
-  meeting: '面談申込',
-};
-const DEFAULT_QUESTIONS: Record<FormType, Question[]> = {
-  diagnosis: [
-    { id: 'opening_timing', label: '開業・事業開始の希望時期', type: 'select', required: true, options: ['3か月以内', '半年以内', '1年以内', '情報収集中'] },
-    { id: 'current_challenge', label: '現在、特に知りたいこと・お困りのこと', type: 'textarea', required: true },
-  ],
-  consultation: [
-    { id: 'consultation_topic', label: '相談したい内容', type: 'textarea', required: true },
-  ],
-  meeting: [
-    { id: 'meeting_date', label: '面談希望日', type: 'date', required: true },
-    { id: 'meeting_topic', label: '面談で相談したい内容', type: 'textarea', required: true },
-  ],
+  diagnosis: '診断受付',
+  consultation: '相談受付',
+  meeting: '面談受付',
 };
 
-function parseQuestions(value: unknown, formType: FormType): Question[] {
-  if (!Array.isArray(value)) return DEFAULT_QUESTIONS[formType];
-  const questions = value.filter((item): item is Question =>
+function parseQuestions(value: unknown): Question[] {
+  if (!Array.isArray(value)) return [];
+  return value.filter((item): item is Question =>
     Boolean(item && typeof item === 'object' &&
       typeof (item as Question).id === 'string' &&
       typeof (item as Question).label === 'string' &&
       ['text', 'textarea', 'select', 'radio', 'checkbox', 'date'].includes((item as Question).type))
   ).slice(0, 40);
-  return questions.length ? questions : DEFAULT_QUESTIONS[formType];
 }
 
 export const PublicIntakeForm: React.FC<{ slug: string }> = ({ slug }) => {
@@ -63,7 +49,12 @@ export const PublicIntakeForm: React.FC<{ slug: string }> = ({ slug }) => {
   }, [slug]);
 
   const formType = form?.formType || 'diagnosis';
-  const questions = useMemo(() => parseQuestions(form?.definition?.questions, formType), [form, formType]);
+  const category = typeof form?.definition?.category === 'string'
+    ? (form.definition.category as string).trim()
+    : typeof form?.definition?.service_category === 'string'
+      ? (form.definition.service_category as string).trim()
+      : '';
+  const questions = useMemo(() => parseQuestions(form?.definition?.questions), [form]);
   const intro = typeof form?.definition?.description === 'string' ? form.definition.description : '';
 
   const updateAnswer = (id: string, value: string | boolean) => setAnswers((current) => ({ ...current, [id]: value }));
@@ -104,10 +95,12 @@ export const PublicIntakeForm: React.FC<{ slug: string }> = ({ slug }) => {
     <main className="min-h-screen bg-slate-100 px-4 py-8 sm:py-14">
       <div className="mx-auto max-w-2xl">
         <header className="mb-6 rounded-3xl bg-gradient-to-br from-sky-900 to-slate-900 p-7 text-white shadow-lg sm:p-10">
-          <p className="text-sm font-semibold tracking-wide text-sky-200">介護保険外開業パッケージ</p>
+          {category ? (
+            <p className="text-sm font-semibold tracking-wide text-sky-200">{category}</p>
+          ) : null}
           <h1 className="mt-3 text-2xl font-bold sm:text-3xl">{form?.name || 'お申し込みフォーム'}</h1>
-          {intro && <p className="mt-4 whitespace-pre-wrap text-sm leading-7 text-slate-200">{intro}</p>}
-          {form && <span className="mt-5 inline-flex rounded-full border border-sky-300/30 bg-sky-300/10 px-3 py-1 text-xs text-sky-100">{TYPE_LABELS[form.formType]}</span>}
+          {intro ? <p className="mt-4 whitespace-pre-wrap text-sm leading-7 text-slate-200">{intro}</p> : null}
+          {form && <span className="mt-5 inline-flex rounded-full border border-sky-300/30 bg-sky-300/10 px-3 py-1 text-xs text-sky-100">{TYPE_LABELS[form.formType] || 'フォーム受付'}</span>}
         </header>
 
         {loading ? (
@@ -118,14 +111,14 @@ export const PublicIntakeForm: React.FC<{ slug: string }> = ({ slug }) => {
           <section className="rounded-2xl border border-emerald-200 bg-white p-8 text-center shadow-sm">
             <CheckCircle2 className="mx-auto h-12 w-12 text-emerald-600"/>
             <h2 className="mt-4 text-xl font-bold text-slate-900">お申し込みを受け付けました</h2>
-            <p className="mt-3 text-sm leading-6 text-slate-600">ご入力いただいた内容を担当者が確認します。診断フォームの場合、診断結果と相談案内は確認後にご連絡します。</p>
+            <p className="mt-3 text-sm leading-6 text-slate-600">ご入力いただいた内容を担当者が確認の上、折り返しご連絡いたします。</p>
           </section>
         ) : form ? (
           <form onSubmit={submit} className="space-y-4">
             <section className="space-y-4 rounded-2xl border border-slate-200 bg-white p-5 shadow-sm sm:p-7">
               <h2 className="text-lg font-bold text-slate-900">お客様情報</h2>
               <label className="block text-sm font-medium text-slate-700">お名前 <span className="text-rose-600">*</span><input required autoComplete="name" maxLength={120} value={name} onChange={(event) => setName(event.target.value)} className={inputClass}/></label>
-              <label className="block text-sm font-medium text-slate-700">会社名・屋号（任意）<input type="text" autoComplete="organization" maxLength={200} value={companyName} onChange={(event) => setCompanyName(event.target.value)} className={inputClass}/><span className="mt-1 block text-xs font-normal text-slate-500">開業準備中の方は予定名でも構いません。未定の場合は空欄で進められます。</span></label>
+              <label className="block text-sm font-medium text-slate-700">会社名・屋号（任意）<input type="text" autoComplete="organization" maxLength={200} value={companyName} onChange={(event) => setCompanyName(event.target.value)} className={inputClass}/><span className="mt-1 block text-xs font-normal text-slate-500">準備中・未定の場合は空欄で進められます。</span></label>
               <label className="block text-sm font-medium text-slate-700">メールアドレス <span className="text-rose-600">*</span><input required type="email" autoComplete="email" maxLength={254} value={email} onChange={(event) => setEmail(event.target.value)} className={inputClass}/><span className="mt-1 block text-xs font-normal text-slate-500">既にご登録がある場合、同じメールアドレスで情報を紐付けます。</span></label>
               <label className="block text-sm font-medium text-slate-700">電話番号<input type="tel" autoComplete="tel" maxLength={40} value={phone} onChange={(event) => setPhone(event.target.value)} className={inputClass}/></label>
             </section>
@@ -154,10 +147,10 @@ export const PublicIntakeForm: React.FC<{ slug: string }> = ({ slug }) => {
             </section>
             {error && <div role="alert" className="rounded-xl border border-rose-200 bg-rose-50 p-4 text-sm text-rose-700">{error}</div>}
             <button disabled={submitting} className="flex w-full items-center justify-center gap-2 rounded-xl bg-sky-800 px-5 py-4 text-base font-bold text-white shadow transition hover:bg-sky-700 disabled:cursor-wait disabled:opacity-60"><Send className="h-4 w-4"/>{submitting ? '送信中…' : '入力内容を送信する'}</button>
-            <p className="text-center text-xs text-slate-500">診断・相談・面談のお申し込みはリードとして登録され、担当者が内容を確認します。</p>
+            <p className="text-center text-xs text-slate-500">送信された内容は担当者が確認の上、折り返しご連絡いたします。</p>
           </form>
         ) : null}
-        <footer className="mt-8 text-center text-xs text-slate-500">MST 経営支援システム</footer>
+        <footer className="mt-8 text-center text-xs text-slate-500">{form?.name || ''}</footer>
       </div>
     </main>
   );

@@ -193,16 +193,6 @@ app.post('/api/line/webhook', express.raw({ type: 'application/json', limit: '1m
 app.use(express.json({ limit: '10mb' }));
 
 const publicFormRateLimits = new Map<string, { count: number; resetAt: number }>();
-const defaultPublicQuestionIds: Record<string, string[]> = {
-  diagnosis: ['opening_timing', 'current_challenge'],
-  consultation: ['consultation_topic'],
-  meeting: ['meeting_date', 'meeting_topic'],
-};
-const defaultPublicRequiredQuestionIds: Record<string, string[]> = {
-  diagnosis: ['opening_timing', 'current_challenge'],
-  consultation: ['consultation_topic'],
-  meeting: ['meeting_date', 'meeting_topic'],
-};
 const publicFormSourceLabels: Record<string, string> = {
   diagnosis: '診断フォーム',
   consultation: '相談申込フォーム',
@@ -317,14 +307,14 @@ app.post('/api/public/forms/:slug/submissions', async (req, res) => {
     const questionIds = configuredQuestions
       .filter((question: any) => question && typeof question.id === 'string')
       .map((question: any) => question.id as string);
-    const allowedQuestionIds = new Set(questionIds.length ? questionIds : defaultPublicQuestionIds[form.form_type]);
+    const allowedQuestionIds = new Set(questionIds);
     if (Object.keys(answers).some((key) => !allowedQuestionIds.has(key))) {
       return res.status(400).json({ error: 'フォームの設問が更新されています。ページを再読み込みして再入力してください。' });
     }
     const cleanAnswers = Object.fromEntries(Object.entries(answers).filter(([key]) => allowedQuestionIds.has(key)));
-    const requiredQuestionIds = configuredQuestions.length
-      ? (configuredQuestions as any[]).filter((question) => question?.required && typeof question.id === 'string').map((question) => question.id as string)
-      : defaultPublicRequiredQuestionIds[form.form_type];
+    const requiredQuestionIds = (configuredQuestions as any[])
+      .filter((question) => question?.required && typeof question.id === 'string')
+      .map((question) => question.id as string);
     for (const questionId of requiredQuestionIds) {
       const answer = cleanAnswers[questionId];
       if (answer === undefined || answer === '' || answer === false) return res.status(400).json({ error: '必須の設問に回答してください。' });
@@ -345,11 +335,11 @@ app.post('/api/public/forms/:slug/submissions', async (req, res) => {
     }
     const escapedEmail = email.replace(/\\/g, '\\\\').replace(/%/g, '\\%').replace(/_/g, '\\_');
     const { data: matchingContacts, error: contactLookupError } = await lineSupabase
-      .from('contacts')
-      .select('id, full_name, email, phone, company_id')
-      .ilike('email', escapedEmail)
-      .order('created_at', { ascending: true })
-      .limit(1);
+        .from('contacts')
+        .select('id, full_name, email, phone, company_id')
+        .ilike('email', escapedEmail)
+        .order('created_at', { ascending: true })
+        .limit(1);
     if (contactLookupError) throw contactLookupError;
 
     let contact = matchingContacts?.[0];
@@ -374,10 +364,14 @@ app.post('/api/public/forms/:slug/submissions', async (req, res) => {
 
     const resolvedCompanyId = matchedCompanyId || contact.company_id || null;
     const answerSummary = JSON.stringify(cleanAnswers).slice(0, 6_000);
-    const sourceLabel = publicFormSourceLabels[form.form_type];
+    const sourceLabel = publicFormSourceLabels[form.form_type] || 'Webフォーム';
     const originLabel = utm.source ? `（流入: ${utm.source.slice(0, 80)}）` : '';
     const requestMarker = `[申込 ${requestId}]`;
     const noteEntry = `${requestMarker} ${form.name}${originLabel} / ${new Date().toISOString()}\n${companyName ? `会社名・屋号（申込時）: ${companyName}\n` : ''}${answerSummary}`;
+    const formServiceType = (typeof definition.category === 'string' && definition.category.trim())
+      || (typeof definition.service_category === 'string' && definition.service_category.trim())
+      || form.name
+      || 'Webフォーム受付';
     const { data: existingLeads, error: leadLookupError } = await lineSupabase
       .from('leads')
       .select('id, notes, source, status, service_type, meeting_date, company_id')
@@ -387,10 +381,12 @@ app.post('/api/public/forms/:slug/submissions', async (req, res) => {
     if (leadLookupError) throw leadLookupError;
 
     let lead = existingLeads?.[0];
+    let leadId = '';
     const meetingDate = typeof cleanAnswers.meeting_date === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(cleanAnswers.meeting_date)
       ? cleanAnswers.meeting_date
       : null;
     if (lead) {
+      leadId = lead.id;
       if (typeof lead.notes !== 'string' || !lead.notes.includes(requestMarker)) {
         const notes = [lead.notes, noteEntry].filter(Boolean).join('\n\n').slice(-12_000);
         const { data: updatedLead, error: updateLeadError } = await lineSupabase
@@ -399,14 +395,14 @@ app.post('/api/public/forms/:slug/submissions', async (req, res) => {
             notes,
             last_contacted_at: new Date().toISOString(),
             ...(resolvedCompanyId && !lead.company_id ? { company_id: resolvedCompanyId } : {}),
-            ...(lead.service_type ? {} : { service_type: '介護保険外開業パッケージ' }),
+            ...(lead.service_type ? {} : { service_type: formServiceType }),
             ...(meetingDate ? { meeting_date: meetingDate } : {}),
           })
           .eq('id', lead.id)
           .select('id')
           .single();
         if (updateLeadError) throw updateLeadError;
-        lead = { ...lead, id: updatedLead.id };
+        leadId = updatedLead.id;
       }
     } else {
       const { data: insertedLead, error: insertLeadError } = await lineSupabase
@@ -415,7 +411,7 @@ app.post('/api/public/forms/:slug/submissions', async (req, res) => {
           contact_id: contact.id,
           company_id: resolvedCompanyId,
           source: `${sourceLabel}${originLabel}`,
-          service_type: '介護保険外開業パッケージ',
+          service_type: formServiceType,
           priority_channel: utm.source === 'line' || utm.utm_source === 'line' ? 'LINE' : 'メール',
           status: form.form_type === 'diagnosis' ? '診断申込' : form.form_type === 'consultation' ? '相談申込' : '面談申込',
           first_registered_at: new Date().toISOString(),
@@ -426,7 +422,7 @@ app.post('/api/public/forms/:slug/submissions', async (req, res) => {
         .select('id')
         .single();
       if (insertLeadError) throw insertLeadError;
-      lead = { id: insertedLead.id };
+      leadId = insertedLead.id;
     }
 
     const { data: submission, error: submissionError } = await lineSupabase
@@ -436,7 +432,7 @@ app.post('/api/public/forms/:slug/submissions', async (req, res) => {
         contact_id: contact.id,
         company_id: resolvedCompanyId,
         respondent_company_name: companyName || null,
-        lead_id: lead.id,
+        lead_id: leadId,
         respondent_name: name,
         respondent_email: email,
         answers: cleanAnswers,
