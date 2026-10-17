@@ -1439,6 +1439,22 @@ function AppContent() {
     }
   };
 
+  const handleServiceMilestoneReached = (event: { engagementId: string; milestoneId: string; milestoneTitle: string; companyId?: string; companyName?: string }) => {
+    createAutomationTask({
+      ruleId: 'workflow-project-milestone',
+      recordId: `${event.engagementId}:${event.milestoneId}`,
+      title: `支援マイルストーンの振り返り：${event.milestoneTitle}`,
+      description: `顧問・構築支援「${event.milestoneTitle}」が到達済みになりました。${event.companyName ? `会社：${event.companyName}。` : ''}進捗・成果・残課題を支援記録と照らして整理し、次の対応案を作成してください。顧客への連絡や契約・請求の確定は行わず、人が確認してください。`,
+      workArea: 'post_contract_support',
+      sourceCategory: 'business_operations',
+      taskKind: 'creation_analysis',
+      priority: 'medium',
+      completionCriteria: '支援の進捗・成果・残課題と次の対応案を根拠付きで整理し、結果を記録する。顧客への連絡や外部処理は人の承認後に行う。',
+      workModeId: 'customer_product',
+      relatedRecord: event.companyId ? { type: 'customer', id: event.companyId, label: event.companyName || '支援先顧客' } : undefined,
+    });
+  };
+
   const handleAddInvoice = (i: Omit<ManagedInvoice, 'id' | 'createdAt' | 'updatedAt'>) => {
     const created = matrixService.addInvoice(i);
     setInvoices(matrixService.loadInvoices());
@@ -1689,6 +1705,7 @@ function AppContent() {
               setContracts(nextContracts);
               setInvoices(nextInvoices);
             }}
+            onMilestoneReached={handleServiceMilestoneReached}
           />
         )}
 

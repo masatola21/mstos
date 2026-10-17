@@ -24,7 +24,7 @@ const aiModeLabels: Record<AutomationRule['aiMode'], string> = {
   execute: '自動実行（イベント発生時に担当AIが草案を作成）',
 };
 
-const connectedTriggerEvents = new Set<AutomationRule['triggerEvent']>(['diagnosis_submitted', 'deal_won', 'contract_signed', 'invoice_overdue']);
+const connectedTriggerEvents = new Set<AutomationRule['triggerEvent']>(['diagnosis_submitted', 'deal_won', 'contract_signed', 'invoice_overdue', 'project_milestone']);
 
 const approvalLabels: Record<AutomationRule['approvalPolicy'], string> = {
   always: 'AIの草案ごとに人が確認する',
@@ -57,7 +57,7 @@ export const AutomationView: React.FC<AutomationViewProps> = ({ automations, act
         <div className="mt-4 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-amber-700/40 bg-amber-950/30 p-3">
           <div className="flex items-start gap-2 text-xs leading-5 text-amber-100">
             <Clock3 className="mt-0.5 h-4 w-4 shrink-0 text-amber-300" />
-            <span>診断フォーム回答（Realtime）、商談の成約、契約締結、請求期限超過を検知して期限付きタスクを作成します。「提案」は担当者用タスクを作成、「担当AIを設定」はタスクから手動実行、「自動実行」はイベント発生時にAIが草案を作成します。「AIの草案ごとに人が確認する」を選ぶと成果物が承認待ちになり、承認後にナレッジへ登録されます。アプリ停止中の診断回答受信と支援マイルストーンは未接続です。顧客への送信や外部処理は自動実行しません。</span>
+            <span>診断フォーム回答（Realtime）、商談の成約、契約締結、請求期限超過、支援マイルストーンの到達を検知して期限付きタスクを作成します。「提案」は担当者用タスクを作成、「担当AIを設定」はタスクから手動実行、「自動実行」はイベント発生時にAIが草案を作成します。「AIの草案ごとに人が確認する」を選ぶと成果物が承認待ちになり、承認後にナレッジへ登録されます。アプリ停止中の診断回答受信は起動時に回復します。支援マイルストーンは顧問・構築支援で到達を記録するとタスクを作成します。顧客への送信や外部処理は自動実行しません。</span>
           </div>
           <span className="whitespace-nowrap text-xs text-slate-400">有効設定 {enabledCount} / {automations.length}</span>
         </div>
