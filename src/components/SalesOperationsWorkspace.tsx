@@ -31,9 +31,9 @@ const defaultInvoiceDueDate = (date = new Date()) => {
   return localDateString(due);
 };
 
-interface Props { tab: WorkspaceTab; companyId?: string; leadId?: string; dealId?: string; onClearCompanyFilter?: () => void; onOperationalRecordsChange?: (contracts: ManagedContract[], invoices: ManagedInvoice[]) => void; }
+interface Props { tab: WorkspaceTab; companyId?: string; leadId?: string; dealId?: string; onClearCompanyFilter?: () => void; onOperationalRecordsChange?: (contracts: ManagedContract[], invoices: ManagedInvoice[]) => void; onMilestoneReached?: (event: { engagementId: string; milestoneId: string; milestoneTitle: string; companyId?: string; companyName?: string }) => void; }
 
-export const SalesOperationsWorkspace: React.FC<Props> = ({ tab, companyId, leadId, dealId, onClearCompanyFilter, onOperationalRecordsChange }) => {
+export const SalesOperationsWorkspace: React.FC<Props> = ({ tab, companyId, leadId, dealId, onClearCompanyFilter, onOperationalRecordsChange, onMilestoneReached }) => {
   const [segments, setSegments] = useState<Segment[]>([]);
   const [documents, setDocuments] = useState<RecordRow[]>([]);
   const [outbox, setOutbox] = useState<RecordRow[]>([]);
@@ -64,6 +64,7 @@ export const SalesOperationsWorkspace: React.FC<Props> = ({ tab, companyId, lead
   const [recordAmount, setRecordAmount] = useState('');
   const [recordDate, setRecordDate] = useState('');
   const [serviceType, setServiceType] = useState<'retainer'|'implementation_support'>('retainer');
+  const [milestoneDrafts, setMilestoneDrafts] = useState<Record<string, string>>({});
   const [previewSegmentId, setPreviewSegmentId] = useState('');
   const [previewRows, setPreviewRows] = useState<RecordRow[]>([]);
 
@@ -276,6 +277,39 @@ ${JSON.stringify(recentMessages || [], null, 2)}`;
     if(updateError)setError(updateError.message);else await load();
   };
 
+  const readMilestones = (record: RecordRow): RecordRow[] => Array.isArray(record.milestone_data) ? record.milestone_data : [];
+
+  const addServiceMilestone = async (record: RecordRow) => {
+    const title = (milestoneDrafts[record.id] || '').trim();
+    const supabase = getSupabase();
+    if (!supabase || !title) return;
+    const milestones = readMilestones(record);
+    const milestone = { id: crypto.randomUUID(), title, status: 'pending', created_at: new Date().toISOString() };
+    const { error: updateError } = await supabase.from('customer_service_engagements')
+      .update({ milestone_data: [...milestones, milestone], updated_at: new Date().toISOString() }).eq('id', record.id);
+    if (updateError) { setError(updateError.message); return; }
+    setMilestoneDrafts((current) => ({ ...current, [record.id]: '' }));
+    setNotice('支援マイルストーンを登録しました。到達時に自動化タスクを作成できます。');
+    await load();
+  };
+
+  const reachServiceMilestone = async (record: RecordRow, milestoneId: string) => {
+    const supabase = getSupabase();
+    if (!supabase) return;
+    const milestones = readMilestones(record);
+    const target = milestones.find((item) => item.id === milestoneId);
+    if (!target || target.status === 'completed') return;
+    const completedAt = new Date().toISOString();
+    const updatedMilestones = milestones.map((item) => item.id === milestoneId ? { ...item, status: 'completed', completed_at: completedAt } : item);
+    const { error: updateError } = await supabase.from('customer_service_engagements')
+      .update({ milestone_data: updatedMilestones, updated_at: completedAt }).eq('id', record.id);
+    if (updateError) { setError(updateError.message); return; }
+    const companyName = companies.find((item) => item.id === record.company_id)?.company_name;
+    onMilestoneReached?.({ engagementId: record.id, milestoneId, milestoneTitle: target.title, companyId: record.company_id || undefined, companyName });
+    setNotice('到達を記録し、設定が有効な場合は自動化タスクを作成しました。');
+    await load();
+  };
+
   const previewSegment = async (segment: Segment) => {
     const supabase=getSupabase(); if(!supabase)return;
     setError('');setPreviewSegmentId(segment.id);
@@ -382,7 +416,7 @@ ${JSON.stringify(recentMessages || [], null, 2)}`;
         <label className="text-xs text-slate-400">{activeOpsTab==='contracts'?'開始日':activeOpsTab==='invoices'?'支払期限（当月25日／25日以降は翌月25日）':'次回面談'}<input type={activeOpsTab==='services'?'datetime-local':'date'} value={recordDate} onChange={(e)=>setRecordDate(e.target.value)} className="mt-1 w-full rounded border border-slate-700 bg-slate-900 px-3 py-2 text-sm text-white" /></label>
         <div className="md:col-span-2"><button className="rounded-lg bg-emerald-700 px-3 py-2 text-sm font-semibold text-white">保存</button></div>
       </form>}
-      {loading ? <p className="text-sm text-slate-400">読み込み中…</p> : records.length === 0 ? <p className="py-8 text-center text-sm text-slate-400">登録データはありません。</p> : <div className="overflow-x-auto"><table className="w-full text-left text-sm"><thead><tr className="border-b border-slate-800 text-xs text-slate-400"><th className="p-2">名称</th><th className="p-2">会社</th><th className="p-2">状態</th><th className="p-2">金額</th><th className="p-2">日付</th></tr></thead><tbody>{records.map((record)=><tr key={record.id} className="border-b border-slate-800/70 text-slate-200"><td className="p-2">{record.title || record.invoice_number}</td><td className="p-2">{record.company_id || '—'}</td><td className="p-2"><select aria-label={`${record.title||record.invoice_number}の状態`} value={record.status} onChange={(e)=>void updateOperationStatus(record,e.target.value)} className="rounded border border-slate-700 bg-slate-950 px-2 py-1 text-xs text-white">{(activeOpsTab==='contracts'?['draft','under_review','sent','signed','expired','canceled']:activeOpsTab==='invoices'?['draft','awaiting_approval','issued','paid','overdue','canceled']:['planned','active','paused','completed','canceled']).map(status=><option key={status} value={status}>{status}</option>)}</select></td><td className="p-2">{record.amount == null?'—':Number(record.amount).toLocaleString('ja-JP')+'円'}</td><td className="p-2">{record.due_date || record.start_date || (record.next_meeting_at ? new Date(record.next_meeting_at).toLocaleString('ja-JP') : '—')}</td></tr>)}</tbody></table></div>}
+      {loading ? <p className="text-sm text-slate-400">読み込み中…</p> : records.length === 0 ? <p className="py-8 text-center text-sm text-slate-400">登録データはありません。</p> : <div className="overflow-x-auto"><table className="w-full text-left text-sm"><thead><tr className="border-b border-slate-800 text-xs text-slate-400"><th className="p-2">名称</th><th className="p-2">会社</th><th className="p-2">状態</th><th className="p-2">金額</th><th className="p-2">日付</th></tr></thead><tbody>{records.map((record)=><React.Fragment key={record.id}><tr className="border-b border-slate-800/70 text-slate-200"><td className="p-2">{record.title || record.invoice_number}</td><td className="p-2">{companies.find((item)=>item.id===record.company_id)?.company_name || record.company_id || '—'}</td><td className="p-2"><select aria-label={`${record.title||record.invoice_number}の状態`} value={record.status} onChange={(e)=>void updateOperationStatus(record,e.target.value)} className="rounded border border-slate-700 bg-slate-950 px-2 py-1 text-xs text-white">{(activeOpsTab==='contracts'?['draft','under_review','sent','signed','expired','canceled']:activeOpsTab==='invoices'?['draft','awaiting_approval','issued','paid','overdue','canceled']:['planned','active','paused','completed','canceled']).map(status=><option key={status} value={status}>{status}</option>)}</select></td><td className="p-2">{record.amount == null?'—':Number(record.amount).toLocaleString('ja-JP')+'円'}</td><td className="p-2">{record.due_date || record.start_date || (record.next_meeting_at ? new Date(record.next_meeting_at).toLocaleString('ja-JP') : '—')}</td></tr>{activeOpsTab==='services'&&<tr className="border-b border-slate-800 bg-slate-950/50"><td colSpan={5} className="p-3"><div className="space-y-2"><div className="text-xs font-semibold text-slate-300">支援マイルストーン</div>{readMilestones(record).map((milestone)=><div key={milestone.id} className="flex flex-wrap items-center gap-2 text-xs"><span className={milestone.status==='completed'?'text-emerald-300':'text-slate-300'}>{milestone.status==='completed'?'✓':'○'} {milestone.title}</span>{milestone.status!=='completed'&&<button type="button" onClick={()=>void reachServiceMilestone(record,milestone.id)} className="rounded border border-emerald-800 px-2 py-1 text-emerald-200">到達を記録してタスク作成</button>}{milestone.completed_at&&<span className="text-slate-500">{new Date(milestone.completed_at).toLocaleDateString('ja-JP')}</span>}</div>)}<div className="flex flex-wrap gap-2"><input value={milestoneDrafts[record.id]||''} onChange={(e)=>setMilestoneDrafts((current)=>({...current,[record.id]:e.target.value}))} placeholder="例：初回レビュー完了" className="min-w-56 rounded border border-slate-700 bg-slate-900 px-2 py-1.5 text-xs text-white"/><button type="button" onClick={()=>void addServiceMilestone(record)} disabled={!(milestoneDrafts[record.id]||'').trim()} className="rounded bg-blue-700 px-2 py-1.5 text-xs text-white disabled:opacity-50">節目を追加</button></div></div></td></tr>}</React.Fragment>)}</tbody></table></div>}
     </section>}
   </div>;
 };
