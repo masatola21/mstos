@@ -26,7 +26,6 @@ DECLARE
   v_current_status pg_catalog.text;
   v_questionnaire_version pg_catalog.text;
   v_answers pg_catalog.jsonb;
-  v_respondent_phone pg_catalog.text;
   v_conducted_at pg_catalog.timestamptz;
   v_required_keys pg_catalog.text[];
   v_missing_keys pg_catalog.text[];
@@ -95,6 +94,7 @@ DECLARE
   v_questionnaire_version pg_catalog.text;
   v_diagnosis_id pg_catalog.uuid;
   v_answers pg_catalog.jsonb;
+  v_respondent_phone pg_catalog.text;
 BEGIN
   SELECT * INTO v_submission
   FROM public.diagnosis_submissions
