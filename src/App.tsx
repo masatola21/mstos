@@ -1455,6 +1455,38 @@ function AppContent() {
     });
   };
 
+  const handleOperationalContractSigned = (event: { id: string; title: string; companyId?: string; companyName?: string; amount?: number }) => {
+    createAutomationTask({
+      ruleId: 'workflow-contract-signed',
+      recordId: event.id,
+      title: `契約締結後の請求・提供準備：${event.companyName || event.title}`,
+      description: `契約「${event.title}」が締結済みになりました。${event.companyName ? `会社：${event.companyName}。` : ''}${event.amount == null ? '' : `契約金額：${event.amount.toLocaleString()}円。`}契約条件と開始日を確認し、請求とサービス開始に必要な準備を整理してください。`,
+      workArea: 'post_contract_support',
+      sourceCategory: 'sales_customer',
+      taskKind: 'creation_analysis',
+      priority: 'medium',
+      completionCriteria: '契約条件を確認し、請求・サービス提供開始に必要な準備項目を整理する。顧客への送付や請求発行は人の確認後に行う。',
+      workModeId: 'customer_product',
+      relatedRecord: event.companyId ? { type: 'company', id: event.companyId, label: event.companyName || '契約先' } : undefined,
+    });
+  };
+
+  const handleOperationalInvoiceOverdue = (event: { id: string; title: string; invoiceNumber?: string; companyId?: string; companyName?: string; amount?: number; dueDate?: string }) => {
+    createAutomationTask({
+      ruleId: 'workflow-invoice-overdue',
+      recordId: event.id,
+      title: `請求期限超過の対応案：${event.companyName || '請求先'}`,
+      description: `請求書「${event.title}」（請求番号: ${event.invoiceNumber || '未設定'}${event.amount == null ? '' : `、金額: ${event.amount.toLocaleString()}円`}${event.dueDate ? `、期限: ${event.dueDate}` : ''}）が期限超過になりました。入金状況と社内対応を確認し、必要なら連絡文案を作成してください。`,
+      workArea: 'sales_customer',
+      sourceCategory: 'business_operations',
+      taskKind: 'response',
+      priority: 'high',
+      completionCriteria: '入金状況を確認し、社内対応と必要な顧客連絡の草案を整理する。顧客への連絡・請求処理は人が確認してから行う。',
+      workModeId: 'president',
+      relatedRecord: event.companyId ? { type: 'customer', id: event.companyId, label: event.companyName || '請求先' } : undefined,
+    });
+  };
+
   const handleAddInvoice = (i: Omit<ManagedInvoice, 'id' | 'createdAt' | 'updatedAt'>) => {
     const created = matrixService.addInvoice(i);
     setInvoices(matrixService.loadInvoices());
@@ -1706,6 +1738,8 @@ function AppContent() {
               setInvoices(nextInvoices);
             }}
             onMilestoneReached={handleServiceMilestoneReached}
+            onContractSigned={handleOperationalContractSigned}
+            onInvoiceOverdue={handleOperationalInvoiceOverdue}
           />
         )}
 
