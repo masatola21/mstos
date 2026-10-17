@@ -31,9 +31,9 @@ const defaultInvoiceDueDate = (date = new Date()) => {
   return localDateString(due);
 };
 
-interface Props { tab: WorkspaceTab; companyId?: string; leadId?: string; dealId?: string; onClearCompanyFilter?: () => void; onOperationalRecordsChange?: (contracts: ManagedContract[], invoices: ManagedInvoice[]) => void; onMilestoneReached?: (event: { engagementId: string; milestoneId: string; milestoneTitle: string; companyId?: string; companyName?: string }) => void; }
+interface Props { tab: WorkspaceTab; companyId?: string; leadId?: string; dealId?: string; onClearCompanyFilter?: () => void; onOperationalRecordsChange?: (contracts: ManagedContract[], invoices: ManagedInvoice[]) => void; onMilestoneReached?: (event: { engagementId: string; milestoneId: string; milestoneTitle: string; companyId?: string; companyName?: string }) => void; onContractSigned?: (event: { id: string; title: string; companyId?: string; companyName?: string; amount?: number }) => void; onInvoiceOverdue?: (event: { id: string; title: string; invoiceNumber?: string; companyId?: string; companyName?: string; amount?: number; dueDate?: string }) => void; }
 
-export const SalesOperationsWorkspace: React.FC<Props> = ({ tab, companyId, leadId, dealId, onClearCompanyFilter, onOperationalRecordsChange, onMilestoneReached }) => {
+export const SalesOperationsWorkspace: React.FC<Props> = ({ tab, companyId, leadId, dealId, onClearCompanyFilter, onOperationalRecordsChange, onMilestoneReached, onContractSigned, onInvoiceOverdue }) => {
   const [segments, setSegments] = useState<Segment[]>([]);
   const [documents, setDocuments] = useState<RecordRow[]>([]);
   const [outbox, setOutbox] = useState<RecordRow[]>([]);
@@ -273,8 +273,17 @@ ${JSON.stringify(recentMessages || [], null, 2)}`;
 
   const updateOperationStatus = async (record: RecordRow, status: string) => {
     const supabase=getSupabase(); if(!supabase)return;
-    const {error:updateError}=await supabase.from(selectedOps.table).update({status}).eq('id',record.id);
-    if(updateError)setError(updateError.message);else await load();
+    const {error:updateError}=await supabase.from(selectedOps.table).update({status, updated_at:new Date().toISOString()}).eq('id',record.id);
+    if(updateError){setError(updateError.message);return;}
+    const sourceId = String(record.legacy_id || record.id);
+    const companyName = companies.find((item)=>item.id===record.company_id)?.company_name || record.counterparty_name || record.recipient_name || undefined;
+    if(activeOpsTab==='contracts' && status==='signed' && record.status!=='signed') {
+      onContractSigned?.({id:sourceId,title:record.title||'契約書',companyId:record.company_id||undefined,companyName,amount:record.amount==null?undefined:Number(record.amount)});
+    }
+    if(activeOpsTab==='invoices' && status==='overdue' && record.status!=='overdue') {
+      onInvoiceOverdue?.({id:sourceId,title:record.title||'請求書',invoiceNumber:record.invoice_number||undefined,companyId:record.company_id||undefined,companyName,amount:record.amount==null?undefined:Number(record.amount),dueDate:record.due_date||undefined});
+    }
+    await load();
   };
 
   const readMilestones = (record: RecordRow): RecordRow[] => Array.isArray(record.milestone_data) ? record.milestone_data : [];
