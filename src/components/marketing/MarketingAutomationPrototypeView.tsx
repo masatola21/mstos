@@ -365,7 +365,7 @@ export const MarketingAutomationPrototypeView: React.FC<Props> = ({ scenarios, o
           <p className="mt-1 text-xs leading-5 text-slate-400">APIキーなどの秘密情報はブラウザーに保存せず、サーバーの環境変数で管理します。ここから設定画面へ移動する必要はありません。</p>
           <div className="mt-3 grid gap-3 md:grid-cols-2">
             <div className="rounded-lg border border-slate-800 bg-slate-950/70 p-3"><div className="text-sm font-semibold text-green-200">LINE公式アカウント</div><p className="mt-1 text-xs text-slate-400">サーバー側に LINE_CHANNEL_ACCESS_TOKEN と LINE_CHANNEL_SECRET を設定します。</p></div>
-            <div className="rounded-lg border border-slate-800 bg-slate-950/70 p-3"><div className="text-sm font-semibold text-purple-200">メール送信</div><p className="mt-1 text-xs text-slate-400">サーバー側に RESEND_API_KEY と RESEND_FROM_EMAIL を設定します。</p></div>
+            <div className="rounded-lg border border-slate-800 bg-slate-950/70 p-3"><div className="text-sm font-semibold text-purple-200">メール送信</div><p className="mt-1 text-xs text-slate-400">送信には RESEND_API_KEY と RESEND_FROM_EMAIL、受信には RESEND_WEBHOOK_SECRET が必要です。</p></div>
           </div>
         </section>
       </>}
