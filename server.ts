@@ -196,10 +196,8 @@ app.post('/api/communications/send', async (req, res) => {
   if (!lineSupabase) return res.status(503).json({ error: '送信サーバーのSupabase設定がありません。' });
   const authorization = req.header('authorization') || '';
   const token = authorization.startsWith('Bearer ') ? authorization.slice(7) : '';
-  const anonKey = process.env.SUPABASE_ANON_KEY || process.env.VITE_SUPABASE_ANON_KEY || '';
-  if (!token || !anonKey) return res.status(401).json({ error: '認証が必要です。' });
-  const authClient = createClient(lineSupabaseUrl, anonKey, { auth: { persistSession: false, autoRefreshToken: false } });
-  const { data: authData, error: authError } = await authClient.auth.getUser(token);
+  if (!token) return res.status(401).json({ error: '認証が必要です。' });
+  const { data: authData, error: authError } = await lineSupabase.auth.getUser(token);
   if (authError || !authData.user) return res.status(401).json({ error: 'ログイン状態を確認できません。' });
   const outboxId = typeof req.body?.outboxId === 'string' ? req.body.outboxId : '';
   if (!isPublicUuid(outboxId)) return res.status(400).json({ error: '送信記録を確認できません。' });
