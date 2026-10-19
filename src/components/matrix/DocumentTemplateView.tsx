@@ -615,13 +615,13 @@ export const DocumentTemplateView: React.FC<DocumentTemplateViewProps> = ({ init
         <div>
           <div className="flex items-center gap-2">
             <span className="px-3 py-1 rounded-full bg-cyan-500/20 text-cyan-400 text-xs font-semibold border border-cyan-500/30">
-              決定論的オートメーション
+              AIを使わない自動入力
             </span>
-            <span className="text-xs text-slate-400">AI不使用・100%正確な一括流し込み</span>
+            <span className="text-xs text-slate-400">テンプレートに登録データを自動反映</span>
           </div>
-          <h1 className="text-2xl font-bold text-white tracking-tight mt-1">文書・帳票自動流し込みハブ</h1>
+          <h1 className="text-2xl font-bold text-white tracking-tight mt-1">書類テンプレート・PDF出力</h1>
           <p className="text-sm text-slate-400 mt-1">
-            契約書、提案書、請求書、診断レポートのひな形にデータを瞬時に流し込み、PDF印刷・出力を行います。
+            契約書、提案書、請求書、診断レポートのテンプレートに顧客・商談データを反映し、内容を確認してPDFとして印刷・保存できます。
           </p>
         </div>
 

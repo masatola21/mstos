@@ -192,6 +192,78 @@ app.post('/api/line/webhook', express.raw({ type: 'application/json', limit: '1m
 
 app.use(express.json({ limit: '10mb' }));
 
+app.post('/api/communications/send', async (req, res) => {
+  if (!lineSupabase) return res.status(503).json({ error: '送信サーバーのSupabase設定がありません。' });
+  const authorization = req.header('authorization') || '';
+  const token = authorization.startsWith('Bearer ') ? authorization.slice(7) : '';
+  if (!token) return res.status(401).json({ error: '認証が必要です。' });
+  const { data: authData, error: authError } = await lineSupabase.auth.getUser(token);
+  if (authError || !authData.user) return res.status(401).json({ error: 'ログイン状態を確認できません。' });
+  const outboxId = typeof req.body?.outboxId === 'string' ? req.body.outboxId : '';
+  if (!isPublicUuid(outboxId)) return res.status(400).json({ error: '送信記録を確認できません。' });
+  const { data: row, error: rowError } = await lineSupabase.from('communication_outbox').select('*')
+    .eq('id', outboxId).eq('owner_id', authData.user.id).maybeSingle();
+  if (rowError || !row) return res.status(404).json({ error: '送信記録が見つかりません。' });
+  if (row.status !== 'queued') return res.status(409).json({ error: 'この送信記録は送信可能な状態ではありません。' });
+  const { data: claimed, error: claimError } = await lineSupabase.from('communication_outbox')
+    .update({ status: 'sending', updated_at: new Date().toISOString() }).eq('id', outboxId).eq('owner_id', authData.user.id).eq('status', 'queued').select('id').maybeSingle();
+  if (claimError || !claimed) return res.status(409).json({ error: '送信処理がすでに開始されています。' });
+  try {
+    if (!row.recipient_contact_id || !row.recipient_address || !row.consent_confirmed_at || !row.consent_basis) {
+      throw new Error('送信先または送信根拠が不足しています。');
+    }
+    const { data: contact, error: contactError } = await lineSupabase.from('contacts')
+      .select('id,email,line_user_id,company_id').eq('id', row.recipient_contact_id).maybeSingle();
+    if (contactError || !contact) throw new Error('連絡先が見つかりません。');
+    if (row.company_id && contact.company_id !== row.company_id) throw new Error('会社と送信先の関連が一致しません。');
+    let providerMessageId = '';
+    if (row.channel === 'email') {
+      const emailKey = process.env.RESEND_API_KEY || '';
+      const emailFrom = process.env.RESEND_FROM_EMAIL || '';
+      if (!emailKey || !emailFrom) throw new Error('メール送信サービスが未設定です。RESEND_API_KEY と RESEND_FROM_EMAIL を設定してください。');
+      if (!contact.email || contact.email.toLowerCase() !== String(row.recipient_address).toLowerCase()) throw new Error('送信先メールアドレスが連絡先と一致しません。');
+      const response = await fetch('https://api.resend.com/emails', {
+        method: 'POST', headers: { Authorization: 'Bearer ' + emailKey, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ from: emailFrom, to: [contact.email], subject: row.subject || '', text: row.body_text || '' }),
+      });
+      const payload = await response.json().catch(() => ({})) as { id?: string; message?: string };
+      if (!response.ok || !payload.id) throw new Error(payload.message || 'メール配信サービスが送信を拒否しました。');
+      providerMessageId = payload.id;
+    } else if (row.channel === 'line') {
+      if (!lineChannelAccessToken) throw new Error('LINE送信トークンが未設定です。');
+      if (!contact.line_user_id || contact.line_user_id !== row.recipient_address) throw new Error('LINE送信先が連絡先と一致しません。');
+      const { data: friend, error: friendError } = await lineSupabase.from('line_friends').select('status,consent_status').eq('line_user_id', contact.line_user_id).maybeSingle();
+      if (friendError || !friend || friend.status !== 'active' || friend.consent_status !== 'opted_in') throw new Error('有効なLINE友だち状態と配信同意を確認できません。');
+      if (String(row.body_text || '').length > 5000) throw new Error('LINEメッセージは5000文字以内にしてください。');
+      const response = await fetch('https://api.line.me/v2/bot/message/push', {
+        method: 'POST', headers: { Authorization: 'Bearer ' + lineChannelAccessToken, 'Content-Type': 'application/json', 'X-Line-Retry-Key': outboxId },
+        body: JSON.stringify({ to: contact.line_user_id, messages: [{ type: 'text', text: row.body_text || '' }] }),
+      });
+      if (!response.ok) {
+        const detail = await response.text().catch(() => '');
+        throw new Error(detail || 'LINE配信サービスが送信を拒否しました。');
+      }
+      providerMessageId = outboxId;
+    } else {
+      throw new Error('未対応の送信方法です。');
+    }
+    const sentAt = new Date().toISOString();
+    const { error: updateError } = await lineSupabase.from('communication_outbox').update({
+      status: 'sent', sent_at: sentAt, provider_message_id: providerMessageId, error_message: null, updated_at: sentAt,
+    }).eq('id', outboxId).eq('owner_id', authData.user.id);
+    if (updateError) throw updateError;
+    return res.json({ status: 'sent', providerMessageId });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : '送信に失敗しました。';
+    await lineSupabase.from('communication_outbox').update({
+      status: 'failed', error_message: message.slice(0, 1000), updated_at: new Date().toISOString(),
+    }).eq('id', outboxId).eq('owner_id', authData.user.id);
+    return res.status(502).json({ status: 'failed', error: message });
+  }
+});
+
+
+
 const publicFormRateLimits = new Map<string, { count: number; resetAt: number }>();
 const publicFormSourceLabels: Record<string, string> = {
   diagnosis: '診断フォーム',
