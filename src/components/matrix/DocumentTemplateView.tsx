@@ -718,48 +718,25 @@ export const DocumentTemplateView: React.FC<DocumentTemplateViewProps> = ({ init
 
             {isEditingTemplate ? (
               <div className="space-y-3">
-                <p className="text-xs leading-5 text-slate-400">
-                  下の書類を見ながら、本文を日本語で直接修正できます。顧客情報の差し込み欄は右側のプレビューに反映されます。
+                <p className="text-xs text-slate-400">
+                  HTMLソースと変数タグ（例: <code className="text-cyan-400">{'{{variable_name}}'}</code>）を直接編集できます。
                 </p>
-                <div
-                  key={currentTemplate.id}
-                  id="visual-document-editor"
-                  contentEditable
-                  suppressContentEditableWarning
-                  role="textbox"
-                  aria-label="書類本文とレイアウト"
-                  className="min-h-80 max-h-[520px] overflow-y-auto rounded-xl border border-slate-700 bg-white p-5 text-sm leading-7 text-slate-900 focus:outline-none focus:ring-2 focus:ring-cyan-500"
-                  dangerouslySetInnerHTML={{ __html: currentTemplate.htmlContent }}
+                <textarea
+                  defaultValue={currentTemplate.htmlContent}
+                  id="raw-html-editor"
+                  rows={18}
+                  className="w-full bg-slate-950 border border-slate-800 rounded-xl p-3 text-xs font-mono text-slate-200 focus:outline-none focus:border-cyan-500"
                 />
                 <button
                   onClick={() => {
-                    const el = document.getElementById('visual-document-editor') as HTMLDivElement;
-                    if (el) void handleSaveTemplateChanges(el.innerHTML);
+                    const el = document.getElementById('raw-html-editor') as HTMLTextAreaElement;
+                    if (el) handleSaveTemplateChanges(el.value);
                   }}
                   className="w-full py-2.5 rounded-xl bg-cyan-600 hover:bg-cyan-500 text-white font-semibold text-xs flex items-center justify-center gap-2 transition-all cursor-pointer shadow-md"
                 >
                   <Save className="w-4 h-4" />
-                  <span>本文・レイアウトを保存</span>
+                  <span>ひな形HTMLを保存</span>
                 </button>
-                <details className="rounded-xl border border-slate-700 bg-slate-950 p-3">
-                  <summary className="cursor-pointer text-xs font-semibold text-slate-300">HTMLコードを直接編集（上級者向け）</summary>
-                  <p className="mt-2 text-[11px] leading-5 text-slate-500">通常は上の日本語編集欄を使ってください。HTML構造や差し込みタグを直接変更する場合のみ利用します。</p>
-                  <textarea
-                    defaultValue={currentTemplate.htmlContent}
-                    id="raw-html-editor"
-                    rows={12}
-                    className="mt-3 w-full rounded-xl border border-slate-800 bg-slate-900 p-3 text-xs font-mono text-slate-200 focus:outline-none focus:border-cyan-500"
-                  />
-                  <button
-                    onClick={() => {
-                      const el = document.getElementById('raw-html-editor') as HTMLTextAreaElement;
-                      if (el) void handleSaveTemplateChanges(el.value);
-                    }}
-                    className="mt-2 w-full rounded-xl bg-slate-800 py-2.5 text-xs font-semibold text-slate-200 hover:bg-slate-700"
-                  >
-                    HTMLコードを保存
-                  </button>
-                </details>
               </div>
             ) : (
               <div className="space-y-4 max-h-[550px] overflow-y-auto pr-1">
