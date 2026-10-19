@@ -99,7 +99,7 @@ async function processLineInboxAndAutoReply(event: any, contact: any, eventId: s
   if (!integration.auto_reply_enabled || !lineChannelAccessToken) return;
 
   const { data: rules, error: rulesError } = await lineSupabase.from('line_auto_reply_rules')
-    .select('id,match_mode,match_text,reply_text,tag_id')
+    .select('id,match_mode,match_text,reply_text,reply_type,reply_payload,tag_id')
     .eq('owner_id', integration.owner_id).eq('enabled', true).order('priority', { ascending: true });
   if (rulesError) {
     if (isOptionalLineAutomationSchemaMissing(rulesError)) return;
@@ -110,7 +110,7 @@ async function processLineInboxAndAutoReply(event: any, contact: any, eventId: s
     const expected = String(rule.match_text || '').trim().toLocaleLowerCase();
     return expected && (rule.match_mode === 'exact' ? normalizedMessage === expected : normalizedMessage.includes(expected));
   });
-  if (!matchedRule || typeof event.replyToken !== 'string' || !matchedRule.reply_text) return;
+  if (!matchedRule || typeof event.replyToken !== 'string') return;
 
   if (matchedRule.tag_id) {
     const { data: friend, error: friendError } = await lineSupabase.from('line_friends')
@@ -124,11 +124,36 @@ async function processLineInboxAndAutoReply(event: any, contact: any, eventId: s
     }
   }
 
-  const replyText = String(matchedRule.reply_text).slice(0, 5000);
+  const replyType = String(matchedRule.reply_type || 'text');
+  const replyPayload = matchedRule.reply_payload && typeof matchedRule.reply_payload === 'object'
+    ? matchedRule.reply_payload as Record<string, any>
+    : {};
+  let lineMessage: Record<string, any>;
+  let inboxBody: string;
+  if (replyType === 'text') {
+    const replyText = String(matchedRule.reply_text || '').slice(0, 5000);
+    if (!replyText) return;
+    lineMessage = { type: 'text', text: replyText };
+    inboxBody = replyText;
+  } else if (replyType === 'image') {
+    const originalContentUrl = String(replyPayload.originalContentUrl || '');
+    const previewImageUrl = String(replyPayload.previewImageUrl || '');
+    if (!originalContentUrl.startsWith('https://') || !previewImageUrl.startsWith('https://')) return;
+    lineMessage = { type: 'image', originalContentUrl, previewImageUrl };
+    inboxBody = '[画像メッセージ]';
+  } else if (replyType === 'flex') {
+    const altText = String(replyPayload.altText || '').slice(0, 1500);
+    const contents = replyPayload.contents;
+    if (!altText || !contents || typeof contents !== 'object' || !['bubble', 'carousel'].includes(contents.type)) return;
+    lineMessage = { type: 'flex', altText, contents };
+    inboxBody = '[Flexメッセージ]';
+  } else {
+    return;
+  }
   const replyResponse = await fetch('https://api.line.me/v2/bot/message/reply', {
     method: 'POST',
     headers: { Authorization: 'Bearer ' + lineChannelAccessToken, 'Content-Type': 'application/json' },
-    body: JSON.stringify({ replyToken: event.replyToken, messages: [{ type: 'text', text: replyText }] }),
+    body: JSON.stringify({ replyToken: event.replyToken, messages: [lineMessage] }),
   });
   if (!replyResponse.ok) {
     const detail = await replyResponse.text().catch(() => '');
@@ -140,8 +165,8 @@ async function processLineInboxAndAutoReply(event: any, contact: any, eventId: s
     direction: 'outbound',
     contact_id: contact.id,
     line_user_id: userId,
-    message_type: 'text',
-    body: replyText,
+    message_type: replyType,
+    body: inboxBody,
     status: 'sent',
     received_at: new Date().toISOString(),
   }, { onConflict: 'owner_id,line_event_id,direction', ignoreDuplicates: true });
