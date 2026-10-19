@@ -3,7 +3,7 @@ CREATE TABLE IF NOT EXISTS public.communication_templates (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
   owner_id uuid NOT NULL DEFAULT auth.uid() REFERENCES auth.users(id) ON DELETE CASCADE,
   template_key text NOT NULL,
-  category text NOT NULL CHECK (category IN ('document','form','diagnosis','announcement')),
+  category text NOT NULL CHECK (category IN ('document','form','diagnosis','deal','announcement')),
   channel text NOT NULL CHECK (channel IN ('email','line')),
   subject text NOT NULL DEFAULT '',
   body_text text NOT NULL DEFAULT '',
