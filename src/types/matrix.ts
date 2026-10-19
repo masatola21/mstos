@@ -131,6 +131,12 @@ export interface ManagedProduct {
   code?: string;
   category?: string; // 既存分類
   price?: number;
+  /** 営業商品マスタへ公開する初期費用。未設定時は0円。 */
+  salesInitialFee?: number;
+  /** 営業商品マスタへ公開する月額費用。未設定時は0円。 */
+  salesMonthlyFee?: number;
+  /** 営業商品マスタに最後に反映した日時 */
+  salesCatalogPublishedAt?: number;
   description?: string;
   archetype: ProductArchetype;
   status: 'planning' | 'developing' | 'active' | 'archived';
