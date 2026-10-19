@@ -263,26 +263,33 @@ async function saveRelationalAIOperations(userId: string, data: WorkspaceData): 
   if (error) throw error;
 }
 
-function mergeRecords<T extends { id: string }>(remoteRecords: T[], localRecords: T[], baselineRecords: T[]): T[] {
-  const remoteById = new Map(remoteRecords.map((record) => [record.id, record]));
-  const localById = new Map(localRecords.map((record) => [record.id, record]));
-  const baselineById = new Map(baselineRecords.map((record) => [record.id, record]));
+function mergeRecordsByKey<T>(
+  remoteRecords: T[],
+  localRecords: T[],
+  baselineRecords: T[],
+  getKey: (record: T) => string,
+): T[] {
+  const remoteById = new Map(remoteRecords.map((record) => [getKey(record), record]));
+  const localById = new Map(localRecords.map((record) => [getKey(record), record]));
+  const baselineById = new Map(baselineRecords.map((record) => [getKey(record), record]));
   const merged = new Map(remoteById);
 
   // Apply local deletions only when the cloud record is still unchanged from the last synchronized snapshot.
   baselineRecords.forEach((baseline) => {
-    if (localById.has(baseline.id)) return;
-    const remote = remoteById.get(baseline.id);
-    if (remote && JSON.stringify(remote) === JSON.stringify(baseline)) merged.delete(baseline.id);
+    const key = getKey(baseline);
+    if (localById.has(key)) return;
+    const remote = remoteById.get(key);
+    if (remote && JSON.stringify(remote) === JSON.stringify(baseline)) merged.delete(key);
   });
 
   localRecords.forEach((local) => {
-    const baseline = baselineById.get(local.id);
-    const remote = remoteById.get(local.id);
+    const key = getKey(local);
+    const baseline = baselineById.get(key);
+    const remote = remoteById.get(key);
     const localChanged = !baseline || JSON.stringify(local) !== JSON.stringify(baseline);
     if (!localChanged) return;
     if (!remote || (baseline && JSON.stringify(remote) === JSON.stringify(baseline))) {
-      merged.set(local.id, local);
+      merged.set(key, local);
       return;
     }
 
@@ -291,10 +298,14 @@ function mergeRecords<T extends { id: string }>(remoteRecords: T[], localRecords
     const remoteUpdatedAt = (remote as T & { updatedAt?: unknown }).updatedAt;
     const localTime = typeof localUpdatedAt === 'number' ? localUpdatedAt : typeof localUpdatedAt === 'string' ? Date.parse(localUpdatedAt) : NaN;
     const remoteTime = typeof remoteUpdatedAt === 'number' ? remoteUpdatedAt : typeof remoteUpdatedAt === 'string' ? Date.parse(remoteUpdatedAt) : NaN;
-    if (Number.isFinite(localTime) && Number.isFinite(remoteTime) && localTime > remoteTime) merged.set(local.id, local);
+    if (Number.isFinite(localTime) && Number.isFinite(remoteTime) && localTime > remoteTime) merged.set(key, local);
   });
 
   return [...merged.values()];
+}
+
+function mergeRecords<T extends { id: string }>(remoteRecords: T[], localRecords: T[], baselineRecords: T[]): T[] {
+  return mergeRecordsByKey(remoteRecords, localRecords, baselineRecords, (record) => record.id);
 }
 
 function mergeChatHistories(
@@ -451,7 +462,7 @@ export async function loadOrMigrateWorkspaceData(userId: string): Promise<Worksp
     merged.activeCharacterId = mergePreference(relationalAI.activeCharacterId, localDefaults.activeCharacterId, baseline.activeCharacterId);
     merged.userProfile = mergePreference(relationalAI.userProfile, localDefaults.userProfile, baseline.userProfile);
     merged.aiModelSettings = mergePreference(relationalAI.aiModelSettings, localDefaults.aiModelSettings, baseline.aiModelSettings);
-    merged.pricingRates = mergeRecords(relationalAI.pricingRates, localDefaults.pricingRates, baseline.pricingRates || []);
+    merged.pricingRates = mergeRecordsByKey(relationalAI.pricingRates, localDefaults.pricingRates, baseline.pricingRates || [], (rate) => rate.model);
     merged.tokenUsage = mergeRecords(relationalAI.tokenUsage, localDefaults.tokenUsage, baseline.tokenUsage || []).slice(0, 300);
     merged.workModeHistories = mergeChatHistories(relationalAI.workModeHistories, localDefaults.workModeHistories, baseline.workModeHistories || {});
     merged.knowledgeItems = mergeRecords(relationalAI.knowledgeItems, localDefaults.knowledgeItems, baseline.knowledgeItems || []);

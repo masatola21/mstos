@@ -25,6 +25,12 @@ interface DashboardProps {
   onNavigateTab: (tab: any) => void;
   onOpenCreate: (tab: TableKey) => void;
   onOpenRls: () => void;
+  onStageTransitionTask?: (event: {
+    transitionType: 'prospect_to_lead' | 'lead_to_deal' | 'deal_to_customer';
+    sourceRecord: any;
+    targetTable: 'leads' | 'deals' | 'customers';
+    targetRecordId?: string | number;
+  }) => void;
 }
 
 const TABLE_ICONS: Partial<Record<TableKey, React.ReactNode>> = {

@@ -80,7 +80,11 @@ JSONオブジェクトのみを返してください。形式: {"candidates":[{"
       const parsed = JSON.parse(jsonText);
       if (!Array.isArray(parsed.candidates)) throw new Error('AIの返答に候補一覧がありません。再度実行してください。');
       const byName = new Map(existingCompanies.map((company: any) => [normalizeName(company.company_name || ''), company]));
-      const byDomain = new Map(existingCompanies.map((company: any) => [domainOf(company.website), company]).filter(([domain]) => Boolean(domain)));
+      const byDomain = new Map<string, any>();
+      existingCompanies.forEach((company: any) => {
+        const d = domainOf(company.website);
+        if (d) byDomain.set(d, company);
+      });
       const byId = new Map(existingCompanies.map((company: any) => [company.id, company]));
       const reviewed: Candidate[] = parsed.candidates.slice(0, 50).filter((item: any) => typeof item.company_name === 'string' && item.company_name.trim()).map((item: any) => {
         const matchedCompany = (byName.get(normalizeName(item.company_name.trim())) as any)
