@@ -36,6 +36,7 @@ import { CommunicationSendCenter } from './components/CommunicationSendCenter';
 import { AutomationView } from './components/matrix/AutomationView';
 import { DocumentTemplateView } from './components/matrix/DocumentTemplateView';
 import { MarketingAutomationPrototypeView } from './components/marketing/MarketingAutomationPrototypeView';
+import { AIAcquisitionOperationsView } from './components/marketing/AIAcquisitionOperationsView';
 import { ContactsLineHub } from './components/ContactsLineHub';
 import { QuickPresidentDrawer } from './components/matrix/QuickPresidentDrawer';
 
@@ -1874,6 +1875,13 @@ function AppContent() {
         )}
 
         {currentTab === 'contacts' && <ContactsLineHub />}
+
+        {currentTab === 'ai_acquisition' && (
+          <AIAcquisitionOperationsView onSendPresidentSummary={(summary) => {
+            setCurrentTab('ai_chat');
+            void handleSendMessage(summary, 'president');
+          }} />
+        )}
 
         {currentTab === 'marketing_automation' && (
           <MarketingAutomationPrototypeView scenarios={marketingScenarios} onScenariosChange={setMarketingScenarios} onNavigateTab={(tab) => setCurrentTab(tab)} />
