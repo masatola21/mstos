@@ -22,14 +22,14 @@ const seed=[
 const documentMessage=(type:string|undefined,channel:DeliveryChannel,title:string,url:string,recipient:string,company:string)=>{
 const hi=recipient+' 様';
 const intro='お世話になっております。有限会社MSTです。';
-const details='書類名：'+title+'\\n'+url;
+const details='書類名：'+title+'\n'+url;
 const messages:Record<string,{subject:string;body:string;line:string}>={
-proposal:{subject:'【ご提案書の送付】'+title+'｜'+company+' 様',body:hi+'\\n\\n'+intro+'\\n\\nご提案書をお送りします。内容をご確認いただき、ご不明点やご希望がございましたらお知らせください。\\n\\n'+details+'\\n\\n有限会社MST',line:hi+'\\nご提案書をお送りします。内容をご確認ください。\\n'+title+'\\n'+url},
-diagnosis_report:{subject:'【診断レポートのご送付】'+title+'｜'+company+' 様',body:hi+'\\n\\n'+intro+'\\n\\n診断結果をまとめたレポートをお送りします。内容をご確認いただき、結果や今後の進め方についてご不明点があればお知らせください。\\n\\n'+details+'\\n\\n有限会社MST',line:hi+'\\n診断レポートをお送りします。結果と今後の進め方をご確認ください。\\n'+title+'\\n'+url},
-contract:{subject:'【契約書のご確認】'+title+'｜'+company+' 様',body:hi+'\\n\\n'+intro+'\\n\\n契約書をお送りします。契約内容をご確認ください。記載内容に不明点や修正のご希望がございましたら、締結・手続きの前にご連絡ください。\\n\\n'+details+'\\n\\n有限会社MST',line:hi+'\\n契約書をお送りします。内容をご確認ください。不明点や修正希望はお知らせください。\\n'+title+'\\n'+url},
-invoice:{subject:'【請求書のご送付】'+title+'｜'+company+' 様',body:hi+'\\n\\n'+intro+'\\n\\n請求書をお送りします。請求金額・お支払期日・振込先などの記載をご確認のうえ、お手続きをお願いいたします。すでにお手続き済みの場合はご容赦ください。\\n\\n'+details+'\\n\\n有限会社MST',line:hi+'\\n請求書をお送りします。金額・お支払期日・振込先をご確認ください。\\n'+title+'\\n'+url}
+proposal:{subject:'【ご提案書の送付】'+title+'｜'+company+' 様',body:hi+'\n\n'+intro+'\n\nご提案書をお送りします。内容をご確認いただき、ご不明点やご希望がございましたらお知らせください。\n\n'+details+'\n\n有限会社MST',line:hi+'\nご提案書をお送りします。内容をご確認ください。\n'+title+'\n'+url},
+diagnosis_report:{subject:'【診断レポートのご送付】'+title+'｜'+company+' 様',body:hi+'\n\n'+intro+'\n\n診断結果をまとめたレポートをお送りします。内容をご確認いただき、結果や今後の進め方についてご不明点があればお知らせください。\n\n'+details+'\n\n有限会社MST',line:hi+'\n診断レポートをお送りします。結果と今後の進め方をご確認ください。\n'+title+'\n'+url},
+contract:{subject:'【契約書のご確認】'+title+'｜'+company+' 様',body:hi+'\n\n'+intro+'\n\n契約書をお送りします。契約内容をご確認ください。記載内容に不明点や修正のご希望がございましたら、締結・手続きの前にご連絡ください。\n\n'+details+'\n\n有限会社MST',line:hi+'\n契約書をお送りします。内容をご確認ください。不明点や修正希望はお知らせください。\n'+title+'\n'+url},
+invoice:{subject:'【請求書のご送付】'+title+'｜'+company+' 様',body:hi+'\n\n'+intro+'\n\n請求書をお送りします。請求金額・お支払期日・振込先などの記載をご確認のうえ、お手続きをお願いいたします。すでにお手続き済みの場合はご容赦ください。\n\n'+details+'\n\n有限会社MST',line:hi+'\n請求書をお送りします。金額・お支払期日・振込先をご確認ください。\n'+title+'\n'+url}
 };
-const message=messages[type||'']||{subject:'【書類のご送付】'+title+'｜'+company+' 様',body:hi+'\\n\\n'+intro+'\\n\\n書類をお送りします。内容をご確認ください。ご不明点がございましたらお知らせください。\\n\\n'+details+'\\n\\n有限会社MST',line:hi+'\\n書類をお送りします。内容をご確認ください。\\n'+title+'\\n'+url};
+const message=messages[type||'']||{subject:'【書類のご送付】'+title+'｜'+company+' 様',body:hi+'\n\n'+intro+'\n\n書類をお送りします。内容をご確認ください。ご不明点がございましたらお知らせください。\n\n'+details+'\n\n有限会社MST',line:hi+'\n書類をお送りします。内容をご確認ください。\n'+title+'\n'+url};
 return channel==='email'?{category:'document',channel,subject:message.subject,body_text:message.body}:{category:'document',channel,subject:'',body_text:message.line};
 };
 const fill=(s:string,v:Record<string,string>)=>s.replace(/\{([a-z_]+)\}/g,(_m,k:string)=>v[k]||'');
