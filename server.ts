@@ -341,9 +341,25 @@ app.post('/api/communications/send', async (req, res) => {
       const { data: friend, error: friendError } = await lineSupabase.from('line_friends').select('status,consent_status').eq('line_user_id', contact.line_user_id).maybeSingle();
       if (friendError || !friend || friend.status !== 'active' || friend.consent_status !== 'opted_in') throw new Error('有効なLINE友だち状態と配信同意を確認できません。');
       if (String(row.body_text || '').length > 5000) throw new Error('LINEメッセージは5000文字以内にしてください。');
+      let lineMessage: Record<string, string>;
+      const requestedVideo = row.line_message_payload && typeof row.line_message_payload === 'object'
+        ? row.line_message_payload as { type?: unknown; originalContentUrl?: unknown; previewImageUrl?: unknown }
+        : null;
+      if (requestedVideo?.type === 'video') {
+        const originalContentUrl = typeof requestedVideo.originalContentUrl === 'string' ? requestedVideo.originalContentUrl : '';
+        const previewImageUrl = typeof requestedVideo.previewImageUrl === 'string' ? requestedVideo.previewImageUrl : '';
+        const isHttpsUrl = (value: string) => { try { return new URL(value).protocol === 'https:'; } catch { return false; } };
+        if (originalContentUrl.length > 2000 || previewImageUrl.length > 2000 || !isHttpsUrl(originalContentUrl) || !isHttpsUrl(previewImageUrl)) {
+          throw new Error('LINE動画とプレビュー画像には2000文字以内の公開HTTPS URLが必要です。');
+        }
+        lineMessage = { type: 'video', originalContentUrl, previewImageUrl };
+      } else {
+        if (String(row.body_text || '').length > 5000) throw new Error('LINEメッセージは5000文字以内にしてください。');
+        lineMessage = { type: 'text', text: row.body_text || '' };
+      }
       const response = await fetch('https://api.line.me/v2/bot/message/push', {
         method: 'POST', headers: { Authorization: 'Bearer ' + lineChannelAccessToken, 'Content-Type': 'application/json', 'X-Line-Retry-Key': outboxId },
-        body: JSON.stringify({ to: contact.line_user_id, messages: [{ type: 'text', text: row.body_text || '' }] }),
+        body: JSON.stringify({ to: contact.line_user_id, messages: [lineMessage] }),
       });
       if (!response.ok) {
         const detail = await response.text().catch(() => '');
