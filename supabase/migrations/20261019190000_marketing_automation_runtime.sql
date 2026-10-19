@@ -76,10 +76,10 @@ begin
     and coalesce(v_old->>'status','') <> coalesce(v_new->>'status','')
     and lower(coalesce(v_new->>'status','')) in ('completed','complete','done','完了') then
     v_trigger := 'meeting_completed';
-  elsif TG_TABLE_NAME = 'invoices' and TG_OP in ('INSERT','UPDATE') then
+  elsif TG_TABLE_NAME = 'customer_invoices' and TG_OP in ('INSERT','UPDATE') then
     if TG_OP='UPDATE' and lower(coalesce(v_new->>'status','')) in ('paid','paid_full','cancelled','canceled') then
       update public.marketing_automation_jobs set status='failed', error_message='請求状態が変更されたため予約配信を停止しました。', updated_at=now()
-        where owner_id=auth.uid() and status='queued' and event_key like 'invoices:'||coalesce(v_new->>'id','')||':%';
+        where owner_id=auth.uid() and status='queued' and event_key like 'customer_invoices:'||coalesce(v_new->>'id','')||':%';
       return NEW;
     end if;
     v_trigger := 'invoice_due';
@@ -87,6 +87,11 @@ begin
     v_trigger := 'deal_stage_changed';
   elsif TG_TABLE_NAME = 'deals' and TG_OP = 'UPDATE' and coalesce(v_old->>'status','') <> coalesce(v_new->>'status','') then
     v_trigger := 'deal_stage_changed';
+  elsif TG_TABLE_NAME = 'customer_contracts' and TG_OP = 'UPDATE'
+    and coalesce(v_old->>'status','') <> coalesce(v_new->>'status','')
+    and lower(coalesce(v_new->>'status','')) in ('sent','signed','active','executed','締結済み') then
+    if lower(coalesce(v_new->>'status','')) = 'sent' then v_trigger := 'contract_sent';
+    else v_trigger := 'contract_signed'; end if;
   elsif TG_TABLE_NAME = 'customer_documents' and TG_OP = 'UPDATE'
     and coalesce(v_old->>'status','') <> coalesce(v_new->>'status','')
     and lower(coalesce(v_new->>'status','')) in ('approved','sent','signed','signed_complete') then
@@ -196,7 +201,7 @@ begin
       payload := case when channel_name='line' and coalesce(s.config->>'lineMessageType','')='video'
         then jsonb_build_object('type','video','originalContentUrl',s.config->>'lineVideoUrl','previewImageUrl',s.config->>'lineVideoPreviewUrl') else null end;
       delay_minutes := greatest(0, least(coalesce((s.config->>'waitMinutes')::integer,0), 10080));
-      if p_table='invoices' and p_matching_trigger in ('invoice_due','invoice_overdue') then
+      if p_table='customer_invoices' and p_matching_trigger in ('invoice_due','invoice_overdue') then
         begin
           due_time := (coalesce(p_record->>'due_date',p_record->>'due_at',p_record->>'payment_due_date'))::timestamptz;
           if p_matching_trigger='invoice_overdue' then due_time := due_time + interval '1 day'; end if;
@@ -222,8 +227,8 @@ create trigger marketing_automation_friend_tags after insert on public.line_frie
 drop trigger if exists marketing_automation_customer_service on public.customer_service_engagements;
 create trigger marketing_automation_customer_service after update on public.customer_service_engagements
   for each row execute function public.enqueue_marketing_automation_jobs();
-drop trigger if exists marketing_automation_invoices on public.invoices;
-create trigger marketing_automation_invoices after insert or update on public.invoices
+drop trigger if exists marketing_automation_invoices on public.customer_invoices;
+create trigger marketing_automation_invoices after insert or update on public.customer_invoices
   for each row execute function public.enqueue_marketing_automation_jobs();
 drop trigger if exists marketing_automation_leads on public.leads;
 create trigger marketing_automation_leads after insert on public.leads
@@ -233,6 +238,9 @@ create trigger marketing_automation_contacts after insert or update of line_user
   for each row execute function public.enqueue_marketing_automation_jobs();
 drop trigger if exists marketing_automation_deals on public.deals;
 create trigger marketing_automation_deals after update on public.deals
+  for each row execute function public.enqueue_marketing_automation_jobs();
+drop trigger if exists marketing_automation_contracts on public.customer_contracts;
+create trigger marketing_automation_contracts after update on public.customer_contracts
   for each row execute function public.enqueue_marketing_automation_jobs();
 drop trigger if exists marketing_automation_documents on public.customer_documents;
 create trigger marketing_automation_documents after update on public.customer_documents
