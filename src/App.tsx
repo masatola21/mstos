@@ -1709,6 +1709,7 @@ function AppContent() {
         {currentTab === 'product_hub' && (
           <ProductHubView
             products={products}
+            contracts={contracts}
             invoices={invoices}
             tools={tools}
             tasks={tasks}
