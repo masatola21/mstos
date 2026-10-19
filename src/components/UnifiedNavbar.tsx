@@ -247,7 +247,7 @@ export const UnifiedNavbar: React.FC<UnifiedNavbarProps> = ({
         <nav className="border-t border-slate-800/70 py-2 text-xs font-medium">
           {activeSection === 'mst' && (() => {
             const groups = [
-              { id: 'marketing', label: 'コミュニケーション', items: (['marketing_automation'] as UnifiedNavTab[]) },
+              { id: 'marketing', label: 'マーケティング', items: (['marketing_automation'] as UnifiedNavTab[]) },
               { id: 'crm', label: '顧客・営業', items: (['mst_dashboard','companies','contacts','prospects','leads','deals','customers','products','custom_lists'] as UnifiedNavTab[]) },
               
               { id: 'intake', label: 'フォーム・案内', items: (['mst_diagnoses','communication_send'] as UnifiedNavTab[]) },
