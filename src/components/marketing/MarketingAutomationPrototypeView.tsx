@@ -114,7 +114,7 @@ export const MarketingAutomationPrototypeView: React.FC<Props> = ({ scenarios, o
     const id = value.startsWith('segment:') ? value.slice('segment:'.length) : '';
     return segments.find((segment) => segment.id === id)?.name || value || '配信対象未設定';
   };
-  const [activeTab, setActiveTab] = useState<'home' | 'email' | 'line' | 'scenarios'>('home');
+  const [activeTab, setActiveTab] = useState<'home' | 'email' | 'line' | 'scenarios' | 'segments'>('home');
   const [lineView, setLineView] = useState<'broadcast' | 'inbox' | 'settings'>('broadcast');
   const [emailView, setEmailView] = useState<'broadcast' | 'inbox'>('broadcast');
   const [editing, setEditing] = useState<MarketingScenario | null>(null);
