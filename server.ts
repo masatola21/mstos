@@ -529,7 +529,7 @@ app.post('/api/communications/send', async (req, res) => {
       const configuredDomain = configuredAddress.split('@').pop()?.toLowerCase() || '';
       const emailPattern = /^[^\\s<>@]+@[^\\s<>@]+\\.[^\\s<>@]+$/;
       const fromEmail = String(sendSettings?.sender_email || 'contact@mstcorp.info').trim();
-      const replyTo = typeof sendSettings?.reply_to_email === 'string' ? sendSettings.reply_to_email.trim() : '';
+      const replyTo = typeof sendSettings?.reply_to_email === 'string' ? sendSettings.reply_to_email.trim() : 'mst.shikumikaizen@gmail.com';
       const fromName = String(sendSettings?.sender_name || '有限会社MST').trim();
       if (!fromName || fromName.length > 100 || /[\\r\\n<>]/.test(fromName)) throw new Error('差出人名の設定が不正です。');
       if (!emailPattern.test(fromEmail) || !configuredDomain || fromEmail.split('@').pop()?.toLowerCase() !== configuredDomain) throw new Error('差出人アドレスにはRESEND_FROM_EMAILと同じ認証済みドメインを指定してください。');
