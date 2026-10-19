@@ -176,10 +176,10 @@ export const Dashboard: React.FC<DashboardProps> = ({
               <span>Phase 1-C 実装完了</span>
             </div>
             <h2 className="text-xl sm:text-2xl font-bold text-white tracking-tight flex items-center gap-2">
-              診断＆AIレポート機能（diagnoses / ai_reports）
+              フォーム・診断・AIレポート
             </h2>
             <p className="text-xs sm:text-sm text-slate-300 max-w-2xl leading-relaxed">
-              取引先企業のヒアリング回答収集、5カテゴリ回答評価、AIレポート発行パイプライン。設問仕様確定までの安全ガードにより、completed への誤完了を確実に防止しながら下書き保存・回答変更を運用できます。
+              フォーム回答の受付・確認から、社内診断、AIレポートの作成・発行までを一元管理します。回答内容を確認してから診断・レポートへ進めます。
             </p>
           </div>
 
@@ -208,7 +208,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
               onClick={() => onNavigateTab('diagnoses')}
               className="px-5 py-3 rounded-xl bg-blue-600 hover:bg-blue-500 text-white font-semibold text-xs sm:text-sm shadow-lg shadow-blue-500/25 flex items-center justify-center gap-2 transition-all active:scale-95 cursor-pointer whitespace-nowrap"
             >
-              <span>診断一覧・回答入力へ</span>
+              <span>フォーム・診断一覧へ</span>
               <ChevronRight className="w-4 h-4" />
             </button>
           </div>
@@ -306,8 +306,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
             className="cursor-pointer bg-slate-950/60 hover:bg-slate-950 border border-slate-800 rounded-2xl p-4 transition-colors"
           >
             <div className="text-[11px] font-semibold text-blue-400">STEP 1. 会社マスタ</div>
-            <div className="text-xl font-black text-white mt-1">{counts.companies.toLocaleString()} <span className="text-xs font-normal text-slate-400">社</span></div>
-            <p className="text-[11px] text-slate-400 mt-1">主キー CID-xxx</p>
+            <p className="text-[11px] text-slate-400 mt-2">企業・担当者の基本情報を管理</p>
           </div>
 
           {/* Step 2: Prospects */}
@@ -316,8 +315,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
             className="cursor-pointer bg-slate-950/60 hover:bg-slate-950 border border-slate-800 rounded-2xl p-4 transition-colors"
           >
             <div className="text-[11px] font-semibold text-amber-400">STEP 2. 見込み企業</div>
-            <div className="text-xl font-black text-white mt-1">{counts.prospects.toLocaleString()} <span className="text-xs font-normal text-slate-400">件</span></div>
-            <p className="text-[11px] text-slate-400 mt-1">アプローチターゲット</p>
+            <p className="text-[11px] text-slate-400 mt-2">アプローチ候補を管理</p>
           </div>
 
           {/* Step 3: Leads */}
@@ -326,8 +324,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
             className="cursor-pointer bg-slate-950/60 hover:bg-slate-950 border border-slate-800 rounded-2xl p-4 transition-colors"
           >
             <div className="text-[11px] font-semibold text-cyan-400">STEP 3. リード</div>
-            <div className="text-xl font-black text-white mt-1">{counts.leads.toLocaleString()} <span className="text-xs font-normal text-slate-400">件</span></div>
-            <p className="text-[11px] text-slate-400 mt-1">問合せ・コンタクト</p>
+            <p className="text-[11px] text-slate-400 mt-2">問い合わせ・接点情報を管理</p>
           </div>
 
           {/* Step 4: Deals */}
@@ -336,8 +333,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
             className="cursor-pointer bg-slate-950/60 hover:bg-slate-950 border border-slate-800 rounded-2xl p-4 transition-colors"
           >
             <div className="text-[11px] font-semibold text-emerald-400">STEP 4. 商談</div>
-            <div className="text-xl font-black text-white mt-1">{counts.deals.toLocaleString()} <span className="text-xs font-normal text-slate-400">件</span></div>
-            <p className="text-[11px] text-slate-400 mt-1">案件・パイプライン</p>
+            <p className="text-[11px] text-slate-400 mt-2">提案から受注までを管理</p>
           </div>
 
           {/* Step 5: Customers */}
@@ -346,8 +342,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
             className="cursor-pointer bg-slate-950/60 hover:bg-slate-950 border border-slate-800 rounded-2xl p-4 transition-colors col-span-2 sm:col-span-1"
           >
             <div className="text-[11px] font-semibold text-pink-400">STEP 5. 顧客</div>
-            <div className="text-xl font-black text-white mt-1">{counts.customers.toLocaleString()} <span className="text-xs font-normal text-slate-400">社</span></div>
-            <p className="text-[11px] text-slate-400 mt-1">成約・1社1契約</p>
+            <p className="text-[11px] text-slate-400 mt-2">契約後の顧客情報を管理</p>
           </div>
         </div>
       </section>
