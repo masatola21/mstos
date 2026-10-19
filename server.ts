@@ -521,22 +521,20 @@ app.post('/api/communications/send', async (req, res) => {
       const configuredFrom = process.env.RESEND_FROM_EMAIL || '';
       if (!emailKey || !configuredFrom) throw new Error('メール送信サービスが未設定です。RESEND_API_KEY と RESEND_FROM_EMAIL を設定してください。');
       if (!contact.email || contact.email.toLowerCase() !== String(row.recipient_address).toLowerCase()) throw new Error('送信先メールアドレスが連絡先と一致しません。');
-      const identity = req.body?.emailIdentity && typeof req.body.emailIdentity === 'object' ? req.body.emailIdentity as {fromName?:unknown;fromEmail?:unknown;replyTo?:unknown} : null;
-      let emailFrom = configuredFrom;
-      let replyTo: string | undefined;
-      if (identity) {
-        const fromName = typeof identity.fromName === 'string' ? identity.fromName.trim() : '';
-        const fromEmail = typeof identity.fromEmail === 'string' ? identity.fromEmail.trim() : '';
-        const requestedReplyTo = typeof identity.replyTo === 'string' ? identity.replyTo.trim() : '';
-        const configuredAddress = configuredFrom.match(/<([^<>]+)>/)?.[1] || configuredFrom.trim();
-        const configuredDomain = configuredAddress.split('@').pop()?.toLowerCase() || '';
-        const emailPattern = /^[^\s<>@]+@[^\s<>@]+\.[^\s<>@]+$/;
-        if (!fromName || fromName.length > 100 || /[\r\n<>]/.test(fromName)) throw new Error('差出人名の設定が不正です。');
-        if (!emailPattern.test(fromEmail) || !configuredDomain || fromEmail.split('@').pop()?.toLowerCase() !== configuredDomain) throw new Error('差出人アドレスにはRESEND_FROM_EMAILと同じ認証済みドメインを指定してください。');
-        if (requestedReplyTo && !emailPattern.test(requestedReplyTo)) throw new Error('返信先メールアドレスの設定が不正です。');
-        emailFrom = `${fromName.replace(/"/g, '')} <${fromEmail}>`;
-        replyTo = requestedReplyTo || undefined;
-      }
+      const { data: sendSettings, error: sendSettingsError } = await lineSupabase.from('email_send_settings')
+        .select('sender_name,sender_email,reply_to_email').eq('owner_id', authData.user.id).maybeSingle();
+      if (sendSettingsError) throw new Error('メール送信設定を読み込めません。メール送信設定のマイグレーション適用を確認してください。');
+      
+      const configuredAddress = configuredFrom.match(/<([^<>]+)>/)?.[1] || configuredFrom.trim();
+      const configuredDomain = configuredAddress.split('@').pop()?.toLowerCase() || '';
+      const emailPattern = /^[^\\s<>@]+@[^\\s<>@]+\\.[^\\s<>@]+$/;
+      const fromEmail = String(sendSettings?.sender_email || 'contact@mstcorp.info').trim();
+      const replyTo = typeof sendSettings?.reply_to_email === 'string' ? sendSettings.reply_to_email.trim() : 'mst.shikumikaizen@gmail.com';
+      const fromName = String(sendSettings?.sender_name || '有限会社MST').trim();
+      if (!fromName || fromName.length > 100 || /[\\r\\n<>]/.test(fromName)) throw new Error('差出人名の設定が不正です。');
+      if (!emailPattern.test(fromEmail) || !configuredDomain || fromEmail.split('@').pop()?.toLowerCase() !== configuredDomain) throw new Error('差出人アドレスにはRESEND_FROM_EMAILと同じ認証済みドメインを指定してください。');
+      if (replyTo && !emailPattern.test(replyTo)) throw new Error('返信先メールアドレスの設定が不正です。');
+      const emailFrom = `${fromName.replace(/"/g, '')} <${fromEmail}>`;
       const response = await fetch('https://api.resend.com/emails', {
         method: 'POST', headers: { Authorization: 'Bearer ' + emailKey, 'Content-Type': 'application/json' },
         body: JSON.stringify({ from: emailFrom, to: [contact.email], subject: row.subject || '', text: row.body_text || '', ...(replyTo ? { reply_to: replyTo } : {}) }),
