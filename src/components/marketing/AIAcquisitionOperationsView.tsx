@@ -116,7 +116,7 @@ export const AIAcquisitionOperationsView: React.FC<{ onSendPresidentSummary?: (s
       setError(savedRecords.error.message.includes('mst_ai_acquisition_records') ? '集客運用テーブルが未適用です。supabase/migrations/20261020100000_ai_acquisition_operations.sql を適用してください。' : `集客データを読み込めませんでした: ${savedRecords.error.message}`);
       setLoading(false); return;
     }
-    setRecords(((savedRecords.data || []) as AcquisitionRecord[]).filter((record) => !['media', 'article', 'seo', 'rewrite', 'attribution'].includes(record.record_type)));
+    setRecords(((savedRecords.data || []) as AcquisitionRecord[]).filter((record) => !(['media', 'article', 'seo', 'rewrite', 'attribution'] as string[]).includes(record.record_type)));
     if (!savedProducts.error) setProducts((savedProducts.data || []) as Product[]);
     if (!savedSegments.error) setSegments(((savedSegments.data || []) as AudienceSegment[]).filter((segment) => Boolean(segment.conditions?.field?.trim())));
     setLoading(false);
