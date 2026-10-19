@@ -25,7 +25,7 @@ interface RecordDetailModalProps {
   onClose: () => void;
   onEdit: (record: any) => void;
   onTransitionStage?: (type: TransitionType, record: any) => void;
-  onOpenCustomerWorkspace?: (companyId: string, destination: 'documents' | 'operations' | 'diagnoses' | 'forms', recordContext?: { tableKey: TableKey; recordId: string; leadId?: string }) => void;
+  onOpenCustomerWorkspace?: (companyId: string, destination: 'documents' | 'operations' | 'diagnoses' | 'forms' | 'send', recordContext?: { tableKey: TableKey; recordId: string; leadId?: string; contactId?: string }) => void;
 }
 
 export const RecordDetailModal: React.FC<RecordDetailModalProps> = ({
@@ -322,7 +322,7 @@ export const RecordDetailModal: React.FC<RecordDetailModalProps> = ({
             {['leads', 'deals', 'customers'].includes(tableKey) && onOpenCustomerWorkspace && record.company_id && (
               <>
                 <button
-                  onClick={() => { onClose(); onOpenCustomerWorkspace(String(record.company_id), 'documents', { tableKey, recordId: String(record.id), leadId: record.lead_id ? String(record.lead_id) : undefined }); }}
+                  onClick={() => { onClose(); onOpenCustomerWorkspace(String(record.company_id), 'documents', { tableKey, recordId: String(record.id), leadId: record.lead_id ? String(record.lead_id) : undefined, contactId: record.contact_id ? String(record.contact_id) : undefined }); }}
                   className="px-3 py-2 rounded-xl text-xs font-medium text-cyan-200 hover:bg-cyan-950/40 border border-cyan-800 transition-colors flex items-center gap-1.5"
                 >
                   <FileText className="w-3.5 h-3.5" />
@@ -341,6 +341,13 @@ export const RecordDetailModal: React.FC<RecordDetailModalProps> = ({
                 >
                   <FileText className="w-3.5 h-3.5" />
                   <span>フォーム回答</span>
+                </button>
+                <button
+                  onClick={() => { onClose(); onOpenCustomerWorkspace(String(record.company_id), 'send', { tableKey, recordId: String(record.id), leadId: record.lead_id ? String(record.lead_id) : undefined, contactId: record.contact_id ? String(record.contact_id) : undefined }); }}
+                  className="px-3 py-2 rounded-xl text-xs font-medium text-emerald-200 hover:bg-emerald-950/40 border border-emerald-800 transition-colors flex items-center gap-1.5"
+                >
+                  <Mail className="w-3.5 h-3.5" />
+                  <span>送信センター</span>
                 </button>
                 {tableKey === 'customers' && <button
                   onClick={() => { onClose(); onOpenCustomerWorkspace(String(record.company_id), 'operations', { tableKey, recordId: String(record.id) }); }}

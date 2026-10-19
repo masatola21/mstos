@@ -230,7 +230,7 @@ async function loadTaskRelatedContext(task: TaskItem): Promise<string> {
 function AppContent() {
   const { user, isLoading } = useAuth();
   const [currentTab, setCurrentTab] = useState<UnifiedNavTab>('mst_dashboard');
-  const [customerWorkspaceContext, setCustomerWorkspaceContext] = useState<{ companyId: string; leadId?: string; dealId?: string; section?: 'forms' | 'diagnoses'; documentType?: 'invoice'; documentId?: string } | undefined>();
+  const [customerWorkspaceContext, setCustomerWorkspaceContext] = useState<{ companyId: string; leadId?: string; dealId?: string; section?: 'forms' | 'diagnoses'; documentType?: 'invoice'; documentId?: string; sendKind?: 'form'|'diagnosis'|'deal'|'customer_meeting'|'announcement'; formId?: string; contactId?: string } | undefined>();
   const customerWorkspaceCompanyId = customerWorkspaceContext?.companyId;
   const [workspaceReady, setWorkspaceReady] = useState(false);
   const [workspaceSyncStatus, setWorkspaceSyncStatus] = useState<'loading' | 'saving' | 'saved' | 'error'>('loading');
@@ -1723,12 +1723,12 @@ function AppContent() {
         )}
 
         {currentTab === 'mst_diagnoses' && (
-          <DiagnosisManager onOpenRls={() => setIsRlsOpen(true)} initialLeadId={customerWorkspaceContext?.leadId} initialCompanyId={customerWorkspaceContext?.companyId} initialSection={customerWorkspaceContext?.section} />
+          <DiagnosisManager onOpenRls={() => setIsRlsOpen(true)} initialLeadId={customerWorkspaceContext?.leadId} initialCompanyId={customerWorkspaceContext?.companyId} initialSection={customerWorkspaceContext?.section} onOpenSendCenter={(formId, _url, kind) => { setCustomerWorkspaceContext(current => ({ ...current, companyId: customerWorkspaceCompanyId || '', formId, sendKind: kind })); setCurrentTab('communication_send'); }} />
         )}
 
         {currentTab === 'deal_invitations' && <CommunicationSendCenter initialKind="deal" />}
-        {currentTab === 'customer_meeting_invitations' && <CommunicationSendCenter initialKind="announcement" />}
-        {currentTab === 'communication_send' && <CommunicationSendCenter initialKind={customerWorkspaceContext?.documentId ? "document" : "form"} initialCompanyId={customerWorkspaceContext?.companyId} initialDocumentId={customerWorkspaceContext?.documentId} />}
+        {currentTab === 'customer_meeting_invitations' && <CommunicationSendCenter initialKind="customer_meeting" />}
+        {currentTab === 'communication_send' && <CommunicationSendCenter initialKind={customerWorkspaceContext?.documentId ? "document" : customerWorkspaceContext?.sendKind || "form"} initialCompanyId={customerWorkspaceContext?.companyId} initialDocumentId={customerWorkspaceContext?.documentId} initialFormId={customerWorkspaceContext?.formId} initialDealId={customerWorkspaceContext?.dealId} initialContactId={customerWorkspaceContext?.contactId} />}
 
         {['companies', 'prospects', 'leads', 'products', 'deals', 'customers'].includes(currentTab) && (
           <TableManager
@@ -1741,8 +1741,11 @@ function AppContent() {
                 leadId: recordContext?.tableKey === 'leads' ? recordContext.recordId : recordContext?.leadId,
                 dealId: recordContext?.tableKey === 'deals' ? recordContext.recordId : undefined,
                 section: destination === 'forms' ? 'forms' : destination === 'diagnoses' ? 'diagnoses' : undefined,
+                sendKind: destination === 'send' ? (recordContext?.tableKey === 'deals' ? 'deal' : recordContext?.tableKey === 'customers' ? 'customer_meeting' : 'form') : undefined,
+                formId: undefined,
+                contactId: recordContext?.contactId,
               });
-              setCurrentTab(destination === 'documents' ? 'document_templates' : destination === 'diagnoses' || destination === 'forms' ? 'mst_diagnoses' : 'customer_operations');
+              setCurrentTab(destination === 'send' ? 'communication_send' : destination === 'documents' ? 'document_templates' : destination === 'diagnoses' || destination === 'forms' ? 'mst_diagnoses' : 'customer_operations');
             }}
           />
         )}
@@ -1822,7 +1825,7 @@ function AppContent() {
           <>
             <DocumentTemplateView key={`${customerWorkspaceCompanyId || 'all'}:${customerWorkspaceContext?.leadId || ''}:${customerWorkspaceContext?.dealId || ''}:${customerWorkspaceContext?.documentType || ''}`} initialCompanyId={customerWorkspaceCompanyId} initialLeadId={customerWorkspaceContext?.leadId} initialDealId={customerWorkspaceContext?.dealId} initialDocumentType={customerWorkspaceContext?.documentType} />
             <SalesOperationsWorkspace tab="documents" companyId={customerWorkspaceCompanyId} leadId={customerWorkspaceContext?.leadId} dealId={customerWorkspaceContext?.dealId} onClearCompanyFilter={() => setCustomerWorkspaceContext(undefined)} onOpenInvoiceDocuments={(companyId, documentId) => { setCustomerWorkspaceContext({ companyId, documentId }); setCurrentTab("communication_send"); }} />
-            <CommunicationSendCenter initialKind="document" initialCompanyId={customerWorkspaceCompanyId} initialDocumentId={customerWorkspaceContext?.documentId} />
+            
           </>
         )}
 

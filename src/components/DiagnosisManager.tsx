@@ -45,6 +45,7 @@ interface DiagnosisManagerProps {
   initialLeadId?: string;
   initialCompanyId?: string;
   initialSection?: 'forms' | 'diagnoses';
+  onOpenSendCenter?: (formId: string, url: string, kind: 'form'|'diagnosis') => void;
   initialDiagnosisId?: string;
 }
 
@@ -1220,7 +1221,7 @@ export const DiagnosisManager: React.FC<DiagnosisManagerProps> = (props) => {
           <button onClick={() => setSection('diagnoses')} className={`rounded-lg px-3 py-2 text-sm ${section === 'diagnoses' ? 'bg-blue-600 text-white' : 'text-slate-300 hover:bg-slate-800'}`}>診断・レポート</button>
         </div>
       </div>
-      {section === 'forms' ? <DiagnosisFormsWorkspace initialLeadId={props.initialLeadId} initialCompanyId={props.initialCompanyId} initialSection={props.initialLeadId || props.initialCompanyId ? 'answers' : undefined} onOpenDiagnosis={(id) => { setRequestedDiagnosisId(id); setSection('diagnoses'); }} /> : <DiagnosisRecordsView {...props} initialDiagnosisId={requestedDiagnosisId || undefined} />}
+      {section === 'forms' ? <DiagnosisFormsWorkspace initialLeadId={props.initialLeadId} initialCompanyId={props.initialCompanyId} initialSection={props.initialLeadId || props.initialCompanyId ? 'answers' : undefined} onOpenDiagnosis={(id) => { setRequestedDiagnosisId(id); setSection('diagnoses'); }} onOpenSendCenter={props.onOpenSendCenter} /> : <DiagnosisRecordsView {...props} initialDiagnosisId={requestedDiagnosisId || undefined} />}
     </div>
   );
 };

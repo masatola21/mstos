@@ -47,9 +47,9 @@ function readDefinition(value: Record<string, unknown> | null | undefined): Form
   };
 }
 
-interface DiagnosisFormsWorkspaceProps { initialLeadId?: string; initialCompanyId?: string; initialSection?: 'forms'|'answers'; onOpenDiagnosis?: (diagnosisId: string) => void; }
+interface DiagnosisFormsWorkspaceProps { initialLeadId?: string; initialCompanyId?: string; initialSection?: 'forms'|'answers'; onOpenDiagnosis?: (diagnosisId: string) => void; onOpenSendCenter?: (formId: string, url: string, kind: 'form'|'diagnosis') => void; }
 
-export const DiagnosisFormsWorkspace: React.FC<DiagnosisFormsWorkspaceProps> = ({ initialLeadId, initialCompanyId, initialSection, onOpenDiagnosis }) => {
+export const DiagnosisFormsWorkspace: React.FC<DiagnosisFormsWorkspaceProps> = ({ initialLeadId, initialCompanyId, initialSection, onOpenDiagnosis, onOpenSendCenter }) => {
   const [section, setSection] = useState<'forms'|'answers'>(initialSection || (initialLeadId || initialCompanyId ? 'answers' : 'forms'));
   const [forms, setForms] = useState<DiagnosisForm[]>([]);
   const [answers, setAnswers] = useState<Submission[]>([]);
@@ -287,6 +287,7 @@ export const DiagnosisFormsWorkspace: React.FC<DiagnosisFormsWorkspaceProps> = (
                           {copiedId === form.id ? <ClipboardCheck className="h-3 w-3" /> : <Clipboard className="h-3 w-3" />}
                           {copiedId === form.id ? 'コピー済み' : 'URLをコピー'}
                         </button>
+                        <button type="button" onClick={() => onOpenSendCenter?.(form.id, publicUrl(form), form.form_type === 'diagnosis' ? 'diagnosis' : 'form')} className="rounded bg-indigo-700 px-2 py-1 text-xs text-white">送信センターで案内</button>
                       </div>
                     )}
                   </li>
