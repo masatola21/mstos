@@ -73,7 +73,7 @@ export const MarketingBroadcastView: React.FC<{initialChannel?:Channel}> = ({ini
   },[]);
 
   const selectedSegment = segments.find(x=>x.id===segmentId);
-  const outreachProspects = prospects.filter(row=>Boolean(row.company_id&&companies[String(row.company_id)]));
+  const outreachProspects = prospects.filter(row=>Boolean(row.company_id&&companies[String(row.company_id)]&&String(row.source||'').includes('外部AI調査')));
   const selectedOutreachCompanies = new Set(outreachProspects.filter(row=>selectedProspectIds.includes(String(row.id||''))).map(row=>String(row.company_id||'')));
   const eligible = useMemo(()=>{
     let rows=contacts;
