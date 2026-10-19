@@ -171,7 +171,7 @@ export const AIAcquisitionOperationsView: React.FC<{ onSendPresidentSummary?: (s
   const summary = `MST集客運用の経営向け要約を作成してください。登録データと未入力項目を区別し、数値を推測しないでください。\n`+
     `運用中施策: ${metrics.active}件 / コンテンツ・投稿・動画: ${metrics.content}件\n`+
     `登録実績: 広告費 ${metrics.known.spend ? yen(metrics.spend) : '未入力'}、表示 ${metrics.known.impressions ? metrics.impressions : '未入力'}、クリック ${metrics.known.clicks ? metrics.clicks : '未入力'}、CV ${metrics.known.conversions ? metrics.conversions : '未入力'}、リード ${metrics.known.leads ? metrics.leads : '未入力'}、商談 ${metrics.known.meetings ? metrics.meetings : '未入力'}、契約 ${metrics.known.contracts ? metrics.contracts : '未入力'}、売上 ${metrics.known.revenue ? yen(metrics.revenue) : '未入力'}、利益 ${metrics.known.profit ? yen(metrics.profit) : '未入力'}\n`+
-    `登録済み成果データ: ${records.filter((record) => record.record_type === 'result').map((record) => `${record.title} ${JSON.stringify(record.payload)}`).join(' / ') || 'なし'}\n`+
+    `登録済み成果データ: ${records.filter((record) => record.record_type === 'result').map((record) => `${record.title}: ${JSON.stringify({ period: record.payload.period, channel: record.payload.channel, campaign: record.payload.campaign, adSpend: record.payload.adSpend, impressions: record.payload.impressions, clicks: record.payload.clicks, conversions: record.payload.conversions, leads: record.payload.leads, meetings: record.payload.meetings, contracts: record.payload.contracts, revenue: record.payload.revenue, profit: record.payload.profit })}`).join(' / ') || 'なし'}\n`+
     `確認事項: ${latestSuggestions.join(' / ') || '登録済みデータから改善余地を検討してください。'}\n`+
     '返答は、根拠、課題、優先度付きの改善案、必要作業に分け、確認できない成果は未入力と明記してください。';
 
