@@ -951,7 +951,6 @@ function AppContent() {
     const automationRule = event.transitionType === 'deal_to_customer'
       ? automations.find((rule) => rule.id === 'workflow-deal-won' && rule.isEnabled)
       : undefined;
-    const targetRecordId = event.targetRecordId ? String(event.targetRecordId) : undefined;
     const duplicateAutomationTask = automationRule && targetRecordId
       ? tasks.some((item) => item.sourceAutomationId === automationRule.id && item.relatedRecord?.id === targetRecordId)
       : false;
