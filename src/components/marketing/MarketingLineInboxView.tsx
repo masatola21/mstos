@@ -49,7 +49,7 @@ export const MarketingLineInboxView:React.FC=()=>{
       db.from('line_auto_reply_templates').select('*').order('created_at',{ascending:false}),
     ]);
     const missing=[m,r,i,templateResult].find(x=>x.error&&x.error.code==='PGRST205');
-    if(missing){setError('受信箱・自動返信用のDBマイグレーションが未適用です。supabase/migrations/20261019130000_line_inbox_autoreply.sql と 20261020150000_line_auto_reply_templates.sql を適用してください。');return}
+    if(missing){setError('受信箱・自動返信用のDBマイグレーションが未適用です。supabase/migrations/20261019130000_line_inbox_autoreply.sql、20261020140000_line_auto_reply_rich_messages.sql、20261020150000_line_auto_reply_templates.sql を適用してください。');return}
     const failed=[m,r,t,i,templateResult].find(x=>x.error)?.error;
     if(failed){setError(failed.message);return}
     setMessages((m.data||[]) as InboxMessage[]);
