@@ -63,7 +63,92 @@ async function resolveLineContact(userId: string) {
   throw insertError || new Error('Unable to create LINE contact.');
 }
 
-async function processLineWebhookEvent(event: any) {
+function isOptionalLineAutomationSchemaMissing(error: any): boolean {
+  return error?.code === 'PGRST205' || /line_channel_integrations|line_inbox_messages|line_auto_reply_rules/.test(String(error?.message || ''));
+}
+
+async function processLineInboxAndAutoReply(event: any, contact: any, eventId: string, botUserId: string): Promise<void> {
+  if (!lineSupabase || event.type !== 'message' || event.message?.type !== 'text' || !botUserId) return;
+  const { data: integration, error: integrationError } = await lineSupabase
+    .from('line_channel_integrations').select('owner_id,auto_reply_enabled').eq('bot_user_id', botUserId).maybeSingle();
+  if (integrationError) {
+    if (isOptionalLineAutomationSchemaMissing(integrationError)) return;
+    throw integrationError;
+  }
+  if (!integration) return;
+
+  const userId = typeof event.source?.userId === 'string' ? event.source.userId : '';
+  const messageText = String(event.message.text || '').slice(0, 5000);
+  if (!userId || !messageText) return;
+  const receivedAt = typeof event.timestamp === 'number' ? new Date(event.timestamp).toISOString() : new Date().toISOString();
+  const { error: inboxError } = await lineSupabase.from('line_inbox_messages').upsert({
+    owner_id: integration.owner_id,
+    line_event_id: eventId,
+    direction: 'inbound',
+    contact_id: contact.id,
+    line_user_id: userId,
+    message_type: 'text',
+    body: messageText,
+    status: 'received',
+    received_at: receivedAt,
+  }, { onConflict: 'owner_id,line_event_id,direction', ignoreDuplicates: true });
+  if (inboxError) {
+    if (isOptionalLineAutomationSchemaMissing(inboxError)) return;
+    throw inboxError;
+  }
+  if (!integration.auto_reply_enabled || !lineChannelAccessToken) return;
+
+  const { data: rules, error: rulesError } = await lineSupabase.from('line_auto_reply_rules')
+    .select('id,match_mode,match_text,reply_text,tag_id')
+    .eq('owner_id', integration.owner_id).eq('enabled', true).order('priority', { ascending: true });
+  if (rulesError) {
+    if (isOptionalLineAutomationSchemaMissing(rulesError)) return;
+    throw rulesError;
+  }
+  const normalizedMessage = messageText.trim().toLocaleLowerCase();
+  const matchedRule = (rules || []).find((rule: any) => {
+    const expected = String(rule.match_text || '').trim().toLocaleLowerCase();
+    return expected && (rule.match_mode === 'exact' ? normalizedMessage === expected : normalizedMessage.includes(expected));
+  });
+  if (!matchedRule || typeof event.replyToken !== 'string' || !matchedRule.reply_text) return;
+
+  if (matchedRule.tag_id) {
+    const { data: friend, error: friendError } = await lineSupabase.from('line_friends')
+      .select('id').eq('line_user_id', userId).maybeSingle();
+    if (friendError) throw friendError;
+    if (friend?.id) {
+      const { error: tagError } = await lineSupabase.from('line_friend_tags').upsert({
+        line_friend_id: friend.id, tag_id: matchedRule.tag_id, assigned_by: 'automation',
+      }, { onConflict: 'line_friend_id,tag_id', ignoreDuplicates: true });
+      if (tagError) throw tagError;
+    }
+  }
+
+  const replyText = String(matchedRule.reply_text).slice(0, 5000);
+  const replyResponse = await fetch('https://api.line.me/v2/bot/message/reply', {
+    method: 'POST',
+    headers: { Authorization: 'Bearer ' + lineChannelAccessToken, 'Content-Type': 'application/json' },
+    body: JSON.stringify({ replyToken: event.replyToken, messages: [{ type: 'text', text: replyText }] }),
+  });
+  if (!replyResponse.ok) {
+    const detail = await replyResponse.text().catch(() => '');
+    throw new Error(detail || 'LINE自動返信の送信に失敗しました。');
+  }
+  const { error: outboundError } = await lineSupabase.from('line_inbox_messages').upsert({
+    owner_id: integration.owner_id,
+    line_event_id: eventId,
+    direction: 'outbound',
+    contact_id: contact.id,
+    line_user_id: userId,
+    message_type: 'text',
+    body: replyText,
+    status: 'sent',
+    received_at: new Date().toISOString(),
+  }, { onConflict: 'owner_id,line_event_id,direction', ignoreDuplicates: true });
+  if (outboundError) throw outboundError;
+}
+
+async function processLineWebhookEvent(event: any, botUserId = '') {
   if (!lineSupabase) throw new Error('Supabase server credentials are missing.');
   const stableEventId = typeof event.webhookEventId === 'string'
     ? event.webhookEventId
@@ -133,6 +218,7 @@ async function processLineWebhookEvent(event: any) {
           .is('contact_id', null);
         if (leadError) throw leadError;
       }
+      if (event.type === 'message') await processLineInboxAndAutoReply(event, contact, stableEventId, botUserId);
     }
 
     if (eventRowId) {
@@ -173,7 +259,7 @@ app.post('/api/line/webhook', express.raw({ type: 'application/json', limit: '1m
     return res.status(401).json({ error: 'Invalid LINE signature.' });
   }
 
-  let webhook: { events?: unknown[] };
+  let webhook: { destination?: unknown; events?: unknown[] };
   try {
     webhook = JSON.parse(req.body.toString('utf8'));
   } catch {
@@ -182,11 +268,31 @@ app.post('/api/line/webhook', express.raw({ type: 'application/json', limit: '1m
   if (!Array.isArray(webhook.events)) return res.status(400).json({ error: 'Webhook events array is required.' });
 
   try {
-    for (const event of webhook.events) await processLineWebhookEvent(event);
+    const botUserId = typeof webhook.destination === 'string' ? webhook.destination : '';
+    for (const event of webhook.events) await processLineWebhookEvent(event, botUserId);
     return res.sendStatus(200);
   } catch (error) {
     console.error('LINE webhook event processing failed:', error instanceof Error ? error.message : 'unknown error');
     return res.status(500).json({ error: 'LINE webhook event could not be stored.' });
+  }
+});
+
+
+app.get('/api/line/account', async (req, res) => {
+  if (!lineSupabase) return res.status(503).json({ error: 'LINE連携サーバーのSupabase設定がありません。' });
+  const authorization = req.header('authorization') || '';
+  const token = authorization.startsWith('Bearer ') ? authorization.slice(7) : '';
+  if (!token) return res.status(401).json({ error: 'ログインしてください。' });
+  const { data: authData, error: authError } = await lineSupabase.auth.getUser(token);
+  if (authError || !authData.user) return res.status(401).json({ error: 'ログイン状態を確認できません。' });
+  if (!lineChannelAccessToken) return res.status(503).json({ error: 'LINE_CHANNEL_ACCESS_TOKEN がサーバーに設定されていません。' });
+  try {
+    const response = await fetch('https://api.line.me/v2/bot/info', { headers: { Authorization: 'Bearer ' + lineChannelAccessToken } });
+    const profile = await response.json().catch(() => ({})) as { userId?: string; message?: string };
+    if (!response.ok || !profile.userId) return res.status(502).json({ error: profile.message || 'LINE公式アカウント情報を取得できません。' });
+    return res.json({ userId: profile.userId });
+  } catch {
+    return res.status(502).json({ error: 'LINE公式アカウント情報を取得できません。' });
   }
 });
 
