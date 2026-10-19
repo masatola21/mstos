@@ -201,7 +201,7 @@ export interface KnowledgeItem {
   updatedAt: number;
   sourceTaskId?: string;
   sourceRoleId?: string;
-  /** AIへの参照範囲。未設定の既存資料は従来互換のため全AI共通として扱う。 */
+  /** AIへの参照範囲。未設定の既存資料は安全のためAI社長のみが参照する。 */
   knowledgeAccess?: KnowledgeAccess;
   attachments?: KnowledgeAttachment[];
 }
