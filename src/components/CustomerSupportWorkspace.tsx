@@ -62,6 +62,10 @@ const TASK_STATUS_LABELS: Record<TaskItem['status'], string> = {
   waiting: '未着手', in_progress: '進行中', pending_approval: '確認待ち', completed: '完了', blocked: '保留',
 };
 const asDateTimeLocal = (value?: string | null) => value ? new Date(value).toISOString().slice(0, 16) : '';
+const supportErrorMessage = (error: any, fallback: string) =>
+  error?.code === '42P01' || error?.code === '42703'
+    ? '支援管理DBのマイグレーションが未適用です。supabase/migrations/20261019100000_customer_support_management.sql を適用してから再読み込みしてください。'
+    : error?.message || fallback;
 const displayDate = (value?: string | null) => value ? new Date(value).toLocaleString('ja-JP') : '未設定';
 
 interface Props {
@@ -120,7 +124,7 @@ export const CustomerSupportWorkspace: React.FC<Props> = ({
     ? serviceContracts.find((item) => item.id === selected.contract_id) : undefined;
   const companyInvoices = invoices.filter((item) => item.companyId === selectedCompanyId);
   const companyName = (id?: string) => companies.find((item) => item.id === id)?.company_name || id || '会社未設定';
-  const phaseOptions = [...PHASES, ...(Array.isArray(detail.phases) ? detail.phases : [])]
+  const phaseOptions = [...PHASES, ...(Array.isArray(detail.phases) ? detail.phases : []), ...(detail.phase ? [detail.phase] : [])]
     .filter((value, index, all) => all.indexOf(value) === index);
 
   useEffect(() => {
@@ -159,7 +163,7 @@ export const CustomerSupportWorkspace: React.FC<Props> = ({
       setServiceContracts(contractResult.data || []);
       setDocuments(documentResult.data || []);
     }).catch((loadError: any) => {
-      if (!cancelled) setError(loadError?.message || '支援履歴を読み込めませんでした。DBマイグレーション適用後に再読み込みしてください。');
+      if (!cancelled) setError(supportErrorMessage(loadError, '支援履歴を読み込めませんでした。'));
     }).finally(() => { if (!cancelled) setLoading(false); });
     return () => { cancelled = true; };
   }, [selected?.id, selectedCompanyId]);
@@ -178,7 +182,7 @@ export const CustomerSupportWorkspace: React.FC<Props> = ({
         support_details: summaryDraft,
         updated_at: new Date().toISOString(),
       }).eq('id', selected.id);
-    if (saveError) { setError(saveError.message); return; }
+    if (saveError) { setError(supportErrorMessage(saveError, '支援状況を保存できませんでした。')); return; }
     setNotice('支援状況を保存しました。');
     await onRefresh();
   };
@@ -206,16 +210,16 @@ export const CustomerSupportWorkspace: React.FC<Props> = ({
         status: 'planned',
         support_details: supportDetails,
       }).select('id').single();
-    if (insertError) { setError(insertError.message); return; }
+    if (insertError) { setError(supportErrorMessage(insertError, '顧客支援を登録できませんでした。')); return; }
     setNewSupport({
       title: '', company_id: companyId || '', contract_id: '',
       service_type: 'implementation_support', purpose: '',
       startedAt: new Date().toISOString().slice(0, 10), ownerName: '',
     });
     setShowNewSupport(false);
-    setSelectedId(data.id);
     setNotice('顧客支援を登録しました。');
     await onRefresh();
+    setSelectedId(data.id);
   };
 
   const saveMeeting = async (event: React.FormEvent) => {
@@ -245,7 +249,7 @@ export const CustomerSupportWorkspace: React.FC<Props> = ({
     const result = editingMeetingId
       ? await supabase.from('customer_service_meetings').update(payload).eq('id', editingMeetingId)
       : await supabase.from('customer_service_meetings').insert(payload);
-    if (result.error) { setError(result.error.message); return; }
+    if (result.error) { setError(supportErrorMessage(result.error, '打ち合わせ履歴を保存できませんでした。')); return; }
     const latestMeeting = meetings[0];
     const isLatest = !latestMeeting || Date.parse(payload.occurred_at) >= Date.parse(latestMeeting.occurred_at);
     if (isLatest) {
@@ -260,7 +264,7 @@ export const CustomerSupportWorkspace: React.FC<Props> = ({
           next_meeting_at: payload.next_meeting_at,
           updated_at: new Date().toISOString(),
         }).eq('id', selected.id);
-      if (summaryError) { setError(summaryError.message); return; }
+      if (summaryError) { setError(supportErrorMessage(summaryError, '支援の次回予定を更新できませんでした。')); return; }
     }
     setMeetingDraft(EMPTY_MEETING);
     setEditingMeetingId('');
@@ -415,12 +419,12 @@ export const CustomerSupportWorkspace: React.FC<Props> = ({
             const open = itemTasks.filter((task) => task.status !== 'completed');
             const overdue = open.some((task) => task.dueDate && task.dueDate < new Date().toISOString().slice(0, 10));
             const lateMeeting = item.next_meeting_at && new Date(item.next_meeting_at).getTime() < Date.now();
-            const warning = overdue || lateMeeting || item.status === 'paused';
+            const warning = overdue || lateMeeting || item.status === 'paused' || itemDetail.progressStatus === 'delayed' || itemDetail.progressStatus === 'at_risk';
             return <li key={item.id}><button type="button" onClick={() => { setSelectedId(item.id); setActiveSection('overview'); setNotice(''); setError(''); }} className={'w-full rounded-lg border p-3 text-left ' + (selected?.id === item.id ? 'border-blue-500 bg-blue-950/30' : 'border-slate-800 bg-slate-950 hover:border-slate-600')}>
               <div className="flex items-start justify-between gap-2"><span className="font-medium text-white">{companyName(item.company_id)}</span>{warning && <AlertTriangle className="h-4 w-4 shrink-0 text-amber-300" />}</div>
               <div className="mt-1 text-xs text-slate-300">{item.title}</div>
               <div className="mt-2 flex flex-wrap gap-x-3 gap-y-1 text-xs text-slate-500"><span>{itemDetail.phase || PHASES[0]}</span><span>{itemDetail.currentTheme || 'テーマ未設定'}</span><span>次回 {displayDate(item.next_meeting_at)}</span><span>未完了 {open.length}件</span><span>{PROGRESS_LABELS[itemDetail.progressStatus || 'not_started']}</span></div>
-              {warning && <div className="mt-2 text-xs text-amber-300">{overdue ? '期限超過タスクあり' : lateMeeting ? '次回予定日を過ぎています' : '支援が保留中です'}</div>}
+              {warning && <div className="mt-2 text-xs text-amber-300">{overdue ? '期限超過タスクあり' : lateMeeting ? '次回予定日を過ぎています' : itemDetail.progressStatus === 'delayed' ? '進捗遅延' : itemDetail.progressStatus === 'at_risk' ? '支援上の確認が必要です' : '支援が保留中です'}</div>}
             </button></li>;
           })}</ul>}
       </section>
