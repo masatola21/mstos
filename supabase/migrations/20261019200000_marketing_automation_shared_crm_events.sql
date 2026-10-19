@@ -151,7 +151,7 @@ begin
     end if;
     if TG_OP='UPDATE' and lower(coalesce(v_new->>'status','')) in ('paid','paid_full','cancelled','canceled') then
       update public.marketing_automation_jobs set status='failed', error_message='請求状態が変更されたため予約配信を停止しました。', updated_at=now()
-        where owner_id=auth.uid() and status='queued' and event_key like 'customer_invoices:'||coalesce(v_new->>'id','')||':%';
+        where (auth.uid() is null or owner_id=auth.uid()) and status='queued' and event_key like 'customer_invoices:'||coalesce(v_new->>'id','')||':%';
       return NEW;
     end if;
     v_trigger := 'invoice_due';
@@ -208,11 +208,11 @@ begin
     return NEW;
   end if;
   if v_contact_id is null then return NEW; end if;
-  perform public.queue_marketing_scenarios(auth.uid(), v_contact_id, v_company_id, v_new, TG_TABLE_NAME, v_status, v_trigger, coalesce(v_new->>'updated_at', now()::text));
+  perform public.queue_marketing_scenarios_for_event( v_contact_id, v_company_id, v_new, TG_TABLE_NAME, v_status, v_trigger, coalesce(v_new->>'updated_at', now()::text));
   if TG_TABLE_NAME = 'customer_invoices' then
-    perform public.queue_marketing_scenarios(auth.uid(), v_contact_id, v_company_id, v_new, TG_TABLE_NAME, 'invoice_overdue', 'invoice_overdue', coalesce(v_new->>'updated_at', now()::text));
+    perform public.queue_marketing_scenarios_for_event( v_contact_id, v_company_id, v_new, TG_TABLE_NAME, 'invoice_overdue', 'invoice_overdue', coalesce(v_new->>'updated_at', now()::text));
   elsif v_status <> v_trigger then
-    perform public.queue_marketing_scenarios(auth.uid(), v_contact_id, v_company_id, v_new, TG_TABLE_NAME, v_status, v_status, coalesce(v_new->>'updated_at', now()::text));
+    perform public.queue_marketing_scenarios_for_event( v_contact_id, v_company_id, v_new, TG_TABLE_NAME, v_status, v_status, coalesce(v_new->>'updated_at', now()::text));
   end if;
   return NEW;
 end $$;
