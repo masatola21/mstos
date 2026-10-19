@@ -4,6 +4,8 @@ import { ManagedContract, ManagedInvoice } from '../types/matrix';
 import { FileText, Plus, RefreshCw, Receipt, Wrench } from 'lucide-react';
 import { DealInvitationPanel } from './DealInvitationPanel';
 import { CustomerMeetingInvitationPanel } from './CustomerMeetingInvitationPanel';
+import { CustomerSupportWorkspace } from './CustomerSupportWorkspace';
+import type { TaskItem } from '../types';
 
 type WorkspaceTab = 'segments' | 'documents' | 'operations' | 'invitations' | 'customer_invitations';
 type Segment = { id: string; name: string; entity_type: string; conditions: { field?: string; value?: string }; created_at: string };
@@ -31,9 +33,9 @@ const defaultInvoiceDueDate = (date = new Date()) => {
   return localDateString(due);
 };
 
-interface Props { tab: WorkspaceTab; companyId?: string; leadId?: string; dealId?: string; onClearCompanyFilter?: () => void; onOperationalRecordsChange?: (contracts: ManagedContract[], invoices: ManagedInvoice[]) => void; onMilestoneReached?: (event: { engagementId: string; milestoneId: string; milestoneTitle: string; companyId?: string; companyName?: string }) => void; onContractSigned?: (event: { id: string; title: string; companyId?: string; companyName?: string; amount?: number }) => void; onInvoiceOverdue?: (event: { id: string; title: string; invoiceNumber?: string; companyId?: string; companyName?: string; amount?: number; dueDate?: string }) => void; }
+interface Props { tab: WorkspaceTab; companyId?: string; leadId?: string; dealId?: string; onClearCompanyFilter?: () => void; onOperationalRecordsChange?: (contracts: ManagedContract[], invoices: ManagedInvoice[]) => void; onMilestoneReached?: (event: { engagementId: string; milestoneId: string; milestoneTitle: string; companyId?: string; companyName?: string }) => void; onContractSigned?: (event: { id: string; title: string; companyId?: string; companyName?: string; amount?: number }) => void; onInvoiceOverdue?: (event: { id: string; title: string; invoiceNumber?: string; companyId?: string; companyName?: string; amount?: number; dueDate?: string }) => void; invoices?: ManagedInvoice[]; tasks?: TaskItem[]; onCreateTask?: (task: Omit<TaskItem, 'id' | 'createdAt' | 'updatedAt'>) => void; onUpdateTask?: (task: TaskItem) => void; }
 
-export const SalesOperationsWorkspace: React.FC<Props> = ({ tab, companyId, leadId, dealId, onClearCompanyFilter, onOperationalRecordsChange, onMilestoneReached, onContractSigned, onInvoiceOverdue }) => {
+export const SalesOperationsWorkspace: React.FC<Props> = ({ tab, companyId, leadId, dealId, onClearCompanyFilter, onOperationalRecordsChange, onMilestoneReached, onContractSigned, onInvoiceOverdue, invoices = [], tasks = [], onCreateTask, onUpdateTask }) => {
   const [segments, setSegments] = useState<Segment[]>([]);
   const [documents, setDocuments] = useState<RecordRow[]>([]);
   const [outbox, setOutbox] = useState<RecordRow[]>([]);
@@ -288,8 +290,8 @@ ${JSON.stringify(recentMessages || [], null, 2)}`;
 
   const readMilestones = (record: RecordRow): RecordRow[] => Array.isArray(record.milestone_data) ? record.milestone_data : [];
 
-  const addServiceMilestone = async (record: RecordRow) => {
-    const title = (milestoneDrafts[record.id] || '').trim();
+  const addServiceMilestone = async (record: RecordRow, titleOverride?: string) => {
+    const title = (titleOverride || milestoneDrafts[record.id] || '').trim();
     const supabase = getSupabase();
     if (!supabase || !title) return;
     const milestones = readMilestones(record);
@@ -416,7 +418,19 @@ ${JSON.stringify(recentMessages || [], null, 2)}`;
         <span className="text-cyan-100">顧客に関連する契約・請求・支援を表示中：{companies.find((company)=>company.id===companyId)?.company_name || companyId}</span>
         {onClearCompanyFilter && <button type="button" onClick={onClearCompanyFilter} className="rounded border border-cyan-800 px-2 py-1 text-cyan-100 hover:bg-cyan-900/50">全顧客を表示</button>}
       </div>}
-      <div className="flex flex-wrap items-center justify-between gap-3"><div className="flex flex-wrap gap-2">{opsTabs.map(({key,label,icon:Icon}) => <button key={key} onClick={() => setActiveOpsTab(key)} className={`flex items-center gap-2 rounded-lg px-3 py-2 text-sm ${activeOpsTab===key?'bg-blue-600 text-white':'border border-slate-700 text-slate-300 hover:bg-slate-800'}`}><Icon className="h-4 w-4" />{label}</button>)}</div><button onClick={() => setFormOpen((value) => !value)} className="flex items-center gap-2 rounded-lg bg-blue-600 px-3 py-2 text-sm font-semibold text-white"><Plus className="h-4 w-4" />新規登録</button></div>
+      <div className="flex flex-wrap items-center justify-between gap-3"><div className="flex flex-wrap gap-2">{opsTabs.map(({key,label,icon:Icon}) => <button key={key} onClick={() => setActiveOpsTab(key)} className={`flex items-center gap-2 rounded-lg px-3 py-2 text-sm ${activeOpsTab===key?'bg-blue-600 text-white':'border border-slate-700 text-slate-300 hover:bg-slate-800'}`}><Icon className="h-4 w-4" />{label}</button>)}</div>{activeOpsTab !== 'services' && <button onClick={() => setFormOpen((value) => !value)} className="flex items-center gap-2 rounded-lg bg-blue-600 px-3 py-2 text-sm font-semibold text-white"><Plus className="h-4 w-4" />新規登録</button>}</div>
+      {activeOpsTab === 'services' ? <CustomerSupportWorkspace
+        companyId={companyId}
+        companies={companies}
+        engagements={records}
+        invoices={invoices}
+        tasks={tasks}
+        onCreateTask={(task) => onCreateTask?.(task)}
+        onUpdateTask={(task) => onUpdateTask?.(task)}
+        onRefresh={load}
+        onAddMilestone={addServiceMilestone}
+        onCompleteMilestone={reachServiceMilestone}
+      /> : <>
       {formOpen && <form onSubmit={createOperation} className="grid gap-3 rounded-lg border border-slate-800 bg-slate-950 p-4 md:grid-cols-2">
         <label className="text-xs text-slate-400">名称（初期入力済み・必要な場合のみ修正）<input required value={recordTitle} onChange={(e)=>setRecordTitle(e.target.value)} className="mt-1 w-full rounded border border-slate-700 bg-slate-900 px-3 py-2 text-sm text-white" /></label>
         <label className="text-xs text-slate-400">会社<select value={companyId || recordCompany} disabled={Boolean(companyId)} onChange={(e)=>setRecordCompany(e.target.value)} className="mt-1 w-full rounded border border-slate-700 bg-slate-900 px-3 py-2 text-sm text-white disabled:opacity-70"><option value="">会社を選択</option>{companies.map(company=><option key={company.id} value={company.id}>{company.company_name}</option>)}</select></label>
@@ -426,6 +440,7 @@ ${JSON.stringify(recentMessages || [], null, 2)}`;
         <div className="md:col-span-2"><button className="rounded-lg bg-emerald-700 px-3 py-2 text-sm font-semibold text-white">保存</button></div>
       </form>}
       {loading ? <p className="text-sm text-slate-400">読み込み中…</p> : records.length === 0 ? <p className="py-8 text-center text-sm text-slate-400">登録データはありません。</p> : <div className="overflow-x-auto"><table className="w-full text-left text-sm"><thead><tr className="border-b border-slate-800 text-xs text-slate-400"><th className="p-2">名称</th><th className="p-2">会社</th><th className="p-2">状態</th><th className="p-2">金額</th><th className="p-2">日付</th></tr></thead><tbody>{records.map((record)=><React.Fragment key={record.id}><tr className="border-b border-slate-800/70 text-slate-200"><td className="p-2">{record.title || record.invoice_number}</td><td className="p-2">{companies.find((item)=>item.id===record.company_id)?.company_name || record.company_id || '—'}</td><td className="p-2"><select aria-label={`${record.title||record.invoice_number}の状態`} value={record.status} onChange={(e)=>void updateOperationStatus(record,e.target.value)} className="rounded border border-slate-700 bg-slate-950 px-2 py-1 text-xs text-white">{(activeOpsTab==='contracts'?['draft','under_review','sent','signed','expired','canceled']:activeOpsTab==='invoices'?['draft','awaiting_approval','issued','paid','overdue','canceled']:['planned','active','paused','completed','canceled']).map(status=><option key={status} value={status}>{status}</option>)}</select></td><td className="p-2">{record.amount == null?'—':Number(record.amount).toLocaleString('ja-JP')+'円'}</td><td className="p-2">{record.due_date || record.start_date || (record.next_meeting_at ? new Date(record.next_meeting_at).toLocaleString('ja-JP') : '—')}</td></tr>{activeOpsTab==='services'&&<tr className="border-b border-slate-800 bg-slate-950/50"><td colSpan={5} className="p-3"><div className="space-y-2"><div className="text-xs font-semibold text-slate-300">支援マイルストーン</div>{readMilestones(record).map((milestone)=><div key={milestone.id} className="flex flex-wrap items-center gap-2 text-xs"><span className={milestone.status==='completed'?'text-emerald-300':'text-slate-300'}>{milestone.status==='completed'?'✓':'○'} {milestone.title}</span>{milestone.status!=='completed'&&<button type="button" onClick={()=>void reachServiceMilestone(record,milestone.id)} className="rounded border border-emerald-800 px-2 py-1 text-emerald-200">到達を記録してタスク作成</button>}{milestone.completed_at&&<span className="text-slate-500">{new Date(milestone.completed_at).toLocaleDateString('ja-JP')}</span>}</div>)}<div className="flex flex-wrap gap-2"><input value={milestoneDrafts[record.id]||''} onChange={(e)=>setMilestoneDrafts((current)=>({...current,[record.id]:e.target.value}))} placeholder="例：初回レビュー完了" className="min-w-56 rounded border border-slate-700 bg-slate-900 px-2 py-1.5 text-xs text-white"/><button type="button" onClick={()=>void addServiceMilestone(record)} disabled={!(milestoneDrafts[record.id]||'').trim()} className="rounded bg-blue-700 px-2 py-1.5 text-xs text-white disabled:opacity-50">節目を追加</button></div></div></td></tr>}</React.Fragment>)}</tbody></table></div>}
+      </>}
     </section>}
   </div>;
 };

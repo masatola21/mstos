@@ -108,6 +108,12 @@ export interface TaskItem {
   sourceAutomationId?: string;
   sourceAutomationRecordId?: string; // 自動化タスクの重複防止に使う発生元レコードID
   automationAutoRun?: boolean; // イベント発生時に自動実行するルール起点タスク
+  // Post-contract support tasks reuse the existing AI task store and sync path.
+  taskOwnerSide?: 'client' | 'mst';
+  supportAssigneeName?: string;
+  supportEngagementId?: string;
+  supportMeetingId?: string;
+  completedAt?: number;
   createdAt: number;
   updatedAt: number;
 }
