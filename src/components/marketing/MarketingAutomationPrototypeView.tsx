@@ -214,6 +214,7 @@ export const MarketingAutomationPrototypeView: React.FC<Props> = ({ scenarios, o
       id: editing?.id || `marketing-${now}`,
       updatedAt: now,
       status: 'draft',
+      automationEnabled: false,
     };
     onScenariosChange(editing
       ? scenarios.map((scenario) => scenario.id === editing.id ? saved : scenario)
@@ -228,7 +229,7 @@ export const MarketingAutomationPrototypeView: React.FC<Props> = ({ scenarios, o
     setNotice('シナリオを削除しました。');
   };
   const markPrepared = (scenario: MarketingScenario) => {
-    // Prepared means configured for later activation. No message is sent by this UI.
+    // Preparation is separate from activation; content edits reset activation.
     onScenariosChange(scenarios.map((item) => item.id === scenario.id ? { ...item, status: item.status === 'prepared' ? 'draft' : 'prepared', automationEnabled: item.status === 'prepared' ? false : item.automationEnabled, updatedAt: Date.now() } : item));
     setNotice('設定状態を保存しました。実配信はまだ行われません。');
   };
