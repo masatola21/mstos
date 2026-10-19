@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { getSupabase } from '../../lib/supabaseClient';
-import { Activity, ArrowRight, CheckCircle2, Copy, GitBranch, Image as ImageIcon, Mail, MessageCircle, MousePointerClick, Plus, Radio, Save, Tags, Trash2, Webhook, Zap } from 'lucide-react';
+import { Activity, ArrowRight, CheckCircle2, Copy, GitBranch, Image as ImageIcon, Mail, MessageCircle, MousePointerClick, Plus, Radio, Save, Tags, Trash2, Zap } from 'lucide-react';
 import { MarketingChannel, MarketingLineMessageType, MarketingScenario, MarketingTrigger } from '../../types/marketing';
 import { MarketingBroadcastView } from './MarketingBroadcastView';
 
@@ -106,7 +106,7 @@ export const MarketingAutomationPrototypeView: React.FC<Props> = ({ scenarios, o
     const id = value.startsWith('segment:') ? value.slice('segment:'.length) : '';
     return segments.find((segment) => segment.id === id)?.name || value || '配信対象未設定';
   };
-  const [activeTab, setActiveTab] = useState<'home' | 'scenarios' | 'settings' | 'broadcast'>('home');
+  const [activeTab, setActiveTab] = useState<'home' | 'scenarios' | 'broadcast'>('home');
   const [editing, setEditing] = useState<MarketingScenario | null>(null);
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [form, setForm] = useState(emptyScenario());
@@ -253,7 +253,6 @@ export const MarketingAutomationPrototypeView: React.FC<Props> = ({ scenarios, o
   const tabs = [
     { id: 'home' as const, label: 'ホーム', icon: GitBranch },
     { id: 'scenarios' as const, label: '自動化シナリオ', icon: Zap },
-    { id: 'settings' as const, label: '接続設定', icon: Webhook },
     { id: 'broadcast' as const, label: '一斉配信', icon: Radio },
   ];
 
@@ -295,7 +294,6 @@ export const MarketingAutomationPrototypeView: React.FC<Props> = ({ scenarios, o
               <div className="mt-4 flex flex-wrap gap-2">
                 <button onClick={() => setActiveTab('scenarios')} className="rounded-lg bg-green-700/70 px-3 py-2 text-xs font-semibold text-white hover:bg-green-600">LINEシナリオ</button>
                 <button onClick={() => onNavigateTab?.('contacts')} className="rounded-lg border border-slate-700 px-3 py-2 text-xs text-slate-200 hover:bg-slate-800">友だち・タグ管理</button>
-                <button onClick={() => setActiveTab('settings')} className="rounded-lg border border-slate-700 px-3 py-2 text-xs text-slate-200 hover:bg-slate-800">接続設定</button>
               </div>
               <p className="mt-3 text-[11px] text-amber-300">受信箱・個別返信・リッチメニュー設定は未実装です。</p>
             </article>
@@ -304,7 +302,6 @@ export const MarketingAutomationPrototypeView: React.FC<Props> = ({ scenarios, o
               <div className="mt-4 flex flex-wrap gap-2">
                 <button onClick={() => setActiveTab('scenarios')} className="rounded-lg bg-purple-700/70 px-3 py-2 text-xs font-semibold text-white hover:bg-purple-600">メールシナリオ</button>
                 <button onClick={() => onNavigateTab?.('communication_send')} className="rounded-lg border border-slate-700 px-3 py-2 text-xs text-slate-200 hover:bg-slate-800">送信センター</button>
-                <button onClick={() => setActiveTab('settings')} className="rounded-lg border border-slate-700 px-3 py-2 text-xs text-slate-200 hover:bg-slate-800">接続設定</button>
               </div>
               <p className="mt-3 text-[11px] text-amber-300">受信箱・個別返信の統合は未実装です。</p>
             </article>
@@ -317,6 +314,14 @@ export const MarketingAutomationPrototypeView: React.FC<Props> = ({ scenarios, o
             <button onClick={() => onNavigateTab?.('custom_lists')} className="flex items-center justify-between rounded-xl border border-slate-700 bg-slate-950/70 p-4 text-left hover:border-indigo-500/40"><span><span className="block text-sm font-bold text-white">配信対象・CRMセグメント</span><span className="mt-1 block text-xs text-slate-400">既存CRMのセグメント管理を開く</span></span><ArrowRight className="h-4 w-4 text-indigo-300" /></button>
           </div>
           <p className="mt-4 text-[11px] leading-5 text-slate-500">集客チャネルや外部アプリ連携は、接続機能の実装時に追加できる構成です。現段階はLINE・メールを対象にします。</p>
+        </section>
+        <section className="rounded-2xl border border-slate-800 bg-slate-900 p-5">
+          <h2 className="font-bold text-white">配信サービスの接続</h2>
+          <p className="mt-1 text-xs leading-5 text-slate-400">APIキーなどの秘密情報はブラウザーに保存せず、サーバーの環境変数で管理します。ここから設定画面へ移動する必要はありません。</p>
+          <div className="mt-3 grid gap-3 md:grid-cols-2">
+            <div className="rounded-lg border border-slate-800 bg-slate-950/70 p-3"><div className="text-sm font-semibold text-green-200">LINE公式アカウント</div><p className="mt-1 text-xs text-slate-400">サーバー側に LINE_CHANNEL_ACCESS_TOKEN と LINE_CHANNEL_SECRET を設定します。</p></div>
+            <div className="rounded-lg border border-slate-800 bg-slate-950/70 p-3"><div className="text-sm font-semibold text-purple-200">メール送信</div><p className="mt-1 text-xs text-slate-400">サーバー側に RESEND_API_KEY と RESEND_FROM_EMAIL を設定します。</p></div>
+          </div>
         </section>
       </>}
 
@@ -355,11 +360,7 @@ export const MarketingAutomationPrototypeView: React.FC<Props> = ({ scenarios, o
         {!editing && scenarios.length > 0 && <p className="text-[11px] text-slate-500">「準備状態」はシナリオの設定整理を示します。配信接続と実行処理が未実装のため、自動送信はしません。</p>}
       </div>}
 
-      {activeTab === 'settings' && <div className="grid gap-4 lg:grid-cols-2">
-        <section className="rounded-2xl border border-slate-800 bg-slate-900 p-5"><div className="flex items-start justify-between gap-3"><div className="flex items-center gap-2"><MessageCircle className="h-5 w-5 text-green-300" /><div><h2 className="text-lg font-bold text-white">LINE公式アカウント</h2><p className="text-xs text-slate-400">Messaging APIを利用</p></div></div><span className="rounded-full bg-slate-800 px-2 py-1 text-[10px] text-amber-300">未接続</span></div><p className="mt-4 text-sm leading-6 text-slate-300">チャネルアクセストークンなどの秘密情報は、フロントエンドやブラウザー保存に置かず、Supabase Edge Functionのサーバー側シークレットとして設定します。</p></section>
-        <section className="rounded-2xl border border-slate-800 bg-slate-900 p-5"><div className="flex items-start justify-between gap-3"><div className="flex items-center gap-2"><Mail className="h-5 w-5 text-purple-300" /><div><h2 className="text-lg font-bold text-white">メール送信サービス</h2><p className="text-xs text-slate-400">Resendなど差し替え可能な送信アダプター</p></div></div><span className="rounded-full bg-slate-800 px-2 py-1 text-[10px] text-amber-300">未接続</span></div><p className="mt-4 text-sm leading-6 text-slate-300">送信元ドメインとAPIキーをサーバー側に設定します。特定のメールサービスに固定しないアダプター構成を想定しています。</p></section>
-        <section className="rounded-2xl border border-indigo-500/30 bg-indigo-950/30 p-5 lg:col-span-2"><h2 className="font-bold text-white">実配信を有効にする前の確認</h2><p className="mt-2 text-sm leading-6 text-slate-300">次の段階で、LINE / メールのサーバー側送信処理、配信同意・停止、重複送信防止、送信履歴、承認設定を追加します。接続先を交換できるようにし、MSTの顧客台帳をデータの正本に保ちます。</p></section>
-      </div>}
+
     </div>
   );
 };
