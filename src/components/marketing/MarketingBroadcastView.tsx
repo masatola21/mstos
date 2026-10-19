@@ -195,7 +195,7 @@ export const MarketingBroadcastView: React.FC<{initialChannel?:Channel}> = ({ini
       </div>
       {audienceMode==='prospect_outreach'&&<section className="rounded-xl border border-amber-500/30 bg-amber-950/10 p-4">
         <div className="font-semibold text-white">営業対象の見込み企業を選択</div>
-        <p className="mt-1 text-xs text-slate-400">AI調査などでCRMに登録した見込み企業から選びます。AIは送信を実行せず、選択企業に紐づく連絡先のメールアドレスだけを宛先候補にします。見込み企業に連絡先が紐づいていない場合は送信対象になりません。</p>
+        <p className="mt-1 text-xs text-slate-400">外部AI調査からCRMへ登録した見込み企業だけを表示します。AIは送信せず、選択企業に紐づく連絡先のメールアドレスだけを宛先候補にします。見込み企業に連絡先が紐づいていない場合は送信対象になりません。</p>
         <div className="mt-3 max-h-48 space-y-1 overflow-auto">{outreachProspects.length===0?<p className="text-sm text-slate-500">会社情報と関連付いた見込み企業がありません。</p>:outreachProspects.map(row=>{const company=companies[String(row.company_id||'')]||{};const id=String(row.id||'');return <label key={id} className="flex items-center gap-2 rounded px-2 py-1.5 text-sm text-slate-300 hover:bg-slate-900"><input type="checkbox" checked={selectedProspectIds.includes(id)} onChange={()=>{setSelectedProspectIds(current=>current.includes(id)?current.filter(x=>x!==id):[...current,id]);setSelected([]);setPreview(false)}}/><span className="min-w-0 flex-1 truncate">{String(company.company_name||company.name||'会社名未設定')}</span><span className="text-xs text-slate-500">{String(row.status||'未設定')}</span></label>})}</div>
         <p className="mt-2 text-xs text-amber-200">営業メールの送信根拠と、宛先情報を営業目的で利用できることを確認してください。</p>
       </section>}
