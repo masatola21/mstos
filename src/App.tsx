@@ -1393,9 +1393,9 @@ function AppContent() {
     setProducts(matrixService.loadProducts());
   };
 
-  const handleDeleteProduct = async (id: string, archive: boolean) => {
+  const handleDeleteProduct = async (id: string, archive: boolean): Promise<boolean> => {
     const product = matrixService.loadProducts().find((item) => item.id === id);
-    if (!product) return;
+    if (!product) return false;
     const syncArchivedProduct = async () => {
       if (product.salesCatalogPublishedAt) {
         await publishManagedProductToSalesCatalog(
@@ -1415,7 +1415,7 @@ function AppContent() {
           const result = await deleteTableRecord('products', { id: product.id });
           if (result.error) {
             window.alert(result.error.message);
-            return;
+            return false;
           }
           if (result.blockedBy) {
             await syncArchivedProduct();
@@ -1423,7 +1423,7 @@ function AppContent() {
             recordActivityLog('project_updated', `商品「${product.name}」は関連データがあるため取扱停止にしました`, '人間');
             window.alert('商談・契約などから参照されているため完全削除せず、取扱停止にしました。既存の紐づきは保持しています。');
             setActivityLogs(loadActivityLogs());
-            return;
+            return true;
           }
         }
         matrixService.deleteProduct(id);
@@ -1431,8 +1431,31 @@ function AppContent() {
         recordActivityLog('project_updated', `商品「${product.name}」を削除しました`, '人間');
       }
       setActivityLogs(loadActivityLogs());
+      return true;
     } catch (error) {
       window.alert(error instanceof Error ? error.message : '商品を削除・取扱停止にできませんでした。');
+      return false;
+    }
+  };
+
+  const handleRestoreProduct = async (id: string): Promise<boolean> => {
+    const product = matrixService.loadProducts().find((item) => item.id === id);
+    if (!product) return false;
+    try {
+      if (product.salesCatalogPublishedAt) {
+        await publishManagedProductToSalesCatalog(
+          { ...product, status: 'active' },
+          { initialFee: product.salesInitialFee ?? product.price ?? 0, monthlyFee: product.salesMonthlyFee ?? 0 },
+        );
+      }
+      matrixService.updateProduct(id, { status: 'active' });
+      setProducts(matrixService.loadProducts());
+      recordActivityLog('project_updated', `商品「${product.name}」の取扱を再開しました`, '人間');
+      setActivityLogs(loadActivityLogs());
+      return true;
+    } catch (error) {
+      window.alert(error instanceof Error ? error.message : '商品の取扱を再開できませんでした。');
+      return false;
     }
   };
 
@@ -1806,6 +1829,7 @@ function AppContent() {
             onAddProduct={handleAddProduct}
             onUpdateProduct={handleUpdateProduct}
             onDeleteProduct={handleDeleteProduct}
+            onRestoreProduct={handleRestoreProduct}
             onPublishProduct={handlePublishProduct}
             onRecordUsage={handleRecordUsage}
             onAddProjectWithTasks={(newProject, newTasks) => {

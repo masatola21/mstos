@@ -243,8 +243,11 @@ export async function deleteTableRecord(
       }
     }
 
-    const { error } = await supabase.from(tableKey).delete().eq('id', record.id);
+    const { data, error } = await supabase.from(tableKey).delete().eq('id', record.id).select('id');
     if (error) return { error: parseSupabaseError(error) };
+    if (!data?.length) {
+      return { error: { type: 'UNKNOWN', message: '削除対象が見つからないか、削除権限がありません。' } };
+    }
     return {};
   } catch (err: any) {
     return { error: parseSupabaseError(err) };
