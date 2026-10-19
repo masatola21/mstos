@@ -264,15 +264,37 @@ async function saveRelationalAIOperations(userId: string, data: WorkspaceData): 
 }
 
 function mergeRecords<T extends { id: string }>(remoteRecords: T[], localRecords: T[], baselineRecords: T[]): T[] {
-  const remoteIds = new Set(remoteRecords.map((record) => record.id));
+  const remoteById = new Map(remoteRecords.map((record) => [record.id, record]));
+  const localById = new Map(localRecords.map((record) => [record.id, record]));
   const baselineById = new Map(baselineRecords.map((record) => [record.id, record]));
-  const localOnlyRecords = localRecords.filter((record) => {
-    if (remoteIds.has(record.id)) return false;
-    const baseline = baselineById.get(record.id);
-    // A record unchanged locally but deleted in the cloud stays deleted; genuinely new or locally edited records are retained.
-    return !baseline || JSON.stringify(record) !== JSON.stringify(baseline);
+  const merged = new Map(remoteById);
+
+  // Apply local deletions only when the cloud record is still unchanged from the last synchronized snapshot.
+  baselineRecords.forEach((baseline) => {
+    if (localById.has(baseline.id)) return;
+    const remote = remoteById.get(baseline.id);
+    if (remote && JSON.stringify(remote) === JSON.stringify(baseline)) merged.delete(baseline.id);
   });
-  return [...localOnlyRecords, ...remoteRecords];
+
+  localRecords.forEach((local) => {
+    const baseline = baselineById.get(local.id);
+    const remote = remoteById.get(local.id);
+    const localChanged = !baseline || JSON.stringify(local) !== JSON.stringify(baseline);
+    if (!localChanged) return;
+    if (!remote || (baseline && JSON.stringify(remote) === JSON.stringify(baseline))) {
+      merged.set(local.id, local);
+      return;
+    }
+
+    // Both copies changed since the baseline. Keep the newer edit when both records expose updatedAt.
+    const localUpdatedAt = (local as T & { updatedAt?: unknown }).updatedAt;
+    const remoteUpdatedAt = (remote as T & { updatedAt?: unknown }).updatedAt;
+    const localTime = typeof localUpdatedAt === 'number' ? localUpdatedAt : typeof localUpdatedAt === 'string' ? Date.parse(localUpdatedAt) : NaN;
+    const remoteTime = typeof remoteUpdatedAt === 'number' ? remoteUpdatedAt : typeof remoteUpdatedAt === 'string' ? Date.parse(remoteUpdatedAt) : NaN;
+    if (Number.isFinite(localTime) && Number.isFinite(remoteTime) && localTime > remoteTime) merged.set(local.id, local);
+  });
+
+  return [...merged.values()];
 }
 
 function mergeChatHistories(
@@ -450,8 +472,8 @@ export async function loadOrMigrateWorkspaceData(userId: string): Promise<Worksp
 
   const relationalSales = await loadRelationalSalesOperations();
   if (relationalSales && (relationalMatrix || relationalSales.contracts.length > 0 || relationalSales.invoices.length > 0 || (merged.contracts.length === 0 && merged.invoices.length === 0))) {
-    merged.contracts = relationalSales.contracts;
-    merged.invoices = relationalSales.invoices;
+    merged.contracts = mergeRecords(relationalSales.contracts, localDefaults.contracts, baseline.contracts || []);
+    merged.invoices = mergeRecords(relationalSales.invoices, localDefaults.invoices, baseline.invoices || []);
   }
 
   applyWorkspaceData(merged);
