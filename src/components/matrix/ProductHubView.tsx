@@ -170,14 +170,14 @@ export const ProductHubView: React.FC<ProductHubViewProps> = ({
       </div>
 
       {/* Product Selection Bar */}
-      <div className="flex items-center gap-2 overflow-x-auto pb-2 scrollbar-none">
+      <div className="grid grid-cols-1 gap-2 pb-2 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4">
         {products.map((p) => {
           const isSelected = p.id === selectedProductId;
           return (
             <button
               key={p.id}
               onClick={() => setSelectedProductId(p.id)}
-              className={`px-4 py-3 rounded-xl border whitespace-nowrap text-left transition-all flex items-center gap-3 shrink-0 ${
+              className={`min-w-0 w-full px-4 py-3 rounded-xl border text-left transition-all flex items-center gap-3 ${
                 isSelected
                   ? 'bg-slate-900 border-indigo-500 ring-1 ring-indigo-500/50 shadow-lg shadow-indigo-500/10'
                   : 'bg-slate-950/70 border-slate-800 hover:bg-slate-900/60 hover:border-slate-700 text-slate-400'
@@ -186,9 +186,9 @@ export const ProductHubView: React.FC<ProductHubViewProps> = ({
               <div className="p-2 rounded-lg bg-slate-800/80">
                 {getArchetypeIcon(p.archetype)}
               </div>
-              <div>
+              <div className="min-w-0">
                 <div className="flex items-center gap-1.5">
-                  <span className={`text-xs font-bold ${isSelected ? 'text-white' : 'text-slate-300'}`}>
+                  <span className={`min-w-0 break-words text-xs font-bold ${isSelected ? 'text-white' : 'text-slate-300'}`}>
                     {p.name}
                   </span>
                   <span className="text-[10px] px-1.5 py-0.2 rounded bg-slate-800 text-slate-400">
