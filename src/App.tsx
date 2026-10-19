@@ -1396,13 +1396,13 @@ function AppContent() {
     const product = matrixService.loadProducts().find((item) => item.id === id);
     if (!product) return;
     const syncArchivedProduct = async () => {
-      matrixService.updateProduct(id, { status: 'archived' });
       if (product.salesCatalogPublishedAt) {
         await publishManagedProductToSalesCatalog(
           { ...product, status: 'archived' },
           { initialFee: product.salesInitialFee ?? product.price ?? 0, monthlyFee: product.salesMonthlyFee ?? 0 },
         );
       }
+      matrixService.updateProduct(id, { status: 'archived' });
     };
     try {
       if (archive) {
