@@ -249,7 +249,7 @@ export const UnifiedNavbar: React.FC<UnifiedNavbarProps> = ({
             const groups = [
               { id: 'marketing', label: 'マーケティング', items: (['marketing_automation','custom_lists'] as UnifiedNavTab[]) },
               { id: 'crm', label: '顧客・営業', items: (['mst_dashboard','companies','contacts','prospects','leads','deals','customers','products'] as UnifiedNavTab[]) },
-              { id: 'intake', label: 'フォーム・案内', items: (['mst_diagnoses','deal_invitations','customer_meeting_invitations','communication_send'] as UnifiedNavTab[]) },
+              { id: 'intake', label: 'フォーム・案内', items: (['mst_diagnoses','communication_send'] as UnifiedNavTab[]) },
               { id: 'delivery', label: '書類・契約後', items: (['document_templates','customer_operations'] as UnifiedNavTab[]) },
             ];
             const activeGroup = groups.find((group) => group.items.includes(currentTab)) || groups[0];
