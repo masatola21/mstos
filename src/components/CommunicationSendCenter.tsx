@@ -6,6 +6,7 @@ type Contact={id:string;full_name:string;email?:string|null;line_user_id?:string
 type Props={initialKind?:Kind;initialCompanyId?:string;initialDocumentId?:string;initialFormId?:string;initialDealId?:string;initialContactId?:string};
 const labels:Record<Kind,string>={document:'書類送信',form:'フォーム案内',diagnosis:'診断案内',deal:'商談案内',customer_meeting:'顧客面談案内',announcement:'その他の案内'};
 const documentCategory=(doc:any):DocumentType=>{
+if(!doc||typeof doc!=='object')return 'other';
 if(doc.document_type==='proposal'&&/見積/.test(doc.title||''))return 'estimate';
 if(doc.document_type==='report')return 'diagnosis_report';
 return (['diagnosis_report','proposal','contract','invoice'].includes(doc.document_type)?doc.document_type:'other') as DocumentType;
