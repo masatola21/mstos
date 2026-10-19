@@ -1804,7 +1804,7 @@ function AppContent() {
         {currentTab === 'document_templates' && (
           <>
             <DocumentTemplateView key={`${customerWorkspaceCompanyId || 'all'}:${customerWorkspaceContext?.leadId || ''}:${customerWorkspaceContext?.dealId || ''}:${customerWorkspaceContext?.documentType || ''}`} initialCompanyId={customerWorkspaceCompanyId} initialLeadId={customerWorkspaceContext?.leadId} initialDealId={customerWorkspaceContext?.dealId} initialDocumentType={customerWorkspaceContext?.documentType} />
-            <SalesOperationsWorkspace tab="documents" companyId={customerWorkspaceCompanyId} leadId={customerWorkspaceContext?.leadId} dealId={customerWorkspaceContext?.dealId} onClearCompanyFilter={() => setCustomerWorkspaceContext(undefined)} />
+            <SalesOperationsWorkspace tab="documents" companyId={customerWorkspaceCompanyId} leadId={customerWorkspaceContext?.leadId} dealId={customerWorkspaceContext?.dealId} onClearCompanyFilter={() => setCustomerWorkspaceContext(undefined)} onOpenInvoiceDocuments={(companyId, documentId) => { setCustomerWorkspaceContext({ companyId, documentId }); setCurrentTab("communication_send"); }} />
             <CommunicationSendCenter initialKind="document" initialCompanyId={customerWorkspaceCompanyId} initialDocumentId={customerWorkspaceContext?.documentId} />
           </>
         )}
