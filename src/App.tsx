@@ -120,8 +120,20 @@ type DiagnosisSubmissionAutomationEvent = { id: string; form_id: string; lead_id
 const MAX_CHAT_CONTEXT_MESSAGES = 12;
 const MAX_CHAT_CONTEXT_CHARACTERS = 16000;
 
-function selectKnowledgeContext(items: KnowledgeItem[], request: string): string {
-  if (!items.length) return '';
+function selectKnowledgeContext(
+  items: KnowledgeItem[],
+  request: string,
+  workModeId: AIWorkModeId,
+  audience: 'president' | 'role' | 'custom' = workModeId === 'president' ? 'president' : 'role',
+): string {
+  const visibleItems = items.filter((item) => {
+    const access = item.knowledgeAccess;
+    if (!access) return audience === 'president';
+    if (access.scope === 'all') return true;
+    if (access.scope === 'president') return audience === 'president';
+    return audience === 'president' || (audience === 'role' && workModeId !== 'president' && (access.roleIds || []).includes(workModeId));
+  });
+  if (!visibleItems.length) return '';
   const normalize = (value: string) => value.toLowerCase().replace(/[\s、。,.!?！？・「」『』（）【】]/g, '');
   const bigrams = (value: string) => {
     const chars = Array.from(normalize(value));
@@ -130,7 +142,7 @@ function selectKnowledgeContext(items: KnowledgeItem[], request: string): string
     return pairs;
   };
   const queryPairs = bigrams(request);
-  const ranked = items.map((item) => {
+  const ranked = visibleItems.map((item) => {
     const title = normalize(item.title);
     const tags = normalize(item.tags.join(' '));
     const content = normalize(item.content);
@@ -687,7 +699,7 @@ function AppContent() {
         workModeId,
         roleOverride: runtime.roleOverride,
         modelSetting: runtime.modelSetting,
-        knowledgeContext: selectKnowledgeContext(knowledgeItems, `${task.title}\n${task.description}\n${task.completionCriteria}`),
+        knowledgeContext: selectKnowledgeContext(knowledgeItems, `${task.title}\n${task.description}\n${task.completionCriteria}`, workModeId, task.assignee.type === 'custom_ai' ? 'custom' : workModeId === 'president' ? 'president' : 'role'),
         stream: false,
       }),
     });
@@ -1225,7 +1237,7 @@ function AppContent() {
           workModeId,
           roleOverride: runtime.roleOverride,
           modelSetting: runtime.modelSetting,
-          knowledgeContext: selectKnowledgeContext(knowledgeItems, text),
+          knowledgeContext: selectKnowledgeContext(knowledgeItems, text, workModeId),
           stream: true,
         }),
       });

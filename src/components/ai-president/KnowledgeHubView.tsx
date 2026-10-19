@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { BookOpen, FilePlus2, Search, Trash2, Save, Download, Paperclip, Loader2 } from 'lucide-react';
 import { KnowledgeAttachment, KnowledgeCategory, KnowledgeItem } from '../types';
+import { AI_WORK_MODES } from '../../data/aiWorkModes';
 
 interface KnowledgeHubViewProps {
   items: KnowledgeItem[];
@@ -29,6 +30,7 @@ const blankItem = (): KnowledgeItem => ({
   tags: [],
   createdAt: Date.now(),
   updatedAt: Date.now(),
+  knowledgeAccess: { scope: 'president', roleIds: [] },
 });
 
 export const KnowledgeHubView: React.FC<KnowledgeHubViewProps> = ({ items, onSave, onDelete, selectedItemId, onUploadAttachment, onDownloadAttachment, onDeleteAttachment }) => {
@@ -154,6 +156,45 @@ export const KnowledgeHubView: React.FC<KnowledgeHubViewProps> = ({ items, onSav
             </select>
             <input value={tagText} onChange={(e) => setTagText(e.target.value)} placeholder="タグ（カンマ区切り）" className="rounded-xl border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-white" />
           </div>
+          <label className="block text-xs font-semibold text-slate-300">
+            AIの参照範囲
+            <select
+              value={editing.knowledgeAccess?.scope || 'president'}
+              onChange={(e) => setEditing({ ...editing, knowledgeAccess: { ...editing.knowledgeAccess, scope: e.target.value as 'all' | 'president' | 'roles', roleIds: editing.knowledgeAccess?.roleIds || [] } })}
+              className="mt-1 w-full rounded-xl border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-white"
+            >
+              <option value="all">AI社長・すべての役割AI</option>
+              <option value="president">AI社長のみ</option>
+              <option value="roles">AI社長と指定した役割AI</option>
+            </select>
+          </label>
+          {editing.knowledgeAccess?.scope === 'roles' && (
+            <fieldset className="rounded-xl border border-slate-800 bg-slate-950/60 p-3">
+              <legend className="px-1 text-xs font-semibold text-slate-300">参照を許可する役割AI</legend>
+              <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+                {AI_WORK_MODES.filter((mode) => mode.id !== 'president').map((mode) => {
+                  const roleIds = editing.knowledgeAccess?.roleIds || [];
+                  return (
+                    <label key={mode.id} className="flex items-center gap-2 text-xs text-slate-300">
+                      <input
+                        type="checkbox"
+                        checked={roleIds.includes(mode.id)}
+                        onChange={(e) => setEditing({
+                          ...editing,
+                          knowledgeAccess: {
+                            scope: 'roles',
+                            roleIds: e.target.checked ? [...roleIds, mode.id] : roleIds.filter((id) => id !== mode.id),
+                          },
+                        })}
+                      />
+                      {mode.avatarEmoji} {mode.label}
+                    </label>
+                  );
+                })}
+              </div>
+              {!editing.knowledgeAccess?.roleIds?.length && <p className="mt-2 text-[11px] text-amber-300">役割AIを1つ以上選ぶまで、この資料は役割AIから参照されません。</p>}
+            </fieldset>
+          )}
           <textarea value={editing.content} onChange={(e) => setEditing({ ...editing, content: e.target.value })} rows={8} placeholder="本文を貼り付けて保存。AIは依頼内容に関連する資料を最大3件参照します。" className="w-full rounded-xl border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-white" />
           <div className="rounded-xl border border-slate-800 bg-slate-950/60 p-3 space-y-3">
             <div className="flex flex-wrap items-center justify-between gap-3">
@@ -201,7 +242,7 @@ export const KnowledgeHubView: React.FC<KnowledgeHubViewProps> = ({ items, onSav
           <article key={item.id} className="rounded-2xl border border-slate-800 bg-slate-900 p-4">
             <div className="flex justify-between gap-3">
               <button onClick={() => startEdit(item)} className="text-left min-w-0 flex-1">
-                <span className="text-[10px] text-indigo-300">{CATEGORIES.find((category) => category.id === item.category)?.label}</span>
+                <span className="text-[10px] text-indigo-300">{CATEGORIES.find((category) => category.id === item.category)?.label} · {(item.knowledgeAccess?.scope || 'president') === 'president' ? 'AI社長のみ' : item.knowledgeAccess?.scope === 'roles' ? 'AI社長と指定役割' : '全AI共通'}</span>
                 <h2 className="font-bold text-white truncate">{item.title}</h2>
                 {item.sourceTaskId && <span className="mt-1 inline-block text-[10px] text-emerald-300">タスク成果物 · {item.sourceRoleId || '担当AI'}</span>}
                 {!!item.attachments?.length && <span className="mt-1 inline-block text-[10px] text-cyan-300">添付 {item.attachments.length}件</span>}

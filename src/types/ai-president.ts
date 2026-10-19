@@ -184,6 +184,13 @@ export interface WorkspaceAttachment {
 
 export type KnowledgeAttachment = WorkspaceAttachment;
 
+export type KnowledgeAccessScope = 'all' | 'president' | 'roles';
+
+export interface KnowledgeAccess {
+  scope: KnowledgeAccessScope;
+  roleIds?: string[];
+}
+
 export interface KnowledgeItem {
   id: string;
   title: string;
@@ -194,6 +201,8 @@ export interface KnowledgeItem {
   updatedAt: number;
   sourceTaskId?: string;
   sourceRoleId?: string;
+  /** AIへの参照範囲。未設定の既存資料は安全のためAI社長のみが参照する。 */
+  knowledgeAccess?: KnowledgeAccess;
   attachments?: KnowledgeAttachment[];
 }
 
