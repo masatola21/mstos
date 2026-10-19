@@ -19,6 +19,19 @@ const seed=[
 {category:'announcement',channel:'email',subject:'【ご案内】{company_name} 様',body_text:'{recipient_name} 様\n\nお世話になっております。有限会社MSTです。\n\n{link_url}\n\nご不明点は本メールにご返信ください。\n有限会社MST'},
 {category:'announcement',channel:'line',subject:'',body_text:'{recipient_name} 様\n{link_url}'}
 ];
+const documentMessage=(type:string|undefined,channel:DeliveryChannel,title:string,url:string,recipient:string,company:string)=>{
+const hi=recipient+' 様';
+const intro='お世話になっております。有限会社MSTです。';
+const details='書類名：'+title+'\\n'+url;
+const messages:Record<string,{subject:string;body:string;line:string}>={
+proposal:{subject:'【ご提案書の送付】'+title+'｜'+company+' 様',body:hi+'\\n\\n'+intro+'\\n\\nご提案書をお送りします。内容をご確認いただき、ご不明点やご希望がございましたらお知らせください。\\n\\n'+details+'\\n\\n有限会社MST',line:hi+'\\nご提案書をお送りします。内容をご確認ください。\\n'+title+'\\n'+url},
+diagnosis_report:{subject:'【診断レポートのご送付】'+title+'｜'+company+' 様',body:hi+'\\n\\n'+intro+'\\n\\n診断結果をまとめたレポートをお送りします。内容をご確認いただき、結果や今後の進め方についてご不明点があればお知らせください。\\n\\n'+details+'\\n\\n有限会社MST',line:hi+'\\n診断レポートをお送りします。結果と今後の進め方をご確認ください。\\n'+title+'\\n'+url},
+contract:{subject:'【契約書のご確認】'+title+'｜'+company+' 様',body:hi+'\\n\\n'+intro+'\\n\\n契約書をお送りします。契約内容をご確認ください。記載内容に不明点や修正のご希望がございましたら、締結・手続きの前にご連絡ください。\\n\\n'+details+'\\n\\n有限会社MST',line:hi+'\\n契約書をお送りします。内容をご確認ください。不明点や修正希望はお知らせください。\\n'+title+'\\n'+url},
+invoice:{subject:'【請求書のご送付】'+title+'｜'+company+' 様',body:hi+'\\n\\n'+intro+'\\n\\n請求書をお送りします。請求金額・お支払期日・振込先などの記載をご確認のうえ、お手続きをお願いいたします。すでにお手続き済みの場合はご容赦ください。\\n\\n'+details+'\\n\\n有限会社MST',line:hi+'\\n請求書をお送りします。金額・お支払期日・振込先をご確認ください。\\n'+title+'\\n'+url}
+};
+const message=messages[type||'']||{subject:'【書類のご送付】'+title+'｜'+company+' 様',body:hi+'\\n\\n'+intro+'\\n\\n書類をお送りします。内容をご確認ください。ご不明点がございましたらお知らせください。\\n\\n'+details+'\\n\\n有限会社MST',line:hi+'\\n書類をお送りします。内容をご確認ください。\\n'+title+'\\n'+url};
+return channel==='email'?{category:'document',channel,subject:message.subject,body_text:message.body}:{category:'document',channel,subject:'',body_text:message.line};
+};
 const fill=(s:string,v:Record<string,string>)=>s.replace(/\{([a-z_]+)\}/g,(_m,k:string)=>v[k]||'');
 const htmlToText=(html:string)=>{const withBreaks=html.replace(/<\s*br\s*\/?>/gi,'\n').replace(/<\/(p|div|h[1-6]|li|tr)>/gi,'\n').replace(/<\/td>/gi,'  ');return new DOMParser().parseFromString(withBreaks,'text/html').body.textContent?.replace(/[ \t]+\n/g,'\n').replace(/\n{3,}/g,'\n\n').trim()||''};
 export const CommunicationSendCenter:React.FC<Props>=({initialKind='announcement',initialCompanyId,initialDocumentId,initialFormId,initialDealId,initialContactId})=>{
@@ -26,7 +39,7 @@ const [kind,setKind]=useState<Kind>(initialKind),[channel,setChannel]=useState<C
 const db=getSupabase(),contact=contacts.find(x=>x.id===contactId),doc=docs.find(x=>x.id===docId),form=forms.find(x=>x.id===formId);
 const templateKeyFor=(deliveryChannel:DeliveryChannel)=>(kind==='form'||kind==='diagnosis')&&form?`${kind}_${form.id}_${deliveryChannel}`:kind==='document'&&doc?`document_${doc.id}_${deliveryChannel}`:`${kind}_${deliveryChannel}`;
 const templateKey=templateKeyFor(templateChannel);
-const resolveTemplate=(deliveryChannel:DeliveryChannel)=>{const key=templateKeyFor(deliveryChannel);return [...templates].reverse().find(x=>x.template_key===key)||[...templates].reverse().find(x=>x.template_key===kind+'_'+deliveryChannel||x.category===kind&&x.channel===deliveryChannel)||seed.find(x=>x.category===kind&&x.channel===deliveryChannel)};
+const resolveTemplate=(deliveryChannel:DeliveryChannel)=>{const key=templateKeyFor(deliveryChannel);const saved=[...templates].reverse().find(x=>x.template_key===key)||[...templates].reverse().find(x=>x.template_key===kind+'_'+deliveryChannel||x.category===kind&&x.channel===deliveryChannel);if(saved)return saved;if(kind==='document'&&doc)return documentMessage(doc.document_type,deliveryChannel,doc.title, url.trim()||'{document_url}',contact?.full_name||'{recipient_name}',companies[contact?.company_id||'']||'{company_name}');return seed.find(x=>x.category===kind&&x.channel===deliveryChannel)};
 const tmpl=resolveTemplate(templateChannel);
 const vals={recipient_name:contact?.full_name||'ご担当者',company_name:companies[contact?.company_id||'']||'貴社',form_title:form?.name||'フォーム',document_title:doc?.title||'書類',document_url:url.trim(),document_content:doc?htmlToText(doc.body_html||''):'',link_url:((kind==='form'||kind==='diagnosis')&&form?window.location.origin+'/f/'+encodeURIComponent(form.public_slug):(kind==='deal'||kind==='customer_meeting')?(url.trim()||bookingUrl):url.trim())};
 const selectedCompanyId=contact?.company_id||initialCompanyId;
