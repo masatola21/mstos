@@ -36,7 +36,8 @@ interface ProductHubViewProps {
   projects: Project[];
   onAddProduct: (product: Omit<ManagedProduct, 'id' | 'createdAt' | 'updatedAt'>) => void;
   onUpdateProduct: (id: string, updates: Partial<ManagedProduct>) => void;
-  onDeleteProduct?: (id: string, archive: boolean) => Promise<void> | void;
+  onDeleteProduct?: (id: string, archive: boolean) => Promise<boolean> | boolean;
+  onRestoreProduct?: (id: string) => Promise<boolean> | boolean;
   onPublishProduct: (product: ManagedProduct, fees: { initialFee: number; monthlyFee: number }) => Promise<void>;
   onAddProjectWithTasks?: (project: Project, tasks: TaskItem[]) => void;
   onRecordUsage?: (params: { endpoint: 'chat'; endpointName: string; model?: string; usage: ApiUsageData }) => void;
@@ -52,11 +53,13 @@ export const ProductHubView: React.FC<ProductHubViewProps> = ({
   onAddProduct,
   onUpdateProduct,
   onDeleteProduct,
+  onRestoreProduct,
   onPublishProduct,
   onAddProjectWithTasks,
   onRecordUsage,
 }) => {
   const [selectedProductId, setSelectedProductId] = useState<string>(products[0]?.id || '');
+  const [productListView, setProductListView] = useState<'active' | 'archived'>('active');
   const [activeTab, setActiveTab] = useState<'overview' | 'tasks' | 'marketing' | 'finance'>('overview');
   const [isWizardOpen, setIsWizardOpen] = useState(false);
   const [isNewProductModalOpen, setIsNewProductModalOpen] = useState(false);
@@ -82,14 +85,15 @@ export const ProductHubView: React.FC<ProductHubViewProps> = ({
     tasks.some((task) => task.relatedRecord?.type === 'product' && task.relatedRecord.id === selectedProduct.id) ||
     projects.some((project: any) => project.productId === selectedProduct.id)
   ));
-  const requestProductRemoval = () => {
+  const requestProductRemoval = async () => {
     if (!selectedProduct || !onDeleteProduct) return;
     const action = productHasReferences ? '取扱停止' : '削除';
     const detail = productHasReferences
-      ? '関連する契約・請求・ツール・タスクは保持し、商品を新規選択から外します。'
+      ? '関連する契約・請求・ツール・タスクは保持し、商品を配信・新規選択から外します。'
       : '商品マスタから完全に削除します。';
     if (window.confirm(`「${selectedProduct.name}」を${action}しますか？\n${detail}`)) {
-      void onDeleteProduct(selectedProduct.id, productHasReferences);
+      const completed = await onDeleteProduct(selectedProduct.id, productHasReferences);
+      if (completed && productHasReferences) setProductListView('archived');
     }
   };
 
@@ -169,39 +173,40 @@ export const ProductHubView: React.FC<ProductHubViewProps> = ({
         </div>
       </div>
 
-      {/* Product Selection Bar */}
-      <div className="grid grid-cols-1 gap-2 pb-2 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4">
-        {products.map((p) => {
-          const isSelected = p.id === selectedProductId;
-          return (
-            <button
-              key={p.id}
-              onClick={() => setSelectedProductId(p.id)}
-              className={`min-w-0 w-full px-4 py-3 rounded-xl border text-left transition-all flex items-center gap-3 ${
-                isSelected
-                  ? 'bg-slate-900 border-indigo-500 ring-1 ring-indigo-500/50 shadow-lg shadow-indigo-500/10'
-                  : 'bg-slate-950/70 border-slate-800 hover:bg-slate-900/60 hover:border-slate-700 text-slate-400'
-              }`}
-            >
-              <div className="p-2 rounded-lg bg-slate-800/80">
-                {getArchetypeIcon(p.archetype)}
-              </div>
-              <div className="min-w-0">
-                <div className="flex items-center gap-1.5">
-                  <span className={`min-w-0 break-words text-xs font-bold ${isSelected ? 'text-white' : 'text-slate-300'}`}>
-                    {p.name}
-                  </span>
-                  <span className="text-[10px] px-1.5 py-0.2 rounded bg-slate-800 text-slate-400">
-                    {PRODUCT_ARCHETYPES[p.archetype]?.label || p.category}
-                  </span>
-                </div>
-                <div className="text-[10px] text-slate-500 mt-0.5">
-                  売上: ¥{(p.kpis?.currentRevenue || 0).toLocaleString()} / 目標: ¥{(p.kpis?.targetRevenue || 0).toLocaleString()}
-                </div>
-              </div>
-            </button>
-          );
-        })}
+      {/* Product Selection List */}
+      <div className="overflow-hidden rounded-xl border border-slate-800 bg-slate-950/70">
+        <div className="flex items-center justify-between border-b border-slate-800 px-3 py-2">
+          <div className="flex gap-1">
+            {(['active', 'archived'] as const).map((view) => (
+              <button key={view} type="button" onClick={() => setProductListView(view)}
+                className={`rounded-lg px-3 py-1.5 text-xs font-semibold ${productListView === view ? 'bg-indigo-600 text-white' : 'text-slate-400 hover:bg-slate-800 hover:text-white'}`}>
+                {view === 'active' ? '取扱中' : '取扱停止'}
+              </button>
+            ))}
+          </div>
+          <span className="text-[11px] text-slate-500">{products.filter((p) => (p.status === 'archived') === (productListView === 'archived')).length}件</span>
+        </div>
+        <div className="grid grid-cols-[minmax(0,1fr)_minmax(100px,0.35fr)_minmax(115px,0.4fr)] gap-3 border-b border-slate-800 px-4 py-2 text-[10px] font-semibold text-slate-500">
+          <span>商品名</span><span>商品タイプ</span><span className="text-right">価格</span>
+        </div>
+        <div className="max-h-64 overflow-y-auto divide-y divide-slate-800/70">
+          {products.filter((p) => (p.status === 'archived') === (productListView === 'archived')).map((p) => {
+            const isSelected = p.id === selectedProductId;
+            const priceLabel = p.salesCatalogPublishedAt
+              ? `初期 ¥${(p.salesInitialFee ?? p.price ?? 0).toLocaleString()} / 月額 ¥${(p.salesMonthlyFee ?? 0).toLocaleString()}`
+              : `¥${(p.price || 0).toLocaleString()}`;
+            return (
+              <button key={p.id} type="button" onClick={() => setSelectedProductId(p.id)}
+                className={`grid w-full grid-cols-[minmax(0,1fr)_minmax(100px,0.35fr)_minmax(115px,0.4fr)] items-center gap-3 px-4 py-2.5 text-left transition-colors ${isSelected ? 'bg-indigo-500/10 text-white' : 'text-slate-300 hover:bg-slate-900'}`}>
+                <span className="truncate text-xs font-semibold">{p.name}</span>
+                <span className="truncate text-[11px] text-slate-400">{PRODUCT_ARCHETYPES[p.archetype]?.label || p.category}</span>
+                <span className="truncate text-right text-[11px] text-slate-300">{priceLabel}</span>
+              </button>
+            );
+          })}
+          {products.filter((p) => (p.status === 'archived') === (productListView === 'archived')).length === 0 &&
+            <p className="px-4 py-5 text-center text-xs text-slate-500">{productListView === 'archived' ? '取扱停止の商品はありません。' : '商品はありません。'}</p>}
+        </div>
       </div>
 
       {/* Selected Product Detail Card & Subtabs */}
@@ -242,7 +247,14 @@ export const ProductHubView: React.FC<ProductHubViewProps> = ({
                     {selectedProduct.salesCatalogPublishedAt ? '営業商品マスタを更新' : '営業商品マスタに反映'}
                   </button>
                   {selectedProduct.salesCatalogPublishedAt && <span className="text-[10px] text-emerald-300">CRMと同じ商品IDで連携済み</span>}
-                  {onDeleteProduct && <button type="button" onClick={requestProductRemoval} className="inline-flex items-center gap-2 rounded-lg border border-rose-500/30 bg-rose-500/10 px-3 py-2 text-xs font-semibold text-rose-200 hover:bg-rose-500/20">
+                  {selectedProduct.status === 'archived' ? (
+                    onRestoreProduct && <button type="button" onClick={async () => {
+                      const restored = await onRestoreProduct(selectedProduct.id);
+                      if (restored) setProductListView('active');
+                    }} className="inline-flex items-center gap-2 rounded-lg border border-emerald-500/30 bg-emerald-500/10 px-3 py-2 text-xs font-semibold text-emerald-200 hover:bg-emerald-500/20">
+                      <Check className="h-4 w-4" />取扱を再開
+                    </button>
+                  ) : onDeleteProduct && <button type="button" onClick={() => void requestProductRemoval()} className="inline-flex items-center gap-2 rounded-lg border border-rose-500/30 bg-rose-500/10 px-3 py-2 text-xs font-semibold text-rose-200 hover:bg-rose-500/20">
                     <Trash2 className="h-4 w-4" />{productHasReferences ? '取扱停止' : '削除'}
                   </button>}
                 </div>
