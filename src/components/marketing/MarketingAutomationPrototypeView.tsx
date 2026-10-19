@@ -61,9 +61,9 @@ const workflowStages = [
   {
     title: '確認して配信へ進む',
     trigger: '文案を確認し、シナリオを準備済みにする',
-    automation: '準備状態を記録できます。現在は配信実行や送信履歴の記録は行いません。',
+    automation: '準備済みで同意根拠があるシナリオは、対応するCRMイベントで自動配信ジョブを作成し、LINE・メールの送信結果を通信履歴に記録します。',
     ai: 'AIは送信を実行しません。必要な文章作成を補助する場合も、送信前に人が確認します。',
-    approval: '配信同意・停止対象・宛先・本文を確認してから実配信できる設計にします。',
+    approval: '配信同意・停止対象・配信対象・本文を確認し、準備済みへの変更と自動実行の有効化を人が行います。',
     data: '準備状態・配信同意・送信履歴',
     status: '準備状態・同意根拠・自動配信',
   },
@@ -231,7 +231,7 @@ export const MarketingAutomationPrototypeView: React.FC<Props> = ({ scenarios, o
   const markPrepared = (scenario: MarketingScenario) => {
     // Preparation is separate from activation; content edits reset activation.
     onScenariosChange(scenarios.map((item) => item.id === scenario.id ? { ...item, status: item.status === 'prepared' ? 'draft' : 'prepared', automationEnabled: item.status === 'prepared' ? false : item.automationEnabled, updatedAt: Date.now() } : item));
-    setNotice('設定状態を保存しました。実配信はまだ行われません。');
+    setNotice('準備状態を保存しました。この操作自体では配信されません。自動実行中は、対応するCRMイベントで配信待ちジョブを作成します。');
   };
   const update = <K extends keyof ReturnType<typeof emptyScenario>>(key: K, value: ReturnType<typeof emptyScenario>[K]) => {
     setForm((current) => ({ ...current, [key]: value }));
