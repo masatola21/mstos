@@ -273,10 +273,10 @@ export const MarketingAutomationPrototypeView: React.FC<Props> = ({ scenarios, o
         <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
           <div>
             <div className="mb-2 flex flex-wrap items-center gap-2">
-              <h1 className="text-2xl font-black text-white">顧客コミュニケーション</h1>
+              <h1 className="text-2xl font-black text-white">教育・フォロー</h1>
               <span className="rounded-full border border-amber-400/30 bg-amber-500/10 px-2.5 py-1 text-xs font-semibold text-amber-300">自動実行は未接続</span>
             </div>
-            <p className="max-w-3xl text-sm leading-6 text-slate-300">LINE・メールの案内と自動化をまとめて管理します。顧客・リード情報は既存のCRMを正本として利用します。</p>
+            <p className="max-w-3xl text-sm leading-6 text-slate-300">LINE・メールで見込み客や顧客をフォローし、次の行動につなげます。顧客・リード情報は既存のCRMを正本として利用します。集客チャネルは必要になった段階でマーケティング内に追加できます。</p>
           </div>
           <button onClick={startNew} className="flex shrink-0 items-center justify-center gap-2 rounded-xl bg-indigo-600 px-4 py-2.5 text-sm font-semibold text-white hover:bg-indigo-500"><Plus className="h-4 w-4" />シナリオ作成</button>
         </div>
