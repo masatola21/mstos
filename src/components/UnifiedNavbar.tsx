@@ -30,6 +30,7 @@ export type UnifiedNavTab =
   | 'deal_invitations'
   | 'customer_meeting_invitations'
   | 'communication_send'
+  | 'ai_acquisition'
   | 'marketing_automation'
   | 'custom_lists'
   | 'customer_operations'
@@ -247,7 +248,7 @@ export const UnifiedNavbar: React.FC<UnifiedNavbarProps> = ({
         <nav className="border-t border-slate-800/70 py-2 text-xs font-medium">
           {activeSection === 'mst' && (() => {
             const groups = [
-              { id: 'marketing', label: 'マーケティング', items: (['marketing_automation'] as UnifiedNavTab[]) },
+              { id: 'marketing', label: 'マーケティング', items: (['ai_acquisition','marketing_automation'] as UnifiedNavTab[]) },
               { id: 'crm', label: '顧客・営業', items: (['mst_dashboard','companies','contacts','prospects','leads','deals','customers','products'] as UnifiedNavTab[]) },
               
               { id: 'intake', label: 'フォーム・案内', items: (['mst_diagnoses','communication_send'] as UnifiedNavTab[]) },
@@ -260,6 +261,7 @@ export const UnifiedNavbar: React.FC<UnifiedNavbarProps> = ({
               if (tab === 'deal_invitations') return '商談案内';
               if (tab === 'customer_meeting_invitations') return '顧客面談案内';
               if (tab === 'communication_send') return '送信センター';
+              if (tab === 'ai_acquisition') return 'AI集客運用';
               if (tab === 'custom_lists') return '配信対象リスト';
               if (tab === 'marketing_automation') return 'LINE・メール';
               if (tab === 'document_templates') return '顧客書類';
