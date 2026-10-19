@@ -428,13 +428,14 @@ export const CustomerSupportWorkspace: React.FC<Props> = ({
             const itemTasks = tasks.filter((task) => task.supportEngagementId === item.id);
             const open = itemTasks.filter((task) => task.status !== 'completed');
             const overdue = open.some((task) => task.dueDate && task.dueDate < new Date().toISOString().slice(0, 10));
+            const lateMilestone = Array.isArray(item.milestone_data) && item.milestone_data.some((milestone: Row) => milestone.due_date && milestone.due_date < new Date().toISOString().slice(0, 10) && milestone.status !== 'completed');
             const lateMeeting = item.next_meeting_at && new Date(item.next_meeting_at).getTime() < Date.now();
-            const warning = overdue || lateMeeting || item.status === 'paused' || itemDetail.progressStatus === 'delayed' || itemDetail.progressStatus === 'at_risk';
+            const warning = overdue || lateMilestone || lateMeeting || item.status === 'paused' || itemDetail.progressStatus === 'delayed' || itemDetail.progressStatus === 'at_risk';
             return <li key={item.id}><button type="button" onClick={() => { setSelectedId(item.id); setActiveSection('overview'); setNotice(''); setError(''); }} className={'w-full rounded-lg border p-3 text-left ' + (selected?.id === item.id ? 'border-blue-500 bg-blue-950/30' : 'border-slate-800 bg-slate-950 hover:border-slate-600')}>
               <div className="flex items-start justify-between gap-2"><span className="font-medium text-white">{companyName(item.company_id)}</span>{warning && <AlertTriangle className="h-4 w-4 shrink-0 text-amber-300" />}</div>
               <div className="mt-1 text-xs text-slate-300">{item.title}</div>
               <div className="mt-2 flex flex-wrap gap-x-3 gap-y-1 text-xs text-slate-500"><span>{itemDetail.phase || PHASES[0]}</span><span>{itemDetail.currentTheme || 'テーマ未設定'}</span><span>次回 {displayDate(item.next_meeting_at)}</span><span>未完了 {open.length}件</span><span>{PROGRESS_LABELS[itemDetail.progressStatus || 'not_started']}</span></div>
-              {warning && <div className="mt-2 text-xs text-amber-300">{overdue ? '期限超過タスクあり' : lateMeeting ? '次回予定日を過ぎています' : itemDetail.progressStatus === 'delayed' ? '進捗遅延' : itemDetail.progressStatus === 'at_risk' ? '支援上の確認が必要です' : '支援が保留中です'}</div>}
+              {warning && <div className="mt-2 text-xs text-amber-300">{overdue ? '期限超過タスクあり' : lateMilestone ? '期限超過マイルストーンあり' : lateMeeting ? '次回予定日を過ぎています' : itemDetail.progressStatus === 'delayed' ? '進捗遅延' : itemDetail.progressStatus === 'at_risk' ? '支援上の確認が必要です' : '支援が保留中です'}</div>}
             </button></li>;
           })}</ul>}
       </section>
