@@ -18,7 +18,9 @@ import {
   Receipt,
   Wrench,
   BarChart3,
-  Edit2
+  Edit2,
+  Link2,
+  Check
 } from 'lucide-react';
 import { ManagedProduct, PRODUCT_ARCHETYPES, ProductArchetype, ManagedContract, ManagedInvoice, ManagedToolAsset } from '../../types/matrix';
 import { ApiUsageData, Project, TaskItem } from '../../types/ai-president';
@@ -33,6 +35,7 @@ interface ProductHubViewProps {
   projects: Project[];
   onAddProduct: (product: Omit<ManagedProduct, 'id' | 'createdAt' | 'updatedAt'>) => void;
   onUpdateProduct: (id: string, updates: Partial<ManagedProduct>) => void;
+  onPublishProduct: (product: ManagedProduct, fees: { initialFee: number; monthlyFee: number }) => Promise<void>;
   onAddProjectWithTasks?: (project: Project, tasks: TaskItem[]) => void;
   onRecordUsage?: (params: { endpoint: 'chat'; endpointName: string; model?: string; usage: ApiUsageData }) => void;
 }
@@ -46,6 +49,7 @@ export const ProductHubView: React.FC<ProductHubViewProps> = ({
   projects,
   onAddProduct,
   onUpdateProduct,
+  onPublishProduct,
   onAddProjectWithTasks,
   onRecordUsage,
 }) => {
@@ -53,6 +57,11 @@ export const ProductHubView: React.FC<ProductHubViewProps> = ({
   const [activeTab, setActiveTab] = useState<'overview' | 'tasks' | 'marketing' | 'finance'>('overview');
   const [isWizardOpen, setIsWizardOpen] = useState(false);
   const [isNewProductModalOpen, setIsNewProductModalOpen] = useState(false);
+  const [isPublishModalOpen, setIsPublishModalOpen] = useState(false);
+  const [publishInitialFee, setPublishInitialFee] = useState('');
+  const [publishMonthlyFee, setPublishMonthlyFee] = useState('');
+  const [publishError, setPublishError] = useState('');
+  const [isPublishing, setIsPublishing] = useState(false);
 
   // New product manual form
   const [manualName, setManualName] = useState('');
@@ -204,6 +213,18 @@ export const ProductHubView: React.FC<ProductHubViewProps> = ({
                 <p className="text-xs text-slate-400 mt-1 max-w-3xl">
                   {selectedProduct.description || '概要未入力'}
                 </p>
+                <div className="mt-3 flex flex-wrap items-center gap-2">
+                  <button type="button" onClick={() => {
+                    setPublishInitialFee(String(selectedProduct.salesInitialFee ?? selectedProduct.price ?? 0));
+                    setPublishMonthlyFee(String(selectedProduct.salesMonthlyFee ?? 0));
+                    setPublishError('');
+                    setIsPublishModalOpen(true);
+                  }} className="inline-flex items-center gap-2 rounded-lg border border-indigo-400/30 bg-indigo-500/10 px-3 py-2 text-xs font-semibold text-indigo-200 hover:bg-indigo-500/20">
+                    {selectedProduct.salesCatalogPublishedAt ? <Check className="h-4 w-4" /> : <Link2 className="h-4 w-4" />}
+                    {selectedProduct.salesCatalogPublishedAt ? '営業商品マスタを更新' : '営業商品マスタに反映'}
+                  </button>
+                  {selectedProduct.salesCatalogPublishedAt && <span className="text-[10px] text-emerald-300">CRMと同じ商品IDで連携済み</span>}
+                </div>
               </div>
 
               {/* KPI Badges */}
@@ -503,6 +524,44 @@ export const ProductHubView: React.FC<ProductHubViewProps> = ({
               </div>
             )}
           </div>
+        </div>
+      )}
+
+      {isPublishModalOpen && selectedProduct && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/80 p-4 backdrop-blur-sm">
+          <form onSubmit={async (event) => {
+            event.preventDefault();
+            setIsPublishing(true);
+            setPublishError('');
+            try {
+              await onPublishProduct(selectedProduct, {
+                initialFee: Math.max(0, Number(publishInitialFee) || 0),
+                monthlyFee: Math.max(0, Number(publishMonthlyFee) || 0),
+              });
+              setIsPublishModalOpen(false);
+            } catch (error) {
+              setPublishError(error instanceof Error ? error.message : '商品マスタを更新できませんでした。');
+            } finally {
+              setIsPublishing(false);
+            }
+          }} className="w-full max-w-lg space-y-4 rounded-2xl border border-slate-800 bg-slate-900 p-6 shadow-2xl">
+            <div>
+              <h3 className="text-lg font-bold text-white">営業商品マスタに反映</h3>
+              <p className="mt-1 text-xs leading-5 text-slate-400">「{selectedProduct.name}」をCRM商品マスタへ登録します。商品IDは維持し、同じIDを参照する契約・請求・商談と紐づけます。</p>
+            </div>
+            <label className="block text-xs text-slate-300">初期費用（円）
+              <input type="number" min="0" step="1" value={publishInitialFee} onChange={(event) => setPublishInitialFee(event.target.value)} className="mt-1 w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-white" />
+            </label>
+            <label className="block text-xs text-slate-300">月額費用（円）
+              <input type="number" min="0" step="1" value={publishMonthlyFee} onChange={(event) => setPublishMonthlyFee(event.target.value)} className="mt-1 w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-white" />
+            </label>
+            {publishError && <p role="alert" className="rounded-lg border border-rose-500/30 bg-rose-950/30 p-3 text-xs text-rose-200">{publishError}</p>}
+            <p className="text-[11px] leading-5 text-slate-500">実行するとSupabaseのCRM商品マスタを作成または更新します。ローカルの商品・契約・請求データは削除しません。</p>
+            <div className="flex justify-end gap-2">
+              <button type="button" disabled={isPublishing} onClick={() => setIsPublishModalOpen(false)} className="rounded-lg border border-slate-700 px-4 py-2 text-xs text-slate-300">キャンセル</button>
+              <button type="submit" disabled={isPublishing} className="rounded-lg bg-indigo-600 px-4 py-2 text-xs font-semibold text-white hover:bg-indigo-500 disabled:opacity-50">{isPublishing ? '反映中…' : 'CRM商品マスタに保存'}</button>
+            </div>
+          </form>
         </div>
       )}
 
