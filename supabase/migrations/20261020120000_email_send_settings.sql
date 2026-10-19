@@ -1,6 +1,6 @@
 create table if not exists public.email_send_settings (
   owner_id uuid primary key references auth.users(id) on delete cascade,
-  sender_name text not null default '有限会社MST',
+  sender_name text not null default '有限会社MST｜経営・業務改善支援',
   sender_email text not null default 'contact@mstcorp.info',
   reply_to_email text default 'mst.shikumikaizen@gmail.com',
   created_at timestamptz not null default now(),
@@ -17,7 +17,7 @@ create policy "Owners manage email send settings"
 grant select, insert, update, delete on public.email_send_settings to authenticated;
 
 insert into public.email_send_settings(owner_id, sender_name, sender_email, reply_to_email)
-select id, '有限会社MST', 'contact@mstcorp.info', 'mst.shikumikaizen@gmail.com'
+select id, '有限会社MST｜経営・業務改善支援', 'contact@mstcorp.info', 'mst.shikumikaizen@gmail.com'
 from auth.users
 on conflict (owner_id) do nothing;
 
