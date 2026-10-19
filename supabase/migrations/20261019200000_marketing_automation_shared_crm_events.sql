@@ -74,7 +74,7 @@ begin
       else
         due_time := now() + make_interval(mins => delay_minutes);
       end if;
-      job_key := concat(p_table,':',coalesce(p_record->>'id',''),':',p_event_time,':',s.scenario_id,':',channel_name);
+      job_key := concat(p_table,':',coalesce(p_record->>'id',''),':',p_matching_trigger,':',p_event_time,':',s.scenario_id,':',channel_name);
       insert into public.marketing_automation_jobs(owner_id,event_key,scenario_id,contact_id,channel,subject,body_text,line_message_payload,consent_basis,due_at)
       values(p_owner,job_key,s.scenario_id,p_contact,channel_name,nullif(s.config->>'emailSubject',''),message_text,payload,s.config->>'consentBasis',due_time)
       on conflict(owner_id,event_key) do nothing;
@@ -217,3 +217,8 @@ begin
   return NEW;
 end $$;
 
+
+-- The dispatcher below now emits both due and overdue invoice scenarios; remove
+-- the earlier one-off trigger so each invoice event is evaluated only once.
+drop trigger if exists marketing_automation_invoice_overdue on public.customer_invoices;
+drop function if exists public.enqueue_marketing_invoice_overdue_jobs();
