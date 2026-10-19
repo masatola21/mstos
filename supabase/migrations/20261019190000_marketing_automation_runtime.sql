@@ -65,6 +65,24 @@ begin
     v_trigger := 'lead_created';
   elsif TG_TABLE_NAME = 'contacts' and (TG_OP = 'INSERT' or coalesce(v_old->>'line_user_id','') = '') and coalesce(v_new->>'line_user_id','') <> '' then
     v_trigger := 'line_registered';
+  elsif TG_TABLE_NAME = 'prospects' and TG_OP = 'UPDATE'
+    and (coalesce(v_old->>'is_selected','false') <> coalesce(v_new->>'is_selected','false')
+      or coalesce(v_old->>'status','') <> coalesce(v_new->>'status',''))
+    and (lower(coalesce(v_new->>'status','')) in ('selected','target','営業対象') or lower(coalesce(v_new->>'is_selected',''))='true') then
+    v_trigger := 'prospect_selected';
+  elsif TG_TABLE_NAME = 'line_friend_tags' and TG_OP = 'INSERT' then
+    v_trigger := 'tag_added';
+  elsif TG_TABLE_NAME = 'customer_service_engagements' and TG_OP = 'UPDATE'
+    and coalesce(v_old->>'status','') <> coalesce(v_new->>'status','')
+    and lower(coalesce(v_new->>'status','')) in ('completed','complete','done','完了') then
+    v_trigger := 'meeting_completed';
+  elsif TG_TABLE_NAME = 'invoices' and TG_OP in ('INSERT','UPDATE') then
+    if TG_OP='UPDATE' and lower(coalesce(v_new->>'status','')) in ('paid','paid_full','cancelled','canceled') then
+      update public.marketing_automation_jobs set status='failed', error_message='請求状態が変更されたため予約配信を停止しました。', updated_at=now()
+        where owner_id=auth.uid() and status='queued' and event_key like 'invoices:'||coalesce(v_new->>'id','')||':%';
+      return NEW;
+    end if;
+    v_trigger := 'invoice_due';
   elsif TG_TABLE_NAME = 'deals' and TG_OP = 'UPDATE' and coalesce(v_old->>'stage','') <> coalesce(v_new->>'stage','') then
     v_trigger := 'deal_stage_changed';
   elsif TG_TABLE_NAME = 'deals' and TG_OP = 'UPDATE' and coalesce(v_old->>'status','') <> coalesce(v_new->>'status','') then
@@ -98,6 +116,9 @@ begin
   begin v_company_id := nullif(coalesce(v_new->>'company_id',''),'')::uuid; exception when others then v_company_id := null; end;
   begin v_lead_id := nullif(coalesce(v_new->>'lead_id',''),'')::uuid; exception when others then v_lead_id := null; end;
   if v_contact_id is null and TG_TABLE_NAME = 'contacts' then begin v_contact_id := nullif(v_new->>'id','')::uuid; exception when others then null; end; end if;
+  if v_contact_id is null and TG_TABLE_NAME = 'line_friend_tags' then
+    begin select c.id,c.company_id into v_contact_id,v_company_id from public.line_friends f join public.contacts c on c.line_user_id=f.line_user_id where f.id=nullif(v_new->>'line_friend_id','')::uuid limit 1; exception when others then v_contact_id := null; end;
+  end if;
   if v_contact_id is null and v_lead_id is not null then select contact_id, company_id into v_contact_id, v_company_id from public.leads where id = v_lead_id; end if;
   if v_contact_id is null and v_company_id is not null then
     for v_contact in select id, company_id from public.contacts where company_id = v_company_id loop
@@ -108,7 +129,9 @@ begin
   end if;
   if v_contact_id is null then return NEW; end if;
   perform public.queue_marketing_scenarios(auth.uid(), v_contact_id, v_company_id, v_new, TG_TABLE_NAME, v_status, v_trigger, coalesce(v_new->>'updated_at', now()::text));
-  if v_status <> v_trigger then
+  if TG_TABLE_NAME = 'invoices' then
+    perform public.queue_marketing_scenarios(auth.uid(), v_contact_id, v_company_id, v_new, TG_TABLE_NAME, 'invoice_overdue', 'invoice_overdue', coalesce(v_new->>'updated_at', now()::text));
+  elsif v_status <> v_trigger then
     perform public.queue_marketing_scenarios(auth.uid(), v_contact_id, v_company_id, v_new, TG_TABLE_NAME, v_status, v_status, coalesce(v_new->>'updated_at', now()::text));
   end if;
   return NEW;
@@ -173,7 +196,15 @@ begin
       payload := case when channel_name='line' and coalesce(s.config->>'lineMessageType','')='video'
         then jsonb_build_object('type','video','originalContentUrl',s.config->>'lineVideoUrl','previewImageUrl',s.config->>'lineVideoPreviewUrl') else null end;
       delay_minutes := greatest(0, least(coalesce((s.config->>'waitMinutes')::integer,0), 10080));
-      due_time := now() + make_interval(mins => delay_minutes);
+      if p_table='invoices' and p_matching_trigger in ('invoice_due','invoice_overdue') then
+        begin
+          due_time := (coalesce(p_record->>'due_date',p_record->>'due_at',p_record->>'payment_due_date'))::timestamptz;
+          if p_matching_trigger='invoice_overdue' then due_time := due_time + interval '1 day'; end if;
+        exception when others then due_time := null; end;
+        if due_time is null then continue; end if;
+      else
+        due_time := now() + make_interval(mins => delay_minutes);
+      end if;
       job_key := concat(p_table,':',coalesce(p_record->>'id',''),':',p_event_time,':',s.scenario_id,':',channel_name);
       insert into public.marketing_automation_jobs(owner_id,event_key,scenario_id,contact_id,channel,subject,body_text,line_message_payload,consent_basis,due_at)
       values(p_owner,job_key,s.scenario_id,p_contact,channel_name,nullif(s.config->>'emailSubject',''),message_text,payload,s.config->>'consentBasis',due_time)
@@ -182,6 +213,18 @@ begin
   end loop;
 end $$;
 
+drop trigger if exists marketing_automation_prospects on public.prospects;
+create trigger marketing_automation_prospects after update on public.prospects
+  for each row execute function public.enqueue_marketing_automation_jobs();
+drop trigger if exists marketing_automation_friend_tags on public.line_friend_tags;
+create trigger marketing_automation_friend_tags after insert on public.line_friend_tags
+  for each row execute function public.enqueue_marketing_automation_jobs();
+drop trigger if exists marketing_automation_customer_service on public.customer_service_engagements;
+create trigger marketing_automation_customer_service after update on public.customer_service_engagements
+  for each row execute function public.enqueue_marketing_automation_jobs();
+drop trigger if exists marketing_automation_invoices on public.invoices;
+create trigger marketing_automation_invoices after insert or update on public.invoices
+  for each row execute function public.enqueue_marketing_automation_jobs();
 drop trigger if exists marketing_automation_leads on public.leads;
 create trigger marketing_automation_leads after insert on public.leads
   for each row execute function public.enqueue_marketing_automation_jobs();
