@@ -61,10 +61,15 @@ const PROGRESS_LABELS: Record<NonNullable<SupportDetails['progressStatus']>, str
 const TASK_STATUS_LABELS: Record<TaskItem['status'], string> = {
   waiting: '未着手', in_progress: '進行中', pending_approval: '確認待ち', completed: '完了', blocked: '保留',
 };
-const asDateTimeLocal = (value?: string | null) => value ? new Date(value).toISOString().slice(0, 16) : '';
+const asDateTimeLocal = (value?: string | null) => {
+  if (!value) return '';
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return '';
+  return new Date(date.getTime() - date.getTimezoneOffset() * 60_000).toISOString().slice(0, 16);
+};
 const supportErrorMessage = (error: any, fallback: string) =>
   error?.code === '42P01' || error?.code === '42703'
-    ? '支援管理DBのマイグレーションが未適用です。supabase/migrations/20261019100000_customer_support_management.sql を適用してから再読み込みしてください。'
+    ? '支援管理DBのマイグレーションが未適用です。supabase/migrations/20261019030537_customer_support_management.sql を適用してから再読み込みしてください。'
     : error?.message || fallback;
 const displayDate = (value?: string | null) => value ? new Date(value).toLocaleString('ja-JP') : '未設定';
 
@@ -77,7 +82,7 @@ interface Props {
   onCreateTask: (task: Omit<TaskItem, 'id' | 'createdAt' | 'updatedAt'>) => void;
   onUpdateTask: (task: TaskItem) => void;
   onRefresh: () => Promise<void>;
-  onAddMilestone: (engagement: Row, title: string) => Promise<void>;
+  onAddMilestone: (engagement: Row, title: string, dueDate?: string) => Promise<void>;
   onCompleteMilestone: (engagement: Row, milestoneId: string) => Promise<void>;
 }
 
@@ -98,6 +103,7 @@ export const CustomerSupportWorkspace: React.FC<Props> = ({
   const [taskDraft, setTaskDraft] = useState<TaskDraft>(EMPTY_TASK);
   const [editingTaskId, setEditingTaskId] = useState('');
   const [milestoneDraft, setMilestoneDraft] = useState('');
+  const [milestoneDueDate, setMilestoneDueDate] = useState('');
   const [customPhaseDraft, setCustomPhaseDraft] = useState('');
   const [showNewSupport, setShowNewSupport] = useState(false);
   const [newSupport, setNewSupport] = useState({
@@ -139,16 +145,19 @@ export const CustomerSupportWorkspace: React.FC<Props> = ({
   useEffect(() => {
     let cancelled = false;
     const supabase = getSupabase();
-    if (!selected?.id || !supabase) {
+    if (!supabase) {
       setMeetings([]);
       setDocuments([]);
+      setServiceContracts([]);
       return () => { cancelled = true; };
     }
     setLoading(true);
     setError('');
     void Promise.all([
-      supabase.from('customer_service_meetings').select('*')
-        .eq('engagement_id', selected.id).order('occurred_at', { ascending: false }),
+      selected?.id
+        ? supabase.from('customer_service_meetings').select('*')
+          .eq('engagement_id', selected.id).order('occurred_at', { ascending: false })
+        : Promise.resolve({ data: [], error: null }),
       supabase.from('customer_contracts').select('id,title,status,company_id,start_date,end_date,amount').order('created_at', { ascending: false }),
       selectedCompanyId
         ? supabase.from('customer_documents').select('id,title,document_type,status,created_at,updated_at')
@@ -371,8 +380,9 @@ export const CustomerSupportWorkspace: React.FC<Props> = ({
   const addMilestone = async (event: React.FormEvent) => {
     event.preventDefault();
     if (!selected || !milestoneDraft.trim()) return;
-    await onAddMilestone(selected, milestoneDraft.trim());
+    await onAddMilestone(selected, milestoneDraft.trim(), milestoneDueDate || undefined);
     setMilestoneDraft('');
+    setMilestoneDueDate('');
   };
 
   const openTaskEditor = (task?: TaskItem) => {
@@ -418,13 +428,14 @@ export const CustomerSupportWorkspace: React.FC<Props> = ({
             const itemTasks = tasks.filter((task) => task.supportEngagementId === item.id);
             const open = itemTasks.filter((task) => task.status !== 'completed');
             const overdue = open.some((task) => task.dueDate && task.dueDate < new Date().toISOString().slice(0, 10));
+            const lateMilestone = Array.isArray(item.milestone_data) && item.milestone_data.some((milestone: Row) => milestone.due_date && milestone.due_date < new Date().toISOString().slice(0, 10) && milestone.status !== 'completed');
             const lateMeeting = item.next_meeting_at && new Date(item.next_meeting_at).getTime() < Date.now();
-            const warning = overdue || lateMeeting || item.status === 'paused' || itemDetail.progressStatus === 'delayed' || itemDetail.progressStatus === 'at_risk';
+            const warning = overdue || lateMilestone || lateMeeting || item.status === 'paused' || itemDetail.progressStatus === 'delayed' || itemDetail.progressStatus === 'at_risk';
             return <li key={item.id}><button type="button" onClick={() => { setSelectedId(item.id); setActiveSection('overview'); setNotice(''); setError(''); }} className={'w-full rounded-lg border p-3 text-left ' + (selected?.id === item.id ? 'border-blue-500 bg-blue-950/30' : 'border-slate-800 bg-slate-950 hover:border-slate-600')}>
               <div className="flex items-start justify-between gap-2"><span className="font-medium text-white">{companyName(item.company_id)}</span>{warning && <AlertTriangle className="h-4 w-4 shrink-0 text-amber-300" />}</div>
               <div className="mt-1 text-xs text-slate-300">{item.title}</div>
               <div className="mt-2 flex flex-wrap gap-x-3 gap-y-1 text-xs text-slate-500"><span>{itemDetail.phase || PHASES[0]}</span><span>{itemDetail.currentTheme || 'テーマ未設定'}</span><span>次回 {displayDate(item.next_meeting_at)}</span><span>未完了 {open.length}件</span><span>{PROGRESS_LABELS[itemDetail.progressStatus || 'not_started']}</span></div>
-              {warning && <div className="mt-2 text-xs text-amber-300">{overdue ? '期限超過タスクあり' : lateMeeting ? '次回予定日を過ぎています' : itemDetail.progressStatus === 'delayed' ? '進捗遅延' : itemDetail.progressStatus === 'at_risk' ? '支援上の確認が必要です' : '支援が保留中です'}</div>}
+              {warning && <div className="mt-2 text-xs text-amber-300">{overdue ? '期限超過タスクあり' : lateMilestone ? '期限超過マイルストーンあり' : lateMeeting ? '次回予定日を過ぎています' : itemDetail.progressStatus === 'delayed' ? '進捗遅延' : itemDetail.progressStatus === 'at_risk' ? '支援上の確認が必要です' : '支援が保留中です'}</div>}
             </button></li>;
           })}</ul>}
       </section>
@@ -532,8 +543,11 @@ export const CustomerSupportWorkspace: React.FC<Props> = ({
         {activeSection === 'delivery' && <div className="space-y-5 p-4">
           <section className="rounded-lg border border-slate-800 bg-slate-950 p-4">
             <h4 className="mb-3 font-semibold text-white">構築タスク・マイルストーン</h4>
-            <form onSubmit={addMilestone} className="mb-3 flex gap-2"><input value={milestoneDraft} onChange={(event) => setMilestoneDraft(event.target.value)} placeholder="節目を追加" className="min-w-0 flex-1 rounded border border-slate-700 bg-slate-900 px-3 py-2 text-xs text-white" /><button className="rounded bg-blue-700 px-3 py-2 text-xs text-white">追加</button></form>
-            {Array.isArray(selected.milestone_data) && selected.milestone_data.length > 0 ? <ul className="space-y-2">{selected.milestone_data.map((milestone: Row) => <li key={milestone.id} className="flex flex-wrap items-center justify-between gap-2 rounded border border-slate-800 px-3 py-2"><span className="text-sm text-slate-200">{milestone.status === 'completed' ? '✓' : '○'} {milestone.title}</span>{milestone.status === 'completed' ? <span className="text-xs text-emerald-300">完了 {milestone.completed_at ? displayDate(milestone.completed_at) : ''}</span> : <button type="button" onClick={() => void onCompleteMilestone(selected, milestone.id)} className="rounded border border-emerald-800 px-2 py-1 text-xs text-emerald-200">完了を記録</button>}</li>)}</ul> : <p className="text-sm text-slate-500">マイルストーンはまだありません。</p>}
+            <form onSubmit={addMilestone} className="mb-3 flex flex-wrap items-end gap-2"><input value={milestoneDraft} onChange={(event) => setMilestoneDraft(event.target.value)} placeholder="節目を追加" className="min-w-0 flex-1 rounded border border-slate-700 bg-slate-900 px-3 py-2 text-xs text-white" /><label className="text-xs text-slate-400">完了予定日<input type="date" value={milestoneDueDate} onChange={(event) => setMilestoneDueDate(event.target.value)} className="mt-1 block rounded border border-slate-700 bg-slate-900 px-2 py-2 text-xs text-white" /></label><button className="rounded bg-blue-700 px-3 py-2 text-xs text-white">追加</button></form>
+            {Array.isArray(selected.milestone_data) && selected.milestone_data.length > 0 ? <ul className="space-y-2">{selected.milestone_data.map((milestone: Row) => {
+              const overdue = milestone.due_date && milestone.due_date < new Date().toISOString().slice(0, 10) && milestone.status !== 'completed';
+              return <li key={milestone.id} className="flex flex-wrap items-center justify-between gap-2 rounded border border-slate-800 px-3 py-2"><div><span className="text-sm text-slate-200">{milestone.status === 'completed' ? '✓' : '○'} {milestone.title}</span><div className={'mt-1 text-xs ' + (overdue ? 'text-amber-300' : 'text-slate-500')}>{milestone.due_date ? '完了予定 ' + milestone.due_date : '完了予定日未設定'}{overdue ? ' · 期限超過' : ''}</div></div>{milestone.status === 'completed' ? <span className="text-xs text-emerald-300">完了 {milestone.completed_at ? displayDate(milestone.completed_at) : ''}</span> : <button type="button" onClick={() => void onCompleteMilestone(selected, milestone.id)} className="rounded border border-emerald-800 px-2 py-1 text-xs text-emerald-200">完了を記録</button>}</li>;
+            })}</ul> : <p className="text-sm text-slate-500">マイルストーンはまだありません。</p>}
             <p className="mt-3 text-xs text-slate-500">完了時は既存のマイルストーン連携から、設定済みの場合にAI社長タスクが作成されます。</p>
           </section>
           <section className="rounded-lg border border-slate-800 bg-slate-950 p-4">

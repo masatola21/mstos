@@ -290,12 +290,12 @@ ${JSON.stringify(recentMessages || [], null, 2)}`;
 
   const readMilestones = (record: RecordRow): RecordRow[] => Array.isArray(record.milestone_data) ? record.milestone_data : [];
 
-  const addServiceMilestone = async (record: RecordRow, titleOverride?: string) => {
+  const addServiceMilestone = async (record: RecordRow, titleOverride?: string, dueDate?: string) => {
     const title = (titleOverride || milestoneDrafts[record.id] || '').trim();
     const supabase = getSupabase();
     if (!supabase || !title) return;
     const milestones = readMilestones(record);
-    const milestone = { id: crypto.randomUUID(), title, status: 'pending', created_at: new Date().toISOString() };
+    const milestone = { id: crypto.randomUUID(), title, status: 'pending', due_date: dueDate || null, created_at: new Date().toISOString() };
     const { error: updateError } = await supabase.from('customer_service_engagements')
       .update({ milestone_data: [...milestones, milestone], updated_at: new Date().toISOString() }).eq('id', record.id);
     if (updateError) { setError(updateError.message); return; }
