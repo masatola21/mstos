@@ -22,7 +22,7 @@ export async function publishManagedProductToSalesCatalog(
     initial_fee: fees.initialFee,
     monthly_fee: fees.monthlyFee,
     description: product.description || null,
-    status: product.status === 'active' ? 'active' : 'draft',
+    status: product.status === 'archived' ? 'inactive' : product.status === 'active' ? 'active' : 'draft',
   }, { onConflict: 'id' });
 
   if (error) {
