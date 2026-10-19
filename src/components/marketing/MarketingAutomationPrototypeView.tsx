@@ -319,10 +319,9 @@ export const MarketingAutomationPrototypeView: React.FC<Props> = ({ scenarios, o
           </div>
         </section>
         <section className="rounded-2xl border border-slate-800 bg-slate-900 p-5">
-          <div className="mb-4"><h2 className="font-bold text-white">共通の自動化</h2><p className="mt-1 text-xs text-slate-400">顧客状態を起点にしたシナリオと配信対象を管理します。</p></div>
-          <div className="grid gap-3 sm:grid-cols-2">
-            <button onClick={() => setActiveTab('scenarios')} className="flex items-center justify-between rounded-xl border border-slate-700 bg-slate-950/70 p-4 text-left hover:border-indigo-500/40"><span><span className="block text-sm font-bold text-white">シナリオ設定</span><span className="mt-1 block text-xs text-slate-400">開始条件・チャネル・文案を編集</span></span><ArrowRight className="h-4 w-4 text-indigo-300" /></button>
-            <button onClick={() => onNavigateTab?.('custom_lists')} className="flex items-center justify-between rounded-xl border border-slate-700 bg-slate-950/70 p-4 text-left hover:border-indigo-500/40"><span><span className="block text-sm font-bold text-white">配信対象・CRMセグメント</span><span className="mt-1 block text-xs text-slate-400">既存CRMのセグメント管理を開く</span></span><ArrowRight className="h-4 w-4 text-indigo-300" /></button>
+          <div className="mb-4"><h2 className="font-bold text-white">共通の自動化</h2><p className="mt-1 text-xs text-slate-400">シナリオ内で開始条件と対象を設定し、配信前に確認します。</p></div>
+          <div className="grid gap-3">
+            <button onClick={() => setActiveTab('scenarios')} className="flex items-center justify-between rounded-xl border border-slate-700 bg-slate-950/70 p-4 text-left hover:border-indigo-500/40"><span><span className="block text-sm font-bold text-white">シナリオ設定</span><span className="mt-1 block text-xs text-slate-400">開始条件・配信対象・チャネル・文案を設定</span></span><ArrowRight className="h-4 w-4 text-indigo-300" /></button>
           </div>
           <p className="mt-4 text-[11px] leading-5 text-slate-500">集客チャネルや外部アプリ連携は、接続機能の実装時に追加できる構成です。現段階はLINE・メールを対象にします。</p>
         </section>
