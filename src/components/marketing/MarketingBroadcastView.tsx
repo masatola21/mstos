@@ -178,7 +178,7 @@ export const MarketingBroadcastView: React.FC<{initialChannel?:Channel}> = ({ini
       <div className="mt-4 grid gap-3 md:grid-cols-2">
         <label className="text-sm text-slate-300">配信対象の種類
           <select value={audienceMode} onChange={e=>{setAudienceMode(e.target.value as 'crm'|'prospect_outreach');setSelected([]);setSelectedProspectIds([]);setPreview(false);if(e.target.value==='prospect_outreach')setChannel('email')}} className="mt-1 block w-full rounded-lg border border-slate-700 bg-slate-950 p-2 text-white">
-            <option value="crm">CRM条件によるフォロー</option><option value="prospect_outreach">見込み企業への営業メール</option>
+            <option value="crm">CRM条件によるフォロー</option><option value="prospect_outreach" disabled={initialChannel==='line'}>見込み企業への営業メール</option>
           </select>
         </label>
         <label className="text-sm text-slate-300">配信方法
@@ -205,7 +205,7 @@ export const MarketingBroadcastView: React.FC<{initialChannel?:Channel}> = ({ini
           <div className="flex gap-2"><button type="button" onClick={selectAll} className="rounded border border-slate-700 px-3 py-1.5 text-xs text-slate-200">対象をすべて選択</button><button type="button" onClick={clearSelected} className="rounded border border-slate-700 px-3 py-1.5 text-xs text-slate-300">解除</button></div>
         </div>
         <div className="mt-3 max-h-52 space-y-1 overflow-auto">
-          {eligible.length===0?<p className="text-sm text-slate-500">対象となる連絡先がありません。LINEは有効な友だちかつ配信同意済みの連絡先だけ表示されます。</p>:eligible.map(contact=><label key={contact.id} className="flex cursor-pointer items-center gap-2 rounded px-2 py-1.5 text-sm text-slate-300 hover:bg-slate-900">
+          {eligible.length===0?<p className="text-sm text-slate-500">{audienceMode==='prospect_outreach'?'選択した企業にメールアドレス付きの連絡先が登録されていません。連絡先を登録して会社に紐づけてください。':'対象となる連絡先がありません。LINEは有効な友だちかつ配信同意済みの連絡先だけ表示されます。'}</p>:eligible.map(contact=><label key={contact.id} className="flex cursor-pointer items-center gap-2 rounded px-2 py-1.5 text-sm text-slate-300 hover:bg-slate-900">
             <input type="checkbox" checked={selected.includes(contact.id)} onChange={()=>toggle(contact.id)} />
             <span className="min-w-0 flex-1 truncate">{contact.full_name||'名前未設定'}</span>
             <span className="max-w-56 truncate text-xs text-slate-500">{channel==='email'?contact.email:contact.line_user_id}</span>
