@@ -1,0 +1,177 @@
+import React, { useEffect, useMemo, useState } from 'react';
+import { getSupabase } from '../../lib/supabaseClient';
+
+type Contact = { id:string; full_name:string|null; email:string|null; line_user_id:string|null; company_id:string|null };
+type Segment = { id:string; name:string; entity_type:string; conditions:Record<string,unknown> };
+type Friend = { line_user_id:string; status:string; consent_status:string };
+type Run = { id:string; name:string; channel:string; status:string; total_count:number; sent_count:number; failed_count:number; created_at:string };
+type Channel = 'email'|'line';
+
+export const MarketingBroadcastView: React.FC = () => {
+  const [contacts,setContacts]=useState<Contact[]>([]);
+  const [segments,setSegments]=useState<Segment[]>([]);
+  const [friends,setFriends]=useState<Record<string,Friend>>({});
+  const [runs,setRuns]=useState<Run[]>([]);
+  const [companies,setCompanies]=useState<Record<string,Record<string,unknown>>>({});
+  const [channel,setChannel]=useState<Channel>('email');
+  const [segmentId,setSegmentId]=useState('all');
+  const [selected,setSelected]=useState<string[]>([]);
+  const [subject,setSubject]=useState('');
+  const [body,setBody]=useState('');
+  const [consentBasis,setConsentBasis]=useState('');
+  const [preview,setPreview]=useState(false);
+  const [busy,setBusy]=useState(false);
+  const [error,setError]=useState('');
+  const [notice,setNotice]=useState('');
+
+  const db=getSupabase();
+  useEffect(()=>{
+    let active=true;
+    if(!db)return;
+    void Promise.all([
+      db.from('contacts').select('id,full_name,email,line_user_id,company_id').order('full_name').limit(5000),
+      db.from('crm_segments').select('id,name,entity_type,conditions').order('name'),
+      db.from('line_friends').select('line_user_id,status,consent_status'),
+      db.from('companies').select('*'),
+      db.from('marketing_broadcast_runs').select('id,name,channel,status,total_count,sent_count,failed_count,created_at').order('created_at',{ascending:false}).limit(30),
+    ]).then(([c,s,f,co,r])=>{
+      if(!active)return;
+      const failed=[c,s,f,co,r].find(x=>x.error)?.error;
+      if(failed){setError(failed.message);return}
+      setContacts((c.data||[]) as Contact[]);
+      setSegments((s.data||[]) as Segment[]);
+      setFriends(Object.fromEntries((f.data||[]).map((x:any)=>[x.line_user_id,x])));
+      setCompanies(Object.fromEntries((co.data||[]).map((x:any)=>[x.id,x])));
+      setRuns((r.data||[]) as Run[]);
+    }).catch(e=>active&&setError(e.message||'一斉配信の読み込みに失敗しました。'));
+    return()=>{active=false}
+  },[]);
+
+  const eligible = useMemo(()=>{
+    let rows=contacts;
+    const segment=segments.find(x=>x.id===segmentId);
+    if(segment){
+      const field=typeof segment.conditions?.field==='string'?segment.conditions.field:'';
+      const value=String(segment.conditions?.value||'').toLowerCase();
+      const includes=(row:Record<string,unknown>)=>!field||String(row[field]??'').toLowerCase().includes(value);
+      if(segment.entity_type==='contacts') rows=rows.filter(row=>includes(row as unknown as Record<string,unknown>));
+      else if(segment.entity_type==='companies'){
+        const companyIds=new Set(Object.values(companies).filter(includes).map(x=>String(x.id||'')));
+        rows=rows.filter(row=>row.company_id&&companyIds.has(row.company_id));
+      } else return [];
+    }
+    return rows.filter(row=>channel==='email'
+      ? Boolean(row.email)
+      : Boolean(row.line_user_id&&friends[row.line_user_id]?.status==='active'&&friends[row.line_user_id]?.consent_status==='opted_in'));
+  },[contacts,segments,companies,segmentId,channel,friends]);
+
+  const refreshRuns=async()=>{
+    if(!db)return;
+    const {data,error:e}=await db.from('marketing_broadcast_runs').select('id,name,channel,status,total_count,sent_count,failed_count,created_at').order('created_at',{ascending:false}).limit(30);
+    if(e)setError(e.message); else setRuns((data||[]) as Run[]);
+  };
+  const selectAll=()=>setSelected(eligible.map(x=>x.id));
+  const clearSelected=()=>setSelected([]);
+  const toggle=(id:string)=>setSelected(current=>current.includes(id)?current.filter(x=>x!==id):[...current,id]);
+  const selectedContacts=eligible.filter(x=>selected.includes(x.id));
+
+  const send=async()=>{
+    if(!db||busy)return;
+    setError('');setNotice('');
+    const recipients=selectedContacts;
+    if(!recipients.length){setError('送信対象がありません。対象を確認してください。');return}
+    if(recipients.length>250){setError('一度に送信できる上限は250件です。対象を絞ってください。');return}
+    if(!consentBasis.trim()){setError('配信同意・送信根拠を入力してください。');return}
+    if(channel==='email'&&!subject.trim()){setError('メール件名を入力してください。');return}
+    if(!body.trim()){setError('配信本文を入力してください。');return}
+    setBusy(true);
+    try{
+      const {data:sessionResult}=await db.auth.getSession();
+      const session=sessionResult.session;
+      if(!session?.access_token||!session.user){throw new Error('ログイン状態を確認できません。')}
+      const runName=subject.trim()||body.trim().slice(0,40);
+      const {data:run,error:runError}=await db.from('marketing_broadcast_runs').insert({
+        name:runName,channel,status:'sending',total_count:recipients.length,
+        audience_summary:segmentId==='all'?'全連絡先から対象抽出':(segments.find(x=>x.id===segmentId)?.name||'CRMセグメント'),
+        subject:channel==='email'?subject.trim():null,body_text:body.trim(),
+      }).select('id').single();
+      if(runError||!run)throw runError||new Error('配信履歴を作成できませんでした。');
+      const rows=recipients.map(contact=>({
+        channel,recipient_contact_id:contact.id,recipient_address:channel==='email'?contact.email:contact.line_user_id,
+        subject:channel==='email'?subject.trim():null,body_text:body.trim(),
+        company_id:contact.company_id||null,source_type:'marketing_broadcast',source_id:run.id,status:'queued',
+        consent_confirmed_at:new Date().toISOString(),consent_basis:consentBasis.trim(),
+      }));
+      const {data:outbox,error:insertError}=await db.from('communication_outbox').insert(rows).select('id,recipient_contact_id');
+      if(insertError||!outbox)throw insertError||new Error('送信待ち記録を作成できませんでした。');
+      let sent=0,failed=0;
+      for(let offset=0;offset<outbox.length;offset+=4){
+        const batch=outbox.slice(offset,offset+4);
+        const results=await Promise.all(batch.map(async(row:any)=>{
+          try{
+            const response=await fetch('/api/communications/send',{method:'POST',headers:{'Content-Type':'application/json',Authorization:'Bearer '+session.access_token},body:JSON.stringify({outboxId:row.id})});
+            const result=await response.json().catch(()=>({}));
+            return response.ok&&result.status==='sent';
+          }catch{return false}
+        }));
+        sent+=results.filter(Boolean).length;failed+=results.length-results.filter(Boolean).length;
+      }
+      const status=failed===0?'sent':sent===0?'failed':'partial';
+      await db.from('marketing_broadcast_runs').update({status,sent_count:sent,failed_count:failed,updated_at:new Date().toISOString()}).eq('id',run.id);
+      setNotice('配信を完了しました。送信済み '+sent+'件、失敗 '+failed+'件。個別結果は送信履歴に保存されています。');
+      setSelected([]);setPreview(false);await refreshRuns();
+    }catch(e:any){setError(e?.message||'一斉配信に失敗しました。')}
+    finally{setBusy(false)}
+  };
+
+  return <div className="space-y-5">
+    <section className="rounded-2xl border border-indigo-500/30 bg-slate-900 p-5">
+      <h2 className="text-xl font-bold text-white">一斉配信</h2>
+      <p className="mt-1 text-sm text-slate-400">CRM連絡先から対象を確認し、プレビュー後にLINEまたはメールを配信します。送信結果は連絡先ごとに既存の送信履歴へ記録します。</p>
+      {error&&<p role="alert" className="mt-3 rounded-lg bg-rose-950/60 p-3 text-sm text-rose-200">{error}</p>}
+      {notice&&<p role="status" className="mt-3 rounded-lg bg-emerald-950/60 p-3 text-sm text-emerald-200">{notice}</p>}
+      <div className="mt-4 grid gap-3 md:grid-cols-2">
+        <label className="text-sm text-slate-300">配信方法
+          <select value={channel} onChange={e=>{setChannel(e.target.value as Channel);setSelected([]);setPreview(false)}} className="mt-1 block w-full rounded-lg border border-slate-700 bg-slate-950 p-2 text-white">
+            <option value="email">メール</option><option value="line">LINE（配信同意済みのみ）</option>
+          </select>
+        </label>
+        <label className="text-sm text-slate-300">CRM対象
+          <select value={segmentId} onChange={e=>{setSegmentId(e.target.value);setSelected([]);setPreview(false)}} className="mt-1 block w-full rounded-lg border border-slate-700 bg-slate-950 p-2 text-white">
+            <option value="all">全連絡先から抽出</option>
+            {segments.filter(x=>x.entity_type==='contacts'||x.entity_type==='companies').map(x=><option key={x.id} value={x.id}>{x.name}（{x.entity_type==='contacts'?'連絡先':'会社'}）</option>)}
+          </select>
+        </label>
+      </div>
+      <div className="mt-4 rounded-xl border border-slate-800 bg-slate-950/60 p-4">
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <div><div className="font-semibold text-white">送信対象</div><div className="text-xs text-slate-400">条件に合う宛先 {eligible.length}件・選択中 {selectedContacts.length}件</div></div>
+          <div className="flex gap-2"><button type="button" onClick={selectAll} className="rounded border border-slate-700 px-3 py-1.5 text-xs text-slate-200">対象をすべて選択</button><button type="button" onClick={clearSelected} className="rounded border border-slate-700 px-3 py-1.5 text-xs text-slate-300">解除</button></div>
+        </div>
+        <div className="mt-3 max-h-52 space-y-1 overflow-auto">
+          {eligible.length===0?<p className="text-sm text-slate-500">対象となる連絡先がありません。LINEは有効な友だちかつ配信同意済みの連絡先だけ表示されます。</p>:eligible.map(contact=><label key={contact.id} className="flex cursor-pointer items-center gap-2 rounded px-2 py-1.5 text-sm text-slate-300 hover:bg-slate-900">
+            <input type="checkbox" checked={selected.includes(contact.id)} onChange={()=>toggle(contact.id)} />
+            <span className="min-w-0 flex-1 truncate">{contact.full_name||'名前未設定'}</span>
+            <span className="max-w-56 truncate text-xs text-slate-500">{channel==='email'?contact.email:contact.line_user_id}</span>
+          </label>)}
+        </div>
+      </div>
+      {channel==='email'&&<label className="block text-sm text-slate-300">メール件名<input value={subject} onChange={e=>setSubject(e.target.value)} maxLength={200} className="mt-1 block w-full rounded-lg border border-slate-700 bg-slate-950 p-2 text-white" /></label>}
+      <label className="block text-sm text-slate-300">配信本文<textarea value={body} onChange={e=>setBody(e.target.value)} maxLength={channel==='line'?5000:10000} rows={6} className="mt-1 block w-full rounded-lg border border-slate-700 bg-slate-950 p-3 text-white" /></label>
+      <label className="block text-sm text-slate-300">配信同意・送信根拠<input value={consentBasis} onChange={e=>setConsentBasis(e.target.value)} placeholder="例：配信登録フォームで同意取得済み" className="mt-1 block w-full rounded-lg border border-slate-700 bg-slate-950 p-2 text-white" /></label>
+      {!preview?<button type="button" disabled={!selectedContacts.length} onClick={()=>setPreview(true)} className="rounded-lg bg-indigo-600 px-4 py-2 font-semibold text-white disabled:opacity-40">プレビュー</button>:<div className="space-y-3 rounded-xl border border-amber-500/30 bg-amber-950/20 p-4">
+        <h3 className="font-bold text-amber-100">配信プレビュー</h3>
+        <p className="text-sm text-slate-300">{channel==='email'?'メール':'LINE'}・選択中 {selectedContacts.length}件。LINEでは友だち状態と配信同意を送信時にも再確認します。</p>
+        <p className="text-xs text-slate-400">送信先例：{selectedContacts.slice(0,5).map(x=>x.full_name||x.email||x.line_user_id).join('、')}{selectedContacts.length>5?' ほか':''}</p>
+        {channel==='email'&&<p className="font-semibold text-white">{subject}</p>}
+        <div className="whitespace-pre-wrap rounded bg-slate-950 p-3 text-sm text-slate-200">{body}</div>
+        <div className="flex gap-2"><button type="button" onClick={()=>setPreview(false)} className="rounded border border-slate-700 px-3 py-2 text-sm text-slate-200">戻って修正</button><button type="button" disabled={busy} onClick={()=>void send()} className="rounded bg-rose-600 px-4 py-2 text-sm font-bold text-white disabled:opacity-50">{busy?'配信中…':'この内容で配信'}</button></div>
+      </div>}
+    </section>
+    <section className="rounded-2xl border border-slate-800 bg-slate-900 p-5">
+      <div className="flex items-center justify-between"><h3 className="font-bold text-white">一斉配信履歴</h3><button onClick={()=>void refreshRuns()} className="rounded border border-slate-700 px-3 py-1.5 text-xs text-slate-300">更新</button></div>
+      <div className="mt-3 divide-y divide-slate-800">{runs.length===0?<p className="py-4 text-sm text-slate-500">配信履歴はありません。</p>:runs.map(run=><div key={run.id} className="flex flex-wrap justify-between gap-2 py-3 text-sm"><div><div className="font-medium text-white">{run.name}</div><div className="text-xs text-slate-500">{new Date(run.created_at).toLocaleString()} ・ {run.channel==='email'?'メール':'LINE'}</div></div><div className="text-right text-xs text-slate-300"><div>{run.status==='sent'?'完了':run.status==='partial'?'一部失敗':run.status==='failed'?'失敗':'配信中'}</div><div className="text-slate-500">{run.sent_count}/{run.total_count}件 成功・失敗 {run.failed_count}件</div></div></div>)}</div>
+      <p className="mt-2 text-xs text-slate-500">個々の宛先・送信エラーは既存の送信センター履歴から確認できます。</p>
+    </section>
+  </div>;
+};
