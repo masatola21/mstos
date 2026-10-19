@@ -234,7 +234,6 @@ export const ProjectsView: React.FC<ProjectsViewProps> = ({
                           : `プロジェクト「${p.name}」を削除しますか？`}
                         confirmLabel={relatedTaskCount > 0 ? 'プロジェクトとタスクを削除' : 'プロジェクト削除を確定'}
                         ariaLabel={`プロジェクト「${p.name}」を削除`}
-                        title="削除"
                         className="p-1.5 rounded-lg text-slate-400 hover:text-rose-400 hover:bg-slate-800 cursor-pointer">
                         <Trash2 className="w-3.5 h-3.5" />
                       </InlineDeleteButton>
