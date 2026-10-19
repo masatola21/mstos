@@ -16,6 +16,14 @@ declare
   v_status text := lower(coalesce(v_new->>'status',''));
   v_event_time text := coalesce(v_new->>'updated_at', now()::text);
 begin
+  if v_owner is null then
+    select owner_id into v_owner from public.marketing_automation_scenarios
+      where coalesce((config->>'automationEnabled')::boolean,false)
+        and coalesce(config->>'status','')='prepared'
+        and coalesce(config->>'trigger','')='invoice_overdue'
+        and coalesce(config->>'consentBasis','')<>''
+      order by updated_at desc limit 1;
+  end if;
   if v_owner is null or v_status in ('paid','paid_full','cancelled','canceled') then
     return NEW;
   end if;
