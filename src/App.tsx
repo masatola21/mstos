@@ -11,6 +11,7 @@ import { RlsGuideModal } from './components/RlsGuideModal';
 import { RecordFormModal } from './components/RecordFormModal';
 import { TableKey } from './types/database';
 import { getSupabase } from './lib/supabaseClient';
+import { deleteTableRecord } from './services/dataService';
 import { Loader2 } from 'lucide-react';
 
 // AI President Views and Modals
@@ -1391,6 +1392,49 @@ function AppContent() {
     setProducts(matrixService.loadProducts());
   };
 
+  const handleDeleteProduct = async (id: string, archive: boolean) => {
+    const product = matrixService.loadProducts().find((item) => item.id === id);
+    if (!product) return;
+    const syncArchivedProduct = async () => {
+      matrixService.updateProduct(id, { status: 'archived' });
+      if (product.salesCatalogPublishedAt) {
+        await publishManagedProductToSalesCatalog(
+          { ...product, status: 'archived' },
+          { initialFee: product.salesInitialFee ?? product.price ?? 0, monthlyFee: product.salesMonthlyFee ?? 0 },
+        );
+      }
+    };
+    try {
+      if (archive) {
+        await syncArchivedProduct();
+        setProducts(matrixService.loadProducts());
+        recordActivityLog('project_updated', `商品「${product.name}」を取扱停止にしました（関連記録は保持）`, '人間');
+      } else {
+        if (product.salesCatalogPublishedAt) {
+          const result = await deleteTableRecord('products', { id: product.id });
+          if (result.error) {
+            window.alert(result.error.message);
+            return;
+          }
+          if (result.blockedBy) {
+            await syncArchivedProduct();
+            setProducts(matrixService.loadProducts());
+            recordActivityLog('project_updated', `商品「${product.name}」は関連データがあるため取扱停止にしました`, '人間');
+            window.alert('商談・契約などから参照されているため完全削除せず、取扱停止にしました。既存の紐づきは保持しています。');
+            setActivityLogs(loadActivityLogs());
+            return;
+          }
+        }
+        matrixService.deleteProduct(id);
+        setProducts(matrixService.loadProducts());
+        recordActivityLog('project_updated', `商品「${product.name}」を削除しました`, '人間');
+      }
+      setActivityLogs(loadActivityLogs());
+    } catch (error) {
+      window.alert(error instanceof Error ? error.message : '商品を削除・取扱停止にできませんでした。');
+    }
+  };
+
   const handlePublishProduct = async (product: ManagedProduct, fees: { initialFee: number; monthlyFee: number }) => {
     await publishManagedProductToSalesCatalog(product, fees);
     matrixService.updateProduct(product.id, {
@@ -1760,6 +1804,7 @@ function AppContent() {
             projects={projects}
             onAddProduct={handleAddProduct}
             onUpdateProduct={handleUpdateProduct}
+            onDeleteProduct={handleDeleteProduct}
             onPublishProduct={handlePublishProduct}
             onRecordUsage={handleRecordUsage}
             onAddProjectWithTasks={(newProject, newTasks) => {
