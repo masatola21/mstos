@@ -36,7 +36,7 @@ interface TableManagerProps {
   onOpenRls: () => void;
   onOpenCreateTrigger?: boolean;
   onStageTransitionTask?: (event: { transitionType: TransitionType; sourceRecord: any; targetTable: 'leads' | 'deals' | 'customers'; targetRecordId?: string | number }) => void;
-  onOpenCustomerWorkspace?: (companyId: string, destination: 'documents' | 'operations' | 'diagnoses' | 'forms', recordContext?: { tableKey: TableKey; recordId: string; leadId?: string }) => void;
+  onOpenCustomerWorkspace?: (companyId: string, destination: 'documents' | 'operations' | 'diagnoses' | 'forms' | 'send', recordContext?: { tableKey: TableKey; recordId: string; leadId?: string; contactId?: string }) => void;
 }
 
 export const TableManager: React.FC<TableManagerProps> = ({
