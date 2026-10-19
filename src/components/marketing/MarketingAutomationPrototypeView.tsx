@@ -3,6 +3,7 @@ import { getSupabase } from '../../lib/supabaseClient';
 import { Activity, ArrowRight, CheckCircle2, Copy, GitBranch, Image as ImageIcon, Mail, MessageCircle, MousePointerClick, Plus, Radio, Save, Tags, Trash2, Zap } from 'lucide-react';
 import { MarketingChannel, MarketingLineMessageType, MarketingScenario, MarketingTrigger } from '../../types/marketing';
 import { MarketingBroadcastView } from './MarketingBroadcastView';
+import { MarketingLineInboxView } from './MarketingLineInboxView';
 
 interface Props {
   scenarios: MarketingScenario[];
@@ -106,7 +107,7 @@ export const MarketingAutomationPrototypeView: React.FC<Props> = ({ scenarios, o
     const id = value.startsWith('segment:') ? value.slice('segment:'.length) : '';
     return segments.find((segment) => segment.id === id)?.name || value || '配信対象未設定';
   };
-  const [activeTab, setActiveTab] = useState<'home' | 'scenarios' | 'broadcast'>('home');
+  const [activeTab, setActiveTab] = useState<'home' | 'scenarios' | 'broadcast' | 'line_inbox'>('home');
   const [editing, setEditing] = useState<MarketingScenario | null>(null);
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [form, setForm] = useState(emptyScenario());
@@ -254,6 +255,7 @@ export const MarketingAutomationPrototypeView: React.FC<Props> = ({ scenarios, o
     { id: 'home' as const, label: 'ホーム', icon: GitBranch },
     { id: 'scenarios' as const, label: '自動化シナリオ', icon: Zap },
     { id: 'broadcast' as const, label: '一斉配信', icon: Radio },
+    { id: 'line_inbox' as const, label: 'LINE受信箱・自動返信', icon: MessageCircle },
   ];
 
   return (
@@ -277,6 +279,7 @@ export const MarketingAutomationPrototypeView: React.FC<Props> = ({ scenarios, o
       {notice && <div role="status" className="rounded-xl border border-emerald-500/30 bg-emerald-500/10 px-4 py-3 text-sm text-emerald-200">{notice}</div>}
 
       {activeTab === 'broadcast' && <MarketingBroadcastView />}
+      {activeTab === 'line_inbox' && <MarketingLineInboxView />}
       {activeTab === 'home' && <>
         <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
           {[
