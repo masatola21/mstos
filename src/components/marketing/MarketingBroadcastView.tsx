@@ -54,7 +54,7 @@ export const MarketingBroadcastView: React.FC<{initialChannel?:Channel}> = ({ini
       db.from('leads').select('*'),
       db.from('deals').select('*'),
       db.from('customers').select('*'),
-      db.from('communication_outbox').select('source_id,channel,status,subject,body_text,created_at').in('source_type',['marketing_broadcast','marketing_outreach']).order('created_at',{ascending:false}).limit(1000),
+      db.from('communication_outbox').select('source_id,channel,status,subject,body_text,created_at').in('source_type',['marketing_broadcast','marketing_outreach','marketing_automation']).order('created_at',{ascending:false}).limit(1000),
     ]).then(([c,s,f,co,p,l,d,cu,h])=>{
       if(!active)return;
       const failed=[c,s,f,co,p,l,d,cu,h].find(x=>x.error)?.error;
