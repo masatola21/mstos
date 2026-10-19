@@ -5,7 +5,13 @@ type Contact = { id:string; full_name:string|null; email:string|null; line_user_
 type Segment = { id:string; name:string; entity_type:string; conditions:Record<string,unknown> };
 type Friend = { line_user_id:string; status:string; consent_status:string };
 type Run = { id:string; name:string; channel:string; status:string; total_count:number; sent_count:number; failed_count:number; created_at:string };
+type OutboxHistoryRow = { source_id:string|null; channel:string; status:string; subject:string|null; body_text:string; created_at:string };
 type Channel = 'email'|'line';
+function summarizeBroadcastHistory(rows:OutboxHistoryRow[]):Run[]{
+  const grouped=new Map<string,{id:string;name:string;channel:string;created_at:string;total_count:number;sent_count:number;failed_count:number;pending_count:number}>();
+  rows.forEach(row=>{if(!row.source_id)return;const current=grouped.get(row.source_id)||{id:row.source_id,name:row.subject||row.body_text.slice(0,40)||'一斉配信',channel:row.channel,created_at:row.created_at,total_count:0,sent_count:0,failed_count:0,pending_count:0};current.total_count+=1;if(row.status==='sent')current.sent_count+=1;else if(row.status==='failed')current.failed_count+=1;else current.pending_count+=1;if(Date.parse(row.created_at)<Date.parse(current.created_at))current.created_at=row.created_at;grouped.set(row.source_id,current)});
+  return [...grouped.values()].map(run=>({...run,status:run.pending_count?'sending':run.failed_count===0?'sent':run.sent_count===0?'failed':'partial'})).sort((a,b)=>Date.parse(b.created_at)-Date.parse(a.created_at)).slice(0,30)
+}
 
 export const MarketingBroadcastView: React.FC = () => {
   const [contacts,setContacts]=useState<Contact[]>([]);
@@ -33,16 +39,16 @@ export const MarketingBroadcastView: React.FC = () => {
       db.from('crm_segments').select('id,name,entity_type,conditions').order('name'),
       db.from('line_friends').select('line_user_id,status,consent_status'),
       db.from('companies').select('*'),
-      db.from('marketing_broadcast_runs').select('id,name,channel,status,total_count,sent_count,failed_count,created_at').order('created_at',{ascending:false}).limit(30),
-    ]).then(([c,s,f,co,r])=>{
+      db.from('communication_outbox').select('source_id,channel,status,subject,body_text,created_at').eq('source_type','marketing_broadcast').order('created_at',{ascending:false}).limit(1000),
+    ]).then(([c,s,f,co,h])=>{
       if(!active)return;
-      const failed=[c,s,f,co,r].find(x=>x.error)?.error;
+      const failed=[c,s,f,co,h].find(x=>x.error)?.error;
       if(failed){setError(failed.message);return}
       setContacts((c.data||[]) as Contact[]);
       setSegments((s.data||[]) as Segment[]);
       setFriends(Object.fromEntries((f.data||[]).map((x:any)=>[x.line_user_id,x])));
       setCompanies(Object.fromEntries((co.data||[]).map((x:any)=>[x.id,x])));
-      setRuns((r.data||[]) as Run[]);
+      setRuns(summarizeBroadcastHistory((h.data||[]) as OutboxHistoryRow[]));
     }).catch(e=>active&&setError(e.message||'一斉配信の読み込みに失敗しました。'));
     return()=>{active=false}
   },[]);
@@ -67,8 +73,7 @@ export const MarketingBroadcastView: React.FC = () => {
 
   const refreshRuns=async()=>{
     if(!db)return;
-    const {data,error:e}=await db.from('marketing_broadcast_runs').select('id,name,channel,status,total_count,sent_count,failed_count,created_at').order('created_at',{ascending:false}).limit(30);
-    if(e)setError(e.message); else setRuns((data||[]) as Run[]);
+    const {data,error:e}=await db.from('communication_outbox').select('source_id,channel,status,subject,body_text,created_at').eq('source_type','marketing_broadcast').order('created_at',{ascending:false}).limit(1000);if(e)setError(e.message);else setRuns(summarizeBroadcastHistory((data||[]) as OutboxHistoryRow[]));
   };
   const selectAll=()=>setSelected(eligible.map(x=>x.id));
   const clearSelected=()=>setSelected([]);
@@ -89,17 +94,11 @@ export const MarketingBroadcastView: React.FC = () => {
       const {data:sessionResult}=await db.auth.getSession();
       const session=sessionResult.session;
       if(!session?.access_token||!session.user){throw new Error('ログイン状態を確認できません。')}
-      const runName=subject.trim()||body.trim().slice(0,40);
-      const {data:run,error:runError}=await db.from('marketing_broadcast_runs').insert({
-        name:runName,channel,status:'sending',total_count:recipients.length,
-        audience_summary:segmentId==='all'?'全連絡先から対象抽出':(segments.find(x=>x.id===segmentId)?.name||'CRMセグメント'),
-        subject:channel==='email'?subject.trim():null,body_text:body.trim(),
-      }).select('id').single();
-      if(runError||!run)throw runError||new Error('配信履歴を作成できませんでした。');
+      const broadcastId=crypto.randomUUID();
       const rows=recipients.map(contact=>({
         channel,recipient_contact_id:contact.id,recipient_address:channel==='email'?contact.email:contact.line_user_id,
         subject:channel==='email'?subject.trim():null,body_text:body.trim(),
-        company_id:contact.company_id||null,source_type:'marketing_broadcast',source_id:run.id,status:'queued',
+        company_id:contact.company_id||null,source_type:'marketing_broadcast',source_id:broadcastId,status:'queued',
         consent_confirmed_at:new Date().toISOString(),consent_basis:consentBasis.trim(),
       }));
       const {data:outbox,error:insertError}=await db.from('communication_outbox').insert(rows).select('id,recipient_contact_id');
@@ -116,9 +115,7 @@ export const MarketingBroadcastView: React.FC = () => {
         }));
         sent+=results.filter(Boolean).length;failed+=results.length-results.filter(Boolean).length;
       }
-      const status=failed===0?'sent':sent===0?'failed':'partial';
-      await db.from('marketing_broadcast_runs').update({status,sent_count:sent,failed_count:failed,updated_at:new Date().toISOString()}).eq('id',run.id);
-      setNotice('配信を完了しました。送信済み '+sent+'件、失敗 '+failed+'件。個別結果は送信履歴に保存されています。');
+      setNotice('配信を完了しました。送信済み '+sent+'件、失敗 '+failed+'件。個別結果と配信履歴は既存の送信記録に保存されています。');
       setSelected([]);setPreview(false);await refreshRuns();
     }catch(e:any){setError(e?.message||'一斉配信に失敗しました。')}
     finally{setBusy(false)}
