@@ -171,14 +171,14 @@ export const MarketingBroadcastView: React.FC<{initialChannel?:Channel}> = ({ini
 
   return <div className="space-y-5">
     <section className="rounded-2xl border border-indigo-500/30 bg-slate-900 p-5">
-      <h2 className="text-xl font-bold text-white">一斉配信</h2>
-      <p className="mt-1 text-sm text-slate-400">CRM状態に応じたフォロー配信と、AI調査などで登録した見込み企業への営業メールを管理します。宛先選択・プレビュー後に既存の送信処理を使い、結果を履歴に記録します。</p>
+      <h2 className="text-xl font-bold text-white">{channel==='email'?'メール送信・営業':'LINE一斉配信'}</h2>
+      <p className="mt-1 text-sm text-slate-400">CRM条件から対象を抽出したフォロー配信と、外部AI調査からCRMへ登録した見込み企業への営業メールを管理します。宛先選択・プレビュー後に既存の送信処理を使い、結果を履歴に記録します。</p>
       {error&&<p role="alert" className="mt-3 rounded-lg bg-rose-950/60 p-3 text-sm text-rose-200">{error}</p>}
       {notice&&<p role="status" className="mt-3 rounded-lg bg-emerald-950/60 p-3 text-sm text-emerald-200">{notice}</p>}
       <div className="mt-4 grid gap-3 md:grid-cols-2">
-        <label className="text-sm text-slate-300">送信シナリオ
+        <label className="text-sm text-slate-300">配信対象の種類
           <select value={audienceMode} onChange={e=>{setAudienceMode(e.target.value as 'crm'|'prospect_outreach');setSelected([]);setSelectedProspectIds([]);setPreview(false);if(e.target.value==='prospect_outreach')setChannel('email')}} className="mt-1 block w-full rounded-lg border border-slate-700 bg-slate-950 p-2 text-white">
-            <option value="crm">CRM状態に応じたフォロー</option><option value="prospect_outreach">見込み企業への営業メール</option>
+            <option value="crm">CRM条件によるフォロー</option><option value="prospect_outreach">見込み企業への営業メール</option>
           </select>
         </label>
         <label className="text-sm text-slate-300">配信方法
