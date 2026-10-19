@@ -115,7 +115,7 @@ export const MarketingBroadcastView: React.FC<{initialChannel?:Channel}> = ({ini
 
   const refreshRuns=async()=>{
     if(!db)return;
-    const {data,error:e}=await db.from('communication_outbox').select('source_id,channel,status,subject,body_text,created_at').eq('source_type','marketing_broadcast').order('created_at',{ascending:false}).limit(1000);if(e)setError(e.message);else setRuns(summarizeBroadcastHistory((data||[]) as OutboxHistoryRow[]));
+    const {data,error:e}=await db.from('communication_outbox').select('source_id,channel,status,subject,body_text,created_at').in('source_type',['marketing_broadcast','marketing_outreach']).order('created_at',{ascending:false}).limit(1000);if(e)setError(e.message);else setRuns(summarizeBroadcastHistory((data||[]) as OutboxHistoryRow[]));
   };
   const selectAll=()=>setSelected(eligible.map(x=>x.id));
   const clearSelected=()=>setSelected([]);
@@ -172,7 +172,7 @@ export const MarketingBroadcastView: React.FC<{initialChannel?:Channel}> = ({ini
   return <div className="space-y-5">
     <section className="rounded-2xl border border-indigo-500/30 bg-slate-900 p-5">
       <h2 className="text-xl font-bold text-white">一斉配信</h2>
-      <p className="mt-1 text-sm text-slate-400">CRM状態に応じたフォロー配信と、AI調査済み見込み企業への営業メールを管理します。宛先選択・プレビュー後に既存の送信処理を使い、結果を履歴に記録します。</p>
+      <p className="mt-1 text-sm text-slate-400">CRM状態に応じたフォロー配信と、AI調査などで登録した見込み企業への営業メールを管理します。宛先選択・プレビュー後に既存の送信処理を使い、結果を履歴に記録します。</p>
       {error&&<p role="alert" className="mt-3 rounded-lg bg-rose-950/60 p-3 text-sm text-rose-200">{error}</p>}
       {notice&&<p role="status" className="mt-3 rounded-lg bg-emerald-950/60 p-3 text-sm text-emerald-200">{notice}</p>}
       <div className="mt-4 grid gap-3 md:grid-cols-2">
@@ -194,14 +194,14 @@ export const MarketingBroadcastView: React.FC<{initialChannel?:Channel}> = ({ini
         </label>}
       </div>
       {audienceMode==='prospect_outreach'&&<section className="rounded-xl border border-amber-500/30 bg-amber-950/10 p-4">
-        <div className="font-semibold text-white">AI調査済み見込み企業を選択</div>
-        <p className="mt-1 text-xs text-slate-400">CRMに登録済みの見込み企業から選びます。AIは送信せず、選択企業に紐づく連絡先のメールアドレスだけを宛先候補にします。見込み企業に連絡先が紐づいていない場合は送信対象になりません。</p>
+        <div className="font-semibold text-white">営業対象の見込み企業を選択</div>
+        <p className="mt-1 text-xs text-slate-400">AI調査などでCRMに登録した見込み企業から選びます。AIは送信を実行せず、選択企業に紐づく連絡先のメールアドレスだけを宛先候補にします。見込み企業に連絡先が紐づいていない場合は送信対象になりません。</p>
         <div className="mt-3 max-h-48 space-y-1 overflow-auto">{outreachProspects.length===0?<p className="text-sm text-slate-500">会社情報と関連付いた見込み企業がありません。</p>:outreachProspects.map(row=>{const company=companies[String(row.company_id||'')]||{};const id=String(row.id||'');return <label key={id} className="flex items-center gap-2 rounded px-2 py-1.5 text-sm text-slate-300 hover:bg-slate-900"><input type="checkbox" checked={selectedProspectIds.includes(id)} onChange={()=>{setSelectedProspectIds(current=>current.includes(id)?current.filter(x=>x!==id):[...current,id]);setSelected([]);setPreview(false)}}/><span className="min-w-0 flex-1 truncate">{String(company.company_name||company.name||'会社名未設定')}</span><span className="text-xs text-slate-500">{String(row.status||'未設定')}</span></label>})}</div>
         <p className="mt-2 text-xs text-amber-200">営業メールの送信根拠と、宛先情報を営業目的で利用できることを確認してください。</p>
       </section>}
       <div className="mt-4 rounded-xl border border-slate-800 bg-slate-950/60 p-4">
         <div className="flex flex-wrap items-center justify-between gap-2">
-          <div><div className="font-semibold text-white">送信対象</div><div className="text-xs text-slate-400">{selectedSegment?`「${selectedSegment.name}」の条件から抽出：`:'条件に合う宛先：'}{eligible.length}件・選択中 {selectedContacts.length}件</div></div>
+          <div><div className="font-semibold text-white">送信対象</div><div className="text-xs text-slate-400">{audienceMode==='crm'&&selectedSegment?`「${selectedSegment.name}」の条件から抽出：`:'条件に合う宛先：'}{eligible.length}件・選択中 {selectedContacts.length}件</div></div>
           <div className="flex gap-2"><button type="button" onClick={selectAll} className="rounded border border-slate-700 px-3 py-1.5 text-xs text-slate-200">対象をすべて選択</button><button type="button" onClick={clearSelected} className="rounded border border-slate-700 px-3 py-1.5 text-xs text-slate-300">解除</button></div>
         </div>
         <div className="mt-3 max-h-52 space-y-1 overflow-auto">
