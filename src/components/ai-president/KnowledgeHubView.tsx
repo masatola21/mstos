@@ -242,7 +242,7 @@ export const KnowledgeHubView: React.FC<KnowledgeHubViewProps> = ({ items, onSav
           <article key={item.id} className="rounded-2xl border border-slate-800 bg-slate-900 p-4">
             <div className="flex justify-between gap-3">
               <button onClick={() => startEdit(item)} className="text-left min-w-0 flex-1">
-                <span className="text-[10px] text-indigo-300">{CATEGORIES.find((category) => category.id === item.category)?.label} · {(item.knowledgeAccess?.scope || 'president') === 'president' ? 'AI社長のみ' : item.knowledgeAccess?.scope === 'roles' ? '指定役割のみ' : '全AI共通'}</span>
+                <span className="text-[10px] text-indigo-300">{CATEGORIES.find((category) => category.id === item.category)?.label} · {(item.knowledgeAccess?.scope || 'president') === 'president' ? 'AI社長のみ' : item.knowledgeAccess?.scope === 'roles' ? 'AI社長と指定役割' : '全AI共通'}</span>
                 <h2 className="font-bold text-white truncate">{item.title}</h2>
                 {item.sourceTaskId && <span className="mt-1 inline-block text-[10px] text-emerald-300">タスク成果物 · {item.sourceRoleId || '担当AI'}</span>}
                 {!!item.attachments?.length && <span className="mt-1 inline-block text-[10px] text-cyan-300">添付 {item.attachments.length}件</span>}
