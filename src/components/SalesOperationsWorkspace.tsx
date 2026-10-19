@@ -227,6 +227,7 @@ export const SalesOperationsWorkspace: React.FC<Props> = ({ tab, companyId, lead
     const supabase = getSupabase();
     const contact = contacts.find((item) => item.id === sendContactId);
     if (!supabase || !contact) { setError('先にメールの送信先を選択してください。'); return; }
+    if (!document.company_id || contact.company_id !== document.company_id) { setError('書類の会社と送信先連絡先が一致しません。会社に紐づく連絡先を選択してください。'); return; }
     if (sendChannel !== 'email') { setError('AI草案の作成はメールを選択した場合に利用できます。'); return; }
     setGeneratingEmailDraft(true);
     setError('');
