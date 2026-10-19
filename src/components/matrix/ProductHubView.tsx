@@ -20,6 +20,7 @@ import {
   BarChart3,
   Edit2,
   Link2,
+  Trash2,
   Check
 } from 'lucide-react';
 import { ManagedProduct, PRODUCT_ARCHETYPES, ProductArchetype, ManagedContract, ManagedInvoice, ManagedToolAsset } from '../../types/matrix';
@@ -35,6 +36,7 @@ interface ProductHubViewProps {
   projects: Project[];
   onAddProduct: (product: Omit<ManagedProduct, 'id' | 'createdAt' | 'updatedAt'>) => void;
   onUpdateProduct: (id: string, updates: Partial<ManagedProduct>) => void;
+  onDeleteProduct?: (id: string, archive: boolean) => Promise<void> | void;
   onPublishProduct: (product: ManagedProduct, fees: { initialFee: number; monthlyFee: number }) => Promise<void>;
   onAddProjectWithTasks?: (project: Project, tasks: TaskItem[]) => void;
   onRecordUsage?: (params: { endpoint: 'chat'; endpointName: string; model?: string; usage: ApiUsageData }) => void;
@@ -49,6 +51,7 @@ export const ProductHubView: React.FC<ProductHubViewProps> = ({
   projects,
   onAddProduct,
   onUpdateProduct,
+  onDeleteProduct,
   onPublishProduct,
   onAddProjectWithTasks,
   onRecordUsage,
@@ -74,6 +77,21 @@ export const ProductHubView: React.FC<ProductHubViewProps> = ({
   const productContracts = contracts.filter((c) => c.productId === selectedProduct?.id);
   const productInvoices = invoices.filter((i) => i.productId === selectedProduct?.id);
   const productTools = tools.filter((t) => t.productId === selectedProduct?.id);
+  const productHasReferences = Boolean(selectedProduct && (
+    productContracts.length || productInvoices.length || productTools.length ||
+    tasks.some((task) => task.relatedRecord?.type === 'product' && task.relatedRecord.id === selectedProduct.id) ||
+    projects.some((project: any) => project.productId === selectedProduct.id)
+  ));
+  const requestProductRemoval = () => {
+    if (!selectedProduct || !onDeleteProduct) return;
+    const action = productHasReferences ? '取扱停止' : '削除';
+    const detail = productHasReferences
+      ? '関連する契約・請求・ツール・タスクは保持し、商品を新規選択から外します。'
+      : '商品マスタから完全に削除します。';
+    if (window.confirm(`「${selectedProduct.name}」を${action}しますか？\n${detail}`)) {
+      void onDeleteProduct(selectedProduct.id, productHasReferences);
+    }
+  };
 
   const getArchetypeIcon = (archetype: ProductArchetype) => {
     switch (archetype) {
@@ -206,7 +224,7 @@ export const ProductHubView: React.FC<ProductHubViewProps> = ({
                       ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/30'
                       : 'bg-amber-500/20 text-amber-300 border border-amber-500/30'
                   }`}>
-                    {selectedProduct.status === 'active' ? '運用中' : '開発・準備中'}
+                    {selectedProduct.status === 'active' ? '運用中' : selectedProduct.status === 'archived' ? '取扱停止' : '開発・準備中'}
                   </span>
                 </div>
                 <h3 className="text-2xl font-black text-white">{selectedProduct.name}</h3>
@@ -224,6 +242,9 @@ export const ProductHubView: React.FC<ProductHubViewProps> = ({
                     {selectedProduct.salesCatalogPublishedAt ? '営業商品マスタを更新' : '営業商品マスタに反映'}
                   </button>
                   {selectedProduct.salesCatalogPublishedAt && <span className="text-[10px] text-emerald-300">CRMと同じ商品IDで連携済み</span>}
+                  {onDeleteProduct && <button type="button" onClick={requestProductRemoval} className="inline-flex items-center gap-2 rounded-lg border border-rose-500/30 bg-rose-500/10 px-3 py-2 text-xs font-semibold text-rose-200 hover:bg-rose-500/20">
+                    <Trash2 className="h-4 w-4" />{productHasReferences ? '取扱停止' : '削除'}
+                  </button>}
                 </div>
               </div>
 
