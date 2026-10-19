@@ -128,9 +128,10 @@ function selectKnowledgeContext(
 ): string {
   const visibleItems = items.filter((item) => {
     const access = item.knowledgeAccess;
-    if (!access || access.scope === 'all') return true;
+    if (!access) return audience === 'president';
+    if (access.scope === 'all') return true;
     if (access.scope === 'president') return audience === 'president';
-    return audience === 'role' && workModeId !== 'president' && (access.roleIds || []).includes(workModeId);
+    return audience === 'president' || (audience === 'role' && workModeId !== 'president' && (access.roleIds || []).includes(workModeId));
   });
   if (!visibleItems.length) return '';
   const normalize = (value: string) => value.toLowerCase().replace(/[\s、。,.!?！？・「」『』（）【】]/g, '');
