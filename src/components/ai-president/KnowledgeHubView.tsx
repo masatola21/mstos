@@ -30,7 +30,7 @@ const blankItem = (): KnowledgeItem => ({
   tags: [],
   createdAt: Date.now(),
   updatedAt: Date.now(),
-  knowledgeAccess: { scope: 'all', roleIds: [] },
+  knowledgeAccess: { scope: 'president', roleIds: [] },
 });
 
 export const KnowledgeHubView: React.FC<KnowledgeHubViewProps> = ({ items, onSave, onDelete, selectedItemId, onUploadAttachment, onDownloadAttachment, onDeleteAttachment }) => {
@@ -159,13 +159,13 @@ export const KnowledgeHubView: React.FC<KnowledgeHubViewProps> = ({ items, onSav
           <label className="block text-xs font-semibold text-slate-300">
             AIの参照範囲
             <select
-              value={editing.knowledgeAccess?.scope || 'all'}
+              value={editing.knowledgeAccess?.scope || 'president'}
               onChange={(e) => setEditing({ ...editing, knowledgeAccess: { ...editing.knowledgeAccess, scope: e.target.value as 'all' | 'president' | 'roles', roleIds: editing.knowledgeAccess?.roleIds || [] } })}
               className="mt-1 w-full rounded-xl border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-white"
             >
               <option value="all">AI社長・すべての役割AI</option>
               <option value="president">AI社長のみ</option>
-              <option value="roles">指定した役割AIのみ</option>
+              <option value="roles">AI社長と指定した役割AI</option>
             </select>
           </label>
           {editing.knowledgeAccess?.scope === 'roles' && (
@@ -242,7 +242,7 @@ export const KnowledgeHubView: React.FC<KnowledgeHubViewProps> = ({ items, onSav
           <article key={item.id} className="rounded-2xl border border-slate-800 bg-slate-900 p-4">
             <div className="flex justify-between gap-3">
               <button onClick={() => startEdit(item)} className="text-left min-w-0 flex-1">
-                <span className="text-[10px] text-indigo-300">{CATEGORIES.find((category) => category.id === item.category)?.label} · {item.knowledgeAccess?.scope === 'president' ? 'AI社長のみ' : item.knowledgeAccess?.scope === 'roles' ? '指定役割のみ' : '全AI共通'}</span>
+                <span className="text-[10px] text-indigo-300">{CATEGORIES.find((category) => category.id === item.category)?.label} · {(item.knowledgeAccess?.scope || 'president') === 'president' ? 'AI社長のみ' : item.knowledgeAccess?.scope === 'roles' ? '指定役割のみ' : '全AI共通'}</span>
                 <h2 className="font-bold text-white truncate">{item.title}</h2>
                 {item.sourceTaskId && <span className="mt-1 inline-block text-[10px] text-emerald-300">タスク成果物 · {item.sourceRoleId || '担当AI'}</span>}
                 {!!item.attachments?.length && <span className="mt-1 inline-block text-[10px] text-cyan-300">添付 {item.attachments.length}件</span>}
