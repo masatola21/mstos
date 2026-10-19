@@ -523,6 +523,7 @@ export const CustomerSupportWorkspace: React.FC<Props> = ({
                 <ul className="divide-y divide-slate-800">{supportTasks.filter((task) => (task.taskOwnerSide || 'mst') === side).map((task) => <li key={task.id} className="py-2">
                   <div className="flex flex-wrap items-start justify-between gap-2"><div><div className={'text-sm ' + (task.status === 'completed' ? 'text-emerald-300 line-through' : 'text-slate-100')}>{task.title}</div><div className="mt-1 text-xs text-slate-500">{task.supportAssigneeName || task.assignee?.name || '担当未設定'} · 期限 {task.dueDate || '未設定'} · 優先度 {task.priority === 'high' ? '高' : task.priority === 'low' ? '低' : '中'}{task.dueDate && task.dueDate < new Date().toISOString().slice(0, 10) && task.status !== 'completed' ? ' · 期限超過' : ''}</div>{task.description && <p className="mt-1 whitespace-pre-wrap text-xs text-slate-400">{task.description}</p>}</div>
                   <div className="flex items-center gap-2"><select aria-label={task.title + 'の状態'} value={task.status} onChange={(event) => setTaskStatus(task, event.target.value as TaskItem['status'])} className="rounded border border-slate-700 bg-slate-900 px-2 py-1 text-xs text-white">{Object.entries(TASK_STATUS_LABELS).map(([key, label]) => <option key={key} value={key}>{label}</option>)}</select><button type="button" onClick={() => openTaskEditor(task)} className="rounded border border-slate-700 px-2 py-1 text-xs text-cyan-200">編集</button></div>
+                  </div>
                 </li>)}</ul>}
             </section>)}
           </div>
