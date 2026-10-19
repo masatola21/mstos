@@ -201,6 +201,7 @@ const TABLE_REFERENCE_CHECKS: Partial<Record<TableKey, Array<{ table: string; fi
     { table: 'customers', field: 'company_id' }, { table: 'diagnoses', field: 'company_id' },
     { table: 'customer_contracts', field: 'company_id' }, { table: 'customer_invoices', field: 'company_id' },
     { table: 'customer_documents', field: 'company_id' }, { table: 'customer_service_engagements', field: 'company_id' },
+    { table: 'communication_outbox', field: 'company_id' },
   ],
   contacts: [{ table: 'communication_outbox', field: 'recipient_contact_id' }],
   prospects: [],
