@@ -363,15 +363,23 @@ app.post('/api/line/rich-menu', async (req, res) => {
   if (!image.length || image.length > 1024 * 1024 || (mime === 'image/png' && !image.subarray(0, 8).equals(Buffer.from([137,80,78,71,13,10,26,10]))) || (mime === 'image/jpeg' && !(image[0] === 255 && image[1] === 216 && image[2] === 255))) {
     return res.status(400).json({ error: '画像は1MB以下のPNGまたはJPEGを指定してください。' });
   }
-  const areas = actions.map((action: any, index: number) => {
-    if (!action || typeof action.label !== 'string' || !action.label.trim() || action.label.length > 20 || typeof action.value !== 'string' || !action.value.trim() || action.value.length > 1000) throw new Error('各タップ領域のラベルと動作内容を入力してください。');
-    const col = index % 2; const row = Math.floor(index / 2);
-    const normalized = action.type === 'uri'
-      ? (() => { let url: URL; try { url = new URL(action.value); } catch { throw new Error('URLを確認してください。'); } if (url.protocol !== 'https:') throw new Error('URLアクションはHTTPSのみ利用できます。'); return { type: 'uri', label: action.label.trim(), uri: url.toString() }; })()
-      : action.type === 'message' ? { type: 'message', label: action.label.trim(), text: action.value.trim() } : null;
-    if (!normalized) throw new Error('アクションの種類が不正です。');
-    return { bounds: { x: col * 1250, y: row * 562, width: 1250, height: row === 2 ? 562 : 562 }, action: normalized };
-  });
+  let areas: any[];
+  try {
+    areas = actions.map((action: any, index: number) => {
+      if (!action || typeof action.label !== 'string' || !action.label.trim() || action.label.length > 20 || typeof action.value !== 'string' || !action.value.trim() || action.value.length > 1000) throw new Error('各タップ領域のラベルと動作内容を入力してください。');
+      const col = index % 2; const row = Math.floor(index / 2);
+      const normalized = action.type === 'uri'
+        ? (() => { let url: URL; try { url = new URL(action.value); } catch { throw new Error('URLを確認してください。'); } if (url.protocol !== 'https:') throw new Error('URLアクションはHTTPSのみ利用できます。'); return { type: 'uri', label: action.label.trim(), uri: url.toString() }; })()
+        : action.type === 'message' ? { type: 'message', label: action.label.trim(), text: action.value.trim() } : null;
+      if (!normalized) throw new Error('アクションの種類が不正です。');
+      return { bounds: { x: col * 1250, y: row * 562, width: 1250, height: 562 }, action: normalized };
+    });
+  } catch (error) {
+    return res.status(400).json({ error: error instanceof Error ? error.message : 'アクション設定を確認してください。' });
+  }
+  const { data: existingIntegration, error: integrationError } = await lineSupabase.from('line_channel_integrations')
+    .select('bot_user_id,auto_reply_enabled,rich_menu_id').eq('owner_id', authData.user.id).maybeSingle();
+  if (integrationError) return res.status(503).json({ error: 'LINE連携設定がありません。マイグレーション適用後にLINE受信箱から連携してください。' });
   let richMenuId = '';
   try {
     const created = await fetch('https://api.line.me/v2/bot/richmenu', { method: 'POST', headers: { Authorization: 'Bearer ' + lineChannelAccessToken, 'Content-Type': 'application/json' }, body: JSON.stringify({ size: { width: 2500, height: 1686 }, selected: false, name: title, chatBarText, areas }) });
@@ -380,10 +388,19 @@ app.post('/api/line/rich-menu', async (req, res) => {
     richMenuId = createdBody.richMenuId;
     const upload = await fetch('https://api-data.line.me/v2/bot/richmenu/' + encodeURIComponent(richMenuId) + '/content', { method: 'POST', headers: { Authorization: 'Bearer ' + lineChannelAccessToken, 'Content-Type': mime }, body: image });
     if (!upload.ok) throw new Error('LINEに画像をアップロードできませんでした。');
-    const setDefault = await fetch('https://api.line.me/v2/bot/user/all/richmenu/' + encodeURIComponent(richMenuId), { method: 'POST', headers: { Authorization: 'Bearer ' + lineChannelAccessToken } });
-    if (!setDefault.ok) throw new Error('LINEの既定メニューに設定できませんでした。');
-    const { error: dbError } = await lineSupabase.from('line_channel_integrations').upsert({ owner_id: authData.user.id, bot_user_id: (await (await fetch('https://api.line.me/v2/bot/info', { headers: { Authorization: 'Bearer ' + lineChannelAccessToken } })).json() as any).userId, auto_reply_enabled: false, rich_menu_id: richMenuId }, { onConflict: 'owner_id' });
+    const infoResponse = await fetch('https://api.line.me/v2/bot/info', { headers: { Authorization: 'Bearer ' + lineChannelAccessToken } });
+    const info = await infoResponse.json().catch(() => ({})) as { userId?: string };
+    if (!infoResponse.ok || !info.userId) throw new Error('LINE公式アカウントを確認できません。');
+    const { error: dbError } = await lineSupabase.from('line_channel_integrations').upsert({
+      owner_id: authData.user.id, bot_user_id: info.userId,
+      auto_reply_enabled: Boolean(existingIntegration?.auto_reply_enabled), rich_menu_id: richMenuId,
+    }, { onConflict: 'owner_id' });
     if (dbError) throw dbError;
+    const setDefault = await fetch('https://api.line.me/v2/bot/user/all/richmenu/' + encodeURIComponent(richMenuId), { method: 'POST', headers: { Authorization: 'Bearer ' + lineChannelAccessToken } });
+    if (!setDefault.ok) {
+      await lineSupabase.from('line_channel_integrations').update({ rich_menu_id: existingIntegration?.rich_menu_id || null }).eq('owner_id', authData.user.id);
+      throw new Error('LINEの既定メニューに設定できませんでした。');
+    }
     return res.json({ richMenuId });
   } catch (error) {
     if (richMenuId) await fetch('https://api.line.me/v2/bot/richmenu/' + encodeURIComponent(richMenuId), { method: 'DELETE', headers: { Authorization: 'Bearer ' + lineChannelAccessToken } }).catch(() => {});
