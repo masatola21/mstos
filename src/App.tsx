@@ -877,10 +877,19 @@ function AppContent() {
   const handleDeleteProject = (id: string) => {
     const target = projects.find((p) => p.id === id);
     const updated = projects.filter((p) => p.id !== id);
+    const relatedTasks = tasks.filter((task) => task.projectId === id);
+    const updatedTasks = relatedTasks.length > 0
+      ? tasks.map((task) => task.projectId === id ? { ...task, projectId: '', updatedAt: Date.now() } : task)
+      : tasks;
     setProjects(updated);
     saveProjects(updated);
+    if (relatedTasks.length > 0) {
+      setTasks(updatedTasks);
+      saveTasks(updatedTasks);
+      recordActivityLog('task_updated', `プロジェクト削除に伴い、関連タスク${relatedTasks.length}件を「プロジェクト未設定」に移しました`, '人間');
+    }
     if (target) {
-      recordActivityLog('project_updated', `プロジェクト「${target.name}」を削除しました`, '人間');
+      recordActivityLog('project_updated', `プロジェクト「${target.name}」を削除しました（関連タスク${relatedTasks.length}件は保持）`, '人間');
       setActivityLogs(loadActivityLogs());
     }
   };
@@ -913,10 +922,18 @@ function AppContent() {
     };
     const preset = presets[event.transitionType];
     const sourceLabel = event.sourceRecord?.company?.company_name || event.sourceRecord?.company_name || event.sourceRecord?.proposal_plan_name || event.sourceRecord?.id || '関連レコード';
+    const targetRecordId = event.targetRecordId ? String(event.targetRecordId) : undefined;
+    const duplicateCrmTask = targetRecordId
+      ? tasks.some((item) => item.id.startsWith('task-crm-')
+        && item.title === preset.title
+        && item.relatedRecord?.type === preset.relatedType
+        && item.relatedRecord.id === targetRecordId)
+      : false;
+    if (duplicateCrmTask) return;
     const assigneeMode = AI_WORK_MODES.find((mode) => mode.id === preset.assigneeMode)!;
     const resolvedAssignee = resolveWorkMode(assigneeMode, aiModelSettings.roleOverrides);
     const task: TaskItem = {
-      id: `task-crm-${now}-${Math.random().toString(36).slice(2, 7)}`,
+      id: targetRecordId ? `task-crm-${event.transitionType}-${targetRecordId}` : `task-crm-${now}-${Math.random().toString(36).slice(2, 7)}`,
       title: preset.title,
       description: `${sourceLabel}の業務段階が進みました。関連情報を確認して草案・次の対応を準備してください。顧客への送信や外部公開は行わないでください。`,
       projectId: '',
