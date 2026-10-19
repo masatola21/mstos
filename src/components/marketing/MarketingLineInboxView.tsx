@@ -3,7 +3,7 @@ import { getSupabase } from '../../lib/supabaseClient';
 import { InlineDeleteButton } from '../InlineDeleteButton';
 
 type InboxMessage={id:string;line_event_id:string;direction:'inbound'|'outbound';contact_id:string|null;line_user_id:string;body:string;status:string;received_at:string};
-type ReplyRule={id:string;name:string;match_mode:'exact'|'contains';match_text:string;reply_text:string;tag_id:string|null;priority:number;enabled:boolean};
+type ReplyRule={id:string;name:string;match_mode:'exact'|'contains';match_text:string;reply_text:string;reply_type?:'text'|'image'|'flex';reply_payload?:Record<string,unknown>;tag_id:string|null;priority:number;enabled:boolean};
 type Tag={id:string;name:string};
 type ChannelIntegration={owner_id:string;bot_user_id:string;auto_reply_enabled:boolean};
 
@@ -17,6 +17,11 @@ export const MarketingLineInboxView:React.FC=()=>{
   const [botUserId,setBotUserId]=useState('');
   const [matchText,setMatchText]=useState('');
   const [replyText,setReplyText]=useState('');
+  const [replyType,setReplyType]=useState<'text'|'image'|'flex'>('text');
+  const [imageOriginalUrl,setImageOriginalUrl]=useState('');
+  const [imagePreviewUrl,setImagePreviewUrl]=useState('');
+  const [flexAltText,setFlexAltText]=useState('');
+  const [flexContentsJson,setFlexContentsJson]=useState('');
   const [ruleName,setRuleName]=useState('');
   const [matchMode,setMatchMode]=useState<'exact'|'contains'>('exact');
   const [tagId,setTagId]=useState('');
@@ -84,10 +89,29 @@ export const MarketingLineInboxView:React.FC=()=>{
 
   const saveRule=async(event:React.FormEvent)=>{
     event.preventDefault();
-    if(!db||!ruleName.trim()||!matchText.trim()||!replyText.trim())return;
-    setBusy(true);setError('');setNotice('');
-    const {error:e}=await db.from('line_auto_reply_rules').insert({owner_id:ownerId,name:ruleName.trim(),match_mode:matchMode,match_text:matchText.trim(),reply_text:replyText.trim(),tag_id:tagId||null,priority:rules.length*10+100,enabled:true});
-    if(e)setError(e.message);else{setRuleName('');setMatchText('');setReplyText('');setTagId('');setNotice('自動返信ルールを保存しました。');await load()}
+    if(!db||!ruleName.trim()||!matchText.trim())return;
+    setError('');setNotice('');
+    let replyPayload:Record<string,unknown>={};
+    if(replyType==='text'&&!replyText.trim()){setError('自動返信文を入力してください。');return;}
+    if(replyType==='image'){
+      try{
+        const original=new URL(imageOriginalUrl.trim());
+        const preview=new URL(imagePreviewUrl.trim());
+        if(original.protocol!=='https:'||preview.protocol!=='https:')throw new Error();
+        replyPayload={originalContentUrl:original.toString(),previewImageUrl:preview.toString()};
+      }catch{setError('画像URLにはHTTPSで公開された画像URLを2つ入力してください。');return;}
+    }
+    if(replyType==='flex'){
+      if(!flexAltText.trim()){setError('Flexメッセージの代替テキストを入力してください。');return;}
+      try{
+        const contents=JSON.parse(flexContentsJson);
+        if(!contents||typeof contents!=='object'||!['bubble','carousel'].includes(contents.type))throw new Error();
+        replyPayload={altText:flexAltText.trim(),contents};
+      }catch{setError('Flex本文はbubbleまたはcarousel形式の正しいJSONで入力してください。');return;}
+    }
+    setBusy(true);
+    const {error:e}=await db.from('line_auto_reply_rules').insert({owner_id:ownerId,name:ruleName.trim(),match_mode:matchMode,match_text:matchText.trim(),reply_text:replyType==='text'?replyText.trim():'',reply_type:replyType,reply_payload:replyPayload,tag_id:tagId||null,priority:rules.length*10+100,enabled:true});
+    if(e)setError(e.message);else{setRuleName('');setMatchText('');setReplyText('');setImageOriginalUrl('');setImagePreviewUrl('');setFlexAltText('');setFlexContentsJson('');setReplyType('text');setTagId('');setNotice('自動返信ルールを保存しました。');await load()}
     setBusy(false);
   };
 
@@ -165,10 +189,13 @@ export const MarketingLineInboxView:React.FC=()=>{
         <select value={matchMode} onChange={e=>setMatchMode(e.target.value as 'exact'|'contains')} className="rounded-lg border border-slate-700 bg-slate-950 p-2 text-sm text-white"><option value="exact">完全一致</option><option value="contains">含む</option></select>
         <input value={matchText} onChange={e=>setMatchText(e.target.value)} placeholder="ボタンから届く選択文字" className="rounded-lg border border-slate-700 bg-slate-950 p-2 text-sm text-white" />
         <select value={tagId} onChange={e=>setTagId(e.target.value)} className="rounded-lg border border-slate-700 bg-slate-950 p-2 text-sm text-white"><option value="">タグを付けない</option>{tags.map(tag=><option key={tag.id} value={tag.id}>{tag.name}</option>)}</select>
-        <textarea value={replyText} onChange={e=>setReplyText(e.target.value)} rows={3} placeholder="自動返信文" className="rounded-lg border border-slate-700 bg-slate-950 p-2 text-sm text-white md:col-span-2" />
+        <select value={replyType} onChange={e=>{const type=e.target.value as 'text'|'image'|'flex';setReplyType(type);if(type==='flex'&&!flexContentsJson)setFlexContentsJson(JSON.stringify({type:'bubble',body:{type:'box',layout:'vertical',contents:[{type:'text',text:'ご相談内容を選んでください',weight:'bold',size:'md'},{type:'button',action:{type:'message',label:'経営改善',text:'経営改善'}},{type:'button',action:{type:'message',label:'業務改善',text:'業務改善'}}]}},null,2));if(type==='flex'&&!flexAltText)setFlexAltText('ご相談内容を選択してください');}} className="rounded-lg border border-slate-700 bg-slate-950 p-2 text-sm text-white md:col-span-2"><option value="text">テキスト</option><option value="image">画像</option><option value="flex">Flexメッセージ</option></select>
+        {replyType==='text'&&<textarea value={replyText} onChange={e=>setReplyText(e.target.value)} rows={3} placeholder="自動返信文" className="rounded-lg border border-slate-700 bg-slate-950 p-2 text-sm text-white md:col-span-2" />}
+        {replyType==='image'&&<div className="grid gap-2 md:col-span-2 md:grid-cols-2"><input type="url" value={imageOriginalUrl} onChange={e=>setImageOriginalUrl(e.target.value)} placeholder="画像URL（HTTPS）" className="rounded-lg border border-slate-700 bg-slate-950 p-2 text-sm text-white" /><input type="url" value={imagePreviewUrl} onChange={e=>setImagePreviewUrl(e.target.value)} placeholder="プレビュー画像URL（HTTPS）" className="rounded-lg border border-slate-700 bg-slate-950 p-2 text-sm text-white" /><p className="text-xs text-slate-500 md:col-span-2">画像はHTTPSで公開されている必要があります。</p></div>}
+        {replyType==='flex'&&<div className="grid gap-2 md:col-span-2"><input value={flexAltText} onChange={e=>setFlexAltText(e.target.value)} maxLength={1500} placeholder="通知や一覧に表示する代替テキスト" className="rounded-lg border border-slate-700 bg-slate-950 p-2 text-sm text-white" /><textarea value={flexContentsJson} onChange={e=>setFlexContentsJson(e.target.value)} rows={10} placeholder='Flex本文 JSON（bubble / carousel）' className="rounded-lg border border-slate-700 bg-slate-950 p-2 font-mono text-xs text-white" /><p className="text-xs text-slate-500">ボタンで自動返信ルールにつなぐ場合は、action.type を message にしてください。</p></div>}
         <button disabled={busy||!integration} className="rounded-lg bg-indigo-600 px-4 py-2 text-sm font-semibold text-white disabled:opacity-40 md:col-span-2">{busy?'保存中…':'自動返信ルールを保存'}</button>
       </form>
-      <div className="mt-4 divide-y divide-slate-800">{rules.map(rule=><div key={rule.id} className="flex flex-wrap items-center justify-between gap-3 py-3"><div><div className="font-medium text-white">{rule.name}</div><div className="text-xs text-slate-400">{rule.match_mode==='exact'?'完全一致':'含む'}：「{rule.match_text}」 ・ {tags.find(tag=>tag.id===rule.tag_id)?.name||'タグなし'}</div><div className="whitespace-pre-wrap text-xs text-slate-500">{rule.reply_text}</div></div><div className="flex gap-2"><button onClick={()=>void toggleRule(rule)} className="rounded border border-slate-700 px-2 py-1 text-xs text-slate-300">{rule.enabled?'停止':'有効化'}</button><InlineDeleteButton onConfirm={()=>void deleteRule(rule)} warning={`「${rule.name}」を削除しますか？`}>削除</InlineDeleteButton></div></div>)}</div>
+      <div className="mt-4 divide-y divide-slate-800">{rules.map(rule=><div key={rule.id} className="flex flex-wrap items-center justify-between gap-3 py-3"><div><div className="font-medium text-white">{rule.name}</div><div className="text-xs text-slate-400">{rule.match_mode==='exact'?'完全一致':'含む'}：「{rule.match_text}」 ・ {tags.find(tag=>tag.id===rule.tag_id)?.name||'タグなし'}</div><div className="whitespace-pre-wrap text-xs text-slate-500">{rule.reply_type==='image'?'画像メッセージ':rule.reply_type==='flex'?'Flexメッセージ':rule.reply_text}</div></div><div className="flex gap-2"><button onClick={()=>void toggleRule(rule)} className="rounded border border-slate-700 px-2 py-1 text-xs text-slate-300">{rule.enabled?'停止':'有効化'}</button><InlineDeleteButton onConfirm={()=>void deleteRule(rule)} warning={`「${rule.name}」を削除しますか？`}>削除</InlineDeleteButton></div></div>)}</div>
     </section>
   </div>;
 };
