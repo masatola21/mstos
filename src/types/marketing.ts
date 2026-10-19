@@ -22,7 +22,7 @@ export type MarketingTrigger =
   | 'manual';
 
 export type MarketingChannel = 'line' | 'email' | 'both';
-export type MarketingLineMessageType = 'text' | 'image' | 'flex';
+export type MarketingLineMessageType = 'text' | 'image' | 'video' | 'flex';
 export type MarketingScenarioStatus = 'draft' | 'prepared';
 
 export interface MarketingScenario {
@@ -38,6 +38,8 @@ export interface MarketingScenario {
   lineMessageType: MarketingLineMessageType;
   lineImageUrl: string;
   linePreviewImageUrl: string;
+  lineVideoUrl?: string;
+  lineVideoPreviewUrl?: string;
   flexAltText: string;
   flexTitle: string;
   flexBody: string;

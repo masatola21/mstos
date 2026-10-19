@@ -3,6 +3,7 @@ import { getSupabase } from '../../lib/supabaseClient';
 import { Activity, ArrowRight, CheckCircle2, Copy, GitBranch, Image as ImageIcon, Mail, MessageCircle, MousePointerClick, Plus, Radio, Save, Tags, Trash2, Zap } from 'lucide-react';
 import { MarketingChannel, MarketingLineMessageType, MarketingScenario, MarketingTrigger } from '../../types/marketing';
 import { MarketingBroadcastView } from './MarketingBroadcastView';
+import { MarketingLineInboxView } from './MarketingLineInboxView';
 
 interface Props {
   scenarios: MarketingScenario[];
@@ -34,7 +35,7 @@ const triggerOptions: Array<{ value: MarketingTrigger; label: string }> = [
   { value: 'manual', label: '手動で開始' },
 ];
 const channelLabels: Record<MarketingChannel, string> = { line: 'LINE', email: 'メール', both: 'LINE + メール' };
-const lineMessageLabels: Record<MarketingLineMessageType, string> = { text: 'テキスト', image: '画像', flex: 'Flex' };
+const lineMessageLabels: Record<MarketingLineMessageType, string> = { text: 'テキスト', image: '画像', video: '動画', flex: 'Flex' };
 
 const workflowStages = [
   {
@@ -86,6 +87,8 @@ const emptyScenario = (): Omit<MarketingScenario, 'id' | 'updatedAt'> => ({
   lineMessageType: 'text',
   lineImageUrl: '',
   linePreviewImageUrl: '',
+  lineVideoUrl: '',
+  lineVideoPreviewUrl: '',
   flexAltText: '',
   flexTitle: '',
   flexBody: '',
@@ -106,7 +109,7 @@ export const MarketingAutomationPrototypeView: React.FC<Props> = ({ scenarios, o
     const id = value.startsWith('segment:') ? value.slice('segment:'.length) : '';
     return segments.find((segment) => segment.id === id)?.name || value || '配信対象未設定';
   };
-  const [activeTab, setActiveTab] = useState<'home' | 'scenarios' | 'broadcast'>('home');
+  const [activeTab, setActiveTab] = useState<'home' | 'scenarios' | 'broadcast' | 'line_inbox'>('home');
   const [editing, setEditing] = useState<MarketingScenario | null>(null);
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [form, setForm] = useState(emptyScenario());
@@ -144,6 +147,8 @@ export const MarketingAutomationPrototypeView: React.FC<Props> = ({ scenarios, o
       lineMessageType: scenario.lineMessageType || 'text',
       lineImageUrl: scenario.lineImageUrl || '',
       linePreviewImageUrl: scenario.linePreviewImageUrl || scenario.lineImageUrl || '',
+      lineVideoUrl: scenario.lineVideoUrl || '',
+      lineVideoPreviewUrl: scenario.lineVideoPreviewUrl || '',
       flexAltText: scenario.flexAltText || '',
       flexTitle: scenario.flexTitle || '',
       flexBody: scenario.flexBody || '',
@@ -156,6 +161,10 @@ export const MarketingAutomationPrototypeView: React.FC<Props> = ({ scenarios, o
     event.preventDefault();
     if (form.channel !== 'email' && form.lineMessageType === 'image' && (!isHttpsUrl(form.lineImageUrl) || !isHttpsUrl(form.linePreviewImageUrl))) {
       setNotice('画像URLはHTTPSで公開されているURLを指定してください。');
+      return;
+    }
+    if (form.channel !== 'email' && form.lineMessageType === 'video' && (!isHttpsUrl(form.lineVideoUrl) || !isHttpsUrl(form.lineVideoPreviewUrl))) {
+      setNotice('動画とプレビュー画像は公開HTTPS URLを指定してください。LINE動画はMP4、プレビュー画像はJPEGまたはPNGが必要です。');
       return;
     }
     if (form.channel !== 'email' && form.lineMessageType === 'flex' && Boolean(form.flexButtonLabel) !== Boolean(form.flexButtonUrl)) {
@@ -198,7 +207,7 @@ export const MarketingAutomationPrototypeView: React.FC<Props> = ({ scenarios, o
     const prompt = [
       'あなたはマーケティング施策の設計者です。以下の目的と条件に沿って、配信シナリオの草案を日本語で作成してください。',
       '個人情報や実在顧客の情報は使わず、汎用的な案にしてください。指定したJSONだけを返し、コードフェンスや説明文は付けないでください。',
-      'JSON項目: name（シナリオ名）, trigger（開始条件の値）, channel（line/email/both）, audience（配信対象）, waitMinutes（待機分）, emailSubject, emailBody, messageBody（LINE本文）, lineMessageType（text/image/flex）, flexAltText, flexTitle, flexBody, flexButtonLabel, flexButtonUrl',
+      'JSON項目: name（シナリオ名）, trigger（開始条件の値）, channel（line/email/both）, audience（配信対象）, waitMinutes（待機分）, emailSubject, emailBody, messageBody（LINE本文）, lineMessageType（text/image/flex）, flexAltText, flexTitle, flexBody, flexButtonLabel, flexButtonUrl, lineVideoUrl, lineVideoPreviewUrl',
       '開始条件は次の値から選択: ' + triggerOptions.map((option) => option.value).join(', '),
       '画像URLやボタンURLは、具体的な公開URLが指定されていない場合は空欄にしてください。',
       '目的・依頼内容: ' + (externalGoal || '（未入力。現在の設定をもとに改善案を作成）'),
@@ -254,6 +263,7 @@ export const MarketingAutomationPrototypeView: React.FC<Props> = ({ scenarios, o
     { id: 'home' as const, label: 'ホーム', icon: GitBranch },
     { id: 'scenarios' as const, label: '自動化シナリオ', icon: Zap },
     { id: 'broadcast' as const, label: '一斉配信', icon: Radio },
+    { id: 'line_inbox' as const, label: 'LINE受信箱・自動返信', icon: MessageCircle },
   ];
 
   return (
@@ -277,6 +287,7 @@ export const MarketingAutomationPrototypeView: React.FC<Props> = ({ scenarios, o
       {notice && <div role="status" className="rounded-xl border border-emerald-500/30 bg-emerald-500/10 px-4 py-3 text-sm text-emerald-200">{notice}</div>}
 
       {activeTab === 'broadcast' && <MarketingBroadcastView />}
+      {activeTab === 'line_inbox' && <MarketingLineInboxView />}
       {activeTab === 'home' && <>
         <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
           {[
@@ -344,9 +355,10 @@ export const MarketingAutomationPrototypeView: React.FC<Props> = ({ scenarios, o
               <label className="text-xs text-slate-300">配信チャネル<select value={form.channel} onChange={(e) => update('channel', e.target.value as MarketingChannel)} className="mt-1 w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-white"><option value="line">LINE</option><option value="email">メール</option><option value="both">LINE + メール</option></select></label>
               <label className="text-xs text-slate-300">待機時間（分）<input type="number" min={0} max={525600} value={form.waitMinutes} onChange={(e) => update('waitMinutes', Number(e.target.value))} className="mt-1 w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-white" /></label>
               {form.channel !== 'email' && <fieldset className="space-y-4 rounded-xl border border-slate-700 bg-slate-950/70 p-4 md:col-span-2"><legend className="px-2 text-xs font-bold text-green-300">LINEメッセージ形式</legend>
-                <label className="block text-xs text-slate-300">形式<select value={form.lineMessageType} onChange={(e) => update('lineMessageType', e.target.value as MarketingLineMessageType)} className="mt-1 w-full rounded-lg border border-slate-700 bg-slate-900 px-3 py-2 text-sm text-white"><option value="text">テキスト</option><option value="image">画像</option><option value="flex">Flex Message（カード）</option></select></label>
+                <label className="block text-xs text-slate-300">形式<select value={form.lineMessageType} onChange={(e) => update('lineMessageType', e.target.value as MarketingLineMessageType)} className="mt-1 w-full rounded-lg border border-slate-700 bg-slate-900 px-3 py-2 text-sm text-white"><option value="text">テキスト</option><option value="image">画像</option><option value="video">動画</option><option value="flex">Flex Message（カード）</option></select></label>
                 {form.lineMessageType === 'text' && <label className="block text-xs text-slate-300">LINE本文<textarea required maxLength={5000} rows={5} value={form.messageBody} onChange={(e) => update('messageBody', e.target.value)} placeholder="配信内容。{name} などの差し込みは配信接続時に設定します。" className="mt-1 w-full rounded-lg border border-slate-700 bg-slate-900 px-3 py-2 text-sm text-white" /></label>}
                 {form.lineMessageType === 'image' && <div className="grid gap-4 md:grid-cols-2"><label className="text-xs text-slate-300">画像URL（HTTPS）<input type="url" required value={form.lineImageUrl} onChange={(e) => update('lineImageUrl', e.target.value)} placeholder="https://example.com/image.jpg" className="mt-1 w-full rounded-lg border border-slate-700 bg-slate-900 px-3 py-2 text-sm text-white" /></label><label className="text-xs text-slate-300">プレビュー画像URL（HTTPS）<input type="url" required value={form.linePreviewImageUrl} onChange={(e) => update('linePreviewImageUrl', e.target.value)} placeholder="https://example.com/preview.jpg" className="mt-1 w-full rounded-lg border border-slate-700 bg-slate-900 px-3 py-2 text-sm text-white" /></label><div className="rounded-lg border border-slate-800 bg-slate-900 p-3 text-[11px] leading-5 text-slate-400 md:col-span-2">LINEが取得できる公開HTTPS画像を指定します。<div className="mt-3 flex min-h-32 items-center justify-center overflow-hidden rounded-lg bg-slate-950">{form.linePreviewImageUrl || form.lineImageUrl ? <img src={form.linePreviewImageUrl || form.lineImageUrl} alt="LINE画像プレビュー" className="max-h-64 max-w-full object-contain" /> : <span>画像プレビュー</span>}</div></div></div>}
+                {form.lineMessageType === 'video' && <div className="grid gap-4 md:grid-cols-2"><label className="text-xs text-slate-300">動画URL（公開HTTPS・MP4）<input type="url" required value={form.lineVideoUrl} onChange={(e) => update('lineVideoUrl', e.target.value)} placeholder="https://example.com/video.mp4" className="mt-1 w-full rounded-lg border border-slate-700 bg-slate-900 px-3 py-2 text-sm text-white" /></label><label className="text-xs text-slate-300">プレビュー画像URL（JPEG/PNG）<input type="url" required value={form.lineVideoPreviewUrl} onChange={(e) => update('lineVideoPreviewUrl', e.target.value)} placeholder="https://example.com/preview.jpg" className="mt-1 w-full rounded-lg border border-slate-700 bg-slate-900 px-3 py-2 text-sm text-white" /></label><div className="rounded-lg border border-slate-800 bg-slate-900 p-3 text-[11px] leading-5 text-slate-400 md:col-span-2">動画は公開HTTPSのMP4（200MB以下）、プレビュー画像は公開HTTPSのJPEG/PNG（1MB以下）を指定してください。LINEから取得できるURLが必要です。<div className="mt-3 flex min-h-32 items-center justify-center overflow-hidden rounded-lg bg-slate-950">{form.lineVideoPreviewUrl ? <img src={form.lineVideoPreviewUrl} alt="動画プレビュー" className="max-h-64 max-w-full object-contain" /> : <span>動画プレビュー画像</span>}</div></div></div>}
                 {form.lineMessageType === 'flex' && <div className="grid gap-4 md:grid-cols-2"><label className="text-xs text-slate-300">通知・代替テキスト<input required maxLength={400} value={form.flexAltText} onChange={(e) => update('flexAltText', e.target.value)} placeholder="例：新商品のご案内" className="mt-1 w-full rounded-lg border border-slate-700 bg-slate-900 px-3 py-2 text-sm text-white" /></label><label className="text-xs text-slate-300">カードタイトル<input required maxLength={120} value={form.flexTitle} onChange={(e) => update('flexTitle', e.target.value)} placeholder="カードの見出し" className="mt-1 w-full rounded-lg border border-slate-700 bg-slate-900 px-3 py-2 text-sm text-white" /></label><label className="text-xs text-slate-300 md:col-span-2">カード本文<textarea required maxLength={800} rows={4} value={form.flexBody} onChange={(e) => update('flexBody', e.target.value)} placeholder="Flexカードに表示する内容" className="mt-1 w-full rounded-lg border border-slate-700 bg-slate-900 px-3 py-2 text-sm text-white" /></label><label className="text-xs text-slate-300">ボタン名（任意）<input maxLength={20} value={form.flexButtonLabel} onChange={(e) => update('flexButtonLabel', e.target.value)} placeholder="詳しく見る" className="mt-1 w-full rounded-lg border border-slate-700 bg-slate-900 px-3 py-2 text-sm text-white" /></label><label className="text-xs text-slate-300">ボタンURL（任意）<input type="url" value={form.flexButtonUrl} onChange={(e) => update('flexButtonUrl', e.target.value)} placeholder="https://example.com" className="mt-1 w-full rounded-lg border border-slate-700 bg-slate-900 px-3 py-2 text-sm text-white" /></label>
                   <div className="rounded-xl border border-slate-700 bg-slate-900 p-4 md:col-span-2"><div className="mb-3 flex items-center gap-2 text-xs font-bold text-indigo-200"><ImageIcon className="h-4 w-4" />Flexカードプレビュー</div><div className="mx-auto max-w-sm rounded-2xl bg-white p-5 text-slate-900 shadow-xl"><div className="text-lg font-bold">{form.flexTitle || 'カードタイトル'}</div><p className="mt-3 whitespace-pre-wrap text-sm text-slate-600">{form.flexBody || 'カード本文のプレビュー'}</p>{form.flexButtonLabel && <div className="mt-5 rounded-lg bg-blue-600 px-3 py-2 text-center text-sm font-semibold text-white">{form.flexButtonLabel}</div>}</div><details className="mt-4"><summary className="cursor-pointer text-xs text-slate-400">生成されるFlex JSONを確認</summary><pre className="mt-2 max-h-64 overflow-auto rounded-lg bg-slate-950 p-3 text-[10px] text-slate-300">{JSON.stringify({ type: 'flex', altText: form.flexAltText || 'Flexメッセージ', contents: flexPayload }, null, 2)}</pre></details></div>
                 </div>}

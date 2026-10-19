@@ -24,6 +24,9 @@ export const MarketingBroadcastView: React.FC = () => {
   const [selected,setSelected]=useState<string[]>([]);
   const [subject,setSubject]=useState('');
   const [body,setBody]=useState('');
+  const [lineContentType,setLineContentType]=useState<'text'|'video'>('text');
+  const [videoUrl,setVideoUrl]=useState('');
+  const [videoPreviewUrl,setVideoPreviewUrl]=useState('');
   const [consentBasis,setConsentBasis]=useState('');
   const [preview,setPreview]=useState(false);
   const [busy,setBusy]=useState(false);
@@ -88,7 +91,11 @@ export const MarketingBroadcastView: React.FC = () => {
     if(recipients.length>250){setError('一度に送信できる上限は250件です。対象を絞ってください。');return}
     if(!consentBasis.trim()){setError('配信同意・送信根拠を入力してください。');return}
     if(channel==='email'&&!subject.trim()){setError('メール件名を入力してください。');return}
-    if(!body.trim()){setError('配信本文を入力してください。');return}
+    if(channel==='line'&&lineContentType==='video'){
+      const isHttps=(value:string)=>{try{return new URL(value).protocol==='https:'}catch{return false}};
+      if(!isHttps(videoUrl)||!isHttps(videoPreviewUrl)){setError('動画とプレビュー画像は公開HTTPS URLを指定してください。');return}
+      if(videoUrl.length>2000||videoPreviewUrl.length>2000){setError('動画URLとプレビュー画像URLは2000文字以内にしてください。');return}
+    }else if(!body.trim()){setError('配信本文を入力してください。');return}
     setBusy(true);
     try{
       const {data:sessionResult}=await db.auth.getSession();
@@ -97,7 +104,9 @@ export const MarketingBroadcastView: React.FC = () => {
       const broadcastId=crypto.randomUUID();
       const rows=recipients.map(contact=>({
         channel,recipient_contact_id:contact.id,recipient_address:channel==='email'?contact.email:contact.line_user_id,
-        subject:channel==='email'?subject.trim():null,body_text:body.trim(),
+        subject:channel==='email'?subject.trim():null,
+        body_text:channel==='line'&&lineContentType==='video'?'動画を送信: '+videoUrl.trim():body.trim(),
+        line_message_payload:channel==='line'&&lineContentType==='video'?{type:'video',originalContentUrl:videoUrl.trim(),previewImageUrl:videoPreviewUrl.trim()}:null,
         company_id:contact.company_id||null,source_type:'marketing_broadcast',source_id:broadcastId,status:'queued',
         consent_confirmed_at:new Date().toISOString(),consent_basis:consentBasis.trim(),
       }));
@@ -154,14 +163,16 @@ export const MarketingBroadcastView: React.FC = () => {
         </div>
       </div>
       {channel==='email'&&<label className="block text-sm text-slate-300">メール件名<input value={subject} onChange={e=>setSubject(e.target.value)} maxLength={200} className="mt-1 block w-full rounded-lg border border-slate-700 bg-slate-950 p-2 text-white" /></label>}
-      <label className="block text-sm text-slate-300">配信本文<textarea value={body} onChange={e=>setBody(e.target.value)} maxLength={channel==='line'?5000:10000} rows={6} className="mt-1 block w-full rounded-lg border border-slate-700 bg-slate-950 p-3 text-white" /></label>
+      {channel==='line'&&<label className="block text-sm text-slate-300">LINEメッセージ形式<select value={lineContentType} onChange={e=>setLineContentType(e.target.value as 'text'|'video')} className="mt-1 block w-full rounded-lg border border-slate-700 bg-slate-950 p-2 text-white"><option value="text">テキスト</option><option value="video">動画（MP4）</option></select></label>}
+      {(channel==='email'||lineContentType==='text')&&<label className="block text-sm text-slate-300">配信本文<textarea value={body} onChange={e=>setBody(e.target.value)} maxLength={channel==='line'?5000:10000} rows={6} className="mt-1 block w-full rounded-lg border border-slate-700 bg-slate-950 p-3 text-white" />{channel==='email'&&<span className="mt-1 block text-xs text-slate-500">動画は公開リンクを本文に貼り付けて送信できます。</span>}</label>}
+      {channel==='line'&&lineContentType==='video'&&<div className="grid gap-3 md:grid-cols-2"><label className="text-sm text-slate-300">動画URL（公開HTTPS・MP4）<input type="url" value={videoUrl} onChange={e=>setVideoUrl(e.target.value)} placeholder="https://example.com/video.mp4" className="mt-1 block w-full rounded-lg border border-slate-700 bg-slate-950 p-2 text-white" /></label><label className="text-sm text-slate-300">プレビュー画像URL（JPEG/PNG）<input type="url" value={videoPreviewUrl} onChange={e=>setVideoPreviewUrl(e.target.value)} placeholder="https://example.com/preview.jpg" className="mt-1 block w-full rounded-lg border border-slate-700 bg-slate-950 p-2 text-white" /></label><p className="text-xs text-slate-500 md:col-span-2">LINEの動画メッセージはMP4（200MB以下）とプレビュー画像（JPEG/PNG、1MB以下）が必要です。URLはLINEから取得できる公開HTTPS URLを指定してください。</p></div>}
       <label className="block text-sm text-slate-300">配信同意・送信根拠<input value={consentBasis} onChange={e=>setConsentBasis(e.target.value)} placeholder="例：配信登録フォームで同意取得済み" className="mt-1 block w-full rounded-lg border border-slate-700 bg-slate-950 p-2 text-white" /></label>
       {!preview?<button type="button" disabled={!selectedContacts.length} onClick={()=>setPreview(true)} className="rounded-lg bg-indigo-600 px-4 py-2 font-semibold text-white disabled:opacity-40">プレビュー</button>:<div className="space-y-3 rounded-xl border border-amber-500/30 bg-amber-950/20 p-4">
         <h3 className="font-bold text-amber-100">配信プレビュー</h3>
         <p className="text-sm text-slate-300">{channel==='email'?'メール':'LINE'}・選択中 {selectedContacts.length}件。LINEでは友だち状態と配信同意を送信時にも再確認します。</p>
         <p className="text-xs text-slate-400">送信先例：{selectedContacts.slice(0,5).map(x=>x.full_name||x.email||x.line_user_id).join('、')}{selectedContacts.length>5?' ほか':''}</p>
         {channel==='email'&&<p className="font-semibold text-white">{subject}</p>}
-        <div className="whitespace-pre-wrap rounded bg-slate-950 p-3 text-sm text-slate-200">{body}</div>
+        {channel==='line'&&lineContentType==='video'?<div className="rounded bg-slate-950 p-3 text-sm text-slate-200"><video src={videoUrl} poster={videoPreviewUrl} controls className="max-h-80 max-w-full rounded"/><p className="mt-2 text-xs text-slate-400">LINE動画メッセージのプレビュー</p></div>:<div className="whitespace-pre-wrap rounded bg-slate-950 p-3 text-sm text-slate-200">{body}</div>}
         <div className="flex gap-2"><button type="button" onClick={()=>setPreview(false)} className="rounded border border-slate-700 px-3 py-2 text-sm text-slate-200">戻って修正</button><button type="button" disabled={busy} onClick={()=>void send()} className="rounded bg-rose-600 px-4 py-2 text-sm font-bold text-white disabled:opacity-50">{busy?'配信中…':'この内容で配信'}</button></div>
       </div>}
     </section>
