@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { AlertTriangle, Calendar, Check, ClipboardList, FileText, Plus, RefreshCw, Save } from 'lucide-react';
 import { getSupabase } from '../lib/supabaseClient';
-import type { ManagedContract, ManagedInvoice } from '../types/matrix';
+import type { ManagedInvoice } from '../types/matrix';
 import type { Priority, TaskItem } from '../types';
 
 type Row = Record<string, any>;
@@ -68,7 +68,6 @@ interface Props {
   companyId?: string;
   companies: Row[];
   engagements: Row[];
-  contracts: ManagedContract[];
   invoices: ManagedInvoice[];
   tasks: TaskItem[];
   onCreateTask: (task: Omit<TaskItem, 'id' | 'createdAt' | 'updatedAt'>) => void;
@@ -79,7 +78,7 @@ interface Props {
 }
 
 export const CustomerSupportWorkspace: React.FC<Props> = ({
-  companyId, companies, engagements, contracts, invoices, tasks,
+  companyId, companies, engagements, invoices, tasks,
   onCreateTask, onUpdateTask, onRefresh, onAddMilestone, onCompleteMilestone,
 }) => {
   const [selectedId, setSelectedId] = useState('');
@@ -89,6 +88,7 @@ export const CustomerSupportWorkspace: React.FC<Props> = ({
   const [notice, setNotice] = useState('');
   const [meetings, setMeetings] = useState<Row[]>([]);
   const [documents, setDocuments] = useState<Row[]>([]);
+  const [serviceContracts, setServiceContracts] = useState<Row[]>([]);
   const [meetingDraft, setMeetingDraft] = useState<MeetingDraft>(EMPTY_MEETING);
   const [editingMeetingId, setEditingMeetingId] = useState('');
   const [taskDraft, setTaskDraft] = useState<TaskDraft>(EMPTY_TASK);
@@ -117,7 +117,7 @@ export const CustomerSupportWorkspace: React.FC<Props> = ({
   const overdueTasks = useMemo(() => companyTasks.filter((task) =>
     task.dueDate && task.dueDate < new Date().toISOString().slice(0, 10)), [companyTasks]);
   const activeContract = selected?.contract_id
-    ? contracts.find((item) => item.id === selected.contract_id) : undefined;
+    ? serviceContracts.find((item) => item.id === selected.contract_id) : undefined;
   const companyInvoices = invoices.filter((item) => item.companyId === selectedCompanyId);
   const companyName = (id?: string) => companies.find((item) => item.id === id)?.company_name || id || '会社未設定';
   const phaseOptions = [...PHASES, ...(Array.isArray(detail.phases) ? detail.phases : [])]
@@ -145,15 +145,18 @@ export const CustomerSupportWorkspace: React.FC<Props> = ({
     void Promise.all([
       supabase.from('customer_service_meetings').select('*')
         .eq('engagement_id', selected.id).order('occurred_at', { ascending: false }),
+      supabase.from('customer_contracts').select('id,title,status,company_id,start_date,end_date,amount').order('created_at', { ascending: false }),
       selectedCompanyId
         ? supabase.from('customer_documents').select('id,title,document_type,status,created_at,updated_at')
           .eq('company_id', selectedCompanyId).order('created_at', { ascending: false }).limit(50)
         : Promise.resolve({ data: [], error: null }),
-    ]).then(([meetingResult, documentResult]) => {
+    ]).then(([meetingResult, contractResult, documentResult]) => {
       if (cancelled) return;
       if (meetingResult.error) throw meetingResult.error;
+      if (contractResult.error) throw contractResult.error;
       if (documentResult.error) throw documentResult.error;
       setMeetings(meetingResult.data || []);
+      setServiceContracts(contractResult.data || []);
       setDocuments(documentResult.data || []);
     }).catch((loadError: any) => {
       if (!cancelled) setError(loadError?.message || '支援履歴を読み込めませんでした。DBマイグレーション適用後に再読み込みしてください。');
@@ -394,7 +397,7 @@ export const CustomerSupportWorkspace: React.FC<Props> = ({
     {showNewSupport && <form onSubmit={createSupport} className="grid gap-3 rounded-xl border border-slate-800 bg-slate-900 p-4 md:grid-cols-2">
       <label className="text-xs text-slate-300">支援名<input required value={newSupport.title} onChange={(event) => setNewSupport({ ...newSupport, title: event.target.value })} className="mt-1 w-full rounded border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-white" placeholder="例：業務フロー構築支援" /></label>
       <label className="text-xs text-slate-300">顧客<select required value={companyId || newSupport.company_id} disabled={Boolean(companyId)} onChange={(event) => setNewSupport({ ...newSupport, company_id: event.target.value })} className="mt-1 w-full rounded border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-white"><option value="">顧客を選択</option>{companies.map((item) => <option key={item.id} value={item.id}>{item.company_name}</option>)}</select></label>
-      <label className="text-xs text-slate-300">契約<select value={newSupport.contract_id} onChange={(event) => setNewSupport({ ...newSupport, contract_id: event.target.value })} className="mt-1 w-full rounded border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-white"><option value="">契約と紐付けない</option>{contracts.filter((item) => item.companyId === (companyId || newSupport.company_id)).map((item) => <option key={item.id} value={item.id}>{item.title} · {item.status}</option>)}</select></label>
+      <label className="text-xs text-slate-300">契約<select value={newSupport.contract_id} onChange={(event) => setNewSupport({ ...newSupport, contract_id: event.target.value })} className="mt-1 w-full rounded border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-white"><option value="">契約と紐付けない</option>{serviceContracts.filter((item) => item.company_id === (companyId || newSupport.company_id)).map((item) => <option key={item.id} value={item.id}>{item.title} · {item.status}</option>)}</select></label>
       <label className="text-xs text-slate-300">支援種別<select value={newSupport.service_type} onChange={(event) => setNewSupport({ ...newSupport, service_type: event.target.value })} className="mt-1 w-full rounded border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-white"><option value="implementation_support">構築支援</option><option value="retainer">顧問</option></select></label>
       <label className="text-xs text-slate-300">開始日<input type="date" value={newSupport.startedAt} onChange={(event) => setNewSupport({ ...newSupport, startedAt: event.target.value })} className="mt-1 w-full rounded border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-white" /></label>
       <label className="text-xs text-slate-300">担当者<input value={newSupport.ownerName} onChange={(event) => setNewSupport({ ...newSupport, ownerName: event.target.value })} className="mt-1 w-full rounded border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-white" placeholder="MST側担当" /></label>
@@ -434,7 +437,7 @@ export const CustomerSupportWorkspace: React.FC<Props> = ({
             const supabase = getSupabase(); if (!supabase) return;
             const { error: updateError } = await supabase.from('customer_service_engagements').update({ contract_id: event.target.value || null, updated_at: new Date().toISOString() }).eq('id', selected.id);
             if (updateError) setError(updateError.message); else { setNotice('契約との関連付けを更新しました。'); await onRefresh(); }
-          }} className="mt-1 w-full rounded border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-white"><option value="">未関連付け</option>{contracts.filter((item) => item.companyId === selected.company_id).map((item) => <option key={item.id} value={item.id}>{item.title} · {item.status}</option>)}</select></label>
+          }} className="mt-1 w-full rounded border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-white"><option value="">未関連付け</option>{serviceContracts.filter((item) => item.company_id === selected.company_id).map((item) => <option key={item.id} value={item.id}>{item.title} · {item.status}</option>)}</select></label>
           <label className="text-xs text-slate-300">支援フェーズ<select value={summaryDraft.phase || PHASES[0]} onChange={(event) => setSummaryDraft({ ...summaryDraft, phase: event.target.value })} className="mt-1 w-full rounded border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-white">{phaseOptions.map((phase) => <option key={phase} value={phase}>{phase}</option>)}</select></label>
           <label className="text-xs text-slate-300">支援状況<select value={selected.status || 'planned'} onChange={async (event) => {
             const supabase = getSupabase(); if (!supabase) return;
@@ -533,7 +536,7 @@ export const CustomerSupportWorkspace: React.FC<Props> = ({
             {documents.length === 0 ? <p className="text-sm text-slate-500">この顧客に紐付く書類はありません。</p> : <ul className="divide-y divide-slate-800">{documents.map((document) => <li key={document.id} className="flex flex-wrap items-center justify-between gap-2 py-2"><div><div className="text-sm text-slate-200">{document.title}</div><div className="text-xs text-slate-500">{document.document_type} · {displayDate(document.created_at)}</div></div><span className="rounded border border-slate-700 px-2 py-1 text-xs text-slate-300">{document.status}</span></li>)}</ul>}
           </section>
           <div className="grid gap-4 md:grid-cols-2">
-            <section className="rounded-lg border border-slate-800 bg-slate-950 p-4"><h4 className="mb-2 font-semibold text-white">契約情報</h4>{activeContract ? <div className="space-y-1 text-sm text-slate-300"><div>{activeContract.title} · {activeContract.status}</div><div>{activeContract.startDate || '開始日未設定'} ～ {activeContract.endDate || '終了日未設定'}</div><div>{Number(activeContract.amount || 0).toLocaleString('ja-JP')}円</div></div> : <p className="text-sm text-slate-500">関連契約はありません。</p>}</section>
+            <section className="rounded-lg border border-slate-800 bg-slate-950 p-4"><h4 className="mb-2 font-semibold text-white">契約情報</h4>{activeContract ? <div className="space-y-1 text-sm text-slate-300"><div>{activeContract.title} · {activeContract.status}</div><div>{activeContract.start_date || '開始日未設定'} ～ {activeContract.end_date || '終了日未設定'}</div><div>{Number(activeContract.amount || 0).toLocaleString('ja-JP')}円</div></div> : <p className="text-sm text-slate-500">関連契約はありません。</p>}</section>
             <section className="rounded-lg border border-slate-800 bg-slate-950 p-4"><h4 className="mb-2 font-semibold text-white">請求情報 ({companyInvoices.length})</h4>{companyInvoices.length ? <ul className="space-y-1 text-sm text-slate-300">{companyInvoices.map((invoice) => <li key={invoice.id}>{invoice.title} · {invoice.status} · {Number(invoice.amount || 0).toLocaleString('ja-JP')}円 · 期限 {invoice.dueDate || '未設定'}</li>)}</ul> : <p className="text-sm text-slate-500">請求はありません。</p>}</section>
           </div>
         </div>}
