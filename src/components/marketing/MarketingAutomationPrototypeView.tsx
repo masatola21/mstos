@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { getSupabase } from '../../lib/supabaseClient';
 import { Activity, ArrowRight, CheckCircle2, Copy, GitBranch, Image as ImageIcon, Mail, MessageCircle, MousePointerClick, Plus, Radio, Save, Tags, Trash2, Zap } from 'lucide-react';
 import { MarketingChannel, MarketingLineMessageType, MarketingScenario, MarketingTrigger } from '../../types/marketing';
@@ -120,8 +120,32 @@ export const MarketingAutomationPrototypeView: React.FC<Props> = ({ scenarios, o
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [form, setForm] = useState(emptyScenario());
   const [notice, setNotice] = useState('');
+  const scenarioSyncRevision = useRef(0);
   const [externalGoal, setExternalGoal] = useState('');
   const [externalResult, setExternalResult] = useState('');
+  useEffect(() => {
+    const revision = ++scenarioSyncRevision.current;
+    let cancelled = false;
+    const sync = async () => {
+      const db = getSupabase();
+      if (!db) return;
+      const { data: auth } = await db.auth.getUser();
+      const ownerId = auth.user?.id;
+      if (!ownerId || cancelled || revision !== scenarioSyncRevision.current) return;
+      const rows = scenarios.map((scenario) => ({ owner_id: ownerId, scenario_id: scenario.id, config: scenario, updated_at: new Date().toISOString() }));
+      if (rows.length) {
+        const { error } = await db.from('marketing_automation_scenarios').upsert(rows, { onConflict: 'owner_id,scenario_id' });
+        if (error) { setNotice('自動化設定をサーバーに同期できません。DBマイグレーションを確認してください。'); return; }
+      }
+      const { data: saved, error: loadError } = await db.from('marketing_automation_scenarios').select('scenario_id').eq('owner_id', ownerId);
+      if (loadError || cancelled || revision !== scenarioSyncRevision.current) return;
+      const keep = new Set(scenarios.map((scenario) => scenario.id));
+      const stale = (saved || []).map((row: any) => row.scenario_id).filter((id: string) => !keep.has(id));
+      if (stale.length) await db.from('marketing_automation_scenarios').delete().eq('owner_id', ownerId).in('scenario_id', stale);
+    };
+    void sync();
+    return () => { cancelled = true; };
+  }, [scenarios]);
   const preparedCount = scenarios.filter((scenario) => scenario.status === 'prepared').length;
   const lineCount = scenarios.filter((scenario) => scenario.channel !== 'email').length;
   const emailCount = scenarios.filter((scenario) => scenario.channel !== 'line').length;
@@ -204,7 +228,7 @@ export const MarketingAutomationPrototypeView: React.FC<Props> = ({ scenarios, o
   };
   const markPrepared = (scenario: MarketingScenario) => {
     // Prepared means configured for later activation. No message is sent by this UI.
-    onScenariosChange(scenarios.map((item) => item.id === scenario.id ? { ...item, status: item.status === 'prepared' ? 'draft' : 'prepared', updatedAt: Date.now() } : item));
+    onScenariosChange(scenarios.map((item) => item.id === scenario.id ? { ...item, status: item.status === 'prepared' ? 'draft' : 'prepared', automationEnabled: item.status === 'prepared' ? false : item.automationEnabled, updatedAt: Date.now() } : item));
     setNotice('設定状態を保存しました。実配信はまだ行われません。');
   };
   const update = <K extends keyof ReturnType<typeof emptyScenario>>(key: K, value: ReturnType<typeof emptyScenario>[K]) => {
