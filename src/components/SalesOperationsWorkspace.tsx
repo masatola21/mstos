@@ -19,6 +19,23 @@ const opsTabs = [
   { key: 'services', label: '顧問・構築支援', table: 'customer_service_engagements', icon: Wrench },
 ] as const;
 
+const contractStatusLabels: Record<string,string> = {
+  draft: '下書き（未送付）',
+  under_review: '社内確認中',
+  sent: '送付済み（締結待ち）',
+  signed: '締結済み',
+  expired: '期限切れ',
+  canceled: '取消',
+};
+const invoiceStatusLabels: Record<string,string> = {
+  draft: '下書き（未発行）',
+  awaiting_approval: '承認待ち',
+  issued: '発行済み（入金待ち）',
+  paid: '入金済み',
+  overdue: '支払期限超過',
+  canceled: '取消',
+};
+
 const localDateString = (date = new Date()) => {
   const year = date.getFullYear();
   const month = String(date.getMonth() + 1).padStart(2, '0');
@@ -347,7 +364,7 @@ export const SalesOperationsWorkspace: React.FC<Props> = ({ tab, companyId, lead
         <label className="text-xs text-slate-400">{activeOpsTab==='contracts'?'開始日':'支払期限（当月25日／25日以降は翌月25日）'}<input type="date" value={recordDate} onChange={(e)=>setRecordDate(e.target.value)} className="mt-1 w-full rounded border border-slate-700 bg-slate-900 px-3 py-2 text-sm text-white" /></label>
         <div className="md:col-span-2"><button className="rounded-lg bg-emerald-700 px-3 py-2 text-sm font-semibold text-white">保存</button></div>
       </form>}
-      {loading ? <p className="text-sm text-slate-400">読み込み中…</p> : records.length === 0 ? <p className="py-8 text-center text-sm text-slate-400">登録データはありません。</p> : <div className="overflow-x-auto"><table className="w-full text-left text-sm"><thead><tr className="border-b border-slate-800 text-xs text-slate-400"><th className="p-2">名称</th><th className="p-2">会社</th><th className="p-2">関連</th><th className="p-2">状態</th><th className="p-2">金額</th><th className="p-2">日付</th>{activeOpsTab==='invoices'&&<th className="p-2">書類</th>}</tr></thead><tbody>{records.map((record)=><tr key={record.id} className="border-b border-slate-800/70 text-slate-200"><td className="p-2">{record.title || record.invoice_number}</td><td className="p-2">{companies.find((item)=>item.id===record.company_id)?.company_name || record.company_id || '—'}</td><td className="p-2 text-xs text-slate-400">{activeOpsTab==='contracts' ? <>{catalogProducts.find((product)=>product.id===record.product_id)?.product_name || record.product_id || '商品未設定'}{record.deal_id && <div>商談: {deals.find((deal)=>deal.id===record.deal_id)?.proposal_plan_name || record.deal_id}</div>}</> : <>{catalogProducts.find((product)=>product.id===record.product_id)?.product_name || record.product_id || '商品未設定'}{record.contract_id && <div>契約: {savedContracts.find((contract)=>contract.id===record.contract_id)?.title || record.contract_id}</div>}</>}</td><td className="p-2"><select aria-label={`${record.title||record.invoice_number}の状態`} value={record.status} onChange={(e)=>void updateOperationStatus(record,e.target.value)} className="rounded border border-slate-700 bg-slate-950 px-2 py-1 text-xs text-white">{(activeOpsTab==='contracts'?['draft','under_review','sent','signed','expired','canceled']:['draft','awaiting_approval','issued','paid','overdue','canceled']).map(status=><option key={status} value={status}>{status}</option>)}</select></td><td className="p-2">{record.amount == null?'—':Number(record.amount).toLocaleString('ja-JP')+'円'}</td><td className="p-2">{record.due_date || record.start_date || '—'}</td><td className="p-2">{activeOpsTab==='invoices'&&<button type="button" onClick={()=>record.company_id&&onOpenInvoiceDocuments?.(record.company_id, record.document_id || undefined)} disabled={!record.company_id||!onOpenInvoiceDocuments} className="whitespace-nowrap rounded border border-cyan-800 px-2 py-1 text-xs text-cyan-200 disabled:opacity-40">請求書類を開く</button>}</td></tr>)}</tbody></table></div>}
+      {activeOpsTab==='contracts' ? <p className="text-xs text-slate-400">状態の流れ：下書き（未送付）→ 社内確認中 → 送付済み（締結待ち）→ 締結済み。期限切れ・取消は終了状態です。</p> : <p className="text-xs text-slate-400">状態の流れ：下書き（未発行）→ 承認待ち → 発行済み（入金待ち）→ 入金済み。支払期限を過ぎると「支払期限超過」、取消は終了状態です。</p>}{loading ? <p className="text-sm text-slate-400">読み込み中…</p> : records.length === 0 ? <p className="py-8 text-center text-sm text-slate-400">登録データはありません。</p> : <div className="overflow-x-auto"><table className="w-full text-left text-sm"><thead><tr className="border-b border-slate-800 text-xs text-slate-400"><th className="p-2">名称</th><th className="p-2">会社</th><th className="p-2">関連</th><th className="p-2">状態</th><th className="p-2">金額</th><th className="p-2">日付</th>{activeOpsTab==='invoices'&&<th className="p-2">書類</th>}</tr></thead><tbody>{records.map((record)=><tr key={record.id} className="border-b border-slate-800/70 text-slate-200"><td className="p-2">{record.title || record.invoice_number}</td><td className="p-2">{companies.find((item)=>item.id===record.company_id)?.company_name || record.company_id || '—'}</td><td className="p-2 text-xs text-slate-400">{activeOpsTab==='contracts' ? <>{catalogProducts.find((product)=>product.id===record.product_id)?.product_name || record.product_id || '商品未設定'}{record.deal_id && <div>商談: {deals.find((deal)=>deal.id===record.deal_id)?.proposal_plan_name || record.deal_id}</div>}</> : <>{catalogProducts.find((product)=>product.id===record.product_id)?.product_name || record.product_id || '商品未設定'}{record.contract_id && <div>契約: {savedContracts.find((contract)=>contract.id===record.contract_id)?.title || record.contract_id}</div>}</>}</td><td className="p-2"><select aria-label={`${record.title||record.invoice_number}の状態`} value={record.status} onChange={(e)=>void updateOperationStatus(record,e.target.value)} className="rounded border border-slate-700 bg-slate-950 px-2 py-1 text-xs text-white">{(activeOpsTab==='contracts'?['draft','under_review','sent','signed','expired','canceled']:['draft','awaiting_approval','issued','paid','overdue','canceled']).map(status=><option key={status} value={status}>{(activeOpsTab==='contracts'?contractStatusLabels:invoiceStatusLabels)[status]||status}</option>)}</select></td><td className="p-2">{record.amount == null?'—':Number(record.amount).toLocaleString('ja-JP')+'円'}</td><td className="p-2">{record.due_date || record.start_date || '—'}</td><td className="p-2">{activeOpsTab==='invoices'&&<button type="button" onClick={()=>record.company_id&&onOpenInvoiceDocuments?.(record.company_id, record.document_id || undefined)} disabled={!record.company_id||!onOpenInvoiceDocuments} className="whitespace-nowrap rounded border border-cyan-800 px-2 py-1 text-xs text-cyan-200 disabled:opacity-40">請求書類を開く</button>}</td></tr>)}</tbody></table></div>}
       </>}
     </section>}
   </div>;
