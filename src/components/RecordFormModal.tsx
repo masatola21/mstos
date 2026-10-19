@@ -373,7 +373,7 @@ export const RecordFormModal: React.FC<RecordFormModalProps> = ({
                         className="w-full px-3 py-2 rounded-xl bg-slate-950 border border-slate-700/80 text-slate-200 text-xs outline-none focus:border-blue-500"
                       >
                         <option value="">商品を選択（未定）</option>
-                        {products.map((product) => <option key={product.id} value={product.id}>{product.product_name}</option>)}
+                        {products.filter((product) => product.status !== 'inactive' || product.id === leadProductChoice).map((product) => <option key={product.id} value={product.id}>{product.product_name}{product.status === 'inactive' ? '（取扱停止・既存記録）' : ''}</option>)}
                         <option value="__custom">その他（自由入力）</option>
                       </select>
                       {leadProductChoice === '__custom' && (
@@ -405,7 +405,7 @@ export const RecordFormModal: React.FC<RecordFormModalProps> = ({
                           className={`w-full px-3 py-2 rounded-xl bg-slate-950 border ${error ? 'border-rose-500' : 'border-slate-700/80'} text-slate-200 text-xs outline-none focus:border-blue-500`}
                         >
                           <option value="">-- 提案商品を選択（未定可） --</option>
-                          {products.map((p) => <option key={p.id} value={p.id}>{p.product_name} (月額: ¥{Number(p.monthly_fee || 0).toLocaleString()})</option>)}
+                          {products.filter((p) => p.status !== 'inactive' || p.id === value).map((p) => <option key={p.id} value={p.id}>{p.product_name}{p.status === 'inactive' ? '（取扱停止・既存記録）' : ''} (月額: ¥{Number(p.monthly_fee || 0).toLocaleString()})</option>)}
                         </select>
                         {error && <p className="text-[11px] text-rose-400">{error}</p>}
                       </div>
