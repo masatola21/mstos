@@ -242,7 +242,7 @@ export const SalesOperationsWorkspace: React.FC<Props> = ({ tab, companyId, lead
     const { data: deleted, error: deleteError } = await supabase.from(selectedOps.table).delete().eq('id', record.id).eq('status', 'draft').select('id').maybeSingle();
     if (deleteError) { setError(deleteError.message); return; }
     if (!deleted) { setError('削除対象が見つからないか、削除権限がありません。'); return; }
-    setNotice('下書きを削除しました。'
+    setNotice('下書きを削除しました。');
     await load();
   };
 
