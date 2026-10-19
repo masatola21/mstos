@@ -429,7 +429,7 @@ async function processMarketingAutomationJobs(): Promise<void> {
         const recipientAddress = job.channel === 'email' ? String(contact.email || '') : String(contact.line_user_id || '');
         if (!recipientAddress) throw new Error('送信先がありません。');
         const { data: outbox, error: outboxError } = await lineSupabase.from('communication_outbox').insert({
-          channel:job.channel, recipient_contact_id:contact.id, recipient_address:recipientAddress,
+          owner_id:job.owner_id, channel:job.channel, recipient_contact_id:contact.id, recipient_address:recipientAddress,
           subject:job.channel==='email'?job.subject:null, body_text:job.body_text,
           line_message_payload:job.channel==='line'?job.line_message_payload:null,
           company_id:contact.company_id||null, source_type:'marketing_automation', source_id:job.id,
@@ -453,9 +453,16 @@ async function processMarketingAutomationJobs(): Promise<void> {
           const {data:friend,error:friendError}=await lineSupabase.from('line_friends').select('status,consent_status').eq('line_user_id',recipientAddress).maybeSingle();
           if(friendError||!friend||friend.status!=='active'||friend.consent_status!=='opted_in')throw new Error('LINEの友だち状態または配信同意を確認できません。');
           const requested=job.line_message_payload&&typeof job.line_message_payload==='object'?job.line_message_payload as {type?:string;originalContentUrl?:string;previewImageUrl?:string}:null;
-          const message=requested?.type==='video'
-            ? {type:'video',originalContentUrl:requested.originalContentUrl,previewImageUrl:requested.previewImageUrl}
-            : {type:'text',text:String(job.body_text||'').replaceAll('{name}',String(contact.full_name||'お客様'))};
+          let message: any;
+          if (requested?.type === 'video') {
+            const videoUrl=String(requested.originalContentUrl||''); const previewUrl=String(requested.previewImageUrl||'');
+            if (!/^https:\/\//i.test(videoUrl) || !/^https:\/\//i.test(previewUrl) || videoUrl.length>2000 || previewUrl.length>2000) throw new Error('LINE動画URLの設定が不正です。');
+            message={type:'video',originalContentUrl:videoUrl,previewImageUrl:previewUrl};
+          } else {
+            const text=String(job.body_text||'').replaceAll('{name}',String(contact.full_name||'お客様'));
+            if (!text || text.length>5000) throw new Error('LINE本文は1〜5000文字で設定してください。');
+            message={type:'text',text};
+          }
           const response=await fetch('https://api.line.me/v2/bot/message/push',{method:'POST',headers:{Authorization:'Bearer '+lineChannelAccessToken,'Content-Type':'application/json','X-Line-Retry-Key':outboxId},body:JSON.stringify({to:recipientAddress,messages:[message]})});
           if(!response.ok)throw new Error((await response.text().catch(()=>''))||'LINE送信に失敗しました。');
           providerMessageId=outboxId;
