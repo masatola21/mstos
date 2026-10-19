@@ -73,11 +73,13 @@ begin
     and coalesce(v_old->>'status','') <> coalesce(v_new->>'status','')
     and lower(coalesce(v_new->>'status','')) in ('approved','sent','signed','signed_complete') then
     v_status := lower(coalesce(v_new->>'status',''));
-    if v_status = 'approved' and lower(coalesce(v_new->>'document_type','')) like '%proposal%' then v_trigger := 'proposal_approved';
-    elsif v_status = 'approved' then v_trigger := 'report_approved';
+    if v_status in ('signed','signed_complete') and lower(coalesce(v_new->>'document_type','')) like '%contract%' then v_trigger := 'contract_signed';
+    elsif v_status = 'sent' and lower(coalesce(v_new->>'document_type','')) like '%contract%' then v_trigger := 'contract_sent';
+    elsif v_status = 'approved' and lower(coalesce(v_new->>'document_type','')) like '%proposal%' then v_trigger := 'proposal_approved';
+    elsif v_status = 'approved' and (lower(coalesce(v_new->>'document_type','')) like '%report%' or lower(coalesce(v_new->>'document_type','')) like '%diagnosis%') then v_trigger := 'report_approved';
     elsif v_status = 'sent' and lower(coalesce(v_new->>'document_type','')) like '%proposal%' then v_trigger := 'proposal_sent';
-    elsif v_status = 'sent' then v_trigger := 'report_sent';
-    elsif v_status in ('signed','signed_complete') then v_trigger := 'contract_signed';
+    elsif v_status = 'sent' and (lower(coalesce(v_new->>'document_type','')) like '%report%' or lower(coalesce(v_new->>'document_type','')) like '%diagnosis%') then v_trigger := 'report_sent';
+    else return NEW;
     end if;
   elsif TG_TABLE_NAME = 'diagnosis_submissions' and TG_OP = 'INSERT' then
     v_trigger := 'diagnosis_completed';
