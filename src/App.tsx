@@ -1876,7 +1876,7 @@ function AppContent() {
         {currentTab === 'contacts' && <ContactsLineHub />}
 
         {currentTab === 'marketing_automation' && (
-          <MarketingAutomationPrototypeView scenarios={marketingScenarios} onScenariosChange={setMarketingScenarios} />
+          <MarketingAutomationPrototypeView scenarios={marketingScenarios} onScenariosChange={setMarketingScenarios} onNavigateTab={(tab) => setCurrentTab(tab)} />
         )}
 
         {/* ================= SECTION 3: AI PRESIDENT & STRATEGY ================= */}
