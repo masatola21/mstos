@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { getSupabase } from '../../lib/supabaseClient';
+import { InlineDeleteButton } from '../InlineDeleteButton';
 import { ArrowRight, BarChart3, Megaphone, Plus, Save, Sparkles, Trash2 } from 'lucide-react';
 import { OwnMediaWorkspace } from './OwnMediaWorkspace';
 
@@ -139,10 +140,11 @@ export const AIAcquisitionOperationsView: React.FC<{ onSendPresidentSummary?: (s
     setNotice(`${typeLabels[type]}を保存しました。`); setEditing(null); setIsFormOpen(false); setTitle(''); setProductId(''); setPayload(emptyPayload());
   };
   const remove = async (record: AcquisitionRecord) => {
-    if (!window.confirm(`「${record.title}」を削除しますか？`)) return;
+    setError(''); setNotice('');
     const db = getSupabase(); if (!db) return;
-    const { error: deleteError } = await db.from('mst_ai_acquisition_records').delete().eq('user_id', userId).eq('id', record.id);
+    const { data: deleted, error: deleteError } = await db.from('mst_ai_acquisition_records').delete().eq('user_id', userId).eq('id', record.id).select('id').maybeSingle();
     if (deleteError) { setError(`削除できませんでした: ${deleteError.message}`); return; }
+    if (!deleted) { setError('削除対象が見つからないか、削除権限がありません。'); return; }
     setRecords((previous) => previous.filter((item) => item.id !== record.id)); setNotice('削除しました。');
   };
 
@@ -233,5 +235,5 @@ export const AIAcquisitionOperationsView: React.FC<{ onSendPresidentSummary?: (s
 
 const RecordList: React.FC<{ records: AcquisitionRecord[]; products: Product[]; segments: AudienceSegment[]; onEdit: (record: AcquisitionRecord) => void; onDelete: (record: AcquisitionRecord) => void }> = ({ records, products, segments, onEdit, onDelete }) => !records.length
   ? <p className="rounded-xl border border-slate-800 bg-slate-900 p-5 text-sm text-slate-400">登録データはありません。</p>
-  : <ul className="space-y-2">{records.map((record) => <li key={record.id} className="rounded-xl border border-slate-800 bg-slate-900 p-4"><div className="flex flex-wrap items-start justify-between gap-3"><div className="min-w-0"><p className="font-semibold">{record.title}</p><p className="mt-1 text-xs text-slate-500">{typeLabels[record.record_type]}{record.product_id ? ` · ${products.find((product) => product.id === record.product_id)?.product_name || '商品'}` : ''}{record.status ? ` · ${record.status}` : ''} · 更新 {new Date(record.updated_at).toLocaleDateString('ja-JP')}</p></div><div className="flex gap-2"><button onClick={() => onEdit(record)} className="rounded border border-slate-700 px-2 py-1 text-xs">編集</button><button onClick={() => onDelete(record)} aria-label={`${record.title}を削除`} className="rounded border border-rose-900 px-2 py-1 text-xs text-rose-300"><Trash2 className="h-3.5 w-3.5"/></button></div></div><dl className="mt-3 grid gap-2 sm:grid-cols-2">{(fields[record.record_type] || []).filter((field) => Boolean(record.payload?.[field.key])).slice(0, 8).map((field) => <div key={field.key} className="min-w-0"><dt className="text-[11px] text-slate-500">{field.label}</dt><dd className="whitespace-pre-wrap break-words text-xs text-slate-300">{field.key === 'audienceSegmentId' ? segments.find((segment) => segment.id === record.payload[field.key])?.name || '配信対象リスト（未選択）' : record.payload[field.key]}</dd></div>)}</dl></li>)}</ul>;
+  : <ul className="space-y-2">{records.map((record) => <li key={record.id} className="rounded-xl border border-slate-800 bg-slate-900 p-4"><div className="flex flex-wrap items-start justify-between gap-3"><div className="min-w-0"><p className="font-semibold">{record.title}</p><p className="mt-1 text-xs text-slate-500">{typeLabels[record.record_type]}{record.product_id ? ` · ${products.find((product) => product.id === record.product_id)?.product_name || '商品'}` : ''}{record.status ? ` · ${record.status}` : ''} · 更新 {new Date(record.updated_at).toLocaleDateString('ja-JP')}</p></div><div className="flex gap-2"><button onClick={() => onEdit(record)} className="rounded border border-slate-700 px-2 py-1 text-xs">編集</button><InlineDeleteButton onConfirm={()=>void onDelete(record)} warning={`「${record.title}」を削除しますか？`} ariaLabel={`${record.title}を削除`}><Trash2 className="h-3.5 w-3.5"/></InlineDeleteButton></div></div><dl className="mt-3 grid gap-2 sm:grid-cols-2">{(fields[record.record_type] || []).filter((field) => Boolean(record.payload?.[field.key])).slice(0, 8).map((field) => <div key={field.key} className="min-w-0"><dt className="text-[11px] text-slate-500">{field.label}</dt><dd className="whitespace-pre-wrap break-words text-xs text-slate-300">{field.key === 'audienceSegmentId' ? segments.find((segment) => segment.id === record.payload[field.key])?.name || '配信対象リスト（未選択）' : record.payload[field.key]}</dd></div>)}</dl></li>)}</ul>;
 

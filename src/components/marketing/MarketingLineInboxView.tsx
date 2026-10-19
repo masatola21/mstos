@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { getSupabase } from '../../lib/supabaseClient';
+import { InlineDeleteButton } from '../InlineDeleteButton';
 
 type InboxMessage={id:string;line_event_id:string;direction:'inbound'|'outbound';contact_id:string|null;line_user_id:string;body:string;status:string;received_at:string};
 type ReplyRule={id:string;name:string;match_mode:'exact'|'contains';match_text:string;reply_text:string;tag_id:string|null;priority:number;enabled:boolean};
@@ -96,9 +97,9 @@ export const MarketingLineInboxView:React.FC=()=>{
     if(e)setError(e.message);else await load();
   };
   const deleteRule=async(rule:ReplyRule)=>{
-    if(!db||!window.confirm('「'+rule.name+'」を削除しますか？'))return;
-    const {error:e}=await db.from('line_auto_reply_rules').delete().eq('id',rule.id);
-    if(e)setError(e.message);else await load();
+    if(!db)return;
+    const {data:deleted,error:e}=await db.from('line_auto_reply_rules').delete().eq('id',rule.id).select('id').maybeSingle();
+    if(e)setError(e.message);else if(!deleted)setError('削除対象が見つからないか、削除権限がありません。');else await load();
   };
 
   const sendReply=async()=>{
@@ -167,7 +168,7 @@ export const MarketingLineInboxView:React.FC=()=>{
         <textarea value={replyText} onChange={e=>setReplyText(e.target.value)} rows={3} placeholder="自動返信文" className="rounded-lg border border-slate-700 bg-slate-950 p-2 text-sm text-white md:col-span-2" />
         <button disabled={busy||!integration} className="rounded-lg bg-indigo-600 px-4 py-2 text-sm font-semibold text-white disabled:opacity-40 md:col-span-2">{busy?'保存中…':'自動返信ルールを保存'}</button>
       </form>
-      <div className="mt-4 divide-y divide-slate-800">{rules.map(rule=><div key={rule.id} className="flex flex-wrap items-center justify-between gap-3 py-3"><div><div className="font-medium text-white">{rule.name}</div><div className="text-xs text-slate-400">{rule.match_mode==='exact'?'完全一致':'含む'}：「{rule.match_text}」 ・ {tags.find(tag=>tag.id===rule.tag_id)?.name||'タグなし'}</div><div className="whitespace-pre-wrap text-xs text-slate-500">{rule.reply_text}</div></div><div className="flex gap-2"><button onClick={()=>void toggleRule(rule)} className="rounded border border-slate-700 px-2 py-1 text-xs text-slate-300">{rule.enabled?'停止':'有効化'}</button><button onClick={()=>void deleteRule(rule)} className="rounded border border-rose-900 px-2 py-1 text-xs text-rose-300">削除</button></div></div>)}</div>
+      <div className="mt-4 divide-y divide-slate-800">{rules.map(rule=><div key={rule.id} className="flex flex-wrap items-center justify-between gap-3 py-3"><div><div className="font-medium text-white">{rule.name}</div><div className="text-xs text-slate-400">{rule.match_mode==='exact'?'完全一致':'含む'}：「{rule.match_text}」 ・ {tags.find(tag=>tag.id===rule.tag_id)?.name||'タグなし'}</div><div className="whitespace-pre-wrap text-xs text-slate-500">{rule.reply_text}</div></div><div className="flex gap-2"><button onClick={()=>void toggleRule(rule)} className="rounded border border-slate-700 px-2 py-1 text-xs text-slate-300">{rule.enabled?'停止':'有効化'}</button><InlineDeleteButton onConfirm={()=>void deleteRule(rule)} warning={`「${rule.name}」を削除しますか？`}>削除</InlineDeleteButton></div></div>)}</div>
     </section>
   </div>;
 };

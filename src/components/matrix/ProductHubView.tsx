@@ -36,8 +36,8 @@ interface ProductHubViewProps {
   projects: Project[];
   onAddProduct: (product: Omit<ManagedProduct, 'id' | 'createdAt' | 'updatedAt'>) => void;
   onUpdateProduct: (id: string, updates: Partial<ManagedProduct>) => void;
-  onDeleteProduct?: (id: string, archive: boolean) => Promise<boolean> | boolean;
-  onRestoreProduct?: (id: string) => Promise<boolean> | boolean;
+  onDeleteProduct?: (id: string, archive: boolean) => Promise<{ success: boolean; message?: string }> | { success: boolean; message?: string };
+  onRestoreProduct?: (id: string) => Promise<{ success: boolean; message?: string }> | { success: boolean; message?: string };
   onPublishProduct: (product: ManagedProduct, fees: { initialFee: number; monthlyFee: number }) => Promise<void>;
   onAddProjectWithTasks?: (project: Project, tasks: TaskItem[]) => void;
   onRecordUsage?: (params: { endpoint: 'chat'; endpointName: string; model?: string; usage: ApiUsageData }) => void;
@@ -60,6 +60,10 @@ export const ProductHubView: React.FC<ProductHubViewProps> = ({
 }) => {
   const [selectedProductId, setSelectedProductId] = useState<string>(products[0]?.id || '');
   const [productListView, setProductListView] = useState<'active' | 'archived'>('active');
+  const [showRemovalConfirmation, setShowRemovalConfirmation] = useState(false);
+  const [isProductActionPending, setIsProductActionPending] = useState(false);
+  const [productActionMessage, setProductActionMessage] = useState('');
+  const [productActionIsError, setProductActionIsError] = useState(false);
   const [activeTab, setActiveTab] = useState<'overview' | 'tasks' | 'marketing' | 'finance'>('overview');
   const [isWizardOpen, setIsWizardOpen] = useState(false);
   const [isNewProductModalOpen, setIsNewProductModalOpen] = useState(false);
@@ -86,15 +90,24 @@ export const ProductHubView: React.FC<ProductHubViewProps> = ({
     projects.some((project: any) => project.productId === selectedProduct.id)
   ));
   const requestProductRemoval = async () => {
-    if (!selectedProduct || !onDeleteProduct) return;
-    const action = productHasReferences ? '取扱停止' : '削除';
-    const detail = productHasReferences
-      ? '関連する契約・請求・ツール・タスクは保持し、商品を配信・新規選択から外します。'
-      : '商品マスタから完全に削除します。';
-    if (window.confirm(`「${selectedProduct.name}」を${action}しますか？\n${detail}`)) {
-      const completed = await onDeleteProduct(selectedProduct.id, productHasReferences);
-      if (completed && productHasReferences) setProductListView('archived');
-    }
+    if (!selectedProduct || !onDeleteProduct || isProductActionPending) return;
+    setIsProductActionPending(true);
+    setShowRemovalConfirmation(false);
+    const result = await onDeleteProduct(selectedProduct.id, productHasReferences);
+    setProductActionMessage(result.message || (result.success ? '操作が完了しました。' : '操作に失敗しました。'));
+    setProductActionIsError(!result.success);
+    if (result.success && productHasReferences) setProductListView('archived');
+    setIsProductActionPending(false);
+  };
+
+  const restoreProduct = async () => {
+    if (!selectedProduct || !onRestoreProduct || isProductActionPending) return;
+    setIsProductActionPending(true);
+    const result = await onRestoreProduct(selectedProduct.id);
+    setProductActionMessage(result.message || (result.success ? '取扱を再開しました。' : '取扱の再開に失敗しました。'));
+    setProductActionIsError(!result.success);
+    if (result.success) setProductListView('active');
+    setIsProductActionPending(false);
   };
 
   const getArchetypeIcon = (archetype: ProductArchetype) => {
@@ -248,16 +261,30 @@ export const ProductHubView: React.FC<ProductHubViewProps> = ({
                   </button>
                   {selectedProduct.salesCatalogPublishedAt && <span className="text-[10px] text-emerald-300">CRMと同じ商品IDで連携済み</span>}
                   {selectedProduct.status === 'archived' ? (
-                    onRestoreProduct && <button type="button" onClick={async () => {
-                      const restored = await onRestoreProduct(selectedProduct.id);
-                      if (restored) setProductListView('active');
-                    }} className="inline-flex items-center gap-2 rounded-lg border border-emerald-500/30 bg-emerald-500/10 px-3 py-2 text-xs font-semibold text-emerald-200 hover:bg-emerald-500/20">
+                    onRestoreProduct && <button type="button" disabled={isProductActionPending} onClick={() => void restoreProduct()} className="inline-flex items-center gap-2 rounded-lg border border-emerald-500/30 bg-emerald-500/10 px-3 py-2 text-xs font-semibold text-emerald-200 hover:bg-emerald-500/20">
                       <Check className="h-4 w-4" />取扱を再開
                     </button>
-                  ) : onDeleteProduct && <button type="button" onClick={() => void requestProductRemoval()} className="inline-flex items-center gap-2 rounded-lg border border-rose-500/30 bg-rose-500/10 px-3 py-2 text-xs font-semibold text-rose-200 hover:bg-rose-500/20">
+                  ) : onDeleteProduct && <button type="button" disabled={isProductActionPending} onClick={() => {
+                    setProductActionMessage('');
+                    setShowRemovalConfirmation(true);
+                  }} className="inline-flex items-center gap-2 rounded-lg border border-rose-500/30 bg-rose-500/10 px-3 py-2 text-xs font-semibold text-rose-200 hover:bg-rose-500/20">
                     <Trash2 className="h-4 w-4" />{productHasReferences ? '取扱停止' : '削除'}
                   </button>}
                 </div>
+                {showRemovalConfirmation && (
+                  <div className="mt-3 flex flex-wrap items-center gap-2 rounded-lg border border-amber-500/30 bg-amber-500/10 p-3 text-xs text-amber-100" role="group" aria-label="商品操作の確認">
+                    <span className="mr-2">{productHasReferences
+                      ? `「${selectedProduct.name}」の取扱を停止します。関連記録は保持されます。`
+                      : `「${selectedProduct.name}」を商品マスタから削除します。この操作は元に戻せません。`}</span>
+                    <button type="button" disabled={isProductActionPending} onClick={() => void requestProductRemoval()} className="rounded bg-rose-700 px-3 py-1.5 font-semibold text-white disabled:opacity-50">
+                      {isProductActionPending ? '処理中…' : productHasReferences ? '取扱停止を確定' : '削除を確定'}
+                    </button>
+                    <button type="button" disabled={isProductActionPending} onClick={() => setShowRemovalConfirmation(false)} className="rounded border border-slate-600 px-3 py-1.5 text-slate-200 disabled:opacity-50">キャンセル</button>
+                  </div>
+                )}
+                {productActionMessage && (
+                  <p role="status" aria-live="polite" className={`mt-2 text-xs ${productActionIsError ? 'text-rose-300' : 'text-emerald-300'}`}>{productActionMessage}</p>
+                )}
               </div>
 
               {/* KPI Badges */}
