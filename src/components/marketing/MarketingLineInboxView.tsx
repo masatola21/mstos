@@ -5,12 +5,16 @@ import { InlineDeleteButton } from '../InlineDeleteButton';
 type InboxMessage={id:string;line_event_id:string;direction:'inbound'|'outbound';contact_id:string|null;line_user_id:string;body:string;status:string;received_at:string};
 type ReplyRule={id:string;name:string;match_mode:'exact'|'contains';match_text:string;reply_text:string;reply_type?:'text'|'image'|'flex';reply_payload?:Record<string,unknown>;tag_id:string|null;priority:number;enabled:boolean};
 type Tag={id:string;name:string};
+type ReplyTemplate={id:string;name:string;reply_type:'text'|'image'|'flex';payload:Record<string,unknown>};
 type ChannelIntegration={owner_id:string;bot_user_id:string;auto_reply_enabled:boolean};
 
 export const MarketingLineInboxView:React.FC=()=>{
   const db=getSupabase();
   const [messages,setMessages]=useState<InboxMessage[]>([]);
   const [rules,setRules]=useState<ReplyRule[]>([]);
+  const [templates,setTemplates]=useState<ReplyTemplate[]>([]);
+  const [templateName,setTemplateName]=useState('');
+  const [showTemplatePicker,setShowTemplatePicker]=useState(false);
   const [tags,setTags]=useState<Tag[]>([]);
   const [integration,setIntegration]=useState<ChannelIntegration|null>(null);
   const [ownerId,setOwnerId]=useState('');
@@ -37,18 +41,20 @@ export const MarketingLineInboxView:React.FC=()=>{
     const {data:auth}=await db.auth.getUser();
     if(!auth.user){setError('ログインしてください。');return}
     setOwnerId(auth.user.id);
-    const [m,r,t,i]=await Promise.all([
+    const [m,r,t,i,templateResult]=await Promise.all([
       db.from('line_inbox_messages').select('*').order('received_at',{ascending:false}).limit(500),
       db.from('line_auto_reply_rules').select('*').order('priority',{ascending:true}),
       db.from('contact_tags').select('id,name').order('name'),
       db.from('line_channel_integrations').select('owner_id,bot_user_id,auto_reply_enabled').maybeSingle(),
+      db.from('line_auto_reply_templates').select('*').order('created_at',{ascending:false}),
     ]);
-    const missing=[m,r,i].find(x=>x.error&&x.error.code==='PGRST205');
-    if(missing){setError('受信箱・自動返信用のDBマイグレーションが未適用です。supabase/migrations/20261019130000_line_inbox_autoreply.sql を適用してください。');return}
-    const failed=[m,r,t,i].find(x=>x.error)?.error;
+    const missing=[m,r,i,templateResult].find(x=>x.error&&x.error.code==='PGRST205');
+    if(missing){setError('受信箱・自動返信用のDBマイグレーションが未適用です。supabase/migrations/20261019130000_line_inbox_autoreply.sql、20261020140000_line_auto_reply_rich_messages.sql、20261020150000_line_auto_reply_templates.sql を適用してください。');return}
+    const failed=[m,r,t,i,templateResult].find(x=>x.error)?.error;
     if(failed){setError(failed.message);return}
     setMessages((m.data||[]) as InboxMessage[]);
     setRules((r.data||[]) as ReplyRule[]);
+    setTemplates((templateResult.data||[]) as ReplyTemplate[]);
     setTags((t.data||[]) as Tag[]);
     setIntegration((i.data||null) as ChannelIntegration|null);
   };
@@ -87,28 +93,58 @@ export const MarketingLineInboxView:React.FC=()=>{
     if(e)setError(e.message);else{setIntegration({...integration,auto_reply_enabled:enabled});setNotice(enabled?'自動返信を有効にしました。':'自動返信を停止しました。')}
   };
 
-  const saveRule=async(event:React.FormEvent)=>{
-    event.preventDefault();
-    if(!db||!ruleName.trim()||!matchText.trim())return;
-    setError('');setNotice('');
-    let replyPayload:Record<string,unknown>={};
-    if(replyType==='text'&&!replyText.trim()){setError('自動返信文を入力してください。');return;}
+  const buildReplyPayload=():Record<string,unknown>=>{
+    if(replyType==='text'){
+      if(!replyText.trim())throw new Error('自動返信文を入力してください。');
+      return {text:replyText.trim()};
+    }
     if(replyType==='image'){
       try{
         const original=new URL(imageOriginalUrl.trim());
         const preview=new URL(imagePreviewUrl.trim());
         if(original.protocol!=='https:'||preview.protocol!=='https:')throw new Error();
-        replyPayload={originalContentUrl:original.toString(),previewImageUrl:preview.toString()};
-      }catch{setError('画像URLにはHTTPSで公開された画像URLを2つ入力してください。');return;}
+        return {originalContentUrl:original.toString(),previewImageUrl:preview.toString()};
+      }catch{throw new Error('画像URLにはHTTPSで公開された画像URLを2つ入力してください。');}
     }
-    if(replyType==='flex'){
-      if(!flexAltText.trim()){setError('Flexメッセージの代替テキストを入力してください。');return;}
-      try{
-        const contents=JSON.parse(flexContentsJson);
-        if(!contents||typeof contents!=='object'||!['bubble','carousel'].includes(contents.type))throw new Error();
-        replyPayload={altText:flexAltText.trim(),contents};
-      }catch{setError('Flex本文はbubbleまたはcarousel形式の正しいJSONで入力してください。');return;}
-    }
+    if(!flexAltText.trim())throw new Error('Flexメッセージの代替テキストを入力してください。');
+    try{
+      const contents=JSON.parse(flexContentsJson);
+      if(!contents||typeof contents!=='object'||!['bubble','carousel'].includes(contents.type))throw new Error();
+      return {altText:flexAltText.trim(),contents};
+    }catch{throw new Error('Flex本文はbubbleまたはcarousel形式の正しいJSONで入力してください。');}
+  };
+  const applyTemplate=(template:ReplyTemplate)=>{
+    const payload=template.payload||{};
+    setReplyType(template.reply_type);
+    setReplyText(String(payload.text||''));
+    setImageOriginalUrl(String(payload.originalContentUrl||''));
+    setImagePreviewUrl(String(payload.previewImageUrl||''));
+    setFlexAltText(String(payload.altText||''));
+    setFlexContentsJson(payload.contents?JSON.stringify(payload.contents,null,2):'');
+    setShowTemplatePicker(false);
+    setNotice('テンプレートを読み込みました。必要に応じて編集して保存してください。');
+  };
+  const saveTemplate=async()=>{
+    if(!db||!templateName.trim())return;
+    setError('');setNotice('');
+    let payload:Record<string,unknown>;
+    try{payload=buildReplyPayload()}catch(e:any){setError(e.message);return}
+    setBusy(true);
+    const {error:e}=await db.from('line_auto_reply_templates').insert({owner_id:ownerId,name:templateName.trim(),reply_type:replyType,payload});
+    if(e)setError(e.message);else{setTemplateName('');setNotice('テンプレートを保存しました。');await load()}
+    setBusy(false);
+  };
+  const deleteTemplate=async(template:ReplyTemplate)=>{
+    if(!db)return;
+    const {error:e}=await db.from('line_auto_reply_templates').delete().eq('id',template.id);
+    if(e)setError(e.message);else{setNotice('テンプレートを削除しました。');await load()}
+  };
+  const saveRule=async(event:React.FormEvent)=>{
+    event.preventDefault();
+    if(!db||!ruleName.trim()||!matchText.trim())return;
+    setError('');setNotice('');
+    let replyPayload:Record<string,unknown>;
+    try{replyPayload=buildReplyPayload()}catch(e:any){setError(e.message);return}
     setBusy(true);
     const {error:e}=await db.from('line_auto_reply_rules').insert({owner_id:ownerId,name:ruleName.trim(),match_mode:matchMode,match_text:matchText.trim(),reply_text:replyType==='text'?replyText.trim():'',reply_type:replyType,reply_payload:replyPayload,tag_id:tagId||null,priority:rules.length*10+100,enabled:true});
     if(e)setError(e.message);else{setRuleName('');setMatchText('');setReplyText('');setImageOriginalUrl('');setImagePreviewUrl('');setFlexAltText('');setFlexContentsJson('');setReplyType('text');setTagId('');setNotice('自動返信ルールを保存しました。');await load()}
@@ -189,6 +225,14 @@ export const MarketingLineInboxView:React.FC=()=>{
         <select value={matchMode} onChange={e=>setMatchMode(e.target.value as 'exact'|'contains')} className="rounded-lg border border-slate-700 bg-slate-950 p-2 text-sm text-white"><option value="exact">完全一致</option><option value="contains">含む</option></select>
         <input value={matchText} onChange={e=>setMatchText(e.target.value)} placeholder="ボタンから届く選択文字" className="rounded-lg border border-slate-700 bg-slate-950 p-2 text-sm text-white" />
         <select value={tagId} onChange={e=>setTagId(e.target.value)} className="rounded-lg border border-slate-700 bg-slate-950 p-2 text-sm text-white"><option value="">タグを付けない</option>{tags.map(tag=><option key={tag.id} value={tag.id}>{tag.name}</option>)}</select>
+        <div className="flex flex-wrap items-center gap-2 md:col-span-2">
+          <button type="button" onClick={()=>setShowTemplatePicker(!showTemplatePicker)} className="rounded-lg border border-indigo-500/40 px-3 py-2 text-xs text-indigo-200 hover:bg-indigo-950/40">テンプレートから選ぶ（{templates.filter(item=>item.reply_type===replyType).length}件）</button>
+          <input value={templateName} onChange={e=>setTemplateName(e.target.value)} placeholder="テンプレート名" className="min-w-0 flex-1 rounded-lg border border-slate-700 bg-slate-950 p-2 text-sm text-white" />
+          <button type="button" disabled={busy||!templateName.trim()} onClick={()=>void saveTemplate()} className="rounded-lg border border-slate-700 px-3 py-2 text-xs text-slate-200 disabled:opacity-40">現在の内容をテンプレート保存</button>
+        </div>
+        {showTemplatePicker&&<div className="space-y-2 rounded-lg border border-slate-700 bg-slate-950 p-3 md:col-span-2">
+          {templates.filter(item=>item.reply_type===replyType).length===0?<p className="text-xs text-slate-500">この形式のテンプレートはありません。</p>:templates.filter(item=>item.reply_type===replyType).map(template=><div key={template.id} className="flex items-center justify-between gap-2 rounded-lg border border-slate-800 p-2"><button type="button" onClick={()=>applyTemplate(template)} className="min-w-0 flex-1 truncate text-left text-sm text-slate-200 hover:text-white">{template.name}</button><InlineDeleteButton onConfirm={()=>deleteTemplate(template)} warning={`テンプレート「${template.name}」を削除しますか？`} ariaLabel={`テンプレート「${template.name}」を削除`}>削除</InlineDeleteButton></div>)}
+        </div>}
         <select value={replyType} onChange={e=>{const type=e.target.value as 'text'|'image'|'flex';setReplyType(type);if(type==='flex'&&!flexContentsJson)setFlexContentsJson(JSON.stringify({type:'bubble',body:{type:'box',layout:'vertical',contents:[{type:'text',text:'ご相談内容を選んでください',weight:'bold',size:'md'},{type:'button',action:{type:'message',label:'経営改善',text:'経営改善'}},{type:'button',action:{type:'message',label:'業務改善',text:'業務改善'}}]}},null,2));if(type==='flex'&&!flexAltText)setFlexAltText('ご相談内容を選択してください');}} className="rounded-lg border border-slate-700 bg-slate-950 p-2 text-sm text-white md:col-span-2"><option value="text">テキスト</option><option value="image">画像</option><option value="flex">Flexメッセージ</option></select>
         {replyType==='text'&&<textarea value={replyText} onChange={e=>setReplyText(e.target.value)} rows={3} placeholder="自動返信文" className="rounded-lg border border-slate-700 bg-slate-950 p-2 text-sm text-white md:col-span-2" />}
         {replyType==='image'&&<div className="grid gap-2 md:col-span-2 md:grid-cols-2"><input type="url" value={imageOriginalUrl} onChange={e=>setImageOriginalUrl(e.target.value)} placeholder="画像URL（HTTPS）" className="rounded-lg border border-slate-700 bg-slate-950 p-2 text-sm text-white" /><input type="url" value={imagePreviewUrl} onChange={e=>setImagePreviewUrl(e.target.value)} placeholder="プレビュー画像URL（HTTPS）" className="rounded-lg border border-slate-700 bg-slate-950 p-2 text-sm text-white" /><p className="text-xs text-slate-500 md:col-span-2">画像はHTTPSで公開されている必要があります。</p></div>}
