@@ -1,9 +1,11 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { getSupabase } from '../../lib/supabaseClient';
 import { Activity, ArrowRight, CheckCircle2, Copy, GitBranch, Image as ImageIcon, Mail, MessageCircle, MousePointerClick, Plus, Radio, Save, Tags, Trash2, Zap } from 'lucide-react';
 import { MarketingChannel, MarketingLineMessageType, MarketingScenario, MarketingTrigger } from '../../types/marketing';
 import { MarketingBroadcastView } from './MarketingBroadcastView';
 import { MarketingLineInboxView } from './MarketingLineInboxView';
+import { MarketingLineSettingsView } from './MarketingLineSettingsView';
+import { MarketingEmailInboxView } from './MarketingEmailInboxView';
 
 interface Props {
   scenarios: MarketingScenario[];
@@ -41,11 +43,11 @@ const workflowStages = [
   {
     title: '配信対象と開始条件を設定',
     trigger: 'CRMセグメント、または登録した開始条件を選ぶ',
-    automation: 'CRMセグメントの選択と、シナリオ条件の保存ができます。イベントを受けた自動起動は未接続です。',
+    automation: '対応するCRM状態変化で、準備済みシナリオを起動して配信待ちに登録します。',
     ai: '対象者の条件を整理し、必要なら外部AIで施策案を作成できます。顧客データを外部AIへ貼り付けないでください。',
     approval: '配信対象と開始条件を人が確認します。',
     data: 'CRMセグメント・シナリオ設定',
-    status: '条件保存まで / 自動起動未接続',
+    status: '条件保存・対応イベントの自動起動',
   },
   {
     title: 'LINE・メールの文案を準備',
@@ -54,7 +56,7 @@ const workflowStages = [
     ai: '定型外の施策は外部AIで草案を作り、JSONを取り込んで内容を編集できます。アプリ内AI APIは呼び出しません。',
     approval: '宛先に合わせた文面・リンク・添付内容を人が確認します。',
     data: 'シナリオ・配信文案',
-    status: '文案保存まで / 実配信未接続',
+    status: '文案保存・配信サービスへ接続',
   },
   {
     title: '確認して配信へ進む',
@@ -62,8 +64,8 @@ const workflowStages = [
     automation: '準備状態を記録できます。現在は配信実行や送信履歴の記録は行いません。',
     ai: 'AIは送信を実行しません。必要な文章作成を補助する場合も、送信前に人が確認します。',
     approval: '配信同意・停止対象・宛先・本文を確認してから実配信できる設計にします。',
-    data: '準備状態・配信同意・送信履歴（送信機能は未接続）',
-    status: '準備状態のみ / 承認・送信連携未接続',
+    data: '準備状態・配信同意・送信履歴',
+    status: '準備状態・同意根拠・自動配信',
   },
 ];
 
@@ -95,6 +97,8 @@ const emptyScenario = (): Omit<MarketingScenario, 'id' | 'updatedAt'> => ({
   flexButtonLabel: '',
   flexButtonUrl: '',
   status: 'draft',
+  automationEnabled: false,
+  consentBasis: '',
 });
 
 export const MarketingAutomationPrototypeView: React.FC<Props> = ({ scenarios, onScenariosChange, onNavigateTab }) => {
@@ -110,17 +114,43 @@ export const MarketingAutomationPrototypeView: React.FC<Props> = ({ scenarios, o
     return segments.find((segment) => segment.id === id)?.name || value || '配信対象未設定';
   };
   const [activeTab, setActiveTab] = useState<'home' | 'email' | 'line' | 'scenarios'>('home');
-  const [lineView, setLineView] = useState<'broadcast' | 'inbox'>('broadcast');
+  const [lineView, setLineView] = useState<'broadcast' | 'inbox' | 'settings'>('broadcast');
+  const [emailView, setEmailView] = useState<'broadcast' | 'inbox'>('broadcast');
   const [editing, setEditing] = useState<MarketingScenario | null>(null);
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [form, setForm] = useState(emptyScenario());
   const [notice, setNotice] = useState('');
+  const scenarioSyncRevision = useRef(0);
   const [externalGoal, setExternalGoal] = useState('');
   const [externalResult, setExternalResult] = useState('');
+  useEffect(() => {
+    const revision = ++scenarioSyncRevision.current;
+    let cancelled = false;
+    const sync = async () => {
+      const db = getSupabase();
+      if (!db) return;
+      const { data: auth } = await db.auth.getUser();
+      const ownerId = auth.user?.id;
+      if (!ownerId || cancelled || revision !== scenarioSyncRevision.current) return;
+      const rows = scenarios.map((scenario) => ({ owner_id: ownerId, scenario_id: scenario.id, config: scenario, updated_at: new Date().toISOString() }));
+      if (rows.length) {
+        const { error } = await db.from('marketing_automation_scenarios').upsert(rows, { onConflict: 'owner_id,scenario_id' });
+        if (error) { setNotice('自動化設定をサーバーに同期できません。DBマイグレーションを確認してください。'); return; }
+      }
+      const { data: saved, error: loadError } = await db.from('marketing_automation_scenarios').select('scenario_id').eq('owner_id', ownerId);
+      if (loadError || cancelled || revision !== scenarioSyncRevision.current) return;
+      const keep = new Set(scenarios.map((scenario) => scenario.id));
+      const stale = (saved || []).map((row: any) => row.scenario_id).filter((id: string) => !keep.has(id));
+      if (stale.length) await db.from('marketing_automation_scenarios').delete().eq('owner_id', ownerId).in('scenario_id', stale);
+    };
+    void sync();
+    return () => { cancelled = true; };
+  }, [scenarios]);
   const preparedCount = scenarios.filter((scenario) => scenario.status === 'prepared').length;
   const lineCount = scenarios.filter((scenario) => scenario.channel !== 'email').length;
   const emailCount = scenarios.filter((scenario) => scenario.channel !== 'line').length;
   const triggerLabel = useMemo(() => Object.fromEntries(triggerOptions.map((option) => [option.value, option.label])) as Record<MarketingTrigger, string>, []);
+  const supportedAutomationTriggers = new Set<MarketingTrigger>(['prospect_selected','lead_created','line_registered','diagnosis_completed','meeting_completed','tag_added','deal_stage_changed','deal_won','report_approved','report_sent','proposal_approved','proposal_sent','contract_sent','contract_signed','invoice_due','invoice_overdue']);
 
   const startNew = () => {
     setEditing(null);
@@ -156,6 +186,8 @@ export const MarketingAutomationPrototypeView: React.FC<Props> = ({ scenarios, o
       flexButtonLabel: scenario.flexButtonLabel || '',
       flexButtonUrl: scenario.flexButtonUrl || '',
       status: scenario.status,
+      automationEnabled: scenario.automationEnabled || false,
+      consentBasis: scenario.consentBasis || '',
     });
   };
   const saveScenario = (event: React.FormEvent) => {
@@ -182,13 +214,14 @@ export const MarketingAutomationPrototypeView: React.FC<Props> = ({ scenarios, o
       id: editing?.id || `marketing-${now}`,
       updatedAt: now,
       status: 'draft',
+      automationEnabled: false,
     };
     onScenariosChange(editing
       ? scenarios.map((scenario) => scenario.id === editing.id ? saved : scenario)
       : [saved, ...scenarios]);
     setEditing(null);
     setIsFormOpen(false);
-    setNotice('シナリオを保存しました。配信接続が完了するまでは実行されません。');
+    setNotice('シナリオを保存しました。自動実行する場合は準備状態にして、同意根拠を記録した上で有効化してください。');
   };
   const deleteScenario = (scenario: MarketingScenario) => {
     if (!window.confirm(`「${scenario.name}」を削除しますか？`)) return;
@@ -196,8 +229,8 @@ export const MarketingAutomationPrototypeView: React.FC<Props> = ({ scenarios, o
     setNotice('シナリオを削除しました。');
   };
   const markPrepared = (scenario: MarketingScenario) => {
-    // Prepared means configured for later activation. No message is sent by this UI.
-    onScenariosChange(scenarios.map((item) => item.id === scenario.id ? { ...item, status: item.status === 'prepared' ? 'draft' : 'prepared', updatedAt: Date.now() } : item));
+    // Preparation is separate from activation; content edits reset activation.
+    onScenariosChange(scenarios.map((item) => item.id === scenario.id ? { ...item, status: item.status === 'prepared' ? 'draft' : 'prepared', automationEnabled: item.status === 'prepared' ? false : item.automationEnabled, updatedAt: Date.now() } : item));
     setNotice('設定状態を保存しました。実配信はまだ行われません。');
   };
   const update = <K extends keyof ReturnType<typeof emptyScenario>>(key: K, value: ReturnType<typeof emptyScenario>[K]) => {
@@ -274,7 +307,7 @@ export const MarketingAutomationPrototypeView: React.FC<Props> = ({ scenarios, o
           <div>
             <div className="mb-2 flex flex-wrap items-center gap-2">
               <h1 className="text-2xl font-black text-white">教育・フォロー</h1>
-              <span className="rounded-full border border-amber-400/30 bg-amber-500/10 px-2.5 py-1 text-xs font-semibold text-amber-300">自動実行は未接続</span>
+              <span className="rounded-full border border-amber-400/30 bg-amber-500/10 px-2.5 py-1 text-xs font-semibold text-amber-300">CRM条件に応じて実行</span>
             </div>
             <p className="max-w-3xl text-sm leading-6 text-slate-300">LINE・メールで見込み客や顧客をフォローし、次の行動につなげます。顧客・リード情報は既存のCRMを正本として利用します。集客チャネルは必要になった段階でマーケティング内に追加できます。</p>
           </div>
@@ -287,13 +320,13 @@ export const MarketingAutomationPrototypeView: React.FC<Props> = ({ scenarios, o
 
       {notice && <div role="status" className="rounded-xl border border-emerald-500/30 bg-emerald-500/10 px-4 py-3 text-sm text-emerald-200">{notice}</div>}
 
-      {activeTab === 'email' && <MarketingBroadcastView initialChannel="email" />}
-      {activeTab === 'line' && <div className="space-y-4"><div className="flex gap-2 border-b border-slate-800 pb-3"><button onClick={()=>setLineView('broadcast')} className={`rounded-lg px-3 py-2 text-xs font-semibold ${lineView==='broadcast'?'bg-green-700 text-white':'text-slate-400 hover:bg-slate-800'}`}>配信</button><button onClick={()=>setLineView('inbox')} className={`rounded-lg px-3 py-2 text-xs font-semibold ${lineView==='inbox'?'bg-green-700 text-white':'text-slate-400 hover:bg-slate-800'}`}>受信箱・自動返信</button></div>{lineView==='broadcast'?<MarketingBroadcastView initialChannel="line"/>:<MarketingLineInboxView/>}</div>}
+      {activeTab === 'email' && <div className="space-y-4"><div className="flex gap-2 border-b border-slate-800 pb-3"><button onClick={()=>setEmailView('broadcast')} className="rounded-lg bg-indigo-700 px-3 py-2 text-xs text-white">配信</button><button onClick={()=>setEmailView('inbox')} className="rounded-lg border border-slate-700 px-3 py-2 text-xs text-slate-300">受信箱</button></div>{emailView==='broadcast'?<MarketingBroadcastView initialChannel="email"/>:<MarketingEmailInboxView/>}</div>}
+      {activeTab === 'line' && <div className="space-y-4"><div className="flex flex-wrap gap-2 border-b border-slate-800 pb-3"><button onClick={()=>setLineView('broadcast')} className="rounded-lg bg-green-700 px-3 py-2 text-xs text-white">配信</button><button onClick={()=>setLineView('inbox')} className="rounded-lg border border-slate-700 px-3 py-2 text-xs text-slate-300">受信箱・自動返信</button><button onClick={()=>setLineView('settings')} className="rounded-lg border border-slate-700 px-3 py-2 text-xs text-slate-300">リッチメニュー</button></div>{lineView==='broadcast'?<MarketingBroadcastView initialChannel="line"/>:lineView==='inbox'?<MarketingLineInboxView/>:<MarketingLineSettingsView/>}</div>}
       {activeTab === 'home' && <>
         <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
           {[
             { label: '登録シナリオ', value: String(scenarios.length), note: '手動確認・配信の準備', icon: GitBranch, color: 'text-cyan-300' },
-            { label: '準備済み', value: String(preparedCount), note: '自動配信は未接続', icon: CheckCircle2, color: 'text-emerald-300' },
+            { label: '準備済み', value: String(preparedCount), note: '有効化した条件で自動配信', icon: CheckCircle2, color: 'text-emerald-300' },
             { label: 'LINEシナリオ', value: String(lineCount), note: 'LINE配信設定へ', icon: MessageCircle, color: 'text-green-300' },
             { label: 'メールシナリオ', value: String(emailCount), note: 'メール送信設定へ', icon: Mail, color: 'text-purple-300' },
           ].map(({ label, value, note, icon: Icon, color }) => <div key={label} className="rounded-xl border border-slate-800 bg-slate-900 p-4"><div className="flex items-center justify-between text-xs text-slate-400"><span>{label}</span><Icon className={`h-4 w-4 ${color}`} /></div><div className="mt-2 text-2xl font-black text-white">{value}</div><div className="mt-1 text-[11px] text-slate-500">{note}</div></div>)}
@@ -333,7 +366,7 @@ export const MarketingAutomationPrototypeView: React.FC<Props> = ({ scenarios, o
           <p className="mt-1 text-xs leading-5 text-slate-400">APIキーなどの秘密情報はブラウザーに保存せず、サーバーの環境変数で管理します。ここから設定画面へ移動する必要はありません。</p>
           <div className="mt-3 grid gap-3 md:grid-cols-2">
             <div className="rounded-lg border border-slate-800 bg-slate-950/70 p-3"><div className="text-sm font-semibold text-green-200">LINE公式アカウント</div><p className="mt-1 text-xs text-slate-400">サーバー側に LINE_CHANNEL_ACCESS_TOKEN と LINE_CHANNEL_SECRET を設定します。</p></div>
-            <div className="rounded-lg border border-slate-800 bg-slate-950/70 p-3"><div className="text-sm font-semibold text-purple-200">メール送信</div><p className="mt-1 text-xs text-slate-400">サーバー側に RESEND_API_KEY と RESEND_FROM_EMAIL を設定します。</p></div>
+            <div className="rounded-lg border border-slate-800 bg-slate-950/70 p-3"><div className="text-sm font-semibold text-purple-200">メール送信</div><p className="mt-1 text-xs text-slate-400">送信には RESEND_API_KEY と RESEND_FROM_EMAIL、受信には RESEND_WEBHOOK_SECRET が必要です。</p></div>
           </div>
         </section>
       </>}
@@ -354,6 +387,7 @@ export const MarketingAutomationPrototypeView: React.FC<Props> = ({ scenarios, o
               <label className="text-xs text-slate-300">シナリオ名<input required maxLength={100} value={form.name} onChange={(e) => update('name', e.target.value)} placeholder="例：診断完了後のフォロー" className="mt-1 w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-white" /></label>
               <label className="text-xs text-slate-300">開始条件<select value={form.trigger} onChange={(e) => update('trigger', e.target.value as MarketingTrigger)} className="mt-1 w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-white">{triggerOptions.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}</select></label>
               <div className="text-xs text-slate-300">配信対象の保存区分<select value={form.audience.startsWith('segment:') && segments.some((segment)=>segment.id===form.audience.slice(8)) ? form.audience : 'manual'} onChange={(e)=>update('audience',e.target.value==='manual'?'':e.target.value)} className="mt-1 w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-white"><option value="manual">条件をメモとして入力（旧形式）</option>{segments.map((segment)=><option key={segment.id} value={`segment:${segment.id}`}>{segment.name}（{segment.entity_type}）</option>)}</select>{(!form.audience.startsWith('segment:') || !segments.some((segment)=>segment.id===form.audience.slice(8))) && <input maxLength={160} value={form.audience} onChange={(e)=>update('audience',e.target.value)} placeholder="配信対象の説明" className="mt-2 w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-white" />}</div>
+              <label className="text-xs text-slate-300">配信同意・送信根拠<input required maxLength={500} value={form.consentBasis} onChange={(e) => update('consentBasis', e.target.value)} placeholder="例：顧客がLINE登録時に案内へ同意" className="mt-1 w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-white" /></label>
               <label className="text-xs text-slate-300">配信チャネル<select value={form.channel} onChange={(e) => update('channel', e.target.value as MarketingChannel)} className="mt-1 w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-white"><option value="line">LINE</option><option value="email">メール</option><option value="both">LINE + メール</option></select></label>
               <label className="text-xs text-slate-300">待機時間（分）<input type="number" min={0} max={525600} value={form.waitMinutes} onChange={(e) => update('waitMinutes', Number(e.target.value))} className="mt-1 w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-white" /></label>
               {form.channel !== 'email' && <fieldset className="space-y-4 rounded-xl border border-slate-700 bg-slate-950/70 p-4 md:col-span-2"><legend className="px-2 text-xs font-bold text-green-300">LINEメッセージ形式</legend>
@@ -370,8 +404,8 @@ export const MarketingAutomationPrototypeView: React.FC<Props> = ({ scenarios, o
             <div className="mt-4 flex flex-wrap items-center justify-between gap-3"><p className="text-[11px] text-slate-500">画像は公開HTTPS URLを指定します。Flexはカード設定からJSONを生成します。今の段階では下書き保存のみで送信されません。</p><div className="flex gap-2"><button type="button" onClick={() => { setEditing(null); setIsFormOpen(false); setNotice(''); }} className="rounded-lg border border-slate-700 px-3 py-2 text-xs text-slate-300">キャンセル</button><button type="submit" className="flex items-center gap-2 rounded-lg bg-indigo-600 px-4 py-2 text-xs font-semibold text-white hover:bg-indigo-500"><Save className="h-4 w-4" />保存</button></div></div>
           </form>
         ) : null}
-        {scenarios.length === 0 ? <div className="rounded-2xl border border-dashed border-slate-700 bg-slate-900/60 p-10 text-center"><GitBranch className="mx-auto h-8 w-8 text-slate-500" /><h2 className="mt-3 font-bold text-white">シナリオはまだありません</h2><p className="mt-1 text-sm text-slate-400">「シナリオ作成」から、開始条件とLINE・メールの配信文案を登録できます。</p><button onClick={startNew} className="mt-4 rounded-lg bg-indigo-600 px-4 py-2 text-xs font-semibold text-white">最初のシナリオを作成</button></div> : <div className="space-y-3">{scenarios.map((scenario) => <article key={scenario.id} className="grid gap-3 rounded-xl border border-slate-800 bg-slate-900 p-4 lg:grid-cols-[1.4fr_1fr_1fr_auto] lg:items-center"><div><div className="font-bold text-white">{scenario.name}</div><div className="mt-1 text-xs text-slate-400">{triggerLabel[scenario.trigger]} ・ {audienceLabel(scenario.audience)}</div></div><div className="text-xs text-slate-300">{channelLabels[scenario.channel]}{scenario.channel !== 'email' ? ` ・ LINE${lineMessageLabels[scenario.lineMessageType || 'text']}` : ''}{scenario.waitMinutes > 0 ? ` ・ ${scenario.waitMinutes}分後` : ''}</div><div className="text-xs"><span className={scenario.status === 'prepared' ? 'text-emerald-300' : 'text-amber-300'}>{scenario.status === 'prepared' ? '準備済み（未配信）' : '下書き'}</span><div className="mt-1 text-[10px] text-slate-500">{new Date(scenario.updatedAt).toLocaleString()}</div></div><div className="flex gap-2"><button onClick={() => { markPrepared(scenario); }} className={`rounded-lg border px-3 py-2 text-xs ${scenario.status === 'prepared' ? 'border-emerald-500/30 text-emerald-300' : 'border-slate-700 text-slate-300 hover:bg-slate-800'}`}>{scenario.status === 'prepared' ? '準備済み' : '準備状態にする'}</button><button onClick={() => { startEdit(scenario); setNotice(''); }} className="rounded-lg border border-slate-700 px-3 py-2 text-xs text-slate-200 hover:bg-slate-800">編集</button><button onClick={() => deleteScenario(scenario)} aria-label="シナリオを削除" className="rounded-lg border border-slate-700 p-2 text-slate-400 hover:border-rose-500/40 hover:text-rose-300"><Trash2 className="h-4 w-4" /></button></div></article>)}</div>}
-        {!editing && scenarios.length > 0 && <p className="text-[11px] text-slate-500">「準備状態」はシナリオの設定整理を示します。配信接続と実行処理が未実装のため、自動送信はしません。</p>}
+        {scenarios.length === 0 ? <div className="rounded-2xl border border-dashed border-slate-700 bg-slate-900/60 p-10 text-center"><GitBranch className="mx-auto h-8 w-8 text-slate-500" /><h2 className="mt-3 font-bold text-white">シナリオはまだありません</h2><p className="mt-1 text-sm text-slate-400">「シナリオ作成」から、開始条件とLINE・メールの配信文案を登録できます。</p><button onClick={startNew} className="mt-4 rounded-lg bg-indigo-600 px-4 py-2 text-xs font-semibold text-white">最初のシナリオを作成</button></div> : <div className="space-y-3">{scenarios.map((scenario) => <article key={scenario.id} className="grid gap-3 rounded-xl border border-slate-800 bg-slate-900 p-4 lg:grid-cols-[1.4fr_1fr_1fr_auto] lg:items-center"><div><div className="font-bold text-white">{scenario.name}</div><div className="mt-1 text-xs text-slate-400">{triggerLabel[scenario.trigger]} ・ {audienceLabel(scenario.audience)}</div></div><div className="text-xs text-slate-300">{channelLabels[scenario.channel]}{scenario.channel !== 'email' ? ` ・ LINE${lineMessageLabels[scenario.lineMessageType || 'text']}` : ''}{scenario.waitMinutes > 0 ? ` ・ ${scenario.waitMinutes}分後` : ''}</div><div className="text-xs"><span className={scenario.status === 'prepared' ? 'text-emerald-300' : 'text-amber-300'}>{scenario.status === 'prepared' ? '準備済み（未配信）' : '下書き'}</span><div className="mt-1 text-[10px] text-slate-500">{new Date(scenario.updatedAt).toLocaleString()}</div></div><div className="flex gap-2"><button onClick={() => { markPrepared(scenario); }} className={`rounded-lg border px-3 py-2 text-xs ${scenario.status === 'prepared' ? 'border-emerald-500/30 text-emerald-300' : 'border-slate-700 text-slate-300 hover:bg-slate-800'}`}>{scenario.status === 'prepared' ? '準備済み' : '準備状態にする'}</button><button disabled={scenario.status!=='prepared'||!scenario.consentBasis?.trim()||!supportedAutomationTriggers.has(scenario.trigger)||(scenario.channel!=='email'&&!['text','video'].includes(scenario.lineMessageType||'text'))} onClick={() => { onScenariosChange(scenarios.map((item) => item.id===scenario.id?{...item,automationEnabled:!item.automationEnabled,updatedAt:Date.now()}:item)); setNotice(scenario.automationEnabled?'自動実行を停止しました。':'自動実行を有効にしました。'); }} className={`rounded-lg border px-3 py-2 text-xs ${scenario.automationEnabled?'border-emerald-500/30 text-emerald-300':'border-slate-700 text-slate-300'} disabled:cursor-not-allowed disabled:opacity-40`}>{scenario.automationEnabled?'自動実行中':!supportedAutomationTriggers.has(scenario.trigger)?'開始条件は未対応':scenario.channel!=='email'&&!['text','video'].includes(scenario.lineMessageType||'text')?'LINE形式は未対応':'自動実行を有効化'}</button><button onClick={() => { startEdit(scenario); setNotice(''); }} className="rounded-lg border border-slate-700 px-3 py-2 text-xs text-slate-200 hover:bg-slate-800">編集</button><button onClick={() => deleteScenario(scenario)} aria-label="シナリオを削除" className="rounded-lg border border-slate-700 p-2 text-slate-400 hover:border-rose-500/40 hover:text-rose-300"><Trash2 className="h-4 w-4" /></button></div></article>)}</div>}
+        {!editing && scenarios.length > 0 && <p className="text-[11px] text-slate-500">自動実行は有効化したシナリオのみです。CRMイベントの対象連絡先が配信同意済みの場合に送信し、既存の送信履歴へ記録します。</p>}
       </div>}
 
 
