@@ -15,7 +15,7 @@ function summarizeBroadcastHistory(rows:OutboxHistoryRow[]):Run[]{
   return [...grouped.values()].map(run=>({...run,status:run.pending_count?'sending':run.failed_count===0?'sent':run.sent_count===0?'failed':'partial'})).sort((a,b)=>Date.parse(b.created_at)-Date.parse(a.created_at)).slice(0,30)
 }
 
-export const MarketingBroadcastView: React.FC = () => {
+export const MarketingBroadcastView: React.FC<{initialChannel?:Channel}> = ({initialChannel}) => {
   const [contacts,setContacts]=useState<Contact[]>([]);
   const [segments,setSegments]=useState<Segment[]>([]);
   const [friends,setFriends]=useState<Record<string,Friend>>({});
@@ -25,7 +25,7 @@ export const MarketingBroadcastView: React.FC = () => {
   const [leads,setLeads]=useState<CrmRecord[]>([]);
   const [deals,setDeals]=useState<CrmRecord[]>([]);
   const [customers,setCustomers]=useState<CrmRecord[]>([]);
-  const [channel,setChannel]=useState<Channel>('email');
+  const [channel,setChannel]=useState<Channel>(initialChannel||'email');
   const [segmentId,setSegmentId]=useState('all');
   const [selected,setSelected]=useState<string[]>([]);
   const [audienceMode,setAudienceMode]=useState<'crm'|'prospect_outreach'>('crm');
@@ -182,8 +182,8 @@ export const MarketingBroadcastView: React.FC = () => {
           </select>
         </label>
         <label className="text-sm text-slate-300">配信方法
-          <select value={channel} onChange={e=>{setChannel(e.target.value as Channel);setSelected([]);setPreview(false)}} className="mt-1 block w-full rounded-lg border border-slate-700 bg-slate-950 p-2 text-white">
-            <option value="email">メール</option><option value="line">LINE（配信同意済みのみ）</option>
+          <select value={channel} disabled={Boolean(initialChannel)} onChange={e=>{setChannel(e.target.value as Channel);setSelected([]);setPreview(false)}} className="mt-1 block w-full rounded-lg border border-slate-700 bg-slate-950 p-2 text-white">
+            <option value="email">メール</option><option value="line" disabled={audienceMode==='prospect_outreach'}>LINE（配信同意済みのみ）</option>
           </select>
         </label>
         {audienceMode==='crm'&&<label className="text-sm text-slate-300">CRM対象
