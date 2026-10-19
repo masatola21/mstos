@@ -1747,7 +1747,6 @@ function AppContent() {
           <SalesOperationsWorkspace
             tab="operations"
             companyId={customerWorkspaceCompanyId}
-            contracts={contracts}
             invoices={invoices}
             tasks={tasks}
             onCreateTask={handleCreateTask}
