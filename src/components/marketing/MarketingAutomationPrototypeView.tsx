@@ -4,6 +4,8 @@ import { Activity, ArrowRight, CheckCircle2, Copy, GitBranch, Image as ImageIcon
 import { MarketingChannel, MarketingLineMessageType, MarketingScenario, MarketingTrigger } from '../../types/marketing';
 import { MarketingBroadcastView } from './MarketingBroadcastView';
 import { MarketingLineInboxView } from './MarketingLineInboxView';
+import { MarketingLineSettingsView } from './MarketingLineSettingsView';
+import { MarketingEmailInboxView } from './MarketingEmailInboxView';
 
 interface Props {
   scenarios: MarketingScenario[];
@@ -110,7 +112,8 @@ export const MarketingAutomationPrototypeView: React.FC<Props> = ({ scenarios, o
     return segments.find((segment) => segment.id === id)?.name || value || '配信対象未設定';
   };
   const [activeTab, setActiveTab] = useState<'home' | 'email' | 'line' | 'scenarios'>('home');
-  const [lineView, setLineView] = useState<'broadcast' | 'inbox'>('broadcast');
+  const [lineView, setLineView] = useState<'broadcast' | 'inbox' | 'settings'>('broadcast');
+  const [emailView, setEmailView] = useState<'broadcast' | 'inbox'>('broadcast');
   const [editing, setEditing] = useState<MarketingScenario | null>(null);
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [form, setForm] = useState(emptyScenario());
@@ -287,8 +290,8 @@ export const MarketingAutomationPrototypeView: React.FC<Props> = ({ scenarios, o
 
       {notice && <div role="status" className="rounded-xl border border-emerald-500/30 bg-emerald-500/10 px-4 py-3 text-sm text-emerald-200">{notice}</div>}
 
-      {activeTab === 'email' && <MarketingBroadcastView initialChannel="email" />}
-      {activeTab === 'line' && <div className="space-y-4"><div className="flex gap-2 border-b border-slate-800 pb-3"><button onClick={()=>setLineView('broadcast')} className={`rounded-lg px-3 py-2 text-xs font-semibold ${lineView==='broadcast'?'bg-green-700 text-white':'text-slate-400 hover:bg-slate-800'}`}>配信</button><button onClick={()=>setLineView('inbox')} className={`rounded-lg px-3 py-2 text-xs font-semibold ${lineView==='inbox'?'bg-green-700 text-white':'text-slate-400 hover:bg-slate-800'}`}>受信箱・自動返信</button></div>{lineView==='broadcast'?<MarketingBroadcastView initialChannel="line"/>:<MarketingLineInboxView/>}</div>}
+      {activeTab === 'email' && <div className="space-y-4"><div className="flex gap-2 border-b border-slate-800 pb-3"><button onClick={()=>setEmailView('broadcast')} className="rounded-lg bg-indigo-700 px-3 py-2 text-xs text-white">配信</button><button onClick={()=>setEmailView('inbox')} className="rounded-lg border border-slate-700 px-3 py-2 text-xs text-slate-300">受信箱</button></div>{emailView==='broadcast'?<MarketingBroadcastView initialChannel="email"/>:<MarketingEmailInboxView/>}</div>}
+      {activeTab === 'line' && <div className="space-y-4"><div className="flex flex-wrap gap-2 border-b border-slate-800 pb-3"><button onClick={()=>setLineView('broadcast')} className="rounded-lg bg-green-700 px-3 py-2 text-xs text-white">配信</button><button onClick={()=>setLineView('inbox')} className="rounded-lg border border-slate-700 px-3 py-2 text-xs text-slate-300">受信箱・自動返信</button><button onClick={()=>setLineView('settings')} className="rounded-lg border border-slate-700 px-3 py-2 text-xs text-slate-300">リッチメニュー</button></div>{lineView==='broadcast'?<MarketingBroadcastView initialChannel="line"/>:lineView==='inbox'?<MarketingLineInboxView/>:<MarketingLineSettingsView/>}</div>}
       {activeTab === 'home' && <>
         <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
           {[
