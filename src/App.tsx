@@ -876,22 +876,22 @@ function AppContent() {
     setActivityLogs(loadActivityLogs());
   };
 
-  const handleDeleteProject = (id: string) => {
+  const handleDeleteProject = async (id: string): Promise<void> => {
     const target = projects.find((p) => p.id === id);
     const updated = projects.filter((p) => p.id !== id);
     const relatedTasks = tasks.filter((task) => task.projectId === id);
-    const updatedTasks = relatedTasks.length > 0
-      ? tasks.map((task) => task.projectId === id ? { ...task, projectId: '', updatedAt: Date.now() } : task)
-      : tasks;
-    setProjects(updated);
-    saveProjects(updated);
     if (relatedTasks.length > 0) {
+      const attachments = relatedTasks.flatMap((task) => task.attachments || []);
+      await Promise.all(attachments.map((attachment) => deleteWorkspaceAttachment(attachment)));
+      const updatedTasks = tasks.filter((task) => task.projectId !== id);
       setTasks(updatedTasks);
       saveTasks(updatedTasks);
-      recordActivityLog('task_updated', `プロジェクト削除に伴い、関連タスク${relatedTasks.length}件を「プロジェクト未設定」に移しました`, '人間');
+      recordActivityLog('task_updated', `プロジェクト削除に伴い、関連タスク${relatedTasks.length}件を添付ファイルと一緒に削除しました`, '人間');
     }
+    setProjects(updated);
+    saveProjects(updated);
     if (target) {
-      recordActivityLog('project_updated', `プロジェクト「${target.name}」を削除しました（関連タスク${relatedTasks.length}件は保持）`, '人間');
+      recordActivityLog('project_updated', `プロジェクト「${target.name}」を削除しました（関連タスク${relatedTasks.length}件も削除）`, '人間');
       setActivityLogs(loadActivityLogs());
     }
   };
@@ -1393,9 +1393,9 @@ function AppContent() {
     setProducts(matrixService.loadProducts());
   };
 
-  const handleDeleteProduct = async (id: string, archive: boolean): Promise<boolean> => {
+  const handleDeleteProduct = async (id: string, archive: boolean): Promise<{ success: boolean; message?: string }> => {
     const product = matrixService.loadProducts().find((item) => item.id === id);
-    if (!product) return false;
+    if (!product) return { success: false, message: '商品が見つかりません。画面を再読み込みしてください。' };
     const syncArchivedProduct = async () => {
       if (product.salesCatalogPublishedAt) {
         await publishManagedProductToSalesCatalog(
@@ -1414,16 +1414,14 @@ function AppContent() {
         if (product.salesCatalogPublishedAt) {
           const result = await deleteTableRecord('products', { id: product.id });
           if (result.error) {
-            window.alert(result.error.message);
-            return false;
+            return { success: false, message: result.error.message };
           }
           if (result.blockedBy) {
             await syncArchivedProduct();
             setProducts(matrixService.loadProducts());
             recordActivityLog('project_updated', `商品「${product.name}」は関連データがあるため取扱停止にしました`, '人間');
-            window.alert('商談・契約などから参照されているため完全削除せず、取扱停止にしました。既存の紐づきは保持しています。');
             setActivityLogs(loadActivityLogs());
-            return true;
+            return { success: true, message: '関連データがあるため完全削除せず、取扱停止にしました。関連記録は保持しています。' };
           }
         }
         matrixService.deleteProduct(id);
@@ -1431,16 +1429,15 @@ function AppContent() {
         recordActivityLog('project_updated', `商品「${product.name}」を削除しました`, '人間');
       }
       setActivityLogs(loadActivityLogs());
-      return true;
+      return { success: true, message: archive ? '取扱停止にしました。停止商品一覧から再開できます。' : '商品を削除しました。' };
     } catch (error) {
-      window.alert(error instanceof Error ? error.message : '商品を削除・取扱停止にできませんでした。');
-      return false;
+      return { success: false, message: error instanceof Error ? error.message : '商品を削除・取扱停止にできませんでした。' };
     }
   };
 
-  const handleRestoreProduct = async (id: string): Promise<boolean> => {
+  const handleRestoreProduct = async (id: string): Promise<{ success: boolean; message?: string }> => {
     const product = matrixService.loadProducts().find((item) => item.id === id);
-    if (!product) return false;
+    if (!product) return { success: false, message: '商品が見つかりません。画面を再読み込みしてください。' };
     try {
       if (product.salesCatalogPublishedAt) {
         await publishManagedProductToSalesCatalog(
@@ -1452,10 +1449,9 @@ function AppContent() {
       setProducts(matrixService.loadProducts());
       recordActivityLog('project_updated', `商品「${product.name}」の取扱を再開しました`, '人間');
       setActivityLogs(loadActivityLogs());
-      return true;
+      return { success: true, message: '商品の取扱を再開しました。' };
     } catch (error) {
-      window.alert(error instanceof Error ? error.message : '商品の取扱を再開できませんでした。');
-      return false;
+      return { success: false, message: error instanceof Error ? error.message : '商品の取扱を再開できませんでした。' };
     }
   };
 

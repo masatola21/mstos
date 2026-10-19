@@ -1,5 +1,6 @@
 import React, { Fragment, useEffect, useState } from 'react';
 import { getSupabase } from '../lib/supabaseClient';
+import { InlineDeleteButton } from './InlineDeleteButton';
 import { ArrowDown, ArrowUp, Clipboard, ClipboardCheck, ExternalLink, Plus, RefreshCw, Save, Trash2 } from 'lucide-react';
 
 type FormType = 'diagnosis' | 'consultation' | 'meeting';
@@ -183,15 +184,15 @@ export const DiagnosisFormsWorkspace: React.FC<DiagnosisFormsWorkspaceProps> = (
   const deleteSelectedForm = async () => {
     const form = forms.find(item => item.id === selectedId);
     if (!form) return;
-    if (!window.confirm(`フォーム「${form.name}」を完全に削除しますか？\nこの操作は取り消せません。`)) return;
     const supabase = getSupabase();
     if (!supabase) return;
     setError(''); setNotice('');
-    const { error: delError } = await supabase.from('diagnosis_forms').delete().eq('id', form.id);
+    const { data: deleted, error: delError } = await supabase.from('diagnosis_forms').delete().eq('id', form.id).select('id').maybeSingle();
     if (delError) {
       setError('フォームを削除できませんでした: ' + delError.message);
       return;
     }
+    if (!deleted) { setError('削除対象が見つからないか、削除権限がありません。'); return; }
     setNotice(`フォーム「${form.name}」を削除しました。`);
     resetForm();
     await load();
@@ -303,7 +304,7 @@ export const DiagnosisFormsWorkspace: React.FC<DiagnosisFormsWorkspaceProps> = (
                 )}
                 <button type="button" onClick={() => { const f = forms.find(x => x.id === selectedId); if (f) void updateStatus(f, 'archived'); }} className="rounded border border-slate-700 px-3 py-1.5 text-xs text-slate-300 hover:bg-slate-800">アーカイブ</button>
                 <button type="button" onClick={() => { const f = forms.find(x => x.id === selectedId); if (f) void updateStatus(f, 'draft'); }} className="rounded border border-slate-700 px-3 py-1.5 text-xs text-slate-300 hover:bg-slate-800">下書きに戻す</button>
-                <button type="button" onClick={deleteSelectedForm} className="rounded border border-rose-800 bg-rose-950/40 px-3 py-1.5 text-xs text-rose-300 hover:bg-rose-900/60">フォームを削除</button>
+                <InlineDeleteButton onConfirm={()=>void deleteSelectedForm()} warning={`フォーム「${forms.find(item => item.id === selectedId)?.name || ''}」を完全に削除しますか？この操作は取り消せません。`} confirmLabel="フォーム削除を確定" className="rounded border border-rose-800 bg-rose-950/40 px-3 py-1.5 text-xs text-rose-300 hover:bg-rose-900/60">フォームを削除</InlineDeleteButton>
               </div>
             )}
           </section>

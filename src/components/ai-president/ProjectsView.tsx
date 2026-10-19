@@ -13,6 +13,7 @@ import {
   ArrowRight,
   Filter,
 } from 'lucide-react';
+import { InlineDeleteButton } from '../InlineDeleteButton';
 import { Project, TaskItem, ProjectStatus, Priority } from '../types';
 
 interface ProjectsViewProps {
@@ -20,7 +21,7 @@ interface ProjectsViewProps {
   tasks: TaskItem[];
   onCreateProject: (project: Omit<Project, 'id' | 'createdAt' | 'updatedAt'>) => void;
   onUpdateProject: (project: Project) => void;
-  onDeleteProject: (id: string) => void;
+  onDeleteProject: (id: string) => void | Promise<void>;
   onNavigateToTasksWithFilter: (projectId: string) => void;
 }
 
@@ -226,24 +227,17 @@ export const ProjectsView: React.FC<ProjectsViewProps> = ({
                       >
                         <Edit2 className="w-3.5 h-3.5" />
                       </button>
-                      <button
-                        type="button"
-                        onClick={() => {
-                          if (
-                            window.confirm(
-                              relatedTaskCount > 0
-                                ? `プロジェクト「${p.name}」を削除しますか？関連タスク${relatedTaskCount}件は削除せず、「プロジェクト未設定」に移します。`
-                                : `プロジェクト「${p.name}」を削除しますか？`
-                            )
-                          ) {
-                            onDeleteProject(p.id);
-                          }
-                        }}
+                      <InlineDeleteButton
+                        onConfirm={() => onDeleteProject(p.id)}
+                        warning={relatedTaskCount > 0
+                          ? `プロジェクト「${p.name}」と関連タスク${relatedTaskCount}件を削除します。この操作は元に戻せません。`
+                          : `プロジェクト「${p.name}」を削除しますか？`}
+                        confirmLabel={relatedTaskCount > 0 ? 'プロジェクトとタスクを削除' : 'プロジェクト削除を確定'}
+                        ariaLabel={`プロジェクト「${p.name}」を削除`}
                         title="削除"
-                        className="p-1.5 rounded-lg text-slate-400 hover:text-rose-400 hover:bg-slate-800 cursor-pointer"
-                      >
+                        className="p-1.5 rounded-lg text-slate-400 hover:text-rose-400 hover:bg-slate-800 cursor-pointer">
                         <Trash2 className="w-3.5 h-3.5" />
-                      </button>
+                      </InlineDeleteButton>
                     </div>
                   </div>
 
