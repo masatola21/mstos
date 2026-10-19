@@ -4,6 +4,7 @@ import { getSupabase } from '../../lib/supabaseClient';
 type Contact = { id:string; full_name:string|null; email:string|null; line_user_id:string|null; company_id:string|null };
 type CrmRecord = Record<string, unknown> & { id?: string; company_id?: string | null; contact_id?: string | null; lead_id?: string | null };
 type Segment = { id:string; name:string; entity_type:string; conditions:Record<string,unknown> };
+const segmentEntityLabels:Record<string,string>={contacts:'連絡先',companies:'会社',prospects:'見込み企業',leads:'リード',deals:'商談',customers:'顧客'};
 type Friend = { line_user_id:string; status:string; consent_status:string };
 type Run = { id:string; name:string; channel:string; status:string; total_count:number; sent_count:number; failed_count:number; created_at:string };
 type OutboxHistoryRow = { source_id:string|null; channel:string; status:string; subject:string|null; body_text:string; created_at:string };
@@ -175,7 +176,7 @@ export const MarketingBroadcastView: React.FC = () => {
         <label className="text-sm text-slate-300">CRM対象
           <select value={segmentId} onChange={e=>{setSegmentId(e.target.value);setSelected([]);setPreview(false)}} className="mt-1 block w-full rounded-lg border border-slate-700 bg-slate-950 p-2 text-white">
             <option value="all">全連絡先から抽出</option>
-            {segments.map(x=><option key={x.id} value={x.id}>{x.name}（{{contacts:'連絡先',companies:'会社',prospects:'見込み企業',leads:'リード',deals:'商談',customers:'顧客'}[x.entity_type]||x.entity_type}）</option>)}
+            {segments.map(x=><option key={x.id} value={x.id}>{x.name}（{segmentEntityLabels[x.entity_type]||x.entity_type}）</option>)}
           </select>
         </label>
       </div>
