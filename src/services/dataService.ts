@@ -203,7 +203,7 @@ const TABLE_REFERENCE_CHECKS: Partial<Record<TableKey, Array<{ table: string; fi
     { table: 'customer_documents', field: 'company_id' }, { table: 'customer_service_engagements', field: 'company_id' },
   ],
   contacts: [{ table: 'communication_outbox', field: 'recipient_contact_id' }],
-  prospects: [{ table: 'leads', field: 'prospect_id' }, { table: 'deals', field: 'prospect_id' }],
+  prospects: [],
   leads: [{ table: 'deals', field: 'lead_id' }, { table: 'diagnoses', field: 'lead_id' }],
   products: [
     { table: 'deals', field: 'product_id' }, { table: 'customer_contracts', field: 'product_id' },
@@ -214,11 +214,15 @@ const TABLE_REFERENCE_CHECKS: Partial<Record<TableKey, Array<{ table: string; fi
     { table: 'customer_contracts', field: 'deal_id' }, { table: 'customer_documents', field: 'deal_id' },
     { table: 'communication_outbox', field: 'deal_id' },
   ],
+  customers: [
+    { table: 'customer_contracts', field: 'company_id' }, { table: 'customer_invoices', field: 'company_id' },
+    { table: 'customer_documents', field: 'company_id' }, { table: 'customer_service_engagements', field: 'company_id' },
+  ],
 };
 
 export async function deleteTableRecord(
   tableKey: TableKey,
-  id: string | number,
+  record: { id: string | number; company_id?: string | null },
 ): Promise<{ error?: DataFetchError; blockedBy?: string }> {
   const supabase = getSupabase();
   if (!supabase) return { error: { type: 'NOT_CONFIGURED', message: 'Supabaseが初期化されていません。' } };
@@ -228,7 +232,7 @@ export async function deleteTableRecord(
       const { data, error } = await supabase
         .from(reference.table)
         .select('id')
-        .eq(reference.field, id)
+        .eq(reference.field, tableKey === 'customers' ? record.company_id || record.id : record.id)
         .limit(1);
       if (error) {
         return { error: parseSupabaseError(error) };
@@ -238,7 +242,7 @@ export async function deleteTableRecord(
       }
     }
 
-    const { error } = await supabase.from(tableKey).delete().eq('id', id);
+    const { error } = await supabase.from(tableKey).delete().eq('id', record.id);
     if (error) return { error: parseSupabaseError(error) };
     return {};
   } catch (err: any) {
