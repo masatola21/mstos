@@ -31,6 +31,7 @@ import { ProductHubView } from './components/matrix/ProductHubView';
 import { CategoryHubView } from './components/matrix/CategoryHubView';
 import { CustomListManager } from './components/matrix/CustomListManager';
 import { SalesOperationsWorkspace } from './components/SalesOperationsWorkspace';
+import { CommunicationSendCenter } from './components/CommunicationSendCenter';
 import { AutomationView } from './components/matrix/AutomationView';
 import { DocumentTemplateView } from './components/matrix/DocumentTemplateView';
 import { MarketingAutomationPrototypeView } from './components/marketing/MarketingAutomationPrototypeView';
@@ -229,7 +230,7 @@ async function loadTaskRelatedContext(task: TaskItem): Promise<string> {
 function AppContent() {
   const { user, isLoading } = useAuth();
   const [currentTab, setCurrentTab] = useState<UnifiedNavTab>('mst_dashboard');
-  const [customerWorkspaceContext, setCustomerWorkspaceContext] = useState<{ companyId: string; leadId?: string; dealId?: string; section?: 'forms' | 'diagnoses'; documentType?: 'invoice' } | undefined>();
+  const [customerWorkspaceContext, setCustomerWorkspaceContext] = useState<{ companyId: string; leadId?: string; dealId?: string; section?: 'forms' | 'diagnoses'; documentType?: 'invoice'; documentId?: string } | undefined>();
   const customerWorkspaceCompanyId = customerWorkspaceContext?.companyId;
   const [workspaceReady, setWorkspaceReady] = useState(false);
   const [workspaceSyncStatus, setWorkspaceSyncStatus] = useState<'loading' | 'saving' | 'saved' | 'error'>('loading');
@@ -1708,8 +1709,9 @@ function AppContent() {
           <DiagnosisManager onOpenRls={() => setIsRlsOpen(true)} initialLeadId={customerWorkspaceContext?.leadId} initialCompanyId={customerWorkspaceContext?.companyId} initialSection={customerWorkspaceContext?.section} />
         )}
 
-        {currentTab === 'deal_invitations' && <SalesOperationsWorkspace tab="invitations" />}
-        {currentTab === 'customer_meeting_invitations' && <SalesOperationsWorkspace tab="customer_invitations" />}
+        {currentTab === 'deal_invitations' && <CommunicationSendCenter initialKind="deal" />}
+        {currentTab === 'customer_meeting_invitations' && <CommunicationSendCenter initialKind="announcement" />}
+        {currentTab === 'communication_send' && <CommunicationSendCenter initialKind="form" initialCompanyId={customerWorkspaceContext?.companyId} initialDocumentId={customerWorkspaceContext?.documentId} />}
 
         {['companies', 'prospects', 'leads', 'products', 'deals', 'customers'].includes(currentTab) && (
           <TableManager
@@ -1784,9 +1786,9 @@ function AppContent() {
             onMilestoneReached={handleServiceMilestoneReached}
             onContractSigned={handleOperationalContractSigned}
             onInvoiceOverdue={handleOperationalInvoiceOverdue}
-            onOpenInvoiceDocuments={(companyId) => {
-              setCustomerWorkspaceContext({ companyId, documentType: 'invoice' });
-              setCurrentTab('document_templates');
+            onOpenInvoiceDocuments={(companyId, documentId) => {
+              setCustomerWorkspaceContext({ companyId, documentId });
+              setCurrentTab('communication_send');
             }}
           />
         )}
