@@ -6,6 +6,7 @@ import { MarketingChannel, MarketingLineMessageType, MarketingScenario, Marketin
 interface Props {
   scenarios: MarketingScenario[];
   onScenariosChange: (scenarios: MarketingScenario[]) => void;
+  onNavigateTab?: (tab: 'communication_send' | 'custom_lists' | 'contacts') => void;
 }
 
 const triggerOptions: Array<{ value: MarketingTrigger; label: string }> = [
@@ -92,7 +93,7 @@ const emptyScenario = (): Omit<MarketingScenario, 'id' | 'updatedAt'> => ({
   status: 'draft',
 });
 
-export const MarketingAutomationPrototypeView: React.FC<Props> = ({ scenarios, onScenariosChange }) => {
+export const MarketingAutomationPrototypeView: React.FC<Props> = ({ scenarios, onScenariosChange, onNavigateTab }) => {
   const [segments, setSegments] = useState<Array<{id:string;name:string;entity_type:string}>>([]);
   useEffect(() => {
     const supabase = getSupabase();
@@ -104,7 +105,7 @@ export const MarketingAutomationPrototypeView: React.FC<Props> = ({ scenarios, o
     const id = value.startsWith('segment:') ? value.slice('segment:'.length) : '';
     return segments.find((segment) => segment.id === id)?.name || value || '配信対象未設定';
   };
-  const [activeTab, setActiveTab] = useState<'overview' | 'channels' | 'workflow' | 'scenarios' | 'connections'>('overview');
+  const [activeTab, setActiveTab] = useState<'home' | 'scenarios' | 'settings'>('home');
   const [editing, setEditing] = useState<MarketingScenario | null>(null);
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [form, setForm] = useState(emptyScenario());
@@ -249,11 +250,9 @@ export const MarketingAutomationPrototypeView: React.FC<Props> = ({ scenarios, o
   };
 
   const tabs = [
-    { id: 'overview' as const, label: '全体像', icon: GitBranch },
-    { id: 'channels' as const, label: 'チャネルと役割', icon: Radio },
-    { id: 'workflow' as const, label: '施策の設定範囲', icon: Zap },
-    { id: 'scenarios' as const, label: 'シナリオ設定', icon: Zap },
-    { id: 'connections' as const, label: 'LINE・メール接続', icon: Webhook },
+    { id: 'home' as const, label: 'ホーム', icon: GitBranch },
+    { id: 'scenarios' as const, label: '自動化シナリオ', icon: Zap },
+    { id: 'settings' as const, label: '接続設定', icon: Webhook },
   ];
 
   return (
@@ -263,9 +262,9 @@ export const MarketingAutomationPrototypeView: React.FC<Props> = ({ scenarios, o
           <div>
             <div className="mb-2 flex flex-wrap items-center gap-2">
               <h1 className="text-2xl font-black text-white">マーケティングオートメーション</h1>
-              <span className="rounded-full border border-amber-400/30 bg-amber-500/10 px-2.5 py-1 text-xs font-semibold text-amber-300">段階導入</span>
+              <span className="rounded-full border border-amber-400/30 bg-amber-500/10 px-2.5 py-1 text-xs font-semibold text-amber-300">準備中</span>
             </div>
-            <p className="max-w-3xl text-sm leading-6 text-slate-300">CRMの配信対象と開始条件を選び、LINE・メールの案内シナリオと文案を準備します。顧客・商談・契約などの業務記録は各管理画面を正本にします。</p>
+            <p className="max-w-3xl text-sm leading-6 text-slate-300">LINE・メールの案内と自動化をまとめて管理します。顧客・リード情報は既存のCRMを正本として利用します。</p>
           </div>
           <button onClick={startNew} className="flex shrink-0 items-center justify-center gap-2 rounded-xl bg-indigo-600 px-4 py-2.5 text-sm font-semibold text-white hover:bg-indigo-500"><Plus className="h-4 w-4" />シナリオ作成</button>
         </div>
@@ -276,87 +275,47 @@ export const MarketingAutomationPrototypeView: React.FC<Props> = ({ scenarios, o
 
       {notice && <div role="status" className="rounded-xl border border-emerald-500/30 bg-emerald-500/10 px-4 py-3 text-sm text-emerald-200">{notice}</div>}
 
-      {activeTab === 'overview' && <>
+      {activeTab === 'home' && <>
         <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
           {[
-            { label: '登録シナリオ', value: String(scenarios.length), note: 'Supabaseに保存', icon: GitBranch, color: 'text-cyan-300' },
-            { label: '準備済み', value: String(preparedCount), note: '配信接続後に有効化', icon: CheckCircle2, color: 'text-emerald-300' },
-            { label: 'LINEを使うシナリオ', value: String(lineCount), note: '接続設定が必要', icon: MessageCircle, color: 'text-green-300' },
-            { label: 'メールを使うシナリオ', value: String(emailCount), note: '送信サービス設定が必要', icon: Mail, color: 'text-purple-300' },
+            { label: '登録シナリオ', value: String(scenarios.length), note: '手動確認・配信の準備', icon: GitBranch, color: 'text-cyan-300' },
+            { label: '準備済み', value: String(preparedCount), note: '自動配信は未接続', icon: CheckCircle2, color: 'text-emerald-300' },
+            { label: 'LINEシナリオ', value: String(lineCount), note: 'LINE配信設定へ', icon: MessageCircle, color: 'text-green-300' },
+            { label: 'メールシナリオ', value: String(emailCount), note: 'メール送信設定へ', icon: Mail, color: 'text-purple-300' },
           ].map(({ label, value, note, icon: Icon, color }) => <div key={label} className="rounded-xl border border-slate-800 bg-slate-900 p-4"><div className="flex items-center justify-between text-xs text-slate-400"><span>{label}</span><Icon className={`h-4 w-4 ${color}`} /></div><div className="mt-2 text-2xl font-black text-white">{value}</div><div className="mt-1 text-[11px] text-slate-500">{note}</div></div>)}
         </div>
         <section className="rounded-2xl border border-slate-800 bg-slate-900 p-5">
-          <div className="mb-5"><h2 className="font-bold text-white">マーケティングで設定するもの</h2><p className="mt-1 text-xs text-slate-400">顧客・商談・契約などの記録は各機能に置き、ここでは配信施策を準備します。</p></div>
-          <div className="grid gap-3 md:grid-cols-3">
-            {[
-              { title: '配信対象', detail: 'CRMセグメントから選択', icon: Tags },
-              { title: '開始条件', detail: 'シナリオの起点を設定', icon: GitBranch },
-              { title: '案内文案', detail: 'LINE・メールを準備', icon: MessageCircle },
-            ].map(({ title, detail, icon: Icon }) => <div key={title} className="rounded-xl border border-slate-800 bg-slate-950/70 p-4"><Icon className="mb-3 h-5 w-5 text-indigo-300" /><div className="text-sm font-bold text-white">{title}</div><div className="mt-1 text-[11px] text-slate-400">{detail}</div></div>)}
+          <div className="mb-4"><h2 className="font-bold text-white">チャネルから開く</h2><p className="mt-1 text-xs text-slate-400">顧客・リード情報は既存CRMを正本として使い、フォームは既存機能を利用します。</p></div>
+          <div className="grid gap-4 lg:grid-cols-2">
+            <article className="rounded-xl border border-green-500/20 bg-slate-950/70 p-5">
+              <div className="flex items-center gap-3"><MessageCircle className="h-6 w-6 text-green-300" /><div><h3 className="font-bold text-white">LINE</h3><p className="text-xs text-slate-400">シナリオ・友だち情報・送信</p></div></div>
+              <div className="mt-4 flex flex-wrap gap-2">
+                <button onClick={() => setActiveTab('scenarios')} className="rounded-lg bg-green-700/70 px-3 py-2 text-xs font-semibold text-white hover:bg-green-600">LINEシナリオ</button>
+                <button onClick={() => onNavigateTab?.('contacts')} className="rounded-lg border border-slate-700 px-3 py-2 text-xs text-slate-200 hover:bg-slate-800">友だち・タグ管理</button>
+                <button onClick={() => setActiveTab('settings')} className="rounded-lg border border-slate-700 px-3 py-2 text-xs text-slate-200 hover:bg-slate-800">接続設定</button>
+              </div>
+              <p className="mt-3 text-[11px] text-amber-300">受信箱・個別返信・リッチメニュー設定は未実装です。</p>
+            </article>
+            <article className="rounded-xl border border-purple-500/20 bg-slate-950/70 p-5">
+              <div className="flex items-center gap-3"><Mail className="h-6 w-6 text-purple-300" /><div><h3 className="font-bold text-white">メール</h3><p className="text-xs text-slate-400">シナリオ・テンプレート・送信</p></div></div>
+              <div className="mt-4 flex flex-wrap gap-2">
+                <button onClick={() => setActiveTab('scenarios')} className="rounded-lg bg-purple-700/70 px-3 py-2 text-xs font-semibold text-white hover:bg-purple-600">メールシナリオ</button>
+                <button onClick={() => onNavigateTab?.('communication_send')} className="rounded-lg border border-slate-700 px-3 py-2 text-xs text-slate-200 hover:bg-slate-800">送信センター</button>
+                <button onClick={() => setActiveTab('settings')} className="rounded-lg border border-slate-700 px-3 py-2 text-xs text-slate-200 hover:bg-slate-800">接続設定</button>
+              </div>
+              <p className="mt-3 text-[11px] text-amber-300">受信箱・個別返信の統合は未実装です。</p>
+            </article>
           </div>
         </section>
-        <section className="rounded-2xl border border-slate-800 bg-slate-900 p-5"><div className="flex items-center gap-2"><Activity className="h-4 w-4 text-indigo-300" /><h2 className="font-bold text-white">保存先と接続状態</h2></div><p className="mt-2 text-sm text-slate-300">シナリオはユーザー別のSupabaseワークスペースに保存します。LINE・メールの認証情報はブラウザーには保存せず、サーバー側の接続設定後に実配信を追加します。</p><button onClick={() => setActiveTab('connections')} className="mt-3 text-xs font-semibold text-indigo-300 hover:text-indigo-200">接続状況を確認 →</button></section>
-      </>}
-
-      {activeTab === 'channels' && <div className="space-y-4">
-        <section className="rounded-2xl border border-indigo-500/30 bg-indigo-950/25 p-5">
-          <h2 className="text-lg font-bold text-white">目的で分け、配信チャネルは共通化</h2>
-          <p className="mt-2 max-w-4xl text-sm leading-6 text-slate-300">マーケティング機能は「誰に何を届けるか」で整理します。集客は新しい接点を作り、育成・営業配信はCRMに登録された相手との関係を進めます。顧客情報や営業段階はCRMを正本にします。</p>
-        </section>
-        <div className="grid gap-4 xl:grid-cols-2">
-          <article className="rounded-2xl border border-cyan-500/25 bg-slate-900 p-5">
-            <div className="flex items-center gap-2"><MousePointerClick className="h-5 w-5 text-cyan-300" /><h3 className="text-lg font-bold text-white">集客・認知</h3></div>
-            <p className="mt-2 text-sm text-slate-300">まだ接点のない人に情報を届け、LP・フォーム・LINE登録へつなげます。</p>
-            <div className="mt-4 flex flex-wrap gap-2"><span className="rounded-full bg-slate-800 px-3 py-1.5 text-xs text-white">Instagram</span><span className="rounded-full bg-slate-800 px-3 py-1.5 text-xs text-white">Facebook</span><span className="rounded-full bg-slate-800 px-3 py-1.5 text-xs text-white">広告・LP</span></div>
-            <ul className="mt-4 space-y-2 text-xs leading-5 text-slate-400">
-              <li>管理するもの：投稿案、広告施策、リンク、流入・反応指標</li>
-              <li>CRMとの接点：フォームやLINE登録が起きた時点で連絡先・リードへつなぐ</li>
-              <li className="text-amber-300">現状：SNS投稿・広告のAPI連携と実行機能は未実装</li>
-            </ul>
-          </article>
-          <article className="rounded-2xl border border-purple-500/25 bg-slate-900 p-5">
-            <div className="flex items-center gap-2"><MessageCircle className="h-5 w-5 text-purple-300" /><h3 className="text-lg font-bold text-white">育成・営業配信</h3></div>
-            <p className="mt-2 text-sm text-slate-300">CRMの状態や同意に応じて、診断案内・情報提供・商談フォローを届けます。</p>
-            <div className="mt-4 flex flex-wrap gap-2"><span className="rounded-full bg-slate-800 px-3 py-1.5 text-xs text-white">LINE</span><span className="rounded-full bg-slate-800 px-3 py-1.5 text-xs text-white">メール</span></div>
-            <ul className="mt-4 space-y-2 text-xs leading-5 text-slate-400">
-              <li>管理するもの：個別・一斉配信、シナリオ、予約配信、停止・送信履歴</li>
-              <li>CRMとの接点：配信対象は会社・連絡先・リード・商談の条件から選ぶ</li>
-              <li className="text-amber-300">現状：LINE・メール文案とシナリオの保存まで。実送信は未接続</li>
-            </ul>
-            <button onClick={() => setActiveTab('scenarios')} className="mt-4 inline-flex items-center gap-2 rounded-lg bg-indigo-600 px-3 py-2 text-xs font-semibold text-white hover:bg-indigo-500">シナリオ設定を見る <ArrowRight className="h-3.5 w-3.5" /></button>
-          </article>
-        </div>
         <section className="rounded-2xl border border-slate-800 bg-slate-900 p-5">
-          <h3 className="font-bold text-white">顧客・契約の記録場所</h3>
-          <p className="mt-2 text-sm leading-6 text-slate-300">契約・請求・顧問・構築支援の状態は「契約・請求・支援」で管理します。この画面は配信チャネルと施策の設定を扱い、顧客の業務状態は複製しません。個別書類の送付は対象顧客の書類画面から行います。</p>
-        </section>
-      </div>}
-
-      {activeTab === 'workflow' && <div className="space-y-4">
-        <section className="rounded-2xl border border-indigo-500/30 bg-indigo-950/25 p-5">
-          <h2 className="text-lg font-bold text-white">マーケティング施策の設定から配信準備まで</h2>
-          <p className="mt-2 text-sm leading-6 text-slate-300">ここでは配信対象・開始条件・案内文案を管理します。シナリオの保存と準備状態の記録はできますが、イベントによる自動起動や実配信は未接続です。</p>
-          <div className="mt-4 flex flex-wrap gap-2 text-[11px]">
-            <span className="rounded-full bg-cyan-500/10 px-3 py-1.5 text-cyan-200">CRM：顧客情報の正本</span>
-            <span className="rounded-full bg-purple-500/10 px-3 py-1.5 text-purple-200">外部AI：任意の草案作成</span>
-            <span className="rounded-full bg-amber-500/10 px-3 py-1.5 text-amber-200">送信：接続・承認処理が必要</span>
+          <div className="mb-4"><h2 className="font-bold text-white">共通の自動化</h2><p className="mt-1 text-xs text-slate-400">顧客状態を起点にしたシナリオと配信対象を管理します。</p></div>
+          <div className="grid gap-3 sm:grid-cols-2">
+            <button onClick={() => setActiveTab('scenarios')} className="flex items-center justify-between rounded-xl border border-slate-700 bg-slate-950/70 p-4 text-left hover:border-indigo-500/40"><span><span className="block text-sm font-bold text-white">シナリオ設定</span><span className="mt-1 block text-xs text-slate-400">開始条件・チャネル・文案を編集</span></span><ArrowRight className="h-4 w-4 text-indigo-300" /></button>
+            <button onClick={() => onNavigateTab?.('custom_lists')} className="flex items-center justify-between rounded-xl border border-slate-700 bg-slate-950/70 p-4 text-left hover:border-indigo-500/40"><span><span className="block text-sm font-bold text-white">配信対象・CRMセグメント</span><span className="mt-1 block text-xs text-slate-400">既存CRMのセグメント管理を開く</span></span><ArrowRight className="h-4 w-4 text-indigo-300" /></button>
           </div>
+          <p className="mt-4 text-[11px] leading-5 text-slate-500">集客チャネルや外部アプリ連携は、接続機能の実装時に追加できる構成です。現段階はLINE・メールを対象にします。</p>
         </section>
-        <div className="space-y-3">
-          {workflowStages.map((stage, index) => <article key={stage.title} className="rounded-2xl border border-slate-800 bg-slate-900 p-5">
-            <div className="flex flex-wrap items-start justify-between gap-3">
-              <div className="flex items-start gap-3"><span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-xl bg-indigo-500/15 text-sm font-black text-indigo-200">{index + 1}</span><div><h3 className="font-bold text-white">{stage.title}</h3><p className="mt-1 text-xs text-slate-400">開始条件：{stage.trigger}</p></div></div>
-              <span className="rounded-full border border-slate-700 bg-slate-950 px-2.5 py-1 text-[10px] text-slate-300">{stage.status}</span>
-            </div>
-            <div className="mt-4 grid gap-3 md:grid-cols-3">
-              <div className="rounded-xl border border-cyan-500/15 bg-cyan-950/20 p-3"><div className="text-[11px] font-bold text-cyan-200">OSの自動処理</div><p className="mt-2 text-xs leading-5 text-slate-300">{stage.automation}</p></div>
-              <div className="rounded-xl border border-purple-500/15 bg-purple-950/20 p-3"><div className="text-[11px] font-bold text-purple-200">必要な時だけAI</div><p className="mt-2 text-xs leading-5 text-slate-300">{stage.ai}</p></div>
-              <div className="rounded-xl border border-amber-500/15 bg-amber-950/20 p-3"><div className="text-[11px] font-bold text-amber-200">人の確認・保存データ</div><p className="mt-2 text-xs leading-5 text-slate-300">{stage.approval}</p><p className="mt-2 border-t border-slate-800 pt-2 text-[10px] leading-4 text-slate-500">記録：{stage.data}</p></div>
-            </div>
-          </article>)}
-        </div>
-        <p className="rounded-xl border border-amber-500/20 bg-amber-950/20 p-4 text-xs leading-5 text-amber-100/80">この画面でできるのは配信対象・シナリオ・文案の準備です。イベントによる自動起動、LINE/メール送信、送信履歴、配信停止処理は未接続です。診断・商談・契約・請求の状態はそれぞれの管理画面で確認します。</p>
-      </div>}
+      </>}
 
       {activeTab === 'scenarios' && <div className="space-y-4">
         {isFormOpen ? (
@@ -393,7 +352,7 @@ export const MarketingAutomationPrototypeView: React.FC<Props> = ({ scenarios, o
         {!editing && scenarios.length > 0 && <p className="text-[11px] text-slate-500">「準備状態」はシナリオの設定整理を示します。配信接続と実行処理が未実装のため、自動送信はしません。</p>}
       </div>}
 
-      {activeTab === 'connections' && <div className="grid gap-4 lg:grid-cols-2">
+      {activeTab === 'settings' && <div className="grid gap-4 lg:grid-cols-2">
         <section className="rounded-2xl border border-slate-800 bg-slate-900 p-5"><div className="flex items-start justify-between gap-3"><div className="flex items-center gap-2"><MessageCircle className="h-5 w-5 text-green-300" /><div><h2 className="text-lg font-bold text-white">LINE公式アカウント</h2><p className="text-xs text-slate-400">Messaging APIを利用</p></div></div><span className="rounded-full bg-slate-800 px-2 py-1 text-[10px] text-amber-300">未接続</span></div><p className="mt-4 text-sm leading-6 text-slate-300">チャネルアクセストークンなどの秘密情報は、フロントエンドやブラウザー保存に置かず、Supabase Edge Functionのサーバー側シークレットとして設定します。</p></section>
         <section className="rounded-2xl border border-slate-800 bg-slate-900 p-5"><div className="flex items-start justify-between gap-3"><div className="flex items-center gap-2"><Mail className="h-5 w-5 text-purple-300" /><div><h2 className="text-lg font-bold text-white">メール送信サービス</h2><p className="text-xs text-slate-400">Resendなど差し替え可能な送信アダプター</p></div></div><span className="rounded-full bg-slate-800 px-2 py-1 text-[10px] text-amber-300">未接続</span></div><p className="mt-4 text-sm leading-6 text-slate-300">送信元ドメインとAPIキーをサーバー側に設定します。特定のメールサービスに固定しないアダプター構成を想定しています。</p></section>
         <section className="rounded-2xl border border-indigo-500/30 bg-indigo-950/30 p-5 lg:col-span-2"><h2 className="font-bold text-white">実配信を有効にする前の確認</h2><p className="mt-2 text-sm leading-6 text-slate-300">次の段階で、LINE / メールのサーバー側送信処理、配信同意・停止、重複送信防止、送信履歴、承認設定を追加します。接続先を交換できるようにし、MSTの顧客台帳をデータの正本に保ちます。</p></section>
