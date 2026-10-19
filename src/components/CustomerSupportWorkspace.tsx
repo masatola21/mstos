@@ -350,9 +350,8 @@ export const CustomerSupportWorkspace: React.FC<Props> = ({
     });
   };
 
-  const addCustomPhase = (event: React.FormEvent) => {
-    event.preventDefault();
-    const value = customPhaseDraft.trim();
+  const addCustomPhase = (input: string) => {
+    const value = input.trim();
     if (!value || !selected) return;
     setSummaryDraft((current) => ({
       ...current,
@@ -458,10 +457,10 @@ export const CustomerSupportWorkspace: React.FC<Props> = ({
           <label className="text-xs text-slate-300 md:col-span-2">次回までに確認しておく事項<textarea value={summaryDraft.nextChecklist || ''} onChange={(event) => setSummaryDraft({ ...summaryDraft, nextChecklist: event.target.value })} rows={2} className="mt-1 w-full rounded border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-white" /></label>
           <div className="md:col-span-2">
             <div className="mb-2 text-xs text-slate-300">顧客ごとのフェーズ候補</div>
-            <form onSubmit={addCustomPhase} className="flex gap-2">
-              <input value={customPhaseDraft} onChange={(event) => setCustomPhaseDraft(event.target.value)} placeholder="個別フェーズを追加" className="min-w-0 flex-1 rounded border border-slate-700 bg-slate-950 px-3 py-2 text-xs text-white" />
-              <button className="rounded border border-slate-700 px-3 py-2 text-xs text-white">追加</button>
-            </form>
+            <div className="flex gap-2">
+              <input value={customPhaseDraft} onChange={(event) => setCustomPhaseDraft(event.target.value)} onKeyDown={(event) => { if (event.key === 'Enter') { event.preventDefault(); addCustomPhase(customPhaseDraft); } }} placeholder="個別フェーズを追加" className="min-w-0 flex-1 rounded border border-slate-700 bg-slate-950 px-3 py-2 text-xs text-white" />
+              <button type="button" onClick={() => addCustomPhase(customPhaseDraft)} className="rounded border border-slate-700 px-3 py-2 text-xs text-white">追加</button>
+            </div>
             {summaryDraft.phases?.length ? <div className="mt-2 flex flex-wrap gap-2">{summaryDraft.phases.map((phase) => <span key={phase} className="rounded bg-slate-800 px-2 py-1 text-xs text-slate-200">{phase}</span>)}</div> : null}
           </div>
           <div className="flex items-center justify-between gap-3 md:col-span-2"><span className="text-xs text-slate-500">契約・顧客情報は既存レコードを参照しています。</span><button className="inline-flex items-center gap-2 rounded bg-emerald-700 px-3 py-2 text-sm font-semibold text-white"><Save className="h-4 w-4" />支援状況を保存</button></div>
