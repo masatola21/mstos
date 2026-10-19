@@ -100,6 +100,7 @@ import { RoleAIEditor } from './components/ai-president/RoleAIEditor';
 import { ModelSettingsModal } from './components/ai-president/ModelSettingsModal';
 import { useProviderStatus } from './components/ai-president/ModelSettingEditor';
 import { matrixService } from './services/matrixService';
+import { publishManagedProductToSalesCatalog } from './services/productCatalogService';
 import { deleteWorkspaceAttachment, downloadWorkspaceAttachment, uploadWorkspaceAttachment } from './services/knowledgeAttachmentService';
 import {
   loadOrMigrateWorkspaceData,
@@ -1373,6 +1374,16 @@ function AppContent() {
     setProducts(matrixService.loadProducts());
   };
 
+  const handlePublishProduct = async (product: ManagedProduct, fees: { initialFee: number; monthlyFee: number }) => {
+    await publishManagedProductToSalesCatalog(product, fees);
+    matrixService.updateProduct(product.id, {
+      salesInitialFee: fees.initialFee,
+      salesMonthlyFee: fees.monthlyFee,
+      salesCatalogPublishedAt: Date.now(),
+    });
+    setProducts(matrixService.loadProducts());
+  };
+
   const createAutomationTask = (input: {
     ruleId: string;
     recordId: string;
@@ -1728,6 +1739,7 @@ function AppContent() {
             projects={projects}
             onAddProduct={handleAddProduct}
             onUpdateProduct={handleUpdateProduct}
+            onPublishProduct={handlePublishProduct}
             onRecordUsage={handleRecordUsage}
             onAddProjectWithTasks={(newProject, newTasks) => {
               setProjects([newProject, ...projects]);
