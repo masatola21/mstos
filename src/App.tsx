@@ -191,7 +191,23 @@ async function loadTaskRelatedContext(task: TaskItem): Promise<string> {
     const fields = fieldsByType[related.type]
       .filter((key) => data[key] !== null && data[key] !== undefined && String(data[key]).trim())
       .map((key) => `${key}: ${String(data[key]).slice(0, 300)}`);
-    return [`関連先: ${related.label || related.type} (ID: ${related.id})`, ...fields].join('\n').slice(0, 1800);
+    let supportContext = '';
+    if (task.supportEngagementId) {
+      const { data: support, error: supportError } = await supabase.from('customer_service_engagements')
+        .select('title,status,next_meeting_at,support_details').eq('id', task.supportEngagementId).maybeSingle();
+      if (!supportError && support) {
+        const details = support.support_details && typeof support.support_details === 'object' ? support.support_details : {};
+        supportContext = [
+          '支援: ' + String(support.title || ''),
+          'フェーズ: ' + String(details.phase || '未設定'),
+          '現在のテーマ: ' + String(details.currentTheme || '未設定'),
+          '次回テーマ: ' + String(details.nextTheme || '未設定'),
+          '次回日時: ' + String(support.next_meeting_at || '未設定'),
+          '重要課題: ' + String(details.keyIssue || '未設定'),
+        ].join('\\n');
+      }
+    }
+    return [`関連先: ${related.label || related.type} (ID: ${related.id})`, ...fields, supportContext].filter(Boolean).join('\\n').slice(0, 2200);
   } catch {
     return '関連レコードは設定されていますが、現在の情報を取得できませんでした。';
   }
@@ -1732,6 +1748,11 @@ function AppContent() {
           <SalesOperationsWorkspace
             tab="operations"
             companyId={customerWorkspaceCompanyId}
+            contracts={contracts}
+            invoices={invoices}
+            tasks={tasks}
+            onCreateTask={handleCreateTask}
+            onUpdateTask={handleUpdateTask}
             onClearCompanyFilter={() => setCustomerWorkspaceContext(undefined)}
             onOperationalRecordsChange={(nextContracts, nextInvoices) => {
               setContracts(nextContracts);
