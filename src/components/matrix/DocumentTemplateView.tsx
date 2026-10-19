@@ -323,12 +323,12 @@ const DEFAULT_TEMPLATES: DocTemplate[] = [
 const templateWorkflowOrder: Record<DocTemplateType, number> = { report: 0, proposal: 1, contract: 2, invoice: 3 };
 const orderTemplatesByWorkflow = (items: DocTemplate[]) => [...items].sort((a, b) => templateWorkflowOrder[a.type] - templateWorkflowOrder[b.type]);
 
-interface DocumentTemplateViewProps { initialCompanyId?: string; initialLeadId?: string; initialDealId?: string; }
+interface DocumentTemplateViewProps { initialCompanyId?: string; initialLeadId?: string; initialDealId?: string; initialDocumentType?: DocTemplateType; }
 
-export const DocumentTemplateView: React.FC<DocumentTemplateViewProps> = ({ initialCompanyId, initialLeadId, initialDealId }) => {
+export const DocumentTemplateView: React.FC<DocumentTemplateViewProps> = ({ initialCompanyId, initialLeadId, initialDealId, initialDocumentType }) => {
   const [templates, setTemplates] = useState<DocTemplate[]>(DEFAULT_TEMPLATES);
   const [templateStatus, setTemplateStatus] = useState('');
-  const [selectedTemplateId, setSelectedTemplateId] = useState<string>(initialDealId ? 'tpl-estimate-01' : 'tpl-report-01');
+  const [selectedTemplateId, setSelectedTemplateId] = useState<string>(initialDocumentType === 'invoice' ? 'tpl-invoice-01' : initialDealId ? 'tpl-estimate-01' : 'tpl-report-01');
   const [isEditingTemplate, setIsEditingTemplate] = useState<boolean>(false);
   const [copied, setCopied] = useState<boolean>(false);
   const [companies, setCompanies] = useState<Array<{id:string;company_name:string}>>([]);
@@ -391,7 +391,7 @@ export const DocumentTemplateView: React.FC<DocumentTemplateViewProps> = ({ init
         })) as DocTemplate[];
         const loadedKeys = new Set(loadedTemplates.map((template)=>template.id));
         setTemplates(orderTemplatesByWorkflow([...loadedTemplates, ...DEFAULT_TEMPLATES.filter((template)=>!loadedKeys.has(template.id))]));
-        setSelectedTemplateId(initialDealId ? 'tpl-estimate-01' : (data.find((row:any)=>row.document_type==='diagnosis_report')?.template_key || data[0].template_key));
+        setSelectedTemplateId(initialDocumentType ? (data.find((row:any)=>row.document_type===initialDocumentType)?.template_key || (initialDocumentType === 'invoice' ? 'tpl-invoice-01' : data[0].template_key)) : initialDealId ? 'tpl-estimate-01' : (data.find((row:any)=>row.document_type==='diagnosis_report')?.template_key || data[0].template_key));
         setTemplateStatus('テンプレートをSupabaseから読み込みました。');
         return;
       }
@@ -403,11 +403,15 @@ export const DocumentTemplateView: React.FC<DocumentTemplateViewProps> = ({ init
       }));
       const {data:seeded,error:seedError}=await supabase.from('customer_document_templates').insert(defaults).select('*');
       if (seedError) { setTemplateStatus('標準テンプレートを共有できませんでした。SQL・権限を確認してください。'); return; }
-      if (seeded?.length) setTemplates(seeded.map((row:any)=>({
-        id:row.template_key,type:row.document_type==='diagnosis_report'?'report':row.document_type,
-        title:row.title,description:row.description,htmlContent:row.body_html,
-        variables:Array.isArray(row.variables)?row.variables:[],
-      })) as DocTemplate[]);
+      if (seeded?.length) {
+        const seededTemplates = seeded.map((row:any)=>({
+          id:row.template_key,type:row.document_type==='diagnosis_report'?'report':row.document_type,
+          title:row.title,description:row.description,htmlContent:row.body_html,
+          variables:Array.isArray(row.variables)?row.variables:[],
+        })) as DocTemplate[];
+        setTemplates(seededTemplates);
+        if (initialDocumentType) setSelectedTemplateId(seededTemplates.find((template)=>template.type===initialDocumentType)?.id || (initialDocumentType==='invoice'?'tpl-invoice-01':seededTemplates[0]?.id || ''));
+      }
       setTemplateStatus('標準テンプレートをワークスペースに登録しました。');
     };
     void loadTemplates();

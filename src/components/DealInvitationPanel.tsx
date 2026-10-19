@@ -12,7 +12,7 @@ type Deal = {
   company?: { company_name?: string } | null;
   lead?: { contact_id?: string | null } | null;
 };
-type Contact = { id: string; full_name: string; email?: string | null; line_user_id?: string | null };
+type Contact = { id: string; full_name: string; email?: string | null; line_user_id?: string | null; company_id?: string | null };
 type Channel = 'email' | 'line' | 'both';
 type OutboxRow = { id: string; deal_id: string; channel: string; recipient_address: string; subject?: string | null; status: string; created_at: string };
 
@@ -42,7 +42,7 @@ export const DealInvitationPanel: React.FC = () => {
     try {
       const [dealResult, contactResult, historyResult, settingResult] = await Promise.all([
         supabase.from('deals').select('id,proposal_plan_name,proposal_status,company_id,lead_id,meeting_date,company:companies(company_name),lead:leads(contact_id)').order('created_at', { ascending: false }),
-        supabase.from('contacts').select('id,full_name,email,line_user_id').order('full_name'),
+        supabase.from('contacts').select('id,full_name,email,line_user_id,company_id').order('full_name'),
         supabase.from('communication_outbox').select('id,deal_id,channel,recipient_address,subject,status,created_at').eq('source_type', 'deal_invitation').order('created_at', { ascending: false }).limit(30),
         supabase.from('sales_workspace_settings').select('booking_page_url').maybeSingle(),
       ]);
@@ -66,9 +66,12 @@ export const DealInvitationPanel: React.FC = () => {
   useEffect(() => { void load(); }, []);
 
   const selectedDeal = deals.find((item) => item.id === dealId);
+  const dealContacts = selectedDeal?.company_id
+    ? contacts.filter((contact) => contact.company_id === selectedDeal.company_id)
+    : [];
   const suggestedContactId = selectedDeal?.lead?.contact_id || '';
-  const selectedContact = contacts.find((item) => item.id === contactId);
-  const suggestedContact = contacts.find((item) => item.id === suggestedContactId);
+  const selectedContact = dealContacts.find((item) => item.id === contactId);
+  const suggestedContact = dealContacts.find((item) => item.id === suggestedContactId);
   const recipientName = selectedContact?.full_name || 'ご担当者';
   const companyName = selectedDeal?.company?.company_name || '貴社';
   const emailBody = useMemo(() => [
@@ -131,7 +134,8 @@ export const DealInvitationPanel: React.FC = () => {
 
   const requestSend = async () => {
     const supabase = getSupabase();
-    if (!supabase || !selectedDeal || !selectedContact) { setError('商談と送信先連絡先を選択してください。'); return; }
+    if (!supabase || !selectedDeal || !selectedDeal.company_id || !selectedContact) { setError('会社に紐づく商談と送信先連絡先を選択してください。'); return; }
+    if (selectedContact.company_id !== selectedDeal.company_id) { setError('送信先の連絡先が商談の会社と一致しません。'); return; }
     if (!bookingUrl.trim() || !/^https:\/\/.+/i.test(bookingUrl.trim())) { setError('有効なGoogle予約ページURLを設定してください。'); return; }
     if (!confirmed) { setError('送信先と案内文を確認してください。'); return; }
 
@@ -188,14 +192,14 @@ export const DealInvitationPanel: React.FC = () => {
         <label className='block text-xs text-slate-300'>Google予約ページURL<div className='mt-1 flex gap-2'><input type='url' value={bookingUrl} onChange={(e)=>setBookingUrl(e.target.value)} placeholder='https://calendar.google.com/calendar/appointments/…' className='min-w-0 flex-1 rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-white'/><button type='button' onClick={()=>void saveBookingUrl()} disabled={savingUrl} className='flex items-center gap-1 rounded-lg border border-slate-700 px-3 py-2 text-xs text-slate-200 disabled:opacity-50'><Save className='h-3.5 w-3.5'/>{savingUrl?'保存中':'保存'}</button></div></label>
         <div className='grid gap-3 sm:grid-cols-2'>
           <label className='block text-xs text-slate-300'>商談<select value={dealId} onChange={(e)=>{setDealId(e.target.value);setContactId('');setConfirmed(false);}} className='mt-1 w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-white'><option value=''>商談を選択</option>{deals.map((deal)=><option key={deal.id} value={deal.id}>{deal.proposal_plan_name}（{deal.company?.company_name || deal.company_id || '会社未設定'}）</option>)}</select></label>
-          <label className='block text-xs text-slate-300'>送信先<select value={contactId} onChange={(e)=>{setContactId(e.target.value);setConfirmed(false);}} className='mt-1 w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-white'><option value=''>連絡先を選択</option>{contacts.map((contact)=><option key={contact.id} value={contact.id}>{contact.full_name}{contact.email?' · '+contact.email:''}</option>)}</select></label>
+          <label className='block text-xs text-slate-300'>送信先<select value={contactId} onChange={(e)=>{setContactId(e.target.value);setConfirmed(false);}} className='mt-1 w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-white'><option value=''>連絡先を選択</option>{dealContacts.map((contact)=><option key={contact.id} value={contact.id}>{contact.full_name}{contact.email?' · '+contact.email:''}</option>)}</select></label>
         </div>
         {suggestedContact && <p className='text-[11px] text-slate-500'>リードに紐づく連絡先を初期選択しています。必要なら変更できます。</p>}
         <label className='block text-xs text-slate-300'>送信チャネル<select value={channel} onChange={(e)=>{setChannel(e.target.value as Channel);setConfirmed(false);}} className='mt-1 w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-white'><option value='email'>メールのみ</option><option value='line'>LINEのみ</option><option value='both'>メールとLINE両方</option></select></label>
         <label className='block text-xs text-slate-300'>追加メッセージ（任意）<textarea rows={3} value={customMessage} onChange={(e)=>setCustomMessage(e.target.value)} placeholder='商談で話したい内容など' className='mt-1 w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-white'/></label>
         <label className='flex items-start gap-2 rounded-lg border border-slate-800 bg-slate-950 p-3 text-xs text-slate-300'><input type='checkbox' checked={confirmed} onChange={(e)=>setConfirmed(e.target.checked)} className='mt-0.5'/><span>宛先・チャネル・案内文を確認しました。選択した全チャネルを承認待ちとして登録します。</span></label>
-        <button type='button' onClick={()=>void requestSend()} disabled={submitting || deals.length===0 || contacts.length===0} className='flex items-center gap-2 rounded-lg bg-indigo-600 px-4 py-2.5 text-sm font-semibold text-white disabled:opacity-50'>{submitting?<Loader2 className='h-4 w-4 animate-spin'/>:channel==='line'?<MessageCircle className='h-4 w-4'/>:<Mail className='h-4 w-4'/>}送信承認を申請</button>
-        {deals.length===0 && <p className='text-xs text-slate-500'>商談がありません。リードを商談化するとここから案内できます。</p>}
+        <button type='button' onClick={()=>void requestSend()} disabled={submitting || !selectedDeal?.company_id || dealContacts.length===0} className='flex items-center gap-2 rounded-lg bg-indigo-600 px-4 py-2.5 text-sm font-semibold text-white disabled:opacity-50'>{submitting?<Loader2 className='h-4 w-4 animate-spin'/>:channel==='line'?<MessageCircle className='h-4 w-4'/>:<Mail className='h-4 w-4'/>}送信承認を申請</button>
+        {deals.length===0 && <p className='text-xs text-slate-500'>商談がありません。リードを商談化するとここから案内できます。</p>}{selectedDeal && !selectedDeal.company_id && <p className='text-xs text-amber-300'>商談に会社が紐づいていないため、送信先を選べません。</p>}{selectedDeal?.company_id && dealContacts.length===0 && <p className='text-xs text-amber-300'>この会社に紐づく連絡先がありません。CRMの連絡先を登録してください。</p>}
       </div>
       <div className='space-y-3'>
         <div className='rounded-lg border border-slate-800 bg-slate-950 p-3'>
