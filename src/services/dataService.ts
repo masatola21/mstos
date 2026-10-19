@@ -193,7 +193,65 @@ export async function fetchTableData(
   }
 }
 
-// 新規レコード追加（削除操作は一切提供しません）
+// レコードは参照関係を壊さない場合に限り削除する。参照確認エラー時は安全のため削除を中止する。
+const TABLE_REFERENCE_CHECKS: Partial<Record<TableKey, Array<{ table: string; field: string }>>> = {
+  companies: [
+    { table: 'contacts', field: 'company_id' }, { table: 'prospects', field: 'company_id' },
+    { table: 'leads', field: 'company_id' }, { table: 'deals', field: 'company_id' },
+    { table: 'customers', field: 'company_id' }, { table: 'diagnoses', field: 'company_id' },
+    { table: 'customer_contracts', field: 'company_id' }, { table: 'customer_invoices', field: 'company_id' },
+    { table: 'customer_documents', field: 'company_id' }, { table: 'customer_service_engagements', field: 'company_id' },
+    { table: 'communication_outbox', field: 'company_id' },
+  ],
+  contacts: [{ table: 'communication_outbox', field: 'recipient_contact_id' }],
+  prospects: [],
+  leads: [{ table: 'deals', field: 'lead_id' }, { table: 'diagnoses', field: 'lead_id' }],
+  products: [
+    { table: 'deals', field: 'product_id' }, { table: 'customer_contracts', field: 'product_id' },
+    { table: 'customer_invoices', field: 'product_id' }, { table: 'prospects', field: 'recommended_product_id' },
+    { table: 'leads', field: 'interested_product_id' }, { table: 'ai_reports', field: 'recommended_product_id' },
+  ],
+  deals: [
+    { table: 'customer_contracts', field: 'deal_id' }, { table: 'customer_documents', field: 'deal_id' },
+    { table: 'communication_outbox', field: 'deal_id' },
+  ],
+  customers: [
+    { table: 'customer_contracts', field: 'company_id' }, { table: 'customer_invoices', field: 'company_id' },
+    { table: 'customer_documents', field: 'company_id' }, { table: 'customer_service_engagements', field: 'company_id' },
+  ],
+};
+
+export async function deleteTableRecord(
+  tableKey: TableKey,
+  record: { id: string | number; company_id?: string | null },
+): Promise<{ error?: DataFetchError; blockedBy?: string }> {
+  const supabase = getSupabase();
+  if (!supabase) return { error: { type: 'NOT_CONFIGURED', message: 'Supabaseが初期化されていません。' } };
+
+  try {
+    for (const reference of TABLE_REFERENCE_CHECKS[tableKey] || []) {
+      const { data, error } = await supabase
+        .from(reference.table)
+        .select('id')
+        .eq(reference.field, tableKey === 'customers' ? record.company_id || record.id : record.id)
+        .limit(1);
+      if (error) {
+        return { error: parseSupabaseError(error) };
+      }
+      if (data?.length) {
+        return { blockedBy: reference.table };
+      }
+    }
+
+    const { error } = await supabase.from(tableKey).delete().eq('id', record.id);
+    if (error) return { error: parseSupabaseError(error) };
+    return {};
+  } catch (err: any) {
+    return { error: parseSupabaseError(err) };
+  }
+}
+
+// 新規レコード追加
 export async function insertRecord(
   tableKey: TableKey,
   payload: Record<string, any>

@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { AlertTriangle, Calendar, Check, ClipboardList, FileText, Plus, RefreshCw, Save } from 'lucide-react';
+import { AlertTriangle, Calendar, Check, ClipboardList, FileText, Plus, RefreshCw, Save, Trash2 } from 'lucide-react';
 import { getSupabase } from '../lib/supabaseClient';
 import type { ManagedInvoice } from '../types/matrix';
 import type { Priority, TaskItem } from '../types';
@@ -231,6 +231,26 @@ export const CustomerSupportWorkspace: React.FC<Props> = ({
     setSelectedId(data.id);
   };
 
+  const deletePlannedEngagement = async (engagement: Row) => {
+    if (engagement.status !== 'planned') return;
+    const supabase = getSupabase();
+    if (!supabase || !window.confirm(`顧客支援「${engagement.title}」を削除しますか？`)) return;
+    if (engagement.contract_id || tasks.some((task) => task.supportEngagementId === engagement.id) || (Array.isArray(engagement.milestone_data) && engagement.milestone_data.length > 0)) {
+      setError('契約・タスク・マイルストーンに関連しているため削除できません。既存の紐づきを保護しました。');
+      return;
+    }
+    const { data: history, error: historyError } = await supabase
+      .from('customer_service_meetings').select('id').eq('engagement_id', engagement.id).limit(1);
+    if (historyError) { setError(supportErrorMessage(historyError, '履歴を確認できないため削除を中止しました。')); return; }
+    if (history?.length) { setError('打ち合わせ履歴があるため削除できません。支援履歴を保持しました。'); return; }
+    const { error: deleteError } = await supabase.from('customer_service_engagements')
+      .delete().eq('id', engagement.id).eq('status', 'planned');
+    if (deleteError) { setError(supportErrorMessage(deleteError, '支援を削除できませんでした。')); return; }
+    setNotice('未開始の顧客支援を削除しました。');
+    if (selectedId === engagement.id) setSelectedId('');
+    await onRefresh();
+  };
+
   const saveMeeting = async (event: React.FormEvent) => {
     event.preventDefault();
     if (!selected) return;
@@ -431,12 +451,12 @@ export const CustomerSupportWorkspace: React.FC<Props> = ({
             const lateMilestone = Array.isArray(item.milestone_data) && item.milestone_data.some((milestone: Row) => milestone.due_date && milestone.due_date < new Date().toISOString().slice(0, 10) && milestone.status !== 'completed');
             const lateMeeting = item.next_meeting_at && new Date(item.next_meeting_at).getTime() < Date.now();
             const warning = overdue || lateMilestone || lateMeeting || item.status === 'paused' || itemDetail.progressStatus === 'delayed' || itemDetail.progressStatus === 'at_risk';
-            return <li key={item.id}><button type="button" onClick={() => { setSelectedId(item.id); setActiveSection('overview'); setNotice(''); setError(''); }} className={'w-full rounded-lg border p-3 text-left ' + (selected?.id === item.id ? 'border-blue-500 bg-blue-950/30' : 'border-slate-800 bg-slate-950 hover:border-slate-600')}>
+            return <li key={item.id} className="flex items-stretch gap-2"><button type="button" onClick={() => { setSelectedId(item.id); setActiveSection('overview'); setNotice(''); setError(''); }} className={'min-w-0 flex-1 rounded-lg border p-3 text-left ' + (selected?.id === item.id ? 'border-blue-500 bg-blue-950/30' : 'border-slate-800 bg-slate-950 hover:border-slate-600')}>
               <div className="flex items-start justify-between gap-2"><span className="font-medium text-white">{companyName(item.company_id)}</span>{warning && <AlertTriangle className="h-4 w-4 shrink-0 text-amber-300" />}</div>
               <div className="mt-1 text-xs text-slate-300">{item.title}</div>
               <div className="mt-2 flex flex-wrap gap-x-3 gap-y-1 text-xs text-slate-500"><span>{itemDetail.phase || PHASES[0]}</span><span>{itemDetail.currentTheme || 'テーマ未設定'}</span><span>次回 {displayDate(item.next_meeting_at)}</span><span>未完了 {open.length}件</span><span>{PROGRESS_LABELS[itemDetail.progressStatus || 'not_started']}</span></div>
               {warning && <div className="mt-2 text-xs text-amber-300">{overdue ? '期限超過タスクあり' : lateMilestone ? '期限超過マイルストーンあり' : lateMeeting ? '次回予定日を過ぎています' : itemDetail.progressStatus === 'delayed' ? '進捗遅延' : itemDetail.progressStatus === 'at_risk' ? '支援上の確認が必要です' : '支援が保留中です'}</div>}
-            </button></li>;
+            </button>{item.status==='planned'&&<button type="button" onClick={(event)=>{event.stopPropagation();void deletePlannedEngagement(item);}} className="self-start rounded-lg border border-rose-900/70 bg-rose-950/20 p-2 text-rose-300 hover:bg-rose-900/40" aria-label={`顧客支援「${item.title}」を削除`} title="未開始の支援を削除"><Trash2 className="h-4 w-4"/></button>}</li>;
           })}</ul>}
       </section>
 

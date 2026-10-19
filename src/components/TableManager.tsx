@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { TableKey, TABLE_CONFIGS } from '../types/database';
-import { fetchTableData, DataFetchError } from '../services/dataService';
+import { deleteTableRecord, fetchTableData, DataFetchError } from '../services/dataService';
 import { RecordDetailModal } from './RecordDetailModal';
 import { RecordFormModal } from './RecordFormModal';
 import { StageTransitionModal, TransitionType } from './StageTransitionModal';
@@ -27,7 +27,8 @@ import {
   Layers,
   Briefcase,
   UserCheck,
-  Check
+  Check,
+  Trash2
 } from 'lucide-react';
 
 interface TableManagerProps {
@@ -54,6 +55,7 @@ export const TableManager: React.FC<TableManagerProps> = ({
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState('ALL');
   const [successBanner, setSuccessBanner] = useState<string | null>(null);
+  const [deletingRecordId, setDeletingRecordId] = useState<string | null>(null);
   const [isProspectImportOpen, setIsProspectImportOpen] = useState(false);
 
   // Modals state
@@ -179,6 +181,27 @@ export const TableManager: React.FC<TableManagerProps> = ({
   const handleOpenEdit = (record: any) => {
     setEditRecord(record);
     setIsFormOpen(true);
+  };
+
+  const handleDeleteRecord = async (record: any) => {
+    const label = record.company_name || record.full_name || record.proposal_plan_name || record.product_name || record.contact_name || String(record.id);
+    if (!window.confirm(`「${label}」を削除しますか？関連データから参照されている場合は削除できません。`)) return;
+    setDeletingRecordId(String(record.id));
+    setError(null);
+    setSuccessBanner(null);
+    const result = await deleteTableRecord(currentTable, { id: record.id, company_id: record.company_id });
+    setDeletingRecordId(null);
+    if (result.blockedBy) {
+      setError({ type: 'UNKNOWN', message: `関連する「${result.blockedBy}」データがあるため削除できません。先に関連データを整理してください。` });
+      return;
+    }
+    if (result.error) {
+      setError(result.error);
+      return;
+    }
+    setData((current) => current.filter((item) => String(item.id) !== String(record.id)));
+    setSuccessBanner(`「${label}」を削除しました。`);
+    window.setTimeout(() => setSuccessBanner(null), 5000);
   };
 
   // ステータス列のユニーク候補を取得（フィルタ用）
@@ -553,7 +576,7 @@ export const TableManager: React.FC<TableManagerProps> = ({
                         );
                       })}
 
-                      {/* Row Actions (View, Stage Progression & Edit, STRICTLY NO DELETE) */}
+                      {/* Row Actions (View, Stage Progression, Edit & Safe Delete) */}
                       <td className="py-3 px-4 text-right whitespace-nowrap" onClick={(e) => e.stopPropagation()}>
                         <div className="flex items-center justify-end gap-1.5">
                           {currentTable === 'prospects' && (
@@ -600,6 +623,14 @@ export const TableManager: React.FC<TableManagerProps> = ({
                           >
                             <Edit3 className="w-3.5 h-3.5" />
                           </button>
+                          <button
+                            onClick={() => void handleDeleteRecord(item)}
+                            disabled={deletingRecordId === String(item.id)}
+                            className="p-1.5 rounded-lg text-slate-500 hover:text-rose-300 hover:bg-rose-950/40 transition-colors disabled:opacity-50"
+                            title="削除（関連データがある場合は保護されます）"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </button>
                         </div>
                       </td>
                     </tr>
@@ -633,6 +664,9 @@ export const TableManager: React.FC<TableManagerProps> = ({
                       {item.status || item.proposal_status || item.contract_status}
                     </span>
                   )}
+                  <button type="button" onClick={(e) => { e.stopPropagation(); void handleDeleteRecord(item); }} disabled={deletingRecordId === String(item.id)} className="mt-2 p-1.5 rounded-lg text-slate-500 hover:text-rose-300 hover:bg-rose-950/40 disabled:opacity-50" title="削除">
+                    <Trash2 className="w-4 h-4" />
+                  </button>
                 </div>
 
                 {/* Sub details */}
