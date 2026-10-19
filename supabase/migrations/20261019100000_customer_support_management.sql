@@ -27,8 +27,23 @@ DROP POLICY IF EXISTS "Users manage own customer_service_meetings" ON public.cus
 CREATE POLICY "Users manage own customer_service_meetings"
   ON public.customer_service_meetings
   FOR ALL TO authenticated
-  USING (auth.uid() = owner_id)
-  WITH CHECK (auth.uid() = owner_id);
+  USING (
+    auth.uid() = owner_id
+    AND EXISTS (
+      SELECT 1 FROM public.customer_service_engagements engagement
+      WHERE engagement.id = customer_service_meetings.engagement_id
+        AND engagement.owner_id = auth.uid()
+    )
+  )
+  WITH CHECK (
+    auth.uid() = owner_id
+    AND EXISTS (
+      SELECT 1 FROM public.customer_service_engagements engagement
+      WHERE engagement.id = customer_service_meetings.engagement_id
+        AND engagement.owner_id = auth.uid()
+        AND engagement.company_id IS NOT DISTINCT FROM customer_service_meetings.company_id
+    )
+  );
 GRANT SELECT, INSERT, UPDATE, DELETE ON public.customer_service_meetings TO authenticated;
 
 CREATE INDEX IF NOT EXISTS idx_customer_service_engagements_company
