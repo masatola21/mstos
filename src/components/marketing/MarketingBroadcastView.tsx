@@ -28,6 +28,8 @@ export const MarketingBroadcastView: React.FC = () => {
   const [channel,setChannel]=useState<Channel>('email');
   const [segmentId,setSegmentId]=useState('all');
   const [selected,setSelected]=useState<string[]>([]);
+  const [audienceMode,setAudienceMode]=useState<'crm'|'prospect_outreach'>('crm');
+  const [selectedProspectIds,setSelectedProspectIds]=useState<string[]>([]);
   const [subject,setSubject]=useState('');
   const [body,setBody]=useState('');
   const [lineContentType,setLineContentType]=useState<'text'|'video'>('text');
@@ -52,7 +54,7 @@ export const MarketingBroadcastView: React.FC = () => {
       db.from('leads').select('*'),
       db.from('deals').select('*'),
       db.from('customers').select('*'),
-      db.from('communication_outbox').select('source_id,channel,status,subject,body_text,created_at').eq('source_type','marketing_broadcast').order('created_at',{ascending:false}).limit(1000),
+      db.from('communication_outbox').select('source_id,channel,status,subject,body_text,created_at').in('source_type',['marketing_broadcast','marketing_outreach']).order('created_at',{ascending:false}).limit(1000),
     ]).then(([c,s,f,co,p,l,d,cu,h])=>{
       if(!active)return;
       const failed=[c,s,f,co,p,l,d,cu,h].find(x=>x.error)?.error;
@@ -71,9 +73,15 @@ export const MarketingBroadcastView: React.FC = () => {
   },[]);
 
   const selectedSegment = segments.find(x=>x.id===segmentId);
+  const outreachProspects = prospects.filter(row=>Boolean(row.company_id&&companies[String(row.company_id)]));
+  const selectedOutreachCompanies = new Set(outreachProspects.filter(row=>selectedProspectIds.includes(String(row.id||''))).map(row=>String(row.company_id||'')));
   const eligible = useMemo(()=>{
     let rows=contacts;
-    const segment=selectedSegment;
+    if(audienceMode==='prospect_outreach'){
+      if(channel!=='email')return [];
+      rows=contacts.filter(row=>Boolean(row.company_id&&selectedOutreachCompanies.has(row.company_id)));
+    }
+    const segment=audienceMode==='crm'?selectedSegment:undefined;
     if(segment){
       const field=typeof segment.conditions?.field==='string'?segment.conditions.field:'';
       const value=String(segment.conditions?.value||'').trim().toLowerCase();
@@ -103,7 +111,7 @@ export const MarketingBroadcastView: React.FC = () => {
     return rows.filter(row=>channel==='email'
       ? Boolean(row.email)
       : Boolean(row.line_user_id&&friends[row.line_user_id]?.status==='active'&&friends[row.line_user_id]?.consent_status==='opted_in'));
-  },[contacts,selectedSegment,companies,prospects,leads,deals,customers,channel,friends]);
+  },[contacts,selectedSegment,companies,prospects,leads,deals,customers,channel,friends,audienceMode,selectedProspectIds]);
 
   const refreshRuns=async()=>{
     if(!db)return;
@@ -138,7 +146,7 @@ export const MarketingBroadcastView: React.FC = () => {
         subject:channel==='email'?subject.trim():null,
         body_text:channel==='line'&&lineContentType==='video'?'動画を送信: '+videoUrl.trim():body.trim(),
         line_message_payload:channel==='line'&&lineContentType==='video'?{type:'video',originalContentUrl:videoUrl.trim(),previewImageUrl:videoPreviewUrl.trim()}:null,
-        company_id:contact.company_id||null,source_type:'marketing_broadcast',source_id:broadcastId,status:'queued',
+        company_id:contact.company_id||null,source_type:audienceMode==='prospect_outreach'?'marketing_outreach':'marketing_broadcast',source_id:broadcastId,status:'queued',
         consent_confirmed_at:new Date().toISOString(),consent_basis:consentBasis.trim(),
       }));
       const {data:outbox,error:insertError}=await db.from('communication_outbox').insert(rows).select('id,recipient_contact_id');
@@ -164,22 +172,33 @@ export const MarketingBroadcastView: React.FC = () => {
   return <div className="space-y-5">
     <section className="rounded-2xl border border-indigo-500/30 bg-slate-900 p-5">
       <h2 className="text-xl font-bold text-white">一斉配信</h2>
-      <p className="mt-1 text-sm text-slate-400">CRM連絡先から対象を確認し、プレビュー後にLINEまたはメールを配信します。送信結果は連絡先ごとに既存の送信履歴へ記録します。</p>
+      <p className="mt-1 text-sm text-slate-400">CRM状態に応じたフォロー配信と、AI調査済み見込み企業への営業メールを管理します。宛先選択・プレビュー後に既存の送信処理を使い、結果を履歴に記録します。</p>
       {error&&<p role="alert" className="mt-3 rounded-lg bg-rose-950/60 p-3 text-sm text-rose-200">{error}</p>}
       {notice&&<p role="status" className="mt-3 rounded-lg bg-emerald-950/60 p-3 text-sm text-emerald-200">{notice}</p>}
       <div className="mt-4 grid gap-3 md:grid-cols-2">
+        <label className="text-sm text-slate-300">送信シナリオ
+          <select value={audienceMode} onChange={e=>{setAudienceMode(e.target.value as 'crm'|'prospect_outreach');setSelected([]);setSelectedProspectIds([]);setPreview(false);if(e.target.value==='prospect_outreach')setChannel('email')}} className="mt-1 block w-full rounded-lg border border-slate-700 bg-slate-950 p-2 text-white">
+            <option value="crm">CRM状態に応じたフォロー</option><option value="prospect_outreach">見込み企業への営業メール</option>
+          </select>
+        </label>
         <label className="text-sm text-slate-300">配信方法
           <select value={channel} onChange={e=>{setChannel(e.target.value as Channel);setSelected([]);setPreview(false)}} className="mt-1 block w-full rounded-lg border border-slate-700 bg-slate-950 p-2 text-white">
             <option value="email">メール</option><option value="line">LINE（配信同意済みのみ）</option>
           </select>
         </label>
-        <label className="text-sm text-slate-300">CRM対象
+        {audienceMode==='crm'&&<label className="text-sm text-slate-300">CRM対象
           <select value={segmentId} onChange={e=>{setSegmentId(e.target.value);setSelected([]);setPreview(false)}} className="mt-1 block w-full rounded-lg border border-slate-700 bg-slate-950 p-2 text-white">
             <option value="all">全連絡先から抽出</option>
             {segments.map(x=><option key={x.id} value={x.id}>{x.name}（{segmentEntityLabels[x.entity_type]||x.entity_type}）</option>)}
           </select>
-        </label>
+        </label>}
       </div>
+      {audienceMode==='prospect_outreach'&&<section className="rounded-xl border border-amber-500/30 bg-amber-950/10 p-4">
+        <div className="font-semibold text-white">AI調査済み見込み企業を選択</div>
+        <p className="mt-1 text-xs text-slate-400">CRMに登録済みの見込み企業から選びます。AIは送信せず、選択企業に紐づく連絡先のメールアドレスだけを宛先候補にします。見込み企業に連絡先が紐づいていない場合は送信対象になりません。</p>
+        <div className="mt-3 max-h-48 space-y-1 overflow-auto">{outreachProspects.length===0?<p className="text-sm text-slate-500">会社情報と関連付いた見込み企業がありません。</p>:outreachProspects.map(row=>{const company=companies[String(row.company_id||'')]||{};const id=String(row.id||'');return <label key={id} className="flex items-center gap-2 rounded px-2 py-1.5 text-sm text-slate-300 hover:bg-slate-900"><input type="checkbox" checked={selectedProspectIds.includes(id)} onChange={()=>{setSelectedProspectIds(current=>current.includes(id)?current.filter(x=>x!==id):[...current,id]);setSelected([]);setPreview(false)}}/><span className="min-w-0 flex-1 truncate">{String(company.company_name||company.name||'会社名未設定')}</span><span className="text-xs text-slate-500">{String(row.status||'未設定')}</span></label>})}</div>
+        <p className="mt-2 text-xs text-amber-200">営業メールの送信根拠と、宛先情報を営業目的で利用できることを確認してください。</p>
+      </section>}
       <div className="mt-4 rounded-xl border border-slate-800 bg-slate-950/60 p-4">
         <div className="flex flex-wrap items-center justify-between gap-2">
           <div><div className="font-semibold text-white">送信対象</div><div className="text-xs text-slate-400">{selectedSegment?`「${selectedSegment.name}」の条件から抽出：`:'条件に合う宛先：'}{eligible.length}件・選択中 {selectedContacts.length}件</div></div>
@@ -197,7 +216,7 @@ export const MarketingBroadcastView: React.FC = () => {
       {channel==='line'&&<label className="block text-sm text-slate-300">LINEメッセージ形式<select value={lineContentType} onChange={e=>setLineContentType(e.target.value as 'text'|'video')} className="mt-1 block w-full rounded-lg border border-slate-700 bg-slate-950 p-2 text-white"><option value="text">テキスト</option><option value="video">動画（MP4）</option></select></label>}
       {(channel==='email'||lineContentType==='text')&&<label className="block text-sm text-slate-300">配信本文<textarea value={body} onChange={e=>setBody(e.target.value)} maxLength={channel==='line'?5000:10000} rows={6} className="mt-1 block w-full rounded-lg border border-slate-700 bg-slate-950 p-3 text-white" />{channel==='email'&&<span className="mt-1 block text-xs text-slate-500">動画は公開リンクを本文に貼り付けて送信できます。</span>}</label>}
       {channel==='line'&&lineContentType==='video'&&<div className="grid gap-3 md:grid-cols-2"><label className="text-sm text-slate-300">動画URL（公開HTTPS・MP4）<input type="url" value={videoUrl} onChange={e=>setVideoUrl(e.target.value)} placeholder="https://example.com/video.mp4" className="mt-1 block w-full rounded-lg border border-slate-700 bg-slate-950 p-2 text-white" /></label><label className="text-sm text-slate-300">プレビュー画像URL（JPEG/PNG）<input type="url" value={videoPreviewUrl} onChange={e=>setVideoPreviewUrl(e.target.value)} placeholder="https://example.com/preview.jpg" className="mt-1 block w-full rounded-lg border border-slate-700 bg-slate-950 p-2 text-white" /></label><p className="text-xs text-slate-500 md:col-span-2">LINEの動画メッセージはMP4（200MB以下）とプレビュー画像（JPEG/PNG、1MB以下）が必要です。URLはLINEから取得できる公開HTTPS URLを指定してください。</p></div>}
-      <label className="block text-sm text-slate-300">配信同意・送信根拠<input value={consentBasis} onChange={e=>setConsentBasis(e.target.value)} placeholder="例：配信登録フォームで同意取得済み" className="mt-1 block w-full rounded-lg border border-slate-700 bg-slate-950 p-2 text-white" /></label>
+      <label className="block text-sm text-slate-300">{audienceMode==='prospect_outreach'?'送信根拠・連絡先の取得元':'配信同意・送信根拠'}<input value={consentBasis} onChange={e=>setConsentBasis(e.target.value)} placeholder="例：配信登録フォームで同意取得済み" className="mt-1 block w-full rounded-lg border border-slate-700 bg-slate-950 p-2 text-white" /></label>
       {!preview?<button type="button" disabled={!selectedContacts.length} onClick={()=>setPreview(true)} className="rounded-lg bg-indigo-600 px-4 py-2 font-semibold text-white disabled:opacity-40">プレビュー</button>:<div className="space-y-3 rounded-xl border border-amber-500/30 bg-amber-950/20 p-4">
         <h3 className="font-bold text-amber-100">配信プレビュー</h3>
         <p className="text-sm text-slate-300">{channel==='email'?'メール':'LINE'}・選択中 {selectedContacts.length}件。LINEでは友だち状態と配信同意を送信時にも再確認します。</p>
