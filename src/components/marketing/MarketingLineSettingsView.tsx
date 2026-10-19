@@ -16,11 +16,15 @@ export const MarketingLineSettingsView:React.FC=()=>{
   const [currentId,setCurrentId]=useState('');
   const chooseImage=(file?:File)=>{
     if(!file)return;
-    if(!['image/png','image/jpeg'].includes(file.type)||file.size>1024*1024){setError('PNGまたはJPEG画像（1MB以下）を選んでください。');return}
-    const reader=new FileReader();
-    reader.onload=()=>{const data=String(reader.result||'');setImage({base64:data.split(',')[1]||'',mime:file.type,url:data});setError('')};
-    reader.onerror=()=>setError('画像を読み込めませんでした。');
-    reader.readAsDataURL(file);
+    if(!['image/png','image/jpeg'].includes(file.type)||file.size>1024*1024){setError('2500×1686 pxのPNGまたはJPEG画像（1MB以下）を選んでください。');return}
+    void createImageBitmap(file).then(bitmap=>{
+      const validSize=bitmap.width===2500&&bitmap.height===1686;bitmap.close();
+      if(!validSize){setError('画像サイズは2500×1686 pxにしてください。');return}
+      const reader=new FileReader();
+      reader.onload=()=>{const data=String(reader.result||'');setImage({base64:data.split(',')[1]||'',mime:file.type,url:data});setError('')};
+      reader.onerror=()=>setError('画像を読み込めませんでした。');
+      reader.readAsDataURL(file);
+    }).catch(()=>setError('画像を読み込めませんでした。'));
   };
   const apply=async()=>{
     if(!db)return;
