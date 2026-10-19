@@ -11,6 +11,7 @@ import {
 
 const MATRIX_STORAGE_KEYS = {
   PRODUCTS: 'mst_matrix_products_v1',
+  PRODUCTS_SEED_VERSION: 'mst_matrix_products_seed_version',
   CONTRACTS: 'mst_matrix_contracts_v1',
   INVOICES: 'mst_matrix_invoices_v1',
   TOOLS: 'mst_matrix_tools_v1',
@@ -109,6 +110,31 @@ const INITIAL_PRODUCTS: ManagedProduct[] = [
     createdAt: Date.now() - 90 * 86400000,
     updatedAt: Date.now(),
   },
+];
+
+// --- User-provided default business catalog ---
+const BUSINESS_DEFAULT_PRODUCTS: ManagedProduct[] = [
+  { id: "A001", name: "経営伴走顧問（ライト）", code: "A001", category: "経営顧問", archetype: "retainer", price: 70000, salesInitialFee: 0, salesMonthlyFee: 70000, description: "売上・利益の課題整理と改善優先順位の明確化", status: "active", customFields: {"contractType":"月額","phase":"戦略設計","usageCategory":"顧問","proposalOrder":1,"normalTransitionTarget":"A002","monitorConditions":"","statusLabel":"提供中"}, createdAt: Date.now(), updatedAt: Date.now() },
+  { id: "A002", name: "経営改善顧問（スタンダード）", code: "A002", category: "経営顧問", archetype: "retainer", price: 120000, salesInitialFee: 0, salesMonthlyFee: 120000, description: "業務構造を再設計し利益改善を実行支援", status: "active", customFields: {"contractType":"月額","phase":"戦略設計","usageCategory":"顧問","proposalOrder":2,"normalTransitionTarget":"A003","monitorConditions":"","statusLabel":"提供中"}, createdAt: Date.now(), updatedAt: Date.now() },
+  { id: "A003", name: "経営参謀顧問", code: "A003", category: "経営顧問", archetype: "retainer", price: 180000, salesInitialFee: 0, salesMonthlyFee: 180000, description: "経営戦略・意思決定支援・利益最大化支援", status: "active", customFields: {"contractType":"月額","phase":"戦略設計","usageCategory":"顧問","proposalOrder":3,"normalTransitionTarget":"C001","monitorConditions":"","statusLabel":"提供中"}, createdAt: Date.now(), updatedAt: Date.now() },
+  { id: "B001", name: "単体業務システム構築", code: "B001", category: "業務システム構築", archetype: "service_project", price: 300000, salesInitialFee: 300000, salesMonthlyFee: 0, description: "案件・見積・請求など単一業務の仕組み化", status: "active", customFields: {"contractType":"単発","phase":"業務実装","usageCategory":"単体構築","proposalOrder":4,"normalTransitionTarget":"B001","monitorConditions":"","statusLabel":"提供中"}, createdAt: Date.now(), updatedAt: Date.now() },
+  { id: "B002", name: "標準業務システム構築", code: "B002", category: "業務システム構築", archetype: "service_project", price: 600000, salesInitialFee: 600000, salesMonthlyFee: 0, description: "2〜3機能連携による業務改善システム構築", status: "active", customFields: {"contractType":"単発","phase":"業務実装","usageCategory":"標準構築","proposalOrder":5,"normalTransitionTarget":"B002","monitorConditions":"","statusLabel":"提供中"}, createdAt: Date.now(), updatedAt: Date.now() },
+  { id: "B003", name: "統合業務システム構築", code: "B003", category: "業務システム構築", archetype: "service_project", price: 1000000, salesInitialFee: 1000000, salesMonthlyFee: 0, description: "4〜6機能統合＋ダッシュボード設計", status: "active", customFields: {"contractType":"単発","phase":"業務実装","usageCategory":"統合構築","proposalOrder":6,"normalTransitionTarget":"B003","monitorConditions":"","statusLabel":"提供中"}, createdAt: Date.now(), updatedAt: Date.now() },
+  { id: "C001", name: "経営統合OS構築", code: "C001", category: "経営OS", archetype: "service_project", price: 1000000, salesInitialFee: 1000000, salesMonthlyFee: 0, description: "顧客・案件・請求を統合した経営基盤構築", status: "active", customFields: {"contractType":"単発","phase":"経営統合","usageCategory":"経営基盤","proposalOrder":7,"normalTransitionTarget":"C001","monitorConditions":"","statusLabel":"提供中"}, createdAt: Date.now(), updatedAt: Date.now() },
+  { id: "D001", name: "AI診断構築", code: "D001", category: "業務・経営自動化", archetype: "service_project", price: 300000, salesInitialFee: 300000, salesMonthlyFee: 0, description: "課題分析・診断・提案を自動化するAI構築", status: "active", customFields: {"contractType":"単発","phase":"AI強化","usageCategory":"AI診断","proposalOrder":8,"normalTransitionTarget":"D001","monitorConditions":"","statusLabel":"提供中"}, createdAt: Date.now(), updatedAt: Date.now() },
+  { id: "D002", name: "AI業務アシスト構築", code: "D002", category: "業務・経営自動化", archetype: "service_project", price: 500000, salesInitialFee: 500000, salesMonthlyFee: 0, description: "提案書・見積・文章作成など業務支援AI構築", status: "active", customFields: {"contractType":"単発","phase":"AI強化","usageCategory":"AIアシスト","proposalOrder":9,"normalTransitionTarget":"D002","monitorConditions":"","statusLabel":"提供中"}, createdAt: Date.now(), updatedAt: Date.now() },
+  { id: "D003", name: "AI自動化構築", code: "D003", category: "業務・経営自動化", archetype: "service_project", price: 800000, salesInitialFee: 800000, salesMonthlyFee: 30000, description: "GAS連携・業務フロー自動化構築", status: "active", customFields: {"contractType":"ハイブリッド","phase":"AI強化","usageCategory":"AI自動化","proposalOrder":10,"normalTransitionTarget":"D003","monitorConditions":"","statusLabel":"提供中"}, createdAt: Date.now(), updatedAt: Date.now() },
+  { id: "D004", name: "AI経営統合OS構築", code: "D004", category: "業務・経営自動化", archetype: "service_project", price: 1500000, salesInitialFee: 1500000, salesMonthlyFee: 30000, description: "AI＋GAS＋CRM統合による経営自動化基盤", status: "active", customFields: {"contractType":"ハイブリッド","phase":"AI強化","usageCategory":"AI経営OS","proposalOrder":11,"normalTransitionTarget":"D004","monitorConditions":"","statusLabel":"提供中"}, createdAt: Date.now(), updatedAt: Date.now() },
+  { id: "M001", name: "システム保守・改善", code: "M001", category: "保守・運用", archetype: "retainer", price: 30000, salesInitialFee: 0, salesMonthlyFee: 30000, description: "構築後の改善・軽微修正・運用支援", status: "active", customFields: {"contractType":"月額","phase":"運用","usageCategory":"保守","proposalOrder":12,"normalTransitionTarget":"M001","monitorConditions":"","statusLabel":"提供中"}, createdAt: Date.now(), updatedAt: Date.now() },
+  { id: "T001", name: "B001単体業務モニター", code: "T001", category: "モニター", archetype: "service_project", price: 100000, salesInitialFee: 100000, salesMonthlyFee: 0, description: "案件・見積・請求など単一業務の仕組み化検証（B001相当）", status: "developing", customFields: {"contractType":"単発","phase":"業務システム検証","usageCategory":"B001","proposalOrder":1,"normalTransitionTarget":"B001","monitorConditions":"事例掲載・感想提供","statusLabel":"テスト中"}, createdAt: Date.now(), updatedAt: Date.now() },
+  { id: "T002", name: "B002標準業務モニター", code: "T002", category: "モニター", archetype: "service_project", price: 250000, salesInitialFee: 250000, salesMonthlyFee: 0, description: "2〜3機能連携による業務改善システム検証（B002相当）", status: "developing", customFields: {"contractType":"単発","phase":"業務システム検証","usageCategory":"B002","proposalOrder":2,"normalTransitionTarget":"B002","monitorConditions":"事例掲載・感想提供","statusLabel":"テスト中"}, createdAt: Date.now(), updatedAt: Date.now() },
+  { id: "T003", name: "B001単体業務モニター（案件管理）", code: "T003", category: "モニター", archetype: "service_project", price: 100000, salesInitialFee: 100000, salesMonthlyFee: 0, description: "案件管理システム導入の検証（B001相当）", status: "developing", customFields: {"contractType":"単発","phase":"業務システム検証","usageCategory":"B001","proposalOrder":3,"normalTransitionTarget":"B001","monitorConditions":"事例掲載・感想提供","statusLabel":"テスト中"}, createdAt: Date.now(), updatedAt: Date.now() },
+  { id: "T004", name: "B002標準業務モニター（工程管理）", code: "T004", category: "モニター", archetype: "service_project", price: 250000, salesInitialFee: 250000, salesMonthlyFee: 0, description: "工程管理・進捗可視化の仕組み検証（B002相当）", status: "developing", customFields: {"contractType":"単発","phase":"業務システム検証","usageCategory":"B002","proposalOrder":4,"normalTransitionTarget":"B002","monitorConditions":"事例掲載・感想提供","statusLabel":"テスト中"}, createdAt: Date.now(), updatedAt: Date.now() },
+  { id: "T005", name: "B001単体業務モニター（見積管理）", code: "T005", category: "モニター", archetype: "service_project", price: 100000, salesInitialFee: 100000, salesMonthlyFee: 0, description: "見積業務の標準化・効率化検証（B001相当）", status: "developing", customFields: {"contractType":"単発","phase":"業務システム検証","usageCategory":"B001","proposalOrder":5,"normalTransitionTarget":"B001","monitorConditions":"事例掲載・感想提供","statusLabel":"テスト中"}, createdAt: Date.now(), updatedAt: Date.now() },
+  { id: "T006", name: "B002標準業務モニター（請求・入金）", code: "T006", category: "モニター", archetype: "service_project", price: 250000, salesInitialFee: 250000, salesMonthlyFee: 0, description: "請求・入金管理の一元化検証（B002相当）", status: "developing", customFields: {"contractType":"単発","phase":"業務システム検証","usageCategory":"B002","proposalOrder":6,"normalTransitionTarget":"B002","monitorConditions":"事例掲載・感想提供・月1回ヒアリング協力","statusLabel":"テスト中"}, createdAt: Date.now(), updatedAt: Date.now() },
+  { id: "T007", name: "C001経営OSモニター", code: "T007", category: "モニター", archetype: "service_project", price: 500000, salesInitialFee: 500000, salesMonthlyFee: 0, description: "顧客・案件・請求の統合構造検証（C001相当）", status: "developing", customFields: {"contractType":"単発","phase":"経営OS検証","usageCategory":"C001","proposalOrder":7,"normalTransitionTarget":"C001","monitorConditions":"事例掲載・感想提供・月1回ヒアリング協力","statusLabel":"テスト中"}, createdAt: Date.now(), updatedAt: Date.now() },
+  { id: "T008", name: "D004AI経営OSモニター", code: "T008", category: "モニター", archetype: "service_project", price: 700000, salesInitialFee: 700000, salesMonthlyFee: 0, description: "AI診断・提案・自動化・統合経営OSの検証（D004相当）", status: "developing", customFields: {"contractType":"単発","phase":"AI統合検証","usageCategory":"D004","proposalOrder":8,"normalTransitionTarget":"D004","monitorConditions":"事例掲載・感想提供・月1回ヒアリング協力","statusLabel":"テスト中"}, createdAt: Date.now(), updatedAt: Date.now() },
+  { id: "E001", name: "介護保険外サービス開業パッケージ", code: "E001", category: "開業支援", archetype: "service_project", price: 1150000, salesInitialFee: 1150000, salesMonthlyFee: 10000, description: "介護保険外サービスの開業に関するトータルサポート。①事業設計支援（市場調査・収支計画・事業計画策定）②集客基盤構築（HP・SNS・チラシ・名刺等の制作）③業務システム導入（顧客管理・請求・給与管理）④開業サポート（全10回の実践サポート）", status: "active", customFields: {"contractType":"ハイブリッド","phase":"開業支援","usageCategory":"開業パッケージ","proposalOrder":13,"normalTransitionTarget":"","monitorConditions":"","statusLabel":"提供中"}, createdAt: Date.now(), updatedAt: Date.now() },
 ];
 
 // --- Initial Seed Contracts ---
@@ -344,9 +370,17 @@ export const matrixService = {
   loadProducts(): ManagedProduct[] {
     try {
       const data = localStorage.getItem(MATRIX_STORAGE_KEYS.PRODUCTS);
-      return data ? JSON.parse(data) : INITIAL_PRODUCTS;
+      const saved = data ? JSON.parse(data) as ManagedProduct[] : INITIAL_PRODUCTS;
+      if (localStorage.getItem(MATRIX_STORAGE_KEYS.PRODUCTS_SEED_VERSION) !== '2026-10-catalog-v1') {
+        const existingIds = new Set(saved.map((product) => product.id));
+        const merged = [...saved, ...BUSINESS_DEFAULT_PRODUCTS.filter((product) => !existingIds.has(product.id))];
+        localStorage.setItem(MATRIX_STORAGE_KEYS.PRODUCTS, JSON.stringify(merged));
+        localStorage.setItem(MATRIX_STORAGE_KEYS.PRODUCTS_SEED_VERSION, '2026-10-catalog-v1');
+        return merged;
+      }
+      return saved;
     } catch {
-      return INITIAL_PRODUCTS;
+      return [...INITIAL_PRODUCTS, ...BUSINESS_DEFAULT_PRODUCTS];
     }
   },
   saveProducts(products: ManagedProduct[]) {
