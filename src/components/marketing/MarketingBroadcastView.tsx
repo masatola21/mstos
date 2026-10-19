@@ -60,7 +60,7 @@ export const MarketingBroadcastView: React.FC<{initialChannel?:Channel}> = ({ini
       const failed=[c,s,f,co,p,l,d,cu,h].find(x=>x.error)?.error;
       if(failed){setError(failed.message);return}
       setContacts((c.data||[]) as Contact[]);
-      setSegments((s.data||[]) as Segment[]);
+      setSegments(((s.data||[]) as Segment[]).filter(x=>typeof x.conditions?.field==='string'&&Boolean(x.conditions.field.trim())));
       setFriends(Object.fromEntries((f.data||[]).map((x:any)=>[x.line_user_id,x])));
       setCompanies(Object.fromEntries((co.data||[]).map((x:any)=>[x.id,x])));
       setProspects((p.data||[]) as CrmRecord[]);
@@ -83,10 +83,12 @@ export const MarketingBroadcastView: React.FC<{initialChannel?:Channel}> = ({ini
     }
     const segment=audienceMode==='crm'?selectedSegment:undefined;
     if(segment){
-      const field=typeof segment.conditions?.field==='string'?segment.conditions.field:'';
+      const field=typeof segment.conditions?.field==='string'?segment.conditions.field.trim():'';
       const value=String(segment.conditions?.value||'').trim().toLowerCase();
-      const matches=(row:Record<string,unknown>)=>!field||String(row[field]??'').toLowerCase().includes(value);
-      if(segment.entity_type==='contacts'){
+      const matches=(row:Record<string,unknown>)=>String(row[field]??'').toLowerCase().includes(value);
+      if(!field){
+        rows=[];
+      }else if(segment.entity_type==='contacts'){
         rows=contacts.filter(row=>matches(row as unknown as Record<string,unknown>));
       }else if(segment.entity_type==='companies'){
         const companyIds=new Set(Object.values(companies).filter(matches).map(x=>String(x.id||'')));
