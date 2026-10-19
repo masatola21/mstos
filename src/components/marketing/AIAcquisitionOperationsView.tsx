@@ -1,9 +1,10 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { getSupabase } from '../../lib/supabaseClient';
 import { ArrowRight, BarChart3, Megaphone, Plus, Save, Sparkles, Trash2 } from 'lucide-react';
+import { OwnMediaWorkspace } from './OwnMediaWorkspace';
 
 type RecordType = 'strategy' | 'content' | 'social' | 'video' | 'ad' | 'funnel' | 'result' | 'proposal';
-type ViewTab = 'dashboard' | RecordType | 'analysis';
+type ViewTab = 'dashboard' | RecordType | 'analysis' | 'media';
 type Field = { key: string; label: string; kind?: 'textarea' | 'number' | 'date' | 'select'; options?: string[]; placeholder?: string };
 type AcquisitionRecord = { id: string; record_type: RecordType; title: string; product_id: string | null; status: string | null; payload: Record<string, string>; created_at: string; updated_at: string };
 type Product = { id: string; product_name: string };
@@ -13,7 +14,7 @@ const tabs: Array<{ id: ViewTab; label: string }> = [
   { id: 'dashboard', label: '集客ダッシュボード' }, { id: 'strategy', label: '集客戦略' },
   { id: 'content', label: 'コンテンツ企画' }, { id: 'social', label: 'SNS・note運用' },
   { id: 'video', label: '動画運用' }, { id: 'ad', label: '広告運用' },
-  { id: 'funnel', label: 'LP・集客導線' }, { id: 'analysis', label: '成果分析・改善提案' },
+  { id: 'media', label: '自社メディア運用' }, { id: 'funnel', label: 'LP・集客導線' }, { id: 'analysis', label: '成果分析・改善提案' },
 ];
 const typeLabels: Record<RecordType, string> = { strategy: '集客戦略', content: 'コンテンツ企画', social: 'SNS・note投稿', video: '動画企画', ad: '広告施策', funnel: '集客導線', result: '成果記録', proposal: '改善提案' };
 const fields: Record<RecordType, Field[]> = {
@@ -115,7 +116,7 @@ export const AIAcquisitionOperationsView: React.FC<{ onSendPresidentSummary?: (s
       setError(savedRecords.error.message.includes('mst_ai_acquisition_records') ? '集客運用テーブルが未適用です。supabase/migrations/20261020100000_ai_acquisition_operations.sql を適用してください。' : `集客データを読み込めませんでした: ${savedRecords.error.message}`);
       setLoading(false); return;
     }
-    setRecords((savedRecords.data || []) as AcquisitionRecord[]);
+    setRecords(((savedRecords.data || []) as AcquisitionRecord[]).filter((record) => !['media', 'article', 'seo', 'rewrite', 'attribution'].includes(record.record_type)));
     if (!savedProducts.error) setProducts((savedProducts.data || []) as Product[]);
     if (!savedSegments.error) setSegments(((savedSegments.data || []) as AudienceSegment[]).filter((segment) => Boolean(segment.conditions?.field?.trim())));
     setLoading(false);
@@ -189,6 +190,7 @@ export const AIAcquisitionOperationsView: React.FC<{ onSendPresidentSummary?: (s
     <nav className="flex gap-1 overflow-x-auto rounded-xl border border-slate-800 bg-slate-900 p-1" aria-label="AI集客運用メニュー">{tabs.map((tab) => <button key={tab.id} onClick={() => { setActiveTab(tab.id); setNotice(''); setError(''); }} aria-current={activeTab === tab.id ? 'page' : undefined} className={`whitespace-nowrap rounded-lg px-3 py-2 text-xs sm:text-sm ${activeTab === tab.id ? 'bg-indigo-600 font-semibold text-white' : 'text-slate-400 hover:bg-slate-800 hover:text-white'}`}>{tab.label}</button>)}</nav>
     {(error || notice) && <p role={error ? 'alert' : 'status'} className={`rounded-lg px-3 py-2 text-sm ${error ? 'bg-rose-950/50 text-rose-200' : 'bg-emerald-950/40 text-emerald-200'}`}>{error || notice}</p>}
     {loading ? <p className="rounded-xl border border-slate-800 p-5 text-sm text-slate-400">集客データを読み込み中…</p> : <>
+      {activeTab === 'media' && <OwnMediaWorkspace products={products} onAskAI={onSendPresidentSummary} />}
       {activeTab === 'dashboard' && <section className="space-y-4">
         <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">{[
           ['運用中の施策', `${metrics.active}件`], ['コンテンツ・投稿・動画', `${metrics.content}件`], ['広告費', metrics.known.spend ? yen(metrics.spend) : '未入力'], ['リード / 商談 / 契約', `${metrics.known.leads ? metrics.leads : '未入力'} / ${metrics.known.meetings ? metrics.meetings : '未入力'} / ${metrics.known.contracts ? metrics.contracts : '未入力'}`],
