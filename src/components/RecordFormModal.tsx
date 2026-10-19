@@ -9,6 +9,13 @@ import {
 } from '../services/dataService';
 import { ProposalPlanTemplatePicker } from './ProposalPlanTemplatePicker';
 import type { ProposalPlanTemplate } from './ProposalPlanTemplatePicker';
+
+const buildSharedProposalDescription = (product: Product): string => [
+  `【商品名】${product.product_name}`,
+  `【説明】${product.description?.trim() || '商品説明未登録'}`,
+  `【価格】初期費用 ¥${Number(product.initial_fee || 0).toLocaleString('ja-JP')} / 月額費用 ¥${Number(product.monthly_fee || 0).toLocaleString('ja-JP')}`,
+  `【フェーズ】${product.phase?.trim() || '未設定（商品マスタで設定してください）'}`,
+].join('\\n');
 import { 
   X, 
   Check, 
@@ -126,6 +133,8 @@ export const RecordFormModal: React.FC<RecordFormModalProps> = ({
         initial_fee: product?.initial_fee ?? '',
         monthly_fee: product?.monthly_fee ?? '',
         total_amount: product ? Number(product.initial_fee || 0) + Number(product.monthly_fee || 0) : '',
+        proposal_plan_name: product?.product_name || '',
+        memo: product ? buildSharedProposalDescription(product) : '',
       }));
       return;
     }
@@ -262,6 +271,20 @@ export const RecordFormModal: React.FC<RecordFormModalProps> = ({
       setIsSubmitting(false);
     }
   };
+
+  const sharedProposalTemplate = (() => {
+    const product = products.find((item) => item.id === String(formData.product_id || ''));
+    if (!product) return null;
+    return {
+      id: '',
+      product_id: product.id,
+      name: product.product_name,
+      description: buildSharedProposalDescription(product),
+      initial_fee: product.initial_fee ?? null,
+      monthly_fee: product.monthly_fee ?? null,
+      total_amount: Number(product.initial_fee || 0) + Number(product.monthly_fee || 0),
+    } satisfies ProposalPlanTemplate;
+  })();
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-fade-in">
@@ -418,7 +441,8 @@ export const RecordFormModal: React.FC<RecordFormModalProps> = ({
                           initialFee={formData.initial_fee ?? ''}
                           monthlyFee={formData.monthly_fee ?? ''}
                           totalAmount={formData.total_amount ?? ''}
-                          onApply={(template?: ProposalPlanTemplate) => {
+                          sharedTemplate={sharedProposalTemplate}
+                          onApply={(template?: ProposalPlanTemplate | null) => {
                             setProposalPlanTemplateId(template?.id || '');
                             if (template) setFormData((prev) => ({
                               ...prev,
