@@ -229,7 +229,7 @@ async function loadTaskRelatedContext(task: TaskItem): Promise<string> {
 function AppContent() {
   const { user, isLoading } = useAuth();
   const [currentTab, setCurrentTab] = useState<UnifiedNavTab>('mst_dashboard');
-  const [customerWorkspaceContext, setCustomerWorkspaceContext] = useState<{ companyId: string; leadId?: string; dealId?: string; section?: 'forms' | 'diagnoses' } | undefined>();
+  const [customerWorkspaceContext, setCustomerWorkspaceContext] = useState<{ companyId: string; leadId?: string; dealId?: string; section?: 'forms' | 'diagnoses'; documentType?: 'invoice' } | undefined>();
   const customerWorkspaceCompanyId = customerWorkspaceContext?.companyId;
   const [workspaceReady, setWorkspaceReady] = useState(false);
   const [workspaceSyncStatus, setWorkspaceSyncStatus] = useState<'loading' | 'saving' | 'saved' | 'error'>('loading');
@@ -1784,6 +1784,10 @@ function AppContent() {
             onMilestoneReached={handleServiceMilestoneReached}
             onContractSigned={handleOperationalContractSigned}
             onInvoiceOverdue={handleOperationalInvoiceOverdue}
+            onOpenInvoiceDocuments={(companyId) => {
+              setCustomerWorkspaceContext({ companyId, documentType: 'invoice' });
+              setCurrentTab('document_templates');
+            }}
           />
         )}
 
@@ -1797,7 +1801,7 @@ function AppContent() {
 
         {currentTab === 'document_templates' && (
           <>
-            <DocumentTemplateView key={`${customerWorkspaceCompanyId || 'all'}:${customerWorkspaceContext?.leadId || ''}:${customerWorkspaceContext?.dealId || ''}`} initialCompanyId={customerWorkspaceCompanyId} initialLeadId={customerWorkspaceContext?.leadId} initialDealId={customerWorkspaceContext?.dealId} />
+            <DocumentTemplateView key={`${customerWorkspaceCompanyId || 'all'}:${customerWorkspaceContext?.leadId || ''}:${customerWorkspaceContext?.dealId || ''}:${customerWorkspaceContext?.documentType || ''}`} initialCompanyId={customerWorkspaceCompanyId} initialLeadId={customerWorkspaceContext?.leadId} initialDealId={customerWorkspaceContext?.dealId} initialDocumentType={customerWorkspaceContext?.documentType} />
             <SalesOperationsWorkspace tab="documents" companyId={customerWorkspaceCompanyId} leadId={customerWorkspaceContext?.leadId} dealId={customerWorkspaceContext?.dealId} onClearCompanyFilter={() => setCustomerWorkspaceContext(undefined)} />
           </>
         )}
