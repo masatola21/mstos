@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { getSupabase } from '../../lib/supabaseClient';
 
 type Contact = { id:string; full_name:string|null; email:string|null; line_user_id:string|null; company_id:string|null };
+type CrmRecord = Record<string, unknown> & { id?: string; company_id?: string | null; contact_id?: string | null; lead_id?: string | null };
 type Segment = { id:string; name:string; entity_type:string; conditions:Record<string,unknown> };
 type Friend = { line_user_id:string; status:string; consent_status:string };
 type Run = { id:string; name:string; channel:string; status:string; total_count:number; sent_count:number; failed_count:number; created_at:string };
@@ -19,6 +20,10 @@ export const MarketingBroadcastView: React.FC = () => {
   const [friends,setFriends]=useState<Record<string,Friend>>({});
   const [runs,setRuns]=useState<Run[]>([]);
   const [companies,setCompanies]=useState<Record<string,Record<string,unknown>>>({});
+  const [prospects,setProspects]=useState<CrmRecord[]>([]);
+  const [leads,setLeads]=useState<CrmRecord[]>([]);
+  const [deals,setDeals]=useState<CrmRecord[]>([]);
+  const [customers,setCustomers]=useState<CrmRecord[]>([]);
   const [channel,setChannel]=useState<Channel>('email');
   const [segmentId,setSegmentId]=useState('all');
   const [selected,setSelected]=useState<string[]>([]);
@@ -42,37 +47,62 @@ export const MarketingBroadcastView: React.FC = () => {
       db.from('crm_segments').select('id,name,entity_type,conditions').order('name'),
       db.from('line_friends').select('line_user_id,status,consent_status'),
       db.from('companies').select('*'),
+      db.from('prospects').select('*'),
+      db.from('leads').select('*'),
+      db.from('deals').select('*'),
+      db.from('customers').select('*'),
       db.from('communication_outbox').select('source_id,channel,status,subject,body_text,created_at').eq('source_type','marketing_broadcast').order('created_at',{ascending:false}).limit(1000),
-    ]).then(([c,s,f,co,h])=>{
+    ]).then(([c,s,f,co,p,l,d,cu,h])=>{
       if(!active)return;
-      const failed=[c,s,f,co,h].find(x=>x.error)?.error;
+      const failed=[c,s,f,co,p,l,d,cu,h].find(x=>x.error)?.error;
       if(failed){setError(failed.message);return}
       setContacts((c.data||[]) as Contact[]);
       setSegments((s.data||[]) as Segment[]);
       setFriends(Object.fromEntries((f.data||[]).map((x:any)=>[x.line_user_id,x])));
       setCompanies(Object.fromEntries((co.data||[]).map((x:any)=>[x.id,x])));
+      setProspects((p.data||[]) as CrmRecord[]);
+      setLeads((l.data||[]) as CrmRecord[]);
+      setDeals((d.data||[]) as CrmRecord[]);
+      setCustomers((cu.data||[]) as CrmRecord[]);
       setRuns(summarizeBroadcastHistory((h.data||[]) as OutboxHistoryRow[]));
     }).catch(e=>active&&setError(e.message||'一斉配信の読み込みに失敗しました。'));
     return()=>{active=false}
   },[]);
 
+  const selectedSegment = segments.find(x=>x.id===segmentId);
   const eligible = useMemo(()=>{
     let rows=contacts;
-    const segment=segments.find(x=>x.id===segmentId);
+    const segment=selectedSegment;
     if(segment){
       const field=typeof segment.conditions?.field==='string'?segment.conditions.field:'';
-      const value=String(segment.conditions?.value||'').toLowerCase();
-      const includes=(row:Record<string,unknown>)=>!field||String(row[field]??'').toLowerCase().includes(value);
-      if(segment.entity_type==='contacts') rows=rows.filter(row=>includes(row as unknown as Record<string,unknown>));
-      else if(segment.entity_type==='companies'){
-        const companyIds=new Set(Object.values(companies).filter(includes).map(x=>String(x.id||'')));
-        rows=rows.filter(row=>row.company_id&&companyIds.has(row.company_id));
-      } else return [];
+      const value=String(segment.conditions?.value||'').trim().toLowerCase();
+      const matches=(row:Record<string,unknown>)=>!field||String(row[field]??'').toLowerCase().includes(value);
+      if(segment.entity_type==='contacts'){
+        rows=contacts.filter(row=>matches(row as unknown as Record<string,unknown>));
+      }else if(segment.entity_type==='companies'){
+        const companyIds=new Set(Object.values(companies).filter(matches).map(x=>String(x.id||'')));
+        rows=contacts.filter(row=>Boolean(row.company_id&&companyIds.has(row.company_id)));
+      }else if(segment.entity_type==='prospects'){
+        const companyIds=new Set(prospects.filter(row=>matches(row)).map(row=>String(row.company_id||'')));
+        rows=contacts.filter(row=>Boolean(row.company_id&&companyIds.has(row.company_id)));
+      }else if(segment.entity_type==='customers'){
+        const companyIds=new Set(customers.filter(row=>matches(row)).map(row=>String(row.company_id||'')));
+        rows=contacts.filter(row=>Boolean(row.company_id&&companyIds.has(row.company_id)));
+      }else if(segment.entity_type==='leads'){
+        const contactIds=new Set(leads.filter(row=>matches(row)).map(row=>String(row.contact_id||'')).filter(Boolean));
+        rows=contacts.filter(row=>contactIds.has(row.id));
+      }else if(segment.entity_type==='deals'){
+        const leadIds=new Set(deals.filter(row=>matches(row)).map(row=>String(row.lead_id||'')).filter(Boolean));
+        const contactIds=new Set(leads.filter(row=>leadIds.has(String(row.id||''))).map(row=>String(row.contact_id||'')).filter(Boolean));
+        rows=contacts.filter(row=>contactIds.has(row.id));
+      }else{
+        rows=[];
+      }
     }
     return rows.filter(row=>channel==='email'
       ? Boolean(row.email)
       : Boolean(row.line_user_id&&friends[row.line_user_id]?.status==='active'&&friends[row.line_user_id]?.consent_status==='opted_in'));
-  },[contacts,segments,companies,segmentId,channel,friends]);
+  },[contacts,selectedSegment,companies,prospects,leads,deals,customers,channel,friends]);
 
   const refreshRuns=async()=>{
     if(!db)return;
@@ -145,13 +175,13 @@ export const MarketingBroadcastView: React.FC = () => {
         <label className="text-sm text-slate-300">CRM対象
           <select value={segmentId} onChange={e=>{setSegmentId(e.target.value);setSelected([]);setPreview(false)}} className="mt-1 block w-full rounded-lg border border-slate-700 bg-slate-950 p-2 text-white">
             <option value="all">全連絡先から抽出</option>
-            {segments.filter(x=>x.entity_type==='contacts'||x.entity_type==='companies').map(x=><option key={x.id} value={x.id}>{x.name}（{x.entity_type==='contacts'?'連絡先':'会社'}）</option>)}
+            {segments.map(x=><option key={x.id} value={x.id}>{x.name}（{{contacts:'連絡先',companies:'会社',prospects:'見込み企業',leads:'リード',deals:'商談',customers:'顧客'}[x.entity_type]||x.entity_type}）</option>)}
           </select>
         </label>
       </div>
       <div className="mt-4 rounded-xl border border-slate-800 bg-slate-950/60 p-4">
         <div className="flex flex-wrap items-center justify-between gap-2">
-          <div><div className="font-semibold text-white">送信対象</div><div className="text-xs text-slate-400">条件に合う宛先 {eligible.length}件・選択中 {selectedContacts.length}件</div></div>
+          <div><div className="font-semibold text-white">送信対象</div><div className="text-xs text-slate-400">{selectedSegment?`「${selectedSegment.name}」の条件から抽出：`:'条件に合う宛先：'}{eligible.length}件・選択中 {selectedContacts.length}件</div></div>
           <div className="flex gap-2"><button type="button" onClick={selectAll} className="rounded border border-slate-700 px-3 py-1.5 text-xs text-slate-200">対象をすべて選択</button><button type="button" onClick={clearSelected} className="rounded border border-slate-700 px-3 py-1.5 text-xs text-slate-300">解除</button></div>
         </div>
         <div className="mt-3 max-h-52 space-y-1 overflow-auto">
