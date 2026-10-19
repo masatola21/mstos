@@ -204,10 +204,10 @@ async function loadTaskRelatedContext(task: TaskItem): Promise<string> {
           '次回テーマ: ' + String(details.nextTheme || '未設定'),
           '次回日時: ' + String(support.next_meeting_at || '未設定'),
           '重要課題: ' + String(details.keyIssue || '未設定'),
-        ].join('\\n');
+        ].join('\n');
       }
     }
-    return [`関連先: ${related.label || related.type} (ID: ${related.id})`, ...fields, supportContext].filter(Boolean).join('\\n').slice(0, 2200);
+    return [`関連先: ${related.label || related.type} (ID: ${related.id})`, ...fields, supportContext].filter(Boolean).join('\n').slice(0, 2200);
   } catch {
     return '関連レコードは設定されていますが、現在の情報を取得できませんでした。';
   }
