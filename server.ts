@@ -408,6 +408,73 @@ app.post('/api/line/rich-menu', async (req, res) => {
   }
 });
 
+let marketingQueueBusy = false;
+async function processMarketingAutomationJobs(): Promise<void> {
+  if (!lineSupabase || marketingQueueBusy) return;
+  marketingQueueBusy = true;
+  try {
+    const now = new Date().toISOString();
+    const { data: jobs, error } = await lineSupabase.from('marketing_automation_jobs')
+      .select('*').eq('status','queued').lte('due_at',now).order('due_at',{ascending:true}).limit(20);
+    if (error) throw error;
+    for (const job of jobs || []) {
+      const { data: claimed } = await lineSupabase.from('marketing_automation_jobs')
+        .update({ status:'sending', updated_at:new Date().toISOString() }).eq('id',job.id).eq('status','queued').select('*').maybeSingle();
+      if (!claimed) continue;
+      let outboxId = '';
+      try {
+        const { data: contact, error: contactError } = await lineSupabase.from('contacts')
+          .select('id,full_name,email,line_user_id,company_id').eq('id',job.contact_id).maybeSingle();
+        if (contactError || !contact) throw new Error('連絡先が見つかりません。');
+        const recipientAddress = job.channel === 'email' ? String(contact.email || '') : String(contact.line_user_id || '');
+        if (!recipientAddress) throw new Error('送信先がありません。');
+        const { data: outbox, error: outboxError } = await lineSupabase.from('communication_outbox').insert({
+          channel:job.channel, recipient_contact_id:contact.id, recipient_address:recipientAddress,
+          subject:job.channel==='email'?job.subject:null, body_text:job.body_text,
+          line_message_payload:job.channel==='line'?job.line_message_payload:null,
+          company_id:contact.company_id||null, source_type:'marketing_automation', source_id:job.id,
+          status:'queued', consent_confirmed_at:new Date().toISOString(), consent_basis:job.consent_basis,
+        }).select('id').single();
+        if (outboxError || !outbox) throw new Error('送信履歴を作成できません。');
+        outboxId = outbox.id;
+        await lineSupabase.from('communication_outbox').update({status:'sending',updated_at:new Date().toISOString()}).eq('id',outboxId);
+        let providerMessageId = '';
+        if (job.channel === 'email') {
+          const emailKey = process.env.RESEND_API_KEY || '';
+          const emailFrom = process.env.RESEND_FROM_EMAIL || '';
+          if (!emailKey || !emailFrom) throw new Error('メール配信サービスの設定がありません。');
+          const body = String(job.body_text || '').replaceAll('{name}',String(contact.full_name||'お客様'));
+          const response = await fetch('https://api.resend.com/emails',{method:'POST',headers:{Authorization:'Bearer '+emailKey,'Content-Type':'application/json'},body:JSON.stringify({from:emailFrom,to:[recipientAddress],subject:job.subject||'',text:body})});
+          const result = await response.json().catch(()=>({})) as {id?:string;message?:string};
+          if (!response.ok || !result.id) throw new Error(result.message||'メール送信に失敗しました。');
+          providerMessageId=result.id;
+        } else if (job.channel === 'line') {
+          if (!lineChannelAccessToken) throw new Error('LINE送信トークンが未設定です。');
+          const {data:friend,error:friendError}=await lineSupabase.from('line_friends').select('status,consent_status').eq('line_user_id',recipientAddress).maybeSingle();
+          if(friendError||!friend||friend.status!=='active'||friend.consent_status!=='opted_in')throw new Error('LINEの友だち状態または配信同意を確認できません。');
+          const requested=job.line_message_payload&&typeof job.line_message_payload==='object'?job.line_message_payload as {type?:string;originalContentUrl?:string;previewImageUrl?:string}:null;
+          const message=requested?.type==='video'
+            ? {type:'video',originalContentUrl:requested.originalContentUrl,previewImageUrl:requested.previewImageUrl}
+            : {type:'text',text:String(job.body_text||'').replaceAll('{name}',String(contact.full_name||'お客様'))};
+          const response=await fetch('https://api.line.me/v2/bot/message/push',{method:'POST',headers:{Authorization:'Bearer '+lineChannelAccessToken,'Content-Type':'application/json','X-Line-Retry-Key':outboxId},body:JSON.stringify({to:recipientAddress,messages:[message]})});
+          if(!response.ok)throw new Error((await response.text().catch(()=>''))||'LINE送信に失敗しました。');
+          providerMessageId=outboxId;
+        }
+        const sentAt=new Date().toISOString();
+        const {error:saveError}=await lineSupabase.from('communication_outbox').update({status:'sent',sent_at:sentAt,provider_message_id:providerMessageId,error_message:null,updated_at:sentAt}).eq('id',outboxId);
+        if(saveError)throw saveError;
+        await lineSupabase.from('marketing_automation_jobs').update({status:'sent',updated_at:sentAt,error_message:null}).eq('id',job.id);
+      } catch (error) {
+        const message=error instanceof Error?error.message:'自動配信に失敗しました。';
+        if(outboxId)await lineSupabase.from('communication_outbox').update({status:'failed',error_message:message.slice(0,1000),updated_at:new Date().toISOString()}).eq('id',outboxId);
+        await lineSupabase.from('marketing_automation_jobs').update({status:'failed',error_message:message.slice(0,1000),updated_at:new Date().toISOString()}).eq('id',job.id);
+      }
+    }
+  } catch (error) {
+    console.error('Marketing automation queue processing failed:',error instanceof Error?error.message:'unknown error');
+  } finally { marketingQueueBusy = false; }
+}
+
 app.post('/api/communications/send', async (req, res) => {
   if (!lineSupabase) return res.status(503).json({ error: '送信サーバーのSupabase設定がありません。' });
   const authorization = req.header('authorization') || '';
@@ -1180,6 +1247,9 @@ if (process.env.NODE_ENV !== 'production') {
     res.sendFile(path.resolve(__dirname, 'dist', 'index.html'));
   });
 }
+
+setInterval(() => { void processMarketingAutomationJobs(); }, 15000);
+setTimeout(() => { void processMarketingAutomationJobs(); }, 15000);
 
 app.listen(port, () => {
   console.log(`Server listening on port ${port}`);
