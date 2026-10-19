@@ -6,6 +6,7 @@ import { MarketingBroadcastView } from './MarketingBroadcastView';
 import { MarketingLineInboxView } from './MarketingLineInboxView';
 import { MarketingLineSettingsView } from './MarketingLineSettingsView';
 import { MarketingEmailInboxView } from './MarketingEmailInboxView';
+import { SalesOperationsWorkspace } from '../SalesOperationsWorkspace';
 
 interface Props {
   scenarios: MarketingScenario[];
@@ -42,11 +43,11 @@ const lineMessageLabels: Record<MarketingLineMessageType, string> = { text: 'テ
 const workflowStages = [
   {
     title: '配信対象と開始条件を設定',
-    trigger: 'CRMセグメント、または登録した開始条件を選ぶ',
+    trigger: '配信対象リスト、または登録した開始条件を選ぶ',
     automation: '対応するCRM状態変化で、準備済みシナリオを起動して配信待ちに登録します。',
     ai: '対象者の条件を整理し、必要なら外部AIで施策案を作成できます。顧客データを外部AIへ貼り付けないでください。',
     approval: '配信対象と開始条件を人が確認します。',
-    data: 'CRMセグメント・シナリオ設定',
+    data: '配信対象リスト・シナリオ設定',
     status: '条件保存・対応イベントの自動起動',
   },
   {
@@ -102,18 +103,18 @@ const emptyScenario = (): Omit<MarketingScenario, 'id' | 'updatedAt'> => ({
 });
 
 export const MarketingAutomationPrototypeView: React.FC<Props> = ({ scenarios, onScenariosChange, onNavigateTab }) => {
-  const [segments, setSegments] = useState<Array<{id:string;name:string;entity_type:string}>>([]);
+  const [segments, setSegments] = useState<Array<{id:string;name:string;entity_type:string;conditions:Record<string,unknown>|null}>>([]);
   useEffect(() => {
     const supabase = getSupabase();
     if (!supabase) return;
-    void supabase.from('crm_segments').select('id,name,entity_type').order('name')
-      .then(({data,error}) => { if (!error) setSegments(data || []); });
+    void supabase.from('crm_segments').select('id,name,entity_type,conditions').order('name')
+      .then(({data,error}) => { if (!error) setSegments((data || []).filter((segment:any)=>typeof segment.conditions?.field==='string'&&Boolean(segment.conditions.field.trim()))); });
   }, []);
   const audienceLabel = (value: string) => {
     const id = value.startsWith('segment:') ? value.slice('segment:'.length) : '';
     return segments.find((segment) => segment.id === id)?.name || value || '配信対象未設定';
   };
-  const [activeTab, setActiveTab] = useState<'home' | 'email' | 'line' | 'scenarios'>('home');
+  const [activeTab, setActiveTab] = useState<'home' | 'email' | 'line' | 'scenarios' | 'segments'>('home');
   const [lineView, setLineView] = useState<'broadcast' | 'inbox' | 'settings'>('broadcast');
   const [emailView, setEmailView] = useState<'broadcast' | 'inbox'>('broadcast');
   const [editing, setEditing] = useState<MarketingScenario | null>(null);
@@ -294,10 +295,11 @@ export const MarketingAutomationPrototypeView: React.FC<Props> = ({ scenarios, o
   };
 
   const tabs = [
-    { id: 'home' as const, label: '全体', icon: GitBranch },
-    { id: 'line' as const, label: 'LINE', icon: MessageCircle },
+    { id: 'home' as const, label: 'ホーム', icon: GitBranch },
     { id: 'email' as const, label: 'メール', icon: Mail },
-    { id: 'scenarios' as const, label: '自動化', icon: Zap }, 
+    { id: 'line' as const, label: 'LINE', icon: MessageCircle },
+    { id: 'scenarios' as const, label: 'シナリオ', icon: Zap },
+    { id: 'segments' as const, label: '配信対象リスト', icon: Tags },
   ];
 
   return (
@@ -386,7 +388,7 @@ export const MarketingAutomationPrototypeView: React.FC<Props> = ({ scenarios, o
             <div className="grid gap-4 md:grid-cols-2">
               <label className="text-xs text-slate-300">シナリオ名<input required maxLength={100} value={form.name} onChange={(e) => update('name', e.target.value)} placeholder="例：診断完了後のフォロー" className="mt-1 w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-white" /></label>
               <label className="text-xs text-slate-300">開始条件<select value={form.trigger} onChange={(e) => update('trigger', e.target.value as MarketingTrigger)} className="mt-1 w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-white">{triggerOptions.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}</select></label>
-              <div className="text-xs text-slate-300">配信対象の保存区分<select value={form.audience.startsWith('segment:') && segments.some((segment)=>segment.id===form.audience.slice(8)) ? form.audience : 'manual'} onChange={(e)=>update('audience',e.target.value==='manual'?'':e.target.value)} className="mt-1 w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-white"><option value="manual">条件をメモとして入力（旧形式）</option>{segments.map((segment)=><option key={segment.id} value={`segment:${segment.id}`}>{segment.name}（{segment.entity_type}）</option>)}</select>{(!form.audience.startsWith('segment:') || !segments.some((segment)=>segment.id===form.audience.slice(8))) && <input maxLength={160} value={form.audience} onChange={(e)=>update('audience',e.target.value)} placeholder="配信対象の説明" className="mt-2 w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-white" />}</div>
+              <div className="text-xs text-slate-300">配信対象リスト<select value={form.audience.startsWith('segment:') && segments.some((segment)=>segment.id===form.audience.slice(8)) ? form.audience : 'manual'} onChange={(e)=>update('audience',e.target.value==='manual'?'':e.target.value)} className="mt-1 w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-white"><option value="manual">条件をメモとして入力（旧形式）</option>{segments.map((segment)=><option key={segment.id} value={`segment:${segment.id}`}>{segment.name}（{segment.entity_type}）</option>)}</select>{(!form.audience.startsWith('segment:') || !segments.some((segment)=>segment.id===form.audience.slice(8))) && <input maxLength={160} value={form.audience} onChange={(e)=>update('audience',e.target.value)} placeholder="配信対象の説明" className="mt-2 w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-white" />}</div>
               <label className="text-xs text-slate-300">配信同意・送信根拠<input required maxLength={500} value={form.consentBasis} onChange={(e) => update('consentBasis', e.target.value)} placeholder="例：顧客がLINE登録時に案内へ同意" className="mt-1 w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-white" /></label>
               <label className="text-xs text-slate-300">配信チャネル<select value={form.channel} onChange={(e) => update('channel', e.target.value as MarketingChannel)} className="mt-1 w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-white"><option value="line">LINE</option><option value="email">メール</option><option value="both">LINE + メール</option></select></label>
               <label className="text-xs text-slate-300">待機時間（分）<input type="number" min={0} max={525600} value={form.waitMinutes} onChange={(e) => update('waitMinutes', Number(e.target.value))} className="mt-1 w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-white" /></label>
@@ -407,7 +409,7 @@ export const MarketingAutomationPrototypeView: React.FC<Props> = ({ scenarios, o
         {scenarios.length === 0 ? <div className="rounded-2xl border border-dashed border-slate-700 bg-slate-900/60 p-10 text-center"><GitBranch className="mx-auto h-8 w-8 text-slate-500" /><h2 className="mt-3 font-bold text-white">シナリオはまだありません</h2><p className="mt-1 text-sm text-slate-400">「シナリオ作成」から、開始条件とLINE・メールの配信文案を登録できます。</p><button onClick={startNew} className="mt-4 rounded-lg bg-indigo-600 px-4 py-2 text-xs font-semibold text-white">最初のシナリオを作成</button></div> : <div className="space-y-3">{scenarios.map((scenario) => <article key={scenario.id} className="grid gap-3 rounded-xl border border-slate-800 bg-slate-900 p-4 lg:grid-cols-[1.4fr_1fr_1fr_auto] lg:items-center"><div><div className="font-bold text-white">{scenario.name}</div><div className="mt-1 text-xs text-slate-400">{triggerLabel[scenario.trigger]} ・ {audienceLabel(scenario.audience)}</div></div><div className="text-xs text-slate-300">{channelLabels[scenario.channel]}{scenario.channel !== 'email' ? ` ・ LINE${lineMessageLabels[scenario.lineMessageType || 'text']}` : ''}{scenario.waitMinutes > 0 ? ` ・ ${scenario.waitMinutes}分後` : ''}</div><div className="text-xs"><span className={scenario.status === 'prepared' ? 'text-emerald-300' : 'text-amber-300'}>{scenario.status === 'prepared' ? '準備済み（未配信）' : '下書き'}</span><div className="mt-1 text-[10px] text-slate-500">{new Date(scenario.updatedAt).toLocaleString()}</div></div><div className="flex gap-2"><button onClick={() => { markPrepared(scenario); }} className={`rounded-lg border px-3 py-2 text-xs ${scenario.status === 'prepared' ? 'border-emerald-500/30 text-emerald-300' : 'border-slate-700 text-slate-300 hover:bg-slate-800'}`}>{scenario.status === 'prepared' ? '準備済み' : '準備状態にする'}</button><button disabled={scenario.status!=='prepared'||!scenario.consentBasis?.trim()||!supportedAutomationTriggers.has(scenario.trigger)||(scenario.channel!=='email'&&!['text','video'].includes(scenario.lineMessageType||'text'))} onClick={() => { onScenariosChange(scenarios.map((item) => item.id===scenario.id?{...item,automationEnabled:!item.automationEnabled,updatedAt:Date.now()}:item)); setNotice(scenario.automationEnabled?'自動実行を停止しました。':'自動実行を有効にしました。'); }} className={`rounded-lg border px-3 py-2 text-xs ${scenario.automationEnabled?'border-emerald-500/30 text-emerald-300':'border-slate-700 text-slate-300'} disabled:cursor-not-allowed disabled:opacity-40`}>{scenario.automationEnabled?'自動実行中':!supportedAutomationTriggers.has(scenario.trigger)?'開始条件は未対応':scenario.channel!=='email'&&!['text','video'].includes(scenario.lineMessageType||'text')?'LINE形式は未対応':'自動実行を有効化'}</button><button onClick={() => { startEdit(scenario); setNotice(''); }} className="rounded-lg border border-slate-700 px-3 py-2 text-xs text-slate-200 hover:bg-slate-800">編集</button><button onClick={() => deleteScenario(scenario)} aria-label="シナリオを削除" className="rounded-lg border border-slate-700 p-2 text-slate-400 hover:border-rose-500/40 hover:text-rose-300"><Trash2 className="h-4 w-4" /></button></div></article>)}</div>}
         {!editing && scenarios.length > 0 && <p className="text-[11px] text-slate-500">自動実行は有効化したシナリオのみです。CRMイベントの対象連絡先が配信同意済みの場合に送信し、既存の送信履歴へ記録します。</p>}
       </div>}
-
+      {activeTab === 'segments' && <SalesOperationsWorkspace tab="segments" />}
 
     </div>
   );
