@@ -77,6 +77,10 @@ begin
     and lower(coalesce(v_new->>'status','')) in ('completed','complete','done','完了') then
     v_trigger := 'meeting_completed';
   elsif TG_TABLE_NAME = 'customer_invoices' and TG_OP in ('INSERT','UPDATE') then
+    if TG_OP='UPDATE' then
+      update public.marketing_automation_jobs set status='failed', error_message='請求情報が更新されたため予約配信を再評価します。', updated_at=now()
+        where owner_id=auth.uid() and status='queued' and event_key like 'customer_invoices:'||coalesce(v_new->>'id','')||':%';
+    end if;
     if TG_OP='UPDATE' and lower(coalesce(v_new->>'status','')) in ('paid','paid_full','cancelled','canceled') then
       update public.marketing_automation_jobs set status='failed', error_message='請求状態が変更されたため予約配信を停止しました。', updated_at=now()
         where owner_id=auth.uid() and status='queued' and event_key like 'customer_invoices:'||coalesce(v_new->>'id','')||':%';
@@ -125,6 +129,9 @@ begin
     begin select c.id,c.company_id into v_contact_id,v_company_id from public.line_friends f join public.contacts c on c.line_user_id=f.line_user_id where f.id=nullif(v_new->>'line_friend_id','')::uuid limit 1; exception when others then v_contact_id := null; end;
   end if;
   if v_contact_id is null and v_lead_id is not null then select contact_id, company_id into v_contact_id, v_company_id from public.leads where id = v_lead_id; end if;
+  if v_company_id is null and nullif(v_new->>'customer_id','') is not null then
+    begin select company_id into v_company_id from public.customers where id=(v_new->>'customer_id')::uuid; exception when others then v_company_id := null; end;
+  end if;
   if v_contact_id is null and v_company_id is not null then
     for v_contact in select id, company_id from public.contacts where company_id = v_company_id loop
       v_contact_id := v_contact.id;
