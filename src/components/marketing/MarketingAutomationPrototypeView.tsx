@@ -109,7 +109,7 @@ export const MarketingAutomationPrototypeView: React.FC<Props> = ({ scenarios, o
     const id = value.startsWith('segment:') ? value.slice('segment:'.length) : '';
     return segments.find((segment) => segment.id === id)?.name || value || '配信対象未設定';
   };
-  const [activeTab, setActiveTab] = useState<'home' | 'scenarios' | 'broadcast' | 'line_inbox'>('home');
+  const [activeTab, setActiveTab] = useState<'home' | 'email' | 'line' | 'scenarios' | 'line_inbox'>('home');
   const [editing, setEditing] = useState<MarketingScenario | null>(null);
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [form, setForm] = useState(emptyScenario());
@@ -260,9 +260,10 @@ export const MarketingAutomationPrototypeView: React.FC<Props> = ({ scenarios, o
   };
 
   const tabs = [
-    { id: 'home' as const, label: 'ホーム', icon: GitBranch },
+    { id: 'home' as const, label: '全体', icon: GitBranch },
+    { id: 'email' as const, label: 'メール', icon: Mail },
+    { id: 'line' as const, label: 'LINE', icon: MessageCircle },
     { id: 'scenarios' as const, label: '自動化シナリオ', icon: Zap },
-    { id: 'broadcast' as const, label: '一斉配信', icon: Radio },
     { id: 'line_inbox' as const, label: 'LINE受信箱・自動返信', icon: MessageCircle },
   ];
 
@@ -272,7 +273,7 @@ export const MarketingAutomationPrototypeView: React.FC<Props> = ({ scenarios, o
         <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
           <div>
             <div className="mb-2 flex flex-wrap items-center gap-2">
-              <h1 className="text-2xl font-black text-white">マーケティングオートメーション</h1>
+              <h1 className="text-2xl font-black text-white">顧客コミュニケーション</h1>
               <span className="rounded-full border border-amber-400/30 bg-amber-500/10 px-2.5 py-1 text-xs font-semibold text-amber-300">準備中</span>
             </div>
             <p className="max-w-3xl text-sm leading-6 text-slate-300">LINE・メールの案内と自動化をまとめて管理します。顧客・リード情報は既存のCRMを正本として利用します。</p>
@@ -286,7 +287,8 @@ export const MarketingAutomationPrototypeView: React.FC<Props> = ({ scenarios, o
 
       {notice && <div role="status" className="rounded-xl border border-emerald-500/30 bg-emerald-500/10 px-4 py-3 text-sm text-emerald-200">{notice}</div>}
 
-      {activeTab === 'broadcast' && <MarketingBroadcastView />}
+      {activeTab === 'email' && <MarketingBroadcastView initialChannel="email" />}
+      {activeTab === 'line' && <MarketingBroadcastView initialChannel="line" />}
       {activeTab === 'line_inbox' && <MarketingLineInboxView />}
       {activeTab === 'home' && <>
         <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
@@ -301,20 +303,22 @@ export const MarketingAutomationPrototypeView: React.FC<Props> = ({ scenarios, o
           <div className="mb-4"><h2 className="font-bold text-white">チャネルから開く</h2><p className="mt-1 text-xs text-slate-400">顧客・リード情報は既存CRMを正本として使い、フォームは既存機能を利用します。</p></div>
           <div className="grid gap-4 lg:grid-cols-2">
             <article className="rounded-xl border border-green-500/20 bg-slate-950/70 p-5">
-              <div className="flex items-center gap-3"><MessageCircle className="h-6 w-6 text-green-300" /><div><h3 className="font-bold text-white">LINE</h3><p className="text-xs text-slate-400">シナリオ・友だち情報・送信</p></div></div>
+              <div className="flex items-center gap-3"><MessageCircle className="h-6 w-6 text-green-300" /><div><h3 className="font-bold text-white">LINE</h3><p className="text-xs text-slate-400">一斉配信・友だち情報・受信対応</p></div></div>
               <div className="mt-4 flex flex-wrap gap-2">
-                <button onClick={() => setActiveTab('scenarios')} className="rounded-lg bg-green-700/70 px-3 py-2 text-xs font-semibold text-white hover:bg-green-600">LINEシナリオ</button>
+                <button onClick={() => setActiveTab('line')} className="rounded-lg bg-green-700/70 px-3 py-2 text-xs font-semibold text-white hover:bg-green-600">LINE配信</button>
+                <button onClick={() => setActiveTab('line_inbox')} className="rounded-lg border border-green-700/50 px-3 py-2 text-xs text-green-200 hover:bg-slate-800">受信箱・自動返信</button>
                 <button onClick={() => onNavigateTab?.('contacts')} className="rounded-lg border border-slate-700 px-3 py-2 text-xs text-slate-200 hover:bg-slate-800">友だち・タグ管理</button>
               </div>
-              <p className="mt-3 text-[11px] text-amber-300">受信箱・個別返信・リッチメニュー設定は未実装です。</p>
+              <p className="mt-3 text-[11px] text-slate-500">自動化シナリオは共通タブで設定します。</p>
             </article>
             <article className="rounded-xl border border-purple-500/20 bg-slate-950/70 p-5">
-              <div className="flex items-center gap-3"><Mail className="h-6 w-6 text-purple-300" /><div><h3 className="font-bold text-white">メール</h3><p className="text-xs text-slate-400">シナリオ・テンプレート・送信</p></div></div>
+              <div className="flex items-center gap-3"><Mail className="h-6 w-6 text-purple-300" /><div><h3 className="font-bold text-white">メール</h3><p className="text-xs text-slate-400">見込み企業への営業・一斉メール</p></div></div>
               <div className="mt-4 flex flex-wrap gap-2">
-                <button onClick={() => setActiveTab('scenarios')} className="rounded-lg bg-purple-700/70 px-3 py-2 text-xs font-semibold text-white hover:bg-purple-600">メールシナリオ</button>
+                <button onClick={() => setActiveTab('email')} className="rounded-lg bg-purple-700/70 px-3 py-2 text-xs font-semibold text-white hover:bg-purple-600">メール送信・営業</button>
+                <button onClick={() => setActiveTab('scenarios')} className="rounded-lg border border-purple-700/50 px-3 py-2 text-xs text-purple-200 hover:bg-slate-800">メール自動化</button>
                 <button onClick={() => onNavigateTab?.('communication_send')} className="rounded-lg border border-slate-700 px-3 py-2 text-xs text-slate-200 hover:bg-slate-800">送信センター</button>
               </div>
-              <p className="mt-3 text-[11px] text-amber-300">受信箱・個別返信の統合は未実装です。</p>
+              <p className="mt-3 text-[11px] text-slate-500">次の段階でメール受信箱を追加できる構成です。</p>
             </article>
           </div>
         </section>
@@ -323,7 +327,7 @@ export const MarketingAutomationPrototypeView: React.FC<Props> = ({ scenarios, o
           <div className="grid gap-3">
             <button onClick={() => setActiveTab('scenarios')} className="flex items-center justify-between rounded-xl border border-slate-700 bg-slate-950/70 p-4 text-left hover:border-indigo-500/40"><span><span className="block text-sm font-bold text-white">シナリオ設定</span><span className="mt-1 block text-xs text-slate-400">開始条件・配信対象・チャネル・文案を設定</span></span><ArrowRight className="h-4 w-4 text-indigo-300" /></button>
           </div>
-          <p className="mt-4 text-[11px] leading-5 text-slate-500">集客チャネルや外部アプリ連携は、接続機能の実装時に追加できる構成です。現段階はLINE・メールを対象にします。</p>
+          <p className="mt-4 text-[11px] leading-5 text-slate-500">集客チャネルや外部アプリ連携は、必要になった時にチャネルとして追加できます。</p>
         </section>
         <section className="rounded-2xl border border-slate-800 bg-slate-900 p-5">
           <h2 className="font-bold text-white">配信サービスの接続</h2>
