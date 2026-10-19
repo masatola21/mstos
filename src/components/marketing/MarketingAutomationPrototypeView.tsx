@@ -150,7 +150,7 @@ export const MarketingAutomationPrototypeView: React.FC<Props> = ({ scenarios, o
   const lineCount = scenarios.filter((scenario) => scenario.channel !== 'email').length;
   const emailCount = scenarios.filter((scenario) => scenario.channel !== 'line').length;
   const triggerLabel = useMemo(() => Object.fromEntries(triggerOptions.map((option) => [option.value, option.label])) as Record<MarketingTrigger, string>, []);
-  const supportedAutomationTriggers = new Set<MarketingTrigger>(['prospect_selected','lead_created','line_registered','diagnosis_completed','meeting_completed','tag_added','deal_stage_changed','deal_won','report_approved','report_sent','proposal_approved','proposal_sent','contract_sent','contract_signed','invoice_due','invoice_overdue']);
+  const supportedAutomationTriggers = new Set<MarketingTrigger>(['prospect_selected','lead_created','line_registered','diagnosis_completed','meeting_completed','tag_added','booking_created','retainer_period','deal_stage_changed','deal_won','report_approved','report_sent','proposal_approved','proposal_sent','contract_sent','contract_signed','invoice_due','invoice_overdue']);
 
   const startNew = () => {
     setEditing(null);
