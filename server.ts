@@ -358,7 +358,14 @@ app.post('/api/line/rich-menu', async (req, res) => {
   const imageBase64 = typeof req.body?.imageBase64 === 'string' ? req.body.imageBase64 : '';
   const mime = req.body?.imageMimeType === 'image/jpeg' ? 'image/jpeg' : req.body?.imageMimeType === 'image/png' ? 'image/png' : '';
   const actions = Array.isArray(req.body?.actions) ? req.body.actions : [];
-  if (!title || !chatBarText || !mime || imageBase64.length > 1400000 || actions.length !== 6) return res.status(400).json({ error: 'メニュー名、表示名、画像、6つのアクションを確認してください。' });
+  const layout = typeof req.body?.layout === 'string' ? req.body.layout : 'grid-2x3';
+  const layoutConfig: Record<string, { columns: number; rows: number }> = {
+    single: { columns: 1, rows: 1 }, 'columns-2': { columns: 2, rows: 1 }, 'rows-2': { columns: 1, rows: 2 },
+    'columns-3': { columns: 3, rows: 1 }, 'rows-3': { columns: 1, rows: 3 }, 'grid-2x2': { columns: 2, rows: 2 },
+    'grid-2x3': { columns: 2, rows: 3 }, 'grid-3x2': { columns: 3, rows: 2 },
+  };
+  const selectedLayout = layoutConfig[layout];
+  if (!title || !chatBarText || !mime || imageBase64.length > 1400000 || !selectedLayout || actions.length !== selectedLayout.columns * selectedLayout.rows || actions.length > 20) return res.status(400).json({ error: 'メニュー名、表示名、画像、レイアウトとアクション数を確認してください。' });
   const image = Buffer.from(imageBase64, 'base64');
   if (!image.length || image.length > 1024 * 1024 || (mime === 'image/png' && !image.subarray(0, 8).equals(Buffer.from([137,80,78,71,13,10,26,10]))) || (mime === 'image/jpeg' && !(image[0] === 255 && image[1] === 216 && image[2] === 255))) {
     return res.status(400).json({ error: '画像は1MB以下のPNGまたはJPEGを指定してください。' });
@@ -367,12 +374,14 @@ app.post('/api/line/rich-menu', async (req, res) => {
   try {
     areas = actions.map((action: any, index: number) => {
       if (!action || typeof action.label !== 'string' || !action.label.trim() || action.label.length > 20 || typeof action.value !== 'string' || !action.value.trim() || action.value.length > 1000) throw new Error('各タップ領域のラベルと動作内容を入力してください。');
-      const col = index % 2; const row = Math.floor(index / 2);
+      const col = index % selectedLayout.columns; const row = Math.floor(index / selectedLayout.columns);
       const normalized = action.type === 'uri'
         ? (() => { let url: URL; try { url = new URL(action.value); } catch { throw new Error('URLを確認してください。'); } if (url.protocol !== 'https:') throw new Error('URLアクションはHTTPSのみ利用できます。'); return { type: 'uri', label: action.label.trim(), uri: url.toString() }; })()
         : action.type === 'message' ? { type: 'message', label: action.label.trim(), text: action.value.trim() } : null;
       if (!normalized) throw new Error('アクションの種類が不正です。');
-      return { bounds: { x: col * 1250, y: row * 562, width: 1250, height: 562 }, action: normalized };
+      const x = Math.round(col * 2500 / selectedLayout.columns); const y = Math.round(row * 1686 / selectedLayout.rows);
+      const right = Math.round((col + 1) * 2500 / selectedLayout.columns); const bottom = Math.round((row + 1) * 1686 / selectedLayout.rows);
+      return { bounds: { x, y, width: right - x, height: bottom - y }, action: normalized };
     });
   } catch (error) {
     return res.status(400).json({ error: error instanceof Error ? error.message : 'アクション設定を確認してください。' });
