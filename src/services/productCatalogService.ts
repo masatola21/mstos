@@ -19,6 +19,7 @@ export async function publishManagedProductToSalesCatalog(
     id: product.id,
     product_name: product.name,
     product_type: product.category || product.archetype,
+    phase: String(product.customFields?.phase || '').trim() || null,
     initial_fee: fees.initialFee,
     monthly_fee: fees.monthlyFee,
     description: product.description || null,
