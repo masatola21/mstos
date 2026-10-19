@@ -1711,7 +1711,7 @@ function AppContent() {
 
         {currentTab === 'deal_invitations' && <CommunicationSendCenter initialKind="deal" />}
         {currentTab === 'customer_meeting_invitations' && <CommunicationSendCenter initialKind="announcement" />}
-        {currentTab === 'communication_send' && <CommunicationSendCenter initialKind="form" initialCompanyId={customerWorkspaceContext?.companyId} initialDocumentId={customerWorkspaceContext?.documentId} />}
+        {currentTab === 'communication_send' && <CommunicationSendCenter initialKind={customerWorkspaceContext?.documentId ? "document" : "form"} initialCompanyId={customerWorkspaceContext?.companyId} initialDocumentId={customerWorkspaceContext?.documentId} />}
 
         {['companies', 'prospects', 'leads', 'products', 'deals', 'customers'].includes(currentTab) && (
           <TableManager
