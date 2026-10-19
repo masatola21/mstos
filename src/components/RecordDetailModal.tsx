@@ -342,6 +342,13 @@ export const RecordDetailModal: React.FC<RecordDetailModalProps> = ({
                   <FileText className="w-3.5 h-3.5" />
                   <span>フォーム回答</span>
                 </button>
+                <button
+                  onClick={() => { onClose(); onOpenCustomerWorkspace(String(record.company_id), 'send', { tableKey, recordId: String(record.id), leadId: record.lead_id ? String(record.lead_id) : undefined, contactId: record.contact_id ? String(record.contact_id) : undefined }); }}
+                  className="px-3 py-2 rounded-xl text-xs font-medium text-emerald-200 hover:bg-emerald-950/40 border border-emerald-800 transition-colors flex items-center gap-1.5"
+                >
+                  <Mail className="w-3.5 h-3.5" />
+                  <span>送信センター</span>
+                </button>
                 {tableKey === 'customers' && <button
                   onClick={() => { onClose(); onOpenCustomerWorkspace(String(record.company_id), 'operations', { tableKey, recordId: String(record.id) }); }}
                   className="px-3 py-2 rounded-xl text-xs font-medium text-emerald-200 hover:bg-emerald-950/40 border border-emerald-800 transition-colors flex items-center gap-1.5"
