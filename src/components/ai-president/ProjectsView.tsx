@@ -183,6 +183,7 @@ export const ProjectsView: React.FC<ProjectsViewProps> = ({
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           {filteredProjects.map((p) => {
             const relatedTasks = tasks.filter((t) => t.projectId === p.id);
+            const relatedTaskCount = relatedTasks.length;
             const doneTasks = relatedTasks.filter((t) => t.status === 'completed');
             const percent =
               relatedTasks.length > 0
@@ -230,7 +231,9 @@ export const ProjectsView: React.FC<ProjectsViewProps> = ({
                         onClick={() => {
                           if (
                             window.confirm(
-                              `プロジェクト「${p.name}」を削除しますか？（関連タスクも確認してください）`
+                              relatedTaskCount > 0
+                                ? `プロジェクト「${p.name}」を削除しますか？関連タスク${relatedTaskCount}件は削除せず、「プロジェクト未設定」に移します。`
+                                : `プロジェクト「${p.name}」を削除しますか？`
                             )
                           ) {
                             onDeleteProject(p.id);

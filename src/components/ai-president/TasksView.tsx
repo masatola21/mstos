@@ -180,7 +180,7 @@ export const TasksView: React.FC<TasksViewProps> = ({
     setEditingTask(t);
     setTitle(t.title);
     setDescription(t.description);
-    setProjectId(t.projectId || '');
+    setProjectId(projects.some((project) => project.id === t.projectId) ? t.projectId : '');
     setWorkArea(t.workArea || 'project');
     setSourceCategory(t.sourceCategory || 'ai_president');
     setDueDate(t.dueDate || '');
@@ -394,7 +394,7 @@ export const TasksView: React.FC<TasksViewProps> = ({
   };
 
   const filteredTasks = tasks.filter((t) => {
-    if (filterProject === 'none' && Boolean(t.projectId)) return false;
+    if (filterProject === 'none' && t.projectId && projects.some((project) => project.id === t.projectId)) return false;
     if (filterProject !== 'all' && filterProject !== 'none' && t.projectId !== filterProject) return false;
     if (filterWorkArea !== 'all' && (t.workArea || 'project') !== filterWorkArea) return false;
     if (filterTaskKind !== 'all' && (t.taskKind || 'response') !== filterTaskKind) return false;
@@ -497,7 +497,7 @@ export const TasksView: React.FC<TasksViewProps> = ({
           <div>
             <h1 className="text-lg font-extrabold text-white">共通タスク</h1>
             <p className="text-xs text-slate-400 mt-0.5">
-              営業・顧客、商品開発、プロジェクト、契約後支援の仕事を同じ一覧で管理
+              営業・顧客、商品開発、プロジェクト、契約後支援の仕事を同じ一覧で管理<br />CRMから生まれたタスクは次の対応のリマインドです。完了してもCRMの段階は変わりません。
             </p>
           </div>
         </div>
@@ -864,9 +864,9 @@ export const TasksView: React.FC<TasksViewProps> = ({
 
       {/* Create / Edit Task Modal */}
       {isModalOpen && (
-        <div className="fixed inset-0 z-50 bg-black/75 backdrop-blur-sm flex items-center justify-center p-4 animate-in fade-in">
-          <div className="w-full max-w-lg rounded-3xl bg-slate-900 border border-slate-800 shadow-2xl p-6 space-y-4">
-            <div className="flex items-center justify-between border-b border-slate-800 pb-3">
+        <div className="fixed inset-0 z-50 bg-black/75 backdrop-blur-sm flex items-center justify-center p-2 sm:p-4 animate-in fade-in">
+          <div className="flex max-h-[calc(100dvh-1rem)] w-full max-w-lg flex-col overflow-hidden rounded-3xl border border-slate-800 bg-slate-900 shadow-2xl sm:max-h-[calc(100dvh-2rem)]">
+            <div className="flex shrink-0 items-center justify-between border-b border-slate-800 px-5 py-4 sm:px-6">
               <h2 className="text-base font-bold text-white flex items-center gap-2">
                 <CheckSquare className="w-4 h-4 text-indigo-400" />
                 <span>{editingTask ? 'タスクを編集' : '新規タスク作成'}</span>
@@ -880,7 +880,7 @@ export const TasksView: React.FC<TasksViewProps> = ({
               </button>
             </div>
 
-            <div className="space-y-3.5">
+            <div className="min-h-0 flex-1 space-y-3.5 overflow-y-auto px-5 py-4 sm:px-6">
               <div>
                 <label className="block text-xs font-semibold text-slate-300 mb-1">
                   タスク名 <span className="text-rose-400">*</span>
@@ -1087,7 +1087,7 @@ export const TasksView: React.FC<TasksViewProps> = ({
               </div>
             </div>
 
-            <div className="flex items-center justify-end gap-2 pt-3 border-t border-slate-800">
+            <div className="flex shrink-0 items-center justify-end gap-2 border-t border-slate-800 px-5 py-4 sm:px-6">
               <button
                 type="button"
                 onClick={() => setIsModalOpen(false)}
