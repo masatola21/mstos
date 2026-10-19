@@ -146,14 +146,16 @@ export const AIAcquisitionOperationsView: React.FC<{ onSendPresidentSummary?: (s
   };
 
   const metrics = useMemo(() => {
-    const actuals = records.filter((record) => record.record_type === 'result' || record.record_type === 'ad');
-    const total = (field: string) => actuals.reduce((sum, record) => sum + num(record.payload || {}, field), 0);
-    const has = (...keys: string[]) => actuals.some((record) => keys.some((key) => String(record.payload?.[key] ?? '').trim() !== ''));
+    const results = records.filter((record) => record.record_type === 'result');
+    const ads = records.filter((record) => record.record_type === 'ad');
+    const sourceFor = (...keys: string[]) => results.some((record) => keys.some((key) => String(record.payload?.[key] ?? '').trim() !== '')) ? results : ads;
+    const total = (...keys: string[]) => sourceFor(...keys).reduce((sum, record) => sum + keys.reduce((subtotal, key) => subtotal + num(record.payload || {}, key), 0), 0);
+    const has = (...keys: string[]) => sourceFor(...keys).some((record) => keys.some((key) => String(record.payload?.[key] ?? '').trim() !== ''));
     const known = { spend: has('adSpend', 'spend'), impressions: has('impressions'), clicks: has('clicks'), conversions: has('conversions'), leads: has('leads'), meetings: has('meetings'), contracts: has('contracts'), revenue: has('revenue'), profit: has('profit') };
     return {
       active: records.filter((record) => ['実施中', '運用中', '公開済み', '予約済み'].includes(record.status || '')).length,
       content: records.filter((record) => ['content', 'social', 'video'].includes(record.record_type)).length,
-      spend: total('adSpend') + total('spend'), impressions: total('impressions'), clicks: total('clicks'), conversions: total('conversions'), leads: total('leads'), meetings: total('meetings'), contracts: total('contracts'), revenue: total('revenue'), profit: total('profit'),
+      spend: total('adSpend', 'spend'), impressions: total('impressions'), clicks: total('clicks'), conversions: total('conversions'), leads: total('leads'), meetings: total('meetings'), contracts: total('contracts'), revenue: total('revenue'), profit: total('profit'),
       known,
       hasActuals: Object.values(known).some(Boolean),
     };
@@ -204,7 +206,7 @@ export const AIAcquisitionOperationsView: React.FC<{ onSendPresidentSummary?: (s
         <div className="grid gap-4 lg:grid-cols-2">
           <article className="rounded-xl border border-slate-800 bg-slate-900 p-4"><div className="flex items-center gap-2"><BarChart3 className="h-4 w-4 text-cyan-300"/><h2 className="font-semibold">登録済み実績の集計</h2></div>{metrics.hasActuals ? <dl className="mt-3 grid grid-cols-2 gap-3 text-sm">{[['広告費',metrics.spend,metrics.known.spend],['表示回数',metrics.impressions,metrics.known.impressions],['クリック数',metrics.clicks,metrics.known.clicks],['CV数',metrics.conversions,metrics.known.conversions],['リード',metrics.leads,metrics.known.leads],['商談',metrics.meetings,metrics.known.meetings],['契約',metrics.contracts,metrics.known.contracts],['売上',metrics.revenue,metrics.known.revenue],['利益',metrics.profit,metrics.known.profit]].map(([label,value,isKnown])=><div key={String(label)}><dt className="text-slate-400">{label}</dt><dd className="font-semibold">{!isKnown ? '未入力' : typeof value === 'number' && ['広告費','売上','利益'].includes(String(label)) ? yen(value) : `${value}件`}</dd></div>)}</dl> : <p className="mt-3 text-sm text-slate-400">成果データ未入力・未連携のため分析できません。</p>}
             <div className="mt-4 grid gap-2 border-t border-slate-800 pt-3 text-sm sm:grid-cols-3"><p><span className="text-slate-400">CPA</span><br/>{metrics.known.spend && metrics.known.leads && metrics.leads > 0 ? yen(Math.round(metrics.spend / metrics.leads)) : '算出に必要な広告費・リード数が不足'}</p><p><span className="text-slate-400">CVR</span><br/>{metrics.known.clicks && metrics.known.conversions && metrics.clicks > 0 ? `${(metrics.conversions / metrics.clicks * 100).toFixed(2)}%` : '算出に必要なクリック・CV数が不足'}</p><p><span className="text-slate-400">ROAS</span><br/>{metrics.known.revenue && metrics.known.spend && metrics.spend > 0 ? `${(metrics.revenue / metrics.spend * 100).toFixed(1)}%` : '算出に必要な売上・広告費が不足'}</p></div>
-            <p className="mt-3 text-xs text-slate-500">入力された広告・成果記録のみを集計しています。空欄の値を実績として補完しません。</p></article>
+            <p className="mt-3 text-xs text-slate-500">項目ごとに成果記録を優先し、未入力時は広告記録を集計します。同じ数値の二重計上を防ぎ、空欄を実績として補完しません。</p></article>
           <article className="rounded-xl border border-slate-800 bg-slate-900 p-4"><h2 className="font-semibold">AI社長との連携</h2><p className="mt-2 text-sm text-slate-400">AI社長には経営判断向けの要約だけを共有できます。投稿全文や個人情報は共有しません。</p><button onClick={() => onSendPresidentSummary?.(summary)} disabled={!onSendPresidentSummary} className="mt-3 inline-flex items-center gap-2 rounded-lg bg-purple-700 px-3 py-2 text-sm disabled:opacity-50"><ArrowRight className="h-4 w-4"/>集客状況を共有して分析を依頼</button></article>
         </div>
         <div className="flex flex-wrap items-center justify-between gap-2"><h2 className="font-semibold">成果記録・改善提案</h2><div className="flex gap-2"><button onClick={() => createRecord('result')} className="rounded-lg border border-slate-700 px-3 py-2 text-sm">成果を記録</button><button onClick={() => createRecord('proposal')} className="rounded-lg bg-indigo-600 px-3 py-2 text-sm">改善提案を登録</button></div></div>
