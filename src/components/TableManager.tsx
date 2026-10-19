@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { TableKey, TABLE_CONFIGS } from '../types/database';
 import { deleteTableRecord, fetchTableData, DataFetchError } from '../services/dataService';
+import { InlineDeleteButton } from './InlineDeleteButton';
 import { RecordDetailModal } from './RecordDetailModal';
 import { RecordFormModal } from './RecordFormModal';
 import { StageTransitionModal, TransitionType } from './StageTransitionModal';
@@ -185,7 +186,6 @@ export const TableManager: React.FC<TableManagerProps> = ({
 
   const handleDeleteRecord = async (record: any) => {
     const label = record.company_name || record.full_name || record.proposal_plan_name || record.product_name || record.contact_name || String(record.id);
-    if (!window.confirm(`「${label}」を削除しますか？関連データから参照されている場合は削除できません。`)) return;
     setDeletingRecordId(String(record.id));
     setError(null);
     setSuccessBanner(null);
@@ -623,14 +623,13 @@ export const TableManager: React.FC<TableManagerProps> = ({
                           >
                             <Edit3 className="w-3.5 h-3.5" />
                           </button>
-                          <button
-                            onClick={() => void handleDeleteRecord(item)}
+                          <InlineDeleteButton onConfirm={() => void handleDeleteRecord(item)}
                             disabled={deletingRecordId === String(item.id)}
+                            warning="削除しますか？関連データから参照されている場合は削除できません。"
                             className="p-1.5 rounded-lg text-slate-500 hover:text-rose-300 hover:bg-rose-950/40 transition-colors disabled:opacity-50"
-                            title="削除（関連データがある場合は保護されます）"
-                          >
+                            ariaLabel="削除（関連データがある場合は保護されます）">
                             <Trash2 className="w-3.5 h-3.5" />
-                          </button>
+                          </InlineDeleteButton>
                         </div>
                       </td>
                     </tr>
@@ -664,9 +663,7 @@ export const TableManager: React.FC<TableManagerProps> = ({
                       {item.status || item.proposal_status || item.contract_status}
                     </span>
                   )}
-                  <button type="button" onClick={(e) => { e.stopPropagation(); void handleDeleteRecord(item); }} disabled={deletingRecordId === String(item.id)} className="mt-2 p-1.5 rounded-lg text-slate-500 hover:text-rose-300 hover:bg-rose-950/40 disabled:opacity-50" title="削除">
-                    <Trash2 className="w-4 h-4" />
-                  </button>
+                  <InlineDeleteButton onConfirm={() => void handleDeleteRecord(item)} disabled={deletingRecordId === String(item.id)} className="mt-2 p-1.5 rounded-lg text-slate-500 hover:text-rose-300 hover:bg-rose-950/40 disabled:opacity-50" ariaLabel="削除"><Trash2 className="w-4 h-4" /></InlineDeleteButton>
                 </div>
 
                 {/* Sub details */}
