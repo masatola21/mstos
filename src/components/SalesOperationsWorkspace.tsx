@@ -22,6 +22,34 @@ const segmentConditionFields: Record<string, string[]> = {
   deals: ['proposal_status', 'proposal_type'],
   customers: ['contract_status'],
 };
+const segmentConditionFieldLabels: Record<string, string> = {
+  source: '流入元',
+  preferred_channel: '希望する連絡手段',
+  role_title: '役職',
+  industry: '業種',
+  status: '状況',
+  approach_method: 'アプローチ方法',
+  target_flag: '対象フラグ',
+  service_type: '希望サービス',
+  priority_channel: '優先する連絡手段',
+  proposal_status: '提案状況',
+  proposal_type: '提案の種類',
+  contract_status: '契約状況',
+};
+const segmentConditionFieldHelp: Record<string, string> = {
+  source: 'どこから問い合わせ・登録したか（例：ウェブサイト、紹介）',
+  preferred_channel: '連絡先が希望する連絡方法（例：メール、電話）',
+  role_title: '連絡先の役職・担当（例：代表、営業担当）',
+  industry: '会社の業種（例：飲食、不動産）',
+  status: '現在の対応状況（例：新規、対応中）',
+  approach_method: '見込み企業への接触方法（例：電話、メール）',
+  target_flag: '対象にするかどうかの登録値（例：true、false）',
+  service_type: 'リードが希望するサービス（例：集客支援）',
+  priority_channel: '優先する連絡方法（例：メール、電話）',
+  proposal_status: '提案の進み具合（例：準備中、提出済み）',
+  proposal_type: '提案の種類（例：新規提案、更新提案）',
+  contract_status: '契約の状態（例：有効、終了）',
+};
 const opsTabs = [
   { key: 'contracts', label: '契約', table: 'customer_contracts', icon: FileText },
   { key: 'invoices', label: '請求', table: 'customer_invoices', icon: Receipt },
@@ -389,14 +417,14 @@ export const SalesOperationsWorkspace: React.FC<Props> = ({ tab, companyId, lead
         <h2 className="font-semibold text-white">配信対象リストを作成</h2>
         <label className="block text-xs text-slate-400">表示名<input value={segmentName} onChange={(e) => setSegmentName(e.target.value)} required className="mt-1 w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-white" placeholder="例：診断済みのリード" /></label>
         <label className="block text-xs text-slate-400">対象<select value={entityType} onChange={(e) => { setEntityType(e.target.value); setFilterField(segmentConditionFields[e.target.value]?.[0] || ''); }} className="mt-1 w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-white">{entityOptions.map(([key,label]) => <option key={key} value={key}>{label}</option>)}</select></label>
-        <label className="block text-xs text-slate-400">条件に使う項目<select value={filterField} onChange={(e) => setFilterField(e.target.value)} required className="mt-1 w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-white">{(segmentConditionFields[entityType] || []).map((field) => <option key={field} value={field}>{field}</option>)}</select></label>
+        <label className="block text-xs text-slate-400">条件に使う項目<select value={filterField} onChange={(e) => setFilterField(e.target.value)} required className="mt-1 w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-white">{(segmentConditionFields[entityType] || []).map((field) => <option key={field} value={field}>{segmentConditionFieldLabels[field] || field}</option>)}</select><span className="mt-1 block leading-5 text-slate-500">{segmentConditionFieldHelp[filterField] || '選んだ項目に、次の値が含まれるレコードを対象にします。'}</span></label>
         <label className="block text-xs text-slate-400">含む値<input value={filterValue} onChange={(e) => setFilterValue(e.target.value)} required className="mt-1 w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-white" /></label>
         <button disabled={loading} className="flex items-center gap-2 rounded-lg bg-blue-600 px-3 py-2 text-sm font-semibold text-white disabled:opacity-50"><Plus className="h-4 w-4" />条件を保存</button>
       </form>
       <section className="rounded-xl border border-slate-800 bg-slate-900 p-4">
         <h2 className="mb-3 font-semibold text-white">保存した配信対象リスト</h2>
         {loading ? <p className="text-sm text-slate-400">読み込み中…</p> : segments.length === 0 ? <p className="text-sm text-slate-400">まだ配信対象リストはありません。</p> :
-          <ul className="divide-y divide-slate-800">{segments.map((segment) => <li key={segment.id} className="flex flex-wrap items-center justify-between gap-2 py-3"><div><div className="font-medium text-white">{segment.name}</div><div className="text-xs text-slate-400">{entityOptions.find(([key]) => key === segment.entity_type)?.[1] || segment.entity_type} · {segment.conditions?.field?.trim() ? <>{segment.conditions?.field} に「{segment.conditions?.value}」を含む</> : <span className="text-amber-300">条件が未設定のため配信対象に使えません</span>}</div></div><div className="flex gap-2"><button onClick={()=>void previewSegment(segment)} className="rounded border border-blue-700 px-2 py-1 text-xs text-blue-200 hover:bg-blue-950/40">対象を確認</button><InlineDeleteButton warning={`「${segment.name}」を削除しますか？`} onConfirm={async () => { const db=getSupabase(); if(!db){setError('Supabaseに接続してください。');return;} const {data:deleted,error:deleteError}=await db.from('crm_segments').delete().eq('id',segment.id).select('id').maybeSingle(); if(deleteError){setError(deleteError.message);return;} if(!deleted){setError('削除対象が見つからないか、削除権限がありません。');return;} if(previewSegmentId===segment.id){setPreviewSegmentId('');setPreviewRows([]);} setNotice('配信対象リストを削除しました。'); await load(); }}>削除</InlineDeleteButton></div></li>)}</ul>}
+          <ul className="divide-y divide-slate-800">{segments.map((segment) => <li key={segment.id} className="flex flex-wrap items-center justify-between gap-2 py-3"><div><div className="font-medium text-white">{segment.name}</div><div className="text-xs text-slate-400">{entityOptions.find(([key]) => key === segment.entity_type)?.[1] || segment.entity_type} · {segment.conditions?.field?.trim() ? <>{segmentConditionFieldLabels[segment.conditions?.field || ''] || segment.conditions?.field} に「{segment.conditions?.value}」を含む</> : <span className="text-amber-300">条件が未設定のため配信対象に使えません</span>}</div></div><div className="flex gap-2"><button onClick={()=>void previewSegment(segment)} className="rounded border border-blue-700 px-2 py-1 text-xs text-blue-200 hover:bg-blue-950/40">対象を確認</button><InlineDeleteButton warning={`「${segment.name}」を削除しますか？`} onConfirm={async () => { const db=getSupabase(); if(!db){setError('Supabaseに接続してください。');return;} const {data:deleted,error:deleteError}=await db.from('crm_segments').delete().eq('id',segment.id).select('id').maybeSingle(); if(deleteError){setError(deleteError.message);return;} if(!deleted){setError('削除対象が見つからないか、削除権限がありません。');return;} if(previewSegmentId===segment.id){setPreviewSegmentId('');setPreviewRows([]);} setNotice('配信対象リストを削除しました。'); await load(); }}>削除</InlineDeleteButton></div></li>)}</ul>}
         {previewSegmentId&&<div className="mt-4 rounded-lg border border-slate-800 bg-slate-950 p-3"><div className="font-medium text-white">対象レコード {previewRows.length}件</div><ul className="mt-2 max-h-40 space-y-1 overflow-auto text-xs text-slate-300">{previewRows.slice(0,50).map((row,index)=><li key={String(row.id||index)}>{row.full_name||row.company_name||row.proposal_plan_name||row.id||'レコード'}</li>)}</ul></div>}
         <p className="mt-3 text-xs text-amber-300">配信直前に条件から対象を抽出します。送信時点の宛先スナップショットと同意状態の確認は、配信実行機能の接続時に記録します。</p>
       </section>
