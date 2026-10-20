@@ -363,10 +363,22 @@ export const DocumentTemplateView: React.FC<DocumentTemplateViewProps> = ({ init
       supabase.from('deals').select('id,proposal_plan_name,company_id,lead_id').order('created_at',{ascending:false}),
       supabase.from('leads').select('id,source,status,company_id').order('created_at',{ascending:false}),
     ]).then(([companyResult,contactResult,dealResult,leadResult]) => {
-      if (!companyResult.error) setCompanies(companyResult.data || []);
-      if (!contactResult.error) setContacts(contactResult.data || []);
-      if (!dealResult.error) setDeals(dealResult.data || []);
-      if (!leadResult.error) setLeads(leadResult.data || []);
+      const loadedCompanies = companyResult.data || [];
+      const loadedContacts = contactResult.data || [];
+      const loadedDeals = dealResult.data || [];
+      const loadedLeads = leadResult.data || [];
+      if (!companyResult.error) setCompanies(loadedCompanies);
+      if (!contactResult.error) setContacts(loadedContacts);
+      if (!dealResult.error) setDeals(loadedDeals);
+      if (!leadResult.error) setLeads(loadedLeads);
+      if (!initialCompanyId && initialDealId) {
+        const sourceDeal = loadedDeals.find((deal: { id: string; company_id?: string | null; lead_id?: string | null }) => deal.id === initialDealId);
+        if (sourceDeal?.company_id) setCompanyId(sourceDeal.company_id);
+        if (sourceDeal?.lead_id) setLeadId(sourceDeal.lead_id);
+      } else if (!initialCompanyId && initialLeadId) {
+        const sourceLead = loadedLeads.find((lead: { id: string; company_id?: string | null }) => lead.id === initialLeadId);
+        if (sourceLead?.company_id) setCompanyId(sourceLead.company_id);
+      }
     });
   }, []);
 
@@ -714,12 +726,12 @@ export const DocumentTemplateView: React.FC<DocumentTemplateViewProps> = ({ init
       </div>
 
       <section className="rounded-xl border border-slate-800 bg-slate-900 p-4">
-        <div className="mb-3"><h2 className="font-semibold text-white">営業レコードとの紐付け</h2><p className="mt-1 text-xs text-slate-400">リード・商談・顧客の各段階から、同じ書類レコードに関連付けます。</p></div>
+        <div className="mb-3"><h2 className="font-semibold text-white">書類の関連先（任意）</h2><p className="mt-1 text-xs text-slate-400">会社を起点に選ぶと、担当者・リード・商談の候補が絞られます。元レコードから開いた場合は会社と起点レコードが固定されます。</p></div>
         <div className="grid gap-3 md:grid-cols-4">
-          <label className="text-xs text-slate-400">会社<select value={companyId} disabled={Boolean(initialCompanyId)} onChange={(e)=>{if(e.target.value)setHasStartedDocument(true);setCompanyId(e.target.value);setContactId('');}} className="mt-1 w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-white disabled:opacity-70"><option value="">未選択</option>{companies.map((company)=><option key={company.id} value={company.id}>{company.company_name}</option>)}</select></label>
-          <label className="text-xs text-slate-400">リード<select value={leadId} disabled={Boolean(initialLeadId || initialDealId)} onChange={(e)=>{if(e.target.value)setHasStartedDocument(true);setLeadId(e.target.value);}} className="mt-1 w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-white disabled:opacity-70"><option value="">未選択</option>{leads.filter((lead)=>!companyId||lead.company_id===companyId).map((lead)=><option key={lead.id} value={lead.id}>{lead.source || 'リード'} · {lead.status || lead.id.slice(0,8)}</option>)}</select></label>
-          <label className="text-xs text-slate-400">担当者<select value={contactId} onChange={(e)=>{const id=e.target.value;if(id)setHasStartedDocument(true);setContactId(id);const linkedCompanyId=contacts.find((contact)=>contact.id===id)?.company_id;if(linkedCompanyId)setCompanyId(linkedCompanyId);}} className="mt-1 w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-white"><option value="">未選択</option>{contacts.filter((contact)=>!companyId||contact.company_id===companyId).map((contact)=><option key={contact.id} value={contact.id}>{contact.full_name}</option>)}</select></label>
-          <label className="text-xs text-slate-400">商談<select value={dealId} disabled={Boolean(initialDealId)} onChange={(e)=>{if(e.target.value)setHasStartedDocument(true);setDealId(e.target.value);}} className="mt-1 w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-white"><option value="">未選択</option>{deals.filter((deal)=>(!companyId||deal.company_id===companyId)&&(!leadId||deal.lead_id===leadId)).map((deal)=><option key={deal.id} value={deal.id}>{deal.proposal_plan_name}</option>)}</select></label>
+          <label className="text-xs text-slate-400">会社（顧客企業）<select value={companyId} disabled={Boolean(initialCompanyId || initialLeadId || initialDealId)} onChange={(e)=>{const nextCompanyId=e.target.value;if(nextCompanyId)setHasStartedDocument(true);setCompanyId(nextCompanyId);setContactId('');setLeadId('');setDealId('');}} className="mt-1 w-full rounded-lg border border-slate-700 bg-slate-950 p-2 text-sm text-white disabled:opacity-70"><option value="">未選択</option>{companies.map((company)=><option key={company.id} value={company.id}>{company.company_name}</option>)}</select></label>
+          <label className="text-xs text-slate-400">担当者<select value={contactId} onChange={(e)=>{const id=e.target.value;const contact=contacts.find((item)=>item.id===id);if(id)setHasStartedDocument(true);setContactId(id);if(contact?.company_id&&contact.company_id!==companyId){setCompanyId(contact.company_id);setLeadId('');setDealId('');}}} className="mt-1 w-full rounded-lg border border-slate-700 bg-slate-950 p-2 text-sm text-white"><option value="">未選択</option>{contacts.filter((contact)=>!companyId||contact.company_id===companyId||!contact.company_id).map((contact)=><option key={contact.id} value={contact.id}>{contact.full_name}</option>)}</select></label>
+          <label className="text-xs text-slate-400">リード<select value={leadId} disabled={Boolean(initialLeadId || initialDealId)} onChange={(e)=>{const id=e.target.value;const lead=leads.find((item)=>item.id===id);if(id)setHasStartedDocument(true);setLeadId(id);if(lead?.company_id&&lead.company_id!==companyId){setCompanyId(lead.company_id);setContactId((current)=>contacts.find((item)=>item.id===current)?.company_id===lead.company_id?current:'');}setDealId((current)=>{const deal=deals.find((item)=>item.id===current);return id&&deal?.lead_id===id?current:'';});}} className="mt-1 w-full rounded-lg border border-slate-700 bg-slate-950 p-2 text-sm text-white disabled:opacity-70"><option value="">未選択</option>{leads.filter((lead)=>!companyId||lead.company_id===companyId||!lead.company_id).map((lead)=><option key={lead.id} value={lead.id}>{lead.source || 'リード'} · {lead.status || lead.id.slice(0,8)}</option>)}</select></label>
+          <label className="text-xs text-slate-400">商談<select value={dealId} disabled={Boolean(initialDealId)} onChange={(e)=>{const id=e.target.value;const deal=deals.find((item)=>item.id===id);const linkedLead=leads.find((item)=>item.id===deal?.lead_id);if(id)setHasStartedDocument(true);setDealId(id);if(deal?.lead_id!==leadId)setLeadId(deal?.lead_id||'');const linkedCompanyId=deal?.company_id||linkedLead?.company_id;if(linkedCompanyId&&linkedCompanyId!==companyId){setCompanyId(linkedCompanyId);setContactId((current)=>contacts.find((item)=>item.id===current)?.company_id===linkedCompanyId?current:'');}}} className="mt-1 w-full rounded-lg border border-slate-700 bg-slate-950 p-2 text-sm text-white disabled:opacity-70"><option value="">未選択</option>{deals.filter((deal)=>(!companyId||deal.company_id===companyId||!deal.company_id)&&(!leadId||deal.lead_id===leadId)).map((deal)=><option key={deal.id} value={deal.id}>{deal.proposal_plan_name}</option>)}</select></label>
         </div>
         <div className="mt-3 flex flex-wrap items-center gap-3"><p className="text-xs text-emerald-300">内容変更は自動で確認待ちに保存されます。</p>{saveMessage&&<p role="status" className="text-xs text-slate-300">{saveMessage}</p>}</div>
       </section>
