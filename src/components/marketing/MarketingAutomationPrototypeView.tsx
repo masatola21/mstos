@@ -242,7 +242,7 @@ export const MarketingAutomationPrototypeView: React.FC<Props> = ({ scenarios, o
       setNotice('画像URLはHTTPSで公開されているURLを指定してください。');
       return;
     }
-    if (form.channel !== 'email' && form.lineMessageType === 'video' && (!isHttpsUrl(form.lineVideoUrl) || !isHttpsUrl(form.lineVideoPreviewUrl))) {
+    if (form.channel !== 'email' && form.lineMessageType === 'video' && (!form.lineVideoUrl || !isHttpsUrl(form.lineVideoUrl) || !form.lineVideoPreviewUrl || !isHttpsUrl(form.lineVideoPreviewUrl))) {
       setNotice('動画とプレビュー画像は公開HTTPS URLを指定してください。LINE動画はMP4、プレビュー画像はJPEGまたはPNGが必要です。');
       return;
     }
