@@ -12,6 +12,7 @@ FROM public.companies;
 CREATE OR REPLACE FUNCTION public.set_company_id()
 RETURNS trigger
 LANGUAGE plpgsql
+SECURITY DEFINER
 SET search_path = ''
 AS $$
 BEGIN
