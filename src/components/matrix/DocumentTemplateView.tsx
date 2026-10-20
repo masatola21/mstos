@@ -7,7 +7,6 @@ import {
   Receipt, 
   ClipboardCheck, 
   Printer, 
-  Download, 
   Copy, 
   Check, 
   Sliders, 
@@ -632,16 +631,6 @@ export const DocumentTemplateView: React.FC<DocumentTemplateViewProps> = ({ init
     printWindow.document.close();
   };
 
-  const handleDownloadHtml = () => {
-    const blob = new Blob([populatedHtml], { type: 'text/html;charset=utf-8' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `${currentTemplate.type}_${Date.now()}.html`;
-    a.click();
-    URL.revokeObjectURL(url);
-  };
-
   const handleCopyHtml = () => {
     navigator.clipboard.writeText(populatedHtml);
     setCopied(true);
@@ -682,13 +671,6 @@ export const DocumentTemplateView: React.FC<DocumentTemplateViewProps> = ({ init
           >
             <Printer className="w-4 h-4" />
             <span>PDF印刷・プレビュー</span>
-          </button>
-          <button
-            onClick={handleDownloadHtml}
-            className="px-4 py-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 font-semibold text-xs flex items-center gap-2 border border-slate-700 transition-all cursor-pointer"
-          >
-            <Download className="w-4 h-4" />
-            <span>HTML保存</span>
           </button>
         </div>
       </div>
