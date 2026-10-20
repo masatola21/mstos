@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { getSupabase } from '../../lib/supabaseClient';
 import { todayJst } from '../../utils/date';
 import { 
@@ -7,7 +7,6 @@ import {
   Receipt, 
   ClipboardCheck, 
   Printer, 
-  Download, 
   Copy, 
   Check, 
   Sliders, 
@@ -351,6 +350,9 @@ export const DocumentTemplateView: React.FC<DocumentTemplateViewProps> = ({ init
   const [contactId, setContactId] = useState('');
   const [dealId, setDealId] = useState(initialDealId || '');
   const [saveMessage, setSaveMessage] = useState('');
+  const [hasStartedDocument, setHasStartedDocument] = useState(Boolean(initialCompanyId || initialLeadId || initialDealId));
+  const autosavedDocumentIds = useRef<Record<string, string>>({});
+  const autosaveQueues = useRef<Record<string, Promise<void>>>({});
 
   useEffect(() => {
     const supabase = getSupabase();
@@ -367,25 +369,6 @@ export const DocumentTemplateView: React.FC<DocumentTemplateViewProps> = ({ init
       if (!leadResult.error) setLeads(leadResult.data || []);
     });
   }, []);
-
-  const saveGeneratedDocument = async () => {
-    const supabase = getSupabase();
-    if (!supabase) { setSaveMessage('Supabase接続後に保存できます。'); return; }
-    setSaveMessage('');
-    const documentType = currentTemplate.type === 'report' ? 'diagnosis_report' : currentTemplate.type;
-    const { error } = await supabase.from('customer_documents').insert({
-      document_type: documentType,
-      title: currentTemplate.title,
-      status: 'awaiting_approval',
-      body_html: populatedHtml,
-      company_id: companyId || null,
-      contact_id: contactId || null,
-      lead_id: leadId || null,
-      deal_id: dealId || null,
-    });
-    if (error) { setSaveMessage(`保存できませんでした: ${error.message}`); return; }
-    setSaveMessage('確認待ち書類として保存しました。承認後、送信画面から送信依頼を作成できます。');
-  };
 
   useEffect(() => {
     const loadTemplates = async () => {
@@ -581,6 +564,7 @@ export const DocumentTemplateView: React.FC<DocumentTemplateViewProps> = ({ init
   };
 
   const handleVariableChange = (key: string, value: string) => {
+    setHasStartedDocument(true);
     setVariableValues((prev) => ({ ...prev, [key]: value }));
   };
 
@@ -603,6 +587,59 @@ export const DocumentTemplateView: React.FC<DocumentTemplateViewProps> = ({ init
   };
 
   const populatedHtml = getPopulatedHtml();
+
+  useEffect(() => {
+    if (!hasStartedDocument) return;
+    setSaveMessage('変更を自動保存します…');
+    const timer = window.setTimeout(() => {
+      const templateId = currentTemplate.id;
+      const documentType = currentTemplate.type === 'report' ? 'diagnosis_report' : currentTemplate.type;
+      const payload = {
+        document_type: documentType,
+        title: currentTemplate.title,
+        body_html: populatedHtml,
+        company_id: companyId || null,
+        contact_id: contactId || null,
+        lead_id: leadId || null,
+        deal_id: dealId || null,
+      };
+      const previousQueue = autosaveQueues.current[templateId] || Promise.resolve();
+      const save = previousQueue.catch(() => undefined).then(async () => {
+        const supabase = getSupabase();
+        if (!supabase) {
+          setSaveMessage('Supabase接続後に確認待ち書類として自動保存します。');
+          return;
+        }
+        const existingId = autosavedDocumentIds.current[templateId];
+        if (existingId) {
+          const { data, error } = await supabase.from('customer_documents')
+            .update(payload)
+            .eq('id', existingId)
+            .eq('status', 'awaiting_approval')
+            .select('id')
+            .maybeSingle();
+          if (error || !data) {
+            setSaveMessage(error ? `自動保存できませんでした: ${error.message}` : '確認待ち状態が解除されているため、自動更新を停止しました。');
+            return;
+          }
+          setSaveMessage('確認待ち書類を自動更新しました。');
+          return;
+        }
+        const { data, error } = await supabase.from('customer_documents')
+          .insert({ ...payload, status: 'awaiting_approval' })
+          .select('id')
+          .single();
+        if (error || !data?.id) {
+          setSaveMessage(error ? `自動保存できませんでした: ${error.message}` : '自動保存先の書類IDを取得できませんでした。');
+          return;
+        }
+        autosavedDocumentIds.current[templateId] = data.id;
+        setSaveMessage('確認待ち書類として自動保存しました。');
+      });
+      autosaveQueues.current[templateId] = save;
+    }, 700);
+    return () => window.clearTimeout(timer);
+  }, [hasStartedDocument, currentTemplate.id, currentTemplate.title, currentTemplate.type, populatedHtml, companyId, contactId, leadId, dealId]);
 
   const handlePrintPdf = () => {
     const printWindow = window.open('', '_blank');
@@ -630,16 +667,6 @@ export const DocumentTemplateView: React.FC<DocumentTemplateViewProps> = ({ init
       </html>
     `);
     printWindow.document.close();
-  };
-
-  const handleDownloadHtml = () => {
-    const blob = new Blob([populatedHtml], { type: 'text/html;charset=utf-8' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `${currentTemplate.type}_${Date.now()}.html`;
-    a.click();
-    URL.revokeObjectURL(url);
   };
 
   const handleCopyHtml = () => {
@@ -683,25 +710,18 @@ export const DocumentTemplateView: React.FC<DocumentTemplateViewProps> = ({ init
             <Printer className="w-4 h-4" />
             <span>PDF印刷・プレビュー</span>
           </button>
-          <button
-            onClick={handleDownloadHtml}
-            className="px-4 py-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 font-semibold text-xs flex items-center gap-2 border border-slate-700 transition-all cursor-pointer"
-          >
-            <Download className="w-4 h-4" />
-            <span>HTML保存</span>
-          </button>
         </div>
       </div>
 
       <section className="rounded-xl border border-slate-800 bg-slate-900 p-4">
         <div className="mb-3"><h2 className="font-semibold text-white">営業レコードとの紐付け</h2><p className="mt-1 text-xs text-slate-400">リード・商談・顧客の各段階から、同じ書類レコードに関連付けます。</p></div>
         <div className="grid gap-3 md:grid-cols-4">
-          <label className="text-xs text-slate-400">会社<select value={companyId} disabled={Boolean(initialCompanyId)} onChange={(e)=>{setCompanyId(e.target.value);setContactId('');}} className="mt-1 w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-white disabled:opacity-70"><option value="">未選択</option>{companies.map((company)=><option key={company.id} value={company.id}>{company.company_name}</option>)}</select></label>
-          <label className="text-xs text-slate-400">リード<select value={leadId} disabled={Boolean(initialLeadId || initialDealId)} onChange={(e)=>setLeadId(e.target.value)} className="mt-1 w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-white disabled:opacity-70"><option value="">未選択</option>{leads.filter((lead)=>!companyId||lead.company_id===companyId).map((lead)=><option key={lead.id} value={lead.id}>{lead.source || 'リード'} · {lead.status || lead.id.slice(0,8)}</option>)}</select></label>
-          <label className="text-xs text-slate-400">担当者<select value={contactId} onChange={(e)=>{const id=e.target.value;setContactId(id);const linkedCompanyId=contacts.find((contact)=>contact.id===id)?.company_id;if(linkedCompanyId)setCompanyId(linkedCompanyId);}} className="mt-1 w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-white"><option value="">未選択</option>{contacts.filter((contact)=>!companyId||contact.company_id===companyId).map((contact)=><option key={contact.id} value={contact.id}>{contact.full_name}</option>)}</select></label>
-          <label className="text-xs text-slate-400">商談<select value={dealId} disabled={Boolean(initialDealId)} onChange={(e)=>setDealId(e.target.value)} className="mt-1 w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-white"><option value="">未選択</option>{deals.filter((deal)=>(!companyId||deal.company_id===companyId)&&(!leadId||deal.lead_id===leadId)).map((deal)=><option key={deal.id} value={deal.id}>{deal.proposal_plan_name}</option>)}</select></label>
+          <label className="text-xs text-slate-400">会社<select value={companyId} disabled={Boolean(initialCompanyId)} onChange={(e)=>{if(e.target.value)setHasStartedDocument(true);setCompanyId(e.target.value);setContactId('');}} className="mt-1 w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-white disabled:opacity-70"><option value="">未選択</option>{companies.map((company)=><option key={company.id} value={company.id}>{company.company_name}</option>)}</select></label>
+          <label className="text-xs text-slate-400">リード<select value={leadId} disabled={Boolean(initialLeadId || initialDealId)} onChange={(e)=>{if(e.target.value)setHasStartedDocument(true);setLeadId(e.target.value);}} className="mt-1 w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-white disabled:opacity-70"><option value="">未選択</option>{leads.filter((lead)=>!companyId||lead.company_id===companyId).map((lead)=><option key={lead.id} value={lead.id}>{lead.source || 'リード'} · {lead.status || lead.id.slice(0,8)}</option>)}</select></label>
+          <label className="text-xs text-slate-400">担当者<select value={contactId} onChange={(e)=>{const id=e.target.value;if(id)setHasStartedDocument(true);setContactId(id);const linkedCompanyId=contacts.find((contact)=>contact.id===id)?.company_id;if(linkedCompanyId)setCompanyId(linkedCompanyId);}} className="mt-1 w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-white"><option value="">未選択</option>{contacts.filter((contact)=>!companyId||contact.company_id===companyId).map((contact)=><option key={contact.id} value={contact.id}>{contact.full_name}</option>)}</select></label>
+          <label className="text-xs text-slate-400">商談<select value={dealId} disabled={Boolean(initialDealId)} onChange={(e)=>{if(e.target.value)setHasStartedDocument(true);setDealId(e.target.value);}} className="mt-1 w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-white"><option value="">未選択</option>{deals.filter((deal)=>(!companyId||deal.company_id===companyId)&&(!leadId||deal.lead_id===leadId)).map((deal)=><option key={deal.id} value={deal.id}>{deal.proposal_plan_name}</option>)}</select></label>
         </div>
-        <div className="mt-3 flex flex-wrap items-center gap-3"><button onClick={()=>void saveGeneratedDocument()} className="flex items-center gap-2 rounded-lg bg-emerald-700 px-3 py-2 text-xs font-semibold text-white hover:bg-emerald-600"><Save className="h-4 w-4"/>生成内容を確認待ちで保存</button>{saveMessage&&<p role="status" className="text-xs text-slate-300">{saveMessage}</p>}</div>
+        <div className="mt-3 flex flex-wrap items-center gap-3"><p className="text-xs text-emerald-300">内容変更は自動で確認待ちに保存されます。</p>{saveMessage&&<p role="status" className="text-xs text-slate-300">{saveMessage}</p>}</div>
       </section>
 
       {templateStatus&&<p role="status" className="rounded-lg border border-slate-800 bg-slate-900 px-3 py-2 text-xs text-slate-300">{templateStatus}</p>}
