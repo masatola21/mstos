@@ -512,11 +512,20 @@ app.post('/api/line/rich-menu', async (req, res) => {
 });
 
 let marketingQueueBusy = false;
+let marketingRunnerLastRunAt: string | null = null;
 async function processMarketingAutomationJobs(): Promise<void> {
+  marketingRunnerLastRunAt = new Date().toISOString();
   if (!lineSupabase || marketingQueueBusy) return;
   marketingQueueBusy = true;
   try {
     const now = new Date().toISOString();
+    const staleBefore = new Date(Date.now() - 15 * 60 * 1000).toISOString();
+    const { error: staleError } = await lineSupabase.from('marketing_automation_jobs').update({
+      status: 'failed',
+      error_message: '送信中に中断された可能性があります。送信済みか確認してから再実行してください。',
+      updated_at: now,
+    }).eq('status', 'sending').lt('updated_at', staleBefore);
+    if (staleError) throw staleError;
     const { data: jobs, error } = await lineSupabase.from('marketing_automation_jobs')
       .select('*').eq('status','queued').lte('due_at',now).order('due_at',{ascending:true}).limit(20);
     if (error) throw error;
@@ -605,6 +614,58 @@ async function processMarketingAutomationJobs(): Promise<void> {
     console.error('Marketing automation queue processing failed:',error instanceof Error?error.message:'unknown error');
   } finally { marketingQueueBusy = false; }
 }
+
+app.get('/api/marketing/health', async (req, res) => {
+  if (!lineSupabase) return res.status(503).json({ error: '自動配信サーバーのSupabase設定がありません。' });
+  const authorization = req.header('authorization') || '';
+  const token = authorization.startsWith('Bearer ') ? authorization.slice(7) : '';
+  if (!token) return res.status(401).json({ error: 'ログインしてください。' });
+  const { data: authData, error: authError } = await lineSupabase.auth.getUser(token);
+  if (authError || !authData.user) return res.status(401).json({ error: 'ログイン状態を確認できません。' });
+  const [queued, failed] = await Promise.all([
+    lineSupabase.from('marketing_automation_jobs').select('id', { count: 'exact', head: true }).eq('owner_id', authData.user.id).eq('status', 'queued'),
+    lineSupabase.from('marketing_automation_jobs').select('id', { count: 'exact', head: true }).eq('owner_id', authData.user.id).eq('status', 'failed'),
+  ]);
+  if (queued.error || failed.error) return res.status(500).json({ error: '自動配信の状態を取得できません。' });
+  const emailConfigured = Boolean(process.env.RESEND_API_KEY?.trim() && process.env.RESEND_FROM_EMAIL?.trim()
+    && process.env.EMAIL_UNSUBSCRIBE_SECRET?.trim() && process.env.PUBLIC_APP_URL?.trim());
+  const lineConfigured = Boolean(lineChannelAccessToken.trim() && lineChannelSecret.trim());
+  return res.json({ emailConfigured, lineConfigured, runnerLastRunAt: marketingRunnerLastRunAt, queuedCount: queued.count || 0, failedCount: failed.count || 0 });
+});
+
+app.post('/api/marketing/jobs/:id/retry', async (req, res) => {
+  if (!lineSupabase) return res.status(503).json({ error: '自動配信サーバーのSupabase設定がありません。' });
+  const authorization = req.header('authorization') || '';
+  const token = authorization.startsWith('Bearer ') ? authorization.slice(7) : '';
+  if (!token) return res.status(401).json({ error: 'ログインしてください。' });
+  const { data: authData, error: authError } = await lineSupabase.auth.getUser(token);
+  if (authError || !authData.user) return res.status(401).json({ error: 'ログイン状態を確認できません。' });
+  const id = req.params.id;
+  if (!isPublicUuid(id)) return res.status(400).json({ error: 'ジョブIDが不正です。' });
+  const { data: updated, error } = await lineSupabase.from('marketing_automation_jobs').update({
+    status: 'queued', due_at: new Date().toISOString(), error_message: null, updated_at: new Date().toISOString(),
+  }).eq('id', id).eq('owner_id', authData.user.id).eq('status', 'failed').select('id').maybeSingle();
+  if (error) return res.status(500).json({ error: 'ジョブを再実行待ちにできませんでした。' });
+  if (!updated) return res.status(409).json({ error: '失敗状態のジョブが見つからないか、再実行できる状態ではありません。' });
+  return res.json({ success: true, status: 'queued' });
+});
+
+app.post('/api/marketing/jobs/:id/cancel', async (req, res) => {
+  if (!lineSupabase) return res.status(503).json({ error: '自動配信サーバーのSupabase設定がありません。' });
+  const authorization = req.header('authorization') || '';
+  const token = authorization.startsWith('Bearer ') ? authorization.slice(7) : '';
+  if (!token) return res.status(401).json({ error: 'ログインしてください。' });
+  const { data: authData, error: authError } = await lineSupabase.auth.getUser(token);
+  if (authError || !authData.user) return res.status(401).json({ error: 'ログイン状態を確認できません。' });
+  const id = req.params.id;
+  if (!isPublicUuid(id)) return res.status(400).json({ error: 'ジョブIDが不正です。' });
+  const { data: updated, error } = await lineSupabase.from('marketing_automation_jobs').update({
+    status: 'canceled', updated_at: new Date().toISOString(),
+  }).eq('id', id).eq('owner_id', authData.user.id).eq('status', 'queued').select('id').maybeSingle();
+  if (error) return res.status(500).json({ error: 'ジョブを取り消せませんでした。' });
+  if (!updated) return res.status(409).json({ error: '待機中のジョブが見つからないか、取消できる状態ではありません。' });
+  return res.json({ success: true, status: 'canceled' });
+});
 
 app.post('/api/communications/send', async (req, res) => {
   if (!lineSupabase) return res.status(503).json({ error: '送信サーバーのSupabase設定がありません。' });
