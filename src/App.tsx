@@ -12,7 +12,7 @@ import { RecordFormModal } from './components/RecordFormModal';
 import { TableKey } from './types/database';
 import { getSupabase } from './lib/supabaseClient';
 import { deleteTableRecord } from './services/dataService';
-import { Loader2, MessageCircle } from 'lucide-react';
+import { Loader2 } from 'lucide-react';
 
 // AI President Views and Modals
 import { DashboardView } from './components/ai-president/DashboardView';
@@ -2349,7 +2349,7 @@ function AppContent() {
         className="fixed bottom-5 right-5 z-40 inline-flex items-center gap-2 rounded-full border border-indigo-400/40 bg-indigo-600 px-4 py-3 text-sm font-semibold text-white shadow-lg shadow-indigo-950/40 transition hover:bg-indigo-500"
         aria-label="現在のページについてAIに相談・依頼"
       >
-        <MessageCircle className="h-4 w-4" />
+        <span aria-hidden="true" className="grid h-6 w-6 place-items-center rounded-full bg-white/15 text-base">🤖</span>
         <span>AIに相談・依頼</span>
       </button>
 
