@@ -247,6 +247,7 @@ function AppContent() {
   const { user, isLoading } = useAuth();
   const [currentTab, setCurrentTab] = useState<UnifiedNavTab>('mst_dashboard');
   const [customerWorkspaceContext, setCustomerWorkspaceContext] = useState<{ companyId: string; leadId?: string; dealId?: string; section?: 'forms' | 'diagnoses'; documentType?: 'invoice'; documentId?: string; sendKind?: 'form'|'diagnosis'|'deal'|'customer_meeting'|'announcement'; formId?: string; contactId?: string } | undefined>();
+  const [lineInboxContact, setLineInboxContact] = useState<{ contactId: string; lineUserId: string } | undefined>();
   const customerWorkspaceCompanyId = customerWorkspaceContext?.companyId;
   const [workspaceReady, setWorkspaceReady] = useState(false);
   const [workspaceSyncStatus, setWorkspaceSyncStatus] = useState<'loading' | 'saving' | 'saved' | 'error' | 'conflict'>('loading');
@@ -1931,7 +1932,7 @@ function AppContent() {
                 leadId: recordContext?.tableKey === 'leads' ? recordContext.recordId : recordContext?.leadId,
                 dealId: recordContext?.tableKey === 'deals' ? recordContext.recordId : undefined,
                 section: destination === 'forms' ? 'forms' : destination === 'diagnoses' ? 'diagnoses' : undefined,
-                sendKind: destination === 'send' ? (recordContext?.tableKey === 'deals' ? 'deal' : recordContext?.tableKey === 'customers' ? 'customer_meeting' : 'form') : undefined,
+                sendKind: destination === 'send' ? (recordContext?.tableKey === 'deals' ? 'deal' : recordContext?.tableKey === 'customers' ? 'customer_meeting' : recordContext?.tableKey === 'prospects' || recordContext?.tableKey === 'leads' ? 'announcement' : 'form') : undefined,
                 formId: undefined,
                 contactId: recordContext?.contactId,
               });
@@ -2023,7 +2024,7 @@ function AppContent() {
           </>
         )}
 
-        {currentTab === 'contacts' && <ContactsLineHub />}
+        {currentTab === 'contacts' && <ContactsLineHub onOpenLineInbox={(contactId, lineUserId) => { setLineInboxContact({ contactId, lineUserId }); setCurrentTab('marketing_automation'); }} onOpenEmailSend={(contactId, companyId) => { setCustomerWorkspaceContext({ companyId: companyId || '', contactId, sendKind: 'announcement' }); setCurrentTab('communication_send'); }} />}
 
         {currentTab === 'ai_acquisition' && (
           <AIAcquisitionOperationsView onSendPresidentSummary={(summary) => {
@@ -2033,7 +2034,7 @@ function AppContent() {
         )}
 
         {currentTab === 'marketing_automation' && (
-          <MarketingAutomationPrototypeView scenarios={marketingScenarios} onScenariosChange={setMarketingScenarios} onNavigateTab={(tab) => setCurrentTab(tab)} />
+          <MarketingAutomationPrototypeView scenarios={marketingScenarios} onScenariosChange={setMarketingScenarios} onNavigateTab={(tab) => setCurrentTab(tab)} lineInboxContact={lineInboxContact} />
         )}
 
         {/* ================= SECTION 3: AI PRESIDENT & STRATEGY ================= */}
