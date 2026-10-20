@@ -1,13 +1,14 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { getSupabase } from '../../lib/supabaseClient';
 import { InlineDeleteButton } from '../InlineDeleteButton';
-import { Activity, ArrowRight, CheckCircle2, Copy, GitBranch, Image as ImageIcon, Mail, MessageCircle, MousePointerClick, Plus, Radio, Save, Tags, Trash2, Zap } from 'lucide-react';
+import { Activity, ArrowRight, CheckCircle2, Copy, GitBranch, Image as ImageIcon, Library, Mail, MessageCircle, MousePointerClick, Plus, Radio, Save, Tags, Trash2, Zap } from 'lucide-react';
 import { MarketingChannel, MarketingLineMessageType, MarketingScenario, MarketingTrigger } from '../../types/marketing';
 import { MarketingBroadcastView } from './MarketingBroadcastView';
 import { MarketingLineInboxView } from './MarketingLineInboxView';
 import { MarketingLineSettingsView } from './MarketingLineSettingsView';
 import { MarketingEmailInboxView } from './MarketingEmailInboxView';
 import { SalesOperationsWorkspace } from '../SalesOperationsWorkspace';
+import { CommunicationTemplateLibraryView } from './CommunicationTemplateLibraryView';
 
 interface Props {
   scenarios: MarketingScenario[];
@@ -131,7 +132,7 @@ export const MarketingAutomationPrototypeView: React.FC<Props> = ({ scenarios, o
     const id = value.startsWith('segment:') ? value.slice('segment:'.length) : '';
     return segments.find((segment) => segment.id === id)?.name || value || '配信対象未設定';
   };
-  const [activeTab, setActiveTab] = useState<'home' | 'email' | 'line' | 'scenarios' | 'segments'>('home');
+  const [activeTab, setActiveTab] = useState<'home' | 'email' | 'line' | 'scenarios' | 'segments' | 'templates'>('home');
   const [lineView, setLineView] = useState<'broadcast' | 'inbox' | 'settings'>('broadcast');
   const [emailView, setEmailView] = useState<'broadcast' | 'inbox'>('broadcast');
   const [editing, setEditing] = useState<MarketingScenario | null>(null);
@@ -319,6 +320,7 @@ export const MarketingAutomationPrototypeView: React.FC<Props> = ({ scenarios, o
     { id: 'line' as const, label: 'LINE', icon: MessageCircle },
     { id: 'scenarios' as const, label: 'シナリオ', icon: Zap },
     { id: 'segments' as const, label: '配信対象リスト', icon: Tags },
+    { id: 'templates' as const, label: 'テンプレート保管庫', icon: Library },
   ];
 
   return (
@@ -421,7 +423,7 @@ export const MarketingAutomationPrototypeView: React.FC<Props> = ({ scenarios, o
                   <div className="rounded-xl border border-slate-700 bg-slate-900 p-4 md:col-span-2"><div className="mb-3 flex items-center gap-2 text-xs font-bold text-indigo-200"><ImageIcon className="h-4 w-4" />Flexカードプレビュー</div><div className="mx-auto max-w-sm rounded-2xl bg-white p-5 text-slate-900 shadow-xl"><div className="text-lg font-bold">{form.flexTitle || 'カードタイトル'}</div><p className="mt-3 whitespace-pre-wrap text-sm text-slate-600">{form.flexBody || 'カード本文のプレビュー'}</p>{form.flexButtonLabel && <div className="mt-5 rounded-lg bg-blue-600 px-3 py-2 text-center text-sm font-semibold text-white">{form.flexButtonLabel}</div>}</div><details className="mt-4"><summary className="cursor-pointer text-xs text-slate-400">生成されるFlex JSONを確認</summary><pre className="mt-2 max-h-64 overflow-auto rounded-lg bg-slate-950 p-3 text-[10px] text-slate-300">{JSON.stringify({ type: 'flex', altText: form.flexAltText || 'Flexメッセージ', contents: flexPayload }, null, 2)}</pre></details></div>
                 </div>}
               </fieldset>}
-              {(form.channel === 'email' || form.channel === 'both') && <div className="grid gap-4 md:col-span-2 md:grid-cols-2"><label className="text-xs text-slate-300 md:col-span-2">保存済みメールテンプレート<select value={selectedEmailTemplateId} onChange={(e)=>chooseEmailTemplate(e.target.value)} className="mt-1 w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-white"><option value="">テンプレートを選択</option>{emailTemplates.map((item)=><option key={item.id} value={item.id}>{item.category} · {item.template_key}</option>)}</select></label><label className="text-xs text-slate-300">メール件名<input required maxLength={200} value={form.emailSubject} onChange={(e) => update('emailSubject', e.target.value)} placeholder="件名" className="mt-1 w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-white" /></label><label className="text-xs text-slate-300 md:col-span-2">メール本文<textarea required maxLength={10000} rows={5} value={form.emailBody} onChange={(e) => update('emailBody', e.target.value)} placeholder="メール本文。{name} などの差し込みは配信接続時に設定します。" className="mt-1 w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-white" /></label></div>}
+              {(form.channel === 'email' || form.channel === 'both') && <div className="grid gap-4 md:col-span-2 md:grid-cols-2"><label className="text-xs text-slate-300 md:col-span-2">保存済みメールテンプレート<select value={selectedEmailTemplateId} onChange={(e)=>chooseEmailTemplate(e.target.value)} className="mt-1 w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-white"><option value="">テンプレートを選択</option>{emailTemplates.map((item)=><option key={item.id} value={item.id}>{item.name?.trim() || `${item.category} · ${item.template_key}`}</option>)}</select></label><label className="text-xs text-slate-300">メール件名<input required maxLength={200} value={form.emailSubject} onChange={(e) => update('emailSubject', e.target.value)} placeholder="件名" className="mt-1 w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-white" /></label><label className="text-xs text-slate-300 md:col-span-2">メール本文<textarea required maxLength={10000} rows={5} value={form.emailBody} onChange={(e) => update('emailBody', e.target.value)} placeholder="メール本文。{name} などの差し込みは配信接続時に設定します。" className="mt-1 w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-white" /></label></div>}
             </div>
             <div className="mt-4 flex flex-wrap items-center justify-between gap-3"><p className="text-[11px] text-slate-500">画像は公開HTTPS URLを指定します。Flexはカード設定からJSONを生成します。今の段階では下書き保存のみで送信されません。</p><div className="flex gap-2"><button type="button" onClick={() => { setEditing(null); setIsFormOpen(false); setNotice(''); }} className="rounded-lg border border-slate-700 px-3 py-2 text-xs text-slate-300">キャンセル</button><button type="submit" className="flex items-center gap-2 rounded-lg bg-indigo-600 px-4 py-2 text-xs font-semibold text-white hover:bg-indigo-500"><Save className="h-4 w-4" />保存</button></div></div>
           </form>
@@ -430,6 +432,7 @@ export const MarketingAutomationPrototypeView: React.FC<Props> = ({ scenarios, o
         {!editing && scenarios.length > 0 && <p className="text-[11px] text-slate-500">自動実行は有効化したシナリオのみです。CRMイベントの対象連絡先が配信同意済みの場合に送信し、既存の送信履歴へ記録します。</p>}
       </div>}
       {activeTab === 'segments' && <SalesOperationsWorkspace tab="segments" />}
+      {activeTab === 'templates' && <CommunicationTemplateLibraryView />}
 
     </div>
   );
