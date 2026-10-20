@@ -1877,8 +1877,6 @@ function AppContent() {
         onOpenPricing={() => setIsPricingModalOpen(true)}
         onOpenBackup={() => setIsBackupModalOpen(true)}
         onOpenProfile={() => setIsProfileModalOpen(true)}
-        onOpenQuickDrawer={() => setIsQuickDrawerOpen(true)}
-        activeCharacter={presidentCharacter}
         pendingApprovalsCount={approvals.filter((a) => a.status === 'pending').length}
       />
 
@@ -2345,9 +2343,20 @@ function AppContent() {
         />
       )}
 
-      {/* Slide-out Quick President Drawer */}
+      <button
+        type="button"
+        onClick={() => setIsQuickDrawerOpen(true)}
+        className="fixed bottom-5 right-5 z-40 inline-flex items-center gap-2 rounded-full border border-indigo-400/40 bg-indigo-600 px-4 py-3 text-sm font-semibold text-white shadow-lg shadow-indigo-950/40 transition hover:bg-indigo-500"
+        aria-label="現在のページについてAIに相談・依頼"
+      >
+        <span aria-hidden="true" className="grid h-6 w-6 place-items-center rounded-full bg-white/15 text-base">🤖</span>
+        <span>AIに相談・依頼</span>
+      </button>
+
+      {/* Page-aware AI helper drawer */}
       <QuickPresidentDrawer
         isOpen={isQuickDrawerOpen}
+        pageId={currentTab}
         onClose={() => setIsQuickDrawerOpen(false)}
         character={presidentCharacter}
         userProfile={userProfile}

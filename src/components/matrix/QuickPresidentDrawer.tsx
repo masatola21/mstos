@@ -12,9 +12,24 @@ import {
   Maximize2 
 } from 'lucide-react';
 import { ApiUsageData, CharacterConfig, ChatMessage, UserProfile } from '../../types/ai-president';
+import { AI_WORK_MODES, AIWorkModeId } from '../../data/aiWorkModes';
+
+type PageAssistantProfile = { label: string; mode: AIWorkModeId };
+type RequestMode = 'consult' | 'action_plan' | 'external_prompt';
+const getPageAssistantProfile = (pageId: string): PageAssistantProfile => {
+  if (pageId === 'marketing_automation' || pageId === 'ai_acquisition') return { label: 'マーケティング', mode: 'marketing_execution' };
+  if (pageId === 'mst_diagnoses') return { label: '診断・提案', mode: 'diagnosis' };
+  if (pageId === 'product_hub' || pageId === 'category_hub') return { label: '商品設計', mode: 'new_product' };
+  if (pageId === 'communication_send') return { label: '配信・顧客フォロー', mode: 'marketing_execution' };
+  if (['invoices', 'contracts', 'customer_invoices', 'customer_contracts'].includes(pageId)) return { label: '契約・請求管理', mode: 'billing_operations' };
+  if (pageId === 'customer_operations' || ['contacts', 'companies', 'leads', 'deals', 'customers', 'prospects', 'deal_invitations'].includes(pageId)) return { label: '営業・顧客管理', mode: 'sales_operations' };
+  if (pageId === 'ai_projects' || pageId === 'ai_tasks' || pageId === 'automations') return { label: 'プロジェクト・業務改善', mode: 'operations_management' };
+  return { label: '経営OS全体', mode: 'president' };
+};
 
 interface QuickPresidentDrawerProps {
   isOpen: boolean;
+  pageId: string;
   onClose: () => void;
   character: CharacterConfig;
   userProfile: UserProfile;
@@ -25,6 +40,7 @@ interface QuickPresidentDrawerProps {
 
 export const QuickPresidentDrawer: React.FC<QuickPresidentDrawerProps> = ({
   isOpen,
+  pageId,
   onClose,
   character,
   userProfile,
@@ -40,6 +56,10 @@ export const QuickPresidentDrawer: React.FC<QuickPresidentDrawerProps> = ({
       timestamp: Date.now(),
     },
   ]);
+  const pageProfile = getPageAssistantProfile(pageId);
+  const [selectedWorkModeId, setSelectedWorkModeId] = useState<AIWorkModeId>(pageProfile.mode);
+  const [requestMode, setRequestMode] = useState<RequestMode>('consult');
+  const selectedWorkMode = AI_WORK_MODES.find((mode) => mode.id === selectedWorkModeId) ?? AI_WORK_MODES[0];
   const [input, setInput] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
@@ -49,6 +69,18 @@ export const QuickPresidentDrawer: React.FC<QuickPresidentDrawerProps> = ({
       messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
     }
   }, [isOpen, messages]);
+
+  useEffect(() => {
+    const profile = getPageAssistantProfile(pageId);
+    setSelectedWorkModeId(profile.mode);
+    setRequestMode('consult');
+    setMessages([{
+      id: 'page-welcome-' + pageId,
+      role: 'assistant',
+      content: profile.label + 'の画面を開いています。担当AIを選んで相談できます。画面上の顧客・案件データは自動送信しません。必要な情報をメッセージに含めてください。',
+      timestamp: Date.now(),
+    }]);
+  }, [pageId]);
 
   if (!isOpen) return null;
 
@@ -79,6 +111,9 @@ export const QuickPresidentDrawer: React.FC<QuickPresidentDrawerProps> = ({
           })),
           character,
           userProfile,
+          workModeId: selectedWorkModeId,
+          roleOverride: requestMode === 'consult' ? undefined : { extraInstruction: requestMode === 'external_prompt' ? '外部のAI・開発者・業者へそのまま渡せる日本語の依頼プロンプトを作成してください。背景、目的、作業範囲、守る制約、完了条件を明記し、不明な事実は捏造せず確認事項として残してください。プロンプト本文を独立してコピーできる形で提示してください。' : 'この画面で解決したい依頼について、実行可能な操作と必要な確認を分けた具体的な実行案を作成してください。データ変更・送信・削除は必ず事前確認を求め、接続されていない機能を実行できると主張せず、実行したふりをしないでください。' },
+          knowledgeContext: '現在開いているページ: ' + pageProfile.label + '（画面ID: ' + pageId + '）。依頼モード: ' + requestMode + '。ページ固有の業務役割を選んで回答してください。実データは自動共有されていないため、未提示の情報を推測しないでください。',
         }),
       });
 
@@ -86,7 +121,7 @@ export const QuickPresidentDrawer: React.FC<QuickPresidentDrawerProps> = ({
       if (data.usage) {
         onRecordUsage?.({
           endpoint: 'chat',
-          endpointName: 'AI社長クイック相談',
+          endpointName: 'AI社長ページ相談',
           model: data.model,
           usage: data.usage,
         });
@@ -132,16 +167,16 @@ export const QuickPresidentDrawer: React.FC<QuickPresidentDrawerProps> = ({
       <div className="p-4 border-b border-slate-800 bg-slate-950 flex items-center justify-between">
         <div className="flex items-center gap-3">
           <div className="w-9 h-9 rounded-xl bg-gradient-to-tr from-indigo-600 to-blue-500 flex items-center justify-center text-white text-lg shadow-lg shadow-indigo-500/20">
-            {character.avatarEmoji || '👔'}
+            {selectedWorkMode.avatarEmoji || character.avatarEmoji || '👔'}
           </div>
           <div>
             <div className="flex items-center gap-1.5">
-              <span className="font-bold text-white text-sm">{character.name}</span>
+              <span className="font-bold text-white text-sm">{selectedWorkMode.name}</span>
               <span className="text-[10px] px-1.5 py-0.2 rounded bg-indigo-500/20 text-indigo-300 font-medium">
                 クイック相談
               </span>
             </div>
-            <p className="text-[10px] text-slate-400 truncate max-w-[200px]">{character.role}</p>
+            <p className="text-[10px] text-slate-400 truncate max-w-[200px]">{selectedWorkMode.label}担当</p>
           </div>
         </div>
 
@@ -163,6 +198,24 @@ export const QuickPresidentDrawer: React.FC<QuickPresidentDrawerProps> = ({
             <X className="w-4 h-4" />
           </button>
         </div>
+      </div>
+
+      <div className="border-b border-slate-800 bg-slate-950/60 px-4 py-3">
+        <div>
+          <p className="text-xs text-slate-300">依頼の種類</p>
+          <div className="mt-2 grid grid-cols-3 gap-1.5">
+            <button type="button" onClick={() => setRequestMode('consult')} className={`rounded-lg px-2 py-1.5 text-[10px] font-semibold ${requestMode === 'consult' ? 'bg-indigo-600 text-white' : 'bg-slate-800 text-slate-300'}`}>相談</button>
+            <button type="button" onClick={() => setRequestMode('action_plan')} className={`rounded-lg px-2 py-1.5 text-[10px] font-semibold ${requestMode === 'action_plan' ? 'bg-indigo-600 text-white' : 'bg-slate-800 text-slate-300'}`}>操作の実行案</button>
+            <button type="button" onClick={() => setRequestMode('external_prompt')} className={`rounded-lg px-2 py-1.5 text-[10px] font-semibold ${requestMode === 'external_prompt' ? 'bg-indigo-600 text-white' : 'bg-slate-800 text-slate-300'}`}>外部依頼文</button>
+          </div>
+        </div>
+        <label className="mt-3 flex items-center justify-between gap-3 text-xs text-slate-300">
+          <span>相談するAI</span>
+          <select value={selectedWorkModeId} onChange={(event) => setSelectedWorkModeId(event.target.value as AIWorkModeId)} className="max-w-[220px] rounded-lg border border-slate-700 bg-slate-900 px-2 py-1.5 text-xs text-white">
+            {AI_WORK_MODES.map((mode) => <option key={mode.id} value={mode.id}>{mode.label}</option>)}
+          </select>
+        </label>
+        <p className="mt-2 text-[10px] leading-relaxed text-slate-500">現在の画面に合わせたAIを初期選択しています。実行案も操作内容を提案する段階で、この窓から直接保存・送信はしません。画面データは自動送信されないため、必要な情報を入力してください。外部依頼文はコピーして他のAIや依頼先に渡せます。</p>
       </div>
 
       {/* Messages Scroll Area */}
