@@ -158,7 +158,7 @@ export const MarketingBroadcastView: React.FC<{initialChannel?:Channel}> = ({ini
     }
     if(channel==='line'&&lineContentType==='video'){
       const isHttps=(value:string)=>{try{return new URL(value).protocol==='https:'}catch{return false}};
-      if(!isHttps(videoUrl)||!isHttps(videoPreviewUrl)){setError('動画とプレビュー画像は公開HTTPS URLを指定してください。');return}
+      if(!selectedLineTemplate||!isHttps(videoUrl)||!isHttps(videoPreviewUrl)){setError('テンプレート管理で動画とプレビュー画像をアップロードしたテンプレートを選択してください。');return}
       if(videoUrl.length>2000||videoPreviewUrl.length>2000){setError('動画URLとプレビュー画像URLは2000文字以内にしてください。');return}
     }else if(channel==='line'&&lineContentType==='text'&&!body.trim()){setError('配信本文を入力してください。');return}
     setBusy(true);
@@ -171,7 +171,7 @@ export const MarketingBroadcastView: React.FC<{initialChannel?:Channel}> = ({ini
         channel,recipient_contact_id:contact.id,recipient_address:channel==='email'?contact.email:contact.line_user_id,
         subject:channel==='email'?fillForContact(subject.trim(),contact):null,
         body_text:channel==='line'&&lineContentType!=='text'?`[${lineContentType==='image'?'画像':lineContentType==='video'?'動画':'Flex'}メッセージ]`:fillForContact(body.trim(),contact),
-        line_message_payload:channel==='line'&&lineContentType!=='text'?{type:lineContentType,...fillLinePayload(selectedLineTemplate?.payload||{},contact)}:null,
+        line_message_payload:channel==='line'&&lineContentType!=='text'?{type:lineContentType,...fillLinePayload(selectedLineTemplate?.payload||{},contact),...(lineContentType==='video'||lineContentType==='image'?{originalContentUrl:videoUrl,previewImageUrl:videoPreviewUrl}:{})}:null,
         company_id:contact.company_id||null,source_type:audienceMode==='prospect_outreach'?'marketing_outreach':'marketing_broadcast',source_id:broadcastId,status:'queued',
         consent_confirmed_at:new Date().toISOString(),consent_basis:consentBasis.trim(),
       }));
@@ -245,7 +245,7 @@ export const MarketingBroadcastView: React.FC<{initialChannel?:Channel}> = ({ini
       {(channel==='email'||lineContentType==='text')&&<label className="block text-sm text-slate-300">{channel==='email'?'メール本文':'配信本文'}<textarea value={body} onChange={e=>setBody(e.target.value)} maxLength={channel==='line'?5000:10000} rows={6} className="mt-1 block w-full rounded-lg border border-slate-700 bg-slate-950 p-3 text-white" />{channel==='email'&&<span className="mt-1 block text-xs text-slate-500">動画は公開リンクを本文に貼り付けて送信できます。</span>}</label>}
       {channel==='line'&&lineContentType==='flex'&&selectedLineTemplate&&<div className="rounded-lg border border-slate-700 bg-slate-950 p-3 text-sm text-slate-300">{lineAltText||selectedLineTemplate.name}<pre className="mt-2 max-h-40 overflow-auto whitespace-pre-wrap text-xs">{lineFlexJson}</pre></div>}
       {channel==='line'&&lineContentType==='image'&&selectedLineTemplate&&<div className="rounded-lg border border-slate-700 bg-slate-950 p-3"><img src={String(selectedLineTemplate.payload.originalContentUrl||'')} alt="LINE画像テンプレート" className="max-h-60 rounded"/><p className="mt-2 text-xs text-slate-400">{selectedLineTemplate.name}</p></div>}
-      {channel==='line'&&lineContentType==='video'&&<div className="grid gap-3 md:grid-cols-2"><label className="text-sm text-slate-300">動画URL（公開HTTPS・MP4）<input type="url" value={videoUrl} onChange={e=>setVideoUrl(e.target.value)} placeholder="https://example.com/video.mp4" className="mt-1 block w-full rounded-lg border border-slate-700 bg-slate-950 p-2 text-white" /></label><label className="text-sm text-slate-300">プレビュー画像URL（JPEG/PNG）<input type="url" value={videoPreviewUrl} onChange={e=>setVideoPreviewUrl(e.target.value)} placeholder="https://example.com/preview.jpg" className="mt-1 block w-full rounded-lg border border-slate-700 bg-slate-950 p-2 text-white" /></label><p className="text-xs text-slate-500 md:col-span-2">LINEの動画メッセージはMP4（200MB以下）とプレビュー画像（JPEG/PNG、1MB以下）が必要です。URLはLINEから取得できる公開HTTPS URLを指定してください。</p></div>}
+      {channel==='line'&&lineContentType==='video'&&selectedLineTemplate&&<div className="rounded-lg border border-slate-700 bg-slate-950 p-3"><video src={videoUrl} poster={videoPreviewUrl} controls className="max-h-60 rounded"/><p className="mt-2 text-xs text-slate-400">テンプレート管理でアップロードしたLINE動画を使用します。</p></div>}
       <label className="block text-sm text-slate-300">{audienceMode==='prospect_outreach'?'送信根拠・連絡先の取得元':'配信同意・送信根拠'}<input value={consentBasis} onChange={e=>setConsentBasis(e.target.value)} placeholder="例：配信登録フォームで同意取得済み" className="mt-1 block w-full rounded-lg border border-slate-700 bg-slate-950 p-2 text-white" /></label>
       {!preview?<button type="button" disabled={!selectedContacts.length} onClick={()=>setPreview(true)} className="rounded-lg bg-indigo-600 px-4 py-2 font-semibold text-white disabled:opacity-40">プレビュー</button>:<div className="space-y-3 rounded-xl border border-amber-500/30 bg-amber-950/20 p-4">
         <h3 className="font-bold text-amber-100">配信プレビュー</h3>
