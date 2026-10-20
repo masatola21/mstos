@@ -580,18 +580,27 @@ app.post('/api/communications/send', async (req, res) => {
       const { data: friend, error: friendError } = await lineSupabase.from('line_friends').select('status,consent_status').eq('line_user_id', contact.line_user_id).maybeSingle();
       if (friendError || !friend || friend.status !== 'active' || friend.consent_status !== 'opted_in') throw new Error('有効なLINE友だち状態と配信同意を確認できません。');
       if (String(row.body_text || '').length > 5000) throw new Error('LINEメッセージは5000文字以内にしてください。');
-      let lineMessage: Record<string, string>;
-      const requestedVideo = row.line_message_payload && typeof row.line_message_payload === 'object'
-        ? row.line_message_payload as { type?: unknown; originalContentUrl?: unknown; previewImageUrl?: unknown }
+      let lineMessage: Record<string, any>;
+      const requestedPayload = row.line_message_payload && typeof row.line_message_payload === 'object'
+        ? row.line_message_payload as { type?: unknown; originalContentUrl?: unknown; previewImageUrl?: unknown; altText?: unknown; contents?: unknown }
         : null;
-      if (requestedVideo?.type === 'video') {
-        const originalContentUrl = typeof requestedVideo.originalContentUrl === 'string' ? requestedVideo.originalContentUrl : '';
-        const previewImageUrl = typeof requestedVideo.previewImageUrl === 'string' ? requestedVideo.previewImageUrl : '';
-        const isHttpsUrl = (value: string) => { try { return new URL(value).protocol === 'https:'; } catch { return false; } };
+      const isHttpsUrl = (value: string) => { try { return new URL(value).protocol === 'https:'; } catch { return false; } };
+      if (requestedPayload?.type === 'video' || requestedPayload?.type === 'image') {
+        const originalContentUrl = typeof requestedPayload.originalContentUrl === 'string' ? requestedPayload.originalContentUrl : '';
+        const previewImageUrl = typeof requestedPayload.previewImageUrl === 'string' ? requestedPayload.previewImageUrl : '';
         if (originalContentUrl.length > 2000 || previewImageUrl.length > 2000 || !isHttpsUrl(originalContentUrl) || !isHttpsUrl(previewImageUrl)) {
-          throw new Error('LINE動画とプレビュー画像には2000文字以内の公開HTTPS URLが必要です。');
+          throw new Error('LINE画像・動画には2000文字以内の公開HTTPS URLが必要です。');
         }
-        lineMessage = { type: 'video', originalContentUrl, previewImageUrl };
+        lineMessage = requestedPayload.type === 'video'
+          ? { type: 'video', originalContentUrl, previewImageUrl }
+          : { type: 'image', originalContentUrl, previewImageUrl };
+      } else if (requestedPayload?.type === 'flex') {
+        const altText = typeof requestedPayload.altText === 'string' ? requestedPayload.altText.trim().slice(0, 400) : '';
+        const contents = requestedPayload.contents;
+        if (!altText || !contents || typeof contents !== 'object' || !['bubble', 'carousel'].includes((contents as { type?: string }).type || '')) {
+          throw new Error('LINE Flexメッセージの内容を確認してください。');
+        }
+        lineMessage = { type: 'flex', altText, contents };
       } else {
         if (String(row.body_text || '').length > 5000) throw new Error('LINEメッセージは5000文字以内にしてください。');
         lineMessage = { type: 'text', text: row.body_text || '' };
