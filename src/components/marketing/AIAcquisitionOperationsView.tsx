@@ -152,7 +152,8 @@ export const AIAcquisitionOperationsView: React.FC<{ onSendPresidentSummary?: (s
   const [pendingToolDrafts, setPendingToolDrafts] = useState<Array<{ record_type: RecordType; title: string; payload: Record<string, string> }>>([]);
 
   const load = async () => {
-    const db = getSupabase();    if (!db) { setError('Supabaseに接続してください。集客運用の保存にはDB接続が必要です。'); setLoading(false); return; }
+    const db = getSupabase();
+    if (!db) { setError('Supabaseに接続してください。集客運用の保存にはDB接続が必要です。'); setLoading(false); return; }
     setLoading(true); setError('');
     const { data: auth, error: authError } = await db.auth.getUser();
     if (authError || !auth.user) { setError('ログイン状態を確認できません。'); setLoading(false); return; }
@@ -199,14 +200,30 @@ export const AIAcquisitionOperationsView: React.FC<{ onSendPresidentSummary?: (s
     aiAbortController.current = controller;
     setAiGenerating(true); setAiError(''); setError(''); setNotice(''); setPendingToolDrafts([]);
     const selectedProduct = products.find((product) => product.id === productId);
+    const relatedStrategy = records
+      .filter((record) => record.record_type === 'strategy' && (!productId || record.product_id === productId))
+      .sort((left, right) => right.updated_at.localeCompare(left.updated_at))[0];
+    const typeGuidance: Record<RecordType, string> = {
+      strategy: '集客戦略として、ターゲット・課題・訴求・目標・チャネルの整合性を高めてください。',
+      content: 'コンテンツ企画として、読者の課題からテーマ、伝える内容、CTAまで一貫させてください。',
+      social: 'SNS・note運用として、媒体に合う長さ・語調・冒頭・CTAを提案してください。投稿文は下書きとして作成してください。',
+      video: '動画運用として、冒頭のつかみ、構成、台本、撮影・編集指示を実制作しやすくしてください。',
+      ad: '広告運用として、目的・対象・訴求・遷移先の案を作成してください。出稿結果や予算実績は作らないでください。',
+      media: '自社メディア運用として、メディア設定の案を作成してください。URL、CMS、実績など確認できない事実は作らず空欄にしてください。',
+      funnel: 'LP・集客導線として、流入からCTAまでの段階と各段階の役割を整理してください。存在しないURLは作らないでください。',
+      result: '成果記録は事実データです。ユーザーが提示した数値・期間・出典だけを反映し、不明な項目は空欄にしてください。数値・実績・URLは推測で補わないでください。',
+      proposal: '改善提案として、登録済みの成果データと集客戦略を根拠に課題・改善案・優先度をまとめてください。根拠がない場合は仮説と明記してください。',
+    };
     const prompt = [
-      '次の依頼と草案をもとに、集客施策の草案を作成または改善してください。',
+      `次の依頼と草案をもとに、${typeLabels[type]}に合った草案を作成または改善してください。`,
+      typeGuidance[type],
       '草案の入力欄に反映するため、JSONオブジェクトだけを返してください。形式: {"message":"変更点の短い説明","draft":{"title":"名称","payload":{"fieldKey":"文字列"}},"toolDrafts":[{"type":"social","title":"施策名","payload":{"fieldKey":"文字列"}}]}',
       'draft.payloadは指定されたfieldKeyのみを使い、すべて文字列で返してください。根拠がない情報は空文字にします。',
       '予算・実績数値・公開日・URLはユーザーが示していない限り作らないでください。戦略や訴求の案は仮説として自然な草案を作れます。',
       '既存草案がある場合、今回の指示が触れていない項目はなるべく維持してください。保存、公開、広告出稿はせず、草案だけを返してください。',
       `種別: ${typeLabels[type]}`,
       `対象商品: ${selectedProduct?.product_name || '未選択'}`,
+      `関連する集客戦略: ${relatedStrategy ? JSON.stringify({ title: relatedStrategy.title, payload: relatedStrategy.payload }) : '登録なし'}`,
       `利用可能な入力欄: ${JSON.stringify(fields[type].map((field) => ({ key: field.key, label: field.label, options: field.options }))) }`,
       `現在の草案: ${JSON.stringify({ title, payload })}`,
       ...(type === 'strategy' ? [`選択済みの運用ツール: ${JSON.stringify((payload.channels || '').split('|').filter(Boolean))}`, `選択済みツールごとに${JSON.stringify(expandableToolTypes)}からtypeを選び、対応する入力欄の草案をtoolDraftsに返してください。未選択のtypeは出さない。実績数値・公開日・URLは作らない。各payloadは${JSON.stringify(Object.fromEntries(expandableToolTypes.map((toolType) => [toolType, fields[toolType].map((field) => field.key)])))}の項目だけを使用。`] : []),
@@ -234,7 +251,7 @@ export const AIAcquisitionOperationsView: React.FC<{ onSendPresidentSummary?: (s
       if (!draft || typeof draft !== 'object' || !draft.payload || typeof draft.payload !== 'object') {
         throw new Error('AIの返答を草案として読み取れませんでした。もう一度依頼してください。');
       }
-      const cleanedPayload = cleanAiDraftPayload(type, type === 'strategy' ? { ...draft.payload, channels: payload.channels || '' } : draft.payload, segments);
+      const cleanedPayload = type === 'result' ? { ...payload } : cleanAiDraftPayload(type, type === 'strategy' ? { ...draft.payload, channels: payload.channels || '' } : draft.payload, segments);
       if (type === 'strategy') cleanedPayload.channels = payload.channels || '';
       const selectedToolIds = type === 'strategy' ? (payload.channels || '').split('|').filter((toolType) => expandableToolTypes.includes(toolType as RecordType)) : [];
       if (type === 'strategy' && selectedToolIds.length) {
@@ -301,7 +318,8 @@ export const AIAcquisitionOperationsView: React.FC<{ onSendPresidentSummary?: (s
       '指定されていない予算・実績数値・公開日・URL・顧客事例・市場データは捏造しないでください。根拠が必要な主張は仮説または確認事項として明示してください。',
       '実行や公開はせず、草案だけを返してください。回答は日本語で、見出しを使ってそのまま編集しやすい形にしてください。',
       `施策種別: ${typeLabels[type]}`,
-      `対象商品: ${selectedProduct?.product_name || '未選択'}`,      `対象の入力項目: ${fields[type].map((field) => field.label).join('、')}`,
+      `対象商品: ${selectedProduct?.product_name || '未選択'}`,
+      `対象の入力項目: ${fields[type].map((field) => field.label).join('、')}`,
       `現在の草案: ${JSON.stringify({ title, payload })}`,
       `依頼・修正指示: ${instruction}`,
     ].join('\n');
@@ -436,7 +454,7 @@ export const AIAcquisitionOperationsView: React.FC<{ onSendPresidentSummary?: (s
     <nav className="flex gap-1 overflow-x-auto rounded-xl border border-slate-800 bg-slate-900 p-1" aria-label="AI集客運用メニュー">{tabs.map((tab) => <button key={tab.id} onClick={() => { if (tab.id !== activeTab) { cancelAIRequest(); setIsFormOpen(false); setEditing(null); setPendingToolDrafts([]); setExternalPrompt(''); setExternalDraft(''); setExternalReview(''); } setActiveTab(tab.id); setNotice(''); setError(''); }} aria-current={activeTab === tab.id ? 'page' : undefined} className={`whitespace-nowrap rounded-lg px-3 py-2 text-xs sm:text-sm ${activeTab === tab.id ? 'bg-indigo-600 font-semibold text-white' : 'text-slate-400 hover:bg-slate-800 hover:text-white'}`}>{tab.label}</button>)}</nav>
     {(error || notice) && <p role={error ? 'alert' : 'status'} className={`rounded-lg px-3 py-2 text-sm ${error ? 'bg-rose-950/50 text-rose-200' : 'bg-emerald-950/40 text-emerald-200'}`}>{error || notice}</p>}
     {loading ? <p className="rounded-xl border border-slate-800 p-5 text-sm text-slate-400">集客データを読み込み中…</p> : <>
-      {activeTab === 'media' && <OwnMediaWorkspace products={products} onAskAI={onSendPresidentSummary} />}
+      {activeTab === 'media' && <OwnMediaWorkspace products={products} onAskAI={onSendPresidentSummary} strategyContext={records.find((record) => record.record_type === 'strategy') ? JSON.stringify({ title: records.find((record) => record.record_type === 'strategy')?.title, payload: records.find((record) => record.record_type === 'strategy')?.payload }) : ''} />}
       {activeTab === 'dashboard' && <section className="space-y-4">
         <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">{[
           ['運用中の施策', `${metrics.active}件`], ['コンテンツ・投稿・動画', `${metrics.content}件`], ['広告費', metrics.known.spend ? yen(metrics.spend) : '未入力'], ['リード / 商談 / 契約', `${metrics.known.leads ? metrics.leads : '未入力'} / ${metrics.known.meetings ? metrics.meetings : '未入力'} / ${metrics.known.contracts ? metrics.contracts : '未入力'}`],
@@ -450,7 +468,8 @@ export const AIAcquisitionOperationsView: React.FC<{ onSendPresidentSummary?: (s
         
       </section>}
 
-      {activeTab === 'analysis' && <section className="space-y-4">        <div className="grid gap-4 lg:grid-cols-2">
+      {activeTab === 'analysis' && <section className="space-y-4">
+        <div className="grid gap-4 lg:grid-cols-2">
           <article className="rounded-xl border border-slate-800 bg-slate-900 p-4"><div className="flex items-center gap-2"><BarChart3 className="h-4 w-4 text-cyan-300"/><h2 className="font-semibold">登録済み実績の集計</h2></div>{metrics.hasActuals ? <dl className="mt-3 grid grid-cols-2 gap-3 text-sm">{[['広告費',metrics.spend,metrics.known.spend],['表示回数',metrics.impressions,metrics.known.impressions],['クリック数',metrics.clicks,metrics.known.clicks],['CV数',metrics.conversions,metrics.known.conversions],['リード',metrics.leads,metrics.known.leads],['商談',metrics.meetings,metrics.known.meetings],['契約',metrics.contracts,metrics.known.contracts],['売上',metrics.revenue,metrics.known.revenue],['利益',metrics.profit,metrics.known.profit]].map(([label,value,isKnown])=><div key={String(label)}><dt className="text-slate-400">{label}</dt><dd className="font-semibold">{!isKnown ? '未入力' : typeof value === 'number' && ['広告費','売上','利益'].includes(String(label)) ? yen(value) : `${value}件`}</dd></div>)}</dl> : <p className="mt-3 text-sm text-slate-400">成果データ未入力・未連携のため分析できません。</p>}
             <div className="mt-4 grid gap-2 border-t border-slate-800 pt-3 text-sm sm:grid-cols-3"><p><span className="text-slate-400">CPA</span><br/>{metrics.known.spend && metrics.known.leads && metrics.leads > 0 ? yen(Math.round(metrics.spend / metrics.leads)) : '算出に必要な広告費・リード数が不足'}</p><p><span className="text-slate-400">CVR</span><br/>{metrics.known.clicks && metrics.known.conversions && metrics.clicks > 0 ? `${(metrics.conversions / metrics.clicks * 100).toFixed(2)}%` : '算出に必要なクリック・CV数が不足'}</p><p><span className="text-slate-400">ROAS</span><br/>{metrics.known.revenue && metrics.known.spend && metrics.spend > 0 ? `${(metrics.revenue / metrics.spend * 100).toFixed(1)}%` : '算出に必要な売上・広告費が不足'}</p></div>
             <p className="mt-3 text-xs text-slate-500">項目ごとに成果記録を優先し、未入力時は広告記録を集計します。同じ数値の二重計上を防ぎ、空欄を実績として補完しません。</p></article>
@@ -463,8 +482,8 @@ export const AIAcquisitionOperationsView: React.FC<{ onSendPresidentSummary?: (s
       {formVisible && <form onSubmit={(event) => void save(event)} className="space-y-4 rounded-xl border border-indigo-500/30 bg-slate-900 p-4">
         <div className="flex items-center justify-between gap-2"><h2 className="font-semibold">{editing ? '編集' : '新規登録'} · {typeLabels[type]}</h2><button type="button" onClick={() => resetForm(type)} className="text-xs text-slate-400">入力をクリア</button></div>
         <section className="space-y-3 rounded-xl border border-violet-500/30 bg-violet-950/20 p-4">
-          <div className="flex items-center justify-between gap-2"><div className="flex items-center gap-2"><Sparkles className="h-4 w-4 text-violet-300"/><h3 className="text-sm font-semibold text-white">AIと一緒に作成・ブラッシュアップ</h3></div>{aiGenerating && <button type="button" onClick={stopAI} className="rounded-lg border border-rose-500/50 px-3 py-1.5 text-xs font-semibold text-rose-200 hover:bg-rose-950/50">停止</button>}</div>
-          <p className="text-xs text-slate-300">「誰に何を届けたいか」をラフに書くだけで、入力欄の草案を作ります。追加の指示で何度でも調整できます。</p>
+          <div className="flex items-center justify-between gap-2"><div className="flex items-center gap-2"><Sparkles className="h-4 w-4 text-violet-300"/><h3 className="text-sm font-semibold text-white">{type === 'result' ? 'AIで記録内容を整理（実績値は反映しません）' : `${typeLabels[type]}をAIと作成・ブラッシュアップ`}</h3></div>{aiGenerating && <button type="button" onClick={stopAI} className="rounded-lg border border-rose-500/50 px-3 py-1.5 text-xs font-semibold text-rose-200 hover:bg-rose-950/50">停止</button>}</div>
+          <p className="text-xs text-slate-300">{type === 'result' ? '実績数値・日付・URLはAIに補わせません。実績分析は「成果分析・改善提案」画面から依頼できます。' : '集客戦略・対象商品・この画面の入力欄をもとに草案を作ります。追加の指示で何度でも調整できます。'}</p>
           {aiConversation.length > 0 && <ol className="max-h-48 space-y-2 overflow-y-auto rounded-lg bg-slate-950/70 p-3 text-xs">{aiConversation.map((turn, index) => <li key={index} className={turn.role === 'assistant' ? 'text-violet-200' : 'text-slate-300'}><span className="font-semibold">{turn.role === 'assistant' ? 'AI' : 'あなた'}:</span> {turn.text}</li>)}</ol>}
           {aiConversation.length > 0 && <section role="status" className="max-h-64 space-y-2 overflow-y-auto rounded-lg border border-violet-500/30 bg-slate-950/70 p-3"><div><p className="text-[11px] font-semibold text-violet-200">現在の草案（下の入力欄にも反映済み）</p><p className="mt-1 text-sm font-semibold text-white">{title || '名称未設定'}</p></div><dl className="space-y-2">{fields[type].filter((field) => Boolean(payload[field.key]?.trim())).map((field) => <div key={field.key}><dt className="text-[10px] text-slate-500">{field.label}</dt><dd className="whitespace-pre-wrap break-words text-xs text-slate-300">{payload[field.key]}</dd></div>)}</dl></section>}
           <textarea value={aiInstruction} onChange={(event) => setAiInstruction(event.target.value)} rows={2} placeholder={aiConversation.length ? '例：専門用語を減らして、初めての人にも伝わる表現にして' : '例：中小企業の経営者向けに、AI導入の無料相談へつながるnote企画を作って'} className="block w-full rounded-lg border border-slate-700 bg-slate-950 p-3 text-sm text-white placeholder:text-slate-500"/>
