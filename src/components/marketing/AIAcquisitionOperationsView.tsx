@@ -5,7 +5,7 @@ import { InlineDeleteButton } from '../InlineDeleteButton';
 import { ArrowRight, BarChart3, Megaphone, Plus, Save, Sparkles, Trash2 } from 'lucide-react';
 import { OwnMediaWorkspace } from './OwnMediaWorkspace';
 
-type RecordType = 'strategy' | 'content' | 'social' | 'video' | 'ad' | 'funnel' | 'result' | 'proposal';
+type RecordType = 'strategy' | 'content' | 'social' | 'video' | 'ad' | 'media' | 'funnel' | 'result' | 'proposal';
 type ViewTab = 'dashboard' | RecordType | 'analysis' | 'media';
 type Field = { key: string; label: string; kind?: 'textarea' | 'number' | 'date' | 'select' | 'multiselect'; options?: string[]; placeholder?: string };
 type AcquisitionRecord = { id: string; record_type: RecordType; title: string; product_id: string | null; status: string | null; payload: Record<string, string>; created_at: string; updated_at: string };
@@ -18,9 +18,14 @@ const tabs: Array<{ id: ViewTab; label: string }> = [
   { id: 'video', label: '動画運用' }, { id: 'ad', label: '広告運用' },
   { id: 'media', label: '自社メディア運用' }, { id: 'funnel', label: 'LP・集客導線' }, { id: 'analysis', label: '成果分析・改善提案' },
 ];
-const typeLabels: Record<RecordType, string> = { strategy: '集客戦略', content: 'コンテンツ企画', social: 'SNS・note投稿', video: '動画企画', ad: '広告施策', funnel: '集客導線', result: '成果記録', proposal: '改善提案' };
-const expandableToolTypes: RecordType[] = ['content', 'social', 'video', 'ad', 'funnel'];
+const typeLabels: Record<RecordType, string> = { strategy: '集客戦略', content: 'コンテンツ企画', social: 'SNS・note運用', video: '動画運用', ad: '広告運用', media: '自社メディア運用', funnel: 'LP・集客導線', result: '成果記録', proposal: '改善提案' };
+const expandableToolTypes: RecordType[] = ['content', 'social', 'video', 'ad', 'media', 'funnel'];
 const fields: Record<RecordType, Field[]> = {
+  media: [
+    { key: 'url', label: 'HPのURL' }, { key: 'mediaType', label: 'メディア種別', kind: 'select', options: ['自社HP', 'ブログ', 'オウンドメディア', 'その他'] },
+    { key: 'cms', label: 'CMS種別', kind: 'select', options: ['WordPress', '独自開発', 'その他', '未設定'] }, { key: 'target', label: 'ターゲット', kind: 'textarea' },
+    { key: 'purpose', label: '運用目的', kind: 'textarea' }, { key: 'connection', label: '連携状態', kind: 'select', options: ['未連携', '手動運用', '連携検討中'] }, { key: 'notes', label: '備考', kind: 'textarea' },
+  ],
   strategy: [
     { key: 'target', label: 'ターゲット顧客', kind: 'textarea' }, { key: 'needs', label: '顧客の課題・ニーズ', kind: 'textarea' },
     { key: 'strengths', label: '強み・訴求ポイント', kind: 'textarea' }, { key: 'goal', label: '集客目標', kind: 'textarea' },
@@ -147,8 +152,7 @@ export const AIAcquisitionOperationsView: React.FC<{ onSendPresidentSummary?: (s
   const [pendingToolDrafts, setPendingToolDrafts] = useState<Array<{ record_type: RecordType; title: string; payload: Record<string, string> }>>([]);
 
   const load = async () => {
-    const db = getSupabase();
-    if (!db) { setError('Supabaseに接続してください。集客運用の保存にはDB接続が必要です。'); setLoading(false); return; }
+    const db = getSupabase();    if (!db) { setError('Supabaseに接続してください。集客運用の保存にはDB接続が必要です。'); setLoading(false); return; }
     setLoading(true); setError('');
     const { data: auth, error: authError } = await db.auth.getUser();
     if (authError || !auth.user) { setError('ログイン状態を確認できません。'); setLoading(false); return; }
@@ -297,8 +301,7 @@ export const AIAcquisitionOperationsView: React.FC<{ onSendPresidentSummary?: (s
       '指定されていない予算・実績数値・公開日・URL・顧客事例・市場データは捏造しないでください。根拠が必要な主張は仮説または確認事項として明示してください。',
       '実行や公開はせず、草案だけを返してください。回答は日本語で、見出しを使ってそのまま編集しやすい形にしてください。',
       `施策種別: ${typeLabels[type]}`,
-      `対象商品: ${selectedProduct?.product_name || '未選択'}`,
-      `対象の入力項目: ${fields[type].map((field) => field.label).join('、')}`,
+      `対象商品: ${selectedProduct?.product_name || '未選択'}`,      `対象の入力項目: ${fields[type].map((field) => field.label).join('、')}`,
       `現在の草案: ${JSON.stringify({ title, payload })}`,
       `依頼・修正指示: ${instruction}`,
     ].join('\n');
@@ -447,8 +450,7 @@ export const AIAcquisitionOperationsView: React.FC<{ onSendPresidentSummary?: (s
         
       </section>}
 
-      {activeTab === 'analysis' && <section className="space-y-4">
-        <div className="grid gap-4 lg:grid-cols-2">
+      {activeTab === 'analysis' && <section className="space-y-4">        <div className="grid gap-4 lg:grid-cols-2">
           <article className="rounded-xl border border-slate-800 bg-slate-900 p-4"><div className="flex items-center gap-2"><BarChart3 className="h-4 w-4 text-cyan-300"/><h2 className="font-semibold">登録済み実績の集計</h2></div>{metrics.hasActuals ? <dl className="mt-3 grid grid-cols-2 gap-3 text-sm">{[['広告費',metrics.spend,metrics.known.spend],['表示回数',metrics.impressions,metrics.known.impressions],['クリック数',metrics.clicks,metrics.known.clicks],['CV数',metrics.conversions,metrics.known.conversions],['リード',metrics.leads,metrics.known.leads],['商談',metrics.meetings,metrics.known.meetings],['契約',metrics.contracts,metrics.known.contracts],['売上',metrics.revenue,metrics.known.revenue],['利益',metrics.profit,metrics.known.profit]].map(([label,value,isKnown])=><div key={String(label)}><dt className="text-slate-400">{label}</dt><dd className="font-semibold">{!isKnown ? '未入力' : typeof value === 'number' && ['広告費','売上','利益'].includes(String(label)) ? yen(value) : `${value}件`}</dd></div>)}</dl> : <p className="mt-3 text-sm text-slate-400">成果データ未入力・未連携のため分析できません。</p>}
             <div className="mt-4 grid gap-2 border-t border-slate-800 pt-3 text-sm sm:grid-cols-3"><p><span className="text-slate-400">CPA</span><br/>{metrics.known.spend && metrics.known.leads && metrics.leads > 0 ? yen(Math.round(metrics.spend / metrics.leads)) : '算出に必要な広告費・リード数が不足'}</p><p><span className="text-slate-400">CVR</span><br/>{metrics.known.clicks && metrics.known.conversions && metrics.clicks > 0 ? `${(metrics.conversions / metrics.clicks * 100).toFixed(2)}%` : '算出に必要なクリック・CV数が不足'}</p><p><span className="text-slate-400">ROAS</span><br/>{metrics.known.revenue && metrics.known.spend && metrics.spend > 0 ? `${(metrics.revenue / metrics.spend * 100).toFixed(1)}%` : '算出に必要な売上・広告費が不足'}</p></div>
             <p className="mt-3 text-xs text-slate-500">項目ごとに成果記録を優先し、未入力時は広告記録を集計します。同じ数値の二重計上を防ぎ、空欄を実績として補完しません。</p></article>
@@ -497,4 +499,3 @@ export const AIAcquisitionOperationsView: React.FC<{ onSendPresidentSummary?: (s
 const RecordList: React.FC<{ records: AcquisitionRecord[]; products: Product[]; segments: AudienceSegment[]; onEdit: (record: AcquisitionRecord) => void; onDelete: (record: AcquisitionRecord) => void }> = ({ records, products, segments, onEdit, onDelete }) => !records.length
   ? <p className="rounded-xl border border-slate-800 bg-slate-900 p-5 text-sm text-slate-400">登録データはありません。</p>
   : <ul className="space-y-2">{records.map((record) => <li key={record.id} className="rounded-xl border border-slate-800 bg-slate-900 p-4"><div className="flex flex-wrap items-start justify-between gap-3"><div className="min-w-0"><p className="font-semibold">{record.title}</p><p className="mt-1 text-xs text-slate-500">{typeLabels[record.record_type]}{record.product_id ? ` · ${products.find((product) => product.id === record.product_id)?.product_name || '商品'}` : ''}{record.status ? ` · ${record.status}` : ''}{record.payload?.strategyTitle ? ` · 戦略: ${record.payload.strategyTitle}` : ''} · 更新 {new Date(record.updated_at).toLocaleDateString('ja-JP')}</p></div><div className="flex gap-2"><button onClick={() => onEdit(record)} className="rounded border border-slate-700 px-2 py-1 text-xs">編集</button><InlineDeleteButton onConfirm={()=>void onDelete(record)} warning={`「${record.title}」を削除しますか？`} ariaLabel={`${record.title}を削除`}><Trash2 className="h-3.5 w-3.5"/></InlineDeleteButton></div></div><dl className="mt-3 grid gap-2 sm:grid-cols-2">{(fields[record.record_type] || []).filter((field) => Boolean(record.payload?.[field.key])).slice(0, 8).map((field) => <div key={field.key} className="min-w-0"><dt className="text-[11px] text-slate-500">{field.label}</dt><dd className="whitespace-pre-wrap break-words text-xs text-slate-300">{field.key === 'audienceSegmentId' ? segments.find((segment) => segment.id === record.payload[field.key])?.name || '配信対象リスト（未選択）' : field.key === 'channels' ? record.payload[field.key].split('|').map((toolType) => typeLabels[toolType as RecordType] || toolType).join('、') : record.payload[field.key]}</dd></div>)}</dl></li>)}</ul>;
-
