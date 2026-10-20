@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import { Check, Loader2, Plus, RefreshCw, Search, Tag, Users, UserRound, Wifi, WifiOff, Pencil } from 'lucide-react';
+import { Check, Loader2, Plus, RefreshCw, Search, Tag, Users, UserRound, Wifi, WifiOff, Pencil, MessageCircle, Mail } from 'lucide-react';
 import { Contact, TableKey } from '../types/database';
 import { fetchTableData } from '../services/dataService';
 import { getSupabase } from '../lib/supabaseClient';
@@ -29,7 +29,12 @@ interface PersonRow {
 
 type FilterMode = 'all' | 'line' | 'no-line';
 
-export const ContactsLineHub: React.FC = () => {
+interface Props {
+  onOpenLineInbox?: (contactId: string, lineUserId: string) => void;
+  onOpenEmailSend?: (contactId: string, companyId?: string) => void;
+}
+
+export const ContactsLineHub: React.FC<Props> = ({ onOpenLineInbox, onOpenEmailSend }) => {
   const [people, setPeople] = useState<PersonRow[]>([]);
   const [tags, setTags] = useState<LineTag[]>([]);
   const [selectedPeople, setSelectedPeople] = useState<string[]>([]);
@@ -349,7 +354,7 @@ export const ContactsLineHub: React.FC = () => {
                   ))}
                   {!person.contact && <p className="mt-2 text-xs text-amber-300">連絡先プロフィール未紐付け</p>}
                 </div>
-                {person.contact && <button onClick={() => setEditingContact(person.contact || null)} className="flex shrink-0 items-center gap-1 rounded-lg bg-slate-800 px-2.5 py-1.5 text-xs text-slate-300 hover:text-white"><Pencil className="h-3.5 w-3.5" />編集</button>}
+                {person.contact && <div className="flex shrink-0 flex-wrap gap-2">{person.email && <button onClick={() => onOpenEmailSend?.(person.contact!.id, person.contact!.company_id || undefined)} className="flex items-center gap-1 rounded-lg bg-indigo-700/30 px-2.5 py-1.5 text-xs text-indigo-200 hover:bg-indigo-700/60"><Mail className="h-3.5 w-3.5" />メール作成</button>}{person.lineFriends.map((friend) => <button key={friend.id} onClick={() => onOpenLineInbox?.(person.contact!.id, friend.line_user_id)} className="flex items-center gap-1 rounded-lg bg-emerald-700/30 px-2.5 py-1.5 text-xs text-emerald-200 hover:bg-emerald-700/60"><MessageCircle className="h-3.5 w-3.5" />LINE受信箱</button>)}<button onClick={() => setEditingContact(person.contact || null)} className="flex items-center gap-1 rounded-lg bg-slate-800 px-2.5 py-1.5 text-xs text-slate-300 hover:text-white"><Pencil className="h-3.5 w-3.5" />編集</button></div>}
               </article>
             ))}
           </div>
