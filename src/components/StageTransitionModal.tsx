@@ -73,7 +73,7 @@ export const StageTransitionModal: React.FC<StageTransitionModalProps> = ({
 
   // For Deal -> Customer
   const [contractStatus, setContractStatus] = useState('契約中');
-  const [contractStartDate, setContractStartDate] = useState(new Date().toISOString().split('T')[0]);
+  const [contractStartDate, setContractStartDate] = useState(todayJst());
   const [customerMemo, setCustomerMemo] = useState('');
 
   const company = sourceRecord?.company as Company | undefined;
@@ -550,7 +550,8 @@ export const StageTransitionModal: React.FC<StageTransitionModalProps> = ({
                     initialFee={initialFee}
                     monthlyFee={monthlyFee}
                     totalAmount={totalAmount}
-                    onApply={(template?: ProposalPlanTemplate) => {
+                    sharedTemplate={null}
+                    onApply={(template?: ProposalPlanTemplate | null) => {
                       setProposalPlanTemplateId(template?.id || '');
                       if (template) {
                         setProductId(template.product_id);
