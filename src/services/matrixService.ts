@@ -1,4 +1,5 @@
 import { AI_WORK_MODES } from '../data/aiWorkModes';
+import { todayJst } from '../utils/date';
 import {
   ManagedProduct,
   ManagedContract,
@@ -382,7 +383,11 @@ export const matrixService = {
     const list = this.loadInvoices();
     const index = list.findIndex((i) => i.id === id);
     if (index !== -1) {
-      list[index] = { ...list[index], ...updates, updatedAt: Date.now() };
+      const current = list[index];
+      const updated = { ...current, ...updates, updatedAt: Date.now() };
+      if (updated.status === 'paid') updated.paidDate = updates.paidDate || current.paidDate || todayJst();
+      else updated.paidDate = undefined;
+      list[index] = updated;
       this.saveInvoices(list);
     }
   },
@@ -437,3 +442,4 @@ export const matrixService = {
     localStorage.setItem(MATRIX_STORAGE_KEYS.CUSTOM_LISTS, JSON.stringify(lists));
   },
 };
+
