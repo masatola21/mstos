@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { Library, Plus, Save, Trash2, X } from 'lucide-react';
 import { getSupabase } from '../../lib/supabaseClient';
+import { LineMessagePreview } from '../LineMessagePreview';
 import { InlineDeleteButton } from '../InlineDeleteButton';
 
 type Channel = 'email' | 'line';
@@ -240,6 +241,7 @@ export const CommunicationTemplateLibraryView: React.FC = () => {
         </div>}
         {channel === 'line' && lineType === 'flex' && <><label className="text-xs text-slate-300">代替テキスト<input required value={altText} onChange={(event) => setAltText(event.target.value)} className="mt-1 block w-full rounded border border-slate-700 bg-slate-900 p-2 text-sm text-white" /></label><label className="text-xs text-slate-300 md:col-span-2">Flex JSON<textarea required rows={10} value={flexJson} onChange={(event) => setFlexJson(event.target.value)} className="mt-1 block w-full rounded border border-slate-700 bg-slate-900 p-3 font-mono text-xs text-white" placeholder='{"type":"bubble","body":{...}}' /></label></>}
       </div>
+      {channel === 'line' && <LineMessagePreview type={lineType} title={name || 'LINEテンプレート'} payload={lineType === 'text' ? { text: body } : lineType === 'image' ? { originalContentUrl: assetUrl, previewImageUrl: previewUrl } : lineType === 'video' ? { originalContentUrl: assetUrl, previewImageUrl: previewUrl, altText } : { altText, contents: flexJson }} />}
       <div className="flex justify-end gap-2"><button type="button" onClick={resetEditor} className="rounded border border-slate-700 px-3 py-2 text-sm text-slate-300">閉じる</button><button disabled={busy} className="inline-flex items-center gap-2 rounded bg-indigo-600 px-4 py-2 text-sm font-semibold text-white disabled:opacity-50"><Save className="h-4 w-4" />{busy ? '保存中…' : '保存'}</button></div>
     </form>}
     <div className="overflow-x-auto rounded-xl border border-slate-800">

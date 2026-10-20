@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { getSupabase } from '../../lib/supabaseClient';
+import { LineMessagePreview } from '../LineMessagePreview';
 
 type Contact = { id:string; full_name:string|null; email:string|null; line_user_id:string|null; company_id:string|null };
 type CrmRecord = Record<string, unknown> & { id?: string; company_id?: string | null; contact_id?: string | null; lead_id?: string | null };
@@ -252,7 +253,7 @@ export const MarketingBroadcastView: React.FC<{initialChannel?:Channel}> = ({ini
         <p className="text-sm text-slate-300">{channel==='email'?'メール':'LINE'}・選択中 {selectedContacts.length}件。LINEでは友だち状態と配信同意を送信時にも再確認します。</p>
         <p className="text-xs text-slate-400">送信先例：{selectedContacts.slice(0,5).map(x=>x.full_name||x.email||x.line_user_id).join('、')}{selectedContacts.length>5?' ほか':''}</p>
         {channel==='email'&&<><p className="font-semibold text-white">{fillForContact(subject,selectedContacts[0])}</p><p className="whitespace-pre-wrap rounded bg-slate-950 p-3 text-sm text-slate-200">{fillForContact(body,selectedContacts[0])}</p></>}
-        {channel==='line'&&lineContentType==='video'?<div className="rounded bg-slate-950 p-3 text-sm text-slate-200"><video src={videoUrl} poster={videoPreviewUrl} controls className="max-h-80 max-w-full rounded"/><p className="mt-2 text-xs text-slate-400">{lineAltText||'LINE動画メッセージのプレビュー'}</p></div>:channel==='line'&&lineContentType==='image'?<div className="rounded bg-slate-950 p-3">{selectedLineTemplate&&<img src={String(selectedLineTemplate.payload.originalContentUrl||'')} alt="配信画像" className="max-h-80 rounded"/>}</div>:channel==='line'&&lineContentType==='flex'?<div className="whitespace-pre-wrap rounded bg-slate-950 p-3 text-sm text-slate-200">{lineFlexJson}</div>:<div className="whitespace-pre-wrap rounded bg-slate-950 p-3 text-sm text-slate-200">{body}</div>}
+        {channel==='line'&&<LineMessagePreview type={lineContentType} payload={lineContentType==='text'?{text:fillForContact(body,selectedContacts[0])}:lineContentType==='image'?fillLinePayload(selectedLineTemplate?.payload||{},selectedContacts[0]):lineContentType==='video'?{originalContentUrl:videoUrl,previewImageUrl:videoPreviewUrl,altText:lineAltText}:fillLinePayload(selectedLineTemplate?.payload||{altText:lineAltText,contents:lineFlexJson},selectedContacts[0])} title="一斉配信プレビュー" />}
         <div className="flex gap-2"><button type="button" onClick={()=>setPreview(false)} className="rounded border border-slate-700 px-3 py-2 text-sm text-slate-200">戻って修正</button><button type="button" disabled={busy} onClick={()=>void send()} className="rounded bg-rose-600 px-4 py-2 text-sm font-bold text-white disabled:opacity-50">{busy?'配信中…':'この内容で配信'}</button></div>
       </div>}
     </section>
