@@ -551,7 +551,8 @@ async function processMarketingAutomationJobs(): Promise<void> {
         const recipientName = String(contact.full_name || 'お客様');
         const companyName = String(companyResult.data?.company_name || '貴社');
         const values:Record<string,string>={name:recipientName,recipient_name:recipientName,company_name:companyName,form_title:'',document_title:'',document_url:'',document_content:'',link_url:''};
-        const personalize=(value:unknown)=>String(value||'').replace(/{([a-z_]+)}/g,(_match,key:string)=>values[key]||'');
+        // Keep this implementation synchronized with src/utils/placeholders.ts (server.ts intentionally remains standalone).
+        const personalize=(value:unknown)=>String(value??'').replace(/{([a-z_]+)}/g,(match,key:string)=>Object.prototype.hasOwnProperty.call(values,key)?values[key]:match);
         const recipientAddress = job.channel === 'email' ? String(contact.email || '') : String(contact.line_user_id || '');
         if (!recipientAddress) throw new Error('送信先がありません。');
         const { data: outbox, error: outboxError } = await lineSupabase.from('communication_outbox').insert({
