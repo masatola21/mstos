@@ -40,6 +40,8 @@ interface CustomListManagerProps {
   onAddInvoice: (i: Omit<ManagedInvoice, 'id' | 'createdAt' | 'updatedAt'>) => void;
   onAddTool: (t: Omit<ManagedToolAsset, 'id' | 'createdAt'>) => void;
   onUpdateInvoiceStatus: (id: string, status: any) => void;
+  onDeleteContract?: (id: string) => Promise<void>;
+  onDeleteInvoice?: (id: string) => Promise<void>;
 }
 
 export const CustomListManager: React.FC<CustomListManagerProps> = ({
@@ -53,10 +55,13 @@ export const CustomListManager: React.FC<CustomListManagerProps> = ({
   onAddInvoice,
   onAddTool,
   onUpdateInvoiceStatus,
+  onDeleteContract,
+  onDeleteInvoice,
 }) => {
   const [selectedListId, setSelectedListId] = useState<string>(customLists[0]?.id || 'list-contracts');
   const [selectedProductFilter, setSelectedProductFilter] = useState<string>('all');
   const [selectedCategoryFilter, setSelectedCategoryFilter] = useState<string>('all');
+  const [deleteError, setDeleteError] = useState('');
   const [searchQuery, setSearchQuery] = useState('');
   const [viewMode, setViewMode] = useState<'table' | 'kanban'>('table');
 
@@ -267,6 +272,8 @@ export const CustomListManager: React.FC<CustomListManagerProps> = ({
       {/* Main List Content */}
       <div className="bg-slate-900 border border-slate-800 rounded-2xl overflow-hidden shadow-xl">
         {/* 1. CONTRACTS LIST */}
+        {deleteError && <div role="alert" className="mx-4 mb-2 rounded-lg border border-rose-500/40 bg-rose-500/10 p-3 text-sm text-rose-200">{deleteError}</div>}
+
         {selectedListId === 'list-contracts' && (
           <div className="p-4 overflow-x-auto">
             <table className="w-full text-left text-xs">
@@ -278,6 +285,7 @@ export const CustomListManager: React.FC<CustomListManagerProps> = ({
                   <th className="py-2 px-3 font-semibold">金額</th>
                   <th className="py-2 px-3 font-semibold">ステータス</th>
                   <th className="py-2 px-3 font-semibold">契約期間</th>
+                  <th className="py-2 px-3 font-semibold">操作</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-800/60">
@@ -305,6 +313,16 @@ export const CustomListManager: React.FC<CustomListManagerProps> = ({
                         </td>
                         <td className="py-3 px-3 text-slate-400">
                           {c.startDate || '未定'} 〜 {c.endDate || '自動更新'}
+                        </td>
+                        <td className="py-3 px-3">
+                          <button type="button" onClick={async () => {
+                            const details = `契約名: ${c.title}\n契約相手: ${c.counterpartyName}\n状態: ${c.status}`;
+                            if (!window.confirm(`この契約を削除しますか？\n\n${details}`)) return;
+                            if (['signed', 'active', 'effective', 'in_force'].includes(String(c.status).toLowerCase()) && !window.confirm('確定した記録です。会計・契約の記録として残す場合は、削除ではなく『取消』の状態にしてください。削除すると元に戻せません。')) return;
+                            setDeleteError('');
+                            if (!onDeleteContract) { setDeleteError('削除処理が接続されていません。'); return; }
+                            try { await onDeleteContract(c.id); } catch (error) { setDeleteError(error instanceof Error ? error.message : '契約の削除に失敗しました。'); }
+                          }} className="rounded border border-rose-500/40 px-2 py-1 text-rose-300 hover:bg-rose-500/10">削除</button>
                         </td>
                       </tr>
                     );
@@ -357,6 +375,14 @@ export const CustomListManager: React.FC<CustomListManagerProps> = ({
                           >
                             {inv.status === 'paid' ? '✓ 入金確認済' : '入金待ち (完了にする)'}
                           </button>
+                          <button type="button" onClick={async () => {
+                            const details = `請求番号: ${inv.invoiceNumber}\n件名: ${inv.title}\n金額: ¥${inv.amount.toLocaleString()}\n状態: ${inv.status}`;
+                            if (!window.confirm(`この請求を削除しますか？\n\n${details}`)) return;
+                            if (['issued', 'paid', 'overdue'].includes(String(inv.status).toLowerCase()) && !window.confirm('確定した記録です。会計・契約の記録として残す場合は、削除ではなく『取消』の状態にしてください。削除すると元に戻せません。')) return;
+                            setDeleteError('');
+                            if (!onDeleteInvoice) { setDeleteError('削除処理が接続されていません。'); return; }
+                            try { await onDeleteInvoice(inv.id); } catch (error) { setDeleteError(error instanceof Error ? error.message : '請求の削除に失敗しました。'); }
+                          }} className="ml-2 rounded border border-rose-500/40 px-2 py-1 text-[10px] text-rose-300 hover:bg-rose-500/10">削除</button>
                         </td>
                       </tr>
                     );

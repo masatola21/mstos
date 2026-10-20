@@ -1669,6 +1669,93 @@ function AppContent() {
     }
   };
 
+  const saveWorkspaceAfterRecordDeletion = async (
+    nextContracts: ManagedContract[],
+    nextInvoices: ManagedInvoice[],
+    nextActivityLogs: ActivityLog[],
+  ) => {
+    if (!user) throw new Error('ログイン状態を確認してから、もう一度削除してください。');
+    const workspaceData: WorkspaceData = {
+      topGoal,
+      characters,
+      activeCharacterId,
+      userProfile,
+      aiModelSettings,
+      projects,
+      tasks,
+      approvals,
+      activityLogs: nextActivityLogs,
+      pricingRates,
+      tokenUsage: tokenUsageRecords,
+      products,
+      contracts: nextContracts,
+      invoices: nextInvoices,
+      tools,
+      customLists,
+      automations,
+      marketingScenarios,
+      workModeHistories,
+      knowledgeItems,
+    };
+    const snapshot = JSON.stringify(workspaceData);
+    const revision = ++workspaceSaveRevisionRef.current;
+    lastSavedWorkspaceRef.current = snapshot;
+    setWorkspaceSyncStatus('saving');
+    try {
+      await saveWorkspaceData(user.id, workspaceData);
+      if (revision !== workspaceSaveRevisionRef.current) return;
+      setWorkspaceSaveError('');
+      setWorkspaceSyncStatus('saved');
+    } catch (error) {
+      if (revision !== workspaceSaveRevisionRef.current) throw error;
+      const errorCode = (error as { code?: string })?.code;
+      const errorMessage = (error as { message?: string })?.message || '';
+      if (errorCode === '40001' || errorMessage.includes('WORKSPACE_CONFLICT')) {
+        workspaceSyncEnabledRef.current = false;
+        setWorkspaceSyncStatus('conflict');
+        const message = '他の端末で更新されています。再読み込みしてください';
+        setWorkspaceSaveError(message);
+        throw new Error(message);
+      }
+      setWorkspaceSyncStatus('error');
+      const message = errorMessage || '削除の保存に失敗しました。未反映の削除は次回の保存時に再試行されます。';
+      setWorkspaceSaveError(message);
+      throw new Error(message);
+    }
+  };
+
+  const handleDeleteContract = async (id: string) => {
+    if (!user) throw new Error('ログイン状態を確認してから、もう一度削除してください。');
+    const current = contracts.find((contract) => contract.id === id);
+    matrixService.deleteContract(id);
+    const nextContracts = matrixService.loadContracts();
+    setContracts(nextContracts);
+    recordActivityLog(
+      'task_updated',
+      `契約「${current?.title || id}」（契約相手: ${current?.counterpartyName || '未設定'}、状態: ${current?.status || '未設定'}）を削除しました`,
+      '人間',
+    );
+    const nextLogs = loadActivityLogs();
+    setActivityLogs(nextLogs);
+    await saveWorkspaceAfterRecordDeletion(nextContracts, invoices, nextLogs);
+  };
+
+  const handleDeleteInvoice = async (id: string) => {
+    if (!user) throw new Error('ログイン状態を確認してから、もう一度削除してください。');
+    const current = invoices.find((invoice) => invoice.id === id);
+    matrixService.deleteInvoice(id);
+    const nextInvoices = matrixService.loadInvoices();
+    setInvoices(nextInvoices);
+    recordActivityLog(
+      'task_updated',
+      `請求「${current?.invoiceNumber || id}」件名「${current?.title || '請求書'}」、金額: ${current?.amount == null ? '未設定' : current.amount.toLocaleString() + '円'}、状態: ${current?.status || '未設定'}を削除しました`,
+      '人間',
+    );
+    const nextLogs = loadActivityLogs();
+    setActivityLogs(nextLogs);
+    await saveWorkspaceAfterRecordDeletion(contracts, nextInvoices, nextLogs);
+  };
+
   const handleUpdateAutomation = (id: string, updates: Partial<AutomationRule>) => {
     const updated = matrixService.normalizeAutomationRules(
       automations.map((rule) => rule.id === id ? { ...rule, ...updates } : rule)
@@ -1893,6 +1980,8 @@ function AppContent() {
               setContracts(nextContracts);
               setInvoices(nextInvoices);
             }}
+            onDeleteContract={handleDeleteContract}
+            onDeleteInvoice={handleDeleteInvoice}
             onMilestoneReached={handleServiceMilestoneReached}
             onContractSigned={handleOperationalContractSigned}
             onInvoiceOverdue={handleOperationalInvoiceOverdue}
