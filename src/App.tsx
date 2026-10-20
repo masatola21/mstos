@@ -376,6 +376,9 @@ function AppContent() {
           setWorkspaceSaveError('他の端末で更新されています。再読み込みしてください');
         } else {
           setWorkspaceSyncStatus('error');
+          setWorkspaceSaveError(errorMessage
+            ? `クラウド同期に失敗しました: ${errorMessage}`
+            : 'クラウド同期に失敗しました。接続設定と mst_workspace_state テーブルのマイグレーションを確認してください。');
         }
         setWorkspaceReady(true);
       });
@@ -437,6 +440,10 @@ function AppContent() {
             setWorkspaceSaveError('請求書番号が重複しています。請求番号を確認して再度保存してください。');
           } else if (errorCode === '23505' || /duplicate key|unique constraint/i.test(errorMessage)) {
             setWorkspaceSaveError('保存時に一意制約の重複が発生しました。重複するデータを確認してください。');
+          } else {
+            setWorkspaceSaveError(errorMessage
+              ? `クラウド同期に失敗しました: ${errorMessage}`
+              : 'クラウド同期に失敗しました。接続設定と mst_workspace_state テーブルのマイグレーションを確認してください。');
           }
           setWorkspaceSyncStatus('error');
         });
@@ -2378,7 +2385,6 @@ function AppContent() {
         onClose={() => setIsQuickDrawerOpen(false)}
         character={presidentCharacter}
         userProfile={userProfile}
-        onOpenFullChat={() => setCurrentTab('ai_chat')}
         onOpenPlanProposal={(plan) => setActivePlanForModal(plan)}
         onRecordUsage={handleRecordUsage}
       />
@@ -2389,10 +2395,10 @@ function AppContent() {
           <span>MST AI経営OS × MyAI Studio 統合基盤</span>
           <div className="flex items-center gap-3">
             <span
-              className={`text-xs ${workspaceSyncStatus === 'error' || workspaceSyncStatus === 'conflict' ? 'text-rose-400' : workspaceSyncStatus === 'saving' ? 'text-amber-300' : 'text-emerald-400'}`}
+              className={`text-xs ${workspaceSyncStatus === 'error' || workspaceSyncStatus === 'conflict' ? 'text-rose-400' : workspaceSyncStatus === 'saving' ? 'text-amber-300' : workspaceSyncStatus === 'loading' ? 'text-slate-400' : 'text-emerald-400'}`}
               title={workspaceSyncStatus === 'error' ? 'Supabaseへの同期に失敗しました。接続設定と mst_workspace_state テーブルのマイグレーションを確認してください。' : undefined}
             >
-              {workspaceSaveError || (workspaceSyncStatus === 'saving' ? 'クラウド保存中' : workspaceSyncStatus === 'saved' ? 'クラウド保存済み' : workspaceSyncStatus === 'conflict' ? '他の端末で更新されています。再読み込みしてください' : 'クラウド同期エラー')}
+              {workspaceSaveError || (workspaceSyncStatus === 'loading' ? 'クラウド同期確認中' : workspaceSyncStatus === 'saving' ? 'クラウド保存中' : workspaceSyncStatus === 'saved' ? 'クラウド保存済み' : workspaceSyncStatus === 'conflict' ? '他の端末で更新されています。再読み込みしてください' : 'クラウド同期エラー')}
             </span>
             <span>•</span>
             <button
