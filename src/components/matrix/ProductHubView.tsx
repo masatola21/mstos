@@ -114,8 +114,11 @@ export const ProductHubView: React.FC<ProductHubViewProps> = ({
       setEditProductError('追加項目はJSONオブジェクト形式で入力してください。');
       return;
     }
-    const { id, createdAt: _createdAt, ...updates } = editProductDraft;
-    onUpdateProduct(id, { ...updates, customFields, updatedAt: Date.now() });
+    const id = editProductDraft.id;
+    const updates: Partial<ManagedProduct> = { ...editProductDraft, customFields, updatedAt: Date.now() };
+    delete updates.id;
+    delete updates.createdAt;
+    onUpdateProduct(id, updates);
     setEditProductDraft(null);
     setProductActionMessage('AIプロダクトを更新しました。');
     setProductActionIsError(false);
