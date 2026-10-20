@@ -147,6 +147,13 @@ async function processLineInboxAndAutoReply(event: any, contact: any, eventId: s
     if (!altText || !contents || typeof contents !== 'object' || !['bubble', 'carousel'].includes(contents.type)) return;
     lineMessage = { type: 'flex', altText, contents };
     inboxBody = '[Flexメッセージ]';
+  } else if (replyType === 'video') {
+    const originalContentUrl = String(replyPayload.originalContentUrl || '');
+    const previewImageUrl = String(replyPayload.previewImageUrl || '');
+    const altText = String(replyPayload.altText || '').slice(0, 1500);
+    if (!originalContentUrl.startsWith('https://') || !previewImageUrl.startsWith('https://') || !altText) return;
+    lineMessage = { type: 'video', originalContentUrl, previewImageUrl };
+    inboxBody = '[動画メッセージ]';
   } else {
     return;
   }
