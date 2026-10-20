@@ -539,7 +539,6 @@ export const DocumentTemplateView: React.FC<DocumentTemplateViewProps> = ({ init
 
   // When switching template, load its default variables
   const handleSelectTemplate = (id: string) => {
-    setHasStartedDocument(true);
     setSelectedTemplateId(id);
     const target = templates.find((t) => t.id === id);
     if (target) {
