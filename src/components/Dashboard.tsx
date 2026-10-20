@@ -95,14 +95,14 @@ export const Dashboard: React.FC<DashboardProps> = ({
           while (true) {
             const { data, error } = await supabase
               .from('deals')
-              .select('id, proposal_status, total_amount, amount')
+              .select('id, proposal_status, total_amount')
               .order('id', { ascending: true })
               .range(from, from + pageSize - 1);
             if (error) throw error;
             const page = data || [];
             for (const deal of page) {
               if (deal.proposal_status === '受注' || deal.proposal_status === '失注') continue;
-              amount += Number(deal.total_amount ?? deal.amount ?? 0) || 0;
+              amount += Number(deal.total_amount ?? 0) || 0;
               count += 1;
             }
             if (page.length < pageSize) break;

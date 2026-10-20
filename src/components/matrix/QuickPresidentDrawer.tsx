@@ -9,7 +9,8 @@ import {
   Target, 
   Layers, 
   CheckCircle2, 
-  Maximize2 
+  Maximize2,
+  Minimize2 
 } from 'lucide-react';
 import { ApiUsageData, CharacterConfig, ChatMessage, UserProfile } from '../../types/ai-president';
 import { AI_WORK_MODES, AIWorkModeId } from '../../data/aiWorkModes';
@@ -38,7 +39,6 @@ interface QuickPresidentDrawerProps {
   onClose: () => void;
   character: CharacterConfig;
   userProfile: UserProfile;
-  onOpenFullChat: () => void;
   onOpenPlanProposal?: (plan: any) => void;
   onRecordUsage?: (params: { endpoint: 'chat'; endpointName: string; model?: string; usage: ApiUsageData }) => void;
 }
@@ -49,7 +49,6 @@ export const QuickPresidentDrawer: React.FC<QuickPresidentDrawerProps> = ({
   onClose,
   character,
   userProfile,
-  onOpenFullChat,
   onOpenPlanProposal,
   onRecordUsage,
 }) => {
@@ -67,6 +66,7 @@ export const QuickPresidentDrawer: React.FC<QuickPresidentDrawerProps> = ({
   const selectedWorkMode = AI_WORK_MODES.find((mode) => mode.id === selectedWorkModeId) ?? AI_WORK_MODES[0];
   const [input, setInput] = useState('');
   const [isLoading, setIsLoading] = useState(false);
+  const [isExpanded, setIsExpanded] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -167,7 +167,9 @@ export const QuickPresidentDrawer: React.FC<QuickPresidentDrawerProps> = ({
   ];
 
   return (
-    <div className="fixed inset-y-0 right-0 z-50 w-full max-w-md bg-slate-900 border-l border-slate-800 shadow-2xl flex flex-col animate-in slide-in-from-right duration-200">
+    <div className={isExpanded
+      ? "fixed inset-4 z-50 bg-slate-900 border border-slate-700 rounded-2xl shadow-2xl flex flex-col"
+      : "fixed inset-y-0 right-0 z-50 w-full max-w-md bg-slate-900 border-l border-slate-800 shadow-2xl flex flex-col animate-in slide-in-from-right duration-200"}>
       {/* Drawer Header */}
       <div className="p-4 border-b border-slate-800 bg-slate-950 flex items-center justify-between">
         <div className="flex items-center gap-3">
@@ -187,14 +189,12 @@ export const QuickPresidentDrawer: React.FC<QuickPresidentDrawerProps> = ({
 
         <div className="flex items-center gap-1">
           <button
-            onClick={() => {
-              onClose();
-              onOpenFullChat();
-            }}
+            onClick={() => setIsExpanded((expanded) => !expanded)}
             className="p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 transition-colors"
-            title="フルチャット画面を開く"
+            title={isExpanded ? "相談パネルを元の大きさに戻す" : "相談パネルを拡大"}
+            aria-label={isExpanded ? "相談パネルを元の大きさに戻す" : "相談パネルを拡大"}
           >
-            <Maximize2 className="w-4 h-4" />
+            {isExpanded ? <Minimize2 className="w-4 h-4" /> : <Maximize2 className="w-4 h-4" />}
           </button>
           <button
             onClick={onClose}
