@@ -556,6 +556,7 @@ export const AIAcquisitionOperationsView: React.FC<{ onSendPresidentSummary?: (s
       </form>}
 
       {activeTab !== 'dashboard' && activeTab !== 'analysis' && activeTab !== 'assets' && !formVisible && <section className="space-y-3"><div className="flex items-center justify-between"><div><h2 className="font-semibold">{tabs.find((tab) => tab.id === activeTab)?.label}</h2><p className="mt-1 text-xs text-slate-500">商品マスターの商品と関連付けて登録できます。実行・公開は外部サービスで行ってください。</p></div><button onClick={() => createRecord(activeTab as RecordType)} className="inline-flex items-center gap-2 rounded-lg bg-indigo-600 px-3 py-2 text-sm"><Plus className="h-4 w-4"/>新規登録</button></div><RecordList records={visibleRecords} products={products} segments={segments} onEdit={startEdit} onDelete={remove}/></section>}
+      {['content', 'social', 'video', 'ad', 'funnel'].includes(activeTab) && !formVisible && <MarketingAssetLibrary key={activeTab} records={records} products={products} onOpenRecord={startEdit} contextRecordType={activeTab} contextualAssetType={activeTab === 'video' ? 'video' : activeTab === 'funnel' ? 'landing_page' : activeTab === 'social' || activeTab === 'ad' ? 'image' : 'draft'} sectionTitle={activeTab === 'video' ? '動画素材・完成動画' : activeTab === 'funnel' ? 'LP・集客導線の素材' : activeTab === 'social' ? 'SNS画像素材' : activeTab === 'ad' ? '広告クリエイティブ素材' : 'コンテンツ草案・資料'} />}
     </>}
   </main>;
 };
