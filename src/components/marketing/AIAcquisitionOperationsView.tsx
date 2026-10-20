@@ -4,9 +4,10 @@ import { getSupabase } from '../../lib/supabaseClient';
 import { InlineDeleteButton } from '../InlineDeleteButton';
 import { ArrowRight, BarChart3, Megaphone, Plus, Save, Sparkles, Trash2 } from 'lucide-react';
 import { OwnMediaWorkspace } from './OwnMediaWorkspace';
+import { MarketingAssetLibrary } from './MarketingAssetLibrary';
 
 type RecordType = 'strategy' | 'content' | 'social' | 'video' | 'ad' | 'media' | 'funnel' | 'result' | 'proposal';
-type ViewTab = 'dashboard' | RecordType | 'analysis' | 'media';
+type ViewTab = 'dashboard' | RecordType | 'analysis' | 'media' | 'assets';
 type Field = { key: string; label: string; kind?: 'textarea' | 'number' | 'date' | 'select' | 'multiselect'; options?: string[]; placeholder?: string };
 type AcquisitionRecord = { id: string; record_type: RecordType; title: string; product_id: string | null; status: string | null; payload: Record<string, string>; created_at: string; updated_at: string };
 type Product = { id: string; product_name: string };
@@ -16,7 +17,7 @@ const tabs: Array<{ id: ViewTab; label: string }> = [
   { id: 'dashboard', label: '集客ダッシュボード' }, { id: 'strategy', label: '集客戦略' },
   { id: 'content', label: 'コンテンツ企画' }, { id: 'social', label: 'SNS・note運用' },
   { id: 'video', label: '動画運用' }, { id: 'ad', label: '広告運用' },
-  { id: 'media', label: '自社メディア運用' }, { id: 'funnel', label: 'LP・集客導線' }, { id: 'analysis', label: '成果分析・改善提案' },
+  { id: 'media', label: '自社メディア運用' }, { id: 'funnel', label: 'LP・集客導線' }, { id: 'assets', label: '素材・成果物' }, { id: 'analysis', label: '成果分析・改善提案' },
 ];
 const typeLabels: Record<RecordType, string> = { strategy: '集客戦略', content: 'コンテンツ企画', social: 'SNS・note運用', video: '動画運用', ad: '広告運用', media: '自社メディア運用', funnel: 'LP・集客導線', result: '成果記録', proposal: '改善提案' };
 const expandableToolTypes: RecordType[] = ['content', 'social', 'video', 'ad', 'media', 'funnel'];
@@ -24,7 +25,7 @@ const fields: Record<RecordType, Field[]> = {
   media: [
     { key: 'url', label: 'HPのURL' }, { key: 'mediaType', label: 'メディア種別', kind: 'select', options: ['自社HP', 'ブログ', 'オウンドメディア', 'その他'] },
     { key: 'cms', label: 'CMS種別', kind: 'select', options: ['WordPress', '独自開発', 'その他', '未設定'] }, { key: 'target', label: 'ターゲット', kind: 'textarea' },
-    { key: 'purpose', label: '運用目的', kind: 'textarea' }, { key: 'connection', label: '連携状態', kind: 'select', options: ['未連携', '手動運用', '連携検討中'] }, { key: 'notes', label: '備考', kind: 'textarea' },
+    { key: 'purpose', label: '運用目的', kind: 'textarea' }, { key: 'strategyContext', label: '集客戦略からの運用方針', kind: 'textarea' }, { key: 'connection', label: '連携状態', kind: 'select', options: ['未連携', '手動運用', '連携検討中'] }, { key: 'notes', label: '備考', kind: 'textarea' },
   ],
   strategy: [
     { key: 'target', label: 'ターゲット顧客', kind: 'textarea' }, { key: 'needs', label: '顧客の課題・ニーズ', kind: 'textarea' },
@@ -37,12 +38,13 @@ const fields: Record<RecordType, Field[]> = {
   content: [
     { key: 'target', label: 'ターゲット' }, { key: 'pain', label: '顧客の課題', kind: 'textarea' }, { key: 'theme', label: '発信テーマ' },
     { key: 'message', label: '伝える内容', kind: 'textarea' }, { key: 'appeal', label: '訴求ポイント', kind: 'textarea' },
-    { key: 'cta', label: 'CTA' }, { key: 'destination', label: '誘導先' }, { key: 'channels', label: '使用媒体', placeholder: 'note、X、Instagram など' },
+    { key: 'cta', label: 'CTA' }, { key: 'destination', label: '誘導先' }, { key: 'channels', label: '使用媒体', placeholder: 'note、X、Instagram など' }, { key: 'strategyContext', label: '集客戦略からの運用方針', kind: 'textarea' },
     { key: 'status', label: '制作状況', kind: 'select', options: ['企画', '制作中', '確認待ち', '承認済み', '公開済み'] },
     { key: 'publishDate', label: '公開予定日', kind: 'date' }, { key: 'campaign', label: '関連キャンペーン' },
   ],
   social: [
     { key: 'platform', label: '媒体', kind: 'select', options: ['note', 'Facebook', 'Threads', 'X', 'Instagram', 'LinkedIn'] },
+    { key: 'target', label: 'ターゲット' }, { key: 'strategyContext', label: '集客戦略からの運用方針', kind: 'textarea' },
     { key: 'content', label: '投稿文・制作指示', kind: 'textarea' }, { key: 'assetUrl', label: '画像・動画などの素材URL' },
     { key: 'publishDate', label: '公開予定日', kind: 'date' }, { key: 'publishedUrl', label: '公開URL' },
     { key: 'status', label: '公開状態', kind: 'select', options: ['企画', '制作中', '確認待ち', '承認済み', '予約済み', '公開済み'] },
@@ -53,14 +55,14 @@ const fields: Record<RecordType, Field[]> = {
   video: [
     { key: 'theme', label: '動画テーマ' }, { key: 'target', label: 'ターゲット' },
     { key: 'platform', label: '配信媒体', placeholder: '例：YouTube、Instagram' }, { key: 'format', label: '動画形式' },
-    { key: 'script', label: '台本', kind: 'textarea' }, { key: 'instruction', label: '制作指示', kind: 'textarea' },
+    { key: 'script', label: '台本', kind: 'textarea' }, { key: 'instruction', label: '制作指示', kind: 'textarea' }, { key: 'strategyContext', label: '集客戦略からの運用方針', kind: 'textarea' },
     { key: 'assetUrl', label: '素材・完成動画URL' }, { key: 'status', label: '制作状況', kind: 'select', options: ['企画', '制作中', '確認待ち', '承認済み', '公開済み'] },
     { key: 'publishDate', label: '公開予定日', kind: 'date' }, { key: 'publishedUrl', label: '公開URL' },
     { key: 'views', label: '再生数', kind: 'number' }, { key: 'campaign', label: '関連キャンペーン' },
   ],
   ad: [
     { key: 'platform', label: '広告媒体', placeholder: '例：Google、Meta' }, { key: 'campaign', label: 'キャンペーン名' },
-    { key: 'purpose', label: '広告の目的' }, { key: 'target', label: 'ターゲット' }, { key: 'creative', label: '広告クリエイティブ', kind: 'textarea' },
+    { key: 'purpose', label: '広告の目的' }, { key: 'target', label: 'ターゲット' }, { key: 'creative', label: '広告クリエイティブ', kind: 'textarea' }, { key: 'strategyContext', label: '集客戦略からの運用方針', kind: 'textarea' },
     { key: 'destination', label: 'LP・誘導先' }, { key: 'budget', label: '予算（円）', kind: 'number' }, { key: 'spend', label: '実際の広告費（円）', kind: 'number' },
     { key: 'impressions', label: '表示回数', kind: 'number' }, { key: 'clicks', label: 'クリック数', kind: 'number' }, { key: 'conversions', label: 'CV数', kind: 'number' },
     { key: 'leads', label: 'リード数', kind: 'number' }, { key: 'meetings', label: '商談数', kind: 'number' }, { key: 'contracts', label: '契約数', kind: 'number' },
@@ -70,7 +72,7 @@ const fields: Record<RecordType, Field[]> = {
     { key: 'channel', label: '集客媒体' }, { key: 'entry', label: '入口（広告・投稿など）' }, { key: 'landing', label: 'LP URL' },
     { key: 'diagnosis', label: '無料診断URL' }, { key: 'form', label: '問い合わせフォームURL' }, { key: 'booking', label: '相談予約URL' },
     { key: 'line', label: 'LINE登録URL' }, { key: 'email', label: 'メール登録URL' }, { key: 'targetProduct', label: '対象商品' },
-    { key: 'goal', label: '導線の目的', kind: 'textarea' }, { key: 'status', label: '状態', kind: 'select', options: ['設計中', '確認待ち', '運用中', '停止', '完了'] },
+    { key: 'goal', label: '導線の目的', kind: 'textarea' }, { key: 'strategyContext', label: '集客戦略からの運用方針', kind: 'textarea' }, { key: 'status', label: '状態', kind: 'select', options: ['設計中', '確認待ち', '運用中', '停止', '完了'] },
   ],
   result: [
     { key: 'channel', label: '媒体・チャネル' }, { key: 'campaign', label: 'キャンペーン' }, { key: 'content', label: 'コンテンツ・施策' },
@@ -90,6 +92,24 @@ const fields: Record<RecordType, Field[]> = {
 const emptyPayload = (): Record<string, string> => ({});
 const yen = (value: number) => `¥${value.toLocaleString('ja-JP')}`;
 const num = (payload: Record<string, string>, key: string) => Math.max(0, Number(payload[key] || 0) || 0);
+
+const strategyContextText = (payload: Record<string, string>) => [
+  ['ターゲット顧客', payload.target], ['顧客の課題・ニーズ', payload.needs],
+  ['強み・訴求ポイント', payload.strengths], ['集客目標', payload.goal],
+  ['コンテンツ方針', payload.contentPolicy], ['誘導先', payload.destination],
+  ['KPI', payload.kpi], ['実施期間', payload.period], ['予算（円）', payload.budget],
+].filter(([, value]) => Boolean(value?.trim())).map(([label, value]) => label + ': ' + value).join('\\n')
+  || '戦略の方針は未入力です。集客戦略を確認してください。';
+
+const strategyFieldsForTool = (toolType: RecordType, strategy: Record<string, string>): Record<string, string> => {
+  const sourceKeys: Partial<Record<RecordType, Record<string, string>>> = {
+    content: { target: 'target', pain: 'needs', appeal: 'strengths', message: 'contentPolicy', destination: 'destination' },
+    social: { target: 'target' }, video: { target: 'target' },
+    ad: { target: 'target', purpose: 'goal', destination: 'destination', budget: 'budget' },
+    media: { target: 'target', purpose: 'goal' }, funnel: { goal: 'goal' },
+  };
+  return Object.fromEntries(Object.entries(sourceKeys[toolType] || {}).map(([targetKey, sourceKey]) => [targetKey, strategy[sourceKey] || '']));
+};
 
 const cleanAiDraftPayload = (recordType: RecordType, rawPayload: unknown, segments: AudienceSegment[]): Record<string, string> => {
   if (!rawPayload || typeof rawPayload !== 'object' || Array.isArray(rawPayload)) {
@@ -279,7 +299,9 @@ export const AIAcquisitionOperationsView: React.FC<{ onSendPresidentSummary?: (s
   };
 
   const saveToolDrafts = async () => {
-    if (type !== 'strategy' || !pendingToolDrafts.length) return;
+    if (type !== 'strategy') return;
+    const selectedToolIds = (payload.channels || '').split('|').filter((toolType) => expandableToolTypes.includes(toolType as RecordType));
+    if (!selectedToolIds.length) return;
     const db = getSupabase();
     if (!db || !userId) { setError('Supabaseに接続してログインしてください。'); return; }
     if (!title.trim()) { setError('集客戦略の名称を入力してください。'); return; }
@@ -289,24 +311,46 @@ export const AIAcquisitionOperationsView: React.FC<{ onSendPresidentSummary?: (s
     const strategyRow = { user_id: userId, id: strategyId, record_type: 'strategy' as const, title: title.trim(), product_id: productId || null, status: payload.status || null, payload, updated_at: now };
     const { error: strategyError } = await db.from('mst_ai_acquisition_records').upsert(strategyRow, { onConflict: 'user_id,id' });
     if (strategyError) { setSaving(false); setError(`集客戦略を保存できませんでした: ${strategyError.message}`); return; }
-    const toolRows = pendingToolDrafts.map((draft) => ({ user_id: userId, id: `${strategyId}-tool-${draft.record_type}`, record_type: draft.record_type, title: draft.title, product_id: productId || null, status: fields[draft.record_type].find((field) => field.key === 'status')?.options?.[0] || null, payload: { ...draft.payload, strategyId, strategyTitle: strategyRow.title }, updated_at: now }));
+    const strategyContext = strategyContextText(payload);
+    const toolRows = selectedToolIds.map((toolType) => {
+      const type = toolType as RecordType;
+      const existing = records.find((record) => record.id === `${strategyId}-tool-${type}`);
+      const generated = pendingToolDrafts.find((draft) => draft.record_type === type);
+      const strategyFields = strategyFieldsForTool(type, payload);
+      const toolPayload = {
+        ...(existing?.payload || {}),
+        ...(generated?.payload || {}),
+        ...strategyFields,
+        strategyContext,
+        strategyId,
+        strategyTitle: strategyRow.title,
+      };
+      return {
+        user_id: userId, id: `${strategyId}-tool-${type}`, record_type: type,
+        title: generated?.title || existing?.title || (strategyRow.title + ' · ' + typeLabels[type]),
+        product_id: productId || null,
+        status: existing?.status || fields[type].find((field) => field.key === 'status')?.options?.[0] || null,
+        payload: toolPayload,
+        updated_at: now,
+      };
+    });
     const results = await Promise.all(toolRows.map((row) => db.from('mst_ai_acquisition_records').upsert(row, { onConflict: 'user_id,id' })));
     setSaving(false);
     const failed = results.find((result) => result.error);
-    if (failed?.error) { setError(`一部の草案を保存できませんでした: ${failed.error.message}。再実行すると同じ運用欄の草案を更新します。`); return; }
+    if (failed?.error) { setError(`一部の運用草案を保存できませんでした: ${failed.error.message}。再実行すると同じ運用草案を更新します。`); return; }
     const strategyRecord = { ...strategyRow, created_at: editing?.created_at || now } as AcquisitionRecord;
     const createdRecords = toolRows.map((row) => ({ ...row, created_at: records.find((record) => record.id === row.id)?.created_at || now }) as AcquisitionRecord);
     const newlyCreatedRecords = createdRecords.filter((record) => !records.some((existing) => existing.id === record.id));
     newlyCreatedRecords.forEach((record) => onCreateTask?.({
       title: `${typeLabels[record.record_type]}「${record.title}」を確認する`,
-      description: `集客戦略「${strategyRow.title}」から自動作成された草案です。内容・事実関係・ブランド表現を確認し、必要ならAIで修正してください。成果物ID: ${record.id}`,
+      description: `集客戦略「${strategyRow.title}」から作成された草案です。内容・事実関係・ブランド表現を確認し、必要ならAIで具体化してください。成果物ID: ${record.id}`,
       projectId: '', workArea: 'project', sourceCategory: 'business_operations', taskKind: 'review',
       relatedRecord: productId ? { type: 'product', id: productId, label: products.find((product) => product.id === productId)?.product_name } : undefined,
       priority: 'medium', assignee: { type: 'human', name: '人間 (あなた)' }, status: 'waiting',
       completionCriteria: '草案を確認・修正し、公開・投稿・出稿の可否を判断する。', sourceAutomationRecordId: record.id,
     }));
     setRecords((previous) => [...createdRecords, strategyRecord, ...previous.filter((record) => record.id !== strategyId && !createdRecords.some((created) => created.id === record.id))]);
-    setEditing(strategyRecord); setPendingToolDrafts([]); setNotice(`${createdRecords.length}件の運用ツール草案を作成し、集客戦略と一緒に保存しました。公開・出稿は行っていません。`);
+    setEditing(strategyRecord); setPendingToolDrafts([]); setNotice(`${createdRecords.length}件の選定ツール草案を作成・更新し、集客戦略と一緒に保存しました。内容は各ツール画面と「素材・成果物」で確認できます。公開・出稿は行っていません。`);
   };
 
   const createExternalPrompt = () => {
@@ -455,6 +499,7 @@ export const AIAcquisitionOperationsView: React.FC<{ onSendPresidentSummary?: (s
     {(error || notice) && <p role={error ? 'alert' : 'status'} className={`rounded-lg px-3 py-2 text-sm ${error ? 'bg-rose-950/50 text-rose-200' : 'bg-emerald-950/40 text-emerald-200'}`}>{error || notice}</p>}
     {loading ? <p className="rounded-xl border border-slate-800 p-5 text-sm text-slate-400">集客データを読み込み中…</p> : <>
       {activeTab === 'media' && <OwnMediaWorkspace products={products} onAskAI={onSendPresidentSummary} strategyContext={records.find((record) => record.record_type === 'strategy') ? JSON.stringify({ title: records.find((record) => record.record_type === 'strategy')?.title, payload: records.find((record) => record.record_type === 'strategy')?.payload }) : ''} />}
+      {activeTab === 'assets' && <MarketingAssetLibrary records={records} products={products} onOpenRecord={startEdit} />}
       {activeTab === 'dashboard' && <section className="space-y-4">
         <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">{[
           ['運用中の施策', `${metrics.active}件`], ['コンテンツ・投稿・動画', `${metrics.content}件`], ['広告費', metrics.known.spend ? yen(metrics.spend) : '未入力'], ['リード / 商談 / 契約', `${metrics.known.leads ? metrics.leads : '未入力'} / ${metrics.known.meetings ? metrics.meetings : '未入力'} / ${metrics.known.contracts ? metrics.contracts : '未入力'}`],
@@ -479,7 +524,7 @@ export const AIAcquisitionOperationsView: React.FC<{ onSendPresidentSummary?: (s
         <RecordList records={visibleRecords} products={products} segments={segments} onEdit={startEdit} onDelete={remove}/>
       </section>}
 
-      {formVisible && <form onSubmit={(event) => void save(event)} className="space-y-4 rounded-xl border border-indigo-500/30 bg-slate-900 p-4">
+      {formVisible && <form onSubmit={(event) => { if (type === 'strategy' && (payload.channels || '').split('|').some((toolType) => expandableToolTypes.includes(toolType as RecordType))) { event.preventDefault(); void saveToolDrafts(); } else void save(event); }} className="space-y-4 rounded-xl border border-indigo-500/30 bg-slate-900 p-4">
         <div className="flex items-center justify-between gap-2"><h2 className="font-semibold">{editing ? '編集' : '新規登録'} · {typeLabels[type]}</h2><button type="button" onClick={() => resetForm(type)} className="text-xs text-slate-400">入力をクリア</button></div>
         <section className="space-y-3 rounded-xl border border-violet-500/30 bg-violet-950/20 p-4">
           <div className="flex items-center justify-between gap-2"><div className="flex items-center gap-2"><Sparkles className="h-4 w-4 text-violet-300"/><h3 className="text-sm font-semibold text-white">{type === 'result' ? 'AIで記録内容を整理（実績値は反映しません）' : `${typeLabels[type]}をAIと作成・ブラッシュアップ`}</h3></div>{aiGenerating && <button type="button" onClick={stopAI} className="rounded-lg border border-rose-500/50 px-3 py-1.5 text-xs font-semibold text-rose-200 hover:bg-rose-950/50">停止</button>}</div>
@@ -499,7 +544,7 @@ export const AIAcquisitionOperationsView: React.FC<{ onSendPresidentSummary?: (s
             {externalReview && <div className="mt-3 rounded-lg border border-emerald-700/40 bg-emerald-950/30 p-3 text-xs text-emerald-100"><p className="mb-1 font-semibold">社内AIのレビュー</p><p className="whitespace-pre-wrap">{externalReview}</p><p className="mt-2 text-emerald-200/70">修正版は下の入力欄に反映されています。元原稿と比べて確認してください。</p></div>}
           </div>
         </section>
-        {pendingToolDrafts.length > 0 && <section className="space-y-3 rounded-xl border border-emerald-500/30 bg-emerald-950/20 p-4"><div><h3 className="text-sm font-semibold text-emerald-100">選定した運用ツールの草案</h3><p className="mt-1 text-xs text-emerald-200/80">保存すると、集客戦略と各ツールの運用欄に下書きとして登録します。公開・投稿・出稿はしません。</p></div><ul className="space-y-2">{pendingToolDrafts.map((draft) => <li key={draft.record_type} className="rounded-lg bg-slate-950/70 p-3"><p className="font-semibold">{typeLabels[draft.record_type]} · {draft.title}</p><p className="mt-1 whitespace-pre-wrap text-xs text-slate-300">{Object.entries(draft.payload).filter(([key, value]) => key !== 'status' && Boolean(value)).map(([key, value]) => `${fields[draft.record_type].find((field) => field.key === key)?.label || key}: ${value}`).join(' / ')}</p></li>)}</ul><button type="button" disabled={saving || aiGenerating} onClick={() => void saveToolDrafts()} className="rounded-lg bg-emerald-700 px-3 py-2 text-sm font-semibold disabled:opacity-50">{saving ? '保存中…' : '集客戦略と選択ツールの草案を保存'}</button></section>}
+        {type === 'strategy' && (payload.channels || '').split('|').some((toolType) => expandableToolTypes.includes(toolType as RecordType)) && pendingToolDrafts.length === 0 && <p className="rounded-lg border border-emerald-500/20 bg-emerald-950/10 p-3 text-xs text-emerald-100">保存すると、選んだツールに戦略のターゲット・課題・訴求・目標・誘導先などを自動反映した草案を作成します。手入力の戦略でも同じように反映され、ツール固有の投稿文・台本・素材は草案のまま確認できます。</p>}{pendingToolDrafts.length > 0 && <section className="space-y-3 rounded-xl border border-emerald-500/30 bg-emerald-950/20 p-4"><div><h3 className="text-sm font-semibold text-emerald-100">選定した運用ツールの草案</h3><p className="mt-1 text-xs text-emerald-200/80">保存すると、集客戦略と各ツールの運用欄に下書きとして登録します。公開・投稿・出稿はしません。草案ファイルやHP・LP・素材は「素材・成果物」にも保管できます。</p></div><ul className="space-y-2">{pendingToolDrafts.map((draft) => <li key={draft.record_type} className="rounded-lg bg-slate-950/70 p-3"><p className="font-semibold">{typeLabels[draft.record_type]} · {draft.title}</p><p className="mt-1 whitespace-pre-wrap text-xs text-slate-300">{Object.entries(draft.payload).filter(([key, value]) => key !== 'status' && Boolean(value)).map(([key, value]) => `${fields[draft.record_type].find((field) => field.key === key)?.label || key}: ${value}`).join(' / ')}</p></li>)}</ul><button type="button" disabled={saving || aiGenerating} onClick={() => void saveToolDrafts()} className="rounded-lg bg-emerald-700 px-3 py-2 text-sm font-semibold disabled:opacity-50">{saving ? '保存中…' : '集客戦略と選択ツールの草案を保存'}</button></section>}
         {aiConversation.length > 0 && <p className="rounded-lg border border-violet-500/30 bg-violet-950/20 p-3 text-xs text-violet-100">草案の反映先はこの下の「名称」と各入力欄です。内容を直接編集してから保存できます。</p>}
         <div id="acquisition-draft-fields" className="grid gap-3 md:grid-cols-2"><label className="text-sm">名称<input required value={title} onChange={(event) => setTitle(event.target.value)} className="mt-1 block w-full rounded-lg border border-slate-700 bg-slate-950 p-2 text-white" placeholder={`${typeLabels[type]}の名称`}/></label>
           <label className="text-sm">対象商品<select value={productId} onChange={(event) => setProductId(event.target.value)} className="mt-1 block w-full rounded-lg border border-slate-700 bg-slate-950 p-2 text-white"><option value="">商品を選択（任意）</option>{products.map((product) => <option key={product.id} value={product.id}>{product.product_name}</option>)}</select>{!products.length && <span className="text-xs text-slate-500">商品マスターの情報は未連携、または未登録です。</span>}</label>
@@ -507,10 +552,10 @@ export const AIAcquisitionOperationsView: React.FC<{ onSendPresidentSummary?: (s
         </div>
         {['social','video'].includes(type) && <p className="rounded-lg bg-amber-950/30 p-3 text-xs text-amber-200">各媒体への自動投稿・実績自動取得は未連携です。ここでは手動投稿の予定・公開URL・入力済み実績を管理します。</p>}
         {type === 'ad' && <p className="rounded-lg bg-amber-950/30 p-3 text-xs text-amber-200">広告の出稿・停止・予算変更は実行しません。費用と成果を記録し、配信判断は人が確認してください。</p>}
-        <div className="flex gap-2"><button disabled={saving || aiGenerating} className="inline-flex items-center gap-2 rounded-lg bg-indigo-600 px-4 py-2 text-sm font-semibold disabled:opacity-50"><Save className="h-4 w-4"/>{aiGenerating ? 'AI処理中…' : saving ? '保存中…' : '保存'}</button><button type="button" onClick={() => { cancelAIRequest(); setEditing(null); setIsFormOpen(false); setTitle(''); setProductId(''); setPayload(emptyPayload()); }} className="rounded-lg border border-slate-700 px-4 py-2 text-sm">キャンセル</button></div>
+        <div className="flex gap-2"><button disabled={saving || aiGenerating} className="inline-flex items-center gap-2 rounded-lg bg-indigo-600 px-4 py-2 text-sm font-semibold disabled:opacity-50"><Save className="h-4 w-4"/>{aiGenerating ? 'AI処理中…' : saving ? '保存中…' : type === 'strategy' && (payload.channels || '').trim() ? '戦略と選定ツールを保存' : '保存'}</button><button type="button" onClick={() => { cancelAIRequest(); setEditing(null); setIsFormOpen(false); setTitle(''); setProductId(''); setPayload(emptyPayload()); }} className="rounded-lg border border-slate-700 px-4 py-2 text-sm">キャンセル</button></div>
       </form>}
 
-      {activeTab !== 'dashboard' && activeTab !== 'analysis' && !formVisible && <section className="space-y-3"><div className="flex items-center justify-between"><div><h2 className="font-semibold">{tabs.find((tab) => tab.id === activeTab)?.label}</h2><p className="mt-1 text-xs text-slate-500">商品マスターの商品と関連付けて登録できます。実行・公開は外部サービスで行ってください。</p></div><button onClick={() => createRecord(activeTab as RecordType)} className="inline-flex items-center gap-2 rounded-lg bg-indigo-600 px-3 py-2 text-sm"><Plus className="h-4 w-4"/>新規登録</button></div><RecordList records={visibleRecords} products={products} segments={segments} onEdit={startEdit} onDelete={remove}/></section>}
+      {activeTab !== 'dashboard' && activeTab !== 'analysis' && activeTab !== 'assets' && !formVisible && <section className="space-y-3"><div className="flex items-center justify-between"><div><h2 className="font-semibold">{tabs.find((tab) => tab.id === activeTab)?.label}</h2><p className="mt-1 text-xs text-slate-500">商品マスターの商品と関連付けて登録できます。実行・公開は外部サービスで行ってください。</p></div><button onClick={() => createRecord(activeTab as RecordType)} className="inline-flex items-center gap-2 rounded-lg bg-indigo-600 px-3 py-2 text-sm"><Plus className="h-4 w-4"/>新規登録</button></div><RecordList records={visibleRecords} products={products} segments={segments} onEdit={startEdit} onDelete={remove}/></section>}
     </>}
   </main>;
 };
