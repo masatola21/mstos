@@ -11,6 +11,16 @@ import { ProposalPlanTemplatePicker } from './ProposalPlanTemplatePicker';
 import type { ProposalPlanTemplate } from './ProposalPlanTemplatePicker';
 import { todayJst } from '../utils/date';
 
+const CORE_FORM_FIELDS: Record<TableKey, string[]> = {
+  companies: ['company_name', 'industry', 'contact_name', 'email', 'phone', 'website'],
+  contacts: ['full_name', 'company_id', 'email', 'phone', 'preferred_channel'],
+  prospects: ['company_id', 'status', 'source', 'approach_method', 'recommended_product_id', 'target_flag'],
+  leads: ['company_id', 'status', 'source', 'service_type', 'priority_channel', 'meeting_date', 'notes'],
+  products: ['product_name', 'product_type', 'phase', 'initial_fee', 'monthly_fee', 'status', 'description'],
+  deals: ['company_id', 'proposal_plan_name', 'proposal_status', 'product_id', 'lead_id', 'total_amount', 'monthly_fee', 'initial_fee'],
+  customers: ['company_id', 'contract_status', 'contract_start_date'],
+};
+
 const buildSharedProposalDescription = (product: Product): string => [
   `【商品名】${product.product_name}`,
   `【説明】${product.description?.trim() || '商品説明未登録'}`,
@@ -48,6 +58,7 @@ export const RecordFormModal: React.FC<RecordFormModalProps> = ({
 
   const [formData, setFormData] = useState<Record<string, any>>({});
   const [customFieldValues, setCustomFieldValues] = useState<Record<string, string>>({});
+  const [showAdvancedFields, setShowAdvancedFields] = useState(false);
   const [formErrors, setFormErrors] = useState<Record<string, string>>({});
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
@@ -66,6 +77,7 @@ export const RecordFormModal: React.FC<RecordFormModalProps> = ({
 
     setSubmitError(null);
     setFormErrors({});
+    setShowAdvancedFields(false);
 
     // 候補データの取得
     const loadLookups = async () => {
@@ -325,8 +337,25 @@ export const RecordFormModal: React.FC<RecordFormModalProps> = ({
               </div>
             )}
 
+            {config.fields.some((field) => !CORE_FORM_FIELDS[tableKey].includes(field.key)) && (
+              <button
+                type="button"
+                onClick={() => setShowAdvancedFields((show) => !show)}
+                className="flex items-center gap-2 text-xs font-semibold text-blue-300 hover:text-blue-200"
+              >
+                <span>{showAdvancedFields ? '詳細項目を隠す' : '詳細項目を表示'}</span>
+                {!showAdvancedFields && (
+                  <span className="rounded-full bg-slate-800 px-2 py-0.5 text-[10px] text-slate-400">
+                    {config.fields.filter((field) => !CORE_FORM_FIELDS[tableKey].includes(field.key)).length}項目
+                  </span>
+                )}
+              </button>
+            )}
+
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              {config.fields.map((field) => {
+              {config.fields
+                .filter((field) => showAdvancedFields || CORE_FORM_FIELDS[tableKey].includes(field.key))
+                .map((field) => {
                 const value = formData[field.key] ?? '';
                 const error = formErrors[field.key];
                 const isFullWidth = field.type === 'textarea' || field.key === 'company_name' || field.key === 'deal_name';
