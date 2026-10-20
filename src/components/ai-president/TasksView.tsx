@@ -40,6 +40,7 @@ import {
 } from '../types';
 import { ApprovalsView } from './ApprovalsView';
 import { AI_WORK_MODES, AIWorkModeId, RoleAIOverrides, resolveWorkMode } from '../../data/aiWorkModes';
+import { todayJst } from '../../utils/date';
 
 const TASK_WORK_AREAS: { value: TaskWorkArea; label: string }[] = [
   { value: 'sales_customer', label: '営業・顧客' },
@@ -651,7 +652,7 @@ export const TasksView: React.FC<TasksViewProps> = ({
                     <span className="rounded bg-indigo-500/10 px-2 py-0.5 text-[10px] text-indigo-200">{TASK_WORK_AREAS.find((item) => item.value === (task.workArea || 'project'))?.label || 'プロジェクト'}</span>
                     <span className="rounded bg-cyan-500/10 px-2 py-0.5 text-[10px] text-cyan-200">{TASK_KINDS.find((item) => item.value === (task.taskKind || 'response'))?.label || '対応'}</span>
                     <span className="rounded bg-slate-800 px-2 py-0.5 text-[10px] text-slate-300">{TASK_SOURCE_CATEGORIES.find((item) => item.value === task.sourceCategory)?.label || '経営・AI社長'}</span>
-                    {task.dueDate && <span className={`rounded px-2 py-0.5 text-[10px] ${task.dueDate < new Date().toISOString().slice(0, 10) && task.status !== 'completed' ? 'bg-rose-500/15 text-rose-300' : 'bg-slate-800 text-slate-300'}`}>期限: {task.dueDate}</span>}
+                    {task.dueDate && <span className={`rounded px-2 py-0.5 text-[10px] ${task.dueDate < todayJst() && task.status !== 'completed' ? 'bg-rose-500/15 text-rose-300' : 'bg-slate-800 text-slate-300'}`}>期限: {task.dueDate}</span>}
                     {task.relatedRecord?.label && <span className="rounded bg-slate-950 px-2 py-0.5 text-[10px] text-slate-300">関連: {task.relatedRecord.label}</span>}
                     <span
                       className={`px-2 py-0.5 rounded text-[10px] font-bold ${
