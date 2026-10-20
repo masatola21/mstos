@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { getSupabase } from '../../lib/supabaseClient';
+import { todayJst } from '../../utils/date';
 import { 
   FileText, 
   FileCheck2, 
@@ -18,24 +19,21 @@ import {
 
 export type DocTemplateType = 'contract' | 'proposal' | 'invoice' | 'report';
 
-const localDateString = (date = new Date()) => {
-  const year = date.getFullYear();
-  const month = String(date.getMonth() + 1).padStart(2, '0');
-  const day = String(date.getDate()).padStart(2, '0');
-  return `${year}-${month}-${day}`;
+const addOneMonthDate = (date = todayJst()) => {
+  const [year, month, day] = date.split('-').map(Number);
+  const lastDay = new Date(Date.UTC(year, month + 1, 0)).getUTCDate();
+  return new Date(Date.UTC(year, month, Math.min(day, lastDay))).toISOString().slice(0, 10);
 };
-const addOneMonthDate = (date: Date) => {
-  const target = new Date(date.getFullYear(), date.getMonth() + 1, 1);
-  const lastDay = new Date(target.getFullYear(), target.getMonth() + 1, 0).getDate();
-  target.setDate(Math.min(date.getDate(), lastDay));
-  return localDateString(target);
-};
-const invoiceDueDate = (date = new Date()) => {
-  const due = new Date(date.getFullYear(), date.getMonth(), 25);
-  if (date.getDate() >= 25) due.setMonth(due.getMonth() + 1);
-  return localDateString(due);
+const invoiceDueDate = (date = todayJst()) => {
+  const [year, month, day] = date.split('-').map(Number);
+  const due = new Date(Date.UTC(year, month - 1, day >= 25 ? 1 : 25));
+  if (day >= 25) due.setUTCMonth(due.getUTCMonth() + 1);
+  if (day >= 25) due.setUTCDate(25);
+  return due.toISOString().slice(0, 10);
 };
 const formatDocumentDate = (value: string) => value ? value.replace(/^(\d{4})-(\d{2})-(\d{2})$/, '$1年$2月$3日') : '';
+const formatDocumentValue = (value: unknown) => Array.isArray(value) ? value.map((item) => typeof item === 'string' ? item : item?.title || item?.description || '').filter(Boolean).join(' / ') : typeof value === 'string' ? value : '';
+const escapeHtml = (value: string) => value.replace(/[&<>"']/g, (char) => { const replacements: Record<string, string> = { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }; return replacements[char] || char; });
 
 interface DocTemplate {
   id: string;
@@ -65,7 +63,7 @@ const DEFAULT_TEMPLATES: DocTemplate[] = [
   支払条件：{{payment_terms}}</p>
 
   <h3 style="margin-top: 20px; font-size: 16px; border-left: 4px solid #2563eb; padding-left: 8px;">第3条（契約期間）</h3>
-  <p>本契約の有効期間は、<strong>{{start_date}}</strong> から <strong>{{end_date}}</strong> までとする。</p>
+  <p>本契約の有効期間は <strong>{{start_date}}</strong> からとする。終了日を定める場合は <strong>{{end_date}}</strong> とし、定めない場合は個別業務の実施期間・納期を発注書等で定める。</p>
 
   <div style="margin-top: 50px; display: flex; justify-content: space-between;">
     <div style="width: 45%;">
@@ -83,18 +81,18 @@ const DEFAULT_TEMPLATES: DocTemplate[] = [
   </div>
 </div>`,
     variables: [
-      { key: 'client_company', label: '顧客会社名 (甲)', defaultValue: 'テックイノベーション株式会社' },
-      { key: 'my_company', label: '自社会社名 (乙)', defaultValue: 'MST AI経営ソリューションズ' },
-      { key: 'project_name', label: 'プロジェクト名', defaultValue: 'AI統合基幹システム受託開発' },
-      { key: 'total_amount', label: '委託料総額 (円)', defaultValue: '3,500,000' },
-      { key: 'tax_amount', label: '消費税額 (円)', defaultValue: '350,000' },
-      { key: 'payment_terms', label: '支払条件', defaultValue: '着手金50%（2026年9月末）、検収後50%（2026年12月末）' },
-      { key: 'start_date', label: '契約開始日', defaultValue: '2026年9月1日' },
-      { key: 'end_date', label: '契約終了日', defaultValue: '2026年12月31日' },
-      { key: 'client_address', label: '甲 住所', defaultValue: '東京都千代田区大手町1-1-1' },
-      { key: 'client_rep', label: '甲 代表者名', defaultValue: '山田 太郎' },
-      { key: 'my_address', label: '乙 住所', defaultValue: '東京都渋谷区道玄坂2-29-1' },
-      { key: 'my_rep', label: '乙 代表者名', defaultValue: '佐藤 一郎' },
+      { key: 'client_company', label: '顧客会社名 (甲)', defaultValue: '' },
+      { key: 'my_company', label: '自社会社名 (乙)', defaultValue: '' },
+      { key: 'project_name', label: 'プロジェクト名', defaultValue: '' },
+      { key: 'total_amount', label: '委託料総額 (円)', defaultValue: '' },
+      { key: 'tax_amount', label: '消費税額 (円)', defaultValue: '' },
+      { key: 'payment_terms', label: '支払条件', defaultValue: '' },
+      { key: 'start_date', label: '契約開始日', defaultValue: '' },
+      { key: 'end_date', label: '契約終了日（任意・期間を定める場合のみ）', defaultValue: '' },
+      { key: 'client_address', label: '甲 住所', defaultValue: '' },
+      { key: 'client_rep', label: '甲 代表者名', defaultValue: '' },
+      { key: 'my_address', label: '乙 住所', defaultValue: '' },
+      { key: 'my_rep', label: '乙 代表者名', defaultValue: '' },
     ],
   },
   {
@@ -130,16 +128,16 @@ const DEFAULT_TEMPLATES: DocTemplate[] = [
   </div>
 </div>`,
     variables: [
-      { key: 'proposal_title', label: '提案書タイトル', defaultValue: 'AI統合基幹システム導入および業務自動化のご提案' },
-      { key: 'client_company', label: '宛先企業名', defaultValue: 'テックイノベーション株式会社' },
-      { key: 'issue_date', label: '提案日付', defaultValue: '2026年10月13日' },
-      { key: 'current_challenge', label: '現状の課題', defaultValue: '手作業による受注・契約管理および顧客情報の分断による業務ロスが発生しております。' },
-      { key: 'solution_overview', label: '提案ソリューション', defaultValue: 'MST AI経営OSを活用し、営業パイプライン、契約・請求管理、AI社長による自動提案をワンストップで統合します。' },
-      { key: 'expected_outcome', label: '期待される効果', defaultValue: '事務工数の約60%削減、およびデータに基づくリアルタイムの意思決定迅速化を実現します。' },
-      { key: 'total_amount', label: 'お見積もり総額 (円)', defaultValue: '3,500,000' },
-      { key: 'cost_breakdown', label: '費用内訳', defaultValue: '基本設計・開発費 2,500,000円 / 導入支援・AIチューニング 1,000,000円' },
-      { key: 'sender_name', label: '提案責任者名', defaultValue: '鈴木 経営コンサルタント' },
-      { key: 'sender_company', label: '提案者組織名', defaultValue: 'MST AI経営ソリューションズ' },
+      { key: 'proposal_title', label: '提案書タイトル', defaultValue: '' },
+      { key: 'client_company', label: '宛先企業名', defaultValue: '' },
+      { key: 'issue_date', label: '提案日付', defaultValue: '' },
+      { key: 'current_challenge', label: '現状の課題', defaultValue: '' },
+      { key: 'solution_overview', label: '提案ソリューション', defaultValue: '' },
+      { key: 'expected_outcome', label: '期待される効果', defaultValue: '' },
+      { key: 'total_amount', label: 'お見積もり総額 (円)', defaultValue: '' },
+      { key: 'cost_breakdown', label: '費用内訳', defaultValue: '' },
+      { key: 'sender_name', label: '提案責任者名', defaultValue: '' },
+      { key: 'sender_company', label: '提案者組織名', defaultValue: '' },
     ],
   },
   {
@@ -216,22 +214,22 @@ const DEFAULT_TEMPLATES: DocTemplate[] = [
   </div>
 </div>`,
     variables: [
-      { key: 'invoice_number', label: '請求書番号', defaultValue: 'INV-202610-001' },
-      { key: 'issue_date', label: '発行日', defaultValue: '2026年10月13日' },
-      { key: 'due_date', label: 'お支払い期限', defaultValue: '2026年10月31日' },
-      { key: 'client_company', label: '宛先企業名', defaultValue: 'テックイノベーション株式会社' },
-      { key: 'total_amount', label: '合計金額 (税込)', defaultValue: '1,925,000' },
-      { key: 'subtotal_amount', label: '小計 (税抜)', defaultValue: '1,750,000' },
-      { key: 'tax_amount', label: '消費税額 (10%)', defaultValue: '175,000' },
-      { key: 'item_name_1', label: '品名 1', defaultValue: 'AI基幹システム受託開発 着手金（50%）' },
-      { key: 'item_qty_1', label: '数量 1', defaultValue: '1' },
-      { key: 'item_price_1', label: '単価 1', defaultValue: '1,750,000' },
-      { key: 'item_amount_1', label: '金額 1', defaultValue: '1,750,000' },
-      { key: 'item_name_2', label: '品名 2', defaultValue: '（予備項目 / なし）' },
-      { key: 'item_qty_2', label: '数量 2', defaultValue: '0' },
-      { key: 'item_price_2', label: '単価 2', defaultValue: '0' },
-      { key: 'item_amount_2', label: '金額 2', defaultValue: '0' },
-      { key: 'bank_account_info', label: '振込先口座情報', defaultValue: '三井住友銀行 渋谷支店 (普通) 1234567 カ）エムエスティエイケイエイソリューションズ' },
+      { key: 'invoice_number', label: '請求書番号', defaultValue: '' },
+      { key: 'issue_date', label: '発行日', defaultValue: '' },
+      { key: 'due_date', label: 'お支払い期限', defaultValue: '' },
+      { key: 'client_company', label: '宛先企業名', defaultValue: '' },
+      { key: 'total_amount', label: '合計金額 (税込)', defaultValue: '' },
+      { key: 'subtotal_amount', label: '小計 (税抜)', defaultValue: '' },
+      { key: 'tax_amount', label: '消費税額 (10%)', defaultValue: '' },
+      { key: 'item_name_1', label: '品名 1', defaultValue: '' },
+      { key: 'item_qty_1', label: '数量 1', defaultValue: '' },
+      { key: 'item_price_1', label: '単価 1', defaultValue: '' },
+      { key: 'item_amount_1', label: '金額 1', defaultValue: '' },
+      { key: 'item_name_2', label: '品名 2', defaultValue: '' },
+      { key: 'item_qty_2', label: '数量 2', defaultValue: '' },
+      { key: 'item_price_2', label: '単価 2', defaultValue: '' },
+      { key: 'item_amount_2', label: '金額 2', defaultValue: '' },
+      { key: 'bank_account_info', label: '振込先口座情報', defaultValue: '' },
     ],
   },
   {
@@ -273,19 +271,19 @@ const DEFAULT_TEMPLATES: DocTemplate[] = [
   </div>
 </div>`,
     variables: [
-      { key: 'client_company', label: '診断対象企業名', defaultValue: 'テックイノベーション株式会社' },
-      { key: 'conducted_date', label: '診断実施日', defaultValue: '2026年10月13日' },
-      { key: 'overall_score', label: '総合スコア (0-100)', defaultValue: '78' },
-      { key: 'score_rank', label: '判定ランク', defaultValue: 'B+ ランク' },
-      { key: 'rank_description', label: 'ランク解説', defaultValue: 'DX推進の基礎は確立されているが、自動化・データ連携に改善余地あり' },
-      { key: 'score_sales', label: '営業スコア', defaultValue: '82' },
-      { key: 'comment_sales', label: '営業コメント', defaultValue: '見込み客管理が整備されており良好です。' },
-      { key: 'score_finance', label: '財務スコア', defaultValue: '70' },
-      { key: 'comment_finance', label: '財務コメント', defaultValue: '請求・入金管理のデジタル化により工数削減の余地があります。' },
-      { key: 'score_automation', label: '自動化スコア', defaultValue: '72' },
-      { key: 'comment_automation', label: '自動化コメント', defaultValue: '非AI業務の自動化ルール導入でさらに効率化できます。' },
-      { key: 'action_recommendation', label: '優先改善提案', defaultValue: '請求・契約書の自動流し込みツールの導入、および定期顧問サポートによる伴走体制の構築。' },
-      { key: 'recommended_product', label: '推奨プロダクト', defaultValue: 'AI統合基幹システム受託開発 ＆ 月額AI経営顧問' },
+      { key: 'client_company', label: '診断対象企業名', defaultValue: '' },
+      { key: 'conducted_date', label: '診断実施日', defaultValue: '' },
+      { key: 'overall_score', label: '総合スコア (0-100)', defaultValue: '' },
+      { key: 'score_rank', label: '判定ランク', defaultValue: '' },
+      { key: 'rank_description', label: 'ランク解説', defaultValue: '' },
+      { key: 'score_sales', label: '営業スコア', defaultValue: '' },
+      { key: 'comment_sales', label: '営業コメント', defaultValue: '' },
+      { key: 'score_finance', label: '財務スコア', defaultValue: '' },
+      { key: 'comment_finance', label: '財務コメント', defaultValue: '' },
+      { key: 'score_automation', label: '自動化スコア', defaultValue: '' },
+      { key: 'comment_automation', label: '自動化コメント', defaultValue: '' },
+      { key: 'action_recommendation', label: '優先改善提案', defaultValue: '' },
+      { key: 'recommended_product', label: '推奨プロダクト', defaultValue: '' },
     ],
   },
   {
@@ -332,7 +330,7 @@ export const DocumentTemplateView: React.FC<DocumentTemplateViewProps> = ({ init
   const [isEditingTemplate, setIsEditingTemplate] = useState<boolean>(false);
   const [copied, setCopied] = useState<boolean>(false);
   const [companies, setCompanies] = useState<Array<{id:string;company_name:string}>>([]);
-  const [contacts, setContacts] = useState<Array<{id:string;full_name:string;company_id?:string|null}>>([]);
+  const [contacts, setContacts] = useState<Array<{id:string;full_name:string;company_id?:string|null;email?:string|null;phone?:string|null;role_title?:string|null}>>([]);
   const [deals, setDeals] = useState<Array<{id:string;proposal_plan_name:string;company_id?:string|null;lead_id?:string|null}>>([]);
   const [leads, setLeads] = useState<Array<{id:string;source?:string|null;status?:string|null;company_id?:string|null}>>([]);
   const [companyId, setCompanyId] = useState(initialCompanyId || '');
@@ -346,7 +344,7 @@ export const DocumentTemplateView: React.FC<DocumentTemplateViewProps> = ({ init
     if (!supabase) return;
     void Promise.all([
       supabase.from('companies').select('id,company_name').order('company_name'),
-      supabase.from('contacts').select('id,full_name,company_id').order('full_name'),
+      supabase.from('contacts').select('id,full_name,company_id,email,phone,role_title').order('full_name'),
       supabase.from('deals').select('id,proposal_plan_name,company_id,lead_id').order('created_at',{ascending:false}),
       supabase.from('leads').select('id,source,status,company_id').order('created_at',{ascending:false}),
     ]).then(([companyResult,contactResult,dealResult,leadResult]) => {
@@ -421,20 +419,23 @@ export const DocumentTemplateView: React.FC<DocumentTemplateViewProps> = ({ init
   // Pull CRM, deal, and latest diagnosis data into matching template variables.
   useEffect(() => {
     const supabase = getSupabase();
-    if (!supabase || (!companyId && !leadId && !dealId)) return;
+    if (!supabase || (!companyId && !leadId && !dealId && !contactId)) return;
     let cancelled = false;
     const populate = async () => {
-      const [companyResult, leadResult, dealResult] = await Promise.all([
+      const [companyResult, leadResult, dealResult, contactResult] = await Promise.all([
         companyId ? supabase.from('companies').select('*').eq('id', companyId).maybeSingle() : Promise.resolve({data:null}),
         leadId ? supabase.from('leads').select('*').eq('id', leadId).maybeSingle() : Promise.resolve({data:null}),
         dealId ? supabase.from('deals').select('*').eq('id', dealId).maybeSingle() : Promise.resolve({data:null}),
+        contactId ? supabase.from('contacts').select('*').eq('id', contactId).maybeSingle() : Promise.resolve({data:null}),
       ]);
       const lead = leadResult.data;
       const deal = dealResult.data;
-      const resolvedCompanyId = companyId || deal?.company_id || lead?.company_id || '';
+      const contact = contactResult.data;
+      const resolvedCompanyId = companyId || deal?.company_id || lead?.company_id || contact?.company_id || '';
       const company = companyResult.data || (resolvedCompanyId
         ? (await supabase.from('companies').select('*').eq('id', resolvedCompanyId).maybeSingle()).data
         : null);
+      const customerResult = resolvedCompanyId ? await supabase.from('customers').select('contract_start_date').eq('company_id', resolvedCompanyId).maybeSingle() : { data: null };
       let diagnosis: any = null;
       if (leadId || resolvedCompanyId) {
         let diagnosisQuery = supabase.from('diagnoses').select('*').order('created_at', {ascending:false}).limit(1);
@@ -448,49 +449,58 @@ export const DocumentTemplateView: React.FC<DocumentTemplateViewProps> = ({ init
         report = result.data;
       }
       let productName = '';
+      let product: any = null;
       if (deal?.product_id) {
-        const result = await supabase.from('products').select('product_name').eq('id', deal.product_id).maybeSingle();
-        productName = result.data?.product_name || '';
+        const result = await supabase.from('products').select('product_name,initial_fee,monthly_fee,description').eq('id', deal.product_id).maybeSingle();
+        product = result.data;
+        productName = product?.product_name || '';
       }
       if (cancelled) return;
       const score = diagnosis?.score;
       const categoryScores = diagnosis?.category_scores || {};
       const recommendations = report?.recommendations;
-      const recommendationText = Array.isArray(recommendations)
-        ? recommendations.map((item:any) => typeof item === 'string' ? item : item?.title || item?.description || JSON.stringify(item)).join(' / ')
-        : typeof recommendations === 'string' ? recommendations : '';
-      const today = localDateString();
-      const quoteExpiry = addOneMonthDate(new Date());
+      const recommendationText = formatDocumentValue(recommendations);
+      const challengeText = formatDocumentValue(report?.challenges);
+      const today = todayJst();
+      const quoteExpiry = addOneMonthDate();
       const invoiceDue = invoiceDueDate();
       const amount = Number(deal?.total_amount ?? 0);
-      const initialFee = Number(deal?.initial_fee ?? 0);
-      const monthlyFee = Number(deal?.monthly_fee ?? 0);
+      const initialFee = Number(deal?.initial_fee ?? product?.initial_fee ?? 0);
+      const monthlyFee = Number(deal?.monthly_fee ?? product?.monthly_fee ?? 0);
       const tax = Math.round(amount / 11);
       const invoiceNumber = `INV-${today.replaceAll('-', '')}-${(deal?.id || crypto.randomUUID()).slice(0, 6).toUpperCase()}`;
       const values: Record<string, string> = {
         client_company: company?.company_name || '',
-        client_name: company?.contact_name || '',
-        sender_company: '',
+        client_name: contact?.full_name || company?.contact_name || '',
+        client_address: company?.address || '',
+        client_rep: contact?.role_title?.includes('代表') ? contact.full_name : '',
+        start_date: customerResult.data?.contract_start_date ? formatDocumentDate(String(customerResult.data.contract_start_date).slice(0,10)) : '',
+        end_date: '',
+        my_company: '', my_address: '', my_rep: '', sender_name: '', sender_company: '',
+        payment_terms: deal?.memo || '',
+        solution_overview: product?.description || report?.summary || '',
+        expected_outcome: recommendationText,
+        cost_breakdown: [initialFee > 0 ? `初期費用 ${initialFee.toLocaleString('ja-JP')}円` : '', monthlyFee > 0 ? `月額費用 ${monthlyFee.toLocaleString('ja-JP')}円` : ''].filter(Boolean).join(' / '),
         proposal_title: deal?.proposal_plan_name || deal?.deal_name || 'お見積り',
         project_name: deal?.proposal_plan_name || deal?.deal_name || productName || 'サービス',
-        total_amount: amount.toLocaleString('ja-JP'),
-        subtotal_amount: Math.max(0, amount - tax).toLocaleString('ja-JP'),
-        tax_amount: tax.toLocaleString('ja-JP'),
-        initial_fee: initialFee.toLocaleString('ja-JP'),
-        monthly_fee: monthlyFee.toLocaleString('ja-JP'),
+        total_amount: amount > 0 ? amount.toLocaleString('ja-JP') : '',
+        subtotal_amount: amount > 0 ? Math.max(0, amount - tax).toLocaleString('ja-JP') : '',
+        tax_amount: tax > 0 ? tax.toLocaleString('ja-JP') : '',
+        initial_fee: initialFee > 0 ? initialFee.toLocaleString('ja-JP') : '',
+        monthly_fee: monthlyFee > 0 ? monthlyFee.toLocaleString('ja-JP') : '',
         invoice_number: invoiceNumber,
         item_name_1: deal?.proposal_plan_name || deal?.deal_name || productName || 'サービス提供費',
-        item_qty_1: '1', item_price_1: Math.max(0, amount - tax).toLocaleString('ja-JP'), item_amount_1: Math.max(0, amount - tax).toLocaleString('ja-JP'),
-        item_name_2: 'なし', item_qty_2: '0', item_price_2: '0', item_amount_2: '0',
+        item_qty_1: '1', item_price_1: amount > 0 ? Math.max(0, amount - tax).toLocaleString('ja-JP') : '', item_amount_1: amount > 0 ? Math.max(0, amount - tax).toLocaleString('ja-JP') : '',
+        item_name_2: 'なし', item_qty_2: '0', item_price_2: '', item_amount_2: '',
         issue_date: formatDocumentDate(today),
         conducted_date: formatDocumentDate(diagnosis?.conducted_at ? String(diagnosis.conducted_at).slice(0,10) : today),
         due_date: formatDocumentDate(selectedTemplateId === 'tpl-estimate-01' ? quoteExpiry : invoiceDue),
         overall_score: score == null ? '' : String(score),
         score_rank: score == null ? '' : score >= 80 ? 'A' : score >= 60 ? 'B' : score >= 40 ? 'C' : 'D',
         rank_description: report?.summary || '',
-        current_challenge: report?.challenges ? JSON.stringify(report.challenges) : '',
+        current_challenge: challengeText,
         action_recommendation: recommendationText,
-        recommended_product: productName || report?.recommended_product_id || '',
+        recommended_product: productName || '',
         score_sales: categoryScores.sales_marketing == null ? '' : String(categoryScores.sales_marketing),
         score_automation: categoryScores.operation == null ? '' : String(categoryScores.operation),
         comment_sales: report?.summary || '',
@@ -500,14 +510,14 @@ export const DocumentTemplateView: React.FC<DocumentTemplateViewProps> = ({ init
     };
     void populate();
     return () => { cancelled = true; };
-  }, [companyId, leadId, dealId, selectedTemplateId]);
+  }, [companyId, leadId, dealId, contactId, selectedTemplateId]);
 
   // Active template
   const currentTemplate = templates.find((t) => t.id === selectedTemplateId) || templates[0];
 
   // Variable inputs state
   const [variableValues, setVariableValues] = useState<Record<string, string>>(() => {
-    const today = localDateString();
+    const today = todayJst();
     const initial: Record<string, string> = {};
     (DEFAULT_TEMPLATES.find((template) => template.type === 'report') || DEFAULT_TEMPLATES[0]).variables.forEach((v) => {
       initial[v.key] = v.key === 'issue_date' || v.key === 'conducted_date' ? formatDocumentDate(today) : '';
@@ -520,16 +530,16 @@ export const DocumentTemplateView: React.FC<DocumentTemplateViewProps> = ({ init
     setSelectedTemplateId(id);
     const target = templates.find((t) => t.id === id);
     if (target) {
-      const today = localDateString();
+      const today = todayJst();
       const newVals: Record<string, string> = {};
       target.variables.forEach((v) => {
         const fallbackByKey: Record<string, string> = {
           issue_date: formatDocumentDate(today), conducted_date: formatDocumentDate(today),
-          due_date: formatDocumentDate(target.id === 'tpl-estimate-01' ? addOneMonthDate(new Date()) : target.type === 'invoice' ? invoiceDueDate() : ''),
+          due_date: formatDocumentDate(target.id === 'tpl-estimate-01' ? addOneMonthDate() : target.type === 'invoice' ? invoiceDueDate() : ''),
           invoice_number: `INV-${today.replaceAll('-', '')}-${crypto.randomUUID().slice(0, 6).toUpperCase()}`,
-          item_qty_1: '1', item_price_1: '0', item_amount_1: '0', item_name_1: 'サービス提供費',
-          item_qty_2: '0', item_price_2: '0', item_amount_2: '0', item_name_2: 'なし',
-          total_amount: '0', subtotal_amount: '0', tax_amount: '0', initial_fee: '0', monthly_fee: '0',
+          item_qty_1: '1', item_price_1: '', item_amount_1: '', item_name_1: 'サービス提供費',
+          item_qty_2: '0', item_price_2: '', item_amount_2: '', item_name_2: 'なし',
+          total_amount: '', subtotal_amount: '', tax_amount: '', initial_fee: '', monthly_fee: '',
         };
         newVals[v.key] = fallbackByKey[v.key] ?? '';
       });
@@ -543,11 +553,16 @@ export const DocumentTemplateView: React.FC<DocumentTemplateViewProps> = ({ init
   };
 
   // Perform deterministic template auto-population
+  const missingVariables = currentTemplate.variables.filter((variable) => !(variableValues[variable.key] || '').trim());
+
   const getPopulatedHtml = (): string => {
     let result = currentTemplate.htmlContent;
+    if (currentTemplate.id === 'tpl-contract-01') {
+      result = result.replace('本契約の有効期間は、<strong>{{start_date}}</strong> から <strong>{{end_date}}</strong> までとする。', '本契約の有効期間は <strong>{{start_date}}</strong> からとする。終了日を定める場合は <strong>{{end_date}}</strong> とし、定めない場合は個別業務の実施期間・納期を発注書等で定める。');
+    }
     Object.entries(variableValues).forEach(([key, val]) => {
       const regex = new RegExp(`{{${key}}}`, 'g');
-      result = result.replace(regex, val || '');
+      result = result.replace(regex, escapeHtml(val || ''));
     });
     return result;
   };
@@ -648,7 +663,7 @@ export const DocumentTemplateView: React.FC<DocumentTemplateViewProps> = ({ init
         <div className="grid gap-3 md:grid-cols-4">
           <label className="text-xs text-slate-400">会社<select value={companyId} disabled={Boolean(initialCompanyId)} onChange={(e)=>{setCompanyId(e.target.value);setContactId('');}} className="mt-1 w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-white disabled:opacity-70"><option value="">未選択</option>{companies.map((company)=><option key={company.id} value={company.id}>{company.company_name}</option>)}</select></label>
           <label className="text-xs text-slate-400">リード<select value={leadId} disabled={Boolean(initialLeadId || initialDealId)} onChange={(e)=>setLeadId(e.target.value)} className="mt-1 w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-white disabled:opacity-70"><option value="">未選択</option>{leads.filter((lead)=>!companyId||lead.company_id===companyId).map((lead)=><option key={lead.id} value={lead.id}>{lead.source || 'リード'} · {lead.status || lead.id.slice(0,8)}</option>)}</select></label>
-          <label className="text-xs text-slate-400">担当者<select value={contactId} onChange={(e)=>setContactId(e.target.value)} className="mt-1 w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-white"><option value="">未選択</option>{contacts.filter((contact)=>!companyId||contact.company_id===companyId).map((contact)=><option key={contact.id} value={contact.id}>{contact.full_name}</option>)}</select></label>
+          <label className="text-xs text-slate-400">担当者<select value={contactId} onChange={(e)=>{const id=e.target.value;setContactId(id);const linkedCompanyId=contacts.find((contact)=>contact.id===id)?.company_id;if(linkedCompanyId)setCompanyId(linkedCompanyId);}} className="mt-1 w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-white"><option value="">未選択</option>{contacts.filter((contact)=>!companyId||contact.company_id===companyId).map((contact)=><option key={contact.id} value={contact.id}>{contact.full_name}</option>)}</select></label>
           <label className="text-xs text-slate-400">商談<select value={dealId} disabled={Boolean(initialDealId)} onChange={(e)=>setDealId(e.target.value)} className="mt-1 w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-white"><option value="">未選択</option>{deals.filter((deal)=>(!companyId||deal.company_id===companyId)&&(!leadId||deal.lead_id===leadId)).map((deal)=><option key={deal.id} value={deal.id}>{deal.proposal_plan_name}</option>)}</select></label>
         </div>
         <div className="mt-3 flex flex-wrap items-center gap-3"><button onClick={()=>void saveGeneratedDocument()} className="flex items-center gap-2 rounded-lg bg-emerald-700 px-3 py-2 text-xs font-semibold text-white hover:bg-emerald-600"><Save className="h-4 w-4"/>生成内容を確認待ちで保存</button>{saveMessage&&<p role="status" className="text-xs text-slate-300">{saveMessage}</p>}</div>
@@ -743,6 +758,7 @@ export const DocumentTemplateView: React.FC<DocumentTemplateViewProps> = ({ init
                 <p className="text-xs text-slate-400">
                   顧客・商談情報と日付ルールを初期反映しています。内容を確認し、必要な箇所だけ修正してください。
                 </p>
+                {missingVariables.length > 0 && <div role="status" className="rounded-lg border border-amber-700/50 bg-amber-950/30 px-3 py-2 text-xs text-amber-200">自動入力できなかった項目が {missingVariables.length} 件あります。未登録の住所・自社情報・口座情報などを確認してください。<span className="mt-1 block text-amber-100/80">{missingVariables.map((variable) => variable.label).join('、')}</span></div>}
                 {currentTemplate.variables.map((v) => (
                   <div key={v.key} className="space-y-1">
                     <label className="block text-xs font-medium text-slate-300 flex items-center justify-between">
@@ -756,7 +772,7 @@ export const DocumentTemplateView: React.FC<DocumentTemplateViewProps> = ({ init
                       value={variableValues[v.key] ?? ''}
                       onChange={(e) => handleVariableChange(v.key, e.target.value)}
                       className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-cyan-500 transition-colors"
-                      placeholder={`${v.label}（自動入力済み。必要な場合のみ修正）`}
+                      placeholder={v.key === 'end_date' ? '任意（定める場合のみ入力）' : `${v.label}（未登録の場合は入力）`}
                     />
                   </div>
                 ))}
