@@ -38,7 +38,7 @@ import { DocumentTemplateView } from './components/matrix/DocumentTemplateView';
 import { MarketingAutomationPrototypeView } from './components/marketing/MarketingAutomationPrototypeView';
 import { AIAcquisitionOperationsView } from './components/marketing/AIAcquisitionOperationsView';
 import { ContactsLineHub } from './components/ContactsLineHub';
-import { QuickPresidentDrawer } from './components/matrix/QuickPresidentDrawer';
+import { QuickPresidentDrawer, getPageAssistantProfile } from './components/matrix/QuickPresidentDrawer';
 
 // Storage and Types
 import {
@@ -459,6 +459,10 @@ function AppContent() {
     characters.find((c) => c.id === activeCharacterId) || characters[0] || PRESET_CHARACTERS[0];
   const presidentCharacter =
     characters.find((c) => c.id === 'preset-ceo') || PRESET_CHARACTERS[0];
+  const pageAssistantMode = resolveWorkMode(
+    AI_WORK_MODES.find((mode) => mode.id === getPageAssistantProfile(currentTab).mode) || AI_WORK_MODES[0],
+    aiModelSettings.roleOverrides,
+  );
   // 標準のAI社長を選んでいるときは、役割設定で変更した名前・絵文字を画面表示に反映する
   const presidentOverride = aiModelSettings.roleOverrides.president;
   const chatCharacter =
@@ -2349,7 +2353,7 @@ function AppContent() {
         className="fixed bottom-5 right-5 z-40 inline-flex items-center gap-2 rounded-full border border-indigo-400/40 bg-indigo-600 px-4 py-3 text-sm font-semibold text-white shadow-lg shadow-indigo-950/40 transition hover:bg-indigo-500"
         aria-label="現在のページについてAIに相談・依頼"
       >
-        <span aria-hidden="true" className="grid h-6 w-6 place-items-center rounded-full bg-white/15 text-base">🤖</span>
+        <span aria-hidden="true" className="grid h-6 w-6 place-items-center rounded-full bg-white/15 text-base">{pageAssistantMode.avatarEmoji}</span>
         <span>AIに相談・依頼</span>
       </button>
 
