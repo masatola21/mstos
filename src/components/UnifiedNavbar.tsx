@@ -21,7 +21,6 @@ import {
   FileCheck2
 } from 'lucide-react';
 import { TableKey, TABLE_CONFIGS } from '../types/database';
-import { CharacterConfig } from '../types/ai-president';
 
 export type UnifiedNavTab = 
   // 営業・顧客管理
@@ -60,8 +59,6 @@ interface UnifiedNavbarProps {
   onOpenPricing: () => void;
   onOpenBackup: () => void;
   onOpenProfile: () => void;
-  onOpenQuickDrawer: () => void;
-  activeCharacter: CharacterConfig;
   pendingApprovalsCount: number;
 }
 
@@ -73,8 +70,6 @@ export const UnifiedNavbar: React.FC<UnifiedNavbarProps> = ({
   onOpenPricing,
   onOpenBackup,
   onOpenProfile,
-  onOpenQuickDrawer,
-  activeCharacter,
   pendingApprovalsCount,
 }) => {
   const { user, signOut, config } = useAuth();
@@ -177,15 +172,6 @@ export const UnifiedNavbar: React.FC<UnifiedNavbarProps> = ({
 
           {/* Right Header Controls */}
           <div className="flex items-center gap-2 sm:gap-3">
-            {/* Quick AI President Drawer Button */}
-            <button
-              onClick={onOpenQuickDrawer}
-              className="px-3 py-1.5 rounded-xl bg-gradient-to-r from-purple-600/90 to-indigo-600/90 hover:from-purple-500 hover:to-indigo-500 text-white font-semibold text-xs flex items-center gap-1.5 shadow-md shadow-purple-600/20 border border-purple-400/30 cursor-pointer"
-            >
-              <span className="text-sm">{activeCharacter.avatarEmoji || '👔'}</span>
-              <span className="hidden sm:inline">AI社長に相談</span>
-            </button>
-
             {/* Token Pricing & Usage Modal */}
             <button
               onClick={onOpenPricing}
