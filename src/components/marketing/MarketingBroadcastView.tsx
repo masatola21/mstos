@@ -51,8 +51,9 @@ export const MarketingBroadcastView: React.FC<{initialChannel?:Channel}> = ({ini
 
   const db=getSupabase();
   const selectedLineTemplate=lineTemplates.find(item=>item.id===selectedLineTemplateId&&item.reply_type===lineContentType);
-  const fillForContact=(value:string,contact:Contact)=>{const company=contact.company_id?companies[contact.company_id]:undefined;const values:Record<string,string>={recipient_name:contact.full_name||'ご担当者',company_name:String(company?.company_name||company?.name||'貴社'),form_title:'',document_title:'',document_url:'',document_content:'',link_url:''};return value.replace(/{([a-z_]+)}/g,(_m,key:string)=>values[key]||'')};
-  const fillLinePayload=(value:any,contact:Contact):any=>Array.isArray(value)?value.map(item=>fillLinePayload(item,contact)):value&&typeof value==='object'?Object.fromEntries(Object.entries(value).filter(([key])=>key!=='storagePaths').map(([key,item])=>[key,fillLinePayload(item,contact)])):typeof value==='string'?fillForContact(value,contact):value;
+  const previewFallbackContact:Contact={id:'preview',full_name:null,email:null,line_user_id:null,company_id:null};
+  const fillForContact=(value:string,contact?:Contact|null)=>{const recipient=contact||previewFallbackContact;const company=recipient.company_id?companies[recipient.company_id]:undefined;const values:Record<string,string>={recipient_name:recipient.full_name||'ご担当者',company_name:String(company?.company_name||company?.name||'貴社'),form_title:'',document_title:'',document_url:'',document_content:'',link_url:''};return value.replace(/{([a-z_]+)}/g,(_m,key:string)=>values[key]||'')};
+  const fillLinePayload=(value:any,contact?:Contact|null):any=>{const recipient=contact||previewFallbackContact;return Array.isArray(value)?value.map(item=>fillLinePayload(item,recipient)):value&&typeof value==='object'?Object.fromEntries(Object.entries(value).filter(([key])=>key!=='storagePaths').map(([key,item])=>[key,fillLinePayload(item,recipient)])):typeof value==='string'?fillForContact(value,recipient):value};
   useEffect(()=>{
     let active=true;
     if(!db)return;
@@ -138,7 +139,7 @@ export const MarketingBroadcastView: React.FC<{initialChannel?:Channel}> = ({ini
   const clearSelected=()=>setSelected([]);
   const toggle=(id:string)=>setSelected(current=>current.includes(id)?current.filter(x=>x!==id):[...current,id]);
   const selectedContacts=eligible.filter(x=>selected.includes(x.id));
-  const previewContact:Contact=selectedContacts[0]||{id:'',full_name:'プレビュー用の宛先',email:'',line_user_id:null,company_id:null};
+  const previewContact:Contact=selectedContacts[0]||previewFallbackContact;
 
   const send=async()=>{
     if(!db||busy)return;
