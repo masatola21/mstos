@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { BookOpen, FilePlus2, Search, Trash2, Save, Download, Paperclip, Loader2 } from 'lucide-react';
 import { KnowledgeAttachment, KnowledgeCategory, KnowledgeItem } from '../types';
-import { AI_WORK_MODES } from '../../data/aiWorkModes';
+import { AI_WORK_MODES, AIWorkModeId } from '../../data/aiWorkModes';
 
 interface KnowledgeHubViewProps {
   items: KnowledgeItem[];
@@ -35,6 +35,7 @@ const blankItem = (): KnowledgeItem => ({
 
 export const KnowledgeHubView: React.FC<KnowledgeHubViewProps> = ({ items, onSave, onDelete, selectedItemId, onUploadAttachment, onDownloadAttachment, onDeleteAttachment }) => {
   const [activeCategory, setActiveCategory] = useState<KnowledgeCategory | 'all'>('all');
+  const [activeRoleId, setActiveRoleId] = useState<AIWorkModeId | 'all'>('all');
   const [query, setQuery] = useState('');
   const [editing, setEditing] = useState<KnowledgeItem | null>(null);
   const [tagText, setTagText] = useState('');
@@ -122,9 +123,14 @@ export const KnowledgeHubView: React.FC<KnowledgeHubViewProps> = ({ items, onSav
 
   const visibleItems = useMemo(() => items.filter((item) => {
     const categoryMatches = activeCategory === 'all' || item.category === activeCategory;
+    const access = item.knowledgeAccess;
+    const roleMatches = activeRoleId === 'all'
+      || (activeRoleId === 'president'
+        ? !access || access.scope === 'all' || access.scope === 'president' || access.scope === 'roles'
+        : Boolean(access && (access.scope === 'all' || (access.scope === 'roles' && (access.roleIds || []).includes(activeRoleId)))));
     const text = `${item.title} ${item.content} ${item.tags.join(' ')}`.toLowerCase();
-    return categoryMatches && text.includes(query.toLowerCase());
-  }), [items, activeCategory, query]);
+    return categoryMatches && roleMatches && text.includes(query.toLowerCase());
+  }), [items, activeCategory, activeRoleId, query]);
 
   const startNew = () => { setEditing(blankItem()); setTagText(''); };
   const startEdit = (item: KnowledgeItem) => { setEditing({ ...item }); setTagText(item.tags.join(', ')); };
@@ -234,6 +240,10 @@ export const KnowledgeHubView: React.FC<KnowledgeHubViewProps> = ({ items, onSav
         <select value={activeCategory} onChange={(e) => setActiveCategory(e.target.value as KnowledgeCategory | 'all')} className="rounded-xl border border-slate-800 bg-slate-900 px-3 py-2 text-sm text-white">
           <option value="all">すべての分類</option>
           {CATEGORIES.map((category) => <option key={category.id} value={category.id}>{category.label}</option>)}
+        </select>
+        <select value={activeRoleId} onChange={(e) => setActiveRoleId(e.target.value as AIWorkModeId | 'all')} className="rounded-xl border border-slate-800 bg-slate-900 px-3 py-2 text-sm text-white">
+          <option value="all">すべての担当AI</option>
+          {AI_WORK_MODES.map((mode) => <option key={mode.id} value={mode.id}>{mode.label}が参照できる資料</option>)}
         </select>
       </div>
 
