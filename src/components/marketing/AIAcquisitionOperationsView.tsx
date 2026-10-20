@@ -160,10 +160,12 @@ export const AIAcquisitionOperationsView: React.FC<{ onSendPresidentSummary?: (s
   };
   useEffect(() => { void load(); }, []);
 
-  const resetForm = (nextType: RecordType) => { aiAbortController.current?.abort(); aiAbortController.current = null; aiRequestVersion.current += 1; setAiGenerating(false); setEditing(null); setIsFormOpen(true); setType(nextType); setTitle(''); setProductId(''); setPayload(emptyPayload()); setNotice(''); setAiInstruction(''); setAiConversation([]); setAiError(''); setExternalPrompt(''); setExternalDraft(''); setExternalReview(''); };
-  const startEdit = (record: AcquisitionRecord) => { aiAbortController.current?.abort(); aiAbortController.current = null; aiRequestVersion.current += 1; setAiGenerating(false); setEditing(record); setIsFormOpen(true); setType(record.record_type); setTitle(record.title); setProductId(record.product_id || ''); setPayload(record.payload || {}); setActiveTab(record.record_type === 'result' || record.record_type === 'proposal' ? 'analysis' : record.record_type); setNotice(''); setAiInstruction(''); setAiConversation([]); setAiError(''); setExternalPrompt(''); setExternalDraft(''); setExternalReview(''); };
+  const cancelAIRequest = () => { aiAbortController.current?.abort(); aiAbortController.current = null; aiRequestVersion.current += 1; setAiGenerating(false); };
+  const resetForm = (nextType: RecordType) => { cancelAIRequest(); setEditing(null); setIsFormOpen(true); setType(nextType); setTitle(''); setProductId(''); setPayload(emptyPayload()); setNotice(''); setAiInstruction(''); setAiConversation([]); setAiError(''); setExternalPrompt(''); setExternalDraft(''); setExternalReview(''); };
+  const startEdit = (record: AcquisitionRecord) => { cancelAIRequest(); setEditing(record); setIsFormOpen(true); setType(record.record_type); setTitle(record.title); setProductId(record.product_id || ''); setPayload(record.payload || {}); setActiveTab(record.record_type === 'result' || record.record_type === 'proposal' ? 'analysis' : record.record_type); setNotice(''); setAiInstruction(''); setAiConversation([]); setAiError(''); setExternalPrompt(''); setExternalDraft(''); setExternalReview(''); };
   const save = async (event: React.FormEvent) => {
     event.preventDefault();
+    if (aiGenerating) { setError('AI生成が完了するか停止してから保存してください。'); return; }
     if (!title.trim()) { setError('名称を入力してください。'); return; }
     const db = getSupabase(); if (!db || !userId) { setError('Supabaseに接続してログインしてください。'); return; }
     setSaving(true); setError(''); setNotice('');
@@ -321,10 +323,7 @@ export const AIAcquisitionOperationsView: React.FC<{ onSendPresidentSummary?: (s
 
   const stopAI = () => {
     if (!aiAbortController.current) return;
-    aiAbortController.current.abort();
-    aiAbortController.current = null;
-    aiRequestVersion.current += 1;
-    setAiGenerating(false);
+    cancelAIRequest();
     setNotice('AI処理を停止しました。草案と入力欄の内容はそのままです。');
   };
 
@@ -433,7 +432,7 @@ export const AIAcquisitionOperationsView: React.FC<{ onSendPresidentSummary?: (s
         </div>
         {['social','video'].includes(type) && <p className="rounded-lg bg-amber-950/30 p-3 text-xs text-amber-200">各媒体への自動投稿・実績自動取得は未連携です。ここでは手動投稿の予定・公開URL・入力済み実績を管理します。</p>}
         {type === 'ad' && <p className="rounded-lg bg-amber-950/30 p-3 text-xs text-amber-200">広告の出稿・停止・予算変更は実行しません。費用と成果を記録し、配信判断は人が確認してください。</p>}
-        <div className="flex gap-2"><button disabled={saving} className="inline-flex items-center gap-2 rounded-lg bg-indigo-600 px-4 py-2 text-sm font-semibold disabled:opacity-50"><Save className="h-4 w-4"/>{saving ? '保存中…' : '保存'}</button><button type="button" onClick={() => { setEditing(null); setIsFormOpen(false); setTitle(''); setProductId(''); setPayload(emptyPayload()); }} className="rounded-lg border border-slate-700 px-4 py-2 text-sm">キャンセル</button></div>
+        <div className="flex gap-2"><button disabled={saving || aiGenerating} className="inline-flex items-center gap-2 rounded-lg bg-indigo-600 px-4 py-2 text-sm font-semibold disabled:opacity-50"><Save className="h-4 w-4"/>{aiGenerating ? 'AI処理中…' : saving ? '保存中…' : '保存'}</button><button type="button" onClick={() => { cancelAIRequest(); setEditing(null); setIsFormOpen(false); setTitle(''); setProductId(''); setPayload(emptyPayload()); }} className="rounded-lg border border-slate-700 px-4 py-2 text-sm">キャンセル</button></div>
       </form>}
 
       {activeTab !== 'dashboard' && activeTab !== 'analysis' && !formVisible && <section className="space-y-3"><div className="flex items-center justify-between"><div><h2 className="font-semibold">{tabs.find((tab) => tab.id === activeTab)?.label}</h2><p className="mt-1 text-xs text-slate-500">商品マスターの商品と関連付けて登録できます。実行・公開は外部サービスで行ってください。</p></div><button onClick={() => createRecord(activeTab as RecordType)} className="inline-flex items-center gap-2 rounded-lg bg-indigo-600 px-3 py-2 text-sm"><Plus className="h-4 w-4"/>新規登録</button></div><RecordList records={visibleRecords} products={products} segments={segments} onEdit={startEdit} onDelete={remove}/></section>}
