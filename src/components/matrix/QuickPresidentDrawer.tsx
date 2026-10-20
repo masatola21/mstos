@@ -15,6 +15,7 @@ import { ApiUsageData, CharacterConfig, ChatMessage, UserProfile } from '../../t
 import { AI_WORK_MODES, AIWorkModeId } from '../../data/aiWorkModes';
 
 type PageAssistantProfile = { label: string; mode: AIWorkModeId };
+type RequestMode = 'consult' | 'action_plan' | 'external_prompt';
 const getPageAssistantProfile = (pageId: string): PageAssistantProfile => {
   if (pageId === 'marketing_automation' || pageId === 'ai_acquisition') return { label: 'マーケティング', mode: 'marketing_execution' };
   if (pageId === 'mst_diagnoses' || pageId === 'deal_invitations') return { label: '診断・提案', mode: 'diagnosis' };
@@ -56,6 +57,7 @@ export const QuickPresidentDrawer: React.FC<QuickPresidentDrawerProps> = ({
   ]);
   const pageProfile = getPageAssistantProfile(pageId);
   const [selectedWorkModeId, setSelectedWorkModeId] = useState<AIWorkModeId>(pageProfile.mode);
+  const [requestMode, setRequestMode] = useState<RequestMode>('consult');
   const selectedWorkMode = AI_WORK_MODES.find((mode) => mode.id === selectedWorkModeId) ?? AI_WORK_MODES[0];
   const [input, setInput] = useState('');
   const [isLoading, setIsLoading] = useState(false);
@@ -70,6 +72,7 @@ export const QuickPresidentDrawer: React.FC<QuickPresidentDrawerProps> = ({
   useEffect(() => {
     const profile = getPageAssistantProfile(pageId);
     setSelectedWorkModeId(profile.mode);
+    setRequestMode('consult');
     setMessages([{
       id: 'page-welcome-' + pageId,
       role: 'assistant',
@@ -108,7 +111,8 @@ export const QuickPresidentDrawer: React.FC<QuickPresidentDrawerProps> = ({
           character,
           userProfile,
           workModeId: selectedWorkModeId,
-          knowledgeContext: '現在開いているページ: ' + pageProfile.label + '（画面ID: ' + pageId + '）。ページ固有の業務役割を選んで回答してください。実データは自動共有されていないため、未提示の情報を推測しないでください。',
+          roleOverride: requestMode === 'consult' ? undefined : { extraInstruction: requestMode === 'external_prompt' ? '外部のAI・開発者・業者へそのまま渡せる日本語の依頼プロンプトを作成してください。背景、目的、作業範囲、守る制約、完了条件を明記し、不明な事実は捏造せず確認事項として残してください。プロンプト本文を独立してコピーできる形で提示してください。' : 'この画面で解決したい依頼について、実行可能な操作と必要な確認を分けた具体的な実行案を作成してください。データ変更・送信・削除は必ず事前確認を求め、接続されていない機能を実行できると主張せず、実行したふりをしないでください。' },
+          knowledgeContext: '現在開いているページ: ' + pageProfile.label + '（画面ID: ' + pageId + '）。依頼モード: ' + requestMode + '。ページ固有の業務役割を選んで回答してください。実データは自動共有されていないため、未提示の情報を推測しないでください。',
         }),
       });
 
@@ -196,13 +200,21 @@ export const QuickPresidentDrawer: React.FC<QuickPresidentDrawerProps> = ({
       </div>
 
       <div className="border-b border-slate-800 bg-slate-950/60 px-4 py-3">
-        <label className="flex items-center justify-between gap-3 text-xs text-slate-300">
+        <div>
+          <p className="text-xs text-slate-300">依頼の種類</p>
+          <div className="mt-2 grid grid-cols-3 gap-1.5">
+            <button type="button" onClick={() => setRequestMode('consult')} className={`rounded-lg px-2 py-1.5 text-[10px] font-semibold ${requestMode === 'consult' ? 'bg-indigo-600 text-white' : 'bg-slate-800 text-slate-300'}`}>相談</button>
+            <button type="button" onClick={() => setRequestMode('action_plan')} className={`rounded-lg px-2 py-1.5 text-[10px] font-semibold ${requestMode === 'action_plan' ? 'bg-indigo-600 text-white' : 'bg-slate-800 text-slate-300'}`}>操作の実行案</button>
+            <button type="button" onClick={() => setRequestMode('external_prompt')} className={`rounded-lg px-2 py-1.5 text-[10px] font-semibold ${requestMode === 'external_prompt' ? 'bg-indigo-600 text-white' : 'bg-slate-800 text-slate-300'}`}>外部依頼文</button>
+          </div>
+        </div>
+        <label className="mt-3 flex items-center justify-between gap-3 text-xs text-slate-300">
           <span>相談するAI</span>
           <select value={selectedWorkModeId} onChange={(event) => setSelectedWorkModeId(event.target.value as AIWorkModeId)} className="max-w-[220px] rounded-lg border border-slate-700 bg-slate-900 px-2 py-1.5 text-xs text-white">
             {AI_WORK_MODES.map((mode) => <option key={mode.id} value={mode.id}>{mode.label}</option>)}
           </select>
         </label>
-        <p className="mt-2 text-[10px] leading-relaxed text-slate-500">現在の画面に合わせたAIを初期選択しています。画面の顧客・案件データは自動送信されません。保存や送信などの操作は、提案内容を確認してから行ってください。</p>
+        <p className="mt-2 text-[10px] leading-relaxed text-slate-500">現在の画面に合わせたAIを初期選択しています。実行案も操作内容を提案する段階で、この窓から直接保存・送信はしません。画面データは自動送信されないため、必要な情報を入力してください。外部依頼文はコピーして他のAIや依頼先に渡せます。</p>
       </div>
 
       {/* Messages Scroll Area */}
