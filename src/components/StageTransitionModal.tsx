@@ -61,7 +61,6 @@ export const StageTransitionModal: React.FC<StageTransitionModalProps> = ({
   const [leadNotes, setLeadNotes] = useState('');
 
   // For Lead -> Deal
-  const [dealId, setDealId] = useState('');
   const [proposalPlanName, setProposalPlanName] = useState('');
   const [proposalPlanTemplateId, setProposalPlanTemplateId] = useState('');
   const [proposalStatus, setProposalStatus] = useState('初回面談');
@@ -103,8 +102,6 @@ export const StageTransitionModal: React.FC<StageTransitionModalProps> = ({
         if (matched) setServiceType(matched.product_name);
       });
     } else if (type === 'lead_to_deal') {
-      const randomCode = Math.floor(1000 + Math.random() * 9000);
-      setDealId(`DEAL-${randomCode}`);
       setProposalPlanName(sourceRecord.service_type ? `${sourceRecord.service_type} 導入提案` : '新規導入提案');
       setProposalPlanTemplateId('');
       setProposalStatus('初回面談');
@@ -198,11 +195,6 @@ export const StageTransitionModal: React.FC<StageTransitionModalProps> = ({
         onSuccess('leads', res.data?.id);
         onClose();
       } else if (type === 'lead_to_deal') {
-        if (!dealId.trim()) {
-          setErrorMessage('商談ID（例: DEAL-001）を入力してください。');
-          setIsSubmitting(false);
-          return;
-        }
         if (!proposalPlanName.trim()) {
           setErrorMessage('提案プラン名・商談名を入力してください。');
           setIsSubmitting(false);
@@ -212,7 +204,6 @@ export const StageTransitionModal: React.FC<StageTransitionModalProps> = ({
         const selectedProd = products.find(p => p.id === productId);
 
         const payload: Record<string, any> = {
-          id: dealId.trim(),
           company_id: companyId || null,
           lead_id: sourceRecord.id, // lead_id を引き継ぎ
           proposal_plan_name: proposalPlanName.trim(),
@@ -519,20 +510,6 @@ export const StageTransitionModal: React.FC<StageTransitionModalProps> = ({
                 </div>
 
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
-                  <div>
-                    <label className="block text-xs font-semibold text-slate-300 mb-1">
-                      商談ID (text PK) <span className="text-rose-400">*</span>
-                    </label>
-                    <input
-                      type="text"
-                      required
-                      value={dealId}
-                      onChange={(e) => setDealId(e.target.value)}
-                      placeholder="DEAL-001"
-                      className="w-full px-3 py-2 rounded-xl bg-slate-950 border border-slate-700 text-slate-200 text-xs font-mono outline-none focus:border-blue-500"
-                    />
-                  </div>
-
                   <div>
                     <label className="block text-xs font-semibold text-slate-300 mb-1">
                       提案プラン名・商談名 <span className="text-rose-400">*</span>
