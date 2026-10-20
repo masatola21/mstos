@@ -313,6 +313,7 @@ function AppContent() {
     workspaceSaveRevisionRef.current += 1;
     setWorkspaceReady(false);
     setWorkspaceSyncStatus('loading');
+    setWorkspaceSaveError('');
 
     if (!user) return () => { cancelled = true; };
 
@@ -354,7 +355,14 @@ function AppContent() {
         if (cancelled) return;
         console.error('Workspace cloud load failed:', error);
         workspaceSyncEnabledRef.current = false;
-        setWorkspaceSyncStatus('error');
+        const errorCode = (error as { code?: string })?.code;
+        const errorMessage = (error as { message?: string })?.message || '';
+        if (errorCode === '40001' || errorMessage.includes('WORKSPACE_CONFLICT')) {
+          setWorkspaceSyncStatus('conflict');
+          setWorkspaceSaveError('他の端末で更新されています。再読み込みしてください');
+        } else {
+          setWorkspaceSyncStatus('error');
+        }
         setWorkspaceReady(true);
       });
 
@@ -410,8 +418,11 @@ function AppContent() {
             setWorkspaceSaveError('他の端末で更新されています。再読み込みしてください');
             return;
           }
-          if (errorCode === '23505' || /duplicate key|unique constraint/i.test(errorMessage)) {
+          const errorDetails = `${errorMessage} ${(error as { details?: string })?.details || ''} ${(error as { hint?: string })?.hint || ''}`;
+          if (errorCode === '23505' && /invoice_number|invoice number|customer_invoices/i.test(errorDetails)) {
             setWorkspaceSaveError('請求書番号が重複しています。請求番号を確認して再度保存してください。');
+          } else if (errorCode === '23505' || /duplicate key|unique constraint/i.test(errorMessage)) {
+            setWorkspaceSaveError('保存時に一意制約の重複が発生しました。重複するデータを確認してください。');
           }
           setWorkspaceSyncStatus('error');
         });
