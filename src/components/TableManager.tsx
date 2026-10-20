@@ -29,7 +29,8 @@ import {
   Briefcase,
   UserCheck,
   Check,
-  Trash2
+  Trash2,
+  Send
 } from 'lucide-react';
 
 interface TableManagerProps {
@@ -182,6 +183,16 @@ export const TableManager: React.FC<TableManagerProps> = ({
   const handleOpenEdit = (record: any) => {
     setEditRecord(record);
     setIsFormOpen(true);
+  };
+
+  const handleOpenRecordSend = (record: any) => {
+    if (!record.company_id || !onOpenCustomerWorkspace) return;
+    onOpenCustomerWorkspace(String(record.company_id), 'send', {
+      tableKey: currentTable,
+      recordId: String(record.id),
+      leadId: currentTable === 'leads' ? String(record.id) : record.lead_id ? String(record.lead_id) : undefined,
+      contactId: record.contact_id ? String(record.contact_id) : undefined,
+    });
   };
 
   const handleDeleteRecord = async (record: any) => {
@@ -579,6 +590,11 @@ export const TableManager: React.FC<TableManagerProps> = ({
                       {/* Row Actions (View, Stage Progression, Edit & Safe Delete) */}
                       <td className="py-3 px-4 text-right whitespace-nowrap" onClick={(e) => e.stopPropagation()}>
                         <div className="flex items-center justify-end gap-1.5">
+                          {['prospects', 'leads', 'deals', 'customers'].includes(currentTable) && item.company_id && onOpenCustomerWorkspace && (
+                            <button onClick={() => handleOpenRecordSend(item)} className="px-2.5 py-1 rounded-lg text-xs font-semibold bg-indigo-600/20 text-indigo-300 hover:bg-indigo-600 hover:text-white border border-indigo-500/30 flex items-center gap-1 transition-colors" title="この会社の連絡先を選んで送信センターを開く">
+                              <Send className="w-3.5 h-3.5" /><span>連絡・配信</span>
+                            </button>
+                          )}
                           {currentTable === 'prospects' && (
                             <button
                               onClick={() => handleOpenTransition('prospect_to_lead', item)}
@@ -701,6 +717,11 @@ export const TableManager: React.FC<TableManagerProps> = ({
                 >
                   <span className="text-slate-500 text-[11px]">タップして詳細確認</span>
                   <div className="flex flex-wrap items-center gap-1.5">
+                    {['prospects', 'leads', 'deals', 'customers'].includes(currentTable) && item.company_id && onOpenCustomerWorkspace && (
+                      <button onClick={() => handleOpenRecordSend(item)} className="px-2 py-1 rounded-lg bg-indigo-600/20 text-indigo-300 hover:bg-indigo-600 hover:text-white border border-indigo-500/30 flex items-center gap-1 text-[11px] font-semibold">
+                        <Send className="w-3 h-3" /><span>連絡・配信</span>
+                      </button>
+                    )}
                     {currentTable === 'prospects' && (
                       <button
                         onClick={() => handleOpenTransition('prospect_to_lead', item)}
