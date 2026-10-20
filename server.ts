@@ -51,9 +51,9 @@ function verifyEmailUnsubscribeToken(token: unknown): string | null {
 }
 
 function createEmailUnsubscribeUrl(contactId: string): string {
+  const token = createEmailUnsubscribeToken(contactId);
   const appUrl = process.env.PUBLIC_APP_URL?.trim();
   if (!appUrl) throw new Error('配信停止URLの設定がありません');
-  const token = createEmailUnsubscribeToken(contactId);
   const url = new URL('/api/email/unsubscribe', appUrl);
   url.searchParams.set('t', token);
   return url.toString();
