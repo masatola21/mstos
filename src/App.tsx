@@ -147,6 +147,18 @@ function selectKnowledgeContext(
     return pairs;
   };
   const queryPairs = bigrams(request);
+  const preferredCategoriesByRole: Record<string, string[]> = {
+    marketing_strategy: ['business', 'product', 'research'],
+    marketing_execution: ['product', 'business', 'deliverable'],
+    sales_operations: ['customer', 'product'],
+    billing_operations: ['business', 'decision'],
+    operations_management: ['business', 'decision', 'deliverable'],
+    new_product: ['product', 'customer', 'research'],
+    customer_product: ['product', 'customer'],
+    diagnosis: ['customer', 'research'],
+    research: ['research', 'business'],
+  };
+  const preferredCategories = preferredCategoriesByRole[workModeId] || [];
   const ranked = visibleItems.map((item) => {
     const title = normalize(item.title);
     const tags = normalize(item.tags.join(' '));
@@ -159,7 +171,8 @@ function selectKnowledgeContext(
       else if (tags.includes(pair)) tagHits += 1;
       else if (content.includes(pair)) contentHits += 1;
     });
-    const score = titleHits * 4 + tagHits * 3 + contentHits + (item.category === 'business' ? 1 : 0);
+    const categoryBoost = preferredCategories.includes(item.category) ? 3 : 0;
+    const score = titleHits * 4 + tagHits * 3 + contentHits + categoryBoost + (item.category === 'business' ? 1 : 0);
     return { item, score };
   }).filter(({ score }) => score > 0)
     .sort((a, b) => b.score - a.score || b.item.updatedAt - a.item.updatedAt)
