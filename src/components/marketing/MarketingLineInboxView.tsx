@@ -3,9 +3,11 @@ import { getSupabase } from '../../lib/supabaseClient';
 import { InlineDeleteButton } from '../InlineDeleteButton';
 
 type InboxMessage={id:string;line_event_id:string;direction:'inbound'|'outbound';contact_id:string|null;line_user_id:string;body:string;status:string;received_at:string};
-type ReplyRule={id:string;name:string;match_mode:'exact'|'contains';match_text:string;reply_text:string;reply_type?:'text'|'image'|'flex';reply_payload?:Record<string,unknown>;tag_id:string|null;priority:number;enabled:boolean};
+type ReplyRule={id:string;name:string;match_mode:'exact'|'contains';match_text:string;reply_text:string;reply_type?:'text'|'image'|'flex'|'video';reply_payload?:Record<string,unknown>;tag_id:string|null;priority:number;enabled:boolean};
 type Tag={id:string;name:string};
-type ReplyTemplate={id:string;name:string;reply_type:'text'|'image'|'flex';payload:Record<string,unknown>};
+type ReplyTemplate={id:string;name:string;reply_type:'text'|'image'|'flex'|'video';payload:Record<string,unknown>};
+const LINE_TEMPLATE_BUCKET='mst-line-message-assets';
+const MAX_LINE_TEMPLATE_FILE_BYTES=20*1024*1024;
 type ChannelIntegration={owner_id:string;bot_user_id:string;auto_reply_enabled:boolean};
 
 export const MarketingLineInboxView:React.FC=()=>{
@@ -13,19 +15,28 @@ export const MarketingLineInboxView:React.FC=()=>{
   const [messages,setMessages]=useState<InboxMessage[]>([]);
   const [rules,setRules]=useState<ReplyRule[]>([]);
   const [templates,setTemplates]=useState<ReplyTemplate[]>([]);
+  const [activeView,setActiveView]=useState<'inbox'|'templates'>('inbox');
   const [templateName,setTemplateName]=useState('');
-  const [showTemplatePicker,setShowTemplatePicker]=useState(false);
+  const [editingTemplateId,setEditingTemplateId]=useState('');
+  const [templateType,setTemplateType]=useState<'text'|'image'|'flex'|'video'>('text');
+  const [templateText,setTemplateText]=useState('');
+  const [templateImageUrl,setTemplateImageUrl]=useState('');
+  const [templateImagePath,setTemplateImagePath]=useState('');
+  const [templatePreviewUrl,setTemplatePreviewUrl]=useState('');
+  const [templatePreviewPath,setTemplatePreviewPath]=useState('');
+  const [templateVideoUrl,setTemplateVideoUrl]=useState('');
+  const [templateVideoPath,setTemplateVideoPath]=useState('');
+  const [templateAltText,setTemplateAltText]=useState('');
+  const [templateFlexJson,setTemplateFlexJson]=useState('');
+  const [selectedTemplateId,setSelectedTemplateId]=useState('');
+  const [replyType,setReplyType]=useState<'text'|'image'|'flex'|'video'>('text');
+  const [replyPayload,setReplyPayload]=useState<Record<string,unknown>>({});
   const [tags,setTags]=useState<Tag[]>([]);
   const [integration,setIntegration]=useState<ChannelIntegration|null>(null);
   const [ownerId,setOwnerId]=useState('');
   const [botUserId,setBotUserId]=useState('');
   const [matchText,setMatchText]=useState('');
   const [replyText,setReplyText]=useState('');
-  const [replyType,setReplyType]=useState<'text'|'image'|'flex'>('text');
-  const [imageOriginalUrl,setImageOriginalUrl]=useState('');
-  const [imagePreviewUrl,setImagePreviewUrl]=useState('');
-  const [flexAltText,setFlexAltText]=useState('');
-  const [flexContentsJson,setFlexContentsJson]=useState('');
   const [ruleName,setRuleName]=useState('');
   const [matchMode,setMatchMode]=useState<'exact'|'contains'>('exact');
   const [tagId,setTagId]=useState('');
@@ -93,61 +104,100 @@ export const MarketingLineInboxView:React.FC=()=>{
     if(e)setError(e.message);else{setIntegration({...integration,auto_reply_enabled:enabled});setNotice(enabled?'自動返信を有効にしました。':'自動返信を停止しました。')}
   };
 
-  const buildReplyPayload=():Record<string,unknown>=>{
-    if(replyType==='text'){
-      if(!replyText.trim())throw new Error('自動返信文を入力してください。');
-      return {text:replyText.trim()};
+  const resetTemplateEditor=()=>{
+    setTemplateName('');setEditingTemplateId('');setTemplateType('text');setTemplateText('');
+    setTemplateImageUrl('');setTemplateImagePath('');setTemplatePreviewUrl('');setTemplatePreviewPath('');
+    setTemplateVideoUrl('');setTemplateVideoPath('');setTemplateAltText('');setTemplateFlexJson('');
+  };
+  const uploadLineTemplateAsset=async(file:File,kind:'image'|'video')=>{
+    if(!db||!ownerId)throw new Error('ログイン状態を確認してください。');
+    if(file.size>MAX_LINE_TEMPLATE_FILE_BYTES)throw new Error('ファイルは20MB以下にしてください。');
+    const allowed=kind==='video'?['video/mp4']:['image/jpeg','image/png'];
+    if(!allowed.includes(file.type))throw new Error(kind==='video'?'動画はMP4形式を選択してください。':'画像はJPEGまたはPNG形式を選択してください。');
+    const safeName=file.name.replace(/[\\/:*?"<>|]/g,'_').slice(0,120)||'asset';
+    const path=`${ownerId}/${crypto.randomUUID()}-${safeName}`;
+    const {error:e}=await db.storage.from(LINE_TEMPLATE_BUCKET).upload(path,file,{contentType:file.type,upsert:false});
+    if(e)throw new Error(`素材をアップロードできませんでした: ${e.message}`);
+    const {data}=db.storage.from(LINE_TEMPLATE_BUCKET).getPublicUrl(path);
+    return {path,url:data.publicUrl};
+  };
+  const templatePayload=():Record<string,unknown>=>{
+    if(templateType==='text'){
+      if(!templateText.trim())throw new Error('返信テキストを入力してください。');
+      return {text:templateText.trim()};
     }
-    if(replyType==='image'){
-      try{
-        const original=new URL(imageOriginalUrl.trim());
-        const preview=new URL(imagePreviewUrl.trim());
-        if(original.protocol!=='https:'||preview.protocol!=='https:')throw new Error();
-        return {originalContentUrl:original.toString(),previewImageUrl:preview.toString()};
-      }catch{throw new Error('画像URLにはHTTPSで公開された画像URLを2つ入力してください。');}
+    if(templateType==='image'){
+      if(!templateImageUrl||!templatePreviewUrl||!templateImagePath||!templatePreviewPath)throw new Error('画像本体とプレビュー画像をアップロードしてください。');
+      return {originalContentUrl:templateImageUrl,previewImageUrl:templatePreviewUrl,storagePaths:[templateImagePath,templatePreviewPath]};
     }
-    if(!flexAltText.trim())throw new Error('Flexメッセージの代替テキストを入力してください。');
+    if(templateType==='video'){
+      if(!templateVideoUrl||!templatePreviewUrl||!templateVideoPath||!templatePreviewPath)throw new Error('動画本体とプレビュー画像をアップロードしてください。');
+      if(!templateAltText.trim())throw new Error('動画の代替テキストを入力してください。');
+      return {originalContentUrl:templateVideoUrl,previewImageUrl:templatePreviewUrl,altText:templateAltText.trim(),storagePaths:[templateVideoPath,templatePreviewPath]};
+    }
+    if(!templateAltText.trim())throw new Error('Flexメッセージの代替テキストを入力してください。');
     try{
-      const contents=JSON.parse(flexContentsJson);
+      const contents=JSON.parse(templateFlexJson);
       if(!contents||typeof contents!=='object'||!['bubble','carousel'].includes(contents.type))throw new Error();
-      return {altText:flexAltText.trim(),contents};
+      return {altText:templateAltText.trim(),contents};
     }catch{throw new Error('Flex本文はbubbleまたはcarousel形式の正しいJSONで入力してください。');}
   };
-  const applyTemplate=(template:ReplyTemplate)=>{
-    const payload=template.payload||{};
-    setReplyType(template.reply_type);
-    setReplyText(String(payload.text||''));
-    setImageOriginalUrl(String(payload.originalContentUrl||''));
-    setImagePreviewUrl(String(payload.previewImageUrl||''));
-    setFlexAltText(String(payload.altText||''));
-    setFlexContentsJson(payload.contents?JSON.stringify(payload.contents,null,2):'');
-    setShowTemplatePicker(false);
-    setNotice('テンプレートを読み込みました。必要に応じて編集して保存してください。');
-  };
-  const saveTemplate=async()=>{
+  const saveTemplate=async(event:React.FormEvent)=>{
+    event.preventDefault();
     if(!db||!templateName.trim())return;
     setError('');setNotice('');
     let payload:Record<string,unknown>;
-    try{payload=buildReplyPayload()}catch(e:any){setError(e.message);return}
+    try{payload=templatePayload()}catch(e:any){setError(e.message);return}
     setBusy(true);
-    const {error:e}=await db.from('line_auto_reply_templates').insert({owner_id:ownerId,name:templateName.trim(),reply_type:replyType,payload});
-    if(e)setError(e.message);else{setTemplateName('');setNotice('テンプレートを保存しました。');await load()}
+    const existing=templates.find(item=>item.id===editingTemplateId);
+    const saved=existing
+      ? await db.from('line_auto_reply_templates').update({name:templateName.trim(),reply_type:templateType,payload,updated_at:new Date().toISOString()}).eq('id',editingTemplateId)
+      : await db.from('line_auto_reply_templates').insert({owner_id:ownerId,name:templateName.trim(),reply_type:templateType,payload});
+    if(saved.error)setError(saved.error.message);
+    else{
+      if(existing){
+        const oldPaths=Array.isArray(existing.payload.storagePaths)?existing.payload.storagePaths.filter((p):p is string=>typeof p==='string'):[];
+        const newPaths=Array.isArray(payload.storagePaths)?payload.storagePaths.filter((p):p is string=>typeof p==='string'):[];
+        const removed=oldPaths.filter(p=>!newPaths.includes(p));
+        if(removed.length){const {error:storageError}=await db.storage.from(LINE_TEMPLATE_BUCKET).remove(removed);if(storageError)setError('テンプレートは更新しましたが、古い素材を削除できませんでした: '+storageError.message);}
+      }
+      setNotice('テンプレートを保存しました。');resetTemplateEditor();await load();
+    }
     setBusy(false);
+  };
+  const editTemplate=(template:ReplyTemplate)=>{
+    const payload=template.payload||{};
+    setEditingTemplateId(template.id);setTemplateName(template.name);setTemplateType(template.reply_type);
+    setTemplateText(String(payload.text||''));
+    setTemplateImageUrl(template.reply_type==='image'?String(payload.originalContentUrl||''):template.reply_type==='video'?'': '');
+    setTemplateImagePath(template.reply_type==='image'?String((payload.storagePaths as string[]|undefined)?.[0]||''):'');
+    setTemplatePreviewUrl(String(payload.previewImageUrl||''));
+    setTemplatePreviewPath(String((payload.storagePaths as string[]|undefined)?.[template.reply_type==='video'?1:1]||''));
+    setTemplateVideoUrl(String(template.reply_type==='video'?payload.originalContentUrl||'':''));
+    setTemplateVideoPath(String(template.reply_type==='video'?((payload.storagePaths as string[]|undefined)?.[0]||''):''));
+    setTemplateAltText(String(payload.altText||''));
+    setTemplateFlexJson(payload.contents?JSON.stringify(payload.contents,null,2):'');
+    setActiveView('templates');window.scrollTo({top:0,behavior:'smooth'});
   };
   const deleteTemplate=async(template:ReplyTemplate)=>{
     if(!db)return;
     const {error:e}=await db.from('line_auto_reply_templates').delete().eq('id',template.id);
-    if(e)setError(e.message);else{setNotice('テンプレートを削除しました。');await load()}
+    if(e){setError(e.message);return}
+    const paths=Array.isArray(template.payload.storagePaths)?template.payload.storagePaths.filter((p):p is string=>typeof p==='string'):[];
+    if(paths.length){const {error:storageError}=await db.storage.from(LINE_TEMPLATE_BUCKET).remove(paths);if(storageError){setError('テンプレートを削除しましたが、保存素材の削除に失敗しました: '+storageError.message);return}}
+    setNotice('テンプレートを削除しました。');await load();
+  };
+  const applyTemplate=(template:ReplyTemplate)=>{
+    setSelectedTemplateId(template.id);setReplyType(template.reply_type);setReplyPayload(template.payload||{});
+    setNotice('テンプレートを返信ルールに設定しました。');
   };
   const saveRule=async(event:React.FormEvent)=>{
     event.preventDefault();
     if(!db||!ruleName.trim()||!matchText.trim())return;
-    setError('');setNotice('');
-    let replyPayload:Record<string,unknown>;
-    try{replyPayload=buildReplyPayload()}catch(e:any){setError(e.message);return}
-    setBusy(true);
-    const {error:e}=await db.from('line_auto_reply_rules').insert({owner_id:ownerId,name:ruleName.trim(),match_mode:matchMode,match_text:matchText.trim(),reply_text:replyType==='text'?replyText.trim():'',reply_type:replyType,reply_payload:replyPayload,tag_id:tagId||null,priority:rules.length*10+100,enabled:true});
-    if(e)setError(e.message);else{setRuleName('');setMatchText('');setReplyText('');setImageOriginalUrl('');setImagePreviewUrl('');setFlexAltText('');setFlexContentsJson('');setReplyType('text');setTagId('');setNotice('自動返信ルールを保存しました。');await load()}
+    if(!selectedTemplateId){setError('返信テンプレートを選択してください。');return;}
+    setBusy(true);setError('');setNotice('');
+    const {error:e}=await db.from('line_auto_reply_rules').insert({owner_id:ownerId,name:ruleName.trim(),match_mode:matchMode,match_text:matchText.trim(),reply_text:replyType==='text'?String(replyPayload.text||''):'',reply_type:replyType,reply_payload:replyPayload,tag_id:tagId||null,priority:rules.length*10+100,enabled:true});
+    if(e)setError(e.message);else{setRuleName('');setMatchText('');setTagId('');setSelectedTemplateId('');setReplyPayload({});setNotice('自動返信ルールを保存しました。');await load()}
     setBusy(false);
   };
 
@@ -197,7 +247,7 @@ export const MarketingLineInboxView:React.FC=()=>{
   const activeConversation=conversations.find(x=>x.lineUserId===selectedLineUserId);
   return <div className="space-y-5">
     <section className="rounded-2xl border border-indigo-500/30 bg-slate-900 p-5">
-      <div className="flex flex-wrap items-center justify-between gap-3"><div><h2 className="text-xl font-bold text-white">LINE受信箱・自動返信</h2><p className="mt-1 text-sm text-slate-400">受信したメッセージと回答タグを確認し、キーワードに応じた返信ルールを管理します。</p></div><button onClick={()=>void load()} className="rounded-lg border border-slate-700 px-3 py-2 text-sm text-slate-200">更新</button></div>
+      <div className="flex flex-wrap items-center justify-between gap-3"><div><h2 className="text-xl font-bold text-white">LINE運用</h2><p className="mt-1 text-sm text-slate-400">受信箱・自動返信と、テキスト・画像・Flex・動画テンプレートを管理します。</p></div><button onClick={()=>void load()} className="rounded-lg border border-slate-700 px-3 py-2 text-sm text-slate-200">更新</button></div>
       {error&&<p role="alert" className="mt-3 rounded-lg bg-rose-950/60 p-3 text-sm text-rose-200">{error}</p>}
       {notice&&<p role="status" className="mt-3 rounded-lg bg-emerald-950/60 p-3 text-sm text-emerald-200">{notice}</p>}
       <div className="mt-4 flex flex-wrap items-center gap-3 rounded-xl border border-slate-800 bg-slate-950/60 p-3">
@@ -207,6 +257,12 @@ export const MarketingLineInboxView:React.FC=()=>{
         {integration&&<button onClick={()=>void toggleAutoReply()} className={'rounded px-3 py-1.5 text-xs font-semibold '+(integration.auto_reply_enabled?'bg-emerald-700 text-white':'bg-slate-800 text-slate-300')}>自動返信：{integration.auto_reply_enabled?'有効':'停止中'}</button>}
       </div>
     </section>
+    <nav className="flex gap-2 border-b border-slate-800 pb-2">
+      <button type="button" onClick={()=>setActiveView('inbox')} className={`rounded-lg px-4 py-2 text-sm font-semibold ${activeView==='inbox'?'bg-indigo-600 text-white':'text-slate-400 hover:bg-slate-800'}`}>受信箱・自動返信</button>
+      <button type="button" onClick={()=>setActiveView('templates')} className={`rounded-lg px-4 py-2 text-sm font-semibold ${activeView==='templates'?'bg-indigo-600 text-white':'text-slate-400 hover:bg-slate-800'}`}>テンプレート管理（{templates.length}）</button>
+    </nav>
+    {activeView==='inbox'&&<>
+
     <div className="grid gap-5 xl:grid-cols-[280px_1fr]">
       <section className="rounded-2xl border border-slate-800 bg-slate-900 p-4">
         <h3 className="font-bold text-white">受信した相手</h3>
@@ -225,21 +281,40 @@ export const MarketingLineInboxView:React.FC=()=>{
         <select value={matchMode} onChange={e=>setMatchMode(e.target.value as 'exact'|'contains')} className="rounded-lg border border-slate-700 bg-slate-950 p-2 text-sm text-white"><option value="exact">完全一致</option><option value="contains">含む</option></select>
         <input value={matchText} onChange={e=>setMatchText(e.target.value)} placeholder="ボタンから届く選択文字" className="rounded-lg border border-slate-700 bg-slate-950 p-2 text-sm text-white" />
         <select value={tagId} onChange={e=>setTagId(e.target.value)} className="rounded-lg border border-slate-700 bg-slate-950 p-2 text-sm text-white"><option value="">タグを付けない</option>{tags.map(tag=><option key={tag.id} value={tag.id}>{tag.name}</option>)}</select>
-        <div className="flex flex-wrap items-center gap-2 md:col-span-2">
-          <button type="button" onClick={()=>setShowTemplatePicker(!showTemplatePicker)} className="rounded-lg border border-indigo-500/40 px-3 py-2 text-xs text-indigo-200 hover:bg-indigo-950/40">テンプレートから選ぶ（{templates.filter(item=>item.reply_type===replyType).length}件）</button>
-          <input value={templateName} onChange={e=>setTemplateName(e.target.value)} placeholder="テンプレート名" className="min-w-0 flex-1 rounded-lg border border-slate-700 bg-slate-950 p-2 text-sm text-white" />
-          <button type="button" disabled={busy||!templateName.trim()} onClick={()=>void saveTemplate()} className="rounded-lg border border-slate-700 px-3 py-2 text-xs text-slate-200 disabled:opacity-40">現在の内容をテンプレート保存</button>
-        </div>
-        {showTemplatePicker&&<div className="space-y-2 rounded-lg border border-slate-700 bg-slate-950 p-3 md:col-span-2">
-          {templates.filter(item=>item.reply_type===replyType).length===0?<p className="text-xs text-slate-500">この形式のテンプレートはありません。</p>:templates.filter(item=>item.reply_type===replyType).map(template=><div key={template.id} className="flex items-center justify-between gap-2 rounded-lg border border-slate-800 p-2"><button type="button" onClick={()=>applyTemplate(template)} className="min-w-0 flex-1 truncate text-left text-sm text-slate-200 hover:text-white">{template.name}</button><InlineDeleteButton onConfirm={()=>deleteTemplate(template)} warning={`テンプレート「${template.name}」を削除しますか？`} ariaLabel={`テンプレート「${template.name}」を削除`}>削除</InlineDeleteButton></div>)}
-        </div>}
-        <select value={replyType} onChange={e=>{const type=e.target.value as 'text'|'image'|'flex';setReplyType(type);if(type==='flex'&&!flexContentsJson)setFlexContentsJson(JSON.stringify({type:'bubble',body:{type:'box',layout:'vertical',contents:[{type:'text',text:'ご相談内容を選んでください',weight:'bold',size:'md'},{type:'button',action:{type:'message',label:'経営改善',text:'経営改善'}},{type:'button',action:{type:'message',label:'業務改善',text:'業務改善'}}]}},null,2));if(type==='flex'&&!flexAltText)setFlexAltText('ご相談内容を選択してください');}} className="rounded-lg border border-slate-700 bg-slate-950 p-2 text-sm text-white md:col-span-2"><option value="text">テキスト</option><option value="image">画像</option><option value="flex">Flexメッセージ</option></select>
-        {replyType==='text'&&<textarea value={replyText} onChange={e=>setReplyText(e.target.value)} rows={3} placeholder="自動返信文" className="rounded-lg border border-slate-700 bg-slate-950 p-2 text-sm text-white md:col-span-2" />}
-        {replyType==='image'&&<div className="grid gap-2 md:col-span-2 md:grid-cols-2"><input type="url" value={imageOriginalUrl} onChange={e=>setImageOriginalUrl(e.target.value)} placeholder="画像URL（HTTPS）" className="rounded-lg border border-slate-700 bg-slate-950 p-2 text-sm text-white" /><input type="url" value={imagePreviewUrl} onChange={e=>setImagePreviewUrl(e.target.value)} placeholder="プレビュー画像URL（HTTPS）" className="rounded-lg border border-slate-700 bg-slate-950 p-2 text-sm text-white" /><p className="text-xs text-slate-500 md:col-span-2">画像はHTTPSで公開されている必要があります。</p></div>}
-        {replyType==='flex'&&<div className="grid gap-2 md:col-span-2"><input value={flexAltText} onChange={e=>setFlexAltText(e.target.value)} maxLength={1500} placeholder="通知や一覧に表示する代替テキスト" className="rounded-lg border border-slate-700 bg-slate-950 p-2 text-sm text-white" /><textarea value={flexContentsJson} onChange={e=>setFlexContentsJson(e.target.value)} rows={10} placeholder='Flex本文 JSON（bubble / carousel）' className="rounded-lg border border-slate-700 bg-slate-950 p-2 font-mono text-xs text-white" /><p className="text-xs text-slate-500">ボタンで自動返信ルールにつなぐ場合は、action.type を message にしてください。</p></div>}
+        <select value={selectedTemplateId} onChange={e=>{const id=e.target.value;setSelectedTemplateId(id);const selected=templates.find(item=>item.id===id);if(selected){setReplyType(selected.reply_type);setReplyPayload(selected.payload||{});}}} className="rounded-lg border border-slate-700 bg-slate-950 p-2 text-sm text-white md:col-span-2">
+          <option value="">返信テンプレートを選択</option>
+          {templates.map(template=><option key={template.id} value={template.id}>{template.reply_type==='text'?'テキスト':template.reply_type==='image'?'画像':template.reply_type==='video'?'動画':'Flex'}：{template.name}</option>)}
+        </select>
+        <p className="text-xs text-slate-500 md:col-span-2">テンプレートは「テンプレート管理」タブで作成・アップロードできます。</p>
         <button disabled={busy||!integration} className="rounded-lg bg-indigo-600 px-4 py-2 text-sm font-semibold text-white disabled:opacity-40 md:col-span-2">{busy?'保存中…':'自動返信ルールを保存'}</button>
       </form>
-      <div className="mt-4 divide-y divide-slate-800">{rules.map(rule=><div key={rule.id} className="flex flex-wrap items-center justify-between gap-3 py-3"><div><div className="font-medium text-white">{rule.name}</div><div className="text-xs text-slate-400">{rule.match_mode==='exact'?'完全一致':'含む'}：「{rule.match_text}」 ・ {tags.find(tag=>tag.id===rule.tag_id)?.name||'タグなし'}</div><div className="whitespace-pre-wrap text-xs text-slate-500">{rule.reply_type==='image'?'画像メッセージ':rule.reply_type==='flex'?'Flexメッセージ':rule.reply_text}</div></div><div className="flex gap-2"><button onClick={()=>void toggleRule(rule)} className="rounded border border-slate-700 px-2 py-1 text-xs text-slate-300">{rule.enabled?'停止':'有効化'}</button><InlineDeleteButton onConfirm={()=>void deleteRule(rule)} warning={`「${rule.name}」を削除しますか？`}>削除</InlineDeleteButton></div></div>)}</div>
+      <div className="mt-4 divide-y divide-slate-800">{rules.map(rule=><div key={rule.id} className="flex flex-wrap items-center justify-between gap-3 py-3"><div><div className="font-medium text-white">{rule.name}</div><div className="text-xs text-slate-400">{rule.match_mode==='exact'?'完全一致':'含む'}：「{rule.match_text}」 ・ {tags.find(tag=>tag.id===rule.tag_id)?.name||'タグなし'}</div><div className="whitespace-pre-wrap text-xs text-slate-500">{rule.reply_type==='image'?'画像メッセージ':rule.reply_type==='video'?'動画メッセージ':rule.reply_type==='flex'?'Flexメッセージ':rule.reply_text}</div></div><div className="flex gap-2"><button onClick={()=>void toggleRule(rule)} className="rounded border border-slate-700 px-2 py-1 text-xs text-slate-300">{rule.enabled?'停止':'有効化'}</button><InlineDeleteButton onConfirm={()=>void deleteRule(rule)} warning={`「${rule.name}」を削除しますか？`}>削除</InlineDeleteButton></div></div>)}</div>
+
     </section>
+    </>}
+    {activeView==='templates'&&<section className="space-y-5 rounded-2xl border border-slate-800 bg-slate-900 p-5">
+      <div><h3 className="font-bold text-white">返信テンプレートの管理</h3><p className="mt-1 text-xs text-slate-400">テキスト・画像・Flex・動画のテンプレートを作成し、自動返信ルールから選択できます。画像・動画ファイルはここからアップロードします（各20MBまで）。</p></div>
+      <form onSubmit={saveTemplate} className="space-y-4 rounded-xl border border-slate-800 bg-slate-950/50 p-4">
+        <div className="grid gap-3 md:grid-cols-2">
+          <input required value={templateName} onChange={e=>setTemplateName(e.target.value)} placeholder="テンプレート名" className="rounded-lg border border-slate-700 bg-slate-950 p-2 text-sm text-white" />
+          <select value={templateType} onChange={e=>setTemplateType(e.target.value as 'text'|'image'|'flex'|'video')} className="rounded-lg border border-slate-700 bg-slate-950 p-2 text-sm text-white"><option value="text">テキスト</option><option value="image">画像</option><option value="flex">Flex</option><option value="video">動画</option></select>
+          {templateType==='text'&&<textarea value={templateText} onChange={e=>setTemplateText(e.target.value)} rows={4} placeholder="返信テキスト" className="rounded-lg border border-slate-700 bg-slate-950 p-2 text-sm text-white md:col-span-2" />}
+          {templateType==='image'&&<div className="grid gap-3 md:col-span-2 md:grid-cols-2">
+            <label className="space-y-2 text-xs text-slate-300">画像本体（JPEG / PNG）<input type="file" accept="image/jpeg,image/png" disabled={busy} onChange={async e=>{const input=e.currentTarget;const file=input.files?.[0];if(!file)return;setBusy(true);setError('');try{const asset=await uploadLineTemplateAsset(file,'image');setTemplateImageUrl(asset.url);setTemplateImagePath(asset.path);setNotice('画像をアップロードしました。')}catch(err:any){setError(err.message)}finally{setBusy(false);input.value=''}}} className="block w-full rounded-lg border border-slate-700 bg-slate-950 p-2" /></label>
+            <label className="space-y-2 text-xs text-slate-300">プレビュー画像（JPEG / PNG）<input type="file" accept="image/jpeg,image/png" disabled={busy} onChange={async e=>{const input=e.currentTarget;const file=input.files?.[0];if(!file)return;setBusy(true);setError('');try{const asset=await uploadLineTemplateAsset(file,'image');setTemplatePreviewUrl(asset.url);setTemplatePreviewPath(asset.path);setNotice('プレビュー画像をアップロードしました。')}catch(err:any){setError(err.message)}finally{setBusy(false);input.value=''}}} className="block w-full rounded-lg border border-slate-700 bg-slate-950 p-2" /></label>
+            {(templateImageUrl||templatePreviewUrl)&&<div className="flex gap-3 md:col-span-2">{templateImageUrl&&<img src={templateImageUrl} alt="画像本体のプレビュー" className="h-24 rounded border border-slate-700 object-contain" />}{templatePreviewUrl&&<img src={templatePreviewUrl} alt="プレビュー画像" className="h-24 rounded border border-slate-700 object-contain" />}</div>}
+          </div>}
+          {templateType==='video'&&<div className="grid gap-3 md:col-span-2 md:grid-cols-2">
+            <label className="space-y-2 text-xs text-slate-300">動画本体（MP4）<input type="file" accept="video/mp4" disabled={busy} onChange={async e=>{const input=e.currentTarget;const file=input.files?.[0];if(!file)return;setBusy(true);setError('');try{const asset=await uploadLineTemplateAsset(file,'video');setTemplateVideoUrl(asset.url);setTemplateVideoPath(asset.path);setNotice('動画をアップロードしました。')}catch(err:any){setError(err.message)}finally{setBusy(false);input.value=''}}} className="block w-full rounded-lg border border-slate-700 bg-slate-950 p-2" /></label>
+            <label className="space-y-2 text-xs text-slate-300">動画プレビュー画像（JPEG / PNG）<input type="file" accept="image/jpeg,image/png" disabled={busy} onChange={async e=>{const input=e.currentTarget;const file=input.files?.[0];if(!file)return;setBusy(true);setError('');try{const asset=await uploadLineTemplateAsset(file,'image');setTemplatePreviewUrl(asset.url);setTemplatePreviewPath(asset.path);setNotice('プレビュー画像をアップロードしました。')}catch(err:any){setError(err.message)}finally{setBusy(false);input.value=''}}} className="block w-full rounded-lg border border-slate-700 bg-slate-950 p-2" /></label>
+            {templateVideoUrl&&<video src={templateVideoUrl} controls className="h-32 rounded border border-slate-700 md:col-span-2" />}
+            <input value={templateAltText} onChange={e=>setTemplateAltText(e.target.value)} maxLength={400} placeholder="通知に表示する動画の代替テキスト" className="rounded-lg border border-slate-700 bg-slate-950 p-2 text-sm text-white md:col-span-2" />
+          </div>}
+          {templateType==='flex'&&<div className="grid gap-3 md:col-span-2"><input value={templateAltText} onChange={e=>setTemplateAltText(e.target.value)} maxLength={1500} placeholder="通知に表示する代替テキスト" className="rounded-lg border border-slate-700 bg-slate-950 p-2 text-sm text-white" /><textarea value={templateFlexJson} onChange={e=>setTemplateFlexJson(e.target.value)} rows={10} placeholder='Flex本文 JSON（bubble / carousel）' className="rounded-lg border border-slate-700 bg-slate-950 p-2 font-mono text-xs text-white" /><p className="text-xs text-slate-500">ボタンでルールにつなぐ場合は action.type を message にしてください。</p></div>}
+        </div>
+        <div className="flex justify-end gap-2"><button type="button" onClick={resetTemplateEditor} className="rounded-lg border border-slate-700 px-4 py-2 text-xs text-slate-300">新規作成に戻す</button><button type="submit" disabled={busy||!ownerId} className="rounded-lg bg-indigo-600 px-4 py-2 text-xs font-semibold text-white disabled:opacity-40">{busy?'保存中…':editingTemplateId?'テンプレートを更新':'テンプレートを保存'}</button></div>
+      </form>
+      <div className="divide-y divide-slate-800">{templates.length===0?<p className="py-4 text-sm text-slate-500">テンプレートはまだありません。</p>:templates.map(template=><div key={template.id} className="flex flex-wrap items-center justify-between gap-3 py-3"><div><div className="font-medium text-white">{template.name}</div><div className="text-xs text-slate-400">{template.reply_type==='text'?'テキスト':template.reply_type==='image'?'画像':template.reply_type==='video'?'動画':'Flex'}</div></div><div className="flex gap-2"><button type="button" onClick={()=>editTemplate(template)} className="rounded border border-slate-700 px-3 py-1.5 text-xs text-slate-200">編集</button><InlineDeleteButton onConfirm={()=>deleteTemplate(template)} warning={`テンプレート「${template.name}」を削除しますか？素材ファイルも削除されます。`}>削除</InlineDeleteButton></div></div>)}</div>
+    </section>}
   </div>;
 };
