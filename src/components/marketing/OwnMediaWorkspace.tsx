@@ -1,5 +1,6 @@
 import React,{useEffect,useMemo,useState} from 'react';
 import {getSupabase} from '../../lib/supabaseClient';
+import {MarketingAssetLibrary} from './MarketingAssetLibrary';
 import {Plus,Save,Trash2,Sparkles,RefreshCw} from 'lucide-react';
 
 type Kind='media'|'article'|'seo'|'rewrite'|'attribution';
@@ -44,6 +45,7 @@ return <section className='space-y-4 text-slate-100'>
 {(error||notice)&&<p role={error?'alert':'status'} className={'rounded-lg p-3 text-sm '+(error?'bg-rose-950/50 text-rose-200':'bg-emerald-950/40 text-emerald-200')}>{error||notice}</p>}
 {loading?<p className='rounded-xl border border-slate-800 p-5 text-sm text-slate-400'>メディアデータを読み込み中…</p>:<>
 {tab==='settings'&&<p className='rounded bg-slate-900 p-3 text-sm text-slate-300'>複数のHP・ブログを登録できます。商品マスターの商品をIDで関連付けます。</p>}
+{tab==='settings'&&<MarketingAssetLibrary records={media.map(row=>({...row,created_at:row.updated_at}))} products={products} onOpenRecord={record=>{const mediaRecord=media.find(row=>row.id===record.id);if(mediaRecord){setTab('settings');edit(mediaRecord);}}} contextRecordType='media' contextualAssetType='website' sectionTitle='HP・自社メディアのURL・素材'/>}
 {['planning','production','publication'].includes(tab)&&<p className='rounded bg-slate-900 p-3 text-sm text-slate-300'>記事企画・本文・公開情報は共通記事レコードを使います。{tab==='production'?'本文・制作指示は保存して再表示できます。':tab==='publication'?'公開URL・日付を手動管理します。自動投稿は行いません。':'企画と公開予定を管理します。'}</p>}
 {tab==='seo'&&<p className='rounded bg-slate-900 p-3 text-sm text-slate-300'>実績は手入力です。CTRはクリック数÷表示回数で算出し、未入力と0件を区別します。</p>}
 {tab==='rewrite'&&<p className='rounded bg-slate-900 p-3 text-sm text-slate-300'>AI提案は既存AI社長チャットを利用します。検索実績とAI仮説を区別してください。{onAskAI&&<button onClick={()=>onAskAI(prompt)} className='ml-2 rounded bg-purple-700 px-2 py-1 text-xs'><Sparkles className='inline h-3 w-3'/> AIに相談</button>}</p>}
