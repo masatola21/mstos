@@ -68,6 +68,9 @@ export const ProductHubView: React.FC<ProductHubViewProps> = ({
   const [isWizardOpen, setIsWizardOpen] = useState(false);
   const [isNewProductModalOpen, setIsNewProductModalOpen] = useState(false);
   const [isPublishModalOpen, setIsPublishModalOpen] = useState(false);
+  const [editProductDraft, setEditProductDraft] = useState<ManagedProduct | null>(null);
+  const [editCustomFieldsJson, setEditCustomFieldsJson] = useState('{}');
+  const [editProductError, setEditProductError] = useState('');
   const [publishInitialFee, setPublishInitialFee] = useState('');
   const [publishMonthlyFee, setPublishMonthlyFee] = useState('');
   const [publishError, setPublishError] = useState('');
@@ -89,6 +92,38 @@ export const ProductHubView: React.FC<ProductHubViewProps> = ({
     tasks.some((task) => task.relatedRecord?.type === 'product' && task.relatedRecord.id === selectedProduct.id) ||
     projects.some((project: any) => project.productId === selectedProduct.id)
   ));
+  const openProductEditor = () => {
+    if (!selectedProduct) return;
+    setEditProductDraft(JSON.parse(JSON.stringify(selectedProduct)) as ManagedProduct);
+    setEditCustomFieldsJson(JSON.stringify(selectedProduct.customFields || {}, null, 2));
+    setEditProductError('');
+  };
+
+  const saveProductEditor = (event: React.FormEvent) => {
+    event.preventDefault();
+    if (!editProductDraft || !editProductDraft.name.trim()) {
+      setEditProductError('商品名を入力してください。');
+      return;
+    }
+    let customFields: Record<string, any>;
+    try {
+      const parsed: unknown = JSON.parse(editCustomFieldsJson || '{}');
+      if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) throw new Error();
+      customFields = parsed as Record<string, any>;
+    } catch {
+      setEditProductError('追加項目はJSONオブジェクト形式で入力してください。');
+      return;
+    }
+    const id = editProductDraft.id;
+    const updates: Partial<ManagedProduct> = { ...editProductDraft, customFields, updatedAt: Date.now() };
+    delete updates.id;
+    delete updates.createdAt;
+    onUpdateProduct(id, updates);
+    setEditProductDraft(null);
+    setProductActionMessage('AIプロダクトを更新しました。');
+    setProductActionIsError(false);
+  };
+
   const requestProductRemoval = async () => {
     if (!selectedProduct || !onDeleteProduct || isProductActionPending) return;
     setIsProductActionPending(true);
@@ -250,6 +285,9 @@ export const ProductHubView: React.FC<ProductHubViewProps> = ({
                   {selectedProduct.description || '概要未入力'}
                 </p>
                 <div className="mt-3 flex flex-wrap items-center gap-2">
+                  <button type="button" onClick={openProductEditor} className="inline-flex items-center gap-2 rounded-lg border border-slate-600 bg-slate-800 px-3 py-2 text-xs font-semibold text-slate-200 hover:bg-slate-700">
+                    <Edit2 className="h-4 w-4" />AIプロダクトを編集
+                  </button>
                   <button type="button" onClick={() => {
                     setPublishInitialFee(String(selectedProduct.salesInitialFee ?? selectedProduct.price ?? 0));
                     setPublishMonthlyFee(String(selectedProduct.salesMonthlyFee ?? 0));
@@ -621,6 +659,33 @@ export const ProductHubView: React.FC<ProductHubViewProps> = ({
               <button type="button" disabled={isPublishing} onClick={() => setIsPublishModalOpen(false)} className="rounded-lg border border-slate-700 px-4 py-2 text-xs text-slate-300">キャンセル</button>
               <button type="submit" disabled={isPublishing} className="rounded-lg bg-indigo-600 px-4 py-2 text-xs font-semibold text-white hover:bg-indigo-500 disabled:opacity-50">{isPublishing ? '反映中…' : 'CRM商品マスタに保存'}</button>
             </div>
+          </form>
+        </div>
+      )}
+
+      {editProductDraft && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/80 p-4 backdrop-blur-sm">
+          <form onSubmit={saveProductEditor} className="max-h-[90vh] w-full max-w-3xl overflow-y-auto rounded-2xl border border-slate-800 bg-slate-900 p-6 shadow-2xl">
+            <h3 className="mb-1 text-lg font-bold text-white">AIプロダクトを編集</h3>
+            <p className="mb-5 text-xs text-slate-400">コード・価格・状態・KPI・追加項目を更新できます。IDは関連する契約やタスクの紐付け維持のため変更できません。</p>
+            <div className="grid gap-4 md:grid-cols-2">
+              <label className="space-y-1 text-xs text-slate-300">商品コード<input value={editProductDraft.code || ''} onChange={e=>setEditProductDraft({...editProductDraft,code:e.target.value})} className="w-full rounded-lg border border-slate-700 bg-slate-950 p-2 text-sm text-white" /></label>
+              <label className="space-y-1 text-xs text-slate-300">商品名<input required value={editProductDraft.name} onChange={e=>setEditProductDraft({...editProductDraft,name:e.target.value})} className="w-full rounded-lg border border-slate-700 bg-slate-950 p-2 text-sm text-white" /></label>
+              <label className="space-y-1 text-xs text-slate-300">商品タイプ<select value={editProductDraft.archetype} onChange={e=>setEditProductDraft({...editProductDraft,archetype:e.target.value as ProductArchetype})} className="w-full rounded-lg border border-slate-700 bg-slate-950 p-2 text-sm text-white">{(Object.keys(PRODUCT_ARCHETYPES) as ProductArchetype[]).map(key=><option key={key} value={key}>{PRODUCT_ARCHETYPES[key].label}</option>)}</select></label>
+              <label className="space-y-1 text-xs text-slate-300">分類<input value={editProductDraft.category || ''} onChange={e=>setEditProductDraft({...editProductDraft,category:e.target.value})} className="w-full rounded-lg border border-slate-700 bg-slate-950 p-2 text-sm text-white" /></label>
+              <label className="space-y-1 text-xs text-slate-300">ステータス<select value={editProductDraft.status} onChange={e=>setEditProductDraft({...editProductDraft,status:e.target.value as ManagedProduct['status']})} className="w-full rounded-lg border border-slate-700 bg-slate-950 p-2 text-sm text-white"><option value="planning">企画中</option><option value="developing">開発中</option><option value="active">運用中</option><option value="archived">取扱停止</option></select></label>
+              <label className="space-y-1 text-xs text-slate-300">標準価格<input type="number" min="0" value={editProductDraft.price ?? ''} onChange={e=>setEditProductDraft({...editProductDraft,price:e.target.value===''?undefined:Number(e.target.value)})} className="w-full rounded-lg border border-slate-700 bg-slate-950 p-2 text-sm text-white" /></label>
+              <label className="space-y-1 text-xs text-slate-300">営業マスタ 初期費用<input type="number" min="0" value={editProductDraft.salesInitialFee ?? ''} onChange={e=>setEditProductDraft({...editProductDraft,salesInitialFee:e.target.value===''?undefined:Number(e.target.value)})} className="w-full rounded-lg border border-slate-700 bg-slate-950 p-2 text-sm text-white" /></label>
+              <label className="space-y-1 text-xs text-slate-300">営業マスタ 月額費用<input type="number" min="0" value={editProductDraft.salesMonthlyFee ?? ''} onChange={e=>setEditProductDraft({...editProductDraft,salesMonthlyFee:e.target.value===''?undefined:Number(e.target.value)})} className="w-full rounded-lg border border-slate-700 bg-slate-950 p-2 text-sm text-white" /></label>
+              <label className="space-y-1 text-xs text-slate-300">目標売上<input type="number" min="0" value={editProductDraft.kpis?.targetRevenue ?? ''} onChange={e=>setEditProductDraft({...editProductDraft,kpis:{...editProductDraft.kpis,targetRevenue:e.target.value===''?undefined:Number(e.target.value)}})} className="w-full rounded-lg border border-slate-700 bg-slate-950 p-2 text-sm text-white" /></label>
+              <label className="space-y-1 text-xs text-slate-300">現在売上<input type="number" min="0" value={editProductDraft.kpis?.currentRevenue ?? ''} onChange={e=>setEditProductDraft({...editProductDraft,kpis:{...editProductDraft.kpis,currentRevenue:e.target.value===''?undefined:Number(e.target.value)}})} className="w-full rounded-lg border border-slate-700 bg-slate-950 p-2 text-sm text-white" /></label>
+              <label className="space-y-1 text-xs text-slate-300">稼働顧客数<input type="number" min="0" value={editProductDraft.kpis?.activeClients ?? ''} onChange={e=>setEditProductDraft({...editProductDraft,kpis:{...editProductDraft.kpis,activeClients:e.target.value===''?undefined:Number(e.target.value)}})} className="w-full rounded-lg border border-slate-700 bg-slate-950 p-2 text-sm text-white" /></label>
+              {PRODUCT_ARCHETYPES[editProductDraft.archetype]?.customFieldTemplates.map((field) => <label key={field.key} className="space-y-1 text-xs text-slate-300">{field.label}<input type={field.type==='date'?'date':field.type==='number'?'number':field.type==='url'?'url':'text'} value={String(editProductDraft.customFields?.[field.key] ?? '')} onChange={e=>{const next={...(editProductDraft.customFields||{}),[field.key]:field.type==='number'?(e.target.value===''?undefined:Number(e.target.value)):e.target.value};setEditProductDraft({...editProductDraft,customFields:next});setEditCustomFieldsJson(JSON.stringify(next,null,2))}} className="w-full rounded-lg border border-slate-700 bg-slate-950 p-2 text-sm text-white" /></label>)}
+              <label className="space-y-1 text-xs text-slate-300 md:col-span-2">説明<textarea rows={4} value={editProductDraft.description || ''} onChange={e=>setEditProductDraft({...editProductDraft,description:e.target.value})} className="w-full rounded-lg border border-slate-700 bg-slate-950 p-2 text-sm text-white" /></label>
+              <details className="md:col-span-2"><summary className="cursor-pointer text-xs text-slate-400">その他の追加項目をJSONで編集</summary><textarea aria-label="すべての追加項目（JSON）" rows={7} value={editCustomFieldsJson} onChange={e=>setEditCustomFieldsJson(e.target.value)} className="mt-2 w-full rounded-lg border border-slate-700 bg-slate-950 p-2 font-mono text-xs text-white" /><span className="text-[10px] text-slate-500">標準項目にない独自の追加項目はこちらで編集できます。</span></details>
+            </div>
+            {editProductError && <p role="alert" className="mt-3 text-sm text-rose-300">{editProductError}</p>}
+            <div className="mt-5 flex justify-end gap-2"><button type="button" onClick={()=>setEditProductDraft(null)} className="rounded-lg border border-slate-700 px-4 py-2 text-xs text-slate-300">キャンセル</button><button type="submit" className="rounded-lg bg-indigo-600 px-4 py-2 text-xs font-semibold text-white">変更を保存</button></div>
           </form>
         </div>
       )}

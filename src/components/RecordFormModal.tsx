@@ -155,7 +155,7 @@ export const RecordFormModal: React.FC<RecordFormModalProps> = ({
       const val = formData[field.key];
 
       // 必須チェック
-      if (field.required && !(field.key === 'id' && !isEditing && ['companies', 'deals'].includes(tableKey)) && (val === undefined || val === null || String(val).trim() === '')) {
+      if (field.required && !(field.key === 'id' && !isEditing && ['companies', 'deals', 'products'].includes(tableKey)) && (val === undefined || val === null || String(val).trim() === '')) {
         errors[field.key] = `${field.label}は必須項目です。`;
         return;
       }
@@ -314,8 +314,8 @@ export const RecordFormModal: React.FC<RecordFormModalProps> = ({
                 const error = formErrors[field.key];
                 const isFullWidth = field.type === 'textarea' || field.key === 'company_name' || field.key === 'deal_name';
 
-                // 会社ID・商談IDはDBで採番する。編集時のみ参照用に表示する。
-                if (field.key === 'id' && !isEditing && ['companies', 'deals'].includes(tableKey)) {
+                // 会社ID・商談ID・商品コードはDBで採番する。編集時のみ参照用に表示する。
+                if (field.key === 'id' && !isEditing && ['companies', 'deals', 'products'].includes(tableKey)) {
                   return null;
                 }
 
