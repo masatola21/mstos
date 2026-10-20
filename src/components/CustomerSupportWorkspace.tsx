@@ -48,6 +48,14 @@ const PHASES = [
   'システム・業務フローの構築', 'テスト・検証', '導入・運用開始',
   '効果測定・改善', '完了',
 ];
+const PURPOSE_OPTIONS: Record<'retainer' | 'implementation_support', string[]> = {
+  retainer: ['経営課題の整理と優先順位付け', '売上・利益改善の伴走', '月次経営会議・意思決定支援', '業務改善・標準化'],
+  implementation_support: ['業務フローの可視化・再設計', 'システム導入・初期設定', 'AI活用・業務自動化の構築', '導入後のテスト・定着支援'],
+};
+const THEME_OPTIONS: Record<'retainer' | 'implementation_support', string[]> = {
+  retainer: ['経営課題の整理', '売上・利益の改善', '業務改善', '採用・組織づくり', '資金繰り・財務', '次回テーマを決める'],
+  implementation_support: ['現状業務の整理', '要件・仕様の確認', 'システム構築', 'テスト・検証', '導入・操作説明', '効果測定・改善', '次回テーマを決める'],
+};
 const EMPTY_MEETING: MeetingDraft = {
   occurred_at: '', purpose: '', topic: '', discussion: '', decisions: '',
   unresolved_items: '', client_homework: '', mst_homework: '',
@@ -141,8 +149,16 @@ export const CustomerSupportWorkspace: React.FC<Props> = ({
   }, [engagements, selectedId]);
 
   useEffect(() => {
-    setSummaryDraft(detail);
-  }, [selected?.id, selected?.support_details]);
+    const serviceType = selected?.service_type === 'retainer' ? 'retainer' : 'implementation_support';
+    setSummaryDraft({
+      ...detail,
+      purpose: detail.purpose || PURPOSE_OPTIONS[serviceType][0],
+      startedAt: detail.startedAt || activeContract?.start_date || todayJst(),
+      ownerName: detail.ownerName || 'MST担当',
+      phase: detail.phase || PHASES[0],
+      progressStatus: detail.progressStatus || 'not_started',
+    });
+  }, [selected?.id, selected?.support_details, selected?.service_type, activeContract?.start_date]);
 
   useEffect(() => {
     let cancelled = false;
@@ -190,7 +206,11 @@ export const CustomerSupportWorkspace: React.FC<Props> = ({
         title: selected.title,
         status: selected.status,
         next_meeting_at: selected.next_meeting_at || null,
-        support_details: summaryDraft,
+        support_details: {
+          ...summaryDraft,
+          startedAt: summaryDraft.startedAt || activeContract?.start_date || todayJst(),
+          ownerName: summaryDraft.ownerName || 'MST担当',
+        },
         updated_at: new Date().toISOString(),
       }).eq('id', selected.id);
     if (saveError) { setError(supportErrorMessage(saveError, '支援状況を保存できませんでした。')); return; }
@@ -202,12 +222,12 @@ export const CustomerSupportWorkspace: React.FC<Props> = ({
     event.preventDefault();
     const supabase = getSupabase();
     if (!supabase) { setError('Supabaseに接続してください。'); return; }
-    if (!newSupport.company_id || !newSupport.title.trim()) { setError('顧客と支援名を入力してください。'); return; }
+    if (!newSupport.company_id) { setError('顧客を選択してください。'); return; }
     setError(''); setNotice('');
     const supportDetails: SupportDetails = {
-      purpose: newSupport.purpose.trim(),
-      startedAt: newSupport.startedAt || undefined,
-      ownerName: newSupport.ownerName.trim(),
+      purpose: newSupport.purpose.trim() || PURPOSE_OPTIONS[newSupport.service_type as 'retainer' | 'implementation_support'][0],
+      startedAt: newSupport.startedAt || serviceContracts.find((item) => item.id === newSupport.contract_id)?.start_date || todayJst(),
+      ownerName: newSupport.ownerName.trim() || 'MST担当',
       phase: PHASES[0],
       progressStatus: 'not_started',
       phases: [],
@@ -217,15 +237,15 @@ export const CustomerSupportWorkspace: React.FC<Props> = ({
         company_id: newSupport.company_id,
         contract_id: newSupport.contract_id || null,
         service_type: newSupport.service_type,
-        title: newSupport.title.trim(),
+        title: `${companyName(newSupport.company_id)} ${newSupport.service_type === 'retainer' ? '顧問支援' : '構築支援'}`,
         status: 'planned',
         support_details: supportDetails,
       }).select('id').single();
     if (insertError) { setError(supportErrorMessage(insertError, '顧客支援を登録できませんでした。')); return; }
     setNewSupport({
       title: '', company_id: companyId || '', contract_id: '',
-      service_type: 'implementation_support', purpose: '',
-      startedAt: new Date().toISOString().slice(0, 10), ownerName: '',
+      service_type: 'implementation_support', purpose: PURPOSE_OPTIONS.implementation_support[0],
+      startedAt: todayJst(), ownerName: 'MST担当',
     });
     setShowNewSupport(false);
     setNotice('顧客支援を登録しました。');
@@ -424,7 +444,7 @@ export const CustomerSupportWorkspace: React.FC<Props> = ({
         <div><h2 className="text-lg font-bold text-white">顧客支援・構築管理</h2><p className="mt-1 text-sm text-slate-400">顧客ごとのフェーズ、次回予定、履歴、宿題、納品状況をまとめて確認します。</p></div>
         <div className="flex gap-2">
           <button type="button" onClick={() => void onRefresh()} className="inline-flex items-center gap-2 rounded-lg border border-slate-700 px-3 py-2 text-sm text-slate-200"><RefreshCw className="h-4 w-4" />更新</button>
-          <button type="button" onClick={() => { setShowNewSupport((value) => !value); setNewSupport((value) => ({ ...value, company_id: companyId || value.company_id })); }} className="inline-flex items-center gap-2 rounded-lg bg-blue-600 px-3 py-2 text-sm font-semibold text-white"><Plus className="h-4 w-4" />支援を登録</button>
+          <button type="button" onClick={() => { setShowNewSupport((value) => !value); setNewSupport((value) => { const nextCompanyId = companyId || value.company_id; const candidates = serviceContracts.filter((item) => item.company_id === nextCompanyId); const linkedContract = value.contract_id ? candidates.find((item) => item.id === value.contract_id) : candidates.length === 1 ? candidates[0] : undefined; return { ...value, company_id: nextCompanyId, contract_id: linkedContract?.id || value.contract_id, startedAt: linkedContract?.start_date || value.startedAt || todayJst(), ownerName: value.ownerName || 'MST担当', purpose: value.purpose || PURPOSE_OPTIONS[value.service_type as 'retainer' | 'implementation_support'][0] }; }); }} className="inline-flex items-center gap-2 rounded-lg bg-blue-600 px-3 py-2 text-sm font-semibold text-white"><Plus className="h-4 w-4" />支援を登録</button>
         </div>
       </div>
       {error && <div role="alert" className="mt-3 rounded-lg border border-rose-700/60 bg-rose-950/30 p-3 text-sm text-rose-200">{error}</div>}
@@ -432,14 +452,15 @@ export const CustomerSupportWorkspace: React.FC<Props> = ({
     </div>
 
     {showNewSupport && <form onSubmit={createSupport} className="grid gap-3 rounded-xl border border-slate-800 bg-slate-900 p-4 md:grid-cols-2">
-      <label className="text-xs text-slate-300">支援名<input required value={newSupport.title} onChange={(event) => setNewSupport({ ...newSupport, title: event.target.value })} className="mt-1 w-full rounded border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-white" placeholder="例：業務フロー構築支援" /></label>
-      <label className="text-xs text-slate-300">顧客<select required value={companyId || newSupport.company_id} disabled={Boolean(companyId)} onChange={(event) => setNewSupport({ ...newSupport, company_id: event.target.value })} className="mt-1 w-full rounded border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-white"><option value="">顧客を選択</option>{companies.map((item) => <option key={item.id} value={item.id}>{item.company_name}</option>)}</select></label>
-      <label className="text-xs text-slate-300">契約<select value={newSupport.contract_id} onChange={(event) => setNewSupport({ ...newSupport, contract_id: event.target.value })} className="mt-1 w-full rounded border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-white"><option value="">契約と紐付けない</option>{serviceContracts.filter((item) => item.company_id === (companyId || newSupport.company_id)).map((item) => <option key={item.id} value={item.id}>{item.title} · {item.status}</option>)}</select></label>
-      <label className="text-xs text-slate-300">支援種別<select value={newSupport.service_type} onChange={(event) => setNewSupport({ ...newSupport, service_type: event.target.value })} className="mt-1 w-full rounded border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-white"><option value="implementation_support">構築支援</option><option value="retainer">顧問</option></select></label>
-      <label className="text-xs text-slate-300">開始日<input type="date" value={newSupport.startedAt} onChange={(event) => setNewSupport({ ...newSupport, startedAt: event.target.value })} className="mt-1 w-full rounded border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-white" /></label>
-      <label className="text-xs text-slate-300">担当者<input value={newSupport.ownerName} onChange={(event) => setNewSupport({ ...newSupport, ownerName: event.target.value })} className="mt-1 w-full rounded border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-white" placeholder="MST側担当" /></label>
-      <label className="text-xs text-slate-300 md:col-span-2">支援内容・構築の目的<textarea value={newSupport.purpose} onChange={(event) => setNewSupport({ ...newSupport, purpose: event.target.value })} rows={3} className="mt-1 w-full rounded border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-white" /></label>
-      <div className="md:col-span-2"><button className="rounded-lg bg-emerald-700 px-3 py-2 text-sm font-semibold text-white">保存</button></div>
+      <label className="text-xs text-slate-300">支援名（自動）<input readOnly value={`${newSupport.company_id ? companyName(newSupport.company_id) : '顧客未選択'} ${newSupport.service_type === 'retainer' ? '顧問支援' : '構築支援'}`} className="mt-1 w-full rounded border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-slate-400" /></label>
+      <label className="text-xs text-slate-300">顧客<select required value={companyId || newSupport.company_id} disabled={Boolean(companyId)} onChange={(event) => { const nextCompanyId = event.target.value; const candidates = serviceContracts.filter((item) => item.company_id === nextCompanyId); const linkedContract = candidates.length === 1 ? candidates[0] : undefined; setNewSupport({ ...newSupport, company_id: nextCompanyId, contract_id: linkedContract?.id || '', startedAt: linkedContract?.start_date || todayJst() }); }} className="mt-1 w-full rounded border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-white"><option value="">顧客を選択</option>{companies.map((item) => <option key={item.id} value={item.id}>{item.company_name}</option>)}</select></label>
+      <label className="text-xs text-slate-300">契約<select value={newSupport.contract_id} onChange={(event) => { const contractId = event.target.value; const contract = serviceContracts.find((item) => item.id === contractId); setNewSupport({ ...newSupport, contract_id: contractId, startedAt: contract?.start_date || newSupport.startedAt || todayJst() }); }} className="mt-1 w-full rounded border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-white"><option value="">契約と紐付けない</option>{serviceContracts.filter((item) => item.company_id === (companyId || newSupport.company_id)).map((item) => <option key={item.id} value={item.id}>{item.title} · {item.status}</option>)}</select></label>
+      <label className="text-xs text-slate-300">支援種別<select value={newSupport.service_type} onChange={(event) => { const serviceType = event.target.value as 'retainer' | 'implementation_support'; setNewSupport({ ...newSupport, service_type: serviceType, purpose: PURPOSE_OPTIONS[serviceType].includes(newSupport.purpose) ? newSupport.purpose : PURPOSE_OPTIONS[serviceType][0] }); }} className="mt-1 w-full rounded border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-white"><option value="implementation_support">構築支援</option><option value="retainer">顧問</option></select></label>
+      <label className="text-xs text-slate-300">開始日（契約から自動入力）<input type="date" value={newSupport.startedAt} onChange={(event) => setNewSupport({ ...newSupport, startedAt: event.target.value })} className="mt-1 w-full rounded border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-white" /></label>
+      <label className="text-xs text-slate-300">担当者<select value={newSupport.ownerName || 'MST担当'} onChange={(event) => setNewSupport({ ...newSupport, ownerName: event.target.value })} className="mt-1 w-full rounded border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-white"><option value="MST担当">MST担当</option><option value="顧客側担当">顧客側担当</option></select></label>
+      <label className="text-xs text-slate-300 md:col-span-2">支援内容・目的<select value={newSupport.purpose} onChange={(event) => setNewSupport({ ...newSupport, purpose: event.target.value })} className="mt-1 w-full rounded border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-white">{PURPOSE_OPTIONS[newSupport.service_type as 'retainer' | 'implementation_support'].map((purpose) => <option key={purpose} value={purpose}>{purpose}</option>)}</select></label>
+      <p className="text-xs text-slate-500 md:col-span-2">顧客・支援種別から支援名を作成し、契約が1件だけなら自動で関連付けます。開始日は契約情報を引き継ぎます。</p>
+      <div className="md:col-span-2"><button className="rounded-lg bg-emerald-700 px-3 py-2 text-sm font-semibold text-white">登録</button></div>
     </form>}
 
     <div className="grid gap-3 lg:grid-cols-[minmax(280px,0.85fr)_minmax(0,1.65fr)]">
@@ -482,8 +503,8 @@ export const CustomerSupportWorkspace: React.FC<Props> = ({
             const { error: updateError } = await supabase.from('customer_service_engagements').update({ status: event.target.value, updated_at: new Date().toISOString() }).eq('id', selected.id);
             if (updateError) setError(updateError.message); else await onRefresh();
           }} className="mt-1 w-full rounded border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-white"><option value="planned">予定</option><option value="active">進行中</option><option value="paused">保留</option><option value="completed">完了</option><option value="canceled">中止</option></select></label>
-          <label className="text-xs text-slate-300">現在のテーマ<input value={summaryDraft.currentTheme || ''} onChange={(event) => setSummaryDraft({ ...summaryDraft, currentTheme: event.target.value })} className="mt-1 w-full rounded border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-white" /></label>
-          <label className="text-xs text-slate-300">次回のテーマ<input value={summaryDraft.nextTheme || ''} onChange={(event) => setSummaryDraft({ ...summaryDraft, nextTheme: event.target.value })} className="mt-1 w-full rounded border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-white" /></label>
+          <label className="text-xs text-slate-300">現在のテーマ<input list="support-theme-options" value={summaryDraft.currentTheme || ''} onChange={(event) => setSummaryDraft({ ...summaryDraft, currentTheme: event.target.value })} className="mt-1 w-full rounded border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-white" /><datalist id="support-theme-options">{THEME_OPTIONS[selected.service_type === 'retainer' ? 'retainer' : 'implementation_support'].map((theme) => <option key={theme} value={theme} />)}</datalist></label>
+          <label className="text-xs text-slate-300">次回のテーマ<input list="support-theme-options" value={summaryDraft.nextTheme || ''} onChange={(event) => setSummaryDraft({ ...summaryDraft, nextTheme: event.target.value })} className="mt-1 w-full rounded border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-white" /></label>
           <label className="text-xs text-slate-300">次回の打ち合わせ日時<input type="datetime-local" value={asDateTimeLocal(selected.next_meeting_at)} onChange={async (event) => {
             const supabase = getSupabase(); if (!supabase) return;
             const { error: updateError } = await supabase.from('customer_service_engagements').update({ next_meeting_at: event.target.value ? new Date(event.target.value).toISOString() : null, updated_at: new Date().toISOString() }).eq('id', selected.id);
@@ -491,8 +512,8 @@ export const CustomerSupportWorkspace: React.FC<Props> = ({
           }} className="mt-1 w-full rounded border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-white" /></label>
           <label className="text-xs text-slate-300">進捗状況<select value={summaryDraft.progressStatus || 'not_started'} onChange={(event) => setSummaryDraft({ ...summaryDraft, progressStatus: event.target.value as SupportDetails['progressStatus'] })} className="mt-1 w-full rounded border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-white">{Object.entries(PROGRESS_LABELS).map(([key, label]) => <option key={key} value={key}>{label}</option>)}</select></label>
           <label className="text-xs text-slate-300">支援開始日<input type="date" value={summaryDraft.startedAt || ''} onChange={(event) => setSummaryDraft({ ...summaryDraft, startedAt: event.target.value })} className="mt-1 w-full rounded border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-white" /></label>
-          <label className="text-xs text-slate-300">MST担当者<input value={summaryDraft.ownerName || ''} onChange={(event) => setSummaryDraft({ ...summaryDraft, ownerName: event.target.value })} className="mt-1 w-full rounded border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-white" /></label>
-          <label className="text-xs text-slate-300 md:col-span-2">支援内容・構築の目的<textarea value={summaryDraft.purpose || ''} onChange={(event) => setSummaryDraft({ ...summaryDraft, purpose: event.target.value })} rows={3} className="mt-1 w-full rounded border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-white" /></label>
+          <label className="text-xs text-slate-300">MST担当者<select value={summaryDraft.ownerName || 'MST担当'} onChange={(event) => setSummaryDraft({ ...summaryDraft, ownerName: event.target.value })} className="mt-1 w-full rounded border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-white">{summaryDraft.ownerName && !['MST担当', '顧客側担当'].includes(summaryDraft.ownerName) && <option value={summaryDraft.ownerName}>{summaryDraft.ownerName}</option>}<option value="MST担当">MST担当</option><option value="顧客側担当">顧客側担当</option></select></label>
+          <label className="text-xs text-slate-300 md:col-span-2">支援内容・目的<select value={summaryDraft.purpose || PURPOSE_OPTIONS[selected.service_type === 'retainer' ? 'retainer' : 'implementation_support'][0]} onChange={(event) => setSummaryDraft({ ...summaryDraft, purpose: event.target.value })} className="mt-1 w-full rounded border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-white">{summaryDraft.purpose && !PURPOSE_OPTIONS[selected.service_type === 'retainer' ? 'retainer' : 'implementation_support'].includes(summaryDraft.purpose) && <option value={summaryDraft.purpose}>{summaryDraft.purpose}</option>}{PURPOSE_OPTIONS[selected.service_type === 'retainer' ? 'retainer' : 'implementation_support'].map((purpose) => <option key={purpose} value={purpose}>{purpose}</option>)}</select></label>
           <label className="text-xs text-slate-300 md:col-span-2">進捗メモ<textarea value={summaryDraft.progressNote || ''} onChange={(event) => setSummaryDraft({ ...summaryDraft, progressNote: event.target.value })} rows={2} className="mt-1 w-full rounded border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-white" /></label>
           <label className="text-xs text-slate-300 md:col-span-2">重要な課題・確認事項<textarea value={summaryDraft.keyIssue || ''} onChange={(event) => setSummaryDraft({ ...summaryDraft, keyIssue: event.target.value })} rows={2} className="mt-1 w-full rounded border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-white" /></label>
           <label className="text-xs text-slate-300 md:col-span-2">次回までに確認しておく事項<textarea value={summaryDraft.nextChecklist || ''} onChange={(event) => setSummaryDraft({ ...summaryDraft, nextChecklist: event.target.value })} rows={2} className="mt-1 w-full rounded border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-white" /></label>
