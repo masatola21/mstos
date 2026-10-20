@@ -10,6 +10,7 @@ import {
 } from '../types/matrix';
 
 const pendingDeletionMemory = new Map<string, { contracts: Set<string>; invoices: Set<string> }>();
+let activeMatrixUserId = '';
 
 const MATRIX_STORAGE_KEYS = {
   PRODUCTS: 'mst_matrix_products_v1',
@@ -224,6 +225,9 @@ const INITIAL_CUSTOM_LISTS: CustomListDefinition[] = [
 
 export const matrixService = {
   normalizeAutomationRules,
+  setActiveUserId(userId: string) {
+    activeMatrixUserId = userId;
+  },
   // Products
   loadProducts(): ManagedProduct[] {
     try {
@@ -331,8 +335,9 @@ export const matrixService = {
     this.saveContracts(list);
     return newContract;
   },
-  deleteContract(id: string, userId: string) {
-    this.recordPendingDeletion(userId, 'contracts', id);
+  deleteContract(id: string) {
+    if (!activeMatrixUserId) throw new Error('ログインユーザーが設定されていません。');
+    this.recordPendingDeletion(activeMatrixUserId, 'contracts', id);
     this.saveContracts(this.loadContracts().filter((contract) => contract.id !== id));
   },
   updateContract(id: string, updates: Partial<ManagedContract>) {
@@ -368,8 +373,9 @@ export const matrixService = {
     this.saveInvoices(list);
     return newInvoice;
   },
-  deleteInvoice(id: string, userId: string) {
-    this.recordPendingDeletion(userId, 'invoices', id);
+  deleteInvoice(id: string) {
+    if (!activeMatrixUserId) throw new Error('ログインユーザーが設定されていません。');
+    this.recordPendingDeletion(activeMatrixUserId, 'invoices', id);
     this.saveInvoices(this.loadInvoices().filter((invoice) => invoice.id !== id));
   },
   updateInvoice(id: string, updates: Partial<ManagedInvoice>) {
