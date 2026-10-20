@@ -160,7 +160,7 @@ export const AIAcquisitionOperationsView: React.FC<{ onSendPresidentSummary?: (s
       `現在の草案: ${JSON.stringify({ title, payload })}`,
       `これまでのやり取り: ${JSON.stringify(aiConversation)}`,
       `今回の依頼: ${instruction}`,
-    ].join('\\n');
+    ].join('\n');
     try {
       const response = await fetch('/api/chat', {
         method: 'POST',
