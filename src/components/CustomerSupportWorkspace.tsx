@@ -149,8 +149,16 @@ export const CustomerSupportWorkspace: React.FC<Props> = ({
   }, [engagements, selectedId]);
 
   useEffect(() => {
-    setSummaryDraft(detail);
-  }, [selected?.id, selected?.support_details]);
+    const serviceType = selected?.service_type === 'retainer' ? 'retainer' : 'implementation_support';
+    setSummaryDraft({
+      ...detail,
+      purpose: detail.purpose || PURPOSE_OPTIONS[serviceType][0],
+      startedAt: detail.startedAt || activeContract?.start_date || todayJst(),
+      ownerName: detail.ownerName || 'MST担当',
+      phase: detail.phase || PHASES[0],
+      progressStatus: detail.progressStatus || 'not_started',
+    });
+  }, [selected?.id, selected?.support_details, selected?.service_type, activeContract?.start_date]);
 
   useEffect(() => {
     let cancelled = false;
