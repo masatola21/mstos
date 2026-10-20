@@ -86,7 +86,16 @@ export const CustomListManager: React.FC<CustomListManagerProps> = ({
       });
     } else if (selectedListId === 'list-invoices') {
       onAddInvoice({
-        invoiceNumber: `INV-${new Date().toISOString().slice(0, 7).replace('-', '')}-${Math.floor(100 + Math.random() * 900)}`,
+        invoiceNumber: (() => {
+          const yearMonth = todayJst().slice(0, 7).replace('-', '');
+          const prefix = `INV-${yearMonth}-`;
+          const maxSequence = invoices.reduce((maximum, invoice) => {
+            if (!invoice.invoiceNumber.startsWith(prefix)) return maximum;
+            const sequence = Number(invoice.invoiceNumber.slice(prefix.length));
+            return Number.isInteger(sequence) ? Math.max(maximum, sequence) : maximum;
+          }, 0);
+          return `${prefix}${String(maxSequence + 1).padStart(3, '0')}`;
+        })(),
         title: newTitle.trim(),
         productId: newProductId || undefined,
         recipientName: newRecipient.trim() || '未設定',
