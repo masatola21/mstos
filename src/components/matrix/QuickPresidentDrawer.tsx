@@ -16,7 +16,7 @@ import { AI_WORK_MODES, AIWorkModeId } from '../../data/aiWorkModes';
 
 type PageAssistantProfile = { label: string; mode: AIWorkModeId };
 type RequestMode = 'consult' | 'action_plan' | 'external_prompt';
-const getPageAssistantProfile = (pageId: string): PageAssistantProfile => {
+export const getPageAssistantProfile = (pageId: string): PageAssistantProfile => {
   if (pageId === 'marketing_automation' || pageId === 'ai_acquisition') return { label: 'マーケティング', mode: 'marketing_execution' };
   if (pageId === 'mst_diagnoses') return { label: '診断・提案', mode: 'diagnosis' };
   if (pageId === 'product_hub' || pageId === 'category_hub') return { label: '商品設計', mode: 'new_product' };
@@ -25,6 +25,11 @@ const getPageAssistantProfile = (pageId: string): PageAssistantProfile => {
   if (pageId === 'customer_operations' || ['contacts', 'companies', 'leads', 'deals', 'customers', 'prospects', 'deal_invitations'].includes(pageId)) return { label: '営業・顧客管理', mode: 'sales_operations' };
   if (pageId === 'ai_projects' || pageId === 'ai_tasks' || pageId === 'automations') return { label: 'プロジェクト・業務改善', mode: 'operations_management' };
   return { label: '経営OS全体', mode: 'president' };
+};
+
+const getAvailableAssistantModes = (pageId: string) => {
+  const defaultModeId = getPageAssistantProfile(pageId).mode;
+  return AI_WORK_MODES.filter((mode) => mode.id === defaultModeId || mode.id === 'president');
 };
 
 interface QuickPresidentDrawerProps {
@@ -212,7 +217,7 @@ export const QuickPresidentDrawer: React.FC<QuickPresidentDrawerProps> = ({
         <label className="mt-3 flex items-center justify-between gap-3 text-xs text-slate-300">
           <span>相談するAI</span>
           <select value={selectedWorkModeId} onChange={(event) => setSelectedWorkModeId(event.target.value as AIWorkModeId)} className="max-w-[220px] rounded-lg border border-slate-700 bg-slate-900 px-2 py-1.5 text-xs text-white">
-            {AI_WORK_MODES.map((mode) => <option key={mode.id} value={mode.id}>{mode.label}</option>)}
+            {getAvailableAssistantModes(pageId).map((mode) => <option key={mode.id} value={mode.id}>{mode.id === 'marketing_execution' ? 'マーケティングAI' : mode.label}</option>)}
           </select>
         </label>
         <p className="mt-2 text-[10px] leading-relaxed text-slate-500">現在の画面に合わせたAIを初期選択しています。実行案も操作内容を提案する段階で、この窓から直接保存・送信はしません。画面データは自動送信されないため、必要な情報を入力してください。外部依頼文はコピーして他のAIや依頼先に渡せます。</p>

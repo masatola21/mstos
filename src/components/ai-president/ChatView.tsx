@@ -571,7 +571,7 @@ export const ChatView: React.FC<ChatViewProps> = ({
               value={inputText}
               onChange={handleTextareaChange}
               onKeyDown={handleKeyDown}
-              placeholder={`${character.name} に経営指示・タスク相談を入力してください...`}
+              placeholder={`${selectedWorkMode.name} に指示・相談を入力してください...`}
               disabled={isStreaming}
               className="w-full resize-none bg-transparent px-3 py-2 text-sm md:text-[15px] text-slate-100 placeholder-slate-500 focus:outline-none min-h-[44px] max-h-[180px] leading-relaxed disabled:opacity-50"
             />
