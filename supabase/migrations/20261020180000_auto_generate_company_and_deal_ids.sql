@@ -39,6 +39,7 @@ FROM public.deals;
 CREATE OR REPLACE FUNCTION public.set_deal_id()
 RETURNS trigger
 LANGUAGE plpgsql
+SECURITY DEFINER
 SET search_path = ''
 AS $$
 BEGIN
