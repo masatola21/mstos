@@ -2029,7 +2029,7 @@ function AppContent() {
           <AIAcquisitionOperationsView onSendPresidentSummary={(summary) => {
             setCurrentTab('ai_chat');
             void handleSendMessage(summary, 'president');
-          }} />
+          }} onCreateTask={handleCreateTask} />
         )}
 
         {currentTab === 'marketing_automation' && (
