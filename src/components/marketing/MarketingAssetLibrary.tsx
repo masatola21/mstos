@@ -49,9 +49,12 @@ export const MarketingAssetLibrary: React.FC<{
   records: MarketingRecord[];
   products: Product[];
   onOpenRecord: (record: MarketingRecord) => void;
-}> = ({ records, products, onOpenRecord }) => {
+  contextualAssetType?: AssetType;
+  contextRecordType?: string;
+  sectionTitle?: string;
+}> = ({ records, products, onOpenRecord, contextualAssetType, contextRecordType, sectionTitle }) => {
   const strategies = records.filter((record) => record.record_type === 'strategy');
-  const operationalRecords = records.filter((record) => ['content', 'social', 'video', 'ad', 'media', 'funnel'].includes(record.record_type));
+  const operationalRecords = records.filter((record) => ['content', 'social', 'video', 'ad', 'media', 'funnel'].includes(record.record_type) && (!contextRecordType || record.record_type === contextRecordType));
   const [userId, setUserId] = useState('');
   const [assets, setAssets] = useState<Asset[]>([]);
   const [loading, setLoading] = useState(true);
@@ -59,7 +62,7 @@ export const MarketingAssetLibrary: React.FC<{
   const [error, setError] = useState('');
   const [notice, setNotice] = useState('');
   const [title, setTitle] = useState('');
-  const [assetType, setAssetType] = useState<AssetType>('draft');
+  const [assetType, setAssetType] = useState<AssetType>(contextualAssetType || 'draft');
   const [status, setStatus] = useState<AssetStatus>('draft');
   const [file, setFile] = useState<File | null>(null);
   const [externalUrl, setExternalUrl] = useState('');
@@ -78,7 +81,7 @@ export const MarketingAssetLibrary: React.FC<{
       .select('*').eq('user_id', auth.user.id).order('updated_at', { ascending: false });
     if (loadError) {
       setError(loadError.message.includes('mst_marketing_assets')
-        ? '素材保管DBが未適用です。supabase/migrations/20261020230000_marketing_asset_library.sql を適用してください。'
+        ? '素材保管DBがまだ使えません。PR #170 の supabase/migrations/20261020230000_marketing_asset_library.sql をSupabaseに適用し、画面を再読み込みしてください。'
         : '素材を読み込めませんでした: ' + loadError.message);
     } else setAssets((data || []) as Asset[]);
     setLoading(false);
@@ -86,7 +89,7 @@ export const MarketingAssetLibrary: React.FC<{
   useEffect(() => { void load(); }, []);
 
   const resetForm = () => {
-    setTitle(''); setAssetType('draft'); setStatus('draft'); setFile(null); setExternalUrl('');
+    setTitle(''); setAssetType(contextualAssetType || 'draft'); setStatus('draft'); setFile(null); setExternalUrl('');
     setStrategyRecordId(''); setToolRecordId(''); setProductId(''); setNotes('');
     const picker = document.getElementById('marketing-asset-file') as HTMLInputElement | null;
     if (picker) picker.value = '';
@@ -166,12 +169,13 @@ export const MarketingAssetLibrary: React.FC<{
     setAssets((current) => current.filter((item) => item.id !== asset.id));
   };
 
+  const visibleAssets = contextualAssetType ? assets.filter((asset) => asset.asset_type === contextualAssetType && (!asset.tool_record_id || operationalRecords.some((record) => record.id === asset.tool_record_id))) : assets;
   const strategyFor = (asset: Asset) => strategies.find((record) => record.id === asset.strategy_record_id);
   const toolFor = (asset: Asset) => operationalRecords.find((record) => record.id === asset.tool_record_id);
 
   return <section className='space-y-4'>
     <header className='rounded-xl border border-cyan-500/30 bg-cyan-950/20 p-4'>
-      <h2 className='font-semibold text-white'>素材・成果物の保管</h2>
+      <h2 className='font-semibold text-white'>{sectionTitle || '素材・成果物の保管'}</h2>
       <p className='mt-1 text-sm text-slate-300'>草案ファイル、HP・LPのURLや元データ、画像・動画・資料を戦略や運用ツールに紐付けて保管します。公開サイトのホスティング・公開操作は行いません。</p>
     </header>
     {(error || notice) && <p role={error ? 'alert' : 'status'} className={'rounded-lg p-3 text-sm ' + (error ? 'bg-rose-950/50 text-rose-200' : 'bg-emerald-950/40 text-emerald-200')}>{error || notice}</p>}
@@ -179,7 +183,7 @@ export const MarketingAssetLibrary: React.FC<{
       <form onSubmit={(event) => void save(event)} className='space-y-3 rounded-xl border border-slate-800 bg-slate-900 p-4'>
         <h3 className='font-semibold text-white'>ファイル・リンクを追加</h3>
         <label className='block text-sm text-slate-300'>名前<input required value={title} onChange={(event) => setTitle(event.target.value)} className={inputClass} placeholder='例：LP構成案、広告バナー案' /></label>
-        <label className='block text-sm text-slate-300'>分類<select value={assetType} onChange={(event) => setAssetType(event.target.value as AssetType)} className={inputClass}>{ASSET_TYPES.map((item) => <option key={item.value} value={item.value}>{item.label}</option>)}</select></label>
+        <label className='block text-sm text-slate-300'>分類<select value={assetType} onChange={(event) => setAssetType(event.target.value as AssetType)} className={inputClass}>{(contextualAssetType ? ASSET_TYPES.filter((item) => item.value === contextualAssetType) : ASSET_TYPES).map((item) => <option key={item.value} value={item.value}>{item.label}</option>)}</select></label>
         <label className='block text-sm text-slate-300'>ファイル（50MBまで）<input id='marketing-asset-file' type='file' accept='image/*,video/*,application/pdf,text/html,application/zip,.doc,.docx,.ppt,.pptx,.csv,.txt' onChange={(event) => { setFile(event.target.files?.[0] || null); if (event.target.files?.[0]) setExternalUrl(''); }} className={inputClass} /></label>
         <label className='block text-sm text-slate-300'>またはHP・LP・素材のURL<input type='url' value={externalUrl} onChange={(event) => { setExternalUrl(event.target.value); if (event.target.value) setFile(null); }} className={inputClass} placeholder='https://...' /></label>
         <label className='block text-sm text-slate-300'>関連する集客戦略<select value={strategyRecordId} onChange={(event) => setStrategyRecordId(event.target.value)} className={inputClass}><option value=''>指定しない</option>{strategies.map((record) => <option key={record.id} value={record.id}>{record.title}</option>)}</select></label>
