@@ -134,6 +134,8 @@ const DEFAULT_TEMPLATES: DocTemplate[] = [
   <div style="margin-top: 40px; text-align: right; border-top: 1px solid #e2e8f0; padding-top: 20px;">
     <p><strong>提案責任者:</strong> {{sender_name}}</p>
     <p style="color: #64748b; font-size: 13px;">{{sender_company}}</p>
+    <p style="color: #64748b; font-size: 13px;">{{sender_address}}</p>
+    <p style="color: #64748b; font-size: 13px;">代表取締役 {{sender_rep}}</p>
   </div>
 </div>`,
     variables: [
@@ -147,6 +149,8 @@ const DEFAULT_TEMPLATES: DocTemplate[] = [
       { key: 'cost_breakdown', label: '費用内訳', defaultValue: '' },
       { key: 'sender_name', label: '提案責任者名', defaultValue: '' },
       { key: 'sender_company', label: '提案者組織名', defaultValue: '' },
+      { key: 'sender_address', label: '提案者住所', defaultValue: '' },
+      { key: 'sender_rep', label: '代表取締役', defaultValue: '' },
     ],
   },
   {
@@ -487,6 +491,8 @@ export const DocumentTemplateView: React.FC<DocumentTemplateViewProps> = ({ init
         end_date: '',
         my_company: '有限会社MST', my_address: '〒503-0981　岐阜県大垣市桧町127番地', my_rep: '大橋真人', sender_name: '大橋真人', sender_company: '有限会社MST',
         bank_account_info: 'ドコモSMTBネット銀行　法人第一支店　普通預金　2223730（口座名義：有限会社MST）',
+          sender_address: '〒503-0981　岐阜県大垣市桧町127番地', sender_rep: '大橋真人',
+      sender_address: '〒503-0981　岐阜県大垣市桧町127番地', sender_rep: '大橋真人',
         payment_terms: deal?.memo || '',
         solution_overview: product?.description || report?.summary || '',
         expected_outcome: recommendationText,
@@ -535,6 +541,19 @@ export const DocumentTemplateView: React.FC<DocumentTemplateViewProps> = ({ init
     return initial;
   });
 
+  // Apply the saved organization profile even before the user selects a customer or deal.
+  useEffect(() => {
+    setVariableValues((prev) => ({
+      ...prev,
+      my_company: prev.my_company || '有限会社MST',
+      my_address: prev.my_address || '〒503-0981　岐阜県大垣市桧町127番地',
+      my_rep: prev.my_rep || '大橋真人',
+      sender_name: prev.sender_name || '大橋真人',
+      sender_company: prev.sender_company || '有限会社MST',
+      bank_account_info: prev.bank_account_info || 'ドコモSMTBネット銀行　法人第一支店　普通預金　2223730（口座名義：有限会社MST）',
+    }));
+  }, [selectedTemplateId]);
+
   // When switching template, load its default variables
   const handleSelectTemplate = (id: string) => {
     setSelectedTemplateId(id);
@@ -550,6 +569,9 @@ export const DocumentTemplateView: React.FC<DocumentTemplateViewProps> = ({ init
           item_qty_1: '1', item_price_1: '', item_amount_1: '', item_name_1: 'サービス提供費',
           item_qty_2: '0', item_price_2: '', item_amount_2: '', item_name_2: 'なし',
           total_amount: '', subtotal_amount: '', tax_amount: '', initial_fee: '', monthly_fee: '',
+          my_company: '有限会社MST', my_address: '〒503-0981　岐阜県大垣市桧町127番地',
+          my_rep: '大橋真人', sender_name: '大橋真人', sender_company: '有限会社MST',
+          bank_account_info: 'ドコモSMTBネット銀行　法人第一支店　普通預金　2223730（口座名義：有限会社MST）',
         };
         newVals[v.key] = fallbackByKey[v.key] ?? '';
       });
@@ -567,6 +589,9 @@ export const DocumentTemplateView: React.FC<DocumentTemplateViewProps> = ({ init
 
   const getPopulatedHtml = (): string => {
     let result = currentTemplate.htmlContent;
+    if (currentTemplate.id === 'tpl-proposal-01') {
+      result = result.replace('<p style="color: #64748b; font-size: 13px;">{{sender_company}}</p>', '<p style="color: #64748b; font-size: 13px;">{{sender_company}}</p><p style="color: #64748b; font-size: 13px;">{{sender_address}}</p><p style="color: #64748b; font-size: 13px;">代表取締役 {{sender_rep}}</p>');
+    }
     if (currentTemplate.id === 'tpl-contract-01') {
       result = result.replace('本契約の有効期間は、<strong>{{start_date}}</strong> から <strong>{{end_date}}</strong> までとする。', '本契約の有効期間は <strong>{{start_date}}</strong> からとする。終了日を定める場合は <strong>{{end_date}}</strong> とし、定めない場合は個別業務の実施期間・納期を発注書等で定める。');
     }
