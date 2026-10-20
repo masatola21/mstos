@@ -229,7 +229,7 @@ export const AIAcquisitionOperationsView: React.FC<{ onSendPresidentSummary?: (s
       if (!draft || typeof draft !== 'object' || !draft.payload || typeof draft.payload !== 'object') {
         throw new Error('AIの返答を草案として読み取れませんでした。もう一度依頼してください。');
       }
-      const cleanedPayload = cleanAiDraftPayload(type, draft.payload, segments);
+      const cleanedPayload = cleanAiDraftPayload(type, type === 'strategy' ? { ...draft.payload, channels: payload.channels || '' } : draft.payload, segments);
       if (type === 'strategy') cleanedPayload.channels = payload.channels || '';
       const selectedToolIds = type === 'strategy' ? (payload.channels || '').split('|').filter((toolType) => expandableToolTypes.includes(toolType as RecordType)) : [];
       if (type === 'strategy' && selectedToolIds.length) {
