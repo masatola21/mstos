@@ -467,6 +467,13 @@ async function processMarketingAutomationJobs(): Promise<void> {
         const { data: contact, error: contactError } = await lineSupabase.from('contacts')
           .select('id,full_name,email,line_user_id,company_id').eq('id',job.contact_id).maybeSingle();
         if (contactError || !contact) throw new Error('連絡先が見つかりません。');
+        const companyResult = contact.company_id
+          ? await lineSupabase.from('companies').select('company_name').eq('id',contact.company_id).maybeSingle()
+          : { data: null };
+        const recipientName = String(contact.full_name || 'お客様');
+        const companyName = String(companyResult.data?.company_name || '貴社');
+        const values:Record<string,string>={name:recipientName,recipient_name:recipientName,company_name:companyName,form_title:'',document_title:'',document_url:'',document_content:'',link_url:''};
+        const personalize=(value:unknown)=>String(value||'').replace(/{([a-z_]+)}/g,(_match,key:string)=>values[key]||'');
         const recipientAddress = job.channel === 'email' ? String(contact.email || '') : String(contact.line_user_id || '');
         if (!recipientAddress) throw new Error('送信先がありません。');
         const { data: outbox, error: outboxError } = await lineSupabase.from('communication_outbox').insert({
@@ -484,8 +491,6 @@ async function processMarketingAutomationJobs(): Promise<void> {
           const emailKey = process.env.RESEND_API_KEY || '';
           const emailFrom = process.env.RESEND_FROM_EMAIL || '';
           if (!emailKey || !emailFrom) throw new Error('メール配信サービスの設定がありません。');
-          const recipientName=String(contact.full_name||'お客様');
-          const personalize=(value:unknown)=>String(value||'').replaceAll('{name}',recipientName).replaceAll('{recipient_name}',recipientName);
           const body = personalize(job.body_text);
           const response = await fetch('https://api.resend.com/emails',{method:'POST',headers:{Authorization:'Bearer '+emailKey,'Content-Type':'application/json'},body:JSON.stringify({from:emailFrom,to:[recipientAddress],subject:personalize(job.subject),text:body})});
           const result = await response.json().catch(()=>({})) as {id?:string;message?:string};
@@ -496,8 +501,6 @@ async function processMarketingAutomationJobs(): Promise<void> {
           const {data:friend,error:friendError}=await lineSupabase.from('line_friends').select('status,consent_status').eq('line_user_id',recipientAddress).maybeSingle();
           if(friendError||!friend||friend.status!=='active'||friend.consent_status!=='opted_in')throw new Error('LINEの友だち状態または配信同意を確認できません。');
           const requested=job.line_message_payload&&typeof job.line_message_payload==='object'?job.line_message_payload as {type?:string;originalContentUrl?:string;previewImageUrl?:string;altText?:string;contents?:unknown}:null;
-          const recipientName=String(contact.full_name||'お客様');
-          const personalize=(value:unknown)=>String(value||'').replaceAll('{name}',recipientName).replaceAll('{recipient_name}',recipientName);
           const personalizeJson=(value:any):any=>Array.isArray(value)?value.map(personalizeJson):value&&typeof value==='object'?Object.fromEntries(Object.entries(value).map(([key,item])=>[key,personalizeJson(item)])):typeof value==='string'?personalize(value):value;
           let message: any;
           if (requested?.type === 'video' || requested?.type === 'image') {
