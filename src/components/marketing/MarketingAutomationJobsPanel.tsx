@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import { Activity, RefreshCw, X } from 'lucide-react';
 import { getSupabase } from '../../lib/supabaseClient';
 
@@ -44,6 +44,7 @@ interface Props {
 
 export const MarketingAutomationJobsPanel: React.FC<Props> = ({ health, onHealthChange }) => {
   const [jobs, setJobs] = useState<JobView[]>([]);
+  const [jobCounts, setJobCounts] = useState<Record<JobStatus, number>>({ queued: 0, sending: 0, sent: 0, failed: 0, skipped: 0, canceled: 0 });
   const [filter, setFilter] = useState<JobStatus | 'all'>('all');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -60,13 +61,15 @@ export const MarketingAutomationJobsPanel: React.FC<Props> = ({ health, onHealth
     const rows = (data || []) as unknown as JobRow[];
     const contactIds = [...new Set(rows.map((row) => row.contact_id).filter(Boolean))];
     const scenarioIds = [...new Set(rows.map((row) => row.scenario_id).filter(Boolean))];
-    const [contactsResult, scenariosResult] = await Promise.all([
+    const [contactsResult, scenariosResult, ...countResults] = await Promise.all([
       contactIds.length ? db.from('contacts').select('id,full_name').in('id', contactIds) : Promise.resolve({ data: [], error: null }),
       scenarioIds.length ? db.from('marketing_automation_scenarios').select('scenario_id,config').in('scenario_id', scenarioIds) : Promise.resolve({ data: [], error: null }),
+      ...statuses.map((status) => db.from('marketing_automation_jobs').select('id', { count: 'exact', head: true }).eq('status', status)),
     ]);
     const contactsById = new Map((contactsResult.data || []).map((contact: any) => [contact.id, contact.full_name]));
     const scenariosById = new Map((scenariosResult.data || []).map((scenario: any) => [scenario.scenario_id, scenario.config?.name || scenario.scenario_id]));
     setJobs(rows.map((row) => ({ ...row, contactName: String(contactsById.get(row.contact_id) || '連絡先不明'), scenarioName: String(scenariosById.get(row.scenario_id) || row.scenario_id || 'シナリオ不明') })));
+    setJobCounts(Object.fromEntries(statuses.map((status, index) => [status, countResults[index]?.count || 0])) as Record<JobStatus, number>);
     setError(contactsResult.error || scenariosResult.error ? '連絡先またはシナリオ名を取得できないジョブがあります。' : '');
     setLoading(false);
   }, [db]);
@@ -102,10 +105,6 @@ export const MarketingAutomationJobsPanel: React.FC<Props> = ({ health, onHealth
     } finally { setBusyJobId(''); }
   };
 
-  const counts = useMemo(() => statuses.reduce((result, status) => {
-    result[status] = jobs.filter((job) => job.status === status).length;
-    return result;
-  }, {} as Record<JobStatus, number>), [jobs]);
   const visibleJobs = filter === 'all' ? jobs : jobs.filter((job) => job.status === filter);
   const runnerIsStale = !health?.runnerLastRunAt || Date.now() - Date.parse(health.runnerLastRunAt) > 15 * 60 * 1000;
 
@@ -132,7 +131,7 @@ export const MarketingAutomationJobsPanel: React.FC<Props> = ({ health, onHealth
           <button onClick={() => { void refresh(); void refreshHealth(); }} className="rounded-lg border border-slate-700 p-2 text-slate-300 hover:bg-slate-800" aria-label="再読み込み"><RefreshCw className="h-4 w-4" /></button>
         </div>
       </div>
-      <div className="flex flex-wrap gap-2 border-b border-slate-800 px-4 py-3">{statuses.map((status) => <button key={status} onClick={() => setFilter(filter === status ? 'all' : status)} className={`rounded-full border px-2.5 py-1 text-[11px] ${filter === status ? 'border-indigo-400/50 bg-indigo-500/10 text-indigo-200' : 'border-slate-700 text-slate-400'}`}>{statusLabels[status]} {counts[status] ?? 0}</button>)}</div>
+      <div className="flex flex-wrap gap-2 border-b border-slate-800 px-4 py-3">{statuses.map((status) => <button key={status} onClick={() => setFilter(filter === status ? 'all' : status)} className={`rounded-full border px-2.5 py-1 text-[11px] ${filter === status ? 'border-indigo-400/50 bg-indigo-500/10 text-indigo-200' : 'border-slate-700 text-slate-400'}`}>{statusLabels[status]} {jobCounts[status] ?? 0}</button>)}</div>
       {error && <p role="alert" className="border-b border-slate-800 px-4 py-3 text-xs text-amber-200">{error}</p>}
       {loading ? <p className="p-6 text-sm text-slate-400">読み込み中…</p> : visibleJobs.length === 0 ? <p className="p-6 text-sm text-slate-400">該当する配信ジョブはありません。</p> : <div className="divide-y divide-slate-800">
         {visibleJobs.map((job) => <article key={job.id} className="grid gap-3 p-4 lg:grid-cols-[minmax(0,1fr)_auto] lg:items-center">
