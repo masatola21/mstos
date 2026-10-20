@@ -1211,21 +1211,35 @@ ${JSON.stringify(context, null, 2)}`;
 
 
 export const DiagnosisManager: React.FC<DiagnosisManagerProps> = (props) => {
-  const [section, setSection] = useState<'forms' | 'diagnoses'>(() => props.initialSection || (props.initialLeadId || props.initialCompanyId ? 'diagnoses' : 'forms'));
+  const [section, setSection] = useState<'forms' | 'answers' | 'diagnoses'>(() =>
+    props.initialSection === 'diagnoses' || props.initialLeadId || props.initialCompanyId ? 'diagnoses' : 'forms'
+  );
   const [requestedDiagnosisId, setRequestedDiagnosisId] = useState<string | null>(null);
   return (
     <div className="space-y-4">
-      <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-slate-800 bg-slate-900 p-3">
+      <div className="space-y-3 rounded-xl border border-slate-800 bg-slate-900 p-3">
         <div>
           <h1 className="text-lg font-bold text-white">フォーム・診断</h1>
-          <p className="text-xs text-slate-400">フォーム設定・受付回答と、社内診断・レポートを一つの管理領域にまとめます。</p>
+          <p className="text-xs text-slate-400">受付フォームの設定、届いた回答、社内診断とレポートをここで確認できます。</p>
         </div>
-        <div className="flex gap-2">
-          <button onClick={() => setSection('forms')} className={`rounded-lg px-3 py-2 text-sm ${section === 'forms' ? 'bg-blue-600 text-white' : 'text-slate-300 hover:bg-slate-800'}`}>フォーム・回答</button>
-          <button onClick={() => setSection('diagnoses')} className={`rounded-lg px-3 py-2 text-sm ${section === 'diagnoses' ? 'bg-blue-600 text-white' : 'text-slate-300 hover:bg-slate-800'}`}>診断・レポート</button>
-        </div>
+        <nav className="flex flex-wrap gap-2 border-t border-slate-800 pt-3" aria-label="フォーム・診断">
+          <button onClick={() => setSection('forms')} aria-current={section === 'forms' ? 'page' : undefined} className={`rounded-lg px-3 py-2 text-sm ${section === 'forms' ? 'bg-blue-600 text-white' : 'text-slate-300 hover:bg-slate-800'}`}>フォーム設定</button>
+          <button onClick={() => setSection('answers')} aria-current={section === 'answers' ? 'page' : undefined} className={`rounded-lg px-3 py-2 text-sm ${section === 'answers' ? 'bg-blue-600 text-white' : 'text-slate-300 hover:bg-slate-800'}`}>フォーム回答</button>
+          <button onClick={() => setSection('diagnoses')} aria-current={section === 'diagnoses' ? 'page' : undefined} className={`rounded-lg px-3 py-2 text-sm ${section === 'diagnoses' ? 'bg-blue-600 text-white' : 'text-slate-300 hover:bg-slate-800'}`}>診断・レポート</button>
+        </nav>
       </div>
-      {section === 'forms' ? <DiagnosisFormsWorkspace initialLeadId={props.initialLeadId} initialCompanyId={props.initialCompanyId} initialSection={props.initialLeadId || props.initialCompanyId ? 'answers' : undefined} onOpenDiagnosis={(id) => { setRequestedDiagnosisId(id); setSection('diagnoses'); }} onOpenSendCenter={props.onOpenSendCenter} /> : <DiagnosisRecordsView {...props} initialDiagnosisId={requestedDiagnosisId || undefined} />}
+      {section === 'forms' || section === 'answers' ? (
+        <DiagnosisFormsWorkspace
+          key={section}
+          initialLeadId={props.initialLeadId}
+          initialCompanyId={props.initialCompanyId}
+          initialSection={section}
+          activeSection={section}
+          showHeader={false}
+          onOpenDiagnosis={(id) => { setRequestedDiagnosisId(id); setSection('diagnoses'); }}
+          onOpenSendCenter={props.onOpenSendCenter}
+        />
+      ) : <DiagnosisRecordsView {...props} initialDiagnosisId={requestedDiagnosisId || undefined} />}
     </div>
   );
 };

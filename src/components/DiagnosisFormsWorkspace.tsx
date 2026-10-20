@@ -48,9 +48,9 @@ function readDefinition(value: Record<string, unknown> | null | undefined): Form
   };
 }
 
-interface DiagnosisFormsWorkspaceProps { initialLeadId?: string; initialCompanyId?: string; initialSection?: 'forms'|'answers'; onOpenDiagnosis?: (diagnosisId: string) => void; onOpenSendCenter?: (formId: string, url: string, kind: 'form'|'diagnosis') => void; }
+interface DiagnosisFormsWorkspaceProps { initialLeadId?: string; initialCompanyId?: string; initialSection?: 'forms'|'answers'; activeSection?: 'forms'|'answers'; showHeader?: boolean; onOpenDiagnosis?: (diagnosisId: string) => void; onOpenSendCenter?: (formId: string, url: string, kind: 'form'|'diagnosis') => void; }
 
-export const DiagnosisFormsWorkspace: React.FC<DiagnosisFormsWorkspaceProps> = ({ initialLeadId, initialCompanyId, initialSection, onOpenDiagnosis, onOpenSendCenter }) => {
+export const DiagnosisFormsWorkspace: React.FC<DiagnosisFormsWorkspaceProps> = ({ initialLeadId, initialCompanyId, initialSection, activeSection, showHeader = true, onOpenDiagnosis, onOpenSendCenter }) => {
   const [section, setSection] = useState<'forms'|'answers'>(initialSection || (initialLeadId || initialCompanyId ? 'answers' : 'forms'));
   const [forms, setForms] = useState<DiagnosisForm[]>([]);
   const [answers, setAnswers] = useState<Submission[]>([]);
@@ -120,6 +120,7 @@ export const DiagnosisFormsWorkspace: React.FC<DiagnosisFormsWorkspaceProps> = (
   };
 
   useEffect(() => { void load(); }, []);
+  useEffect(() => { if (activeSection) setSection(activeSection); }, [activeSection]);
 
   const saveForm = async (event: React.FormEvent) => {
     event.preventDefault();
@@ -237,17 +238,14 @@ export const DiagnosisFormsWorkspace: React.FC<DiagnosisFormsWorkspaceProps> = (
 
   return (
     <div className="space-y-4">
-      <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-slate-800 bg-slate-900 p-4">
-        <div>
-          <h2 className="font-bold text-white">フォーム・診断の受付管理</h2>
-          <p className="mt-1 text-xs text-slate-400">フォーム名・設問・説明文を自由に作成・管理できます。</p>
-        </div>
+      {showHeader && <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-slate-800 bg-slate-900 p-4">
+        <div><h2 className="font-bold text-white">フォーム・診断の受付管理</h2><p className="mt-1 text-xs text-slate-400">フォーム名・設問・説明文を自由に作成・管理できます。</p></div>
         <div className="flex gap-2">
           <button onClick={() => setSection('forms')} className={'rounded-lg px-3 py-2 text-sm ' + (section === 'forms' ? 'bg-blue-600 text-white' : 'text-slate-300 hover:bg-slate-800')}>フォーム設定</button>
           <button onClick={() => setSection('answers')} className={'rounded-lg px-3 py-2 text-sm ' + (section === 'answers' ? 'bg-blue-600 text-white' : 'text-slate-300 hover:bg-slate-800')}>フォーム回答 ({visibleAnswers.length})</button>
           <button onClick={() => void load()} title="更新" className="rounded-lg border border-slate-700 px-3 py-2 text-slate-300"><RefreshCw className="h-4 w-4" /></button>
         </div>
-      </div>
+      </div>}
       {error && <div role="alert" className="rounded-lg border border-rose-800 bg-rose-950/40 p-3 text-sm text-rose-200">{error}</div>}
       {notice && <div role="status" className="rounded-lg border border-emerald-800 bg-emerald-950/40 p-3 text-sm text-emerald-200">{notice}</div>}
       {section === 'forms' && (
