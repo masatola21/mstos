@@ -166,7 +166,7 @@ export const QuickPresidentDrawer: React.FC<QuickPresidentDrawerProps> = ({
       <div className="p-4 border-b border-slate-800 bg-slate-950 flex items-center justify-between">
         <div className="flex items-center gap-3">
           <div className="w-9 h-9 rounded-xl bg-gradient-to-tr from-indigo-600 to-blue-500 flex items-center justify-center text-white text-lg shadow-lg shadow-indigo-500/20">
-            {character.avatarEmoji || '👔'}
+            {selectedWorkMode.avatarEmoji || character.avatarEmoji || '👔'}
           </div>
           <div>
             <div className="flex items-center gap-1.5">
@@ -175,7 +175,7 @@ export const QuickPresidentDrawer: React.FC<QuickPresidentDrawerProps> = ({
                 クイック相談
               </span>
             </div>
-            <p className="text-[10px] text-slate-400 truncate max-w-[200px]">{getPageAssistantProfile(pageId).label}担当</p>
+            <p className="text-[10px] text-slate-400 truncate max-w-[200px]">{selectedWorkMode.label}担当</p>
           </div>
         </div>
 
