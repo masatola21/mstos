@@ -27,6 +27,7 @@ interface Props {
   scenarios: MarketingScenario[];
   onScenariosChange: (scenarios: MarketingScenario[]) => void;
   onNavigateTab?: (tab: 'communication_send' | 'custom_lists' | 'contacts') => void;
+  lineInboxContact?: { contactId: string; lineUserId: string };
 }
 
 const triggerOptions: Array<{ value: MarketingTrigger; label: string }> = [
@@ -117,7 +118,7 @@ const emptyScenario = (): Omit<MarketingScenario, 'id' | 'updatedAt'> => ({
   consentBasis: '',
 });
 
-export const MarketingAutomationPrototypeView: React.FC<Props> = ({ scenarios, onScenariosChange, onNavigateTab }) => {
+export const MarketingAutomationPrototypeView: React.FC<Props> = ({ scenarios, onScenariosChange, onNavigateTab, lineInboxContact }) => {
   const [segments, setSegments] = useState<Array<{id:string;name:string;entity_type:string;conditions:Record<string,unknown>|null}>>([]);
   const [emailTemplates,setEmailTemplates]=useState<any[]>([]);
   const [lineTemplates,setLineTemplates]=useState<Array<{id:string;name:string;reply_type:'text'|'image'|'flex'|'video';payload:Record<string,any>}>>([]);
@@ -147,6 +148,11 @@ export const MarketingAutomationPrototypeView: React.FC<Props> = ({ scenarios, o
   };
   const [activeTab, setActiveTab] = useState<'home' | 'email' | 'line' | 'scenarios' | 'jobs' | 'segments' | 'templates'>('home');
   const [lineView, setLineView] = useState<'broadcast' | 'inbox' | 'settings'>('broadcast');
+  useEffect(() => {
+    if (!lineInboxContact) return;
+    setActiveTab('line');
+    setLineView('inbox');
+  }, [lineInboxContact]);
   const [emailView, setEmailView] = useState<'broadcast' | 'inbox'>('broadcast');
   const [editing, setEditing] = useState<MarketingScenario | null>(null);
   const [isFormOpen, setIsFormOpen] = useState(false);
@@ -369,7 +375,7 @@ export const MarketingAutomationPrototypeView: React.FC<Props> = ({ scenarios, o
       {notice && <div role="status" className="rounded-xl border border-emerald-500/30 bg-emerald-500/10 px-4 py-3 text-sm text-emerald-200">{notice}</div>}
 
       {activeTab === 'email' && <div className="space-y-4"><div className="flex gap-2 border-b border-slate-800 pb-3"><button onClick={()=>setEmailView('broadcast')} className="rounded-lg bg-indigo-700 px-3 py-2 text-xs text-white">配信</button><button onClick={()=>setEmailView('inbox')} className="rounded-lg border border-slate-700 px-3 py-2 text-xs text-slate-300">受信箱</button></div>{emailView==='broadcast'?<MarketingBroadcastView initialChannel="email"/>:<MarketingEmailInboxView/>}</div>}
-      {activeTab === 'line' && <div className="space-y-4"><div className="flex flex-wrap gap-2 border-b border-slate-800 pb-3"><button onClick={()=>setLineView('broadcast')} className="rounded-lg bg-green-700 px-3 py-2 text-xs text-white">配信</button><button onClick={()=>setLineView('inbox')} className="rounded-lg border border-slate-700 px-3 py-2 text-xs text-slate-300">受信箱・自動返信</button><button onClick={()=>setLineView('settings')} className="rounded-lg border border-slate-700 px-3 py-2 text-xs text-slate-300">リッチメニュー</button></div>{lineView==='broadcast'?<MarketingBroadcastView initialChannel="line"/>:lineView==='inbox'?<MarketingLineInboxView/>:<MarketingLineSettingsView/>}</div>}
+      {activeTab === 'line' && <div className="space-y-4"><div className="flex flex-wrap gap-2 border-b border-slate-800 pb-3"><button onClick={()=>setLineView('broadcast')} className="rounded-lg bg-green-700 px-3 py-2 text-xs text-white">配信</button><button onClick={()=>setLineView('inbox')} className="rounded-lg border border-slate-700 px-3 py-2 text-xs text-slate-300">受信箱・自動返信</button><button onClick={()=>setLineView('settings')} className="rounded-lg border border-slate-700 px-3 py-2 text-xs text-slate-300">リッチメニュー</button></div>{lineView==='broadcast'?<MarketingBroadcastView initialChannel="line"/>:lineView==='inbox'?<MarketingLineInboxView initialLineUserId={lineInboxContact?.lineUserId}/>:<MarketingLineSettingsView/>}</div>}
       {activeTab === 'home' && <>
         <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
           {[
