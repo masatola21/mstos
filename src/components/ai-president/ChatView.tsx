@@ -368,6 +368,7 @@ export const ChatView: React.FC<ChatViewProps> = ({
                 </p>
 
                 {selectedWorkModeId === 'president' && <>
+                <div className="flex flex-wrap items-center justify-center gap-1.5 max-w-lg mx-auto mb-6">
                   {userProfile.userName && (
                     <span className="text-[11px] px-2.5 py-1 rounded-full bg-indigo-950/60 text-indigo-300 border border-indigo-500/30">
                       あなたの登録名: {userProfile.userName}
