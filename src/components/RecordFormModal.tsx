@@ -9,6 +9,17 @@ import {
 } from '../services/dataService';
 import { ProposalPlanTemplatePicker } from './ProposalPlanTemplatePicker';
 import type { ProposalPlanTemplate } from './ProposalPlanTemplatePicker';
+import { todayJst } from '../utils/date';
+
+const CORE_FORM_FIELDS: Record<TableKey, string[]> = {
+  companies: ['company_name', 'industry', 'contact_name', 'email', 'phone', 'website'],
+  contacts: ['full_name', 'company_id', 'email', 'phone', 'preferred_channel'],
+  prospects: ['company_id', 'status', 'source', 'approach_method', 'recommended_product_id', 'target_flag'],
+  leads: ['company_id', 'status', 'source', 'service_type', 'priority_channel', 'meeting_date', 'notes'],
+  products: ['product_name', 'product_type', 'phase', 'initial_fee', 'monthly_fee', 'status', 'description'],
+  deals: ['company_id', 'proposal_plan_name', 'proposal_status', 'product_id', 'lead_id', 'total_amount', 'monthly_fee', 'initial_fee'],
+  customers: ['company_id', 'contract_status', 'contract_start_date'],
+};
 
 const buildSharedProposalDescription = (product: Product): string => [
   `【商品名】${product.product_name}`,
@@ -46,6 +57,8 @@ export const RecordFormModal: React.FC<RecordFormModalProps> = ({
   const isEditing = !!editRecord;
 
   const [formData, setFormData] = useState<Record<string, any>>({});
+  const [customFieldValues, setCustomFieldValues] = useState<Record<string, string>>({});
+  const [showAdvancedFields, setShowAdvancedFields] = useState(false);
   const [formErrors, setFormErrors] = useState<Record<string, string>>({});
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
@@ -64,6 +77,7 @@ export const RecordFormModal: React.FC<RecordFormModalProps> = ({
 
     setSubmitError(null);
     setFormErrors({});
+    setShowAdvancedFields(false);
 
     // 候補データの取得
     const loadLookups = async () => {
@@ -94,9 +108,18 @@ export const RecordFormModal: React.FC<RecordFormModalProps> = ({
     if (editRecord) {
       // 編集時: 既存レコードの値をセット
       const initial: Record<string, any> = {};
+      const customValues: Record<string, string> = {};
       config.fields.forEach((f) => {
-        initial[f.key] = editRecord[f.key] !== undefined && editRecord[f.key] !== null ? editRecord[f.key] : '';
+        const existingValue = editRecord[f.key] !== undefined && editRecord[f.key] !== null ? editRecord[f.key] : '';
+        const isKnownChoice = f.options?.some((option) => option.value === String(existingValue));
+        if (f.allowCustom && existingValue !== '' && !isKnownChoice) {
+          initial[f.key] = '__custom';
+          customValues[f.key] = String(existingValue);
+        } else {
+          initial[f.key] = existingValue;
+        }
       });
+      setCustomFieldValues(customValues);
       if (editRecord.id !== undefined) {
         initial.id = editRecord.id;
       }
@@ -107,9 +130,12 @@ export const RecordFormModal: React.FC<RecordFormModalProps> = ({
       setProposalPlanTemplateId('');
       // 新規登録時: デフォルト値
       const initial: Record<string, any> = {};
+      setCustomFieldValues({});
       config.fields.forEach((f) => {
         if (f.type === 'select' && f.options && f.options.length > 0) {
           initial[f.key] = f.options[0].value;
+        } else if (['registered_at', 'first_registered_at'].includes(f.key)) {
+          initial[f.key] = todayJst();
         } else {
           initial[f.key] = '';
         }
@@ -201,6 +227,9 @@ export const RecordFormModal: React.FC<RecordFormModalProps> = ({
     const payload: Record<string, any> = {};
     config.fields.forEach((field) => {
       let val = formData[field.key];
+      if (field.allowCustom && val === '__custom') {
+        val = customFieldValues[field.key]?.trim() || '';
+      }
       // ブール型セレクトボックスの変換
       if (['target_flag', 'reply_flag', 'proposal_created'].includes(field.key)) {
         if (val === 'true') val = true;
@@ -308,8 +337,25 @@ export const RecordFormModal: React.FC<RecordFormModalProps> = ({
               </div>
             )}
 
+            {config.fields.some((field) => !CORE_FORM_FIELDS[tableKey].includes(field.key)) && (
+              <button
+                type="button"
+                onClick={() => setShowAdvancedFields((show) => !show)}
+                className="flex items-center gap-2 text-xs font-semibold text-blue-300 hover:text-blue-200"
+              >
+                <span>{showAdvancedFields ? '詳細項目を隠す' : '詳細項目を表示'}</span>
+                {!showAdvancedFields && (
+                  <span className="rounded-full bg-slate-800 px-2 py-0.5 text-[10px] text-slate-400">
+                    {config.fields.filter((field) => !CORE_FORM_FIELDS[tableKey].includes(field.key)).length}項目
+                  </span>
+                )}
+              </button>
+            )}
+
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              {config.fields.map((field) => {
+              {config.fields
+                .filter((field) => showAdvancedFields || CORE_FORM_FIELDS[tableKey].includes(field.key))
+                .map((field) => {
                 const value = formData[field.key] ?? '';
                 const error = formErrors[field.key];
                 const isFullWidth = field.type === 'textarea' || field.key === 'company_name' || field.key === 'deal_name';
@@ -486,6 +532,7 @@ export const RecordFormModal: React.FC<RecordFormModalProps> = ({
 
                 // セレクトボックス
                 if (field.type === 'select' && field.options) {
+                  const isCustomChoice = field.allowCustom && value === '__custom';
                   return (
                     <div key={field.key} className={`space-y-1.5 ${isFullWidth ? 'sm:col-span-2' : ''}`}>
                       <label className="block text-xs font-semibold text-slate-300 flex items-center justify-between">
@@ -507,7 +554,17 @@ export const RecordFormModal: React.FC<RecordFormModalProps> = ({
                             {opt.label}
                           </option>
                         ))}
+                        {field.allowCustom && <option value="__custom">その他（自由入力）</option>}
                       </select>
+                      {isCustomChoice && (
+                        <input
+                          type="text"
+                          value={customFieldValues[field.key] || ''}
+                          onChange={(e) => setCustomFieldValues((prev) => ({ ...prev, [field.key]: e.target.value }))}
+                          placeholder={field.placeholder || `${field.label}を入力`}
+                          className="w-full px-3 py-2 rounded-xl bg-slate-950 border border-slate-700/80 text-slate-200 text-xs outline-none focus:border-blue-500"
+                        />
+                      )}
                       {error && <p className="text-[11px] text-rose-400">{error}</p>}
                     </div>
                   );
@@ -567,6 +624,17 @@ export const RecordFormModal: React.FC<RecordFormModalProps> = ({
                     </label>
                     <input
                       type={field.type}
+                      autoComplete={({
+                        full_name: 'name',
+                        contact_name: 'name',
+                        company_name: 'organization',
+                        email: 'email',
+                        phone: 'tel',
+                        postal_code: 'postal-code',
+                        address: 'street-address',
+                        role_title: 'organization-title',
+                        website: 'url',
+                      } as Record<string, string>)[field.key]}
                       value={value}
                       placeholder={field.placeholder}
                       onChange={(e) => handleInputChange(field.key, e.target.value)}
