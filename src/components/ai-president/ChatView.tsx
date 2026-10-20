@@ -368,23 +368,6 @@ export const ChatView: React.FC<ChatViewProps> = ({
                 </p>
 
                 {selectedWorkModeId === 'president' && <>
-                {/* Character Traits Pills */}
-                <div className="flex flex-wrap items-center justify-center gap-1.5 max-w-lg mx-auto mb-6">
-                  {character.firstPerson && (
-                    <span className="text-[11px] px-2.5 py-1 rounded-full bg-slate-800 text-slate-300 border border-slate-700/60">
-                      一人称: {character.firstPerson}
-                    </span>
-                  )}
-                  {character.secondPerson && (
-                    <span className="text-[11px] px-2.5 py-1 rounded-full bg-slate-800 text-slate-300 border border-slate-700/60">
-                      あなたへの呼び名: {character.secondPerson}
-                    </span>
-                  )}
-                  {character.tone && (
-                    <span className="text-[11px] px-2.5 py-1 rounded-full bg-slate-800 text-slate-300 border border-slate-700/60">
-                      口調: {character.tone}
-                    </span>
-                  )}
                   {userProfile.userName && (
                     <span className="text-[11px] px-2.5 py-1 rounded-full bg-indigo-950/60 text-indigo-300 border border-indigo-500/30">
                       あなたの登録名: {userProfile.userName}
