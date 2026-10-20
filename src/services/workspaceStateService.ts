@@ -149,11 +149,15 @@ async function loadRelationalMatrixWorkspace(userId: string): Promise<Relational
   const supabase = getSupabaseClient();
   const { data: syncState, error: syncStateError } = await supabase
     .from('mst_matrix_workspace_sync_state')
-    .select('user_id')
+    .select('user_id, updated_at')
     .eq('user_id', userId)
     .maybeSingle();
   if (syncStateError) throw syncStateError;
-  if (!syncState) return null;
+  if (!syncState) {
+    matrixWorkspaceUpdatedAtByUser.delete(userId);
+    return null;
+  }
+  matrixWorkspaceUpdatedAtByUser.set(userId, syncState.updated_at);
 
   const [products, tools, customLists, marketingScenarios] = await Promise.all([
     supabase.from('mst_managed_products').select('payload').eq('user_id', userId).order('updated_at', { ascending: false }),
@@ -174,7 +178,8 @@ async function loadRelationalMatrixWorkspace(userId: string): Promise<Relational
 
 async function saveRelationalMatrixWorkspace(userId: string, data: WorkspaceData): Promise<void> {
   const supabase = getSupabaseClient();
-  const { error } = await supabase.rpc('mst_save_matrix_workspace', {
+  const pendingDeletions = matrixService.getPendingDeletions(userId);
+  const { data: updatedAt, error } = await supabase.rpc('mst_save_matrix_workspace', {
     p_user_id: userId,
     p_products: data.products,
     p_contracts: data.contracts,
@@ -182,13 +187,19 @@ async function saveRelationalMatrixWorkspace(userId: string, data: WorkspaceData
     p_tools: data.tools,
     p_custom_lists: data.customLists,
     p_marketing_scenarios: data.marketingScenarios,
+    p_expected_updated_at: matrixWorkspaceUpdatedAtByUser.get(userId) || null,
+    p_deleted_contract_ids: [...pendingDeletions.contracts],
+    p_deleted_invoice_ids: [...pendingDeletions.invoices],
   });
   if (error) throw error;
+  if (typeof updatedAt === 'string') matrixWorkspaceUpdatedAtByUser.set(userId, updatedAt);
+  matrixService.clearPendingDeletions(userId);
 }
 
 const WORKSPACE_STATE_TABLE = 'mst_workspace_state';
 const AI_OPERATIONS_SYNC_STATE_TABLE = 'mst_ai_operations_sync_state';
 const LAST_SYNC_PREFIX = 'mst_workspace_last_synced_v1:';
+const matrixWorkspaceUpdatedAtByUser = new Map<string, string>();
 
 async function loadRelationalAIOperations(userId: string): Promise<RelationalAIOperations | null> {
   const supabase = getSupabaseClient();
@@ -415,6 +426,7 @@ function getSupabaseClient() {
 }
 
 export async function loadOrMigrateWorkspaceData(userId: string): Promise<WorkspaceData> {
+  matrixService.setActiveUserId(userId);
   const supabase = getSupabaseClient();
   const { data: row, error } = await supabase
     .from(WORKSPACE_STATE_TABLE)
@@ -491,12 +503,17 @@ export async function loadOrMigrateWorkspaceData(userId: string): Promise<Worksp
     merged.invoices = mergeRecords(relationalSales.invoices, localDefaults.invoices, baseline.invoices || []);
   }
 
+  const pendingDeletions = matrixService.getPendingDeletions(userId);
+  merged.contracts = merged.contracts.filter((record) => !pendingDeletions.contracts.has(record.id));
+  merged.invoices = merged.invoices.filter((record) => !pendingDeletions.invoices.has(record.id));
+
   applyWorkspaceData(merged);
   await saveWorkspaceData(userId, merged);
   return merged;
 }
 
 export async function saveWorkspaceData(userId: string, data: WorkspaceData): Promise<void> {
+  matrixService.setActiveUserId(userId);
   const supabase = getSupabaseClient();
   await saveRelationalAIOperations(userId, data);
   await saveRelationalMatrixWorkspace(userId, data);

@@ -9,6 +9,9 @@ import {
   BusinessCategory,
 } from '../types/matrix';
 
+const pendingDeletionMemory = new Map<string, { contracts: Set<string>; invoices: Set<string> }>();
+let activeMatrixUserId = '';
+
 const MATRIX_STORAGE_KEYS = {
   PRODUCTS: 'mst_matrix_products_v1',
   PRODUCTS_SEED_VERSION: 'mst_matrix_products_seed_version',
@@ -17,6 +20,7 @@ const MATRIX_STORAGE_KEYS = {
   TOOLS: 'mst_matrix_tools_v1',
   CUSTOM_LISTS: 'mst_matrix_custom_lists_v1',
   AUTOMATIONS: 'mst_matrix_automations_v1',
+  PENDING_DELETIONS: 'mst_pending_deletions_v1:',
 };
 
 // --- Initial Seed Products (covering all archetypes) ---
@@ -221,6 +225,9 @@ const INITIAL_CUSTOM_LISTS: CustomListDefinition[] = [
 
 export const matrixService = {
   normalizeAutomationRules,
+  setActiveUserId(userId: string) {
+    activeMatrixUserId = userId;
+  },
   // Products
   loadProducts(): ManagedProduct[] {
     try {
@@ -266,6 +273,44 @@ export const matrixService = {
     this.saveProducts(list);
   },
 
+  // Pending contract and invoice deletions are scoped to the signed-in user.
+  getPendingDeletions(userId: string): { contracts: Set<string>; invoices: Set<string> } {
+    const cached = pendingDeletionMemory.get(userId);
+    if (cached) return { contracts: new Set(cached.contracts), invoices: new Set(cached.invoices) };
+    try {
+      const raw = localStorage.getItem(`${MATRIX_STORAGE_KEYS.PENDING_DELETIONS}${userId}`);
+      const parsed = raw ? JSON.parse(raw) as { contracts?: string[]; invoices?: string[] } : {};
+      const value = { contracts: new Set(parsed.contracts || []), invoices: new Set(parsed.invoices || []) };
+      pendingDeletionMemory.set(userId, value);
+      return { contracts: new Set(value.contracts), invoices: new Set(value.invoices) };
+    } catch {
+      const value = { contracts: new Set<string>(), invoices: new Set<string>() };
+      pendingDeletionMemory.set(userId, value);
+      return { contracts: new Set(), invoices: new Set() };
+    }
+  },
+  clearPendingDeletions(userId: string) {
+    pendingDeletionMemory.set(userId, { contracts: new Set(), invoices: new Set() });
+    try {
+      localStorage.removeItem(`${MATRIX_STORAGE_KEYS.PENDING_DELETIONS}${userId}`);
+    } catch {
+      // The cloud save succeeded; a stale local marker is harmless and will be retried.
+    }
+  },
+  recordPendingDeletion(userId: string, kind: 'contracts' | 'invoices', id: string) {
+    const pending = this.getPendingDeletions(userId);
+    pending[kind].add(id);
+    pendingDeletionMemory.set(userId, pending);
+    try {
+      localStorage.setItem(`${MATRIX_STORAGE_KEYS.PENDING_DELETIONS}${userId}`, JSON.stringify({
+        contracts: [...pending.contracts],
+        invoices: [...pending.invoices],
+      }));
+    } catch {
+      // Keep the in-memory marker so this session still cannot restore the deleted row.
+    }
+  },
+
   // Contracts
   loadContracts(): ManagedContract[] {
     try {
@@ -289,6 +334,11 @@ export const matrixService = {
     list.unshift(newContract);
     this.saveContracts(list);
     return newContract;
+  },
+  deleteContract(id: string) {
+    if (!activeMatrixUserId) throw new Error('ログインユーザーが設定されていません。');
+    this.recordPendingDeletion(activeMatrixUserId, 'contracts', id);
+    this.saveContracts(this.loadContracts().filter((contract) => contract.id !== id));
   },
   updateContract(id: string, updates: Partial<ManagedContract>) {
     const list = this.loadContracts();
@@ -322,6 +372,11 @@ export const matrixService = {
     list.unshift(newInvoice);
     this.saveInvoices(list);
     return newInvoice;
+  },
+  deleteInvoice(id: string) {
+    if (!activeMatrixUserId) throw new Error('ログインユーザーが設定されていません。');
+    this.recordPendingDeletion(activeMatrixUserId, 'invoices', id);
+    this.saveInvoices(this.loadInvoices().filter((invoice) => invoice.id !== id));
   },
   updateInvoice(id: string, updates: Partial<ManagedInvoice>) {
     const list = this.loadInvoices();
