@@ -105,12 +105,28 @@ const emptyScenario = (): Omit<MarketingScenario, 'id' | 'updatedAt'> => ({
 
 export const MarketingAutomationPrototypeView: React.FC<Props> = ({ scenarios, onScenariosChange, onNavigateTab }) => {
   const [segments, setSegments] = useState<Array<{id:string;name:string;entity_type:string;conditions:Record<string,unknown>|null}>>([]);
+  const [emailTemplates,setEmailTemplates]=useState<any[]>([]);
+  const [lineTemplates,setLineTemplates]=useState<Array<{id:string;name:string;reply_type:'text'|'image'|'flex'|'video';payload:Record<string,any>}>>([]);
+  const [selectedEmailTemplateId,setSelectedEmailTemplateId]=useState('');
+  const [selectedLineTemplateId,setSelectedLineTemplateId]=useState('');
   useEffect(() => {
     const supabase = getSupabase();
     if (!supabase) return;
     void supabase.from('crm_segments').select('id,name,entity_type,conditions').order('name')
       .then(({data,error}) => { if (!error) setSegments((data || []).filter((segment:any)=>typeof segment.conditions?.field==='string'&&Boolean(segment.conditions.field.trim()))); });
   }, []);
+  useEffect(() => {
+    const supabase = getSupabase();
+    if (!supabase) return;
+    let active=true;
+    void Promise.all([
+      supabase.from('communication_templates').select('*').eq('channel','email').order('updated_at',{ascending:false}),
+      supabase.from('line_auto_reply_templates').select('*').order('created_at',{ascending:false}),
+    ]).then(([emailResult,lineResult])=>{if(!active)return;if(!emailResult.error)setEmailTemplates((emailResult.data||[]) as any[]);if(!lineResult.error)setLineTemplates((lineResult.data||[]) as Array<{id:string;name:string;reply_type:'text'|'image'|'flex'|'video';payload:Record<string,any>}>)});
+    return()=>{active=false};
+  }, []);
+  const chooseEmailTemplate=(id:string)=>{setSelectedEmailTemplateId(id);const item=emailTemplates.find(x=>x.id===id);if(item){update('emailSubject',item.subject||'');update('emailBody',item.body_text||'')}};
+  const chooseLineTemplate=(id:string)=>{setSelectedLineTemplateId(id);const item=lineTemplates.find(x=>x.id===id);if(!item)return;const payload={...(item.payload||{})};delete payload.storagePaths;update('lineMessageType',item.reply_type);update('lineMessagePayload',{type:item.reply_type,...payload});update('messageBody',item.reply_type==='text'?String(payload.text||''):'');update('lineImageUrl',item.reply_type==='image'?String(payload.originalContentUrl||''):'');update('linePreviewImageUrl',item.reply_type==='image'?String(payload.previewImageUrl||''):'');update('lineVideoUrl',item.reply_type==='video'?String(payload.originalContentUrl||''):'');update('lineVideoPreviewUrl',item.reply_type==='video'?String(payload.previewImageUrl||''):'');update('flexAltText',item.reply_type==='flex'?String(payload.altText||''):'');update('flexTitle','');update('flexBody','');update('flexButtonLabel','');update('flexButtonUrl','')};
   const audienceLabel = (value: string) => {
     const id = value.startsWith('segment:') ? value.slice('segment:'.length) : '';
     return segments.find((segment) => segment.id === id)?.name || value || '配信対象未設定';
