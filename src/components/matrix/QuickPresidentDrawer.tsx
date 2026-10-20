@@ -12,9 +12,22 @@ import {
   Maximize2 
 } from 'lucide-react';
 import { ApiUsageData, CharacterConfig, ChatMessage, UserProfile } from '../../types/ai-president';
+import { AI_WORK_MODES, AIWorkModeId } from '../../data/aiWorkModes';
+
+type PageAssistantProfile = { label: string; mode: AIWorkModeId };
+const getPageAssistantProfile = (pageId: string): PageAssistantProfile => {
+  if (pageId === 'marketing_automation' || pageId === 'ai_acquisition') return { label: 'マーケティング', mode: 'marketing_execution' };
+  if (pageId === 'mst_diagnoses' || pageId === 'deal_invitations') return { label: '診断・提案', mode: 'diagnosis' };
+  if (pageId === 'product_hub' || pageId === 'category_hub') return { label: '商品設計', mode: 'new_product' };
+  if (pageId === 'communication_send') return { label: '配信・顧客フォロー', mode: 'marketing_execution' };
+  if (pageId === 'customer_operations' || ['contacts', 'companies', 'leads', 'deals', 'customers', 'prospects'].includes(pageId)) return { label: '営業・顧客管理', mode: 'customer_product' };
+  if (pageId === 'ai_projects' || pageId === 'ai_tasks' || pageId === 'automations') return { label: 'プロジェクト・業務改善', mode: 'president' };
+  return { label: '経営OS全体', mode: 'president' };
+};
 
 interface QuickPresidentDrawerProps {
   isOpen: boolean;
+  pageId: string;
   onClose: () => void;
   character: CharacterConfig;
   userProfile: UserProfile;
@@ -25,6 +38,7 @@ interface QuickPresidentDrawerProps {
 
 export const QuickPresidentDrawer: React.FC<QuickPresidentDrawerProps> = ({
   isOpen,
+  pageId,
   onClose,
   character,
   userProfile,
@@ -40,6 +54,9 @@ export const QuickPresidentDrawer: React.FC<QuickPresidentDrawerProps> = ({
       timestamp: Date.now(),
     },
   ]);
+  const pageProfile = getPageAssistantProfile(pageId);
+  const [selectedWorkModeId, setSelectedWorkModeId] = useState<AIWorkModeId>(pageProfile.mode);
+  const selectedWorkMode = AI_WORK_MODES.find((mode) => mode.id === selectedWorkModeId) ?? AI_WORK_MODES[0];
   const [input, setInput] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
@@ -49,6 +66,17 @@ export const QuickPresidentDrawer: React.FC<QuickPresidentDrawerProps> = ({
       messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
     }
   }, [isOpen, messages]);
+
+  useEffect(() => {
+    const profile = getPageAssistantProfile(pageId);
+    setSelectedWorkModeId(profile.mode);
+    setMessages([{
+      id: 'page-welcome-' + pageId,
+      role: 'assistant',
+      content: profile.label + 'の画面を開いています。担当AIを選んで相談できます。画面上の顧客・案件データは自動送信しません。必要な情報をメッセージに含めてください。',
+      timestamp: Date.now(),
+    }]);
+  }, [pageId]);
 
   if (!isOpen) return null;
 
@@ -79,6 +107,8 @@ export const QuickPresidentDrawer: React.FC<QuickPresidentDrawerProps> = ({
           })),
           character,
           userProfile,
+          workModeId: selectedWorkModeId,
+          knowledgeContext: '現在開いているページ: ' + pageProfile.label + '（画面ID: ' + pageId + '）。ページ固有の業務役割を選んで回答してください。実データは自動共有されていないため、未提示の情報を推測しないでください。',
         }),
       });
 
@@ -86,7 +116,7 @@ export const QuickPresidentDrawer: React.FC<QuickPresidentDrawerProps> = ({
       if (data.usage) {
         onRecordUsage?.({
           endpoint: 'chat',
-          endpointName: 'AI社長クイック相談',
+          endpointName: 'AI社長ページ相談',
           model: data.model,
           usage: data.usage,
         });
@@ -136,12 +166,12 @@ export const QuickPresidentDrawer: React.FC<QuickPresidentDrawerProps> = ({
           </div>
           <div>
             <div className="flex items-center gap-1.5">
-              <span className="font-bold text-white text-sm">{character.name}</span>
+              <span className="font-bold text-white text-sm">{selectedWorkMode.name}</span>
               <span className="text-[10px] px-1.5 py-0.2 rounded bg-indigo-500/20 text-indigo-300 font-medium">
                 クイック相談
               </span>
             </div>
-            <p className="text-[10px] text-slate-400 truncate max-w-[200px]">{character.role}</p>
+            <p className="text-[10px] text-slate-400 truncate max-w-[200px]">{getPageAssistantProfile(pageId).label}担当</p>
           </div>
         </div>
 
@@ -163,6 +193,16 @@ export const QuickPresidentDrawer: React.FC<QuickPresidentDrawerProps> = ({
             <X className="w-4 h-4" />
           </button>
         </div>
+      </div>
+
+      <div className="border-b border-slate-800 bg-slate-950/60 px-4 py-3">
+        <label className="flex items-center justify-between gap-3 text-xs text-slate-300">
+          <span>相談するAI</span>
+          <select value={selectedWorkModeId} onChange={(event) => setSelectedWorkModeId(event.target.value as AIWorkModeId)} className="max-w-[220px] rounded-lg border border-slate-700 bg-slate-900 px-2 py-1.5 text-xs text-white">
+            {AI_WORK_MODES.map((mode) => <option key={mode.id} value={mode.id}>{mode.label}</option>)}
+          </select>
+        </label>
+        <p className="mt-2 text-[10px] leading-relaxed text-slate-500">現在の画面に合わせたAIを初期選択しています。画面の顧客・案件データは自動送信されません。保存や送信などの操作は、提案内容を確認してから行ってください。</p>
       </div>
 
       {/* Messages Scroll Area */}
