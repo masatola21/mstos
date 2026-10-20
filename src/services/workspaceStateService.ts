@@ -426,6 +426,7 @@ function getSupabaseClient() {
 }
 
 export async function loadOrMigrateWorkspaceData(userId: string): Promise<WorkspaceData> {
+  matrixService.setActiveUserId(userId);
   const supabase = getSupabaseClient();
   const { data: row, error } = await supabase
     .from(WORKSPACE_STATE_TABLE)
@@ -512,6 +513,7 @@ export async function loadOrMigrateWorkspaceData(userId: string): Promise<Worksp
 }
 
 export async function saveWorkspaceData(userId: string, data: WorkspaceData): Promise<void> {
+  matrixService.setActiveUserId(userId);
   const supabase = getSupabaseClient();
   await saveRelationalAIOperations(userId, data);
   await saveRelationalMatrixWorkspace(userId, data);
