@@ -132,6 +132,7 @@ export const AIAcquisitionOperationsView: React.FC<{ onSendPresidentSummary?: (s
   const [aiGenerating, setAiGenerating] = useState(false);
   const [aiError, setAiError] = useState('');
   const aiRequestVersion = useRef(0);
+  const aiAbortController = useRef<AbortController | null>(null);
   const [externalPrompt, setExternalPrompt] = useState('');
   const [externalDraft, setExternalDraft] = useState('');
   const [externalReview, setExternalReview] = useState('');
@@ -159,8 +160,8 @@ export const AIAcquisitionOperationsView: React.FC<{ onSendPresidentSummary?: (s
   };
   useEffect(() => { void load(); }, []);
 
-  const resetForm = (nextType: RecordType) => { aiRequestVersion.current += 1; setAiGenerating(false); setEditing(null); setIsFormOpen(true); setType(nextType); setTitle(''); setProductId(''); setPayload(emptyPayload()); setNotice(''); setAiInstruction(''); setAiConversation([]); setAiError(''); setExternalPrompt(''); setExternalDraft(''); setExternalReview(''); };
-  const startEdit = (record: AcquisitionRecord) => { aiRequestVersion.current += 1; setAiGenerating(false); setEditing(record); setIsFormOpen(true); setType(record.record_type); setTitle(record.title); setProductId(record.product_id || ''); setPayload(record.payload || {}); setActiveTab(record.record_type === 'result' || record.record_type === 'proposal' ? 'analysis' : record.record_type); setNotice(''); setAiInstruction(''); setAiConversation([]); setAiError(''); setExternalPrompt(''); setExternalDraft(''); setExternalReview(''); };
+  const resetForm = (nextType: RecordType) => { aiAbortController.current?.abort(); aiAbortController.current = null; aiRequestVersion.current += 1; setAiGenerating(false); setEditing(null); setIsFormOpen(true); setType(nextType); setTitle(''); setProductId(''); setPayload(emptyPayload()); setNotice(''); setAiInstruction(''); setAiConversation([]); setAiError(''); setExternalPrompt(''); setExternalDraft(''); setExternalReview(''); };
+  const startEdit = (record: AcquisitionRecord) => { aiAbortController.current?.abort(); aiAbortController.current = null; aiRequestVersion.current += 1; setAiGenerating(false); setEditing(record); setIsFormOpen(true); setType(record.record_type); setTitle(record.title); setProductId(record.product_id || ''); setPayload(record.payload || {}); setActiveTab(record.record_type === 'result' || record.record_type === 'proposal' ? 'analysis' : record.record_type); setNotice(''); setAiInstruction(''); setAiConversation([]); setAiError(''); setExternalPrompt(''); setExternalDraft(''); setExternalReview(''); };
   const save = async (event: React.FormEvent) => {
     event.preventDefault();
     if (!title.trim()) { setError('名称を入力してください。'); return; }
@@ -178,6 +179,8 @@ export const AIAcquisitionOperationsView: React.FC<{ onSendPresidentSummary?: (s
     const instruction = aiInstruction.trim();
     if (!instruction || aiGenerating) return;
     const requestVersion = ++aiRequestVersion.current;
+    const controller = new AbortController();
+    aiAbortController.current = controller;
     setAiGenerating(true); setAiError(''); setError(''); setNotice('');
     const selectedProduct = products.find((product) => product.id === productId);
     const prompt = [
@@ -203,6 +206,7 @@ export const AIAcquisitionOperationsView: React.FC<{ onSendPresidentSummary?: (s
           character: { name: '集客企画パートナー', role: 'マーケティング戦略とコンテンツ制作', personality: '要望を整理し、実務で使える草案にまとめる。事実や数値を捏造しない', tone: '具体的で親しみやすい' },
           stream: false,
         }),
+        signal: controller.signal,
       });
       const result = await response.json();
       if (requestVersion !== aiRequestVersion.current) return;
@@ -225,7 +229,7 @@ export const AIAcquisitionOperationsView: React.FC<{ onSendPresidentSummary?: (s
     } catch (requestError: any) {
       if (requestVersion === aiRequestVersion.current) setAiError(requestError?.message || 'AI草案の作成に失敗しました。');
     } finally {
-      if (requestVersion === aiRequestVersion.current) setAiGenerating(false);
+      if (requestVersion === aiRequestVersion.current) { aiAbortController.current = null; setAiGenerating(false); }
     }
   };
 
@@ -261,6 +265,8 @@ export const AIAcquisitionOperationsView: React.FC<{ onSendPresidentSummary?: (s
   const reviewExternalDraft = async () => {
     if (!externalDraft.trim() || aiGenerating) return;
     const requestVersion = ++aiRequestVersion.current;
+    const controller = new AbortController();
+    aiAbortController.current = controller;
     setAiGenerating(true); setAiError(''); setError(''); setNotice('');
     const selectedProduct = products.find((product) => product.id === productId);
     const prompt = [
@@ -286,6 +292,7 @@ export const AIAcquisitionOperationsView: React.FC<{ onSendPresidentSummary?: (s
           character: { name: '集客コンテンツ社内レビュー', role: '集客施策と原稿のレビュー', personality: '根拠、顧客への適合、誤解のリスクを確認し、改善理由を示す。投稿や広告は実行しない', tone: '具体的で公平' },
           stream: false,
         }),
+        signal: controller.signal,
       });
       const result = await response.json();
       if (requestVersion !== aiRequestVersion.current) return;
@@ -308,8 +315,17 @@ export const AIAcquisitionOperationsView: React.FC<{ onSendPresidentSummary?: (s
     } catch (requestError: any) {
       if (requestVersion === aiRequestVersion.current) setAiError(requestError?.message || '社内AIレビューに失敗しました。');
     } finally {
-      if (requestVersion === aiRequestVersion.current) setAiGenerating(false);
+      if (requestVersion === aiRequestVersion.current) { aiAbortController.current = null; setAiGenerating(false); }
     }
+  };
+
+  const stopAI = () => {
+    if (!aiAbortController.current) return;
+    aiAbortController.current.abort();
+    aiAbortController.current = null;
+    aiRequestVersion.current += 1;
+    setAiGenerating(false);
+    setNotice('AI処理を停止しました。草案と入力欄の内容はそのままです。');
   };
 
   const remove = async (record: AcquisitionRecord) => {
@@ -393,9 +409,10 @@ export const AIAcquisitionOperationsView: React.FC<{ onSendPresidentSummary?: (s
       {formVisible && <form onSubmit={(event) => void save(event)} className="space-y-4 rounded-xl border border-indigo-500/30 bg-slate-900 p-4">
         <div className="flex items-center justify-between gap-2"><h2 className="font-semibold">{editing ? '編集' : '新規登録'} · {typeLabels[type]}</h2><button type="button" onClick={() => resetForm(type)} className="text-xs text-slate-400">入力をクリア</button></div>
         <section className="space-y-3 rounded-xl border border-violet-500/30 bg-violet-950/20 p-4">
-          <div className="flex items-center gap-2"><Sparkles className="h-4 w-4 text-violet-300"/><h3 className="text-sm font-semibold text-white">AIと一緒に作成・ブラッシュアップ</h3></div>
+          <div className="flex items-center justify-between gap-2"><div className="flex items-center gap-2"><Sparkles className="h-4 w-4 text-violet-300"/><h3 className="text-sm font-semibold text-white">AIと一緒に作成・ブラッシュアップ</h3></div>{aiGenerating && <button type="button" onClick={stopAI} className="rounded-lg border border-rose-500/50 px-3 py-1.5 text-xs font-semibold text-rose-200 hover:bg-rose-950/50">停止</button>}</div>
           <p className="text-xs text-slate-300">「誰に何を届けたいか」をラフに書くだけで、入力欄の草案を作ります。追加の指示で何度でも調整できます。</p>
           {aiConversation.length > 0 && <ol className="max-h-48 space-y-2 overflow-y-auto rounded-lg bg-slate-950/70 p-3 text-xs">{aiConversation.map((turn, index) => <li key={index} className={turn.role === 'assistant' ? 'text-violet-200' : 'text-slate-300'}><span className="font-semibold">{turn.role === 'assistant' ? 'AI' : 'あなた'}:</span> {turn.text}</li>)}</ol>}
+          {aiConversation.length > 0 && <section role="status" className="max-h-64 space-y-2 overflow-y-auto rounded-lg border border-violet-500/30 bg-slate-950/70 p-3"><div><p className="text-[11px] font-semibold text-violet-200">現在の草案（下の入力欄にも反映済み）</p><p className="mt-1 text-sm font-semibold text-white">{title || '名称未設定'}</p></div><dl className="space-y-2">{fields[type].filter((field) => Boolean(payload[field.key]?.trim())).map((field) => <div key={field.key}><dt className="text-[10px] text-slate-500">{field.label}</dt><dd className="whitespace-pre-wrap break-words text-xs text-slate-300">{payload[field.key]}</dd></div>)}</dl></section>}
           <textarea value={aiInstruction} onChange={(event) => setAiInstruction(event.target.value)} rows={2} placeholder={aiConversation.length ? '例：専門用語を減らして、初めての人にも伝わる表現にして' : '例：中小企業の経営者向けに、AI導入の無料相談へつながるnote企画を作って'} className="block w-full rounded-lg border border-slate-700 bg-slate-950 p-3 text-sm text-white placeholder:text-slate-500"/>
           {aiError && <p role="alert" className="text-xs text-rose-300">{aiError}</p>}
           <div className="flex flex-wrap items-center justify-between gap-2"><button type="button" disabled={aiGenerating || !aiInstruction.trim()} onClick={() => void askAIForDraft()} className="inline-flex items-center gap-2 rounded-lg bg-violet-700 px-3 py-2 text-sm font-semibold disabled:opacity-50"><Sparkles className="h-4 w-4"/>{aiGenerating ? '草案を考えています…' : aiConversation.length ? '社内AIで草案を作成・調整' : '社内AIに草案を作ってもらう'}</button><span className="text-[11px] text-slate-400">直接作成した案も保存・公開前に確認できます。</span></div>
@@ -409,7 +426,8 @@ export const AIAcquisitionOperationsView: React.FC<{ onSendPresidentSummary?: (s
             {externalReview && <div className="mt-3 rounded-lg border border-emerald-700/40 bg-emerald-950/30 p-3 text-xs text-emerald-100"><p className="mb-1 font-semibold">社内AIのレビュー</p><p className="whitespace-pre-wrap">{externalReview}</p><p className="mt-2 text-emerald-200/70">修正版は下の入力欄に反映されています。元原稿と比べて確認してください。</p></div>}
           </div>
         </section>
-        <div className="grid gap-3 md:grid-cols-2"><label className="text-sm">名称<input required value={title} onChange={(event) => setTitle(event.target.value)} className="mt-1 block w-full rounded-lg border border-slate-700 bg-slate-950 p-2 text-white" placeholder={`${typeLabels[type]}の名称`}/></label>
+        {aiConversation.length > 0 && <p className="rounded-lg border border-violet-500/30 bg-violet-950/20 p-3 text-xs text-violet-100">草案の反映先はこの下の「名称」と各入力欄です。内容を直接編集してから保存できます。</p>}
+        <div id="acquisition-draft-fields" className="grid gap-3 md:grid-cols-2"><label className="text-sm">名称<input required value={title} onChange={(event) => setTitle(event.target.value)} className="mt-1 block w-full rounded-lg border border-slate-700 bg-slate-950 p-2 text-white" placeholder={`${typeLabels[type]}の名称`}/></label>
           <label className="text-sm">対象商品<select value={productId} onChange={(event) => setProductId(event.target.value)} className="mt-1 block w-full rounded-lg border border-slate-700 bg-slate-950 p-2 text-white"><option value="">商品を選択（任意）</option>{products.map((product) => <option key={product.id} value={product.id}>{product.product_name}</option>)}</select>{!products.length && <span className="text-xs text-slate-500">商品マスターの情報は未連携、または未登録です。</span>}</label>
           {fields[type].map((field) => <label key={field.key} className={`text-sm ${field.kind === 'textarea' ? 'md:col-span-2' : ''}`}>{field.label}{field.key === 'audienceSegmentId' ? <><select value={payload[field.key] || ''} onChange={(event) => setPayload((previous) => ({ ...previous, [field.key]: event.target.value }))} className="mt-1 block w-full rounded-lg border border-slate-700 bg-slate-950 p-2 text-white"><option value="">配信対象リストを選択（任意）</option>{segments.map((segment) => <option key={segment.id} value={segment.id}>{segment.name}</option>)}</select>{!segments.length && <span className="text-xs text-slate-500">利用できる配信対象リストがありません。教育・フォロー側で作成できます。</span>}</> : field.kind === 'select' ? <select value={payload[field.key] || ''} onChange={(event) => setPayload((previous) => ({ ...previous, [field.key]: event.target.value }))} className="mt-1 block w-full rounded-lg border border-slate-700 bg-slate-950 p-2 text-white"><option value="">選択してください</option>{field.options?.map((option) => <option key={option}>{option}</option>)}</select> : field.kind === 'textarea' ? <textarea value={payload[field.key] || ''} onChange={(event) => setPayload((previous) => ({ ...previous, [field.key]: event.target.value }))} rows={3} className="mt-1 block w-full rounded-lg border border-slate-700 bg-slate-950 p-2 text-white"/> : <input type={field.kind || 'text'} min={field.kind === 'number' ? 0 : undefined} value={payload[field.key] || ''} placeholder={field.placeholder} onChange={(event) => setPayload((previous) => ({ ...previous, [field.key]: event.target.value }))} className="mt-1 block w-full rounded-lg border border-slate-700 bg-slate-950 p-2 text-white"/>}</label>)}
         </div>
