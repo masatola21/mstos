@@ -734,6 +734,15 @@ const publicFormSourceLabels: Record<string, string> = {
   consultation: '相談申込フォーム',
   meeting: '面談申込フォーム',
 };
+
+function normalizePublicCompanyName(value: unknown): string {
+  return String(value || '')
+    .normalize('NFKC')
+    .trim()
+    .replace(/株式会社|有限会社|合同会社|\(株\)|\(有\)/g, '')
+    .toLowerCase()
+    .replace(/\s+/g, '');
+}
 const validPublicFormTypes = new Set(['diagnosis', 'consultation', 'meeting']);
 
 function isPublicUuid(value: unknown): value is string {
@@ -857,17 +866,25 @@ app.post('/api/public/forms/:slug/submissions', async (req, res) => {
     }
 
     let matchedCompanyId: string | null = null;
+    let matchingCompanyNames: string[] = [];
     if (companyName) {
-      const escapedCompanyName = companyName.replace(/\\/g, '\\\\').replace(/%/g, '\\%').replace(/_/g, '\\_');
-      const { data: matchingCompanies, error: companyLookupError } = await lineSupabase
-        .from('companies')
-        .select('id, company_name')
-        .ilike('company_name', escapedCompanyName)
-        .limit(10);
-      if (companyLookupError) throw companyLookupError;
-      matchedCompanyId = matchingCompanies?.find((company) =>
-        typeof company.company_name === 'string' && company.company_name.trim().toLocaleLowerCase() === companyName.toLocaleLowerCase()
-      )?.id ?? null;
+      const normalizedCompanyName = normalizePublicCompanyName(companyName);
+      const allCompanies: Array<{ id: string; company_name: string | null }> = [];
+      if (normalizedCompanyName) {
+        const pageSize = 1000;
+        for (let offset = 0; ; offset += pageSize) {
+          const { data: companyPage, error: companyLookupError } = await lineSupabase
+            .from('companies')
+            .select('id, company_name')
+            .range(offset, offset + pageSize - 1);
+          if (companyLookupError) throw companyLookupError;
+          allCompanies.push(...(companyPage || []));
+          if (!companyPage || companyPage.length < pageSize) break;
+        }
+      }
+      const matchingCompanies = allCompanies.filter((company) => normalizePublicCompanyName(company.company_name) === normalizedCompanyName);
+      matchingCompanyNames = matchingCompanies.map((company) => String(company.company_name || '')).filter(Boolean);
+      if (matchingCompanies.length === 1) matchedCompanyId = matchingCompanies[0].id;
     }
     const escapedEmail = email.replace(/\\/g, '\\\\').replace(/%/g, '\\%').replace(/_/g, '\\_');
     const { data: matchingContacts, error: contactLookupError } = await lineSupabase
@@ -879,10 +896,18 @@ app.post('/api/public/forms/:slug/submissions', async (req, res) => {
     if (contactLookupError) throw contactLookupError;
 
     let contact = matchingContacts?.[0];
+    let contactNameNote = '';
     if (contact) {
+      const existingName = typeof contact.full_name === 'string' ? contact.full_name.trim() : '';
+      const existingPhone = typeof contact.phone === 'string' ? contact.phone.trim() : '';
+      if (existingName && existingName !== name) contactNameNote = `申込時の氏名: ${name}`;
       const { data: updatedContact, error: updateContactError } = await lineSupabase
         .from('contacts')
-        .update({ full_name: name, ...(phone ? { phone } : {}), ...(matchedCompanyId && !contact.company_id ? { company_id: matchedCompanyId } : {}) })
+        .update({
+          ...(!existingName ? { full_name: name } : {}),
+          ...(!existingPhone && phone ? { phone } : {}),
+          ...(matchedCompanyId && !contact.company_id ? { company_id: matchedCompanyId } : {}),
+        })
         .eq('id', contact.id)
         .select('id, full_name, email, phone, company_id')
         .single();
@@ -898,12 +923,19 @@ app.post('/api/public/forms/:slug/submissions', async (req, res) => {
       contact = insertedContact;
     }
 
-    const resolvedCompanyId = matchedCompanyId || contact.company_id || null;
+    const resolvedCompanyId = companyName ? matchedCompanyId : contact.company_id || null;
     const answerSummary = JSON.stringify(cleanAnswers).slice(0, 6_000);
     const sourceLabel = publicFormSourceLabels[form.form_type] || 'Webフォーム';
     const originLabel = utm.source ? `（流入: ${utm.source.slice(0, 80)}）` : '';
     const requestMarker = `[申込 ${requestId}]`;
-    const noteEntry = `${requestMarker} ${form.name}${originLabel} / ${new Date().toISOString()}\n${companyName ? `会社名・屋号（申込時）: ${companyName}\n` : ''}${answerSummary}`;
+    const companyNote = companyName
+      ? matchingCompanyNames.length > 1
+        ? `会社名の候補が複数あります: ${matchingCompanyNames.join('、')}`
+        : matchedCompanyId
+          ? `会社名・屋号（申込時）: ${companyName}`
+          : `申込時の会社名: ${companyName}（未登録）`
+      : '';
+    const noteEntry = `${requestMarker} ${form.name}${originLabel} / ${new Date().toISOString()}\n${[companyNote, contactNameNote].filter(Boolean).join('\n')}${companyNote || contactNameNote ? '\n' : ''}${answerSummary}`;
     const formServiceType = (typeof definition.category === 'string' && definition.category.trim())
       || (typeof definition.service_category === 'string' && definition.service_category.trim())
       || form.name
@@ -916,7 +948,8 @@ app.post('/api/public/forms/:slug/submissions', async (req, res) => {
       .limit(1);
     if (leadLookupError) throw leadLookupError;
 
-    let lead = existingLeads?.[0];
+    let lead: any = existingLeads?.[0];
+    if (lead && !['新規', 'ヒアリング済'].includes(lead.status)) lead = undefined;
     let leadId = '';
     const meetingDate = typeof cleanAnswers.meeting_date === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(cleanAnswers.meeting_date)
       ? cleanAnswers.meeting_date
@@ -996,7 +1029,7 @@ app.post('/api/public/forms/:slug/submissions', async (req, res) => {
     return res.status(201).json({
       success: true,
       submissionId: submission.id,
-      leadId: lead.id,
+      leadId,
       diagnosisId,
       diagnosisPending: form.form_type === 'diagnosis' && !diagnosisId,
     });
