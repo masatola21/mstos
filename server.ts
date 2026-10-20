@@ -25,6 +25,48 @@ const lineSupabase = lineSupabaseUrl && lineServiceRoleKey
   ? createClient(lineSupabaseUrl, lineServiceRoleKey, { auth: { persistSession: false, autoRefreshToken: false } })
   : null;
 
+function createEmailUnsubscribeToken(contactId: string): string {
+  const secret = process.env.EMAIL_UNSUBSCRIBE_SECRET?.trim();
+  if (!secret) throw new Error('配信停止の設定がありません');
+  const encodedContactId = Buffer.from(contactId, 'utf8').toString('base64url');
+  const signature = createHmac('sha256', secret).update(contactId).digest('base64url');
+  return `${encodedContactId}.${signature}`;
+}
+
+function verifyEmailUnsubscribeToken(token: unknown): string | null {
+  const secret = process.env.EMAIL_UNSUBSCRIBE_SECRET?.trim();
+  if (!secret || typeof token !== 'string') return null;
+  const parts = token.split('.');
+  if (parts.length !== 2 || !/^[A-Za-z0-9_-]+$/.test(parts[0]) || !/^[A-Za-z0-9_-]+$/.test(parts[1])) return null;
+  let contactId: string;
+  try {
+    contactId = Buffer.from(parts[0], 'base64url').toString('utf8');
+    if (!contactId || Buffer.from(contactId, 'utf8').toString('base64url') !== parts[0]) return null;
+  } catch { return null; }
+  const expected = createHmac('sha256', secret).update(contactId).digest();
+  let supplied: Buffer;
+  try { supplied = Buffer.from(parts[1], 'base64url'); } catch { return null; }
+  if (supplied.length !== expected.length || !timingSafeEqual(supplied, expected)) return null;
+  return contactId;
+}
+
+function createEmailUnsubscribeUrl(contactId: string): string {
+  const token = createEmailUnsubscribeToken(contactId);
+  const appUrl = process.env.PUBLIC_APP_URL?.trim();
+  if (!appUrl) throw new Error('配信停止URLの設定がありません');
+  const url = new URL('/api/email/unsubscribe', appUrl);
+  url.searchParams.set('t', token);
+  return url.toString();
+}
+
+function isTransactionalOutboxEmail(row: any): boolean {
+  const category = String(row.category || '').toLowerCase();
+  if (['document', 'diagnosis', 'form', 'deal'].includes(category)) return true;
+  const sourceType = String(row.source_type || '').toLowerCase();
+  return ['customer_document', 'document_announcement', 'diagnosis_announcement', 'form_announcement', 'deal_invitation']
+    .some((prefix) => sourceType === prefix || sourceType.startsWith(`${prefix}_`));
+}
+
 async function getLineDisplayName(userId: string): Promise<string | undefined> {
   if (!lineChannelAccessToken) return undefined;
   try {
@@ -376,6 +418,26 @@ app.post('/api/email/webhook', express.raw({ type: 'application/json', limit: '2
 });
 
 app.use(express.json({ limit: '10mb' }));
+app.use(express.urlencoded({ extended: false, limit: '10kb' }));
+
+app.get('/api/email/unsubscribe', (req, res) => {
+  const token = typeof req.query.t === 'string' ? req.query.t : '';
+  if (!verifyEmailUnsubscribeToken(token)) return res.status(400).type('html').send('<!doctype html><html lang="ja"><meta charset="utf-8"><title>配信停止</title><h1>リンクを確認できません</h1><p>配信停止リンクが無効です。</p></html>');
+  return res.type('html').send(`<!doctype html><html lang="ja"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>メール配信停止</title><main><h1>メール配信停止</h1><p>このメールアドレスへの営業・案内メールの配信を停止します。</p><form method="post" action="/api/email/unsubscribe?t=${token}"><input type="hidden" name="t" value="${token}"><button type="submit">配信を停止する</button></form></main></html>`);
+});
+
+app.post('/api/email/unsubscribe', async (req, res) => {
+  const token = typeof req.query.t === 'string' ? req.query.t : typeof req.body?.t === 'string' ? req.body.t : '';
+  const contactId = verifyEmailUnsubscribeToken(token);
+  if (!contactId) return res.status(400).type('html').send('<!doctype html><html lang="ja"><meta charset="utf-8"><title>配信停止</title><h1>リンクを確認できません</h1><p>配信停止リンクが無効です。</p></html>');
+  if (!lineSupabase) return res.status(503).type('html').send('<!doctype html><html lang="ja"><meta charset="utf-8"><title>配信停止</title><h1>処理できませんでした</h1><p>時間をおいて再度お試しください。</p></html>');
+  const { data, error } = await lineSupabase.from('contacts').update({
+    email_consent_status: 'opted_out', email_opted_out_at: new Date().toISOString(), email_opt_out_reason: '本人による配信停止',
+  }).eq('id', contactId).select('id').maybeSingle();
+  if (error) return res.status(500).type('html').send('<!doctype html><html lang="ja"><meta charset="utf-8"><title>配信停止</title><h1>処理できませんでした</h1><p>時間をおいて再度お試しください。</p></html>');
+  if (!data) return res.status(400).type('html').send('<!doctype html><html lang="ja"><meta charset="utf-8"><title>配信停止</title><h1>リンクを確認できません</h1><p>配信停止リンクが無効です。</p></html>');
+  return res.type('html').send('<!doctype html><html lang="ja"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>配信停止完了</title><main><h1>配信を停止しました</h1><p>今後の営業・案内メールの配信を停止しました。</p></main></html>');
+});
 
 app.post('/api/line/rich-menu', async (req, res) => {
   if (!lineSupabase) return res.status(503).json({ error: 'LINE連携サーバーのSupabase設定がありません。' });
@@ -465,8 +527,15 @@ async function processMarketingAutomationJobs(): Promise<void> {
       let outboxId = '';
       try {
         const { data: contact, error: contactError } = await lineSupabase.from('contacts')
-          .select('id,full_name,email,line_user_id,company_id').eq('id',job.contact_id).maybeSingle();
+          .select('id,full_name,email,line_user_id,company_id,email_consent_status').eq('id',job.contact_id).maybeSingle();
         if (contactError || !contact) throw new Error('連絡先が見つかりません。');
+        if (job.channel === 'email' && contact.email_consent_status === 'opted_out') {
+          const { error: skipError } = await lineSupabase.from('marketing_automation_jobs').update({
+            status: 'skipped', error_message: '配信停止済みのためスキップ', updated_at: new Date().toISOString(),
+          }).eq('id', job.id);
+          if (skipError) throw skipError;
+          continue;
+        }
         const companyResult = contact.company_id
           ? await lineSupabase.from('companies').select('company_name').eq('id',contact.company_id).maybeSingle()
           : { data: null };
@@ -492,7 +561,8 @@ async function processMarketingAutomationJobs(): Promise<void> {
           const emailFrom = process.env.RESEND_FROM_EMAIL || '';
           if (!emailKey || !emailFrom) throw new Error('メール配信サービスの設定がありません。');
           const body = personalize(job.body_text);
-          const response = await fetch('https://api.resend.com/emails',{method:'POST',headers:{Authorization:'Bearer '+emailKey,'Content-Type':'application/json'},body:JSON.stringify({from:emailFrom,to:[recipientAddress],subject:personalize(job.subject),text:body})});
+          const unsubscribeUrl = createEmailUnsubscribeUrl(contact.id);
+          const response = await fetch('https://api.resend.com/emails',{method:'POST',headers:{Authorization:'Bearer '+emailKey,'Content-Type':'application/json'},body:JSON.stringify({from:emailFrom,to:[recipientAddress],subject:personalize(job.subject),text:`${body}\n\n配信停止はこちら: ${unsubscribeUrl}`,headers:{'List-Unsubscribe':`<${unsubscribeUrl}>`,'List-Unsubscribe-Post':'List-Unsubscribe=One-Click'}})});
           const result = await response.json().catch(()=>({})) as {id?:string;message?:string};
           if (!response.ok || !result.id) throw new Error(result.message||'メール送信に失敗しました。');
           providerMessageId=result.id;
@@ -557,9 +627,17 @@ app.post('/api/communications/send', async (req, res) => {
       throw new Error('送信先または送信根拠が不足しています。');
     }
     const { data: contact, error: contactError } = await lineSupabase.from('contacts')
-      .select('id,email,line_user_id,company_id').eq('id', row.recipient_contact_id).maybeSingle();
+      .select('id,email,line_user_id,company_id,email_consent_status').eq('id', row.recipient_contact_id).maybeSingle();
     if (contactError || !contact) throw new Error('連絡先が見つかりません。');
     if (row.company_id && contact.company_id !== row.company_id) throw new Error('会社と送信先の関連が一致しません。');
+    if (row.channel === 'email' && contact.email_consent_status === 'opted_out' && !isTransactionalOutboxEmail(row)) {
+      const reason = '配信停止済みのため送信できません。';
+      const { error: cancelError } = await lineSupabase.from('communication_outbox').update({
+        status: 'canceled', error_message: reason, updated_at: new Date().toISOString(),
+      }).eq('id', outboxId).eq('owner_id', authData.user.id);
+      if (cancelError) throw cancelError;
+      return res.status(409).json({ status: 'canceled', error: reason });
+    }
     let providerMessageId = '';
     if (row.channel === 'email') {
       const emailKey = process.env.RESEND_API_KEY || '';
@@ -580,9 +658,12 @@ app.post('/api/communications/send', async (req, res) => {
       if (!emailPattern.test(fromEmail) || !configuredDomain || fromEmail.split('@').pop()?.toLowerCase() !== configuredDomain) throw new Error('差出人アドレスにはRESEND_FROM_EMAILと同じ認証済みドメインを指定してください。');
       if (replyTo && !emailPattern.test(replyTo)) throw new Error('返信先メールアドレスの設定が不正です。');
       const emailFrom = `${fromName.replace(/"/g, '')} <${fromEmail}>`;
+      const isTransactional = isTransactionalOutboxEmail(row);
+      const unsubscribeUrl = isTransactional ? '' : createEmailUnsubscribeUrl(contact.id);
+      const emailText = String(row.body_text || '') + (unsubscribeUrl ? `\n\n配信停止はこちら: ${unsubscribeUrl}` : '');
       const response = await fetch('https://api.resend.com/emails', {
         method: 'POST', headers: { Authorization: 'Bearer ' + emailKey, 'Content-Type': 'application/json' },
-        body: JSON.stringify({ from: emailFrom, to: [contact.email], subject: row.subject || '', text: row.body_text || '', ...(replyTo ? { reply_to: replyTo } : {}) }),
+        body: JSON.stringify({ from: emailFrom, to: [contact.email], subject: row.subject || '', text: emailText, ...(unsubscribeUrl ? { headers: { 'List-Unsubscribe': `<${unsubscribeUrl}>`, 'List-Unsubscribe-Post': 'List-Unsubscribe=One-Click' } } : {}), ...(replyTo ? { reply_to: replyTo } : {}) }),
       });
       const payload = await response.json().catch(() => ({})) as { id?: string; message?: string };
       if (!response.ok || !payload.id) throw new Error(payload.message || 'メール配信サービスが送信を拒否しました。');
@@ -1338,4 +1419,5 @@ setTimeout(() => { void processMarketingAutomationJobs(); }, 15000);
 app.listen(port, () => {
   console.log(`Server listening on port ${port}`);
 });
+
 

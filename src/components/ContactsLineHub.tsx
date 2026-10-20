@@ -201,6 +201,34 @@ export const ContactsLineHub: React.FC = () => {
     else await load();
   };
 
+  const changeEmailConsent = async (contact: Contact, status: 'unknown' | 'opted_in' | 'opted_out') => {
+    const currentStatus = String(contact.email_consent_status || 'unknown');
+    if (currentStatus === status) return;
+    const statusLabels = { unknown: '未確認', opted_in: '配信可', opted_out: '配信停止' };
+    if (!window.confirm(`この連絡先のメール状態を「${statusLabels[status]}」に変更しますか？${status === 'opted_out' ? '\n営業・案内メールを送信しない状態になります。' : ''}`)) return;
+    const supabase = getSupabase();
+    if (!supabase) return;
+    const optedOutAt = status === 'opted_out' ? new Date().toISOString() : null;
+    const optedOutReason = status === 'opted_out' ? '手動で停止' : null;
+    setSaving(true);
+    setError('');
+    setNotice('');
+    const { error: updateError } = await supabase.from('contacts').update({
+      email_consent_status: status,
+      email_opted_out_at: optedOutAt,
+      email_opt_out_reason: optedOutReason,
+    }).eq('id', contact.id);
+    if (updateError) {
+      setError(updateError.message);
+    } else {
+      setPeople((current) => current.map((person) => person.contact?.id === contact.id
+        ? { ...person, contact: { ...person.contact, email_consent_status: status, email_opted_out_at: optedOutAt, email_opt_out_reason: optedOutReason } }
+        : person));
+      setNotice(`メール状態を「${statusLabels[status]}」に変更しました。`);
+    }
+    setSaving(false);
+  };
+
   const statusLabel: Record<LineFriend['status'], string> = {
     active: '友だち',
     blocked: 'ブロック',
@@ -297,6 +325,14 @@ export const ContactsLineHub: React.FC = () => {
                     {person.email && <span>{person.email}</span>}
                     {person.phone && <span>{person.phone}</span>}
                   </div>
+                  {person.contact && <div className="mt-2 flex flex-wrap items-center gap-2">
+                    <span className="text-[11px] text-slate-400">メール配信状態</span>
+                    <select aria-label={person.name + 'のメール配信状態'} value={String(person.contact.email_consent_status || 'unknown')} onChange={(event) => void changeEmailConsent(person.contact!, event.target.value as 'unknown' | 'opted_in' | 'opted_out')} disabled={saving} className="rounded-lg border border-slate-700 bg-slate-950 px-2 py-1 text-[11px] text-slate-200 disabled:opacity-50">
+                      <option value="unknown">未確認</option>
+                      <option value="opted_in">配信可</option>
+                      <option value="opted_out">配信停止</option>
+                    </select>
+                  </div>}
                   {person.lineFriends.map((friend) => (
                     <div key={friend.id} className="mt-3 rounded-xl border border-slate-800 bg-slate-950/60 p-3">
                       <div className="flex flex-wrap items-center gap-2">
@@ -351,3 +387,4 @@ export const ContactsLineHub: React.FC = () => {
     </div>
   );
 };
+
