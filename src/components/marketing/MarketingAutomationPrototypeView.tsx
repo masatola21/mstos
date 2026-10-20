@@ -181,6 +181,7 @@ export const MarketingAutomationPrototypeView: React.FC<Props> = ({ scenarios, o
     setNotice('');
   };
   const startEdit = (scenario: MarketingScenario) => {
+    setSelectedEmailTemplateId('');setSelectedLineTemplateId('');
     setEditing(scenario);
     setIsFormOpen(true);
     setExternalGoal('');
@@ -288,7 +289,7 @@ export const MarketingAutomationPrototypeView: React.FC<Props> = ({ scenarios, o
       if (typeof parsed.emailSubject === 'string') next.emailSubject = parsed.emailSubject.slice(0, 200);
       if (typeof parsed.emailBody === 'string') next.emailBody = parsed.emailBody.slice(0, 10000);
       if (typeof parsed.messageBody === 'string') next.messageBody = parsed.messageBody.slice(0, 5000);
-      if (parsed.lineMessageType === 'text' || parsed.lineMessageType === 'image' || parsed.lineMessageType === 'flex') next.lineMessageType = parsed.lineMessageType;
+      if (parsed.lineMessageType === 'text' || parsed.lineMessageType === 'image' || parsed.lineMessageType === 'flex') next.lineMessageType = parsed.lineMessageType; next.lineMessagePayload = undefined;
       if (typeof parsed.lineImageUrl === 'string') next.lineImageUrl = parsed.lineImageUrl;
       if (typeof parsed.linePreviewImageUrl === 'string') next.linePreviewImageUrl = parsed.linePreviewImageUrl;
       if (typeof parsed.flexAltText === 'string') next.flexAltText = parsed.flexAltText.slice(0, 400);
