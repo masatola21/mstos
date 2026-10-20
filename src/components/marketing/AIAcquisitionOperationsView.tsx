@@ -159,6 +159,7 @@ export const AIAcquisitionOperationsView: React.FC<{ onSendPresidentSummary?: (s
     setLoading(false);
   };
   useEffect(() => { void load(); }, []);
+  useEffect(() => () => { aiAbortController.current?.abort(); aiAbortController.current = null; aiRequestVersion.current += 1; }, []);
 
   const cancelAIRequest = () => { aiAbortController.current?.abort(); aiAbortController.current = null; aiRequestVersion.current += 1; setAiGenerating(false); };
   const resetForm = (nextType: RecordType) => { cancelAIRequest(); setEditing(null); setIsFormOpen(true); setType(nextType); setTitle(''); setProductId(''); setPayload(emptyPayload()); setNotice(''); setAiInstruction(''); setAiConversation([]); setAiError(''); setExternalPrompt(''); setExternalDraft(''); setExternalReview(''); };
