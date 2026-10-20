@@ -100,6 +100,10 @@ export const AIAcquisitionOperationsView: React.FC<{ onSendPresidentSummary?: (s
   const [productId, setProductId] = useState('');
   const [payload, setPayload] = useState<Record<string, string>>(emptyPayload());
   const [saving, setSaving] = useState(false);
+  const [aiInstruction, setAiInstruction] = useState('');
+  const [aiConversation, setAiConversation] = useState<Array<{ role: 'user' | 'assistant'; text: string }>>([]);
+  const [aiGenerating, setAiGenerating] = useState(false);
+  const [aiError, setAiError] = useState('');
 
   const load = async () => {
     const db = getSupabase();
@@ -124,8 +128,8 @@ export const AIAcquisitionOperationsView: React.FC<{ onSendPresidentSummary?: (s
   };
   useEffect(() => { void load(); }, []);
 
-  const resetForm = (nextType: RecordType) => { setEditing(null); setIsFormOpen(true); setType(nextType); setTitle(''); setProductId(''); setPayload(emptyPayload()); setNotice(''); };
-  const startEdit = (record: AcquisitionRecord) => { setEditing(record); setIsFormOpen(true); setType(record.record_type); setTitle(record.title); setProductId(record.product_id || ''); setPayload(record.payload || {}); setActiveTab(record.record_type === 'result' || record.record_type === 'proposal' ? 'analysis' : record.record_type); setNotice(''); };
+  const resetForm = (nextType: RecordType) => { setEditing(null); setIsFormOpen(true); setType(nextType); setTitle(''); setProductId(''); setPayload(emptyPayload()); setNotice(''); setAiInstruction(''); setAiConversation([]); setAiError(''); };
+  const startEdit = (record: AcquisitionRecord) => { setEditing(record); setIsFormOpen(true); setType(record.record_type); setTitle(record.title); setProductId(record.product_id || ''); setPayload(record.payload || {}); setActiveTab(record.record_type === 'result' || record.record_type === 'proposal' ? 'analysis' : record.record_type); setNotice(''); setAiInstruction(''); setAiConversation([]); setAiError(''); };
   const save = async (event: React.FormEvent) => {
     event.preventDefault();
     if (!title.trim()) { setError('名称を入力してください。'); return; }
@@ -139,6 +143,63 @@ export const AIAcquisitionOperationsView: React.FC<{ onSendPresidentSummary?: (s
     setRecords((previous) => [{ ...row, created_at: editing?.created_at || new Date().toISOString() } as AcquisitionRecord, ...previous.filter((item) => item.id !== id)]);
     setNotice(`${typeLabels[type]}を保存しました。`); setEditing(null); setIsFormOpen(false); setTitle(''); setProductId(''); setPayload(emptyPayload());
   };
+  const askAIForDraft = async () => {
+    const instruction = aiInstruction.trim();
+    if (!instruction || aiGenerating) return;
+    setAiGenerating(true); setAiError(''); setError(''); setNotice('');
+    const selectedProduct = products.find((product) => product.id === productId);
+    const prompt = [
+      '次の依頼と草案をもとに、集客施策の草案を作成または改善してください。',
+      '草案の入力欄に反映するため、JSONオブジェクトだけを返してください。形式: {"message":"変更点の短い説明","draft":{"title":"名称","payload":{"fieldKey":"文字列"}}}',
+      'draft.payloadは指定されたfieldKeyのみを使い、すべて文字列で返してください。根拠がない情報は空文字にします。',
+      '予算・実績数値・公開日・URLはユーザーが示していない限り作らないでください。戦略や訴求の案は仮説として自然な草案を作れます。',
+      '既存草案がある場合、今回の指示が触れていない項目はなるべく維持してください。保存、公開、広告出稿はせず、草案だけを返してください。',
+      `種別: ${typeLabels[type]}`,
+      `対象商品: ${selectedProduct?.product_name || '未選択'}`,
+      `利用可能な入力欄: ${JSON.stringify(fields[type].map((field) => ({ key: field.key, label: field.label, options: field.options }))) }`,
+      `現在の草案: ${JSON.stringify({ title, payload })}`,
+      `これまでのやり取り: ${JSON.stringify(aiConversation)}`,
+      `今回の依頼: ${instruction}`,
+    ].join('\\n');
+    try {
+      const response = await fetch('/api/chat', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          messages: [{ role: 'user', content: prompt }],
+          workModeId: 'marketing_execution',
+          character: { name: '集客企画パートナー', role: 'マーケティング戦略とコンテンツ制作', personality: '要望を整理し、実務で使える草案にまとめる。事実や数値を捏造しない', tone: '具体的で親しみやすい' },
+          stream: false,
+        }),
+      });
+      const result = await response.json();
+      if (!response.ok || typeof result.text !== 'string') throw new Error(result.error || 'AI草案の作成に失敗しました。');
+      const jsonText = result.text.trim().replace(/^`{3}(?:json)?\s*/i, '').replace(/\s*`{3}$/i, '');
+      const parsed = JSON.parse(jsonText);
+      const draft = parsed?.draft;
+      if (!draft || typeof draft !== 'object' || !draft.payload || typeof draft.payload !== 'object') {
+        throw new Error('AIの返答を草案として読み取れませんでした。もう一度依頼してください。');
+      }
+      const allowedKeys = new Set(fields[type].map((field) => field.key));
+      const cleanedPayload: Record<string, string> = {};
+      for (const [key, value] of Object.entries(draft.payload as Record<string, unknown>)) {
+        if (allowedKeys.has(key) && typeof value === 'string') cleanedPayload[key] = value.slice(0, 5000);
+      }
+      if (typeof draft.title === 'string' && draft.title.trim()) setTitle(draft.title.trim().slice(0, 200));
+      setPayload((previous) => ({ ...previous, ...cleanedPayload }));
+      const message = typeof parsed.message === 'string' && parsed.message.trim()
+        ? parsed.message.trim()
+        : '草案を入力欄に反映しました。内容を確認して必要な箇所を編集してください。';
+      setAiConversation((previous) => [...previous, { role: 'user', text: instruction }, { role: 'assistant', text: message }]);
+      setAiInstruction('');
+      setNotice('AIの草案を入力欄に反映しました。確認・編集してから保存してください。');
+    } catch (requestError: any) {
+      setAiError(requestError?.message || 'AI草案の作成に失敗しました。');
+    } finally {
+      setAiGenerating(false);
+    }
+  };
+
   const remove = async (record: AcquisitionRecord) => {
     setError(''); setNotice('');
     const db = getSupabase(); if (!db) return;
@@ -219,6 +280,14 @@ export const AIAcquisitionOperationsView: React.FC<{ onSendPresidentSummary?: (s
 
       {formVisible && <form onSubmit={(event) => void save(event)} className="space-y-4 rounded-xl border border-indigo-500/30 bg-slate-900 p-4">
         <div className="flex items-center justify-between gap-2"><h2 className="font-semibold">{editing ? '編集' : '新規登録'} · {typeLabels[type]}</h2><button type="button" onClick={() => resetForm(type)} className="text-xs text-slate-400">入力をクリア</button></div>
+        <section className="space-y-3 rounded-xl border border-violet-500/30 bg-violet-950/20 p-4">
+          <div className="flex items-center gap-2"><Sparkles className="h-4 w-4 text-violet-300"/><h3 className="text-sm font-semibold text-white">AIと一緒に作成・ブラッシュアップ</h3></div>
+          <p className="text-xs text-slate-300">「誰に何を届けたいか」をラフに書くだけで、入力欄の草案を作ります。追加の指示で何度でも調整できます。</p>
+          {aiConversation.length > 0 && <ol className="max-h-48 space-y-2 overflow-y-auto rounded-lg bg-slate-950/70 p-3 text-xs">{aiConversation.map((turn, index) => <li key={index} className={turn.role === 'assistant' ? 'text-violet-200' : 'text-slate-300'}><span className="font-semibold">{turn.role === 'assistant' ? 'AI' : 'あなた'}:</span> {turn.text}</li>)}</ol>}
+          <textarea value={aiInstruction} onChange={(event) => setAiInstruction(event.target.value)} rows={2} placeholder={aiConversation.length ? '例：専門用語を減らして、初めての人にも伝わる表現にして' : '例：中小企業の経営者向けに、AI導入の無料相談へつながるnote企画を作って'} className="block w-full rounded-lg border border-slate-700 bg-slate-950 p-3 text-sm text-white placeholder:text-slate-500"/>
+          {aiError && <p role="alert" className="text-xs text-rose-300">{aiError}</p>}
+          <div className="flex flex-wrap items-center justify-between gap-2"><button type="button" disabled={aiGenerating || !aiInstruction.trim()} onClick={() => void askAIForDraft()} className="inline-flex items-center gap-2 rounded-lg bg-violet-700 px-3 py-2 text-sm font-semibold disabled:opacity-50"><Sparkles className="h-4 w-4"/>{aiGenerating ? '草案を考えています…' : aiConversation.length ? 'AIにブラッシュアップを依頼' : 'AIに草案を作ってもらう'}</button><span className="text-[11px] text-slate-400">AIは保存・公開しません。入力欄を確認してから保存してください。</span></div>
+        </section>
         <div className="grid gap-3 md:grid-cols-2"><label className="text-sm">名称<input required value={title} onChange={(event) => setTitle(event.target.value)} className="mt-1 block w-full rounded-lg border border-slate-700 bg-slate-950 p-2 text-white" placeholder={`${typeLabels[type]}の名称`}/></label>
           <label className="text-sm">対象商品<select value={productId} onChange={(event) => setProductId(event.target.value)} className="mt-1 block w-full rounded-lg border border-slate-700 bg-slate-950 p-2 text-white"><option value="">商品を選択（任意）</option>{products.map((product) => <option key={product.id} value={product.id}>{product.product_name}</option>)}</select>{!products.length && <span className="text-xs text-slate-500">商品マスターの情報は未連携、または未登録です。</span>}</label>
           {fields[type].map((field) => <label key={field.key} className={`text-sm ${field.kind === 'textarea' ? 'md:col-span-2' : ''}`}>{field.label}{field.key === 'audienceSegmentId' ? <><select value={payload[field.key] || ''} onChange={(event) => setPayload((previous) => ({ ...previous, [field.key]: event.target.value }))} className="mt-1 block w-full rounded-lg border border-slate-700 bg-slate-950 p-2 text-white"><option value="">配信対象リストを選択（任意）</option>{segments.map((segment) => <option key={segment.id} value={segment.id}>{segment.name}</option>)}</select>{!segments.length && <span className="text-xs text-slate-500">利用できる配信対象リストがありません。教育・フォロー側で作成できます。</span>}</> : field.kind === 'select' ? <select value={payload[field.key] || ''} onChange={(event) => setPayload((previous) => ({ ...previous, [field.key]: event.target.value }))} className="mt-1 block w-full rounded-lg border border-slate-700 bg-slate-950 p-2 text-white"><option value="">選択してください</option>{field.options?.map((option) => <option key={option}>{option}</option>)}</select> : field.kind === 'textarea' ? <textarea value={payload[field.key] || ''} onChange={(event) => setPayload((previous) => ({ ...previous, [field.key]: event.target.value }))} rows={3} className="mt-1 block w-full rounded-lg border border-slate-700 bg-slate-950 p-2 text-white"/> : <input type={field.kind || 'text'} min={field.kind === 'number' ? 0 : undefined} value={payload[field.key] || ''} placeholder={field.placeholder} onChange={(event) => setPayload((previous) => ({ ...previous, [field.key]: event.target.value }))} className="mt-1 block w-full rounded-lg border border-slate-700 bg-slate-950 p-2 text-white"/>}</label>)}
