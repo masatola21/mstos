@@ -108,10 +108,7 @@ export const RecordFormModal: React.FC<RecordFormModalProps> = ({
       // 新規登録時: デフォルト値
       const initial: Record<string, any> = {};
       config.fields.forEach((f) => {
-        if (f.key === 'id' && tableKey === 'companies') {
-          // 会社IDの初期値サジェスト
-          initial[f.key] = 'CID-';
-        } else if (f.type === 'select' && f.options && f.options.length > 0) {
+        if (f.type === 'select' && f.options && f.options.length > 0) {
           initial[f.key] = f.options[0].value;
         } else {
           initial[f.key] = '';
@@ -158,18 +155,9 @@ export const RecordFormModal: React.FC<RecordFormModalProps> = ({
       const val = formData[field.key];
 
       // 必須チェック
-      if (field.required && (val === undefined || val === null || String(val).trim() === '')) {
+      if (field.required && !(field.key === 'id' && !isEditing && ['companies', 'deals'].includes(tableKey)) && (val === undefined || val === null || String(val).trim() === '')) {
         errors[field.key] = `${field.label}は必須項目です。`;
         return;
-      }
-
-      // 会社IDの書式チェック (CID-xxx)
-      if (tableKey === 'companies' && field.key === 'id') {
-        const strVal = String(val).trim();
-        if (!strVal.startsWith('CID-') || strVal.length < 5) {
-          errors[field.key] = '会社IDは「CID-001」のような CID- から始まる形式で入力してください。';
-          return;
-        }
       }
 
       // メールチェック
@@ -325,6 +313,11 @@ export const RecordFormModal: React.FC<RecordFormModalProps> = ({
                 const value = formData[field.key] ?? '';
                 const error = formErrors[field.key];
                 const isFullWidth = field.type === 'textarea' || field.key === 'company_name' || field.key === 'deal_name';
+
+                // 会社ID・商談IDはDBで採番する。編集時のみ参照用に表示する。
+                if (field.key === 'id' && !isEditing && ['companies', 'deals'].includes(tableKey)) {
+                  return null;
+                }
 
                 // 主キー (編集時は編集不可にする)
                 if (field.key === 'id' && isEditing) {
