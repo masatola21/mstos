@@ -32,7 +32,16 @@ const invoiceDueDate = (date = todayJst()) => {
   return due.toISOString().slice(0, 10);
 };
 const formatDocumentDate = (value: string) => value ? value.replace(/^(\d{4})-(\d{2})-(\d{2})$/, '$1年$2月$3日') : '';
-const formatDocumentValue = (value: unknown) => Array.isArray(value) ? value.map((item) => typeof item === 'string' ? item : item?.title || item?.description || '').filter(Boolean).join(' / ') : typeof value === 'string' ? value : '';
+const formatDocumentValue = (value: unknown): string => {
+  if (typeof value === 'string') return value;
+  if (Array.isArray(value)) return value.map(formatDocumentValue).filter(Boolean).join(' / ');
+  if (value && typeof value === 'object') {
+    const record = value as Record<string, unknown>;
+    const directText = formatDocumentValue(record.title || record.description || record.text || '');
+    return directText || Object.values(record).map(formatDocumentValue).filter(Boolean).join(' / ');
+  }
+  return '';
+};
 const escapeHtml = (value: string) => value.replace(/[&<>"']/g, (char) => { const replacements: Record<string, string> = { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }; return replacements[char] || char; });
 
 interface DocTemplate {
@@ -553,7 +562,7 @@ export const DocumentTemplateView: React.FC<DocumentTemplateViewProps> = ({ init
   };
 
   // Perform deterministic template auto-population
-  const missingVariables = currentTemplate.variables.filter((variable) => !(variableValues[variable.key] || '').trim());
+  const missingVariables = currentTemplate.variables.filter((variable) => variable.key !== 'end_date' && !(variableValues[variable.key] || '').trim());
 
   const getPopulatedHtml = (): string => {
     let result = currentTemplate.htmlContent;
