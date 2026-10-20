@@ -11,7 +11,7 @@ const LINE_TEMPLATE_BUCKET='mst-line-message-assets';
 const MAX_LINE_TEMPLATE_FILE_BYTES=20*1024*1024;
 type ChannelIntegration={owner_id:string;bot_user_id:string;auto_reply_enabled:boolean};
 
-export const MarketingLineInboxView:React.FC=()=>{
+export const MarketingLineInboxView:React.FC<{initialLineUserId?:string}> = ({initialLineUserId})=>{
   const db=getSupabase();
   const [messages,setMessages]=useState<InboxMessage[]>([]);
   const [rules,setRules]=useState<ReplyRule[]>([]);
@@ -43,6 +43,7 @@ export const MarketingLineInboxView:React.FC=()=>{
   const [tagId,setTagId]=useState('');
   const [selectedLineUserId,setSelectedLineUserId]=useState('');
   const [replyDraft,setReplyDraft]=useState('');
+  useEffect(()=>{if(initialLineUserId)setSelectedLineUserId(initialLineUserId)},[initialLineUserId]);
   const [busy,setBusy]=useState(false);
   const [error,setError]=useState('');
   const [notice,setNotice]=useState('');
