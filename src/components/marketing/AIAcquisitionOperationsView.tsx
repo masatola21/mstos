@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
+import type { TaskItem } from '../../types';
 import { getSupabase } from '../../lib/supabaseClient';
 import { InlineDeleteButton } from '../InlineDeleteButton';
 import { ArrowRight, BarChart3, Megaphone, Plus, Save, Sparkles, Trash2 } from 'lucide-react';
@@ -118,7 +119,7 @@ const cleanAiDraftPayload = (recordType: RecordType, rawPayload: unknown, segmen
   return cleaned;
 };
 
-export const AIAcquisitionOperationsView: React.FC<{ onSendPresidentSummary?: (summary: string) => void }> = ({ onSendPresidentSummary }) => {
+export const AIAcquisitionOperationsView: React.FC<{ onSendPresidentSummary?: (summary: string) => void; onCreateTask?: (task: Omit<TaskItem, 'id' | 'createdAt' | 'updatedAt'>) => void }> = ({ onSendPresidentSummary, onCreateTask }) => {
   const [activeTab, setActiveTab] = useState<ViewTab>('dashboard');
   const [records, setRecords] = useState<AcquisitionRecord[]>([]);
   const [products, setProducts] = useState<Product[]>([]);
@@ -274,6 +275,15 @@ export const AIAcquisitionOperationsView: React.FC<{ onSendPresidentSummary?: (s
     if (failed?.error) { setError(`一部の草案を保存できませんでした: ${failed.error.message}。再実行すると同じ運用欄の草案を更新します。`); return; }
     const strategyRecord = { ...strategyRow, created_at: editing?.created_at || now } as AcquisitionRecord;
     const createdRecords = toolRows.map((row) => ({ ...row, created_at: records.find((record) => record.id === row.id)?.created_at || now }) as AcquisitionRecord);
+    const newlyCreatedRecords = createdRecords.filter((record) => !records.some((existing) => existing.id === record.id));
+    newlyCreatedRecords.forEach((record) => onCreateTask?.({
+      title: `${typeLabels[record.record_type]}「${record.title}」を確認する`,
+      description: `集客戦略「${strategyRow.title}」から自動作成された草案です。内容・事実関係・ブランド表現を確認し、必要ならAIで修正してください。成果物ID: ${record.id}`,
+      projectId: '', workArea: 'project', sourceCategory: 'business_operations', taskKind: 'review',
+      relatedRecord: productId ? { type: 'product', id: productId, label: products.find((product) => product.id === productId)?.product_name } : undefined,
+      priority: 'medium', assignee: { type: 'human', name: '人間 (あなた)' }, status: 'waiting',
+      completionCriteria: '草案を確認・修正し、公開・投稿・出稿の可否を判断する。', sourceAutomationRecordId: record.id,
+    }));
     setRecords((previous) => [...createdRecords, strategyRecord, ...previous.filter((record) => record.id !== strategyId && !createdRecords.some((created) => created.id === record.id))]);
     setEditing(strategyRecord); setPendingToolDrafts([]); setNotice(`${createdRecords.length}件の運用ツール草案を作成し、集客戦略と一緒に保存しました。公開・出稿は行っていません。`);
   };
