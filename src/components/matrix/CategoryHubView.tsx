@@ -17,6 +17,7 @@ import {
 } from 'lucide-react';
 import { BusinessCategory, BUSINESS_CATEGORIES, ManagedContract, ManagedInvoice, ManagedToolAsset, ManagedProduct } from '../../types/matrix';
 import { Project, TaskItem, ApprovalItem } from '../../types/ai-president';
+import { monthJst, todayJst } from '../../utils/date';
 
 interface CategoryHubViewProps {
   products: ManagedProduct[];
@@ -43,10 +44,17 @@ export const CategoryHubView: React.FC<CategoryHubViewProps> = ({
 }) => {
   const [activeCategory, setActiveCategory] = useState<BusinessCategory>('management');
 
-  // Metrics calculation
-  const totalRevenue = invoices.filter(i => i.status === 'paid').reduce((sum, i) => sum + i.amount, 0);
+  // Invoice amounts are stored net of tax; missing tax is treated as zero.
+  const grossAmount = (invoice: ManagedInvoice) => invoice.amount + (invoice.taxAmount ?? 0);
+  const currentMonth = monthJst();
+  const today = todayJst();
+  const monthlyPaidTotal = invoices.filter((invoice) => invoice.status === 'paid' && invoice.paidDate?.slice(0, 7) === currentMonth)
+    .reduce((sum, invoice) => sum + grossAmount(invoice), 0);
+  const totalRevenue = invoices.filter((invoice) => invoice.status === 'paid').reduce((sum, invoice) => sum + grossAmount(invoice), 0);
   const pendingInvoices = invoices.filter(i => i.status === 'issued');
-  const pendingInvoicesTotal = pendingInvoices.reduce((sum, i) => sum + i.amount, 0);
+  const pendingInvoicesTotal = pendingInvoices.reduce((sum, invoice) => sum + grossAmount(invoice), 0);
+  const overdueInvoices = pendingInvoices.filter((invoice) => Boolean(invoice.dueDate) && invoice.dueDate < today);
+  const overdueInvoicesTotal = overdueInvoices.reduce((sum, invoice) => sum + grossAmount(invoice), 0);
   const activeContracts = contracts.filter(c => c.status === 'signed');
   const pendingApprovals = approvals.filter(a => a.status === 'pending');
 
@@ -70,14 +78,22 @@ export const CategoryHubView: React.FC<CategoryHubViewProps> = ({
         </div>
 
         {/* Global Mini Stats */}
-        <div className="flex items-center gap-3">
+        <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
           <div className="px-3 py-1.5 rounded-xl bg-slate-950 border border-slate-800 text-right">
-            <span className="text-[10px] text-slate-400 block">当期回収済売上</span>
-            <span className="text-xs font-bold text-emerald-400">¥{totalRevenue.toLocaleString()}</span>
+            <span className="text-[10px] text-slate-400 block">今月の入金（税込）</span>
+            <span className="text-xs font-bold text-emerald-400">¥{monthlyPaidTotal.toLocaleString()}</span>
           </div>
           <div className="px-3 py-1.5 rounded-xl bg-slate-950 border border-slate-800 text-right">
-            <span className="text-[10px] text-slate-400 block">入金待ち請求額</span>
+            <span className="text-[10px] text-slate-400 block">未入金（税込）</span>
             <span className="text-xs font-bold text-amber-400">¥{pendingInvoicesTotal.toLocaleString()}</span>
+          </div>
+          <div className="px-3 py-1.5 rounded-xl bg-slate-950 border border-slate-800 text-right">
+            <span className="text-[10px] text-slate-400 block">うち期限超過（税込）</span>
+            <span className="text-xs font-bold text-rose-400">¥{overdueInvoicesTotal.toLocaleString()}</span>
+          </div>
+          <div className="px-3 py-1.5 rounded-xl bg-slate-950 border border-slate-800 text-right">
+            <span className="text-[10px] text-slate-400 block">入金累計（税込）</span>
+            <span className="text-xs font-bold text-cyan-400">¥{totalRevenue.toLocaleString()}</span>
           </div>
         </div>
       </div>
@@ -334,9 +350,10 @@ export const CategoryHubView: React.FC<CategoryHubViewProps> = ({
                         <span className="text-[10px] text-slate-400 block">{inv.recipientName} - 期日: {inv.dueDate}</span>
                       </div>
                       <div className="text-right">
-                        <span className="text-xs font-bold text-cyan-400 block">
-                          ¥{inv.amount.toLocaleString()}
-                        </span>
+                        <span className="text-xs font-bold text-cyan-400 block">税込 ¥{grossAmount(inv).toLocaleString()}</span>
+                        <span className="text-[9px] text-slate-400 block">税抜 ¥{inv.amount.toLocaleString()}</span>
+                        <span className="text-[9px] text-slate-400 block">{inv.taxAmount == null ? '税額未設定' : `消費税 ¥${inv.taxAmount.toLocaleString()}`}</span>
+                        {inv.status === 'paid' && inv.paidDate && <span className="text-[9px] text-slate-500 block">入金日: {inv.paidDate}</span>}
                         <span className={`text-[9px] px-1.5 py-0.2 rounded ${
                           inv.status === 'paid' ? 'bg-emerald-500/20 text-emerald-300' : 'bg-amber-500/20 text-amber-300'
                         }`}>
@@ -354,3 +371,4 @@ export const CategoryHubView: React.FC<CategoryHubViewProps> = ({
     </div>
   );
 };
+

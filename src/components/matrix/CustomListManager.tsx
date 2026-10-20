@@ -39,7 +39,8 @@ interface CustomListManagerProps {
   onAddContract: (c: Omit<ManagedContract, 'id' | 'createdAt' | 'updatedAt'>) => void;
   onAddInvoice: (i: Omit<ManagedInvoice, 'id' | 'createdAt' | 'updatedAt'>) => void;
   onAddTool: (t: Omit<ManagedToolAsset, 'id' | 'createdAt'>) => void;
-  onUpdateInvoiceStatus: (id: string, status: any) => void;
+  onUpdateInvoiceStatus: (id: string, status: any, paidDate?: string) => void;
+  onUpdateInvoice: (id: string, updates: Partial<ManagedInvoice>) => void;
   onDeleteContract?: (id: string) => Promise<void>;
   onDeleteInvoice?: (id: string) => Promise<void>;
 }
@@ -55,6 +56,7 @@ export const CustomListManager: React.FC<CustomListManagerProps> = ({
   onAddInvoice,
   onAddTool,
   onUpdateInvoiceStatus,
+  onUpdateInvoice,
   onDeleteContract,
   onDeleteInvoice,
 }) => {
@@ -70,8 +72,13 @@ export const CustomListManager: React.FC<CustomListManagerProps> = ({
   const [newTitle, setNewTitle] = useState('');
   const [newProductId, setNewProductId] = useState(products[0]?.id || '');
   const [newAmount, setNewAmount] = useState('');
+  const [newTaxRate, setNewTaxRate] = useState<'10' | '8' | '0'>('10');
   const [newRecipient, setNewRecipient] = useState('');
   const [newDueDate, setNewDueDate] = useState('');
+  const [payingInvoiceId, setPayingInvoiceId] = useState('');
+  const [paidDateInput, setPaidDateInput] = useState(todayJst());
+  const [editingTaxInvoiceId, setEditingTaxInvoiceId] = useState('');
+  const [editingTaxRate, setEditingTaxRate] = useState<'10' | '8' | '0'>('10');
 
   const currentList = customLists.find((l) => l.id === selectedListId) || customLists[0];
 
@@ -90,6 +97,8 @@ export const CustomListManager: React.FC<CustomListManagerProps> = ({
         endDate: newDueDate || undefined,
       });
     } else if (selectedListId === 'list-invoices') {
+      const invoiceAmount = Number(newAmount) || 0;
+      const invoiceTaxAmount = Math.floor(invoiceAmount * Number(newTaxRate) / 100);
       onAddInvoice({
         invoiceNumber: (() => {
           const yearMonth = todayJst().slice(0, 7).replace('-', '');
@@ -104,7 +113,8 @@ export const CustomListManager: React.FC<CustomListManagerProps> = ({
         title: newTitle.trim(),
         productId: newProductId || undefined,
         recipientName: newRecipient.trim() || '未設定',
-        amount: Number(newAmount) || 0,
+        amount: invoiceAmount,
+        taxAmount: invoiceTaxAmount,
         status: 'issued',
         issueDate: todayJst(),
         dueDate: newDueDate || dateAfterDaysJst(30),
@@ -122,6 +132,7 @@ export const CustomListManager: React.FC<CustomListManagerProps> = ({
 
     setNewTitle('');
     setNewAmount('');
+    setNewTaxRate('10');
     setNewRecipient('');
     setNewDueDate('');
     setIsAddItemOpen(false);
@@ -341,7 +352,7 @@ export const CustomListManager: React.FC<CustomListManagerProps> = ({
                   <th className="py-2 px-3 font-semibold">請求書番号 / 項目名</th>
                   <th className="py-2 px-3 font-semibold">請求先</th>
                   <th className="py-2 px-3 font-semibold">対象商品</th>
-                  <th className="py-2 px-3 font-semibold">請求金額</th>
+                  <th className="py-2 px-3 font-semibold">請求金額（税込）</th>
                   <th className="py-2 px-3 font-semibold">期日</th>
                   <th className="py-2 px-3 font-semibold">ステータス / アクション</th>
                 </tr>
@@ -361,12 +372,28 @@ export const CustomListManager: React.FC<CustomListManagerProps> = ({
                         <td className="py-3 px-3 text-slate-300">{inv.recipientName}</td>
                         <td className="py-3 px-3 text-slate-400">{prod ? prod.name : '一般'}</td>
                         <td className="py-3 px-3 font-black text-cyan-400">
-                          ¥{inv.amount.toLocaleString()}
+                          <div>税込 ¥{(inv.amount + (inv.taxAmount ?? 0)).toLocaleString()}</div>
+                          <div className="mt-1 text-[10px] font-normal text-slate-400">税抜 ¥{inv.amount.toLocaleString()}</div>
+                          <div className="text-[10px] font-normal text-slate-400">{inv.taxAmount == null ? '税額未設定' : `消費税 ¥${inv.taxAmount.toLocaleString()}`}</div>
+                          {editingTaxInvoiceId === inv.id ? (
+                            <div className="mt-2 flex flex-wrap items-center gap-1.5">
+                              <select value={editingTaxRate} onChange={(event) => setEditingTaxRate(event.target.value as '10' | '8' | '0')} className="rounded border border-slate-700 bg-slate-950 px-1.5 py-1 text-[10px] text-slate-200">
+                                <option value="10">10%</option><option value="8">8%</option><option value="0">非課税 0%</option>
+                              </select>
+                              <button type="button" onClick={() => { onUpdateInvoice(inv.id, { taxAmount: Math.floor(inv.amount * Number(editingTaxRate) / 100) }); setEditingTaxInvoiceId(''); }} className="rounded bg-cyan-700 px-1.5 py-1 text-[10px] text-white">保存</button>
+                              <button type="button" onClick={() => setEditingTaxInvoiceId('')} className="px-1 py-1 text-[10px] text-slate-400">取消</button>
+                            </div>
+                          ) : (
+                            <button type="button" onClick={() => { const rate = inv.taxAmount == null ? 10 : inv.taxAmount === 0 ? 0 : Math.round(inv.taxAmount / Math.max(inv.amount, 1) * 100); setEditingTaxRate(rate === 8 ? '8' : rate === 0 ? '0' : '10'); setEditingTaxInvoiceId(inv.id); }} className="mt-1 text-[10px] font-normal text-cyan-300 underline">{inv.taxAmount == null ? '税率を設定' : '税率を変更'}</button>
+                          )}
                         </td>
                         <td className="py-3 px-3 text-slate-300">{inv.dueDate}</td>
                         <td className="py-3 px-3">
                           <button
-                            onClick={() => onUpdateInvoiceStatus(inv.id, inv.status === 'paid' ? 'issued' : 'paid')}
+                            onClick={() => {
+                              if (inv.status === 'paid') onUpdateInvoiceStatus(inv.id, 'issued');
+                              else { setPayingInvoiceId(inv.id); setPaidDateInput(todayJst()); }
+                            }}
                             className={`px-2.5 py-1 rounded-lg text-[10px] font-bold cursor-pointer transition-colors ${
                               inv.status === 'paid'
                                 ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/30'
@@ -375,8 +402,9 @@ export const CustomListManager: React.FC<CustomListManagerProps> = ({
                           >
                             {inv.status === 'paid' ? '✓ 入金確認済' : '入金待ち (完了にする)'}
                           </button>
+                          {inv.status === 'paid' && inv.paidDate && <div className="mt-1 text-[10px] text-slate-400">入金日: {inv.paidDate}</div>}
                           <button type="button" onClick={async () => {
-                            const details = `請求番号: ${inv.invoiceNumber}\n件名: ${inv.title}\n金額: ¥${inv.amount.toLocaleString()}\n状態: ${inv.status}`;
+                            const details = `請求番号: ${inv.invoiceNumber}\n件名: ${inv.title}\n税抜金額: ¥${inv.amount.toLocaleString()}\n消費税: ${inv.taxAmount == null ? '未設定' : `¥${inv.taxAmount.toLocaleString()}`}\n税込金額: ¥${(inv.amount + (inv.taxAmount ?? 0)).toLocaleString()}\n状態: ${inv.status}`;
                             if (!window.confirm(`この請求を削除しますか？\n\n${details}`)) return;
                             if (['issued', 'paid', 'overdue'].includes(String(inv.status).toLowerCase()) && !window.confirm('確定した記録です。会計・契約の記録として残す場合は、削除ではなく『取消』の状態にしてください。削除すると元に戻せません。')) return;
                             setDeleteError('');
@@ -479,7 +507,7 @@ export const CustomListManager: React.FC<CustomListManagerProps> = ({
                 <div className="grid grid-cols-2 gap-3">
                   <div>
                     <label className="block text-xs font-medium text-slate-300 mb-1">
-                      金額 (円)
+                      {selectedListId === 'list-invoices' ? '税抜金額 (円)' : '金額 (円)'}
                     </label>
                     <input
                       type="number"
@@ -489,6 +517,12 @@ export const CustomListManager: React.FC<CustomListManagerProps> = ({
                       className="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-cyan-500"
                     />
                   </div>
+                  {selectedListId === 'list-invoices' && <div>
+                    <label className="block text-xs font-medium text-slate-300 mb-1">税率</label>
+                    <select value={newTaxRate} onChange={(e) => setNewTaxRate(e.target.value as '10' | '8' | '0')} className="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-cyan-500">
+                      <option value="10">10%</option><option value="8">8%</option><option value="0">非課税 0%</option>
+                    </select>
+                  </div>}
                   <div>
                     <label className="block text-xs font-medium text-slate-300 mb-1">
                       期日
@@ -502,6 +536,10 @@ export const CustomListManager: React.FC<CustomListManagerProps> = ({
                   </div>
                 </div>
               )}
+              {selectedListId === 'list-invoices' && <div className="rounded-lg border border-slate-800 bg-slate-950 p-3 text-xs text-slate-300">
+                <div className="flex justify-between"><span>消費税額</span><span>¥{Math.floor((Number(newAmount) || 0) * Number(newTaxRate) / 100).toLocaleString()}</span></div>
+                <div className="mt-1 flex justify-between font-bold text-cyan-300"><span>税込額</span><span>¥{((Number(newAmount) || 0) + Math.floor((Number(newAmount) || 0) * Number(newTaxRate) / 100)).toLocaleString()}</span></div>
+              </div>}
 
               <div className="flex justify-end gap-2 pt-2">
                 <button
@@ -522,6 +560,20 @@ export const CustomListManager: React.FC<CustomListManagerProps> = ({
           </div>
         </div>
       )}
+      {payingInvoiceId && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/80 p-4 backdrop-blur-sm">
+          <div className="w-full max-w-sm rounded-2xl border border-slate-800 bg-slate-900 p-6 shadow-2xl">
+            <h3 className="text-base font-bold text-white">入金日の確認</h3>
+            <p className="mt-2 text-xs text-slate-400">入金日を入力してください。</p>
+            <input type="date" required value={paidDateInput} onChange={(event) => setPaidDateInput(event.target.value)} className="mt-4 w-full rounded-lg border border-slate-800 bg-slate-950 px-3 py-2 text-sm text-white" />
+            <div className="mt-4 flex justify-end gap-2">
+              <button type="button" onClick={() => setPayingInvoiceId('')} className="rounded-lg px-3 py-2 text-xs text-slate-400">キャンセル</button>
+              <button type="button" disabled={!paidDateInput} onClick={() => { onUpdateInvoiceStatus(payingInvoiceId, 'paid', paidDateInput); setPayingInvoiceId(''); }} className="rounded-lg bg-emerald-700 px-3 py-2 text-xs font-bold text-white disabled:opacity-40">入金済みにする</button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };
+
