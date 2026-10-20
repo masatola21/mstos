@@ -4,6 +4,7 @@ import { getSupabase } from '../lib/supabaseClient';
 import { InlineDeleteButton } from './InlineDeleteButton';
 import type { ManagedInvoice } from '../types/matrix';
 import type { Priority, TaskItem } from '../types';
+import { todayJst } from '../utils/date';
 
 type Row = Record<string, any>;
 type SupportDetails = {
@@ -109,7 +110,7 @@ export const CustomerSupportWorkspace: React.FC<Props> = ({
   const [showNewSupport, setShowNewSupport] = useState(false);
   const [newSupport, setNewSupport] = useState({
     title: '', company_id: '', contract_id: '', service_type: 'implementation_support',
-    purpose: '', startedAt: new Date().toISOString().slice(0, 10), ownerName: '',
+    purpose: '', startedAt: todayJst(), ownerName: '',
   });
   const [summaryDraft, setSummaryDraft] = useState<SupportDetails>({});
 

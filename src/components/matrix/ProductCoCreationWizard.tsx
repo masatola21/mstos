@@ -18,6 +18,7 @@ import {
 } from 'lucide-react';
 import { ProductArchetype, PRODUCT_ARCHETYPES, ManagedProduct } from '../../types/matrix';
 import { ApiUsageData, Project, TaskItem } from '../../types/ai-president';
+import { dateAfterDaysJst } from '../../utils/date';
 
 interface ProductCoCreationWizardProps {
   isOpen: boolean;
@@ -179,7 +180,7 @@ export const ProductCoCreationWizard: React.FC<ProductCoCreationWizardProps> = (
       objective: `${aiProposal.tagline} - ${aiProposal.description}`,
       status: 'in_progress',
       priority: 'high',
-      dueDate: new Date(Date.now() + 30 * 86400000).toISOString().split('T')[0],
+      dueDate: dateAfterDaysJst(30),
       createdAt: Date.now(),
       updatedAt: Date.now(),
     };
