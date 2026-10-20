@@ -467,6 +467,13 @@ async function processMarketingAutomationJobs(): Promise<void> {
         const { data: contact, error: contactError } = await lineSupabase.from('contacts')
           .select('id,full_name,email,line_user_id,company_id').eq('id',job.contact_id).maybeSingle();
         if (contactError || !contact) throw new Error('連絡先が見つかりません。');
+        const companyResult = contact.company_id
+          ? await lineSupabase.from('companies').select('company_name').eq('id',contact.company_id).maybeSingle()
+          : { data: null };
+        const recipientName = String(contact.full_name || 'お客様');
+        const companyName = String(companyResult.data?.company_name || '貴社');
+        const values:Record<string,string>={name:recipientName,recipient_name:recipientName,company_name:companyName,form_title:'',document_title:'',document_url:'',document_content:'',link_url:''};
+        const personalize=(value:unknown)=>String(value||'').replace(/{([a-z_]+)}/g,(_match,key:string)=>values[key]||'');
         const recipientAddress = job.channel === 'email' ? String(contact.email || '') : String(contact.line_user_id || '');
         if (!recipientAddress) throw new Error('送信先がありません。');
         const { data: outbox, error: outboxError } = await lineSupabase.from('communication_outbox').insert({
@@ -484,8 +491,8 @@ async function processMarketingAutomationJobs(): Promise<void> {
           const emailKey = process.env.RESEND_API_KEY || '';
           const emailFrom = process.env.RESEND_FROM_EMAIL || '';
           if (!emailKey || !emailFrom) throw new Error('メール配信サービスの設定がありません。');
-          const body = String(job.body_text || '').replaceAll('{name}',String(contact.full_name||'お客様'));
-          const response = await fetch('https://api.resend.com/emails',{method:'POST',headers:{Authorization:'Bearer '+emailKey,'Content-Type':'application/json'},body:JSON.stringify({from:emailFrom,to:[recipientAddress],subject:job.subject||'',text:body})});
+          const body = personalize(job.body_text);
+          const response = await fetch('https://api.resend.com/emails',{method:'POST',headers:{Authorization:'Bearer '+emailKey,'Content-Type':'application/json'},body:JSON.stringify({from:emailFrom,to:[recipientAddress],subject:personalize(job.subject),text:body})});
           const result = await response.json().catch(()=>({})) as {id?:string;message?:string};
           if (!response.ok || !result.id) throw new Error(result.message||'メール送信に失敗しました。');
           providerMessageId=result.id;
@@ -493,14 +500,20 @@ async function processMarketingAutomationJobs(): Promise<void> {
           if (!lineChannelAccessToken) throw new Error('LINE送信トークンが未設定です。');
           const {data:friend,error:friendError}=await lineSupabase.from('line_friends').select('status,consent_status').eq('line_user_id',recipientAddress).maybeSingle();
           if(friendError||!friend||friend.status!=='active'||friend.consent_status!=='opted_in')throw new Error('LINEの友だち状態または配信同意を確認できません。');
-          const requested=job.line_message_payload&&typeof job.line_message_payload==='object'?job.line_message_payload as {type?:string;originalContentUrl?:string;previewImageUrl?:string}:null;
+          const requested=job.line_message_payload&&typeof job.line_message_payload==='object'?job.line_message_payload as {type?:string;originalContentUrl?:string;previewImageUrl?:string;altText?:string;contents?:unknown}:null;
+          const personalizeJson=(value:any):any=>Array.isArray(value)?value.map(personalizeJson):value&&typeof value==='object'?Object.fromEntries(Object.entries(value).map(([key,item])=>[key,personalizeJson(item)])):typeof value==='string'?personalize(value):value;
           let message: any;
-          if (requested?.type === 'video') {
-            const videoUrl=String(requested.originalContentUrl||''); const previewUrl=String(requested.previewImageUrl||'');
-            if (!/^https:\/\//i.test(videoUrl) || !/^https:\/\//i.test(previewUrl) || videoUrl.length>2000 || previewUrl.length>2000) throw new Error('LINE動画URLの設定が不正です。');
-            message={type:'video',originalContentUrl:videoUrl,previewImageUrl:previewUrl};
+          if (requested?.type === 'video' || requested?.type === 'image') {
+            const originalUrl=String(requested.originalContentUrl||''); const previewUrl=String(requested.previewImageUrl||'');
+            if (!/^https:\/\//i.test(originalUrl) || !/^https:\/\//i.test(previewUrl) || originalUrl.length>2000 || previewUrl.length>2000) throw new Error('LINE画像・動画URLの設定が不正です。');
+            message=requested.type==='video'?{type:'video',originalContentUrl:originalUrl,previewImageUrl:previewUrl}:{type:'image',originalContentUrl:originalUrl,previewImageUrl:previewUrl};
+          } else if (requested?.type === 'flex') {
+            const altText=personalize(requested.altText).slice(0,400);
+            const contents=personalizeJson(requested.contents);
+            if(!altText||!contents||typeof contents!=='object'||!['bubble','carousel'].includes(contents.type))throw new Error('LINE Flexテンプレートの内容を確認してください。');
+            message={type:'flex',altText,contents};
           } else {
-            const text=String(job.body_text||'').replaceAll('{name}',String(contact.full_name||'お客様'));
+            const text=personalize(job.body_text);
             if (!text || text.length>5000) throw new Error('LINE本文は1〜5000文字で設定してください。');
             message={type:'text',text};
           }
@@ -580,18 +593,27 @@ app.post('/api/communications/send', async (req, res) => {
       const { data: friend, error: friendError } = await lineSupabase.from('line_friends').select('status,consent_status').eq('line_user_id', contact.line_user_id).maybeSingle();
       if (friendError || !friend || friend.status !== 'active' || friend.consent_status !== 'opted_in') throw new Error('有効なLINE友だち状態と配信同意を確認できません。');
       if (String(row.body_text || '').length > 5000) throw new Error('LINEメッセージは5000文字以内にしてください。');
-      let lineMessage: Record<string, string>;
-      const requestedVideo = row.line_message_payload && typeof row.line_message_payload === 'object'
-        ? row.line_message_payload as { type?: unknown; originalContentUrl?: unknown; previewImageUrl?: unknown }
+      let lineMessage: Record<string, any>;
+      const requestedPayload = row.line_message_payload && typeof row.line_message_payload === 'object'
+        ? row.line_message_payload as { type?: unknown; originalContentUrl?: unknown; previewImageUrl?: unknown; altText?: unknown; contents?: unknown }
         : null;
-      if (requestedVideo?.type === 'video') {
-        const originalContentUrl = typeof requestedVideo.originalContentUrl === 'string' ? requestedVideo.originalContentUrl : '';
-        const previewImageUrl = typeof requestedVideo.previewImageUrl === 'string' ? requestedVideo.previewImageUrl : '';
-        const isHttpsUrl = (value: string) => { try { return new URL(value).protocol === 'https:'; } catch { return false; } };
+      const isHttpsUrl = (value: string) => { try { return new URL(value).protocol === 'https:'; } catch { return false; } };
+      if (requestedPayload?.type === 'video' || requestedPayload?.type === 'image') {
+        const originalContentUrl = typeof requestedPayload.originalContentUrl === 'string' ? requestedPayload.originalContentUrl : '';
+        const previewImageUrl = typeof requestedPayload.previewImageUrl === 'string' ? requestedPayload.previewImageUrl : '';
         if (originalContentUrl.length > 2000 || previewImageUrl.length > 2000 || !isHttpsUrl(originalContentUrl) || !isHttpsUrl(previewImageUrl)) {
-          throw new Error('LINE動画とプレビュー画像には2000文字以内の公開HTTPS URLが必要です。');
+          throw new Error('LINE画像・動画には2000文字以内の公開HTTPS URLが必要です。');
         }
-        lineMessage = { type: 'video', originalContentUrl, previewImageUrl };
+        lineMessage = requestedPayload.type === 'video'
+          ? { type: 'video', originalContentUrl, previewImageUrl }
+          : { type: 'image', originalContentUrl, previewImageUrl };
+      } else if (requestedPayload?.type === 'flex') {
+        const altText = typeof requestedPayload.altText === 'string' ? requestedPayload.altText.trim().slice(0, 400) : '';
+        const contents = requestedPayload.contents;
+        if (!altText || !contents || typeof contents !== 'object' || !['bubble', 'carousel'].includes((contents as { type?: string }).type || '')) {
+          throw new Error('LINE Flexメッセージの内容を確認してください。');
+        }
+        lineMessage = { type: 'flex', altText, contents };
       } else {
         if (String(row.body_text || '').length > 5000) throw new Error('LINEメッセージは5000文字以内にしてください。');
         lineMessage = { type: 'text', text: row.body_text || '' };

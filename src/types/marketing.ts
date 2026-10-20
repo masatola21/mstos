@@ -40,6 +40,7 @@ export interface MarketingScenario {
   linePreviewImageUrl: string;
   lineVideoUrl?: string;
   lineVideoPreviewUrl?: string;
+  lineMessagePayload?: Record<string, unknown>;
   flexAltText: string;
   flexTitle: string;
   flexBody: string;
