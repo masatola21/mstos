@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { TableKey, TABLE_CONFIGS, DiagnosisStatus } from '../types/database';
 import { fetchTableCounts, fetchTableData, fetchDiagnosisCounts, DataFetchError } from '../services/dataService';
+import { getSupabase } from '../lib/supabaseClient';
 import { 
   Building2, 
   Target, 
@@ -68,6 +69,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
     customers: 0,
   });
   const [recentDeals, setRecentDeals] = useState<any[]>([]);
+  const [pipelineSummary, setPipelineSummary] = useState({ amount: 0, count: 0 });
   const [diagnosisStats, setDiagnosisStats] = useState<{ total: number; byStatus: Record<DiagnosisStatus, number> }>({
     total: 0,
     byStatus: { received: 0, completed: 0, generating: 0, reported: 0 }
@@ -79,10 +81,35 @@ export const Dashboard: React.FC<DashboardProps> = ({
     setLoading(true);
     setFetchError(null);
     try {
-      const [tableRes, diagRes, dealsRes] = await Promise.all([
+      const [tableRes, diagRes, dealsRes, pipelineRes] = await Promise.all([
         fetchTableCounts(),
         fetchDiagnosisCounts(),
         fetchTableData('deals'),
+        (async () => {
+          const supabase = getSupabase();
+          if (!supabase) return null;
+          const pageSize = 1000;
+          let from = 0;
+          let amount = 0;
+          let count = 0;
+          while (true) {
+            const { data, error } = await supabase
+              .from('deals')
+              .select('id, proposal_status, total_amount, amount')
+              .order('id', { ascending: true })
+              .range(from, from + pageSize - 1);
+            if (error) throw error;
+            const page = data || [];
+            for (const deal of page) {
+              if (deal.proposal_status === '受注' || deal.proposal_status === '失注') continue;
+              amount += Number(deal.total_amount ?? deal.amount ?? 0) || 0;
+              count += 1;
+            }
+            if (page.length < pageSize) break;
+            from += pageSize;
+          }
+          return { amount, count };
+        })(),
       ]);
 
       if (tableRes.error) {
@@ -96,8 +123,9 @@ export const Dashboard: React.FC<DashboardProps> = ({
       }
 
       if (dealsRes.data) {
-        setRecentDeals(dealsRes.data.slice(0, 5));
+        setRecentDeals([...dealsRes.data].sort((a, b) => (Date.parse(b.created_at || '') || 0) - (Date.parse(a.created_at || '') || 0)).slice(0, 5));
       }
+      if (pipelineRes) setPipelineSummary(pipelineRes);
     } catch (err: any) {
       setFetchError({
         type: 'UNKNOWN',
@@ -111,8 +139,6 @@ export const Dashboard: React.FC<DashboardProps> = ({
   useEffect(() => {
     loadData();
   }, []);
-
-  const totalPipelineAmount = recentDeals.reduce((sum, d) => sum + (Number(d.total_amount || d.amount) || 0), 0);
 
   return (
     <div className="space-y-8 animate-fade-in pb-12">
@@ -185,22 +211,29 @@ export const Dashboard: React.FC<DashboardProps> = ({
 
           <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-4 shrink-0">
             {/* Quick Status Stats */}
-            <div className="grid grid-cols-3 gap-2 bg-slate-950/70 p-3 rounded-2xl border border-slate-800/80 text-center">
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 bg-slate-950/70 p-3 rounded-2xl border border-slate-800/80 text-center">
               <div className="px-3">
                 <span className="text-[10px] text-slate-400 block">診断総数</span>
                 <span className="text-lg font-black text-white">{loading ? '...' : diagnosisStats.total}</span>
               </div>
-              <div className="px-3 border-x border-slate-800">
+              <div className="px-3 border-l border-slate-800">
                 <span className="text-[10px] text-sky-400 block">未確認の回答</span>
                 <span className="text-lg font-black text-sky-300">
                   {loading ? '...' : diagnosisStats.byStatus.received}
                 </span>
               </div>
-              <div className="px-3">
+              <div className="px-3 border-l border-slate-800">
                 <span className="text-[10px] text-indigo-400 block">レポート発行</span>
                 <span className="text-lg font-black text-indigo-300">
                   {loading ? '...' : diagnosisStats.byStatus.reported}
                 </span>
+              </div>
+              <div className="px-3 border-l border-slate-800">
+                <span className="text-[10px] text-emerald-400 block">進行中の商談金額</span>
+                <span className="text-sm font-black text-emerald-300">
+                  {loading ? '...' : `¥${pipelineSummary.amount.toLocaleString('ja-JP')}`}
+                </span>
+                <span className="block text-[10px] text-slate-400">{loading ? '' : `${pipelineSummary.count}件`}</span>
               </div>
             </div>
 
