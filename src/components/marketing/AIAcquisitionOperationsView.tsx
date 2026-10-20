@@ -6,7 +6,7 @@ import { OwnMediaWorkspace } from './OwnMediaWorkspace';
 
 type RecordType = 'strategy' | 'content' | 'social' | 'video' | 'ad' | 'funnel' | 'result' | 'proposal';
 type ViewTab = 'dashboard' | RecordType | 'analysis' | 'media';
-type Field = { key: string; label: string; kind?: 'textarea' | 'number' | 'date' | 'select'; options?: string[]; placeholder?: string };
+type Field = { key: string; label: string; kind?: 'textarea' | 'number' | 'date' | 'select' | 'multiselect'; options?: string[]; placeholder?: string };
 type AcquisitionRecord = { id: string; record_type: RecordType; title: string; product_id: string | null; status: string | null; payload: Record<string, string>; created_at: string; updated_at: string };
 type Product = { id: string; product_name: string };
 type AudienceSegment = { id: string; name: string; entity_type: string; conditions: { field?: string } | null };
@@ -18,11 +18,12 @@ const tabs: Array<{ id: ViewTab; label: string }> = [
   { id: 'media', label: '自社メディア運用' }, { id: 'funnel', label: 'LP・集客導線' }, { id: 'analysis', label: '成果分析・改善提案' },
 ];
 const typeLabels: Record<RecordType, string> = { strategy: '集客戦略', content: 'コンテンツ企画', social: 'SNS・note投稿', video: '動画企画', ad: '広告施策', funnel: '集客導線', result: '成果記録', proposal: '改善提案' };
+const expandableToolTypes: RecordType[] = ['content', 'social', 'video', 'ad', 'funnel'];
 const fields: Record<RecordType, Field[]> = {
   strategy: [
     { key: 'target', label: 'ターゲット顧客', kind: 'textarea' }, { key: 'needs', label: '顧客の課題・ニーズ', kind: 'textarea' },
     { key: 'strengths', label: '強み・訴求ポイント', kind: 'textarea' }, { key: 'goal', label: '集客目標', kind: 'textarea' },
-    { key: 'channels', label: '集客チャネル', placeholder: '例：note、X、紹介' }, { key: 'contentPolicy', label: 'コンテンツ方針', kind: 'textarea' },
+    { key: 'channels', label: '使う運用ツール', kind: 'multiselect', options: expandableToolTypes }, { key: 'contentPolicy', label: 'コンテンツ方針', kind: 'textarea' },
     { key: 'destination', label: '誘導先（LP・診断・相談など）' }, { key: 'audienceSegmentId', label: '連携する配信対象リスト' }, { key: 'kpi', label: 'KPI' },
     { key: 'budget', label: '予算（円）', kind: 'number' }, { key: 'period', label: '実施期間', placeholder: '例：2026-10〜2026-12' },
     { key: 'status', label: '戦略の状態', kind: 'select', options: ['下書き', '確認待ち', '承認済み', '実施中', '完了'] },
@@ -97,6 +98,12 @@ const cleanAiDraftPayload = (recordType: RecordType, rawPayload: unknown, segmen
     if (typeof rawValue !== 'string') { invalid.push(field.label); continue; }
     const value = rawValue.slice(0, 5000);
     if (field.kind === 'select' && value && !field.options?.includes(value)) { invalid.push(field.label); continue; }
+    if (field.kind === 'multiselect' && value) {
+      const selected = [...new Set(value.split('|').map((item) => item.trim()).filter(Boolean))];
+      if (selected.some((item) => !field.options?.includes(item))) { invalid.push(field.label); continue; }
+      cleaned[key] = selected.join('|');
+      continue;
+    }
     if (field.kind === 'number' && value && (!Number.isFinite(Number(value)) || Number(value) < 0)) { invalid.push(field.label); continue; }
     if (field.kind === 'date' && value) {
       const parsedDate = new Date(value + 'T00:00:00Z');
@@ -136,6 +143,7 @@ export const AIAcquisitionOperationsView: React.FC<{ onSendPresidentSummary?: (s
   const [externalPrompt, setExternalPrompt] = useState('');
   const [externalDraft, setExternalDraft] = useState('');
   const [externalReview, setExternalReview] = useState('');
+  const [pendingToolDrafts, setPendingToolDrafts] = useState<Array<{ record_type: RecordType; title: string; payload: Record<string, string> }>>([]);
 
   const load = async () => {
     const db = getSupabase();
@@ -162,8 +170,8 @@ export const AIAcquisitionOperationsView: React.FC<{ onSendPresidentSummary?: (s
   useEffect(() => () => { aiAbortController.current?.abort(); aiAbortController.current = null; aiRequestVersion.current += 1; }, []);
 
   const cancelAIRequest = () => { aiAbortController.current?.abort(); aiAbortController.current = null; aiRequestVersion.current += 1; setAiGenerating(false); };
-  const resetForm = (nextType: RecordType) => { cancelAIRequest(); setEditing(null); setIsFormOpen(true); setType(nextType); setTitle(''); setProductId(''); setPayload(emptyPayload()); setNotice(''); setAiInstruction(''); setAiConversation([]); setAiError(''); setExternalPrompt(''); setExternalDraft(''); setExternalReview(''); };
-  const startEdit = (record: AcquisitionRecord) => { cancelAIRequest(); setEditing(record); setIsFormOpen(true); setType(record.record_type); setTitle(record.title); setProductId(record.product_id || ''); setPayload(record.payload || {}); setActiveTab(record.record_type === 'result' || record.record_type === 'proposal' ? 'analysis' : record.record_type); setNotice(''); setAiInstruction(''); setAiConversation([]); setAiError(''); setExternalPrompt(''); setExternalDraft(''); setExternalReview(''); };
+  const resetForm = (nextType: RecordType) => { cancelAIRequest(); setPendingToolDrafts([]); setEditing(null); setIsFormOpen(true); setType(nextType); setTitle(''); setProductId(''); setPayload(emptyPayload()); setNotice(''); setAiInstruction(''); setAiConversation([]); setAiError(''); setExternalPrompt(''); setExternalDraft(''); setExternalReview(''); };
+  const startEdit = (record: AcquisitionRecord) => { cancelAIRequest(); setPendingToolDrafts([]); setEditing(record); setIsFormOpen(true); setType(record.record_type); setTitle(record.title); setProductId(record.product_id || ''); setPayload(record.payload || {}); setActiveTab(record.record_type === 'result' || record.record_type === 'proposal' ? 'analysis' : record.record_type); setNotice(''); setAiInstruction(''); setAiConversation([]); setAiError(''); setExternalPrompt(''); setExternalDraft(''); setExternalReview(''); };
   const save = async (event: React.FormEvent) => {
     event.preventDefault();
     if (aiGenerating) { setError('AI生成が完了するか停止してから保存してください。'); return; }
@@ -176,7 +184,7 @@ export const AIAcquisitionOperationsView: React.FC<{ onSendPresidentSummary?: (s
     setSaving(false);
     if (saveError) { setError(`保存できませんでした: ${saveError.message}`); return; }
     setRecords((previous) => [{ ...row, created_at: editing?.created_at || new Date().toISOString() } as AcquisitionRecord, ...previous.filter((item) => item.id !== id)]);
-    setNotice(`${typeLabels[type]}を保存しました。`); setEditing(null); setIsFormOpen(false); setTitle(''); setProductId(''); setPayload(emptyPayload());
+    setNotice(`${typeLabels[type]}を保存しました。`); setEditing(null); setIsFormOpen(false); setTitle(''); setProductId(''); setPayload(emptyPayload()); setPendingToolDrafts([]);
   };
   const askAIForDraft = async () => {
     const instruction = aiInstruction.trim();
@@ -184,11 +192,11 @@ export const AIAcquisitionOperationsView: React.FC<{ onSendPresidentSummary?: (s
     const requestVersion = ++aiRequestVersion.current;
     const controller = new AbortController();
     aiAbortController.current = controller;
-    setAiGenerating(true); setAiError(''); setError(''); setNotice('');
+    setAiGenerating(true); setAiError(''); setError(''); setNotice(''); setPendingToolDrafts([]);
     const selectedProduct = products.find((product) => product.id === productId);
     const prompt = [
       '次の依頼と草案をもとに、集客施策の草案を作成または改善してください。',
-      '草案の入力欄に反映するため、JSONオブジェクトだけを返してください。形式: {"message":"変更点の短い説明","draft":{"title":"名称","payload":{"fieldKey":"文字列"}}}',
+      '草案の入力欄に反映するため、JSONオブジェクトだけを返してください。形式: {"message":"変更点の短い説明","draft":{"title":"名称","payload":{"fieldKey":"文字列"}},"toolDrafts":[{"type":"social","title":"施策名","payload":{"fieldKey":"文字列"}}]}',
       'draft.payloadは指定されたfieldKeyのみを使い、すべて文字列で返してください。根拠がない情報は空文字にします。',
       '予算・実績数値・公開日・URLはユーザーが示していない限り作らないでください。戦略や訴求の案は仮説として自然な草案を作れます。',
       '既存草案がある場合、今回の指示が触れていない項目はなるべく維持してください。保存、公開、広告出稿はせず、草案だけを返してください。',
@@ -196,6 +204,7 @@ export const AIAcquisitionOperationsView: React.FC<{ onSendPresidentSummary?: (s
       `対象商品: ${selectedProduct?.product_name || '未選択'}`,
       `利用可能な入力欄: ${JSON.stringify(fields[type].map((field) => ({ key: field.key, label: field.label, options: field.options }))) }`,
       `現在の草案: ${JSON.stringify({ title, payload })}`,
+      ...(type === 'strategy' ? [`選択済みの運用ツール: ${JSON.stringify((payload.channels || '').split('|').filter(Boolean))}`, `選択済みツールごとに${JSON.stringify(expandableToolTypes)}からtypeを選び、対応する入力欄の草案をtoolDraftsに返してください。未選択のtypeは出さない。実績数値・公開日・URLは作らない。各payloadは${JSON.stringify(Object.fromEntries(expandableToolTypes.map((toolType) => [toolType, fields[toolType].map((field) => field.key)])))}の項目だけを使用。`] : []),
       `これまでのやり取り: ${JSON.stringify(aiConversation)}`,
       `今回の依頼: ${instruction}`,
     ].join('\n');
@@ -221,6 +230,17 @@ export const AIAcquisitionOperationsView: React.FC<{ onSendPresidentSummary?: (s
         throw new Error('AIの返答を草案として読み取れませんでした。もう一度依頼してください。');
       }
       const cleanedPayload = cleanAiDraftPayload(type, draft.payload, segments);
+      if (type === 'strategy') cleanedPayload.channels = payload.channels || '';
+      const selectedToolIds = type === 'strategy' ? (payload.channels || '').split('|').filter((toolType) => expandableToolTypes.includes(toolType as RecordType)) : [];
+      if (type === 'strategy' && selectedToolIds.length) {
+        const returnedDrafts = Array.isArray(parsed.toolDrafts) ? parsed.toolDrafts : [];
+        const nextDrafts = selectedToolIds.map((toolType) => {
+          const toolDraft = returnedDrafts.find((item: any) => item?.type === toolType);
+          if (!toolDraft || typeof toolDraft.title !== 'string' || !toolDraft.payload) throw new Error(`${typeLabels[toolType as RecordType]}の草案がありません。もう一度AIに依頼してください。`);
+          return { record_type: toolType as RecordType, title: toolDraft.title.trim().slice(0, 200) || typeLabels[toolType as RecordType], payload: cleanAiDraftPayload(toolType as RecordType, toolDraft.payload, segments) };
+        });
+        setPendingToolDrafts(nextDrafts);
+      } else setPendingToolDrafts([]);
       if (typeof draft.title === 'string' && draft.title.trim()) setTitle(draft.title.trim().slice(0, 200));
       setPayload((previous) => ({ ...previous, ...cleanedPayload }));
       const message = typeof parsed.message === 'string' && parsed.message.trim()
@@ -234,6 +254,28 @@ export const AIAcquisitionOperationsView: React.FC<{ onSendPresidentSummary?: (s
     } finally {
       if (requestVersion === aiRequestVersion.current) { aiAbortController.current = null; setAiGenerating(false); }
     }
+  };
+
+  const saveToolDrafts = async () => {
+    if (type !== 'strategy' || !pendingToolDrafts.length) return;
+    const db = getSupabase();
+    if (!db || !userId) { setError('Supabaseに接続してログインしてください。'); return; }
+    if (!title.trim()) { setError('集客戦略の名称を入力してください。'); return; }
+    setSaving(true); setError('');
+    const strategyId = editing?.id || `acq-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+    const now = new Date().toISOString();
+    const strategyRow = { user_id: userId, id: strategyId, record_type: 'strategy' as const, title: title.trim(), product_id: productId || null, status: payload.status || null, payload, updated_at: now };
+    const { error: strategyError } = await db.from('mst_ai_acquisition_records').upsert(strategyRow, { onConflict: 'user_id,id' });
+    if (strategyError) { setSaving(false); setError(`集客戦略を保存できませんでした: ${strategyError.message}`); return; }
+    const toolRows = pendingToolDrafts.map((draft) => ({ user_id: userId, id: `${strategyId}-tool-${draft.record_type}`, record_type: draft.record_type, title: draft.title, product_id: productId || null, status: fields[draft.record_type].find((field) => field.key === 'status')?.options?.[0] || null, payload: { ...draft.payload, strategyId, strategyTitle: strategyRow.title }, updated_at: now }));
+    const results = await Promise.all(toolRows.map((row) => db.from('mst_ai_acquisition_records').upsert(row, { onConflict: 'user_id,id' })));
+    setSaving(false);
+    const failed = results.find((result) => result.error);
+    if (failed?.error) { setError(`一部の草案を保存できませんでした: ${failed.error.message}。再実行すると同じ運用欄の草案を更新します。`); return; }
+    const strategyRecord = { ...strategyRow, created_at: editing?.created_at || now } as AcquisitionRecord;
+    const createdRecords = toolRows.map((row) => ({ ...row, created_at: records.find((record) => record.id === row.id)?.created_at || now }) as AcquisitionRecord);
+    setRecords((previous) => [...createdRecords, strategyRecord, ...previous.filter((record) => record.id !== strategyId && !createdRecords.some((created) => created.id === record.id))]);
+    setEditing(strategyRecord); setPendingToolDrafts([]); setNotice(`${createdRecords.length}件の運用ツール草案を作成し、集客戦略と一緒に保存しました。公開・出稿は行っていません。`);
   };
 
   const createExternalPrompt = () => {
@@ -392,7 +434,7 @@ export const AIAcquisitionOperationsView: React.FC<{ onSendPresidentSummary?: (s
           <section className="rounded-xl border border-slate-800 bg-slate-900 p-4"><h2 className="font-semibold">最近の施策</h2>{records.length ? <ul className="mt-3 divide-y divide-slate-800">{records.slice(0, 6).map((record) => <li key={record.id} className="flex items-center justify-between gap-2 py-2"><div><p className="text-sm font-medium">{record.title}</p><p className="text-xs text-slate-500">{typeLabels[record.record_type]} · {record.status || '状態未設定'}</p></div><button onClick={() => startEdit(record)} className="rounded border border-slate-700 px-2 py-1 text-xs">開く</button></li>)}</ul> : <p className="mt-3 text-sm text-slate-400">まだ施策は登録されていません。</p>}</section>
           <section className="rounded-xl border border-slate-800 bg-slate-900 p-4"><div className="flex items-center gap-2"><Sparkles className="h-4 w-4 text-amber-300"/><h2 className="font-semibold">改善の確認ポイント</h2></div><ul className="mt-3 space-y-2">{latestSuggestions.map((suggestion) => <li key={suggestion} className="rounded-lg bg-slate-950 p-3 text-sm text-slate-300">{suggestion}</li>)}</ul><button onClick={() => onSendPresidentSummary?.(summary)} disabled={!onSendPresidentSummary} className="mt-3 inline-flex items-center gap-2 rounded-lg bg-purple-700 px-3 py-2 text-sm disabled:opacity-50"><Sparkles className="h-4 w-4"/>AI社長に要約を共有</button><p className="mt-2 text-xs text-slate-500">共有するのは施策概要・集計値・確認事項です。個人顧客の情報や投稿全文は含めません。</p></section>
         </div>
-        <div className="flex flex-wrap gap-2">{(['strategy','content','social','video','ad','funnel','result','proposal'] as RecordType[]).map((recordType) => <button key={recordType} onClick={() => createRecord(recordType)} className="inline-flex items-center gap-1 rounded-lg border border-slate-700 px-3 py-2 text-sm hover:bg-slate-800"><Plus className="h-4 w-4"/>{typeLabels[recordType]}を追加</button>)}</div>
+        
       </section>}
 
       {activeTab === 'analysis' && <section className="space-y-4">
@@ -426,10 +468,11 @@ export const AIAcquisitionOperationsView: React.FC<{ onSendPresidentSummary?: (s
             {externalReview && <div className="mt-3 rounded-lg border border-emerald-700/40 bg-emerald-950/30 p-3 text-xs text-emerald-100"><p className="mb-1 font-semibold">社内AIのレビュー</p><p className="whitespace-pre-wrap">{externalReview}</p><p className="mt-2 text-emerald-200/70">修正版は下の入力欄に反映されています。元原稿と比べて確認してください。</p></div>}
           </div>
         </section>
+        {pendingToolDrafts.length > 0 && <section className="space-y-3 rounded-xl border border-emerald-500/30 bg-emerald-950/20 p-4"><div><h3 className="text-sm font-semibold text-emerald-100">選定した運用ツールの草案</h3><p className="mt-1 text-xs text-emerald-200/80">保存すると、集客戦略と各ツールの運用欄に下書きとして登録します。公開・投稿・出稿はしません。</p></div><ul className="space-y-2">{pendingToolDrafts.map((draft) => <li key={draft.record_type} className="rounded-lg bg-slate-950/70 p-3"><p className="font-semibold">{typeLabels[draft.record_type]} · {draft.title}</p><p className="mt-1 whitespace-pre-wrap text-xs text-slate-300">{Object.entries(draft.payload).filter(([key, value]) => key !== 'status' && Boolean(value)).map(([key, value]) => `${fields[draft.record_type].find((field) => field.key === key)?.label || key}: ${value}`).join(' / ')}</p></li>)}</ul><button type="button" disabled={saving || aiGenerating} onClick={() => void saveToolDrafts()} className="rounded-lg bg-emerald-700 px-3 py-2 text-sm font-semibold disabled:opacity-50">{saving ? '保存中…' : '集客戦略と選択ツールの草案を保存'}</button></section>}
         {aiConversation.length > 0 && <p className="rounded-lg border border-violet-500/30 bg-violet-950/20 p-3 text-xs text-violet-100">草案の反映先はこの下の「名称」と各入力欄です。内容を直接編集してから保存できます。</p>}
         <div id="acquisition-draft-fields" className="grid gap-3 md:grid-cols-2"><label className="text-sm">名称<input required value={title} onChange={(event) => setTitle(event.target.value)} className="mt-1 block w-full rounded-lg border border-slate-700 bg-slate-950 p-2 text-white" placeholder={`${typeLabels[type]}の名称`}/></label>
           <label className="text-sm">対象商品<select value={productId} onChange={(event) => setProductId(event.target.value)} className="mt-1 block w-full rounded-lg border border-slate-700 bg-slate-950 p-2 text-white"><option value="">商品を選択（任意）</option>{products.map((product) => <option key={product.id} value={product.id}>{product.product_name}</option>)}</select>{!products.length && <span className="text-xs text-slate-500">商品マスターの情報は未連携、または未登録です。</span>}</label>
-          {fields[type].map((field) => <label key={field.key} className={`text-sm ${field.kind === 'textarea' ? 'md:col-span-2' : ''}`}>{field.label}{field.key === 'audienceSegmentId' ? <><select value={payload[field.key] || ''} onChange={(event) => setPayload((previous) => ({ ...previous, [field.key]: event.target.value }))} className="mt-1 block w-full rounded-lg border border-slate-700 bg-slate-950 p-2 text-white"><option value="">配信対象リストを選択（任意）</option>{segments.map((segment) => <option key={segment.id} value={segment.id}>{segment.name}</option>)}</select>{!segments.length && <span className="text-xs text-slate-500">利用できる配信対象リストがありません。教育・フォロー側で作成できます。</span>}</> : field.kind === 'select' ? <select value={payload[field.key] || ''} onChange={(event) => setPayload((previous) => ({ ...previous, [field.key]: event.target.value }))} className="mt-1 block w-full rounded-lg border border-slate-700 bg-slate-950 p-2 text-white"><option value="">選択してください</option>{field.options?.map((option) => <option key={option}>{option}</option>)}</select> : field.kind === 'textarea' ? <textarea value={payload[field.key] || ''} onChange={(event) => setPayload((previous) => ({ ...previous, [field.key]: event.target.value }))} rows={3} className="mt-1 block w-full rounded-lg border border-slate-700 bg-slate-950 p-2 text-white"/> : <input type={field.kind || 'text'} min={field.kind === 'number' ? 0 : undefined} value={payload[field.key] || ''} placeholder={field.placeholder} onChange={(event) => setPayload((previous) => ({ ...previous, [field.key]: event.target.value }))} className="mt-1 block w-full rounded-lg border border-slate-700 bg-slate-950 p-2 text-white"/>}</label>)}
+          {fields[type].map((field) => <label key={field.key} className={`text-sm ${field.kind === 'textarea' ? 'md:col-span-2' : ''}`}>{field.label}{field.kind === 'multiselect' ? <div className="mt-1 grid gap-2 rounded-lg border border-slate-700 bg-slate-950 p-3 sm:grid-cols-2">{field.options?.map((option) => <label key={option} className="flex items-center gap-2 text-sm"><input type="checkbox" checked={(payload[field.key] || '').split('|').includes(option)} onChange={(event) => setPayload((previous) => { const selected = new Set((previous[field.key] || '').split('|').filter(Boolean)); event.target.checked ? selected.add(option) : selected.delete(option); return { ...previous, [field.key]: [...selected].join('|') }; })}/>{typeLabels[option as RecordType]}</label>)}</div> : field.key === 'audienceSegmentId' ? <><select value={payload[field.key] || ''} onChange={(event) => setPayload((previous) => ({ ...previous, [field.key]: event.target.value }))} className="mt-1 block w-full rounded-lg border border-slate-700 bg-slate-950 p-2 text-white"><option value="">配信対象リストを選択（任意）</option>{segments.map((segment) => <option key={segment.id} value={segment.id}>{segment.name}</option>)}</select>{!segments.length && <span className="text-xs text-slate-500">利用できる配信対象リストがありません。教育・フォロー側で作成できます。</span>}</> : field.kind === 'select' ? <select value={payload[field.key] || ''} onChange={(event) => setPayload((previous) => ({ ...previous, [field.key]: event.target.value }))} className="mt-1 block w-full rounded-lg border border-slate-700 bg-slate-950 p-2 text-white"><option value="">選択してください</option>{field.options?.map((option) => <option key={option}>{option}</option>)}</select> : field.kind === 'textarea' ? <textarea value={payload[field.key] || ''} onChange={(event) => setPayload((previous) => ({ ...previous, [field.key]: event.target.value }))} rows={3} className="mt-1 block w-full rounded-lg border border-slate-700 bg-slate-950 p-2 text-white"/> : <input type={field.kind || 'text'} min={field.kind === 'number' ? 0 : undefined} value={payload[field.key] || ''} placeholder={field.placeholder} onChange={(event) => setPayload((previous) => ({ ...previous, [field.key]: event.target.value }))} className="mt-1 block w-full rounded-lg border border-slate-700 bg-slate-950 p-2 text-white"/>}</label>)}
         </div>
         {['social','video'].includes(type) && <p className="rounded-lg bg-amber-950/30 p-3 text-xs text-amber-200">各媒体への自動投稿・実績自動取得は未連携です。ここでは手動投稿の予定・公開URL・入力済み実績を管理します。</p>}
         {type === 'ad' && <p className="rounded-lg bg-amber-950/30 p-3 text-xs text-amber-200">広告の出稿・停止・予算変更は実行しません。費用と成果を記録し、配信判断は人が確認してください。</p>}
@@ -443,5 +486,5 @@ export const AIAcquisitionOperationsView: React.FC<{ onSendPresidentSummary?: (s
 
 const RecordList: React.FC<{ records: AcquisitionRecord[]; products: Product[]; segments: AudienceSegment[]; onEdit: (record: AcquisitionRecord) => void; onDelete: (record: AcquisitionRecord) => void }> = ({ records, products, segments, onEdit, onDelete }) => !records.length
   ? <p className="rounded-xl border border-slate-800 bg-slate-900 p-5 text-sm text-slate-400">登録データはありません。</p>
-  : <ul className="space-y-2">{records.map((record) => <li key={record.id} className="rounded-xl border border-slate-800 bg-slate-900 p-4"><div className="flex flex-wrap items-start justify-between gap-3"><div className="min-w-0"><p className="font-semibold">{record.title}</p><p className="mt-1 text-xs text-slate-500">{typeLabels[record.record_type]}{record.product_id ? ` · ${products.find((product) => product.id === record.product_id)?.product_name || '商品'}` : ''}{record.status ? ` · ${record.status}` : ''} · 更新 {new Date(record.updated_at).toLocaleDateString('ja-JP')}</p></div><div className="flex gap-2"><button onClick={() => onEdit(record)} className="rounded border border-slate-700 px-2 py-1 text-xs">編集</button><InlineDeleteButton onConfirm={()=>void onDelete(record)} warning={`「${record.title}」を削除しますか？`} ariaLabel={`${record.title}を削除`}><Trash2 className="h-3.5 w-3.5"/></InlineDeleteButton></div></div><dl className="mt-3 grid gap-2 sm:grid-cols-2">{(fields[record.record_type] || []).filter((field) => Boolean(record.payload?.[field.key])).slice(0, 8).map((field) => <div key={field.key} className="min-w-0"><dt className="text-[11px] text-slate-500">{field.label}</dt><dd className="whitespace-pre-wrap break-words text-xs text-slate-300">{field.key === 'audienceSegmentId' ? segments.find((segment) => segment.id === record.payload[field.key])?.name || '配信対象リスト（未選択）' : record.payload[field.key]}</dd></div>)}</dl></li>)}</ul>;
+  : <ul className="space-y-2">{records.map((record) => <li key={record.id} className="rounded-xl border border-slate-800 bg-slate-900 p-4"><div className="flex flex-wrap items-start justify-between gap-3"><div className="min-w-0"><p className="font-semibold">{record.title}</p><p className="mt-1 text-xs text-slate-500">{typeLabels[record.record_type]}{record.product_id ? ` · ${products.find((product) => product.id === record.product_id)?.product_name || '商品'}` : ''}{record.status ? ` · ${record.status}` : ''}{record.payload?.strategyTitle ? ` · 戦略: ${record.payload.strategyTitle}` : ''} · 更新 {new Date(record.updated_at).toLocaleDateString('ja-JP')}</p></div><div className="flex gap-2"><button onClick={() => onEdit(record)} className="rounded border border-slate-700 px-2 py-1 text-xs">編集</button><InlineDeleteButton onConfirm={()=>void onDelete(record)} warning={`「${record.title}」を削除しますか？`} ariaLabel={`${record.title}を削除`}><Trash2 className="h-3.5 w-3.5"/></InlineDeleteButton></div></div><dl className="mt-3 grid gap-2 sm:grid-cols-2">{(fields[record.record_type] || []).filter((field) => Boolean(record.payload?.[field.key])).slice(0, 8).map((field) => <div key={field.key} className="min-w-0"><dt className="text-[11px] text-slate-500">{field.label}</dt><dd className="whitespace-pre-wrap break-words text-xs text-slate-300">{field.key === 'audienceSegmentId' ? segments.find((segment) => segment.id === record.payload[field.key])?.name || '配信対象リスト（未選択）' : record.payload[field.key]}</dd></div>)}</dl></li>)}</ul>;
 
