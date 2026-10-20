@@ -535,6 +535,19 @@ export const DocumentTemplateView: React.FC<DocumentTemplateViewProps> = ({ init
     return initial;
   });
 
+  // Apply the saved organization profile even before the user selects a customer or deal.
+  useEffect(() => {
+    setVariableValues((prev) => ({
+      ...prev,
+      my_company: prev.my_company || '有限会社MST',
+      my_address: prev.my_address || '〒503-0981　岐阜県大垣市桧町127番地',
+      my_rep: prev.my_rep || '大橋真人',
+      sender_name: prev.sender_name || '大橋真人',
+      sender_company: prev.sender_company || '有限会社MST',
+      bank_account_info: prev.bank_account_info || 'ドコモSMTBネット銀行　法人第一支店　普通預金　2223730（口座名義：有限会社MST）',
+    }));
+  }, [selectedTemplateId]);
+
   // When switching template, load its default variables
   const handleSelectTemplate = (id: string) => {
     setSelectedTemplateId(id);
@@ -550,6 +563,9 @@ export const DocumentTemplateView: React.FC<DocumentTemplateViewProps> = ({ init
           item_qty_1: '1', item_price_1: '', item_amount_1: '', item_name_1: 'サービス提供費',
           item_qty_2: '0', item_price_2: '', item_amount_2: '', item_name_2: 'なし',
           total_amount: '', subtotal_amount: '', tax_amount: '', initial_fee: '', monthly_fee: '',
+          my_company: '有限会社MST', my_address: '〒503-0981　岐阜県大垣市桧町127番地',
+          my_rep: '大橋真人', sender_name: '大橋真人', sender_company: '有限会社MST',
+          bank_account_info: 'ドコモSMTBネット銀行　法人第一支店　普通預金　2223730（口座名義：有限会社MST）',
         };
         newVals[v.key] = fallbackByKey[v.key] ?? '';
       });
