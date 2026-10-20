@@ -290,7 +290,7 @@ export const AIAcquisitionOperationsView: React.FC<{ onSendPresidentSummary?: (s
       const result = await response.json();
       if (requestVersion !== aiRequestVersion.current) return;
       if (!response.ok || typeof result.text !== 'string') throw new Error(result.error || '社内AIレビューに失敗しました。');
-      const jsonText = result.text.trim().replace(/^\u0060{3}(?:json)?\\s*/i, '').replace(/\\s*\u0060{3}$/i, '');
+      const jsonText = result.text.trim().replace(/^\u0060{3}(?:json)?\s*/i, '').replace(/\s*\u0060{3}$/i, '');
       const parsed = JSON.parse(jsonText);
       const draft = parsed?.draft;
       if (!draft || typeof draft !== 'object' || !draft.payload || typeof draft.payload !== 'object') {
