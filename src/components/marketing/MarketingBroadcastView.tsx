@@ -138,6 +138,7 @@ export const MarketingBroadcastView: React.FC<{initialChannel?:Channel}> = ({ini
   const clearSelected=()=>setSelected([]);
   const toggle=(id:string)=>setSelected(current=>current.includes(id)?current.filter(x=>x!==id):[...current,id]);
   const selectedContacts=eligible.filter(x=>selected.includes(x.id));
+  const previewContact:Contact=selectedContacts[0]||{id:'',full_name:'プレビュー用の宛先',email:'',line_user_id:null,company_id:null};
 
   const send=async()=>{
     if(!db||busy)return;
@@ -248,13 +249,13 @@ export const MarketingBroadcastView: React.FC<{initialChannel?:Channel}> = ({ini
       {channel==='line'&&lineContentType==='image'&&selectedLineTemplate&&<div className="rounded-lg border border-slate-700 bg-slate-950 p-3"><img src={String(selectedLineTemplate.payload.originalContentUrl||'')} alt="LINE画像テンプレート" className="max-h-60 rounded"/><p className="mt-2 text-xs text-slate-400">{selectedLineTemplate.name}</p></div>}
       {channel==='line'&&lineContentType==='video'&&selectedLineTemplate&&<div className="rounded-lg border border-slate-700 bg-slate-950 p-3"><video src={videoUrl} poster={videoPreviewUrl} controls className="max-h-60 rounded"/><p className="mt-2 text-xs text-slate-400">テンプレート管理でアップロードしたLINE動画を使用します。</p></div>}
       <label className="block text-sm text-slate-300">{audienceMode==='prospect_outreach'?'送信根拠・連絡先の取得元':'配信同意・送信根拠'}<input value={consentBasis} onChange={e=>setConsentBasis(e.target.value)} placeholder="例：配信登録フォームで同意取得済み" className="mt-1 block w-full rounded-lg border border-slate-700 bg-slate-950 p-2 text-white" /></label>
-      {!preview?<button type="button" disabled={!selectedContacts.length} onClick={()=>setPreview(true)} className="rounded-lg bg-indigo-600 px-4 py-2 font-semibold text-white disabled:opacity-40">プレビュー</button>:<div className="space-y-3 rounded-xl border border-amber-500/30 bg-amber-950/20 p-4">
+      {!preview?<button type="button" onClick={()=>setPreview(true)} className="rounded-lg bg-indigo-600 px-4 py-2 font-semibold text-white disabled:opacity-40">プレビュー</button>:<div className="space-y-3 rounded-xl border border-amber-500/30 bg-amber-950/20 p-4">
         <h3 className="font-bold text-amber-100">配信プレビュー</h3>
         <p className="text-sm text-slate-300">{channel==='email'?'メール':'LINE'}・選択中 {selectedContacts.length}件。LINEでは友だち状態と配信同意を送信時にも再確認します。</p>
-        <p className="text-xs text-slate-400">送信先例：{selectedContacts.slice(0,5).map(x=>x.full_name||x.email||x.line_user_id).join('、')}{selectedContacts.length>5?' ほか':''}</p>
-        {channel==='email'&&<><p className="font-semibold text-white">{fillForContact(subject,selectedContacts[0])}</p><p className="whitespace-pre-wrap rounded bg-slate-950 p-3 text-sm text-slate-200">{fillForContact(body,selectedContacts[0])}</p></>}
-        {channel==='line'&&<LineMessagePreview type={lineContentType} payload={lineContentType==='text'?{text:fillForContact(body,selectedContacts[0])}:lineContentType==='image'?fillLinePayload(selectedLineTemplate?.payload||{},selectedContacts[0]):lineContentType==='video'?{originalContentUrl:videoUrl,previewImageUrl:videoPreviewUrl,altText:lineAltText}:fillLinePayload(selectedLineTemplate?.payload||{altText:lineAltText,contents:lineFlexJson},selectedContacts[0])} title="一斉配信プレビュー" />}
-        <div className="flex gap-2"><button type="button" onClick={()=>setPreview(false)} className="rounded border border-slate-700 px-3 py-2 text-sm text-slate-200">戻って修正</button><button type="button" disabled={busy} onClick={()=>void send()} className="rounded bg-rose-600 px-4 py-2 text-sm font-bold text-white disabled:opacity-50">{busy?'配信中…':'この内容で配信'}</button></div>
+        <p className="text-xs text-slate-400">{selectedContacts.length?`送信先例：${selectedContacts.slice(0,5).map(x=>x.full_name||x.email||x.line_user_id).join('、')}${selectedContacts.length>5?' ほか':''}`:'宛先未選択のため、差し込み例（ご担当者・貴社）で表示しています。'}</p>
+        {channel==='email'&&<><p className="font-semibold text-white">{fillForContact(subject,previewContact)}</p><p className="whitespace-pre-wrap rounded bg-slate-950 p-3 text-sm text-slate-200">{fillForContact(body,previewContact)}</p></>}
+        {channel==='line'&&<LineMessagePreview type={lineContentType} payload={lineContentType==='text'?{text:fillForContact(body,selectedContacts[0])}:lineContentType==='image'?fillLinePayload(selectedLineTemplate?.payload||{},previewContact):lineContentType==='video'?{originalContentUrl:videoUrl,previewImageUrl:videoPreviewUrl,altText:lineAltText}:fillLinePayload(selectedLineTemplate?.payload||{altText:lineAltText,contents:lineFlexJson},previewContact)} title="一斉配信プレビュー" />}
+        <div className="flex gap-2"><button type="button" onClick={()=>setPreview(false)} className="rounded border border-slate-700 px-3 py-2 text-sm text-slate-200">戻って修正</button><button type="button" disabled={busy||!selectedContacts.length} onClick={()=>void send()} className="rounded bg-rose-600 px-4 py-2 text-sm font-bold text-white disabled:opacity-50">{busy?'配信中…':selectedContacts.length?'この内容で配信':'宛先を選択してください'}</button></div>
       </div>}
     </section>
     <section className="rounded-2xl border border-slate-800 bg-slate-900 p-5">
