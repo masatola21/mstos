@@ -790,7 +790,7 @@ const DiagnosisDetailModal: React.FC<DiagnosisDetailModalProps> = ({
     setReportDraft(null);
     try {
       const [{ data: company }, { data: lead }, { data: deal }] = await Promise.all([
-        supabase.from('companies').select('company_name, industry, contact_name, email, phone, website').eq('id', diagnosis.company_id).maybeSingle(),
+        supabase.from('companies').select('company_name, industry, website').eq('id', diagnosis.company_id).maybeSingle(),
         diagnosis.lead_id
           ? supabase.from('leads').select('source, service_type, status, notes, interested_product_id').eq('id', diagnosis.lead_id).maybeSingle()
           : Promise.resolve({ data: null }),
@@ -798,14 +798,17 @@ const DiagnosisDetailModal: React.FC<DiagnosisDetailModalProps> = ({
       ]);
 
       const context = {
-        company: company || diagnosis.company || { company_id: diagnosis.company_id },
+        company: {
+          company_name: company?.company_name || diagnosis.company?.company_name,
+          industry: company?.industry || diagnosis.company?.industry,
+          website: company?.website || diagnosis.company?.website,
+        },
         lead,
         latestDeal: deal,
         diagnosis: {
           type: diagnosis.diagnosis_type,
           questionnaireVersion: diagnosis.questionnaire_version,
           answers: Object.fromEntries(answerEntries),
-          internalMemo: memo,
           score: diagnosis.questionnaire_version.startsWith('form-') ? null : diagnosis.score ?? currentScores.totalScore,
           categoryScores: diagnosis.questionnaire_version.startsWith('form-') ? null : diagnosis.category_scores ?? currentScores.categoryScores,
         },
@@ -1041,6 +1044,7 @@ ${JSON.stringify(context, null, 2)}`;
                 <h3 className="text-sm font-bold text-indigo-100">診断レポート</h3>
                 <p className="mt-1 text-xs text-slate-400">フォーム回答と社内CRM情報から草案を生成します。内容を確認・修正して保存すると、顧客書類にレポートと提案書の草案を作成します。</p>
               </div>
+              <p className="text-xs text-slate-400">診断回答と会社名・業種などをAIサービスに送信します。個人の連絡先と社内メモは送信しません。</p>
               <button type="button" onClick={handleGenerateReportDraft} disabled={generatingReport || savingReport} className="inline-flex items-center gap-2 rounded-xl bg-indigo-600 px-4 py-2 text-xs font-semibold text-white hover:bg-indigo-500 disabled:cursor-not-allowed disabled:opacity-50">
                 {generatingReport ? <RefreshCw className="h-4 w-4 animate-spin" /> : <Sparkles className="h-4 w-4" />}
                 {generatingReport ? '草案を生成中…' : 'AIで草案を生成'}

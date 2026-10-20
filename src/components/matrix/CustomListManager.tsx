@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { dateAfterDaysJst, todayJst } from '../../utils/date';
 import { 
   ClipboardList, 
   Plus, 
@@ -91,8 +92,8 @@ export const CustomListManager: React.FC<CustomListManagerProps> = ({
         recipientName: newRecipient.trim() || '未設定',
         amount: Number(newAmount) || 0,
         status: 'issued',
-        issueDate: new Date().toISOString().split('T')[0],
-        dueDate: newDueDate || new Date(Date.now() + 30 * 86400000).toISOString().split('T')[0],
+        issueDate: todayJst(),
+        dueDate: newDueDate || dateAfterDaysJst(30),
       });
     } else if (selectedListId === 'list-tools') {
       onAddTool({

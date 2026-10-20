@@ -103,6 +103,7 @@ import { RoleAIEditor } from './components/ai-president/RoleAIEditor';
 import { ModelSettingsModal } from './components/ai-president/ModelSettingsModal';
 import { useProviderStatus } from './components/ai-president/ModelSettingEditor';
 import { matrixService } from './services/matrixService';
+import { todayJst } from './utils/date';
 import { publishManagedProductToSalesCatalog } from './services/productCatalogService';
 import { deleteWorkspaceAttachment, downloadWorkspaceAttachment, uploadWorkspaceAttachment } from './services/knowledgeAttachmentService';
 import {
@@ -1623,7 +1624,7 @@ function AppContent() {
 
   const handleUpdateInvoiceStatus = (id: string, status: any) => {
     const current = invoices.find((invoice) => invoice.id === id);
-    matrixService.updateInvoice(id, { status, paidDate: status === 'paid' ? new Date().toISOString().split('T')[0] : undefined });
+    matrixService.updateInvoice(id, { status, paidDate: status === 'paid' ? todayJst() : undefined });
     setInvoices(matrixService.loadInvoices());
     recordActivityLog('task_status_changed', `請求書ステータスが更新されました`, '人間');
     setActivityLogs(loadActivityLogs());

@@ -138,164 +138,19 @@ const BUSINESS_DEFAULT_PRODUCTS: ManagedProduct[] = [
 ];
 
 // --- Initial Seed Contracts ---
-const INITIAL_CONTRACTS: ManagedContract[] = [
-  {
-    id: 'cnt-001',
-    title: 'AI基幹システム開発 基本契約書',
-    type: 'service_agreement',
-    productId: 'prd-sys-01',
-    counterpartyName: 'テックイノベーション株式会社',
-    status: 'signed',
-    startDate: '2026-09-01',
-    endDate: '2026-12-31',
-    amount: 3500000,
-    documentUrl: 'https://cloudsign.example.com/docs/cnt-001',
-    notes: '着手金50%、検収後50%分割払い',
-    createdAt: Date.now() - 25 * 86400000,
-    updatedAt: Date.now(),
-  },
-  {
-    id: 'cnt-002',
-    title: '年間AI経営顧問契約',
-    type: 'retainer',
-    productId: 'prd-ret-02',
-    counterpartyName: 'フューチャーロジック合同会社',
-    status: 'signed',
-    startDate: '2026-08-01',
-    endDate: '2027-07-31',
-    amount: 250000,
-    documentUrl: 'https://cloudsign.example.com/docs/cnt-002',
-    notes: '月額自動更新（解約は3ヶ月前通知）',
-    createdAt: Date.now() - 40 * 86400000,
-    updatedAt: Date.now(),
-  },
-  {
-    id: 'cnt-003',
-    title: '秘密保持契約書 (NDA)',
-    type: 'nda',
-    productId: 'prd-sys-01',
-    counterpartyName: 'グローバルネクスト株式会社',
-    status: 'under_review',
-    startDate: '2026-10-10',
-    notes: '商談進行中、先方法務確認中',
-    createdAt: Date.now() - 5 * 86400000,
-    updatedAt: Date.now(),
-  },
-  {
-    id: 'cnt-004',
-    title: 'メディアライティング業務委託契約',
-    type: 'subcontractor',
-    productId: 'prd-med-04',
-    counterpartyName: '合同会社コンテンツラボ（外注先）',
-    status: 'signed',
-    startDate: '2026-07-01',
-    endDate: '2026-12-31',
-    amount: 80000,
-    notes: '月4本納品、記事単価20,000円',
-    createdAt: Date.now() - 60 * 86400000,
-    updatedAt: Date.now(),
-  },
-];
+export const SAMPLE_RECORD_IDS = {
+  contracts: new Set(['cnt-001', 'cnt-002', 'cnt-003', 'cnt-004']),
+  invoices: new Set(['inv-202610-01', 'inv-202610-02', 'inv-202610-03', 'inv-202609-04']),
+  tools: new Set(['tool-01', 'tool-02', 'tool-03']),
+};
+
+const INITIAL_CONTRACTS: ManagedContract[] = [];
 
 // --- Initial Seed Invoices ---
-const INITIAL_INVOICES: ManagedInvoice[] = [
-  {
-    id: 'inv-202610-01',
-    invoiceNumber: 'INV-202610-001',
-    title: 'AI基幹システム開発 着手金（50%）',
-    productId: 'prd-sys-01',
-    recipientName: 'テックイノベーション株式会社',
-    amount: 1750000,
-    taxAmount: 175000,
-    status: 'paid',
-    issueDate: '2026-09-05',
-    dueDate: '2026-09-30',
-    paidDate: '2026-09-28',
-    notes: '入金確認済み（三井住友銀行口座）',
-    createdAt: Date.now() - 35 * 86400000,
-    updatedAt: Date.now(),
-  },
-  {
-    id: 'inv-202610-02',
-    invoiceNumber: 'INV-202610-002',
-    title: '10月度 AI経営顧問報酬',
-    productId: 'prd-ret-02',
-    recipientName: 'フューチャーロジック合同会社',
-    amount: 250000,
-    taxAmount: 25000,
-    status: 'issued',
-    issueDate: '2026-10-01',
-    dueDate: '2026-10-31',
-    notes: '月末自動振替予定',
-    createdAt: Date.now() - 12 * 86400000,
-    updatedAt: Date.now(),
-  },
-  {
-    id: 'inv-202610-03',
-    invoiceNumber: 'INV-202610-003',
-    title: 'デジタル教材・テンプレ一括購入',
-    productId: 'prd-dig-03',
-    recipientName: '株式会社サクセスパートナーズ',
-    amount: 149400,
-    taxAmount: 14940,
-    status: 'issued',
-    issueDate: '2026-10-08',
-    dueDate: '2026-10-25',
-    notes: '3ライセンス一括購入',
-    createdAt: Date.now() - 5 * 86400000,
-    updatedAt: Date.now(),
-  },
-  {
-    id: 'inv-202609-04',
-    invoiceNumber: 'INV-202609-012',
-    title: 'ASP成果報酬受領（9月確定分）',
-    productId: 'prd-med-04',
-    recipientName: '株式会社ファンコミュニケーションズ (A8.net)',
-    amount: 128000,
-    status: 'paid',
-    issueDate: '2026-09-15',
-    dueDate: '2026-10-15',
-    paidDate: '2026-10-15',
-    notes: 'ASP管理画面より振込確認',
-    createdAt: Date.now() - 28 * 86400000,
-    updatedAt: Date.now(),
-  },
-];
+const INITIAL_INVOICES: ManagedInvoice[] = [];
 
 // --- Initial Seed Tools ---
-const INITIAL_TOOLS: ManagedToolAsset[] = [
-  {
-    id: 'tool-01',
-    name: 'AI診断受付Webフォーム (公開LP用)',
-    category: 'marketing',
-    productId: 'prd-ret-02',
-    toolType: 'lp',
-    url: 'https://form.example.com/diagnosis',
-    description: 'LINEやLPから見込み客が直接簡易診断を受けられるスマホ最適化フォーム',
-    status: 'active',
-    createdAt: Date.now() - 20 * 86400000,
-  },
-  {
-    id: 'tool-02',
-    name: '請求書ステータス自動集計スプレッドシート',
-    category: 'customer_service',
-    toolType: 'sheet',
-    url: 'https://docs.google.com/spreadsheets/d/invoice-summary',
-    description: '毎月の入金・未入金をリアルタイム集計するGAS連携シート',
-    status: 'active',
-    createdAt: Date.now() - 30 * 86400000,
-  },
-  {
-    id: 'tool-03',
-    name: '開発要件定義AIプロンプトジェネレーター',
-    category: 'product_dev',
-    productId: 'prd-sys-01',
-    toolType: 'prompt',
-    description: 'クライアントの要望ヒアリングメモから要件定義書初稿を生成する専用プロンプト',
-    status: 'active',
-    createdAt: Date.now() - 15 * 86400000,
-  },
-];
+const INITIAL_TOOLS: ManagedToolAsset[] = [];
 
 // --- 標準AI自動化・承認ルール（未接続の設定テンプレート） ---
 const INITIAL_AUTOMATIONS: AutomationRule[] = [
@@ -415,9 +270,9 @@ export const matrixService = {
   loadContracts(): ManagedContract[] {
     try {
       const data = localStorage.getItem(MATRIX_STORAGE_KEYS.CONTRACTS);
-      return data ? JSON.parse(data) : INITIAL_CONTRACTS;
+      return (data ? JSON.parse(data) as ManagedContract[] : INITIAL_CONTRACTS).filter((record) => !SAMPLE_RECORD_IDS.contracts.has(record.id));
     } catch {
-      return INITIAL_CONTRACTS;
+      return INITIAL_CONTRACTS.filter((record) => !SAMPLE_RECORD_IDS.contracts.has(record.id));
     }
   },
   saveContracts(contracts: ManagedContract[]) {
@@ -448,9 +303,9 @@ export const matrixService = {
   loadInvoices(): ManagedInvoice[] {
     try {
       const data = localStorage.getItem(MATRIX_STORAGE_KEYS.INVOICES);
-      return data ? JSON.parse(data) : INITIAL_INVOICES;
+      return (data ? JSON.parse(data) as ManagedInvoice[] : INITIAL_INVOICES).filter((record) => !SAMPLE_RECORD_IDS.invoices.has(record.id));
     } catch {
-      return INITIAL_INVOICES;
+      return INITIAL_INVOICES.filter((record) => !SAMPLE_RECORD_IDS.invoices.has(record.id));
     }
   },
   saveInvoices(invoices: ManagedInvoice[]) {
@@ -481,9 +336,9 @@ export const matrixService = {
   loadTools(): ManagedToolAsset[] {
     try {
       const data = localStorage.getItem(MATRIX_STORAGE_KEYS.TOOLS);
-      return data ? JSON.parse(data) : INITIAL_TOOLS;
+      return (data ? JSON.parse(data) as ManagedToolAsset[] : INITIAL_TOOLS).filter((record) => !SAMPLE_RECORD_IDS.tools.has(record.id));
     } catch {
-      return INITIAL_TOOLS;
+      return INITIAL_TOOLS.filter((record) => !SAMPLE_RECORD_IDS.tools.has(record.id));
     }
   },
   saveTools(tools: ManagedToolAsset[]) {

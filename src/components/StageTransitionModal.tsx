@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Company, Product, Lead, Customer } from '../types/database';
 import { ProposalPlanTemplatePicker } from './ProposalPlanTemplatePicker';
+import { todayJst } from '../utils/date';
 import type { ProposalPlanTemplate } from './ProposalPlanTemplatePicker';
 import { 
   fetchProductsList, 
@@ -222,7 +223,7 @@ export const StageTransitionModal: React.FC<StageTransitionModalProps> = ({
           initial_fee: initialFee !== '' ? Number(initialFee) : null,
           monthly_fee: monthlyFee !== '' ? Number(monthlyFee) : null,
           total_amount: totalAmount !== '' ? Number(totalAmount) : null,
-          proposal_date: new Date().toISOString().split('T')[0],
+          proposal_date: todayJst(),
           meeting_date: meetingDate || null,
           memo: dealMemo.trim() || null,
         };

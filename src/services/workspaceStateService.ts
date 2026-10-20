@@ -40,7 +40,7 @@ import { getSupabase } from '../lib/supabaseClient';
 import { MarketingScenario } from '../types/marketing';
 import { loadMarketingScenarios, saveMarketingScenarios } from '../utils/marketingStorage';
 import { AIModelSettings, loadAIModelSettings, saveAIModelSettings } from '../utils/aiSettingsStorage';
-import { matrixService } from './matrixService';
+import { matrixService, SAMPLE_RECORD_IDS } from './matrixService';
 import {
   AutomationRule,
   CustomListDefinition,
@@ -453,6 +453,10 @@ export async function loadOrMigrateWorkspaceData(userId: string): Promise<Worksp
         marketingScenarios: mergeRecords(remote.marketingScenarios || [], localDefaults.marketingScenarios, baseline.marketingScenarios || []),
       }
     : localDefaults;
+
+  merged.contracts = merged.contracts.filter((record) => !SAMPLE_RECORD_IDS.contracts.has(record.id));
+  merged.invoices = merged.invoices.filter((record) => !SAMPLE_RECORD_IDS.invoices.has(record.id));
+  merged.tools = merged.tools.filter((record) => !SAMPLE_RECORD_IDS.tools.has(record.id));
 
   // The sync-state row marks the normalized tables as authoritative, including when a user intentionally has zero records.
   const relationalAI = await loadRelationalAIOperations(userId);
