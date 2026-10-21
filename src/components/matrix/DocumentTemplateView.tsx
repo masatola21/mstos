@@ -471,7 +471,8 @@ export const DocumentTemplateView: React.FC<DocumentTemplateViewProps> = ({ init
   const [contactId, setContactId] = useState('');
   const [dealId, setDealId] = useState(initialDealId || '');
   const [saveMessage, setSaveMessage] = useState('');
-  const [hasStartedDocument, setHasStartedDocument] = useState<boolean>(true);
+  const [hasStartedDocument, setHasStartedDocument] = useState<boolean>(false);
+  const [isSavingDocument, setIsSavingDocument] = useState<boolean>(false);
   const [savedDocIds, setSavedDocIds] = useState<Record<string, string>>({});
   const autosavedDocumentIds = useRef<Record<string, string>>({});
   const autosaveQueues = useRef<Record<string, Promise<void>>>({});
@@ -739,10 +740,13 @@ export const DocumentTemplateView: React.FC<DocumentTemplateViewProps> = ({ init
   const populatedHtml = getPopulatedHtml();
 
   useEffect(() => {
-    if (!hasStartedDocument) return;
-    setSaveMessage('変更を自動保存します…');
+    const templateId = currentTemplate.id;
+    const existingId = autosavedDocumentIds.current[templateId];
+    // 手動で保存したことがある書類のみ、入力内容の変更を自動更新（勝手に新規作成しない）
+    if (!hasStartedDocument || !existingId) return;
+
+    setSaveMessage('変更内容を更新中…');
     const timer = window.setTimeout(() => {
-      const templateId = currentTemplate.id;
       const documentType = currentTemplate.type === 'report' ? 'diagnosis_report' : currentTemplate.type;
       const payload = {
         document_type: documentType,
@@ -756,40 +760,19 @@ export const DocumentTemplateView: React.FC<DocumentTemplateViewProps> = ({ init
       const previousQueue = autosaveQueues.current[templateId] || Promise.resolve();
       const save = previousQueue.catch(() => undefined).then(async () => {
         const supabase = getSupabase();
-        if (!supabase) {
-          setSaveMessage('Supabase接続後に確認待ち書類として自動保存します。');
-          return;
-        }
-        const existingId = autosavedDocumentIds.current[templateId];
-        if (existingId) {
-          const { data, error } = await supabase.from('customer_documents')
-            .update(payload)
-            .eq('id', existingId)
-            .eq('status', 'awaiting_approval')
-            .select('id')
-            .maybeSingle();
-          if (error || !data) {
-            setSaveMessage(error ? `自動保存できませんでした: ${error.message}` : '確認待ち状態が解除されているため、自動更新を停止しました。');
-            return;
-          }
-          setSavedDocIds((prev) => ({ ...prev, [templateId]: existingId }));
-          setSaveMessage('確認待ち書類を自動更新しました。');
-          return;
-        }
+        if (!supabase) return;
         const { data, error } = await supabase.from('customer_documents')
-          .insert({ ...payload, status: 'awaiting_approval' })
+          .update(payload)
+          .eq('id', existingId)
+          .eq('status', 'awaiting_approval')
           .select('id')
-          .single();
-        if (error || !data?.id) {
-          setSaveMessage(error ? `自動保存できませんでした: ${error.message}` : '自動保存先の書類IDを取得できませんでした。');
-          return;
+          .maybeSingle();
+        if (!error && data) {
+          setSaveMessage('保存済み書類の内容を自動更新しました。');
         }
-        autosavedDocumentIds.current[templateId] = data.id;
-        setSavedDocIds((prev) => ({ ...prev, [templateId]: data.id }));
-        setSaveMessage('確認待ち書類として自動保存しました。');
       });
       autosaveQueues.current[templateId] = save;
-    }, 700);
+    }, 800);
     return () => window.clearTimeout(timer);
   }, [hasStartedDocument, currentTemplate.id, currentTemplate.title, currentTemplate.type, populatedHtml, companyId, contactId, leadId, dealId]);
 
@@ -825,6 +808,52 @@ export const DocumentTemplateView: React.FC<DocumentTemplateViewProps> = ({ init
     navigator.clipboard.writeText(populatedHtml);
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
+  };
+
+  const handleManualSave = async () => {
+    const supabase = getSupabase();
+    if (!supabase) {
+      setSaveMessage('Supabase接続後に確認待ち書類として保存できます。');
+      return;
+    }
+    const templateId = currentTemplate.id;
+    const documentType = currentTemplate.type === 'report' ? 'diagnosis_report' : currentTemplate.type;
+    const payload = {
+      document_type: documentType,
+      title: currentTemplate.title,
+      body_html: populatedHtml,
+      company_id: companyId || null,
+      contact_id: contactId || null,
+      lead_id: leadId || null,
+      deal_id: dealId || null,
+    };
+    setIsSavingDocument(true);
+    setSaveMessage('書類を保存しています…');
+    try {
+      const existingId = autosavedDocumentIds.current[templateId];
+      if (existingId) {
+        const { error } = await supabase.from('customer_documents')
+          .update(payload)
+          .eq('id', existingId);
+        if (error) throw error;
+        setSavedDocIds((prev) => ({ ...prev, [templateId]: existingId }));
+        setSaveMessage('確認待ち書類を更新しました。');
+      } else {
+        const { data, error } = await supabase.from('customer_documents')
+          .insert({ ...payload, status: 'awaiting_approval' })
+          .select('id')
+          .single();
+        if (error || !data?.id) throw error || new Error('書類IDを取得できませんでした。');
+        autosavedDocumentIds.current[templateId] = data.id;
+        setSavedDocIds((prev) => ({ ...prev, [templateId]: data.id }));
+        setHasStartedDocument(true);
+        setSaveMessage('確認待ち書類として保存しました。');
+      }
+    } catch (e: any) {
+      setSaveMessage(`保存できませんでした: ${e?.message || 'エラーが発生しました'}`);
+    } finally {
+      setIsSavingDocument(false);
+    }
   };
 
   const handleSaveTemplateChanges = async (newHtml: string) => {
@@ -886,6 +915,17 @@ export const DocumentTemplateView: React.FC<DocumentTemplateViewProps> = ({ init
               </a>
             </>
           )}
+
+          <button
+            type="button"
+            onClick={handleManualSave}
+            disabled={isSavingDocument}
+            className="px-4 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 text-white font-semibold text-xs flex items-center gap-2 shadow-lg shadow-emerald-600/25 transition-all cursor-pointer"
+            title="現在の内容で確認待ち書類として保存します"
+          >
+            <Save className="w-4 h-4" />
+            <span>{isSavingDocument ? '保存中…' : (savedDocIds[currentTemplate.id] || autosavedDocumentIds.current[currentTemplate.id]) ? '書類を上書き保存' : '確認待ちとして保存'}</span>
+          </button>
 
           <button
             onClick={handlePrintPdf}
