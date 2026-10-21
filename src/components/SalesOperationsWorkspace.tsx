@@ -230,8 +230,71 @@ export const SalesOperationsWorkspace: React.FC<Props> = ({ tab, companyId, lead
 
   const updateDocumentStatus = async (documentId: string, status: string) => {
     const supabase = getSupabase(); if (!supabase) return;
+    setError(''); setNotice('');
     const { error: updateError } = await supabase.from('customer_documents').update({ status }).eq('id', documentId);
-    if (updateError) setError(updateError.message); else await load();
+    if (updateError) {
+      setError(updateError.message);
+      return;
+    }
+
+    // 承認された場合、自動で送信キュー（communication_outbox）に送付ドラフトを作成
+    if (status === 'approved') {
+      try {
+        const { data: docData } = await supabase.from('customer_documents').select('*').eq('id', documentId).maybeSingle();
+        if (docData) {
+          // すでにキューに登録されていないかチェック
+          const { data: existingOutbox } = await supabase.from('communication_outbox')
+            .select('id')
+            .eq('document_id', documentId)
+            .in('status', ['awaiting_approval', 'queued', 'sent'])
+            .maybeSingle();
+
+          if (!existingOutbox) {
+            let targetContact: any = null;
+            if (docData.contact_id) {
+              const { data: c } = await supabase.from('contacts').select('*').eq('id', docData.contact_id).maybeSingle();
+              targetContact = c;
+            } else if (docData.company_id) {
+              const { data: c } = await supabase.from('contacts').select('*').eq('company_id', docData.company_id).limit(1).maybeSingle();
+              targetContact = c;
+            }
+
+            if (targetContact) {
+              const docUrl = `${window.location.origin}/docs/${encodeURIComponent(documentId)}`;
+              const docTypeName = docData.document_type === 'diagnosis_report' ? '診断レポート' : docData.document_type === 'proposal' ? '提案書' : docData.document_type === 'contract' ? '契約書' : docData.document_type === 'invoice' ? '請求書' : '書類';
+              const subject = `【${docTypeName}のご送付】${docData.title}｜${targetContact.full_name} 様`;
+              const body = `${targetContact.full_name} 様\n\nお世話になっております。有限会社MSTです。\n作成いたしました${docTypeName}「${docData.title}」をお送りいたします。\n\n以下のリンクよりWeb上でご確認・PDF保存いただけます。\n${docUrl}\n\n内容をご確認いただき、ご不明点やご要望がございましたらお気軽にご連絡ください。\nよろしくお願いいたします。\n\n有限会社MST`;
+
+              const channel = targetContact.line_user_id ? 'line' : 'email';
+              const address = channel === 'line' ? targetContact.line_user_id : targetContact.email;
+
+              if (address) {
+                const { data: authData } = await supabase.auth.getUser();
+                const ownerId = authData?.user?.id;
+                if (ownerId) {
+                  await supabase.from('communication_outbox').insert({
+                    owner_id: ownerId,
+                    channel,
+                    recipient_contact_id: targetContact.id,
+                    recipient_address: address,
+                    subject,
+                    body_text: body,
+                    document_id: documentId,
+                    source_type: 'document_approval',
+                    status: 'awaiting_approval',
+                  });
+                  setNotice(`書類を承認し、送信キューに送付案（承認待ち）を自動作成しました。下部の送信キューで確認・送信できます。`);
+                }
+              }
+            }
+          }
+        }
+      } catch (err: any) {
+        console.error('Failed to auto-create outbox draft:', err);
+      }
+    }
+
+    await load();
   };
 
   const deleteDocumentDraft = async (doc: RecordRow) => {
