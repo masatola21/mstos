@@ -1090,12 +1090,22 @@ app.get('/api/public/forms/:slug', async (req, res) => {
       .maybeSingle();
     if (error) throw error;
     if (!form || !validPublicFormTypes.has(form.form_type)) return res.status(404).json({ error: 'このフォームは公開されていないか、受付を終了しています。' });
+    const def = form.definition && typeof form.definition === 'object' ? form.definition : {};
+    let bookingPageUrl = typeof (def as any).booking_url === 'string' ? (def as any).booking_url.trim() : '';
+    if (!bookingPageUrl) {
+      const { data: salesSettings } = await lineSupabase
+        .from('sales_workspace_settings')
+        .select('booking_page_url')
+        .maybeSingle();
+      bookingPageUrl = salesSettings?.booking_page_url || '';
+    }
     return res.json({
       form: {
         name: form.name,
         formType: form.form_type,
-        definition: form.definition && typeof form.definition === 'object' ? form.definition : {},
+        definition: def,
         privacyNotice: form.privacy_notice || '',
+        bookingPageUrl,
       },
     });
   } catch (error) {
@@ -1342,11 +1352,24 @@ app.post('/api/public/forms/:slug/submissions', async (req, res) => {
     }
 
     // 診断回答・受付時の自動サンクス通知（LINE / Email）
+    const formDef = form.definition && typeof form.definition === 'object' ? form.definition : {};
+    let bookingUrl = typeof (formDef as any).booking_url === 'string' ? (formDef as any).booking_url.trim() : '';
+    if (!bookingUrl) {
+      const { data: salesSettings } = await lineSupabase
+        .from('sales_workspace_settings')
+        .select('booking_page_url')
+        .maybeSingle();
+      bookingUrl = salesSettings?.booking_page_url || '';
+    }
+    const bookingPrompt = bookingUrl
+      ? `\n\n▼ 30分無料・個別フィードバック面談の日程予約はこちら\n${bookingUrl}\n\n※面談当日、画面共有にて診断レポートを詳しく解説し、終了後にPDFを進呈いたします。`
+      : '\n\n担当者より面談日程のご案内をお届けいたします。';
+
     if (contact.line_user_id && lineChannelAccessToken) {
       try {
         const lineMsg = {
           type: 'text',
-          text: `【MST】「${form.name || '無料診断'}」の回答を受け付けました。\nご多忙の中、ご回答いただき誠にありがとうございます！\n\n現在、有限会社MST代表の大橋真人と専任チームにて、回答内容を基にした個別診断レポートを作成しております。\n完成次第、こちらのLINE宛てにレポートをお届けいたしますので、今しばらくお待ちください。\n\n※急ぎのご相談やご質問がございましたら、このLINEにそのまま返信いただけます。`,
+          text: `【MST】「${form.name || '無料診断'}」の回答を受け付けました。\nご多忙の中、ご回答いただき誠にありがとうございます！\n\n現在、有限会社MST代表の大橋真人と専任チームにて、回答内容を基にした個別診断レポート（業務・売上・経営者の時間の急所特定）を作成しております。\n机上の空論ではなく「御社がどこから手を付ければ一番利益が残るか」を明確にするため、30分のオンライン個別面談にて解説と質疑応答を行わせていただきます。${bookingPrompt}\n\n※急ぎのご相談やご質問がございましたら、このLINEにそのまま返信いただけます。`,
         };
         await fetch('https://api.line.me/v2/bot/message/push', {
           method: 'POST',
@@ -1373,8 +1396,8 @@ app.post('/api/public/forms/:slug/submissions', async (req, res) => {
       try {
         const emailKey = process.env.RESEND_API_KEY || '';
         const emailFrom = process.env.RESEND_FROM_EMAIL || '';
-        const subject = `【MST】「${form.name || '無料診断'}」のお申し込みを受け付けました`;
-        const bodyText = `${name} 様\n\n有限会社MST代表の大橋真人です。\nこの度は「${form.name || '無料診断'}」にご回答いただき誠にありがとうございます。\n\n現在、ご入力いただいた内容を精査し、個別診断・改善レポートを作成しております。\n完成次第、本メールアドレス宛にお届けいたしますので、今しばらくお待ちくださいますようお願い申し上げます。\n\n--------------------------------------------------\n有限会社MST\n代表取締役: 大橋真人\n〒503-0981 岐阜県大垣市桧町127番地\n--------------------------------------------------`;
+        const subject = `【MST】「${form.name || '無料診断'}」の受付と個別面談のご案内`;
+        const bodyText = `${name} 様\n\n有限会社MST代表の大橋真人です。\nこの度は「${form.name || '無料診断'}」にご回答いただき誠にありがとうございます。\n\n現在、ご入力いただいた内容を精査し、御社の業務・売上・時間の急所を特定した個別診断レポートを作成しております。\n机上の空論ではなく「御社がどこから手を付ければ一番利益が残るか」を明確にするため、30分のオンライン面談にて解説と質疑応答を行わせていただきます。${bookingPrompt}\n\n--------------------------------------------------\n有限会社MST\n代表取締役: 大橋真人\n〒503-0981 岐阜県大垣市桧町127番地\n--------------------------------------------------`;
         if (emailKey && emailFrom) {
           await fetch('https://api.resend.com/emails', {
             method: 'POST',

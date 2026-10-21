@@ -6,7 +6,7 @@ import { ArrowDown, ArrowUp, Clipboard, ClipboardCheck, ExternalLink, Plus, Refr
 type FormType = 'diagnosis' | 'consultation' | 'meeting';
 type QuestionType = 'text' | 'textarea' | 'select' | 'radio' | 'checkbox' | 'date';
 type FormQuestion = { id: string; label: string; type: QuestionType; required: boolean; options: string[] };
-type FormDefinition = { category?: string; description: string; questions: FormQuestion[] };
+type FormDefinition = { category?: string; description: string; booking_url?: string; questions: FormQuestion[] };
 type DiagnosisForm = { id: string; name: string; public_slug: string; form_type: FormType; status: 'draft'|'published'|'paused'|'archived'; questionnaire_version: string; definition: Record<string, unknown>; privacy_notice: string|null; created_at: string };
 type Submission = { id: string; form_id: string; contact_id: string|null; company_id: string|null; respondent_company_name: string|null; lead_id: string|null; diagnosis_id?: string|null; status: 'received'|'reviewing'|'completed'|'rejected'; respondent_name: string|null; respondent_email: string|null; answers: Record<string, unknown>; score: number|null; submitted_at: string; reviewer_memo: string|null };
 
@@ -106,6 +106,7 @@ function readDefinition(value: Record<string, unknown> | null | undefined): Form
   return {
     category: typeof definition.category === 'string' ? definition.category : typeof definition.service_category === 'string' ? definition.service_category : '',
     description: typeof definition.description === 'string' ? definition.description : '',
+    booking_url: typeof definition.booking_url === 'string' ? definition.booking_url : '',
     questions: questions.length ? questions : [newQuestion()],
   };
 }
@@ -119,6 +120,7 @@ export const DiagnosisFormsWorkspace: React.FC<DiagnosisFormsWorkspaceProps> = (
   const [selectedId, setSelectedId] = useState('');
   const [name, setName] = useState('');
   const [category, setCategory] = useState('');
+  const [bookingUrl, setBookingUrl] = useState('');
   const [formType, setFormType] = useState<FormType>('diagnosis');
   const [description, setDescription] = useState('');
   const [questions, setQuestions] = useState<FormQuestion[]>([newQuestion()]);
@@ -137,6 +139,7 @@ export const DiagnosisFormsWorkspace: React.FC<DiagnosisFormsWorkspaceProps> = (
     setSelectedId(form.id);
     setName(form.name);
     setCategory(definition.category || '');
+    setBookingUrl(definition.booking_url || '');
     setFormType(form.form_type || 'diagnosis');
     setDescription(definition.description || '');
     setQuestions(definition.questions);
@@ -146,6 +149,7 @@ export const DiagnosisFormsWorkspace: React.FC<DiagnosisFormsWorkspaceProps> = (
   const applyOfficialBottleneckPreset = async (autoSave = false) => {
     setName('経営課題・業務診断フォーム');
     setCategory('経営の仕組み化 × 利益改善');
+    setBookingUrl('');
     setFormType('diagnosis');
     setDescription('貴社の現状の経営課題（業務の手作業・売上利益・改善停滞原因・経営者の時間）のボトルネックを特定し、仕組み化と利益改善に向けた最適なロードマップを作成するための診断フォームです。');
     setQuestions(MST_OFFICIAL_BOTTLENECK_QUESTIONS);
@@ -163,6 +167,7 @@ export const DiagnosisFormsWorkspace: React.FC<DiagnosisFormsWorkspaceProps> = (
           definition: {
             category: '経営の仕組み化 × 利益改善',
             description: '貴社の現状の経営課題（業務の手作業・売上利益・改善停滞原因・経営者の時間）のボトルネックを特定し、仕組み化と利益改善に向けた最適なロードマップを作成するための診断フォームです。',
+            booking_url: bookingUrl.trim(),
             questions: MST_OFFICIAL_BOTTLENECK_QUESTIONS,
           },
           privacy_notice: DEFAULT_PRIVACY_NOTICE,
@@ -239,6 +244,7 @@ export const DiagnosisFormsWorkspace: React.FC<DiagnosisFormsWorkspaceProps> = (
     const definition: FormDefinition = {
       category: category.trim(),
       description: description.trim(),
+      booking_url: bookingUrl.trim(),
       questions,
     };
     const slug = (name.trim().toLowerCase().replace(/[^a-z0-9ぁ-んァ-ヶ一-龠]+/g, '-').replace(/^-|-$/g, '') || 'form') + '-' + crypto.randomUUID().slice(0, 8);
@@ -480,9 +486,14 @@ export const DiagnosisFormsWorkspace: React.FC<DiagnosisFormsWorkspaceProps> = (
                 </select>
               </label>
               <label className={labelClass}>サービス区分・上部ラベル（任意）
-                <input value={category} onChange={event => setCategory(event.target.value)} className={inputClass} placeholder="例：個別相談、業務支援（未入力時は非表示）" />
+                <input value={category} onChange={event => setCategory(event.target.value)} className={inputClass} placeholder="例：経営の仕組み化 × 利益改善" />
               </label>
             </div>
+
+            <label className={labelClass}>個別面談の予約カレンダーURL（任意・Spir / TimeRex / Calendly など）
+              <input value={bookingUrl} onChange={event => setBookingUrl(event.target.value)} className={inputClass} placeholder="例：https://app.spirbot.com/... または https://timerex.net/..." />
+              <span className="text-xs text-slate-500">設定すると、診断回答完了後の速報サンクスページに「面談日時を選ぶ（予約する）」ボタンとして表示されます。</span>
+            </label>
 
             <label className={labelClass}>フォーム名 <span className="text-rose-400">*</span>
               <input required value={name} onChange={event => setName(event.target.value)} className={inputClass} placeholder="例：業務ヒアリングフォーム、初回相談受付" />
