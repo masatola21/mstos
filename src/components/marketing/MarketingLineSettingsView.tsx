@@ -1,6 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { getSupabase } from '../../lib/supabaseClient';
-import { MessageSquare, Save, CheckCircle2, AlertCircle, Sparkles } from 'lucide-react';
+import { MessageSquare, Save, CheckCircle2, AlertCircle, ExternalLink, RefreshCw } from 'lucide-react';
 
 type Action = { type: 'uri' | 'message'; label: string; value: string };
 type LayoutId = 'single' | 'columns-2' | 'rows-2' | 'columns-3' | 'rows-3' | 'grid-2x2' | 'grid-2x3' | 'grid-3x2';
@@ -23,7 +23,30 @@ export const MarketingLineSettingsView: React.FC = () => {
   const db = getSupabase();
   const fileRef = useRef<HTMLInputElement>(null);
 
-  // リッチメニュー用
+  // ─── 友だち追加ウェルカムFlexメッセージ状態 ───
+  const [welcomeHeading, setWelcomeHeading] = useState('大橋真人です。');
+  const [welcomeSubheading, setWelcomeSubheading] = useState('LINE登録ありがとうございます。');
+  const [welcomeIntro, setWelcomeIntro] = useState(
+    'MSTでは、中小企業の\n「経営の仕組み化×利益改善」と\n介護保険外サービスの開業を支援しています。'
+  );
+  const [welcomeQuestion, setWelcomeQuestion] = useState('まず、どのようなご相談をご希望ですか？');
+  const [welcomeInstruction, setWelcomeInstruction] = useState('ご希望に近いものをお選びください');
+
+  // ボタン設定
+  const [btn1Label, setBtn1Label] = useState('経営改善について相談する');
+  const [btn1Text, setBtn1Text] = useState('経営改善について相談する');
+  const [btn2Label, setBtn2Label] = useState('介護保険外サービスについて相談する');
+  const [btn2Text, setBtn2Text] = useState('介護保険外サービスについて相談する');
+  const [btn3Label, setBtn3Label] = useState('📊 3分無料経営診断を受ける');
+  const [btn3Uri, setBtn3Uri] = useState('');
+
+  const [welcomeRuleId, setWelcomeRuleId] = useState<string | null>(null);
+  const [welcomeEnabled, setWelcomeEnabled] = useState(true);
+  const [welcomeSaving, setWelcomeSaving] = useState(false);
+  const [welcomeNotice, setWelcomeNotice] = useState('');
+  const [welcomeError, setWelcomeError] = useState('');
+
+  // ─── リッチメニュー用状態 ───
   const [title, setTitle] = useState('メニュー');
   const [chatBarText, setChatBarText] = useState('メニュー');
   const [layout, setLayout] = useState<LayoutId>('grid-2x3');
@@ -31,25 +54,22 @@ export const MarketingLineSettingsView: React.FC = () => {
   const [actions, setActions] = useState<Action[]>(initial());
   const [image, setImage] = useState<{ base64: string; mime: string; url: string } | null>(null);
   const [currentId, setCurrentId] = useState('');
-
-  // 友だち追加ウェルカムメッセージ用
-  const [welcomeMessage, setWelcomeMessage] = useState(
-    '友だち追加ありがとうございます！\nこちらのアカウントでは最新のご案内や個別サポートを提供しています。\nご質問やお困りごとがあれば、このトークルームへお気軽にメッセージをお送りください。'
-  );
-  const [welcomeRuleId, setWelcomeRuleId] = useState<string | null>(null);
-  const [welcomeEnabled, setWelcomeEnabled] = useState(true);
-  const [welcomeSaving, setWelcomeSaving] = useState(false);
-  const [welcomeNotice, setWelcomeNotice] = useState('');
-  const [welcomeError, setWelcomeError] = useState('');
-
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   const [notice, setNotice] = useState('');
 
-  // ウェルカムメッセージ初期読み込み
+  // 診断URLの初期値を設定
+  useEffect(() => {
+    const origin = typeof window !== 'undefined' ? window.location.origin : '';
+    if (!btn3Uri) {
+      setBtn3Uri(`${origin}/forms/business-diagnosis?source=line`);
+    }
+  }, []);
+
+  // 既存のウェルカム設定をロード
   useEffect(() => {
     if (!db) return;
-    const loadWelcome = async () => {
+    const loadWelcomeRule = async () => {
       try {
         const { data: sessionData } = await db.auth.getSession();
         const ownerId = sessionData.session?.user?.id;
@@ -57,39 +77,113 @@ export const MarketingLineSettingsView: React.FC = () => {
 
         const { data, error: fetchErr } = await db
           .from('line_auto_reply_rules')
-          .select('id, reply_text, enabled')
+          .select('id, reply_type, reply_payload, enabled')
           .eq('owner_id', ownerId)
           .eq('match_text', '__welcome__')
           .maybeSingle();
 
-        if (fetchErr) return;
-        if (data) {
-          setWelcomeRuleId(data.id);
-          if (data.reply_text) setWelcomeMessage(data.reply_text);
-          setWelcomeEnabled(data.enabled);
+        if (fetchErr || !data) return;
+        setWelcomeRuleId(data.id);
+        setWelcomeEnabled(data.enabled);
+
+        const payload = data.reply_payload as any;
+        const bodyContents = payload?.contents?.body?.contents;
+        if (Array.isArray(bodyContents)) {
+          // テキスト抽出
+          if (bodyContents[0]?.text) setWelcomeHeading(bodyContents[0].text);
+          if (bodyContents[1]?.text) setWelcomeSubheading(bodyContents[1].text);
+          if (bodyContents[3]?.text) setWelcomeIntro(bodyContents[3].text);
+          if (bodyContents[4]?.text) setWelcomeQuestion(bodyContents[4].text);
+          if (bodyContents[5]?.text) setWelcomeInstruction(bodyContents[5].text);
+
+          // ボタン抽出
+          const btns = bodyContents.filter((c: any) => c.type === 'button');
+          if (btns[0]?.action) {
+            setBtn1Label(btns[0].action.label || '');
+            setBtn1Text(btns[0].action.text || '');
+          }
+          if (btns[1]?.action) {
+            setBtn2Label(btns[1].action.label || '');
+            setBtn2Text(btns[1].action.text || '');
+          }
+          if (btns[2]?.action) {
+            setBtn3Label(btns[2].action.label || '');
+            setBtn3Uri(btns[2].action.uri || '');
+          }
         }
       } catch {
-        // ignore
+        // ignore load errors
       }
     };
-    void loadWelcome();
+    void loadWelcomeRule();
   }, [db]);
 
-  const saveWelcomeMessage = async () => {
+  const buildFlexPayload = () => {
+    return {
+      altText: `${welcomeHeading} ${welcomeSubheading}`,
+      contents: {
+        type: 'bubble',
+        body: {
+          type: 'box',
+          layout: 'vertical',
+          spacing: 'lg',
+          contents: [
+            { type: 'text', text: welcomeHeading, size: 'xl', weight: 'bold', align: 'center', color: '#1E293B', wrap: true },
+            { type: 'text', text: welcomeSubheading, size: 'md', align: 'center', color: '#334155', margin: 'sm', wrap: true },
+            { type: 'separator', margin: 'lg' },
+            { type: 'text', text: welcomeIntro, size: 'sm', align: 'center', color: '#475569', margin: 'lg', wrap: true },
+            { type: 'text', text: welcomeQuestion, size: 'lg', weight: 'bold', align: 'center', color: '#1E293B', margin: 'xl', wrap: true },
+            { type: 'text', text: welcomeInstruction, size: 'sm', align: 'center', color: '#64748B', margin: 'sm', wrap: true },
+            {
+              type: 'button',
+              style: 'primary',
+              color: '#1E3A5F',
+              height: 'lg',
+              margin: 'lg',
+              action: { type: 'message', label: btn1Label, text: btn1Text || btn1Label },
+            },
+            {
+              type: 'button',
+              style: 'primary',
+              color: '#0284C7',
+              height: 'lg',
+              margin: 'sm',
+              action: { type: 'message', label: btn2Label, text: btn2Text || btn2Label },
+            },
+            {
+              type: 'button',
+              style: 'primary',
+              color: '#10B981',
+              height: 'lg',
+              margin: 'sm',
+              action: { type: 'uri', label: btn3Label, uri: btn3Uri },
+            },
+          ],
+        },
+      },
+    };
+  };
+
+  const handleSaveWelcome = async () => {
     if (!db) return;
     setWelcomeSaving(true);
     setWelcomeNotice('');
     setWelcomeError('');
+
     try {
       const { data: sessionData } = await db.auth.getSession();
       const ownerId = sessionData.session?.user?.id;
       if (!ownerId) throw new Error('ログイン状態を確認できません');
 
+      const payload = buildFlexPayload();
+
       if (welcomeRuleId) {
         const { error: updateErr } = await db
           .from('line_auto_reply_rules')
           .update({
-            reply_text: welcomeMessage.trim(),
+            reply_type: 'flex',
+            reply_payload: payload,
+            reply_text: `[ウェルカムFlexメッセージ: ${welcomeHeading}]`,
             enabled: welcomeEnabled,
             updated_at: new Date().toISOString(),
           })
@@ -100,11 +194,12 @@ export const MarketingLineSettingsView: React.FC = () => {
           .from('line_auto_reply_rules')
           .insert({
             owner_id: ownerId,
-            name: '友だち追加ウェルカムメッセージ',
+            name: '友だち追加ウェルカムFlexメッセージ',
             match_mode: 'exact',
             match_text: '__welcome__',
-            reply_text: welcomeMessage.trim(),
-            reply_type: 'text',
+            reply_type: 'flex',
+            reply_payload: payload,
+            reply_text: `[ウェルカムFlexメッセージ: ${welcomeHeading}]`,
             priority: 10,
             enabled: welcomeEnabled,
           })
@@ -113,7 +208,20 @@ export const MarketingLineSettingsView: React.FC = () => {
         if (insertErr) throw insertErr;
         if (inserted) setWelcomeRuleId(inserted.id);
       }
-      setWelcomeNotice('ウェルカムメッセージを保存しました');
+
+      // テンプレート一覧にも同期保存（テンプレート管理でも呼び出せるように）
+      await db.from('line_auto_reply_templates').upsert(
+        {
+          owner_id: ownerId,
+          name: '大橋真人 公式ウェルカムメッセージ（無料診断誘導付き）',
+          reply_type: 'flex',
+          payload,
+          updated_at: new Date().toISOString(),
+        },
+        { onConflict: 'owner_id,name' }
+      );
+
+      setWelcomeNotice('友だち追加ウェルカムメッセージを更新保存しました！');
     } catch (e: any) {
       setWelcomeError(e?.message || '保存に失敗しました');
     } finally {
@@ -193,43 +301,40 @@ export const MarketingLineSettingsView: React.FC = () => {
 
   return (
     <div className="space-y-6">
-      {/* 友だち追加ウェルカムメッセージ設定 */}
-      <section className="space-y-4 rounded-2xl border border-slate-800 bg-slate-900 p-5 shadow-xl">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <div className="rounded-xl bg-emerald-500/10 p-2 text-emerald-400">
-              <MessageSquare className="h-5 w-5" />
+      {/* ─── 友だち追加ウェルカムFlexメッセージ設定＆プレビュー ─── */}
+      <section className="space-y-5 rounded-2xl border border-emerald-500/30 bg-slate-900 p-5 shadow-xl">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-800 pb-4">
+          <div>
+            <div className="flex items-center gap-2">
+              <span className="px-2.5 py-0.5 rounded-full bg-emerald-500/20 text-emerald-400 text-xs font-semibold border border-emerald-500/30 flex items-center gap-1">
+                <MessageSquare className="h-3.5 w-3.5" /> 友だち追加時 自動送信（Flex）
+              </span>
+              <span className="text-xs text-slate-400">友だち追加 ➜ 即座に診断誘導 ➜ 回答 ➜ リード化</span>
             </div>
-            <div>
-              <h2 className="text-lg font-bold text-white">友だち追加時ウェルカムメッセージ</h2>
-              <p className="text-xs text-slate-400">
-                ユーザーが公式アカウントを友だち追加（またはブロック解除）した際に自動送信する挨拶文
-              </p>
-            </div>
+            <h2 className="text-lg font-bold text-white mt-1">友だち追加ウェルカムメッセージ編集</h2>
+            <p className="text-xs text-slate-400 mt-0.5">
+              LINE公式アカウントの新規友だち追加（およびブロック解除）時に自動送信されるFlexカードの文面とボタン設定
+            </p>
           </div>
-          <label className="flex items-center gap-2 text-xs font-semibold text-slate-300 cursor-pointer">
-            <input
-              type="checkbox"
-              checked={welcomeEnabled}
-              onChange={(e) => setWelcomeEnabled(e.target.checked)}
-              className="h-4 w-4 accent-emerald-500 cursor-pointer"
-            />
-            自動送信を有効化
-          </label>
-        </div>
-
-        <div className="space-y-2">
-          <textarea
-            rows={5}
-            maxLength={1000}
-            value={welcomeMessage}
-            onChange={(e) => setWelcomeMessage(e.target.value)}
-            placeholder="友だち追加時のメッセージを入力..."
-            className="w-full rounded-xl border border-slate-700 bg-slate-950 p-3 text-sm text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-emerald-500"
-          />
-          <div className="flex items-center justify-between text-xs text-slate-500">
-            <span>※ LINE公式アカウントの管理画面（LINE Official Account Manager）側の自動応答と重複しないようご調整ください。</span>
-            <span>{welcomeMessage.length} / 1000文字</span>
+          <div className="flex items-center gap-3">
+            <label className="flex items-center gap-2 text-xs font-semibold text-slate-300 cursor-pointer">
+              <input
+                type="checkbox"
+                checked={welcomeEnabled}
+                onChange={(e) => setWelcomeEnabled(e.target.checked)}
+                className="h-4 w-4 accent-emerald-500 cursor-pointer"
+              />
+              自動送信を有効化
+            </label>
+            <button
+              type="button"
+              disabled={welcomeSaving}
+              onClick={() => void handleSaveWelcome()}
+              className="inline-flex items-center gap-1.5 rounded-xl bg-emerald-600 px-4 py-2 text-xs font-bold text-white shadow-md hover:bg-emerald-500 transition-colors disabled:opacity-50 cursor-pointer shrink-0"
+            >
+              <Save className="h-4 w-4" />
+              {welcomeSaving ? '保存中…' : 'ウェルカムメッセージを更新保存'}
+            </button>
           </div>
         </div>
 
@@ -246,20 +351,174 @@ export const MarketingLineSettingsView: React.FC = () => {
           </div>
         )}
 
-        <div className="flex justify-end">
-          <button
-            type="button"
-            disabled={welcomeSaving}
-            onClick={() => void saveWelcomeMessage()}
-            className="inline-flex items-center gap-1.5 rounded-xl bg-emerald-600 px-4 py-2 text-xs font-bold text-white shadow-md hover:bg-emerald-500 transition-colors disabled:opacity-50"
-          >
-            <Save className="h-4 w-4" />
-            {welcomeSaving ? '保存中...' : 'ウェルカムメッセージを保存'}
-          </button>
+        {/* 2カラム構成: 左側フォーム / 右側リアルタイムプレビュー */}
+        <div className="grid gap-6 lg:grid-cols-12">
+          {/* 左側: 入力フォーム */}
+          <div className="lg:col-span-7 space-y-4">
+            <div className="space-y-3 rounded-xl border border-slate-800 bg-slate-950/60 p-4">
+              <h3 className="text-xs font-bold text-slate-200">1. ご挨拶・導入文</h3>
+              <div className="grid gap-3 sm:grid-cols-2">
+                <div>
+                  <label className="block text-[11px] text-slate-400 mb-1">メイン見出し（送信者名）</label>
+                  <input
+                    type="text"
+                    value={welcomeHeading}
+                    onChange={(e) => setWelcomeHeading(e.target.value)}
+                    className="w-full rounded-lg border border-slate-700 bg-slate-900 px-3 py-1.5 text-xs text-white"
+                  />
+                </div>
+                <div>
+                  <label className="block text-[11px] text-slate-400 mb-1">サブ挨拶文</label>
+                  <input
+                    type="text"
+                    value={welcomeSubheading}
+                    onChange={(e) => setWelcomeSubheading(e.target.value)}
+                    className="w-full rounded-lg border border-slate-700 bg-slate-900 px-3 py-1.5 text-xs text-white"
+                  />
+                </div>
+              </div>
+              <div>
+                <label className="block text-[11px] text-slate-400 mb-1">事業・サービス紹介文（改行可）</label>
+                <textarea
+                  rows={3}
+                  value={welcomeIntro}
+                  onChange={(e) => setWelcomeIntro(e.target.value)}
+                  className="w-full rounded-lg border border-slate-700 bg-slate-900 p-2 text-xs text-white"
+                />
+              </div>
+              <div className="grid gap-3 sm:grid-cols-2">
+                <div>
+                  <label className="block text-[11px] text-slate-400 mb-1">相談喚起の問いかけ</label>
+                  <input
+                    type="text"
+                    value={welcomeQuestion}
+                    onChange={(e) => setWelcomeQuestion(e.target.value)}
+                    className="w-full rounded-lg border border-slate-700 bg-slate-900 px-3 py-1.5 text-xs text-white"
+                  />
+                </div>
+                <div>
+                  <label className="block text-[11px] text-slate-400 mb-1">操作案内文</label>
+                  <input
+                    type="text"
+                    value={welcomeInstruction}
+                    onChange={(e) => setWelcomeInstruction(e.target.value)}
+                    className="w-full rounded-lg border border-slate-700 bg-slate-900 px-3 py-1.5 text-xs text-white"
+                  />
+                </div>
+              </div>
+            </div>
+
+            {/* ボタン設定 */}
+            <div className="space-y-3 rounded-xl border border-slate-800 bg-slate-950/60 p-4">
+              <h3 className="text-xs font-bold text-slate-200">2. アクションボタン設定</h3>
+
+              {/* ボタン1 */}
+              <div className="rounded-lg border border-slate-800 p-3 space-y-2">
+                <span className="text-[11px] font-semibold text-indigo-400">ボタン 1（メッセージ送信）</span>
+                <div className="grid gap-2 sm:grid-cols-2">
+                  <input
+                    type="text"
+                    value={btn1Label}
+                    onChange={(e) => setBtn1Label(e.target.value)}
+                    placeholder="ボタン表示名"
+                    className="rounded border border-slate-700 bg-slate-900 px-2.5 py-1 text-xs text-white"
+                  />
+                  <input
+                    type="text"
+                    value={btn1Text}
+                    onChange={(e) => setBtn1Text(e.target.value)}
+                    placeholder="タップ時に送信される返信文字"
+                    className="rounded border border-slate-700 bg-slate-900 px-2.5 py-1 text-xs text-white"
+                  />
+                </div>
+              </div>
+
+              {/* ボタン2 */}
+              <div className="rounded-lg border border-slate-800 p-3 space-y-2">
+                <span className="text-[11px] font-semibold text-sky-400">ボタン 2（メッセージ送信）</span>
+                <div className="grid gap-2 sm:grid-cols-2">
+                  <input
+                    type="text"
+                    value={btn2Label}
+                    onChange={(e) => setBtn2Label(e.target.value)}
+                    placeholder="ボタン表示名"
+                    className="rounded border border-slate-700 bg-slate-900 px-2.5 py-1 text-xs text-white"
+                  />
+                  <input
+                    type="text"
+                    value={btn2Text}
+                    onChange={(e) => setBtn2Text(e.target.value)}
+                    placeholder="タップ時に送信される返信文字"
+                    className="rounded border border-slate-700 bg-slate-900 px-2.5 py-1 text-xs text-white"
+                  />
+                </div>
+              </div>
+
+              {/* ボタン3 (診断リンク) */}
+              <div className="rounded-lg border border-emerald-500/20 bg-emerald-950/10 p-3 space-y-2">
+                <span className="text-[11px] font-semibold text-emerald-400">ボタン 3（診断フォームURLリンク）</span>
+                <div className="space-y-2">
+                  <input
+                    type="text"
+                    value={btn3Label}
+                    onChange={(e) => setBtn3Label(e.target.value)}
+                    placeholder="ボタン表示名"
+                    className="w-full rounded border border-slate-700 bg-slate-900 px-2.5 py-1 text-xs text-white"
+                  />
+                  <input
+                    type="url"
+                    value={btn3Uri}
+                    onChange={(e) => setBtn3Uri(e.target.value)}
+                    placeholder="遷移先URL (https://...)"
+                    className="w-full rounded border border-slate-700 bg-slate-900 px-2.5 py-1 text-xs text-white font-mono"
+                  />
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* 右側: リアルタイムFlexプレビュー */}
+          <div className="lg:col-span-5">
+            <div className="sticky top-6 rounded-xl border border-slate-800 bg-slate-950/80 p-4">
+              <div className="flex items-center justify-between text-xs font-semibold text-slate-300 mb-3">
+                <span>リアルタイムFlexプレビュー</span>
+                <span className="text-[10px] text-emerald-400 bg-emerald-950/60 px-2 py-0.5 rounded border border-emerald-800/60">
+                  LINE受信画面イメージ
+                </span>
+              </div>
+
+              <div className="max-w-[320px] mx-auto bg-white rounded-2xl p-5 text-slate-900 shadow-2xl space-y-2.5">
+                <div className="text-center font-bold text-lg text-slate-800 break-words">{welcomeHeading || '（見出し）'}</div>
+                <div className="text-center text-xs text-slate-600 break-words">{welcomeSubheading || '（サブ見出し）'}</div>
+                <hr className="border-slate-200 my-1.5" />
+                <div className="text-center text-[11px] text-slate-600 leading-relaxed whitespace-pre-wrap break-words">
+                  {welcomeIntro || '（事業紹介文）'}
+                </div>
+                <div className="text-center font-bold text-xs text-slate-800 pt-2 break-words">
+                  {welcomeQuestion || '（質問）'}
+                </div>
+                <div className="text-center text-[10px] text-slate-500 break-words">
+                  {welcomeInstruction || '（案内文）'}
+                </div>
+
+                <div className="space-y-1.5 pt-2">
+                  <div className="w-full py-2 px-3 rounded-xl bg-[#1E3A5F] text-white text-xs font-bold text-center shadow-sm truncate">
+                    {btn1Label || 'ボタン1'}
+                  </div>
+                  <div className="w-full py-2 px-3 rounded-xl bg-[#0284C7] text-white text-xs font-bold text-center shadow-sm truncate">
+                    {btn2Label || 'ボタン2'}
+                  </div>
+                  <div className="w-full py-2 px-3 rounded-xl bg-[#10B981] text-white text-xs font-bold text-center shadow-sm flex items-center justify-center gap-1 truncate">
+                    <span>{btn3Label || 'ボタン3'}</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
         </div>
       </section>
 
-      {/* LINEリッチメニュー */}
+      {/* ─── LINEリッチメニュー ─── */}
       <section className="space-y-4 rounded-2xl border border-slate-800 bg-slate-900 p-5 shadow-xl">
         <div>
           <h2 className="text-xl font-bold text-white">LINEリッチメニュー</h2>
