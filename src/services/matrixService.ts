@@ -168,7 +168,9 @@ const INITIAL_AUTOMATIONS: AutomationRule[] = [
 
 export function normalizeAutomationRules(value: unknown): AutomationRule[] {
   const saved = Array.isArray(value) ? value as Partial<AutomationRule>[] : [];
-  return INITIAL_AUTOMATIONS.map((preset) => {
+
+  // プリセットルールを保存値でマージ
+  const presetRules = INITIAL_AUTOMATIONS.map((preset) => {
     const existing = saved.find((item) => item && item.id === preset.id);
     if (!existing || !('aiMode' in existing) || !('approvalPolicy' in existing) || !('isEnabled' in existing)) return { ...preset };
     const aiMode = existing.aiMode === 'suggest' || existing.aiMode === 'prepare' || existing.aiMode === 'execute' ? existing.aiMode : preset.aiMode;
@@ -177,6 +179,30 @@ export function normalizeAutomationRules(value: unknown): AutomationRule[] {
     const workModeId = AI_WORK_MODES.some((mode) => mode.id === existing.workModeId) ? existing.workModeId : preset.workModeId;
     return { ...preset, aiMode, approvalPolicy, isEnabled: Boolean(existing.isEnabled), taskDueInDays: dueDays, workModeId, updatedAt: existing.updatedAt };
   });
+
+  // ユーザーが追加したカスタムルール（id が "custom-" または preset 以外のもの）を保持
+  const presetIds = new Set(INITIAL_AUTOMATIONS.map(p => p.id));
+  const customRules = saved.filter(
+    (item): item is AutomationRule =>
+      !!item &&
+      typeof item.id === 'string' &&
+      !presetIds.has(item.id) &&
+      typeof item.name === 'string' &&
+      typeof item.triggerEvent === 'string'
+  ).map((item) => ({
+    id: item.id,
+    name: item.name,
+    description: item.description || '',
+    triggerEvent: item.triggerEvent,
+    aiMode: item.aiMode || 'prepare',
+    approvalPolicy: item.approvalPolicy || 'always',
+    isEnabled: Boolean(item.isEnabled),
+    taskDueInDays: Number.isFinite(Number(item.taskDueInDays)) ? Math.min(90, Math.max(1, Math.floor(Number(item.taskDueInDays)))) : 3,
+    workModeId: item.workModeId || 'customer_product',
+    updatedAt: item.updatedAt || Date.now(),
+  }));
+
+  return [...presetRules, ...customRules];
 }
 
 // --- Initial Custom Lists ---
@@ -427,6 +453,22 @@ export const matrixService = {
   },
   saveAutomations(rules: AutomationRule[]) {
     localStorage.setItem(MATRIX_STORAGE_KEYS.AUTOMATIONS, JSON.stringify(normalizeAutomationRules(rules)));
+  },
+  addAutomation(rule: Omit<AutomationRule, 'id' | 'updatedAt'>): AutomationRule {
+    const list = this.loadAutomations();
+    const newRule: AutomationRule = {
+      ...rule,
+      id: 'custom-rule-' + Date.now(),
+      updatedAt: Date.now(),
+    };
+    list.push(newRule);
+    this.saveAutomations(list);
+    return newRule;
+  },
+  deleteAutomation(id: string): void {
+    const list = this.loadAutomations();
+    const filtered = list.filter((r) => r.id !== id);
+    this.saveAutomations(filtered);
   },
 
   // Custom Lists

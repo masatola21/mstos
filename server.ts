@@ -415,6 +415,63 @@ async function processLineInboxAndAutoReply(event: any, contact: any, eventId: s
   if (outboundError) throw outboundError;
 }
 
+
+async function processLineFollowWelcome(event: any, contact: any, eventId: string, botUserId: string): Promise<void> {
+  if (!lineSupabase || event.type !== 'follow' || !botUserId || typeof event.replyToken !== 'string') return;
+  const { data: integration, error: integrationError } = await lineSupabase
+    .from('line_channel_integrations').select('owner_id,auto_reply_enabled').eq('bot_user_id', botUserId).maybeSingle();
+  if (integrationError) {
+    if (isOptionalLineAutomationSchemaMissing(integrationError)) return;
+    throw integrationError;
+  }
+  if (!integration || !integration.auto_reply_enabled) return;
+
+  const { data: welcomeRules, error: rulesError } = await lineSupabase.from('line_auto_reply_rules')
+    .select('id,reply_text,reply_type,reply_payload,tag_id')
+    .eq('owner_id', integration.owner_id)
+    .eq('enabled', true)
+    .in('match_text', ['__welcome__', '友だち追加', 'ウェルカム'])
+    .order('priority', { ascending: true });
+
+  if (rulesError || !welcomeRules || welcomeRules.length === 0) return;
+  const matchedRule = welcomeRules[0];
+  const replyType = matchedRule.reply_type || 'text';
+  const replyText = String(matchedRule.reply_text || '').slice(0, 5000);
+  if (!replyText && replyType === 'text') return;
+
+  const lineMessage = { type: 'text', text: replyText };
+  const replyResponse = await fetch('https://api.line.me/v2/bot/message/reply', {
+    method: 'POST',
+    headers: { Authorization: 'Bearer ' + lineChannelAccessToken, 'Content-Type': 'application/json' },
+    body: JSON.stringify({ replyToken: event.replyToken, messages: [lineMessage] }),
+  });
+  if (!replyResponse.ok) return;
+
+  const userId = typeof event.source?.userId === 'string' ? event.source.userId : '';
+  if (userId) {
+    await lineSupabase.from('line_inbox_messages').upsert({
+      owner_id: integration.owner_id,
+      line_event_id: eventId + '_welcome',
+      direction: 'outbound',
+      contact_id: contact.id,
+      line_user_id: userId,
+      message_type: 'text',
+      body: replyText,
+      status: 'sent',
+      received_at: new Date().toISOString(),
+    }, { onConflict: 'owner_id,line_event_id,direction', ignoreDuplicates: true });
+
+    if (matchedRule.tag_id) {
+      const { data: friend } = await lineSupabase.from('line_friends')
+        .select('id').eq('line_user_id', userId).maybeSingle();
+      if (friend?.id) {
+        await lineSupabase.from('line_friend_tags').upsert({
+          line_friend_id: friend.id, tag_id: matchedRule.tag_id, assigned_by: 'automation',
+        }, { onConflict: 'line_friend_id,tag_id', ignoreDuplicates: true });
+      }
+    }
+  }
+}
 async function processLineWebhookEvent(event: any, botUserId = '') {
   if (!lineSupabase) throw new Error('Supabase server credentials are missing.');
   const stableEventId = typeof event.webhookEventId === 'string'
@@ -487,6 +544,7 @@ async function processLineWebhookEvent(event: any, botUserId = '') {
       }
       if (event.type === 'follow') await sendLineWelcomeMessage(event, contact, stableEventId, botUserId);
       if (event.type === 'message') await processLineInboxAndAutoReply(event, contact, stableEventId, botUserId);
+      if (event.type === 'follow') await processLineFollowWelcome(event, contact, stableEventId, botUserId);
     }
 
     if (eventRowId) {

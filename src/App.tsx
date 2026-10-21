@@ -1788,6 +1788,22 @@ function AppContent() {
     setAutomations(updated);
     matrixService.saveAutomations(updated);
   };
+  const handleAddAutomation = (rule: Omit<AutomationRule, 'id' | 'updatedAt'>) => {
+    const newRule = matrixService.addAutomation(rule);
+    setAutomations(matrixService.loadAutomations());
+    recordActivityLog('task_created', '新しい自動化ルール「' + newRule.name + '」を登録しました', '人間');
+    setActivityLogs(loadActivityLogs());
+  };
+
+  const handleDeleteAutomation = (id: string) => {
+    const target = automations.find((a) => a.id === id);
+    matrixService.deleteAutomation(id);
+    setAutomations(matrixService.loadAutomations());
+    if (target) {
+      recordActivityLog('task_updated', '自動化ルール「' + target.name + '」を削除しました', '人間');
+      setActivityLogs(loadActivityLogs());
+    }
+  };
 
   useEffect(() => {
     if (!user || !workspaceReady) return;
@@ -2020,6 +2036,8 @@ function AppContent() {
             automations={automations}
             activityLogs={activityLogs}
             onUpdateAutomation={handleUpdateAutomation}
+            onAddAutomation={handleAddAutomation}
+            onDeleteAutomation={handleDeleteAutomation}
           />
         )}
 
