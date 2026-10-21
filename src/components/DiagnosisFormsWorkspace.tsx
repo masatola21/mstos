@@ -121,7 +121,7 @@ export const DiagnosisFormsWorkspace: React.FC<DiagnosisFormsWorkspaceProps> = (
   const [name, setName] = useState('');
   const [category, setCategory] = useState('');
   const [bookingUrl, setBookingUrl] = useState('');
-  const [formType, setFormType] = useState<FormType>('diagnosis');
+  const [formType, setFormType] = useState<FormType>('consultation');
   const [description, setDescription] = useState('');
   const [questions, setQuestions] = useState<FormQuestion[]>([newQuestion()]);
   const [privacyNotice, setPrivacyNotice] = useState(DEFAULT_PRIVACY_NOTICE);
@@ -191,11 +191,12 @@ export const DiagnosisFormsWorkspace: React.FC<DiagnosisFormsWorkspaceProps> = (
 
   const resetForm = () => {
     setSelectedId('');
-    setName('経営課題・業務診断フォーム');
-    setCategory('経営の仕組み化 × 利益改善');
-    setFormType('diagnosis');
-    setDescription('貴社の現状の経営課題（業務の手作業・売上利益・改善停滞原因・経営者の時間）のボトルネックを特定し、仕組み化と利益改善に向けた最適なロードマップを作成するための診断フォームです。');
-    setQuestions(MST_OFFICIAL_BOTTLENECK_QUESTIONS);
+    setName('');
+    setCategory('');
+    setFormType('consultation');
+    setDescription('');
+    setBookingUrl('');
+    setQuestions([newQuestion()]);
     setPrivacyNotice(DEFAULT_PRIVACY_NOTICE);
   };
 
