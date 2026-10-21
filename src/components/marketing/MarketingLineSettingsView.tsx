@@ -1,6 +1,17 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { getSupabase } from '../../lib/supabaseClient';
-import { MessageSquare, Save, CheckCircle2, AlertCircle, ExternalLink, RefreshCw } from 'lucide-react';
+import { LineMessagePreview } from '../LineMessagePreview';
+import {
+  MessageSquare,
+  Save,
+  CheckCircle2,
+  AlertCircle,
+  ExternalLink,
+  Code,
+  LayoutTemplate,
+  HelpCircle,
+  Copy,
+} from 'lucide-react';
 
 type Action = { type: 'uri' | 'message'; label: string; value: string };
 type LayoutId = 'single' | 'columns-2' | 'rows-2' | 'columns-3' | 'rows-3' | 'grid-2x2' | 'grid-2x3' | 'grid-3x2';
@@ -23,7 +34,10 @@ export const MarketingLineSettingsView: React.FC = () => {
   const db = getSupabase();
   const fileRef = useRef<HTMLInputElement>(null);
 
-  // ─── 友だち追加ウェルカムFlexメッセージ状態 ───
+  // ─── モード切替: 'form' (かんたん入力) | 'json' (JSON直接編集) ───
+  const [editorMode, setEditorMode] = useState<'form' | 'json'>('form');
+
+  // かんたんフォーム入力用状態
   const [welcomeHeading, setWelcomeHeading] = useState('大橋真人です。');
   const [welcomeSubheading, setWelcomeSubheading] = useState('LINE登録ありがとうございます。');
   const [welcomeIntro, setWelcomeIntro] = useState(
@@ -39,6 +53,10 @@ export const MarketingLineSettingsView: React.FC = () => {
   const [btn2Text, setBtn2Text] = useState('介護保険外サービスについて相談する');
   const [btn3Label, setBtn3Label] = useState('📊 3分無料経営診断を受ける');
   const [btn3Uri, setBtn3Uri] = useState('');
+
+  // ─── JSON直接編集用状態 ───
+  const [jsonText, setJsonText] = useState('');
+  const [jsonParseError, setJsonParseError] = useState('');
 
   const [welcomeRuleId, setWelcomeRuleId] = useState<string | null>(null);
   const [welcomeEnabled, setWelcomeEnabled] = useState(true);
@@ -66,59 +84,7 @@ export const MarketingLineSettingsView: React.FC = () => {
     }
   }, []);
 
-  // 既存のウェルカム設定をロード
-  useEffect(() => {
-    if (!db) return;
-    const loadWelcomeRule = async () => {
-      try {
-        const { data: sessionData } = await db.auth.getSession();
-        const ownerId = sessionData.session?.user?.id;
-        if (!ownerId) return;
-
-        const { data, error: fetchErr } = await db
-          .from('line_auto_reply_rules')
-          .select('id, reply_type, reply_payload, enabled')
-          .eq('owner_id', ownerId)
-          .eq('match_text', '__welcome__')
-          .maybeSingle();
-
-        if (fetchErr || !data) return;
-        setWelcomeRuleId(data.id);
-        setWelcomeEnabled(data.enabled);
-
-        const payload = data.reply_payload as any;
-        const bodyContents = payload?.contents?.body?.contents;
-        if (Array.isArray(bodyContents)) {
-          // テキスト抽出
-          if (bodyContents[0]?.text) setWelcomeHeading(bodyContents[0].text);
-          if (bodyContents[1]?.text) setWelcomeSubheading(bodyContents[1].text);
-          if (bodyContents[3]?.text) setWelcomeIntro(bodyContents[3].text);
-          if (bodyContents[4]?.text) setWelcomeQuestion(bodyContents[4].text);
-          if (bodyContents[5]?.text) setWelcomeInstruction(bodyContents[5].text);
-
-          // ボタン抽出
-          const btns = bodyContents.filter((c: any) => c.type === 'button');
-          if (btns[0]?.action) {
-            setBtn1Label(btns[0].action.label || '');
-            setBtn1Text(btns[0].action.text || '');
-          }
-          if (btns[1]?.action) {
-            setBtn2Label(btns[1].action.label || '');
-            setBtn2Text(btns[1].action.text || '');
-          }
-          if (btns[2]?.action) {
-            setBtn3Label(btns[2].action.label || '');
-            setBtn3Uri(btns[2].action.uri || '');
-          }
-        }
-      } catch {
-        // ignore load errors
-      }
-    };
-    void loadWelcomeRule();
-  }, [db]);
-
-  const buildFlexPayload = () => {
+  const buildFormFlexPayload = () => {
     return {
       altText: `${welcomeHeading} ${welcomeSubheading}`,
       contents: {
@@ -164,6 +130,103 @@ export const MarketingLineSettingsView: React.FC = () => {
     };
   };
 
+  // 既存設定をロード
+  useEffect(() => {
+    if (!db) return;
+    const loadWelcomeRule = async () => {
+      try {
+        const { data: sessionData } = await db.auth.getSession();
+        const ownerId = sessionData.session?.user?.id;
+        if (!ownerId) return;
+
+        const { data, error: fetchErr } = await db
+          .from('line_auto_reply_rules')
+          .select('id, reply_type, reply_payload, enabled')
+          .eq('owner_id', ownerId)
+          .eq('match_text', '__welcome__')
+          .maybeSingle();
+
+        if (fetchErr || !data) {
+          // 初期状態のJSONを生成してセット
+          setJsonText(JSON.stringify(buildFormFlexPayload(), null, 2));
+          return;
+        }
+        setWelcomeRuleId(data.id);
+        setWelcomeEnabled(data.enabled);
+
+        const payload = data.reply_payload as any;
+        if (payload) {
+          setJsonText(JSON.stringify(payload, null, 2));
+
+          const bodyContents = payload?.contents?.body?.contents;
+          if (Array.isArray(bodyContents)) {
+            if (bodyContents[0]?.text) setWelcomeHeading(bodyContents[0].text);
+            if (bodyContents[1]?.text) setWelcomeSubheading(bodyContents[1].text);
+            if (bodyContents[3]?.text) setWelcomeIntro(bodyContents[3].text);
+            if (bodyContents[4]?.text) setWelcomeQuestion(bodyContents[4].text);
+            if (bodyContents[5]?.text) setWelcomeInstruction(bodyContents[5].text);
+
+            const btns = bodyContents.filter((c: any) => c.type === 'button');
+            if (btns[0]?.action) {
+              setBtn1Label(btns[0].action.label || '');
+              setBtn1Text(btns[0].action.text || '');
+            }
+            if (btns[1]?.action) {
+              setBtn2Label(btns[1].action.label || '');
+              setBtn2Text(btns[1].action.text || '');
+            }
+            if (btns[2]?.action) {
+              setBtn3Label(btns[2].action.label || '');
+              setBtn3Uri(btns[2].action.uri || '');
+            }
+          }
+        }
+      } catch {
+        // ignore load errors
+      }
+    };
+    void loadWelcomeRule();
+  }, [db]);
+
+  // モードをJSONに切り替えたときは現在のフォーム内容からJSONを最新化
+  const switchToJsonMode = () => {
+    setJsonText(JSON.stringify(buildFormFlexPayload(), null, 2));
+    setJsonParseError('');
+    setEditorMode('json');
+  };
+
+  // モードをフォームに切り替えるときはJSONからフォーム状態を逆反映（解析可能な場合）
+  const switchToFormMode = () => {
+    try {
+      const parsed = JSON.parse(jsonText);
+      const bodyContents = parsed?.contents?.body?.contents;
+      if (Array.isArray(bodyContents)) {
+        if (bodyContents[0]?.text) setWelcomeHeading(bodyContents[0].text);
+        if (bodyContents[1]?.text) setWelcomeSubheading(bodyContents[1].text);
+        if (bodyContents[3]?.text) setWelcomeIntro(bodyContents[3].text);
+        if (bodyContents[4]?.text) setWelcomeQuestion(bodyContents[4].text);
+        if (bodyContents[5]?.text) setWelcomeInstruction(bodyContents[5].text);
+      }
+      setJsonParseError('');
+    } catch {
+      // 独自JSONの場合はフォーム側へ逆反映しないが、切り替えは許可
+    }
+    setEditorMode('form');
+  };
+
+  // プレビュー表示用payloadの決定
+  const getCurrentPreviewPayload = () => {
+    if (editorMode === 'form') {
+      return buildFormFlexPayload();
+    }
+    try {
+      const parsed = JSON.parse(jsonText);
+      return parsed;
+    } catch {
+      return null;
+    }
+  };
+
   const handleSaveWelcome = async () => {
     if (!db) return;
     setWelcomeSaving(true);
@@ -175,7 +238,33 @@ export const MarketingLineSettingsView: React.FC = () => {
       const ownerId = sessionData.session?.user?.id;
       if (!ownerId) throw new Error('ログイン状態を確認できません');
 
-      const payload = buildFlexPayload();
+      let payload: any;
+      if (editorMode === 'form') {
+        payload = buildFormFlexPayload();
+      } else {
+        try {
+          payload = JSON.parse(jsonText);
+        } catch (e: any) {
+          throw new Error('JSONの構文が正しくありません: ' + e.message);
+        }
+      }
+
+      // altTextが抜けている場合は補正
+      if (!payload.altText) {
+        payload.altText = '友だち追加ありがとうございます（Flexメッセージ）';
+      }
+      // contents単体でコピーされた場合（Simulatorのコピー仕様対応）
+      if (!payload.contents && (payload.type === 'bubble' || payload.type === 'carousel')) {
+        payload = {
+          altText: '友だち追加ありがとうございます（Flexメッセージ）',
+          contents: payload,
+        };
+      }
+
+      const summaryText =
+        editorMode === 'form'
+          ? `[ウェルカムFlexメッセージ: ${welcomeHeading}]`
+          : `[ウェルカムFlexメッセージ: ${payload.altText || 'カスタムFlex'}]`;
 
       if (welcomeRuleId) {
         const { error: updateErr } = await db
@@ -183,7 +272,7 @@ export const MarketingLineSettingsView: React.FC = () => {
           .update({
             reply_type: 'flex',
             reply_payload: payload,
-            reply_text: `[ウェルカムFlexメッセージ: ${welcomeHeading}]`,
+            reply_text: summaryText,
             enabled: welcomeEnabled,
             updated_at: new Date().toISOString(),
           })
@@ -199,7 +288,7 @@ export const MarketingLineSettingsView: React.FC = () => {
             match_text: '__welcome__',
             reply_type: 'flex',
             reply_payload: payload,
-            reply_text: `[ウェルカムFlexメッセージ: ${welcomeHeading}]`,
+            reply_text: summaryText,
             priority: 10,
             enabled: welcomeEnabled,
           })
@@ -209,7 +298,7 @@ export const MarketingLineSettingsView: React.FC = () => {
         if (inserted) setWelcomeRuleId(inserted.id);
       }
 
-      // テンプレート一覧にも同期保存（テンプレート管理でも呼び出せるように）
+      // テンプレート管理側にも同期保存
       await db.from('line_auto_reply_templates').upsert(
         {
           owner_id: ownerId,
@@ -221,7 +310,7 @@ export const MarketingLineSettingsView: React.FC = () => {
         { onConflict: 'owner_id,name' }
       );
 
-      setWelcomeNotice('友だち追加ウェルカムメッセージを更新保存しました！');
+      setWelcomeNotice('友だち追加ウェルカムFlexメッセージを更新保存しました！');
     } catch (e: any) {
       setWelcomeError(e?.message || '保存に失敗しました');
     } finally {
@@ -299,6 +388,8 @@ export const MarketingLineSettingsView: React.FC = () => {
     }
   };
 
+  const previewPayload = getCurrentPreviewPayload();
+
   return (
     <div className="space-y-6">
       {/* ─── 友だち追加ウェルカムFlexメッセージ設定＆プレビュー ─── */}
@@ -313,7 +404,7 @@ export const MarketingLineSettingsView: React.FC = () => {
             </div>
             <h2 className="text-lg font-bold text-white mt-1">友だち追加ウェルカムメッセージ編集</h2>
             <p className="text-xs text-slate-400 mt-0.5">
-              LINE公式アカウントの新規友だち追加（およびブロック解除）時に自動送信されるFlexカードの文面とボタン設定
+              LINE公式アカウントの新規友だち追加（およびブロック解除）時に自動送信されるFlexカードの文面・JSON設定
             </p>
           </div>
           <div className="flex items-center gap-3">
@@ -338,6 +429,46 @@ export const MarketingLineSettingsView: React.FC = () => {
           </div>
         </div>
 
+        {/* 編集モード切り替えタブ */}
+        <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-800 pb-3">
+          <div className="inline-flex rounded-xl bg-slate-950 p-1 border border-slate-800">
+            <button
+              type="button"
+              onClick={switchToFormMode}
+              className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${
+                editorMode === 'form'
+                  ? 'bg-emerald-600 text-white shadow-sm'
+                  : 'text-slate-400 hover:text-white'
+              }`}
+            >
+              <LayoutTemplate className="h-3.5 w-3.5" />
+              かんたんフォーム入力
+            </button>
+            <button
+              type="button"
+              onClick={switchToJsonMode}
+              className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${
+                editorMode === 'json'
+                  ? 'bg-indigo-600 text-white shadow-sm'
+                  : 'text-slate-400 hover:text-white'
+              }`}
+            >
+              <Code className="h-3.5 w-3.5" />
+              JSON直接編集（Simulator対応）
+            </button>
+          </div>
+
+          <a
+            href="https://developers.line.biz/flex-simulator/"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="inline-flex items-center gap-1 text-xs text-sky-400 hover:text-sky-300 transition-colors"
+          >
+            <span>LINE公式 Flex Message Simulator を開く</span>
+            <ExternalLink className="h-3 w-3" />
+          </a>
+        </div>
+
         {welcomeNotice && (
           <div className="flex items-center gap-2 text-xs text-emerald-300 bg-emerald-950/40 border border-emerald-800/60 rounded-xl p-3">
             <CheckCircle2 className="h-4 w-4 shrink-0" />
@@ -351,168 +482,201 @@ export const MarketingLineSettingsView: React.FC = () => {
           </div>
         )}
 
-        {/* 2カラム構成: 左側フォーム / 右側リアルタイムプレビュー */}
+        {/* 2カラム構成: 左側フォームまたはJSON / 右側リアルタイムプレビュー */}
         <div className="grid gap-6 lg:grid-cols-12">
-          {/* 左側: 入力フォーム */}
+          {/* 左側: 入力フォーム or JSON */}
           <div className="lg:col-span-7 space-y-4">
-            <div className="space-y-3 rounded-xl border border-slate-800 bg-slate-950/60 p-4">
-              <h3 className="text-xs font-bold text-slate-200">1. ご挨拶・導入文</h3>
-              <div className="grid gap-3 sm:grid-cols-2">
-                <div>
-                  <label className="block text-[11px] text-slate-400 mb-1">メイン見出し（送信者名）</label>
-                  <input
-                    type="text"
-                    value={welcomeHeading}
-                    onChange={(e) => setWelcomeHeading(e.target.value)}
-                    className="w-full rounded-lg border border-slate-700 bg-slate-900 px-3 py-1.5 text-xs text-white"
-                  />
+            {editorMode === 'form' ? (
+              <>
+                <div className="space-y-3 rounded-xl border border-slate-800 bg-slate-950/60 p-4">
+                  <h3 className="text-xs font-bold text-slate-200">1. ご挨拶・導入文</h3>
+                  <div className="grid gap-3 sm:grid-cols-2">
+                    <div>
+                      <label className="block text-[11px] text-slate-400 mb-1">メイン見出し（送信者名）</label>
+                      <input
+                        type="text"
+                        value={welcomeHeading}
+                        onChange={(e) => setWelcomeHeading(e.target.value)}
+                        className="w-full rounded-lg border border-slate-700 bg-slate-900 px-3 py-1.5 text-xs text-white"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-[11px] text-slate-400 mb-1">サブ挨拶文</label>
+                      <input
+                        type="text"
+                        value={welcomeSubheading}
+                        onChange={(e) => setWelcomeSubheading(e.target.value)}
+                        className="w-full rounded-lg border border-slate-700 bg-slate-900 px-3 py-1.5 text-xs text-white"
+                      />
+                    </div>
+                  </div>
+                  <div>
+                    <label className="block text-[11px] text-slate-400 mb-1">事業・サービス紹介文（改行可）</label>
+                    <textarea
+                      rows={3}
+                      value={welcomeIntro}
+                      onChange={(e) => setWelcomeIntro(e.target.value)}
+                      className="w-full rounded-lg border border-slate-700 bg-slate-900 p-2 text-xs text-white"
+                    />
+                  </div>
+                  <div className="grid gap-3 sm:grid-cols-2">
+                    <div>
+                      <label className="block text-[11px] text-slate-400 mb-1">相談喚起の問いかけ</label>
+                      <input
+                        type="text"
+                        value={welcomeQuestion}
+                        onChange={(e) => setWelcomeQuestion(e.target.value)}
+                        className="w-full rounded-lg border border-slate-700 bg-slate-900 px-3 py-1.5 text-xs text-white"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-[11px] text-slate-400 mb-1">操作案内文</label>
+                      <input
+                        type="text"
+                        value={welcomeInstruction}
+                        onChange={(e) => setWelcomeInstruction(e.target.value)}
+                        className="w-full rounded-lg border border-slate-700 bg-slate-900 px-3 py-1.5 text-xs text-white"
+                      />
+                    </div>
+                  </div>
                 </div>
-                <div>
-                  <label className="block text-[11px] text-slate-400 mb-1">サブ挨拶文</label>
-                  <input
-                    type="text"
-                    value={welcomeSubheading}
-                    onChange={(e) => setWelcomeSubheading(e.target.value)}
-                    className="w-full rounded-lg border border-slate-700 bg-slate-900 px-3 py-1.5 text-xs text-white"
-                  />
+
+                {/* ボタン設定 */}
+                <div className="space-y-3 rounded-xl border border-slate-800 bg-slate-950/60 p-4">
+                  <h3 className="text-xs font-bold text-slate-200">2. アクションボタン設定</h3>
+
+                  {/* ボタン1 */}
+                  <div className="rounded-lg border border-slate-800 p-3 space-y-2">
+                    <span className="text-[11px] font-semibold text-indigo-400">ボタン 1（メッセージ送信）</span>
+                    <div className="grid gap-2 sm:grid-cols-2">
+                      <input
+                        type="text"
+                        value={btn1Label}
+                        onChange={(e) => setBtn1Label(e.target.value)}
+                        placeholder="ボタン表示名"
+                        className="rounded border border-slate-700 bg-slate-900 px-2.5 py-1 text-xs text-white"
+                      />
+                      <input
+                        type="text"
+                        value={btn1Text}
+                        onChange={(e) => setBtn1Text(e.target.value)}
+                        placeholder="タップ時に送信される返信文字"
+                        className="rounded border border-slate-700 bg-slate-900 px-2.5 py-1 text-xs text-white"
+                      />
+                    </div>
+                  </div>
+
+                  {/* ボタン2 */}
+                  <div className="rounded-lg border border-slate-800 p-3 space-y-2">
+                    <span className="text-[11px] font-semibold text-sky-400">ボタン 2（メッセージ送信）</span>
+                    <div className="grid gap-2 sm:grid-cols-2">
+                      <input
+                        type="text"
+                        value={btn2Label}
+                        onChange={(e) => setBtn2Label(e.target.value)}
+                        placeholder="ボタン表示名"
+                        className="rounded border border-slate-700 bg-slate-900 px-2.5 py-1 text-xs text-white"
+                      />
+                      <input
+                        type="text"
+                        value={btn2Text}
+                        onChange={(e) => setBtn2Text(e.target.value)}
+                        placeholder="タップ時に送信される返信文字"
+                        className="rounded border border-slate-700 bg-slate-900 px-2.5 py-1 text-xs text-white"
+                      />
+                    </div>
+                  </div>
+
+                  {/* ボタン3 (診断リンク) */}
+                  <div className="rounded-lg border border-emerald-500/20 bg-emerald-950/10 p-3 space-y-2">
+                    <span className="text-[11px] font-semibold text-emerald-400">ボタン 3（診断フォームURLリンク）</span>
+                    <div className="space-y-2">
+                      <input
+                        type="text"
+                        value={btn3Label}
+                        onChange={(e) => setBtn3Label(e.target.value)}
+                        placeholder="ボタン表示名"
+                        className="w-full rounded border border-slate-700 bg-slate-900 px-2.5 py-1 text-xs text-white"
+                      />
+                      <input
+                        type="url"
+                        value={btn3Uri}
+                        onChange={(e) => setBtn3Uri(e.target.value)}
+                        placeholder="遷移先URL (https://...)"
+                        className="w-full rounded border border-slate-700 bg-slate-900 px-2.5 py-1 text-xs text-white font-mono"
+                      />
+                    </div>
+                  </div>
                 </div>
-              </div>
-              <div>
-                <label className="block text-[11px] text-slate-400 mb-1">事業・サービス紹介文（改行可）</label>
+              </>
+            ) : (
+              /* JSON直接編集モード */
+              <div className="space-y-3 rounded-xl border border-indigo-500/30 bg-slate-950/60 p-4">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-1.5">
+                    <Code className="h-4 w-4 text-indigo-400" />
+                    <h3 className="text-xs font-bold text-slate-200">Flex Message JSON 直接編集</h3>
+                  </div>
+                  <span className="text-[11px] text-slate-400">
+                    LINE SimulatorのJSONをそのまま貼り付け可能
+                  </span>
+                </div>
+
+                <p className="text-[11px] leading-relaxed text-slate-400">
+                  <span className="text-amber-300 font-semibold">【使い方】</span>
+                  LINE Developersの <a href="https://developers.line.biz/flex-simulator/" target="_blank" rel="noopener noreferrer" className="text-sky-400 underline">Flex Message Simulator</a> でデザインしたBubbleまたはCarouselのJSONをここに貼り付けて保存できます。
+                </p>
+
                 <textarea
-                  rows={3}
-                  value={welcomeIntro}
-                  onChange={(e) => setWelcomeIntro(e.target.value)}
-                  className="w-full rounded-lg border border-slate-700 bg-slate-900 p-2 text-xs text-white"
+                  rows={20}
+                  value={jsonText}
+                  onChange={(e) => {
+                    const text = e.target.value;
+                    setJsonText(text);
+                    try {
+                      JSON.parse(text);
+                      setJsonParseError('');
+                    } catch (err: any) {
+                      setJsonParseError(err.message);
+                    }
+                  }}
+                  className="w-full rounded-lg border border-slate-700 bg-slate-950 p-3 font-mono text-xs text-slate-200 focus:outline-none focus:border-indigo-500"
+                  placeholder='{\n  "type": "bubble",\n  "body": { ... }\n}'
                 />
-              </div>
-              <div className="grid gap-3 sm:grid-cols-2">
-                <div>
-                  <label className="block text-[11px] text-slate-400 mb-1">相談喚起の問いかけ</label>
-                  <input
-                    type="text"
-                    value={welcomeQuestion}
-                    onChange={(e) => setWelcomeQuestion(e.target.value)}
-                    className="w-full rounded-lg border border-slate-700 bg-slate-900 px-3 py-1.5 text-xs text-white"
-                  />
-                </div>
-                <div>
-                  <label className="block text-[11px] text-slate-400 mb-1">操作案内文</label>
-                  <input
-                    type="text"
-                    value={welcomeInstruction}
-                    onChange={(e) => setWelcomeInstruction(e.target.value)}
-                    className="w-full rounded-lg border border-slate-700 bg-slate-900 px-3 py-1.5 text-xs text-white"
-                  />
-                </div>
-              </div>
-            </div>
 
-            {/* ボタン設定 */}
-            <div className="space-y-3 rounded-xl border border-slate-800 bg-slate-950/60 p-4">
-              <h3 className="text-xs font-bold text-slate-200">2. アクションボタン設定</h3>
-
-              {/* ボタン1 */}
-              <div className="rounded-lg border border-slate-800 p-3 space-y-2">
-                <span className="text-[11px] font-semibold text-indigo-400">ボタン 1（メッセージ送信）</span>
-                <div className="grid gap-2 sm:grid-cols-2">
-                  <input
-                    type="text"
-                    value={btn1Label}
-                    onChange={(e) => setBtn1Label(e.target.value)}
-                    placeholder="ボタン表示名"
-                    className="rounded border border-slate-700 bg-slate-900 px-2.5 py-1 text-xs text-white"
-                  />
-                  <input
-                    type="text"
-                    value={btn1Text}
-                    onChange={(e) => setBtn1Text(e.target.value)}
-                    placeholder="タップ時に送信される返信文字"
-                    className="rounded border border-slate-700 bg-slate-900 px-2.5 py-1 text-xs text-white"
-                  />
-                </div>
+                {jsonParseError && (
+                  <div className="flex items-center gap-2 text-xs text-rose-300 bg-rose-950/40 border border-rose-800/60 rounded-lg p-2.5 font-mono">
+                    <AlertCircle className="h-4 w-4 shrink-0" />
+                    <span>JSON構文エラー: {jsonParseError}</span>
+                  </div>
+                )}
               </div>
-
-              {/* ボタン2 */}
-              <div className="rounded-lg border border-slate-800 p-3 space-y-2">
-                <span className="text-[11px] font-semibold text-sky-400">ボタン 2（メッセージ送信）</span>
-                <div className="grid gap-2 sm:grid-cols-2">
-                  <input
-                    type="text"
-                    value={btn2Label}
-                    onChange={(e) => setBtn2Label(e.target.value)}
-                    placeholder="ボタン表示名"
-                    className="rounded border border-slate-700 bg-slate-900 px-2.5 py-1 text-xs text-white"
-                  />
-                  <input
-                    type="text"
-                    value={btn2Text}
-                    onChange={(e) => setBtn2Text(e.target.value)}
-                    placeholder="タップ時に送信される返信文字"
-                    className="rounded border border-slate-700 bg-slate-900 px-2.5 py-1 text-xs text-white"
-                  />
-                </div>
-              </div>
-
-              {/* ボタン3 (診断リンク) */}
-              <div className="rounded-lg border border-emerald-500/20 bg-emerald-950/10 p-3 space-y-2">
-                <span className="text-[11px] font-semibold text-emerald-400">ボタン 3（診断フォームURLリンク）</span>
-                <div className="space-y-2">
-                  <input
-                    type="text"
-                    value={btn3Label}
-                    onChange={(e) => setBtn3Label(e.target.value)}
-                    placeholder="ボタン表示名"
-                    className="w-full rounded border border-slate-700 bg-slate-900 px-2.5 py-1 text-xs text-white"
-                  />
-                  <input
-                    type="url"
-                    value={btn3Uri}
-                    onChange={(e) => setBtn3Uri(e.target.value)}
-                    placeholder="遷移先URL (https://...)"
-                    className="w-full rounded border border-slate-700 bg-slate-900 px-2.5 py-1 text-xs text-white font-mono"
-                  />
-                </div>
-              </div>
-            </div>
+            )}
           </div>
 
           {/* 右側: リアルタイムFlexプレビュー */}
           <div className="lg:col-span-5">
             <div className="sticky top-6 rounded-xl border border-slate-800 bg-slate-950/80 p-4">
               <div className="flex items-center justify-between text-xs font-semibold text-slate-300 mb-3">
-                <span>リアルタイムFlexプレビュー</span>
+                <span>リアルタイムプレビュー</span>
                 <span className="text-[10px] text-emerald-400 bg-emerald-950/60 px-2 py-0.5 rounded border border-emerald-800/60">
-                  LINE受信画面イメージ
+                  {editorMode === 'form' ? 'フォーム連動' : 'JSONレンダリング'}
                 </span>
               </div>
 
-              <div className="max-w-[320px] mx-auto bg-white rounded-2xl p-5 text-slate-900 shadow-2xl space-y-2.5">
-                <div className="text-center font-bold text-lg text-slate-800 break-words">{welcomeHeading || '（見出し）'}</div>
-                <div className="text-center text-xs text-slate-600 break-words">{welcomeSubheading || '（サブ見出し）'}</div>
-                <hr className="border-slate-200 my-1.5" />
-                <div className="text-center text-[11px] text-slate-600 leading-relaxed whitespace-pre-wrap break-words">
-                  {welcomeIntro || '（事業紹介文）'}
+              {previewPayload ? (
+                <div className="max-w-[340px] mx-auto overflow-hidden">
+                  <LineMessagePreview
+                    type="flex"
+                    title="ウェルカムメッセージ"
+                    payload={previewPayload}
+                  />
                 </div>
-                <div className="text-center font-bold text-xs text-slate-800 pt-2 break-words">
-                  {welcomeQuestion || '（質問）'}
+              ) : (
+                <div className="p-8 text-center text-xs text-slate-500 border border-dashed border-slate-800 rounded-xl">
+                  JSONの構文にエラーがあるためプレビューを表示できません
                 </div>
-                <div className="text-center text-[10px] text-slate-500 break-words">
-                  {welcomeInstruction || '（案内文）'}
-                </div>
-
-                <div className="space-y-1.5 pt-2">
-                  <div className="w-full py-2 px-3 rounded-xl bg-[#1E3A5F] text-white text-xs font-bold text-center shadow-sm truncate">
-                    {btn1Label || 'ボタン1'}
-                  </div>
-                  <div className="w-full py-2 px-3 rounded-xl bg-[#0284C7] text-white text-xs font-bold text-center shadow-sm truncate">
-                    {btn2Label || 'ボタン2'}
-                  </div>
-                  <div className="w-full py-2 px-3 rounded-xl bg-[#10B981] text-white text-xs font-bold text-center shadow-sm flex items-center justify-center gap-1 truncate">
-                    <span>{btn3Label || 'ボタン3'}</span>
-                  </div>
-                </div>
-              </div>
+              )}
             </div>
           </div>
         </div>
