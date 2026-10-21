@@ -1129,6 +1129,8 @@ app.post('/api/public/forms/:slug/submissions', async (req, res) => {
   const companyName = typeof body.companyName === 'string' ? body.companyName.trim().slice(0, 200) : '';
   const email = typeof body.email === 'string' ? body.email.trim().toLowerCase().slice(0, 254) : '';
   const phone = typeof body.phone === 'string' ? body.phone.trim().slice(0, 40) : '';
+  const lineUserId = typeof body.lineUserId === 'string' && /^U[0-9a-f]{32}$/i.test(body.lineUserId.trim()) ? body.lineUserId.trim() : '';
+  const contactId = typeof body.contactId === 'string' && isPublicUuid(body.contactId.trim()) ? body.contactId.trim() : '';
   const requestId = body.requestId;
   if (!name || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email) || !isPublicUuid(requestId) || body.privacyAgreed !== true) {
     return res.status(400).json({ error: 'お名前・有効なメールアドレス・個人情報の同意をご確認ください。' });
@@ -1210,26 +1212,54 @@ app.post('/api/public/forms/:slug/submissions', async (req, res) => {
       matchingCompanyNames = matchingCompanies.map((company) => String(company.company_name || '')).filter(Boolean);
       if (matchingCompanies.length === 1) matchedCompanyId = matchingCompanies[0].id;
     }
-    const escapedEmail = email.replace(/\\/g, '\\\\').replace(/%/g, '\\%').replace(/_/g, '\\_');
-    const { data: matchingContacts, error: contactLookupError } = await lineSupabase
+    // 1. LINE User ID または Contact ID が渡されていれば最優先で該当連絡先を特定
+    let contact: any = null;
+    if (contactId) {
+      const { data: cById } = await lineSupabase
         .from('contacts')
         .select('id, full_name, email, phone, company_id, line_user_id')
-        .ilike('email', escapedEmail)
-        .order('created_at', { ascending: true })
-        .limit(1);
-    if (contactLookupError) throw contactLookupError;
+        .eq('id', contactId)
+        .maybeSingle();
+      if (cById) contact = cById;
+    }
+    if (!contact && lineUserId) {
+      const { data: cByLine } = await lineSupabase
+        .from('contacts')
+        .select('id, full_name, email, phone, company_id, line_user_id')
+        .eq('line_user_id', lineUserId)
+        .maybeSingle();
+      if (cByLine) contact = cByLine;
+    }
 
-    let contact = matchingContacts?.[0];
+    // 2. まだ見つからなければ従来の email で検索
+    if (!contact) {
+      const escapedEmail = email.replace(/\\/g, '\\\\').replace(/%/g, '\\%').replace(/_/g, '\\_');
+      const { data: matchingContacts, error: contactLookupError } = await lineSupabase
+          .from('contacts')
+          .select('id, full_name, email, phone, company_id, line_user_id')
+          .ilike('email', escapedEmail)
+          .order('created_at', { ascending: true })
+          .limit(1);
+      if (contactLookupError) throw contactLookupError;
+      contact = matchingContacts?.[0];
+    }
+
     let contactNameNote = '';
     if (contact) {
       const existingName = typeof contact.full_name === 'string' ? contact.full_name.trim() : '';
       const existingPhone = typeof contact.phone === 'string' ? contact.phone.trim() : '';
-      if (existingName && existingName !== name) contactNameNote = `申込時の氏名: ${name}`;
+      const existingEmail = typeof contact.email === 'string' ? contact.email.trim() : '';
+      const isPlaceholderName = !existingName || existingName === 'LINE登録者' || existingName === 'LINE友だち';
+      if (existingName && !isPlaceholderName && existingName !== name) contactNameNote = `申込時の氏名: ${name}`;
+
+      const targetLineUserId = lineUserId || contact.line_user_id || null;
       const { data: updatedContact, error: updateContactError } = await lineSupabase
         .from('contacts')
         .update({
-          ...(!existingName ? { full_name: name } : {}),
+          ...(isPlaceholderName || !existingName ? { full_name: name } : {}),
           ...(!existingPhone && phone ? { phone } : {}),
+          ...(!existingEmail || isPlaceholderName ? { email } : {}),
+          ...(targetLineUserId && !contact.line_user_id ? { line_user_id: targetLineUserId } : {}),
           ...(matchedCompanyId && !contact.company_id ? { company_id: matchedCompanyId } : {}),
         })
         .eq('id', contact.id)
@@ -1237,14 +1267,38 @@ app.post('/api/public/forms/:slug/submissions', async (req, res) => {
         .single();
       if (updateContactError) throw updateContactError;
       contact = updatedContact;
+
+      // LINE友だち情報が関連付いている場合は名前を同期
+      if (contact.line_user_id) {
+        await lineSupabase.from('line_friends')
+          .update({ display_name: name, contact_id: contact.id })
+          .eq('line_user_id', contact.line_user_id);
+      }
     } else {
       const { data: insertedContact, error: insertContactError } = await lineSupabase
         .from('contacts')
-        .insert({ full_name: name, email, phone: phone || null, company_id: matchedCompanyId, source: 'public_form' })
+        .insert({
+          full_name: name,
+          email,
+          phone: phone || null,
+          company_id: matchedCompanyId,
+          source: lineUserId ? 'line_form' : 'public_form',
+          ...(lineUserId ? { line_user_id: lineUserId } : {}),
+        })
         .select('id, full_name, email, phone, company_id, line_user_id')
         .single();
       if (insertContactError) throw insertContactError;
       contact = insertedContact;
+
+      if (lineUserId) {
+        await lineSupabase.from('line_friends').upsert({
+          contact_id: contact.id,
+          line_user_id: lineUserId,
+          display_name: name,
+          status: 'active',
+          source: 'public_form',
+        }, { onConflict: 'line_user_id' });
+      }
     }
 
     const resolvedCompanyId = companyName ? matchedCompanyId : contact.company_id || null;

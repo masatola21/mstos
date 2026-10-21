@@ -108,12 +108,14 @@ export const PublicIntakeForm: React.FC<{ slug: string }> = ({ slug }) => {
       const value = query.get(key);
       if (value) utm[key] = value.slice(0, 120);
     }
+    const lineUserId = query.get('luid') || query.get('line_user_id') || undefined;
+    const contactId = query.get('cid') || query.get('contact_id') || undefined;
     try {
       const response = await fetch(`/api/public/forms/${encodeURIComponent(slug)}/submissions`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          requestId, name, companyName, email, phone, answers, privacyAgreed, utm,
+          requestId, name, companyName, email, phone, answers, privacyAgreed, utm, lineUserId, contactId,
         }),
       });
       const payload = await response.json().catch(() => null);
