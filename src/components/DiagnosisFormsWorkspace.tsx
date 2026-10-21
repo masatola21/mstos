@@ -1,7 +1,7 @@
 import React, { Fragment, useEffect, useState } from 'react';
 import { getSupabase } from '../lib/supabaseClient';
 import { InlineDeleteButton } from './InlineDeleteButton';
-import { ArrowDown, ArrowUp, Clipboard, ClipboardCheck, ExternalLink, Plus, RefreshCw, Save, Trash2 } from 'lucide-react';
+import { ArrowDown, ArrowUp, Clipboard, ClipboardCheck, ExternalLink, Plus, RefreshCw, Save, Trash2, Sparkles, AlertCircle } from 'lucide-react';
 
 type FormType = 'diagnosis' | 'consultation' | 'meeting';
 type QuestionType = 'text' | 'textarea' | 'select' | 'radio' | 'checkbox' | 'date';
@@ -9,6 +9,68 @@ type FormQuestion = { id: string; label: string; type: QuestionType; required: b
 type FormDefinition = { category?: string; description: string; questions: FormQuestion[] };
 type DiagnosisForm = { id: string; name: string; public_slug: string; form_type: FormType; status: 'draft'|'published'|'paused'|'archived'; questionnaire_version: string; definition: Record<string, unknown>; privacy_notice: string|null; created_at: string };
 type Submission = { id: string; form_id: string; contact_id: string|null; company_id: string|null; respondent_company_name: string|null; lead_id: string|null; diagnosis_id?: string|null; status: 'received'|'reviewing'|'completed'|'rejected'; respondent_name: string|null; respondent_email: string|null; answers: Record<string, unknown>; score: number|null; submitted_at: string; reviewer_memo: string|null };
+
+export const MST_OFFICIAL_BOTTLENECK_QUESTIONS: FormQuestion[] = [
+  {
+    id: 'q_ops_bottleneck',
+    label: '【業務・手作業】日々の業務で最も時間や手間を奪われている手作業・ボトルネックは何ですか？',
+    type: 'radio',
+    required: true,
+    options: [
+      '請求書・見積書等の作成やツール間の二重入力・転記作業',
+      '顧客対応や連絡漏れ・対応状況の確認に追われている',
+      '経営者や特定の人に仕事が集中し、属人化している',
+      '情報が散乱しており、どこに何があるか探す時間が長い',
+      '特に大きな手作業の負担はなく、自走できている',
+    ],
+  },
+  {
+    id: 'q_profit_bottleneck',
+    label: '【売上・利益】売上と利益の現状について、最も当てはまるお悩みは何ですか？',
+    type: 'radio',
+    required: true,
+    options: [
+      '売上はある程度あるが、手元に利益が残りにくい',
+      '集客から商談・フォローまでの導線が分断され、案件化が漏れている',
+      '日々の業務に追われ、単価アップや利益改善の見直しに着手できていない',
+      '営業や顧客獲得が経営者の人脈や属人的な力に依存している',
+      '利益は順調に出ており、さらなる事業拡大・新事業を目指したい',
+    ],
+  },
+  {
+    id: 'q_delay_reason',
+    label: '【改善停滞の原因】「改善したい」と思いながらも後回しになっている主な原因は何ですか？',
+    type: 'radio',
+    required: true,
+    options: [
+      '日々の現場業務や火消しに追われ、改善を考える時間がない',
+      '何から手を付ければ一番効果が出るか、優先順位が分からない',
+      'ツールを導入してみたが、自社の業務に合わず定着しなかった',
+      '改善を伴走・相談できる右腕（パートナー）が社内外にいない',
+      '計画はあるが、社内だけで実行を継続するのが難しい',
+    ],
+  },
+  {
+    id: 'q_ideal_future',
+    label: '【目指したい未来】仕組み化によって経営者の時間と利益が創出できたら、何に一番時間を使いたいですか？',
+    type: 'radio',
+    required: true,
+    options: [
+      '経営判断や戦略・次の一手（新規事業や新収益源の立ち上げ）',
+      '既存事業の利益率向上とマーケティング・集客の強化',
+      '組織化・人材育成・権限移譲を進め、自走する組織づくり',
+      '経営者自身の余白・休日の確保と健康管理',
+      'まずは目の前の手作業を減らし、日々の負担を軽減したい',
+    ],
+  },
+  {
+    id: 'q_free_notes',
+    label: '現在最も気になっていることや、相談したい課題があればご自由にご記入ください（任意）',
+    type: 'textarea',
+    required: false,
+    options: [],
+  },
+];
 
 const DEFAULT_PRIVACY_NOTICE = 'ご入力いただいた情報は、お問い合わせ・お申し込みへの対応および関連するご連絡のために利用します。個人情報の取り扱いに関するお問い合わせは、運営者までご連絡ください。';
 const FORM_TYPES: { value: FormType; label: string }[] = [
@@ -81,13 +143,54 @@ export const DiagnosisFormsWorkspace: React.FC<DiagnosisFormsWorkspaceProps> = (
     setPrivacyNotice(form.privacy_notice || DEFAULT_PRIVACY_NOTICE);
   };
 
+  const applyOfficialBottleneckPreset = async (autoSave = false) => {
+    setName('経営課題・業務診断フォーム');
+    setCategory('経営の仕組み化 × 利益改善');
+    setFormType('diagnosis');
+    setDescription('貴社の現状の経営課題（業務の手作業・売上利益・改善停滞原因・経営者の時間）のボトルネックを特定し、仕組み化と利益改善に向けた最適なロードマップを作成するための診断フォームです。');
+    setQuestions(MST_OFFICIAL_BOTTLENECK_QUESTIONS);
+    setPrivacyNotice(DEFAULT_PRIVACY_NOTICE);
+
+    if (autoSave) {
+      const supabase = getSupabase();
+      if (!supabase) { setError('Supabaseに接続してください。'); return; }
+      setLoading(true); setError(''); setNotice('');
+      try {
+        const payload = {
+          name: '経営課題・業務診断フォーム',
+          form_type: 'diagnosis' as FormType,
+          questionnaire_version: 'v2.0-bottleneck',
+          definition: {
+            category: '経営の仕組み化 × 利益改善',
+            description: '貴社の現状の経営課題（業務の手作業・売上利益・改善停滞原因・経営者の時間）のボトルネックを特定し、仕組み化と利益改善に向けた最適なロードマップを作成するための診断フォームです。',
+            questions: MST_OFFICIAL_BOTTLENECK_QUESTIONS,
+          },
+          privacy_notice: DEFAULT_PRIVACY_NOTICE,
+        };
+        const slug = 'business-diagnosis';
+        const result = selectedId
+          ? await supabase.from('diagnosis_forms').update(payload).eq('id', selectedId)
+          : await supabase.from('diagnosis_forms').insert({ ...payload, public_slug: slug, status: 'published' });
+        if (result.error) throw result.error;
+        setNotice('営業資料準拠の最新ボトルネック診断設問を保存しました。');
+        await load();
+      } catch (e: any) {
+        setError(e?.message || '保存できませんでした。');
+      } finally {
+        setLoading(false);
+      }
+    } else {
+      setNotice('営業資料準拠の最新設問（4大ボトルネック＋自由記述）を編集欄に反映しました。「変更を保存」ボタンを押して確定してください。');
+    }
+  };
+
   const resetForm = () => {
     setSelectedId('');
-    setName('');
-    setCategory('');
+    setName('経営課題・業務診断フォーム');
+    setCategory('経営の仕組み化 × 利益改善');
     setFormType('diagnosis');
-    setDescription('');
-    setQuestions([newQuestion()]);
+    setDescription('貴社の現状の経営課題（業務の手作業・売上利益・改善停滞原因・経営者の時間）のボトルネックを特定し、仕組み化と利益改善に向けた最適なロードマップを作成するための診断フォームです。');
+    setQuestions(MST_OFFICIAL_BOTTLENECK_QUESTIONS);
     setPrivacyNotice(DEFAULT_PRIVACY_NOTICE);
   };
 
@@ -273,7 +376,12 @@ export const DiagnosisFormsWorkspace: React.FC<DiagnosisFormsWorkspaceProps> = (
                     <button onClick={() => selectForm(form)} className={'w-full rounded-lg border p-3 text-left ' + (selectedId === form.id ? 'border-blue-500 bg-blue-950/30' : 'border-slate-800 bg-slate-950 hover:bg-slate-800')}>
                       <div className="flex justify-between gap-2">
                         <span className="font-medium text-white">{form.name}</span>
-                        <span className="text-xs text-slate-400">{FORM_TYPES.find(x => x.value === form.form_type)?.label || '診断申込'} · {form.status}</span>
+                        <div className="flex items-center gap-1.5">
+                          {((form.form_type === 'diagnosis' || form.name.includes('診断')) && !readDefinition(form.definition).questions.some((q) => q.id === 'q_ops_bottleneck')) && (
+                            <span className="rounded border border-amber-600/50 bg-amber-950/80 px-1.5 py-0.5 text-[10px] font-semibold text-amber-300">最新化推奨</span>
+                          )}
+                          <span className="text-xs text-slate-400">{FORM_TYPES.find(x => x.value === form.form_type)?.label || '診断申込'} · {form.status}</span>
+                        </div>
                       </div>
                       <div className="mt-1 break-all text-xs text-slate-500">/{form.public_slug}</div>
                     </button>
@@ -316,6 +424,54 @@ export const DiagnosisFormsWorkspace: React.FC<DiagnosisFormsWorkspaceProps> = (
                 <button type="button" onClick={resetForm} className="text-xs text-blue-300 hover:underline">新規フォームを作成</button>
               )}
             </div>
+
+            <div className="rounded-xl border border-blue-500/40 bg-gradient-to-r from-blue-950/60 via-slate-900 to-indigo-950/60 p-4 shadow-sm">
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <div>
+                  <div className="flex items-center gap-2 font-bold text-sky-200 text-sm">
+                    <Sparkles className="h-4 w-4 text-sky-400" />
+                    営業資料準拠：経営の仕組み化 × 利益改善 ボトルネック診断（公式プリセット）
+                  </div>
+                  <p className="mt-1 text-xs text-slate-300">
+                    日々の手作業・売上利益・改善停滞原因・目指したい未来の4大ボトルネックを特定する最新設問構成です。
+                  </p>
+                </div>
+                <div className="flex flex-wrap items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => applyOfficialBottleneckPreset(false)}
+                    className="inline-flex items-center gap-1.5 rounded-lg border border-sky-400/50 bg-sky-900/60 px-3 py-1.5 text-xs font-semibold text-sky-100 hover:bg-sky-800 transition"
+                  >
+                    <Sparkles className="h-3.5 w-3.5" />
+                    編集欄に反映
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => void applyOfficialBottleneckPreset(true)}
+                    className="inline-flex items-center gap-1.5 rounded-lg bg-blue-600 px-3.5 py-1.5 text-xs font-semibold text-white shadow hover:bg-blue-500 transition"
+                  >
+                    <Save className="h-3.5 w-3.5" />
+                    反映して即時保存
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            {!questions.some((q) => q.id === 'q_ops_bottleneck') && (
+              <div className="rounded-lg border border-amber-600/60 bg-amber-950/40 p-3 text-xs text-amber-200 flex flex-wrap items-center justify-between gap-2">
+                <div className="flex items-center gap-2">
+                  <AlertCircle className="h-4 w-4 shrink-0 text-amber-400" />
+                  <span>現在の設問は旧構成です。「反映して即時保存」を押すと、営業資料に合わせた最新ボトルネック設問（4問＋自由記述）に一括更新されます。</span>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => void applyOfficialBottleneckPreset(true)}
+                  className="rounded bg-amber-600 px-3 py-1 text-xs font-bold text-white hover:bg-amber-500 transition shadow"
+                >
+                  今すぐ更新して保存
+                </button>
+              </div>
+            )}
 
             <div className="grid gap-3 md:grid-cols-2">
               <label className={labelClass}>受付の種類

@@ -398,6 +398,58 @@ const DEFAULT_TEMPLATES: DocTemplate[] = [
   },
 ];
 
+const getTemplateDefaultValues = (templateId: string, today: string = todayJst()): Record<string, string> => {
+  const common: Record<string, string> = {
+    client_company: '株式会社サンプル',
+    client_name: '山田 太郎',
+    client_address: '東京都千代田区丸の内1-1-1',
+    client_rep: '代表取締役 山田 太郎',
+    my_company: '有限会社MST',
+    my_address: '〒503-0981　岐阜県大垣市桧町127番地',
+    my_rep: '大橋真人',
+    sender_name: '大橋真人',
+    sender_company: '有限会社MST',
+    sender_address: '〒503-0981　岐阜県大垣市桧町127番地',
+    sender_rep: '大橋真人',
+    bank_account_info: 'ドコモSMTBネット銀行　法人第一支店　普通預金　2223730（口座名義：有限会社MST）',
+    issue_date: formatDocumentDate(today),
+    conducted_date: formatDocumentDate(today),
+    due_date: formatDocumentDate(addOneMonthDate(today)),
+  };
+
+  if (templateId === 'tpl-report-01') {
+    return {
+      ...common,
+      primary_bottleneck: '経営者自身の現場拘束と事務手作業の二重入力',
+      bottleneck_impact: '請求・見積の手作業や顧客対応の遅れにより、月間約25時間の経営リソースが現場に奪われ、売上につながる次の一手が後回しになっています。',
+      company_before: '手作業や属人化により、売上はあるのに手元に利益が残らず、仕事が特定の人に集中している',
+      company_after: '業務が仕組みで回り、限られた人員でもミスなく自動連携し、売上だけでなく利益がしっかり残る会社へ',
+      ceo_before: '日々の火消しや業務処理に追われ、会社の改善や戦略を考える時間が奪われている',
+      ceo_after: '現場から解放され、本来向き合うべき「経営判断」「人材育成」「次の一手（新規事業）」に集中できる',
+      phase1_action: '【業務・時間の急所解消】毎月の請求・見積・顧客情報の重複入力を自動化し、月20時間以上の経営時間を即座に創出',
+      phase2_action: '【売上・集客の導線構築】LINE・メール・CRMを連携し、集客から問い合わせ・商談・顧客フォローが自動でつながる流れを構築',
+      phase3_action: '【経営の自走化・新規事業】経営戦略・利益改善顧問の定期伴走により、新たな収益源の創出と自走組織を実現',
+      recommended_product: '業務改善・IT・DX顧問 ＋ 業務自動化パッケージ',
+      action_recommendation: 'まずはPhase 1の業務改善・自動化から小さく着手し、成果を確認しながら主軸の経営顧問へと展開することを推奨いたします。',
+    };
+  }
+
+  if (templateId === 'tpl-proposal-01') {
+    return {
+      ...common,
+      proposal_title: '経営の仕組み化 × 利益改善 伴走ご提案書',
+      current_challenge: '売上はあるものの手元に利益が残りにくく、手作業や二重入力に時間を奪われ、改善を進めたいが日々の業務に追われて優先順位が決まらない状態です。',
+      solution_overview: '経営戦略・利益改善顧問を主軸に、業務自動化（GAS・ツール連携）と集客導線（LINE・CRM連携）を組み合わせ、戦略と現場実装の両面から利益体質へ変革します。',
+      expected_outcome: '現場の手作業を月20時間以上削減して利益が残る体制をつくり、経営者が現場作業から解放されて「次の一手」を選べる経営へ導きます。',
+      total_amount: '350,000',
+      cost_breakdown: '初期費用 150,000円（仕組み構築） / 月額費用 200,000円（継続伴走顧問）',
+      payment_terms: '月末締め・翌月末日払い（銀行振込）',
+    };
+  }
+
+  return common;
+};
+
 const templateWorkflowOrder: Record<DocTemplateType, number> = { report: 0, proposal: 1, contract: 2, invoice: 3 };
 const orderTemplatesByWorkflow = (items: DocTemplate[]) => [...items].sort((a, b) => templateWorkflowOrder[a.type] - templateWorkflowOrder[b.type]);
 
@@ -459,12 +511,18 @@ export const DocumentTemplateView: React.FC<DocumentTemplateViewProps> = ({ init
       const { data, error } = await supabase.from('customer_document_templates').select('*').order('created_at');
       if (error) { setTemplateStatus('テンプレート共有には最新のSupabase SQL適用が必要です。'); return; }
       if (data?.length) {
-        const loadedTemplates = data.map((row:any)=>({
-          id:row.template_key,
-          type:row.document_type==='diagnosis_report'?'report':row.document_type,
-          title:row.title,description:row.description||'',htmlContent:row.body_html||'',
-          variables:Array.isArray(row.variables)?row.variables:[],
-        })) as DocTemplate[];
+        // 最新コードの DEFAULT_TEMPLATES (新レポート・提案書) を常に最優先し、DB側の未更新レコードで先祖返りしないようにする
+        const defaultMap = new Map(DEFAULT_TEMPLATES.map((t) => [t.id, t]));
+        const loadedTemplates = data.map((row:any)=> {
+          const def = defaultMap.get(row.template_key);
+          if (def) return def; // 最新の雛形を優先
+          return {
+            id:row.template_key,
+            type:row.document_type==='diagnosis_report'?'report':row.document_type,
+            title:row.title,description:row.description||'',htmlContent:row.body_html||'',
+            variables:Array.isArray(row.variables)?row.variables:[],
+          };
+        }) as DocTemplate[];
         const loadedKeys = new Set(loadedTemplates.map((template)=>template.id));
         setTemplates(orderTemplatesByWorkflow([...loadedTemplates, ...DEFAULT_TEMPLATES.filter((template)=>!loadedKeys.has(template.id))]));
         setSelectedTemplateId(initialDocumentType ? (data.find((row:any)=>row.document_type===initialDocumentType)?.template_key || (initialDocumentType === 'invoice' ? 'tpl-invoice-01' : data[0].template_key)) : initialDealId ? 'tpl-estimate-01' : (data.find((row:any)=>row.document_type==='diagnosis_report')?.template_key || data[0].template_key));
@@ -601,11 +659,8 @@ export const DocumentTemplateView: React.FC<DocumentTemplateViewProps> = ({ init
   // Variable inputs state
   const [variableValues, setVariableValues] = useState<Record<string, string>>(() => {
     const today = todayJst();
-    const initial: Record<string, string> = {};
-    (DEFAULT_TEMPLATES.find((template) => template.type === 'report') || DEFAULT_TEMPLATES[0]).variables.forEach((v) => {
-      initial[v.key] = v.key === 'issue_date' || v.key === 'conducted_date' ? formatDocumentDate(today) : '';
-    });
-    return initial;
+    const activeId = initialDocumentType === 'invoice' ? 'tpl-invoice-01' : initialDealId ? 'tpl-estimate-01' : 'tpl-report-01';
+    return getTemplateDefaultValues(activeId, today);
   });
 
   // Apply the saved organization profile even before the user selects a customer or deal.
@@ -624,26 +679,15 @@ export const DocumentTemplateView: React.FC<DocumentTemplateViewProps> = ({ init
   // When switching template, load its default variables
   const handleSelectTemplate = (id: string) => {
     setSelectedTemplateId(id);
-    const target = templates.find((t) => t.id === id);
-    if (target) {
-      const today = todayJst();
-      const newVals: Record<string, string> = {};
-      target.variables.forEach((v) => {
-        const fallbackByKey: Record<string, string> = {
-          issue_date: formatDocumentDate(today), conducted_date: formatDocumentDate(today),
-          due_date: formatDocumentDate(target.id === 'tpl-estimate-01' ? addOneMonthDate() : target.type === 'invoice' ? invoiceDueDate() : ''),
-          invoice_number: `INV-${today.replaceAll('-', '')}-${crypto.randomUUID().slice(0, 6).toUpperCase()}`,
-          item_qty_1: '1', item_price_1: '', item_amount_1: '', item_name_1: 'サービス提供費',
-          item_qty_2: '0', item_price_2: '', item_amount_2: '', item_name_2: 'なし',
-          total_amount: '', subtotal_amount: '', tax_amount: '', initial_fee: '', monthly_fee: '',
-          my_company: '有限会社MST', my_address: '〒503-0981　岐阜県大垣市桧町127番地',
-          my_rep: '大橋真人', sender_name: '大橋真人', sender_company: '有限会社MST',
-          bank_account_info: 'ドコモSMTBネット銀行　法人第一支店　普通預金　2223730（口座名義：有限会社MST）',
-        };
-        newVals[v.key] = fallbackByKey[v.key] ?? '';
-      });
-      setVariableValues(newVals);
-    }
+    const today = todayJst();
+    const defaults = getTemplateDefaultValues(id, today);
+    setVariableValues((prev) => ({
+      ...defaults,
+      ...prev,
+      ...defaults,
+      client_company: prev.client_company || defaults.client_company || '',
+      issue_date: formatDocumentDate(today),
+    }));
     setIsEditingTemplate(false);
   };
 
