@@ -432,6 +432,7 @@ export const DiagnosisFormsWorkspace: React.FC<DiagnosisFormsWorkspaceProps> = (
               )}
             </div>
 
+            {formType === 'diagnosis' && (
             <div className="rounded-xl border border-blue-500/40 bg-gradient-to-r from-blue-950/60 via-slate-900 to-indigo-950/60 p-4 shadow-sm">
               <div className="flex flex-wrap items-center justify-between gap-3">
                 <div>
@@ -464,7 +465,9 @@ export const DiagnosisFormsWorkspace: React.FC<DiagnosisFormsWorkspaceProps> = (
               </div>
             </div>
 
-            {!questions.some((q) => q.id === 'q_ops_bottleneck') && (
+            )}
+
+            {formType === 'diagnosis' && !questions.some((q) => q.id === 'q_ops_bottleneck') && (
               <div className="rounded-lg border border-amber-600/60 bg-amber-950/40 p-3 text-xs text-amber-200 flex flex-wrap items-center justify-between gap-2">
                 <div className="flex items-center gap-2">
                   <AlertCircle className="h-4 w-4 shrink-0 text-amber-400" />
