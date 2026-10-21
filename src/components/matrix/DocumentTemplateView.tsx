@@ -13,7 +13,9 @@ import {
   Edit3, 
   Save, 
   RefreshCw,
-  FileCode
+  FileCode,
+  ExternalLink,
+  Link2
 } from 'lucide-react';
 
 export type DocTemplateType = 'contract' | 'proposal' | 'invoice' | 'report';
@@ -341,6 +343,7 @@ export const DocumentTemplateView: React.FC<DocumentTemplateViewProps> = ({ init
   const [selectedTemplateId, setSelectedTemplateId] = useState<string>(initialDocumentType === 'invoice' ? 'tpl-invoice-01' : initialDealId ? 'tpl-estimate-01' : 'tpl-report-01');
   const [isEditingTemplate, setIsEditingTemplate] = useState<boolean>(false);
   const [copied, setCopied] = useState<boolean>(false);
+  const [copiedApplyUrl, setCopiedApplyUrl] = useState<boolean>(false);
   const [companies, setCompanies] = useState<Array<{id:string;company_name:string}>>([]);
   const [contacts, setContacts] = useState<Array<{id:string;full_name:string;company_id?:string|null;email?:string|null;phone?:string|null;role_title?:string|null}>>([]);
   const [deals, setDeals] = useState<Array<{id:string;proposal_plan_name:string;company_id?:string|null;lead_id?:string|null}>>([]);
@@ -594,6 +597,26 @@ export const DocumentTemplateView: React.FC<DocumentTemplateViewProps> = ({ init
       const regex = new RegExp(`{{${key}}}`, 'g');
       result = result.replace(regex, escapeHtml(val || ''));
     });
+
+    const currentDocId = autosavedDocumentIds.current[currentTemplate.id];
+    const applyUrl = currentDocId ? `${window.location.origin}/apply/${currentDocId}` : '#';
+    result = result.replace(/{{apply_url}}/g, applyUrl);
+
+    // 提案書または見積書の場合、末尾にWeb申込ボタンを確実に付与
+    if (['proposal', 'report'].includes(currentTemplate.type) || currentTemplate.id === 'tpl-estimate-01') {
+      if (!result.includes('web-apply-box')) {
+        const ctaHtml = `<div class="web-apply-box" style="margin-top: 40px; padding: 24px; border: 2px solid #10b981; border-radius: 12px; background: #f0fdf4; text-align: center;">
+  <p style="font-weight: bold; font-size: 16px; color: #065f46; margin: 0 0 6px 0;">【Web申込・オンライン即時成約】</p>
+  <p style="font-size: 13px; color: #047857; margin: 0 0 16px 0;">上記のお見積・提案内容にご承諾いただける場合は、Web上でワンタップで申し込み・ご成約いただけます。</p>
+  <a href="${applyUrl}" target="_blank" rel="noopener noreferrer" style="display: inline-block; background: #059669; color: #ffffff; padding: 12px 32px; border-radius: 8px; font-weight: bold; font-size: 15px; text-decoration: none; box-shadow: 0 4px 6px -1px rgba(16,185,129,0.3);">👉 この内容で申し込む</a>
+</div>`;
+        const lastDivIndex = result.lastIndexOf('</div>');
+        if (lastDivIndex !== -1) {
+          result = result.slice(0, lastDivIndex) + ctaHtml + '\n</div>' + result.slice(lastDivIndex + 6);
+        }
+      }
+    }
+
     return result;
   };
 
@@ -713,7 +736,39 @@ export const DocumentTemplateView: React.FC<DocumentTemplateViewProps> = ({ init
           </p>
         </div>
 
-        <div className="flex items-center gap-3">
+        <div className="flex flex-wrap items-center gap-2.5">
+          {autosavedDocumentIds.current[currentTemplate.id] && (
+            <>
+              <button
+                type="button"
+                onClick={() => {
+                  const docId = autosavedDocumentIds.current[currentTemplate.id];
+                  if (!docId) return;
+                  const url = `${window.location.origin}/apply/${docId}`;
+                  navigator.clipboard.writeText(url);
+                  setCopiedApplyUrl(true);
+                  setTimeout(() => setCopiedApplyUrl(false), 2500);
+                }}
+                className="px-3.5 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-semibold text-xs flex items-center gap-1.5 shadow-lg shadow-emerald-600/25 transition-all cursor-pointer"
+                title="顧客に送信するワンタップ申込用URLをコピーします"
+              >
+                <Link2 className="w-4 h-4" />
+                <span>{copiedApplyUrl ? '申込URLをコピーしました！' : 'Web申込URLをコピー'}</span>
+              </button>
+
+              <a
+                href={`/apply/${autosavedDocumentIds.current[currentTemplate.id]}`}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="px-3 py-2.5 rounded-xl border border-slate-700 bg-slate-800 hover:bg-slate-700 text-slate-200 font-semibold text-xs flex items-center gap-1.5 transition-all"
+                title="顧客向けWeb申込画面を別タブでプレビュー確認します"
+              >
+                <ExternalLink className="w-3.5 h-3.5 text-slate-400" />
+                <span className="hidden sm:inline">申込画面を開く</span>
+              </a>
+            </>
+          )}
+
           <button
             onClick={handlePrintPdf}
             className="px-4 py-2.5 rounded-xl bg-blue-600 hover:bg-blue-500 text-white font-semibold text-xs flex items-center gap-2 shadow-lg shadow-blue-600/25 transition-all cursor-pointer"

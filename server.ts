@@ -1435,6 +1435,220 @@ app.post('/api/public/forms/:slug/submissions', async (req, res) => {
   }
 });
 
+// ─── 公開書類・Web申込・自動成約 API ───
+app.get('/api/public/documents/:id', async (req, res) => {
+  if (!lineSupabase) return res.status(503).json({ error: '書類配信サーバーが設定されていません。' });
+  const id = req.params.id;
+  if (!isPublicUuid(id)) return res.status(400).json({ error: '書類IDが無効です。' });
+
+  try {
+    const { data: doc, error } = await lineSupabase
+      .from('customer_documents')
+      .select('id, title, document_type, status, body_html, company_id, lead_id, contact_id, deal_id, created_at, updated_at')
+      .eq('id', id)
+      .maybeSingle();
+
+    if (error) throw error;
+    if (!doc) return res.status(404).json({ error: '書類が見つかりません。' });
+
+    let companyName = '';
+    if (doc.company_id) {
+      const { data: company } = await lineSupabase.from('companies').select('company_name').eq('id', doc.company_id).maybeSingle();
+      if (company?.company_name) companyName = company.company_name;
+    }
+
+    let dealInfo: { id: string; proposal_status?: string; total_amount?: number } | null = null;
+    if (doc.deal_id) {
+      const { data: deal } = await lineSupabase.from('deals').select('id, proposal_status, total_amount').eq('id', doc.deal_id).maybeSingle();
+      if (deal) dealInfo = deal;
+    }
+
+    return res.json({
+      document: {
+        id: doc.id,
+        title: doc.title,
+        documentType: doc.document_type,
+        status: doc.status,
+        bodyHtml: doc.body_html,
+        companyId: doc.company_id,
+        companyName,
+        dealId: doc.deal_id,
+        dealStatus: dealInfo?.proposal_status,
+        dealAmount: dealInfo?.total_amount,
+        createdAt: doc.created_at,
+        updatedAt: doc.updated_at,
+      },
+    });
+  } catch (error) {
+    console.error('Public document lookup failed:', error instanceof Error ? error.message : 'unknown error');
+    return res.status(500).json({ error: '書類を読み込めませんでした。' });
+  }
+});
+
+app.post('/api/public/documents/:id/apply', async (req, res) => {
+  if (!lineSupabase) return res.status(503).json({ error: '書類配信サーバーが設定されていません。' });
+  const id = req.params.id;
+  if (!isPublicUuid(id)) return res.status(400).json({ error: '書類IDが無効です。' });
+
+  try {
+    const { data: doc, error: docError } = await lineSupabase
+      .from('customer_documents')
+      .select('id, title, document_type, status, body_html, company_id, lead_id, contact_id, deal_id, owner_id')
+      .eq('id', id)
+      .maybeSingle();
+
+    if (docError) throw docError;
+    if (!doc) return res.status(404).json({ error: '書類が見つかりません。' });
+
+    // 既に承認・成約済みの場合は既存の商談IDを返す
+    if (doc.status === 'approved' && doc.deal_id) {
+      const { data: existingDeal } = await lineSupabase.from('deals').select('id, proposal_status').eq('id', doc.deal_id).maybeSingle();
+      if (existingDeal && (existingDeal.proposal_status === '成約' || existingDeal.proposal_status === '受注')) {
+        return res.json({
+          success: true,
+          alreadyWon: true,
+          dealId: existingDeal.id,
+          message: '既にお申込みおよび成約が完了しています。',
+        });
+      }
+    }
+
+    // 金額の抽出（body_html から見積・合計金額を抽出）
+    let totalAmount = 0;
+    const matchAmount = (doc.body_html || '').replace(/&yen;|¥/g, '').match(/(?:合計|総額)[^\d]{0,15}([0-9,]+)\s*円?/);
+    if (matchAmount && matchAmount[1]) {
+      totalAmount = parseInt(matchAmount[1].replace(/,/g, ''), 10) || 0;
+    }
+
+    // 会社IDの解決
+    let resolvedCompanyId = doc.company_id;
+    if (!resolvedCompanyId && doc.lead_id) {
+      const { data: lead } = await lineSupabase.from('leads').select('company_id').eq('id', doc.lead_id).maybeSingle();
+      if (lead?.company_id) resolvedCompanyId = lead.company_id;
+    }
+    if (!resolvedCompanyId && doc.contact_id) {
+      const { data: contact } = await lineSupabase.from('contacts').select('company_id').eq('id', doc.contact_id).maybeSingle();
+      if (contact?.company_id) resolvedCompanyId = contact.company_id;
+    }
+
+    // それでも会社が無い場合、自動作成またはフォールバック
+    if (!resolvedCompanyId) {
+      const matchComp = (doc.body_html || '').match(/([^\n<]+)\s*御中/);
+      const companyNameCandidate = (matchComp && matchComp[1] ? matchComp[1].trim() : '') || 'Web申込顧客';
+      const newCompId = 'COMP-WEB-' + Date.now().toString(36).toUpperCase();
+      const { data: newCompany, error: createCompErr } = await lineSupabase
+        .from('companies')
+        .insert({
+          id: newCompId,
+          company_name: companyNameCandidate,
+          memo: 'Web申込フォーム・書類（ID: ' + doc.id + '）より自動作成',
+        })
+        .select('id, company_name')
+        .single();
+      if (!createCompErr && newCompany) {
+        resolvedCompanyId = newCompany.id;
+      } else {
+        const { data: firstComp } = await lineSupabase.from('companies').select('id').limit(1).maybeSingle();
+        resolvedCompanyId = firstComp?.id || 'COMP-DEFAULT';
+      }
+    }
+
+    const nowIso = new Date().toISOString();
+    const todayStr = nowIso.slice(0, 10);
+    let finalDealId = doc.deal_id;
+
+    // 商談の更新または自動起票
+    if (finalDealId) {
+      const { data: currentDeal } = await lineSupabase.from('deals').select('id, memo').eq('id', finalDealId).maybeSingle();
+      const newMemo = [currentDeal?.memo, '【Web申込】顧客がWeb上で「この内容で申し込む」をタップして即時成約（日時: ' + nowIso + '）'].filter(Boolean).join('\n');
+      await lineSupabase.from('deals').update({
+        proposal_status: '成約',
+        status: 'won',
+        memo: newMemo,
+        updated_at: nowIso,
+      }).eq('id', finalDealId);
+    } else {
+      finalDealId = 'DEAL-WEB-' + Date.now().toString(36).toUpperCase() + '-' + Math.random().toString(36).slice(2, 6).toUpperCase();
+      const { error: insertDealErr } = await lineSupabase.from('deals').insert({
+        id: finalDealId,
+        company_id: resolvedCompanyId,
+        lead_id: doc.lead_id || null,
+        proposal_plan_name: doc.title || 'Web申込プラン',
+        proposal_status: '成約',
+        proposal_date: todayStr,
+        total_amount: totalAmount > 0 ? totalAmount : null,
+        memo: '【Web申込自動起票・即時成約】書類「' + doc.title + '」（ID: ' + doc.id + '）の末尾ボタンより顧客が直接発注',
+        created_at: nowIso,
+        updated_at: nowIso,
+      });
+      if (insertDealErr) throw insertDealErr;
+    }
+
+    // 書類のステータス更新 (approved = 承認・成約完了)
+    await lineSupabase.from('customer_documents').update({
+      status: 'approved',
+      deal_id: finalDealId,
+      company_id: resolvedCompanyId,
+      updated_at: nowIso,
+    }).eq('id', doc.id);
+
+    // 顧客マスタ (customers) への登録（1社1件）
+    if (resolvedCompanyId) {
+      const { data: existingCustomer } = await lineSupabase
+        .from('customers')
+        .select('id')
+        .eq('company_id', resolvedCompanyId)
+        .maybeSingle();
+
+      if (!existingCustomer) {
+        await lineSupabase.from('customers').insert({
+          company_id: resolvedCompanyId,
+          contract_status: '契約中',
+          contract_start_date: todayStr,
+          memo: 'Web申込（商談ID: ' + finalDealId + '）により自動成約登録',
+          created_at: nowIso,
+          last_updated_at: nowIso,
+        });
+      }
+    }
+
+    // リードのステータス更新
+    if (doc.lead_id) {
+      await lineSupabase.from('leads').update({
+        status: '成約',
+        last_contacted_at: nowIso,
+      }).eq('id', doc.lead_id);
+    }
+
+    // 社内向け通知タスクの起票
+    try {
+      const { data: compData } = await lineSupabase.from('companies').select('company_name').eq('id', resolvedCompanyId).maybeSingle();
+      const compLabel = compData?.company_name || '顧客企業';
+      await lineSupabase.from('tasks').insert({
+        title: '【🎉即時成約】' + compLabel + ' 様よりWeb申込・発注を受領しました',
+        description: '書類「' + doc.title + '」のWeb申込ボタンより発注が確定し、商談（' + finalDealId + '）が即座に「成約」となりました。金額: ' + (totalAmount > 0 ? totalAmount.toLocaleString('ja-JP') + '円' : '未定') + '。初回キックオフや契約締結手続きを進めてください。',
+        status: 'todo',
+        priority: 'high',
+        due_date: todayStr,
+        created_at: nowIso,
+      });
+    } catch (taskErr) {
+      console.warn('Auto task insertion warning:', taskErr);
+    }
+
+    return res.json({
+      success: true,
+      dealId: finalDealId,
+      companyId: resolvedCompanyId,
+      message: 'お申し込みを受け付けました。成約が確定いたしました。',
+    });
+  } catch (error) {
+    console.error('Public document apply failed:', error instanceof Error ? error.message : 'unknown error');
+    return res.status(500).json({ error: '申込処理を完了できませんでした。時間をおいて再度お試しください。' });
+  }
+});
+
+
 
 function boundChatMessages(input: Array<{ role?: unknown; content?: unknown }> = []) {
   const messages = input

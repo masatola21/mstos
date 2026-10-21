@@ -5,6 +5,7 @@ import { Dashboard } from './components/Dashboard';
 import { TableManager } from './components/TableManager';
 import { DiagnosisManager } from './components/DiagnosisManager';
 import { PublicIntakeForm } from './components/PublicIntakeForm';
+import { PublicDocumentApplyView } from './components/PublicDocumentApplyView';
 import { AuthScreen } from './components/AuthScreen';
 import { ConfigGuideModal } from './components/ConfigGuideModal';
 import { RlsGuideModal } from './components/RlsGuideModal';
@@ -2447,6 +2448,11 @@ function AppContent() {
 }
 
 export default function App() {
+  const publicDocMatch = window.location.pathname.match(/^\/(?:apply|docs)\/([0-9a-f-]+)\/?$/i);
+  if (publicDocMatch) {
+    return <PublicDocumentApplyView documentId={publicDocMatch[1]} />;
+  }
+
   const publicFormMatch = window.location.pathname.match(/^\/f\/([^/]+)\/?$/);
   if (publicFormMatch) {
     let slug = publicFormMatch[1];
