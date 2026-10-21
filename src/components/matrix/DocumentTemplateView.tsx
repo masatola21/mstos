@@ -353,7 +353,8 @@ export const DocumentTemplateView: React.FC<DocumentTemplateViewProps> = ({ init
   const [contactId, setContactId] = useState('');
   const [dealId, setDealId] = useState(initialDealId || '');
   const [saveMessage, setSaveMessage] = useState('');
-  const [hasStartedDocument, setHasStartedDocument] = useState(Boolean(initialCompanyId || initialLeadId || initialDealId));
+  const [hasStartedDocument, setHasStartedDocument] = useState<boolean>(true);
+  const [savedDocIds, setSavedDocIds] = useState<Record<string, string>>({});
   const autosavedDocumentIds = useRef<Record<string, string>>({});
   const autosaveQueues = useRef<Record<string, Promise<void>>>({});
 
@@ -598,8 +599,10 @@ export const DocumentTemplateView: React.FC<DocumentTemplateViewProps> = ({ init
       result = result.replace(regex, escapeHtml(val || ''));
     });
 
-    const currentDocId = autosavedDocumentIds.current[currentTemplate.id];
-    const applyUrl = currentDocId ? `${window.location.origin}/apply/${currentDocId}` : '#';
+    const currentDocId = savedDocIds[currentTemplate.id] || autosavedDocumentIds.current[currentTemplate.id];
+    const applyUrl = currentDocId
+      ? `${window.location.origin}/apply/${currentDocId}`
+      : 'javascript:alert("書類の申込URLを発行中です。数秒お待ちください。");';
     result = result.replace(/{{apply_url}}/g, applyUrl);
 
     // 提案書または見積書の場合、末尾にWeb申込ボタンを確実に付与
@@ -608,7 +611,7 @@ export const DocumentTemplateView: React.FC<DocumentTemplateViewProps> = ({ init
         const ctaHtml = `<div class="web-apply-box" style="margin-top: 40px; padding: 24px; border: 2px solid #10b981; border-radius: 12px; background: #f0fdf4; text-align: center;">
   <p style="font-weight: bold; font-size: 16px; color: #065f46; margin: 0 0 6px 0;">【Web申込・オンライン即時成約】</p>
   <p style="font-size: 13px; color: #047857; margin: 0 0 16px 0;">上記のお見積・提案内容にご承諾いただける場合は、Web上でワンタップで申し込み・ご成約いただけます。</p>
-  <a href="${applyUrl}" target="_blank" rel="noopener noreferrer" style="display: inline-block; background: #059669; color: #ffffff; padding: 12px 32px; border-radius: 8px; font-weight: bold; font-size: 15px; text-decoration: none; box-shadow: 0 4px 6px -1px rgba(16,185,129,0.3);">👉 この内容で申し込む</a>
+  <a href="${applyUrl}" ${currentDocId ? 'target="_blank" rel="noopener noreferrer"' : ''} style="display: inline-block; background: #059669; color: #ffffff; padding: 12px 32px; border-radius: 8px; font-weight: bold; font-size: 15px; text-decoration: none; box-shadow: 0 4px 6px -1px rgba(16,185,129,0.3);">👉 この内容で申し込む</a>
 </div>`;
         const lastDivIndex = result.lastIndexOf('</div>');
         if (lastDivIndex !== -1) {
@@ -656,6 +659,7 @@ export const DocumentTemplateView: React.FC<DocumentTemplateViewProps> = ({ init
             setSaveMessage(error ? `自動保存できませんでした: ${error.message}` : '確認待ち状態が解除されているため、自動更新を停止しました。');
             return;
           }
+          setSavedDocIds((prev) => ({ ...prev, [templateId]: existingId }));
           setSaveMessage('確認待ち書類を自動更新しました。');
           return;
         }
@@ -668,6 +672,7 @@ export const DocumentTemplateView: React.FC<DocumentTemplateViewProps> = ({ init
           return;
         }
         autosavedDocumentIds.current[templateId] = data.id;
+        setSavedDocIds((prev) => ({ ...prev, [templateId]: data.id }));
         setSaveMessage('確認待ち書類として自動保存しました。');
       });
       autosaveQueues.current[templateId] = save;
@@ -737,12 +742,12 @@ export const DocumentTemplateView: React.FC<DocumentTemplateViewProps> = ({ init
         </div>
 
         <div className="flex flex-wrap items-center gap-2.5">
-          {autosavedDocumentIds.current[currentTemplate.id] && (
+          {(savedDocIds[currentTemplate.id] || autosavedDocumentIds.current[currentTemplate.id]) && (
             <>
               <button
                 type="button"
                 onClick={() => {
-                  const docId = autosavedDocumentIds.current[currentTemplate.id];
+                  const docId = savedDocIds[currentTemplate.id] || autosavedDocumentIds.current[currentTemplate.id];
                   if (!docId) return;
                   const url = `${window.location.origin}/apply/${docId}`;
                   navigator.clipboard.writeText(url);
@@ -757,7 +762,7 @@ export const DocumentTemplateView: React.FC<DocumentTemplateViewProps> = ({ init
               </button>
 
               <a
-                href={`/apply/${autosavedDocumentIds.current[currentTemplate.id]}`}
+                href={`/apply/${savedDocIds[currentTemplate.id] || autosavedDocumentIds.current[currentTemplate.id]}`}
                 target="_blank"
                 rel="noopener noreferrer"
                 className="px-3 py-2.5 rounded-xl border border-slate-700 bg-slate-800 hover:bg-slate-700 text-slate-200 font-semibold text-xs flex items-center gap-1.5 transition-all"

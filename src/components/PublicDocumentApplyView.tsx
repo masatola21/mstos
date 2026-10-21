@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from 'react';
+import { getSupabase } from '../lib/supabaseClient';
 import {
   CheckCircle2,
   AlertCircle,
@@ -22,6 +23,7 @@ interface PublicDocument {
   dealId?: string;
   dealStatus?: string;
   dealAmount?: number;
+  leadId?: string;
   createdAt?: string;
   updatedAt?: string;
 }
@@ -42,21 +44,78 @@ export const PublicDocumentApplyView: React.FC<PublicDocumentApplyViewProps> = (
 
   useEffect(() => {
     let cancelled = false;
+
     const fetchDocument = async () => {
       try {
         setLoading(true);
         setError('');
-        const res = await fetch(`/api/public/documents/${encodeURIComponent(documentId)}`);
-        if (!res.ok) {
-          const errData = await res.json().catch(() => ({}));
-          throw new Error(errData.error || '書類が見つかりませんでした。');
+
+        // 1. まずサーバーAPIを試行
+        let fetchedDoc: PublicDocument | null = null;
+        try {
+          const res = await fetch(`/api/public/documents/${encodeURIComponent(documentId)}`);
+          if (res.ok) {
+            const data = await res.json();
+            fetchedDoc = data.document;
+          }
+        } catch {
+          // API失敗時はクライアント側Supabaseへフォールバック
         }
-        const data = await res.json();
+
+        // 2. サーバーAPIで取得できなかった場合、Supabaseクライアントから直接取得
+        if (!fetchedDoc) {
+          const supabase = getSupabase();
+          if (supabase) {
+            const { data: dbDoc, error: dbErr } = await supabase
+              .from('customer_documents')
+              .select('id, title, document_type, status, body_html, company_id, lead_id, contact_id, deal_id, created_at, updated_at')
+              .eq('id', documentId)
+              .maybeSingle();
+
+            if (!dbErr && dbDoc) {
+              let companyName = '';
+              if (dbDoc.company_id) {
+                const { data: comp } = await supabase.from('companies').select('company_name').eq('id', dbDoc.company_id).maybeSingle();
+                companyName = comp?.company_name || '';
+              }
+
+              let dealStatus = '';
+              let dealAmount: number | undefined;
+              if (dbDoc.deal_id) {
+                const { data: deal } = await supabase.from('deals').select('proposal_status, total_amount').eq('id', dbDoc.deal_id).maybeSingle();
+                dealStatus = deal?.proposal_status || '';
+                dealAmount = deal?.total_amount;
+              }
+
+              fetchedDoc = {
+                id: dbDoc.id,
+                title: dbDoc.title,
+                documentType: dbDoc.document_type,
+                status: dbDoc.status,
+                bodyHtml: dbDoc.body_html,
+                companyId: dbDoc.company_id,
+                companyName,
+                dealId: dbDoc.deal_id,
+                dealStatus,
+                dealAmount,
+                leadId: dbDoc.lead_id,
+                createdAt: dbDoc.created_at,
+                updatedAt: dbDoc.updated_at,
+              };
+            }
+          }
+        }
+
         if (cancelled) return;
-        setDoc(data.document);
-        if (data.document?.status === 'approved' || data.document?.dealStatus === '成約' || data.document?.dealStatus === '受注') {
+
+        if (!fetchedDoc) {
+          throw new Error('書類が見つかりませんでした。URLが正しいかご確認ください。');
+        }
+
+        setDoc(fetchedDoc);
+        if (fetchedDoc.status === 'approved' || fetchedDoc.dealStatus === '成約' || fetchedDoc.dealStatus === '受注') {
           setApplied(true);
-          setResultDealId(data.document.dealId || null);
+          setResultDealId(fetchedDoc.dealId || null);
         }
       } catch (err: any) {
         if (!cancelled) setError(err.message || '書類の読み込みに失敗しました。');
@@ -69,30 +128,154 @@ export const PublicDocumentApplyView: React.FC<PublicDocumentApplyViewProps> = (
     return () => { cancelled = true; };
   }, [documentId]);
 
+  // 書類本文内の「この内容で申し込む」ボタンを押した際、下部の確定エリアへスムーズスクロール
+  useEffect(() => {
+    const handleCtaClick = (e: MouseEvent) => {
+      const target = (e.target as HTMLElement)?.closest('.web-apply-box a');
+      if (target) {
+        e.preventDefault();
+        setAgreeChecked(true);
+        const section = document.getElementById('apply-cta-section');
+        if (section) {
+          section.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        }
+      }
+    };
+    document.addEventListener('click', handleCtaClick);
+    return () => document.removeEventListener('click', handleCtaClick);
+  }, []);
+
   const handleExecuteApply = async () => {
     try {
       setSubmitting(true);
       setError('');
       setShowConfirmModal(false);
 
-      const res = await fetch(`/api/public/documents/${encodeURIComponent(documentId)}/apply`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({}),
-      });
+      let appliedDealId: string | null = null;
 
-      const data = await res.json();
-      if (!res.ok || !data.success) {
-        throw new Error(data.error || 'お申し込みの処理に失敗しました。');
+      // 1. まずサーバーAPIを試行
+      try {
+        const res = await fetch(`/api/public/documents/${encodeURIComponent(documentId)}/apply`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({}),
+        });
+
+        if (res.ok) {
+          const data = await res.json();
+          if (data.success) {
+            appliedDealId = data.dealId;
+          }
+        }
+      } catch {
+        // フォールバックへ
+      }
+
+      // 2. サーバーAPIが未設定または失敗した場合、Supabaseクライアントから直接実行
+      if (!appliedDealId) {
+        const supabase = getSupabase();
+        if (!supabase) throw new Error('データベース接続が見つかりません。');
+
+        const nowIso = new Date().toISOString();
+        const todayStr = nowIso.slice(0, 10);
+
+        // 金額の抽出
+        let totalAmount = doc?.dealAmount || 0;
+        if (!totalAmount) {
+          const matchAmount = (doc?.bodyHtml || '').replace(/&yen;|¥/g, '').match(/(?:合計|総額)[^\d]{0,15}([0-9,]+)\s*円?/);
+          if (matchAmount && matchAmount[1]) {
+            totalAmount = parseInt(matchAmount[1].replace(/,/g, ''), 10) || 0;
+          }
+        }
+
+        // 会社IDの解決
+        let targetCompanyId = doc?.companyId;
+        if (!targetCompanyId) {
+          const { data: firstComp } = await supabase.from('companies').select('id').limit(1).maybeSingle();
+          targetCompanyId = firstComp?.id || 'COMP-DEFAULT';
+        }
+
+        if (doc?.dealId) {
+          // 既存商談を成約に更新
+          appliedDealId = doc.dealId;
+          const { data: curDeal } = await supabase.from('deals').select('memo').eq('id', appliedDealId).maybeSingle();
+          const memo = [curDeal?.memo, `【Web申込】顧客がWeb上で「この内容で申し込む」をタップして即時成約（日時: ${nowIso}）`].filter(Boolean).join('\n');
+          await supabase.from('deals').update({
+            proposal_status: '成約',
+            memo,
+            updated_at: nowIso,
+          }).eq('id', appliedDealId);
+        } else {
+          // 新規商談を自動起票
+          appliedDealId = `DEAL-WEB-${Date.now().toString(36).toUpperCase()}-${Math.random().toString(36).slice(2, 6).toUpperCase()}`;
+          const { error: insDealErr } = await supabase.from('deals').insert({
+            id: appliedDealId,
+            company_id: targetCompanyId,
+            lead_id: doc?.leadId || null,
+            proposal_plan_name: doc?.title || 'Web申込プラン',
+            proposal_status: '成約',
+            proposal_date: todayStr,
+            total_amount: totalAmount > 0 ? totalAmount : null,
+            memo: `【Web申込自動起票・即時成約】書類「${doc?.title}」（ID: ${doc?.id}）より即時自動起票・成約`,
+            created_at: nowIso,
+            updated_at: nowIso,
+          });
+          if (insDealErr) throw insDealErr;
+        }
+
+        // 書類ステータスを approved に更新
+        await supabase.from('customer_documents').update({
+          status: 'approved',
+          deal_id: appliedDealId,
+          company_id: targetCompanyId,
+          updated_at: nowIso,
+        }).eq('id', documentId);
+
+        // 顧客マスタに登録
+        if (targetCompanyId) {
+          const { data: existingCust } = await supabase.from('customers').select('id').eq('company_id', targetCompanyId).maybeSingle();
+          if (!existingCust) {
+            await supabase.from('customers').insert({
+              company_id: targetCompanyId,
+              contract_status: '契約中',
+              contract_start_date: todayStr,
+              memo: `Web申込（商談ID: ${appliedDealId}）により自動成約登録`,
+              created_at: nowIso,
+              last_updated_at: nowIso,
+            });
+          }
+        }
+
+        // リードステータスを成約に更新
+        if (doc?.leadId) {
+          await supabase.from('leads').update({
+            status: '成約',
+            last_contacted_at: nowIso,
+          }).eq('id', doc.leadId);
+        }
+
+        // 社内タスク起票
+        try {
+          await supabase.from('tasks').insert({
+            title: `【🎉即時成約】${doc?.companyName || '顧客企業'} 様よりWeb申込・発注を受領しました`,
+            description: `書類「${doc?.title}」のWeb申込ボタンより発注が確定し、商談（${appliedDealId}）が即座に「成約」となりました。金額: ${totalAmount > 0 ? totalAmount.toLocaleString('ja-JP') + '円' : '未定'}。初回キックオフや契約締結手続きを進めてください。`,
+            status: 'todo',
+            priority: 'high',
+            due_date: todayStr,
+            created_at: nowIso,
+          });
+        } catch {
+          // ignore task error
+        }
       }
 
       setApplied(true);
-      setResultDealId(data.dealId || null);
+      setResultDealId(appliedDealId);
       if (doc) {
         setDoc({
           ...doc,
           status: 'approved',
-          dealId: data.dealId,
+          dealId: appliedDealId || undefined,
           dealStatus: '成約',
         });
       }
@@ -235,7 +418,7 @@ export const PublicDocumentApplyView: React.FC<PublicDocumentApplyViewProps> = (
 
         {/* Web申込CTAセクション（未成約の場合に表示） */}
         {!applied && (
-          <div className="no-print rounded-2xl border-2 border-emerald-500/50 bg-gradient-to-b from-slate-900 to-slate-950 p-6 sm:p-8 shadow-2xl space-y-6">
+          <div id="apply-cta-section" className="no-print rounded-2xl border-2 border-emerald-500/50 bg-gradient-to-b from-slate-900 to-slate-950 p-6 sm:p-8 shadow-2xl space-y-6">
             <div className="flex items-start gap-4">
               <div className="h-12 w-12 rounded-2xl bg-emerald-500/20 border border-emerald-500/30 flex items-center justify-center shrink-0 text-emerald-400 shadow-inner">
                 <Sparkles className="w-6 h-6" />

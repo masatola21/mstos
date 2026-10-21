@@ -2448,7 +2448,7 @@ function AppContent() {
 }
 
 export default function App() {
-  const publicDocMatch = window.location.pathname.match(/^\/(?:apply|docs)\/([0-9a-f-]+)\/?$/i);
+  const publicDocMatch = window.location.pathname.match(/^\/(?:apply|docs)\/([^/]+)\/?$/i);
   if (publicDocMatch) {
     return <PublicDocumentApplyView documentId={publicDocMatch[1]} />;
   }

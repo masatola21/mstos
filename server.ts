@@ -17,8 +17,8 @@ const MAX_CHAT_CONTEXT_MESSAGES = 12;
 const MAX_CHAT_CONTEXT_CHARACTERS = 16000;
 
 
-const lineSupabaseUrl = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL || '';
-const lineServiceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY || '';
+const lineSupabaseUrl = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL || '';
+const lineServiceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || '';
 const lineChannelSecret = process.env.LINE_CHANNEL_SECRET || '';
 const lineChannelAccessToken = process.env.LINE_CHANNEL_ACCESS_TOKEN || '';
 const lineSupabase = lineSupabaseUrl && lineServiceRoleKey
