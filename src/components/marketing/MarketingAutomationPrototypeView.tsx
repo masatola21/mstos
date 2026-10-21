@@ -1,3 +1,121 @@
+
+export const MST_DIAGNOSIS_STARTER_SCENARIOS: Omit<MarketingScenario, 'id' | 'updatedAt'>[] = [
+  {
+    name: '【1. 初回登録】LINE友だち追加・ボトルネック診断ご案内',
+    trigger: 'line_registered',
+    channel: 'line',
+    audience: 'すべての見込み客',
+    waitMinutes: 0,
+    emailSubject: '',
+    emailBody: '',
+    messageBody: '{recipient_name} 様\n友だち追加ありがとうございます！有限会社MSTです。\n\n貴社の業務・経営における「本当のボトルネック（手作業・売上利益・属人化）」を特定し、改善ロードマップを作成する【無料ボトルネック診断】を実施中です。\n\n▼診断はこちら（約3分）\n{link_url}\n\n回答後すぐに速報分析をご確認いただけます。',
+    lineMessageType: 'text',
+    lineImageUrl: '',
+    linePreviewImageUrl: '',
+    flexAltText: '',
+    flexTitle: '',
+    flexBody: '',
+    flexButtonLabel: '',
+    flexButtonUrl: '',
+    status: 'draft',
+    automationEnabled: false,
+    stopOnBooking: true,
+    stopOnDeal: true,
+    consentBasis: 'LINE友だち追加時の配信同意に基づく',
+  },
+  {
+    name: '【2. 診断直後】回答完了のお礼＆分析レポート作成開始',
+    trigger: 'diagnosis_completed',
+    channel: 'line',
+    audience: 'すべての見込み客',
+    waitMinutes: 0,
+    emailSubject: '',
+    emailBody: '',
+    messageBody: '{recipient_name} 様\n【経営課題・業務ボトルネック診断】へのご回答ありがとうございました！\n\n現在、回答内容をもとに詳細な改善ロードマップ（診断レポート）を作成しております。完成次第、改めてこちらでご案内いたします。\n\n※お急ぎで現状の急所改善をご相談されたい場合は、以下の日程調整より無料の個別面談（30分）をご予約いただけます。\n{booking_url}',
+    lineMessageType: 'text',
+    lineImageUrl: '',
+    linePreviewImageUrl: '',
+    flexAltText: '',
+    flexTitle: '',
+    flexBody: '',
+    flexButtonLabel: '',
+    flexButtonUrl: '',
+    status: 'draft',
+    automationEnabled: false,
+    stopOnBooking: true,
+    stopOnDeal: true,
+    consentBasis: '診断フォーム回答時の同意に基づく',
+  },
+  {
+    name: '【3. レポート送付】診断レポート完成＆個別面談のご提案',
+    trigger: 'report_approved',
+    channel: 'line',
+    audience: 'すべての見込み客',
+    waitMinutes: 0,
+    emailSubject: '',
+    emailBody: '',
+    messageBody: '{recipient_name} 様\n大変お待たせいたしました！貴社の【経営改善・ボトルネック診断レポート】が完成いたしました。\n\n▼診断レポートのWeb閲覧・PDF保存はこちら\n{document_url}\n\nこのレポートをもとに、貴社が最優先で着手すべき「最初の1手」を具体化する無料個別相談（30分）も承っております。ぜひご活用ください。\n{booking_url}',
+    lineMessageType: 'text',
+    lineImageUrl: '',
+    linePreviewImageUrl: '',
+    flexAltText: '',
+    flexTitle: '',
+    flexBody: '',
+    flexButtonLabel: '',
+    flexButtonUrl: '',
+    status: 'draft',
+    automationEnabled: false,
+    stopOnBooking: true,
+    stopOnDeal: true,
+    consentBasis: '診断レポート完成通知への同意に基づく',
+  },
+  {
+    name: '【4. 3日後フォロー】診断レポートのご確認状況と個別相談の打診',
+    trigger: 'report_sent',
+    channel: 'line',
+    audience: 'すべての見込み客',
+    waitMinutes: 4320,
+    emailSubject: '',
+    emailBody: '',
+    messageBody: '{recipient_name} 様\n先日お送りいたしました診断レポートはご確認いただけましたでしょうか？\n\n「どこから手をつければいいか分からない」「自社だけで実行するのが難しそう」といったお声を多くいただきます。\n\nレポートの急所を最短で解消する具体的なステップについて、30分のオンライン相談にてアドバイスしております。\n\n▼面談の日程を選ぶ\n{booking_url}\n\nご都合の良い枠をお選びください。',
+    lineMessageType: 'text',
+    lineImageUrl: '',
+    linePreviewImageUrl: '',
+    flexAltText: '',
+    flexTitle: '',
+    flexBody: '',
+    flexButtonLabel: '',
+    flexButtonUrl: '',
+    status: 'draft',
+    automationEnabled: false,
+    stopOnBooking: true,
+    stopOnDeal: true,
+    consentBasis: '診断フォロー配信への同意に基づく',
+  },
+  {
+    name: '【5. 7日後フォロー】他社改善事例のご紹介＆個別相談の最終枠',
+    trigger: 'report_sent',
+    channel: 'line',
+    audience: 'すべての見込み客',
+    waitMinutes: 10080,
+    emailSubject: '',
+    emailBody: '',
+    messageBody: '{recipient_name} 様\n診断レポートのご案内から1週間が経ちました。\n\n同様の課題（現場業務の属人化・請求や見積の手作業）を抱えていた企業様が、仕組み化により月20時間の経営時間を創出し、新規事業に着手できた事例をご紹介しております。\n\n今月の無料個別相談の枠も残り少なくなっておりますので、現状を打破したいとお考えの方はぜひお早めにご予約ください。\n{booking_url}',
+    lineMessageType: 'text',
+    lineImageUrl: '',
+    linePreviewImageUrl: '',
+    flexAltText: '',
+    flexTitle: '',
+    flexBody: '',
+    flexButtonLabel: '',
+    flexButtonUrl: '',
+    status: 'draft',
+    automationEnabled: false,
+    stopOnBooking: true,
+    stopOnDeal: true,
+    consentBasis: '診断フォロー配信への同意に基づく',
+  },
+];
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { getSupabase } from '../../lib/supabaseClient';
 import { InlineDeleteButton } from '../InlineDeleteButton';
@@ -115,6 +233,9 @@ const emptyScenario = (): Omit<MarketingScenario, 'id' | 'updatedAt'> => ({
   flexButtonUrl: '',
   status: 'draft',
   automationEnabled: false,
+  stopOnBooking: true,
+  stopOnDeal: true,
+  sendTimeWindow: '09:00-20:00',
   consentBasis: '',
 });
 
@@ -201,6 +322,16 @@ export const MarketingAutomationPrototypeView: React.FC<Props> = ({ scenarios, o
   const triggerLabel = useMemo(() => Object.fromEntries(triggerOptions.map((option) => [option.value, option.label])) as Record<MarketingTrigger, string>, []);
   const supportedAutomationTriggers = new Set<MarketingTrigger>(['prospect_selected','lead_created','line_registered','diagnosis_invited','diagnosis_completed','meeting_completed','tag_added','booking_created','retainer_period','deal_stage_changed','deal_won','report_approved','report_sent','proposal_approved','proposal_sent','contract_sent','contract_signed','invoice_due','invoice_overdue','project_milestone']);
 
+  const applyDiagnosisStarterSet = () => {
+    const now = Date.now();
+    const newScenarios: MarketingScenario[] = MST_DIAGNOSIS_STARTER_SCENARIOS.map((item, index) => ({
+      ...item,
+      id: `starter-scenario-${now}-${index}`,
+      updatedAt: now + index * 10,
+    }));
+    onScenariosChange([...newScenarios, ...scenarios]);
+    setNotice('診断フローのスターターセット（5本の公式シナリオ）を一括導入しました！内容を確認して「準備状態にする」または編集を行ってください。');
+  };
   const startNew = () => {
     setSelectedEmailTemplateId('');setSelectedLineTemplateId('');
     setEditing(null);
@@ -428,6 +559,25 @@ export const MarketingAutomationPrototypeView: React.FC<Props> = ({ scenarios, o
 
       {activeTab === 'jobs' && <MarketingAutomationJobsPanel health={automationHealth} onHealthChange={setAutomationHealth} />}
       {activeTab === 'scenarios' && <div className="space-y-4">
+        <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-indigo-500/40 bg-gradient-to-r from-indigo-950/60 via-slate-900 to-purple-950/60 p-4 shadow-sm mb-4">
+            <div>
+              <div className="flex items-center gap-2 font-bold text-indigo-200 text-sm">
+                <Zap className="h-4 w-4 text-indigo-400" />
+                公式プリセット：診断フォローシナリオ スターターセット（5本）
+              </div>
+              <p className="mt-1 text-xs text-slate-300">
+                LINE登録案内 → 診断完了速報 → レポート送付 → 3日後フォロー → 7日後フォローのベストプラクティスを一括導入します。
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={applyDiagnosisStarterSet}
+              className="inline-flex items-center gap-1.5 rounded-lg bg-indigo-600 px-3.5 py-2 text-xs font-semibold text-white shadow hover:bg-indigo-500 transition"
+            >
+              <Plus className="h-4 w-4" />
+              スターターセットを一括導入
+            </button>
+          </div>
         {isFormOpen ? (
           <form onSubmit={saveScenario} className="rounded-2xl border border-indigo-500/30 bg-slate-900 p-5">
             <div className="mb-4 flex items-center justify-between"><h2 className="font-bold text-white">{editing ? 'シナリオを編集' : '新しいシナリオ'}</h2><button type="button" onClick={() => { setEditing(null); setIsFormOpen(false); setNotice(''); }} className="text-xs text-slate-400 hover:text-white">閉じる</button></div>
@@ -445,6 +595,23 @@ export const MarketingAutomationPrototypeView: React.FC<Props> = ({ scenarios, o
               <div className="text-xs text-slate-300">配信対象リスト<select value={form.audience.startsWith('segment:') && segments.some((segment)=>segment.id===form.audience.slice(8)) ? form.audience : 'manual'} onChange={(e)=>update('audience',e.target.value==='manual'?'':e.target.value)} className="mt-1 w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-white"><option value="manual">条件をメモとして入力（旧形式）</option>{segments.map((segment)=><option key={segment.id} value={`segment:${segment.id}`}>{segment.name}（{segment.entity_type}）</option>)}</select>{(!form.audience.startsWith('segment:') || !segments.some((segment)=>segment.id===form.audience.slice(8))) && <input maxLength={160} value={form.audience} onChange={(e)=>update('audience',e.target.value)} placeholder="配信対象の説明" className="mt-2 w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-white" />}</div>
               <label className="text-xs text-slate-300">配信同意・送信根拠<input required maxLength={500} value={form.consentBasis} onChange={(e) => update('consentBasis', e.target.value)} placeholder="例：顧客がLINE登録時に案内へ同意" className="mt-1 w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-white" /></label>
               <label className="text-xs text-slate-300">配信チャネル<select value={form.channel} onChange={(e) => update('channel', e.target.value as MarketingChannel)} className="mt-1 w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-white"><option value="line">LINE</option><option value="email">メール</option><option value="both">LINE + メール</option></select></label>
+                            <fieldset className="rounded-xl border border-slate-700 bg-slate-950/70 p-4 md:col-span-2 space-y-3">
+                <legend className="px-2 text-xs font-bold text-amber-300">停止条件 ＆ 送信時間帯</legend>
+                <div className="grid gap-3 sm:grid-cols-3">
+                  <label className="flex items-center gap-2 text-xs text-slate-300 cursor-pointer">
+                    <input type="checkbox" checked={form.stopOnBooking ?? true} onChange={(e) => update('stopOnBooking', e.target.checked)} className="rounded border-slate-700 bg-slate-900 text-indigo-600" />
+                    <span>面談予約が入ったら停止</span>
+                  </label>
+                  <label className="flex items-center gap-2 text-xs text-slate-300 cursor-pointer">
+                    <input type="checkbox" checked={form.stopOnDeal ?? true} onChange={(e) => update('stopOnDeal', e.target.checked)} className="rounded border-slate-700 bg-slate-900 text-indigo-600" />
+                    <span>商談化・成約したら停止</span>
+                  </label>
+                  <label className="text-xs text-slate-300 block">
+                    <span>送信可能時間帯</span>
+                    <input value={form.sendTimeWindow || '09:00-20:00'} onChange={(e) => update('sendTimeWindow', e.target.value)} placeholder="09:00-20:00" className="mt-1 w-full rounded border border-slate-700 bg-slate-900 px-2 py-1 text-xs text-white" />
+                  </label>
+                </div>
+              </fieldset>
               <label className="text-xs text-slate-300">待機時間（分）<input type="number" min={0} max={525600} value={form.waitMinutes} onChange={(e) => update('waitMinutes', Number(e.target.value))} className="mt-1 w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-white" /></label>
               {form.channel !== 'email' && <fieldset className="space-y-4 rounded-xl border border-slate-700 bg-slate-950/70 p-4 md:col-span-2"><legend className="px-2 text-xs font-bold text-green-300">LINEメッセージ形式</legend>
                 <label className="block text-xs text-slate-300 md:col-span-2">保存済みLINEテンプレート<select value={selectedLineTemplateId} onChange={(e)=>chooseLineTemplate(e.target.value)} className="mt-1 w-full rounded-lg border border-slate-700 bg-slate-900 px-3 py-2 text-sm text-white"><option value="">テンプレートを選択</option>{lineTemplates.map((item)=><option key={item.id} value={item.id}>{item.name}（{item.reply_type==='text'?'テキスト':item.reply_type==='image'?'画像':item.reply_type==='video'?'動画':'Flex'}）</option>)}</select></label>

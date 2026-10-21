@@ -48,6 +48,9 @@ export interface MarketingScenario {
   flexButtonUrl: string;
   status: MarketingScenarioStatus;
   automationEnabled?: boolean;
+  stopOnBooking?: boolean;
+  stopOnDeal?: boolean;
+  sendTimeWindow?: string;
   consentBasis?: string;
   updatedAt: number;
 }
