@@ -275,6 +275,101 @@ export const MarketingLineInboxView:React.FC<{initialLineUserId?:string}> = ({in
         {!activeConversation?<p className="mt-4 text-sm text-slate-500">左から相手を選択してください。</p>:<><div className="mt-3 max-h-[420px] space-y-2 overflow-auto rounded-xl bg-slate-950/50 p-3">{activeConversation.items.map(message=><div key={message.id} className={'max-w-[85%] rounded-xl px-3 py-2 text-sm '+(message.direction==='outbound'?'ml-auto bg-indigo-700 text-white':'bg-slate-800 text-slate-100')}><div className="whitespace-pre-wrap">{message.body}</div><div className="mt-1 text-[10px] opacity-60">{new Date(message.received_at).toLocaleString()}</div></div>)}</div><div className="mt-3 flex gap-2"><textarea value={replyDraft} onChange={e=>setReplyDraft(e.target.value)} rows={2} maxLength={5000} placeholder="LINE返信を入力" className="min-w-0 flex-1 rounded-lg border border-slate-700 bg-slate-950 p-2 text-sm text-white" /><button disabled={busy||!replyDraft.trim()} onClick={()=>void sendReply()} className="rounded-lg bg-indigo-600 px-4 text-sm font-semibold text-white disabled:opacity-40">返信</button></div></>}
       </section>
     </div>
+    <section className="rounded-2xl border border-emerald-500/30 bg-slate-900 p-5 space-y-4">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+        <div>
+          <div className="flex items-center gap-2">
+            <span className="px-2.5 py-0.5 rounded-full bg-emerald-500/20 text-emerald-400 text-xs font-semibold border border-emerald-500/30">
+              友だち追加時自動送信（標準有効）
+            </span>
+            <span className="text-xs text-slate-400">友だち追加 → 即座に診断誘導 → 回答 → リード化</span>
+          </div>
+          <h3 className="text-lg font-bold text-white mt-1">友だち追加ウェルカムメッセージ</h3>
+          <p className="text-xs text-slate-400 mt-0.5">
+            新規友だち追加（およびブロック解除）時に、大橋真人からのご挨拶と3分無料診断フォームへの誘導ボタン付きFlexメッセージを自動即時送信します。
+          </p>
+        </div>
+        <button
+          type="button"
+          disabled={busy || !ownerId}
+          onClick={async () => {
+            if (!db || !ownerId) return;
+            setBusy(true);
+            setError('');
+            try {
+              const origin = window.location.origin || 'https://ais-dev-cadlpgsrctfv3ddojzsli3-203567468120.asia-northeast1.run.app';
+              const payload = {
+                altText: '大橋真人よりLINE友だち登録のご挨拶と無料診断のご案内',
+                contents: {
+                  type: 'bubble',
+                  body: {
+                    type: 'box',
+                    layout: 'vertical',
+                    spacing: 'lg',
+                    contents: [
+                      { type: 'text', text: '大橋真人です。', size: 'xl', weight: 'bold', align: 'center', color: '#1E293B', wrap: true },
+                      { type: 'text', text: 'LINE登録ありがとうございます。', size: 'md', align: 'center', color: '#334155', margin: 'sm', wrap: true },
+                      { type: 'separator', margin: 'lg' },
+                      { type: 'text', text: 'MSTでは、中小企業の\n「経営の仕組み化×利益改善」と\n介護保険外サービスの開業を支援しています。', size: 'sm', align: 'center', color: '#475569', margin: 'lg', wrap: true },
+                      { type: 'text', text: 'まず、どのようなご相談をご希望ですか？', size: 'lg', weight: 'bold', align: 'center', color: '#1E293B', margin: 'xl', wrap: true },
+                      { type: 'text', text: 'ご希望に近いものをお選びください', size: 'sm', align: 'center', color: '#64748B', margin: 'sm', wrap: true },
+                      { type: 'button', style: 'primary', color: '#1E3A5F', height: 'lg', margin: 'lg', action: { type: 'message', label: '経営改善について相談する', text: '経営改善について相談する' } },
+                      { type: 'button', style: 'primary', color: '#0284C7', height: 'lg', margin: 'sm', action: { type: 'message', label: '介護保険外サービスについて相談する', text: '介護保険外サービスについて相談する' } },
+                      { type: 'button', style: 'primary', color: '#10B981', height: 'lg', margin: 'sm', action: { type: 'uri', label: '📊 3分無料経営診断を受ける', uri: `${origin}/forms/business-diagnosis?source=line` } },
+                    ],
+                  },
+                },
+              };
+
+              const { error: insErr } = await db.from('line_auto_reply_templates').insert({
+                owner_id: ownerId,
+                name: '大橋真人 公式ウェルカムメッセージ（無料診断誘導付き）',
+                reply_type: 'flex',
+                payload,
+              });
+              if (insErr) throw insErr;
+              setNotice('ウェルカムFlexメッセージをテンプレート管理に登録しました。');
+              await load();
+            } catch (err: any) {
+              setError(err.message || 'テンプレート登録に失敗しました。');
+            } finally {
+              setBusy(false);
+            }
+          }}
+          className="px-3.5 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-semibold flex items-center gap-1.5 transition-colors border border-slate-700 cursor-pointer shrink-0"
+        >
+          テンプレート管理に取り込む
+        </button>
+      </div>
+
+      {/* ウェルカムメッセージ プレビューカード */}
+      <div className="rounded-xl border border-slate-800 bg-slate-950/70 p-4">
+        <div className="text-xs font-semibold text-slate-300 mb-2">自動送信されるウェルカムFlexプレビュー</div>
+        <div className="max-w-sm mx-auto bg-white rounded-2xl p-6 text-slate-900 shadow-xl space-y-3">
+          <div className="text-center font-bold text-xl text-slate-800">大橋真人です。</div>
+          <div className="text-center text-sm text-slate-600">LINE登録ありがとうございます。</div>
+          <hr className="border-slate-200 my-2" />
+          <div className="text-center text-xs text-slate-600 leading-relaxed whitespace-pre-wrap">
+            MSTでは、中小企業の{"\n"}「経営の仕組み化×利益改善」と{"\n"}介護保険外サービスの開業を支援しています。
+          </div>
+          <div className="text-center font-bold text-base text-slate-800 pt-2">まず、どのようなご相談をご希望ですか？</div>
+          <div className="text-center text-xs text-slate-500">ご希望に近いものをお選びください</div>
+
+          <div className="space-y-2 pt-2">
+            <div className="w-full py-2.5 px-3 rounded-xl bg-[#1E3A5F] text-white text-xs font-bold text-center shadow-sm">
+              経営改善について相談する
+            </div>
+            <div className="w-full py-2.5 px-3 rounded-xl bg-[#0284C7] text-white text-xs font-bold text-center shadow-sm">
+              介護保険外サービスについて相談する
+            </div>
+            <div className="w-full py-2.5 px-3 rounded-xl bg-[#10B981] text-white text-xs font-bold text-center shadow-sm flex items-center justify-center gap-1.5">
+              <span>📊 3分無料経営診断を受ける</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
     <section className="rounded-2xl border border-slate-800 bg-slate-900 p-5">
       <h3 className="font-bold text-white">回答に応じたタグ付け・自動返信</h3>
       <p className="mt-1 text-xs text-slate-400">Flex Messageのボタンをメッセージアクションにすると、押された選択文字を条件にできます。最初に一致したルールの返信とタグを適用します。</p>

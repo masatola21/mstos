@@ -305,8 +305,22 @@ export const SalesOperationsWorkspace: React.FC<Props> = ({ tab, companyId, lead
     if(updateError){setError(updateError.message);return;}
     const sourceId = String(record.legacy_id || record.id);
     const companyName = companies.find((item)=>item.id===record.company_id)?.company_name || record.counterparty_name || record.recipient_name || undefined;
-    if(activeOpsTab==='contracts' && status==='signed' && record.status!=='signed') {
-      onContractSigned?.({id:sourceId,title:record.title||'契約書',companyId:record.company_id||undefined,companyName,amount:record.amount==null?undefined:Number(record.amount)});
+    if(activeOpsTab==='contracts' && status==='signed') {
+      if(record.status!=='signed') {
+        onContractSigned?.({id:sourceId,title:record.title||'契約書',companyId:record.company_id||undefined,companyName,amount:record.amount==null?undefined:Number(record.amount)});
+      }
+      if(record.company_id) {
+        await supabase.from('deals')
+          .update({ proposal_status: '成約', updated_at: new Date().toISOString() })
+          .eq('company_id', record.company_id)
+          .neq('proposal_status', '成約');
+      }
+    }
+    if(activeOpsTab==='invoices' && status==='paid' && record.company_id) {
+      await supabase.from('deals')
+        .update({ proposal_status: '成約', updated_at: new Date().toISOString() })
+        .eq('company_id', record.company_id)
+        .neq('proposal_status', '成約');
     }
     if(activeOpsTab==='invoices' && status==='overdue' && record.status!=='overdue') {
       onInvoiceOverdue?.({id:sourceId,title:record.title||'請求書',invoiceNumber:record.invoice_number||undefined,companyId:record.company_id||undefined,companyName,amount:record.amount==null?undefined:Number(record.amount),dueDate:record.due_date||undefined});

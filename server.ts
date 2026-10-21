@@ -109,6 +109,160 @@ function isOptionalLineAutomationSchemaMissing(error: any): boolean {
   return error?.code === 'PGRST205' || /line_channel_integrations|line_inbox_messages|line_auto_reply_rules/.test(String(error?.message || ''));
 }
 
+function buildDefaultWelcomeFlexMessage(): { altText: string; contents: Record<string, any> } {
+  const appUrl = (process.env.PUBLIC_APP_URL || '').replace(/\/$/, '') || 'https://ais-dev-cadlpgsrctfv3ddojzsli3-203567468120.asia-northeast1.run.app';
+  const diagnosisUrl = `${appUrl}/forms/business-diagnosis?source=line`;
+
+  return {
+    altText: '大橋真人よりLINE友だち登録のご挨拶と無料診断のご案内',
+    contents: {
+      type: 'bubble',
+      body: {
+        type: 'box',
+        layout: 'vertical',
+        spacing: 'lg',
+        contents: [
+          {
+            type: 'text',
+            text: '大橋真人です。',
+            size: 'xl',
+            weight: 'bold',
+            align: 'center',
+            color: '#1E293B',
+            wrap: true,
+          },
+          {
+            type: 'text',
+            text: 'LINE登録ありがとうございます。',
+            size: 'md',
+            align: 'center',
+            color: '#334155',
+            margin: 'sm',
+            wrap: true,
+          },
+          {
+            type: 'separator',
+            margin: 'lg',
+          },
+          {
+            type: 'text',
+            text: 'MSTでは、中小企業の\n「経営の仕組み化×利益改善」と\n介護保険外サービスの開業を支援しています。',
+            size: 'sm',
+            align: 'center',
+            color: '#475569',
+            margin: 'lg',
+            wrap: true,
+          },
+          {
+            type: 'text',
+            text: 'まず、どのようなご相談をご希望ですか？',
+            size: 'lg',
+            weight: 'bold',
+            align: 'center',
+            color: '#1E293B',
+            margin: 'xl',
+            wrap: true,
+          },
+          {
+            type: 'text',
+            text: 'ご希望に近いものをお選びください',
+            size: 'sm',
+            align: 'center',
+            color: '#64748B',
+            margin: 'sm',
+            wrap: true,
+          },
+          {
+            type: 'button',
+            style: 'primary',
+            color: '#1E3A5F',
+            height: 'lg',
+            margin: 'lg',
+            action: {
+              type: 'message',
+              label: '経営改善について相談する',
+              text: '経営改善について相談する',
+            },
+          },
+          {
+            type: 'button',
+            style: 'primary',
+            color: '#0284C7',
+            height: 'lg',
+            margin: 'sm',
+            action: {
+              type: 'message',
+              label: '介護保険外サービスについて相談する',
+              text: '介護保険外サービスについて相談する',
+            },
+          },
+          {
+            type: 'button',
+            style: 'primary',
+            color: '#10B981',
+            height: 'lg',
+            margin: 'sm',
+            action: {
+              type: 'uri',
+              label: '📊 3分無料経営診断を受ける',
+              uri: diagnosisUrl,
+            },
+          },
+        ],
+      },
+    },
+  };
+}
+
+async function sendLineWelcomeMessage(event: any, contact: any, eventId: string, botUserId: string): Promise<void> {
+  if (!lineSupabase || !lineChannelAccessToken) return;
+  const userId = typeof event.source?.userId === 'string' ? event.source.userId : '';
+  if (!userId) return;
+
+  const flexData = buildDefaultWelcomeFlexMessage();
+  const lineMessage = {
+    type: 'flex',
+    altText: flexData.altText,
+    contents: flexData.contents,
+  };
+
+  try {
+    if (typeof event.replyToken === 'string') {
+      const response = await fetch('https://api.line.me/v2/bot/message/reply', {
+        method: 'POST',
+        headers: { Authorization: 'Bearer ' + lineChannelAccessToken, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ replyToken: event.replyToken, messages: [lineMessage] }),
+      });
+      if (!response.ok) {
+        console.warn('LINE welcome reply error:', await response.text().catch(() => ''));
+      }
+    } else {
+      await fetch('https://api.line.me/v2/bot/message/push', {
+        method: 'POST',
+        headers: { Authorization: 'Bearer ' + lineChannelAccessToken, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ to: userId, messages: [lineMessage] }),
+      });
+    }
+
+    const { data: integration } = await lineSupabase
+      .from('line_channel_integrations').select('owner_id').eq('bot_user_id', botUserId).maybeSingle();
+
+    await lineSupabase.from('line_inbox_messages').upsert({
+      owner_id: integration?.owner_id || null,
+      line_event_id: `welcome-${eventId}`,
+      direction: 'outbound',
+      contact_id: contact.id,
+      line_user_id: userId,
+      message_type: 'flex',
+      body: '[友だち追加ウェルカムメッセージ: 大橋真人よりご挨拶・無料診断誘導]',
+      status: 'sent',
+      received_at: new Date().toISOString(),
+    }, { onConflict: 'owner_id,line_event_id,direction', ignoreDuplicates: true });
+  } catch (error) {
+    console.warn('Failed to send LINE welcome message:', error);
+  }
+}
+
 async function processLineInboxAndAutoReply(event: any, contact: any, eventId: string, botUserId: string): Promise<void> {
   if (!lineSupabase || event.type !== 'message' || event.message?.type !== 'text' || !botUserId) return;
   const { data: integration, error: integrationError } = await lineSupabase
@@ -152,7 +306,46 @@ async function processLineInboxAndAutoReply(event: any, contact: any, eventId: s
     const expected = String(rule.match_text || '').trim().toLocaleLowerCase();
     return expected && (rule.match_mode === 'exact' ? normalizedMessage === expected : normalizedMessage.includes(expected));
   });
-  if (!matchedRule || typeof event.replyToken !== 'string') return;
+
+  if (!matchedRule) {
+    // 組み込みデフォルト自動返信（経営改善・介護保険外サービス・無料診断誘導）
+    const appUrl = (process.env.PUBLIC_APP_URL || '').replace(/\/$/, '') || 'https://ais-dev-cadlpgsrctfv3ddojzsli3-203567468120.asia-northeast1.run.app';
+    let defaultReplyText = '';
+
+    if (normalizedMessage.includes('経営改善')) {
+      defaultReplyText = `経営改善についてのご相談ありがとうございます！\n有限会社MST代表の大橋真人です。\n\n貴社の現状の経営課題（集客・営業・業務フロー・利益率）を明確にするため、まずは【3分無料経営診断】へのご回答をおすすめしております。\n\n回答内容を元に、専任コンサルタントによる改善アドバイスレポートを個別にお届けいたします。\n\n▼ 3分無料経営診断はこちら\n${appUrl}/forms/business-diagnosis?source=line&topic=management\n\nまた、個別面談や直接のご相談も受け付けております。お気軽にご希望日程やご質問をそのまま返信してください。`;
+    } else if (normalizedMessage.includes('介護保険外')) {
+      defaultReplyText = `介護保険外サービスの開業・事業展開についてのご相談ありがとうございます！\n有限会社MST代表の大橋真人です。\n\n介護保険外サービス（自費リハビリ・自費看護・生活支援等）の立ち上げでは、収益モデルの設計と地域集客が成功の鍵となります。\n\nまずは貴社の構想や適性を把握するため、無料診断フォームよりお聞かせください。\n\n▼ 開業・経営診断フォームはこちら\n${appUrl}/forms/business-diagnosis?source=line&topic=care\n\n回答を確認後、大橋より専門レポートを作成してお届けします。`;
+    } else if (normalizedMessage.includes('診断')) {
+      defaultReplyText = `無料経営診断のご案内です。\n以下のURLより約3分でご回答いただけます。回答受領後、大橋真人より専任レポートをお届けします。\n\n▼ 3分無料経営診断\n${appUrl}/forms/business-diagnosis?source=line`;
+    }
+
+    if (defaultReplyText && typeof event.replyToken === 'string') {
+      try {
+        const replyResponse = await fetch('https://api.line.me/v2/bot/message/reply', {
+          method: 'POST',
+          headers: { Authorization: 'Bearer ' + lineChannelAccessToken, 'Content-Type': 'application/json' },
+          body: JSON.stringify({ replyToken: event.replyToken, messages: [{ type: 'text', text: defaultReplyText }] }),
+        });
+        if (replyResponse.ok) {
+          await lineSupabase.from('line_inbox_messages').upsert({
+            owner_id: integration.owner_id,
+            line_event_id: `reply-${eventId}`,
+            direction: 'outbound',
+            contact_id: contact.id,
+            line_user_id: userId,
+            message_type: 'text',
+            body: defaultReplyText,
+            status: 'sent',
+            received_at: new Date().toISOString(),
+          }, { onConflict: 'owner_id,line_event_id,direction', ignoreDuplicates: true });
+        }
+      } catch (defErr) {
+        console.warn('Default auto reply warning:', defErr);
+      }
+    }
+    return;
+  }
 
   if (matchedRule.tag_id) {
     const { data: friend, error: friendError } = await lineSupabase.from('line_friends')
@@ -292,6 +485,7 @@ async function processLineWebhookEvent(event: any, botUserId = '') {
           .is('contact_id', null);
         if (leadError) throw leadError;
       }
+      if (event.type === 'follow') await sendLineWelcomeMessage(event, contact, stableEventId, botUserId);
       if (event.type === 'message') await processLineInboxAndAutoReply(event, contact, stableEventId, botUserId);
     }
 
@@ -951,7 +1145,7 @@ app.post('/api/public/forms/:slug/submissions', async (req, res) => {
     const escapedEmail = email.replace(/\\/g, '\\\\').replace(/%/g, '\\%').replace(/_/g, '\\_');
     const { data: matchingContacts, error: contactLookupError } = await lineSupabase
         .from('contacts')
-        .select('id, full_name, email, phone, company_id')
+        .select('id, full_name, email, phone, company_id, line_user_id')
         .ilike('email', escapedEmail)
         .order('created_at', { ascending: true })
         .limit(1);
@@ -971,7 +1165,7 @@ app.post('/api/public/forms/:slug/submissions', async (req, res) => {
           ...(matchedCompanyId && !contact.company_id ? { company_id: matchedCompanyId } : {}),
         })
         .eq('id', contact.id)
-        .select('id, full_name, email, phone, company_id')
+        .select('id, full_name, email, phone, company_id, line_user_id')
         .single();
       if (updateContactError) throw updateContactError;
       contact = updatedContact;
@@ -979,7 +1173,7 @@ app.post('/api/public/forms/:slug/submissions', async (req, res) => {
       const { data: insertedContact, error: insertContactError } = await lineSupabase
         .from('contacts')
         .insert({ full_name: name, email, phone: phone || null, company_id: matchedCompanyId, source: 'public_form' })
-        .select('id, full_name, email, phone, company_id')
+        .select('id, full_name, email, phone, company_id, line_user_id')
         .single();
       if (insertContactError) throw insertContactError;
       contact = insertedContact;
@@ -1088,6 +1282,88 @@ app.post('/api/public/forms/:slug/submissions', async (req, res) => {
       if (error) console.error('Diagnosis handoff failed:', error.message);
       else diagnosisId = data || null;
     }
+
+    // 診断回答・受付時の自動サンクス通知（LINE / Email）
+    if (contact.line_user_id && lineChannelAccessToken) {
+      try {
+        const lineMsg = {
+          type: 'text',
+          text: `【MST】「${form.name || '無料診断'}」の回答を受け付けました。\nご多忙の中、ご回答いただき誠にありがとうございます！\n\n現在、有限会社MST代表の大橋真人と専任チームにて、回答内容を基にした個別診断レポートを作成しております。\n完成次第、こちらのLINE宛てにレポートをお届けいたしますので、今しばらくお待ちください。\n\n※急ぎのご相談やご質問がございましたら、このLINEにそのまま返信いただけます。`,
+        };
+        await fetch('https://api.line.me/v2/bot/message/push', {
+          method: 'POST',
+          headers: { Authorization: `Bearer ${lineChannelAccessToken}`, 'Content-Type': 'application/json' },
+          body: JSON.stringify({ to: contact.line_user_id, messages: [lineMsg] }),
+        });
+        if (lineSupabase) {
+          await lineSupabase.from('line_inbox_messages').insert({
+            owner_id: (form as any).owner_id || null,
+            line_event_id: `sub-${submission.id}`,
+            direction: 'outbound',
+            contact_id: contact.id,
+            line_user_id: contact.line_user_id,
+            message_type: 'text',
+            body: lineMsg.text,
+            status: 'sent',
+            received_at: new Date().toISOString(),
+          });
+        }
+      } catch (linePushErr) {
+        console.warn('LINE auto confirmation push warning:', linePushErr);
+      }
+    } else if (contact.email) {
+      try {
+        const emailKey = process.env.RESEND_API_KEY || '';
+        const emailFrom = process.env.RESEND_FROM_EMAIL || '';
+        const subject = `【MST】「${form.name || '無料診断'}」のお申し込みを受け付けました`;
+        const bodyText = `${name} 様\n\n有限会社MST代表の大橋真人です。\nこの度は「${form.name || '無料診断'}」にご回答いただき誠にありがとうございます。\n\n現在、ご入力いただいた内容を精査し、個別診断・改善レポートを作成しております。\n完成次第、本メールアドレス宛にお届けいたしますので、今しばらくお待ちくださいますようお願い申し上げます。\n\n--------------------------------------------------\n有限会社MST\n代表取締役: 大橋真人\n〒503-0981 岐阜県大垣市桧町127番地\n--------------------------------------------------`;
+        if (emailKey && emailFrom) {
+          await fetch('https://api.resend.com/emails', {
+            method: 'POST',
+            headers: { Authorization: `Bearer ${emailKey}`, 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              from: emailFrom,
+              to: [contact.email],
+              subject,
+              text: bodyText,
+            }),
+          });
+        }
+        if (lineSupabase) {
+          await lineSupabase.from('communication_outbox').insert({
+            channel: 'email',
+            recipient_contact_id: contact.id,
+            recipient_address: contact.email,
+            subject,
+            body_text: bodyText,
+            status: emailKey && emailFrom ? 'sent' : 'queued',
+            consent_confirmed_at: new Date().toISOString(),
+            consent_basis: 'transactional_intake',
+            source_type: 'diagnosis_submission',
+            source_id: submission.id,
+            company_id: resolvedCompanyId,
+          });
+        }
+      } catch (emailErr) {
+        console.warn('Email auto confirmation warning:', emailErr);
+      }
+    }
+
+    // 管理者向けタスク起票（レポート承認通知）
+    if (lineSupabase) {
+      try {
+        await lineSupabase.from('tasks').insert({
+          title: `【要対応・レポート承認】${name} 様（${companyName || '個人'}）の診断回答`,
+          description: `フォーム「${form.name || '無料診断'}」の回答が届きました。診断管理（/diagnoses）または顧客書類から内容を確認し、診断レポートの承認・送信を行ってください。`,
+          status: 'todo',
+          priority: 'high',
+          due_date: new Date().toISOString().slice(0, 10),
+        });
+      } catch (taskErr) {
+        console.warn('Task auto-creation warning:', taskErr);
+      }
+    }
+
     return res.status(201).json({
       success: true,
       submissionId: submission.id,

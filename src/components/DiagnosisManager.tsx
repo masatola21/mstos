@@ -895,6 +895,120 @@ ${JSON.stringify(context, null, 2)}`;
     }
   };
 
+  const [approvingAndSendingReport, setApprovingAndSendingReport] = useState(false);
+
+  const handleApproveAndSendReport = async (reportToUse?: AiReport | null) => {
+    const targetReport = reportToUse || reports[0];
+    if (!targetReport || !diagnosis) return;
+
+    const supabase = getSupabase();
+    if (!supabase) {
+      setErrorMsg('Supabaseに接続されていません。');
+      return;
+    }
+
+    setApprovingAndSendingReport(true);
+    setErrorMsg(null);
+
+    try {
+      // 1. レポートステータスを承認済（approved）に更新
+      await supabase.from('ai_reports').update({ status: 'approved' }).eq('id', targetReport.id);
+
+      // 2. 診断ステータスを reported に更新
+      await supabase.from('diagnoses').update({ status: 'reported' }).eq('id', diagnosis.id);
+
+      // 3. 会社紐づきの連絡先を取得
+      let contact: any = null;
+      if (diagnosis.lead_id) {
+        const { data: leadData } = await supabase.from('leads').select('contact_id').eq('id', diagnosis.lead_id).maybeSingle();
+        if (leadData?.contact_id) {
+          const { data: cData } = await supabase.from('contacts').select('*').eq('id', leadData.contact_id).maybeSingle();
+          contact = cData;
+        }
+      }
+      if (!contact && diagnosis.company_id) {
+        const { data: cData } = await supabase.from('contacts').select('*').eq('company_id', diagnosis.company_id).limit(1).maybeSingle();
+        contact = cData;
+      }
+
+      const reportText = targetReport.full_report_text || targetReport.summary || '';
+      const companyName = diagnosis.company?.company_name || '御社';
+
+      if (contact?.line_user_id) {
+        // LINE送信
+        const linePayload = {
+          type: 'text',
+          text: `【MST】${companyName}様 経営診断レポートのご送付\n\n${contact.full_name || 'ご担当者'} 様\n大変お待たせいたしました。先般ご回答いただきました診断内容をもとに作成したレポートをお届けします。\n\n───────────────\n${reportText.slice(0, 4000)}\n───────────────\n\n詳細な改善施策や導入支援のご相談は、本LINEにそのままご返信いただくか、個別相談をお申し付けください。`,
+        };
+        const { data: outbox } = await supabase.from('communication_outbox').insert({
+          channel: 'line',
+          recipient_contact_id: contact.id,
+          recipient_address: contact.line_user_id,
+          body_text: linePayload.text,
+          line_message_payload: linePayload,
+          company_id: diagnosis.company_id,
+          source_type: 'diagnosis_report',
+          source_id: targetReport.id,
+          status: 'queued',
+          consent_confirmed_at: new Date().toISOString(),
+          consent_basis: 'transactional_intake',
+        }).select('id').maybeSingle();
+
+        if (outbox?.id) {
+          const session = await supabase.auth.getSession();
+          const token = session.data.session?.access_token;
+          if (token) {
+            await fetch('/api/communications/send', {
+              method: 'POST',
+              headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+              body: JSON.stringify({ outboxId: outbox.id }),
+            }).catch(() => {});
+          }
+        }
+        setSaveSuccessMsg(`✅ 診断レポートを承認し、${contact.full_name || '担当者'}様（LINE公式）へ送信完了しました！`);
+      } else if (contact?.email) {
+        // メール送信
+        const subject = `【MST】${companyName}様 経営診断・改善レポートのご送付`;
+        const bodyText = `${contact.full_name || 'ご担当者'} 様\n\n有限会社MST代表の大橋真人です。\n先般は経営診断にご回答いただき誠にありがとうございました。\n\n診断結果を取りまとめた個別レポートをお届けいたします。\n\n--------------------------------------------------\n${reportText}\n--------------------------------------------------\n\nレポート内容に関するご質問や、具体的な改善施策のご相談はお気軽にご連絡ください。\n\n--------------------------------------------------\n有限会社MST\n代表取締役: 大橋真人\n〒503-0981 岐阜県大垣市桧町127番地\n--------------------------------------------------`;
+
+        const { data: outbox } = await supabase.from('communication_outbox').insert({
+          channel: 'email',
+          recipient_contact_id: contact.id,
+          recipient_address: contact.email,
+          subject,
+          body_text: bodyText,
+          company_id: diagnosis.company_id,
+          source_type: 'diagnosis_report',
+          source_id: targetReport.id,
+          status: 'queued',
+          consent_confirmed_at: new Date().toISOString(),
+          consent_basis: 'transactional_intake',
+        }).select('id').maybeSingle();
+
+        if (outbox?.id) {
+          const session = await supabase.auth.getSession();
+          const token = session.data.session?.access_token;
+          if (token) {
+            await fetch('/api/communications/send', {
+              method: 'POST',
+              headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+              body: JSON.stringify({ outboxId: outbox.id }),
+            }).catch(() => {});
+          }
+        }
+        setSaveSuccessMsg(`✅ 診断レポートを承認し、${contact.full_name || '担当者'}様（${contact.email}）へ送信完了しました！`);
+      } else {
+        setSaveSuccessMsg('✅ 診断レポートを「承認済（approved）」にし、診断ステータスを「レポート発行済」に更新しました。（※連絡先アドレス未登録のため送信待ちは保留）');
+      }
+
+      onUpdated();
+    } catch (err: any) {
+      setErrorMsg(`レポート承認送信エラー: ${err?.message || '不明なエラー'}`);
+    } finally {
+      setApprovingAndSendingReport(false);
+    }
+  };
+
   if (isLoading || !diagnosis) {
     return (
       <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-sm animate-fade-in">
@@ -1054,7 +1168,7 @@ ${JSON.stringify(context, null, 2)}`;
               <div className="space-y-3 rounded-xl border border-slate-700 bg-slate-950/70 p-3">
                 <label className="block text-xs font-medium text-slate-300">草案（保存前に編集できます）</label>
                 <textarea value={reportDraft.text} onChange={(event) => setReportDraft({ ...reportDraft, text: event.target.value })} rows={16} className="w-full resize-y rounded-lg border border-slate-700 bg-slate-950 p-3 text-sm leading-6 text-slate-200" />
-                <div className="flex justify-end gap-2">
+                <div className="flex flex-wrap items-center justify-end gap-2">
                   <button type="button" onClick={() => setReportDraft(null)} className="rounded-lg px-3 py-2 text-xs text-slate-300 hover:bg-slate-800">破棄</button>
                   <button type="button" onClick={handleSaveGeneratedReport} disabled={savingReport || !reportDraft.text.trim()} className="inline-flex items-center gap-2 rounded-lg bg-emerald-600 px-4 py-2 text-xs font-semibold text-white hover:bg-emerald-500 disabled:opacity-50">
                     {savingReport && <RefreshCw className="h-3.5 w-3.5 animate-spin" />}
@@ -1064,10 +1178,40 @@ ${JSON.stringify(context, null, 2)}`;
               </div>
             )}
             {reports[0] && !reportDraft && (
-              <details className="rounded-xl border border-slate-800 bg-slate-950/60 p-3">
-                <summary className="cursor-pointer text-xs font-semibold text-indigo-100">保存済みレポート v{reports[0].version} を確認</summary>
-                <div className="mt-3 max-h-96 overflow-y-auto whitespace-pre-wrap rounded-lg bg-slate-950 p-3 text-sm leading-6 text-slate-200">{reports[0].full_report_text || reports[0].summary || 'レポート本文がありません。'}</div>
-              </details>
+              <div className="rounded-xl border border-indigo-800/80 bg-indigo-950/40 p-3 space-y-3">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                  <div className="flex items-center gap-2">
+                    <Award className="w-4 h-4 text-indigo-400" />
+                    <span className="text-xs font-bold text-indigo-200">
+                      最新レポート v{reports[0].version} ({reports[0].status === 'approved' ? '承認済' : '承認待ち'})
+                    </span>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => handleApproveAndSendReport(reports[0])}
+                    disabled={approvingAndSendingReport}
+                    className="inline-flex items-center gap-1.5 rounded-lg bg-gradient-to-r from-indigo-600 to-purple-600 px-3.5 py-1.5 text-xs font-bold text-white hover:from-indigo-500 hover:to-purple-500 transition-all shadow-md shadow-indigo-600/25 disabled:opacity-50 cursor-pointer"
+                  >
+                    {approvingAndSendingReport ? (
+                      <>
+                        <RefreshCw className="h-3.5 w-3.5 animate-spin" />
+                        <span>承認・送信処理中…</span>
+                      </>
+                    ) : (
+                      <>
+                        <CheckCircle2 className="h-3.5 w-3.5 text-indigo-200" />
+                        <span>1クリック承認＆レポート送信</span>
+                      </>
+                    )}
+                  </button>
+                </div>
+                <details className="rounded-lg border border-slate-800 bg-slate-950/80 p-3" open>
+                  <summary className="cursor-pointer text-xs font-semibold text-slate-300">レポート本文を確認</summary>
+                  <div className="mt-3 max-h-96 overflow-y-auto whitespace-pre-wrap rounded-lg bg-slate-950 p-3 text-sm leading-6 text-slate-200">
+                    {reports[0].full_report_text || reports[0].summary || 'レポート本文がありません。'}
+                  </div>
+                </details>
+              </div>
             )}
           </section>
 

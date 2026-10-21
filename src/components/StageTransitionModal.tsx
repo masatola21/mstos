@@ -6,8 +6,10 @@ import type { ProposalPlanTemplate } from './ProposalPlanTemplatePicker';
 import { 
   fetchProductsList, 
   fetchCustomerByCompanyId, 
-  insertRecord 
+  insertRecord,
+  updateRecord
 } from '../services/dataService';
+import { executeDealWonAutomation } from '../services/dealWonAutomationService';
 import { 
   X, 
   ArrowRight, 
@@ -229,28 +231,36 @@ export const StageTransitionModal: React.FC<StageTransitionModalProps> = ({
         onSuccess('deals', res.data?.id);
         onClose();
       } else if (type === 'deal_to_customer') {
-        // 重複チェック
-        if (existingCustomer) {
-          setErrorMessage('既にこの会社の顧客レコードが存在します。重複作成はできません。');
-          setIsSubmitting(false);
-          return;
+        let customerRecordId = existingCustomer?.id;
+
+        if (!existingCustomer) {
+          const payload: Record<string, any> = {
+            company_id: companyId,
+            contract_status: contractStatus,
+            contract_start_date: contractStartDate || null,
+            memo: customerMemo.trim() || null,
+          };
+
+          const res = await insertRecord('customers', payload);
+          if (res.error) {
+            setErrorMessage(res.error.message);
+            setIsSubmitting(false);
+            return;
+          }
+          customerRecordId = res.data?.id;
         }
 
-        const payload: Record<string, any> = {
-          company_id: companyId,
-          contract_status: contractStatus,
-          contract_start_date: contractStartDate || null,
-          memo: customerMemo.trim() || null,
-        };
-
-        const res = await insertRecord('customers', payload);
-        if (res.error) {
-          setErrorMessage(res.error.message);
-          setIsSubmitting(false);
-          return;
+        // 商談ステータスを「成約」に更新
+        if (sourceRecord?.id && sourceRecord.proposal_status !== '成約') {
+          await updateRecord('deals', sourceRecord.id, { proposal_status: '成約' });
         }
 
-        onSuccess('customers', res.data?.id);
+        // 契約書下書き・初回請求書下書き・書類HTMLの一発自動生成を実行
+        if (sourceRecord?.id) {
+          await executeDealWonAutomation(sourceRecord.id);
+        }
+
+        onSuccess('customers', customerRecordId);
         onClose();
       }
     } catch (err: any) {

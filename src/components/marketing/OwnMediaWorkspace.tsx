@@ -1,65 +1,686 @@
-import React,{useEffect,useMemo,useState} from 'react';
-import {getSupabase} from '../../lib/supabaseClient';
-import {Plus,Save,Trash2,Sparkles,RefreshCw} from 'lucide-react';
+import React, { useEffect, useMemo, useState } from 'react';
+import { getSupabase } from '../../lib/supabaseClient';
+import { Plus, Save, Trash2, Sparkles, RefreshCw, Globe, Link as LinkIcon } from 'lucide-react';
+import { TabMarketingAssetManager } from './TabMarketingAssetManager';
 
-type Kind='media'|'article'|'seo'|'rewrite'|'attribution';
-type Row={id:string;record_type:Kind;title:string;product_id:string|null;status:string|null;payload:Record<string,string>;updated_at:string};
-type Product={id:string;product_name:string};
-type Field={key:string;label:string;kind?:'textarea'|'number'|'date'|'select';options?:string[]};
-type Lead={id:string;source?:string|null;report_url?:string|null};
-type Deal={id:string;lead_id?:string|null;proposal_status?:string|null};
-const kinds:Kind[]=['media','article','seo','rewrite','attribution'];
-const sections=[['settings','メディア設定'],['planning','記事企画'],['production','記事制作'],['publication','公開管理'],['seo','SEO分析'],['rewrite','リライト管理'],['attribution','リード・売上連携']] as const;
-type Tab=typeof sections[number][0];
-const articleFields:Field[]=[
-{key:'mediaId',label:'対象メディア',kind:'select'},{key:'target',label:'ターゲット'},{key:'keyword',label:'狙うキーワード'},{key:'searchIntent',label:'検索意図',kind:'textarea'},{key:'readerProblem',label:'読者の課題',kind:'textarea'},{key:'purpose',label:'記事の目的'},{key:'theme',label:'記事テーマ',kind:'textarea'},{key:'cta',label:'CTA'},{key:'destination',label:'誘導先'},{key:'relatedArticles',label:'関連記事候補',kind:'textarea'},{key:'priority',label:'優先度',kind:'select',options:['高','中','低']},{key:'plannedDate',label:'公開予定日',kind:'date'},{key:'progress',label:'進捗状況',kind:'select',options:['企画中','制作待ち','制作中','確認中','公開待ち','公開済み','保留','中止']},
-{key:'outline',label:'記事構成・見出し',kind:'textarea'},{key:'body',label:'本文（外部AIで作成した文章も貼り付けて保存できます）',kind:'textarea'},{key:'metaTitle',label:'メタタイトル案'},{key:'metaDescription',label:'メタディスクリプション案',kind:'textarea'},{key:'internalLinks',label:'内部リンク候補',kind:'textarea'},{key:'instruction',label:'制作指示',kind:'textarea'},{key:'productionStatus',label:'制作状態',kind:'select',options:['未着手','制作中','確認中','完了']},{key:'approval',label:'最終確認状態',kind:'select',options:['未確認','確認中','承認済み','修正依頼']},{key:'publishStatus',label:'公開状態',kind:'select',options:['未公開','下書き','公開待ち','公開済み','公開停止']},{key:'publishedUrl',label:'公開URL（外部メディアURL）'},{key:'publishedDate',label:'公開日',kind:'date'},{key:'lastPublishedUpdate',label:'最終更新日',kind:'date'}];
-const seoFields:Field[]=[{key:'articleId',label:'対象記事',kind:'select'},{key:'periodStart',label:'集計開始日',kind:'date'},{key:'periodEnd',label:'集計終了日',kind:'date'},{key:'impressions',label:'検索表示回数',kind:'number'},{key:'clicks',label:'検索クリック数',kind:'number'},{key:'avgPosition',label:'平均掲載順位',kind:'number'},{key:'pageViews',label:'ページアクセス数',kind:'number'},{key:'inquiries',label:'問い合わせ数',kind:'number'},{key:'leads',label:'リード獲得数',kind:'number'},{key:'notes',label:'備考',kind:'textarea'}];
-const rewriteFields:Field[]=[{key:'articleId',label:'対象記事',kind:'select'},{key:'reason',label:'改善理由',kind:'select',options:['CTRが低い','検索順位を改善したい','情報が古い','問い合わせにつながっていない','CTAを改善したい','内部リンクを追加したい','その他']},{key:'target',label:'改善対象',kind:'textarea'},{key:'change',label:'改善内容',kind:'textarea'},{key:'priority',label:'優先度',kind:'select',options:['高','中','低']},{key:'assignee',label:'担当者'},{key:'dueDate',label:'対応期限',kind:'date'},{key:'status',label:'対応状況',kind:'select',options:['未着手','対応中','確認中','完了','保留']},{key:'doneDate',label:'改善実施日',kind:'date'},{key:'before',label:'改善前の実績',kind:'textarea'},{key:'after',label:'改善後の実績',kind:'textarea'},{key:'result',label:'改善結果',kind:'textarea'},{key:'aiSuggestion',label:'AI改善案（仮説）',kind:'textarea'}];
-const attributionFields:Field[]=[{key:'articleId',label:'対象記事',kind:'select'},{key:'sourceUrl',label:'流入元URL'},{key:'product',label:'対象商品・サービス'},{key:'periodStart',label:'集計開始日',kind:'date'},{key:'periodEnd',label:'集計終了日',kind:'date'},{key:'leads',label:'リード数',kind:'number'},{key:'meetings',label:'商談数',kind:'number'},{key:'contracts',label:'契約数',kind:'number'},{key:'revenue',label:'売上（円）',kind:'number'},{key:'profit',label:'利益（円）',kind:'number'},{key:'notes',label:'備考・集計根拠',kind:'textarea'}];
-const cls='mt-1 block w-full rounded-lg border border-slate-700 bg-slate-950 p-2 text-white';
+type Kind = 'media' | 'article' | 'seo' | 'rewrite' | 'attribution';
+type Row = {
+  id: string;
+  record_type: Kind;
+  title: string;
+  product_id: string | null;
+  status: string | null;
+  payload: Record<string, string>;
+  updated_at: string;
+};
+type Product = { id: string; product_name: string };
+type Field = { key: string; label: string; kind?: 'textarea' | 'number' | 'date' | 'select'; options?: string[] };
+type Lead = { id: string; source?: string | null; report_url?: string | null };
+type Deal = { id: string; lead_id?: string | null; proposal_status?: string | null };
 
-export const OwnMediaWorkspace:React.FC<{products:Product[];onAskAI?:(prompt:string)=>void;strategyContext?:string}>=({products,onAskAI,strategyContext=''})=>{
-const [tab,setTab]=useState<Tab>('settings'),[rows,setRows]=useState<Row[]>([]),[userId,setUserId]=useState(''),[loading,setLoading]=useState(true),[error,setError]=useState(''),[notice,setNotice]=useState(''),[editing,setEditing]=useState<Row|null>(null),[title,setTitle]=useState(''),[productId,setProductId]=useState(''),[payload,setPayload]=useState<Record<string,string>>({}),[form,setForm]=useState(false),[saving,setSaving]=useState(false),[crmLeads,setCrmLeads]=useState<Lead[]>([]),[crmDeals,setCrmDeals]=useState<Deal[]>([]),[aiInstruction,setAiInstruction]=useState(''),[aiLoading,setAiLoading]=useState(false),[aiError,setAiError]=useState(''),[aiNotice,setAiNotice]=useState('');
-const load=async()=>{const db=getSupabase();setLoading(true);setError('');if(!db){setError('Supabaseに接続してください。既存の集客運用DBへの接続が必要です。');setLoading(false);return;}const {data:auth,error:ae}=await db.auth.getUser();if(ae||!auth.user){setError('ログイン状態を確認できません。');setLoading(false);return;}setUserId(auth.user.id);const [saved,leadsResult,dealsResult]=await Promise.all([db.from('mst_ai_acquisition_records').select('*').eq('user_id',auth.user.id).in('record_type',kinds).order('updated_at',{ascending:false}),db.from('leads').select('id,source,report_url'),db.from('deals').select('id,lead_id,proposal_status')]);const {data,error:e}=saved;if(!leadsResult.error)setCrmLeads((leadsResult.data||[]) as Lead[]);if(!dealsResult.error)setCrmDeals((dealsResult.data||[]) as Deal[]);if(e){setError('自社メディアデータを読み込めませんでした: '+e.message);setLoading(false);return;}setRows((data||[]) as Row[]);setLoading(false);};
-useEffect(()=>{void load();},[]);
-const media=useMemo(()=>rows.filter(r=>r.record_type==='media'),[rows]),articles=useMemo(()=>rows.filter(r=>r.record_type==='article'),[rows]);
-const kind:Kind=tab==='settings'?'media':tab==='seo'?'seo':tab==='rewrite'?'rewrite':tab==='attribution'?'attribution':'article';
-const fields:Field[]=kind==='media'?[{key:'url',label:'HPのURL'},{key:'mediaType',label:'メディア種別',kind:'select',options:['自社HP','ブログ','オウンドメディア','その他']},{key:'cms',label:'CMS種別',kind:'select',options:['WordPress','独自開発','その他','未設定']},{key:'target',label:'ターゲット',kind:'textarea'},{key:'purpose',label:'運用目的',kind:'textarea'},{key:'strategyContext',label:'集客戦略からの運用方針',kind:'textarea'},{key:'connection',label:'連携状態',kind:'select',options:['未連携','手動運用','連携検討中']},{key:'notes',label:'備考',kind:'textarea'}]:kind==='article'?articleFields:kind==='seo'?seoFields:kind==='rewrite'?rewriteFields:attributionFields;
-const list=kind==='media'?media:kind==='article'?articles:rows.filter(r=>r.record_type===kind);
-const reset=()=>{setEditing(null);setTitle('');setProductId('');setPayload({});setForm(true);setError('');setNotice('');};
-const edit=(r:Row)=>{setEditing(r);setTitle(r.title);setProductId(r.product_id||'');setPayload(r.payload||{});setForm(true);};
-const save=async(e:React.FormEvent)=>{e.preventDefault();if(!title.trim()){setError('名称を入力してください。');return;}if(tab==='settings'&&!payload.url?.trim()){setError('HPのURLを入力してください。');return;}if(['planning','production','publication'].includes(tab)&&!payload.mediaId){setError('対象メディアを選択してください。');return;}const db=getSupabase();if(!db||!userId){setError('Supabaseに接続してログインしてください。');return;}setSaving(true);setError('');const id=editing?.id||'media-'+Date.now()+'-'+Math.random().toString(36).slice(2,8);const status=kind==='article'?(payload.progress||payload.productionStatus||payload.publishStatus||null):payload.status||null;const row={user_id:userId,id,record_type:kind,title:title.trim(),product_id:productId||null,status,payload,updated_at:new Date().toISOString()};const {error:saveError}=await db.from('mst_ai_acquisition_records').upsert(row,{onConflict:'user_id,id'});setSaving(false);if(saveError){setError('保存できませんでした: '+saveError.message);return;}setRows(p=>[{...row} as Row,...p.filter(r=>r.id!==id)]);setForm(false);setEditing(null);setNotice('保存しました。');};
-const remove=async(r:Row)=>{if(!window.confirm('「'+r.title+'」を削除しますか？'))return;const db=getSupabase();if(!db)return;const {error:e}=await db.from('mst_ai_acquisition_records').delete().eq('user_id',userId).eq('id',r.id);if(e){setError('削除できませんでした: '+e.message);return;}setRows(p=>p.filter(x=>x.id!==r.id));setNotice('削除しました。');};
-const renderField=(f:Field)=>{const relation=f.key==='mediaId'||f.key==='articleId',choices=f.key==='mediaId'?media:articles;return <label key={f.key} className={'text-sm '+(f.kind==='textarea'?'md:col-span-2':'')}>{f.label}{f.kind==='select'||relation?<select required={relation} value={payload[f.key]||''} onChange={e=>setPayload(p=>({...p,[f.key]:e.target.value}))} className={cls}><option value=''>選択してください</option>{(relation?choices.map(r=>r.id):f.options||[]).map(o=><option key={o} value={o}>{relation?choices.find(r=>r.id===o)?.title:o}</option>)}</select>:f.kind==='textarea'?<textarea value={payload[f.key]||''} rows={f.key==='body'?14:4} onChange={e=>setPayload(p=>({...p,[f.key]:e.target.value}))} className={cls}/>:<input type={f.kind||'text'} min={f.kind==='number'?0:undefined} value={payload[f.key]||''} onChange={e=>setPayload(p=>({...p,[f.key]:e.target.value}))} className={cls}/>}</label>;};
-const prompt='自社メディアの記事企画・改善案を提案してください。未入力データを推測せず、検索実績が無い提案は仮説と明記してください。記事名: '+title+'。キーワード: '+(payload.keyword||'未入力')+'。読者課題: '+(payload.readerProblem||'未入力')+'。既存本文: '+(payload.body?'本文の改善案を示す（元本文を保持）':'未入力')+'。集客戦略: '+(strategyContext||'未登録');
-const aiAllowedKeys:Record<Tab,string[]>={settings:['target','purpose','strategyContext','notes'],planning:['target','keyword','searchIntent','readerProblem','purpose','theme','cta','destination','relatedArticles','outline','metaTitle','metaDescription','internalLinks','instruction'],production:['outline','body','metaTitle','metaDescription','internalLinks','instruction'],publication:['metaTitle','metaDescription','internalLinks'],seo:['notes'],rewrite:['target','change','aiSuggestion'],attribution:['notes']};
-const aiGuidance:Record<Tab,string>={settings:'メディア設定のターゲット・目的・集客戦略からの運用方針・備考を提案する。URL、CMS、連携状態は作らない。',planning:'記事企画を読者課題、検索意図、テーマ、CTA、構成まで具体化する。本文はまだ作らない。',production:'既存の企画・構成と指示を使って本文や制作指示を作成・改善する。事実や引用元を捏造しない。',publication:'公開前のメタタイトル、メタディスクリプション、内部リンク候補だけを整える。公開URL、公開日、公開状態は変更しない。',seo:'入力済みの検索実績に基づく所見だけを備考に記載する。数値を作らず、仮説は仮説と明記する。',rewrite:'既存記事と入力済み実績をもとに改善案を提案し、実績にない効果を断定しない。',attribution:'入力済みの集計根拠を整理する。リード・売上の因果関係や実績数値は作らない。'};
-const generateDraft=async()=>{const instruction=aiInstruction.trim();if(!instruction||aiLoading)return;setAiLoading(true);setAiError('');setAiNotice('');try{const response=await fetch('/api/chat',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({messages:[{role:'user',content:['自社メディア運用の草案を作成・改善する社内AIです。JSONオブジェクトだけを返してください。形式: {"message":"変更点","draft":{"title":"名称","payload":{"fieldKey":"文字列"}}}','出力値はすべて文字列。指定された許可キーだけを使い、数値・URL・日付・CMS・公開状態などの事実を作らない。','画面: '+(sections.find(section=>section[0]===tab)?.[1]||tab),'この画面に合った作業: '+aiGuidance[tab],'許可キー: '+JSON.stringify(aiAllowedKeys[tab]),'対象商品: '+(products.find(product=>product.id===productId)?.product_name||'未選択'),'集客戦略: '+(strategyContext||'未登録'),'関連メディア・記事: '+JSON.stringify(rows.filter(row=>row.record_type==='media'||row.record_type==='article').map(row=>({title:row.title,type:row.record_type,payload:row.payload})).slice(0,12)),'現在の草案: '+JSON.stringify({title,payload}),'今回の依頼: '+instruction].join('\n')}],workModeId:'marketing_execution',character:{name:'自社メディア編集パートナー',role:'記事企画・制作・改善',personality:'未入力の事実を作らず、画面に合う草案のみ提案する',tone:'具体的で編集しやすい'},stream:false})});const result=await response.json();if(!response.ok||typeof result.text!=='string')throw new Error(result.error||'AI草案の作成に失敗しました。');const parsed=JSON.parse(result.text.trim().replace(/^`{3}(?:json)?\s*/i,'').replace(/\s*`{3}$/i,''));if(!parsed?.draft||typeof parsed.draft!=='object'||!parsed.draft.payload||typeof parsed.draft.payload!=='object')throw new Error('AIの返答を草案として読み取れませんでした。');const next:Record<string,string>={};for(const [key,value] of Object.entries(parsed.draft.payload)){if(aiAllowedKeys[tab].includes(key)&&typeof value==='string')next[key]=value.slice(0,5000);}setPayload(previous=>({...previous,...next}));if(typeof parsed.draft.title==='string'&&parsed.draft.title.trim())setTitle(parsed.draft.title.trim().slice(0,200));setAiInstruction('');setAiNotice(typeof parsed.message==='string'?parsed.message:'草案を入力欄に反映しました。内容を確認して編集してください。');}catch(e:any){setAiError(e?.message||'AI草案の作成に失敗しました。');}finally{setAiLoading(false);}};
+const kinds: Kind[] = ['media', 'article', 'seo', 'rewrite', 'attribution'];
+const sections = [
+  ['settings', 'メディア設定'],
+  ['planning', '記事企画'],
+  ['production', '記事制作'],
+  ['publication', '公開管理'],
+  ['seo', 'SEO分析'],
+  ['rewrite', 'リライト管理'],
+  ['attribution', 'リード・売上連携'],
+] as const;
+type Tab = typeof sections[number][0];
 
-const sectionName=sections.find(s=>s[0]===tab)?.[1]||'';
-return <section className='space-y-4 text-slate-100'>
-<header className='flex flex-wrap items-start justify-between gap-3 rounded-2xl border border-cyan-500/20 bg-gradient-to-r from-cyan-950/60 to-slate-900 p-5'><div><h2 className='text-xl font-bold'>自社メディア運用</h2><p className='mt-1 text-sm text-slate-300'>記事企画から制作・公開・検索実績・改善を管理します。外部API、自動取得、自動公開は行いません。</p></div><button onClick={()=>void load()} className='inline-flex items-center gap-2 rounded-lg border border-slate-700 px-3 py-2 text-sm'><RefreshCw className='h-4 w-4'/>更新</button></header>
-<nav className='flex gap-1 overflow-x-auto rounded-xl border border-slate-800 bg-slate-900 p-1' aria-label='自社メディア運用'>{sections.map(s=><button key={s[0]} onClick={()=>{setTab(s[0]);setForm(false);setError('');setNotice('');}} aria-current={tab===s[0]?'page':undefined} className={'whitespace-nowrap rounded-lg px-3 py-2 text-xs sm:text-sm '+(tab===s[0]?'bg-cyan-700 font-semibold text-white':'text-slate-400 hover:bg-slate-800')}>{s[1]}</button>)}</nav>
-{(error||notice)&&<p role={error?'alert':'status'} className={'rounded-lg p-3 text-sm '+(error?'bg-rose-950/50 text-rose-200':'bg-emerald-950/40 text-emerald-200')}>{error||notice}</p>}
-{loading?<p className='rounded-xl border border-slate-800 p-5 text-sm text-slate-400'>メディアデータを読み込み中…</p>:<>
-{tab==='settings'&&<p className='rounded bg-slate-900 p-3 text-sm text-slate-300'>複数のHP・ブログを登録できます。商品マスターの商品をIDで関連付けます。</p>}
-{['planning','production','publication'].includes(tab)&&<p className='rounded bg-slate-900 p-3 text-sm text-slate-300'>記事企画・本文・公開情報は共通記事レコードを使います。{tab==='production'?'本文・制作指示は保存して再表示できます。':tab==='publication'?'公開URL・日付を手動管理します。自動投稿は行いません。':'企画と公開予定を管理します。'}</p>}
-{tab==='seo'&&<p className='rounded bg-slate-900 p-3 text-sm text-slate-300'>実績は手入力です。CTRはクリック数÷表示回数で算出し、未入力と0件を区別します。</p>}
-{tab==='rewrite'&&<p className='rounded bg-slate-900 p-3 text-sm text-slate-300'>AI提案は既存AI社長チャットを利用します。検索実績とAI仮説を区別してください。{onAskAI&&<button onClick={()=>onAskAI(prompt)} className='ml-2 rounded bg-purple-700 px-2 py-1 text-xs'><Sparkles className='inline h-3 w-3'/> AIに相談</button>}</p>}
-{tab==='attribution'&&<p className='rounded bg-slate-900 p-3 text-sm text-slate-300'>既存CRMのリード獲得元・診断URLが公開記事URLと完全一致した場合に限り、参考件数を表示します。記事アクセスと契約の因果関係は断定しません。契約・売上は手入力で集計できます。</p>}
-<div className='flex items-center justify-between'><h3 className='font-semibold'>{sectionName}</h3><button onClick={()=>{reset();if(tab==='planning')setPayload({progress:'企画中'});if(tab==='publication')setPayload({publishStatus:'未公開'});}} className='inline-flex items-center gap-2 rounded-lg bg-cyan-700 px-3 py-2 text-sm'><Plus className='h-4 w-4'/>新規登録</button></div>
-{form&&<form onSubmit={e=>void save(e)} className='space-y-4 rounded-xl border border-cyan-500/30 bg-slate-900 p-4'><div className='grid gap-3 md:grid-cols-2'>
-<label className='text-sm'>{tab==='settings'?'メディア名':tab==='planning'?'記事企画名':'記事タイトル'}<input required value={title} onChange={e=>setTitle(e.target.value)} className={cls}/></label>
-<label className='text-sm'>対象商品・サービス<select value={productId} onChange={e=>setProductId(e.target.value)} className={cls}><option value=''>商品を選択（任意）</option>{products.map(p=><option key={p.id} value={p.id}>{p.product_name}</option>)}</select></label>{fields.map(renderField)}</div>
-{tab==='planning'&&onAskAI&&<button type='button' onClick={()=>onAskAI(prompt)} className='rounded-lg bg-purple-700 px-3 py-2 text-sm'><Sparkles className='mr-1 inline h-4 w-4'/>AIに企画案を相談</button>}
-{tab==='production'&&<div className='rounded bg-amber-950/30 p-3 text-xs text-amber-200'>AIへの相談は既存チャットを開きます。回答を本文欄へ貼り付けて保存してください。{onAskAI&&<button type='button' onClick={()=>onAskAI(prompt)} className='ml-2 rounded bg-purple-700 px-2 py-1'><Sparkles className='mr-1 inline h-3 w-3'/>構成・本文の改善を相談</button>}</div>}
-<section className='space-y-2 rounded-xl border border-violet-500/30 bg-violet-950/20 p-3'><h4 className='text-sm font-semibold text-violet-100'>{sections.find(section=>section[0]===tab)?.[1]}のAI草案</h4><p className='text-xs text-slate-300'>画面ごとの役割と集客戦略を踏まえて草案を作成します。数値・URL・日付などの事実欄はAIで補いません。</p><textarea value={aiInstruction} onChange={e=>setAiInstruction(e.target.value)} rows={2} placeholder='作りたい内容や直したい点を入力' className='block w-full rounded-lg border border-slate-700 bg-slate-950 p-3 text-sm text-white'/><div className='flex flex-wrap items-center gap-2'><button type='button' disabled={aiLoading||!aiInstruction.trim()} onClick={()=>void generateDraft()} className='rounded-lg bg-violet-700 px-3 py-2 text-sm font-semibold disabled:opacity-50'>{aiLoading?'AIが草案を作成中…':'AIで草案を作成・改善'}</button>{aiError&&<p role='alert' className='text-xs text-rose-300'>{aiError}</p>}{aiNotice&&<p role='status' className='text-xs text-emerald-200'>{aiNotice}</p>}</div></section><div className='flex gap-2'><button disabled={saving} className='inline-flex items-center gap-2 rounded-lg bg-cyan-700 px-4 py-2 text-sm'><Save className='h-4 w-4'/>{saving?'保存中…':'保存'}</button><button type='button' onClick={()=>setForm(false)} className='rounded-lg border border-slate-700 px-4 py-2 text-sm'>キャンセル</button></div></form>}
-{!form&&<div className='space-y-2'>{list.length===0?<p className='rounded-xl border border-slate-800 bg-slate-900 p-5 text-sm text-slate-400'>登録データはありません。</p>:list.map(r=>{const linkedArticle=articles.find(a=>a.id===r.payload.articleId),linkedMedia=media.find(m=>m.id===r.payload.mediaId),rate=r.record_type==='seo'&&r.payload.impressions!==undefined&&r.payload.clicks!==undefined&&Number(r.payload.impressions)>0?(Number(r.payload.clicks)/Number(r.payload.impressions)*100).toFixed(2)+'%':r.record_type==='seo'&&r.payload.impressions==='0'?'算出不可':r.record_type==='seo'?'未入力':'';return <article key={r.id} className='rounded-xl border border-slate-800 bg-slate-900 p-4'><div className='flex items-start justify-between gap-3'><div><h4 className='font-semibold'>{r.title}</h4><p className='mt-1 text-xs text-slate-500'>{products.find(p=>p.id===r.product_id)?.product_name||'商品未設定'}{linkedMedia?' · '+linkedMedia.title:''}{linkedArticle?' · '+linkedArticle.title:''}{r.status?' · '+r.status:''}</p></div><div className='flex gap-2'><button onClick={()=>edit(r)} className='rounded border border-slate-700 px-2 py-1 text-xs'>編集</button><button onClick={()=>void remove(r)} aria-label={r.title+'を削除'} className='rounded border border-rose-900 px-2 py-1 text-xs text-rose-300'><Trash2 className='h-3.5 w-3.5'/></button></div></div>
-{r.record_type==='article'&&<p className='mt-2 text-xs text-cyan-200'>企画: {r.payload.progress||'未設定'} · 制作: {r.payload.productionStatus||'未設定'} · 公開: {r.payload.publishStatus||'未設定'}{r.payload.publishedUrl?' · '+r.payload.publishedUrl:''}</p>}
-{r.record_type==='seo'&&<p className='mt-2 text-sm text-cyan-200'>CTR: {rate} · 表示 {r.payload.impressions||'未入力'} · クリック {r.payload.clicks||'未入力'} · 順位 {r.payload.avgPosition||'未入力'}</p>}
-{r.record_type==='attribution'&&linkedArticle&&(()=>{const url=linkedArticle.payload.publishedUrl?.trim();const matched=url?crmLeads.filter(l=>l.report_url?.trim()===url||l.source?.trim()===url):[];const ids=new Set(matched.map(l=>l.id));const matchingDeals=crmDeals.filter(d=>d.lead_id&&ids.has(d.lead_id));return <p className='mt-2 text-xs text-slate-300'>CRMのURL完全一致（参考値）: リード {url?matched.length:'URL未登録'}件・商談 {url?matchingDeals.length:'URL未登録'}件。契約との因果関係を示す数値ではありません。</p>;})()}
-<dl className='mt-3 grid gap-2 sm:grid-cols-2'>{fields.filter(f=>Boolean(r.payload[f.key])).slice(0,8).map(f=><div key={f.key}><dt className='text-[11px] text-slate-500'>{f.label}</dt><dd className='whitespace-pre-wrap break-words text-xs text-slate-300'>{f.key==='mediaId'?linkedMedia?.title||'未選択':f.key==='articleId'?linkedArticle?.title||'未選択':r.payload[f.key]}</dd></div>)}</dl></article>;})}</div>}
-</>}
-</section>;
+const articleFields: Field[] = [
+  { key: 'mediaId', label: '対象メディア', kind: 'select' },
+  { key: 'target', label: 'ターゲット' },
+  { key: 'keyword', label: '狙うキーワード' },
+  { key: 'searchIntent', label: '検索意図', kind: 'textarea' },
+  { key: 'readerProblem', label: '読者の課題', kind: 'textarea' },
+  { key: 'purpose', label: '記事の目的' },
+  { key: 'theme', label: '記事テーマ', kind: 'textarea' },
+  { key: 'cta', label: 'CTA' },
+  { key: 'destination', label: '誘導先' },
+  { key: 'relatedArticles', label: '関連記事候補', kind: 'textarea' },
+  { key: 'priority', label: '優先度', kind: 'select', options: ['高', '中', '低'] },
+  { key: 'plannedDate', label: '公開予定日', kind: 'date' },
+  { key: 'progress', label: '進捗状況', kind: 'select', options: ['企画中', '制作待ち', '制作中', '確認中', '公開待ち', '公開済み', '保留', '中止'] },
+  { key: 'outline', label: '記事構成・見出し', kind: 'textarea' },
+  { key: 'body', label: '本文（外部AIで作成した文章も貼り付けて保存できます）', kind: 'textarea' },
+  { key: 'metaTitle', label: 'メタタイトル案' },
+  { key: 'metaDescription', label: 'メタディスクリプション案', kind: 'textarea' },
+  { key: 'internalLinks', label: '内部リンク候補', kind: 'textarea' },
+  { key: 'instruction', label: '制作指示', kind: 'textarea' },
+  { key: 'productionStatus', label: '制作状態', kind: 'select', options: ['未着手', '制作中', '確認中', '完了'] },
+  { key: 'approval', label: '最終確認状態', kind: 'select', options: ['未確認', '確認中', '承認済み', '修正依頼'] },
+  { key: 'publishStatus', label: '公開状態', kind: 'select', options: ['未公開', '下書き', '公開待ち', '公開済み', '公開停止'] },
+  { key: 'publishedUrl', label: '公開URL（外部メディアURL）' },
+  { key: 'publishedDate', label: '公開日', kind: 'date' },
+  { key: 'lastPublishedUpdate', label: '最終更新日', kind: 'date' },
+];
+
+const seoFields: Field[] = [
+  { key: 'articleId', label: '対象記事', kind: 'select' },
+  { key: 'periodStart', label: '集計開始日', kind: 'date' },
+  { key: 'periodEnd', label: '集計終了日', kind: 'date' },
+  { key: 'impressions', label: '検索表示回数', kind: 'number' },
+  { key: 'clicks', label: '検索クリック数', kind: 'number' },
+  { key: 'avgPosition', label: '平均掲載順位', kind: 'number' },
+  { key: 'pageViews', label: 'ページアクセス数', kind: 'number' },
+  { key: 'inquiries', label: '問い合わせ数', kind: 'number' },
+  { key: 'leads', label: 'リード獲得数', kind: 'number' },
+  { key: 'notes', label: '備考', kind: 'textarea' },
+];
+
+const rewriteFields: Field[] = [
+  { key: 'articleId', label: '対象記事', kind: 'select' },
+  { key: 'reason', label: '改善理由', kind: 'select', options: ['CTRが低い', '検索順位を改善したい', '情報が古い', '問い合わせにつながっていない', 'CTAを改善したい', '内部リンクを追加したい', 'その他'] },
+  { key: 'target', label: '改善対象', kind: 'textarea' },
+  { key: 'change', label: '改善内容', kind: 'textarea' },
+  { key: 'priority', label: '優先度', kind: 'select', options: ['高', '中', '低'] },
+  { key: 'assignee', label: '担当者' },
+  { key: 'dueDate', label: '対応期限', kind: 'date' },
+  { key: 'status', label: '対応状況', kind: 'select', options: ['未着手', '対応中', '確認中', '完了', '保留'] },
+  { key: 'doneDate', label: '改善実施日', kind: 'date' },
+  { key: 'before', label: '改善前の実績', kind: 'textarea' },
+  { key: 'after', label: '改善後の実績', kind: 'textarea' },
+  { key: 'result', label: '改善結果', kind: 'textarea' },
+  { key: 'aiSuggestion', label: 'AI改善案（仮説）', kind: 'textarea' },
+];
+
+const attributionFields: Field[] = [
+  { key: 'articleId', label: '対象記事', kind: 'select' },
+  { key: 'sourceUrl', label: '流入元URL' },
+  { key: 'product', label: '対象商品・サービス' },
+  { key: 'periodStart', label: '集計開始日', kind: 'date' },
+  { key: 'periodEnd', label: '集計終了日', kind: 'date' },
+  { key: 'leads', label: 'リード数', kind: 'number' },
+  { key: 'meetings', label: '商談数', kind: 'number' },
+  { key: 'contracts', label: '契約数', kind: 'number' },
+  { key: 'revenue', label: '売上（円）', kind: 'number' },
+  { key: 'profit', label: '利益（円）', kind: 'number' },
+  { key: 'notes', label: '備考・集計根拠', kind: 'textarea' },
+];
+
+const cls = 'mt-1 block w-full rounded-lg border border-slate-700 bg-slate-950 p-2 text-white';
+
+export const OwnMediaWorkspace: React.FC<{
+  products: Product[];
+  onAskAI?: (prompt: string) => void;
+  strategyContext?: string;
+  userId?: string;
+}> = ({ products, onAskAI, strategyContext = '', userId: propUserId }) => {
+  const [tab, setTab] = useState<Tab>('settings');
+  const [rows, setRows] = useState<Row[]>([]);
+  const [userId, setUserId] = useState(propUserId || '');
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
+  const [notice, setNotice] = useState('');
+  const [editing, setEditing] = useState<Row | null>(null);
+  const [title, setTitle] = useState('');
+  const [productId, setProductId] = useState('');
+  const [payload, setPayload] = useState<Record<string, string>>({});
+  const [form, setForm] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [crmLeads, setCrmLeads] = useState<Lead[]>([]);
+  const [crmDeals, setCrmDeals] = useState<Deal[]>([]);
+  const [aiInstruction, setAiInstruction] = useState('');
+  const [aiLoading, setAiLoading] = useState(false);
+  const [aiError, setAiError] = useState('');
+  const [aiNotice, setAiNotice] = useState('');
+
+  const load = async () => {
+    const db = getSupabase();
+    setLoading(true);
+    setError('');
+    if (!db) {
+      setError('Supabaseに接続してください。既存の集客運用DBへの接続が必要です。');
+      setLoading(false);
+      return;
+    }
+    const { data: auth, error: ae } = await db.auth.getUser();
+    if (ae || !auth.user) {
+      setError('ログイン状態を確認できません。');
+      setLoading(false);
+      return;
+    }
+    setUserId(auth.user.id);
+    const [saved, leadsResult, dealsResult] = await Promise.all([
+      db.from('mst_ai_acquisition_records').select('*').eq('user_id', auth.user.id).in('record_type', kinds).order('updated_at', { ascending: false }),
+      db.from('leads').select('id,source,report_url'),
+      db.from('deals').select('id,lead_id,proposal_status'),
+    ]);
+    const { data, error: e } = saved;
+    if (!leadsResult.error) setCrmLeads((leadsResult.data || []) as Lead[]);
+    if (!dealsResult.error) setCrmDeals((dealsResult.data || []) as Deal[]);
+    if (e) {
+      setError('自社メディアデータを読み込めませんでした: ' + e.message);
+      setLoading(false);
+      return;
+    }
+    setRows((data || []) as Row[]);
+    setLoading(false);
+  };
+
+  useEffect(() => {
+    void load();
+  }, []);
+
+  const media = useMemo(() => rows.filter((r) => r.record_type === 'media'), [rows]);
+  const articles = useMemo(() => rows.filter((r) => r.record_type === 'article'), [rows]);
+
+  const kind: Kind = tab === 'settings' ? 'media' : tab === 'seo' ? 'seo' : tab === 'rewrite' ? 'rewrite' : tab === 'attribution' ? 'attribution' : 'article';
+  const fields: Field[] =
+    kind === 'media'
+      ? [
+          { key: 'url', label: 'HPのURL' },
+          { key: 'mediaType', label: 'メディア種別', kind: 'select', options: ['自社HP', 'ブログ', 'オウンドメディア', 'その他'] },
+          { key: 'cms', label: 'CMS種別', kind: 'select', options: ['WordPress', '独自開発', 'その他', '未設定'] },
+          { key: 'target', label: 'ターゲット', kind: 'textarea' },
+          { key: 'purpose', label: '運用目的', kind: 'textarea' },
+          { key: 'strategyContext', label: '集客戦略からの運用方針', kind: 'textarea' },
+          { key: 'connection', label: '連携状態', kind: 'select', options: ['未連携', '手動運用', '連携検討中'] },
+          { key: 'notes', label: '備考', kind: 'textarea' },
+        ]
+      : kind === 'article'
+      ? articleFields
+      : kind === 'seo'
+      ? seoFields
+      : kind === 'rewrite'
+      ? rewriteFields
+      : attributionFields;
+
+  const list = kind === 'media' ? media : kind === 'article' ? articles : rows.filter((r) => r.record_type === kind);
+
+  const reset = () => {
+    setEditing(null);
+    setTitle('');
+    setProductId('');
+    setPayload({});
+    setForm(true);
+    setError('');
+    setNotice('');
+  };
+
+  const edit = (r: Row) => {
+    setEditing(r);
+    setTitle(r.title);
+    setProductId(r.product_id || '');
+    setPayload(r.payload || {});
+    setForm(true);
+  };
+
+  const save = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!title.trim()) {
+      setError('名称を入力してください。');
+      return;
+    }
+    if (tab === 'settings' && !payload.url?.trim()) {
+      setError('HPのURLを入力してください。');
+      return;
+    }
+    if (['planning', 'production', 'publication'].includes(tab) && !payload.mediaId) {
+      setError('対象メディアを選択してください。');
+      return;
+    }
+    const db = getSupabase();
+    if (!db || !userId) {
+      setError('Supabaseに接続してログインしてください。');
+      return;
+    }
+    setSaving(true);
+    setError('');
+    const id = editing?.id || 'media-' + Date.now() + '-' + Math.random().toString(36).slice(2, 8);
+    const status = kind === 'article' ? payload.progress || payload.productionStatus || payload.publishStatus || null : payload.status || null;
+    const row = {
+      user_id: userId,
+      id,
+      record_type: kind,
+      title: title.trim(),
+      product_id: productId || null,
+      status,
+      payload,
+      updated_at: new Date().toISOString(),
+    };
+    const { error: saveError } = await db.from('mst_ai_acquisition_records').upsert(row, { onConflict: 'user_id,id' });
+    setSaving(false);
+    if (saveError) {
+      setError('保存できませんでした: ' + saveError.message);
+      return;
+    }
+    setRows((p) => [{ ...row } as Row, ...p.filter((r) => r.id !== id)]);
+    setForm(false);
+    setEditing(null);
+    setNotice('保存しました。');
+  };
+
+  const remove = async (r: Row) => {
+    if (!window.confirm('「' + r.title + '」を削除しますか？')) return;
+    const db = getSupabase();
+    if (!db) return;
+    const { error: e } = await db.from('mst_ai_acquisition_records').delete().eq('user_id', userId).eq('id', r.id);
+    if (e) {
+      setError('削除できませんでした: ' + e.message);
+      return;
+    }
+    setRows((p) => p.filter((x) => x.id !== r.id));
+    setNotice('削除しました。');
+  };
+
+  const renderField = (f: Field) => {
+    const relation = f.key === 'mediaId' || f.key === 'articleId';
+    const choices = f.key === 'mediaId' ? media : articles;
+    return (
+      <label key={f.key} className={'text-sm ' + (f.kind === 'textarea' ? 'md:col-span-2' : '')}>
+        {f.label}
+        {f.kind === 'select' || relation ? (
+          <select
+            required={relation}
+            value={payload[f.key] || ''}
+            onChange={(e) => setPayload((p) => ({ ...p, [f.key]: e.target.value }))}
+            className={cls}
+          >
+            <option value="">選択してください</option>
+            {(relation ? choices.map((r) => r.id) : f.options || []).map((o) => (
+              <option key={o} value={o}>
+                {relation ? choices.find((r) => r.id === o)?.title : o}
+              </option>
+            ))}
+          </select>
+        ) : f.kind === 'textarea' ? (
+          <textarea
+            value={payload[f.key] || ''}
+            rows={f.key === 'body' ? 14 : 4}
+            onChange={(e) => setPayload((p) => ({ ...p, [f.key]: e.target.value }))}
+            className={cls}
+          />
+        ) : (
+          <input
+            type={f.kind || 'text'}
+            min={f.kind === 'number' ? 0 : undefined}
+            value={payload[f.key] || ''}
+            onChange={(e) => setPayload((p) => ({ ...p, [f.key]: e.target.value }))}
+            className={cls}
+          />
+        )}
+      </label>
+    );
+  };
+
+  const prompt =
+    '自社メディアの記事企画・改善案を提案してください。未入力データを推測せず、検索実績が無い提案は仮説と明記してください。記事名: ' +
+    title +
+    '。キーワード: ' +
+    (payload.keyword || '未入力') +
+    '。読者課題: ' +
+    (payload.readerProblem || '未入力') +
+    '。既存本文: ' +
+    (payload.body ? '本文の改善案を示す（元本文を保持）' : '未入力') +
+    '。集客戦略: ' +
+    (strategyContext || '未登録');
+
+  const aiAllowedKeys: Record<Tab, string[]> = {
+    settings: ['target', 'purpose', 'strategyContext', 'notes'],
+    planning: ['target', 'keyword', 'searchIntent', 'readerProblem', 'purpose', 'theme', 'cta', 'destination', 'relatedArticles', 'outline', 'metaTitle', 'metaDescription', 'internalLinks', 'instruction'],
+    production: ['outline', 'body', 'metaTitle', 'metaDescription', 'internalLinks', 'instruction'],
+    publication: ['metaTitle', 'metaDescription', 'internalLinks'],
+    seo: ['notes'],
+    rewrite: ['target', 'change', 'aiSuggestion'],
+    attribution: ['notes'],
+  };
+
+  const aiGuidance: Record<Tab, string> = {
+    settings: 'メディア設定のターゲット・目的・集客戦略からの運用方針・備考を提案する。URL、CMS、連携状態は作らない。',
+    planning: '記事企画を読者課題、検索意図、テーマ、CTA、構成まで具体化する。本文はまだ作らない。',
+    production: '既存の企画・構成と指示を使って本文や制作指示を作成・改善する。事実や引用元を捏造しない。',
+    publication: '公開前のメタタイトル、メタディスクリプション、内部リンク候補だけを整える。公開URL、公開日、公開状態は変更しない。',
+    seo: '入力済みの検索実績に基づく所見だけを備考に記載する。数値を作らず、仮説は仮説と明記する。',
+    rewrite: '既存記事と入力済み実績をもとに改善案を提案し、実績にない効果を断定しない。',
+    attribution: '入力済みの集計根拠を整理する。リード・売上の因果関係や実績数値は作らない。',
+  };
+
+  const generateDraft = async () => {
+    const instruction = aiInstruction.trim();
+    if (!instruction || aiLoading) return;
+    setAiLoading(true);
+    setAiError('');
+    setAiNotice('');
+    try {
+      const response = await fetch('/api/chat', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          messages: [
+            {
+              role: 'user',
+              content: [
+                '自社メディア運用の草案を作成・改善する社内AIです。JSONオブジェクトだけを返してください。形式: {"message":"変更点","draft":{"title":"名称","payload":{"fieldKey":"文字列"}}}',
+                '出力値はすべて文字列。指定された許可キーだけを使い、数値・URL・日付・CMS・公開状態などの事実を作らない。',
+                '画面: ' + (sections.find((section) => section[0] === tab)?.[1] || tab),
+                'この画面に合った作業: ' + aiGuidance[tab],
+                '許可キー: ' + JSON.stringify(aiAllowedKeys[tab]),
+                '対象商品: ' + (products.find((product) => product.id === productId)?.product_name || '未選択'),
+                '集客戦略: ' + (strategyContext || '未登録'),
+                '関連メディア・記事: ' +
+                  JSON.stringify(
+                    rows
+                      .filter((row) => row.record_type === 'media' || row.record_type === 'article')
+                      .map((row) => ({ title: row.title, type: row.record_type, payload: row.payload }))
+                      .slice(0, 12)
+                  ),
+                '現在の草案: ' + JSON.stringify({ title, payload }),
+                '今回の依頼: ' + instruction,
+              ].join('\n'),
+            },
+          ],
+          workModeId: 'marketing_execution',
+          character: {
+            name: '自社メディア編集パートナー',
+            role: '記事企画・制作・改善',
+            personality: '未入力の事実を作らず、画面に合う草案のみ提案する',
+            tone: '具体的で編集しやすい',
+          },
+          stream: false,
+        }),
+      });
+      const result = await response.json();
+      if (!response.ok || typeof result.text !== 'string') throw new Error(result.error || 'AI草案の作成に失敗しました。');
+      const parsed = JSON.parse(result.text.trim().replace(/^`{3}(?:json)?\s*/i, '').replace(/\s*`{3}$/i, ''));
+      if (!parsed?.draft || typeof parsed.draft !== 'object' || !parsed.draft.payload || typeof parsed.draft.payload !== 'object') {
+        throw new Error('AIの返答を草案として読み取れませんでした。');
+      }
+      const next: Record<string, string> = {};
+      for (const [key, value] of Object.entries(parsed.draft.payload)) {
+        if (aiAllowedKeys[tab].includes(key) && typeof value === 'string') next[key] = value.slice(0, 5000);
+      }
+      setPayload((previous) => ({ ...previous, ...next }));
+      if (typeof parsed.draft.title === 'string' && parsed.draft.title.trim()) setTitle(parsed.draft.title.trim().slice(0, 200));
+      setAiInstruction('');
+      setAiNotice(typeof parsed.message === 'string' ? parsed.message : '草案を入力欄に反映しました。内容を確認して編集してください。');
+    } catch (e: any) {
+      setAiError(e?.message || 'AI草案の作成に失敗しました。');
+    } finally {
+      setAiLoading(false);
+    }
+  };
+
+  const sectionName = sections.find((s) => s[0] === tab)?.[1] || '';
+
+  return (
+    <section className="space-y-4 text-slate-100">
+      <header className="flex flex-wrap items-start justify-between gap-3 rounded-2xl border border-cyan-500/20 bg-gradient-to-r from-cyan-950/60 to-slate-900 p-5">
+        <div>
+          <h2 className="text-xl font-bold flex items-center gap-2">
+            <Globe className="h-5 w-5 text-cyan-400" />
+            自社メディア運用
+          </h2>
+          <p className="mt-1 text-sm text-slate-300">
+            自社HP・オウンドメディアのURLや素材、記事企画から制作・公開・検索実績・改善を管理します。
+          </p>
+        </div>
+        <button onClick={() => void load()} className="inline-flex items-center gap-2 rounded-lg border border-slate-700 px-3 py-2 text-sm hover:bg-slate-800">
+          <RefreshCw className="h-4 w-4" />
+          更新
+        </button>
+      </header>
+
+      <nav className="flex gap-1 overflow-x-auto rounded-xl border border-slate-800 bg-slate-900 p-1" aria-label="自社メディア運用">
+        {sections.map((s) => (
+          <button
+            key={s[0]}
+            onClick={() => {
+              setTab(s[0]);
+              setForm(false);
+              setError('');
+              setNotice('');
+            }}
+            aria-current={tab === s[0] ? 'page' : undefined}
+            className={'whitespace-nowrap rounded-lg px-3 py-2 text-xs sm:text-sm ' + (tab === s[0] ? 'bg-cyan-700 font-semibold text-white' : 'text-slate-400 hover:bg-slate-800')}
+          >
+            {s[1]}
+          </button>
+        ))}
+      </nav>
+
+      {(error || notice) && (
+        <p role={error ? 'alert' : 'status'} className={'rounded-lg p-3 text-sm ' + (error ? 'bg-rose-950/50 text-rose-200' : 'bg-emerald-950/40 text-emerald-200')}>
+          {error || notice}
+        </p>
+      )}
+
+      {loading ? (
+        <p className="rounded-xl border border-slate-800 p-5 text-sm text-slate-400">メディアデータを読み込み中…</p>
+      ) : (
+        <>
+          {tab === 'settings' && (
+            <p className="rounded bg-slate-900 p-3 text-sm text-slate-300">
+              自社HP、ブログ、オウンドメディアのURLやCMS、運用目的を登録できます。下の「自社メディアのHP URL・素材・成果物」欄からサイト用ファイルや各種URLも直接保管・管理できます。
+            </p>
+          )}
+          {['planning', 'production', 'publication'].includes(tab) && (
+            <p className="rounded bg-slate-900 p-3 text-sm text-slate-300">
+              記事企画・本文・公開情報は共通記事レコードを使います。
+              {tab === 'production'
+                ? '本文・制作指示は保存して再表示できます。'
+                : tab === 'publication'
+                ? '公開URL・日付を手動管理します。自動投稿は行いません。'
+                : '企画と公開予定を管理します。'}
+            </p>
+          )}
+          {tab === 'seo' && <p className="rounded bg-slate-900 p-3 text-sm text-slate-300">実績は手入力です。CTRはクリック数÷表示回数で算出し、未入力と0件を区別します。</p>}
+          {tab === 'rewrite' && (
+            <p className="rounded bg-slate-900 p-3 text-sm text-slate-300">
+              AI提案は既存AI社長チャットを利用します。検索実績とAI仮説を区別してください。
+              {onAskAI && (
+                <button onClick={() => onAskAI(prompt)} className="ml-2 rounded bg-purple-700 px-2 py-1 text-xs">
+                  <Sparkles className="inline h-3 w-3" /> AIに相談
+                </button>
+              )}
+            </p>
+          )}
+          {tab === 'attribution' && (
+            <p className="rounded bg-slate-900 p-3 text-sm text-slate-300">
+              既存CRMのリード獲得元・診断URLが公開記事URLと完全一致した場合に限り、参考件数を表示します。記事アクセスと契約の因果関係は断定しません。契約・売上は手入力で集計できます。
+            </p>
+          )}
+
+          {/* 新規登録ボタン */}
+          <div className="flex items-center justify-between">
+            <h3 className="font-semibold text-lg">{sectionName}</h3>
+            <button
+              onClick={() => {
+                reset();
+                if (tab === 'planning') setPayload({ progress: '企画中' });
+                if (tab === 'publication') setPayload({ publishStatus: '未公開' });
+              }}
+              className="inline-flex items-center gap-2 rounded-lg bg-cyan-700 px-3 py-2 text-sm hover:bg-cyan-600"
+            >
+              <Plus className="h-4 w-4" />
+              新規登録
+            </button>
+          </div>
+
+          {/* フォーム */}
+          {form && (
+            <form onSubmit={(e) => void save(e)} className="space-y-4 rounded-xl border border-cyan-500/30 bg-slate-900 p-4">
+              <div className="grid gap-3 md:grid-cols-2">
+                <label className="text-sm">
+                  {tab === 'settings' ? 'メディア名' : tab === 'planning' ? '記事企画名' : '記事タイトル'}
+                  <input required value={title} onChange={(e) => setTitle(e.target.value)} className={cls} />
+                </label>
+                <label className="text-sm">
+                  対象商品・サービス
+                  <select value={productId} onChange={(e) => setProductId(e.target.value)} className={cls}>
+                    <option value="">商品を選択（任意）</option>
+                    {products.map((p) => (
+                      <option key={p.id} value={p.id}>
+                        {p.product_name}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                {fields.map(renderField)}
+              </div>
+
+              {tab === 'planning' && onAskAI && (
+                <button type="button" onClick={() => onAskAI(prompt)} className="rounded-lg bg-purple-700 px-3 py-2 text-sm">
+                  <Sparkles className="mr-1 inline h-4 w-4" />
+                  AIに企画案を相談
+                </button>
+              )}
+              {tab === 'production' && (
+                <div className="rounded bg-amber-950/30 p-3 text-xs text-amber-200">
+                  AIへの相談は既存チャットを開きます。回答を本文欄へ貼り付けて保存してください。
+                  {onAskAI && (
+                    <button type="button" onClick={() => onAskAI(prompt)} className="ml-2 rounded bg-purple-700 px-2 py-1">
+                      <Sparkles className="mr-1 inline h-3 w-3" />
+                      構成・本文の改善を相談
+                    </button>
+                  )}
+                </div>
+              )}
+
+              <section className="space-y-2 rounded-xl border border-violet-500/30 bg-violet-950/20 p-3">
+                <h4 className="text-sm font-semibold text-violet-100">{sections.find((section) => section[0] === tab)?.[1]}のAI草案</h4>
+                <p className="text-xs text-slate-300">画面ごとの役割と集客戦略を踏まえて草案を作成します。数値・URL・日付などの事実欄はAIで補いません。</p>
+                <textarea
+                  value={aiInstruction}
+                  onChange={(e) => setAiInstruction(e.target.value)}
+                  rows={2}
+                  placeholder="作りたい内容や直したい点を入力"
+                  className="block w-full rounded-lg border border-slate-700 bg-slate-950 p-3 text-sm text-white"
+                />
+                <div className="flex flex-wrap items-center gap-2">
+                  <button
+                    type="button"
+                    disabled={aiLoading || !aiInstruction.trim()}
+                    onClick={() => void generateDraft()}
+                    className="rounded-lg bg-violet-700 px-3 py-2 text-sm font-semibold disabled:opacity-50"
+                  >
+                    {aiLoading ? 'AIが草案を作成中…' : 'AIで草案を作成・改善'}
+                  </button>
+                  {aiError && (
+                    <p role="alert" className="text-xs text-rose-300">
+                      {aiError}
+                    </p>
+                  )}
+                  {aiNotice && (
+                    <p role="status" className="text-xs text-emerald-200">
+                      {aiNotice}
+                    </p>
+                  )}
+                </div>
+              </section>
+
+              <div className="flex gap-2">
+                <button disabled={saving} className="inline-flex items-center gap-2 rounded-lg bg-cyan-700 px-4 py-2 text-sm">
+                  <Save className="h-4 w-4" />
+                  {saving ? '保存中…' : '保存'}
+                </button>
+                <button type="button" onClick={() => setForm(false)} className="rounded-lg border border-slate-700 px-4 py-2 text-sm">
+                  キャンセル
+                </button>
+              </div>
+            </form>
+          )}
+
+          {/* 一覧 */}
+          {!form && (
+            <div className="space-y-2">
+              {list.length === 0 ? (
+                <p className="rounded-xl border border-slate-800 bg-slate-900 p-5 text-sm text-slate-400">登録データはありません。</p>
+              ) : (
+                list.map((r) => {
+                  const linkedArticle = articles.find((a) => a.id === r.payload.articleId);
+                  const linkedMedia = media.find((m) => m.id === r.payload.mediaId);
+                  const rate =
+                    r.record_type === 'seo' && r.payload.impressions !== undefined && r.payload.clicks !== undefined && Number(r.payload.impressions) > 0
+                      ? (Number(r.payload.clicks) / Number(r.payload.impressions) * 100).toFixed(2) + '%'
+                      : r.record_type === 'seo' && r.payload.impressions === '0'
+                      ? '算出不可'
+                      : r.record_type === 'seo'
+                      ? '未入力'
+                      : '';
+                  return (
+                    <article key={r.id} className="rounded-xl border border-slate-800 bg-slate-900 p-4">
+                      <div className="flex items-start justify-between gap-3">
+                        <div>
+                          <h4 className="font-semibold">{r.title}</h4>
+                          <p className="mt-1 text-xs text-slate-500">
+                            {products.find((p) => p.id === r.product_id)?.product_name || '商品未設定'}
+                            {linkedMedia ? ' · ' + linkedMedia.title : ''}
+                            {linkedArticle ? ' · ' + linkedArticle.title : ''}
+                            {r.status ? ' · ' + r.status : ''}
+                          </p>
+                        </div>
+                        <div className="flex gap-2">
+                          <button onClick={() => edit(r)} className="rounded border border-slate-700 px-2 py-1 text-xs">
+                            編集
+                          </button>
+                          <button onClick={() => void remove(r)} aria-label={r.title + 'を削除'} className="rounded border border-rose-900 px-2 py-1 text-xs text-rose-300">
+                            <Trash2 className="h-3.5 w-3.5" />
+                          </button>
+                        </div>
+                      </div>
+                      {r.record_type === 'article' && (
+                        <p className="mt-2 text-xs text-cyan-200">
+                          企画: {r.payload.progress || '未設定'} · 制作: {r.payload.productionStatus || '未設定'} · 公開: {r.payload.publishStatus || '未設定'}
+                          {r.payload.publishedUrl ? ' · ' + r.payload.publishedUrl : ''}
+                        </p>
+                      )}
+                      {r.record_type === 'seo' && (
+                        <p className="mt-2 text-sm text-cyan-200">
+                          CTR: {rate} · 表示 {r.payload.impressions || '未入力'} · クリック {r.payload.clicks || '未入力'} · 順位 {r.payload.avgPosition || '未入力'}
+                        </p>
+                      )}
+                      {r.record_type === 'attribution' &&
+                        linkedArticle &&
+                        (() => {
+                          const url = linkedArticle.payload.publishedUrl?.trim();
+                          const matched = url ? crmLeads.filter((l) => l.report_url?.trim() === url || l.source?.trim() === url) : [];
+                          const ids = new Set(matched.map((l) => l.id));
+                          const matchingDeals = crmDeals.filter((d) => d.lead_id && ids.has(d.lead_id));
+                          return (
+                            <p className="mt-2 text-xs text-slate-300">
+                              CRMのURL完全一致（参考値）: リード {url ? matched.length : 'URL未登録'}件・商談 {url ? matchingDeals.length : 'URL未登録'}件。契約との因果関係を示す数値ではありません。
+                            </p>
+                          );
+                        })()}
+                      <dl className="mt-3 grid gap-2 sm:grid-cols-2">
+                        {fields
+                          .filter((f) => Boolean(r.payload[f.key]))
+                          .slice(0, 8)
+                          .map((f) => (
+                            <div key={f.key}>
+                              <dt className="text-[11px] text-slate-500">{f.label}</dt>
+                              <dd className="whitespace-pre-wrap break-words text-xs text-slate-300">
+                                {f.key === 'mediaId' ? linkedMedia?.title || '未選択' : f.key === 'articleId' ? linkedArticle?.title || '未選択' : r.payload[f.key]}
+                              </dd>
+                            </div>
+                          ))}
+                      </dl>
+                    </article>
+                  );
+                })
+              )}
+            </div>
+          )}
+
+          {/* ★ 自社メディア用の素材・成果物管理セクション（HP URLやWeb素材をこのタブ内で直接管理） ★ */}
+          <div className="pt-4 border-t border-slate-800">
+            <TabMarketingAssetManager
+              toolType="media"
+              title="自社メディアのHP URL・素材・成果物"
+              description="HPのURL、オウンドメディアのURL、サイト用ロゴ・画像、元HTMLファイル、仕様書をこのタブで管理します。"
+              currentRecordId={editing?.id}
+              currentRecordTitle={editing?.title}
+              records={rows.map((r) => ({ id: r.id, title: r.title, record_type: r.record_type }))}
+              products={products}
+              userId={userId}
+            />
+          </div>
+        </>
+      )}
+    </section>
+  );
 };

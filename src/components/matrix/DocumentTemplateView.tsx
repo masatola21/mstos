@@ -342,7 +342,7 @@ export const DocumentTemplateView: React.FC<DocumentTemplateViewProps> = ({ init
   const [isEditingTemplate, setIsEditingTemplate] = useState<boolean>(false);
   const [copied, setCopied] = useState<boolean>(false);
   const [companies, setCompanies] = useState<Array<{id:string;company_name:string}>>([]);
-  const [contacts, setContacts] = useState<Array<{id:string;full_name:string;company_id?:string|null;email?:string|null;phone?:string|null;role_title?:string|null}>>([]);
+  const [contacts, setContacts] = useState<Array<{id:string;full_name:string;company_id?:string|null;email?:string|null;phone?:string|null;role_title?:string|null;line_user_id?:string|null}>>([]);
   const [deals, setDeals] = useState<Array<{id:string;proposal_plan_name:string;company_id?:string|null;lead_id?:string|null}>>([]);
   const [leads, setLeads] = useState<Array<{id:string;source?:string|null;status?:string|null;company_id?:string|null}>>([]);
   const [companyId, setCompanyId] = useState(initialCompanyId || '');
@@ -486,8 +486,7 @@ export const DocumentTemplateView: React.FC<DocumentTemplateViewProps> = ({ init
         end_date: '',
         my_company: '有限会社MST', my_address: '〒503-0981　岐阜県大垣市桧町127番地', my_rep: '大橋真人', sender_name: '大橋真人', sender_company: '有限会社MST',
         bank_account_info: 'ドコモSMTBネット銀行　法人第一支店　普通預金　2223730（口座名義：有限会社MST）',
-          sender_address: '〒503-0981　岐阜県大垣市桧町127番地', sender_rep: '大橋真人',
-      sender_address: '〒503-0981　岐阜県大垣市桧町127番地', sender_rep: '大橋真人',
+        sender_address: '〒503-0981　岐阜県大垣市桧町127番地', sender_rep: '大橋真人',
         payment_terms: deal?.memo || '',
         solution_overview: product?.description || report?.summary || '',
         expected_outcome: recommendationText,
@@ -697,6 +696,139 @@ export const DocumentTemplateView: React.FC<DocumentTemplateViewProps> = ({ init
     setIsEditingTemplate(false);
   };
 
+  const [approvingAndSending, setApprovingAndSending] = useState(false);
+  const [approveSendNotice, setApproveSendNotice] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
+
+  const handleApproveAndSend = async () => {
+    const supabase = getSupabase();
+    if (!supabase) {
+      setApproveSendNotice({ type: 'error', text: 'Supabaseに接続されていません。' });
+      return;
+    }
+
+    setApprovingAndSending(true);
+    setApproveSendNotice(null);
+
+    try {
+      const { data: auth } = await supabase.auth.getUser();
+      const ownerId = auth.user?.id || null;
+
+      // 1. 対象の連絡先を特定
+      let targetContact = contacts.find((c) => c.id === contactId);
+      if (!targetContact && companyId) {
+        targetContact = contacts.find((c) => c.company_id === companyId);
+      }
+
+      const hasLine = Boolean(targetContact?.line_user_id);
+      const hasEmail = Boolean(targetContact?.email);
+      const channel: 'line' | 'email' = hasLine ? 'line' : 'email';
+      const recipientAddress = hasLine ? targetContact?.line_user_id : targetContact?.email;
+
+      // 2. 書類レコード（customer_documents）を承認（approved）として保存・更新
+      const templateId = currentTemplate.id;
+      const documentType = currentTemplate.type === 'report' ? 'diagnosis_report' : currentTemplate.type;
+      const existingId = autosavedDocumentIds.current[templateId];
+
+      const docPayload = {
+        document_type: documentType,
+        title: currentTemplate.title,
+        body_html: populatedHtml,
+        company_id: companyId || null,
+        contact_id: targetContact?.id || contactId || null,
+        lead_id: leadId || null,
+        deal_id: dealId || null,
+        status: 'approved',
+      };
+
+      let savedDocId = existingId;
+      if (existingId) {
+        const { error: updateDocErr } = await supabase.from('customer_documents').update(docPayload).eq('id', existingId);
+        if (updateDocErr) throw updateDocErr;
+      } else {
+        const { data: newDoc, error: insertDocErr } = await supabase.from('customer_documents').insert(docPayload).select('id').single();
+        if (insertDocErr) throw insertDocErr;
+        savedDocId = newDoc?.id;
+        if (savedDocId) autosavedDocumentIds.current[templateId] = savedDocId;
+      }
+
+      // 3. 契約書・請求書のステータスを連動更新
+      if (currentTemplate.type === 'contract' && companyId) {
+        await supabase.from('customer_contracts').update({ status: 'sent' }).eq('company_id', companyId).eq('status', 'draft');
+      } else if (currentTemplate.type === 'invoice' && companyId) {
+        await supabase.from('customer_invoices').update({ status: 'issued' }).eq('company_id', companyId).eq('status', 'draft');
+      }
+
+      // 4. 送信先情報がある場合、送信待ち（communication_outbox）へ登録
+      if (recipientAddress && targetContact) {
+        const subject = `【有限会社MST】${currentTemplate.title}のご送付`;
+        const bodyText = `${targetContact.full_name || 'お客様'} 様\n\nお世話になっております。有限会社MSTの大橋真人です。\n${currentTemplate.title}をお送りいたします。ご確認のほどよろしくお願い申し上げます。\n\n--------------------------------------------------\n有限会社MST\n代表取締役: 大橋真人\n〒503-0981 岐阜県大垣市桧町127番地\n--------------------------------------------------`;
+        const linePayload = {
+          type: 'text',
+          text: `【MST】${currentTemplate.title}のご送付\n\n${targetContact.full_name || 'お客様'} 様\nお世話になっております。有限会社MSTの大橋です。\n${currentTemplate.title}をお送りいたします。ご確認のほどよろしくお願い申し上げます。`,
+        };
+
+        const { data: outboxItem, error: outboxErr } = await supabase.from('communication_outbox').insert({
+          owner_id: ownerId,
+          channel,
+          recipient_contact_id: targetContact.id,
+          recipient_address: recipientAddress,
+          subject: channel === 'email' ? subject : null,
+          body_text: bodyText,
+          line_message_payload: channel === 'line' ? linePayload : null,
+          company_id: companyId || null,
+          source_type: 'customer_document',
+          source_id: savedDocId || null,
+          status: 'queued',
+          consent_confirmed_at: new Date().toISOString(),
+          consent_basis: 'business_transaction',
+        }).select('id').single();
+
+        if (outboxErr) throw outboxErr;
+
+        // 即時送信を試行
+        if (outboxItem?.id) {
+          const session = await supabase.auth.getSession();
+          const token = session.data.session?.access_token;
+          if (token) {
+            const sendRes = await fetch('/api/communications/send', {
+              method: 'POST',
+              headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+              body: JSON.stringify({ outboxId: outboxItem.id }),
+            }).catch(() => null);
+
+            if (sendRes && sendRes.ok) {
+              setApproveSendNotice({
+                type: 'success',
+                text: `✅ 書類を承認し、${targetContact.full_name || '担当者'}様宛て（${channel === 'line' ? 'LINE公式' : 'メール'}）へ即座に送信完了しました！`,
+              });
+              setSaveMessage('承認・送信完了');
+              return;
+            }
+          }
+        }
+
+        setApproveSendNotice({
+          type: 'success',
+          text: `✅ 書類を承認し、送信待ち（Outbox）へ登録しました！送信先: ${targetContact.full_name || '担当者'}様（${channel === 'line' ? 'LINE公式' : 'メール'}）`,
+        });
+        setSaveMessage('承認済・送信待ち登録');
+      } else {
+        setApproveSendNotice({
+          type: 'success',
+          text: '✅ 書類を「承認済み（approved）」として保存しました。※連絡先に有効なメールまたはLINEが登録されていないため、送信用Outboxへのキューは保留されました。',
+        });
+        setSaveMessage('書類承認完了');
+      }
+    } catch (err: any) {
+      setApproveSendNotice({
+        type: 'error',
+        text: `処理中にエラーが発生しました: ${err?.message || '不明なエラー'}`,
+      });
+    } finally {
+      setApprovingAndSending(false);
+    }
+  };
+
   return (
     <div className="space-y-6">
       {/* Header Banner */}
@@ -715,6 +847,23 @@ export const DocumentTemplateView: React.FC<DocumentTemplateViewProps> = ({ init
         </div>
 
         <div className="flex items-center gap-3">
+          <button
+            onClick={handleApproveAndSend}
+            disabled={approvingAndSending}
+            className="px-4 py-2.5 rounded-xl bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white font-bold text-xs flex items-center gap-2 shadow-lg shadow-emerald-600/25 transition-all disabled:opacity-50 cursor-pointer"
+          >
+            {approvingAndSending ? (
+              <>
+                <RefreshCw className="w-4 h-4 animate-spin" />
+                <span>承認・送信処理中…</span>
+              </>
+            ) : (
+              <>
+                <FileCheck2 className="w-4 h-4 text-emerald-200" />
+                <span>1クリック承認＆送信依頼</span>
+              </>
+            )}
+          </button>
           <button
             onClick={handlePrintPdf}
             className="px-4 py-2.5 rounded-xl bg-blue-600 hover:bg-blue-500 text-white font-semibold text-xs flex items-center gap-2 shadow-lg shadow-blue-600/25 transition-all cursor-pointer"
@@ -861,12 +1010,30 @@ export const DocumentTemplateView: React.FC<DocumentTemplateViewProps> = ({ init
 
         {/* Right Live Preview Panel (7 Cols) */}
         <div className="lg:col-span-7 bg-slate-900 border border-slate-800 rounded-2xl p-5 shadow-xl flex flex-col">
-          <div className="flex items-center justify-between pb-3 border-b border-slate-800 mb-4">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between pb-3 border-b border-slate-800 mb-4 gap-3">
             <div className="flex items-center gap-2">
               <FileCheck2 className="w-4 h-4 text-emerald-400" />
               <h2 className="font-bold text-sm text-white">リアルタイムプレビュー</h2>
             </div>
-            <div className="flex items-center gap-2">
+            <div className="flex flex-wrap items-center gap-2">
+              <button
+                type="button"
+                onClick={handleApproveAndSend}
+                disabled={approvingAndSending}
+                className="px-3 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold flex items-center gap-1.5 transition-all shadow-md shadow-emerald-600/25 disabled:opacity-50 cursor-pointer"
+              >
+                {approvingAndSending ? (
+                  <>
+                    <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                    <span>送信処理中…</span>
+                  </>
+                ) : (
+                  <>
+                    <FileCheck2 className="w-3.5 h-3.5 text-emerald-200" />
+                    <span>この内容で承認して送信待ちへ登録</span>
+                  </>
+                )}
+              </button>
               <button
                 onClick={handleCopyHtml}
                 className="px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-semibold flex items-center gap-1.5 transition-colors cursor-pointer"
@@ -883,6 +1050,26 @@ export const DocumentTemplateView: React.FC<DocumentTemplateViewProps> = ({ init
               </button>
             </div>
           </div>
+
+          {approveSendNotice && (
+            <div
+              role="alert"
+              className={`mb-3 p-3 rounded-xl border text-xs flex items-center justify-between ${
+                approveSendNotice.type === 'success'
+                  ? 'bg-emerald-950/80 border-emerald-500/50 text-emerald-200'
+                  : 'bg-rose-950/80 border-rose-500/50 text-rose-200'
+              }`}
+            >
+              <span>{approveSendNotice.text}</span>
+              <button
+                type="button"
+                onClick={() => setApproveSendNotice(null)}
+                className="ml-2 text-slate-400 hover:text-white"
+              >
+                ✕
+              </button>
+            </div>
+          )}
 
           {/* Rendered HTML Container */}
           <div className="flex-1 bg-white rounded-xl shadow-inner overflow-hidden min-h-[600px] max-h-[700px] overflow-y-auto border border-slate-700">

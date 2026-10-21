@@ -1,5 +1,6 @@
 import { getSupabase } from '../lib/supabaseClient';
 import { TableKey, Company, Product, Lead, Prospect, Deal, Customer, Diagnosis, AiReport, DiagnosisStatus } from '../types/database';
+import { executeDealWonAutomation } from './dealWonAutomationService';
 
 export type ErrorType = 'PERMISSION_DENIED' | 'SCHEMA_MISMATCH' | 'CONNECTION_ERROR' | 'NOT_CONFIGURED' | 'UNKNOWN';
 
@@ -296,6 +297,12 @@ export async function insertRecord(
       return { error: parseSupabaseError(error) };
     }
 
+    if (tableKey === 'deals' && data?.id && (payload.proposal_status === '成約' || payload.proposal_status === 'Won')) {
+      void executeDealWonAutomation(String(data.id)).catch((err) => {
+        console.warn('Auto deal-won automation warning on insert:', err);
+      });
+    }
+
     return { data };
   } catch (err: any) {
     return { error: parseSupabaseError(err) };
@@ -348,6 +355,12 @@ export async function updateRecord(
 
     if (error) {
       return { error: parseSupabaseError(error) };
+    }
+
+    if (tableKey === 'deals' && (cleanPayload.proposal_status === '成約' || cleanPayload.proposal_status === 'Won')) {
+      void executeDealWonAutomation(String(id)).catch((err) => {
+        console.warn('Auto deal-won automation warning on update:', err);
+      });
     }
 
     return { data };

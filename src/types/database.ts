@@ -136,7 +136,7 @@ export interface Customer {
 }
 
 export type DiagnosisStatus = 'received' | 'completed' | 'generating' | 'reported';
-export type AiReportStatus = 'pending' | 'generating' | 'generated' | 'superseded' | 'failed' | 'reviewed';
+export type AiReportStatus = 'pending' | 'generating' | 'generated' | 'superseded' | 'failed' | 'reviewed' | 'approved';
 
 export interface Diagnosis {
   id: string; // uuid

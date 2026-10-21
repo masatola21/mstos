@@ -4,20 +4,25 @@ import { getSupabase } from '../../lib/supabaseClient';
 import { InlineDeleteButton } from '../InlineDeleteButton';
 import { ArrowRight, BarChart3, Megaphone, Plus, Save, Sparkles, Trash2 } from 'lucide-react';
 import { OwnMediaWorkspace } from './OwnMediaWorkspace';
-import { MarketingAssetLibrary } from './MarketingAssetLibrary';
+import { TabMarketingAssetManager } from './TabMarketingAssetManager';
 
 type RecordType = 'strategy' | 'content' | 'social' | 'video' | 'ad' | 'media' | 'funnel' | 'result' | 'proposal';
-type ViewTab = 'dashboard' | RecordType | 'analysis' | 'media' | 'assets';
+type ViewTab = 'dashboard' | RecordType | 'analysis' | 'media';
 type Field = { key: string; label: string; kind?: 'textarea' | 'number' | 'date' | 'select' | 'multiselect'; options?: string[]; placeholder?: string };
 type AcquisitionRecord = { id: string; record_type: RecordType; title: string; product_id: string | null; status: string | null; payload: Record<string, string>; created_at: string; updated_at: string };
 type Product = { id: string; product_name: string };
 type AudienceSegment = { id: string; name: string; entity_type: string; conditions: { field?: string } | null };
 
 const tabs: Array<{ id: ViewTab; label: string }> = [
-  { id: 'dashboard', label: '集客ダッシュボード' }, { id: 'strategy', label: '集客戦略' },
-  { id: 'content', label: 'コンテンツ企画' }, { id: 'social', label: 'SNS・note運用' },
-  { id: 'video', label: '動画運用' }, { id: 'ad', label: '広告運用' },
-  { id: 'media', label: '自社メディア運用' }, { id: 'funnel', label: 'LP・集客導線' }, { id: 'assets', label: '素材・成果物' }, { id: 'analysis', label: '成果分析・改善提案' },
+  { id: 'dashboard', label: '集客ダッシュボード' },
+  { id: 'strategy', label: '集客戦略' },
+  { id: 'content', label: 'コンテンツ企画' },
+  { id: 'social', label: 'SNS・note運用' },
+  { id: 'video', label: '動画運用' },
+  { id: 'ad', label: '広告運用' },
+  { id: 'media', label: '自社メディア運用' },
+  { id: 'funnel', label: 'LP・集客導線' },
+  { id: 'analysis', label: '成果分析・改善提案' },
 ];
 const typeLabels: Record<RecordType, string> = { strategy: '集客戦略', content: 'コンテンツ企画', social: 'SNS・note運用', video: '動画運用', ad: '広告運用', media: '自社メディア運用', funnel: 'LP・集客導線', result: '成果記録', proposal: '改善提案' };
 const expandableToolTypes: RecordType[] = ['content', 'social', 'video', 'ad', 'media', 'funnel'];
@@ -498,8 +503,7 @@ export const AIAcquisitionOperationsView: React.FC<{ onSendPresidentSummary?: (s
     <nav className="flex gap-1 overflow-x-auto rounded-xl border border-slate-800 bg-slate-900 p-1" aria-label="AI集客運用メニュー">{tabs.map((tab) => <button key={tab.id} onClick={() => { if (tab.id !== activeTab) { cancelAIRequest(); setIsFormOpen(false); setEditing(null); setPendingToolDrafts([]); setExternalPrompt(''); setExternalDraft(''); setExternalReview(''); } setActiveTab(tab.id); setNotice(''); setError(''); }} aria-current={activeTab === tab.id ? 'page' : undefined} className={`whitespace-nowrap rounded-lg px-3 py-2 text-xs sm:text-sm ${activeTab === tab.id ? 'bg-indigo-600 font-semibold text-white' : 'text-slate-400 hover:bg-slate-800 hover:text-white'}`}>{tab.label}</button>)}</nav>
     {(error || notice) && <p role={error ? 'alert' : 'status'} className={`rounded-lg px-3 py-2 text-sm ${error ? 'bg-rose-950/50 text-rose-200' : 'bg-emerald-950/40 text-emerald-200'}`}>{error || notice}</p>}
     {loading ? <p className="rounded-xl border border-slate-800 p-5 text-sm text-slate-400">集客データを読み込み中…</p> : <>
-      {activeTab === 'media' && <OwnMediaWorkspace products={products} onAskAI={onSendPresidentSummary} strategyContext={records.find((record) => record.record_type === 'strategy') ? JSON.stringify({ title: records.find((record) => record.record_type === 'strategy')?.title, payload: records.find((record) => record.record_type === 'strategy')?.payload }) : ''} />}
-      {activeTab === 'assets' && <MarketingAssetLibrary records={records} products={products} onOpenRecord={startEdit} />}
+      {activeTab === 'media' && <OwnMediaWorkspace products={products} onAskAI={onSendPresidentSummary} strategyContext={records.find((record) => record.record_type === 'strategy') ? JSON.stringify({ title: records.find((record) => record.record_type === 'strategy')?.title, payload: records.find((record) => record.record_type === 'strategy')?.payload }) : ''} userId={userId} />}
       {activeTab === 'dashboard' && <section className="space-y-4">
         <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">{[
           ['運用中の施策', `${metrics.active}件`], ['コンテンツ・投稿・動画', `${metrics.content}件`], ['広告費', metrics.known.spend ? yen(metrics.spend) : '未入力'], ['リード / 商談 / 契約', `${metrics.known.leads ? metrics.leads : '未入力'} / ${metrics.known.meetings ? metrics.meetings : '未入力'} / ${metrics.known.contracts ? metrics.contracts : '未入力'}`],
@@ -510,7 +514,38 @@ export const AIAcquisitionOperationsView: React.FC<{ onSendPresidentSummary?: (s
           <section className="rounded-xl border border-slate-800 bg-slate-900 p-4"><h2 className="font-semibold">最近の施策</h2>{records.length ? <ul className="mt-3 divide-y divide-slate-800">{records.slice(0, 6).map((record) => <li key={record.id} className="flex items-center justify-between gap-2 py-2"><div><p className="text-sm font-medium">{record.title}</p><p className="text-xs text-slate-500">{typeLabels[record.record_type]} · {record.status || '状態未設定'}</p></div><button onClick={() => startEdit(record)} className="rounded border border-slate-700 px-2 py-1 text-xs">開く</button></li>)}</ul> : <p className="mt-3 text-sm text-slate-400">まだ施策は登録されていません。</p>}</section>
           <section className="rounded-xl border border-slate-800 bg-slate-900 p-4"><div className="flex items-center gap-2"><Sparkles className="h-4 w-4 text-amber-300"/><h2 className="font-semibold">改善の確認ポイント</h2></div><ul className="mt-3 space-y-2">{latestSuggestions.map((suggestion) => <li key={suggestion} className="rounded-lg bg-slate-950 p-3 text-sm text-slate-300">{suggestion}</li>)}</ul><button onClick={() => onSendPresidentSummary?.(summary)} disabled={!onSendPresidentSummary} className="mt-3 inline-flex items-center gap-2 rounded-lg bg-purple-700 px-3 py-2 text-sm disabled:opacity-50"><Sparkles className="h-4 w-4"/>AI社長に要約を共有</button><p className="mt-2 text-xs text-slate-500">共有するのは施策概要・集計値・確認事項です。個人顧客の情報や投稿全文は含めません。</p></section>
         </div>
-        
+
+        {/* 各運用タブの素材・成果物へのクイックアクセス */}
+        <section className="rounded-xl border border-slate-800 bg-slate-900 p-4">
+          <div className="flex items-center justify-between">
+            <div>
+              <h2 className="font-semibold text-white">各運用タブの素材・成果物</h2>
+              <p className="mt-1 text-xs text-slate-400">
+                素材・成果物は各運用タブ（自社メディアHP、動画、SNS、広告、LPなど）内で直接管理されています。
+              </p>
+            </div>
+          </div>
+          <div className="mt-3 grid gap-2 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-6">
+            {[
+              { id: 'media' as const, label: '自社メディア', hint: 'HP URL・サイト素材' },
+              { id: 'video' as const, label: '動画運用', hint: '動画素材・台本' },
+              { id: 'social' as const, label: 'SNS・note', hint: '投稿画像・記事URL' },
+              { id: 'ad' as const, label: '広告運用', hint: 'バナー・広告動画' },
+              { id: 'funnel' as const, label: 'LP・集客導線', hint: 'LP URL・デザイン' },
+              { id: 'content' as const, label: 'コンテンツ企画', hint: '企画書・原稿' },
+            ].map((item) => (
+              <button
+                key={item.id}
+                type="button"
+                onClick={() => setActiveTab(item.id)}
+                className="flex flex-col items-start rounded-lg border border-slate-800 bg-slate-950/60 p-2.5 text-left hover:border-indigo-500/50 hover:bg-slate-800/50 transition-colors"
+              >
+                <span className="text-xs font-semibold text-slate-200">{item.label}</span>
+                <span className="mt-1 text-[11px] text-slate-400">{item.hint}</span>
+              </button>
+            ))}
+          </div>
+        </section>
       </section>}
 
       {activeTab === 'analysis' && <section className="space-y-4">
@@ -552,10 +587,51 @@ export const AIAcquisitionOperationsView: React.FC<{ onSendPresidentSummary?: (s
         </div>
         {['social','video'].includes(type) && <p className="rounded-lg bg-amber-950/30 p-3 text-xs text-amber-200">各媒体への自動投稿・実績自動取得は未連携です。ここでは手動投稿の予定・公開URL・入力済み実績を管理します。</p>}
         {type === 'ad' && <p className="rounded-lg bg-amber-950/30 p-3 text-xs text-amber-200">広告の出稿・停止・予算変更は実行しません。費用と成果を記録し、配信判断は人が確認してください。</p>}
+
+        {/* 施策編集時用の素材・成果物インライン管理 */}
+        {['strategy', 'content', 'social', 'video', 'ad', 'funnel'].includes(type) && (
+          <div className="pt-2">
+            <TabMarketingAssetManager
+              toolType={type as any}
+              currentRecordId={editing?.id}
+              currentRecordTitle={title || editing?.title}
+              records={records}
+              products={products}
+              userId={userId}
+              compact={true}
+            />
+          </div>
+        )}
+
         <div className="flex gap-2"><button disabled={saving || aiGenerating} className="inline-flex items-center gap-2 rounded-lg bg-indigo-600 px-4 py-2 text-sm font-semibold disabled:opacity-50"><Save className="h-4 w-4"/>{aiGenerating ? 'AI処理中…' : saving ? '保存中…' : type === 'strategy' && (payload.channels || '').trim() ? '戦略と選定ツールを保存' : '保存'}</button><button type="button" onClick={() => { cancelAIRequest(); setEditing(null); setIsFormOpen(false); setTitle(''); setProductId(''); setPayload(emptyPayload()); }} className="rounded-lg border border-slate-700 px-4 py-2 text-sm">キャンセル</button></div>
       </form>}
 
-      {activeTab !== 'dashboard' && activeTab !== 'analysis' && activeTab !== 'assets' && !formVisible && <section className="space-y-3"><div className="flex items-center justify-between"><div><h2 className="font-semibold">{tabs.find((tab) => tab.id === activeTab)?.label}</h2><p className="mt-1 text-xs text-slate-500">商品マスターの商品と関連付けて登録できます。実行・公開は外部サービスで行ってください。</p></div><button onClick={() => createRecord(activeTab as RecordType)} className="inline-flex items-center gap-2 rounded-lg bg-indigo-600 px-3 py-2 text-sm"><Plus className="h-4 w-4"/>新規登録</button></div><RecordList records={visibleRecords} products={products} segments={segments} onEdit={startEdit} onDelete={remove}/></section>}
+      {activeTab !== 'dashboard' && activeTab !== 'analysis' && !formVisible && (
+        <section className="space-y-4">
+          <div className="flex items-center justify-between">
+            <div>
+              <h2 className="font-semibold">{tabs.find((tab) => tab.id === activeTab)?.label}</h2>
+              <p className="mt-1 text-xs text-slate-500">商品マスターの商品と関連付けて登録できます。実行・公開は外部サービスで行ってください。</p>
+            </div>
+            <button onClick={() => createRecord(activeTab as RecordType)} className="inline-flex items-center gap-2 rounded-lg bg-indigo-600 px-3 py-2 text-sm">
+              <Plus className="h-4 w-4"/>新規登録
+            </button>
+          </div>
+          <RecordList records={visibleRecords} products={products} segments={segments} onEdit={startEdit} onDelete={remove}/>
+
+          {/* 各運用タブ専用の素材・成果物管理セクション */}
+          {['strategy', 'content', 'social', 'video', 'ad', 'funnel'].includes(activeTab) && (
+            <div className="pt-3 border-t border-slate-800">
+              <TabMarketingAssetManager
+                toolType={activeTab as any}
+                records={records}
+                products={products}
+                userId={userId}
+              />
+            </div>
+          )}
+        </section>
+      )}
     </>}
   </main>;
 };
