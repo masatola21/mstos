@@ -108,46 +108,84 @@ const DEFAULT_TEMPLATES: DocTemplate[] = [
   {
     id: 'tpl-proposal-01',
     type: 'proposal',
-    title: 'AI経営変革 提案書 (標準ひな形)',
-    description: 'クライアント向け課題解決型システム・顧問支援の提案書ひな形',
-    htmlContent: `<div style="font-family: 'Helvetica Neue', Arial, sans-serif; padding: 40px; color: #1e293b; max-width: 800px; margin: 0 auto; line-height: 1.8;">
-  <div style="background: #0f172a; color: white; padding: 30px; border-radius: 12px; margin-bottom: 30px;">
-    <p style="font-size: 14px; color: #38bdf8; text-transform: uppercase; letter-spacing: 1px; margin-bottom: 5px;">Business Proposal</p>
-    <h1 style="font-size: 24px; margin: 0; font-weight: 700;">{{proposal_title}}</h1>
-    <p style="margin-top: 10px; color: #94a3b8; font-size: 14px;">宛先: {{client_company}} 御中 / 提案日: {{issue_date}}</p>
+    title: '経営の仕組み化 × 利益改善 伴走ご提案書',
+    description: '戦略と実行の両面から会社の可能性を広げ、次の一手を打てる経営へ導く伴走提案書',
+    htmlContent: `<div style="font-family: 'Helvetica Neue', Arial, 'Hiragino Sans', sans-serif; padding: 40px; color: #1e293b; max-width: 820px; margin: 0 auto; line-height: 1.8;">
+  <div style="background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%); color: white; padding: 36px; border-radius: 14px; margin-bottom: 35px; box-shadow: 0 10px 25px -5px rgba(0,0,0,0.1);">
+    <p style="font-size: 13px; color: #38bdf8; text-transform: uppercase; letter-spacing: 1.5px; margin: 0 0 8px 0; font-weight: bold;">Business Improvement Proposal</p>
+    <h1 style="font-size: 26px; margin: 0 0 10px 0; font-weight: 800; line-height: 1.4;">{{proposal_title}}</h1>
+    <p style="font-size: 14px; color: #cbd5e1; margin: 0 0 16px 0;">会社の可能性を広げ、経営者が次の一手を打てる経営へ</p>
+    <div style="border-top: 1px solid #334155; padding-top: 14px; display: flex; justify-content: space-between; font-size: 13px; color: #94a3b8;">
+      <span>宛先: <strong style="color: white;">{{client_company}}</strong> 御中</span>
+      <span>提案日: {{issue_date}}</span>
+    </div>
   </div>
 
-  <h3 style="font-size: 18px; border-left: 4px solid #2563eb; padding-left: 8px; margin-top: 20px;">1. 現状の課題と経営インパクト</h3>
-  <p>{{current_challenge}}</p>
-
-  <h3 style="font-size: 18px; border-left: 4px solid #2563eb; padding-left: 8px; margin-top: 20px;">2. 提案ソリューション・システム概要</h3>
-  <p>{{solution_overview}}</p>
-
-  <h3 style="font-size: 18px; border-left: 4px solid #2563eb; padding-left: 8px; margin-top: 20px;">3. 期待される導入効果</h3>
-  <p>{{expected_outcome}}</p>
-
-  <h3 style="font-size: 18px; border-left: 4px solid #2563eb; padding-left: 8px; margin-top: 20px;">4. 費用お見積もり</h3>
-  <div style="background: #f8fafc; border: 1px solid #e2e8f0; padding: 15px; border-radius: 8px; margin-top: 10px;">
-    <p style="margin: 0; font-size: 16px;"><strong>総額: {{total_amount}} 円（税別）</strong></p>
-    <p style="margin: 5px 0 0 0; font-size: 13px; color: #64748b;">内訳: {{cost_breakdown}}</p>
+  <h3 style="font-size: 18px; border-left: 4px solid #2563eb; padding-left: 10px; margin: 30px 0 12px 0; color: #0f172a; font-weight: bold;">
+    1. 診断結果に基づく貴社の現状課題・ボトルネック
+  </h3>
+  <div style="background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 10px; padding: 20px; margin-bottom: 25px;">
+    <p style="margin: 0; font-size: 14px; color: #334155; line-height: 1.8;">{{current_challenge}}</p>
   </div>
 
-  <div style="margin-top: 40px; text-align: right; border-top: 1px solid #e2e8f0; padding-top: 20px;">
-    <p><strong>提案責任者:</strong> {{sender_name}}</p>
-    <p style="color: #64748b; font-size: 13px;">{{sender_company}}</p>
-    <p style="color: #64748b; font-size: 13px;">{{sender_address}}</p>
-    <p style="color: #64748b; font-size: 13px;">代表取締役 {{sender_rep}}</p>
+  <h3 style="font-size: 18px; border-left: 4px solid #2563eb; padding-left: 10px; margin: 30px 0 12px 0; color: #0f172a; font-weight: bold;">
+    2. 本プランで実現する「未来」（期待される成果）
+  </h3>
+  <div style="background: #f0fdf4; border: 1px solid #bbf7d0; border-radius: 10px; padding: 20px; margin-bottom: 25px;">
+    <p style="margin: 0; font-size: 14px; color: #166534; line-height: 1.8;">{{expected_outcome}}</p>
+  </div>
+
+  <h3 style="font-size: 18px; border-left: 4px solid #2563eb; padding-left: 10px; margin: 30px 0 12px 0; color: #0f172a; font-weight: bold;">
+    3. 具体的な支援内容と進め方（MSTアプローチ）
+  </h3>
+  <div style="background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 10px; padding: 20px; margin-bottom: 25px;">
+    <p style="margin: 0 0 12px 0; font-size: 14px; font-weight: bold; color: #1e3a8a;">【支援プラン概要】</p>
+    <p style="margin: 0 0 16px 0; font-size: 14px; color: #334155; line-height: 1.8;">{{solution_overview}}</p>
+    <div style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; font-size: 12px; text-align: center; border-top: 1px solid #e2e8f0; padding-top: 16px;">
+      <div style="background: white; border: 1px solid #cbd5e1; border-radius: 8px; padding: 10px;">
+        <strong style="color: #2563eb;">01 課題を把握</strong><br><span style="color: #64748b; font-size: 11px;">時間ロス・原因整理</span>
+      </div>
+      <div style="background: white; border: 1px solid #cbd5e1; border-radius: 8px; padding: 10px;">
+        <strong style="color: #2563eb;">02 改善策設計</strong><br><span style="color: #64748b; font-size: 11px;">優先順位・手段選定</span>
+      </div>
+      <div style="background: white; border: 1px solid #cbd5e1; border-radius: 8px; padding: 10px;">
+        <strong style="color: #2563eb;">03 実行・構築</strong><br><span style="color: #64748b; font-size: 11px;">自動化・仕組み実装</span>
+      </div>
+      <div style="background: white; border: 1px solid #cbd5e1; border-radius: 8px; padding: 10px;">
+        <strong style="color: #2563eb;">04 効果確認と次へ</strong><br><span style="color: #64748b; font-size: 11px;">次の改善へ継続伴走</span>
+      </div>
+    </div>
+  </div>
+
+  <h3 style="font-size: 18px; border-left: 4px solid #2563eb; padding-left: 10px; margin: 30px 0 12px 0; color: #0f172a; font-weight: bold;">
+    4. 費用お見積もり
+  </h3>
+  <div style="background: #f8fafc; border: 1px solid #cbd5e1; border-radius: 12px; padding: 22px; margin-bottom: 25px;">
+    <div style="display: flex; justify-content: space-between; align-items: baseline; border-bottom: 1px solid #e2e8f0; padding-bottom: 12px; margin-bottom: 12px;">
+      <span style="font-size: 16px; font-weight: bold; color: #0f172a;">総額（税別）</span>
+      <span style="font-size: 26px; font-weight: 800; color: #1e3a8a;">￥{{total_amount}} 円</span>
+    </div>
+    <p style="margin: 0; font-size: 13px; color: #475569;"><strong>内訳:</strong> {{cost_breakdown}}</p>
+    <p style="margin: 6px 0 0 0; font-size: 12px; color: #64748b;">※お支払い条件: {{payment_terms}}</p>
+  </div>
+
+  <div style="margin-top: 35px; text-align: right; border-top: 1px solid #e2e8f0; padding-top: 20px; font-size: 13px; color: #475569;">
+    <p style="margin: 0 0 4px 0; font-weight: bold; color: #0f172a;">提案責任者: {{sender_name}}</p>
+    <p style="margin: 0 0 2px 0;">{{sender_company}}</p>
+    <p style="margin: 0 0 2px 0;">{{sender_address}}</p>
+    <p style="margin: 0;">代表取締役 {{sender_rep}}</p>
   </div>
 </div>`,
     variables: [
       { key: 'proposal_title', label: '提案書タイトル', defaultValue: '' },
       { key: 'client_company', label: '宛先企業名', defaultValue: '' },
       { key: 'issue_date', label: '提案日付', defaultValue: '' },
-      { key: 'current_challenge', label: '現状の課題', defaultValue: '' },
-      { key: 'solution_overview', label: '提案ソリューション', defaultValue: '' },
-      { key: 'expected_outcome', label: '期待される効果', defaultValue: '' },
+      { key: 'current_challenge', label: '現状の課題・ボトルネック', defaultValue: '' },
+      { key: 'solution_overview', label: '提案ソリューション・進め方', defaultValue: '' },
+      { key: 'expected_outcome', label: '期待される未来の成果', defaultValue: '' },
       { key: 'total_amount', label: 'お見積もり総額 (円)', defaultValue: '' },
       { key: 'cost_breakdown', label: '費用内訳', defaultValue: '' },
+      { key: 'payment_terms', label: '支払条件', defaultValue: '' },
       { key: 'sender_name', label: '提案責任者名', defaultValue: '' },
       { key: 'sender_company', label: '提案者組織名', defaultValue: '' },
       { key: 'sender_address', label: '提案者住所', defaultValue: '' },
@@ -249,55 +287,83 @@ const DEFAULT_TEMPLATES: DocTemplate[] = [
   {
     id: 'tpl-report-01',
     type: 'report',
-    title: '経営診断レポート (標準ひな形)',
-    description: '企業向け経営体力・デジタル化診断レポートのひな形',
-    htmlContent: `<div style="font-family: 'Helvetica Neue', Arial, sans-serif; padding: 40px; color: #1e293b; max-width: 800px; margin: 0 auto; line-height: 1.8;">
-  <div style="border-bottom: 2px solid #2563eb; padding-bottom: 15px; margin-bottom: 30px; display: flex; justify-content: space-between; align-items: flex-end;">
+    title: '経営の仕組み化 × 利益改善 診断レポート',
+    description: 'ボトルネックを特定し、会社と経営者の未来像および継続改善ロードマップを提示するレポート',
+    htmlContent: `<div style="font-family: 'Helvetica Neue', Arial, 'Hiragino Sans', sans-serif; padding: 40px; color: #1e293b; max-width: 820px; margin: 0 auto; line-height: 1.8;">
+  <div style="border-bottom: 3px solid #1e3a8a; padding-bottom: 20px; margin-bottom: 30px; display: flex; justify-content: space-between; align-items: flex-end;">
     <div>
-      <p style="color: #2563eb; font-weight: bold; font-size: 13px; margin: 0; text-transform: uppercase;">Diagnostic Report</p>
-      <h1 style="font-size: 24px; margin: 5px 0 0 0; color: #0f172a;">経営体力・DX推進 診断レポート</h1>
+      <p style="color: #2563eb; font-weight: bold; font-size: 13px; margin: 0; text-transform: uppercase; letter-spacing: 1px;">Management Diagnostic Report</p>
+      <h1 style="font-size: 26px; margin: 6px 0 0 0; color: #0f172a; font-weight: 800;">経営の仕組み化 × 利益改善 診断レポート</h1>
+      <p style="margin: 4px 0 0 0; font-size: 13px; color: #64748b;">会社の可能性を広げ、経営者が次の一手を打てる経営へ</p>
     </div>
     <div style="text-align: right; font-size: 13px; color: #64748b;">
-      <p style="margin: 0;">診断対象: <strong>{{client_company}}</strong></p>
-      <p style="margin: 3px 0 0 0;">実施日: {{conducted_date}}</p>
+      <p style="margin: 0;">診断対象: <strong style="color: #0f172a; font-size: 15px;">{{client_company}}</strong> 御中</p>
+      <p style="margin: 3px 0 0 0;">診断実施日: {{conducted_date}}</p>
+      <p style="margin: 3px 0 0 0; font-size: 11px;">診断パートナー: 有限会社MST</p>
     </div>
   </div>
 
-  <div style="background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 12px; padding: 25px; margin-bottom: 30px; text-align: center;">
-    <p style="margin: 0; font-size: 14px; color: #64748b;">総合経営スコア</p>
-    <p style="font-size: 48px; font-weight: 900; color: #2563eb; margin: 10px 0;">{{overall_score}} <span style="font-size: 20px; color: #64748b;">/ 100点</span></p>
-    <p style="margin: 0; font-size: 15px; font-weight: bold; color: #0f172a;">判定ランク: {{score_rank}}（{{rank_description}}）</p>
+  <div style="background: linear-gradient(135deg, #fef2f2 0%, #fff1f2 100%); border: 2px solid #fecdd3; border-radius: 12px; padding: 24px; margin-bottom: 30px;">
+    <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 8px;">
+      <span style="background: #e11d48; color: white; font-size: 11px; font-weight: bold; padding: 2px 8px; border-radius: 4px;">KEY BOTTLENECK</span>
+      <span style="font-size: 13px; font-weight: bold; color: #9f1239;">現在、貴社の成長・利益を止めている最優先ボトルネック</span>
+    </div>
+    <h2 style="font-size: 20px; font-weight: 800; color: #881337; margin: 0 0 10px 0;">{{primary_bottleneck}}</h2>
+    <p style="font-size: 13px; color: #4c0519; margin: 0; line-height: 1.7;">{{bottleneck_impact}}</p>
   </div>
 
-  <h3 style="font-size: 18px; border-left: 4px solid #2563eb; padding-left: 8px; margin-top: 25px;">1. カテゴリ別評価サマリー</h3>
-  <ul style="padding-left: 20px; color: #334155;">
-    <li style="margin-bottom: 8px;"><strong>営業・パイプライン管理:</strong> {{score_sales}}点 - {{comment_sales}}</li>
-    <li style="margin-bottom: 8px;"><strong>契約・請求管理:</strong> {{score_finance}}点 - {{comment_finance}}</li>
-    <li style="margin-bottom: 8px;"><strong>AI・業務自動化度:</strong> {{score_automation}}点 - {{comment_automation}}</li>
-  </ul>
+  <h3 style="font-size: 17px; font-weight: 700; border-left: 4px solid #2563eb; padding-left: 10px; margin: 30px 0 15px 0; color: #0f172a;">
+    1. ボトルネック解消後に手に入る「未来」（Before & After）
+  </h3>
+  <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: 25px;">
+    <div style="background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 10px; padding: 18px;">
+      <p style="font-weight: bold; font-size: 14px; color: #1e3a8a; margin: 0 0 8px 0;">🏢 【会社の未来】</p>
+      <div style="font-size: 12px; margin-bottom: 6px; color: #dc2626;"><strong>現状（Before）:</strong> {{company_before}}</div>
+      <div style="font-size: 12px; color: #059669; font-weight: bold;"><strong>改善後（After）:</strong> {{company_after}}</div>
+    </div>
+    <div style="background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 10px; padding: 18px;">
+      <p style="font-weight: bold; font-size: 14px; color: #1e3a8a; margin: 0 0 8px 0;">👤 【経営者の未来】</p>
+      <div style="font-size: 12px; margin-bottom: 6px; color: #dc2626;"><strong>現状（Before）:</strong> {{ceo_before}}</div>
+      <div style="font-size: 12px; color: #059669; font-weight: bold;"><strong>改善後（After）:</strong> {{ceo_after}}</div>
+    </div>
+  </div>
 
-  <h3 style="font-size: 18px; border-left: 4px solid #2563eb; padding-left: 8px; margin-top: 25px;">2. 優先改善提案 (Action Items)</h3>
-  <p>{{action_recommendation}}</p>
+  <h3 style="font-size: 17px; font-weight: 700; border-left: 4px solid #2563eb; padding-left: 10px; margin: 30px 0 15px 0; color: #0f172a;">
+    2. 継続的な改善ロードマップ（ボトルネック連鎖の解消）
+  </h3>
+  <p style="font-size: 12px; color: #64748b; margin: 0 0 12px 0;">※経営改善は単発で終わらせず、1つのボトルネックが解消すると現れる「次の急所」を先回りして解決し続けることで利益が最大化します。</p>
+  <div style="background: #f1f5f9; border-radius: 10px; padding: 16px; margin-bottom: 25px; font-size: 13px; line-height: 1.8;">
+    <div style="margin-bottom: 10px; padding-bottom: 10px; border-bottom: 1px dashed #cbd5e1;">
+      <strong style="color: #2563eb;">Phase 1（まず着手）:</strong> {{phase1_action}}
+    </div>
+    <div style="margin-bottom: 10px; padding-bottom: 10px; border-bottom: 1px dashed #cbd5e1;">
+      <strong style="color: #0d9488;">Phase 2（次への展開）:</strong> {{phase2_action}}
+    </div>
+    <div>
+      <strong style="color: #7c3aed;">Phase 3（完成形・次の一手）:</strong> {{phase3_action}}
+    </div>
+  </div>
 
-  <div style="margin-top: 40px; background: #eff6ff; border: 1px solid #bfdbfe; padding: 20px; border-radius: 8px;">
-    <p style="margin: 0; font-weight: bold; color: #1e40af;">推奨導入プロダクト: {{recommended_product}}</p>
-    <p style="margin: 5px 0 0 0; font-size: 14px; color: #1e3a8a;">上記課題を迅速に解決するため、当社の専門サポートパッケージの導入を強く推奨いたします。</p>
+  <div style="background: #eff6ff; border: 1px solid #bfdbfe; border-radius: 12px; padding: 22px; margin-top: 30px;">
+    <p style="font-size: 12px; font-weight: bold; color: #1e40af; text-transform: uppercase; margin: 0 0 4px 0;">RECOMMENDED SOLUTION</p>
+    <h4 style="font-size: 16px; font-weight: 800; color: #1e3a8a; margin: 0 0 8px 0;">推奨伴走プラン: {{recommended_product}}</h4>
+    <p style="font-size: 13px; color: #1e40af; margin: 0; line-height: 1.7;">{{action_recommendation}}</p>
   </div>
 </div>`,
     variables: [
       { key: 'client_company', label: '診断対象企業名', defaultValue: '' },
       { key: 'conducted_date', label: '診断実施日', defaultValue: '' },
-      { key: 'overall_score', label: '総合スコア (0-100)', defaultValue: '' },
-      { key: 'score_rank', label: '判定ランク', defaultValue: '' },
-      { key: 'rank_description', label: 'ランク解説', defaultValue: '' },
-      { key: 'score_sales', label: '営業スコア', defaultValue: '' },
-      { key: 'comment_sales', label: '営業コメント', defaultValue: '' },
-      { key: 'score_finance', label: '財務スコア', defaultValue: '' },
-      { key: 'comment_finance', label: '財務コメント', defaultValue: '' },
-      { key: 'score_automation', label: '自動化スコア', defaultValue: '' },
-      { key: 'comment_automation', label: '自動化コメント', defaultValue: '' },
-      { key: 'action_recommendation', label: '優先改善提案', defaultValue: '' },
-      { key: 'recommended_product', label: '推奨プロダクト', defaultValue: '' },
+      { key: 'primary_bottleneck', label: '最優先ボトルネック', defaultValue: '' },
+      { key: 'bottleneck_impact', label: 'ボトルネックによる経営損失・影響', defaultValue: '' },
+      { key: 'company_before', label: '会社の現状 (Before)', defaultValue: '' },
+      { key: 'company_after', label: '会社の改善後 (After)', defaultValue: '' },
+      { key: 'ceo_before', label: '経営者の現状 (Before)', defaultValue: '' },
+      { key: 'ceo_after', label: '経営者の改善後 (After)', defaultValue: '' },
+      { key: 'phase1_action', label: 'Phase 1 施策', defaultValue: '' },
+      { key: 'phase2_action', label: 'Phase 2 施策', defaultValue: '' },
+      { key: 'phase3_action', label: 'Phase 3 施策', defaultValue: '' },
+      { key: 'recommended_product', label: '推奨伴走サービス', defaultValue: '' },
+      { key: 'action_recommendation', label: '推奨アクション詳細', defaultValue: '' },
     ],
   },
   {
@@ -492,8 +558,6 @@ export const DocumentTemplateView: React.FC<DocumentTemplateViewProps> = ({ init
         bank_account_info: 'ドコモSMTBネット銀行　法人第一支店　普通預金　2223730（口座名義：有限会社MST）',
           sender_address: '〒503-0981　岐阜県大垣市桧町127番地', sender_rep: '大橋真人',
         payment_terms: deal?.memo || '',
-        solution_overview: product?.description || report?.summary || '',
-        expected_outcome: recommendationText,
         cost_breakdown: [initialFee > 0 ? `初期費用 ${initialFee.toLocaleString('ja-JP')}円` : '', monthlyFee > 0 ? `月額費用 ${monthlyFee.toLocaleString('ja-JP')}円` : ''].filter(Boolean).join(' / '),
         proposal_title: deal?.proposal_plan_name || deal?.deal_name || 'お見積り',
         project_name: deal?.proposal_plan_name || deal?.deal_name || productName || 'サービス',
@@ -510,15 +574,20 @@ export const DocumentTemplateView: React.FC<DocumentTemplateViewProps> = ({ init
         conducted_date: formatDocumentDate(diagnosis?.conducted_at ? String(diagnosis.conducted_at).slice(0,10) : today),
         due_date: formatDocumentDate(selectedTemplateId === 'tpl-estimate-01' ? quoteExpiry : invoiceDue),
         overall_score: score == null ? '' : String(score),
-        score_rank: score == null ? '' : score >= 80 ? 'A' : score >= 60 ? 'B' : score >= 40 ? 'C' : 'D',
-        rank_description: report?.summary || '',
-        current_challenge: challengeText,
-        action_recommendation: recommendationText,
-        recommended_product: productName || '',
-        score_sales: categoryScores.sales_marketing == null ? '' : String(categoryScores.sales_marketing),
-        score_automation: categoryScores.operation == null ? '' : String(categoryScores.operation),
-        comment_sales: report?.summary || '',
-        comment_automation: recommendationText,
+        primary_bottleneck: challengeText || '経営者自身の現場拘束と事務手作業の二重入力',
+        bottleneck_impact: report?.summary || '請求・見積の手作業や顧客対応の遅れにより、月間約25時間の経営リソースが現場に奪われ、売上につながる次の一手が後回しになっています。',
+        company_before: '手作業や属人化により、売上はあるのに手元に利益が残らず、仕事が特定の人に集中している',
+        company_after: '業務が仕組みで回り、限られた人員でもミスなく自動連携し、売上だけでなく利益がしっかり残る会社へ',
+        ceo_before: '日々の火消しや業務処理に追われ、会社の改善や戦略を考える時間が奪われている',
+        ceo_after: '現場から解放され、本来向き合うべき「経営判断」「人材育成」「次の一手（新規事業）」に集中できる',
+        phase1_action: '【業務・時間の急所解消】毎月の請求・見積・顧客情報の重複入力を自動化し、月20時間以上の経営時間を即座に創出',
+        phase2_action: '【売上・集客の導線構築】LINE・メール・CRMを連携し、集客から問い合わせ・商談・顧客フォローが自動でつながる流れを構築',
+        phase3_action: '【経営の自走化・新規事業】経営戦略・利益改善顧問の定期伴走により、新たな収益源の創出と自走組織を実現',
+        current_challenge: challengeText || '手作業や二重入力に時間を奪われ、改善を着手したいが日々の業務に追われて優先順位が決まらない状態です。',
+        solution_overview: product?.description || '経営戦略・利益改善顧問および業務自動化パッケージにより、手作業の撲滅と利益の残る仕組み化を同時に進めます。',
+        expected_outcome: recommendationText || '現場の手作業が自動化され、月20時間以上の余白を創出。経営者が次の一手を選べる経営体質へ変革します。',
+        action_recommendation: recommendationText || 'まずはPhase 1の業務改善・自動化から小さく着手し、成果を確認しながら主軸の経営顧問へと展開することを推奨いたします。',
+        recommended_product: productName || '業務改善・IT・DX顧問 ＋ 業務自動化パッケージ',
       };
       setVariableValues((prev) => ({...prev, ...values}));
     };
