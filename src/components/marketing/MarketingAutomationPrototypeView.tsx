@@ -297,7 +297,55 @@ const emptyScenario = (): Omit<MarketingScenario, 'id' | 'updatedAt'> => ({
   consentBasis: '',
 });
 
+
+export function getScenarioSortKey(scenario: MarketingScenario): { categoryOrder: number; stepNumber: number; waitMinutes: number; name: string } {
+  const name = scenario.name || '';
+  
+  // カテゴリ優先度: 1. 診断・面談フォロー, 2. 見込み営業メール, 3. ストーリーナーチャリング, 99. その他
+  let categoryOrder = 99;
+  if (name.includes('診断') || name.includes('【1. 初回') || name.includes('【2. 診断') || name.includes('【3. レポート') || name.includes('【4. 3日') || name.includes('【5. 7日') || scenario.trigger.startsWith('diagnosis_') || scenario.trigger.startsWith('report_')) {
+    categoryOrder = 1;
+  } else if (name.includes('営業メール') || name.includes('【営業') || (scenario.channel === 'email' && scenario.trigger === 'lead_created')) {
+    categoryOrder = 2;
+  } else if (name.includes('ストーリー') || name.includes('大橋') || name.includes('ナーチャリング') || name.includes('話】') || name.includes('第')) {
+    categoryOrder = 3;
+  }
+
+  // ステップ番号の抽出（例: 【1. や 第1話、ステップ1、営業メール1 など）
+  let stepNumber = 999;
+  const numMatch = name.match(/[【［\[第ステップ]?\s*(\d+)\s*[.話ステップ\]］】]/) || name.match(/(\d+)/);
+  if (numMatch) {
+    stepNumber = parseInt(numMatch[1], 10);
+  }
+
+  return {
+    categoryOrder,
+    stepNumber,
+    waitMinutes: scenario.waitMinutes ?? 0,
+    name,
+  };
+}
+
+export function sortScenarios(scenarios: MarketingScenario[]): MarketingScenario[] {
+  return [...scenarios].sort((a, b) => {
+    const keyA = getScenarioSortKey(a);
+    const keyB = getScenarioSortKey(b);
+
+    if (keyA.categoryOrder !== keyB.categoryOrder) {
+      return keyA.categoryOrder - keyB.categoryOrder;
+    }
+    if (keyA.stepNumber !== keyB.stepNumber) {
+      return keyA.stepNumber - keyB.stepNumber;
+    }
+    if (keyA.waitMinutes !== keyB.waitMinutes) {
+      return keyA.waitMinutes - keyB.waitMinutes;
+    }
+    return keyA.name.localeCompare(keyB.name, 'ja');
+  });
+}
+
 export const MarketingAutomationPrototypeView: React.FC<Props> = ({ scenarios, onScenariosChange, onNavigateTab, lineInboxContact }) => {
+  const sortedScenarios = useMemo(() => sortScenarios(scenarios), [scenarios]);
   const [segments, setSegments] = useState<Array<{id:string;name:string;entity_type:string;conditions:Record<string,unknown>|null}>>([]);
   const [emailTemplates,setEmailTemplates]=useState<any[]>([]);
   const [lineTemplates,setLineTemplates]=useState<Array<{id:string;name:string;reply_type:'text'|'image'|'flex'|'video';payload:Record<string,any>}>>([]);
@@ -422,7 +470,7 @@ export const MarketingAutomationPrototypeView: React.FC<Props> = ({ scenarios, o
       }
     });
 
-    return { merged: updatedList, addedCount, updatedCount };
+    return { merged: sortScenarios(updatedList), addedCount, updatedCount };
   };
 
   const deduplicateScenarios = () => {
@@ -444,7 +492,7 @@ export const MarketingAutomationPrototypeView: React.FC<Props> = ({ scenarios, o
       return;
     }
 
-    onScenariosChange(deduplicated);
+    onScenariosChange(sortScenarios(deduplicated));
     setNotice(`重複していたシナリオ ${removedCount} 件を整理し、最新の1本ずつにまとめました！`);
   };
 
@@ -543,9 +591,9 @@ export const MarketingAutomationPrototypeView: React.FC<Props> = ({ scenarios, o
       status: 'draft',
       automationEnabled: false,
     };
-    onScenariosChange(editing
+    onScenariosChange(sortScenarios(editing
       ? scenarios.map((scenario) => scenario.id === editing.id ? saved : scenario)
-      : [saved, ...scenarios]);
+      : [saved, ...scenarios]));
     setEditing(null);
     setIsFormOpen(false);
     setNotice('シナリオを保存しました。自動実行する場合は準備状態にして、同意根拠を記録した上で有効化してください。');
@@ -821,7 +869,7 @@ export const MarketingAutomationPrototypeView: React.FC<Props> = ({ scenarios, o
             <div className="mt-4 flex flex-wrap items-center justify-between gap-3"><p className="text-[11px] text-slate-500">画像は公開HTTPS URLを指定します。Flexはカード設定からJSONを生成します。今の段階では下書き保存のみで送信されません。</p><div className="flex gap-2"><button type="button" onClick={() => { setEditing(null); setIsFormOpen(false); setNotice(''); }} className="rounded-lg border border-slate-700 px-3 py-2 text-xs text-slate-300">キャンセル</button><button type="submit" className="flex items-center gap-2 rounded-lg bg-indigo-600 px-4 py-2 text-xs font-semibold text-white hover:bg-indigo-500"><Save className="h-4 w-4" />保存</button></div></div>
           </form>
         ) : null}
-        {scenarios.length === 0 ? <div className="rounded-2xl border border-dashed border-slate-700 bg-slate-900/60 p-10 text-center"><GitBranch className="mx-auto h-8 w-8 text-slate-500" /><h2 className="mt-3 font-bold text-white">シナリオはまだありません</h2><p className="mt-1 text-sm text-slate-400">「シナリオ作成」から、開始条件とLINE・メールの配信文案を登録できます。</p><button onClick={startNew} className="mt-4 rounded-lg bg-indigo-600 px-4 py-2 text-xs font-semibold text-white">最初のシナリオを作成</button></div> : <div className="space-y-3">{scenarios.map((scenario) => <article key={scenario.id} className="grid gap-3 rounded-xl border border-slate-800 bg-slate-900 p-4 lg:grid-cols-[1.4fr_1fr_1fr_auto] lg:items-center"><div><div className="font-bold text-white">{scenario.name}</div><div className="mt-1 text-xs text-slate-400">{triggerLabel[scenario.trigger]} ・ {audienceLabel(scenario.audience)}</div></div><div className="text-xs text-slate-300">{channelLabels[scenario.channel]}{scenario.channel !== 'email' ? ` ・ LINE${lineMessageLabels[scenario.lineMessageType || 'text']}` : ''}{scenario.waitMinutes > 0 ? ` ・ ${scenario.waitMinutes}分後` : ''}</div><div className="text-xs"><span className={scenario.status === 'prepared' ? 'text-emerald-300' : 'text-amber-300'}>{scenario.status === 'prepared' ? '準備済み（未配信）' : '下書き'}</span><div className="mt-1 text-[10px] text-slate-500">{new Date(scenario.updatedAt).toLocaleString()}</div></div><div className="flex gap-2"><button onClick={() => { markPrepared(scenario); }} className={`rounded-lg border px-3 py-2 text-xs ${scenario.status === 'prepared' ? 'border-emerald-500/30 text-emerald-300' : 'border-slate-700 text-slate-300 hover:bg-slate-800'}`}>{scenario.status === 'prepared' ? '準備済み' : '準備状態にする'}</button><button disabled={scenario.status!=='prepared'||!scenario.consentBasis?.trim()||!supportedAutomationTriggers.has(scenario.trigger)||(scenario.channel!=='email'&&!['text','image','video','flex'].includes(scenario.lineMessageType||'text'))} onClick={() => { onScenariosChange(scenarios.map((item) => item.id===scenario.id?{...item,automationEnabled:!item.automationEnabled,updatedAt:Date.now()}:item)); setNotice(scenario.automationEnabled?'自動実行を停止しました。':'自動実行を有効にしました。'); }} className={`rounded-lg border px-3 py-2 text-xs ${scenario.automationEnabled?'border-emerald-500/30 text-emerald-300':'border-slate-700 text-slate-300'} disabled:cursor-not-allowed disabled:opacity-40`}>{scenario.automationEnabled?'自動実行中':!supportedAutomationTriggers.has(scenario.trigger)?'開始条件は未対応':scenario.channel!=='email'&&!['text','image','video','flex'].includes(scenario.lineMessageType||'text')?'LINE形式は未対応':'自動実行を有効化'}</button>{scenario.automationEnabled && automationHealth && ((scenario.channel === 'email' && !automationHealth.emailConfigured) || (scenario.channel === 'line' && !automationHealth.lineConfigured) || (scenario.channel === 'both' && (!automationHealth.emailConfigured || !automationHealth.lineConfigured))) && <span className="self-center text-[10px] text-amber-300">実際には送信されません</span>}<button onClick={() => { startEdit(scenario); setNotice(''); }} className="rounded-lg border border-slate-700 px-3 py-2 text-xs text-slate-200 hover:bg-slate-800">編集</button><InlineDeleteButton onConfirm={()=>deleteScenario(scenario)} warning={`「${scenario.name}」を削除しますか？`} ariaLabel="シナリオを削除" className="rounded-lg border border-slate-700 p-2 text-slate-400 hover:border-rose-500/40 hover:text-rose-300"><Trash2 className="h-4 w-4" /></InlineDeleteButton></div></article>)}</div>}
+        {scenarios.length === 0 ? <div className="rounded-2xl border border-dashed border-slate-700 bg-slate-900/60 p-10 text-center"><GitBranch className="mx-auto h-8 w-8 text-slate-500" /><h2 className="mt-3 font-bold text-white">シナリオはまだありません</h2><p className="mt-1 text-sm text-slate-400">「シナリオ作成」から、開始条件とLINE・メールの配信文案を登録できます。</p><button onClick={startNew} className="mt-4 rounded-lg bg-indigo-600 px-4 py-2 text-xs font-semibold text-white">最初のシナリオを作成</button></div> : <div className="space-y-3">{sortedScenarios.map((scenario) => <article key={scenario.id} className="grid gap-3 rounded-xl border border-slate-800 bg-slate-900 p-4 lg:grid-cols-[1.4fr_1fr_1fr_auto] lg:items-center"><div><div className="font-bold text-white">{scenario.name}</div><div className="mt-1 text-xs text-slate-400">{triggerLabel[scenario.trigger]} ・ {audienceLabel(scenario.audience)}</div></div><div className="text-xs text-slate-300">{channelLabels[scenario.channel]}{scenario.channel !== 'email' ? ` ・ LINE${lineMessageLabels[scenario.lineMessageType || 'text']}` : ''}{scenario.waitMinutes > 0 ? ` ・ ${scenario.waitMinutes}分後` : ''}</div><div className="text-xs"><span className={scenario.status === 'prepared' ? 'text-emerald-300' : 'text-amber-300'}>{scenario.status === 'prepared' ? '準備済み（未配信）' : '下書き'}</span><div className="mt-1 text-[10px] text-slate-500">{new Date(scenario.updatedAt).toLocaleString()}</div></div><div className="flex gap-2"><button onClick={() => { markPrepared(scenario); }} className={`rounded-lg border px-3 py-2 text-xs ${scenario.status === 'prepared' ? 'border-emerald-500/30 text-emerald-300' : 'border-slate-700 text-slate-300 hover:bg-slate-800'}`}>{scenario.status === 'prepared' ? '準備済み' : '準備状態にする'}</button><button disabled={scenario.status!=='prepared'||!scenario.consentBasis?.trim()||!supportedAutomationTriggers.has(scenario.trigger)||(scenario.channel!=='email'&&!['text','image','video','flex'].includes(scenario.lineMessageType||'text'))} onClick={() => { onScenariosChange(scenarios.map((item) => item.id===scenario.id?{...item,automationEnabled:!item.automationEnabled,updatedAt:Date.now()}:item)); setNotice(scenario.automationEnabled?'自動実行を停止しました。':'自動実行を有効にしました。'); }} className={`rounded-lg border px-3 py-2 text-xs ${scenario.automationEnabled?'border-emerald-500/30 text-emerald-300':'border-slate-700 text-slate-300'} disabled:cursor-not-allowed disabled:opacity-40`}>{scenario.automationEnabled?'自動実行中':!supportedAutomationTriggers.has(scenario.trigger)?'開始条件は未対応':scenario.channel!=='email'&&!['text','image','video','flex'].includes(scenario.lineMessageType||'text')?'LINE形式は未対応':'自動実行を有効化'}</button>{scenario.automationEnabled && automationHealth && ((scenario.channel === 'email' && !automationHealth.emailConfigured) || (scenario.channel === 'line' && !automationHealth.lineConfigured) || (scenario.channel === 'both' && (!automationHealth.emailConfigured || !automationHealth.lineConfigured))) && <span className="self-center text-[10px] text-amber-300">実際には送信されません</span>}<button onClick={() => { startEdit(scenario); setNotice(''); }} className="rounded-lg border border-slate-700 px-3 py-2 text-xs text-slate-200 hover:bg-slate-800">編集</button><InlineDeleteButton onConfirm={()=>deleteScenario(scenario)} warning={`「${scenario.name}」を削除しますか？`} ariaLabel="シナリオを削除" className="rounded-lg border border-slate-700 p-2 text-slate-400 hover:border-rose-500/40 hover:text-rose-300"><Trash2 className="h-4 w-4" /></InlineDeleteButton></div></article>)}</div>}
         {!editing && scenarios.length > 0 && <p className="text-[11px] text-slate-500">自動実行は有効化したシナリオのみです。CRMイベントの対象連絡先が配信同意済みの場合に送信し、既存の送信履歴へ記録します。</p>}
       </div>}
       {activeTab === 'segments' && <SalesOperationsWorkspace tab="segments" />}
