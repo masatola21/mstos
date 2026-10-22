@@ -234,24 +234,30 @@ export const UnifiedNavbar: React.FC<UnifiedNavbarProps> = ({
         <nav className="border-t border-slate-800/70 py-2 text-xs font-medium">
           {activeSection === 'mst' && (() => {
             const groups = [
-              { id: 'marketing', label: 'マーケティング', items: (['ai_acquisition','marketing_automation'] as UnifiedNavTab[]) },
-              { id: 'crm', label: '顧客・営業', items: (['mst_dashboard','companies','contacts','prospects','leads','deals','customers','products'] as UnifiedNavTab[]) },
-              
-              { id: 'intake', label: 'フォーム・案内', items: (['mst_diagnoses','communication_send'] as UnifiedNavTab[]) },
-              { id: 'delivery', label: '書類・契約後', items: (['document_templates','customer_operations'] as UnifiedNavTab[]) },
+              { id: 'acquisition', label: '集客・開拓', items: (['prospects', 'marketing_automation', 'ai_acquisition'] as UnifiedNavTab[]) },
+              { id: 'pipeline', label: '反響・商談', items: (['mst_dashboard', 'leads', 'deals', 'mst_diagnoses'] as UnifiedNavTab[]) },
+              { id: 'contracts', label: '契約・書類', items: (['document_templates', 'communication_send'] as UnifiedNavTab[]) },
+              { id: 'customers', label: '顧客・支援', items: (['customers', 'customer_operations', 'products', 'companies', 'contacts'] as UnifiedNavTab[]) },
             ];
             const activeGroup = groups.find((group) => group.items.includes(currentTab)) || groups[0];
             const labelFor = (tab: UnifiedNavTab) => {
+              if (tab === 'prospects') return '見込み企業（AI検索）';
+              if (tab === 'marketing_automation') return 'LINE・メール自動配信';
+              if (tab === 'ai_acquisition') return 'AI集客運用';
               if (tab === 'mst_dashboard') return '営業ダッシュボード';
+              if (tab === 'leads') return '反響リード';
+              if (tab === 'deals') return '商談一覧';
               if (tab === 'mst_diagnoses') return 'フォーム・診断';
+              if (tab === 'document_templates') return '見積・契約・請求書';
+              if (tab === 'communication_send') return '送信・承認センター';
+              if (tab === 'customers') return '契約顧客';
+              if (tab === 'customer_operations') return '支援案件・タスク';
+              if (tab === 'products') return '商品マスタ（デジタル含む）';
+              if (tab === 'companies') return '会社一覧';
+              if (tab === 'contacts') return '連絡先一覧';
               if (tab === 'deal_invitations') return '商談案内';
               if (tab === 'customer_meeting_invitations') return '顧客面談案内';
-              if (tab === 'communication_send') return '送信センター';
-              if (tab === 'ai_acquisition') return 'AI集客運用';
               if (tab === 'custom_lists') return '配信対象リスト';
-              if (tab === 'marketing_automation') return 'LINE・メール';
-              if (tab === 'document_templates') return '顧客書類';
-              if (tab === 'customer_operations') return '契約・請求・支援';
               return TABLE_CONFIGS[tab as TableKey]?.label || String(tab);
             };
             return <div className="space-y-2">

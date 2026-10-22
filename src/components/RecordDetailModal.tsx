@@ -141,17 +141,32 @@ export const RecordDetailModal: React.FC<RecordDetailModalProps> = ({
               )}
 
               {tableKey === 'deals' && (
-                <button
-                  type="button"
-                  onClick={() => {
-                    onClose();
-                    onTransitionStage('deal_to_customer', record);
-                  }}
-                  className="px-3.5 py-2 rounded-xl text-xs font-bold bg-pink-600 hover:bg-pink-500 text-white shadow-md shadow-pink-600/30 flex items-center gap-1.5 transition-colors shrink-0"
-                >
-                  <UserCheck className="w-3.5 h-3.5" />
-                  <span>顧客として登録</span>
-                </button>
+                <>
+                  {record.company_id && onOpenCustomerWorkspace && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        onClose();
+                        onOpenCustomerWorkspace(String(record.company_id), 'documents', { tableKey, recordId: String(record.id), leadId: record.lead_id ? String(record.lead_id) : undefined });
+                      }}
+                      className="px-3.5 py-2 rounded-xl text-xs font-bold bg-indigo-600 hover:bg-indigo-500 text-white shadow-md shadow-indigo-600/30 flex items-center gap-1.5 transition-colors shrink-0"
+                    >
+                      <FileText className="w-3.5 h-3.5" />
+                      <span>見積・契約書を作成</span>
+                    </button>
+                  )}
+                  <button
+                    type="button"
+                    onClick={() => {
+                      onClose();
+                      onTransitionStage('deal_to_customer', record);
+                    }}
+                    className="px-3.5 py-2 rounded-xl text-xs font-bold bg-pink-600 hover:bg-pink-500 text-white shadow-md shadow-pink-600/30 flex items-center gap-1.5 transition-colors shrink-0"
+                  >
+                    <UserCheck className="w-3.5 h-3.5" />
+                    <span>顧客として登録</span>
+                  </button>
+                </>
               )}
             </div>
           )}
@@ -349,6 +364,13 @@ export const RecordDetailModal: React.FC<RecordDetailModalProps> = ({
                   <Mail className="w-3.5 h-3.5" />
                   <span>送信センター</span>
                 </button>
+                {tableKey === 'deals' && <button
+                  onClick={() => { onClose(); onOpenCustomerWorkspace(String(record.company_id), 'documents', { tableKey, recordId: String(record.id), leadId: record.lead_id ? String(record.lead_id) : undefined }); }}
+                  className="px-3 py-2 rounded-xl text-xs font-medium text-indigo-200 hover:bg-indigo-950/40 border border-indigo-800 transition-colors flex items-center gap-1.5"
+                >
+                  <FileText className="w-3.5 h-3.5" />
+                  <span>見積・契約書</span>
+                </button>}
                 {tableKey === 'customers' && <button
                   onClick={() => { onClose(); onOpenCustomerWorkspace(String(record.company_id), 'operations', { tableKey, recordId: String(record.id) }); }}
                   className="px-3 py-2 rounded-xl text-xs font-medium text-emerald-200 hover:bg-emerald-950/40 border border-emerald-800 transition-colors flex items-center gap-1.5"

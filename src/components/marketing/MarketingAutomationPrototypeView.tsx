@@ -57,6 +57,30 @@ export const MST_LINE_NURTURING_STARTER_SCENARIOS: Omit<MarketingScenario, 'id' 
   };
 });
 
+export const MST_DIRECT_CONSULT_STARTER_SCENARIO: Omit<MarketingScenario, 'id' | 'updatedAt'> = {
+  name: '【直相談】介護保険外サービス開業・個別経営相談 受付案内',
+  trigger: 'lead_created',
+  channel: 'both',
+  audience: 'すべての見込み客',
+  waitMinutes: 0,
+  emailSubject: '【MST】介護保険外サービス開業・個別相談を承りました（日程調整のご案内）',
+  emailBody: '{recipient_name} 様\n\n有限会社MSTの大橋真人です。\nこの度は介護保険外サービス開業・個別相談のお申し込みをいただき、誠にありがとうございます。\n\n貴社の事業構想や地域ニーズを踏まえ、失敗しない開業ステップと収益モデルについて、30分のオンライン相談にて直接アドバイスさせていただきます。\n\n▼ 面談日程の選択はこちら\n{booking_url}\n\n当日お話しできますことを楽しみにしております。\n\n有限会社MST\n大橋真人',
+  messageBody: '{recipient_name} 様\n介護保険外サービス開業・個別相談のお申し込みありがとうございます！有限会社MST代表の大橋真人です。\n\n貴社の構想や開業課題を伺い、最初の実行ステップを具体化する【30分無料オンライン相談】枠をご用意いたしました。\n\n▼ 日程調整はこちら\n{booking_url}',
+  lineMessageType: 'flex',
+  lineImageUrl: '',
+  linePreviewImageUrl: '',
+  flexAltText: '【受付完了】介護保険外サービス開業・個別相談のご案内',
+  flexTitle: '🌿 介護保険外サービス開業・個別相談',
+  flexBody: '{recipient_name} 様\nご相談ありがとうございます！有限会社MST代表の大橋真人です。\n貴社の構想や開業課題を伺い、最初の実行ステップを具体化する【30分無料オンライン相談】枠を確保いたしました。下記よりご都合の良い枠をお選びください。',
+  flexButtonLabel: '無料相談の日程を選ぶ',
+  flexButtonUrl: '{booking_url}',
+  status: 'draft',
+  automationEnabled: false,
+  stopOnBooking: true,
+  stopOnDeal: true,
+  consentBasis: '個別相談フォーム・LINE相談受付時の同意に基づく',
+};
+
 export const MST_DIAGNOSIS_STARTER_SCENARIOS: Omit<MarketingScenario, 'id' | 'updatedAt'>[] = [
   {
     name: '【1. 初回登録】LINE友だち追加・ボトルネック診断ご案内',
@@ -514,15 +538,22 @@ export const MarketingAutomationPrototypeView: React.FC<Props> = ({ scenarios, o
     setNotice(`大橋ストーリー型ナーチャリング（7話・テキスト共感重視）を反映しました（新規導入: ${addedCount}件、最新更新: ${updatedCount}件）。何回押しても重複しません。`);
   };
 
+  const applyDirectConsultStarterSet = () => {
+    const { merged, addedCount, updatedCount } = mergeStarterScenarios([MST_DIRECT_CONSULT_STARTER_SCENARIO]);
+    onScenariosChange(merged);
+    setNotice(`介護開業・個別相談の直相談Flexシナリオを反映しました（新規導入: ${addedCount}件、最新更新: ${updatedCount}件）。`);
+  };
+
   const applyAllStarterSets = () => {
     const allPresets = [
       ...MST_DIAGNOSIS_STARTER_SCENARIOS,
+      MST_DIRECT_CONSULT_STARTER_SCENARIO,
       ...MST_OUTREACH_STARTER_SCENARIOS,
       ...MST_LINE_NURTURING_STARTER_SCENARIOS,
     ];
     const { merged, addedCount, updatedCount } = mergeStarterScenarios(allPresets);
     onScenariosChange(merged);
-    setNotice(`公式プリセット全17本を反映しました（新規導入: ${addedCount}件、最新更新: ${updatedCount}件）。何回押しても重複しません。`);
+    setNotice(`公式プリセット全18本を反映しました（新規導入: ${addedCount}件、最新更新: ${updatedCount}件）。何回押しても重複しません。`);
   };
   const startNew = () => {
     setSelectedEmailTemplateId('');setSelectedLineTemplateId('');
@@ -779,11 +810,22 @@ export const MarketingAutomationPrototypeView: React.FC<Props> = ({ scenarios, o
                   className="inline-flex items-center gap-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 px-3 py-1.5 text-xs font-bold text-white shadow transition cursor-pointer"
                 >
                   <Plus className="h-4 w-4" />
-                  全17本を一括導入・更新
+                  全18本を一括導入・更新
                 </button>
               </div>
             </div>
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5 pt-1">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2.5 pt-1">
+              <button
+                type="button"
+                onClick={applyDirectConsultStarterSet}
+                className="flex items-center justify-between gap-2 rounded-xl border border-emerald-500/40 bg-emerald-950/40 hover:bg-emerald-900/60 p-3 text-left transition cursor-pointer"
+              >
+                <div>
+                  <div className="text-xs font-bold text-white">🌿 直相談（介護開業/経営）</div>
+                  <div className="text-[11px] text-emerald-200 mt-0.5">診断不要・即時30分面談案内Flex</div>
+                </div>
+                <Plus className="h-4 w-4 text-emerald-400 shrink-0" />
+              </button>
               <button
                 type="button"
                 onClick={applyDiagnosisStarterSet}
