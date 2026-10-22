@@ -642,6 +642,64 @@ app.post('/api/email/webhook', express.raw({ type: 'application/json', limit: '2
   if (!valid) return res.status(401).json({ error: 'Webhook署名が一致しません。' });
   let event: any;
   try { event = JSON.parse(req.body.toString('utf8')); } catch { return res.status(400).json({ error: 'Webhook JSONが不正です。' }); }
+  // 1. 不達（Bounce）イベント処理: 宛先を配信停止・送信キューをfailedに更新
+  if (event?.type === 'email.bounced') {
+    const toList = Array.isArray(event.data?.to) ? event.data.to : [event.data?.to].filter(Boolean);
+    const providerId = event.data?.email_id || event.data?.id;
+    for (const emailAddr of toList) {
+      if (typeof emailAddr === 'string' && emailAddr.trim()) {
+        const cleanEmail = emailAddr.trim().toLowerCase();
+        await lineSupabase.from('contacts').update({
+          email_consent_status: 'opted_out',
+          email_opted_out_at: new Date().toISOString(),
+          email_opt_out_reason: '宛先不達（Bounced）による自動配信停止',
+        }).ilike('email', cleanEmail);
+      }
+    }
+    if (providerId) {
+      await lineSupabase.from('communication_outbox').update({
+        status: 'failed',
+        error_message: 'メール不達（Bounced）',
+      }).eq('provider_message_id', String(providerId));
+    }
+    return res.sendStatus(200);
+  }
+
+  // 2. 迷惑メール報告（Complaint）イベント処理: 即座に配信停止
+  if (event?.type === 'email.complained') {
+    const toList = Array.isArray(event.data?.to) ? event.data.to : [event.data?.to].filter(Boolean);
+    const providerId = event.data?.email_id || event.data?.id;
+    for (const emailAddr of toList) {
+      if (typeof emailAddr === 'string' && emailAddr.trim()) {
+        const cleanEmail = emailAddr.trim().toLowerCase();
+        await lineSupabase.from('contacts').update({
+          email_consent_status: 'opted_out',
+          email_opted_out_at: new Date().toISOString(),
+          email_opt_out_reason: '迷惑メール報告（苦情）による自動配信停止',
+        }).ilike('email', cleanEmail);
+      }
+    }
+    if (providerId) {
+      await lineSupabase.from('communication_outbox').update({
+        status: 'failed',
+        error_message: '迷惑メール報告（Complaint）',
+      }).eq('provider_message_id', String(providerId));
+    }
+    return res.sendStatus(200);
+  }
+
+  // 3. 配信完了（Delivered）イベント処理
+  if (event?.type === 'email.delivered') {
+    const providerId = event.data?.email_id || event.data?.id;
+    if (providerId) {
+      await lineSupabase.from('communication_outbox').update({
+        status: 'sent',
+        sent_at: new Date().toISOString(),
+      }).eq('provider_message_id', String(providerId));
+    }
+    return res.sendStatus(200);
+  }
+
   if (event?.type !== 'email.received') return res.sendStatus(204);
   const emailId = typeof event.data?.email_id === 'string' ? event.data.email_id : '';
   const recipients = Array.isArray(event.data?.to) ? event.data.to.filter((value: unknown) => typeof value === 'string').map((value: string) => value.toLowerCase()) : [];
