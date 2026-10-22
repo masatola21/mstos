@@ -66,15 +66,15 @@ export const MST_DIAGNOSIS_STARTER_SCENARIOS: Omit<MarketingScenario, 'id' | 'up
     waitMinutes: 0,
     emailSubject: '',
     emailBody: '',
-    messageBody: '{recipient_name} 様\n友だち追加ありがとうございます！有限会社MSTです。\n\n貴社の業務・経営における「本当のボトルネック（手作業・売上利益・属人化）」を特定し、改善ロードマップを作成する【無料ボトルネック診断】を実施中です。\n\n▼診断はこちら（約3分）\n{link_url}\n\n回答後すぐに速報分析をご確認いただけます。',
-    lineMessageType: 'text',
+    messageBody: '{recipient_name} 様\n友だち追加ありがとうございます！有限会社MSTです。\n\n貴社の業務・経営における「本当のボトルネック（手作業・売上利益・属人化）」を特定し、改善処方箋を作成する【無料ボトルネック診断】を実施中です。\n\n回答後すぐに速報分析をご確認いただけます。',
+    lineMessageType: 'flex',
     lineImageUrl: '',
     linePreviewImageUrl: '',
-    flexAltText: '',
-    flexTitle: '',
-    flexBody: '',
-    flexButtonLabel: '',
-    flexButtonUrl: '',
+    flexAltText: '【MST経営OS】無料ボトルネック診断（約3分）のご案内',
+    flexTitle: '【無料】業務ボトルネック診断（約3分）',
+    flexBody: '{recipient_name} 様\n友だち追加ありがとうございます！\n貴社の業務における「本当の急所（属人化・人手不足・売上低迷）」を特定し、改善ロードマップを作成します。回答後すぐに速報分析をご確認いただけます。',
+    flexButtonLabel: '3分診断を始める',
+    flexButtonUrl: '{link_url}',
     status: 'draft',
     automationEnabled: false,
     stopOnBooking: true,
@@ -89,15 +89,15 @@ export const MST_DIAGNOSIS_STARTER_SCENARIOS: Omit<MarketingScenario, 'id' | 'up
     waitMinutes: 0,
     emailSubject: '',
     emailBody: '',
-    messageBody: '{recipient_name} 様\n【経営課題・業務ボトルネック診断】へのご回答ありがとうございました！\n\n現在、回答内容をもとに詳細な改善ロードマップ（診断レポート）を作成しております。完成次第、改めてこちらでご案内いたします。\n\n※お急ぎで現状の急所改善をご相談されたい場合は、以下の日程調整より無料の個別面談（30分）をご予約いただけます。\n{booking_url}',
-    lineMessageType: 'text',
+    messageBody: '{recipient_name} 様\n【経営課題・業務ボトルネック診断】へのご回答ありがとうございました！\n\n現在、回答内容をもとに詳細な改善ロードマップ（診断レポート）を作成しております。\n\n※お急ぎで急所改善のご相談を希望される場合は、先行して無料の個別相談（30分）をご予約いただけます。\n{booking_url}',
+    lineMessageType: 'flex',
     lineImageUrl: '',
     linePreviewImageUrl: '',
-    flexAltText: '',
-    flexTitle: '',
-    flexBody: '',
-    flexButtonLabel: '',
-    flexButtonUrl: '',
+    flexAltText: '【診断受付完了】急所分析レポート作成中',
+    flexTitle: '📊 診断受付完了・レポート作成中',
+    flexBody: '{recipient_name} 様、診断へのご回答ありがとうございました！\n現在AIと専門アナリストが詳細な改善レポートを作成中です。お急ぎの方は先行して30分の無料個別相談をご予約いただけます。',
+    flexButtonLabel: '無料相談の日程を選ぶ',
+    flexButtonUrl: '{booking_url}',
     status: 'draft',
     automationEnabled: false,
     stopOnBooking: true,
@@ -112,15 +112,15 @@ export const MST_DIAGNOSIS_STARTER_SCENARIOS: Omit<MarketingScenario, 'id' | 'up
     waitMinutes: 0,
     emailSubject: '',
     emailBody: '',
-    messageBody: '{recipient_name} 様\n大変お待たせいたしました！貴社の【経営改善・ボトルネック診断レポート】が完成いたしました。\n\n▼診断レポートのWeb閲覧・PDF保存はこちら\n{document_url}\n\nこのレポートをもとに、貴社が最優先で着手すべき「最初の1手」を具体化する無料個別相談（30分）も承っております。ぜひご活用ください。\n{booking_url}',
-    lineMessageType: 'text',
+    messageBody: '{recipient_name} 様\n大変お待たせいたしました！貴社の【経営改善・ボトルネック診断レポート】が完成いたしました。\n\n▼診断レポートの閲覧はこちら\n{document_url}\n\nこのレポートをもとに、最優先で着手すべき「最初の1手」を具体化する無料個別相談（30分）も承っております。\n{booking_url}',
+    lineMessageType: 'flex',
     lineImageUrl: '',
     linePreviewImageUrl: '',
-    flexAltText: '',
-    flexTitle: '',
-    flexBody: '',
-    flexButtonLabel: '',
-    flexButtonUrl: '',
+    flexAltText: '【診断レポート完成】貴社の急所分析・改善処方箋',
+    flexTitle: '📑 業務ボトルネック診断レポート完成',
+    flexBody: '{recipient_name} 様\n大変お待たせいたしました！貴社の【改善ロードマップ付き診断レポート】が完成しました。最優先で着手すべき「最初の1手」をご確認ください。',
+    flexButtonLabel: 'レポートを閲覧する',
+    flexButtonUrl: '{document_url}',
     status: 'draft',
     automationEnabled: false,
     stopOnBooking: true,
@@ -135,15 +135,15 @@ export const MST_DIAGNOSIS_STARTER_SCENARIOS: Omit<MarketingScenario, 'id' | 'up
     waitMinutes: 4320,
     emailSubject: '',
     emailBody: '',
-    messageBody: '{recipient_name} 様\n先日お送りいたしました診断レポートはご確認いただけましたでしょうか？\n\n「どこから手をつければいいか分からない」「自社だけで実行するのが難しそう」といったお声を多くいただきます。\n\nレポートの急所を最短で解消する具体的なステップについて、30分のオンライン相談にてアドバイスしております。\n\n▼面談の日程を選ぶ\n{booking_url}\n\nご都合の良い枠をお選びください。',
-    lineMessageType: 'text',
+    messageBody: '{recipient_name} 様\n先日お送りいたしました診断レポートはご確認いただけましたでしょうか？\n\n「どこから手をつければいいか分からない」「自社だけで実行するのが難しそう」といったお声に対して、他社事例を踏まえた30分の無料オンライン作戦会議を実施しております。\n\n▼面談の日程を選ぶ\n{booking_url}',
+    lineMessageType: 'flex',
     lineImageUrl: '',
     linePreviewImageUrl: '',
-    flexAltText: '',
-    flexTitle: '',
-    flexBody: '',
-    flexButtonLabel: '',
-    flexButtonUrl: '',
+    flexAltText: '【個別作戦会議】診断レポート解消の具体策（30分・無料）',
+    flexTitle: '🎯 個別作戦会議のご案内（無料）',
+    flexBody: '{recipient_name} 様\n診断レポートの急所を最短で解消する具体的な手順について、他社実績を踏まえて30分で直接アドバイスいたします。ご都合の良い枠をお選びください。',
+    flexButtonLabel: '無料作戦会議を予約する',
+    flexButtonUrl: '{booking_url}',
     status: 'draft',
     automationEnabled: false,
     stopOnBooking: true,
@@ -158,15 +158,15 @@ export const MST_DIAGNOSIS_STARTER_SCENARIOS: Omit<MarketingScenario, 'id' | 'up
     waitMinutes: 10080,
     emailSubject: '',
     emailBody: '',
-    messageBody: '{recipient_name} 様\n診断レポートのご案内から1週間が経ちました。\n\n同様の課題（現場業務の属人化・請求や見積の手作業）を抱えていた企業様が、仕組み化により月20時間の経営時間を創出し、新規事業に着手できた事例をご紹介しております。\n\n今月の無料個別相談の枠も残り少なくなっておりますので、現状を打破したいとお考えの方はぜひお早めにご予約ください。\n{booking_url}',
-    lineMessageType: 'text',
+    messageBody: '{recipient_name} 様\n診断レポートのご案内から1週間が経ちました。\n\n同様の課題（現場業務の属人化・請求や見積の手作業）を抱えていた企業様が、仕組み化により月20時間の経営時間を創出した事例をご紹介しております。\n\n今月の無料個別相談の枠も残り少なくなっておりますので、現状を打破したいとお考えの方はぜひお早めにご予約ください。\n{booking_url}',
+    lineMessageType: 'flex',
     lineImageUrl: '',
     linePreviewImageUrl: '',
-    flexAltText: '',
-    flexTitle: '',
-    flexBody: '',
-    flexButtonLabel: '',
-    flexButtonUrl: '',
+    flexAltText: '【改善事例】月20時間の経営時間を創出した仕組み化手法',
+    flexTitle: '💡 仕組み化による業務改善事例',
+    flexBody: '{recipient_name} 様\n同様の急所（属人化・請求手作業）を仕組み化で解消した事例を公開中。今月の無料作戦会議の枠も残り少なくなっております。',
+    flexButtonLabel: '今すぐ面談枠を確保する',
+    flexButtonUrl: '{booking_url}',
     status: 'draft',
     automationEnabled: false,
     stopOnBooking: true,
@@ -380,53 +380,101 @@ export const MarketingAutomationPrototypeView: React.FC<Props> = ({ scenarios, o
   const triggerLabel = useMemo(() => Object.fromEntries(triggerOptions.map((option) => [option.value, option.label])) as Record<MarketingTrigger, string>, []);
   const supportedAutomationTriggers = new Set<MarketingTrigger>(['prospect_selected','lead_created','line_registered','diagnosis_invited','diagnosis_completed','meeting_completed','tag_added','booking_created','retainer_period','deal_stage_changed','deal_won','report_approved','report_sent','proposal_approved','proposal_sent','contract_sent','contract_signed','invoice_due','invoice_overdue','project_milestone']);
 
-  const applyDiagnosisStarterSet = () => {
+  const duplicateCount = useMemo(() => {
+    const names = new Set<string>();
+    let dupes = 0;
+    scenarios.forEach((s) => {
+      if (names.has(s.name)) dupes++;
+      else names.add(s.name);
+    });
+    return dupes;
+  }, [scenarios]);
+
+  const mergeStarterScenarios = (presets: Omit<MarketingScenario, 'id' | 'updatedAt'>[]): { merged: MarketingScenario[]; addedCount: number; updatedCount: number } => {
     const now = Date.now();
-    const newScenarios: MarketingScenario[] = MST_DIAGNOSIS_STARTER_SCENARIOS.map((item, index) => ({
-      ...item,
-      id: `starter-scenario-${now}-${index}`,
-      updatedAt: now + index * 10,
-    }));
-    onScenariosChange([...newScenarios, ...scenarios]);
-    setNotice('診断フローのスターターセット（5本の公式シナリオ）を一括導入しました！内容を確認して「準備状態にする」または編集を行ってください。');
+    const existingByName = new Map<string, MarketingScenario>();
+    scenarios.forEach((s) => existingByName.set(s.name, s));
+
+    let addedCount = 0;
+    let updatedCount = 0;
+    const updatedList = [...scenarios];
+
+    presets.forEach((preset, index) => {
+      const existing = existingByName.get(preset.name);
+      if (existing) {
+        const targetIndex = updatedList.findIndex((s) => s.id === existing.id);
+        if (targetIndex !== -1) {
+          updatedList[targetIndex] = {
+            ...existing,
+            ...preset,
+            updatedAt: now,
+          };
+          updatedCount++;
+        }
+      } else {
+        const newScenario: MarketingScenario = {
+          ...preset,
+          id: `starter-${preset.channel}-${now}-${index}`,
+          updatedAt: now + index * 10,
+        };
+        updatedList.unshift(newScenario);
+        addedCount++;
+      }
+    });
+
+    return { merged: updatedList, addedCount, updatedCount };
+  };
+
+  const deduplicateScenarios = () => {
+    const seenNames = new Set<string>();
+    const deduplicated: MarketingScenario[] = [];
+    let removedCount = 0;
+
+    scenarios.forEach((scenario) => {
+      if (seenNames.has(scenario.name)) {
+        removedCount++;
+      } else {
+        seenNames.add(scenario.name);
+        deduplicated.push(scenario);
+      }
+    });
+
+    if (removedCount === 0) {
+      setNotice('重複しているシナリオはありません（すべて1本ずつ整理されています）。');
+      return;
+    }
+
+    onScenariosChange(deduplicated);
+    setNotice(`重複していたシナリオ ${removedCount} 件を整理し、最新の1本ずつにまとめました！`);
+  };
+
+  const applyDiagnosisStarterSet = () => {
+    const { merged, addedCount, updatedCount } = mergeStarterScenarios(MST_DIAGNOSIS_STARTER_SCENARIOS);
+    onScenariosChange(merged);
+    setNotice(`診断フォロー（5本・Flex対応）を反映しました（新規導入: ${addedCount}件、最新更新: ${updatedCount}件）。何回押しても重複しません。`);
   };
 
   const applyOutreachStarterSet = () => {
-    const now = Date.now();
-    const newScenarios: MarketingScenario[] = MST_OUTREACH_STARTER_SCENARIOS.map((item, index) => ({
-      ...item,
-      id: `outreach-scenario-${now}-${index}`,
-      updatedAt: now + index * 10,
-    }));
-    onScenariosChange([...newScenarios, ...scenarios]);
-    setNotice('見込み企業向け営業メール（全5ステップ・3日おき配信）を一括導入しました！');
+    const { merged, addedCount, updatedCount } = mergeStarterScenarios(MST_OUTREACH_STARTER_SCENARIOS);
+    onScenariosChange(merged);
+    setNotice(`見込み企業向け営業メール（5ステップ）を反映しました（新規導入: ${addedCount}件、最新更新: ${updatedCount}件）。何回押しても重複しません。`);
   };
 
   const applyLineNurturingStarterSet = () => {
-    const now = Date.now();
-    const newScenarios: MarketingScenario[] = MST_LINE_NURTURING_STARTER_SCENARIOS.map((item, index) => ({
-      ...item,
-      id: `line-nurture-scenario-${now}-${index}`,
-      updatedAt: now + index * 10,
-    }));
-    onScenariosChange([...newScenarios, ...scenarios]);
-    setNotice('大橋ストーリー型LINEナーチャリング（全7話・3日おき配信）を一括導入しました！');
+    const { merged, addedCount, updatedCount } = mergeStarterScenarios(MST_LINE_NURTURING_STARTER_SCENARIOS);
+    onScenariosChange(merged);
+    setNotice(`大橋ストーリー型ナーチャリング（7話・テキスト共感重視）を反映しました（新規導入: ${addedCount}件、最新更新: ${updatedCount}件）。何回押しても重複しません。`);
   };
 
   const applyAllStarterSets = () => {
-    const now = Date.now();
     const allPresets = [
       ...MST_DIAGNOSIS_STARTER_SCENARIOS,
       ...MST_OUTREACH_STARTER_SCENARIOS,
       ...MST_LINE_NURTURING_STARTER_SCENARIOS,
     ];
-    const newScenarios: MarketingScenario[] = allPresets.map((item, index) => ({
-      ...item,
-      id: `all-starter-${now}-${index}`,
-      updatedAt: now + index * 10,
-    }));
-    onScenariosChange([...newScenarios, ...scenarios]);
-    setNotice('公式プリセットパック（診断フォロー5本 ＋ 営業メール5本 ＋ LINEナーチャリング7本）の計17本を一括導入しました！');
+    const { merged, addedCount, updatedCount } = mergeStarterScenarios(allPresets);
+    onScenariosChange(merged);
+    setNotice(`公式プリセット全17本を反映しました（新規導入: ${addedCount}件、最新更新: ${updatedCount}件）。何回押しても重複しません。`);
   };
   const startNew = () => {
     setSelectedEmailTemplateId('');setSelectedLineTemplateId('');
@@ -666,14 +714,26 @@ export const MarketingAutomationPrototypeView: React.FC<Props> = ({ scenarios, o
                   業務・経営の急所解消に特化したベストプラクティス自動化シナリオをワンクリックで導入できます。
                 </p>
               </div>
-              <button
-                type="button"
-                onClick={applyAllStarterSets}
-                className="inline-flex items-center gap-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 px-3 py-1.5 text-xs font-bold text-white shadow transition cursor-pointer"
-              >
-                <Plus className="h-4 w-4" />
-                全17本を一括導入
-              </button>
+              <div className="flex flex-wrap items-center gap-2">
+                {duplicateCount > 0 && (
+                  <button
+                    type="button"
+                    onClick={deduplicateScenarios}
+                    className="inline-flex items-center gap-1.5 rounded-lg bg-amber-600 hover:bg-amber-500 px-3 py-1.5 text-xs font-bold text-white shadow transition cursor-pointer"
+                  >
+                    <Trash2 className="h-4 w-4" />
+                    重複を整理（{duplicateCount}件の重複を削除）
+                  </button>
+                )}
+                <button
+                  type="button"
+                  onClick={applyAllStarterSets}
+                  className="inline-flex items-center gap-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 px-3 py-1.5 text-xs font-bold text-white shadow transition cursor-pointer"
+                >
+                  <Plus className="h-4 w-4" />
+                  全17本を一括導入・更新
+                </button>
+              </div>
             </div>
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5 pt-1">
               <button
@@ -682,7 +742,7 @@ export const MarketingAutomationPrototypeView: React.FC<Props> = ({ scenarios, o
                 className="flex items-center justify-between gap-2 rounded-xl border border-indigo-500/40 bg-indigo-950/40 hover:bg-indigo-900/60 p-3 text-left transition cursor-pointer"
               >
                 <div>
-                  <div className="text-xs font-bold text-white">① 診断フォロー（5本）</div>
+                  <div className="text-xs font-bold text-white">① 診断フォロー（5本・Flexカード）</div>
                   <div className="text-[11px] text-indigo-200 mt-0.5">LINE登録→診断速報→レポート→面談誘導</div>
                 </div>
                 <Plus className="h-4 w-4 text-indigo-400 shrink-0" />
@@ -704,7 +764,7 @@ export const MarketingAutomationPrototypeView: React.FC<Props> = ({ scenarios, o
                 className="flex items-center justify-between gap-2 rounded-xl border border-purple-500/40 bg-purple-950/40 hover:bg-purple-900/60 p-3 text-left transition cursor-pointer"
               >
                 <div>
-                  <div className="text-xs font-bold text-white">③ ストーリー型ナーチャリング（7話）</div>
+                  <div className="text-xs font-bold text-white">③ ストーリー型（7話・テキスト共感重視）</div>
                   <div className="text-[11px] text-purple-200 mt-0.5">大橋の実話・LINE＆メルマガ両対応</div>
                 </div>
                 <Plus className="h-4 w-4 text-purple-400 shrink-0" />
