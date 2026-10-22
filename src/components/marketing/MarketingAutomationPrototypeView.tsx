@@ -1,5 +1,5 @@
 
-import { getSalesEmailTemplate, getLineStepTemplate } from '../../utils/salesOutreachTemplates';
+import { getSalesEmailTemplate, getNurturingStepTemplate } from '../../utils/salesOutreachTemplates';
 
 export const MST_OUTREACH_STARTER_SCENARIOS: Omit<MarketingScenario, 'id' | 'updatedAt'>[] = [1, 2, 3, 4, 5].map((step) => {
   const tpl = getSalesEmailTemplate(step);
@@ -30,17 +30,17 @@ export const MST_OUTREACH_STARTER_SCENARIOS: Omit<MarketingScenario, 'id' | 'upd
 });
 
 export const MST_LINE_NURTURING_STARTER_SCENARIOS: Omit<MarketingScenario, 'id' | 'updatedAt'>[] = [1, 2, 3, 4, 5, 6, 7].map((step) => {
-  const tpl = getLineStepTemplate(step);
+  const tpl = getNurturingStepTemplate(step);
   const waitMinutes = step === 1 ? 0 : (step - 1) * 3 * 24 * 60;
   return {
     name: tpl.name,
     trigger: 'line_registered' as MarketingTrigger,
-    channel: 'line' as MarketingChannel,
+    channel: 'both' as MarketingChannel,
     audience: 'すべての見込み客',
     waitMinutes,
-    emailSubject: '',
-    emailBody: '',
-    messageBody: tpl.body.replace(/\{\{diagnostic_url\}\}/g, '{link_url}').replace(/様 様/g, '{recipient_name} 様'),
+    emailSubject: tpl.emailSubject,
+    emailBody: tpl.emailBody.replace(/\{\{diagnostic_url\}\}/g, '{link_url}').replace(/\{recipient_name\}/g, '{recipient_name}').replace(/\{company_name\}/g, '{company_name}'),
+    messageBody: tpl.lineBody.replace(/\{\{diagnostic_url\}\}/g, '{link_url}').replace(/様 様/g, '{recipient_name} 様'),
     lineMessageType: 'text',
     lineImageUrl: '',
     linePreviewImageUrl: '',
@@ -53,7 +53,7 @@ export const MST_LINE_NURTURING_STARTER_SCENARIOS: Omit<MarketingScenario, 'id' 
     automationEnabled: false,
     stopOnBooking: true,
     stopOnDeal: true,
-    consentBasis: 'LINE公式アカウント友だち追加時の配信同意に基づく',
+    consentBasis: '配信同意に基づく（LINEおよびメルマガ配信対応）',
   };
 });
 
@@ -704,8 +704,8 @@ export const MarketingAutomationPrototypeView: React.FC<Props> = ({ scenarios, o
                 className="flex items-center justify-between gap-2 rounded-xl border border-purple-500/40 bg-purple-950/40 hover:bg-purple-900/60 p-3 text-left transition cursor-pointer"
               >
                 <div>
-                  <div className="text-xs font-bold text-white">③ LINEナーチャリング（7話）</div>
-                  <div className="text-[11px] text-purple-200 mt-0.5">大橋の実話（FC倒産危機）→経営の右腕</div>
+                  <div className="text-xs font-bold text-white">③ ストーリー型ナーチャリング（7話）</div>
+                  <div className="text-[11px] text-purple-200 mt-0.5">大橋の実話・LINE＆メルマガ両対応</div>
                 </div>
                 <Plus className="h-4 w-4 text-purple-400 shrink-0" />
               </button>
