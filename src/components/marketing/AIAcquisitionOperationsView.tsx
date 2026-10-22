@@ -5,6 +5,7 @@ import { InlineDeleteButton } from '../InlineDeleteButton';
 import { ArrowRight, BarChart3, Megaphone, Plus, Save, Sparkles, Trash2 } from 'lucide-react';
 import { OwnMediaWorkspace } from './OwnMediaWorkspace';
 import { MarketingAssetLibrary } from './MarketingAssetLibrary';
+import { MarketingQuickLinksHub } from './MarketingQuickLinksHub';
 
 type RecordType = 'strategy' | 'content' | 'social' | 'video' | 'ad' | 'media' | 'funnel' | 'result' | 'proposal';
 type ViewTab = 'dashboard' | RecordType | 'analysis' | 'media' | 'assets';
