@@ -14,10 +14,11 @@ type Product = { id: string; product_name: string };
 type AudienceSegment = { id: string; name: string; entity_type: string; conditions: { field?: string } | null };
 
 const tabs: Array<{ id: ViewTab; label: string }> = [
-  { id: 'dashboard', label: '集客ダッシュボード' }, { id: 'strategy', label: '集客戦略' },
-  { id: 'content', label: 'コンテンツ企画' }, { id: 'social', label: 'SNS・note運用' },
-  { id: 'video', label: '動画運用' }, { id: 'ad', label: '広告運用' },
-  { id: 'media', label: '自社メディア運用' }, { id: 'funnel', label: 'LP・集客導線' }, { id: 'assets', label: '素材・成果物' }, { id: 'analysis', label: '成果分析・改善提案' },
+  { id: 'funnel', label: '🔗 集客導線・公式URLハブ' },
+  { id: 'assets', label: '📁 営業資料・成果物保管庫' },
+  { id: 'media', label: '🌐 自社メディア・HP設定' },
+  { id: 'dashboard', label: '📊 流入・反響ダッシュボード' },
+  { id: 'strategy', label: '📋 集客戦略・施策一覧' },
 ];
 const typeLabels: Record<RecordType, string> = { strategy: '集客戦略', content: 'コンテンツ企画', social: 'SNS・note運用', video: '動画運用', ad: '広告運用', media: '自社メディア運用', funnel: 'LP・集客導線', result: '成果記録', proposal: '改善提案' };
 const expandableToolTypes: RecordType[] = ['content', 'social', 'video', 'ad', 'media', 'funnel'];
@@ -145,7 +146,7 @@ const cleanAiDraftPayload = (recordType: RecordType, rawPayload: unknown, segmen
 };
 
 export const AIAcquisitionOperationsView: React.FC<{ onSendPresidentSummary?: (summary: string) => void; onCreateTask?: (task: Omit<TaskItem, 'id' | 'createdAt' | 'updatedAt'>) => void }> = ({ onSendPresidentSummary, onCreateTask }) => {
-  const [activeTab, setActiveTab] = useState<ViewTab>('dashboard');
+  const [activeTab, setActiveTab] = useState<ViewTab>('funnel');
   const [records, setRecords] = useState<AcquisitionRecord[]>([]);
   const [products, setProducts] = useState<Product[]>([]);
   const [segments, setSegments] = useState<AudienceSegment[]>([]);
@@ -512,7 +513,7 @@ export const AIAcquisitionOperationsView: React.FC<{ onSendPresidentSummary?: (s
 
   return <main className="space-y-5 text-slate-100">
     <header className="flex flex-wrap items-start justify-between gap-3 rounded-2xl border border-indigo-500/20 bg-gradient-to-r from-indigo-950/70 to-slate-900 p-5">
-      <div><div className="flex items-center gap-2"><Megaphone className="h-5 w-5 text-indigo-300"/><h1 className="text-xl font-bold">AI集客運用</h1></div><p className="mt-1 text-sm text-slate-300">戦略・コンテンツ・媒体運用・成果をまとめ、データに基づく改善を進めます。投稿や広告の外部実行は行いません。</p></div>
+      <div><div className="flex items-center gap-2"><Megaphone className="h-5 w-5 text-indigo-300"/><h1 className="text-xl font-bold">AI集客運用</h1></div><p className="mt-1 text-sm text-slate-300">集客導線（自社メディア・LP・公式URL）、営業資料アセット、流入成果を一元管理する管制塔です。</p></div>
       <button onClick={() => void load()} className="rounded-lg border border-slate-700 px-3 py-2 text-sm">更新</button>
     </header>
     <nav className="flex gap-1 overflow-x-auto rounded-xl border border-slate-800 bg-slate-900 p-1" aria-label="AI集客運用メニュー">{tabs.map((tab) => <button key={tab.id} onClick={() => { if (tab.id !== activeTab) { cancelAIRequest(); setIsFormOpen(false); setEditing(null); setPendingToolDrafts([]); setExternalPrompt(''); setExternalDraft(''); setExternalReview(''); } setActiveTab(tab.id); setNotice(''); setError(''); }} aria-current={activeTab === tab.id ? 'page' : undefined} className={`whitespace-nowrap rounded-lg px-3 py-2 text-xs sm:text-sm ${activeTab === tab.id ? 'bg-indigo-600 font-semibold text-white' : 'text-slate-400 hover:bg-slate-800 hover:text-white'}`}>{tab.label}</button>)}</nav>
@@ -640,6 +641,7 @@ export const AIAcquisitionOperationsView: React.FC<{ onSendPresidentSummary?: (s
         <div className="flex gap-2"><button disabled={saving || aiGenerating} className="inline-flex items-center gap-2 rounded-lg bg-indigo-600 px-4 py-2 text-sm font-semibold disabled:opacity-50"><Save className="h-4 w-4"/>{aiGenerating ? 'AI処理中…' : saving ? '保存中…' : type === 'strategy' && (payload.channels || '').trim() ? '戦略と選定ツールを保存' : '保存'}</button><button type="button" onClick={() => { cancelAIRequest(); setEditing(null); setIsFormOpen(false); setTitle(''); setProductId(''); setPayload(emptyPayload()); }} className="rounded-lg border border-slate-700 px-4 py-2 text-sm">キャンセル</button></div>
       </form>}
 
+      {activeTab === 'funnel' && !formVisible && <MarketingQuickLinksHub />}
       {activeTab !== 'dashboard' && activeTab !== 'analysis' && activeTab !== 'assets' && !formVisible && <section className="space-y-3"><div className="flex items-center justify-between"><div><h2 className="font-semibold">{tabs.find((tab) => tab.id === activeTab)?.label}</h2><p className="mt-1 text-xs text-slate-500">商品マスターの商品と関連付けて登録できます。実行・公開は外部サービスで行ってください。</p></div><button onClick={() => createRecord(activeTab as RecordType)} className="inline-flex items-center gap-2 rounded-lg bg-indigo-600 px-3 py-2 text-sm"><Plus className="h-4 w-4"/>新規登録</button></div><RecordList records={visibleRecords} products={products} segments={segments} onEdit={startEdit} onDelete={remove}/></section>}
     </>}
   </main>;
