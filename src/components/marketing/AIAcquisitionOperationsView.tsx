@@ -170,6 +170,26 @@ export const AIAcquisitionOperationsView: React.FC<{ onSendPresidentSummary?: (s
   const [externalDraft, setExternalDraft] = useState('');
   const [externalReview, setExternalReview] = useState('');
   const [pendingToolDrafts, setPendingToolDrafts] = useState<Array<{ record_type: RecordType; title: string; payload: Record<string, string> }>>([]);
+  const [crmMetrics, setCrmMetrics] = useState<{
+    totalLeads: number;
+    totalDeals: number;
+    wonDeals: number;
+    totalContracts: number;
+    totalContractRevenue: number;
+    totalInvoiced: number;
+    totalPaid: number;
+    utmBreakdown: Array<{ source: string; campaign: string; count: number }>;
+  }>({
+    totalLeads: 0,
+    totalDeals: 0,
+    wonDeals: 0,
+    totalContracts: 0,
+    totalContractRevenue: 0,
+    totalInvoiced: 0,
+    totalPaid: 0,
+    utmBreakdown: [],
+  });
+
 
   const load = async () => {
     const db = getSupabase();
@@ -501,6 +521,71 @@ export const AIAcquisitionOperationsView: React.FC<{ onSendPresidentSummary?: (s
       {activeTab === 'media' && <OwnMediaWorkspace products={products} onAskAI={onSendPresidentSummary} strategyContext={records.find((record) => record.record_type === 'strategy') ? JSON.stringify({ title: records.find((record) => record.record_type === 'strategy')?.title, payload: records.find((record) => record.record_type === 'strategy')?.payload }) : ''} />}
       {activeTab === 'assets' && <MarketingAssetLibrary records={records} products={products} onOpenRecord={(r) => startEdit(r as AcquisitionRecord)} />}
       {activeTab === 'dashboard' && <section className="space-y-4">
+        {/* CRM実データ自動集計カード */}
+        <div className="rounded-2xl border border-indigo-500/40 bg-gradient-to-br from-indigo-950/60 via-slate-900 to-slate-900 p-5 shadow-xl space-y-4">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div className="flex items-center gap-2">
+              <span className="flex h-2.5 w-2.5 rounded-full bg-emerald-400 animate-pulse" />
+              <h2 className="text-base font-bold text-white tracking-wide">CRM実データ自動集計（ファネル＆流入成果）</h2>
+            </div>
+            <span className="rounded-full bg-indigo-500/20 px-3 py-1 text-xs font-semibold text-indigo-300 border border-indigo-500/30">
+              手入力不要・DB自動連携
+            </span>
+          </div>
+
+          <div className="grid gap-3 grid-cols-2 sm:grid-cols-4 lg:grid-cols-6">
+            <div className="rounded-xl border border-slate-800 bg-slate-950/80 p-3">
+              <p className="text-xs text-slate-400">総リード数</p>
+              <p className="mt-1 text-xl font-bold text-sky-400">{crmMetrics.totalLeads} 件</p>
+            </div>
+            <div className="rounded-xl border border-slate-800 bg-slate-950/80 p-3">
+              <p className="text-xs text-slate-400">商談化数 (商談率)</p>
+              <p className="mt-1 text-xl font-bold text-indigo-300">
+                {crmMetrics.totalDeals} 件
+                <span className="ml-1 text-xs text-slate-400 font-normal">
+                  ({crmMetrics.totalLeads > 0 ? ((crmMetrics.totalDeals / crmMetrics.totalLeads) * 100).toFixed(1) : 0}%)
+                </span>
+              </p>
+            </div>
+            <div className="rounded-xl border border-slate-800 bg-slate-950/80 p-3">
+              <p className="text-xs text-slate-400">成約数 (成約率)</p>
+              <p className="mt-1 text-xl font-bold text-emerald-400">
+                {crmMetrics.wonDeals} 件
+                <span className="ml-1 text-xs text-slate-400 font-normal">
+                  ({crmMetrics.totalDeals > 0 ? ((crmMetrics.wonDeals / crmMetrics.totalDeals) * 100).toFixed(1) : 0}%)
+                </span>
+              </p>
+            </div>
+            <div className="rounded-xl border border-slate-800 bg-slate-950/80 p-3">
+              <p className="text-xs text-slate-400">契約総額</p>
+              <p className="mt-1 text-xl font-bold text-amber-300">¥{crmMetrics.totalContractRevenue.toLocaleString()}</p>
+            </div>
+            <div className="rounded-xl border border-slate-800 bg-slate-950/80 p-3">
+              <p className="text-xs text-slate-400">請求総額</p>
+              <p className="mt-1 text-xl font-bold text-slate-200">¥{crmMetrics.totalInvoiced.toLocaleString()}</p>
+            </div>
+            <div className="rounded-xl border border-slate-800 bg-slate-950/80 p-3">
+              <p className="text-xs text-slate-400">入金済み総額</p>
+              <p className="mt-1 text-xl font-bold text-teal-300">¥{crmMetrics.totalPaid.toLocaleString()}</p>
+            </div>
+          </div>
+
+          {crmMetrics.utmBreakdown.length > 0 && (
+            <div className="mt-3 rounded-xl border border-slate-800/80 bg-slate-950/60 p-3">
+              <p className="text-xs font-semibold text-slate-300 mb-2">流入チャネル・キャンペーン別リード獲得数（UTM集計）</p>
+              <div className="flex flex-wrap gap-2">
+                {crmMetrics.utmBreakdown.map((item, idx) => (
+                  <span key={idx} className="inline-flex items-center gap-1.5 rounded-lg border border-slate-700 bg-slate-900 px-2.5 py-1 text-xs text-slate-300">
+                    <span className="font-semibold text-indigo-300">{item.source}</span>
+                    {item.campaign !== 'default' && <span className="text-slate-400 font-mono text-[11px]">({item.campaign})</span>}
+                    <span className="rounded bg-indigo-500/20 px-1.5 py-0.2 text-indigo-200 font-bold">{item.count}件</span>
+                  </span>
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
+
         <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">{[
           ['運用中の施策', `${metrics.active}件`], ['コンテンツ・投稿・動画', `${metrics.content}件`], ['広告費', metrics.known.spend ? yen(metrics.spend) : '未入力'], ['リード / 商談 / 契約', `${metrics.known.leads ? metrics.leads : '未入力'} / ${metrics.known.meetings ? metrics.meetings : '未入力'} / ${metrics.known.contracts ? metrics.contracts : '未入力'}`],
           ['売上', metrics.known.revenue ? yen(metrics.revenue) : '未入力'], ['利益', metrics.known.profit ? yen(metrics.profit) : '未入力'],
