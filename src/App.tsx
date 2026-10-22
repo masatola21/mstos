@@ -2421,6 +2421,13 @@ function AppContent() {
             </span>
             <span>•</span>
             <button
+              onClick={() => setIsModelSettingsOpen(true)}
+              className="hover:text-slate-300 transition-colors"
+            >
+              AIモデル設定
+            </button>
+            <span>•</span>
+            <button
               onClick={() => setIsPricingModalOpen(true)}
               className="hover:text-slate-300 transition-colors"
             >
