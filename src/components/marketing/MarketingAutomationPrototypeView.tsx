@@ -1,4 +1,62 @@
 
+import { getSalesEmailTemplate, getLineStepTemplate } from '../../utils/salesOutreachTemplates';
+
+export const MST_OUTREACH_STARTER_SCENARIOS: Omit<MarketingScenario, 'id' | 'updatedAt'>[] = [1, 2, 3, 4, 5].map((step) => {
+  const tpl = getSalesEmailTemplate(step);
+  const waitMinutes = step === 1 ? 0 : (step - 1) * 3 * 24 * 60; // 0, 3日後, 6日後, 9日後, 12日後
+  return {
+    name: tpl.name,
+    trigger: 'lead_created' as MarketingTrigger,
+    channel: 'email' as MarketingChannel,
+    audience: '未接触の見込み企業',
+    waitMinutes,
+    emailSubject: tpl.subject.replace('貴社 様の', '{company_name} 様の').replace('貴社 様', '{company_name} 様'),
+    emailBody: tpl.body.replace(/\{\{diagnostic_url\}\}/g, '{link_url}').replace(/貴社/g, '{company_name}'),
+    messageBody: '',
+    lineMessageType: 'text',
+    lineImageUrl: '',
+    linePreviewImageUrl: '',
+    flexAltText: '',
+    flexTitle: '',
+    flexBody: '',
+    flexButtonLabel: '',
+    flexButtonUrl: '',
+    status: 'draft',
+    automationEnabled: false,
+    stopOnBooking: true,
+    stopOnDeal: true,
+    consentBasis: '特定電子メール法に基づく業務改善情報の提供（オプトアウト明記）',
+  };
+});
+
+export const MST_LINE_NURTURING_STARTER_SCENARIOS: Omit<MarketingScenario, 'id' | 'updatedAt'>[] = [1, 2, 3, 4, 5, 6, 7].map((step) => {
+  const tpl = getLineStepTemplate(step);
+  const waitMinutes = step === 1 ? 0 : (step - 1) * 3 * 24 * 60;
+  return {
+    name: tpl.name,
+    trigger: 'line_registered' as MarketingTrigger,
+    channel: 'line' as MarketingChannel,
+    audience: 'すべての見込み客',
+    waitMinutes,
+    emailSubject: '',
+    emailBody: '',
+    messageBody: tpl.body.replace(/\{\{diagnostic_url\}\}/g, '{link_url}').replace(/様 様/g, '{recipient_name} 様'),
+    lineMessageType: 'text',
+    lineImageUrl: '',
+    linePreviewImageUrl: '',
+    flexAltText: '',
+    flexTitle: '',
+    flexBody: '',
+    flexButtonLabel: '',
+    flexButtonUrl: '',
+    status: 'draft',
+    automationEnabled: false,
+    stopOnBooking: true,
+    stopOnDeal: true,
+    consentBasis: 'LINE公式アカウント友だち追加時の配信同意に基づく',
+  };
+});
+
 export const MST_DIAGNOSIS_STARTER_SCENARIOS: Omit<MarketingScenario, 'id' | 'updatedAt'>[] = [
   {
     name: '【1. 初回登録】LINE友だち追加・ボトルネック診断ご案内',
@@ -332,6 +390,44 @@ export const MarketingAutomationPrototypeView: React.FC<Props> = ({ scenarios, o
     onScenariosChange([...newScenarios, ...scenarios]);
     setNotice('診断フローのスターターセット（5本の公式シナリオ）を一括導入しました！内容を確認して「準備状態にする」または編集を行ってください。');
   };
+
+  const applyOutreachStarterSet = () => {
+    const now = Date.now();
+    const newScenarios: MarketingScenario[] = MST_OUTREACH_STARTER_SCENARIOS.map((item, index) => ({
+      ...item,
+      id: `outreach-scenario-${now}-${index}`,
+      updatedAt: now + index * 10,
+    }));
+    onScenariosChange([...newScenarios, ...scenarios]);
+    setNotice('見込み企業向け営業メール（全5ステップ・3日おき配信）を一括導入しました！');
+  };
+
+  const applyLineNurturingStarterSet = () => {
+    const now = Date.now();
+    const newScenarios: MarketingScenario[] = MST_LINE_NURTURING_STARTER_SCENARIOS.map((item, index) => ({
+      ...item,
+      id: `line-nurture-scenario-${now}-${index}`,
+      updatedAt: now + index * 10,
+    }));
+    onScenariosChange([...newScenarios, ...scenarios]);
+    setNotice('大橋ストーリー型LINEナーチャリング（全7話・3日おき配信）を一括導入しました！');
+  };
+
+  const applyAllStarterSets = () => {
+    const now = Date.now();
+    const allPresets = [
+      ...MST_DIAGNOSIS_STARTER_SCENARIOS,
+      ...MST_OUTREACH_STARTER_SCENARIOS,
+      ...MST_LINE_NURTURING_STARTER_SCENARIOS,
+    ];
+    const newScenarios: MarketingScenario[] = allPresets.map((item, index) => ({
+      ...item,
+      id: `all-starter-${now}-${index}`,
+      updatedAt: now + index * 10,
+    }));
+    onScenariosChange([...newScenarios, ...scenarios]);
+    setNotice('公式プリセットパック（診断フォロー5本 ＋ 営業メール5本 ＋ LINEナーチャリング7本）の計17本を一括導入しました！');
+  };
   const startNew = () => {
     setSelectedEmailTemplateId('');setSelectedLineTemplateId('');
     setEditing(null);
@@ -559,24 +655,61 @@ export const MarketingAutomationPrototypeView: React.FC<Props> = ({ scenarios, o
 
       {activeTab === 'jobs' && <MarketingAutomationJobsPanel health={automationHealth} onHealthChange={setAutomationHealth} />}
       {activeTab === 'scenarios' && <div className="space-y-4">
-        <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-indigo-500/40 bg-gradient-to-r from-indigo-950/60 via-slate-900 to-purple-950/60 p-4 shadow-sm mb-4">
-            <div>
-              <div className="flex items-center gap-2 font-bold text-indigo-200 text-sm">
-                <Zap className="h-4 w-4 text-indigo-400" />
-                公式プリセット：診断フォローシナリオ スターターセット（5本）
+        <div className="space-y-3 rounded-2xl border border-indigo-500/40 bg-gradient-to-r from-indigo-950/60 via-slate-900 to-purple-950/60 p-4 shadow-sm mb-4">
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <div>
+                <div className="flex items-center gap-2 font-bold text-indigo-200 text-sm">
+                  <Zap className="h-4 w-4 text-indigo-400" />
+                  公式プリセット：目的別自動化シナリオパック
+                </div>
+                <p className="mt-1 text-xs text-slate-300">
+                  業務・経営の急所解消に特化したベストプラクティス自動化シナリオをワンクリックで導入できます。
+                </p>
               </div>
-              <p className="mt-1 text-xs text-slate-300">
-                LINE登録案内 → 診断完了速報 → レポート送付 → 3日後フォロー → 7日後フォローのベストプラクティスを一括導入します。
-              </p>
+              <button
+                type="button"
+                onClick={applyAllStarterSets}
+                className="inline-flex items-center gap-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 px-3 py-1.5 text-xs font-bold text-white shadow transition cursor-pointer"
+              >
+                <Plus className="h-4 w-4" />
+                全17本を一括導入
+              </button>
             </div>
-            <button
-              type="button"
-              onClick={applyDiagnosisStarterSet}
-              className="inline-flex items-center gap-1.5 rounded-lg bg-indigo-600 px-3.5 py-2 text-xs font-semibold text-white shadow hover:bg-indigo-500 transition"
-            >
-              <Plus className="h-4 w-4" />
-              スターターセットを一括導入
-            </button>
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5 pt-1">
+              <button
+                type="button"
+                onClick={applyDiagnosisStarterSet}
+                className="flex items-center justify-between gap-2 rounded-xl border border-indigo-500/40 bg-indigo-950/40 hover:bg-indigo-900/60 p-3 text-left transition cursor-pointer"
+              >
+                <div>
+                  <div className="text-xs font-bold text-white">① 診断フォロー（5本）</div>
+                  <div className="text-[11px] text-indigo-200 mt-0.5">LINE登録→診断速報→レポート→面談誘導</div>
+                </div>
+                <Plus className="h-4 w-4 text-indigo-400 shrink-0" />
+              </button>
+              <button
+                type="button"
+                onClick={applyOutreachStarterSet}
+                className="flex items-center justify-between gap-2 rounded-xl border border-cyan-500/40 bg-cyan-950/40 hover:bg-cyan-900/60 p-3 text-left transition cursor-pointer"
+              >
+                <div>
+                  <div className="text-xs font-bold text-white">② 営業メール（5ステップ）</div>
+                  <div className="text-[11px] text-cyan-200 mt-0.5">業界急所提起→仕組み化事例→3分診断誘導</div>
+                </div>
+                <Plus className="h-4 w-4 text-cyan-400 shrink-0" />
+              </button>
+              <button
+                type="button"
+                onClick={applyLineNurturingStarterSet}
+                className="flex items-center justify-between gap-2 rounded-xl border border-purple-500/40 bg-purple-950/40 hover:bg-purple-900/60 p-3 text-left transition cursor-pointer"
+              >
+                <div>
+                  <div className="text-xs font-bold text-white">③ LINEナーチャリング（7話）</div>
+                  <div className="text-[11px] text-purple-200 mt-0.5">大橋の実話（FC倒産危機）→経営の右腕</div>
+                </div>
+                <Plus className="h-4 w-4 text-purple-400 shrink-0" />
+              </button>
+            </div>
           </div>
         {isFormOpen ? (
           <form onSubmit={saveScenario} className="rounded-2xl border border-indigo-500/30 bg-slate-900 p-5">
