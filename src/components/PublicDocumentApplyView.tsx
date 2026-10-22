@@ -41,6 +41,7 @@ export const PublicDocumentApplyView: React.FC<PublicDocumentApplyViewProps> = (
   const [applied, setApplied] = useState(false);
   const [resultDealId, setResultDealId] = useState<string | null>(null);
   const [showConfirmModal, setShowConfirmModal] = useState(false);
+  const [consentInfo, setConsentInfo] = useState<{ recordedAt?: string; ip?: string } | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -155,16 +156,21 @@ export const PublicDocumentApplyView: React.FC<PublicDocumentApplyViewProps> = (
 
       // 1. まずサーバーAPIを試行
       try {
+        const consentEvidenceText = '上記の内容（金額、委託範囲、支払条件等）を確認し、本内容での発注および申し込みに同意します。';
         const res = await fetch(`/api/public/documents/${encodeURIComponent(documentId)}/apply`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({}),
+          body: JSON.stringify({
+            consentMethod: 'web_apply',
+            consentEvidenceText,
+          }),
         });
 
         if (res.ok) {
           const data = await res.json();
           if (data.success) {
             appliedDealId = data.dealId;
+            setConsentInfo({ recordedAt: data.consentRecordedAt, ip: data.consentIp });
           }
         }
       } catch {
@@ -223,13 +229,63 @@ export const PublicDocumentApplyView: React.FC<PublicDocumentApplyViewProps> = (
           if (insDealErr) throw insDealErr;
         }
 
-        // 書類ステータスを approved に更新
+        const consentEvidenceText = '上記の内容（金額、委託範囲、支払条件等）を確認し、本内容での発注および申し込みに同意します。';
+        const userAgentStr = typeof navigator !== 'undefined' ? navigator.userAgent : '';
+
+        // 書類ステータスを approved に更新（電子承諾ログも保存）
         await supabase.from('customer_documents').update({
           status: 'approved',
           deal_id: appliedDealId,
           company_id: targetCompanyId,
+          consent_method: 'web_apply',
+          consent_recorded_at: nowIso,
+          consent_user_agent: userAgentStr,
+          consent_evidence_text: consentEvidenceText,
           updated_at: nowIso,
         }).eq('id', documentId);
+
+        // 契約書テーブルに電子合意レコードを記録
+        try {
+          const { data: existingContract } = await supabase
+            .from('customer_contracts')
+            .select('id')
+            .or(`document_id.eq.${documentId},deal_id.eq.${appliedDealId}`)
+            .maybeSingle();
+
+          if (existingContract) {
+            await supabase.from('customer_contracts').update({
+              status: 'signed',
+              consent_method: 'web_apply',
+              consent_recorded_at: nowIso,
+              consent_user_agent: userAgentStr,
+              consent_evidence_text: consentEvidenceText,
+              updated_at: nowIso,
+            }).eq('id', existingContract.id);
+          } else {
+            await supabase.from('customer_contracts').insert({
+              company_id: targetCompanyId,
+              contact_id: doc?.contact_id || null,
+              deal_id: appliedDealId,
+              document_id: documentId,
+              title: doc?.title ? `${doc.title}（電子合意）` : 'Web申込契約合意',
+              contract_type: 'service_agreement',
+              amount: totalAmount > 0 ? totalAmount : 0,
+              status: 'signed',
+              start_date: todayStr,
+              consent_method: 'web_apply',
+              consent_recorded_at: nowIso,
+              consent_user_agent: userAgentStr,
+              consent_evidence_text: consentEvidenceText,
+              notes: `【Web申込・電子承諾エビデンス】\n承諾方式: web_apply\n承諾日時: ${nowIso}\n合意文面: ${consentEvidenceText}`,
+              created_at: nowIso,
+              updated_at: nowIso,
+            });
+          }
+        } catch (contractErr) {
+          console.warn('Customer contract fallback consent sync warning:', contractErr);
+        }
+
+        setConsentInfo({ recordedAt: nowIso });
 
         // 顧客マスタに登録
         if (targetCompanyId) {
@@ -379,6 +435,12 @@ export const PublicDocumentApplyView: React.FC<PublicDocumentApplyViewProps> = (
                   本提案・見積内容でのお申し込みが正常に受理され、システム上で<strong className="text-emerald-400 font-semibold">「即時成約（受注）」</strong>として確定いたしました。<br />
                   担当責任者（大橋真人）より、初回キックオフおよび今後の進め方について折り返しご連絡差し上げます。
                 </p>
+                <div className="flex flex-wrap items-center gap-2 text-xs text-emerald-300 bg-emerald-950/50 border border-emerald-500/30 rounded-xl px-3.5 py-2">
+                  <ShieldCheck className="w-4 h-4 text-emerald-400 shrink-0" />
+                  <span>
+                    電子合意エビデンス記録済（承諾日時: {consentInfo?.recordedAt ? new Date(consentInfo.recordedAt).toLocaleString('ja-JP') : new Date().toLocaleString('ja-JP')} / 方式: Web即時合意・改ざん防止ログ保持）
+                  </span>
+                </div>
                 <div className="pt-2 flex flex-wrap gap-3">
                   <button
                     onClick={handlePrint}

@@ -261,7 +261,7 @@ export const SalesOperationsWorkspace: React.FC<Props> = ({ tab, companyId, lead
 
             if (targetContact) {
               const docUrl = `${window.location.origin}/docs/${encodeURIComponent(documentId)}`;
-              const docTypeName = docData.document_type === 'diagnosis_report' ? '診断レポート' : docData.document_type === 'proposal' ? '提案書' : docData.document_type === 'contract' ? '契約書' : docData.document_type === 'invoice' ? '請求書' : '書類';
+              const docTypeName = docData.document_type === 'diagnosis_report' ? '診断レポート' : docData.document_type === 'proposal' ? '提案書' : docData.document_type === 'estimate' ? '見積書' : docData.document_type === 'contract' ? '契約書' : docData.document_type === 'invoice' ? '請求書' : docData.document_type === 'monthly_report' ? '月次報告書' : '書類';
               const subject = `【${docTypeName}のご送付】${docData.title}｜${targetContact.full_name} 様`;
               const body = `${targetContact.full_name} 様\n\nお世話になっております。有限会社MSTです。\n作成いたしました${docTypeName}「${docData.title}」をお送りいたします。\n\n以下のリンクよりWeb上でご確認・PDF保存いただけます。\n${docUrl}\n\n内容をご確認いただき、ご不明点やご要望がございましたらお気軽にご連絡ください。\nよろしくお願いいたします。\n\n有限会社MST`;
 

@@ -1688,14 +1688,28 @@ app.post('/api/public/documents/:id/apply', async (req, res) => {
       }
     }
 
+    const forwardedHeader = req.headers['x-forwarded-for'];
+    const clientIp = (typeof forwardedHeader === 'string' ? forwardedHeader.split(',')[0].trim() : Array.isArray(forwardedHeader) ? forwardedHeader[0] : req.socket.remoteAddress) || '';
+    const userAgent = (req.headers['user-agent'] as string) || '';
+    const consentMethod = req.body?.consentMethod || 'web_apply';
+    const consentEvidenceText = req.body?.consentEvidenceText || '上記の内容（金額、委託範囲、支払条件等）を確認し、本内容での発注および申し込みに同意します。';
     const nowIso = new Date().toISOString();
     const todayStr = nowIso.slice(0, 10);
     let finalDealId = doc.deal_id;
 
+    const evidenceLog = [
+      '【Web申込・電子承諾エビデンス】',
+      '・承諾方式: ' + consentMethod,
+      '・承諾日時: ' + nowIso,
+      '・IPアドレス: ' + (clientIp || '未取得'),
+      '・端末UA: ' + (userAgent ? userAgent.slice(0, 120) : '未取得'),
+      '・合意文面: ' + consentEvidenceText,
+    ].join('\n');
+
     // 商談の更新または自動起票
     if (finalDealId) {
       const { data: currentDeal } = await lineSupabase.from('deals').select('id, memo').eq('id', finalDealId).maybeSingle();
-      const newMemo = [currentDeal?.memo, '【Web申込】顧客がWeb上で「この内容で申し込む」をタップして即時成約（日時: ' + nowIso + '）'].filter(Boolean).join('\n');
+      const newMemo = [currentDeal?.memo, evidenceLog].filter(Boolean).join('\n\n');
       await lineSupabase.from('deals').update({
         proposal_status: '成約',
         status: 'won',
@@ -1712,20 +1726,68 @@ app.post('/api/public/documents/:id/apply', async (req, res) => {
         proposal_status: '成約',
         proposal_date: todayStr,
         total_amount: totalAmount > 0 ? totalAmount : null,
-        memo: '【Web申込自動起票・即時成約】書類「' + doc.title + '」（ID: ' + doc.id + '）の末尾ボタンより顧客が直接発注',
+        memo: '【Web申込自動起票・即時成約】書類「' + doc.title + '」（ID: ' + doc.id + '）の末尾ボタンより顧客が直接発注\n\n' + evidenceLog,
         created_at: nowIso,
         updated_at: nowIso,
       });
       if (insertDealErr) throw insertDealErr;
     }
 
-    // 書類のステータス更新 (approved = 承認・成約完了)
+    // 書類のステータス更新 (approved = 承認・成約完了) および電子承諾ログの記録
     await lineSupabase.from('customer_documents').update({
       status: 'approved',
       deal_id: finalDealId,
       company_id: resolvedCompanyId,
+      consent_method: consentMethod,
+      consent_recorded_at: nowIso,
+      consent_ip: clientIp,
+      consent_user_agent: userAgent,
+      consent_evidence_text: consentEvidenceText,
       updated_at: nowIso,
     }).eq('id', doc.id);
+
+    // 契約書レコード（customer_contracts）の作成または承諾更新
+    try {
+      const { data: existingContract } = await lineSupabase
+        .from('customer_contracts')
+        .select('id')
+        .or(`document_id.eq.${doc.id},deal_id.eq.${finalDealId}`)
+        .maybeSingle();
+
+      if (existingContract) {
+        await lineSupabase.from('customer_contracts').update({
+          status: 'signed',
+          consent_method: consentMethod,
+          consent_recorded_at: nowIso,
+          consent_ip: clientIp,
+          consent_user_agent: userAgent,
+          consent_evidence_text: consentEvidenceText,
+          updated_at: nowIso,
+        }).eq('id', existingContract.id);
+      } else {
+        await lineSupabase.from('customer_contracts').insert({
+          company_id: resolvedCompanyId,
+          contact_id: doc.contact_id || null,
+          deal_id: finalDealId,
+          document_id: doc.id,
+          title: doc.title ? `${doc.title}（電子合意）` : 'Web申込契約合意',
+          contract_type: 'service_agreement',
+          amount: totalAmount > 0 ? totalAmount : 0,
+          status: 'signed',
+          start_date: todayStr,
+          consent_method: consentMethod,
+          consent_recorded_at: nowIso,
+          consent_ip: clientIp,
+          consent_user_agent: userAgent,
+          consent_evidence_text: consentEvidenceText,
+          notes: evidenceLog,
+          created_at: nowIso,
+          updated_at: nowIso,
+        });
+      }
+    } catch (contractErr) {
+      console.warn('Customer contract consent sync warning:', contractErr);
+    }
 
     // 顧客マスタ (customers) への登録（1社1件）
     if (resolvedCompanyId) {
@@ -1775,7 +1837,10 @@ app.post('/api/public/documents/:id/apply', async (req, res) => {
       success: true,
       dealId: finalDealId,
       companyId: resolvedCompanyId,
-      message: 'お申し込みを受け付けました。成約が確定いたしました。',
+      consentRecordedAt: nowIso,
+      consentMethod,
+      consentIp: clientIp,
+      message: 'お申し込みを受け付けました。電子承諾ログを記録し、成約が確定いたしました。',
     });
   } catch (error) {
     console.error('Public document apply failed:', error instanceof Error ? error.message : 'unknown error');

@@ -15,10 +15,12 @@ import {
   RefreshCw,
   FileCode,
   ExternalLink,
-  Link2
+  Link2,
+  Calculator,
+  BarChart3
 } from 'lucide-react';
 
-export type DocTemplateType = 'contract' | 'proposal' | 'invoice' | 'report';
+export type DocTemplateType = 'contract' | 'proposal' | 'invoice' | 'report' | 'estimate' | 'monthly_report';
 
 const addOneMonthDate = (date = todayJst()) => {
   const [year, month, day] = date.split('-').map(Number);
@@ -368,7 +370,7 @@ const DEFAULT_TEMPLATES: DocTemplate[] = [
   },
   {
     id: 'tpl-estimate-01',
-    type: 'proposal',
+    type: 'estimate',
     title: '見積書（商談情報から作成）',
     description: '診断を行わず、商談のプラン・金額だけで作成する見積書',
     htmlContent: `<div style="font-family: Arial, sans-serif; max-width: 760px; margin: 0 auto; padding: 40px; color: #1e293b; line-height: 1.8">
@@ -394,6 +396,53 @@ const DEFAULT_TEMPLATES: DocTemplate[] = [
       { key: 'total_amount', label: '合計金額', defaultValue: '' },
       { key: 'issue_date', label: '発行日', defaultValue: '' },
       { key: 'due_date', label: '有効期限', defaultValue: '' },
+    ],
+  },
+  {
+    id: 'tpl-monthly-report-01',
+    type: 'monthly_report',
+    title: '月次業務報告書（伴走支援レポート）',
+    description: '月次の業務改善実績・成果指標・稼働削減・次月方針をまとめた報告書ひな形',
+    htmlContent: `<div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; max-width: 800px; margin: 0 auto; padding: 40px; color: #1e293b; line-height: 1.8;">
+  <div style="background: linear-gradient(135deg, #1e1b4b 0%, #312e81 100%); color: white; padding: 32px; border-radius: 12px; margin-bottom: 30px;">
+    <p style="font-size: 12px; color: #a5b4fc; text-transform: uppercase; letter-spacing: 1.5px; margin: 0 0 6px 0; font-weight: bold;">Monthly Advisory & Implementation Report</p>
+    <h1 style="font-size: 24px; margin: 0 0 10px 0; font-weight: 800;">{{report_title}}</h1>
+    <p style="font-size: 13px; color: #c7d2fe; margin: 0;">対象期間: {{target_month}} ｜ 宛先: {{client_company}} 御中</p>
+  </div>
+
+  <div style="margin-bottom: 24px; padding: 20px; background: #f8fafc; border-left: 4px solid #6366f1; border-radius: 6px;">
+    <h3 style="margin: 0 0 8px 0; font-size: 15px; color: #1e293b;">📌 今月の支援サマリー</h3>
+    <p style="margin: 0; font-size: 13px; color: #475569;">{{monthly_summary}}</p>
+  </div>
+
+  <h3 style="font-size: 16px; border-bottom: 2px solid #e2e8f0; padding-bottom: 8px; margin-top: 28px; color: #0f172a;">1. 主な実施実績・自動化実装</h3>
+  <div style="padding: 12px 0; font-size: 13px; color: #334155; white-space: pre-wrap;">{{accomplishments}}</div>
+
+  <h3 style="font-size: 16px; border-bottom: 2px solid #e2e8f0; padding-bottom: 8px; margin-top: 28px; color: #0f172a;">2. 成果指標・創出時間（KPI）</h3>
+  <table style="width: 100%; border-collapse: collapse; margin-top: 12px; font-size: 13px;">
+    <tr style="background: #f1f5f9;"><th style="padding: 10px; border: 1px solid #cbd5e1; text-align: left;">指標項目</th><th style="padding: 10px; border: 1px solid #cbd5e1; text-align: right;">当月実績 / 創出効果</th></tr>
+    <tr><td style="padding: 10px; border: 1px solid #cbd5e1;">月間手作業削減時間</td><td style="padding: 10px; border: 1px solid #cbd5e1; text-align: right; font-weight: bold; color: #4338ca;">{{hours_saved}} 時間</td></tr>
+    <tr><td style="padding: 10px; border: 1px solid #cbd5e1;">自動化・導線KPI進捗</td><td style="padding: 10px; border: 1px solid #cbd5e1; text-align: right;">{{metrics_kpi}}</td></tr>
+  </table>
+
+  <h3 style="font-size: 16px; border-bottom: 2px solid #e2e8f0; padding-bottom: 8px; margin-top: 28px; color: #0f172a;">3. 次月のアクションプラン</h3>
+  <div style="padding: 12px 0; font-size: 13px; color: #334155; white-space: pre-wrap;">{{next_actions}}</div>
+
+  <div style="margin-top: 40px; padding-top: 20px; border-top: 1px solid #e2e8f0; font-size: 12px; color: #64748b; display: flex; justify-content: space-between;">
+    <div>発行日: {{issue_date}}</div>
+    <div>{{sender_company}}　担当: {{sender_name}}</div>
+  </div>
+</div>`,
+    variables: [
+      { key: 'client_company', label: '宛先企業名', defaultValue: '' },
+      { key: 'report_title', label: '報告書タイトル', defaultValue: '' },
+      { key: 'target_month', label: '対象年月', defaultValue: '' },
+      { key: 'monthly_summary', label: '当月サマリー', defaultValue: '' },
+      { key: 'accomplishments', label: '主な実施実績', defaultValue: '' },
+      { key: 'hours_saved', label: '月間創出時間（h）', defaultValue: '' },
+      { key: 'metrics_kpi', label: 'KPI実績・成果', defaultValue: '' },
+      { key: 'next_actions', label: '次月アクション', defaultValue: '' },
+      { key: 'issue_date', label: '発行日', defaultValue: '' },
     ],
   },
 ];
@@ -447,10 +496,23 @@ const getTemplateDefaultValues = (templateId: string, today: string = todayJst()
     };
   }
 
+  if (templateId === 'tpl-monthly-report-01') {
+    return {
+      ...common,
+      report_title: '月次業務改善・伴走支援レポート',
+      target_month: `${today.slice(0, 4)}年${today.slice(5, 7)}月度`,
+      monthly_summary: '今月は請求書発行および顧客面談調整の自動化ラインを本番稼働させ、二重入力作業の削減を達成しました。',
+      accomplishments: '・LINE友だち登録後の自動アンケート配信およびCRM連携稼働\n・請求書発行および送付ステータス自動更新の実装\n・定期経営ミーティング（月2回）の実施とボトルネックの優先順位付け',
+      hours_saved: '24',
+      metrics_kpi: '商談化率 18%向上 / 問い合わせ対応リードタイム 65%短縮',
+      next_actions: '・次月は見直し後の業務フローにおける関係者定着状況の確認\n・定期請求の自動集計レポートの構築',
+    };
+  }
+
   return common;
 };
 
-const templateWorkflowOrder: Record<DocTemplateType, number> = { report: 0, proposal: 1, contract: 2, invoice: 3 };
+const templateWorkflowOrder: Record<DocTemplateType, number> = { report: 0, proposal: 1, estimate: 2, contract: 3, invoice: 4, monthly_report: 5 };
 const orderTemplatesByWorkflow = (items: DocTemplate[]) => [...items].sort((a, b) => templateWorkflowOrder[a.type] - templateWorkflowOrder[b.type]);
 
 interface DocumentTemplateViewProps { initialCompanyId?: string; initialLeadId?: string; initialDealId?: string; initialDocumentType?: DocTemplateType; }
@@ -720,7 +782,7 @@ export const DocumentTemplateView: React.FC<DocumentTemplateViewProps> = ({ init
     result = result.replace(/{{apply_url}}/g, applyUrl);
 
     // 提案書または見積書の場合、末尾にWeb申込ボタンを確実に付与
-    if (['proposal', 'report'].includes(currentTemplate.type) || currentTemplate.id === 'tpl-estimate-01') {
+    if (['proposal', 'report', 'estimate'].includes(currentTemplate.type) || currentTemplate.id === 'tpl-estimate-01') {
       if (!result.includes('web-apply-box')) {
         const ctaHtml = `<div class="web-apply-box" style="margin-top: 40px; padding: 24px; border: 2px solid #10b981; border-radius: 12px; background: #f0fdf4; text-align: center;">
   <p style="font-weight: bold; font-size: 16px; color: #065f46; margin: 0 0 6px 0;">【Web申込・オンライン即時成約】</p>
@@ -951,14 +1013,16 @@ export const DocumentTemplateView: React.FC<DocumentTemplateViewProps> = ({ init
       {templateStatus&&<p role="status" className="rounded-lg border border-slate-800 bg-slate-900 px-3 py-2 text-xs text-slate-300">{templateStatus}</p>}
 
       {/* Template Selector Tabs */}
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
         {orderTemplatesByWorkflow(templates).map((tpl) => {
           const isSelected = tpl.id === selectedTemplateId;
-          const icons = {
+          const icons: Record<DocTemplateType, React.ReactNode> = {
             contract: <FileCheck2 className="w-4 h-4 text-emerald-400" />,
             proposal: <FileText className="w-4 h-4 text-blue-400" />,
+            estimate: <Calculator className="w-4 h-4 text-cyan-400" />,
             invoice: <Receipt className="w-4 h-4 text-amber-400" />,
             report: <ClipboardCheck className="w-4 h-4 text-purple-400" />,
+            monthly_report: <BarChart3 className="w-4 h-4 text-indigo-400" />,
           };
           return (
             <button
