@@ -40,6 +40,7 @@ import { MarketingAutomationPrototypeView } from './components/marketing/Marketi
 import { AIAcquisitionOperationsView } from './components/marketing/AIAcquisitionOperationsView';
 import { ContactsLineHub } from './components/ContactsLineHub';
 import { QuickPresidentDrawer, getPageAssistantProfile } from './components/matrix/QuickPresidentDrawer';
+import { IntegratedCalendarWorkspace } from './components/calendar/IntegratedCalendarWorkspace';
 
 // Storage and Types
 import {
@@ -105,7 +106,7 @@ import { ModelSettingsModal } from './components/ai-president/ModelSettingsModal
 import { useProviderStatus } from './components/ai-president/ModelSettingEditor';
 import { matrixService } from './services/matrixService';
 import { todayJst } from './utils/date';
-import { publishManagedProductToSalesCatalog } from './services/productCatalogService';
+import { publishManagedProductToSalesCatalog, syncManagedProductToSalesCatalog } from './services/productCatalogService';
 import { deleteWorkspaceAttachment, downloadWorkspaceAttachment, uploadWorkspaceAttachment } from './services/knowledgeAttachmentService';
 import {
   loadOrMigrateWorkspaceData,
@@ -120,6 +121,8 @@ import {
   CustomListDefinition, 
   AutomationRule 
 } from './types/matrix';
+
+import { generateBusinessSummaryContext } from './services/businessSummaryService';
 
 type DiagnosisSubmissionAutomationEvent = { id: string; form_id: string; lead_id: string | null; company_id: string | null; diagnosis_id?: string | null };
 
@@ -181,6 +184,62 @@ function selectKnowledgeContext(
   return ranked.map(({ item }) =>
     '【' + item.title + ' / ' + item.category + '】\n' + item.content.slice(0, 2400)
   ).join('\n\n');
+}
+
+/**
+ * アドネスAI方式・最先端セマンティックRAG（ベクトル検索 + レキシカルフォールバックのハイブリッド検索）
+ */
+async function retrieveKnowledgeContext(
+  items: KnowledgeItem[],
+  request: string,
+  workModeId: AIWorkModeId,
+  audience: 'president' | 'role' | 'custom' = workModeId === 'president' ? 'president' : 'role',
+): Promise<string> {
+  const visibleItems = items.filter((item) => {
+    const access = item.knowledgeAccess;
+    if (!access) return audience === 'president';
+    if (access.scope === 'all') return true;
+    if (access.scope === 'president') return audience === 'president';
+    return audience === 'president' || (audience === 'role' && workModeId !== 'president' && (access.roleIds || []).includes(workModeId));
+  });
+  if (!visibleItems.length) return '';
+
+  try {
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 1800);
+    const res = await fetch('/api/knowledge/semantic-search', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      signal: controller.signal,
+      body: JSON.stringify({
+        query: request,
+        items: visibleItems.map((item) => ({
+          id: item.id,
+          title: item.title,
+          category: item.category,
+          tags: item.tags,
+          content: item.content.slice(0, 1000),
+          embedding: item.embedding,
+        })),
+        limit: 3,
+      }),
+    });
+    clearTimeout(timeout);
+    if (res.ok) {
+      const data = await res.json();
+      if (Array.isArray(data.matches) && data.matches.length > 0) {
+        return data.matches.map((m: any) => {
+          const matchItem = visibleItems.find((vi) => vi.id === m.item.id) || m.item;
+          const scorePercent = Math.round((m.similarity || 0) * 100);
+          return `【${matchItem.title} / ${matchItem.category}（意味関連度: ${scorePercent}%）】\n${matchItem.content.slice(0, 2400)}`;
+        }).join('\n\n');
+      }
+    }
+  } catch {
+    // タイムアウトや失敗時はレキシカル検索へ自動フォールバック
+  }
+
+  return selectKnowledgeContext(items, request, workModeId, audience);
 }
 function buildBoundedChatContext(messages: ChatMessage[]) {
   const context = messages.slice(-MAX_CHAT_CONTEXT_MESSAGES).map(({ role, content }) => ({ role, content }));
@@ -544,6 +603,32 @@ function AppContent() {
       : [item, ...knowledgeItems];
     setKnowledgeItems(next);
     saveKnowledgeItems(next);
+
+    // アドネスAI方式: バックグラウンドでセマンティックRAG用ベクトル埋め込み（text-embedding-004）を生成
+    if (!item.embedding && item.content) {
+      void (async () => {
+        try {
+          const sample = `${item.title}\n${(item.tags || []).join(' ')}\n${item.content.slice(0, 1000)}`;
+          const res = await fetch('/api/knowledge/embed', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ text: sample }),
+          });
+          if (res.ok) {
+            const data = await res.json();
+            if (Array.isArray(data.embedding)) {
+              setKnowledgeItems((curr) => {
+                const updated = curr.map((k) => k.id === item.id ? { ...k, embedding: data.embedding } : k);
+                saveKnowledgeItems(updated);
+                return updated;
+              });
+            }
+          }
+        } catch {
+          // ignore embedding precomputation errors
+        }
+      })();
+    }
   };
 
   const handleDeleteKnowledgeItem = (id: string) => {
@@ -745,6 +830,22 @@ function AppContent() {
       'このタスクの成果物を作成してください。まず与えられた情報だけで進め、不足する前提は明記してください。外部への送信・公開や本番変更は行わず、レビュー可能な草案・成果として提示してください。',
     ].filter(Boolean).join('\n');
 
+    const businessSummaryContext = generateBusinessSummaryContext({
+      products,
+      contracts,
+      invoices,
+      tasks,
+      approvals,
+      topGoal,
+      userProfile,
+    });
+    const knowledgeContext = await retrieveKnowledgeContext(
+      knowledgeItems,
+      `${task.title}\n${task.description}\n${task.completionCriteria}`,
+      workModeId,
+      task.assignee.type === 'custom_ai' ? 'custom' : workModeId === 'president' ? 'president' : 'role'
+    );
+
     const response = await fetch('/api/chat', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -754,7 +855,8 @@ function AppContent() {
         workModeId,
         roleOverride: runtime.roleOverride,
         modelSetting: runtime.modelSetting,
-        knowledgeContext: selectKnowledgeContext(knowledgeItems, `${task.title}\n${task.description}\n${task.completionCriteria}`, workModeId, task.assignee.type === 'custom_ai' ? 'custom' : workModeId === 'president' ? 'president' : 'role'),
+        knowledgeContext,
+        businessSummaryContext,
         stream: false,
       }),
     });
@@ -995,6 +1097,11 @@ function AppContent() {
       taskKind: preset.taskKind,
       relatedRecord: { type: preset.relatedType, id: event.targetRecordId ? String(event.targetRecordId) : undefined, label: sourceLabel },
       priority: 'medium',
+      dueDate: (() => {
+        const d = new Date();
+        d.setDate(d.getDate() + 3);
+        return d.toISOString().slice(0, 10);
+      })(),
       assignee: { type: 'role_ai', workModeId: preset.assigneeMode, name: `${resolvedAssignee.name}（${assigneeMode.label}）` },
       status: 'waiting',
       completionCriteria: preset.criteria,
@@ -1036,6 +1143,11 @@ function AppContent() {
   const handleCreateTask = (taskData: Omit<TaskItem, 'id' | 'createdAt' | 'updatedAt'>) => {
     const newTask: TaskItem = {
       ...taskData,
+      dueDate: taskData.dueDate || (() => {
+        const d = new Date();
+        d.setDate(d.getDate() + 7);
+        return d.toISOString().slice(0, 10);
+      })(),
       id: `task-${Date.now()}`,
       createdAt: Date.now(),
       updatedAt: Date.now(),
@@ -1231,6 +1343,11 @@ function AppContent() {
       description: pt.objective,
       status: 'waiting',
       priority: pt.priority,
+      dueDate: plan.dueDate || (() => {
+        const d = new Date();
+        d.setDate(d.getDate() + (idx + 1) * 7);
+        return d.toISOString().slice(0, 10);
+      })(),
       assignee,
       completionCriteria: pt.completionCriteria,
       createdAt: Date.now() + idx,
@@ -1295,6 +1412,17 @@ function AppContent() {
     ]);
 
     try {
+      const businessSummaryContext = generateBusinessSummaryContext({
+        products,
+        contracts,
+        invoices,
+        tasks,
+        approvals,
+        topGoal,
+        userProfile,
+      });
+      const knowledgeContext = await retrieveKnowledgeContext(knowledgeItems, text, workModeId);
+
       const response = await fetch('/api/chat', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -1308,7 +1436,8 @@ function AppContent() {
           workModeId,
           roleOverride: runtime.roleOverride,
           modelSetting: runtime.modelSetting,
-          knowledgeContext: selectKnowledgeContext(knowledgeItems, text, workModeId),
+          knowledgeContext,
+          businessSummaryContext,
           stream: true,
         }),
       });
@@ -1434,26 +1563,33 @@ function AppContent() {
   // Matrix handlers
   const handleAddProduct = (p: Omit<ManagedProduct, 'id' | 'createdAt' | 'updatedAt'>) => {
     const created = matrixService.addProduct(p);
-    setProducts(matrixService.loadProducts());
-    recordActivityLog('project_created', `新商品「${created.name}」を登録しました`, '人間');
+    const updated = matrixService.loadProducts();
+    setProducts(updated);
+    void syncManagedProductToSalesCatalog(created);
+    recordActivityLog('project_created', `新商品「${created.name}」を登録し、営業商品マスタに同期しました`, '人間');
     setActivityLogs(loadActivityLogs());
   };
 
   const handleUpdateProduct = (id: string, updates: Partial<ManagedProduct>) => {
     matrixService.updateProduct(id, updates);
-    setProducts(matrixService.loadProducts());
+    const updated = matrixService.loadProducts();
+    setProducts(updated);
+    const target = updated.find((p) => p.id === id);
+    if (target) {
+      void syncManagedProductToSalesCatalog(target);
+    }
+  };
+
+  const handleReorderProducts = (reordered: ManagedProduct[]) => {
+    matrixService.saveProducts(reordered);
+    setProducts(reordered);
   };
 
   const handleDeleteProduct = async (id: string, archive: boolean): Promise<{ success: boolean; message?: string }> => {
     const product = matrixService.loadProducts().find((item) => item.id === id);
     if (!product) return { success: false, message: '商品が見つかりません。画面を再読み込みしてください。' };
     const syncArchivedProduct = async () => {
-      if (product.salesCatalogPublishedAt) {
-        await publishManagedProductToSalesCatalog(
-          { ...product, status: 'archived' },
-          { initialFee: product.salesInitialFee ?? product.price ?? 0, monthlyFee: product.salesMonthlyFee ?? 0 },
-        );
-      }
+      await syncManagedProductToSalesCatalog({ ...product, status: 'archived' });
       matrixService.updateProduct(id, { status: 'archived' });
     };
     try {
@@ -1462,18 +1598,16 @@ function AppContent() {
         setProducts(matrixService.loadProducts());
         recordActivityLog('project_updated', `商品「${product.name}」を取扱停止にしました（関連記録は保持）`, '人間');
       } else {
-        if (product.salesCatalogPublishedAt) {
-          const result = await deleteTableRecord('products', { id: product.id });
-          if (result.error) {
-            return { success: false, message: result.error.message };
-          }
-          if (result.blockedBy) {
-            await syncArchivedProduct();
-            setProducts(matrixService.loadProducts());
-            recordActivityLog('project_updated', `商品「${product.name}」は関連データがあるため取扱停止にしました`, '人間');
-            setActivityLogs(loadActivityLogs());
-            return { success: true, message: '関連データがあるため完全削除せず、取扱停止にしました。関連記録は保持しています。' };
-          }
+        const result = await deleteTableRecord('products', { id: product.id });
+        if (result.error) {
+          return { success: false, message: result.error.message };
+        }
+        if (result.blockedBy) {
+          await syncArchivedProduct();
+          setProducts(matrixService.loadProducts());
+          recordActivityLog('project_updated', `商品「${product.name}」は関連データがあるため取扱停止にしました`, '人間');
+          setActivityLogs(loadActivityLogs());
+          return { success: true, message: '関連データがあるため完全削除せず、取扱停止にしました。関連記録は保持しています。' };
         }
         matrixService.deleteProduct(id);
         setProducts(matrixService.loadProducts());
@@ -1490,12 +1624,7 @@ function AppContent() {
     const product = matrixService.loadProducts().find((item) => item.id === id);
     if (!product) return { success: false, message: '商品が見つかりません。画面を再読み込みしてください。' };
     try {
-      if (product.salesCatalogPublishedAt) {
-        await publishManagedProductToSalesCatalog(
-          { ...product, status: 'active' },
-          { initialFee: product.salesInitialFee ?? product.price ?? 0, monthlyFee: product.salesMonthlyFee ?? 0 },
-        );
-      }
+      await syncManagedProductToSalesCatalog({ ...product, status: 'active' });
       matrixService.updateProduct(id, { status: 'active' });
       setProducts(matrixService.loadProducts());
       recordActivityLog('project_updated', `商品「${product.name}」の取扱を再開しました`, '人間');
@@ -1925,7 +2054,7 @@ function AppContent() {
       {/* Main App Workspace */}
       <main className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-6">
         {/* ================= SECTION 1: MST AI経営OS ================= */}
-        {currentTab === 'mst_dashboard' && (
+        {(currentTab === 'mst_dashboard' || currentTab === 'inflow_dashboard') && (
           <Dashboard
             onNavigateTab={(tab) => {
               if (tab === 'diagnoses') setCurrentTab('mst_diagnoses');
@@ -1934,6 +2063,32 @@ function AppContent() {
             onOpenCreate={handleOpenCreate}
             onOpenRls={() => setIsRlsOpen(true)}
             onStageTransitionTask={handleCrmStageTransition}
+          />
+        )}
+
+        {currentTab === 'unified_calendar' && (
+          <IntegratedCalendarWorkspace
+            invoices={invoices}
+            contracts={contracts}
+            tasks={tasks}
+            onNavigateTab={(tab) => setCurrentTab(tab as UnifiedNavTab)}
+            onOpenCustomerWorkspace={(companyId, destination, recordContext) => {
+              setCustomerWorkspaceContext({
+                companyId,
+                leadId: recordContext?.leadId,
+                dealId: recordContext?.dealId,
+                sendKind: destination === 'send' ? 'deal' : undefined,
+              });
+              setCurrentTab(
+                destination === 'deals'
+                  ? 'deals'
+                  : destination === 'customer_operations'
+                  ? 'customer_operations'
+                  : destination === 'documents'
+                  ? 'document_templates'
+                  : 'customer_operations'
+              );
+            }}
           />
         )}
 
@@ -1974,8 +2129,11 @@ function AppContent() {
             tools={tools}
             tasks={tasks}
             projects={projects}
+            character={chatCharacter}
+            userProfile={userProfile}
             onAddProduct={handleAddProduct}
             onUpdateProduct={handleUpdateProduct}
+            onReorderProducts={handleReorderProducts}
             onDeleteProduct={handleDeleteProduct}
             onRestoreProduct={handleRestoreProduct}
             onPublishProduct={handlePublishProduct}
@@ -2052,11 +2210,16 @@ function AppContent() {
 
         {currentTab === 'contacts' && <ContactsLineHub onOpenLineInbox={(contactId, lineUserId) => { setLineInboxContact({ contactId, lineUserId }); setCurrentTab('marketing_automation'); }} onOpenEmailSend={(contactId, companyId) => { setCustomerWorkspaceContext({ companyId: companyId || '', contactId, sendKind: 'announcement' }); setCurrentTab('communication_send'); }} />}
 
+
         {currentTab === 'ai_acquisition' && (
-          <AIAcquisitionOperationsView onSendPresidentSummary={(summary) => {
-            setCurrentTab('ai_chat');
-            void handleSendMessage(summary, 'president');
-          }} onCreateTask={handleCreateTask} />
+          <AIAcquisitionOperationsView
+            initialTab="strategy"
+            onSendPresidentSummary={(summary) => {
+              setCurrentTab('ai_chat');
+              void handleSendMessage(summary, 'president');
+            }}
+            onCreateTask={handleCreateTask}
+          />
         )}
 
         {currentTab === 'marketing_automation' && (
@@ -2074,6 +2237,10 @@ function AppContent() {
             activityLogs={activityLogs}
             tokenUsageRecords={tokenUsageRecords}
             pricingRates={pricingRates}
+            products={products}
+            contracts={contracts}
+            invoices={invoices}
+            onNavigateToTab={(tab) => setCurrentTab(tab as UnifiedNavTab)}
             onNavigateTab={(tab) => {
               if (tab === 'chat') setCurrentTab('ai_chat');
               else if (tab === 'projects') setCurrentTab('ai_projects');
@@ -2089,6 +2256,14 @@ function AppContent() {
             }}
             onOpenPricingSettings={() => setIsPricingModalOpen(true)}
             onResolveApproval={handleResolveApproval}
+            onUpdateTask={handleUpdateTask}
+            onStartGoalBreakdown={(goal) => {
+              setCurrentTab('ai_chat');
+              void handleSendMessage(
+                `次の経営目標を達成するためのプロジェクト概要と具体的タスク一覧（目的、優先度、完了条件、担当案）を計画立案してください：\n「${goal}」`,
+                'president'
+              );
+            }}
           />
         )}
 

@@ -13,7 +13,8 @@ import {
   Calendar,
   Receipt,
   FileCheck2,
-  Users
+  Users,
+  GripVertical
 } from 'lucide-react';
 import { BusinessCategory, BUSINESS_CATEGORIES, ManagedContract, ManagedInvoice, ManagedToolAsset, ManagedProduct } from '../../types/matrix';
 import { Project, TaskItem, ApprovalItem } from '../../types/ai-president';
@@ -43,6 +44,34 @@ export const CategoryHubView: React.FC<CategoryHubViewProps> = ({
   onNavigateTab,
 }) => {
   const [activeCategory, setActiveCategory] = useState<BusinessCategory>('management');
+  const [categoryOrder, setCategoryOrder] = useState<BusinessCategory[]>(() => {
+    try {
+      const saved = localStorage.getItem('mst_business_category_order_v1');
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed) && parsed.length === 4) return parsed;
+      }
+    } catch {}
+    return Object.keys(BUSINESS_CATEGORIES) as BusinessCategory[];
+  });
+  const [draggedCat, setDraggedCat] = useState<BusinessCategory | null>(null);
+  const [dragOverCat, setDragOverCat] = useState<BusinessCategory | null>(null);
+
+  const handleCategoryReorder = (targetCat: BusinessCategory) => {
+    if (!draggedCat || draggedCat === targetCat) return;
+    const current = [...categoryOrder];
+    const fromIdx = current.indexOf(draggedCat);
+    const toIdx = current.indexOf(targetCat);
+    if (fromIdx === -1 || toIdx === -1) return;
+    const [removed] = current.splice(fromIdx, 1);
+    current.splice(toIdx, 0, removed);
+    setCategoryOrder(current);
+    try {
+      localStorage.setItem('mst_business_category_order_v1', JSON.stringify(current));
+    } catch {}
+    setDraggedCat(null);
+    setDragOverCat(null);
+  };
 
   // Invoice amounts are stored net of tax; missing tax is treated as zero.
   const grossAmount = (invoice: ManagedInvoice) => invoice.amount + (invoice.taxAmount ?? 0);
@@ -71,6 +100,10 @@ export const CategoryHubView: React.FC<CategoryHubViewProps> = ({
             <span className="text-xs px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 font-medium">
               マトリクス横軸ビュー
             </span>
+            <span className="text-xs px-2 py-0.5 rounded-full bg-indigo-500/15 text-indigo-300 border border-indigo-500/20 font-medium hidden sm:inline-flex items-center gap-1">
+              <GripVertical className="w-3 h-3 text-indigo-400" />
+              <span>ドラッグで並び替え可能</span>
+            </span>
           </div>
           <p className="text-xs text-slate-400 mt-1">
             経営・開発・マーケティング・顧客サービス（契約・請求）の職能別ステータスを一括統括
@@ -98,25 +131,52 @@ export const CategoryHubView: React.FC<CategoryHubViewProps> = ({
         </div>
       </div>
 
-      {/* Category Tabs */}
+      {/* Draggable Category Tabs */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-        {(Object.keys(BUSINESS_CATEGORIES) as BusinessCategory[]).map((catKey) => {
+        {categoryOrder.map((catKey) => {
           const cat = BUSINESS_CATEGORIES[catKey];
           const isSelected = activeCategory === catKey;
+          const isBeingDragged = draggedCat === catKey;
+          const isDragOver = dragOverCat === catKey;
           return (
-            <button
+            <div
               key={catKey}
+              draggable={true}
+              onDragStart={(e) => {
+                e.dataTransfer.setData('text/plain', catKey);
+                setDraggedCat(catKey);
+              }}
+              onDragOver={(e) => {
+                e.preventDefault();
+                if (dragOverCat !== catKey) setDragOverCat(catKey);
+              }}
+              onDragLeave={() => {
+                if (dragOverCat === catKey) setDragOverCat(null);
+              }}
+              onDrop={(e) => {
+                e.preventDefault();
+                handleCategoryReorder(catKey);
+              }}
+              onDragEnd={() => {
+                setDraggedCat(null);
+                setDragOverCat(null);
+              }}
               onClick={() => setActiveCategory(catKey)}
-              className={`p-4 rounded-xl border text-left transition-all ${
+              className={`p-4 rounded-xl border text-left transition-all cursor-grab active:cursor-grabbing select-none ${
                 isSelected
                   ? 'bg-slate-900 border-emerald-500 ring-1 ring-emerald-500/50 shadow-lg shadow-emerald-500/10'
                   : 'bg-slate-950/60 border-slate-800 hover:bg-slate-900/60 hover:border-slate-700 text-slate-400'
+              } ${isBeingDragged ? 'opacity-40 scale-95' : ''} ${
+                isDragOver ? 'border-emerald-400 ring-2 ring-emerald-400/30' : ''
               }`}
             >
               <div className="flex items-center justify-between mb-2">
-                <span className={`text-sm font-bold ${isSelected ? 'text-white' : 'text-slate-300'}`}>
-                  {cat.name}
-                </span>
+                <div className="flex items-center gap-1.5">
+                  <GripVertical className="w-3.5 h-3.5 text-slate-500 shrink-0" />
+                  <span className={`text-sm font-bold ${isSelected ? 'text-white' : 'text-slate-300'}`}>
+                    {cat.name}
+                  </span>
+                </div>
                 {catKey === 'management' && <Briefcase className="w-4 h-4 text-emerald-400" />}
                 {catKey === 'product_dev' && <Layers className="w-4 h-4 text-blue-400" />}
                 {catKey === 'marketing' && <Megaphone className="w-4 h-4 text-purple-400" />}
@@ -125,7 +185,7 @@ export const CategoryHubView: React.FC<CategoryHubViewProps> = ({
               <p className="text-xs text-slate-400 leading-relaxed line-clamp-2">
                 {cat.description}
               </p>
-            </button>
+            </div>
           );
         })}
       </div>
@@ -222,9 +282,14 @@ export const CategoryHubView: React.FC<CategoryHubViewProps> = ({
                         <span className="font-semibold text-white">{p.name}</span>
                         <span className="text-[10px] text-slate-400 block">{p.category}</span>
                       </div>
-                      <span className="text-xs font-bold text-slate-300">
-                        ¥{(p.price || 0).toLocaleString()}
-                      </span>
+                      <div className="text-right">
+                        <span className="text-xs font-bold text-white block">
+                          税抜 ¥{(p.price || 0).toLocaleString()}
+                        </span>
+                        <span className="text-[10px] text-cyan-300 font-medium block">
+                          税込 ¥{Math.floor((p.price || 0) * 1.1).toLocaleString()}
+                        </span>
+                      </div>
                     </div>
                   ))}
                 </div>

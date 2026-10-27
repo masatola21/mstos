@@ -131,7 +131,7 @@ export const TabMarketingAssetManager: React.FC<TabMarketingAssetManagerProps> =
   // 登録フォーム
   const [assetTitle, setAssetTitle] = useState('');
   const [assetType, setAssetType] = useState<AssetType>(config.defaultAssetType);
-  const [status, setStatus] = useState<AssetStatus>('draft');
+  const [status, setStatus] = useState<AssetStatus>('published');
   const [externalUrl, setExternalUrl] = useState('');
   const [file, setFile] = useState<File | null>(null);
   const [linkedRecordId, setLinkedRecordId] = useState(currentRecordId || '');
@@ -400,7 +400,12 @@ export const TabMarketingAssetManager: React.FC<TabMarketingAssetManagerProps> =
                 onChange={(e) => {
                   const selected = e.target.files?.[0] || null;
                   setFile(selected);
-                  if (selected) setExternalUrl('');
+                  if (selected) {
+                    setExternalUrl('');
+                    if (!assetTitle.trim()) {
+                      setAssetTitle(selected.name.replace(/\.[^/.]+$/, '').replace(/[-_]/g, ' ').trim());
+                    }
+                  }
                 }}
                 className="mt-1 block w-full rounded-lg border border-slate-700 bg-slate-900 p-1.5 text-xs text-slate-300 file:mr-2 file:rounded file:border-0 file:bg-slate-800 file:px-2 file:py-1 file:text-xs file:text-white"
               />
@@ -429,20 +434,6 @@ export const TabMarketingAssetManager: React.FC<TabMarketingAssetManagerProps> =
               </label>
             )}
 
-            <label className="text-xs text-slate-300">
-              ステータス
-              <select
-                value={status}
-                onChange={(e) => setStatus(e.target.value as AssetStatus)}
-                className="mt-1 block w-full rounded-lg border border-slate-700 bg-slate-900 p-2 text-xs text-white"
-              >
-                {ASSET_STATUSES.map((s) => (
-                  <option key={s.value} value={s.value}>
-                    {s.label}
-                  </option>
-                ))}
-              </select>
-            </label>
 
             <label className="text-xs text-slate-300 sm:col-span-2">
               備考・制作メモ
@@ -576,19 +567,13 @@ export const TabMarketingAssetManager: React.FC<TabMarketingAssetManagerProps> =
                 </div>
 
                 <div className="mt-3 flex items-center justify-between border-t border-slate-900 pt-2 text-[11px]">
-                  <select
-                    value={asset.status}
-                    onChange={(e) => handleStatusChange(asset, e.target.value as AssetStatus)}
-                    className={`rounded border px-1.5 py-0.5 text-[10px] font-medium bg-slate-900 ${
-                      statusConfig?.badgeClass || 'text-slate-300 border-slate-700'
-                    }`}
-                  >
-                    {ASSET_STATUSES.map((s) => (
-                      <option key={s.value} value={s.value}>
-                        {s.label}
-                      </option>
-                    ))}
-                  </select>
+                  <span className="text-[10px] text-slate-400">
+                    {asset.source === 'upload'
+                      ? asset.file_size_bytes
+                        ? Math.ceil(asset.file_size_bytes / 1024) + ' KB'
+                        : 'ファイル保管'
+                      : '外部リンク'}
+                  </span>
 
                   <button
                     type="button"

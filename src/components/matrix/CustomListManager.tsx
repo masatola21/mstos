@@ -507,7 +507,7 @@ export const CustomListManager: React.FC<CustomListManagerProps> = ({
                 <div className="grid grid-cols-2 gap-3">
                   <div>
                     <label className="block text-xs font-medium text-slate-300 mb-1">
-                      {selectedListId === 'list-invoices' ? '税抜金額 (円)' : '金額 (円)'}
+                      税抜金額 (円)
                     </label>
                     <input
                       type="number"
@@ -517,13 +517,13 @@ export const CustomListManager: React.FC<CustomListManagerProps> = ({
                       className="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-cyan-500"
                     />
                   </div>
-                  {selectedListId === 'list-invoices' && <div>
+                  <div>
                     <label className="block text-xs font-medium text-slate-300 mb-1">税率</label>
                     <select value={newTaxRate} onChange={(e) => setNewTaxRate(e.target.value as '10' | '8' | '0')} className="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-cyan-500">
                       <option value="10">10%</option><option value="8">8%</option><option value="0">非課税 0%</option>
                     </select>
-                  </div>}
-                  <div>
+                  </div>
+                  <div className="col-span-2">
                     <label className="block text-xs font-medium text-slate-300 mb-1">
                       期日
                     </label>
@@ -536,10 +536,13 @@ export const CustomListManager: React.FC<CustomListManagerProps> = ({
                   </div>
                 </div>
               )}
-              {selectedListId === 'list-invoices' && <div className="rounded-lg border border-slate-800 bg-slate-950 p-3 text-xs text-slate-300">
-                <div className="flex justify-between"><span>消費税額</span><span>¥{Math.floor((Number(newAmount) || 0) * Number(newTaxRate) / 100).toLocaleString()}</span></div>
-                <div className="mt-1 flex justify-between font-bold text-cyan-300"><span>税込額</span><span>¥{((Number(newAmount) || 0) + Math.floor((Number(newAmount) || 0) * Number(newTaxRate) / 100)).toLocaleString()}</span></div>
-              </div>}
+              {selectedListId !== 'list-tools' && newAmount && (
+                <div className="rounded-lg border border-slate-800 bg-slate-950 p-3 text-xs text-slate-300 space-y-1">
+                  <div className="flex justify-between"><span>税抜金額</span><span>¥{(Number(newAmount) || 0).toLocaleString()}</span></div>
+                  <div className="flex justify-between"><span>消費税額 ({newTaxRate}%)</span><span>¥{Math.floor((Number(newAmount) || 0) * Number(newTaxRate) / 100).toLocaleString()}</span></div>
+                  <div className="mt-1 pt-1 border-t border-slate-800 flex justify-between font-bold text-cyan-300"><span>税込総額</span><span>¥{((Number(newAmount) || 0) + Math.floor((Number(newAmount) || 0) * Number(newTaxRate) / 100)).toLocaleString()}</span></div>
+                </div>
+              )}
 
               <div className="flex justify-end gap-2 pt-2">
                 <button

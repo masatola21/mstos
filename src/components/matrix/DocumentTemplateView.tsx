@@ -71,7 +71,7 @@ const DEFAULT_TEMPLATES: DocTemplate[] = [
   <p>甲は、乙に対し、<strong>{{project_name}}</strong>に関する業務（以下「本件業務」という。）を委託し、乙はこれを受託する。</p>
 
   <h3 style="margin-top: 20px; font-size: 16px; border-left: 4px solid #2563eb; padding-left: 8px;">第2条（委託料および支払方法）</h3>
-  <p>本件業務の委託料総額は、金 <strong>{{total_amount}}</strong> 円（消費税込み 金 {{tax_amount}} 円）とする。<br>
+  <p>本件業務の委託料は、金 <strong>{{subtotal_amount}}</strong> 円（税抜 / 消費税10% 金 {{tax_amount}} 円 / 税込合計 金 {{total_amount}} 円）とする。<br>
   支払条件：{{payment_terms}}</p>
 
   <h3 style="margin-top: 20px; font-size: 16px; border-left: 4px solid #2563eb; padding-left: 8px;">第3条（契約期間）</h3>
@@ -96,8 +96,9 @@ const DEFAULT_TEMPLATES: DocTemplate[] = [
       { key: 'client_company', label: '顧客会社名 (甲)', defaultValue: '' },
       { key: 'my_company', label: '自社会社名 (乙)', defaultValue: '' },
       { key: 'project_name', label: 'プロジェクト名', defaultValue: '' },
-      { key: 'total_amount', label: '委託料総額 (円)', defaultValue: '' },
-      { key: 'tax_amount', label: '消費税額 (円)', defaultValue: '' },
+      { key: 'subtotal_amount', label: '委託料 (税抜・円)', defaultValue: '' },
+      { key: 'tax_amount', label: '消費税額 (10%・円)', defaultValue: '' },
+      { key: 'total_amount', label: '税込合計 (円)', defaultValue: '' },
       { key: 'payment_terms', label: '支払条件', defaultValue: '' },
       { key: 'start_date', label: '契約開始日', defaultValue: '' },
       { key: 'end_date', label: '契約終了日（任意・期間を定める場合のみ）', defaultValue: '' },
@@ -105,6 +106,60 @@ const DEFAULT_TEMPLATES: DocTemplate[] = [
       { key: 'client_rep', label: '甲 代表者名', defaultValue: '' },
       { key: 'my_address', label: '乙 住所', defaultValue: '' },
       { key: 'my_rep', label: '乙 代表者名', defaultValue: '' },
+    ],
+  },
+  {
+    id: 'tpl-contract-retainer',
+    type: 'contract',
+    title: '経営・業務顧問 委託契約書 (最低6ヶ月契約)',
+    description: '月額顧問・DX伴走支援用。最低6ヶ月間の契約期間および自動更新条項を定めた標準ひな形',
+    htmlContent: `<div style="font-family: 'Helvetica Neue', Arial, sans-serif; padding: 40px; color: #1e293b; max-width: 800px; margin: 0 auto; line-height: 1.8;">
+  <h1 style="text-align: center; font-size: 22px; margin-bottom: 30px; border-bottom: 2px solid #0f172a; padding-bottom: 10px;">経営・業務顧問 委託契約書</h1>
+  
+  <p>発注者である <strong>{{client_company}}</strong>（以下「甲」という。）と、受注者である <strong>{{my_company}}</strong>（以下「乙」という。）は、以下の通り顧問および業務支援に関する委託契約（以下「本契約」という。）を締結する。</p>
+
+  <h3 style="margin-top: 20px; font-size: 16px; border-left: 4px solid #2563eb; padding-left: 8px;">第1条（目的および顧問業務）</h3>
+  <p>甲は、乙に対し、<strong>{{project_name}}</strong>（経営戦略の策定支援・業務改善・IT/DX活用支援・組織自走化等）に関する顧問業務（以下「本件業務」という。）を委託し、乙はこれを受託する。</p>
+
+  <h3 style="margin-top: 20px; font-size: 16px; border-left: 4px solid #2563eb; padding-left: 8px;">第2条（顧問料および支払方法）</h3>
+  <p>本件業務の月額顧問料は、金 <strong>{{monthly_amount}}</strong> 円（税抜 / 消費税10%込 金 {{tax_included_amount}} 円）とする。<br>
+  支払期日・条件：{{payment_terms}}</p>
+
+  <h3 style="margin-top: 20px; font-size: 16px; border-left: 4px solid #2563eb; padding-left: 8px;">第3条（契約期間および最低契約期間）</h3>
+  <p>1. 本契約の有効期間は <strong>{{start_date}}</strong> からとし、継続的な改善および自走組織化の観点より、<strong>契約締結日より最低6ヶ月間</strong>を最低契約期間とする。<br>
+  2. 最低契約期間満了の1ヶ月前までに、甲または乙のいずれからも書面または電磁的記録（電子メール・チャット等）による別段の申し出がない場合、本契約は同一条件にてさらに6ヶ月間自動的に更新されるものとし、以後も同様とする。<br>
+  3. 最低契約期間内の中途解約は原則として行えないものとし、やむを得ない事情により解約する場合であっても、甲は最低契約期間残余期間分の月額顧問料相当額を一括して乙に支払うものとする。</p>
+
+  <h3 style="margin-top: 20px; font-size: 16px; border-left: 4px solid #2563eb; padding-left: 8px;">第4条（秘密保持および信義誠実）</h3>
+  <p>甲および乙は、本契約の履行に関して知り得た相手方の営業上・技術上の一切の秘密情報を、相手方の事前の書面による承諾なしに第三者に開示または漏洩してはならない。</p>
+
+  <div style="margin-top: 50px; display: flex; justify-content: space-between;">
+    <div style="width: 45%;">
+      <p><strong>発注者（甲）</strong></p>
+      <p>住所: {{client_address}}</p>
+      <p>会社名: {{client_company}}</p>
+      <p>代表者: {{client_rep}} 印</p>
+    </div>
+    <div style="width: 45%;">
+      <p><strong>受注者（乙）</strong></p>
+      <p>住所: {{my_address}}</p>
+      <p>会社名: {{my_company}}</p>
+      <p>代表者: {{my_rep}} 印</p>
+    </div>
+  </div>
+</div>`,
+    variables: [
+      { key: 'client_company', label: '顧客会社名 (甲)', defaultValue: '' },
+      { key: 'my_company', label: '自社会社名 (乙)', defaultValue: '有限会社MST' },
+      { key: 'project_name', label: '顧問業務名', defaultValue: '経営戦略・利益改善およびDX伴走支援' },
+      { key: 'monthly_amount', label: '月額顧問料 (税抜・円)', defaultValue: '120,000' },
+      { key: 'tax_included_amount', label: '税込月額 (円)', defaultValue: '132,000' },
+      { key: 'payment_terms', label: '支払条件', defaultValue: '毎月末日締め翌月末日振込' },
+      { key: 'start_date', label: '契約開始日', defaultValue: '' },
+      { key: 'client_address', label: '甲 住所', defaultValue: '' },
+      { key: 'client_rep', label: '甲 代表者名', defaultValue: '' },
+      { key: 'my_address', label: '乙 住所', defaultValue: '北海道函館市' },
+      { key: 'my_rep', label: '乙 代表者名', defaultValue: '大橋真人' },
     ],
   },
   {
@@ -372,28 +427,73 @@ const DEFAULT_TEMPLATES: DocTemplate[] = [
     id: 'tpl-estimate-01',
     type: 'estimate',
     title: '見積書（商談情報から作成）',
-    description: '診断を行わず、商談のプラン・金額だけで作成する見積書',
+    description: '商談のプラン・金額から作成する御見積書（税抜・消費税10%・税込合計を明記）',
     htmlContent: `<div style="font-family: Arial, sans-serif; max-width: 760px; margin: 0 auto; padding: 40px; color: #1e293b; line-height: 1.8">
-  <h1 style="text-align:center">御見積書</h1>
-  <p>{{client_company}} 御中</p>
-  <p>下記のとおりお見積り申し上げます。</p>
-  <h2>{{proposal_title}}</h2>
-  <table style="width:100%; border-collapse:collapse">
-    <tr><th style="text-align:left;border-bottom:1px solid #94a3b8">項目</th><th style="text-align:right;border-bottom:1px solid #94a3b8">金額</th></tr>
-    <tr><td style="padding:10px 0">{{project_name}}</td><td style="text-align:right">初期費用 {{initial_fee}} 円</td></tr>
-    <tr><td style="padding:10px 0">月額費用</td><td style="text-align:right">{{monthly_fee}} 円</td></tr>
+  <div style="display:flex; justify-content:space-between; align-items:baseline; border-bottom:2px solid #0f172a; padding-bottom:12px; margin-bottom:24px;">
+    <h1 style="margin:0; font-size:24px; color:#0f172a;">御 見 積 書</h1>
+    <p style="margin:0; font-size:13px; color:#64748b;">発行日: {{issue_date}} ｜ 有効期限: {{due_date}}</p>
+  </div>
+  <p style="font-size:16px; margin:0 0 16px 0;"><strong>{{client_company}}</strong> 御中</p>
+  <p style="font-size:13px; color:#475569; margin:0 0 20px 0;">下記のとおりお見積り申し上げます。</p>
+  
+  <div style="background:#f8fafc; border:1px solid #cbd5e1; border-radius:10px; padding:16px 20px; margin-bottom:24px; display:flex; justify-content:space-between; align-items:baseline;">
+    <span style="font-size:14px; color:#475569; font-weight:bold;">御見積合計金額（税込）</span>
+    <span style="font-size:28px; font-weight:800; color:#1e3a8a;">￥{{total_amount}} 円</span>
+  </div>
+
+  <h3 style="font-size:15px; border-left:4px solid #2563eb; padding-left:8px; margin:0 0 12px 0; color:#0f172a;">件名: {{proposal_title}}</h3>
+  
+  <table style="width:100%; border-collapse:collapse; margin-bottom:20px; font-size:13px;">
+    <thead>
+      <tr style="background:#0f172a; color:white;">
+        <th style="padding:10px; text-align:left;">項目 / 内容</th>
+        <th style="padding:10px; text-align:right;">金額（税抜）</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr style="border-bottom:1px solid #e2e8f0;">
+        <td style="padding:12px 10px;">{{project_name}}（初期構築・導入費用）</td>
+        <td style="padding:12px 10px; text-align:right; font-weight:bold;">¥{{initial_fee}} 円</td>
+      </tr>
+      <tr style="border-bottom:1px solid #e2e8f0;">
+        <td style="padding:12px 10px;">月額伴走・顧問支援（継続）</td>
+        <td style="padding:12px 10px; text-align:right; font-weight:bold;">¥{{monthly_fee}} 円 / 月</td>
+      </tr>
+    </tbody>
   </table>
-  <h2 style="text-align:right">合計 {{total_amount}} 円</h2>
-  <p>発行日：{{issue_date}}　有効期限：{{due_date}}</p>
-  <p>※記載内容をご確認のうえ、ご不明点があればお問い合わせください。</p>
+
+  <div style="display:flex; justify-content:flex-end; margin-bottom:30px;">
+    <div style="width:280px; font-size:13px;">
+      <div style="display:flex; justify-content:space-between; padding:4px 0;">
+        <span style="color:#64748b;">小計（税抜）:</span>
+        <span style="font-weight:bold;">¥{{subtotal_amount}} 円</span>
+      </div>
+      <div style="display:flex; justify-content:space-between; padding:4px 0; border-bottom:1px solid #cbd5e1;">
+        <span style="color:#64748b;">消費税（10%）:</span>
+        <span style="font-weight:bold;">¥{{tax_amount}} 円</span>
+      </div>
+      <div style="display:flex; justify-content:space-between; padding:8px 0; font-size:15px; font-weight:bold; color:#0f172a;">
+        <span>税込合計:</span>
+        <span style="color:#1e3a8a;">¥{{total_amount}} 円</span>
+      </div>
+    </div>
+  </div>
+
+  <div style="border-top:1px solid #e2e8f0; padding-top:16px; font-size:12px; color:#64748b;">
+    <p style="margin:0 0 4px 0;"><strong>発行元:</strong> 有限会社MST（代表: 大橋真人）</p>
+    <p style="margin:0 0 4px 0;">所在地: 〒503-0981 岐阜県大垣市桧町127番地</p>
+    <p style="margin:0;">※記載内容をご確認のうえ、Webまたは返信にてお申し込みいただけます。</p>
+  </div>
 </div>`,
     variables: [
       { key: 'client_company', label: '宛先企業名', defaultValue: '' },
       { key: 'proposal_title', label: '見積件名', defaultValue: '' },
       { key: 'project_name', label: '提案プラン・商談名', defaultValue: '' },
-      { key: 'initial_fee', label: '初期費用', defaultValue: '' },
-      { key: 'monthly_fee', label: '月額費用', defaultValue: '' },
-      { key: 'total_amount', label: '合計金額', defaultValue: '' },
+      { key: 'initial_fee', label: '初期費用 (税抜・円)', defaultValue: '' },
+      { key: 'monthly_fee', label: '月額費用 (税抜・円)', defaultValue: '' },
+      { key: 'subtotal_amount', label: '小計 (税抜・円)', defaultValue: '' },
+      { key: 'tax_amount', label: '消費税額 (10%・円)', defaultValue: '' },
+      { key: 'total_amount', label: '税込合計金額 (円)', defaultValue: '' },
       { key: 'issue_date', label: '発行日', defaultValue: '' },
       { key: 'due_date', label: '有効期限', defaultValue: '' },
     ],
@@ -663,10 +763,12 @@ export const DocumentTemplateView: React.FC<DocumentTemplateViewProps> = ({ init
       const today = todayJst();
       const quoteExpiry = addOneMonthDate();
       const invoiceDue = invoiceDueDate();
-      const amount = Number(deal?.total_amount ?? 0);
       const initialFee = Number(deal?.initial_fee ?? product?.initial_fee ?? 0);
       const monthlyFee = Number(deal?.monthly_fee ?? product?.monthly_fee ?? 0);
-      const tax = Math.round(amount / 11);
+      const dealAmount = Number(deal?.total_amount ?? 0);
+      const subtotal = dealAmount > 0 ? dealAmount : (initialFee + monthlyFee);
+      const tax = Math.floor(subtotal * 0.1);
+      const total = subtotal + tax;
       const invoiceNumber = `INV-${today.replaceAll('-', '')}-${(deal?.id || crypto.randomUUID()).slice(0, 6).toUpperCase()}`;
       const values: Record<string, string> = {
         client_company: company?.company_name || '',
@@ -682,14 +784,16 @@ export const DocumentTemplateView: React.FC<DocumentTemplateViewProps> = ({ init
         cost_breakdown: [initialFee > 0 ? `初期費用 ${initialFee.toLocaleString('ja-JP')}円` : '', monthlyFee > 0 ? `月額費用 ${monthlyFee.toLocaleString('ja-JP')}円` : ''].filter(Boolean).join(' / '),
         proposal_title: deal?.proposal_plan_name || deal?.deal_name || 'お見積り',
         project_name: deal?.proposal_plan_name || deal?.deal_name || productName || 'サービス',
-        total_amount: amount > 0 ? amount.toLocaleString('ja-JP') : '',
-        subtotal_amount: amount > 0 ? Math.max(0, amount - tax).toLocaleString('ja-JP') : '',
+        total_amount: total > 0 ? total.toLocaleString('ja-JP') : '',
+        subtotal_amount: subtotal > 0 ? subtotal.toLocaleString('ja-JP') : '',
         tax_amount: tax > 0 ? tax.toLocaleString('ja-JP') : '',
         initial_fee: initialFee > 0 ? initialFee.toLocaleString('ja-JP') : '',
         monthly_fee: monthlyFee > 0 ? monthlyFee.toLocaleString('ja-JP') : '',
+        monthly_amount: monthlyFee > 0 ? monthlyFee.toLocaleString('ja-JP') : '',
+        tax_included_amount: monthlyFee > 0 ? Math.floor(monthlyFee * 1.1).toLocaleString('ja-JP') : '',
         invoice_number: invoiceNumber,
         item_name_1: deal?.proposal_plan_name || deal?.deal_name || productName || 'サービス提供費',
-        item_qty_1: '1', item_price_1: amount > 0 ? Math.max(0, amount - tax).toLocaleString('ja-JP') : '', item_amount_1: amount > 0 ? Math.max(0, amount - tax).toLocaleString('ja-JP') : '',
+        item_qty_1: '1', item_price_1: subtotal > 0 ? subtotal.toLocaleString('ja-JP') : '', item_amount_1: subtotal > 0 ? subtotal.toLocaleString('ja-JP') : '',
         item_name_2: 'なし', item_qty_2: '0', item_price_2: '', item_amount_2: '',
         issue_date: formatDocumentDate(today),
         conducted_date: formatDocumentDate(diagnosis?.conducted_at ? String(diagnosis.conducted_at).slice(0,10) : today),

@@ -518,11 +518,21 @@ export const TableManager: React.FC<TableManagerProps> = ({
                           );
                         }
 
-                        // 金額表示
+                        // 金額表示（税抜ベース + 税込自動表示）
                         if (['total_amount', 'monthly_fee', 'initial_fee', 'discount_amount'].includes(colKey)) {
+                          if (val !== null && val !== undefined && val !== '' && !isNaN(Number(val))) {
+                            const num = Number(val);
+                            const withTax = Math.floor(num * 1.1);
+                            return (
+                              <td key={colKey} className="py-2.5 px-4 font-mono whitespace-nowrap">
+                                <div className="text-slate-200 font-medium">¥{num.toLocaleString()} <span className="text-[10px] text-slate-400 font-sans">(税抜)</span></div>
+                                <div className="text-xs text-indigo-300 font-semibold">¥{withTax.toLocaleString()} <span className="text-[10px] text-slate-400 font-sans">(税込)</span></div>
+                              </td>
+                            );
+                          }
                           return (
-                            <td key={colKey} className="py-3 px-4 font-mono font-medium text-emerald-300 whitespace-nowrap">
-                              {val !== null && val !== undefined ? `¥${Number(val).toLocaleString()}` : '-'}
+                            <td key={colKey} className="py-3 px-4 font-mono font-medium text-slate-500 whitespace-nowrap">
+                              -
                             </td>
                           );
                         }
@@ -691,13 +701,15 @@ export const TableManager: React.FC<TableManagerProps> = ({
                     </div>
                   )}
                   {item.total_amount && (
-                    <div className="font-mono text-emerald-300 font-semibold">
-                      想定総額: ¥{Number(item.total_amount).toLocaleString()}
+                    <div className="font-mono text-xs">
+                      <span className="text-slate-300">税抜: ¥{Number(item.total_amount).toLocaleString()}</span>
+                      <span className="ml-2 font-semibold text-indigo-300">税込: ¥{Math.floor(Number(item.total_amount) * 1.1).toLocaleString()}</span>
                     </div>
                   )}
                   {item.monthly_fee && (
-                    <div className="font-mono text-emerald-300">
-                      月額: ¥{Number(item.monthly_fee).toLocaleString()}
+                    <div className="font-mono text-xs">
+                      <span className="text-slate-400">月額（税抜）: ¥{Number(item.monthly_fee).toLocaleString()}</span>
+                      <span className="ml-2 text-indigo-300">（税込 ¥{Math.floor(Number(item.monthly_fee) * 1.1).toLocaleString()}）</span>
                     </div>
                   )}
                   {item.ai_score !== undefined && item.ai_score !== null && (

@@ -54,3 +54,15 @@ export interface MarketingScenario {
   consentBasis?: string;
   updatedAt: number;
 }
+
+export interface OfficialLinkItem {
+  id: string;
+  title: string;
+  description: string;
+  url: string;
+  badge: string;
+  badgeColor?: string;
+  iconName?: 'sparkles' | 'file-text' | 'message-circle' | 'calendar' | 'globe' | 'link';
+  isCustom?: boolean;
+  updatedAt?: string;
+}

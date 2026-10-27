@@ -591,26 +591,55 @@ export const StageTransitionModal: React.FC<StageTransitionModalProps> = ({
                   </div>
 
                   {/* Financial Fields */}
-                  <div>
-                    <label className="block text-xs font-semibold text-slate-300 mb-1">
-                      月額費用 (monthly_fee)
-                    </label>
-                    <input
-                      type="number"
-                      value={monthlyFee}
-                      onChange={(e) => {
-                        const val = e.target.value;
-                        setMonthlyFee(val);
-                        setTotalAmount(Number(initialFee || 0) + Number(val || 0));
-                      }}
-                      placeholder="0"
-                      className="w-full px-3 py-2 rounded-xl bg-slate-950 border border-slate-700 text-slate-200 text-xs font-mono outline-none focus:border-blue-500"
-                    />
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <div>
+                      <label className="block text-xs font-semibold text-slate-300 mb-1">
+                        初期費用（税抜・円）
+                      </label>
+                      <input
+                        type="number"
+                        value={initialFee}
+                        onChange={(e) => {
+                          const val = e.target.value;
+                          setInitialFee(val);
+                          setTotalAmount(Number(val || 0) + Number(monthlyFee || 0));
+                        }}
+                        placeholder="0"
+                        className="w-full px-3 py-2 rounded-xl bg-slate-950 border border-slate-700 text-slate-200 text-xs font-mono outline-none focus:border-blue-500"
+                      />
+                      {initialFee !== '' && !isNaN(Number(initialFee)) && (
+                        <p className="mt-1 text-[11px] font-medium text-cyan-300">
+                          税込: ¥{Math.floor(Number(initialFee) * 1.1).toLocaleString()}
+                        </p>
+                      )}
+                    </div>
+
+                    <div>
+                      <label className="block text-xs font-semibold text-slate-300 mb-1">
+                        月額費用（税抜・円）
+                      </label>
+                      <input
+                        type="number"
+                        value={monthlyFee}
+                        onChange={(e) => {
+                          const val = e.target.value;
+                          setMonthlyFee(val);
+                          setTotalAmount(Number(initialFee || 0) + Number(val || 0));
+                        }}
+                        placeholder="0"
+                        className="w-full px-3 py-2 rounded-xl bg-slate-950 border border-slate-700 text-slate-200 text-xs font-mono outline-none focus:border-blue-500"
+                      />
+                      {monthlyFee !== '' && !isNaN(Number(monthlyFee)) && (
+                        <p className="mt-1 text-[11px] font-medium text-cyan-300">
+                          税込: ¥{Math.floor(Number(monthlyFee) * 1.1).toLocaleString()}
+                        </p>
+                      )}
+                    </div>
                   </div>
 
                   <div>
                     <label className="block text-xs font-semibold text-slate-300 mb-1">
-                      想定総額 (total_amount)
+                      想定総額（税抜・円）
                     </label>
                     <input
                       type="number"
@@ -619,6 +648,11 @@ export const StageTransitionModal: React.FC<StageTransitionModalProps> = ({
                       placeholder="0"
                       className="w-full px-3 py-2 rounded-xl bg-slate-950 border border-slate-700 text-slate-200 text-xs font-mono outline-none focus:border-blue-500"
                     />
+                    {totalAmount !== '' && !isNaN(Number(totalAmount)) && (
+                      <p className="mt-1 text-[11px] font-semibold text-indigo-300">
+                        消費税 (10%): ¥{Math.floor(Number(totalAmount) * 0.1).toLocaleString()} ｜ 税込合計: ¥{Math.floor(Number(totalAmount) * 1.1).toLocaleString()}
+                      </p>
+                    )}
                   </div>
 
                   <div>

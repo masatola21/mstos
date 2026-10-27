@@ -785,7 +785,7 @@ export const getLineStepTemplate = (
   };
 };
 
-const _unusedOldSwitch = (step: number) => {
+const _unusedOldSwitch = (step: number, displayName: string = '様', targetUrl: string = '') => {
   switch (step) {
     case 1:
       return {

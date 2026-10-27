@@ -50,6 +50,8 @@ import {
   ManagedToolAsset,
 } from '../types/matrix';
 
+import { syncAllProductsBidirectionally } from './productCatalogService';
+
 type RelationalSalesOperations = { contracts: ManagedContract[]; invoices: ManagedInvoice[] };
 
 function toTimestamp(value: string | null | undefined): number {
@@ -67,39 +69,47 @@ async function loadRelationalSalesOperations(): Promise<RelationalSalesOperation
   // Older deployments continue using the compatible workspace snapshot until the migration is applied.
   if (contractResult.error || invoiceResult.error) return null;
   return {
-    contracts: (contractResult.data || []).map((row: any) => row.payload || ({
-      id: row.legacy_id || row.id,
-      title: row.title,
-      type: row.contract_type,
-      productId: row.product_id || undefined,
-      companyId: row.company_id || undefined,
-      counterpartyName: row.counterparty_name || '',
-      status: row.status,
-      startDate: row.start_date || undefined,
-      endDate: row.end_date || undefined,
-      amount: Number(row.amount || 0),
-      documentUrl: undefined,
-      notes: row.notes || undefined,
-      createdAt: toTimestamp(row.created_at),
-      updatedAt: toTimestamp(row.updated_at),
-    })) as ManagedContract[],
-    invoices: (invoiceResult.data || []).map((row: any) => row.payload || ({
-      id: row.legacy_id || row.id,
-      invoiceNumber: row.invoice_number,
-      title: row.title,
-      productId: row.product_id || undefined,
-      companyId: row.company_id || undefined,
-      recipientName: row.recipient_name || '',
-      amount: Number(row.amount || 0),
-      taxAmount: row.tax_amount == null ? undefined : Number(row.tax_amount),
-      status: row.status,
-      issueDate: row.issue_date || '',
-      dueDate: row.due_date || '',
-      paidDate: row.paid_at || undefined,
-      notes: row.notes || undefined,
-      createdAt: toTimestamp(row.created_at),
-      updatedAt: toTimestamp(row.updated_at),
-    })) as ManagedInvoice[],
+    contracts: (contractResult.data || []).map((row: any) => {
+      const payload = row.payload || {};
+      return {
+        ...payload,
+        id: row.legacy_id || row.id,
+        title: row.title,
+        type: row.contract_type,
+        productId: row.product_id || payload.productId || undefined,
+        companyId: row.company_id || undefined,
+        counterpartyName: row.counterparty_name || '',
+        status: row.status,
+        startDate: row.start_date || undefined,
+        endDate: row.end_date || undefined,
+        amount: Number(row.amount || 0),
+        documentUrl: row.document_url || undefined,
+        notes: row.notes || undefined,
+        createdAt: toTimestamp(row.created_at),
+        updatedAt: toTimestamp(row.updated_at),
+      };
+    }) as ManagedContract[],
+    invoices: (invoiceResult.data || []).map((row: any) => {
+      const payload = row.payload || {};
+      return {
+        ...payload,
+        id: row.legacy_id || row.id,
+        invoiceNumber: row.invoice_number,
+        title: row.title,
+        productId: row.product_id || payload.productId || undefined,
+        companyId: row.company_id || undefined,
+        recipientName: row.recipient_name || '',
+        amount: Number(row.amount || 0),
+        taxAmount: row.tax_amount == null ? undefined : Number(row.tax_amount),
+        status: row.status,
+        issueDate: row.issue_date || '',
+        dueDate: row.due_date || '',
+        paidDate: row.paid_at || undefined,
+        notes: row.notes || undefined,
+        createdAt: toTimestamp(row.created_at),
+        updatedAt: toTimestamp(row.updated_at),
+      };
+    }) as ManagedInvoice[],
   };
 }
 
@@ -254,10 +264,41 @@ async function loadRelationalAIOperations(userId: string): Promise<RelationalAIO
 
 async function saveRelationalAIOperations(userId: string, data: WorkspaceData): Promise<void> {
   const supabase = getSupabaseClient();
+
+  // 安全性向上: タスクの期限・ステータス・プロジェクト紐付けの正規化
+  const sanitizedTasks = (data.tasks || []).map((t) => {
+    let dueDate = t.dueDate;
+    if (!dueDate || !/^\d{4}-\d{2}-\d{2}$/.test(dueDate)) {
+      dueDate = new Date(Date.now() + 7 * 86400000).toISOString().slice(0, 10);
+    }
+    return {
+      ...t,
+      dueDate,
+      status: t.status || 'waiting',
+      priority: t.priority || 'medium',
+      projectId: t.projectId || '',
+      updatedAt: t.updatedAt || Date.now(),
+    };
+  });
+
+  const sanitizedProjects = (data.projects || []).map((p) => {
+    let dueDate = p.dueDate;
+    if (!dueDate || !/^\d{4}-\d{2}-\d{2}$/.test(dueDate)) {
+      dueDate = new Date(Date.now() + 30 * 86400000).toISOString().slice(0, 10);
+    }
+    return {
+      ...p,
+      dueDate,
+      status: p.status || 'planning',
+      priority: p.priority || 'medium',
+      updatedAt: p.updatedAt || Date.now(),
+    };
+  });
+
   const { error } = await supabase.rpc('mst_save_ai_operations', {
     p_user_id: userId,
-    p_projects: data.projects,
-    p_tasks: data.tasks,
+    p_projects: sanitizedProjects,
+    p_tasks: sanitizedTasks,
     p_approvals: data.approvals,
     p_automation_rules: data.automations,
     p_activity_logs: data.activityLogs,
@@ -496,6 +537,9 @@ export async function loadOrMigrateWorkspaceData(userId: string): Promise<Worksp
     merged.customLists = mergeRecords(relationalMatrix.customLists, localDefaults.customLists, baseline.customLists || []);
     merged.marketingScenarios = mergeRecords(relationalMatrix.marketingScenarios, localDefaults.marketingScenarios, baseline.marketingScenarios || []);
   }
+
+  // Ensure CRM products table and ManagedProducts are bidirectionally unified
+  merged.products = await syncAllProductsBidirectionally(merged.products);
 
   const relationalSales = await loadRelationalSalesOperations();
   if (relationalSales && (relationalMatrix || relationalSales.contracts.length > 0 || relationalSales.invoices.length > 0 || (merged.contracts.length === 0 && merged.invoices.length === 0))) {

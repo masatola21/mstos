@@ -264,7 +264,7 @@ export const PublicDocumentApplyView: React.FC<PublicDocumentApplyViewProps> = (
           } else {
             await supabase.from('customer_contracts').insert({
               company_id: targetCompanyId,
-              contact_id: doc?.contact_id || null,
+              contact_id: (doc as any)?.contact_id || null,
               deal_id: appliedDealId,
               document_id: documentId,
               title: doc?.title ? `${doc.title}（電子合意）` : 'Web申込契約合意',

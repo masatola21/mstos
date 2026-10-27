@@ -55,6 +55,7 @@ export interface Project {
   status: ProjectStatus;
   priority: Priority;
   dueDate?: string; // 期限 (YYYY-MM-DD or '')
+  productId?: string; // 紐づく商品(事業)ID
   createdAt: number;
   updatedAt: number;
   isSample?: boolean; // サンプル表示用フラグ
@@ -204,6 +205,8 @@ export interface KnowledgeItem {
   /** AIへの参照範囲。未設定の既存資料は安全のためAI社長のみが参照する。 */
   knowledgeAccess?: KnowledgeAccess;
   attachments?: KnowledgeAttachment[];
+  /** 最先端セマンティックRAG用ベクトル埋め込み（text-embedding-004） */
+  embedding?: number[];
 }
 
 // --- APIトークン利用量・料金単価管理データ型 ---

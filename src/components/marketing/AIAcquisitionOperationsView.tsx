@@ -6,20 +6,21 @@ import { ArrowRight, BarChart3, Megaphone, Plus, Save, Sparkles, Trash2 } from '
 import { OwnMediaWorkspace } from './OwnMediaWorkspace';
 import { MarketingAssetLibrary } from './MarketingAssetLibrary';
 import { MarketingQuickLinksHub } from './MarketingQuickLinksHub';
+import { SocialMediaBroadcastStudio } from './SocialMediaBroadcastStudio';
 
 type RecordType = 'strategy' | 'content' | 'social' | 'video' | 'ad' | 'media' | 'funnel' | 'result' | 'proposal';
-type ViewTab = 'dashboard' | RecordType | 'analysis' | 'media' | 'assets';
+type ViewTab = RecordType | 'analysis' | 'media' | 'assets' | 'social_studio';
 type Field = { key: string; label: string; kind?: 'textarea' | 'number' | 'date' | 'select' | 'multiselect'; options?: string[]; placeholder?: string };
 type AcquisitionRecord = { id: string; record_type: RecordType; title: string; product_id: string | null; status: string | null; payload: Record<string, string>; created_at: string; updated_at: string };
 type Product = { id: string; product_name: string };
 type AudienceSegment = { id: string; name: string; entity_type: string; conditions: { field?: string } | null };
 
 const tabs: Array<{ id: ViewTab; label: string }> = [
+  { id: 'strategy', label: '📋 集客戦略・施策一覧' },
   { id: 'funnel', label: '🔗 集客導線・公式URLハブ' },
+  { id: 'social_studio', label: '📱 SNS一括投稿スタジオ' },
   { id: 'assets', label: '📁 営業資料・成果物保管庫' },
   { id: 'media', label: '🌐 自社メディア・HP設定' },
-  { id: 'dashboard', label: '📊 流入・反響ダッシュボード' },
-  { id: 'strategy', label: '📋 集客戦略・施策一覧' },
 ];
 const typeLabels: Record<RecordType, string> = { strategy: '集客戦略', content: 'コンテンツ企画', social: 'SNS・note運用', video: '動画運用', ad: '広告運用', media: '自社メディア運用', funnel: 'LP・集客導線', result: '成果記録', proposal: '改善提案' };
 const expandableToolTypes: RecordType[] = ['content', 'social', 'video', 'ad', 'media', 'funnel'];
@@ -146,8 +147,18 @@ const cleanAiDraftPayload = (recordType: RecordType, rawPayload: unknown, segmen
   return cleaned;
 };
 
-export const AIAcquisitionOperationsView: React.FC<{ onSendPresidentSummary?: (summary: string) => void; onCreateTask?: (task: Omit<TaskItem, 'id' | 'createdAt' | 'updatedAt'>) => void }> = ({ onSendPresidentSummary, onCreateTask }) => {
-  const [activeTab, setActiveTab] = useState<ViewTab>('funnel');
+export const AIAcquisitionOperationsView: React.FC<{
+  initialTab?: ViewTab | string;
+  onSendPresidentSummary?: (summary: string) => void;
+  onCreateTask?: (task: Omit<TaskItem, 'id' | 'createdAt' | 'updatedAt'>) => void;
+}> = ({ initialTab = 'strategy', onSendPresidentSummary, onCreateTask }) => {
+  const [activeTab, setActiveTab] = useState<ViewTab>(initialTab === 'dashboard' ? 'strategy' : (initialTab as ViewTab));
+
+  useEffect(() => {
+    if (initialTab) {
+      setActiveTab(initialTab === 'dashboard' ? 'strategy' : (initialTab as ViewTab));
+    }
+  }, [initialTab]);
   const [records, setRecords] = useState<AcquisitionRecord[]>([]);
   const [products, setProducts] = useState<Product[]>([]);
   const [segments, setSegments] = useState<AudienceSegment[]>([]);
@@ -172,25 +183,6 @@ export const AIAcquisitionOperationsView: React.FC<{ onSendPresidentSummary?: (s
   const [externalDraft, setExternalDraft] = useState('');
   const [externalReview, setExternalReview] = useState('');
   const [pendingToolDrafts, setPendingToolDrafts] = useState<Array<{ record_type: RecordType; title: string; payload: Record<string, string> }>>([]);
-  const [crmMetrics, setCrmMetrics] = useState<{
-    totalLeads: number;
-    totalDeals: number;
-    wonDeals: number;
-    totalContracts: number;
-    totalContractRevenue: number;
-    totalInvoiced: number;
-    totalPaid: number;
-    utmBreakdown: Array<{ source: string; campaign: string; count: number }>;
-  }>({
-    totalLeads: 0,
-    totalDeals: 0,
-    wonDeals: 0,
-    totalContracts: 0,
-    totalContractRevenue: 0,
-    totalInvoiced: 0,
-    totalPaid: 0,
-    utmBreakdown: [],
-  });
 
 
   const load = async () => {
@@ -209,7 +201,7 @@ export const AIAcquisitionOperationsView: React.FC<{ onSendPresidentSummary?: (s
       setError(savedRecords.error.message.includes('mst_ai_acquisition_records') ? '集客運用テーブルが未適用です。supabase/migrations/20261020100000_ai_acquisition_operations.sql を適用してください。' : `集客データを読み込めませんでした: ${savedRecords.error.message}`);
       setLoading(false); return;
     }
-    setRecords(((savedRecords.data || []) as AcquisitionRecord[]).filter((record) => !(['media', 'article', 'seo', 'rewrite', 'attribution'] as string[]).includes(record.record_type)));
+    setRecords(((savedRecords.data || []) as AcquisitionRecord[]).filter((record) => !(['media', 'article', 'seo', 'rewrite', 'attribution', 'funnel_hub_config'] as string[]).includes(record.record_type)));
     if (!savedProducts.error) setProducts((savedProducts.data || []) as Product[]);
     if (!savedSegments.error) setSegments(((savedSegments.data || []) as AudienceSegment[]).filter((segment) => Boolean(segment.conditions?.field?.trim())));
     setLoading(false);
@@ -522,83 +514,7 @@ export const AIAcquisitionOperationsView: React.FC<{ onSendPresidentSummary?: (s
     {loading ? <p className="rounded-xl border border-slate-800 p-5 text-sm text-slate-400">集客データを読み込み中…</p> : <>
       {activeTab === 'media' && <OwnMediaWorkspace products={products} onAskAI={onSendPresidentSummary} strategyContext={records.find((record) => record.record_type === 'strategy') ? JSON.stringify({ title: records.find((record) => record.record_type === 'strategy')?.title, payload: records.find((record) => record.record_type === 'strategy')?.payload }) : ''} />}
       {activeTab === 'assets' && <MarketingAssetLibrary records={records} products={products} onOpenRecord={(r) => startEdit(r as AcquisitionRecord)} />}
-      {activeTab === 'dashboard' && <section className="space-y-4">
-        {/* CRM実データ自動集計カード */}
-        <div className="rounded-2xl border border-indigo-500/40 bg-gradient-to-br from-indigo-950/60 via-slate-900 to-slate-900 p-5 shadow-xl space-y-4">
-          <div className="flex flex-wrap items-center justify-between gap-3">
-            <div className="flex items-center gap-2">
-              <span className="flex h-2.5 w-2.5 rounded-full bg-emerald-400 animate-pulse" />
-              <h2 className="text-base font-bold text-white tracking-wide">CRM実データ自動集計（ファネル＆流入成果）</h2>
-            </div>
-            <span className="rounded-full bg-indigo-500/20 px-3 py-1 text-xs font-semibold text-indigo-300 border border-indigo-500/30">
-              手入力不要・DB自動連携
-            </span>
-          </div>
 
-          <div className="grid gap-3 grid-cols-2 sm:grid-cols-4 lg:grid-cols-6">
-            <div className="rounded-xl border border-slate-800 bg-slate-950/80 p-3">
-              <p className="text-xs text-slate-400">総リード数</p>
-              <p className="mt-1 text-xl font-bold text-sky-400">{crmMetrics.totalLeads} 件</p>
-            </div>
-            <div className="rounded-xl border border-slate-800 bg-slate-950/80 p-3">
-              <p className="text-xs text-slate-400">商談化数 (商談率)</p>
-              <p className="mt-1 text-xl font-bold text-indigo-300">
-                {crmMetrics.totalDeals} 件
-                <span className="ml-1 text-xs text-slate-400 font-normal">
-                  ({crmMetrics.totalLeads > 0 ? ((crmMetrics.totalDeals / crmMetrics.totalLeads) * 100).toFixed(1) : 0}%)
-                </span>
-              </p>
-            </div>
-            <div className="rounded-xl border border-slate-800 bg-slate-950/80 p-3">
-              <p className="text-xs text-slate-400">成約数 (成約率)</p>
-              <p className="mt-1 text-xl font-bold text-emerald-400">
-                {crmMetrics.wonDeals} 件
-                <span className="ml-1 text-xs text-slate-400 font-normal">
-                  ({crmMetrics.totalDeals > 0 ? ((crmMetrics.wonDeals / crmMetrics.totalDeals) * 100).toFixed(1) : 0}%)
-                </span>
-              </p>
-            </div>
-            <div className="rounded-xl border border-slate-800 bg-slate-950/80 p-3">
-              <p className="text-xs text-slate-400">契約総額</p>
-              <p className="mt-1 text-xl font-bold text-amber-300">¥{crmMetrics.totalContractRevenue.toLocaleString()}</p>
-            </div>
-            <div className="rounded-xl border border-slate-800 bg-slate-950/80 p-3">
-              <p className="text-xs text-slate-400">請求総額</p>
-              <p className="mt-1 text-xl font-bold text-slate-200">¥{crmMetrics.totalInvoiced.toLocaleString()}</p>
-            </div>
-            <div className="rounded-xl border border-slate-800 bg-slate-950/80 p-3">
-              <p className="text-xs text-slate-400">入金済み総額</p>
-              <p className="mt-1 text-xl font-bold text-teal-300">¥{crmMetrics.totalPaid.toLocaleString()}</p>
-            </div>
-          </div>
-
-          {crmMetrics.utmBreakdown.length > 0 && (
-            <div className="mt-3 rounded-xl border border-slate-800/80 bg-slate-950/60 p-3">
-              <p className="text-xs font-semibold text-slate-300 mb-2">流入チャネル・キャンペーン別リード獲得数（UTM集計）</p>
-              <div className="flex flex-wrap gap-2">
-                {crmMetrics.utmBreakdown.map((item, idx) => (
-                  <span key={idx} className="inline-flex items-center gap-1.5 rounded-lg border border-slate-700 bg-slate-900 px-2.5 py-1 text-xs text-slate-300">
-                    <span className="font-semibold text-indigo-300">{item.source}</span>
-                    {item.campaign !== 'default' && <span className="text-slate-400 font-mono text-[11px]">({item.campaign})</span>}
-                    <span className="rounded bg-indigo-500/20 px-1.5 py-0.2 text-indigo-200 font-bold">{item.count}件</span>
-                  </span>
-                ))}
-              </div>
-            </div>
-          )}
-        </div>
-
-        <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">{[
-          ['運用中の施策', `${metrics.active}件`], ['コンテンツ・投稿・動画', `${metrics.content}件`], ['広告費', metrics.known.spend ? yen(metrics.spend) : '未入力'], ['リード / 商談 / 契約', `${metrics.known.leads ? metrics.leads : '未入力'} / ${metrics.known.meetings ? metrics.meetings : '未入力'} / ${metrics.known.contracts ? metrics.contracts : '未入力'}`],
-          ['売上', metrics.known.revenue ? yen(metrics.revenue) : '未入力'], ['利益', metrics.known.profit ? yen(metrics.profit) : '未入力'],
-        ].map(([label, value]) => <article key={label} className="rounded-xl border border-slate-800 bg-slate-900 p-4"><p className="text-xs text-slate-400">{label}</p><p className="mt-2 text-xl font-semibold text-white">{value}</p></article>)}</div>
-        {!metrics.hasActuals && <p className="rounded-xl border border-amber-700/40 bg-amber-950/20 p-3 text-sm text-amber-200">実績データは未入力・未連携です。実績値を推測して表示していません。</p>}
-        <div className="grid gap-4 lg:grid-cols-2">
-          <section className="rounded-xl border border-slate-800 bg-slate-900 p-4"><h2 className="font-semibold">最近の施策</h2>{records.length ? <ul className="mt-3 divide-y divide-slate-800">{records.slice(0, 6).map((record) => <li key={record.id} className="flex items-center justify-between gap-2 py-2"><div><p className="text-sm font-medium">{record.title}</p><p className="text-xs text-slate-500">{typeLabels[record.record_type]} · {record.status || '状態未設定'}</p></div><button onClick={() => startEdit(record)} className="rounded border border-slate-700 px-2 py-1 text-xs">開く</button></li>)}</ul> : <p className="mt-3 text-sm text-slate-400">まだ施策は登録されていません。</p>}</section>
-          <section className="rounded-xl border border-slate-800 bg-slate-900 p-4"><div className="flex items-center gap-2"><Sparkles className="h-4 w-4 text-amber-300"/><h2 className="font-semibold">改善の確認ポイント</h2></div><ul className="mt-3 space-y-2">{latestSuggestions.map((suggestion) => <li key={suggestion} className="rounded-lg bg-slate-950 p-3 text-sm text-slate-300">{suggestion}</li>)}</ul><button onClick={() => onSendPresidentSummary?.(summary)} disabled={!onSendPresidentSummary} className="mt-3 inline-flex items-center gap-2 rounded-lg bg-purple-700 px-3 py-2 text-sm disabled:opacity-50"><Sparkles className="h-4 w-4"/>AI社長に要約を共有</button><p className="mt-2 text-xs text-slate-500">共有するのは施策概要・集計値・確認事項です。個人顧客の情報や投稿全文は含めません。</p></section>
-        </div>
-        
-      </section>}
 
       {activeTab === 'analysis' && <section className="space-y-4">
         <div className="grid gap-4 lg:grid-cols-2">
@@ -611,7 +527,7 @@ export const AIAcquisitionOperationsView: React.FC<{ onSendPresidentSummary?: (s
         <RecordList records={visibleRecords} products={products} segments={segments} onEdit={startEdit} onDelete={remove}/>
       </section>}
 
-      {formVisible && <form onSubmit={(event) => { if (type === 'strategy' && (payload.channels || '').split('|').some((toolType) => expandableToolTypes.includes(toolType as RecordType))) { event.preventDefault(); void saveToolDrafts(); } else void save(event); }} className="space-y-4 rounded-xl border border-indigo-500/30 bg-slate-900 p-4">
+      {formVisible && (activeTab === 'strategy' || activeTab === 'analysis') && <form onSubmit={(event) => { if (type === 'strategy' && (payload.channels || '').split('|').some((toolType) => expandableToolTypes.includes(toolType as RecordType))) { event.preventDefault(); void saveToolDrafts(); } else void save(event); }} className="space-y-4 rounded-xl border border-indigo-500/30 bg-slate-900 p-4">
         <div className="flex items-center justify-between gap-2"><h2 className="font-semibold">{editing ? '編集' : '新規登録'} · {typeLabels[type]}</h2><button type="button" onClick={() => resetForm(type)} className="text-xs text-slate-400">入力をクリア</button></div>
         <section className="space-y-3 rounded-xl border border-violet-500/30 bg-violet-950/20 p-4">
           <div className="flex items-center justify-between gap-2"><div className="flex items-center gap-2"><Sparkles className="h-4 w-4 text-violet-300"/><h3 className="text-sm font-semibold text-white">{type === 'result' ? 'AIで記録内容を整理（実績値は反映しません）' : `${typeLabels[type]}をAIと作成・ブラッシュアップ`}</h3></div>{aiGenerating && <button type="button" onClick={stopAI} className="rounded-lg border border-rose-500/50 px-3 py-1.5 text-xs font-semibold text-rose-200 hover:bg-rose-950/50">停止</button>}</div>
@@ -642,8 +558,9 @@ export const AIAcquisitionOperationsView: React.FC<{ onSendPresidentSummary?: (s
         <div className="flex gap-2"><button disabled={saving || aiGenerating} className="inline-flex items-center gap-2 rounded-lg bg-indigo-600 px-4 py-2 text-sm font-semibold disabled:opacity-50"><Save className="h-4 w-4"/>{aiGenerating ? 'AI処理中…' : saving ? '保存中…' : type === 'strategy' && (payload.channels || '').trim() ? '戦略と選定ツールを保存' : '保存'}</button><button type="button" onClick={() => { cancelAIRequest(); setEditing(null); setIsFormOpen(false); setTitle(''); setProductId(''); setPayload(emptyPayload()); }} className="rounded-lg border border-slate-700 px-4 py-2 text-sm">キャンセル</button></div>
       </form>}
 
-      {activeTab === 'funnel' && !formVisible && <MarketingQuickLinksHub />}
-      {activeTab !== 'dashboard' && activeTab !== 'analysis' && activeTab !== 'assets' && !formVisible && <section className="space-y-3"><div className="flex items-center justify-between"><div><h2 className="font-semibold">{tabs.find((tab) => tab.id === activeTab)?.label}</h2><p className="mt-1 text-xs text-slate-500">商品マスターの商品と関連付けて登録できます。実行・公開は外部サービスで行ってください。</p></div><button onClick={() => createRecord(activeTab as RecordType)} className="inline-flex items-center gap-2 rounded-lg bg-indigo-600 px-3 py-2 text-sm"><Plus className="h-4 w-4"/>新規登録</button></div><RecordList records={visibleRecords} products={products} segments={segments} onEdit={startEdit} onDelete={remove}/></section>}
+      {activeTab === 'funnel' && <MarketingQuickLinksHub />}
+      {activeTab === 'social_studio' && <SocialMediaBroadcastStudio />}
+      {activeTab === 'strategy' && !formVisible && <section className="space-y-3"><div className="flex items-center justify-between"><div><h2 className="font-semibold">{tabs.find((tab) => tab.id === activeTab)?.label}</h2><p className="mt-1 text-xs text-slate-500">商品マスターの商品と関連付けて登録できます。実行・公開は外部サービスで行ってください。</p></div><button onClick={() => createRecord('strategy')} className="inline-flex items-center gap-2 rounded-lg bg-indigo-600 px-3 py-2 text-sm"><Plus className="h-4 w-4"/>新規登録</button></div><RecordList records={visibleRecords} products={products} segments={segments} onEdit={startEdit} onDelete={remove}/></section>}
     </>}
   </main>;
 };

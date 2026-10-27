@@ -257,3 +257,38 @@ export async function runWithFallback(
   const summary = failures.map((f) => `${describeTarget(f.target)}（${f.reason}）`).join(' / ');
   throw new Error(`利用できるモデルがありませんでした: ${summary}`);
 }
+
+/**
+ * テキストから高次元ベクトル埋め込み（text-embedding-004）を生成する
+ */
+export async function getEmbedding(text: string): Promise<number[] | null> {
+  if (!isProviderConfigured('gemini')) return null;
+  try {
+    const ai = getGemini();
+    const response = await ai.models.embedContent({
+      model: 'text-embedding-004',
+      contents: text.slice(0, 2048),
+    });
+    return (response as any).embedding?.values || null;
+  } catch (error) {
+    console.warn('Embedding generation warning:', error instanceof Error ? error.message : error);
+    return null;
+  }
+}
+
+/**
+ * コサイン類似度（-1.0 〜 1.0）を計算する
+ */
+export function cosineSimilarity(vecA: number[], vecB: number[]): number {
+  if (!Array.isArray(vecA) || !Array.isArray(vecB) || vecA.length !== vecB.length || vecA.length === 0) return 0;
+  let dot = 0;
+  let normA = 0;
+  let normB = 0;
+  for (let i = 0; i < vecA.length; i++) {
+    dot += vecA[i] * vecB[i];
+    normA += vecA[i] * vecA[i];
+    normB += vecB[i] * vecB[i];
+  }
+  const denom = Math.sqrt(normA) * Math.sqrt(normB);
+  return denom === 0 ? 0 : dot / denom;
+}

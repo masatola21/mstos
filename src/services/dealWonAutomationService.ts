@@ -58,7 +58,8 @@ export async function executeDealWonAutomation(dealId: string): Promise<DealWonR
     const initialFee = Number(deal.initial_fee || deal.product?.initial_fee || 0);
     const monthlyFee = Number(deal.monthly_fee || deal.product?.monthly_fee || 0);
     const firstInvoiceAmount = initialFee > 0 ? initialFee : totalAmount;
-    const taxAmount = firstInvoiceAmount > 0 ? Math.round(firstInvoiceAmount / 11) : 0;
+    const taxAmount = firstInvoiceAmount > 0 ? Math.floor(firstInvoiceAmount * 0.1) : 0;
+    const firstInvoiceTotalWithTax = firstInvoiceAmount + taxAmount;
     const companyName = deal.company?.company_name || '顧客企業';
     const invoiceNumber = `INV-${today.replaceAll('-', '')}-${crypto.randomUUID().slice(0, 6).toUpperCase()}`;
     const dueDate = defaultInvoiceDueDate();
@@ -96,21 +97,27 @@ export async function executeDealWonAutomation(dealId: string): Promise<DealWonR
     const documentIds: string[] = [];
 
     const scheduleNote = monthlyFee > 0
-      ? `月額費用: ¥${monthlyFee.toLocaleString('ja-JP')}（毎月25日締め翌月末払い）`
+      ? `月額費用: ¥${monthlyFee.toLocaleString('ja-JP')}（税抜 / 税込 ¥${Math.floor(monthlyFee * 1.1).toLocaleString('ja-JP')}・毎月25日締め翌月末払い）`
       : 'スポット契約（一括払い）';
 
     try {
+      const isRetainer = monthlyFee > 0;
+      const initialFeeVal = initialFee > 0 ? initialFee : totalAmount;
       const contractHtml = `
         <div style="font-family: sans-serif; padding: 30px; line-height: 1.8; color: #1e293b;">
-          <h1 style="text-align: center; border-bottom: 2px solid #0f172a; padding-bottom: 10px;">業務委託基本契約書</h1>
+          <h1 style="text-align: center; border-bottom: 2px solid #0f172a; padding-bottom: 10px;">${isRetainer ? '経営・業務顧問 委託契約書' : '業務委託基本契約書'}</h1>
           <p>発注者 <strong>${companyName}</strong>（以下「甲」）と、受注者 <strong>有限会社MST</strong>（以下「乙」）は、以下の通り契約を締結する。</p>
           <h3>第1条（業務内容）</h3>
           <p>${dealTitle}に関する業務支援および仕組み化伴走</p>
           <h3>第2条（委託料および請求スケジュール）</h3>
-          <p>初期費用: 金 <strong>¥${initialFee > 0 ? initialFee.toLocaleString('ja-JP') : totalAmount.toLocaleString('ja-JP')}</strong> 円</p>
-          ${monthlyFee > 0 ? `<p>継続顧問料: 月額 <strong>¥${monthlyFee.toLocaleString('ja-JP')}</strong> 円（毎月25日締め翌月払い）</p>` : ''}
-          <h3>第3条（契約開始日）</h3>
-          <p>${today}</p>
+          <p>初期費用: 金 <strong>¥${initialFeeVal.toLocaleString('ja-JP')}</strong> 円（税抜 / 消費税10%込 金 ¥${Math.floor(initialFeeVal * 1.1).toLocaleString('ja-JP')} 円）</p>
+          ${isRetainer ? `<p>継続顧問料: 月額 <strong>¥${monthlyFee.toLocaleString('ja-JP')}</strong> 円（税抜 / 消費税10%込 金 ¥${Math.floor(monthlyFee * 1.1).toLocaleString('ja-JP')} 円 / 毎月25日締め翌月末払い）</p>` : ''}
+          <h3>第3条（契約期間および最低契約期間）</h3>
+          ${isRetainer
+            ? `<p>1. 本契約の有効期間は <strong>${today}</strong> からとし、<strong>契約締結日より最低6ヶ月間</strong>を最低契約期間とする。<br>
+2. 期間満了の1ヶ月前までに甲乙いずれからも書面または電磁的方法（電子メール・チャット等）による終了の申し出がない場合は、同一条件で6ヶ月間自動更新するものとし、以後も同様とする。<br>
+3. 最低契約期間内の中途解約時は、甲は最低契約期間残余期間分の顧問料相当額を一括して乙に支払うものとする。</p>`
+            : `<p>本契約の有効期間は <strong>${today}</strong> からとし、個別業務の納品・完了をもって終了とする。</p>`}
         </div>
       `;
 
@@ -120,8 +127,21 @@ export async function executeDealWonAutomation(dealId: string): Promise<DealWonR
           <p style="text-align: right;">請求番号: ${invoiceNumber}<br>発行日: ${today}</p>
           <p style="font-size: 18px;"><strong>${companyName} 御中</strong></p>
           <p>下記の通りご請求申し上げます。</p>
-          <div style="background: #f1f5f9; padding: 15px; border-radius: 8px; font-size: 20px; font-weight: bold; text-align: center;">
-            ご請求金額: ¥${firstInvoiceAmount.toLocaleString('ja-JP')} （税込）
+          <div style="background: #f8fafc; border: 1px solid #cbd5e1; padding: 15px; border-radius: 8px; margin-bottom: 20px;">
+            <table style="width: 100%; border-collapse: collapse; font-size: 14px;">
+              <tr>
+                <td style="padding: 6px 0; color: #64748b;">小計（税抜）:</td>
+                <td style="padding: 6px 0; text-align: right; font-weight: bold;">¥${firstInvoiceAmount.toLocaleString('ja-JP')}</td>
+              </tr>
+              <tr>
+                <td style="padding: 6px 0; color: #64748b; border-bottom: 1px solid #cbd5e1;">消費税（10%）:</td>
+                <td style="padding: 6px 0; text-align: right; font-weight: bold; border-bottom: 1px solid #cbd5e1;">¥${taxAmount.toLocaleString('ja-JP')}</td>
+              </tr>
+              <tr>
+                <td style="padding: 10px 0 4px 0; font-size: 18px; font-weight: bold; color: #0f172a;">ご請求金額合計（税込）:</td>
+                <td style="padding: 10px 0 4px 0; text-align: right; font-size: 20px; font-weight: 800; color: #1e3a8a;">¥${firstInvoiceTotalWithTax.toLocaleString('ja-JP')}</td>
+              </tr>
+            </table>
           </div>
           <p style="margin-top: 20px;">支払期日: <strong>${dueDate}</strong></p>
           <p>振込先口座: ドコモSMTBネット銀行 法人第一支店 普通 2223730（口座名義：有限会社MST）</p>
@@ -152,11 +172,15 @@ export async function executeDealWonAutomation(dealId: string): Promise<DealWonR
 
       if (cDoc.data?.id) {
         contractDocId = cDoc.data.id;
-        documentIds.push(contractDocId);
+        if (contractDocId) {
+          documentIds.push(contractDocId);
+        }
       }
       if (iDoc.data?.id) {
         invoiceDocId = iDoc.data.id;
-        documentIds.push(invoiceDocId);
+        if (invoiceDocId) {
+          documentIds.push(invoiceDocId);
+        }
       }
     } catch (docErr) {
       console.warn('Document draft auto-generation warning:', docErr);

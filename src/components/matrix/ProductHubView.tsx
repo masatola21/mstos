@@ -21,11 +21,14 @@ import {
   Edit2,
   Link2,
   Trash2,
-  Check
+  Check,
+  GripVertical,
 } from 'lucide-react';
 import { ManagedProduct, PRODUCT_ARCHETYPES, ProductArchetype, ManagedContract, ManagedInvoice, ManagedToolAsset } from '../../types/matrix';
-import { ApiUsageData, Project, TaskItem } from '../../types/ai-president';
+import { ApiUsageData, Project, TaskItem, CharacterConfig, UserProfile } from '../../types/ai-president';
 import { ProductCoCreationWizard } from './ProductCoCreationWizard';
+import { generateNextProductCode } from '../../services/productCatalogService';
+import { calculateProductKPIs } from '../../services/businessSummaryService';
 
 interface ProductHubViewProps {
   products: ManagedProduct[];
@@ -34,13 +37,16 @@ interface ProductHubViewProps {
   tools: ManagedToolAsset[];
   tasks: TaskItem[];
   projects: Project[];
-  onAddProduct: (product: Omit<ManagedProduct, 'id' | 'createdAt' | 'updatedAt'>) => void;
+  onAddProduct: (product: Omit<ManagedProduct, 'id' | 'createdAt' | 'updatedAt'> & { id?: string }) => void;
   onUpdateProduct: (id: string, updates: Partial<ManagedProduct>) => void;
+  onReorderProducts?: (reorderedProducts: ManagedProduct[]) => void;
   onDeleteProduct?: (id: string, archive: boolean) => Promise<{ success: boolean; message?: string }> | { success: boolean; message?: string };
   onRestoreProduct?: (id: string) => Promise<{ success: boolean; message?: string }> | { success: boolean; message?: string };
   onPublishProduct: (product: ManagedProduct, fees: { initialFee: number; monthlyFee: number }) => Promise<void>;
   onAddProjectWithTasks?: (project: Project, tasks: TaskItem[]) => void;
   onRecordUsage?: (params: { endpoint: 'chat'; endpointName: string; model?: string; usage: ApiUsageData }) => void;
+  character?: CharacterConfig;
+  userProfile?: UserProfile;
 }
 
 export const ProductHubView: React.FC<ProductHubViewProps> = ({
@@ -52,14 +58,80 @@ export const ProductHubView: React.FC<ProductHubViewProps> = ({
   projects,
   onAddProduct,
   onUpdateProduct,
+  onReorderProducts,
   onDeleteProduct,
   onRestoreProduct,
   onPublishProduct,
   onAddProjectWithTasks,
   onRecordUsage,
+  character,
+  userProfile,
 }) => {
   const [selectedProductId, setSelectedProductId] = useState<string>(products[0]?.id || '');
   const [productListView, setProductListView] = useState<'active' | 'archived'>('active');
+  const [selectedCategoryFilter, setSelectedCategoryFilter] = useState<string>('ALL');
+  const [draggedProductId, setDraggedProductId] = useState<string | null>(null);
+  const [dragOverProductId, setDragOverProductId] = useState<string | null>(null);
+  const [draggedCategory, setDraggedCategory] = useState<string | null>(null);
+  const [dragOverCategory, setDragOverCategory] = useState<string | null>(null);
+
+  const [categoryOrder, setCategoryOrder] = useState<string[]>(() => {
+    try {
+      const saved = localStorage.getItem('mst_product_category_order_v1');
+      if (saved) return JSON.parse(saved);
+    } catch {}
+    return [];
+  });
+
+  const distinctCategories = React.useMemo(() => {
+    const cats = new Set<string>();
+    products.forEach((p) => {
+      if (p.category && p.category.trim()) cats.add(p.category.trim());
+    });
+    const baseList = Array.from(cats);
+    return baseList.sort((a, b) => {
+      const idxA = categoryOrder.indexOf(a);
+      const idxB = categoryOrder.indexOf(b);
+      if (idxA !== -1 && idxB !== -1) return idxA - idxB;
+      if (idxA !== -1) return -1;
+      if (idxB !== -1) return 1;
+      return a.localeCompare(b);
+    });
+  }, [products, categoryOrder]);
+
+  const handleCategoryDrop = (targetCat: string) => {
+    if (!draggedCategory || draggedCategory === targetCat) return;
+    const current = [...distinctCategories];
+    const fromIdx = current.indexOf(draggedCategory);
+    const toIdx = current.indexOf(targetCat);
+    if (fromIdx === -1 || toIdx === -1) return;
+    const [removed] = current.splice(fromIdx, 1);
+    current.splice(toIdx, 0, removed);
+    setCategoryOrder(current);
+    try {
+      localStorage.setItem('mst_product_category_order_v1', JSON.stringify(current));
+    } catch {}
+    setDraggedCategory(null);
+    setDragOverCategory(null);
+  };
+
+  const handleProductDrop = (targetId: string) => {
+    if (!draggedProductId || draggedProductId === targetId) return;
+    const currentIndex = products.findIndex((p) => p.id === draggedProductId);
+    const targetIndex = products.findIndex((p) => p.id === targetId);
+    if (currentIndex === -1 || targetIndex === -1) return;
+
+    const next = [...products];
+    const [removed] = next.splice(currentIndex, 1);
+    next.splice(targetIndex, 0, removed);
+
+    if (onReorderProducts) {
+      onReorderProducts(next);
+    }
+    setDraggedProductId(null);
+    setDragOverProductId(null);
+  };
+
   const [showRemovalConfirmation, setShowRemovalConfirmation] = useState(false);
   const [isProductActionPending, setIsProductActionPending] = useState(false);
   const [productActionMessage, setProductActionMessage] = useState('');
@@ -80,6 +152,7 @@ export const ProductHubView: React.FC<ProductHubViewProps> = ({
   const [manualName, setManualName] = useState('');
   const [manualArchetype, setManualArchetype] = useState<ProductArchetype>('service_project');
   const [manualPrice, setManualPrice] = useState('');
+  const [manualTargetRevenue, setManualTargetRevenue] = useState('');
   const [manualDesc, setManualDesc] = useState('');
 
   const selectedProduct = products.find((p) => p.id === selectedProductId) || products[0];
@@ -87,10 +160,21 @@ export const ProductHubView: React.FC<ProductHubViewProps> = ({
   const productContracts = contracts.filter((c) => c.productId === selectedProduct?.id);
   const productInvoices = invoices.filter((i) => i.productId === selectedProduct?.id);
   const productTools = tools.filter((t) => t.productId === selectedProduct?.id);
+  const productProjects = projects.filter((p) => p.productId === selectedProduct?.id);
+  const productProjectIds = new Set(productProjects.map((p) => p.id));
+  const productTasks = tasks.filter(
+    (task) =>
+      (task.relatedRecord?.type === 'product' && task.relatedRecord.id === selectedProduct?.id) ||
+      (task.projectId && productProjectIds.has(task.projectId))
+  );
+
+  const selectedProductKpi = selectedProduct
+    ? calculateProductKPIs(selectedProduct, contracts, invoices)
+    : null;
+
   const productHasReferences = Boolean(selectedProduct && (
     productContracts.length || productInvoices.length || productTools.length ||
-    tasks.some((task) => task.relatedRecord?.type === 'product' && task.relatedRecord.id === selectedProduct.id) ||
-    projects.some((project: any) => project.productId === selectedProduct.id)
+    productTasks.length || productProjects.length
   ));
   const openProductEditor = () => {
     if (!selectedProduct) return;
@@ -115,7 +199,17 @@ export const ProductHubView: React.FC<ProductHubViewProps> = ({
       return;
     }
     const id = editProductDraft.id;
-    const updates: Partial<ManagedProduct> = { ...editProductDraft, customFields, updatedAt: Date.now() };
+    const liveKpi = calculateProductKPIs(editProductDraft, contracts, invoices);
+    const updates: Partial<ManagedProduct> = {
+      ...editProductDraft,
+      customFields,
+      kpis: {
+        targetRevenue: editProductDraft.kpis?.targetRevenue ?? 0,
+        currentRevenue: liveKpi.currentRevenue,
+        activeClients: liveKpi.activeClients,
+      },
+      updatedAt: Date.now(),
+    };
     delete updates.id;
     delete updates.createdAt;
     onUpdateProduct(id, updates);
@@ -164,22 +258,40 @@ export const ProductHubView: React.FC<ProductHubViewProps> = ({
     e.preventDefault();
     if (!manualName.trim()) return;
 
+    const derivedPrice = Number(manualPrice) || 0;
+    const initialFee = manualArchetype === 'retainer' ? 0 : derivedPrice;
+    const monthlyFee = manualArchetype === 'retainer' ? derivedPrice : 0;
+    const generatedCode = generateNextProductCode(products, 'PRD');
+    const defaultTarget = manualArchetype === 'retainer'
+      ? (monthlyFee > 0 ? monthlyFee * 12 * 5 : 1000000)
+      : (derivedPrice > 0 ? derivedPrice * 10 : 1000000);
+    const userTarget = manualTargetRevenue !== '' ? Math.max(0, Number(manualTargetRevenue)) : defaultTarget;
+
     onAddProduct({
+      id: generatedCode,
+      code: generatedCode,
       name: manualName.trim(),
       archetype: manualArchetype,
       category: PRODUCT_ARCHETYPES[manualArchetype].label,
-      price: Number(manualPrice) || 0,
+      price: derivedPrice,
+      salesInitialFee: initialFee,
+      salesMonthlyFee: monthlyFee,
       description: manualDesc.trim(),
       status: 'active',
+      customFields: {
+        phase: '商品設計',
+      },
       kpis: {
-        targetRevenue: (Number(manualPrice) || 100000) * 10,
+        targetRevenue: userTarget,
         currentRevenue: 0,
         activeClients: 0,
       },
+      salesCatalogPublishedAt: Date.now(),
     });
 
     setManualName('');
     setManualPrice('');
+    setManualTargetRevenue('');
     setManualDesc('');
     setIsNewProductModalOpen(false);
   };
@@ -221,39 +333,188 @@ export const ProductHubView: React.FC<ProductHubViewProps> = ({
         </div>
       </div>
 
-      {/* Product Selection List */}
-      <div className="overflow-hidden rounded-xl border border-slate-800 bg-slate-950/70">
-        <div className="flex items-center justify-between border-b border-slate-800 px-3 py-2">
-          <div className="flex gap-1">
-            {(['active', 'archived'] as const).map((view) => (
-              <button key={view} type="button" onClick={() => setProductListView(view)}
-                className={`rounded-lg px-3 py-1.5 text-xs font-semibold ${productListView === view ? 'bg-indigo-600 text-white' : 'text-slate-400 hover:bg-slate-800 hover:text-white'}`}>
-                {view === 'active' ? '取扱中' : '取扱停止'}
-              </button>
-            ))}
+      {/* Product Selection List with Drag & Drop Reordering */}
+      <div className="overflow-hidden rounded-xl border border-slate-800 bg-slate-950/70 shadow-lg">
+        {/* Top Control Bar */}
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between border-b border-slate-800 px-3 py-2.5 gap-2">
+          <div className="flex items-center gap-2 flex-wrap">
+            <div className="flex gap-1">
+              {(['active', 'archived'] as const).map((view) => (
+                <button
+                  key={view}
+                  type="button"
+                  onClick={() => setProductListView(view)}
+                  className={`rounded-lg px-3 py-1.5 text-xs font-semibold transition-colors cursor-pointer ${
+                    productListView === view ? 'bg-indigo-600 text-white' : 'text-slate-400 hover:bg-slate-800 hover:text-white'
+                  }`}
+                >
+                  {view === 'active' ? '取扱中' : '取扱停止'}
+                </button>
+              ))}
+            </div>
+
+            <span className="text-[11px] text-indigo-400/90 font-medium hidden sm:inline-flex items-center gap-1 bg-indigo-500/10 px-2 py-0.5 rounded border border-indigo-500/20">
+              <GripVertical className="w-3 h-3 text-indigo-400" />
+              <span>ドラッグで並び替え可能</span>
+            </span>
           </div>
-          <span className="text-[11px] text-slate-500">{products.filter((p) => (p.status === 'archived') === (productListView === 'archived')).length}件</span>
+
+          <div className="flex items-center gap-2 text-[11px] text-slate-400">
+            <span>全 {products.filter((p) => (p.status === 'archived') === (productListView === 'archived')).length} 件</span>
+          </div>
         </div>
-        <div className="grid grid-cols-[minmax(0,1fr)_minmax(100px,0.35fr)_minmax(115px,0.4fr)] gap-3 border-b border-slate-800 px-4 py-2 text-[10px] font-semibold text-slate-500">
-          <span>商品名</span><span>商品タイプ</span><span className="text-right">価格</span>
+
+        {/* Draggable Category Filter Bar */}
+        {distinctCategories.length > 0 && (
+          <div className="flex items-center gap-1.5 overflow-x-auto px-3 py-2 border-b border-slate-800/80 bg-slate-900/40 text-xs no-scrollbar">
+            <span className="text-[10px] text-slate-500 shrink-0 font-semibold uppercase tracking-wider">カテゴリ:</span>
+            <button
+              type="button"
+              onClick={() => setSelectedCategoryFilter('ALL')}
+              className={`px-2.5 py-1 rounded-lg text-xs font-semibold shrink-0 transition-colors cursor-pointer ${
+                selectedCategoryFilter === 'ALL'
+                  ? 'bg-slate-700 text-white shadow-sm'
+                  : 'text-slate-400 hover:bg-slate-800 hover:text-slate-200'
+              }`}
+            >
+              すべて
+            </button>
+            {distinctCategories.map((cat) => {
+              const isCatSelected = selectedCategoryFilter === cat;
+              const isBeingDragged = draggedCategory === cat;
+              const isDragOver = dragOverCategory === cat;
+              return (
+                <div
+                  key={cat}
+                  draggable={true}
+                  onDragStart={(e) => {
+                    e.dataTransfer.setData('text/plain', cat);
+                    setDraggedCategory(cat);
+                  }}
+                  onDragOver={(e) => {
+                    e.preventDefault();
+                    if (dragOverCategory !== cat) setDragOverCategory(cat);
+                  }}
+                  onDragLeave={() => {
+                    if (dragOverCategory === cat) setDragOverCategory(null);
+                  }}
+                  onDrop={(e) => {
+                    e.preventDefault();
+                    handleCategoryDrop(cat);
+                  }}
+                  onDragEnd={() => {
+                    setDraggedCategory(null);
+                    setDragOverCategory(null);
+                  }}
+                  onClick={() => setSelectedCategoryFilter(cat)}
+                  title="ドラッグでカテゴリの並び替えができます"
+                  className={`flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-semibold shrink-0 cursor-grab active:cursor-grabbing transition-all select-none border ${
+                    isCatSelected
+                      ? 'bg-indigo-600 text-white border-indigo-500 shadow-sm'
+                      : 'text-slate-400 hover:bg-slate-800 hover:text-slate-200 border-slate-800'
+                  } ${isBeingDragged ? 'opacity-40 scale-95' : ''} ${isDragOver ? 'border-indigo-400 bg-indigo-500/20' : ''}`}
+                >
+                  <GripVertical className="w-3 h-3 text-slate-500 shrink-0 opacity-60" />
+                  <span>{cat}</span>
+                </div>
+              );
+            })}
+          </div>
+        )}
+
+        {/* Column Headers */}
+        <div className="grid grid-cols-[28px_minmax(0,1fr)_minmax(100px,0.35fr)_minmax(115px,0.4fr)] gap-3 border-b border-slate-800 px-4 py-2 text-[10px] font-semibold text-slate-500">
+          <span title="並び替えハンドル">順</span>
+          <span>商品名</span>
+          <span>商品タイプ / 分類</span>
+          <span className="text-right">価格</span>
         </div>
-        <div className="max-h-64 overflow-y-auto divide-y divide-slate-800/70">
-          {products.filter((p) => (p.status === 'archived') === (productListView === 'archived')).map((p) => {
-            const isSelected = p.id === selectedProductId;
-            const priceLabel = p.salesCatalogPublishedAt
-              ? `初期 ¥${(p.salesInitialFee ?? p.price ?? 0).toLocaleString()} / 月額 ¥${(p.salesMonthlyFee ?? 0).toLocaleString()}`
-              : `¥${(p.price || 0).toLocaleString()}`;
-            return (
-              <button key={p.id} type="button" onClick={() => setSelectedProductId(p.id)}
-                className={`grid w-full grid-cols-[minmax(0,1fr)_minmax(100px,0.35fr)_minmax(115px,0.4fr)] items-center gap-3 px-4 py-2.5 text-left transition-colors ${isSelected ? 'bg-indigo-500/10 text-white' : 'text-slate-300 hover:bg-slate-900'}`}>
-                <span className="truncate text-xs font-semibold">{p.name}</span>
-                <span className="truncate text-[11px] text-slate-400">{PRODUCT_ARCHETYPES[p.archetype]?.label || p.category}</span>
-                <span className="truncate text-right text-[11px] text-slate-300">{priceLabel}</span>
-              </button>
-            );
-          })}
-          {products.filter((p) => (p.status === 'archived') === (productListView === 'archived')).length === 0 &&
-            <p className="px-4 py-5 text-center text-xs text-slate-500">{productListView === 'archived' ? '取扱停止の商品はありません。' : '商品はありません。'}</p>}
+
+        {/* Product Rows */}
+        <div className="max-h-72 overflow-y-auto divide-y divide-slate-800/70">
+          {(() => {
+            const displayProducts = products
+              .filter((p) => (p.status === 'archived') === (productListView === 'archived'))
+              .filter((p) => selectedCategoryFilter === 'ALL' || p.category === selectedCategoryFilter);
+
+            if (displayProducts.length === 0) {
+              return (
+                <p className="px-4 py-6 text-center text-xs text-slate-500">
+                  {productListView === 'archived'
+                    ? '取扱停止の商品はありません。'
+                    : selectedCategoryFilter !== 'ALL'
+                    ? `「${selectedCategoryFilter}」の商品はありません。`
+                    : '商品はありません。'}
+                </p>
+              );
+            }
+
+            return displayProducts.map((p) => {
+              const isSelected = p.id === selectedProductId;
+              const isBeingDragged = draggedProductId === p.id;
+              const isDragOver = dragOverProductId === p.id;
+              const rawPrice = p.price || 0;
+              const initFee = p.salesInitialFee ?? rawPrice;
+              const monthlyFee = p.salesMonthlyFee ?? 0;
+              const priceLabel = p.salesCatalogPublishedAt
+                ? `初期 税抜¥${initFee.toLocaleString()} / 月額 税抜¥${monthlyFee.toLocaleString()}`
+                : `税抜 ¥${rawPrice.toLocaleString()} (税込 ¥${Math.floor(rawPrice * 1.1).toLocaleString()})`;
+
+              return (
+                <div
+                  key={p.id}
+                  draggable={true}
+                  onDragStart={(e) => {
+                    e.dataTransfer.setData('text/plain', p.id);
+                    setDraggedProductId(p.id);
+                  }}
+                  onDragOver={(e) => {
+                    e.preventDefault();
+                    if (dragOverProductId !== p.id) setDragOverProductId(p.id);
+                  }}
+                  onDragLeave={() => {
+                    if (dragOverProductId === p.id) setDragOverProductId(null);
+                  }}
+                  onDrop={(e) => {
+                    e.preventDefault();
+                    handleProductDrop(p.id);
+                  }}
+                  onDragEnd={() => {
+                    setDraggedProductId(null);
+                    setDragOverProductId(null);
+                  }}
+                  onClick={() => setSelectedProductId(p.id)}
+                  className={`grid w-full grid-cols-[28px_minmax(0,1fr)_minmax(100px,0.35fr)_minmax(115px,0.4fr)] items-center gap-3 px-4 py-2.5 text-left transition-all cursor-pointer ${
+                    isSelected ? 'bg-indigo-500/15 text-white' : 'text-slate-300 hover:bg-slate-900'
+                  } ${isBeingDragged ? 'opacity-40 bg-slate-900' : ''} ${
+                    isDragOver ? 'border-t-2 border-indigo-400 bg-indigo-500/20' : ''
+                  }`}
+                >
+                  <div
+                    title="ドラッグして並び替え"
+                    className="flex items-center justify-center cursor-grab active:cursor-grabbing text-slate-500 hover:text-indigo-300"
+                    onClick={(e) => e.stopPropagation()}
+                  >
+                    <GripVertical className="w-4 h-4" />
+                  </div>
+                  <div className="truncate text-xs font-semibold flex items-center gap-1.5 min-w-0">
+                    <span className="truncate">{p.name}</span>
+                    {p.code && (
+                      <span className="text-[10px] px-1 py-0.2 rounded bg-slate-800 text-slate-400 font-mono shrink-0">
+                        {p.code}
+                      </span>
+                    )}
+                  </div>
+                  <span className="truncate text-[11px] text-slate-400">
+                    {PRODUCT_ARCHETYPES[p.archetype]?.label || p.category}
+                  </span>
+                  <span className="truncate text-right text-[11px] text-slate-300 font-mono">
+                    {priceLabel}
+                  </span>
+                </div>
+              );
+            });
+          })()}
         </div>
       </div>
 
@@ -325,24 +586,38 @@ export const ProductHubView: React.FC<ProductHubViewProps> = ({
                 )}
               </div>
 
-              {/* KPI Badges */}
-              <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+              {/* KPI Badges (契約書・請求書の実データから自動集計) */}
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
                 <div className="p-3 bg-slate-950 border border-slate-800 rounded-xl text-center">
-                  <span className="text-[10px] text-slate-500 block">標準単価 / 報酬</span>
-                  <span className="text-sm font-bold text-white">
-                    ¥{(selectedProduct.price || 0).toLocaleString()}
+                  <span className="text-[10px] text-slate-500 block">標準単価（税抜 / 税込）</span>
+                  <span className="text-sm font-bold text-white block">
+                    税抜 ¥{(selectedProduct.price || 0).toLocaleString()}
+                  </span>
+                  <span className="text-[11px] font-semibold text-cyan-300 block">
+                    税込 ¥{Math.floor((selectedProduct.price || 0) * 1.1).toLocaleString()}
                   </span>
                 </div>
                 <div className="p-3 bg-slate-950 border border-slate-800 rounded-xl text-center">
-                  <span className="text-[10px] text-slate-500 block">契約中 / 顧客数</span>
+                  <span className="text-[10px] text-slate-500 block">契約中社数 (自動集計)</span>
                   <span className="text-sm font-bold text-emerald-400">
-                    {selectedProduct.kpis?.activeClients || 0} 件
+                    {selectedProductKpi?.activeClients ?? 0} 社
                   </span>
+                  <span className="text-[10px] text-slate-500 block mt-0.5">締結済契約より</span>
                 </div>
                 <div className="p-3 bg-slate-950 border border-slate-800 rounded-xl text-center">
-                  <span className="text-[10px] text-slate-500 block">累計売上</span>
+                  <span className="text-[10px] text-slate-500 block">確定売上 (税込・自動集計)</span>
                   <span className="text-sm font-bold text-cyan-400">
-                    ¥{(selectedProduct.kpis?.currentRevenue || 0).toLocaleString()}
+                    ¥{(selectedProductKpi?.currentRevenue ?? 0).toLocaleString()}
+                  </span>
+                  <span className="text-[10px] text-slate-500 block mt-0.5">入金済請求より</span>
+                </div>
+                <div className="p-3 bg-slate-950 border border-slate-800 rounded-xl text-center">
+                  <span className="text-[10px] text-slate-500 block">目標売上 / 達成率</span>
+                  <span className="text-sm font-bold text-purple-400">
+                    ¥{(selectedProductKpi?.targetRevenue ?? 0).toLocaleString()}
+                  </span>
+                  <span className="text-[10px] text-purple-300 block mt-0.5 font-medium">
+                    達成率: {selectedProductKpi?.achievementRate ?? 0}%
                   </span>
                 </div>
               </div>
@@ -451,44 +726,63 @@ export const ProductHubView: React.FC<ProductHubViewProps> = ({
                 <div className="flex items-center justify-between">
                   <h4 className="text-sm font-bold text-white flex items-center gap-2">
                     <Code2 className="w-4 h-4 text-blue-400" />
-                    開発・推進タスク一覧
+                    商品開発・推進タスク一覧 ({selectedProduct?.name})
                   </h4>
                   <span className="text-xs text-slate-400">
-                    全 {tasks.length} タスク中
+                    関連 {productTasks.length} 件 / 全 {tasks.length} タスク中
                   </span>
                 </div>
 
                 <div className="space-y-2">
-                  {tasks.slice(0, 5).map((task) => (
-                    <div
-                      key={task.id}
-                      className="p-3 rounded-xl bg-slate-950 border border-slate-800 flex items-center justify-between text-xs"
-                    >
-                      <div className="flex items-center gap-3">
-                        <span className={`w-2.5 h-2.5 rounded-full ${
-                          task.status === 'completed'
-                            ? 'bg-emerald-500'
-                            : task.status === 'in_progress'
-                            ? 'bg-blue-500 animate-pulse'
-                            : 'bg-slate-600'
-                        }`} />
-                        <div>
-                          <span className="font-semibold text-white">{task.title}</span>
-                          <p className="text-[10px] text-slate-400">{task.description}</p>
+                  {productTasks.length > 0 ? (
+                    productTasks.map((task) => (
+                      <div
+                        key={task.id}
+                        className="p-3 rounded-xl bg-slate-950 border border-slate-800 flex items-center justify-between text-xs"
+                      >
+                        <div className="flex items-center gap-3">
+                          <span className={`w-2.5 h-2.5 rounded-full ${
+                            task.status === 'completed'
+                              ? 'bg-emerald-500'
+                              : task.status === 'in_progress'
+                              ? 'bg-blue-500 animate-pulse'
+                              : 'bg-slate-600'
+                          }`} />
+                          <div>
+                            <span className="font-semibold text-white">{task.title}</span>
+                            <p className="text-[10px] text-slate-400">{task.description}</p>
+                            {task.dueDate && (
+                              <span className="text-[10px] text-amber-400/90 font-mono mt-0.5 block">
+                                期限: {task.dueDate}
+                              </span>
+                            )}
+                          </div>
+                        </div>
+                        <div className="flex items-center gap-2 shrink-0">
+                          <span className="text-[10px] px-2 py-0.5 rounded bg-slate-800 text-slate-300">
+                            {task.assignee?.name || '担当者'}
+                          </span>
+                          <span className={`text-[10px] px-2 py-0.5 rounded font-medium ${
+                            task.priority === 'high' ? 'bg-rose-500/20 text-rose-300' : 'bg-slate-800 text-slate-400'
+                          }`}>
+                            {task.priority === 'high' ? '高' : '通常'}
+                          </span>
                         </div>
                       </div>
-                      <div className="flex items-center gap-2">
-                        <span className="text-[10px] px-2 py-0.5 rounded bg-slate-800 text-slate-300">
-                          {task.assignee?.name || '担当者'}
-                        </span>
-                        <span className={`text-[10px] px-2 py-0.5 rounded font-medium ${
-                          task.priority === 'high' ? 'bg-rose-500/20 text-rose-300' : 'bg-slate-800 text-slate-400'
-                        }`}>
-                          {task.priority === 'high' ? '高' : '通常'}
-                        </span>
-                      </div>
+                    ))
+                  ) : (
+                    <div className="p-6 rounded-xl bg-slate-950/60 border border-slate-800 text-center text-xs text-slate-500 space-y-2">
+                      <p>現在「{selectedProduct?.name}」に紐付く個別開発タスクはありません。</p>
+                      <button
+                        type="button"
+                        onClick={() => setIsWizardOpen(true)}
+                        className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-indigo-600/20 text-indigo-300 border border-indigo-500/30 hover:bg-indigo-600/30 font-medium"
+                      >
+                        <Sparkles className="w-3.5 h-3.5" />
+                        <span>AIとWBSタスクを自動策定する</span>
+                      </button>
                     </div>
-                  ))}
+                  )}
                 </div>
               </div>
             )}
@@ -647,11 +941,17 @@ export const ProductHubView: React.FC<ProductHubViewProps> = ({
               <h3 className="text-lg font-bold text-white">営業商品マスタに反映</h3>
               <p className="mt-1 text-xs leading-5 text-slate-400">「{selectedProduct.name}」をCRM商品マスタへ登録します。商品IDは維持し、同じIDを参照する契約・請求・商談と紐づけます。</p>
             </div>
-            <label className="block text-xs text-slate-300">初期費用（円）
+            <label className="block text-xs text-slate-300">初期費用（税抜・円）
               <input type="number" min="0" step="1" value={publishInitialFee} onChange={(event) => setPublishInitialFee(event.target.value)} className="mt-1 w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-white" />
+              {publishInitialFee && !isNaN(Number(publishInitialFee)) && (
+                <span className="mt-1 block text-[11px] text-cyan-300 font-medium">税込 (10%): ¥{Math.floor(Number(publishInitialFee) * 1.1).toLocaleString()}</span>
+              )}
             </label>
-            <label className="block text-xs text-slate-300">月額費用（円）
+            <label className="block text-xs text-slate-300">月額費用（税抜・円）
               <input type="number" min="0" step="1" value={publishMonthlyFee} onChange={(event) => setPublishMonthlyFee(event.target.value)} className="mt-1 w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-white" />
+              {publishMonthlyFee && !isNaN(Number(publishMonthlyFee)) && (
+                <span className="mt-1 block text-[11px] text-cyan-300 font-medium">税込 (10%): ¥{Math.floor(Number(publishMonthlyFee) * 1.1).toLocaleString()}</span>
+              )}
             </label>
             {publishError && <p role="alert" className="rounded-lg border border-rose-500/30 bg-rose-950/30 p-3 text-xs text-rose-200">{publishError}</p>}
             <p className="text-[11px] leading-5 text-slate-500">実行するとSupabaseのCRM商品マスタを作成または更新します。ローカルの商品・契約・請求データは削除しません。</p>
@@ -674,12 +974,53 @@ export const ProductHubView: React.FC<ProductHubViewProps> = ({
               <label className="space-y-1 text-xs text-slate-300">商品タイプ<select value={editProductDraft.archetype} onChange={e=>setEditProductDraft({...editProductDraft,archetype:e.target.value as ProductArchetype})} className="w-full rounded-lg border border-slate-700 bg-slate-950 p-2 text-sm text-white">{(Object.keys(PRODUCT_ARCHETYPES) as ProductArchetype[]).map(key=><option key={key} value={key}>{PRODUCT_ARCHETYPES[key].label}</option>)}</select></label>
               <label className="space-y-1 text-xs text-slate-300">分類<input value={editProductDraft.category || ''} onChange={e=>setEditProductDraft({...editProductDraft,category:e.target.value})} className="w-full rounded-lg border border-slate-700 bg-slate-950 p-2 text-sm text-white" /></label>
               <label className="space-y-1 text-xs text-slate-300">ステータス<select value={editProductDraft.status} onChange={e=>setEditProductDraft({...editProductDraft,status:e.target.value as ManagedProduct['status']})} className="w-full rounded-lg border border-slate-700 bg-slate-950 p-2 text-sm text-white"><option value="planning">企画中</option><option value="developing">開発中</option><option value="active">運用中</option><option value="archived">取扱停止</option></select></label>
-              <label className="space-y-1 text-xs text-slate-300">標準価格<input type="number" min="0" value={editProductDraft.price ?? ''} onChange={e=>setEditProductDraft({...editProductDraft,price:e.target.value===''?undefined:Number(e.target.value)})} className="w-full rounded-lg border border-slate-700 bg-slate-950 p-2 text-sm text-white" /></label>
-              <label className="space-y-1 text-xs text-slate-300">営業マスタ 初期費用<input type="number" min="0" value={editProductDraft.salesInitialFee ?? ''} onChange={e=>setEditProductDraft({...editProductDraft,salesInitialFee:e.target.value===''?undefined:Number(e.target.value)})} className="w-full rounded-lg border border-slate-700 bg-slate-950 p-2 text-sm text-white" /></label>
-              <label className="space-y-1 text-xs text-slate-300">営業マスタ 月額費用<input type="number" min="0" value={editProductDraft.salesMonthlyFee ?? ''} onChange={e=>setEditProductDraft({...editProductDraft,salesMonthlyFee:e.target.value===''?undefined:Number(e.target.value)})} className="w-full rounded-lg border border-slate-700 bg-slate-950 p-2 text-sm text-white" /></label>
-              <label className="space-y-1 text-xs text-slate-300">目標売上<input type="number" min="0" value={editProductDraft.kpis?.targetRevenue ?? ''} onChange={e=>setEditProductDraft({...editProductDraft,kpis:{...editProductDraft.kpis,targetRevenue:e.target.value===''?undefined:Number(e.target.value)}})} className="w-full rounded-lg border border-slate-700 bg-slate-950 p-2 text-sm text-white" /></label>
-              <label className="space-y-1 text-xs text-slate-300">現在売上<input type="number" min="0" value={editProductDraft.kpis?.currentRevenue ?? ''} onChange={e=>setEditProductDraft({...editProductDraft,kpis:{...editProductDraft.kpis,currentRevenue:e.target.value===''?undefined:Number(e.target.value)}})} className="w-full rounded-lg border border-slate-700 bg-slate-950 p-2 text-sm text-white" /></label>
-              <label className="space-y-1 text-xs text-slate-300">稼働顧客数<input type="number" min="0" value={editProductDraft.kpis?.activeClients ?? ''} onChange={e=>setEditProductDraft({...editProductDraft,kpis:{...editProductDraft.kpis,activeClients:e.target.value===''?undefined:Number(e.target.value)}})} className="w-full rounded-lg border border-slate-700 bg-slate-950 p-2 text-sm text-white" /></label>
+              <label className="space-y-1 text-xs text-slate-300">
+                標準価格（税抜・円）
+                <input type="number" min="0" value={editProductDraft.price ?? ''} onChange={e=>setEditProductDraft({...editProductDraft,price:e.target.value===''?undefined:Number(e.target.value)})} className="w-full rounded-lg border border-slate-700 bg-slate-950 p-2 text-sm text-white" />
+                {editProductDraft.price != null && !isNaN(editProductDraft.price) && (
+                  <span className="block text-[11px] text-cyan-300 font-medium">税込 (10%): ¥{Math.floor(editProductDraft.price * 1.1).toLocaleString()}</span>
+                )}
+              </label>
+              <label className="space-y-1 text-xs text-slate-300">
+                営業マスタ 初期費用（税抜・円）
+                <input type="number" min="0" value={editProductDraft.salesInitialFee ?? ''} onChange={e=>setEditProductDraft({...editProductDraft,salesInitialFee:e.target.value===''?undefined:Number(e.target.value)})} className="w-full rounded-lg border border-slate-700 bg-slate-950 p-2 text-sm text-white" />
+                {editProductDraft.salesInitialFee != null && !isNaN(editProductDraft.salesInitialFee) && (
+                  <span className="block text-[11px] text-cyan-300 font-medium">税込 (10%): ¥{Math.floor(editProductDraft.salesInitialFee * 1.1).toLocaleString()}</span>
+                )}
+              </label>
+              <label className="space-y-1 text-xs text-slate-300">
+                営業マスタ 月額費用（税抜・円）
+                <input type="number" min="0" value={editProductDraft.salesMonthlyFee ?? ''} onChange={e=>setEditProductDraft({...editProductDraft,salesMonthlyFee:e.target.value===''?undefined:Number(e.target.value)})} className="w-full rounded-lg border border-slate-700 bg-slate-950 p-2 text-sm text-white" />
+                {editProductDraft.salesMonthlyFee != null && !isNaN(editProductDraft.salesMonthlyFee) && (
+                  <span className="block text-[11px] text-cyan-300 font-medium">税込 (10%): ¥{Math.floor(editProductDraft.salesMonthlyFee * 1.1).toLocaleString()}</span>
+                )}
+              </label>
+              <label className="space-y-1 text-xs text-slate-300">
+                目標売上（税抜・円）
+                <input
+                  type="number"
+                  min="0"
+                  placeholder="例: 10000000"
+                  value={editProductDraft.kpis?.targetRevenue ?? ''}
+                  onChange={e=>setEditProductDraft({...editProductDraft,kpis:{...editProductDraft.kpis,targetRevenue:e.target.value===''?undefined:Number(e.target.value)}})}
+                  className="w-full rounded-lg border border-slate-700 bg-slate-950 p-2 text-sm text-white"
+                />
+                <span className="block text-[10px] text-slate-500">事業で目指す売上目標額を入力</span>
+              </label>
+              <div className="space-y-1 text-xs text-slate-400 bg-slate-950/70 p-2.5 rounded-lg border border-slate-800">
+                <span className="block font-semibold text-slate-300">現在売上（税込・自動集計）</span>
+                <span className="text-sm font-bold text-cyan-300 block">
+                  ¥{(selectedProductKpi?.currentRevenue ?? 0).toLocaleString()}
+                </span>
+                <span className="text-[10px] text-slate-500">※入金済み請求書から自動計算</span>
+              </div>
+              <div className="space-y-1 text-xs text-slate-400 bg-slate-950/70 p-2.5 rounded-lg border border-slate-800">
+                <span className="block font-semibold text-slate-300">稼働顧客数（自動集計）</span>
+                <span className="text-sm font-bold text-emerald-300 block">
+                  {selectedProductKpi?.activeClients ?? 0} 社
+                </span>
+                <span className="text-[10px] text-slate-500">※締結済み契約書から自動計算</span>
+              </div>
               {PRODUCT_ARCHETYPES[editProductDraft.archetype]?.customFieldTemplates.map((field) => <label key={field.key} className="space-y-1 text-xs text-slate-300">{field.label}<input type={field.type==='date'?'date':field.type==='number'?'number':field.type==='url'?'url':'text'} value={String(editProductDraft.customFields?.[field.key] ?? '')} onChange={e=>{const next={...(editProductDraft.customFields||{}),[field.key]:field.type==='number'?(e.target.value===''?undefined:Number(e.target.value)):e.target.value};setEditProductDraft({...editProductDraft,customFields:next});setEditCustomFieldsJson(JSON.stringify(next,null,2))}} className="w-full rounded-lg border border-slate-700 bg-slate-950 p-2 text-sm text-white" /></label>)}
               <label className="space-y-1 text-xs text-slate-300 md:col-span-2">説明<textarea rows={4} value={editProductDraft.description || ''} onChange={e=>setEditProductDraft({...editProductDraft,description:e.target.value})} className="w-full rounded-lg border border-slate-700 bg-slate-950 p-2 text-sm text-white" /></label>
               <details className="md:col-span-2"><summary className="cursor-pointer text-xs text-slate-400">その他の追加項目をJSONで編集</summary><textarea aria-label="すべての追加項目（JSON）" rows={7} value={editCustomFieldsJson} onChange={e=>setEditCustomFieldsJson(e.target.value)} className="mt-2 w-full rounded-lg border border-slate-700 bg-slate-950 p-2 font-mono text-xs text-white" /><span className="text-[10px] text-slate-500">標準項目にない独自の追加項目はこちらで編集できます。</span></details>
@@ -696,6 +1037,9 @@ export const ProductHubView: React.FC<ProductHubViewProps> = ({
           isOpen={isWizardOpen}
           onClose={() => setIsWizardOpen(false)}
           onRecordUsage={onRecordUsage}
+          character={character}
+          userProfile={userProfile}
+          existingProducts={products}
           onComplete={(newProduct, newProject, newTasks) => {
             onAddProduct(newProduct);
             if (newProject && newTasks && onAddProjectWithTasks) {
@@ -740,7 +1084,7 @@ export const ProductHubView: React.FC<ProductHubViewProps> = ({
               </div>
 
               <div>
-                <label className="block text-xs font-medium text-slate-300 mb-1">標準価格 (円)</label>
+                <label className="block text-xs font-medium text-slate-300 mb-1">標準価格 (税抜・円)</label>
                 <input
                   type="number"
                   value={manualPrice}
@@ -748,6 +1092,24 @@ export const ProductHubView: React.FC<ProductHubViewProps> = ({
                   placeholder="例: 200000"
                   className="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-indigo-500"
                 />
+                {manualPrice && !isNaN(Number(manualPrice)) && (
+                  <p className="mt-1 text-[11px] font-medium text-cyan-300">
+                    税込金額 (10%): ¥{Math.floor(Number(manualPrice) * 1.1).toLocaleString()}
+                  </p>
+                )}
+              </div>
+
+              <div>
+                <label className="block text-xs font-medium text-slate-300 mb-1">目標売上（税抜・円）</label>
+                <input
+                  type="number"
+                  min="0"
+                  value={manualTargetRevenue}
+                  onChange={(e) => setManualTargetRevenue(e.target.value)}
+                  placeholder={manualPrice ? `空欄時は自動目安: ¥${((Number(manualPrice) || 0) * (manualArchetype === 'retainer' ? 60 : 10)).toLocaleString()}` : '例: 10000000'}
+                  className="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-indigo-500"
+                />
+                <span className="block mt-1 text-[10px] text-slate-400">達成を目指す売上目標。空欄の場合は価格とモデル種別に応じた目安を自動設定します。</span>
               </div>
 
               <div>

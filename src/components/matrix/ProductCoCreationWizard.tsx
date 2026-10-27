@@ -17,14 +17,18 @@ import {
   DollarSign
 } from 'lucide-react';
 import { ProductArchetype, PRODUCT_ARCHETYPES, ManagedProduct } from '../../types/matrix';
-import { ApiUsageData, Project, TaskItem } from '../../types/ai-president';
+import { ApiUsageData, Project, TaskItem, CharacterConfig, UserProfile } from '../../types/ai-president';
 import { dateAfterDaysJst } from '../../utils/date';
+import { generateNextProductCode } from '../../services/productCatalogService';
 
 interface ProductCoCreationWizardProps {
   isOpen: boolean;
   onClose: () => void;
   onComplete: (product: ManagedProduct, project?: Project, tasks?: TaskItem[]) => void;
   onRecordUsage?: (params: { endpoint: 'chat'; endpointName: string; model?: string; usage: ApiUsageData }) => void;
+  character?: CharacterConfig;
+  userProfile?: UserProfile;
+  existingProducts?: ManagedProduct[];
 }
 
 export const ProductCoCreationWizard: React.FC<ProductCoCreationWizardProps> = ({
@@ -32,6 +36,9 @@ export const ProductCoCreationWizard: React.FC<ProductCoCreationWizardProps> = (
   onClose,
   onComplete,
   onRecordUsage,
+  character,
+  userProfile,
+  existingProducts,
 }) => {
   const [step, setStep] = useState<number>(1);
   const [archetype, setArchetype] = useState<ProductArchetype>('service_project');
@@ -45,6 +52,7 @@ export const ProductCoCreationWizard: React.FC<ProductCoCreationWizardProps> = (
 
   // AI Co-creation Generation state
   const [isGenerating, setIsGenerating] = useState(false);
+  const [customTargetRevenue, setCustomTargetRevenue] = useState('');
   const [aiProposal, setAiProposal] = useState<{
     refinedName: string;
     tagline: string;
@@ -70,6 +78,7 @@ export const ProductCoCreationWizard: React.FC<ProductCoCreationWizardProps> = (
 【ターゲット顧客】: ${targetAudience || '中小企業経営者・事業責任者'}
 【解決する課題】: ${problemToSolve || '業務の属人化、売上拡大、コスト削減'}
 【想定価格帯】: ${priceExpectation || '未定'}
+【オーナー/企業方針】: ${userProfile?.userGoals ? `${userProfile.userName || 'オーナー'}の方針: ${userProfile.userGoals}` : '自社の強みを活かした高付加価値事業の展開'}
 【補足メモ】: ${customNotes}
 
 以下のJSON形式のみで回答してください:
@@ -90,11 +99,11 @@ export const ProductCoCreationWizard: React.FC<ProductCoCreationWizardProps> = (
 }
 \`\`\``,
           character: {
-            name: 'シドウ (AI社長)',
-            role: 'AI社長 / 新規事業開発総指揮',
-            personality: '戦略的かつ実行力重視',
-            tone: 'プロフェッショナルな敬語',
-            behaviorRules: ['新規事業のWBSと収益モデルを具体的に設計する'],
+            name: character?.name || 'AI社長',
+            role: character?.role || 'AI社長 / 新規事業開発総指揮',
+            personality: character?.personality || '戦略的かつ実行力重視',
+            tone: character?.tone || 'プロフェッショナルな敬語',
+            behaviorRules: character?.behaviorRules?.length ? character.behaviorRules : ['新規事業のWBSと収益モデルを具体的に設計する'],
           },
         }),
       });
@@ -108,13 +117,16 @@ export const ProductCoCreationWizard: React.FC<ProductCoCreationWizardProps> = (
       if (match) {
         const parsed = JSON.parse(match[1]);
         setAiProposal(parsed);
+        const defaultRev = (Number(parsed.targetPrice) || 250000) * (archetype === 'retainer' ? 60 : 10);
+        setCustomTargetRevenue(String(defaultRev));
       } else {
         // Fallback fallback proposal
+        const fallbackPrice = Number(priceExpectation) || 250000;
         setAiProposal({
           refinedName: productName || `${PRODUCT_ARCHETYPES[archetype].label} プレミアム`,
           tagline: `${targetAudience || '経営者'}の課題を解決する特化型ソリューション`,
           description: `${problemToSolve || '業務効率化'}を実現し、迅速な成果提供を保証する新サービスです。`,
-          targetPrice: Number(priceExpectation) || 250000,
+          targetPrice: fallbackPrice,
           wbsTasks: [
             { title: 'サービス提供フロー・カリキュラム仕様策定', priority: 'high', description: '詳細設計の完了' },
             { title: '集客用LP・販促資料の制作', priority: 'high', description: 'コンバージョン導線の確立' },
@@ -124,15 +136,17 @@ export const ProductCoCreationWizard: React.FC<ProductCoCreationWizardProps> = (
           marketingPlan: '既存顧客への先行案内およびSNS/メールによるクローズドローンチ',
           contractType: archetype === 'service_project' ? '受託契約' : archetype === 'retainer' ? '顧問契約' : '利用規約',
         });
+        setCustomTargetRevenue(String(fallbackPrice * (archetype === 'retainer' ? 60 : 10)));
       }
       setStep(4);
     } catch {
       // Fallback proposal on network/API failure
+      const fallbackPrice = Number(priceExpectation) || 300000;
       setAiProposal({
         refinedName: productName || `${PRODUCT_ARCHETYPES[archetype].label} パッケージ`,
         tagline: `${targetAudience || '顧客'}の成果を最大化する新サービス`,
         description: `${problemToSolve || '生産性向上'}を短期間で実現するパッケージです。`,
-        targetPrice: Number(priceExpectation) || 300000,
+        targetPrice: fallbackPrice,
         wbsTasks: [
           { title: 'サービス仕様・提供要件の確定', priority: 'high', description: '納品物と範囲の合意' },
           { title: 'マーケティングLP・案内資料の作成', priority: 'high', description: 'リード獲得導線の作成' },
@@ -142,6 +156,7 @@ export const ProductCoCreationWizard: React.FC<ProductCoCreationWizardProps> = (
         marketingPlan: 'ウェビナーおよび診断フォームからのリード育成',
         contractType: '業務委託契約',
       });
+      setCustomTargetRevenue(String(fallbackPrice * (archetype === 'retainer' ? 60 : 10)));
       setStep(4);
     } finally {
       setIsGenerating(false);
@@ -151,31 +166,41 @@ export const ProductCoCreationWizard: React.FC<ProductCoCreationWizardProps> = (
   const handleFinish = () => {
     if (!aiProposal) return;
 
+    const generatedCode = generateNextProductCode(existingProducts || [], 'PRD');
+    const generatedId = generatedCode;
+    const initialFee = archetype === 'retainer' ? 0 : aiProposal.targetPrice;
+    const monthlyFee = archetype === 'retainer' ? aiProposal.targetPrice : 0;
+
     const newProduct: ManagedProduct = {
-      id: `prd-${Date.now()}`,
+      id: generatedId,
       name: aiProposal.refinedName,
-      code: `PRD-${archetype.toUpperCase().slice(0, 3)}-${Math.floor(100 + Math.random() * 900)}`,
+      code: generatedCode,
       category: PRODUCT_ARCHETYPES[archetype].label,
       archetype,
       price: aiProposal.targetPrice,
+      salesInitialFee: initialFee,
+      salesMonthlyFee: monthlyFee,
       description: aiProposal.description,
       status: 'developing',
       customFields: {
         tagline: aiProposal.tagline,
         marketingPlan: aiProposal.marketingPlan,
         contractType: aiProposal.contractType,
+        phase: '商品開発',
       },
       kpis: {
-        targetRevenue: aiProposal.targetPrice * 5,
+        targetRevenue: customTargetRevenue !== '' ? Math.max(0, Number(customTargetRevenue)) : (aiProposal.targetPrice * (archetype === 'retainer' ? 60 : 10)),
         currentRevenue: 0,
         activeClients: 0,
       },
+      salesCatalogPublishedAt: Date.now(),
       createdAt: Date.now(),
       updatedAt: Date.now(),
     };
 
     const newProject: Project = {
       id: `proj-${Date.now()}`,
+      productId: newProduct.id,
       name: `【商品開発】${aiProposal.refinedName}`,
       objective: `${aiProposal.tagline} - ${aiProposal.description}`,
       status: 'in_progress',
@@ -192,10 +217,19 @@ export const ProductCoCreationWizard: React.FC<ProductCoCreationWizardProps> = (
       description: t.description,
       status: idx === 0 ? 'in_progress' : 'waiting',
       priority: t.priority,
+      workArea: 'product_development',
+      sourceCategory: 'business_operations',
+      taskKind: 'creation_analysis',
+      relatedRecord: {
+        type: 'product',
+        id: newProduct.id,
+        label: newProduct.name,
+      },
       assignee: {
         type: 'ai_ceo',
-        name: 'AI社長シドウ',
+        name: character?.name || 'AI社長',
       },
+      dueDate: dateAfterDaysJst((idx + 1) * 7),
       completionCriteria: '成果物の納品と社内承認完了',
       createdAt: Date.now(),
       updatedAt: Date.now(),
@@ -373,7 +407,7 @@ export const ProductCoCreationWizard: React.FC<ProductCoCreationWizardProps> = (
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                   <div>
                     <label className="block text-xs font-medium text-slate-300 mb-1">
-                      想定価格帯（円）
+                      想定価格帯（税抜・円）
                     </label>
                     <input
                       type="number"
@@ -382,6 +416,11 @@ export const ProductCoCreationWizard: React.FC<ProductCoCreationWizardProps> = (
                       placeholder="例: 300000"
                       className="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-2 text-sm text-white placeholder-slate-500 focus:outline-none focus:border-purple-500"
                     />
+                    {priceExpectation && !isNaN(Number(priceExpectation)) && (
+                      <p className="mt-1 text-[11px] font-medium text-cyan-300">
+                        税込 (10%): ¥{Math.floor(Number(priceExpectation) * 1.1).toLocaleString()}
+                      </p>
+                    )}
                   </div>
                   <div>
                     <label className="block text-xs font-medium text-slate-300 mb-1">
@@ -492,6 +531,24 @@ export const ProductCoCreationWizard: React.FC<ProductCoCreationWizardProps> = (
                     <span className="text-slate-200 text-xs font-medium">
                       {aiProposal.contractType}
                     </span>
+                  </div>
+                </div>
+
+                <div className="bg-slate-900/90 p-3 rounded-xl border border-indigo-500/30 mt-2">
+                  <div className="flex items-center justify-between gap-3">
+                    <div>
+                      <span className="text-xs font-bold text-white block">目標売上設定（税抜・円）</span>
+                      <span className="text-[10px] text-slate-400">ビジネスモデルに応じた初期目標（必要に応じて変更可能）</span>
+                    </div>
+                    <div className="w-44">
+                      <input
+                        type="number"
+                        min="0"
+                        value={customTargetRevenue}
+                        onChange={(e) => setCustomTargetRevenue(e.target.value)}
+                        className="w-full bg-slate-950 border border-slate-700 rounded-lg px-2.5 py-1.5 text-xs text-white font-semibold text-right"
+                      />
+                    </div>
                   </div>
                 </div>
               </div>

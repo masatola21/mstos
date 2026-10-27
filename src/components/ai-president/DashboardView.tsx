@@ -17,6 +17,9 @@ import {
   PlusCircle,
   FileText,
   Settings,
+  Sparkles,
+  Square,
+  CheckSquare,
 } from 'lucide-react';
 import {
   Project,
@@ -28,6 +31,8 @@ import {
   TokenUsageRecord,
   ModelPricingRate,
 } from '../types';
+import { ManagedProduct, ManagedContract, ManagedInvoice, PRODUCT_ARCHETYPES } from '../../types/matrix';
+import { calculateProductKPIs } from '../../services/businessSummaryService';
 import { getMonthlyTokenSummary } from '../../utils/storage';
 
 interface DashboardViewProps {
@@ -39,9 +44,15 @@ interface DashboardViewProps {
   activityLogs: ActivityLog[];
   tokenUsageRecords: TokenUsageRecord[];
   pricingRates: ModelPricingRate[];
+  products?: ManagedProduct[];
+  contracts?: ManagedContract[];
+  invoices?: ManagedInvoice[];
   onOpenPricingSettings: () => void;
   onNavigateTab: (tab: 'chat' | 'projects' | 'tasks' | 'approvals') => void;
+  onNavigateToTab?: (tab: string) => void;
   onResolveApproval: (id: string, status: 'approved' | 'rejected') => void;
+  onUpdateTask?: (task: TaskItem) => void;
+  onStartGoalBreakdown?: (goal: string) => void;
 }
 
 export const DashboardView: React.FC<DashboardViewProps> = ({
@@ -53,9 +64,15 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
   activityLogs,
   tokenUsageRecords,
   pricingRates,
+  products = [],
+  contracts = [],
+  invoices = [],
   onOpenPricingSettings,
   onNavigateTab,
+  onNavigateToTab,
   onResolveApproval,
+  onUpdateTask,
+  onStartGoalBreakdown,
 }) => {
   const [isEditingGoal, setIsEditingGoal] = useState(false);
   const [goalInput, setGoalInput] = useState(topGoal);
@@ -66,6 +83,30 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
     }
     setIsEditingGoal(false);
   };
+
+  // Business & Revenue Metrics
+  let totalPaidRevenue = 0;
+  let totalPendingRevenue = 0;
+  invoices.forEach((inv) => {
+    const amount = Number(inv.amount) || 0;
+    const tax = inv.taxAmount !== undefined && inv.taxAmount !== null ? Number(inv.taxAmount) : Math.floor(amount * 0.1);
+    const total = amount + tax;
+    if (inv.status === 'paid') totalPaidRevenue += total;
+    else if (inv.status === 'issued' || inv.status === 'overdue') totalPendingRevenue += total;
+  });
+
+  const activeSignedClients = new Set<string>();
+  contracts.filter((c) => c.status === 'signed').forEach((c) => {
+    const key = (c.companyId || c.counterpartyName || c.id).trim();
+    if (key) activeSignedClients.add(key);
+  });
+
+  const activeProducts = products.filter((p) => p.status !== 'archived');
+  const productStatsList = activeProducts.map((p) => calculateProductKPIs(p, contracts, invoices));
+  const totalTargetRevenue = productStatsList.reduce((sum, s) => sum + s.targetRevenue, 0);
+  const overallAchievementRate = totalTargetRevenue > 0
+    ? Math.min(999, Math.round((totalPaidRevenue / totalTargetRevenue) * 100))
+    : 0;
 
   // Metrics
   const inProgressProjects = projects.filter((p) => p.status === 'in_progress');
@@ -152,9 +193,27 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
           </div>
 
           {!isEditingGoal ? (
-            <p className="text-sm font-semibold text-slate-100 leading-relaxed">
-              {topGoal || '最優先目標が未設定です。クリックして設定してください。'}
-            </p>
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pt-0.5">
+              <p className="text-sm font-semibold text-slate-100 leading-relaxed">
+                {topGoal || '最優先目標が未設定です。クリックして設定してください。'}
+              </p>
+              {topGoal && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (onStartGoalBreakdown) {
+                      onStartGoalBreakdown(topGoal);
+                    } else {
+                      onNavigateTab('chat');
+                    }
+                  }}
+                  className="px-3.5 py-1.5 rounded-xl bg-gradient-to-r from-indigo-500 to-purple-600 hover:from-indigo-600 hover:to-purple-700 text-white text-xs font-bold shadow-md shadow-indigo-500/20 transition-all flex items-center gap-1.5 shrink-0 cursor-pointer self-start sm:self-center"
+                >
+                  <Sparkles className="w-3.5 h-3.5 text-amber-300" />
+                  <span>🎯 AI社長にタスク分解を依頼</span>
+                </button>
+              )}
+            </div>
           ) : (
             <input
               type="text"
@@ -166,6 +225,242 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
             />
           )}
         </div>
+      </div>
+
+      {/* リアルタイム全社業績 & 商品別進捗コックピット（経営・AI社長統合） */}
+      <div className="p-6 rounded-3xl bg-slate-900 border border-slate-800 shadow-xl space-y-5">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-800 pb-4">
+          <div className="flex items-center gap-2">
+            <TrendingUp className="w-5 h-5 text-emerald-400" />
+            <h2 className="text-base font-bold text-white">全社業績・プロダクト進捗（実データ確定値）</h2>
+            <span className="text-[10px] px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 font-semibold border border-emerald-500/30">
+              契約書・請求書自動集計
+            </span>
+          </div>
+          {onNavigateToTab && (
+            <div className="flex items-center gap-2 text-xs flex-wrap">
+              <button
+                type="button"
+                onClick={() => onNavigateToTab('mst_dashboard')}
+                className="px-2.5 py-1 rounded-lg bg-slate-800 hover:bg-slate-750 text-slate-300 hover:text-white border border-slate-700 flex items-center gap-1 font-semibold cursor-pointer transition-colors"
+              >
+                <span>営業パイプライン一覧</span>
+                <ArrowRight className="w-3 h-3" />
+              </button>
+              <button
+                type="button"
+                onClick={() => onNavigateToTab('product_hub')}
+                className="px-2.5 py-1 rounded-lg bg-indigo-500/15 hover:bg-indigo-500/25 text-indigo-300 border border-indigo-500/30 flex items-center gap-1 font-semibold cursor-pointer transition-colors"
+              >
+                <span>AIプロダクト設計</span>
+                <ArrowRight className="w-3.5 h-3.5" />
+              </button>
+            </div>
+          )}
+        </div>
+
+        {/* 4大財務・事業KPI */}
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+          <div className="p-4 rounded-2xl bg-slate-950/80 border border-slate-800/80">
+            <span className="text-xs text-slate-400 block font-medium">確定売上（税込・入金済）</span>
+            <div className="text-xl sm:text-2xl font-black text-emerald-400 mt-1">
+              ¥{totalPaidRevenue.toLocaleString()}
+            </div>
+            <span className="text-[10px] text-slate-500 mt-1 block">入金完了済みの請求書合算</span>
+          </div>
+
+          <div className="p-4 rounded-2xl bg-slate-950/80 border border-slate-800/80">
+            <span className="text-xs text-slate-400 block font-medium">請求中・未収金（税込）</span>
+            <div className="text-xl sm:text-2xl font-black text-amber-400 mt-1">
+              ¥{totalPendingRevenue.toLocaleString()}
+            </div>
+            <span className="text-[10px] text-slate-500 mt-1 block">発行済・期日待ち請求合算</span>
+          </div>
+
+          <div className="p-4 rounded-2xl bg-slate-950/80 border border-slate-800/80">
+            <span className="text-xs text-slate-400 block font-medium">稼働クライアント数</span>
+            <div className="text-xl sm:text-2xl font-black text-cyan-400 mt-1">
+              {activeSignedClients.size} <span className="text-sm font-semibold text-slate-400">社</span>
+            </div>
+            <span className="text-[10px] text-slate-500 mt-1 block">有効契約締結済みの顧客企業</span>
+          </div>
+
+          <div className="p-4 rounded-2xl bg-slate-950/80 border border-slate-800/80">
+            <span className="text-xs text-slate-400 block font-medium">全社目標達成率</span>
+            <div className="text-xl sm:text-2xl font-black text-purple-400 mt-1">
+              {overallAchievementRate} <span className="text-sm font-semibold text-slate-400">%</span>
+            </div>
+            <span className="text-[10px] text-slate-500 mt-1 block">
+              目標計: ¥{totalTargetRevenue.toLocaleString()}
+            </span>
+          </div>
+        </div>
+
+        {/* 商品別進捗リスト */}
+        {productStatsList.length > 0 && (
+          <div className="space-y-2 pt-1">
+            <div className="text-xs font-bold text-slate-300 flex items-center justify-between">
+              <span>取扱プロダクト別の実績と進捗 ({productStatsList.length} 商品):</span>
+              <span className="text-[11px] text-slate-500 font-normal">確定売上 / 目標売上</span>
+            </div>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-2.5">
+              {productStatsList.map((stat) => (
+                <div key={stat.productId} className="p-3.5 rounded-xl bg-slate-950 border border-slate-800/80 space-y-2">
+                  <div className="flex items-center justify-between gap-2">
+                    <div className="flex items-center gap-1.5 min-w-0">
+                      <span className="text-xs font-bold text-white truncate">{stat.productName}</span>
+                      <span className="text-[10px] px-1.5 py-0.5 rounded bg-slate-800 text-slate-400 shrink-0">
+                        {PRODUCT_ARCHETYPES[stat.archetype as keyof typeof PRODUCT_ARCHETYPES]?.label || stat.archetype}
+                      </span>
+                    </div>
+                    <span className="text-xs font-bold text-emerald-400 shrink-0">
+                      ¥{stat.currentRevenue.toLocaleString()}
+                    </span>
+                  </div>
+                  <div className="space-y-1">
+                    <div className="w-full bg-slate-800 h-1.5 rounded-full overflow-hidden">
+                      <div
+                        className="bg-gradient-to-r from-emerald-500 to-indigo-500 h-full rounded-full transition-all duration-500"
+                        style={{ width: `${Math.min(100, stat.achievementRate)}%` }}
+                      />
+                    </div>
+                    <div className="flex items-center justify-between text-[10px] text-slate-400">
+                      <span>契約: <strong className="text-slate-200">{stat.activeClients}社</strong></span>
+                      <span>
+                        目標: ¥{stat.targetRevenue.toLocaleString()} (
+                        <span className={stat.achievementRate >= 100 ? 'text-emerald-400 font-bold' : 'text-indigo-300'}>
+                          {stat.achievementRate}%
+                        </span>)
+                      </span>
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+      </div>
+
+      {/* 今日やること・優先ToDo（アドネスAI Action OS） */}
+      <div className="p-5 sm:p-6 rounded-3xl bg-slate-900 border border-slate-800 shadow-xl space-y-4">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-slate-800 pb-3">
+          <div className="flex items-center gap-2">
+            <CheckCircle2 className="w-5 h-5 text-indigo-400" />
+            <h2 className="text-base font-bold text-white">今日やること・優先ToDo（AI Action OS）</h2>
+            <span className="text-[10px] px-2 py-0.5 rounded-full bg-indigo-500/20 text-indigo-300 font-semibold border border-indigo-500/30">
+              直近・重要アクション
+            </span>
+          </div>
+          <button
+            type="button"
+            onClick={() => onNavigateTab('tasks')}
+            className="text-xs text-indigo-400 hover:text-indigo-300 flex items-center gap-1 font-semibold cursor-pointer self-start sm:self-center"
+          >
+            <span>全タスク・ToDo一覧を見る ({tasks.filter((t) => t.status !== 'completed').length}件)</span>
+            <ArrowRight className="w-3.5 h-3.5" />
+          </button>
+        </div>
+
+        {(() => {
+          const todayStr = new Date().toISOString().slice(0, 10);
+          const priorityTasks = tasks
+            .filter((t) => t.status !== 'completed')
+            .sort((a, b) => {
+              const aDue = a.dueDate || '9999-99-99';
+              const bDue = b.dueDate || '9999-99-99';
+              if (aDue <= todayStr && bDue > todayStr) return -1;
+              if (bDue <= todayStr && aDue > todayStr) return 1;
+              const priorityOrder = { high: 0, medium: 1, low: 2 };
+              const aP = priorityOrder[a.priority] ?? 1;
+              const bP = priorityOrder[b.priority] ?? 1;
+              if (aP !== bP) return aP - bP;
+              return aDue.localeCompare(bDue);
+            })
+            .slice(0, 6);
+
+          if (priorityTasks.length === 0) {
+            return (
+              <div className="p-6 rounded-2xl bg-slate-950/60 border border-slate-800 text-center space-y-2">
+                <CheckCircle2 className="w-6 h-6 text-emerald-400 mx-auto" />
+                <p className="text-xs text-slate-300 font-semibold">現在、急ぎの未完了ToDoはありません！</p>
+                <p className="text-[11px] text-slate-500">
+                  AI社長に新しい目標のタスク分解を依頼するか、新規タスクを作成してください。
+                </p>
+              </div>
+            );
+          }
+
+          return (
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-2.5">
+              {priorityTasks.map((t) => {
+                const isOverdue = t.dueDate && t.dueDate < todayStr;
+                const isToday = t.dueDate && t.dueDate === todayStr;
+                const proj = projects.find((p) => p.id === t.projectId);
+
+                return (
+                  <div
+                    key={t.id}
+                    onClick={() => onNavigateTab('tasks')}
+                    className="p-3.5 rounded-2xl bg-slate-950 border border-slate-800 hover:border-slate-700 transition-all cursor-pointer flex items-start justify-between gap-3 group shadow-sm"
+                  >
+                    <div className="flex items-start gap-2.5 min-w-0">
+                      <button
+                        type="button"
+                        title="完了にする"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          if (onUpdateTask) {
+                            onUpdateTask({
+                              ...t,
+                              status: 'completed',
+                              completedAt: Date.now(),
+                              updatedAt: Date.now(),
+                            });
+                          }
+                        }}
+                        className="mt-0.5 text-slate-500 hover:text-emerald-400 transition-colors shrink-0 cursor-pointer"
+                      >
+                        <Square className="w-4 h-4" />
+                      </button>
+                      <div className="min-w-0 space-y-1">
+                        <div className="text-xs font-bold text-white group-hover:text-indigo-300 transition-colors truncate">
+                          {t.title}
+                        </div>
+                        {proj && (
+                          <div className="text-[10px] text-indigo-400 truncate">
+                            📁 {proj.name}
+                          </div>
+                        )}
+                        {t.completionCriteria && (
+                          <div className="text-[10px] text-slate-400 line-clamp-1">
+                            完了条件: {t.completionCriteria}
+                          </div>
+                        )}
+                      </div>
+                    </div>
+
+                    <div className="flex flex-col items-end gap-1 shrink-0 text-right">
+                      <span
+                        className={`text-[10px] px-2 py-0.5 rounded-full font-semibold ${
+                          isOverdue
+                            ? 'bg-rose-500/20 text-rose-300 border border-rose-500/30'
+                            : isToday
+                            ? 'bg-amber-500/20 text-amber-300 border border-amber-500/30'
+                            : 'bg-slate-800 text-slate-400'
+                        }`}
+                      >
+                        {isOverdue ? '期限超過' : isToday ? '本日締切' : t.dueDate ? `期日: ${t.dueDate}` : '期限未定'}
+                      </span>
+                      <span className="text-[10px] text-slate-500">
+                        担当: <strong className="text-slate-300 font-medium">{t.assignee?.name || '未定'}</strong>
+                      </span>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          );
+        })()}
       </div>
 
       {/* Task & KPI Metrics Grid */}
