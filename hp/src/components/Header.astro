@@ -1,0 +1,124 @@
+---
+interface Props {
+  currentPath?: string;
+}
+
+const { currentPath = '/' } = Astro.props;
+
+const navLinks = [
+  { name: 'ホーム', href: '/' },
+  { name: 'サービス一覧', href: '/services' },
+  { name: '介護保険外開業支援', href: '/care-package' },
+  { name: '無料経営診断', href: '/diagnosis' },
+  { name: '資料請求', href: '/materials' },
+  { name: '会社概要', href: '/company' },
+];
+---
+
+<header class="sticky top-0 z-50 bg-white/95 backdrop-blur-md border-b border-sand-200 transition-all duration-200 shadow-sm">
+  <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+    <div class="flex items-center justify-between h-20">
+      <!-- ロゴ -->
+      <a href="/" class="flex items-center gap-3 group">
+        <div class="w-10 h-10 rounded-lg bg-forest-900 flex items-center justify-center text-gold-400 font-serif font-bold text-xl shadow-inner group-hover:bg-forest-800 transition-colors">
+          M
+        </div>
+        <div>
+          <span class="block text-xl font-bold tracking-tight text-forest-900 font-serif">有限会社MST</span>
+          <span class="block text-[10px] text-gray-500 tracking-wider uppercase font-medium">Management & System Transformation</span>
+        </div>
+      </a>
+
+      <!-- デスクトップ ナビゲーション -->
+      <nav class="hidden lg:flex items-center gap-6">
+        {navLinks.map((link) => {
+          const isActive = currentPath === link.href || (link.href !== '/' && currentPath.startsWith(link.href));
+          return (
+            <a
+              href={link.href}
+              class={`text-sm font-semibold transition-colors py-1 ${
+                isActive 
+                  ? 'text-forest-700 border-b-2 border-gold-500' 
+                  : 'text-gray-600 hover:text-forest-900'
+              }`}
+            >
+              {link.name}
+            </a>
+          );
+        })}
+      </nav>
+
+      <!-- CTAボタン群 -->
+      <div class="hidden sm:flex items-center gap-3">
+        <a
+          href="https://lin.ee/4Vl9v91" 
+          target="_blank" 
+          rel="noopener noreferrer"
+          class="inline-flex items-center gap-1.5 px-3.5 py-2 text-xs font-bold text-[#06C755] bg-[#06C755]/10 border border-[#06C755]/20 rounded-lg hover:bg-[#06C755] hover:text-white transition-all duration-200"
+        >
+          <svg class="w-4 h-4 fill-current" viewBox="0 0 24 24">
+            <path d="M19.365 9.863c.349.001.62.288.621.637v.018c-.001.35-.272.637-.621.637h-3.414v2.778h3.414c.349 0 .62.287.621.637 0 .349-.272.637-.621.637h-4.051a.636.636 0 01-.637-.637V7.094c0-.349.288-.636.637-.636h4.051c.349 0 .62.287.621.636 0 .35-.272.637-.621.637h-3.414v2.132h3.414zm-5.748-2.769a.638.638 0 01.637.636v7.351a.638.638 0 01-.637.637.637.637 0 01-.637-.637V7.73a.637.637 0 01.637-.636zm-3.136 0a.638.638 0 01.637.636v4.636l3.526-4.996a.638.638 0 01.895-.145.637.637 0 01.144.896l-4.148 5.875a.637.637 0 01-.522.271.637.637 0 01-.532-.284V7.73a.637.637 0 01.637-.636h-.637zm-6.19 0a.637.637 0 01.637.636v5.876h3.414c.349 0 .62.287.621.637 0 .349-.272.636-.621.636H4.291a.638.638 0 01-.637-.636V7.73a.637.637 0 01.637-.636h.637zM12 2C6.477 2 2 5.918 2 10.751c0 3.332 2.131 6.223 5.309 7.643-.233.784-.848 2.855-.972 3.29-.153.535.195.526.411.383.17-.113 2.709-1.841 3.806-2.587.47.07 1.05.108 1.646.108 5.523 0 10-3.918 10-8.751C22 5.918 17.523 2 12 2z"/>
+          </svg>
+          LINE無料相談
+        </a>
+
+        <a
+          href="/contact"
+          class="inline-flex items-center justify-center px-4 py-2 text-xs font-bold text-white bg-forest-900 rounded-lg hover:bg-forest-800 transition-colors shadow-sm"
+        >
+          お問い合わせ
+        </a>
+      </div>
+
+      <!-- モバイルメニューボタン -->
+      <button
+        id="mobile-menu-button"
+        type="button"
+        class="lg:hidden p-2 rounded-md text-gray-700 hover:text-forest-900 hover:bg-sand-100"
+        aria-label="メニューを開く"
+      >
+        <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16" />
+        </svg>
+      </button>
+    </div>
+  </div>
+
+  <!-- モバイルナビゲーションパネル -->
+  <div id="mobile-menu" class="hidden lg:hidden border-t border-sand-200 bg-white px-4 pt-3 pb-6 space-y-2">
+    {navLinks.map((link) => (
+      <a
+        href={link.href}
+        class="block px-3 py-2.5 rounded-md text-base font-medium text-gray-700 hover:text-forest-900 hover:bg-sand-100"
+      >
+        {link.name}
+      </a>
+    ))}
+    <div class="pt-4 flex flex-col gap-2 border-t border-sand-100">
+      <a
+        href="https://lin.ee/4Vl9v91"
+        target="_blank"
+        rel="noopener noreferrer"
+        class="flex items-center justify-center gap-2 py-3 text-sm font-bold text-white bg-[#06C755] rounded-lg"
+      >
+        LINEで無料相談する
+      </a>
+      <a
+        href="/contact"
+        class="flex items-center justify-center py-3 text-sm font-bold text-white bg-forest-900 rounded-lg"
+      >
+        フォームでお問い合わせ
+      </a>
+    </div>
+  </div>
+</header>
+
+<script>
+  const btn = document.getElementById('mobile-menu-button');
+  const menu = document.getElementById('mobile-menu');
+  if (btn && menu) {
+    btn.addEventListener('click', () => {
+      menu.classList.toggle('hidden');
+    });
+  }
+</script>

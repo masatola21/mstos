@@ -1,0 +1,79 @@
+---
+import Header from '../components/Header.astro';
+import Footer from '../components/Footer.astro';
+import '../styles/global.css';
+
+interface Props {
+  title?: string;
+  description?: string;
+  ogType?: string;
+}
+
+const {
+  title = '有限会社MST | 経営の仕組み化で、利益が残る会社へ。',
+  description = '中小企業・小規模事業者の成長と改善を、経営戦略とシステム実装の両面から支援する「経営の右腕」パートナー。利益改善顧問、業務自動化、AI経営OS導入、介護保険外サービス開業支援まで。',
+  ogType = 'website',
+} = Astro.props;
+
+const canonicalURL = new URL(Astro.url.pathname, Astro.site || 'https://mstcorp.info');
+---
+
+<!doctype html>
+<html lang="ja">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <meta name="generator" content={Astro.generator} />
+
+    <!-- SEO Meta Tags -->
+    <title>{title}</title>
+    <meta name="description" content={description} />
+    <link rel="canonical" href={canonicalURL} />
+
+    <!-- OGP -->
+    <meta property="og:title" content={title} />
+    <meta property="og:description" content={description} />
+    <meta property="og:type" content={ogType} />
+    <meta property="og:url" content={canonicalURL} />
+    <meta property="og:site_name" content="有限会社MST" />
+    <meta property="og:locale" content="ja_JP" />
+
+    <!-- Twitter Card -->
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content={title} />
+    <meta name="twitter:description" content={description} />
+
+    <!-- JSON-LD 構造化データ -->
+    <script type="application/ld+json" set:html={JSON.stringify({
+      "@context": "https://schema.org",
+      "@type": "Corporation",
+      "name": "有限会社MST",
+      "alternateName": "MST Co., Ltd.",
+      "url": "https://mstcorp.info",
+      "logo": "https://mstcorp.info/logo.png",
+      "address": {
+        "@type": "PostalAddress",
+        "streetAddress": "桧町127番地",
+        "addressLocality": "大垣市",
+        "addressRegion": "岐阜県",
+        "postalCode": "503-0981",
+        "addressCountry": "JP"
+      },
+      "telephone": "+81-584-71-7009",
+      "founder": {
+        "@type": "Person",
+        "name": "大橋 真人"
+      },
+      "foundingDate": "2005-06-16",
+      "description": "中小企業の経営仕組み化・利益改善・業務DX・システム実装パートナー"
+    })} />
+  </head>
+  <body class="min-h-screen flex flex-col font-sans bg-sand-50 text-gray-900 antialiased selection:bg-gold-500 selection:text-white">
+    <Header currentPath={Astro.url.pathname} />
+    <main class="flex-grow">
+      <slot />
+    </main>
+    <Footer />
+  </body>
+</html>
