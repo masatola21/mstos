@@ -148,16 +148,16 @@ export default function DiagnosisForm() {
   return (
     <div className="max-w-3xl mx-auto bg-white rounded-2xl border border-sand-300 shadow-xl overflow-hidden">
       {/* 上部ヘッダー進捗バー */}
-      <div className="bg-forest-900 text-white p-6 sm:p-8">
-        <div className="flex items-center justify-between text-xs font-semibold text-gold-400 mb-2">
+      <div className="bg-brand-950 text-white p-6 sm:p-8">
+        <div className="flex items-center justify-between text-xs font-semibold text-brand-300 mb-2">
           <span>MST 経営ボトルネック無料診断</span>
           <span>
             {showResult ? '診断完了' : `質問 ${currentStep + 1} / ${QUESTIONS.length}`}
           </span>
         </div>
-        <div className="w-full bg-forest-950 rounded-full h-2">
+        <div className="w-full bg-brand-900 rounded-full h-2">
           <div
-            className="bg-gold-500 h-2 rounded-full transition-all duration-300"
+            className="bg-brand-500 h-2 rounded-full transition-all duration-300"
             style={{
               width: showResult
                 ? '100%'
@@ -171,10 +171,10 @@ export default function DiagnosisForm() {
         {!showResult ? (
           <div>
             <div className="mb-6">
-              <span className="text-xs font-bold text-forest-700 bg-forest-50 px-3 py-1 rounded-full border border-forest-200">
+              <span className="text-xs font-bold text-brand-700 bg-brand-50 px-3 py-1 rounded-full border border-brand-200">
                 {QUESTIONS[currentStep].category}
               </span>
-              <h3 className="text-xl sm:text-2xl font-bold font-serif text-forest-900 mt-3 leading-snug">
+              <h3 className="text-xl sm:text-2xl font-bold font-serif text-slate-900 mt-3 leading-snug">
                 {QUESTIONS[currentStep].title}
               </h3>
               <p className="text-sm text-gray-500 mt-2">
@@ -187,12 +187,12 @@ export default function DiagnosisForm() {
                 <button
                   key={idx}
                   onClick={() => handleSelectOption(opt.score)}
-                  className="w-full text-left p-4 sm:p-5 rounded-xl border border-sand-300 hover:border-gold-500 hover:bg-gold-50/30 transition-all duration-150 group flex items-start justify-between gap-4"
+                  className="w-full text-left p-4 sm:p-5 rounded-xl border border-sand-300 hover:border-brand-500 hover:bg-brand-50/40 transition-all duration-150 group flex items-start justify-between gap-4"
                 >
-                  <span className="text-sm sm:text-base font-medium text-gray-800 group-hover:text-forest-900">
+                  <span className="text-sm sm:text-base font-medium text-gray-800 group-hover:text-brand-900">
                     {opt.label}
                   </span>
-                  <span className="w-6 h-6 rounded-full border border-sand-400 group-hover:border-gold-600 group-hover:bg-gold-500 flex items-center justify-center shrink-0 mt-0.5">
+                  <span className="w-6 h-6 rounded-full border border-sand-400 group-hover:border-brand-600 group-hover:bg-brand-500 flex items-center justify-center shrink-0 mt-0.5">
                     <svg
                       className="w-3.5 h-3.5 text-white opacity-0 group-hover:opacity-100 transition-opacity"
                       fill="none"
@@ -213,7 +213,7 @@ export default function DiagnosisForm() {
                     setCurrentStep(currentStep - 1);
                     setAnswers(answers.slice(0, -1));
                   }}
-                  className="text-xs font-semibold text-gray-500 hover:text-forest-900 flex items-center gap-1"
+                  className="text-xs font-semibold text-gray-500 hover:text-brand-900 flex items-center gap-1"
                 >
                   <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
@@ -227,13 +227,13 @@ export default function DiagnosisForm() {
           <div className="space-y-8">
             {/* 結果サマリー */}
             <div className="text-center pb-6 border-b border-sand-200">
-              <span className="inline-block px-4 py-1.5 rounded-full text-xs font-bold bg-gold-100 text-gold-800 mb-3">
+              <span className="inline-block px-4 py-1.5 rounded-full text-xs font-bold bg-brand-100 text-brand-900 mb-3">
                 仕組み化スコア: {scorePercentage}点 / 100点
               </span>
-              <h3 className="text-2xl sm:text-3xl font-bold font-serif text-forest-900">
+              <h3 className="text-2xl sm:text-3xl font-bold font-serif text-slate-900">
                 判定：ランク【{diagnosisGrade}】
               </h3>
-              <p className="text-lg font-semibold text-gold-700 mt-1">
+              <p className="text-lg font-semibold text-brand-700 mt-1">
                 {diagnosisTitle}
               </p>
               <p className="text-sm text-gray-600 mt-4 leading-relaxed max-w-xl mx-auto text-left sm:text-center">
@@ -243,7 +243,7 @@ export default function DiagnosisForm() {
 
             {/* 各カテゴリの分析 */}
             <div>
-              <h4 className="text-sm font-bold text-forest-900 uppercase tracking-wider mb-3">
+              <h4 className="text-sm font-bold text-slate-900 uppercase tracking-wider mb-3">
                 カテゴリ別チェック結果
               </h4>
               <div className="space-y-3">
@@ -253,11 +253,11 @@ export default function DiagnosisForm() {
                   return (
                     <div key={q.id} className="p-4 bg-sand-50 rounded-xl border border-sand-200">
                       <div className="flex items-center justify-between text-xs font-bold mb-1">
-                        <span className="text-forest-900">{q.category}</span>
+                        <span className="text-slate-900">{q.category}</span>
                         <span
                           className={`px-2 py-0.5 rounded ${
                             score >= 3
-                              ? 'bg-green-100 text-green-800'
+                              ? 'bg-blue-100 text-blue-800'
                               : 'bg-amber-100 text-amber-800'
                           }`}
                         >
@@ -273,9 +273,9 @@ export default function DiagnosisForm() {
 
             {/* 詳細カルテの送付 / 個別相談申し込み */}
             {!leadSubmitted ? (
-              <form onSubmit={handleLeadSubmit} className="bg-forest-50 p-6 sm:p-8 rounded-2xl border border-forest-100 space-y-4">
+              <form onSubmit={handleLeadSubmit} className="bg-brand-50/50 p-6 sm:p-8 rounded-2xl border border-brand-100 space-y-4">
                 <div className="text-center">
-                  <h4 className="text-lg font-bold font-serif text-forest-900">
+                  <h4 className="text-lg font-bold font-serif text-slate-900">
                     詳細な「改善優先度カルテ」をメールでお受け取りいただけます
                   </h4>
                   <p className="text-xs text-gray-600 mt-1">
@@ -290,7 +290,7 @@ export default function DiagnosisForm() {
                     placeholder="貴社名"
                     value={lead.company}
                     onChange={(e) => setLead({ ...lead, company: e.target.value })}
-                    className="px-3.5 py-2.5 text-sm bg-white border border-sand-300 rounded-lg outline-none focus:ring-2 focus:ring-forest-500"
+                    className="px-3.5 py-2.5 text-sm bg-white border border-sand-300 rounded-lg outline-none focus:ring-2 focus:ring-brand-500"
                   />
                   <input
                     type="text"
@@ -298,7 +298,7 @@ export default function DiagnosisForm() {
                     placeholder="お名前"
                     value={lead.name}
                     onChange={(e) => setLead({ ...lead, name: e.target.value })}
-                    className="px-3.5 py-2.5 text-sm bg-white border border-sand-300 rounded-lg outline-none focus:ring-2 focus:ring-forest-500"
+                    className="px-3.5 py-2.5 text-sm bg-white border border-sand-300 rounded-lg outline-none focus:ring-2 focus:ring-brand-500"
                   />
                   <input
                     type="email"
@@ -306,7 +306,7 @@ export default function DiagnosisForm() {
                     placeholder="メールアドレス"
                     value={lead.email}
                     onChange={(e) => setLead({ ...lead, email: e.target.value })}
-                    className="px-3.5 py-2.5 text-sm bg-white border border-sand-300 rounded-lg outline-none focus:ring-2 focus:ring-forest-500"
+                    className="px-3.5 py-2.5 text-sm bg-white border border-sand-300 rounded-lg outline-none focus:ring-2 focus:ring-brand-500"
                   />
                   <input
                     type="tel"
@@ -314,24 +314,24 @@ export default function DiagnosisForm() {
                     placeholder="お電話番号"
                     value={lead.phone}
                     onChange={(e) => setLead({ ...lead, phone: e.target.value })}
-                    className="px-3.5 py-2.5 text-sm bg-white border border-sand-300 rounded-lg outline-none focus:ring-2 focus:ring-forest-500"
+                    className="px-3.5 py-2.5 text-sm bg-white border border-sand-300 rounded-lg outline-none focus:ring-2 focus:ring-brand-500"
                   />
                 </div>
 
                 <button
                   type="submit"
                   disabled={submitting}
-                  className="w-full py-3.5 bg-forest-900 hover:bg-forest-800 text-gold-300 font-bold rounded-xl text-sm transition shadow flex items-center justify-center gap-2"
+                  className="w-full py-3.5 bg-brand-900 hover:bg-brand-800 text-white font-bold rounded-xl text-sm transition shadow flex items-center justify-center gap-2"
                 >
                   {submitting ? '送信中...' : '診断カルテを受け取る ＆ 初回相談を希望する'}
                 </button>
               </form>
             ) : (
-              <div className="p-6 bg-forest-100 rounded-2xl text-center space-y-3 border border-forest-200">
-                <div className="w-10 h-10 bg-forest-700 text-white rounded-full flex items-center justify-center mx-auto">
+              <div className="p-6 bg-brand-50 rounded-2xl text-center space-y-3 border border-brand-200">
+                <div className="w-10 h-10 bg-brand-700 text-white rounded-full flex items-center justify-center mx-auto">
                   ✓
                 </div>
-                <h4 className="text-base font-bold text-forest-900">
+                <h4 className="text-base font-bold text-slate-900">
                   診断カルテの送付申し込みを完了しました
                 </h4>
                 <p className="text-xs text-gray-600">

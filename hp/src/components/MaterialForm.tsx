@@ -49,12 +49,12 @@ export default function MaterialForm() {
   if (downloadReady) {
     return (
       <div className="bg-white p-8 sm:p-12 rounded-2xl border border-sand-300 shadow-xl text-center space-y-6">
-        <div className="w-16 h-16 bg-forest-100 text-forest-700 rounded-full flex items-center justify-center mx-auto">
+        <div className="w-16 h-16 bg-brand-100 text-brand-700 rounded-full flex items-center justify-center mx-auto">
           <svg className="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
           </svg>
         </div>
-        <h3 className="text-2xl font-bold font-serif text-forest-900">資料請求を受け付けました</h3>
+        <h3 className="text-2xl font-bold font-serif text-slate-900">資料請求を受け付けました</h3>
         <p className="text-sm text-gray-600 leading-relaxed max-w-md mx-auto">
           ご入力いただいたメールアドレス（{formData.email}）宛てに、資料ダウンロードURLを送付いたしました。以下のボタンからも直接資料をご覧いただけます。
         </p>
@@ -64,7 +64,7 @@ export default function MaterialForm() {
             href="/materials/mst-management-guide.pdf"
             target="_blank"
             rel="noopener noreferrer"
-            className="px-6 py-3 bg-forest-900 hover:bg-forest-800 text-gold-300 font-bold rounded-xl text-sm transition shadow-md flex items-center justify-center gap-2"
+            className="px-6 py-3 bg-brand-900 hover:bg-brand-800 text-white font-bold rounded-xl text-sm transition shadow-md flex items-center justify-center gap-2"
           >
             <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
@@ -73,7 +73,7 @@ export default function MaterialForm() {
           </a>
           <a
             href="/diagnosis"
-            className="px-6 py-3 bg-sand-100 hover:bg-sand-200 text-forest-900 font-bold rounded-xl text-sm transition flex items-center justify-center gap-2 border border-sand-300"
+            className="px-6 py-3 bg-sand-100 hover:bg-sand-200 text-slate-900 font-bold rounded-xl text-sm transition flex items-center justify-center gap-2 border border-sand-300"
           >
             自社のボトルネック無料診断に進む
           </a>
@@ -85,10 +85,10 @@ export default function MaterialForm() {
   return (
     <form onSubmit={handleSubmit} className="bg-white p-6 sm:p-10 rounded-2xl border border-sand-300 shadow-lg space-y-6">
       <div className="border-b border-sand-200 pb-4">
-        <span className="text-xs font-bold text-gold-600 bg-gold-50 px-3 py-1 rounded-full uppercase tracking-wider">
+        <span className="text-xs font-bold text-brand-700 bg-brand-50 px-3 py-1 rounded-full uppercase tracking-wider border border-brand-200">
           無料ダウンロード
         </span>
-        <h3 className="text-xl font-bold font-serif text-forest-900 mt-2">
+        <h3 className="text-xl font-bold font-serif text-slate-900 mt-2">
           経営の仕組み化 × 利益改善 実務ガイド（全13スライド要点解説）
         </h3>
         <p className="text-xs text-gray-500 mt-1">
@@ -113,7 +113,7 @@ export default function MaterialForm() {
             value={formData.company_name}
             onChange={(e) => setFormData({ ...formData, company_name: e.target.value })}
             placeholder="例：株式会社〇〇"
-            className="w-full px-4 py-3 border border-sand-300 rounded-lg focus:ring-2 focus:ring-forest-500 outline-none text-sm"
+            className="w-full px-4 py-3 border border-sand-300 rounded-lg focus:ring-2 focus:ring-brand-500 outline-none text-sm"
           />
         </div>
 
@@ -127,7 +127,7 @@ export default function MaterialForm() {
             value={formData.name}
             onChange={(e) => setFormData({ ...formData, name: e.target.value })}
             placeholder="例：山田 太郎"
-            className="w-full px-4 py-3 border border-sand-300 rounded-lg focus:ring-2 focus:ring-forest-500 outline-none text-sm"
+            className="w-full px-4 py-3 border border-sand-300 rounded-lg focus:ring-2 focus:ring-brand-500 outline-none text-sm"
           />
         </div>
       </div>
@@ -143,7 +143,7 @@ export default function MaterialForm() {
             value={formData.email}
             onChange={(e) => setFormData({ ...formData, email: e.target.value })}
             placeholder="例：yamada@example.co.jp"
-            className="w-full px-4 py-3 border border-sand-300 rounded-lg focus:ring-2 focus:ring-forest-500 outline-none text-sm"
+            className="w-full px-4 py-3 border border-sand-300 rounded-lg focus:ring-2 focus:ring-brand-500 outline-none text-sm"
           />
         </div>
 
@@ -157,7 +157,7 @@ export default function MaterialForm() {
             value={formData.phone}
             onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
             placeholder="例：090-1234-5678"
-            className="w-full px-4 py-3 border border-sand-300 rounded-lg focus:ring-2 focus:ring-forest-500 outline-none text-sm"
+            className="w-full px-4 py-3 border border-sand-300 rounded-lg focus:ring-2 focus:ring-brand-500 outline-none text-sm"
           />
         </div>
       </div>
@@ -170,7 +170,7 @@ export default function MaterialForm() {
           <select
             value={formData.industry}
             onChange={(e) => setFormData({ ...formData, industry: e.target.value })}
-            className="w-full px-4 py-3 border border-sand-300 rounded-lg focus:ring-2 focus:ring-forest-500 outline-none text-sm bg-white"
+            className="w-full px-4 py-3 border border-sand-300 rounded-lg focus:ring-2 focus:ring-brand-500 outline-none text-sm bg-white"
           >
             <option value="">選択してください</option>
             <option value="介護・福祉・医療">介護・福祉・医療</option>
@@ -189,7 +189,7 @@ export default function MaterialForm() {
           <select
             value={formData.role}
             onChange={(e) => setFormData({ ...formData, role: e.target.value })}
-            className="w-full px-4 py-3 border border-sand-300 rounded-lg focus:ring-2 focus:ring-forest-500 outline-none text-sm bg-white"
+            className="w-full px-4 py-3 border border-sand-300 rounded-lg focus:ring-2 focus:ring-brand-500 outline-none text-sm bg-white"
           >
             <option value="代表取締役 / 役員">代表取締役 / 役員</option>
             <option value="事業責任者 / 部長">事業責任者 / 部長</option>
@@ -207,13 +207,13 @@ export default function MaterialForm() {
       <button
         type="submit"
         disabled={loading}
-        className="w-full py-4 px-6 bg-forest-900 hover:bg-forest-800 text-gold-300 font-bold rounded-xl transition duration-200 shadow-md flex items-center justify-center gap-2 disabled:opacity-50"
+        className="w-full py-4 px-6 bg-brand-900 hover:bg-brand-800 text-white font-bold rounded-xl transition duration-200 shadow-md flex items-center justify-center gap-2 disabled:opacity-50"
       >
         {loading ? (
           <span>準備中...</span>
         ) : (
           <>
-            <svg className="w-5 h-5 text-gold-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <svg className="w-5 h-5 text-brand-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
             </svg>
             <span>資料を無料でダウンロードする</span>

@@ -45,7 +45,7 @@ const steps = [
   {
     num: '01',
     title: '無料相談・現状ヒアリング',
-    desc: 'まずはLINE、フォーム、お電話からご連絡ください。現在の経営状況やお困りごとをお聞きします（初回無料）。',
+    desc: 'まずはLINE、フォームからご連絡ください。現在の経営状況やお困りごとをお聞きします（初回無料）。',
   },
   {
     num: '02',
@@ -139,7 +139,7 @@ const steps = [
     </div>
   </section>
 
-  <!-- ② 経営者が抱える課題（設計書指定の6課題） -->
+  <!-- ② 経営者が抱える課題 -->
   <section class="py-20 sm:py-28 bg-white border-b border-sand-200">
     <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
       <div class="text-center max-w-3xl mx-auto space-y-3 mb-16">
@@ -206,7 +206,7 @@ const steps = [
     </div>
   </section>
 
-  <!-- ③ MSTの支援方針（課題整理→改善戦略→仕組み構築→運用・継続改善） -->
+  <!-- ③ MSTの支援方針 -->
   <section class="py-20 sm:py-28 bg-sand-100">
     <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
       <div class="text-center max-w-3xl mx-auto space-y-3 mb-16">
@@ -257,7 +257,7 @@ const steps = [
     </div>
   </section>
 
-  <!-- ④ サービス紹介（設計書指定の6サービス） -->
+  <!-- ④ サービス紹介 -->
   <section class="py-20 sm:py-28 bg-white border-b border-sand-200">
     <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
       <div class="text-center max-w-3xl mx-auto space-y-3 mb-16">
@@ -301,7 +301,7 @@ const steps = [
     </div>
   </section>
 
-  <!-- ⑤ 支援の進め方（相談→整理→提案→契約→実行運用） -->
+  <!-- ⑤ 支援の進め方 -->
   <section class="py-20 sm:py-28 bg-sand-100">
     <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
       <div class="text-center max-w-3xl mx-auto space-y-3 mb-16">
@@ -412,7 +412,7 @@ const steps = [
 
         <div class="bg-white p-8 rounded-2xl border border-sand-300 shadow-sm flex flex-col justify-between">
           <div class="space-y-3">
-            <span class="text-xs font-bold text-green-700 bg-green-50 px-2.5 py-1 rounded">即時ダウンロード</span>
+            <span class="text-xs font-bold text-brand-700 bg-brand-50 px-2.5 py-1 rounded border border-brand-200">即時ダウンロード</span>
             <h3 class="text-xl font-bold font-serif text-slate-900">経営改善実務ガイド・資料請求</h3>
             <p class="text-xs text-gray-600 leading-relaxed">
               中小企業が利益を残すための仕組み化プロセス、業務自動化事例、支援体系をまとめた全13スライドの解説PDFをダウンロード。
@@ -431,30 +431,43 @@ const steps = [
     </div>
   </section>
 
-  <!-- ⑧ 会社情報・問い合わせ導線 ＆ 大橋代表プロフィール -->
+  <!-- ⑧ 会社情報・問い合わせ導線 ＆ 大橋代表紹介（重複を解消し要約・誘導に整理） -->
   <section class="py-20 sm:py-28 bg-white border-t border-sand-200">
     <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-      <div class="grid grid-cols-1 lg:grid-cols-12 gap-12 items-start">
-        <!-- 代表情報 -->
-        <div class="lg:col-span-5 bg-sand-50 p-8 rounded-3xl border border-sand-300 space-y-6">
+      <div class="grid grid-cols-1 lg:grid-cols-12 gap-12 items-center">
+        
+        <!-- 代表者紹介カード（写真＋プロフィール要約＋会社概要リンク） -->
+        <div class="lg:col-span-5 bg-sand-50 p-6 sm:p-8 rounded-3xl border border-sand-300 space-y-6">
           <div class="flex items-center gap-4">
-            <div class="w-20 h-20 rounded-2xl bg-brand-900 text-white font-serif font-bold text-3xl flex items-center justify-center shadow-md">
-              大橋
-            </div>
+            <img
+              src="/images/representative.webp"
+              alt="有限会社MST 代表取締役 大橋真人"
+              class="w-20 h-20 sm:w-24 sm:h-24 rounded-2xl object-cover shadow border-2 border-white shrink-0"
+            />
             <div>
               <span class="text-xs text-gray-500 font-medium">有限会社MST 代表取締役</span>
               <h3 class="text-2xl font-bold font-serif text-slate-900">大橋 真人</h3>
-              <p class="text-xs text-brand-700 mt-1">Masato Ohashi</p>
+              <p class="text-xs text-brand-700 mt-0.5">Masato Ohashi</p>
             </div>
           </div>
 
-          <div class="text-xs sm:text-sm text-gray-700 space-y-4 leading-relaxed border-t border-sand-200 pt-6 font-light">
+          <div class="text-xs text-gray-700 space-y-2 leading-relaxed border-t border-sand-200 pt-4 font-light">
             <p>
-              25歳でWeb事業で起業後、ビジネススクール講師・運営、自動車事業、有限会社の株式取得（M&A）、実店舗サロン経営、介護保険外生活支援サービス「アシスタ大垣」の直営創業と、幾多の現場を泥臭く経験してきました。
+              25歳でWeb事業を起業後、スクール運営、自動車流通、M&A承継、実店舗サロン運営、介護保険外生活支援サービス「アシスタ大垣」の直営創業と、泥臭い事業の立ち上げと改善を自ら実践。
             </p>
             <p>
-              公庫・地銀融資や補助金調達の実践から、デザイン・LP制作・GAS・Webアプリ・AI経営OSの開発まで、すべて自らの手で実装してきました。評論家ではない「経営の右腕」として貴社の利益改善に伴走します。
+              「現場で機能する仕組みをつくり、企業の成長を支える」を信念に、中小企業・小規模事業者の経営の右腕として伴走します。
             </p>
+          </div>
+
+          <div class="pt-2">
+            <a
+              href="/company"
+              class="inline-flex items-center gap-1.5 text-xs font-bold text-brand-700 hover:text-brand-900 underline"
+            >
+              <span>代表挨拶・会社概要はこちら</span>
+              <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M14 5l7 7m0 0l-7 7m7-7H3"/></svg>
+            </a>
           </div>
         </div>
 
@@ -466,9 +479,10 @@ const steps = [
           <h2 class="text-2xl sm:text-3xl font-bold font-serif text-slate-900">
             有限会社MST 会社情報・ご相談窓口
           </h2>
-          <p class="text-xs sm:text-sm text-gray-600 leading-relaxed">
-            〒503-0981 岐阜県大垣市桧町127番地 / TEL: 0584-71-7009 / 設立: 平成17年6月16日
-          </p>
+          <div class="text-xs sm:text-sm text-gray-600 space-y-1">
+            <p>〒503-0981 岐阜県大垣市桧町127番地 / 設立: 平成17年6月16日</p>
+            <p>E-mail: info@mstcorp.info / FAX: 0584-91-4897</p>
+          </div>
 
           <div class="pt-4 flex flex-col sm:flex-row gap-4">
             <a
@@ -491,6 +505,7 @@ const steps = [
             </a>
           </div>
         </div>
+
       </div>
     </div>
   </section>

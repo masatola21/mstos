@@ -8,17 +8,17 @@ import ContactForm from '../components/ContactForm';
   description="有限会社MSTへのお問い合わせ・ご相談フォーム。経営戦略・利益改善顧問、業務自動化、AI経営OS、介護保険外サービス開業支援など、お気軽にお問い合わせください。"
 >
   <!-- ページヘッダー -->
-  <section class="bg-forest-950 text-white py-14 sm:py-20 border-b border-forest-900">
+  <section class="bg-gradient-to-b from-brand-950 via-brand-900 to-slate-900 text-white py-14 sm:py-20 border-b border-brand-800">
     <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 text-center space-y-4">
-      <span class="text-xs font-bold text-gold-400 tracking-widest uppercase bg-forest-900 px-3.5 py-1.5 rounded-full border border-forest-800">
+      <span class="text-xs font-bold text-brand-300 tracking-widest uppercase bg-brand-800 px-3.5 py-1.5 rounded-full border border-brand-700">
         CONTACT US
       </span>
       <h1 class="text-3xl sm:text-5xl font-bold font-serif text-white">
         お問い合わせ・ご相談
       </h1>
-      <p class="text-sm sm:text-base text-sand-300 max-w-2xl mx-auto leading-relaxed font-light">
+      <p class="text-sm sm:text-base text-slate-300 max-w-2xl mx-auto leading-relaxed font-light">
         経営課題の整理、業務の属人化解消、システム自動化、新規事業の立ち上げなど、<br class="hidden sm:inline" />
-        どのような段階のご相談でも代表・大橋が丁寧に対応いたします。
+        どのような段階のご相談でも丁寧に対応いたします。
       </p>
     </div>
   </section>
@@ -32,11 +32,11 @@ import ContactForm from '../components/ContactForm';
         <div class="lg:col-span-5 space-y-6">
           <div class="bg-white p-6 sm:p-8 rounded-2xl border border-sand-300 shadow-sm space-y-6">
             <div>
-              <span class="text-xs font-bold text-forest-700 bg-forest-50 px-3 py-1 rounded-full border border-forest-200">
+              <span class="text-xs font-bold text-brand-700 bg-brand-50 px-3 py-1 rounded-full border border-brand-200">
                 お急ぎの方へ
               </span>
-              <h3 class="text-xl font-bold font-serif text-forest-900 mt-3">
-                公式LINEやお電話でもご相談いただけます
+              <h3 class="text-xl font-bold font-serif text-slate-900 mt-3">
+                公式LINEやメールでもご相談いただけます
               </h3>
               <p class="text-xs text-gray-600 mt-2 leading-relaxed">
                 「フォームに入力する時間がない」「チャット感覚でまずは質問したい」という方は、公式LINEをご活用ください。
@@ -61,36 +61,43 @@ import ContactForm from '../components/ContactForm';
               </div>
             </a>
 
-            <!-- お電話案内 -->
-            <div class="border-t border-sand-200 pt-4">
-              <span class="text-xs text-gray-500 font-bold block">お電話でのお問い合わせ</span>
-              <div class="text-2xl font-bold font-serif text-forest-900 mt-1">
-                0584-71-7009
+            <!-- メール・FAX案内 -->
+            <div class="border-t border-sand-200 pt-4 space-y-2">
+              <div>
+                <span class="text-xs text-gray-500 font-bold block">メールでのお問い合わせ</span>
+                <a href="mailto:info@mstcorp.info" class="text-base font-bold text-brand-700 underline hover:text-brand-900">
+                  info@mstcorp.info
+                </a>
               </div>
-              <p class="text-xs text-gray-500 mt-0.5">受付時間：平日 9:00 - 18:00（代表・大橋宛）</p>
+              <div>
+                <span class="text-xs text-gray-500 font-bold block">FAXでのお問い合わせ</span>
+                <div class="text-base font-bold text-slate-900">
+                  0584-91-4897
+                </div>
+              </div>
             </div>
           </div>
 
           <!-- ご相談の流れ -->
-          <div class="bg-forest-900 text-white p-6 sm:p-8 rounded-2xl shadow-sm space-y-4">
-            <h4 class="text-base font-bold font-serif text-gold-300">
+          <div class="bg-brand-950 text-white p-6 sm:p-8 rounded-2xl shadow-sm space-y-4">
+            <h4 class="text-base font-bold font-serif text-brand-300">
               初回ご相談の流れ
             </h4>
-            <ol class="space-y-3 text-xs text-sand-300">
+            <ol class="space-y-3 text-xs text-slate-300">
               <li class="flex items-start gap-2">
-                <span class="font-bold text-gold-400">1.</span>
+                <span class="font-bold text-brand-400">1.</span>
                 <span>フォームまたはLINEからお問い合わせ</span>
               </li>
               <li class="flex items-start gap-2">
-                <span class="font-bold text-gold-400">2.</span>
-                <span>原則1営業日以内に代表・大橋よりご連絡</span>
+                <span class="font-bold text-brand-400">2.</span>
+                <span>原則1営業日以内に担当よりご連絡</span>
               </li>
               <li class="flex items-start gap-2">
-                <span class="font-bold text-gold-400">3.</span>
+                <span class="font-bold text-brand-400">3.</span>
                 <span>オンライン（Zoom等）またはご来社にて課題ヒアリング（初回無料）</span>
               </li>
               <li class="flex items-start gap-2">
-                <span class="font-bold text-gold-400">4.</span>
+                <span class="font-bold text-brand-400">4.</span>
                 <span>課題整理と最適な改善プラン（顧問または構築）のご提案</span>
               </li>
             </ol>

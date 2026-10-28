@@ -50,20 +50,20 @@ export default function ContactForm() {
   if (submitted) {
     return (
       <div className="bg-white p-8 sm:p-12 rounded-2xl border border-sand-300 shadow-xl text-center space-y-6">
-        <div className="w-16 h-16 bg-forest-100 text-forest-700 rounded-full flex items-center justify-center mx-auto">
+        <div className="w-16 h-16 bg-brand-100 text-brand-700 rounded-full flex items-center justify-center mx-auto">
           <svg className="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
           </svg>
         </div>
-        <h3 className="text-2xl font-bold font-serif text-forest-900">お問い合わせありがとうございます</h3>
+        <h3 className="text-2xl font-bold font-serif text-slate-900">お問い合わせありがとうございます</h3>
         <p className="text-sm text-gray-600 leading-relaxed max-w-md mx-auto">
-          内容を確認の上、通常1営業日以内に担当（代表・大橋）よりご連絡申し上げます。<br />
-          お急ぎの場合は、公式LINEまたはお電話（0584-71-7009）でもご相談いただけます。
+          内容を確認の上、通常1営業日以内に担当よりご連絡申し上げます。<br />
+          お急ぎの場合は、公式LINEまたはFAX（0584-91-4897）でもご連絡いただけます。
         </p>
         <div className="pt-4 flex flex-col sm:flex-row justify-center gap-4">
           <a
             href="/"
-            className="px-6 py-2.5 bg-forest-900 text-white rounded-lg text-sm font-semibold hover:bg-forest-800 transition"
+            className="px-6 py-2.5 bg-brand-900 text-white rounded-lg text-sm font-semibold hover:bg-brand-800 transition"
           >
             トップページへ戻る
           </a>
@@ -98,7 +98,7 @@ export default function ContactForm() {
             value={formData.company_name}
             onChange={(e) => setFormData({ ...formData, company_name: e.target.value })}
             placeholder="例：株式会社〇〇（個人の場合は空欄可）"
-            className="w-full px-4 py-3 border border-sand-300 rounded-lg focus:ring-2 focus:ring-forest-500 focus:border-transparent outline-none text-sm transition"
+            className="w-full px-4 py-3 border border-sand-300 rounded-lg focus:ring-2 focus:ring-brand-500 focus:border-transparent outline-none text-sm transition"
           />
         </div>
 
@@ -112,7 +112,7 @@ export default function ContactForm() {
             value={formData.name}
             onChange={(e) => setFormData({ ...formData, name: e.target.value })}
             placeholder="例：山田 太郎"
-            className="w-full px-4 py-3 border border-sand-300 rounded-lg focus:ring-2 focus:ring-forest-500 focus:border-transparent outline-none text-sm transition"
+            className="w-full px-4 py-3 border border-sand-300 rounded-lg focus:ring-2 focus:ring-brand-500 focus:border-transparent outline-none text-sm transition"
           />
         </div>
       </div>
@@ -128,7 +128,7 @@ export default function ContactForm() {
             value={formData.email}
             onChange={(e) => setFormData({ ...formData, email: e.target.value })}
             placeholder="例：info@example.com"
-            className="w-full px-4 py-3 border border-sand-300 rounded-lg focus:ring-2 focus:ring-forest-500 focus:border-transparent outline-none text-sm transition"
+            className="w-full px-4 py-3 border border-sand-300 rounded-lg focus:ring-2 focus:ring-brand-500 focus:border-transparent outline-none text-sm transition"
           />
         </div>
 
@@ -142,7 +142,7 @@ export default function ContactForm() {
             value={formData.phone}
             onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
             placeholder="例：090-1234-5678"
-            className="w-full px-4 py-3 border border-sand-300 rounded-lg focus:ring-2 focus:ring-forest-500 focus:border-transparent outline-none text-sm transition"
+            className="w-full px-4 py-3 border border-sand-300 rounded-lg focus:ring-2 focus:ring-brand-500 focus:border-transparent outline-none text-sm transition"
           />
         </div>
       </div>
@@ -154,7 +154,7 @@ export default function ContactForm() {
         <select
           value={formData.service_interest}
           onChange={(e) => setFormData({ ...formData, service_interest: e.target.value })}
-          className="w-full px-4 py-3 border border-sand-300 rounded-lg focus:ring-2 focus:ring-forest-500 focus:border-transparent outline-none text-sm bg-white transition"
+          className="w-full px-4 py-3 border border-sand-300 rounded-lg focus:ring-2 focus:ring-brand-500 focus:border-transparent outline-none text-sm bg-white transition"
         >
           <option value="経営戦略・利益改善顧問">経営戦略・利益改善顧問（経営課題の整理・利益向上）</option>
           <option value="業務改善・IT・DX・AI顧問">業務改善・IT・DX・AI顧問（業務属人化の解消・自動化）</option>
@@ -173,7 +173,7 @@ export default function ContactForm() {
         <select
           value={formData.current_status}
           onChange={(e) => setFormData({ ...formData, current_status: e.target.value })}
-          className="w-full px-4 py-3 border border-sand-300 rounded-lg focus:ring-2 focus:ring-forest-500 focus:border-transparent outline-none text-sm bg-white transition"
+          className="w-full px-4 py-3 border border-sand-300 rounded-lg focus:ring-2 focus:ring-brand-500 focus:border-transparent outline-none text-sm bg-white transition"
         >
           <option value="">選択してください（任意）</option>
           <option value="創業準備中・個人事業主">創業準備中 / 個人事業主</option>
@@ -194,18 +194,18 @@ export default function ContactForm() {
           value={formData.message}
           onChange={(e) => setFormData({ ...formData, message: e.target.value })}
           placeholder="例：売上はあるものの現場業務に追われ、手元に利益が残りにくい状態が続いています。業務の棚卸しと利益改善の進め方について相談したいです。"
-          className="w-full px-4 py-3 border border-sand-300 rounded-lg focus:ring-2 focus:ring-forest-500 focus:border-transparent outline-none text-sm transition"
+          className="w-full px-4 py-3 border border-sand-300 rounded-lg focus:ring-2 focus:ring-brand-500 focus:border-transparent outline-none text-sm transition"
         ></textarea>
       </div>
 
       <div className="text-xs text-gray-500 leading-relaxed">
-        送信いただく前に、当社の<a href="/privacy" target="_blank" className="text-forest-700 underline">プライバシーポリシー</a>をご確認ください。ご入力いただいた情報は、お問い合わせ対応および改善ご提案の目的のみに利用いたします。
+        送信いただく前に、当社の<a href="/privacy" target="_blank" className="text-brand-700 underline">プライバシーポリシー</a>をご確認ください。ご入力いただいた情報は、お問い合わせ対応および改善ご提案の目的のみに利用いたします。
       </div>
 
       <button
         type="submit"
         disabled={loading}
-        className="w-full py-4 px-6 bg-forest-900 hover:bg-forest-800 text-gold-300 font-bold rounded-xl transition duration-200 shadow-md flex items-center justify-center gap-2 disabled:opacity-50"
+        className="w-full py-4 px-6 bg-brand-900 hover:bg-brand-800 text-white font-bold rounded-xl transition duration-200 shadow-md flex items-center justify-center gap-2 disabled:opacity-50"
       >
         {loading ? (
           <span>送信処理中...</span>

@@ -147,9 +147,10 @@ import Layout from '../layouts/Layout.astro';
           </div>
 
           <div class="grid grid-cols-1 sm:grid-cols-3 p-4 sm:p-6 bg-sand-50/50 items-center">
-            <dt class="font-bold text-slate-900">電話番号 / FAX</dt>
-            <dd class="sm:col-span-2 text-gray-700 mt-1 sm:mt-0">
-              TEL: 0584-71-7009 / FAX: 0584-71-7009
+            <dt class="font-bold text-slate-900">連絡先（メール / FAX）</dt>
+            <dd class="sm:col-span-2 text-gray-700 mt-1 sm:mt-0 space-y-1">
+              <p>E-mail: <a href="mailto:info@mstcorp.info" class="text-brand-700 underline font-semibold">info@mstcorp.info</a>（または<a href="/contact" class="text-brand-700 underline font-semibold">お問い合わせフォーム</a>）</p>
+              <p>FAX: 0584-91-4897</p>
             </dd>
           </div>
 
@@ -168,7 +169,7 @@ import Layout from '../layouts/Layout.astro';
           <div class="grid grid-cols-1 sm:grid-cols-3 p-4 sm:p-6 bg-sand-50/50 items-center">
             <dt class="font-bold text-slate-900">主要取引銀行</dt>
             <dd class="sm:col-span-2 text-gray-700 mt-1 sm:mt-0">
-              大垣共立銀行、日本政策金融公庫 ほか
+              三菱UFJ銀行、十六銀行、大垣西濃信用金庫、ゆうちょ銀行、ドコモSMTP
             </dd>
           </div>
 
@@ -192,7 +193,7 @@ import Layout from '../layouts/Layout.astro';
     </div>
   </section>
 
-  <!-- ページ内導線（無料診断・資料請求・LINE・問い合わせ） -->
+  <!-- ページ内導線 -->
   <section class="py-16 sm:py-20 bg-white border-t border-sand-200">
     <div class="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 space-y-8">
       
@@ -243,7 +244,7 @@ import Layout from '../layouts/Layout.astro';
         </a>
       </div>
 
-      <!-- サブ導線（診断・資料請求・サービス一覧） -->
+      <!-- サブ導線 -->
       <div class="pt-4 flex flex-wrap justify-center gap-6 text-xs text-gray-600">
         <a href="/diagnosis" class="hover:text-brand-700 underline flex items-center gap-1">
           <span>3分無料経営診断</span>
