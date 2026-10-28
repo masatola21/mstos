@@ -52,6 +52,169 @@ function verifyEmailUnsubscribeToken(token: unknown): string | null {
   return contactId;
 }
 
+// ─── 介護保険外サービス開業パッケージ 署名付きフォームトークン ───
+interface CarePackageFormTokenPayload {
+  v: 1;
+  cid: string | null;
+  luid: string | null;
+  rt: '資料請求' | '開業相談' | '両方希望';
+  exp: number;
+}
+
+function createCarePackageFormToken(cid: string | null, luid: string | null, rt: '資料請求' | '開業相談' | '両方希望'): string {
+  const secret = process.env.FORM_LINK_SECRET?.trim();
+  if (!secret) {
+    console.error('[CarePackageToken] FORM_LINK_SECRET is not configured in environment variables.');
+    throw new Error('FORM_LINK_SECRET_MISSING');
+  }
+  const payload: CarePackageFormTokenPayload = {
+    v: 1,
+    cid: cid || null,
+    luid: luid || null,
+    rt,
+    exp: Date.now() + 7 * 24 * 60 * 60 * 1000, // 7日後
+  };
+  const jsonStr = JSON.stringify(payload);
+  const payloadB64 = Buffer.from(jsonStr, 'utf8').toString('base64url');
+  const signatureB64 = createHmac('sha256', secret).update(payloadB64).digest('base64url');
+  return `${payloadB64}.${signatureB64}`;
+}
+
+function verifyCarePackageFormToken(token: unknown): CarePackageFormTokenPayload | null {
+  const secret = process.env.FORM_LINK_SECRET?.trim();
+  if (!secret || typeof token !== 'string') return null;
+  const parts = token.split('.');
+  if (parts.length !== 2 || !/^[A-Za-z0-9_-]+$/.test(parts[0]) || !/^[A-Za-z0-9_-]+$/.test(parts[1])) return null;
+
+  const payloadB64 = parts[0];
+  const expectedSig = createHmac('sha256', secret).update(payloadB64).digest();
+  let suppliedSig: Buffer;
+  try {
+    suppliedSig = Buffer.from(parts[1], 'base64url');
+  } catch {
+    return null;
+  }
+  if (suppliedSig.length !== expectedSig.length || !timingSafeEqual(suppliedSig, expectedSig)) {
+    return null;
+  }
+
+  try {
+    const jsonStr = Buffer.from(payloadB64, 'base64url').toString('utf8');
+    const parsed = JSON.parse(jsonStr) as CarePackageFormTokenPayload;
+    if (parsed.v !== 1) return null;
+    if (!['資料請求', '開業相談', '両方希望'].includes(parsed.rt)) return null;
+    if (typeof parsed.exp !== 'number' || parsed.exp < Date.now()) return null;
+    return parsed;
+  } catch {
+    return null;
+  }
+}
+
+async function assignCarePackageTag(contactId: string | null, lineUserId: string, requestType: '資料請求' | '開業相談' | '両方希望'): Promise<void> {
+  if (!lineSupabase) return;
+  const tagName = `care:${requestType}`;
+  try {
+    const { data: existingTag } = await lineSupabase
+      .from('contact_tags')
+      .select('id')
+      .eq('name', tagName)
+      .maybeSingle();
+
+    let tagId = existingTag?.id;
+    if (!tagId) {
+      const { data: newTag, error: tagInsertErr } = await lineSupabase
+        .from('contact_tags')
+        .insert({ name: tagName, description: '介護保険外サービス開業パッケージ' })
+        .select('id')
+        .maybeSingle();
+      if (!tagInsertErr && newTag) {
+        tagId = newTag.id;
+      }
+    }
+
+    if (tagId && lineUserId) {
+      const { data: friend } = await lineSupabase
+        .from('line_friends')
+        .select('id')
+        .eq('line_user_id', lineUserId)
+        .maybeSingle();
+      if (friend?.id) {
+        await lineSupabase.from('line_friend_tags').upsert({
+          line_friend_id: friend.id,
+          tag_id: tagId,
+          assigned_by: 'automation',
+        }, { onConflict: 'line_friend_id,tag_id', ignoreDuplicates: true });
+      }
+    }
+  } catch (err) {
+    console.warn('[CarePackage] Tag assignment warning:', err instanceof Error ? err.message : 'unknown');
+  }
+}
+
+async function ensureDefaultCarePackageInquiryForm(): Promise<void> {
+  if (!lineSupabase) return;
+  try {
+    const { data: existing, error } = await lineSupabase
+      .from('diagnosis_forms')
+      .select('id')
+      .eq('public_slug', 'care-package-inquiry')
+      .maybeSingle();
+    if (error && error.code !== 'PGRST116') return;
+    if (existing) return;
+
+    const defaultDefinition = {
+      category: '介護保険外サービス開業パッケージ',
+      service_category: '介護保険外サービス開業パッケージ',
+      description: '介護保険外サービスの開業・事業化に関するお問い合わせ・ご相談・資料請求を承っております。ご希望の内容と現在の状況をお知らせください。専任コンサルタントより最適なご案内をお届けいたします。',
+      booking_url: null,
+      material_url: null,
+      care_flex_template_id: null,
+      questions: [
+        {
+          id: 'q_inquiry_type',
+          label: 'ご希望の内容',
+          type: 'radio',
+          required: true,
+          options: ['資料請求', '開業相談', '資料請求＋開業相談'],
+        },
+        {
+          id: 'q_current_status',
+          label: '現在の状況',
+          type: 'select',
+          required: false,
+          options: [
+            'これから開業を検討している',
+            '開業準備を進めている',
+            'すでに介護保険外サービスを運営している',
+            '既存事業の新規事業として検討している',
+            'その他',
+          ],
+        },
+        {
+          id: 'q_interests_challenges',
+          label: '開業・新規事業について知りたいこと・ご相談内容',
+          type: 'textarea',
+          required: false,
+        },
+      ],
+    };
+
+    await lineSupabase.from('diagnosis_forms').insert({
+      name: '介護保険外サービス開業パッケージ お問い合わせ・相談フォーム',
+      public_slug: 'care-package-inquiry',
+      form_type: 'consultation',
+      status: 'draft',
+      questionnaire_version: 'v1.0',
+      definition: defaultDefinition,
+      privacy_notice: 'ご入力いただいた個人情報および相談内容は、お問い合わせへの対応、資料送付、および開業支援に関するご案内にのみ利用いたします。',
+    });
+    console.log('[Setup] Default care package inquiry form created (status: draft)');
+  } catch (err) {
+    console.warn('[Setup] ensureDefaultCarePackageInquiryForm error:', err);
+  }
+}
+
+
 function createEmailUnsubscribeUrl(contactId: string): string {
   const token = createEmailUnsubscribeToken(contactId);
   const appUrl = process.env.PUBLIC_APP_URL?.trim();
@@ -436,6 +599,182 @@ async function getOrCreateLineTag(ownerId: string, tagName: string): Promise<str
     return retryTag?.id || null;
   }
   return newTag?.id || null;
+}
+
+
+async function processLinePostback(event: any, contact: any, eventId: string, botUserId: string): Promise<void> {
+  if (!lineSupabase) return;
+  const postbackData = typeof event.postback?.data === 'string' ? event.postback.data : '';
+  const userId = typeof event.source?.userId === 'string' ? event.source.userId : '';
+  if (!userId || !postbackData) return;
+
+  const params = new URLSearchParams(postbackData);
+  const action = params.get('action');
+  const requestTypeRaw = params.get('request_type');
+
+  const validRequestTypes = ['資料請求', '開業相談', '両方希望'] as const;
+  type RequestType = typeof validRequestTypes[number];
+
+  if (action === 'care_package_form' && requestTypeRaw && (validRequestTypes as readonly string[]).includes(requestTypeRaw)) {
+    const requestType = requestTypeRaw as RequestType;
+    let formUrl = '';
+    let tokenCreated = false;
+
+    const appUrl = (process.env.PUBLIC_APP_URL || '').replace(/\/$/, '') || 'https://ais-dev-cadlpgsrctfv3ddojzsli3-203567468120.asia-northeast1.run.app';
+
+    try {
+      const token = createCarePackageFormToken(contact?.id || null, userId, requestType);
+      formUrl = `${appUrl}/forms/care-package-inquiry?t=${encodeURIComponent(token)}`;
+      tokenCreated = true;
+    } catch (tokenErr) {
+      console.error('[LINE Postback] Failed to generate care package form token (secret or config missing)');
+    }
+
+    if (tokenCreated && formUrl && typeof event.replyToken === 'string' && lineChannelAccessToken) {
+      const replyFlex = {
+        type: 'flex',
+        altText: `【介護保険外サービス開業パッケージ】${requestType}の専用フォームをご案内します`,
+        contents: {
+          type: 'bubble',
+          header: {
+            type: 'box',
+            layout: 'vertical',
+            backgroundColor: '#0369A1',
+            paddingAll: 'lg',
+            contents: [
+              {
+                type: 'text',
+                text: '介護保険外サービス開業パッケージ',
+                color: '#FFFFFF',
+                weight: 'bold',
+                size: 'sm',
+              },
+            ],
+          },
+          body: {
+            type: 'box',
+            layout: 'vertical',
+            spacing: 'md',
+            contents: [
+              {
+                type: 'text',
+                text: `${requestType}のお申し込み`,
+                weight: 'bold',
+                size: 'lg',
+                color: '#0F172A',
+              },
+              {
+                type: 'text',
+                text: '以下のボタンより専用フォームへお進みください。ご入力いただいた内容に合わせて、専任チームより最適なご案内をお届けいたします。',
+                wrap: true,
+                size: 'sm',
+                color: '#475569',
+              },
+              {
+                type: 'text',
+                text: '※リンクの有効期限は発行から7日間です。',
+                size: 'xs',
+                color: '#94A3B8',
+                margin: 'sm',
+              },
+            ],
+          },
+          footer: {
+            type: 'box',
+            layout: 'vertical',
+            contents: [
+              {
+                type: 'button',
+                style: 'primary',
+                color: '#0284C7',
+                height: 'md',
+                action: {
+                  type: 'uri',
+                  label: '専用フォームを開く',
+                  uri: formUrl,
+                },
+              },
+            ],
+          },
+        },
+      };
+
+      try {
+        const replyRes = await fetch('https://api.line.me/v2/bot/message/reply', {
+          method: 'POST',
+          headers: { Authorization: 'Bearer ' + lineChannelAccessToken, 'Content-Type': 'application/json' },
+          body: JSON.stringify({ replyToken: event.replyToken, messages: [replyFlex] }),
+        });
+        if (replyRes.ok) {
+          const { data: integration } = await lineSupabase
+            .from('line_channel_integrations').select('owner_id').eq('bot_user_id', botUserId).maybeSingle();
+          await lineSupabase.from('line_inbox_messages').upsert({
+            owner_id: integration?.owner_id || null,
+            line_event_id: `reply-postback-${eventId}`,
+            direction: 'outbound',
+            contact_id: contact?.id || null,
+            line_user_id: userId,
+            message_type: 'flex',
+            body: `[Flex] 介護保険外サービス開業パッケージ専用フォームURL案内（${requestType}）`,
+            status: 'sent',
+            received_at: new Date().toISOString(),
+          }, { onConflict: 'owner_id,line_event_id,direction', ignoreDuplicates: true });
+        }
+      } catch (replyErr) {
+        console.warn('[LINE Postback] Reply fetch warning:', replyErr);
+      }
+    } else if (!tokenCreated && typeof event.replyToken === 'string' && lineChannelAccessToken) {
+      const fallbackText = '介護保険外サービス開業パッケージへのお問い合わせありがとうございます。\nただいま専用フォームの準備中となっております。担当者より折り返しご連絡いたしますので、恐れ入りますが少々お待ちください。';
+      try {
+        await fetch('https://api.line.me/v2/bot/message/reply', {
+          method: 'POST',
+          headers: { Authorization: 'Bearer ' + lineChannelAccessToken, 'Content-Type': 'application/json' },
+          body: JSON.stringify({ replyToken: event.replyToken, messages: [{ type: 'text', text: fallbackText }] }),
+        });
+        const { data: integration } = await lineSupabase
+          .from('line_channel_integrations').select('owner_id').eq('bot_user_id', botUserId).maybeSingle();
+        await lineSupabase.from('line_inbox_messages').upsert({
+          owner_id: integration?.owner_id || null,
+          line_event_id: `alert-postback-${eventId}`,
+          direction: 'outbound',
+          contact_id: contact?.id || null,
+          line_user_id: userId,
+          message_type: 'text',
+          body: `【システム案内】フォームURL生成失敗（FORM_LINK_SECRET未設定）。ユーザーには準備中案内を返信しました。希望内容: ${requestType}`,
+          status: 'sent',
+          received_at: new Date().toISOString(),
+        }, { onConflict: 'owner_id,line_event_id,direction', ignoreDuplicates: true });
+      } catch (err) {
+        console.warn('[LINE Postback] Fallback reply error:', err);
+      }
+    }
+
+    // タグ付与
+    await assignCarePackageTag(contact?.id || null, userId, requestType);
+
+    // ※ この postback では待機中ジョブのスキップは実行しない
+    return;
+  }
+
+  // それ以外の postback の場合: 待機中のLINEマーケティングジョブを skipped にする（個人情報はログに出さない）
+  try {
+    const { data: pendingJobs } = await lineSupabase
+      .from('marketing_automation_jobs')
+      .select('id')
+      .eq('channel', 'line')
+      .eq('line_user_id', userId)
+      .eq('status', 'pending');
+    if (pendingJobs && pendingJobs.length > 0) {
+      await lineSupabase
+        .from('marketing_automation_jobs')
+        .update({ status: 'skipped', error_message: 'Skipped: user sent postback', updated_at: new Date().toISOString() })
+        .eq('channel', 'line')
+        .eq('line_user_id', userId)
+        .eq('status', 'pending');
+    }
+  } catch (skipErr) {
+    console.warn('[LINE Postback] Skip jobs warning:', skipErr);
+  }
 }
 
 async function processLineFollowWelcome(event: any, contact: any, eventId: string, botUserId: string): Promise<void> {
@@ -983,7 +1322,7 @@ async function processLineWebhookEvent(event: any, botUserId = '') {
       }
       if (event.type === 'follow') await processLineFollowWelcome(event, contact, stableEventId, botUserId);
       if (event.type === 'message') await processLineInboxAndAutoReply(event, contact, stableEventId, botUserId);
-      if (event.type === 'postback') await processLinePostbackEvent(event, contact, stableEventId, botUserId);
+      if (event.type === 'postback') await processLinePostback(event, contact, stableEventId, botUserId);
     }
 
     if (eventRowId) {
@@ -3775,6 +4114,7 @@ if (process.env.NODE_ENV !== 'production') {
 setInterval(() => { void processMarketingAutomationJobs(); }, 15000);
 setTimeout(() => { void processMarketingAutomationJobs(); }, 15000);
 
+void ensureDefaultCarePackageInquiryForm();
 app.listen(port, () => {
   console.log(`Server listening on port ${port}`);
 });
