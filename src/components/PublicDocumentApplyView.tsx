@@ -24,6 +24,8 @@ interface PublicDocument {
   dealStatus?: string;
   dealAmount?: number;
   leadId?: string;
+  contact_id?: string;
+  contactId?: string;
   createdAt?: string;
   updatedAt?: string;
 }

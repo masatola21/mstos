@@ -18,7 +18,7 @@ const segmentConditionFields: Record<string, string[]> = {
   contacts: ['source', 'preferred_channel', 'role_title'],
   companies: ['industry'],
   prospects: ['status', 'source', 'approach_method', 'target_flag'],
-  leads: ['status', 'source', 'service_type', 'priority_channel'],
+  leads: ['status', 'inquiry_type', 'source', 'service_type', 'priority_channel'],
   deals: ['proposal_status', 'proposal_type'],
   customers: ['contract_status'],
 };
@@ -28,6 +28,7 @@ const segmentConditionFieldLabels: Record<string, string> = {
   role_title: '役職',
   industry: '業種',
   status: '状況',
+  inquiry_type: '希望内容（資料請求/相談）',
   approach_method: 'アプローチ方法',
   target_flag: '対象フラグ',
   service_type: '希望サービス',

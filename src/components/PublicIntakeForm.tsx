@@ -70,16 +70,34 @@ export const PublicIntakeForm: React.FC<{ slug: string }> = ({ slug }) => {
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
   const [submitted, setSubmitted] = useState(false);
+  const [submissionResult, setSubmissionResult] = useState<{
+    inquiryType?: string;
+    materialUrl?: string | null;
+    materialReady?: boolean;
+    bookingUrl?: string | null;
+  } | null>(null);
   const [error, setError] = useState('');
   const [requestId] = useState(() => crypto.randomUUID());
 
   useEffect(() => {
     let cancelled = false;
-    fetch(`/api/public/forms/${encodeURIComponent(slug)}`)
+    const query = new URLSearchParams(window.location.search);
+    const tokenParam = query.get('t') || query.get('token') || '';
+    const fetchUrl = `/api/public/forms/${encodeURIComponent(slug)}${tokenParam ? `?t=${encodeURIComponent(tokenParam)}` : ''}`;
+
+    fetch(fetchUrl)
       .then(async (response) => {
         const payload = await response.json().catch(() => null);
         if (!response.ok) throw new Error(payload?.error || 'フォームを表示できません。');
-        if (!cancelled) setForm(payload.form as PublicForm);
+        if (!cancelled) {
+          setForm(payload.form as PublicForm);
+          if (payload.initialRequestType) {
+            setAnswers((prev) => ({
+              ...prev,
+              q_inquiry_type: payload.initialRequestType,
+            }));
+          }
+        }
       })
       .catch((reason) => { if (!cancelled) setError(reason instanceof Error ? reason.message : 'フォームを読み込めませんでした。'); })
       .finally(() => { if (!cancelled) setLoading(false); });
@@ -116,10 +134,12 @@ export const PublicIntakeForm: React.FC<{ slug: string }> = ({ slug }) => {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           requestId, name, companyName, email, phone, answers, privacyAgreed, utm, lineUserId, contactId,
+          token: query.get('t') || query.get('token') || undefined,
         }),
       });
       const payload = await response.json().catch(() => null);
       if (!response.ok) throw new Error(payload?.error || '送信できませんでした。入力内容をご確認ください。');
+      setSubmissionResult(payload);
       setSubmitted(true);
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : '送信できませんでした。');

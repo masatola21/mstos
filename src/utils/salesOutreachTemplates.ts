@@ -786,6 +786,8 @@ export const getLineStepTemplate = (
 };
 
 const _unusedOldSwitch = (step: number) => {
+  const displayName = "お客様";
+  const targetUrl = "https://example.com";
   switch (step) {
     case 1:
       return {

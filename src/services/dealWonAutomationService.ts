@@ -152,11 +152,11 @@ export async function executeDealWonAutomation(dealId: string): Promise<DealWonR
 
       if (cDoc.data?.id) {
         contractDocId = cDoc.data.id;
-        documentIds.push(contractDocId);
+        if (contractDocId) documentIds.push(contractDocId);
       }
       if (iDoc.data?.id) {
         invoiceDocId = iDoc.data.id;
-        documentIds.push(invoiceDocId);
+        if (invoiceDocId) documentIds.push(invoiceDocId);
       }
     } catch (docErr) {
       console.warn('Document draft auto-generation warning:', docErr);

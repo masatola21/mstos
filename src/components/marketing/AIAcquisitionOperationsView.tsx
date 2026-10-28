@@ -181,6 +181,13 @@ export const AIAcquisitionOperationsView: React.FC<{ onSendPresidentSummary?: (s
     totalInvoiced: number;
     totalPaid: number;
     utmBreakdown: Array<{ source: string; campaign: string; count: number }>;
+    carePackageMetrics: {
+      materialRequests: number;
+      consultationRequests: number;
+      bothRequests: number;
+      totalCareSubmissions: number;
+      schedulingPending: number;
+    };
   }>({
     totalLeads: 0,
     totalDeals: 0,
@@ -190,6 +197,13 @@ export const AIAcquisitionOperationsView: React.FC<{ onSendPresidentSummary?: (s
     totalInvoiced: 0,
     totalPaid: 0,
     utmBreakdown: [],
+    carePackageMetrics: {
+      materialRequests: 0,
+      consultationRequests: 0,
+      bothRequests: 0,
+      totalCareSubmissions: 0,
+      schedulingPending: 0,
+    },
   });
 
 
@@ -533,6 +547,40 @@ export const AIAcquisitionOperationsView: React.FC<{ onSendPresidentSummary?: (s
             <span className="rounded-full bg-indigo-500/20 px-3 py-1 text-xs font-semibold text-indigo-300 border border-indigo-500/30">
               手入力不要・DB自動連携
             </span>
+          </div>
+
+          {/* 介護保険外サービス開業パッケージ 導線集計 */}
+          <div className="rounded-xl border border-sky-500/30 bg-sky-950/30 p-4 space-y-2">
+            <div className="flex items-center justify-between">
+              <span className="text-xs font-bold text-sky-300 flex items-center gap-1.5">
+                <span>🏥</span> 介護保険外サービス開業パッケージ成果（LINE／フォーム）
+              </span>
+              <span className="text-[11px] text-sky-400 font-semibold">
+                専用フォーム送信: {crmMetrics.carePackageMetrics.totalCareSubmissions} 件
+              </span>
+            </div>
+            <div className="grid gap-2 grid-cols-2 sm:grid-cols-5 pt-1">
+              <div className="rounded-lg bg-slate-900/80 border border-slate-800 p-2.5">
+                <p className="text-[11px] text-slate-400">📄 資料請求数</p>
+                <p className="mt-1 text-lg font-bold text-sky-400">{crmMetrics.carePackageMetrics.materialRequests} 件</p>
+              </div>
+              <div className="rounded-lg bg-slate-900/80 border border-slate-800 p-2.5">
+                <p className="text-[11px] text-slate-400">💬 開業相談希望数</p>
+                <p className="mt-1 text-lg font-bold text-emerald-400">{crmMetrics.carePackageMetrics.consultationRequests} 件</p>
+              </div>
+              <div className="rounded-lg bg-slate-900/80 border border-slate-800 p-2.5">
+                <p className="text-[11px] text-slate-400">📄💬 両方希望数</p>
+                <p className="mt-1 text-lg font-bold text-amber-300">{crmMetrics.carePackageMetrics.bothRequests} 件</p>
+              </div>
+              <div className="rounded-lg bg-slate-900/80 border border-slate-800 p-2.5">
+                <p className="text-[11px] text-slate-400">📝 フォーム送信総数</p>
+                <p className="mt-1 text-lg font-bold text-indigo-300">{crmMetrics.carePackageMetrics.totalCareSubmissions} 件</p>
+              </div>
+              <div className="rounded-lg bg-slate-900/80 border border-amber-900/50 p-2.5 bg-amber-950/20">
+                <p className="text-[11px] text-amber-300 font-semibold">⏳ 相談日程調整中</p>
+                <p className="mt-1 text-lg font-bold text-amber-400">{crmMetrics.carePackageMetrics.schedulingPending} 件</p>
+              </div>
+            </div>
           </div>
 
           <div className="grid gap-3 grid-cols-2 sm:grid-cols-4 lg:grid-cols-6">
