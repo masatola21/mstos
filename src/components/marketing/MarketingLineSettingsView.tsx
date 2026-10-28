@@ -11,7 +11,29 @@ import {
   LayoutTemplate,
   HelpCircle,
   Copy,
+  Database,
+  Check,
+  Plus,
+  Trash2,
 } from 'lucide-react';
+
+export type WelcomeChoiceRoute = 'form' | 'booking' | 'template';
+
+export interface WelcomeChoice {
+  id: string;
+  label: string;
+  tag: string;
+  route: WelcomeChoiceRoute;
+  formSlug?: string;
+  templateId?: string;
+  replyText?: string;
+}
+
+export const DEFAULT_WELCOME_CHOICES: WelcomeChoice[] = [
+  { id: 'diagnosis', label: '📊 3分無料経営診断を受ける', tag: '選択:診断', route: 'form', formSlug: 'business-diagnosis' },
+  { id: 'consult', label: '経営改善について個別相談する', tag: '選択:個別相談', route: 'booking' },
+  { id: 'care', label: '介護保険外サービス開業パッケージについて知る', tag: '選択:開業パッケージ', route: 'template', templateId: '' },
+];
 
 type Action = { type: 'uri' | 'message'; label: string; value: string };
 type LayoutId = 'single' | 'columns-2' | 'rows-2' | 'columns-3' | 'rows-3' | 'grid-2x2' | 'grid-2x3' | 'grid-3x2';
@@ -46,13 +68,10 @@ export const MarketingLineSettingsView: React.FC = () => {
   const [welcomeQuestion, setWelcomeQuestion] = useState('まず、どのようなご相談をご希望ですか？');
   const [welcomeInstruction, setWelcomeInstruction] = useState('ご希望に近いものをお選びください');
 
-  // ボタン設定
-  const [btn1Label, setBtn1Label] = useState('経営改善について相談する');
-  const [btn1Text, setBtn1Text] = useState('経営改善について相談する');
-  const [btn2Label, setBtn2Label] = useState('介護保険外サービスについて相談する');
-  const [btn2Text, setBtn2Text] = useState('介護保険外サービスについて相談する');
-  const [btn3Label, setBtn3Label] = useState('📊 3分無料経営診断を受ける');
-  const [btn3Uri, setBtn3Uri] = useState('');
+  // 選択肢（postback分岐）
+  const [choices, setChoices] = useState<WelcomeChoice[]>(DEFAULT_WELCOME_CHOICES);
+  const [templates, setTemplates] = useState<{ id: string; name: string; reply_type?: string }[]>([]);
+  const [scenarios, setScenarios] = useState<any[]>([]);
 
   // ─── JSON直接編集用状態 ───
   const [jsonText, setJsonText] = useState('');
@@ -63,6 +82,8 @@ export const MarketingLineSettingsView: React.FC = () => {
   const [welcomeSaving, setWelcomeSaving] = useState(false);
   const [welcomeNotice, setWelcomeNotice] = useState('');
   const [welcomeError, setWelcomeError] = useState('');
+  const [schemaMissingColumn, setSchemaMissingColumn] = useState(false);
+  const [migrationCopied, setMigrationCopied] = useState(false);
 
   // ─── リッチメニュー用状態 ───
   const [title, setTitle] = useState('メニュー');
@@ -76,15 +97,22 @@ export const MarketingLineSettingsView: React.FC = () => {
   const [error, setError] = useState('');
   const [notice, setNotice] = useState('');
 
-  // 診断URLの初期値を設定
-  useEffect(() => {
-    const origin = typeof window !== 'undefined' ? window.location.origin : '';
-    if (!btn3Uri) {
-      setBtn3Uri(`${origin}/forms/business-diagnosis?source=line`);
-    }
-  }, []);
-
   const buildFormFlexPayload = () => {
+    const buttonColors = ['#10B981', '#1E3A5F', '#0284C7', '#8B5CF6'];
+    const buttons = choices.map((c, i) => ({
+      type: 'button',
+      style: 'primary',
+      color: buttonColors[i % buttonColors.length],
+      height: 'lg',
+      margin: i === 0 ? 'lg' : 'sm',
+      action: {
+        type: 'postback',
+        label: (c.label || `選択肢 ${i + 1}`).slice(0, 20),
+        data: `wc=${c.id}`,
+        displayText: c.label || `選択肢 ${i + 1}`,
+      },
+    }));
+
     return {
       altText: `${welcomeHeading} ${welcomeSubheading}`,
       contents: {
@@ -100,33 +128,11 @@ export const MarketingLineSettingsView: React.FC = () => {
             { type: 'text', text: welcomeIntro, size: 'sm', align: 'center', color: '#475569', margin: 'lg', wrap: true },
             { type: 'text', text: welcomeQuestion, size: 'lg', weight: 'bold', align: 'center', color: '#1E293B', margin: 'xl', wrap: true },
             { type: 'text', text: welcomeInstruction, size: 'sm', align: 'center', color: '#64748B', margin: 'sm', wrap: true },
-            {
-              type: 'button',
-              style: 'primary',
-              color: '#1E3A5F',
-              height: 'lg',
-              margin: 'lg',
-              action: { type: 'message', label: btn1Label, text: btn1Text || btn1Label },
-            },
-            {
-              type: 'button',
-              style: 'primary',
-              color: '#0284C7',
-              height: 'lg',
-              margin: 'sm',
-              action: { type: 'message', label: btn2Label, text: btn2Text || btn2Label },
-            },
-            {
-              type: 'button',
-              style: 'primary',
-              color: '#10B981',
-              height: 'lg',
-              margin: 'sm',
-              action: { type: 'uri', label: btn3Label, uri: btn3Uri },
-            },
+            ...buttons,
           ],
         },
       },
+      choices,
     };
   };
 
@@ -139,6 +145,15 @@ export const MarketingLineSettingsView: React.FC = () => {
         const ownerId = sessionData.session?.user?.id;
         if (!ownerId) return;
 
+        // テンプレート保管庫とシナリオ一覧をロード
+        const [tplRes, scRes] = await Promise.all([
+          db.from('line_auto_reply_templates').select('id, name, reply_type').eq('owner_id', ownerId).order('name'),
+          db.from('marketing_automation_scenarios').select('scenario_id, config').eq('owner_id', ownerId),
+        ]);
+        if (tplRes.data) setTemplates(tplRes.data);
+        if (scRes.data) setScenarios(scRes.data.map((item: any) => item.config).filter(Boolean));
+
+        let ruleData: any = null;
         const { data, error: fetchErr } = await db
           .from('line_auto_reply_rules')
           .select('id, reply_type, reply_payload, enabled')
@@ -146,15 +161,56 @@ export const MarketingLineSettingsView: React.FC = () => {
           .eq('match_text', '__welcome__')
           .maybeSingle();
 
-        if (fetchErr || !data) {
-          // 初期状態のJSONを生成してセット
+        if (fetchErr) {
+          if (fetchErr.message?.includes('reply_payload') || fetchErr.code === 'PGRST204') {
+            setSchemaMissingColumn(true);
+            const { data: fallbackData } = await db
+              .from('line_auto_reply_rules')
+              .select('id, reply_text, enabled')
+              .eq('owner_id', ownerId)
+              .eq('match_text', '__welcome__')
+              .maybeSingle();
+            ruleData = fallbackData;
+          }
+        } else {
+          ruleData = data;
+        }
+
+        if (!ruleData) {
+          // テンプレート保管庫もチェック
+          const { data: tpl } = await db
+            .from('line_auto_reply_templates')
+            .select('payload')
+            .eq('owner_id', ownerId)
+            .ilike('name', '%ウェルカム%')
+            .maybeSingle();
+          if (tpl?.payload) {
+            setJsonText(JSON.stringify(tpl.payload, null, 2));
+            return;
+          }
           setJsonText(JSON.stringify(buildFormFlexPayload(), null, 2));
           return;
         }
-        setWelcomeRuleId(data.id);
-        setWelcomeEnabled(data.enabled);
+        setWelcomeRuleId(ruleData.id);
+        setWelcomeEnabled(ruleData.enabled);
 
-        const payload = data.reply_payload as any;
+        let payload = ruleData.reply_payload as any;
+        if (!payload && ruleData.reply_text) {
+          try {
+            payload = JSON.parse(ruleData.reply_text);
+          } catch {
+            // text was summary
+          }
+        }
+        if (!payload) {
+          const { data: tpl } = await db
+            .from('line_auto_reply_templates')
+            .select('payload')
+            .eq('owner_id', ownerId)
+            .ilike('name', '%ウェルカム%')
+            .maybeSingle();
+          if (tpl?.payload) payload = tpl.payload;
+        }
         if (payload) {
           setJsonText(JSON.stringify(payload, null, 2));
 
@@ -165,19 +221,28 @@ export const MarketingLineSettingsView: React.FC = () => {
             if (bodyContents[3]?.text) setWelcomeIntro(bodyContents[3].text);
             if (bodyContents[4]?.text) setWelcomeQuestion(bodyContents[4].text);
             if (bodyContents[5]?.text) setWelcomeInstruction(bodyContents[5].text);
+          }
 
+          if (Array.isArray(payload.choices) && payload.choices.length > 0) {
+            setChoices(payload.choices);
+          } else if (Array.isArray(bodyContents)) {
             const btns = bodyContents.filter((c: any) => c.type === 'button');
-            if (btns[0]?.action) {
-              setBtn1Label(btns[0].action.label || '');
-              setBtn1Text(btns[0].action.text || '');
-            }
-            if (btns[1]?.action) {
-              setBtn2Label(btns[1].action.label || '');
-              setBtn2Text(btns[1].action.text || '');
-            }
-            if (btns[2]?.action) {
-              setBtn3Label(btns[2].action.label || '');
-              setBtn3Uri(btns[2].action.uri || '');
+            if (btns.length > 0) {
+              const recoveredChoices: WelcomeChoice[] = btns.slice(0, 4).map((b: any, idx: number) => {
+                const data = String(b.action?.data || '');
+                const idMatch = data.match(/^wc=([a-z0-9_-]+)/i);
+                const choiceId = idMatch ? idMatch[1] : (idx === 0 ? 'diagnosis' : idx === 1 ? 'consult' : idx === 2 ? 'care' : `choice_${idx + 1}`);
+                const defaultForId = DEFAULT_WELCOME_CHOICES.find(d => d.id === choiceId) || DEFAULT_WELCOME_CHOICES[idx];
+                return {
+                  id: choiceId,
+                  label: b.action?.label || defaultForId?.label || `選択肢 ${idx + 1}`,
+                  tag: defaultForId?.tag || `選択:${choiceId}`,
+                  route: defaultForId?.route || (idx === 0 ? 'form' : idx === 1 ? 'booking' : 'template'),
+                  formSlug: defaultForId?.formSlug || 'business-diagnosis',
+                  templateId: defaultForId?.templateId || '',
+                };
+              });
+              setChoices(recoveredChoices);
             }
           }
         }
@@ -187,6 +252,40 @@ export const MarketingLineSettingsView: React.FC = () => {
     };
     void loadWelcomeRule();
   }, [db]);
+
+  const updateChoice = (index: number, patch: Partial<WelcomeChoice>) => {
+    setChoices((prev) => prev.map((c, i) => (i === index ? { ...c, ...patch } : c)));
+  };
+
+  const addChoice = () => {
+    if (choices.length >= 4) return;
+    const nextIdx = choices.length + 1;
+    const newChoice: WelcomeChoice = {
+      id: `choice_${Date.now().toString(36)}`,
+      label: `選択肢 ${nextIdx}`,
+      tag: `選択:項目${nextIdx}`,
+      route: 'form',
+      formSlug: 'business-diagnosis',
+    };
+    setChoices((prev) => [...prev, newChoice]);
+  };
+
+  const removeChoice = (index: number) => {
+    if (choices.length <= 1) return;
+    setChoices((prev) => prev.filter((_, i) => i !== index));
+  };
+
+  const getScenariosForTag = (tagName: string) => {
+    if (!tagName || !tagName.trim()) return [];
+    const normalizedTag = tagName.trim().toLowerCase();
+    return scenarios.filter((s: any) => {
+      const trig = String(s.trigger || '').toLowerCase();
+      const aud = String(s.audience || '').toLowerCase();
+      const name = String(s.name || '').toLowerCase();
+      return (trig === 'tag_added' && (aud.includes(normalizedTag) || name.includes(normalizedTag))) ||
+        aud.includes(normalizedTag);
+    });
+  };
 
   // モードをJSONに切り替えたときは現在のフォーム内容からJSONを最新化
   const switchToJsonMode = () => {
@@ -206,6 +305,9 @@ export const MarketingLineSettingsView: React.FC = () => {
         if (bodyContents[3]?.text) setWelcomeIntro(bodyContents[3].text);
         if (bodyContents[4]?.text) setWelcomeQuestion(bodyContents[4].text);
         if (bodyContents[5]?.text) setWelcomeInstruction(bodyContents[5].text);
+      }
+      if (Array.isArray(parsed?.choices) && parsed.choices.length > 0) {
+        setChoices(parsed.choices);
       }
       setJsonParseError('');
     } catch {
@@ -266,51 +368,96 @@ export const MarketingLineSettingsView: React.FC = () => {
           ? `[ウェルカムFlexメッセージ: ${welcomeHeading}]`
           : `[ウェルカムFlexメッセージ: ${payload.altText || 'カスタムFlex'}]`;
 
-      if (welcomeRuleId) {
-        const { error: updateErr } = await db
-          .from('line_auto_reply_rules')
-          .update({
-            reply_type: 'flex',
-            reply_payload: payload,
-            reply_text: summaryText,
-            enabled: welcomeEnabled,
-            updated_at: new Date().toISOString(),
-          })
-          .eq('id', welcomeRuleId);
-        if (updateErr) throw updateErr;
-      } else {
-        const { data: inserted, error: insertErr } = await db
-          .from('line_auto_reply_rules')
-          .insert({
-            owner_id: ownerId,
-            name: '友だち追加ウェルカムFlexメッセージ',
-            match_mode: 'exact',
-            match_text: '__welcome__',
-            reply_type: 'flex',
-            reply_payload: payload,
-            reply_text: summaryText,
-            priority: 10,
-            enabled: welcomeEnabled,
-          })
-          .select('id')
-          .single();
-        if (insertErr) throw insertErr;
-        if (inserted) setWelcomeRuleId(inserted.id);
+      try {
+        if (welcomeRuleId) {
+          const { error: updateErr } = await db
+            .from('line_auto_reply_rules')
+            .update({
+              reply_type: 'flex',
+              reply_payload: payload,
+              reply_text: summaryText,
+              enabled: welcomeEnabled,
+              updated_at: new Date().toISOString(),
+            })
+            .eq('id', welcomeRuleId);
+          if (updateErr) throw updateErr;
+        } else {
+          const { data: inserted, error: insertErr } = await db
+            .from('line_auto_reply_rules')
+            .insert({
+              owner_id: ownerId,
+              name: '友だち追加ウェルカムFlexメッセージ',
+              match_mode: 'exact',
+              match_text: '__welcome__',
+              reply_type: 'flex',
+              reply_payload: payload,
+              reply_text: summaryText,
+              priority: 10,
+              enabled: welcomeEnabled,
+            })
+            .select('id')
+            .single();
+          if (insertErr) throw insertErr;
+          if (inserted) setWelcomeRuleId(inserted.id);
+        }
+      } catch (ruleErr: any) {
+        // 'reply_payload' カラムが見つからない場合（スキーマ未マイグレーション）
+        if (ruleErr?.message?.includes('reply_payload') || ruleErr?.code === 'PGRST204' || ruleErr?.message?.includes('schema cache')) {
+          setSchemaMissingColumn(true);
+          // フォールバック: reply_payload を除外して reply_text に JSON を保存
+          if (welcomeRuleId) {
+            const { error: fbErr } = await db
+              .from('line_auto_reply_rules')
+              .update({
+                reply_text: JSON.stringify(payload),
+                enabled: welcomeEnabled,
+                updated_at: new Date().toISOString(),
+              })
+              .eq('id', welcomeRuleId);
+            if (fbErr) throw fbErr;
+          } else {
+            const { data: fbInserted, error: fbInsertErr } = await db
+              .from('line_auto_reply_rules')
+              .insert({
+                owner_id: ownerId,
+                name: '友だち追加ウェルカムFlexメッセージ',
+                match_mode: 'exact',
+                match_text: '__welcome__',
+                reply_text: JSON.stringify(payload),
+                priority: 10,
+                enabled: welcomeEnabled,
+              })
+              .select('id')
+              .single();
+            if (fbInsertErr) throw fbInsertErr;
+            if (fbInserted) setWelcomeRuleId(fbInserted.id);
+          }
+        } else {
+          throw ruleErr;
+        }
       }
 
       // テンプレート管理側にも同期保存
-      await db.from('line_auto_reply_templates').upsert(
-        {
-          owner_id: ownerId,
-          name: '大橋真人 公式ウェルカムメッセージ（無料診断誘導付き）',
-          reply_type: 'flex',
-          payload,
-          updated_at: new Date().toISOString(),
-        },
-        { onConflict: 'owner_id,name' }
-      );
+      try {
+        await db.from('line_auto_reply_templates').upsert(
+          {
+            owner_id: ownerId,
+            name: '大橋真人 公式ウェルカムメッセージ（無料診断誘導付き）',
+            reply_type: 'flex',
+            payload,
+            updated_at: new Date().toISOString(),
+          },
+          { onConflict: 'owner_id,name' }
+        );
+      } catch (tplErr) {
+        console.warn('Template sync warning:', tplErr);
+      }
 
-      setWelcomeNotice('友だち追加ウェルカムFlexメッセージを更新保存しました！');
+      setWelcomeNotice(
+        schemaMissingColumn
+          ? 'ウェルカムメッセージを互換モードで保存しました。Flexの完全なネイティブ保存を行うには下記のSQLを実行してください。'
+          : '友だち追加ウェルカムFlexメッセージを更新保存しました！'
+      );
     } catch (e: any) {
       setWelcomeError(e?.message || '保存に失敗しました');
     } finally {
@@ -481,6 +628,38 @@ export const MarketingLineSettingsView: React.FC = () => {
             <span>{welcomeError}</span>
           </div>
         )}
+        {schemaMissingColumn && (
+          <div className="rounded-xl border border-amber-500/40 bg-amber-950/30 p-4 text-xs text-amber-200 space-y-2.5">
+            <div className="flex items-start justify-between gap-3">
+              <div className="flex items-start gap-2">
+                <Database className="h-4 w-4 shrink-0 text-amber-400 mt-0.5" />
+                <div>
+                  <div className="font-bold text-amber-300">
+                    Supabaseの「line_auto_reply_rules」に reply_payload カラムが未適用です
+                  </div>
+                  <p className="mt-1 text-[11px] text-amber-200/90 leading-relaxed">
+                    アプリ側で自動フォールバックを行っているため保存は完了していますが、Flex・画像・動画のネイティブ保存を完了するにはSupabase SQL Editorで以下のSQLを1回実行してください。
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={async () => {
+                  await navigator.clipboard.writeText(`ALTER TABLE public.line_auto_reply_rules\n  ADD COLUMN IF NOT EXISTS reply_type text NOT NULL DEFAULT 'text',\n  ADD COLUMN IF NOT EXISTS reply_payload jsonb NOT NULL DEFAULT '{}'::jsonb;\nNOTIFY pgrst, 'reload schema';`);
+                  setMigrationCopied(true);
+                  setTimeout(() => setMigrationCopied(false), 3000);
+                }}
+                className="inline-flex items-center gap-1.5 shrink-0 rounded-lg bg-amber-500/20 hover:bg-amber-500/30 border border-amber-500/40 px-3 py-1.5 text-xs font-semibold text-amber-200 transition-colors cursor-pointer"
+              >
+                {migrationCopied ? <Check className="h-3.5 w-3.5 text-emerald-400" /> : <Copy className="h-3.5 w-3.5" />}
+                <span>{migrationCopied ? 'コピー完了' : 'SQLをコピー'}</span>
+              </button>
+            </div>
+            <div className="rounded-lg bg-slate-950/80 p-2 font-mono text-[11px] text-slate-300 overflow-x-auto select-all">
+              ALTER TABLE public.line_auto_reply_rules ADD COLUMN IF NOT EXISTS reply_type text NOT NULL DEFAULT &apos;text&apos;, ADD COLUMN IF NOT EXISTS reply_payload jsonb NOT NULL DEFAULT &apos;&#123;&#125;&apos;::jsonb; NOTIFY pgrst, &apos;reload schema&apos;;
+            </div>
+          </div>
+        )}
 
         {/* 2カラム構成: 左側フォームまたはJSON / 右側リアルタイムプレビュー */}
         <div className="grid gap-6 lg:grid-cols-12">
@@ -541,71 +720,189 @@ export const MarketingLineSettingsView: React.FC = () => {
                   </div>
                 </div>
 
-                {/* ボタン設定 */}
-                <div className="space-y-3 rounded-xl border border-slate-800 bg-slate-950/60 p-4">
-                  <h3 className="text-xs font-bold text-slate-200">2. アクションボタン設定</h3>
-
-                  {/* ボタン1 */}
-                  <div className="rounded-lg border border-slate-800 p-3 space-y-2">
-                    <span className="text-[11px] font-semibold text-indigo-400">ボタン 1（メッセージ送信）</span>
-                    <div className="grid gap-2 sm:grid-cols-2">
-                      <input
-                        type="text"
-                        value={btn1Label}
-                        onChange={(e) => setBtn1Label(e.target.value)}
-                        placeholder="ボタン表示名"
-                        className="rounded border border-slate-700 bg-slate-900 px-2.5 py-1 text-xs text-white"
-                      />
-                      <input
-                        type="text"
-                        value={btn1Text}
-                        onChange={(e) => setBtn1Text(e.target.value)}
-                        placeholder="タップ時に送信される返信文字"
-                        className="rounded border border-slate-700 bg-slate-900 px-2.5 py-1 text-xs text-white"
-                      />
+                {/* 選択肢・分岐アクション設定（最大4つ） */}
+                <div className="space-y-4 rounded-xl border border-slate-800 bg-slate-950/60 p-4">
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                    <div>
+                      <h3 className="text-xs font-bold text-white flex items-center gap-1.5">
+                        <span>2. 選択肢・自動分岐設定（最大4つ）</span>
+                        <span className="text-[10px] bg-indigo-500/20 text-indigo-300 border border-indigo-500/30 px-2 py-0.5 rounded-full font-medium">postback方式</span>
+                      </h3>
+                      <p className="text-[11px] text-slate-400 mt-0.5">
+                        友だち追加時に届くFlexカードのボタンです。選択時にタグを付与し、それぞれの専用ルートへ分岐返信します。
+                      </p>
                     </div>
+                    {choices.length < 4 && (
+                      <button
+                        type="button"
+                        onClick={addChoice}
+                        className="inline-flex items-center gap-1 text-xs text-emerald-400 bg-emerald-950/40 hover:bg-emerald-900/60 border border-emerald-800/60 rounded-lg px-2.5 py-1 font-semibold transition cursor-pointer"
+                      >
+                        <Plus className="h-3.5 w-3.5" /> 選択肢を追加
+                      </button>
+                    )}
                   </div>
 
-                  {/* ボタン2 */}
-                  <div className="rounded-lg border border-slate-800 p-3 space-y-2">
-                    <span className="text-[11px] font-semibold text-sky-400">ボタン 2（メッセージ送信）</span>
-                    <div className="grid gap-2 sm:grid-cols-2">
-                      <input
-                        type="text"
-                        value={btn2Label}
-                        onChange={(e) => setBtn2Label(e.target.value)}
-                        placeholder="ボタン表示名"
-                        className="rounded border border-slate-700 bg-slate-900 px-2.5 py-1 text-xs text-white"
-                      />
-                      <input
-                        type="text"
-                        value={btn2Text}
-                        onChange={(e) => setBtn2Text(e.target.value)}
-                        placeholder="タップ時に送信される返信文字"
-                        className="rounded border border-slate-700 bg-slate-900 px-2.5 py-1 text-xs text-white"
-                      />
-                    </div>
-                  </div>
+                  <div className="space-y-3">
+                    {choices.map((choice, idx) => {
+                      const matchedScenarios = getScenariosForTag(choice.tag);
+                      const badgeColors = [
+                        'bg-emerald-500/20 text-emerald-300 border-emerald-500/30',
+                        'bg-indigo-500/20 text-indigo-300 border-indigo-500/30',
+                        'bg-sky-500/20 text-sky-300 border-sky-500/30',
+                        'bg-purple-500/20 text-purple-300 border-purple-500/30',
+                      ];
 
-                  {/* ボタン3 (診断リンク) */}
-                  <div className="rounded-lg border border-emerald-500/20 bg-emerald-950/10 p-3 space-y-2">
-                    <span className="text-[11px] font-semibold text-emerald-400">ボタン 3（診断フォームURLリンク）</span>
-                    <div className="space-y-2">
-                      <input
-                        type="text"
-                        value={btn3Label}
-                        onChange={(e) => setBtn3Label(e.target.value)}
-                        placeholder="ボタン表示名"
-                        className="w-full rounded border border-slate-700 bg-slate-900 px-2.5 py-1 text-xs text-white"
-                      />
-                      <input
-                        type="url"
-                        value={btn3Uri}
-                        onChange={(e) => setBtn3Uri(e.target.value)}
-                        placeholder="遷移先URL (https://...)"
-                        className="w-full rounded border border-slate-700 bg-slate-900 px-2.5 py-1 text-xs text-white font-mono"
-                      />
-                    </div>
+                      return (
+                        <div key={choice.id || idx} className="rounded-xl border border-slate-800 bg-slate-900/90 p-3.5 space-y-3">
+                          <div className="flex items-center justify-between gap-2 border-b border-slate-800 pb-2">
+                            <div className="flex items-center gap-2">
+                              <span className={`px-2 py-0.5 rounded text-[11px] font-bold border ${badgeColors[idx % badgeColors.length]}`}>
+                                選択肢 {idx + 1}
+                              </span>
+                              <span className="text-[11px] text-slate-400 font-mono">id: {choice.id}</span>
+                            </div>
+                            {choices.length > 1 && (
+                              <button
+                                type="button"
+                                onClick={() => removeChoice(idx)}
+                                className="text-slate-500 hover:text-rose-400 transition p-1 cursor-pointer"
+                                title="この選択肢を削除"
+                              >
+                                <Trash2 className="h-3.5 w-3.5" />
+                              </button>
+                            )}
+                          </div>
+
+                          <div className="grid gap-3 sm:grid-cols-2">
+                            <div>
+                              <label className="block text-[11px] text-slate-400 mb-1">
+                                ボタン表示名 <span className="text-rose-400">*</span>（最大20文字）
+                              </label>
+                              <input
+                                type="text"
+                                maxLength={20}
+                                value={choice.label}
+                                onChange={(e) => updateChoice(idx, { label: e.target.value })}
+                                placeholder="例: 📊 3分無料経営診断を受ける"
+                                className="w-full rounded border border-slate-700 bg-slate-950 px-2.5 py-1.5 text-xs text-white"
+                              />
+                            </div>
+                            <div>
+                              <label className="block text-[11px] text-slate-400 mb-1">
+                                付与するタグ名 <span className="text-rose-400">*</span>（シナリオ起動条件）
+                              </label>
+                              <input
+                                type="text"
+                                value={choice.tag}
+                                onChange={(e) => updateChoice(idx, { tag: e.target.value })}
+                                placeholder="例: 選択:診断"
+                                className="w-full rounded border border-slate-700 bg-slate-950 px-2.5 py-1.5 text-xs text-white font-mono"
+                              />
+                            </div>
+                          </div>
+
+                          <div className="grid gap-3 sm:grid-cols-2">
+                            <div>
+                              <label className="block text-[11px] text-slate-400 mb-1">
+                                分岐先の返信タイプ（route）
+                              </label>
+                              <select
+                                value={choice.route}
+                                onChange={(e) => updateChoice(idx, { route: e.target.value as WelcomeChoiceRoute })}
+                                className="w-full rounded border border-slate-700 bg-slate-950 px-2.5 py-1.5 text-xs text-white"
+                              >
+                                <option value="form">📊 診断フォーム（識別付きURLを返信）</option>
+                                <option value="booking">🗓️ 個別相談・面談予約（予約カレンダーURLを返信）</option>
+                                <option value="template">📑 登録済みテンプレート（Flex等テンプレートを返信）</option>
+                              </select>
+                            </div>
+
+                            {choice.route === 'form' && (
+                              <div>
+                                <label className="block text-[11px] text-slate-400 mb-1">
+                                  フォーム識別スラッグ
+                                </label>
+                                <input
+                                  type="text"
+                                  value={choice.formSlug || 'business-diagnosis'}
+                                  onChange={(e) => updateChoice(idx, { formSlug: e.target.value })}
+                                  placeholder="business-diagnosis"
+                                  className="w-full rounded border border-slate-700 bg-slate-950 px-2.5 py-1.5 text-xs text-white font-mono"
+                                />
+                                <span className="text-[10px] text-slate-500">
+                                  /f/{choice.formSlug || 'business-diagnosis'}?cid=&luid= で送信されます
+                                </span>
+                              </div>
+                            )}
+
+                            {choice.route === 'template' && (
+                              <div>
+                                <label className="block text-[11px] text-slate-400 mb-1">
+                                  返信する登録済みテンプレート
+                                </label>
+                                <select
+                                  value={choice.templateId || ''}
+                                  onChange={(e) => updateChoice(idx, { templateId: e.target.value })}
+                                  className="w-full rounded border border-slate-700 bg-slate-950 px-2.5 py-1.5 text-xs text-white"
+                                >
+                                  <option value="">自動選択（「介護/開業」テンプレートを検索）</option>
+                                  {templates.map((tpl) => (
+                                    <option key={tpl.id} value={tpl.id}>
+                                      {tpl.name}（{tpl.reply_type || 'flex'}）
+                                    </option>
+                                  ))}
+                                </select>
+                                <span className="text-[10px] text-slate-500">
+                                  「テンプレート保管庫」に登録済みのFlexメッセージを選択できます
+                                </span>
+                              </div>
+                            )}
+
+                            {choice.route === 'booking' && (
+                              <div className="flex flex-col justify-center">
+                                <span className="text-[11px] text-slate-400 mb-1">面談予約カレンダー</span>
+                                <span className="text-[11px] text-slate-300">
+                                  営業設定の予約URL（booking_page_url）が自動差し込みされます
+                                </span>
+                              </div>
+                            )}
+                          </div>
+
+                          <div>
+                            <label className="block text-[11px] text-slate-400 mb-1">
+                              個別返信メッセージ・備考（任意）
+                            </label>
+                            <input
+                              type="text"
+                              value={choice.replyText || ''}
+                              onChange={(e) => updateChoice(idx, { replyText: e.target.value })}
+                              placeholder="空欄の場合は標準のご案内メッセージが送信されます"
+                              className="w-full rounded border border-slate-700 bg-slate-950 px-2.5 py-1.5 text-xs text-white"
+                            />
+                          </div>
+
+                          {/* この選択で起動するシナリオ表示 */}
+                          <div className="pt-1">
+                            {matchedScenarios.length > 0 ? (
+                              <div className="flex items-center gap-1.5 text-[11px] text-emerald-300 bg-emerald-950/40 border border-emerald-800/50 rounded-lg px-2.5 py-1.5">
+                                <CheckCircle2 className="h-3.5 w-3.5 shrink-0 text-emerald-400" />
+                                <span>
+                                  この選択で起動するシナリオ: <span className="font-semibold text-emerald-200">{matchedScenarios.map((s) => s.name).join('、')}</span>
+                                </span>
+                              </div>
+                            ) : (
+                              <div className="flex items-center gap-1.5 text-[11px] text-amber-300 bg-amber-950/40 border border-amber-800/50 rounded-lg px-2.5 py-1.5">
+                                <AlertCircle className="h-3.5 w-3.5 shrink-0 text-amber-400" />
+                                <span>
+                                  タグ「<span className="font-mono">{choice.tag || '未設定'}</span>」で起動するシナリオは現在未設定です（「教育・フォロー」タブで作成できます）
+                                </span>
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      );
+                    })}
                   </div>
                 </div>
               </>

@@ -198,7 +198,11 @@ export const MarketingLineInboxView:React.FC<{initialLineUserId?:string}> = ({in
     if(!db||!ruleName.trim()||!matchText.trim())return;
     if(!selectedTemplateId){setError('返信テンプレートを選択してください。');return;}
     setBusy(true);setError('');setNotice('');
-    const {error:e}=await db.from('line_auto_reply_rules').insert({owner_id:ownerId,name:ruleName.trim(),match_mode:matchMode,match_text:matchText.trim(),reply_text:replyType==='text'?String(replyPayload.text||''):'',reply_type:replyType,reply_payload:replyPayload,tag_id:tagId||null,priority:rules.length*10+100,enabled:true});
+    let {error:e}=await db.from('line_auto_reply_rules').insert({owner_id:ownerId,name:ruleName.trim(),match_mode:matchMode,match_text:matchText.trim(),reply_text:replyType==='text'?String(replyPayload.text||''):JSON.stringify(replyPayload),reply_type:replyType,reply_payload:replyPayload,tag_id:tagId||null,priority:rules.length*10+100,enabled:true});
+    if(e && (e.message?.includes('reply_payload') || e.code === 'PGRST204' || e.message?.includes('schema cache'))){
+      const fb = await db.from('line_auto_reply_rules').insert({owner_id:ownerId,name:ruleName.trim(),match_mode:matchMode,match_text:matchText.trim(),reply_text:replyType==='text'?String(replyPayload.text||''):JSON.stringify(replyPayload),tag_id:tagId||null,priority:rules.length*10+100,enabled:true});
+      e = fb.error;
+    }
     if(e)setError(e.message);else{setRuleName('');setMatchText('');setTagId('');setSelectedTemplateId('');setReplyPayload({});setNotice('自動返信ルールを保存しました。');await load()}
     setBusy(false);
   };

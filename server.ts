@@ -112,11 +112,8 @@ function isOptionalLineAutomationSchemaMissing(error: any): boolean {
 }
 
 function buildDefaultWelcomeFlexMessage(): { altText: string; contents: Record<string, any> } {
-  const appUrl = (process.env.PUBLIC_APP_URL || '').replace(/\/$/, '') || 'https://ais-dev-cadlpgsrctfv3ddojzsli3-203567468120.asia-northeast1.run.app';
-  const diagnosisUrl = `${appUrl}/forms/business-diagnosis?source=line`;
-
   return {
-    altText: '大橋真人よりLINE友だち登録のご挨拶と無料診断のご案内',
+    altText: '大橋真人よりLINE友だち登録のご挨拶とご案内',
     contents: {
       type: 'bubble',
       body: {
@@ -177,13 +174,27 @@ function buildDefaultWelcomeFlexMessage(): { altText: string; contents: Record<s
           {
             type: 'button',
             style: 'primary',
-            color: '#1E3A5F',
+            color: '#10B981',
             height: 'lg',
             margin: 'lg',
             action: {
-              type: 'message',
-              label: '経営改善について相談する',
-              text: '経営改善について相談する',
+              type: 'postback',
+              label: '📊 3分無料経営診断を受ける',
+              data: 'wc=diagnosis',
+              displayText: '📊 3分無料経営診断を受ける',
+            },
+          },
+          {
+            type: 'button',
+            style: 'primary',
+            color: '#1E3A5F',
+            height: 'lg',
+            margin: 'sm',
+            action: {
+              type: 'postback',
+              label: '経営改善について個別相談する',
+              data: 'wc=consult',
+              displayText: '経営改善について個別相談する',
             },
           },
           {
@@ -193,21 +204,10 @@ function buildDefaultWelcomeFlexMessage(): { altText: string; contents: Record<s
             height: 'lg',
             margin: 'sm',
             action: {
-              type: 'message',
-              label: '介護保険外サービスについて相談する',
-              text: '介護保険外サービスについて相談する',
-            },
-          },
-          {
-            type: 'button',
-            style: 'primary',
-            color: '#10B981',
-            height: 'lg',
-            margin: 'sm',
-            action: {
-              type: 'uri',
-              label: '📊 3分無料経営診断を受ける',
-              uri: diagnosisUrl,
+              type: 'postback',
+              label: '介護保険外サービス開業パッケージを知る',
+              data: 'wc=care',
+              displayText: '介護保険外サービス開業パッケージについて知る',
             },
           },
         ],
@@ -216,54 +216,6 @@ function buildDefaultWelcomeFlexMessage(): { altText: string; contents: Record<s
   };
 }
 
-async function sendLineWelcomeMessage(event: any, contact: any, eventId: string, botUserId: string): Promise<void> {
-  if (!lineSupabase || !lineChannelAccessToken) return;
-  const userId = typeof event.source?.userId === 'string' ? event.source.userId : '';
-  if (!userId) return;
-
-  const flexData = buildDefaultWelcomeFlexMessage();
-  const lineMessage = {
-    type: 'flex',
-    altText: flexData.altText,
-    contents: flexData.contents,
-  };
-
-  try {
-    if (typeof event.replyToken === 'string') {
-      const response = await fetch('https://api.line.me/v2/bot/message/reply', {
-        method: 'POST',
-        headers: { Authorization: 'Bearer ' + lineChannelAccessToken, 'Content-Type': 'application/json' },
-        body: JSON.stringify({ replyToken: event.replyToken, messages: [lineMessage] }),
-      });
-      if (!response.ok) {
-        console.warn('LINE welcome reply error:', await response.text().catch(() => ''));
-      }
-    } else {
-      await fetch('https://api.line.me/v2/bot/message/push', {
-        method: 'POST',
-        headers: { Authorization: 'Bearer ' + lineChannelAccessToken, 'Content-Type': 'application/json' },
-        body: JSON.stringify({ to: userId, messages: [lineMessage] }),
-      });
-    }
-
-    const { data: integration } = await lineSupabase
-      .from('line_channel_integrations').select('owner_id').eq('bot_user_id', botUserId).maybeSingle();
-
-    await lineSupabase.from('line_inbox_messages').upsert({
-      owner_id: integration?.owner_id || null,
-      line_event_id: `welcome-${eventId}`,
-      direction: 'outbound',
-      contact_id: contact.id,
-      line_user_id: userId,
-      message_type: 'flex',
-      body: '[友だち追加ウェルカムメッセージ: 大橋真人よりご挨拶・無料診断誘導]',
-      status: 'sent',
-      received_at: new Date().toISOString(),
-    }, { onConflict: 'owner_id,line_event_id,direction', ignoreDuplicates: true });
-  } catch (error) {
-    console.warn('Failed to send LINE welcome message:', error);
-  }
-}
 
 async function processLineInboxAndAutoReply(event: any, contact: any, eventId: string, botUserId: string): Promise<void> {
   if (!lineSupabase || event.type !== 'message' || event.message?.type !== 'text' || !botUserId) return;
@@ -329,15 +281,33 @@ async function processLineInboxAndAutoReply(event: any, contact: any, eventId: s
 
   if (!matchedRule) {
     // 組み込みデフォルト自動返信（経営改善・介護保険外サービス・無料診断誘導）
-    const appUrl = (process.env.PUBLIC_APP_URL || '').replace(/\/$/, '') || 'https://ais-dev-cadlpgsrctfv3ddojzsli3-203567468120.asia-northeast1.run.app';
+    const appUrl = (process.env.PUBLIC_APP_URL || '').replace(/\/$/, '');
+    if (!appUrl) {
+      console.warn('PUBLIC_APP_URL is not set. Default auto-reply URL omitted.');
+    }
     let defaultReplyText = '';
 
     if (normalizedMessage.includes('経営改善')) {
-      defaultReplyText = `経営改善についてのご相談ありがとうございます！\n有限会社MST代表の大橋真人です。\n\n貴社の現状の経営課題（集客・営業・業務フロー・利益率）を明確にするため、まずは【3分無料経営診断】へのご回答をおすすめしております。\n\n回答内容を元に、専任コンサルタントによる改善アドバイスレポートを個別にお届けいたします。\n\n▼ 3分無料経営診断はこちら\n${appUrl}/forms/business-diagnosis?source=line&topic=management\n\nまた、個別面談や直接のご相談も受け付けております。お気軽にご希望日程やご質問をそのまま返信してください。`;
+      if (appUrl) {
+        const diagUrl = `${appUrl}/forms/business-diagnosis?source=line&topic=management&cid=${encodeURIComponent(contact.id)}&luid=${encodeURIComponent(userId)}`;
+        defaultReplyText = `経営改善についてのご相談ありがとうございます！\n有限会社MST代表の大橋真人です。\n\n貴社の現状の経営課題（集客・営業・業務フロー・利益率）を明確にするため、まずは【3分無料経営診断】へのご回答をおすすめしております。\n\n回答内容を元に、専任コンサルタントによる改善アドバイスレポートを個別にお届けいたします。\n\n▼ 3分無料経営診断はこちら\n${diagUrl}\n\nまた、個別面談や直接のご相談も受け付けております。お気軽にご希望日程やご質問をそのまま返信してください。`;
+      } else {
+        defaultReplyText = `経営改善についてのご相談ありがとうございます！\n有限会社MST代表の大橋真人です。\n\n貴社の現状の経営課題（集客・営業・業務フロー・利益率）を明確にするため、まずは無料経営診断をおすすめしております。\n現在システム公開URLの設定準備中のため、担当者より直接ご案内をお送りいたします。\nお気軽にご希望日程やご質問をそのまま返信してください。`;
+      }
     } else if (normalizedMessage.includes('介護保険外')) {
-      defaultReplyText = `介護保険外サービスの開業・事業展開についてのご相談ありがとうございます！\n有限会社MST代表の大橋真人です。\n\n介護保険外サービス（自費リハビリ・自費看護・生活支援等）の立ち上げでは、収益モデルの設計と地域集客が成功の鍵となります。\n\nまずは貴社の構想や適性を把握するため、無料診断フォームよりお聞かせください。\n\n▼ 開業・経営診断フォームはこちら\n${appUrl}/forms/business-diagnosis?source=line&topic=care\n\n回答を確認後、大橋より専門レポートを作成してお届けします。`;
+      if (appUrl) {
+        const diagUrl = `${appUrl}/forms/business-diagnosis?source=line&topic=care&cid=${encodeURIComponent(contact.id)}&luid=${encodeURIComponent(userId)}`;
+        defaultReplyText = `介護保険外サービスの開業・事業展開についてのご相談ありがとうございます！\n有限会社MST代表の大橋真人です。\n\n介護保険外サービス（自費リハビリ・自費看護・生活支援等）の立ち上げでは、収益モデルの設計と地域集客が成功の鍵となります。\n\nまずは貴社の構想や適性を把握するため、無料診断フォームよりお聞かせください。\n\n▼ 開業・経営診断フォームはこちら\n${diagUrl}\n\n回答を確認後、大橋より専門レポートを作成してお届けします。`;
+      } else {
+        defaultReplyText = `介護保険外サービスの開業・事業展開についてのご相談ありがとうございます！\n有限会社MST代表の大橋真人です。\n\n介護保険外サービス（自費リハビリ・自費看護・生活支援等）の立ち上げでは、収益モデルの設計と地域集客が成功の鍵となります。\n担当の大橋より詳細資料をお送りいたしますので、今しばらくお待ちください。`;
+      }
     } else if (normalizedMessage.includes('診断')) {
-      defaultReplyText = `無料経営診断のご案内です。\n以下のURLより約3分でご回答いただけます。回答受領後、大橋真人より専任レポートをお届けします。\n\n▼ 3分無料経営診断\n${appUrl}/forms/business-diagnosis?source=line`;
+      if (appUrl) {
+        const diagUrl = `${appUrl}/forms/business-diagnosis?source=line&cid=${encodeURIComponent(contact.id)}&luid=${encodeURIComponent(userId)}`;
+        defaultReplyText = `無料経営診断のご案内です。\n以下のURLより約3分でご回答いただけます。回答受領後、大橋真人より専任レポートをお届けします。\n\n▼ 3分無料経営診断\n${diagUrl}`;
+      } else {
+        defaultReplyText = `無料経営診断のご案内です。\n現在システム公開URLの設定準備中のため、担当者より直接診断フォームをご案内いたします。`;
+      }
     }
 
     if (defaultReplyText && typeof event.replyToken === 'string') {
@@ -436,8 +406,40 @@ async function processLineInboxAndAutoReply(event: any, contact: any, eventId: s
 }
 
 
+async function getOrCreateLineTag(ownerId: string, tagName: string): Promise<string | null> {
+  if (!lineSupabase || !ownerId || !tagName?.trim()) return null;
+  const trimmed = tagName.trim();
+  const { data: existingTag } = await lineSupabase
+    .from('line_tags')
+    .select('id')
+    .eq('owner_id', ownerId)
+    .eq('name', trimmed)
+    .maybeSingle();
+  if (existingTag?.id) return existingTag.id;
+
+  const { data: newTag, error: insertError } = await lineSupabase
+    .from('line_tags')
+    .insert({
+      owner_id: ownerId,
+      name: trimmed,
+      color: '#0284C7',
+    })
+    .select('id')
+    .maybeSingle();
+  if (insertError) {
+    const { data: retryTag } = await lineSupabase
+      .from('line_tags')
+      .select('id')
+      .eq('owner_id', ownerId)
+      .eq('name', trimmed)
+      .maybeSingle();
+    return retryTag?.id || null;
+  }
+  return newTag?.id || null;
+}
+
 async function processLineFollowWelcome(event: any, contact: any, eventId: string, botUserId: string): Promise<void> {
-  if (!lineSupabase || event.type !== 'follow' || !botUserId || typeof event.replyToken !== 'string') return;
+  if (!lineSupabase || !lineChannelAccessToken || event.type !== 'follow' || !botUserId) return;
   const { data: integration, error: integrationError } = await lineSupabase
     .from('line_channel_integrations').select('owner_id,auto_reply_enabled').eq('bot_user_id', botUserId).maybeSingle();
   if (integrationError) {
@@ -446,42 +448,147 @@ async function processLineFollowWelcome(event: any, contact: any, eventId: strin
   }
   if (!integration || !integration.auto_reply_enabled) return;
 
+  const userId = typeof event.source?.userId === 'string' ? event.source.userId : '';
+  if (!userId) return;
+
+  // 1. 有効な __welcome__ ルールを取得
   const { data: welcomeRules, error: rulesError } = await lineSupabase.from('line_auto_reply_rules')
-    .select('id,reply_text,reply_type,reply_payload,tag_id')
+    .select('id,name,reply_text,reply_type,reply_payload,tag_id,enabled')
     .eq('owner_id', integration.owner_id)
     .eq('enabled', true)
     .in('match_text', ['__welcome__', '友だち追加', 'ウェルカム'])
     .order('priority', { ascending: true });
 
-  if (rulesError || !welcomeRules || welcomeRules.length === 0) return;
-  const matchedRule = welcomeRules[0];
-  const replyType = matchedRule.reply_type || 'text';
-  const replyText = String(matchedRule.reply_text || '').slice(0, 5000);
-  if (!replyText && replyType === 'text') return;
+  const matchedRule = (!rulesError && welcomeRules && welcomeRules.length > 0) ? welcomeRules[0] : null;
 
-  const lineMessage = { type: 'text', text: replyText };
-  const replyResponse = await fetch('https://api.line.me/v2/bot/message/reply', {
-    method: 'POST',
-    headers: { Authorization: 'Bearer ' + lineChannelAccessToken, 'Content-Type': 'application/json' },
-    body: JSON.stringify({ replyToken: event.replyToken, messages: [lineMessage] }),
-  });
-  if (!replyResponse.ok) return;
+  let lineMessage: Record<string, any> | null = null;
+  let inboxBody = '';
+  let usedFallback = false;
 
-  const userId = typeof event.source?.userId === 'string' ? event.source.userId : '';
-  if (userId) {
+  if (matchedRule) {
+    const replyType = matchedRule.reply_type || 'text';
+    let payload = matchedRule.reply_payload;
+    if (!payload && typeof matchedRule.reply_text === 'string' && matchedRule.reply_text.trim().startsWith('{')) {
+      try { payload = JSON.parse(matchedRule.reply_text); } catch {}
+    }
+
+    try {
+      const { data: salesSettings } = await lineSupabase.from('sales_workspace_settings')
+        .select('booking_page_url').eq('owner_id', integration.owner_id).maybeSingle();
+      const { data: pubForms } = await lineSupabase.from('diagnosis_forms')
+        .select('id,name,public_slug,definition,form_type,status')
+        .eq('status', 'published').order('created_at', { ascending: false }).limit(5);
+      const defaultForm = (pubForms || []).find((f: any) => f.form_type === 'diagnosis') || pubForms?.[0] || null;
+
+      const appUrl = (process.env.PUBLIC_APP_URL || '').replace(/\/$/, '');
+      const ownerSettings = {
+        salesSettings,
+        defaultForm,
+        allForms: pubForms,
+        appUrl,
+      };
+
+      if (replyType === 'flex' && payload && typeof payload === 'object') {
+        const resolved = resolveMessageVars(contact, { line_message_payload: payload }, ownerSettings);
+        if (resolved.error) {
+          console.warn('Welcome Flex resolveMessageVars error, falling back to default Flex:', resolved.error);
+          usedFallback = true;
+        } else {
+          const personalizedPayload = resolved.personalizeJson(payload);
+          const unresolved = checkUnresolvedPlaceholders(personalizedPayload);
+          const urlCheck = checkUrlsInObject(personalizedPayload);
+          if (unresolved || !urlCheck.valid) {
+            console.warn('Welcome Flex has unresolved placeholders or invalid URL:', unresolved || urlCheck.invalidUrl);
+            usedFallback = true;
+          } else {
+            const altText = String(personalizedPayload.altText || '友だち追加ありがとうございます').slice(0, 400);
+            const contents = personalizedPayload.contents || (['bubble', 'carousel'].includes(personalizedPayload.type) ? personalizedPayload : null);
+            if (contents && typeof contents === 'object') {
+              lineMessage = { type: 'flex', altText, contents };
+              inboxBody = `[ウェルカムFlexメッセージ: ${altText}]`;
+            } else {
+              usedFallback = true;
+            }
+          }
+        }
+      } else if (replyType === 'text') {
+        const textContent = String(matchedRule.reply_text || (payload as any)?.text || '');
+        const resolved = resolveMessageVars(contact, { body_text: textContent }, ownerSettings);
+        if (resolved.error) {
+          console.warn('Welcome text resolveMessageVars error, falling back:', resolved.error);
+          usedFallback = true;
+        } else {
+          const personalizedText = resolved.personalize(textContent);
+          if (checkUnresolvedPlaceholders(personalizedText)) {
+            usedFallback = true;
+          } else {
+            lineMessage = { type: 'text', text: personalizedText };
+            inboxBody = personalizedText;
+          }
+        }
+      } else if (replyType === 'image' && payload && typeof payload === 'object') {
+        const originalContentUrl = String((payload as any).originalContentUrl || '');
+        const previewImageUrl = String((payload as any).previewImageUrl || '');
+        if (originalContentUrl.startsWith('https://') && previewImageUrl.startsWith('https://')) {
+          lineMessage = { type: 'image', originalContentUrl, previewImageUrl };
+          inboxBody = '[ウェルカム画像メッセージ]';
+        } else {
+          usedFallback = true;
+        }
+      } else {
+        usedFallback = true;
+      }
+    } catch (resolveErr) {
+      console.warn('Welcome message resolve exception:', resolveErr);
+      usedFallback = true;
+    }
+  }
+
+  // ルールが無いか、未解決プレースホルダー等でフォールバックが必要な場合は固定Flexを使用
+  if (!matchedRule || usedFallback || !lineMessage) {
+    const defaultFlex = buildDefaultWelcomeFlexMessage();
+    lineMessage = {
+      type: 'flex',
+      altText: defaultFlex.altText,
+      contents: defaultFlex.contents,
+    };
+    inboxBody = '[友だち追加ウェルカムメッセージ: 大橋真人よりご挨拶・選択肢Flex]';
+  }
+
+  // 1通だけ送信 (replyToken があれば reply、無ければ push)
+  try {
+    let sentOk = false;
+    if (typeof event.replyToken === 'string') {
+      const response = await fetch('https://api.line.me/v2/bot/message/reply', {
+        method: 'POST',
+        headers: { Authorization: 'Bearer ' + lineChannelAccessToken, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ replyToken: event.replyToken, messages: [lineMessage] }),
+      });
+      if (response.ok) sentOk = true;
+      else console.warn('LINE welcome reply error:', await response.text().catch(() => ''));
+    }
+    if (!sentOk) {
+      const pushRes = await fetch('https://api.line.me/v2/bot/message/push', {
+        method: 'POST',
+        headers: { Authorization: 'Bearer ' + lineChannelAccessToken, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ to: userId, messages: [lineMessage] }),
+      });
+      if (!pushRes.ok) console.warn('LINE welcome push error:', await pushRes.text().catch(() => ''));
+    }
+
     await lineSupabase.from('line_inbox_messages').upsert({
       owner_id: integration.owner_id,
-      line_event_id: eventId + '_welcome',
+      line_event_id: `welcome-${eventId}`,
       direction: 'outbound',
       contact_id: contact.id,
       line_user_id: userId,
-      message_type: 'text',
-      body: replyText,
+      message_type: lineMessage.type,
+      body: inboxBody,
       status: 'sent',
       received_at: new Date().toISOString(),
     }, { onConflict: 'owner_id,line_event_id,direction', ignoreDuplicates: true });
 
-    if (matchedRule.tag_id) {
+    if (matchedRule?.tag_id) {
       const { data: friend } = await lineSupabase.from('line_friends')
         .select('id').eq('line_user_id', userId).maybeSingle();
       if (friend?.id) {
@@ -489,6 +596,318 @@ async function processLineFollowWelcome(event: any, contact: any, eventId: strin
           line_friend_id: friend.id, tag_id: matchedRule.tag_id, assigned_by: 'automation',
         }, { onConflict: 'line_friend_id,tag_id', ignoreDuplicates: true });
       }
+    }
+  } catch (err) {
+    console.warn('processLineFollowWelcome failed:', err);
+  }
+}
+
+async function processLinePostbackEvent(event: any, contact: any, eventId: string, botUserId: string): Promise<void> {
+  if (!lineSupabase || !lineChannelAccessToken || !botUserId) return;
+  const { data: integration, error: integrationError } = await lineSupabase
+    .from('line_channel_integrations').select('owner_id,auto_reply_enabled').eq('bot_user_id', botUserId).maybeSingle();
+  if (integrationError) {
+    if (isOptionalLineAutomationSchemaMissing(integrationError)) return;
+    throw integrationError;
+  }
+  if (!integration) return;
+
+  const userId = typeof event.source?.userId === 'string' ? event.source.userId : '';
+  if (!userId) return;
+
+  const postbackData = typeof event.postback?.data === 'string' ? event.postback.data.trim() : '';
+  const eventTime = typeof event.timestamp === 'number' ? new Date(event.timestamp).toISOString() : new Date().toISOString();
+
+  const isWc = postbackData.startsWith('wc=');
+  const isCarePackage = postbackData.startsWith('care_package_form=');
+
+  // 4. 既存の「postback で、待機中のLINEジョブを skipped にする」処理は、wc= または care_package_form= のとき、実行しない。
+  if (!isWc && !isCarePackage) {
+    try {
+      await lineSupabase
+        .from('marketing_automation_jobs')
+        .update({
+          status: 'skipped',
+          error_message: '顧客側からのアクション（ボタン・メニュータップ）があったため自動シナリオを停止',
+          updated_at: eventTime,
+        })
+        .eq('contact_id', contact.id)
+        .eq('channel', 'line')
+        .eq('status', 'queued');
+    } catch (pbErr) {
+      console.warn('LINE scenario auto-pause on postback warning:', pbErr);
+    }
+  }
+
+  if (!isWc) return;
+
+  const choiceId = postbackData.slice(3).trim();
+  if (!choiceId) return;
+
+  // 1. data が 'wc=<choiceId>' の形で、choiceId が定義済みのものだけ処理する（許可リスト方式。未知の値は、何もしない）。
+  const { data: welcomeRule } = await lineSupabase
+    .from('line_auto_reply_rules')
+    .select('reply_payload, reply_text')
+    .eq('owner_id', integration.owner_id)
+    .eq('enabled', true)
+    .in('match_text', ['__welcome__', '友だち追加', 'ウェルカム'])
+    .order('priority', { ascending: true })
+    .limit(1)
+    .maybeSingle();
+
+  let configuredChoices: any[] = [];
+  if (welcomeRule?.reply_payload && typeof welcomeRule.reply_payload === 'object') {
+    const payload = welcomeRule.reply_payload as any;
+    if (Array.isArray(payload.choices)) configuredChoices = payload.choices;
+  }
+  if (configuredChoices.length === 0 && typeof welcomeRule?.reply_text === 'string' && welcomeRule.reply_text.startsWith('{')) {
+    try {
+      const parsed = JSON.parse(welcomeRule.reply_text);
+      if (Array.isArray(parsed?.choices)) configuredChoices = parsed.choices;
+    } catch {}
+  }
+
+  const defaultChoices = [
+    { id: 'diagnosis', label: '📊 3分無料経営診断を受ける', tag: '選択:診断', route: 'form', formSlug: 'business-diagnosis' },
+    { id: 'consult', label: '経営改善について個別相談する', tag: '選択:個別相談', route: 'booking' },
+    { id: 'care', label: '介護保険外サービス開業パッケージについて知る', tag: '選択:開業パッケージ', route: 'template' },
+  ];
+
+  const allowedChoices = configuredChoices.length > 0 ? configuredChoices : defaultChoices;
+  const choice = allowedChoices.find((c: any) => c.id === choiceId);
+  if (!choice) {
+    // 許可リストにない未知のchoiceIdは何もしない
+    return;
+  }
+
+  // 2. その選択肢のタグを、友だちに付与する（line_tags を名前で検索、無ければ作成。line_friend_tags に upsert。assigned_by='welcome_choice'）。
+  // タグの付与は、既存のDBトリガー（tag_added）により、該当シナリオを起動する。
+  if (choice.tag && choice.tag.trim()) {
+    try {
+      const tagId = await getOrCreateLineTag(integration.owner_id, choice.tag.trim());
+      if (tagId) {
+        const { data: friend } = await lineSupabase
+          .from('line_friends')
+          .select('id')
+          .eq('line_user_id', userId)
+          .maybeSingle();
+        if (friend?.id) {
+          await lineSupabase.from('line_friend_tags').upsert({
+            line_friend_id: friend.id,
+            tag_id: tagId,
+            assigned_by: 'welcome_choice',
+          }, { onConflict: 'line_friend_id,tag_id', ignoreDuplicates: true });
+        }
+      }
+    } catch (tagErr) {
+      console.warn('Failed to assign tag on welcome choice:', tagErr);
+    }
+  }
+
+  // 3. 選択肢の route に応じた返信を送る。
+  const appUrl = (process.env.PUBLIC_APP_URL || '').replace(/\/$/, '');
+  let replyMessage: Record<string, any> | null = null;
+  let inboxBody = '';
+
+  if (choice.route === 'form') {
+    if (!appUrl) {
+      console.warn('PUBLIC_APP_URL is not configured. Cannot send form URL.');
+      replyMessage = {
+        type: 'text',
+        text: '無料経営診断をお選びいただきありがとうございます！\n現在診断フォームのURL設定を確認中のため、担当者より直接ご案内メッセージをお送りいたします。\nそのままご相談内容をメッセージでご返信いただくことも可能です。',
+      };
+      inboxBody = '[無料診断案内: PUBLIC_APP_URL未設定のため案内文のみ送信]';
+    } else {
+      const formSlug = choice.formSlug || 'business-diagnosis';
+      const formUrl = `${appUrl}/f/${encodeURIComponent(formSlug)}?cid=${encodeURIComponent(contact.id)}&luid=${encodeURIComponent(userId)}`;
+      const cardTitle = '📊 3分無料経営診断';
+      const cardBody = `${contact.full_name || 'お客様'} 様\n無料経営診断をお選びいただきありがとうございます！\n貴社の業務・売上利益のボトルネックを特定し、改善処方箋を作成します。`;
+      replyMessage = {
+        type: 'flex',
+        altText: '【無料経営診断】ご案内',
+        contents: {
+          type: 'bubble',
+          body: {
+            type: 'box',
+            layout: 'vertical',
+            spacing: 'md',
+            contents: [
+              { type: 'text', text: cardTitle, weight: 'bold', size: 'lg', color: '#1E293B' },
+              { type: 'text', text: cardBody, size: 'sm', color: '#475569', wrap: true },
+            ],
+          },
+          footer: {
+            type: 'box',
+            layout: 'vertical',
+            contents: [
+              {
+                type: 'button',
+                style: 'primary',
+                color: '#10B981',
+                action: { type: 'uri', label: '診断を始める（約3分）', uri: formUrl },
+              },
+            ],
+          },
+        },
+      };
+      inboxBody = `[無料経営診断案内Flex送信: ${formUrl}]`;
+    }
+  } else if (choice.route === 'booking') {
+    const { data: salesSettings } = await lineSupabase
+      .from('sales_workspace_settings')
+      .select('booking_page_url')
+      .eq('owner_id', integration.owner_id)
+      .maybeSingle();
+    let bookingUrl = (salesSettings?.booking_page_url || '').trim();
+    if (!bookingUrl) {
+      const { data: pubForms } = await lineSupabase
+        .from('diagnosis_forms')
+        .select('definition')
+        .eq('status', 'published')
+        .limit(5);
+      for (const f of pubForms || []) {
+        if (typeof f?.definition?.booking_url === 'string' && f.definition.booking_url.trim()) {
+          bookingUrl = f.definition.booking_url.trim();
+          break;
+        }
+      }
+    }
+
+    if (bookingUrl && /^https?:\/\//i.test(bookingUrl)) {
+      replyMessage = {
+        type: 'flex',
+        altText: '【個別相談】日程調整のご案内',
+        contents: {
+          type: 'bubble',
+          body: {
+            type: 'box',
+            layout: 'vertical',
+            spacing: 'md',
+            contents: [
+              { type: 'text', text: '🗓️ 経営改善の個別相談', weight: 'bold', size: 'lg', color: '#1E293B' },
+              { type: 'text', text: `${contact.full_name || 'お客様'} 様\n個別相談のご希望ありがとうございます！\n下記の日程調整カレンダーより、ご都合のよい日時をお選びください（30分・オンライン）。`, size: 'sm', color: '#475569', wrap: true },
+            ],
+          },
+          footer: {
+            type: 'box',
+            layout: 'vertical',
+            contents: [
+              {
+                type: 'button',
+                style: 'primary',
+                color: '#1E3A5F',
+                action: { type: 'uri', label: '面談日時を選ぶ（30分）', uri: bookingUrl },
+              },
+            ],
+          },
+        },
+      };
+      inboxBody = `[個別相談予約案内Flex送信: ${bookingUrl}]`;
+    } else {
+      replyMessage = {
+        type: 'text',
+        text: '個別相談のご希望ありがとうございます！\n担当者より日程調整のご案内を個別にお送りいたします。\nそのままご希望の日程やご相談内容をメッセージでご返信いただいても構いません。',
+      };
+      inboxBody = '[個別相談案内: 予約カレンダー未設定のため返信案内を送信]';
+    }
+  } else if (choice.route === 'template') {
+    let templateRow: any = null;
+    if (choice.templateId) {
+      const { data: tpl } = await lineSupabase
+        .from('line_auto_reply_templates')
+        .select('id, name, reply_type, payload, content')
+        .eq('id', choice.templateId)
+        .maybeSingle();
+      templateRow = tpl;
+    }
+    if (!templateRow) {
+      const { data: tpls } = await lineSupabase
+        .from('line_auto_reply_templates')
+        .select('id, name, reply_type, payload, content')
+        .eq('owner_id', integration.owner_id)
+        .or('name.ilike.%介護%,name.ilike.%開業%,name.ilike.%パッケージ%')
+        .limit(1);
+      if (tpls && tpls.length > 0) templateRow = tpls[0];
+    }
+
+    if (templateRow && templateRow.payload && typeof templateRow.payload === 'object') {
+      try {
+        const { data: salesSettings } = await lineSupabase.from('sales_workspace_settings')
+          .select('booking_page_url').eq('owner_id', integration.owner_id).maybeSingle();
+        const { data: pubForms } = await lineSupabase.from('diagnosis_forms')
+          .select('id,name,public_slug,definition,form_type,status').eq('status', 'published').limit(5);
+        const defaultForm = (pubForms || []).find((f: any) => f.form_type === 'diagnosis') || pubForms?.[0] || null;
+
+        const resolved = resolveMessageVars(contact, { line_message_payload: templateRow.payload }, {
+          salesSettings,
+          defaultForm,
+          allForms: pubForms,
+          appUrl,
+        });
+
+        const personalized = resolved.personalizeJson(templateRow.payload);
+        const unresolved = checkUnresolvedPlaceholders(personalized);
+        const urlCheck = checkUrlsInObject(personalized);
+
+        if (!resolved.error && !unresolved && urlCheck.valid) {
+          const tType = templateRow.reply_type || 'flex';
+          if (tType === 'flex') {
+            const altText = String(personalized.altText || templateRow.name || '介護保険外サービス開業パッケージのご案内').slice(0, 400);
+            const contents = personalized.contents || (['bubble', 'carousel'].includes(personalized.type) ? personalized : null);
+            if (contents) {
+              replyMessage = { type: 'flex', altText, contents };
+              inboxBody = `[テンプレートFlex返信: ${templateRow.name}]`;
+            }
+          } else if (tType === 'text') {
+            replyMessage = { type: 'text', text: personalized.text || templateRow.content || '' };
+            inboxBody = `[テンプレートテキスト返信: ${templateRow.name}]`;
+          }
+        }
+      } catch (tplErr) {
+        console.warn('Failed to personalize template payload:', tplErr);
+      }
+    }
+
+    if (!replyMessage) {
+      console.warn('Template not found or invalid for welcome choice:', choice.templateId || choice.label);
+      const fallbackText = choice.replyText || '「介護保険外サービス開業パッケージ」についてご関心をお寄せいただきありがとうございます！\n有限会社MST代表の大橋真人です。\n\n詳細資料および具体的な導入事例について、担当者より個別にお送りいたします。\n今しばらくお待ちくださいませ。';
+      replyMessage = { type: 'text', text: fallbackText };
+      inboxBody = `[テンプレート読込不可のため代替文送信: ${choice.label}]`;
+    }
+  }
+
+  if (replyMessage) {
+    try {
+      let sentOk = false;
+      if (typeof event.replyToken === 'string') {
+        const replyRes = await fetch('https://api.line.me/v2/bot/message/reply', {
+          method: 'POST',
+          headers: { Authorization: 'Bearer ' + lineChannelAccessToken, 'Content-Type': 'application/json' },
+          body: JSON.stringify({ replyToken: event.replyToken, messages: [replyMessage] }),
+        });
+        if (replyRes.ok) sentOk = true;
+      }
+      if (!sentOk) {
+        await fetch('https://api.line.me/v2/bot/message/push', {
+          method: 'POST',
+          headers: { Authorization: 'Bearer ' + lineChannelAccessToken, 'Content-Type': 'application/json' },
+          body: JSON.stringify({ to: userId, messages: [replyMessage] }),
+        });
+      }
+
+      await lineSupabase.from('line_inbox_messages').upsert({
+        owner_id: integration.owner_id,
+        line_event_id: `postback-${eventId}`,
+        direction: 'outbound',
+        contact_id: contact.id,
+        line_user_id: userId,
+        message_type: replyMessage.type,
+        body: inboxBody,
+        status: 'sent',
+        received_at: new Date().toISOString(),
+      }, { onConflict: 'owner_id,line_event_id,direction', ignoreDuplicates: true });
+    } catch (sendErr) {
+      console.warn('Failed to reply to postback event:', sendErr);
     }
   }
 }
@@ -562,25 +981,9 @@ async function processLineWebhookEvent(event: any, botUserId = '') {
           .is('contact_id', null);
         if (leadError) throw leadError;
       }
-      if (event.type === 'follow') await sendLineWelcomeMessage(event, contact, stableEventId, botUserId);
-      if (event.type === 'message') await processLineInboxAndAutoReply(event, contact, stableEventId, botUserId);
-      if (event.type === 'postback') {
-        try {
-          await lineSupabase
-            .from('marketing_automation_jobs')
-            .update({
-              status: 'skipped',
-              error_message: '顧客側からのアクション（ボタン・メニュータップ）があったため自動シナリオを停止',
-              updated_at: eventTime,
-            })
-            .eq('contact_id', contact.id)
-            .eq('channel', 'line')
-            .eq('status', 'queued');
-        } catch (pbErr) {
-          console.warn('LINE scenario auto-pause on postback warning:', pbErr);
-        }
-      }
       if (event.type === 'follow') await processLineFollowWelcome(event, contact, stableEventId, botUserId);
+      if (event.type === 'message') await processLineInboxAndAutoReply(event, contact, stableEventId, botUserId);
+      if (event.type === 'postback') await processLinePostbackEvent(event, contact, stableEventId, botUserId);
     }
 
     if (eventRowId) {
@@ -1250,6 +1653,306 @@ app.post('/api/line/rich-menu', async (req, res) => {
   }
 });
 
+// --- マーケティング自動配信（差し込み解決・送信時間帯・停止条件） ---
+interface ResolveMessageVarsResult {
+  personalize: (text: string) => string;
+  personalizeJson: (value: any) => any;
+  vars: Record<string, string>;
+  error?: string;
+}
+
+function resolveMessageVars(
+  contact: any,
+  scenarioOrJob: any,
+  ownerSettings: {
+    salesSettings?: { booking_page_url?: string | null } | null;
+    defaultForm?: { public_slug?: string | null; definition?: any } | null;
+    allForms?: any[] | null;
+    latestApprovedDoc?: { id: string } | null;
+    company?: { company_name?: string | null } | null;
+    appUrl?: string;
+  }
+): ResolveMessageVarsResult {
+  const recipientName = String(contact?.full_name || 'お客様');
+  const companyName = String(ownerSettings?.company?.company_name || '貴社');
+
+  // {booking_url}: 営業設定の予約ページURL（sales_settings.booking_page_url）。未設定なら、フォームの booking_url。
+  const bookingPageUrl = (ownerSettings?.salesSettings?.booking_page_url || '').trim();
+  const formBookingUrl = typeof ownerSettings?.defaultForm?.definition?.booking_url === 'string'
+    ? ownerSettings.defaultForm.definition.booking_url.trim()
+    : '';
+  const resolvedBookingUrl = bookingPageUrl || formBookingUrl;
+
+  // {material_url}: 資料のURL。フォーム定義（diagnosis_forms.definition.material_url）に設定された公開URL。
+  let formMaterialUrl = typeof ownerSettings?.defaultForm?.definition?.material_url === 'string'
+    ? ownerSettings.defaultForm.definition.material_url.trim()
+    : '';
+  if (!formMaterialUrl && Array.isArray((ownerSettings as any)?.allForms)) {
+    const formWithMaterial = (ownerSettings as any).allForms.find((f: any) => typeof f?.definition?.material_url === 'string' && f.definition.material_url.trim());
+    if (formWithMaterial) {
+      formMaterialUrl = formWithMaterial.definition.material_url.trim();
+    }
+  }
+  const resolvedMaterialUrl = formMaterialUrl;
+
+  // {document_url}: その連絡先の、最新の承認済みの書類の公開URL（/docs/<書類ID>）
+  const appBaseUrl = (ownerSettings?.appUrl || process.env.PUBLIC_APP_URL || '').replace(/\/$/, '');
+  const resolvedDocUrl = (appBaseUrl && ownerSettings?.latestApprovedDoc?.id)
+    ? `${appBaseUrl}/docs/${encodeURIComponent(ownerSettings.latestApprovedDoc.id)}`
+    : '';
+
+  // {link_url}: 診断フォームの公開URL。連絡先IDと LINE のユーザーID を含める（?cid=<contactId>&luid=<lineUserId>）
+  const formSlug = ownerSettings?.defaultForm?.public_slug || 'business-diagnosis';
+  const queryParams = new URLSearchParams();
+  if (contact?.id) queryParams.set('cid', String(contact.id));
+  if (contact?.line_user_id) queryParams.set('luid', String(contact.line_user_id));
+  const queryString = queryParams.toString() ? `?${queryParams.toString()}` : '';
+  const resolvedLinkUrl = appBaseUrl ? `${appBaseUrl}/f/${encodeURIComponent(formSlug)}${queryString}` : '';
+
+  const vars: Record<string, string> = {
+    name: recipientName,
+    recipient_name: recipientName,
+    company_name: companyName,
+    booking_url: resolvedBookingUrl,
+    material_url: resolvedMaterialUrl,
+    document_url: resolvedDocUrl,
+    link_url: resolvedLinkUrl,
+  };
+
+  // メッセージやPayload内に未設定の必須差し込み項目があるか確認
+  const textsToCheck: string[] = [];
+  if (scenarioOrJob?.subject) textsToCheck.push(String(scenarioOrJob.subject));
+  if (scenarioOrJob?.body_text) textsToCheck.push(String(scenarioOrJob.body_text));
+  if (scenarioOrJob?.line_message_payload) {
+    const extractText = (val: any) => {
+      if (typeof val === 'string') textsToCheck.push(val);
+      else if (Array.isArray(val)) val.forEach(extractText);
+      else if (val && typeof val === 'object') Object.values(val).forEach(extractText);
+    };
+    extractText(scenarioOrJob.line_message_payload);
+  }
+  if (scenarioOrJob?.config && typeof scenarioOrJob.config === 'object') {
+    const cfg = scenarioOrJob.config;
+    if (cfg.emailSubject) textsToCheck.push(String(cfg.emailSubject));
+    if (cfg.emailBody) textsToCheck.push(String(cfg.emailBody));
+    if (cfg.messageBody) textsToCheck.push(String(cfg.messageBody));
+    if (cfg.flexTitle) textsToCheck.push(String(cfg.flexTitle));
+    if (cfg.flexBody) textsToCheck.push(String(cfg.flexBody));
+    if (cfg.flexButtonUrl) textsToCheck.push(String(cfg.flexButtonUrl));
+  }
+  const combined = textsToCheck.join('\n');
+
+  if (combined.includes('{booking_url}') && !resolvedBookingUrl) {
+    return {
+      personalize: (t: string) => t,
+      personalizeJson: (v: any) => v,
+      vars,
+      error: '予約URLが未設定です',
+    };
+  }
+
+  if (combined.includes('{material_url}') && !resolvedMaterialUrl) {
+    return {
+      personalize: (t: string) => t,
+      personalizeJson: (v: any) => v,
+      vars,
+      error: '資料URLが未設定です',
+    };
+  }
+
+  if (combined.includes('{document_url}') && !resolvedDocUrl) {
+    return {
+      personalize: (t: string) => t,
+      personalizeJson: (v: any) => v,
+      vars,
+      error: '承認済みの書類が見つかりません（書類URL未設定）',
+    };
+  }
+
+  const personalize = (text: string): string => {
+    return String(text ?? '').replace(/\{([a-z_]+)\}/g, (match, key: string) => {
+      return Object.prototype.hasOwnProperty.call(vars, key) ? vars[key] : match;
+    });
+  };
+
+  const personalizeJson = (value: any): any => {
+    if (typeof value === 'string') return personalize(value);
+    if (Array.isArray(value)) return value.map(personalizeJson);
+    if (value && typeof value === 'object') {
+      const res: Record<string, any> = {};
+      for (const [k, v] of Object.entries(value)) {
+        res[k] = personalizeJson(v);
+      }
+      return res;
+    }
+    return value;
+  };
+
+  return { personalize, personalizeJson, vars };
+}
+
+function checkUrlsInObject(obj: any): { valid: boolean; invalidUrl?: string } {
+  if (!obj) return { valid: true };
+  if (Array.isArray(obj)) {
+    for (const item of obj) {
+      const res = checkUrlsInObject(item);
+      if (!res.valid) return res;
+    }
+    return { valid: true };
+  }
+  if (typeof obj === 'object') {
+    for (const [k, v] of Object.entries(obj)) {
+      const lowerKey = k.toLowerCase();
+      if (typeof v === 'string') {
+        if (lowerKey === 'uri' || lowerKey.endsWith('url') || lowerKey.endsWith('uri')) {
+          const trimmed = v.trim();
+          if (trimmed && !/^https?:\/\//i.test(trimmed)) {
+            return { valid: false, invalidUrl: v };
+          }
+        }
+      } else if (v && typeof v === 'object') {
+        const res = checkUrlsInObject(v);
+        if (!res.valid) return res;
+      }
+    }
+  }
+  return { valid: true };
+}
+
+function checkUnresolvedPlaceholders(val: any): string | null {
+  if (typeof val === 'string') {
+    const match = val.match(/\{([a-z_]+)\}/);
+    if (match) return match[0];
+  } else if (Array.isArray(val)) {
+    for (const item of val) {
+      const res = checkUnresolvedPlaceholders(item);
+      if (res) return res;
+    }
+  } else if (val && typeof val === 'object') {
+    for (const v of Object.values(val)) {
+      const res = checkUnresolvedPlaceholders(v);
+      if (res) return res;
+    }
+  }
+  return null;
+}
+
+function buildFlexBubblePayload(title: string, body: string, buttonLabel?: string, buttonUrl?: string): Record<string, any> {
+  const contents: any = {
+    type: 'bubble',
+    body: {
+      type: 'box',
+      layout: 'vertical',
+      contents: [
+        { type: 'text', text: title || 'ご案内', weight: 'bold', size: 'md', wrap: true },
+        { type: 'text', text: body || '', size: 'sm', color: '#666666', wrap: true, margin: 'md' },
+      ],
+    },
+  };
+  if (buttonLabel && buttonUrl) {
+    contents.footer = {
+      type: 'box',
+      layout: 'vertical',
+      spacing: 'sm',
+      contents: [
+        {
+          type: 'button',
+          style: 'primary',
+          height: 'sm',
+          action: {
+            type: 'uri',
+            label: buttonLabel.slice(0, 20),
+            uri: buttonUrl,
+          },
+        },
+      ],
+    };
+  }
+  return contents;
+}
+
+interface SendTimeWindowCheck {
+  allowed: boolean;
+  nextDueAt?: string;
+}
+
+function checkSendTimeWindow(windowStr: string | null | undefined, now: Date = new Date()): SendTimeWindowCheck {
+  if (!windowStr || typeof windowStr !== 'string' || !windowStr.trim()) {
+    return { allowed: true };
+  }
+  const match = windowStr.trim().match(/^(\d{1,2}):(\d{2})\s*-\s*(\d{1,2}):(\d{2})$/);
+  if (!match) {
+    return { allowed: true };
+  }
+
+  const startHour = parseInt(match[1], 10);
+  const startMinute = parseInt(match[2], 10);
+  const endHour = parseInt(match[3], 10);
+  const endMinute = parseInt(match[4], 10);
+
+  if (
+    startHour < 0 || startHour > 23 || startMinute < 0 || startMinute > 59 ||
+    endHour < 0 || endHour > 23 || endMinute < 0 || endMinute > 59
+  ) {
+    return { allowed: true };
+  }
+
+  const formatter = new Intl.DateTimeFormat('en-US', {
+    timeZone: 'Asia/Tokyo',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit',
+    hour12: false,
+  });
+  const parts = formatter.formatToParts(now);
+  const get = (type: string) => parts.find((p) => p.type === type)?.value || '0';
+  const year = parseInt(get('year'), 10);
+  const month = parseInt(get('month'), 10);
+  const day = parseInt(get('day'), 10);
+  let hour = parseInt(get('hour'), 10);
+  if (hour === 24) hour = 0;
+  const minute = parseInt(get('minute'), 10);
+
+  const currentMins = hour * 60 + minute;
+  const startMins = startHour * 60 + startMinute;
+  const endMins = endHour * 60 + endMinute;
+
+  let isAllowed = false;
+  let nextStartDayOffset = 0;
+
+  if (startMins <= endMins) {
+    if (currentMins >= startMins && currentMins < endMins) {
+      isAllowed = true;
+    } else if (currentMins < startMins) {
+      nextStartDayOffset = 0;
+    } else {
+      nextStartDayOffset = 1;
+    }
+  } else {
+    if (currentMins >= startMins || currentMins < endMins) {
+      isAllowed = true;
+    } else {
+      nextStartDayOffset = 0;
+    }
+  }
+
+  if (isAllowed) {
+    return { allowed: true };
+  }
+
+  const pad = (n: number) => String(n).padStart(2, '0');
+  const baseTokyoDate = new Date(`${year}-${pad(month)}-${pad(day)}T${pad(startHour)}:${pad(startMinute)}:00+09:00`);
+  const nextStartTime = new Date(baseTokyoDate.getTime() + nextStartDayOffset * 24 * 60 * 60 * 1000);
+
+  return {
+    allowed: false,
+    nextDueAt: nextStartTime.toISOString(),
+  };
+}
+
 let marketingQueueBusy = false;
 let marketingRunnerLastRunAt: string | null = null;
 async function processMarketingAutomationJobs(): Promise<void> {
@@ -1274,6 +1977,27 @@ async function processMarketingAutomationJobs(): Promise<void> {
       if (!claimed) continue;
       let outboxId = '';
       try {
+        // シナリオ設定の取得
+        const { data: scenarioRow } = await lineSupabase.from('marketing_automation_scenarios')
+          .select('scenario_id,config,created_at,updated_at')
+          .eq('owner_id', job.owner_id)
+          .eq('scenario_id', job.scenario_id)
+          .maybeSingle();
+        const scenarioConfig = (scenarioRow?.config && typeof scenarioRow.config === 'object') ? scenarioRow.config : {};
+        const scenarioCreatedAt = scenarioRow?.created_at || job.created_at;
+
+        // 3. 送信時間帯の実装 (scenario.sendTimeWindow: Asia/Tokyoで判定)
+        const timeWindowCheck = checkSendTimeWindow(scenarioConfig.sendTimeWindow);
+        if (!timeWindowCheck.allowed && timeWindowCheck.nextDueAt) {
+          // 時間帯外なら送らず、due_at を次の時間帯開始時刻に更新（status は queued に復帰）
+          await lineSupabase.from('marketing_automation_jobs').update({
+            status: 'queued',
+            due_at: timeWindowCheck.nextDueAt,
+            updated_at: new Date().toISOString(),
+          }).eq('id', job.id);
+          continue;
+        }
+
         const { data: contact, error: contactError } = await lineSupabase.from('contacts')
           .select('id,full_name,email,line_user_id,company_id,email_consent_status').eq('id',job.contact_id).maybeSingle();
         if (contactError || !contact) throw new Error('連絡先が見つかりません。');
@@ -1284,19 +2008,200 @@ async function processMarketingAutomationJobs(): Promise<void> {
           if (skipError) throw skipError;
           continue;
         }
+
+        // 2. 停止条件の実装
+        // 2-1. メールの返信があれば停止（email_inbox_messages の受信確認）
+        if (job.channel === 'email' && contact.email) {
+          const normalizedEmail = contact.email.trim().toLowerCase();
+          const { data: emailReplies } = await lineSupabase.from('email_inbox_messages')
+            .select('id,from_email,received_at')
+            .eq('owner_id', job.owner_id)
+            .ilike('from_email', `%${normalizedEmail}%`)
+            .gte('received_at', scenarioCreatedAt)
+            .limit(1);
+          if (emailReplies && emailReplies.length > 0) {
+            await lineSupabase.from('marketing_automation_jobs').update({
+              status: 'skipped',
+              error_message: 'メール返信があったため停止（個別返信対応へ移行）',
+              updated_at: new Date().toISOString(),
+            }).eq('id', job.id);
+            continue;
+          }
+        }
+
+        // 2-2. LINE返信があれば停止（line_inbox_messages の受信確認）
+        if (job.channel === 'line' && contact.line_user_id) {
+          const { data: lineReplies } = await lineSupabase.from('line_inbox_messages')
+            .select('id,received_at')
+            .eq('line_user_id', contact.line_user_id)
+            .eq('direction', 'inbound')
+            .gte('received_at', scenarioCreatedAt)
+            .limit(1);
+          if (lineReplies && lineReplies.length > 0) {
+            await lineSupabase.from('marketing_automation_jobs').update({
+              status: 'skipped',
+              error_message: 'LINE返信があったため停止（個別チャット対応へ移行）',
+              updated_at: new Date().toISOString(),
+            }).eq('id', job.id);
+            continue;
+          }
+        }
+
+        // 2-3. stopOnBooking: シナリオ作成日時以降の予約があれば停止
+        if (scenarioConfig.stopOnBooking) {
+          let hasBooking = false;
+          let bookingReason = '';
+
+          // leads テーブルの面談予約確認
+          const { data: bookedLeads } = await lineSupabase.from('leads')
+            .select('id,meeting_date,updated_at,created_at')
+            .eq('contact_id', contact.id)
+            .not('meeting_date', 'is', null)
+            .gte('updated_at', scenarioCreatedAt)
+            .limit(1);
+          if (bookedLeads && bookedLeads.length > 0 && bookedLeads[0].meeting_date) {
+            hasBooking = true;
+            bookingReason = `予約済みのため停止（リード予約日: ${bookedLeads[0].meeting_date}）`;
+          }
+
+          // deals テーブルの面談日確認
+          if (!hasBooking && contact.company_id) {
+            const { data: bookedDeals } = await lineSupabase.from('deals')
+              .select('id,meeting_date,updated_at')
+              .eq('company_id', contact.company_id)
+              .not('meeting_date', 'is', null)
+              .gte('updated_at', scenarioCreatedAt)
+              .limit(1);
+            if (bookedDeals && bookedDeals.length > 0 && bookedDeals[0].meeting_date) {
+              hasBooking = true;
+              bookingReason = `予約済みのため停止（商談面談日: ${bookedDeals[0].meeting_date}）`;
+            }
+          }
+
+          // customer_service_meetings テーブルの面談確認
+          if (!hasBooking && contact.company_id) {
+            const { data: bookedMeetings } = await lineSupabase.from('customer_service_meetings')
+              .select('id,occurred_at,next_meeting_at,created_at')
+              .eq('company_id', contact.company_id)
+              .gte('created_at', scenarioCreatedAt)
+              .limit(1);
+            if (bookedMeetings && bookedMeetings.length > 0) {
+              hasBooking = true;
+              bookingReason = '予約済みのため停止（ミーティング日程登録あり）';
+            }
+          }
+
+          if (hasBooking) {
+            await lineSupabase.from('marketing_automation_jobs').update({
+              status: 'skipped',
+              error_message: bookingReason || '予約済みのため停止',
+              updated_at: new Date().toISOString(),
+            }).eq('id', job.id);
+            continue;
+          }
+        }
+
+        // 2-4. stopOnDeal: 会社の商談成約/受注 または 連絡先リードのステータス商談化以上で停止
+        if (scenarioConfig.stopOnDeal) {
+          let hasDeal = false;
+          let dealReason = '';
+
+          // 会社の進行中でない商談（成約または受注）
+          if (contact.company_id) {
+            const { data: closedDeals } = await lineSupabase.from('deals')
+              .select('id,proposal_status,updated_at')
+              .eq('company_id', contact.company_id)
+              .in('proposal_status', ['成約', '受注', 'won', 'closed_won'])
+              .gte('updated_at', scenarioCreatedAt)
+              .limit(1);
+            if (closedDeals && closedDeals.length > 0) {
+              hasDeal = true;
+              dealReason = `成約・受注済みのため停止（商談ステータス: ${closedDeals[0].proposal_status}）`;
+            }
+          }
+
+          // 連絡先に紐付くリードのステータスが '商談化' 以上
+          if (!hasDeal) {
+            const { data: dealLeads } = await lineSupabase.from('leads')
+              .select('id,status,updated_at')
+              .eq('contact_id', contact.id)
+              .in('status', ['商談化', '成約', '受注'])
+              .limit(1);
+            if (dealLeads && dealLeads.length > 0) {
+              hasDeal = true;
+              dealReason = `商談化のため停止（リードステータス: ${dealLeads[0].status}）`;
+            }
+          }
+
+          if (hasDeal) {
+            await lineSupabase.from('marketing_automation_jobs').update({
+              status: 'skipped',
+              error_message: dealReason || '商談化・成約済みのため停止',
+              updated_at: new Date().toISOString(),
+            }).eq('id', job.id);
+            continue;
+          }
+        }
+
+        // 1. 差し込みの解決（共通の仕組み resolveMessageVars）
         const companyResult = contact.company_id
-          ? await lineSupabase.from('companies').select('company_name').eq('id',contact.company_id).maybeSingle()
+          ? await lineSupabase.from('companies').select('id,company_name').eq('id',contact.company_id).maybeSingle()
           : { data: null };
-        const recipientName = String(contact.full_name || 'お客様');
-        const companyName = String(companyResult.data?.company_name || '貴社');
-        const values:Record<string,string>={name:recipientName,recipient_name:recipientName,company_name:companyName};
-        // Keep this implementation synchronized with src/utils/placeholders.ts (server.ts intentionally remains standalone).
-        const personalize=(value:unknown)=>String(value??'').replace(/{([a-z_]+)}/g,(match,key:string)=>Object.prototype.hasOwnProperty.call(values,key)?values[key]:match);
+
+        const { data: salesSettings } = await lineSupabase.from('sales_workspace_settings')
+          .select('booking_page_url').eq('owner_id', job.owner_id).maybeSingle();
+
+        const { data: pubForms } = await lineSupabase.from('diagnosis_forms')
+          .select('id,name,public_slug,definition,form_type,status')
+          .eq('status', 'published')
+          .order('created_at', { ascending: false })
+          .limit(10);
+        const defaultForm = (pubForms || []).find((f: any) => f.form_type === 'diagnosis') || pubForms?.[0] || null;
+
+        let latestApprovedDoc: any = null;
+        if (contact.company_id) {
+          const { data: docData } = await lineSupabase.from('customer_documents')
+            .select('id,title,status,created_at')
+            .eq('company_id', contact.company_id)
+            .eq('status', 'approved')
+            .order('created_at', { ascending: false })
+            .limit(1)
+            .maybeSingle();
+          latestApprovedDoc = docData;
+        }
+        if (!latestApprovedDoc) {
+          const { data: fallbackDoc } = await lineSupabase.from('customer_documents')
+            .select('id,title,status,created_at')
+            .eq('owner_id', job.owner_id)
+            .eq('status', 'approved')
+            .order('created_at', { ascending: false })
+            .limit(1)
+            .maybeSingle();
+          latestApprovedDoc = fallbackDoc;
+        }
+
+        const appUrl = (process.env.PUBLIC_APP_URL || '').replace(/\/$/, '');
+
+        const resolved = resolveMessageVars(contact, { ...job, config: scenarioConfig }, {
+          salesSettings,
+          defaultForm,
+          allForms: pubForms,
+          latestApprovedDoc,
+          company: companyResult.data,
+          appUrl,
+        });
+
+        if (resolved.error) {
+          throw new Error(resolved.error);
+        }
+
+        const { personalize, personalizeJson } = resolved;
+
         const recipientAddress = job.channel === 'email' ? String(contact.email || '') : String(contact.line_user_id || '');
         if (!recipientAddress) throw new Error('送信先がありません。');
         const { data: outbox, error: outboxError } = await lineSupabase.from('communication_outbox').insert({
           owner_id:job.owner_id, channel:job.channel, recipient_contact_id:contact.id, recipient_address:recipientAddress,
-          subject:job.channel==='email'?job.subject:null, body_text:job.body_text,
+          subject:job.channel==='email'?personalize(job.subject):null, body_text:job.body_text,
           line_message_payload:job.channel==='line'?job.line_message_payload:null,
           company_id:contact.company_id||null, source_type:'marketing_automation', source_id:job.id,
           status:'queued', consent_confirmed_at:new Date().toISOString(), consent_basis:job.consent_basis,
@@ -1310,8 +2215,17 @@ async function processMarketingAutomationJobs(): Promise<void> {
           const emailFrom = process.env.RESEND_FROM_EMAIL || '';
           if (!emailKey || !emailFrom) throw new Error('メール配信サービスの設定がありません。');
           const body = personalize(job.body_text);
+          const emailSubject = personalize(job.subject || '');
+
+          // 未解決の差し込み項目チェック（{xxx}が本文・件名に残ったまま送信しない）
+          const unresolvedInBody = checkUnresolvedPlaceholders(body);
+          const unresolvedInSubject = checkUnresolvedPlaceholders(emailSubject);
+          if (unresolvedInBody || unresolvedInSubject) {
+            throw new Error(`未解決の差し込み項目「${unresolvedInBody || unresolvedInSubject}」が残っているため送信できません。`);
+          }
+
           const unsubscribeUrl = createEmailUnsubscribeUrl(contact.id);
-          const response = await fetch('https://api.resend.com/emails',{method:'POST',headers:{Authorization:'Bearer '+emailKey,'Content-Type':'application/json'},body:JSON.stringify({from:emailFrom,to:[recipientAddress],subject:personalize(job.subject),text:`${body}\n\n配信停止はこちら: ${unsubscribeUrl}`,headers:{'List-Unsubscribe':`<${unsubscribeUrl}>`,'List-Unsubscribe-Post':'List-Unsubscribe=One-Click'}})});
+          const response = await fetch('https://api.resend.com/emails',{method:'POST',headers:{Authorization:'Bearer '+emailKey,'Content-Type':'application/json'},body:JSON.stringify({from:emailFrom,to:[recipientAddress],subject:emailSubject,text:`${body}\n\n配信停止はこちら: ${unsubscribeUrl}`,headers:{'List-Unsubscribe':`<${unsubscribeUrl}>`,'List-Unsubscribe-Post':'List-Unsubscribe=One-Click'}})});
           const result = await response.json().catch(()=>({})) as {id?:string;message?:string};
           if (!response.ok || !result.id) throw new Error(result.message||'メール送信に失敗しました。');
           providerMessageId=result.id;
@@ -1320,20 +2234,53 @@ async function processMarketingAutomationJobs(): Promise<void> {
           const {data:friend,error:friendError}=await lineSupabase.from('line_friends').select('status,consent_status').eq('line_user_id',recipientAddress).maybeSingle();
           if(friendError||!friend||friend.status!=='active'||friend.consent_status!=='opted_in')throw new Error('LINEの友だち状態または配信同意を確認できません。');
           const requested=job.line_message_payload&&typeof job.line_message_payload==='object'?job.line_message_payload as {type?:string;originalContentUrl?:string;previewImageUrl?:string;altText?:string;contents?:unknown}:null;
-          const personalizeJson=(value:any):any=>Array.isArray(value)?value.map(personalizeJson):value&&typeof value==='object'?Object.fromEntries(Object.entries(value).map(([key,item])=>[key,personalizeJson(item)])):typeof value==='string'?personalize(value):value;
           let message: any;
           if (requested?.type === 'video' || requested?.type === 'image') {
-            const originalUrl=String(requested.originalContentUrl||''); const previewUrl=String(requested.previewImageUrl||'');
-            if (!/^https:\/\//i.test(originalUrl) || !/^https:\/\//i.test(previewUrl) || originalUrl.length>2000 || previewUrl.length>2000) throw new Error('LINE画像・動画URLの設定が不正です。');
+            const originalUrl=personalize(String(requested.originalContentUrl||''));
+            const previewUrl=personalize(String(requested.previewImageUrl||''));
+            if (!/^https:\/\//i.test(originalUrl) || !/^https:\/\//i.test(previewUrl) || originalUrl.length>2000 || previewUrl.length>2000) throw new Error('LINE画像・動画URLの設定が不正です（HTTPS必須）。');
+            const unres = checkUnresolvedPlaceholders([originalUrl, previewUrl]);
+            if (unres) throw new Error(`未解決の差し込み項目「${unres}」が残っているため送信できません。`);
             message=requested.type==='video'?{type:'video',originalContentUrl:originalUrl,previewImageUrl:previewUrl}:{type:'image',originalContentUrl:originalUrl,previewImageUrl:previewUrl};
           } else if (requested?.type === 'flex') {
-            const altText=personalize(requested.altText).slice(0,400);
+            const altText=personalize(requested.altText || '').slice(0,400);
             const contents=personalizeJson(requested.contents);
             if(!altText||!contents||typeof contents!=='object'||!['bubble','carousel'].includes(contents.type))throw new Error('LINE Flexテンプレートの内容を確認してください。');
+
+            // Flexメッセージ内の全URL（action.uri 等）が http:// または https:// で始まるか検証
+            const urlValidation = checkUrlsInObject(contents);
+            if (!urlValidation.valid) {
+              throw new Error(`Flexメッセージ内のURLが無効です（http/https必須）: ${urlValidation.invalidUrl}`);
+            }
+
+            // 未解決の差し込み項目チェック
+            const unres = checkUnresolvedPlaceholders({ altText, contents });
+            if (unres) throw new Error(`未解決の差し込み項目「${unres}」が残っているため送信できません。`);
+
             message={type:'flex',altText,contents};
+          } else if (!requested && scenarioConfig.lineMessageType === 'flex') {
+            // シナリオ設定からFlexカードを構築
+            const altText = personalize(scenarioConfig.flexAltText || scenarioConfig.flexTitle || 'ご案内').slice(0, 400);
+            const title = personalize(scenarioConfig.flexTitle || '');
+            const body = personalize(scenarioConfig.flexBody || job.body_text || '');
+            const btnLabel = personalize(scenarioConfig.flexButtonLabel || '');
+            const btnUrl = personalize(scenarioConfig.flexButtonUrl || '');
+            const bubble = buildFlexBubblePayload(title, body, btnLabel, btnUrl);
+
+            const urlValidation = checkUrlsInObject(bubble);
+            if (!urlValidation.valid) {
+              throw new Error(`Flexメッセージ内のURLが無効です（http/https必須）: ${urlValidation.invalidUrl}`);
+            }
+
+            const unres = checkUnresolvedPlaceholders({ altText, bubble });
+            if (unres) throw new Error(`未解決の差し込み項目「${unres}」が残っているため送信できません。`);
+
+            message = { type: 'flex', altText, contents: bubble };
           } else {
             const text=personalize(job.body_text);
             if (!text || text.length>5000) throw new Error('LINE本文は1〜5000文字で設定してください。');
+            const unres = checkUnresolvedPlaceholders(text);
+            if (unres) throw new Error(`未解決の差し込み項目「${unres}」が残っているため送信できません。`);
             message={type:'text',text};
           }
           const response=await fetch('https://api.line.me/v2/bot/message/push',{method:'POST',headers:{Authorization:'Bearer '+lineChannelAccessToken,'Content-Type':'application/json','X-Line-Retry-Key':outboxId},body:JSON.stringify({to:recipientAddress,messages:[message]})});

@@ -30,8 +30,10 @@ import {
   UserCheck,
   Check,
   Trash2,
-  Send
+  Send,
+  GripVertical
 } from 'lucide-react';
+import { matrixService } from '../services/matrixService';
 
 interface TableManagerProps {
   currentTable: TableKey;
@@ -59,6 +61,9 @@ export const TableManager: React.FC<TableManagerProps> = ({
   const [successBanner, setSuccessBanner] = useState<string | null>(null);
   const [deletingRecordId, setDeletingRecordId] = useState<string | null>(null);
   const [isProspectImportOpen, setIsProspectImportOpen] = useState(false);
+  const [draggedProductId, setDraggedProductId] = useState<string | null>(null);
+  const [dragOverProductId, setDragOverProductId] = useState<string | null>(null);
+  const [reorderNotice, setReorderNotice] = useState<string | null>(null);
 
   // Modals state
   const [selectedRecord, setSelectedRecord] = useState<any | null>(null);
@@ -108,7 +113,24 @@ export const TableManager: React.FC<TableManagerProps> = ({
         setError(fetchErr);
         setData([]);
       } else {
-        setData(tableData);
+        let sorted = tableData;
+        if (currentTable === 'products') {
+          try {
+            const savedOrderStr = localStorage.getItem('crm_products_sort_order');
+            if (savedOrderStr) {
+              const savedOrder: string[] = JSON.parse(savedOrderStr);
+              const orderMap = new Map(savedOrder.map((id, index) => [String(id), index]));
+              sorted = [...tableData].sort((a: any, b: any) => {
+                const orderA = orderMap.has(String(a.id)) ? orderMap.get(String(a.id))! : 99999;
+                const orderB = orderMap.has(String(b.id)) ? orderMap.get(String(b.id))! : 99999;
+                return orderA - orderB;
+              });
+            }
+          } catch {
+            // ignore
+          }
+        }
+        setData(sorted);
       }
     } catch (err: any) {
       setError({
@@ -119,6 +141,39 @@ export const TableManager: React.FC<TableManagerProps> = ({
     } finally {
       setLoading(false);
     }
+  };
+
+  const handleProductReorder = (draggedId: string, targetId: string) => {
+    if (draggedId === targetId) return;
+    const oldIndex = data.findIndex((item) => String(item.id) === draggedId);
+    const newIndex = data.findIndex((item) => String(item.id) === targetId);
+    if (oldIndex === -1 || newIndex === -1) return;
+
+    const next = [...data];
+    const [removed] = next.splice(oldIndex, 1);
+    next.splice(newIndex, 0, removed);
+    setData(next);
+
+    const newOrderIds = next.map((item) => String(item.id));
+    localStorage.setItem('crm_products_sort_order', JSON.stringify(newOrderIds));
+
+    try {
+      const matrixList = matrixService.loadProducts();
+      if (matrixList.length > 0) {
+        const matrixMap = new Map(matrixList.map((p) => [p.id, p]));
+        const reorderedMatrix = next
+          .filter((item) => matrixMap.has(String(item.id)))
+          .map((item) => matrixMap.get(String(item.id))!);
+        const reorderedIds = new Set(reorderedMatrix.map((p) => p.id));
+        const remaining = matrixList.filter((p) => !reorderedIds.has(p.id));
+        matrixService.saveProducts([...reorderedMatrix, ...remaining]);
+      }
+    } catch {
+      // ignore
+    }
+
+    setReorderNotice('商品の表示順を更新しました。');
+    setTimeout(() => setReorderNotice(null), 3500);
   };
 
   useEffect(() => {
@@ -331,6 +386,30 @@ export const TableManager: React.FC<TableManagerProps> = ({
         </div>
       )}
 
+      {/* Reorder Notification Banner */}
+      {reorderNotice && (
+        <div className="p-3 rounded-2xl bg-indigo-500/10 border border-indigo-500/30 text-indigo-200 flex items-center justify-between gap-3 animate-fade-in shadow-lg">
+          <div className="flex items-center gap-2.5 text-xs">
+            <CheckCircle2 className="w-4 h-4 text-indigo-400 shrink-0" />
+            <span className="font-semibold">{reorderNotice}</span>
+          </div>
+          <button
+            onClick={() => setReorderNotice(null)}
+            className="text-xs text-indigo-400 hover:text-indigo-200"
+          >
+            閉じる
+          </button>
+        </div>
+      )}
+
+      {/* Product Master Drag Hint */}
+      {currentTable === 'products' && (
+        <div className="flex items-center gap-2 px-3.5 py-2.5 rounded-2xl bg-indigo-950/40 border border-indigo-500/30 text-indigo-200 text-xs">
+          <GripVertical className="w-4 h-4 text-indigo-400 shrink-0" />
+          <span>行をドラッグ＆ドロップすると商品の表示順を並び替えできます（ブラウザと商品設計に自動保存されます）</span>
+        </div>
+      )}
+
       {/* =========================================================================
           DISTINCT STATE RENDERING:
           1. Loading (読み込み中)
@@ -445,6 +524,14 @@ export const TableManager: React.FC<TableManagerProps> = ({
               <table className="w-full text-left text-xs">
                 <thead className="bg-slate-950 text-slate-400 font-semibold uppercase tracking-wider border-b border-slate-800">
                   <tr>
+                    {currentTable === 'products' && (
+                      <th className="py-3 px-3 text-center w-12 whitespace-nowrap" title="ドラッグで並び替え">
+                        <span className="flex items-center justify-center gap-0.5 text-[11px] text-indigo-400 font-semibold">
+                          <GripVertical className="w-3.5 h-3.5" />
+                          <span>順</span>
+                        </span>
+                      </th>
+                    )}
                     {config.columnsToShow.map((colKey) => {
                       const fieldDef = config.fields.find((f) => f.key === colKey);
                       const label = fieldDef?.label || colKey;
@@ -461,9 +548,48 @@ export const TableManager: React.FC<TableManagerProps> = ({
                   {filteredData.map((item) => (
                     <tr
                       key={item.id}
+                      draggable={currentTable === 'products'}
+                      onDragStart={currentTable === 'products' ? (e) => {
+                        e.dataTransfer.setData('text/plain', String(item.id));
+                        setDraggedProductId(String(item.id));
+                      } : undefined}
+                      onDragOver={currentTable === 'products' ? (e) => {
+                        e.preventDefault();
+                        if (dragOverProductId !== String(item.id)) setDragOverProductId(String(item.id));
+                      } : undefined}
+                      onDragLeave={currentTable === 'products' ? () => {
+                        if (dragOverProductId === String(item.id)) setDragOverProductId(null);
+                      } : undefined}
+                      onDrop={currentTable === 'products' ? (e) => {
+                        e.preventDefault();
+                        if (draggedProductId) {
+                          handleProductReorder(draggedProductId, String(item.id));
+                        }
+                        setDraggedProductId(null);
+                        setDragOverProductId(null);
+                      } : undefined}
+                      onDragEnd={currentTable === 'products' ? () => {
+                        setDraggedProductId(null);
+                        setDragOverProductId(null);
+                      } : undefined}
                       onClick={() => handleOpenDetail(item)}
-                      className="hover:bg-slate-800/40 cursor-pointer transition-colors group"
+                      className={`hover:bg-slate-800/40 cursor-pointer transition-colors group ${
+                        draggedProductId === String(item.id) ? 'opacity-40 bg-slate-900/90' : ''
+                      } ${
+                        dragOverProductId === String(item.id) ? 'border-t-2 border-indigo-400 bg-indigo-500/20' : ''
+                      }`}
                     >
+                      {currentTable === 'products' && (
+                        <td
+                          className="py-3 px-2 text-center cursor-grab active:cursor-grabbing text-slate-500 hover:text-indigo-300"
+                          onClick={(e) => e.stopPropagation()}
+                          title="ドラッグして並び替え"
+                        >
+                          <div className="flex items-center justify-center">
+                            <GripVertical className="w-4 h-4" />
+                          </div>
+                        </td>
+                      )}
                       {config.columnsToShow.map((colKey) => {
                         const val = item[colKey];
 
@@ -670,19 +796,58 @@ export const TableManager: React.FC<TableManagerProps> = ({
             {filteredData.map((item) => (
               <div
                 key={item.id}
+                draggable={currentTable === 'products'}
+                onDragStart={currentTable === 'products' ? (e) => {
+                  e.dataTransfer.setData('text/plain', String(item.id));
+                  setDraggedProductId(String(item.id));
+                } : undefined}
+                onDragOver={currentTable === 'products' ? (e) => {
+                  e.preventDefault();
+                  if (dragOverProductId !== String(item.id)) setDragOverProductId(String(item.id));
+                } : undefined}
+                onDragLeave={currentTable === 'products' ? () => {
+                  if (dragOverProductId === String(item.id)) setDragOverProductId(null);
+                } : undefined}
+                onDrop={currentTable === 'products' ? (e) => {
+                  e.preventDefault();
+                  if (draggedProductId) {
+                    handleProductReorder(draggedProductId, String(item.id));
+                  }
+                  setDraggedProductId(null);
+                  setDragOverProductId(null);
+                } : undefined}
+                onDragEnd={currentTable === 'products' ? () => {
+                  setDraggedProductId(null);
+                  setDragOverProductId(null);
+                } : undefined}
                 onClick={() => handleOpenDetail(item)}
-                className="bg-slate-900/90 border border-slate-800 rounded-2xl p-4 space-y-3 cursor-pointer hover:border-slate-700 transition-colors"
+                className={`bg-slate-900/90 border border-slate-800 rounded-2xl p-4 space-y-3 cursor-pointer hover:border-slate-700 transition-colors ${
+                  draggedProductId === String(item.id) ? 'opacity-40 bg-slate-900' : ''
+                } ${
+                  dragOverProductId === String(item.id) ? 'border-t-2 border-indigo-400 bg-indigo-500/20' : ''
+                }`}
               >
                 <div className="flex items-start justify-between">
-                  <div>
-                    <span className="text-[11px] font-mono text-slate-500">ID: {item.id}</span>
-                    <h3 className="font-bold text-white text-sm">
-                      {item.company_name ||
-                        item.proposal_plan_name ||
-                        item.product_name ||
-                        item.company?.company_name ||
-                        `レコード #${item.id}`}
-                    </h3>
+                  <div className="flex items-start gap-2">
+                    {currentTable === 'products' && (
+                      <div
+                        className="cursor-grab active:cursor-grabbing p-1 text-slate-500 hover:text-indigo-400 shrink-0 mt-0.5"
+                        onClick={(e) => e.stopPropagation()}
+                        title="ドラッグで並び替え"
+                      >
+                        <GripVertical className="w-4 h-4" />
+                      </div>
+                    )}
+                    <div>
+                      <span className="text-[11px] font-mono text-slate-500">ID: {item.id}</span>
+                      <h3 className="font-bold text-white text-sm">
+                        {item.company_name ||
+                          item.proposal_plan_name ||
+                          item.product_name ||
+                          item.company?.company_name ||
+                          `レコード #${item.id}`}
+                      </h3>
+                    </div>
                   </div>
                   {(item.status || item.proposal_status || item.contract_status) && (
                     <span className="px-2 py-0.5 rounded-full text-[10px] font-medium bg-blue-500/10 text-blue-300 border border-blue-500/20">

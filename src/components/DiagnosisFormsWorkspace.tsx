@@ -6,7 +6,7 @@ import { ArrowDown, ArrowUp, Clipboard, ClipboardCheck, ExternalLink, Plus, Refr
 type FormType = 'diagnosis' | 'consultation' | 'meeting';
 type QuestionType = 'text' | 'textarea' | 'select' | 'radio' | 'checkbox' | 'date';
 type FormQuestion = { id: string; label: string; type: QuestionType; required: boolean; options: string[] };
-type FormDefinition = { category?: string; description: string; booking_url?: string; questions: FormQuestion[] };
+type FormDefinition = { category?: string; description: string; booking_url?: string; material_url?: string; questions: FormQuestion[] };
 type DiagnosisForm = { id: string; name: string; public_slug: string; form_type: FormType; status: 'draft'|'published'|'paused'|'archived'; questionnaire_version: string; definition: Record<string, unknown>; privacy_notice: string|null; created_at: string };
 type Submission = { id: string; form_id: string; contact_id: string|null; company_id: string|null; respondent_company_name: string|null; lead_id: string|null; diagnosis_id?: string|null; status: 'received'|'reviewing'|'completed'|'rejected'; respondent_name: string|null; respondent_email: string|null; answers: Record<string, unknown>; score: number|null; submitted_at: string; reviewer_memo: string|null };
 
@@ -107,6 +107,7 @@ function readDefinition(value: Record<string, unknown> | null | undefined): Form
     category: typeof definition.category === 'string' ? definition.category : typeof definition.service_category === 'string' ? definition.service_category : '',
     description: typeof definition.description === 'string' ? definition.description : '',
     booking_url: typeof definition.booking_url === 'string' ? definition.booking_url : '',
+    material_url: typeof definition.material_url === 'string' ? definition.material_url : '',
     questions: questions.length ? questions : [newQuestion()],
   };
 }
@@ -121,6 +122,7 @@ export const DiagnosisFormsWorkspace: React.FC<DiagnosisFormsWorkspaceProps> = (
   const [name, setName] = useState('');
   const [category, setCategory] = useState('');
   const [bookingUrl, setBookingUrl] = useState('');
+  const [materialUrl, setMaterialUrl] = useState('');
   const [formType, setFormType] = useState<FormType>('consultation');
   const [description, setDescription] = useState('');
   const [questions, setQuestions] = useState<FormQuestion[]>([newQuestion()]);
@@ -140,6 +142,7 @@ export const DiagnosisFormsWorkspace: React.FC<DiagnosisFormsWorkspaceProps> = (
     setName(form.name);
     setCategory(definition.category || '');
     setBookingUrl(definition.booking_url || '');
+    setMaterialUrl(definition.material_url || '');
     setFormType(form.form_type || 'diagnosis');
     setDescription(definition.description || '');
     setQuestions(definition.questions);
@@ -196,6 +199,7 @@ export const DiagnosisFormsWorkspace: React.FC<DiagnosisFormsWorkspaceProps> = (
     setFormType('consultation');
     setDescription('');
     setBookingUrl('');
+    setMaterialUrl('');
     setQuestions([newQuestion()]);
     setPrivacyNotice(DEFAULT_PRIVACY_NOTICE);
   };
@@ -246,6 +250,7 @@ export const DiagnosisFormsWorkspace: React.FC<DiagnosisFormsWorkspaceProps> = (
       category: category.trim(),
       description: description.trim(),
       booking_url: bookingUrl.trim(),
+      material_url: materialUrl.trim(),
       questions,
     };
     const slug = (name.trim().toLowerCase().replace(/[^a-z0-9ぁ-んァ-ヶ一-龠]+/g, '-').replace(/^-|-$/g, '') || 'form') + '-' + crypto.randomUUID().slice(0, 8);
@@ -280,7 +285,13 @@ export const DiagnosisFormsWorkspace: React.FC<DiagnosisFormsWorkspaceProps> = (
   const publishSelectedForm = () => {
     const form = forms.find(item => item.id === selectedId);
     if (!form) return;
-    const currentDefinition: FormDefinition = { category: category.trim(), description: description.trim(), questions };
+    const currentDefinition: FormDefinition = {
+      category: category.trim(),
+      description: description.trim(),
+      booking_url: bookingUrl.trim(),
+      material_url: materialUrl.trim(),
+      questions,
+    };
     const savedDefinition = readDefinition(form.definition);
     const hasUnsavedChanges = name.trim() !== form.name || formType !== (form.form_type || 'diagnosis') ||
       privacyNotice.trim() !== (form.privacy_notice || '') ||
@@ -502,7 +513,12 @@ export const DiagnosisFormsWorkspace: React.FC<DiagnosisFormsWorkspaceProps> = (
 
             <label className={labelClass}>個別面談の予約カレンダーURL（任意・Spir / TimeRex / Calendly など）
               <input value={bookingUrl} onChange={event => setBookingUrl(event.target.value)} className={inputClass} placeholder="例：https://app.spirbot.com/... または https://timerex.net/..." />
-              <span className="text-xs text-slate-500">設定すると、診断回答完了後の速報サンクスページに「面談日時を選ぶ（予約する）」ボタンとして表示されます。</span>
+              <span className="text-xs text-slate-500">設定すると、診断回答完了後の速報サンクスページに「面談日時を選ぶ（予約する）」ボタンとして表示されます。自動フォローの {'{booking_url}'} にも差し込まれます。</span>
+            </label>
+
+            <label className={labelClass}>配布資料・サービス概要資料のURL（任意・PDF / Google Drive / 閲覧URL など）
+              <input value={materialUrl} onChange={event => setMaterialUrl(event.target.value)} className={inputClass} placeholder="例：https://example.com/materials/guide.pdf" />
+              <span className="text-xs text-slate-500">自動フォローの {'{material_url}'} プレースホルダーに差し込まれます。未設定の場合、{'{material_url}'} を含む自動フォローメッセージは安全のため送信が停止（failed）されます。</span>
             </label>
 
             <label className={labelClass}>フォーム名 <span className="text-rose-400">*</span>
