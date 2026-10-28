@@ -8,6 +8,7 @@ const coreServices = [
     num: '01',
     title: '経営戦略・利益改善顧問',
     badge: '主軸サービス',
+    icon: `<svg xmlns="http://www.w3.org/2000/svg" class="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.5"><path stroke-linecap="round" stroke-linejoin="round" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"/></svg>`,
     desc: '経営者の右腕として、経営課題の整理、戦略立案、利益改善、事業運営の見直しを支援します。会社全体の経営課題、利益構造、事業戦略、経営判断を中心に扱います。',
     target: '売上はあるが利益が残らない企業、経営判断の相談相手が不在の経営者',
     href: '/services/strategy',
@@ -17,6 +18,7 @@ const coreServices = [
     num: '02',
     title: '業務改善・IT・DX・AI顧問',
     badge: '主軸サービス',
+    icon: `<svg xmlns="http://www.w3.org/2000/svg" class="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.5"><path stroke-linecap="round" stroke-linejoin="round" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"/><path stroke-linecap="round" stroke-linejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/></svg>`,
     desc: '業務プロセスの分析、改善計画の策定、業務効率化、身の丈に合ったIT・DX・生成AI活用の設計と継続支援を行います。属人化や非効率な作業など、具体的な業務課題を中心に扱います。',
     target: '特定社員への属人化に悩む企業、ITツールやAIを身の丈に合わせて導入したい企業',
     href: '/services/it-dx',
@@ -30,6 +32,7 @@ const implementationServices = [
     num: '03',
     title: 'システム構築・業務自動化',
     badge: '主要サービス（実装）',
+    icon: `<svg xmlns="http://www.w3.org/2000/svg" class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.5"><path stroke-linecap="round" stroke-linejoin="round" d="M8 9l3 3-3 3m5 0h3M5 20h14a2 2 0 002-2V6a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"/></svg>`,
     desc: '業務フローや管理体制に合わせ、Google Workspace/GAS、専用Webアプリ、API連携により、手作業の削減や業務ミスの防止につながる仕組みを構築します。',
     href: '/services/system',
   },
@@ -38,6 +41,7 @@ const implementationServices = [
     num: '04',
     title: 'マーケティング戦略・集客導線構築',
     badge: '主要サービス（実装）',
+    icon: `<svg xmlns="http://www.w3.org/2000/svg" class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.5"><path stroke-linecap="round" stroke-linejoin="round" d="M11 3.055A9.001 9.001 0 1020.945 13H11V3.055z"/><path stroke-linecap="round" stroke-linejoin="round" d="M20.488 9H15V3.512A9.025 9.025 0 0120.488 9z"/></svg>`,
     desc: 'ターゲット、商品、販売戦略に合わせて、認知から問い合わせ・商談・成約までの導線を設計・構築。紹介頼みを脱却し、見込み客が継続して集まる基盤を整えます。',
     href: '/services/marketing',
   },
@@ -131,9 +135,12 @@ const implementationServices = [
                   {s.num}
                 </span>
               </div>
-              <h3 class="text-xl sm:text-2xl font-bold font-serif text-slate-900 group-hover:text-brand-600 transition-colors leading-snug">
-                {s.title}
-              </h3>
+              <div class="flex items-center gap-3">
+                <div class="w-10 h-10 rounded-xl bg-brand-900 text-brand-300 flex items-center justify-center shrink-0" set:html={s.icon} />
+                <h3 class="text-xl sm:text-2xl font-bold font-serif text-slate-900 group-hover:text-brand-600 transition-colors leading-snug">
+                  {s.title}
+                </h3>
+              </div>
               <p class="text-xs sm:text-sm text-gray-600 leading-relaxed">
                 {s.desc}
               </p>
@@ -191,9 +198,12 @@ const implementationServices = [
                   {s.num}
                 </span>
               </div>
-              <h3 class="text-xl font-bold font-serif text-slate-900 group-hover:text-brand-600 transition-colors">
-                {s.title}
-              </h3>
+              <div class="flex items-center gap-3">
+                <div class="w-9 h-9 rounded-lg bg-brand-50 border border-brand-200 text-brand-700 flex items-center justify-center shrink-0" set:html={s.icon} />
+                <h3 class="text-xl font-bold font-serif text-slate-900 group-hover:text-brand-600 transition-colors">
+                  {s.title}
+                </h3>
+              </div>
               <p class="text-xs sm:text-sm text-gray-600 leading-relaxed">
                 {s.desc}
               </p>

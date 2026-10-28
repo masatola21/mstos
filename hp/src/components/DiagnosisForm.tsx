@@ -276,10 +276,10 @@ export default function DiagnosisForm() {
               <form onSubmit={handleLeadSubmit} className="bg-brand-50/50 p-6 sm:p-8 rounded-2xl border border-brand-100 space-y-4">
                 <div className="text-center">
                   <h4 className="text-lg font-bold font-serif text-slate-900">
-                    詳細な「改善優先度カルテ」をメールでお受け取りいただけます
+                    診断結果のご確認と初回無料相談のご案内
                   </h4>
                   <p className="text-xs text-gray-600 mt-1">
-                    代表・大橋による具体的な改善ステップの助言付き個別カルテをお届けします（無料）
+                    お名前・ご連絡先をご入力いただくと、診断結果のまとめと次のステップをご案内します（無料・営業電話なし）
                   </p>
                 </div>
 
@@ -323,7 +323,7 @@ export default function DiagnosisForm() {
                   disabled={submitting}
                   className="w-full py-3.5 bg-brand-900 hover:bg-brand-800 text-white font-bold rounded-xl text-sm transition shadow flex items-center justify-center gap-2"
                 >
-                  {submitting ? '送信中...' : '診断カルテを受け取る ＆ 初回相談を希望する'}
+                  {submitting ? '送信中...' : '相談を申し込む'}
                 </button>
               </form>
             ) : (
@@ -335,7 +335,7 @@ export default function DiagnosisForm() {
                   診断カルテの送付申し込みを完了しました
                 </h4>
                 <p className="text-xs text-gray-600">
-                  ご入力いただいたメールアドレス宛に、改善カルテと次の具体的な改善ステップをお送りいたします。
+                  ご入力いただいた内容をもとに、担当者よりご連絡いたします。初回のご相談はLINEからもお気軽にどうぞ。
                 </p>
                 <div className="pt-2">
                   <a
