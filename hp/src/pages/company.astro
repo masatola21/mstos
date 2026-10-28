@@ -4,54 +4,103 @@ import Layout from '../layouts/Layout.astro';
 
 <Layout
   title="会社概要・代表挨拶 | 有限会社MST"
-  description="有限会社MSTの会社情報、所在地、沿革、代表取締役 大橋真人のご挨拶と経歴。岐阜県大垣市を拠点に、中小企業の経営仕組み化と利益改善を戦略と実行の両面から伴走支援。"
+  description="有限会社MSTの会社概要・代表挨拶。「経営の仕組み化 × 利益改善」を軸に、中小企業・小規模事業者の経営課題の整理、改善策の設計、現場で機能する仕組みの構築・運用改善まで支援する経営の右腕パートナー。"
 >
   <!-- ページヘッダー -->
-  <section class="bg-forest-950 text-white py-14 sm:py-20 border-b border-forest-900">
+  <section class="bg-gradient-to-b from-brand-950 via-brand-900 to-slate-900 text-white py-14 sm:py-20 border-b border-brand-800">
     <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 text-center space-y-4">
-      <span class="text-xs font-bold text-gold-400 tracking-widest uppercase bg-forest-900 px-3.5 py-1.5 rounded-full border border-forest-800">
-        COMPANY PROFILE
+      <span class="text-xs font-bold text-brand-300 tracking-widest uppercase bg-brand-800 px-3.5 py-1.5 rounded-full border border-brand-700">
+        COMPANY PROFILE & MESSAGE
       </span>
       <h1 class="text-3xl sm:text-5xl font-bold font-serif text-white">
         会社概要・代表挨拶
       </h1>
-      <p class="text-sm sm:text-base text-sand-300 max-w-2xl mx-auto leading-relaxed font-light">
-        有限会社MSTは、中小企業・小規模事業者の成長と改善を、経営戦略とシステム実装の両面から支援する「経営の右腕」パートナーです。
+      <p class="text-sm sm:text-base text-slate-300 max-w-2xl mx-auto leading-relaxed font-light">
+        有限会社MSTは、「経営の仕組み化 × 利益改善」を軸に、中小企業・小規模事業者の経営課題を整理し、改善策の設計から、現場で機能する仕組みの構築・運用改善まで支援する「経営の右腕」パートナーです。
       </p>
     </div>
   </section>
 
-  <!-- 代表メッセージ -->
+  <!-- 代表挨拶 -->
   <section class="py-16 sm:py-24 bg-white border-b border-sand-200">
     <div class="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8">
-      <div class="text-center space-y-3 mb-12">
-        <span class="text-xs font-bold text-forest-700 bg-forest-50 px-3 py-1 rounded-full border border-forest-200">
+      
+      <!-- セクション見出し -->
+      <div class="text-center space-y-3 mb-14">
+        <span class="text-xs font-bold text-brand-700 bg-brand-50 px-3 py-1 rounded-full border border-brand-200">
           MESSAGE
         </span>
-        <h2 class="text-2xl sm:text-3xl font-bold font-serif text-forest-900">
-          「机上の空論」ではなく、現場で結果を出す仕組みを。
+        <h2 class="text-2xl sm:text-3.5xl font-bold font-serif text-slate-900 leading-snug">
+          現場で機能する仕組みをつくり、企業の成長を支える。
         </h2>
       </div>
 
-      <div class="space-y-6 text-sm sm:text-base text-gray-700 leading-relaxed font-light">
-        <p>
-          中小企業の経営は、日々の挑戦と判断の連続です。良い技術や商品を持ちながらも、現場のオペレーションに追われ、社長自身が「現場のプレイヤー」から抜け出せず、結果として手元に十分な利益が残らない企業を数多く目の当たりにしてきました。
-        </p>
-        <p>
-          世の中には立派な経営助言をするコンサルタントや、高機能なツールを提案するシステム会社が溢れています。しかし、中小企業が必要としているのは「きれいなスライド」や「難解で高価なシステム」ではありません。現場のスタッフがストレスなく運用でき、無駄な転記やミスがなくなり、確実に社長の時間と会社の利益が生み出される「実効性のある仕組み」です。
-        </p>
-        <p>
-          私自身、25歳でWeb事業で起業し、スクール講師・運営、自動車流通、有限会社の株式取得（M&A）、実店舗サロン経営、そして介護保険外生活支援サービス「アシスタ大垣」の直営創業と、泥臭い事業の立ち上げと運営を幾重にも経験してきました。資金調達の現場、現場スタッフの教育、顧客からの厳しい声、すべてを自分事としてくぐり抜けてきた自負があります。
-        </p>
-        <p>
-          だからこそ、私たちは貴社の課題から目をそらさず、戦略の策定から現場のシステム実装・運用改善まで、とことん「右腕」として伴走します。貴社が安定した利益を生み出し、次のステージへ飛躍するための礎となることをお約束いたします。
-        </p>
-
-        <div class="pt-6 text-right">
-          <p class="text-xs text-gray-500">有限会社MST 代表取締役</p>
-          <p class="text-xl font-bold font-serif text-forest-900 mt-1">大橋 真人</p>
+      <!-- 代表写真＆メッセージ本文 -->
+      <div class="space-y-10">
+        
+        <!-- 代表者紹介カード（写真＋肩書） -->
+        <div class="bg-sand-50 p-6 sm:p-8 rounded-2xl border border-sand-300 flex flex-col sm:flex-row items-center gap-6 shadow-sm">
+          <img
+            src="/images/representative.webp"
+            alt="有限会社MST 代表取締役 大橋真人"
+            class="w-28 h-28 sm:w-36 sm:h-36 rounded-2xl object-cover shadow-md border-2 border-white shrink-0"
+          />
+          <div class="space-y-1.5 text-center sm:text-left">
+            <span class="text-xs font-semibold text-brand-700 tracking-wider">REPRESENTATIVE</span>
+            <div class="text-xs text-gray-500">有限会社MST 代表取締役</div>
+            <h3 class="text-2xl font-bold font-serif text-slate-900">大橋 真人</h3>
+            <p class="text-xs text-gray-600 leading-relaxed pt-1">
+              Web事業起業、スクール運営、自動車流通、M&A承継、実店舗サロン運営、介護保険外生活支援サービス直営など、自ら幾多の現場で事業立ち上げ・経営改善を実践。
+            </p>
+          </div>
         </div>
+
+        <!-- ご挨拶本文（段落ごとに読みやすく配置） -->
+        <div class="space-y-6 text-sm sm:text-base text-gray-700 leading-relaxed font-light pt-2">
+          <p>
+            中小企業・小規模事業者の経営には、売上や利益の改善、日々の業務、人材、集客、新規事業など、さまざまな課題があります。
+          </p>
+
+          <p>
+            目の前の業務に追われるうちに、経営者自身が現場の仕事から離れられず、会社をより良くするための取り組みに十分な時間を使えない。そんな状況も少なくありません。
+          </p>
+
+          <p>
+            私が大切にしているのは、課題を整理して改善策を提案するだけでなく、実際の現場で機能し、継続して活用できる仕組みをつくることです。
+          </p>
+
+          <p>
+            私は25歳でWeb事業を立ち上げた後、スクールの講師・運営、自動車流通、M&Aによる事業承継、実店舗サロンの経営、介護保険外生活支援サービス「アシスタ大垣」の立ち上げ・運営など、さまざまな事業に携わってきました。
+          </p>
+
+          <p>
+            その経験を通じて実感したのは、事業を成長させるためには、良いアイデアや戦略だけでなく、集客、業務、人材、数字の管理などを含めた、実行できる仕組みが必要だということです。
+          </p>
+
+          <p>
+            有限会社MSTでは、経営課題の整理から、利益改善・業務改善の方針づくり、マーケティングの設計、IT・AIの活用、必要なシステムの構築まで、お客様の状況に合わせて支援しています。
+          </p>
+
+          <p>
+            すべてをシステム化することが目的ではありません。何を改善すべきかを見極め、人が取り組むべきことと、仕組みで効率化できることを整理し、無理なく運用できる形にすることを重視しています。
+          </p>
+
+          <p>
+            経営者が目の前の業務だけでなく、会社の将来を考え、次の成長に向けた判断や行動に時間を使えるように。
+          </p>
+
+          <p class="font-normal text-slate-900">
+            有限会社MSTは、経営の仕組み化と利益改善を通じて、中小企業・小規模事業者の持続的な成長を支援してまいります。
+          </p>
+
+          <div class="pt-6 text-right">
+            <p class="text-xs text-gray-500">有限会社MST</p>
+            <p class="text-lg font-bold font-serif text-slate-900 mt-0.5">代表取締役　大橋 真人</p>
+          </div>
+        </div>
+
       </div>
+
     </div>
   </section>
 
@@ -59,84 +108,160 @@ import Layout from '../layouts/Layout.astro';
   <section class="py-16 sm:py-24 bg-sand-100">
     <div class="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8">
       <div class="text-center space-y-3 mb-12">
-        <span class="text-xs font-bold text-forest-700 bg-forest-50 px-3 py-1 rounded-full border border-forest-200">
+        <span class="text-xs font-bold text-brand-700 bg-brand-50 px-3 py-1 rounded-full border border-brand-200">
           OVERVIEW
         </span>
-        <h2 class="text-2xl sm:text-3xl font-bold font-serif text-forest-900">
+        <h2 class="text-2xl sm:text-3xl font-bold font-serif text-slate-900">
           会社基本情報
         </h2>
       </div>
 
       <div class="bg-white rounded-2xl border border-sand-300 shadow-sm overflow-hidden">
         <dl class="divide-y divide-sand-200 text-sm">
-          <div class="grid grid-cols-1 sm:grid-cols-3 p-4 sm:p-6">
-            <dt class="font-bold text-forest-950">会社名</dt>
+          
+          <div class="grid grid-cols-1 sm:grid-cols-3 p-4 sm:p-6 items-center">
+            <dt class="font-bold text-slate-900">会社名</dt>
             <dd class="sm:col-span-2 text-gray-700 mt-1 sm:mt-0">有限会社MST（MST Co., Ltd.）</dd>
           </div>
 
-          <div class="grid grid-cols-1 sm:grid-cols-3 p-4 sm:p-6 bg-sand-50/50">
-            <dt class="font-bold text-forest-950">代表者</dt>
+          <div class="grid grid-cols-1 sm:grid-cols-3 p-4 sm:p-6 bg-sand-50/50 items-center">
+            <dt class="font-bold text-slate-900">代表者</dt>
             <dd class="sm:col-span-2 text-gray-700 mt-1 sm:mt-0">代表取締役　大橋 真人</dd>
           </div>
 
-          <div class="grid grid-cols-1 sm:grid-cols-3 p-4 sm:p-6">
-            <dt class="font-bold text-forest-950">設立</dt>
+          <div class="grid grid-cols-1 sm:grid-cols-3 p-4 sm:p-6 items-center">
+            <dt class="font-bold text-slate-900">設立</dt>
             <dd class="sm:col-span-2 text-gray-700 mt-1 sm:mt-0">平成17年（2005年）6月16日</dd>
           </div>
 
-          <div class="grid grid-cols-1 sm:grid-cols-3 p-4 sm:p-6 bg-sand-50/50">
-            <dt class="font-bold text-forest-950">資本金</dt>
+          <div class="grid grid-cols-1 sm:grid-cols-3 p-4 sm:p-6 bg-sand-50/50 items-center">
+            <dt class="font-bold text-slate-900">資本金</dt>
             <dd class="sm:col-span-2 text-gray-700 mt-1 sm:mt-0">3,000,000円</dd>
           </div>
 
-          <div class="grid grid-cols-1 sm:grid-cols-3 p-4 sm:p-6">
-            <dt class="font-bold text-forest-950">所在地</dt>
+          <div class="grid grid-cols-1 sm:grid-cols-3 p-4 sm:p-6 items-center">
+            <dt class="font-bold text-slate-900">所在地</dt>
             <dd class="sm:col-span-2 text-gray-700 mt-1 sm:mt-0">
               〒503-0981 岐阜県大垣市桧町127番地
             </dd>
           </div>
 
-          <div class="grid grid-cols-1 sm:grid-cols-3 p-4 sm:p-6 bg-sand-50/50">
-            <dt class="font-bold text-forest-950">電話番号 / FAX</dt>
+          <div class="grid grid-cols-1 sm:grid-cols-3 p-4 sm:p-6 bg-sand-50/50 items-center">
+            <dt class="font-bold text-slate-900">電話番号 / FAX</dt>
             <dd class="sm:col-span-2 text-gray-700 mt-1 sm:mt-0">
               TEL: 0584-71-7009 / FAX: 0584-71-7009
             </dd>
           </div>
 
-          <div class="grid grid-cols-1 sm:grid-cols-3 p-4 sm:p-6">
-            <dt class="font-bold text-forest-950">事業内容</dt>
-            <dd class="sm:col-span-2 text-gray-700 mt-1 sm:mt-0 space-y-1">
-              <p>・中小企業・小規模事業者の経営戦略・利益改善顧問業務</p>
-              <p>・業務プロセス可視化・IT・DX・AI活用支援</p>
-              <p>・業務管理Webシステム・自動化ツール（GAS等）の受託開発</p>
-              <p>・Webマーケティング・LP制作・公式LINE導線構築</p>
+          <div class="grid grid-cols-1 sm:grid-cols-3 p-4 sm:p-6 items-start">
+            <dt class="font-bold text-slate-900 pt-1">事業内容</dt>
+            <dd class="sm:col-span-2 text-gray-700 mt-1 sm:mt-0 space-y-1.5 leading-relaxed">
+              <p>・経営戦略・利益改善支援</p>
+              <p>・業務改善・IT・DX・AI活用支援</p>
+              <p>・システム構築・業務自動化</p>
+              <p>・マーケティング・集客導線の設計・構築</p>
               <p>・新規事業の企画・立ち上げ・仕組み化支援</p>
-              <p>・介護保険外生活支援サービス「アシスタ大垣」の直営および開業パッケージ支援</p>
+              <p>・介護保険外生活支援サービス「アシスタ大垣」の運営・開業支援</p>
             </dd>
           </div>
 
-          <div class="grid grid-cols-1 sm:grid-cols-3 p-4 sm:p-6 bg-sand-50/50">
-            <dt class="font-bold text-forest-950">主要取引銀行</dt>
+          <div class="grid grid-cols-1 sm:grid-cols-3 p-4 sm:p-6 bg-sand-50/50 items-center">
+            <dt class="font-bold text-slate-900">主要取引銀行</dt>
             <dd class="sm:col-span-2 text-gray-700 mt-1 sm:mt-0">
               大垣共立銀行、日本政策金融公庫 ほか
             </dd>
           </div>
 
-          <div class="grid grid-cols-1 sm:grid-cols-3 p-4 sm:p-6">
-            <dt class="font-bold text-forest-950">関連サービス・LP</dt>
+          <div class="grid grid-cols-1 sm:grid-cols-3 p-4 sm:p-6 items-center">
+            <dt class="font-bold text-slate-900">関連サービス・LP</dt>
             <dd class="sm:col-span-2 text-gray-700 mt-1 sm:mt-0">
               <a
                 href="https://business.mstcorp.info/"
                 target="_blank"
                 rel="noopener noreferrer"
-                class="text-forest-700 underline font-semibold hover:text-forest-900"
+                class="inline-flex items-center gap-1 text-brand-700 underline font-semibold hover:text-brand-900"
               >
-                介護保険外サービス開業支援パッケージ 公式LP ↗
+                <span>介護保険外サービス開業パッケージ 専用LP</span>
+                <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"/></svg>
               </a>
             </dd>
           </div>
         </dl>
       </div>
+
+    </div>
+  </section>
+
+  <!-- ページ内導線（無料診断・資料請求・LINE・問い合わせ） -->
+  <section class="py-16 sm:py-20 bg-white border-t border-sand-200">
+    <div class="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 space-y-8">
+      
+      <div class="text-center space-y-2">
+        <h3 class="text-xl font-bold font-serif text-slate-900">
+          まずはお気軽にご相談・お問い合わせください
+        </h3>
+        <p class="text-xs sm:text-sm text-gray-600">
+          貴社の現状やお困りごとに合わせて、最適な方法をお選びいただけます。
+        </p>
+      </div>
+
+      <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+        <!-- LINE相談 -->
+        <a
+          href="https://lin.ee/4Vl9v91"
+          target="_blank"
+          rel="noopener noreferrer"
+          class="p-5 rounded-2xl bg-[#06C755] text-white hover:opacity-95 transition shadow flex items-center justify-between group"
+        >
+          <div class="flex items-center gap-3">
+            <svg class="w-7 h-7 fill-current shrink-0" viewBox="0 0 24 24">
+              <path d="M12 2C6.477 2 2 5.918 2 10.751c0 3.332 2.131 6.223 5.309 7.643-.233.784-.848 2.855-.972 3.29-.153.535.195.526.411.383.17-.113 2.709-1.841 3.806-2.587.47.07 1.05.108 1.646.108 5.523 0 10-3.918 10-8.751C22 5.918 17.523 2 12 2z"/>
+            </svg>
+            <div>
+              <div class="text-xs opacity-90">チャットで気軽に相談</div>
+              <div class="text-sm font-bold">LINEで無料相談する</div>
+            </div>
+          </div>
+          <svg class="w-4 h-4 transition-transform group-hover:translate-x-1" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M14 5l7 7m0 0l-7 7m7-7H3"/></svg>
+        </a>
+
+        <!-- フォーム問い合わせ -->
+        <a
+          href="/contact"
+          class="p-5 rounded-2xl bg-brand-900 text-white hover:bg-brand-800 transition shadow flex items-center justify-between group"
+        >
+          <div class="flex items-center gap-3">
+            <svg class="w-7 h-7 text-brand-300 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"/>
+            </svg>
+            <div>
+              <div class="text-xs opacity-90">Webフォームから直接</div>
+              <div class="text-sm font-bold">お問い合わせ・ご相談</div>
+            </div>
+          </div>
+          <svg class="w-4 h-4 transition-transform group-hover:translate-x-1" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M14 5l7 7m0 0l-7 7m7-7H3"/></svg>
+        </a>
+      </div>
+
+      <!-- サブ導線（診断・資料請求・サービス一覧） -->
+      <div class="pt-4 flex flex-wrap justify-center gap-6 text-xs text-gray-600">
+        <a href="/diagnosis" class="hover:text-brand-700 underline flex items-center gap-1">
+          <span>3分無料経営診断</span>
+        </a>
+        <span class="text-gray-300">•</span>
+        <a href="/materials" class="hover:text-brand-700 underline flex items-center gap-1">
+          <span>経営改善資料請求（PDF）</span>
+        </a>
+        <span class="text-gray-300">•</span>
+        <a href="/services" class="hover:text-brand-700 underline flex items-center gap-1">
+          <span>支援サービス一覧</span>
+        </a>
+        <span class="text-gray-300">•</span>
+        <a href="/privacy" class="hover:text-brand-700 underline flex items-center gap-1">
+          <span>プライバシーポリシー</span>
+        </a>
+      </div>
+
     </div>
   </section>
 </Layout>
