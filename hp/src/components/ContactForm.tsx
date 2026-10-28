@@ -1,5 +1,14 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { submitLead } from '../lib/supabase';
+
+const SERVICE_MAP: Record<string, string> = {
+  strategy: '経営戦略・利益改善',
+  'it-dx': '業務改善・IT・DX・AI',
+  system: 'システム構築・業務自動化',
+  marketing: 'マーケティング・集客',
+  'new-business': '新規事業',
+  'care-package': '介護保険外サービス開業パッケージ',
+};
 
 export default function ContactForm() {
   const [formData, setFormData] = useState({
@@ -7,10 +16,23 @@ export default function ContactForm() {
     name: '',
     email: '',
     phone: '',
-    service_interest: '経営戦略・利益改善顧問',
+    service_interest: '経営戦略・利益改善',
     current_status: '',
     message: '',
   });
+
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      const params = new URLSearchParams(window.location.search);
+      const serviceParam = params.get('service');
+      if (serviceParam && SERVICE_MAP[serviceParam]) {
+        setFormData((prev) => ({
+          ...prev,
+          service_interest: SERVICE_MAP[serviceParam],
+        }));
+      }
+    }
+  }, []);
 
   const [loading, setLoading] = useState(false);
   const [submitted, setSubmitted] = useState(false);
@@ -156,13 +178,13 @@ export default function ContactForm() {
           onChange={(e) => setFormData({ ...formData, service_interest: e.target.value })}
           className="w-full px-4 py-3 border border-sand-300 rounded-lg focus:ring-2 focus:ring-brand-500 focus:border-transparent outline-none text-sm bg-white transition"
         >
-          <option value="経営戦略・利益改善顧問">経営戦略・利益改善顧問（経営課題の整理・利益向上）</option>
-          <option value="業務改善・IT・DX・AI顧問">業務改善・IT・DX・AI顧問（業務属人化の解消・自動化）</option>
-          <option value="システム構築・業務自動化">システム構築・自動化実装（GAS/Webアプリ/ツール構築）</option>
-          <option value="マーケティング・集客導線構築">マーケティング・集客導線構築（LP/HP/導線設計）</option>
-          <option value="新規事業の企画・立ち上げ">新規事業の企画・立ち上げ・仕組み化支援</option>
-          <option value="介護保険外サービス開業支援">介護保険外サービス開業パッケージについて</option>
-          <option value="その他・全般相談">その他・まずは何から相談すべきか整理したい</option>
+          <option value="経営戦略・利益改善">経営戦略・利益改善（経営課題整理・収益構造の改善）</option>
+          <option value="業務改善・IT・DX・AI">業務改善・IT・DX・AI（属人化解消・フロー標準化・ツール導入）</option>
+          <option value="システム構築・業務自動化">システム構築・業務自動化（GAS・専用Webアプリ・API連携）</option>
+          <option value="マーケティング・集客">マーケティング・集客（集客導線設計・成約LP構築）</option>
+          <option value="新規事業">新規事業（企画・立ち上げ・仕組み化支援）</option>
+          <option value="介護保険外サービス開業パッケージ">介護保険外サービス開業パッケージ（専用商品）</option>
+          <option value="その他">その他（まずは何から手をつけるべきか相談したい）</option>
         </select>
       </div>
 

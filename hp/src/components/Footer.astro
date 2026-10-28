@@ -1,4 +1,4 @@
-﻿---
+---
 const currentYear = new Date().getFullYear();
 ---
 
@@ -18,7 +18,10 @@ const currentYear = new Date().getFullYear();
             height="44"
           />
         </a>
-        <p class="text-sm text-sand-300 leading-relaxed max-w-sm">
+        <div class="text-xs text-brand-300 font-semibold tracking-wider">
+          MST｜経営の仕組み化 × 利益改善
+        </div>
+        <p class="text-xs sm:text-sm text-sand-300 leading-relaxed max-w-sm">
           経営の仕組み化で、利益が残る会社へ。中小企業・小規模事業者の成長と改善を、戦略と実行の両面から支援する「経営の右腕」パートナーです。
         </p>
         <div class="pt-2 text-xs text-sand-400 space-y-1">
@@ -28,17 +31,32 @@ const currentYear = new Date().getFullYear();
         </div>
       </div>
 
-      <!-- サービス個別ページ一覧 -->
+      <!-- サービス個別ページ一覧（4区分に整理） -->
       <div>
-        <h3 class="text-white font-semibold text-sm tracking-wider uppercase mb-4 font-serif text-brand-300">Services</h3>
-        <ul class="space-y-2.5 text-xs text-sand-300">
-          <li><a href="/services/strategy" class="hover:text-white transition-colors">経営戦略・利益改善顧問</a></li>
-          <li><a href="/services/it-dx" class="hover:text-white transition-colors">業務改善・IT・DX・AI顧問</a></li>
-          <li><a href="/services/system" class="hover:text-white transition-colors">システム構築・業務自動化</a></li>
-          <li><a href="/services/marketing" class="hover:text-white transition-colors">マーケティング・集客導線構築</a></li>
-          <li><a href="/services/new-business" class="hover:text-white transition-colors">新規事業の企画・立ち上げ支援</a></li>
-          <li><a href="/services/care-package" class="hover:text-white transition-colors">介護保険外サービス開業支援</a></li>
-        </ul>
+        <h3 class="text-white font-semibold text-sm tracking-wider uppercase mb-3 font-serif text-brand-300">Services</h3>
+        <div class="space-y-3 text-xs">
+          <div>
+            <span class="text-[10px] text-brand-400 font-bold block mb-1">主軸サービス</span>
+            <ul class="space-y-1.5 text-sand-300">
+              <li><a href="/services/strategy" class="hover:text-white transition-colors">経営戦略・利益改善顧問</a></li>
+              <li><a href="/services/it-dx" class="hover:text-white transition-colors">業務改善・IT・DX・AI顧問</a></li>
+            </ul>
+          </div>
+          <div>
+            <span class="text-[10px] text-brand-400 font-bold block mb-1">主要サービス（実装）</span>
+            <ul class="space-y-1.5 text-sand-300">
+              <li><a href="/services/system" class="hover:text-white transition-colors">システム構築・業務自動化</a></li>
+              <li><a href="/services/marketing" class="hover:text-white transition-colors">マーケティング・集客導線構築</a></li>
+            </ul>
+          </div>
+          <div>
+            <span class="text-[10px] text-brand-400 font-bold block mb-1">関連・専門商品</span>
+            <ul class="space-y-1.5 text-sand-300">
+              <li><a href="/services/new-business" class="hover:text-white transition-colors">新規事業の企画・立ち上げ</a></li>
+              <li><a href="/services/care-package" class="hover:text-white transition-colors">介護保険外サービス開業支援</a></li>
+            </ul>
+          </div>
+        </div>
       </div>
 
       <!-- メディア・商品・アクション -->
