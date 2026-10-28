@@ -79,78 +79,153 @@ const steps = [
     <div class="absolute -top-40 -right-40 w-96 h-96 bg-brand-500/20 rounded-full blur-3xl pointer-events-none"></div>
 
     <div class="relative max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-      <div class="max-w-3xl space-y-6">
-        <!-- ブランド表記 -->
-        <div class="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-brand-800/80 border border-brand-500/30 text-brand-200 text-xs sm:text-sm font-medium backdrop-blur-sm">
-          <span class="w-2 h-2 rounded-full bg-brand-400"></span>
-          MST｜経営の仕組み化 × 利益改善
-        </div>
+      <div class="grid grid-cols-1 lg:grid-cols-12 gap-12 items-center">
+        
+        <!-- 左側：キャッチコピー ＆ CTA（可読性と視認性を最優先） -->
+        <div class="lg:col-span-7 space-y-6">
+          <!-- ブランド表記 -->
+          <div class="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-brand-800/80 border border-brand-500/30 text-brand-200 text-xs sm:text-sm font-medium backdrop-blur-sm">
+            <span class="w-2 h-2 rounded-full bg-brand-400"></span>
+            MST｜経営の仕組み化 × 利益改善
+          </div>
 
-        <!-- メインコピー（最も目立たせる） -->
-        <h1 class="text-3xl sm:text-5xl lg:text-6xl font-bold font-serif tracking-tight leading-[1.3] sm:leading-[1.25] text-white">
-          経営の仕組み化で、<br />
-          <span class="text-transparent bg-clip-text bg-gradient-to-r from-brand-300 via-blue-200 to-brand-400">
-            利益が残る会社
-          </span>へ。
-        </h1>
+          <!-- メインコピー（最も目立たせる） -->
+          <h1 class="text-3xl sm:text-5xl lg:text-6xl font-bold font-serif tracking-tight leading-[1.3] sm:leading-[1.25] text-white">
+            経営の仕組み化で、<br />
+            <span class="text-transparent bg-clip-text bg-gradient-to-r from-brand-300 via-blue-200 to-brand-400">
+              利益が残る会社
+            </span>へ。
+          </h1>
 
-        <!-- 補足コピー ＆ 支援内容説明文 -->
-        <div class="space-y-3">
-          <p class="text-base sm:text-xl text-brand-200 font-medium">
-            経営課題の解決から、新規事業の開発、仕組みの構築まで。
+          <!-- 補足コピー ＆ 支援内容説明文 -->
+          <div class="space-y-3">
+            <p class="text-base sm:text-xl text-brand-200 font-medium">
+              経営課題の解決から、新規事業の開発、仕組みの構築まで。
+            </p>
+            <p class="text-sm sm:text-base text-slate-200 leading-relaxed font-normal max-w-2xl">
+              中小企業・小規模事業者の経営改善と事業成長を、戦略と実行の両面から支援します。経営課題を整理し、利益改善につながる戦略と仕組みを設計。必要に応じてシステム構築や業務自動化まで、実行と定着を支援します。
+            </p>
+          </div>
+
+          <!-- CTA（優先順位を明確化：LINE相談を主CTA、無料診断を副CTAとして配置） -->
+          <div class="pt-2 flex flex-col sm:flex-row items-stretch sm:items-center gap-3.5 sm:gap-4">
+            <!-- 主CTA: LINEで無料相談する -->
+            <a
+              href="https://lin.ee/4Vl9v91"
+              target="_blank"
+              rel="noopener noreferrer"
+              class="px-8 py-4 rounded-xl bg-[#06C755] hover:bg-[#05b34c] text-white font-bold text-sm sm:text-base text-center shadow-lg hover:shadow-xl transition-all duration-200 flex items-center justify-center gap-2.5 active:scale-[0.99]"
+            >
+              <svg class="w-5 h-5 fill-current shrink-0" viewBox="0 0 24 24">
+                <path d="M12 2C6.477 2 2 5.918 2 10.751c0 3.332 2.131 6.223 5.309 7.643-.233.784-.848 2.855-.972 3.29-.153.535.195.526.411.383.17-.113 2.709-1.841 3.806-2.587.47.07 1.05.108 1.646.108 5.523 0 10-3.918 10-8.751C22 5.918 17.523 2 12 2z"/>
+              </svg>
+              <span>LINEで無料相談する</span>
+            </a>
+
+            <!-- 副CTA: 3分無料経営診断 -->
+            <a
+              href="/diagnosis"
+              class="px-8 py-4 rounded-xl bg-brand-800/80 hover:bg-brand-700/80 border border-brand-400/40 text-white font-semibold text-sm sm:text-base text-center shadow transition-all duration-200 flex items-center justify-center gap-2 active:scale-[0.99]"
+            >
+              <span>3分無料経営診断</span>
+              <svg class="w-4 h-4 text-brand-300 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M14 5l7 7m0 0l-7 7m7-7H3"/>
+              </svg>
+            </a>
+          </div>
+
+          <!-- 補足説明 -->
+          <p class="text-xs sm:text-sm text-slate-300 leading-relaxed font-light pt-1 max-w-2xl">
+            経営の課題整理から、改善策の設計・実装・継続改善まで。MSTは、中小企業・小規模事業者の『経営の右腕』として伴走します。
           </p>
-          <p class="text-sm sm:text-base text-slate-200 leading-relaxed font-normal max-w-2xl">
-            中小企業・小規模事業者の経営改善と事業成長を、戦略と実行の両面から支援します。経営課題を整理し、利益改善につながる戦略と仕組みを設計。必要に応じてシステム構築や業務自動化まで、実行と定着を支援します。
-          </p>
-        </div>
 
-        <!-- CTA（優先順位を明確化：LINE相談を主CTA、無料診断を副CTAとして配置） -->
-        <div class="pt-2 flex flex-col sm:flex-row items-stretch sm:items-center gap-3.5 sm:gap-4">
-          <!-- 主CTA: LINEで無料相談する -->
-          <a
-            href="https://lin.ee/4Vl9v91"
-            target="_blank"
-            rel="noopener noreferrer"
-            class="px-8 py-4 rounded-xl bg-[#06C755] hover:bg-[#05b34c] text-white font-bold text-sm sm:text-base text-center shadow-lg hover:shadow-xl transition-all duration-200 flex items-center justify-center gap-2.5 active:scale-[0.99]"
-          >
-            <svg class="w-5 h-5 fill-current shrink-0" viewBox="0 0 24 24">
-              <path d="M12 2C6.477 2 2 5.918 2 10.751c0 3.332 2.131 6.223 5.309 7.643-.233.784-.848 2.855-.972 3.29-.153.535.195.526.411.383.17-.113 2.709-1.841 3.806-2.587.47.07 1.05.108 1.646.108 5.523 0 10-3.918 10-8.751C22 5.918 17.523 2 12 2z"/>
-            </svg>
-            <span>LINEで無料相談する</span>
-          </a>
-
-          <!-- 副CTA: 3分無料経営診断 -->
-          <a
-            href="/diagnosis"
-            class="px-8 py-4 rounded-xl bg-brand-800/80 hover:bg-brand-700/80 border border-brand-400/40 text-white font-semibold text-sm sm:text-base text-center shadow transition-all duration-200 flex items-center justify-center gap-2 active:scale-[0.99]"
-          >
-            <span>3分無料経営診断</span>
-            <svg class="w-4 h-4 text-brand-300 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M14 5l7 7m0 0l-7 7m7-7H3"/>
-            </svg>
-          </a>
-        </div>
-
-        <!-- 補足説明 -->
-        <p class="text-xs sm:text-sm text-slate-300 leading-relaxed font-light pt-1 max-w-2xl">
-          経営の課題整理から、改善策の設計・実装・継続改善まで。MSTは、中小企業・小規模事業者の『経営の右腕』として伴走します。
-        </p>
-
-        <!-- 提供価値バッジ -->
-        <div class="pt-6 grid grid-cols-2 sm:grid-cols-3 gap-6 border-t border-brand-800/80 text-slate-300">
-          <div>
-            <div class="text-xl sm:text-2xl font-bold font-serif text-brand-300">実業主義</div>
-            <div class="text-xs text-slate-400 mt-0.5">自社での事業運営・現場実践</div>
-          </div>
-          <div>
-            <div class="text-xl sm:text-2xl font-bold font-serif text-brand-300">戦略×実装</div>
-            <div class="text-xs text-slate-400 mt-0.5">助言で終わらない仕組みづくり</div>
-          </div>
-          <div class="col-span-2 sm:col-span-1">
-            <div class="text-xl sm:text-2xl font-bold font-serif text-brand-300">伴走型</div>
-            <div class="text-xs text-slate-400 mt-0.5">課題整理から運用定着まで一貫支援</div>
+          <!-- 提供価値バッジ -->
+          <div class="pt-6 grid grid-cols-2 sm:grid-cols-3 gap-6 border-t border-brand-800/80 text-slate-300">
+            <div>
+              <div class="text-xl sm:text-2xl font-bold font-serif text-brand-300">実業主義</div>
+              <div class="text-xs text-slate-400 mt-0.5">自社での事業運営・現場実践</div>
+            </div>
+            <div>
+              <div class="text-xl sm:text-2xl font-bold font-serif text-brand-300">戦略×実装</div>
+              <div class="text-xs text-slate-400 mt-0.5">助言で終わらない仕組みづくり</div>
+            </div>
+            <div class="col-span-2 sm:col-span-1">
+              <div class="text-xl sm:text-2xl font-bold font-serif text-brand-300">伴走型</div>
+              <div class="text-xs text-slate-400 mt-0.5">課題整理から運用定着まで一貫支援</div>
+            </div>
           </div>
         </div>
+
+        <!-- 右側：ビジュアル図解カード（PCのみ表示で縦長化を防止・誠実で上質なインフォグラフィック） -->
+        <div class="hidden lg:block lg:col-span-5">
+          <div class="bg-gradient-to-b from-white/10 to-white/5 backdrop-blur-md rounded-3xl border border-white/20 p-8 shadow-2xl space-y-6">
+            <div class="flex items-center justify-between border-b border-white/10 pb-4">
+              <div class="flex items-center gap-2">
+                <span class="w-3 h-3 rounded-full bg-brand-400"></span>
+                <span class="text-xs font-bold tracking-widest text-brand-200 uppercase">MST METHODOLOGY</span>
+              </div>
+              <span class="text-[11px] text-slate-300 bg-white/10 px-2.5 py-0.5 rounded-full">経営の仕組み化モデル</span>
+            </div>
+
+            <!-- ステップ図解カード -->
+            <div class="space-y-3">
+              <!-- 現状 -->
+              <div class="p-4 rounded-xl bg-slate-900/80 border border-red-500/30 flex items-start gap-3">
+                <div class="w-6 h-6 rounded-md bg-red-950 text-red-400 flex items-center justify-center text-xs font-bold shrink-0 mt-0.5">!</div>
+                <div>
+                  <div class="text-xs font-bold text-red-200">現状のボトルネック</div>
+                  <div class="text-[11px] text-slate-300 mt-0.5">売上はあるが利益が薄い・業務の属人化・社長が現場忙殺</div>
+                </div>
+              </div>
+
+              <!-- 変換矢印 -->
+              <div class="flex justify-center text-brand-400">
+                <svg class="w-5 h-5 animate-bounce" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 14l-7 7m0 0l-7-7m7 7V3" />
+                </svg>
+              </div>
+
+              <!-- MSTの支援 -->
+              <div class="p-4 rounded-xl bg-brand-900/90 border border-brand-400/50 shadow-md">
+                <div class="flex items-center justify-between text-xs font-bold text-brand-200 mb-2">
+                  <span>MSTの伴走支援</span>
+                  <span class="text-[10px] bg-brand-700/80 px-2 py-0.5 rounded text-white">戦略 × 現場実装</span>
+                </div>
+                <div class="grid grid-cols-2 gap-2 text-[11px]">
+                  <div class="p-2 bg-brand-950/60 rounded border border-brand-500/20 text-slate-200">
+                    <strong class="text-brand-300 block">① 顧問支援</strong>
+                    課題整理・採算可視化
+                  </div>
+                  <div class="p-2 bg-brand-950/60 rounded border border-brand-500/20 text-slate-200">
+                    <strong class="text-brand-300 block">② 仕組み実装</strong>
+                    業務自動化・集客導線
+                  </div>
+                </div>
+              </div>
+
+              <!-- 変換矢印 -->
+              <div class="flex justify-center text-brand-400">
+                <svg class="w-5 h-5 animate-bounce" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 14l-7 7m0 0l-7-7m7 7V3" />
+                </svg>
+              </div>
+
+              <!-- 実現する姿 -->
+              <div class="p-4 rounded-xl bg-slate-900/80 border border-emerald-500/40 flex items-start gap-3">
+                <div class="w-6 h-6 rounded-md bg-emerald-950 text-emerald-400 flex items-center justify-center text-xs font-bold shrink-0 mt-0.5">✓</div>
+                <div>
+                  <div class="text-xs font-bold text-emerald-200">目指す企業体質</div>
+                  <div class="text-[11px] text-slate-300 mt-0.5">確かな利益体質・人に依存しない自走体制・経営時間の創出</div>
+                </div>
+              </div>
+            </div>
+
+            <div class="text-center pt-2 text-[11px] text-slate-400 font-light">
+              助言だけで終わらせず、現場で機能する仕組みを直接実装します
+            </div>
+          </div>
+        </div>
+
       </div>
     </div>
   </section>
@@ -237,38 +312,94 @@ const steps = [
         </p>
       </div>
 
-      <div class="grid grid-cols-1 md:grid-cols-4 gap-6">
-        <div class="bg-white p-6 sm:p-8 rounded-2xl border border-sand-300 shadow-sm space-y-3">
-          <div class="text-xs font-bold text-brand-700 bg-brand-50 px-2.5 py-1 rounded inline-block">STEP 1</div>
-          <h3 class="text-lg font-bold font-serif text-slate-900">課題の整理</h3>
-          <p class="text-xs text-gray-600 leading-relaxed">
-            経営の数字と現場実務を棚卸しし、最優先で手をつけるべき真のボトルネックを特定。
-          </p>
+      <!-- プロセス図解フロー -->
+      <div class="grid grid-cols-1 md:grid-cols-4 gap-6 relative">
+        
+        <!-- STEP 1 -->
+        <div class="bg-white p-6 sm:p-7 rounded-2xl border-2 border-sand-300 shadow-sm space-y-3 relative flex flex-col justify-between">
+          <div class="space-y-3">
+            <div class="flex items-center justify-between">
+              <span class="text-xs font-bold text-brand-700 bg-brand-50 px-2.5 py-1 rounded-md border border-brand-200">STEP 01</span>
+              <div class="w-8 h-8 rounded-lg bg-brand-100 text-brand-700 flex items-center justify-center">
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                </svg>
+              </div>
+            </div>
+            <h3 class="text-lg font-bold font-serif text-slate-900">課題の整理</h3>
+            <p class="text-xs text-gray-600 leading-relaxed font-light">
+              経営の数字・案件別採算・現場実務を棚卸しし、最優先で手をつけるべき真のボトルネックを特定します。
+            </p>
+          </div>
+          <div class="pt-3 border-t border-sand-200 text-[11px] text-brand-800 font-medium">
+            → 課題棚卸し・採算分析
+          </div>
         </div>
 
-        <div class="bg-white p-6 sm:p-8 rounded-2xl border border-sand-300 shadow-sm space-y-3">
-          <div class="text-xs font-bold text-brand-700 bg-brand-50 px-2.5 py-1 rounded inline-block">STEP 2</div>
-          <h3 class="text-lg font-bold font-serif text-slate-900">改善戦略の設計</h3>
-          <p class="text-xs text-gray-600 leading-relaxed">
-            利益改善、業務標準化、集客導線、IT・AI活用の方針など、身の丈に合った具体策を設計。
-          </p>
+        <!-- STEP 2 -->
+        <div class="bg-white p-6 sm:p-7 rounded-2xl border-2 border-sand-300 shadow-sm space-y-3 relative flex flex-col justify-between">
+          <div class="space-y-3">
+            <div class="flex items-center justify-between">
+              <span class="text-xs font-bold text-brand-700 bg-brand-50 px-2.5 py-1 rounded-md border border-brand-200">STEP 02</span>
+              <div class="w-8 h-8 rounded-lg bg-brand-100 text-brand-700 flex items-center justify-center">
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                </svg>
+              </div>
+            </div>
+            <h3 class="text-lg font-bold font-serif text-slate-900">改善戦略の設計</h3>
+            <p class="text-xs text-gray-600 leading-relaxed font-light">
+              利益改善、業務標準化、集客導線、IT・AI活用の方針など、貴社の身の丈に合った現実的な改善策を設計します。
+            </p>
+          </div>
+          <div class="pt-3 border-t border-sand-200 text-[11px] text-brand-800 font-medium">
+            → 改善ロードマップ策定
+          </div>
         </div>
 
-        <div class="bg-white p-6 sm:p-8 rounded-2xl border border-sand-300 shadow-sm space-y-3">
-          <div class="text-xs font-bold text-brand-700 bg-brand-50 px-2.5 py-1 rounded inline-block">STEP 3</div>
-          <h3 class="text-lg font-bold font-serif text-slate-900">仕組みの構築・実装</h3>
-          <p class="text-xs text-gray-600 leading-relaxed">
-            助言だけで終わらせず、必要に応じてGAS・ツール・LP・マニュアルなど動く仕組みを具体的に実装。
-          </p>
+        <!-- STEP 3 -->
+        <div class="bg-white p-6 sm:p-7 rounded-2xl border-2 border-brand-400 shadow-sm space-y-3 relative flex flex-col justify-between bg-gradient-to-b from-white to-brand-50/20">
+          <div class="space-y-3">
+            <div class="flex items-center justify-between">
+              <span class="text-xs font-bold text-white bg-brand-800 px-2.5 py-1 rounded-md">STEP 03</span>
+              <div class="w-8 h-8 rounded-lg bg-brand-800 text-white flex items-center justify-center">
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                </svg>
+              </div>
+            </div>
+            <h3 class="text-lg font-bold font-serif text-slate-900">仕組みの構築・実装</h3>
+            <p class="text-xs text-gray-600 leading-relaxed font-light">
+              助言だけで終わらせず、必要に応じてGAS・専用Webアプリ・成約LP・マニュアルなど動く仕組みを具体的に実装。
+            </p>
+          </div>
+          <div class="pt-3 border-t border-brand-200 text-[11px] text-brand-800 font-bold">
+            → 動く仕組みを自社直接実装
+          </div>
         </div>
 
-        <div class="bg-white p-6 sm:p-8 rounded-2xl border border-sand-300 shadow-sm space-y-3">
-          <div class="text-xs font-bold text-brand-700 bg-brand-50 px-2.5 py-1 rounded inline-block">STEP 4</div>
-          <h3 class="text-lg font-bold font-serif text-slate-900">運用・継続改善</h3>
-          <p class="text-xs text-gray-600 leading-relaxed">
-            契約範囲に応じて運用定着を検証し、数字の変化に合わせて継続的に改善を伴走します。
-          </p>
+        <!-- STEP 4 -->
+        <div class="bg-white p-6 sm:p-7 rounded-2xl border-2 border-sand-300 shadow-sm space-y-3 relative flex flex-col justify-between">
+          <div class="space-y-3">
+            <div class="flex items-center justify-between">
+              <span class="text-xs font-bold text-brand-700 bg-brand-50 px-2.5 py-1 rounded-md border border-brand-200">STEP 04</span>
+              <div class="w-8 h-8 rounded-lg bg-brand-100 text-brand-700 flex items-center justify-center">
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                </svg>
+              </div>
+            </div>
+            <h3 class="text-lg font-bold font-serif text-slate-900">運用・継続改善</h3>
+            <p class="text-xs text-gray-600 leading-relaxed font-light">
+              契約範囲に応じて現場での運用定着を検証し、数字の変化に合わせて継続的に改善を伴走します。
+            </p>
+          </div>
+          <div class="pt-3 border-t border-sand-200 text-[11px] text-brand-800 font-medium">
+            → 現場定着・継続伴走
+          </div>
         </div>
+
       </div>
 
       <!-- 契約形態・範囲についての注記 -->
@@ -658,7 +789,7 @@ const steps = [
             <p><strong class="text-slate-800">所在地：</strong>〒503-0981 岐阜県大垣市桧町127番地</p>
             <p><strong class="text-slate-800">設立：</strong>平成17年（2005年）6月16日 / <strong class="text-slate-800">資本金：</strong>3,000,000円</p>
             <p><strong class="text-slate-800">連絡先：</strong>E-mail: contact@mstcorp.info / FAX: 0584-91-4897</p>
-            <p><strong class="text-slate-800">主要取引銀行：</strong>三菱UFJ銀行、十六銀行、大垣西濃信用金庫、ゆうちょ銀行、ドコモSMTP</p>
+            <p><strong class="text-slate-800">主要取引銀行：</strong>三菱UFJ銀行、十六銀行、大垣西濃信用金庫、ゆうちょ銀行、ドコモSMTBネット銀行</p>
           </div>
         </div>
 

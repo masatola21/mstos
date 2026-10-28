@@ -6,6 +6,11 @@ export interface Article {
   publishedAt: string;
   summary: string;
   content: string[];
+  thumbnailTheme: {
+    bgGradient: string;
+    icon: string;
+    accentColor: string;
+  };
   relatedService: {
     name: string;
     href: string;
@@ -20,6 +25,11 @@ export const ARTICLES: Article[] = [
     categorySlug: 'management',
     publishedAt: '2026.10.20',
     summary: '忙しく働いているのに月末や決算期にキャッシュが残らない。その根本原因は案件別の採算管理の欠如と、固定費のブラックボックス化にあります。利益体質に転換するための具体的手法を解説します。',
+    thumbnailTheme: {
+      bgGradient: 'from-blue-900 to-slate-900',
+      icon: 'trending-up',
+      accentColor: 'text-brand-300',
+    },
     relatedService: {
       name: '経営戦略・利益改善顧問',
       href: '/services/strategy',
@@ -38,6 +48,11 @@ export const ARTICLES: Article[] = [
     categorySlug: 'operations',
     publishedAt: '2026.10.15',
     summary: '担当者が休むと業務が停滞する、新人教育に多大な時間がかかる。属人化の恐怖を克服するための、業務プロセスの可視化と身の丈に合ったマニュアル作成の進め方。',
+    thumbnailTheme: {
+      bgGradient: 'from-slate-900 to-teal-950',
+      icon: 'users',
+      accentColor: 'text-teal-300',
+    },
     relatedService: {
       name: '業務改善・IT・DX・AI顧問',
       href: '/services/it-dx',
@@ -51,11 +66,16 @@ export const ARTICLES: Article[] = [
   },
   {
     slug: 'gas-and-ai-practical-automation',
-    title: '高価なシステムは不要！Google Workspace × GAS × 生成AIで始める月間50時間の業務削減',
+    title: '高価なシステムは不要！Google Workspace × GAS × 生成AIで始める反復業務の自動化手法',
     category: 'IT・DX・AI活用',
     categorySlug: 'it-dx',
     publishedAt: '2026.10.10',
     summary: '数百万円の開発費用をかけなくても、すでに導入しているGoogle Workspaceや身近な自動化ツールで毎日の転記やメール送信は自動化できます。実例を交えてご紹介。',
+    thumbnailTheme: {
+      bgGradient: 'from-brand-950 to-blue-900',
+      icon: 'cpu',
+      accentColor: 'text-brand-300',
+    },
     relatedService: {
       name: 'システム構築・業務自動化',
       href: '/services/system',
@@ -74,6 +94,11 @@ export const ARTICLES: Article[] = [
     categorySlug: 'marketing',
     publishedAt: '2026.10.05',
     summary: 'HPを公開しただけで問い合わせが来る時代は終わりました。無料診断や資料請求をフックにLINEへ誘導し、信頼関係を構築して商談へつなげる最新のBtoB導線設計。',
+    thumbnailTheme: {
+      bgGradient: 'from-emerald-950 to-slate-900',
+      icon: 'message-square',
+      accentColor: 'text-emerald-300',
+    },
     relatedService: {
       name: 'マーケティング・集客導線構築',
       href: '/services/marketing',
@@ -92,6 +117,11 @@ export const ARTICLES: Article[] = [
     categorySlug: 'new-business',
     publishedAt: '2026.09.28',
     summary: '超高齢社会でニーズが急拡大する介護保険外サービス。なぜ資格不要・低初期費用で始められるのか。自社直営「アシスタ大垣」の現場データから見る成功のポイント。',
+    thumbnailTheme: {
+      bgGradient: 'from-amber-950 to-slate-900',
+      icon: 'compass',
+      accentColor: 'text-amber-300',
+    },
     relatedService: {
       name: '介護保険外サービス開業パッケージ',
       href: '/services/care-package',
