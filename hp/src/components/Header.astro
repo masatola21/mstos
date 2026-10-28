@@ -1,4 +1,4 @@
----
+﻿---
 interface Props {
   currentPath?: string;
 }
@@ -18,15 +18,16 @@ const navLinks = [
 <header class="sticky top-0 z-50 bg-white/95 backdrop-blur-md border-b border-sand-200 transition-all duration-200 shadow-sm">
   <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
     <div class="flex items-center justify-between h-20">
-      <!-- 正式ロゴ画像 -->
+      
+      <!-- 正式ロゴ画像（トリミング済み横長ロゴでスマホでも大きく表示） -->
       <a href="/" class="flex items-center gap-3 group shrink-0">
         <img
           src="/images/logo.png"
           alt="有限会社MST"
-          class="h-11 w-auto max-h-11 object-contain transition-transform group-hover:scale-105"
-          style="height: 44px; width: auto; max-width: 160px; object-fit: contain;"
-          width="160"
-          height="44"
+          class="h-9 sm:h-11 w-auto object-contain transition-transform group-hover:scale-105"
+          style="height: 38px; width: auto; max-width: 170px; object-fit: contain;"
+          width="170"
+          height="38"
         />
       </a>
 
@@ -49,7 +50,7 @@ const navLinks = [
         })}
       </nav>
 
-      <!-- CTAボタン群 -->
+      <!-- デスクトップ CTAボタン群 -->
       <div class="hidden sm:flex items-center gap-3">
         <a
           href="https://lin.ee/4Vl9v91" 
@@ -71,55 +72,140 @@ const navLinks = [
         </a>
       </div>
 
-      <!-- モバイルメニューボタン -->
+      <!-- モバイル ハンバーガーメニューボタン -->
       <button
-        id="mobile-menu-button"
+        id="mobile-menu-open"
         type="button"
-        class="lg:hidden p-2 rounded-md text-gray-700 hover:text-brand-900 hover:bg-sand-100"
+        class="lg:hidden p-2 rounded-lg text-slate-700 hover:text-brand-900 hover:bg-sand-100 transition"
         aria-label="メニューを開く"
       >
-        <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 6h16M4 12h16M4 18h16" />
+        <svg class="w-7 h-7" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16" />
         </svg>
       </button>
-    </div>
-  </div>
 
-  <!-- モバイルナビゲーションパネル -->
-  <div id="mobile-menu" class="hidden lg:hidden border-t border-sand-200 bg-white px-4 pt-3 pb-6 space-y-2">
-    {navLinks.map((link) => (
-      <a
-        href={link.href}
-        class="block px-3 py-2.5 rounded-md text-base font-medium text-gray-700 hover:text-brand-900 hover:bg-sand-100"
-      >
-        {link.name}
-      </a>
-    ))}
-    <div class="pt-4 flex flex-col gap-2 border-t border-sand-100">
-      <a
-        href="https://lin.ee/4Vl9v91"
-        target="_blank"
-        rel="noopener noreferrer"
-        class="flex items-center justify-center gap-2 py-3 text-sm font-bold text-white bg-[#06C755] rounded-lg"
-      >
-        LINEで無料相談する
-      </a>
-      <a
-        href="/contact"
-        class="flex items-center justify-center py-3 text-sm font-bold text-white bg-brand-900 rounded-lg"
-      >
-        フォームでお問い合わせ
-      </a>
     </div>
   </div>
 </header>
 
+<!-- モバイル右端スライドイン ドロワーメニュー -->
+<div id="drawer-container" class="fixed inset-0 z-50 pointer-events-none transition-opacity duration-300 opacity-0 lg:hidden">
+  
+  <!-- 半透明背景オーバーレイ（タップで閉じる） -->
+  <div id="drawer-backdrop" class="absolute inset-0 bg-slate-950/60 backdrop-blur-sm transition-opacity"></div>
+
+  <!-- 右端スライドパネル本体 -->
+  <div
+    id="drawer-panel"
+    class="absolute top-0 right-0 bottom-0 w-80 max-w-[85vw] bg-white shadow-2xl flex flex-col justify-between transform translate-x-full transition-transform duration-300 ease-in-out pointer-events-auto overflow-y-auto"
+  >
+    <!-- パネルヘッダー -->
+    <div>
+      <div class="p-6 border-b border-sand-200 flex items-center justify-between">
+        <img
+          src="/images/logo.png"
+          alt="有限会社MST"
+          class="h-8 w-auto object-contain"
+          style="height: 32px; width: auto;"
+        />
+        <button
+          id="mobile-menu-close"
+          type="button"
+          class="p-2 rounded-lg text-gray-500 hover:text-slate-900 hover:bg-sand-100 transition"
+          aria-label="メニューを閉じる"
+        >
+          <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12" />
+          </svg>
+        </button>
+      </div>
+
+      <!-- ナビゲーションリンク一覧 -->
+      <nav class="p-4 space-y-1">
+        {navLinks.map((link) => {
+          const isActive = currentPath === link.href || (link.href !== '/' && currentPath.startsWith(link.href));
+          return (
+            <a
+              href={link.href}
+              class={`flex items-center justify-between px-4 py-3 rounded-xl text-sm font-semibold transition ${
+                isActive
+                  ? 'bg-brand-50 text-brand-700 font-bold'
+                  : 'text-slate-800 hover:bg-sand-100 hover:text-brand-900'
+              }`}
+            >
+              <span>{link.name}</span>
+              <svg class="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 5l7 7-7 7" />
+              </svg>
+            </a>
+          );
+        })}
+      </nav>
+    </div>
+
+    <!-- パネル下部CTAボタン群 -->
+    <div class="p-6 border-t border-sand-200 space-y-3 bg-sand-50/50">
+      <a
+        href="https://lin.ee/4Vl9v91"
+        target="_blank"
+        rel="noopener noreferrer"
+        class="w-full py-3.5 px-4 bg-[#06C755] text-white font-bold text-xs rounded-xl flex items-center justify-center gap-2 shadow"
+      >
+        <svg class="w-4 h-4 fill-current" viewBox="0 0 24 24">
+          <path d="M12 2C6.477 2 2 5.918 2 10.751c0 3.332 2.131 6.223 5.309 7.643-.233.784-.848 2.855-.972 3.29-.153.535.195.526.411.383.17-.113 2.709-1.841 3.806-2.587.47.07 1.05.108 1.646.108 5.523 0 10-3.918 10-8.751C22 5.918 17.523 2 12 2z"/>
+        </svg>
+        <span>LINEで無料相談する</span>
+      </a>
+
+      <a
+        href="/contact"
+        class="w-full py-3.5 px-4 bg-brand-900 hover:bg-brand-800 text-white font-bold text-xs rounded-xl flex items-center justify-center gap-2 shadow"
+      >
+        フォームでお問い合わせ
+      </a>
+
+      <div class="pt-2 text-center">
+        <a href="tel:0584-71-7009" class="text-[11px] text-gray-500 hover:underline">
+          FAX: 0584-91-4897 / E-mail: contact@mstcorp.info
+        </a>
+      </div>
+    </div>
+
+  </div>
+</div>
+
 <script>
-  const btn = document.getElementById('mobile-menu-button');
-  const menu = document.getElementById('mobile-menu');
-  if (btn && menu) {
-    btn.addEventListener('click', () => {
-      menu.classList.toggle('hidden');
-    });
+  function setupDrawer() {
+    const openBtn = document.getElementById('mobile-menu-open');
+    const closeBtn = document.getElementById('mobile-menu-close');
+    const container = document.getElementById('drawer-container');
+    const backdrop = document.getElementById('drawer-backdrop');
+    const panel = document.getElementById('drawer-panel');
+
+    function openDrawer() {
+      if (!container || !panel) return;
+      container.classList.remove('opacity-0', 'pointer-events-none');
+      container.classList.add('opacity-100', 'pointer-events-auto');
+      panel.classList.remove('translate-x-full');
+      panel.classList.add('translate-x-0');
+      document.body.style.overflow = 'hidden'; // 背景スクロール防止
+    }
+
+    function closeDrawer() {
+      if (!container || !panel) return;
+      panel.classList.remove('translate-x-0');
+      panel.classList.add('translate-x-full');
+      container.classList.remove('opacity-100', 'pointer-events-auto');
+      container.classList.add('opacity-0', 'pointer-events-none');
+      document.body.style.overflow = '';
+    }
+
+    if (openBtn) openBtn.addEventListener('click', openDrawer);
+    if (closeBtn) closeBtn.addEventListener('click', closeDrawer);
+    if (backdrop) backdrop.addEventListener('click', closeDrawer);
   }
+
+  // 初回実行およびAstroのページ遷移対応
+  setupDrawer();
+  document.addEventListener('astro:page-load', setupDrawer);
 </script>
