@@ -1,86 +1,152 @@
 ---
 import Layout from '../layouts/Layout.astro';
+import { ARTICLES } from '../data/articles';
+
+const services = [
+  {
+    num: '01',
+    title: '経営戦略・利益改善顧問',
+    desc: '経営課題を整理し、利益構造・収益性を改善。売上はあるが利益が残らない企業に伴走。',
+    href: '/services/strategy',
+  },
+  {
+    num: '02',
+    title: '業務改善・IT・DX・AI顧問',
+    desc: '業務の非効率・属人化を解消。身の丈に合ったツール選定・AI活用・マニュアル化を支援。',
+    href: '/services/it-dx',
+  },
+  {
+    num: '03',
+    title: 'システム構築・業務自動化',
+    desc: 'Google Workspace/GAS、専用Webアプリ、API連携で手作業をゼロにし、ミスをなくす実装開発。',
+    href: '/services/system',
+  },
+  {
+    num: '04',
+    title: 'マーケティング・集客導線構築',
+    desc: '紹介頼みを脱却。強みの言語化からLP制作、LINE公式アカウント、見込み客育成までを設計。',
+    href: '/services/marketing',
+  },
+  {
+    num: '05',
+    title: '新規事業企画・立ち上げ支援',
+    desc: '既存事業に次ぐ第2の収益の柱を構築。商品設計、収益モデル、業務体制をパッケージ化。',
+    href: '/services/new-business',
+  },
+  {
+    num: '06',
+    title: '介護保険外サービス開業パッケージ',
+    desc: '「新しい事業を、ゼロから作らない。」自社直営事業「アシスタ大垣」の実証基盤をそのまま提供。',
+    href: '/services/care-package',
+  },
+];
+
+const steps = [
+  {
+    num: '01',
+    title: '無料相談・現状ヒアリング',
+    desc: 'まずはLINE、フォーム、お電話からご連絡ください。現在の経営状況やお困りごとをお聞きします（初回無料）。',
+  },
+  {
+    num: '02',
+    title: '課題・目標の整理',
+    desc: '数字や業務フローを棚卸しし、手元資金が残らない原因や業務の属人化ボトルネックを明確にします。',
+  },
+  {
+    num: '03',
+    title: '方針・改善案のご提案',
+    desc: '貴社の予算やリソースに合わせた現実的な改善ロードマップ、顧問支援またはシステム構築のプランを提示。',
+  },
+  {
+    num: '04',
+    title: '顧問契約 または 構築支援開始',
+    desc: 'ご納得いただいた上でご契約。顧問（設計・助言）と構築（実装）の区分を明確にして着手します。',
+  },
+  {
+    num: '05',
+    title: '実行・運用・継続改善',
+    desc: '一度きりで終わらせず、月次ミーティングやシステム保守を通じて、確実に利益が残る体制へ定着させます。',
+  },
+];
 ---
 
 <Layout
   title="有限会社MST | 経営の仕組み化で、利益が残る会社へ。"
-  description="中小企業・小規模事業者の成長と改善を、経営戦略とシステム実装の両面から支援する「経営の右腕」パートナー。利益改善顧問、業務自動化、AI経営OS導入、介護保険外サービス開業支援まで。"
+  description="中小企業・小規模事業者の成長と改善を、戦略と実行の両面から支援する「経営の右腕」パートナー。利益改善顧問、業務自動化、AI経営OS導入、介護保険外サービス開業支援まで。"
 >
-  <!-- HERO SECTION -->
-  <section class="relative bg-gradient-to-b from-forest-950 via-forest-900 to-forest-800 text-white pt-20 pb-24 sm:pt-28 sm:pb-36 overflow-hidden">
-    <!-- 装飾背景 -->
-    <div class="absolute inset-0 opacity-10 bg-[radial-gradient(#C5A059_1px,transparent_1px)] [background-size:24px_24px]"></div>
-    <div class="absolute -top-40 -right-40 w-96 h-96 bg-gold-500/10 rounded-full blur-3xl pointer-events-none"></div>
+  <!-- ① メインビジュアル -->
+  <section class="relative bg-gradient-to-b from-brand-950 via-brand-900 to-slate-900 text-white pt-20 pb-24 sm:pt-28 sm:pb-36 overflow-hidden">
+    <div class="absolute inset-0 opacity-10 bg-[radial-gradient(#3984F5_1px,transparent_1px)] [background-size:24px_24px]"></div>
+    <div class="absolute -top-40 -right-40 w-96 h-96 bg-brand-500/20 rounded-full blur-3xl pointer-events-none"></div>
 
     <div class="relative max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
       <div class="max-w-3xl space-y-6">
-        <div class="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-forest-800/80 border border-gold-500/30 text-gold-300 text-xs font-semibold tracking-wide backdrop-blur-sm">
-          <span class="w-2 h-2 rounded-full bg-gold-400 animate-pulse"></span>
+        <div class="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-brand-800/80 border border-brand-500/30 text-brand-200 text-xs font-semibold backdrop-blur-sm">
+          <span class="w-2 h-2 rounded-full bg-brand-400 animate-pulse"></span>
           経営戦略 × IT・DX × 現場実装
         </div>
 
         <h1 class="text-3xl sm:text-5xl lg:text-6xl font-bold font-serif tracking-tight leading-[1.25] text-white">
           経営の仕組み化で、<br />
-          <span class="text-transparent bg-clip-text bg-gradient-to-r from-gold-300 via-gold-200 to-gold-400">
+          <span class="text-transparent bg-clip-text bg-gradient-to-r from-brand-300 via-blue-200 to-brand-400">
             利益が残る会社
           </span>へ。
         </h1>
 
-        <p class="text-base sm:text-xl text-sand-200 leading-relaxed font-light">
-          中小企業・小規模事業者の成長と改善を、戦略と実行の両面から支援。<br class="hidden sm:inline" />
-          単なるIT導入や助言にとどまらず、泥臭い実務の整理からシステム実装まで「経営の右腕」として伴走します。
+        <p class="text-base sm:text-xl text-slate-200 leading-relaxed font-light">
+          中小企業・小規模事業者の成長と改善を、戦略と実行の両面から支援します。<br class="hidden sm:inline" />
+          MSTは単なるIT導入・開発会社ではなく、経営課題を整理し、改善策を設計し、必要に応じて実装まで支援する「経営の右腕」です。
         </p>
 
-        <!-- アクションボタン -->
+        <!-- 設計書指定のアクションボタン: LINE相談 ＆ 無料診断 -->
         <div class="pt-4 flex flex-col sm:flex-row items-stretch sm:items-center gap-4">
           <a
-            href="/diagnosis"
-            class="px-8 py-4 rounded-xl bg-gradient-to-r from-gold-500 to-gold-600 hover:from-gold-600 hover:to-gold-700 text-forest-950 font-bold text-sm sm:text-base text-center shadow-lg hover:shadow-xl transition-all duration-200 flex items-center justify-center gap-2 group"
+            href="https://lin.ee/4Vl9v91"
+            target="_blank"
+            rel="noopener noreferrer"
+            class="px-8 py-4 rounded-xl bg-[#06C755] hover:opacity-95 text-white font-bold text-sm sm:text-base text-center shadow-lg transition flex items-center justify-center gap-2"
           >
-            <span>3分でわかる無料経営診断</span>
-            <svg class="w-4 h-4 transition-transform group-hover:translate-x-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M14 5l7 7m0 0l-7 7m7-7H3" />
+            <svg class="w-5 h-5 fill-current" viewBox="0 0 24 24">
+              <path d="M12 2C6.477 2 2 5.918 2 10.751c0 3.332 2.131 6.223 5.309 7.643-.233.784-.848 2.855-.972 3.29-.153.535.195.526.411.383.17-.113 2.709-1.841 3.806-2.587.47.07 1.05.108 1.646.108 5.523 0 10-3.918 10-8.751C22 5.918 17.523 2 12 2z"/>
             </svg>
+            <span>LINEで相談する</span>
           </a>
 
           <a
-            href="/materials"
-            class="px-6 py-4 rounded-xl bg-forest-800/80 hover:bg-forest-700/80 border border-sand-300/20 text-white font-semibold text-sm sm:text-base text-center backdrop-blur-sm transition-all duration-200 flex items-center justify-center gap-2"
+            href="/diagnosis"
+            class="px-8 py-4 rounded-xl bg-brand-500 hover:bg-brand-600 text-white font-bold text-sm sm:text-base text-center shadow-lg transition flex items-center justify-center gap-2"
           >
-            <svg class="w-4 h-4 text-gold-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
-            </svg>
-            <span>改善ガイド・資料請求（無料）</span>
+            <span>無料診断を受ける（3分）</span>
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M14 5l7 7m0 0l-7 7m7-7H3"/></svg>
           </a>
         </div>
 
-        <!-- 実績・信頼の指標 -->
-        <div class="pt-8 grid grid-cols-2 sm:grid-cols-3 gap-6 border-t border-forest-800/80 text-sand-300">
+        <div class="pt-8 grid grid-cols-2 sm:grid-cols-3 gap-6 border-t border-brand-800/80 text-slate-300">
           <div>
-            <div class="text-2xl sm:text-3xl font-bold font-serif text-gold-400">平成17年</div>
-            <div class="text-xs text-sand-400 mt-0.5">創業・設立（信頼の実績）</div>
+            <div class="text-2xl sm:text-3xl font-bold font-serif text-brand-300">平成17年</div>
+            <div class="text-xs text-slate-400 mt-0.5">創業・設立（20年の実績）</div>
           </div>
           <div>
-            <div class="text-2xl sm:text-3xl font-bold font-serif text-gold-400">実業×内製</div>
-            <div class="text-xs text-sand-400 mt-0.5">福祉・サロン・開発の自社実践</div>
+            <div class="text-2xl sm:text-3xl font-bold font-serif text-brand-300">実業×内製</div>
+            <div class="text-xs text-slate-400 mt-0.5">福祉・サロン・開発の自社実践</div>
           </div>
           <div class="col-span-2 sm:col-span-1">
-            <div class="text-2xl sm:text-3xl font-bold font-serif text-gold-400">戦略＋実装</div>
-            <div class="text-xs text-sand-400 mt-0.5">助言で終わらない完全ワンストップ</div>
+            <div class="text-2xl sm:text-3xl font-bold font-serif text-brand-300">戦略＋実装</div>
+            <div class="text-xs text-slate-400 mt-0.5">助言で終わらない完全ワンストップ</div>
           </div>
         </div>
       </div>
     </div>
   </section>
 
-  <!-- PROBLEMS SECTION -->
+  <!-- ② 経営者が抱える課題（設計書指定の6課題） -->
   <section class="py-20 sm:py-28 bg-white border-b border-sand-200">
     <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
       <div class="text-center max-w-3xl mx-auto space-y-3 mb-16">
-        <span class="text-xs font-bold text-forest-700 uppercase tracking-widest bg-forest-50 px-3 py-1 rounded-full border border-forest-200">
+        <span class="text-xs font-bold text-brand-700 uppercase tracking-widest bg-brand-50 px-3 py-1 rounded-full border border-brand-200">
           CHALLENGES
         </span>
-        <h2 class="text-2xl sm:text-4xl font-bold font-serif text-forest-900">
+        <h2 class="text-2xl sm:text-4xl font-bold font-serif text-slate-900">
           こんな経営課題を抱えていませんか？
         </h2>
         <p class="text-sm sm:text-base text-gray-600">
@@ -89,510 +155,339 @@ import Layout from '../layouts/Layout.astro';
       </div>
 
       <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
-        <!-- 課題1 -->
-        <div class="bg-sand-50 p-8 rounded-2xl border border-sand-200 hover:border-gold-500/50 hover:shadow-lg transition-all duration-200">
-          <div class="w-12 h-12 rounded-xl bg-forest-900 text-gold-400 flex items-center justify-center font-bold text-lg mb-6">
-            01
-          </div>
-          <h3 class="text-lg font-bold font-serif text-forest-900 mb-3">売上はあるが利益が残らない</h3>
-          <p class="text-sm text-gray-600 leading-relaxed">
+        <div class="bg-sand-50 p-8 rounded-2xl border border-sand-200 hover:border-brand-500 hover:shadow-lg transition">
+          <div class="w-10 h-10 rounded-xl bg-brand-900 text-brand-300 flex items-center justify-center font-bold text-sm mb-4">01</div>
+          <h3 class="text-lg font-bold font-serif text-slate-900 mb-2">売上はあるが利益が残らない</h3>
+          <p class="text-xs text-gray-600 leading-relaxed">
             忙しく働いているのに月末や決算期に手元キャッシュが薄い。案件ごとの正確な採算が把握できておらず、不採算業務が利益を圧迫しています。
           </p>
         </div>
 
-        <!-- 課題2 -->
-        <div class="bg-sand-50 p-8 rounded-2xl border border-sand-200 hover:border-gold-500/50 hover:shadow-lg transition-all duration-200">
-          <div class="w-12 h-12 rounded-xl bg-forest-900 text-gold-400 flex items-center justify-center font-bold text-lg mb-6">
-            02
-          </div>
-          <h3 class="text-lg font-bold font-serif text-forest-900 mb-3">業務が属人化しブラックボックス化</h3>
-          <p class="text-sm text-gray-600 leading-relaxed">
+        <div class="bg-sand-50 p-8 rounded-2xl border border-sand-200 hover:border-brand-500 hover:shadow-lg transition">
+          <div class="w-10 h-10 rounded-xl bg-brand-900 text-brand-300 flex items-center justify-center font-bold text-sm mb-4">02</div>
+          <h3 class="text-lg font-bold font-serif text-slate-900 mb-2">業務が属人化している</h3>
+          <p class="text-xs text-gray-600 leading-relaxed">
             「あの人しか分からない」業務ばかりで、担当者が休むと業務がストップ。マニュアルが形骸化し、新人育成にも多大なコストがかかっています。
           </p>
         </div>
 
-        <!-- 課題3 -->
-        <div class="bg-sand-50 p-8 rounded-2xl border border-sand-200 hover:border-gold-500/50 hover:shadow-lg transition-all duration-200">
-          <div class="w-12 h-12 rounded-xl bg-forest-900 text-gold-400 flex items-center justify-center font-bold text-lg mb-6">
-            03
-          </div>
-          <h3 class="text-lg font-bold font-serif text-forest-900 mb-3">集客が人脈・紹介頼みで不安定</h3>
-          <p class="text-sm text-gray-600 leading-relaxed">
-            来月や3ヶ月後の見込み客が安定して獲得できる仕組みがない。HPやSNSはあるものの、実際の商談や売上に繋がる導線が機能していません。
+        <div class="bg-sand-50 p-8 rounded-2xl border border-sand-200 hover:border-brand-500 hover:shadow-lg transition">
+          <div class="w-10 h-10 rounded-xl bg-brand-900 text-brand-300 flex items-center justify-center font-bold text-sm mb-4">03</div>
+          <h3 class="text-lg font-bold font-serif text-slate-900 mb-2">集客が安定しない</h3>
+          <p class="text-xs text-gray-600 leading-relaxed">
+            来月や3ヶ月後の見込み客獲得が紹介や人脈頼み。HPやSNSはあるものの、実際の問い合わせや商談に繋がる導線が機能していません。
           </p>
         </div>
 
-        <!-- 課題4 -->
-        <div class="bg-sand-50 p-8 rounded-2xl border border-sand-200 hover:border-gold-500/50 hover:shadow-lg transition-all duration-200">
-          <div class="w-12 h-12 rounded-xl bg-forest-900 text-gold-400 flex items-center justify-center font-bold text-lg mb-6">
-            04
-          </div>
-          <h3 class="text-lg font-bold font-serif text-forest-900 mb-3">社長が日々の実務に追われている</h3>
-          <p class="text-sm text-gray-600 leading-relaxed">
-            社長自身が現場のプレイングや雑務、トラブル対応に忙殺され、中長期の経営戦略や新規事業、仕組みづくりに向き合う時間が取れていません。
+        <div class="bg-sand-50 p-8 rounded-2xl border border-sand-200 hover:border-brand-500 hover:shadow-lg transition">
+          <div class="w-10 h-10 rounded-xl bg-brand-900 text-brand-300 flex items-center justify-center font-bold text-sm mb-4">04</div>
+          <h3 class="text-lg font-bold font-serif text-slate-900 mb-2">日々の業務に追われ改善が進まない</h3>
+          <p class="text-xs text-gray-600 leading-relaxed">
+            社長自身が現場実務やトラブル対応に忙殺され、中長期の経営戦略や新規事業、仕組みづくりに向き合う時間が取れていません。
           </p>
         </div>
 
-        <!-- 課題5 -->
-        <div class="bg-sand-50 p-8 rounded-2xl border border-sand-200 hover:border-gold-500/50 hover:shadow-lg transition-all duration-200">
-          <div class="w-12 h-12 rounded-xl bg-forest-900 text-gold-400 flex items-center justify-center font-bold text-lg mb-6">
-            05
-          </div>
-          <h3 class="text-lg font-bold font-serif text-forest-900 mb-3">IT・AIを活用したいが何から始めればよいか不明</h3>
-          <p class="text-sm text-gray-600 leading-relaxed">
+        <div class="bg-sand-50 p-8 rounded-2xl border border-sand-200 hover:border-brand-500 hover:shadow-lg transition">
+          <div class="w-10 h-10 rounded-xl bg-brand-900 text-brand-300 flex items-center justify-center font-bold text-sm mb-4">05</div>
+          <h3 class="text-lg font-bold font-serif text-slate-900 mb-2">IT・AIを活用したいが何から始めればよいか不明</h3>
+          <p class="text-xs text-gray-600 leading-relaxed">
             世の中のDXツールやAIは難解で、自社にどう当てはまるか分からない。高いシステムを入れても使いこなせず放置される懸念を抱えています。
           </p>
         </div>
 
-        <!-- 課題6 -->
-        <div class="bg-sand-50 p-8 rounded-2xl border border-sand-200 hover:border-gold-500/50 hover:shadow-lg transition-all duration-200">
-          <div class="w-12 h-12 rounded-xl bg-forest-900 text-gold-400 flex items-center justify-center font-bold text-lg mb-6">
-            06
-          </div>
-          <h3 class="text-lg font-bold font-serif text-forest-900 mb-3">新規事業を始めたいが仕組み作りに不安</h3>
-          <p class="text-sm text-gray-600 leading-relaxed">
+        <div class="bg-sand-50 p-8 rounded-2xl border border-sand-200 hover:border-brand-500 hover:shadow-lg transition">
+          <div class="w-10 h-10 rounded-xl bg-brand-900 text-brand-300 flex items-center justify-center font-bold text-sm mb-4">06</div>
+          <h3 class="text-lg font-bold font-serif text-slate-900 mb-2">新しい事業を始めたいが仕組みづくりに不安</h3>
+          <p class="text-xs text-gray-600 leading-relaxed">
             新たな収益の柱を作りたいが、企画、集客、業務フロー、現場オペレーションを一から構築するリソースや知見が社内に不足しています。
           </p>
         </div>
       </div>
-
-      <!-- 診断誘導バナー -->
-      <div class="mt-12 p-6 sm:p-8 bg-forest-900 rounded-2xl text-white flex flex-col sm:flex-row items-center justify-between gap-6 shadow-xl">
-        <div class="space-y-1 text-center sm:text-left">
-          <h3 class="text-lg sm:text-xl font-bold font-serif text-gold-300">
-            自社の「真のボトルネック」を診断してみませんか？
-          </h3>
-          <p class="text-xs sm:text-sm text-sand-300">
-            わずか3分・全5問の問診で、仕組み化スコアと改善優先度を即座に判定します。
-          </p>
-        </div>
-        <a
-          href="/diagnosis"
-          class="shrink-0 px-6 py-3.5 bg-gold-500 hover:bg-gold-600 text-forest-950 font-bold rounded-xl text-sm transition shadow-md"
-        >
-          無料でボトルネック診断を受ける →
-        </a>
-      </div>
     </div>
   </section>
 
-  <!-- APPROACH SECTION (3 VALUES x 2 METHODS) -->
-  <section class="py-20 sm:py-28 bg-sand-100/60">
-    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-      <div class="text-center max-w-3xl mx-auto space-y-3 mb-16">
-        <span class="text-xs font-bold text-forest-700 uppercase tracking-widest bg-forest-50 px-3 py-1 rounded-full border border-forest-200">
-          OUR APPROACH
-        </span>
-        <h2 class="text-2xl sm:text-4xl font-bold font-serif text-forest-900">
-          戦略と実行の両面から「仕組み」を築く
-        </h2>
-        <p class="text-sm sm:text-base text-gray-600">
-          助言だけのコンサルとも、言われたものだけ作る開発会社とも違います。<br class="hidden sm:inline" />
-          MSTは「顧問（設計・助言）」と「システム（実装・自動化）」の2つの手段を統合して支援します。
-        </p>
-      </div>
-
-      <!-- 2つの手段 × 3つの価値 -->
-      <div class="grid grid-cols-1 lg:grid-cols-2 gap-8 mb-16">
-        <!-- 手段1: 顧問 -->
-        <div class="bg-white p-8 sm:p-10 rounded-2xl border border-sand-300 shadow-sm relative overflow-hidden">
-          <div class="absolute top-0 right-0 w-28 h-28 bg-forest-50 rounded-bl-full -z-0"></div>
-          <div class="relative z-10 space-y-4">
-            <span class="text-xs font-bold text-forest-700 bg-forest-100 px-3 py-1 rounded-full">手段 ①</span>
-            <h3 class="text-2xl font-bold font-serif text-forest-900">顧問（設計・助言・改善方針）</h3>
-            <p class="text-sm text-gray-600 leading-relaxed">
-              経営課題の分析から、優先順位づけ、業務フローの設計、IT・AI活用方針、集客導線の設計まで。「何をどう改善すべきか」を経営者と共に整理し、意思決定に伴走します。
-            </p>
-            <ul class="text-xs text-gray-700 space-y-2 pt-2 border-t border-sand-200">
-              <li class="flex items-center gap-2">
-                <span class="text-forest-600 font-bold">✓</span> 経営課題の棚卸しと利益構造の改善
-              </li>
-              <li class="flex items-center gap-2">
-                <span class="text-forest-600 font-bold">✓</span> 業務フローの可視化と属人化の解消方針
-              </li>
-              <li class="flex items-center gap-2">
-                <span class="text-forest-600 font-bold">✓</span> 費用対効果の高いIT・DXツールの選定
-              </li>
-            </ul>
-          </div>
-        </div>
-
-        <!-- 手段2: システム実装 -->
-        <div class="bg-white p-8 sm:p-10 rounded-2xl border border-sand-300 shadow-sm relative overflow-hidden">
-          <div class="absolute top-0 right-0 w-28 h-28 bg-gold-50 rounded-bl-full -z-0"></div>
-          <div class="relative z-10 space-y-4">
-            <span class="text-xs font-bold text-gold-700 bg-gold-100 px-3 py-1 rounded-full">手段 ②</span>
-            <h3 class="text-2xl font-bold font-serif text-forest-900">システム構築（実装・制作・自動化）</h3>
-            <p class="text-sm text-gray-600 leading-relaxed">
-              「方針は決まったが作れる人がいない」を防ぎます。Google Workspace・GAS、Webアプリ、API連携、LINE自動化、LP制作など、業務改善に必要なシステムを自社でダイレクトに実装します。
-            </p>
-            <ul class="text-xs text-gray-700 space-y-2 pt-2 border-t border-sand-200">
-              <li class="flex items-center gap-2">
-                <span class="text-gold-600 font-bold">✓</span> 定型業務の自動化スクリプト（GAS・API）
-              </li>
-              <li class="flex items-center gap-2">
-                <span class="text-gold-600 font-bold">✓</span> 専用Web管理ツール・クラウドDB構築
-              </li>
-              <li class="flex items-center gap-2">
-                <span class="text-gold-600 font-bold">✓</span> LP・お問い合わせフォーム・LINE自動連携
-              </li>
-            </ul>
-          </div>
-        </div>
-      </div>
-
-      <!-- 3つの提供価値 -->
-      <div class="bg-forest-950 text-white rounded-3xl p-8 sm:p-14 shadow-2xl">
-        <div class="text-center max-w-2xl mx-auto mb-12">
-          <span class="text-xs font-bold text-gold-400 uppercase tracking-widest">VALUE PROPOSITION</span>
-          <h3 class="text-2xl sm:text-3xl font-bold font-serif mt-2">
-            仕組み化によって企業にもたらされる3つの価値
-          </h3>
-        </div>
-
-        <div class="grid grid-cols-1 md:grid-cols-3 gap-8">
-          <div class="border-t border-forest-800 pt-6 space-y-3">
-            <div class="text-gold-400 font-serif font-bold text-2xl">01</div>
-            <h4 class="text-lg font-bold text-white font-serif">経営判断の迅速化</h4>
-            <p class="text-xs sm:text-sm text-sand-300 leading-relaxed">
-              データと数字がリアルタイムに可視化され、社長の勘や記憶に頼らない的確な経営判断が可能になります。
-            </p>
-          </div>
-
-          <div class="border-t border-forest-800 pt-6 space-y-3">
-            <div class="text-gold-400 font-serif font-bold text-2xl">02</div>
-            <h4 class="text-lg font-bold text-white font-serif">属人化の解消と品質安定</h4>
-            <p class="text-xs sm:text-sm text-sand-300 leading-relaxed">
-              業務フローと自動化システムにより、担当者の力量に左右されない一貫した高品質なサービス提供体制を構築。
-            </p>
-          </div>
-
-          <div class="border-t border-forest-800 pt-6 space-y-3">
-            <div class="text-gold-400 font-serif font-bold text-2xl">03</div>
-            <h4 class="text-lg font-bold text-white font-serif">利益率の構造的改善</h4>
-            <p class="text-xs sm:text-sm text-sand-300 leading-relaxed">
-              無駄な残業・転記作業の削減と、高付加価値業務へのリソース集中によって、手元に残る営業利益を大幅に改善します。
-            </p>
-          </div>
-        </div>
-      </div>
-    </div>
-  </section>
-
-  <!-- OUR PRACTICE (自社実践) SECTION -->
-  <section class="py-20 sm:py-28 bg-white border-b border-sand-200">
-    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-      <div class="grid grid-cols-1 lg:grid-cols-2 gap-12 items-center">
-        <div class="space-y-6">
-          <span class="text-xs font-bold text-forest-700 uppercase tracking-widest bg-forest-50 px-3 py-1 rounded-full border border-forest-200">
-            OUR PRACTICE
-          </span>
-          <h2 class="text-2xl sm:text-4xl font-bold font-serif text-forest-900 leading-tight">
-            自社で実践し、実証された<br />
-            仕組みだけを提供する。
-          </h2>
-          <p class="text-sm sm:text-base text-gray-600 leading-relaxed">
-            私たちが提案する仕組みやツールは、机上の空論ではありません。自社で運営する介護保険外サービス事業や実店舗、各種Webサービスの現場で実際に稼働し、検証を重ねて成果を上げた手法のみをクライアントに還元しています。
-          </p>
-
-          <div class="space-y-4 pt-2">
-            <div class="flex items-start gap-4">
-              <div class="w-8 h-8 rounded-lg bg-forest-100 text-forest-800 flex items-center justify-center font-bold text-sm shrink-0 mt-1">
-                ✓
-              </div>
-              <div>
-                <h4 class="text-sm font-bold text-forest-900">自社開発のAI経営OSの運用</h4>
-                <p class="text-xs text-gray-500 mt-0.5">
-                  顧客管理（CRM）、見積・請求書発行、タスク管理、経営KPI集計を単一のWebアプリ基盤で統合運用。
-                </p>
-              </div>
-            </div>
-
-            <div class="flex items-start gap-4">
-              <div class="w-8 h-8 rounded-lg bg-forest-100 text-forest-800 flex items-center justify-center font-bold text-sm shrink-0 mt-1">
-                ✓
-              </div>
-              <div>
-                <h4 class="text-sm font-bold text-forest-900">介護保険外サービス「アシスタ大垣」の直営展開</h4>
-                <p class="text-xs text-gray-500 mt-0.5">
-                  超高齢社会で需要が急増する生活支援・保険外サービスを岐阜県大垣市にて直営。現場オペレーションと仕組み化を自社検証。
-                </p>
-              </div>
-            </div>
-
-            <div class="flex items-start gap-4">
-              <div class="w-8 h-8 rounded-lg bg-forest-100 text-forest-800 flex items-center justify-center font-bold text-sm shrink-0 mt-1">
-                ✓
-              </div>
-              <div>
-                <h4 class="text-sm font-bold text-forest-900">LINE・Web自動集客導線の自社運用</h4>
-                <p class="text-xs text-gray-500 mt-0.5">
-                  SNS広告・LPからLINE公式アカウントへ誘導し、セグメント配信・ステップ配信・自動問診による見込み客育成を実践。
-                </p>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        <!-- 視覚カード群 -->
-        <div class="bg-sand-50 p-6 sm:p-10 rounded-3xl border border-sand-300 space-y-6">
-          <div class="bg-white p-6 rounded-2xl border border-sand-200 shadow-sm space-y-3">
-            <div class="flex items-center justify-between text-xs font-bold text-forest-700">
-              <span>実証済みシステム基盤</span>
-              <span class="text-gold-600">PRODUCTION READY</span>
-            </div>
-            <div class="text-lg font-bold text-forest-900 font-serif">
-              経営データ・業務自動化の統合ダッシュボード
-            </div>
-            <p class="text-xs text-gray-500 leading-relaxed">
-              散らばっていたスプレッドシートや紙伝票を一掃し、リード流入から請求管理、売上分析までをスムーズに一本化する独自アーキテクチャ。
-            </p>
-          </div>
-
-          <div class="bg-white p-6 rounded-2xl border border-sand-200 shadow-sm space-y-3">
-            <div class="flex items-center justify-between text-xs font-bold text-forest-700">
-              <span>新規事業パッケージ</span>
-              <span class="text-gold-600">TURNKEY SOLUTION</span>
-            </div>
-            <div class="text-lg font-bold text-forest-900 font-serif">
-              ゼロから作らない、完成された事業基盤
-            </div>
-            <p class="text-xs text-gray-500 leading-relaxed">
-              契約書・マニュアル・チラシ・Webサイト・顧客管理・営業トークスクリプトをすべてワンセットで提供し、立ち上げリスクを最小化。
-            </p>
-          </div>
-        </div>
-      </div>
-    </div>
-  </section>
-
-  <!-- SPECIAL CARE PACKAGE BANNER (介護保険外サービス特設) -->
-  <section class="py-16 bg-gradient-to-r from-forest-900 via-forest-800 to-forest-950 text-white relative overflow-hidden">
-    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 relative z-10">
-      <div class="flex flex-col lg:flex-row items-center justify-between gap-8">
-        <div class="space-y-4 max-w-2xl text-center lg:text-left">
-          <span class="inline-block px-3.5 py-1 rounded-full text-xs font-bold bg-gold-500 text-forest-950">
-            新規事業・独立支援特設プログラム
-          </span>
-          <h2 class="text-2xl sm:text-4xl font-bold font-serif text-white leading-tight">
-            介護保険外サービス開業パッケージ<br />
-            <span class="text-gold-300">新しい事業を、ゼロから作らない。</span>
-          </h2>
-          <p class="text-xs sm:text-sm text-sand-300 leading-relaxed">
-            事業設計・集客営業基盤・業務システム・開業運営サポートを統合。自社で直営する生活支援サービス「アシスタ大垣」の実践ノウハウをそのまま提供し、低リスクでの立ち上げを実現します。
-          </p>
-        </div>
-
-        <div class="flex flex-col sm:flex-row items-center gap-4 shrink-0">
-          <a
-            href="https://business.mstcorp.info/"
-            target="_blank"
-            rel="noopener noreferrer"
-            class="px-8 py-4 bg-gold-500 hover:bg-gold-400 text-forest-950 font-bold rounded-xl text-sm transition shadow-lg flex items-center gap-2"
-          >
-            <span>開業パッケージ専用LPを見る</span>
-            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
-            </svg>
-          </a>
-          <a
-            href="/care-package"
-            class="px-6 py-4 bg-forest-700/80 hover:bg-forest-600/80 text-white font-semibold rounded-xl text-sm transition border border-forest-500/30"
-          >
-            当サイト内の概要解説
-          </a>
-        </div>
-      </div>
-    </div>
-  </section>
-
-  <!-- PROFILE / MESSAGE SECTION (大橋真人 代表メッセージ & プロフィール) -->
-  <section class="py-20 sm:py-28 bg-white border-b border-sand-200">
-    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-      <div class="text-center max-w-3xl mx-auto space-y-3 mb-16">
-        <span class="text-xs font-bold text-forest-700 uppercase tracking-widest bg-forest-50 px-3 py-1 rounded-full border border-forest-200">
-          LEADERSHIP & BACKGROUND
-        </span>
-        <h2 class="text-2xl sm:text-4xl font-bold font-serif text-forest-900">
-          代表メッセージと実績の背景
-        </h2>
-        <p class="text-sm sm:text-base text-gray-600">
-          起業から約20年。自ら泥水をすすり、事業の立ち上げ・買収・店舗運営・資金調達・システム開発を実践してきたからこそ話せる「真実」があります。
-        </p>
-      </div>
-
-      <div class="grid grid-cols-1 lg:grid-cols-12 gap-12 items-start">
-        <!-- 代表情報 -->
-        <div class="lg:col-span-5 bg-sand-50 p-8 rounded-3xl border border-sand-300 space-y-6">
-          <div class="flex items-center gap-4">
-            <div class="w-20 h-20 rounded-2xl bg-forest-900 text-gold-400 font-serif font-bold text-3xl flex items-center justify-center shadow-md">
-              大橋
-            </div>
-            <div>
-              <span class="text-xs text-gray-500 font-medium">有限会社MST 代表取締役</span>
-              <h3 class="text-2xl font-bold font-serif text-forest-900">大橋 真人</h3>
-              <p class="text-xs text-forest-700 mt-1">Masato Ohashi</p>
-            </div>
-          </div>
-
-          <div class="text-xs sm:text-sm text-gray-700 space-y-4 leading-relaxed border-t border-sand-200 pt-6">
-            <p>
-              「良い商品や技術を持っているのに、経営や業務の仕組み化が追いつかず、社長自身が日々の雑務に忙殺されて利益が残らない…」
-            </p>
-            <p>
-              そんな中小企業・小規模事業者を数多く見てきました。私自身、25歳でWeb事業で起業して以来、ビジネススクール講師、スクール運営、自動車関連事業、有限会社の株式取得（M&A）、実店舗サロンの運営、そして介護保険外生活支援サービス「アシスタ大垣」の自社立ち上げと、幾多の事業を現場で泥臭く経験してきました。
-            </p>
-            <p>
-              公庫や地銀からの融資調達、各種ものづくり・持続化補助金の採択経験から、デザイン制作、LP構築、GASやフルスタックWebアプリ、AI経営OSの開発まで、すべて自らの手で実装し乗り越えてきました。
-            </p>
-            <p class="font-bold text-forest-900">
-              だからこそ、評論家のような助言はしません。現場の痛みと経営の数字を誰よりも理解するパートナーとして、貴社に利益が残る確固たる仕組みを一緒に築き上げます。
-            </p>
-          </div>
-        </div>
-
-        <!-- 経歴・専門性年表 -->
-        <div class="lg:col-span-7 space-y-6">
-          <h4 class="text-lg font-bold font-serif text-forest-900 pb-2 border-b border-sand-300">
-            代表・大橋真人の歩みと実践知
-          </h4>
-
-          <div class="space-y-6 text-sm">
-            <div class="flex gap-4">
-              <div class="w-24 shrink-0 font-bold text-forest-700 text-xs sm:text-sm">25歳〜</div>
-              <div class="space-y-1">
-                <h5 class="font-bold text-gray-900">Webビジネスでの起業・ビジネススクール講師</h5>
-                <p class="text-xs text-gray-600 leading-relaxed">
-                  Web集客・マーケティング事業で独立。多くの受講生を抱えるビジネススクールでの講師登壇、スクール運営を担い、人に教え組織を動かす土台を確立。
-                </p>
-              </div>
-            </div>
-
-            <div class="flex gap-4">
-              <div class="w-24 shrink-0 font-bold text-forest-700 text-xs sm:text-sm">自動車事業</div>
-              <div class="space-y-1">
-                <h5 class="font-bold text-gray-900">実物商品・自動車流通事業の展開</h5>
-                <p class="text-xs text-gray-600 leading-relaxed">
-                  Webだけでなくリアルな物販・自動車事業を展開。仕入れ、在庫管理、顧客対応など泥臭い現場オペレーションを徹底的に体験。
-                </p>
-              </div>
-            </div>
-
-            <div class="flex gap-4">
-              <div class="w-24 shrink-0 font-bold text-forest-700 text-xs sm:text-sm">法人M&A</div>
-              <div class="space-y-1">
-                <h5 class="font-bold text-gray-900">有限会社MSTの株式取得・代表就任</h5>
-                <p class="text-xs text-gray-600 leading-relaxed">
-                  平成17年設立の有限会社の株式を取得し経営を引き継ぐ。公庫・地銀からのプロパー融資調達や補助金申請・採択を自ら実行し、強固な財務体質を構築。
-                </p>
-              </div>
-            </div>
-
-            <div class="flex gap-4">
-              <div class="w-24 shrink-0 font-bold text-forest-700 text-xs sm:text-sm">実店舗・福祉</div>
-              <div class="space-y-1">
-                <h5 class="font-bold text-gray-900">美容サロン運営 ＆ 介護保険外「アシスタ大垣」自社創業</h5>
-                <p class="text-xs text-gray-600 leading-relaxed">
-                  地域密着の実店舗サロンの経営、ならびに超高齢社会の課題を解決する介護保険外生活支援サービスを自社で立ち上げ・運営中。
-                </p>
-              </div>
-            </div>
-
-            <div class="flex gap-4">
-              <div class="w-24 shrink-0 font-bold text-forest-700 text-xs sm:text-sm">開発・DX</div>
-              <div class="space-y-1">
-                <h5 class="font-bold text-gray-900">デザイン・Web・業務効率化ツール・AI経営OSの自力フルスタック開発</h5>
-                <p class="text-xs text-gray-600 leading-relaxed">
-                  Photoshop/Illustratorによるマーケティングデザイン・LP制作から、GAS、Python、TypeScript、React、Supabaseを用いた自社基幹システムの自力構築まで完結。
-                </p>
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
-    </div>
-  </section>
-
-  <!-- 3 ACTIONS CTA SECTION (診断・資料請求・LINE相談) -->
+  <!-- ③ MSTの支援方針（課題整理→改善戦略→仕組み構築→運用・継続改善） -->
   <section class="py-20 sm:py-28 bg-sand-100">
     <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
       <div class="text-center max-w-3xl mx-auto space-y-3 mb-16">
-        <span class="text-xs font-bold text-forest-700 uppercase tracking-widest bg-forest-50 px-3 py-1 rounded-full border border-forest-200">
-          NEXT ACTIONS
+        <span class="text-xs font-bold text-brand-700 uppercase tracking-widest bg-brand-50 px-3 py-1 rounded-full border border-brand-200">
+          OUR POLICY
         </span>
-        <h2 class="text-2xl sm:text-4xl font-bold font-serif text-forest-900">
-          まずは無料の3つの方法からご相談ください
+        <h2 class="text-2xl sm:text-4xl font-bold font-serif text-slate-900">
+          MSTの支援方針
         </h2>
         <p class="text-sm sm:text-base text-gray-600">
-          貴社の状況に合わせて、最も負担の少ないアクションをお選びいただけます。
+          改善を一度きりで終わらせず、継続的な成長につなげる4段階のアプローチ。
         </p>
       </div>
 
+      <div class="grid grid-cols-1 md:grid-cols-4 gap-6">
+        <div class="bg-white p-6 sm:p-8 rounded-2xl border border-sand-300 shadow-sm space-y-3">
+          <div class="text-xs font-bold text-brand-700 bg-brand-50 px-2.5 py-1 rounded inline-block">STEP 1</div>
+          <h3 class="text-lg font-bold font-serif text-slate-900">課題の整理</h3>
+          <p class="text-xs text-gray-600 leading-relaxed">
+            経営の数字と現場実務を棚卸しし、最優先で手をつけるべき真のボトルネックを特定。
+          </p>
+        </div>
+
+        <div class="bg-white p-6 sm:p-8 rounded-2xl border border-sand-300 shadow-sm space-y-3">
+          <div class="text-xs font-bold text-brand-700 bg-brand-50 px-2.5 py-1 rounded inline-block">STEP 2</div>
+          <h3 class="text-lg font-bold font-serif text-slate-900">改善戦略の設計</h3>
+          <p class="text-xs text-gray-600 leading-relaxed">
+            利益改善、業務標準化、集客導線、IT活用の方針など、無理のない具体策を設計。
+          </p>
+        </div>
+
+        <div class="bg-white p-6 sm:p-8 rounded-2xl border border-sand-300 shadow-sm space-y-3">
+          <div class="text-xs font-bold text-brand-700 bg-brand-50 px-2.5 py-1 rounded inline-block">STEP 3</div>
+          <h3 class="text-lg font-bold font-serif text-slate-900">仕組みの構築・実装</h3>
+          <p class="text-xs text-gray-600 leading-relaxed">
+            助言だけで終わらせず、GAS・ツール・LP・マニュアルなど動く仕組みを自社で実装。
+          </p>
+        </div>
+
+        <div class="bg-white p-6 sm:p-8 rounded-2xl border border-sand-300 shadow-sm space-y-3">
+          <div class="text-xs font-bold text-brand-700 bg-brand-50 px-2.5 py-1 rounded inline-block">STEP 4</div>
+          <h3 class="text-lg font-bold font-serif text-slate-900">運用・継続改善</h3>
+          <p class="text-xs text-gray-600 leading-relaxed">
+            現場での運用定着を確認し、数字の変化に合わせて継続的に改善を伴走します。
+          </p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ④ サービス紹介（設計書指定の6サービス） -->
+  <section class="py-20 sm:py-28 bg-white border-b border-sand-200">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+      <div class="text-center max-w-3xl mx-auto space-y-3 mb-16">
+        <span class="text-xs font-bold text-brand-700 uppercase tracking-widest bg-brand-50 px-3 py-1 rounded-full border border-brand-200">
+          SERVICES
+        </span>
+        <h2 class="text-2xl sm:text-4xl font-bold font-serif text-slate-900">
+          MSTが提供するサービス
+        </h2>
+        <p class="text-sm text-gray-600">
+          各サービスごとに専用ページをご用意しています。詳細は各カードよりご覧いただけます。
+        </p>
+      </div>
+
+      <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
+        {services.map((s) => (
+          <div class="bg-sand-50 rounded-2xl border border-sand-300 p-8 flex flex-col justify-between hover:border-brand-500 hover:shadow-xl transition-all group">
+            <div class="space-y-3">
+              <span class="text-2xl font-bold font-serif text-gray-300 group-hover:text-brand-500 transition-colors">
+                {s.num}
+              </span>
+              <h3 class="text-lg font-bold font-serif text-slate-900 group-hover:text-brand-600 transition-colors">
+                {s.title}
+              </h3>
+              <p class="text-xs text-gray-600 leading-relaxed">
+                {s.desc}
+              </p>
+            </div>
+            <div class="pt-6 border-t border-sand-200 mt-6">
+              <a
+                href={s.href}
+                class="inline-flex items-center gap-1.5 text-xs font-bold text-brand-700 hover:text-brand-900 group-hover:translate-x-1 transition-all"
+              >
+                <span>サービス詳細を見る</span>
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M14 5l7 7m0 0l-7 7m7-7H3"/></svg>
+              </a>
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  </section>
+
+  <!-- ⑤ 支援の進め方（相談→整理→提案→契約→実行運用） -->
+  <section class="py-20 sm:py-28 bg-sand-100">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+      <div class="text-center max-w-3xl mx-auto space-y-3 mb-16">
+        <span class="text-xs font-bold text-brand-700 uppercase tracking-widest bg-brand-50 px-3 py-1 rounded-full border border-brand-200">
+          FLOW
+        </span>
+        <h2 class="text-2xl sm:text-4xl font-bold font-serif text-slate-900">
+          支援の進め方
+        </h2>
+        <p class="text-sm text-gray-600">
+          初回相談から改善の実行・定着まで、透明性の高いステップで進めます。
+        </p>
+      </div>
+
+      <div class="max-w-4xl mx-auto space-y-4">
+        {steps.map((st) => (
+          <div class="bg-white p-6 sm:p-8 rounded-2xl border border-sand-300 shadow-sm flex flex-col sm:flex-row items-start sm:items-center gap-6">
+            <div class="w-12 h-12 rounded-xl bg-brand-900 text-white font-serif font-bold text-lg flex items-center justify-center shrink-0">
+              {st.num}
+            </div>
+            <div class="space-y-1">
+              <h3 class="text-base font-bold font-serif text-slate-900">{st.title}</h3>
+              <p class="text-xs text-gray-600 leading-relaxed">{st.desc}</p>
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  </section>
+
+  <!-- ⑥ お役立ち情報・自社メディア最新記事 -->
+  <section class="py-20 sm:py-28 bg-white border-b border-sand-200">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+      <div class="flex flex-col sm:flex-row items-start sm:items-end justify-between mb-12 gap-4">
+        <div class="space-y-2">
+          <span class="text-xs font-bold text-brand-700 bg-brand-50 px-3 py-1 rounded-full border border-brand-200">
+            OWN MEDIA
+          </span>
+          <h2 class="text-2xl sm:text-4xl font-bold font-serif text-slate-900">
+            お役立ち情報・最新記事
+          </h2>
+          <p class="text-sm text-gray-600">現場の実践から得られた経営・業務改善ノウハウを配信中。</p>
+        </div>
+        <a
+          href="/media"
+          class="shrink-0 text-xs font-bold text-brand-700 hover:text-brand-900 underline"
+        >
+          記事一覧をすべて見る →
+        </a>
+      </div>
+
       <div class="grid grid-cols-1 md:grid-cols-3 gap-8">
-        <!-- アクション1: 診断 -->
-        <div class="bg-white p-8 rounded-2xl border border-sand-300 shadow-sm flex flex-col justify-between hover:shadow-lg transition">
-          <div class="space-y-4">
-            <span class="inline-block px-3 py-1 bg-gold-100 text-gold-800 text-xs font-bold rounded-full">
-              所要時間 約3分
-            </span>
-            <h3 class="text-xl font-bold font-serif text-forest-900">無料経営ボトルネック診断</h3>
+        {ARTICLES.slice(0, 3).map((a) => (
+          <article class="bg-sand-50 rounded-2xl border border-sand-300 p-6 flex flex-col justify-between hover:shadow-md transition group">
+            <div class="space-y-3">
+              <div class="flex items-center justify-between text-xs text-gray-500">
+                <span class="font-bold text-brand-700 bg-white px-2.5 py-0.5 rounded border border-sand-200">
+                  {a.category}
+                </span>
+                <time>{a.publishedAt}</time>
+              </div>
+              <h3 class="text-base font-bold font-serif text-slate-900 group-hover:text-brand-600 transition leading-snug">
+                <a href={`/media/${a.slug}`}>{a.title}</a>
+              </h3>
+              <p class="text-xs text-gray-600 line-clamp-2 leading-relaxed">{a.summary}</p>
+            </div>
+            <div class="pt-4 border-t border-sand-200 mt-4 text-right">
+              <a href={`/media/${a.slug}`} class="text-xs font-bold text-brand-700 hover:text-brand-900">
+                記事を読む →
+              </a>
+            </div>
+          </article>
+        ))}
+      </div>
+    </div>
+  </section>
+
+  <!-- ⑦ 無料診断・資料請求への導線 -->
+  <section class="py-20 sm:py-28 bg-sand-100">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+      <div class="text-center max-w-3xl mx-auto space-y-3 mb-16">
+        <span class="text-xs font-bold text-brand-700 uppercase tracking-widest bg-brand-50 px-3 py-1 rounded-full border border-brand-200">
+          FREE RESOURCES
+        </span>
+        <h2 class="text-2xl sm:text-4xl font-bold font-serif text-slate-900">
+          まずは無料の2大アクションから
+        </h2>
+      </div>
+
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-8 max-w-4xl mx-auto">
+        <div class="bg-white p-8 rounded-2xl border border-sand-300 shadow-sm flex flex-col justify-between">
+          <div class="space-y-3">
+            <span class="text-xs font-bold text-brand-700 bg-brand-50 px-2.5 py-1 rounded">所要時間 約3分</span>
+            <h3 class="text-xl font-bold font-serif text-slate-900">無料経営ボトルネック診断</h3>
             <p class="text-xs text-gray-600 leading-relaxed">
-              全5問の選択式問診で、自社の属人化リスクや利益構造のボトルネックを可視化。代表・大橋による改善優先度カルテを無料でお届けします。
+              全5問の診断で、会社の属人化リスクと利益改善の優先順位を判定。代表・大橋による改善カルテを無料でお届けします。
             </p>
           </div>
           <div class="pt-6">
             <a
               href="/diagnosis"
-              class="w-full py-3.5 px-4 bg-forest-900 hover:bg-forest-800 text-gold-300 font-bold rounded-xl text-xs text-center block transition shadow"
+              class="block w-full py-3.5 bg-brand-900 hover:bg-brand-800 text-white text-xs font-bold text-center rounded-xl transition shadow"
             >
               診断を開始する（無料）
             </a>
           </div>
         </div>
 
-        <!-- アクション2: 資料請求 -->
-        <div class="bg-white p-8 rounded-2xl border border-sand-300 shadow-sm flex flex-col justify-between hover:shadow-lg transition">
-          <div class="space-y-4">
-            <span class="inline-block px-3 py-1 bg-forest-100 text-forest-800 text-xs font-bold rounded-full">
-              PDF即時ダウンロード
-            </span>
-            <h3 class="text-xl font-bold font-serif text-forest-900">経営改善実務ガイド・資料請求</h3>
+        <div class="bg-white p-8 rounded-2xl border border-sand-300 shadow-sm flex flex-col justify-between">
+          <div class="space-y-3">
+            <span class="text-xs font-bold text-green-700 bg-green-50 px-2.5 py-1 rounded">即時ダウンロード</span>
+            <h3 class="text-xl font-bold font-serif text-slate-900">経営改善実務ガイド・資料請求</h3>
             <p class="text-xs text-gray-600 leading-relaxed">
-              中小企業が利益を残すための仕組み化プロセス、業務自動化事例、MSTの支援体系をまとめた全13スライドの解説資料を無料ダウンロード。
+              中小企業が利益を残すための仕組み化プロセス、業務自動化事例、支援体系をまとめた全13スライドの解説PDFをダウンロード。
             </p>
           </div>
           <div class="pt-6">
             <a
               href="/materials"
-              class="w-full py-3.5 px-4 bg-forest-900 hover:bg-forest-800 text-gold-300 font-bold rounded-xl text-xs text-center block transition shadow"
+              class="block w-full py-3.5 bg-brand-900 hover:bg-brand-800 text-white text-xs font-bold text-center rounded-xl transition shadow"
             >
-              資料を無料で請求する
+              資料を請求する（無料）
             </a>
           </div>
         </div>
+      </div>
+    </div>
+  </section>
 
-        <!-- アクション3: LINE相談 -->
-        <div class="bg-white p-8 rounded-2xl border border-sand-300 shadow-sm flex flex-col justify-between hover:shadow-lg transition">
-          <div class="space-y-4">
-            <span class="inline-block px-3 py-1 bg-green-100 text-green-800 text-xs font-bold rounded-full">
-              チャットで気軽に
-            </span>
-            <h3 class="text-xl font-bold font-serif text-forest-900">公式LINE無料相談</h3>
-            <p class="text-xs text-gray-600 leading-relaxed">
-              「まずはちょっと聞いてみたい」「自社の業種でも仕組み化できる？」など、代表・大橋と1対1のLINEトークで気軽にご相談いただけます。
+  <!-- ⑧ 会社情報・問い合わせ導線 ＆ 大橋代表プロフィール -->
+  <section class="py-20 sm:py-28 bg-white border-t border-sand-200">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+      <div class="grid grid-cols-1 lg:grid-cols-12 gap-12 items-start">
+        <!-- 代表情報 -->
+        <div class="lg:col-span-5 bg-sand-50 p-8 rounded-3xl border border-sand-300 space-y-6">
+          <div class="flex items-center gap-4">
+            <div class="w-20 h-20 rounded-2xl bg-brand-900 text-white font-serif font-bold text-3xl flex items-center justify-center shadow-md">
+              大橋
+            </div>
+            <div>
+              <span class="text-xs text-gray-500 font-medium">有限会社MST 代表取締役</span>
+              <h3 class="text-2xl font-bold font-serif text-slate-900">大橋 真人</h3>
+              <p class="text-xs text-brand-700 mt-1">Masato Ohashi</p>
+            </div>
+          </div>
+
+          <div class="text-xs sm:text-sm text-gray-700 space-y-4 leading-relaxed border-t border-sand-200 pt-6 font-light">
+            <p>
+              25歳でWeb事業で起業後、ビジネススクール講師・運営、自動車事業、有限会社の株式取得（M&A）、実店舗サロン経営、介護保険外生活支援サービス「アシスタ大垣」の直営創業と、幾多の現場を泥臭く経験してきました。
+            </p>
+            <p>
+              公庫・地銀融資や補助金調達の実践から、デザイン・LP制作・GAS・Webアプリ・AI経営OSの開発まで、すべて自らの手で実装してきました。評論家ではない「経営の右腕」として貴社の利益改善に伴走します。
             </p>
           </div>
-          <div class="pt-6">
+        </div>
+
+        <!-- 問い合わせ・会社情報案内 -->
+        <div class="lg:col-span-7 space-y-6">
+          <span class="text-xs font-bold text-brand-700 bg-brand-50 px-3 py-1 rounded-full border border-brand-200">
+            CONTACT & COMPANY
+          </span>
+          <h2 class="text-2xl sm:text-3xl font-bold font-serif text-slate-900">
+            有限会社MST 会社情報・ご相談窓口
+          </h2>
+          <p class="text-xs sm:text-sm text-gray-600 leading-relaxed">
+            〒503-0981 岐阜県大垣市桧町127番地 / TEL: 0584-71-7009 / 設立: 平成17年6月16日
+          </p>
+
+          <div class="pt-4 flex flex-col sm:flex-row gap-4">
             <a
               href="https://lin.ee/4Vl9v91"
               target="_blank"
               rel="noopener noreferrer"
-              class="w-full py-3.5 px-4 bg-[#06C755] hover:opacity-90 text-white font-bold rounded-xl text-xs text-center block transition shadow flex items-center justify-center gap-1.5"
+              class="flex-1 py-4 px-6 bg-[#06C755] text-white font-bold rounded-xl text-sm flex items-center justify-center gap-2 shadow"
             >
-              <svg class="w-4 h-4 fill-current" viewBox="0 0 24 24">
+              <svg class="w-5 h-5 fill-current" viewBox="0 0 24 24">
                 <path d="M12 2C6.477 2 2 5.918 2 10.751c0 3.332 2.131 6.223 5.309 7.643-.233.784-.848 2.855-.972 3.29-.153.535.195.526.411.383.17-.113 2.709-1.841 3.806-2.587.47.07 1.05.108 1.646.108 5.523 0 10-3.918 10-8.751C22 5.918 17.523 2 12 2z"/>
               </svg>
               LINEで無料相談する
+            </a>
+
+            <a
+              href="/contact"
+              class="flex-1 py-4 px-6 bg-brand-900 hover:bg-brand-800 text-white font-bold rounded-xl text-sm flex items-center justify-center gap-2 shadow"
+            >
+              フォームでお問い合わせ
             </a>
           </div>
         </div>

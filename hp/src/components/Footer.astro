@@ -2,23 +2,21 @@
 const currentYear = new Date().getFullYear();
 ---
 
-<footer class="bg-forest-950 text-sand-200 pt-16 pb-28 sm:pb-16 border-t border-forest-900">
+<footer class="bg-slate-950 text-sand-200 pt-16 pb-28 sm:pb-16 border-t border-slate-900">
   <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-10 pb-12 border-b border-forest-900/60">
+    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-10 pb-12 border-b border-slate-900">
       
       <!-- 会社・ビジョン情報 -->
       <div class="lg:col-span-2 space-y-4">
-        <div class="flex items-center gap-3">
-          <div class="w-9 h-9 rounded-lg bg-forest-800 flex items-center justify-center text-gold-400 font-serif font-bold text-lg shadow-inner">
-            M
-          </div>
-          <div>
-            <span class="block text-xl font-bold tracking-tight text-white font-serif">有限会社MST</span>
-            <span class="block text-[10px] text-sand-400 tracking-wider uppercase font-medium">Management & System Transformation</span>
-          </div>
-        </div>
+        <a href="/" class="block">
+          <img
+            src="/images/logo.png"
+            alt="有限会社MST"
+            class="h-10 w-auto object-contain brightness-0 invert"
+          />
+        </a>
         <p class="text-sm text-sand-300 leading-relaxed max-w-sm">
-          経営の仕組み化で、利益が残る会社へ。中小企業・小規模事業者の成長と改善を、経営戦略とシステム実装の両面から支援する「経営の右腕」パートナーです。
+          経営の仕組み化で、利益が残る会社へ。中小企業・小規模事業者の成長と改善を、戦略と実行の両面から支援する「経営の右腕」パートナーです。
         </p>
         <div class="pt-2 text-xs text-sand-400 space-y-1">
           <p>〒503-0981 岐阜県大垣市桧町127番地</p>
@@ -27,28 +25,30 @@ const currentYear = new Date().getFullYear();
         </div>
       </div>
 
-      <!-- サービス -->
+      <!-- サービス個別ページ一覧 -->
       <div>
-        <h3 class="text-white font-semibold text-sm tracking-wider uppercase mb-4 font-serif text-gold-400">Services</h3>
+        <h3 class="text-white font-semibold text-sm tracking-wider uppercase mb-4 font-serif text-brand-300">Services</h3>
         <ul class="space-y-2.5 text-xs text-sand-300">
-          <li><a href="/services#strategy" class="hover:text-white transition-colors">経営戦略・利益改善顧問</a></li>
-          <li><a href="/services#it-dx" class="hover:text-white transition-colors">業務改善・IT・DX・AI顧問</a></li>
-          <li><a href="/services#system" class="hover:text-white transition-colors">システム構築・業務自動化</a></li>
-          <li><a href="/services#marketing" class="hover:text-white transition-colors">マーケティング・集客導線構築</a></li>
-          <li><a href="/services#new-business" class="hover:text-white transition-colors">新規事業の企画・立ち上げ</a></li>
-          <li><a href="/care-package" class="hover:text-white transition-colors">介護保険外サービス開業支援</a></li>
+          <li><a href="/services/strategy" class="hover:text-white transition-colors">経営戦略・利益改善顧問</a></li>
+          <li><a href="/services/it-dx" class="hover:text-white transition-colors">業務改善・IT・DX・AI顧問</a></li>
+          <li><a href="/services/system" class="hover:text-white transition-colors">システム構築・業務自動化</a></li>
+          <li><a href="/services/marketing" class="hover:text-white transition-colors">マーケティング・集客導線構築</a></li>
+          <li><a href="/services/new-business" class="hover:text-white transition-colors">新規事業の企画・立ち上げ支援</a></li>
+          <li><a href="/services/care-package" class="hover:text-white transition-colors">介護保険外サービス開業支援</a></li>
         </ul>
       </div>
 
-      <!-- アクション・導線 -->
+      <!-- メディア・商品・アクション -->
       <div>
-        <h3 class="text-white font-semibold text-sm tracking-wider uppercase mb-4 font-serif text-gold-400">Resources</h3>
+        <h3 class="text-white font-semibold text-sm tracking-wider uppercase mb-4 font-serif text-brand-300">Resources</h3>
         <ul class="space-y-2.5 text-xs text-sand-300">
+          <li><a href="/media" class="hover:text-white transition-colors">お役立ち情報・自社メディア</a></li>
+          <li><a href="/products" class="hover:text-white transition-colors">業務改善ツール・商品</a></li>
           <li><a href="/diagnosis" class="hover:text-white transition-colors">3分無料・経営ボトルネック診断</a></li>
           <li><a href="/materials" class="hover:text-white transition-colors">経営改善実務ガイド・資料請求</a></li>
           <li><a href="https://business.mstcorp.info/" target="_blank" rel="noopener noreferrer" class="hover:text-white transition-colors flex items-center gap-1">
             介護事業開業特設LP
-            <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"/></svg>
+            <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"/></svg>
           </a></li>
           <li><a href="https://lin.ee/4Vl9v91" target="_blank" rel="noopener noreferrer" class="hover:text-[#06C755] transition-colors">公式LINEアカウント</a></li>
         </ul>
@@ -56,7 +56,7 @@ const currentYear = new Date().getFullYear();
 
       <!-- 企業情報・法的表記 -->
       <div>
-        <h3 class="text-white font-semibold text-sm tracking-wider uppercase mb-4 font-serif text-gold-400">About MST</h3>
+        <h3 class="text-white font-semibold text-sm tracking-wider uppercase mb-4 font-serif text-brand-300">About MST</h3>
         <ul class="space-y-2.5 text-xs text-sand-300">
           <li><a href="/company" class="hover:text-white transition-colors">会社概要・代表挨拶</a></li>
           <li><a href="/privacy" class="hover:text-white transition-colors">プライバシーポリシー</a></li>
@@ -90,10 +90,10 @@ const currentYear = new Date().getFullYear();
     </a>
     <a
       href="/diagnosis"
-      class="flex-1 py-3 px-2 rounded-lg bg-forest-900 text-gold-400 text-xs font-bold text-center flex items-center justify-center gap-1 shadow"
+      class="flex-1 py-3 px-2 rounded-lg bg-brand-900 text-white text-xs font-bold text-center flex items-center justify-center gap-1 shadow"
     >
       <span>3分無料診断</span>
-      <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/></svg>
+      <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7"/></svg>
     </a>
   </div>
 </footer>

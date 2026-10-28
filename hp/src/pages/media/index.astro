@@ -1,0 +1,128 @@
+---
+import Layout from '../../layouts/Layout.astro';
+import { ARTICLES } from '../../data/articles';
+
+const categories = [
+  { name: 'すべて', slug: 'all' },
+  { name: '経営改善・利益改善', slug: 'management' },
+  { name: '業務改善・業務効率化', slug: 'operations' },
+  { name: 'マーケティング・集客', slug: 'marketing' },
+  { name: 'IT・DX・AI活用', slug: 'it-dx' },
+  { name: '新規事業・事業づくり', slug: 'new-business' },
+];
+---
+
+<Layout
+  title="お役立ち情報・自社メディア | 有限会社MST"
+  description="中小企業の経営改善、業務効率化、IT・AI活用、マーケティング導線、新規事業立ち上げに役立つ実務ノウハウを配信するMST公式メディア。"
+>
+  <!-- ページヘッダー -->
+  <section class="bg-gradient-to-b from-brand-950 via-brand-900 to-slate-900 text-white py-16 sm:py-24 border-b border-brand-800">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 text-center space-y-4">
+      <span class="text-xs font-bold text-brand-300 tracking-widest uppercase bg-brand-800 px-3.5 py-1.5 rounded-full border border-brand-700">
+        OWN MEDIA & INSIGHTS
+      </span>
+      <h1 class="text-3xl sm:text-5xl font-bold font-serif text-white">
+        お役立ち情報・自社メディア
+      </h1>
+      <p class="text-sm sm:text-base text-slate-300 max-w-2xl mx-auto leading-relaxed font-light">
+        机上の空論ではない、現場の実践と検証から得られた<br class="hidden sm:inline" />
+        「経営の仕組み化」と「利益改善」の実務ノウハウをお届けします。
+      </p>
+    </div>
+  </section>
+
+  <!-- 記事一覧 -->
+  <section class="py-16 sm:py-24 bg-sand-50">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+      
+      <!-- カテゴリ切り替えボタン -->
+      <div class="flex items-center gap-2 overflow-x-auto pb-4 mb-10 border-b border-sand-300 scrollbar-none">
+        {categories.map((c, idx) => (
+          <button
+            class={`px-4 py-2 rounded-full text-xs font-bold shrink-0 transition-all ${
+              idx === 0 
+                ? 'bg-brand-900 text-white shadow-sm' 
+                : 'bg-white text-gray-700 hover:bg-sand-200 border border-sand-300'
+            }`}
+          >
+            {c.name}
+          </button>
+        ))}
+      </div>
+
+      <!-- 記事グリッド -->
+      <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
+        {ARTICLES.map((article) => (
+          <article class="bg-white rounded-2xl border border-sand-300 shadow-sm overflow-hidden flex flex-col justify-between hover:border-brand-500 hover:shadow-xl transition-all duration-200 group">
+            <div class="p-6 sm:p-8 space-y-4">
+              <div class="flex items-center justify-between text-xs text-gray-500">
+                <span class="font-bold text-brand-700 bg-brand-50 px-3 py-1 rounded-full border border-brand-200">
+                  {article.category}
+                </span>
+                <time>{article.publishedAt}</time>
+              </div>
+
+              <h2 class="text-lg font-bold font-serif text-slate-900 group-hover:text-brand-600 transition-colors leading-snug">
+                <a href={`/media/${article.slug}`}>
+                  {article.title}
+                </a>
+              </h2>
+
+              <p class="text-xs text-gray-600 leading-relaxed line-clamp-3">
+                {article.summary}
+              </p>
+            </div>
+
+            <div class="p-6 sm:p-8 pt-0 border-t border-sand-100 flex items-center justify-between mt-auto">
+              <span class="text-xs text-gray-500">
+                関連: {article.relatedService.name}
+              </span>
+              <a
+                href={`/media/${article.slug}`}
+                class="inline-flex items-center gap-1 text-xs font-bold text-brand-700 group-hover:translate-x-1 transition-transform"
+              >
+                <span>記事を読む</span>
+                <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M14 5l7 7m0 0l-7 7m7-7H3"/></svg>
+              </a>
+            </div>
+          </article>
+        ))}
+      </div>
+
+    </div>
+  </section>
+
+  <!-- 無料診断・資料請求バナー -->
+  <section class="py-16 bg-white border-t border-sand-200">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+      <div class="bg-sand-100 rounded-3xl p-8 sm:p-12 border border-sand-300 flex flex-col lg:flex-row items-center justify-between gap-8">
+        <div class="space-y-2 text-center lg:text-left">
+          <span class="text-xs font-bold text-brand-700 bg-white px-3 py-1 rounded-full border border-sand-300">
+            ACTION
+          </span>
+          <h3 class="text-2xl font-bold font-serif text-slate-900">
+            自社の現状ボトルネックを3分で診断しませんか？
+          </h3>
+          <p class="text-xs sm:text-sm text-gray-600">
+            全5問の診断で、改善優先度と仕組み化スコアを判定。代表・大橋による改善カルテをお届けします。
+          </p>
+        </div>
+        <div class="flex flex-col sm:flex-row gap-4 shrink-0">
+          <a
+            href="/diagnosis"
+            class="px-6 py-3.5 bg-brand-900 hover:bg-brand-800 text-white font-bold rounded-xl text-xs sm:text-sm shadow transition text-center"
+          >
+            無料ボトルネック診断
+          </a>
+          <a
+            href="/materials"
+            class="px-6 py-3.5 bg-white hover:bg-sand-50 text-slate-900 font-bold rounded-xl text-xs sm:text-sm border border-sand-300 transition text-center"
+          >
+            経営改善資料請求
+          </a>
+        </div>
+      </div>
+    </div>
+  </section>
+</Layout>

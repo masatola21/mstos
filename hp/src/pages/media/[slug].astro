@@ -1,0 +1,145 @@
+---
+import Layout from '../../layouts/Layout.astro';
+import { ARTICLES, type Article } from '../../data/articles';
+
+export function getStaticPaths() {
+  return ARTICLES.map((article) => ({
+    params: { slug: article.slug },
+    props: { article },
+  }));
+}
+
+interface Props {
+  article: Article;
+}
+
+const { article } = Astro.props;
+---
+
+<Layout
+  title={`${article.title} | 有限会社MST 自社メディア`}
+  description={article.summary}
+>
+  <!-- 記事ヘッダー -->
+  <section class="bg-gradient-to-b from-brand-950 via-brand-900 to-slate-900 text-white py-14 sm:py-20 border-b border-brand-800">
+    <div class="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 space-y-4">
+      <div class="flex items-center gap-3 text-xs">
+        <span class="font-bold text-brand-300 bg-brand-800 px-3 py-1 rounded-full border border-brand-700">
+          {article.category}
+        </span>
+        <time class="text-slate-400">{article.publishedAt}</time>
+      </div>
+      <h1 class="text-2xl sm:text-4xl font-bold font-serif text-white leading-snug">
+        {article.title}
+      </h1>
+    </div>
+  </section>
+
+  <!-- 記事本文 -->
+  <article class="py-16 sm:py-20 bg-white">
+    <div class="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8">
+      
+      <!-- リード文 -->
+      <div class="p-6 sm:p-8 bg-sand-50 rounded-2xl border border-sand-300 text-sm sm:text-base text-gray-700 leading-relaxed font-medium mb-12">
+        {article.summary}
+      </div>
+
+      <!-- 本文段落 -->
+      <div class="space-y-6 text-sm sm:text-base text-gray-800 leading-relaxed font-light">
+        {article.content.map((p) => (
+          <p>{p}</p>
+        ))}
+      </div>
+
+      <!-- 設計書指定：記事末尾に設置する各種CTA導線群 -->
+      <div class="mt-16 pt-12 border-t border-sand-300 space-y-8">
+        <h3 class="text-xl font-bold font-serif text-slate-900 text-center">
+          この記事に関連する支援・アクション
+        </h3>
+
+        <!-- 関連サービス誘導カード -->
+        <div class="p-6 bg-sand-100 rounded-2xl border border-sand-300 flex flex-col sm:flex-row items-center justify-between gap-4">
+          <div>
+            <span class="text-xs font-bold text-brand-700">おすすめの関連サービス</span>
+            <div class="text-base font-bold text-slate-900 font-serif mt-0.5">
+              {article.relatedService.name}
+            </div>
+          </div>
+          <a
+            href={article.relatedService.href}
+            class="shrink-0 px-6 py-2.5 bg-brand-900 hover:bg-brand-800 text-white font-bold rounded-lg text-xs transition"
+          >
+            サービス詳細を見る →
+          </a>
+        </div>
+
+        <!-- 3大アクションバナー群 -->
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+          <!-- 無料診断 -->
+          <div class="bg-white p-6 rounded-2xl border border-sand-300 shadow-sm flex flex-col justify-between">
+            <div class="space-y-2">
+              <span class="text-xs font-bold text-brand-700 bg-brand-50 px-2 py-0.5 rounded">3分無料</span>
+              <h4 class="text-sm font-bold text-slate-900">経営ボトルネック診断</h4>
+              <p class="text-xs text-gray-500">自社の属人化・利益構造の課題を全5問で判定。</p>
+            </div>
+            <div class="pt-4">
+              <a
+                href="/diagnosis"
+                class="block w-full py-2.5 bg-brand-900 text-white text-xs font-bold text-center rounded-lg hover:bg-brand-800 transition"
+              >
+                診断を受ける
+              </a>
+            </div>
+          </div>
+
+          <!-- 資料請求 -->
+          <div class="bg-white p-6 rounded-2xl border border-sand-300 shadow-sm flex flex-col justify-between">
+            <div class="space-y-2">
+              <span class="text-xs font-bold text-green-700 bg-green-50 px-2 py-0.5 rounded">PDF即時</span>
+              <h4 class="text-sm font-bold text-slate-900">経営改善実務ガイド</h4>
+              <p class="text-xs text-gray-500">仕組み化プロセスを凝縮した全13スライド資料。</p>
+            </div>
+            <div class="pt-4">
+              <a
+                href="/materials"
+                class="block w-full py-2.5 bg-brand-900 text-white text-xs font-bold text-center rounded-lg hover:bg-brand-800 transition"
+              >
+                資料をダウンロード
+              </a>
+            </div>
+          </div>
+
+          <!-- LINE相談 -->
+          <div class="bg-white p-6 rounded-2xl border border-sand-300 shadow-sm flex flex-col justify-between">
+            <div class="space-y-2">
+              <span class="text-xs font-bold text-[#06C755] bg-green-50 px-2 py-0.5 rounded">チャット相談</span>
+              <h4 class="text-sm font-bold text-slate-900">公式LINEで無料相談</h4>
+              <p class="text-xs text-gray-500">代表・大橋と1対1トークで気軽にご相談。</p>
+            </div>
+            <div class="pt-4">
+              <a
+                href="https://lin.ee/4Vl9v91"
+                target="_blank"
+                rel="noopener noreferrer"
+                class="block w-full py-2.5 bg-[#06C755] text-white text-xs font-bold text-center rounded-lg hover:opacity-90 transition"
+              >
+                LINEで相談する
+              </a>
+            </div>
+          </div>
+        </div>
+
+        <div class="text-center pt-4">
+          <a
+            href="/contact"
+            class="text-xs text-brand-700 underline font-semibold hover:text-brand-900"
+          >
+            または共通問い合わせフォームから相談する →
+          </a>
+        </div>
+
+      </div>
+
+    </div>
+  </article>
+</Layout>

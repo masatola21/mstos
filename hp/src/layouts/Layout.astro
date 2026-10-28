@@ -23,7 +23,8 @@ const canonicalURL = new URL(Astro.url.pathname, Astro.site || 'https://mstcorp.
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <link rel="icon" type="image/png" href="/favicon.png" />
+    <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
     <meta name="generator" content={Astro.generator} />
 
     <!-- SEO Meta Tags -->
@@ -37,12 +38,14 @@ const canonicalURL = new URL(Astro.url.pathname, Astro.site || 'https://mstcorp.
     <meta property="og:type" content={ogType} />
     <meta property="og:url" content={canonicalURL} />
     <meta property="og:site_name" content="有限会社MST" />
+    <meta property="og:image" content="https://mstcorp.info/images/logo.png" />
     <meta property="og:locale" content="ja_JP" />
 
     <!-- Twitter Card -->
     <meta name="twitter:card" content="summary_large_image" />
     <meta name="twitter:title" content={title} />
     <meta name="twitter:description" content={description} />
+    <meta name="twitter:image" content="https://mstcorp.info/images/logo.png" />
 
     <!-- JSON-LD 構造化データ -->
     <script type="application/ld+json" set:html={JSON.stringify({
@@ -51,7 +54,7 @@ const canonicalURL = new URL(Astro.url.pathname, Astro.site || 'https://mstcorp.
       "name": "有限会社MST",
       "alternateName": "MST Co., Ltd.",
       "url": "https://mstcorp.info",
-      "logo": "https://mstcorp.info/logo.png",
+      "logo": "https://mstcorp.info/images/logo.png",
       "address": {
         "@type": "PostalAddress",
         "streetAddress": "桧町127番地",
@@ -69,7 +72,7 @@ const canonicalURL = new URL(Astro.url.pathname, Astro.site || 'https://mstcorp.
       "description": "中小企業の経営仕組み化・利益改善・業務DX・システム実装パートナー"
     })} />
   </head>
-  <body class="min-h-screen flex flex-col font-sans bg-sand-50 text-gray-900 antialiased selection:bg-gold-500 selection:text-white">
+  <body class="min-h-screen flex flex-col font-sans bg-sand-50 text-gray-900 antialiased selection:bg-brand-600 selection:text-white">
     <Header currentPath={Astro.url.pathname} />
     <main class="flex-grow">
       <slot />

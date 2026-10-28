@@ -1,0 +1,124 @@
+---
+import Layout from '../layouts/Layout.astro';
+
+const products = [
+  {
+    title: '中小企業向け 業務棚卸し・属人化解消チェックリスト',
+    category: 'テンプレート / ガイド',
+    status: '準備中（先行予約受付中）',
+    desc: '社内のどの業務が誰に依存しているかを1枚で可視化し、標準化の優先度を判定できるエクセル＆スプレッドシート形式のチェックシート。',
+    price: '無償配布予定 / 一部有料版あり',
+  },
+  {
+    title: '案件別 採算・粗利管理スプレッドシート（自動計算GAS付き）',
+    category: 'GAS / 業務ツール',
+    status: '準備中',
+    desc: '工数と直接原価を入力するだけで、案件別・取引先別の限界利益と営業利益率を自動集計・グラフ化する管理テンプレート。',
+    price: '販売予定',
+  },
+  {
+    title: 'ChatGPT・生成AI 実務導入プロンプトテンプレート集',
+    category: 'AI活用テンプレート',
+    status: '準備中',
+    desc: '議事録要約、問い合わせメール一次返信、営業提案書ドラフト、社内マニュアル作成など、中小企業実務で即使える厳選プロンプト集。',
+    price: '販売予定',
+  },
+  {
+    title: '介護保険外サービス開業 実務運営規約・同意書一式',
+    category: '法務・運営ドキュメント',
+    status: '提供中（開業パッケージ内）',
+    desc: '生活支援・介護保険外サービスを提供する際に必要な利用規約、免責事項、重要事項説明書、事故対応マニュアルの実務テンプレート。',
+    price: '開業パッケージにて提供',
+    href: '/services/care-package',
+  },
+];
+---
+
+<Layout
+  title="業務改善ツール・商品一覧 | 有限会社MST"
+  description="有限会社MSTが開発・提供する業務改善チェックリスト、経営管理テンプレート、GAS自動化ツール、AIプロンプト集などのご紹介。"
+>
+  <!-- ページヘッダー -->
+  <section class="bg-gradient-to-b from-brand-950 via-brand-900 to-slate-900 text-white py-16 sm:py-24 border-b border-brand-800">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 text-center space-y-4">
+      <span class="text-xs font-bold text-brand-300 tracking-widest uppercase bg-brand-800 px-3.5 py-1.5 rounded-full border border-brand-700">
+        PRODUCTS & TEMPLATES
+      </span>
+      <h1 class="text-3xl sm:text-5xl font-bold font-serif text-white">
+        業務改善ツール・自社商品
+      </h1>
+      <p class="text-sm sm:text-base text-slate-300 max-w-2xl mx-auto leading-relaxed font-light">
+        現場で検証された実用性の高いテンプレート、スプレッドシート・GASツール、<br class="hidden sm:inline" />
+        AI活用ノウハウを、自社商品として順次リリースしてまいります。
+      </p>
+    </div>
+  </section>
+
+  <!-- 商品一覧 -->
+  <section class="py-16 sm:py-24 bg-white">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-8">
+        {products.map((p) => (
+          <div class="bg-sand-50 rounded-2xl border border-sand-300 p-8 flex flex-col justify-between hover:shadow-lg transition">
+            <div class="space-y-4">
+              <div class="flex items-center justify-between text-xs">
+                <span class="font-bold text-brand-700 bg-brand-50 px-3 py-1 rounded-full border border-brand-200">
+                  {p.category}
+                </span>
+                <span class="text-gray-500 font-semibold">{p.status}</span>
+              </div>
+              <h2 class="text-xl font-bold font-serif text-slate-900">
+                {p.title}
+              </h2>
+              <p class="text-xs text-gray-600 leading-relaxed">
+                {p.desc}
+              </p>
+            </div>
+
+            <div class="pt-6 border-t border-sand-200 mt-6 flex items-center justify-between text-xs">
+              <span class="font-bold text-brand-800">{p.price}</span>
+              {p.href ? (
+                <a
+                  href={p.href}
+                  class="font-bold text-brand-700 hover:text-brand-900 flex items-center gap-1"
+                >
+                  詳細を見る →
+                </a>
+              ) : (
+                <a
+                  href="/contact?service=tool-inquiry"
+                  class="text-gray-500 hover:text-brand-700 underline"
+                >
+                  先行案内を受け取る
+                </a>
+              )}
+            </div>
+          </div>
+        ))}
+      </div>
+
+      <!-- 先行案内の案内カード -->
+      <div class="mt-16 bg-sand-100 rounded-3xl p-8 sm:p-12 border border-sand-300 text-center max-w-3xl mx-auto space-y-4">
+        <h3 class="text-xl font-bold font-serif text-slate-900">
+          新着ツール・テンプレートのリリース通知
+        </h3>
+        <p class="text-xs sm:text-sm text-gray-600 leading-relaxed">
+          新しい業務効率化ツールや無償テンプレートの配布開始は、MST公式LINEにて優先的にご案内しております。
+        </p>
+        <div class="pt-2">
+          <a
+            href="https://lin.ee/4Vl9v91"
+            target="_blank"
+            rel="noopener noreferrer"
+            class="inline-flex items-center gap-2 px-8 py-3.5 bg-[#06C755] hover:opacity-90 text-white font-bold rounded-xl text-sm transition shadow"
+          >
+            <svg class="w-4 h-4 fill-current" viewBox="0 0 24 24">
+              <path d="M12 2C6.477 2 2 5.918 2 10.751c0 3.332 2.131 6.223 5.309 7.643-.233.784-.848 2.855-.972 3.29-.153.535.195.526.411.383.17-.113 2.709-1.841 3.806-2.587.47.07 1.05.108 1.646.108 5.523 0 10-3.918 10-8.751C22 5.918 17.523 2 12 2z"/>
+            </svg>
+            LINE公式アカウントに登録して案内を受け取る
+          </a>
+        </div>
+      </div>
+    </div>
+  </section>
+</Layout>

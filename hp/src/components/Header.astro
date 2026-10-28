@@ -8,9 +8,9 @@ const { currentPath = '/' } = Astro.props;
 const navLinks = [
   { name: 'ホーム', href: '/' },
   { name: 'サービス一覧', href: '/services' },
-  { name: '介護保険外開業支援', href: '/care-package' },
+  { name: 'お役立ちメディア', href: '/media' },
+  { name: '商品・ツール', href: '/products' },
   { name: '無料経営診断', href: '/diagnosis' },
-  { name: '資料請求', href: '/materials' },
   { name: '会社概要', href: '/company' },
 ];
 ---
@@ -18,15 +18,13 @@ const navLinks = [
 <header class="sticky top-0 z-50 bg-white/95 backdrop-blur-md border-b border-sand-200 transition-all duration-200 shadow-sm">
   <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
     <div class="flex items-center justify-between h-20">
-      <!-- ロゴ -->
+      <!-- 正式ロゴ画像 -->
       <a href="/" class="flex items-center gap-3 group">
-        <div class="w-10 h-10 rounded-lg bg-forest-900 flex items-center justify-center text-gold-400 font-serif font-bold text-xl shadow-inner group-hover:bg-forest-800 transition-colors">
-          M
-        </div>
-        <div>
-          <span class="block text-xl font-bold tracking-tight text-forest-900 font-serif">有限会社MST</span>
-          <span class="block text-[10px] text-gray-500 tracking-wider uppercase font-medium">Management & System Transformation</span>
-        </div>
+        <img
+          src="/images/logo.png"
+          alt="有限会社MST"
+          class="h-10 w-auto object-contain transition-transform group-hover:scale-105"
+        />
       </a>
 
       <!-- デスクトップ ナビゲーション -->
@@ -38,8 +36,8 @@ const navLinks = [
               href={link.href}
               class={`text-sm font-semibold transition-colors py-1 ${
                 isActive 
-                  ? 'text-forest-700 border-b-2 border-gold-500' 
-                  : 'text-gray-600 hover:text-forest-900'
+                  ? 'text-brand-700 border-b-2 border-brand-600 font-bold' 
+                  : 'text-gray-600 hover:text-brand-900'
               }`}
             >
               {link.name}
@@ -64,7 +62,7 @@ const navLinks = [
 
         <a
           href="/contact"
-          class="inline-flex items-center justify-center px-4 py-2 text-xs font-bold text-white bg-forest-900 rounded-lg hover:bg-forest-800 transition-colors shadow-sm"
+          class="inline-flex items-center justify-center px-4 py-2 text-xs font-bold text-white bg-brand-900 rounded-lg hover:bg-brand-800 transition-colors shadow-sm"
         >
           お問い合わせ
         </a>
@@ -74,11 +72,11 @@ const navLinks = [
       <button
         id="mobile-menu-button"
         type="button"
-        class="lg:hidden p-2 rounded-md text-gray-700 hover:text-forest-900 hover:bg-sand-100"
+        class="lg:hidden p-2 rounded-md text-gray-700 hover:text-brand-900 hover:bg-sand-100"
         aria-label="メニューを開く"
       >
         <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16" />
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 6h16M4 12h16M4 18h16" />
         </svg>
       </button>
     </div>
@@ -89,7 +87,7 @@ const navLinks = [
     {navLinks.map((link) => (
       <a
         href={link.href}
-        class="block px-3 py-2.5 rounded-md text-base font-medium text-gray-700 hover:text-forest-900 hover:bg-sand-100"
+        class="block px-3 py-2.5 rounded-md text-base font-medium text-gray-700 hover:text-brand-900 hover:bg-sand-100"
       >
         {link.name}
       </a>
@@ -105,7 +103,7 @@ const navLinks = [
       </a>
       <a
         href="/contact"
-        class="flex items-center justify-center py-3 text-sm font-bold text-white bg-forest-900 rounded-lg"
+        class="flex items-center justify-center py-3 text-sm font-bold text-white bg-brand-900 rounded-lg"
       >
         フォームでお問い合わせ
       </a>
