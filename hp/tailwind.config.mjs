@@ -1,0 +1,58 @@
+/** @type {import('tailwindcss').Config} */
+export default {
+  content: ['./src/**/*.{astro,html,js,jsx,md,mdx,svelte,ts,tsx,vue}'],
+  theme: {
+    extend: {
+      colors: {
+        forest: {
+          50: '#F2F7F4',
+          100: '#E1EFE8',
+          200: '#C2DFD1',
+          300: '#9BC7B3',
+          400: '#6FA990',
+          500: '#40916C',
+          600: '#2D6A4F',
+          700: '#1B4332',
+          800: '#143527',
+          900: '#0F2E22',
+          950: '#081C14',
+        },
+        gold: {
+          50: '#FAF7EE',
+          100: '#F3ECCC',
+          200: '#E7D897',
+          300: '#DBC362',
+          400: '#D4AF37',
+          500: '#C5A059',
+          600: '#A4823E',
+          700: '#7E632D',
+          800: '#5A461E',
+          900: '#3D2F12',
+        },
+        sand: {
+          50: '#FDFCFB',
+          100: '#F8F7F4',
+          200: '#F1EFE9',
+          300: '#E6E3D8',
+          400: '#D5D1C3',
+          500: '#B8B3A2',
+        },
+      },
+      fontFamily: {
+        sans: [
+          '"Hiragino Sans"',
+          '"Noto Sans JP"',
+          '"Yu Gothic"',
+          'Meiryo',
+          'sans-serif',
+        ],
+        serif: [
+          '"Shippori Mincho"',
+          '"Yu Mincho"',
+          'serif',
+        ],
+      },
+    },
+  },
+  plugins: [],
+};
