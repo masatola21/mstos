@@ -183,6 +183,39 @@ export const AIAcquisitionOperationsView: React.FC<{
   const [externalDraft, setExternalDraft] = useState('');
   const [externalReview, setExternalReview] = useState('');
   const [pendingToolDrafts, setPendingToolDrafts] = useState<Array<{ record_type: RecordType; title: string; payload: Record<string, string> }>>([]);
+  const [crmMetrics, setCrmMetrics] = useState<{
+    totalLeads: number;
+    totalDeals: number;
+    wonDeals: number;
+    totalContracts: number;
+    totalContractRevenue: number;
+    totalInvoiced: number;
+    totalPaid: number;
+    utmBreakdown: Array<{ source: string; campaign: string; count: number }>;
+    carePackageMetrics: {
+      materialRequests: number;
+      consultationRequests: number;
+      bothRequests: number;
+      totalCareSubmissions: number;
+      schedulingPending: number;
+    };
+  }>({
+    totalLeads: 0,
+    totalDeals: 0,
+    wonDeals: 0,
+    totalContracts: 0,
+    totalContractRevenue: 0,
+    totalInvoiced: 0,
+    totalPaid: 0,
+    utmBreakdown: [],
+    carePackageMetrics: {
+      materialRequests: 0,
+      consultationRequests: 0,
+      bothRequests: 0,
+      totalCareSubmissions: 0,
+      schedulingPending: 0,
+    },
+  });
 
 
   const load = async () => {
@@ -516,6 +549,7 @@ export const AIAcquisitionOperationsView: React.FC<{
       {activeTab === 'assets' && <MarketingAssetLibrary records={records} products={products} onOpenRecord={(r) => startEdit(r as AcquisitionRecord)} />}
 
 
+
       {activeTab === 'analysis' && <section className="space-y-4">
         <div className="grid gap-4 lg:grid-cols-2">
           <article className="rounded-xl border border-slate-800 bg-slate-900 p-4"><div className="flex items-center gap-2"><BarChart3 className="h-4 w-4 text-cyan-300"/><h2 className="font-semibold">登録済み実績の集計</h2></div>{metrics.hasActuals ? <dl className="mt-3 grid grid-cols-2 gap-3 text-sm">{[['広告費',metrics.spend,metrics.known.spend],['表示回数',metrics.impressions,metrics.known.impressions],['クリック数',metrics.clicks,metrics.known.clicks],['CV数',metrics.conversions,metrics.known.conversions],['リード',metrics.leads,metrics.known.leads],['商談',metrics.meetings,metrics.known.meetings],['契約',metrics.contracts,metrics.known.contracts],['売上',metrics.revenue,metrics.known.revenue],['利益',metrics.profit,metrics.known.profit]].map(([label,value,isKnown])=><div key={String(label)}><dt className="text-slate-400">{label}</dt><dd className="font-semibold">{!isKnown ? '未入力' : typeof value === 'number' && ['広告費','売上','利益'].includes(String(label)) ? yen(value) : `${value}件`}</dd></div>)}</dl> : <p className="mt-3 text-sm text-slate-400">成果データ未入力・未連携のため分析できません。</p>}
@@ -558,7 +592,44 @@ export const AIAcquisitionOperationsView: React.FC<{
         <div className="flex gap-2"><button disabled={saving || aiGenerating} className="inline-flex items-center gap-2 rounded-lg bg-indigo-600 px-4 py-2 text-sm font-semibold disabled:opacity-50"><Save className="h-4 w-4"/>{aiGenerating ? 'AI処理中…' : saving ? '保存中…' : type === 'strategy' && (payload.channels || '').trim() ? '戦略と選定ツールを保存' : '保存'}</button><button type="button" onClick={() => { cancelAIRequest(); setEditing(null); setIsFormOpen(false); setTitle(''); setProductId(''); setPayload(emptyPayload()); }} className="rounded-lg border border-slate-700 px-4 py-2 text-sm">キャンセル</button></div>
       </form>}
 
-      {activeTab === 'funnel' && <MarketingQuickLinksHub />}
+      {activeTab === 'funnel' && (
+        <section className="space-y-4">
+          {/* 介護保険外サービス開業パッケージ 導線集計 */}
+          <div className="rounded-xl border border-sky-500/30 bg-sky-950/30 p-4 space-y-2">
+            <div className="flex items-center justify-between">
+              <span className="text-xs font-bold text-sky-300 flex items-center gap-1.5">
+                <span>🏥</span> 介護保険外サービス開業パッケージ成果（LINE／専用フォーム）
+              </span>
+              <span className="text-[11px] text-sky-400 font-semibold">
+                専用フォーム送信: {crmMetrics.carePackageMetrics.totalCareSubmissions} 件
+              </span>
+            </div>
+            <div className="grid gap-2 grid-cols-2 sm:grid-cols-5 pt-1">
+              <div className="rounded-lg bg-slate-900/80 border border-slate-800 p-2.5">
+                <p className="text-[11px] text-slate-400">📄 資料請求数</p>
+                <p className="mt-1 text-lg font-bold text-sky-400">{crmMetrics.carePackageMetrics.materialRequests} 件</p>
+              </div>
+              <div className="rounded-lg bg-slate-900/80 border border-slate-800 p-2.5">
+                <p className="text-[11px] text-slate-400">💬 開業相談希望数</p>
+                <p className="mt-1 text-lg font-bold text-emerald-400">{crmMetrics.carePackageMetrics.consultationRequests} 件</p>
+              </div>
+              <div className="rounded-lg bg-slate-900/80 border border-slate-800 p-2.5">
+                <p className="text-[11px] text-slate-400">📄💬 両方希望数</p>
+                <p className="mt-1 text-lg font-bold text-amber-300">{crmMetrics.carePackageMetrics.bothRequests} 件</p>
+              </div>
+              <div className="rounded-lg bg-slate-900/80 border border-slate-800 p-2.5">
+                <p className="text-[11px] text-slate-400">📝 フォーム送信総数</p>
+                <p className="mt-1 text-lg font-bold text-indigo-300">{crmMetrics.carePackageMetrics.totalCareSubmissions} 件</p>
+              </div>
+              <div className="rounded-lg bg-slate-900/80 border border-amber-900/50 p-2.5 bg-amber-950/20">
+                <p className="text-[11px] text-amber-300 font-semibold">⏳ 相談日程調整中</p>
+                <p className="mt-1 text-lg font-bold text-amber-400">{crmMetrics.carePackageMetrics.schedulingPending} 件</p>
+              </div>
+            </div>
+          </div>
+          <MarketingQuickLinksHub />
+        </section>
+      )}
       {activeTab === 'social_studio' && <SocialMediaBroadcastStudio />}
       {activeTab === 'strategy' && !formVisible && <section className="space-y-3"><div className="flex items-center justify-between"><div><h2 className="font-semibold">{tabs.find((tab) => tab.id === activeTab)?.label}</h2><p className="mt-1 text-xs text-slate-500">商品マスターの商品と関連付けて登録できます。実行・公開は外部サービスで行ってください。</p></div><button onClick={() => createRecord('strategy')} className="inline-flex items-center gap-2 rounded-lg bg-indigo-600 px-3 py-2 text-sm"><Plus className="h-4 w-4"/>新規登録</button></div><RecordList records={visibleRecords} products={products} segments={segments} onEdit={startEdit} onDelete={remove}/></section>}
     </>}
