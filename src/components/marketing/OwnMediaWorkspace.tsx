@@ -392,6 +392,80 @@ export const OwnMediaWorkspace: React.FC<{
     }
   };
 
+  // ★ MST公式HP（Astro + Supabase 自社メディア）へワンクリック公開 / 下書き変更
+  const publishToOfficialWebsite = async (articleRow?: Row, newStatus: '公開' | '下書き' = '公開') => {
+    const targetArticle = articleRow || editing;
+    const articleTitle = articleRow ? articleRow.title : title;
+    const articlePayload = articleRow ? articleRow.payload : payload;
+    const articleId = articleRow ? articleRow.id : editing?.id;
+
+    if (!articleTitle.trim()) {
+      alert('記事タイトルを入力してください。');
+      return;
+    }
+
+    const db = getSupabase();
+    if (!db || !userId) {
+      alert('Supabaseに接続されていません。');
+      return;
+    }
+
+    setCmsPosting(articleId || 'current');
+    setCmsResult(null);
+
+    try {
+      const slug = articlePayload.slug || articleId || `post-${Date.now().toString(36)}`;
+      const hpUrl = `https://corp.mstcorp.info/media/${slug}`;
+
+      const updatedPayload = {
+        ...articlePayload,
+        slug,
+        publishedUrl: newStatus === '公開' ? hpUrl : '',
+        publishStatus: newStatus,
+        publishedDate: newStatus === '公開' ? (articlePayload.publishedDate || new Date().toISOString().slice(0, 10).replace(/-/g, '.')) : '',
+      };
+
+      if (!articleRow) {
+        setPayload(updatedPayload);
+      }
+
+      if (articleId) {
+        const { error: updateErr } = await db.from('mst_ai_acquisition_records').update({
+          title: articleTitle,
+          payload: updatedPayload,
+          status: newStatus,
+          updated_at: new Date().toISOString(),
+        }).eq('user_id', userId).eq('id', articleId);
+
+        if (updateErr) throw updateErr;
+
+        setRows((prev) =>
+          prev.map((r) =>
+            r.id === articleId
+              ? { ...r, title: articleTitle, payload: updatedPayload, status: newStatus }
+              : r
+          )
+        );
+      }
+
+      setCmsResult({
+        id: articleId || 'current',
+        success: true,
+        message: newStatus === '公開' ? '🌐 MST公式HPに公開しました！' : '📁 記事を「下書き」に戻しました。',
+        url: newStatus === '公開' ? hpUrl : undefined,
+      });
+    } catch (err: any) {
+      console.error(err);
+      setCmsResult({
+        id: articleId || 'current',
+        success: false,
+        message: err.message || '公式HPへの公開処理に失敗しました。',
+      });
+    } finally {
+      setCmsPosting(null);
+    }
+  };
+
   return (
     <section className="space-y-4 text-slate-100">
       {/* ヘッダー */}
@@ -558,6 +632,35 @@ export const OwnMediaWorkspace: React.FC<{
                   <div className="grid gap-4 md:grid-cols-2">
                     <div>
                       <label className="block text-xs font-medium text-slate-300">
+                        公式HP URLスラッグ（半角英数ハイフン）
+                      </label>
+                      <input
+                        value={payload.slug || ''}
+                        onChange={(e) => setPayload((p) => ({ ...p, slug: e.target.value }))}
+                        placeholder="例: ai-automation-roadmap"
+                        className={cls}
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-xs font-medium text-slate-300">
+                        自社メディア カテゴリ
+                      </label>
+                      <select
+                        value={payload.category || '経営改善・利益改善'}
+                        onChange={(e) => setPayload((p) => ({ ...p, category: e.target.value }))}
+                        className={cls}
+                      >
+                        <option value="経営改善・利益改善">経営改善・利益改善</option>
+                        <option value="業務改善・業務効率化">業務改善・業務効率化</option>
+                        <option value="マーケティング・集客">マーケティング・集客</option>
+                        <option value="IT・DX・AI活用">IT・DX・AI活用</option>
+                        <option value="新規事業・事業づくり">新規事業・事業づくり</option>
+                      </select>
+                    </div>
+
+                    <div>
+                      <label className="block text-xs font-medium text-slate-300">
                         狙うキーワード（任意）
                       </label>
                       <input
@@ -681,16 +784,26 @@ export const OwnMediaWorkspace: React.FC<{
                       </button>
                     </div>
 
-                    {/* WordPress自動投稿ボタン */}
-                    <div className="flex items-center gap-2">
+                    {/* 公式HP & WordPress 投稿ボタン群 */}
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <button
+                        type="button"
+                        disabled={cmsPosting === (editing?.id || 'current')}
+                        onClick={() => void publishToOfficialWebsite(undefined, '公開')}
+                        className="inline-flex items-center gap-2 rounded-xl bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 px-4 py-2.5 text-xs font-bold text-white shadow-lg shadow-emerald-600/30 transition disabled:opacity-50"
+                      >
+                        <Globe className="h-4 w-4" />
+                        {cmsPosting === (editing?.id || 'current') ? '公開処理中…' : '🌐 公式HPに即時公開'}
+                      </button>
+
                       <button
                         type="button"
                         disabled={cmsPosting === (editing?.id || 'current')}
                         onClick={() => void postToWordPress(undefined, 'draft')}
-                        className="inline-flex items-center gap-2 rounded-xl bg-gradient-to-r from-cyan-600 to-blue-600 hover:from-cyan-500 hover:to-blue-500 px-4 py-2.5 text-xs font-bold text-white shadow-lg shadow-cyan-600/30 transition disabled:opacity-50"
+                        className="inline-flex items-center gap-2 rounded-xl bg-slate-800 hover:bg-slate-700 border border-slate-700 px-3.5 py-2.5 text-xs font-bold text-white transition disabled:opacity-50"
                       >
                         <Send className="h-4 w-4" />
-                        {cmsPosting === (editing?.id || 'current') ? 'WordPressに送信中…' : '🚀 WordPressへ下書き投稿'}
+                        {cmsPosting === (editing?.id || 'current') ? '送信中…' : 'WordPressへ'}
                       </button>
                       <button
                         type="button"
@@ -752,17 +865,30 @@ export const OwnMediaWorkspace: React.FC<{
                             </div>
 
                             <div className="flex items-center gap-2">
-                              {/* ワンクリック投稿ボタン */}
-                              <button
-                                type="button"
-                                disabled={cmsPosting === art.id}
-                                onClick={() => void postToWordPress(art, 'draft')}
-                                className="inline-flex items-center gap-1.5 rounded-lg bg-cyan-700/80 hover:bg-cyan-600 px-3 py-1.5 text-xs font-semibold text-white transition disabled:opacity-50"
-                                title="WordPressへ下書き投稿"
-                              >
-                                <Send className="h-3.5 w-3.5" />
-                                {cmsPosting === art.id ? '送信中…' : 'WordPressへ投稿'}
-                              </button>
+                              {/* 公式HPへの公開・下書きトグル */}
+                              {art.status === '公開' || art.payload?.publishStatus === '公開' ? (
+                                <button
+                                  type="button"
+                                  disabled={cmsPosting === art.id}
+                                  onClick={() => void publishToOfficialWebsite(art, '下書き')}
+                                  className="inline-flex items-center gap-1.5 rounded-lg bg-emerald-950/80 border border-emerald-500/50 hover:bg-emerald-900 px-3 py-1.5 text-xs font-semibold text-emerald-300 transition disabled:opacity-50"
+                                  title="公式HPで公開中（クリックで下書きに戻す）"
+                                >
+                                  <Globe className="h-3.5 w-3.5" />
+                                  HP公開中
+                                </button>
+                              ) : (
+                                <button
+                                  type="button"
+                                  disabled={cmsPosting === art.id}
+                                  onClick={() => void publishToOfficialWebsite(art, '公開')}
+                                  className="inline-flex items-center gap-1.5 rounded-lg bg-emerald-700 hover:bg-emerald-600 px-3 py-1.5 text-xs font-semibold text-white transition disabled:opacity-50 shadow"
+                                  title="公式HPに即時公開する"
+                                >
+                                  <Globe className="h-3.5 w-3.5" />
+                                  HPに公開
+                                </button>
+                              )}
 
                               <button
                                 onClick={() => edit(art)}
@@ -1209,7 +1335,15 @@ export const OwnMediaWorkspace: React.FC<{
               <div className="space-y-3">
                 {articles.map((art) => {
                   const url = art.payload.publishedUrl?.trim();
-                  const matched = url ? crmLeads.filter((l) => l.report_url?.trim() === url || l.source?.trim() === url) : [];
+                  const slug = art.payload.slug || art.id;
+                  const matched = crmLeads.filter((l) => {
+                    const s = l.source?.trim() || '';
+                    const r = l.report_url?.trim() || '';
+                    return (
+                      (url && (s === url || r === url)) ||
+                      (slug && (s === `media_${slug}` || s.includes(slug) || r.includes(slug)))
+                    );
+                  });
                   const ids = new Set(matched.map((l) => l.id));
                   const matchingDeals = crmDeals.filter((d) => d.lead_id && ids.has(d.lead_id));
 
