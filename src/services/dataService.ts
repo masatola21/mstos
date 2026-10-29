@@ -258,7 +258,25 @@ export async function deleteTableRecord(
       }
     }
 
+    // 1. クライアント側からの直接削除を試行
     const { data, error } = await supabase.from(tableKey).delete().eq('id', record.id).select('id');
+    if (!error && data && data.length > 0) {
+      return {};
+    }
+
+    // 2. RLSポリシー等でクライアント側から削除できない場合のサーバーAPIフォールバック
+    try {
+      const resp = await fetch(`/api/admin/tables/${encodeURIComponent(tableKey)}/records/${encodeURIComponent(String(record.id))}?force=${options?.force ? 'true' : 'false'}`, {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json' },
+      });
+      if (resp.ok) {
+        return {};
+      }
+    } catch {
+      // ネットワークエラー時は元の判定へフォールバック
+    }
+
     if (error) return { error: parseSupabaseError(error) };
     if (!data?.length) {
       return { error: { type: 'UNKNOWN', message: '削除対象が見つからないか、削除権限がありません。' } };

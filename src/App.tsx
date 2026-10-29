@@ -1599,11 +1599,11 @@ function AppContent() {
         recordActivityLog('project_updated', `商品「${product.name}」を取扱停止にしました（関連記録は保持）`, '人間');
       } else {
         const result = await deleteTableRecord('products', { id: product.id }, { force });
-        if (result.error) {
-          return { success: false, message: result.error.message };
-        }
         if (result.blockedBy && !force) {
           return { success: false, message: `関連する「${result.blockedBy}」データがあるため通常削除が保留されました。「完全削除」を実行すると関連付けを解除して完全に削除できます。` };
+        }
+        if (result.error && !result.error.message.includes('削除対象が見つからない')) {
+          return { success: false, message: result.error.message };
         }
         matrixService.deleteProduct(id);
         setProducts(matrixService.loadProducts());

@@ -3357,6 +3357,371 @@ app.post('/api/public/forms/:slug/submissions', async (req, res) => {
   }
 });
 
+// ─── 管理者向け汎用レコード削除 API（サービスロールによる安全な実行・外部キー連動解除） ───
+app.delete('/api/admin/tables/:tableKey/records/:id', async (req, res) => {
+  if (!lineSupabase) return res.status(503).json({ error: 'DB接続が設定されていません。' });
+  const { tableKey, id } = req.params;
+  const force = req.query.force === 'true' || (req.body && (req.body as any).force === true);
+
+  const allowedTables = ['products', 'companies', 'prospects', 'leads', 'deals', 'customers', 'customer_contracts', 'customer_invoices', 'diagnosis_forms', 'communication_templates', 'line_auto_reply_templates'];
+  if (!allowedTables.includes(tableKey)) {
+    return res.status(400).json({ error: '削除が許可されていないテーブルです。' });
+  }
+
+  try {
+    if (tableKey === 'products' && force) {
+      const prodId = String(id);
+      await Promise.allSettled([
+        lineSupabase.from('deals').update({ product_id: null }).eq('product_id', prodId),
+        lineSupabase.from('customer_contracts').update({ product_id: null }).eq('product_id', prodId),
+        lineSupabase.from('customer_invoices').update({ product_id: null }).eq('product_id', prodId),
+        lineSupabase.from('prospects').update({ recommended_product_id: null }).eq('recommended_product_id', prodId),
+        lineSupabase.from('leads').update({ interested_product_id: null }).eq('interested_product_id', prodId),
+        lineSupabase.from('ai_reports').update({ recommended_product_id: null }).eq('recommended_product_id', prodId),
+      ]);
+      await lineSupabase.from('mst_managed_products').delete().eq('id', prodId);
+    }
+
+    const { data, error } = await lineSupabase.from(tableKey).delete().eq('id', id).select('id');
+    if (error) {
+      console.warn(`[AdminDelete] ${tableKey}/${id} error:`, error.message);
+      return res.status(500).json({ error: error.message });
+    }
+    return res.json({ success: true, count: data?.length || 0 });
+  } catch (err: any) {
+    return res.status(500).json({ error: err.message || 'レコード削除中にエラーが発生しました。' });
+  }
+});
+
+// ─── 定期請求（月次自動生成） API ───
+app.get('/api/billing/recurring-candidates', async (req, res) => {
+  if (!lineSupabase) return res.status(503).json({ error: 'Database connection unavailable.' });
+
+  try {
+    let targetMonth = String(req.query.month || '').trim();
+    if (!/^\d{4}-\d{2}$/.test(targetMonth)) {
+      const now = new Date();
+      targetMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+    }
+
+    const [yearStr, monthStr] = targetMonth.split('-');
+    const year = parseInt(yearStr, 10);
+    const month = parseInt(monthStr, 10);
+    const monthLabel = `${year}年${month}月分`;
+    const compactMonthTag = `INV-${yearStr}${monthStr}-`;
+
+    const [contractsRes, companiesRes, invoicesRes, dealsRes, productsRes] = await Promise.all([
+      lineSupabase.from('customer_contracts').select('*'),
+      lineSupabase.from('companies').select('id, company_name'),
+      lineSupabase.from('customer_invoices').select('*'),
+      lineSupabase.from('deals').select('id, company_id, monthly_fee, total_amount, proposal_plan_name'),
+      lineSupabase.from('products').select('id, product_name'),
+    ]);
+
+    const contracts = contractsRes.data || [];
+    const companies = companiesRes.data || [];
+    const invoices = invoicesRes.data || [];
+    const deals = dealsRes.data || [];
+    const products = productsRes.data || [];
+
+    const companyMap = new Map(companies.map((c: any) => [c.id, c.company_name]));
+    const productMap = new Map(products.map((p: any) => [p.id, p.product_name]));
+    const dealMap = new Map(deals.map((d: any) => [d.id, d]));
+
+    const defaultIssueDate = `${targetMonth}-01`;
+    const lastDay = new Date(year, month, 0).getDate();
+    const defaultDueDate = `${targetMonth}-${String(Math.min(25, lastDay)).padStart(2, '0')}`;
+
+    const candidates: any[] = [];
+
+    for (const contract of contracts) {
+      const isSignedOrActive = ['signed', 'active', 'sent', 'under_review'].includes(contract.status);
+      const isRetainer = contract.contract_type === 'retainer' || (contract.notes && contract.notes.includes('月額'));
+
+      const linkedDeal = contract.deal_id ? dealMap.get(contract.deal_id) : undefined;
+      let monthlyFee = 0;
+
+      if (linkedDeal && typeof linkedDeal.monthly_fee === 'number' && linkedDeal.monthly_fee > 0) {
+        monthlyFee = linkedDeal.monthly_fee;
+      } else if (isRetainer && typeof contract.amount === 'number' && contract.amount > 0) {
+        monthlyFee = contract.amount;
+      } else if (contract.amount && contract.amount > 0 && isSignedOrActive) {
+        if (isRetainer || (contract.notes && /毎月|顧問|定期/.test(contract.notes))) {
+          monthlyFee = contract.amount;
+        }
+      }
+
+      if (monthlyFee <= 0) continue;
+
+      const existingInv = invoices.find((inv: any) => {
+        if (inv.contract_id === contract.id || (inv.company_id === contract.company_id && inv.company_id)) {
+          const invNum = inv.invoice_number || '';
+          const title = inv.title || '';
+          const notes = inv.notes || '';
+          if (
+            invNum.startsWith(compactMonthTag) ||
+            title.includes(monthLabel) ||
+            title.includes(targetMonth) ||
+            notes.includes(monthLabel) ||
+            notes.includes(targetMonth)
+          ) {
+            return true;
+          }
+        }
+        return false;
+      });
+
+      const tax = Math.floor(monthlyFee * 0.1);
+      const companyName = companyMap.get(contract.company_id) || contract.counterparty_name || '取引先';
+
+      candidates.push({
+        contractId: contract.id,
+        companyId: contract.company_id,
+        companyName,
+        contractTitle: contract.title || `${companyName} 顧問契約`,
+        contractType: contract.contract_type || 'retainer',
+        contractStatus: contract.status || 'active',
+        productId: contract.product_id || undefined,
+        productName: contract.product_id ? productMap.get(contract.product_id) : undefined,
+        dealId: contract.deal_id || undefined,
+        monthlyFee,
+        taxAmount: tax,
+        totalWithTax: monthlyFee + tax,
+        startDate: contract.start_date || undefined,
+        endDate: contract.end_date || undefined,
+        alreadyBilled: Boolean(existingInv),
+        existingInvoiceId: existingInv?.id,
+        existingInvoiceNumber: existingInv?.invoice_number,
+        existingInvoiceStatus: existingInv?.status,
+        suggestedIssueDate: defaultIssueDate,
+        suggestedDueDate: defaultDueDate,
+      });
+    }
+
+    const readyToBill = candidates.filter((c) => !c.alreadyBilled);
+    const alreadyBilled = candidates.filter((c) => c.alreadyBilled);
+
+    return res.json({
+      success: true,
+      targetMonth,
+      summary: {
+        targetMonth,
+        targetMonthLabel: monthLabel,
+        totalCandidates: candidates.length,
+        readyToBillCount: readyToBill.length,
+        alreadyBilledCount: alreadyBilled.length,
+        estimatedMonthlyRevenue: candidates.reduce((sum, c) => sum + c.monthlyFee, 0),
+        alreadyBilledRevenue: alreadyBilled.reduce((sum, c) => sum + c.monthlyFee, 0),
+      },
+      candidates,
+    });
+  } catch (err: any) {
+    console.error('Error fetching recurring billing candidates:', err);
+    return res.status(500).json({ error: err.message || '定期請求対象の取得に失敗しました。' });
+  }
+});
+
+app.post('/api/billing/recurring-generate', async (req, res) => {
+  if (!lineSupabase) return res.status(503).json({ error: 'Database connection unavailable.' });
+
+  try {
+    const { targetMonth, contractIds, issueDate, dueDate } = req.body || {};
+    if (!targetMonth || !/^\d{4}-\d{2}$/.test(targetMonth)) {
+      return res.status(400).json({ error: '対象月を YYYY-MM 形式で指定してください。' });
+    }
+
+    const [yearStr, monthStr] = targetMonth.split('-');
+    const year = parseInt(yearStr, 10);
+    const month = parseInt(monthStr, 10);
+    const monthLabel = `${year}年${month}月分`;
+    const compactMonthTag = `INV-${yearStr}${monthStr}-`;
+
+    const finalIssueDate = issueDate || `${targetMonth}-01`;
+    const lastDay = new Date(year, month, 0).getDate();
+    const finalDueDate = dueDate || `${targetMonth}-${String(Math.min(25, lastDay)).padStart(2, '0')}`;
+
+    const [contractsRes, companiesRes, invoicesRes, dealsRes] = await Promise.all([
+      lineSupabase.from('customer_contracts').select('*'),
+      lineSupabase.from('companies').select('id, company_name'),
+      lineSupabase.from('customer_invoices').select('*'),
+      lineSupabase.from('deals').select('id, company_id, monthly_fee, total_amount'),
+    ]);
+
+    const contracts = contractsRes.data || [];
+    const companies = companiesRes.data || [];
+    const invoices = invoicesRes.data || [];
+    const deals = dealsRes.data || [];
+
+    const companyMap = new Map(companies.map((c: any) => [c.id, c.company_name]));
+    const dealMap = new Map(deals.map((d: any) => [d.id, d]));
+
+    const generatedInvoices: any[] = [];
+    let skippedCount = 0;
+
+    for (const contract of contracts) {
+      if (Array.isArray(contractIds) && contractIds.length > 0 && !contractIds.includes(contract.id)) {
+        continue;
+      }
+
+      const isSignedOrActive = ['signed', 'active', 'sent', 'under_review'].includes(contract.status);
+      const isRetainer = contract.contract_type === 'retainer' || (contract.notes && contract.notes.includes('月額'));
+
+      const linkedDeal = contract.deal_id ? dealMap.get(contract.deal_id) : undefined;
+      let monthlyFee = 0;
+
+      if (linkedDeal && typeof linkedDeal.monthly_fee === 'number' && linkedDeal.monthly_fee > 0) {
+        monthlyFee = linkedDeal.monthly_fee;
+      } else if (isRetainer && typeof contract.amount === 'number' && contract.amount > 0) {
+        monthlyFee = contract.amount;
+      } else if (contract.amount && contract.amount > 0 && isSignedOrActive) {
+        if (isRetainer || (contract.notes && /毎月|顧問|定期/.test(contract.notes))) {
+          monthlyFee = contract.amount;
+        }
+      }
+
+      if (monthlyFee <= 0) continue;
+
+      // Idempotency check: already billed?
+      const alreadyBilled = invoices.some((inv: any) => {
+        if (inv.contract_id === contract.id || (inv.company_id === contract.company_id && inv.company_id)) {
+          const invNum = inv.invoice_number || '';
+          const title = inv.title || '';
+          const notes = inv.notes || '';
+          if (
+            invNum.startsWith(compactMonthTag) ||
+            title.includes(monthLabel) ||
+            title.includes(targetMonth) ||
+            notes.includes(monthLabel) ||
+            notes.includes(targetMonth)
+          ) {
+            return true;
+          }
+        }
+        return false;
+      });
+
+      if (alreadyBilled) {
+        skippedCount++;
+        continue;
+      }
+
+      const companyName = companyMap.get(contract.company_id) || contract.counterparty_name || '取引先';
+      const taxAmount = Math.floor(monthlyFee * 0.1);
+      const totalWithTax = monthlyFee + taxAmount;
+      const invoiceNumber = `INV-${yearStr}${monthStr}-${contract.id.slice(0, 6).toUpperCase()}`;
+      const invoiceTitle = `${companyName} 【${monthLabel}】定期請求書`;
+
+      const invoiceHtml = `
+        <div style="font-family: sans-serif; padding: 30px; line-height: 1.8; color: #1e293b;">
+          <h1 style="text-align: center; border-bottom: 2px solid #0f172a; padding-bottom: 10px;">御 請 求 書</h1>
+          <p style="text-align: right;">請求番号: ${invoiceNumber}<br>発行日: ${finalIssueDate}</p>
+          <p style="font-size: 18px;"><strong>${companyName} 御中</strong></p>
+          <p>下記の通り、${monthLabel}の月次顧問料・運用支援費用をご請求申し上げます。</p>
+          
+          <div style="background: #f8fafc; border: 1px solid #cbd5e1; padding: 15px; border-radius: 8px; margin-bottom: 20px;">
+            <table style="width: 100%; border-collapse: collapse; font-size: 14px;">
+              <thead>
+                <tr style="border-bottom: 2px solid #94a3b8; text-align: left;">
+                  <th style="padding: 8px 0;">品目・内容</th>
+                  <th style="padding: 8px 0; text-align: right;">金額（税抜）</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td style="padding: 8px 0;">月額顧問・システム運用支援費用（${monthLabel}）</td>
+                  <td style="padding: 8px 0; text-align: right; font-weight: bold;">¥${monthlyFee.toLocaleString('ja-JP')}</td>
+                </tr>
+                <tr style="border-top: 1px solid #cbd5e1;">
+                  <td style="padding: 6px 0; color: #64748b;">小計（税抜）:</td>
+                  <td style="padding: 6px 0; text-align: right; font-weight: bold;">¥${monthlyFee.toLocaleString('ja-JP')}</td>
+                </tr>
+                <tr>
+                  <td style="padding: 6px 0; color: #64748b; border-bottom: 1px solid #cbd5e1;">消費税（10%）:</td>
+                  <td style="padding: 6px 0; text-align: right; font-weight: bold; border-bottom: 1px solid #cbd5e1;">¥${taxAmount.toLocaleString('ja-JP')}</td>
+                </tr>
+                <tr>
+                  <td style="padding: 10px 0 4px 0; font-size: 18px; font-weight: bold; color: #0f172a;">ご請求金額合計（税込）:</td>
+                  <td style="padding: 10px 0 4px 0; text-align: right; font-size: 20px; font-weight: 800; color: #1e3a8a;">¥${totalWithTax.toLocaleString('ja-JP')}</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+
+          <p style="margin-top: 20px;">お支払期日: <strong>${finalDueDate}</strong></p>
+          <div style="background: #eff6ff; border: 1px solid #bfdbfe; padding: 12px 16px; border-radius: 6px; font-size: 13px;">
+            <strong>お振込先口座:</strong><br>
+            ドコモSMTBネット銀行 法人第一支店 普通 2223730<br>
+            口座名義: 有限会社MST
+          </div>
+
+          <div style="margin-top: 30px; font-size: 12px; color: #64748b; text-align: right;">
+            有限会社MST<br>
+            代表取締役: 大橋真人<br>
+            〒503-0981 岐阜県大垣市桧町127番地
+          </div>
+        </div>
+      `;
+
+      let documentId: string | undefined;
+      const { data: docData } = await lineSupabase
+        .from('customer_documents')
+        .insert({
+          document_type: 'invoice',
+          title: `${companyName} · 定期請求書（${monthLabel}）`,
+          body_html: invoiceHtml,
+          company_id: contract.company_id,
+          deal_id: contract.deal_id || null,
+          status: 'draft',
+        })
+        .select('id')
+        .maybeSingle();
+
+      if (docData?.id) documentId = docData.id;
+
+      const { data: invData, error: invError } = await lineSupabase
+        .from('customer_invoices')
+        .insert({
+          company_id: contract.company_id,
+          contract_id: contract.id,
+          product_id: contract.product_id || null,
+          document_id: documentId || null,
+          title: invoiceTitle,
+          invoice_number: invoiceNumber,
+          amount: monthlyFee,
+          tax_amount: taxAmount,
+          issue_date: finalIssueDate,
+          due_date: finalDueDate,
+          status: 'draft',
+          recipient_name: companyName,
+          notes: `定期月次請求（${monthLabel}）。お支払期日: ${finalDueDate}。振込先: ドコモSMTBネット銀行 法人第一支店 普通 2223730（有限会社MST）。書類ID: ${documentId || 'なし'}`,
+        })
+        .select('id')
+        .single();
+
+      if (!invError && invData?.id) {
+        generatedInvoices.push({
+          invoiceId: invData.id,
+          invoiceNumber,
+          companyName,
+          amount: monthlyFee,
+          documentId,
+        });
+      }
+    }
+
+    return res.json({
+      success: true,
+      targetMonth,
+      generatedCount: generatedInvoices.length,
+      skippedCount,
+      generatedInvoices,
+    });
+  } catch (err: any) {
+    console.error('Error in /api/billing/recurring-generate:', err);
+    return res.status(500).json({ error: err.message || '定期請求書の一括生成中にエラーが発生しました。' });
+  }
+});
+
 // ─── 公開書類・Web申込・自動成約 API ───
 app.get('/api/public/documents/:id', async (req, res) => {
   if (!lineSupabase) return res.status(503).json({ error: '書類配信サーバーが設定されていません。' });

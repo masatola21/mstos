@@ -2,9 +2,17 @@ import React, { useEffect, useState } from 'react';
 import { getSupabase } from '../lib/supabaseClient';
 import { InlineDeleteButton } from './InlineDeleteButton';
 import { ManagedContract, ManagedInvoice } from '../types/matrix';
-import { FileText, Plus, RefreshCw, Receipt, Wrench, Trash2 } from 'lucide-react';
+import { FileText, Plus, RefreshCw, Receipt, Wrench, Trash2, Calendar, Sparkles, CheckCircle2, AlertCircle, X, ChevronRight } from 'lucide-react';
 import { CustomerSupportWorkspace } from './CustomerSupportWorkspace';
 import type { TaskItem } from '../types';
+import {
+  fetchRecurringCandidates,
+  generateRecurringInvoices,
+  getCurrentTargetMonth,
+  formatTargetMonthLabel,
+  RecurringCandidate,
+  RecurringSummary,
+} from '../services/recurringInvoiceService';
 
 type WorkspaceTab = 'segments' | 'documents' | 'operations';
 type Segment = { id: string; name: string; entity_type: string; conditions: { field?: string; value?: string } | null; created_at: string };
@@ -121,7 +129,69 @@ export const SalesOperationsWorkspace: React.FC<Props> = ({ tab, companyId, lead
   const [previewSegmentId, setPreviewSegmentId] = useState('');
   const [previewRows, setPreviewRows] = useState<RecordRow[]>([]);
 
+  // ─── 月次定期請求（MRR自動起票）State ───
+  const [recurringMonth, setRecurringMonth] = useState<string>(getCurrentTargetMonth());
+  const [recurringCandidates, setRecurringCandidates] = useState<RecurringCandidate[]>([]);
+  const [recurringSummary, setRecurringSummary] = useState<RecurringSummary | null>(null);
+  const [recurringModalOpen, setRecurringModalOpen] = useState(false);
+  const [selectedContractIds, setSelectedContractIds] = useState<string[]>([]);
+  const [recurringIssueDate, setRecurringIssueDate] = useState<string>('');
+  const [recurringDueDate, setRecurringDueDate] = useState<string>('');
+  const [isGeneratingRecurring, setIsGeneratingRecurring] = useState(false);
+  const [loadingRecurring, setLoadingRecurring] = useState(false);
+
   const selectedOps = opsTabs.find((item) => item.key === activeOpsTab) || opsTabs[0];
+
+  const loadRecurringCandidates = async (month: string) => {
+    setLoadingRecurring(true);
+    try {
+      const res = await fetchRecurringCandidates(month);
+      setRecurringSummary(res.summary);
+      setRecurringCandidates(res.candidates);
+      // 未請求のものを初期選択
+      const unbilledIds = res.candidates.filter((c) => !c.alreadyBilled).map((c) => c.contractId);
+      setSelectedContractIds(unbilledIds);
+      // 日付の初期化
+      const [y, m] = month.split('-');
+      setRecurringIssueDate(`${month}-01`);
+      const lastDay = new Date(parseInt(y, 10), parseInt(m, 10), 0).getDate();
+      setRecurringDueDate(`${month}-${String(Math.min(25, lastDay)).padStart(2, '0')}`);
+    } catch (err: any) {
+      console.warn('loadRecurringCandidates error:', err);
+    } finally {
+      setLoadingRecurring(false);
+    }
+  };
+
+  useEffect(() => {
+    if (tab === 'operations' && activeOpsTab === 'invoices') {
+      void loadRecurringCandidates(recurringMonth);
+    }
+  }, [tab, activeOpsTab, recurringMonth]);
+
+  const handleGenerateRecurring = async () => {
+    if (selectedContractIds.length === 0) {
+      setError('発行対象の契約を1件以上選択してください。');
+      return;
+    }
+    setIsGeneratingRecurring(true);
+    setError('');
+    try {
+      const res = await generateRecurringInvoices({
+        targetMonth: recurringMonth,
+        contractIds: selectedContractIds,
+        issueDate: recurringIssueDate,
+        dueDate: recurringDueDate,
+      });
+      setNotice(`【${formatTargetMonthLabel(recurringMonth)}】定期請求書を ${res.generatedCount}件 一括生成しました。（スキップ: ${res.skippedCount}件）`);
+      setRecurringModalOpen(false);
+      await Promise.all([load(), loadRecurringCandidates(recurringMonth)]);
+    } catch (err: any) {
+      setError(err.message || '定期請求書の生成に失敗しました。');
+    } finally {
+      setIsGeneratingRecurring(false);
+    }
+  };
 
   useEffect(() => {
     if (!formOpen || activeOpsTab === 'services') return;
@@ -555,6 +625,266 @@ export const SalesOperationsWorkspace: React.FC<Props> = ({ tab, companyId, lead
         <label className="text-xs text-slate-400">{activeOpsTab==='contracts'?'開始日':'支払期限（当月25日／25日以降は翌月25日）'}<input type="date" value={recordDate} onChange={(e)=>setRecordDate(e.target.value)} className="mt-1 w-full rounded border border-slate-700 bg-slate-900 px-3 py-2 text-sm text-white" /></label>
         <div className="md:col-span-2"><button className="rounded-lg bg-emerald-700 px-3 py-2 text-sm font-semibold text-white">保存</button></div>
       </form>}
+
+      {/* ─── 月次定期請求（MRR）コントロールパネル ─── */}
+      {activeOpsTab === 'invoices' && (
+        <div className="rounded-xl border border-blue-900/60 bg-gradient-to-r from-blue-950/40 via-slate-900 to-indigo-950/40 p-4 shadow-sm">
+          <div className="flex flex-wrap items-center justify-between gap-4">
+            <div className="space-y-1">
+              <div className="flex flex-wrap items-center gap-2">
+                <span className="inline-flex items-center gap-1 rounded-full bg-blue-500/20 px-2.5 py-0.5 text-xs font-semibold text-blue-300 border border-blue-500/30">
+                  <Sparkles className="h-3 w-3" /> 月次定期請求・MRR自動化
+                </span>
+                <span className="text-xs text-slate-400">対象月:</span>
+                <span className="font-semibold text-white">{formatTargetMonthLabel(recurringMonth)}</span>
+                <div className="inline-flex items-center gap-1 ml-1">
+                  {[-1, 0, 1].map((offset) => {
+                    const m = getCurrentTargetMonth(offset);
+                    const label = offset === -1 ? '先月' : offset === 0 ? '今月' : '翌月';
+                    return (
+                      <button
+                        key={m}
+                        type="button"
+                        onClick={() => setRecurringMonth(m)}
+                        className={`rounded px-2 py-0.5 text-[11px] transition-colors ${
+                          recurringMonth === m
+                            ? 'bg-blue-600 text-white font-semibold'
+                            : 'bg-slate-800 text-slate-300 hover:bg-slate-700'
+                        }`}
+                      >
+                        {label}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+              <div className="flex flex-wrap items-center gap-4 text-xs pt-1">
+                <div className="text-slate-300">
+                  継続契約: <strong className="text-white text-sm">{recurringSummary?.totalCandidates ?? '…'}</strong> 社
+                </div>
+                <div className="text-slate-300">
+                  定期MRR: <strong className="text-emerald-300 text-sm">¥{(recurringSummary?.estimatedMonthlyRevenue ?? 0).toLocaleString('ja-JP')}</strong> <span className="text-[10px] text-slate-400">(税抜)</span>
+                </div>
+                <div className="text-slate-300">
+                  請求状況: <span className="text-cyan-300 font-medium">{recurringSummary?.alreadyBilledCount ?? 0}社 発行済</span> / <span className="text-amber-300 font-semibold">{recurringSummary?.readyToBillCount ?? 0}社 未請求</span>
+                </div>
+              </div>
+            </div>
+
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={() => {
+                  setRecurringModalOpen(true);
+                  void loadRecurringCandidates(recurringMonth);
+                }}
+                className="flex items-center gap-2 rounded-lg bg-blue-600 hover:bg-blue-500 px-4 py-2 text-sm font-semibold text-white shadow-lg shadow-blue-500/20 transition-all cursor-pointer"
+              >
+                <Receipt className="h-4 w-4" />
+                <span>定期請求書を一括生成</span>
+                {(recurringSummary?.readyToBillCount ?? 0) > 0 && (
+                  <span className="rounded-full bg-amber-400 px-2 py-0.5 text-[11px] font-bold text-slate-950">
+                    {recurringSummary?.readyToBillCount}
+                  </span>
+                )}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ─── 定期請求一括生成モーダル ─── */}
+      {recurringModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-4 backdrop-blur-sm">
+          <div className="w-full max-w-3xl rounded-2xl border border-slate-700 bg-slate-900 p-6 shadow-2xl space-y-4 max-h-[90vh] flex flex-col">
+            <div className="flex items-center justify-between border-b border-slate-800 pb-3">
+              <div>
+                <h3 className="text-lg font-bold text-white flex items-center gap-2">
+                  <Receipt className="h-5 w-5 text-blue-400" />
+                  【{formatTargetMonthLabel(recurringMonth)}】月次定期請求書の一括生成
+                </h3>
+                <p className="text-xs text-slate-400 mt-0.5">
+                  締結・有効な顧問契約から、当月分の請求書と請求書類（振込先: 有限会社MST）を一括起票します。
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setRecurringModalOpen(false)}
+                className="rounded-lg p-1.5 text-slate-400 hover:bg-slate-800 hover:text-white"
+              >
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+
+            {/* 日付・対象月設定 */}
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-3 bg-slate-950/60 p-3 rounded-xl border border-slate-800 text-xs">
+              <div>
+                <label className="block text-slate-400 mb-1">対象月 (YYYY-MM)</label>
+                <input
+                  type="month"
+                  value={recurringMonth}
+                  onChange={(e) => {
+                    if (e.target.value) setRecurringMonth(e.target.value);
+                  }}
+                  className="w-full rounded border border-slate-700 bg-slate-900 px-2.5 py-1.5 text-xs text-white"
+                />
+              </div>
+              <div>
+                <label className="block text-slate-400 mb-1">発行日 (起票日)</label>
+                <input
+                  type="date"
+                  value={recurringIssueDate}
+                  onChange={(e) => setRecurringIssueDate(e.target.value)}
+                  className="w-full rounded border border-slate-700 bg-slate-900 px-2.5 py-1.5 text-xs text-white"
+                />
+              </div>
+              <div>
+                <label className="block text-slate-400 mb-1">支払期日</label>
+                <input
+                  type="date"
+                  value={recurringDueDate}
+                  onChange={(e) => setRecurringDueDate(e.target.value)}
+                  className="w-full rounded border border-slate-700 bg-slate-900 px-2.5 py-1.5 text-xs text-white"
+                />
+              </div>
+            </div>
+
+            {/* 候補者一覧 */}
+            <div className="flex-1 overflow-y-auto space-y-2 min-h-48 border border-slate-800 rounded-xl bg-slate-950/40 p-2">
+              <div className="flex items-center justify-between px-2 py-1 text-xs text-slate-400 border-b border-slate-800/80">
+                <div className="flex items-center gap-3">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const unbilled = recurringCandidates.filter((c) => !c.alreadyBilled).map((c) => c.contractId);
+                      setSelectedContractIds(unbilled);
+                    }}
+                    className="text-blue-400 hover:underline cursor-pointer"
+                  >
+                    未請求のみ全選択 ({recurringCandidates.filter((c) => !c.alreadyBilled).length}件)
+                  </button>
+                  <span>｜</span>
+                  <button
+                    type="button"
+                    onClick={() => setSelectedContractIds([])}
+                    className="text-slate-400 hover:underline cursor-pointer"
+                  >
+                    選択解除
+                  </button>
+                </div>
+                <span>選択中: <strong className="text-white">{selectedContractIds.length}</strong> 件</span>
+              </div>
+
+              {loadingRecurring ? (
+                <div className="p-8 text-center text-xs text-slate-400 flex items-center justify-center gap-2">
+                  <RefreshCw className="h-4 w-4 animate-spin text-blue-400" />
+                  定期請求対象の契約を確認中…
+                </div>
+              ) : recurringCandidates.length === 0 ? (
+                <div className="p-8 text-center text-xs text-slate-400">
+                  有効な顧問契約または月次費用が設定された契約が見つかりませんでした。「契約」タブから顧問契約（retainer）を登録・締結してください。
+                </div>
+              ) : (
+                <div className="divide-y divide-slate-800/60">
+                  {recurringCandidates.map((c) => {
+                    const isChecked = selectedContractIds.includes(c.contractId);
+                    return (
+                      <div
+                        key={c.contractId}
+                        className={`flex items-center justify-between p-2.5 rounded-lg text-xs transition-colors ${
+                          c.alreadyBilled
+                            ? 'opacity-60 bg-slate-900/40'
+                            : isChecked
+                            ? 'bg-blue-950/30 border border-blue-900/50'
+                            : 'hover:bg-slate-900/60'
+                        }`}
+                      >
+                        <label className="flex items-center gap-3 cursor-pointer flex-1">
+                          <input
+                            type="checkbox"
+                            disabled={c.alreadyBilled || isGeneratingRecurring}
+                            checked={isChecked}
+                            onChange={(e) => {
+                              if (e.target.checked) {
+                                setSelectedContractIds((prev) => [...prev, c.contractId]);
+                              } else {
+                                setSelectedContractIds((prev) => prev.filter((id) => id !== c.contractId));
+                              }
+                            }}
+                            className="rounded border-slate-700 bg-slate-900 text-blue-600 focus:ring-0 disabled:opacity-40"
+                          />
+                          <div>
+                            <div className="font-semibold text-white flex items-center gap-2">
+                              {c.companyName}
+                              {c.alreadyBilled ? (
+                                <span className="inline-flex items-center gap-1 rounded bg-slate-800 px-1.5 py-0.5 text-[10px] text-slate-300">
+                                  <CheckCircle2 className="h-3 w-3 text-emerald-400" /> {c.existingInvoiceNumber || '今月発行済'}
+                                </span>
+                              ) : (
+                                <span className="inline-flex items-center gap-1 rounded bg-emerald-950/60 border border-emerald-800/80 px-1.5 py-0.5 text-[10px] text-emerald-300">
+                                  未請求・発行可能
+                                </span>
+                              )}
+                            </div>
+                            <div className="text-[11px] text-slate-400">
+                              {c.contractTitle} {c.productName ? `· ${c.productName}` : ''}
+                            </div>
+                          </div>
+                        </label>
+
+                        <div className="text-right pl-3">
+                          <div className="font-bold text-white text-sm">
+                            ¥{c.monthlyFee.toLocaleString('ja-JP')} <span className="text-[10px] text-slate-400 font-sans">(税抜)</span>
+                          </div>
+                          <div className="text-[11px] text-indigo-300 font-semibold">
+                            ¥{c.totalWithTax.toLocaleString('ja-JP')} <span className="text-[10px] text-slate-400 font-sans">(税込)</span>
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+
+            {/* モーダル下部・振込先案内 & 実行ボタン */}
+            <div className="border-t border-slate-800 pt-3 flex flex-wrap items-center justify-between gap-3">
+              <div className="text-[11px] text-slate-400">
+                振込先口座: ドコモSMTBネット銀行 法人第一支店 普通 2223730（有限会社MST）
+              </div>
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => setRecurringModalOpen(false)}
+                  disabled={isGeneratingRecurring}
+                  className="rounded-lg border border-slate-700 px-3 py-1.5 text-xs text-slate-300 hover:bg-slate-800 disabled:opacity-50 cursor-pointer"
+                >
+                  閉じる
+                </button>
+                <button
+                  type="button"
+                  onClick={() => void handleGenerateRecurring()}
+                  disabled={isGeneratingRecurring || selectedContractIds.length === 0}
+                  className="flex items-center gap-2 rounded-lg bg-blue-600 hover:bg-blue-500 px-4 py-2 text-xs font-semibold text-white shadow-lg shadow-blue-600/30 disabled:opacity-50 cursor-pointer"
+                >
+                  {isGeneratingRecurring ? (
+                    <>
+                      <RefreshCw className="h-3.5 w-3.5 animate-spin" />
+                      <span>一括起票中…</span>
+                    </>
+                  ) : (
+                    <>
+                      <Receipt className="h-3.5 w-3.5" />
+                      <span>選択した {selectedContractIds.length}件 を一括生成する</span>
+                    </>
+                  )}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
       {activeOpsTab==='contracts' ? <p className="text-xs text-slate-400">状態の流れ：下書き → 社内確認中 → メール送付済み（同意返信待ち）→ 締結済み（相手の合意を確認）。相手の明示的な同意返信を確認した後に「締結済み」へ更新し、返信メールと契約書PDFを契約記録として保存してください。期限切れ・取消は終了状態です。</p> : <p className="text-xs text-slate-400">状態の流れ：下書き（未発行）→ 承認待ち → 発行済み（入金待ち）→ 入金済み。支払期限を過ぎると「支払期限超過」、取消は終了状態です。</p>}{loading ? <p className="text-sm text-slate-400">読み込み中…</p> : records.length === 0 ? <p className="py-8 text-center text-sm text-slate-400">登録データはありません。</p> : <div className="overflow-x-auto"><table className="w-full text-left text-sm"><thead><tr className="border-b border-slate-800 text-xs text-slate-400"><th className="p-2">名称</th><th className="p-2">会社</th><th className="p-2">関連</th><th className="p-2">状態</th><th className="p-2">金額（税抜 / 税込）</th><th className="p-2">日付</th>{activeOpsTab==='invoices'&&<th className="p-2">書類</th>}<th className="p-2">操作</th></tr></thead><tbody>{records.map((record)=><tr key={record.id} className="border-b border-slate-800/70 text-slate-200"><td className="p-2">{record.title || record.invoice_number}</td><td className="p-2">{companies.find((item)=>item.id===record.company_id)?.company_name || record.company_id || '—'}</td><td className="p-2 text-xs text-slate-400">{activeOpsTab==='contracts' ? <>{catalogProducts.find((product)=>product.id===record.product_id)?.product_name || record.product_id || '商品未設定'}{record.deal_id && <div>商談: {deals.find((deal)=>deal.id===record.deal_id)?.proposal_plan_name || record.deal_id}</div>}</> : <>{catalogProducts.find((product)=>product.id===record.product_id)?.product_name || record.product_id || '商品未設定'}{record.contract_id && <div>契約: {savedContracts.find((contract)=>contract.id===record.contract_id)?.title || record.contract_id}</div>}</>}</td><td className="p-2"><select aria-label={`${record.title||record.invoice_number}の状態`} value={record.status} onChange={(e)=>void updateOperationStatus(record,e.target.value)} className="rounded border border-slate-700 bg-slate-950 px-2 py-1 text-xs text-white">{(activeOpsTab==='contracts'?['draft','under_review','sent','signed','expired','canceled']:['draft','awaiting_approval','issued','paid','overdue','canceled']).map(status=><option key={status} value={status}>{(activeOpsTab==='contracts'?contractStatusLabels:invoiceStatusLabels)[status]||status}</option>)}</select></td><td className="p-2">{record.amount == null?'—':<div><div>¥{Number(record.amount).toLocaleString('ja-JP')} <span className="text-[10px] text-slate-400 font-sans">(税抜)</span></div><div className="text-xs text-indigo-300 font-semibold">¥{Math.floor(Number(record.amount) * 1.1).toLocaleString('ja-JP')} <span className="text-[10px] text-slate-400 font-sans">(税込)</span></div></div>}</td><td className="p-2">{record.due_date || record.start_date || '—'}</td><td className="p-2">{activeOpsTab==='invoices'&&<button type="button" onClick={()=>record.company_id&&onOpenInvoiceDocuments?.(record.company_id, record.document_id || undefined)} disabled={!record.company_id||!onOpenInvoiceDocuments} className="whitespace-nowrap rounded border border-cyan-800 px-2 py-1 text-xs text-cyan-200 disabled:opacity-40">請求書類を開く</button>}</td><td className="p-2"><button type="button" onClick={()=>void deleteOperationRecord(record)} className="rounded border border-rose-500/40 px-2 py-1 text-xs text-rose-300 hover:bg-rose-500/10">削除</button></td></tr>)}</tbody></table></div>}
       </>}
     </section>}
