@@ -76,6 +76,15 @@ export default function DiagnosisForm() {
   const [currentStep, setCurrentStep] = useState(0);
   const [answers, setAnswers] = useState<number[]>([]);
   const [showResult, setShowResult] = useState(false);
+  const [source, setSource] = useState('corporate_website');
+
+  React.useEffect(() => {
+    if (typeof window !== 'undefined') {
+      const params = new URLSearchParams(window.location.search);
+      const s = params.get('source');
+      if (s) setSource(s);
+    }
+  }, []);
 
   // リード収集フォーム
   const [lead, setLead] = useState({
@@ -129,6 +138,7 @@ export default function DiagnosisForm() {
         name: lead.name,
         email: lead.email,
         phone: lead.phone,
+        source: source,
         inquiry_type: 'diagnosis',
         notes: `【3分無料診断結果】\nスコア: ${totalScore}/${maxScore} (${scorePercentage}%)\n判定: ${diagnosisGrade}ランク「${diagnosisTitle}」\n回答詳細: ${answers.join(', ')}`,
         custom_fields: {

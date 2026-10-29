@@ -1,22 +1,34 @@
+import { supabase } from '../lib/supabase';
+
 export interface Article {
+  id?: string;
   slug: string;
   title: string;
-  category: '経営改善・利益改善' | '業務改善・業務効率化' | 'マーケティング・集客' | 'IT・DX・AI活用' | '新規事業・事業づくり';
-  categorySlug: 'management' | 'operations' | 'marketing' | 'it-dx' | 'new-business';
+  category: '経営改善・利益改善' | '業務改善・業務効率化' | 'マーケティング・集客' | 'IT・DX・AI活用' | '新規事業・事業づくり' | string;
+  categorySlug: 'management' | 'operations' | 'marketing' | 'it-dx' | 'new-business' | string;
   publishedAt: string;
   summary: string;
   content: string[];
-  thumbnailTheme: {
+  thumbnailTheme?: {
     bgGradient: string;
     icon: string;
     accentColor: string;
   };
-  relatedService: {
+  relatedService?: {
     name: string;
     href: string;
   };
 }
 
+export const CATEGORY_MAP: Record<string, { name: Article['category']; slug: Article['categorySlug'] }> = {
+  management: { name: '経営改善・利益改善', slug: 'management' },
+  operations: { name: '業務改善・業務効率化', slug: 'operations' },
+  marketing: { name: 'マーケティング・集客', slug: 'marketing' },
+  'it-dx': { name: 'IT・DX・AI活用', slug: 'it-dx' },
+  'new-business': { name: '新規事業・事業づくり', slug: 'new-business' },
+};
+
+// 既存の基本記事データ（フォールバック用）
 export const ARTICLES: Article[] = [
   {
     slug: 'profit-improvement-bottleneck',
@@ -49,30 +61,30 @@ export const ARTICLES: Article[] = [
     publishedAt: '2026.10.15',
     summary: '担当者が休むと業務が停滞する、新人教育に多大な時間がかかる。属人化の恐怖を克服するための、業務プロセスの可視化と身の丈に合ったマニュアル作成の進め方。',
     thumbnailTheme: {
-      bgGradient: 'from-slate-900 to-teal-950',
+      bgGradient: 'from-slate-800 to-slate-950',
       icon: 'users',
-      accentColor: 'text-teal-300',
+      accentColor: 'text-slate-300',
     },
     relatedService: {
       name: '業務改善・IT・DX・AI顧問',
       href: '/services/it-dx',
     },
     content: [
-      '「担当者が急に休むと、どこに何があるか分からず業務がストップしてしまう」「何年もいるベテランの頭の中にしか手順がない」。こうした属人化は、会社にとって最大の事業継続リスクです。',
-      'しかし、分厚いマニュアルを作ろうとしても、現場は日々の業務に追われて作成が進まず、仮に完成しても誰も読まない「形骸化したマニュアル」になりがちです。',
-      '属人化を解消する最も効果的な方法は、「完璧な文書」を目指すのではなく、まず業務の「入力・処理・出力」の3点だけを箇条書きで洗い出すことです。さらに、クラウドツールやGoogleフォームを挟むことで、「そのツールを通さないと次の工程に進めない仕組み（強制フロー化）」を作ることが重要です。',
-      'MSTでは、現場の業務棚卸しから、誰でも同じ品質で仕事が完了する標準フローの設計と定着までを伴走支援しています。',
+      '「この業務は〇〇さんしか分からない」「急に休まれたら現場がストップする」。多くの小規模事業者で、特定のベテラン社員への業務の属人化が深刻な経営リスクとなっています。',
+      '属人化が発生する原因は「マニュアルがないから」だけではありません。真の原因は「業務の全体フローと判断基準が可視化されていないこと」にあります。手順だけを文字にしても、実際の現場で起こる例外パターンや判断の理由が共有されていなければ、結局その人に聞かなければ解決しないからです。',
+      '解決の鍵は、業務を「インプット」「判断基準」「アウトプット」に分解し、誰でも80点以上の品質で対応できる仕組みを作ることです。最初から分厚いマニュアルを作る必要はありません。まずはスマホで作業動画を撮る、チェックリストを1枚作ることから始めます。',
+      'MSTでは、現場のヒアリングから業務フロー図の作成、誰でも回せる標準化マニュアルの設計までを一貫して支援しています。',
     ],
   },
   {
     slug: 'gas-and-ai-practical-automation',
-    title: '高価なシステムは不要！Google Workspace × GAS × 生成AIで始める反復業務の自動化手法',
+    title: '高額なシステム開発は不要：Google Workspace × 生成AIで実現する反復業務の自動化手法',
     category: 'IT・DX・AI活用',
     categorySlug: 'it-dx',
     publishedAt: '2026.10.10',
-    summary: '数百万円の開発費用をかけなくても、すでに導入しているGoogle Workspaceや身近な自動化ツールで毎日の転記やメール送信は自動化できます。実例を交えてご紹介。',
+    summary: '数百万円の基幹システムを導入しなくても、日々の二重入力や集計、メール送信は自動化できます。小規模事業者に最適な身の丈の自動化・AI活用事例。',
     thumbnailTheme: {
-      bgGradient: 'from-brand-950 to-blue-900',
+      bgGradient: 'from-brand-900 to-slate-900',
       icon: 'cpu',
       accentColor: 'text-brand-300',
     },
@@ -81,10 +93,10 @@ export const ARTICLES: Article[] = [
       href: '/services/system',
     },
     content: [
-      '「DXやAIを進めたいが、数百万円もする専用システムを導入する予算はない」。多くの中小企業が直面するこの課題ですが、実は莫大な投資は必要ありません。',
-      'すでに社内で使っているGoogleスプレッドシート、Gmail、Googleフォームに、Google Apps Script（GAS）と生成AIのAPIを組み合わせるだけで、日常の「請求書の下書き作成」「フォーム回答の自動転記」「リマインドメールの自動送信」などは驚くほど低コストで自動化できます。',
-      '重要なのは、ツールを導入すること自体ではなく、「社内のどの反復作業が時間を奪っているのか」を正確に特定し、そこにピンポイントで小さな自動化を適用することです。',
-      '有限会社MSTでは、大企業向けのパッケージを売りつけるのではなく、貴社の業務にジャストフィットする完全内製の自動化スクリプトやWebツールをスモールスタートで構築しています。',
+      '「業務を自動化したいが、大手のシステム開発会社に見積もりを取ったら数百万円と言われて諦めた」。中小企業経営者からよく伺うお話です。',
+      'しかし、日常のルーチンワークの多くは、Googleスプレッドシート、Gmail、GoogleフォームをGoogle Apps Script（GAS）で連携させるだけで、驚くほど簡単に自動化できます。さらに最近では、ChatGPTやClaudeなどの生成AI APIを組み合わせることで、問い合わせメールの一次返信ドラフト作成や、議事録の要約まで自動で行えるようになっています。',
+      '身の丈に合った自動化の秘訣は、「最初から100点を目指さないこと」です。まずは毎日30分かかっている請求書転記やレポート作成をスクリプトで自動化し、浮いた時間で次の改善を進める。このスモールスタートこそが、失敗しない業務DXの鉄則です。',
+      'MSTでは、専用Webアプリの開発はもちろん、既存ツールを活かした低コストかつ超高速なGAS・AI自動化の実装を自社直接開発で承っています。',
     ],
   },
   {
@@ -134,3 +146,89 @@ export const ARTICLES: Article[] = [
     ],
   },
 ];
+
+/**
+ * Supabase（mstosのAI集客運用）から公開中の最新記事を取得する
+ * 接続できない場合や記事がない場合は既存の ARTICLES を安全に返す
+ */
+export async function getLiveArticles(): Promise<Article[]> {
+  try {
+    if (!supabase) return ARTICLES;
+
+    const { data, error } = await supabase
+      .from('mst_ai_acquisition_records')
+      .select('*')
+      .eq('record_type', 'article')
+      .order('updated_at', { ascending: false });
+
+    if (error || !data || data.length === 0) {
+      return ARTICLES;
+    }
+
+    // Supabaseから取得した記事を Article 型に変換
+    const remoteArticles: Article[] = data
+      .filter((row: any) => {
+        const payload = row.payload || {};
+        const status = row.status || payload.publishStatus || '';
+        return ['公開', 'published', '公開済み'].includes(status);
+      })
+      .map((row: any) => {
+        const p = row.payload || {};
+        const slug = p.slug || row.id || `article-${row.created_at?.slice(0, 10)}`;
+        const category = p.category || '経営改善・利益改善';
+        const categorySlug =
+          Object.values(CATEGORY_MAP).find((c) => c.name === category)?.slug || 'management';
+
+        // 本文を行単位の配列に変換
+        const rawBody = p.body || p.content || '';
+        const contentLines = rawBody
+          .split(/\n\n+|\r\n\r\n+/)
+          .map((s: string) => s.trim())
+          .filter(Boolean);
+
+        return {
+          id: row.id,
+          slug,
+          title: row.title || p.metaTitle || '無題の記事',
+          category,
+          categorySlug,
+          publishedAt: p.publishedDate || row.created_at?.slice(0, 10)?.replace(/-/g, '.') || '2026.10.29',
+          summary: p.metaDescription || p.excerpt || p.summary || '',
+          content: contentLines.length > 0 ? contentLines : [p.body || ''],
+          thumbnailTheme: {
+            bgGradient: p.bgGradient || 'from-brand-900 to-slate-900',
+            icon: p.icon || 'file-text',
+            accentColor: 'text-brand-300',
+          },
+          relatedService: p.relatedServiceName
+            ? {
+                name: p.relatedServiceName,
+                href: p.relatedServiceHref || '/services',
+              }
+            : {
+                name: '経営戦略・利益改善顧問',
+                href: '/services/strategy',
+              },
+        };
+      });
+
+    // リモート記事があれば既存記事とマージ（スラッグ重複を排除）
+    if (remoteArticles.length > 0) {
+      const mergedMap = new Map<string, Article>();
+      // 1. まず静的記事をセット
+      for (const a of ARTICLES) {
+        mergedMap.set(a.slug, a);
+      }
+      // 2. Supabase記事で上書きまたは追加
+      for (const r of remoteArticles) {
+        mergedMap.set(r.slug, r);
+      }
+      return Array.from(mergedMap.values());
+    }
+
+    return ARTICLES;
+  } catch (err) {
+    console.warn('Failed to load articles from Supabase, falling back to static:', err);
+    return ARTICLES;
+  }
+}

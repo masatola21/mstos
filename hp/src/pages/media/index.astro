@@ -1,6 +1,6 @@
 ---
 import Layout from '../../layouts/Layout.astro';
-import { ARTICLES } from '../../data/articles';
+import { getLiveArticles } from '../../data/articles';
 
 const categories = [
   { name: 'すべて', slug: 'all' },
@@ -10,6 +10,8 @@ const categories = [
   { name: 'IT・DX・AI活用', slug: 'it-dx' },
   { name: '新規事業・事業づくり', slug: 'new-business' },
 ];
+
+const articles = await getLiveArticles();
 ---
 
 <Layout
@@ -53,7 +55,7 @@ const categories = [
 
       <!-- 記事グリッド -->
       <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
-        {ARTICLES.map((article) => (
+        {articles.map((article) => (
           <article class="bg-white rounded-2xl border border-sand-300 shadow-sm overflow-hidden flex flex-col justify-between hover:border-brand-500 hover:shadow-xl transition-all duration-200 group">
             <!-- 視覚的識別サムネイル（16:9比率） -->
             <div class={`h-36 sm:h-40 bg-gradient-to-br ${article.thumbnailTheme?.bgGradient || 'from-brand-900 to-slate-900'} relative p-5 flex flex-col justify-between overflow-hidden`}>

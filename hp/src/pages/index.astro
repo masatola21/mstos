@@ -1,6 +1,8 @@
 ---
 import Layout from '../layouts/Layout.astro';
-import { ARTICLES } from '../data/articles';
+import { getLiveArticles } from '../data/articles';
+
+const liveArticles = await getLiveArticles();
 
 // A. 主軸サービス（MSTの中心商品）
 const coreServices = [
@@ -638,7 +640,7 @@ const steps = [
       </div>
 
       <div class="grid grid-cols-1 md:grid-cols-3 gap-8">
-        {ARTICLES.slice(0, 3).map((a) => (
+        {liveArticles.slice(0, 3).map((a) => (
           <article class="bg-white rounded-2xl border border-sand-300 overflow-hidden flex flex-col justify-between hover:shadow-md transition group">
             <div class={`h-12 flex items-center gap-2 px-5 text-white text-xs font-bold ${
               a.category === '経営改善・利益改善' ? 'bg-gradient-to-r from-brand-900 to-brand-700' :

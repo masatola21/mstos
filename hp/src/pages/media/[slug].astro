@@ -1,9 +1,10 @@
 ---
 import Layout from '../../layouts/Layout.astro';
-import { ARTICLES, type Article } from '../../data/articles';
+import { getLiveArticles, type Article } from '../../data/articles';
 
-export function getStaticPaths() {
-  return ARTICLES.map((article) => ({
+export async function getStaticPaths() {
+  const articles = await getLiveArticles();
+  return articles.map((article) => ({
     params: { slug: article.slug },
     props: { article },
   }));
@@ -84,7 +85,7 @@ const { article } = Astro.props;
             </div>
             <div class="pt-4">
               <a
-                href="/diagnosis"
+                href={`/diagnosis?source=media_${article.slug}`}
                 class="block w-full py-2.5 bg-brand-900 text-white text-xs font-bold text-center rounded-lg hover:bg-brand-800 transition"
               >
                 診断を受ける
@@ -101,7 +102,7 @@ const { article } = Astro.props;
             </div>
             <div class="pt-4">
               <a
-                href="/materials"
+                href={`/materials?source=media_${article.slug}`}
                 class="block w-full py-2.5 bg-brand-900 text-white text-xs font-bold text-center rounded-lg hover:bg-brand-800 transition"
               >
                 資料をダウンロード
@@ -131,7 +132,7 @@ const { article } = Astro.props;
 
         <div class="text-center pt-4">
           <a
-            href="/contact"
+            href={`/contact?source=media_${article.slug}`}
             class="text-xs text-brand-700 underline font-semibold hover:text-brand-900"
           >
             または共通問い合わせフォームから相談する →

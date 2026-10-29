@@ -21,6 +21,8 @@ export default function ContactForm() {
     message: '',
   });
 
+  const [source, setSource] = useState('corporate_website');
+
   useEffect(() => {
     if (typeof window !== 'undefined') {
       const params = new URLSearchParams(window.location.search);
@@ -30,6 +32,10 @@ export default function ContactForm() {
           ...prev,
           service_interest: SERVICE_MAP[serviceParam],
         }));
+      }
+      const sourceParam = params.get('source');
+      if (sourceParam) {
+        setSource(sourceParam);
       }
     }
   }, []);
@@ -49,6 +55,7 @@ export default function ContactForm() {
         name: formData.name,
         email: formData.email,
         phone: formData.phone,
+        source: source,
         inquiry_type: 'consultation',
         notes: `【ご関心のあるテーマ】${formData.service_interest}\n【現在の状況】${formData.current_status}\n【ご相談内容】${formData.message}`,
         custom_fields: {

@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { submitLead } from '../lib/supabase';
 
 export default function MaterialForm() {
@@ -10,6 +10,16 @@ export default function MaterialForm() {
     industry: '',
     role: '代表取締役 / 役員',
   });
+
+  const [source, setSource] = useState('corporate_website');
+
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      const params = new URLSearchParams(window.location.search);
+      const s = params.get('source');
+      if (s) setSource(s);
+    }
+  }, []);
 
   const [loading, setLoading] = useState(false);
   const [downloadReady, setDownloadReady] = useState(false);
@@ -26,6 +36,7 @@ export default function MaterialForm() {
         name: formData.name,
         email: formData.email,
         phone: formData.phone,
+        source: source,
         inquiry_type: 'material',
         notes: `【資料請求】経営改善実務ガイド・MST紹介資料\n【業種】${formData.industry}\n【役職】${formData.role}`,
         custom_fields: {
