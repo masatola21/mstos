@@ -747,39 +747,32 @@ const steps = [
         </p>
       </div>
 
-      <!-- PC: 横フロー / SP: 縦リスト -->
-      <div class="hidden md:block">
-        <div class="grid grid-cols-9 gap-0 items-start max-w-6xl mx-auto">
-          {steps.map((st, i) => (
-            <>
-              <div class="col-span-1 bg-white p-5 rounded-2xl border border-sand-300 shadow-sm text-center space-y-2">
-                <div class="w-9 h-9 rounded-full bg-brand-900 text-white text-sm font-bold flex items-center justify-center mx-auto">
-                  {st.num}
-                </div>
-                <h3 class="text-sm font-bold font-serif text-slate-900 leading-snug">{st.title}</h3>
-                <p class="text-[10px] text-gray-500 leading-relaxed">{st.desc}</p>
+      <!-- 支援の進め方ステップ（ゆったり読めるタイムライン構成） -->
+      <div class="max-w-3xl mx-auto space-y-4 sm:space-y-5">
+        {steps.map((st, i) => (
+          <div class="relative">
+            <div class="bg-white p-6 sm:p-7 rounded-2xl border border-sand-300 shadow-sm flex flex-col sm:flex-row items-start sm:items-center gap-5 sm:gap-6 hover:border-brand-400 hover:shadow-md transition">
+              <div class="w-12 h-12 sm:w-14 sm:h-14 rounded-2xl bg-brand-900 text-brand-300 font-serif font-bold text-lg sm:text-xl flex items-center justify-center shrink-0 shadow-sm">
+                {st.num}
               </div>
-              {i < steps.length - 1 && (
-                <div class="col-span-1 flex items-center justify-center pt-6">
-                  <svg class="w-5 h-5 text-brand-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width={2} d="M9 5l7 7-7 7"/></svg>
+              <div class="space-y-1.5 flex-1">
+                <div class="flex items-center gap-2">
+                  <span class="text-[11px] font-bold text-brand-700 bg-brand-50 px-2.5 py-0.5 rounded-full border border-brand-200">
+                    STEP {st.num}
+                  </span>
+                  <h3 class="text-base sm:text-lg font-bold font-serif text-slate-900">
+                    {st.title}
+                  </h3>
                 </div>
-              )}
-            </>
-          ))}
-        </div>
-      </div>
+                <p class="text-xs sm:text-sm text-gray-600 leading-relaxed font-light">
+                  {st.desc}
+                </p>
+              </div>
+            </div>
 
-      <!-- SP: 縦リスト -->
-      <div class="md:hidden max-w-lg mx-auto space-y-3">
-        {steps.map((st) => (
-          <div class="bg-white p-5 rounded-2xl border border-sand-300 shadow-sm flex items-start gap-4">
-            <div class="w-10 h-10 rounded-full bg-brand-900 text-white font-serif font-bold text-sm flex items-center justify-center shrink-0">
-              {st.num}
-            </div>
-            <div class="space-y-1">
-              <h3 class="text-sm font-bold font-serif text-slate-900">{st.title}</h3>
-              <p class="text-xs text-gray-600 leading-relaxed">{st.desc}</p>
-            </div>
+            {i < steps.length - 1 && (
+              <div class="w-0.5 h-4 bg-brand-300 mx-auto my-1"></div>
+            )}
           </div>
         ))}
       </div>
