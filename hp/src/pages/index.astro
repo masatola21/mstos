@@ -10,6 +10,8 @@ const coreServices = [
     num: '01',
     title: '経営戦略・利益改善顧問',
     badge: '主軸サービス',
+    image: '/images/consulting-meeting.jpg',
+    imageAlt: '経営戦略・利益改善のミーティング・課題棚卸し風景',
     desc: '経営者の右腕として、利益構造の改善・戦略立案といった経営面から、業務フローの属人化解消・効率化といった現場改善まで、会社全体を見渡して伴走します。',
     points: ['利益構造・採算の可視化と改善', '業務の属人化解消・標準化', '中長期の経営戦略・判断支援'],
     href: '/services/strategy',
@@ -18,6 +20,8 @@ const coreServices = [
     num: '02',
     title: '業務改善・IT・DX・AI顧問',
     badge: '主軸サービス',
+    image: '/images/system-blueprint.jpg',
+    imageAlt: 'パソコン画面での業務フロー設計図・IT/AI活用設計',
     desc: '業務プロセスの分析、属人化の解消、業務効率化、身の丈に合ったIT・DX・生成AI活用の設計と継続支援を行います。',
     points: ['業務フロー可視化・標準化', '現場の属人化ボトルネック解消', '身の丈に合ったIT・AI活用設計'],
     href: '/services/it-dx',
@@ -76,23 +80,34 @@ const steps = [
   description="MST｜経営の仕組み化 × 利益改善。中小企業・小規模事業者の経営課題を整理し、利益改善につながる戦略と仕組みを設計。必要に応じてシステム構築や業務自動化まで、戦略と実行の両面から伴走支援します。"
 >
   <!-- ① ファーストビュー -->
-  <section class="relative bg-gradient-to-b from-brand-950 via-brand-900 to-slate-900 text-white pt-20 pb-20 sm:pt-28 sm:pb-32 overflow-hidden">
-    <div class="absolute inset-0 opacity-10 bg-[radial-gradient(#3984F5_1px,transparent_1px)] [background-size:24px_24px]"></div>
+  <section class="relative bg-brand-950 text-white pt-20 pb-20 sm:pt-28 sm:pb-32 overflow-hidden">
+    <!-- 背景画像レイヤー：打合せ・コンサルティング風景（参考例に準拠した高品位オーバーレイ） -->
+    <div class="absolute inset-0 z-0">
+      <img
+        src="/images/hero-consulting.jpg"
+        alt="MST 経営の仕組み化と利益改善コンサルティング"
+        class="w-full h-full object-cover object-right lg:object-center opacity-30 lg:opacity-40 mix-blend-luminosity filter contrast-125"
+      />
+      <!-- 深みのあるブランドネイビーのグラデーション（左側テキストの可読性と右側の洗練された雰囲気を両立） -->
+      <div class="absolute inset-0 bg-gradient-to-r from-brand-950 via-brand-950/95 sm:via-brand-950/90 to-brand-950/40 lg:to-brand-950/25"></div>
+      <div class="absolute inset-0 bg-gradient-to-b from-brand-950/90 via-transparent to-brand-950"></div>
+      <div class="absolute inset-0 opacity-15 bg-[radial-gradient(#3984F5_1px,transparent_1px)] [background-size:24px_24px]"></div>
+    </div>
     <div class="absolute -top-40 -right-40 w-96 h-96 bg-brand-500/20 rounded-full blur-3xl pointer-events-none"></div>
 
-    <div class="relative max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+    <div class="relative z-10 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
       <div class="grid grid-cols-1 lg:grid-cols-12 gap-12 items-center">
         
         <!-- 左側：キャッチコピー ＆ CTA（可読性と視認性を最優先） -->
         <div class="lg:col-span-7 space-y-6">
           <!-- ブランド表記 -->
-          <div class="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-brand-800/80 border border-brand-500/30 text-brand-200 text-xs sm:text-sm font-medium backdrop-blur-sm">
-            <span class="w-2 h-2 rounded-full bg-brand-400"></span>
+          <div class="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-brand-900/90 border border-brand-400/40 text-brand-200 text-xs sm:text-sm font-medium backdrop-blur-md shadow-sm">
+            <span class="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
             MST｜経営の仕組み化 × 利益改善
           </div>
 
           <!-- メインコピー（最も目立たせる） -->
-          <h1 class="text-3xl sm:text-5xl lg:text-6xl font-bold font-serif tracking-tight leading-[1.3] sm:leading-[1.25] text-white">
+          <h1 class="text-3xl sm:text-5xl lg:text-6xl font-bold font-serif tracking-tight leading-[1.3] sm:leading-[1.25] text-white drop-shadow-sm">
             経営の仕組み化で、<br />
             <span class="text-transparent bg-clip-text bg-gradient-to-r from-brand-300 via-blue-200 to-brand-400">
               利益が残る会社
@@ -124,7 +139,7 @@ const steps = [
             <!-- 副CTA: 3分無料経営診断 -->
             <a
               href="/diagnosis"
-              class="px-8 py-4 rounded-xl bg-brand-800/80 hover:bg-brand-700/80 border border-brand-400/40 text-white font-semibold text-sm sm:text-base text-center shadow transition-all duration-200 flex items-center justify-center gap-2 active:scale-[0.99]"
+              class="px-8 py-4 rounded-xl bg-brand-900/90 hover:bg-brand-800/90 border border-brand-400/50 text-white font-semibold text-sm sm:text-base text-center shadow transition-all duration-200 flex items-center justify-center gap-2 active:scale-[0.99] backdrop-blur-md"
             >
               <span>3分無料経営診断</span>
               <svg class="w-4 h-4 text-brand-300 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -155,72 +170,66 @@ const steps = [
           </div>
         </div>
 
-        <!-- 右側：ビジュアル図解カード（PCのみ表示で縦長化を防止・誠実で上質なインフォグラフィック） -->
+        <!-- 右側：ビジュアル図解 ＆ システム設計図コクピットカード（PCのみ表示で縦長化を防止） -->
         <div class="hidden lg:block lg:col-span-5">
-          <div class="bg-gradient-to-b from-white/10 to-white/5 backdrop-blur-md rounded-3xl border border-white/20 p-8 shadow-2xl space-y-6">
-            <div class="flex items-center justify-between border-b border-white/10 pb-4">
+          <div class="bg-gradient-to-b from-white/10 to-slate-900/85 backdrop-blur-xl rounded-3xl border border-white/20 p-6 shadow-2xl space-y-5">
+            
+            <!-- コクピットヘッダー -->
+            <div class="flex items-center justify-between border-b border-white/10 pb-3">
               <div class="flex items-center gap-2">
-                <span class="w-3 h-3 rounded-full bg-brand-400"></span>
-                <span class="text-xs font-bold tracking-widest text-brand-200 uppercase">MST METHODOLOGY</span>
+                <span class="w-2.5 h-2.5 rounded-full bg-emerald-400 animate-pulse"></span>
+                <span class="text-xs font-bold tracking-widest text-brand-200 uppercase">MST ARCHITECTURE</span>
               </div>
-              <span class="text-[11px] text-slate-300 bg-white/10 px-2.5 py-0.5 rounded-full">経営の仕組み化モデル</span>
+              <span class="text-[11px] text-brand-300 bg-brand-900/80 border border-brand-500/30 px-2.5 py-0.5 rounded-full font-medium">
+                仕組み化・システム設計図
+              </span>
             </div>
 
-            <!-- ステップ図解カード -->
-            <div class="space-y-3">
-              <!-- 現状 -->
-              <div class="p-4 rounded-xl bg-slate-900/80 border border-red-500/30 flex items-start gap-3">
-                <div class="w-6 h-6 rounded-md bg-red-950 text-red-400 flex items-center justify-center text-xs font-bold shrink-0 mt-0.5">!</div>
+            <!-- システム・設計図プレビュー画像コンテナ -->
+            <div class="relative rounded-2xl overflow-hidden border border-brand-500/40 shadow-lg group">
+              <img
+                src="/images/system-blueprint.jpg"
+                alt="パソコン画面での業務フロー設計図・システム自動化"
+                class="w-full h-44 object-cover object-center group-hover:scale-105 transition-transform duration-500"
+              />
+              <div class="absolute inset-0 bg-gradient-to-t from-slate-950/90 via-slate-950/30 to-transparent"></div>
+              
+              <!-- 画面内フローティングバッジ -->
+              <div class="absolute top-2.5 right-2.5 bg-brand-950/85 backdrop-blur-md border border-brand-400/40 px-2.5 py-1 rounded-lg text-[10px] text-brand-200 font-semibold flex items-center gap-1.5 shadow">
+                <span class="w-1.5 h-1.5 rounded-full bg-emerald-400"></span>
+                業務フロー・API連携稼働中
+              </div>
+
+              <!-- 画面内下部テキスト -->
+              <div class="absolute bottom-2.5 left-3 right-3 flex items-center justify-between text-white">
                 <div>
-                  <div class="text-xs font-bold text-red-200">現状のボトルネック</div>
-                  <div class="text-[11px] text-slate-300 mt-0.5">売上はあるが利益が薄い・業務の属人化・社長が現場忙殺</div>
-                </div>
-              </div>
-
-              <!-- 変換矢印 -->
-              <div class="flex justify-center text-brand-400">
-                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 14l-7 7m0 0l-7-7m7 7V3" />
-                </svg>
-              </div>
-
-              <!-- MSTの支援 -->
-              <div class="p-4 rounded-xl bg-brand-900/90 border border-brand-400/50 shadow-md">
-                <div class="flex items-center justify-between text-xs font-bold text-brand-200 mb-2">
-                  <span>MSTの伴走支援</span>
-                  <span class="text-[10px] bg-brand-700/80 px-2 py-0.5 rounded text-white">戦略 × 現場実装</span>
-                </div>
-                <div class="grid grid-cols-2 gap-2 text-[11px]">
-                  <div class="p-2 bg-brand-950/60 rounded border border-brand-500/20 text-slate-200">
-                    <strong class="text-brand-300 block">① 顧問支援</strong>
-                    課題整理・採算可視化
-                  </div>
-                  <div class="p-2 bg-brand-950/60 rounded border border-brand-500/20 text-slate-200">
-                    <strong class="text-brand-300 block">② 仕組み実装</strong>
-                    業務自動化・集客導線
-                  </div>
-                </div>
-              </div>
-
-              <!-- 変換矢印 -->
-              <div class="flex justify-center text-brand-400">
-                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 14l-7 7m0 0l-7-7m7 7V3" />
-                </svg>
-              </div>
-
-              <!-- 実現する姿 -->
-              <div class="p-4 rounded-xl bg-slate-900/80 border border-emerald-500/40 flex items-start gap-3">
-                <div class="w-6 h-6 rounded-md bg-emerald-950 text-emerald-400 flex items-center justify-center text-xs font-bold shrink-0 mt-0.5">✓</div>
-                <div>
-                  <div class="text-xs font-bold text-emerald-200">目指す企業体質</div>
-                  <div class="text-[11px] text-slate-300 mt-0.5">確かな利益体質・人に依存しない自走体制・経営時間の創出</div>
+                  <div class="text-[10px] text-brand-300 font-bold uppercase tracking-wider">PROCESS & DATA PIPELINE</div>
+                  <div class="text-xs font-bold font-serif">属人化解消・月間工数40h削減の自動化設計</div>
                 </div>
               </div>
             </div>
 
-            <div class="text-center pt-2 text-[11px] text-slate-400 font-light">
-              助言だけで終わらせず、現場で機能する仕組みを直接実装します
+            <!-- ステップ図解ミニパイプライン -->
+            <div class="grid grid-cols-3 gap-2 text-center">
+              <div class="p-2.5 rounded-xl bg-slate-900/90 border border-brand-500/30">
+                <div class="text-[10px] text-brand-300 font-bold">STEP 01</div>
+                <div class="text-xs font-bold text-white mt-0.5">課題整理</div>
+                <div class="text-[9px] text-slate-400 mt-0.5">採算・属人化分析</div>
+              </div>
+              <div class="p-2.5 rounded-xl bg-slate-900/90 border border-brand-500/30">
+                <div class="text-[10px] text-brand-300 font-bold">STEP 02</div>
+                <div class="text-xs font-bold text-white mt-0.5">設計図策定</div>
+                <div class="text-[9px] text-slate-400 mt-0.5">業務標準化ロードマップ</div>
+              </div>
+              <div class="p-2.5 rounded-xl bg-brand-900/90 border border-brand-400/60 shadow">
+                <div class="text-[10px] text-emerald-400 font-bold">STEP 03</div>
+                <div class="text-xs font-bold text-white mt-0.5">仕組み実装</div>
+                <div class="text-[9px] text-brand-200 mt-0.5">GAS / 専用Webアプリ</div>
+              </div>
+            </div>
+
+            <div class="text-center text-[11px] text-slate-300 font-light pt-1">
+              助言だけでなく、現場で動くシステム・業務フローを直接実装します
             </div>
           </div>
         </div>
@@ -321,6 +330,63 @@ const steps = [
         <p class="text-sm sm:text-base text-gray-600">
           改善を一度きりで終わらせず、継続的な成長につなげる4段階のアプローチ。
         </p>
+      </div>
+
+      <!-- 打合せ風景 ＆ パソコン画面での仕組み化・設計図の2大実践ビジュアル -->
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-8 mb-12">
+        <div class="bg-white rounded-2xl border border-sand-300 overflow-hidden shadow-sm hover:shadow-md transition group">
+          <div class="relative h-48 sm:h-56 overflow-hidden">
+            <img
+              src="/images/consulting-meeting.jpg"
+              alt="経営戦略・課題棚卸しミーティング風景"
+              class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
+            />
+            <div class="absolute inset-0 bg-gradient-to-t from-slate-950/80 via-transparent to-transparent"></div>
+            <div class="absolute bottom-3 left-4 right-4">
+              <span class="text-[10px] font-bold text-brand-300 uppercase tracking-widest bg-brand-950/80 px-2.5 py-1 rounded backdrop-blur-sm border border-brand-500/30">
+                STRATEGIC CONSULTING
+              </span>
+              <h3 class="text-base sm:text-lg font-bold font-serif text-white mt-1">
+                【助言・設計】課題棚卸し・戦略ミーティング
+              </h3>
+            </div>
+          </div>
+          <div class="p-5 sm:p-6 space-y-2">
+            <p class="text-xs sm:text-sm text-gray-600 leading-relaxed font-light">
+              数字と業務フローを徹底的に棚卸し。手元資金が残らない原因や、社長・現場リーダーの属人化ボトルネックを特定し、貴社に最適な改善ロードマップを設計します。
+            </p>
+            <div class="text-[11px] text-brand-700 font-semibold pt-1">
+              ✓ 採算の可視化　✓ 属人化リスクの解消　✓ 継続的な月次伴走
+            </div>
+          </div>
+        </div>
+
+        <div class="bg-white rounded-2xl border border-sand-300 overflow-hidden shadow-sm hover:shadow-md transition group">
+          <div class="relative h-48 sm:h-56 overflow-hidden">
+            <img
+              src="/images/system-blueprint.jpg"
+              alt="パソコン画面での業務フロー設計図・システム構築"
+              class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
+            />
+            <div class="absolute inset-0 bg-gradient-to-t from-slate-950/80 via-transparent to-transparent"></div>
+            <div class="absolute bottom-3 left-4 right-4">
+              <span class="text-[10px] font-bold text-emerald-300 uppercase tracking-widest bg-slate-950/80 px-2.5 py-1 rounded backdrop-blur-sm border border-emerald-500/30">
+                SYSTEM IMPLEMENTATION
+              </span>
+              <h3 class="text-base sm:text-lg font-bold font-serif text-white mt-1">
+                【現場実装】パソコン画面での仕組み化・システム設計図
+              </h3>
+            </div>
+          </div>
+          <div class="p-5 sm:p-6 space-y-2">
+            <p class="text-xs sm:text-sm text-gray-600 leading-relaxed font-light">
+              助言だけで終わらせず、GAS・専用Webアプリ・API連携・成約LPなど、現場で手作業やミスを減らす「動く仕組み」を自社で具体的に構築します。
+            </p>
+            <div class="text-[11px] text-brand-700 font-semibold pt-1">
+              ✓ 手作業・転記の自動化　✓ Google Workspace連携　✓ 安定集客基盤
+            </div>
+          </div>
+        </div>
       </div>
 
       <!-- プロセス図解フロー -->
@@ -440,13 +506,24 @@ const steps = [
           <div class="bg-sand-50 rounded-2xl border-2 border-brand-400 p-8 flex flex-col justify-between hover:border-brand-600 hover:shadow-xl transition-all group relative overflow-hidden">
             <div class="absolute left-0 top-0 bottom-0 w-1.5 bg-brand-600 rounded-l-2xl"></div>
             <div class="space-y-4">
-              <div class="flex items-center justify-between">
-                <span class="text-xs font-bold text-white bg-brand-900 px-3 py-1 rounded-full shadow-sm">
-                  {s.badge}
-                </span>
-                <span class="text-3xl font-bold font-serif text-brand-300 group-hover:text-brand-600 transition-colors">
-                  {s.num}
-                </span>
+              <!-- サービスビジュアルイメージ -->
+              <div class="relative h-40 sm:h-44 rounded-xl overflow-hidden border border-sand-200">
+                <img
+                  src={s.image}
+                  alt={s.imageAlt}
+                  class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
+                />
+                <div class="absolute inset-0 bg-gradient-to-t from-slate-950/75 via-transparent to-transparent"></div>
+                <div class="absolute top-3 left-3">
+                  <span class="text-xs font-bold text-white bg-brand-900/90 backdrop-blur-sm px-3 py-1 rounded-full shadow-sm">
+                    {s.badge}
+                  </span>
+                </div>
+                <div class="absolute bottom-2.5 right-3">
+                  <span class="text-3xl font-bold font-serif text-white/90">
+                    {s.num}
+                  </span>
+                </div>
               </div>
               <h3 class="text-xl sm:text-2xl font-bold font-serif text-slate-900 group-hover:text-brand-600 transition-colors">
                 {s.title}
