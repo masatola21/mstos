@@ -1585,7 +1585,7 @@ function AppContent() {
     setProducts(reordered);
   };
 
-  const handleDeleteProduct = async (id: string, archive: boolean): Promise<{ success: boolean; message?: string }> => {
+  const handleDeleteProduct = async (id: string, archive: boolean, force = false): Promise<{ success: boolean; message?: string }> => {
     const product = matrixService.loadProducts().find((item) => item.id === id);
     if (!product) return { success: false, message: '商品が見つかりません。画面を再読み込みしてください。' };
     const syncArchivedProduct = async () => {
@@ -1598,23 +1598,19 @@ function AppContent() {
         setProducts(matrixService.loadProducts());
         recordActivityLog('project_updated', `商品「${product.name}」を取扱停止にしました（関連記録は保持）`, '人間');
       } else {
-        const result = await deleteTableRecord('products', { id: product.id });
+        const result = await deleteTableRecord('products', { id: product.id }, { force });
         if (result.error) {
           return { success: false, message: result.error.message };
         }
-        if (result.blockedBy) {
-          await syncArchivedProduct();
-          setProducts(matrixService.loadProducts());
-          recordActivityLog('project_updated', `商品「${product.name}」は関連データがあるため取扱停止にしました`, '人間');
-          setActivityLogs(loadActivityLogs());
-          return { success: true, message: '関連データがあるため完全削除せず、取扱停止にしました。関連記録は保持しています。' };
+        if (result.blockedBy && !force) {
+          return { success: false, message: `関連する「${result.blockedBy}」データがあるため通常削除が保留されました。「完全削除」を実行すると関連付けを解除して完全に削除できます。` };
         }
         matrixService.deleteProduct(id);
         setProducts(matrixService.loadProducts());
-        recordActivityLog('project_updated', `商品「${product.name}」を削除しました`, '人間');
+        recordActivityLog('project_updated', `商品「${product.name}」を完全削除しました`, '人間');
       }
       setActivityLogs(loadActivityLogs());
-      return { success: true, message: archive ? '取扱停止にしました。停止商品一覧から再開できます。' : '商品を削除しました。' };
+      return { success: true, message: archive ? '取扱停止にしました。停止商品一覧から再開できます。' : '商品を完全削除しました。' };
     } catch (error) {
       return { success: false, message: error instanceof Error ? error.message : '商品を削除・取扱停止にできませんでした。' };
     }

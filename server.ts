@@ -114,24 +114,15 @@ async function assignCarePackageTag(contactId: string | null, lineUserId: string
   if (!lineSupabase) return;
   const tagName = `care:${requestType}`;
   try {
-    const { data: existingTag } = await lineSupabase
-      .from('contact_tags')
-      .select('id')
-      .eq('name', tagName)
-      .maybeSingle();
-
-    let tagId = existingTag?.id;
-    if (!tagId) {
-      const { data: newTag, error: tagInsertErr } = await lineSupabase
-        .from('contact_tags')
-        .insert({ name: tagName, description: '介護保険外サービス開業パッケージ' })
-        .select('id')
-        .maybeSingle();
-      if (!tagInsertErr && newTag) {
-        tagId = newTag.id;
-      }
+    const { data: integrations } = await lineSupabase
+      .from('line_channel_integrations')
+      .select('owner_id')
+      .limit(1);
+    const ownerId = integrations?.[0]?.owner_id || null;
+    let tagId: string | null = null;
+    if (ownerId) {
+      tagId = await getOrCreateLineTag(ownerId, tagName);
     }
-
     if (tagId && lineUserId) {
       const { data: friend } = await lineSupabase
         .from('line_friends')
@@ -175,7 +166,7 @@ async function ensureDefaultCarePackageInquiryForm(): Promise<void> {
           label: 'ご希望の内容',
           type: 'radio',
           required: true,
-          options: ['資料請求', '開業相談', '資料請求＋開業相談'],
+          options: ['資料請求', '開業相談', '両方希望'],
         },
         {
           id: 'q_current_status',
@@ -603,15 +594,47 @@ async function getOrCreateLineTag(ownerId: string, tagName: string): Promise<str
 
 
 async function processLinePostback(event: any, contact: any, eventId: string, botUserId: string): Promise<void> {
-  if (!lineSupabase) return;
-  const postbackData = typeof event.postback?.data === 'string' ? event.postback.data : '';
+  if (!lineSupabase || !lineChannelAccessToken || !botUserId) return;
+  const { data: integration, error: integrationError } = await lineSupabase
+    .from('line_channel_integrations').select('owner_id,auto_reply_enabled').eq('bot_user_id', botUserId).maybeSingle();
+  if (integrationError) {
+    if (isOptionalLineAutomationSchemaMissing(integrationError)) return;
+    throw integrationError;
+  }
+  if (!integration) return;
+
   const userId = typeof event.source?.userId === 'string' ? event.source.userId : '';
+  const postbackData = typeof event.postback?.data === 'string' ? event.postback.data.trim() : '';
   if (!userId || !postbackData) return;
+
+  const eventTime = typeof event.timestamp === 'number' ? new Date(event.timestamp).toISOString() : new Date().toISOString();
 
   const params = new URLSearchParams(postbackData);
   const action = params.get('action');
   const requestTypeRaw = params.get('request_type');
+  const isCarePackage = action === 'care_package_form' || postbackData.startsWith('care_package_form=');
+  const isWc = postbackData.startsWith('wc=');
 
+  // 1. 待機中LINEマーケティングジョブの自動スキップ判定
+  // ※ wc= または care_package_form のときは実行しない（シナリオの誤停止防止）
+  if (!isWc && !isCarePackage) {
+    try {
+      await lineSupabase
+        .from('marketing_automation_jobs')
+        .update({
+          status: 'skipped',
+          error_message: '顧客側からのアクション（ボタン・メニュータップ）があったため自動シナリオを停止',
+          updated_at: eventTime,
+        })
+        .eq('channel', 'line')
+        .eq('status', 'queued')
+        .eq('line_user_id', userId);
+    } catch (skipErr) {
+      console.warn('[LINE Postback] Skip queued jobs warning:', skipErr);
+    }
+  }
+
+  // 2. 介護保険外サービス開業パッケージ専用フォーム postback
   const validRequestTypes = ['資料請求', '開業相談', '両方希望'] as const;
   type RequestType = typeof validRequestTypes[number];
 
@@ -620,17 +643,21 @@ async function processLinePostback(event: any, contact: any, eventId: string, bo
     let formUrl = '';
     let tokenCreated = false;
 
-    const appUrl = (process.env.PUBLIC_APP_URL || '').replace(/\/$/, '') || 'https://ais-dev-cadlpgsrctfv3ddojzsli3-203567468120.asia-northeast1.run.app';
+    const appUrl = (process.env.PUBLIC_APP_URL || '').replace(/\/$/, '');
 
-    try {
-      const token = createCarePackageFormToken(contact?.id || null, userId, requestType);
-      formUrl = `${appUrl}/forms/care-package-inquiry?t=${encodeURIComponent(token)}`;
-      tokenCreated = true;
-    } catch (tokenErr) {
-      console.error('[LINE Postback] Failed to generate care package form token (secret or config missing)');
+    if (appUrl) {
+      try {
+        const token = createCarePackageFormToken(contact?.id || null, userId, requestType);
+        formUrl = `${appUrl}/forms/care-package-inquiry?t=${encodeURIComponent(token)}`;
+        tokenCreated = true;
+      } catch (tokenErr) {
+        console.error('[LINE Postback] Failed to generate care package form token:', tokenErr);
+      }
+    } else {
+      console.warn('[LINE Postback] PUBLIC_APP_URL is not set. Cannot send form URL.');
     }
 
-    if (tokenCreated && formUrl && typeof event.replyToken === 'string' && lineChannelAccessToken) {
+    if (tokenCreated && formUrl && typeof event.replyToken === 'string') {
       const replyFlex = {
         type: 'flex',
         altText: `【介護保険外サービス開業パッケージ】${requestType}の専用フォームをご案内します`,
@@ -706,10 +733,8 @@ async function processLinePostback(event: any, contact: any, eventId: string, bo
           body: JSON.stringify({ replyToken: event.replyToken, messages: [replyFlex] }),
         });
         if (replyRes.ok) {
-          const { data: integration } = await lineSupabase
-            .from('line_channel_integrations').select('owner_id').eq('bot_user_id', botUserId).maybeSingle();
           await lineSupabase.from('line_inbox_messages').upsert({
-            owner_id: integration?.owner_id || null,
+            owner_id: integration.owner_id,
             line_event_id: `reply-postback-${eventId}`,
             direction: 'outbound',
             contact_id: contact?.id || null,
@@ -723,7 +748,7 @@ async function processLinePostback(event: any, contact: any, eventId: string, bo
       } catch (replyErr) {
         console.warn('[LINE Postback] Reply fetch warning:', replyErr);
       }
-    } else if (!tokenCreated && typeof event.replyToken === 'string' && lineChannelAccessToken) {
+    } else if (!tokenCreated && typeof event.replyToken === 'string') {
       const fallbackText = '介護保険外サービス開業パッケージへのお問い合わせありがとうございます。\nただいま専用フォームの準備中となっております。担当者より折り返しご連絡いたしますので、恐れ入りますが少々お待ちください。';
       try {
         await fetch('https://api.line.me/v2/bot/message/reply', {
@@ -731,16 +756,14 @@ async function processLinePostback(event: any, contact: any, eventId: string, bo
           headers: { Authorization: 'Bearer ' + lineChannelAccessToken, 'Content-Type': 'application/json' },
           body: JSON.stringify({ replyToken: event.replyToken, messages: [{ type: 'text', text: fallbackText }] }),
         });
-        const { data: integration } = await lineSupabase
-          .from('line_channel_integrations').select('owner_id').eq('bot_user_id', botUserId).maybeSingle();
         await lineSupabase.from('line_inbox_messages').upsert({
-          owner_id: integration?.owner_id || null,
+          owner_id: integration.owner_id,
           line_event_id: `alert-postback-${eventId}`,
           direction: 'outbound',
           contact_id: contact?.id || null,
           line_user_id: userId,
           message_type: 'text',
-          body: `【システム案内】フォームURL生成失敗（FORM_LINK_SECRET未設定）。ユーザーには準備中案内を返信しました。希望内容: ${requestType}`,
+          body: `【システム案内】フォームURL生成準備中（設定未完了）。ユーザーには準備中案内を返信しました。希望内容: ${requestType}`,
           status: 'sent',
           received_at: new Date().toISOString(),
         }, { onConflict: 'owner_id,line_event_id,direction', ignoreDuplicates: true });
@@ -751,29 +774,278 @@ async function processLinePostback(event: any, contact: any, eventId: string, bo
 
     // タグ付与
     await assignCarePackageTag(contact?.id || null, userId, requestType);
-
-    // ※ この postback では待機中ジョブのスキップは実行しない
     return;
   }
 
-  // それ以外の postback の場合: 待機中のLINEマーケティングジョブを skipped にする（個人情報はログに出さない）
-  try {
-    const { data: pendingJobs } = await lineSupabase
-      .from('marketing_automation_jobs')
-      .select('id')
-      .eq('channel', 'line')
-      .eq('line_user_id', userId)
-      .eq('status', 'pending');
-    if (pendingJobs && pendingJobs.length > 0) {
-      await lineSupabase
-        .from('marketing_automation_jobs')
-        .update({ status: 'skipped', error_message: 'Skipped: user sent postback', updated_at: new Date().toISOString() })
-        .eq('channel', 'line')
-        .eq('line_user_id', userId)
-        .eq('status', 'pending');
+  // 3. wc=（ウェルカムメッセージ選択肢）postback
+  if (isWc) {
+    const choiceId = postbackData.slice(3).trim();
+    if (!choiceId) return;
+
+    // 1. 許可リスト検証
+    const { data: welcomeRule } = await lineSupabase
+      .from('line_auto_reply_rules')
+      .select('reply_payload, reply_text')
+      .eq('owner_id', integration.owner_id)
+      .eq('enabled', true)
+      .in('match_text', ['__welcome__', '友だち追加', 'ウェルカム'])
+      .order('priority', { ascending: true })
+      .limit(1)
+      .maybeSingle();
+
+    let configuredChoices: any[] = [];
+    if (welcomeRule?.reply_payload && typeof welcomeRule.reply_payload === 'object') {
+      const payload = welcomeRule.reply_payload as any;
+      if (Array.isArray(payload.choices)) configuredChoices = payload.choices;
     }
-  } catch (skipErr) {
-    console.warn('[LINE Postback] Skip jobs warning:', skipErr);
+    if (configuredChoices.length === 0 && typeof welcomeRule?.reply_text === 'string' && welcomeRule.reply_text.startsWith('{')) {
+      try {
+        const parsed = JSON.parse(welcomeRule.reply_text);
+        if (Array.isArray(parsed?.choices)) configuredChoices = parsed.choices;
+      } catch {}
+    }
+
+    const defaultChoices = [
+      { id: 'diagnosis', label: '📊 3分無料経営診断を受ける', tag: '選択:診断', route: 'form', formSlug: 'business-diagnosis' },
+      { id: 'consult', label: '経営改善について個別相談する', tag: '選択:個別相談', route: 'booking' },
+      { id: 'care', label: '介護保険外サービス開業パッケージについて知る', tag: '選択:開業パッケージ', route: 'template' },
+    ];
+
+    const allowedChoices = configuredChoices.length > 0 ? configuredChoices : defaultChoices;
+    const choice = allowedChoices.find((c: any) => c.id === choiceId);
+    if (!choice) return; // 許可リスト外は無視
+
+    // 2. タグ付与
+    if (choice.tag && choice.tag.trim()) {
+      try {
+        const tagId = await getOrCreateLineTag(integration.owner_id, choice.tag.trim());
+        if (tagId) {
+          const { data: friend } = await lineSupabase
+            .from('line_friends')
+            .select('id')
+            .eq('line_user_id', userId)
+            .maybeSingle();
+          if (friend?.id) {
+            await lineSupabase.from('line_friend_tags').upsert({
+              line_friend_id: friend.id,
+              tag_id: tagId,
+              assigned_by: 'welcome_choice',
+            }, { onConflict: 'line_friend_id,tag_id', ignoreDuplicates: true });
+          }
+        }
+      } catch (tagErr) {
+        console.warn('[LINE Postback] Failed to assign tag on welcome choice:', tagErr);
+      }
+    }
+
+    // 3. route 返信
+    const appUrl = (process.env.PUBLIC_APP_URL || '').replace(/\/$/, '');
+    let replyMessage: Record<string, any> | null = null;
+    let inboxBody = '';
+
+    if (choice.route === 'form') {
+      if (!appUrl) {
+        console.warn('[LINE Postback] PUBLIC_APP_URL is not configured. Cannot send form URL.');
+        replyMessage = {
+          type: 'text',
+          text: '無料経営診断をお選びいただきありがとうございます！\n現在診断フォームのURL設定を確認中のため、担当者より直接ご案内メッセージをお送りいたします。\nそのままご相談内容をメッセージでご返信いただくことも可能です。',
+        };
+        inboxBody = '[無料診断案内: PUBLIC_APP_URL未設定のため案内文のみ送信]';
+      } else {
+        const formSlug = choice.formSlug || 'business-diagnosis';
+        const contactParam = contact?.id ? `&cid=${encodeURIComponent(contact.id)}` : '';
+        const formUrl = `${appUrl}/forms/${encodeURIComponent(formSlug)}?source=line&luid=${encodeURIComponent(userId)}${contactParam}`;
+        const cardTitle = '📊 3分無料経営診断';
+        const cardBody = `${contact?.full_name || 'お客様'} 様\n無料経営診断をお選びいただきありがとうございます！\n貴社の業務・売上利益のボトルネックを特定し、改善処方箋を作成します。`;
+        replyMessage = {
+          type: 'flex',
+          altText: '【無料経営診断】ご案内',
+          contents: {
+            type: 'bubble',
+            body: {
+              type: 'box',
+              layout: 'vertical',
+              spacing: 'md',
+              contents: [
+                { type: 'text', text: cardTitle, weight: 'bold', size: 'lg', color: '#1E293B' },
+                { type: 'text', text: cardBody, size: 'sm', color: '#475569', wrap: true },
+              ],
+            },
+            footer: {
+              type: 'box',
+              layout: 'vertical',
+              contents: [
+                {
+                  type: 'button',
+                  style: 'primary',
+                  color: '#10B981',
+                  action: { type: 'uri', label: '診断を始める（約3分）', uri: formUrl },
+                },
+              ],
+            },
+          },
+        };
+        inboxBody = `[無料経営診断案内Flex送信: ${formUrl}]`;
+      }
+    } else if (choice.route === 'booking') {
+      const { data: salesSettings } = await lineSupabase
+        .from('sales_workspace_settings')
+        .select('booking_page_url')
+        .eq('owner_id', integration.owner_id)
+        .maybeSingle();
+      let bookingUrl = (salesSettings?.booking_page_url || '').trim();
+      if (!bookingUrl) {
+        const { data: pubForms } = await lineSupabase
+          .from('diagnosis_forms')
+          .select('definition')
+          .eq('status', 'published')
+          .limit(5);
+        for (const f of pubForms || []) {
+          if (typeof f?.definition?.booking_url === 'string' && f.definition.booking_url.trim()) {
+            bookingUrl = f.definition.booking_url.trim();
+            break;
+          }
+        }
+      }
+
+      if (bookingUrl && /^https?:\/\//i.test(bookingUrl)) {
+        replyMessage = {
+          type: 'flex',
+          altText: '【個別相談】日程調整のご案内',
+          contents: {
+            type: 'bubble',
+            body: {
+              type: 'box',
+              layout: 'vertical',
+              spacing: 'md',
+              contents: [
+                { type: 'text', text: '🗓️ 経営改善の個別相談', weight: 'bold', size: 'lg', color: '#1E293B' },
+                { type: 'text', text: `${contact?.full_name || 'お客様'} 様\n個別相談のご希望ありがとうございます！\n下記の日程調整カレンダーより、ご都合のよい日時をお選びください（30分・オンライン）。`, size: 'sm', color: '#475569', wrap: true },
+              ],
+            },
+            footer: {
+              type: 'box',
+              layout: 'vertical',
+              contents: [
+                {
+                  type: 'button',
+                  style: 'primary',
+                  color: '#1E3A5F',
+                  action: { type: 'uri', label: '面談日時を選ぶ（30分）', uri: bookingUrl },
+                },
+              ],
+            },
+          },
+        };
+        inboxBody = `[個別相談予約案内Flex送信: ${bookingUrl}]`;
+      } else {
+        replyMessage = {
+          type: 'text',
+          text: '個別相談のご希望ありがとうございます！\n担当者より日程調整のご案内を個別にお送りいたします。\nそのままご希望の日程やご相談内容をメッセージでご返信いただいても構いません。',
+        };
+        inboxBody = '[個別相談案内: 予約カレンダー未設定のため返信案内を送信]';
+      }
+    } else if (choice.route === 'template') {
+      let templateRow: any = null;
+      if (choice.templateId) {
+        const { data: tpl } = await lineSupabase
+          .from('line_auto_reply_templates')
+          .select('id, name, reply_type, payload, content')
+          .eq('id', choice.templateId)
+          .maybeSingle();
+        templateRow = tpl;
+      }
+      if (!templateRow) {
+        const { data: tpls } = await lineSupabase
+          .from('line_auto_reply_templates')
+          .select('id, name, reply_type, payload, content')
+          .eq('owner_id', integration.owner_id)
+          .or('name.ilike.%介護%,name.ilike.%開業%,name.ilike.%パッケージ%')
+          .limit(1);
+        if (tpls && tpls.length > 0) templateRow = tpls[0];
+      }
+
+      if (templateRow && templateRow.payload && typeof templateRow.payload === 'object') {
+        try {
+          const { data: salesSettings } = await lineSupabase.from('sales_workspace_settings')
+            .select('booking_page_url').eq('owner_id', integration.owner_id).maybeSingle();
+          const { data: pubForms } = await lineSupabase.from('diagnosis_forms')
+            .select('id,name,public_slug,definition,form_type,status').eq('status', 'published').limit(5);
+          const defaultForm = (pubForms || []).find((f: any) => f.form_type === 'diagnosis') || pubForms?.[0] || null;
+
+          const resolved = resolveMessageVars(contact || { full_name: 'お客様', id: '' }, { line_message_payload: templateRow.payload }, {
+            salesSettings,
+            defaultForm,
+            allForms: pubForms,
+            appUrl,
+          });
+
+          const personalized = resolved.personalizeJson(templateRow.payload);
+          const unresolved = checkUnresolvedPlaceholders(personalized);
+          const urlCheck = checkUrlsInObject(personalized);
+
+          if (!resolved.error && !unresolved && urlCheck.valid) {
+            const tType = templateRow.reply_type || 'flex';
+            if (tType === 'flex') {
+              const altText = String(personalized.altText || templateRow.name || '介護保険外サービス開業パッケージのご案内').slice(0, 400);
+              const contents = personalized.contents || (['bubble', 'carousel'].includes(personalized.type) ? personalized : null);
+              if (contents) {
+                replyMessage = { type: 'flex', altText, contents };
+                inboxBody = `[テンプレートFlex返信: ${templateRow.name}]`;
+              }
+            } else if (tType === 'text') {
+              replyMessage = { type: 'text', text: personalized.text || templateRow.content || '' };
+              inboxBody = `[テンプレートテキスト返信: ${templateRow.name}]`;
+            }
+          }
+        } catch (tplErr) {
+          console.warn('[LINE Postback] Failed to personalize template payload:', tplErr);
+        }
+      }
+
+      if (!replyMessage) {
+        console.warn('[LINE Postback] Template not found or invalid for welcome choice:', choice.templateId || choice.label);
+        const fallbackText = choice.replyText || '「介護保険外サービス開業パッケージ」についてご関心をお寄せいただきありがとうございます！\n有限会社MST代表の大橋真人です。\n\n詳細資料および具体的な導入事例について、担当者より個別にお送りいたします。\n今しばらくお待ちくださいませ。';
+        replyMessage = { type: 'text', text: fallbackText };
+        inboxBody = `[テンプレート読込不可のため代替文送信: ${choice.label}]`;
+      }
+    }
+
+    if (replyMessage) {
+      try {
+        let sentOk = false;
+        if (typeof event.replyToken === 'string') {
+          const replyRes = await fetch('https://api.line.me/v2/bot/message/reply', {
+            method: 'POST',
+            headers: { Authorization: 'Bearer ' + lineChannelAccessToken, 'Content-Type': 'application/json' },
+            body: JSON.stringify({ replyToken: event.replyToken, messages: [replyMessage] }),
+          });
+          if (replyRes.ok) sentOk = true;
+        }
+        if (!sentOk) {
+          await fetch('https://api.line.me/v2/bot/message/push', {
+            method: 'POST',
+            headers: { Authorization: 'Bearer ' + lineChannelAccessToken, 'Content-Type': 'application/json' },
+            body: JSON.stringify({ to: userId, messages: [replyMessage] }),
+          });
+        }
+
+        await lineSupabase.from('line_inbox_messages').upsert({
+          owner_id: integration.owner_id,
+          line_event_id: `postback-${eventId}`,
+          direction: 'outbound',
+          contact_id: contact?.id || null,
+          line_user_id: userId,
+          message_type: replyMessage.type,
+          body: inboxBody,
+          status: 'sent',
+          received_at: new Date().toISOString(),
+        }, { onConflict: 'owner_id,line_event_id,direction', ignoreDuplicates: true });
+      } catch (sendErr) {
+        console.warn('[LINE Postback] Failed to reply to postback event:', sendErr);
+      }
+    }
+    return;
   }
 }
 
@@ -941,315 +1213,7 @@ async function processLineFollowWelcome(event: any, contact: any, eventId: strin
   }
 }
 
-async function processLinePostbackEvent(event: any, contact: any, eventId: string, botUserId: string): Promise<void> {
-  if (!lineSupabase || !lineChannelAccessToken || !botUserId) return;
-  const { data: integration, error: integrationError } = await lineSupabase
-    .from('line_channel_integrations').select('owner_id,auto_reply_enabled').eq('bot_user_id', botUserId).maybeSingle();
-  if (integrationError) {
-    if (isOptionalLineAutomationSchemaMissing(integrationError)) return;
-    throw integrationError;
-  }
-  if (!integration) return;
 
-  const userId = typeof event.source?.userId === 'string' ? event.source.userId : '';
-  if (!userId) return;
-
-  const postbackData = typeof event.postback?.data === 'string' ? event.postback.data.trim() : '';
-  const eventTime = typeof event.timestamp === 'number' ? new Date(event.timestamp).toISOString() : new Date().toISOString();
-
-  const isWc = postbackData.startsWith('wc=');
-  const isCarePackage = postbackData.startsWith('care_package_form=');
-
-  // 4. 既存の「postback で、待機中のLINEジョブを skipped にする」処理は、wc= または care_package_form= のとき、実行しない。
-  if (!isWc && !isCarePackage) {
-    try {
-      await lineSupabase
-        .from('marketing_automation_jobs')
-        .update({
-          status: 'skipped',
-          error_message: '顧客側からのアクション（ボタン・メニュータップ）があったため自動シナリオを停止',
-          updated_at: eventTime,
-        })
-        .eq('contact_id', contact.id)
-        .eq('channel', 'line')
-        .eq('status', 'queued');
-    } catch (pbErr) {
-      console.warn('LINE scenario auto-pause on postback warning:', pbErr);
-    }
-  }
-
-  if (!isWc) return;
-
-  const choiceId = postbackData.slice(3).trim();
-  if (!choiceId) return;
-
-  // 1. data が 'wc=<choiceId>' の形で、choiceId が定義済みのものだけ処理する（許可リスト方式。未知の値は、何もしない）。
-  const { data: welcomeRule } = await lineSupabase
-    .from('line_auto_reply_rules')
-    .select('reply_payload, reply_text')
-    .eq('owner_id', integration.owner_id)
-    .eq('enabled', true)
-    .in('match_text', ['__welcome__', '友だち追加', 'ウェルカム'])
-    .order('priority', { ascending: true })
-    .limit(1)
-    .maybeSingle();
-
-  let configuredChoices: any[] = [];
-  if (welcomeRule?.reply_payload && typeof welcomeRule.reply_payload === 'object') {
-    const payload = welcomeRule.reply_payload as any;
-    if (Array.isArray(payload.choices)) configuredChoices = payload.choices;
-  }
-  if (configuredChoices.length === 0 && typeof welcomeRule?.reply_text === 'string' && welcomeRule.reply_text.startsWith('{')) {
-    try {
-      const parsed = JSON.parse(welcomeRule.reply_text);
-      if (Array.isArray(parsed?.choices)) configuredChoices = parsed.choices;
-    } catch {}
-  }
-
-  const defaultChoices = [
-    { id: 'diagnosis', label: '📊 3分無料経営診断を受ける', tag: '選択:診断', route: 'form', formSlug: 'business-diagnosis' },
-    { id: 'consult', label: '経営改善について個別相談する', tag: '選択:個別相談', route: 'booking' },
-    { id: 'care', label: '介護保険外サービス開業パッケージについて知る', tag: '選択:開業パッケージ', route: 'template' },
-  ];
-
-  const allowedChoices = configuredChoices.length > 0 ? configuredChoices : defaultChoices;
-  const choice = allowedChoices.find((c: any) => c.id === choiceId);
-  if (!choice) {
-    // 許可リストにない未知のchoiceIdは何もしない
-    return;
-  }
-
-  // 2. その選択肢のタグを、友だちに付与する（line_tags を名前で検索、無ければ作成。line_friend_tags に upsert。assigned_by='welcome_choice'）。
-  // タグの付与は、既存のDBトリガー（tag_added）により、該当シナリオを起動する。
-  if (choice.tag && choice.tag.trim()) {
-    try {
-      const tagId = await getOrCreateLineTag(integration.owner_id, choice.tag.trim());
-      if (tagId) {
-        const { data: friend } = await lineSupabase
-          .from('line_friends')
-          .select('id')
-          .eq('line_user_id', userId)
-          .maybeSingle();
-        if (friend?.id) {
-          await lineSupabase.from('line_friend_tags').upsert({
-            line_friend_id: friend.id,
-            tag_id: tagId,
-            assigned_by: 'welcome_choice',
-          }, { onConflict: 'line_friend_id,tag_id', ignoreDuplicates: true });
-        }
-      }
-    } catch (tagErr) {
-      console.warn('Failed to assign tag on welcome choice:', tagErr);
-    }
-  }
-
-  // 3. 選択肢の route に応じた返信を送る。
-  const appUrl = (process.env.PUBLIC_APP_URL || '').replace(/\/$/, '');
-  let replyMessage: Record<string, any> | null = null;
-  let inboxBody = '';
-
-  if (choice.route === 'form') {
-    if (!appUrl) {
-      console.warn('PUBLIC_APP_URL is not configured. Cannot send form URL.');
-      replyMessage = {
-        type: 'text',
-        text: '無料経営診断をお選びいただきありがとうございます！\n現在診断フォームのURL設定を確認中のため、担当者より直接ご案内メッセージをお送りいたします。\nそのままご相談内容をメッセージでご返信いただくことも可能です。',
-      };
-      inboxBody = '[無料診断案内: PUBLIC_APP_URL未設定のため案内文のみ送信]';
-    } else {
-      const formSlug = choice.formSlug || 'business-diagnosis';
-      const formUrl = `${appUrl}/f/${encodeURIComponent(formSlug)}?cid=${encodeURIComponent(contact.id)}&luid=${encodeURIComponent(userId)}`;
-      const cardTitle = '📊 3分無料経営診断';
-      const cardBody = `${contact.full_name || 'お客様'} 様\n無料経営診断をお選びいただきありがとうございます！\n貴社の業務・売上利益のボトルネックを特定し、改善処方箋を作成します。`;
-      replyMessage = {
-        type: 'flex',
-        altText: '【無料経営診断】ご案内',
-        contents: {
-          type: 'bubble',
-          body: {
-            type: 'box',
-            layout: 'vertical',
-            spacing: 'md',
-            contents: [
-              { type: 'text', text: cardTitle, weight: 'bold', size: 'lg', color: '#1E293B' },
-              { type: 'text', text: cardBody, size: 'sm', color: '#475569', wrap: true },
-            ],
-          },
-          footer: {
-            type: 'box',
-            layout: 'vertical',
-            contents: [
-              {
-                type: 'button',
-                style: 'primary',
-                color: '#10B981',
-                action: { type: 'uri', label: '診断を始める（約3分）', uri: formUrl },
-              },
-            ],
-          },
-        },
-      };
-      inboxBody = `[無料経営診断案内Flex送信: ${formUrl}]`;
-    }
-  } else if (choice.route === 'booking') {
-    const { data: salesSettings } = await lineSupabase
-      .from('sales_workspace_settings')
-      .select('booking_page_url')
-      .eq('owner_id', integration.owner_id)
-      .maybeSingle();
-    let bookingUrl = (salesSettings?.booking_page_url || '').trim();
-    if (!bookingUrl) {
-      const { data: pubForms } = await lineSupabase
-        .from('diagnosis_forms')
-        .select('definition')
-        .eq('status', 'published')
-        .limit(5);
-      for (const f of pubForms || []) {
-        if (typeof f?.definition?.booking_url === 'string' && f.definition.booking_url.trim()) {
-          bookingUrl = f.definition.booking_url.trim();
-          break;
-        }
-      }
-    }
-
-    if (bookingUrl && /^https?:\/\//i.test(bookingUrl)) {
-      replyMessage = {
-        type: 'flex',
-        altText: '【個別相談】日程調整のご案内',
-        contents: {
-          type: 'bubble',
-          body: {
-            type: 'box',
-            layout: 'vertical',
-            spacing: 'md',
-            contents: [
-              { type: 'text', text: '🗓️ 経営改善の個別相談', weight: 'bold', size: 'lg', color: '#1E293B' },
-              { type: 'text', text: `${contact.full_name || 'お客様'} 様\n個別相談のご希望ありがとうございます！\n下記の日程調整カレンダーより、ご都合のよい日時をお選びください（30分・オンライン）。`, size: 'sm', color: '#475569', wrap: true },
-            ],
-          },
-          footer: {
-            type: 'box',
-            layout: 'vertical',
-            contents: [
-              {
-                type: 'button',
-                style: 'primary',
-                color: '#1E3A5F',
-                action: { type: 'uri', label: '面談日時を選ぶ（30分）', uri: bookingUrl },
-              },
-            ],
-          },
-        },
-      };
-      inboxBody = `[個別相談予約案内Flex送信: ${bookingUrl}]`;
-    } else {
-      replyMessage = {
-        type: 'text',
-        text: '個別相談のご希望ありがとうございます！\n担当者より日程調整のご案内を個別にお送りいたします。\nそのままご希望の日程やご相談内容をメッセージでご返信いただいても構いません。',
-      };
-      inboxBody = '[個別相談案内: 予約カレンダー未設定のため返信案内を送信]';
-    }
-  } else if (choice.route === 'template') {
-    let templateRow: any = null;
-    if (choice.templateId) {
-      const { data: tpl } = await lineSupabase
-        .from('line_auto_reply_templates')
-        .select('id, name, reply_type, payload, content')
-        .eq('id', choice.templateId)
-        .maybeSingle();
-      templateRow = tpl;
-    }
-    if (!templateRow) {
-      const { data: tpls } = await lineSupabase
-        .from('line_auto_reply_templates')
-        .select('id, name, reply_type, payload, content')
-        .eq('owner_id', integration.owner_id)
-        .or('name.ilike.%介護%,name.ilike.%開業%,name.ilike.%パッケージ%')
-        .limit(1);
-      if (tpls && tpls.length > 0) templateRow = tpls[0];
-    }
-
-    if (templateRow && templateRow.payload && typeof templateRow.payload === 'object') {
-      try {
-        const { data: salesSettings } = await lineSupabase.from('sales_workspace_settings')
-          .select('booking_page_url').eq('owner_id', integration.owner_id).maybeSingle();
-        const { data: pubForms } = await lineSupabase.from('diagnosis_forms')
-          .select('id,name,public_slug,definition,form_type,status').eq('status', 'published').limit(5);
-        const defaultForm = (pubForms || []).find((f: any) => f.form_type === 'diagnosis') || pubForms?.[0] || null;
-
-        const resolved = resolveMessageVars(contact, { line_message_payload: templateRow.payload }, {
-          salesSettings,
-          defaultForm,
-          allForms: pubForms,
-          appUrl,
-        });
-
-        const personalized = resolved.personalizeJson(templateRow.payload);
-        const unresolved = checkUnresolvedPlaceholders(personalized);
-        const urlCheck = checkUrlsInObject(personalized);
-
-        if (!resolved.error && !unresolved && urlCheck.valid) {
-          const tType = templateRow.reply_type || 'flex';
-          if (tType === 'flex') {
-            const altText = String(personalized.altText || templateRow.name || '介護保険外サービス開業パッケージのご案内').slice(0, 400);
-            const contents = personalized.contents || (['bubble', 'carousel'].includes(personalized.type) ? personalized : null);
-            if (contents) {
-              replyMessage = { type: 'flex', altText, contents };
-              inboxBody = `[テンプレートFlex返信: ${templateRow.name}]`;
-            }
-          } else if (tType === 'text') {
-            replyMessage = { type: 'text', text: personalized.text || templateRow.content || '' };
-            inboxBody = `[テンプレートテキスト返信: ${templateRow.name}]`;
-          }
-        }
-      } catch (tplErr) {
-        console.warn('Failed to personalize template payload:', tplErr);
-      }
-    }
-
-    if (!replyMessage) {
-      console.warn('Template not found or invalid for welcome choice:', choice.templateId || choice.label);
-      const fallbackText = choice.replyText || '「介護保険外サービス開業パッケージ」についてご関心をお寄せいただきありがとうございます！\n有限会社MST代表の大橋真人です。\n\n詳細資料および具体的な導入事例について、担当者より個別にお送りいたします。\n今しばらくお待ちくださいませ。';
-      replyMessage = { type: 'text', text: fallbackText };
-      inboxBody = `[テンプレート読込不可のため代替文送信: ${choice.label}]`;
-    }
-  }
-
-  if (replyMessage) {
-    try {
-      let sentOk = false;
-      if (typeof event.replyToken === 'string') {
-        const replyRes = await fetch('https://api.line.me/v2/bot/message/reply', {
-          method: 'POST',
-          headers: { Authorization: 'Bearer ' + lineChannelAccessToken, 'Content-Type': 'application/json' },
-          body: JSON.stringify({ replyToken: event.replyToken, messages: [replyMessage] }),
-        });
-        if (replyRes.ok) sentOk = true;
-      }
-      if (!sentOk) {
-        await fetch('https://api.line.me/v2/bot/message/push', {
-          method: 'POST',
-          headers: { Authorization: 'Bearer ' + lineChannelAccessToken, 'Content-Type': 'application/json' },
-          body: JSON.stringify({ to: userId, messages: [replyMessage] }),
-        });
-      }
-
-      await lineSupabase.from('line_inbox_messages').upsert({
-        owner_id: integration.owner_id,
-        line_event_id: `postback-${eventId}`,
-        direction: 'outbound',
-        contact_id: contact.id,
-        line_user_id: userId,
-        message_type: replyMessage.type,
-        body: inboxBody,
-        status: 'sent',
-        received_at: new Date().toISOString(),
-      }, { onConflict: 'owner_id,line_event_id,direction', ignoreDuplicates: true });
-    } catch (sendErr) {
-      console.warn('Failed to reply to postback event:', sendErr);
-    }
-  }
-}
 async function processLineWebhookEvent(event: any, botUserId = '') {
   if (!lineSupabase) throw new Error('Supabase server credentials are missing.');
   const stableEventId = typeof event.webhookEventId === 'string'
@@ -2872,6 +2836,20 @@ app.get('/api/public/forms/:slug', async (req, res) => {
         .maybeSingle();
       bookingPageUrl = salesSettings?.booking_page_url || '';
     }
+
+    let initialRequestType: string | null = null;
+    let tokenContactId: string | null = null;
+    let tokenLineUserId: string | null = null;
+    const rawToken = typeof req.query.t === 'string' ? req.query.t.trim() : typeof req.query.token === 'string' ? req.query.token.trim() : '';
+    if (rawToken) {
+      const verified = verifyCarePackageFormToken(rawToken);
+      if (verified) {
+        initialRequestType = verified.rt || null;
+        tokenContactId = verified.cid || null;
+        tokenLineUserId = verified.luid || null;
+      }
+    }
+
     return res.json({
       form: {
         name: form.name,
@@ -2880,6 +2858,9 @@ app.get('/api/public/forms/:slug', async (req, res) => {
         privacyNotice: form.privacy_notice || '',
         bookingPageUrl,
       },
+      initialRequestType,
+      tokenContactId,
+      tokenLineUserId,
     });
   } catch (error) {
     console.error('Public form lookup failed:', error instanceof Error ? error.message : 'unknown error');
@@ -2902,8 +2883,21 @@ app.post('/api/public/forms/:slug/submissions', async (req, res) => {
   const companyName = typeof body.companyName === 'string' ? body.companyName.trim().slice(0, 200) : '';
   const email = typeof body.email === 'string' ? body.email.trim().toLowerCase().slice(0, 254) : '';
   const phone = typeof body.phone === 'string' ? body.phone.trim().slice(0, 40) : '';
-  const lineUserId = typeof body.lineUserId === 'string' && /^U[0-9a-f]{32}$/i.test(body.lineUserId.trim()) ? body.lineUserId.trim() : '';
-  const contactId = typeof body.contactId === 'string' && isPublicUuid(body.contactId.trim()) ? body.contactId.trim() : '';
+  let lineUserId = typeof body.lineUserId === 'string' && /^U[0-9a-f]{32}$/i.test(body.lineUserId.trim()) ? body.lineUserId.trim() : '';
+  let contactId = typeof body.contactId === 'string' && isPublicUuid(body.contactId.trim()) ? body.contactId.trim() : '';
+  const rawToken = typeof body.token === 'string' ? body.token.trim() : '';
+  let tokenData: CarePackageFormTokenPayload | null = null;
+  if (rawToken) {
+    tokenData = verifyCarePackageFormToken(rawToken);
+    if (tokenData) {
+      if (!contactId && tokenData.cid && isPublicUuid(tokenData.cid)) {
+        contactId = tokenData.cid;
+      }
+      if (!lineUserId && tokenData.luid && /^U[0-9a-f]{32}$/i.test(tokenData.luid)) {
+        lineUserId = tokenData.luid;
+      }
+    }
+  }
   const requestId = body.requestId;
   if (!name || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email) || !isPublicUuid(requestId) || body.privacyAgreed !== true) {
     return res.status(400).json({ error: 'お名前・有効なメールアドレス・個人情報の同意をご確認ください。' });
@@ -3087,10 +3081,37 @@ app.post('/api/public/forms/:slug/submissions', async (req, res) => {
           : `申込時の会社名: ${companyName}（未登録）`
       : '';
     const noteEntry = `${requestMarker} ${form.name}${originLabel} / ${new Date().toISOString()}\n${[companyNote, contactNameNote].filter(Boolean).join('\n')}${companyNote || contactNameNote ? '\n' : ''}${answerSummary}`;
-    const formServiceType = (typeof definition.category === 'string' && definition.category.trim())
+    const validInquiryTypes = ['資料請求', '開業相談', '両方希望'] as const;
+    type ValidInquiryType = typeof validInquiryTypes[number];
+    let inquiryType: ValidInquiryType | null = null;
+    const rawInquiry = String(cleanAnswers.q_inquiry_type || cleanAnswers.inquiry_type || tokenData?.rt || '').trim();
+    if ((validInquiryTypes as readonly string[]).includes(rawInquiry)) {
+      inquiryType = rawInquiry as ValidInquiryType;
+    } else if (rawInquiry.includes('両方') || (rawInquiry.includes('資料') && rawInquiry.includes('相談'))) {
+      inquiryType = '両方希望';
+    } else if (rawInquiry.includes('資料')) {
+      inquiryType = '資料請求';
+    } else if (rawInquiry.includes('相談')) {
+      inquiryType = '開業相談';
+    }
+
+    const isCarePackage = slug === 'care-package-inquiry' || Boolean(inquiryType);
+
+    const formServiceType = isCarePackage
+      ? '介護保険外サービス開業パッケージ'
+      : (typeof definition.category === 'string' && definition.category.trim())
       || (typeof definition.service_category === 'string' && definition.service_category.trim())
       || form.name
       || 'Webフォーム受付';
+
+    const leadStatus = isCarePackage
+      ? (inquiryType === '資料請求' ? '資料請求' : '相談申込')
+      : (form.form_type === 'diagnosis' ? '診断申込' : form.form_type === 'consultation' ? '相談申込' : '面談申込');
+
+    const leadSource = isCarePackage
+      ? (lineUserId ? 'LINE（介護保険外サービス開業パッケージ）' : 'Web（介護保険外サービス開業パッケージ）')
+      : `${sourceLabel}${originLabel}`;
+
     const { data: existingLeads, error: leadLookupError } = await lineSupabase
       .from('leads')
       .select('id, notes, source, status, service_type, meeting_date, company_id')
@@ -3117,6 +3138,9 @@ app.post('/api/public/forms/:slug/submissions', async (req, res) => {
             ...(resolvedCompanyId && !lead.company_id ? { company_id: resolvedCompanyId } : {}),
             ...(lead.service_type ? {} : { service_type: formServiceType }),
             ...(meetingDate ? { meeting_date: meetingDate } : {}),
+            ...(inquiryType ? { inquiry_type: inquiryType } : {}),
+            ...(isCarePackage && ['新規', 'ヒアリング済'].includes(lead.status) ? { status: leadStatus } : {}),
+            ...(!isCarePackage && inquiryType === '資料請求' && lead.status === '新規' ? { status: '資料請求' } : {}),
           })
           .eq('id', lead.id)
           .select('id')
@@ -3130,14 +3154,15 @@ app.post('/api/public/forms/:slug/submissions', async (req, res) => {
         .insert({
           contact_id: contact.id,
           company_id: resolvedCompanyId,
-          source: `${sourceLabel}${originLabel}`,
+          source: leadSource,
           service_type: formServiceType,
           priority_channel: utm.source === 'line' || utm.utm_source === 'line' ? 'LINE' : 'メール',
-          status: form.form_type === 'diagnosis' ? '診断申込' : form.form_type === 'consultation' ? '相談申込' : '面談申込',
+          status: leadStatus,
           first_registered_at: new Date().toISOString(),
           last_contacted_at: new Date().toISOString(),
           ...(meetingDate ? { meeting_date: meetingDate } : {}),
           notes: noteEntry,
+          ...(inquiryType ? { inquiry_type: inquiryType } : {}),
         })
         .select('id')
         .single();
@@ -3178,7 +3203,7 @@ app.post('/api/public/forms/:slug/submissions', async (req, res) => {
       else diagnosisId = data || null;
     }
 
-    // 診断回答・受付時の自動サンクス通知（LINE / Email）
+    // 診断・相談・資料請求回答時の自動通知（LINE / Email）
     const formDef = form.definition && typeof form.definition === 'object' ? form.definition : {};
     let bookingUrl = typeof (formDef as any).booking_url === 'string' ? (formDef as any).booking_url.trim() : '';
     if (!bookingUrl) {
@@ -3188,15 +3213,47 @@ app.post('/api/public/forms/:slug/submissions', async (req, res) => {
         .maybeSingle();
       bookingUrl = salesSettings?.booking_page_url || '';
     }
-    const bookingPrompt = bookingUrl
+
+    const rawMaterialUrl = typeof (formDef as any).material_url === 'string' ? (formDef as any).material_url.trim() : '';
+    const materialReady = Boolean(rawMaterialUrl && /^https?:\/\//i.test(rawMaterialUrl));
+    const materialUrl = materialReady ? rawMaterialUrl : null;
+    const bookingReady = Boolean(bookingUrl && /^https?:\/\//i.test(bookingUrl));
+
+    const bookingPrompt = bookingReady
       ? `\n\n▼ 30分無料・個別フィードバック面談の日程予約はこちら\n${bookingUrl}\n\n※面談当日、画面共有にて診断レポートを詳しく解説し、終了後にPDFを進呈いたします。`
       : '\n\n担当者より面談日程のご案内をお届けいたします。';
+
+    let customNotificationText = '';
+    if (isCarePackage) {
+      if (inquiryType === '資料請求') {
+        customNotificationText = `【MST】「介護保険外サービス開業パッケージ」資料請求を承りました。\n\n${name} 様\n資料請求いただき誠にありがとうございます！\n\n` +
+          (materialReady
+            ? `以下のURLより開業パッケージの概要資料をご確認いただけます。\n▼ 開業パッケージ資料URL\n${materialUrl}\n\nご不明点や具体的な相談をご希望の場合は、いつでも本LINE／メールまでお気軽に返信してください。`
+            : `現在、最新版資料の送付準備中となっております。専任担当者より折り返しご案内をお送りいたしますので、恐れ入りますが少々お待ちくださいませ。`);
+      } else if (inquiryType === '開業相談') {
+        customNotificationText = `【MST】「介護保険外サービス開業パッケージ」開業相談のお申し込みを承りました。\n\n${name} 様\nご相談のお申し込み誠にありがとうございます！\n\n専任コンサルタントによる30分のオンライン個別面談（Zoom・無料）にて、貴社の構想に合わせた開業ステップや収益設計をご案内いたします。` +
+          (bookingReady ? `\n\n▼ 面談日程のWeb予約はこちら\n${bookingUrl}\n\n※上記リンクよりご都合のよい日時をお選びください。` : '\n\n担当者より面談日程のご案内を折り返しお届けいたします。');
+      } else {
+        const parts = [`【MST】「介護保険外サービス開業パッケージ」資料請求・個別相談を承りました。\n\n${name} 様\nお申し込み誠にありがとうございます！`];
+        if (materialReady) {
+          parts.push(`▼ 開業パッケージ資料URL\n${materialUrl}`);
+        } else {
+          parts.push(`※最新版資料はただいま送付準備中となっております。準備が整い次第ご案内いたします。`);
+        }
+        if (bookingReady) {
+          parts.push(`▼ 個別相談（30分・無料）の面談日程Web予約はこちら\n${bookingUrl}\n\n※上記リンクよりご都合のよい日時をお選びください。`);
+        } else {
+          parts.push(`担当者より面談日程のご案内を折り返しお届けいたします。`);
+        }
+        customNotificationText = parts.join('\n\n');
+      }
+    }
 
     if (contact.line_user_id && lineChannelAccessToken) {
       try {
         const lineMsg = {
           type: 'text',
-          text: `【MST】「${form.name || '無料診断'}」の回答を受け付けました。\nご多忙の中、ご回答いただき誠にありがとうございます！\n\n現在、有限会社MST代表の大橋真人と専任チームにて、回答内容を基にした個別診断レポート（業務・売上・経営者の時間の急所特定）を作成しております。\n机上の空論ではなく「御社がどこから手を付ければ一番利益が残るか」を明確にするため、30分のオンライン個別面談にて解説と質疑応答を行わせていただきます。${bookingPrompt}\n\n※急ぎのご相談やご質問がございましたら、このLINEにそのまま返信いただけます。`,
+          text: customNotificationText || `【MST】「${form.name || '無料診断'}」の回答を受け付けました。\nご多忙の中、ご回答いただき誠にありがとうございます！\n\n現在、有限会社MST代表の大橋真人と専任チームにて、回答内容を基にした個別診断レポート（業務・売上・経営者の時間の急所特定）を作成しております。\n机上の空論ではなく「御社がどこから手を付ければ一番利益が残るか」を明確にするため、30分のオンライン個別面談にて解説と質疑応答を行わせていただきます。${bookingPrompt}\n\n※急ぎのご相談やご質問がございましたら、このLINEにそのまま返信いただけます。`,
         };
         await fetch('https://api.line.me/v2/bot/message/push', {
           method: 'POST',
@@ -3223,8 +3280,10 @@ app.post('/api/public/forms/:slug/submissions', async (req, res) => {
       try {
         const emailKey = process.env.RESEND_API_KEY || '';
         const emailFrom = process.env.RESEND_FROM_EMAIL || '';
-        const subject = `【MST】「${form.name || '無料診断'}」の受付と個別面談のご案内`;
-        const bodyText = `${name} 様\n\n有限会社MST代表の大橋真人です。\nこの度は「${form.name || '無料診断'}」にご回答いただき誠にありがとうございます。\n\n現在、ご入力いただいた内容を精査し、御社の業務・売上・時間の急所を特定した個別診断レポートを作成しております。\n机上の空論ではなく「御社がどこから手を付ければ一番利益が残るか」を明確にするため、30分のオンライン面談にて解説と質疑応答を行わせていただきます。${bookingPrompt}\n\n--------------------------------------------------\n有限会社MST\n代表取締役: 大橋真人\n〒503-0981 岐阜県大垣市桧町127番地\n--------------------------------------------------`;
+        const subject = isCarePackage
+          ? `【MST】「介護保険外サービス開業パッケージ」${inquiryType || 'お問い合わせ'}の受付完了`
+          : `【MST】「${form.name || '無料診断'}」の受付と個別面談のご案内`;
+        const bodyText = customNotificationText || `${name} 様\n\n有限会社MST代表の大橋真人です。\nこの度は「${form.name || '無料診断'}」にご回答いただき誠にありがとうございます。\n\n現在、ご入力いただいた内容を精査し、御社の業務・売上・時間の急所を特定した個別診断レポートを作成しております。\n机上の空論ではなく「御社がどこから手を付ければ一番利益が残るか」を明確にするため、30分のオンライン面談にて解説と質疑応答を行わせていただきます。${bookingPrompt}\n\n--------------------------------------------------\n有限会社MST\n代表取締役: 大橋真人\n〒503-0981 岐阜県大垣市桧町127番地\n--------------------------------------------------`;
         if (emailKey && emailFrom) {
           await fetch('https://api.resend.com/emails', {
             method: 'POST',
@@ -3257,12 +3316,21 @@ app.post('/api/public/forms/:slug/submissions', async (req, res) => {
       }
     }
 
-    // 管理者向けタスク起票（レポート承認通知）
+    // 管理者向けタスク起票（レポート承認通知 / 資料URL未設定警告）
     if (lineSupabase) {
       try {
+        if (isCarePackage && (inquiryType === '資料請求' || inquiryType === '両方希望') && !materialReady) {
+          await lineSupabase.from('tasks').insert({
+            title: `【未設定警告】資料URLが未登録です（${name} 様の資料請求）`,
+            description: `「介護保険外サービス開業パッケージ」で資料請求を受領しましたが、フォーム定義（diagnosis_forms.definition.material_url）に資料URL（PDF等）が未設定です。至急URLを設定し、申込者（${name}様 / ${email}）へ資料を送付してください。`,
+            status: 'todo',
+            priority: 'urgent',
+            due_date: new Date().toISOString().slice(0, 10),
+          });
+        }
         await lineSupabase.from('tasks').insert({
-          title: `【要対応・レポート承認】${name} 様（${companyName || '個人'}）の診断回答`,
-          description: `フォーム「${form.name || '無料診断'}」の回答が届きました。診断管理（/diagnoses）または顧客書類から内容を確認し、診断レポートの承認・送信を行ってください。`,
+          title: `【要対応・${isCarePackage ? '開業パッケージ申込' : 'レポート承認'}】${name} 様（${companyName || '個人'}）の回答`,
+          description: `フォーム「${form.name}」の回答（希望: ${inquiryType || '未指定'}）が届きました。内容を確認し、案内または面談日程の調整を行ってください。`,
           status: 'todo',
           priority: 'high',
           due_date: new Date().toISOString().slice(0, 10),
@@ -3278,6 +3346,10 @@ app.post('/api/public/forms/:slug/submissions', async (req, res) => {
       leadId,
       diagnosisId,
       diagnosisPending: form.form_type === 'diagnosis' && !diagnosisId,
+      inquiryType: inquiryType || null,
+      materialReady,
+      materialUrl: materialReady ? materialUrl : null,
+      bookingUrl: bookingReady ? bookingUrl : null,
     });
   } catch (error) {
     console.error('Public intake submission failed:', error instanceof Error ? error.message : 'unknown error');

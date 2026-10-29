@@ -40,7 +40,7 @@ interface ProductHubViewProps {
   onAddProduct: (product: Omit<ManagedProduct, 'id' | 'createdAt' | 'updatedAt'> & { id?: string }) => void;
   onUpdateProduct: (id: string, updates: Partial<ManagedProduct>) => void;
   onReorderProducts?: (reorderedProducts: ManagedProduct[]) => void;
-  onDeleteProduct?: (id: string, archive: boolean) => Promise<{ success: boolean; message?: string }> | { success: boolean; message?: string };
+  onDeleteProduct?: (id: string, archive: boolean, force?: boolean) => Promise<{ success: boolean; message?: string }> | { success: boolean; message?: string };
   onRestoreProduct?: (id: string) => Promise<{ success: boolean; message?: string }> | { success: boolean; message?: string };
   onPublishProduct: (product: ManagedProduct, fees: { initialFee: number; monthlyFee: number }) => Promise<void>;
   onAddProjectWithTasks?: (project: Project, tasks: TaskItem[]) => void;
@@ -133,6 +133,7 @@ export const ProductHubView: React.FC<ProductHubViewProps> = ({
   };
 
   const [showRemovalConfirmation, setShowRemovalConfirmation] = useState(false);
+  const [removalMode, setRemovalMode] = useState<'archive' | 'delete'>('archive');
   const [isProductActionPending, setIsProductActionPending] = useState(false);
   const [productActionMessage, setProductActionMessage] = useState('');
   const [productActionIsError, setProductActionIsError] = useState(false);
@@ -218,14 +219,19 @@ export const ProductHubView: React.FC<ProductHubViewProps> = ({
     setProductActionIsError(false);
   };
 
-  const requestProductRemoval = async () => {
+  const requestProductRemoval = async (mode: 'archive' | 'delete') => {
     if (!selectedProduct || !onDeleteProduct || isProductActionPending) return;
     setIsProductActionPending(true);
     setShowRemovalConfirmation(false);
-    const result = await onDeleteProduct(selectedProduct.id, productHasReferences);
+    const isArchive = mode === 'archive';
+    const isForce = mode === 'delete';
+    const result = await onDeleteProduct(selectedProduct.id, isArchive, isForce);
     setProductActionMessage(result.message || (result.success ? '操作が完了しました。' : '操作に失敗しました。'));
     setProductActionIsError(!result.success);
-    if (result.success && productHasReferences) setProductListView('archived');
+    if (result.success) {
+      if (isArchive) setProductListView('archived');
+      else setProductListView('active');
+    }
     setIsProductActionPending(false);
   };
 
@@ -560,23 +566,50 @@ export const ProductHubView: React.FC<ProductHubViewProps> = ({
                   </button>
                   {selectedProduct.salesCatalogPublishedAt && <span className="text-[10px] text-emerald-300">CRMと同じ商品IDで連携済み</span>}
                   {selectedProduct.status === 'archived' ? (
-                    onRestoreProduct && <button type="button" disabled={isProductActionPending} onClick={() => void restoreProduct()} className="inline-flex items-center gap-2 rounded-lg border border-emerald-500/30 bg-emerald-500/10 px-3 py-2 text-xs font-semibold text-emerald-200 hover:bg-emerald-500/20">
-                      <Check className="h-4 w-4" />取扱を再開
-                    </button>
-                  ) : onDeleteProduct && <button type="button" disabled={isProductActionPending} onClick={() => {
-                    setProductActionMessage('');
-                    setShowRemovalConfirmation(true);
-                  }} className="inline-flex items-center gap-2 rounded-lg border border-rose-500/30 bg-rose-500/10 px-3 py-2 text-xs font-semibold text-rose-200 hover:bg-rose-500/20">
-                    <Trash2 className="h-4 w-4" />{productHasReferences ? '取扱停止' : '削除'}
-                  </button>}
+                    <div className="flex items-center gap-2">
+                      {onRestoreProduct && (
+                        <button type="button" disabled={isProductActionPending} onClick={() => void restoreProduct()} className="inline-flex items-center gap-1.5 rounded-lg border border-emerald-500/30 bg-emerald-500/10 px-3 py-2 text-xs font-semibold text-emerald-200 hover:bg-emerald-500/20">
+                          <Check className="h-4 w-4" />取扱を再開
+                        </button>
+                      )}
+                      {onDeleteProduct && (
+                        <button type="button" disabled={isProductActionPending} onClick={() => {
+                          setProductActionMessage('');
+                          setRemovalMode('delete');
+                          setShowRemovalConfirmation(true);
+                        }} className="inline-flex items-center gap-1.5 rounded-lg border border-rose-500/30 bg-rose-500/10 px-3 py-2 text-xs font-semibold text-rose-200 hover:bg-rose-500/20">
+                          <Trash2 className="h-4 w-4" />完全削除
+                        </button>
+                      )}
+                    </div>
+                  ) : onDeleteProduct && (
+                    <div className="flex items-center gap-2">
+                      <button type="button" disabled={isProductActionPending} onClick={() => {
+                        setProductActionMessage('');
+                        setRemovalMode('archive');
+                        setShowRemovalConfirmation(true);
+                      }} className="inline-flex items-center gap-1.5 rounded-lg border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-xs font-semibold text-amber-200 hover:bg-amber-500/20" title="過去の契約や商談の記録を残したまま、新規提案を停止します">
+                        取扱停止
+                      </button>
+                      <button type="button" disabled={isProductActionPending} onClick={() => {
+                        setProductActionMessage('');
+                        setRemovalMode('delete');
+                        setShowRemovalConfirmation(true);
+                      }} className="inline-flex items-center gap-1.5 rounded-lg border border-rose-500/30 bg-rose-500/10 px-3 py-2 text-xs font-semibold text-rose-200 hover:bg-rose-500/20" title="商品マスタおよびプロダクト一覧から完全に抹消します">
+                        <Trash2 className="h-4 w-4" />完全削除
+                      </button>
+                    </div>
+                  )}
                 </div>
                 {showRemovalConfirmation && (
                   <div className="mt-3 flex flex-wrap items-center gap-2 rounded-lg border border-amber-500/30 bg-amber-500/10 p-3 text-xs text-amber-100" role="group" aria-label="商品操作の確認">
-                    <span className="mr-2">{productHasReferences
-                      ? `「${selectedProduct.name}」の取扱を停止します。関連記録は保持されます。`
-                      : `「${selectedProduct.name}」を商品マスタから削除します。この操作は元に戻せません。`}</span>
-                    <button type="button" disabled={isProductActionPending} onClick={() => void requestProductRemoval()} className="rounded bg-rose-700 px-3 py-1.5 font-semibold text-white disabled:opacity-50">
-                      {isProductActionPending ? '処理中…' : productHasReferences ? '取扱停止を確定' : '削除を確定'}
+                    <span className="mr-2">
+                      {removalMode === 'archive'
+                        ? `「${selectedProduct.name}」の取扱を停止（アーカイブ）します。過去の商談・契約などの関連記録は保持されます。`
+                        : `「${selectedProduct.name}」を商品マスタおよびプロダクト一覧から完全に削除します（関連データがある場合は参照を安全に解除して削除します）。この操作は元に戻せません。`}
+                    </span>
+                    <button type="button" disabled={isProductActionPending} onClick={() => void requestProductRemoval(removalMode)} className={`rounded ${removalMode === 'archive' ? 'bg-amber-700' : 'bg-rose-700'} px-3 py-1.5 font-semibold text-white disabled:opacity-50`}>
+                      {isProductActionPending ? '処理中…' : removalMode === 'archive' ? '取扱停止を確定' : '完全削除を実行'}
                     </button>
                     <button type="button" disabled={isProductActionPending} onClick={() => setShowRemovalConfirmation(false)} className="rounded border border-slate-600 px-3 py-1.5 text-slate-200 disabled:opacity-50">キャンセル</button>
                   </div>

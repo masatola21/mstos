@@ -225,22 +225,36 @@ const TABLE_REFERENCE_CHECKS: Partial<Record<TableKey, Array<{ table: string; fi
 export async function deleteTableRecord(
   tableKey: TableKey,
   record: { id: string | number; company_id?: string | null },
+  options?: { force?: boolean },
 ): Promise<{ error?: DataFetchError; blockedBy?: string }> {
   const supabase = getSupabase();
   if (!supabase) return { error: { type: 'NOT_CONFIGURED', message: 'Supabaseが初期化されていません。' } };
 
   try {
-    for (const reference of TABLE_REFERENCE_CHECKS[tableKey] || []) {
-      const { data, error } = await supabase
-        .from(reference.table)
-        .select('id')
-        .eq(reference.field, tableKey === 'customers' ? record.company_id || record.id : record.id)
-        .limit(1);
-      if (error) {
-        return { error: parseSupabaseError(error) };
-      }
-      if (data?.length) {
-        return { blockedBy: reference.table };
+    if (options?.force && tableKey === 'products') {
+      const prodId = String(record.id);
+      // 関連テーブルの参照を安全に解除（NULL設定）
+      await Promise.allSettled([
+        supabase.from('deals').update({ product_id: null }).eq('product_id', prodId),
+        supabase.from('customer_contracts').update({ product_id: null }).eq('product_id', prodId),
+        supabase.from('customer_invoices').update({ product_id: null }).eq('product_id', prodId),
+        supabase.from('prospects').update({ recommended_product_id: null }).eq('recommended_product_id', prodId),
+        supabase.from('leads').update({ interested_product_id: null }).eq('interested_product_id', prodId),
+        supabase.from('ai_reports').update({ recommended_product_id: null }).eq('recommended_product_id', prodId),
+      ]);
+    } else {
+      for (const reference of TABLE_REFERENCE_CHECKS[tableKey] || []) {
+        const { data, error } = await supabase
+          .from(reference.table)
+          .select('id')
+          .eq(reference.field, tableKey === 'customers' ? record.company_id || record.id : record.id)
+          .limit(1);
+        if (error) {
+          return { error: parseSupabaseError(error) };
+        }
+        if (data?.length) {
+          return { blockedBy: reference.table };
+        }
       }
     }
 

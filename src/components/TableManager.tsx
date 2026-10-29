@@ -250,14 +250,20 @@ export const TableManager: React.FC<TableManagerProps> = ({
     });
   };
 
-  const handleDeleteRecord = async (record: any) => {
+  const [forceDeleteConfirmRecord, setForceDeleteConfirmRecord] = useState<{ record: any; blockedBy: string } | null>(null);
+
+  const handleDeleteRecord = async (record: any, force = false) => {
     const label = record.company_name || record.full_name || record.proposal_plan_name || record.product_name || record.contact_name || String(record.id);
     setDeletingRecordId(String(record.id));
     setError(null);
     setSuccessBanner(null);
-    const result = await deleteTableRecord(currentTable, { id: record.id, company_id: record.company_id });
+    const result = await deleteTableRecord(currentTable, { id: record.id, company_id: record.company_id }, { force });
     setDeletingRecordId(null);
-    if (result.blockedBy) {
+    if (result.blockedBy && !force) {
+      if (currentTable === 'products') {
+        setForceDeleteConfirmRecord({ record, blockedBy: result.blockedBy });
+        return;
+      }
       setError({ type: 'UNKNOWN', message: `関連する「${result.blockedBy}」データがあるため削除できません。先に関連データを整理してください。` });
       return;
     }
@@ -266,7 +272,7 @@ export const TableManager: React.FC<TableManagerProps> = ({
       return;
     }
     setData((current) => current.filter((item) => String(item.id) !== String(record.id)));
-    setSuccessBanner(`「${label}」を削除しました。`);
+    setSuccessBanner(force ? `「${label}」を関連付け解除の上、完全削除しました。` : `「${label}」を削除しました。`);
     window.setTimeout(() => setSuccessBanner(null), 5000);
   };
 
@@ -281,6 +287,34 @@ export const TableManager: React.FC<TableManagerProps> = ({
 
   return (
     <div className="space-y-6 animate-fade-in pb-12">
+      {forceDeleteConfirmRecord && (
+        <div className="rounded-2xl border border-amber-500/40 bg-amber-950/40 p-4 text-amber-200 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 animate-fade-in">
+          <div>
+            <p className="font-semibold text-sm">【削除の確認】関連データが存在します</p>
+            <p className="text-xs text-amber-300 mt-0.5">
+              商品「{forceDeleteConfirmRecord.record.product_name || forceDeleteConfirmRecord.record.id}」は「{forceDeleteConfirmRecord.blockedBy}」等に紐付いています。関連付けを安全に解除（NULL設定）した上で完全削除しますか？
+            </p>
+          </div>
+          <div className="flex items-center gap-2 shrink-0">
+            <button
+              onClick={() => {
+                const rec = forceDeleteConfirmRecord.record;
+                setForceDeleteConfirmRecord(null);
+                void handleDeleteRecord(rec, true);
+              }}
+              className="rounded-lg bg-rose-600 hover:bg-rose-500 text-white text-xs font-semibold px-3 py-1.5 transition"
+            >
+              参照を解除して完全削除
+            </button>
+            <button
+              onClick={() => setForceDeleteConfirmRecord(null)}
+              className="rounded-lg border border-slate-700 hover:bg-slate-800 text-slate-300 text-xs px-3 py-1.5 transition"
+            >
+              キャンセル
+            </button>
+          </div>
+        </div>
+      )}
       {/* Table Selector Sub-Bar */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-slate-900/60 p-5 rounded-3xl border border-slate-800">
         <div>

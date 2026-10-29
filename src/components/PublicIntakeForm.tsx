@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { CheckCircle2, Loader2, Send, Lock, Calendar, Sparkles, ArrowRight, ShieldCheck } from 'lucide-react';
+import { CheckCircle2, Loader2, Send, Lock, Calendar, Sparkles, ArrowRight, ShieldCheck, FileText, Download, ExternalLink } from 'lucide-react';
 
 type FormType = 'diagnosis' | 'consultation' | 'meeting';
 type Question = { id: string; label: string; type: 'text' | 'textarea' | 'select' | 'radio' | 'checkbox' | 'date'; required?: boolean; options?: string[] };
@@ -286,6 +286,98 @@ export const PublicIntakeForm: React.FC<{ slug: string }> = ({ slug }) => {
                     </ul>
                   </div>
                 </section>
+              </div>
+            );
+          })() : slug === 'care-package-inquiry' || submissionResult?.inquiryType ? (() => {
+            const inqType = submissionResult?.inquiryType || String(answers.q_inquiry_type || 'お問い合わせ');
+            const hasMaterial = inqType === '資料請求' || inqType === '両方希望';
+            const hasConsult = inqType === '開業相談' || inqType === '両方希望';
+            const matUrl = submissionResult?.materialUrl;
+            const matReady = Boolean(submissionResult?.materialReady && matUrl);
+            let bookUrl = submissionResult?.bookingUrl || form?.bookingPageUrl || '';
+            if (bookUrl) {
+              const delim = bookUrl.includes('?') ? '&' : '?';
+              bookUrl += delim + 'name=' + encodeURIComponent(name) + '&email=' + encodeURIComponent(email);
+            }
+
+            return (
+              <div className="space-y-6">
+                <section className="rounded-3xl border border-sky-500/30 bg-gradient-to-br from-slate-900 via-slate-800 to-sky-950 p-6 text-white shadow-xl sm:p-8">
+                  <div className="flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-sky-400">
+                    <CheckCircle2 className="h-4 w-4" />
+                    お申し込み完了（{inqType}）
+                  </div>
+                  <h2 className="mt-3 text-xl font-extrabold sm:text-2xl">
+                    ご入力ありがとうございました！<br />
+                    【介護保険外サービス開業パッケージ】
+                  </h2>
+                  <p className="mt-2 text-xs leading-5 text-slate-300">
+                    専任チームにてご入力内容を確認し、最適なご案内をお届けいたします。
+                  </p>
+                </section>
+
+                {/* 資料請求セクション */}
+                {hasMaterial && (
+                  <section className="rounded-3xl border border-slate-200 bg-white p-6 shadow-md sm:p-8 space-y-4">
+                    <div className="flex items-center gap-2 text-slate-900 font-bold text-base">
+                      <FileText className="h-5 w-5 text-sky-600" />
+                      介護保険外サービス開業パッケージ 概要資料
+                    </div>
+                    {matReady ? (
+                      <div>
+                        <p className="text-xs text-slate-600 mb-3">
+                          以下のリンクより開業パッケージの概要資料（PDF・Web資料）を今すぐご覧いただけます。
+                        </p>
+                        <a
+                          href={matUrl!}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="inline-flex w-full items-center justify-center gap-2 rounded-2xl bg-sky-600 px-6 py-4 text-sm font-bold text-white shadow-lg transition hover:bg-sky-500 active:scale-[0.99]"
+                        >
+                          <Download className="h-4 w-4" />
+                          概要資料をダウンロード / 閲覧する
+                          <ExternalLink className="h-4 w-4 ml-1" />
+                        </a>
+                      </div>
+                    ) : (
+                      <div className="rounded-2xl border border-amber-200 bg-amber-50 p-4 text-xs font-medium text-amber-900 leading-relaxed">
+                        📄 資料の送付準備中です。ご入力いただいた連絡先（{email || 'LINE'}）宛に、専任担当者より追って最新版資料をお送りいたします。
+                      </div>
+                    )}
+                  </section>
+                )}
+
+                {/* 個別相談セクション */}
+                {hasConsult && (
+                  <section className="rounded-3xl border-2 border-indigo-500 bg-white p-6 text-center shadow-xl sm:p-8 space-y-4">
+                    <span className="inline-flex items-center gap-1.5 rounded-full bg-indigo-100 px-3.5 py-1 text-xs font-bold text-indigo-800">
+                      <Sparkles className="h-3.5 w-3.5" />
+                      オンラインZoom（30分・無料）
+                    </span>
+                    <h3 className="text-lg font-extrabold text-slate-900 sm:text-xl">
+                      個別相談の日程を予約する
+                    </h3>
+                    <p className="text-xs leading-5 text-slate-600 sm:text-sm">
+                      貴社の地域特性や構想に合わせた開業モデル・収益設計について、専任コンサルタントが直接アドバイスいたします。
+                    </p>
+                    {bookUrl ? (
+                      <a
+                        href={bookUrl}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="inline-flex w-full items-center justify-center gap-2 rounded-2xl bg-indigo-600 px-6 py-4 text-base font-bold text-white shadow-lg transition hover:bg-indigo-500 active:scale-[0.99]"
+                      >
+                        <Calendar className="h-5 w-5" />
+                        カレンダーから面談日時を選ぶ（予約する）
+                        <ArrowRight className="h-4 w-4" />
+                      </a>
+                    ) : (
+                      <div className="rounded-2xl border border-indigo-200 bg-indigo-50 p-4 text-xs font-medium text-indigo-900 sm:text-sm">
+                        ご入力いただいた連絡先宛に、担当者より日程調整のご案内を個別にお届けいたします。
+                      </div>
+                    )}
+                  </section>
+                )}
               </div>
             );
           })() : (

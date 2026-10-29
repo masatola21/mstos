@@ -1,0 +1,9 @@
+<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 1000 1000' width='100%'>
+  <rect width='1000' height='1000' fill='white' rx='160' />
+  <!-- Left Shape -->
+  <polygon points='150,700 320,295 415,295 500,480 310,700' fill='#0066FF' />
+  <!-- Middle Diagonal Slash -->
+  <polygon points='380,700 630,295 745,295 495,700' fill='#0066FF' />
+  <!-- Right Leg -->
+  <polygon points='655,370 738,418 860,700 720,700' fill='#0066FF' />
+</svg>
