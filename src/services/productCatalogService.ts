@@ -178,7 +178,14 @@ export async function syncManagedProductToSalesCatalog(
   let { error } = await supabase.from('products').upsert(payload, { onConflict: 'id' });
 
   // Graceful fallback if database does not yet have flexible pricing columns
-  if (error && (error.message.includes('pricing_model') || error.message.includes('price_range_max') || error.code === '42703')) {
+  if (error && (
+    error.message.includes('pricing_model') ||
+    error.message.includes('price_range_max') ||
+    error.message.includes('price_note') ||
+    error.message.includes('schema cache') ||
+    error.code === '42703' ||
+    error.code === 'PGRST204'
+  )) {
     delete payload.pricing_model;
     delete payload.price_range_max;
     delete payload.price_note;
@@ -221,7 +228,14 @@ export async function publishManagedProductToSalesCatalog(
   let { error } = await supabase.from('products').upsert(payload, { onConflict: 'id' });
 
   // Fallback if schema not yet updated
-  if (error && (error.message.includes('pricing_model') || error.message.includes('price_range_max') || error.code === '42703')) {
+  if (error && (
+    error.message.includes('pricing_model') ||
+    error.message.includes('price_range_max') ||
+    error.message.includes('price_note') ||
+    error.message.includes('schema cache') ||
+    error.code === '42703' ||
+    error.code === 'PGRST204'
+  )) {
     delete payload.pricing_model;
     delete payload.price_range_max;
     delete payload.price_note;

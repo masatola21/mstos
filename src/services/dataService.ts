@@ -107,7 +107,18 @@ export async function fetchProductsList(): Promise<Product[]> {
   if (!supabase) return [];
   try {
     const { data } = await supabase.from('products').select('*').order('product_name', { ascending: true });
-    return (data as Product[]) || [];
+    if (!data) return [];
+    const localProducts = matrixService.loadProducts();
+    const localMap = new Map(localProducts.map(p => [p.id, p]));
+    return (data as Product[]).map(item => {
+      const local = localMap.get(String(item.id));
+      return {
+        ...item,
+        pricing_model: item.pricing_model || local?.pricingModel || 'fixed',
+        price_range_max: item.price_range_max ?? local?.priceRangeMax ?? null,
+        price_note: item.price_note || local?.priceNote || null,
+      };
+    });
   } catch {
     return [];
   }
@@ -165,6 +176,20 @@ export async function fetchTableData(
     // 関連テーブルのルックアップを行い、会社名や商品名を人間に見やすい形で付与
     let enrichedData = [...data];
 
+    if (tableKey === 'products') {
+      const localProducts = matrixService.loadProducts();
+      const localMap = new Map(localProducts.map(p => [p.id, p]));
+      enrichedData = enrichedData.map(item => {
+        const local = localMap.get(String(item.id));
+        return {
+          ...item,
+          pricing_model: item.pricing_model || local?.pricingModel || 'fixed',
+          price_range_max: item.price_range_max ?? local?.priceRangeMax ?? null,
+          price_note: item.price_note || local?.priceNote || null,
+        };
+      });
+    }
+
     if (['contacts', 'prospects', 'leads', 'deals', 'customers'].includes(tableKey)) {
       const companies = await fetchCompaniesList();
       const compMap = new Map(companies.map(c => [String(c.id), c]));
@@ -203,7 +228,6 @@ const TABLE_REFERENCE_CHECKS: Partial<Record<TableKey, Array<{ table: string; fi
     { table: 'customers', field: 'company_id' }, { table: 'diagnoses', field: 'company_id' },
     { table: 'customer_contracts', field: 'company_id' }, { table: 'customer_invoices', field: 'company_id' },
     { table: 'customer_documents', field: 'company_id' }, { table: 'customer_service_engagements', field: 'company_id' },
-    { table: 'communication_outbox', field: 'company_id' },
   ],
   contacts: [{ table: 'communication_outbox', field: 'recipient_contact_id' }],
   prospects: [],
@@ -222,6 +246,25 @@ const TABLE_REFERENCE_CHECKS: Partial<Record<TableKey, Array<{ table: string; fi
     { table: 'customer_documents', field: 'company_id' }, { table: 'customer_service_engagements', field: 'company_id' },
   ],
 };
+
+// スキーマエラーから未存在の列名を抽出するヘルパー
+function extractMissingColumn(error: any): string | null {
+  if (!error) return null;
+  const msg = error.message || String(error);
+  // PostgREST: Could not find the 'xyz' column of 'table' in the schema cache
+  const pgrstMatch = msg.match(/Could not find the '([^']+)' column/i);
+  if (pgrstMatch) return pgrstMatch[1];
+
+  // PostgreSQL: column "xyz" of relation "table" does not exist
+  const pgMatch1 = msg.match(/column "([^"]+)" of relation/i);
+  if (pgMatch1) return pgMatch1[1];
+
+  // PostgreSQL: column table.xyz does not exist OR column xyz does not exist
+  const pgMatch2 = msg.match(/column (?:[a-zA-Z0-9_]+\.)?([a-zA-Z0-9_]+) does not exist/i);
+  if (pgMatch2) return pgMatch2[1];
+
+  return null;
+}
 
 export async function deleteTableRecord(
   tableKey: TableKey,
@@ -251,6 +294,20 @@ export async function deleteTableRecord(
           .eq(reference.field, tableKey === 'customers' ? record.company_id || record.id : record.id)
           .limit(1);
         if (error) {
+          // リモートスキーマに対象テーブルや列が存在しない場合は参照なしとみなし安全にスキップ
+          const errorMsg = (error.message || '').toLowerCase();
+          const errorCode = error.code || '';
+          if (
+            errorCode === '42703' || // undefined_column
+            errorCode === '42P01' || // undefined_table
+            errorCode === 'PGRST204' ||
+            errorCode === 'PGRST205' ||
+            errorMsg.includes('does not exist') ||
+            errorMsg.includes('could not find the') ||
+            errorMsg.includes('schema cache')
+          ) {
+            continue;
+          }
           return { error: parseSupabaseError(error) };
         }
         if (data?.length) {
@@ -341,14 +398,78 @@ export async function insertRecord(
       delete payload.id;
     }
 
-    const { data, error } = await supabase
-      .from(tableKey)
-      .insert([payload])
-      .select()
-      .single();
+    // 商品テーブルの場合、柔軟価格設定をローカル/matrixServiceに退避保存
+    if (tableKey === 'products' && (payload.id || payload.product_name)) {
+      const prodId = String(payload.id || payload.code || '');
+      if (prodId) {
+        matrixService.updateProduct(prodId, {
+          pricingModel: payload.pricing_model || undefined,
+          priceRangeMax: payload.price_range_max != null ? Number(payload.price_range_max) : undefined,
+          priceNote: payload.price_note || undefined,
+          name: payload.product_name || undefined,
+          price: payload.initial_fee || payload.monthly_fee || undefined,
+          description: payload.description || undefined,
+        });
+      }
+    }
 
-    if (error) {
-      return { error: parseSupabaseError(error) };
+    let currentPayload = { ...payload };
+    let data: any = null;
+    let lastError: any = null;
+
+    // リモートDBのスキーマキャッシュに未反映の列（price_note等）があれば自動で除外して再試行
+    for (let attempt = 0; attempt < 5; attempt++) {
+      const result = await supabase
+        .from(tableKey)
+        .insert([currentPayload])
+        .select()
+        .single();
+
+      if (!result.error) {
+        data = result.data;
+        lastError = null;
+        break;
+      }
+
+      lastError = result.error;
+      const missingCol = extractMissingColumn(lastError);
+      if (missingCol && missingCol in currentPayload) {
+        delete currentPayload[missingCol];
+        continue;
+      }
+
+      let stripped = false;
+      for (const knownCol of ['price_note', 'price_range_max', 'pricing_model']) {
+        if (knownCol in currentPayload && (
+          lastError.message?.includes(knownCol) ||
+          lastError.message?.includes('schema cache') ||
+          lastError.code === 'PGRST204' ||
+          lastError.code === '42703'
+        )) {
+          delete currentPayload[knownCol];
+          stripped = true;
+        }
+      }
+      if (stripped) continue;
+
+      break;
+    }
+
+    if (lastError) {
+      return { error: parseSupabaseError(lastError) };
+    }
+
+    if (tableKey === 'products' && data) {
+      const localProducts = matrixService.loadProducts();
+      const local = localProducts.find(p => p.id === String(data.id));
+      if (local) {
+        data = {
+          ...data,
+          pricing_model: data.pricing_model || local.pricingModel || 'fixed',
+          price_range_max: data.price_range_max ?? local.priceRangeMax ?? null,
+          price_note: data.price_note || local.priceNote || null,
+        };
+      }
     }
 
     if (tableKey === 'deals' && data?.id && (payload.proposal_status === '成約' || payload.proposal_status === 'Won')) {
@@ -400,15 +521,77 @@ export async function updateRecord(
       cleanPayload.updated_at = new Date().toISOString();
     }
 
-    const { data, error } = await supabase
-      .from(tableKey)
-      .update(cleanPayload)
-      .eq('id', id)
-      .select()
-      .single();
+    // 商品テーブルの場合、柔軟価格設定をローカル/matrixServiceに退避保存
+    if (tableKey === 'products') {
+      const prodId = String(id);
+      matrixService.updateProduct(prodId, {
+        pricingModel: cleanPayload.pricing_model || undefined,
+        priceRangeMax: cleanPayload.price_range_max != null ? Number(cleanPayload.price_range_max) : undefined,
+        priceNote: cleanPayload.price_note || undefined,
+        name: cleanPayload.product_name || undefined,
+        price: cleanPayload.initial_fee || cleanPayload.monthly_fee || undefined,
+        description: cleanPayload.description || undefined,
+      });
+    }
 
-    if (error) {
-      return { error: parseSupabaseError(error) };
+    let currentPayload = { ...cleanPayload };
+    let data: any = null;
+    let lastError: any = null;
+
+    // リモートDBのスキーマキャッシュに未反映の列（price_note等）があれば自動で除外して再試行
+    for (let attempt = 0; attempt < 5; attempt++) {
+      const result = await supabase
+        .from(tableKey)
+        .update(currentPayload)
+        .eq('id', id)
+        .select()
+        .single();
+
+      if (!result.error) {
+        data = result.data;
+        lastError = null;
+        break;
+      }
+
+      lastError = result.error;
+      const missingCol = extractMissingColumn(lastError);
+      if (missingCol && missingCol in currentPayload) {
+        delete currentPayload[missingCol];
+        continue;
+      }
+
+      let stripped = false;
+      for (const knownCol of ['price_note', 'price_range_max', 'pricing_model']) {
+        if (knownCol in currentPayload && (
+          lastError.message?.includes(knownCol) ||
+          lastError.message?.includes('schema cache') ||
+          lastError.code === 'PGRST204' ||
+          lastError.code === '42703'
+        )) {
+          delete currentPayload[knownCol];
+          stripped = true;
+        }
+      }
+      if (stripped) continue;
+
+      break;
+    }
+
+    if (lastError) {
+      return { error: parseSupabaseError(lastError) };
+    }
+
+    if (tableKey === 'products' && data) {
+      const localProducts = matrixService.loadProducts();
+      const local = localProducts.find(p => p.id === String(id));
+      if (local) {
+        data = {
+          ...data,
+          pricing_model: data.pricing_model || local.pricingModel || 'fixed',
+          price_range_max: data.price_range_max ?? local.priceRangeMax ?? null,
+          price_note: data.price_note || local.priceNote || null,
+        };
+      }
     }
 
     if (tableKey === 'deals' && (cleanPayload.proposal_status === '成約' || cleanPayload.proposal_status === 'Won')) {
