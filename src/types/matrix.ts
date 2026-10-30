@@ -124,6 +124,9 @@ export const PRODUCT_ARCHETYPES: Record<ProductArchetype, ProductArchetypeInfo> 
   },
 };
 
+// --- 料金体系 (固定価格 / 最低価格〜 / 価格帯 / 個別見積) ---
+export type PricingModel = 'fixed' | 'starting_at' | 'range' | 'custom_quote';
+
 // --- 商品エンティティ（MST既存商品＋拡張情報） ---
 export interface ManagedProduct {
   id: string; // PRD-... or id
@@ -131,6 +134,12 @@ export interface ManagedProduct {
   code?: string;
   category?: string; // 既存分類
   price?: number;
+  /** 料金体系: 'fixed' (固定), 'starting_at' (最低価格〜・商談で本決め), 'range' (価格帯), 'custom_quote' (個別見積・商談時決定) */
+  pricingModel?: PricingModel;
+  /** 価格帯上限（pricingModel === 'range' の場合） */
+  priceRangeMax?: number;
+  /** 融通設定の補足メモ（例: アカウント数やシステム規模により商談で本決め） */
+  priceNote?: string;
   /** 営業商品マスタへ公開する初期費用。未設定時は0円。 */
   salesInitialFee?: number;
   /** 営業商品マスタへ公開する月額費用。未設定時は0円。 */

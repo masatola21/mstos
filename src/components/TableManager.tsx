@@ -649,20 +649,54 @@ export const TableManager: React.FC<TableManagerProps> = ({
 
                         // 商品外部キーのレンダリング
                         if (colKey === 'product_id') {
+                          const prod = item.product;
+                          const priceStr = prod ? (
+                            prod.pricing_model === 'starting_at'
+                              ? `最低月額: ¥${Number(prod.monthly_fee || prod.initial_fee || 0).toLocaleString()}〜 (商談で本決め)`
+                              : prod.pricing_model === 'range'
+                              ? `月額: ¥${Number(prod.monthly_fee || 0).toLocaleString()} 〜 ¥${Number(prod.price_range_max || 0).toLocaleString()}`
+                              : prod.pricing_model === 'custom_quote'
+                              ? '個別見積・商談時決定'
+                              : `月額: ¥${Number(prod.monthly_fee || 0).toLocaleString()}`
+                          ) : '';
                           return (
                             <td key={colKey} className="py-3 px-4">
                               {item.product?.product_name ? (
                                 <div>
-                                  <div className="font-semibold text-purple-300">
-                                    {item.product.product_name}
+                                  <div className="font-semibold text-purple-300 flex items-center gap-1.5">
+                                    <span>{item.product.product_name}</span>
+                                    {prod?.pricing_model && prod.pricing_model !== 'fixed' && (
+                                      <span className="text-[10px] px-1.5 py-0.2 rounded bg-cyan-950 border border-cyan-800 text-cyan-300 font-sans">
+                                        商談時決定
+                                      </span>
+                                    )}
                                   </div>
-                                  <div className="text-[10px] text-slate-500">
-                                    月額: ¥{Number(item.product.monthly_fee || 0).toLocaleString()}
+                                  <div className="text-[10px] text-slate-400">
+                                    {priceStr}
                                   </div>
                                 </div>
                               ) : (
                                 <span className="font-mono text-slate-400">{val || '-'}</span>
                               )}
+                            </td>
+                          );
+                        }
+
+                        // 料金体系（融通設定）バッジ
+                        if (colKey === 'pricing_model') {
+                          const model = String(val || 'fixed');
+                          const modelLabels: Record<string, { label: string; color: string }> = {
+                            starting_at: { label: '最低価格〜（商談で本決め）', color: 'bg-cyan-500/10 text-cyan-300 border-cyan-500/30' },
+                            range: { label: '価格帯（商談で本決め）', color: 'bg-purple-500/10 text-purple-300 border-purple-500/30' },
+                            custom_quote: { label: '個別見積・商談時決定', color: 'bg-amber-500/10 text-amber-300 border-amber-500/30' },
+                            fixed: { label: '固定価格', color: 'bg-slate-800 text-slate-400 border-slate-700' },
+                          };
+                          const info = modelLabels[model] || modelLabels.fixed;
+                          return (
+                            <td key={colKey} className="py-3 px-4 whitespace-nowrap">
+                              <span className={`inline-block px-2.5 py-0.5 rounded-full text-[11px] font-medium border ${info.color}`}>
+                                {info.label}
+                              </span>
                             </td>
                           );
                         }
@@ -683,10 +717,12 @@ export const TableManager: React.FC<TableManagerProps> = ({
                           if (val !== null && val !== undefined && val !== '' && !isNaN(Number(val))) {
                             const num = Number(val);
                             const withTax = Math.floor(num * 1.1);
+                            const isStartingAt = item.pricing_model === 'starting_at';
+                            const suffix = isStartingAt ? '〜' : '';
                             return (
                               <td key={colKey} className="py-2.5 px-4 font-mono whitespace-nowrap">
-                                <div className="text-slate-200 font-medium">¥{num.toLocaleString()} <span className="text-[10px] text-slate-400 font-sans">(税抜)</span></div>
-                                <div className="text-xs text-indigo-300 font-semibold">¥{withTax.toLocaleString()} <span className="text-[10px] text-slate-400 font-sans">(税込)</span></div>
+                                <div className="text-slate-200 font-medium">¥{num.toLocaleString()}{suffix} <span className="text-[10px] text-slate-400 font-sans">(税抜)</span></div>
+                                <div className="text-xs text-indigo-300 font-semibold">¥{withTax.toLocaleString()}{suffix} <span className="text-[10px] text-slate-400 font-sans">(税込)</span></div>
                               </td>
                             );
                           }

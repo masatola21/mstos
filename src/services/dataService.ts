@@ -1,6 +1,7 @@
 import { getSupabase } from '../lib/supabaseClient';
 import { TableKey, Company, Product, Lead, Prospect, Deal, Customer, Diagnosis, AiReport, DiagnosisStatus } from '../types/database';
 import { executeDealWonAutomation } from './dealWonAutomationService';
+import { matrixService } from './matrixService';
 
 export type ErrorType = 'PERMISSION_DENIED' | 'SCHEMA_MISMATCH' | 'CONNECTION_ERROR' | 'NOT_CONFIGURED' | 'UNKNOWN';
 
@@ -261,16 +262,37 @@ export async function deleteTableRecord(
     // 1. クライアント側からの直接削除を試行
     const { data, error } = await supabase.from(tableKey).delete().eq('id', record.id).select('id');
     if (!error && data && data.length > 0) {
+      if (tableKey === 'products') {
+        const prodId = String(record.id);
+        matrixService.deleteProduct(prodId);
+        await supabase.from('mst_managed_products').delete().eq('id', prodId);
+      }
       return {};
     }
 
-    // 2. RLSポリシー等でクライアント側から削除できない場合のサーバーAPIフォールバック
+    // 2. 既に削除済みかチェック（存在しない場合は正常終了とする）
+    const { data: existingCheck } = await supabase.from(tableKey).select('id').eq('id', record.id).maybeSingle();
+    if (!existingCheck) {
+      if (tableKey === 'products') {
+        const prodId = String(record.id);
+        matrixService.deleteProduct(prodId);
+        await supabase.from('mst_managed_products').delete().eq('id', prodId);
+      }
+      return {};
+    }
+
+    // 3. RLSポリシー等でクライアント側から削除できない場合のサーバーAPIフォールバック
     try {
       const resp = await fetch(`/api/admin/tables/${encodeURIComponent(tableKey)}/records/${encodeURIComponent(String(record.id))}?force=${options?.force ? 'true' : 'false'}`, {
         method: 'DELETE',
         headers: { 'Content-Type': 'application/json' },
       });
       if (resp.ok) {
+        if (tableKey === 'products') {
+          const prodId = String(record.id);
+          matrixService.deleteProduct(prodId);
+          await supabase.from('mst_managed_products').delete().eq('id', prodId);
+        }
         return {};
       }
     } catch {

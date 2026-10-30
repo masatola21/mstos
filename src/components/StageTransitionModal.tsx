@@ -21,8 +21,10 @@ import {
   ShieldAlert,
   Briefcase,
   Layers,
-  UserCheck
+  UserCheck,
+  Sparkles
 } from 'lucide-react';
+import { formatProductPrice } from '../services/productCatalogService';
 
 export type TransitionType = 'prospect_to_lead' | 'lead_to_deal' | 'deal_to_customer';
 
@@ -544,13 +546,39 @@ export const StageTransitionModal: React.FC<StageTransitionModalProps> = ({
                       className="w-full px-3 py-2 rounded-xl bg-slate-950 border border-slate-700 text-slate-200 text-xs outline-none focus:border-blue-500"
                     >
                       <option value="">-- 未定 --</option>
-                      {products.map((p) => (
-                        <option key={p.id} value={p.id}>
-                          {p.product_name} (月額: ¥{Number(p.monthly_fee || 0).toLocaleString()})
-                        </option>
-                      ))}
+                      {products.map((p) => {
+                        const priceInfo = formatProductPrice(p);
+                        return (
+                          <option key={p.id} value={p.id}>
+                            {p.product_name} ({priceInfo.label}{priceInfo.isFlexible ? ` 【${priceInfo.badge}】` : ''})
+                          </option>
+                        );
+                      })}
                     </select>
                   </div>
+
+                  {(() => {
+                    const currentProduct = products.find((p) => p.id === productId);
+                    if (!currentProduct || !currentProduct.pricing_model || currentProduct.pricing_model === 'fixed') {
+                      return null;
+                    }
+                    const modelLabel = currentProduct.pricing_model === 'starting_at' 
+                      ? '最低価格〜（商談で本決め）' 
+                      : currentProduct.pricing_model === 'range' 
+                      ? '価格帯（商談で本決め）' 
+                      : '個別見積・商談時決定';
+                    return (
+                      <div className="rounded-xl border border-cyan-500/40 bg-cyan-950/40 p-3 text-xs text-cyan-200 space-y-1">
+                        <div className="flex items-center gap-1.5 font-bold text-cyan-300">
+                          <Sparkles className="w-3.5 h-3.5 text-cyan-400" />
+                          <span>融通設定商品: {modelLabel}</span>
+                        </div>
+                        <p className="text-[11px] text-cyan-200/90 leading-relaxed">
+                          {currentProduct.price_note ? `💡 ${currentProduct.price_note}` : '💡 システム保守など顧客のアカウント規模や対応要件に合わせて、下記の金額欄に商談で合意した本決め金額を自由に入力してください。'}
+                        </p>
+                      </div>
+                    );
+                  })()}
 
                   <ProposalPlanTemplatePicker
                     productId={productId}

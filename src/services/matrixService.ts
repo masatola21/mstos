@@ -10,7 +10,7 @@ import {
   BusinessCategory,
 } from '../types/matrix';
 
-const pendingDeletionMemory = new Map<string, { contracts: Set<string>; invoices: Set<string> }>();
+const pendingDeletionMemory = new Map<string, { contracts: Set<string>; invoices: Set<string>; products: Set<string> }>();
 let activeMatrixUserId = '';
 
 const MATRIX_STORAGE_KEYS = {
@@ -130,7 +130,7 @@ const BUSINESS_DEFAULT_PRODUCTS: ManagedProduct[] = [
   { id: "D002", name: "AI業務アシスト構築", code: "D002", category: "業務・経営自動化", archetype: "service_project", price: 500000, salesInitialFee: 500000, salesMonthlyFee: 0, description: "提案書・見積・文章作成など業務支援AI構築", status: "active", customFields: {"contractType":"単発","phase":"AI強化","usageCategory":"AIアシスト","proposalOrder":9,"normalTransitionTarget":"D002","monitorConditions":"","statusLabel":"提供中"}, createdAt: Date.now(), updatedAt: Date.now() },
   { id: "D003", name: "AI自動化構築", code: "D003", category: "業務・経営自動化", archetype: "service_project", price: 800000, salesInitialFee: 800000, salesMonthlyFee: 30000, description: "GAS連携・業務フロー自動化構築", status: "active", customFields: {"contractType":"ハイブリッド","phase":"AI強化","usageCategory":"AI自動化","proposalOrder":10,"normalTransitionTarget":"D003","monitorConditions":"","statusLabel":"提供中"}, createdAt: Date.now(), updatedAt: Date.now() },
   { id: "D004", name: "AI経営統合OS構築", code: "D004", category: "業務・経営自動化", archetype: "service_project", price: 1500000, salesInitialFee: 1500000, salesMonthlyFee: 30000, description: "AI＋GAS＋CRM統合による経営自動化基盤", status: "active", customFields: {"contractType":"ハイブリッド","phase":"AI強化","usageCategory":"AI経営OS","proposalOrder":11,"normalTransitionTarget":"D004","monitorConditions":"","statusLabel":"提供中"}, createdAt: Date.now(), updatedAt: Date.now() },
-  { id: "M001", name: "システム保守・改善", code: "M001", category: "保守・運用", archetype: "retainer", price: 30000, salesInitialFee: 0, salesMonthlyFee: 30000, description: "構築後の改善・軽微修正・運用支援", status: "active", customFields: {"contractType":"月額","phase":"運用","usageCategory":"保守","proposalOrder":12,"normalTransitionTarget":"M001","monitorConditions":"","statusLabel":"提供中"}, createdAt: Date.now(), updatedAt: Date.now() },
+  { id: "M001", name: "システム保守・改善", code: "M001", category: "保守・運用", archetype: "retainer", price: 10000, pricingModel: "starting_at", priceRangeMax: 50000, priceNote: "アカウント数やサーバー規模・対応範囲に応じて商談で本決め", salesInitialFee: 0, salesMonthlyFee: 10000, description: "構築後の改善・軽微修正・運用支援（月額10,000円〜、商談で要件に合わせて本決め）", status: "active", customFields: {"contractType":"月額","phase":"運用","usageCategory":"保守","proposalOrder":12,"normalTransitionTarget":"M001","monitorConditions":"","statusLabel":"提供中"}, createdAt: Date.now(), updatedAt: Date.now() },
   { id: "T001", name: "B001単体業務モニター", code: "T001", category: "モニター", archetype: "service_project", price: 100000, salesInitialFee: 100000, salesMonthlyFee: 0, description: "案件・見積・請求など単一業務の仕組み化検証（B001相当）", status: "developing", customFields: {"contractType":"単発","phase":"業務システム検証","usageCategory":"B001","proposalOrder":1,"normalTransitionTarget":"B001","monitorConditions":"事例掲載・感想提供","statusLabel":"テスト中"}, createdAt: Date.now(), updatedAt: Date.now() },
   { id: "T002", name: "B002標準業務モニター", code: "T002", category: "モニター", archetype: "service_project", price: 250000, salesInitialFee: 250000, salesMonthlyFee: 0, description: "2〜3機能連携による業務改善システム検証（B002相当）", status: "developing", customFields: {"contractType":"単発","phase":"業務システム検証","usageCategory":"B002","proposalOrder":2,"normalTransitionTarget":"B002","monitorConditions":"事例掲載・感想提供","statusLabel":"テスト中"}, createdAt: Date.now(), updatedAt: Date.now() },
   { id: "T003", name: "B001単体業務モニター（案件管理）", code: "T003", category: "モニター", archetype: "service_project", price: 100000, salesInitialFee: 100000, salesMonthlyFee: 0, description: "案件管理システム導入の検証（B001相当）", status: "developing", customFields: {"contractType":"単発","phase":"業務システム検証","usageCategory":"B001","proposalOrder":3,"normalTransitionTarget":"B001","monitorConditions":"事例掲載・感想提供","statusLabel":"テスト中"}, createdAt: Date.now(), updatedAt: Date.now() },
@@ -255,6 +255,9 @@ export const matrixService = {
   setActiveUserId(userId: string) {
     activeMatrixUserId = userId;
   },
+  getActiveUserId(): string {
+    return activeMatrixUserId;
+  },
   // Products
   loadProducts(): ManagedProduct[] {
     try {
@@ -267,9 +270,11 @@ export const matrixService = {
         localStorage.setItem(MATRIX_STORAGE_KEYS.PRODUCTS_SEED_VERSION, '2026-10-catalog-v1');
         return merged;
       }
-      return saved;
+      const pendingDeletions = this.getPendingDeletions(activeMatrixUserId);
+      return saved.filter((p) => !pendingDeletions.products.has(p.id));
     } catch {
-      return [...INITIAL_PRODUCTS, ...BUSINESS_DEFAULT_PRODUCTS];
+      const pendingDeletions = this.getPendingDeletions(activeMatrixUserId);
+      return [...INITIAL_PRODUCTS, ...BUSINESS_DEFAULT_PRODUCTS].filter((p) => !pendingDeletions.products.has(p.id));
     }
   },
   saveProducts(products: ManagedProduct[]) {
@@ -279,7 +284,7 @@ export const matrixService = {
     const list = this.loadProducts();
     const newProduct: ManagedProduct = {
       ...product,
-      id: `prd-${Date.now()}`,
+      id: product.code || `prd-${Date.now()}`,
       createdAt: Date.now(),
       updatedAt: Date.now(),
     };
@@ -296,35 +301,42 @@ export const matrixService = {
     }
   },
   deleteProduct(id: string) {
+    if (activeMatrixUserId) {
+      this.recordPendingDeletion(activeMatrixUserId, 'products', id);
+    }
     const list = this.loadProducts().filter((p) => p.id !== id);
     this.saveProducts(list);
   },
 
-  // Pending contract and invoice deletions are scoped to the signed-in user.
-  getPendingDeletions(userId: string): { contracts: Set<string>; invoices: Set<string> } {
+  // Pending contract, invoice, and product deletions are scoped to the signed-in user.
+  getPendingDeletions(userId: string): { contracts: Set<string>; invoices: Set<string>; products: Set<string> } {
+    if (!userId) {
+      return { contracts: new Set(), invoices: new Set(), products: new Set() };
+    }
     const cached = pendingDeletionMemory.get(userId);
-    if (cached) return { contracts: new Set(cached.contracts), invoices: new Set(cached.invoices) };
+    if (cached) return { contracts: new Set(cached.contracts), invoices: new Set(cached.invoices), products: new Set(cached.products) };
     try {
       const raw = localStorage.getItem(`${MATRIX_STORAGE_KEYS.PENDING_DELETIONS}${userId}`);
-      const parsed = raw ? JSON.parse(raw) as { contracts?: string[]; invoices?: string[] } : {};
-      const value = { contracts: new Set(parsed.contracts || []), invoices: new Set(parsed.invoices || []) };
+      const parsed = raw ? JSON.parse(raw) as { contracts?: string[]; invoices?: string[]; products?: string[] } : {};
+      const value = { contracts: new Set(parsed.contracts || []), invoices: new Set(parsed.invoices || []), products: new Set(parsed.products || []) };
       pendingDeletionMemory.set(userId, value);
-      return { contracts: new Set(value.contracts), invoices: new Set(value.invoices) };
+      return { contracts: new Set(value.contracts), invoices: new Set(value.invoices), products: new Set(value.products) };
     } catch {
-      const value = { contracts: new Set<string>(), invoices: new Set<string>() };
+      const value = { contracts: new Set<string>(), invoices: new Set<string>(), products: new Set<string>() };
       pendingDeletionMemory.set(userId, value);
-      return { contracts: new Set(), invoices: new Set() };
+      return { contracts: new Set(), invoices: new Set(), products: new Set() };
     }
   },
   clearPendingDeletions(userId: string) {
-    pendingDeletionMemory.set(userId, { contracts: new Set(), invoices: new Set() });
+    pendingDeletionMemory.set(userId, { contracts: new Set(), invoices: new Set(), products: new Set() });
     try {
       localStorage.removeItem(`${MATRIX_STORAGE_KEYS.PENDING_DELETIONS}${userId}`);
     } catch {
       // The cloud save succeeded; a stale local marker is harmless and will be retried.
     }
   },
-  recordPendingDeletion(userId: string, kind: 'contracts' | 'invoices', id: string) {
+  recordPendingDeletion(userId: string, kind: 'contracts' | 'invoices' | 'products', id: string) {
+    if (!userId) return;
     const pending = this.getPendingDeletions(userId);
     pending[kind].add(id);
     pendingDeletionMemory.set(userId, pending);
@@ -332,6 +344,7 @@ export const matrixService = {
       localStorage.setItem(`${MATRIX_STORAGE_KEYS.PENDING_DELETIONS}${userId}`, JSON.stringify({
         contracts: [...pending.contracts],
         invoices: [...pending.invoices],
+        products: [...pending.products],
       }));
     } catch {
       // Keep the in-memory marker so this session still cannot restore the deleted row.

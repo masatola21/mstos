@@ -193,7 +193,6 @@ export const ProductCoCreationWizard: React.FC<ProductCoCreationWizardProps> = (
         currentRevenue: 0,
         activeClients: 0,
       },
-      salesCatalogPublishedAt: Date.now(),
       createdAt: Date.now(),
       updatedAt: Date.now(),
     };

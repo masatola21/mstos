@@ -548,6 +548,7 @@ export async function loadOrMigrateWorkspaceData(userId: string): Promise<Worksp
   }
 
   const pendingDeletions = matrixService.getPendingDeletions(userId);
+  merged.products = merged.products.filter((record) => !pendingDeletions.products.has(record.id));
   merged.contracts = merged.contracts.filter((record) => !pendingDeletions.contracts.has(record.id));
   merged.invoices = merged.invoices.filter((record) => !pendingDeletions.invoices.has(record.id));
 

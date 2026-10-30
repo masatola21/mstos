@@ -24,11 +24,12 @@ import {
   Check,
   GripVertical,
 } from 'lucide-react';
-import { ManagedProduct, PRODUCT_ARCHETYPES, ProductArchetype, ManagedContract, ManagedInvoice, ManagedToolAsset } from '../../types/matrix';
+import { ManagedProduct, PRODUCT_ARCHETYPES, ProductArchetype, PricingModel, ManagedContract, ManagedInvoice, ManagedToolAsset } from '../../types/matrix';
 import { ApiUsageData, Project, TaskItem, CharacterConfig, UserProfile } from '../../types/ai-president';
 import { ProductCoCreationWizard } from './ProductCoCreationWizard';
-import { generateNextProductCode } from '../../services/productCatalogService';
+import { generateNextProductCode, formatProductPrice } from '../../services/productCatalogService';
 import { calculateProductKPIs } from '../../services/businessSummaryService';
+import { matrixService } from '../../services/matrixService';
 
 interface ProductHubViewProps {
   products: ManagedProduct[];
@@ -152,7 +153,10 @@ export const ProductHubView: React.FC<ProductHubViewProps> = ({
   // New product manual form
   const [manualName, setManualName] = useState('');
   const [manualArchetype, setManualArchetype] = useState<ProductArchetype>('service_project');
+  const [manualPricingModel, setManualPricingModel] = useState<PricingModel>('fixed');
   const [manualPrice, setManualPrice] = useState('');
+  const [manualPriceRangeMax, setManualPriceRangeMax] = useState('');
+  const [manualPriceNote, setManualPriceNote] = useState('');
   const [manualTargetRevenue, setManualTargetRevenue] = useState('');
   const [manualDesc, setManualDesc] = useState('');
 
@@ -280,6 +284,9 @@ export const ProductHubView: React.FC<ProductHubViewProps> = ({
       archetype: manualArchetype,
       category: PRODUCT_ARCHETYPES[manualArchetype].label,
       price: derivedPrice,
+      pricingModel: manualPricingModel,
+      priceRangeMax: manualPriceRangeMax ? Math.max(0, Number(manualPriceRangeMax)) : undefined,
+      priceNote: manualPriceNote.trim() || undefined,
       salesInitialFee: initialFee,
       salesMonthlyFee: monthlyFee,
       description: manualDesc.trim(),
@@ -297,6 +304,9 @@ export const ProductHubView: React.FC<ProductHubViewProps> = ({
 
     setManualName('');
     setManualPrice('');
+    setManualPricingModel('fixed');
+    setManualPriceRangeMax('');
+    setManualPriceNote('');
     setManualTargetRevenue('');
     setManualDesc('');
     setIsNewProductModalOpen(false);
@@ -459,12 +469,7 @@ export const ProductHubView: React.FC<ProductHubViewProps> = ({
               const isSelected = p.id === selectedProductId;
               const isBeingDragged = draggedProductId === p.id;
               const isDragOver = dragOverProductId === p.id;
-              const rawPrice = p.price || 0;
-              const initFee = p.salesInitialFee ?? rawPrice;
-              const monthlyFee = p.salesMonthlyFee ?? 0;
-              const priceLabel = p.salesCatalogPublishedAt
-                ? `初期 税抜¥${initFee.toLocaleString()} / 月額 税抜¥${monthlyFee.toLocaleString()}`
-                : `税抜 ¥${rawPrice.toLocaleString()} (税込 ¥${Math.floor(rawPrice * 1.1).toLocaleString()})`;
+              const priceInfo = formatProductPrice(p);
 
               return (
                 <div
@@ -490,7 +495,7 @@ export const ProductHubView: React.FC<ProductHubViewProps> = ({
                     setDragOverProductId(null);
                   }}
                   onClick={() => setSelectedProductId(p.id)}
-                  className={`grid w-full grid-cols-[28px_minmax(0,1fr)_minmax(100px,0.35fr)_minmax(115px,0.4fr)] items-center gap-3 px-4 py-2.5 text-left transition-all cursor-pointer ${
+                  className={`grid w-full grid-cols-[28px_minmax(0,1fr)_minmax(100px,0.35fr)_minmax(125px,0.45fr)] items-center gap-3 px-4 py-2.5 text-left transition-all cursor-pointer ${
                     isSelected ? 'bg-indigo-500/15 text-white' : 'text-slate-300 hover:bg-slate-900'
                   } ${isBeingDragged ? 'opacity-40 bg-slate-900' : ''} ${
                     isDragOver ? 'border-t-2 border-indigo-400 bg-indigo-500/20' : ''
@@ -514,9 +519,18 @@ export const ProductHubView: React.FC<ProductHubViewProps> = ({
                   <span className="truncate text-[11px] text-slate-400">
                     {PRODUCT_ARCHETYPES[p.archetype]?.label || p.category}
                   </span>
-                  <span className="truncate text-right text-[11px] text-slate-300 font-mono">
-                    {priceLabel}
-                  </span>
+                  <div className="text-right text-[11px] font-mono min-w-0">
+                    <div className="truncate text-slate-200 font-semibold">{priceInfo.label}</div>
+                    {priceInfo.isFlexible ? (
+                      <span className="inline-block px-1.5 py-0.2 rounded bg-cyan-950/80 text-[10px] text-cyan-300 font-sans border border-cyan-800/40">
+                        {priceInfo.badge}
+                      </span>
+                    ) : (
+                      <span className="text-[10px] text-slate-400 font-sans">
+                        {p.salesCatalogPublishedAt ? '営業マスタ登録済' : `税込 ¥${Math.floor((p.price || 0) * 1.1).toLocaleString()}`}
+                      </span>
+                    )}
+                  </div>
                 </div>
               );
             });
@@ -564,7 +578,27 @@ export const ProductHubView: React.FC<ProductHubViewProps> = ({
                     {selectedProduct.salesCatalogPublishedAt ? <Check className="h-4 w-4" /> : <Link2 className="h-4 w-4" />}
                     {selectedProduct.salesCatalogPublishedAt ? '営業商品マスタを更新' : '営業商品マスタに反映'}
                   </button>
-                  {selectedProduct.salesCatalogPublishedAt && <span className="text-[10px] text-emerald-300">CRMと同じ商品IDで連携済み</span>}
+                  {selectedProduct.salesCatalogPublishedAt && (
+                    <div className="flex items-center gap-2">
+                      <span className="text-[10px] text-emerald-300">CRM商品マスタ連携済</span>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          matrixService.deleteProduct(selectedProduct.id);
+                          if (onReorderProducts) {
+                            onReorderProducts(products.filter((p) => p.id !== selectedProduct.id));
+                          }
+                          setProductActionMessage(`「${selectedProduct.name}」を商品マスタへ移行完了として設計一覧から整理しました（商品マスタには保持されます）。`);
+                          setProductActionIsError(false);
+                        }}
+                        className="inline-flex items-center gap-1.5 rounded-lg border border-slate-700 bg-slate-900 px-2.5 py-1.5 text-xs text-slate-300 hover:bg-slate-800 hover:text-white"
+                        title="AIプロダクト設計ワークベンチから除外し、商品マスタのみに保持します"
+                      >
+                        <Layers className="h-3.5 w-3.5 text-slate-400" />
+                        設計一覧から整理（マスタのみ保持）
+                      </button>
+                    </div>
+                  )}
                   {selectedProduct.status === 'archived' ? (
                     <div className="flex items-center gap-2">
                       {onRestoreProduct && (
@@ -622,12 +656,18 @@ export const ProductHubView: React.FC<ProductHubViewProps> = ({
               {/* KPI Badges (契約書・請求書の実データから自動集計) */}
               <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
                 <div className="p-3 bg-slate-950 border border-slate-800 rounded-xl text-center">
-                  <span className="text-[10px] text-slate-500 block">標準単価（税抜 / 税込）</span>
-                  <span className="text-sm font-bold text-white block">
-                    税抜 ¥{(selectedProduct.price || 0).toLocaleString()}
+                  <span className="text-[10px] text-slate-500 block">料金体系 / 単価</span>
+                  <span className="text-sm font-bold text-white block truncate">
+                    {formatProductPrice(selectedProduct).label}
                   </span>
-                  <span className="text-[11px] font-semibold text-cyan-300 block">
-                    税込 ¥{Math.floor((selectedProduct.price || 0) * 1.1).toLocaleString()}
+                  <span className="text-[11px] font-semibold text-cyan-300 block truncate">
+                    {selectedProduct.pricingModel && selectedProduct.pricingModel !== 'fixed' ? (
+                      <span className="inline-block px-1.5 py-0.2 rounded bg-cyan-950/80 text-[10px] text-cyan-300 border border-cyan-800/50">
+                        {selectedProduct.pricingModel === 'starting_at' ? '最低価格〜 (商談で本決め)' : selectedProduct.pricingModel === 'range' ? '価格帯 (商談で本決め)' : '個別見積'}
+                      </span>
+                    ) : (
+                      `税込 ¥${Math.floor((selectedProduct.price || 0) * 1.1).toLocaleString()}`
+                    )}
                   </span>
                 </div>
                 <div className="p-3 bg-slate-950 border border-slate-800 rounded-xl text-center">
@@ -974,13 +1014,24 @@ export const ProductHubView: React.FC<ProductHubViewProps> = ({
               <h3 className="text-lg font-bold text-white">営業商品マスタに反映</h3>
               <p className="mt-1 text-xs leading-5 text-slate-400">「{selectedProduct.name}」をCRM商品マスタへ登録します。商品IDは維持し、同じIDを参照する契約・請求・商談と紐づけます。</p>
             </div>
-            <label className="block text-xs text-slate-300">初期費用（税抜・円）
+            {selectedProduct.pricingModel && selectedProduct.pricingModel !== 'fixed' && (
+              <div className="rounded-lg border border-cyan-500/40 bg-cyan-950/40 p-2.5 text-xs text-cyan-200 space-y-1">
+                <div className="flex items-center gap-1 font-semibold text-cyan-300">
+                  <Sparkles className="w-3.5 h-3.5 text-cyan-400" />
+                  <span>融通設定: {selectedProduct.pricingModel === 'starting_at' ? '最低価格〜（商談で本決め）' : selectedProduct.pricingModel === 'range' ? '価格帯（商談で本決め）' : '個別見積'}</span>
+                </div>
+                {selectedProduct.priceNote && <div className="text-[11px] text-cyan-200/90">メモ: {selectedProduct.priceNote}</div>}
+              </div>
+            )}
+            <label className="block text-xs text-slate-300">
+              {selectedProduct.pricingModel === 'starting_at' ? '最低初期費用（税抜・円）' : '初期費用（税抜・円）'}
               <input type="number" min="0" step="1" value={publishInitialFee} onChange={(event) => setPublishInitialFee(event.target.value)} className="mt-1 w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-white" />
               {publishInitialFee && !isNaN(Number(publishInitialFee)) && (
                 <span className="mt-1 block text-[11px] text-cyan-300 font-medium">税込 (10%): ¥{Math.floor(Number(publishInitialFee) * 1.1).toLocaleString()}</span>
               )}
             </label>
-            <label className="block text-xs text-slate-300">月額費用（税抜・円）
+            <label className="block text-xs text-slate-300">
+              {selectedProduct.pricingModel === 'starting_at' ? '最低月額費用（税抜・円）' : '月額費用（税抜・円）'}
               <input type="number" min="0" step="1" value={publishMonthlyFee} onChange={(event) => setPublishMonthlyFee(event.target.value)} className="mt-1 w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-white" />
               {publishMonthlyFee && !isNaN(Number(publishMonthlyFee)) && (
                 <span className="mt-1 block text-[11px] text-cyan-300 font-medium">税込 (10%): ¥{Math.floor(Number(publishMonthlyFee) * 1.1).toLocaleString()}</span>
@@ -1007,22 +1058,79 @@ export const ProductHubView: React.FC<ProductHubViewProps> = ({
               <label className="space-y-1 text-xs text-slate-300">商品タイプ<select value={editProductDraft.archetype} onChange={e=>setEditProductDraft({...editProductDraft,archetype:e.target.value as ProductArchetype})} className="w-full rounded-lg border border-slate-700 bg-slate-950 p-2 text-sm text-white">{(Object.keys(PRODUCT_ARCHETYPES) as ProductArchetype[]).map(key=><option key={key} value={key}>{PRODUCT_ARCHETYPES[key].label}</option>)}</select></label>
               <label className="space-y-1 text-xs text-slate-300">分類<input value={editProductDraft.category || ''} onChange={e=>setEditProductDraft({...editProductDraft,category:e.target.value})} className="w-full rounded-lg border border-slate-700 bg-slate-950 p-2 text-sm text-white" /></label>
               <label className="space-y-1 text-xs text-slate-300">ステータス<select value={editProductDraft.status} onChange={e=>setEditProductDraft({...editProductDraft,status:e.target.value as ManagedProduct['status']})} className="w-full rounded-lg border border-slate-700 bg-slate-950 p-2 text-sm text-white"><option value="planning">企画中</option><option value="developing">開発中</option><option value="active">運用中</option><option value="archived">取扱停止</option></select></label>
+              <div className="md:col-span-2 rounded-xl border border-indigo-500/30 bg-indigo-950/20 p-4 space-y-3">
+                <div>
+                  <h4 className="text-xs font-bold text-white flex items-center gap-1.5">
+                    <Sparkles className="w-4 h-4 text-cyan-400" />
+                    <span>料金体系・融通設定（商談で本決め）</span>
+                  </h4>
+                  <p className="text-[11px] text-slate-400 mt-0.5">
+                    システム保守など「月額 ¥10,000〜」のように設定し、商談でアカウント規模や要件に合わせて本決めできます。何パターンもマスタを作る手間を削減できます。
+                  </p>
+                </div>
+
+                <div className="grid gap-3 sm:grid-cols-2">
+                  <label className="space-y-1 text-xs text-slate-300">
+                    料金モデル
+                    <select
+                      value={editProductDraft.pricingModel || 'fixed'}
+                      onChange={(e) => setEditProductDraft({ ...editProductDraft, pricingModel: e.target.value as PricingModel })}
+                      className="w-full rounded-lg border border-slate-700 bg-slate-950 p-2 text-sm text-white"
+                    >
+                      <option value="fixed">固定価格（通常設定）</option>
+                      <option value="starting_at">最低価格〜（商談で本決め・おすすめ）</option>
+                      <option value="range">価格帯（〜円 から 〜円）</option>
+                      <option value="custom_quote">個別見積・商談時決定</option>
+                    </select>
+                  </label>
+
+                  {editProductDraft.pricingModel === 'range' && (
+                    <label className="space-y-1 text-xs text-slate-300">
+                      上限価格（税抜・円）
+                      <input
+                        type="number"
+                        min="0"
+                        placeholder="例: 50000"
+                        value={editProductDraft.priceRangeMax ?? ''}
+                        onChange={(e) => setEditProductDraft({ ...editProductDraft, priceRangeMax: e.target.value === '' ? undefined : Number(e.target.value) })}
+                        className="w-full rounded-lg border border-slate-700 bg-slate-950 p-2 text-sm text-white"
+                      />
+                    </label>
+                  )}
+
+                  <label className="space-y-1 text-xs text-slate-300 sm:col-span-2">
+                    商談時ガイド・融通メモ
+                    <input
+                      type="text"
+                      placeholder="例: アカウント数やサーバー規模、対応時間に応じて商談で本決め"
+                      value={editProductDraft.priceNote || ''}
+                      onChange={(e) => setEditProductDraft({ ...editProductDraft, priceNote: e.target.value })}
+                      className="w-full rounded-lg border border-slate-700 bg-slate-950 p-2 text-sm text-white"
+                    />
+                  </label>
+                </div>
+              </div>
+
               <label className="space-y-1 text-xs text-slate-300">
-                標準価格（税抜・円）
+                {editProductDraft.pricingModel === 'starting_at' ? '最低標準価格（税抜・円）' : editProductDraft.pricingModel === 'range' ? '下限標準価格（税抜・円）' : '標準価格（税抜・円）'}
                 <input type="number" min="0" value={editProductDraft.price ?? ''} onChange={e=>setEditProductDraft({...editProductDraft,price:e.target.value===''?undefined:Number(e.target.value)})} className="w-full rounded-lg border border-slate-700 bg-slate-950 p-2 text-sm text-white" />
                 {editProductDraft.price != null && !isNaN(editProductDraft.price) && (
-                  <span className="block text-[11px] text-cyan-300 font-medium">税込 (10%): ¥{Math.floor(editProductDraft.price * 1.1).toLocaleString()}</span>
+                  <span className="block text-[11px] text-cyan-300 font-medium">
+                    {editProductDraft.pricingModel === 'starting_at'
+                      ? `税込 ¥${Math.floor(editProductDraft.price * 1.1).toLocaleString()}〜 (商談で本決め)`
+                      : `税込 (10%): ¥${Math.floor(editProductDraft.price * 1.1).toLocaleString()}`}
+                  </span>
                 )}
               </label>
               <label className="space-y-1 text-xs text-slate-300">
-                営業マスタ 初期費用（税抜・円）
+                {editProductDraft.pricingModel === 'starting_at' ? '営業マスタ 最低初期費用（税抜・円）' : '営業マスタ 初期費用（税抜・円）'}
                 <input type="number" min="0" value={editProductDraft.salesInitialFee ?? ''} onChange={e=>setEditProductDraft({...editProductDraft,salesInitialFee:e.target.value===''?undefined:Number(e.target.value)})} className="w-full rounded-lg border border-slate-700 bg-slate-950 p-2 text-sm text-white" />
                 {editProductDraft.salesInitialFee != null && !isNaN(editProductDraft.salesInitialFee) && (
                   <span className="block text-[11px] text-cyan-300 font-medium">税込 (10%): ¥{Math.floor(editProductDraft.salesInitialFee * 1.1).toLocaleString()}</span>
                 )}
               </label>
               <label className="space-y-1 text-xs text-slate-300">
-                営業マスタ 月額費用（税抜・円）
+                {editProductDraft.pricingModel === 'starting_at' ? '営業マスタ 最低月額費用（税抜・円）' : '営業マスタ 月額費用（税抜・円）'}
                 <input type="number" min="0" value={editProductDraft.salesMonthlyFee ?? ''} onChange={e=>setEditProductDraft({...editProductDraft,salesMonthlyFee:e.target.value===''?undefined:Number(e.target.value)})} className="w-full rounded-lg border border-slate-700 bg-slate-950 p-2 text-sm text-white" />
                 {editProductDraft.salesMonthlyFee != null && !isNaN(editProductDraft.salesMonthlyFee) && (
                   <span className="block text-[11px] text-cyan-300 font-medium">税込 (10%): ¥{Math.floor(editProductDraft.salesMonthlyFee * 1.1).toLocaleString()}</span>
@@ -1116,18 +1224,61 @@ export const ProductHubView: React.FC<ProductHubViewProps> = ({
                 </select>
               </div>
 
+              <div className="rounded-xl border border-indigo-500/30 bg-indigo-950/20 p-3 space-y-2">
+                <label className="block text-xs font-semibold text-white">料金モデル（融通設定）</label>
+                <select
+                  value={manualPricingModel}
+                  onChange={(e) => setManualPricingModel(e.target.value as PricingModel)}
+                  className="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-indigo-500"
+                >
+                  <option value="fixed">固定価格</option>
+                  <option value="starting_at">最低価格〜（商談で本決め・おすすめ）</option>
+                  <option value="range">価格帯（〜円 から 〜円）</option>
+                  <option value="custom_quote">個別見積・商談時決定</option>
+                </select>
+
+                {manualPricingModel === 'range' && (
+                  <div>
+                    <label className="block text-xs font-medium text-slate-300 mb-1">上限価格（税抜・円）</label>
+                    <input
+                      type="number"
+                      min="0"
+                      value={manualPriceRangeMax}
+                      onChange={(e) => setManualPriceRangeMax(e.target.value)}
+                      placeholder="例: 50000"
+                      className="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-indigo-500"
+                    />
+                  </div>
+                )}
+
+                <div>
+                  <label className="block text-xs font-medium text-slate-300 mb-1">商談時ガイド・メモ</label>
+                  <input
+                    type="text"
+                    value={manualPriceNote}
+                    onChange={(e) => setManualPriceNote(e.target.value)}
+                    placeholder="例: アカウント数やシステム規模により商談で本決め"
+                    className="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-indigo-500"
+                  />
+                </div>
+              </div>
+
               <div>
-                <label className="block text-xs font-medium text-slate-300 mb-1">標準価格 (税抜・円)</label>
+                <label className="block text-xs font-medium text-slate-300 mb-1">
+                  {manualPricingModel === 'starting_at' ? '最低価格（税抜・円）' : manualPricingModel === 'range' ? '下限価格（税抜・円）' : '標準価格 (税抜・円)'}
+                </label>
                 <input
                   type="number"
                   value={manualPrice}
                   onChange={(e) => setManualPrice(e.target.value)}
-                  placeholder="例: 200000"
+                  placeholder="例: 10000"
                   className="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-indigo-500"
                 />
                 {manualPrice && !isNaN(Number(manualPrice)) && (
                   <p className="mt-1 text-[11px] font-medium text-cyan-300">
-                    税込金額 (10%): ¥{Math.floor(Number(manualPrice) * 1.1).toLocaleString()}
+                    {manualPricingModel === 'starting_at'
+                      ? `税込金額 (10%): ¥${Math.floor(Number(manualPrice) * 1.1).toLocaleString()}〜 (商談で本決め)`
+                      : `税込金額 (10%): ¥${Math.floor(Number(manualPrice) * 1.1).toLocaleString()}`}
                   </p>
                 )}
               </div>
