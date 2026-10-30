@@ -16,7 +16,18 @@ const CORE_FORM_FIELDS: Record<TableKey, string[]> = {
   contacts: ['full_name', 'company_id', 'email', 'phone', 'preferred_channel'],
   prospects: ['company_id', 'status', 'source', 'approach_method', 'recommended_product_id', 'target_flag'],
   leads: ['company_id', 'status', 'source', 'service_type', 'priority_channel', 'meeting_date', 'notes'],
-  products: ['product_name', 'product_type', 'phase', 'initial_fee', 'monthly_fee', 'status', 'description'],
+  products: [
+    'product_name',
+    'product_type',
+    'pricing_model',
+    'initial_fee',
+    'monthly_fee',
+    'price_range_max',
+    'price_note',
+    'phase',
+    'status',
+    'description',
+  ],
   deals: ['company_id', 'proposal_plan_name', 'proposal_status', 'product_id', 'lead_id', 'total_amount', 'monthly_fee', 'initial_fee'],
   customers: ['company_id', 'contract_status', 'contract_start_date'],
 };
@@ -358,7 +369,16 @@ export const RecordFormModal: React.FC<RecordFormModalProps> = ({
                 .map((field) => {
                 const value = formData[field.key] ?? '';
                 const error = formErrors[field.key];
-                const isFullWidth = field.type === 'textarea' || field.key === 'company_name' || field.key === 'deal_name';
+                // 料金体系が価格帯(range)でない場合、上限価格項目は非表示
+                if (field.key === 'price_range_max' && formData.pricing_model !== 'range') {
+                  return null;
+                }
+
+                const isFullWidth = field.type === 'textarea' ||
+                  field.key === 'company_name' ||
+                  field.key === 'deal_name' ||
+                  field.key === 'pricing_model' ||
+                  field.key === 'price_note';
 
                 // 会社ID・商談ID・商品コードはDBで採番する。編集時のみ参照用に表示する。
                 if (field.key === 'id' && !isEditing && ['companies', 'deals', 'products'].includes(tableKey)) {
@@ -565,6 +585,22 @@ export const RecordFormModal: React.FC<RecordFormModalProps> = ({
                           className="w-full px-3 py-2 rounded-xl bg-slate-950 border border-slate-700/80 text-slate-200 text-xs outline-none focus:border-blue-500"
                         />
                       )}
+                      {field.key === 'pricing_model' && (
+                        <div className="p-2.5 rounded-xl bg-indigo-950/40 border border-indigo-500/30 text-[11px] text-indigo-200 space-y-1">
+                          {value === 'starting_at' && (
+                            <p>💡 <strong>最低価格〜（商談で本決め）</strong>: 月額や初期費用の金額欄に「最低価格（例: ￥10,000）」を入力してください。商談画面で「￥10,000〜」と表示され、顧客規模に合わせて本決め金額を入力できます。</p>
+                          )}
+                          {value === 'range' && (
+                            <p>💡 <strong>価格帯（商談で本決め）</strong>: 月額費用を下限、下記の上限価格欄を上限（例: ￥10,000〜￥50,000）として設定し、商談で合意金額を本決めできます。</p>
+                          )}
+                          {value === 'custom_quote' && (
+                            <p>💡 <strong>個別見積・商談時決定</strong>: 定額を設定せず、商談時にヒアリングして本決めします。</p>
+                          )}
+                          {(!value || value === 'fixed') && (
+                            <p>💡 <strong>固定価格</strong>: 定額提示の通常商品です。商談で融通を利かせたい場合は「最低価格〜」や「価格帯」へ切り替えてください。</p>
+                          )}
+                        </div>
+                      )}
                       {error && <p className="text-[11px] text-rose-400">{error}</p>}
                     </div>
                   );
@@ -613,12 +649,31 @@ export const RecordFormModal: React.FC<RecordFormModalProps> = ({
                   );
                 }
 
+                // ラベルの動的調整（最低価格〜の場合）
+                let displayLabel = field.label;
+                let displayPlaceholder = field.placeholder;
+                if (tableKey === 'products' && formData.pricing_model === 'starting_at') {
+                  if (field.key === 'initial_fee') {
+                    displayLabel = '最低初期費用 (円) 〜';
+                    displayPlaceholder = '例: 300000（商談で本決め）';
+                  } else if (field.key === 'monthly_fee') {
+                    displayLabel = '最低月額費用 (円) 〜';
+                    displayPlaceholder = '例: 10000（商談で本決め）';
+                  }
+                } else if (tableKey === 'products' && formData.pricing_model === 'range') {
+                  if (field.key === 'monthly_fee') {
+                    displayLabel = '下限月額費用 (円)';
+                  } else if (field.key === 'price_range_max') {
+                    displayLabel = '上限月額費用 (円)';
+                  }
+                }
+
                 // 通常の input (text, number, date, email, url, tel)
                 return (
                   <div key={field.key} className={`space-y-1.5 ${isFullWidth ? 'sm:col-span-2' : ''}`}>
                     <label className="block text-xs font-semibold text-slate-300 flex items-center justify-between">
                       <span>
-                        {field.label} {field.required && <span className="text-rose-400">*</span>}
+                        {displayLabel} {field.required && <span className="text-rose-400">*</span>}
                       </span>
                       <span className="font-mono text-[10px] text-slate-500">{field.key}</span>
                     </label>
@@ -636,7 +691,7 @@ export const RecordFormModal: React.FC<RecordFormModalProps> = ({
                         website: 'url',
                       } as Record<string, string>)[field.key]}
                       value={value}
-                      placeholder={field.placeholder}
+                      placeholder={displayPlaceholder}
                       onChange={(e) => handleInputChange(field.key, e.target.value)}
                       className={`w-full px-3 py-2 rounded-xl bg-slate-950 border ${
                         error ? 'border-rose-500' : 'border-slate-700/80'

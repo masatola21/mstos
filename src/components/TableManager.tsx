@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { TableKey, TABLE_CONFIGS } from '../types/database';
-import { deleteTableRecord, fetchTableData, DataFetchError } from '../services/dataService';
+import { deleteTableRecord, fetchTableData, updateRecord, DataFetchError } from '../services/dataService';
 import { InlineDeleteButton } from './InlineDeleteButton';
 import { RecordDetailModal } from './RecordDetailModal';
 import { RecordFormModal } from './RecordFormModal';
@@ -274,6 +274,34 @@ export const TableManager: React.FC<TableManagerProps> = ({
     setData((current) => current.filter((item) => String(item.id) !== String(record.id)));
     setSuccessBanner(force ? `「${label}」を関連付け解除の上、完全削除しました。` : `「${label}」を削除しました。`);
     window.setTimeout(() => setSuccessBanner(null), 5000);
+  };
+
+  const handleQuickPricingModelChange = async (product: any, newModel: string) => {
+    const label = product.product_name || product.id;
+    const modelLabels: Record<string, string> = {
+      fixed: '固定価格',
+      starting_at: '最低価格〜（商談で本決め）',
+      range: '価格帯（商談で本決め）',
+      custom_quote: '個別見積・商談時決定',
+    };
+    // 楽観的UI更新
+    setData((current) =>
+      current.map((item) =>
+        String(item.id) === String(product.id) ? { ...item, pricing_model: newModel } : item
+      )
+    );
+    setError(null);
+    const result = await updateRecord('products', product.id, {
+      ...product,
+      pricing_model: newModel,
+    });
+    if (result.error) {
+      setError(result.error);
+      await loadData();
+      return;
+    }
+    setSuccessBanner(`商品「${label}」の料金体系を「${modelLabels[newModel] || newModel}」に切り替えました。`);
+    window.setTimeout(() => setSuccessBanner(null), 4000);
   };
 
   // ステータス列のユニーク候補を取得（フィルタ用）
@@ -682,21 +710,33 @@ export const TableManager: React.FC<TableManagerProps> = ({
                           );
                         }
 
-                        // 料金体系（融通設定）バッジ
+                        // 料金体系（融通設定）セレクター
                         if (colKey === 'pricing_model') {
                           const model = String(val || 'fixed');
-                          const modelLabels: Record<string, { label: string; color: string }> = {
-                            starting_at: { label: '最低価格〜（商談で本決め）', color: 'bg-cyan-500/10 text-cyan-300 border-cyan-500/30' },
-                            range: { label: '価格帯（商談で本決め）', color: 'bg-purple-500/10 text-purple-300 border-purple-500/30' },
-                            custom_quote: { label: '個別見積・商談時決定', color: 'bg-amber-500/10 text-amber-300 border-amber-500/30' },
-                            fixed: { label: '固定価格', color: 'bg-slate-800 text-slate-400 border-slate-700' },
-                          };
-                          const info = modelLabels[model] || modelLabels.fixed;
                           return (
-                            <td key={colKey} className="py-3 px-4 whitespace-nowrap">
-                              <span className={`inline-block px-2.5 py-0.5 rounded-full text-[11px] font-medium border ${info.color}`}>
-                                {info.label}
-                              </span>
+                            <td key={colKey} className="py-2.5 px-4 whitespace-nowrap" onClick={(e) => e.stopPropagation()}>
+                              <div className="relative inline-flex items-center">
+                                <select
+                                  value={model}
+                                  onChange={(e) => void handleQuickPricingModelChange(item, e.target.value)}
+                                  className={`appearance-none pl-3 pr-7 py-1 rounded-full text-[11px] font-semibold border outline-none cursor-pointer transition-all ${
+                                    model === 'starting_at'
+                                      ? 'bg-cyan-500/10 text-cyan-300 border-cyan-500/40 hover:bg-cyan-500/20'
+                                      : model === 'range'
+                                      ? 'bg-purple-500/10 text-purple-300 border-purple-500/40 hover:bg-purple-500/20'
+                                      : model === 'custom_quote'
+                                      ? 'bg-amber-500/10 text-amber-300 border-amber-500/40 hover:bg-amber-500/20'
+                                      : 'bg-slate-800 text-slate-300 border-slate-700 hover:bg-slate-750'
+                                  }`}
+                                  title="クリックして料金体系（融通設定）を直接切り替えられます"
+                                >
+                                  <option value="fixed" className="bg-slate-900 text-slate-300">固定価格</option>
+                                  <option value="starting_at" className="bg-slate-900 text-cyan-300">最低価格〜（商談で本決め）</option>
+                                  <option value="range" className="bg-slate-900 text-purple-300">価格帯（商談で本決め）</option>
+                                  <option value="custom_quote" className="bg-slate-900 text-amber-300">個別見積・商談時決定</option>
+                                </select>
+                                <span className="pointer-events-none absolute right-2.5 text-[8px] text-slate-400">▼</span>
+                              </div>
                             </td>
                           );
                         }
@@ -943,8 +983,23 @@ export const TableManager: React.FC<TableManagerProps> = ({
                   )}
                   {item.monthly_fee && (
                     <div className="font-mono text-xs">
-                      <span className="text-slate-400">月額（税抜）: ¥{Number(item.monthly_fee).toLocaleString()}</span>
-                      <span className="ml-2 text-indigo-300">（税込 ¥{Math.floor(Number(item.monthly_fee) * 1.1).toLocaleString()}）</span>
+                      <span className="text-slate-400">月額（税抜）: ¥{Number(item.monthly_fee).toLocaleString()}{item.pricing_model === 'starting_at' ? '〜' : ''}</span>
+                      <span className="ml-2 text-indigo-300">（税込 ¥{Math.floor(Number(item.monthly_fee) * 1.1).toLocaleString()}{item.pricing_model === 'starting_at' ? '〜' : ''}）</span>
+                    </div>
+                  )}
+                  {currentTable === 'products' && (
+                    <div className="flex items-center gap-2 pt-1" onClick={(e) => e.stopPropagation()}>
+                      <span className="text-[11px] text-slate-400">料金体系:</span>
+                      <select
+                        value={String(item.pricing_model || 'fixed')}
+                        onChange={(e) => void handleQuickPricingModelChange(item, e.target.value)}
+                        className="text-xs px-2.5 py-1 rounded-lg bg-slate-950 border border-slate-700 text-slate-200 outline-none"
+                      >
+                        <option value="fixed">固定価格</option>
+                        <option value="starting_at">最低価格〜（商談で本決め）</option>
+                        <option value="range">価格帯（商談で本決め）</option>
+                        <option value="custom_quote">個別見積・商談時決定</option>
+                      </select>
                     </div>
                   )}
                   {item.ai_score !== undefined && item.ai_score !== null && (
