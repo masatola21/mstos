@@ -19,6 +19,7 @@ import {
   Info,
   AlertCircle,
   HelpCircle,
+  Lightbulb,
   ChevronDown,
   ChevronUp,
   Layers,
@@ -56,6 +57,21 @@ export const TRACKING_MEDIA_PRESETS: MediumPreset[] = [
   { id: 'youtube', name: 'YouTube（概要欄・固定コメント）', category: 'Video', badge: '動画', badgeColor: 'bg-rose-500/20 text-rose-300 border-rose-500/30', description: '動画の概要欄や固定コメントの導線リンク', utmSource: 'youtube', utmMedium: 'video' },
   { id: 'newsletter', name: 'メルマガ配信（Eメール）', category: 'Direct', badge: 'メール', badgeColor: 'bg-cyan-500/20 text-cyan-300 border-cyan-500/30', description: '定期メルマガやステップメール本文内のリンク', utmSource: 'newsletter', utmMedium: 'email' },
   { id: 'partner', name: '提携パートナー・外部メディア紹介', category: 'Partner', badge: '外部', badgeColor: 'bg-purple-500/20 text-purple-300 border-purple-500/30', description: 'アライアンス先や紹介記事からの送客リンク', utmSource: 'partner', utmMedium: 'referral' },
+];
+
+export interface CampaignPreset {
+  id: string;
+  name: string;
+  label: string;
+  description: string;
+}
+
+export const CAMPAIGN_PRESETS: CampaignPreset[] = [
+  { id: 'standard', name: '常設・普段の投稿', label: '常設・基本 (standard)', description: '特別な企画ではなく、日々の投稿やプロフに常時置く基本URL' },
+  { id: 'business_opening', name: '独立・開業応援', label: '独立・開業支援 (opening)', description: '新規立ち上げ・開業応援キャンペーン用の告知リンク' },
+  { id: 'free_gift', name: '無料特典・診断配布', label: '無料特典・診断 (gift)', description: 'チェックシートや診断PDFプレゼントなどの企画用リンク' },
+  { id: 'webinar_spring', name: 'セミナー・説明会', label: 'セミナー・説明会 (webinar)', description: 'オンライン説明会やセミナー告知時の専用リンク' },
+  { id: 'new_service', name: '新プラン・サービス開始', label: '新プラン告知 (new_service)', description: '新しいプランやサービス提供開始時の集中集客用' },
 ];
 
 const ICON_MAP = {
@@ -134,7 +150,7 @@ export const MarketingQuickLinksHub: React.FC = () => {
   const [links, setLinks] = useState<OfficialLinkItem[]>(defaultLinks);
   const [copiedKey, setCopiedKey] = useState<string | null>(null);
   const [selectedMedium, setSelectedMedium] = useState<string>('note');
-  const [campaignName, setCampaignName] = useState<string>('brand_awareness');
+  const [campaignName, setCampaignName] = useState<string>('standard');
   const [feedbackMessage, setFeedbackMessage] = useState<string | null>(null);
 
   // UTM表示モード & マトリクス選択状態
@@ -618,37 +634,80 @@ export const MarketingQuickLinksHub: React.FC = () => {
         </div>
 
         {/* 施策・キャンペーン名設定（全モード共通） */}
-        <div className="rounded-xl border border-slate-800 bg-slate-950/60 p-3.5 space-y-2">
+        <div className="rounded-xl border border-slate-800 bg-slate-950/70 p-4 space-y-3">
           <div className="flex flex-wrap items-center justify-between gap-2">
-            <label className="text-xs font-bold text-slate-200 flex items-center gap-1.5">
-              <span>施策・キャンペーン識別名（utm_campaign）</span>
-              <span className="text-[10px] text-slate-400 font-normal">いつの・何の企画からの流入かを記録</span>
-            </label>
-            <div className="flex items-center gap-1.5">
-              <span className="text-[11px] text-slate-400">ワンクリック選択:</span>
-              {['brand_awareness', 'care_opening', 'lead_magnet', 'webinar_spring', 'dx_package'].map((tag) => (
-                <button
-                  key={tag}
-                  type="button"
-                  onClick={() => setCampaignName(tag)}
-                  className={`text-[10px] px-2 py-0.5 rounded border transition font-mono ${
-                    campaignName === tag
-                      ? 'bg-indigo-600 text-white border-indigo-500 font-semibold'
-                      : 'bg-slate-800 text-slate-300 border-slate-700 hover:border-slate-600'
-                  }`}
-                >
-                  {tag}
-                </button>
-              ))}
+            <div>
+              <label className="text-xs font-bold text-white flex items-center gap-1.5">
+                <span className="flex h-2 w-2 rounded-full bg-indigo-400"></span>
+                <span>施策・企画名（utm_campaign）の選択・入力</span>
+              </label>
+              <p className="mt-0.5 text-[11px] text-slate-400">
+                「いつの・どんな企画で配ったリンクか」をカルテに記録する目印です（普段使いなら「常設」のままでOK）。
+              </p>
+            </div>
+            <span className="text-[10px] text-indigo-300 font-mono bg-indigo-950/80 px-2 py-0.5 rounded border border-indigo-700/50">
+              現在適用中: {campaignName}
+            </span>
+          </div>
+
+          {/* 日本語ワンクリック選択ボタン */}
+          <div>
+            <div className="text-[11px] font-semibold text-slate-300 mb-1.5 flex items-center gap-1">
+              <span>よく使う企画プリセット（ワンクリックで切り替え）:</span>
+            </div>
+            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-2">
+              {CAMPAIGN_PRESETS.map((preset) => {
+                const isSelected = campaignName === preset.id;
+                return (
+                  <button
+                    key={preset.id}
+                    type="button"
+                    onClick={() => setCampaignName(preset.id)}
+                    className={`text-left p-2 rounded-lg border text-xs transition flex flex-col justify-between ${
+                      isSelected
+                        ? 'bg-indigo-600 text-white border-indigo-500 font-bold shadow-sm'
+                        : 'bg-slate-900 text-slate-300 border-slate-800 hover:border-slate-700 hover:bg-slate-850'
+                    }`}
+                  >
+                    <span className="truncate">{preset.name}</span>
+                    <span className={`text-[10px] font-mono truncate mt-0.5 ${isSelected ? 'text-indigo-200' : 'text-slate-400'}`}>
+                      {preset.id}
+                    </span>
+                  </button>
+                );
+              })}
             </div>
           </div>
-          <input
-            type="text"
-            value={campaignName}
-            onChange={(e) => setCampaignName(e.target.value)}
-            placeholder="例: care_opening, bottleneck_2026"
-            className="block w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-xs text-white font-mono focus:border-indigo-500 focus:outline-none"
-          />
+
+          {/* 自由入力フォーム */}
+          <div className="pt-1">
+            <div className="flex items-center justify-between text-[11px] text-slate-400 mb-1">
+              <span>独自の企画名・イベント名を指定する場合（自由入力）:</span>
+              <span className="text-[10px] text-slate-400">例: spring_2026, opening_fair, 無料相談会</span>
+            </div>
+            <input
+              type="text"
+              value={campaignName}
+              onChange={(e) => setCampaignName(e.target.value)}
+              placeholder="例: standard, opening_2026, 春の開業支援"
+              className="block w-full rounded-lg border border-slate-700 bg-slate-900 px-3 py-2 text-xs text-white font-mono focus:border-indigo-500 focus:outline-none"
+            />
+          </div>
+
+          {/* わかりやすい機能解説カード */}
+          <div className="rounded-lg bg-indigo-950/30 border border-indigo-500/20 p-2.5 text-[11px] text-indigo-200 leading-relaxed space-y-1">
+            <div className="flex items-center gap-1.5 font-bold text-white text-xs">
+              <Lightbulb className="h-3.5 w-3.5 text-amber-400 shrink-0" />
+              <span>「utm_campaign」は何のためにあって、どう役立つの？</span>
+            </div>
+            <p className="text-slate-300">
+              同じ「note」や「X」にリンクを貼る場合でも、<strong>「普段の定期投稿」</strong>から来たのか、それとも<strong>「春の独立・開業フェア」</strong>の告知から来たのかを区別するために使います。
+            </p>
+            <p className="text-slate-400 text-[10px]">
+              👉 顧客カルテの流入元に「診断フォーム（流入: note / 企画: opening_2026）」のように記録されるため、「どの企画イベントが一番見込み客を集められたか」を後から振り返ることができます。
+              <strong>※特別なイベントでない普段使い時は【常設・基本（standard）】のままで問題ありません。</strong>
+            </p>
+          </div>
         </div>
 
         {/* 表示モード切り替えタブ */}
