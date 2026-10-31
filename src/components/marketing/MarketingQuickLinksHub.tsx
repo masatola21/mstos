@@ -17,7 +17,14 @@ import {
   X,
   CheckCircle2,
   Info,
-  AlertCircle
+  AlertCircle,
+  HelpCircle,
+  ChevronDown,
+  ChevronUp,
+  Layers,
+  ListFilter,
+  FileSpreadsheet,
+  QrCode
 } from 'lucide-react';
 import { OfficialLinkItem } from '../../types/marketing';
 import { 
@@ -26,6 +33,30 @@ import {
   clearStoredOfficialLinks 
 } from '../../utils/marketingStorage';
 import { getSupabase } from '../../lib/supabaseClient';
+
+export interface MediumPreset {
+  id: string;
+  name: string;
+  category: string;
+  badge: string;
+  badgeColor: string;
+  description: string;
+  utmSource: string;
+  utmMedium: string;
+}
+
+export const TRACKING_MEDIA_PRESETS: MediumPreset[] = [
+  { id: 'note', name: 'note（ブログ・解説記事）', category: 'Owned / Blog', badge: '記事', badgeColor: 'bg-emerald-500/20 text-emerald-300 border-emerald-500/30', description: 'note記事の文末CTAやマガジンに埋め込み', utmSource: 'note', utmMedium: 'article' },
+  { id: 'x_twitter', name: 'X / Twitter（SNS投稿・プロフ）', category: 'Social', badge: 'SNS', badgeColor: 'bg-sky-500/20 text-sky-300 border-sky-500/30', description: '固定ポスト・日々の投稿・プロフィールリンク用', utmSource: 'x_twitter', utmMedium: 'social' },
+  { id: 'instagram', name: 'Instagram（プロフ・ストーリーズ）', category: 'Social', badge: 'SNS', badgeColor: 'bg-pink-500/20 text-pink-300 border-pink-500/30', description: 'プロフのリンクツリーやストーリーズスタンプ用', utmSource: 'instagram', utmMedium: 'social' },
+  { id: 'line_broadcast', name: 'LINE公式（一斉配信・リッチメニュー）', category: 'Chat / CRM', badge: 'LINE', badgeColor: 'bg-emerald-600/20 text-emerald-400 border-emerald-500/30', description: 'LINE配信メッセージやリッチメニューのタップ先', utmSource: 'line_broadcast', utmMedium: 'chat' },
+  { id: 'flyer_qr', name: 'チラシ・名刺・POP（QRコード用）', category: 'Offline', badge: '紙/QR', badgeColor: 'bg-amber-500/20 text-amber-300 border-amber-500/30', description: '印刷物・展示会・店舗POP等のQRコード生成用URL', utmSource: 'flyer_qr', utmMedium: 'offline_qr' },
+  { id: 'meta_ads', name: 'Meta広告（FB / IG広告）', category: 'Paid Ads', badge: '広告', badgeColor: 'bg-indigo-500/20 text-indigo-300 border-indigo-500/30', description: 'Meta広告マネージャのリンク先URL設定用', utmSource: 'meta_ads', utmMedium: 'cpc' },
+  { id: 'google_ads', name: 'Google広告（検索・PMax）', category: 'Paid Ads', badge: '広告', badgeColor: 'bg-blue-500/20 text-blue-300 border-blue-500/30', description: 'リスティング・ディスプレイ広告の最終ページURL', utmSource: 'google_ads', utmMedium: 'cpc' },
+  { id: 'youtube', name: 'YouTube（概要欄・固定コメント）', category: 'Video', badge: '動画', badgeColor: 'bg-rose-500/20 text-rose-300 border-rose-500/30', description: '動画の概要欄や固定コメントの導線リンク', utmSource: 'youtube', utmMedium: 'video' },
+  { id: 'newsletter', name: 'メルマガ配信（Eメール）', category: 'Direct', badge: 'メール', badgeColor: 'bg-cyan-500/20 text-cyan-300 border-cyan-500/30', description: '定期メルマガやステップメール本文内のリンク', utmSource: 'newsletter', utmMedium: 'email' },
+  { id: 'partner', name: '提携パートナー・外部メディア紹介', category: 'Partner', badge: '外部', badgeColor: 'bg-purple-500/20 text-purple-300 border-purple-500/30', description: 'アライアンス先や紹介記事からの送客リンク', utmSource: 'partner', utmMedium: 'referral' },
+];
 
 const ICON_MAP = {
   'sparkles': Sparkles,
@@ -106,6 +137,11 @@ export const MarketingQuickLinksHub: React.FC = () => {
   const [campaignName, setCampaignName] = useState<string>('brand_awareness');
   const [feedbackMessage, setFeedbackMessage] = useState<string | null>(null);
 
+  // UTM表示モード & マトリクス選択状態
+  const [utmViewMode, setUtmViewMode] = useState<'matrix' | 'single'>('matrix');
+  const [selectedMatrixLinkId, setSelectedMatrixLinkId] = useState<string>('biz_diagnostic');
+  const [showUtmGuide, setShowUtmGuide] = useState<boolean>(true);
+
   // 編集用モーダル状態
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const [editingItem, setEditingItem] = useState<OfficialLinkItem | null>(null);
@@ -126,6 +162,9 @@ export const MarketingQuickLinksHub: React.FC = () => {
       const localStored = loadStoredOfficialLinks();
       if (localStored && localStored.length > 0 && isMounted) {
         setLinks(localStored);
+        if (!selectedMatrixLinkId) {
+          setSelectedMatrixLinkId(localStored[0].id);
+        }
       }
 
       // Supabaseからリモート同期
@@ -145,6 +184,9 @@ export const MarketingQuickLinksHub: React.FC = () => {
             if (!error && data?.payload?.links && Array.isArray(data.payload.links) && isMounted) {
               setLinks(data.payload.links);
               saveStoredOfficialLinks(data.payload.links);
+              if (!selectedMatrixLinkId && data.payload.links.length > 0) {
+                setSelectedMatrixLinkId(data.payload.links[0].id);
+              }
               return;
             }
           }
@@ -192,8 +234,8 @@ export const MarketingQuickLinksHub: React.FC = () => {
     setTimeout(() => setCopiedKey(null), 2000);
   };
 
-  // UTMリンクジェネレーター（ベースURLが修正されると自動で連動）
-  const generateUtmUrl = (baseUrl: string) => {
+  // 高機能UTMリンクビルダー（媒体・施策・媒体種別を柔軟に付与）
+  const buildUtmUrl = (baseUrl: string, source: string, campaign: string, mediumParam?: string) => {
     if (!baseUrl) return '';
     const trimmed = baseUrl.trim();
     let fullUrl = trimmed;
@@ -201,9 +243,29 @@ export const MarketingQuickLinksHub: React.FC = () => {
       fullUrl = `${origin}${trimmed}`;
     }
     const separator = fullUrl.includes('?') ? '&' : '?';
-    const sourceParam = encodeURIComponent(selectedMedium);
-    const campaignParam = encodeURIComponent(campaignName || 'default');
-    return `${fullUrl}${separator}utm_source=${sourceParam}&utm_campaign=${campaignParam}`;
+    const params = new URLSearchParams();
+    params.set('utm_source', source);
+    if (mediumParam) {
+      params.set('utm_medium', mediumParam);
+    }
+    params.set('utm_campaign', campaign || 'default');
+    return `${fullUrl}${separator}${params.toString()}`;
+  };
+
+  // 従来の単一媒体用ラッパー
+  const generateUtmUrl = (baseUrl: string) => {
+    return buildUtmUrl(baseUrl, selectedMedium, campaignName);
+  };
+
+  // マトリクス全媒体の一括コピー処理
+  const handleCopyAllMatrixUrls = (link: OfficialLinkItem) => {
+    const lines = TRACKING_MEDIA_PRESETS.map((preset) => {
+      const url = buildUtmUrl(link.url, preset.utmSource, campaignName, preset.utmMedium);
+      return `【${preset.name}】（${preset.description}）\n${url}`;
+    });
+    const header = `▼ ${link.title}\n公式URL: ${link.url}\n施策キャンペーン名: ${campaignName || 'default'}\n----------------------------------------\n`;
+    const fullText = header + lines.join('\n\n');
+    copyToClipboard(fullText, 'matrix_all');
   };
 
   // 編集モーダルを開く
@@ -479,63 +541,91 @@ export const MarketingQuickLinksHub: React.FC = () => {
       </section>
 
       {/* ── 2. 流入計測（UTMリンク）発行ツール ── */}
-      <section className="rounded-2xl border border-indigo-500/30 bg-gradient-to-br from-indigo-950/40 via-slate-900 to-slate-900 p-5 space-y-4">
-        <div className="space-y-2">
+      <section className="rounded-2xl border border-indigo-500/30 bg-gradient-to-br from-indigo-950/40 via-slate-900 to-slate-900 p-5 space-y-5">
+        <div className="space-y-3">
           <div className="flex flex-wrap items-center justify-between gap-2">
-            <h3 className="text-sm font-bold text-white flex items-center gap-2">
-              <Share2 className="h-4 w-4 text-cyan-400" />
-              媒体別 流入追跡リンク（UTM計測URL）発行ツール
-            </h3>
-            <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-emerald-300 bg-emerald-500/20 border border-emerald-500/30 px-2.5 py-0.5 rounded-full">
-              <CheckCircle2 className="h-3 w-3" /> 公式URLハブと自動連動中
-            </span>
-          </div>
-
-          {/* ユーザーの疑問に明快に答える説明カード */}
-          <div className="rounded-xl border border-indigo-500/20 bg-indigo-950/30 p-3 text-xs text-indigo-200/90 flex items-start gap-2.5 leading-relaxed">
-            <Info className="h-4 w-4 text-indigo-400 shrink-0 mt-0.5" />
             <div>
-              <p className="font-semibold text-indigo-100">
-                【自動反映について】上記の公式URLハブでURLを修正すると、ここにある媒体別追跡リンクもすべて自動的に新しいURLへと書き換わります。
-              </p>
-              <p className="mt-0.5 text-slate-300 text-[11px]">
-                修正後に個別の追跡URLを再生成・再入力する手間はありません。媒体（note / X / 広告など）を選ぶだけで、常に最新の公式URLに基づく計測リンクを即座にコピーできます。
+              <h3 className="text-base font-bold text-white flex items-center gap-2">
+                <Share2 className="h-5 w-5 text-cyan-400" />
+                媒体別 流入追跡リンク（UTM計測URL）発行ツール
+              </h3>
+              <p className="mt-0.5 text-xs text-slate-400">
+                note、X、Instagram、LINE、チラシQR、広告など、媒体ごとに専用URLを発行して流入元を自動分析します。
               </p>
             </div>
+            <div className="flex items-center gap-2">
+              <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-emerald-300 bg-emerald-500/20 border border-emerald-500/30 px-2.5 py-0.5 rounded-full">
+                <CheckCircle2 className="h-3 w-3" /> 公式URLハブと自動連動中
+              </span>
+              <button
+                type="button"
+                onClick={() => setShowUtmGuide((prev) => !prev)}
+                className="inline-flex items-center gap-1 text-xs text-indigo-300 hover:text-white bg-indigo-900/40 hover:bg-indigo-900/70 border border-indigo-700/50 px-2.5 py-1 rounded-lg transition"
+              >
+                <HelpCircle className="h-3.5 w-3.5 text-indigo-400" />
+                <span>仕組みと使い分けの解説</span>
+                {showUtmGuide ? <ChevronUp className="h-3 w-3" /> : <ChevronDown className="h-3 w-3" />}
+              </button>
+            </div>
           </div>
+
+          {/* ユーザーの疑問に明快に答える解説ガイド（開閉可能） */}
+          {showUtmGuide && (
+            <div className="rounded-xl border border-indigo-500/30 bg-indigo-950/40 p-4 text-xs text-indigo-100 space-y-3 animate-in fade-in duration-200">
+              <div className="flex items-center gap-2 text-cyan-300 font-bold text-xs border-b border-indigo-800/60 pb-2">
+                <Info className="h-4 w-4 shrink-0 text-cyan-400" />
+                <span>よくある疑問：流入分析の仕組みと「URLは1つしか作れない？」について</span>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-3 text-[11px] leading-relaxed">
+                <div className="rounded-lg bg-slate-900/80 p-3 border border-indigo-500/20">
+                  <div className="font-bold text-white mb-1 flex items-center gap-1.5">
+                    <span className="flex h-4 w-4 items-center justify-center rounded-full bg-cyan-500/20 text-cyan-300 text-[10px]">1</span>
+                    流入分析とは？
+                  </div>
+                  <p className="text-slate-300">
+                    訪問者がリンクを踏んだ時、URL末尾の <code className="bg-slate-950 px-1 py-0.5 rounded text-cyan-300 font-mono">?utm_source=note</code> などをシステムが自動検知。
+                    「誰がどの媒体から来たのか」を顧客カルテ（リード一覧）に自動記録する仕組みです。
+                  </p>
+                </div>
+
+                <div className="rounded-lg bg-slate-900/80 p-3 border border-indigo-500/20">
+                  <div className="font-bold text-white mb-1 flex items-center gap-1.5">
+                    <span className="flex h-4 w-4 items-center justify-center rounded-full bg-cyan-500/20 text-cyan-300 text-[10px]">2</span>
+                    URLは1つしか作れない？
+                  </div>
+                  <p className="text-slate-300 font-semibold text-white">
+                    いいえ！媒体ごとに別々のURLを同時に何本でも発行して並行利用できます。
+                  </p>
+                  <p className="text-slate-400 mt-1">
+                    同じ「診断ページ」でも、note用・X用・チラシQR用・LINE配信用のURLを同時に配ることで、流入元を完全に区別できます。
+                  </p>
+                </div>
+
+                <div className="rounded-lg bg-slate-900/80 p-3 border border-indigo-500/20">
+                  <div className="font-bold text-white mb-1 flex items-center gap-1.5">
+                    <span className="flex h-4 w-4 items-center justify-center rounded-full bg-cyan-500/20 text-cyan-300 text-[10px]">3</span>
+                    分析結果はどこで見れる？
+                  </div>
+                  <p className="text-slate-300">
+                    顧客台帳（CRMリード一覧）の「流入元」列に <span className="text-emerald-300 font-mono">診断フォーム（流入: note）</span> などと自動記録されます。
+                    どの媒体が最も成約に繋がっているかを比較分析できます。
+                  </p>
+                </div>
+              </div>
+            </div>
+          )}
         </div>
 
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
-          <div>
-            <label className="text-slate-300 font-medium">貼り付け先の媒体（流入元 utm_source）</label>
-            <select
-              value={selectedMedium}
-              onChange={(e) => setSelectedMedium(e.target.value)}
-              className="mt-1 block w-full rounded-lg border border-slate-700 bg-slate-950 p-2 text-white"
-            >
-              <option value="note">note（ブログ・解説記事）</option>
-              <option value="x_twitter">X / Twitter（SNS投稿・プロフィール）</option>
-              <option value="instagram">Instagram（プロフリンク・ストーリーズ）</option>
-              <option value="meta_ads">Meta広告（Facebook / Instagram広告）</option>
-              <option value="google_ads">Googleリスティング広告 / PMax</option>
-              <option value="youtube">YouTube（概要欄・固定コメント）</option>
-              <option value="line_broadcast">LINE一斉配信 / リッチメッセージ</option>
-              <option value="newsletter">メルマガ配信</option>
-              <option value="flyer_qr">チラシ・名刺・POP（QRコード用）</option>
-              <option value="partner">提携パートナー・外部メディア紹介</option>
-            </select>
-          </div>
-
-          <div>
-            <label className="text-slate-300 font-medium">施策・キャンペーン名（utm_campaign）</label>
-            <input
-              type="text"
-              value={campaignName}
-              onChange={(e) => setCampaignName(e.target.value)}
-              placeholder="例: care_opening, bottleneck_2026"
-              className="mt-1 block w-full rounded-lg border border-slate-700 bg-slate-950 p-2 text-white font-mono"
-            />
-            <div className="mt-1.5 flex flex-wrap gap-1.5">
+        {/* 施策・キャンペーン名設定（全モード共通） */}
+        <div className="rounded-xl border border-slate-800 bg-slate-950/60 p-3.5 space-y-2">
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <label className="text-xs font-bold text-slate-200 flex items-center gap-1.5">
+              <span>施策・キャンペーン識別名（utm_campaign）</span>
+              <span className="text-[10px] text-slate-400 font-normal">いつの・何の企画からの流入かを記録</span>
+            </label>
+            <div className="flex items-center gap-1.5">
+              <span className="text-[11px] text-slate-400">ワンクリック選択:</span>
               {['brand_awareness', 'care_opening', 'lead_magnet', 'webinar_spring', 'dx_package'].map((tag) => (
                 <button
                   key={tag}
@@ -543,7 +633,7 @@ export const MarketingQuickLinksHub: React.FC = () => {
                   onClick={() => setCampaignName(tag)}
                   className={`text-[10px] px-2 py-0.5 rounded border transition font-mono ${
                     campaignName === tag
-                      ? 'bg-indigo-600 text-white border-indigo-500'
+                      ? 'bg-indigo-600 text-white border-indigo-500 font-semibold'
                       : 'bg-slate-800 text-slate-300 border-slate-700 hover:border-slate-600'
                   }`}
                 >
@@ -552,65 +642,265 @@ export const MarketingQuickLinksHub: React.FC = () => {
               ))}
             </div>
           </div>
+          <input
+            type="text"
+            value={campaignName}
+            onChange={(e) => setCampaignName(e.target.value)}
+            placeholder="例: care_opening, bottleneck_2026"
+            className="block w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-xs text-white font-mono focus:border-indigo-500 focus:outline-none"
+          />
         </div>
 
-        <div className="space-y-2 pt-2">
-          <div className="flex items-center justify-between text-[11px] font-semibold text-slate-400">
-            <span>生成された媒体別追跡URL（クリックでワンタッチコピー）:</span>
-            <span className="text-indigo-300 font-normal">全 {links.length} 件連動中</span>
+        {/* 表示モード切り替えタブ */}
+        <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-800 pb-3">
+          <div className="inline-flex rounded-xl bg-slate-950 p-1 border border-slate-800">
+            <button
+              type="button"
+              onClick={() => setUtmViewMode('matrix')}
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition ${
+                utmViewMode === 'matrix'
+                  ? 'bg-indigo-600 text-white shadow-sm'
+                  : 'text-slate-400 hover:text-slate-200'
+              }`}
+            >
+              <Layers className="h-3.5 w-3.5" />
+              全媒体マトリクス表示（推奨: 1つのURLを各媒体用に一括発行）
+            </button>
+            <button
+              type="button"
+              onClick={() => setUtmViewMode('single')}
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition ${
+                utmViewMode === 'single'
+                  ? 'bg-indigo-600 text-white shadow-sm'
+                  : 'text-slate-400 hover:text-slate-200'
+              }`}
+            >
+              <ListFilter className="h-3.5 w-3.5" />
+              媒体別絞り込み（単一媒体 × 全URL）
+            </button>
           </div>
+          <span className="text-[11px] text-slate-400">
+            {utmViewMode === 'matrix' ? '全 10 媒体の計測URLを一覧表示中' : '選択した1媒体のURLを一覧表示中'}
+          </span>
+        </div>
 
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
-            {links.map((link) => {
-              const utmUrl = generateUtmUrl(link.url);
-              const isCopied = copiedKey === `utm_${link.id}`;
-              const modified = isCustomized(link);
+        {/* ── モードA: 全媒体マトリクス表示 ── */}
+        {utmViewMode === 'matrix' && (() => {
+          const activeMatrixLink = links.find((l) => l.id === selectedMatrixLinkId) || links[0];
+          if (!activeMatrixLink) return null;
 
-              return (
-                <div
-                  key={link.id}
-                  onClick={() => copyToClipboard(utmUrl, `utm_${link.id}`)}
-                  className="rounded-xl border border-slate-800 bg-slate-950/80 p-3 flex items-center justify-between gap-3 cursor-pointer hover:border-indigo-500/60 transition group shadow-sm"
-                  title="クリックしてUTM追跡URLをコピー"
-                >
-                  <div className="min-w-0 flex-1">
-                    <div className="flex items-center gap-1.5 mb-0.5">
-                      <span className="text-xs font-semibold text-white truncate">{link.title}</span>
-                      {modified && (
-                        <span className="text-[9px] px-1.5 py-0.2 rounded bg-amber-500/20 text-amber-300 border border-amber-500/30 shrink-0">
-                          最新URL適用
-                        </span>
-                      )}
-                    </div>
-                    <div className="text-[10px] text-slate-400 font-mono truncate">{utmUrl}</div>
-                  </div>
-                  <div className="flex items-center gap-1.5 shrink-0">
-                    <a
-                      href={utmUrl}
-                      target="_blank"
-                      rel="noreferrer"
-                      onClick={(e) => e.stopPropagation()}
-                      className="p-1.5 rounded-lg text-slate-500 hover:text-slate-200 hover:bg-slate-800 transition"
-                      title="UTMリンクをテスト確認"
-                    >
-                      <ExternalLink className="h-3.5 w-3.5" />
-                    </a>
-                    <button
-                      type="button"
-                      className={`p-1.5 rounded-lg text-xs font-semibold transition ${
-                        isCopied
-                          ? 'bg-emerald-600 text-white'
-                          : 'bg-slate-800 text-slate-300 group-hover:bg-indigo-600 group-hover:text-white'
-                      }`}
-                    >
-                      {isCopied ? <Check className="h-3.5 w-3.5" /> : <Copy className="h-3.5 w-3.5" />}
-                    </button>
-                  </div>
+          return (
+            <div className="space-y-4">
+              {/* 発行対象リンク選択 */}
+              <div className="rounded-xl border border-indigo-500/20 bg-slate-950/70 p-4 space-y-3">
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <label className="text-xs font-bold text-slate-200 flex items-center gap-1.5">
+                    <span>計測したい公式導線（URL）を選択:</span>
+                  </label>
+                  <button
+                    type="button"
+                    onClick={() => handleCopyAllMatrixUrls(activeMatrixLink)}
+                    className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold transition shadow-sm"
+                  >
+                    {copiedKey === 'matrix_all' ? (
+                      <>
+                        <Check className="h-3.5 w-3.5" /> 全10媒体のURLを一括コピー完了！
+                      </>
+                    ) : (
+                      <>
+                        <FileSpreadsheet className="h-3.5 w-3.5" /> 全10媒体のURLをまとめてコピー（スプシ・記録用）
+                      </>
+                    )}
+                  </button>
                 </div>
-              );
-            })}
+
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                  {links.map((link) => {
+                    const isSelected = link.id === activeMatrixLink.id;
+                    return (
+                      <button
+                        key={link.id}
+                        type="button"
+                        onClick={() => setSelectedMatrixLinkId(link.id)}
+                        className={`text-left p-2.5 rounded-xl border text-xs transition flex flex-col justify-between ${
+                          isSelected
+                            ? 'bg-indigo-950/80 border-indigo-500 text-white font-bold shadow-md shadow-indigo-950/40 ring-1 ring-indigo-500'
+                            : 'bg-slate-900 border-slate-800 text-slate-300 hover:border-slate-700'
+                        }`}
+                      >
+                        <span className="truncate">{link.title}</span>
+                        <span className="text-[10px] text-slate-400 font-normal font-mono truncate mt-1">
+                          {link.url}
+                        </span>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+
+              {/* 全10媒体の個別追跡URLグリッド */}
+              <div className="space-y-2">
+                <div className="flex items-center justify-between text-xs text-slate-400">
+                  <span className="font-semibold text-slate-300">
+                    「{activeMatrixLink.title}」の媒体別 計測URL一覧（全 {TRACKING_MEDIA_PRESETS.length} 媒体）:
+                  </span>
+                  <span className="text-[11px] text-indigo-300">各媒体へ貼り付けて同時に配信可能</span>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                  {TRACKING_MEDIA_PRESETS.map((preset) => {
+                    const utmUrl = buildUtmUrl(activeMatrixLink.url, preset.utmSource, campaignName, preset.utmMedium);
+                    const isCopied = copiedKey === `preset_${preset.id}`;
+
+                    return (
+                      <div
+                        key={preset.id}
+                        onClick={() => copyToClipboard(utmUrl, `preset_${preset.id}`)}
+                        className="rounded-xl border border-slate-800 bg-slate-950/90 p-3.5 flex flex-col justify-between gap-2.5 hover:border-indigo-500/60 transition cursor-pointer group shadow-sm"
+                        title="クリックしてこの媒体専用URLをコピー"
+                      >
+                        <div className="flex items-start justify-between gap-2">
+                          <div className="min-w-0">
+                            <div className="flex items-center gap-2">
+                              <span className={`text-[10px] font-bold px-2 py-0.5 rounded border ${preset.badgeColor}`}>
+                                {preset.badge}
+                              </span>
+                              <span className="font-bold text-xs text-white truncate">{preset.name}</span>
+                            </div>
+                            <p className="mt-1 text-[11px] text-slate-400 leading-snug">
+                              {preset.description}
+                            </p>
+                          </div>
+
+                          <div className="flex items-center gap-1 shrink-0">
+                            <a
+                              href={utmUrl}
+                              target="_blank"
+                              rel="noreferrer"
+                              onClick={(e) => e.stopPropagation()}
+                              className="p-1.5 rounded-lg text-slate-500 hover:text-slate-200 hover:bg-slate-800 transition"
+                              title="ブラウザでテスト表示"
+                            >
+                              <ExternalLink className="h-3.5 w-3.5" />
+                            </a>
+                            <button
+                              type="button"
+                              className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-bold transition ${
+                                isCopied
+                                  ? 'bg-emerald-600 text-white'
+                                  : 'bg-slate-800 text-slate-200 group-hover:bg-indigo-600 group-hover:text-white'
+                              }`}
+                            >
+                              {isCopied ? (
+                                <>
+                                  <Check className="h-3 w-3" /> コピー済
+                                </>
+                              ) : (
+                                <>
+                                  <Copy className="h-3 w-3" /> コピー
+                                </>
+                              )}
+                            </button>
+                          </div>
+                        </div>
+
+                        {/* URL表示枠 */}
+                        <div className="p-2 rounded-lg bg-slate-900 border border-slate-800/80 text-[10px] font-mono text-cyan-300/90 truncate select-all">
+                          {utmUrl}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            </div>
+          );
+        })()}
+
+        {/* ── モードB: 単一媒体絞り込み表示 ── */}
+        {utmViewMode === 'single' && (
+          <div className="space-y-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
+              <div>
+                <label className="text-slate-300 font-medium">貼り付け先の媒体（流入元 utm_source）</label>
+                <select
+                  value={selectedMedium}
+                  onChange={(e) => setSelectedMedium(e.target.value)}
+                  className="mt-1 block w-full rounded-lg border border-slate-700 bg-slate-950 p-2.5 text-white"
+                >
+                  {TRACKING_MEDIA_PRESETS.map((p) => (
+                    <option key={p.id} value={p.utmSource}>
+                      {p.name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div className="flex flex-col justify-end">
+                <span className="text-[11px] text-slate-400">
+                  選択中の媒体（<code className="text-cyan-300">{selectedMedium}</code>）がすべての公式リンクに適用されます。
+                </span>
+              </div>
+            </div>
+
+            <div className="space-y-2 pt-2">
+              <div className="flex items-center justify-between text-[11px] font-semibold text-slate-400">
+                <span>生成された媒体別追跡URL（全 {links.length} 件）:</span>
+                <span className="text-indigo-300 font-normal">クリックでワンタッチコピー</span>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                {links.map((link) => {
+                  const utmUrl = generateUtmUrl(link.url);
+                  const isCopied = copiedKey === `utm_${link.id}`;
+                  const modified = isCustomized(link);
+
+                  return (
+                    <div
+                      key={link.id}
+                      onClick={() => copyToClipboard(utmUrl, `utm_${link.id}`)}
+                      className="rounded-xl border border-slate-800 bg-slate-950/80 p-3.5 flex items-center justify-between gap-3 cursor-pointer hover:border-indigo-500/60 transition group shadow-sm"
+                      title="クリックしてUTM追跡URLをコピー"
+                    >
+                      <div className="min-w-0 flex-1">
+                        <div className="flex items-center gap-1.5 mb-0.5">
+                          <span className="text-xs font-semibold text-white truncate">{link.title}</span>
+                          {modified && (
+                            <span className="text-[9px] px-1.5 py-0.2 rounded bg-amber-500/20 text-amber-300 border border-amber-500/30 shrink-0">
+                              最新URL適用
+                            </span>
+                          )}
+                        </div>
+                        <div className="text-[10px] text-slate-400 font-mono truncate">{utmUrl}</div>
+                      </div>
+                      <div className="flex items-center gap-1.5 shrink-0">
+                        <a
+                          href={utmUrl}
+                          target="_blank"
+                          rel="noreferrer"
+                          onClick={(e) => e.stopPropagation()}
+                          className="p-1.5 rounded-lg text-slate-500 hover:text-slate-200 hover:bg-slate-800 transition"
+                          title="UTMリンクをテスト確認"
+                        >
+                          <ExternalLink className="h-3.5 w-3.5" />
+                        </a>
+                        <button
+                          type="button"
+                          className={`p-1.5 rounded-lg text-xs font-semibold transition ${
+                            isCopied
+                              ? 'bg-emerald-600 text-white'
+                              : 'bg-slate-800 text-slate-300 group-hover:bg-indigo-600 group-hover:text-white'
+                          }`}
+                        >
+                          {isCopied ? <Check className="h-3.5 w-3.5" /> : <Copy className="h-3.5 w-3.5" />}
+                        </button>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
           </div>
-        </div>
+        )}
       </section>
 
       {/* ── 編集 / 追加モーダル ── */}

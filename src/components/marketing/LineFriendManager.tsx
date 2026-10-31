@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import { Check, Loader2, RefreshCw, Search, Tag, Users, WifiOff } from 'lucide-react';
+import { Check, Loader2, RefreshCw, Search, Tag, Users, WifiOff, Trash2 } from 'lucide-react';
 import { getSupabase } from '../../lib/supabaseClient';
+import { InlineDeleteButton } from '../InlineDeleteButton';
 
 interface LineTag { id: string; name: string; color?: string | null; }
 interface Friend {
@@ -146,6 +147,49 @@ export const LineFriendManager: React.FC = () => {
     else await load();
   };
 
+  const deleteFriend = async (friendId: string, displayName?: string | null) => {
+    const supabase = getSupabase();
+    if (!supabase) return;
+    setSaving(true);
+    setError('');
+    setNotice('');
+    try {
+      await supabase.from('line_friend_tags').delete().eq('line_friend_id', friendId);
+      const { error: delErr } = await supabase.from('line_friends').delete().eq('id', friendId);
+      if (delErr) throw delErr;
+      setNotice(`LINE友だち「${displayName || friendId}」を削除しました。`);
+      setSelectedFriends(prev => prev.filter(id => id !== friendId));
+      await load();
+    } catch (err: any) {
+      setError(err.message || '友だちの削除に失敗しました。');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const bulkDeleteSelectedFriends = async () => {
+    if (!selectedFriends.length) return;
+    const count = selectedFriends.length;
+    const supabase = getSupabase();
+    if (!supabase) return;
+    setSaving(true);
+    setError('');
+    setNotice('');
+    try {
+      for (const friendId of selectedFriends) {
+        await supabase.from('line_friend_tags').delete().eq('line_friend_id', friendId);
+        await supabase.from('line_friends').delete().eq('id', friendId);
+      }
+      setNotice(`選択した ${count} 人のLINE友だちを完全削除しました。`);
+      setSelectedFriends([]);
+      await load();
+    } catch (err: any) {
+      setError(err.message || '一括削除に失敗しました。');
+    } finally {
+      setSaving(false);
+    }
+  };
+
   const statusLabel: Record<Friend['status'], string> = {
     active: '友だち', blocked: 'ブロック', unfollowed: '解除', unknown: '状態不明',
   };
@@ -160,7 +204,7 @@ export const LineFriendManager: React.FC = () => {
               <span className="rounded-full border border-amber-400/30 bg-amber-500/10 px-2 py-1 text-[11px] font-semibold text-amber-300">受信・送信API未接続</span>
             </div>
             <p className="mt-2 max-w-3xl text-sm leading-6 text-slate-300">
-              Webhookから取り込まれた友だちを連絡先に紐付け、タグで分類します。友だち追加だけではリード化しません。
+              Webhookから取り込まれた友だちを連絡先に紐付け、タグで分類します。テスト用の友だちデータはいつでも削除できます。
             </p>
           </div>
           <button onClick={() => void load()} disabled={loading} className="flex items-center gap-2 rounded-xl border border-slate-700 bg-slate-800 px-3 py-2 text-xs text-slate-200 hover:bg-slate-700">
@@ -182,12 +226,23 @@ export const LineFriendManager: React.FC = () => {
           </div>
 
           {selectedFriends.length > 0 && (
-            <div className="flex flex-wrap items-center gap-3 border-b border-slate-800 bg-slate-950/70 p-4">
-              <span className="text-xs text-slate-300">{selectedFriends.length}人選択</span>
-              <div className="flex flex-wrap gap-2">
-                {tags.map(tag => <button key={tag.id} onClick={() => toggleTag(tag.id)} className={`rounded-full border px-2.5 py-1 text-xs ${selectedTags.includes(tag.id) ? 'border-emerald-400 bg-emerald-500/20 text-emerald-200' : 'border-slate-700 text-slate-400'}`}>{tag.name}</button>)}
+            <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-800 bg-slate-950/70 p-4">
+              <div className="flex flex-wrap items-center gap-3">
+                <span className="text-xs text-slate-300 font-semibold">{selectedFriends.length}人選択</span>
+                <div className="flex flex-wrap gap-2">
+                  {tags.map(tag => <button key={tag.id} onClick={() => toggleTag(tag.id)} className={`rounded-full border px-2.5 py-1 text-xs ${selectedTags.includes(tag.id) ? 'border-emerald-400 bg-emerald-500/20 text-emerald-200' : 'border-slate-700 text-slate-400'}`}>{tag.name}</button>)}
+                </div>
+                <button onClick={() => void assignSelectedTags()} disabled={saving || !selectedTags.length} className="rounded-lg bg-emerald-600 px-3 py-2 text-xs font-semibold text-white disabled:opacity-40">{saving ? '処理中…' : '選択したタグを付与'}</button>
               </div>
-              <button onClick={() => void assignSelectedTags()} disabled={saving || !selectedTags.length} className="rounded-lg bg-emerald-600 px-3 py-2 text-xs font-semibold text-white disabled:opacity-40">{saving ? '処理中…' : '選択したタグを付与'}</button>
+              <InlineDeleteButton
+                onConfirm={() => void bulkDeleteSelectedFriends()}
+                warning={`選択した ${selectedFriends.length} 人のLINE友だちデータを完全削除しますか？`}
+                confirmLabel="一括削除を実行"
+                className="rounded-lg bg-rose-950/60 border border-rose-800/80 px-3 py-1.5 text-xs font-semibold text-rose-300 hover:bg-rose-900/60 transition flex items-center gap-1.5"
+              >
+                <Trash2 className="h-3.5 w-3.5" />
+                <span>選択した {selectedFriends.length} 人を一括削除</span>
+              </InlineDeleteButton>
             </div>
           )}
 
@@ -197,8 +252,8 @@ export const LineFriendManager: React.FC = () => {
               <p className="mt-3 text-sm font-semibold text-slate-300">{friends.length ? '条件に一致する友だちはいません' : 'LINE友だちはまだ登録されていません'}</p>
               <p className="mt-2 text-xs leading-5 text-slate-500">友だち追加イベントの自動取込には、次段階でLINE Messaging APIのWebhookを接続します。</p>
             </div> : <div className="divide-y divide-slate-800">
-              {visibleFriends.map(friend => <article key={friend.id} className="flex gap-3 p-4">
-                <input aria-label={`${friend.display_name || friend.line_user_id}を選択`} type="checkbox" checked={selectedFriends.includes(friend.id)} onChange={() => toggleFriend(friend.id)} className="mt-1 accent-emerald-500" />
+              {visibleFriends.map(friend => <article key={friend.id} className="flex items-start gap-3 p-4">
+                <input aria-label={`${friend.display_name || friend.line_user_id}を選択`} type="checkbox" checked={selectedFriends.includes(friend.id)} onChange={() => toggleFriend(friend.id)} className="mt-1 accent-emerald-500 cursor-pointer" />
                 <div className="min-w-0 flex-1">
                   <div className="flex flex-wrap items-center gap-2">
                     <h2 className="truncate text-sm font-semibold text-white">{friend.contact?.full_name || friend.display_name || '名前未取得'}</h2>
@@ -212,9 +267,21 @@ export const LineFriendManager: React.FC = () => {
                     {!friend.tags.length && <span className="text-[10px] text-slate-600">タグなし</span>}
                   </div>
                 </div>
-                <div className="hidden shrink-0 text-right text-[10px] text-slate-500 md:block">
-                  <div>追加 {friend.followed_at ? new Date(friend.followed_at).toLocaleDateString() : '—'}</div>
-                  <div className="mt-1">最終接触 {friend.last_message_at ? new Date(friend.last_message_at).toLocaleDateString() : '—'}</div>
+                <div className="flex items-center gap-3 shrink-0">
+                  <div className="hidden text-right text-[10px] text-slate-500 md:block">
+                    <div>追加 {friend.followed_at ? new Date(friend.followed_at).toLocaleDateString() : '—'}</div>
+                    <div className="mt-1">最終接触 {friend.last_message_at ? new Date(friend.last_message_at).toLocaleDateString() : '—'}</div>
+                  </div>
+                  <InlineDeleteButton
+                    onConfirm={() => void deleteFriend(friend.id, friend.display_name || friend.line_user_id)}
+                    warning={`LINE友だち「${friend.display_name || friend.line_user_id}」を削除しますか？`}
+                    confirmLabel="削除確定"
+                    className="p-1.5 rounded-lg border border-rose-800/60 bg-rose-950/30 text-rose-300 hover:bg-rose-900/50 hover:text-white transition flex items-center gap-1 text-xs"
+                    ariaLabel="LINE友だちを削除"
+                  >
+                    <Trash2 className="h-3.5 w-3.5" />
+                    <span className="hidden sm:inline">削除</span>
+                  </InlineDeleteButton>
                 </div>
               </article>)}
             </div>}

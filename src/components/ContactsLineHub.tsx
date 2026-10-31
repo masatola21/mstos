@@ -1,9 +1,10 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import { Check, Loader2, Plus, RefreshCw, Search, Tag, Users, UserRound, Wifi, WifiOff, Pencil, MessageCircle, Mail } from 'lucide-react';
+import { Check, Loader2, Plus, RefreshCw, Search, Tag, Users, UserRound, Wifi, WifiOff, Pencil, MessageCircle, Mail, Trash2 } from 'lucide-react';
 import { Contact, TableKey } from '../types/database';
-import { fetchTableData } from '../services/dataService';
+import { fetchTableData, deleteTableRecord } from '../services/dataService';
 import { getSupabase } from '../lib/supabaseClient';
 import { RecordFormModal } from './RecordFormModal';
+import { InlineDeleteButton } from './InlineDeleteButton';
 
 interface LineTag { id: string; name: string; color?: string | null; }
 interface LineFriend {
@@ -234,6 +235,90 @@ export const ContactsLineHub: React.FC<Props> = ({ onOpenLineInbox, onOpenEmailS
     setSaving(false);
   };
 
+  const deletePerson = async (person: PersonRow) => {
+    const supabase = getSupabase();
+    if (!supabase) return;
+    setSaving(true);
+    setError('');
+    setNotice('');
+    try {
+      // 1. 紐づくLINE友だち・タグの削除
+      for (const friend of person.lineFriends) {
+        await supabase.from('line_friend_tags').delete().eq('line_friend_id', friend.id);
+        await supabase.from('line_friends').delete().eq('id', friend.id);
+      }
+
+      // 2. 連絡先本体の削除
+      if (person.contact) {
+        const res = await deleteTableRecord('contacts', person.contact, { force: true });
+        if (res.error) {
+          const { error: directErr } = await supabase.from('contacts').delete().eq('id', person.contact.id);
+          if (directErr) {
+            throw new Error(`連絡先「${person.name}」の削除に失敗しました: ${res.error.message || directErr.message}`);
+          }
+        }
+      }
+
+      setNotice(`「${person.name}」を削除しました。`);
+      setSelectedPeople((prev) => prev.filter((id) => id !== person.id));
+      await load();
+    } catch (err: any) {
+      setError(err.message || '削除中にエラーが発生しました。');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const deleteLineFriend = async (friendId: string, displayName?: string | null) => {
+    const supabase = getSupabase();
+    if (!supabase) return;
+    setSaving(true);
+    setError('');
+    setNotice('');
+    try {
+      await supabase.from('line_friend_tags').delete().eq('line_friend_id', friendId);
+      const { error: delErr } = await supabase.from('line_friends').delete().eq('id', friendId);
+      if (delErr) throw delErr;
+      setNotice(`LINE友だち「${displayName || friendId}」の連携を削除しました。`);
+      await load();
+    } catch (err: any) {
+      setError(err.message || 'LINE友だちの削除に失敗しました。');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const bulkDeleteSelected = async () => {
+    if (!selectedPeople.length) return;
+    const count = selectedPeople.length;
+    const targetPeople = people.filter((p) => selectedPeople.includes(p.id));
+    const supabase = getSupabase();
+    if (!supabase) return;
+
+    setSaving(true);
+    setError('');
+    setNotice('');
+    try {
+      for (const person of targetPeople) {
+        for (const friend of person.lineFriends) {
+          await supabase.from('line_friend_tags').delete().eq('line_friend_id', friend.id);
+          await supabase.from('line_friends').delete().eq('id', friend.id);
+        }
+        if (person.contact) {
+          await deleteTableRecord('contacts', person.contact, { force: true });
+          await supabase.from('contacts').delete().eq('id', person.contact.id);
+        }
+      }
+      setNotice(`選択した ${count} 件のテスト連絡先・LINE友だちを完全削除しました。`);
+      setSelectedPeople([]);
+      await load();
+    } catch (err: any) {
+      setError(err.message || '一括削除中にエラーが発生しました。');
+    } finally {
+      setSaving(false);
+    }
+  };
+
   const statusLabel: Record<LineFriend['status'], string> = {
     active: '友だち',
     blocked: 'ブロック',
@@ -251,7 +336,7 @@ export const ContactsLineHub: React.FC<Props> = ({ onOpenLineInbox, onOpenEmailS
               <span className="rounded-full border border-amber-400/30 bg-amber-500/10 px-2 py-1 text-[11px] font-semibold text-amber-300">配信・個別チャット未実装</span>
             </div>
             <p className="mt-2 max-w-3xl text-sm leading-6 text-slate-300">
-              人の基本情報とLINE上の状態を同じ一覧で管理します。LINE友だち追加だけではリードになりません。
+              人の基本情報とLINE上の状態を同じ一覧で管理します。テストデータや不要な連絡先・LINE友だちはいつでも削除できます。
             </p>
           </div>
           <div className="flex gap-2">
@@ -294,12 +379,25 @@ export const ContactsLineHub: React.FC<Props> = ({ onOpenLineInbox, onOpenEmailS
         </div>
 
         {selectedPeople.length > 0 && (
-          <div className="flex flex-wrap items-center gap-3 border-b border-slate-800 bg-slate-950/70 p-4">
-            <span className="text-xs text-slate-300">{selectedPeople.length}人選択</span>
-            <div className="flex flex-wrap gap-2">
-              {tags.map((tag) => <button key={tag.id} onClick={() => toggleTag(tag.id)} className={'rounded-full border px-2.5 py-1 text-xs ' + (selectedTags.includes(tag.id) ? 'border-blue-400 bg-blue-500/20 text-blue-200' : 'border-slate-700 text-slate-400')}>{tag.name}</button>)}
+          <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-800 bg-slate-950/70 p-4">
+            <div className="flex flex-wrap items-center gap-3">
+              <span className="text-xs text-slate-300 font-semibold">{selectedPeople.length}人選択中</span>
+              <div className="flex flex-wrap gap-2">
+                {tags.map((tag) => <button key={tag.id} onClick={() => toggleTag(tag.id)} className={'rounded-full border px-2.5 py-1 text-xs ' + (selectedTags.includes(tag.id) ? 'border-blue-400 bg-blue-500/20 text-blue-200' : 'border-slate-700 text-slate-400')}>{tag.name}</button>)}
+              </div>
+              <button onClick={() => void assignSelectedTags()} disabled={saving || !selectedTags.length} className="rounded-lg bg-blue-600 px-3 py-2 text-xs font-semibold text-white disabled:opacity-40">{saving ? '処理中…' : '選択したLINEにタグ付与'}</button>
             </div>
-            <button onClick={() => void assignSelectedTags()} disabled={saving || !selectedTags.length} className="rounded-lg bg-blue-600 px-3 py-2 text-xs font-semibold text-white disabled:opacity-40">{saving ? '処理中…' : '選択した人のLINEにタグ付与'}</button>
+            <div>
+              <InlineDeleteButton
+                onConfirm={() => void bulkDeleteSelected()}
+                warning={`選択した ${selectedPeople.length} 件のデータ（連絡先・LINE連携）を完全に削除しますか？`}
+                confirmLabel="一括削除を実行"
+                className="rounded-lg bg-rose-950/60 border border-rose-800/80 px-3 py-1.5 text-xs font-semibold text-rose-300 hover:bg-rose-900/60 transition flex items-center gap-1.5"
+              >
+                <Trash2 className="h-3.5 w-3.5" />
+                <span>選択した {selectedPeople.length} 件を一括削除</span>
+              </InlineDeleteButton>
+            </div>
           </div>
         )}
 
@@ -315,7 +413,7 @@ export const ContactsLineHub: React.FC<Props> = ({ onOpenLineInbox, onOpenEmailS
           <div className="divide-y divide-slate-800">
             {visiblePeople.map((person) => (
               <article key={person.id} className="flex flex-wrap items-start gap-3 p-4">
-                <input aria-label={person.name + 'を選択'} type="checkbox" checked={selectedPeople.includes(person.id)} onChange={() => togglePerson(person.id)} disabled={!person.lineFriends.length} className="mt-1 accent-blue-500 disabled:opacity-25" />
+                <input aria-label={person.name + 'を選択'} type="checkbox" checked={selectedPeople.includes(person.id)} onChange={() => togglePerson(person.id)} className="mt-1 accent-blue-500 cursor-pointer" />
                 <div className="min-w-0 flex-1">
                   <div className="flex flex-wrap items-center gap-2">
                     <h2 className="truncate text-sm font-semibold text-white">{person.name}</h2>
@@ -340,10 +438,22 @@ export const ContactsLineHub: React.FC<Props> = ({ onOpenLineInbox, onOpenEmailS
                   </div>}
                   {person.lineFriends.map((friend) => (
                     <div key={friend.id} className="mt-3 rounded-xl border border-slate-800 bg-slate-950/60 p-3">
-                      <div className="flex flex-wrap items-center gap-2">
-                        <span className="inline-flex items-center gap-1 text-xs font-semibold text-slate-200"><UserRound className="h-3.5 w-3.5 text-emerald-400" />LINE {statusLabel[friend.status] || friend.status}</span>
-                        <span className="text-[10px] text-slate-500">配信同意: {friend.consent_status === 'opted_in' ? 'あり' : friend.consent_status === 'opted_out' ? 'なし' : '未確認'}</span>
-                        {friend.last_message_at && <span className="text-[10px] text-slate-500">最終接触 {new Date(friend.last_message_at).toLocaleDateString()}</span>}
+                      <div className="flex flex-wrap items-center justify-between gap-2">
+                        <div className="flex flex-wrap items-center gap-2">
+                          <span className="inline-flex items-center gap-1 text-xs font-semibold text-slate-200"><UserRound className="h-3.5 w-3.5 text-emerald-400" />LINE {statusLabel[friend.status] || friend.status}</span>
+                          <span className="text-[10px] text-slate-500">配信同意: {friend.consent_status === 'opted_in' ? 'あり' : friend.consent_status === 'opted_out' ? 'なし' : '未確認'}</span>
+                          {friend.last_message_at && <span className="text-[10px] text-slate-500">最終接触 {new Date(friend.last_message_at).toLocaleDateString()}</span>}
+                        </div>
+                        <InlineDeleteButton
+                          onConfirm={() => void deleteLineFriend(friend.id, friend.display_name || friend.line_user_id)}
+                          warning="このLINE友だち連携を削除しますか？"
+                          confirmLabel="削除確定"
+                          className="text-[11px] text-slate-500 hover:text-rose-400 p-1 rounded transition flex items-center gap-1"
+                          ariaLabel="LINE友だち連携を削除"
+                        >
+                          <Trash2 className="h-3 w-3" />
+                          <span className="text-[10px]">LINE削除</span>
+                        </InlineDeleteButton>
                       </div>
                       <p className="mt-1 truncate font-mono text-[10px] text-slate-500">{friend.line_user_id}</p>
                       <div className="mt-2 flex flex-wrap gap-1.5">
@@ -354,7 +464,27 @@ export const ContactsLineHub: React.FC<Props> = ({ onOpenLineInbox, onOpenEmailS
                   ))}
                   {!person.contact && <p className="mt-2 text-xs text-amber-300">連絡先プロフィール未紐付け</p>}
                 </div>
-                {person.contact && <div className="flex shrink-0 flex-wrap gap-2">{person.email && <button onClick={() => onOpenEmailSend?.(person.contact!.id, person.contact!.company_id || undefined)} className="flex items-center gap-1 rounded-lg bg-indigo-700/30 px-2.5 py-1.5 text-xs text-indigo-200 hover:bg-indigo-700/60"><Mail className="h-3.5 w-3.5" />メール作成</button>}{person.lineFriends.map((friend) => <button key={friend.id} onClick={() => onOpenLineInbox?.(person.contact!.id, friend.line_user_id)} className="flex items-center gap-1 rounded-lg bg-emerald-700/30 px-2.5 py-1.5 text-xs text-emerald-200 hover:bg-emerald-700/60"><MessageCircle className="h-3.5 w-3.5" />LINE受信箱</button>)}<button onClick={() => setEditingContact(person.contact || null)} className="flex items-center gap-1 rounded-lg bg-slate-800 px-2.5 py-1.5 text-xs text-slate-300 hover:text-white"><Pencil className="h-3.5 w-3.5" />編集</button></div>}
+                <div className="flex shrink-0 flex-wrap items-center gap-2">
+                  {person.contact && person.email && (
+                    <button onClick={() => onOpenEmailSend?.(person.contact!.id, person.contact!.company_id || undefined)} className="flex items-center gap-1 rounded-lg bg-indigo-700/30 px-2.5 py-1.5 text-xs text-indigo-200 hover:bg-indigo-700/60"><Mail className="h-3.5 w-3.5" />メール作成</button>
+                  )}
+                  {person.contact && person.lineFriends.map((friend) => (
+                    <button key={friend.id} onClick={() => onOpenLineInbox?.(person.contact!.id, friend.line_user_id)} className="flex items-center gap-1 rounded-lg bg-emerald-700/30 px-2.5 py-1.5 text-xs text-emerald-200 hover:bg-emerald-700/60"><MessageCircle className="h-3.5 w-3.5" />LINE受信箱</button>
+                  ))}
+                  {person.contact && (
+                    <button onClick={() => setEditingContact(person.contact || null)} className="flex items-center gap-1 rounded-lg bg-slate-800 px-2.5 py-1.5 text-xs text-slate-300 hover:text-white"><Pencil className="h-3.5 w-3.5" />編集</button>
+                  )}
+                  <InlineDeleteButton
+                    onConfirm={() => void deletePerson(person)}
+                    warning={`「${person.name}」を削除しますか？`}
+                    confirmLabel="削除確定"
+                    className="flex items-center gap-1 rounded-lg border border-rose-800/60 bg-rose-950/30 px-2.5 py-1.5 text-xs text-rose-300 hover:bg-rose-900/50 hover:text-white transition"
+                    ariaLabel={`「${person.name}」を削除`}
+                  >
+                    <Trash2 className="h-3.5 w-3.5" />
+                    <span>削除</span>
+                  </InlineDeleteButton>
+                </div>
               </article>
             ))}
           </div>
