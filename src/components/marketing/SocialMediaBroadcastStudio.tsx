@@ -24,12 +24,14 @@ import {
   X,
   Video,
   Film,
-  Play
+  Play,
+  MessageSquare
 } from 'lucide-react';
 import { OfficialLinkItem } from '../../types/marketing';
 import { loadStoredOfficialLinks } from '../../utils/marketingStorage';
 import { getSupabase } from '../../lib/supabaseClient';
 import { fetchMarketingAssets, getAssetViewUrl, MarketingAsset } from '../../services/marketingAssetService';
+import { SocialDmSalesStudio } from './SocialDmSalesStudio';
 
 interface SocialPlatformConfig {
   id: 'facebook' | 'threads' | 'linkedin' | 'instagram' | 'x';
@@ -113,6 +115,9 @@ export const SocialMediaBroadcastStudio: React.FC = () => {
   const [isLibraryModalOpen, setIsLibraryModalOpen] = useState(false);
   const [libraryAssets, setLibraryAssets] = useState<MarketingAsset[]>([]);
   const [libraryLoading, setLibraryLoading] = useState(false);
+
+  // スタジオモード切り替え（全体一括投稿 or 個別SNS営業・DM管理）
+  const [studioMode, setStudioMode] = useState<'broadcast' | 'dm_sales'>('broadcast');
 
   // プラットフォーム＆プレビュー
   const [selectedPlatforms, setSelectedPlatforms] = useState<string[]>(['facebook', 'threads', 'linkedin']);
@@ -544,7 +549,49 @@ ${postText}`;
         </button>
       </div>
 
-      {/* ── フィードバックバナー ── */}
+      {/* ── スタジオ機能切り替えサブタブ ── */}
+      <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-800 pb-3">
+        <div className="inline-flex rounded-xl bg-slate-950 p-1 border border-slate-800">
+          <button
+            type="button"
+            onClick={() => setStudioMode('broadcast')}
+            className={`flex items-center gap-2 px-4 py-2 rounded-lg text-xs font-bold transition ${
+              studioMode === 'broadcast'
+                ? 'bg-indigo-600 text-white shadow-sm'
+                : 'text-slate-400 hover:text-slate-200'
+            }`}
+          >
+            <Share2 className="h-4 w-4" />
+            <span>📱 SNS一括投稿（全体発信）</span>
+          </button>
+          <button
+            type="button"
+            onClick={() => setStudioMode('dm_sales')}
+            className={`flex items-center gap-2 px-4 py-2 rounded-lg text-xs font-bold transition ${
+              studioMode === 'dm_sales'
+                ? 'bg-gradient-to-r from-indigo-600 via-purple-600 to-cyan-600 text-white shadow-sm'
+                : 'text-slate-400 hover:text-slate-200'
+            }`}
+          >
+            <MessageSquare className="h-4 w-4 text-cyan-300" />
+            <span>💬 SNS営業・DM個別管理（アプローチ & 受信DM返信）</span>
+            <span className="text-[10px] px-1.5 py-0.2 rounded-full bg-cyan-500/20 text-cyan-300 border border-cyan-500/30">
+              AI個別最適化
+            </span>
+          </button>
+        </div>
+        <span className="text-xs text-slate-400">
+          {studioMode === 'broadcast'
+            ? '全体発信: 5大SNSへの同時投稿・ワンクリックシェア'
+            : '個別営業: シーン別テンプレ・AI最適化・手動送信・CRM連携'}
+        </span>
+      </div>
+
+      {studioMode === 'dm_sales' ? (
+        <SocialDmSalesStudio />
+      ) : (
+        <>
+          {/* ── フィードバックバナー ── */}
       {feedback && (
         <div
           className={`flex items-start gap-2.5 rounded-xl border p-3.5 text-xs shadow-md animate-in fade-in duration-200 ${
@@ -1324,6 +1371,8 @@ ${postText}`;
             </div>
           </div>
         </div>
+      )}
+        </>
       )}
     </div>
   );

@@ -28,6 +28,23 @@ export const LineFriendManager: React.FC = () => {
   const [saving, setSaving] = useState(false);
   const [notice, setNotice] = useState('');
   const [error, setError] = useState('');
+  const [activeTagPickerFriendId, setActiveTagPickerFriendId] = useState<string | null>(null);
+
+  const assignTagToFriend = async (lineFriendId: string, tagId: string) => {
+    const supabase = getSupabase();
+    if (!supabase) return;
+    setSaving(true);
+    setError('');
+    const { error: assignError } = await supabase.from('line_friend_tags')
+      .upsert({ line_friend_id: lineFriendId, tag_id: tagId, assigned_by: 'operator' }, { onConflict: 'line_friend_id,tag_id' });
+    if (assignError) {
+      setError('タグ付与エラー: ' + assignError.message);
+    } else {
+      setNotice('タグを付与しました。');
+      await load();
+    }
+    setSaving(false);
+  };
 
   const load = useCallback(async () => {
     const supabase = getSupabase();
@@ -262,9 +279,51 @@ export const LineFriendManager: React.FC = () => {
                   </div>
                   <p className="mt-1 truncate font-mono text-[10px] text-slate-500">{friend.line_user_id}</p>
                   {friend.contact?.email && <p className="mt-1 text-xs text-slate-400">{friend.contact.email}</p>}
-                  <div className="mt-2 flex flex-wrap gap-1.5">
-                    {friend.tags.map(tag => <span key={tag.id} className="inline-flex items-center gap-1 rounded-full border border-slate-700 bg-slate-800 px-2 py-1 text-[10px] text-slate-300">{tag.name}<button title={`タグ「${tag.name}」を外す`} onClick={() => void removeTag(friend.id, tag.id)} className="text-slate-500 hover:text-rose-300">×</button></span>)}
-                    {!friend.tags.length && <span className="text-[10px] text-slate-600">タグなし</span>}
+                  <div className="mt-2 flex flex-wrap items-center gap-1.5">
+                    {friend.tags.map(tag => (
+                      <span key={tag.id} className="inline-flex items-center gap-1 rounded-full border border-slate-700 bg-slate-800 px-2 py-1 text-[10px] text-slate-300">
+                        {tag.name}
+                        <button title={`タグ「${tag.name}」を外す`} onClick={() => void removeTag(friend.id, tag.id)} className="text-slate-500 hover:text-rose-300">×</button>
+                      </span>
+                    ))}
+                    <div className="relative">
+                      <button
+                        type="button"
+                        onClick={() => setActiveTagPickerFriendId(activeTagPickerFriendId === friend.id ? null : friend.id)}
+                        className="inline-flex items-center gap-1 rounded-full border border-dashed border-emerald-500/50 bg-emerald-950/20 px-2 py-0.5 text-[10px] font-semibold text-emerald-300 hover:bg-emerald-900/40 transition"
+                      >
+                        <Tag className="h-2.5 w-2.5" />
+                        <span>＋タグ追加</span>
+                      </button>
+                      {activeTagPickerFriendId === friend.id && (
+                        <div className="absolute left-0 top-full z-20 mt-1 min-w-44 rounded-xl border border-slate-700 bg-slate-900 p-2 shadow-2xl space-y-1">
+                          <div className="text-[10px] font-bold text-slate-400 px-1 pb-1 border-b border-slate-800">付与するタグを選択</div>
+                          <div className="max-h-36 overflow-y-auto space-y-0.5">
+                            {tags.map(tag => {
+                              const hasTag = friend.tags.some(t => t.id === tag.id);
+                              return (
+                                <button
+                                  key={tag.id}
+                                  type="button"
+                                  disabled={hasTag}
+                                  onClick={() => {
+                                    void assignTagToFriend(friend.id, tag.id);
+                                    setActiveTagPickerFriendId(null);
+                                  }}
+                                  className={`w-full text-left px-2 py-1 rounded text-xs flex items-center justify-between ${
+                                    hasTag ? 'text-slate-500 opacity-50 cursor-not-allowed' : 'text-slate-200 hover:bg-slate-800 hover:text-white'
+                                  }`}
+                                >
+                                  <span>{tag.name}</span>
+                                  {hasTag && <Check className="h-3 w-3 text-emerald-400" />}
+                                </button>
+                              );
+                            })}
+                          </div>
+                          {tags.length === 0 && <div className="text-[10px] text-slate-500 p-1">右側のフォームから先にタグを作成してください</div>}
+                        </div>
+                      )}
+                    </div>
                   </div>
                 </div>
                 <div className="flex items-center gap-3 shrink-0">

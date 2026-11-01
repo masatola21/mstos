@@ -147,6 +147,7 @@ export const SAMPLE_RECORD_IDS = {
   contracts: new Set(['cnt-001', 'cnt-002', 'cnt-003', 'cnt-004']),
   invoices: new Set(['inv-202610-01', 'inv-202610-02', 'inv-202610-03', 'inv-202609-04']),
   tools: new Set(['tool-01', 'tool-02', 'tool-03']),
+  products: new Set(['prd-sys-01', 'prd-ret-02', 'prd-med-04', 'prd-dig-03']),
 };
 
 const INITIAL_CONTRACTS: ManagedContract[] = [];
@@ -251,6 +252,7 @@ const INITIAL_CUSTOM_LISTS: CustomListDefinition[] = [
 ];
 
 export const matrixService = {
+  SAMPLE_RECORD_IDS,
   normalizeAutomationRules,
   setActiveUserId(userId: string) {
     activeMatrixUserId = userId;
@@ -262,19 +264,16 @@ export const matrixService = {
   loadProducts(): ManagedProduct[] {
     try {
       const data = localStorage.getItem(MATRIX_STORAGE_KEYS.PRODUCTS);
-      const saved = data ? JSON.parse(data) as ManagedProduct[] : INITIAL_PRODUCTS;
-      if (localStorage.getItem(MATRIX_STORAGE_KEYS.PRODUCTS_SEED_VERSION) !== '2026-10-catalog-v1') {
-        const existingIds = new Set(saved.map((product) => product.id));
-        const merged = [...saved, ...BUSINESS_DEFAULT_PRODUCTS.filter((product) => !existingIds.has(product.id))];
-        localStorage.setItem(MATRIX_STORAGE_KEYS.PRODUCTS, JSON.stringify(merged));
-        localStorage.setItem(MATRIX_STORAGE_KEYS.PRODUCTS_SEED_VERSION, '2026-10-catalog-v1');
-        return merged;
-      }
+      const saved = data ? JSON.parse(data) as ManagedProduct[] : BUSINESS_DEFAULT_PRODUCTS;
       const pendingDeletions = this.getPendingDeletions(activeMatrixUserId);
-      return saved.filter((p) => !pendingDeletions.products.has(p.id));
+      const filtered = saved.filter((p) => !pendingDeletions.products.has(p.id) && !SAMPLE_RECORD_IDS.products.has(p.id));
+      if (filtered.length === 0 && saved.length > 0) {
+        return BUSINESS_DEFAULT_PRODUCTS.filter((p) => !pendingDeletions.products.has(p.id) && !SAMPLE_RECORD_IDS.products.has(p.id));
+      }
+      return filtered;
     } catch {
       const pendingDeletions = this.getPendingDeletions(activeMatrixUserId);
-      return [...INITIAL_PRODUCTS, ...BUSINESS_DEFAULT_PRODUCTS].filter((p) => !pendingDeletions.products.has(p.id));
+      return [...BUSINESS_DEFAULT_PRODUCTS].filter((p) => !pendingDeletions.products.has(p.id) && !SAMPLE_RECORD_IDS.products.has(p.id));
     }
   },
   saveProducts(products: ManagedProduct[]) {

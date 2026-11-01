@@ -31,17 +31,18 @@ interface PersonRow {
 type FilterMode = 'all' | 'line' | 'no-line';
 
 interface Props {
+  initialFilter?: FilterMode;
   onOpenLineInbox?: (contactId: string, lineUserId: string) => void;
   onOpenEmailSend?: (contactId: string, companyId?: string) => void;
 }
 
-export const ContactsLineHub: React.FC<Props> = ({ onOpenLineInbox, onOpenEmailSend }) => {
+export const ContactsLineHub: React.FC<Props> = ({ initialFilter = 'all', onOpenLineInbox, onOpenEmailSend }) => {
   const [people, setPeople] = useState<PersonRow[]>([]);
   const [tags, setTags] = useState<LineTag[]>([]);
   const [selectedPeople, setSelectedPeople] = useState<string[]>([]);
   const [selectedTags, setSelectedTags] = useState<string[]>([]);
   const [search, setSearch] = useState('');
-  const [filter, setFilter] = useState<FilterMode>('all');
+  const [filter, setFilter] = useState<FilterMode>(initialFilter);
   const [newTagName, setNewTagName] = useState('');
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -49,6 +50,13 @@ export const ContactsLineHub: React.FC<Props> = ({ onOpenLineInbox, onOpenEmailS
   const [notice, setNotice] = useState('');
   const [editingContact, setEditingContact] = useState<Contact | null>(null);
   const [isCreateOpen, setIsCreateOpen] = useState(false);
+  const [activeTagPickerFriendId, setActiveTagPickerFriendId] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (initialFilter) {
+      setFilter(initialFilter);
+    }
+  }, [initialFilter]);
 
   const load = useCallback(async () => {
     const supabase = getSupabase();
@@ -198,6 +206,22 @@ export const ContactsLineHub: React.FC<Props> = ({ onOpenLineInbox, onOpenEmailS
     setSaving(false);
   };
 
+  const assignTagToFriend = async (friendId: string, tagId: string) => {
+    const supabase = getSupabase();
+    if (!supabase) return;
+    setSaving(true);
+    setError('');
+    const { error: assignError } = await supabase.from('line_friend_tags')
+      .upsert({ line_friend_id: friendId, tag_id: tagId, assigned_by: 'operator' }, { onConflict: 'line_friend_id,tag_id' });
+    if (assignError) {
+      setError('タグ付与エラー: ' + assignError.message);
+    } else {
+      setNotice('タグを付与しました。');
+      await load();
+    }
+    setSaving(false);
+  };
+
   const removeTag = async (friendId: string, tagId: string) => {
     const supabase = getSupabase();
     if (!supabase) return;
@@ -331,19 +355,21 @@ export const ContactsLineHub: React.FC<Props> = ({ onOpenLineInbox, onOpenEmailS
       <section className="rounded-2xl border border-blue-500/20 bg-gradient-to-br from-slate-900 to-blue-950/20 p-6">
         <div className="flex flex-wrap items-start justify-between gap-4">
           <div>
-            <div className="flex items-center gap-2">
-              <h1 className="text-2xl font-black text-white">連絡先・LINE</h1>
-              <span className="rounded-full border border-amber-400/30 bg-amber-500/10 px-2 py-1 text-[11px] font-semibold text-amber-300">配信・個別チャット未実装</span>
+            <div className="flex items-center gap-2 flex-wrap">
+              <h1 className="text-2xl font-black text-white">連絡先・LINE友だち台帳（タグ管理）</h1>
+              <span className="rounded-full border border-emerald-500/30 bg-emerald-500/10 px-2.5 py-1 text-[11px] font-semibold text-emerald-300">
+                CRM・LINE友だち・タグ統合正本 (Single Source of Truth)
+              </span>
             </div>
             <p className="mt-2 max-w-3xl text-sm leading-6 text-slate-300">
-              人の基本情報とLINE上の状態を同じ一覧で管理します。テストデータや不要な連絡先・LINE友だちはいつでも削除できます。
+              個人の連絡先とLINE公式アカウントの友だち情報を一元統合管理します。タグの作成・付与、LINE個別チャット、メール送信をワンクリックで行えます。
             </p>
           </div>
           <div className="flex gap-2">
-            <button onClick={() => setIsCreateOpen(true)} className="flex items-center gap-2 rounded-xl bg-blue-600 px-3 py-2 text-xs font-semibold text-white hover:bg-blue-500">
+            <button onClick={() => setIsCreateOpen(true)} className="flex items-center gap-2 rounded-xl bg-blue-600 px-3 py-2 text-xs font-semibold text-white hover:bg-blue-500 cursor-pointer">
               <Plus className="h-4 w-4" />連絡先を追加
             </button>
-            <button onClick={() => void load()} disabled={loading} className="flex items-center gap-2 rounded-xl border border-slate-700 bg-slate-800 px-3 py-2 text-xs text-slate-200 hover:bg-slate-700 disabled:opacity-50">
+            <button onClick={() => void load()} disabled={loading} className="flex items-center gap-2 rounded-xl border border-slate-700 bg-slate-800 px-3 py-2 text-xs text-slate-200 hover:bg-slate-700 disabled:opacity-50 cursor-pointer">
               <RefreshCw className={loading ? 'h-4 w-4 animate-spin' : 'h-4 w-4'} />更新
             </button>
           </div>
@@ -367,11 +393,15 @@ export const ContactsLineHub: React.FC<Props> = ({ onOpenLineInbox, onOpenEmailS
           </div>
           <div className="flex gap-1 rounded-lg bg-slate-950 p-1">
             {([
-              ['all', 'すべて'],
-              ['line', 'LINEあり'],
-              ['no-line', 'LINE未連携'],
+              ['all', `すべて (${people.length})`],
+              ['line', `LINE友だちのみ (${people.filter((p) => p.lineFriends.length > 0).length})`],
+              ['no-line', `LINE未連携 (${people.filter((p) => p.lineFriends.length === 0).length})`],
             ] as [FilterMode, string][]).map(([value, label]) => (
-              <button key={value} onClick={() => setFilter(value)} className={'rounded-md px-2.5 py-1.5 text-xs ' + (filter === value ? 'bg-blue-600 text-white' : 'text-slate-400 hover:text-white')}>
+              <button
+                key={value}
+                onClick={() => setFilter(value)}
+                className={'rounded-md px-2.5 py-1.5 text-xs font-medium transition-all cursor-pointer ' + (filter === value ? 'bg-blue-600 font-semibold text-white shadow-sm' : 'text-slate-400 hover:text-white')}
+              >
                 {label}
               </button>
             ))}
@@ -456,9 +486,51 @@ export const ContactsLineHub: React.FC<Props> = ({ onOpenLineInbox, onOpenEmailS
                         </InlineDeleteButton>
                       </div>
                       <p className="mt-1 truncate font-mono text-[10px] text-slate-500">{friend.line_user_id}</p>
-                      <div className="mt-2 flex flex-wrap gap-1.5">
-                        {friend.tags.map((tag) => <span key={tag.id} className="inline-flex items-center gap-1 rounded-full border border-slate-700 bg-slate-800 px-2 py-1 text-[10px] text-slate-300">{tag.name}<button title={'タグ「' + tag.name + '」を外す'} onClick={() => void removeTag(friend.id, tag.id)} className="text-slate-500 hover:text-rose-300">×</button></span>)}
-                        {!friend.tags.length && <span className="text-[10px] text-slate-600">タグなし</span>}
+                      <div className="mt-2 flex flex-wrap items-center gap-1.5">
+                        {friend.tags.map((tag) => (
+                          <span key={tag.id} className="inline-flex items-center gap-1 rounded-full border border-slate-700 bg-slate-800 px-2 py-1 text-[10px] text-slate-300">
+                            {tag.name}
+                            <button title={'タグ「' + tag.name + '」を外す'} onClick={() => void removeTag(friend.id, tag.id)} className="text-slate-500 hover:text-rose-300">×</button>
+                          </span>
+                        ))}
+                        <div className="relative">
+                          <button
+                            type="button"
+                            onClick={() => setActiveTagPickerFriendId(activeTagPickerFriendId === friend.id ? null : friend.id)}
+                            className="inline-flex items-center gap-1 rounded-full border border-dashed border-blue-500/50 bg-blue-950/20 px-2 py-0.5 text-[10px] font-semibold text-blue-300 hover:bg-blue-900/40 transition"
+                          >
+                            <Tag className="h-2.5 w-2.5" />
+                            <span>＋タグ追加</span>
+                          </button>
+                          {activeTagPickerFriendId === friend.id && (
+                            <div className="absolute left-0 top-full z-20 mt-1 min-w-44 rounded-xl border border-slate-700 bg-slate-900 p-2 shadow-2xl space-y-1">
+                              <div className="text-[10px] font-bold text-slate-400 px-1 pb-1 border-b border-slate-800">付与するタグを選択</div>
+                              <div className="max-h-36 overflow-y-auto space-y-0.5">
+                                {tags.map((tag) => {
+                                  const hasTag = friend.tags.some((t) => t.id === tag.id);
+                                  return (
+                                    <button
+                                      key={tag.id}
+                                      type="button"
+                                      disabled={hasTag}
+                                      onClick={() => {
+                                        void assignTagToFriend(friend.id, tag.id);
+                                        setActiveTagPickerFriendId(null);
+                                      }}
+                                      className={`w-full text-left px-2 py-1 rounded text-xs flex items-center justify-between ${
+                                        hasTag ? 'text-slate-500 opacity-50 cursor-not-allowed' : 'text-slate-200 hover:bg-slate-800 hover:text-white'
+                                      }`}
+                                    >
+                                      <span>{tag.name}</span>
+                                      {hasTag && <Check className="h-3 w-3 text-emerald-400" />}
+                                    </button>
+                                  );
+                                })}
+                              </div>
+                              {tags.length === 0 && <div className="text-[10px] text-slate-500 p-1">右下の「タグ」欄から先にタグを作成してください</div>}
+                            </div>
+                          )}
+                        </div>
                       </div>
                     </div>
                   ))}

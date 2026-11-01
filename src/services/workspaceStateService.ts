@@ -38,7 +38,7 @@ import {
 } from '../utils/storage';
 import { getSupabase } from '../lib/supabaseClient';
 import { MarketingScenario } from '../types/marketing';
-import { loadMarketingScenarios, saveMarketingScenarios } from '../utils/marketingStorage';
+import { loadMarketingScenarios, saveMarketingScenarios, deduplicateMarketingScenarios } from '../utils/marketingStorage';
 import { AIModelSettings, loadAIModelSettings, saveAIModelSettings } from '../utils/aiSettingsStorage';
 import { matrixService, SAMPLE_RECORD_IDS } from './matrixService';
 import {
@@ -503,13 +503,14 @@ export async function loadOrMigrateWorkspaceData(userId: string): Promise<Worksp
           baseline.workModeHistories || {}
         ),
         knowledgeItems: mergeRecords(remote.knowledgeItems || [], localDefaults.knowledgeItems, baseline.knowledgeItems || []),
-        marketingScenarios: mergeRecords(remote.marketingScenarios || [], localDefaults.marketingScenarios, baseline.marketingScenarios || []),
+        marketingScenarios: deduplicateMarketingScenarios(mergeRecords(remote.marketingScenarios || [], localDefaults.marketingScenarios, baseline.marketingScenarios || [])),
       }
     : localDefaults;
 
   merged.contracts = merged.contracts.filter((record) => !SAMPLE_RECORD_IDS.contracts.has(record.id));
   merged.invoices = merged.invoices.filter((record) => !SAMPLE_RECORD_IDS.invoices.has(record.id));
   merged.tools = merged.tools.filter((record) => !SAMPLE_RECORD_IDS.tools.has(record.id));
+  merged.products = (merged.products || []).filter((record) => !SAMPLE_RECORD_IDS.products?.has(record.id));
 
   // The sync-state row marks the normalized tables as authoritative, including when a user intentionally has zero records.
   const relationalAI = await loadRelationalAIOperations(userId);
@@ -535,7 +536,7 @@ export async function loadOrMigrateWorkspaceData(userId: string): Promise<Worksp
     merged.products = mergeRecords(relationalMatrix.products, localDefaults.products, baseline.products || []);
     merged.tools = mergeRecords(relationalMatrix.tools, localDefaults.tools, baseline.tools || []);
     merged.customLists = mergeRecords(relationalMatrix.customLists, localDefaults.customLists, baseline.customLists || []);
-    merged.marketingScenarios = mergeRecords(relationalMatrix.marketingScenarios, localDefaults.marketingScenarios, baseline.marketingScenarios || []);
+    merged.marketingScenarios = deduplicateMarketingScenarios(mergeRecords(relationalMatrix.marketingScenarios, localDefaults.marketingScenarios, baseline.marketingScenarios || []));
   }
 
   // Ensure CRM products table and ManagedProducts are bidirectionally unified

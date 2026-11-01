@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   Target,
   Briefcase,
@@ -6,6 +6,7 @@ import {
   Clock,
   AlertTriangle,
   ShieldAlert,
+  ShieldCheck,
   Coins,
   ArrowRight,
   TrendingUp,
@@ -20,6 +21,10 @@ import {
   Sparkles,
   Square,
   CheckSquare,
+  RefreshCw,
+  Package,
+  Layers,
+  ExternalLink,
 } from 'lucide-react';
 import {
   Project,
@@ -33,6 +38,8 @@ import {
 } from '../types';
 import { ManagedProduct, ManagedContract, ManagedInvoice, PRODUCT_ARCHETYPES } from '../../types/matrix';
 import { calculateProductKPIs } from '../../services/businessSummaryService';
+import { loadLiveProductsFromMaster, formatProductPrice } from '../../services/productCatalogService';
+import { matrixService } from '../../services/matrixService';
 import { getMonthlyTokenSummary } from '../../utils/storage';
 
 interface DashboardViewProps {
@@ -76,6 +83,29 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
 }) => {
   const [isEditingGoal, setIsEditingGoal] = useState(false);
   const [goalInput, setGoalInput] = useState(topGoal);
+  const [liveMasterProducts, setLiveMasterProducts] = useState<ManagedProduct[] | null>(null);
+  const [isSyncingMaster, setIsSyncingMaster] = useState(false);
+  const [masterSyncTime, setMasterSyncTime] = useState<Date | null>(null);
+  const [productCategoryFilter, setProductCategoryFilter] = useState<string>('all');
+
+  const refreshMasterProducts = async () => {
+    setIsSyncingMaster(true);
+    try {
+      const masterItems = await loadLiveProductsFromMaster();
+      if (masterItems && masterItems.length > 0) {
+        setLiveMasterProducts(masterItems);
+        setMasterSyncTime(new Date());
+      }
+    } catch (err) {
+      console.warn('Dashboard master product fetch failed:', err);
+    } finally {
+      setIsSyncingMaster(false);
+    }
+  };
+
+  useEffect(() => {
+    void refreshMasterProducts();
+  }, []);
 
   const handleSaveGoal = () => {
     if (goalInput.trim()) {
@@ -101,12 +131,28 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
     if (key) activeSignedClients.add(key);
   });
 
-  const activeProducts = products.filter((p) => p.status !== 'archived');
-  const productStatsList = activeProducts.map((p) => calculateProductKPIs(p, contracts, invoices));
-  const totalTargetRevenue = productStatsList.reduce((sum, s) => sum + s.targetRevenue, 0);
+  // 商品マスタ正（Single Source of Truth: products table / liveMasterProducts）
+  const sampleIds = matrixService.SAMPLE_RECORD_IDS?.products || new Set(['prd-sys-01', 'prd-ret-02', 'prd-med-04', 'prd-dig-03']);
+  const effectiveProductSource = (liveMasterProducts && liveMasterProducts.length > 0 ? liveMasterProducts : products)
+    .filter((p) => !sampleIds.has(p.id) && p.status !== 'archived');
+
+  const availableCategories = Array.from(
+    new Set(effectiveProductSource.map((p) => p.category?.trim()).filter(Boolean))
+  ) as string[];
+
+  const filteredProducts = productCategoryFilter === 'all'
+    ? effectiveProductSource
+    : effectiveProductSource.filter((p) => (p.category || '').trim() === productCategoryFilter);
+
+  // 全社総計（全プロダクト対象）
+  const allProductStatsList = effectiveProductSource.map((p) => calculateProductKPIs(p, contracts, invoices));
+  const totalTargetRevenue = allProductStatsList.reduce((sum, s) => sum + s.targetRevenue, 0);
   const overallAchievementRate = totalTargetRevenue > 0
     ? Math.min(999, Math.round((totalPaidRevenue / totalTargetRevenue) * 100))
     : 0;
+
+  // 表示対象プロダクトのKPI
+  const displayedProductStatsList = filteredProducts.map((p) => calculateProductKPIs(p, contracts, invoices));
 
   // Metrics
   const inProgressProjects = projects.filter((p) => p.status === 'in_progress');
@@ -227,36 +273,73 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
         </div>
       </div>
 
-      {/* リアルタイム全社業績 & 商品別進捗コックピット（経営・AI社長統合） */}
+      {/* リアルタイム全社業績 & 商品別進捗コックピット（商品マスタ正・Single Source of Truth） */}
       <div className="p-6 rounded-3xl bg-slate-900 border border-slate-800 shadow-xl space-y-5">
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-800 pb-4">
-          <div className="flex items-center gap-2">
-            <TrendingUp className="w-5 h-5 text-emerald-400" />
-            <h2 className="text-base font-bold text-white">全社業績・プロダクト進捗（実データ確定値）</h2>
-            <span className="text-[10px] px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 font-semibold border border-emerald-500/30">
-              契約書・請求書自動集計
-            </span>
-          </div>
-          {onNavigateToTab && (
-            <div className="flex items-center gap-2 text-xs flex-wrap">
-              <button
-                type="button"
-                onClick={() => onNavigateToTab('mst_dashboard')}
-                className="px-2.5 py-1 rounded-lg bg-slate-800 hover:bg-slate-750 text-slate-300 hover:text-white border border-slate-700 flex items-center gap-1 font-semibold cursor-pointer transition-colors"
-              >
-                <span>営業パイプライン一覧</span>
-                <ArrowRight className="w-3 h-3" />
-              </button>
-              <button
-                type="button"
-                onClick={() => onNavigateToTab('product_hub')}
-                className="px-2.5 py-1 rounded-lg bg-indigo-500/15 hover:bg-indigo-500/25 text-indigo-300 border border-indigo-500/30 flex items-center gap-1 font-semibold cursor-pointer transition-colors"
-              >
-                <span>AIプロダクト設計</span>
-                <ArrowRight className="w-3.5 h-3.5" />
-              </button>
+        <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-3 border-b border-slate-800 pb-4">
+          <div className="space-y-1">
+            <div className="flex items-center gap-2 flex-wrap">
+              <TrendingUp className="w-5 h-5 text-emerald-400" />
+              <h2 className="text-base font-bold text-white">全社業績・プロダクト進捗（実データ確定値）</h2>
+              <span className="text-[10px] px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 font-semibold border border-emerald-500/30 flex items-center gap-1">
+                <ShieldCheck className="w-3 h-3 text-emerald-400" />
+                商品マスタ正 (Single Source of Truth)
+              </span>
+              <span className="text-[10px] px-2 py-0.5 rounded-full bg-indigo-500/20 text-indigo-300 font-semibold border border-indigo-500/30">
+                契約書・請求書自動集計
+              </span>
             </div>
-          )}
+            <p className="text-xs text-slate-400">
+              Supabaseの商品マスタ（<code className="text-indigo-300 bg-slate-950 px-1 py-0.5 rounded text-[11px]">products</code>テーブル）を正本として、締結済み契約書・発行済み請求書から実数値をリアルタイム集計
+              {masterSyncTime && (
+                <span className="text-slate-500 ml-1.5 text-[11px]">
+                  (最終マスタ同期: {masterSyncTime.toLocaleTimeString('ja-JP', { hour: '2-digit', minute: '2-digit', second: '2-digit' })})
+                </span>
+              )}
+            </p>
+          </div>
+
+          <div className="flex items-center gap-2 text-xs flex-wrap">
+            <button
+              type="button"
+              onClick={() => void refreshMasterProducts()}
+              disabled={isSyncingMaster}
+              className="px-2.5 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-750 text-slate-300 hover:text-white border border-slate-700 flex items-center gap-1.5 font-semibold cursor-pointer transition-colors disabled:opacity-50"
+              title="Supabaseの商品マスタから最新の商品データを再取得します"
+            >
+              <RefreshCw className={`w-3.5 h-3.5 text-indigo-400 ${isSyncingMaster ? 'animate-spin' : ''}`} />
+              <span>{isSyncingMaster ? 'マスタ同期中...' : '最新マスタ同期'}</span>
+            </button>
+            {onNavigateToTab && (
+              <>
+                <button
+                  type="button"
+                  onClick={() => onNavigateToTab('products')}
+                  className="px-2.5 py-1.5 rounded-xl bg-indigo-500/15 hover:bg-indigo-500/25 text-indigo-300 border border-indigo-500/30 flex items-center gap-1 font-semibold cursor-pointer transition-colors"
+                  title="商品マスタ管理画面（CRMテーブルマネージャー）へ移動"
+                >
+                  <Package className="w-3.5 h-3.5" />
+                  <span>商品マスタ管理</span>
+                  <ExternalLink className="w-3 h-3 text-indigo-400" />
+                </button>
+                <button
+                  type="button"
+                  onClick={() => onNavigateToTab('mst_dashboard')}
+                  className="px-2.5 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-750 text-slate-300 hover:text-white border border-slate-700 flex items-center gap-1 font-semibold cursor-pointer transition-colors"
+                >
+                  <span>営業パイプライン一覧</span>
+                  <ArrowRight className="w-3 h-3" />
+                </button>
+                <button
+                  type="button"
+                  onClick={() => onNavigateToTab('customer_operations')}
+                  className="px-2.5 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-750 text-slate-300 hover:text-white border border-slate-700 flex items-center gap-1 font-semibold cursor-pointer transition-colors"
+                >
+                  <span>契約・請求管理</span>
+                  <ArrowRight className="w-3 h-3" />
+                </button>
+              </>
+            )}
+          </div>
         </div>
 
         {/* 4大財務・事業KPI */}
@@ -296,47 +379,179 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
           </div>
         </div>
 
-        {/* 商品別進捗リスト */}
-        {productStatsList.length > 0 && (
+        {/* カテゴリフィルター */}
+        {availableCategories.length > 0 && (
+          <div className="flex items-center gap-2 overflow-x-auto pb-1 text-xs">
+            <span className="text-slate-400 text-xs shrink-0 flex items-center gap-1 font-semibold">
+              <Layers className="w-3.5 h-3.5 text-slate-400" />
+              カテゴリ:
+            </span>
+            <button
+              type="button"
+              onClick={() => setProductCategoryFilter('all')}
+              className={`px-3 py-1 rounded-xl text-xs font-semibold shrink-0 cursor-pointer transition-all ${
+                productCategoryFilter === 'all'
+                  ? 'bg-indigo-600 text-white shadow-sm'
+                  : 'bg-slate-800 text-slate-400 hover:text-slate-200 hover:bg-slate-750'
+              }`}
+            >
+              すべて ({effectiveProductSource.length})
+            </button>
+            {availableCategories.map((category) => {
+              const count = effectiveProductSource.filter((p) => (p.category || '').trim() === category).length;
+              return (
+                <button
+                  key={category}
+                  type="button"
+                  onClick={() => setProductCategoryFilter(category)}
+                  className={`px-3 py-1 rounded-xl text-xs font-semibold shrink-0 cursor-pointer transition-all ${
+                    productCategoryFilter === category
+                      ? 'bg-indigo-600 text-white shadow-sm'
+                      : 'bg-slate-800 text-slate-400 hover:text-slate-200 hover:bg-slate-750'
+                  }`}
+                >
+                  {category} ({count})
+                </button>
+              );
+            })}
+          </div>
+        )}
+
+        {/* 商品別進捗リスト（商品マスタ正） */}
+        {displayedProductStatsList.length > 0 ? (
           <div className="space-y-2 pt-1">
             <div className="text-xs font-bold text-slate-300 flex items-center justify-between">
-              <span>取扱プロダクト別の実績と進捗 ({productStatsList.length} 商品):</span>
+              <span>取扱プロダクト別の実績と進捗 ({displayedProductStatsList.length} 商品):</span>
               <span className="text-[11px] text-slate-500 font-normal">確定売上 / 目標売上</span>
             </div>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-2.5">
-              {productStatsList.map((stat) => (
-                <div key={stat.productId} className="p-3.5 rounded-xl bg-slate-950 border border-slate-800/80 space-y-2">
-                  <div className="flex items-center justify-between gap-2">
-                    <div className="flex items-center gap-1.5 min-w-0">
-                      <span className="text-xs font-bold text-white truncate">{stat.productName}</span>
-                      <span className="text-[10px] px-1.5 py-0.5 rounded bg-slate-800 text-slate-400 shrink-0">
-                        {PRODUCT_ARCHETYPES[stat.archetype as keyof typeof PRODUCT_ARCHETYPES]?.label || stat.archetype}
-                      </span>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+              {displayedProductStatsList.map((stat) => {
+                const productObj = effectiveProductSource.find((p) => p.id === stat.productId);
+                const priceInfo = productObj ? formatProductPrice(productObj) : null;
+                const isOverTarget = stat.targetRevenue > 0 && stat.currentRevenue >= stat.targetRevenue;
+
+                return (
+                  <div key={stat.productId} className="p-4 rounded-2xl bg-slate-950 border border-slate-800/80 hover:border-slate-700 transition-all space-y-3">
+                    <div className="flex items-start justify-between gap-2">
+                      <div className="min-w-0 space-y-1">
+                        <div className="flex items-center gap-1.5 flex-wrap">
+                          <span className="text-xs font-bold text-white truncate">
+                            {productObj?.code && (
+                              <span className="text-indigo-400 font-mono mr-1.5 font-bold">[{productObj.code}]</span>
+                            )}
+                            {stat.productName}
+                          </span>
+                          <span className="text-[10px] px-1.5 py-0.5 rounded bg-slate-800 text-slate-400 shrink-0 font-medium">
+                            {productObj?.category || PRODUCT_ARCHETYPES[stat.archetype as keyof typeof PRODUCT_ARCHETYPES]?.label || stat.archetype}
+                          </span>
+                          {priceInfo && (
+                            <span
+                              className={`text-[10px] px-1.5 py-0.5 rounded font-semibold shrink-0 ${
+                                priceInfo.model === 'custom_quote'
+                                  ? 'bg-purple-500/20 text-purple-300 border border-purple-500/30'
+                                  : priceInfo.isFlexible
+                                  ? 'bg-amber-500/20 text-amber-300 border border-amber-500/30'
+                                  : 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/30'
+                              }`}
+                            >
+                              {priceInfo.badge}
+                            </span>
+                          )}
+                        </div>
+
+                        {priceInfo && (
+                          <div className="text-[11px] text-slate-400 font-medium">
+                            料金: <span className="text-slate-200">{priceInfo.label}</span>
+                            {priceInfo.subLabel && (
+                              <span className="text-slate-500 ml-1">({priceInfo.subLabel})</span>
+                            )}
+                          </div>
+                        )}
+                      </div>
+
+                      <div className="text-right shrink-0">
+                        <span className="text-sm font-extrabold text-emerald-400">
+                          ¥{stat.currentRevenue.toLocaleString()}
+                        </span>
+                        <span className="text-[10px] text-slate-500 block">入金済</span>
+                      </div>
                     </div>
-                    <span className="text-xs font-bold text-emerald-400 shrink-0">
-                      ¥{stat.currentRevenue.toLocaleString()}
-                    </span>
+
+                    <div className="space-y-1.5">
+                      <div className="w-full bg-slate-800 h-2 rounded-full overflow-hidden">
+                        <div
+                          className={`h-full rounded-full transition-all duration-500 ${
+                            isOverTarget
+                              ? 'bg-gradient-to-r from-emerald-500 to-teal-400'
+                              : 'bg-gradient-to-r from-emerald-500 to-indigo-500'
+                          }`}
+                          style={{ width: `${Math.min(100, stat.achievementRate)}%` }}
+                        />
+                      </div>
+                      <div className="flex items-center justify-between text-[11px] text-slate-400">
+                        <span>
+                          有効契約: <strong className="text-slate-200">{stat.activeClients}社</strong>
+                        </span>
+                        <span>
+                          目標: ¥{stat.targetRevenue.toLocaleString()} (
+                          <span className={stat.achievementRate >= 100 ? 'text-emerald-400 font-bold' : 'text-indigo-300 font-semibold'}>
+                            {stat.achievementRate}%
+                          </span>
+                          )
+                        </span>
+                      </div>
+                    </div>
+
+                    <div className="pt-1 flex items-center justify-between border-t border-slate-900 text-xs">
+                      <div className="text-[10px] text-slate-500">
+                        ID: <span className="font-mono text-slate-400">{stat.productId}</span>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        {onNavigateToTab && (
+                          <>
+                            <button
+                              type="button"
+                              onClick={() => onNavigateToTab('products')}
+                              className="text-[11px] text-indigo-400 hover:text-indigo-300 font-medium cursor-pointer transition-colors"
+                            >
+                              マスタ詳細
+                            </button>
+                            <span className="text-slate-700">|</span>
+                            <button
+                              type="button"
+                              onClick={() => onNavigateToTab('mst_dashboard')}
+                              className="text-[11px] text-slate-400 hover:text-slate-200 font-medium cursor-pointer transition-colors"
+                            >
+                              商談を見る
+                            </button>
+                          </>
+                        )}
+                      </div>
+                    </div>
                   </div>
-                  <div className="space-y-1">
-                    <div className="w-full bg-slate-800 h-1.5 rounded-full overflow-hidden">
-                      <div
-                        className="bg-gradient-to-r from-emerald-500 to-indigo-500 h-full rounded-full transition-all duration-500"
-                        style={{ width: `${Math.min(100, stat.achievementRate)}%` }}
-                      />
-                    </div>
-                    <div className="flex items-center justify-between text-[10px] text-slate-400">
-                      <span>契約: <strong className="text-slate-200">{stat.activeClients}社</strong></span>
-                      <span>
-                        目標: ¥{stat.targetRevenue.toLocaleString()} (
-                        <span className={stat.achievementRate >= 100 ? 'text-emerald-400 font-bold' : 'text-indigo-300'}>
-                          {stat.achievementRate}%
-                        </span>)
-                      </span>
-                    </div>
-                  </div>
-                </div>
-              ))}
+                );
+              })}
             </div>
+          </div>
+        ) : (
+          <div className="p-8 rounded-2xl bg-slate-950/60 border border-slate-800 text-center space-y-2">
+            <Package className="w-8 h-8 text-slate-600 mx-auto" />
+            <p className="text-sm text-slate-300 font-semibold">表示対象のプロダクトがありません</p>
+            <p className="text-xs text-slate-500">
+              {productCategoryFilter !== 'all'
+                ? `カテゴリ「${productCategoryFilter}」には現在有効なプロダクトがありません。`
+                : '商品マスタ（productsテーブル）にプロダクトを登録するか、「最新マスタ同期」をクリックしてください。'}
+            </p>
+            {onNavigateToTab && (
+              <button
+                type="button"
+                onClick={() => onNavigateToTab('products')}
+                className="mt-2 inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-bold transition-all cursor-pointer"
+              >
+                <Package className="w-3.5 h-3.5" />
+                <span>商品マスタを開く</span>
+              </button>
+            )}
           </div>
         )}
       </div>

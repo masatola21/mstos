@@ -252,7 +252,7 @@ export const UnifiedNavbar: React.FC<UnifiedNavbarProps> = ({
               if (tab === 'customer_meeting_invitations') return '顧客面談案内';
               if (tab === 'ai_acquisition') return 'AI集客運用（HP/SNS/メディア）';
               if (tab === 'prospects') return '見込み企業（AI検索）';
-              if (tab === 'contacts') return '連絡先一覧（LINE友だち）';
+              if (tab === 'contacts') return '連絡先・LINE友だち（タグ管理）';
               if (tab === 'marketing_automation') return 'LINE・メール自動配信';
               if (tab === 'leads') return '反響リード';
               if (tab === 'deals') return '商談一覧';

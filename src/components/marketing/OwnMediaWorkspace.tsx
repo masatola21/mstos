@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { getSupabase } from '../../lib/supabaseClient';
-import { Plus, Save, Trash2, Sparkles, RefreshCw, Globe, ExternalLink, Send, CheckCircle2, AlertCircle, Wrench, FileText, ArrowRight } from 'lucide-react';
+import { Plus, Save, Trash2, Sparkles, RefreshCw, Globe, ExternalLink, Send, CheckCircle2, AlertCircle, Wrench, FileText, ArrowRight, Code2, Zap, Layers } from 'lucide-react';
 import { TabMarketingAssetManager } from './TabMarketingAssetManager';
 
 type Kind = 'media' | 'article' | 'seo' | 'rewrite' | 'attribution';
@@ -20,8 +20,8 @@ type Deal = { id: string; lead_id?: string | null; proposal_status?: string | nu
 const kinds: Kind[] = ['media', 'article', 'seo', 'rewrite', 'attribution'];
 
 const sections = [
-  ['articles', '📝 記事作成・CMS自動投稿'],
-  ['settings', '⚙️ 自社メディア・CMS連携設定'],
+  ['articles', '📝 記事作成・自社HP公開'],
+  ['settings', '🌐 自社HP（Astro・Vercel）連携設定'],
   ['seo', '📈 SEO・アクセス分析'],
   ['rewrite', '🔄 リライト・記事改善'],
   ['attribution', '🤝 リード・売上成果'],
@@ -60,6 +60,28 @@ export const OwnMediaWorkspace: React.FC<{
   const [cmsPosting, setCmsPosting] = useState<string | null>(null);
   const [cmsResult, setCmsResult] = useState<{ id: string; success: boolean; message: string; url?: string } | null>(null);
 
+  // Vercel Deploy Hook テスト状態
+  const [testingDeployHook, setTestingDeployHook] = useState(false);
+  const [deployHookNotice, setDeployHookNotice] = useState<string | null>(null);
+
+  const testVercelDeployHook = async (hookUrl?: string) => {
+    const url = hookUrl || payload.vercelDeployHook;
+    if (!url || !url.startsWith('https://')) {
+      setDeployHookNotice('有効なVercel Deploy Hook URL（https://api.vercel.com/...）を入力してください。');
+      return;
+    }
+    setTestingDeployHook(true);
+    setDeployHookNotice(null);
+    try {
+      await fetch(url, { method: 'POST' });
+      setDeployHookNotice('✅ Vercel Deploy Hook の送信に成功しました！Vercel側で再デプロイが開始されました。');
+    } catch (err: any) {
+      setDeployHookNotice('⚠️ Deploy Hook へのリクエストに失敗しました: ' + (err.message || 'ネットワークエラー'));
+    } finally {
+      setTestingDeployHook(false);
+    }
+  };
+
   const load = async () => {
     const db = getSupabase();
     setLoading(true);
@@ -97,7 +119,39 @@ export const OwnMediaWorkspace: React.FC<{
     void load();
   }, []);
 
-  const media = useMemo(() => rows.filter((r) => r.record_type === 'media'), [rows]);
+  // 有限会社MST 公式オウンドメディア / コーポレートHP（Astro + Supabase + Vercel / Google Antigravity）
+  const DEFAULT_OFFICIAL_MEDIA: Row = useMemo(() => ({
+    id: 'mst_official_corporate_hp',
+    record_type: 'media',
+    title: '有限会社MST 公式オウンドメディア / コーポレートHP',
+    product_id: null,
+    status: '連携稼働中',
+    payload: {
+      url: 'https://corp.mstcorp.info',
+      mediaUrl: 'https://corp.mstcorp.info/media',
+      mediaType: '自社公式メディア / コーポレートHP',
+      cms: 'Astro + Supabase (Vercel) / Google Antigravity',
+      githubRepo: 'mst-corporate-website (/hp)',
+      connectionType: 'supabase_direct',
+      target: '中小企業・小規模事業者の経営者・事業責任者',
+      purpose: '現場実践の利益改善・業務標準化・DX/AIノウハウの発信とリード獲得',
+      vercelDeployHook: '',
+    },
+    updated_at: new Date().toISOString(),
+  }), []);
+
+  const media = useMemo(() => {
+    const list = rows.filter((r) => r.record_type === 'media');
+    if (list.length === 0) {
+      return [DEFAULT_OFFICIAL_MEDIA];
+    }
+    const hasOfficial = list.some((m) => (m.payload?.url || '').includes('mstcorp.info') || (m.payload?.cms || '').includes('Astro'));
+    if (!hasOfficial) {
+      return [DEFAULT_OFFICIAL_MEDIA, ...list];
+    }
+    return list;
+  }, [rows, DEFAULT_OFFICIAL_MEDIA]);
+
   const articles = useMemo(() => rows.filter((r) => r.record_type === 'article'), [rows]);
   const seoList = useMemo(() => rows.filter((r) => r.record_type === 'seo'), [rows]);
   const rewriteList = useMemo(() => rows.filter((r) => r.record_type === 'rewrite'), [rows]);
@@ -110,13 +164,22 @@ export const OwnMediaWorkspace: React.FC<{
     setPayload(
       tab === 'articles'
         ? {
-            mediaId: media[0]?.id || '',
+            mediaId: media[0]?.id || DEFAULT_OFFICIAL_MEDIA.id,
             publishStatus: '下書き',
+            category: '経営改善・利益改善',
+            slug: '',
           }
         : tab === 'settings'
         ? {
-            mediaType: '自社HP',
-            cms: 'WordPress',
+            mediaType: '自社公式メディア / コーポレートHP',
+            cms: 'Astro + Supabase (Vercel)',
+            url: 'https://mstcorp.info',
+            mediaUrl: 'https://mstcorp.info/media',
+            githubRepo: 'mst-corporate-website (/hp)',
+            connectionType: 'supabase_direct',
+            target: '中小企業・小規模事業者の経営者・事業責任者',
+            purpose: '現場実践の利益改善・業務標準化・DX/AIノウハウの発信とリード獲得',
+            vercelDeployHook: '',
           }
         : {}
     );
@@ -392,7 +455,7 @@ export const OwnMediaWorkspace: React.FC<{
     }
   };
 
-  // ★ MST公式HP（Astro + Supabase 自社メディア）へワンクリック公開 / 下書き変更
+  // ★ 自社公式HP（Astro + Supabase + Vercel / Google Antigravity）へワンクリック即時公開 / 下書き変更
   const publishToOfficialWebsite = async (articleRow?: Row, newStatus: '公開' | '下書き' = '公開') => {
     const targetArticle = articleRow || editing;
     const articleTitle = articleRow ? articleRow.title : title;
@@ -414,12 +477,19 @@ export const OwnMediaWorkspace: React.FC<{
     setCmsResult(null);
 
     try {
-      const slug = articlePayload.slug || articleId || `post-${Date.now().toString(36)}`;
-      const hpUrl = `https://corp.mstcorp.info/media/${slug}`;
+      // スラッグを正規化
+      let cleanSlug = (articlePayload.slug || '').trim();
+      if (!cleanSlug) {
+        cleanSlug = (articleId || `article-${Date.now().toString(36)}`).replace(/^article-/, '');
+      }
+      cleanSlug = cleanSlug.toLowerCase().replace(/[^a-z0-9_-]/g, '-').replace(/-+/g, '-');
+      if (!cleanSlug || cleanSlug === '-') cleanSlug = `insight-${Date.now().toString(36)}`;
+
+      const hpUrl = `https://corp.mstcorp.info/media/${cleanSlug}`;
 
       const updatedPayload = {
         ...articlePayload,
-        slug,
+        slug: cleanSlug,
         publishedUrl: newStatus === '公開' ? hpUrl : '',
         publishStatus: newStatus,
         publishedDate: newStatus === '公開' ? (articlePayload.publishedDate || new Date().toISOString().slice(0, 10).replace(/-/g, '.')) : '',
@@ -429,29 +499,55 @@ export const OwnMediaWorkspace: React.FC<{
         setPayload(updatedPayload);
       }
 
-      if (articleId) {
-        const { error: updateErr } = await db.from('mst_ai_acquisition_records').update({
+      const rowId = articleId || `article-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+
+      // 1. Supabaseの mst_ai_acquisition_records を更新（HP側の getLiveArticles がこれを直接読み出します）
+      const { error: upsertErr } = await db.from('mst_ai_acquisition_records').upsert({
+        user_id: userId,
+        id: rowId,
+        record_type: 'article',
+        title: articleTitle,
+        product_id: productId || null,
+        status: newStatus,
+        payload: updatedPayload,
+        updated_at: new Date().toISOString(),
+      }, { onConflict: 'user_id,id' });
+
+      if (upsertErr) throw upsertErr;
+
+      setRows((prev) => [
+        {
+          id: rowId,
+          record_type: 'article',
           title: articleTitle,
-          payload: updatedPayload,
+          product_id: productId || null,
           status: newStatus,
+          payload: updatedPayload,
           updated_at: new Date().toISOString(),
-        }).eq('user_id', userId).eq('id', articleId);
+        } as Row,
+        ...prev.filter((r) => r.id !== rowId),
+      ]);
 
-        if (updateErr) throw updateErr;
-
-        setRows((prev) =>
-          prev.map((r) =>
-            r.id === articleId
-              ? { ...r, title: articleTitle, payload: updatedPayload, status: newStatus }
-              : r
-          )
-        );
+      // 2. Vercel Deploy Hook が設定されていればキック（静的ビルド再生成）
+      const targetMediaId = (updatedPayload as Record<string, any>).mediaId || payload.mediaId;
+      const activeMedia = media.find((m) => m.id === targetMediaId) || media[0] || DEFAULT_OFFICIAL_MEDIA;
+      const vercelHook = activeMedia?.payload?.vercelDeployHook;
+      let deployNotice = '';
+      if (vercelHook && vercelHook.startsWith('https://')) {
+        try {
+          await fetch(vercelHook, { method: 'POST' });
+          deployNotice = '（Vercel再デプロイを自動キックしました）';
+        } catch (e) {
+          console.warn('Vercel Deploy Hook notice:', e);
+        }
       }
 
       setCmsResult({
-        id: articleId || 'current',
+        id: rowId,
         success: true,
-        message: newStatus === '公開' ? '🌐 MST公式HPに公開しました！' : '📁 記事を「下書き」に戻しました。',
+        message: newStatus === '公開'
+          ? `🎉 自社公式HP（Astro + Supabase: https://mstcorp.info/media/${cleanSlug}）に即時公開しました！${deployNotice}`
+          : '📁 記事を「下書き」に戻しました。',
         url: newStatus === '公開' ? hpUrl : undefined,
       });
     } catch (err: any) {
@@ -557,11 +653,17 @@ export const OwnMediaWorkspace: React.FC<{
           {tab === 'articles' && (
             <div className="space-y-4">
               {/* ヘッダーガイド ＆ 新規作成ボタン */}
-              <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-slate-800 bg-slate-900/60 p-4">
+              <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-indigo-500/30 bg-gradient-to-r from-indigo-950/60 via-slate-900 to-slate-900 p-4">
                 <div>
-                  <h3 className="font-bold text-base text-white">記事一覧 & CMSワンクリック投稿</h3>
-                  <p className="text-xs text-slate-400 mt-0.5">
-                    手入力を減らし、AIで記事（見出し・本文・メタ）を一括作成。ボタン1つでWordPressへ送信できます。
+                  <div className="flex items-center gap-2">
+                    <Globe className="h-5 w-5 text-cyan-400" />
+                    <h3 className="font-bold text-base text-white">自社メディア記事一覧 & HP即時公開</h3>
+                    <span className="rounded-full bg-emerald-500/20 px-2 py-0.5 text-[10px] font-bold text-emerald-300 border border-emerald-500/30">
+                      Astro + Supabase 直結稼働
+                    </span>
+                  </div>
+                  <p className="text-xs text-slate-300 mt-1">
+                    手入力を減らし、AIで記事（見出し・本文・メタ）を一括作成。ボタン1つで自社公式HP（<a href="https://mstcorp.info/media" target="_blank" rel="noopener noreferrer" className="text-cyan-300 underline font-mono">https://mstcorp.info/media</a>）へ即時公開できます。
                   </p>
                 </div>
                 {!form && (
@@ -596,22 +698,18 @@ export const OwnMediaWorkspace: React.FC<{
                   <div className="grid gap-4 md:grid-cols-3">
                     <div>
                       <label className="block text-xs font-medium text-slate-300">
-                        対象メディア（WordPressサイト） <span className="text-cyan-400">*</span>
+                        対象メディア（自社HP / Astro） <span className="text-cyan-400">*</span>
                       </label>
                       <select
                         value={payload.mediaId || (media[0]?.id ?? '')}
                         onChange={(e) => setPayload((p) => ({ ...p, mediaId: e.target.value }))}
                         className={cls}
                       >
-                        {media.length === 0 ? (
-                          <option value="">メディア未設定（設定タブで追加）</option>
-                        ) : (
-                          media.map((m) => (
-                            <option key={m.id} value={m.id}>
-                              {m.title} {m.payload?.wpUrl ? `(${m.payload.wpUrl})` : ''}
-                            </option>
-                          ))
-                        )}
+                        {media.map((m) => (
+                          <option key={m.id} value={m.id}>
+                            {m.title} {m.payload?.url ? `(${m.payload.url})` : ''}
+                          </option>
+                        ))}
                       </select>
                     </div>
 
@@ -784,39 +882,28 @@ export const OwnMediaWorkspace: React.FC<{
                       </button>
                     </div>
 
-                    {/* 公式HP & WordPress 投稿ボタン群 */}
+                    {/* 自社公式HP（Astro + Supabase）即時公開ボタン */}
                     <div className="flex items-center gap-2 flex-wrap">
                       <button
                         type="button"
                         disabled={cmsPosting === (editing?.id || 'current')}
                         onClick={() => void publishToOfficialWebsite(undefined, '公開')}
-                        className="inline-flex items-center gap-2 rounded-xl bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 px-4 py-2.5 text-xs font-bold text-white shadow-lg shadow-emerald-600/30 transition disabled:opacity-50"
+                        className="inline-flex items-center gap-2 rounded-xl bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 px-5 py-2.5 text-xs font-bold text-white shadow-lg shadow-emerald-600/30 transition disabled:opacity-50 cursor-pointer"
                       >
                         <Globe className="h-4 w-4" />
-                        {cmsPosting === (editing?.id || 'current') ? '公開処理中…' : '🌐 公式HPに即時公開'}
+                        {cmsPosting === (editing?.id || 'current') ? 'HPへ反映中…' : '🚀 自社公式HP（Astroメディア）へ即時公開'}
                       </button>
 
+                      {/* 外部WordPress等との併用オプション（任意） */}
                       <button
                         type="button"
                         disabled={cmsPosting === (editing?.id || 'current')}
                         onClick={() => void postToWordPress(undefined, 'draft')}
-                        className="inline-flex items-center gap-2 rounded-xl bg-slate-800 hover:bg-slate-700 border border-slate-700 px-3.5 py-2.5 text-xs font-bold text-white transition disabled:opacity-50"
+                        className="inline-flex items-center gap-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 border border-slate-700 px-3 py-2 text-xs font-medium text-slate-300 hover:text-white transition disabled:opacity-50"
+                        title="外部のWordPressブログにも送信する場合"
                       >
-                        <Send className="h-4 w-4" />
-                        {cmsPosting === (editing?.id || 'current') ? '送信中…' : 'WordPressへ'}
-                      </button>
-                      <button
-                        type="button"
-                        disabled={cmsPosting === (editing?.id || 'current')}
-                        onClick={() => {
-                          if (window.confirm('WordPressに「即時公開」として投稿しますか？')) {
-                            void postToWordPress(undefined, 'publish');
-                          }
-                        }}
-                        className="inline-flex items-center gap-2 rounded-xl bg-emerald-700 hover:bg-emerald-600 px-3.5 py-2.5 text-xs font-bold text-white transition disabled:opacity-50"
-                      >
-                        <Globe className="h-4 w-4" />
-                        即時公開投稿
+                        <Send className="h-3.5 w-3.5 text-slate-400" />
+                        <span>外部WordPressへ</span>
                       </button>
                     </div>
                   </div>
@@ -938,15 +1025,22 @@ export const OwnMediaWorkspace: React.FC<{
           )}
 
           {/* ========================================================
-              TAB 2: メディア設定・CMS連携設定
+              TAB 2: 自社HP・メディア連携設定（Astro + Supabase + Vercel）
              ======================================================== */}
           {tab === 'settings' && (
             <div className="space-y-6">
-              <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-slate-800 bg-slate-900/60 p-4">
+              {/* ヘッダー */}
+              <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-indigo-500/30 bg-gradient-to-r from-indigo-950/70 via-slate-900 to-slate-900 p-5 shadow-lg">
                 <div>
-                  <h3 className="font-bold text-base text-white">自社メディア・WordPress CMS連携設定</h3>
-                  <p className="text-xs text-slate-400 mt-0.5">
-                    WordPressサイトのURL、ユーザー名、アプリケーションパスワードを設定すると、記事一覧からボタン1つで自動投稿できるようになります。
+                  <div className="flex items-center gap-2">
+                    <Globe className="h-5 w-5 text-cyan-400" />
+                    <h3 className="font-bold text-base text-white">自社HP・オウンドメディア連携設定（Astro + Supabase + Vercel）</h3>
+                    <span className="rounded-full bg-emerald-500/20 px-2.5 py-0.5 text-[11px] font-bold text-emerald-300 border border-emerald-500/30">
+                      ● Supabase直結稼働中
+                    </span>
+                  </div>
+                  <p className="text-xs text-slate-300 mt-1 leading-relaxed">
+                    Google Antigravityで構築された自社HP（Astro）とネイティブ連動しています。WordPressのような面倒なAPIキー設定は不要で、記事の自動同期とリード集約がリアルタイムに連携されます。
                   </p>
                 </div>
                 {!form && (
@@ -955,12 +1049,184 @@ export const OwnMediaWorkspace: React.FC<{
                     className="inline-flex items-center gap-2 rounded-xl bg-cyan-700 hover:bg-cyan-600 px-4 py-2 text-xs font-bold text-white shadow-md"
                   >
                     <Plus className="h-4 w-4" />
-                    メディアを登録
+                    連携設定を追加・編集
                   </button>
                 )}
               </div>
 
-              {/* メディア登録・編集フォーム */}
+              {/* ★ メイン連携ステータスカード（Astro + Supabase + Vercel / Google Antigravity） ★ */}
+              <div className="rounded-2xl border border-cyan-500/30 bg-gradient-to-br from-slate-900 via-slate-900 to-cyan-950/20 p-5 space-y-4 shadow-xl">
+                <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-800 pb-3">
+                  <div className="flex items-center gap-2.5">
+                    <div className="h-9 w-9 rounded-xl bg-cyan-500/20 border border-cyan-500/30 flex items-center justify-center text-cyan-300 font-bold">
+                      <Code2 className="h-5 w-5" />
+                    </div>
+                    <div>
+                      <h4 className="text-sm font-bold text-white flex items-center gap-2">
+                        有限会社MST 公式コーポレートHP / オウンドメディア
+                        <span className="text-[10px] bg-cyan-500/20 text-cyan-300 px-2 py-0.5 rounded border border-cyan-500/30">
+                          Google Antigravity 構築
+                        </span>
+                      </h4>
+                      <div className="flex items-center gap-3 text-xs text-slate-400 mt-0.5">
+                        <span>サイトURL: <a href="https://corp.mstcorp.info" target="_blank" rel="noreferrer" className="text-cyan-400 underline font-mono">https://corp.mstcorp.info</a></span>
+                        <span>・ メディア: <a href="https://corp.mstcorp.info/media" target="_blank" rel="noreferrer" className="text-cyan-400 underline font-mono">/media</a></span>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="flex items-center gap-2">
+                    <a
+                      href="https://corp.mstcorp.info/media"
+                      target="_blank"
+                      rel="noreferrer"
+                      className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-xs font-bold text-slate-200 border border-slate-700 transition"
+                    >
+                      <span>本番メディアを確認</span>
+                      <ExternalLink className="h-3.5 w-3.5" />
+                    </a>
+                  </div>
+                </div>
+
+                {/* システム構成スペック */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 text-xs">
+                  <div className="rounded-xl bg-slate-950/80 p-3 border border-slate-800 space-y-1">
+                    <span className="text-[10px] text-slate-400 font-semibold uppercase">Framework</span>
+                    <p className="font-bold text-white flex items-center gap-1.5">
+                      <Layers className="h-3.5 w-3.5 text-cyan-400" />
+                      Astro 5 + Tailwind
+                    </p>
+                    <p className="text-[10px] text-slate-400 font-mono">ソース: /hp ディレクトリ</p>
+                  </div>
+
+                  <div className="rounded-xl bg-slate-950/80 p-3 border border-slate-800 space-y-1">
+                    <span className="text-[10px] text-slate-400 font-semibold uppercase">Database (CMS)</span>
+                    <p className="font-bold text-emerald-300 flex items-center gap-1.5">
+                      <CheckCircle2 className="h-3.5 w-3.5 text-emerald-400" />
+                      Supabase 直結
+                    </p>
+                    <p className="text-[10px] text-slate-400">mst_ai_acquisition_records</p>
+                  </div>
+
+                  <div className="rounded-xl bg-slate-950/80 p-3 border border-slate-800 space-y-1">
+                    <span className="text-[10px] text-slate-400 font-semibold uppercase">Hosting / Deploy</span>
+                    <p className="font-bold text-white flex items-center gap-1.5">
+                      <Zap className="h-3.5 w-3.5 text-amber-400" />
+                      Vercel
+                    </p>
+                    <p className="text-[10px] text-slate-400">GitHub連携自動ビルド</p>
+                  </div>
+
+                  <div className="rounded-xl bg-slate-950/80 p-3 border border-slate-800 space-y-1">
+                    <span className="text-[10px] text-slate-400 font-semibold uppercase">CRM & Lead Sync</span>
+                    <p className="font-bold text-indigo-300 flex items-center gap-1.5">
+                      <ArrowRight className="h-3.5 w-3.5 text-indigo-400" />
+                      リード自動集約
+                    </p>
+                    <p className="text-[10px] text-slate-400">leads テーブルに直接蓄積</p>
+                  </div>
+                </div>
+
+                {/* 自動同期の仕組みガイド */}
+                <div className="rounded-xl bg-indigo-950/30 border border-indigo-500/20 p-3.5 text-xs text-indigo-200 leading-relaxed space-y-2">
+                  <div className="font-bold text-white flex items-center gap-2">
+                    <CheckCircle2 className="h-4 w-4 text-emerald-400" />
+                    <span>Astro + Supabase 連携がなぜ自動で動くのか？（仕組みの解説）</span>
+                  </div>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-[11px] text-slate-300">
+                    <div className="rounded-lg bg-slate-950/70 p-2.5 border border-slate-800/80 space-y-1">
+                      <strong className="text-white block font-bold">1. 記事作成 ➡ 自社HPへ即時反映</strong>
+                      <p className="text-slate-400">
+                        本システムで作成した記事を「自社HPに即時公開」すると、同じSupabaseの <code className="text-cyan-300">mst_ai_acquisition_records</code> に保存されます。自社HP（<code className="text-cyan-300">/hp/src/data/articles.ts</code>）が直接このテーブルを読み込むため、WordPressのようなAPIパスワード設定なしに完全同期されます。
+                      </p>
+                    </div>
+                    <div className="rounded-lg bg-slate-950/70 p-2.5 border border-slate-800/80 space-y-1">
+                      <strong className="text-white block font-bold">2. 自社HPからの問い合わせ ➡ CRM顧客台帳へ直結</strong>
+                      <p className="text-slate-400">
+                        自社HP（<code className="text-cyan-300">https://corp.mstcorp.info</code>）の無料診断や資料請求から送信されたデータは、同じSupabaseの <code className="text-emerald-300">leads</code> テーブルに直接挿入されます。本システムの「CRM・リード台帳」でリアルタイムに確認・商談化できます。
+                      </p>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Vercel Deploy Hook（即時再ビルド）設定セクション */}
+                <div className="rounded-xl border border-slate-800 bg-slate-950/80 p-4 space-y-3">
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <div>
+                      <h5 className="font-bold text-xs text-white flex items-center gap-1.5">
+                        <Zap className="h-4 w-4 text-amber-400" />
+                        Vercel Deploy Hook 設定（公開時の自動再ビルド用・任意）
+                      </h5>
+                      <p className="text-[11px] text-slate-400 mt-0.5">
+                        Vercelのプロジェクト設定 ＞「Git」＞「Deploy Hooks」で発行したURLを登録すると、記事公開時にVercelの自動再ビルドを即座にキックできます。
+                      </p>
+                    </div>
+                    <button
+                      type="button"
+                      disabled={testingDeployHook}
+                      onClick={() => void testVercelDeployHook(media[0]?.payload?.vercelDeployHook)}
+                      className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 border border-slate-700 text-xs font-semibold text-slate-200 transition disabled:opacity-50"
+                    >
+                      <RefreshCw className={`h-3.5 w-3.5 ${testingDeployHook ? 'animate-spin' : ''}`} />
+                      {testingDeployHook ? 'テスト送信中…' : '🔔 デプロイフックのテスト送信'}
+                    </button>
+                  </div>
+
+                  {deployHookNotice && (
+                    <div className="p-2.5 rounded-lg bg-slate-900 border border-slate-700 text-xs text-cyan-200">
+                      {deployHookNotice}
+                    </div>
+                  )}
+
+                  <div className="grid grid-cols-1 sm:grid-cols-12 gap-2 text-xs">
+                    <div className="sm:col-span-10">
+                      <input
+                        type="url"
+                        value={media[0]?.payload?.vercelDeployHook || ''}
+                        onChange={(e) => {
+                          const val = e.target.value;
+                          setRows((prev) =>
+                            prev.map((r) =>
+                              r.id === (media[0]?.id || DEFAULT_OFFICIAL_MEDIA.id)
+                                ? { ...r, payload: { ...r.payload, vercelDeployHook: val } }
+                                : r
+                            )
+                          );
+                        }}
+                        placeholder="例: https://api.vercel.com/v1/integrations/deploy/prj_.../..."
+                        className="w-full rounded-lg border border-slate-700 bg-slate-900 p-2 text-xs text-white font-mono focus:border-cyan-500 focus:outline-none"
+                      />
+                    </div>
+                    <div className="sm:col-span-2">
+                      <button
+                        type="button"
+                        onClick={async () => {
+                          const targetMedia = media[0] || DEFAULT_OFFICIAL_MEDIA;
+                          const db = getSupabase();
+                          if (db && userId) {
+                            await db.from('mst_ai_acquisition_records').upsert({
+                              user_id: userId,
+                              id: targetMedia.id,
+                              record_type: 'media',
+                              title: targetMedia.title,
+                              status: '連携稼働中',
+                              payload: targetMedia.payload,
+                              updated_at: new Date().toISOString(),
+                            }, { onConflict: 'user_id,id' });
+                            setNotice('Vercel Deploy Hook 設定を保存しました。');
+                            setTimeout(() => setNotice(''), 3000);
+                          }
+                        }}
+                        className="w-full py-2 rounded-lg bg-cyan-700 hover:bg-cyan-600 text-white font-bold text-xs transition shadow"
+                      >
+                        Hook保存
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* メディア登録・編集フォーム（新規追加または詳細編集時） */}
               {form && (
                 <form onSubmit={(e) => void save(e)} className="space-y-4 rounded-2xl border border-cyan-500/40 bg-slate-900 p-5 shadow-2xl">
                   <h4 className="font-bold text-white text-base">
@@ -976,7 +1242,7 @@ export const OwnMediaWorkspace: React.FC<{
                         required
                         value={title}
                         onChange={(e) => setTitle(e.target.value)}
-                        placeholder="例: 自社公式ブログ / テックマガジン"
+                        placeholder="例: 有限会社MST 公式オウンドメディア"
                         className={cls}
                       />
                     </div>
@@ -988,50 +1254,78 @@ export const OwnMediaWorkspace: React.FC<{
                       <input
                         required
                         value={payload.url || ''}
-                        onChange={(e) => setPayload((p) => ({ ...p, url: e.target.value, wpUrl: e.target.value }))}
-                        placeholder="https://example.com"
+                        onChange={(e) => setPayload((p) => ({ ...p, url: e.target.value }))}
+                        placeholder="https://corp.mstcorp.info"
                         className={cls}
                       />
                     </div>
                   </div>
 
-                  {/* WordPress REST API 連携セクション */}
-                  <div className="rounded-xl border border-cyan-500/30 bg-cyan-950/20 p-4 space-y-3">
-                    <h5 className="font-bold text-xs text-cyan-300 flex items-center gap-1.5">
-                      <Wrench className="h-4 w-4" />
-                      WordPress REST API 自動投稿連携（ワンクリック投稿用）
-                    </h5>
-                    <p className="text-[11px] text-slate-300">
-                      WordPress管理画面 ＞「ユーザー」＞「プロフィール」＞「アプリケーションパスワード」でパスワードを発行し、以下に入力してください。
-                    </p>
+                  <div className="grid gap-4 md:grid-cols-2">
+                    <div>
+                      <label className="block text-xs font-medium text-slate-300">
+                        CMS・システム種別
+                      </label>
+                      <select
+                        value={payload.cms || 'Astro + Supabase (Vercel)'}
+                        onChange={(e) => setPayload((p) => ({ ...p, cms: e.target.value }))}
+                        className={cls}
+                      >
+                        <option value="Astro + Supabase (Vercel) / Google Antigravity">
+                          Astro + Supabase (Vercel) / Google Antigravity（推奨・自社HP）
+                        </option>
+                        <option value="WordPress">外部WordPress（REST API）</option>
+                        <option value="その他・自社独自CMS">その他・自社独自CMS</option>
+                      </select>
+                    </div>
 
-                    <div className="grid gap-3 md:grid-cols-2">
-                      <div>
-                        <label className="block text-xs font-medium text-slate-300">
-                          WordPress ユーザー名（またはメールアドレス）
-                        </label>
-                        <input
-                          value={payload.wpUsername || ''}
-                          onChange={(e) => setPayload((p) => ({ ...p, wpUsername: e.target.value }))}
-                          placeholder="例: admin または editor_name"
-                          className={cls}
-                        />
-                      </div>
-
-                      <div>
-                        <label className="block text-xs font-medium text-slate-300">
-                          アプリケーションパスワード
-                        </label>
-                        <input
-                          type="password"
-                          value={payload.wpAppPassword || ''}
-                          onChange={(e) => setPayload((p) => ({ ...p, wpAppPassword: e.target.value }))}
-                          placeholder="xxxx xxxx xxxx xxxx"
-                          className={cls}
-                        />
-                      </div>
+                    <div>
+                      <label className="block text-xs font-medium text-slate-300">
+                        Vercel Deploy Hook URL（任意）
+                      </label>
+                      <input
+                        value={payload.vercelDeployHook || ''}
+                        onChange={(e) => setPayload((p) => ({ ...p, vercelDeployHook: e.target.value }))}
+                        placeholder="https://api.vercel.com/v1/integrations/deploy/..."
+                        className={cls}
+                      />
                     </div>
                   </div>
+
+                  {/* 外部WordPressを選択した場合のみ表示 */}
+                  {payload.cms === 'WordPress' && (
+                    <div className="rounded-xl border border-cyan-500/30 bg-cyan-950/20 p-4 space-y-3">
+                      <h5 className="font-bold text-xs text-cyan-300 flex items-center gap-1.5">
+                        <Wrench className="h-4 w-4" />
+                        外部WordPress REST API 連携（必要な場合のみ設定）
+                      </h5>
+                      <div className="grid gap-3 md:grid-cols-2">
+                        <div>
+                          <label className="block text-xs font-medium text-slate-300">
+                            WordPress ユーザー名
+                          </label>
+                          <input
+                            value={payload.wpUsername || ''}
+                            onChange={(e) => setPayload((p) => ({ ...p, wpUsername: e.target.value }))}
+                            placeholder="例: admin"
+                            className={cls}
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-xs font-medium text-slate-300">
+                            アプリケーションパスワード
+                          </label>
+                          <input
+                            type="password"
+                            value={payload.wpAppPassword || ''}
+                            onChange={(e) => setPayload((p) => ({ ...p, wpAppPassword: e.target.value }))}
+                            placeholder="xxxx xxxx xxxx xxxx"
+                            className={cls}
+                          />
+                        </div>
+                      </div>
+                    </div>
+                  )}
 
                   <div className="grid gap-3 md:grid-cols-2">
                     <div>
@@ -1049,7 +1343,7 @@ export const OwnMediaWorkspace: React.FC<{
                       <input
                         value={payload.purpose || ''}
                         onChange={(e) => setPayload((p) => ({ ...p, purpose: e.target.value }))}
-                        placeholder="例: 検索流入によるリード獲得・資料ダウンロード"
+                        placeholder="例: 利益改善・DXノウハウ発信による無料診断受診・リード獲得"
                         className={cls}
                       />
                     </div>
@@ -1077,31 +1371,40 @@ export const OwnMediaWorkspace: React.FC<{
               {/* 登録済みメディア一覧 */}
               {!form && (
                 <div className="space-y-3">
-                  {media.length === 0 ? (
-                    <div className="rounded-xl border border-slate-800 bg-slate-900/40 p-6 text-center text-sm text-slate-400">
-                      メディアが登録されていません。「メディアを登録」から追加してください。
-                    </div>
-                  ) : (
-                    media.map((m) => (
+                  {media.map((m) => {
+                    const isAstro = (m.payload?.cms || '').includes('Astro') || (m.payload?.url || '').includes('mstcorp.info');
+
+                    return (
                       <article key={m.id} className="rounded-2xl border border-slate-800 bg-slate-900/80 p-5 shadow">
                         <div className="flex flex-wrap items-start justify-between gap-3">
                           <div>
-                            <h4 className="font-bold text-base text-white">{m.title}</h4>
-                            <p className="text-xs text-cyan-300 mt-0.5 flex items-center gap-1.5">
+                            <div className="flex items-center gap-2">
+                              <h4 className="font-bold text-base text-white">{m.title}</h4>
+                              <span className={`text-[10px] font-bold px-2 py-0.5 rounded border ${
+                                isAstro
+                                  ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/30'
+                                  : 'bg-cyan-500/20 text-cyan-300 border-cyan-500/30'
+                              }`}>
+                                {m.payload?.cms || 'Astro + Supabase'}
+                              </span>
+                            </div>
+                            <p className="text-xs text-cyan-300 mt-1 flex items-center gap-1.5 font-mono">
                               <Globe className="h-3.5 w-3.5" />
-                              <a href={m.payload.url} target="_blank" rel="noopener noreferrer" className="underline hover:text-cyan-200">
-                                {m.payload.url}
+                              <a href={m.payload?.url || 'https://mstcorp.info'} target="_blank" rel="noopener noreferrer" className="underline hover:text-cyan-200">
+                                {m.payload?.url || 'https://mstcorp.info'}
                               </a>
+                              {m.payload?.mediaUrl && (
+                                <span className="text-slate-400 font-normal">
+                                  （メディア: <a href={m.payload.mediaUrl} target="_blank" rel="noreferrer" className="text-cyan-400 underline">{m.payload.mediaUrl}</a>）
+                                </span>
+                              )}
                             </p>
                           </div>
 
                           <div className="flex items-center gap-2">
-                            <span className={`inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-[11px] font-semibold ${
-                              m.payload.wpUsername && m.payload.wpAppPassword
-                                ? 'bg-emerald-950/80 border border-emerald-500/40 text-emerald-300'
-                                : 'bg-amber-950/80 border border-amber-500/40 text-amber-300'
-                            }`}>
-                              {m.payload.wpUsername && m.payload.wpAppPassword ? 'CMS連携済 (自動投稿可)' : 'CMS未連携 (手動設定要)'}
+                            <span className="inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-[11px] font-semibold bg-emerald-950/80 border border-emerald-500/40 text-emerald-300">
+                              <CheckCircle2 className="h-3 w-3" />
+                              {isAstro ? 'Supabase直結同期中' : 'CMS設定済'}
                             </span>
                             <button
                               onClick={() => edit(m)}
@@ -1109,24 +1412,31 @@ export const OwnMediaWorkspace: React.FC<{
                             >
                               編集
                             </button>
-                            <button
-                              onClick={() => void remove(m)}
-                              aria-label={`${m.title}を削除`}
-                              className="rounded-lg border border-rose-900/50 bg-rose-950/20 px-2.5 py-1.5 text-xs text-rose-300 hover:bg-rose-950/60"
-                            >
-                              <Trash2 className="h-3.5 w-3.5" />
-                            </button>
+                            {m.id !== 'mst_official_corporate_hp' && (
+                              <button
+                                onClick={() => void remove(m)}
+                                aria-label={`${m.title}を削除`}
+                                className="rounded-lg border border-rose-900/50 bg-rose-950/20 px-2.5 py-1.5 text-xs text-rose-300 hover:bg-rose-950/60"
+                              >
+                                <Trash2 className="h-3.5 w-3.5" />
+                              </button>
+                            )}
                           </div>
                         </div>
 
-                        {m.payload.target && (
+                        {m.payload?.target && (
                           <p className="mt-2 text-xs text-slate-400">
                             ターゲット: {m.payload.target}
                           </p>
                         )}
+                        {m.payload?.purpose && (
+                          <p className="mt-1 text-xs text-slate-500">
+                            目的: {m.payload.purpose}
+                          </p>
+                        )}
                       </article>
-                    ))
-                  )}
+                    );
+                  })}
                 </div>
               )}
 

@@ -2037,6 +2037,7 @@ function AppContent() {
         currentTab={currentTab}
         onTabChange={(tab) => {
           if (tab === 'ai_tasks') setSelectedTaskWorkspaceSection('tasks');
+          if (tab === 'marketing_automation') setLineInboxContact(undefined);
           setCurrentTab(tab);
         }}
         onOpenConfig={() => setIsConfigOpen(true)}

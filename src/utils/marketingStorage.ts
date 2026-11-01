@@ -3,12 +3,26 @@ import { MarketingScenario, OfficialLinkItem } from '../types/marketing';
 const STORAGE_KEY = 'mst_marketing_scenarios_v1';
 const OFFICIAL_LINKS_KEY = 'mst_marketing_official_links_v2';
 
+export function deduplicateMarketingScenarios(scenarios: MarketingScenario[]): MarketingScenario[] {
+  const map = new Map<string, MarketingScenario>();
+  for (const s of scenarios) {
+    const key = (s.name || '').trim();
+    if (!key) continue;
+    const existing = map.get(key);
+    if (!existing || (s.updatedAt || 0) >= (existing.updatedAt || 0)) {
+      map.set(key, s);
+    }
+  }
+  return Array.from(map.values());
+}
+
 export function loadMarketingScenarios(): MarketingScenario[] {
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
     if (!raw) return [];
     const parsed = JSON.parse(raw);
-    return Array.isArray(parsed) ? parsed : [];
+    const list = Array.isArray(parsed) ? (parsed as MarketingScenario[]) : [];
+    return deduplicateMarketingScenarios(list);
   } catch {
     return [];
   }
@@ -16,7 +30,8 @@ export function loadMarketingScenarios(): MarketingScenario[] {
 
 export function saveMarketingScenarios(scenarios: MarketingScenario[]): void {
   try {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(scenarios));
+    const deduped = deduplicateMarketingScenarios(scenarios);
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(deduped));
   } catch (error) {
     console.warn('Could not save marketing scenarios locally:', error);
   }

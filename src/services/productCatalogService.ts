@@ -366,9 +366,76 @@ export async function syncAllProductsBidirectionally(
       }
     });
 
-    return Array.from(managedMap.values()).filter((p) => !pendingDeletions.products.has(p.id));
+    const sampleIds = matrixService.SAMPLE_RECORD_IDS?.products || new Set(['prd-sys-01', 'prd-ret-02', 'prd-med-04', 'prd-dig-03']);
+    return Array.from(managedMap.values()).filter((p) => !pendingDeletions.products.has(p.id) && !sampleIds.has(p.id));
   } catch (err) {
     console.warn('商品マスタ双方向同期エラー:', err);
     return managedProducts;
+  }
+}
+
+/**
+ * Loads products directly from the official 商品マスタ (products table in Supabase)
+ * ensuring it acts as the Single Source of Truth across AI President Dashboard & Operations.
+ */
+export async function loadLiveProductsFromMaster(): Promise<ManagedProduct[]> {
+  const supabase = getSupabase();
+  if (!supabase) return [];
+  try {
+    const { data: crmProducts, error } = await supabase
+      .from('products')
+      .select('*')
+      .order('id', { ascending: true });
+
+    if (error || !crmProducts) {
+      console.warn('商品マスタ取得エラー:', error);
+      return [];
+    }
+
+    const sampleIds = matrixService.SAMPLE_RECORD_IDS?.products || new Set(['prd-sys-01', 'prd-ret-02', 'prd-med-04', 'prd-dig-03']);
+
+    return crmProducts
+      .filter((crm) => !sampleIds.has(crm.id))
+      .map((crm) => {
+        const archetype = inferArchetype(crm.product_type);
+        const initFee = Number(crm.initial_fee ?? 0);
+        const monthlyFee = Number(crm.monthly_fee ?? 0);
+        const basePrice = initFee || monthlyFee || 0;
+
+        let targetRevenue = 0;
+        if (monthlyFee > 0) targetRevenue = monthlyFee * 12;
+        else if (initFee > 0) targetRevenue = initFee * 5;
+        else targetRevenue = 1000000;
+
+        return {
+          id: crm.id,
+          name: crm.product_name || '名称未設定サービス',
+          code: crm.id,
+          category: crm.product_type || '標準サービス',
+          archetype,
+          price: basePrice,
+          pricingModel: (crm.pricing_model as PricingModel) || 'fixed',
+          priceRangeMax: crm.price_range_max ?? undefined,
+          priceNote: crm.price_note || undefined,
+          salesInitialFee: initFee,
+          salesMonthlyFee: monthlyFee,
+          description: crm.description || '',
+          status: crm.status === 'inactive' ? 'archived' : crm.status === 'draft' ? 'developing' : 'active',
+          customFields: {
+            phase: crm.phase || '',
+          },
+          kpis: {
+            targetRevenue,
+            currentRevenue: 0,
+            activeClients: 0,
+          },
+          salesCatalogPublishedAt: Date.now(),
+          createdAt: crm.created_at ? Date.parse(crm.created_at) || Date.now() : Date.now(),
+          updatedAt: crm.updated_at ? Date.parse(crm.updated_at) || Date.now() : Date.now(),
+        } as ManagedProduct;
+      });
+  } catch (err) {
+    console.warn('商品マスタ読み込み例外:', err);
+    return [];
   }
 }

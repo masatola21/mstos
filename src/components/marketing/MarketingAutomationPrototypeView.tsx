@@ -222,6 +222,7 @@ import { MarketingEmailInboxView } from './MarketingEmailInboxView';
 import { SalesOperationsWorkspace } from '../SalesOperationsWorkspace';
 import { CommunicationTemplateLibraryView } from './CommunicationTemplateLibraryView';
 import { fetchMarketingAutomationHealth, MarketingAutomationHealth, MarketingAutomationJobsPanel } from './MarketingAutomationJobsPanel';
+import { deduplicateMarketingScenarios } from '../../utils/marketingStorage';
 
 interface Props {
   scenarios: MarketingScenario[];
@@ -399,11 +400,27 @@ export const MarketingAutomationPrototypeView: React.FC<Props> = ({ scenarios, o
   };
   const [activeTab, setActiveTab] = useState<'home' | 'email' | 'line' | 'scenarios' | 'jobs' | 'segments' | 'templates'>('home');
   const [lineView, setLineView] = useState<'broadcast' | 'inbox' | 'settings'>('broadcast');
+  const consumedLineInboxRef = useRef<string | null>(null);
+
   useEffect(() => {
-    if (!lineInboxContact) return;
+    if (!lineInboxContact?.lineUserId) return;
+    const key = `${lineInboxContact.contactId}:${lineInboxContact.lineUserId}`;
+    if (consumedLineInboxRef.current === key) return;
+    consumedLineInboxRef.current = key;
     setActiveTab('line');
     setLineView('inbox');
   }, [lineInboxContact]);
+
+  // 自動重複排除：シナリオ一覧に同名や重複がある場合、最新版の1本ずつに自動整理
+  const autoDedupRef = useRef(false);
+  useEffect(() => {
+    if (scenarios.length === 0) return;
+    const deduped = deduplicateMarketingScenarios(scenarios);
+    if (deduped.length !== scenarios.length && !autoDedupRef.current) {
+      autoDedupRef.current = true;
+      onScenariosChange(sortScenarios(deduped));
+    }
+  }, [scenarios, onScenariosChange]);
   const [emailView, setEmailView] = useState<'broadcast' | 'inbox'>('broadcast');
   const [editing, setEditing] = useState<MarketingScenario | null>(null);
   const [isFormOpen, setIsFormOpen] = useState(false);
@@ -465,16 +482,17 @@ export const MarketingAutomationPrototypeView: React.FC<Props> = ({ scenarios, o
   const mergeStarterScenarios = (presets: Omit<MarketingScenario, 'id' | 'updatedAt'>[]): { merged: MarketingScenario[]; addedCount: number; updatedCount: number } => {
     const now = Date.now();
     const existingByName = new Map<string, MarketingScenario>();
-    scenarios.forEach((s) => existingByName.set(s.name, s));
+    scenarios.forEach((s) => existingByName.set(s.name.trim(), s));
 
     let addedCount = 0;
     let updatedCount = 0;
     const updatedList = [...scenarios];
 
     presets.forEach((preset, index) => {
-      const existing = existingByName.get(preset.name);
+      const pName = preset.name.trim();
+      const existing = existingByName.get(pName);
       if (existing) {
-        const targetIndex = updatedList.findIndex((s) => s.id === existing.id);
+        const targetIndex = updatedList.findIndex((s) => s.id === existing.id || s.name.trim() === pName);
         if (targetIndex !== -1) {
           updatedList[targetIndex] = {
             ...existing,
@@ -484,17 +502,22 @@ export const MarketingAutomationPrototypeView: React.FC<Props> = ({ scenarios, o
           updatedCount++;
         }
       } else {
+        let hash = 0;
+        for (let i = 0; i < pName.length; i++) hash = ((hash << 5) - hash) + pName.charCodeAt(i);
+        const stableId = `starter-${preset.channel}-${Math.abs(hash).toString(36)}-${index}`;
+
         const newScenario: MarketingScenario = {
           ...preset,
-          id: `starter-${preset.channel}-${now}-${index}`,
+          id: stableId,
           updatedAt: now + index * 10,
         };
         updatedList.unshift(newScenario);
+        existingByName.set(pName, newScenario);
         addedCount++;
       }
     });
 
-    return { merged: sortScenarios(updatedList), addedCount, updatedCount };
+    return { merged: sortScenarios(deduplicateMarketingScenarios(updatedList)), addedCount, updatedCount };
   };
 
   const deduplicateScenarios = () => {
@@ -729,7 +752,51 @@ export const MarketingAutomationPrototypeView: React.FC<Props> = ({ scenarios, o
       {notice && <div role="status" className="rounded-xl border border-emerald-500/30 bg-emerald-500/10 px-4 py-3 text-sm text-emerald-200">{notice}</div>}
 
       {activeTab === 'email' && <div className="space-y-4"><div className="flex gap-2 border-b border-slate-800 pb-3"><button onClick={()=>setEmailView('broadcast')} className="rounded-lg bg-indigo-700 px-3 py-2 text-xs text-white">配信</button><button onClick={()=>setEmailView('inbox')} className="rounded-lg border border-slate-700 px-3 py-2 text-xs text-slate-300">受信箱</button></div>{emailView==='broadcast'?<MarketingBroadcastView initialChannel="email"/>:<MarketingEmailInboxView/>}</div>}
-      {activeTab === 'line' && <div className="space-y-4"><div className="flex flex-wrap gap-2 border-b border-slate-800 pb-3"><button onClick={()=>setLineView('broadcast')} className={`rounded-lg px-3 py-2 text-xs font-semibold ${lineView==='broadcast'?'bg-green-700 text-white':'border border-slate-700 text-slate-300 hover:bg-slate-800'}`}>配信</button><button onClick={()=>setLineView('inbox')} className={`rounded-lg px-3 py-2 text-xs font-semibold ${lineView==='inbox'?'bg-green-700 text-white':'border border-slate-700 text-slate-300 hover:bg-slate-800'}`}>受信箱・自動返信</button><button onClick={()=>setLineView('settings')} className={`rounded-lg px-3 py-2 text-xs font-semibold ${lineView==='settings'?'bg-green-700 text-white':'border border-slate-700 text-slate-300 hover:bg-slate-800'}`}>LINE設定・ウェルカム</button></div>{lineView==='broadcast'?<MarketingBroadcastView initialChannel="line"/>:lineView==='inbox'?<MarketingLineInboxView initialLineUserId={lineInboxContact?.lineUserId}/>:<MarketingLineSettingsView/>}</div>}
+      {activeTab === 'line' && (
+        <div className="space-y-4">
+          <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-800 pb-3">
+            <div className="flex flex-wrap gap-2">
+              <button
+                onClick={() => setLineView('broadcast')}
+                className={`rounded-lg px-3 py-2 text-xs font-semibold cursor-pointer transition-colors ${lineView === 'broadcast' ? 'bg-green-700 text-white' : 'border border-slate-700 text-slate-300 hover:bg-slate-800'}`}
+              >
+                一斉配信
+              </button>
+              <button
+                onClick={() => setLineView('inbox')}
+                className={`rounded-lg px-3 py-2 text-xs font-semibold cursor-pointer transition-colors ${lineView === 'inbox' ? 'bg-green-700 text-white' : 'border border-slate-700 text-slate-300 hover:bg-slate-800'}`}
+              >
+                受信箱・個別チャット
+              </button>
+              <button
+                onClick={() => setLineView('settings')}
+                className={`rounded-lg px-3 py-2 text-xs font-semibold cursor-pointer transition-colors ${lineView === 'settings' ? 'bg-green-700 text-white' : 'border border-slate-700 text-slate-300 hover:bg-slate-800'}`}
+              >
+                LINE設定・ウェルカム
+              </button>
+            </div>
+            {onNavigateTab && (
+              <button
+                type="button"
+                onClick={() => onNavigateTab('contacts')}
+                className="flex items-center gap-1.5 rounded-lg border border-blue-500/40 bg-blue-950/40 px-3 py-2 text-xs font-semibold text-blue-200 hover:bg-blue-900/60 hover:text-white transition shadow-sm cursor-pointer"
+                title="LINE友だちとタグの統合マスタ（連絡先一覧）を開きます"
+              >
+                <Tags className="h-3.5 w-3.5 text-blue-400" />
+                <span>👥 LINE友だち・タグ台帳を開く</span>
+                <ArrowRight className="h-3 w-3 text-blue-400" />
+              </button>
+            )}
+          </div>
+          {lineView === 'broadcast' ? (
+            <MarketingBroadcastView initialChannel="line" />
+          ) : lineView === 'inbox' ? (
+            <MarketingLineInboxView initialLineUserId={lineInboxContact?.lineUserId} />
+          ) : (
+            <MarketingLineSettingsView />
+          )}
+        </div>
+      )}
       {activeTab === 'home' && <>
         <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
           {[
@@ -743,16 +810,20 @@ export const MarketingAutomationPrototypeView: React.FC<Props> = ({ scenarios, o
           <div className="mb-4"><h2 className="font-bold text-white">チャネルから開く</h2><p className="mt-1 text-xs text-slate-400">顧客・リード情報は既存CRMを正本として使い、フォームは既存機能を利用します。</p></div>
           <div className="grid gap-4 lg:grid-cols-2">
             <article className="rounded-xl border border-green-500/20 bg-slate-950/70 p-5">
-              <div className="flex items-center gap-3"><MessageCircle className="h-6 w-6 text-green-300" /><div><h3 className="font-bold text-white">LINE</h3><p className="text-xs text-slate-400">一斉配信・友だち情報・受信対応</p></div></div>
+              <div className="flex items-center gap-3"><MessageCircle className="h-6 w-6 text-green-300" /><div><h3 className="font-bold text-white">LINE</h3><p className="text-xs text-slate-400">一斉配信・個別チャット・自動返信</p></div></div>
               <div className="mt-4 flex flex-wrap gap-2">
-                <button onClick={() => setActiveTab('line')} className="rounded-lg bg-green-700/70 px-3 py-2 text-xs font-semibold text-white hover:bg-green-600">LINE配信</button>
-                <button onClick={() => {setActiveTab('line');setLineView('inbox')}} className="rounded-lg border border-green-700/50 px-3 py-2 text-xs text-green-200 hover:bg-slate-800">受信箱・自動返信</button>
-                <button onClick={() => {setActiveTab('line');setLineView('settings')}} className="rounded-lg border border-green-700/50 px-3 py-2 text-xs text-green-200 hover:bg-slate-800">LINE設定・ウェルカム</button>
-                <button onClick={() => onNavigateTab?.('contacts')} className="rounded-lg border border-slate-700 px-3 py-2 text-xs text-slate-200 hover:bg-slate-800">友だち・タグ管理</button>
+                <button onClick={() => { setActiveTab('line'); setLineView('broadcast'); }} className="rounded-lg bg-green-700/70 px-3 py-2 text-xs font-semibold text-white hover:bg-green-600 cursor-pointer">LINE一斉配信</button>
+                <button onClick={() => { setActiveTab('line'); setLineView('inbox'); }} className="rounded-lg border border-green-700/50 px-3 py-2 text-xs text-green-200 hover:bg-slate-800 cursor-pointer">受信箱・個別チャット</button>
+                <button onClick={() => onNavigateTab?.('contacts')} className="rounded-lg border border-blue-500/40 bg-blue-950/40 px-3 py-2 text-xs font-semibold text-blue-200 hover:bg-blue-900/60 flex items-center gap-1.5 cursor-pointer" title="LINE友だち・タグの統合台帳（連絡先一覧）を開きます">
+                  <Tags className="h-3 w-3 text-blue-400" />
+                  <span>👥 友だち・タグ台帳（連絡先一覧）</span>
+                  <ArrowRight className="h-3 w-3 text-blue-300" />
+                </button>
+                <button onClick={() => { setActiveTab('line'); setLineView('settings'); }} className="rounded-lg border border-slate-700 px-3 py-2 text-xs text-slate-300 hover:bg-slate-800 cursor-pointer">設定・ウェルカム</button>
               </div>
-              <p className="mt-3 text-[11px] text-emerald-400/90 flex items-center gap-1.5 bg-emerald-950/30 border border-emerald-800/40 rounded-md px-2.5 py-1.5">
+              <p className="mt-3 text-[11px] text-slate-400 flex items-center gap-1.5 bg-slate-900/60 border border-slate-800 rounded-md px-2.5 py-1.5">
                 <CheckCircle2 className="h-3.5 w-3.5 shrink-0 text-emerald-400" />
-                相手側からの返信・アクションがあった場合は自動でシナリオ配信を停止し、個別チャット対応へ移行します。
+                LINE友だちとタグの登録・管理は「<button type="button" onClick={() => onNavigateTab?.('contacts')} className="text-blue-300 underline font-semibold hover:text-blue-200 cursor-pointer">連絡先・LINE友だち台帳</button>」に一本化されています。
               </p>
             </article>
             <article className="rounded-xl border border-purple-500/20 bg-slate-950/70 p-5">

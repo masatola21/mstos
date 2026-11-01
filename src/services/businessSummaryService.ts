@@ -22,12 +22,15 @@ export function calculateProductKPIs(
   contracts: ManagedContract[],
   invoices: ManagedInvoice[],
 ): ProductKPIStats {
-  const prodId = product.id;
-  const prodCode = product.code;
+  const prodId = String(product.id || '').trim();
+  const prodCode = String(product.code || '').trim();
+  const prodName = String(product.name || '').trim();
 
   // 1. 契約中顧客数: この商品に紐づく signed (締結済) 契約の相手先（会社IDまたは相手先名）のユニーク数
   const signedContracts = contracts.filter((c) => {
-    const matchesProduct = c.productId === prodId || (prodCode && c.productId === prodCode);
+    const cid = String(c.productId || (c as any).product_id || '').trim();
+    const cTitle = String(c.title || '');
+    const matchesProduct = (prodId && cid === prodId) || (prodCode && cid === prodCode) || (prodName && cTitle.includes(prodName));
     return matchesProduct && c.status === 'signed';
   });
   const clientKeys = new Set<string>();
@@ -39,7 +42,9 @@ export function calculateProductKPIs(
 
   // 2. 確定売上（税込・入金済請求）: status === 'paid' の請求書の合計
   const paidInvoices = invoices.filter((i) => {
-    const matchesProduct = i.productId === prodId || (prodCode && i.productId === prodCode);
+    const iid = String(i.productId || (i as any).product_id || '').trim();
+    const iTitle = String(i.title || '');
+    const matchesProduct = (prodId && iid === prodId) || (prodCode && iid === prodCode) || (prodName && iTitle.includes(prodName));
     return matchesProduct && i.status === 'paid';
   });
   const currentRevenue = paidInvoices.reduce((sum, inv) => {
@@ -50,7 +55,9 @@ export function calculateProductKPIs(
 
   // 3. 請求中・未回収額: status === 'issued' または 'overdue'
   const pendingInvoices = invoices.filter((i) => {
-    const matchesProduct = i.productId === prodId || (prodCode && i.productId === prodCode);
+    const iid = String(i.productId || (i as any).product_id || '').trim();
+    const iTitle = String(i.title || '');
+    const matchesProduct = (prodId && iid === prodId) || (prodCode && iid === prodCode) || (prodName && iTitle.includes(prodName));
     return matchesProduct && (i.status === 'issued' || i.status === 'overdue');
   });
   const billedUnpaidRevenue = pendingInvoices.reduce((sum, inv) => {
@@ -59,7 +66,14 @@ export function calculateProductKPIs(
     return sum + amount + tax;
   }, 0);
 
-  const targetRevenue = Number(product.kpis?.targetRevenue) || 0;
+  let targetRevenue = Number(product.kpis?.targetRevenue) || 0;
+  if (!targetRevenue) {
+    const init = Number(product.salesInitialFee ?? product.price ?? 0);
+    const monthly = Number(product.salesMonthlyFee ?? 0);
+    if (monthly > 0) targetRevenue = monthly * 12;
+    else if (init > 0) targetRevenue = init * 5;
+    else targetRevenue = 1000000;
+  }
   const achievementRate = targetRevenue > 0 ? Math.min(999, Math.round((currentRevenue / targetRevenue) * 100)) : 0;
 
   return {

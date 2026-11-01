@@ -18,7 +18,7 @@ type AudienceSegment = { id: string; name: string; entity_type: string; conditio
 const tabs: Array<{ id: ViewTab; label: string }> = [
   { id: 'strategy', label: '📋 集客戦略・施策一覧' },
   { id: 'funnel', label: '🔗 集客導線・公式URLハブ' },
-  { id: 'social_studio', label: '📱 SNS一括投稿スタジオ' },
+  { id: 'social_studio', label: '📱 SNS一括投稿 & DM営業' },
   { id: 'assets', label: '📁 営業資料・成果物保管庫' },
   { id: 'media', label: '🌐 自社メディア・HP設定' },
 ];

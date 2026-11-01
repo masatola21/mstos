@@ -3,6 +3,7 @@ import tailwind from '@astrojs/tailwind';
 import react from '@astrojs/react';
 
 export default defineConfig({
+  site: 'https://corp.mstcorp.info',
   integrations: [
     tailwind({
       applyBaseStyles: false,
