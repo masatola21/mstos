@@ -36,7 +36,9 @@ Sparkles,
   Award,
   BarChart3,
   ExternalLink,
-  Sliders
+  Sliders,
+  Inbox,
+  ArrowRight
 } from 'lucide-react';
 
 interface DiagnosisManagerProps {
@@ -47,6 +49,7 @@ interface DiagnosisManagerProps {
   initialSection?: 'forms' | 'diagnoses';
   onOpenSendCenter?: (formId: string, url: string, kind: 'form'|'diagnosis') => void;
   initialDiagnosisId?: string;
+  onNavigateTab?: (tab: string) => void;
 }
 
 const STATUS_LABELS: Record<DiagnosisStatus, { label: string; color: string; bg: string; border: string; icon: React.ReactNode }> = {
@@ -1408,35 +1411,64 @@ ${reportDraft.text.replace(/</g, '&lt;').replace(/>/g, '&gt;')}
 
 
 export const DiagnosisManager: React.FC<DiagnosisManagerProps> = (props) => {
-  const [section, setSection] = useState<'forms' | 'answers' | 'diagnoses'>(() =>
+  const [section, setSection] = useState<'forms' | 'diagnoses'>(() =>
     props.initialSection === 'diagnoses' || props.initialLeadId || props.initialCompanyId ? 'diagnoses' : 'forms'
   );
   const [requestedDiagnosisId, setRequestedDiagnosisId] = useState<string | null>(null);
   return (
     <div className="space-y-4">
       <div className="space-y-3 rounded-xl border border-slate-800 bg-slate-900 p-3">
-        <div>
-          <h1 className="text-lg font-bold text-white">フォーム・診断</h1>
-          <p className="text-xs text-slate-400">受付フォームの設定、届いた回答、社内診断とレポートをここで確認できます。</p>
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+          <div>
+            <h1 className="text-lg font-bold text-white">フォーム設計・診断レポート</h1>
+            <p className="text-xs text-slate-400">受付フォームの設問・デザイン設計と、社内診断・AIレポート作成を管理します。</p>
+          </div>
+          {props.onNavigateTab && (
+            <button
+              onClick={() => props.onNavigateTab?.('inbox_hub')}
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold text-sky-300 hover:text-white bg-sky-950/60 hover:bg-sky-900/70 border border-sky-800/60 shadow-sm transition"
+            >
+              <Inbox className="w-3.5 h-3.5 text-sky-400" />
+              <span>届いたWeb回答は「統合受信トレイ」で即時確認・CRM連携</span>
+              <ArrowRight className="w-3.5 h-3.5 text-sky-400" />
+            </button>
+          )}
         </div>
-        <nav className="flex flex-wrap gap-2 border-t border-slate-800 pt-3" aria-label="フォーム・診断">
-          <button onClick={() => setSection('forms')} aria-current={section === 'forms' ? 'page' : undefined} className={`rounded-lg px-3 py-2 text-sm ${section === 'forms' ? 'bg-blue-600 text-white' : 'text-slate-300 hover:bg-slate-800'}`}>フォーム設定</button>
-          <button onClick={() => setSection('answers')} aria-current={section === 'answers' ? 'page' : undefined} className={`rounded-lg px-3 py-2 text-sm ${section === 'answers' ? 'bg-blue-600 text-white' : 'text-slate-300 hover:bg-slate-800'}`}>フォーム回答</button>
-          <button onClick={() => setSection('diagnoses')} aria-current={section === 'diagnoses' ? 'page' : undefined} className={`rounded-lg px-3 py-2 text-sm ${section === 'diagnoses' ? 'bg-blue-600 text-white' : 'text-slate-300 hover:bg-slate-800'}`}>診断・レポート</button>
+        <nav className="flex flex-wrap items-center gap-2 border-t border-slate-800 pt-3" aria-label="フォーム・診断">
+          <button
+            onClick={() => setSection('forms')}
+            aria-current={section === 'forms' ? 'page' : undefined}
+            className={`rounded-lg px-3 py-2 text-sm font-medium transition ${
+              section === 'forms' ? 'bg-blue-600 text-white shadow-sm' : 'text-slate-300 hover:bg-slate-800'
+            }`}
+          >
+            フォーム設計
+          </button>
+          <button
+            onClick={() => setSection('diagnoses')}
+            aria-current={section === 'diagnoses' ? 'page' : undefined}
+            className={`rounded-lg px-3 py-2 text-sm font-medium transition ${
+              section === 'diagnoses' ? 'bg-blue-600 text-white shadow-sm' : 'text-slate-300 hover:bg-slate-800'
+            }`}
+          >
+            診断・レポート作成
+          </button>
         </nav>
       </div>
-      {section === 'forms' || section === 'answers' ? (
+      {section === 'forms' ? (
         <DiagnosisFormsWorkspace
-          key={section}
+          key="forms"
           initialLeadId={props.initialLeadId}
           initialCompanyId={props.initialCompanyId}
-          initialSection={section}
-          activeSection={section}
+          initialSection="forms"
+          activeSection="forms"
           showHeader={false}
           onOpenDiagnosis={(id) => { setRequestedDiagnosisId(id); setSection('diagnoses'); }}
           onOpenSendCenter={props.onOpenSendCenter}
         />
-      ) : <DiagnosisRecordsView {...props} initialDiagnosisId={requestedDiagnosisId || undefined} />}
+      ) : (
+        <DiagnosisRecordsView {...props} initialDiagnosisId={requestedDiagnosisId || undefined} />
+      )}
     </div>
   );
 };

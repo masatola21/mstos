@@ -63,3 +63,32 @@ export function clearStoredOfficialLinks(): void {
     console.warn('Could not clear official links locally:', error);
   }
 }
+
+const TRACKING_MEDIA_KEY = 'mst_marketing_tracking_media_v1';
+
+export function loadStoredTrackingMedia<T>(): T[] | null {
+  try {
+    const raw = localStorage.getItem(TRACKING_MEDIA_KEY);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw);
+    return Array.isArray(parsed) && parsed.length > 0 ? (parsed as T[]) : null;
+  } catch {
+    return null;
+  }
+}
+
+export function saveStoredTrackingMedia<T>(media: T[]): void {
+  try {
+    localStorage.setItem(TRACKING_MEDIA_KEY, JSON.stringify(media));
+  } catch (error) {
+    console.warn('Could not save tracking media locally:', error);
+  }
+}
+
+export function clearStoredTrackingMedia(): void {
+  try {
+    localStorage.removeItem(TRACKING_MEDIA_KEY);
+  } catch (error) {
+    console.warn('Could not clear tracking media locally:', error);
+  }
+}

@@ -99,7 +99,7 @@ interface BroadcastHistoryItem {
 const STORAGE_SETTINGS_KEY = 'mst_social_broadcast_settings_v1';
 const STORAGE_HISTORY_KEY = 'mst_social_broadcast_history_v1';
 
-export const SocialMediaBroadcastStudio: React.FC<{ onNavigateTab?: (tab: string) => void }> = ({ onNavigateTab }) => {
+export const SocialMediaBroadcastStudio: React.FC<{ onNavigateTab?: (tab: string, options?: any) => void }> = ({ onNavigateTab }) => {
   const origin = typeof window !== 'undefined' ? window.location.origin : 'https://mstos.app';
 
   // フォーム状態
@@ -118,7 +118,13 @@ export const SocialMediaBroadcastStudio: React.FC<{ onNavigateTab?: (tab: string
   const [libraryLoading, setLibraryLoading] = useState(false);
 
   // スタジオモード切り替え（全体一括投稿 or 個別SNS営業・DM管理）
-  const [studioMode, setStudioMode] = useState<'broadcast' | 'dm_sales'>('broadcast');
+  const [studioMode, setStudioMode] = useState<'broadcast' | 'dm_sales'>(() => {
+    try {
+      const saved = localStorage.getItem('social_studio_mode');
+      if (saved === 'dm_sales' || saved === 'broadcast') return saved;
+    } catch {}
+    return 'broadcast';
+  });
 
   // プラットフォーム＆プレビュー
   const [selectedPlatforms, setSelectedPlatforms] = useState<string[]>(['facebook', 'threads', 'linkedin']);
@@ -555,7 +561,10 @@ ${postText}`;
         <div className="inline-flex rounded-xl bg-slate-950 p-1 border border-slate-800">
           <button
             type="button"
-            onClick={() => setStudioMode('broadcast')}
+            onClick={() => {
+              setStudioMode('broadcast');
+              try { localStorage.setItem('social_studio_mode', 'broadcast'); } catch {}
+            }}
             className={`flex items-center gap-2 px-4 py-2 rounded-lg text-xs font-bold transition ${
               studioMode === 'broadcast'
                 ? 'bg-indigo-600 text-white shadow-sm'
@@ -567,7 +576,10 @@ ${postText}`;
           </button>
           <button
             type="button"
-            onClick={() => setStudioMode('dm_sales')}
+            onClick={() => {
+              setStudioMode('dm_sales');
+              try { localStorage.setItem('social_studio_mode', 'dm_sales'); } catch {}
+            }}
             className={`flex items-center gap-2 px-4 py-2 rounded-lg text-xs font-bold transition ${
               studioMode === 'dm_sales'
                 ? 'bg-gradient-to-r from-indigo-600 via-purple-600 to-cyan-600 text-white shadow-sm'
@@ -575,16 +587,16 @@ ${postText}`;
             }`}
           >
             <MessageSquare className="h-4 w-4 text-cyan-300" />
-            <span>💬 攻めのSNS DM開拓（新規アプローチ文案作成）</span>
+            <span>🎯 攻めのSNS DM開拓（リストアップ ＆ 営業テンプレ送信）</span>
             <span className="text-[10px] px-1.5 py-0.2 rounded-full bg-cyan-500/20 text-cyan-300 border border-cyan-500/30">
-              AI開拓特化
+              リスト営業特化
             </span>
           </button>
         </div>
         <span className="text-xs text-slate-400">
           {studioMode === 'broadcast'
             ? '全体発信: 5大SNSへの同時投稿・ワンクリックシェア'
-            : '個別営業: シーン別テンプレ・AI最適化・手動送信・CRM連携'}
+            : '個別営業: 見込み客リストアップ・営業テンプレ選択・手動送信・CRM連携'}
         </span>
       </div>
 
@@ -592,12 +604,15 @@ ${postText}`;
         <div className="space-y-4">
           <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-cyan-500/30 bg-cyan-950/20 p-3.5 text-xs text-cyan-200">
             <div>
-              💡 <strong>【攻めと守りの役割分担】</strong> ここでは「攻めのアプローチ（新規開拓DM文案のAI作成・送信）」を管理します。届いた相談DMへの返信対応や「返信待ち」ステータス管理は「<strong className="text-white">📥 統合受信トレイ（SNS DMタブ）</strong>」に一本化されています。
+              💡 <strong>【攻めと守りの役割分担】</strong> ここでは「攻めのDM営業（見込み顧客のリストアップ ＆ 営業テンプレ送信）」に特化しています。相手から届いた問い合わせDMの確認や返信対応は「<strong className="text-white">📥 統合受信トレイ（SNS DMタブ）</strong>」で行います。
             </div>
             {onNavigateTab && (
               <button
                 type="button"
-                onClick={() => onNavigateTab('inbox_hub')}
+                onClick={() => {
+                  try { localStorage.setItem('unified_inbox_active_channel', 'social_dm'); } catch {}
+                  onNavigateTab('inbox_hub', { inboxChannel: 'social_dm' });
+                }}
                 className="flex items-center gap-1.5 rounded-lg border border-cyan-400/40 bg-cyan-900/40 px-3.5 py-1.5 text-xs font-semibold text-cyan-100 hover:bg-cyan-800/60 hover:text-white transition shadow-sm cursor-pointer"
               >
                 <Inbox className="h-3.5 w-3.5 text-cyan-400" />
@@ -605,7 +620,7 @@ ${postText}`;
               </button>
             )}
           </div>
-          <SocialDmSalesStudio />
+          <SocialDmSalesStudio mode="outbound" onNavigateTab={onNavigateTab} />
         </div>
       ) : (
         <>

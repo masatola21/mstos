@@ -309,6 +309,37 @@ function AppContent() {
   const [currentTab, setCurrentTab] = useState<UnifiedNavTab>('mst_dashboard');
   const [customerWorkspaceContext, setCustomerWorkspaceContext] = useState<{ companyId: string; leadId?: string; dealId?: string; section?: 'forms' | 'diagnoses'; documentType?: 'invoice'; documentId?: string; sendKind?: 'form'|'diagnosis'|'deal'|'customer_meeting'|'announcement'; formId?: string; contactId?: string } | undefined>();
   const [lineInboxContact, setLineInboxContact] = useState<{ contactId: string; lineUserId: string } | undefined>();
+  const [inboxTargetChannel, setInboxTargetChannel] = useState<'line' | 'email' | 'social_dm' | 'forms' | undefined>(undefined);
+  const [acquisitionTargetTab, setAcquisitionTargetTab] = useState<string | undefined>(undefined);
+
+  const handleNavigateWorkspaceTab = (
+    tab: UnifiedNavTab | string,
+    options?: {
+      inboxChannel?: 'line' | 'email' | 'social_dm' | 'forms';
+      acquisitionTab?: string;
+      studioMode?: 'broadcast' | 'dm_sales';
+    }
+  ) => {
+    if (options?.inboxChannel) {
+      setInboxTargetChannel(options.inboxChannel);
+      try {
+        localStorage.setItem('unified_inbox_active_channel', options.inboxChannel);
+      } catch {}
+    }
+    if (options?.acquisitionTab) {
+      setAcquisitionTargetTab(options.acquisitionTab);
+      try {
+        localStorage.setItem('ai_acquisition_active_tab', options.acquisitionTab);
+      } catch {}
+    }
+    if (options?.studioMode) {
+      try {
+        localStorage.setItem('social_studio_mode', options.studioMode);
+      } catch {}
+    }
+    setCurrentTab(tab as UnifiedNavTab);
+  };
+
   const customerWorkspaceCompanyId = customerWorkspaceContext?.companyId;
   const [workspaceReady, setWorkspaceReady] = useState(false);
   const [workspaceSyncStatus, setWorkspaceSyncStatus] = useState<'loading' | 'saving' | 'saved' | 'error' | 'conflict'>('loading');
@@ -1308,6 +1339,110 @@ function AppContent() {
     );
     setActivityLogs(loadActivityLogs());
   };
+
+  const handleDeleteApproval = (id: string) => {
+    const targetApproval = approvals.find((a) => a.id === id);
+    if (!targetApproval) return;
+
+    if (targetApproval.taskId) {
+      const task = tasks.find((t) => t.id === targetApproval.taskId);
+      if (task && task.status === 'pending_approval') {
+        const updatedTasks = tasks.map((t) =>
+          t.id === task.id ? { ...t, status: 'in_progress' as const, updatedAt: Date.now() } : t
+        );
+        setTasks(updatedTasks);
+        saveTasks(updatedTasks);
+      }
+    }
+
+    const updatedApprovals = approvals.filter((a) => a.id !== id);
+    setApprovals(updatedApprovals);
+    saveApprovals(updatedApprovals);
+
+    recordActivityLog(
+      'task_updated',
+      `承認項目「${targetApproval.actionTitle || targetApproval.taskTitle}」を削除しました`,
+      '人間'
+    );
+    setActivityLogs(loadActivityLogs());
+  };
+
+  const handleClearApprovals = (statusFilter?: 'pending' | 'approved' | 'rejected' | 'all') => {
+    const filter = statusFilter || 'all';
+    const itemsToRemove = filter === 'all'
+      ? approvals
+      : approvals.filter((a) => a.status === filter);
+
+    if (itemsToRemove.length === 0) return;
+
+    const pendingTaskIds = new Set(
+      itemsToRemove
+        .filter((a) => a.status === 'pending' && a.taskId)
+        .map((a) => a.taskId as string)
+    );
+
+    if (pendingTaskIds.size > 0) {
+      const updatedTasks = tasks.map((t) =>
+        pendingTaskIds.has(t.id) && t.status === 'pending_approval'
+          ? { ...t, status: 'in_progress' as const, updatedAt: Date.now() }
+          : t
+      );
+      setTasks(updatedTasks);
+      saveTasks(updatedTasks);
+    }
+
+    const removeIds = new Set(itemsToRemove.map((a) => a.id));
+    const updatedApprovals = approvals.filter((a) => !removeIds.has(a.id));
+    setApprovals(updatedApprovals);
+    saveApprovals(updatedApprovals);
+
+    const labelMap: Record<string, string> = {
+      all: 'すべて',
+      pending: '確認待ち',
+      approved: '承認済み',
+      rejected: '却下',
+    };
+    recordActivityLog(
+      'task_updated',
+      `承認項目（${labelMap[filter] || filter}・${itemsToRemove.length}件）を一括削除しました`,
+      '人間'
+    );
+    setActivityLogs(loadActivityLogs());
+  };
+
+  const handleDeleteActivityLog = (id: string) => {
+    const updated = activityLogs.filter((log) => log.id !== id);
+    setActivityLogs(updated);
+    saveActivityLogs(updated);
+  };
+
+  const handleClearActivityLogs = () => {
+    setActivityLogs([]);
+    saveActivityLogs([]);
+  };
+
+  const handleDeleteCompletedTasks = async (): Promise<void> => {
+    const completedTasks = tasks.filter((t) => t.status === 'completed');
+    if (completedTasks.length === 0) return;
+
+    for (const t of completedTasks) {
+      if (t.attachments?.length) {
+        await Promise.all(t.attachments.map((att) => deleteWorkspaceAttachment(att).catch(() => {})));
+      }
+    }
+
+    const remainingTasks = tasks.filter((t) => t.status !== 'completed');
+    setTasks(remainingTasks);
+    saveTasks(remainingTasks);
+
+    recordActivityLog(
+      'task_updated',
+      `完了タスク（${completedTasks.length}件）を一括削除しました`,
+      '人間'
+    );
+    setActivityLogs(loadActivityLogs());
+  };
+
   // --- Plan Import from Chat ---
   const handleImportPlan = (plan: ProposedPlan) => {
     const newProject: Project = {
@@ -2066,9 +2201,12 @@ function AppContent() {
 
         {currentTab === 'inbox_hub' && (
           <UnifiedInboxView
-            initialChannel={lineInboxContact ? 'line' : 'forms'}
+            initialChannel={
+              inboxTargetChannel ||
+              (lineInboxContact ? 'line' : (localStorage.getItem('unified_inbox_active_channel') as any) || 'forms')
+            }
             initialLineUserId={lineInboxContact?.lineUserId}
-            onNavigateTab={(tab) => setCurrentTab(tab)}
+            onNavigateTab={(tab, options) => handleNavigateWorkspaceTab(tab, options)}
             onOpenSendCenter={(params) => {
               setCustomerWorkspaceContext((current) => ({
                 ...current,
@@ -2113,7 +2251,22 @@ function AppContent() {
         )}
 
         {currentTab === 'mst_diagnoses' && (
-          <DiagnosisManager onOpenRls={() => setIsRlsOpen(true)} initialLeadId={customerWorkspaceContext?.leadId} initialCompanyId={customerWorkspaceContext?.companyId} initialSection={customerWorkspaceContext?.section} onOpenSendCenter={(formId, _url, kind) => { setCustomerWorkspaceContext(current => ({ ...current, companyId: customerWorkspaceCompanyId || '', formId, sendKind: kind })); setCurrentTab('communication_send'); }} />
+          <DiagnosisManager
+            onOpenRls={() => setIsRlsOpen(true)}
+            initialLeadId={customerWorkspaceContext?.leadId}
+            initialCompanyId={customerWorkspaceContext?.companyId}
+            initialSection={customerWorkspaceContext?.section}
+            onOpenSendCenter={(formId, _url, kind) => {
+              setCustomerWorkspaceContext((current) => ({
+                ...current,
+                companyId: customerWorkspaceCompanyId || '',
+                formId,
+                sendKind: kind,
+              }));
+              setCurrentTab('communication_send');
+            }}
+            onNavigateTab={(tab) => setCurrentTab(tab as UnifiedNavTab)}
+          />
         )}
 
         {currentTab === 'deal_invitations' && <CommunicationSendCenter initialKind="deal" />}
@@ -2233,13 +2386,17 @@ function AppContent() {
 
         {currentTab === 'ai_acquisition' && (
           <AIAcquisitionOperationsView
-            initialTab="strategy"
+            initialTab={
+              acquisitionTargetTab ||
+              localStorage.getItem('ai_acquisition_active_tab') ||
+              'strategy'
+            }
             onSendPresidentSummary={(summary) => {
               setCurrentTab('ai_chat');
               void handleSendMessage(summary, 'president');
             }}
             onCreateTask={handleCreateTask}
-            onNavigateTab={(tab) => setCurrentTab(tab as UnifiedNavTab)}
+            onNavigateTab={(tab, options) => handleNavigateWorkspaceTab(tab, options)}
           />
         )}
 
@@ -2277,6 +2434,7 @@ function AppContent() {
             }}
             onOpenPricingSettings={() => setIsPricingModalOpen(true)}
             onResolveApproval={handleResolveApproval}
+            onDeleteApproval={handleDeleteApproval}
             onUpdateTask={handleUpdateTask}
             onStartGoalBreakdown={(goal) => {
               setCurrentTab('ai_chat');
@@ -2346,6 +2504,7 @@ function AppContent() {
             onCreateTask={handleCreateTask}
             onUpdateTask={handleUpdateTask}
             onDeleteTask={handleDeleteTask}
+            onDeleteCompletedTasks={handleDeleteCompletedTasks}
             onRunTask={handleRunAssignedTask}
             onUploadAttachment={handleUploadTaskAttachment}
             onDownloadAttachment={handleDownloadTaskAttachment}
@@ -2358,6 +2517,10 @@ function AppContent() {
             approvals={approvals}
             activityLogs={activityLogs}
             onResolveApproval={handleResolveApproval}
+            onDeleteApproval={handleDeleteApproval}
+            onClearApprovals={handleClearApprovals}
+            onDeleteActivityLog={handleDeleteActivityLog}
+            onClearActivityLogs={handleClearActivityLogs}
             initialSection={selectedTaskWorkspaceSection}
             onSectionChange={setSelectedTaskWorkspaceSection}
           />

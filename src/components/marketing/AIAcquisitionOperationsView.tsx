@@ -151,13 +151,22 @@ export const AIAcquisitionOperationsView: React.FC<{
   initialTab?: ViewTab | string;
   onSendPresidentSummary?: (summary: string) => void;
   onCreateTask?: (task: Omit<TaskItem, 'id' | 'createdAt' | 'updatedAt'>) => void;
-  onNavigateTab?: (tab: string) => void;
+  onNavigateTab?: (tab: string, options?: any) => void;
 }> = ({ initialTab = 'strategy', onSendPresidentSummary, onCreateTask, onNavigateTab }) => {
-  const [activeTab, setActiveTab] = useState<ViewTab>(initialTab === 'dashboard' ? 'strategy' : (initialTab as ViewTab));
+  const [activeTab, setActiveTab] = useState<ViewTab>(() => {
+    if (initialTab && tabs.some((t) => t.id === initialTab)) {
+      return initialTab as ViewTab;
+    }
+    try {
+      const saved = localStorage.getItem('ai_acquisition_active_tab') as ViewTab | null;
+      if (saved && tabs.some((t) => t.id === saved)) return saved;
+    } catch {}
+    return initialTab === 'dashboard' ? 'strategy' : (initialTab as ViewTab);
+  });
 
   useEffect(() => {
-    if (initialTab) {
-      setActiveTab(initialTab === 'dashboard' ? 'strategy' : (initialTab as ViewTab));
+    if (initialTab && tabs.some((t) => t.id === initialTab)) {
+      setActiveTab(initialTab as ViewTab);
     }
   }, [initialTab]);
   const [records, setRecords] = useState<AcquisitionRecord[]>([]);
@@ -587,7 +596,7 @@ export const AIAcquisitionOperationsView: React.FC<{
       <div><div className="flex items-center gap-2"><Megaphone className="h-5 w-5 text-indigo-300"/><h1 className="text-xl font-bold">AI集客運用</h1></div><p className="mt-1 text-sm text-slate-300">集客導線（自社メディア・LP・公式URL）、営業資料アセット、流入成果を一元管理する管制塔です。</p></div>
       <button onClick={() => void load()} className="rounded-lg border border-slate-700 px-3 py-2 text-sm">更新</button>
     </header>
-    <nav className="flex gap-1 overflow-x-auto rounded-xl border border-slate-800 bg-slate-900 p-1" aria-label="AI集客運用メニュー">{tabs.map((tab) => <button key={tab.id} onClick={() => { if (tab.id !== activeTab) { cancelAIRequest(); setIsFormOpen(false); setEditing(null); setPendingToolDrafts([]); setExternalPrompt(''); setExternalDraft(''); setExternalReview(''); } setActiveTab(tab.id); setNotice(''); setError(''); }} aria-current={activeTab === tab.id ? 'page' : undefined} className={`whitespace-nowrap rounded-lg px-3 py-2 text-xs sm:text-sm ${activeTab === tab.id ? 'bg-indigo-600 font-semibold text-white' : 'text-slate-400 hover:bg-slate-800 hover:text-white'}`}>{tab.label}</button>)}</nav>
+    <nav className="flex gap-1 overflow-x-auto rounded-xl border border-slate-800 bg-slate-900 p-1" aria-label="AI集客運用メニュー">{tabs.map((tab) => <button key={tab.id} onClick={() => { if (tab.id !== activeTab) { cancelAIRequest(); setIsFormOpen(false); setEditing(null); setPendingToolDrafts([]); setExternalPrompt(''); setExternalDraft(''); setExternalReview(''); } setActiveTab(tab.id); try { localStorage.setItem('ai_acquisition_active_tab', tab.id); } catch {} setNotice(''); setError(''); }} aria-current={activeTab === tab.id ? 'page' : undefined} className={`whitespace-nowrap rounded-lg px-3 py-2 text-xs sm:text-sm ${activeTab === tab.id ? 'bg-indigo-600 font-semibold text-white' : 'text-slate-400 hover:bg-slate-800 hover:text-white'}`}>{tab.label}</button>)}</nav>
     {(error || notice) && <p role={error ? 'alert' : 'status'} className={`rounded-lg px-3 py-2 text-sm ${error ? 'bg-rose-950/50 text-rose-200' : 'bg-emerald-950/40 text-emerald-200'}`}>{error || notice}</p>}
     {loading ? <p className="rounded-xl border border-slate-800 p-5 text-sm text-slate-400">集客データを読み込み中…</p> : <>
       {activeTab === 'media' && <OwnMediaWorkspace products={products} onAskAI={onSendPresidentSummary} strategyContext={records.find((record) => record.record_type === 'strategy') ? JSON.stringify({ title: records.find((record) => record.record_type === 'strategy')?.title, payload: records.find((record) => record.record_type === 'strategy')?.payload }) : ''} />}

@@ -25,6 +25,7 @@ import {
   Package,
   Layers,
   ExternalLink,
+  Trash2,
 } from 'lucide-react';
 import {
   Project,
@@ -58,6 +59,7 @@ interface DashboardViewProps {
   onNavigateTab: (tab: 'chat' | 'projects' | 'tasks' | 'approvals') => void;
   onNavigateToTab?: (tab: string) => void;
   onResolveApproval: (id: string, status: 'approved' | 'rejected') => void;
+  onDeleteApproval?: (id: string) => void;
   onUpdateTask?: (task: TaskItem) => void;
   onStartGoalBreakdown?: (goal: string) => void;
 }
@@ -78,6 +80,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
   onNavigateTab,
   onNavigateToTab,
   onResolveApproval,
+  onDeleteApproval,
   onUpdateTask,
   onStartGoalBreakdown,
 }) => {
@@ -928,6 +931,16 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
                       >
                         却下
                       </button>
+                      {onDeleteApproval && (
+                        <button
+                          type="button"
+                          onClick={() => onDeleteApproval(item.id)}
+                          title="この承認待ちを削除"
+                          className="p-1.5 rounded-xl bg-slate-850 hover:bg-rose-950/60 text-slate-400 hover:text-rose-400 transition-all cursor-pointer border border-slate-750"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </button>
+                      )}
                     </div>
                   </div>
                 ))}

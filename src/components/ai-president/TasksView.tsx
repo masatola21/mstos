@@ -76,6 +76,7 @@ interface TasksViewProps {
   onCreateTask: (task: Omit<TaskItem, 'id' | 'createdAt' | 'updatedAt'>) => void;
   onUpdateTask: (task: TaskItem) => void;
   onDeleteTask: (id: string) => Promise<void> | void;
+  onDeleteCompletedTasks?: () => Promise<void> | void;
   onRunTask: (task: TaskItem) => Promise<void>;
   onUploadAttachment: (taskId: string, file: File) => Promise<WorkspaceAttachment>;
   onDownloadAttachment: (attachment: WorkspaceAttachment) => Promise<Blob>;
@@ -85,6 +86,10 @@ interface TasksViewProps {
   approvals: ApprovalItem[];
   activityLogs: ActivityLog[];
   onResolveApproval: (id: string, status: 'approved' | 'rejected', note?: string) => void;
+  onDeleteApproval?: (id: string) => void;
+  onClearApprovals?: (statusFilter?: 'pending' | 'approved' | 'rejected' | 'all') => void;
+  onDeleteActivityLog?: (id: string) => void;
+  onClearActivityLogs?: () => void;
   initialSection?: 'tasks' | 'approvals' | 'logs';
   onSectionChange?: (section: 'tasks' | 'approvals' | 'logs') => void;
 }
@@ -99,6 +104,7 @@ export const TasksView: React.FC<TasksViewProps> = ({
   onCreateTask,
   onUpdateTask,
   onDeleteTask,
+  onDeleteCompletedTasks,
   onRunTask,
   onUploadAttachment,
   onDownloadAttachment,
@@ -108,6 +114,10 @@ export const TasksView: React.FC<TasksViewProps> = ({
   approvals,
   activityLogs,
   onResolveApproval,
+  onDeleteApproval,
+  onClearApprovals,
+  onDeleteActivityLog,
+  onClearActivityLogs,
   initialSection = 'tasks',
   onSectionChange,
 }) => {
@@ -125,6 +135,10 @@ export const TasksView: React.FC<TasksViewProps> = ({
 
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingTask, setEditingTask] = useState<TaskItem | null>(null);
+
+  // Batch delete completed tasks state
+  const [isBatchDeleteCompletedOpen, setIsBatchDeleteCompletedOpen] = useState(false);
+  const [isDeletingCompleted, setIsDeletingCompleted] = useState(false);
 
   // Form Fields
   const [title, setTitle] = useState('');
@@ -154,6 +168,19 @@ export const TasksView: React.FC<TasksViewProps> = ({
   const [taskToDelete, setTaskToDelete] = useState<TaskItem | null>(null);
   const [isDeletingTask, setIsDeletingTask] = useState(false);
   const [deleteTaskError, setDeleteTaskError] = useState('');
+
+  const confirmDeleteCompletedTasks = async () => {
+    if (!onDeleteCompletedTasks) return;
+    setIsDeletingCompleted(true);
+    try {
+      await onDeleteCompletedTasks();
+      setIsBatchDeleteCompletedOpen(false);
+    } catch (e) {
+      console.error(e);
+    } finally {
+      setIsDeletingCompleted(false);
+    }
+  };
 
   const openCreateModal = () => {
     setEditingTask(null);
@@ -503,14 +530,29 @@ export const TasksView: React.FC<TasksViewProps> = ({
           </div>
         </div>
 
-        {activeSection === 'tasks' && <button
-          type="button"
-          onClick={openCreateModal}
-          className="flex items-center gap-1.5 px-4 py-2 rounded-xl bg-gradient-to-r from-indigo-500 to-purple-600 hover:from-indigo-600 hover:to-purple-700 text-white text-xs font-bold transition-all shadow-md shadow-indigo-500/20 cursor-pointer"
-        >
-          <Plus className="w-3.5 h-3.5" />
-          <span>新規タスクを作成</span>
-        </button>}
+        {activeSection === 'tasks' && (
+          <div className="flex items-center gap-2">
+            {tasks.some((t) => t.status === 'completed') && onDeleteCompletedTasks && (
+              <button
+                type="button"
+                onClick={() => setIsBatchDeleteCompletedOpen(true)}
+                className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-slate-800 hover:bg-rose-950/40 hover:text-rose-300 text-slate-300 border border-slate-700 hover:border-rose-500/50 text-xs font-semibold transition-all cursor-pointer"
+                title="完了したタスクを一括削除して一覧を整理"
+              >
+                <Trash2 className="w-3.5 h-3.5 text-rose-400" />
+                <span>完了タスク整理 ({tasks.filter((t) => t.status === 'completed').length})</span>
+              </button>
+            )}
+            <button
+              type="button"
+              onClick={openCreateModal}
+              className="flex items-center gap-1.5 px-4 py-2 rounded-xl bg-gradient-to-r from-indigo-500 to-purple-600 hover:from-indigo-600 hover:to-purple-700 text-white text-xs font-bold transition-all shadow-md shadow-indigo-500/20 cursor-pointer"
+            >
+              <Plus className="w-3.5 h-3.5" />
+              <span>新規タスクを作成</span>
+            </button>
+          </div>
+        )}
       </div>
 
       <div className="flex flex-wrap gap-2 border-b border-slate-800 pb-3">
@@ -1178,6 +1220,40 @@ export const TasksView: React.FC<TasksViewProps> = ({
           </section>
         </div>
       )}
+
+      {isBatchDeleteCompletedOpen && (
+        <div className="fixed inset-0 z-[80] flex items-center justify-center bg-slate-950/80 p-4 backdrop-blur-sm" role="presentation">
+          <section role="dialog" aria-modal="true" className="w-full max-w-md rounded-2xl border border-slate-700 bg-slate-900 p-6 shadow-2xl">
+            <h2 className="text-base font-bold text-white flex items-center gap-2">
+              <Trash2 className="w-5 h-5 text-rose-400" />
+              <span>完了タスクの一括削除</span>
+            </h2>
+            <p className="mt-3 text-sm text-slate-300">
+              ステータスが「完了」となっているタスク（全{tasks.filter((t) => t.status === 'completed').length}件）を一括削除します。
+              <br />
+              添付ファイルも含めて削除されます。この操作は取り消せません。実行しますか？
+            </p>
+            <div className="mt-6 flex justify-end gap-2">
+              <button
+                type="button"
+                disabled={isDeletingCompleted}
+                onClick={() => setIsBatchDeleteCompletedOpen(false)}
+                className="rounded-xl border border-slate-700 px-4 py-2 text-sm text-slate-300 hover:bg-slate-800 disabled:opacity-50 cursor-pointer"
+              >
+                キャンセル
+              </button>
+              <button
+                type="button"
+                disabled={isDeletingCompleted}
+                onClick={() => void confirmDeleteCompletedTasks()}
+                className="rounded-xl bg-rose-600 px-4 py-2 text-sm font-semibold text-white hover:bg-rose-500 disabled:opacity-50 cursor-pointer shadow-md shadow-rose-600/20"
+              >
+                {isDeletingCompleted ? '削除中…' : '一括削除する'}
+              </button>
+            </div>
+          </section>
+        </div>
+      )}
       </>}
 
       {(activeSection === 'approvals' || activeSection === 'logs') && (
@@ -1186,6 +1262,10 @@ export const TasksView: React.FC<TasksViewProps> = ({
           approvals={approvals}
           activityLogs={activityLogs}
           onResolveApproval={onResolveApproval}
+          onDeleteApproval={onDeleteApproval}
+          onClearApprovals={onClearApprovals}
+          onDeleteActivityLog={onDeleteActivityLog}
+          onClearActivityLogs={onClearActivityLogs}
           initialTab={activeSection === 'logs' ? 'logs' : 'approvals'}
           embedded
         />

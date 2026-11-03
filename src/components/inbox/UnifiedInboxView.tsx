@@ -57,7 +57,7 @@ interface FormMeta {
 interface UnifiedInboxViewProps {
   initialChannel?: InboxChannel;
   initialLineUserId?: string;
-  onNavigateTab: (tab: UnifiedNavTab) => void;
+  onNavigateTab: (tab: any, options?: any) => void;
   onOpenSendCenter?: (params: { companyId?: string; contactId?: string; formId?: string; sendKind?: 'announcement' | 'customer_meeting' | 'deal' | 'diagnosis' | 'form' }) => void;
   onOpenCustomerWorkspace?: (companyId: string, destination?: string) => void;
 }
@@ -72,7 +72,29 @@ export const UnifiedInboxView: React.FC<UnifiedInboxViewProps> = ({
   onOpenCustomerWorkspace
 }) => {
   const db = getSupabase();
-  const [activeChannel, setActiveChannel] = useState<InboxChannel>(initialChannel);
+  const [activeChannel, setActiveChannel] = useState<InboxChannel>(() => {
+    if (initialChannel && initialChannel !== 'forms') return initialChannel;
+    try {
+      const saved = localStorage.getItem('unified_inbox_active_channel') as InboxChannel | null;
+      if (saved && ['line', 'email', 'social_dm', 'forms'].includes(saved)) {
+        return saved;
+      }
+    } catch {}
+    return initialChannel || 'forms';
+  });
+
+  useEffect(() => {
+    if (initialChannel) {
+      setActiveChannel(initialChannel);
+    }
+  }, [initialChannel]);
+
+  const handleSelectChannel = (ch: InboxChannel) => {
+    setActiveChannel(ch);
+    try {
+      localStorage.setItem('unified_inbox_active_channel', ch);
+    } catch {}
+  };
 
   // Badge counters
   const [counts, setCounts] = useState({
@@ -324,7 +346,7 @@ export const UnifiedInboxView: React.FC<UnifiedInboxViewProps> = ({
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mt-5">
           {/* Channel 1: Form / Diagnoses */}
           <button
-            onClick={() => setActiveChannel('forms')}
+            onClick={() => handleSelectChannel('forms')}
             className={`p-3.5 rounded-xl border text-left transition-all cursor-pointer ${
               activeChannel === 'forms'
                 ? 'bg-blue-950/60 border-blue-500 shadow-md ring-1 ring-blue-500/50'
@@ -353,7 +375,7 @@ export const UnifiedInboxView: React.FC<UnifiedInboxViewProps> = ({
 
           {/* Channel 2: LINE */}
           <button
-            onClick={() => setActiveChannel('line')}
+            onClick={() => handleSelectChannel('line')}
             className={`p-3.5 rounded-xl border text-left transition-all cursor-pointer ${
               activeChannel === 'line'
                 ? 'bg-emerald-950/60 border-emerald-500 shadow-md ring-1 ring-emerald-500/50'
@@ -376,13 +398,13 @@ export const UnifiedInboxView: React.FC<UnifiedInboxViewProps> = ({
               <span className="text-xs text-slate-400">通履歴</span>
             </div>
             <p className="text-[11px] text-slate-500 mt-1 truncate">
-              友だち返信・個別チャット・自動応答
+              友だち返信・個別チャット（1:1）
             </p>
           </button>
 
           {/* Channel 3: Email */}
           <button
-            onClick={() => setActiveChannel('email')}
+            onClick={() => handleSelectChannel('email')}
             className={`p-3.5 rounded-xl border text-left transition-all cursor-pointer ${
               activeChannel === 'email'
                 ? 'bg-indigo-950/60 border-indigo-500 shadow-md ring-1 ring-indigo-500/50'
@@ -409,7 +431,7 @@ export const UnifiedInboxView: React.FC<UnifiedInboxViewProps> = ({
 
           {/* Channel 4: Social DM */}
           <button
-            onClick={() => setActiveChannel('social_dm')}
+            onClick={() => handleSelectChannel('social_dm')}
             className={`p-3.5 rounded-xl border text-left transition-all cursor-pointer ${
               activeChannel === 'social_dm'
                 ? 'bg-purple-950/60 border-purple-500 shadow-md ring-1 ring-purple-500/50'
@@ -441,7 +463,7 @@ export const UnifiedInboxView: React.FC<UnifiedInboxViewProps> = ({
       {/* ── Channel Navigation Tabs ── */}
       <div className="flex flex-wrap items-center gap-2 border-b border-slate-800 pb-2">
         <button
-          onClick={() => setActiveChannel('forms')}
+          onClick={() => handleSelectChannel('forms')}
           className={`flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-semibold transition ${
             activeChannel === 'forms'
               ? 'bg-blue-600 text-white shadow-sm'
@@ -458,7 +480,7 @@ export const UnifiedInboxView: React.FC<UnifiedInboxViewProps> = ({
         </button>
 
         <button
-          onClick={() => setActiveChannel('line')}
+          onClick={() => handleSelectChannel('line')}
           className={`flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-semibold transition ${
             activeChannel === 'line'
               ? 'bg-emerald-600 text-white shadow-sm'
@@ -475,7 +497,7 @@ export const UnifiedInboxView: React.FC<UnifiedInboxViewProps> = ({
         </button>
 
         <button
-          onClick={() => setActiveChannel('email')}
+          onClick={() => handleSelectChannel('email')}
           className={`flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-semibold transition ${
             activeChannel === 'email'
               ? 'bg-indigo-600 text-white shadow-sm'
@@ -492,7 +514,7 @@ export const UnifiedInboxView: React.FC<UnifiedInboxViewProps> = ({
         </button>
 
         <button
-          onClick={() => setActiveChannel('social_dm')}
+          onClick={() => handleSelectChannel('social_dm')}
           className={`flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-semibold transition ${
             activeChannel === 'social_dm'
               ? 'bg-purple-600 text-white shadow-sm'
@@ -707,6 +729,16 @@ export const UnifiedInboxView: React.FC<UnifiedInboxViewProps> = ({
                           <span>面談案内を作成</span>
                         </button>
 
+                        {/* Open Diagnosis / Report */}
+                        <button
+                          onClick={() => onNavigateTab('mst_diagnoses')}
+                          className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-emerald-950/60 hover:bg-emerald-900/60 text-xs font-medium text-emerald-300 border border-emerald-700/60 transition"
+                          title="社内診断・AIレポート作成へ"
+                        >
+                          <FileText className="w-3.5 h-3.5 text-emerald-400" />
+                          <span>診断・レポートへ</span>
+                        </button>
+
                         {/* Expand Details Toggle */}
                         <button
                           onClick={() => setExpandedSubmissionId(isExpanded ? null : sub.id)}
@@ -800,23 +832,37 @@ export const UnifiedInboxView: React.FC<UnifiedInboxViewProps> = ({
       {/* 2. LINE INBOX & INDIVIDUAL CHAT */}
       {activeChannel === 'line' && (
         <div className="space-y-4">
-          <div className="flex items-center justify-between p-3.5 rounded-xl border border-emerald-500/30 bg-emerald-950/20 text-xs text-slate-300">
+          <div className="flex flex-wrap items-center justify-between gap-3 p-3.5 rounded-xl border border-emerald-500/30 bg-emerald-950/20 text-xs text-slate-300">
             <div className="flex items-center gap-2">
               <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
               <span>
-                LINE公式アカウントの個別チャットと受信メッセージです。友だちへの個別返信や自動応答ルールの設定が行えます。
+                LINE公式アカウントの1:1個別チャット画面です。友だちへの個別返信やメッセージ履歴を閲覧できます。
               </span>
             </div>
-            <button
-              onClick={() => onNavigateTab('contacts')}
-              className="inline-flex items-center gap-1 text-emerald-300 hover:text-emerald-200 font-semibold"
-            >
-              <TagIcon className="w-3.5 h-3.5" />
-              <span>LINE友だち・タグ管理を開く</span>
-            </button>
+            <div className="flex items-center gap-2">
+              <button
+                onClick={() => onNavigateTab('contacts')}
+                className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-slate-800/80 hover:bg-slate-700 text-emerald-300 hover:text-emerald-200 font-semibold transition"
+              >
+                <TagIcon className="w-3.5 h-3.5" />
+                <span>友だち・タグ管理</span>
+              </button>
+              <button
+                onClick={() => onNavigateTab('marketing_automation')}
+                className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-emerald-600/20 hover:bg-emerald-600/30 text-emerald-300 hover:text-emerald-200 font-semibold border border-emerald-500/30 transition"
+                title="マーケティング自動化のLINE設定へ"
+              >
+                <Sparkles className="w-3.5 h-3.5" />
+                <span>ウェルカムFlex・自動返信設定へ</span>
+              </button>
+            </div>
           </div>
 
-          <MarketingLineInboxView initialLineUserId={initialLineUserId} />
+          <MarketingLineInboxView
+            initialLineUserId={initialLineUserId}
+            chatOnly={true}
+            onNavigateSettings={() => onNavigateTab('marketing_automation')}
+          />
         </div>
       )}
 
@@ -846,23 +892,29 @@ export const UnifiedInboxView: React.FC<UnifiedInboxViewProps> = ({
       {/* 4. SOCIAL DM STUDIO */}
       {activeChannel === 'social_dm' && (
         <div className="space-y-4">
-          <div className="flex items-center justify-between p-3.5 rounded-xl border border-purple-500/30 bg-purple-950/20 text-xs text-slate-300">
+          <div className="flex flex-wrap items-center justify-between gap-3 p-3.5 rounded-xl border border-purple-500/30 bg-purple-950/20 text-xs text-slate-300">
             <div className="flex items-center gap-2">
               <span className="w-2 h-2 rounded-full bg-purple-400 animate-pulse" />
               <span>
-                X (Twitter)・Instagram・LinkedIn・Facebook等の受信DM対応およびアウトバウンド返信を管理します。
+                SNSから届いたDM・問い合わせの受信トレイです。テンプレ選択や手動返信、CRM見込み客登録を行えます。
               </span>
             </div>
             <button
-              onClick={() => onNavigateTab('ai_acquisition')}
-              className="inline-flex items-center gap-1 text-purple-300 hover:text-purple-200 font-semibold"
+              onClick={() => {
+                try {
+                  localStorage.setItem('ai_acquisition_active_tab', 'social_studio');
+                  localStorage.setItem('social_studio_mode', 'dm_sales');
+                } catch {}
+                onNavigateTab('ai_acquisition', { acquisitionTab: 'social_studio', studioMode: 'dm_sales' });
+              }}
+              className="inline-flex items-center gap-1.5 px-3 py-1 rounded-lg bg-slate-800/80 hover:bg-slate-700 text-purple-300 hover:text-purple-200 text-xs font-semibold border border-purple-500/30 transition cursor-pointer"
             >
-              <Share2 className="w-3.5 h-3.5" />
-              <span>AI集客運用（SNS発信・HP分析）を開く</span>
+              <Send className="w-3.5 h-3.5" />
+              <span>🎯 攻めのDM営業（リストアップ・テンプレ送信）へ</span>
             </button>
           </div>
 
-          <SocialDmSalesStudio />
+          <SocialDmSalesStudio mode="inbound" onNavigateTab={onNavigateTab} />
         </div>
       )}
     </div>
