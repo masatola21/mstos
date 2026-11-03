@@ -311,21 +311,21 @@ export const UnifiedInboxView: React.FC<UnifiedInboxViewProps> = ({
   return (
     <div className="space-y-6">
       {/* ── Top Header & Executive Summary Cockpit ── */}
-      <section className="rounded-2xl border border-slate-800 bg-gradient-to-r from-slate-900 via-indigo-950/40 to-slate-900 p-5 shadow-lg">
+      <section className="rounded-2xl border border-slate-200 bg-white p-6 shadow-xs">
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
           <div>
-            <div className="flex items-center gap-2.5">
-              <div className="w-10 h-10 rounded-xl bg-blue-600/30 border border-blue-500/40 flex items-center justify-center text-blue-400">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-xl bg-purple-50 border border-purple-200 flex items-center justify-center text-purple-600">
                 <Inbox className="w-5 h-5" />
               </div>
               <div>
-                <h1 className="text-xl font-bold text-white flex items-center gap-2">
+                <h1 className="text-xl font-bold text-slate-900 flex items-center gap-2">
                   <span>統合受信トレイ</span>
-                  <span className="text-xs px-2.5 py-0.5 rounded-full bg-blue-500/20 text-blue-300 border border-blue-500/30 font-medium">
-                    反響・商談中 ＆ 契約後顧客 全チャネル集約
+                  <span className="text-xs px-2.5 py-0.5 rounded-full bg-purple-50 text-purple-700 border border-purple-200 font-semibold">
+                    全チャネル集約・未対応ゼロ化
                   </span>
                 </h1>
-                <p className="text-xs text-slate-400 mt-0.5">
+                <p className="text-xs text-slate-500 mt-1">
                   LINE公式・メール・SNS DM・HP診断フォームの全受信メッセージを一元管理。見込み客の反響対応から契約中クライアントの連絡まで見落としゼロで対応します。
                 </p>
               </div>
@@ -338,7 +338,7 @@ export const UnifiedInboxView: React.FC<UnifiedInboxViewProps> = ({
                 void loadCounts();
                 void loadSubmissions();
               }}
-              className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-xs font-medium text-slate-200 border border-slate-700 transition cursor-pointer"
+              className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl bg-white hover:bg-slate-50 text-xs font-medium text-slate-700 border border-slate-200 transition cursor-pointer shadow-xs"
               title="最新の受信状態を再読み込み"
             >
               <RefreshCw className="w-3.5 h-3.5 text-slate-400" />
@@ -346,21 +346,21 @@ export const UnifiedInboxView: React.FC<UnifiedInboxViewProps> = ({
             </button>
             <button
               onClick={() => onNavigateTab('leads')}
-              className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-xs font-semibold text-slate-200 border border-slate-700 transition cursor-pointer"
+              className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl bg-white hover:bg-slate-50 text-xs font-semibold text-slate-700 border border-slate-200 transition cursor-pointer shadow-xs"
             >
               <span>反響リード</span>
               <ArrowRight className="w-3.5 h-3.5 text-slate-400" />
             </button>
             <button
               onClick={() => onNavigateTab('customers')}
-              className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-xs font-semibold text-slate-200 border border-slate-700 transition cursor-pointer"
+              className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl bg-white hover:bg-slate-50 text-xs font-semibold text-slate-700 border border-slate-200 transition cursor-pointer shadow-xs"
             >
               <span>契約顧客台帳</span>
               <ArrowRight className="w-3.5 h-3.5 text-slate-400" />
             </button>
             <button
               onClick={() => onNavigateTab('communication_send')}
-              className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-xs font-semibold text-white shadow-md transition cursor-pointer"
+              className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-purple-600 hover:bg-purple-700 text-xs font-semibold text-white shadow-xs transition cursor-pointer"
             >
               <Send className="w-3.5 h-3.5" />
               <span>送信センターへ</span>
@@ -374,26 +374,26 @@ export const UnifiedInboxView: React.FC<UnifiedInboxViewProps> = ({
           {/* Channel 1: Form / Diagnoses */}
           <button
             onClick={() => handleSelectChannel('forms')}
-            className={`p-3.5 rounded-xl border text-left transition-all cursor-pointer ${
+            className={`p-4 rounded-xl border text-left transition-all cursor-pointer ${
               activeChannel === 'forms'
-                ? 'bg-blue-950/60 border-blue-500 shadow-md ring-1 ring-blue-500/50'
-                : 'bg-slate-950/70 border-slate-800 hover:border-slate-700 hover:bg-slate-900/80'
+                ? 'bg-purple-50/80 border-purple-400 shadow-xs ring-2 ring-purple-400/20'
+                : 'bg-slate-50/70 border-slate-200 hover:border-slate-300 hover:bg-slate-100/60'
             }`}
           >
             <div className="flex items-center justify-between">
-              <span className="flex items-center gap-1.5 text-xs font-semibold text-slate-300">
-                <FileText className="w-4 h-4 text-emerald-400" />
+              <span className="flex items-center gap-1.5 text-xs font-semibold text-slate-700">
+                <FileText className="w-4 h-4 text-emerald-600" />
                 フォーム・診断回答
               </span>
               {counts.formsReceived > 0 && (
-                <span className="px-1.5 py-0.5 rounded text-[10px] font-bold bg-amber-500 text-slate-950 animate-pulse">
+                <span className="px-1.5 py-0.5 rounded text-[10px] font-bold bg-amber-100 text-amber-800 border border-amber-300 animate-pulse">
                   未対応 {counts.formsReceived}
                 </span>
               )}
             </div>
             <div className="mt-2 flex items-baseline gap-2">
-              <span className="text-2xl font-black text-white">{counts.formsTotal}</span>
-              <span className="text-xs text-slate-400">件受付</span>
+              <span className="text-2xl font-black text-slate-900">{counts.formsTotal}</span>
+              <span className="text-xs text-slate-500">件受付</span>
             </div>
             <p className="text-[11px] text-slate-500 mt-1 truncate">
               HP問い合わせ・ボトルネック診断
@@ -403,26 +403,26 @@ export const UnifiedInboxView: React.FC<UnifiedInboxViewProps> = ({
           {/* Channel 2: LINE */}
           <button
             onClick={() => handleSelectChannel('line')}
-            className={`p-3.5 rounded-xl border text-left transition-all cursor-pointer ${
+            className={`p-4 rounded-xl border text-left transition-all cursor-pointer ${
               activeChannel === 'line'
-                ? 'bg-emerald-950/60 border-emerald-500 shadow-md ring-1 ring-emerald-500/50'
-                : 'bg-slate-950/70 border-slate-800 hover:border-slate-700 hover:bg-slate-900/80'
+                ? 'bg-emerald-50/80 border-emerald-400 shadow-xs ring-2 ring-emerald-400/20'
+                : 'bg-slate-50/70 border-slate-200 hover:border-slate-300 hover:bg-slate-100/60'
             }`}
           >
             <div className="flex items-center justify-between">
-              <span className="flex items-center gap-1.5 text-xs font-semibold text-slate-300">
-                <MessageSquare className="w-4 h-4 text-emerald-400" />
+              <span className="flex items-center gap-1.5 text-xs font-semibold text-slate-700">
+                <MessageSquare className="w-4 h-4 text-emerald-600" />
                 LINE公式アカウント
               </span>
               {counts.lineInbound > 0 && (
-                <span className="px-1.5 py-0.5 rounded text-[10px] font-bold bg-emerald-500/20 text-emerald-300 border border-emerald-500/40">
+                <span className="px-1.5 py-0.5 rounded text-[10px] font-bold bg-emerald-100 text-emerald-800 border border-emerald-300">
                   受信 {counts.lineInbound}
                 </span>
               )}
             </div>
             <div className="mt-2 flex items-baseline gap-2">
-              <span className="text-2xl font-black text-white">{counts.lineTotal}</span>
-              <span className="text-xs text-slate-400">通履歴</span>
+              <span className="text-2xl font-black text-slate-900">{counts.lineTotal}</span>
+              <span className="text-xs text-slate-500">通履歴</span>
             </div>
             <p className="text-[11px] text-slate-500 mt-1 truncate">
               友だち返信・個別チャット（1:1）
@@ -432,24 +432,24 @@ export const UnifiedInboxView: React.FC<UnifiedInboxViewProps> = ({
           {/* Channel 3: Email */}
           <button
             onClick={() => handleSelectChannel('email')}
-            className={`p-3.5 rounded-xl border text-left transition-all cursor-pointer ${
+            className={`p-4 rounded-xl border text-left transition-all cursor-pointer ${
               activeChannel === 'email'
-                ? 'bg-indigo-950/60 border-indigo-500 shadow-md ring-1 ring-indigo-500/50'
-                : 'bg-slate-950/70 border-slate-800 hover:border-slate-700 hover:bg-slate-900/80'
+                ? 'bg-sky-50/80 border-sky-400 shadow-xs ring-2 ring-sky-400/20'
+                : 'bg-slate-50/70 border-slate-200 hover:border-slate-300 hover:bg-slate-100/60'
             }`}
           >
             <div className="flex items-center justify-between">
-              <span className="flex items-center gap-1.5 text-xs font-semibold text-slate-300">
-                <Mail className="w-4 h-4 text-sky-400" />
+              <span className="flex items-center gap-1.5 text-xs font-semibold text-slate-700">
+                <Mail className="w-4 h-4 text-sky-600" />
                 メール受信箱
               </span>
-              <span className="px-1.5 py-0.5 rounded text-[10px] font-medium bg-slate-800 text-slate-300">
+              <span className="px-1.5 py-0.5 rounded text-[10px] font-medium bg-slate-200 text-slate-700">
                 Resend連携
               </span>
             </div>
             <div className="mt-2 flex items-baseline gap-2">
-              <span className="text-2xl font-black text-white">{counts.emailTotal}</span>
-              <span className="text-xs text-slate-400">通受信</span>
+              <span className="text-2xl font-black text-slate-900">{counts.emailTotal}</span>
+              <span className="text-xs text-slate-500">通受信</span>
             </div>
             <p className="text-[11px] text-slate-500 mt-1 truncate">
               問い合わせ・アウトリーチ返信
@@ -459,26 +459,26 @@ export const UnifiedInboxView: React.FC<UnifiedInboxViewProps> = ({
           {/* Channel 4: Social DM */}
           <button
             onClick={() => handleSelectChannel('social_dm')}
-            className={`p-3.5 rounded-xl border text-left transition-all cursor-pointer ${
+            className={`p-4 rounded-xl border text-left transition-all cursor-pointer ${
               activeChannel === 'social_dm'
-                ? 'bg-purple-950/60 border-purple-500 shadow-md ring-1 ring-purple-500/50'
-                : 'bg-slate-950/70 border-slate-800 hover:border-slate-700 hover:bg-slate-900/80'
+                ? 'bg-purple-50/80 border-purple-400 shadow-xs ring-2 ring-purple-400/20'
+                : 'bg-slate-50/70 border-slate-200 hover:border-slate-300 hover:bg-slate-100/60'
             }`}
           >
             <div className="flex items-center justify-between">
-              <span className="flex items-center gap-1.5 text-xs font-semibold text-slate-300">
-                <Share2 className="w-4 h-4 text-purple-400" />
+              <span className="flex items-center gap-1.5 text-xs font-semibold text-slate-700">
+                <Share2 className="w-4 h-4 text-purple-600" />
                 SNS DM受信対応
               </span>
               {counts.dmInboundWaiting > 0 && (
-                <span className="px-1.5 py-0.5 rounded text-[10px] font-bold bg-purple-500/20 text-purple-300 border border-purple-500/40 animate-pulse">
+                <span className="px-1.5 py-0.5 rounded text-[10px] font-bold bg-purple-100 text-purple-800 border border-purple-300 animate-pulse">
                   未対応 {counts.dmInboundWaiting}
                 </span>
               )}
             </div>
             <div className="mt-2 flex items-baseline gap-2">
-              <span className="text-2xl font-black text-white">{counts.dmInboundWaiting}</span>
-              <span className="text-xs text-slate-400">件返信待ち</span>
+              <span className="text-2xl font-black text-slate-900">{counts.dmInboundWaiting}</span>
+              <span className="text-xs text-slate-500">件返信待ち</span>
             </div>
             <p className="text-[11px] text-slate-500 mt-1 truncate">
               X・Instagram・LinkedIn・FB
@@ -488,19 +488,19 @@ export const UnifiedInboxView: React.FC<UnifiedInboxViewProps> = ({
       </section>
 
       {/* ── Channel Navigation Tabs ── */}
-      <div className="flex flex-wrap items-center gap-2 border-b border-slate-800 pb-2">
+      <div className="flex flex-wrap items-center gap-2 border-b border-slate-200 pb-2">
         <button
           onClick={() => handleSelectChannel('forms')}
-          className={`flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-semibold transition ${
+          className={`flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-semibold transition cursor-pointer ${
             activeChannel === 'forms'
-              ? 'bg-blue-600 text-white shadow-sm'
-              : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800'
+              ? 'bg-purple-600 text-white shadow-xs'
+              : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100'
           }`}
         >
           <FileText className="w-4 h-4" />
           <span>📝 フォーム・無料診断回答</span>
           {counts.formsReceived > 0 && (
-            <span className="px-1.5 py-0.2 rounded-full text-xs font-bold bg-amber-400 text-slate-950">
+            <span className="px-1.5 py-0.2 rounded-full text-xs font-bold bg-amber-200 text-amber-900">
               {counts.formsReceived}
             </span>
           )}
@@ -508,16 +508,16 @@ export const UnifiedInboxView: React.FC<UnifiedInboxViewProps> = ({
 
         <button
           onClick={() => handleSelectChannel('line')}
-          className={`flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-semibold transition ${
+          className={`flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-semibold transition cursor-pointer ${
             activeChannel === 'line'
-              ? 'bg-emerald-600 text-white shadow-sm'
-              : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800'
+              ? 'bg-purple-600 text-white shadow-xs'
+              : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100'
           }`}
         >
           <MessageSquare className="w-4 h-4" />
           <span>💬 LINE公式チャット・受信</span>
           {counts.lineInbound > 0 && (
-            <span className="px-1.5 py-0.2 rounded-full text-xs font-bold bg-white text-emerald-800">
+            <span className="px-1.5 py-0.2 rounded-full text-xs font-bold bg-emerald-100 text-emerald-800">
               {counts.lineInbound}
             </span>
           )}
@@ -525,16 +525,16 @@ export const UnifiedInboxView: React.FC<UnifiedInboxViewProps> = ({
 
         <button
           onClick={() => handleSelectChannel('email')}
-          className={`flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-semibold transition ${
+          className={`flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-semibold transition cursor-pointer ${
             activeChannel === 'email'
-              ? 'bg-indigo-600 text-white shadow-sm'
-              : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800'
+              ? 'bg-purple-600 text-white shadow-xs'
+              : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100'
           }`}
         >
           <Mail className="w-4 h-4" />
           <span>✉️ メール受信箱</span>
           {counts.emailTotal > 0 && (
-            <span className="px-1.5 py-0.2 rounded-full text-xs font-bold bg-indigo-950 text-indigo-200 border border-indigo-400/40">
+            <span className="px-1.5 py-0.2 rounded-full text-xs font-bold bg-slate-200 text-slate-800">
               {counts.emailTotal}
             </span>
           )}
@@ -542,16 +542,16 @@ export const UnifiedInboxView: React.FC<UnifiedInboxViewProps> = ({
 
         <button
           onClick={() => handleSelectChannel('social_dm')}
-          className={`flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-semibold transition ${
+          className={`flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-semibold transition cursor-pointer ${
             activeChannel === 'social_dm'
-              ? 'bg-purple-600 text-white shadow-sm'
-              : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800'
+              ? 'bg-purple-600 text-white shadow-xs'
+              : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100'
           }`}
         >
           <Share2 className="w-4 h-4" />
           <span>📱 SNS DM営業・受信対応</span>
           {counts.dmInboundWaiting > 0 && (
-            <span className="px-1.5 py-0.2 rounded-full text-xs font-bold bg-purple-950 text-purple-200 border border-purple-400/40">
+            <span className="px-1.5 py-0.2 rounded-full text-xs font-bold bg-purple-100 text-purple-800">
               {counts.dmInboundWaiting}
             </span>
           )}
@@ -560,17 +560,17 @@ export const UnifiedInboxView: React.FC<UnifiedInboxViewProps> = ({
 
       {/* ── Notification & Alert Banners ── */}
       {submissionNotice && (
-        <div className="p-3.5 rounded-xl border border-emerald-500/40 bg-emerald-950/40 text-emerald-200 text-xs flex items-center justify-between">
+        <div className="p-3.5 rounded-xl border border-emerald-200 bg-emerald-50 text-emerald-800 text-xs flex items-center justify-between">
           <span>{submissionNotice}</span>
-          <button onClick={() => setSubmissionNotice('')} className="text-emerald-400 hover:text-emerald-200">
+          <button onClick={() => setSubmissionNotice('')} className="text-emerald-600 hover:text-emerald-800 font-bold">
             ×
           </button>
         </div>
       )}
       {submissionError && (
-        <div className="p-3.5 rounded-xl border border-rose-500/40 bg-rose-950/40 text-rose-200 text-xs flex items-center justify-between">
+        <div className="p-3.5 rounded-xl border border-rose-200 bg-rose-50 text-rose-800 text-xs flex items-center justify-between">
           <span>{submissionError}</span>
-          <button onClick={() => setSubmissionError('')} className="text-rose-400 hover:text-rose-200">
+          <button onClick={() => setSubmissionError('')} className="text-rose-600 hover:text-rose-800 font-bold">
             ×
           </button>
         </div>
@@ -581,17 +581,17 @@ export const UnifiedInboxView: React.FC<UnifiedInboxViewProps> = ({
       {activeChannel === 'forms' && (
         <div className="space-y-4">
           {/* Filter Bar */}
-          <div className="flex flex-col xl:flex-row items-stretch xl:items-center justify-between gap-3 p-4 rounded-xl border border-slate-800 bg-slate-900">
+          <div className="flex flex-col xl:flex-row items-stretch xl:items-center justify-between gap-3 p-4 rounded-xl border border-slate-200 bg-white shadow-xs">
             <div className="flex flex-wrap items-center gap-2.5">
               {/* Lifecycle Stage Filter */}
-              <div className="flex items-center bg-slate-950 p-1 rounded-lg border border-slate-800 text-xs">
+              <div className="flex items-center bg-slate-100 p-1 rounded-lg border border-slate-200 text-xs">
                 <button
                   type="button"
                   onClick={() => setCustomerStageFilter('all')}
                   className={`px-2.5 py-1 rounded font-medium transition cursor-pointer ${
                     customerStageFilter === 'all'
-                      ? 'bg-blue-600 text-white font-semibold'
-                      : 'text-slate-400 hover:text-white'
+                      ? 'bg-purple-600 text-white font-semibold shadow-xs'
+                      : 'text-slate-600 hover:text-slate-900'
                   }`}
                 >
                   全対象 ({submissions.length})
@@ -601,8 +601,8 @@ export const UnifiedInboxView: React.FC<UnifiedInboxViewProps> = ({
                   onClick={() => setCustomerStageFilter('leads')}
                   className={`px-2.5 py-1 rounded font-medium transition cursor-pointer flex items-center gap-1 ${
                     customerStageFilter === 'leads'
-                      ? 'bg-indigo-600 text-white font-semibold'
-                      : 'text-slate-400 hover:text-white'
+                      ? 'bg-purple-600 text-white font-semibold shadow-xs'
+                      : 'text-slate-600 hover:text-slate-900'
                   }`}
                 >
                   <span>反響・リード</span>
@@ -615,11 +615,11 @@ export const UnifiedInboxView: React.FC<UnifiedInboxViewProps> = ({
                   onClick={() => setCustomerStageFilter('customers')}
                   className={`px-2.5 py-1 rounded font-medium transition cursor-pointer flex items-center gap-1 ${
                     customerStageFilter === 'customers'
-                      ? 'bg-emerald-600 text-white font-semibold'
-                      : 'text-slate-400 hover:text-white'
+                      ? 'bg-emerald-600 text-white font-semibold shadow-xs'
+                      : 'text-slate-600 hover:text-slate-900'
                   }`}
                 >
-                  <Building2 className="w-3 h-3 text-emerald-400" />
+                  <Building2 className="w-3 h-3 text-emerald-200" />
                   <span>契約中クライアント</span>
                   <span className="text-[10px] opacity-75">
                     ({submissions.filter((s) => s.company_id && customerCompanyIds.has(s.company_id)).length})
@@ -629,7 +629,7 @@ export const UnifiedInboxView: React.FC<UnifiedInboxViewProps> = ({
 
               {/* Status Filter */}
               <div className="flex flex-wrap items-center gap-1">
-                <span className="text-xs text-slate-400 mr-1 flex items-center gap-1">
+                <span className="text-xs text-slate-500 mr-1 flex items-center gap-1">
                   <Filter className="w-3.5 h-3.5" /> 状態:
                 </span>
                 {[
@@ -637,7 +637,7 @@ export const UnifiedInboxView: React.FC<UnifiedInboxViewProps> = ({
                   {
                     key: 'received',
                     label: `未対応 (${submissions.filter((s) => s.status === 'received').length})`,
-                    color: 'text-amber-300 font-bold',
+                    color: 'text-amber-700 font-bold',
                   },
                   { key: 'reviewing', label: `対応中 (${submissions.filter((s) => s.status === 'reviewing').length})` },
                   { key: 'completed', label: `完了 (${submissions.filter((s) => s.status === 'completed').length})` },
@@ -648,8 +648,8 @@ export const UnifiedInboxView: React.FC<UnifiedInboxViewProps> = ({
                     onClick={() => setFormFilterStatus(filter.key)}
                     className={`px-2.5 py-1 rounded-lg text-xs font-medium transition cursor-pointer ${
                       formFilterStatus === filter.key
-                        ? 'bg-slate-700 text-white font-semibold'
-                        : 'bg-slate-950 text-slate-400 hover:bg-slate-800'
+                        ? 'bg-slate-900 text-white font-semibold shadow-xs'
+                        : 'bg-white border border-slate-200 text-slate-600 hover:bg-slate-50'
                     }`}
                   >
                     <span className={filter.color}>{filter.label}</span>
@@ -665,27 +665,27 @@ export const UnifiedInboxView: React.FC<UnifiedInboxViewProps> = ({
                 value={formSearchQuery}
                 onChange={(e) => setFormSearchQuery(e.target.value)}
                 placeholder="回答者名・会社名・メール検索..."
-                className="w-full pl-8 pr-3 py-1.5 rounded-lg border border-slate-700 bg-slate-950 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-blue-500"
+                className="w-full pl-8 pr-3 py-1.5 rounded-lg border border-slate-200 bg-white text-xs text-slate-900 placeholder-slate-400 focus:outline-none focus:border-purple-500"
               />
             </div>
           </div>
 
           {/* Submissions List */}
           {loadingSubmissions ? (
-            <div className="p-12 text-center text-sm text-slate-400 rounded-2xl border border-slate-800 bg-slate-900">
-              <RefreshCw className="w-6 h-6 animate-spin mx-auto text-blue-400 mb-2" />
+            <div className="p-12 text-center text-sm text-slate-500 rounded-2xl border border-slate-200 bg-white shadow-xs">
+              <RefreshCw className="w-6 h-6 animate-spin mx-auto text-purple-600 mb-2" />
               回答データを読み込み中...
             </div>
           ) : visibleSubmissions.length === 0 ? (
-            <div className="p-12 text-center rounded-2xl border border-slate-800 bg-slate-900 text-slate-400">
-              <FileText className="w-10 h-10 mx-auto text-slate-600 mb-2" />
-              <p className="text-sm font-medium text-slate-300">該当する回答データはありません。</p>
+            <div className="p-12 text-center rounded-2xl border border-slate-200 bg-white text-slate-500 shadow-xs">
+              <FileText className="w-10 h-10 mx-auto text-slate-300 mb-2" />
+              <p className="text-sm font-semibold text-slate-800">該当する回答データはありません。</p>
               <p className="text-xs text-slate-500 mt-1">
                 HPや公開診断フォームからの回答を受信すると、ここに即時蓄積されます。
               </p>
               <button
                 onClick={() => onNavigateTab('mst_diagnoses')}
-                className="mt-4 px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-xs text-blue-300 border border-slate-700 transition"
+                className="mt-4 px-3 py-1.5 rounded-lg bg-purple-50 hover:bg-purple-100 text-xs text-purple-700 font-semibold border border-purple-200 transition cursor-pointer"
               >
                 フォーム・診断の公開設定を確認する
               </button>
@@ -698,17 +698,17 @@ export const UnifiedInboxView: React.FC<UnifiedInboxViewProps> = ({
                 const isContracted = sub.company_id ? customerCompanyIds.has(sub.company_id) : false;
                 const statusBadge =
                   sub.status === 'received'
-                    ? { label: '未対応（新規受付）', color: 'bg-amber-500/20 text-amber-300 border-amber-500/40' }
+                    ? { label: '未対応（新規受付）', color: 'bg-amber-50 text-amber-800 border-amber-300' }
                     : sub.status === 'reviewing'
-                    ? { label: '対応中', color: 'bg-blue-500/20 text-blue-300 border-blue-500/40' }
+                    ? { label: '対応中', color: 'bg-purple-50 text-purple-700 border-purple-300' }
                     : sub.status === 'completed'
-                    ? { label: '完了', color: 'bg-emerald-500/20 text-emerald-300 border-emerald-500/40' }
-                    : { label: '対象外', color: 'bg-zinc-700/30 text-zinc-400 border-zinc-700' };
+                    ? { label: '完了', color: 'bg-emerald-50 text-emerald-800 border-emerald-300' }
+                    : { label: '対象外', color: 'bg-slate-100 text-slate-600 border-slate-300' };
 
                 return (
                   <div
                     key={sub.id}
-                    className="rounded-2xl border border-slate-800 bg-slate-900 p-5 hover:border-slate-700 transition-all shadow-sm"
+                    className="rounded-2xl border border-slate-200 bg-white p-5 hover:border-purple-300 transition-all shadow-xs"
                   >
                     {/* Upper row: Respondent info & status */}
                     <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-3">
@@ -718,31 +718,31 @@ export const UnifiedInboxView: React.FC<UnifiedInboxViewProps> = ({
                             {statusBadge.label}
                           </span>
                           {isContracted ? (
-                            <span className="text-[11px] px-2.5 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 font-semibold flex items-center gap-1">
-                              <CheckCircle2 className="w-3 h-3 text-emerald-400" />
+                            <span className="text-[11px] px-2.5 py-0.5 rounded-full bg-emerald-50 text-emerald-800 border border-emerald-300 font-semibold flex items-center gap-1">
+                              <CheckCircle2 className="w-3 h-3 text-emerald-600" />
                               契約中クライアント
                             </span>
                           ) : (
-                            <span className="text-[11px] px-2 py-0.5 rounded-full bg-blue-500/20 text-blue-300 border border-blue-500/30 font-medium">
+                            <span className="text-[11px] px-2 py-0.5 rounded-full bg-purple-50 text-purple-700 border border-purple-200 font-medium">
                               反響リード
                             </span>
                           )}
-                          <span className="text-sm font-bold text-white">
+                          <span className="text-sm font-bold text-slate-900">
                             {sub.respondent_name || sub.respondent_email || '回答者（氏名未入力）'}
                           </span>
                           {sub.respondent_company_name && (
-                            <span className="text-xs px-2 py-0.5 rounded bg-slate-800 text-slate-300 border border-slate-700">
+                            <span className="text-xs px-2 py-0.5 rounded bg-slate-100 text-slate-700 border border-slate-200 font-medium">
                               {sub.respondent_company_name}
                             </span>
                           )}
-                          <span className="text-xs text-slate-400">
+                          <span className="text-xs text-slate-500">
                             受付日時: {new Date(sub.submitted_at).toLocaleString('ja-JP')}
                           </span>
                         </div>
 
-                        <div className="flex flex-wrap items-center gap-2 text-xs text-slate-400 mt-1.5">
+                        <div className="flex flex-wrap items-center gap-2 text-xs text-slate-500 mt-1.5">
                           <span>
-                            フォーム: <strong className="text-slate-200">{form?.name || sub.form_id.slice(0, 8)}</strong>
+                            フォーム: <strong className="text-slate-800">{form?.name || sub.form_id.slice(0, 8)}</strong>
                           </span>
                           {sub.respondent_email && (
                             <>
@@ -753,7 +753,7 @@ export const UnifiedInboxView: React.FC<UnifiedInboxViewProps> = ({
                           {sub.score != null && (
                             <>
                               <span>·</span>
-                              <span className="text-sky-300 font-semibold">診断スコア: {sub.score}点</span>
+                              <span className="text-purple-700 font-semibold">診断スコア: {sub.score}点</span>
                             </>
                           )}
                         </div>
@@ -767,7 +767,7 @@ export const UnifiedInboxView: React.FC<UnifiedInboxViewProps> = ({
                           onChange={(e) =>
                             void handleUpdateSubmissionStatus(sub, e.target.value as SubmissionItem['status'])
                           }
-                          className="px-2.5 py-1.5 rounded-lg border border-slate-700 bg-slate-950 text-xs text-white focus:outline-none focus:border-blue-500"
+                          className="px-2.5 py-1.5 rounded-lg border border-slate-200 bg-white text-xs text-slate-800 focus:outline-none focus:border-purple-500 shadow-xs"
                         >
                           <option value="received">未対応（受付）</option>
                           <option value="reviewing">対応中</option>
@@ -780,10 +780,10 @@ export const UnifiedInboxView: React.FC<UnifiedInboxViewProps> = ({
                           <button
                             type="button"
                             onClick={() => onOpenCustomerWorkspace?.(sub.company_id!)}
-                            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-emerald-950/70 hover:bg-emerald-900/70 text-xs font-semibold text-emerald-300 border border-emerald-600/50 shadow transition cursor-pointer"
+                            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-emerald-50 hover:bg-emerald-100 text-xs font-semibold text-emerald-800 border border-emerald-300 shadow-xs transition cursor-pointer"
                             title="契約顧客カルテ・支援タスクを開く"
                           >
-                            <Building2 className="w-3.5 h-3.5 text-emerald-400" />
+                            <Building2 className="w-3.5 h-3.5 text-emerald-600" />
                             <span>顧客カルテ</span>
                           </button>
                         )}
@@ -792,7 +792,7 @@ export const UnifiedInboxView: React.FC<UnifiedInboxViewProps> = ({
                         {!sub.lead_id ? (
                           <button
                             onClick={() => void handleConvertToLead(sub)}
-                            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-xs font-semibold text-white shadow transition cursor-pointer"
+                            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-purple-600 hover:bg-purple-700 text-xs font-semibold text-white shadow-xs transition cursor-pointer"
                             title="この回答内容を営業リード台帳に登録"
                           >
                             <UserCheck className="w-3.5 h-3.5" />
@@ -801,9 +801,9 @@ export const UnifiedInboxView: React.FC<UnifiedInboxViewProps> = ({
                         ) : (
                           <button
                             onClick={() => onNavigateTab('leads')}
-                            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-indigo-950/60 hover:bg-indigo-900/60 text-xs font-semibold text-indigo-300 border border-indigo-700/60 transition cursor-pointer"
+                            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-purple-50 hover:bg-purple-100 text-xs font-semibold text-purple-700 border border-purple-200 transition cursor-pointer"
                           >
-                            <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" />
+                            <CheckCircle2 className="w-3.5 h-3.5 text-purple-600" />
                             <span>リード登録済</span>
                           </button>
                         )}
@@ -821,26 +821,26 @@ export const UnifiedInboxView: React.FC<UnifiedInboxViewProps> = ({
                             }
                             onNavigateTab(isContracted ? 'customer_meeting_invitations' : 'deal_invitations');
                           }}
-                          className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-xs font-medium text-slate-200 border border-slate-700 transition cursor-pointer"
+                          className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-white hover:bg-slate-50 text-xs font-medium text-slate-700 border border-slate-200 shadow-xs transition cursor-pointer"
                         >
-                          <Calendar className="w-3.5 h-3.5 text-blue-400" />
+                          <Calendar className="w-3.5 h-3.5 text-purple-600" />
                           <span>{isContracted ? '面談案内' : '商談案内'}</span>
                         </button>
 
                         {/* Open Diagnosis / Report */}
                         <button
                           onClick={() => onNavigateTab('mst_diagnoses')}
-                          className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-emerald-950/60 hover:bg-emerald-900/60 text-xs font-medium text-emerald-300 border border-emerald-700/60 transition"
+                          className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-emerald-50 hover:bg-emerald-100 text-xs font-medium text-emerald-800 border border-emerald-200 transition cursor-pointer"
                           title="社内診断・AIレポート作成へ"
                         >
-                          <FileText className="w-3.5 h-3.5 text-emerald-400" />
+                          <FileText className="w-3.5 h-3.5 text-emerald-600" />
                           <span>診断・レポートへ</span>
                         </button>
 
                         {/* Expand Details Toggle */}
                         <button
                           onClick={() => setExpandedSubmissionId(isExpanded ? null : sub.id)}
-                          className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-xs text-slate-300 transition"
+                          className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-white hover:bg-slate-50 text-xs text-slate-700 border border-slate-200 shadow-xs transition cursor-pointer"
                         >
                           <span>{isExpanded ? '回答を閉じる' : '回答を見る'}</span>
                           {isExpanded ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
@@ -850,10 +850,10 @@ export const UnifiedInboxView: React.FC<UnifiedInboxViewProps> = ({
 
                     {/* Collapsible Answer Questionnaire Details */}
                     {isExpanded && (
-                      <div className="mt-4 pt-4 border-t border-slate-800 space-y-4">
-                        <div className="bg-slate-950 rounded-xl p-4 border border-slate-800">
-                          <h4 className="text-xs font-bold text-slate-300 mb-3 flex items-center gap-1.5">
-                            <Sparkles className="w-3.5 h-3.5 text-sky-400" />
+                      <div className="mt-4 pt-4 border-t border-slate-200 space-y-4">
+                        <div className="bg-slate-50 rounded-xl p-4 border border-slate-200">
+                          <h4 className="text-xs font-bold text-slate-700 mb-3 flex items-center gap-1.5">
+                            <Sparkles className="w-3.5 h-3.5 text-purple-600" />
                             <span>送信された設問回答一覧:</span>
                           </h4>
 
@@ -888,12 +888,12 @@ export const UnifiedInboxView: React.FC<UnifiedInboxViewProps> = ({
                                   return (
                                     <div
                                       key={key}
-                                      className="grid sm:grid-cols-[220px_1fr] gap-2 p-2.5 rounded-lg bg-slate-900 border border-slate-800/80 text-xs"
+                                      className="grid sm:grid-cols-[220px_1fr] gap-2 p-3 rounded-lg bg-white border border-slate-200 text-xs"
                                     >
-                                      <div className="font-medium text-slate-400 break-words">
+                                      <div className="font-semibold text-slate-600 break-words">
                                         {questionLabel}
                                       </div>
-                                      <div className="text-slate-100 whitespace-pre-wrap break-words font-sans">
+                                      <div className="text-slate-900 whitespace-pre-wrap break-words font-sans">
                                         {formattedValue}
                                       </div>
                                     </div>
@@ -911,9 +911,9 @@ export const UnifiedInboxView: React.FC<UnifiedInboxViewProps> = ({
                             defaultValue={sub.reviewer_memo || ''}
                             onBlur={(e) => void handleSaveMemo(sub.id, e.target.value)}
                             placeholder="社内対応メモを入力（フォーカスが外れると自動保存されます）"
-                            className="flex-1 px-3 py-1.5 rounded-lg border border-slate-700 bg-slate-950 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-blue-500"
+                            className="flex-1 px-3 py-1.5 rounded-lg border border-slate-200 bg-white text-xs text-slate-900 placeholder-slate-400 focus:outline-none focus:border-purple-500"
                           />
-                          <span className="text-[11px] text-slate-500 self-center">
+                          <span className="text-[11px] text-slate-400 self-center">
                             自動保存済み
                           </span>
                         </div>
@@ -930,9 +930,9 @@ export const UnifiedInboxView: React.FC<UnifiedInboxViewProps> = ({
       {/* 2. LINE INBOX & INDIVIDUAL CHAT */}
       {activeChannel === 'line' && (
         <div className="space-y-4">
-          <div className="flex flex-wrap items-center justify-between gap-3 p-3.5 rounded-xl border border-emerald-500/30 bg-emerald-950/20 text-xs text-slate-300">
+          <div className="flex flex-wrap items-center justify-between gap-3 p-4 rounded-xl border border-emerald-200 bg-emerald-50/70 text-xs text-emerald-900">
             <div className="flex items-center gap-2">
-              <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
+              <span className="w-2 h-2 rounded-full bg-emerald-600 animate-pulse" />
               <span>
                 LINE公式アカウントの1:1個別チャット画面です。友だちへの個別返信やメッセージ履歴を閲覧できます。
               </span>
@@ -940,14 +940,14 @@ export const UnifiedInboxView: React.FC<UnifiedInboxViewProps> = ({
             <div className="flex items-center gap-2">
               <button
                 onClick={() => onNavigateTab('contacts')}
-                className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-slate-800/80 hover:bg-slate-700 text-emerald-300 hover:text-emerald-200 font-semibold transition"
+                className="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg bg-white hover:bg-emerald-50 text-emerald-800 text-xs font-semibold border border-emerald-200 shadow-xs transition cursor-pointer"
               >
-                <TagIcon className="w-3.5 h-3.5" />
+                <TagIcon className="w-3.5 h-3.5 text-emerald-600" />
                 <span>友だち・タグ管理</span>
               </button>
               <button
                 onClick={() => onNavigateTab('marketing_automation')}
-                className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-emerald-600/20 hover:bg-emerald-600/30 text-emerald-300 hover:text-emerald-200 font-semibold border border-emerald-500/30 transition"
+                className="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-semibold shadow-xs transition cursor-pointer"
                 title="マーケティング自動化のLINE設定へ"
               >
                 <Sparkles className="w-3.5 h-3.5" />
@@ -967,18 +967,18 @@ export const UnifiedInboxView: React.FC<UnifiedInboxViewProps> = ({
       {/* 3. EMAIL INBOX */}
       {activeChannel === 'email' && (
         <div className="space-y-4">
-          <div className="flex items-center justify-between p-3.5 rounded-xl border border-indigo-500/30 bg-indigo-950/20 text-xs text-slate-300">
+          <div className="flex items-center justify-between p-4 rounded-xl border border-purple-200 bg-purple-50/70 text-xs text-purple-900">
             <div className="flex items-center gap-2">
-              <span className="w-2 h-2 rounded-full bg-indigo-400" />
+              <span className="w-2 h-2 rounded-full bg-purple-600" />
               <span>
                 受信用メールアドレス宛に届いたお問い合わせやアウトリーチ返信を閲覧・管理します。
               </span>
             </div>
             <button
               onClick={() => onNavigateTab('communication_send')}
-              className="inline-flex items-center gap-1 text-indigo-300 hover:text-indigo-200 font-semibold"
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-white hover:bg-purple-50 text-purple-700 text-xs font-semibold border border-purple-200 shadow-xs transition cursor-pointer"
             >
-              <Send className="w-3.5 h-3.5" />
+              <Send className="w-3.5 h-3.5 text-purple-600" />
               <span>送信センター（返信・商談案内）を開く</span>
             </button>
           </div>
@@ -990,9 +990,9 @@ export const UnifiedInboxView: React.FC<UnifiedInboxViewProps> = ({
       {/* 4. SOCIAL DM STUDIO */}
       {activeChannel === 'social_dm' && (
         <div className="space-y-4">
-          <div className="flex flex-wrap items-center justify-between gap-3 p-3.5 rounded-xl border border-purple-500/30 bg-purple-950/20 text-xs text-slate-300">
+          <div className="flex flex-wrap items-center justify-between gap-3 p-4 rounded-xl border border-purple-200 bg-purple-50/70 text-xs text-purple-900">
             <div className="flex items-center gap-2">
-              <span className="w-2 h-2 rounded-full bg-purple-400 animate-pulse" />
+              <span className="w-2 h-2 rounded-full bg-purple-600 animate-pulse" />
               <span>
                 SNSから届いたDM・問い合わせの受信トレイです。テンプレ選択や手動返信、CRM見込み客登録を行えます。
               </span>
@@ -1005,7 +1005,7 @@ export const UnifiedInboxView: React.FC<UnifiedInboxViewProps> = ({
                 } catch {}
                 onNavigateTab('ai_acquisition', { acquisitionTab: 'social_studio', studioMode: 'dm_sales' });
               }}
-              className="inline-flex items-center gap-1.5 px-3 py-1 rounded-lg bg-slate-800/80 hover:bg-slate-700 text-purple-300 hover:text-purple-200 text-xs font-semibold border border-purple-500/30 transition cursor-pointer"
+              className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg bg-purple-600 hover:bg-purple-700 text-white text-xs font-semibold shadow-xs transition cursor-pointer"
             >
               <Send className="w-3.5 h-3.5" />
               <span>🎯 攻めのDM営業（リストアップ・テンプレ送信）へ</span>

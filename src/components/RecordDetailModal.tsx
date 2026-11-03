@@ -65,18 +65,21 @@ export const RecordDetailModal: React.FC<RecordDetailModalProps> = ({
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-xs animate-fade-in">
-      <div className="bg-white border border-slate-200 rounded-2xl max-w-2xl w-full shadow-2xl overflow-hidden flex flex-col max-h-[90vh]">
+    <div className="fixed inset-0 z-50 flex justify-end bg-slate-900/40 backdrop-blur-xs transition-opacity animate-fade-in" onClick={onClose}>
+      <div 
+        className="bg-white border-l border-slate-200 w-full max-w-2xl h-full shadow-2xl flex flex-col overflow-hidden animate-slide-in-right"
+        onClick={(e) => e.stopPropagation()}
+      >
         {/* Header */}
-        <div className="px-6 py-4 border-b border-slate-200 flex items-center justify-between bg-white sticky top-0">
+        <div className="px-6 py-4 border-b border-slate-200 flex items-center justify-between bg-white sticky top-0 z-10">
           <div className="flex items-center gap-2.5">
             <div className="p-2 bg-purple-50 border border-purple-200 rounded-xl text-purple-700">
               <Building2 className="w-5 h-5" />
             </div>
             <div>
               <div className="flex items-center gap-2">
-                <h2 className="text-lg font-bold text-slate-900">{config.label} 詳細</h2>
-                <span className="text-xs px-2 py-0.5 rounded-full bg-slate-100 text-slate-600 font-mono">
+                <h2 className="text-lg font-bold text-slate-900">{config.label} 詳細ドロワー</h2>
+                <span className="text-xs px-2.5 py-0.5 rounded-full bg-purple-50 text-purple-700 border border-purple-200 font-mono">
                   ID: {record.id}
                 </span>
               </div>
@@ -85,7 +88,8 @@ export const RecordDetailModal: React.FC<RecordDetailModalProps> = ({
           </div>
           <button
             onClick={onClose}
-            className="p-1.5 rounded-lg text-slate-400 hover:text-slate-700 hover:bg-slate-100 transition-colors"
+            className="p-1.5 rounded-lg text-slate-400 hover:text-slate-700 hover:bg-slate-100 transition-colors cursor-pointer"
+            title="閉じる"
           >
             <X className="w-5 h-5" />
           </button>

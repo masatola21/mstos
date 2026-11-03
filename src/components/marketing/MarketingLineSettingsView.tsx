@@ -137,33 +137,33 @@ export const MarketingLineSettingsView: React.FC<MarketingLineSettingsViewProps>
   return (
     <div className="space-y-6">
       {notice && (
-        <div role="status" className="rounded-xl border border-emerald-500/30 bg-emerald-500/10 px-4 py-3 text-sm text-emerald-200">
+        <div role="status" className="rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-800 font-medium">
           {notice}
         </div>
       )}
       {error && (
-        <div role="alert" className="rounded-xl border border-rose-500/30 bg-rose-500/10 px-4 py-3 text-sm text-rose-200">
+        <div role="alert" className="rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-800 font-medium">
           {error}
         </div>
       )}
 
       {/* ─── 友だち追加ウェルカムFlexメッセージ（導線フローで一元管理） ─── */}
-      <section className="rounded-2xl border border-emerald-500/30 bg-gradient-to-r from-emerald-950/40 via-slate-900 to-slate-900 p-5 shadow-lg">
+      <section className="rounded-2xl border border-emerald-200 bg-emerald-50/70 p-6 shadow-xs">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
           <div className="flex items-start gap-3">
-            <span className="p-2.5 rounded-xl bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 shrink-0 mt-0.5">
+            <span className="p-2.5 rounded-xl bg-emerald-100 text-emerald-700 border border-emerald-200 shrink-0 mt-0.5">
               <MessageSquare className="h-5 w-5" />
             </span>
             <div>
               <div className="flex items-center gap-2">
-                <span className="px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 text-xs font-bold border border-emerald-500/30">
+                <span className="px-2.5 py-0.5 rounded-full bg-emerald-100 text-emerald-800 text-xs font-bold border border-emerald-300">
                   📱 友だち追加時 自動送信（Flex）
                 </span>
-                <span className="text-xs text-slate-400">一元管理：導線フロー連動</span>
+                <span className="text-xs text-slate-500">一元管理：導線フロー連動</span>
               </div>
-              <h2 className="text-base font-bold text-white mt-1">友だち追加ウェルカムメッセージ</h2>
-              <p className="text-xs text-slate-300 mt-1 max-w-2xl leading-relaxed">
-                友だち追加（およびブロック解除）時に即時送信されるFlexメッセージや、3大ご相談メニュー（診断・個別相談・介護開業）の分岐は、設定の二重化を防ぐため「<strong className="text-emerald-300">🗺️ 導線フロー ＆ シナリオ管理</strong>」で一元管理されています。
+              <h2 className="text-base font-bold text-slate-900 mt-1">友だち追加ウェルカムメッセージ</h2>
+              <p className="text-xs text-slate-600 mt-1 max-w-2xl leading-relaxed">
+                友だち追加（およびブロック解除）時に即時送信されるFlexメッセージや、3大ご相談メニュー（診断・個別相談・介護開業）の分岐は、設定の二重化を防ぐため「<strong className="text-emerald-800 font-semibold">🗺️ 導線フロー ＆ シナリオ管理</strong>」で一元管理されています。
               </p>
             </div>
           </div>
@@ -171,7 +171,7 @@ export const MarketingLineSettingsView: React.FC<MarketingLineSettingsViewProps>
             <button
               type="button"
               onClick={onNavigateToWelcomeFlow}
-              className="inline-flex items-center gap-2 px-4 py-2.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl text-xs font-bold transition shadow-md cursor-pointer shrink-0 self-start sm:self-auto"
+              className="inline-flex items-center gap-2 px-4 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold transition shadow-xs cursor-pointer shrink-0 self-start sm:self-auto"
             >
               <span>🗺️ 導線フローでウェルカム文面を編集</span>
               <ArrowRight className="h-4 w-4" />
@@ -181,34 +181,34 @@ export const MarketingLineSettingsView: React.FC<MarketingLineSettingsViewProps>
       </section>
 
       {/* ─── LINEリッチメニュー ─── */}
-      <section className="space-y-4 rounded-2xl border border-slate-800 bg-slate-900 p-5 shadow-xl">
+      <section className="space-y-4 rounded-2xl border border-slate-200 bg-white p-6 shadow-xs">
         <div>
-          <h2 className="text-xl font-bold text-white">LINEリッチメニュー</h2>
-          <p className="mt-1 text-sm text-slate-400">
+          <h2 className="text-xl font-bold text-slate-900">LINEリッチメニュー</h2>
+          <p className="mt-1 text-sm text-slate-500">
             画像とタッチ領域のレイアウトを選び、各領域の動作を設定します。「LINEに反映」で公式アカウント全体の既定メニューが切り替わります。
           </p>
         </div>
-        <div className="grid gap-4 lg:grid-cols-2">
+        <div className="grid gap-6 lg:grid-cols-2">
           <div className="space-y-3">
-            <label className="block text-xs text-slate-300">
+            <label className="block text-xs font-semibold text-slate-700">
               メニュー名
               <input
                 maxLength={300}
                 value={title}
                 onChange={(e) => setTitle(e.target.value)}
-                className="mt-1 w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-white"
+                className="mt-1 w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 shadow-xs focus:outline-none focus:border-emerald-500"
               />
             </label>
-            <label className="block text-xs text-slate-300">
+            <label className="block text-xs font-semibold text-slate-700">
               開閉バーの表示
               <input
                 maxLength={14}
                 value={chatBarText}
                 onChange={(e) => setChatBarText(e.target.value)}
-                className="mt-1 w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-white"
+                className="mt-1 w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 shadow-xs focus:outline-none focus:border-emerald-500"
               />
             </label>
-            <label className="block text-xs text-slate-300">
+            <label className="block text-xs font-semibold text-slate-700">
               タッチ領域のレイアウト
               <select
                 value={layout}
@@ -220,7 +220,7 @@ export const MarketingLineSettingsView: React.FC<MarketingLineSettingsViewProps>
                     setActions(initial(config.columns * config.rows));
                   }
                 }}
-                className="mt-1 w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-white"
+                className="mt-1 w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 shadow-xs focus:outline-none focus:border-emerald-500"
               >
                 {layouts.map((item) => (
                   <option key={item.id} value={item.id}>
@@ -239,14 +239,14 @@ export const MarketingLineSettingsView: React.FC<MarketingLineSettingsViewProps>
             <button
               type="button"
               onClick={() => fileRef.current?.click()}
-              className="w-full rounded-lg border border-dashed border-slate-600 px-4 py-5 text-sm text-slate-300 hover:bg-slate-800"
+              className="w-full rounded-xl border border-dashed border-slate-300 bg-slate-50/50 px-4 py-5 text-sm text-slate-600 hover:bg-slate-100 transition cursor-pointer"
             >
               メニュー画像を選択（PNG/JPEG、1MB以下）
             </button>
-            <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+            <div className="grid grid-cols-1 gap-2.5 sm:grid-cols-2">
               {actions.map((a, i) => (
-                <div key={i} className="rounded-lg border border-slate-800 p-3">
-                  <div className="mb-2 text-xs font-semibold text-white">タッチ領域 {i + 1}</div>
+                <div key={i} className="rounded-xl border border-slate-200 bg-slate-50/70 p-3 shadow-xs">
+                  <div className="mb-2 text-xs font-bold text-slate-800">タッチ領域 {i + 1}</div>
                   <input
                     value={a.label}
                     maxLength={20}
@@ -254,7 +254,7 @@ export const MarketingLineSettingsView: React.FC<MarketingLineSettingsViewProps>
                       setActions((v) => v.map((x, j) => (j === i ? { ...x, label: e.target.value } : x)))
                     }
                     placeholder="表示名"
-                    className="mb-2 w-full rounded border border-slate-700 bg-slate-950 px-2 py-1.5 text-xs text-white"
+                    className="mb-2 w-full rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 text-xs text-slate-900 shadow-xs focus:outline-none focus:border-emerald-500"
                   />
                   <select
                     value={a.type}
@@ -263,7 +263,7 @@ export const MarketingLineSettingsView: React.FC<MarketingLineSettingsViewProps>
                         v.map((x, j) => (j === i ? { ...x, type: e.target.value as Action['type'] } : x))
                       )
                     }
-                    className="mb-2 w-full rounded border border-slate-700 bg-slate-950 px-2 py-1.5 text-xs text-white"
+                    className="mb-2 w-full rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 text-xs text-slate-900 shadow-xs focus:outline-none focus:border-emerald-500"
                   >
                     <option value="uri">URLを開く</option>
                     <option value="message">テキストを送る</option>
@@ -275,17 +275,17 @@ export const MarketingLineSettingsView: React.FC<MarketingLineSettingsViewProps>
                       setActions((v) => v.map((x, j) => (j === i ? { ...x, value: e.target.value } : x)))
                     }
                     placeholder={a.type === 'uri' ? 'https://example.com' : '送信するテキスト'}
-                    className="w-full rounded border border-slate-700 bg-slate-950 px-2 py-1.5 text-xs text-white"
+                    className="w-full rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 text-xs text-slate-900 shadow-xs focus:outline-none focus:border-emerald-500"
                   />
                 </div>
               ))}
             </div>
           </div>
           <div>
-            <div className="mb-2 text-xs font-semibold text-slate-300">
+            <div className="mb-2 text-xs font-semibold text-slate-700">
               プレビュー（{selectedLayout.label}）
             </div>
-            <div className="relative aspect-[2500/1686] overflow-hidden rounded-xl bg-slate-950">
+            <div className="relative aspect-[2500/1686] overflow-hidden rounded-xl bg-slate-100 border border-slate-200 shadow-inner">
               {image && (
                 <img
                   src={image.url}
@@ -303,36 +303,39 @@ export const MarketingLineSettingsView: React.FC<MarketingLineSettingsViewProps>
                 {actions.map((a, i) => (
                   <div
                     key={i}
-                    className="flex items-center justify-center border border-white/50 bg-indigo-950/20 text-center text-xs font-bold text-white [text-shadow:0_1px_3px_#000]"
+                    className="flex items-center justify-center border border-white/60 bg-purple-900/20 text-center text-xs font-bold text-white [text-shadow:0_1px_3px_#000]"
                   >
                     {a.label}
                   </div>
                 ))}
               </div>
               {!image && (
-                <div className="absolute inset-0 flex items-center justify-center text-sm text-slate-500">
+                <div className="absolute inset-0 flex items-center justify-center text-sm text-slate-400">
                   画像プレビュー
                 </div>
               )}
             </div>
-            <p className="mt-2 text-[11px] text-slate-500">
+            <p className="mt-2 text-[11px] text-slate-400">
               画像は2500×1686 pxです。選択したレイアウトに合わせて領域を配置します。
             </p>
             {currentId && (
-              <p className="mt-2 break-all text-xs text-emerald-300">
+              <p className="mt-2 break-all text-xs text-emerald-700 font-medium">
                 現在のリッチメニューID: {currentId}
               </p>
             )}
           </div>
         </div>
-        <button
-          disabled={busy}
-          onClick={() => void apply()}
-          className="rounded-lg bg-green-700 px-4 py-2 text-sm font-semibold text-white disabled:opacity-50 cursor-pointer"
-        >
-          {busy ? 'LINEへ反映中…' : 'LINEに反映'}
-        </button>
+        <div className="pt-2 border-t border-slate-100">
+          <button
+            disabled={busy}
+            onClick={() => void apply()}
+            className="rounded-xl bg-emerald-600 hover:bg-emerald-700 px-5 py-2.5 text-sm font-bold text-white shadow-xs transition disabled:opacity-50 cursor-pointer"
+          >
+            {busy ? 'LINEへ反映中…' : 'LINEに反映'}
+          </button>
+        </div>
       </section>
     </div>
   );
+};
 };

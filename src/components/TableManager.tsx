@@ -32,7 +32,9 @@ import {
   Check,
   Trash2,
   Send,
-  GripVertical
+  GripVertical,
+  LayoutGrid,
+  List
 } from 'lucide-react';
 import { matrixService } from '../services/matrixService';
 
@@ -65,6 +67,7 @@ export const TableManager: React.FC<TableManagerProps> = ({
   const [draggedProductId, setDraggedProductId] = useState<string | null>(null);
   const [dragOverProductId, setDragOverProductId] = useState<string | null>(null);
   const [reorderNotice, setReorderNotice] = useState<string | null>(null);
+  const [viewMode, setViewMode] = useState<'table' | 'kanban'>('table');
 
   // Modals state
   const [selectedRecord, setSelectedRecord] = useState<any | null>(null);
@@ -305,6 +308,26 @@ export const TableManager: React.FC<TableManagerProps> = ({
     window.setTimeout(() => setSuccessBanner(null), 4000);
   };
 
+  const handleQuickStatusChange = async (record: any, newStatus: string) => {
+    const statusField = currentTable === 'deals' ? 'proposal_status' : currentTable === 'customers' ? 'contract_status' : 'status';
+    setData((current) =>
+      current.map((item) =>
+        String(item.id) === String(record.id) ? { ...item, [statusField]: newStatus } : item
+      )
+    );
+    const result = await updateRecord(currentTable, record.id, {
+      ...record,
+      [statusField]: newStatus,
+    });
+    if (result.error) {
+      setError(result.error);
+      await loadData();
+      return;
+    }
+    setSuccessBanner(`「${record.company_name || record.proposal_plan_name || record.id}」の状態を「${newStatus}」に更新しました。`);
+    window.setTimeout(() => setSuccessBanner(null), 3000);
+  };
+
   // ステータス列のユニーク候補を取得（フィルタ用）
   const statusOptions = Array.from(
     new Set(
@@ -313,6 +336,22 @@ export const TableManager: React.FC<TableManagerProps> = ({
         .filter(Boolean)
     )
   );
+
+  // ステージ列（カンバン表示用）
+  const kanbanColumns = React.useMemo(() => {
+    const statusField = currentTable === 'deals' ? 'proposal_status' : currentTable === 'customers' ? 'contract_status' : 'status';
+    const defaultCols: Record<string, string[]> = {
+      deals: ['新規', '提案中', '見積提出', '成約', '失注', '保留'],
+      leads: ['新規', '資料請求', 'ヒアリング済', '商談化', '失注・対象外'],
+      prospects: ['未接触', 'アプローチ中', '検討中', '商談化', '保留'],
+      customers: ['active', '契約中', '更新中', '解約'],
+    };
+    const base = defaultCols[currentTable] || [];
+    const discovered = Array.from(
+      new Set(data.map((d) => d[statusField]).filter(Boolean))
+    );
+    return Array.from(new Set([...base, ...discovered]));
+  }, [currentTable, data]);
 
   return (
     <div className="space-y-6 animate-fade-in pb-12">
@@ -387,50 +426,122 @@ export const TableManager: React.FC<TableManagerProps> = ({
       </div>
 
       {/* Search and Filters Toolbar */}
-      <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3">
-        {/* Keyword Search Input */}
-        <div className="relative flex-1">
-          <Search className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
-          <input
-            type="text"
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            placeholder={`${config.label}内のキーワード、会社名、担当者、IDなどを検索...`}
-            className="w-full pl-9 pr-4 py-2 rounded-lg bg-white border border-slate-200 focus:border-purple-500 text-slate-800 text-xs placeholder:text-slate-400 outline-none shadow-2xs transition-colors"
-          />
-          {searchQuery && (
-            <button
-              onClick={() => setSearchQuery('')}
-              className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-slate-400 hover:text-slate-600"
-            >
-              クリア
-            </button>
+      <div className="space-y-3">
+        <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3">
+          {/* Keyword Search Input */}
+          <div className="relative flex-1">
+            <Search className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
+            <input
+              type="text"
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              placeholder={`${config.label}内のキーワード、会社名、担当者、IDなどを検索...`}
+              className="w-full pl-9 pr-4 py-2 rounded-lg bg-white border border-slate-200 focus:border-purple-500 text-slate-800 text-xs placeholder:text-slate-400 outline-none shadow-2xs transition-colors"
+            />
+            {searchQuery && (
+              <button
+                onClick={() => setSearchQuery('')}
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-slate-400 hover:text-slate-600 cursor-pointer"
+              >
+                クリア
+              </button>
+            )}
+          </div>
+
+          {/* View Mode Toggle (for pipeline tables) */}
+          {['deals', 'leads', 'prospects', 'customers'].includes(currentTable) && (
+            <div className="flex items-center bg-slate-100 p-0.5 rounded-lg border border-slate-200 shrink-0">
+              <button
+                type="button"
+                onClick={() => setViewMode('table')}
+                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs transition-colors cursor-pointer ${
+                  viewMode === 'table'
+                    ? 'bg-white text-purple-700 shadow-2xs font-bold'
+                    : 'text-slate-600 hover:text-slate-900 font-medium'
+                }`}
+                title="テーブル一覧表示"
+              >
+                <List className="w-3.5 h-3.5" />
+                <span>リスト</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => setViewMode('kanban')}
+                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs transition-colors cursor-pointer ${
+                  viewMode === 'kanban'
+                    ? 'bg-white text-purple-700 shadow-2xs font-bold'
+                    : 'text-slate-600 hover:text-slate-900 font-medium'
+                }`}
+                title="ステージ別パイプライン（カンバン表示）"
+              >
+                <LayoutGrid className="w-3.5 h-3.5" />
+                <span>パイプライン (カンバン)</span>
+              </button>
+            </div>
           )}
+
+          {/* Status Dropdown Filter */}
+          {statusOptions.length > 0 && (
+            <div className="flex items-center gap-2 shrink-0">
+              <span className="text-xs text-slate-500 whitespace-nowrap">状態:</span>
+              <select
+                value={statusFilter}
+                onChange={(e) => setStatusFilter(e.target.value)}
+                className="px-3 py-2 rounded-lg bg-white border border-slate-200 text-slate-700 text-xs outline-none focus:border-purple-500 shadow-2xs cursor-pointer"
+              >
+                <option value="ALL">すべて表示</option>
+                {statusOptions.map((st) => (
+                  <option key={st} value={st}>
+                    {st}
+                  </option>
+                ))}
+              </select>
+            </div>
+          )}
+
+          {/* Record Count Badge */}
+          <div className="text-xs text-slate-500 self-center whitespace-nowrap px-2 shrink-0">
+            表示: <strong className="text-purple-700 font-mono font-bold">{filteredData.length}</strong> / {data.length} 件
+          </div>
         </div>
 
-        {/* Status Dropdown Filter (if available) */}
+        {/* Quick Filter Status Pills */}
         {statusOptions.length > 0 && (
-          <div className="flex items-center gap-2">
-            <span className="text-xs text-slate-500 whitespace-nowrap">状態絞込:</span>
-            <select
-              value={statusFilter}
-              onChange={(e) => setStatusFilter(e.target.value)}
-              className="px-3 py-2 rounded-lg bg-white border border-slate-200 text-slate-700 text-xs outline-none focus:border-purple-500 shadow-2xs cursor-pointer"
+          <div className="flex items-center gap-1.5 overflow-x-auto pb-1 text-xs no-scrollbar">
+            <button
+              type="button"
+              onClick={() => setStatusFilter('ALL')}
+              className={`px-3 py-1 rounded-full text-xs transition-colors shrink-0 cursor-pointer ${
+                statusFilter === 'ALL'
+                  ? 'bg-purple-600 text-white font-bold shadow-xs'
+                  : 'bg-white text-slate-600 border border-slate-200 hover:bg-slate-50'
+              }`}
             >
-              <option value="ALL">すべて表示</option>
-              {statusOptions.map((st) => (
-                <option key={st} value={st}>
-                  {st}
-                </option>
-              ))}
-            </select>
+              すべて ({data.length})
+            </button>
+            {statusOptions.map((st) => {
+              const count = data.filter((d) => (d.status || d.proposal_status || d.contract_status) === st).length;
+              const isActive = statusFilter === st;
+              return (
+                <button
+                  key={st}
+                  type="button"
+                  onClick={() => setStatusFilter(isActive ? 'ALL' : st)}
+                  className={`px-3 py-1 rounded-full text-xs transition-colors shrink-0 border cursor-pointer ${
+                    isActive
+                      ? 'bg-purple-50 text-purple-700 border-purple-300 font-bold shadow-xs'
+                      : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-50'
+                  }`}
+                >
+                  <span>{st}</span>
+                  <span className={`ml-1.5 text-[10px] font-mono px-1.5 py-0.2 rounded-full ${isActive ? 'bg-purple-200/60 text-purple-800' : 'bg-slate-100 text-slate-500'}`}>
+                    {count}
+                  </span>
+                </button>
+              );
+            })}
           </div>
         )}
-
-        {/* Record Count Badge */}
-        <div className="text-xs text-slate-500 self-center whitespace-nowrap px-2">
-          表示: <strong className="text-slate-800 font-mono">{filteredData.length}</strong> / {data.length} 件
-        </div>
       </div>
 
       {/* Success Notification Banner */}
@@ -578,8 +689,162 @@ export const TableManager: React.FC<TableManagerProps> = ({
         </div>
       )}
 
-      {/* 5. Data View: Table on Desktop, Cards on Mobile */}
-      {!loading && !error && filteredData.length > 0 && (
+      {/* 5. Data View: Kanban Pipeline View */}
+      {!loading && !error && filteredData.length > 0 && viewMode === 'kanban' && ['deals', 'leads', 'prospects', 'customers'].includes(currentTable) && (
+        <div className="overflow-x-auto pb-4">
+          <div className="flex items-start gap-4 min-w-[900px]">
+            {kanbanColumns.map((colStatus) => {
+              const statusField = currentTable === 'deals' ? 'proposal_status' : currentTable === 'customers' ? 'contract_status' : 'status';
+              const columnRecords = filteredData.filter((item) => (item[statusField] || '') === colStatus);
+              const columnTotalAmount = currentTable === 'deals' 
+                ? columnRecords.reduce((acc, cur) => acc + (Number(cur.total_amount) || 0), 0)
+                : 0;
+
+              return (
+                <div key={colStatus} className="flex-1 min-w-[280px] max-w-[340px] bg-slate-50/70 border border-slate-200 rounded-2xl p-3 flex flex-col max-h-[calc(100vh-280px)]">
+                  {/* Column Header */}
+                  <div className="flex items-center justify-between pb-2.5 mb-2.5 border-b border-slate-200">
+                    <div className="flex items-center gap-1.5">
+                      <span className={`px-2.5 py-0.5 rounded-full text-[11px] font-bold border ${getStatusBadgeClass(colStatus)}`}>
+                        {colStatus}
+                      </span>
+                      <span className="text-xs font-mono font-semibold text-slate-500">
+                        {columnRecords.length}
+                      </span>
+                    </div>
+                    {columnTotalAmount > 0 && (
+                      <span className="text-[11px] font-mono font-bold text-purple-700">
+                        ¥{columnTotalAmount.toLocaleString()}
+                      </span>
+                    )}
+                  </div>
+
+                  {/* Cards container */}
+                  <div className="space-y-2.5 overflow-y-auto flex-1 pr-1">
+                    {columnRecords.map((item) => {
+                      const title = item.proposal_plan_name || item.company_name || item.company?.company_name || `レコード #${item.id}`;
+                      const subTitle = item.company?.company_name || (item.company_id ? `会社ID: ${item.company_id}` : undefined);
+                      const amount = item.total_amount ? Number(item.total_amount) : item.monthly_fee ? Number(item.monthly_fee) : null;
+                      const dateField = item.meeting_date || item.proposal_date || item.last_contacted_at || item.contract_start_date;
+
+                      return (
+                        <div
+                          key={item.id}
+                          onClick={() => handleOpenDetail(item)}
+                          className="bg-white border border-slate-200 hover:border-purple-300 rounded-xl p-3.5 shadow-2xs hover:shadow-xs transition-all cursor-pointer space-y-2.5 group"
+                        >
+                          <div className="flex items-start justify-between gap-2">
+                            <div>
+                              <div className="text-[10px] font-mono text-slate-400">ID: {item.id}</div>
+                              <h4 className="font-bold text-xs text-slate-900 group-hover:text-purple-700 transition-colors line-clamp-1">
+                                {title}
+                              </h4>
+                              {subTitle && (
+                                <div className="text-[11px] text-slate-500 flex items-center gap-1 mt-0.5">
+                                  <Building2 className="w-3 h-3 text-purple-600 shrink-0" />
+                                  <span className="truncate">{subTitle}</span>
+                                </div>
+                              )}
+                            </div>
+                          </div>
+
+                          {/* Amounts & Indicators */}
+                          <div className="flex items-center justify-between text-xs pt-1 border-t border-slate-100">
+                            {amount !== null ? (
+                              <div className="font-mono">
+                                <span className="font-bold text-slate-900">¥{amount.toLocaleString()}</span>
+                                <span className="text-[10px] text-purple-700 ml-1">
+                                  (込 ¥{Math.floor(amount * 1.1).toLocaleString()})
+                                </span>
+                              </div>
+                            ) : item.ai_score !== undefined && item.ai_score !== null ? (
+                              <span className="text-[11px] font-mono font-bold px-2 py-0.5 rounded-full bg-purple-50 text-purple-700 border border-purple-200">
+                                AI確度: {item.ai_score}点
+                              </span>
+                            ) : (
+                              <span className="text-[11px] text-slate-400 font-mono">-</span>
+                            )}
+
+                            {dateField && (
+                              <div className="flex items-center gap-1 text-[11px] text-slate-400 font-mono">
+                                <Calendar className="w-3 h-3" />
+                                <span>{String(dateField).split('T')[0]}</span>
+                              </div>
+                            )}
+                          </div>
+
+                          {/* Stage Dropdown & Action buttons */}
+                          <div className="flex items-center justify-between pt-1 border-t border-slate-100 gap-1.5" onClick={(e) => e.stopPropagation()}>
+                            <select
+                              value={item[statusField] || colStatus}
+                              onChange={(e) => void handleQuickStatusChange(item, e.target.value)}
+                              className="text-[10px] py-1 px-2 rounded-lg bg-slate-50 border border-slate-200 text-slate-700 outline-none hover:bg-slate-100 cursor-pointer"
+                              title="ステージを変更"
+                            >
+                              {kanbanColumns.map((st) => (
+                                <option key={st} value={st}>{st}</option>
+                              ))}
+                            </select>
+
+                            <div className="flex items-center gap-1">
+                              {currentTable === 'prospects' && (
+                                <button
+                                  type="button"
+                                  onClick={() => handleOpenTransition('prospect_to_lead', item)}
+                                  className="p-1 rounded bg-cyan-50 text-cyan-700 hover:bg-cyan-100 border border-cyan-200 text-[10px] font-semibold cursor-pointer"
+                                  title="リードへ進める"
+                                >
+                                  リード化
+                                </button>
+                              )}
+                              {currentTable === 'leads' && (
+                                <button
+                                  type="button"
+                                  onClick={() => handleOpenTransition('lead_to_deal', item)}
+                                  className="p-1 rounded bg-emerald-50 text-emerald-700 hover:bg-emerald-100 border border-emerald-200 text-[10px] font-semibold cursor-pointer"
+                                  title="商談を作成"
+                                >
+                                  商談化
+                                </button>
+                              )}
+                              {currentTable === 'deals' && (
+                                <button
+                                  type="button"
+                                  onClick={() => handleOpenTransition('deal_to_customer', item)}
+                                  className="p-1 rounded bg-pink-50 text-pink-700 hover:bg-pink-100 border border-pink-200 text-[10px] font-semibold cursor-pointer"
+                                  title="顧客として登録"
+                                >
+                                  成約登録
+                                </button>
+                              )}
+                              <button
+                                type="button"
+                                onClick={() => handleOpenDetail(item)}
+                                className="p-1 text-slate-400 hover:text-purple-700 hover:bg-purple-50 rounded cursor-pointer"
+                                title="詳細ドロワーを開く"
+                              >
+                                <Eye className="w-3.5 h-3.5" />
+                              </button>
+                            </div>
+                          </div>
+                        </div>
+                      );
+                    })}
+                    {columnRecords.length === 0 && (
+                      <div className="h-24 border border-dashed border-slate-200 rounded-xl flex items-center justify-center text-xs text-slate-400">
+                        該当なし
+                      </div>
+                    )}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
+      {/* 5. Data View: Table on Desktop, Cards on Mobile (When viewMode === 'table') */}
+      {!loading && !error && filteredData.length > 0 && (viewMode === 'table' || !['deals', 'leads', 'prospects', 'customers'].includes(currentTable)) && (
         <div className="space-y-4">
           {/* Desktop Table View */}
           <div className="hidden md:block bg-white border border-slate-200 rounded-2xl overflow-hidden shadow-xs">

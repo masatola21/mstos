@@ -195,24 +195,24 @@ export const FlowStepInspectorModal: React.FC<FlowStepInspectorModalProps> = ({
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-2 sm:p-4 bg-black/80 backdrop-blur-sm animate-fade-in">
-      <div className="bg-slate-900 border border-slate-700 rounded-2xl max-w-5xl w-full shadow-2xl overflow-hidden flex flex-col max-h-[92vh]">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-2 sm:p-4 bg-slate-900/60 backdrop-blur-xs animate-fade-in">
+      <div className="bg-white border border-slate-200 rounded-2xl max-w-5xl w-full shadow-2xl overflow-hidden flex flex-col max-h-[92vh]">
         {/* Header */}
-        <div className="px-6 py-4 border-b border-slate-800 flex items-center justify-between bg-slate-950">
+        <div className="px-6 py-4 border-b border-slate-200 flex items-center justify-between bg-slate-50/70">
           <div className="flex items-center gap-3">
-            <span className="p-2 bg-indigo-500/20 text-indigo-400 rounded-xl border border-indigo-500/30">
+            <span className="p-2 bg-purple-100 text-purple-700 rounded-xl border border-purple-200">
               <Sparkles className="w-5 h-5" />
             </span>
             <div>
               <div className="flex items-center gap-2">
-                <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-indigo-500/20 text-indigo-300 border border-indigo-500/30">
+                <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-purple-100 text-purple-800 border border-purple-200">
                   ステップ詳細設定 ＆ 事故防止インスペクター
                 </span>
-                <span className="text-[11px] text-slate-400">
-                  ID: <span className="font-mono text-slate-300">{scenario.id}</span>
+                <span className="text-[11px] text-slate-500">
+                  ID: <span className="font-mono text-slate-700 font-medium">{scenario.id}</span>
                 </span>
               </div>
-              <h3 className="text-base font-black text-white mt-0.5">
+              <h3 className="text-base font-bold text-slate-900 mt-0.5">
                 {name || 'ステップ設定'}
               </h3>
             </div>
@@ -222,7 +222,7 @@ export const FlowStepInspectorModal: React.FC<FlowStepInspectorModalProps> = ({
             <button
               type="button"
               onClick={onClose}
-              className="p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 transition cursor-pointer"
+              className="p-1.5 rounded-lg text-slate-400 hover:text-slate-700 hover:bg-slate-100 transition cursor-pointer"
             >
               <X className="w-5 h-5" />
             </button>
@@ -230,14 +230,14 @@ export const FlowStepInspectorModal: React.FC<FlowStepInspectorModalProps> = ({
         </div>
 
         {/* Tab Navigation */}
-        <div className="flex items-center border-b border-slate-800 bg-slate-950/80 px-6 gap-2 text-xs font-bold overflow-x-auto">
+        <div className="flex items-center border-b border-slate-200 bg-white px-6 gap-2 text-xs font-bold overflow-x-auto">
           <button
             type="button"
             onClick={() => setActiveTab('edit')}
             className={`py-3 px-3.5 border-b-2 flex items-center gap-2 transition cursor-pointer shrink-0 ${
               activeTab === 'edit'
-                ? 'border-indigo-500 text-indigo-300 bg-indigo-500/10'
-                : 'border-transparent text-slate-400 hover:text-slate-200'
+                ? 'border-purple-600 text-purple-700 bg-purple-50/60'
+                : 'border-transparent text-slate-500 hover:text-slate-800'
             }`}
           >
             <Layers className="w-4 h-4" />
@@ -249,11 +249,11 @@ export const FlowStepInspectorModal: React.FC<FlowStepInspectorModalProps> = ({
             onClick={() => setActiveTab('preview_message')}
             className={`py-3 px-3.5 border-b-2 flex items-center gap-2 transition cursor-pointer shrink-0 ${
               activeTab === 'preview_message'
-                ? 'border-emerald-500 text-emerald-300 bg-emerald-500/10'
-                : 'border-transparent text-slate-400 hover:text-slate-200'
+                ? 'border-emerald-600 text-emerald-800 bg-emerald-50/60'
+                : 'border-transparent text-slate-500 hover:text-slate-800'
             }`}
           >
-            <Smartphone className="w-4 h-4 text-emerald-400" />
+            <Smartphone className="w-4 h-4 text-emerald-600" />
             <span>② LINE/メール配信プレビュー</span>
           </button>
 
@@ -262,14 +262,14 @@ export const FlowStepInspectorModal: React.FC<FlowStepInspectorModalProps> = ({
             onClick={() => setActiveTab('inspect_form')}
             className={`py-3 px-3.5 border-b-2 flex items-center gap-2 transition cursor-pointer shrink-0 ${
               activeTab === 'inspect_form'
-                ? 'border-amber-500 text-amber-300 bg-amber-500/10'
-                : 'border-transparent text-slate-400 hover:text-slate-200'
+                ? 'border-amber-600 text-amber-800 bg-amber-50/60'
+                : 'border-transparent text-slate-500 hover:text-slate-800'
             }`}
           >
-            <ShieldCheck className="w-4 h-4 text-amber-400" />
+            <ShieldCheck className="w-4 h-4 text-amber-600" />
             <span>③ 連動フォーム・リンク安全点検</span>
             {detectedLinks.length > 0 && (
-              <span className="px-1.5 py-0.2 rounded-full bg-amber-500/20 text-amber-300 text-[10px]">
+              <span className="px-1.5 py-0.2 rounded-full bg-amber-100 text-amber-800 text-[10px]">
                 {detectedLinks.length}件検知
               </span>
             )}
@@ -280,44 +280,44 @@ export const FlowStepInspectorModal: React.FC<FlowStepInspectorModalProps> = ({
             onClick={() => setActiveTab('test_send')}
             className={`py-3 px-3.5 border-b-2 flex items-center gap-2 transition cursor-pointer shrink-0 ${
               activeTab === 'test_send'
-                ? 'border-purple-500 text-purple-300 bg-purple-500/10'
-                : 'border-transparent text-slate-400 hover:text-slate-200'
+                ? 'border-purple-600 text-purple-700 bg-purple-50/60'
+                : 'border-transparent text-slate-500 hover:text-slate-800'
             }`}
           >
-            <Send className="w-4 h-4 text-purple-400" />
+            <Send className="w-4 h-4 text-purple-600" />
             <span>④ 管理者テスト送信点検</span>
           </button>
         </div>
 
         {/* Tab Contents */}
-        <div className="flex-1 overflow-y-auto p-6 space-y-6">
+        <div className="flex-1 overflow-y-auto p-6 space-y-6 bg-slate-50/30">
           {/* TAB 1: Edit Details */}
           {activeTab === 'edit' && (
             <div className="space-y-6 text-xs">
               {/* Step Title & Trigger & Wait */}
-              <div className="p-4 bg-slate-950 rounded-xl border border-slate-800 space-y-4">
-                <div className="font-bold text-white text-sm flex items-center gap-2">
-                  <Clock className="w-4 h-4 text-indigo-400" />
+              <div className="p-5 bg-white rounded-2xl border border-slate-200 shadow-xs space-y-4">
+                <div className="font-bold text-slate-900 text-sm flex items-center gap-2">
+                  <Clock className="w-4 h-4 text-purple-600" />
                   <span>ステップ基本パラメータ</span>
                 </div>
 
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
                   <div className="md:col-span-2">
-                    <label className="text-slate-300 font-bold block mb-1">ステップ名称</label>
+                    <label className="text-slate-700 font-bold block mb-1">ステップ名称</label>
                     <input
                       type="text"
                       value={name}
                       onChange={(e) => setName(e.target.value)}
-                      className="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-white font-bold"
+                      className="w-full bg-white border border-slate-200 rounded-xl px-3 py-2 text-slate-900 font-bold shadow-xs focus:outline-none focus:border-purple-500"
                     />
                   </div>
 
                   <div>
-                    <label className="text-slate-300 font-bold block mb-1">配信チャネル</label>
+                    <label className="text-slate-700 font-bold block mb-1">配信チャネル</label>
                     <select
                       value={channel}
                       onChange={(e) => setChannel(e.target.value as MarketingChannel)}
-                      className="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-white font-bold cursor-pointer"
+                      className="w-full bg-white border border-slate-200 rounded-xl px-3 py-2 text-slate-900 font-bold cursor-pointer shadow-xs focus:outline-none focus:border-purple-500"
                     >
                       <option value="line">LINE公式アカウントのみ</option>
                       <option value="email">メールのみ</option>
@@ -326,9 +326,9 @@ export const FlowStepInspectorModal: React.FC<FlowStepInspectorModalProps> = ({
                   </div>
                 </div>
 
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-3 pt-2 border-t border-slate-800/80">
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-3 pt-3 border-t border-slate-100">
                   <div>
-                    <label className="text-slate-300 font-bold block mb-1">配信タイミング</label>
+                    <label className="text-slate-700 font-bold block mb-1">配信タイミング</label>
                     <div className="flex items-center gap-2">
                       <input
                         type="number"
@@ -336,35 +336,35 @@ export const FlowStepInspectorModal: React.FC<FlowStepInspectorModalProps> = ({
                         max={90}
                         value={waitDaysInput}
                         onChange={(e) => setWaitDaysInput(Math.max(0, parseInt(e.target.value) || 0))}
-                        className="w-20 bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-white font-mono text-center font-bold"
+                        className="w-20 bg-white border border-slate-200 rounded-xl px-3 py-2 text-slate-900 font-mono text-center font-bold shadow-xs focus:outline-none focus:border-purple-500"
                       />
-                      <span className="text-slate-300">
+                      <span className="text-slate-600 font-medium">
                         日後 {waitDaysInput === 0 ? '（即時配信）' : ''}
                       </span>
                     </div>
                   </div>
 
                   <div>
-                    <label className="text-slate-300 font-bold block mb-1">配信時間帯ガード</label>
+                    <label className="text-slate-700 font-bold block mb-1">配信時間帯ガード</label>
                     <input
                       type="text"
                       value={sendTimeWindow}
                       onChange={(e) => setSendTimeWindow(e.target.value)}
                       placeholder="09:00-20:00"
-                      className="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-white font-mono"
+                      className="w-full bg-white border border-slate-200 rounded-xl px-3 py-2 text-slate-900 font-mono shadow-xs focus:outline-none focus:border-purple-500"
                     />
-                    <span className="text-[10px] text-slate-500 mt-0.5 block">※夜間迷惑配信を自動抑止</span>
+                    <span className="text-[10px] text-slate-400 mt-0.5 block">※夜間迷惑配信を自動抑止</span>
                   </div>
 
                   <div>
-                    <label className="text-slate-300 font-bold block mb-1">自動配信ステータス</label>
+                    <label className="text-slate-700 font-bold block mb-1">自動配信ステータス</label>
                     <button
                       type="button"
                       onClick={() => setAutomationEnabled(!automationEnabled)}
-                      className={`w-full py-2 px-3 rounded-xl font-bold flex items-center justify-center gap-2 transition cursor-pointer ${
+                      className={`w-full py-2 px-3 rounded-xl font-bold flex items-center justify-center gap-2 transition cursor-pointer shadow-xs ${
                         automationEnabled
-                          ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/40'
-                          : 'bg-slate-800 text-slate-400 border border-slate-700'
+                          ? 'bg-emerald-50 text-emerald-800 border border-emerald-300'
+                          : 'bg-slate-100 text-slate-600 border border-slate-200'
                       }`}
                     >
                       <CheckCircle2 className="w-4 h-4" />
@@ -375,66 +375,66 @@ export const FlowStepInspectorModal: React.FC<FlowStepInspectorModalProps> = ({
               </div>
 
               {/* 🏷️ 共通タグマスター連動 ＆ 自動停止条件 */}
-              <div className="p-4 bg-slate-950 rounded-xl border border-indigo-500/30 space-y-4">
-                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-slate-800 pb-2">
+              <div className="p-5 bg-white rounded-2xl border border-purple-200 shadow-xs space-y-4">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-slate-100 pb-3">
                   <div className="flex items-center gap-2">
-                    <TagIcon className="w-4 h-4 text-indigo-400" />
-                    <span className="font-bold text-white text-sm">
+                    <TagIcon className="w-4 h-4 text-purple-600" />
+                    <span className="font-bold text-slate-900 text-sm">
                       🏷️ 共通タグマスター連動 ＆ 自動脱落（停止）ガード
                     </span>
                   </div>
-                  <span className="text-[10px] px-2 py-0.5 rounded bg-emerald-500/10 text-emerald-300 border border-emerald-500/20 font-bold">
+                  <span className="text-[10px] px-2.5 py-0.5 rounded-full bg-emerald-50 text-emerald-800 border border-emerald-200 font-bold">
                     CRM・LINE友だち管理とリアルタイム同期中
                   </span>
                 </div>
 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   {/* 自動停止・脱落条件 */}
-                  <div className="space-y-2 bg-slate-900/60 p-3 rounded-xl border border-slate-800">
-                    <span className="font-bold text-red-300 block flex items-center gap-1.5">
-                      <ShieldCheck className="w-3.5 h-3.5" />
+                  <div className="space-y-2.5 bg-slate-50 p-4 rounded-xl border border-slate-200">
+                    <span className="font-bold text-rose-800 block flex items-center gap-1.5">
+                      <ShieldCheck className="w-4 h-4 text-rose-600" />
                       誤配信防止：自動停止（脱落）トリガー
                     </span>
-                    <p className="text-[11px] text-slate-400">
+                    <p className="text-[11px] text-slate-500">
                       以下のいずれかの条件を満たした顧客には、このステップ以降の配信を即時完全ストップします。
                     </p>
 
-                    <div className="space-y-1.5 pt-1">
-                      <label className="flex items-center gap-2 p-1.5 bg-slate-950 rounded-lg cursor-pointer">
+                    <div className="space-y-2 pt-1">
+                      <label className="flex items-center gap-2 p-2 bg-white rounded-lg border border-slate-200 cursor-pointer shadow-xs">
                         <input
                           type="checkbox"
                           checked={stopOnBooking}
                           onChange={(e) => setStopOnBooking(e.target.checked)}
-                          className="rounded text-indigo-600"
+                          className="rounded text-purple-600"
                         />
-                        <span className="text-white font-bold">面談・個別相談が予約されたら即停止</span>
+                        <span className="text-slate-900 font-semibold">面談・個別相談が予約されたら即停止</span>
                       </label>
-                      <label className="flex items-center gap-2 p-1.5 bg-slate-950 rounded-lg cursor-pointer">
+                      <label className="flex items-center gap-2 p-2 bg-white rounded-lg border border-slate-200 cursor-pointer shadow-xs">
                         <input
                           type="checkbox"
                           checked={stopOnDeal}
                           onChange={(e) => setStopOnDeal(e.target.checked)}
-                          className="rounded text-indigo-600"
+                          className="rounded text-purple-600"
                         />
-                        <span className="text-white font-bold">成約・契約締結が成立したら即停止</span>
+                        <span className="text-slate-900 font-semibold">成約・契約締結が成立したら即停止</span>
                       </label>
                     </div>
 
                     <div className="pt-2">
-                      <span className="text-[11px] text-slate-400 block mb-1">
+                      <span className="text-[11px] text-slate-600 font-medium block mb-1.5">
                         指定タグが付与されたら停止:
                       </span>
-                      <div className="flex flex-wrap gap-1">
+                      <div className="flex flex-wrap gap-1.5">
                         {selectedExitTagNames.map((tagName) => (
                           <span
                             key={tagName}
-                            className="inline-flex items-center gap-1 px-2 py-0.5 rounded bg-rose-500/20 text-rose-300 border border-rose-500/30 text-[10px] font-bold"
+                            className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-rose-50 text-rose-800 border border-rose-200 text-[10px] font-bold"
                           >
                             <span>{tagName}</span>
                             <button
                               type="button"
                               onClick={() => setSelectedExitTagNames(selectedExitTagNames.filter((t) => t !== tagName))}
-                              className="hover:text-white"
+                              className="hover:text-rose-950 font-bold ml-0.5"
                             >
                               ✕
                             </button>
@@ -445,15 +445,15 @@ export const FlowStepInspectorModal: React.FC<FlowStepInspectorModalProps> = ({
                   </div>
 
                   {/* タグマスターから選択して追加 */}
-                  <div className="space-y-2 bg-slate-900/60 p-3 rounded-xl border border-slate-800">
-                    <span className="font-bold text-indigo-300 block">
+                  <div className="space-y-2.5 bg-slate-50 p-4 rounded-xl border border-slate-200">
+                    <span className="font-bold text-purple-900 block">
                       共通タグマスター（辞書からワンクリック追加）
                     </span>
-                    <p className="text-[11px] text-slate-400">
+                    <p className="text-[11px] text-slate-500">
                       手入力による表記揺れ（例:「診断済」と「診断受検済み」）を防ぐため、定義済みタグから選択します。
                     </p>
 
-                    <div className="flex flex-wrap gap-1 max-h-36 overflow-y-auto p-1 bg-slate-950 rounded-lg border border-slate-800/80">
+                    <div className="flex flex-wrap gap-1.5 max-h-40 overflow-y-auto p-2 bg-white rounded-xl border border-slate-200 shadow-inner">
                       {UNIFIED_TAG_MASTER.map((tag) => {
                         const isExit = selectedExitTagNames.includes(tag.name);
                         return (
@@ -467,10 +467,10 @@ export const FlowStepInspectorModal: React.FC<FlowStepInspectorModalProps> = ({
                                 setSelectedExitTagNames([...selectedExitTagNames, tag.name]);
                               }
                             }}
-                            className={`px-2 py-1 rounded text-[10px] font-bold transition flex items-center gap-1 cursor-pointer ${
+                            className={`px-2.5 py-1 rounded-lg text-[10px] font-semibold transition flex items-center gap-1 cursor-pointer ${
                               isExit
-                                ? 'bg-rose-500 text-white'
-                                : 'bg-slate-800 text-slate-300 hover:bg-slate-700'
+                                ? 'bg-rose-600 text-white shadow-xs'
+                                : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
                             }`}
                             title={tag.description}
                           >
@@ -486,18 +486,18 @@ export const FlowStepInspectorModal: React.FC<FlowStepInspectorModalProps> = ({
 
               {/* LINE メッセージ設定（LINE選択時） */}
               {(channel === 'line' || channel === 'both') && (
-                <div className="p-4 bg-slate-950 rounded-xl border border-emerald-500/30 space-y-4">
-                  <div className="flex items-center justify-between border-b border-slate-800 pb-2">
+                <div className="p-5 bg-white rounded-2xl border border-emerald-200 shadow-xs space-y-4">
+                  <div className="flex items-center justify-between border-b border-slate-100 pb-3">
                     <div className="flex items-center gap-2">
-                      <MessageCircle className="w-4 h-4 text-emerald-400" />
-                      <span className="font-bold text-white text-sm">LINE配信メッセージ</span>
+                      <MessageCircle className="w-4 h-4 text-emerald-600" />
+                      <span className="font-bold text-slate-900 text-sm">LINE配信メッセージ</span>
                     </div>
                     <div className="flex items-center gap-2">
-                      <label className="text-slate-400 text-xs">メッセージ形式:</label>
+                      <label className="text-slate-500 text-xs font-medium">メッセージ形式:</label>
                       <select
                         value={lineMessageType}
                         onChange={(e) => setLineMessageType(e.target.value as MarketingLineMessageType)}
-                        className="bg-slate-900 border border-slate-700 rounded-lg px-2.5 py-1 text-white text-xs font-bold cursor-pointer"
+                        className="bg-white border border-slate-200 rounded-lg px-3 py-1.5 text-slate-800 text-xs font-semibold cursor-pointer shadow-xs focus:outline-none focus:border-emerald-500"
                       >
                         <option value="flex">Flexカード（ボタン付き高クリック率UI）</option>
                         <option value="text">通常テキスト吹き出し</option>
@@ -508,59 +508,59 @@ export const FlowStepInspectorModal: React.FC<FlowStepInspectorModalProps> = ({
                   {lineMessageType === 'flex' ? (
                     <div className="space-y-3">
                       <div>
-                        <label className="text-slate-300 font-bold block mb-1">Flexカード タイトル</label>
+                        <label className="text-slate-700 font-bold block mb-1">Flexカード タイトル</label>
                         <input
                           type="text"
                           value={flexTitle}
                           onChange={(e) => setFlexTitle(e.target.value)}
                           placeholder="例：【無料】業務ボトルネック診断（約3分）"
-                          className="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-white text-xs font-bold"
+                          className="w-full bg-white border border-slate-200 rounded-xl px-3 py-2 text-slate-900 text-xs font-bold shadow-xs focus:outline-none focus:border-emerald-500"
                         />
                       </div>
 
                       <div>
-                        <label className="text-slate-300 font-bold block mb-1">カード説明文</label>
+                        <label className="text-slate-700 font-bold block mb-1">カード説明文</label>
                         <textarea
                           rows={3}
                           value={flexBody}
                           onChange={(e) => setFlexBody(e.target.value)}
                           placeholder="カードに表示する説明文。{recipient_name} などの差し込みが利用可能。"
-                          className="w-full bg-slate-900 border border-slate-700 rounded-xl p-3 text-white text-xs"
+                          className="w-full bg-white border border-slate-200 rounded-xl p-3 text-slate-900 text-xs shadow-xs focus:outline-none focus:border-emerald-500"
                         />
                       </div>
 
                       <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                         <div>
-                          <label className="text-slate-300 font-bold block mb-1">アクションボタン名</label>
+                          <label className="text-slate-700 font-bold block mb-1">アクションボタン名</label>
                           <input
                             type="text"
                             value={flexButtonLabel}
                             onChange={(e) => setFlexButtonLabel(e.target.value)}
                             placeholder="例：3分診断を始める"
-                            className="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-white text-xs"
+                            className="w-full bg-white border border-slate-200 rounded-xl px-3 py-2 text-slate-900 text-xs shadow-xs focus:outline-none focus:border-emerald-500"
                           />
                         </div>
                         <div>
-                          <label className="text-slate-300 font-bold block mb-1">ボタン遷移先URL</label>
+                          <label className="text-slate-700 font-bold block mb-1">ボタン遷移先URL</label>
                           <input
                             type="text"
                             value={flexButtonUrl}
                             onChange={(e) => setFlexButtonUrl(e.target.value)}
                             placeholder="{link_url} や {booking_url} または HTTPS URL"
-                            className="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-white text-xs font-mono"
+                            className="w-full bg-white border border-slate-200 rounded-xl px-3 py-2 text-slate-900 text-xs font-mono shadow-xs focus:outline-none focus:border-emerald-500"
                           />
                         </div>
                       </div>
                     </div>
                   ) : (
                     <div>
-                      <label className="text-slate-300 font-bold block mb-1">トーク本文</label>
+                      <label className="text-slate-700 font-bold block mb-1">トーク本文</label>
                       <textarea
                         rows={5}
                         value={messageBody}
                         onChange={(e) => setMessageBody(e.target.value)}
                         placeholder="LINEの吹き出しに送るテキストを入力してください。"
-                        className="w-full bg-slate-900 border border-slate-700 rounded-xl p-3 text-white text-xs font-mono leading-relaxed"
+                        className="w-full bg-white border border-slate-200 rounded-xl p-3 text-slate-900 text-xs font-mono leading-relaxed shadow-xs focus:outline-none focus:border-emerald-500"
                       />
                     </div>
                   )}
@@ -569,31 +569,31 @@ export const FlowStepInspectorModal: React.FC<FlowStepInspectorModalProps> = ({
 
               {/* メール メッセージ設定（メール選択時） */}
               {(channel === 'email' || channel === 'both') && (
-                <div className="p-4 bg-slate-950 rounded-xl border border-blue-500/30 space-y-3">
-                  <div className="flex items-center gap-2 border-b border-slate-800 pb-2">
-                    <Mail className="w-4 h-4 text-blue-400" />
-                    <span className="font-bold text-white text-sm">メール配信メッセージ</span>
+                <div className="p-5 bg-white rounded-2xl border border-sky-200 shadow-xs space-y-3">
+                  <div className="flex items-center gap-2 border-b border-slate-100 pb-3">
+                    <Mail className="w-4 h-4 text-sky-600" />
+                    <span className="font-bold text-slate-900 text-sm">メール配信メッセージ</span>
                   </div>
 
                   <div>
-                    <label className="text-slate-300 font-bold block mb-1">メール件名</label>
+                    <label className="text-slate-700 font-bold block mb-1">メール件名</label>
                     <input
                       type="text"
                       value={emailSubject}
                       onChange={(e) => setEmailSubject(e.target.value)}
                       placeholder="【MST】3分無料経営診断のご案内"
-                      className="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-white text-xs font-bold"
+                      className="w-full bg-white border border-slate-200 rounded-xl px-3 py-2 text-slate-900 text-xs font-bold shadow-xs focus:outline-none focus:border-sky-500"
                     />
                   </div>
 
                   <div>
-                    <label className="text-slate-300 font-bold block mb-1">メール本文</label>
+                    <label className="text-slate-700 font-bold block mb-1">メール本文</label>
                     <textarea
                       rows={6}
                       value={emailBody}
                       onChange={(e) => setEmailBody(e.target.value)}
                       placeholder="メール本文を入力してください。{recipient_name} 様、{company_name} 様、{link_url} などの差し込みが可能です。"
-                      className="w-full bg-slate-900 border border-slate-700 rounded-xl p-3 text-white text-xs font-mono leading-relaxed"
+                      className="w-full bg-white border border-slate-200 rounded-xl p-3 text-slate-900 text-xs font-mono leading-relaxed shadow-xs focus:outline-none focus:border-sky-500"
                     />
                   </div>
                 </div>
@@ -604,23 +604,23 @@ export const FlowStepInspectorModal: React.FC<FlowStepInspectorModalProps> = ({
           {/* TAB 2: Preview Message */}
           {activeTab === 'preview_message' && (
             <div className="space-y-6">
-              <div className="p-4 bg-slate-950 rounded-xl border border-slate-800 text-xs text-slate-300 flex items-center justify-between">
+              <div className="p-4 bg-purple-50/70 rounded-xl border border-purple-200/80 text-xs text-slate-700 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                 <div>
-                  <span className="font-bold text-white">実機プレビュー表示</span>
-                  <p className="text-slate-400 mt-0.5">
+                  <span className="font-bold text-slate-900">実機プレビュー表示</span>
+                  <p className="text-slate-600 mt-0.5">
                     差し込みタグ（{'{recipient_name}'} → 「山田 太郎」、{'{company_name}'} → 「MST製造株式会社」）を実環境に合わせて展開しています。
                   </p>
                 </div>
-                <span className="px-2.5 py-1 rounded-full bg-emerald-500/10 text-emerald-300 border border-emerald-500/20 text-xs font-bold">
+                <span className="px-2.5 py-1 rounded-full bg-emerald-100 text-emerald-800 border border-emerald-300 text-xs font-bold shrink-0 self-start sm:self-center">
                   表示シミュレーション稼働中
                 </span>
               </div>
 
               <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
                 {/* LINE Preview */}
-                <div className="bg-slate-950 rounded-2xl border border-slate-800 p-5 space-y-3">
-                  <div className="flex items-center gap-2 font-bold text-emerald-300 text-sm">
-                    <Smartphone className="w-4 h-4" />
+                <div className="bg-slate-50/80 rounded-2xl border border-slate-200 p-5 space-y-3 shadow-xs">
+                  <div className="flex items-center gap-2 font-bold text-emerald-700 text-sm">
+                    <Smartphone className="w-4 h-4 text-emerald-600" />
                     <span>LINEトーク画面プレビュー</span>
                   </div>
                   <div className="p-4 bg-[#7494c0] rounded-2xl shadow-inner min-h-[300px]">
@@ -670,14 +670,14 @@ export const FlowStepInspectorModal: React.FC<FlowStepInspectorModalProps> = ({
                 </div>
 
                 {/* Email Preview */}
-                <div className="bg-slate-950 rounded-2xl border border-slate-800 p-5 space-y-3">
-                  <div className="flex items-center gap-2 font-bold text-blue-300 text-sm">
-                    <Mail className="w-4 h-4" />
+                <div className="bg-slate-50/80 rounded-2xl border border-slate-200 p-5 space-y-3 shadow-xs">
+                  <div className="flex items-center gap-2 font-bold text-blue-700 text-sm">
+                    <Mail className="w-4 h-4 text-blue-600" />
                     <span>メール受信プレビュー</span>
                   </div>
-                  <div className="bg-white text-slate-900 rounded-xl p-5 shadow font-sans text-xs space-y-3">
+                  <div className="bg-white text-slate-900 rounded-xl p-5 border border-slate-200 shadow-xs font-sans text-xs space-y-3">
                     <div className="border-b border-slate-200 pb-2">
-                      <span className="text-slate-500 block text-[10px]">件名:</span>
+                      <span className="text-slate-500 block text-[10px] font-medium">件名:</span>
                       <div className="font-bold text-slate-900 text-sm">
                         {renderPlaceholders(emailSubject || '(件名未設定)', PLACEHOLDER_SAMPLE_VALUES)}
                       </div>
@@ -694,12 +694,12 @@ export const FlowStepInspectorModal: React.FC<FlowStepInspectorModalProps> = ({
           {/* TAB 3: Inspect Linked Forms & URL Safety */}
           {activeTab === 'inspect_form' && (
             <div className="space-y-6">
-              <div className="p-4 bg-slate-950 rounded-xl border border-amber-500/40 text-xs space-y-2">
-                <div className="flex items-center gap-2 text-amber-300 font-bold text-sm">
-                  <ShieldCheck className="w-5 h-5 text-amber-400" />
+              <div className="p-4 bg-amber-50/90 rounded-xl border border-amber-300 text-xs space-y-2">
+                <div className="flex items-center gap-2 text-amber-900 font-bold text-sm">
+                  <ShieldCheck className="w-5 h-5 text-amber-600" />
                   <span>配信事故防止：連動フォーム・設問・URL安全点検</span>
                 </div>
-                <p className="text-slate-300 leading-relaxed">
+                <p className="text-amber-800 leading-relaxed">
                   メッセージ本文やボタンに含まれる「リンク先（診断フォーム・予約カレンダー・資料請求）」の内容をこの場で事前点検できます。
                   <strong>文面とフォームの設問内容に齟齬がないか、回答後に期待するタグが正しく付与されるか</strong>を確認してください。
                 </p>
@@ -708,43 +708,43 @@ export const FlowStepInspectorModal: React.FC<FlowStepInspectorModalProps> = ({
               {/* Detected Links List */}
               <div className="space-y-4">
                 {detectedLinks.map((item, idx) => (
-                  <div key={idx} className="bg-slate-950 rounded-2xl border border-slate-800 p-5 space-y-4">
-                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-slate-800 pb-3">
+                  <div key={idx} className="bg-white rounded-2xl border border-slate-200 p-5 space-y-4 shadow-xs">
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-slate-100 pb-3">
                       <div>
-                        <span className="text-xs font-black text-white flex items-center gap-2">
+                        <span className="text-xs font-bold text-slate-900 flex items-center gap-2">
                           {item.label}
                         </span>
-                        <span className="font-mono text-[11px] text-indigo-300 break-all">
+                        <span className="font-mono text-[11px] text-purple-700 break-all">
                           {item.url}
                         </span>
                       </div>
-                      <span className="px-2.5 py-1 rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 text-xs font-bold shrink-0 flex items-center gap-1">
-                        <CheckCircle2 className="w-3.5 h-3.5" />
+                      <span className="px-2.5 py-1 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200 text-xs font-bold shrink-0 flex items-center gap-1">
+                        <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
                         <span>疎通確認済み（リンク有効）</span>
                       </span>
                     </div>
 
                     {/* Specific Inspection for 3-minute diagnosis */}
                     {item.type === 'diagnosis' && (
-                      <div className="space-y-3 bg-slate-900/60 p-4 rounded-xl border border-slate-800">
-                        <div className="flex items-center justify-between">
-                          <span className="font-bold text-white text-xs">
+                      <div className="space-y-3 bg-slate-50 p-4 rounded-xl border border-slate-200">
+                        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1">
+                          <span className="font-bold text-slate-900 text-xs">
                             📋 診断フォームの設問構成プレビュー（全5問・約3分）
                           </span>
-                          <span className="text-[11px] text-emerald-400 font-bold">
+                          <span className="text-[11px] text-emerald-700 font-bold">
                             回答完了時に自動付与タグ: 「診断受検済み」
                           </span>
                         </div>
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-2 text-xs">
                           {QUESTIONNAIRE_V1.flatMap(cat => cat.questions).slice(0, 4).map((q, qIdx) => (
-                            <div key={q.id} className="p-2.5 rounded-lg bg-slate-950 border border-slate-800/80">
-                              <span className="text-indigo-400 font-bold block text-[10px]">設問 {qIdx + 1}</span>
-                              <span className="text-white font-medium">{q.label}</span>
-                              <p className="text-slate-400 text-[10px] mt-0.5">{q.description}</p>
+                            <div key={q.id} className="p-2.5 rounded-lg bg-white border border-slate-200 shadow-2xs">
+                              <span className="text-purple-700 font-bold block text-[10px]">設問 {qIdx + 1}</span>
+                              <span className="text-slate-900 font-medium">{q.label}</span>
+                              <p className="text-slate-500 text-[10px] mt-0.5">{q.description}</p>
                             </div>
                           ))}
                         </div>
-                        <div className="p-2 rounded-lg bg-indigo-500/10 border border-indigo-500/20 text-[11px] text-indigo-200">
+                        <div className="p-2.5 rounded-lg bg-purple-50 border border-purple-200 text-[11px] text-purple-900">
                           ℹ️ 顧客がこの診断を送信した瞬間、CRMおよびLINE友だちに「診断受検済み」タグが付与され、未受検リマインドは自動的に停止します。
                         </div>
                       </div>
@@ -752,21 +752,21 @@ export const FlowStepInspectorModal: React.FC<FlowStepInspectorModalProps> = ({
 
                     {/* Specific Inspection for Booking Calendar */}
                     {item.type === 'booking' && (
-                      <div className="space-y-3 bg-slate-900/60 p-4 rounded-xl border border-slate-800 text-xs">
-                        <div className="flex items-center justify-between">
-                          <span className="font-bold text-white">
+                      <div className="space-y-3 bg-slate-50 p-4 rounded-xl border border-slate-200 text-xs">
+                        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1">
+                          <span className="font-bold text-slate-900">
                             🗓️ 個別相談予約カレンダー連携状況
                           </span>
-                          <span className="text-emerald-400 font-bold text-[11px]">
+                          <span className="text-emerald-700 font-bold text-[11px]">
                             予約確定時に自動付与タグ: 「個別相談予約済み」
                           </span>
                         </div>
-                        <div className="p-3 bg-slate-950 rounded-lg border border-slate-800 text-slate-300 space-y-1">
+                        <div className="p-3 bg-white rounded-lg border border-slate-200 text-slate-700 space-y-1">
                           <div className="flex items-center justify-between">
-                            <span>所要時間: <strong>30分</strong>（Google Meet / オンライン）</span>
-                            <span className="text-emerald-300">Googleカレンダー空き枠と自動連動中</span>
+                            <span>所要時間: <strong className="text-slate-900">30分</strong>（Google Meet / オンライン）</span>
+                            <span className="text-emerald-700 font-medium">Googleカレンダー空き枠と自動連動中</span>
                           </div>
-                          <p className="text-slate-400 text-[11px]">
+                          <p className="text-slate-500 text-[11px]">
                             予約完了と同時に、顧客向けサンクス案内と大橋真人様への通知が発行されます。
                           </p>
                         </div>
@@ -776,7 +776,7 @@ export const FlowStepInspectorModal: React.FC<FlowStepInspectorModalProps> = ({
                 ))}
 
                 {detectedLinks.length === 0 && (
-                  <div className="p-8 text-center bg-slate-950 rounded-2xl border border-slate-800 text-slate-400 text-xs">
+                  <div className="p-8 text-center bg-slate-50 rounded-2xl border border-slate-200 text-slate-500 text-xs">
                     このメッセージには現在フォームや外部リンクURLが含まれていません。
                   </div>
                 )}
@@ -787,12 +787,12 @@ export const FlowStepInspectorModal: React.FC<FlowStepInspectorModalProps> = ({
           {/* TAB 4: Test Send Simulation */}
           {activeTab === 'test_send' && (
             <div className="space-y-6 text-xs">
-              <div className="p-4 bg-slate-950 rounded-xl border border-purple-500/30 space-y-3">
-                <div className="flex items-center gap-2 font-bold text-purple-300 text-sm">
-                  <Send className="w-4 h-4" />
+              <div className="p-5 bg-purple-50/70 rounded-2xl border border-purple-200 space-y-3">
+                <div className="flex items-center gap-2 font-bold text-purple-950 text-sm">
+                  <Send className="w-4 h-4 text-purple-700" />
                   <span>管理者向けテスト配信（事前シミュレーション）</span>
                 </div>
-                <p className="text-slate-300 leading-relaxed">
+                <p className="text-slate-700 leading-relaxed">
                   顧客へ実際に自動配信される前に、管理者のLINE公式アカウントまたは管理メール宛に実機テスト送信を行い、改行やボタンの挙動を直接確認できます。
                 </p>
 
@@ -801,7 +801,7 @@ export const FlowStepInspectorModal: React.FC<FlowStepInspectorModalProps> = ({
                     <button
                       type="button"
                       onClick={() => handleTestSend('line')}
-                      className="px-4 py-2 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl font-bold flex items-center gap-2 shadow-sm transition cursor-pointer"
+                      className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl font-bold flex items-center gap-2 shadow-xs transition cursor-pointer"
                     >
                       <MessageCircle className="w-4 h-4" />
                       <span>LINEテスト送信を実行</span>
@@ -812,7 +812,7 @@ export const FlowStepInspectorModal: React.FC<FlowStepInspectorModalProps> = ({
                     <button
                       type="button"
                       onClick={() => handleTestSend('email')}
-                      className="px-4 py-2 bg-blue-600 hover:bg-blue-500 text-white rounded-xl font-bold flex items-center gap-2 shadow-sm transition cursor-pointer"
+                      className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-xl font-bold flex items-center gap-2 shadow-xs transition cursor-pointer"
                     >
                       <Mail className="w-4 h-4" />
                       <span>メールテスト送信を実行</span>
@@ -821,7 +821,7 @@ export const FlowStepInspectorModal: React.FC<FlowStepInspectorModalProps> = ({
                 </div>
 
                 {testSendResult && (
-                  <div className="p-3 bg-emerald-500/20 border border-emerald-500/30 rounded-xl text-emerald-200 font-bold mt-3 animate-fade-in">
+                  <div className="p-3 bg-emerald-100 border border-emerald-300 rounded-xl text-emerald-800 font-bold mt-3 animate-fade-in">
                     {testSendResult}
                   </div>
                 )}
@@ -831,7 +831,7 @@ export const FlowStepInspectorModal: React.FC<FlowStepInspectorModalProps> = ({
         </div>
 
         {/* Footer Actions */}
-        <div className="px-6 py-4 border-t border-slate-800 bg-slate-950 flex items-center justify-between">
+        <div className="px-6 py-4 border-t border-slate-200 bg-slate-50/90 flex items-center justify-between">
           <div>
             {onDelete && (
               <button
@@ -842,7 +842,7 @@ export const FlowStepInspectorModal: React.FC<FlowStepInspectorModalProps> = ({
                     onClose();
                   }
                 }}
-                className="text-xs text-rose-400 hover:text-rose-300 flex items-center gap-1 cursor-pointer"
+                className="text-xs text-rose-600 hover:text-rose-700 font-medium flex items-center gap-1 cursor-pointer"
               >
                 <Trash2 className="w-4 h-4" />
                 <span>このステップを削除</span>
@@ -854,14 +854,14 @@ export const FlowStepInspectorModal: React.FC<FlowStepInspectorModalProps> = ({
             <button
               type="button"
               onClick={onClose}
-              className="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-xl text-xs font-bold transition cursor-pointer"
+              className="px-4 py-2 bg-white hover:bg-slate-100 text-slate-700 border border-slate-200 rounded-xl text-xs font-bold transition cursor-pointer"
             >
               閉じる
             </button>
             <button
               type="button"
               onClick={handleSave}
-              className="px-5 py-2 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl text-xs font-bold shadow-md transition flex items-center gap-1.5 cursor-pointer"
+              className="px-5 py-2 bg-purple-600 hover:bg-purple-700 text-white rounded-xl text-xs font-bold shadow-xs transition flex items-center gap-1.5 cursor-pointer"
             >
               <Save className="w-4 h-4" />
               <span>設定を保存して反映</span>

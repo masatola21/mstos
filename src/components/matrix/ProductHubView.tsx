@@ -315,19 +315,19 @@ export const ProductHubView: React.FC<ProductHubViewProps> = ({
   return (
     <div className="space-y-6">
       {/* Top Banner / Actions */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-slate-900 border border-slate-800 p-5 rounded-2xl shadow-xl">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-white border border-slate-200 p-5 rounded-2xl shadow-sm">
         <div>
           <div className="flex items-center gap-2">
-            <h2 className="text-xl font-black text-white tracking-tight flex items-center gap-2">
-              <Package className="w-6 h-6 text-indigo-400" />
-              AIプロダクト設計
+            <h2 className="text-xl font-black text-slate-900 tracking-tight flex items-center gap-2">
+              <Package className="w-6 h-6 text-purple-600" />
+              商品マスタ（サービス・プロダクト設計）
             </h2>
-            <span className="text-xs px-2 py-0.5 rounded-full bg-indigo-500/20 text-indigo-300 border border-indigo-500/30 font-medium">
-              AI共創ワークスペース
+            <span className="text-xs px-2.5 py-0.5 rounded-full bg-purple-50 text-purple-700 border border-purple-200 font-semibold">
+              全プロダクト・単価一元管理
             </span>
           </div>
-          <p className="text-xs text-slate-400 mt-1">
-            AIと対話しながら事業アイデアをプロダクトとして設計し、仕様・提供内容・開発タスクを具体化します。設計したプロダクトの情報や販促素材も管理できます。顧客ごとの契約・請求は営業・顧客管理で扱います。
+          <p className="text-xs text-slate-500 mt-1">
+            提供する全サービス・プロダクトの仕様、料金体系（固定・最低価格〜・価格帯）、売上目標を一元管理・更新します。AIと共創した新商品アイデアの具体化や開発タスクへの連携もここから実行できます。
           </p>
         </div>
 

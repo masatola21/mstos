@@ -1096,17 +1096,17 @@ export const DocumentTemplateView: React.FC<DocumentTemplateViewProps> = ({
   return (
     <div className="space-y-6">
       {/* Header Banner */}
-      <div className="bg-slate-900 border border-slate-800 rounded-2xl p-6 shadow-xl flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
+      <div className="bg-white border border-slate-200 rounded-2xl p-6 shadow-xs flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
         <div>
           <div className="flex items-center gap-2">
-            <span className="px-3 py-1 rounded-full bg-cyan-500/20 text-cyan-400 text-xs font-semibold border border-cyan-500/30">
-              AIを使わない自動入力
+            <span className="px-3 py-1 rounded-full bg-purple-50 text-purple-700 text-xs font-bold border border-purple-200">
+              AIを使わない高精度自動入力
             </span>
-            <span className="text-xs text-slate-400">テンプレートに登録データを自動反映</span>
+            <span className="text-xs text-slate-500 font-medium">テンプレートに顧客・商談・自社データを自動反映</span>
           </div>
-          <h1 className="text-2xl font-bold text-white tracking-tight mt-1">書類テンプレート・PDF出力</h1>
-          <p className="text-sm text-slate-400 mt-1">
-            契約書、提案書、請求書、診断レポートのテンプレートに顧客・商談データを反映し、内容を確認してPDFとして印刷・保存できます。
+          <h1 className="text-2xl font-bold text-slate-900 tracking-tight mt-1.5">書類テンプレート・PDF出力</h1>
+          <p className="text-sm text-slate-600 mt-1 max-w-2xl leading-relaxed">
+            契約書・提案書・見積書・請求書・診断レポートのひな形に最新データを自動反映。内容を確認・編集し、PDF印刷や送信センター経由の送付が可能です。
           </p>
         </div>
 
@@ -1123,7 +1123,7 @@ export const DocumentTemplateView: React.FC<DocumentTemplateViewProps> = ({
                   setCopiedApplyUrl(true);
                   setTimeout(() => setCopiedApplyUrl(false), 2500);
                 }}
-                className="px-3.5 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-semibold text-xs flex items-center gap-1.5 shadow-lg shadow-emerald-600/25 transition-all cursor-pointer"
+                className="px-3.5 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-semibold text-xs flex items-center gap-1.5 shadow-xs transition-all cursor-pointer"
                 title="顧客に送信するワンタップ申込用URLをコピーします"
               >
                 <Link2 className="w-4 h-4" />
@@ -1134,10 +1134,10 @@ export const DocumentTemplateView: React.FC<DocumentTemplateViewProps> = ({
                 href={`/apply/${savedDocIds[currentTemplate.id] || autosavedDocumentIds.current[currentTemplate.id]}`}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="px-3 py-2.5 rounded-xl border border-slate-700 bg-slate-800 hover:bg-slate-700 text-slate-200 font-semibold text-xs flex items-center gap-1.5 transition-all"
+                className="px-3 py-2.5 rounded-xl border border-slate-200 bg-slate-50 hover:bg-slate-100 text-slate-700 font-semibold text-xs flex items-center gap-1.5 transition-all shadow-2xs"
                 title="顧客向けWeb申込画面を別タブでプレビュー確認します"
               >
-                <ExternalLink className="w-3.5 h-3.5 text-slate-400" />
+                <ExternalLink className="w-3.5 h-3.5 text-slate-500" />
                 <span className="hidden sm:inline">申込画面を開く</span>
               </a>
             </>
@@ -1147,7 +1147,7 @@ export const DocumentTemplateView: React.FC<DocumentTemplateViewProps> = ({
             type="button"
             onClick={handleManualSave}
             disabled={isSavingDocument}
-            className="px-4 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 text-white font-semibold text-xs flex items-center gap-2 shadow-lg shadow-emerald-600/25 transition-all cursor-pointer"
+            className="px-4 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white font-semibold text-xs flex items-center gap-2 shadow-xs transition-all cursor-pointer"
             title="現在の内容で確認待ち書類として保存します"
           >
             <Save className="w-4 h-4" />
@@ -1158,7 +1158,7 @@ export const DocumentTemplateView: React.FC<DocumentTemplateViewProps> = ({
             type="button"
             onClick={handleSendViaSendCenter}
             disabled={isSavingDocument}
-            className="px-4 py-2.5 rounded-xl bg-gradient-to-r from-blue-600 via-indigo-600 to-indigo-700 hover:from-blue-500 hover:to-indigo-600 text-white font-semibold text-xs flex items-center gap-2 shadow-lg shadow-indigo-600/25 transition-all cursor-pointer"
+            className="px-4 py-2.5 rounded-xl bg-purple-600 hover:bg-purple-700 text-white font-semibold text-xs flex items-center gap-2 shadow-xs shadow-purple-600/20 transition-all cursor-pointer"
             title="仕上げた書類を送信センター（LINE・メール送信）へ連携して送付します"
           >
             <Send className="w-4 h-4" />
@@ -1167,38 +1167,142 @@ export const DocumentTemplateView: React.FC<DocumentTemplateViewProps> = ({
 
           <button
             onClick={handlePrintPdf}
-            className="px-4 py-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 font-semibold text-xs flex items-center gap-2 transition-all cursor-pointer"
+            className="px-4 py-2.5 rounded-xl bg-white hover:bg-slate-50 text-slate-700 border border-slate-200 font-semibold text-xs flex items-center gap-2 transition-all cursor-pointer shadow-2xs"
           >
-            <Printer className="w-4 h-4 text-slate-400" />
+            <Printer className="w-4 h-4 text-slate-500" />
             <span>PDF印刷・プレビュー</span>
           </button>
         </div>
       </div>
 
-      <section className="rounded-xl border border-slate-800 bg-slate-900 p-4">
-        <div className="mb-3"><h2 className="font-semibold text-white">書類の関連先（任意）</h2><p className="mt-1 text-xs text-slate-400">会社を起点に選ぶと、担当者・リード・商談の候補が絞られます。元レコードから開いた場合は会社と起点レコードが固定されます。</p></div>
-        <div className="grid gap-3 md:grid-cols-4">
-          <label className="text-xs text-slate-400">会社（顧客企業）<select value={companyId} disabled={Boolean(initialCompanyId || initialLeadId || initialDealId)} onChange={(e)=>{const nextCompanyId=e.target.value;if(nextCompanyId)setHasStartedDocument(true);setCompanyId(nextCompanyId);setContactId('');setLeadId('');setDealId('');}} className="mt-1 w-full rounded-lg border border-slate-700 bg-slate-950 p-2 text-sm text-white disabled:opacity-70"><option value="">未選択</option>{companies.map((company)=><option key={company.id} value={company.id}>{company.company_name}</option>)}</select></label>
-          <label className="text-xs text-slate-400">担当者<select value={contactId} onChange={(e)=>{const id=e.target.value;const contact=contacts.find((item)=>item.id===id);if(id)setHasStartedDocument(true);setContactId(id);if(contact?.company_id&&contact.company_id!==companyId){setCompanyId(contact.company_id);setLeadId('');setDealId('');}}} className="mt-1 w-full rounded-lg border border-slate-700 bg-slate-950 p-2 text-sm text-white"><option value="">未選択</option>{contacts.filter((contact)=>!companyId||contact.company_id===companyId||!contact.company_id).map((contact)=><option key={contact.id} value={contact.id}>{contact.full_name}</option>)}</select></label>
-          <label className="text-xs text-slate-400">リード<select value={leadId} disabled={Boolean(initialLeadId || initialDealId)} onChange={(e)=>{const id=e.target.value;const lead=leads.find((item)=>item.id===id);if(id)setHasStartedDocument(true);setLeadId(id);if(lead?.company_id&&lead.company_id!==companyId){setCompanyId(lead.company_id);setContactId((current)=>contacts.find((item)=>item.id===current)?.company_id===lead.company_id?current:'');}setDealId((current)=>{const deal=deals.find((item)=>item.id===current);return id&&deal?.lead_id===id?current:'';});}} className="mt-1 w-full rounded-lg border border-slate-700 bg-slate-950 p-2 text-sm text-white disabled:opacity-70"><option value="">未選択</option>{leads.filter((lead)=>!companyId||lead.company_id===companyId||!lead.company_id).map((lead)=><option key={lead.id} value={lead.id}>{lead.source || 'リード'} · {lead.status || lead.id.slice(0,8)}</option>)}</select></label>
-          <label className="text-xs text-slate-400">商談<select value={dealId} disabled={Boolean(initialDealId)} onChange={(e)=>{const id=e.target.value;const deal=deals.find((item)=>item.id===id);const linkedLead=leads.find((item)=>item.id===deal?.lead_id);if(id)setHasStartedDocument(true);setDealId(id);if(deal?.lead_id!==leadId)setLeadId(deal?.lead_id||'');const linkedCompanyId=deal?.company_id||linkedLead?.company_id;if(linkedCompanyId&&linkedCompanyId!==companyId){setCompanyId(linkedCompanyId);setContactId((current)=>contacts.find((item)=>item.id===current)?.company_id===linkedCompanyId?current:'');}}} className="mt-1 w-full rounded-lg border border-slate-700 bg-slate-950 p-2 text-sm text-white disabled:opacity-70"><option value="">未選択</option>{deals.filter((deal)=>(!companyId||deal.company_id===companyId||!deal.company_id)&&(!leadId||deal.lead_id===leadId)).map((deal)=><option key={deal.id} value={deal.id}>{deal.proposal_plan_name}</option>)}</select></label>
+      {/* Relation Section */}
+      <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-xs">
+        <div className="mb-3.5">
+          <h2 className="font-bold text-slate-900 text-sm">書類の関連先（任意）</h2>
+          <p className="mt-1 text-xs text-slate-500">会社を起点に選ぶと、担当者・リード・商談の候補が自動で絞り込まれます。</p>
         </div>
-        <div className="mt-3 flex flex-wrap items-center gap-3"><p className="text-xs text-emerald-300">内容変更は自動で確認待ちに保存されます。</p>{saveMessage&&<p role="status" className="text-xs text-slate-300">{saveMessage}</p>}</div>
+        <div className="grid gap-3.5 md:grid-cols-4">
+          <label className="text-xs font-semibold text-slate-700">
+            会社（顧客企業）
+            <select
+              value={companyId}
+              disabled={Boolean(initialCompanyId || initialLeadId || initialDealId)}
+              onChange={(e) => {
+                const nextCompanyId = e.target.value;
+                if (nextCompanyId) setHasStartedDocument(true);
+                setCompanyId(nextCompanyId);
+                setContactId('');
+                setLeadId('');
+                setDealId('');
+              }}
+              className="mt-1 w-full rounded-xl border border-slate-200 bg-slate-50 p-2.5 text-xs text-slate-900 focus:bg-white focus:border-purple-600 focus:outline-none disabled:opacity-60 shadow-2xs"
+            >
+              <option value="">未選択</option>
+              {companies.map((company) => (
+                <option key={company.id} value={company.id}>{company.company_name}</option>
+              ))}
+            </select>
+          </label>
+          <label className="text-xs font-semibold text-slate-700">
+            担当者
+            <select
+              value={contactId}
+              onChange={(e) => {
+                const id = e.target.value;
+                const contact = contacts.find((item) => item.id === id);
+                if (id) setHasStartedDocument(true);
+                setContactId(id);
+                if (contact?.company_id && contact.company_id !== companyId) {
+                  setCompanyId(contact.company_id);
+                  setLeadId('');
+                  setDealId('');
+                }
+              }}
+              className="mt-1 w-full rounded-xl border border-slate-200 bg-slate-50 p-2.5 text-xs text-slate-900 focus:bg-white focus:border-purple-600 focus:outline-none shadow-2xs"
+            >
+              <option value="">未選択</option>
+              {contacts.filter((contact) => !companyId || contact.company_id === companyId || !contact.company_id).map((contact) => (
+                <option key={contact.id} value={contact.id}>{contact.full_name}</option>
+              ))}
+            </select>
+          </label>
+          <label className="text-xs font-semibold text-slate-700">
+            反響リード
+            <select
+              value={leadId}
+              disabled={Boolean(initialLeadId || initialDealId)}
+              onChange={(e) => {
+                const id = e.target.value;
+                const lead = leads.find((item) => item.id === id);
+                if (id) setHasStartedDocument(true);
+                setLeadId(id);
+                if (lead?.company_id && lead.company_id !== companyId) {
+                  setCompanyId(lead.company_id);
+                  setContactId((current) => contacts.find((item) => item.id === current)?.company_id === lead.company_id ? current : '');
+                }
+                setDealId((current) => {
+                  const deal = deals.find((item) => item.id === current);
+                  return id && deal?.lead_id === id ? current : '';
+                });
+              }}
+              className="mt-1 w-full rounded-xl border border-slate-200 bg-slate-50 p-2.5 text-xs text-slate-900 focus:bg-white focus:border-purple-600 focus:outline-none disabled:opacity-60 shadow-2xs"
+            >
+              <option value="">未選択</option>
+              {leads.filter((lead) => !companyId || lead.company_id === companyId || !lead.company_id).map((lead) => (
+                <option key={lead.id} value={lead.id}>{lead.source || 'リード'} · {lead.status || lead.id.slice(0, 8)}</option>
+              ))}
+            </select>
+          </label>
+          <label className="text-xs font-semibold text-slate-700">
+            商談
+            <select
+              value={dealId}
+              disabled={Boolean(initialDealId)}
+              onChange={(e) => {
+                const id = e.target.value;
+                const deal = deals.find((item) => item.id === id);
+                const linkedLead = leads.find((item) => item.id === deal?.lead_id);
+                if (id) setHasStartedDocument(true);
+                setDealId(id);
+                if (deal?.lead_id !== leadId) setLeadId(deal?.lead_id || '');
+                const linkedCompanyId = deal?.company_id || linkedLead?.company_id;
+                if (linkedCompanyId && linkedCompanyId !== companyId) {
+                  setCompanyId(linkedCompanyId);
+                  setContactId((current) => contacts.find((item) => item.id === current)?.company_id === linkedCompanyId ? current : '');
+                }
+              }}
+              className="mt-1 w-full rounded-xl border border-slate-200 bg-slate-50 p-2.5 text-xs text-slate-900 focus:bg-white focus:border-purple-600 focus:outline-none disabled:opacity-60 shadow-2xs"
+            >
+              <option value="">未選択</option>
+              {deals.filter((deal) => (!companyId || deal.company_id === companyId || !deal.company_id) && (!leadId || deal.lead_id === leadId)).map((deal) => (
+                <option key={deal.id} value={deal.id}>{deal.proposal_plan_name}</option>
+              ))}
+            </select>
+          </label>
+        </div>
+        <div className="mt-3.5 flex flex-wrap items-center gap-3">
+          <p className="text-xs text-emerald-700 font-medium">✓ 内容変更は自動で確認待ちとして保存されます</p>
+          {saveMessage && <p role="status" className="text-xs text-slate-500">{saveMessage}</p>}
+        </div>
       </section>
 
-      {templateStatus&&<p role="status" className="rounded-lg border border-slate-800 bg-slate-900 px-3 py-2 text-xs text-slate-300">{templateStatus}</p>}
+      {templateStatus && (
+        <p role="status" className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-2.5 text-xs text-slate-600 font-medium">
+          {templateStatus}
+        </p>
+      )}
 
       {/* Template Selector Tabs */}
       <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
         {orderTemplatesByWorkflow(templates).map((tpl) => {
           const isSelected = tpl.id === selectedTemplateId;
           const icons: Record<DocTemplateType, React.ReactNode> = {
-            contract: <FileCheck2 className="w-4 h-4 text-emerald-400" />,
-            proposal: <FileText className="w-4 h-4 text-blue-400" />,
-            estimate: <Calculator className="w-4 h-4 text-cyan-400" />,
-            invoice: <Receipt className="w-4 h-4 text-amber-400" />,
-            report: <ClipboardCheck className="w-4 h-4 text-purple-400" />,
-            monthly_report: <BarChart3 className="w-4 h-4 text-indigo-400" />,
+            contract: <FileCheck2 className="w-4 h-4 text-purple-600" />,
+            proposal: <FileText className="w-4 h-4 text-blue-600" />,
+            estimate: <Calculator className="w-4 h-4 text-emerald-600" />,
+            invoice: <Receipt className="w-4 h-4 text-amber-600" />,
+            report: <ClipboardCheck className="w-4 h-4 text-indigo-600" />,
+            monthly_report: <BarChart3 className="w-4 h-4 text-cyan-600" />,
           };
           return (
             <button
@@ -1206,18 +1310,18 @@ export const DocumentTemplateView: React.FC<DocumentTemplateViewProps> = ({
               onClick={() => handleSelectTemplate(tpl.id)}
               className={`p-4 rounded-xl border text-left transition-all cursor-pointer flex flex-col justify-between ${
                 isSelected
-                  ? 'bg-slate-900 border-cyan-500 shadow-md shadow-cyan-500/10 ring-1 ring-cyan-500'
-                  : 'bg-slate-900/60 border-slate-800 hover:border-slate-700 text-slate-400 hover:text-slate-200'
+                  ? 'bg-purple-50/70 border-purple-600 shadow-sm ring-1 ring-purple-600'
+                  : 'bg-white border-slate-200 hover:border-purple-300 text-slate-600 hover:text-slate-900 shadow-2xs'
               }`}
             >
               <div className="flex items-center justify-between mb-2">
-                <span className="p-2 rounded-lg bg-slate-800/80">{icons[tpl.type]}</span>
-                <span className="text-[10px] px-2 py-0.5 rounded-full bg-slate-800 text-slate-300 font-mono uppercase">
+                <span className={`p-2 rounded-lg ${isSelected ? 'bg-purple-100' : 'bg-slate-100'}`}>{icons[tpl.type]}</span>
+                <span className="text-[10px] px-2 py-0.5 rounded-full bg-slate-100 text-slate-600 font-mono uppercase font-semibold">
                   {tpl.type}
                 </span>
               </div>
               <div>
-                <h3 className={`font-bold text-sm ${isSelected ? 'text-white' : 'text-slate-300'}`}>
+                <h3 className={`font-bold text-sm ${isSelected ? 'text-purple-900' : 'text-slate-800'}`}>
                   {tpl.title}
                 </h3>
                 <p className="text-xs text-slate-500 line-clamp-1 mt-0.5">{tpl.description}</p>
@@ -1230,19 +1334,19 @@ export const DocumentTemplateView: React.FC<DocumentTemplateViewProps> = ({
       {/* Main Workspace Split: Left Form Inputs / Right Preview */}
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
         {/* Left Form / Variable Panel (5 Cols) */}
-        <div className="lg:col-span-5 bg-slate-900 border border-slate-800 rounded-2xl p-5 shadow-xl flex flex-col justify-between">
+        <div className="lg:col-span-5 bg-white border border-slate-200 rounded-2xl p-5 shadow-xs flex flex-col justify-between">
           <div>
-            <div className="flex items-center justify-between pb-3 border-b border-slate-800 mb-4">
+            <div className="flex items-center justify-between pb-3 border-b border-slate-100 mb-4">
               <div className="flex items-center gap-2">
-                <Sliders className="w-4 h-4 text-cyan-400" />
-                <h2 className="font-bold text-sm text-white">データ流し込み変数</h2>
+                <Sliders className="w-4 h-4 text-purple-600" />
+                <h2 className="font-bold text-sm text-slate-900">データ流し込み変数</h2>
               </div>
               <button
                 onClick={() => setIsEditingTemplate(!isEditingTemplate)}
                 className={`text-xs px-2.5 py-1 rounded-lg border flex items-center gap-1 transition-colors cursor-pointer ${
                   isEditingTemplate
-                    ? 'bg-amber-500/20 border-amber-500/40 text-amber-300'
-                    : 'bg-slate-800 border-slate-700 text-slate-300 hover:text-white'
+                    ? 'bg-purple-50 border-purple-300 text-purple-700 font-semibold'
+                    : 'bg-slate-50 border-slate-200 text-slate-700 hover:bg-slate-100'
                 }`}
               >
                 <FileCode className="w-3.5 h-3.5" />
@@ -1252,37 +1356,42 @@ export const DocumentTemplateView: React.FC<DocumentTemplateViewProps> = ({
 
             {isEditingTemplate ? (
               <div className="space-y-3">
-                <p className="text-xs text-slate-400">
-                  HTMLソースと変数タグ（例: <code className="text-cyan-400">{'{{variable_name}}'}</code>）を直接編集できます。
+                <p className="text-xs text-slate-500">
+                  HTMLソースと変数タグ（例: <code className="text-purple-700 font-semibold">{'{{variable_name}}'}</code>）を直接編集できます。
                 </p>
                 <textarea
                   defaultValue={currentTemplate.htmlContent}
                   id="raw-html-editor"
                   rows={18}
-                  className="w-full bg-slate-950 border border-slate-800 rounded-xl p-3 text-xs font-mono text-slate-200 focus:outline-none focus:border-cyan-500"
+                  className="w-full bg-slate-50 border border-slate-200 rounded-xl p-3 text-xs font-mono text-slate-900 focus:outline-none focus:border-purple-600 focus:bg-white"
                 />
                 <button
                   onClick={() => {
                     const el = document.getElementById('raw-html-editor') as HTMLTextAreaElement;
                     if (el) handleSaveTemplateChanges(el.value);
                   }}
-                  className="w-full py-2.5 rounded-xl bg-cyan-600 hover:bg-cyan-500 text-white font-semibold text-xs flex items-center justify-center gap-2 transition-all cursor-pointer shadow-md"
+                  className="w-full py-2.5 rounded-xl bg-purple-600 hover:bg-purple-700 text-white font-semibold text-xs flex items-center justify-center gap-2 transition-all cursor-pointer shadow-xs"
                 >
                   <Save className="w-4 h-4" />
                   <span>ひな形HTMLを保存</span>
                 </button>
               </div>
             ) : (
-              <div className="space-y-4 max-h-[550px] overflow-y-auto pr-1">
-                <p className="text-xs text-slate-400">
+              <div className="space-y-3.5 max-h-[550px] overflow-y-auto pr-1">
+                <p className="text-xs text-slate-500">
                   顧客・商談情報と日付ルールを初期反映しています。内容を確認し、必要な箇所だけ修正してください。
                 </p>
-                {missingVariables.length > 0 && <div role="status" className="rounded-lg border border-amber-700/50 bg-amber-950/30 px-3 py-2 text-xs text-amber-200">自動入力できなかった項目が {missingVariables.length} 件あります。未登録の住所・自社情報・口座情報などを確認してください。<span className="mt-1 block text-amber-100/80">{missingVariables.map((variable) => variable.label).join('、')}</span></div>}
+                {missingVariables.length > 0 && (
+                  <div role="status" className="rounded-xl border border-amber-200 bg-amber-50 px-3.5 py-2.5 text-xs text-amber-900 shadow-2xs">
+                    自動入力できなかった項目が {missingVariables.length} 件あります。自社情報・口座情報などを確認してください。
+                    <span className="mt-1 block font-medium text-amber-800">{missingVariables.map((variable) => variable.label).join('、')}</span>
+                  </div>
+                )}
                 {currentTemplate.variables.map((v) => (
                   <div key={v.key} className="space-y-1">
-                    <label className="block text-xs font-medium text-slate-300 flex items-center justify-between">
+                    <label className="block text-xs font-semibold text-slate-700 flex items-center justify-between">
                       <span>{v.label}</span>
-                      <span className="text-[10px] font-mono text-cyan-400 bg-cyan-950/40 px-1.5 py-0.5 rounded border border-cyan-800/40">
+                      <span className="text-[10px] font-mono text-purple-700 bg-purple-50 px-1.5 py-0.5 rounded border border-purple-200">
                         {`{{${v.key}}}`}
                       </span>
                     </label>
@@ -1290,7 +1399,7 @@ export const DocumentTemplateView: React.FC<DocumentTemplateViewProps> = ({
                       type="text"
                       value={variableValues[v.key] ?? ''}
                       onChange={(e) => handleVariableChange(v.key, e.target.value)}
-                      className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-cyan-500 transition-colors"
+                      className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs text-slate-900 focus:outline-none focus:border-purple-600 focus:bg-white transition-colors shadow-2xs"
                       placeholder={v.key === 'end_date' ? '任意（定める場合のみ入力）' : `${v.label}（未登録の場合は入力）`}
                     />
                   </div>
@@ -1299,11 +1408,11 @@ export const DocumentTemplateView: React.FC<DocumentTemplateViewProps> = ({
             )}
           </div>
 
-          <div className="mt-6 pt-4 border-t border-slate-800 flex items-center justify-between text-xs text-slate-500">
-            <span>変数置換完了: 100% 確定</span>
+          <div className="mt-6 pt-4 border-t border-slate-100 flex items-center justify-between text-xs text-slate-500">
+            <span className="font-medium text-emerald-700">✓ 変数流し込み完了</span>
             <button
               onClick={() => handleSelectTemplate(currentTemplate.id)}
-              className="text-cyan-400 hover:text-cyan-300 flex items-center gap-1 cursor-pointer"
+              className="text-purple-600 hover:text-purple-700 font-semibold flex items-center gap-1 cursor-pointer"
             >
               <RefreshCw className="w-3 h-3" />
               <span>初期値に戻す</span>
@@ -1312,17 +1421,17 @@ export const DocumentTemplateView: React.FC<DocumentTemplateViewProps> = ({
         </div>
 
         {/* Right Live Preview Panel (7 Cols) */}
-        <div className="lg:col-span-7 bg-slate-900 border border-slate-800 rounded-2xl p-5 shadow-xl flex flex-col">
-          <div className="flex items-center justify-between pb-3 border-b border-slate-800 mb-4">
+        <div className="lg:col-span-7 bg-white border border-slate-200 rounded-2xl p-5 shadow-xs flex flex-col">
+          <div className="flex items-center justify-between pb-3 border-b border-slate-100 mb-4">
             <div className="flex items-center gap-2">
-              <FileCheck2 className="w-4 h-4 text-emerald-400" />
-              <h2 className="font-bold text-sm text-white">リアルタイムプレビュー</h2>
+              <FileCheck2 className="w-4 h-4 text-purple-600" />
+              <h2 className="font-bold text-sm text-slate-900">リアルタイムプレビュー</h2>
             </div>
             <div className="flex items-center gap-2">
               <button
                 type="button"
                 onClick={handleSendViaSendCenter}
-                className="px-3 py-1.5 rounded-lg bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white text-xs font-semibold flex items-center gap-1.5 transition-all shadow-md cursor-pointer"
+                className="px-3 py-1.5 rounded-lg bg-purple-600 hover:bg-purple-700 text-white text-xs font-semibold flex items-center gap-1.5 transition-all shadow-xs cursor-pointer"
                 title="仕上げた書類を送信センター（LINE・メール送信）へ連携して送付します"
               >
                 <Send className="w-3.5 h-3.5" />
@@ -1330,23 +1439,23 @@ export const DocumentTemplateView: React.FC<DocumentTemplateViewProps> = ({
               </button>
               <button
                 onClick={handleCopyHtml}
-                className="px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-semibold flex items-center gap-1.5 transition-colors cursor-pointer"
+                className="px-3 py-1.5 rounded-lg bg-slate-50 hover:bg-slate-100 text-slate-700 border border-slate-200 text-xs font-semibold flex items-center gap-1.5 transition-colors cursor-pointer"
               >
-                {copied ? <Check className="w-3.5 h-3.5 text-emerald-400" /> : <Copy className="w-3.5 h-3.5" />}
+                {copied ? <Check className="w-3.5 h-3.5 text-emerald-600" /> : <Copy className="w-3.5 h-3.5" />}
                 <span>{copied ? 'コピー完了!' : 'HTMLコピー'}</span>
               </button>
               <button
                 onClick={handlePrintPdf}
-                className="px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 text-xs font-semibold flex items-center gap-1.5 transition-colors cursor-pointer shadow-md"
+                className="px-3 py-1.5 rounded-lg bg-slate-50 hover:bg-slate-100 text-slate-700 border border-slate-200 text-xs font-semibold flex items-center gap-1.5 transition-colors cursor-pointer shadow-2xs"
               >
-                <Printer className="w-3.5 h-3.5 text-slate-400" />
+                <Printer className="w-3.5 h-3.5 text-slate-500" />
                 <span>印刷 / PDF</span>
               </button>
             </div>
           </div>
 
           {/* Rendered HTML Container */}
-          <div className="flex-1 bg-white rounded-xl shadow-inner overflow-hidden min-h-[600px] max-h-[700px] overflow-y-auto border border-slate-700">
+          <div className="flex-1 bg-white rounded-xl shadow-xs overflow-hidden min-h-[600px] max-h-[700px] overflow-y-auto border border-slate-200">
             <div dangerouslySetInnerHTML={{ __html: populatedHtml }} />
           </div>
         </div>

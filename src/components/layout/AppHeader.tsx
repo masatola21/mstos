@@ -77,7 +77,7 @@ export const AppHeader: React.FC<AppHeaderProps> = ({
       case 'unified_calendar':
         return { category: '全社共通', page: '予定カレンダー（Google連携）' };
       case 'product_hub':
-        return { category: '事業運営', page: '商品・サービス設計' };
+        return { category: '事業運営', page: '商品マスタ（商品・サービス設計）' };
       case 'customer_operations':
         return { category: '事業運営', page: '契約・請求・顧問支援' };
       case 'category_hub':

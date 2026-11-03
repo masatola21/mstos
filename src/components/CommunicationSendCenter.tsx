@@ -597,16 +597,16 @@ export const CommunicationSendCenter: React.FC<Props> = ({
   };
 
   return (
-    <section className="space-y-5 rounded-2xl border border-slate-800 bg-slate-900 p-6 shadow-xl">
-      <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between border-b border-slate-800 pb-4">
+    <section className="space-y-5 rounded-2xl border border-slate-200 bg-white p-6 shadow-xs">
+      <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between border-b border-slate-100 pb-4">
         <div>
           <div className="flex items-center gap-2">
-            <h2 className="text-xl font-black text-white">統合メッセージ・送信センター</h2>
-            <span className="rounded-full border border-indigo-500/30 bg-indigo-500/10 px-2.5 py-0.5 text-xs font-semibold text-indigo-300">
+            <h2 className="text-xl font-bold text-slate-900">統合メッセージ・送信センター</h2>
+            <span className="rounded-full border border-purple-200 bg-purple-50 px-2.5 py-0.5 text-xs font-bold text-purple-700">
               個別送信 · 一斉配信 · 全社テンプレート保管庫
             </span>
           </div>
-          <p className="mt-1 text-xs text-slate-400">
+          <p className="mt-1 text-xs text-slate-500">
             個別宛先への重要書類・面談予約・診断案内（1対1）から、メール・LINEセグメント一斉配信（1対N）、全社共通定型テンプレートの管理までを1箇所で集中運用します。
           </p>
         </div>
@@ -621,10 +621,10 @@ export const CommunicationSendCenter: React.FC<Props> = ({
               setError('');
             }}
             aria-pressed={screen === 'send'}
-            className={`flex items-center gap-2 rounded-xl px-4 py-2 text-xs font-bold transition shadow-xs cursor-pointer ${
+            className={`flex items-center gap-2 rounded-xl px-4 py-2 text-xs font-bold transition shadow-2xs cursor-pointer ${
               screen === 'send'
-                ? 'bg-indigo-600 text-white shadow-indigo-500/20'
-                : 'border border-slate-700 bg-slate-950/60 text-slate-300 hover:bg-slate-800 hover:text-white'
+                ? 'bg-purple-600 text-white shadow-purple-500/20'
+                : 'border border-slate-200 bg-slate-50 text-slate-700 hover:bg-slate-100 hover:text-slate-900'
             }`}
           >
             <SendHorizonal className="h-4 w-4" />
@@ -638,10 +638,10 @@ export const CommunicationSendCenter: React.FC<Props> = ({
               setError('');
             }}
             aria-pressed={screen === 'broadcast'}
-            className={`flex items-center gap-2 rounded-xl px-4 py-2 text-xs font-bold transition shadow-xs cursor-pointer ${
+            className={`flex items-center gap-2 rounded-xl px-4 py-2 text-xs font-bold transition shadow-2xs cursor-pointer ${
               screen === 'broadcast'
                 ? 'bg-purple-600 text-white shadow-purple-500/20'
-                : 'border border-slate-700 bg-slate-950/60 text-slate-300 hover:bg-slate-800 hover:text-white'
+                : 'border border-slate-200 bg-slate-50 text-slate-700 hover:bg-slate-100 hover:text-slate-900'
             }`}
           >
             <Users className="h-4 w-4" />
@@ -655,10 +655,10 @@ export const CommunicationSendCenter: React.FC<Props> = ({
               setError('');
             }}
             aria-pressed={screen === 'templates'}
-            className={`flex items-center gap-2 rounded-xl px-4 py-2 text-xs font-bold transition shadow-xs cursor-pointer ${
+            className={`flex items-center gap-2 rounded-xl px-4 py-2 text-xs font-bold transition shadow-2xs cursor-pointer ${
               screen === 'templates'
-                ? 'bg-emerald-600 text-white shadow-emerald-500/20 font-bold'
-                : 'border border-slate-700 bg-slate-950/60 text-slate-300 hover:bg-slate-800 hover:text-white'
+                ? 'bg-purple-600 text-white shadow-purple-500/20'
+                : 'border border-slate-200 bg-slate-50 text-slate-700 hover:bg-slate-100 hover:text-slate-900'
             }`}
           >
             <Library className="h-4 w-4" />
@@ -667,18 +667,18 @@ export const CommunicationSendCenter: React.FC<Props> = ({
         </div>
       </div>
 
-      {error && <p role="alert" className="rounded-xl border border-rose-500/30 bg-rose-500/10 p-3 text-xs text-rose-300">{error}</p>}
-      {notice && <p role="status" className="rounded-xl border border-emerald-500/30 bg-emerald-500/10 p-3 text-xs text-emerald-300">{notice}</p>}
+      {error && <p role="alert" className="rounded-xl border border-rose-200 bg-rose-50 p-3 text-xs text-rose-800 shadow-2xs">{error}</p>}
+      {notice && <p role="status" className="rounded-xl border border-purple-200 bg-purple-50 p-3 text-xs text-purple-800 shadow-2xs">{notice}</p>}
 
       {/* 画面1: 一斉配信（1対N） */}
       {screen === 'broadcast' && (
         <div className="space-y-4">
-          <div className="rounded-xl border border-purple-500/30 bg-purple-950/20 p-4">
-            <div className="flex items-center gap-2 text-purple-300 text-sm font-bold">
-              <Users className="h-4 w-4" />
+          <div className="rounded-2xl border border-purple-200 bg-purple-50/60 p-4">
+            <div className="flex items-center gap-2 text-purple-900 text-sm font-bold">
+              <Users className="h-4 w-4 text-purple-700" />
               <span>セグメント・一括配信モード（1対N）</span>
             </div>
-            <p className="mt-1 text-xs text-purple-200/80">
+            <p className="mt-1 text-xs text-purple-800/90 leading-relaxed">
               見込み客リストや顧客セグメント、LINE友だちへの一斉告知・メルマガ配信を行います。差込変数（<code>&#123;お名前&#125;</code>, <code>&#123;会社名&#125;</code>）は各宛先の情報に自動変換されます。
             </p>
           </div>
@@ -690,12 +690,12 @@ export const CommunicationSendCenter: React.FC<Props> = ({
       {screen === 'send' && (
         <>
           <div className="grid gap-4 md:grid-cols-2">
-            <label className="text-xs font-bold text-slate-300">
+            <label className="text-xs font-semibold text-slate-700">
               送信内容
               <select
                 value={kind}
                 onChange={(e) => setKind(e.target.value as Kind)}
-                className="mt-1 block w-full rounded-lg border border-slate-700 bg-slate-950 p-2.5 text-sm text-white focus:border-indigo-500"
+                className="mt-1 block w-full rounded-xl border border-slate-200 bg-slate-50 p-2.5 text-xs text-slate-900 focus:bg-white focus:border-purple-600 focus:outline-none shadow-2xs"
               >
                 {Object.entries(labels).map(([k, v]) => (
                   <option key={k} value={k}>
@@ -704,7 +704,7 @@ export const CommunicationSendCenter: React.FC<Props> = ({
                 ))}
               </select>
             </label>
-            <label className="text-xs font-bold text-slate-300">
+            <label className="text-xs font-semibold text-slate-700">
               送信方法
               <select
                 value={channel}
@@ -713,19 +713,19 @@ export const CommunicationSendCenter: React.FC<Props> = ({
                   setChannel(next);
                   if (next !== 'both') setTemplateChannel(next);
                 }}
-                className="mt-1 block w-full rounded-lg border border-slate-700 bg-slate-950 p-2.5 text-sm text-white focus:border-indigo-500"
+                className="mt-1 block w-full rounded-xl border border-slate-200 bg-slate-50 p-2.5 text-xs text-slate-900 focus:bg-white focus:border-purple-600 focus:outline-none shadow-2xs"
               >
                 <option value="email">メール</option>
                 <option value="line">LINE</option>
                 <option value="both">メール ＋ LINE（同時送信）</option>
               </select>
             </label>
-            <label className="md:col-span-2 text-xs font-bold text-slate-300">
+            <label className="md:col-span-2 text-xs font-semibold text-slate-700">
               送信先
               <select
                 value={contactId}
                 onChange={(e) => setContactId(e.target.value)}
-                className="mt-1 block w-full rounded-lg border border-slate-700 bg-slate-950 p-2.5 text-sm text-white focus:border-indigo-500"
+                className="mt-1 block w-full rounded-xl border border-slate-200 bg-slate-50 p-2.5 text-xs text-slate-900 focus:bg-white focus:border-purple-600 focus:outline-none shadow-2xs"
               >
                 <option value="">連絡先を選択してください</option>
                 {contacts.map((x) => (
@@ -744,8 +744,8 @@ export const CommunicationSendCenter: React.FC<Props> = ({
             </label>
 
             {kind === 'nurturing_story' && (
-              <div className="md:col-span-2 space-y-2 rounded-xl border border-purple-500/30 bg-purple-950/20 p-3">
-                <label className="block text-xs font-bold text-purple-300">
+              <div className="md:col-span-2 space-y-2 rounded-xl border border-purple-200 bg-purple-50/50 p-3.5">
+                <label className="block text-xs font-bold text-purple-900">
                   ストーリー型ナーチャリング話数（{channel === 'line' ? 'LINE形式' : 'メルマガ/メール形式'}）
                   <select
                     value={nurturingStep}
@@ -754,7 +754,7 @@ export const CommunicationSendCenter: React.FC<Props> = ({
                       setNurturingStep(s);
                       applyNurturingStep(s, contact, channel);
                     }}
-                    className="mt-1 block w-full bg-slate-950 p-2 text-white rounded border border-slate-700"
+                    className="mt-1 block w-full bg-white p-2.5 text-xs text-slate-900 rounded-lg border border-purple-200 focus:outline-none focus:border-purple-600"
                   >
                     <option value={1}>第1話：大橋の原体験・FC本部突然倒産の危機</option>
                     <option value={2}>第2話：最初に徹底して仕組み化した2大業務（管理＆集客）</option>
@@ -765,13 +765,13 @@ export const CommunicationSendCenter: React.FC<Props> = ({
                     <option value={7}>第7話：【最終話】自分がいないと現場が回らない状態から、脱却するチャンス</option>
                   </select>
                 </label>
-                <p className="text-[11px] text-slate-400">※ 送信方法（メール／LINE）に応じて、最適なレイアウト（メルマガ件名・本文 または LINE向けテキスト）が自動展開されます。</p>
+                <p className="text-[11px] text-purple-800">※ 送信方法（メール／LINE）に応じて、最適なレイアウト（メルマガ件名・本文 または LINE向けテキスト）が自動展開されます。</p>
               </div>
             )}
 
             {kind === 'sales_outreach' && (
-              <div className="md:col-span-2 space-y-2 rounded-xl border border-indigo-500/30 bg-indigo-950/20 p-3">
-                <label className="block text-xs font-bold text-indigo-300">
+              <div className="md:col-span-2 space-y-2 rounded-xl border border-purple-200 bg-purple-50/50 p-3.5">
+                <label className="block text-xs font-bold text-purple-900">
                   営業メールステップ（{contact?.company_id ? (companies[contact.company_id] || '選択中') + (' · 業種: ' + (companyIndustries[contact.company_id] || '一般・未設定')) : '送信先を選ぶと業種別メッセージが自動挿入'}）
                   <select
                     value={salesStep}
@@ -780,7 +780,7 @@ export const CommunicationSendCenter: React.FC<Props> = ({
                       setSalesStep(s);
                       applySalesStep(s);
                     }}
-                    className="mt-1 block w-full bg-slate-950 p-2 text-white rounded border border-slate-700"
+                    className="mt-1 block w-full bg-white p-2.5 text-xs text-slate-900 rounded-lg border border-purple-200 focus:outline-none focus:border-purple-600"
                   >
                     <option value={1}>第1通：業界急所の提起 ＆ 3分無料診断ギフト（返信不要）</option>
                     <option value={2}>第2通：人手不足ではなく「仕組み不足」の真実</option>
@@ -789,12 +789,12 @@ export const CommunicationSendCenter: React.FC<Props> = ({
                     <option value={5}>第5通：【最終案内】現場の火消しから解放され利益が残る会社へ</option>
                   </select>
                 </label>
-                <p className="text-[11px] text-slate-400">※ 選択した会社の業種に応じた課題・メリットを自動挿入します。</p>
+                <p className="text-[11px] text-purple-800">※ 選択した会社の業種に応じた課題・メリットを自動挿入します。</p>
               </div>
             )}
 
             {(kind === 'form' || kind === 'diagnosis') && (
-              <label className="md:col-span-2 text-xs font-bold text-slate-300">
+              <label className="md:col-span-2 text-xs font-semibold text-slate-700">
                 公開フォーム
                 <select
                   value={formId}
@@ -803,7 +803,7 @@ export const CommunicationSendCenter: React.FC<Props> = ({
                     const f = forms.find((x: any) => x.id === e.target.value);
                     if (f) setUrl(window.location.origin + '/f/' + encodeURIComponent(f.public_slug));
                   }}
-                  className="mt-1 block w-full rounded-lg border border-slate-700 bg-slate-950 p-2.5 text-sm text-white"
+                  className="mt-1 block w-full rounded-xl border border-slate-200 bg-slate-50 p-2.5 text-xs text-slate-900 focus:bg-white focus:border-purple-600 focus:outline-none shadow-2xs"
                 >
                   <option value="">公開フォームを選択してください</option>
                   {forms.map((f: any) => (
@@ -817,12 +817,12 @@ export const CommunicationSendCenter: React.FC<Props> = ({
 
             {kind === 'document' && (
               <>
-                <label className="md:col-span-2 text-xs font-bold text-slate-300">
+                <label className="md:col-span-2 text-xs font-semibold text-slate-700">
                   書類の種類
                   <select
                     value={documentType}
                     onChange={(e) => setDocumentType(e.target.value as DocumentType)}
-                    className="mt-1 block w-full rounded-lg border border-slate-700 bg-slate-950 p-2.5 text-sm text-white"
+                    className="mt-1 block w-full rounded-xl border border-slate-200 bg-slate-50 p-2.5 text-xs text-slate-900 focus:bg-white focus:border-purple-600 focus:outline-none shadow-2xs"
                   >
                     <option value="all">すべての書類（診断レポート→提案書→見積書→契約書→請求書）</option>
                     <option value="diagnosis_report">診断レポート</option>
@@ -834,12 +834,12 @@ export const CommunicationSendCenter: React.FC<Props> = ({
                     <option value="other">その他</option>
                   </select>
                 </label>
-                <label className="md:col-span-2 text-xs font-bold text-slate-300">
+                <label className="md:col-span-2 text-xs font-semibold text-slate-700">
                   書類（{contact?.company_id ? (companies[contact.company_id] || '選択した会社') + 'の書類' : initialCompanyId ? (companies[initialCompanyId] || 'この会社') + 'の書類' : '送信先を選ぶと会社の書類で絞り込み'}・承認済みのみ送信可能）
                   <select
                     value={docId}
                     onChange={(e) => setDocId(e.target.value)}
-                    className="mt-1 block w-full rounded-lg border border-slate-700 bg-slate-950 p-2.5 text-sm text-white"
+                    className="mt-1 block w-full rounded-xl border border-slate-200 bg-slate-50 p-2.5 text-xs text-slate-900 focus:bg-white focus:border-purple-600 focus:outline-none shadow-2xs"
                   >
                     <option value="">書類を選択してください</option>
                     {availableDocs.map((x) => (
@@ -852,41 +852,41 @@ export const CommunicationSendCenter: React.FC<Props> = ({
               </>
             )}
 
-            <label className="md:col-span-2 text-xs font-bold text-slate-300">
+            <label className="md:col-span-2 text-xs font-semibold text-slate-700">
               {kind === 'document' ? '共有可能な書類URL' : kind === 'deal' || kind === 'customer_meeting' ? 'この案内専用URL（空欄なら共通予約URL）' : 'フォーム・案内URL'}
-              <input value={url} onChange={(e) => setUrl(e.target.value)} className="mt-1 block w-full rounded-lg border border-slate-700 bg-slate-950 p-2.5 text-sm text-white" placeholder="https://..." />
+              <input value={url} onChange={(e) => setUrl(e.target.value)} className="mt-1 block w-full rounded-xl border border-slate-200 bg-slate-50 p-2.5 text-xs text-slate-900 focus:bg-white focus:border-purple-600 focus:outline-none shadow-2xs" placeholder="https://..." />
             </label>
 
             {(channel === 'email' || channel === 'both') && (
               <>
-                <label className="md:col-span-2 text-xs font-bold text-slate-300">
+                <label className="md:col-span-2 text-xs font-semibold text-slate-700">
                   差出人名
                   <input
                     value={senderSettings.fromName}
                     onChange={(e) => setSenderSettings((x) => ({ ...x, fromName: e.target.value }))}
                     maxLength={100}
-                    className="mt-1 block w-full rounded-lg border border-slate-700 bg-slate-950 p-2.5 text-sm text-white"
+                    className="mt-1 block w-full rounded-xl border border-slate-200 bg-slate-50 p-2.5 text-xs text-slate-900 focus:bg-white focus:border-purple-600 focus:outline-none shadow-2xs"
                     placeholder="有限会社MST"
                   />
                 </label>
-                <label className="text-xs font-bold text-slate-300">
+                <label className="text-xs font-semibold text-slate-700">
                   差出人メールアドレス
                   <input
                     type="email"
                     value={senderSettings.fromEmail}
                     onChange={(e) => setSenderSettings((x) => ({ ...x, fromEmail: e.target.value }))}
-                    className="mt-1 block w-full rounded-lg border border-slate-700 bg-slate-950 p-2.5 text-sm text-white"
+                    className="mt-1 block w-full rounded-xl border border-slate-200 bg-slate-50 p-2.5 text-xs text-slate-900 focus:bg-white focus:border-purple-600 focus:outline-none shadow-2xs"
                     placeholder="info@example.co.jp"
                   />
-                  <span className="mt-1 block text-[11px] text-slate-400">RESEND_FROM_EMAILで認証済みのドメインを指定してください。</span>
+                  <span className="mt-1 block text-[11px] text-slate-500">RESEND_FROM_EMAILで認証済みのドメインを指定してください。</span>
                 </label>
-                <label className="text-xs font-bold text-slate-300">
+                <label className="text-xs font-semibold text-slate-700">
                   返信先メールアドレス（Reply-To）
                   <input
                     type="email"
                     value={senderSettings.replyTo}
                     onChange={(e) => setSenderSettings((x) => ({ ...x, replyTo: e.target.value }))}
-                    className="mt-1 block w-full rounded-lg border border-slate-700 bg-slate-950 p-2.5 text-sm text-white"
+                    className="mt-1 block w-full rounded-xl border border-slate-200 bg-slate-50 p-2.5 text-xs text-slate-900 focus:bg-white focus:border-purple-600 focus:outline-none shadow-2xs"
                     placeholder="返信先を変更する場合に入力（任意）"
                   />
                 </label>
@@ -896,13 +896,13 @@ export const CommunicationSendCenter: React.FC<Props> = ({
             {templateChannel === 'email' && (
               <div className="md:col-span-2 space-y-1.5">
                 <div className="flex items-center justify-between">
-                  <label className="text-xs font-bold text-slate-300">
+                  <label className="text-xs font-semibold text-slate-700">
                     メール定型テンプレート（保管庫から引用）
                   </label>
                   <button
                     type="button"
                     onClick={() => setScreen('templates')}
-                    className="inline-flex items-center gap-1 text-[11px] font-bold text-emerald-400 hover:text-emerald-300 cursor-pointer"
+                    className="inline-flex items-center gap-1 text-[11px] font-bold text-purple-700 hover:text-purple-800 cursor-pointer"
                   >
                     <Library className="h-3.5 w-3.5" />
                     <span>テンプレート保管庫で作成・編集</span>
@@ -911,7 +911,7 @@ export const CommunicationSendCenter: React.FC<Props> = ({
                 <select
                   value={selectedEmailTemplateId}
                   onChange={(e) => chooseEmailTemplate(e.target.value)}
-                  className="block w-full rounded-lg border border-slate-700 bg-slate-950 p-2.5 text-sm text-white"
+                  className="block w-full rounded-xl border border-slate-200 bg-slate-50 p-2.5 text-xs text-slate-900 focus:bg-white focus:border-purple-600 focus:outline-none shadow-2xs"
                 >
                   <option value="">現在の送信種別（{labels[kind]}）の標準初期文面</option>
                   {emailTemplates
@@ -928,13 +928,13 @@ export const CommunicationSendCenter: React.FC<Props> = ({
             {templateChannel === 'line' && (
               <div className="md:col-span-2 space-y-1.5">
                 <div className="flex items-center justify-between">
-                  <label className="text-xs font-bold text-slate-300">
+                  <label className="text-xs font-semibold text-slate-700">
                     LINE定型テンプレート（保管庫から引用）
                   </label>
                   <button
                     type="button"
                     onClick={() => setScreen('templates')}
-                    className="inline-flex items-center gap-1 text-[11px] font-bold text-emerald-400 hover:text-emerald-300 cursor-pointer"
+                    className="inline-flex items-center gap-1 text-[11px] font-bold text-purple-700 hover:text-purple-800 cursor-pointer"
                   >
                     <Library className="h-3.5 w-3.5" />
                     <span>テンプレート保管庫で作成・編集</span>
@@ -943,7 +943,7 @@ export const CommunicationSendCenter: React.FC<Props> = ({
                 <select
                   value={selectedLineTemplateId}
                   onChange={(e) => chooseLineTemplate(e.target.value)}
-                  className="block w-full rounded-lg border border-slate-700 bg-slate-950 p-2.5 text-sm text-white"
+                  className="block w-full rounded-xl border border-slate-200 bg-slate-50 p-2.5 text-xs text-slate-900 focus:bg-white focus:border-purple-600 focus:outline-none shadow-2xs"
                 >
                   <option value="">現在の送信種別（{labels[kind]}）の標準テキスト</option>
                   {lineTemplates.map((x: any) => (
@@ -957,11 +957,11 @@ export const CommunicationSendCenter: React.FC<Props> = ({
 
             {templateChannel === 'email' && (
               <div className="md:col-span-2">
-                <label className="text-xs font-bold text-slate-300">件名</label>
+                <label className="text-xs font-semibold text-slate-700">件名</label>
                 <input
                   value={subject}
                   onChange={(e) => setSubject(e.target.value)}
-                  className="mt-1 block w-full rounded-lg border border-slate-700 bg-slate-950 p-2.5 text-sm text-white"
+                  className="mt-1 block w-full rounded-xl border border-slate-200 bg-slate-50 p-2.5 text-xs text-slate-900 focus:bg-white focus:border-purple-600 focus:outline-none shadow-2xs"
                   placeholder="件名を入力..."
                 />
                 <PlaceholderAssist text={subject} onInsert={(token) => setSubject((curr) => curr + token)} />
@@ -969,25 +969,25 @@ export const CommunicationSendCenter: React.FC<Props> = ({
             )}
 
             {(kind === 'deal' || kind === 'customer_meeting') && (
-              <p className="md:col-span-2 text-xs text-slate-400">
-                共通Google予約ページ: <span className="text-indigo-300 font-mono">{bookingUrl || '未設定'}</span>
+              <p className="md:col-span-2 text-xs text-slate-500">
+                共通Google予約ページ: <span className="text-purple-700 font-mono font-medium">{bookingUrl || '未設定'}</span>
               </p>
             )}
 
             {channel === 'both' && (
-              <div className="md:col-span-2 flex items-center gap-2 rounded-lg bg-slate-950/60 p-2 text-xs text-slate-300 border border-slate-800">
-                <span>編集対象:</span>
+              <div className="md:col-span-2 flex items-center gap-2 rounded-xl bg-purple-50/50 p-2.5 text-xs text-slate-700 border border-purple-200">
+                <span className="font-semibold text-purple-900">編集対象:</span>
                 <button
                   type="button"
                   onClick={() => setTemplateChannel('email')}
-                  className={`rounded-md px-3 py-1 font-semibold transition cursor-pointer ${templateChannel === 'email' ? 'bg-indigo-600 text-white' : 'bg-slate-800 text-slate-300'}`}
+                  className={`rounded-lg px-3 py-1 font-semibold transition cursor-pointer text-xs ${templateChannel === 'email' ? 'bg-purple-600 text-white' : 'bg-white border border-slate-200 text-slate-700'}`}
                 >
                   メール文面
                 </button>
                 <button
                   type="button"
                   onClick={() => setTemplateChannel('line')}
-                  className={`rounded-md px-3 py-1 font-semibold transition cursor-pointer ${templateChannel === 'line' ? 'bg-indigo-600 text-white' : 'bg-slate-800 text-slate-300'}`}
+                  className={`rounded-lg px-3 py-1 font-semibold transition cursor-pointer text-xs ${templateChannel === 'line' ? 'bg-purple-600 text-white' : 'bg-white border border-slate-200 text-slate-700'}`}
                 >
                   LINE文面
                 </button>
@@ -998,9 +998,9 @@ export const CommunicationSendCenter: React.FC<Props> = ({
             {(templateChannel !== 'line' || !selectedLineTemplate || selectedLineTemplate.reply_type === 'text') && (
               <div className="md:col-span-2">
                 <div className="flex items-center justify-between">
-                  <label className="text-xs font-bold text-slate-300">テンプレート本文</label>
+                  <label className="text-xs font-semibold text-slate-700">テンプレート本文</label>
                   {(kind === 'document' || kind === 'form' || kind === 'diagnosis') && (
-                    <span className="text-xs text-indigo-300">
+                    <span className="text-xs font-medium text-purple-700">
                       保存対象: {kind === 'document' ? doc?.title || '共通書類テンプレート' : form?.name || '共通テンプレート'}
                     </span>
                   )}
@@ -1009,19 +1009,19 @@ export const CommunicationSendCenter: React.FC<Props> = ({
                   value={body}
                   onChange={(e) => setBody(e.target.value)}
                   rows={8}
-                  className="mt-1 block w-full rounded-lg border border-slate-700 bg-slate-950 p-3 text-sm text-white font-sans leading-relaxed"
+                  className="mt-1 block w-full rounded-xl border border-slate-200 bg-slate-50 p-3 text-xs text-slate-900 font-sans leading-relaxed focus:bg-white focus:border-purple-600 focus:outline-none shadow-2xs"
                   placeholder="本文を入力してください..."
                 />
                 <PlaceholderAssist text={body} onInsert={(token) => setBody((curr) => curr + token)} />
               </div>
             )}
 
-            <label className="md:col-span-2 text-xs font-bold text-slate-300">
+            <label className="md:col-span-2 text-xs font-semibold text-slate-700">
               送信根拠（法規・同意記録）
               <input
                 value={basis}
                 onChange={(e) => setBasis(e.target.value)}
-                className="mt-1 block w-full rounded-lg border border-slate-700 bg-slate-950 p-2.5 text-sm text-white"
+                className="mt-1 block w-full rounded-xl border border-slate-200 bg-slate-50 p-2.5 text-xs text-slate-900 focus:bg-white focus:border-purple-600 focus:outline-none shadow-2xs"
               />
             </label>
           </div>
@@ -1032,7 +1032,7 @@ export const CommunicationSendCenter: React.FC<Props> = ({
                 type="button"
                 disabled={savingSenderSettings}
                 onClick={() => void saveSenderSettings()}
-                className="inline-flex items-center gap-2 rounded-xl border border-slate-700 bg-slate-800/80 px-4 py-2.5 text-xs font-semibold text-slate-200 hover:bg-slate-700 cursor-pointer"
+                className="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-slate-50 px-4 py-2.5 text-xs font-semibold text-slate-700 hover:bg-slate-100 cursor-pointer shadow-2xs"
               >
                 <Save className="h-4 w-4" />
                 {savingSenderSettings ? '保存中…' : '差出人既定値を保存'}
@@ -1041,7 +1041,7 @@ export const CommunicationSendCenter: React.FC<Props> = ({
             <button
               type="button"
               onClick={() => void save()}
-              className="inline-flex items-center gap-2 rounded-xl border border-slate-700 bg-slate-800/80 px-4 py-2.5 text-xs font-semibold text-slate-200 hover:bg-slate-700 cursor-pointer"
+              className="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-slate-50 px-4 py-2.5 text-xs font-semibold text-slate-700 hover:bg-slate-100 cursor-pointer shadow-2xs"
             >
               <Save className="h-4 w-4" />
               テンプレート保存（{templateChannel === 'email' ? 'メール' : 'LINE'}）
@@ -1065,7 +1065,7 @@ export const CommunicationSendCenter: React.FC<Props> = ({
                   }
                   setPreview(true);
                 }}
-                className="inline-flex items-center gap-2 rounded-xl bg-indigo-600 px-5 py-2.5 text-xs font-bold text-white hover:bg-indigo-500 shadow-md shadow-indigo-600/20 cursor-pointer"
+                className="inline-flex items-center gap-2 rounded-xl bg-purple-600 px-5 py-2.5 text-xs font-bold text-white hover:bg-purple-700 shadow-xs shadow-purple-600/20 cursor-pointer"
               >
                 <Eye className="h-4 w-4" />
                 送信プレビューを確認
@@ -1075,7 +1075,7 @@ export const CommunicationSendCenter: React.FC<Props> = ({
                 type="button"
                 disabled={busy}
                 onClick={() => void send()}
-                className="inline-flex items-center gap-2 rounded-xl bg-emerald-600 px-6 py-2.5 text-xs font-bold text-white hover:bg-emerald-500 shadow-md shadow-emerald-600/20 cursor-pointer"
+                className="inline-flex items-center gap-2 rounded-xl bg-emerald-600 px-6 py-2.5 text-xs font-bold text-white hover:bg-emerald-700 shadow-xs shadow-emerald-600/20 cursor-pointer"
               >
                 <Send className="h-4 w-4" />
                 {busy ? '送信中…' : '確定して送信する'}
@@ -1084,34 +1084,34 @@ export const CommunicationSendCenter: React.FC<Props> = ({
           </div>
 
           {preview && (
-            <div className="rounded-2xl border border-indigo-500/40 bg-slate-950 p-5 space-y-4">
-              <div className="flex items-center justify-between border-b border-slate-800 pb-3">
-                <h3 className="font-bold text-white text-sm">送信プレビュー（差込解決済み）</h3>
+            <div className="rounded-2xl border border-purple-200 bg-purple-50/40 p-5 space-y-4 shadow-xs">
+              <div className="flex items-center justify-between border-b border-purple-200 pb-3">
+                <h3 className="font-bold text-slate-900 text-sm">送信プレビュー（差込解決済み）</h3>
                 <button
                   type="button"
                   onClick={() => setPreview(false)}
-                  className="text-xs text-slate-400 hover:text-white cursor-pointer"
+                  className="text-xs text-slate-500 hover:text-slate-800 font-semibold cursor-pointer"
                 >
                   プレビューを閉じる
                 </button>
               </div>
 
               {(channel === 'email' || channel === 'both') && (
-                <div className="space-y-2 rounded-xl border border-slate-800 bg-slate-900/60 p-4">
-                  <div className="flex flex-wrap items-center justify-between text-xs text-slate-400">
+                <div className="space-y-2 rounded-xl border border-slate-200 bg-white p-4 shadow-2xs">
+                  <div className="flex flex-wrap items-center justify-between text-xs text-slate-500">
                     <span>
-                      差出人: <strong className="text-white">{senderSettings.fromName}</strong> &lt;{senderSettings.fromEmail || '未設定'}&gt;
+                      差出人: <strong className="text-slate-800">{senderSettings.fromName}</strong> &lt;{senderSettings.fromEmail || '未設定'}&gt;
                       {senderSettings.replyTo.trim() ? ` · 返信先: ${senderSettings.replyTo}` : ''}
                     </span>
-                    <span className="rounded bg-indigo-950 px-2 py-0.5 text-indigo-300 font-semibold">メール送信</span>
+                    <span className="rounded-full bg-blue-50 border border-blue-200 px-2.5 py-0.5 text-blue-700 font-bold text-[10px]">メール送信</span>
                   </div>
-                  <div className="text-xs text-slate-400">
-                    宛先: <strong className="text-white">{contact?.full_name}</strong> &lt;{contact?.email || 'メール未登録'}&gt;
+                  <div className="text-xs text-slate-600">
+                    宛先: <strong className="text-slate-800">{contact?.full_name}</strong> &lt;{contact?.email || 'メール未登録'}&gt;
                   </div>
-                  <div className="text-sm font-bold text-white pt-1">
+                  <div className="text-sm font-bold text-slate-900 pt-1">
                     件名: {fill(selectedEmailTemplate?.subject || (templateChannel === 'email' ? subject : resolveTemplate('email')?.subject || ''), vals)}
                   </div>
-                  <pre className="whitespace-pre-wrap rounded-lg bg-slate-950 p-3 text-xs text-slate-300 font-sans leading-relaxed border border-slate-800">
+                  <pre className="whitespace-pre-wrap rounded-xl bg-slate-50 p-3.5 text-xs text-slate-800 font-sans leading-relaxed border border-slate-200 shadow-inner">
                     {fill(
                       kind === 'document' && documentCategory(doc) === 'contract'
                         ? ensureContractReplySection(selectedEmailTemplate?.body_text || (templateChannel === 'email' ? body : resolveTemplate('email')?.body_text || ''))
@@ -1123,12 +1123,12 @@ export const CommunicationSendCenter: React.FC<Props> = ({
               )}
 
               {(channel === 'line' || channel === 'both') && (
-                <div className="space-y-2 rounded-xl border border-slate-800 bg-slate-900/60 p-4">
-                  <div className="flex items-center justify-between text-xs text-slate-400">
+                <div className="space-y-2 rounded-xl border border-slate-200 bg-white p-4 shadow-2xs">
+                  <div className="flex items-center justify-between text-xs text-slate-500">
                     <span>
-                      宛先: <strong className="text-white">{contact?.full_name}</strong> · LINE
+                      宛先: <strong className="text-slate-800">{contact?.full_name}</strong> · LINE
                     </span>
-                    <span className="rounded bg-emerald-950 px-2 py-0.5 text-emerald-300 font-semibold">LINE送信</span>
+                    <span className="rounded-full bg-emerald-50 border border-emerald-200 px-2.5 py-0.5 text-emerald-700 font-bold text-[10px]">LINE送信</span>
                   </div>
                   <LineMessagePreview
                     type={selectedLineTemplate?.reply_type || 'text'}

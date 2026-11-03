@@ -553,60 +553,63 @@ export const SalesOperationsWorkspace: React.FC<Props> = ({ tab, companyId, lead
       : '契約・請求・顧問・構築支援の状態を管理します。顧客への連絡は送信センターへ渡します。';
 
   return <div className="space-y-5">
-    <header className="rounded-2xl border border-slate-800 bg-slate-900 p-5">
+    <header className="rounded-2xl border border-slate-200 bg-white p-5 shadow-xs">
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <div><h1 className="text-xl font-bold text-white">{title}</h1><p className="mt-1 text-sm text-slate-400">{description}</p></div>
-        <button onClick={() => void load()} className="flex items-center gap-2 rounded-lg border border-slate-700 px-3 py-2 text-sm text-slate-300 hover:bg-slate-800"><RefreshCw className="h-4 w-4" />更新</button>
+        <div>
+          <h1 className="text-xl sm:text-2xl font-bold text-slate-900 tracking-tight">{title}</h1>
+          <p className="mt-1 text-xs text-slate-500">{description}</p>
+        </div>
+        <button onClick={() => void load()} className="flex items-center gap-2 rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-50 transition cursor-pointer shadow-2xs"><RefreshCw className="h-3.5 w-3.5" />更新</button>
       </div>
     </header>
-    {error && <div role="alert" className="rounded-lg border border-rose-700/50 bg-rose-950/30 p-3 text-sm text-rose-200">{error}</div>}
-    {notice && <div role="status" className="rounded-lg border border-emerald-700/50 bg-emerald-950/30 p-3 text-sm text-emerald-200">{notice}</div>}
+    {error && <div role="alert" className="rounded-xl border border-rose-200 bg-rose-50 p-3 text-xs text-rose-800 shadow-2xs">{error}</div>}
+    {notice && <div role="status" className="rounded-xl border border-purple-200 bg-purple-50 p-3 text-xs text-purple-800 shadow-2xs">{notice}</div>}
 
-    {tab === 'segments' && <div className="grid gap-5 lg:grid-cols-[minmax(260px,0.8fr)_minmax(0,1.2fr)]">
-      <form onSubmit={createSegment} className="space-y-3 rounded-xl border border-slate-800 bg-slate-900 p-4">
-        <h2 className="font-semibold text-white">配信対象リストを作成</h2>
-        <label className="block text-xs text-slate-400">表示名<input value={segmentName} onChange={(e) => setSegmentName(e.target.value)} required className="mt-1 w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-white" placeholder="例：診断済みのリード" /></label>
-        <label className="block text-xs text-slate-400">対象<select value={entityType} onChange={(e) => { setEntityType(e.target.value); setFilterField(segmentConditionFields[e.target.value]?.[0] || ''); }} className="mt-1 w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-white">{entityOptions.map(([key,label]) => <option key={key} value={key}>{label}</option>)}</select></label>
-        <label className="block text-xs text-slate-400">条件に使う項目<select value={filterField} onChange={(e) => setFilterField(e.target.value)} required className="mt-1 w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-white">{(segmentConditionFields[entityType] || []).map((field) => <option key={field} value={field}>{segmentConditionFieldLabels[field] || field}</option>)}</select><span className="mt-1 block leading-5 text-slate-500">{segmentConditionFieldHelp[filterField] || '選んだ項目に、次の値が含まれるレコードを対象にします。'}</span></label>
-        <label className="block text-xs text-slate-400">含む値<input value={filterValue} onChange={(e) => setFilterValue(e.target.value)} required className="mt-1 w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-white" /></label>
-        <button disabled={loading} className="flex items-center gap-2 rounded-lg bg-blue-600 px-3 py-2 text-sm font-semibold text-white disabled:opacity-50"><Plus className="h-4 w-4" />条件を保存</button>
+    {tab === 'segments' && <div className="grid gap-5 lg:grid-cols-[minmax(280px,0.85fr)_minmax(0,1.15fr)]">
+      <form onSubmit={createSegment} className="space-y-3.5 rounded-2xl border border-slate-200 bg-white p-5 shadow-xs">
+        <h2 className="font-bold text-slate-900 text-sm">配信対象リストを作成</h2>
+        <label className="block text-xs font-semibold text-slate-600">表示名<input value={segmentName} onChange={(e) => setSegmentName(e.target.value)} required className="mt-1 w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs text-slate-800 outline-none focus:border-purple-500 shadow-2xs" placeholder="例：診断済みのリード" /></label>
+        <label className="block text-xs font-semibold text-slate-600">対象<select value={entityType} onChange={(e) => { setEntityType(e.target.value); setFilterField(segmentConditionFields[e.target.value]?.[0] || ''); }} className="mt-1 w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs text-slate-800 outline-none focus:border-purple-500 shadow-2xs cursor-pointer">{entityOptions.map(([key,label]) => <option key={key} value={key}>{label}</option>)}</select></label>
+        <label className="block text-xs font-semibold text-slate-600">条件に使う項目<select value={filterField} onChange={(e) => setFilterField(e.target.value)} required className="mt-1 w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs text-slate-800 outline-none focus:border-purple-500 shadow-2xs cursor-pointer">{(segmentConditionFields[entityType] || []).map((field) => <option key={field} value={field}>{segmentConditionFieldLabels[field] || field}</option>)}</select><span className="mt-1 block text-[11px] leading-relaxed text-slate-400">{segmentConditionFieldHelp[filterField] || '選んだ項目に、次の値が含まれるレコードを対象にします。'}</span></label>
+        <label className="block text-xs font-semibold text-slate-600">含む値<input value={filterValue} onChange={(e) => setFilterValue(e.target.value)} required className="mt-1 w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs text-slate-800 outline-none focus:border-purple-500 shadow-2xs" placeholder="例: Webフォーム、成約、集客支援..." /></label>
+        <button disabled={loading} className="flex items-center justify-center gap-2 rounded-lg bg-purple-600 hover:bg-purple-700 px-4 py-2.5 text-xs font-bold text-white shadow-xs transition cursor-pointer disabled:opacity-50 w-full"><Plus className="h-4 w-4" />条件を保存</button>
       </form>
-      <section className="rounded-xl border border-slate-800 bg-slate-900 p-4">
-        <h2 className="mb-3 font-semibold text-white">保存した配信対象リスト</h2>
-        {loading ? <p className="text-sm text-slate-400">読み込み中…</p> : segments.length === 0 ? <p className="text-sm text-slate-400">まだ配信対象リストはありません。</p> :
-          <ul className="divide-y divide-slate-800">{segments.map((segment) => <li key={segment.id} className="flex flex-wrap items-center justify-between gap-2 py-3"><div><div className="font-medium text-white">{segment.name}</div><div className="text-xs text-slate-400">{entityOptions.find(([key]) => key === segment.entity_type)?.[1] || segment.entity_type} · {segment.conditions?.field?.trim() ? <>{segmentConditionFieldLabels[segment.conditions?.field || ''] || segment.conditions?.field} に「{segment.conditions?.value}」を含む</> : <span className="text-amber-300">条件が未設定のため配信対象に使えません</span>}</div></div><div className="flex gap-2"><button onClick={()=>void previewSegment(segment)} className="rounded border border-blue-700 px-2 py-1 text-xs text-blue-200 hover:bg-blue-950/40">対象を確認</button><InlineDeleteButton warning={`「${segment.name}」を削除しますか？`} onConfirm={async () => { const db=getSupabase(); if(!db){setError('Supabaseに接続してください。');return;} const {data:deleted,error:deleteError}=await db.from('crm_segments').delete().eq('id',segment.id).select('id').maybeSingle(); if(deleteError){setError(deleteError.message);return;} if(!deleted){setError('削除対象が見つからないか、削除権限がありません。');return;} if(previewSegmentId===segment.id){setPreviewSegmentId('');setPreviewRows([]);} setNotice('配信対象リストを削除しました。'); await load(); }}>削除</InlineDeleteButton></div></li>)}</ul>}
-        {previewSegmentId&&<div className="mt-4 rounded-lg border border-slate-800 bg-slate-950 p-3"><div className="font-medium text-white">対象レコード {previewRows.length}件</div><ul className="mt-2 max-h-40 space-y-1 overflow-auto text-xs text-slate-300">{previewRows.slice(0,50).map((row,index)=><li key={String(row.id||index)}>{row.full_name||row.company_name||row.proposal_plan_name||row.id||'レコード'}</li>)}</ul></div>}
-        <p className="mt-3 text-xs text-amber-300">配信直前に条件から対象を抽出します。送信時点の宛先スナップショットと同意状態の確認は、配信実行機能の接続時に記録します。</p>
+      <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-xs space-y-4">
+        <h2 className="font-bold text-slate-900 text-sm">保存した配信対象リスト</h2>
+        {loading ? <p className="text-xs text-slate-400">読み込み中…</p> : segments.length === 0 ? <p className="text-xs text-slate-400">まだ配信対象リストはありません。</p> :
+          <ul className="divide-y divide-slate-100">{segments.map((segment) => <li key={segment.id} className="flex flex-wrap items-center justify-between gap-2 py-3"><div><div className="font-bold text-xs text-slate-900">{segment.name}</div><div className="text-[11px] text-slate-500 mt-0.5">{entityOptions.find(([key]) => key === segment.entity_type)?.[1] || segment.entity_type} · {segment.conditions?.field?.trim() ? <>{segmentConditionFieldLabels[segment.conditions?.field || ''] || segment.conditions?.field} に「<span className="font-semibold text-purple-700">{segment.conditions?.value}</span>」を含む</> : <span className="text-amber-600">条件が未設定のため配信対象に使えません</span>}</div></div><div className="flex gap-2"><button onClick={()=>void previewSegment(segment)} className="rounded-lg border border-purple-200 bg-purple-50 px-2.5 py-1 text-xs font-semibold text-purple-700 hover:bg-purple-100 transition cursor-pointer shadow-2xs">対象を確認</button><InlineDeleteButton warning={`「${segment.name}」を削除しますか？`} onConfirm={async () => { const db=getSupabase(); if(!db){setError('Supabaseに接続してください。');return;} const {data:deleted,error:deleteError}=await db.from('crm_segments').delete().eq('id',segment.id).select('id').maybeSingle(); if(deleteError){setError(deleteError.message);return;} if(!deleted){setError('削除対象が見つからないか、削除権限がありません。');return;} if(previewSegmentId===segment.id){setPreviewSegmentId('');setPreviewRows([]);} setNotice('配信対象リストを削除しました。'); await load(); }}>削除</InlineDeleteButton></div></li>)}</ul>}
+        {previewSegmentId&&<div className="mt-4 rounded-xl border border-slate-200 bg-slate-50 p-4 space-y-2"><div className="font-bold text-xs text-slate-800">抽出対象レコード: <span className="font-mono text-purple-700">{previewRows.length}</span> 件</div><ul className="max-h-48 space-y-1 overflow-auto text-xs text-slate-600 divide-y divide-slate-100">{previewRows.slice(0,50).map((row,index)=><li key={String(row.id||index)} className="py-1">{row.full_name||row.company_name||row.proposal_plan_name||row.id||'レコード'}</li>)}</ul></div>}
+        <p className="text-[11px] text-slate-400">配信直前に条件から対象を自動抽出します。送信時点の宛先スナップショットと同意状態の確認は、配信実行機能の接続時に記録します。</p>
       </section>
     </div>}
 
     {tab === 'documents' && <div className="space-y-4">
-      {companyId && <div className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-cyan-900/70 bg-cyan-950/30 px-3 py-2 text-xs">
-        <span className="text-cyan-100">{leadId ? `リードに関連する書類を表示中（ID: ${leadId}）` : dealId ? `商談に関連する書類を表示中（ID: ${dealId}）` : `この顧客に関連する書類を表示中（会社ID: ${companyId}）`}</span>
-        {onClearCompanyFilter && <button type="button" onClick={onClearCompanyFilter} className="rounded border border-cyan-800 px-2 py-1 text-cyan-100 hover:bg-cyan-900/50">全顧客を表示</button>}
+      {companyId && <div className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-purple-200 bg-purple-50 px-3.5 py-2.5 text-xs">
+        <span className="text-purple-900 font-semibold">{leadId ? `リードに関連する書類を表示中（ID: ${leadId}）` : dealId ? `商談に関連する書類を表示中（ID: ${dealId}）` : `この顧客に関連する書類を表示中（会社ID: ${companyId}）`}</span>
+        {onClearCompanyFilter && <button type="button" onClick={onClearCompanyFilter} className="rounded-lg border border-purple-300 bg-white px-2.5 py-1 text-purple-800 font-semibold hover:bg-purple-100 cursor-pointer shadow-2xs">全顧客を表示</button>}
       </div>}
       <div className="grid gap-5 xl:grid-cols-2">
-      <section className="rounded-xl border border-slate-800 bg-slate-900 p-4">
-        <h2 className="mb-3 font-semibold text-white">生成済み書類</h2>
-        <p className="mb-3 text-xs text-slate-400">書類を選んで送信センターを開き、宛先・テンプレート・プレビューを確認してから送信できます。</p>
+      <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-xs">
+        <h2 className="mb-2 font-bold text-slate-900 text-sm">生成済み書類</h2>
+        <p className="mb-3.5 text-xs text-slate-500">書類を選んで送信センターを開き、宛先・テンプレート・プレビューを確認してから送信できます。</p>
         {loading ? (
-          <p className="text-sm text-slate-400">読み込み中…</p>
+          <p className="text-xs text-slate-400">読み込み中…</p>
         ) : documents.length === 0 ? (
-          <p className="text-sm text-slate-400">書類ひな形から保存した書類がここに表示されます。</p>
+          <p className="text-xs text-slate-400 py-6 text-center">書類ひな形から保存した書類がここに表示されます。</p>
         ) : (
-          <ul className="divide-y divide-slate-800">
+          <ul className="divide-y divide-slate-100">
             {documents.map((doc) => {
               const linkedCompany = doc.company_id ? companies.find((c) => c.id === doc.company_id) : undefined;
               return (
                 <li key={doc.id} className="py-3.5 space-y-2">
                   <div className="flex flex-wrap items-center justify-between gap-2">
-                    <span className="font-medium text-white">{doc.title}</span>
+                    <span className="font-bold text-sm text-slate-900">{doc.title}</span>
                     <div className="flex items-center gap-2">
                       <select
                         aria-label={`${doc.title}の状態`}
                         value={doc.status}
                         onChange={(e) => void updateDocumentStatus(doc.id, e.target.value)}
-                        className="rounded-lg border border-slate-700 bg-slate-950 px-2 py-1 text-xs text-white"
+                        className="rounded-lg border border-slate-200 bg-slate-50 px-2 py-1 text-xs text-slate-800 focus:bg-white focus:border-purple-600 focus:outline-none"
                       >
                         <option value="draft">下書き</option>
                         <option value="awaiting_approval">確認待ち</option>
@@ -616,18 +619,18 @@ export const SalesOperationsWorkspace: React.FC<Props> = ({ tab, companyId, lead
                       {['draft', 'awaiting_approval', 'archived'].includes(doc.status) && (
                         pendingDeleteDocumentId === doc.id ? (
                           <span className="inline-flex items-center gap-2">
-                            <span className="text-xs text-amber-200">削除しますか？</span>
+                            <span className="text-xs text-amber-700 font-semibold">削除しますか？</span>
                             <button
                               type="button"
                               onClick={() => void deleteDocumentDraft(doc)}
-                              className="rounded bg-rose-700 px-2 py-1 text-xs text-white cursor-pointer"
+                              className="rounded-lg bg-rose-600 px-2 py-1 text-xs text-white font-semibold cursor-pointer"
                             >
                               削除確定
                             </button>
                             <button
                               type="button"
                               onClick={() => setPendingDeleteDocumentId('')}
-                              className="rounded border border-slate-700 px-2 py-1 text-xs text-slate-300 cursor-pointer"
+                              className="rounded-lg border border-slate-200 px-2 py-1 text-xs text-slate-600 cursor-pointer"
                             >
                               取消
                             </button>
@@ -636,7 +639,7 @@ export const SalesOperationsWorkspace: React.FC<Props> = ({ tab, companyId, lead
                           <button
                             type="button"
                             onClick={() => { setError(''); setPendingDeleteDocumentId(doc.id); }}
-                            className="inline-flex items-center gap-1 rounded border border-rose-800/70 px-2 py-1 text-xs text-rose-200 hover:bg-rose-950/40 cursor-pointer"
+                            className="inline-flex items-center gap-1 rounded-lg border border-rose-200 px-2 py-1 text-xs text-rose-700 hover:bg-rose-50 cursor-pointer"
                           >
                             <Trash2 className="h-3.5 w-3.5" />
                             <span>削除</span>
@@ -646,23 +649,23 @@ export const SalesOperationsWorkspace: React.FC<Props> = ({ tab, companyId, lead
                     </div>
                   </div>
 
-                  <div className="flex flex-wrap items-center gap-2 text-xs text-slate-400">
-                    <span className="rounded bg-slate-800 px-2 py-0.5 text-[10px] text-slate-300">
+                  <div className="flex flex-wrap items-center gap-2 text-xs text-slate-500">
+                    <span className="rounded-md bg-purple-50 border border-purple-200 px-2 py-0.5 text-[10px] text-purple-700 font-semibold">
                       {doc.document_type === 'diagnosis_report' ? '診断レポート' : doc.document_type === 'proposal' ? '提案書' : doc.document_type === 'estimate' ? '見積書' : doc.document_type === 'contract' ? '契約書' : doc.document_type === 'invoice' ? '請求書' : doc.document_type === 'monthly_report' ? '月次報告書' : doc.document_type}
                     </span>
                     <span>{new Date(doc.created_at).toLocaleString('ja-JP')}</span>
                     <span>·</span>
-                    <span className={linkedCompany ? 'text-indigo-300 font-medium' : 'text-slate-400'}>
+                    <span className={linkedCompany ? 'text-purple-700 font-semibold' : 'text-slate-400'}>
                       会社: {linkedCompany ? linkedCompany.company_name : '未紐付け（送信センターで選択可能）'}
                     </span>
                   </div>
 
                   {['draft', 'awaiting_approval'].includes(doc.status) && (
-                    <details className="rounded-lg border border-slate-800 bg-slate-950 p-3">
-                      <summary className="cursor-pointer text-xs text-cyan-200 font-semibold hover:text-cyan-100">
+                    <details className="rounded-xl border border-slate-200 bg-slate-50 p-3">
+                      <summary className="cursor-pointer text-xs text-purple-700 font-bold hover:text-purple-800">
                         本文を確認・直接編集
                       </summary>
-                      <p className="mt-2 text-xs leading-5 text-slate-400">
+                      <p className="mt-2 text-xs leading-5 text-slate-500">
                         書類の見た目を確認しながら、本文を直接修正できます。文字をクリックして編集してください。
                       </p>
                       <div
@@ -678,13 +681,13 @@ export const SalesOperationsWorkspace: React.FC<Props> = ({ tab, companyId, lead
                         dangerouslySetInnerHTML={{
                           __html: editingDocumentId === doc.id ? editingDocumentBody : (doc.body_html || ''),
                         }}
-                        className="mt-2 max-h-[680px] min-h-96 overflow-auto rounded border border-slate-700 bg-white p-6 text-sm leading-7 text-slate-900 shadow-inner"
+                        className="mt-2 max-h-[680px] min-h-96 overflow-auto rounded-xl border border-slate-200 bg-white p-6 text-sm leading-7 text-slate-900 shadow-inner"
                       />
                       <button
                         type="button"
                         onClick={() => void saveDocumentBody(doc.id)}
                         disabled={editingDocumentId !== doc.id}
-                        className="mt-2 rounded bg-cyan-700 hover:bg-cyan-600 px-3 py-1.5 text-xs font-semibold text-white disabled:opacity-50 cursor-pointer"
+                        className="mt-2 rounded-lg bg-purple-600 hover:bg-purple-700 px-3 py-1.5 text-xs font-semibold text-white disabled:opacity-50 cursor-pointer shadow-2xs"
                       >
                         本文を保存
                       </button>
@@ -701,14 +704,14 @@ export const SalesOperationsWorkspace: React.FC<Props> = ({ tab, companyId, lead
                         onOpenInvoiceDocuments?.(doc.company_id || '', doc.id);
                       }}
                       disabled={!onOpenInvoiceDocuments}
-                      className="inline-flex items-center gap-1.5 rounded-lg bg-gradient-to-r from-blue-600 via-indigo-600 to-indigo-700 hover:from-blue-500 hover:to-indigo-600 px-3.5 py-1.5 text-xs font-semibold text-white shadow-md shadow-indigo-500/20 transition-all cursor-pointer disabled:opacity-50"
+                      className="inline-flex items-center gap-1.5 rounded-lg bg-purple-600 hover:bg-purple-700 px-3.5 py-1.5 text-xs font-semibold text-white shadow-xs shadow-purple-600/20 transition-all cursor-pointer disabled:opacity-50"
                       title="送信センターで宛先・テンプレート・プレビューを確認して送付します"
                     >
                       <Send className="h-3.5 w-3.5" />
                       <span>送信センターで送る</span>
                     </button>
                     {doc.status !== 'approved' && (
-                      <span className="text-[11px] text-amber-300">
+                      <span className="text-[11px] text-amber-700 font-medium">
                         ※ クリックすると承認状態に更新して送信センターを開きます
                       </span>
                     )}
@@ -719,17 +722,76 @@ export const SalesOperationsWorkspace: React.FC<Props> = ({ tab, companyId, lead
           </ul>
         )}
       </section>
-      <section className="rounded-xl border border-slate-800 bg-slate-900 p-4"><h2 className="mb-3 font-semibold text-white">送信履歴・送信待ち</h2>{loading ? <p className="text-sm text-slate-400">読み込み中…</p> : outbox.length === 0 ? <p className="text-sm text-slate-400">個別送信・一斉配信・書類送付は、同じ送信台帳に集約します。</p> : <ul className="divide-y divide-slate-800">{outbox.map((msg) => <li key={msg.id} className="py-3"><div className="flex flex-wrap items-center justify-between gap-2"><span className="font-medium text-white">{msg.subject || msg.recipient_address}</span><span className="text-xs text-slate-400">{msg.channel} · {msg.status}</span></div><div className="mt-1 text-xs text-slate-500">{new Date(msg.created_at).toLocaleString('ja-JP')} · 同意根拠: {msg.consent_basis || '記録なし'}</div>{['awaiting_approval', 'queued'].includes(msg.status)&&<div className="mt-2 flex gap-2">{msg.status==='awaiting_approval'&&<button type="button" onClick={()=>void approveOutboxMessage(msg.id)} className="rounded bg-cyan-700 px-2 py-1 text-xs font-semibold text-white">承認して送信待ちへ</button>}<button type="button" onClick={()=>void cancelOutboxMessage(msg.id)} className="rounded border border-slate-700 px-2 py-1 text-xs text-slate-300">送信依頼を取り消す</button></div>}</li>)}</ul>}<p className="mt-3 text-xs text-amber-300">実送信はサーバー側のLINE・メール接続が必要です。この一覧への登録だけで配信完了にはなりません。</p></section>
+      <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-xs">
+        <h2 className="mb-2 font-bold text-slate-900 text-sm">送信履歴・送信待ち</h2>
+        {loading ? (
+          <p className="text-xs text-slate-400">読み込み中…</p>
+        ) : outbox.length === 0 ? (
+          <p className="text-xs text-slate-400 py-6 text-center">個別送信・一斉配信・書類送付は、同じ送信台帳に集約します。</p>
+        ) : (
+          <ul className="divide-y divide-slate-100">
+            {outbox.map((msg) => (
+              <li key={msg.id} className="py-3 space-y-1">
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <span className="font-semibold text-xs text-slate-900">{msg.subject || msg.recipient_address}</span>
+                  <span className="rounded-full bg-slate-100 px-2 py-0.5 text-[10px] font-bold text-slate-600">{msg.channel} · {msg.status}</span>
+                </div>
+                <div className="text-xs text-slate-500">{new Date(msg.created_at).toLocaleString('ja-JP')} · 同意根拠: {msg.consent_basis || '記録なし'}</div>
+                {['awaiting_approval', 'queued'].includes(msg.status) && (
+                  <div className="mt-2 flex gap-2">
+                    {msg.status === 'awaiting_approval' && (
+                      <button type="button" onClick={() => void approveOutboxMessage(msg.id)} className="rounded-lg bg-purple-600 px-2.5 py-1 text-xs font-semibold text-white cursor-pointer shadow-2xs">
+                        承認して送信待ちへ
+                      </button>
+                    )}
+                    <button type="button" onClick={() => void cancelOutboxMessage(msg.id)} className="rounded-lg border border-slate-200 px-2.5 py-1 text-xs text-slate-600 hover:bg-slate-50 cursor-pointer">
+                      送信依頼を取り消す
+                    </button>
+                  </div>
+                )}
+              </li>
+            ))}
+          </ul>
+        )}
+        <p className="mt-3 text-xs text-amber-700 font-medium">※ 実送信はサーバー側のLINE・メール接続が必要です。一覧への登録だけで配信完了にはなりません。</p>
+      </section>
       </div>
     </div>}
 
 
-    {tab === 'operations' && <section className="space-y-4 rounded-xl border border-slate-800 bg-slate-900 p-4">
-      {companyId && <div className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-cyan-900/70 bg-cyan-950/30 px-3 py-2 text-xs">
-        <span className="text-cyan-100">顧客に関連する契約・請求・支援を表示中：{companies.find((company)=>company.id===companyId)?.company_name || companyId}</span>
-        {onClearCompanyFilter && <button type="button" onClick={onClearCompanyFilter} className="rounded border border-cyan-800 px-2 py-1 text-cyan-100 hover:bg-cyan-900/50">全顧客を表示</button>}
+    {tab === 'operations' && <section className="space-y-4 rounded-2xl border border-slate-200 bg-white p-5 shadow-xs">
+      {companyId && <div className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-purple-200 bg-purple-50 px-3.5 py-2.5 text-xs">
+        <span className="text-purple-900 font-semibold">顧客に関連する契約・請求・支援を表示中：{companies.find((company)=>company.id===companyId)?.company_name || companyId}</span>
+        {onClearCompanyFilter && <button type="button" onClick={onClearCompanyFilter} className="rounded-lg border border-purple-300 bg-white px-2.5 py-1 text-purple-800 font-semibold hover:bg-purple-100 cursor-pointer shadow-2xs">全顧客を表示</button>}
       </div>}
-      <div className="flex flex-wrap items-center justify-between gap-3"><div className="flex flex-wrap gap-2">{opsTabs.map(({key,label,icon:Icon}) => <button key={key} onClick={() => setActiveOpsTab(key)} className={`flex items-center gap-2 rounded-lg px-3 py-2 text-sm ${activeOpsTab===key?'bg-blue-600 text-white':'border border-slate-700 text-slate-300 hover:bg-slate-800'}`}><Icon className="h-4 w-4" />{label}</button>)}</div>{activeOpsTab !== 'services' && <button onClick={() => setFormOpen((value) => !value)} className="flex items-center gap-2 rounded-lg bg-blue-600 px-3 py-2 text-sm font-semibold text-white"><Plus className="h-4 w-4" />新規登録</button>}</div>
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div className="flex flex-wrap gap-2">
+          {opsTabs.map(({key,label,icon:Icon}) => (
+            <button
+              key={key}
+              onClick={() => setActiveOpsTab(key)}
+              className={`flex items-center gap-2 rounded-xl px-3.5 py-2 text-xs font-semibold transition cursor-pointer ${
+                activeOpsTab === key
+                  ? 'bg-purple-600 text-white shadow-2xs'
+                  : 'border border-slate-200 bg-white text-slate-700 hover:bg-slate-50'
+              }`}
+            >
+              <Icon className="h-4 w-4" />
+              {label}
+            </button>
+          ))}
+        </div>
+        {activeOpsTab !== 'services' && (
+          <button
+            onClick={() => setFormOpen((value) => !value)}
+            className="flex items-center gap-2 rounded-xl bg-purple-600 hover:bg-purple-700 px-3.5 py-2 text-xs font-bold text-white transition cursor-pointer shadow-xs shadow-purple-600/20"
+          >
+            <Plus className="h-4 w-4" />
+            新規登録
+          </button>
+        )}
+      </div>
+
       {activeOpsTab === 'services' ? <CustomerSupportWorkspace
         companyId={companyId}
         companies={companies}
@@ -742,35 +804,35 @@ export const SalesOperationsWorkspace: React.FC<Props> = ({ tab, companyId, lead
         onAddMilestone={addServiceMilestone}
         onCompleteMilestone={reachServiceMilestone}
       /> : <>
-      {formOpen && <form onSubmit={createOperation} className="grid gap-3 rounded-lg border border-slate-800 bg-slate-950 p-4 md:grid-cols-2">
-        <label className="text-xs text-slate-400">名称（初期入力済み・必要な場合のみ修正）<input required value={recordTitle} onChange={(e)=>setRecordTitle(e.target.value)} className="mt-1 w-full rounded border border-slate-700 bg-slate-900 px-3 py-2 text-sm text-white" /></label>
-        <label className="text-xs text-slate-400">会社<select value={companyId || recordCompany} disabled={Boolean(companyId)} onChange={(e)=>setRecordCompany(e.target.value)} className="mt-1 w-full rounded border border-slate-700 bg-slate-900 px-3 py-2 text-sm text-white disabled:opacity-70"><option value="">会社を選択</option>{companies.map(company=><option key={company.id} value={company.id}>{company.company_name}</option>)}</select></label>
-        {activeOpsTab === 'contracts' && <label className="text-xs text-slate-400">関連商談（任意）<select value={recordDealId} onChange={(e)=>{ const id=e.target.value; setRecordDealId(id); const deal=deals.find((item)=>item.id===id); if (deal) { setRecordCompany(deal.company_id || ''); setRecordProductId(deal.product_id || ''); if (deal.proposal_plan_name) setRecordTitle(deal.proposal_plan_name); if (deal.total_amount != null) setRecordAmount(String(deal.total_amount)); } }} className="mt-1 w-full rounded border border-slate-700 bg-slate-900 px-3 py-2 text-sm text-white"><option value="">商談を選択しない</option>{deals.filter((deal)=>!(companyId || recordCompany) || deal.company_id===(companyId || recordCompany)).map((deal)=><option key={deal.id} value={deal.id}>{deal.proposal_plan_name || deal.id}</option>)}</select></label>}
-        {activeOpsTab === 'invoices' && <label className="text-xs text-slate-400">関連契約（任意）<select value={recordContractId} onChange={(e)=>{ const id=e.target.value; setRecordContractId(id); const contract=savedContracts.find((item)=>item.id===id); if(contract){ setRecordCompany(contract.company_id || ''); setRecordProductId(contract.product_id || ''); } }} className="mt-1 w-full rounded border border-slate-700 bg-slate-900 px-3 py-2 text-sm text-white"><option value="">契約を選択しない</option>{savedContracts.filter((contract)=>!(companyId || recordCompany) || contract.company_id===(companyId || recordCompany)).map((contract)=><option key={contract.id} value={contract.id}>{contract.title}</option>)}</select></label>}
-        <label className="text-xs text-slate-400">関連商品（任意）<select value={recordProductId} onChange={(e)=>setRecordProductId(e.target.value)} className="mt-1 w-full rounded border border-slate-700 bg-slate-900 px-3 py-2 text-sm text-white"><option value="">商品を選択しない</option>{catalogProducts.filter((product)=>product.status!=='inactive'||product.id===recordProductId).map((product)=><option key={product.id} value={product.id}>{product.product_name}{product.status==='inactive'?'（取扱停止・既存記録）':''}</option>)}</select></label>
-        <label className="text-xs text-slate-400">金額（税抜・円 / 商談から初期入力）
-          <input type="number" min="0" value={recordAmount} onChange={(e)=>setRecordAmount(e.target.value)} placeholder="0" className="mt-1 w-full rounded border border-slate-700 bg-slate-900 px-3 py-2 text-sm text-white" />
+      {formOpen && <form onSubmit={createOperation} className="grid gap-3.5 rounded-xl border border-slate-200 bg-slate-50 p-4 md:grid-cols-2">
+        <label className="text-xs font-semibold text-slate-700">名称（初期入力済み・必要な場合のみ修正）<input required value={recordTitle} onChange={(e)=>setRecordTitle(e.target.value)} className="mt-1 w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs text-slate-900 focus:border-purple-600 focus:outline-none shadow-2xs" /></label>
+        <label className="text-xs font-semibold text-slate-700">会社<select value={companyId || recordCompany} disabled={Boolean(companyId)} onChange={(e)=>setRecordCompany(e.target.value)} className="mt-1 w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs text-slate-900 disabled:opacity-60 focus:border-purple-600 focus:outline-none shadow-2xs"><option value="">会社を選択</option>{companies.map(company=><option key={company.id} value={company.id}>{company.company_name}</option>)}</select></label>
+        {activeOpsTab === 'contracts' && <label className="text-xs font-semibold text-slate-700">関連商談（任意）<select value={recordDealId} onChange={(e)=>{ const id=e.target.value; setRecordDealId(id); const deal=deals.find((item)=>item.id===id); if (deal) { setRecordCompany(deal.company_id || ''); setRecordProductId(deal.product_id || ''); if (deal.proposal_plan_name) setRecordTitle(deal.proposal_plan_name); if (deal.total_amount != null) setRecordAmount(String(deal.total_amount)); } }} className="mt-1 w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs text-slate-900 focus:border-purple-600 focus:outline-none shadow-2xs"><option value="">商談を選択しない</option>{deals.filter((deal)=>!(companyId || recordCompany) || deal.company_id===(companyId || recordCompany)).map((deal)=><option key={deal.id} value={deal.id}>{deal.proposal_plan_name || deal.id}</option>)}</select></label>}
+        {activeOpsTab === 'invoices' && <label className="text-xs font-semibold text-slate-700">関連契約（任意）<select value={recordContractId} onChange={(e)=>{ const id=e.target.value; setRecordContractId(id); const contract=savedContracts.find((item)=>item.id===id); if(contract){ setRecordCompany(contract.company_id || ''); setRecordProductId(contract.product_id || ''); } }} className="mt-1 w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs text-slate-900 focus:border-purple-600 focus:outline-none shadow-2xs"><option value="">契約を選択しない</option>{savedContracts.filter((contract)=>!(companyId || recordCompany) || contract.company_id===(companyId || recordCompany)).map((contract)=><option key={contract.id} value={contract.id}>{contract.title}</option>)}</select></label>}
+        <label className="text-xs font-semibold text-slate-700">関連商品（任意）<select value={recordProductId} onChange={(e)=>setRecordProductId(e.target.value)} className="mt-1 w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs text-slate-900 focus:border-purple-600 focus:outline-none shadow-2xs"><option value="">商品を選択しない</option>{catalogProducts.filter((product)=>product.status!=='inactive'||product.id===recordProductId).map((product)=><option key={product.id} value={product.id}>{product.product_name}{product.status==='inactive'?'（取扱停止・既存記録）':''}</option>)}</select></label>
+        <label className="text-xs font-semibold text-slate-700">金額（税抜・円 / 商談から初期入力）
+          <input type="number" min="0" value={recordAmount} onChange={(e)=>setRecordAmount(e.target.value)} placeholder="0" className="mt-1 w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs text-slate-900 focus:border-purple-600 focus:outline-none shadow-2xs" />
           {recordAmount !== '' && !isNaN(Number(recordAmount)) && (
-            <span className="mt-1 block text-[11px] font-medium text-cyan-300">
+            <span className="mt-1 block text-[11px] font-semibold text-purple-700">
               消費税 (10%): ¥{Math.floor(Number(recordAmount) * 0.1).toLocaleString('ja-JP')} ｜ 税込合計: ¥{Math.floor(Number(recordAmount) * 1.1).toLocaleString('ja-JP')}
             </span>
           )}
         </label>
-        <label className="text-xs text-slate-400">{activeOpsTab==='contracts'?'開始日':'支払期限（当月25日／25日以降は翌月25日）'}<input type="date" value={recordDate} onChange={(e)=>setRecordDate(e.target.value)} className="mt-1 w-full rounded border border-slate-700 bg-slate-900 px-3 py-2 text-sm text-white" /></label>
-        <div className="md:col-span-2"><button className="rounded-lg bg-emerald-700 px-3 py-2 text-sm font-semibold text-white">保存</button></div>
+        <label className="text-xs font-semibold text-slate-700">{activeOpsTab==='contracts'?'開始日':'支払期限（当月25日／25日以降は翌月25日）'}<input type="date" value={recordDate} onChange={(e)=>setRecordDate(e.target.value)} className="mt-1 w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs text-slate-900 focus:border-purple-600 focus:outline-none shadow-2xs" /></label>
+        <div className="md:col-span-2"><button className="rounded-xl bg-purple-600 hover:bg-purple-700 px-4 py-2 text-xs font-bold text-white shadow-xs shadow-purple-600/20 cursor-pointer">保存する</button></div>
       </form>}
 
       {/* ─── 月次定期請求（MRR）コントロールパネル ─── */}
       {activeOpsTab === 'invoices' && (
-        <div className="rounded-xl border border-blue-900/60 bg-gradient-to-r from-blue-950/40 via-slate-900 to-indigo-950/40 p-4 shadow-sm">
+        <div className="rounded-2xl border border-purple-200 bg-purple-50/50 p-4 shadow-2xs">
           <div className="flex flex-wrap items-center justify-between gap-4">
             <div className="space-y-1">
               <div className="flex flex-wrap items-center gap-2">
-                <span className="inline-flex items-center gap-1 rounded-full bg-blue-500/20 px-2.5 py-0.5 text-xs font-semibold text-blue-300 border border-blue-500/30">
+                <span className="inline-flex items-center gap-1 rounded-full bg-purple-100 px-2.5 py-0.5 text-xs font-bold text-purple-800 border border-purple-200">
                   <Sparkles className="h-3 w-3" /> 月次定期請求・MRR自動化
                 </span>
-                <span className="text-xs text-slate-400">対象月:</span>
-                <span className="font-semibold text-white">{formatTargetMonthLabel(recurringMonth)}</span>
+                <span className="text-xs text-slate-500">対象月:</span>
+                <span className="font-bold text-slate-900">{formatTargetMonthLabel(recurringMonth)}</span>
                 <div className="inline-flex items-center gap-1 ml-1">
                   {[-1, 0, 1].map((offset) => {
                     const m = getCurrentTargetMonth(offset);
@@ -780,10 +842,10 @@ export const SalesOperationsWorkspace: React.FC<Props> = ({ tab, companyId, lead
                         key={m}
                         type="button"
                         onClick={() => setRecurringMonth(m)}
-                        className={`rounded px-2 py-0.5 text-[11px] transition-colors ${
+                        className={`rounded-lg px-2.5 py-0.5 text-[11px] font-semibold transition-colors cursor-pointer ${
                           recurringMonth === m
-                            ? 'bg-blue-600 text-white font-semibold'
-                            : 'bg-slate-800 text-slate-300 hover:bg-slate-700'
+                            ? 'bg-purple-600 text-white'
+                            : 'bg-white border border-slate-200 text-slate-700 hover:bg-slate-50'
                         }`}
                       >
                         {label}
@@ -793,14 +855,14 @@ export const SalesOperationsWorkspace: React.FC<Props> = ({ tab, companyId, lead
                 </div>
               </div>
               <div className="flex flex-wrap items-center gap-4 text-xs pt-1">
-                <div className="text-slate-300">
-                  継続契約: <strong className="text-white text-sm">{recurringSummary?.totalCandidates ?? '…'}</strong> 社
+                <div className="text-slate-600">
+                  継続契約: <strong className="text-slate-900 text-sm">{recurringSummary?.totalCandidates ?? '…'}</strong> 社
                 </div>
-                <div className="text-slate-300">
-                  定期MRR: <strong className="text-emerald-300 text-sm">¥{(recurringSummary?.estimatedMonthlyRevenue ?? 0).toLocaleString('ja-JP')}</strong> <span className="text-[10px] text-slate-400">(税抜)</span>
+                <div className="text-slate-600">
+                  定期MRR: <strong className="text-purple-700 text-sm">¥{(recurringSummary?.estimatedMonthlyRevenue ?? 0).toLocaleString('ja-JP')}</strong> <span className="text-[10px] text-slate-500">(税抜)</span>
                 </div>
-                <div className="text-slate-300">
-                  請求状況: <span className="text-cyan-300 font-medium">{recurringSummary?.alreadyBilledCount ?? 0}社 発行済</span> / <span className="text-amber-300 font-semibold">{recurringSummary?.readyToBillCount ?? 0}社 未請求</span>
+                <div className="text-slate-600">
+                  請求状況: <span className="text-emerald-700 font-semibold">{recurringSummary?.alreadyBilledCount ?? 0}社 発行済</span> / <span className="text-amber-700 font-semibold">{recurringSummary?.readyToBillCount ?? 0}社 未請求</span>
                 </div>
               </div>
             </div>
@@ -812,12 +874,12 @@ export const SalesOperationsWorkspace: React.FC<Props> = ({ tab, companyId, lead
                   setRecurringModalOpen(true);
                   void loadRecurringCandidates(recurringMonth);
                 }}
-                className="flex items-center gap-2 rounded-lg bg-blue-600 hover:bg-blue-500 px-4 py-2 text-sm font-semibold text-white shadow-lg shadow-blue-500/20 transition-all cursor-pointer"
+                className="flex items-center gap-2 rounded-xl bg-purple-600 hover:bg-purple-700 px-4 py-2 text-xs font-bold text-white shadow-xs shadow-purple-600/20 transition-all cursor-pointer"
               >
                 <Receipt className="h-4 w-4" />
                 <span>定期請求書を一括生成</span>
                 {(recurringSummary?.readyToBillCount ?? 0) > 0 && (
-                  <span className="rounded-full bg-amber-400 px-2 py-0.5 text-[11px] font-bold text-slate-950">
+                  <span className="rounded-full bg-amber-400 px-2 py-0.5 text-[10px] font-bold text-slate-900">
                     {recurringSummary?.readyToBillCount}
                   </span>
                 )}
@@ -829,63 +891,63 @@ export const SalesOperationsWorkspace: React.FC<Props> = ({ tab, companyId, lead
 
       {/* ─── 定期請求一括生成モーダル ─── */}
       {recurringModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-4 backdrop-blur-sm">
-          <div className="w-full max-w-3xl rounded-2xl border border-slate-700 bg-slate-900 p-6 shadow-2xl space-y-4 max-h-[90vh] flex flex-col">
-            <div className="flex items-center justify-between border-b border-slate-800 pb-3">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 p-4 backdrop-blur-xs">
+          <div className="w-full max-w-3xl rounded-2xl border border-slate-200 bg-white p-6 shadow-2xl space-y-4 max-h-[90vh] flex flex-col">
+            <div className="flex items-center justify-between border-b border-slate-100 pb-3">
               <div>
-                <h3 className="text-lg font-bold text-white flex items-center gap-2">
-                  <Receipt className="h-5 w-5 text-blue-400" />
+                <h3 className="text-base font-bold text-slate-900 flex items-center gap-2">
+                  <Receipt className="h-5 w-5 text-purple-600" />
                   【{formatTargetMonthLabel(recurringMonth)}】月次定期請求書の一括生成
                 </h3>
-                <p className="text-xs text-slate-400 mt-0.5">
+                <p className="text-xs text-slate-500 mt-0.5">
                   締結・有効な顧問契約から、当月分の請求書と請求書類（振込先: 有限会社MST）を一括起票します。
                 </p>
               </div>
               <button
                 type="button"
                 onClick={() => setRecurringModalOpen(false)}
-                className="rounded-lg p-1.5 text-slate-400 hover:bg-slate-800 hover:text-white"
+                className="rounded-lg p-1.5 text-slate-400 hover:bg-slate-100 hover:text-slate-700 cursor-pointer"
               >
                 <X className="h-5 w-5" />
               </button>
             </div>
 
             {/* 日付・対象月設定 */}
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-3 bg-slate-950/60 p-3 rounded-xl border border-slate-800 text-xs">
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-3 bg-slate-50 p-3.5 rounded-xl border border-slate-200 text-xs">
               <div>
-                <label className="block text-slate-400 mb-1">対象月 (YYYY-MM)</label>
+                <label className="block text-slate-600 font-semibold mb-1">対象月 (YYYY-MM)</label>
                 <input
                   type="month"
                   value={recurringMonth}
                   onChange={(e) => {
                     if (e.target.value) setRecurringMonth(e.target.value);
                   }}
-                  className="w-full rounded border border-slate-700 bg-slate-900 px-2.5 py-1.5 text-xs text-white"
+                  className="w-full rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 text-xs text-slate-900 focus:outline-none focus:border-purple-600 shadow-2xs"
                 />
               </div>
               <div>
-                <label className="block text-slate-400 mb-1">発行日 (起票日)</label>
+                <label className="block text-slate-600 font-semibold mb-1">発行日 (起票日)</label>
                 <input
                   type="date"
                   value={recurringIssueDate}
                   onChange={(e) => setRecurringIssueDate(e.target.value)}
-                  className="w-full rounded border border-slate-700 bg-slate-900 px-2.5 py-1.5 text-xs text-white"
+                  className="w-full rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 text-xs text-slate-900 focus:outline-none focus:border-purple-600 shadow-2xs"
                 />
               </div>
               <div>
-                <label className="block text-slate-400 mb-1">支払期日</label>
+                <label className="block text-slate-600 font-semibold mb-1">支払期日</label>
                 <input
                   type="date"
                   value={recurringDueDate}
                   onChange={(e) => setRecurringDueDate(e.target.value)}
-                  className="w-full rounded border border-slate-700 bg-slate-900 px-2.5 py-1.5 text-xs text-white"
+                  className="w-full rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 text-xs text-slate-900 focus:outline-none focus:border-purple-600 shadow-2xs"
                 />
               </div>
             </div>
 
             {/* 候補者一覧 */}
-            <div className="flex-1 overflow-y-auto space-y-2 min-h-48 border border-slate-800 rounded-xl bg-slate-950/40 p-2">
-              <div className="flex items-center justify-between px-2 py-1 text-xs text-slate-400 border-b border-slate-800/80">
+            <div className="flex-1 overflow-y-auto space-y-2 min-h-48 border border-slate-200 rounded-xl bg-slate-50 p-2.5">
+              <div className="flex items-center justify-between px-2 py-1 text-xs text-slate-500 border-b border-slate-200/80">
                 <div className="flex items-center gap-3">
                   <button
                     type="button"
@@ -893,7 +955,7 @@ export const SalesOperationsWorkspace: React.FC<Props> = ({ tab, companyId, lead
                       const unbilled = recurringCandidates.filter((c) => !c.alreadyBilled).map((c) => c.contractId);
                       setSelectedContractIds(unbilled);
                     }}
-                    className="text-blue-400 hover:underline cursor-pointer"
+                    className="text-purple-700 font-semibold hover:underline cursor-pointer"
                   >
                     未請求のみ全選択 ({recurringCandidates.filter((c) => !c.alreadyBilled).length}件)
                   </button>
@@ -901,17 +963,17 @@ export const SalesOperationsWorkspace: React.FC<Props> = ({ tab, companyId, lead
                   <button
                     type="button"
                     onClick={() => setSelectedContractIds([])}
-                    className="text-slate-400 hover:underline cursor-pointer"
+                    className="text-slate-500 hover:underline cursor-pointer"
                   >
                     選択解除
                   </button>
                 </div>
-                <span>選択中: <strong className="text-white">{selectedContractIds.length}</strong> 件</span>
+                <span>選択中: <strong className="text-purple-700 font-bold">{selectedContractIds.length}</strong> 件</span>
               </div>
 
               {loadingRecurring ? (
                 <div className="p-8 text-center text-xs text-slate-400 flex items-center justify-center gap-2">
-                  <RefreshCw className="h-4 w-4 animate-spin text-blue-400" />
+                  <RefreshCw className="h-4 w-4 animate-spin text-purple-600" />
                   定期請求対象の契約を確認中…
                 </div>
               ) : recurringCandidates.length === 0 ? (
@@ -919,18 +981,18 @@ export const SalesOperationsWorkspace: React.FC<Props> = ({ tab, companyId, lead
                   有効な顧問契約または月次費用が設定された契約が見つかりませんでした。「契約」タブから顧問契約（retainer）を登録・締結してください。
                 </div>
               ) : (
-                <div className="divide-y divide-slate-800/60">
+                <div className="divide-y divide-slate-200">
                   {recurringCandidates.map((c) => {
                     const isChecked = selectedContractIds.includes(c.contractId);
                     return (
                       <div
                         key={c.contractId}
-                        className={`flex items-center justify-between p-2.5 rounded-lg text-xs transition-colors ${
+                        className={`flex items-center justify-between p-2.5 rounded-xl text-xs transition-colors ${
                           c.alreadyBilled
-                            ? 'opacity-60 bg-slate-900/40'
+                            ? 'opacity-60 bg-slate-100/60'
                             : isChecked
-                            ? 'bg-blue-950/30 border border-blue-900/50'
-                            : 'hover:bg-slate-900/60'
+                            ? 'bg-purple-50/80 border border-purple-200'
+                            : 'hover:bg-white'
                         }`}
                       >
                         <label className="flex items-center gap-3 cursor-pointer flex-1">
@@ -945,33 +1007,33 @@ export const SalesOperationsWorkspace: React.FC<Props> = ({ tab, companyId, lead
                                 setSelectedContractIds((prev) => prev.filter((id) => id !== c.contractId));
                               }
                             }}
-                            className="rounded border-slate-700 bg-slate-900 text-blue-600 focus:ring-0 disabled:opacity-40"
+                            className="rounded border-slate-300 text-purple-600 focus:ring-purple-500 disabled:opacity-40"
                           />
                           <div>
-                            <div className="font-semibold text-white flex items-center gap-2">
+                            <div className="font-bold text-slate-900 flex items-center gap-2">
                               {c.companyName}
                               {c.alreadyBilled ? (
-                                <span className="inline-flex items-center gap-1 rounded bg-slate-800 px-1.5 py-0.5 text-[10px] text-slate-300">
-                                  <CheckCircle2 className="h-3 w-3 text-emerald-400" /> {c.existingInvoiceNumber || '今月発行済'}
+                                <span className="inline-flex items-center gap-1 rounded bg-slate-200 px-1.5 py-0.5 text-[10px] text-slate-700 font-medium">
+                                  <CheckCircle2 className="h-3 w-3 text-emerald-600" /> {c.existingInvoiceNumber || '今月発行済'}
                                 </span>
                               ) : (
-                                <span className="inline-flex items-center gap-1 rounded bg-emerald-950/60 border border-emerald-800/80 px-1.5 py-0.5 text-[10px] text-emerald-300">
+                                <span className="inline-flex items-center gap-1 rounded bg-emerald-50 border border-emerald-200 px-1.5 py-0.5 text-[10px] text-emerald-700 font-bold">
                                   未請求・発行可能
                                 </span>
                               )}
                             </div>
-                            <div className="text-[11px] text-slate-400">
+                            <div className="text-[11px] text-slate-500">
                               {c.contractTitle} {c.productName ? `· ${c.productName}` : ''}
                             </div>
                           </div>
                         </label>
 
                         <div className="text-right pl-3">
-                          <div className="font-bold text-white text-sm">
-                            ¥{c.monthlyFee.toLocaleString('ja-JP')} <span className="text-[10px] text-slate-400 font-sans">(税抜)</span>
+                          <div className="font-bold text-slate-900 text-sm">
+                            ¥{c.monthlyFee.toLocaleString('ja-JP')} <span className="text-[10px] text-slate-500 font-sans">(税抜)</span>
                           </div>
-                          <div className="text-[11px] text-indigo-300 font-semibold">
-                            ¥{c.totalWithTax.toLocaleString('ja-JP')} <span className="text-[10px] text-slate-400 font-sans">(税込)</span>
+                          <div className="text-[11px] text-purple-700 font-semibold">
+                            ¥{c.totalWithTax.toLocaleString('ja-JP')} <span className="text-[10px] text-slate-500 font-sans">(税込)</span>
                           </div>
                         </div>
                       </div>
@@ -982,8 +1044,8 @@ export const SalesOperationsWorkspace: React.FC<Props> = ({ tab, companyId, lead
             </div>
 
             {/* モーダル下部・振込先案内 & 実行ボタン */}
-            <div className="border-t border-slate-800 pt-3 flex flex-wrap items-center justify-between gap-3">
-              <div className="text-[11px] text-slate-400">
+            <div className="border-t border-slate-100 pt-3 flex flex-wrap items-center justify-between gap-3">
+              <div className="text-[11px] text-slate-500">
                 振込先口座: ドコモSMTBネット銀行 法人第一支店 普通 2223730（有限会社MST）
               </div>
               <div className="flex items-center gap-2">
@@ -991,7 +1053,7 @@ export const SalesOperationsWorkspace: React.FC<Props> = ({ tab, companyId, lead
                   type="button"
                   onClick={() => setRecurringModalOpen(false)}
                   disabled={isGeneratingRecurring}
-                  className="rounded-lg border border-slate-700 px-3 py-1.5 text-xs text-slate-300 hover:bg-slate-800 disabled:opacity-50 cursor-pointer"
+                  className="rounded-lg border border-slate-200 px-3 py-1.5 text-xs text-slate-600 hover:bg-slate-50 disabled:opacity-50 cursor-pointer"
                 >
                   閉じる
                 </button>
@@ -999,7 +1061,7 @@ export const SalesOperationsWorkspace: React.FC<Props> = ({ tab, companyId, lead
                   type="button"
                   onClick={() => void handleGenerateRecurring()}
                   disabled={isGeneratingRecurring || selectedContractIds.length === 0}
-                  className="flex items-center gap-2 rounded-lg bg-blue-600 hover:bg-blue-500 px-4 py-2 text-xs font-semibold text-white shadow-lg shadow-blue-600/30 disabled:opacity-50 cursor-pointer"
+                  className="flex items-center gap-2 rounded-xl bg-purple-600 hover:bg-purple-700 px-4 py-2 text-xs font-bold text-white shadow-xs shadow-purple-600/20 disabled:opacity-50 cursor-pointer"
                 >
                   {isGeneratingRecurring ? (
                     <>
@@ -1019,7 +1081,7 @@ export const SalesOperationsWorkspace: React.FC<Props> = ({ tab, companyId, lead
         </div>
       )}
 
-      {activeOpsTab==='contracts' ? <p className="text-xs text-slate-400">状態の流れ：下書き → 社内確認中 → メール送付済み（同意返信待ち）→ 締結済み（相手の合意を確認）。相手の明示的な同意返信を確認した後に「締結済み」へ更新し、返信メールと契約書PDFを契約記録として保存してください。期限切れ・取消は終了状態です。</p> : <p className="text-xs text-slate-400">状態の流れ：下書き（未発行）→ 承認待ち → 発行済み（入金待ち）→ 入金済み。支払期限を過ぎると「支払期限超過」、取消は終了状態です。</p>}{loading ? <p className="text-sm text-slate-400">読み込み中…</p> : records.length === 0 ? <p className="py-8 text-center text-sm text-slate-400">登録データはありません。</p> : <div className="overflow-x-auto"><table className="w-full text-left text-sm"><thead><tr className="border-b border-slate-800 text-xs text-slate-400"><th className="p-2">名称</th><th className="p-2">会社</th><th className="p-2">関連</th><th className="p-2">状態</th><th className="p-2">金額（税抜 / 税込）</th><th className="p-2">日付</th>{activeOpsTab==='invoices'&&<th className="p-2">書類</th>}<th className="p-2">操作</th></tr></thead><tbody>{records.map((record)=><tr key={record.id} className="border-b border-slate-800/70 text-slate-200"><td className="p-2">{record.title || record.invoice_number}</td><td className="p-2">{companies.find((item)=>item.id===record.company_id)?.company_name || record.company_id || '—'}</td><td className="p-2 text-xs text-slate-400">{activeOpsTab==='contracts' ? <>{catalogProducts.find((product)=>product.id===record.product_id)?.product_name || record.product_id || '商品未設定'}{record.deal_id && <div>商談: {deals.find((deal)=>deal.id===record.deal_id)?.proposal_plan_name || record.deal_id}</div>}</> : <>{catalogProducts.find((product)=>product.id===record.product_id)?.product_name || record.product_id || '商品未設定'}{record.contract_id && <div>契約: {savedContracts.find((contract)=>contract.id===record.contract_id)?.title || record.contract_id}</div>}</>}</td><td className="p-2"><select aria-label={`${record.title||record.invoice_number}の状態`} value={record.status} onChange={(e)=>void updateOperationStatus(record,e.target.value)} className="rounded border border-slate-700 bg-slate-950 px-2 py-1 text-xs text-white">{(activeOpsTab==='contracts'?['draft','under_review','sent','signed','expired','canceled']:['draft','awaiting_approval','issued','paid','overdue','canceled']).map(status=><option key={status} value={status}>{(activeOpsTab==='contracts'?contractStatusLabels:invoiceStatusLabels)[status]||status}</option>)}</select></td><td className="p-2">{record.amount == null?'—':<div><div>¥{Number(record.amount).toLocaleString('ja-JP')} <span className="text-[10px] text-slate-400 font-sans">(税抜)</span></div><div className="text-xs text-indigo-300 font-semibold">¥{Math.floor(Number(record.amount) * 1.1).toLocaleString('ja-JP')} <span className="text-[10px] text-slate-400 font-sans">(税込)</span></div></div>}</td><td className="p-2">{record.due_date || record.start_date || '—'}</td><td className="p-2">{activeOpsTab==='invoices'&&<button type="button" onClick={()=>record.company_id&&onOpenInvoiceDocuments?.(record.company_id, record.document_id || undefined)} disabled={!record.company_id||!onOpenInvoiceDocuments} className="whitespace-nowrap rounded border border-cyan-800 px-2 py-1 text-xs text-cyan-200 disabled:opacity-40">請求書類を開く</button>}</td><td className="p-2"><button type="button" onClick={()=>void deleteOperationRecord(record)} className="rounded border border-rose-500/40 px-2 py-1 text-xs text-rose-300 hover:bg-rose-500/10">削除</button></td></tr>)}</tbody></table></div>}
+      {activeOpsTab==='contracts' ? <p className="text-xs text-slate-500">状態の流れ：下書き → 社内確認中 → メール送付済み（同意返信待ち）→ 締結済み（相手の合意を確認）。相手の明示的な同意返信を確認した後に「締結済み」へ更新し、返信メールと契約書PDFを契約記録として保存してください。期限切れ・取消は終了状態です。</p> : <p className="text-xs text-slate-500">状態の流れ：下書き（未発行）→ 承認待ち → 発行済み（入金待ち）→ 入金済み。支払期限を過ぎると「支払期限超過」、取消は終了状態です。</p>}{loading ? <p className="text-xs text-slate-400">読み込み中…</p> : records.length === 0 ? <p className="py-8 text-center text-xs text-slate-400">登録データはありません。</p> : <div className="overflow-x-auto"><table className="w-full text-left text-xs"><thead><tr className="border-b border-slate-200 text-xs font-semibold text-slate-600"><th className="p-2.5">名称</th><th className="p-2.5">会社</th><th className="p-2.5">関連</th><th className="p-2.5">状態</th><th className="p-2.5">金額（税抜 / 税込）</th><th className="p-2.5">日付</th>{activeOpsTab==='invoices'&&<th className="p-2.5">書類</th>}<th className="p-2.5">操作</th></tr></thead><tbody className="divide-y divide-slate-100">{records.map((record)=><tr key={record.id} className="text-slate-800 hover:bg-slate-50/50"><td className="p-2.5 font-semibold">{record.title || record.invoice_number}</td><td className="p-2.5">{companies.find((item)=>item.id===record.company_id)?.company_name || record.company_id || '—'}</td><td className="p-2.5 text-xs text-slate-500">{activeOpsTab==='contracts' ? <>{catalogProducts.find((product)=>product.id===record.product_id)?.product_name || record.product_id || '商品未設定'}{record.deal_id && <div>商談: {deals.find((deal)=>deal.id===record.deal_id)?.proposal_plan_name || record.deal_id}</div>}</> : <>{catalogProducts.find((product)=>product.id===record.product_id)?.product_name || record.product_id || '商品未設定'}{record.contract_id && <div>契約: {savedContracts.find((contract)=>contract.id===record.contract_id)?.title || record.contract_id}</div>}</>}</td><td className="p-2.5"><select aria-label={`${record.title||record.invoice_number}の状態`} value={record.status} onChange={(e)=>void updateOperationStatus(record,e.target.value)} className="rounded-lg border border-slate-200 bg-white px-2 py-1 text-xs text-slate-800 focus:outline-none focus:border-purple-600 shadow-2xs">{(activeOpsTab==='contracts'?['draft','under_review','sent','signed','expired','canceled']:['draft','awaiting_approval','issued','paid','overdue','canceled']).map(status=><option key={status} value={status}>{(activeOpsTab==='contracts'?contractStatusLabels:invoiceStatusLabels)[status]||status}</option>)}</select></td><td className="p-2.5">{record.amount == null?'—':<div><div className="font-medium text-slate-900">¥{Number(record.amount).toLocaleString('ja-JP')} <span className="text-[10px] text-slate-500 font-sans">(税抜)</span></div><div className="text-[11px] text-purple-700 font-semibold">¥{Math.floor(Number(record.amount) * 1.1).toLocaleString('ja-JP')} <span className="text-[10px] text-slate-500 font-sans">(税込)</span></div></div>}</td><td className="p-2.5 text-slate-600">{record.due_date || record.start_date || '—'}</td><td className="p-2.5">{activeOpsTab==='invoices'&&<button type="button" onClick={()=>record.company_id&&onOpenInvoiceDocuments?.(record.company_id, record.document_id || undefined)} disabled={!record.company_id||!onOpenInvoiceDocuments} className="whitespace-nowrap rounded-lg border border-purple-200 bg-purple-50 px-2 py-1 text-xs font-semibold text-purple-700 hover:bg-purple-100 disabled:opacity-40 cursor-pointer shadow-2xs">請求書類を開く</button>}</td><td className="p-2.5"><button type="button" onClick={()=>void deleteOperationRecord(record)} className="rounded-lg border border-rose-200 px-2 py-1 text-xs font-semibold text-rose-700 hover:bg-rose-50 cursor-pointer shadow-2xs">削除</button></td></tr>)}</tbody></table></div>}
       </>}
     </section>}
   </div>;

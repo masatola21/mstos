@@ -650,32 +650,32 @@ export const ContactsLineHub: React.FC<Props> = ({
     <div className="space-y-6">
       {/* 告知・エラーバナー */}
       {error && (
-        <div className="rounded-xl border border-rose-800 bg-rose-950/60 p-3 text-xs text-rose-200 flex items-center justify-between">
+        <div className="rounded-xl border border-rose-200 bg-rose-50 p-3 text-xs text-rose-800 flex items-center justify-between shadow-2xs">
           <span>{error}</span>
-          <button onClick={() => setError('')} className="text-rose-400 hover:text-rose-200">
+          <button onClick={() => setError('')} className="text-rose-500 hover:text-rose-700 cursor-pointer">
             ×
           </button>
         </div>
       )}
       {notice && (
-        <div className="rounded-xl border border-blue-800 bg-blue-950/60 p-3 text-xs text-blue-200 flex items-center justify-between">
+        <div className="rounded-xl border border-purple-200 bg-purple-50 p-3 text-xs text-purple-800 flex items-center justify-between shadow-2xs">
           <span>{notice}</span>
-          <button onClick={() => setNotice('')} className="text-blue-400 hover:text-blue-200">
+          <button onClick={() => setNotice('')} className="text-purple-500 hover:text-purple-700 cursor-pointer">
             ×
           </button>
         </div>
       )}
 
       {/* ヘッダー */}
-      <section className="flex flex-wrap items-center justify-between gap-4 rounded-2xl border border-slate-800 bg-slate-900/60 p-5">
+      <section className="flex flex-wrap items-center justify-between gap-4 rounded-2xl border border-slate-200 bg-white p-5 shadow-xs">
         <div>
           <div className="flex items-center gap-2">
-            <h1 className="text-2xl font-black text-white">連絡先・LINE友だち台帳（タグ管理）</h1>
-            <span className="rounded-full bg-blue-900/40 border border-blue-700/60 px-2.5 py-0.5 text-[10px] font-bold text-blue-300">
+            <h1 className="text-xl sm:text-2xl font-bold text-slate-900 tracking-tight">連絡先・LINE友だち台帳（タグ管理）</h1>
+            <span className="rounded-full bg-purple-50 border border-purple-200 px-2.5 py-0.5 text-[10px] font-bold text-purple-700">
               配信共通タグ辞書 連携中
             </span>
           </div>
-          <p className="mt-1 text-xs text-slate-400">
+          <p className="mt-1 text-xs text-slate-500">
             CRM連絡先とLINE公式アカウントの友だち情報を一元統合管理します。配信シナリオでの自動付与（⚡自動）と、スタッフによる商談進捗の手動付与（👤手動）が同一のタグ辞書で完全連動します。
           </p>
         </div>
@@ -684,14 +684,14 @@ export const ContactsLineHub: React.FC<Props> = ({
             onClick={() => void syncMasterTags()}
             disabled={saving}
             title="マーケティング配信シナリオで使われている共通タグ辞書（全16種）をCRMタグ台帳に一括同期します"
-            className="flex items-center gap-1.5 rounded-lg border border-blue-500/40 bg-blue-950/40 px-3 py-2 text-xs font-semibold text-blue-300 hover:bg-blue-900/50 transition cursor-pointer disabled:opacity-40"
+            className="flex items-center gap-1.5 rounded-lg border border-purple-200 bg-purple-50 px-3 py-2 text-xs font-semibold text-purple-700 hover:bg-purple-100 transition cursor-pointer disabled:opacity-40 shadow-2xs"
           >
             <BookOpen className="h-3.5 w-3.5" />
             <span>辞書タグ全同期 ({tags.length}/16)</span>
           </button>
           <button
             onClick={() => setIsCreateOpen(true)}
-            className="flex items-center gap-1.5 rounded-lg bg-blue-600 px-3 py-2 text-xs font-semibold text-white hover:bg-blue-500 transition cursor-pointer"
+            className="flex items-center gap-1.5 rounded-lg bg-purple-600 px-3 py-2 text-xs font-semibold text-white hover:bg-purple-700 transition cursor-pointer shadow-xs"
           >
             <Plus className="h-3.5 w-3.5" />
             <span>連絡先を追加</span>
@@ -699,7 +699,7 @@ export const ContactsLineHub: React.FC<Props> = ({
           <button
             onClick={() => void load()}
             disabled={loading}
-            className="rounded-lg border border-slate-700 bg-slate-800 p-2 text-slate-300 hover:bg-slate-700 hover:text-white transition cursor-pointer disabled:opacity-50"
+            className="rounded-lg border border-slate-200 bg-white p-2 text-slate-600 hover:bg-slate-50 hover:text-slate-900 transition cursor-pointer disabled:opacity-50 shadow-2xs"
             title="再読み込み"
           >
             <RefreshCw className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`} />
@@ -708,35 +708,35 @@ export const ContactsLineHub: React.FC<Props> = ({
       </section>
 
       {/* 💡 配信・友だちタグ連携の解説カード（ユーザーの疑問を解消） */}
-      <section className="rounded-2xl border border-slate-800 bg-gradient-to-r from-slate-900/90 via-slate-900/60 to-blue-950/30 p-4">
+      <section className="rounded-2xl border border-purple-200 bg-gradient-to-r from-purple-50/60 via-purple-50/30 to-indigo-50/40 p-4 shadow-2xs">
         <div className="flex items-start gap-3">
-          <div className="rounded-lg bg-blue-500/10 p-2 border border-blue-500/20 text-blue-400 shrink-0 mt-0.5">
+          <div className="rounded-lg bg-purple-100 p-2 border border-purple-200 text-purple-700 shrink-0 mt-0.5">
             <Zap className="h-4 w-4" />
           </div>
           <div className="space-y-1.5 text-xs">
             <div className="flex items-center gap-2">
-              <span className="font-bold text-white">
+              <span className="font-bold text-slate-900">
                 💡 自動配信と友だち台帳のタグ連携仕様について
               </span>
-              <span className="text-[10px] text-emerald-400 font-semibold bg-emerald-950/40 border border-emerald-800/40 px-2 py-0.2 rounded-full">
+              <span className="text-[10px] text-emerald-700 font-semibold bg-emerald-50 border border-emerald-200 px-2 py-0.2 rounded-full">
                 正常連携
               </span>
             </div>
-            <div className="grid sm:grid-cols-2 gap-3 text-slate-300 leading-relaxed text-[11px] pt-1">
-              <div className="rounded-xl border border-slate-800 bg-slate-950/40 p-2.5 space-y-1">
-                <div className="font-bold text-blue-300 flex items-center gap-1.5">
-                  <span className="text-amber-400">⚡</span> 自動配信（シナリオ・自動返信・診断）
+            <div className="grid sm:grid-cols-2 gap-3 text-slate-600 leading-relaxed text-[11px] pt-1">
+              <div className="rounded-xl border border-slate-200 bg-white p-3 space-y-1 shadow-2xs">
+                <div className="font-bold text-purple-700 flex items-center gap-1.5">
+                  <span className="text-amber-500">⚡</span> 自動配信（シナリオ・自動返信・診断）
                 </div>
-                <p className="text-slate-400">
-                  友だち追加、診断回答完了、面談予約、選択肢タップ時にトリガーで<span className="text-amber-300 font-semibold">「⚡自動付与」</span>されます。また「成約」「予約済」タグが付いた際は、シナリオ配信が<span className="text-emerald-300 font-semibold">自動停止</span>します。
+                <p className="text-slate-500">
+                  友だち追加、診断回答完了、面談予約、選択肢タップ時にトリガーで<span className="text-amber-700 font-semibold">「⚡自動付与」</span>されます。また「成約」「予約済」タグが付いた際は、シナリオ配信が<span className="text-emerald-700 font-semibold">自動停止</span>します。
                 </p>
               </div>
-              <div className="rounded-xl border border-slate-800 bg-slate-950/40 p-2.5 space-y-1">
-                <div className="font-bold text-emerald-300 flex items-center gap-1.5">
-                  <span className="text-emerald-400">👤</span> 連絡先・友だち台帳（この画面）
+              <div className="rounded-xl border border-slate-200 bg-white p-3 space-y-1 shadow-2xs">
+                <div className="font-bold text-emerald-700 flex items-center gap-1.5">
+                  <span className="text-emerald-600">👤</span> 連絡先・友だち台帳（この画面）
                 </div>
-                <p className="text-slate-400">
-                  面談や商談の進捗に応じて、オペレーターが<span className="text-emerald-300 font-semibold">「👤手動付与」</span>します。同じ共通タグ辞書を使っているため、手動で「成約」や「相談済」を付与した場合も自動配信は即時停止します。
+                <p className="text-slate-500">
+                  面談や商談の進捗に応じて、オペレーターが<span className="text-emerald-700 font-semibold">「👤手動付与」</span>します。同じ共通タグ辞書を使っているため、手動で「成約」や「相談済」を付与した場合も自動配信は即時停止します。
                 </p>
               </div>
             </div>
@@ -745,19 +745,19 @@ export const ContactsLineHub: React.FC<Props> = ({
       </section>
 
       {/* メイン台帳セクション */}
-      <section className="rounded-2xl border border-slate-800 bg-slate-900/60 shadow-xl">
+      <section className="rounded-2xl border border-slate-200 bg-white shadow-xs">
         {/* 検索・基本フィルター */}
-        <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-800 bg-slate-950/70 p-4 rounded-t-2xl">
+        <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-200 bg-slate-50/70 p-4 rounded-t-2xl">
           <div className="relative min-w-48 flex-1 sm:max-w-xs">
-            <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-500" />
+            <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
             <input
               value={search}
               onChange={(event) => setSearch(event.target.value)}
               placeholder="氏名・会社・メール・電話・タグで検索"
-              className="w-full rounded-lg border border-slate-700 bg-slate-950 py-2 pl-9 pr-3 text-xs text-white outline-none focus:border-blue-500"
+              className="w-full rounded-lg border border-slate-200 bg-white py-2 pl-9 pr-3 text-xs text-slate-800 outline-none focus:border-purple-500 shadow-2xs placeholder:text-slate-400"
             />
           </div>
-          <div className="flex gap-1 rounded-lg bg-slate-950 p-1">
+          <div className="flex gap-1 rounded-lg bg-slate-100 p-1 border border-slate-200">
             {(
               [
                 ['all', `すべて (${people.length})`],
@@ -777,8 +777,8 @@ export const ContactsLineHub: React.FC<Props> = ({
                 className={
                   'rounded-md px-2.5 py-1.5 text-xs font-medium transition-all cursor-pointer ' +
                   (filter === value
-                    ? 'bg-blue-600 font-semibold text-white shadow-sm'
-                    : 'text-slate-400 hover:text-white')
+                    ? 'bg-white font-bold text-purple-700 shadow-2xs'
+                    : 'text-slate-600 hover:text-slate-900')
                 }
               >
                 {label}
@@ -788,10 +788,10 @@ export const ContactsLineHub: React.FC<Props> = ({
         </div>
 
         {/* 🏷️ タグカテゴリ切替 & 絞り込みバー */}
-        <div className="border-b border-slate-800 bg-slate-950/40 px-4 py-2.5 text-xs space-y-2">
+        <div className="border-b border-slate-200 bg-white px-4 py-2.5 text-xs space-y-2">
           <div className="flex flex-wrap items-center justify-between gap-2">
-            <div className="flex items-center gap-1.5 text-slate-300 font-semibold shrink-0">
-              <Tag className="h-3.5 w-3.5 text-blue-400" />
+            <div className="flex items-center gap-1.5 text-slate-700 font-semibold shrink-0">
+              <Tag className="h-3.5 w-3.5 text-purple-600" />
               <span>タグ辞書絞り込み:</span>
             </div>
             {/* カテゴリタブ */}
@@ -807,10 +807,10 @@ export const ContactsLineHub: React.FC<Props> = ({
                   key={cat.key}
                   type="button"
                   onClick={() => setTagCategoryFilter(cat.key)}
-                  className={`px-2 py-0.5 rounded text-[11px] font-medium transition cursor-pointer ${
+                  className={`px-2.5 py-1 rounded-lg text-xs font-medium transition cursor-pointer ${
                     tagCategoryFilter === cat.key
-                      ? 'bg-blue-600/40 text-blue-200 border border-blue-500/50'
-                      : 'text-slate-400 hover:text-white hover:bg-slate-800'
+                      ? 'bg-purple-50 text-purple-700 border border-purple-200 font-bold'
+                      : 'text-slate-600 hover:text-slate-900 hover:bg-slate-50'
                   }`}
                 >
                   {cat.label}
@@ -824,10 +824,10 @@ export const ContactsLineHub: React.FC<Props> = ({
             <button
               type="button"
               onClick={() => setSelectedTagFilter(null)}
-              className={`rounded-full px-2.5 py-1 text-xs font-medium transition cursor-pointer ${
+              className={`rounded-full px-3 py-1 text-xs font-medium transition cursor-pointer ${
                 selectedTagFilter === null
-                  ? 'bg-blue-600 text-white font-bold shadow-sm'
-                  : 'border border-slate-700 bg-slate-900 text-slate-300 hover:text-white hover:border-slate-600'
+                  ? 'bg-purple-600 text-white font-bold shadow-xs'
+                  : 'border border-slate-200 bg-white text-slate-700 hover:bg-slate-50'
               }`}
             >
               全タグ表示 ({people.length})
@@ -845,39 +845,39 @@ export const ContactsLineHub: React.FC<Props> = ({
                     title={`「${tag.name}」タグで絞り込み ${tag.description ? '— ' + tag.description : ''}`}
                     className={`rounded-l-full border-y border-l px-2.5 py-1 text-xs font-medium transition cursor-pointer flex items-center gap-1.5 ${
                       isSelected
-                        ? 'border-blue-500 bg-blue-600 text-white font-bold shadow-sm'
-                        : 'border-slate-700 bg-slate-900 text-slate-300 hover:border-slate-600 hover:text-white'
+                        ? 'border-purple-300 bg-purple-50 text-purple-800 font-bold shadow-xs'
+                        : 'border-slate-200 bg-white text-slate-700 hover:border-slate-300 hover:bg-slate-50'
                     }`}
                   >
                     <span
                       className="w-1.5 h-1.5 rounded-full"
-                      style={{ backgroundColor: tag.color || '#3b82f6' }}
+                      style={{ backgroundColor: tag.color || '#6b46c1' }}
                     />
                     <span>{tag.name}</span>
                     <span
                       className={`text-[10px] px-1.5 py-0.2 rounded-full font-bold ${
                         isSelected
-                          ? 'bg-blue-800 text-blue-100'
-                          : 'bg-slate-800 text-slate-400'
+                          ? 'bg-purple-200 text-purple-900'
+                          : 'bg-slate-100 text-slate-600'
                       }`}
                     >
                       {count}
                     </span>
                   </button>
                   {isDeleting ? (
-                    <div className="inline-flex items-center rounded-r-full border border-rose-600 bg-rose-950 px-2 py-0.5 text-[10px] text-rose-200 gap-1">
+                    <div className="inline-flex items-center rounded-r-full border border-rose-300 bg-rose-50 px-2 py-0.5 text-[10px] text-rose-800 gap-1">
                       <span>削除?</span>
                       <button
                         type="button"
                         onClick={() => void deleteTag(tag.id, tag.name)}
-                        className="font-bold text-rose-400 hover:text-white underline cursor-pointer"
+                        className="font-bold text-rose-700 hover:underline cursor-pointer"
                       >
                         はい
                       </button>
                       <button
                         type="button"
                         onClick={() => setDeletingTagId(null)}
-                        className="text-slate-400 hover:text-white ml-1 cursor-pointer"
+                        className="text-slate-500 hover:text-slate-800 ml-1 cursor-pointer"
                       >
                         いいえ
                       </button>
@@ -889,8 +889,8 @@ export const ContactsLineHub: React.FC<Props> = ({
                       onClick={() => setDeletingTagId(tag.id)}
                       className={`rounded-r-full border px-1.5 py-1 text-xs transition cursor-pointer ${
                         isSelected
-                          ? 'border-blue-500 bg-blue-700 text-blue-200 hover:bg-rose-600 hover:text-white'
-                          : 'border-slate-700 bg-slate-900 text-slate-500 hover:bg-rose-950 hover:text-rose-300 hover:border-rose-700'
+                          ? 'border-purple-300 bg-purple-100 text-purple-800 hover:bg-rose-50 hover:text-rose-600 hover:border-rose-300'
+                          : 'border-slate-200 bg-white text-slate-400 hover:bg-rose-50 hover:text-rose-600 hover:border-rose-200'
                       }`}
                     >
                       <Trash2 className="h-3 w-3" />
@@ -906,12 +906,12 @@ export const ContactsLineHub: React.FC<Props> = ({
                 value={topNewTagName}
                 onChange={(e) => setTopNewTagName(e.target.value)}
                 placeholder="＋新規タグ名..."
-                className="rounded-lg border border-slate-700 bg-slate-950 px-2.5 py-1 text-xs text-white placeholder-slate-500 outline-none focus:border-blue-500 w-28 sm:w-36"
+                className="rounded-lg border border-slate-200 bg-white px-2.5 py-1 text-xs text-slate-800 placeholder-slate-400 outline-none focus:border-purple-500 w-28 sm:w-36 shadow-2xs"
               />
               <button
                 type="submit"
                 disabled={saving || !topNewTagName.trim()}
-                className="rounded-lg bg-blue-600 hover:bg-blue-500 px-2.5 py-1 text-xs font-semibold text-white disabled:opacity-40 cursor-pointer transition flex items-center gap-1"
+                className="rounded-lg bg-purple-600 hover:bg-purple-700 px-2.5 py-1 text-xs font-semibold text-white disabled:opacity-40 cursor-pointer transition flex items-center gap-1 shadow-2xs"
               >
                 <Plus className="h-3 w-3" />
                 <span>作成</span>
@@ -921,7 +921,7 @@ export const ContactsLineHub: React.FC<Props> = ({
         </div>
 
         {selectedTagFilter && (
-          <div className="flex items-center justify-between border-b border-blue-900/40 bg-blue-950/30 px-4 py-2 text-xs text-blue-200">
+          <div className="flex items-center justify-between border-b border-purple-200 bg-purple-50/70 px-4 py-2 text-xs text-purple-900">
             <div className="flex items-center gap-2">
               <span className="font-bold">
                 🏷️ タグ「{tags.find((t) => t.id === selectedTagFilter)?.name}」で絞り込み中:
@@ -931,7 +931,7 @@ export const ContactsLineHub: React.FC<Props> = ({
             <button
               type="button"
               onClick={() => setSelectedTagFilter(null)}
-              className="text-xs text-blue-300 hover:text-white underline cursor-pointer"
+              className="text-xs text-purple-700 hover:text-purple-900 underline cursor-pointer font-medium"
             >
               絞り込みを解除
             </button>
@@ -940,9 +940,9 @@ export const ContactsLineHub: React.FC<Props> = ({
 
         {/* 一括操作バー */}
         {selectedPeople.length > 0 && (
-          <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-800 bg-slate-950/70 p-4">
+          <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-200 bg-purple-50/40 p-4">
             <div className="flex flex-wrap items-center gap-3">
-              <span className="text-xs text-slate-300 font-semibold">
+              <span className="text-xs text-slate-800 font-bold">
                 {selectedPeople.length}人選択中
               </span>
               <div className="flex flex-wrap gap-2 max-h-24 overflow-y-auto">
@@ -953,8 +953,8 @@ export const ContactsLineHub: React.FC<Props> = ({
                     className={
                       'rounded-full border px-2.5 py-1 text-xs cursor-pointer ' +
                       (selectedTags.includes(tag.id)
-                        ? 'border-blue-400 bg-blue-500/20 text-blue-200'
-                        : 'border-slate-700 text-slate-400')
+                        ? 'border-purple-300 bg-purple-100 text-purple-800 font-bold'
+                        : 'border-slate-200 bg-white text-slate-600 hover:bg-slate-50')
                     }
                   >
                     {tag.name}
@@ -964,7 +964,7 @@ export const ContactsLineHub: React.FC<Props> = ({
               <button
                 onClick={() => void assignSelectedTags()}
                 disabled={saving || !selectedTags.length}
-                className="rounded-lg bg-blue-600 px-3 py-2 text-xs font-semibold text-white disabled:opacity-40 cursor-pointer"
+                className="rounded-lg bg-purple-600 hover:bg-purple-700 px-3 py-2 text-xs font-semibold text-white disabled:opacity-40 cursor-pointer shadow-xs"
               >
                 {saving ? '処理中…' : '選択したLINEにタグ付与'}
               </button>
@@ -974,7 +974,7 @@ export const ContactsLineHub: React.FC<Props> = ({
                 onConfirm={() => void bulkDeleteSelected()}
                 warning={`選択した ${selectedPeople.length} 件のデータ（連絡先・LINE連携）を完全に削除しますか？`}
                 confirmLabel="一括削除を実行"
-                className="rounded-lg bg-rose-950/60 border border-rose-800/80 px-3 py-1.5 text-xs font-semibold text-rose-300 hover:bg-rose-900/60 transition flex items-center gap-1.5 cursor-pointer"
+                className="rounded-lg bg-rose-50 border border-rose-200 px-3 py-1.5 text-xs font-semibold text-rose-700 hover:bg-rose-100 transition flex items-center gap-1.5 cursor-pointer shadow-2xs"
               >
                 <Trash2 className="h-3.5 w-3.5" />
                 <span>選択した {selectedPeople.length} 件を一括削除</span>
@@ -985,22 +985,22 @@ export const ContactsLineHub: React.FC<Props> = ({
 
         {/* 顧客リスト */}
         {loading ? (
-          <div className="flex items-center gap-2 p-8 text-sm text-slate-400">
-            <Loader2 className="h-4 w-4 animate-spin" />
-            読み込み中…
+          <div className="flex items-center justify-center gap-2 p-12 text-sm text-slate-500">
+            <Loader2 className="h-5 w-5 animate-spin text-purple-600" />
+            <span>連絡先・LINE友だちデータを読み込み中…</span>
           </div>
         ) : visiblePeople.length === 0 ? (
-          <div className="p-10 text-center">
-            <WifiOff className="mx-auto h-8 w-8 text-slate-600" />
-            <p className="mt-3 text-sm font-semibold text-slate-300">
+          <div className="p-12 text-center space-y-3">
+            <WifiOff className="mx-auto h-8 w-8 text-slate-400" />
+            <p className="text-sm font-bold text-slate-800">
               {people.length ? '条件に一致する人はいません' : '連絡先はまだ登録されていません'}
             </p>
-            <p className="mt-2 text-xs leading-5 text-slate-500">
-              連絡先は手動登録や診断・相談から登録できます。LINE友だちはWebhook接続後に自動で連絡先に紐付きます。
+            <p className="text-xs leading-5 text-slate-500 max-w-md mx-auto">
+              連絡先は手動登録や診断・相談受付フォームから登録できます。LINE友だちは友だち追加時に自動で紐付きます。
             </p>
           </div>
         ) : (
-          <div className="divide-y divide-slate-800">
+          <div className="divide-y divide-slate-100">
             {visiblePeople.map((person) => {
               const hasActivePicker = person.lineFriends.some(
                 (f) => f.id === activeTagPickerFriendId
@@ -1009,8 +1009,8 @@ export const ContactsLineHub: React.FC<Props> = ({
               return (
                 <article
                   key={person.id}
-                  className={`flex flex-wrap items-start gap-3 p-4 transition ${
-                    hasActivePicker ? 'relative z-30 bg-slate-900/90' : 'relative z-0'
+                  className={`flex flex-wrap items-start gap-3 p-4 transition hover:bg-slate-50/60 ${
+                    hasActivePicker ? 'relative z-30 bg-purple-50/30' : 'relative z-0'
                   }`}
                 >
                 <input
@@ -1018,35 +1018,35 @@ export const ContactsLineHub: React.FC<Props> = ({
                   type="checkbox"
                   checked={selectedPeople.includes(person.id)}
                   onChange={() => togglePerson(person.id)}
-                  className="mt-1 accent-blue-500 cursor-pointer"
+                  className="mt-1 accent-purple-600 cursor-pointer"
                 />
                 <div className="min-w-0 flex-1">
                   <div className="flex flex-wrap items-center gap-2">
-                    <h2 className="truncate text-sm font-semibold text-white">{person.name}</h2>
+                    <h2 className="truncate text-sm font-bold text-slate-900">{person.name}</h2>
                     {person.lineFriends.length ? (
-                      <span className="inline-flex items-center gap-1 rounded-full bg-emerald-500/10 px-2 py-0.5 text-[10px] text-emerald-300">
+                      <span className="inline-flex items-center gap-1 rounded-full bg-emerald-50 border border-emerald-200 px-2 py-0.5 text-[10px] font-semibold text-emerald-700">
                         <Wifi className="h-3 w-3" />
                         LINE連携 {person.lineFriends.length}
                       </span>
                     ) : (
-                      <span className="inline-flex items-center gap-1 rounded-full bg-slate-800 px-2 py-0.5 text-[10px] text-slate-400">
+                      <span className="inline-flex items-center gap-1 rounded-full bg-slate-100 border border-slate-200 px-2 py-0.5 text-[10px] text-slate-500">
                         <WifiOff className="h-3 w-3" />
                         LINE未連携
                       </span>
                     )}
                     {person.companyName && (
-                      <span className="rounded-full bg-slate-800 px-2 py-0.5 text-[10px] text-slate-300">
+                      <span className="rounded-full bg-slate-100 border border-slate-200 px-2.5 py-0.5 text-[10px] font-medium text-slate-700">
                         {person.companyName}
                       </span>
                     )}
                   </div>
-                  <div className="mt-1 flex flex-wrap gap-x-4 gap-y-1 text-xs text-slate-400">
+                  <div className="mt-1 flex flex-wrap gap-x-4 gap-y-1 text-xs text-slate-500">
                     {person.email && <span>{person.email}</span>}
                     {person.phone && <span>{person.phone}</span>}
                   </div>
                   {person.contact && (
                     <div className="mt-2 flex flex-wrap items-center gap-2">
-                      <span className="text-[11px] text-slate-400">メール配信状態</span>
+                      <span className="text-[11px] text-slate-500 font-medium">メール配信状態:</span>
                       <select
                         aria-label={person.name + 'のメール配信状態'}
                         value={String(person.contact.email_consent_status || 'unknown')}
@@ -1057,7 +1057,7 @@ export const ContactsLineHub: React.FC<Props> = ({
                           )
                         }
                         disabled={saving}
-                        className="rounded-lg border border-slate-700 bg-slate-950 px-2 py-1 text-[11px] text-slate-200 disabled:opacity-50"
+                        className="rounded-lg border border-slate-200 bg-white px-2 py-1 text-[11px] text-slate-700 disabled:opacity-50 outline-none focus:border-purple-500 shadow-2xs cursor-pointer"
                       >
                         <option value="unknown">未確認</option>
                         <option value="opted_in">配信可</option>
@@ -1070,17 +1070,17 @@ export const ContactsLineHub: React.FC<Props> = ({
                   {person.lineFriends.map((friend) => (
                     <div
                       key={friend.id}
-                      className={`mt-3 rounded-xl border border-slate-800 bg-slate-950/60 p-3 transition ${
-                        activeTagPickerFriendId === friend.id ? 'relative z-20 ring-1 ring-blue-500/30' : ''
+                      className={`mt-3 rounded-xl border border-slate-200 bg-slate-50/80 p-3.5 transition shadow-2xs ${
+                        activeTagPickerFriendId === friend.id ? 'relative z-20 ring-2 ring-purple-500/20 bg-white' : ''
                       }`}
                     >
                       <div className="flex flex-wrap items-center justify-between gap-2">
                         <div className="flex flex-wrap items-center gap-2">
-                          <span className="inline-flex items-center gap-1 text-xs font-semibold text-slate-200">
-                            <UserRound className="h-3.5 w-3.5 text-emerald-400" />
+                          <span className="inline-flex items-center gap-1 text-xs font-bold text-slate-700">
+                            <UserRound className="h-3.5 w-3.5 text-emerald-600" />
                             LINE {statusLabel[friend.status] || friend.status}
                           </span>
-                          <span className="text-xs text-white font-medium">
+                          <span className="text-xs text-slate-900 font-semibold">
                             {friend.display_name || '名前未取得'}
                           </span>
                         </div>
@@ -1105,14 +1105,14 @@ export const ContactsLineHub: React.FC<Props> = ({
                           }}
                           warning={`「${friend.display_name || friend.line_user_id}」のLINE友だち連携を解除しますか？`}
                           confirmLabel="削除確定"
-                          className="flex items-center gap-1 rounded-lg border border-slate-700 bg-slate-900 px-2 py-1 text-xs text-slate-400 hover:border-rose-700 hover:bg-rose-950/60 hover:text-rose-300 transition"
+                          className="flex items-center gap-1 rounded-lg border border-slate-200 bg-white px-2 py-1 text-xs text-slate-500 hover:border-rose-300 hover:bg-rose-50 hover:text-rose-600 transition cursor-pointer"
                           ariaLabel="LINE友だち連携を解除"
                         >
                           <Trash2 className="h-3 w-3" />
-                          <span className="text-[10px]">LINE削除</span>
+                          <span className="text-[10px]">LINE解除</span>
                         </InlineDeleteButton>
                       </div>
-                      <p className="mt-1 truncate font-mono text-[10px] text-slate-500">
+                      <p className="mt-1 truncate font-mono text-[10px] text-slate-400">
                         {friend.line_user_id}
                       </p>
 
@@ -1125,22 +1125,22 @@ export const ContactsLineHub: React.FC<Props> = ({
                           return (
                             <span
                               key={tag.id}
-                              style={{ borderColor: tag.color ? `${tag.color}50` : undefined }}
-                              className="inline-flex items-center gap-1.5 rounded-full border bg-slate-900/90 px-2.5 py-0.5 text-[11px] text-slate-200 transition"
+                              style={{ borderColor: tag.color ? `${tag.color}40` : undefined }}
+                              className="inline-flex items-center gap-1.5 rounded-full border bg-white px-2.5 py-0.5 text-[11px] text-slate-800 transition shadow-2xs"
                               title={`${tag.name} (${
                                 isAuto ? '⚡ 自動配信・ルールにより自動付与' : '👤 手動付与'
                               }) ${tag.description ? '— ' + tag.description : ''}`}
                             >
                               <span
                                 className="w-1.5 h-1.5 rounded-full shrink-0"
-                                style={{ backgroundColor: tag.color || '#3b82f6' }}
+                                style={{ backgroundColor: tag.color || '#6b46c1' }}
                               />
-                              <span className="font-medium">{tag.name}</span>
+                              <span className="font-semibold text-slate-800">{tag.name}</span>
                               <span
                                 className={`text-[9px] font-mono px-1 rounded ${
                                   isAuto
-                                    ? 'bg-amber-950/70 text-amber-300 border border-amber-800/40'
-                                    : 'bg-slate-800 text-slate-400'
+                                    ? 'bg-amber-50 text-amber-800 border border-amber-200'
+                                    : 'bg-slate-100 text-slate-600'
                                 }`}
                               >
                                 {isAuto ? '⚡自動' : '👤手動'}
@@ -1149,7 +1149,7 @@ export const ContactsLineHub: React.FC<Props> = ({
                                 type="button"
                                 title={'タグ「' + tag.name + '」を外す'}
                                 onClick={() => void removeTag(friend.id, tag.id)}
-                                className="text-slate-500 hover:text-rose-300 ml-0.5 cursor-pointer transition text-xs font-bold"
+                                className="text-slate-400 hover:text-rose-600 ml-0.5 cursor-pointer transition text-xs font-bold"
                               >
                                 ×
                               </button>
@@ -1166,7 +1166,7 @@ export const ContactsLineHub: React.FC<Props> = ({
                                 activeTagPickerFriendId === friend.id ? null : friend.id
                               )
                             }
-                            className="inline-flex items-center gap-1 rounded-full border border-dashed border-blue-500/50 bg-blue-950/20 px-2.5 py-0.5 text-[10px] font-semibold text-blue-300 hover:bg-blue-900/40 transition cursor-pointer"
+                            className="inline-flex items-center gap-1 rounded-full border border-dashed border-purple-300 bg-purple-50/70 px-2.5 py-0.5 text-[10px] font-bold text-purple-700 hover:bg-purple-100 transition cursor-pointer"
                           >
                             <Tag className="h-2.5 w-2.5" />
                             <span>＋タグ追加</span>
@@ -1174,21 +1174,21 @@ export const ContactsLineHub: React.FC<Props> = ({
 
                           {activeTagPickerFriendId === friend.id && (
                             <>
-                              {/* 画面外クリック検知バックドロップ（最前面レイヤー） */}
+                              {/* 画面外クリック検知バックドロップ */}
                               <div
-                                className="fixed inset-0 z-40 bg-black/20 backdrop-blur-[0.5px]"
+                                className="fixed inset-0 z-40 bg-slate-900/20 backdrop-blur-[0.5px]"
                                 onClick={() => setActiveTagPickerFriendId(null)}
                               />
-                              <div className="absolute left-0 top-full z-50 mt-1.5 w-80 sm:w-96 max-w-[calc(100vw-2rem)] rounded-2xl border border-slate-700 bg-slate-900 p-3.5 shadow-2xl space-y-2.5">
-                                <div className="flex items-center justify-between border-b border-slate-800 pb-2">
-                                  <div className="text-xs font-bold text-white flex items-center gap-1.5">
-                                    <Tag className="h-3.5 w-3.5 text-blue-400" />
+                              <div className="absolute left-0 top-full z-50 mt-1.5 w-80 sm:w-96 max-w-[calc(100vw-2rem)] rounded-2xl border border-slate-200 bg-white p-3.5 shadow-2xl space-y-2.5">
+                                <div className="flex items-center justify-between border-b border-slate-100 pb-2">
+                                  <div className="text-xs font-bold text-slate-900 flex items-center gap-1.5">
+                                    <Tag className="h-3.5 w-3.5 text-purple-600" />
                                     <span>付与するタグを選択（共通辞書連携）</span>
                                   </div>
                                 <button
                                   type="button"
                                   onClick={() => setActiveTagPickerFriendId(null)}
-                                  className="text-slate-400 hover:text-white text-xs cursor-pointer"
+                                  className="text-slate-400 hover:text-slate-700 text-xs cursor-pointer"
                                 >
                                   ×
                                 </button>
@@ -1201,7 +1201,7 @@ export const ContactsLineHub: React.FC<Props> = ({
                                   value={pickerSearch}
                                   onChange={(e) => setPickerSearch(e.target.value)}
                                   placeholder="タグ名や説明で検索..."
-                                  className="w-full rounded-lg border border-slate-700 bg-slate-950 px-2.5 py-1 text-xs text-white placeholder-slate-500 outline-none focus:border-blue-500"
+                                  className="w-full rounded-lg border border-slate-200 bg-slate-50 px-2.5 py-1 text-xs text-slate-800 placeholder-slate-400 outline-none focus:border-purple-500 shadow-inner"
                                 />
                                 <div className="flex flex-wrap gap-1">
                                   {[
@@ -1216,8 +1216,8 @@ export const ContactsLineHub: React.FC<Props> = ({
                                       onClick={() => setPickerCategory(cat.key)}
                                       className={`px-1.5 py-0.5 rounded text-[10px] font-medium cursor-pointer transition ${
                                         pickerCategory === cat.key
-                                          ? 'bg-blue-600 text-white font-bold'
-                                          : 'bg-slate-800 text-slate-300 hover:bg-slate-700'
+                                          ? 'bg-purple-600 text-white font-bold shadow-xs'
+                                          : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
                                       }`}
                                     >
                                       {cat.label}
@@ -1249,8 +1249,8 @@ export const ContactsLineHub: React.FC<Props> = ({
                                       }}
                                       className={`w-full text-left p-1.5 rounded-lg text-xs flex items-center justify-between transition cursor-pointer border ${
                                         hasTag
-                                          ? 'border-emerald-600/40 bg-emerald-950/30 text-emerald-200'
-                                          : 'border-slate-800/80 bg-slate-950/60 text-slate-300 hover:bg-slate-800 hover:text-white'
+                                          ? 'border-emerald-200 bg-emerald-50 text-emerald-800'
+                                          : 'border-slate-100 bg-white text-slate-700 hover:bg-purple-50/50 hover:text-purple-900'
                                       }`}
                                     >
                                       <div className="min-w-0 flex-1">
@@ -1259,27 +1259,27 @@ export const ContactsLineHub: React.FC<Props> = ({
                                             className="w-2 h-2 rounded-full shrink-0"
                                             style={{ backgroundColor: item.color }}
                                           />
-                                          <span className="font-semibold text-white">
+                                          <span className="font-bold text-slate-800">
                                             {item.name}
                                           </span>
-                                          <span className="text-[9px] px-1 rounded bg-slate-800 text-slate-400">
+                                          <span className="text-[9px] px-1 rounded bg-slate-100 text-slate-500">
                                             {item.categoryLabel}
                                           </span>
                                         </div>
                                         {item.description && (
-                                          <p className="truncate text-[10px] text-slate-400 mt-0.5">
+                                          <p className="truncate text-[10px] text-slate-500 mt-0.5">
                                             {item.description}
                                           </p>
                                         )}
                                       </div>
                                       <div className="shrink-0 ml-2">
                                         {hasTag ? (
-                                          <span className="inline-flex items-center gap-0.5 text-[10px] font-bold text-emerald-400 bg-emerald-950/60 px-1.5 py-0.5 rounded border border-emerald-700/50">
+                                          <span className="inline-flex items-center gap-0.5 text-[10px] font-bold text-emerald-700 bg-emerald-100 px-1.5 py-0.5 rounded border border-emerald-200">
                                             <Check className="h-3 w-3" />
                                             付与済
                                           </span>
                                         ) : (
-                                          <span className="text-[10px] text-blue-400 hover:underline">
+                                          <span className="text-[10px] font-bold text-purple-600 hover:underline">
                                             ＋付与
                                           </span>
                                         )}
@@ -1289,20 +1289,20 @@ export const ContactsLineHub: React.FC<Props> = ({
                                 })}
 
                                 {pickerMasterItems.length === 0 && (
-                                  <div className="text-center py-4 text-xs text-slate-500">
+                                  <div className="text-center py-4 text-xs text-slate-400">
                                     一致するタグがありません
                                   </div>
                                 )}
                               </div>
 
                               {/* 独自タグ作成フォーム */}
-                              <div className="border-t border-slate-800 pt-2 flex items-center gap-1.5">
+                              <div className="border-t border-slate-100 pt-2 flex items-center gap-1.5">
                                 <input
                                   type="text"
                                   value={pickerCustomTagName}
                                   onChange={(e) => setPickerCustomTagName(e.target.value)}
                                   placeholder="新しい独自タグを入力..."
-                                  className="flex-1 rounded-lg border border-slate-700 bg-slate-950 px-2 py-1 text-xs text-white placeholder-slate-500 outline-none focus:border-blue-500"
+                                  className="flex-1 rounded-lg border border-slate-200 bg-slate-50 px-2 py-1 text-xs text-slate-800 placeholder-slate-400 outline-none focus:border-purple-500 shadow-2xs"
                                 />
                                 <button
                                   type="button"
@@ -1312,7 +1312,7 @@ export const ContactsLineHub: React.FC<Props> = ({
                                     await createTagDirect(pickerCustomTagName.trim());
                                     setPickerCustomTagName('');
                                   }}
-                                  className="rounded-lg bg-blue-600 hover:bg-blue-500 px-2.5 py-1 text-xs font-semibold text-white disabled:opacity-40 cursor-pointer"
+                                  className="rounded-lg bg-purple-600 hover:bg-purple-700 px-2.5 py-1 text-xs font-semibold text-white disabled:opacity-40 cursor-pointer shadow-2xs"
                                 >
                                   作成
                                 </button>
@@ -1325,7 +1325,7 @@ export const ContactsLineHub: React.FC<Props> = ({
                     </div>
                   ))}
                   {!person.contact && (
-                    <p className="mt-2 text-xs text-amber-300">連絡先プロフィール未紐付け</p>
+                    <p className="mt-2 text-xs text-amber-600 font-medium">連絡先プロフィール未紐付け</p>
                   )}
                 </div>
 
@@ -1339,10 +1339,10 @@ export const ContactsLineHub: React.FC<Props> = ({
                           person.contact!.company_id || undefined
                         )
                       }
-                      className="flex items-center gap-1 rounded-lg bg-indigo-700/30 px-2.5 py-1.5 text-xs text-indigo-200 hover:bg-indigo-700/60 cursor-pointer transition"
+                      className="flex items-center gap-1 rounded-lg bg-purple-50 border border-purple-200 px-2.5 py-1.5 text-xs font-semibold text-purple-700 hover:bg-purple-100 cursor-pointer transition shadow-2xs"
                     >
                       <Mail className="h-3.5 w-3.5" />
-                      メール作成
+                      <span>メール作成</span>
                     </button>
                   )}
                   {person.contact &&
@@ -1352,26 +1352,26 @@ export const ContactsLineHub: React.FC<Props> = ({
                         onClick={() =>
                           onOpenLineInbox?.(person.contact!.id, friend.line_user_id)
                         }
-                        className="flex items-center gap-1 rounded-lg bg-emerald-700/30 px-2.5 py-1.5 text-xs text-emerald-200 hover:bg-emerald-700/60 cursor-pointer transition"
+                        className="flex items-center gap-1 rounded-lg bg-emerald-50 border border-emerald-200 px-2.5 py-1.5 text-xs font-semibold text-emerald-700 hover:bg-emerald-100 cursor-pointer transition shadow-2xs"
                       >
                         <MessageCircle className="h-3.5 w-3.5" />
-                        LINE受信箱
+                        <span>LINE受信箱</span>
                       </button>
                     ))}
                   {person.contact && (
                     <button
                       onClick={() => setEditingContact(person.contact || null)}
-                      className="flex items-center gap-1 rounded-lg bg-slate-800 px-2.5 py-1.5 text-xs text-slate-300 hover:text-white cursor-pointer transition"
+                      className="flex items-center gap-1 rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-50 cursor-pointer transition shadow-2xs"
                     >
                       <Pencil className="h-3.5 w-3.5" />
-                      編集
+                      <span>編集</span>
                     </button>
                   )}
                   <InlineDeleteButton
                     onConfirm={() => void deletePerson(person)}
                     warning={`「${person.name}」を削除しますか？`}
                     confirmLabel="削除確定"
-                    className="flex items-center gap-1 rounded-lg border border-rose-800/60 bg-rose-950/30 px-2.5 py-1.5 text-xs text-rose-300 hover:bg-rose-900/50 hover:text-white transition cursor-pointer"
+                    className="flex items-center gap-1 rounded-lg border border-rose-200 bg-rose-50 px-2.5 py-1.5 text-xs font-semibold text-rose-700 hover:bg-rose-100 transition cursor-pointer shadow-2xs"
                     ariaLabel={`「${person.name}」を削除`}
                   >
                     <Trash2 className="h-3.5 w-3.5" />
@@ -1387,24 +1387,24 @@ export const ContactsLineHub: React.FC<Props> = ({
 
       {/* 下部：配信・CRM共通タグ辞書 ＆ マスタ一覧セクション */}
       <div className="grid gap-4 lg:grid-cols-[minmax(0,2fr)_minmax(280px,1fr)]">
-        <section className="rounded-2xl border border-slate-800 bg-slate-900/60 p-5 space-y-4">
+        <section className="rounded-2xl border border-slate-200 bg-white p-5 space-y-4 shadow-xs">
           <div className="flex flex-wrap items-center justify-between gap-3">
-            <div className="flex items-center gap-2 text-sm font-bold text-white">
-              <Tag className="h-4 w-4 text-blue-400" />
+            <div className="flex items-center gap-2 text-sm font-bold text-slate-900">
+              <Tag className="h-4 w-4 text-purple-600" />
               <span>配信・CRM共通タグ辞書（UNIFIED_TAG_MASTER）</span>
             </div>
             <button
               type="button"
               onClick={() => void syncMasterTags()}
               disabled={saving}
-              className="flex items-center gap-1.5 rounded-lg border border-blue-500/40 bg-blue-950/40 px-3 py-1.5 text-xs font-semibold text-blue-300 hover:bg-blue-900/40 transition cursor-pointer disabled:opacity-40"
+              className="flex items-center gap-1.5 rounded-lg border border-purple-200 bg-purple-50 px-3 py-1.5 text-xs font-semibold text-purple-700 hover:bg-purple-100 transition cursor-pointer disabled:opacity-40 shadow-2xs"
             >
               <RefreshCw className={`h-3.5 w-3.5 ${saving ? 'animate-spin' : ''}`} />
               <span>辞書全16種を一括同期</span>
             </button>
           </div>
 
-          <p className="text-xs leading-5 text-slate-400">
+          <p className="text-xs leading-5 text-slate-500">
             マーケティング配信（ステップ配信・自動返信・診断フォーム）と連絡先台帳で同じ辞書を共有します。
             下の各タグをクリックして選択し、上の「選択したLINEにタグ付与」で一括反映できます。
           </p>
@@ -1430,10 +1430,10 @@ export const ContactsLineHub: React.FC<Props> = ({
             ].map((section) => {
               const sectionTags = tags.filter((t) => t.category === section.category);
               return (
-                <div key={section.category} className="rounded-xl border border-slate-800/80 bg-slate-950/50 p-3 space-y-2">
+                <div key={section.category} className="rounded-xl border border-slate-200 bg-slate-50/70 p-3 space-y-2">
                   <div className="flex items-center justify-between">
-                    <span className="text-xs font-bold text-slate-200">{section.label}</span>
-                    <span className="text-[10px] text-slate-400">{section.desc}</span>
+                    <span className="text-xs font-bold text-slate-800">{section.label}</span>
+                    <span className="text-[10px] text-slate-400 font-medium">{section.desc}</span>
                   </div>
                   <div className="flex flex-wrap gap-2">
                     {sectionTags.map((tag) => (
@@ -1443,25 +1443,25 @@ export const ContactsLineHub: React.FC<Props> = ({
                         onClick={() => toggleTag(tag.id)}
                         className={`rounded-full border px-2.5 py-1 text-xs transition cursor-pointer flex items-center gap-1.5 ${
                           selectedTags.includes(tag.id)
-                            ? 'border-blue-400 bg-blue-500/20 text-blue-200 font-bold'
-                            : 'border-slate-700 bg-slate-900 text-slate-300 hover:border-slate-500'
+                            ? 'border-purple-300 bg-purple-100 text-purple-800 font-bold'
+                            : 'border-slate-200 bg-white text-slate-700 hover:border-slate-300 hover:bg-slate-50'
                         }`}
                         title={tag.description || ''}
                       >
                         <span
                           className="w-1.5 h-1.5 rounded-full"
-                          style={{ backgroundColor: tag.color || '#3b82f6' }}
+                          style={{ backgroundColor: tag.color || '#6b46c1' }}
                         />
                         <span>{tag.name}</span>
                         {tag.isExitConditionDefault && (
-                          <span className="text-[9px] px-1 rounded bg-amber-950/70 text-amber-300 border border-amber-800/40">
+                          <span className="text-[9px] px-1 rounded bg-amber-100 text-amber-800 border border-amber-200 font-semibold">
                             停止条件
                           </span>
                         )}
                       </button>
                     ))}
                     {!sectionTags.length && (
-                      <span className="text-xs text-slate-500 italic">
+                      <span className="text-xs text-slate-400 italic">
                         未同期（「辞書全16種を一括同期」を押すと登録されます）
                       </span>
                     )}
@@ -1477,11 +1477,11 @@ export const ContactsLineHub: React.FC<Props> = ({
               onChange={(event) => setNewTagName(event.target.value)}
               maxLength={40}
               placeholder="新しい独自タグ名を入力"
-              className="min-w-0 flex-1 rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-xs text-white outline-none focus:border-blue-500"
+              className="min-w-0 flex-1 rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs text-slate-800 outline-none focus:border-purple-500 shadow-2xs placeholder:text-slate-400"
             />
             <button
               disabled={saving || !newTagName.trim()}
-              className="rounded-lg bg-blue-600 px-3 text-xs font-semibold text-white disabled:opacity-40 cursor-pointer"
+              className="rounded-lg bg-purple-600 hover:bg-purple-700 px-3 text-xs font-semibold text-white disabled:opacity-40 cursor-pointer shadow-2xs transition"
             >
               {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Check className="h-4 w-4" />}
             </button>
@@ -1489,34 +1489,34 @@ export const ContactsLineHub: React.FC<Props> = ({
         </section>
 
         {/* 右サイド：接続状態＆仕様まとめ */}
-        <aside className="rounded-2xl border border-blue-500/20 bg-blue-950/10 p-5 space-y-4">
+        <aside className="rounded-2xl border border-purple-200 bg-purple-50/30 p-5 space-y-4 shadow-xs">
           <div className="flex items-center gap-2">
-            <h3 className="text-xs font-bold text-blue-200">タグ辞書と自動配信の仕様</h3>
+            <h3 className="text-xs font-bold text-purple-900">タグ辞書と自動配信の仕様</h3>
           </div>
-          <div className="space-y-3 text-xs text-slate-300 leading-relaxed">
-            <div className="rounded-xl border border-slate-800 bg-slate-900/60 p-3 space-y-1">
-              <div className="font-bold text-amber-300 flex items-center gap-1">
+          <div className="space-y-3 text-xs text-slate-600 leading-relaxed">
+            <div className="rounded-xl border border-slate-200 bg-white p-3 space-y-1 shadow-2xs">
+              <div className="font-bold text-amber-700 flex items-center gap-1">
                 <span>⚡</span> 自動配信の役割
               </div>
-              <p className="text-[11px] text-slate-400">
+              <p className="text-[11px] text-slate-500">
                 LINE登録時や診断回答完了時、選択肢クリック時にタグを自動付与。
                 「成約」「予約済」タグが付いた場合は、ステップ配信やリマインドを自動で終了（Exit）させます。
               </p>
             </div>
-            <div className="rounded-xl border border-slate-800 bg-slate-900/60 p-3 space-y-1">
-              <div className="font-bold text-emerald-300 flex items-center gap-1">
+            <div className="rounded-xl border border-slate-200 bg-white p-3 space-y-1 shadow-2xs">
+              <div className="font-bold text-emerald-700 flex items-center gap-1">
                 <span>👤</span> 友だち台帳の役割
               </div>
-              <p className="text-[11px] text-slate-400">
+              <p className="text-[11px] text-slate-500">
                 オペレーターが顧客との個別商談やヒアリング結果を見て手動でタグ付け。
                 手動で付与したタグも自動配信の停止条件に即座に反映されます。
               </p>
             </div>
-            <div className="rounded-xl border border-slate-800 bg-slate-900/60 p-3 space-y-1">
-              <div className="font-bold text-blue-300 flex items-center gap-1">
+            <div className="rounded-xl border border-slate-200 bg-white p-3 space-y-1 shadow-2xs">
+              <div className="font-bold text-purple-700 flex items-center gap-1">
                 <span>📖</span> 共通辞書の役割
               </div>
-              <p className="text-[11px] text-slate-400">
+              <p className="text-[11px] text-slate-500">
                 配信側と台帳側で同じタグ名・カラー・分類を共有することで、表記揺れを防ぎ、誰でも迷わず正確な顧客管理・配信ターゲティングを行えます。
               </p>
             </div>

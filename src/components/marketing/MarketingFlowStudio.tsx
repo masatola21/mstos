@@ -689,23 +689,26 @@ export const MarketingFlowStudio: React.FC<MarketingFlowStudioProps> = ({
       {/* ═══════════════════════════════════════════════════════════════ */}
       {/* 統合: シナリオ別 配信設計 ＆ 公式プリセット連動コントロールセンター   */}
       {/* ═══════════════════════════════════════════════════════════════ */}
-      <div className="rounded-2xl border border-indigo-500/40 bg-gradient-to-r from-indigo-950/70 via-slate-900 to-purple-950/60 p-4 sm:p-5 shadow-sm space-y-4">
+      {/* ═══════════════════════════════════════════════════════════════ */}
+      {/* 統合: シナリオ別 配信設計 ＆ 公式プリセット連動コントロールセンター   */}
+      {/* ═══════════════════════════════════════════════════════════════ */}
+      <div className="rounded-2xl border border-slate-200 bg-white p-4 sm:p-5 shadow-xs space-y-4">
         {/* 上段: タイトル ＆ マスターアクション */}
-        <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 border-b border-slate-800/80 pb-4">
+        <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 border-b border-slate-100 pb-4">
           <div className="space-y-1">
             <div className="flex items-center gap-2.5 flex-wrap">
-              <span className="p-2 bg-indigo-500/20 text-indigo-400 rounded-xl border border-indigo-500/30">
+              <span className="p-2 bg-purple-50 text-purple-700 rounded-xl border border-purple-200">
                 <GitBranch className="w-5 h-5" />
               </span>
-              <h2 className="text-base font-black text-white flex items-center gap-2">
+              <h2 className="text-base font-bold text-slate-900 flex items-center gap-2">
                 シナリオ別 配信設計 ＆ ビジュアル導線マップ
               </h2>
-              <span className="text-[11px] font-bold px-2.5 py-0.5 rounded-full bg-emerald-500/10 text-emerald-300 border border-emerald-500/20 flex items-center gap-1">
+              <span className="text-[11px] font-bold px-2.5 py-0.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200 flex items-center gap-1">
                 <ShieldCheck className="w-3.5 h-3.5" />
                 安全ストッパー稼働・重複ゼロ
               </span>
             </div>
-            <p className="text-xs text-slate-300 leading-relaxed max-w-2xl">
+            <p className="text-xs text-slate-500 leading-relaxed max-w-2xl">
               目的別シナリオ（LINE導線・営業メール・ストーリー型・直相談）を即時切り替え＆編集。面談予約や返信が入った瞬間に自動停止し、安全に個別有人チャットへ移行します。
             </p>
           </div>
@@ -715,7 +718,7 @@ export const MarketingFlowStudio: React.FC<MarketingFlowStudioProps> = ({
               <button
                 type="button"
                 onClick={onDeduplicateScenarios}
-                className="inline-flex items-center gap-1.5 rounded-xl bg-amber-600 hover:bg-amber-500 px-3 py-2 text-xs font-bold text-white shadow transition cursor-pointer"
+                className="inline-flex items-center gap-1.5 rounded-xl bg-amber-600 hover:bg-amber-700 px-3 py-2 text-xs font-bold text-white shadow-xs transition cursor-pointer"
               >
                 <Trash2 className="h-3.5 w-3.5" />
                 <span>重複整理（{duplicateCount}件）</span>
@@ -726,10 +729,10 @@ export const MarketingFlowStudio: React.FC<MarketingFlowStudioProps> = ({
               <button
                 type="button"
                 onClick={onApplyAllStarterSets}
-                className="inline-flex items-center gap-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 border border-indigo-500/30 px-3.5 py-2 text-xs font-bold text-indigo-200 hover:text-white shadow transition cursor-pointer"
+                className="inline-flex items-center gap-1.5 rounded-xl bg-slate-50 hover:bg-slate-100 border border-slate-200 px-3.5 py-2 text-xs font-bold text-slate-700 hover:text-slate-900 shadow-xs transition cursor-pointer"
                 title="全18本の公式プリセットシナリオを一括最新化します"
               >
-                <Zap className="h-3.5 w-3.5 text-indigo-400" />
+                <Zap className="h-3.5 w-3.5 text-purple-600" />
                 <span>全18本を一括最新化</span>
               </button>
             )}
@@ -737,7 +740,7 @@ export const MarketingFlowStudio: React.FC<MarketingFlowStudioProps> = ({
             <button
               type="button"
               onClick={handleCreateNewStep}
-              className="inline-flex items-center gap-1.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 px-4 py-2 text-xs font-bold text-white shadow-md shadow-indigo-600/30 transition cursor-pointer"
+              className="inline-flex items-center gap-1.5 rounded-xl bg-purple-600 hover:bg-purple-700 px-4 py-2 text-xs font-bold text-white shadow-xs transition cursor-pointer"
             >
               <Plus className="h-4 w-4" />
               <span>＋ 新規ステップ作成</span>
@@ -753,20 +756,20 @@ export const MarketingFlowStudio: React.FC<MarketingFlowStudioProps> = ({
             onClick={() => { setActiveTrack('line_welcome'); setViewMode('flow'); }}
             className={`group flex flex-col justify-between p-3 rounded-xl border text-left transition cursor-pointer ${
               activeTrack === 'line_welcome' && viewMode === 'flow'
-                ? 'bg-emerald-950/80 border-emerald-500 shadow-md ring-1 ring-emerald-500/50'
-                : 'bg-slate-950/60 border-slate-800 hover:border-emerald-500/40 hover:bg-slate-900'
+                ? 'bg-emerald-50 border-emerald-500 shadow-xs ring-1 ring-emerald-400'
+                : 'bg-white border-slate-200 hover:border-emerald-300 hover:bg-slate-50/70'
             }`}
           >
             <div className="flex items-center justify-between">
-              <span className="flex items-center gap-1.5 font-bold text-xs text-white">
-                <MessageCircle className={`w-3.5 h-3.5 ${activeTrack === 'line_welcome' && viewMode === 'flow' ? 'text-emerald-400' : 'text-slate-400 group-hover:text-emerald-400'}`} />
+              <span className={`flex items-center gap-1.5 font-bold text-xs ${activeTrack === 'line_welcome' && viewMode === 'flow' ? 'text-emerald-900' : 'text-slate-800'}`}>
+                <MessageCircle className={`w-3.5 h-3.5 ${activeTrack === 'line_welcome' && viewMode === 'flow' ? 'text-emerald-600' : 'text-slate-400 group-hover:text-emerald-600'}`} />
                 ① 診断フォロー
               </span>
-              <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded ${activeTrack === 'line_welcome' && viewMode === 'flow' ? 'bg-emerald-500/20 text-emerald-300' : 'bg-slate-800 text-slate-400'}`}>
+              <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded ${activeTrack === 'line_welcome' && viewMode === 'flow' ? 'bg-emerald-100 text-emerald-800' : 'bg-slate-100 text-slate-600'}`}>
                 {diagnosisScenarios.length}件・Flex
               </span>
             </div>
-            <div className="text-[11px] text-slate-400 group-hover:text-slate-300 mt-1.5 line-clamp-1">
+            <div className="text-[11px] text-slate-500 group-hover:text-slate-700 mt-1.5 line-clamp-1">
               LINE登録→診断→レポート→面談誘導
             </div>
           </button>
@@ -777,20 +780,20 @@ export const MarketingFlowStudio: React.FC<MarketingFlowStudioProps> = ({
             onClick={() => { setActiveTrack('sales_outreach'); setViewMode('flow'); }}
             className={`group flex flex-col justify-between p-3 rounded-xl border text-left transition cursor-pointer ${
               activeTrack === 'sales_outreach' && viewMode === 'flow'
-                ? 'bg-blue-950/80 border-blue-500 shadow-md ring-1 ring-blue-500/50'
-                : 'bg-slate-950/60 border-slate-800 hover:border-blue-500/40 hover:bg-slate-900'
+                ? 'bg-blue-50 border-blue-500 shadow-xs ring-1 ring-blue-400'
+                : 'bg-white border-slate-200 hover:border-blue-300 hover:bg-slate-50/70'
             }`}
           >
             <div className="flex items-center justify-between">
-              <span className="flex items-center gap-1.5 font-bold text-xs text-white">
-                <Mail className={`w-3.5 h-3.5 ${activeTrack === 'sales_outreach' && viewMode === 'flow' ? 'text-blue-400' : 'text-slate-400 group-hover:text-blue-400'}`} />
+              <span className={`flex items-center gap-1.5 font-bold text-xs ${activeTrack === 'sales_outreach' && viewMode === 'flow' ? 'text-blue-900' : 'text-slate-800'}`}>
+                <Mail className={`w-3.5 h-3.5 ${activeTrack === 'sales_outreach' && viewMode === 'flow' ? 'text-blue-600' : 'text-slate-400 group-hover:text-blue-600'}`} />
                 ② 営業メール
               </span>
-              <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded ${activeTrack === 'sales_outreach' && viewMode === 'flow' ? 'bg-blue-500/20 text-blue-300' : 'bg-slate-800 text-slate-400'}`}>
+              <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded ${activeTrack === 'sales_outreach' && viewMode === 'flow' ? 'bg-blue-100 text-blue-800' : 'bg-slate-100 text-slate-600'}`}>
                 {outreachScenarios.length}ステップ
               </span>
             </div>
-            <div className="text-[11px] text-slate-400 group-hover:text-slate-300 mt-1.5 line-clamp-1">
+            <div className="text-[11px] text-slate-500 group-hover:text-slate-700 mt-1.5 line-clamp-1">
               業界急所提起→仕組み化事例→3分診断
             </div>
           </button>
@@ -801,20 +804,20 @@ export const MarketingFlowStudio: React.FC<MarketingFlowStudioProps> = ({
             onClick={() => { setActiveTrack('story_nurturing'); setViewMode('flow'); }}
             className={`group flex flex-col justify-between p-3 rounded-xl border text-left transition cursor-pointer ${
               activeTrack === 'story_nurturing' && viewMode === 'flow'
-                ? 'bg-purple-950/80 border-purple-500 shadow-md ring-1 ring-purple-500/50'
-                : 'bg-slate-950/60 border-slate-800 hover:border-purple-500/40 hover:bg-slate-900'
+                ? 'bg-purple-50 border-purple-500 shadow-xs ring-1 ring-purple-400'
+                : 'bg-white border-slate-200 hover:border-purple-300 hover:bg-slate-50/70'
             }`}
           >
             <div className="flex items-center justify-between">
-              <span className="flex items-center gap-1.5 font-bold text-xs text-white">
-                <BookOpen className={`w-3.5 h-3.5 ${activeTrack === 'story_nurturing' && viewMode === 'flow' ? 'text-purple-400' : 'text-slate-400 group-hover:text-purple-400'}`} />
+              <span className={`flex items-center gap-1.5 font-bold text-xs ${activeTrack === 'story_nurturing' && viewMode === 'flow' ? 'text-purple-900' : 'text-slate-800'}`}>
+                <BookOpen className={`w-3.5 h-3.5 ${activeTrack === 'story_nurturing' && viewMode === 'flow' ? 'text-purple-600' : 'text-slate-400 group-hover:text-purple-600'}`} />
                 ③ ストーリー型
               </span>
-              <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded ${activeTrack === 'story_nurturing' && viewMode === 'flow' ? 'bg-purple-500/20 text-purple-300' : 'bg-slate-800 text-slate-400'}`}>
+              <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded ${activeTrack === 'story_nurturing' && viewMode === 'flow' ? 'bg-purple-100 text-purple-800' : 'bg-slate-100 text-slate-600'}`}>
                 {nurturingScenarios.length}話
               </span>
             </div>
-            <div className="text-[11px] text-slate-400 group-hover:text-slate-300 mt-1.5 line-clamp-1">
+            <div className="text-[11px] text-slate-500 group-hover:text-slate-700 mt-1.5 line-clamp-1">
               大橋真人実話・LINE+メルマガ共感重視
             </div>
           </button>
@@ -825,20 +828,20 @@ export const MarketingFlowStudio: React.FC<MarketingFlowStudioProps> = ({
             onClick={() => { setActiveTrack('direct_consult'); setViewMode('flow'); }}
             className={`group flex flex-col justify-between p-3 rounded-xl border text-left transition cursor-pointer ${
               activeTrack === 'direct_consult' && viewMode === 'flow'
-                ? 'bg-sky-950/80 border-sky-500 shadow-md ring-1 ring-sky-500/50'
-                : 'bg-slate-950/60 border-slate-800 hover:border-sky-500/40 hover:bg-slate-900'
+                ? 'bg-sky-50 border-sky-500 shadow-xs ring-1 ring-sky-400'
+                : 'bg-white border-slate-200 hover:border-sky-300 hover:bg-slate-50/70'
             }`}
           >
             <div className="flex items-center justify-between">
-              <span className="flex items-center gap-1.5 font-bold text-xs text-white">
-                <Calendar className={`w-3.5 h-3.5 ${activeTrack === 'direct_consult' && viewMode === 'flow' ? 'text-sky-400' : 'text-slate-400 group-hover:text-sky-400'}`} />
+              <span className={`flex items-center gap-1.5 font-bold text-xs ${activeTrack === 'direct_consult' && viewMode === 'flow' ? 'text-sky-900' : 'text-slate-800'}`}>
+                <Calendar className={`w-3.5 h-3.5 ${activeTrack === 'direct_consult' && viewMode === 'flow' ? 'text-sky-600' : 'text-slate-400 group-hover:text-sky-600'}`} />
                 ④ 直相談（面談・介護）
               </span>
-              <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded ${activeTrack === 'direct_consult' && viewMode === 'flow' ? 'bg-sky-500/20 text-sky-300' : 'bg-slate-800 text-slate-400'}`}>
+              <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded ${activeTrack === 'direct_consult' && viewMode === 'flow' ? 'bg-sky-100 text-sky-800' : 'bg-slate-100 text-slate-600'}`}>
                 {consultScenarios.length}件
               </span>
             </div>
-            <div className="text-[11px] text-slate-400 group-hover:text-slate-300 mt-1.5 line-clamp-1">
+            <div className="text-[11px] text-slate-500 group-hover:text-slate-700 mt-1.5 line-clamp-1">
               診断不要・即時30分面談案内Flex
             </div>
           </button>
@@ -849,20 +852,20 @@ export const MarketingFlowStudio: React.FC<MarketingFlowStudioProps> = ({
             onClick={() => setViewMode('table')}
             className={`group flex flex-col justify-between p-3 rounded-xl border text-left transition cursor-pointer ${
               viewMode === 'table'
-                ? 'bg-indigo-950/80 border-indigo-500 shadow-md ring-1 ring-indigo-500/50'
-                : 'bg-slate-950/60 border-slate-800 hover:border-indigo-500/40 hover:bg-slate-900'
+                ? 'bg-purple-50 border-purple-500 shadow-xs ring-1 ring-purple-400'
+                : 'bg-white border-slate-200 hover:border-purple-300 hover:bg-slate-50/70'
             }`}
           >
             <div className="flex items-center justify-between">
-              <span className="flex items-center gap-1.5 font-bold text-xs text-white">
-                <Table className={`w-3.5 h-3.5 ${viewMode === 'table' ? 'text-indigo-400' : 'text-slate-400 group-hover:text-indigo-400'}`} />
+              <span className={`flex items-center gap-1.5 font-bold text-xs ${viewMode === 'table' ? 'text-purple-900' : 'text-slate-800'}`}>
+                <Table className={`w-3.5 h-3.5 ${viewMode === 'table' ? 'text-purple-600' : 'text-slate-400 group-hover:text-purple-600'}`} />
                 全ステップ一覧
               </span>
-              <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded ${viewMode === 'table' ? 'bg-indigo-500/20 text-indigo-300' : 'bg-slate-800 text-slate-400'}`}>
+              <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded ${viewMode === 'table' ? 'bg-purple-100 text-purple-800' : 'bg-slate-100 text-slate-600'}`}>
                 {scenarios.length}件
               </span>
             </div>
-            <div className="text-[11px] text-slate-400 group-hover:text-slate-300 mt-1.5 line-clamp-1">
+            <div className="text-[11px] text-slate-500 group-hover:text-slate-700 mt-1.5 line-clamp-1">
               全シナリオの横断検索・一括管理
             </div>
           </button>
@@ -873,14 +876,14 @@ export const MarketingFlowStudio: React.FC<MarketingFlowStudioProps> = ({
       {/* テーブル表示モード: 全シナリオ一覧 ＆ 詳細インスペクター直結     */}
       {/* ═══════════════════════════════════════════════════════════════ */}
       {viewMode === 'table' && (
-        <div className="bg-slate-900 border border-slate-800 rounded-2xl p-5 shadow-sm space-y-4 animate-fade-in">
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-800 pb-3">
+        <div className="bg-white border border-slate-200 rounded-2xl p-5 shadow-xs space-y-4 animate-fade-in">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-100 pb-3">
             <div>
-              <h3 className="text-base font-bold text-white flex items-center gap-2">
-                <Table className="w-5 h-5 text-indigo-400" />
+              <h3 className="text-base font-bold text-slate-900 flex items-center gap-2">
+                <Table className="w-5 h-5 text-purple-600" />
                 全配信ステップ一覧・一括管理
               </h3>
-              <p className="text-xs text-slate-400 mt-0.5">
+              <p className="text-xs text-slate-500 mt-0.5">
                 各行の「点検・編集」を押すと、その場でメッセージ文面・URL・タグ・停止条件を確認・手入れできます。
               </p>
             </div>
@@ -891,14 +894,14 @@ export const MarketingFlowStudio: React.FC<MarketingFlowStudioProps> = ({
                 value={tableSearch}
                 onChange={(e) => setTableSearch(e.target.value)}
                 placeholder="ステップ名や本文で検索..."
-                className="w-full bg-slate-950 border border-slate-700 rounded-xl pl-9 pr-3 py-1.5 text-xs text-white placeholder-slate-500"
+                className="w-full bg-slate-50 border border-slate-200 rounded-xl pl-9 pr-3 py-1.5 text-xs text-slate-900 placeholder-slate-400 focus:outline-none focus:border-purple-500 focus:bg-white"
               />
             </div>
           </div>
 
           <div className="overflow-x-auto">
             <table className="w-full text-left text-xs">
-              <thead className="bg-slate-950 text-slate-400 font-bold border-b border-slate-800">
+              <thead className="bg-slate-50 text-slate-600 font-bold border-b border-slate-200">
                 <tr>
                   <th className="p-3">ステップ名</th>
                   <th className="p-3">チャネル</th>
@@ -908,33 +911,33 @@ export const MarketingFlowStudio: React.FC<MarketingFlowStudioProps> = ({
                   <th className="p-3 text-right">点検・操作</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-slate-800 text-slate-300">
+              <tbody className="divide-y divide-slate-100 text-slate-700">
                 {scenarios
                   .filter((s) => !tableSearch || s.name.toLowerCase().includes(tableSearch.toLowerCase()) || (s.messageBody || '').toLowerCase().includes(tableSearch.toLowerCase()) || (s.emailSubject || '').toLowerCase().includes(tableSearch.toLowerCase()))
                   .map((s) => (
-                    <tr key={s.id} className="hover:bg-slate-950/60 transition">
+                    <tr key={s.id} className="hover:bg-slate-50/70 transition">
                       <td className="p-3">
-                        <div className="font-bold text-white">{s.name}</div>
-                        <div className="text-[11px] text-slate-400 line-clamp-1 mt-0.5">
+                        <div className="font-bold text-slate-900">{s.name}</div>
+                        <div className="text-[11px] text-slate-500 line-clamp-1 mt-0.5">
                           {s.flexTitle || s.messageBody || s.emailSubject || '文面未設定'}
                         </div>
                       </td>
                       <td className="p-3">
                         <span className={`px-2 py-0.5 rounded text-[10px] font-bold ${
                           s.channel === 'line'
-                            ? 'bg-emerald-500/20 text-emerald-300'
+                            ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
                             : s.channel === 'email'
-                            ? 'bg-blue-500/20 text-blue-300'
-                            : 'bg-purple-500/20 text-purple-300'
+                            ? 'bg-blue-50 text-blue-700 border border-blue-200'
+                            : 'bg-purple-50 text-purple-700 border border-purple-200'
                         }`}>
                           {s.channel === 'line' ? '📱 LINE' : s.channel === 'email' ? '✉️ メール' : '📱+✉️ 両方'}
                         </span>
                       </td>
-                      <td className="p-3 font-mono text-[11px]">
+                      <td className="p-3 font-mono text-[11px] text-slate-600">
                         {s.waitMinutes === 0 ? '即時実行' : `${Math.round(s.waitMinutes / 1440)}日後`}
                       </td>
                       <td className="p-3 text-[11px]">
-                        <span className="text-slate-400">
+                        <span className="text-slate-500">
                           {s.stopOnBooking ? '面談予約' : ''} {s.stopOnDeal ? '/ 成約' : ''} で停止
                         </span>
                       </td>
@@ -944,11 +947,11 @@ export const MarketingFlowStudio: React.FC<MarketingFlowStudioProps> = ({
                           onClick={() => toggleScenarioAutomation(s.id, Boolean(s.automationEnabled))}
                           className={`flex items-center gap-1 px-2.5 py-1 rounded text-[11px] font-bold cursor-pointer transition ${
                             s.automationEnabled
-                              ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/30'
-                              : 'bg-slate-800 text-slate-400 border border-slate-700'
+                              ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
+                              : 'bg-slate-100 text-slate-600 border border-slate-200 hover:bg-slate-200'
                           }`}
                         >
-                          {s.automationEnabled ? <Play className="w-3 h-3 fill-emerald-400" /> : <Pause className="w-3 h-3" />}
+                          {s.automationEnabled ? <Play className="w-3 h-3 fill-emerald-600 text-emerald-600" /> : <Pause className="w-3 h-3 text-slate-500" />}
                           <span>{s.automationEnabled ? '稼働中' : '停止中'}</span>
                         </button>
                       </td>
@@ -957,7 +960,7 @@ export const MarketingFlowStudio: React.FC<MarketingFlowStudioProps> = ({
                           <button
                             type="button"
                             onClick={() => setPreviewModalScenario(s)}
-                            className="p-1.5 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-lg cursor-pointer"
+                            className="p-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg cursor-pointer transition"
                             title="文面プレビュー"
                           >
                             <Eye className="w-3.5 h-3.5" />
@@ -965,10 +968,10 @@ export const MarketingFlowStudio: React.FC<MarketingFlowStudioProps> = ({
                           <button
                             type="button"
                             onClick={() => handleOpenInspector(s)}
-                            className="px-2.5 py-1.5 bg-indigo-600 hover:bg-indigo-500 text-white rounded-lg font-bold flex items-center gap-1 cursor-pointer"
+                            className="px-2.5 py-1.5 bg-purple-600 hover:bg-purple-700 text-white rounded-lg font-bold flex items-center gap-1 cursor-pointer shadow-xs transition"
                             title="点検・編集"
                           >
-                            <ShieldCheck className="w-3.5 h-3.5 text-indigo-300" />
+                            <ShieldCheck className="w-3.5 h-3.5 text-purple-200" />
                             <span>点検・編集</span>
                           </button>
                         </div>

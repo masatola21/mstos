@@ -265,13 +265,13 @@ export const MarketingLineInboxView: React.FC<MarketingLineInboxViewProps> = ({
   if (chatOnly) {
     return (
       <div className="space-y-4">
-        <section className="rounded-2xl border border-emerald-500/30 bg-slate-900 p-4 shadow-sm">
+        <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-xs">
           <div className="flex flex-wrap items-center justify-between gap-3">
             <div>
-              <h2 className="text-base font-bold text-white flex items-center gap-2">
+              <h2 className="text-base font-bold text-slate-900 flex items-center gap-2">
                 <span>💬 LINE公式 1:1 個別チャット</span>
               </h2>
-              <p className="mt-0.5 text-xs text-slate-400">
+              <p className="mt-0.5 text-xs text-slate-500">
                 LINE友だちからの受信メッセージを確認し、1対1の個別返信を行います。
               </p>
             </div>
@@ -279,7 +279,7 @@ export const MarketingLineInboxView: React.FC<MarketingLineInboxViewProps> = ({
               <button
                 type="button"
                 onClick={() => void load()}
-                className="rounded-lg border border-slate-700 px-3 py-1.5 text-xs text-slate-300 hover:bg-slate-800 transition cursor-pointer"
+                className="rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs text-slate-700 hover:bg-slate-50 shadow-xs transition cursor-pointer"
               >
                 更新
               </button>
@@ -287,7 +287,7 @@ export const MarketingLineInboxView: React.FC<MarketingLineInboxViewProps> = ({
                 <button
                   type="button"
                   onClick={onNavigateSettings}
-                  className="inline-flex items-center gap-1.5 rounded-lg bg-emerald-850 hover:bg-emerald-800 border border-emerald-600/50 px-3 py-1.5 text-xs font-semibold text-emerald-200 transition cursor-pointer"
+                  className="inline-flex items-center gap-1.5 rounded-lg bg-emerald-50 hover:bg-emerald-100 border border-emerald-200 px-3 py-1.5 text-xs font-semibold text-emerald-800 shadow-xs transition cursor-pointer"
                 >
                   <span>⚙️ 自動返信・ウェルカム設定へ</span>
                 </button>
@@ -295,19 +295,19 @@ export const MarketingLineInboxView: React.FC<MarketingLineInboxViewProps> = ({
             </div>
           </div>
 
-          {error && <p role="alert" className="mt-3 rounded-lg bg-rose-950/60 p-3 text-xs text-rose-200">{error}</p>}
-          {notice && <p role="status" className="mt-3 rounded-lg bg-emerald-950/60 p-3 text-xs text-emerald-200">{notice}</p>}
+          {error && <p role="alert" className="mt-3 rounded-lg bg-rose-50 border border-rose-200 p-3 text-xs text-rose-800">{error}</p>}
+          {notice && <p role="status" className="mt-3 rounded-lg bg-emerald-50 border border-emerald-200 p-3 text-xs text-emerald-800">{notice}</p>}
 
-          <div className="mt-3 flex flex-wrap items-center gap-2.5 rounded-xl border border-slate-800 bg-slate-950/60 px-3 py-2 text-xs">
-            <span className={`inline-block w-2 h-2 rounded-full ${integration ? 'bg-emerald-400' : 'bg-amber-400'}`} />
-            <span className="text-slate-300 font-medium">{integration ? 'LINE公式アカウント連携中' : 'LINE公式アカウント未関連付け'}</span>
+          <div className="mt-3 flex flex-wrap items-center gap-2.5 rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-xs">
+            <span className={`inline-block w-2 h-2 rounded-full ${integration ? 'bg-emerald-500' : 'bg-amber-500'}`} />
+            <span className="text-slate-700 font-medium">{integration ? 'LINE公式アカウント連携中' : 'LINE公式アカウント未関連付け'}</span>
             {integration && <span className="text-slate-500 font-mono text-[11px]">(Bot ID: {integration.bot_user_id})</span>}
             {!integration && (
               <button
                 disabled={busy}
                 type="button"
                 onClick={() => void connect()}
-                className="ml-auto rounded border border-slate-700 px-2.5 py-1 text-xs text-slate-200 hover:bg-slate-800"
+                className="ml-auto rounded border border-slate-200 bg-white px-2.5 py-1 text-xs text-slate-700 hover:bg-slate-50 shadow-xs cursor-pointer"
               >
                 連携を再確認
               </button>
@@ -316,13 +316,13 @@ export const MarketingLineInboxView: React.FC<MarketingLineInboxViewProps> = ({
         </section>
 
         <div className="grid gap-4 xl:grid-cols-[280px_1fr]">
-          <section className="rounded-2xl border border-slate-800 bg-slate-900 p-4">
-            <h3 className="font-bold text-white text-xs flex items-center justify-between">
+          <section className="rounded-2xl border border-slate-200 bg-white p-4 shadow-xs">
+            <h3 className="font-bold text-slate-900 text-xs flex items-center justify-between">
               <span>受信した友だち ({conversations.length}名)</span>
             </h3>
             <div className="mt-3 max-h-[560px] space-y-1.5 overflow-auto">
               {conversations.length === 0 ? (
-                <p className="text-xs text-slate-500 py-4 text-center">メッセージ履歴はありません。</p>
+                <p className="text-xs text-slate-400 py-6 text-center">メッセージ履歴はありません。</p>
               ) : (
                 conversations.map((conversation) => {
                   const lastMsg = conversation.items[conversation.items.length - 1];
@@ -334,17 +334,17 @@ export const MarketingLineInboxView: React.FC<MarketingLineInboxViewProps> = ({
                       onClick={() => setSelectedLineUserId(conversation.lineUserId)}
                       className={`w-full rounded-xl p-3 text-left transition cursor-pointer border ${
                         isSelected
-                          ? 'bg-emerald-950/50 border-emerald-500/60 shadow-sm'
-                          : 'bg-slate-950/60 border-slate-850 hover:bg-slate-800 hover:border-slate-700'
+                          ? 'bg-emerald-50 border-emerald-300 shadow-xs ring-1 ring-emerald-300/40'
+                          : 'bg-slate-50/70 border-slate-200 hover:bg-slate-100/80 hover:border-slate-300'
                       }`}
                     >
-                      <div className="truncate text-[11px] font-semibold text-slate-400">
+                      <div className="truncate text-[11px] font-semibold text-slate-500">
                         {conversation.lineUserId}
                       </div>
-                      <div className="truncate text-xs font-medium text-slate-100 mt-0.5">
+                      <div className="truncate text-xs font-semibold text-slate-900 mt-0.5">
                         {lastMsg?.body || '（本文なし）'}
                       </div>
-                      <div className="text-[10px] text-slate-500 mt-1">
+                      <div className="text-[10px] text-slate-400 mt-1">
                         {new Date(lastMsg?.received_at || '').toLocaleString('ja-JP', { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' })}
                       </div>
                     </button>
@@ -354,54 +354,54 @@ export const MarketingLineInboxView: React.FC<MarketingLineInboxViewProps> = ({
             </div>
           </section>
 
-          <section className="rounded-2xl border border-slate-800 bg-slate-900 p-4 flex flex-col min-h-[460px]">
-            <h3 className="font-bold text-white text-xs border-b border-slate-800 pb-2 flex items-center justify-between">
+          <section className="rounded-2xl border border-slate-200 bg-white p-4 flex flex-col min-h-[460px] shadow-xs">
+            <h3 className="font-bold text-slate-900 text-xs border-b border-slate-200 pb-2 flex items-center justify-between">
               <span>チャット履歴</span>
               {selectedLineUserId && (
-                <span className="text-[11px] font-mono text-emerald-400 truncate max-w-[220px]">
+                <span className="text-[11px] font-mono text-emerald-600 truncate max-w-[220px]">
                   {selectedLineUserId}
                 </span>
               )}
             </h3>
 
             {!activeConversation ? (
-              <div className="flex-1 flex items-center justify-center p-8 text-center text-xs text-slate-500">
+              <div className="flex-1 flex items-center justify-center p-8 text-center text-xs text-slate-400">
                 左の一覧から友だちを選択して会話を表示してください。
               </div>
             ) : (
               <>
-                <div className="mt-3 flex-1 max-h-[460px] space-y-2.5 overflow-auto rounded-xl bg-slate-950/60 p-3 border border-slate-850">
+                <div className="mt-3 flex-1 max-h-[460px] space-y-2.5 overflow-auto rounded-xl bg-slate-50 p-4 border border-slate-200">
                   {activeConversation.items.map((message) => (
                     <div
                       key={message.id}
-                      className={`max-w-[85%] rounded-2xl px-3.5 py-2 text-xs shadow-sm ${
+                      className={`max-w-[85%] rounded-2xl px-4 py-2.5 text-xs shadow-xs ${
                         message.direction === 'outbound'
-                          ? 'ml-auto bg-emerald-700 text-white rounded-br-none'
-                          : 'bg-slate-800 text-slate-100 rounded-bl-none border border-slate-700/60'
+                          ? 'ml-auto bg-emerald-600 text-white rounded-br-none'
+                          : 'bg-white text-slate-900 rounded-bl-none border border-slate-200'
                       }`}
                     >
                       <div className="whitespace-pre-wrap leading-relaxed">{message.body}</div>
-                      <div className={`mt-1 text-[10px] text-right ${message.direction === 'outbound' ? 'text-emerald-200' : 'text-slate-400'}`}>
+                      <div className={`mt-1 text-[10px] text-right ${message.direction === 'outbound' ? 'text-emerald-100' : 'text-slate-400'}`}>
                         {new Date(message.received_at).toLocaleString('ja-JP', { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' })}
                       </div>
                     </div>
                   ))}
                 </div>
 
-                <div className="mt-3 flex items-end gap-2 pt-2 border-t border-slate-800">
+                <div className="mt-3 flex items-end gap-2 pt-2 border-t border-slate-200">
                   <textarea
                     value={replyDraft}
                     onChange={(e) => setReplyDraft(e.target.value)}
                     rows={2}
                     maxLength={5000}
                     placeholder="LINE返信メッセージを入力…"
-                    className="min-w-0 flex-1 rounded-xl border border-slate-700 bg-slate-950 p-2.5 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-emerald-500"
+                    className="min-w-0 flex-1 rounded-xl border border-slate-200 bg-white p-2.5 text-xs text-slate-900 placeholder-slate-400 focus:outline-none focus:border-emerald-500 shadow-xs"
                   />
                   <button
                     disabled={busy || !replyDraft.trim()}
                     type="button"
                     onClick={() => void sendReply()}
-                    className="rounded-xl bg-emerald-600 hover:bg-emerald-500 px-4 py-2.5 text-xs font-bold text-white shadow-md transition disabled:opacity-40 cursor-pointer"
+                    className="rounded-xl bg-emerald-600 hover:bg-emerald-700 px-4 py-2.5 text-xs font-bold text-white shadow-xs transition disabled:opacity-40 cursor-pointer"
                   >
                     {busy ? '送信中…' : '返信'}
                   </button>
@@ -414,77 +414,260 @@ export const MarketingLineInboxView: React.FC<MarketingLineInboxViewProps> = ({
     );
   }
 
-  return <div className="space-y-5">
-    <section className="rounded-2xl border border-indigo-500/30 bg-slate-900 p-5">
-      <div className="flex flex-wrap items-center justify-between gap-3"><div><h2 className="text-xl font-bold text-white">LINE運用</h2><p className="mt-1 text-sm text-slate-400">受信箱・自動返信と、テキスト・画像・Flex・動画テンプレートを管理します。</p></div><button onClick={()=>void load()} className="rounded-lg border border-slate-700 px-3 py-2 text-sm text-slate-200">更新</button></div>
-      {error&&<p role="alert" className="mt-3 rounded-lg bg-rose-950/60 p-3 text-sm text-rose-200">{error}</p>}
-      {notice&&<p role="status" className="mt-3 rounded-lg bg-emerald-950/60 p-3 text-sm text-emerald-200">{notice}</p>}
-      <div className="mt-4 flex flex-wrap items-center gap-3 rounded-xl border border-slate-800 bg-slate-950/60 p-3">
-        <span className="text-sm text-slate-300">{integration?'LINE連携済み':'LINEアカウント未関連付け'}</span>
-        {integration&&<span className="text-xs text-slate-500">Bot ID: {integration.bot_user_id}</span>}
-        <button disabled={busy} onClick={()=>void connect()} className="rounded border border-slate-700 px-3 py-1.5 text-xs text-slate-200">{integration?'接続を更新':'LINEアカウントを接続'}</button>
-        {integration&&<button onClick={()=>void toggleAutoReply()} className={'rounded px-3 py-1.5 text-xs font-semibold '+(integration.auto_reply_enabled?'bg-emerald-700 text-white':'bg-slate-800 text-slate-300')}>自動返信：{integration.auto_reply_enabled?'有効':'停止中'}</button>}
-      </div>
-    </section>
-    <nav className="flex gap-2 border-b border-slate-800 pb-2">
-      <button type="button" onClick={()=>setActiveView('inbox')} className={`rounded-lg px-4 py-2 text-sm font-semibold ${activeView==='inbox'?'bg-indigo-600 text-white':'text-slate-400 hover:bg-slate-800'}`}>受信箱・自動返信</button>
-      <button type="button" onClick={()=>setActiveView('templates')} className={`rounded-lg px-4 py-2 text-sm font-semibold ${activeView==='templates'?'bg-indigo-600 text-white':'text-slate-400 hover:bg-slate-800'}`}>テンプレート管理（{templates.length}）</button>
-    </nav>
-    {activeView==='inbox'&&<>
-
-    <div className="grid gap-5 xl:grid-cols-[280px_1fr]">
-      <section className="rounded-2xl border border-slate-800 bg-slate-900 p-4">
-        <h3 className="font-bold text-white">受信した相手</h3>
-        <div className="mt-3 max-h-[560px] space-y-1 overflow-auto">{conversations.length===0?<p className="text-sm text-slate-500">Webhookで受信したメッセージはここに表示されます。</p>:conversations.map(conversation=><button key={conversation.lineUserId} onClick={()=>setSelectedLineUserId(conversation.lineUserId)} className={'w-full rounded-lg p-3 text-left '+(selectedLineUserId===conversation.lineUserId?'bg-indigo-950/70':'hover:bg-slate-800')}><div className="truncate text-xs text-slate-400">{conversation.lineUserId}</div><div className="truncate text-sm text-white">{conversation.items[conversation.items.length-1]?.body||'（本文なし）'}</div><div className="text-[10px] text-slate-500">{new Date(conversation.items[conversation.items.length-1]?.received_at||'').toLocaleString()}</div></button>)}</div>
-      </section>
-      <section className="rounded-2xl border border-slate-800 bg-slate-900 p-4">
-        <h3 className="font-bold text-white">会話</h3>
-        {!activeConversation?<p className="mt-4 text-sm text-slate-500">左から相手を選択してください。</p>:<><div className="mt-3 max-h-[420px] space-y-2 overflow-auto rounded-xl bg-slate-950/50 p-3">{activeConversation.items.map(message=><div key={message.id} className={'max-w-[85%] rounded-xl px-3 py-2 text-sm '+(message.direction==='outbound'?'ml-auto bg-indigo-700 text-white':'bg-slate-800 text-slate-100')}><div className="whitespace-pre-wrap">{message.body}</div><div className="mt-1 text-[10px] opacity-60">{new Date(message.received_at).toLocaleString()}</div></div>)}</div><div className="mt-3 flex gap-2"><textarea value={replyDraft} onChange={e=>setReplyDraft(e.target.value)} rows={2} maxLength={5000} placeholder="LINE返信を入力" className="min-w-0 flex-1 rounded-lg border border-slate-700 bg-slate-950 p-2 text-sm text-white" /><button disabled={busy||!replyDraft.trim()} onClick={()=>void sendReply()} className="rounded-lg bg-indigo-600 px-4 text-sm font-semibold text-white disabled:opacity-40">返信</button></div></>}
-      </section>
-    </div>
-    <section className="rounded-2xl border border-slate-800 bg-slate-900 p-5">
-      <h3 className="font-bold text-white">回答に応じたタグ付け・自動返信</h3>
-      <p className="mt-1 text-xs text-slate-400">Flex Messageのボタンをメッセージアクションにすると、押された選択文字を条件にできます。最初に一致したルールの返信とタグを適用します。</p>
-      <form onSubmit={saveRule} className="mt-4 grid gap-3 md:grid-cols-2">
-        <input value={ruleName} onChange={e=>setRuleName(e.target.value)} placeholder="ルール名（例：経営改善の相談）" className="rounded-lg border border-slate-700 bg-slate-950 p-2 text-sm text-white" />
-        <select value={matchMode} onChange={e=>setMatchMode(e.target.value as 'exact'|'contains')} className="rounded-lg border border-slate-700 bg-slate-950 p-2 text-sm text-white"><option value="exact">完全一致</option><option value="contains">含む</option></select>
-        <input value={matchText} onChange={e=>setMatchText(e.target.value)} placeholder="ボタンから届く選択文字" className="rounded-lg border border-slate-700 bg-slate-950 p-2 text-sm text-white" />
-        <select value={tagId} onChange={e=>setTagId(e.target.value)} className="rounded-lg border border-slate-700 bg-slate-950 p-2 text-sm text-white"><option value="">タグを付けない</option>{tags.map(tag=><option key={tag.id} value={tag.id}>{tag.name}</option>)}</select>
-        <select value={selectedTemplateId} onChange={e=>{const id=e.target.value;setSelectedTemplateId(id);const selected=templates.find(item=>item.id===id);if(selected){setReplyType(selected.reply_type);setReplyPayload(selected.payload||{});}}} className="rounded-lg border border-slate-700 bg-slate-950 p-2 text-sm text-white md:col-span-2">
-          <option value="">返信テンプレートを選択</option>
-          {templates.map(template=><option key={template.id} value={template.id}>{template.reply_type==='text'?'テキスト':template.reply_type==='image'?'画像':template.reply_type==='video'?'動画':'Flex'}：{template.name}</option>)}
-        </select>
-        <p className="text-xs text-slate-500 md:col-span-2">テンプレートは「テンプレート管理」タブで作成・アップロードできます。</p><div className="md:col-span-2"><LineMessagePreview type={replyType} title="返信ルールの送信内容" payload={replyPayload} text={replyText} /></div>
-        <button disabled={busy||!integration} className="rounded-lg bg-indigo-600 px-4 py-2 text-sm font-semibold text-white disabled:opacity-40 md:col-span-2">{busy?'保存中…':'自動返信ルールを保存'}</button>{!integration&&<p className="text-xs text-amber-300 md:col-span-2">LINEアカウントを接続すると保存できます。上部の「LINEアカウントを接続」を先に実行してください。</p>}
-      </form>
-      <div className="mt-4 divide-y divide-slate-800">{rules.map(rule=><div key={rule.id} className="flex flex-wrap items-center justify-between gap-3 py-3"><div><div className="font-medium text-white">{rule.name}</div><div className="text-xs text-slate-400">{rule.match_mode==='exact'?'完全一致':'含む'}：「{rule.match_text}」 ・ {tags.find(tag=>tag.id===rule.tag_id)?.name||'タグなし'}</div><div className="whitespace-pre-wrap text-xs text-slate-500">{rule.reply_type==='image'?'画像メッセージ':rule.reply_type==='video'?'動画メッセージ':rule.reply_type==='flex'?'Flexメッセージ':rule.reply_text}</div><LineMessagePreview type={rule.reply_type || 'text'} title={rule.name} payload={rule.reply_payload || { text: rule.reply_text }} /></div><div className="flex gap-2"><button onClick={()=>void toggleRule(rule)} className="rounded border border-slate-700 px-2 py-1 text-xs text-slate-300">{rule.enabled?'停止':'有効化'}</button><InlineDeleteButton onConfirm={()=>void deleteRule(rule)} warning={`「${rule.name}」を削除しますか？`}>削除</InlineDeleteButton></div></div>)}</div>
-
-    </section>
-    </>}
-    {activeView==='templates'&&<section className="space-y-5 rounded-2xl border border-slate-800 bg-slate-900 p-5">
-      <div><h3 className="font-bold text-white">返信テンプレートの管理</h3><p className="mt-1 text-xs text-slate-400">テキスト・画像・Flex・動画のテンプレートを作成し、自動返信ルールから選択できます。画像・動画ファイルはここからアップロードします（各20MBまで）。</p></div>
-      <form onSubmit={saveTemplate} className="space-y-4 rounded-xl border border-slate-800 bg-slate-950/50 p-4">
-        <div className="grid gap-3 md:grid-cols-2">
-          <input required value={templateName} onChange={e=>setTemplateName(e.target.value)} placeholder="テンプレート名" className="rounded-lg border border-slate-700 bg-slate-950 p-2 text-sm text-white" />
-          <select value={templateType} onChange={e=>setTemplateType(e.target.value as 'text'|'image'|'flex'|'video')} className="rounded-lg border border-slate-700 bg-slate-950 p-2 text-sm text-white"><option value="text">テキスト</option><option value="image">画像</option><option value="flex">Flex</option><option value="video">動画</option></select>
-          {templateType==='text'&&<textarea value={templateText} onChange={e=>setTemplateText(e.target.value)} rows={4} placeholder="返信テキスト" className="rounded-lg border border-slate-700 bg-slate-950 p-2 text-sm text-white md:col-span-2" />}
-          {templateType==='image'&&<div className="grid gap-3 md:col-span-2 md:grid-cols-2">
-            <label className="space-y-2 text-xs text-slate-300">画像本体（JPEG / PNG）<input type="file" accept="image/jpeg,image/png" disabled={busy} onChange={async e=>{const input=e.currentTarget;const file=input.files?.[0];if(!file)return;setBusy(true);setError('');try{const asset=await uploadLineTemplateAsset(file,'image');setTemplateImageUrl(asset.url);setTemplateImagePath(asset.path);setNotice('画像をアップロードしました。')}catch(err:any){setError(err.message)}finally{setBusy(false);input.value=''}}} className="block w-full rounded-lg border border-slate-700 bg-slate-950 p-2" /></label>
-            <label className="space-y-2 text-xs text-slate-300">プレビュー画像（JPEG / PNG）<input type="file" accept="image/jpeg,image/png" disabled={busy} onChange={async e=>{const input=e.currentTarget;const file=input.files?.[0];if(!file)return;setBusy(true);setError('');try{const asset=await uploadLineTemplateAsset(file,'image');setTemplatePreviewUrl(asset.url);setTemplatePreviewPath(asset.path);setNotice('プレビュー画像をアップロードしました。')}catch(err:any){setError(err.message)}finally{setBusy(false);input.value=''}}} className="block w-full rounded-lg border border-slate-700 bg-slate-950 p-2" /></label>
-            {(templateImageUrl||templatePreviewUrl)&&<div className="flex gap-3 md:col-span-2">{templateImageUrl&&<img src={templateImageUrl} alt="画像本体のプレビュー" className="h-24 rounded border border-slate-700 object-contain" />}{templatePreviewUrl&&<img src={templatePreviewUrl} alt="プレビュー画像" className="h-24 rounded border border-slate-700 object-contain" />}</div>}
-          </div>}
-          {templateType==='video'&&<div className="grid gap-3 md:col-span-2 md:grid-cols-2">
-            <label className="space-y-2 text-xs text-slate-300">動画本体（MP4）<input type="file" accept="video/mp4" disabled={busy} onChange={async e=>{const input=e.currentTarget;const file=input.files?.[0];if(!file)return;setBusy(true);setError('');try{const asset=await uploadLineTemplateAsset(file,'video');setTemplateVideoUrl(asset.url);setTemplateVideoPath(asset.path);setNotice('動画をアップロードしました。')}catch(err:any){setError(err.message)}finally{setBusy(false);input.value=''}}} className="block w-full rounded-lg border border-slate-700 bg-slate-950 p-2" /></label>
-            <label className="space-y-2 text-xs text-slate-300">動画プレビュー画像（JPEG / PNG）<input type="file" accept="image/jpeg,image/png" disabled={busy} onChange={async e=>{const input=e.currentTarget;const file=input.files?.[0];if(!file)return;setBusy(true);setError('');try{const asset=await uploadLineTemplateAsset(file,'image');setTemplatePreviewUrl(asset.url);setTemplatePreviewPath(asset.path);setNotice('プレビュー画像をアップロードしました。')}catch(err:any){setError(err.message)}finally{setBusy(false);input.value=''}}} className="block w-full rounded-lg border border-slate-700 bg-slate-950 p-2" /></label>
-            {templateVideoUrl&&<video src={templateVideoUrl} controls className="h-32 rounded border border-slate-700 md:col-span-2" />}
-            <input value={templateAltText} onChange={e=>setTemplateAltText(e.target.value)} maxLength={400} placeholder="通知に表示する動画の代替テキスト" className="rounded-lg border border-slate-700 bg-slate-950 p-2 text-sm text-white md:col-span-2" />
-          </div>}
-          {templateType==='flex'&&<div className="grid gap-3 md:col-span-2"><input value={templateAltText} onChange={e=>setTemplateAltText(e.target.value)} maxLength={1500} placeholder="通知に表示する代替テキスト" className="rounded-lg border border-slate-700 bg-slate-950 p-2 text-sm text-white" /><textarea value={templateFlexJson} onChange={e=>setTemplateFlexJson(e.target.value)} rows={10} placeholder='Flex本文 JSON（bubble / carousel）' className="rounded-lg border border-slate-700 bg-slate-950 p-2 font-mono text-xs text-white" /><p className="text-xs text-slate-500">ボタンでルールにつなぐ場合は action.type を message にしてください。</p></div>}
+  return (
+    <div className="space-y-5">
+      <section className="rounded-2xl border border-slate-200 bg-white p-6 shadow-xs">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div>
+            <h2 className="text-xl font-bold text-slate-900">LINE運用</h2>
+            <p className="mt-1 text-sm text-slate-500">受信箱・自動返信と、テキスト・画像・Flex・動画テンプレートを管理します。</p>
+          </div>
+          <button onClick={() => void load()} className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-700 hover:bg-slate-50 shadow-xs transition cursor-pointer">
+            更新
+          </button>
         </div>
-        <LineMessagePreview type={templateType} title={templateName || '自動返信テンプレート'} payload={templateType === 'text' ? { text: templateText } : templateType === 'image' ? { originalContentUrl: templateImageUrl, previewImageUrl: templatePreviewUrl } : templateType === 'video' ? { originalContentUrl: templateVideoUrl, previewImageUrl: templatePreviewUrl, altText: templateAltText } : { altText: templateAltText, contents: templateFlexJson }} />
-        <div className="flex justify-end gap-2"><button type="button" onClick={resetTemplateEditor} className="rounded-lg border border-slate-700 px-4 py-2 text-xs text-slate-300">新規作成に戻す</button><button type="submit" disabled={busy||!ownerId} className="rounded-lg bg-indigo-600 px-4 py-2 text-xs font-semibold text-white disabled:opacity-40">{busy?'保存中…':editingTemplateId?'テンプレートを更新':'テンプレートを保存'}</button></div>
-      </form>
-      <div className="divide-y divide-slate-800">{templates.length===0?<p className="py-4 text-sm text-slate-500">テンプレートはまだありません。</p>:templates.map(template=><div key={template.id} className="flex flex-wrap items-center justify-between gap-3 py-3"><div><div className="font-medium text-white">{template.name}</div><div className="text-xs text-slate-400">{template.reply_type==='text'?'テキスト':template.reply_type==='image'?'画像':template.reply_type==='video'?'動画':'Flex'}</div></div><div className="flex gap-2"><button type="button" onClick={()=>editTemplate(template)} className="rounded border border-slate-700 px-3 py-1.5 text-xs text-slate-200">編集</button><InlineDeleteButton onConfirm={()=>deleteTemplate(template)} warning={`テンプレート「${template.name}」を削除しますか？素材ファイルも削除されます。`}>削除</InlineDeleteButton></div></div>)}</div>
-    </section>}
-  </div>;
+        {error && <p role="alert" className="mt-3 rounded-lg bg-rose-50 border border-rose-200 p-3 text-sm text-rose-800">{error}</p>}
+        {notice && <p role="status" className="mt-3 rounded-lg bg-emerald-50 border border-emerald-200 p-3 text-sm text-emerald-800">{notice}</p>}
+        <div className="mt-4 flex flex-wrap items-center gap-3 rounded-xl border border-slate-200 bg-slate-50 p-3">
+          <span className="text-sm font-medium text-slate-700">{integration ? 'LINE連携済み' : 'LINEアカウント未関連付け'}</span>
+          {integration && <span className="text-xs text-slate-500">Bot ID: {integration.bot_user_id}</span>}
+          <button disabled={busy} onClick={() => void connect()} className="rounded border border-slate-200 bg-white px-3 py-1.5 text-xs text-slate-700 hover:bg-slate-50 shadow-xs cursor-pointer">
+            {integration ? '接続を更新' : 'LINEアカウントを接続'}
+          </button>
+          {integration && (
+            <button onClick={() => void toggleAutoReply()} className={'rounded px-3 py-1.5 text-xs font-semibold cursor-pointer ' + (integration.auto_reply_enabled ? 'bg-emerald-600 text-white' : 'bg-slate-200 text-slate-700')}>
+              自動返信：{integration.auto_reply_enabled ? '有効' : '停止中'}
+            </button>
+          )}
+        </div>
+      </section>
+
+      <nav className="flex gap-2 border-b border-slate-200 pb-2">
+        <button
+          type="button"
+          onClick={() => setActiveView('inbox')}
+          className={`rounded-lg px-4 py-2 text-sm font-semibold transition cursor-pointer ${activeView === 'inbox' ? 'bg-purple-600 text-white shadow-xs' : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900'}`}
+        >
+          受信箱・自動返信
+        </button>
+        <button
+          type="button"
+          onClick={() => setActiveView('templates')}
+          className={`rounded-lg px-4 py-2 text-sm font-semibold transition cursor-pointer ${activeView === 'templates' ? 'bg-purple-600 text-white shadow-xs' : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900'}`}
+        >
+          テンプレート管理（{templates.length}）
+        </button>
+      </nav>
+
+      {activeView === 'inbox' && (
+        <>
+          <div className="grid gap-5 xl:grid-cols-[280px_1fr]">
+            <section className="rounded-2xl border border-slate-200 bg-white p-4 shadow-xs">
+              <h3 className="font-bold text-slate-900">受信した相手</h3>
+              <div className="mt-3 max-h-[560px] space-y-1 overflow-auto">
+                {conversations.length === 0 ? (
+                  <p className="text-sm text-slate-400 py-4 text-center">Webhookで受信したメッセージはここに表示されます。</p>
+                ) : (
+                  conversations.map((conversation) => (
+                    <button
+                      key={conversation.lineUserId}
+                      onClick={() => setSelectedLineUserId(conversation.lineUserId)}
+                      className={'w-full rounded-lg p-3 text-left transition cursor-pointer border ' + (selectedLineUserId === conversation.lineUserId ? 'bg-purple-50 border-purple-200 shadow-xs' : 'border-transparent hover:bg-slate-50')}
+                    >
+                      <div className="truncate text-xs text-slate-500">{conversation.lineUserId}</div>
+                      <div className="truncate text-sm font-semibold text-slate-900 mt-0.5">{conversation.items[conversation.items.length - 1]?.body || '（本文なし）'}</div>
+                      <div className="text-[10px] text-slate-400 mt-1">{new Date(conversation.items[conversation.items.length - 1]?.received_at || '').toLocaleString()}</div>
+                    </button>
+                  ))
+                )}
+              </div>
+            </section>
+            <section className="rounded-2xl border border-slate-200 bg-white p-4 shadow-xs">
+              <h3 className="font-bold text-slate-900">会話</h3>
+              {!activeConversation ? (
+                <p className="mt-4 text-sm text-slate-400">左から相手を選択してください。</p>
+              ) : (
+                <>
+                  <div className="mt-3 max-h-[420px] space-y-2 overflow-auto rounded-xl bg-slate-50 p-4 border border-slate-200">
+                    {activeConversation.items.map((message) => (
+                      <div
+                        key={message.id}
+                        className={'max-w-[85%] rounded-xl px-4 py-2 text-sm ' + (message.direction === 'outbound' ? 'ml-auto bg-emerald-600 text-white' : 'bg-white text-slate-900 border border-slate-200 shadow-xs')}
+                      >
+                        <div className="whitespace-pre-wrap leading-relaxed">{message.body}</div>
+                        <div className={`mt-1 text-[10px] ${message.direction === 'outbound' ? 'text-emerald-100' : 'text-slate-400'}`}>
+                          {new Date(message.received_at).toLocaleString()}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                  <div className="mt-3 flex gap-2">
+                    <textarea
+                      value={replyDraft}
+                      onChange={(e) => setReplyDraft(e.target.value)}
+                      rows={2}
+                      maxLength={5000}
+                      placeholder="LINE返信を入力"
+                      className="min-w-0 flex-1 rounded-lg border border-slate-200 bg-white p-2.5 text-sm text-slate-900 placeholder-slate-400 focus:outline-none focus:border-purple-500 shadow-xs"
+                    />
+                    <button
+                      disabled={busy || !replyDraft.trim()}
+                      onClick={() => void sendReply()}
+                      className="rounded-lg bg-emerald-600 hover:bg-emerald-700 px-4 text-sm font-semibold text-white disabled:opacity-40 shadow-xs transition cursor-pointer"
+                    >
+                      返信
+                    </button>
+                  </div>
+                </>
+              )}
+            </section>
+          </div>
+
+          <section className="rounded-2xl border border-slate-200 bg-white p-6 shadow-xs">
+            <h3 className="font-bold text-slate-900">回答に応じたタグ付け・自動返信</h3>
+            <p className="mt-1 text-xs text-slate-500">Flex Messageのボタンをメッセージアクションにすると、押された選択文字を条件にできます。最初に一致したルールの返信とタグを適用します。</p>
+            <form onSubmit={saveRule} className="mt-4 grid gap-3 md:grid-cols-2">
+              <input value={ruleName} onChange={(e) => setRuleName(e.target.value)} placeholder="ルール名（例：経営改善の相談）" className="rounded-lg border border-slate-200 bg-white p-2 text-sm text-slate-900 focus:border-purple-500 focus:outline-none" />
+              <select value={matchMode} onChange={(e) => setMatchMode(e.target.value as 'exact' | 'contains')} className="rounded-lg border border-slate-200 bg-white p-2 text-sm text-slate-900 focus:border-purple-500 focus:outline-none">
+                <option value="exact">完全一致</option>
+                <option value="contains">含む</option>
+              </select>
+              <input value={matchText} onChange={(e) => setMatchText(e.target.value)} placeholder="ボタンから届く選択文字" className="rounded-lg border border-slate-200 bg-white p-2 text-sm text-slate-900 focus:border-purple-500 focus:outline-none" />
+              <select value={tagId} onChange={(e) => setTagId(e.target.value)} className="rounded-lg border border-slate-200 bg-white p-2 text-sm text-slate-900 focus:border-purple-500 focus:outline-none">
+                <option value="">タグを付けない</option>
+                {tags.map((tag) => <option key={tag.id} value={tag.id}>{tag.name}</option>)}
+              </select>
+              <select
+                value={selectedTemplateId}
+                onChange={(e) => {
+                  const id = e.target.value;
+                  setSelectedTemplateId(id);
+                  const selected = templates.find((item) => item.id === id);
+                  if (selected) {
+                    setReplyType(selected.reply_type);
+                    setReplyPayload(selected.payload || {});
+                  }
+                }}
+                className="rounded-lg border border-slate-200 bg-white p-2 text-sm text-slate-900 md:col-span-2 focus:border-purple-500 focus:outline-none"
+              >
+                <option value="">返信テンプレートを選択</option>
+                {templates.map((template) => (
+                  <option key={template.id} value={template.id}>
+                    {template.reply_type === 'text' ? 'テキスト' : template.reply_type === 'image' ? '画像' : template.reply_type === 'video' ? '動画' : 'Flex'}：{template.name}
+                  </option>
+                ))}
+              </select>
+              <p className="text-xs text-slate-500 md:col-span-2">テンプレートは「テンプレート管理」タブで作成・アップロードできます。</p>
+              <div className="md:col-span-2">
+                <LineMessagePreview type={replyType} title="返信ルールの送信内容" payload={replyPayload} text={replyText} />
+              </div>
+              <button disabled={busy || !integration} className="rounded-lg bg-purple-600 hover:bg-purple-700 px-4 py-2 text-sm font-semibold text-white disabled:opacity-40 md:col-span-2 shadow-xs transition cursor-pointer">
+                {busy ? '保存中…' : '自動返信ルールを保存'}
+              </button>
+              {!integration && <p className="text-xs text-amber-700 md:col-span-2">LINEアカウントを接続すると保存できます。上部の「LINEアカウントを接続」を先に実行してください。</p>}
+            </form>
+            <div className="mt-4 divide-y divide-slate-100">
+              {rules.map((rule) => (
+                <div key={rule.id} className="flex flex-wrap items-center justify-between gap-3 py-3">
+                  <div>
+                    <div className="font-semibold text-slate-900">{rule.name}</div>
+                    <div className="text-xs text-slate-500">{rule.match_mode === 'exact' ? '完全一致' : '含む'}：「{rule.match_text}」 · {tags.find((tag) => tag.id === rule.tag_id)?.name || 'タグなし'}</div>
+                    <div className="whitespace-pre-wrap text-xs text-slate-600 mt-1">{rule.reply_type === 'image' ? '画像メッセージ' : rule.reply_type === 'video' ? '動画メッセージ' : rule.reply_type === 'flex' ? 'Flexメッセージ' : rule.reply_text}</div>
+                    <LineMessagePreview type={rule.reply_type || 'text'} title={rule.name} payload={rule.reply_payload || { text: rule.reply_text }} />
+                  </div>
+                  <div className="flex gap-2">
+                    <button onClick={() => void toggleRule(rule)} className="rounded border border-slate-200 bg-white px-2.5 py-1 text-xs text-slate-700 hover:bg-slate-50 shadow-xs cursor-pointer">
+                      {rule.enabled ? '停止' : '有効化'}
+                    </button>
+                    <InlineDeleteButton onConfirm={() => void deleteRule(rule)} warning={`「${rule.name}」を削除しますか？`}>
+                      削除
+                    </InlineDeleteButton>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </section>
+        </>
+      )}
+
+      {activeView === 'templates' && (
+        <section className="space-y-5 rounded-2xl border border-slate-200 bg-white p-6 shadow-xs">
+          <div>
+            <h3 className="font-bold text-slate-900">返信テンプレートの管理</h3>
+            <p className="mt-1 text-xs text-slate-500">テキスト・画像・Flex・動画のテンプレートを作成し、自動返信ルールから選択できます。画像・動画ファイルはここからアップロードします（各20MBまで）。</p>
+          </div>
+          <form onSubmit={saveTemplate} className="space-y-4 rounded-xl border border-slate-200 bg-slate-50/70 p-4">
+            <div className="grid gap-3 md:grid-cols-2">
+              <input required value={templateName} onChange={(e) => setTemplateName(e.target.value)} placeholder="テンプレート名" className="rounded-lg border border-slate-200 bg-white p-2 text-sm text-slate-900 focus:border-purple-500 focus:outline-none" />
+              <select value={templateType} onChange={(e) => setTemplateType(e.target.value as 'text' | 'image' | 'flex' | 'video')} className="rounded-lg border border-slate-200 bg-white p-2 text-sm text-slate-900 focus:border-purple-500 focus:outline-none">
+                <option value="text">テキスト</option>
+                <option value="image">画像</option>
+                <option value="flex">Flex</option>
+                <option value="video">動画</option>
+              </select>
+              {templateType === 'text' && <textarea value={templateText} onChange={(e) => setTemplateText(e.target.value)} rows={4} placeholder="返信テキスト" className="rounded-lg border border-slate-200 bg-white p-2 text-sm text-slate-900 md:col-span-2 focus:border-purple-500 focus:outline-none" />}
+              {templateType === 'image' && (
+                <div className="grid gap-3 md:col-span-2 md:grid-cols-2">
+                  <label className="space-y-1.5 text-xs text-slate-700 font-medium">画像本体（JPEG / PNG）<input type="file" accept="image/jpeg,image/png" disabled={busy} onChange={async (e) => { const input = e.currentTarget; const file = input.files?.[0]; if (!file) return; setBusy(true); setError(''); try { const asset = await uploadLineTemplateAsset(file, 'image'); setTemplateImageUrl(asset.url); setTemplateImagePath(asset.path); setNotice('画像をアップロードしました。'); } catch (err: any) { setError(err.message); } finally { setBusy(false); input.value = ''; } }} className="block w-full rounded-lg border border-slate-200 bg-white p-2 text-xs" /></label>
+                  <label className="space-y-1.5 text-xs text-slate-700 font-medium">プレビュー画像（JPEG / PNG）<input type="file" accept="image/jpeg,image/png" disabled={busy} onChange={async (e) => { const input = e.currentTarget; const file = input.files?.[0]; if (!file) return; setBusy(true); setError(''); try { const asset = await uploadLineTemplateAsset(file, 'image'); setTemplatePreviewUrl(asset.url); setTemplatePreviewPath(asset.path); setNotice('プレビュー画像をアップロードしました。'); } catch (err: any) { setError(err.message); } finally { setBusy(false); input.value = ''; } }} className="block w-full rounded-lg border border-slate-200 bg-white p-2 text-xs" /></label>
+                  {(templateImageUrl || templatePreviewUrl) && (
+                    <div className="flex gap-3 md:col-span-2">
+                      {templateImageUrl && <img src={templateImageUrl} alt="画像本体のプレビュー" className="h-24 rounded border border-slate-200 object-contain bg-white" />}
+                      {templatePreviewUrl && <img src={templatePreviewUrl} alt="プレビュー画像" className="h-24 rounded border border-slate-200 object-contain bg-white" />}
+                    </div>
+                  )}
+                </div>
+              )}
+              {templateType === 'video' && (
+                <div className="grid gap-3 md:col-span-2 md:grid-cols-2">
+                  <label className="space-y-1.5 text-xs text-slate-700 font-medium">動画本体（MP4）<input type="file" accept="video/mp4" disabled={busy} onChange={async (e) => { const input = e.currentTarget; const file = input.files?.[0]; if (!file) return; setBusy(true); setError(''); try { const asset = await uploadLineTemplateAsset(file, 'video'); setTemplateVideoUrl(asset.url); setTemplateVideoPath(asset.path); setNotice('動画をアップロードしました。'); } catch (err: any) { setError(err.message); } finally { setBusy(false); input.value = ''; } }} className="block w-full rounded-lg border border-slate-200 bg-white p-2 text-xs" /></label>
+                  <label className="space-y-1.5 text-xs text-slate-700 font-medium">動画プレビュー画像（JPEG / PNG）<input type="file" accept="image/jpeg,image/png" disabled={busy} onChange={async (e) => { const input = e.currentTarget; const file = input.files?.[0]; if (!file) return; setBusy(true); setError(''); try { const asset = await uploadLineTemplateAsset(file, 'image'); setTemplatePreviewUrl(asset.url); setTemplatePreviewPath(asset.path); setNotice('プレビュー画像をアップロードしました。'); } catch (err: any) { setError(err.message); } finally { setBusy(false); input.value = ''; } }} className="block w-full rounded-lg border border-slate-200 bg-white p-2 text-xs" /></label>
+                  {templateVideoUrl && <video src={templateVideoUrl} controls className="h-32 rounded border border-slate-200 md:col-span-2 bg-black" />}
+                  <input value={templateAltText} onChange={(e) => setTemplateAltText(e.target.value)} maxLength={400} placeholder="通知に表示する動画の代替テキスト" className="rounded-lg border border-slate-200 bg-white p-2 text-sm text-slate-900 md:col-span-2 focus:border-purple-500 focus:outline-none" />
+                </div>
+              )}
+              {templateType === 'flex' && (
+                <div className="grid gap-3 md:col-span-2">
+                  <input value={templateAltText} onChange={(e) => setTemplateAltText(e.target.value)} maxLength={1500} placeholder="通知に表示する代替テキスト" className="rounded-lg border border-slate-200 bg-white p-2 text-sm text-slate-900 focus:border-purple-500 focus:outline-none" />
+                  <textarea value={templateFlexJson} onChange={(e) => setTemplateFlexJson(e.target.value)} rows={10} placeholder='Flex本文 JSON（bubble / carousel）' className="rounded-lg border border-slate-200 bg-white p-2 font-mono text-xs text-slate-900 focus:border-purple-500 focus:outline-none" />
+                  <p className="text-xs text-slate-500">ボタンでルールにつなぐ場合は action.type を message にしてください。</p>
+                </div>
+              )}
+            </div>
+            <LineMessagePreview type={templateType} title={templateName || '自動返信テンプレート'} payload={templateType === 'text' ? { text: templateText } : templateType === 'image' ? { originalContentUrl: templateImageUrl, previewImageUrl: templatePreviewUrl } : templateType === 'video' ? { originalContentUrl: templateVideoUrl, previewImageUrl: templatePreviewUrl, altText: templateAltText } : { altText: templateAltText, contents: templateFlexJson }} />
+            <div className="flex justify-end gap-2">
+              <button type="button" onClick={resetTemplateEditor} className="rounded-lg border border-slate-200 bg-white px-4 py-2 text-xs text-slate-700 hover:bg-slate-50 shadow-xs cursor-pointer">
+                新規作成に戻す
+              </button>
+              <button type="submit" disabled={busy || !ownerId} className="rounded-lg bg-purple-600 hover:bg-purple-700 px-4 py-2 text-xs font-semibold text-white disabled:opacity-40 shadow-xs transition cursor-pointer">
+                {busy ? '保存中…' : editingTemplateId ? 'テンプレートを更新' : 'テンプレートを保存'}
+              </button>
+            </div>
+          </form>
+          <div className="divide-y divide-slate-100">
+            {templates.length === 0 ? (
+              <p className="py-4 text-sm text-slate-400">テンプレートはまだありません。</p>
+            ) : (
+              templates.map((template) => (
+                <div key={template.id} className="flex flex-wrap items-center justify-between gap-3 py-3">
+                  <div>
+                    <div className="font-semibold text-slate-900">{template.name}</div>
+                    <div className="text-xs text-slate-500">{template.reply_type === 'text' ? 'テキスト' : template.reply_type === 'image' ? '画像' : template.reply_type === 'video' ? '動画' : 'Flex'}</div>
+                  </div>
+                  <div className="flex gap-2">
+                    <button type="button" onClick={() => editTemplate(template)} className="rounded border border-slate-200 bg-white px-3 py-1.5 text-xs text-slate-700 hover:bg-slate-50 shadow-xs cursor-pointer">
+                      編集
+                    </button>
+                    <InlineDeleteButton onConfirm={() => deleteTemplate(template)} warning={`テンプレート「${template.name}」を削除しますか？素材ファイルも削除されます。`}>
+                      削除
+                    </InlineDeleteButton>
+                  </div>
+                </div>
+              ))
+            )}
+          </div>
+        </section>
+      )}
+    </div>
+  );
 };
