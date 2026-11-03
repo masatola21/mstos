@@ -761,16 +761,16 @@ export const MarketingAutomationPrototypeView: React.FC<Props> = ({ scenarios, o
 
   return (
     <div className="space-y-6">
-      <section className="rounded-2xl border border-indigo-500/30 bg-gradient-to-br from-slate-900 via-slate-900 to-indigo-950/50 p-6">
+      <section className="rounded-2xl border border-slate-200 bg-white p-6 shadow-xs">
         <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
           <div>
             <div className="mb-2 flex flex-wrap items-center gap-2">
-              <h1 className="text-2xl font-black text-white">マーケティング自動配信</h1>
-              <span className="rounded-full border border-amber-400/30 bg-amber-500/10 px-2.5 py-1 text-xs font-semibold text-amber-300">シナリオ・自動応答・ジョブ監視</span>
+              <h1 className="text-2xl font-black text-slate-900">マーケティング自動配信</h1>
+              <span className="rounded-full border border-purple-200 bg-purple-50 px-2.5 py-1 text-xs font-semibold text-purple-700">シナリオ・自動応答・ジョブ監視</span>
             </div>
-            <p className="max-w-3xl text-sm leading-6 text-slate-300">
+            <p className="max-w-3xl text-sm leading-6 text-slate-600">
               見込み客や顧客リストに向けた「ステップシナリオ」「キーワード自動応答」「配信ジョブ」を自動運用します。
-              ※一斉配信（メール・LINE一括）や定型テンプレート管理は「<strong className="text-white">📤 送信センター</strong>」、受信対応は「<strong className="text-white">📥 統合受信トレイ</strong>」で一元管理されています。
+              ※一斉配信（メール・LINE一括）や定型テンプレート管理は「<strong className="text-slate-900 font-semibold">📤 送信センター</strong>」、受信対応は「<strong className="text-slate-900 font-semibold">📥 統合受信トレイ</strong>」で一元管理されています。
             </p>
           </div>
           <div className="flex flex-wrap items-center gap-2">
@@ -779,32 +779,45 @@ export const MarketingAutomationPrototypeView: React.FC<Props> = ({ scenarios, o
                 <button
                   type="button"
                   onClick={() => onNavigateTab('communication_send')}
-                  className="flex items-center gap-1.5 rounded-xl border border-purple-500/40 bg-purple-950/50 px-3.5 py-2.5 text-xs font-bold text-purple-200 hover:bg-purple-900/60 hover:text-white transition shadow-sm cursor-pointer"
+                  className="flex items-center gap-1.5 rounded-xl border border-purple-200 bg-purple-50 px-3.5 py-2.5 text-xs font-bold text-purple-700 hover:bg-purple-100 transition shadow-xs cursor-pointer"
                   title="全社共通の一斉配信を実行します"
                 >
-                  <Send className="h-3.5 w-3.5 text-purple-400" />
+                  <Send className="h-3.5 w-3.5 text-purple-600" />
                   <span>📢 一斉配信（送信センター）</span>
                 </button>
                 <button
                   type="button"
                   onClick={() => onNavigateTab('communication_send')}
-                  className="flex items-center gap-1.5 rounded-xl border border-emerald-500/40 bg-emerald-950/50 px-3.5 py-2.5 text-xs font-bold text-emerald-200 hover:bg-emerald-900/60 hover:text-white transition shadow-sm cursor-pointer"
+                  className="flex items-center gap-1.5 rounded-xl border border-emerald-200 bg-emerald-50 px-3.5 py-2.5 text-xs font-bold text-emerald-700 hover:bg-emerald-100 transition shadow-xs cursor-pointer"
                   title="全社共通の定型テンプレート保管庫を開きます"
                 >
-                  <Library className="h-3.5 w-3.5 text-emerald-400" />
+                  <Library className="h-3.5 w-3.5 text-emerald-600" />
                   <span>📚 テンプレート保管庫（送信センター）</span>
                 </button>
               </>
             )}
-            <button onClick={startNew} className="flex shrink-0 items-center justify-center gap-2 rounded-xl bg-indigo-600 px-4 py-2.5 text-sm font-semibold text-white hover:bg-indigo-500 cursor-pointer shadow-md shadow-indigo-600/20"><Plus className="h-4 w-4" />シナリオ作成</button>
+            <button onClick={startNew} className="flex shrink-0 items-center justify-center gap-2 rounded-xl bg-purple-600 px-4 py-2.5 text-sm font-semibold text-white hover:bg-purple-700 cursor-pointer shadow-xs transition-colors"><Plus className="h-4 w-4" />シナリオ作成</button>
           </div>
         </div>
-        <div className="mt-5 flex gap-2 overflow-x-auto border-t border-slate-800 pt-4">
-          {tabs.map(({ id, label, icon: Icon }) => <button key={id} onClick={() => { setActiveTab(id); setNotice(''); }} className={`flex shrink-0 items-center gap-2 rounded-lg px-3.5 py-2 text-xs font-bold transition cursor-pointer ${activeTab === id ? 'bg-indigo-600 text-white shadow-sm' : 'text-slate-400 hover:bg-slate-800 hover:text-white'}`}><Icon className="h-4 w-4" />{label}</button>)}
+        <div className="mt-5 flex gap-2 overflow-x-auto border-t border-slate-200 pt-4">
+          {tabs.map(({ id, label, icon: Icon }) => (
+            <button
+              key={id}
+              onClick={() => { setActiveTab(id); setNotice(''); }}
+              className={`flex shrink-0 items-center gap-2 rounded-lg px-3.5 py-2 text-xs font-semibold transition cursor-pointer ${
+                activeTab === id
+                  ? 'bg-purple-600 text-white shadow-xs'
+                  : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900'
+              }`}
+            >
+              <Icon className="h-4 w-4" />
+              {label}
+            </button>
+          ))}
         </div>
       </section>
 
-      {notice && <div role="status" className="rounded-xl border border-emerald-500/30 bg-emerald-500/10 px-4 py-3 text-sm text-emerald-200">{notice}</div>}
+      {notice && <div role="status" className="rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-800 font-medium">{notice}</div>}
 
       {activeTab === 'flows' && (
         <MarketingFlowStudio
@@ -826,16 +839,16 @@ export const MarketingAutomationPrototypeView: React.FC<Props> = ({ scenarios, o
 
       {activeTab === 'line_settings' && (
         <div className="space-y-4">
-          <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-emerald-500/30 bg-emerald-950/30 p-4">
-            <div className="text-xs text-emerald-200 leading-relaxed">
+          <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-emerald-200 bg-emerald-50/70 p-4">
+            <div className="text-xs text-emerald-800 leading-relaxed">
               ⚙️ <strong>LINE公式アカウント基本設定:</strong> Webhookやリッチメニューの登録を行います。<br />
-              ※LINE友だちへのウェルカム分岐やステップ配信は「<strong className="text-white">🗺️ 導線フロー＆シナリオ設計</strong>」、有人チャット対話は「<strong className="text-white">📥 統合受信箱</strong>」で管理されます。
+              ※LINE友だちへのウェルカム分岐やステップ配信は「<strong className="text-emerald-950">🗺️ 導線フロー＆シナリオ設計</strong>」、有人チャット対話は「<strong className="text-emerald-950">📥 統合受信箱</strong>」で管理されます。
             </div>
             {onNavigateTab && (
               <button
                 type="button"
                 onClick={() => onNavigateTab('inbox_hub')}
-                className="flex items-center gap-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white px-3.5 py-2 text-xs font-bold rounded-lg transition shadow-sm cursor-pointer"
+                className="flex items-center gap-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white px-3.5 py-2 text-xs font-semibold transition shadow-xs cursor-pointer"
               >
                 <Inbox className="h-3.5 w-3.5" />
                 <span>📥 統合受信箱へ移動</span>

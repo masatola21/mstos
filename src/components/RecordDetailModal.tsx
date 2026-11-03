@@ -65,47 +65,47 @@ export const RecordDetailModal: React.FC<RecordDetailModalProps> = ({
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-fade-in">
-      <div className="bg-slate-900 border border-slate-800 rounded-3xl max-w-2xl w-full shadow-2xl overflow-hidden flex flex-col max-h-[90vh]">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-xs animate-fade-in">
+      <div className="bg-white border border-slate-200 rounded-2xl max-w-2xl w-full shadow-2xl overflow-hidden flex flex-col max-h-[90vh]">
         {/* Header */}
-        <div className="px-6 py-4 border-b border-slate-800 flex items-center justify-between bg-slate-900/90 sticky top-0">
+        <div className="px-6 py-4 border-b border-slate-200 flex items-center justify-between bg-white sticky top-0">
           <div className="flex items-center gap-2.5">
-            <div className="p-2 bg-blue-500/10 border border-blue-500/20 rounded-xl text-blue-400">
+            <div className="p-2 bg-purple-50 border border-purple-200 rounded-xl text-purple-700">
               <Building2 className="w-5 h-5" />
             </div>
             <div>
               <div className="flex items-center gap-2">
-                <h2 className="text-lg font-bold text-white">{config.label} 詳細</h2>
-                <span className="text-xs px-2 py-0.5 rounded-full bg-slate-800 text-slate-300 font-mono">
+                <h2 className="text-lg font-bold text-slate-900">{config.label} 詳細</h2>
+                <span className="text-xs px-2 py-0.5 rounded-full bg-slate-100 text-slate-600 font-mono">
                   ID: {record.id}
                 </span>
               </div>
-              <p className="text-xs text-slate-400 font-mono">テーブル: {tableKey}</p>
+              <p className="text-xs text-slate-500 font-mono">テーブル: {tableKey}</p>
             </div>
           </div>
           <button
             onClick={onClose}
-            className="p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 transition-colors"
+            className="p-1.5 rounded-lg text-slate-400 hover:text-slate-700 hover:bg-slate-100 transition-colors"
           >
             <X className="w-5 h-5" />
           </button>
         </div>
 
         {/* Content Body */}
-        <div className="p-6 overflow-y-auto space-y-6 text-sm text-slate-200">
+        <div className="p-6 overflow-y-auto space-y-6 text-sm text-slate-700">
           {/* Stage Progression Action Banner */}
           {['prospects', 'leads', 'deals'].includes(tableKey) && onTransitionStage && (
-            <div className="p-4 rounded-2xl bg-gradient-to-r from-slate-900 to-slate-800/90 border border-slate-700/80 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 shadow-md">
+            <div className="p-4 rounded-xl bg-purple-50/70 border border-purple-200 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 shadow-xs">
               <div className="space-y-0.5">
-                <div className="text-xs font-bold text-white flex items-center gap-1.5">
-                  <ArrowRight className="w-3.5 h-3.5 text-blue-400" />
+                <div className="text-xs font-bold text-purple-950 flex items-center gap-1.5">
+                  <ArrowRight className="w-3.5 h-3.5 text-purple-600" />
                   <span>
                     {tableKey === 'prospects' && '次の営業ステップ：リードへ進める'}
                     {tableKey === 'leads' && '次の営業ステップ：商談を作成する'}
                     {tableKey === 'deals' && '次の営業ステップ：顧客として登録する'}
                   </span>
                 </div>
-                <p className="text-[11px] text-slate-400">
+                <p className="text-[11px] text-purple-800/80">
                   {tableKey === 'prospects' && 'この見込み企業の会社情報・アプローチ履歴を引き継いで案件リードを起票します。'}
                   {tableKey === 'leads' && 'このリードに紐づく商談パイプラインレコードを作成し、具体的な提案に入ります。'}
                   {tableKey === 'deals' && 'この商談の受注・合意に伴い、契約会社としての顧客レコードを登録します。'}
@@ -119,7 +119,7 @@ export const RecordDetailModal: React.FC<RecordDetailModalProps> = ({
                     onClose();
                     onTransitionStage('prospect_to_lead', record);
                   }}
-                  className="px-3.5 py-2 rounded-xl text-xs font-bold bg-cyan-600 hover:bg-cyan-500 text-white shadow-md shadow-cyan-600/30 flex items-center gap-1.5 transition-colors shrink-0"
+                  className="px-3.5 py-2 rounded-lg text-xs font-bold bg-cyan-600 hover:bg-cyan-700 text-white shadow-xs flex items-center gap-1.5 transition-colors shrink-0"
                 >
                   <Layers className="w-3.5 h-3.5" />
                   <span>リードへ進める</span>
@@ -133,7 +133,7 @@ export const RecordDetailModal: React.FC<RecordDetailModalProps> = ({
                     onClose();
                     onTransitionStage('lead_to_deal', record);
                   }}
-                  className="px-3.5 py-2 rounded-xl text-xs font-bold bg-emerald-600 hover:bg-emerald-500 text-white shadow-md shadow-emerald-600/30 flex items-center gap-1.5 transition-colors shrink-0"
+                  className="px-3.5 py-2 rounded-lg text-xs font-bold bg-emerald-600 hover:bg-emerald-700 text-white shadow-xs flex items-center gap-1.5 transition-colors shrink-0"
                 >
                   <Briefcase className="w-3.5 h-3.5" />
                   <span>商談を作成</span>
@@ -149,7 +149,7 @@ export const RecordDetailModal: React.FC<RecordDetailModalProps> = ({
                         onClose();
                         onOpenCustomerWorkspace(String(record.company_id), 'documents', { tableKey, recordId: String(record.id), leadId: record.lead_id ? String(record.lead_id) : undefined });
                       }}
-                      className="px-3.5 py-2 rounded-xl text-xs font-bold bg-indigo-600 hover:bg-indigo-500 text-white shadow-md shadow-indigo-600/30 flex items-center gap-1.5 transition-colors shrink-0"
+                      className="px-3.5 py-2 rounded-lg text-xs font-bold bg-purple-600 hover:bg-purple-700 text-white shadow-xs flex items-center gap-1.5 transition-colors shrink-0"
                     >
                       <FileText className="w-3.5 h-3.5" />
                       <span>見積・契約書を作成</span>
@@ -161,7 +161,7 @@ export const RecordDetailModal: React.FC<RecordDetailModalProps> = ({
                       onClose();
                       onTransitionStage('deal_to_customer', record);
                     }}
-                    className="px-3.5 py-2 rounded-xl text-xs font-bold bg-pink-600 hover:bg-pink-500 text-white shadow-md shadow-pink-600/30 flex items-center gap-1.5 transition-colors shrink-0"
+                    className="px-3.5 py-2 rounded-lg text-xs font-bold bg-pink-600 hover:bg-pink-700 text-white shadow-xs flex items-center gap-1.5 transition-colors shrink-0"
                   >
                     <UserCheck className="w-3.5 h-3.5" />
                     <span>顧客として登録</span>
@@ -180,16 +180,16 @@ export const RecordDetailModal: React.FC<RecordDetailModalProps> = ({
               if (field.type === 'fk_company') {
                 const linkedComp = record.company;
                 return (
-                  <div key={field.key} className="sm:col-span-2 bg-slate-950/60 p-3.5 rounded-2xl border border-slate-800/80 space-y-1">
-                    <div className="flex items-center justify-between text-xs text-slate-400">
-                      <span className="font-semibold text-blue-300">{field.label} ({field.key})</span>
-                      <span className="font-mono text-[11px]">会社ID: {rawValue || '未設定'}</span>
+                  <div key={field.key} className="sm:col-span-2 bg-slate-50 p-3.5 rounded-xl border border-slate-200 space-y-1">
+                    <div className="flex items-center justify-between text-xs text-slate-500">
+                      <span className="font-semibold text-purple-700">{field.label} ({field.key})</span>
+                      <span className="font-mono text-[11px] text-slate-400">会社ID: {rawValue || '未設定'}</span>
                     </div>
                     {linkedComp ? (
-                      <div className="pt-1 text-white font-bold text-base flex items-center justify-between">
+                      <div className="pt-1 text-slate-900 font-bold text-base flex items-center justify-between">
                         <span>{linkedComp.company_name}</span>
                         {linkedComp.industry && (
-                          <span className="text-xs font-normal px-2 py-0.5 rounded-full bg-slate-800 text-slate-300">
+                          <span className="text-xs font-normal px-2 py-0.5 rounded-full bg-slate-200 text-slate-700">
                             {linkedComp.industry}
                           </span>
                         )}
@@ -205,15 +205,15 @@ export const RecordDetailModal: React.FC<RecordDetailModalProps> = ({
               if (field.type === 'fk_product') {
                 const linkedProd = record.product;
                 return (
-                  <div key={field.key} className="sm:col-span-2 bg-slate-950/60 p-3.5 rounded-2xl border border-slate-800/80 space-y-1">
-                    <div className="flex items-center justify-between text-xs text-slate-400">
-                      <span className="font-semibold text-purple-300">{field.label} ({field.key})</span>
-                      <span className="font-mono text-[11px]">商品ID: {rawValue || '未設定'}</span>
+                  <div key={field.key} className="sm:col-span-2 bg-slate-50 p-3.5 rounded-xl border border-slate-200 space-y-1">
+                    <div className="flex items-center justify-between text-xs text-slate-500">
+                      <span className="font-semibold text-purple-700">{field.label} ({field.key})</span>
+                      <span className="font-mono text-[11px] text-slate-400">商品ID: {rawValue || '未設定'}</span>
                     </div>
                     {linkedProd ? (
-                      <div className="pt-1 text-white font-bold flex items-center justify-between">
+                      <div className="pt-1 text-slate-900 font-bold flex items-center justify-between">
                         <span>{linkedProd.product_name}</span>
-                        <span className="text-xs font-mono font-medium text-emerald-400">
+                        <span className="text-xs font-mono font-medium text-emerald-700">
                           月額: ¥{Number(linkedProd.monthly_fee || 0).toLocaleString()}
                         </span>
                       </div>
@@ -228,18 +228,18 @@ export const RecordDetailModal: React.FC<RecordDetailModalProps> = ({
               if (field.type === 'fk_lead') {
                 const linkedLead = record.lead;
                 return (
-                  <div key={field.key} className="sm:col-span-2 bg-slate-950/60 p-3.5 rounded-2xl border border-slate-800/80 space-y-1">
-                    <div className="flex items-center justify-between text-xs text-slate-400">
-                      <span className="font-semibold text-cyan-300">{field.label} ({field.key})</span>
-                      <span className="font-mono text-[11px]">リードID: {rawValue || '未設定'}</span>
+                  <div key={field.key} className="sm:col-span-2 bg-slate-50 p-3.5 rounded-xl border border-slate-200 space-y-1">
+                    <div className="flex items-center justify-between text-xs text-slate-500">
+                      <span className="font-semibold text-purple-700">{field.label} ({field.key})</span>
+                      <span className="font-mono text-[11px] text-slate-400">リードID: {rawValue || '未設定'}</span>
                     </div>
                     {linkedLead ? (
-                      <div className="pt-1 text-white text-xs space-y-0.5">
+                      <div className="pt-1 text-slate-900 text-xs space-y-0.5">
                         <div className="font-bold">
                           {linkedLead.service_type || linkedLead.source ? `${linkedLead.service_type || linkedLead.source} (${linkedLead.status || 'ステータス未設定'})` : `リード ID: ${linkedLead.id}`}
                         </div>
                         {linkedLead.priority_channel && (
-                          <div className="text-slate-400 text-[11px]">優先チャネル: {linkedLead.priority_channel}</div>
+                          <div className="text-slate-500 text-[11px]">優先チャネル: {linkedLead.priority_channel}</div>
                         )}
                       </div>
                     ) : (
@@ -255,21 +255,21 @@ export const RecordDetailModal: React.FC<RecordDetailModalProps> = ({
               return (
                 <div 
                   key={field.key} 
-                  className={`bg-slate-950/40 p-3 rounded-xl border border-slate-800/60 space-y-1 ${
+                  className={`bg-slate-50/70 p-3 rounded-xl border border-slate-200/80 space-y-1 ${
                     isFullWidth ? 'sm:col-span-2' : ''
                   }`}
                 >
-                  <div className="text-[11px] font-semibold text-slate-400 flex items-center justify-between">
+                  <div className="text-[11px] font-semibold text-slate-500 flex items-center justify-between">
                     <span>{field.label}</span>
-                    <span className="font-mono text-[10px] text-slate-500">{field.key}</span>
+                    <span className="font-mono text-[10px] text-slate-400">{field.key}</span>
                   </div>
-                  <div className="font-medium text-white break-words">
+                  <div className="font-medium text-slate-900 break-words">
                     {field.key === 'ai_score' && rawValue !== null && rawValue !== undefined ? (
-                      <span className="font-mono text-blue-300 font-bold">
+                      <span className="font-mono text-purple-700 font-bold">
                         {rawValue} 点
                       </span>
                     ) : field.type === 'number' && typeof rawValue === 'number' ? (
-                      <span className="font-mono text-emerald-300">
+                      <span className="font-mono text-slate-900 font-semibold">
                         ¥{rawValue.toLocaleString()}
                       </span>
                     ) : field.type === 'url' && rawValue ? (
@@ -277,7 +277,7 @@ export const RecordDetailModal: React.FC<RecordDetailModalProps> = ({
                         href={rawValue} 
                         target="_blank" 
                         rel="noreferrer" 
-                        className="text-blue-400 hover:underline flex items-center gap-1 inline-flex"
+                        className="text-purple-700 hover:underline flex items-center gap-1 inline-flex"
                       >
                         <span>{rawValue}</span>
                         <ExternalLink className="w-3 h-3" />
@@ -293,17 +293,17 @@ export const RecordDetailModal: React.FC<RecordDetailModalProps> = ({
 
           {/* Timestamps */}
           {(record.created_at || record.updated_at) && (
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-3 border-t border-slate-800/80 text-xs text-slate-400 font-mono">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-3 border-t border-slate-200 text-xs text-slate-500 font-mono">
               {record.created_at && (
                 <div>
-                  <span className="text-slate-500">作成日時 (created_at): </span>
-                  <span className="text-slate-300">{new Date(record.created_at).toLocaleString('ja-JP')}</span>
+                  <span className="text-slate-400">作成日時 (created_at): </span>
+                  <span className="text-slate-700 font-semibold">{new Date(record.created_at).toLocaleString('ja-JP')}</span>
                 </div>
               )}
               {record.updated_at && (
                 <div>
-                  <span className="text-slate-500">更新日時 (updated_at): </span>
-                  <span className="text-slate-300">{new Date(record.updated_at).toLocaleString('ja-JP')}</span>
+                  <span className="text-slate-400">更新日時 (updated_at): </span>
+                  <span className="text-slate-700 font-semibold">{new Date(record.updated_at).toLocaleString('ja-JP')}</span>
                 </div>
               )}
             </div>
@@ -311,16 +311,16 @@ export const RecordDetailModal: React.FC<RecordDetailModalProps> = ({
 
           {/* Additional Columns from live DB */}
           {extraFields.length > 0 && (
-            <div className="pt-4 border-t border-slate-800 space-y-3">
-              <div className="flex items-center gap-1.5 text-xs font-semibold text-slate-400">
-                <Info className="w-4 h-4 text-blue-400" />
+            <div className="pt-4 border-t border-slate-200 space-y-3">
+              <div className="flex items-center gap-1.5 text-xs font-semibold text-slate-500">
+                <Info className="w-4 h-4 text-purple-600" />
                 <span>その他の追加列 (データベースの実スキーマより検出)</span>
               </div>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 {extraFields.map((key) => (
-                  <div key={key} className="bg-slate-950/40 p-2.5 rounded-xl border border-slate-800 text-xs space-y-1">
+                  <div key={key} className="bg-slate-50 p-2.5 rounded-xl border border-slate-200 text-xs space-y-1">
                     <div className="font-mono text-slate-400 text-[10px]">{key}</div>
-                    <div className="text-slate-200">{formatFieldValue(record[key])}</div>
+                    <div className="text-slate-800">{formatFieldValue(record[key])}</div>
                   </div>
                 ))}
               </div>
@@ -329,8 +329,8 @@ export const RecordDetailModal: React.FC<RecordDetailModalProps> = ({
         </div>
 
         {/* Footer Actions - STRICTLY NO DELETE BUTTON */}
-        <div className="px-6 py-4 border-t border-slate-800 bg-slate-900 flex items-center justify-between">
-          <span className="text-xs text-slate-500">
+        <div className="px-6 py-4 border-t border-slate-200 bg-slate-50 flex items-center justify-between">
+          <span className="text-xs text-slate-400">
             ※ 社内ポリシーによりデータの削除機能は提供されていません。
           </span>
           <div className="flex items-center gap-2 flex-wrap">
@@ -338,42 +338,42 @@ export const RecordDetailModal: React.FC<RecordDetailModalProps> = ({
               <>
                 <button
                   onClick={() => { onClose(); onOpenCustomerWorkspace(String(record.company_id), 'documents', { tableKey, recordId: String(record.id), leadId: record.lead_id ? String(record.lead_id) : undefined, contactId: record.contact_id ? String(record.contact_id) : undefined }); }}
-                  className="px-3 py-2 rounded-xl text-xs font-medium text-cyan-200 hover:bg-cyan-950/40 border border-cyan-800 transition-colors flex items-center gap-1.5"
+                  className="px-3 py-1.5 rounded-lg text-xs font-semibold text-purple-700 bg-purple-50 hover:bg-purple-100 border border-purple-200 transition-colors flex items-center gap-1.5"
                 >
                   <FileText className="w-3.5 h-3.5" />
                   <span>{tableKey === 'customers' ? '顧客書類' : '関連書類'}</span>
                 </button>
                 <button
                   onClick={() => { onClose(); onOpenCustomerWorkspace(String(record.company_id), 'diagnoses', { tableKey, recordId: String(record.id), leadId: record.lead_id ? String(record.lead_id) : undefined }); }}
-                  className="px-3 py-2 rounded-xl text-xs font-medium text-indigo-200 hover:bg-indigo-950/40 border border-indigo-800 transition-colors flex items-center gap-1.5"
+                  className="px-3 py-1.5 rounded-lg text-xs font-semibold text-purple-700 bg-purple-50 hover:bg-purple-100 border border-purple-200 transition-colors flex items-center gap-1.5"
                 >
                   <FileText className="w-3.5 h-3.5" />
                   <span>診断レポート</span>
                 </button>
                 <button
                   onClick={() => { onClose(); onOpenCustomerWorkspace(String(record.company_id), 'forms', { tableKey, recordId: String(record.id), leadId: record.lead_id ? String(record.lead_id) : undefined }); }}
-                  className="px-3 py-2 rounded-xl text-xs font-medium text-sky-200 hover:bg-sky-950/40 border border-sky-800 transition-colors flex items-center gap-1.5"
+                  className="px-3 py-1.5 rounded-lg text-xs font-semibold text-purple-700 bg-purple-50 hover:bg-purple-100 border border-purple-200 transition-colors flex items-center gap-1.5"
                 >
                   <FileText className="w-3.5 h-3.5" />
                   <span>フォーム回答</span>
                 </button>
                 <button
                   onClick={() => { onClose(); onOpenCustomerWorkspace(String(record.company_id), 'send', { tableKey, recordId: String(record.id), leadId: record.lead_id ? String(record.lead_id) : undefined, contactId: record.contact_id ? String(record.contact_id) : undefined }); }}
-                  className="px-3 py-2 rounded-xl text-xs font-medium text-emerald-200 hover:bg-emerald-950/40 border border-emerald-800 transition-colors flex items-center gap-1.5"
+                  className="px-3 py-1.5 rounded-lg text-xs font-semibold text-emerald-700 bg-emerald-50 hover:bg-emerald-100 border border-emerald-200 transition-colors flex items-center gap-1.5"
                 >
                   <Mail className="w-3.5 h-3.5" />
                   <span>送信センター</span>
                 </button>
                 {tableKey === 'deals' && <button
                   onClick={() => { onClose(); onOpenCustomerWorkspace(String(record.company_id), 'documents', { tableKey, recordId: String(record.id), leadId: record.lead_id ? String(record.lead_id) : undefined }); }}
-                  className="px-3 py-2 rounded-xl text-xs font-medium text-indigo-200 hover:bg-indigo-950/40 border border-indigo-800 transition-colors flex items-center gap-1.5"
+                  className="px-3 py-1.5 rounded-lg text-xs font-semibold text-purple-700 bg-purple-50 hover:bg-purple-100 border border-purple-200 transition-colors flex items-center gap-1.5"
                 >
                   <FileText className="w-3.5 h-3.5" />
                   <span>見積・契約書</span>
                 </button>}
                 {tableKey === 'customers' && <button
                   onClick={() => { onClose(); onOpenCustomerWorkspace(String(record.company_id), 'operations', { tableKey, recordId: String(record.id) }); }}
-                  className="px-3 py-2 rounded-xl text-xs font-medium text-emerald-200 hover:bg-emerald-950/40 border border-emerald-800 transition-colors flex items-center gap-1.5"
+                  className="px-3 py-1.5 rounded-lg text-xs font-semibold text-emerald-700 bg-emerald-50 hover:bg-emerald-100 border border-emerald-200 transition-colors flex items-center gap-1.5"
                 >
                   <Briefcase className="w-3.5 h-3.5" />
                   <span>契約・請求・支援</span>
@@ -382,7 +382,7 @@ export const RecordDetailModal: React.FC<RecordDetailModalProps> = ({
             )}
             <button
               onClick={onClose}
-              className="px-4 py-2 rounded-xl text-xs font-medium text-slate-300 hover:bg-slate-800 border border-slate-700 transition-colors"
+              className="px-4 py-2 rounded-lg text-xs font-medium text-slate-600 hover:bg-slate-200/70 border border-slate-200 transition-colors"
             >
               閉じる
             </button>
@@ -391,7 +391,7 @@ export const RecordDetailModal: React.FC<RecordDetailModalProps> = ({
                 onClose();
                 onEdit(record);
               }}
-              className="px-4 py-2 rounded-xl text-xs font-semibold bg-blue-600 hover:bg-blue-500 text-white shadow-md shadow-blue-600/30 flex items-center gap-1.5 transition-colors"
+              className="px-4 py-2 rounded-lg text-xs font-semibold bg-purple-600 hover:bg-purple-700 text-white shadow-xs flex items-center gap-1.5 transition-colors"
             >
               <Edit3 className="w-3.5 h-3.5" />
               <span>このレコードを編集</span>

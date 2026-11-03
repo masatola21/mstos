@@ -6,6 +6,7 @@ import { RecordDetailModal } from './RecordDetailModal';
 import { RecordFormModal } from './RecordFormModal';
 import { StageTransitionModal, TransitionType } from './StageTransitionModal';
 import { ProspectResearchImportModal } from './ProspectResearchImportModal';
+import { getStatusBadgeClass } from '../utils/statusBadges';
 import { Customer } from '../types/database';
 import { 
   Search, 
@@ -316,10 +317,10 @@ export const TableManager: React.FC<TableManagerProps> = ({
   return (
     <div className="space-y-6 animate-fade-in pb-12">
       {forceDeleteConfirmRecord && (
-        <div className="rounded-2xl border border-amber-500/40 bg-amber-950/40 p-4 text-amber-200 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 animate-fade-in">
+        <div className="rounded-xl border border-amber-200 bg-amber-50 p-4 text-amber-900 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 animate-fade-in shadow-xs">
           <div>
             <p className="font-semibold text-sm">【削除の確認】関連データが存在します</p>
-            <p className="text-xs text-amber-300 mt-0.5">
+            <p className="text-xs text-amber-800 mt-0.5">
               商品「{forceDeleteConfirmRecord.record.product_name || forceDeleteConfirmRecord.record.id}」は「{forceDeleteConfirmRecord.blockedBy}」等に紐付いています。関連付けを安全に解除（NULL設定）した上で完全削除しますか？
             </p>
           </div>
@@ -330,13 +331,13 @@ export const TableManager: React.FC<TableManagerProps> = ({
                 setForceDeleteConfirmRecord(null);
                 void handleDeleteRecord(rec, true);
               }}
-              className="rounded-lg bg-rose-600 hover:bg-rose-500 text-white text-xs font-semibold px-3 py-1.5 transition"
+              className="rounded-lg bg-rose-600 hover:bg-rose-700 text-white text-xs font-semibold px-3 py-1.5 transition shadow-xs cursor-pointer"
             >
               参照を解除して完全削除
             </button>
             <button
               onClick={() => setForceDeleteConfirmRecord(null)}
-              className="rounded-lg border border-slate-700 hover:bg-slate-800 text-slate-300 text-xs px-3 py-1.5 transition"
+              className="rounded-lg border border-slate-200 bg-white hover:bg-slate-50 text-slate-700 text-xs px-3 py-1.5 transition cursor-pointer"
             >
               キャンセル
             </button>
@@ -344,17 +345,17 @@ export const TableManager: React.FC<TableManagerProps> = ({
         </div>
       )}
       {/* Table Selector Sub-Bar */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-slate-900/60 p-5 rounded-3xl border border-slate-800">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-white p-5 rounded-2xl border border-slate-200 shadow-xs">
         <div>
           <div className="flex items-center gap-2">
-            <h1 className="text-xl sm:text-2xl font-black text-white tracking-tight">
+            <h1 className="text-xl sm:text-2xl font-bold text-slate-900 tracking-tight">
               {config.label}
             </h1>
-            <span className="text-xs px-2.5 py-0.5 rounded-full bg-slate-800 border border-slate-700 text-slate-300 font-mono">
+            <span className="text-xs px-2.5 py-0.5 rounded-full bg-slate-100 border border-slate-200 text-slate-600 font-mono">
               {config.name}
             </span>
           </div>
-          <p className="text-xs text-slate-400 mt-1">{config.description}</p>
+          <p className="text-xs text-slate-500 mt-1">{config.description}</p>
         </div>
 
         {/* Action Button: 新規登録 */}
@@ -362,7 +363,7 @@ export const TableManager: React.FC<TableManagerProps> = ({
           {currentTable === 'prospects' && (
             <button
               onClick={() => setIsProspectImportOpen(true)}
-              className="px-3 py-2.5 rounded-xl font-bold text-xs bg-indigo-600/20 hover:bg-indigo-600/30 text-indigo-200 border border-indigo-500/40 flex items-center gap-2 transition-colors"
+              className="px-3 py-2 rounded-lg font-semibold text-xs bg-purple-50 hover:bg-purple-100 text-purple-700 border border-purple-200 flex items-center gap-2 transition-colors cursor-pointer shadow-xs"
             >
               <span>見込み企業調査</span>
             </button>
@@ -370,14 +371,14 @@ export const TableManager: React.FC<TableManagerProps> = ({
           <button
             onClick={loadData}
             disabled={loading}
-            className="p-2.5 rounded-xl text-slate-400 hover:text-white bg-slate-800 hover:bg-slate-700 border border-slate-700 transition-colors"
+            className="p-2 rounded-lg text-slate-500 hover:text-slate-800 bg-white hover:bg-slate-50 border border-slate-200 transition-colors shadow-xs cursor-pointer"
             title="再読み込み"
           >
             <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
           </button>
           <button
             onClick={handleOpenCreate}
-            className="px-4 py-2.5 rounded-xl font-bold text-xs bg-blue-600 hover:bg-blue-500 text-white shadow-lg shadow-blue-600/30 flex items-center gap-2 transition-colors"
+            className="px-4 py-2 rounded-lg font-semibold text-xs bg-purple-600 hover:bg-purple-700 text-white shadow-xs flex items-center gap-2 transition-colors cursor-pointer"
           >
             <Plus className="w-4 h-4" />
             <span>{config.label}を新規登録</span>
@@ -395,12 +396,12 @@ export const TableManager: React.FC<TableManagerProps> = ({
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
             placeholder={`${config.label}内のキーワード、会社名、担当者、IDなどを検索...`}
-            className="w-full pl-9 pr-4 py-2.5 rounded-xl bg-slate-900/80 border border-slate-800 focus:border-blue-500 text-slate-200 text-xs placeholder:text-slate-500 outline-none"
+            className="w-full pl-9 pr-4 py-2 rounded-lg bg-white border border-slate-200 focus:border-purple-500 text-slate-800 text-xs placeholder:text-slate-400 outline-none shadow-2xs transition-colors"
           />
           {searchQuery && (
             <button
               onClick={() => setSearchQuery('')}
-              className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-slate-500 hover:text-slate-300"
+              className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-slate-400 hover:text-slate-600"
             >
               クリア
             </button>
@@ -410,11 +411,11 @@ export const TableManager: React.FC<TableManagerProps> = ({
         {/* Status Dropdown Filter (if available) */}
         {statusOptions.length > 0 && (
           <div className="flex items-center gap-2">
-            <span className="text-xs text-slate-400 whitespace-nowrap">状態絞込:</span>
+            <span className="text-xs text-slate-500 whitespace-nowrap">状態絞込:</span>
             <select
               value={statusFilter}
               onChange={(e) => setStatusFilter(e.target.value)}
-              className="px-3 py-2.5 rounded-xl bg-slate-900/80 border border-slate-800 text-slate-300 text-xs outline-none focus:border-blue-500"
+              className="px-3 py-2 rounded-lg bg-white border border-slate-200 text-slate-700 text-xs outline-none focus:border-purple-500 shadow-2xs cursor-pointer"
             >
               <option value="ALL">すべて表示</option>
               {statusOptions.map((st) => (
@@ -427,8 +428,8 @@ export const TableManager: React.FC<TableManagerProps> = ({
         )}
 
         {/* Record Count Badge */}
-        <div className="text-xs text-slate-400 self-center whitespace-nowrap px-2">
-          表示: <strong className="text-white font-mono">{filteredData.length}</strong> / {data.length} 件
+        <div className="text-xs text-slate-500 self-center whitespace-nowrap px-2">
+          表示: <strong className="text-slate-800 font-mono">{filteredData.length}</strong> / {data.length} 件
         </div>
       </div>
 
@@ -466,8 +467,8 @@ export const TableManager: React.FC<TableManagerProps> = ({
 
       {/* Product Master Drag Hint */}
       {currentTable === 'products' && (
-        <div className="flex items-center gap-2 px-3.5 py-2.5 rounded-2xl bg-indigo-950/40 border border-indigo-500/30 text-indigo-200 text-xs">
-          <GripVertical className="w-4 h-4 text-indigo-400 shrink-0" />
+        <div className="flex items-center gap-2 px-3.5 py-2.5 rounded-xl bg-purple-50 border border-purple-200 text-purple-800 text-xs shadow-xs">
+          <GripVertical className="w-4 h-4 text-purple-600 shrink-0" />
           <span>行をドラッグ＆ドロップすると商品の表示順を並び替えできます（ブラウザと商品設計に自動保存されます）</span>
         </div>
       )}
@@ -483,26 +484,26 @@ export const TableManager: React.FC<TableManagerProps> = ({
 
       {/* 1. Loading State */}
       {loading && (
-        <div className="bg-slate-900/60 border border-slate-800 rounded-3xl p-12 text-center space-y-3">
-          <RefreshCw className="w-8 h-8 animate-spin mx-auto text-blue-400" />
-          <p className="text-sm font-semibold text-slate-300">
+        <div className="bg-white border border-slate-200 rounded-2xl p-12 text-center space-y-3 shadow-xs">
+          <RefreshCw className="w-8 h-8 animate-spin mx-auto text-purple-600" />
+          <p className="text-sm font-semibold text-slate-800">
             {config.label}のデータを読み込み中...
           </p>
-          <p className="text-xs text-slate-500">Supabaseデータベースと通信しています</p>
+          <p className="text-xs text-slate-400">Supabaseデータベースと通信しています</p>
         </div>
       )}
 
       {/* 2. Error State: 権限不足 (RLS / 401 / 403 / 42501) */}
       {!loading && error && error.type === 'PERMISSION_DENIED' && (
-        <div className="bg-amber-950/30 border border-amber-500/40 rounded-3xl p-8 text-center space-y-4 max-w-2xl mx-auto shadow-2xl">
-          <div className="w-12 h-12 rounded-2xl bg-amber-500/10 border border-amber-500/30 text-amber-400 flex items-center justify-center mx-auto">
+        <div className="bg-amber-50 border border-amber-200 rounded-2xl p-8 text-center space-y-4 max-w-2xl mx-auto shadow-xs text-amber-900">
+          <div className="w-12 h-12 rounded-xl bg-amber-100 border border-amber-200 text-amber-700 flex items-center justify-center mx-auto">
             <ShieldAlert className="w-6 h-6" />
           </div>
           <div className="space-y-1">
-            <h3 className="text-lg font-bold text-amber-300">
+            <h3 className="text-base font-bold text-amber-900">
               権限不足（Row Level Security: RLS ポリシー）
             </h3>
-            <p className="text-xs text-amber-200/90 leading-relaxed">
+            <p className="text-xs text-amber-800 leading-relaxed">
               テーブル <code>{currentTable}</code> に対するアクセス権限がSupabase側で許可されていません。
               社内認証ユーザー（authenticated）に対して SELECT/INSERT/UPDATE ポリシーを設定してください。
             </p>
@@ -510,14 +511,14 @@ export const TableManager: React.FC<TableManagerProps> = ({
           <div className="pt-2 flex justify-center gap-3">
             <button
               onClick={onOpenRls}
-              className="px-4 py-2 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold text-xs flex items-center gap-1.5 transition-colors"
+              className="px-4 py-2 rounded-lg bg-amber-500 hover:bg-amber-600 text-white font-semibold text-xs flex items-center gap-1.5 transition-colors shadow-xs"
             >
               <FileCode2 className="w-4 h-4" />
               <span>RLS推奨SQLを確認して適用する</span>
             </button>
             <button
               onClick={loadData}
-              className="px-4 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-medium border border-slate-700 transition-colors"
+              className="px-4 py-2 rounded-lg bg-white hover:bg-slate-50 text-slate-700 text-xs font-medium border border-slate-200 transition-colors shadow-xs"
             >
               再試行
             </button>
@@ -527,22 +528,22 @@ export const TableManager: React.FC<TableManagerProps> = ({
 
       {/* 3. Error State: 接続エラー / スキーマ不一致 */}
       {!loading && error && error.type !== 'PERMISSION_DENIED' && (
-        <div className="bg-rose-950/30 border border-rose-500/40 rounded-3xl p-8 text-center space-y-4 max-w-2xl mx-auto shadow-2xl">
-          <div className="w-12 h-12 rounded-2xl bg-rose-500/10 border border-rose-500/30 text-rose-400 flex items-center justify-center mx-auto">
+        <div className="bg-rose-50 border border-rose-200 rounded-2xl p-8 text-center space-y-4 max-w-2xl mx-auto shadow-xs text-rose-900">
+          <div className="w-12 h-12 rounded-xl bg-rose-100 border border-rose-200 text-rose-600 flex items-center justify-center mx-auto">
             <AlertCircle className="w-6 h-6" />
           </div>
           <div className="space-y-1">
-            <h3 className="text-lg font-bold text-rose-300">
+            <h3 className="text-base font-bold text-rose-900">
               {error.type === 'CONNECTION_ERROR' ? '接続エラー' : 'データ取得エラー'}
             </h3>
-            <p className="text-xs text-rose-200/90 leading-relaxed font-mono">
+            <p className="text-xs text-rose-800 leading-relaxed font-mono">
               {error.message}
             </p>
           </div>
           <div className="pt-2 flex justify-center gap-3">
             <button
               onClick={loadData}
-              className="px-4 py-2 rounded-xl bg-rose-600 hover:bg-rose-500 text-white font-bold text-xs flex items-center gap-1.5 transition-colors"
+              className="px-4 py-2 rounded-lg bg-rose-600 hover:bg-rose-700 text-white font-semibold text-xs flex items-center gap-1.5 transition-colors shadow-xs"
             >
               <RefreshCw className="w-3.5 h-3.5" />
               <span>再試行する</span>
@@ -553,12 +554,12 @@ export const TableManager: React.FC<TableManagerProps> = ({
 
       {/* 4. Empty State (0件) */}
       {!loading && !error && filteredData.length === 0 && (
-        <div className="bg-slate-900/40 border border-slate-800 rounded-3xl p-12 text-center space-y-4">
-          <div className="w-12 h-12 rounded-2xl bg-slate-800 text-slate-500 flex items-center justify-center mx-auto">
+        <div className="bg-white border border-slate-200 rounded-2xl p-12 text-center space-y-4 shadow-xs">
+          <div className="w-12 h-12 rounded-xl bg-slate-100 text-slate-400 flex items-center justify-center mx-auto">
             <Inbox className="w-6 h-6" />
           </div>
           <div className="space-y-1">
-            <h3 className="text-base font-bold text-slate-300">
+            <h3 className="text-base font-bold text-slate-800">
               {searchQuery ? '検索条件に一致するレコードがありません' : `${config.label}のレコードはまだありません`}
             </h3>
             <p className="text-xs text-slate-500">
@@ -568,7 +569,7 @@ export const TableManager: React.FC<TableManagerProps> = ({
           {!searchQuery && (
             <button
               onClick={handleOpenCreate}
-              className="px-4 py-2 rounded-xl bg-blue-600 hover:bg-blue-500 text-white font-bold text-xs inline-flex items-center gap-1.5 transition-colors"
+              className="px-4 py-2 rounded-lg bg-purple-600 hover:bg-purple-700 text-white font-semibold text-xs inline-flex items-center gap-1.5 transition-colors shadow-xs cursor-pointer"
             >
               <Plus className="w-3.5 h-3.5" />
               <span>{config.label}を新規登録する</span>
@@ -581,14 +582,14 @@ export const TableManager: React.FC<TableManagerProps> = ({
       {!loading && !error && filteredData.length > 0 && (
         <div className="space-y-4">
           {/* Desktop Table View */}
-          <div className="hidden md:block bg-slate-900/80 border border-slate-800 rounded-3xl overflow-hidden shadow-xl">
+          <div className="hidden md:block bg-white border border-slate-200 rounded-2xl overflow-hidden shadow-xs">
             <div className="overflow-x-auto">
               <table className="w-full text-left text-xs">
-                <thead className="bg-slate-950 text-slate-400 font-semibold uppercase tracking-wider border-b border-slate-800">
+                <thead className="bg-slate-50/80 text-slate-600 font-semibold text-[11px] tracking-wider border-b border-slate-200">
                   <tr>
                     {currentTable === 'products' && (
                       <th className="py-3 px-3 text-center w-12 whitespace-nowrap" title="ドラッグで並び替え">
-                        <span className="flex items-center justify-center gap-0.5 text-[11px] text-indigo-400 font-semibold">
+                        <span className="flex items-center justify-center gap-0.5 text-[11px] text-purple-600 font-semibold">
                           <GripVertical className="w-3.5 h-3.5" />
                           <span>順</span>
                         </span>
@@ -598,15 +599,15 @@ export const TableManager: React.FC<TableManagerProps> = ({
                       const fieldDef = config.fields.find((f) => f.key === colKey);
                       const label = fieldDef?.label || colKey;
                       return (
-                        <th key={colKey} className="py-3 px-4 whitespace-nowrap">
+                        <th key={colKey} className="py-3 px-4 whitespace-nowrap text-slate-600">
                           {label}
                         </th>
                       );
                     })}
-                    <th className="py-3 px-4 text-right">操作</th>
+                    <th className="py-3 px-4 text-right text-slate-600">操作</th>
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-slate-800/60 text-slate-300">
+                <tbody className="divide-y divide-slate-100 text-slate-700">
                   {filteredData.map((item) => (
                     <tr
                       key={item.id}
@@ -635,15 +636,15 @@ export const TableManager: React.FC<TableManagerProps> = ({
                         setDragOverProductId(null);
                       } : undefined}
                       onClick={() => handleOpenDetail(item)}
-                      className={`hover:bg-slate-800/40 cursor-pointer transition-colors group ${
-                        draggedProductId === String(item.id) ? 'opacity-40 bg-slate-900/90' : ''
+                      className={`hover:bg-purple-50/40 cursor-pointer transition-colors group ${
+                        draggedProductId === String(item.id) ? 'opacity-40 bg-slate-100' : ''
                       } ${
-                        dragOverProductId === String(item.id) ? 'border-t-2 border-indigo-400 bg-indigo-500/20' : ''
+                        dragOverProductId === String(item.id) ? 'border-t-2 border-purple-500 bg-purple-50' : ''
                       }`}
                     >
                       {currentTable === 'products' && (
                         <td
-                          className="py-3 px-2 text-center cursor-grab active:cursor-grabbing text-slate-500 hover:text-indigo-300"
+                          className="py-3 px-2 text-center cursor-grab active:cursor-grabbing text-slate-400 hover:text-purple-600"
                           onClick={(e) => e.stopPropagation()}
                           title="ドラッグして並び替え"
                         >
@@ -661,10 +662,10 @@ export const TableManager: React.FC<TableManagerProps> = ({
                             <td key={colKey} className="py-3 px-4">
                               {item.company?.company_name ? (
                                 <div>
-                                  <div className="font-bold text-blue-300 group-hover:text-blue-200">
+                                  <div className="font-semibold text-slate-900 group-hover:text-purple-700">
                                     {item.company.company_name}
                                   </div>
-                                  <div className="text-[10px] font-mono text-slate-500">
+                                  <div className="text-[10px] font-mono text-slate-400">
                                     {item.company_id}
                                   </div>
                                 </div>
@@ -691,15 +692,15 @@ export const TableManager: React.FC<TableManagerProps> = ({
                             <td key={colKey} className="py-3 px-4">
                               {item.product?.product_name ? (
                                 <div>
-                                  <div className="font-semibold text-purple-300 flex items-center gap-1.5">
+                                  <div className="font-semibold text-slate-900 flex items-center gap-1.5">
                                     <span>{item.product.product_name}</span>
                                     {prod?.pricing_model && prod.pricing_model !== 'fixed' && (
-                                      <span className="text-[10px] px-1.5 py-0.2 rounded bg-cyan-950 border border-cyan-800 text-cyan-300 font-sans">
+                                      <span className="text-[10px] px-1.5 py-0.2 rounded bg-purple-50 border border-purple-200 text-purple-700 font-sans">
                                         商談時決定
                                       </span>
                                     )}
                                   </div>
-                                  <div className="text-[10px] text-slate-400">
+                                  <div className="text-[10px] text-slate-500 font-mono">
                                     {priceStr}
                                   </div>
                                 </div>
@@ -719,23 +720,23 @@ export const TableManager: React.FC<TableManagerProps> = ({
                                 <select
                                   value={model}
                                   onChange={(e) => void handleQuickPricingModelChange(item, e.target.value)}
-                                  className={`appearance-none pl-3 pr-7 py-1 rounded-full text-[11px] font-semibold border outline-none cursor-pointer transition-all ${
+                                  className={`appearance-none pl-2.5 pr-6 py-1 rounded-full text-[11px] font-medium border outline-none cursor-pointer transition-all ${
                                     model === 'starting_at'
-                                      ? 'bg-cyan-500/10 text-cyan-300 border-cyan-500/40 hover:bg-cyan-500/20'
+                                      ? 'bg-cyan-50 text-cyan-700 border-cyan-200 hover:bg-cyan-100'
                                       : model === 'range'
-                                      ? 'bg-purple-500/10 text-purple-300 border-purple-500/40 hover:bg-purple-500/20'
+                                      ? 'bg-purple-50 text-purple-700 border-purple-200 hover:bg-purple-100'
                                       : model === 'custom_quote'
-                                      ? 'bg-amber-500/10 text-amber-300 border-amber-500/40 hover:bg-amber-500/20'
-                                      : 'bg-slate-800 text-slate-300 border-slate-700 hover:bg-slate-750'
+                                      ? 'bg-amber-50 text-amber-700 border-amber-200 hover:bg-amber-100'
+                                      : 'bg-slate-50 text-slate-700 border-slate-200 hover:bg-slate-100'
                                   }`}
                                   title="クリックして料金体系（融通設定）を直接切り替えられます"
                                 >
-                                  <option value="fixed" className="bg-slate-900 text-slate-300">固定価格</option>
-                                  <option value="starting_at" className="bg-slate-900 text-cyan-300">最低価格〜（商談で本決め）</option>
-                                  <option value="range" className="bg-slate-900 text-purple-300">価格帯（商談で本決め）</option>
-                                  <option value="custom_quote" className="bg-slate-900 text-amber-300">個別見積・商談時決定</option>
+                                  <option value="fixed">固定価格</option>
+                                  <option value="starting_at">最低価格〜（商談で本決め）</option>
+                                  <option value="range">価格帯（商談で本決め）</option>
+                                  <option value="custom_quote">個別見積・商談時決定</option>
                                 </select>
-                                <span className="pointer-events-none absolute right-2.5 text-[8px] text-slate-400">▼</span>
+                                <span className="pointer-events-none absolute right-2 text-[8px] text-slate-400">▼</span>
                               </div>
                             </td>
                           );
@@ -745,7 +746,7 @@ export const TableManager: React.FC<TableManagerProps> = ({
                         if (['status', 'proposal_status', 'contract_status'].includes(colKey) && val) {
                           return (
                             <td key={colKey} className="py-3 px-4 whitespace-nowrap">
-                              <span className="inline-block px-2.5 py-0.5 rounded-full text-[11px] font-medium bg-blue-500/10 text-blue-300 border border-blue-500/20">
+                              <span className={`inline-block px-2.5 py-0.5 rounded-full text-[11px] font-medium border ${getStatusBadgeClass(String(val))}`}>
                                 {String(val)}
                               </span>
                             </td>
@@ -761,13 +762,13 @@ export const TableManager: React.FC<TableManagerProps> = ({
                             const suffix = isStartingAt ? '〜' : '';
                             return (
                               <td key={colKey} className="py-2.5 px-4 font-mono whitespace-nowrap">
-                                <div className="text-slate-200 font-medium">¥{num.toLocaleString()}{suffix} <span className="text-[10px] text-slate-400 font-sans">(税抜)</span></div>
-                                <div className="text-xs text-indigo-300 font-semibold">¥{withTax.toLocaleString()}{suffix} <span className="text-[10px] text-slate-400 font-sans">(税込)</span></div>
+                                <div className="text-slate-800 font-medium">¥{num.toLocaleString()}{suffix} <span className="text-[10px] text-slate-400 font-sans">(税抜)</span></div>
+                                <div className="text-xs text-purple-700 font-semibold">¥{withTax.toLocaleString()}{suffix} <span className="text-[10px] text-slate-400 font-sans">(税込)</span></div>
                               </td>
                             );
                           }
                           return (
-                            <td key={colKey} className="py-3 px-4 font-mono font-medium text-slate-500 whitespace-nowrap">
+                            <td key={colKey} className="py-3 px-4 font-mono font-medium text-slate-400 whitespace-nowrap">
                               -
                             </td>
                           );
@@ -778,10 +779,10 @@ export const TableManager: React.FC<TableManagerProps> = ({
                           const scoreNum = Number(val);
                           return (
                             <td key={colKey} className="py-3 px-4 whitespace-nowrap">
-                              <span className={`inline-block px-2.5 py-0.5 rounded-full text-[11px] font-mono font-bold ${
-                                scoreNum >= 75 ? 'bg-emerald-500/20 text-emerald-300' :
-                                scoreNum >= 50 ? 'bg-blue-500/20 text-blue-300' :
-                                'bg-slate-800 text-slate-400'
+                              <span className={`inline-block px-2.5 py-0.5 rounded-full text-[11px] font-mono font-bold border ${
+                                scoreNum >= 75 ? 'bg-emerald-50 text-emerald-700 border-emerald-200' :
+                                scoreNum >= 50 ? 'bg-purple-50 text-purple-700 border-purple-200' :
+                                'bg-slate-100 text-slate-600 border-slate-200'
                               }`}>
                                 {scoreNum} 点
                               </span>
@@ -801,7 +802,7 @@ export const TableManager: React.FC<TableManagerProps> = ({
                         // 会社名表示
                         if (colKey === 'company_name') {
                           return (
-                            <td key={colKey} className="py-3 px-4 font-bold text-white whitespace-nowrap">
+                            <td key={colKey} className="py-3 px-4 font-semibold text-slate-900 whitespace-nowrap">
                               {String(val || '-')}
                             </td>
                           );
@@ -810,7 +811,7 @@ export const TableManager: React.FC<TableManagerProps> = ({
                         // 商談名表示
                         if (colKey === 'proposal_plan_name') {
                           return (
-                            <td key={colKey} className="py-3 px-4 font-bold text-white whitespace-nowrap">
+                            <td key={colKey} className="py-3 px-4 font-semibold text-slate-900 whitespace-nowrap">
                               {String(val || '-')}
                             </td>
                           );
@@ -820,14 +821,14 @@ export const TableManager: React.FC<TableManagerProps> = ({
                         if (['last_contacted_at', 'registered_at', 'contract_start_date', 'last_updated_at', 'meeting_date', 'proposal_date', 'next_followup_at', 'last_reply_at', 'first_registered_at', 'next_action_at', 'email_step_started_at', 'created_at'].includes(colKey) && val) {
                           const formattedDate = String(val).includes('T') ? String(val).split('T')[0] : String(val);
                           return (
-                            <td key={colKey} className="py-3 px-4 font-mono text-slate-400 whitespace-nowrap">
+                            <td key={colKey} className="py-3 px-4 font-mono text-slate-500 whitespace-nowrap">
                               {formattedDate}
                             </td>
                           );
                         }
 
                         return (
-                          <td key={colKey} className="py-3 px-4 max-w-[200px] truncate">
+                          <td key={colKey} className="py-3 px-4 max-w-[200px] truncate text-slate-700">
                             {val !== null && val !== undefined ? String(val) : '-'}
                           </td>
                         );
@@ -837,14 +838,14 @@ export const TableManager: React.FC<TableManagerProps> = ({
                       <td className="py-3 px-4 text-right whitespace-nowrap" onClick={(e) => e.stopPropagation()}>
                         <div className="flex items-center justify-end gap-1.5">
                           {['prospects', 'leads', 'deals', 'customers'].includes(currentTable) && item.company_id && onOpenCustomerWorkspace && (
-                            <button onClick={() => handleOpenRecordSend(item)} className="px-2.5 py-1 rounded-lg text-xs font-semibold bg-indigo-600/20 text-indigo-300 hover:bg-indigo-600 hover:text-white border border-indigo-500/30 flex items-center gap-1 transition-colors" title="この会社の連絡先を選んで送信センターを開く">
+                            <button onClick={() => handleOpenRecordSend(item)} className="px-2.5 py-1 rounded-lg text-xs font-semibold bg-purple-50 text-purple-700 hover:bg-purple-600 hover:text-white border border-purple-200 flex items-center gap-1 transition-colors" title="この会社の連絡先を選んで送信センターを開く">
                               <Send className="w-3.5 h-3.5" /><span>連絡・配信</span>
                             </button>
                           )}
                           {currentTable === 'prospects' && (
                             <button
                               onClick={() => handleOpenTransition('prospect_to_lead', item)}
-                              className="px-2.5 py-1 rounded-lg text-xs font-semibold bg-cyan-600/20 text-cyan-300 hover:bg-cyan-600 hover:text-white border border-cyan-500/30 flex items-center gap-1 transition-colors"
+                              className="px-2.5 py-1 rounded-lg text-xs font-semibold bg-cyan-50 text-cyan-700 hover:bg-cyan-600 hover:text-white border border-cyan-200 flex items-center gap-1 transition-colors"
                               title="見込み企業からリードへ進める"
                             >
                               <Layers className="w-3.5 h-3.5" />
@@ -854,7 +855,7 @@ export const TableManager: React.FC<TableManagerProps> = ({
                           {currentTable === 'leads' && (
                             <button
                               onClick={() => handleOpenTransition('lead_to_deal', item)}
-                              className="px-2.5 py-1 rounded-lg text-xs font-semibold bg-emerald-600/20 text-emerald-300 hover:bg-emerald-600 hover:text-white border border-emerald-500/30 flex items-center gap-1 transition-colors"
+                              className="px-2.5 py-1 rounded-lg text-xs font-semibold bg-emerald-50 text-emerald-700 hover:bg-emerald-600 hover:text-white border border-emerald-200 flex items-center gap-1 transition-colors"
                               title="リードから商談を作成する"
                             >
                               <Briefcase className="w-3.5 h-3.5" />
@@ -864,7 +865,7 @@ export const TableManager: React.FC<TableManagerProps> = ({
                           {currentTable === 'deals' && (
                             <button
                               onClick={() => handleOpenTransition('deal_to_customer', item)}
-                              className="px-2.5 py-1 rounded-lg text-xs font-semibold bg-pink-600/20 text-pink-300 hover:bg-pink-600 hover:text-white border border-pink-500/30 flex items-center gap-1 transition-colors"
+                              className="px-2.5 py-1 rounded-lg text-xs font-semibold bg-pink-50 text-pink-700 hover:bg-pink-600 hover:text-white border border-pink-200 flex items-center gap-1 transition-colors"
                               title="商談から顧客として登録する"
                             >
                               <UserCheck className="w-3.5 h-3.5" />
@@ -873,14 +874,14 @@ export const TableManager: React.FC<TableManagerProps> = ({
                           )}
                           <button
                             onClick={() => handleOpenDetail(item)}
-                            className="p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 transition-colors"
+                            className="p-1.5 rounded-lg text-slate-500 hover:text-slate-900 hover:bg-slate-100 transition-colors"
                             title="詳細を見る"
                           >
                             <Eye className="w-3.5 h-3.5" />
                           </button>
                           <button
                             onClick={() => handleOpenEdit(item)}
-                            className="p-1.5 rounded-lg text-slate-400 hover:text-blue-300 hover:bg-slate-800 transition-colors"
+                            className="p-1.5 rounded-lg text-slate-500 hover:text-purple-700 hover:bg-purple-50 transition-colors"
                             title="編集する"
                           >
                             <Edit3 className="w-3.5 h-3.5" />
@@ -888,7 +889,7 @@ export const TableManager: React.FC<TableManagerProps> = ({
                           <InlineDeleteButton onConfirm={() => void handleDeleteRecord(item)}
                             disabled={deletingRecordId === String(item.id)}
                             warning="削除しますか？関連データから参照されている場合は削除できません。"
-                            className="p-1.5 rounded-lg text-slate-500 hover:text-rose-300 hover:bg-rose-950/40 transition-colors disabled:opacity-50"
+                            className="p-1.5 rounded-lg text-slate-400 hover:text-rose-600 hover:bg-rose-50 transition-colors disabled:opacity-50"
                             ariaLabel="削除（関連データがある場合は保護されます）">
                             <Trash2 className="w-3.5 h-3.5" />
                           </InlineDeleteButton>
@@ -931,17 +932,17 @@ export const TableManager: React.FC<TableManagerProps> = ({
                   setDragOverProductId(null);
                 } : undefined}
                 onClick={() => handleOpenDetail(item)}
-                className={`bg-slate-900/90 border border-slate-800 rounded-2xl p-4 space-y-3 cursor-pointer hover:border-slate-700 transition-colors ${
-                  draggedProductId === String(item.id) ? 'opacity-40 bg-slate-900' : ''
+                className={`bg-white border border-slate-200 rounded-xl p-4 space-y-3 cursor-pointer hover:border-purple-200 hover:shadow-xs transition-all ${
+                  draggedProductId === String(item.id) ? 'opacity-40 bg-slate-50' : ''
                 } ${
-                  dragOverProductId === String(item.id) ? 'border-t-2 border-indigo-400 bg-indigo-500/20' : ''
+                  dragOverProductId === String(item.id) ? 'border-t-2 border-purple-500 bg-purple-50' : ''
                 }`}
               >
                 <div className="flex items-start justify-between">
                   <div className="flex items-start gap-2">
                     {currentTable === 'products' && (
                       <div
-                        className="cursor-grab active:cursor-grabbing p-1 text-slate-500 hover:text-indigo-400 shrink-0 mt-0.5"
+                        className="cursor-grab active:cursor-grabbing p-1 text-slate-400 hover:text-purple-600 shrink-0 mt-0.5"
                         onClick={(e) => e.stopPropagation()}
                         title="ドラッグで並び替え"
                       >
@@ -949,8 +950,8 @@ export const TableManager: React.FC<TableManagerProps> = ({
                       </div>
                     )}
                     <div>
-                      <span className="text-[11px] font-mono text-slate-500">ID: {item.id}</span>
-                      <h3 className="font-bold text-white text-sm">
+                      <span className="text-[11px] font-mono text-slate-400">ID: {item.id}</span>
+                      <h3 className="font-bold text-slate-900 text-sm">
                         {item.company_name ||
                           item.proposal_plan_name ||
                           item.product_name ||
@@ -960,40 +961,40 @@ export const TableManager: React.FC<TableManagerProps> = ({
                     </div>
                   </div>
                   {(item.status || item.proposal_status || item.contract_status) && (
-                    <span className="px-2 py-0.5 rounded-full text-[10px] font-medium bg-blue-500/10 text-blue-300 border border-blue-500/20">
+                    <span className={`px-2 py-0.5 rounded-full text-[10px] font-medium border ${getStatusBadgeClass(String(item.status || item.proposal_status || item.contract_status))}`}>
                       {item.status || item.proposal_status || item.contract_status}
                     </span>
                   )}
-                  <InlineDeleteButton onConfirm={() => void handleDeleteRecord(item)} disabled={deletingRecordId === String(item.id)} className="mt-2 p-1.5 rounded-lg text-slate-500 hover:text-rose-300 hover:bg-rose-950/40 disabled:opacity-50" ariaLabel="削除"><Trash2 className="w-4 h-4" /></InlineDeleteButton>
+                  <InlineDeleteButton onConfirm={() => void handleDeleteRecord(item)} disabled={deletingRecordId === String(item.id)} className="mt-2 p-1.5 rounded-lg text-slate-400 hover:text-rose-600 hover:bg-rose-50 disabled:opacity-50" ariaLabel="削除"><Trash2 className="w-4 h-4" /></InlineDeleteButton>
                 </div>
 
                 {/* Sub details */}
-                <div className="space-y-1 text-xs text-slate-400">
+                <div className="space-y-1 text-xs text-slate-500">
                   {item.company_id && (
                     <div className="flex items-center gap-1.5">
-                      <Building2 className="w-3.5 h-3.5 text-blue-400 shrink-0" />
+                      <Building2 className="w-3.5 h-3.5 text-purple-600 shrink-0" />
                       <span>会社: {item.company?.company_name || item.company_id}</span>
                     </div>
                   )}
                   {item.total_amount && (
                     <div className="font-mono text-xs">
-                      <span className="text-slate-300">税抜: ¥{Number(item.total_amount).toLocaleString()}</span>
-                      <span className="ml-2 font-semibold text-indigo-300">税込: ¥{Math.floor(Number(item.total_amount) * 1.1).toLocaleString()}</span>
+                      <span className="text-slate-700">税抜: ¥{Number(item.total_amount).toLocaleString()}</span>
+                      <span className="ml-2 font-semibold text-purple-700">税込: ¥{Math.floor(Number(item.total_amount) * 1.1).toLocaleString()}</span>
                     </div>
                   )}
                   {item.monthly_fee && (
                     <div className="font-mono text-xs">
-                      <span className="text-slate-400">月額（税抜）: ¥{Number(item.monthly_fee).toLocaleString()}{item.pricing_model === 'starting_at' ? '〜' : ''}</span>
-                      <span className="ml-2 text-indigo-300">（税込 ¥{Math.floor(Number(item.monthly_fee) * 1.1).toLocaleString()}{item.pricing_model === 'starting_at' ? '〜' : ''}）</span>
+                      <span className="text-slate-600">月額（税抜）: ¥{Number(item.monthly_fee).toLocaleString()}{item.pricing_model === 'starting_at' ? '〜' : ''}</span>
+                      <span className="ml-2 text-purple-700 font-semibold">（税込 ¥{Math.floor(Number(item.monthly_fee) * 1.1).toLocaleString()}{item.pricing_model === 'starting_at' ? '〜' : ''}）</span>
                     </div>
                   )}
                   {currentTable === 'products' && (
                     <div className="flex items-center gap-2 pt-1" onClick={(e) => e.stopPropagation()}>
-                      <span className="text-[11px] text-slate-400">料金体系:</span>
+                      <span className="text-[11px] text-slate-500">料金体系:</span>
                       <select
                         value={String(item.pricing_model || 'fixed')}
                         onChange={(e) => void handleQuickPricingModelChange(item, e.target.value)}
-                        className="text-xs px-2.5 py-1 rounded-lg bg-slate-950 border border-slate-700 text-slate-200 outline-none"
+                        className="text-xs px-2.5 py-1 rounded-lg bg-slate-50 border border-slate-200 text-slate-700 outline-none"
                       >
                         <option value="fixed">固定価格</option>
                         <option value="starting_at">最低価格〜（商談で本決め）</option>
@@ -1003,7 +1004,7 @@ export const TableManager: React.FC<TableManagerProps> = ({
                     </div>
                   )}
                   {item.ai_score !== undefined && item.ai_score !== null && (
-                    <div className="font-mono text-blue-300">
+                    <div className="font-mono text-purple-700 font-semibold">
                       AI確度スコア: {item.ai_score} 点
                     </div>
                   )}
@@ -1014,20 +1015,20 @@ export const TableManager: React.FC<TableManagerProps> = ({
 
                 {/* Actions */}
                 <div
-                  className="pt-2 border-t border-slate-800 flex items-center justify-between text-xs"
+                  className="pt-2 border-t border-slate-100 flex items-center justify-between text-xs"
                   onClick={(e) => e.stopPropagation()}
                 >
-                  <span className="text-slate-500 text-[11px]">タップして詳細確認</span>
+                  <span className="text-slate-400 text-[11px]">タップして詳細確認</span>
                   <div className="flex flex-wrap items-center gap-1.5">
                     {['prospects', 'leads', 'deals', 'customers'].includes(currentTable) && item.company_id && onOpenCustomerWorkspace && (
-                      <button onClick={() => handleOpenRecordSend(item)} className="px-2 py-1 rounded-lg bg-indigo-600/20 text-indigo-300 hover:bg-indigo-600 hover:text-white border border-indigo-500/30 flex items-center gap-1 text-[11px] font-semibold">
+                      <button onClick={() => handleOpenRecordSend(item)} className="px-2 py-1 rounded-lg bg-purple-50 text-purple-700 hover:bg-purple-600 hover:text-white border border-purple-200 flex items-center gap-1 text-[11px] font-semibold">
                         <Send className="w-3 h-3" /><span>連絡・配信</span>
                       </button>
                     )}
                     {currentTable === 'prospects' && (
                       <button
                         onClick={() => handleOpenTransition('prospect_to_lead', item)}
-                        className="px-2 py-1 rounded-lg bg-cyan-600/20 text-cyan-300 hover:bg-cyan-600 hover:text-white border border-cyan-500/30 flex items-center gap-1 text-[11px] font-semibold"
+                        className="px-2 py-1 rounded-lg bg-cyan-50 text-cyan-700 hover:bg-cyan-600 hover:text-white border border-cyan-200 flex items-center gap-1 text-[11px] font-semibold"
                       >
                         <Layers className="w-3 h-3" />
                         <span>リードへ進める</span>
@@ -1036,7 +1037,7 @@ export const TableManager: React.FC<TableManagerProps> = ({
                     {currentTable === 'leads' && (
                       <button
                         onClick={() => handleOpenTransition('lead_to_deal', item)}
-                        className="px-2 py-1 rounded-lg bg-emerald-600/20 text-emerald-300 hover:bg-emerald-600 hover:text-white border border-emerald-500/30 flex items-center gap-1 text-[11px] font-semibold"
+                        className="px-2 py-1 rounded-lg bg-emerald-50 text-emerald-700 hover:bg-emerald-600 hover:text-white border border-emerald-200 flex items-center gap-1 text-[11px] font-semibold"
                       >
                         <Briefcase className="w-3 h-3" />
                         <span>商談を作成</span>
@@ -1045,7 +1046,7 @@ export const TableManager: React.FC<TableManagerProps> = ({
                     {currentTable === 'deals' && (
                       <button
                         onClick={() => handleOpenTransition('deal_to_customer', item)}
-                        className="px-2 py-1 rounded-lg bg-pink-600/20 text-pink-300 hover:bg-pink-600 hover:text-white border border-pink-500/30 flex items-center gap-1 text-[11px] font-semibold"
+                        className="px-2 py-1 rounded-lg bg-pink-50 text-pink-700 hover:bg-pink-600 hover:text-white border border-pink-200 flex items-center gap-1 text-[11px] font-semibold"
                       >
                         <UserCheck className="w-3 h-3" />
                         <span>顧客として登録</span>
@@ -1053,7 +1054,7 @@ export const TableManager: React.FC<TableManagerProps> = ({
                     )}
                     <button
                       onClick={() => handleOpenEdit(item)}
-                      className="px-2.5 py-1 rounded-lg bg-slate-800 text-slate-300 hover:text-white flex items-center gap-1"
+                      className="px-2.5 py-1 rounded-lg bg-slate-100 text-slate-700 hover:bg-purple-50 hover:text-purple-700 flex items-center gap-1 transition-colors"
                     >
                       <Edit3 className="w-3 h-3" />
                       <span>編集</span>

@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import { UnifiedNavbar, UnifiedNavTab } from './components/UnifiedNavbar';
+import { AppShell } from './components/layout/AppShell';
 import { Dashboard } from './components/Dashboard';
 import { TableManager } from './components/TableManager';
 import { DiagnosisManager } from './components/DiagnosisManager';
@@ -2197,25 +2198,25 @@ function AppContent() {
   }
 
   return (
-    <div className="min-h-screen bg-slate-950 text-slate-100 flex flex-col font-sans selection:bg-blue-500 selection:text-white">
-      {/* Unified Navigation Bar */}
-      <UnifiedNavbar
-        currentTab={currentTab}
-        onTabChange={(tab) => {
-          if (tab === 'ai_tasks') setSelectedTaskWorkspaceSection('tasks');
-          if (tab === 'marketing_automation') setLineInboxContact(undefined);
-          setCurrentTab(tab);
-        }}
-        onOpenConfig={() => setIsConfigOpen(true)}
-        onOpenRls={() => setIsRlsOpen(true)}
-        onOpenPricing={() => setIsPricingModalOpen(true)}
-        onOpenBackup={() => setIsBackupModalOpen(true)}
-        onOpenProfile={() => setIsProfileModalOpen(true)}
-        pendingApprovalsCount={approvals.filter((a) => a.status === 'pending').length}
-      />
-
-      {/* Main App Workspace */}
-      <main className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-6">
+    <AppShell
+      currentTab={currentTab}
+      onSelectTab={(tab) => {
+        if (tab === 'ai_tasks') setSelectedTaskWorkspaceSection('tasks');
+        if (tab === 'marketing_automation') setLineInboxContact(undefined);
+        setCurrentTab(tab);
+      }}
+      pendingApprovalsCount={approvals.filter((a) => a.status === 'pending').length}
+      workspaceSyncStatus={workspaceSyncStatus}
+      workspaceSaveError={workspaceSaveError}
+      pageAssistantEmoji={pageAssistantMode.avatarEmoji}
+      onOpenQuickAiDrawer={() => setIsQuickDrawerOpen(true)}
+      onOpenConfig={() => setIsConfigOpen(true)}
+      onOpenRls={() => setIsRlsOpen(true)}
+      onOpenPricing={() => setIsPricingModalOpen(true)}
+      onOpenBackup={() => setIsBackupModalOpen(true)}
+      onOpenProfile={() => setIsProfileModalOpen(true)}
+      onOpenModelSettings={() => setIsModelSettingsOpen(true)}
+    >
         {/* ================= SECTION 1: MST AI経営OS ================= */}
         {(currentTab === 'mst_dashboard' || currentTab === 'inflow_dashboard') && (
           <Dashboard
@@ -2599,7 +2600,7 @@ function AppContent() {
             onDeleteCharacter={handleDeleteCharacter}
           />
         )}
-      </main>
+
 
       {/* Global Modals */}
       <ConfigGuideModal
@@ -2814,49 +2815,7 @@ function AppContent() {
         onRecordUsage={handleRecordUsage}
       />
 
-      {/* Footer */}
-      <footer className="border-t border-slate-900 bg-slate-950/80 py-4 px-4 text-center text-xs text-slate-500">
-        <div className="max-w-7xl mx-auto flex flex-col sm:flex-row items-center justify-between gap-2">
-          <span>MST AI経営OS × MyAI Studio 統合基盤</span>
-          <div className="flex items-center gap-3">
-            <span
-              className={`text-xs ${workspaceSyncStatus === 'error' || workspaceSyncStatus === 'conflict' ? 'text-rose-400' : workspaceSyncStatus === 'saving' ? 'text-amber-300' : workspaceSyncStatus === 'loading' ? 'text-slate-400' : 'text-emerald-400'}`}
-              title={workspaceSyncStatus === 'error' ? 'Supabaseへの同期に失敗しました。接続設定と mst_workspace_state テーブルのマイグレーションを確認してください。' : undefined}
-            >
-              {workspaceSaveError || (workspaceSyncStatus === 'loading' ? 'クラウド同期確認中' : workspaceSyncStatus === 'saving' ? 'クラウド保存中' : workspaceSyncStatus === 'saved' ? 'クラウド保存済み' : workspaceSyncStatus === 'conflict' ? '他の端末で更新されています。再読み込みしてください' : 'クラウド同期エラー')}
-            </span>
-            <span>•</span>
-            <button
-              onClick={() => setIsModelSettingsOpen(true)}
-              className="hover:text-slate-300 transition-colors"
-            >
-              AIモデル設定
-            </button>
-            <span>•</span>
-            <button
-              onClick={() => setIsPricingModalOpen(true)}
-              className="hover:text-slate-300 transition-colors"
-            >
-              APIトークン利用量
-            </button>
-            <span>•</span>
-            <button
-              onClick={() => setIsRlsOpen(true)}
-              className="hover:text-slate-300 transition-colors"
-            >
-              RLS設定
-            </button>
-            <span>•</span>
-            <button
-              onClick={() => setIsConfigOpen(true)}
-              className="hover:text-slate-300 transition-colors"
-            >
-              Supabase接続設定
-            </button>
-          </div>
-        </div>
-      </footer>
-    </div>
+    </AppShell>
   );
 }
 

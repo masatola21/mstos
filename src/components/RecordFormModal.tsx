@@ -315,24 +315,24 @@ export const RecordFormModal: React.FC<RecordFormModalProps> = ({
   })();
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-fade-in">
-      <div className="bg-slate-900 border border-slate-800 rounded-3xl max-w-2xl w-full shadow-2xl overflow-hidden flex flex-col max-h-[92vh]">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-xs animate-fade-in">
+      <div className="bg-white border border-slate-200 rounded-2xl max-w-2xl w-full shadow-2xl overflow-hidden flex flex-col max-h-[92vh]">
         {/* Header */}
-        <div className="px-6 py-4 border-b border-slate-800 flex items-center justify-between bg-slate-900/90 sticky top-0">
+        <div className="px-6 py-4 border-b border-slate-200 flex items-center justify-between bg-white sticky top-0">
           <div className="flex items-center gap-2.5">
-            <div className="p-2 bg-blue-500/10 border border-blue-500/20 rounded-xl text-blue-400">
+            <div className="p-2 bg-purple-50 border border-purple-200 rounded-xl text-purple-700">
               {isEditing ? <Edit3 className="w-5 h-5" /> : <PlusCircle className="w-5 h-5" />}
             </div>
             <div>
-              <h2 className="text-lg font-bold text-white">
+              <h2 className="text-lg font-bold text-slate-900">
                 {isEditing ? `${config.label} 編集` : `${config.label} 新規登録`}
               </h2>
-              <p className="text-xs text-slate-400 font-mono">テーブル: {tableKey}</p>
+              <p className="text-xs text-slate-500 font-mono">テーブル: {tableKey}</p>
             </div>
           </div>
           <button
             onClick={onClose}
-            className="p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 transition-colors"
+            className="p-1.5 rounded-lg text-slate-400 hover:text-slate-700 hover:bg-slate-100 transition-colors"
           >
             <X className="w-5 h-5" />
           </button>
@@ -340,10 +340,10 @@ export const RecordFormModal: React.FC<RecordFormModalProps> = ({
 
         {/* Form Body */}
         <form onSubmit={handleSubmit} className="flex-1 flex flex-col overflow-hidden">
-          <div className="p-6 overflow-y-auto space-y-5 text-sm text-slate-200">
+          <div className="p-6 overflow-y-auto space-y-5 text-sm text-slate-700">
             {submitError && (
-              <div className="p-3.5 rounded-xl bg-rose-500/10 border border-rose-500/30 text-rose-300 text-xs flex items-start gap-2.5 animate-fade-in">
-                <AlertCircle className="w-4 h-4 shrink-0 text-rose-400 mt-0.5" />
+              <div className="p-3.5 rounded-xl bg-rose-50 border border-rose-200 text-rose-700 text-xs flex items-start gap-2.5 animate-fade-in">
+                <AlertCircle className="w-4 h-4 shrink-0 text-rose-600 mt-0.5" />
                 <span className="leading-relaxed">{submitError}</span>
               </div>
             )}
@@ -352,11 +352,11 @@ export const RecordFormModal: React.FC<RecordFormModalProps> = ({
               <button
                 type="button"
                 onClick={() => setShowAdvancedFields((show) => !show)}
-                className="flex items-center gap-2 text-xs font-semibold text-blue-300 hover:text-blue-200"
+                className="flex items-center gap-2 text-xs font-semibold text-purple-700 hover:text-purple-800"
               >
                 <span>{showAdvancedFields ? '詳細項目を隠す' : '詳細項目を表示'}</span>
                 {!showAdvancedFields && (
-                  <span className="rounded-full bg-slate-800 px-2 py-0.5 text-[10px] text-slate-400">
+                  <span className="rounded-full bg-purple-50 border border-purple-200 px-2 py-0.5 text-[10px] text-purple-700">
                     {config.fields.filter((field) => !CORE_FORM_FIELDS[tableKey].includes(field.key)).length}項目
                   </span>
                 )}
@@ -389,14 +389,14 @@ export const RecordFormModal: React.FC<RecordFormModalProps> = ({
                 if (field.key === 'id' && isEditing) {
                   return (
                     <div key={field.key} className="space-y-1">
-                      <label className="block text-xs font-medium text-slate-400">
+                      <label className="block text-xs font-medium text-slate-500">
                         {field.label} (主キー: 変更不可)
                       </label>
                       <input
                         type="text"
                         disabled
                         value={value}
-                        className="w-full px-3 py-2 rounded-xl bg-slate-950/80 border border-slate-800 text-slate-400 text-xs font-mono cursor-not-allowed"
+                        className="w-full px-3 py-2 rounded-xl bg-slate-100 border border-slate-200 text-slate-500 text-xs font-mono cursor-not-allowed"
                       />
                     </div>
                   );
@@ -406,25 +406,25 @@ export const RecordFormModal: React.FC<RecordFormModalProps> = ({
                 if (field.type === 'fk_company') {
                   return (
                     <div key={field.key} className={`space-y-1.5 ${isFullWidth ? 'sm:col-span-2' : ''}`}>
-                      <label className="block text-xs font-semibold text-slate-300 flex items-center justify-between">
+                      <label className="block text-xs font-semibold text-slate-700 flex items-center justify-between">
                         <span>
-                          {field.label} {field.required && <span className="text-rose-400">*</span>}
+                          {field.label} {field.required && <span className="text-rose-500">*</span>}
                         </span>
-                        <span className="font-mono text-[10px] text-slate-500">{field.key}</span>
+                        <span className="font-mono text-[10px] text-slate-400">{field.key}</span>
                       </label>
 
                       {loadingLookups ? (
-                        <div className="text-xs text-slate-400 flex items-center gap-2 p-2">
-                          <Loader2 className="w-3.5 h-3.5 animate-spin text-blue-400" />
+                        <div className="text-xs text-slate-500 flex items-center gap-2 p-2">
+                          <Loader2 className="w-3.5 h-3.5 animate-spin text-purple-600" />
                           会社一覧を読み込み中...
                         </div>
                       ) : (
                         <select
                           value={value}
                           onChange={(e) => handleInputChange(field.key, e.target.value)}
-                          className={`w-full px-3 py-2 rounded-xl bg-slate-950 border ${
-                            error ? 'border-rose-500' : 'border-slate-700/80'
-                          } text-slate-200 text-xs outline-none focus:border-blue-500`}
+                          className={`w-full px-3 py-2 rounded-xl bg-white border ${
+                            error ? 'border-rose-400 ring-1 ring-rose-200' : 'border-slate-200'
+                          } text-slate-800 text-xs outline-none focus:border-purple-500 focus:ring-1 focus:ring-purple-500 shadow-2xs`}
                         >
                           <option value="">-- 対象会社を選択してください --</option>
                           {companies.map((c) => (
@@ -434,7 +434,7 @@ export const RecordFormModal: React.FC<RecordFormModalProps> = ({
                           ))}
                         </select>
                       )}
-                      {error && <p className="text-[11px] text-rose-400">{error}</p>}
+                      {error && <p className="text-[11px] text-rose-500">{error}</p>}
                     </div>
                   );
                 }
@@ -442,7 +442,7 @@ export const RecordFormModal: React.FC<RecordFormModalProps> = ({
                 if (tableKey === 'leads' && field.key === 'service_type') {
                   return (
                     <div key={field.key} className="space-y-1.5">
-                      <label className="block text-xs font-semibold text-slate-300">検討サービス種別</label>
+                      <label className="block text-xs font-semibold text-slate-700">検討サービス種別</label>
                       <select
                         value={leadProductChoice}
                         onChange={(e) => {
@@ -452,7 +452,7 @@ export const RecordFormModal: React.FC<RecordFormModalProps> = ({
                           handleInputChange('interested_product_id', product?.id || '');
                           handleInputChange('service_type', product?.product_name || '');
                         }}
-                        className="w-full px-3 py-2 rounded-xl bg-slate-950 border border-slate-700/80 text-slate-200 text-xs outline-none focus:border-blue-500"
+                        className="w-full px-3 py-2 rounded-xl bg-white border border-slate-200 text-slate-800 text-xs outline-none focus:border-purple-500 focus:ring-1 focus:ring-purple-500 shadow-2xs"
                       >
                         <option value="">商品を選択（未定）</option>
                         {products.filter((product) => product.status !== 'inactive' || product.id === leadProductChoice).map((product) => <option key={product.id} value={product.id}>{product.product_name}{product.status === 'inactive' ? '（取扱停止・既存記録）' : ''}</option>)}
@@ -464,10 +464,10 @@ export const RecordFormModal: React.FC<RecordFormModalProps> = ({
                           value={value}
                           onChange={(e) => handleInputChange('service_type', e.target.value)}
                           placeholder="サービス名を入力"
-                          className="w-full px-3 py-2 rounded-xl bg-slate-950 border border-slate-700/80 text-slate-200 text-xs outline-none focus:border-blue-500"
+                          className="w-full px-3 py-2 rounded-xl bg-white border border-slate-200 text-slate-800 text-xs outline-none focus:border-purple-500 focus:ring-1 focus:ring-purple-500 shadow-2xs mt-1.5"
                         />
                       )}
-                      {error && <p className="text-[11px] text-rose-400">{error}</p>}
+                      {error && <p className="text-[11px] text-rose-500">{error}</p>}
                     </div>
                   );
                 }
@@ -477,19 +477,19 @@ export const RecordFormModal: React.FC<RecordFormModalProps> = ({
                   return (
                     <React.Fragment key={field.key}>
                       <div className={`space-y-1.5 ${isFullWidth ? 'sm:col-span-2' : ''}`}>
-                        <label className="block text-xs font-semibold text-slate-300 flex items-center justify-between">
-                          <span>{field.label} {field.required && <span className="text-rose-400">*</span>}</span>
-                          <span className="font-mono text-[10px] text-slate-500">{field.key}</span>
+                        <label className="block text-xs font-semibold text-slate-700 flex items-center justify-between">
+                          <span>{field.label} {field.required && <span className="text-rose-500">*</span>}</span>
+                          <span className="font-mono text-[10px] text-slate-400">{field.key}</span>
                         </label>
                         <select
                           value={value}
                           onChange={(e) => handleInputChange(field.key, e.target.value)}
-                          className={`w-full px-3 py-2 rounded-xl bg-slate-950 border ${error ? 'border-rose-500' : 'border-slate-700/80'} text-slate-200 text-xs outline-none focus:border-blue-500`}
+                          className={`w-full px-3 py-2 rounded-xl bg-white border ${error ? 'border-rose-400 ring-1 ring-rose-200' : 'border-slate-200'} text-slate-800 text-xs outline-none focus:border-purple-500 focus:ring-1 focus:ring-purple-500 shadow-2xs`}
                         >
                           <option value="">-- 提案商品を選択（未定可） --</option>
                           {products.filter((p) => p.status !== 'inactive' || p.id === value).map((p) => <option key={p.id} value={p.id}>{p.product_name}{p.status === 'inactive' ? '（取扱停止・既存記録）' : ''} (月額: ¥{Number(p.monthly_fee || 0).toLocaleString()})</option>)}
                         </select>
-                        {error && <p className="text-[11px] text-rose-400">{error}</p>}
+                        {error && <p className="text-[11px] text-rose-500">{error}</p>}
                       </div>
                       {tableKey === 'deals' && field.key === 'product_id' && (
                         <ProposalPlanTemplatePicker
@@ -524,19 +524,19 @@ export const RecordFormModal: React.FC<RecordFormModalProps> = ({
                 if (field.type === 'fk_lead') {
                   return (
                     <div key={field.key} className={`space-y-1.5 ${isFullWidth ? 'sm:col-span-2' : ''}`}>
-                      <label className="block text-xs font-semibold text-slate-300 flex items-center justify-between">
+                      <label className="block text-xs font-semibold text-slate-700 flex items-center justify-between">
                         <span>
-                          {field.label} {field.required && <span className="text-rose-400">*</span>}
+                          {field.label} {field.required && <span className="text-rose-500">*</span>}
                         </span>
-                        <span className="font-mono text-[10px] text-slate-500">{field.key}</span>
+                        <span className="font-mono text-[10px] text-slate-400">{field.key}</span>
                       </label>
 
                       <select
                         value={value}
                         onChange={(e) => handleInputChange(field.key, e.target.value)}
-                        className={`w-full px-3 py-2 rounded-xl bg-slate-950 border ${
-                          error ? 'border-rose-500' : 'border-slate-700/80'
-                        } text-slate-200 text-xs outline-none focus:border-blue-500`}
+                        className={`w-full px-3 py-2 rounded-xl bg-white border ${
+                          error ? 'border-rose-400 ring-1 ring-rose-200' : 'border-slate-200'
+                        } text-slate-800 text-xs outline-none focus:border-purple-500 focus:ring-1 focus:ring-purple-500 shadow-2xs`}
                       >
                         <option value="">-- 紐づくリードを選択（任意） --</option>
                         {leads.map((l) => (
@@ -545,7 +545,7 @@ export const RecordFormModal: React.FC<RecordFormModalProps> = ({
                           </option>
                         ))}
                       </select>
-                      {error && <p className="text-[11px] text-rose-400">{error}</p>}
+                      {error && <p className="text-[11px] text-rose-500">{error}</p>}
                     </div>
                   );
                 }
@@ -555,19 +555,19 @@ export const RecordFormModal: React.FC<RecordFormModalProps> = ({
                   const isCustomChoice = field.allowCustom && value === '__custom';
                   return (
                     <div key={field.key} className={`space-y-1.5 ${isFullWidth ? 'sm:col-span-2' : ''}`}>
-                      <label className="block text-xs font-semibold text-slate-300 flex items-center justify-between">
+                      <label className="block text-xs font-semibold text-slate-700 flex items-center justify-between">
                         <span>
-                          {field.label} {field.required && <span className="text-rose-400">*</span>}
+                          {field.label} {field.required && <span className="text-rose-500">*</span>}
                         </span>
-                        <span className="font-mono text-[10px] text-slate-500">{field.key}</span>
+                        <span className="font-mono text-[10px] text-slate-400">{field.key}</span>
                       </label>
 
                       <select
                         value={value}
                         onChange={(e) => handleInputChange(field.key, e.target.value)}
-                        className={`w-full px-3 py-2 rounded-xl bg-slate-950 border ${
-                          error ? 'border-rose-500' : 'border-slate-700/80'
-                        } text-slate-200 text-xs outline-none focus:border-blue-500`}
+                        className={`w-full px-3 py-2 rounded-xl bg-white border ${
+                          error ? 'border-rose-400 ring-1 ring-rose-200' : 'border-slate-200'
+                        } text-slate-800 text-xs outline-none focus:border-purple-500 focus:ring-1 focus:ring-purple-500 shadow-2xs`}
                       >
                         {field.options.map((opt) => (
                           <option key={opt.value} value={opt.value}>
@@ -582,11 +582,11 @@ export const RecordFormModal: React.FC<RecordFormModalProps> = ({
                           value={customFieldValues[field.key] || ''}
                           onChange={(e) => setCustomFieldValues((prev) => ({ ...prev, [field.key]: e.target.value }))}
                           placeholder={field.placeholder || `${field.label}を入力`}
-                          className="w-full px-3 py-2 rounded-xl bg-slate-950 border border-slate-700/80 text-slate-200 text-xs outline-none focus:border-blue-500"
+                          className="w-full px-3 py-2 rounded-xl bg-white border border-slate-200 text-slate-800 text-xs outline-none focus:border-purple-500 focus:ring-1 focus:ring-purple-500 shadow-2xs mt-1.5"
                         />
                       )}
                       {field.key === 'pricing_model' && (
-                        <div className="p-2.5 rounded-xl bg-indigo-950/40 border border-indigo-500/30 text-[11px] text-indigo-200 space-y-1">
+                        <div className="p-2.5 rounded-xl bg-purple-50/70 border border-purple-200 text-[11px] text-purple-900 space-y-1">
                           {value === 'starting_at' && (
                             <p>💡 <strong>最低価格〜（商談で本決め）</strong>: 月額や初期費用の金額欄に「最低価格（例: ￥10,000）」を入力してください。商談画面で「￥10,000〜」と表示され、顧客規模に合わせて本決め金額を入力できます。</p>
                           )}
@@ -601,7 +601,7 @@ export const RecordFormModal: React.FC<RecordFormModalProps> = ({
                           )}
                         </div>
                       )}
-                      {error && <p className="text-[11px] text-rose-400">{error}</p>}
+                      {error && <p className="text-[11px] text-rose-500">{error}</p>}
                     </div>
                   );
                 }
@@ -609,18 +609,18 @@ export const RecordFormModal: React.FC<RecordFormModalProps> = ({
                 if (tableKey === 'deals' && field.key === 'proposal_plan_name') {
                   return (
                     <div key={field.key} className="space-y-1.5 sm:col-span-2">
-                      <label className="block text-xs font-semibold text-slate-300">
-                        {field.label} {field.required && <span className="text-rose-400">*</span>}
+                      <label className="block text-xs font-semibold text-slate-700">
+                        {field.label} {field.required && <span className="text-rose-500">*</span>}
                       </label>
                       <input
                         type="text"
                         value={value}
                         placeholder={field.placeholder}
                         onChange={(e) => handleInputChange(field.key, e.target.value)}
-                        className={`w-full px-3 py-2 rounded-xl bg-slate-950 border ${error ? 'border-rose-500' : 'border-slate-700/80'} text-slate-200 text-xs outline-none focus:border-blue-500`}
+                        className={`w-full px-3 py-2 rounded-xl bg-white border ${error ? 'border-rose-400 ring-1 ring-rose-200' : 'border-slate-200'} text-slate-800 text-xs outline-none focus:border-purple-500 focus:ring-1 focus:ring-purple-500 shadow-2xs`}
                       />
 
-                      {error && <p className="text-[11px] text-rose-400">{error}</p>}
+                      {error && <p className="text-[11px] text-rose-500">{error}</p>}
                     </div>
                   );
                 }
@@ -629,22 +629,22 @@ export const RecordFormModal: React.FC<RecordFormModalProps> = ({
                 if (field.type === 'textarea') {
                   return (
                     <div key={field.key} className="sm:col-span-2 space-y-1.5">
-                      <label className="block text-xs font-semibold text-slate-300 flex items-center justify-between">
+                      <label className="block text-xs font-semibold text-slate-700 flex items-center justify-between">
                         <span>
-                          {field.label} {field.required && <span className="text-rose-400">*</span>}
+                          {field.label} {field.required && <span className="text-rose-500">*</span>}
                         </span>
-                        <span className="font-mono text-[10px] text-slate-500">{field.key}</span>
+                        <span className="font-mono text-[10px] text-slate-400">{field.key}</span>
                       </label>
                       <textarea
                         rows={3}
                         value={value}
                         placeholder={field.placeholder}
                         onChange={(e) => handleInputChange(field.key, e.target.value)}
-                        className={`w-full px-3 py-2 rounded-xl bg-slate-950 border ${
-                          error ? 'border-rose-500' : 'border-slate-700/80'
-                        } text-slate-200 text-xs outline-none focus:border-blue-500`}
+                        className={`w-full px-3 py-2 rounded-xl bg-white border ${
+                          error ? 'border-rose-400 ring-1 ring-rose-200' : 'border-slate-200'
+                        } text-slate-800 text-xs outline-none focus:border-purple-500 focus:ring-1 focus:ring-purple-500 shadow-2xs`}
                       />
-                      {error && <p className="text-[11px] text-rose-400">{error}</p>}
+                      {error && <p className="text-[11px] text-rose-500">{error}</p>}
                     </div>
                   );
                 }
@@ -671,11 +671,11 @@ export const RecordFormModal: React.FC<RecordFormModalProps> = ({
                 // 通常の input (text, number, date, email, url, tel)
                 return (
                   <div key={field.key} className={`space-y-1.5 ${isFullWidth ? 'sm:col-span-2' : ''}`}>
-                    <label className="block text-xs font-semibold text-slate-300 flex items-center justify-between">
+                    <label className="block text-xs font-semibold text-slate-700 flex items-center justify-between">
                       <span>
-                        {displayLabel} {field.required && <span className="text-rose-400">*</span>}
+                        {displayLabel} {field.required && <span className="text-rose-500">*</span>}
                       </span>
-                      <span className="font-mono text-[10px] text-slate-500">{field.key}</span>
+                      <span className="font-mono text-[10px] text-slate-400">{field.key}</span>
                     </label>
                     <input
                       type={field.type}
@@ -693,11 +693,11 @@ export const RecordFormModal: React.FC<RecordFormModalProps> = ({
                       value={value}
                       placeholder={displayPlaceholder}
                       onChange={(e) => handleInputChange(field.key, e.target.value)}
-                      className={`w-full px-3 py-2 rounded-xl bg-slate-950 border ${
-                        error ? 'border-rose-500' : 'border-slate-700/80'
-                      } text-slate-200 text-xs outline-none focus:border-blue-500`}
+                      className={`w-full px-3 py-2 rounded-xl bg-white border ${
+                        error ? 'border-rose-400 ring-1 ring-rose-200' : 'border-slate-200'
+                      } text-slate-800 text-xs outline-none focus:border-purple-500 focus:ring-1 focus:ring-purple-500 shadow-2xs`}
                     />
-                    {error && <p className="text-[11px] text-rose-400">{error}</p>}
+                    {error && <p className="text-[11px] text-rose-500">{error}</p>}
                   </div>
                 );
               })}
@@ -705,7 +705,7 @@ export const RecordFormModal: React.FC<RecordFormModalProps> = ({
           </div>
 
           {/* Footer Actions */}
-          <div className="px-6 py-4 border-t border-slate-800 bg-slate-900 flex items-center justify-between">
+          <div className="px-6 py-4 border-t border-slate-200 bg-slate-50 flex items-center justify-between">
             <span className="text-xs text-slate-500">
               {isEditing ? '※ 既存レコードを安全に更新します' : '※ 新規レコードを追加します'}
             </span>
@@ -713,14 +713,14 @@ export const RecordFormModal: React.FC<RecordFormModalProps> = ({
               <button
                 type="button"
                 onClick={onClose}
-                className="px-4 py-2 rounded-xl text-xs font-medium text-slate-300 hover:bg-slate-800 border border-slate-700 transition-colors"
+                className="px-4 py-2 rounded-lg text-xs font-medium text-slate-600 hover:bg-slate-200/70 border border-slate-200 transition-colors"
               >
                 キャンセル
               </button>
               <button
                 type="submit"
                 disabled={isSubmitting}
-                className="px-5 py-2 rounded-xl text-xs font-semibold bg-blue-600 hover:bg-blue-500 text-white shadow-md shadow-blue-600/30 flex items-center gap-1.5 transition-colors disabled:opacity-50"
+                className="px-5 py-2 rounded-lg text-xs font-semibold bg-purple-600 hover:bg-purple-700 text-white shadow-xs flex items-center gap-1.5 transition-colors disabled:opacity-50"
               >
                 {isSubmitting ? (
                   <>

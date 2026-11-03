@@ -1,0 +1,261 @@
+<!doctype html>
+<html lang="ja"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>MST経営支援システム</title>
+<style>
+:root{--bg:#f5f6f8;--card:#fff;--tx:#1d2430;--mut:#6a7381;--bd:#e2e5ea;--pri:#1f5c7a;--prib:#e4eff4;--ok:#e2f3e8;--okt:#17703b;--wn:#fff1d2;--wnt:#86560a;--ng:#fde7e7;--ngt:#a22b2b;--gr:#eceef1;--grt:#4a5462;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+@media(prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#12161c;--card:#1b212a;--tx:#e6e9ee;--mut:#99a3b1;--bd:#2c3440;--pri:#6cb6d6;--prib:#1d3340;--ok:#173a26;--okt:#7fd6a0;--wn:#3d2f10;--wnt:#f0c978;--ng:#431d1d;--ngt:#f0a0a0;--gr:#262d37;--grt:#b4bcc8}}
+:root[data-theme="dark"]{--bg:#12161c;--card:#1b212a;--tx:#e6e9ee;--mut:#99a3b1;--bd:#2c3440;--pri:#6cb6d6;--prib:#1d3340;--ok:#173a26;--okt:#7fd6a0;--wn:#3d2f10;--wnt:#f0c978;--ng:#431d1d;--ngt:#f0a0a0;--gr:#262d37;--grt:#b4bcc8}
+*{box-sizing:border-box}html{scroll-padding-top:env(safe-area-inset-top,0px)}
+body{margin:0;background:var(--bg);color:var(--tx);font:14px/1.6 "Hiragino Sans","Noto Sans JP","Yu Gothic",Meiryo,sans-serif}
+#side{position:fixed;top:0;bottom:0;left:0;width:216px;background:var(--card);border-right:1px solid var(--bd);padding:calc(14px + env(safe-area-inset-top,0px)) 10px 14px;overflow:auto;z-index:20}
+#side h2{font-size:15px;margin:2px 8px 12px;color:var(--pri)}#side small{display:block;color:var(--mut);font-weight:400;font-size:11px}
+#side a{display:block;padding:7px 10px;border-radius:6px;color:var(--tx);text-decoration:none}
+#side a.on{background:var(--prib);color:var(--pri);font-weight:600}#side a:hover{background:var(--gr)}
+#side p{margin:14px 10px 3px;font-size:12px;font-weight:600;color:var(--mut)}#side a.c{padding-left:26px}
+#top{display:none}
+#main{margin-left:216px;padding:22px 26px 40px}
+h1{font-size:19px;margin:0 0 14px}h3{font-size:14px;margin:0 0 8px}
+.card{background:var(--card);border:1px solid var(--bd);border-radius:8px;padding:14px;margin-bottom:14px}
+.kp{display:grid;grid-template-columns:repeat(auto-fill,minmax(130px,1fr));gap:10px;margin-bottom:14px}
+.kp a{background:var(--card);border:1px solid var(--bd);border-radius:8px;padding:10px 12px;color:inherit;text-decoration:none}
+.kp b{display:block;font-size:24px;line-height:1.2}.kp span{color:var(--mut);font-size:12px}
+.flow{display:flex;flex-wrap:wrap;gap:6px;align-items:center;margin-bottom:14px;color:var(--mut)}
+.flow i{font-style:normal;background:var(--prib);color:var(--pri);padding:3px 10px;border-radius:14px;font-size:12px}
+.g2{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:14px}
+.bar{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:10px}
+input,select,textarea,button{font:inherit;color:var(--tx);background:var(--card);border:1px solid var(--bd);border-radius:6px;padding:6px 9px}
+input,select,textarea{width:100%}.bar input{width:220px}.bar select{width:auto}
+.btn{background:var(--pri);color:var(--card);border-color:var(--pri);cursor:pointer}.btn.s{background:var(--card);color:var(--tx);border-color:var(--bd)}
+.tw{overflow-x:auto;background:var(--card);border:1px solid var(--bd);border-radius:8px}
+table{border-collapse:collapse;width:100%;white-space:nowrap}
+th,td{padding:8px 11px;text-align:left;border-bottom:1px solid var(--bd)}th{background:var(--gr);font-weight:600;font-size:12px;color:var(--grt)}
+tr[onclick]{cursor:pointer}tr[onclick]:hover td{background:var(--prib)}tr:last-child td{border-bottom:0}
+.b{display:inline-block;padding:1px 9px;border-radius:12px;font-size:12px;background:var(--gr);color:var(--grt)}
+.b.o{background:var(--ok);color:var(--okt)}.b.w{background:var(--wn);color:var(--wnt)}.b.n{background:var(--ng);color:var(--ngt)}.b.p{background:var(--prib);color:var(--pri)}
+.tabs{display:flex;gap:4px;border-bottom:1px solid var(--bd);margin-bottom:14px;overflow-x:auto}
+.tabs a{padding:8px 14px;cursor:pointer;color:var(--mut);white-space:nowrap;border-bottom:2px solid transparent}.tabs a.on{color:var(--pri);border-color:var(--pri);font-weight:600}
+.li{display:flex;justify-content:space-between;gap:8px;padding:6px 0;border-bottom:1px solid var(--bd);cursor:pointer}.li:last-child{border:0}.li em{font-style:normal;color:var(--mut);font-size:12px}
+#ov{position:fixed;inset:0;background:rgba(0,0,0,.4);display:none;z-index:30}
+#dr{position:fixed;top:0;bottom:0;right:0;width:min(580px,100%);background:var(--bg);overflow:auto;padding:calc(16px + env(safe-area-inset-top,0px)) 18px calc(20px + env(safe-area-inset-bottom,0px))}
+.fm{display:grid;grid-template-columns:1fr 1fr;gap:10px}.fm label{font-size:12px;color:var(--mut)}.fm label.w{grid-column:1/-1}.fm input[readonly]{background:var(--gr)}
+.rp p{white-space:pre-wrap;margin:2px 0 10px}
+.chat{display:grid;grid-template-columns:200px 1fr;gap:12px}
+.ul{background:var(--card);border:1px solid var(--bd);border-radius:8px;overflow:auto;max-height:420px}.ul div{padding:9px 12px;border-bottom:1px solid var(--bd);cursor:pointer;font-size:12px}.ul .on{background:var(--prib);color:var(--pri)}
+.cw{background:var(--card);border:1px solid var(--bd);border-radius:8px;display:flex;flex-direction:column}
+.msgs{padding:12px;height:340px;overflow:auto;display:flex;flex-direction:column;gap:8px}
+.m{max-width:75%;padding:7px 11px;border-radius:12px;background:var(--gr)}.m.out{align-self:flex-end;background:var(--pri);color:var(--card)}
+.snd{display:flex;gap:8px;padding:10px;border-top:1px solid var(--bd)}
+.cal{display:grid;grid-template-columns:repeat(7,1fr);min-width:620px}.cal>div{min-height:78px;border:1px solid var(--bd);padding:3px 5px;font-size:11px;background:var(--card)}
+.cal .h{min-height:0;background:var(--gr);text-align:center;color:var(--grt)}.cal .td{background:var(--prib)}.cal a{display:block;background:var(--pri);color:var(--card);border-radius:4px;padding:0 4px;margin-top:2px;cursor:pointer;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+@media(max-width:760px){#side{transform:translateX(-100%);transition:transform .2s}#side.open{transform:none}
+#top{display:flex;align-items:center;gap:10px;position:sticky;top:env(safe-area-inset-top,0px);background:var(--card);border-bottom:1px solid var(--bd);padding:8px 12px;z-index:10}
+#main{margin-left:0;padding:16px 12px 40px}.fm{grid-template-columns:1fr}.chat{grid-template-columns:1fr}.bar input{width:100%}}
+</style></head><body>
+<nav id="side"></nav>
+<div id="top"><button onclick="side.classList.toggle('open')">☰</button><b>MST経営支援システム</b></div>
+<main id="main"></main>
+<div id="ov" onclick="if(event.target==ov)cl()"><div id="dr"></div></div>
+<script>
+const $=s=>document.querySelector(s),TODAY='2026-10-03',S={tab:{}},C={};
+const esc=s=>String(s??'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+const sp=s=>s.split(',');
+const bm={未接触:'g',アプローチ中:'p',返信あり:'o',商談化:'o',見送り:'n',新規:'p',診断希望:'p',診断案内済み:'p',診断完了:'w',レポート送付済:'w',追客中:'w',保留:'g',成約:'o',失注:'n',配信中:'o',停止:'g',ブロック:'n',作成中:'g',提案済:'p',検討中:'w',有:'o',確認待ち:'w',生成済:'o',公開中:'o',下書き:'g',準備中:'g',宛先なし:'n',経営改善:'p',介護保険外サービス開業:'o',LINE相談:'w',有効:'o',無効:'g'};
+const B=v=>v?`<span class="b ${bm[v]||'g'}">${esc(v)}</span>`:'';
+const AVC=['#2a7f62','#c0562c','#5b6cc4','#a04a8c','#3c8a9e'];
+const av=u=>{const n=(u&&u.表示名)||'?',c=AVC[(n.charCodeAt(0)||0)%5];const f=`<span style="display:inline-flex;align-items:center;justify-content:center;width:26px;height:26px;border-radius:50%;background:${c};color:#fff;font-size:12px;margin-right:8px;vertical-align:middle">${esc(Array.from(n)[0].toUpperCase())}</span>`;return u&&u.アイコンURL?`<img src="${esc(u.アイコンURL)}" alt="" width="26" height="26" style="border-radius:50%;margin-right:8px;vertical-align:middle" data-f="${esc(f)}" onerror="this.outerHTML=this.dataset.f">`:f};
+const cell=(k,c,r)=>(k=='line'&&c=='表示名')?av(r)+esc(r[c]):E[k].bc.includes(c)?B(r[c]):esc(r[c]);
+const TAGS=['経営改善','介護保険外サービス開業','LINE相談'];
+const E={
+prospects:{t:'見込み企業',p:'P',st:'ステータス',bc:['ステータス','返信フラグ'],
+ fields:sp('会社ID,会社名,業種,担当者名,ウェブサイト,メールアドレス,電話番号,SNSアカウント,流入元,アプローチ方法,ステータス,返信フラグ,最終返信日,登録日,メールステップ,メールステップ開始日,最終接触日,メモ'),
+ opts:{ステータス:sp('未接触,アプローチ中,返信あり,商談化,見送り'),返信フラグ:sp('有,無'),アプローチ方法:sp('メール,SNS(DM),フォーム営業,電話')},
+ cols:sp('会社ID,会社名,業種,担当者名,アプローチ方法,ステータス,返信フラグ,メールステップ,最終接触日'),
+ rows:[['P-001','山田工務店','建設業','山田 太郎','メール','アプローチ中','無','Step2','2026-09-30'],['P-002','さくらケアサービス','介護・福祉','佐藤 花子','メール','返信あり','有','Step3','2026-10-01'],['P-003','和彩ダイニング','飲食業','鈴木 一郎','SNS(DM)','未接触','無','',''],['P-004','中村製作所','製造業','中村 健','フォーム営業','アプローチ中','無','Step1','2026-09-28'],['P-005','木村税理士事務所','士業','木村 恵','メール','商談化','有','Step4','2026-10-02'],['P-006','ひなた住設','小売業','小林 誠','電話','見送り','無','Step2','2026-09-15']]},
+leads:{t:'リード管理',p:'L',tag:1,st:'リードステータス',bc:['リードステータス','サービス区分'],
+ fields:sp('会社ID,会社名,業種,担当者名,メールアドレス,LINEユーザーID,電話番号,流入元,サービス区分,リードステータス,優先チャネル,初回登録日,最終接触日,次アクション日,面談予約日,面談開始時間,レポートURL,メールステップ,メールステップ開始日,備考'),
+ opts:{リードステータス:sp('新規,診断希望,診断案内済み,診断完了,レポート送付済,追客中,保留,商談化'),優先チャネル:sp('メール,LINE,電話'),サービス区分:TAGS},
+ cols:sp('会社ID,会社名,業種,担当者名,流入元,サービス区分,リードステータス,優先チャネル,初回登録日,次アクション日,面談予約日,面談開始時間,メールステップ'),
+ rows:[['L-001','さくらケアサービス','介護・福祉','佐藤 花子','LINE','介護保険外サービス開業','商談化','LINE','2026-09-20','2026-10-06','2026-10-08','10:00','Step3'],['L-002','青空リフォーム','建設業','高橋 修','HP','経営改善','レポート送付済','メール','2026-10-01','2026-10-05','','','Step1'],['L-003','木村税理士事務所','士業','木村 恵','メール','経営改善','商談化','メール','2026-09-12','2026-10-07','2026-10-06','14:00','Step4'],['L-004','みどり訪問看護','介護・福祉','渡辺 愛','Instagram','介護保険外サービス開業','追客中','LINE','2026-09-25','2026-10-04','','','Step2'],['L-005','丸山運送','運送業','丸山 剛','個別相談フォーム','経営改善','商談化','電話','2026-09-30','2026-10-09','2026-10-12','16:30','Step1'],['L-006','カフェ・ルーチェ','飲食業','森 美咲','LINE','LINE相談','診断完了','LINE','2026-10-02','2026-10-03','','','']]},
+line:{t:'LINEユーザー',p:'U',tag:1,st:'ステータス',bc:['ステータス','返信フラグ','サービス区分'],ro:['表示名','アイコンURL'],
+ fields:sp('LINE_ID,表示名,アイコンURL,イベント種別,登録日時,LINEステップ,LINEステップ開始日,配信数,最終配信日,ステータス,フロー種別,返信フラグ,最終返信日,サービス区分'),
+ opts:{ステータス:sp('配信中,停止,ブロック'),返信フラグ:sp('有,無'),サービス区分:TAGS},
+ cols:sp('表示名,LINE_ID,イベント種別,登録日時,LINEステップ,配信数,最終配信日,ステータス,フロー種別,返信フラグ,サービス区分'),
+ rows:[['Hanako','U7a1f03e2','follow','2026-09-20 10:12','Step3','3','2026-10-01','配信中','介護開業相談','有'],['Osamu T.','U2c9d81b4','follow','2026-09-30 18:40','Step1','1','2026-10-01','配信中','AI診断','無'],['みさき','U55e0a7f9','follow','2026-10-02 09:05','Step0','0','','配信中','LINE相談','有'],['めぐみ','U9b3c4d10','unfollow','2026-09-10 21:30','Step2','2','2026-09-18','ブロック','AI診断','無'],['あい','U10fe6a2c','follow','2026-09-25 13:22','Step2','2','2026-09-29','配信中','個別相談','無']]},
+diag:{t:'経営診断',p:'D',st:'',bc:[],
+ fields:sp('診断ID,診断日,会社ID,会社名,お名前,メールアドレス,電話番号,業種,従業員数,年商,集客方法,現在の課題,最重要課題,顧客管理方法,案件管理方法,見積管理方法,請求管理方法,経営課題,社長依存業務,現状課題（自由記述）,その他相談内容,最終更新日'),opts:{},
+ cols:sp('診断ID,診断日,会社ID,会社名,業種,従業員数,年商,最重要課題'),
+ rows:[['D-001','2026-10-01','L-002','青空リフォーム','建設業','8名','5,000万円','集客'],['D-002','2026-09-12','L-003','木村税理士事務所','士業','5名','6,000万円','顧客管理'],['D-003','2026-10-02','L-006','カフェ・ルーチェ','飲食業','6名','3,500万円','原価管理']]},
+deals:{t:'商談管理',p:'T',st:'提案ステータス',bc:['提案ステータス'],
+ fields:sp('商談ID,会社ID,会社名,業種,担当者名,メールアドレス,電話番号,面談予定日,次回フォロー予定日,商品ID,提案プラン名,提案タイプ,初期費用,月額費用,割引金額,合計金額（税込）,提案書作成,提案書URL,提案日,提案ステータス,メモ'),
+ opts:{提案ステータス:sp('作成中,提案済,検討中,成約,失注'),提案書作成:sp('済,未')},
+ cols:sp('商談ID,会社ID,会社名,担当者名,面談予定日,提案プラン名,提案タイプ,月額費用,合計金額（税込）,提案ステータス'),
+ rows:[['T-001','L-003','木村税理士事務所','木村 恵','2026-10-06','経営顧問スタンダード','顧問契約','¥55,000','¥181,500','提案済'],['T-002','L-005','丸山運送','丸山 剛','2026-10-12','業務効率化ライト','顧問契約','¥33,000','¥108,900','作成中'],['T-003','L-001','さくらケアサービス','佐藤 花子','2026-10-08','開業支援パッケージ','スポット','¥0','¥330,000','検討中']]}};
+for(const k in E){const e=E[k];e.key=e.fields[0];e.d=e.rows.map(r=>Object.fromEntries(e.cols.map((c,i)=>[c,r[i]||''])))}
+const LK={'L-001':'U7a1f03e2','L-002':'U2c9d81b4','L-006':'U55e0a7f9','L-003':'U9b3c4d10','L-004':'U10fe6a2c'};
+E.leads.d.forEach(r=>{if(LK[r.会社ID])r.LINEユーザーID=LK[r.会社ID]});
+const EM={'P-001':'yamada@example.com','P-002':'sato@example.com','P-003':'wasai@example.com','P-005':'kimura@example.com','P-006':'kobayashi@example.com','L-001':'hanako.sato@example.com','L-002':'takahashi@example.com','L-003':'kimura.m@example.com','L-005':'maruyama@example.com','L-006':'mori@example.com'};
+[...E.prospects.d,...E.leads.d].forEach(r=>{if(EM[r.会社ID])r.メールアドレス=EM[r.会社ID]});
+function leadOf(u){return E.leads.d.find(l=>l.LINEユーザーID&&l.LINEユーザーID==u.LINE_ID)}
+function syncTag(){E.line.d.forEach(u=>{const l=leadOf(u);u.サービス区分=l?l.サービス区分:''})}
+syncTag();
+/* ===== データアクセス層 =====
+ 画面はここ(Repo)だけを通してデータを読み書きする。接続先は mode で切り替え。
+ mock: 画面内の仮データ / gas: GAS Webアプリ(POST text/plain, {op,sheet,id,row} → {ok,data})
+ 将来 Supabase にする場合も call() の中身を差し替えるだけ。 */
+const SHEET={prospects:'見込み企業',leads:'リード管理',line:'LINE_IDs',diag:'診断回答',deals:'商談管理'};
+const DB=Object.fromEntries(Object.keys(E).map(k=>[k,JSON.parse(JSON.stringify(E[k].d))]));
+Object.keys(E).forEach(k=>E[k].d=[]);
+const Repo={mode:'mock',GAS_URL:'',ready:false,
+ async call(op,k,p={}){
+  if(this.mode=='gas'){const r=await fetch(this.GAS_URL,{method:'POST',headers:{'Content-Type':'text/plain'},body:JSON.stringify({op,sheet:SHEET[k],...p})});const j=await r.json();if(!j.ok)throw new Error(j.error||'APIエラー');return j.data}
+  await new Promise(r=>setTimeout(r,200));
+  const t=DB[k];
+  if(op=='list')return JSON.parse(JSON.stringify(t));
+  if(op=='create'){t.push({...p.row});return p.row}
+  if(op=='update'){const i=t.findIndex(x=>x[E[k].key]==p.id);if(i<0)throw new Error('対象が見つかりません');Object.assign(t[i],p.row);return t[i]}
+ },
+ async load(){this.ready=false;for(const k in E)E[k].d=await this.call('list',k);syncTag();this.ready=true},
+ save(k,row,id){return id==null?this.call('create',k,{row}):this.call('update',k,{id,row})}};
+const RF=sp('ボトルネック,優先課題,推奨顧問プラン,推奨商品,関連商品候補,AI生成 診断サマリー,AI生成 改善ロードマップ,AI生成 提案ストーリー,レポート作成日,レポートURL,ステータス');
+const R={'D-001':['新規顧客の獲得経路が紹介のみ','Web集客の導線整備','経営顧問スタンダード','集客設計パッケージ','LINE導入支援','紹介依存で月ごとの売上が不安定。問い合わせ導線が未整備。','1か月目: 導線整理\n2か月目: LINE/メール自動化\n3か月目: 効果測定','「紹介の次」の柱を作る提案。','2026-10-02','https://example.com/r/D-001','生成済'],
+'D-002':['顧客情報が個人のExcelに分散','顧客管理の一元化','経営顧問スタンダード','顧客管理導入','請求管理','顧客・案件の管理が属人化し、フォロー漏れのリスクがある。','1か月目: データ統合\n2か月目: フォロー運用\n3か月目: 月次レビュー','「見える化」で所長の時間を取り戻す提案。','2026-09-13','https://example.com/r/D-002','生成済'],
+'D-003':['原価と売上の把握が月末まで遅れる','原価管理の仕組み化','業務効率化ライト','原価管理テンプレート','','','','','','','確認待ち']};
+const FORMS=[
+{n:'AI経営診断',d:'診断回答とAI診断レポートを生成する経営診断',dest:'診断回答',svc:'経営改善',on:'有効',q:'会社名\nお名前\nメールアドレス\n電話番号\n業種\n従業員数\n年商\n最重要課題',flow:'AI経営診断フォーム → 診断回答 → 診断AIレポート → リード管理 → 予約 → 商談'},
+{n:'介護保険外サービス開業相談',d:'個別相談につながる開業相談の入口',dest:'リード管理',svc:'介護保険外サービス開業',on:'有効',q:'会社名\nお名前\nメールアドレス\n開業予定時期\n相談内容',flow:'開業相談フォーム → リード管理 → 予約 → 商談(個別相談につながる入口)'},
+{n:'LINE相談',d:'LINEから気軽に問い合わせ。面談は必須ではない',dest:'リード管理',svc:'LINE相談',on:'有効',q:'お名前\nメールアドレス\n相談内容',flow:'LINE → LINE相談フォーム → リード管理 →(必要に応じて)予約 → 商談'},
+{n:'個別相談',d:'MSTと個別に話すための申込み(面談前提)',dest:'リード管理',svc:'指定なし',src:'個別相談フォーム',on:'有効',q:'会社名\nお名前\nメールアドレス\n電話番号\n希望日時\n相談内容',flow:'診断のあと → 個別相談フォーム → リード管理 → 予約 → 商談'}];
+const HIST=[['2026-10-02 09:00','ステップメール','木村税理士事務所','【MST】経営の見える化チェックリスト','送信済'],['2026-10-02 09:00','営業メール','山田工務店','ご挨拶とご提案','送信済'],['2026-10-01 09:00','ステップメール','青空リフォーム','診断結果のご案内','送信済'],['2026-09-30 09:00','営業メール','中村製作所','業務効率化のご提案','エラー']];
+const NAV=[['dash','📊 ダッシュボード'],['_📣 マーケティング'],['prospects','見込み企業'],['leads','リード管理'],['line','LINE'],['mail','メール'],['_🔍 診断・フォーム'],['forms','フォーム'],['diag','経営診断'],['_📅 面談・商談'],['resv','予約'],['deals','商談管理'],['_ '],['settings','⚙️ 設定']];
+side.innerHTML='<h2>MST経営支援システム<small>'+(Repo.mode=='mock'?'仮データ表示中':'接続中')+'</small></h2>'+NAV.map(n=>n[0][0]=='_'?`<p>${n[0].slice(1)}</p>`:`<a class="${['dash','settings'].includes(n[0])?'':'c'}" href="#/${n[0]}" data-p="${n[0]}" onclick="side.classList.remove('open')">${n[1]}</a>`).join('')+'<a onclick="reload()" style="cursor:pointer;margin-top:12px">↻ データ再読込</a>';
+
+function tb(k){const e=E[k],q=(S[k+'q']||'').toLowerCase(),f=S[k+'f']||'';
+ const rows=e.d.map((r,i)=>[r,i]).filter(([r])=>(!q||Object.values(r).join(' ').toLowerCase().includes(q))&&(!f||r[e.st]==f)&&(!(S[k+'t'])||r.サービス区分==S[k+'t']));
+ return `<div class="tw"><table><tr>${e.cols.map(c=>`<th>${c}</th>`).join('')}</tr>${rows.map(([r,i])=>`<tr onclick="op('${k}',${i})">${e.cols.map(c=>`<td>${cell(k,c,r)}</td>`).join('')}</tr>`).join('')||`<tr><td colspan="${e.cols.length}">該当するデータがありません。検索条件を変えてください。</td></tr>`}</table></div>`}
+function upd(k){$('#tb').innerHTML=tb(k)}
+function tbl(k){const e=E[k];return `<div class="bar"><input placeholder="検索" value="${esc(S[k+'q']||'')}" oninput="S['${k}q']=this.value;upd('${k}')">${e.st?`<select onchange="S['${k}f']=this.value;upd('${k}')"><option value="">すべての${e.st}</option>${e.opts[e.st].map(o=>`<option${S[k+'f']==o?' selected':''}>${o}</option>`).join('')}</select>`:''}${e.tag?`<select onchange="S['${k}t']=this.value;upd('${k}')"><option value="">すべてのサービス区分</option>${TAGS.map(o=>`<option${S[k+'t']==o?' selected':''}>${o}</option>`).join('')}</select>`:''}${k!='diag'?`<button class="btn" onclick="op('${k}',-1)">＋ 新規登録</button>`:''}</div><div id="tb">${tb(k)}</div>`}
+function mini(rows,cols,k){return `<div class="tw"><table><tr>${cols.map(c=>`<th>${c}</th>`).join('')}</tr>${rows.map(r=>`<tr onclick="op('${k}',${E[k].d.indexOf(r)})">${cols.map(c=>`<td>${c=='メールアドレス'?(r[c]?esc(r[c]):B('宛先なし')):c.includes('ステータス')||c=='返信フラグ'||c=='サービス区分'?B(r[c]):esc(r[c])}</td>`).join('')}</tr>`).join('')}</table></div>`}
+function tabs(p,names){const n=S.tab[p]||0;return `<div class="tabs">${names.map((x,i)=>`<a class="${i==n?'on':''}" onclick="S.tab['${p}']=${i};go()">${x}</a>`).join('')}</div>`}
+
+// ★ 関連情報パネル
+function renderRelated(k,r){
+ const bs=k=='line'?(leadOf(r)||{}):r;
+ const same=x=>(x.会社ID&&x.会社ID===bs.会社ID)||(x.会社名&&x.会社名===bs.会社名);
+ const pr=E.prospects.d.find(same),ld=E.leads.d.find(same),dg=E.diag.d.find(same),ls=E.line.d.filter(u=>{const l=leadOf(u);return l&&same(l)}),dl=E.deals.d.filter(same);
+ const row=(lb,txt,bd,fn)=>`<div class="li"${fn?` onclick="${fn}"`:' style="cursor:default"'}><span>${lb}: ${txt?esc(txt):'<span style="color:var(--mut)">なし</span>'}</span><em>${bd||''}</em></div>`;
+ const it=[];
+ if(k!='prospects')it.push(row('見込み企業',pr&&pr.会社名,pr&&B(pr.ステータス),pr&&`op('prospects',${E.prospects.d.indexOf(pr)})`));
+ if(k!='leads')it.push(row('リード管理',ld&&ld.会社名,ld&&B(ld.リードステータス),ld&&`op('leads',${E.leads.d.indexOf(ld)})`));
+ if(k!='line')it.push(...(ls.length?ls.map(u=>row('LINE',u.表示名+'('+u.LINE_ID+')',B(u.ステータス),`cl();S.chat='${u.LINE_ID}';S.tab.line=1;location.hash='#/line';go()`)):[row('LINE','')]));
+ const st=(ld&&ld.メールステップ)||(pr&&pr.メールステップ);
+ if(k!='mail')it.push(row('メール',st,'',st&&`cl();S.tab.mail=${ld&&ld.メールステップ?1:0};location.hash='#/mail';go()`));
+ if(k!='diag'){it.push(row('経営診断',dg&&dg.診断ID+'('+dg.診断日+')','',dg&&`op('diag',${E.diag.d.indexOf(dg)})`));
+  if(dg&&R[dg.診断ID])it.push(row('AIレポート',dg.診断ID+' レポート',B(R[dg.診断ID][10]),`op('diag',${E.diag.d.indexOf(dg)})`))}
+ if(k!='resv')it.push(row('予約',ld&&ld.面談予約日&&(ld.面談予約日+' '+ld.面談開始時間),ld&&ld.面談予約日&&B(ld.リードステータス),ld&&ld.面談予約日&&`cl();location.hash='#/resv';go()`));
+ if(k!='deals')it.push(...(dl.length?dl.map(d=>row('商談',d.提案プラン名,B(d.提案ステータス),`op('deals',${E.deals.d.indexOf(d)})`)):[row('商談','')]));
+ return `<div class="card"><h3>関連情報(${esc(bs.会社名||r.表示名||r.会社ID||'')})</h3>${it.join('')}</div>`}
+function op(k,i){const e=E[k],nw=i<0,r=nw?{}:e.d[i];S.cur=[k,i];
+ let x=`<div class="bar" style="justify-content:space-between"><h3>${e.t}${nw?'の新規登録':'の詳細'}</h3><button class="btn s" onclick="cl()">閉じる</button></div>`;
+ // ★ 関連情報パネル
+ if((k=='line'||k=='leads')&&!nw){const sc=SCEN.find(c=>c.tag==r.サービス区分);x+=`<div class="card"><h3>サービス区分(タグ)</h3>${k=='line'?av(r)+esc(r.表示名)+'('+esc(r.LINE_ID)+')':esc(r.会社名||'')}<br>サービス区分: ${B(r.サービス区分)||'<span style="color:var(--mut)">未設定</span>'}${sc?`<br><small style="color:var(--mut)">自動化: この区分で「${esc(sc.sc)}」を開始</small>`:''}<br><small style="color:var(--mut)">リード管理の「サービス区分」と共通です。下の項目で変更でき、LINEとリードで連動します。</small></div>`}
+ if(!nw&&(r.会社ID||k=='line')){x+=renderRelated(k,r)}
+ // 面談予約・診断（リードの詳細のとき）
+ if(k=='leads'&&!nw){const di=E.diag.d.findIndex(d=>d.会社ID==r.会社ID);x+=`<div class="card"><h3>面談予約・診断</h3>面談: ${r.面談予約日?esc(r.面談予約日+' '+r.面談開始時間):'未予約'}　${di>=0?`<button class="btn s" onclick="op('diag',${di})">診断レポートを確認</button>`:'<span class="b">診断なし</span>'}</div>`}
+ x+=`<div class="card"><div class="fm">${e.fields.map((n,j)=>{const v=nw&&j==0?e.p+'-'+String(e.d.length+1).padStart(3,'0'):(r[n]||''),o=e.opts[n],ro=(j==0||(e.ro||[]).includes(n))?' readonly':'';
+  const inp=o?`<select data-f="${n}">${['',...o].map(y=>`<option${y==v?' selected':''}>${y}</option>`).join('')}</select>`:/メモ|備考|自由記述|その他相談|経営課題|社長依存/.test(n)?`<textarea rows="3" data-f="${n}">${esc(v)}</textarea>`:`<input data-f="${n}" value="${esc(v)}"${ro}>`;
+  return `<label class="${/メモ|備考|自由記述|その他相談|URL/.test(n)?'w':''}">${n}${inp}</label>`}).join('')}</div></div>`;
+ if(k=='diag'&&R[r.診断ID]){const p=R[r.診断ID];x+=`<div class="card rp"><h3>AI診断レポート ${B(p[10])}</h3>${RF.map((n,j)=>p[j]?`<small style="color:var(--mut)">${n}</small><p>${esc(p[j])}</p>`:'').join('')}</div>`}
+ x+=`<div class="bar"><button class="btn" onclick="sv()">保存(仮データ)</button><button class="btn s" onclick="cl()">キャンセル</button></div>`;
+ dr.innerHTML=x;ov.style.display='block'}
+function cl(){ov.style.display='none'}
+async function sv(){const[k,i]=S.cur,o={};dr.querySelectorAll('[data-f]').forEach(el=>o[el.dataset.f]=el.value);
+ const bt=dr.querySelector('.bar .btn:not(.s)');if(bt){bt.disabled=true;bt.textContent='保存中…'}
+ try{const id=i<0?null:E[k].d[i][E[k].key],pl={...o};if(k=='line')delete pl.サービス区分;
+  await Repo.save(k,pl,id);
+  let r;if(i<0){E[k].d.push(o);r=o}else{Object.assign(E[k].d[i],o);r=E[k].d[i]}
+  if(k=='line'&&o.サービス区分!==undefined){const l=leadOf(r);if(l&&l.サービス区分!=o.サービス区分){await Repo.save('leads',{サービス区分:o.サービス区分},l.会社ID);l.サービス区分=o.サービス区分}}
+  syncTag();cl();go()}catch(e){if(bt){bt.disabled=false;bt.textContent='保存(仮データ)'}alert('保存に失敗しました: '+e.message)}}
+const kpi=(n,v,l)=>`<a href="#/${n}"><b>${v}</b><span>${l}</span></a>`;
+const li=(k,r,a,b)=>`<div class="li" onclick="op('${k}',${E[k].d.indexOf(r)})"><span>${esc(a)}</span><em>${esc(b)}</em></div>`;
+const pages={
+dash(){const L=E.leads.d,res=L.filter(r=>r.面談予約日>=TODAY).sort((a,b)=>a.面談予約日.localeCompare(b.面談予約日));
+ return `<div class="kp">${kpi('prospects',E.prospects.d.length,'見込み企業')}${kpi('leads',L.length,'リード管理')}${kpi('line',E.line.d.length,'LINE登録者')}${kpi('diag',E.diag.d.length,'経営診断')}${kpi('resv',res.length,'面談予定')}${kpi('deals',E.deals.d.length,'商談')}</div>
+ <div class="flow"><i>見込み企業 ${E.prospects.d.length}</i>→<i>リード管理 ${L.length}</i>→<i>経営診断 ${E.diag.d.length}</i>→<i>予約 ${res.length}</i>→<i>商談 ${E.deals.d.length}</i></div>
+ <div class="g2"><div class="card"><h3>今週のアクション</h3>${L.filter(r=>r.次アクション日&&r.次アクション日<='2026-10-09').sort((a,b)=>a.次アクション日.localeCompare(b.次アクション日)).map(r=>li('leads',r,r.会社名+'(次アクション)',r.次アクション日)).join('')}</div>
+ <div class="card"><h3>面談予定</h3>${res.map(r=>li('leads',r,r.会社名,r.面談予約日+' '+r.面談開始時間)).join('')}</div>
+ <div class="card"><h3>最近登録されたリード</h3>${[...L].sort((a,b)=>b.初回登録日.localeCompare(a.初回登録日)).slice(0,4).map(r=>li('leads',r,r.会社名,r.初回登録日)).join('')}</div>
+ <div class="card"><h3>最近の経営診断</h3>${[...E.diag.d].sort((a,b)=>b.診断日.localeCompare(a.診断日)).map(r=>li('diag',r,r.会社名,r.診断日)).join('')}</div></div>`},
+
+prospects:()=>tbl('prospects'),leads:()=>tbl('leads'),diag:()=>tbl('diag'),deals:()=>tbl('deals'),
+line(){const t=tabs('line',['ユーザー','個別チャット','配信','リッチメニュー']),n=S.tab.line||0;if(n==0)return t+tbl('line');
+ if(n==1){const u=S.chat||E.line.d[0].LINE_ID,m=C[u]=C[u]||[['in','診断の結果について相談したいです。'],['out','ご連絡ありがとうございます。内容を確認してご案内します。']];
+  return t+`<div class="chat"><div class="ul">${E.line.d.map(x=>`<div class="${x.LINE_ID==u?'on':''}" onclick="S.chat='${x.LINE_ID}';go()">${av(x)+esc(x.表示名||x.LINE_ID)}</div>`).join('')}</div><div class="cw"><div style="padding:8px 12px;border-bottom:1px solid var(--bd)">${av(E.line.d.find(x=>x.LINE_ID==u))}${esc((E.line.d.find(x=>x.LINE_ID==u)||{}).表示名)}</div><div class="msgs">${m.map(([d,x])=>`<div class="m ${d}">${esc(x)}</div>`).join('')}</div><div class="snd"><input id="ci" placeholder="メッセージを入力"><button class="btn" onclick="send('${u}')">送信</button></div></div></div>`}
+ if(n==2)return t+first()+`<div class="g2">${[['ステップ配信','登録後の日数に応じて自動配信'],['自動返信','キーワードに応じて自動で返信'],['一斉配信','条件で絞ったユーザーへ一括配信'],['Flexメッセージ','カード形式のメッセージを作成']].map(x=>`<div class="card"><h3>${x[0]} ${B('準備中')}</h3><span style="color:var(--mut)">${x[1]}</span></div>`).join('')}</div>`;return t+rich()},
+mail(){const t=tabs('mail',['営業メール(見込み企業)','ステップメール(リード管理)','配信履歴']),n=S.tab.mail||0;
+ if(n==0)return t+mini(E.prospects.d.filter(r=>r.メールステップ),['会社名','担当者名','メールアドレス','メールステップ','最終接触日','返信フラグ','ステータス'],'prospects');
+ if(n==1)return t+mini(E.leads.d.filter(r=>r.メールステップ),['会社名','担当者名','メールアドレス','メールステップ','最終接触日','リードステータス'],'leads');
+ return t+`<p style="color:var(--mut);margin-top:0">仮データです。専用の履歴シートは作らず、将来は既存の「メールステップ」「最終接触日」から表示します。</p><div class="tw"><table><tr><th>日時</th><th>種別</th><th>宛先</th><th>件名</th><th>結果</th></tr>${HIST.map(r=>`<tr>${r.map((c,i)=>`<td>${i==4?B(c=='送信済'?'完了':'失注').replace(c=='送信済'?'完了':'失注',c):esc(c)}</td>`).join('')}</tr>`).join('')}</table></div>`},
+forms(){const t=tabs('forms',['フォーム管理','回答データ']),n=S.tab.forms||0;
+ if(n==0)return t+`<div class="bar"><button class="btn" onclick="editForm(-1)">＋ フォームを追加</button></div><div class="tw"><table><tr><th>フォーム名</th><th>説明</th><th>保存先(既存シート)</th><th>サービス区分(タグ)</th><th>状態</th><th>回答数</th><th>導線</th></tr>${FORMS.map((f,i)=>`<tr onclick="editForm(${i})"><td>${esc(f.n)}</td><td>${esc(f.d)}</td><td>${esc(f.dest)}</td><td>${f.svc=='指定なし'?'指定なし':B(f.svc)}</td><td>${B(f.on)}</td><td>${fcnt(f)}</td><td>${esc(f.flow)}</td></tr>`).join('')}</table></div>`;
+ const i=S.fsel||0,f=FORMS[i]||FORMS[0];
+ return t+`<div class="bar"><select onchange="S.fsel=+this.value;go()">${FORMS.map((x,j)=>`<option value="${j}"${j==i?' selected':''}>${esc(x.n)}</option>`).join('')}</select></div><p style="color:var(--mut);margin-top:0">保存先: ${esc(f.dest)}(既存シートのデータを表示)</p>${f.dest=='診断回答'?mini(E.diag.d,['診断ID','診断日','会社名','業種','最重要課題'],'diag'):mini(fl(f),['会社ID','会社名','担当者名','流入元','サービス区分','リードステータス','次アクション日'],'leads')}`},
+resv(){const L=E.leads.d.filter(r=>r.面談予約日).sort((a,b)=>(a.面談予約日+a.面談開始時間).localeCompare(b.面談予約日+b.面談開始時間)),f=new Date(2026,9,1).getDay();
+ let c=['日','月','火','水','木','金','土'].map(d=>`<div class="h">${d}</div>`).join('')+'<div></div>'.repeat(f);
+ for(let d=1;d<=31;d++){const ds='2026-10-'+String(d).padStart(2,'0');c+=`<div class="${ds==TODAY?'td':''}">${d}${L.filter(r=>r.面談予約日==ds).map(r=>`<a onclick="op('leads',${E.leads.d.indexOf(r)})">${esc(r.面談開始時間)} ${esc(r.会社名)}</a>`).join('')}</div>`}
+ return `<h3>2026年10月</h3><div class="tw" style="margin-bottom:14px"><div class="cal">${c}</div></div><h3>予約一覧</h3>`+mini(L,['会社名','担当者名','面談予約日','面談開始時間','リードステータス'],'leads')},
+settings(){const t=tabs('settings',['自動化設定','LINE設定','メール設定']),n=S.tab.settings||0;
+ if(n==0){
+  return t+`<p style="color:var(--mut);margin-top:0">サービス区分(タグ)とリードステータスなどを条件に、シナリオを開始するルールを管理します(UIのみ・仮表示)。タグ専用のシートは作らず、条件には既存の項目を使います。</p><div class="bar"><button class="btn" onclick="editRule(-1)">＋ ルールを追加</button></div><div class="tw"><table><tr><th>ルール名</th><th>条件</th><th>アクション</th><th>対象リード</th><th>状態</th></tr>${AUTO.map((a,i)=>`<tr onclick="editRule(${i})"><td>${esc(a.n)}</td><td>${ruleCond(a)}</td><td>${esc(a.act)}</td><td>${ruleCnt(a)}件</td><td>${B(a.on)}</td></tr>`).join('')}</table></div><h3 style="margin-top:18px">自動処理の種類</h3><div class="g2">${[['LINE自動返信','キーワードに応じてLINEで自動返信'],['LINEステップ配信','登録後の日数に応じて配信'],['メールステップ配信','リード・見込み企業へ段階的にメール配信'],['シナリオ開始','サービス区分ごとのシナリオを開始']].map(x=>`<div class="card"><h3>${x[0]} ${B('準備中')}</h3><span style="color:var(--mut)">${x[1]}</span></div>`).join('')}</div>`;
+ }
+ if(n==1){
+  return t+`<div class="card">
+   <h3>LINE連携設定</h3>
+   <div class="fm">
+    <label>チャネルID<input value="（未設定）" readonly></label>
+    <label>チャネルシークレット<input value="（未設定）" readonly></label>
+    <label class="w">チャネルアクセストークン<input value="（未設定）" readonly></label>
+   </div>
+   <div class="bar" style="margin-top:10px"><button class="btn s">接続テスト</button></div>
+   <small style="color:var(--mut)">GAS接続は別途実装予定。</small>
+  </div>`;
+ }
+ return t+`<div class="card">
+  <h3>メール送信設定</h3>
+  <div class="fm">
+   <label>送信者名<input value="MST 大橋真人"></label>
+   <label>返信先<input value="mst.shikumikaizen@gmail.com"></label>
+  </div>
+  <div class="bar" style="margin-top:10px"><button class="btn">保存</button></div>
+ </div>`}};
+function send(u){const v=$('#ci').value.trim();if(v){C[u].push(['out',v]);go()}}
+
+function rich(){const M=['AI経営診断','介護保険外サービス開業相談','LINE相談','個別相談'];
+ return `<p style="color:var(--mut);margin-top:0">LINEトーク画面の下部メニューから、各フォームへの導線を管理します(UIのみ・仮表示)。</p><div class="g2"><div class="card"><h3>メニュープレビュー ${B('準備中')}</h3><div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;max-width:320px">${M.map(m=>`<div style="background:var(--prib);color:var(--pri);border-radius:6px;padding:22px 8px;text-align:center;font-size:13px">${esc(m)}</div>`).join('')}</div></div><div class="card"><h3>タップ時の遷移先(フォーム)</h3>${M.map(m=>{const i=FORMS.findIndex(f=>f.n==m);return i<0?'':`<div class="li" onclick="editForm(${i})"><span>${esc(m)}</span><em>${esc(FORMS[i].flow)}</em></div>`}).join('')}</div></div>`}
+const AUTO=[{n:'介護開業シナリオ開始',tag:'介護保険外サービス開業',st:'',act:'介護開業シナリオを開始',on:'有効'},{n:'経営改善シナリオ開始',tag:'経営改善',st:'',act:'経営改善シナリオを開始',on:'有効'},{n:'LINE相談の案内',tag:'LINE相談',st:'',act:'LINE相談用の案内を開始',on:'有効'},{n:'経営改善フォロー',tag:'経営改善',st:'追客中',act:'メールステップ配信を開始',on:'無効'}];
+const ACTS=['介護開業シナリオを開始','経営改善シナリオを開始','LINE相談用の案内を開始','LINEステップ配信を開始','メールステップ配信を開始'];
+function ruleCond(a){return 'サービス区分 = '+B(a.tag)+(a.st?' かつ リードステータス = '+B(a.st):'')}
+function ruleCnt(a){return E.leads.d.filter(r=>(!a.tag||r.サービス区分==a.tag)&&(!a.st||r.リードステータス==a.st)).length}
+function editRule(i){const nw=i<0,a=nw?{n:'',tag:TAGS[0],st:'',act:ACTS[0],on:'有効'}:AUTO[i];
+ const sel=(id,o,v)=>`<select id="${id}">${o.map(x=>`<option${x==v?' selected':''}>${x}</option>`).join('')}</select>`;
+ dr.innerHTML=`<div class="bar" style="justify-content:space-between"><h3>自動化ルール${nw?'の追加':'の設定'}</h3><button class="btn s" onclick="cl()">閉じる</button></div><div class="card"><div class="fm"><label>ルール名<input id="a_n" value="${esc(a.n)}"></label><label>状態${sel('a_on',['有効','無効'],a.on)}</label></div></div><div class="card"><h3>条件(すべて満たす場合)</h3><div class="fm"><label>サービス区分(タグ)${sel('a_tag',TAGS,a.tag)}</label><label>リードステータス(任意)<select id="a_st">${['',...E.leads.opts.リードステータス].map(x=>`<option${x==a.st?' selected':''}>${x}</option>`).join('')}</select></label></div><div class="bar" style="margin-top:10px"><button class="btn s" disabled>＋ その他の条件(準備中)</button></div></div><div class="card"><h3>アクション</h3>${sel('a_act',ACTS,a.act)}</div><small style="color:var(--mut)">ルール専用のシートは作りません。条件には既存のリード管理の項目を使います。</small><div class="bar" style="margin-top:10px"><button class="btn" onclick="saveRule(${i})">保存(仮データ)</button><button class="btn s" onclick="cl()">キャンセル</button></div>`;ov.style.display='block'}
+function saveRule(i){const n=$('#a_n').value.trim();if(!n){$('#a_n').focus();return}const a={n,tag:$('#a_tag').value,st:$('#a_st').value,act:$('#a_act').value,on:$('#a_on').value};if(i<0)AUTO.push(a);else AUTO[i]=a;cl();go()}
+const SCEN=[
+{ch:'経営改善について相談',tag:'経営改善',sc:'経営改善シナリオ',guide:'AI経営診断などを案内'},
+{ch:'介護保険外サービスを開業したい',tag:'介護保険外サービス開業',sc:'介護開業シナリオ',guide:'介護保険外サービス開業相談フォームを案内'},
+{ch:'まずLINEで相談したい',tag:'LINE相談',sc:'LINE相談用の案内',guide:'必要に応じてリード登録・予約'}];
+function first(){return `<div class="card"><h3>友だち追加時の初回選択 ${B('仮表示')}</h3><p style="color:var(--mut);margin-top:0">選んだ時点でサービス区分(タグ)を付与し、その値でシナリオを分岐します。タグはリード管理の「サービス区分」を使い、タグ用シートは作りません。</p><div class="flow"><i>友だち追加</i>→<i>三択</i>→<i>サービス区分を付与</i>→<i>シナリオ開始</i></div><div class="tw"><table><tr><th>選択肢</th><th>付与するサービス区分</th><th>開始するシナリオ</th><th>案内</th></tr>${SCEN.map(c=>`<tr><td>${esc(c.ch)}</td><td>${B(c.tag)}</td><td>${esc(c.sc)}</td><td>${esc(c.guide)}</td></tr>`).join('')}</table></div><h3 style="margin-top:12px">動作確認(仮)</h3><div class="bar">${SCEN.map((c,i)=>`<button class="btn s" onclick="demo(${i})">${esc(c.ch)}</button>`).join('')}</div><div id="demo" style="color:var(--mut)">選択肢を押すと、付与されるサービス区分と開始されるシナリオが表示されます。</div></div>`}
+function demo(i){const c=SCEN[i];$('#demo').innerHTML=`選択「${esc(c.ch)}」→ サービス区分＝${B(c.tag)} を付与 → ${esc(c.sc)}を開始 → ${esc(c.guide)}`}
+const fl=f=>E.leads.d.filter(r=>f.src?r.流入元==f.src:(f.svc=='指定なし'||r.サービス区分==f.svc));
+function fcnt(f){return f.dest=='診断回答'?E.diag.d.length:(f.svc=='指定なし'&&!f.src)?'—':fl(f).length}
+function editForm(i){const nw=i<0,f=nw?{n:'',d:'',dest:'リード管理',svc:'指定なし',on:'有効',q:'会社名\nお名前\nメールアドレス\n相談内容',flow:''}:FORMS[i];
+ const sel=(id,o,v)=>`<select id="${id}">${o.map(x=>`<option${x==v?' selected':''}>${x}</option>`).join('')}</select>`;
+ dr.innerHTML=`<div class="bar" style="justify-content:space-between"><h3>フォーム${nw?'の追加':'の設定'}</h3><button class="btn s" onclick="cl()">閉じる</button></div>${f.flow?`<div class="card"><h3>導線</h3>${esc(f.flow)}</div>`:''}<div class="card"><div class="fm"><label>フォーム名<input id="f_n" value="${esc(f.n)}"></label><label>状態${sel('f_on',['有効','無効'],f.on)}</label><label class="w">説明<input id="f_d" value="${esc(f.d)}"></label><label>保存先(既存シート)${sel('f_dest',['リード管理','診断回答'],f.dest)}</label><label>付与するサービス区分(タグ)${sel('f_svc',['指定なし',...TAGS],f.svc)}</label><label class="w">回答の識別(リード管理の「流入元」・任意)<input id="f_src" value="${esc(f.src||'')}"></label><label class="w">質問項目(1行に1項目)<textarea id="f_q" rows="7">${esc(f.q)}</textarea></label></div><small style="color:var(--mut)">保存先は既存シートから選びます。新しいシートは作りません。</small></div><div class="bar"><button class="btn" onclick="saveForm(${i})">保存(仮データ)</button><button class="btn s" onclick="cl()">キャンセル</button></div>`;ov.style.display='block'}
+function saveForm(i){const n=$('#f_n').value.trim();if(!n){$('#f_n').focus();return}const f={n,d:$('#f_d').value,dest:$('#f_dest').value,svc:$('#f_svc').value,src:$('#f_src').value.trim(),on:$('#f_on').value,q:$('#f_q').value,flow:i<0?'':FORMS[i].flow};if(i<0)FORMS.push(f);else FORMS[i]=f;cl();go()}
+const T={dash:'ダッシュボード',prospects:'見込み企業',leads:'リード管理',line:'LINE',mail:'メール',forms:'フォーム',diag:'経営診断',resv:'予約',deals:'商談管理',settings:'設定'};
+function go(){if(!Repo.ready)return;const p=location.hash.slice(2);const k=pages[p]?p:'dash';main.innerHTML=`<h1>${T[k]}</h1>`+pages[k]();document.querySelectorAll('#side a').forEach(a=>a.classList.toggle('on',a.dataset.p==k));window.scrollTo(0,0)}
+addEventListener('hashchange',go);
+async function boot(){main.innerHTML='<p style="color:var(--mut)">読み込み中…</p>';try{await Repo.load();go()}catch(e){main.innerHTML=`<div class="card"><h3>データを読み込めませんでした</h3><p style="color:var(--mut)">${esc(e.message)}</p><button class="btn" onclick="boot()">再試行</button></div>`}}
+function reload(){side.classList.remove('open');boot()}
+boot();
+</script></body></html>
