@@ -2,7 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { getSupabase } from '../lib/supabaseClient';
 import { InlineDeleteButton } from './InlineDeleteButton';
 import { ManagedContract, ManagedInvoice } from '../types/matrix';
-import { FileText, Plus, RefreshCw, Receipt, Wrench, Trash2, Calendar, Sparkles, CheckCircle2, AlertCircle, X, ChevronRight } from 'lucide-react';
+import { FileText, Plus, RefreshCw, Receipt, Wrench, Trash2, Calendar, Sparkles, CheckCircle2, AlertCircle, X, ChevronRight, Send } from 'lucide-react';
 import { CustomerSupportWorkspace } from './CustomerSupportWorkspace';
 import type { TaskItem } from '../types';
 import {
@@ -228,12 +228,14 @@ export const SalesOperationsWorkspace: React.FC<Props> = ({ tab, companyId, lead
         if (leadId) documentsQuery = documentsQuery.or(`lead_id.eq.${leadId},and(lead_id.is.null,deal_id.is.null,company_id.eq.${companyId})`);
         else if (dealId) documentsQuery = documentsQuery.or(`deal_id.eq.${dealId},and(deal_id.is.null,company_id.eq.${companyId})`);
         else if (companyId) documentsQuery = documentsQuery.eq('company_id', companyId);
-        const [docs, messages] = await Promise.all([
+        const [docs, messages, companyResult] = await Promise.all([
           documentsQuery,
           supabase.from('communication_outbox').select('*').order('created_at', { ascending: false }).limit(100),
+          supabase.from('companies').select('id,company_name').order('company_name'),
         ]);
         if (docs.error) throw docs.error;
         if (messages.error) throw messages.error;
+        if (!companyResult.error) setCompanies(companyResult.data || []);
         setDocuments(docs.data || []); setOutbox(companyId ? (messages.data || []).filter((message:any) => (docs.data || []).some((doc:any) => doc.id === message.document_id)) : messages.data || []);
       } else {
         let recordsQuery = supabase.from(selectedOps.table).select('*').order('created_at', { ascending: false });
@@ -584,7 +586,139 @@ export const SalesOperationsWorkspace: React.FC<Props> = ({ tab, companyId, lead
         {onClearCompanyFilter && <button type="button" onClick={onClearCompanyFilter} className="rounded border border-cyan-800 px-2 py-1 text-cyan-100 hover:bg-cyan-900/50">全顧客を表示</button>}
       </div>}
       <div className="grid gap-5 xl:grid-cols-2">
-      <section className="rounded-xl border border-slate-800 bg-slate-900 p-4"><h2 className="mb-3 font-semibold text-white">生成済み書類</h2><p className="mb-3 text-xs text-slate-400">書類を選んで送信センターを開き、宛先・テンプレート・プレビューを確認してから送信できます。</p>{loading ? <p className="text-sm text-slate-400">読み込み中…</p> : documents.length === 0 ? <p className="text-sm text-slate-400">書類ひな形から保存した書類がここに表示されます。</p> : <ul className="divide-y divide-slate-800">{documents.map((doc) => <li key={doc.id} className="py-3"><div className="flex flex-wrap items-center justify-between gap-2"><span className="font-medium text-white">{doc.title}</span><select aria-label={`${doc.title}の状態`} value={doc.status} onChange={(e)=>void updateDocumentStatus(doc.id,e.target.value)} className="rounded border border-slate-700 bg-slate-950 px-2 py-1 text-xs text-white"><option value="draft">下書き</option><option value="awaiting_approval">確認待ち</option><option value="approved">承認済み</option><option value="archived">保管</option></select>{['draft','awaiting_approval'].includes(doc.status)&&(pendingDeleteDocumentId===doc.id?<span className="inline-flex items-center gap-2"><span className="text-xs text-amber-200">削除しますか？</span><button type="button" onClick={()=>void deleteDocumentDraft(doc)} className="rounded bg-rose-700 px-2 py-1 text-xs text-white">削除を確定</button><button type="button" onClick={()=>setPendingDeleteDocumentId('')} className="rounded border border-slate-700 px-2 py-1 text-xs text-slate-300">取消</button></span>:<button type="button" onClick={()=>{setError('');setPendingDeleteDocumentId(doc.id)}} className="inline-flex items-center gap-1 rounded border border-rose-800/70 px-2 py-1 text-xs text-rose-200 hover:bg-rose-950/40"><Trash2 className="h-3.5 w-3.5"/>削除</button>)}</div><div className="mt-1 text-xs text-slate-500">{doc.document_type} · {new Date(doc.created_at).toLocaleString('ja-JP')}</div>{['draft','awaiting_approval'].includes(doc.status)&&<details className="mt-2 rounded-lg border border-slate-800 bg-slate-950 p-3"><summary className="cursor-pointer text-xs text-cyan-200">本文を確認・修正</summary><p className="mt-2 text-xs leading-5 text-slate-400">書類の見た目を確認しながら、本文を日本語で直接修正できます。書類上の文字をクリックして編集してください。</p><div id={`generated-document-editor-${doc.id}`} aria-label={`${doc.title}の本文`} contentEditable suppressContentEditableWarning role="textbox" onFocus={()=>{setEditingDocumentId(doc.id);setEditingDocumentBody(doc.body_html||'');}} dangerouslySetInnerHTML={{__html:editingDocumentId===doc.id?editingDocumentBody:(doc.body_html||'')}} className="mt-2 max-h-[680px] min-h-96 overflow-auto rounded border border-slate-700 bg-white p-6 text-sm leading-7 text-slate-900 shadow-inner"/><button type="button" onClick={()=>void saveDocumentBody(doc.id)} disabled={editingDocumentId!==doc.id} className="mt-2 rounded bg-cyan-700 px-3 py-2 text-xs font-semibold text-white disabled:opacity-50">本文を保存</button></details>}{doc.status==='approved'&&<div className="mt-2"><button type="button" onClick={()=>doc.company_id&&onOpenInvoiceDocuments?.(doc.company_id,doc.id)} disabled={!doc.company_id||!onOpenInvoiceDocuments} className="rounded bg-indigo-700 px-3 py-2 text-xs font-semibold text-white" >送信センターで送る</button></div>}</li>)}</ul>}</section>
+      <section className="rounded-xl border border-slate-800 bg-slate-900 p-4">
+        <h2 className="mb-3 font-semibold text-white">生成済み書類</h2>
+        <p className="mb-3 text-xs text-slate-400">書類を選んで送信センターを開き、宛先・テンプレート・プレビューを確認してから送信できます。</p>
+        {loading ? (
+          <p className="text-sm text-slate-400">読み込み中…</p>
+        ) : documents.length === 0 ? (
+          <p className="text-sm text-slate-400">書類ひな形から保存した書類がここに表示されます。</p>
+        ) : (
+          <ul className="divide-y divide-slate-800">
+            {documents.map((doc) => {
+              const linkedCompany = doc.company_id ? companies.find((c) => c.id === doc.company_id) : undefined;
+              return (
+                <li key={doc.id} className="py-3.5 space-y-2">
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <span className="font-medium text-white">{doc.title}</span>
+                    <div className="flex items-center gap-2">
+                      <select
+                        aria-label={`${doc.title}の状態`}
+                        value={doc.status}
+                        onChange={(e) => void updateDocumentStatus(doc.id, e.target.value)}
+                        className="rounded-lg border border-slate-700 bg-slate-950 px-2 py-1 text-xs text-white"
+                      >
+                        <option value="draft">下書き</option>
+                        <option value="awaiting_approval">確認待ち</option>
+                        <option value="approved">承認済み</option>
+                        <option value="archived">保管</option>
+                      </select>
+                      {['draft', 'awaiting_approval', 'archived'].includes(doc.status) && (
+                        pendingDeleteDocumentId === doc.id ? (
+                          <span className="inline-flex items-center gap-2">
+                            <span className="text-xs text-amber-200">削除しますか？</span>
+                            <button
+                              type="button"
+                              onClick={() => void deleteDocumentDraft(doc)}
+                              className="rounded bg-rose-700 px-2 py-1 text-xs text-white cursor-pointer"
+                            >
+                              削除確定
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => setPendingDeleteDocumentId('')}
+                              className="rounded border border-slate-700 px-2 py-1 text-xs text-slate-300 cursor-pointer"
+                            >
+                              取消
+                            </button>
+                          </span>
+                        ) : (
+                          <button
+                            type="button"
+                            onClick={() => { setError(''); setPendingDeleteDocumentId(doc.id); }}
+                            className="inline-flex items-center gap-1 rounded border border-rose-800/70 px-2 py-1 text-xs text-rose-200 hover:bg-rose-950/40 cursor-pointer"
+                          >
+                            <Trash2 className="h-3.5 w-3.5" />
+                            <span>削除</span>
+                          </button>
+                        )
+                      )}
+                    </div>
+                  </div>
+
+                  <div className="flex flex-wrap items-center gap-2 text-xs text-slate-400">
+                    <span className="rounded bg-slate-800 px-2 py-0.5 text-[10px] text-slate-300">
+                      {doc.document_type === 'diagnosis_report' ? '診断レポート' : doc.document_type === 'proposal' ? '提案書' : doc.document_type === 'estimate' ? '見積書' : doc.document_type === 'contract' ? '契約書' : doc.document_type === 'invoice' ? '請求書' : doc.document_type === 'monthly_report' ? '月次報告書' : doc.document_type}
+                    </span>
+                    <span>{new Date(doc.created_at).toLocaleString('ja-JP')}</span>
+                    <span>·</span>
+                    <span className={linkedCompany ? 'text-indigo-300 font-medium' : 'text-slate-400'}>
+                      会社: {linkedCompany ? linkedCompany.company_name : '未紐付け（送信センターで選択可能）'}
+                    </span>
+                  </div>
+
+                  {['draft', 'awaiting_approval'].includes(doc.status) && (
+                    <details className="rounded-lg border border-slate-800 bg-slate-950 p-3">
+                      <summary className="cursor-pointer text-xs text-cyan-200 font-semibold hover:text-cyan-100">
+                        本文を確認・直接編集
+                      </summary>
+                      <p className="mt-2 text-xs leading-5 text-slate-400">
+                        書類の見た目を確認しながら、本文を直接修正できます。文字をクリックして編集してください。
+                      </p>
+                      <div
+                        id={`generated-document-editor-${doc.id}`}
+                        aria-label={`${doc.title}の本文`}
+                        contentEditable
+                        suppressContentEditableWarning
+                        role="textbox"
+                        onFocus={() => {
+                          setEditingDocumentId(doc.id);
+                          setEditingDocumentBody(doc.body_html || '');
+                        }}
+                        dangerouslySetInnerHTML={{
+                          __html: editingDocumentId === doc.id ? editingDocumentBody : (doc.body_html || ''),
+                        }}
+                        className="mt-2 max-h-[680px] min-h-96 overflow-auto rounded border border-slate-700 bg-white p-6 text-sm leading-7 text-slate-900 shadow-inner"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => void saveDocumentBody(doc.id)}
+                        disabled={editingDocumentId !== doc.id}
+                        className="mt-2 rounded bg-cyan-700 hover:bg-cyan-600 px-3 py-1.5 text-xs font-semibold text-white disabled:opacity-50 cursor-pointer"
+                      >
+                        本文を保存
+                      </button>
+                    </details>
+                  )}
+
+                  <div className="pt-1 flex flex-wrap items-center gap-2.5">
+                    <button
+                      type="button"
+                      onClick={async () => {
+                        if (doc.status !== 'approved') {
+                          await updateDocumentStatus(doc.id, 'approved');
+                        }
+                        onOpenInvoiceDocuments?.(doc.company_id || '', doc.id);
+                      }}
+                      disabled={!onOpenInvoiceDocuments}
+                      className="inline-flex items-center gap-1.5 rounded-lg bg-gradient-to-r from-blue-600 via-indigo-600 to-indigo-700 hover:from-blue-500 hover:to-indigo-600 px-3.5 py-1.5 text-xs font-semibold text-white shadow-md shadow-indigo-500/20 transition-all cursor-pointer disabled:opacity-50"
+                      title="送信センターで宛先・テンプレート・プレビューを確認して送付します"
+                    >
+                      <Send className="h-3.5 w-3.5" />
+                      <span>送信センターで送る</span>
+                    </button>
+                    {doc.status !== 'approved' && (
+                      <span className="text-[11px] text-amber-300">
+                        ※ クリックすると承認状態に更新して送信センターを開きます
+                      </span>
+                    )}
+                  </div>
+                </li>
+              );
+            })}
+          </ul>
+        )}
+      </section>
       <section className="rounded-xl border border-slate-800 bg-slate-900 p-4"><h2 className="mb-3 font-semibold text-white">送信履歴・送信待ち</h2>{loading ? <p className="text-sm text-slate-400">読み込み中…</p> : outbox.length === 0 ? <p className="text-sm text-slate-400">個別送信・一斉配信・書類送付は、同じ送信台帳に集約します。</p> : <ul className="divide-y divide-slate-800">{outbox.map((msg) => <li key={msg.id} className="py-3"><div className="flex flex-wrap items-center justify-between gap-2"><span className="font-medium text-white">{msg.subject || msg.recipient_address}</span><span className="text-xs text-slate-400">{msg.channel} · {msg.status}</span></div><div className="mt-1 text-xs text-slate-500">{new Date(msg.created_at).toLocaleString('ja-JP')} · 同意根拠: {msg.consent_basis || '記録なし'}</div>{['awaiting_approval', 'queued'].includes(msg.status)&&<div className="mt-2 flex gap-2">{msg.status==='awaiting_approval'&&<button type="button" onClick={()=>void approveOutboxMessage(msg.id)} className="rounded bg-cyan-700 px-2 py-1 text-xs font-semibold text-white">承認して送信待ちへ</button>}<button type="button" onClick={()=>void cancelOutboxMessage(msg.id)} className="rounded border border-slate-700 px-2 py-1 text-xs text-slate-300">送信依頼を取り消す</button></div>}</li>)}</ul>}<p className="mt-3 text-xs text-amber-300">実送信はサーバー側のLINE・メール接続が必要です。この一覧への登録だけで配信完了にはなりません。</p></section>
       </div>
     </div>}

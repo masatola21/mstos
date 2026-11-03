@@ -1220,10 +1220,40 @@ function AppContent() {
     const updated = tasks.filter((t) => t.id !== id);
     setTasks(updated);
     saveTasks(updated);
+
+    const updatedApprovals = approvals.filter((a) => a.taskId !== id);
+    if (updatedApprovals.length !== approvals.length) {
+      setApprovals(updatedApprovals);
+      saveApprovals(updatedApprovals);
+    }
+
     if (target) {
       recordActivityLog('task_updated', `タスク「${target.title}」を削除しました`, '人間');
       setActivityLogs(loadActivityLogs());
     }
+  };
+
+  const handleBatchDeleteTasks = async (taskIds: string[], reason: string): Promise<void> => {
+    if (taskIds.length === 0) return;
+    const idSet = new Set(taskIds);
+    const targetTasks = tasks.filter((t) => idSet.has(t.id));
+    for (const t of targetTasks) {
+      if (t.attachments?.length) {
+        await Promise.all(t.attachments.map((att) => deleteWorkspaceAttachment(att).catch(() => {})));
+      }
+    }
+    const remainingTasks = tasks.filter((t) => !idSet.has(t.id));
+    setTasks(remainingTasks);
+    saveTasks(remainingTasks);
+
+    const updatedApprovals = approvals.filter((a) => !a.taskId || !idSet.has(a.taskId));
+    if (updatedApprovals.length !== approvals.length) {
+      setApprovals(updatedApprovals);
+      saveApprovals(updatedApprovals);
+    }
+
+    recordActivityLog('task_updated', `${reason}（${targetTasks.length}件）を一括削除しました`, '人間');
+    setActivityLogs(loadActivityLogs());
   };
 
   const handleRequestApproval = (task: TaskItem, reason: string) => {
@@ -2521,6 +2551,7 @@ function AppContent() {
             onUpdateTask={handleUpdateTask}
             onDeleteTask={handleDeleteTask}
             onDeleteCompletedTasks={handleDeleteCompletedTasks}
+            onBatchDeleteTasks={handleBatchDeleteTasks}
             onRunTask={handleRunAssignedTask}
             onUploadAttachment={handleUploadTaskAttachment}
             onDownloadAttachment={handleDownloadTaskAttachment}

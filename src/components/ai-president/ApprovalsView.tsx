@@ -155,6 +155,17 @@ export const ApprovalsView: React.FC<ApprovalsViewProps> = ({
 
             {onClearApprovals && approvals.length > 0 && (
               <div className="flex items-center gap-2 flex-wrap self-end sm:self-auto">
+                {pendingApprovalsCount > 0 && (
+                  <button
+                    type="button"
+                    onClick={() => setBatchDeleteType('pending')}
+                    className="flex items-center gap-1 px-2.5 py-1.5 rounded-xl text-xs font-medium bg-amber-950/40 hover:bg-amber-900/60 text-amber-300 border border-amber-800/60 transition-all cursor-pointer shadow-sm"
+                    title="確認待ちの承認申請を一括削除"
+                  >
+                    <Trash2 className="w-3 h-3 text-amber-400" />
+                    <span>確認待ちを一括削除 ({pendingApprovalsCount})</span>
+                  </button>
+                )}
                 {rejectedApprovalsCount > 0 && (
                   <button
                     type="button"

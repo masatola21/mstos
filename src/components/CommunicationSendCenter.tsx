@@ -316,19 +316,28 @@ export const CommunicationSendCenter: React.FC<Props> = ({
 
   const selectedCompanyId = contact?.company_id || initialCompanyId;
   const availableDocs = docs
-    .filter((x) => (!selectedCompanyId || x.company_id === selectedCompanyId) && (documentType === 'all' || documentCategory(x) === documentType))
+    .filter((x) => (!selectedCompanyId || x.company_id === selectedCompanyId || x.id === docId || x.id === initialDocumentId) && (documentType === 'all' || documentCategory(x) === documentType || x.id === docId || x.id === initialDocumentId))
     .sort((a, b) => documentOrder[documentCategory(a)] - documentOrder[documentCategory(b)]);
 
   useEffect(() => {
-    if (docId && !availableDocs.some((x) => x.id === docId)) setDocId('');
+    if (docId && docs.length > 0 && !availableDocs.some((x) => x.id === docId)) {
+      setDocId('');
+    }
   }, [docId, contact?.company_id, initialCompanyId, docs, documentType]);
+
+  useEffect(() => {
+    if (initialDocumentId) {
+      setDocId(initialDocumentId);
+      setKind('document');
+    }
+  }, [initialDocumentId]);
 
   useEffect(() => {
     let ok = true;
     if (!db) return;
     Promise.all([
       db.from('contacts').select('id,full_name,email,line_user_id,company_id').order('full_name'),
-      db.from('customer_documents').select('id,title,status,document_type,company_id,body_html').order('created_at', { ascending: false }).limit(1000),
+      db.from('customer_documents').select('id,title,status,document_type,company_id,contact_id,body_html').order('created_at', { ascending: false }).limit(1000),
       db.from('communication_templates').select('*'),
       db.from('companies').select('id,company_name,industry'),
       db.from('diagnosis_forms').select('id,name,public_slug,form_type,status').eq('status', 'published').order('created_at', { ascending: false }),
@@ -355,9 +364,22 @@ export const CommunicationSendCenter: React.FC<Props> = ({
           setCompanyIndustries(Object.fromEntries((co.data || []).map((x: any) => [x.id, x.industry || ''])));
         }
         setContacts((c.data || []).filter((x: Contact) => !initialCompanyId || x.company_id === initialCompanyId));
-        setDocs((d.data || []).filter((x: any) => !initialCompanyId || x.company_id === initialCompanyId));
+        setDocs((d.data || []).filter((x: any) => !initialCompanyId || x.company_id === initialCompanyId || x.id === initialDocumentId));
         if (initialFormId) setFormId(initialFormId);
         if (initialContactId) setContactId(initialContactId);
+        if (initialDocumentId) {
+          setDocId(initialDocumentId);
+          setKind('document');
+          const targetDoc = (d.data || []).find((x: any) => x.id === initialDocumentId);
+          if (targetDoc) {
+            if (targetDoc.contact_id && !initialContactId) {
+              setContactId(targetDoc.contact_id);
+            } else if (targetDoc.company_id && !initialContactId) {
+              const matchingContact = (c.data || []).find((ct: any) => ct.company_id === targetDoc.company_id);
+              if (matchingContact) setContactId(matchingContact.id);
+            }
+          }
+        }
         if (!t.error) {
           setEmailTemplates((t.data || []) as any[]);
           if (t.data?.length) setTemplates([...seed.filter((x) => !t.data.some((row: any) => row.template_key === x.category + '_' + x.channel)), ...t.data]);
@@ -368,7 +390,7 @@ export const CommunicationSendCenter: React.FC<Props> = ({
     return () => {
       ok = false;
     };
-  }, [initialCompanyId, initialFormId, initialContactId]);
+  }, [initialCompanyId, initialFormId, initialContactId, initialDocumentId]);
 
   useEffect(() => {
     if (tmpl) {
@@ -493,9 +515,10 @@ export const CommunicationSendCenter: React.FC<Props> = ({
       setError('送信時の差出人設定を入力して保存してください。');
       return;
     }
+    const hasDocUrl = Boolean(url.trim() || vals.document_url?.trim() || (doc ? window.location.origin + '/docs/' + encodeURIComponent(doc.id) : ''));
     if (
       !basis.trim() ||
-      (kind === 'document' && (!doc || doc.status !== 'approved' || targets.some((target) => !url.trim() && (target === 'line' || !vals.document_content || !fill(target === templateChannel ? body : resolveTemplate(target)?.body_text || '', vals).includes(vals.document_content))))) ||
+      (kind === 'document' && (!doc || !hasDocUrl)) ||
       (kind !== 'document' && kind !== 'announcement' && !vals.link_url.trim()) ||
       (targets.includes('email') && !contact.email) ||
       (targets.includes('line') && !contact.line_user_id)
@@ -503,12 +526,16 @@ export const CommunicationSendCenter: React.FC<Props> = ({
       setError('送信先、メール・LINEの登録状況、必要な書類またはURLを確認してください。');
       return;
     }
-    if (initialCompanyId && contact.company_id !== initialCompanyId) {
+    if (initialCompanyId && contact.company_id && contact.company_id !== initialCompanyId) {
       setError('会社に紐づく連絡先を選択してください。');
       return;
     }
     setBusy(true);
     try {
+      if (doc && doc.status !== 'approved') {
+        await db.from('customer_documents').update({ status: 'approved' }).eq('id', doc.id);
+        doc.status = 'approved';
+      }
       const { data: sessionData } = await db.auth.getSession();
       if (!sessionData.session?.access_token) throw Error('ログイン状態を確認できません。');
       if (targets.includes('line')) {
