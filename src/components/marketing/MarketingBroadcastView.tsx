@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
+import { Mail, MessageCircle } from 'lucide-react';
 import { getSupabase } from '../../lib/supabaseClient';
 import { LineMessagePreview } from '../LineMessagePreview';
 import { renderPlaceholders } from '../../utils/placeholders';
@@ -54,6 +55,14 @@ export const MarketingBroadcastView: React.FC<{initialChannel?:Channel}> = ({ini
   const [notice,setNotice]=useState('');
 
   const db=getSupabase();
+  useEffect(() => {
+    if (initialChannel) {
+      setChannel(initialChannel);
+      if (initialChannel === 'line') {
+        setAudienceMode('crm');
+      }
+    }
+  }, [initialChannel]);
   const selectedLineTemplate=lineTemplates.find(item=>item.id===selectedLineTemplateId&&item.reply_type===lineContentType);
   const previewFallbackContact:Contact={id:'preview',full_name:null,email:null,line_user_id:null,company_id:null};
   const fillForContact=(value:string,contact?:Contact|null)=>{const recipient=contact||previewFallbackContact;const company=recipient.company_id?companies[recipient.company_id]:undefined;const values:Record<string,string>={recipient_name:recipient.full_name||'ご担当者',company_name:String(company?.company_name||company?.name||'貴社'),form_title:'',document_title:'',document_url:'',document_content:'',link_url:''};return renderPlaceholders(value,values)};
@@ -209,19 +218,55 @@ export const MarketingBroadcastView: React.FC<{initialChannel?:Channel}> = ({ini
       {error&&<p role="alert" className="mt-3 rounded-lg bg-rose-950/60 p-3 text-sm text-rose-200">{error}</p>}
       {notice&&<p role="status" className="mt-3 rounded-lg bg-emerald-950/60 p-3 text-sm text-emerald-200">{notice}</p>}
       <div className="mt-4 grid gap-3 md:grid-cols-2">
-        <label className="text-sm text-slate-300">配信対象の種類
-          <select value={audienceMode} onChange={e=>{setAudienceMode(e.target.value as 'crm'|'prospect_outreach');setSelected([]);setSelectedProspectIds([]);setPreview(false);if(e.target.value==='prospect_outreach')setChannel('email')}} className="mt-1 block w-full rounded-lg border border-slate-700 bg-slate-950 p-2 text-white">
-            <option value="crm">CRM条件によるフォロー</option><option value="prospect_outreach" disabled={initialChannel==='line'}>見込み企業への営業メール</option>
+        <div>
+          <span className="block text-sm font-semibold text-slate-300 mb-1.5">配信チャネル（配信方法）</span>
+          <div className="grid grid-cols-2 gap-2">
+            <button
+              type="button"
+              onClick={() => {
+                setChannel('email');
+                setSelected([]);
+                setPreview(false);
+              }}
+              className={`flex items-center justify-center gap-2 rounded-lg py-2.5 px-3 text-xs font-bold transition border cursor-pointer ${
+                channel === 'email'
+                  ? 'bg-indigo-600 border-indigo-500 text-white shadow-md shadow-indigo-600/30 ring-1 ring-indigo-400'
+                  : 'bg-slate-950 border-slate-700 text-slate-300 hover:bg-slate-800'
+              }`}
+            >
+              <Mail className="w-4 h-4 text-indigo-300" />
+              <span>メール一斉配信</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                setChannel('line');
+                setAudienceMode('crm');
+                setSelected([]);
+                setPreview(false);
+              }}
+              className={`flex items-center justify-center gap-2 rounded-lg py-2.5 px-3 text-xs font-bold transition border cursor-pointer ${
+                channel === 'line'
+                  ? 'bg-emerald-600 border-emerald-500 text-white shadow-md shadow-emerald-600/30 ring-1 ring-emerald-400'
+                  : 'bg-slate-950 border-slate-700 text-slate-300 hover:bg-slate-800'
+              }`}
+            >
+              <MessageCircle className="w-4 h-4 text-emerald-300" />
+              <span>LINE一斉配信</span>
+            </button>
+          </div>
+        </div>
+
+        <label className="text-sm font-semibold text-slate-300">配信対象の種類
+          <select value={audienceMode} onChange={e=>{setAudienceMode(e.target.value as 'crm'|'prospect_outreach');setSelected([]);setSelectedProspectIds([]);setPreview(false);if(e.target.value==='prospect_outreach')setChannel('email')}} className="mt-1.5 block w-full rounded-lg border border-slate-700 bg-slate-950 p-2.5 text-xs text-white">
+            <option value="crm">CRM条件によるフォロー（連絡先・顧客）</option>
+            {channel === 'email' && <option value="prospect_outreach">見込み企業への営業メール（AI調査対象）</option>}
           </select>
         </label>
-        <label className="text-sm text-slate-300">配信方法
-          <select value={channel} disabled={Boolean(initialChannel)} onChange={e=>{setChannel(e.target.value as Channel);setSelected([]);setPreview(false)}} className="mt-1 block w-full rounded-lg border border-slate-700 bg-slate-950 p-2 text-white">
-            <option value="email">メール</option><option value="line" disabled={audienceMode==='prospect_outreach'}>LINE（配信同意済みのみ）</option>
-          </select>
-        </label>
-        {audienceMode==='crm'&&<label className="text-sm text-slate-300">CRM対象
-          <select value={segmentId} onChange={e=>{setSegmentId(e.target.value);setSelected([]);setPreview(false)}} className="mt-1 block w-full rounded-lg border border-slate-700 bg-slate-950 p-2 text-white">
-            <option value="all">全連絡先から抽出</option>
+
+        {audienceMode==='crm'&&<label className="md:col-span-2 text-sm font-semibold text-slate-300">CRMセグメント絞り込み
+          <select value={segmentId} onChange={e=>{setSegmentId(e.target.value);setSelected([]);setPreview(false)}} className="mt-1.5 block w-full rounded-lg border border-slate-700 bg-slate-950 p-2.5 text-xs text-white">
+            <option value="all">全連絡先から抽出（メールまたは有効なLINE連携済み友だち）</option>
             {segments.map(x=><option key={x.id} value={x.id}>{x.name}（{segmentEntityLabels[x.entity_type]||x.entity_type}）</option>)}
           </select>
         </label>}

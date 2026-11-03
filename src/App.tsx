@@ -2239,6 +2239,7 @@ function AppContent() {
               void handleSendMessage(summary, 'president');
             }}
             onCreateTask={handleCreateTask}
+            onNavigateTab={(tab) => setCurrentTab(tab as UnifiedNavTab)}
           />
         )}
 

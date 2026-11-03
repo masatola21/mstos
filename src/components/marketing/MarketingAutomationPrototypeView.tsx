@@ -201,7 +201,7 @@ export const MST_DIAGNOSIS_STARTER_SCENARIOS: Omit<MarketingScenario, 'id' | 'up
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { getSupabase } from '../../lib/supabaseClient';
 import { InlineDeleteButton } from '../InlineDeleteButton';
-import { Activity, ArrowRight, CheckCircle2, Copy, GitBranch, Inbox, Library, Mail, MessageCircle, MousePointerClick, Plus, Radio, Save, Send, Tags, Trash2, Zap } from 'lucide-react';
+import { Activity, AlertCircle, ArrowRight, Check, CheckCircle2, Clock, Copy, ExternalLink, GitBranch, Inbox, Library, Mail, MessageCircle, MousePointerClick, Plus, Radio, RefreshCw, Save, Send, Settings, ShieldCheck, Sparkles, Tags, Trash2, Users, Zap } from 'lucide-react';
 import { MarketingChannel, MarketingLineMessageType, MarketingScenario, MarketingTrigger } from '../../types/marketing';
 import { MarketingBroadcastView } from './MarketingBroadcastView';
 import { LineMessagePreview } from '../LineMessagePreview';
@@ -457,8 +457,26 @@ export const MarketingAutomationPrototypeView: React.FC<Props> = ({ scenarios, o
     return () => { cancelled = true; };
   }, [scenarios]);
   const preparedCount = scenarios.filter((scenario) => scenario.status === 'prepared').length;
+  const activeAutomatedCount = scenarios.filter((scenario) => scenario.automationEnabled).length;
   const lineCount = scenarios.filter((scenario) => scenario.channel !== 'email').length;
   const emailCount = scenarios.filter((scenario) => scenario.channel !== 'line').length;
+
+  const diagnosisScenarios = useMemo(
+    () => scenarios.filter((s) => s.name.includes('診断') || s.name.includes('【1. 初回') || s.name.includes('【2. 診断') || s.name.includes('【3. レポート') || s.name.includes('【4. 3日') || s.name.includes('【5. 7日') || s.trigger.startsWith('diagnosis_') || s.trigger.startsWith('report_')),
+    [scenarios]
+  );
+  const outreachScenarios = useMemo(
+    () => scenarios.filter((s) => s.name.includes('営業メール') || s.name.includes('【営業') || (s.channel === 'email' && s.trigger === 'lead_created')),
+    [scenarios]
+  );
+  const storyScenarios = useMemo(
+    () => scenarios.filter((s) => s.name.includes('ストーリー') || s.name.includes('大橋') || s.name.includes('ナーチャリング') || s.name.includes('話】') || s.name.includes('第')),
+    [scenarios]
+  );
+  const directConsultScenarios = useMemo(
+    () => scenarios.filter((s) => s.name.includes('直相談') || s.name.includes('介護保険外')),
+    [scenarios]
+  );
   const triggerLabel = useMemo(() => Object.fromEntries(triggerOptions.map((option) => [option.value, option.label])) as Record<MarketingTrigger, string>, []);
   const supportedAutomationTriggers = new Set<MarketingTrigger>(['prospect_selected','lead_created','line_registered','diagnosis_invited','diagnosis_completed','meeting_completed','tag_added','booking_created','retainer_period','deal_stage_changed','deal_won','report_approved','report_sent','proposal_approved','proposal_sent','contract_sent','contract_signed','invoice_due','invoice_overdue','project_milestone']);
 
@@ -764,38 +782,33 @@ export const MarketingAutomationPrototypeView: React.FC<Props> = ({ scenarios, o
         <div className="space-y-4">
           <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-indigo-500/30 bg-indigo-950/30 p-3">
             <div className="text-xs text-indigo-200">
-              💡 <strong>送信機能の集約:</strong> メールやLINEの一斉配信は「<strong className="text-white">送信センター（個別・一斉配信）</strong>」へ統合されました。どちらからでも共通の配信機能をご利用いただけます。
+              💡 <strong>メール送信機能の役割分担:</strong> セグメント一斉メール配信はここ、または「<strong className="text-white">送信センター（個別・一斉配信）</strong>」から実施できます。届いたお問い合わせメールの閲覧・返信対応は「<strong className="text-white">📥 統合受信トレイ</strong>」に一本化されています。
             </div>
-            {onNavigateTab && (
-              <button
-                type="button"
-                onClick={() => onNavigateTab('communication_send')}
-                className="flex items-center gap-1.5 rounded-lg bg-indigo-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-indigo-500 transition cursor-pointer"
-              >
-                <Send className="h-3.5 w-3.5" />
-                <span>送信センターを開く</span>
-              </button>
-            )}
-          </div>
-          <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-800 pb-3">
-            <div className="flex gap-2">
-              <button onClick={()=>setEmailView('broadcast')} className={`rounded-lg px-3 py-2 text-xs font-semibold ${emailView==='broadcast'?'bg-indigo-700 text-white':'border border-slate-700 text-slate-300 hover:bg-slate-800'}`}>配信</button>
-              <button onClick={()=>setEmailView('inbox')} className={`rounded-lg px-3 py-2 text-xs font-semibold ${emailView==='inbox'?'bg-indigo-700 text-white':'border border-slate-700 text-slate-300 hover:bg-slate-800'}`}>受信箱</button>
+            <div className="flex flex-wrap gap-2">
+              {onNavigateTab && (
+                <>
+                  <button
+                    type="button"
+                    onClick={() => onNavigateTab('inbox_hub')}
+                    className="flex items-center gap-1.5 rounded-lg border border-indigo-500/40 bg-indigo-950/60 px-3 py-1.5 text-xs font-semibold text-indigo-200 hover:bg-indigo-900/80 hover:text-white transition shadow-sm cursor-pointer"
+                    title="届いたお問い合わせメールの閲覧・返信トレイを開きます"
+                  >
+                    <Inbox className="h-3.5 w-3.5 text-indigo-400" />
+                    <span>📥 受信メール（統合トレイ）</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => onNavigateTab('communication_send')}
+                    className="flex items-center gap-1.5 rounded-lg bg-indigo-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-indigo-500 transition cursor-pointer"
+                  >
+                    <Send className="h-3.5 w-3.5" />
+                    <span>送信センターを開く</span>
+                  </button>
+                </>
+              )}
             </div>
-            {onNavigateTab && (
-              <button
-                type="button"
-                onClick={() => onNavigateTab('inbox_hub')}
-                className="flex items-center gap-1.5 rounded-lg border border-indigo-500/40 bg-indigo-950/40 px-3 py-2 text-xs font-semibold text-indigo-200 hover:bg-indigo-900/60 hover:text-white transition shadow-sm cursor-pointer"
-                title="LINE・メール・SNS DM・フォーム回答をまとめた統合受信トレイを開きます"
-              >
-                <Inbox className="h-3.5 w-3.5 text-indigo-400" />
-                <span>📥 統合受信トレイ（全チャネル反響）を開く</span>
-                <ArrowRight className="h-3 w-3 text-indigo-400" />
-              </button>
-            )}
           </div>
-          {emailView==='broadcast'?<MarketingBroadcastView initialChannel="email"/>:<MarketingEmailInboxView/>}
+          <MarketingBroadcastView initialChannel="email" />
         </div>
       )}
       {activeTab === 'line' && (
@@ -803,22 +816,22 @@ export const MarketingAutomationPrototypeView: React.FC<Props> = ({ scenarios, o
           <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-800 pb-3">
             <div className="flex flex-wrap gap-2">
               <button
+                type="button"
                 onClick={() => setLineView('broadcast')}
-                className={`rounded-lg px-3 py-2 text-xs font-semibold cursor-pointer transition-colors ${lineView === 'broadcast' ? 'bg-green-700 text-white' : 'border border-slate-700 text-slate-300 hover:bg-slate-800'}`}
+                className={`rounded-lg px-3 py-2 text-xs font-semibold cursor-pointer transition-colors ${
+                  lineView === 'broadcast' ? 'bg-green-700 text-white' : 'border border-slate-700 text-slate-300 hover:bg-slate-800'
+                }`}
               >
-                一斉配信
+                📢 友だち一斉告知配信
               </button>
               <button
-                onClick={() => setLineView('inbox')}
-                className={`rounded-lg px-3 py-2 text-xs font-semibold cursor-pointer transition-colors ${lineView === 'inbox' ? 'bg-green-700 text-white' : 'border border-slate-700 text-slate-300 hover:bg-slate-800'}`}
-              >
-                受信箱・個別チャット
-              </button>
-              <button
+                type="button"
                 onClick={() => setLineView('settings')}
-                className={`rounded-lg px-3 py-2 text-xs font-semibold cursor-pointer transition-colors ${lineView === 'settings' ? 'bg-green-700 text-white' : 'border border-slate-700 text-slate-300 hover:bg-slate-800'}`}
+                className={`rounded-lg px-3 py-2 text-xs font-semibold cursor-pointer transition-colors ${
+                  lineView === 'settings' ? 'bg-green-700 text-white' : 'border border-slate-700 text-slate-300 hover:bg-slate-800'
+                }`}
               >
-                LINE設定・ウェルカム
+                ⚙️ LINE設定・ウェルカム挨拶
               </button>
             </div>
             {onNavigateTab && (
@@ -827,10 +840,10 @@ export const MarketingAutomationPrototypeView: React.FC<Props> = ({ scenarios, o
                   type="button"
                   onClick={() => onNavigateTab('inbox_hub')}
                   className="flex items-center gap-1.5 rounded-lg border border-emerald-500/40 bg-emerald-950/40 px-3 py-2 text-xs font-semibold text-emerald-200 hover:bg-emerald-900/60 hover:text-white transition shadow-sm cursor-pointer"
-                  title="LINE・メール・SNS DM・フォーム回答をまとめた統合受信トレイを開きます"
+                  title="友だちからの受信確認・個別チャット対話・自動返信ルール設定を統合受信トレイで開きます"
                 >
                   <Inbox className="h-3.5 w-3.5 text-emerald-400" />
-                  <span>📥 統合受信トレイで見る</span>
+                  <span>📥 個別チャット・自動返信設定（統合受信トレイへ）</span>
                   <ArrowRight className="h-3 w-3 text-emerald-400" />
                 </button>
                 <button
@@ -840,7 +853,7 @@ export const MarketingAutomationPrototypeView: React.FC<Props> = ({ scenarios, o
                   title="LINE友だちとタグの統合マスタ（連絡先一覧）を開きます"
                 >
                   <Tags className="h-3.5 w-3.5 text-blue-400" />
-                  <span>👥 LINE友だち・タグ台帳を開く</span>
+                  <span>👥 LINE友だち・タグ台帳</span>
                   <ArrowRight className="h-3 w-3 text-blue-400" />
                 </button>
               </div>
@@ -848,69 +861,674 @@ export const MarketingAutomationPrototypeView: React.FC<Props> = ({ scenarios, o
           </div>
           {lineView === 'broadcast' ? (
             <MarketingBroadcastView initialChannel="line" />
-          ) : lineView === 'inbox' ? (
-            <MarketingLineInboxView initialLineUserId={lineInboxContact?.lineUserId} />
-          ) : (
+          ) : lineView === 'settings' ? (
             <MarketingLineSettingsView />
+          ) : (
+            <div className="rounded-2xl border border-emerald-500/30 bg-emerald-950/20 p-6 text-center space-y-3">
+              <div className="w-12 h-12 rounded-full bg-emerald-500/20 text-emerald-400 flex items-center justify-center mx-auto">
+                <Inbox className="w-6 h-6" />
+              </div>
+              <h3 className="text-base font-bold text-white">LINE受信・個別チャットは統合受信トレイに一本化されました</h3>
+              <p className="text-xs text-slate-300 max-w-lg mx-auto">
+                LINE友だちからの受信メッセージ確認、個別チャット手動返信、自動返信（キーワード応答ルール）の設定は、すべて「📥 統合受信トレイ」で行えます。
+              </p>
+              {onNavigateTab && (
+                <button
+                  type="button"
+                  onClick={() => onNavigateTab('inbox_hub')}
+                  className="inline-flex items-center gap-2 rounded-xl bg-emerald-600 px-5 py-2.5 text-xs font-bold text-white hover:bg-emerald-500 transition shadow-md cursor-pointer"
+                >
+                  <Inbox className="w-4 h-4" />
+                  <span>📥 統合受信トレイ（LINE）を開く</span>
+                  <ArrowRight className="w-4 h-4" />
+                </button>
+              )}
+            </div>
           )}
         </div>
       )}
-      {activeTab === 'home' && <>
-        <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-          {[
-            { label: '登録シナリオ', value: String(scenarios.length), note: '手動確認・配信の準備', icon: GitBranch, color: 'text-cyan-300' },
-            { label: '準備済み', value: String(preparedCount), note: '有効化した条件で自動配信', icon: CheckCircle2, color: 'text-emerald-300' },
-            { label: 'LINEシナリオ', value: String(lineCount), note: 'LINE配信設定へ', icon: MessageCircle, color: 'text-green-300' },
-            { label: 'メールシナリオ', value: String(emailCount), note: 'メール送信設定へ', icon: Mail, color: 'text-purple-300' },
-          ].map(({ label, value, note, icon: Icon, color }) => <div key={label} className="rounded-xl border border-slate-800 bg-slate-900 p-4"><div className="flex items-center justify-between text-xs text-slate-400"><span>{label}</span><Icon className={`h-4 w-4 ${color}`} /></div><div className="mt-2 text-2xl font-black text-white">{value}</div><div className="mt-1 text-[11px] text-slate-500">{note}</div></div>)}
-        </div>
-        <section className="rounded-2xl border border-slate-800 bg-slate-900 p-5">
-          <div className="mb-4"><h2 className="font-bold text-white">チャネルから開く</h2><p className="mt-1 text-xs text-slate-400">顧客・リード情報は既存CRMを正本として使い、フォームは既存機能を利用します。</p></div>
-          <div className="grid gap-4 lg:grid-cols-2">
-            <article className="rounded-xl border border-green-500/20 bg-slate-950/70 p-5">
-              <div className="flex items-center gap-3"><MessageCircle className="h-6 w-6 text-green-300" /><div><h3 className="font-bold text-white">LINE</h3><p className="text-xs text-slate-400">一斉配信・個別チャット・自動返信</p></div></div>
-              <div className="mt-4 flex flex-wrap gap-2">
-                <button onClick={() => { setActiveTab('line'); setLineView('broadcast'); }} className="rounded-lg bg-green-700/70 px-3 py-2 text-xs font-semibold text-white hover:bg-green-600 cursor-pointer">LINE一斉配信</button>
-                <button onClick={() => { setActiveTab('line'); setLineView('inbox'); }} className="rounded-lg border border-green-700/50 px-3 py-2 text-xs text-green-200 hover:bg-slate-800 cursor-pointer">受信箱・個別チャット</button>
-                <button onClick={() => onNavigateTab?.('contacts')} className="rounded-lg border border-blue-500/40 bg-blue-950/40 px-3 py-2 text-xs font-semibold text-blue-200 hover:bg-blue-900/60 flex items-center gap-1.5 cursor-pointer" title="LINE友だち・タグの統合台帳（連絡先一覧）を開きます">
-                  <Tags className="h-3 w-3 text-blue-400" />
-                  <span>👥 友だち・タグ台帳（連絡先一覧）</span>
-                  <ArrowRight className="h-3 w-3 text-blue-300" />
+      {activeTab === 'home' && (
+        <div className="space-y-6">
+          {/* 3本柱の役割分担ガイド・クイックジャンプバー */}
+          <section className="rounded-2xl border border-indigo-500/30 bg-gradient-to-r from-slate-900 via-indigo-950/40 to-slate-900 p-5 shadow-lg">
+            <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+              <div>
+                <div className="flex items-center gap-2 text-xs font-bold text-indigo-300">
+                  <Sparkles className="h-4 w-4 text-amber-400" />
+                  <span>全社コミュニケーション体系：役割分担マップ</span>
+                </div>
+                <h2 className="mt-1 text-base font-black text-white">
+                  「自動配信シナリオ」×「送信センター（発信）」×「統合受信トレイ（受信・対話）」
+                </h2>
+                <p className="mt-1 text-xs leading-5 text-slate-300 max-w-2xl">
+                  各チャネル（LINE・メール・SNS）の「攻め（発信・自動化）」と「守り（受信・対話）」を明確に整理しています。
+                </p>
+              </div>
+              <div className="flex flex-wrap items-center gap-2">
+                {onNavigateTab && (
+                  <>
+                    <button
+                      type="button"
+                      onClick={() => onNavigateTab('communication_send')}
+                      className="flex items-center gap-1.5 rounded-xl border border-purple-500/40 bg-purple-950/60 hover:bg-purple-900/80 px-3.5 py-2 text-xs font-bold text-purple-200 hover:text-white transition shadow-sm cursor-pointer"
+                    >
+                      <Send className="h-3.5 w-3.5 text-purple-400" />
+                      <span>📤 送信センター（一斉配信・重要書類）</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => onNavigateTab('inbox_hub')}
+                      className="flex items-center gap-1.5 rounded-xl border border-emerald-500/40 bg-emerald-950/60 hover:bg-emerald-900/80 px-3.5 py-2 text-xs font-bold text-emerald-200 hover:text-white transition shadow-sm cursor-pointer"
+                    >
+                      <Inbox className="h-3.5 w-3.5 text-emerald-400" />
+                      <span>📥 統合受信トレイ（対話・返信対応）</span>
+                    </button>
+                  </>
+                )}
+              </div>
+            </div>
+
+            <div className="mt-4 grid grid-cols-1 md:grid-cols-3 gap-3 border-t border-slate-800/80 pt-4">
+              <div className="rounded-xl border border-indigo-500/20 bg-indigo-950/20 p-3">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-bold text-indigo-300 flex items-center gap-1.5">
+                    <Zap className="h-3.5 w-3.5 text-indigo-400" />
+                    ⚡ 自動配信（現在地）
+                  </span>
+                  <span className="text-[10px] bg-indigo-500/20 text-indigo-200 px-2 py-0.5 rounded-full font-semibold">シナリオ・設定</span>
+                </div>
+                <ul className="mt-2 text-[11px] space-y-1 text-slate-300">
+                  <li>・トリガー連動ステップ配信（診断/営業/物語）</li>
+                  <li>・LINE友だち追加時ウェルカム設定</li>
+                  <li>・自動配信ジョブ監視・停止ガードレール</li>
+                </ul>
+              </div>
+
+              <div className="rounded-xl border border-purple-500/20 bg-purple-950/20 p-3">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-bold text-purple-300 flex items-center gap-1.5">
+                    <Send className="h-3.5 w-3.5 text-purple-400" />
+                    📤 送信センター
+                  </span>
+                  <span className="text-[10px] bg-purple-500/20 text-purple-200 px-2 py-0.5 rounded-full font-semibold">1対1 / 1対N</span>
+                </div>
+                <ul className="mt-2 text-[11px] space-y-1 text-slate-300">
+                  <li>・セグメント一斉メール＆LINE一括告知</li>
+                  <li>・個別重要書類（見積/契約/請求/レポート）送付</li>
+                  <li>・定型テンプレートの差込送信</li>
+                </ul>
+              </div>
+
+              <div className="rounded-xl border border-emerald-500/20 bg-emerald-950/20 p-3">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-bold text-emerald-300 flex items-center gap-1.5">
+                    <Inbox className="h-3.5 w-3.5 text-emerald-400" />
+                    📥 統合受信トレイ
+                  </span>
+                  <span className="text-[10px] bg-emerald-500/20 text-emerald-200 px-2 py-0.5 rounded-full font-semibold">受信・対話</span>
+                </div>
+                <ul className="mt-2 text-[11px] space-y-1 text-slate-300">
+                  <li>・お問い合わせメールの閲覧・返信対応</li>
+                  <li>・LINE友だちチャット対話＆自動応答設定</li>
+                  <li>・SNS DM反響・相談への返信対応</li>
+                </ul>
+              </div>
+            </div>
+          </section>
+
+          {/* 4つの主要KPIステータスカード */}
+          <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+            <div className="rounded-2xl border border-indigo-500/30 bg-slate-900 p-4 shadow-sm hover:border-indigo-500/50 transition">
+              <div className="flex items-center justify-between text-xs text-slate-400">
+                <span className="font-bold text-slate-300">ステップ配信シナリオ</span>
+                <Zap className="h-4 w-4 text-indigo-400" />
+              </div>
+              <div className="mt-2 flex items-baseline gap-2">
+                <span className="text-2xl font-black text-white">{scenarios.length}</span>
+                <span className="text-xs text-slate-400">本登録</span>
+              </div>
+              <div className="mt-2 flex items-center justify-between text-[11px] border-t border-slate-800 pt-2">
+                <span className="text-emerald-400 font-medium">準備済み: {preparedCount}本</span>
+                <span className="text-cyan-400 font-medium">自動実行中: {activeAutomatedCount}本</span>
+              </div>
+            </div>
+
+            <div className="rounded-2xl border border-green-500/30 bg-slate-900 p-4 shadow-sm hover:border-green-500/50 transition">
+              <div className="flex items-center justify-between text-xs text-slate-400">
+                <span className="font-bold text-slate-300">LINE公式アカウント</span>
+                <MessageCircle className="h-4 w-4 text-green-400" />
+              </div>
+              <div className="mt-2 flex items-baseline gap-2">
+                <span className="text-xl font-black text-white">
+                  {automationHealth?.lineConfigured ? 'Messaging API 連携中' : '設定可能'}
+                </span>
+              </div>
+              <div className="mt-2 flex items-center justify-between text-[11px] border-t border-slate-800 pt-2 text-slate-400">
+                <span>LINEシナリオ: {lineCount}本</span>
+                <span className="text-green-300 font-semibold">Flexカード対応</span>
+              </div>
+            </div>
+
+            <div className="rounded-2xl border border-purple-500/30 bg-slate-900 p-4 shadow-sm hover:border-purple-500/50 transition">
+              <div className="flex items-center justify-between text-xs text-slate-400">
+                <span className="font-bold text-slate-300">メール配信（Resend）</span>
+                <Mail className="h-4 w-4 text-purple-400" />
+              </div>
+              <div className="mt-2 flex items-baseline gap-2">
+                <span className="text-xl font-black text-white">
+                  {automationHealth?.emailConfigured ? '送信API 接続完了' : '送信準備完了'}
+                </span>
+              </div>
+              <div className="mt-2 flex items-center justify-between text-[11px] border-t border-slate-800 pt-2 text-slate-400">
+                <span>メールシナリオ: {emailCount}本</span>
+                <span className="text-purple-300 font-semibold">テンプレート: {emailTemplates.length}件</span>
+              </div>
+            </div>
+
+            <div className="rounded-2xl border border-slate-700 bg-slate-900 p-4 shadow-sm hover:border-slate-600 transition">
+              <div className="flex items-center justify-between text-xs text-slate-400">
+                <span className="font-bold text-slate-300">自動配信エンジン</span>
+                <Activity className="h-4 w-4 text-cyan-400" />
+              </div>
+              <div className="mt-2 flex items-baseline gap-2">
+                <span className="text-xl font-black text-emerald-400 flex items-center gap-1.5">
+                  <span className="relative flex h-2.5 w-2.5">
+                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+                    <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-emerald-500"></span>
+                  </span>
+                  常時監視中
+                </span>
+              </div>
+              <div className="mt-2 flex items-center justify-between text-[11px] border-t border-slate-800 pt-2 text-slate-400">
+                <span>安全停止: 面談/成約時</span>
+                <span className="text-slate-300">09:00〜20:00</span>
+              </div>
+            </div>
+          </div>
+
+          {/* クイックアクションバー */}
+          <section className="rounded-2xl border border-slate-800 bg-slate-900/90 p-4">
+            <div className="flex items-center justify-between mb-3">
+              <span className="text-xs font-bold uppercase tracking-wider text-slate-400 flex items-center gap-1.5">
+                <MousePointerClick className="h-3.5 w-3.5 text-indigo-400" />
+                クイックアクション
+              </span>
+              {duplicateCount > 0 && (
+                <button
+                  type="button"
+                  onClick={deduplicateScenarios}
+                  className="inline-flex items-center gap-1 rounded-lg bg-amber-600/90 hover:bg-amber-500 px-2.5 py-1 text-[11px] font-bold text-white transition cursor-pointer"
+                >
+                  <Trash2 className="h-3 w-3" />
+                  重複整理（{duplicateCount}件）
                 </button>
-                <button onClick={() => { setActiveTab('line'); setLineView('settings'); }} className="rounded-lg border border-slate-700 px-3 py-2 text-xs text-slate-300 hover:bg-slate-800 cursor-pointer">設定・ウェルカム</button>
+              )}
+            </div>
+            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2">
+              <button
+                type="button"
+                onClick={startNew}
+                className="flex flex-col items-center justify-center p-3 rounded-xl border border-indigo-500/30 bg-indigo-950/30 hover:bg-indigo-900/50 text-indigo-200 hover:text-white transition text-center group cursor-pointer"
+              >
+                <Plus className="h-5 w-5 mb-1.5 text-indigo-400 group-hover:scale-110 transition-transform" />
+                <span className="text-xs font-bold">新規シナリオ</span>
+                <span className="text-[10px] text-slate-400 mt-0.5">ステップ配信作成</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={applyAllStarterSets}
+                className="flex flex-col items-center justify-center p-3 rounded-xl border border-emerald-500/30 bg-emerald-950/30 hover:bg-emerald-900/50 text-emerald-200 hover:text-white transition text-center group cursor-pointer"
+              >
+                <Sparkles className="h-5 w-5 mb-1.5 text-emerald-400 group-hover:scale-110 transition-transform" />
+                <span className="text-xs font-bold">公式プリセット</span>
+                <span className="text-[10px] text-slate-400 mt-0.5">全18本一括導入</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => { setActiveTab('scenarios'); }}
+                className="flex flex-col items-center justify-center p-3 rounded-xl border border-slate-700 bg-slate-800/50 hover:bg-slate-800 text-slate-200 hover:text-white transition text-center group cursor-pointer"
+              >
+                <Zap className="h-5 w-5 mb-1.5 text-cyan-400 group-hover:scale-110 transition-transform" />
+                <span className="text-xs font-bold">シナリオ一覧</span>
+                <span className="text-[10px] text-slate-400 mt-0.5">{scenarios.length}本を管理</span>
+              </button>
+
+              {onNavigateTab && (
+                <button
+                  type="button"
+                  onClick={() => onNavigateTab('communication_send')}
+                  className="flex flex-col items-center justify-center p-3 rounded-xl border border-purple-500/30 bg-purple-950/30 hover:bg-purple-900/50 text-purple-200 hover:text-white transition text-center group cursor-pointer"
+                >
+                  <Send className="h-5 w-5 mb-1.5 text-purple-400 group-hover:scale-110 transition-transform" />
+                  <span className="text-xs font-bold">一斉配信</span>
+                  <span className="text-[10px] text-slate-400 mt-0.5">送信センターへ</span>
+                </button>
+              )}
+
+              <button
+                type="button"
+                onClick={() => { setActiveTab('line'); setLineView('settings'); }}
+                className="flex flex-col items-center justify-center p-3 rounded-xl border border-green-500/30 bg-green-950/30 hover:bg-green-900/50 text-green-200 hover:text-white transition text-center group cursor-pointer"
+              >
+                <Settings className="h-5 w-5 mb-1.5 text-green-400 group-hover:scale-110 transition-transform" />
+                <span className="text-xs font-bold">LINE設定</span>
+                <span className="text-[10px] text-slate-400 mt-0.5">ウェルカム挨拶</span>
+              </button>
+
+              {onNavigateTab && (
+                <button
+                  type="button"
+                  onClick={() => onNavigateTab('inbox_hub')}
+                  className="flex flex-col items-center justify-center p-3 rounded-xl border border-blue-500/30 bg-blue-950/30 hover:bg-blue-900/50 text-blue-200 hover:text-white transition text-center group cursor-pointer"
+                >
+                  <Inbox className="h-5 w-5 mb-1.5 text-blue-400 group-hover:scale-110 transition-transform" />
+                  <span className="text-xs font-bold">受信・対話</span>
+                  <span className="text-[10px] text-slate-400 mt-0.5">統合受信トレイへ</span>
+                </button>
+              )}
+            </div>
+          </section>
+
+          {/* 3大公式ステップ配信シナリオの導入・稼働状況 */}
+          <section className="rounded-2xl border border-slate-800 bg-slate-900 p-5">
+            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-4">
+              <div>
+                <h3 className="text-base font-bold text-white flex items-center gap-2">
+                  <Zap className="h-4 w-4 text-indigo-400" />
+                  主要ステップ配信シナリオ（公式プリセット稼働状況）
+                </h3>
+                <p className="text-xs text-slate-400 mt-0.5">
+                  トリガー発生時に自動起動する実証済みのシナリオパッケージです。
+                </p>
               </div>
-              <p className="mt-3 text-[11px] text-slate-400 flex items-center gap-1.5 bg-slate-900/60 border border-slate-800 rounded-md px-2.5 py-1.5">
-                <CheckCircle2 className="h-3.5 w-3.5 shrink-0 text-emerald-400" />
-                LINE友だちとタグの登録・管理は「<button type="button" onClick={() => onNavigateTab?.('contacts')} className="text-blue-300 underline font-semibold hover:text-blue-200 cursor-pointer">連絡先・LINE友だち台帳</button>」に一本化されています。
-              </p>
-            </article>
-            <article className="rounded-xl border border-purple-500/20 bg-slate-950/70 p-5">
-              <div className="flex items-center gap-3"><Mail className="h-6 w-6 text-purple-300" /><div><h3 className="font-bold text-white">メール</h3><p className="text-xs text-slate-400">見込み企業への営業・一斉メール</p></div></div>
-              <div className="mt-4 flex flex-wrap gap-2">
-                <button onClick={() => setActiveTab('email')} className="rounded-lg bg-purple-700/70 px-3 py-2 text-xs font-semibold text-white hover:bg-purple-600">メール送信・営業</button>
-                <button onClick={() => setActiveTab('scenarios')} className="rounded-lg border border-purple-700/50 px-3 py-2 text-xs text-purple-200 hover:bg-slate-800">メール自動化</button>
-                <button onClick={() => onNavigateTab?.('communication_send')} className="rounded-lg border border-slate-700 px-3 py-2 text-xs text-slate-200 hover:bg-slate-800">送信センター</button>
+              <button
+                type="button"
+                onClick={() => setActiveTab('scenarios')}
+                className="inline-flex items-center gap-1.5 text-xs text-indigo-300 hover:text-indigo-200 font-semibold cursor-pointer"
+              >
+                <span>シナリオ自動化タブで全設定を見る</span>
+                <ArrowRight className="h-3.5 w-3.5" />
+              </button>
+            </div>
+
+            <div className="grid gap-4 lg:grid-cols-2">
+              {/* ① 診断フォロー */}
+              <article className="rounded-xl border border-indigo-500/30 bg-slate-950/70 p-4 flex flex-col justify-between">
+                <div>
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="font-bold text-sm text-white flex items-center gap-2">
+                      <span>📊 ① 業務ボトルネック診断・面談フォロー</span>
+                    </span>
+                    <span className={`text-[11px] px-2 py-0.5 rounded-full font-bold ${
+                      diagnosisScenarios.length >= 5 ? 'bg-emerald-500/20 text-emerald-300' : 'bg-slate-800 text-slate-400'
+                    }`}>
+                      {diagnosisScenarios.length} / 5本 導入済
+                    </span>
+                  </div>
+                  <div className="mt-2 text-xs text-indigo-200">
+                    LINE友だち登録 → 診断受付完了 → レポート完成 → 3日後フォロー → 7日後改善事例
+                  </div>
+                  <p className="mt-2 text-[11px] leading-5 text-slate-400">
+                    美しいLINE Flexカードで回答直後の速報や診断レポートを自動送付し、無料個別相談枠（30分）への誘導を自動化します。
+                  </p>
+                </div>
+                <div className="mt-4 pt-3 border-t border-slate-800 flex items-center justify-between gap-2">
+                  <button
+                    type="button"
+                    onClick={applyDiagnosisStarterSet}
+                    className="inline-flex items-center gap-1 rounded-lg bg-indigo-600/80 hover:bg-indigo-600 px-3 py-1.5 text-xs font-semibold text-white transition cursor-pointer"
+                  >
+                    <Plus className="h-3.5 w-3.5" />
+                    <span>このセットを反映・更新</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setActiveTab('scenarios')}
+                    className="text-xs text-slate-400 hover:text-white transition"
+                  >
+                    詳細を確認 →
+                  </button>
+                </div>
+              </article>
+
+              {/* ② 営業メール */}
+              <article className="rounded-xl border border-cyan-500/30 bg-slate-950/70 p-4 flex flex-col justify-between">
+                <div>
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="font-bold text-sm text-white flex items-center gap-2">
+                      <span>✉️ ② 見込み企業向け営業アプローチメール</span>
+                    </span>
+                    <span className={`text-[11px] px-2 py-0.5 rounded-full font-bold ${
+                      outreachScenarios.length >= 5 ? 'bg-emerald-500/20 text-emerald-300' : 'bg-slate-800 text-slate-400'
+                    }`}>
+                      {outreachScenarios.length} / 5本 導入済
+                    </span>
+                  </div>
+                  <div className="mt-2 text-xs text-cyan-200">
+                    見込み客登録時 → 業界急所提起 → 仕組み化事例 → 3分診断誘導 → 最終案内
+                  </div>
+                  <p className="mt-2 text-[11px] leading-5 text-slate-400">
+                    手作業や属人化に悩む介護・経営企業に向け、3日おきに価値ある業務改善ノウハウを配信。面談予約が入った時点で自動停止します。
+                  </p>
+                </div>
+                <div className="mt-4 pt-3 border-t border-slate-800 flex items-center justify-between gap-2">
+                  <button
+                    type="button"
+                    onClick={applyOutreachStarterSet}
+                    className="inline-flex items-center gap-1 rounded-lg bg-cyan-700 hover:bg-cyan-600 px-3 py-1.5 text-xs font-semibold text-white transition cursor-pointer"
+                  >
+                    <Plus className="h-3.5 w-3.5" />
+                    <span>このセットを反映・更新</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setActiveTab('scenarios')}
+                    className="text-xs text-slate-400 hover:text-white transition"
+                  >
+                    詳細を確認 →
+                  </button>
+                </div>
+              </article>
+
+              {/* ③ ストーリー型 */}
+              <article className="rounded-xl border border-purple-500/30 bg-slate-950/70 p-4 flex flex-col justify-between">
+                <div>
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="font-bold text-sm text-white flex items-center gap-2">
+                      <span>💬 ③ 大橋ストーリー型ナーチャリング</span>
+                    </span>
+                    <span className={`text-[11px] px-2 py-0.5 rounded-full font-bold ${
+                      storyScenarios.length >= 7 ? 'bg-emerald-500/20 text-emerald-300' : 'bg-slate-800 text-slate-400'
+                    }`}>
+                      {storyScenarios.length} / 7話 導入済
+                    </span>
+                  </div>
+                  <div className="mt-2 text-xs text-purple-200">
+                    代表大橋の実体験・理念・挫折と再生のエピソード（LINE・メール両対応）
+                  </div>
+                  <p className="mt-2 text-[11px] leading-5 text-slate-400">
+                    単なる売り込みではなく、深い共感と信頼を生み出すロングテキスト配信。読者をファン化し、継続的な相談へとつなげます。
+                  </p>
+                </div>
+                <div className="mt-4 pt-3 border-t border-slate-800 flex items-center justify-between gap-2">
+                  <button
+                    type="button"
+                    onClick={applyLineNurturingStarterSet}
+                    className="inline-flex items-center gap-1 rounded-lg bg-purple-700 hover:bg-purple-600 px-3 py-1.5 text-xs font-semibold text-white transition cursor-pointer"
+                  >
+                    <Plus className="h-3.5 w-3.5" />
+                    <span>このセットを反映・更新</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setActiveTab('scenarios')}
+                    className="text-xs text-slate-400 hover:text-white transition"
+                  >
+                    詳細を確認 →
+                  </button>
+                </div>
+              </article>
+
+              {/* ④ 直相談 */}
+              <article className="rounded-xl border border-emerald-500/30 bg-slate-950/70 p-4 flex flex-col justify-between">
+                <div>
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="font-bold text-sm text-white flex items-center gap-2">
+                      <span>🌿 直相談（介護開業・個別経営相談）</span>
+                    </span>
+                    <span className={`text-[11px] px-2 py-0.5 rounded-full font-bold ${
+                      directConsultScenarios.length > 0 ? 'bg-emerald-500/20 text-emerald-300' : 'bg-slate-800 text-slate-400'
+                    }`}>
+                      {directConsultScenarios.length > 0 ? '導入済' : '未導入'}
+                    </span>
+                  </div>
+                  <div className="mt-2 text-xs text-emerald-200">
+                    相談フォーム回答時 → 即時LINE Flexカードで30分無料面談日程をご案内
+                  </div>
+                  <p className="mt-2 text-[11px] leading-5 text-slate-400">
+                    診断を挟まずに即時面談を希望する熱量の高い見込み客に向けて、日程調整URLを組み込んだ専用Flexカードを自動送付します。
+                  </p>
+                </div>
+                <div className="mt-4 pt-3 border-t border-slate-800 flex items-center justify-between gap-2">
+                  <button
+                    type="button"
+                    onClick={applyDirectConsultStarterSet}
+                    className="inline-flex items-center gap-1 rounded-lg bg-emerald-700 hover:bg-emerald-600 px-3 py-1.5 text-xs font-semibold text-white transition cursor-pointer"
+                  >
+                    <Plus className="h-3.5 w-3.5" />
+                    <span>このセットを反映・更新</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setActiveTab('scenarios')}
+                    className="text-xs text-slate-400 hover:text-white transition"
+                  >
+                    詳細を確認 →
+                  </button>
+                </div>
+              </article>
+            </div>
+          </section>
+
+          {/* チャネル別 管理・設定エリア（攻めと設定に特化） */}
+          <section className="grid gap-4 lg:grid-cols-2">
+            {/* LINE管理カード */}
+            <article className="rounded-2xl border border-green-500/30 bg-slate-900 p-5">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-xl bg-green-500/20 text-green-400 flex items-center justify-center">
+                    <MessageCircle className="h-5 w-5" />
+                  </div>
+                  <div>
+                    <h3 className="font-bold text-white">LINE公式アカウント管理</h3>
+                    <p className="text-xs text-slate-400">発信施策・ウェルカム挨拶・接続設定</p>
+                  </div>
+                </div>
+                <span className={`text-[11px] px-2.5 py-1 rounded-full font-bold ${
+                  automationHealth?.lineConfigured ? 'bg-green-500/20 text-green-300' : 'bg-slate-800 text-slate-400'
+                }`}>
+                  {automationHealth?.lineConfigured ? '連携稼働中' : '設定可能'}
+                </span>
               </div>
-              <p className="mt-3 text-[11px] text-slate-500">次の段階でメール受信箱を追加できる構成です。</p>
+
+              <div className="mt-4 space-y-2 text-xs text-slate-300">
+                <div className="flex items-center justify-between p-2.5 rounded-lg bg-slate-950/60 border border-slate-800">
+                  <span className="text-slate-300">📢 友だち一斉告知配信</span>
+                  <div className="flex items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={() => { setActiveTab('line'); setLineView('broadcast'); }}
+                      className="text-green-300 hover:text-green-200 underline font-semibold cursor-pointer"
+                    >
+                      ここで作成
+                    </button>
+                    <span className="text-slate-600">|</span>
+                    <button
+                      type="button"
+                      onClick={() => onNavigateTab?.('communication_send')}
+                      className="text-purple-300 hover:text-purple-200 underline font-semibold cursor-pointer"
+                    >
+                      送信センター
+                    </button>
+                  </div>
+                </div>
+
+                <div className="flex items-center justify-between p-2.5 rounded-lg bg-slate-950/60 border border-slate-800">
+                  <span className="text-slate-300">⚙️ 友だち追加時あいさつ（ウェルカム設定）</span>
+                  <button
+                    type="button"
+                    onClick={() => { setActiveTab('line'); setLineView('settings'); }}
+                    className="text-green-300 hover:text-green-200 underline font-semibold cursor-pointer"
+                  >
+                    設定を開く →
+                  </button>
+                </div>
+
+                <div className="flex items-center justify-between p-2.5 rounded-lg bg-slate-950/60 border border-slate-800">
+                  <span className="text-slate-300">👥 友だち・タグ台帳（連絡先一覧）</span>
+                  <button
+                    type="button"
+                    onClick={() => onNavigateTab?.('contacts')}
+                    className="text-blue-300 hover:text-blue-200 underline font-semibold cursor-pointer"
+                  >
+                    台帳を開く →
+                  </button>
+                </div>
+              </div>
+
+              <div className="mt-4 p-3 rounded-xl border border-emerald-500/30 bg-emerald-950/20 text-xs text-emerald-200 flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <Inbox className="h-4 w-4 shrink-0 text-emerald-400" />
+                  <span>個別チャット対話・キーワード自動返信ルール</span>
+                </div>
+                {onNavigateTab && (
+                  <button
+                    type="button"
+                    onClick={() => onNavigateTab('inbox_hub')}
+                    className="inline-flex items-center gap-1 rounded-lg bg-emerald-600 hover:bg-emerald-500 px-2.5 py-1 text-[11px] font-bold text-white transition cursor-pointer"
+                  >
+                    <span>統合トレイへ</span>
+                    <ArrowRight className="h-3 w-3" />
+                  </button>
+                )}
+              </div>
             </article>
-          </div>
-        </section>
-        <section className="rounded-2xl border border-slate-800 bg-slate-900 p-5">
-          <div className="mb-4"><h2 className="font-bold text-white">共通の自動化</h2><p className="mt-1 text-xs text-slate-400">シナリオ内で開始条件と対象を設定し、配信前に確認します。</p></div>
-          <div className="grid gap-3">
-            <button onClick={() => setActiveTab('scenarios')} className="flex items-center justify-between rounded-xl border border-slate-700 bg-slate-950/70 p-4 text-left hover:border-indigo-500/40"><span><span className="block text-sm font-bold text-white">シナリオ設定</span><span className="mt-1 block text-xs text-slate-400">開始条件・配信対象・チャネル・文案を設定</span></span><ArrowRight className="h-4 w-4 text-indigo-300" /></button>
-          </div>
-          <p className="mt-4 text-[11px] leading-5 text-slate-500">集客チャネルや外部アプリ連携は、必要になった時にチャネルとして追加できます。</p>
-        </section>
-        <section className="rounded-2xl border border-slate-800 bg-slate-900 p-5">
-          <h2 className="font-bold text-white">配信サービスの接続</h2>
-          <p className="mt-1 text-xs leading-5 text-slate-400">APIキーなどの秘密情報はブラウザーに保存せず、サーバーの環境変数で管理します。ここから設定画面へ移動する必要はありません。</p>
-          <div className="mt-3 grid gap-3 md:grid-cols-2">
-            <div className="rounded-lg border border-slate-800 bg-slate-950/70 p-3"><div className="text-sm font-semibold text-green-200">LINE公式アカウント</div><p className="mt-1 text-xs text-slate-400">サーバー側に LINE_CHANNEL_ACCESS_TOKEN と LINE_CHANNEL_SECRET を設定します。</p></div>
-            <div className="rounded-lg border border-slate-800 bg-slate-950/70 p-3"><div className="text-sm font-semibold text-purple-200">メール送信</div><p className="mt-1 text-xs text-slate-400">送信には RESEND_API_KEY と RESEND_FROM_EMAIL、受信には RESEND_WEBHOOK_SECRET が必要です。</p></div>
-          </div>
-        </section>
-      </>}
+
+            {/* メール管理カード */}
+            <article className="rounded-2xl border border-purple-500/30 bg-slate-900 p-5">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-xl bg-purple-500/20 text-purple-400 flex items-center justify-center">
+                    <Mail className="h-5 w-5" />
+                  </div>
+                  <div>
+                    <h3 className="font-bold text-white">メール配信管理（Resend）</h3>
+                    <p className="text-xs text-slate-400">セグメント送信・テンプレート・API連携</p>
+                  </div>
+                </div>
+                <span className={`text-[11px] px-2.5 py-1 rounded-full font-bold ${
+                  automationHealth?.emailConfigured ? 'bg-purple-500/20 text-purple-300' : 'bg-slate-800 text-slate-400'
+                }`}>
+                  {automationHealth?.emailConfigured ? 'API連携完了' : '送信準備完了'}
+                </span>
+              </div>
+
+              <div className="mt-4 space-y-2 text-xs text-slate-300">
+                <div className="flex items-center justify-between p-2.5 rounded-lg bg-slate-950/60 border border-slate-800">
+                  <span className="text-slate-300">📢 セグメント一斉メール配信</span>
+                  <div className="flex items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={() => setActiveTab('email')}
+                      className="text-purple-300 hover:text-purple-200 underline font-semibold cursor-pointer"
+                    >
+                      ここで作成
+                    </button>
+                    <span className="text-slate-600">|</span>
+                    <button
+                      type="button"
+                      onClick={() => onNavigateTab?.('communication_send')}
+                      className="text-purple-300 hover:text-purple-200 underline font-semibold cursor-pointer"
+                    >
+                      送信センター
+                    </button>
+                  </div>
+                </div>
+
+                <div className="flex items-center justify-between p-2.5 rounded-lg bg-slate-950/60 border border-slate-800">
+                  <span className="text-slate-300">📚 メールテンプレート保管庫</span>
+                  <button
+                    type="button"
+                    onClick={() => setActiveTab('templates')}
+                    className="text-purple-300 hover:text-purple-200 underline font-semibold cursor-pointer"
+                  >
+                    保管庫を開く（{emailTemplates.length}件） →
+                  </button>
+                </div>
+
+                <div className="flex items-center justify-between p-2.5 rounded-lg bg-slate-950/60 border border-slate-800">
+                  <span className="text-slate-300">🏷️ 配信対象セグメントリスト</span>
+                  <button
+                    type="button"
+                    onClick={() => setActiveTab('segments')}
+                    className="text-cyan-300 hover:text-cyan-200 underline font-semibold cursor-pointer"
+                  >
+                    セグメント管理 →
+                  </button>
+                </div>
+              </div>
+
+              <div className="mt-4 p-3 rounded-xl border border-indigo-500/30 bg-indigo-950/20 text-xs text-indigo-200 flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <Inbox className="h-4 w-4 shrink-0 text-indigo-400" />
+                  <span>届いたお問い合わせメールの閲覧・返信</span>
+                </div>
+                {onNavigateTab && (
+                  <button
+                    type="button"
+                    onClick={() => onNavigateTab('inbox_hub')}
+                    className="inline-flex items-center gap-1 rounded-lg bg-indigo-600 hover:bg-indigo-500 px-2.5 py-1 text-[11px] font-bold text-white transition cursor-pointer"
+                  >
+                    <span>統合トレイへ</span>
+                    <ArrowRight className="h-3 w-3" />
+                  </button>
+                )}
+              </div>
+            </article>
+          </section>
+
+          {/* 安全安心の配信ガードレール */}
+          <section className="rounded-2xl border border-slate-800 bg-slate-900 p-5">
+            <div className="flex items-center gap-2 mb-3">
+              <ShieldCheck className="h-5 w-5 text-emerald-400" />
+              <h3 className="font-bold text-white text-sm">安心運用の安全保護ガードレール（標準適用）</h3>
+            </div>
+            <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+              <div className="rounded-xl border border-slate-800 bg-slate-950/70 p-3">
+                <div className="text-xs font-bold text-emerald-300 flex items-center gap-1.5">
+                  <Check className="h-3.5 w-3.5" />
+                  面談予約時の自動停止
+                </div>
+                <p className="mt-1 text-[11px] text-slate-400 leading-4">
+                  面談予約が成立した時点でステップ配信を自動停止し、不要なリマインドを防ぎます。
+                </p>
+              </div>
+
+              <div className="rounded-xl border border-slate-800 bg-slate-950/70 p-3">
+                <div className="text-xs font-bold text-emerald-300 flex items-center gap-1.5">
+                  <Check className="h-3.5 w-3.5" />
+                  商談化・成約時の自動停止
+                </div>
+                <p className="mt-1 text-[11px] text-slate-400 leading-4">
+                  ステージが商談中または成約（受注）に変化すると、営業アプローチ配信を即座に停止します。
+                </p>
+              </div>
+
+              <div className="rounded-xl border border-slate-800 bg-slate-950/70 p-3">
+                <div className="text-xs font-bold text-emerald-300 flex items-center gap-1.5">
+                  <Clock className="h-3.5 w-3.5" />
+                  送信時間帯の自動順守
+                </div>
+                <p className="mt-1 text-[11px] text-slate-400 leading-4">
+                  深夜や早朝の誤送信を防ぐため、既定の営業時間帯（09:00〜20:00）のみに配信を実行します。
+                </p>
+              </div>
+
+              <div className="rounded-xl border border-slate-800 bg-slate-950/70 p-3">
+                <div className="text-xs font-bold text-emerald-300 flex items-center gap-1.5">
+                  <ShieldCheck className="h-3.5 w-3.5" />
+                  特定電子メール法・同意記録
+                </div>
+                <p className="mt-1 text-[11px] text-slate-400 leading-4">
+                  配信同意根拠の事前記録を必須化し、オプトインに基づく健全な配信を徹底します。
+                </p>
+              </div>
+            </div>
+          </section>
+        </div>
+      )}
 
       {activeTab === 'jobs' && <MarketingAutomationJobsPanel health={automationHealth} onHealthChange={setAutomationHealth} />}
       {activeTab === 'scenarios' && <div className="space-y-4">

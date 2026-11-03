@@ -25,7 +25,8 @@ import {
   Video,
   Film,
   Play,
-  MessageSquare
+  MessageSquare,
+  Inbox
 } from 'lucide-react';
 import { OfficialLinkItem } from '../../types/marketing';
 import { loadStoredOfficialLinks } from '../../utils/marketingStorage';
@@ -98,7 +99,7 @@ interface BroadcastHistoryItem {
 const STORAGE_SETTINGS_KEY = 'mst_social_broadcast_settings_v1';
 const STORAGE_HISTORY_KEY = 'mst_social_broadcast_history_v1';
 
-export const SocialMediaBroadcastStudio: React.FC = () => {
+export const SocialMediaBroadcastStudio: React.FC<{ onNavigateTab?: (tab: string) => void }> = ({ onNavigateTab }) => {
   const origin = typeof window !== 'undefined' ? window.location.origin : 'https://mstos.app';
 
   // フォーム状態
@@ -574,9 +575,9 @@ ${postText}`;
             }`}
           >
             <MessageSquare className="h-4 w-4 text-cyan-300" />
-            <span>💬 SNS営業・DM個別管理（アプローチ & 受信DM返信）</span>
+            <span>💬 攻めのSNS DM開拓（新規アプローチ文案作成）</span>
             <span className="text-[10px] px-1.5 py-0.2 rounded-full bg-cyan-500/20 text-cyan-300 border border-cyan-500/30">
-              AI個別最適化
+              AI開拓特化
             </span>
           </button>
         </div>
@@ -588,7 +589,24 @@ ${postText}`;
       </div>
 
       {studioMode === 'dm_sales' ? (
-        <SocialDmSalesStudio />
+        <div className="space-y-4">
+          <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-cyan-500/30 bg-cyan-950/20 p-3.5 text-xs text-cyan-200">
+            <div>
+              💡 <strong>【攻めと守りの役割分担】</strong> ここでは「攻めのアプローチ（新規開拓DM文案のAI作成・送信）」を管理します。届いた相談DMへの返信対応や「返信待ち」ステータス管理は「<strong className="text-white">📥 統合受信トレイ（SNS DMタブ）</strong>」に一本化されています。
+            </div>
+            {onNavigateTab && (
+              <button
+                type="button"
+                onClick={() => onNavigateTab('inbox_hub')}
+                className="flex items-center gap-1.5 rounded-lg border border-cyan-400/40 bg-cyan-900/40 px-3.5 py-1.5 text-xs font-semibold text-cyan-100 hover:bg-cyan-800/60 hover:text-white transition shadow-sm cursor-pointer"
+              >
+                <Inbox className="h-3.5 w-3.5 text-cyan-400" />
+                <span>📥 統合受信トレイ（SNS DM対応）を開く</span>
+              </button>
+            )}
+          </div>
+          <SocialDmSalesStudio />
+        </div>
       ) : (
         <>
           {/* ── フィードバックバナー ── */}

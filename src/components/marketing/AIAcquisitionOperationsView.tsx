@@ -151,7 +151,8 @@ export const AIAcquisitionOperationsView: React.FC<{
   initialTab?: ViewTab | string;
   onSendPresidentSummary?: (summary: string) => void;
   onCreateTask?: (task: Omit<TaskItem, 'id' | 'createdAt' | 'updatedAt'>) => void;
-}> = ({ initialTab = 'strategy', onSendPresidentSummary, onCreateTask }) => {
+  onNavigateTab?: (tab: string) => void;
+}> = ({ initialTab = 'strategy', onSendPresidentSummary, onCreateTask, onNavigateTab }) => {
   const [activeTab, setActiveTab] = useState<ViewTab>(initialTab === 'dashboard' ? 'strategy' : (initialTab as ViewTab));
 
   useEffect(() => {
@@ -686,7 +687,7 @@ export const AIAcquisitionOperationsView: React.FC<{
           <MarketingQuickLinksHub />
         </section>
       )}
-      {activeTab === 'social_studio' && <SocialMediaBroadcastStudio />}
+      {activeTab === 'social_studio' && <SocialMediaBroadcastStudio onNavigateTab={onNavigateTab} />}
       {activeTab === 'strategy' && !formVisible && <section className="space-y-3"><div className="flex items-center justify-between"><div><h2 className="font-semibold">{tabs.find((tab) => tab.id === activeTab)?.label}</h2><p className="mt-1 text-xs text-slate-500">商品マスターの商品と関連付けて登録できます。実行・公開は外部サービスで行ってください。</p></div><button onClick={() => createRecord('strategy')} className="inline-flex items-center gap-2 rounded-lg bg-indigo-600 px-3 py-2 text-sm"><Plus className="h-4 w-4"/>新規登録</button></div><RecordList records={visibleRecords} products={products} segments={segments} onEdit={startEdit} onDelete={remove}/></section>}
     </>}
   </main>;
