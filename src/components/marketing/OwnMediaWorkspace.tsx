@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { getSupabase } from '../../lib/supabaseClient';
-import { Plus, Save, Trash2, Sparkles, RefreshCw, Globe, ExternalLink, Send, CheckCircle2, AlertCircle, Wrench, FileText, ArrowRight, Code2, Zap, Layers } from 'lucide-react';
+import { Plus, Save, Trash2, Sparkles, RefreshCw, Globe, ExternalLink, Send, CheckCircle2, AlertCircle, Wrench, FileText, ArrowRight, Code2, Zap, Layers, Pencil } from 'lucide-react';
 import { TabMarketingAssetManager } from './TabMarketingAssetManager';
 
 type Kind = 'media' | 'article' | 'seo' | 'rewrite' | 'attribution';
@@ -60,6 +60,26 @@ export const OwnMediaWorkspace: React.FC<{
   const [cmsPosting, setCmsPosting] = useState<string | null>(null);
   const [cmsResult, setCmsResult] = useState<{ id: string; success: boolean; message: string; url?: string } | null>(null);
 
+  // 自社公式HP / オウンドメディア URL設定（localStorage & Supabase連動）
+  const [customSiteUrl, setCustomSiteUrl] = useState<string>(() => {
+    if (typeof window !== 'undefined') {
+      return localStorage.getItem('mst_official_site_url') || 'https://corp.mstcorp.info';
+    }
+    return 'https://corp.mstcorp.info';
+  });
+
+  const [customMediaUrl, setCustomMediaUrl] = useState<string>(() => {
+    if (typeof window !== 'undefined') {
+      return localStorage.getItem('mst_official_media_url') || 'https://corp.mstcorp.info/media';
+    }
+    return 'https://corp.mstcorp.info/media';
+  });
+
+  const [showUrlModal, setShowUrlModal] = useState<boolean>(false);
+  const [tempSiteUrl, setTempSiteUrl] = useState<string>('');
+  const [tempMediaUrl, setTempMediaUrl] = useState<string>('');
+  const [savingUrlConfig, setSavingUrlConfig] = useState<boolean>(false);
+
   // Vercel Deploy Hook テスト状態
   const [testingDeployHook, setTestingDeployHook] = useState(false);
   const [deployHookNotice, setDeployHookNotice] = useState<string | null>(null);
@@ -111,13 +131,99 @@ export const OwnMediaWorkspace: React.FC<{
       setLoading(false);
       return;
     }
-    setRows((data || []) as Row[]);
+
+    const rowsData = (data || []) as Row[];
+    setRows(rowsData);
+
+    // 保存済みの公式メディアレコードがあればURLを同期
+    const officialRow = rowsData.find((r) => r.record_type === 'media' && (r.id === 'mst_official_corporate_hp' || (r.payload?.cms || '').includes('Astro') || (r.payload?.url || '').includes('mstcorp.info')));
+    if (officialRow?.payload?.url) {
+      setCustomSiteUrl(officialRow.payload.url);
+      if (typeof window !== 'undefined') localStorage.setItem('mst_official_site_url', officialRow.payload.url);
+    }
+    if (officialRow?.payload?.mediaUrl) {
+      setCustomMediaUrl(officialRow.payload.mediaUrl);
+      if (typeof window !== 'undefined') localStorage.setItem('mst_official_media_url', officialRow.payload.mediaUrl);
+    }
+
     setLoading(false);
   };
 
   useEffect(() => {
     void load();
   }, []);
+
+  // 自社公式HP・オウンドメディア URL設定の保存
+  const handleSaveUrlConfig = async () => {
+    let cleanMediaUrl = tempMediaUrl.trim();
+    let cleanSiteUrl = tempSiteUrl.trim();
+    if (!cleanMediaUrl) {
+      cleanMediaUrl = 'https://corp.mstcorp.info/media';
+    }
+    if (!cleanSiteUrl) {
+      cleanSiteUrl = 'https://corp.mstcorp.info';
+    }
+    if (!cleanMediaUrl.startsWith('http://') && !cleanMediaUrl.startsWith('https://')) {
+      cleanMediaUrl = `https://${cleanMediaUrl}`;
+    }
+    if (!cleanSiteUrl.startsWith('http://') && !cleanSiteUrl.startsWith('https://')) {
+      cleanSiteUrl = `https://${cleanSiteUrl}`;
+    }
+
+    setSavingUrlConfig(true);
+    try {
+      setCustomSiteUrl(cleanSiteUrl);
+      setCustomMediaUrl(cleanMediaUrl);
+      if (typeof window !== 'undefined') {
+        localStorage.setItem('mst_official_site_url', cleanSiteUrl);
+        localStorage.setItem('mst_official_media_url', cleanMediaUrl);
+      }
+
+      // Supabaseに反映
+      const db = getSupabase();
+      if (db && userId) {
+        const targetMediaId = 'mst_official_corporate_hp';
+        const existing = media.find((m) => m.id === targetMediaId) || DEFAULT_OFFICIAL_MEDIA;
+        const newPayload = {
+          ...existing.payload,
+          url: cleanSiteUrl,
+          mediaUrl: cleanMediaUrl,
+        };
+        await db.from('mst_ai_acquisition_records').upsert({
+          user_id: userId,
+          id: targetMediaId,
+          record_type: 'media',
+          title: existing.title || '有限会社MST 公式オウンドメディア / コーポレートHP',
+          status: '連携稼働中',
+          payload: newPayload,
+          updated_at: new Date().toISOString(),
+        }, { onConflict: 'user_id,id' });
+
+        setRows((prev) => {
+          const others = prev.filter((r) => r.id !== targetMediaId);
+          return [
+            {
+              id: targetMediaId,
+              record_type: 'media',
+              title: existing.title || '有限会社MST 公式オウンドメディア / コーポレートHP',
+              product_id: null,
+              status: '連携稼働中',
+              payload: newPayload,
+              updated_at: new Date().toISOString(),
+            } as Row,
+            ...others,
+          ];
+        });
+      }
+
+      setNotice(`✅ 自社公式HPの公開先URLを「${cleanMediaUrl}」に更新しました。`);
+      setShowUrlModal(false);
+    } catch (e: any) {
+      setError('URL設定の保存に失敗しました: ' + (e.message || ''));
+    } finally {
+      setSavingUrlConfig(false);
+    }
+  };
 
   // 有限会社MST 公式オウンドメディア / コーポレートHP（Astro + Supabase + Vercel / Google Antigravity）
   const DEFAULT_OFFICIAL_MEDIA: Row = useMemo(() => ({
@@ -127,8 +233,8 @@ export const OwnMediaWorkspace: React.FC<{
     product_id: null,
     status: '連携稼働中',
     payload: {
-      url: 'https://corp.mstcorp.info',
-      mediaUrl: 'https://corp.mstcorp.info/media',
+      url: customSiteUrl,
+      mediaUrl: customMediaUrl,
       mediaType: '自社公式メディア / コーポレートHP',
       cms: 'Astro + Supabase (Vercel) / Google Antigravity',
       githubRepo: 'mst-corporate-website (/hp)',
@@ -138,7 +244,7 @@ export const OwnMediaWorkspace: React.FC<{
       vercelDeployHook: '',
     },
     updated_at: new Date().toISOString(),
-  }), []);
+  }), [customSiteUrl, customMediaUrl]);
 
   const media = useMemo(() => {
     const list = rows.filter((r) => r.record_type === 'media');
@@ -173,8 +279,8 @@ export const OwnMediaWorkspace: React.FC<{
         ? {
             mediaType: '自社公式メディア / コーポレートHP',
             cms: 'Astro + Supabase (Vercel)',
-            url: 'https://mstcorp.info',
-            mediaUrl: 'https://mstcorp.info/media',
+            url: customSiteUrl,
+            mediaUrl: customMediaUrl,
             githubRepo: 'mst-corporate-website (/hp)',
             connectionType: 'supabase_direct',
             target: '中小企業・小規模事業者の経営者・事業責任者',
@@ -485,7 +591,10 @@ export const OwnMediaWorkspace: React.FC<{
       cleanSlug = cleanSlug.toLowerCase().replace(/[^a-z0-9_-]/g, '-').replace(/-+/g, '-');
       if (!cleanSlug || cleanSlug === '-') cleanSlug = `insight-${Date.now().toString(36)}`;
 
-      const hpUrl = `https://corp.mstcorp.info/media/${cleanSlug}`;
+      const targetMediaId = (articlePayload as Record<string, any>).mediaId || payload.mediaId;
+      const activeMedia = media.find((m) => m.id === targetMediaId) || media[0] || DEFAULT_OFFICIAL_MEDIA;
+      const baseMediaUrl = (activeMedia?.payload?.mediaUrl || customMediaUrl || `${(activeMedia?.payload?.url || customSiteUrl).replace(/\/$/, '')}/media`).replace(/\/$/, '');
+      const hpUrl = `${baseMediaUrl}/${cleanSlug}`;
 
       const updatedPayload = {
         ...articlePayload,
@@ -529,8 +638,6 @@ export const OwnMediaWorkspace: React.FC<{
       ]);
 
       // 2. Vercel Deploy Hook が設定されていればキック（静的ビルド再生成）
-      const targetMediaId = (updatedPayload as Record<string, any>).mediaId || payload.mediaId;
-      const activeMedia = media.find((m) => m.id === targetMediaId) || media[0] || DEFAULT_OFFICIAL_MEDIA;
       const vercelHook = activeMedia?.payload?.vercelDeployHook;
       let deployNotice = '';
       if (vercelHook && vercelHook.startsWith('https://')) {
@@ -546,7 +653,7 @@ export const OwnMediaWorkspace: React.FC<{
         id: rowId,
         success: true,
         message: newStatus === '公開'
-          ? `🎉 自社公式HP（Astro + Supabase: https://mstcorp.info/media/${cleanSlug}）に即時公開しました！${deployNotice}`
+          ? `🎉 自社公式HP（Astro + Supabase: ${hpUrl}）に即時公開しました！${deployNotice}`
           : '📁 記事を「下書き」に戻しました。',
         url: newStatus === '公開' ? hpUrl : undefined,
       });
@@ -662,9 +769,32 @@ export const OwnMediaWorkspace: React.FC<{
                       Astro + Supabase 直結稼働
                     </span>
                   </div>
-                  <p className="text-xs text-slate-300 mt-1">
-                    手入力を減らし、AIで記事（見出し・本文・メタ）を一括作成。ボタン1つで自社公式HP（<a href="https://mstcorp.info/media" target="_blank" rel="noopener noreferrer" className="text-cyan-300 underline font-mono">https://mstcorp.info/media</a>）へ即時公開できます。
-                  </p>
+                  <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-slate-300 mt-1.5">
+                    <span>手入力を減らし、AIで記事（見出し・本文・メタ）を一括作成。ボタン1つで自社公式HP（</span>
+                    <a
+                      href={customMediaUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-cyan-300 underline font-mono inline-flex items-center gap-1 hover:text-cyan-200"
+                    >
+                      <span>{customMediaUrl}</span>
+                      <ExternalLink className="h-3 w-3 inline" />
+                    </a>
+                    <span>）へ即時公開できます。</span>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setTempSiteUrl(customSiteUrl);
+                        setTempMediaUrl(customMediaUrl);
+                        setShowUrlModal(true);
+                      }}
+                      className="inline-flex items-center gap-1 rounded bg-slate-800 hover:bg-slate-700 text-[11px] font-semibold text-cyan-300 px-2.5 py-0.5 border border-cyan-500/30 transition cursor-pointer shadow-sm"
+                      title="自社公式HPの公開先URL（ドメインやパス）を変更"
+                    >
+                      <Pencil className="h-2.5 w-2.5" />
+                      <span>URL設定・変更</span>
+                    </button>
+                  </div>
                 </div>
                 {!form && (
                   <button
@@ -1069,15 +1199,27 @@ export const OwnMediaWorkspace: React.FC<{
                         </span>
                       </h4>
                       <div className="flex items-center gap-3 text-xs text-slate-400 mt-0.5">
-                        <span>サイトURL: <a href="https://corp.mstcorp.info" target="_blank" rel="noreferrer" className="text-cyan-400 underline font-mono">https://corp.mstcorp.info</a></span>
-                        <span>・ メディア: <a href="https://corp.mstcorp.info/media" target="_blank" rel="noreferrer" className="text-cyan-400 underline font-mono">/media</a></span>
+                        <span>サイトURL: <a href={customSiteUrl} target="_blank" rel="noreferrer" className="text-cyan-400 underline font-mono">{customSiteUrl}</a></span>
+                        <span>・ メディア: <a href={customMediaUrl} target="_blank" rel="noreferrer" className="text-cyan-400 underline font-mono">{customMediaUrl}</a></span>
                       </div>
                     </div>
                   </div>
 
                   <div className="flex items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setTempSiteUrl(customSiteUrl);
+                        setTempMediaUrl(customMediaUrl);
+                        setShowUrlModal(true);
+                      }}
+                      className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-cyan-950/80 hover:bg-cyan-900 border border-cyan-500/40 text-xs font-bold text-cyan-300 transition cursor-pointer"
+                    >
+                      <Pencil className="h-3.5 w-3.5" />
+                      <span>URL設定・変更</span>
+                    </button>
                     <a
-                      href="https://corp.mstcorp.info/media"
+                      href={customMediaUrl}
                       target="_blank"
                       rel="noreferrer"
                       className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-xs font-bold text-slate-200 border border-slate-700 transition"
@@ -1143,7 +1285,7 @@ export const OwnMediaWorkspace: React.FC<{
                     <div className="rounded-lg bg-slate-950/70 p-2.5 border border-slate-800/80 space-y-1">
                       <strong className="text-white block font-bold">2. 自社HPからの問い合わせ ➡ CRM顧客台帳へ直結</strong>
                       <p className="text-slate-400">
-                        自社HP（<code className="text-cyan-300">https://corp.mstcorp.info</code>）の無料診断や資料請求から送信されたデータは、同じSupabaseの <code className="text-emerald-300">leads</code> テーブルに直接挿入されます。本システムの「CRM・リード台帳」でリアルタイムに確認・商談化できます。
+                        自社HP（<code className="text-cyan-300">{customSiteUrl}</code>）の無料診断や資料請求から送信されたデータは、同じSupabaseの <code className="text-emerald-300">leads</code> テーブルに直接挿入されます。本システムの「CRM・リード台帳」でリアルタイムに確認・商談化できます。
                       </p>
                     </div>
                   </div>
@@ -1676,6 +1818,107 @@ export const OwnMediaWorkspace: React.FC<{
             </div>
           )}
         </>
+      )}
+
+      {/* 自社公式HP / オウンドメディア URL変更モーダル */}
+      {showUrlModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
+          <div className="w-full max-w-lg rounded-2xl border border-cyan-500/40 bg-slate-900 p-6 shadow-2xl space-y-4">
+            <div className="flex items-center justify-between border-b border-slate-800 pb-3">
+              <div className="flex items-center gap-2 text-white font-bold text-base">
+                <Globe className="h-5 w-5 text-cyan-400" />
+                <span>自社公式HP / オウンドメディア公開先URL設定</span>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowUrlModal(false)}
+                className="text-slate-400 hover:text-white text-sm cursor-pointer"
+              >
+                ×
+              </button>
+            </div>
+
+            <p className="text-xs text-slate-300 leading-relaxed">
+              記事公開ボタンを押した際に公開される自社公式HP（Astro + Supabase直結）のURLを設定します。
+              変更すると記事一覧のリンク・案内文・即時公開先URLが自動で更新されます。
+            </p>
+
+            {/* プリセット選択チップ */}
+            <div className="space-y-1.5">
+              <label className="text-[11px] font-semibold text-slate-400">ワンクリック選択（プリセット候補）:</label>
+              <div className="flex flex-wrap gap-1.5">
+                {[
+                  { site: 'https://corp.mstcorp.info', media: 'https://corp.mstcorp.info/media', label: 'corp.mstcorp.info/media（Astro公式HP）' },
+                  { site: 'https://mstcorp.info', media: 'https://mstcorp.info/media', label: 'mstcorp.info/media' },
+                  { site: 'https://mstcorp.info', media: 'https://mstcorp.info', label: 'mstcorp.info（トップ直下）' },
+                  { site: 'https://corp.mstcorp.info', media: 'https://corp.mstcorp.info', label: 'corp.mstcorp.info（トップ直下）' },
+                ].map((preset) => (
+                  <button
+                    key={preset.media}
+                    type="button"
+                    onClick={() => {
+                      setTempSiteUrl(preset.site);
+                      setTempMediaUrl(preset.media);
+                    }}
+                    className="text-[11px] px-2.5 py-1 rounded-lg bg-slate-800 hover:bg-slate-700 text-cyan-300 border border-slate-700 cursor-pointer transition font-mono"
+                  >
+                    {preset.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* 入力欄 */}
+            <div className="space-y-3 pt-2">
+              <div>
+                <label className="block text-xs font-semibold text-slate-200 mb-1">
+                  メディア・記事ディレクトリURL <span className="text-cyan-400">*</span>
+                </label>
+                <input
+                  type="url"
+                  value={tempMediaUrl}
+                  onChange={(e) => setTempMediaUrl(e.target.value)}
+                  placeholder="例: https://corp.mstcorp.info/media"
+                  className="w-full rounded-xl border border-slate-700 bg-slate-950 px-3 py-2 text-xs text-white placeholder-slate-500 outline-none focus:border-cyan-500 font-mono"
+                />
+                <p className="text-[10px] text-slate-400 mt-1">
+                  ※ 記事公開時に <code>{tempMediaUrl ? tempMediaUrl.replace(/\/$/, '') : 'https://...'}/[記事スラッグ]</code> のURLが生成されます。
+                </p>
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-slate-200 mb-1">
+                  コーポレートHP トップURL <span className="text-cyan-400">*</span>
+                </label>
+                <input
+                  type="url"
+                  value={tempSiteUrl}
+                  onChange={(e) => setTempSiteUrl(e.target.value)}
+                  placeholder="例: https://corp.mstcorp.info"
+                  className="w-full rounded-xl border border-slate-700 bg-slate-950 px-3 py-2 text-xs text-white placeholder-slate-500 outline-none focus:border-cyan-500 font-mono"
+                />
+              </div>
+            </div>
+
+            <div className="flex items-center justify-end gap-2 border-t border-slate-800 pt-4">
+              <button
+                type="button"
+                onClick={() => setShowUrlModal(false)}
+                className="rounded-xl border border-slate-700 px-3.5 py-2 text-xs font-medium text-slate-300 hover:bg-slate-800 cursor-pointer"
+              >
+                キャンセル
+              </button>
+              <button
+                type="button"
+                disabled={savingUrlConfig || !tempMediaUrl.trim()}
+                onClick={() => void handleSaveUrlConfig()}
+                className="inline-flex items-center gap-1.5 rounded-xl bg-cyan-600 hover:bg-cyan-500 px-4 py-2 text-xs font-bold text-white disabled:opacity-50 shadow-md shadow-cyan-600/30 cursor-pointer"
+              >
+                {savingUrlConfig ? '保存中…' : '保存してURLを反映'}
+              </button>
+            </div>
+          </div>
+        </div>
       )}
     </section>
   );

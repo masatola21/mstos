@@ -556,20 +556,18 @@ async function processLineInboxAndAutoReply(event: any, contact: any, eventId: s
 
 
 async function getOrCreateLineTag(ownerId: string, tagName: string): Promise<string | null> {
-  if (!lineSupabase || !ownerId || !tagName?.trim()) return null;
+  if (!lineSupabase || !tagName?.trim()) return null;
   const trimmed = tagName.trim();
   const { data: existingTag } = await lineSupabase
-    .from('line_tags')
+    .from('contact_tags')
     .select('id')
-    .eq('owner_id', ownerId)
     .eq('name', trimmed)
     .maybeSingle();
   if (existingTag?.id) return existingTag.id;
 
   const { data: newTag, error: insertError } = await lineSupabase
-    .from('line_tags')
+    .from('contact_tags')
     .insert({
-      owner_id: ownerId,
       name: trimmed,
       color: '#0284C7',
     })
@@ -577,9 +575,8 @@ async function getOrCreateLineTag(ownerId: string, tagName: string): Promise<str
     .maybeSingle();
   if (insertError) {
     const { data: retryTag } = await lineSupabase
-      .from('line_tags')
+      .from('contact_tags')
       .select('id')
-      .eq('owner_id', ownerId)
       .eq('name', trimmed)
       .maybeSingle();
     return retryTag?.id || null;

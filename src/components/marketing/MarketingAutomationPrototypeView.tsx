@@ -392,7 +392,7 @@ export const MarketingAutomationPrototypeView: React.FC<Props> = ({ scenarios, o
     const id = value.startsWith('segment:') ? value.slice('segment:'.length) : '';
     return segments.find((segment) => segment.id === id)?.name || value || '配信対象未設定';
   };
-  const [activeTab, setActiveTab] = useState<'flows' | 'scenarios' | 'broadcast' | 'jobs' | 'line_settings' | 'templates'>('flows');
+  const [activeTab, setActiveTab] = useState<'flows' | 'broadcast' | 'jobs' | 'line_settings' | 'templates'>('flows');
   const [lineView, setLineView] = useState<'broadcast' | 'inbox' | 'settings'>('broadcast');
   const consumedLineInboxRef = useRef<string | null>(null);
 
@@ -596,7 +596,7 @@ export const MarketingAutomationPrototypeView: React.FC<Props> = ({ scenarios, o
     setForm(emptyScenario());
     setExternalGoal('');
     setExternalResult('');
-    setActiveTab('scenarios');
+    setActiveTab('flows');
     setNotice('');
   };
   const startEdit = (scenario: MarketingScenario) => {
@@ -733,10 +733,9 @@ export const MarketingAutomationPrototypeView: React.FC<Props> = ({ scenarios, o
   };
 
   const tabs = [
-    { id: 'flows' as const, label: '🗺️ 導線フロー＆シナリオ管理（統合ハブ）', icon: GitBranch },
-    { id: 'scenarios' as const, label: '📋 プリセット導入＆旧設定', icon: Zap },
+    { id: 'flows' as const, label: '🗺️ 導線フロー ＆ シナリオ配信管理', icon: GitBranch },
     { id: 'broadcast' as const, label: '📢 一斉配信（LINE/メール）', icon: Send },
-    { id: 'jobs' as const, label: '📊 配信ジョブ監視', icon: Activity },
+    { id: 'jobs' as const, label: '⚡ 配信ジョブ監視', icon: Activity },
     { id: 'line_settings' as const, label: '⚙️ LINE設定＆リッチメニュー', icon: MessageCircle },
     { id: 'templates' as const, label: '📁 テンプレート保管庫', icon: Library },
   ];
@@ -784,6 +783,14 @@ export const MarketingAutomationPrototypeView: React.FC<Props> = ({ scenarios, o
           onEditScenario={startEdit}
           onOpenInbox={() => onNavigateTab?.('inbox_hub')}
           onOpenJobs={() => setActiveTab('jobs')}
+          onApplyAllStarterSets={applyAllStarterSets}
+          onApplyDiagnosisStarterSet={applyDiagnosisStarterSet}
+          onApplyOutreachStarterSet={applyOutreachStarterSet}
+          onApplyLineNurturingStarterSet={applyLineNurturingStarterSet}
+          onApplyDirectConsultStarterSet={applyDirectConsultStarterSet}
+          onDeduplicateScenarios={deduplicateScenarios}
+          duplicateCount={duplicateCount}
+          onStartNew={startNew}
         />
       )}
 
@@ -857,166 +864,10 @@ export const MarketingAutomationPrototypeView: React.FC<Props> = ({ scenarios, o
               </button>
             )}
           </div>
-          <MarketingLineSettingsView />
+          <MarketingLineSettingsView onNavigateToWelcomeFlow={() => setActiveTab('flows')} />
         </div>
       )}
       {activeTab === 'jobs' && <MarketingAutomationJobsPanel health={automationHealth} onHealthChange={setAutomationHealth} />}
-      {activeTab === 'scenarios' && <div className="space-y-4">
-        {/* キーワード自動応答＆導線設計へのクイック連携案内 */}
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-3.5 rounded-xl border border-amber-500/30 bg-amber-950/20 text-xs">
-          <div className="flex items-center gap-2.5">
-            <span className="p-1.5 rounded-lg bg-amber-500/20 text-amber-300">
-              <Sparkles className="h-4 w-4" />
-            </span>
-            <div>
-              <span className="font-bold text-amber-200">⚡ LINEキーワード自動応答（「診断」「相談」「介護」「料金」「資料」等）</span>
-              <p className="text-slate-400 mt-0.5">
-                友だち追加ウェルカムFlexおよびキーワード即時応答と後続フォローの全体図は「導線フロー＆シナリオ設計」で視覚的に設定・連動しています。
-              </p>
-            </div>
-          </div>
-          <button
-            type="button"
-            onClick={() => setActiveTab('flows')}
-            className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-amber-600 hover:bg-amber-500 text-white rounded-lg font-bold text-xs shrink-0 transition cursor-pointer shadow-sm"
-          >
-            <span>🗺️ 導線フローで確認・編集</span>
-            <ArrowRight className="h-3.5 w-3.5" />
-          </button>
-        </div>
-
-        <div className="space-y-3 rounded-2xl border border-indigo-500/40 bg-gradient-to-r from-indigo-950/60 via-slate-900 to-purple-950/60 p-4 shadow-sm mb-4">
-            <div className="flex flex-wrap items-center justify-between gap-3">
-              <div>
-                <div className="flex items-center gap-2 font-bold text-indigo-200 text-sm">
-                  <Zap className="h-4 w-4 text-indigo-400" />
-                  公式プリセット：目的別自動化シナリオパック
-                </div>
-                <p className="mt-1 text-xs text-slate-300">
-                  業務・経営の急所解消に特化したベストプラクティス自動化シナリオをワンクリックで導入できます。
-                </p>
-              </div>
-              <div className="flex flex-wrap items-center gap-2">
-                {duplicateCount > 0 && (
-                  <button
-                    type="button"
-                    onClick={deduplicateScenarios}
-                    className="inline-flex items-center gap-1.5 rounded-lg bg-amber-600 hover:bg-amber-500 px-3 py-1.5 text-xs font-bold text-white shadow transition cursor-pointer"
-                  >
-                    <Trash2 className="h-4 w-4" />
-                    重複を整理（{duplicateCount}件の重複を削除）
-                  </button>
-                )}
-                <button
-                  type="button"
-                  onClick={applyAllStarterSets}
-                  className="inline-flex items-center gap-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 px-3 py-1.5 text-xs font-bold text-white shadow transition cursor-pointer"
-                >
-                  <Plus className="h-4 w-4" />
-                  全18本を一括導入・更新
-                </button>
-              </div>
-            </div>
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2.5 pt-1">
-              <button
-                type="button"
-                onClick={applyDirectConsultStarterSet}
-                className="flex items-center justify-between gap-2 rounded-xl border border-emerald-500/40 bg-emerald-950/40 hover:bg-emerald-900/60 p-3 text-left transition cursor-pointer"
-              >
-                <div>
-                  <div className="text-xs font-bold text-white">🌿 直相談（介護開業/経営）</div>
-                  <div className="text-[11px] text-emerald-200 mt-0.5">診断不要・即時30分面談案内Flex</div>
-                </div>
-                <Plus className="h-4 w-4 text-emerald-400 shrink-0" />
-              </button>
-              <button
-                type="button"
-                onClick={applyDiagnosisStarterSet}
-                className="flex items-center justify-between gap-2 rounded-xl border border-indigo-500/40 bg-indigo-950/40 hover:bg-indigo-900/60 p-3 text-left transition cursor-pointer"
-              >
-                <div>
-                  <div className="text-xs font-bold text-white">① 診断フォロー（5本・Flexカード）</div>
-                  <div className="text-[11px] text-indigo-200 mt-0.5">LINE登録→診断速報→レポート→面談誘導</div>
-                </div>
-                <Plus className="h-4 w-4 text-indigo-400 shrink-0" />
-              </button>
-              <button
-                type="button"
-                onClick={applyOutreachStarterSet}
-                className="flex items-center justify-between gap-2 rounded-xl border border-cyan-500/40 bg-cyan-950/40 hover:bg-cyan-900/60 p-3 text-left transition cursor-pointer"
-              >
-                <div>
-                  <div className="text-xs font-bold text-white">② 営業メール（5ステップ）</div>
-                  <div className="text-[11px] text-cyan-200 mt-0.5">業界急所提起→仕組み化事例→3分診断誘導</div>
-                </div>
-                <Plus className="h-4 w-4 text-cyan-400 shrink-0" />
-              </button>
-              <button
-                type="button"
-                onClick={applyLineNurturingStarterSet}
-                className="flex items-center justify-between gap-2 rounded-xl border border-purple-500/40 bg-purple-950/40 hover:bg-purple-900/60 p-3 text-left transition cursor-pointer"
-              >
-                <div>
-                  <div className="text-xs font-bold text-white">③ ストーリー型（7話・テキスト共感重視）</div>
-                  <div className="text-[11px] text-purple-200 mt-0.5">大橋の実話・LINE＆メルマガ両対応</div>
-                </div>
-                <Plus className="h-4 w-4 text-purple-400 shrink-0" />
-              </button>
-            </div>
-          </div>
-        {isFormOpen ? (
-          <form onSubmit={saveScenario} className="rounded-2xl border border-indigo-500/30 bg-slate-900 p-5">
-            <div className="mb-4 flex items-center justify-between"><h2 className="font-bold text-white">{editing ? 'シナリオを編集' : '新しいシナリオ'}</h2><button type="button" onClick={() => { setEditing(null); setIsFormOpen(false); setNotice(''); }} className="text-xs text-slate-400 hover:text-white">閉じる</button></div>
-            <section className="mb-4 rounded-xl border border-indigo-500/20 bg-indigo-950/20 p-4">
-              <h3 className="text-sm font-bold text-indigo-100">外部AIでシナリオ草案を作る</h3>
-              <p className="mt-1 text-xs leading-5 text-slate-400">ここではAI APIを呼び出しません。依頼文をコピーして外部AIに貼り、回答を取り込んで確認・編集できます。顧客個人情報は入力しないでください。</p>
-              <label className="mt-3 block text-xs text-slate-300">施策の目的・依頼内容<textarea rows={3} maxLength={3000} value={externalGoal} onChange={(e) => setExternalGoal(e.target.value)} placeholder="例：診断完了後、面談予約につながる案内を3日後にメールで送る" className="mt-1 w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-white" /></label>
-              <button type="button" onClick={() => void copyExternalPrompt()} className="mt-3 flex items-center gap-2 rounded-lg border border-indigo-400/30 px-3 py-2 text-xs font-semibold text-indigo-200 hover:bg-indigo-500/10"><Copy className="h-4 w-4" />外部AIへの依頼文をコピー</button>
-              <label className="mt-4 block text-xs text-slate-300">外部AIの回答（JSON）<textarea rows={5} value={externalResult} onChange={(e) => setExternalResult(e.target.value)} placeholder='{"name":"診断後フォロー","trigger":"diagnosis_completed","channel":"email"}' className="mt-1 w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 font-mono text-xs text-white" /></label>
-              <button type="button" disabled={!externalResult.trim()} onClick={applyExternalResult} className="mt-2 rounded-lg bg-indigo-600 px-3 py-2 text-xs font-semibold text-white hover:bg-indigo-500 disabled:cursor-not-allowed disabled:opacity-50">草案をフォームに反映</button>
-            </section>
-            <div className="grid gap-4 md:grid-cols-2">
-              <label className="text-xs text-slate-300">シナリオ名<input required maxLength={100} value={form.name} onChange={(e) => update('name', e.target.value)} placeholder="例：診断完了後のフォロー" className="mt-1 w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-white" /></label>
-              <label className="text-xs text-slate-300">開始条件<select value={form.trigger} onChange={(e) => update('trigger', e.target.value as MarketingTrigger)} className="mt-1 w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-white">{triggerOptions.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}</select></label>
-              <div className="text-xs text-slate-300">配信対象リスト<select value={form.audience.startsWith('segment:') && segments.some((segment)=>segment.id===form.audience.slice(8)) ? form.audience : 'manual'} onChange={(e)=>update('audience',e.target.value==='manual'?'':e.target.value)} className="mt-1 w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-white"><option value="manual">条件をメモとして入力（旧形式）</option>{segments.map((segment)=><option key={segment.id} value={`segment:${segment.id}`}>{segment.name}（{segment.entity_type}）</option>)}</select>{(!form.audience.startsWith('segment:') || !segments.some((segment)=>segment.id===form.audience.slice(8))) && <input maxLength={160} value={form.audience} onChange={(e)=>update('audience',e.target.value)} placeholder="配信対象の説明" className="mt-2 w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-white" />}</div>
-              <label className="text-xs text-slate-300">配信同意・送信根拠<input required maxLength={500} value={form.consentBasis} onChange={(e) => update('consentBasis', e.target.value)} placeholder="例：顧客がLINE登録時に案内へ同意" className="mt-1 w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-white" /></label>
-              <label className="text-xs text-slate-300">配信チャネル<select value={form.channel} onChange={(e) => update('channel', e.target.value as MarketingChannel)} className="mt-1 w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-white"><option value="line">LINE</option><option value="email">メール</option><option value="both">LINE + メール</option></select></label>
-                            <fieldset className="rounded-xl border border-slate-700 bg-slate-950/70 p-4 md:col-span-2 space-y-3">
-                <legend className="px-2 text-xs font-bold text-amber-300">停止条件 ＆ 送信時間帯</legend>
-                <div className="grid gap-3 sm:grid-cols-3">
-                  <label className="flex items-center gap-2 text-xs text-slate-300 cursor-pointer">
-                    <input type="checkbox" checked={form.stopOnBooking ?? true} onChange={(e) => update('stopOnBooking', e.target.checked)} className="rounded border-slate-700 bg-slate-900 text-indigo-600" />
-                    <span>面談予約が入ったら停止</span>
-                  </label>
-                  <label className="flex items-center gap-2 text-xs text-slate-300 cursor-pointer">
-                    <input type="checkbox" checked={form.stopOnDeal ?? true} onChange={(e) => update('stopOnDeal', e.target.checked)} className="rounded border-slate-700 bg-slate-900 text-indigo-600" />
-                    <span>商談化・成約したら停止</span>
-                  </label>
-                  <label className="text-xs text-slate-300 block">
-                    <span>送信可能時間帯</span>
-                    <input value={form.sendTimeWindow || '09:00-20:00'} onChange={(e) => update('sendTimeWindow', e.target.value)} placeholder="09:00-20:00" className="mt-1 w-full rounded border border-slate-700 bg-slate-900 px-2 py-1 text-xs text-white" />
-                  </label>
-                </div>
-              </fieldset>
-              <label className="text-xs text-slate-300">待機時間（分）<input type="number" min={0} max={525600} value={form.waitMinutes} onChange={(e) => update('waitMinutes', Number(e.target.value))} className="mt-1 w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-white" /></label>
-              {form.channel !== 'email' && <fieldset className="space-y-4 rounded-xl border border-slate-700 bg-slate-950/70 p-4 md:col-span-2"><legend className="px-2 text-xs font-bold text-green-300">LINEメッセージ形式</legend>
-                <label className="block text-xs text-slate-300 md:col-span-2">保存済みLINEテンプレート<select value={selectedLineTemplateId} onChange={(e)=>chooseLineTemplate(e.target.value)} className="mt-1 w-full rounded-lg border border-slate-700 bg-slate-900 px-3 py-2 text-sm text-white"><option value="">テンプレートを選択</option>{lineTemplates.map((item)=><option key={item.id} value={item.id}>{item.name}（{item.reply_type==='text'?'テキスト':item.reply_type==='image'?'画像':item.reply_type==='video'?'動画':'Flex'}）</option>)}</select></label>
-                <label className="block text-xs text-slate-300">形式<select value={form.lineMessageType} onChange={(e) => {update('lineMessageType', e.target.value as MarketingLineMessageType);update('lineMessagePayload',undefined);setSelectedLineTemplateId('')}} className="mt-1 w-full rounded-lg border border-slate-700 bg-slate-900 px-3 py-2 text-sm text-white"><option value="text">テキスト</option><option value="image">画像</option><option value="video">動画</option><option value="flex">Flex Message（カード）</option></select></label>
-                {form.lineMessageType === 'text' && <div className="space-y-3 md:col-span-2"><label className="block text-xs text-slate-300">LINE本文<textarea required maxLength={5000} rows={5} value={form.messageBody} onChange={(e) => update('messageBody', e.target.value)} placeholder="配信内容。{name} などの差し込みに対応しています。" className="mt-1 w-full rounded-lg border border-slate-700 bg-slate-900 px-3 py-2 text-sm text-white" /><PlaceholderAssist text={form.messageBody} onInsert={(token)=>update('messageBody', form.messageBody+token)} /></label><LineMessagePreview type="text" text={renderPlaceholders(form.messageBody, PLACEHOLDER_SAMPLE_VALUES)} title="シナリオLINEプレビュー" /></div>}
-                {form.lineMessageType === 'image' && <div className="grid gap-4 md:grid-cols-2"><label className="text-xs text-slate-300">画像URL（HTTPS）<input type="url" required value={form.lineImageUrl} onChange={(e) => update('lineImageUrl', e.target.value)} placeholder="https://example.com/image.jpg" className="mt-1 w-full rounded-lg border border-slate-700 bg-slate-900 px-3 py-2 text-sm text-white" /></label><label className="text-xs text-slate-300">プレビュー画像URL（HTTPS）<input type="url" required value={form.linePreviewImageUrl} onChange={(e) => update('linePreviewImageUrl', e.target.value)} placeholder="https://example.com/preview.jpg" className="mt-1 w-full rounded-lg border border-slate-700 bg-slate-900 px-3 py-2 text-sm text-white" /></label><div className="rounded-lg border border-slate-800 bg-slate-900 p-3 text-[11px] leading-5 text-slate-400 md:col-span-2">LINEが取得できる公開HTTPS画像を指定します。<div className="mt-3"><LineMessagePreview type="image" payload={{originalContentUrl:form.lineImageUrl,previewImageUrl:form.linePreviewImageUrl}} title="シナリオ画像プレビュー" /></div></div></div>}
-                {form.lineMessageType === 'video' && <div className="grid gap-4 md:grid-cols-2"><label className="text-xs text-slate-300">動画URL（公開HTTPS・MP4）<input type="url" required value={form.lineVideoUrl} onChange={(e) => update('lineVideoUrl', e.target.value)} placeholder="https://example.com/video.mp4" className="mt-1 w-full rounded-lg border border-slate-700 bg-slate-900 px-3 py-2 text-sm text-white" /></label><label className="text-xs text-slate-300">プレビュー画像URL（JPEG/PNG）<input type="url" required value={form.lineVideoPreviewUrl} onChange={(e) => update('lineVideoPreviewUrl', e.target.value)} placeholder="https://example.com/preview.jpg" className="mt-1 w-full rounded-lg border border-slate-700 bg-slate-900 px-3 py-2 text-sm text-white" /></label><div className="rounded-lg border border-slate-800 bg-slate-900 p-3 text-[11px] leading-5 text-slate-400 md:col-span-2">動画は公開HTTPSのMP4（200MB以下）、プレビュー画像は公開HTTPSのJPEG/PNG（1MB以下）を指定してください。LINEから取得できるURLが必要です。<div className="mt-3"><LineMessagePreview type="video" payload={{originalContentUrl:form.lineVideoUrl,previewImageUrl:form.lineVideoPreviewUrl,altText:form.flexAltText}} title="シナリオ動画プレビュー" /></div></div></div>}
-                {form.lineMessageType === 'flex' && form.lineMessagePayload && <div className="md:col-span-2"><LineMessagePreview type="flex" title="選択中のLINEテンプレートプレビュー" payload={form.lineMessagePayload} /></div>}{form.lineMessageType === 'flex' && !form.lineMessagePayload && <div className="grid gap-4 md:grid-cols-2"><label className="text-xs text-slate-300">通知・代替テキスト<input required maxLength={400} value={form.flexAltText} onChange={(e) => update('flexAltText', e.target.value)} placeholder="例：新商品のご案内" className="mt-1 w-full rounded-lg border border-slate-700 bg-slate-900 px-3 py-2 text-sm text-white" /></label><label className="text-xs text-slate-300">カードタイトル<input required maxLength={120} value={form.flexTitle} onChange={(e) => update('flexTitle', e.target.value)} placeholder="カードの見出し" className="mt-1 w-full rounded-lg border border-slate-700 bg-slate-900 px-3 py-2 text-sm text-white" /></label><label className="text-xs text-slate-300 md:col-span-2">カード本文<textarea required maxLength={800} rows={4} value={form.flexBody} onChange={(e) => update('flexBody', e.target.value)} placeholder="Flexカードに表示する内容" className="mt-1 w-full rounded-lg border border-slate-700 bg-slate-900 px-3 py-2 text-sm text-white" /><PlaceholderAssist text={form.flexBody} onInsert={(token)=>update('flexBody', form.flexBody+token)} /></label><label className="text-xs text-slate-300">ボタン名（任意）<input maxLength={20} value={form.flexButtonLabel} onChange={(e) => update('flexButtonLabel', e.target.value)} placeholder="詳しく見る" className="mt-1 w-full rounded-lg border border-slate-700 bg-slate-900 px-3 py-2 text-sm text-white" /></label><label className="text-xs text-slate-300">ボタンURL（任意）<input type="url" value={form.flexButtonUrl} onChange={(e) => update('flexButtonUrl', e.target.value)} placeholder="https://example.com" className="mt-1 w-full rounded-lg border border-slate-700 bg-slate-900 px-3 py-2 text-sm text-white" /></label>
-                  <div className="space-y-3 md:col-span-2"><LineMessagePreview type="flex" title="シナリオFlexプレビュー" payload={form.lineMessagePayload || {altText:form.flexAltText || 'Flexメッセージ',contents:flexPayload}} /></div>
-                </div>}
-              </fieldset>}
-              {(form.channel === 'email' || form.channel === 'both') && <div className="grid gap-4 md:col-span-2 md:grid-cols-2"><label className="text-xs text-slate-300 md:col-span-2">保存済みメールテンプレート<select value={selectedEmailTemplateId} onChange={(e)=>chooseEmailTemplate(e.target.value)} className="mt-1 w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-white"><option value="">テンプレートを選択</option>{emailTemplates.map((item)=><option key={item.id} value={item.id}>{item.name?.trim() || `${item.category} · ${item.template_key}`}</option>)}</select></label><label className="text-xs text-slate-300">メール件名<input required maxLength={200} value={form.emailSubject} onChange={(e) => update('emailSubject', e.target.value)} placeholder="件名" className="mt-1 w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-white" /><PlaceholderAssist text={form.emailSubject} onInsert={(token)=>update('emailSubject', form.emailSubject+token)} /></label><label className="text-xs text-slate-300 md:col-span-2">メール本文<textarea required maxLength={10000} rows={5} value={form.emailBody} onChange={(e) => update('emailBody', e.target.value)} placeholder="メール本文。{name} などの差し込みに対応しています。" className="mt-1 w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-white" /><PlaceholderAssist text={form.emailBody} onInsert={(token)=>update('emailBody', form.emailBody+token)} /></label></div>}
-            </div>
-            <div className="mt-4 flex flex-wrap items-center justify-between gap-3"><p className="text-[11px] text-slate-500">画像は公開HTTPS URLを指定します。Flexはカード設定からJSONを生成します。今の段階では下書き保存のみで送信されません。</p><div className="flex gap-2"><button type="button" onClick={() => { setEditing(null); setIsFormOpen(false); setNotice(''); }} className="rounded-lg border border-slate-700 px-3 py-2 text-xs text-slate-300">キャンセル</button><button type="submit" className="flex items-center gap-2 rounded-lg bg-indigo-600 px-4 py-2 text-xs font-semibold text-white hover:bg-indigo-500"><Save className="h-4 w-4" />保存</button></div></div>
-          </form>
-        ) : null}
-        {scenarios.length === 0 ? <div className="rounded-2xl border border-dashed border-slate-700 bg-slate-900/60 p-10 text-center"><GitBranch className="mx-auto h-8 w-8 text-slate-500" /><h2 className="mt-3 font-bold text-white">シナリオはまだありません</h2><p className="mt-1 text-sm text-slate-400">「シナリオ作成」から、開始条件とLINE・メールの配信文案を登録できます。</p><button onClick={startNew} className="mt-4 rounded-lg bg-indigo-600 px-4 py-2 text-xs font-semibold text-white">最初のシナリオを作成</button></div> : <div className="space-y-3">{sortedScenarios.map((scenario) => <article key={scenario.id} className="grid gap-3 rounded-xl border border-slate-800 bg-slate-900 p-4 lg:grid-cols-[1.4fr_1fr_1fr_auto] lg:items-center"><div><div className="font-bold text-white">{scenario.name}</div><div className="mt-1 text-xs text-slate-400">{triggerLabel[scenario.trigger]} ・ {audienceLabel(scenario.audience)}</div></div><div className="text-xs text-slate-300">{channelLabels[scenario.channel]}{scenario.channel !== 'email' ? ` ・ LINE${lineMessageLabels[scenario.lineMessageType || 'text']}` : ''}{scenario.waitMinutes > 0 ? ` ・ ${scenario.waitMinutes}分後` : ''}</div><div className="text-xs"><span className={scenario.status === 'prepared' ? 'text-emerald-300' : 'text-amber-300'}>{scenario.status === 'prepared' ? '準備済み（未配信）' : '下書き'}</span><div className="mt-1 text-[10px] text-slate-500">{new Date(scenario.updatedAt).toLocaleString()}</div></div><div className="flex gap-2"><button onClick={() => { markPrepared(scenario); }} className={`rounded-lg border px-3 py-2 text-xs ${scenario.status === 'prepared' ? 'border-emerald-500/30 text-emerald-300' : 'border-slate-700 text-slate-300 hover:bg-slate-800'}`}>{scenario.status === 'prepared' ? '準備済み' : '準備状態にする'}</button><button disabled={scenario.status!=='prepared'||!scenario.consentBasis?.trim()||!supportedAutomationTriggers.has(scenario.trigger)||(scenario.channel!=='email'&&!['text','image','video','flex'].includes(scenario.lineMessageType||'text'))} onClick={() => { onScenariosChange(scenarios.map((item) => item.id===scenario.id?{...item,automationEnabled:!item.automationEnabled,updatedAt:Date.now()}:item)); setNotice(scenario.automationEnabled?'自動実行を停止しました。':'自動実行を有効にしました。'); }} className={`rounded-lg border px-3 py-2 text-xs ${scenario.automationEnabled?'border-emerald-500/30 text-emerald-300':'border-slate-700 text-slate-300'} disabled:cursor-not-allowed disabled:opacity-40`}>{scenario.automationEnabled?'自動実行中':!supportedAutomationTriggers.has(scenario.trigger)?'開始条件は未対応':scenario.channel!=='email'&&!['text','image','video','flex'].includes(scenario.lineMessageType||'text')?'LINE形式は未対応':'自動実行を有効化'}</button>{scenario.automationEnabled && automationHealth && ((scenario.channel === 'email' && !automationHealth.emailConfigured) || (scenario.channel === 'line' && !automationHealth.lineConfigured) || (scenario.channel === 'both' && (!automationHealth.emailConfigured || !automationHealth.lineConfigured))) && <span className="self-center text-[10px] text-amber-300">実際には送信されません</span>}<button onClick={() => { startEdit(scenario); setNotice(''); }} className="rounded-lg border border-slate-700 px-3 py-2 text-xs text-slate-200 hover:bg-slate-800">編集</button><InlineDeleteButton onConfirm={()=>deleteScenario(scenario)} warning={`「${scenario.name}」を削除しますか？`} ariaLabel="シナリオを削除" className="rounded-lg border border-slate-700 p-2 text-slate-400 hover:border-rose-500/40 hover:text-rose-300"><Trash2 className="h-4 w-4" /></InlineDeleteButton></div></article>)}</div>}
-        {!editing && scenarios.length > 0 && <p className="text-[11px] text-slate-500">自動実行は有効化したシナリオのみです。CRMイベントの対象連絡先が配信同意済みの場合に送信し、既存の送信履歴へ記録します。</p>}
-      </div>}
       {activeTab === 'templates' && <CommunicationTemplateLibraryView />}
 
     </div>
