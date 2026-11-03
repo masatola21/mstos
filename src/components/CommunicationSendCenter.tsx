@@ -1,11 +1,12 @@
 import React, { useEffect, useState } from 'react';
 import { getSalesEmailTemplate, getNurturingStepTemplate } from '../utils/salesOutreachTemplates';
-import { Eye, Save, Send, Users, SendHorizonal, FileText } from 'lucide-react';
+import { Eye, Save, Send, Users, SendHorizonal, FileText, Library } from 'lucide-react';
 import { getSupabase } from '../lib/supabaseClient';
 import { LineMessagePreview } from './LineMessagePreview';
 import { renderPlaceholders } from '../utils/placeholders';
 import { PlaceholderAssist } from './common/PlaceholderAssist';
 import { MarketingBroadcastView } from './marketing/MarketingBroadcastView';
+import { CommunicationTemplateLibraryView } from './marketing/CommunicationTemplateLibraryView';
 
 type Kind = 'document' | 'form' | 'diagnosis' | 'deal' | 'customer_meeting' | 'announcement' | 'sales_outreach' | 'nurturing_story';
 type Channel = 'email' | 'line' | 'both';
@@ -573,13 +574,13 @@ export const CommunicationSendCenter: React.FC<Props> = ({
       <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between border-b border-slate-800 pb-4">
         <div>
           <div className="flex items-center gap-2">
-            <h2 className="text-xl font-black text-white">送信センター</h2>
+            <h2 className="text-xl font-black text-white">統合メッセージ・送信センター</h2>
             <span className="rounded-full border border-indigo-500/30 bg-indigo-500/10 px-2.5 py-0.5 text-xs font-semibold text-indigo-300">
-              アウトバウンド統括
+              個別送信 · 一斉配信 · 全社テンプレート保管庫
             </span>
           </div>
           <p className="mt-1 text-xs text-slate-400">
-            個別宛先への重要書類・面談予約・診断案内（1対1）から、メール・LINEセグメント一斉配信（1対N）までを1箇所で集中送信・管理します。
+            個別宛先への重要書類・面談予約・診断案内（1対1）から、メール・LINEセグメント一斉配信（1対N）、全社共通定型テンプレートの管理までを1箇所で集中運用します。
           </p>
         </div>
 
@@ -629,12 +630,12 @@ export const CommunicationSendCenter: React.FC<Props> = ({
             aria-pressed={screen === 'templates'}
             className={`flex items-center gap-2 rounded-xl px-4 py-2 text-xs font-bold transition shadow-xs cursor-pointer ${
               screen === 'templates'
-                ? 'bg-blue-600 text-white shadow-blue-500/20'
+                ? 'bg-emerald-600 text-white shadow-emerald-500/20 font-bold'
                 : 'border border-slate-700 bg-slate-950/60 text-slate-300 hover:bg-slate-800 hover:text-white'
             }`}
           >
-            <FileText className="h-4 w-4" />
-            <span>定型テンプレート設定</span>
+            <Library className="h-4 w-4" />
+            <span>📚 テンプレート保管庫（全社マスター）</span>
           </button>
         </div>
       </div>
@@ -866,41 +867,65 @@ export const CommunicationSendCenter: React.FC<Props> = ({
             )}
 
             {templateChannel === 'email' && (
-              <label className="md:col-span-2 text-xs font-bold text-slate-300">
-                メール定型テンプレート
+              <div className="md:col-span-2 space-y-1.5">
+                <div className="flex items-center justify-between">
+                  <label className="text-xs font-bold text-slate-300">
+                    メール定型テンプレート（保管庫から引用）
+                  </label>
+                  <button
+                    type="button"
+                    onClick={() => setScreen('templates')}
+                    className="inline-flex items-center gap-1 text-[11px] font-bold text-emerald-400 hover:text-emerald-300 cursor-pointer"
+                  >
+                    <Library className="h-3.5 w-3.5" />
+                    <span>テンプレート保管庫で作成・編集</span>
+                  </button>
+                </div>
                 <select
                   value={selectedEmailTemplateId}
                   onChange={(e) => chooseEmailTemplate(e.target.value)}
-                  className="mt-1 block w-full rounded-lg border border-slate-700 bg-slate-950 p-2.5 text-sm text-white"
+                  className="block w-full rounded-lg border border-slate-700 bg-slate-950 p-2.5 text-sm text-white"
                 >
-                  <option value="">現在の送信内容に合わせた初期文面</option>
+                  <option value="">現在の送信種別（{labels[kind]}）の標準初期文面</option>
                   {emailTemplates
                     .filter((x) => x.channel === 'email')
                     .map((x: any) => (
                       <option key={x.id} value={x.id}>
-                        {x.name?.trim() || `${labels[x.category as Kind] || x.category} · ${x.template_key}`}
+                        【{labels[x.category as Kind] || x.category}】{x.name?.trim() || x.template_key}
                       </option>
                     ))}
                 </select>
-              </label>
+              </div>
             )}
 
             {templateChannel === 'line' && (
-              <label className="md:col-span-2 text-xs font-bold text-slate-300">
-                LINE定型テンプレート
+              <div className="md:col-span-2 space-y-1.5">
+                <div className="flex items-center justify-between">
+                  <label className="text-xs font-bold text-slate-300">
+                    LINE定型テンプレート（保管庫から引用）
+                  </label>
+                  <button
+                    type="button"
+                    onClick={() => setScreen('templates')}
+                    className="inline-flex items-center gap-1 text-[11px] font-bold text-emerald-400 hover:text-emerald-300 cursor-pointer"
+                  >
+                    <Library className="h-3.5 w-3.5" />
+                    <span>テンプレート保管庫で作成・編集</span>
+                  </button>
+                </div>
                 <select
                   value={selectedLineTemplateId}
                   onChange={(e) => chooseLineTemplate(e.target.value)}
-                  className="mt-1 block w-full rounded-lg border border-slate-700 bg-slate-950 p-2.5 text-sm text-white"
+                  className="block w-full rounded-lg border border-slate-700 bg-slate-950 p-2.5 text-sm text-white"
                 >
-                  <option value="">現在の送信内容に合わせたテキスト</option>
+                  <option value="">現在の送信種別（{labels[kind]}）の標準テキスト</option>
                   {lineTemplates.map((x: any) => (
                     <option key={x.id} value={x.id}>
                       {x.name}（{x.reply_type === 'text' ? 'テキスト' : x.reply_type === 'image' ? '画像' : x.reply_type === 'video' ? '動画' : 'Flex'}）
                     </option>
                   ))}
                 </select>
-              </label>
+              </div>
             )}
 
             {templateChannel === 'email' && (
@@ -1094,92 +1119,9 @@ export const CommunicationSendCenter: React.FC<Props> = ({
         </>
       )}
 
-      {/* 画面3: テンプレート設定 */}
+      {/* 画面3: テンプレート保管庫（全社マスター） */}
       {screen === 'templates' && (
-        <div className="space-y-4 rounded-xl border border-slate-800 bg-slate-950/60 p-5">
-          <div className="grid gap-3 md:grid-cols-2">
-            <label className="text-xs font-bold text-slate-300">
-              テンプレート種類
-              <select
-                value={kind}
-                onChange={(e) => {
-                  setKind(e.target.value as Kind);
-                  setError('');
-                }}
-                className="mt-1 block w-full rounded-lg border border-slate-700 bg-slate-950 p-2.5 text-sm text-white"
-              >
-                {Object.entries(labels).map(([k, v]) => (
-                  <option key={k} value={k}>
-                    {v}
-                  </option>
-                ))}
-              </select>
-            </label>
-            {kind === 'document' && (
-              <label className="text-xs font-bold text-slate-300">
-                書類の種類
-                <select
-                  value={templateDocumentType}
-                  onChange={(e) => setTemplateDocumentType(e.target.value as DocumentType)}
-                  className="mt-1 block w-full rounded-lg border border-slate-700 bg-slate-950 p-2.5 text-sm text-white"
-                >
-                  <option value="diagnosis_report">診断レポート</option>
-                  <option value="proposal">提案書</option>
-                  <option value="estimate">見積書</option>
-                  <option value="contract">契約書</option>
-                  <option value="invoice">請求書</option>
-                  <option value="other">その他</option>
-                </select>
-              </label>
-            )}
-            <label className="text-xs font-bold text-slate-300">
-              送信方法
-              <select
-                value={templateChannel}
-                onChange={(e) => setTemplateChannel(e.target.value as DeliveryChannel)}
-                className="mt-1 block w-full rounded-lg border border-slate-700 bg-slate-950 p-2.5 text-sm text-white"
-              >
-                <option value="email">メール</option>
-                <option value="line">LINE</option>
-              </select>
-            </label>
-
-            {templateChannel === 'email' && (
-              <div className="md:col-span-2">
-                <label className="text-xs font-bold text-slate-300">件名</label>
-                <input
-                  value={subject}
-                  onChange={(e) => setSubject(e.target.value)}
-                  className="mt-1 block w-full rounded-lg border border-slate-700 bg-slate-950 p-2.5 text-sm text-white"
-                />
-                <PlaceholderAssist text={subject} onInsert={(token) => setSubject((curr) => curr + token)} />
-              </div>
-            )}
-
-            <div className="md:col-span-2">
-              <label className="text-xs font-bold text-slate-300">テンプレート本文</label>
-              <textarea
-                value={body}
-                onChange={(e) => setBody(e.target.value)}
-                rows={12}
-                className="mt-1 block w-full rounded-lg border border-slate-700 bg-slate-950 p-3 text-sm text-white font-sans leading-relaxed"
-              />
-              <PlaceholderAssist text={body} onInsert={(token) => setBody((curr) => curr + token)} />
-            </div>
-
-            <p className="md:col-span-2 text-xs text-slate-400">
-              対象: {kind === 'document' ? '書類テンプレート (' + templateDocumentType + ')' : labels[kind]} · {templateChannel === 'email' ? 'メール' : 'LINE'}。宛先や生成書類を選ばず、標準文面を自由にカスタマイズして保存できます。
-            </p>
-          </div>
-          <button
-            type="button"
-            onClick={() => void save()}
-            className="inline-flex items-center gap-2 rounded-xl bg-indigo-600 px-5 py-2.5 text-xs font-bold text-white hover:bg-indigo-500 shadow-md shadow-indigo-600/20 cursor-pointer"
-          >
-            <Save className="h-4 w-4" />
-            定型テンプレートを保存
-          </button>
-        </div>
+        <CommunicationTemplateLibraryView />
       )}
     </section>
   );

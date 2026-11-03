@@ -307,7 +307,7 @@ async function loadTaskRelatedContext(task: TaskItem): Promise<string> {
 function AppContent() {
   const { user, isLoading } = useAuth();
   const [currentTab, setCurrentTab] = useState<UnifiedNavTab>('mst_dashboard');
-  const [customerWorkspaceContext, setCustomerWorkspaceContext] = useState<{ companyId: string; leadId?: string; dealId?: string; section?: 'forms' | 'diagnoses'; documentType?: 'invoice'; documentId?: string; sendKind?: 'form'|'diagnosis'|'deal'|'customer_meeting'|'announcement'; formId?: string; contactId?: string } | undefined>();
+  const [customerWorkspaceContext, setCustomerWorkspaceContext] = useState<{ companyId: string; leadId?: string; dealId?: string; section?: 'forms' | 'diagnoses'; documentType?: 'invoice'; documentId?: string; sendKind?: 'document'|'form'|'diagnosis'|'deal'|'customer_meeting'|'announcement'; formId?: string; contactId?: string } | undefined>();
   const [lineInboxContact, setLineInboxContact] = useState<{ contactId: string; lineUserId: string } | undefined>();
   const [inboxTargetChannel, setInboxTargetChannel] = useState<'line' | 'email' | 'social_dm' | 'forms' | undefined>(undefined);
   const [acquisitionTargetTab, setAcquisitionTargetTab] = useState<string | undefined>(undefined);
@@ -2375,9 +2375,25 @@ function AppContent() {
 
         {currentTab === 'document_templates' && (
           <>
-            <DocumentTemplateView key={`${customerWorkspaceCompanyId || 'all'}:${customerWorkspaceContext?.leadId || ''}:${customerWorkspaceContext?.dealId || ''}:${customerWorkspaceContext?.documentType || ''}`} initialCompanyId={customerWorkspaceCompanyId} initialLeadId={customerWorkspaceContext?.leadId} initialDealId={customerWorkspaceContext?.dealId} initialDocumentType={customerWorkspaceContext?.documentType} />
-            <SalesOperationsWorkspace tab="documents" companyId={customerWorkspaceCompanyId} leadId={customerWorkspaceContext?.leadId} dealId={customerWorkspaceContext?.dealId} onClearCompanyFilter={() => setCustomerWorkspaceContext(undefined)} onOpenInvoiceDocuments={(companyId, documentId) => { setCustomerWorkspaceContext({ companyId, documentId }); setCurrentTab("communication_send"); }} />
-            
+            <DocumentTemplateView 
+              key={`${customerWorkspaceCompanyId || 'all'}:${customerWorkspaceContext?.leadId || ''}:${customerWorkspaceContext?.dealId || ''}:${customerWorkspaceContext?.documentType || ''}`} 
+              initialCompanyId={customerWorkspaceCompanyId} 
+              initialLeadId={customerWorkspaceContext?.leadId} 
+              initialDealId={customerWorkspaceContext?.dealId} 
+              initialDocumentType={customerWorkspaceContext?.documentType} 
+              onOpenSendCenter={(params) => {
+                setCustomerWorkspaceContext((current) => ({
+                  ...current,
+                  companyId: params.companyId || current?.companyId || customerWorkspaceCompanyId || '',
+                  documentId: params.documentId,
+                  dealId: params.dealId || current?.dealId,
+                  contactId: params.contactId || current?.contactId,
+                  sendKind: 'document',
+                }));
+                setCurrentTab('communication_send');
+              }}
+            />
+            <SalesOperationsWorkspace tab="documents" companyId={customerWorkspaceCompanyId} leadId={customerWorkspaceContext?.leadId} dealId={customerWorkspaceContext?.dealId} onClearCompanyFilter={() => setCustomerWorkspaceContext(undefined)} onOpenInvoiceDocuments={(companyId, documentId) => { setCustomerWorkspaceContext({ companyId, documentId, sendKind: 'document' }); setCurrentTab("communication_send"); }} />
           </>
         )}
 

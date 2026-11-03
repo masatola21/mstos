@@ -43,8 +43,19 @@ const FlexNode: React.FC<{ node: any; index?: number }> = ({ node, index = 0 }) 
   }
   if (node.type === 'button') {
     const action = node.action || {};
-    return <div key={index} className={'rounded-lg px-3 py-2 text-center text-sm font-semibold ' + (node.style === 'link' ? 'text-blue-700' : 'bg-blue-600 text-white')}
-      style={{ marginTop: spacing[node.margin] || '8px' }}>{String(action.label || 'ボタン')}</div>;
+    const isLink = node.style === 'link';
+    return (
+      <div
+        key={index}
+        className={`rounded-lg px-3 py-2 text-center text-sm font-semibold ${isLink ? 'text-blue-700 underline' : 'text-white'}`}
+        style={{
+          marginTop: spacing[node.margin] || '8px',
+          backgroundColor: isLink ? 'transparent' : (node.color || '#2563eb'),
+        }}
+      >
+        {String(action.label || 'ボタン')}
+      </div>
+    );
   }
   if (node.type === 'separator') return <hr key={index} className="my-2 border-slate-200" />;
   if (node.type === 'spacer') return <div key={index} style={{ height: spacing[node.size] || '12px' }} />;

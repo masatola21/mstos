@@ -1,32 +1,133 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { Library, Plus, Save, Trash2, X } from 'lucide-react';
+import { Library, Plus, Save, Trash2, X, Sparkles, Filter, CheckCircle2, ChevronDown, Copy } from 'lucide-react';
 import { getSupabase } from '../../lib/supabaseClient';
 import { LineMessagePreview } from '../LineMessagePreview';
 import { InlineDeleteButton } from '../InlineDeleteButton';
 import { renderPlaceholders } from '../../utils/placeholders';
 import { PlaceholderAssist } from '../common/PlaceholderAssist';
 
+export type Channel = 'email' | 'line';
+export type LineType = 'text' | 'image' | 'flex' | 'video';
 
+export const CATEGORY_LABELS: Record<string, string> = {
+  diagnosis: '診断のご案内',
+  form: 'フォーム・アンケート案内',
+  deal: '商談・相談日程調整',
+  customer_meeting: '顧客面談・定期フォロー',
+  document: '重要書類送付（見積・契約・請求）',
+  sales_outreach: '営業アプローチ',
+  nurturing_story: 'ナーチャリング・ストーリー',
+  announcement: 'お知らせ・汎用連絡',
+};
 
-type Channel = 'email' | 'line';
-type LineType = 'text' | 'image' | 'flex' | 'video';
-type EmailTemplate = { id: string; name?: string; category: string; channel: Channel; template_key: string; subject: string; body_text: string; updated_at?: string };
-type LineTemplate = { id: string; name: string; reply_type: LineType; payload: Record<string, any>; updated_at?: string };
-type TemplateRow =
+export type EmailTemplate = {
+  id: string;
+  name?: string;
+  category: string;
+  channel: Channel;
+  template_key: string;
+  subject: string;
+  body_text: string;
+  updated_at?: string;
+};
+
+export type LineTemplate = {
+  id: string;
+  name: string;
+  reply_type: LineType;
+  payload: Record<string, any>;
+  updated_at?: string;
+};
+
+export type TemplateRow =
   | { source: 'communication'; id: string; name: string; channel: Channel; type: 'text'; category: string; updatedAt?: string; subject: string; body: string }
   | { source: 'line'; id: string; name: string; channel: 'line'; type: LineType; category: string; updatedAt?: string; payload: Record<string, any> };
 
 const BUCKET = 'mst-line-message-assets';
 const typeLabel: Record<LineType, string> = { text: 'テキスト', image: '画像', flex: 'Flex', video: '動画' };
 
+const PRESET_SNIPPETS = [
+  {
+    label: '【診断】無料経営診断のご案内',
+    category: 'diagnosis',
+    channel: 'email' as Channel,
+    name: '【診断】無料経営診断のご案内（標準版）',
+    subject: '【3分無料診断のご案内】現状の仕組み化と改善ポイント｜{会社名} 様',
+    body: `{お名前} 様\n\nいつもお世話になっております。有限会社MSTの大橋です。\n\n貴社の現状の経営・業務課題を可視化し、改善優先度を診断できる「3分無料診断」をご用意いたしました。\n下記の診断フォームより、3分ほどでご回答いただけます。\n\n▼ 3分無料診断フォーム\n{案内URL}\n\n回答完了後、即座に簡易レポートが生成され、専任チームからの改善アドバイスも受け取ることができます。\nぜひ現状の整理にお役立てください。\n\n--------------------\n有限会社MST\n担当: 大橋真人\n返信先: {差出人メール}\n--------------------`,
+  },
+  {
+    label: '【日程調整】商談・個別相談（30分）',
+    category: 'deal',
+    channel: 'email' as Channel,
+    name: '【日程調整】30分オンライン個別相談のご案内',
+    subject: '【オンライン個別相談】日程調整のお願い｜{会社名} 様',
+    body: `{お名前} 様\n\nお世話になっております。有限会社MSTの大橋です。\n\nこの度はご相談いただきありがとうございます。\nオンライン（Google Meet）にて、30分の個別相談を実施させていただければと存じます。\n\n下記の日程調整ページより、ご都合の良い日時を1つお選びください。\nカレンダーから選択いただくと、自動で予約が確定し接続URLが発行されます。\n\n▼ 面談日程の選択（カレンダー）\n{面談予約URL}\n\n※所要時間: 約30分\n※当日は現状の課題感やご希望をざっくばらんにお伺いできれば幸いです。\n\n何かご都合が合わない場合は、本メールに希望日時を2〜3候補ご返信ください。\n何卒よろしくお願い申し上げます。\n\n有限会社MST 大橋真人`,
+  },
+  {
+    label: '【フォーム】事前ヒアリングシート回答依頼',
+    category: 'form',
+    channel: 'email' as Channel,
+    name: '【フォーム】事前ヒアリングシートのご回答依頼',
+    subject: '【ご回答のお願い】事前ヒアリングシート｜{会社名} 様',
+    body: `{お名前} 様\n\nお世話になっております。有限会社MSTです。\n\n次回のお打ち合わせをより有意義な時間とするため、事前に貴社の現状について簡単なアンケートへのご回答をお願いしております。\n\n▼ 事前ヒアリングフォーム\n{案内URL}\n\n※所要時間: 約3〜5分\n事前に入力いただいた内容をもとに、具体的な改善案や資料を準備して面談に臨ませていただきます。\n\nご不明な点がございましたら本メールにご返信ください。\nよろしくお願いいたします。\n\n有限会社MST`,
+  },
+  {
+    label: '【書類】お見積書の送付',
+    category: 'document',
+    channel: 'email' as Channel,
+    name: '【書類】お見積書のご送付（標準）',
+    subject: '【お見積書の送付】{書類名}｜{会社名} 様',
+    body: `{お名前} 様\n\n平素より大変お世話になっております。有限会社MSTの大橋です。\n\n先般はお打ち合わせのお時間をいただき、誠にありがとうございました。\nご相談いただきました内容に基づき、お見積書を作成いたしましたのでお送り申し上げます。\n\n下記のURLより、お見積内容をご確認いただけます。\n▼ お見積書\n{書類URL}\n\n【書類名】: {書類名}\n\n内容にご不明な点や追加のご要望がございましたら、いつでもお気軽にお申し付けください。\nご検討のほど、何卒よろしくお願い申し上げます。\n\n有限会社MST 大橋真人`,
+  },
+  {
+    label: '【LINE Flex】診断・相談カード（選択肢付き）',
+    category: 'diagnosis',
+    channel: 'line' as Channel,
+    lineType: 'flex' as LineType,
+    name: '【LINE Flex】無料診断＆オンライン相談ご案内カード',
+    altText: '【無料診断・個別相談のご案内】ご希望のメニューをお選びください',
+    flexJson: JSON.stringify({
+      type: 'bubble',
+      body: {
+        type: 'box',
+        layout: 'vertical',
+        spacing: 'md',
+        contents: [
+          { type: 'text', text: '【MST】経営改善サポート', weight: 'bold', size: 'lg', color: '#1E293B' },
+          { type: 'text', text: '{お名前} 様、ご登録ありがとうございます。下記のメニューより、ご希望の案内をお選びください。', size: 'sm', color: '#475569', wrap: true },
+          { type: 'separator', margin: 'md' },
+          {
+            type: 'button',
+            style: 'primary',
+            color: '#10B981',
+            action: { type: 'uri', label: '📊 3分無料診断を始める', uri: '{案内URL}' },
+            margin: 'md'
+          },
+          {
+            type: 'button',
+            style: 'secondary',
+            action: { type: 'uri', label: '📅 30分オンライン相談を予約', uri: '{面談予約URL}' },
+            margin: 'sm'
+          }
+        ]
+      }
+    }, null, 2),
+    body: '',
+  },
+];
+
 export const CommunicationTemplateLibraryView: React.FC = () => {
   const db = getSupabase();
   const [emailTemplates, setEmailTemplates] = useState<EmailTemplate[]>([]);
   const [lineTemplates, setLineTemplates] = useState<LineTemplate[]>([]);
-  const [filter, setFilter] = useState<'all' | 'email' | LineType>('all');
+  const [channelFilter, setChannelFilter] = useState<'all' | 'email' | LineType>('all');
+  const [categoryFilter, setCategoryFilter] = useState<string>('all');
+  const [searchQuery, setSearchQuery] = useState('');
+
   const [editing, setEditing] = useState<TemplateRow | null>(null);
   const [editorOpen, setEditorOpen] = useState(false);
   const [name, setName] = useState('');
+  const [category, setCategory] = useState<string>('diagnosis');
   const [channel, setChannel] = useState<Channel>('email');
   const [lineType, setLineType] = useState<LineType>('text');
   const [subject, setSubject] = useState('');
@@ -44,7 +145,11 @@ export const CommunicationTemplateLibraryView: React.FC = () => {
   const [notice, setNotice] = useState('');
 
   const load = async () => {
-    if (!db) { setError('Supabaseに接続してください。'); setLoading(false); return; }
+    if (!db) {
+      setError('Supabaseに接続してください。');
+      setLoading(false);
+      return;
+    }
     setLoading(true);
     const [{ data: userData }, emailResult, lineResult] = await Promise.all([
       db.auth.getUser(),
@@ -52,52 +157,147 @@ export const CommunicationTemplateLibraryView: React.FC = () => {
       db.from('line_auto_reply_templates').select('*').order('updated_at', { ascending: false }),
     ]);
     setOwnerId(userData.user?.id || '');
-    if (emailResult.error) setError('メールテンプレートを読み込めません。supabase/migrations/20261019120000_communication_templates.sql と 20261020170000_communication_template_names.sql を適用してください。');
-    else setEmailTemplates((emailResult.data || []) as EmailTemplate[]);
-    if (lineResult.error) setError((current) => current || 'LINEテンプレートを読み込めません。supabase/migrations/20261020150000_line_auto_reply_templates.sql を適用してください。');
-    else setLineTemplates((lineResult.data || []) as LineTemplate[]);
+    if (emailResult.error) {
+      setError('メールテンプレートを読み込めません。');
+    } else {
+      setEmailTemplates((emailResult.data || []) as EmailTemplate[]);
+    }
+    if (lineResult.error) {
+      setError((current) => current || 'LINEテンプレートを読み込めません。');
+    } else {
+      setLineTemplates((lineResult.data || []) as LineTemplate[]);
+    }
     setLoading(false);
   };
 
-  useEffect(() => { void load(); }, []);
+  useEffect(() => {
+    void load();
+  }, []);
 
   const rows = useMemo<TemplateRow[]>(() => [
     ...emailTemplates.map((item) => ({
-      source: 'communication' as const, id: item.id,
-      name: item.name?.trim() || `${item.category} · ${item.template_key}`,
-      channel: item.channel, type: 'text' as const, category: item.category,
-      updatedAt: item.updated_at, subject: item.subject || '', body: item.body_text || '',
+      source: 'communication' as const,
+      id: item.id,
+      name: item.name?.trim() || `${CATEGORY_LABELS[item.category] || item.category} · ${item.template_key}`,
+      channel: item.channel,
+      type: 'text' as const,
+      category: item.category || 'announcement',
+      updatedAt: item.updated_at,
+      subject: item.subject || '',
+      body: item.body_text || '',
     })),
-    ...lineTemplates.map((item) => ({
-      source: 'line' as const, id: item.id, name: item.name,
-      channel: 'line' as const, type: item.reply_type, category: '共通',
-      updatedAt: item.updated_at, payload: item.payload || {},
-    })),
+    ...lineTemplates.map((item) => {
+      // LINEテンプレートはタイトル等からカテゴリを類推、または汎用
+      let inferredCat = 'announcement';
+      const n = item.name.toLowerCase();
+      if (n.includes('診断') || n.includes('カルテ')) inferredCat = 'diagnosis';
+      else if (n.includes('面談') || n.includes('予約') || n.includes('日程') || n.includes('相談')) inferredCat = 'deal';
+      else if (n.includes('フォーム') || n.includes('アンケート')) inferredCat = 'form';
+      else if (n.includes('書類') || n.includes('請求') || n.includes('見積') || n.includes('契約')) inferredCat = 'document';
+      else if (n.includes('営業') || n.includes('アプローチ')) inferredCat = 'sales_outreach';
+      else if (n.includes('ストーリー') || n.includes('大橋')) inferredCat = 'nurturing_story';
+
+      return {
+        source: 'line' as const,
+        id: item.id,
+        name: item.name,
+        channel: 'line' as const,
+        type: item.reply_type,
+        category: inferredCat,
+        updatedAt: item.updated_at,
+        payload: item.payload || {},
+      };
+    }),
   ], [emailTemplates, lineTemplates]);
 
-  const visibleRows = rows.filter((item) => filter === 'all' || (filter === 'email' ? item.channel === 'email' : item.type === filter));
+  const visibleRows = useMemo(() => {
+    return rows.filter((item) => {
+      // チャンネル・形式フィルター
+      if (channelFilter !== 'all') {
+        if (channelFilter === 'email' && item.channel !== 'email') return false;
+        if (channelFilter !== 'email' && (item.channel !== 'line' || item.type !== channelFilter)) return false;
+      }
+      // カテゴリフィルター
+      if (categoryFilter !== 'all' && item.category !== categoryFilter) {
+        return false;
+      }
+      // 検索クエリ
+      if (searchQuery.trim()) {
+        const q = searchQuery.toLowerCase().trim();
+        const matchesName = item.name.toLowerCase().includes(q);
+        const matchesCat = (CATEGORY_LABELS[item.category] || item.category).toLowerCase().includes(q);
+        const matchesSubject = item.source === 'communication' && item.subject.toLowerCase().includes(q);
+        const matchesBody = item.source === 'communication' && item.body.toLowerCase().includes(q);
+        if (!matchesName && !matchesCat && !matchesSubject && !matchesBody) return false;
+      }
+      return true;
+    });
+  }, [rows, channelFilter, categoryFilter, searchQuery]);
 
   const resetEditor = () => {
-    setEditing(null); setName(''); setChannel('email'); setLineType('text');
-    setSubject(''); setBody(''); setAltText(''); setFlexJson('');
-    setAssetUrl(''); setAssetPath(''); setPreviewUrl(''); setPreviewPath('');
+    setEditing(null);
+    setName('');
+    setCategory('diagnosis');
+    setChannel('email');
+    setLineType('text');
+    setSubject('');
+    setBody('');
+    setAltText('');
+    setFlexJson('');
+    setAssetUrl('');
+    setAssetPath('');
+    setPreviewUrl('');
+    setPreviewPath('');
     setEditorOpen(false);
   };
 
   const startCreate = () => {
-    resetEditor(); setError(''); setNotice(''); setEditorOpen(true);
+    resetEditor();
+    setError('');
+    setNotice('');
+    setEditorOpen(true);
+  };
+
+  const applyPreset = (preset: typeof PRESET_SNIPPETS[0]) => {
+    setName(preset.name);
+    setCategory(preset.category);
+    setChannel(preset.channel);
+    if (preset.channel === 'email') {
+      setLineType('text');
+      setSubject(preset.subject || '');
+      setBody(preset.body || '');
+      setAltText('');
+      setFlexJson('');
+    } else {
+      setLineType(preset.lineType || 'text');
+      setSubject('');
+      setBody(preset.body || '');
+      setAltText(preset.altText || '');
+      setFlexJson(preset.flexJson || '');
+    }
   };
 
   const startEdit = (item: TemplateRow) => {
-    setEditing(item); setName(item.name);
+    setEditing(item);
+    setName(item.name);
+    setCategory(item.category || 'announcement');
     setChannel(item.channel);
     if (item.source === 'communication') {
-      setLineType('text'); setSubject(item.subject); setBody(item.body);
-      setAssetUrl(''); setPreviewUrl(''); setAssetPath(''); setPreviewPath(''); setAltText(''); setFlexJson('');
+      setLineType('text');
+      setSubject(item.subject);
+      setBody(item.body);
+      setAssetUrl('');
+      setPreviewUrl('');
+      setAssetPath('');
+      setPreviewPath('');
+      setAltText('');
+      setFlexJson('');
     } else {
       const payload = item.payload || {};
-      setLineType(item.type); setSubject('');
-      setBody(String(payload.text || '')); setAltText(String(payload.altText || ''));
+      setLineType(item.type);
+      setSubject('');
+      setBody(String(payload.text || ''));
+      setAltText(String(payload.altText || ''));
       setFlexJson(payload.contents ? JSON.stringify(payload.contents, null, 2) : '');
       const paths = Array.isArray(payload.storagePaths) ? payload.storagePaths : [];
       const isVideo = item.type === 'video';
@@ -106,7 +306,9 @@ export const CommunicationTemplateLibraryView: React.FC = () => {
       setAssetPath(typeof paths[0] === 'string' ? paths[0] : '');
       setPreviewPath(typeof paths[1] === 'string' ? paths[1] : '');
     }
-    setError(''); setNotice(''); setEditorOpen(true);
+    setError('');
+    setNotice('');
+    setEditorOpen(true);
   };
 
   const uploadAsset = async (file: File, kind: 'image' | 'video') => {
@@ -124,13 +326,22 @@ export const CommunicationTemplateLibraryView: React.FC = () => {
 
   const onUpload = async (file: File | undefined, slot: 'asset' | 'preview') => {
     if (!file) return;
-    setBusy(true); setError('');
+    setBusy(true);
+    setError('');
     try {
       const uploaded = await uploadAsset(file, slot === 'asset' && lineType === 'video' ? 'video' : 'image');
-      if (slot === 'asset') { setAssetPath(uploaded.path); setAssetUrl(uploaded.url); }
-      else { setPreviewPath(uploaded.path); setPreviewUrl(uploaded.url); }
-    } catch (e: any) { setError(e.message || '素材をアップロードできませんでした。'); }
-    finally { setBusy(false); }
+      if (slot === 'asset') {
+        setAssetPath(uploaded.path);
+        setAssetUrl(uploaded.url);
+      } else {
+        setPreviewPath(uploaded.path);
+        setPreviewUrl(uploaded.url);
+      }
+    } catch (e: any) {
+      setError(e.message || '素材をアップロードできませんでした。');
+    } finally {
+      setBusy(false);
+    }
   };
 
   const removeStoredAssets = async (paths: string[]) => {
@@ -142,40 +353,86 @@ export const CommunicationTemplateLibraryView: React.FC = () => {
 
   const saveTemplate = async (event: React.FormEvent) => {
     event.preventDefault();
-    if (!db) { setError('Supabaseに接続してください。'); return; }
-    if (!ownerId) { setError('ログインしてください。'); return; }
-    if (!name.trim()) { setError('テンプレート名を入力してください。'); return; }
-    setError(''); setNotice('');
+    if (!db) {
+      setError('Supabaseに接続してください。');
+      return;
+    }
+    if (!ownerId) {
+      setError('ログインしてください。');
+      return;
+    }
+    if (!name.trim()) {
+      setError('テンプレート名を入力してください。');
+      return;
+    }
+    setError('');
+    setNotice('');
+
     let linePayload: Record<string, any> | null = null;
     if (channel === 'line') {
-      if (lineType === 'text' && !body.trim()) { setError('本文を入力してください。'); return; }
-      if ((lineType === 'image' || lineType === 'video') && (!assetUrl || !previewUrl || !assetPath || !previewPath)) { setError('素材本体とプレビュー画像をアップロードしてください。'); return; }
-      if ((lineType === 'image' || lineType === 'video') && !altText.trim() && lineType === 'video') { setError('動画の代替テキストを入力してください。'); return; }
+      if (lineType === 'text' && !body.trim()) {
+        setError('本文を入力してください。');
+        return;
+      }
+      if ((lineType === 'image' || lineType === 'video') && (!assetUrl || !previewUrl || !assetPath || !previewPath)) {
+        setError('素材本体とプレビュー画像をアップロードしてください。');
+        return;
+      }
+      if (lineType === 'video' && !altText.trim()) {
+        setError('動画の代替テキストを入力してください。');
+        return;
+      }
       if (lineType === 'flex') {
-        if (!altText.trim()) { setError('Flexメッセージの代替テキストを入力してください。'); return; }
+        if (!altText.trim()) {
+          setError('Flexメッセージの代替テキストを入力してください。');
+          return;
+        }
         try {
           const contents = JSON.parse(flexJson);
-          if (!contents || typeof contents !== 'object' || !['bubble', 'carousel'].includes(contents.type)) throw new Error();
+          if (!contents || typeof contents !== 'object' || !['bubble', 'carousel'].includes(contents.type)) {
+            throw new Error();
+          }
           linePayload = { altText: altText.trim(), contents };
-        } catch { setError('Flex本文はbubbleまたはcarousel形式の正しいJSONで入力してください。'); return; }
-      } else if (lineType === 'text') linePayload = { text: body.trim() };
-      else linePayload = { originalContentUrl: assetUrl, previewImageUrl: previewUrl, ...(lineType === 'video' ? { altText: altText.trim() } : {}), storagePaths: [assetPath, previewPath] };
+        } catch {
+          setError('Flex本文はbubbleまたはcarousel形式の正しいJSONで入力してください。');
+          return;
+        }
+      } else if (lineType === 'text') {
+        linePayload = { text: body.trim() };
+      } else {
+        linePayload = {
+          originalContentUrl: assetUrl,
+          previewImageUrl: previewUrl,
+          ...(lineType === 'video' ? { altText: altText.trim() } : {}),
+          storagePaths: [assetPath, previewPath],
+        };
+      }
     }
+
     setBusy(true);
     let saveError: any = null;
     let oldPaths: string[] = [];
+
     if (editing?.source === 'communication' || (!editing && channel === 'email')) {
       const previous = editing?.source === 'communication' ? emailTemplates.find((item) => item.id === editing.id) : null;
-      if (previous?.channel !== 'email' && previous?.channel !== 'line') { setBusy(false); setError('編集対象のテンプレートを読み込めません。'); return; }
       if (editing?.source === 'communication' && previous) {
         const { error: updateError } = await db.from('communication_templates').update({
-          name: name.trim(), subject: channel === 'email' ? subject : '', body_text: body, updated_at: new Date().toISOString(),
+          name: name.trim(),
+          category,
+          subject: channel === 'email' ? subject : '',
+          body_text: body,
+          updated_at: new Date().toISOString(),
         }).eq('id', editing.id);
         saveError = updateError;
       } else {
         const { error: insertError } = await db.from('communication_templates').insert({
-          owner_id: ownerId, template_key: `library_${crypto.randomUUID()}`, category: 'announcement',
-          channel: 'email', name: name.trim(), subject, body_text: body,
+          owner_id: ownerId,
+          template_key: `tpl_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`,
+          category,
+          channel: 'email',
+          name: name.trim(),
+          subject,
+          body_text: body,
         });
         saveError = insertError;
       }
@@ -184,75 +441,502 @@ export const CommunicationTemplateLibraryView: React.FC = () => {
       const oldPayload = previous?.payload || {};
       oldPaths = Array.isArray(oldPayload.storagePaths) ? oldPayload.storagePaths.filter((path: unknown): path is string => typeof path === 'string') : [];
       const payload = linePayload || { text: body.trim() };
+
       const result = editing?.source === 'line'
-        ? await db.from('line_auto_reply_templates').update({ name: name.trim(), reply_type: lineType, payload, updated_at: new Date().toISOString() }).eq('id', editing.id)
-        : await db.from('line_auto_reply_templates').insert({ owner_id: ownerId, name: name.trim(), reply_type: lineType, payload });
+        ? await db.from('line_auto_reply_templates').update({
+            name: name.trim(),
+            reply_type: lineType,
+            payload,
+            updated_at: new Date().toISOString(),
+          }).eq('id', editing.id)
+        : await db.from('line_auto_reply_templates').insert({
+            owner_id: ownerId,
+            name: name.trim(),
+            reply_type: lineType,
+            payload,
+          });
       saveError = result.error;
       if (saveError) oldPaths = [];
     }
-    if (saveError) setError(saveError.message);
-    else {
+
+    if (saveError) {
+      setError(saveError.message);
+    } else {
       if (editing?.source === 'line') {
         const savedPayload = linePayload || { text: body.trim() };
         const retainedPaths = Array.isArray(savedPayload.storagePaths) ? savedPayload.storagePaths : [];
         await removeStoredAssets(oldPaths.filter((path) => !retainedPaths.includes(path)));
       }
-      setNotice('テンプレートを保存しました。各送信画面で選択できます。'); resetEditor(); await load();
+      setNotice('テンプレートを保存しました。送信センター（個別送信・一斉配信）および自動配信シナリオで即座に選べます。');
+      resetEditor();
+      await load();
     }
     setBusy(false);
   };
 
   const deleteTemplate = async (item: TemplateRow) => {
     if (!db) return;
-    setError(''); setNotice('');
+    setError('');
+    setNotice('');
     const result = item.source === 'communication'
       ? await db.from('communication_templates').delete().eq('id', item.id)
       : await db.from('line_auto_reply_templates').delete().eq('id', item.id);
-    if (result.error) { setError(result.error.message); return; }
+    if (result.error) {
+      setError(result.error.message);
+      return;
+    }
     if (item.source === 'line') {
       const paths = Array.isArray(item.payload.storagePaths) ? item.payload.storagePaths.filter((path: unknown): path is string => typeof path === 'string') : [];
       await removeStoredAssets(paths);
     }
-    setNotice('テンプレートを削除しました。'); await load();
+    setNotice(`テンプレート「${item.name}」を削除しました。`);
+    await load();
   };
 
-  const typeOf = (item: TemplateRow) => item.source === 'communication' ? (item.channel === 'email' ? 'メール文面' : 'テキスト') : typeLabel[item.type];
-  const filterItems: Array<{ id: 'all' | 'email' | LineType; label: string }> = [
-    { id: 'all', label: 'すべて' }, { id: 'email', label: 'メール' },
-    { id: 'text', label: 'テキスト' }, { id: 'flex', label: 'Flex' },
-    { id: 'image', label: '画像' }, { id: 'video', label: '動画' },
+  const typeOf = (item: TemplateRow) =>
+    item.source === 'communication' ? (item.channel === 'email' ? 'メール文面' : 'テキスト') : typeLabel[item.type];
+
+  const channelFilterItems: Array<{ id: 'all' | 'email' | LineType; label: string }> = [
+    { id: 'all', label: '全形式' },
+    { id: 'email', label: '✉️ メール' },
+    { id: 'text', label: '💬 LINEテキスト' },
+    { id: 'flex', label: '📇 LINE Flexカード' },
+    { id: 'image', label: '🖼️ LINE画像' },
+    { id: 'video', label: '🎬 LINE動画' },
   ];
 
-  return <section className="space-y-5 rounded-2xl border border-slate-800 bg-slate-900 p-5">
-    <div className="flex flex-wrap items-start justify-between gap-3">
-      <div><div className="flex items-center gap-2 text-xs font-bold uppercase tracking-[0.2em] text-emerald-300"><Library className="h-4 w-4" />Communication templates <span className="rounded-full bg-slate-700 px-2 py-0.5 text-[10px] text-white">LINE / EMAIL</span></div><h2 className="mt-2 text-xl font-bold text-white">テンプレート保管庫</h2><p className="mt-1 text-sm text-slate-400">メールとLINEの文面・素材をまとめて管理します。保存したテンプレートは送信センター、一斉配信、シナリオ設定から選べます。</p></div>
-      <button type="button" onClick={startCreate} className="inline-flex items-center gap-2 rounded-lg bg-emerald-600 px-4 py-2 text-sm font-semibold text-white hover:bg-emerald-500"><Plus className="h-4 w-4" />新規テンプレート</button>
-    </div>
-    {(error || notice) && <p role={error ? 'alert' : 'status'} className={error ? 'rounded-lg border border-rose-800 bg-rose-950/30 p-3 text-sm text-rose-200' : 'rounded-lg border border-emerald-800 bg-emerald-950/30 p-3 text-sm text-emerald-200'}>{error || notice}</p>}
-    <div className="flex flex-wrap gap-2">{filterItems.map((item) => <button key={item.id} type="button" onClick={() => setFilter(item.id)} aria-pressed={filter === item.id} className={`rounded-lg border px-3 py-1.5 text-xs font-semibold ${filter === item.id ? 'border-emerald-500 bg-emerald-600 text-white' : 'border-slate-700 text-slate-300 hover:bg-slate-800'}`}>{item.label}</button>)}</div>
-    {editorOpen && <form onSubmit={(event) => void saveTemplate(event)} className="space-y-4 rounded-xl border border-indigo-700/60 bg-slate-950/70 p-4">
-      <div className="flex items-center justify-between"><h3 className="font-semibold text-white">{editing ? 'テンプレートを編集' : '新規テンプレート'}</h3><button type="button" onClick={resetEditor} className="rounded p-1 text-slate-400 hover:bg-slate-800"><X className="h-4 w-4" /></button></div>
-      <div className="grid gap-3 md:grid-cols-2">
-        <label className="text-xs text-slate-300">名前<input required maxLength={120} value={name} onChange={(event) => setName(event.target.value)} className="mt-1 block w-full rounded border border-slate-700 bg-slate-900 p-2 text-sm text-white" /></label>
-        <label className="text-xs text-slate-300">チャネル<select disabled={!!editing} value={channel} onChange={(event) => { const value = event.target.value as Channel; setChannel(value); if (value === 'email') setLineType('text'); }} className="mt-1 block w-full rounded border border-slate-700 bg-slate-900 p-2 text-sm text-white"><option value="email">メール</option><option value="line">LINE</option></select></label>
-        {channel === 'line' && <label className="text-xs text-slate-300">種類<select disabled={editing?.source === 'communication'} value={lineType} onChange={(event) => { setLineType(event.target.value as LineType); setBody(''); setAltText(''); setFlexJson(''); setAssetUrl(''); setAssetPath(''); setPreviewUrl(''); setPreviewPath(''); }} className="mt-1 block w-full rounded border border-slate-700 bg-slate-900 p-2 text-sm text-white">{Object.entries(typeLabel).map(([key, label]) => <option key={key} value={key}>{label}</option>)}</select></label>}
-        {channel === 'email' && <label className="text-xs text-slate-300">件名<input required maxLength={200} value={subject} onChange={(event) => setSubject(event.target.value)} className="mt-1 block w-full rounded border border-slate-700 bg-slate-900 p-2 text-sm text-white" /><PlaceholderAssist text={subject} onInsert={(token)=>setSubject(current=>current+token)} /></label>}
-        {(channel === 'email' || lineType === 'text') && <label className="text-xs text-slate-300 md:col-span-2">本文<textarea required rows={7} maxLength={10000} value={body} onChange={(event) => setBody(event.target.value)} className="mt-1 block w-full rounded border border-slate-700 bg-slate-900 p-3 text-sm text-white" /><PlaceholderAssist text={body} onInsert={(token)=>setBody(current=>current+token)} /></label>}
-        {channel === 'line' && (lineType === 'image' || lineType === 'video') && <div className="space-y-3 md:col-span-2">
-          <label className="block text-xs text-slate-300">{lineType === 'video' ? '動画ファイル（MP4）' : '画像ファイル（JPEG / PNG）'}<input type="file" accept={lineType === 'video' ? 'video/mp4' : 'image/jpeg,image/png'} onChange={(event) => void onUpload(event.target.files?.[0], 'asset')} className="mt-1 block w-full text-xs text-slate-300" />{assetUrl && <span className="mt-1 block break-all text-[11px] text-emerald-300">アップロード済み: {assetUrl}</span>}</label>
-          <label className="block text-xs text-slate-300">プレビュー画像（JPEG / PNG）<input type="file" accept="image/jpeg,image/png" onChange={(event) => void onUpload(event.target.files?.[0], 'preview')} className="mt-1 block w-full text-xs text-slate-300" />{previewUrl && <span className="mt-1 block break-all text-[11px] text-emerald-300">アップロード済み: {previewUrl}</span>}</label>
-          {lineType === 'video' && <label className="block text-xs text-slate-300">代替テキスト<input required value={altText} onChange={(event) => setAltText(event.target.value)} className="mt-1 block w-full rounded border border-slate-700 bg-slate-900 p-2 text-sm text-white" /></label>}
-        </div>}
-        {channel === 'line' && lineType === 'flex' && <><label className="text-xs text-slate-300">代替テキスト<input required value={altText} onChange={(event) => setAltText(event.target.value)} className="mt-1 block w-full rounded border border-slate-700 bg-slate-900 p-2 text-sm text-white" /></label><label className="text-xs text-slate-300 md:col-span-2">Flex JSON<textarea required rows={10} value={flexJson} onChange={(event) => setFlexJson(event.target.value)} className="mt-1 block w-full rounded border border-slate-700 bg-slate-900 p-3 font-mono text-xs text-white" placeholder='{"type":"bubble","body":{...}}' /><PlaceholderAssist text={flexJson} onInsert={(token)=>setFlexJson(current=>current+token)} showPreview={false} /></label></>}
+  return (
+    <section className="space-y-5 rounded-2xl border border-slate-800 bg-slate-900 p-5">
+      {/* Header */}
+      <div className="flex flex-wrap items-start justify-between gap-3 border-b border-slate-800/80 pb-4">
+        <div>
+          <div className="flex items-center gap-2 text-xs font-bold uppercase tracking-[0.2em] text-emerald-400">
+            <Library className="h-4 w-4" />
+            <span>Master Communication Templates</span>
+            <span className="rounded-full bg-emerald-500/20 px-2.5 py-0.5 text-[10px] text-emerald-300 font-bold border border-emerald-500/30">
+              全社統合マスター保管庫
+            </span>
+          </div>
+          <h2 className="mt-2 text-xl font-black text-white">定型テンプレート保管庫</h2>
+          <p className="mt-1 text-xs text-slate-300 max-w-3xl leading-relaxed">
+            診断案内・フォーム案内・面談日程調整・書類送付・営業アプローチ・LINE Flexなど、全社共通の定型テンプレートをここで一元管理します。
+            作成したテンプレートは「<strong>個別手動送信</strong>」「<strong>一斉配信</strong>」「<strong>自動ステップシナリオ</strong>」のすべてで共通選択できます。
+          </p>
+        </div>
+        <div className="flex flex-wrap items-center gap-2">
+          <button
+            type="button"
+            onClick={startCreate}
+            className="inline-flex items-center gap-2 rounded-xl bg-emerald-600 px-4 py-2.5 text-xs font-bold text-white hover:bg-emerald-500 shadow-md shadow-emerald-600/20 cursor-pointer transition"
+          >
+            <Plus className="h-4 w-4" />
+            新規テンプレート作成
+          </button>
+        </div>
       </div>
-      {channel === 'line' && <LineMessagePreview type={lineType} title={name || 'LINEテンプレート'} payload={lineType === 'text' ? { text: body } : lineType === 'image' ? { originalContentUrl: assetUrl, previewImageUrl: previewUrl } : lineType === 'video' ? { originalContentUrl: assetUrl, previewImageUrl: previewUrl, altText } : { altText, contents: flexJson }} />}
-      <div className="flex justify-end gap-2"><button type="button" onClick={resetEditor} className="rounded border border-slate-700 px-3 py-2 text-sm text-slate-300">閉じる</button><button disabled={busy} className="inline-flex items-center gap-2 rounded bg-indigo-600 px-4 py-2 text-sm font-semibold text-white disabled:opacity-50"><Save className="h-4 w-4" />{busy ? '保存中…' : '保存'}</button></div>
-    </form>}
-    <div className="overflow-x-auto rounded-xl border border-slate-800">
-      <table className="w-full min-w-[680px] text-left text-sm"><thead className="bg-slate-950 text-xs text-slate-400"><tr><th className="p-3">種類</th><th className="p-3">名前</th><th className="p-3">カテゴリ</th><th className="p-3">更新日</th><th className="p-3">操作</th></tr></thead><tbody className="divide-y divide-slate-800">
-        {loading ? <tr><td colSpan={5} className="p-4 text-center text-slate-400">読み込み中…</td></tr> : visibleRows.length === 0 ? <tr><td colSpan={5} className="p-4 text-center text-slate-500">テンプレートはまだありません。</td></tr> : visibleRows.map((item) => <tr key={item.source + item.id} className="text-slate-200"><td className="p-3"><span className="rounded-full bg-slate-700 px-2 py-1 text-xs">{item.channel === 'email' ? 'メール' : typeOf(item)}</span></td><td className="p-3 font-medium">{item.name}</td><td className="p-3 text-xs text-slate-400">{item.category}</td><td className="p-3 text-xs text-slate-400">{item.updatedAt ? new Date(item.updatedAt).toLocaleString('ja-JP') : '—'}</td><td className="p-3"><div className="flex gap-2"><button type="button" onClick={() => startEdit(item)} className="rounded border border-slate-700 px-2 py-1 text-xs hover:bg-slate-800">詳細・編集</button><InlineDeleteButton warning={`テンプレート「${item.name}」を削除しますか？${item.source === 'line' ? ' 素材ファイルも削除されます。' : ''}`} onConfirm={() => deleteTemplate(item)}><Trash2 className="mr-1 inline h-3 w-3" />削除</InlineDeleteButton></div></td></tr>)}
-      </tbody></table>
-    </div>
-    <p className="text-xs text-slate-500">LINE画像・動画の素材はSupabase Storageに保存します。使用回数は現在記録していないため表示していません。</p>
-  </section>;
+
+      {(error || notice) && (
+        <div
+          role={error ? 'alert' : 'status'}
+          className={error ? 'rounded-xl border border-rose-800 bg-rose-950/40 p-3.5 text-xs font-medium text-rose-200' : 'rounded-xl border border-emerald-800 bg-emerald-950/40 p-3.5 text-xs font-medium text-emerald-200'}
+        >
+          {error || notice}
+        </div>
+      )}
+
+      {/* Preset Fast Picker Banner */}
+      <div className="rounded-xl border border-indigo-500/30 bg-indigo-950/20 p-4 space-y-2.5">
+        <div className="flex items-center gap-2 text-xs font-bold text-indigo-300">
+          <Sparkles className="h-4 w-4 text-indigo-400" />
+          <span>よく使う定型テンプレートの雛形（ワンクリックで新規作成）</span>
+        </div>
+        <div className="flex flex-wrap gap-2">
+          {PRESET_SNIPPETS.map((preset, idx) => (
+            <button
+              key={idx}
+              type="button"
+              onClick={() => {
+                resetEditor();
+                applyPreset(preset);
+                setEditorOpen(true);
+              }}
+              className="inline-flex items-center gap-1.5 rounded-lg border border-indigo-500/40 bg-slate-900/90 hover:bg-indigo-900/50 px-3 py-1.5 text-xs text-indigo-200 hover:text-white transition cursor-pointer"
+            >
+              <Copy className="h-3 w-3 text-indigo-400" />
+              <span>{preset.label}</span>
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {/* Filters */}
+      <div className="space-y-3 pt-1">
+        {/* Category Filters */}
+        <div className="flex flex-wrap items-center gap-1.5">
+          <span className="text-xs font-semibold text-slate-400 mr-1 flex items-center gap-1">
+            <Filter className="h-3.5 w-3.5" /> 用途:
+          </span>
+          <button
+            type="button"
+            onClick={() => setCategoryFilter('all')}
+            className={`rounded-lg px-2.5 py-1 text-xs font-semibold transition cursor-pointer ${
+              categoryFilter === 'all'
+                ? 'bg-emerald-600 text-white'
+                : 'bg-slate-800/80 text-slate-300 hover:bg-slate-700'
+            }`}
+          >
+            すべて
+          </button>
+          {Object.entries(CATEGORY_LABELS).map(([catKey, catLabel]) => (
+            <button
+              key={catKey}
+              type="button"
+              onClick={() => setCategoryFilter(catKey)}
+              className={`rounded-lg px-2.5 py-1 text-xs font-semibold transition cursor-pointer ${
+                categoryFilter === catKey
+                  ? 'bg-emerald-600 text-white shadow-sm'
+                  : 'bg-slate-800/80 text-slate-300 hover:bg-slate-700'
+              }`}
+            >
+              {catLabel}
+            </button>
+          ))}
+        </div>
+
+        {/* Channel & Type Filters */}
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div className="flex flex-wrap gap-1.5">
+            <span className="text-xs font-semibold text-slate-400 mr-1">媒体:</span>
+            {channelFilterItems.map((item) => (
+              <button
+                key={item.id}
+                type="button"
+                onClick={() => setChannelFilter(item.id)}
+                className={`rounded-lg border px-2.5 py-1 text-xs font-semibold transition cursor-pointer ${
+                  channelFilter === item.id
+                    ? 'border-emerald-500 bg-emerald-600/30 text-emerald-200'
+                    : 'border-slate-800 bg-slate-950/60 text-slate-400 hover:bg-slate-800 hover:text-slate-200'
+                }`}
+              >
+                {item.label}
+              </button>
+            ))}
+          </div>
+
+          <div className="w-full sm:w-64">
+            <input
+              type="text"
+              placeholder="テンプレート名や本文で検索…"
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-1.5 text-xs text-white placeholder-slate-500 focus:border-emerald-500 focus:outline-none"
+            />
+          </div>
+        </div>
+      </div>
+
+      {/* Editor Modal / Form */}
+      {editorOpen && (
+        <form onSubmit={(event) => void saveTemplate(event)} className="space-y-4 rounded-xl border border-indigo-600/60 bg-slate-950/90 p-5 shadow-xl">
+          <div className="flex items-center justify-between border-b border-slate-800 pb-3">
+            <div>
+              <h3 className="text-base font-bold text-white flex items-center gap-2">
+                <span>{editing ? 'テンプレートを編集' : '新規テンプレート作成'}</span>
+                <span className="text-xs font-normal text-slate-400">（全社共通マスターとして保存されます）</span>
+              </h3>
+            </div>
+            <button type="button" onClick={resetEditor} className="rounded-lg p-1.5 text-slate-400 hover:bg-slate-800 cursor-pointer">
+              <X className="h-5 w-5" />
+            </button>
+          </div>
+
+          <div className="grid gap-3 md:grid-cols-3">
+            <label className="text-xs font-bold text-slate-300 md:col-span-2">
+              テンプレート名 <span className="text-rose-400">*</span>
+              <input
+                required
+                maxLength={120}
+                placeholder="例: 【診断】製造業向け3分無料診断案内（オンライン面談URL付き）"
+                value={name}
+                onChange={(event) => setName(event.target.value)}
+                className="mt-1 block w-full rounded-lg border border-slate-700 bg-slate-900 p-2.5 text-sm text-white"
+              />
+            </label>
+
+            <label className="text-xs font-bold text-slate-300">
+              用途（カテゴリ） <span className="text-rose-400">*</span>
+              <select
+                value={category}
+                onChange={(event) => setCategory(event.target.value)}
+                className="mt-1 block w-full rounded-lg border border-slate-700 bg-slate-900 p-2.5 text-sm text-white"
+              >
+                {Object.entries(CATEGORY_LABELS).map(([catKey, catLabel]) => (
+                  <option key={catKey} value={catKey}>
+                    {catLabel}
+                  </option>
+                ))}
+              </select>
+            </label>
+
+            <label className="text-xs font-bold text-slate-300">
+              配信チャネル
+              <select
+                disabled={!!editing}
+                value={channel}
+                onChange={(event) => {
+                  const value = event.target.value as Channel;
+                  setChannel(value);
+                  if (value === 'email') setLineType('text');
+                }}
+                className="mt-1 block w-full rounded-lg border border-slate-700 bg-slate-900 p-2.5 text-sm text-white"
+              >
+                <option value="email">✉️ メール</option>
+                <option value="line">📱 LINE</option>
+              </select>
+            </label>
+
+            {channel === 'line' && (
+              <label className="text-xs font-bold text-slate-300">
+                LINE形式
+                <select
+                  disabled={editing?.source === 'communication'}
+                  value={lineType}
+                  onChange={(event) => {
+                    setLineType(event.target.value as LineType);
+                    setBody('');
+                    setAltText('');
+                    setFlexJson('');
+                    setAssetUrl('');
+                    setAssetPath('');
+                    setPreviewUrl('');
+                    setPreviewPath('');
+                  }}
+                  className="mt-1 block w-full rounded-lg border border-slate-700 bg-slate-900 p-2.5 text-sm text-white"
+                >
+                  {Object.entries(typeLabel).map(([key, label]) => (
+                    <option key={key} value={key}>
+                      {label}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            )}
+
+            {channel === 'email' && (
+              <div className="md:col-span-2">
+                <label className="text-xs font-bold text-slate-300">
+                  件名 <span className="text-rose-400">*</span>
+                </label>
+                <input
+                  required
+                  maxLength={200}
+                  placeholder="例: 【3分無料診断】改善優先度レポートのご案内｜{会社名} 様"
+                  value={subject}
+                  onChange={(event) => setSubject(event.target.value)}
+                  className="mt-1 block w-full rounded-lg border border-slate-700 bg-slate-900 p-2.5 text-sm text-white"
+                />
+                <PlaceholderAssist text={subject} onInsert={(token) => setSubject((curr) => curr + token)} />
+              </div>
+            )}
+
+            {(channel === 'email' || lineType === 'text') && (
+              <div className="md:col-span-3">
+                <label className="text-xs font-bold text-slate-300">
+                  本文 <span className="text-rose-400">*</span>
+                </label>
+                <textarea
+                  required
+                  rows={8}
+                  maxLength={10000}
+                  value={body}
+                  onChange={(event) => setBody(event.target.value)}
+                  className="mt-1 block w-full rounded-lg border border-slate-700 bg-slate-900 p-3 text-sm text-white font-sans leading-relaxed"
+                  placeholder="お名前は {お名前}、会社名は {会社名}、診断URLは {案内URL}、面談カレンダーは {面談予約URL} のように埋め込めます。"
+                />
+                <PlaceholderAssist text={body} onInsert={(token) => setBody((curr) => curr + token)} />
+              </div>
+            )}
+
+            {channel === 'line' && (lineType === 'image' || lineType === 'video') && (
+              <div className="space-y-3 md:col-span-3">
+                <label className="block text-xs font-bold text-slate-300">
+                  {lineType === 'video' ? '動画ファイル（MP4）' : '画像ファイル（JPEG / PNG）'}
+                  <input
+                    type="file"
+                    accept={lineType === 'video' ? 'video/mp4' : 'image/jpeg,image/png'}
+                    onChange={(event) => void onUpload(event.target.files?.[0], 'asset')}
+                    className="mt-1 block w-full text-xs text-slate-300 file:mr-3 file:py-1.5 file:px-3 file:rounded-lg file:border-0 file:bg-slate-800 file:text-white"
+                  />
+                  {assetUrl && <span className="mt-1 block break-all text-[11px] text-emerald-400 font-mono">URL: {assetUrl}</span>}
+                </label>
+                <label className="block text-xs font-bold text-slate-300">
+                  プレビュー画像（JPEG / PNG）
+                  <input
+                    type="file"
+                    accept="image/jpeg,image/png"
+                    onChange={(event) => void onUpload(event.target.files?.[0], 'preview')}
+                    className="mt-1 block w-full text-xs text-slate-300 file:mr-3 file:py-1.5 file:px-3 file:rounded-lg file:border-0 file:bg-slate-800 file:text-white"
+                  />
+                  {previewUrl && <span className="mt-1 block break-all text-[11px] text-emerald-400 font-mono">URL: {previewUrl}</span>}
+                </label>
+                {lineType === 'video' && (
+                  <label className="block text-xs font-bold text-slate-300">
+                    代替テキスト
+                    <input
+                      required
+                      value={altText}
+                      onChange={(event) => setAltText(event.target.value)}
+                      className="mt-1 block w-full rounded-lg border border-slate-700 bg-slate-900 p-2 text-sm text-white"
+                    />
+                  </label>
+                )}
+              </div>
+            )}
+
+            {channel === 'line' && lineType === 'flex' && (
+              <div className="space-y-3 md:col-span-3">
+                <label className="block text-xs font-bold text-slate-300">
+                  代替テキスト（プッシュ通知や一覧に表示される文字） <span className="text-rose-400">*</span>
+                  <input
+                    required
+                    value={altText}
+                    onChange={(event) => setAltText(event.target.value)}
+                    className="mt-1 block w-full rounded-lg border border-slate-700 bg-slate-900 p-2 text-sm text-white"
+                  />
+                </label>
+                <label className="block text-xs font-bold text-slate-300">
+                  Flex JSON構造 <span className="text-rose-400">*</span>
+                  <textarea
+                    required
+                    rows={9}
+                    value={flexJson}
+                    onChange={(event) => setFlexJson(event.target.value)}
+                    className="mt-1 block w-full rounded-lg border border-slate-700 bg-slate-900 p-3 font-mono text-xs text-white"
+                    placeholder='{"type":"bubble","body":{"type":"box","layout":"vertical","contents":[...]}}'
+                  />
+                  <PlaceholderAssist text={flexJson} onInsert={(token) => setFlexJson((curr) => curr + token)} showPreview={false} />
+                </label>
+              </div>
+            )}
+          </div>
+
+          {channel === 'line' && (
+            <div className="rounded-xl border border-slate-800 bg-slate-900/60 p-4">
+              <span className="text-xs font-bold text-slate-400 mb-2 block">LINE送信プレビュー:</span>
+              <LineMessagePreview
+                type={lineType}
+                title={name || 'LINEテンプレート'}
+                payload={
+                  lineType === 'text'
+                    ? { text: body }
+                    : lineType === 'image'
+                    ? { originalContentUrl: assetUrl, previewImageUrl: previewUrl }
+                    : lineType === 'video'
+                    ? { originalContentUrl: assetUrl, previewImageUrl: previewUrl, altText }
+                    : { altText, contents: flexJson }
+                }
+              />
+            </div>
+          )}
+
+          <div className="flex items-center justify-end gap-2 pt-2 border-t border-slate-800">
+            <button
+              type="button"
+              onClick={resetEditor}
+              className="rounded-lg border border-slate-700 px-4 py-2 text-xs font-bold text-slate-300 hover:bg-slate-800 cursor-pointer"
+            >
+              キャンセル
+            </button>
+            <button
+              disabled={busy}
+              type="submit"
+              className="inline-flex items-center gap-2 rounded-lg bg-emerald-600 px-5 py-2 text-xs font-bold text-white hover:bg-emerald-500 disabled:opacity-50 shadow-md shadow-emerald-600/20 cursor-pointer"
+            >
+              <Save className="h-4 w-4" />
+              {busy ? '保存中…' : 'テンプレートを保存'}
+            </button>
+          </div>
+        </form>
+      )}
+
+      {/* Templates Table List */}
+      <div className="overflow-x-auto rounded-xl border border-slate-800">
+        <table className="w-full min-w-[720px] text-left text-sm">
+          <thead className="bg-slate-950 text-xs font-bold text-slate-400">
+            <tr>
+              <th className="p-3">媒体</th>
+              <th className="p-3">カテゴリ（用途）</th>
+              <th className="p-3">テンプレート名</th>
+              <th className="p-3">更新日時</th>
+              <th className="p-3 text-right">操作</th>
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-slate-800">
+            {loading ? (
+              <tr>
+                <td colSpan={5} className="p-6 text-center text-slate-400">
+                  テンプレートを読み込み中…
+                </td>
+              </tr>
+            ) : visibleRows.length === 0 ? (
+              <tr>
+                <td colSpan={5} className="p-8 text-center text-slate-500">
+                  条件に合致するテンプレートはありません。「新規テンプレート作成」または上部のプリセットから追加できます。
+                </td>
+              </tr>
+            ) : (
+              visibleRows.map((item) => (
+                <tr key={item.source + item.id} className="text-slate-200 hover:bg-slate-800/40 transition">
+                  <td className="p-3">
+                    <span className={`inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-xs font-semibold ${
+                      item.channel === 'email' ? 'bg-indigo-950/80 text-indigo-300 border border-indigo-700/50' : 'bg-emerald-950/80 text-emerald-300 border border-emerald-700/50'
+                    }`}>
+                      {item.channel === 'email' ? '✉️ メール' : `📱 LINE (${typeOf(item)})`}
+                    </span>
+                  </td>
+                  <td className="p-3">
+                    <span className="rounded bg-slate-800 px-2 py-0.5 text-xs text-slate-300 font-medium">
+                      {CATEGORY_LABELS[item.category] || item.category}
+                    </span>
+                  </td>
+                  <td className="p-3">
+                    <div className="font-bold text-white">{item.name}</div>
+                    {item.source === 'communication' && item.subject && (
+                      <div className="text-xs text-slate-400 truncate max-w-md">件名: {item.subject}</div>
+                    )}
+                  </td>
+                  <td className="p-3 text-xs text-slate-400">
+                    {item.updatedAt ? new Date(item.updatedAt).toLocaleString('ja-JP', { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' }) : '—'}
+                  </td>
+                  <td className="p-3 text-right">
+                    <div className="inline-flex items-center gap-2">
+                      <button
+                        type="button"
+                        onClick={() => startEdit(item)}
+                        className="rounded-lg border border-slate-700 bg-slate-800 px-2.5 py-1 text-xs font-medium text-slate-200 hover:bg-slate-700 cursor-pointer"
+                      >
+                        詳細・編集
+                      </button>
+                      <InlineDeleteButton
+                        warning={`テンプレート「${item.name}」を削除しますか？${item.source === 'line' ? ' 関連ファイルも削除されます。' : ''}`}
+                        onConfirm={() => deleteTemplate(item)}
+                      >
+                        <Trash2 className="mr-1 inline h-3 w-3" />
+                        削除
+                      </InlineDeleteButton>
+                    </div>
+                  </td>
+                </tr>
+              ))
+            )}
+          </tbody>
+        </table>
+      </div>
+
+      <div className="flex flex-wrap items-center justify-between text-xs text-slate-400 pt-1">
+        <span>合計 {visibleRows.length} 件のテンプレートを表示中</span>
+        <span>※LINE画像・動画の素材ファイルはSupabase Storage（mst-line-message-assets）でセキュアに管理されます。</span>
+      </div>
+    </section>
+  );
 };

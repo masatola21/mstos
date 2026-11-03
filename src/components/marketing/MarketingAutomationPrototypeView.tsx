@@ -217,6 +217,7 @@ import { CommunicationTemplateLibraryView } from './CommunicationTemplateLibrary
 import { fetchMarketingAutomationHealth, MarketingAutomationHealth, MarketingAutomationJobsPanel } from './MarketingAutomationJobsPanel';
 import { deduplicateMarketingScenarios } from '../../utils/marketingStorage';
 import { MarketingFlowStudio } from './MarketingFlowStudio';
+import { FlowStepInspectorModal } from './FlowStepInspectorModal';
 
 interface Props {
   scenarios: MarketingScenario[];
@@ -392,7 +393,7 @@ export const MarketingAutomationPrototypeView: React.FC<Props> = ({ scenarios, o
     const id = value.startsWith('segment:') ? value.slice('segment:'.length) : '';
     return segments.find((segment) => segment.id === id)?.name || value || '配信対象未設定';
   };
-  const [activeTab, setActiveTab] = useState<'flows' | 'broadcast' | 'jobs' | 'line_settings' | 'templates'>('flows');
+  const [activeTab, setActiveTab] = useState<'flows' | 'jobs' | 'line_settings'>('flows');
   const [lineView, setLineView] = useState<'broadcast' | 'inbox' | 'settings'>('broadcast');
   const consumedLineInboxRef = useRef<string | null>(null);
 
@@ -416,6 +417,8 @@ export const MarketingAutomationPrototypeView: React.FC<Props> = ({ scenarios, o
   }, [scenarios, onScenariosChange]);
   const [emailView, setEmailView] = useState<'broadcast' | 'inbox'>('broadcast');
   const [editing, setEditing] = useState<MarketingScenario | null>(null);
+  const [inspectorScenario, setInspectorScenario] = useState<MarketingScenario | null>(null);
+  const [isInspectorOpen, setIsInspectorOpen] = useState(false);
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [form, setForm] = useState(emptyScenario());
   const [notice, setNotice] = useState('');
@@ -590,21 +593,39 @@ export const MarketingAutomationPrototypeView: React.FC<Props> = ({ scenarios, o
     setNotice(`公式プリセット全18本を反映しました（新規導入: ${addedCount}件、最新更新: ${updatedCount}件）。何回押しても重複しません。`);
   };
   const startNew = () => {
-    setSelectedEmailTemplateId('');setSelectedLineTemplateId('');
-    setEditing(null);
-    setIsFormOpen(true);
-    setForm(emptyScenario());
-    setExternalGoal('');
-    setExternalResult('');
+    const newStep: MarketingScenario = {
+      id: `scenario-${Date.now()}`,
+      name: '新しい配信シナリオ',
+      trigger: 'lead_created',
+      channel: 'line',
+      audience: 'すべての見込み客',
+      waitMinutes: 0,
+      emailSubject: '',
+      emailBody: '',
+      messageBody: '',
+      lineMessageType: 'flex',
+      lineImageUrl: '',
+      linePreviewImageUrl: '',
+      flexAltText: 'ご案内',
+      flexTitle: '新しいご案内',
+      flexBody: '{recipient_name} 様\nご案内をお届けいたします。',
+      flexButtonLabel: '詳細を見る',
+      flexButtonUrl: '{link_url}',
+      status: 'draft',
+      automationEnabled: false,
+      stopOnBooking: true,
+      stopOnDeal: true,
+      consentBasis: '配信同意に基づく',
+      updatedAt: Date.now(),
+    };
+    setInspectorScenario(newStep);
+    setIsInspectorOpen(true);
     setActiveTab('flows');
     setNotice('');
   };
   const startEdit = (scenario: MarketingScenario) => {
-    setSelectedEmailTemplateId('');setSelectedLineTemplateId('');
-    setEditing(scenario);
-    setIsFormOpen(true);
-    setExternalGoal('');
-    setExternalResult('');
+    setInspectorScenario(scenario);
+    setIsInspectorOpen(true);
     setForm({
       name: scenario.name,
       trigger: scenario.trigger,
@@ -734,10 +755,8 @@ export const MarketingAutomationPrototypeView: React.FC<Props> = ({ scenarios, o
 
   const tabs = [
     { id: 'flows' as const, label: '🗺️ 導線フロー ＆ シナリオ配信管理', icon: GitBranch },
-    { id: 'broadcast' as const, label: '📢 一斉配信（LINE/メール）', icon: Send },
     { id: 'jobs' as const, label: '⚡ 配信ジョブ監視', icon: Activity },
     { id: 'line_settings' as const, label: '⚙️ LINE設定＆リッチメニュー', icon: MessageCircle },
-    { id: 'templates' as const, label: '📁 テンプレート保管庫', icon: Library },
   ];
 
   return (
@@ -751,26 +770,37 @@ export const MarketingAutomationPrototypeView: React.FC<Props> = ({ scenarios, o
             </div>
             <p className="max-w-3xl text-sm leading-6 text-slate-300">
               見込み客や顧客リストに向けた「ステップシナリオ」「キーワード自動応答」「配信ジョブ」を自動運用します。
-              ※一斉配信（メール・LINE一括）や個別書類送付は「<strong className="text-white">📤 送信センター</strong>」、受信対応は「<strong className="text-white">📥 統合受信トレイ</strong>」に集約されています。
+              ※一斉配信（メール・LINE一括）や定型テンプレート管理は「<strong className="text-white">📤 送信センター</strong>」、受信対応は「<strong className="text-white">📥 統合受信トレイ</strong>」で一元管理されています。
             </p>
           </div>
           <div className="flex flex-wrap items-center gap-2">
             {onNavigateTab && (
-              <button
-                type="button"
-                onClick={() => onNavigateTab('communication_send')}
-                className="flex items-center gap-1.5 rounded-xl border border-purple-500/40 bg-purple-950/50 px-3.5 py-2.5 text-xs font-bold text-purple-200 hover:bg-purple-900/60 hover:text-white transition shadow-sm cursor-pointer"
-                title="セグメント一斉配信・個別送信を行う送信センターを開きます"
-              >
-                <Send className="h-4 w-4 text-purple-400" />
-                <span>📢 送信センター（一斉配信）</span>
-              </button>
+              <>
+                <button
+                  type="button"
+                  onClick={() => onNavigateTab('communication_send')}
+                  className="flex items-center gap-1.5 rounded-xl border border-purple-500/40 bg-purple-950/50 px-3.5 py-2.5 text-xs font-bold text-purple-200 hover:bg-purple-900/60 hover:text-white transition shadow-sm cursor-pointer"
+                  title="全社共通の一斉配信を実行します"
+                >
+                  <Send className="h-3.5 w-3.5 text-purple-400" />
+                  <span>📢 一斉配信（送信センター）</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => onNavigateTab('communication_send')}
+                  className="flex items-center gap-1.5 rounded-xl border border-emerald-500/40 bg-emerald-950/50 px-3.5 py-2.5 text-xs font-bold text-emerald-200 hover:bg-emerald-900/60 hover:text-white transition shadow-sm cursor-pointer"
+                  title="全社共通の定型テンプレート保管庫を開きます"
+                >
+                  <Library className="h-3.5 w-3.5 text-emerald-400" />
+                  <span>📚 テンプレート保管庫（送信センター）</span>
+                </button>
+              </>
             )}
-            <button onClick={startNew} className="flex shrink-0 items-center justify-center gap-2 rounded-xl bg-indigo-600 px-4 py-2.5 text-sm font-semibold text-white hover:bg-indigo-500 cursor-pointer"><Plus className="h-4 w-4" />シナリオ作成</button>
+            <button onClick={startNew} className="flex shrink-0 items-center justify-center gap-2 rounded-xl bg-indigo-600 px-4 py-2.5 text-sm font-semibold text-white hover:bg-indigo-500 cursor-pointer shadow-md shadow-indigo-600/20"><Plus className="h-4 w-4" />シナリオ作成</button>
           </div>
         </div>
         <div className="mt-5 flex gap-2 overflow-x-auto border-t border-slate-800 pt-4">
-          {tabs.map(({ id, label, icon: Icon }) => <button key={id} onClick={() => { setActiveTab(id); setNotice(''); }} className={`flex shrink-0 items-center gap-2 rounded-lg px-3 py-2 text-xs font-semibold ${activeTab === id ? 'bg-indigo-600 text-white' : 'text-slate-400 hover:bg-slate-800 hover:text-white'}`}><Icon className="h-4 w-4" />{label}</button>)}
+          {tabs.map(({ id, label, icon: Icon }) => <button key={id} onClick={() => { setActiveTab(id); setNotice(''); }} className={`flex shrink-0 items-center gap-2 rounded-lg px-3.5 py-2 text-xs font-bold transition cursor-pointer ${activeTab === id ? 'bg-indigo-600 text-white shadow-sm' : 'text-slate-400 hover:bg-slate-800 hover:text-white'}`}><Icon className="h-4 w-4" />{label}</button>)}
         </div>
       </section>
 
@@ -792,58 +822,6 @@ export const MarketingAutomationPrototypeView: React.FC<Props> = ({ scenarios, o
           duplicateCount={duplicateCount}
           onStartNew={startNew}
         />
-      )}
-
-      {activeTab === 'broadcast' && (
-        <div className="space-y-4">
-          <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-indigo-500/30 bg-indigo-950/30 p-4">
-            <div className="text-xs text-indigo-200 leading-relaxed">
-              📢 <strong>一斉告知・セグメント配信:</strong> LINE友だちへの一斉告知、または顧客リスト宛の一斉メール配信をここで実行できます。<br />
-              ※届いたメッセージの返信や1対1チャットは「<strong className="text-white">📥 統合受信箱</strong>」で一本化されています。
-            </div>
-            {onNavigateTab && (
-              <button
-                type="button"
-                onClick={() => onNavigateTab('inbox_hub')}
-                className="flex items-center gap-1.5 rounded-lg border border-emerald-500/40 bg-emerald-950/60 px-3.5 py-2 text-xs font-bold text-emerald-200 hover:bg-emerald-900/80 hover:text-white transition shadow-sm cursor-pointer"
-              >
-                <Inbox className="h-3.5 w-3.5 text-emerald-400" />
-                <span>📥 統合受信箱を開く</span>
-              </button>
-            )}
-          </div>
-
-          <div className="flex items-center gap-2 border-b border-slate-800 pb-3">
-            <button
-              type="button"
-              onClick={() => setLineView('broadcast')}
-              className={`px-4 py-2 rounded-xl text-xs font-bold transition cursor-pointer ${
-                lineView === 'broadcast'
-                  ? 'bg-emerald-600 text-white shadow-sm'
-                  : 'bg-slate-800 text-slate-300 hover:bg-slate-700'
-              }`}
-            >
-              📱 LINE友だち一斉告知
-            </button>
-            <button
-              type="button"
-              onClick={() => setLineView('inbox')}
-              className={`px-4 py-2 rounded-xl text-xs font-bold transition cursor-pointer ${
-                lineView === 'inbox'
-                  ? 'bg-blue-600 text-white shadow-sm'
-                  : 'bg-slate-800 text-slate-300 hover:bg-slate-700'
-              }`}
-            >
-              ✉️ メール一斉配信
-            </button>
-          </div>
-
-          {lineView === 'broadcast' ? (
-            <MarketingBroadcastView initialChannel="line" />
-          ) : (
-            <MarketingBroadcastView initialChannel="email" />
-          )}
-        </div>
       )}
 
       {activeTab === 'line_settings' && (
@@ -868,8 +846,29 @@ export const MarketingAutomationPrototypeView: React.FC<Props> = ({ scenarios, o
         </div>
       )}
       {activeTab === 'jobs' && <MarketingAutomationJobsPanel health={automationHealth} onHealthChange={setAutomationHealth} />}
-      {activeTab === 'templates' && <CommunicationTemplateLibraryView />}
 
+      {isInspectorOpen && inspectorScenario && (
+        <FlowStepInspectorModal
+          isOpen={isInspectorOpen}
+          scenario={inspectorScenario}
+          onClose={() => setIsInspectorOpen(false)}
+          onSave={(saved) => {
+            const exists = scenarios.some((s) => s.id === saved.id);
+            const updated = exists
+              ? scenarios.map((s) => (s.id === saved.id ? saved : s))
+              : [saved, ...scenarios];
+            onScenariosChange(sortScenarios(updated));
+            setIsInspectorOpen(false);
+            setNotice(`シナリオ「${saved.name}」を保存しました。`);
+          }}
+          onDelete={(scenarioId) => {
+            onScenariosChange(scenarios.filter((s) => s.id !== scenarioId));
+            setIsInspectorOpen(false);
+            setNotice('シナリオを削除しました。');
+          }}
+          allScenarios={scenarios}
+        />
+      )}
     </div>
   );
 };

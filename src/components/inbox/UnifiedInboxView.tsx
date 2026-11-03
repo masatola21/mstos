@@ -19,7 +19,9 @@ import {
   Sparkles,
   ChevronDown,
   ChevronUp,
-  Tag as TagIcon
+  Tag as TagIcon,
+  Building2,
+  Users
 } from 'lucide-react';
 import { getSupabase } from '../../lib/supabaseClient';
 import { UnifiedNavTab } from '../UnifiedNavbar';
@@ -109,6 +111,8 @@ export const UnifiedInboxView: React.FC<UnifiedInboxViewProps> = ({
   // Forms & Submissions state
   const [submissions, setSubmissions] = useState<SubmissionItem[]>([]);
   const [formsMeta, setFormsMeta] = useState<Map<string, FormMeta>>(new Map());
+  const [customerCompanyIds, setCustomerCompanyIds] = useState<Set<string>>(new Set());
+  const [customerStageFilter, setCustomerStageFilter] = useState<'all' | 'leads' | 'customers'>('all');
   const [formFilterStatus, setFormFilterStatus] = useState<string>('all');
   const [formSearchQuery, setFormSearchQuery] = useState('');
   const [expandedSubmissionId, setExpandedSubmissionId] = useState<string | null>(null);
@@ -158,15 +162,16 @@ export const UnifiedInboxView: React.FC<UnifiedInboxViewProps> = ({
     }
   };
 
-  // Load Form Submissions & Definitions
+  // Load Form Submissions & Definitions & Customer Status
   const loadSubmissions = async () => {
     if (!db) return;
     setLoadingSubmissions(true);
     setSubmissionError('');
     try {
-      const [subRes, formRes] = await Promise.all([
+      const [subRes, formRes, custRes] = await Promise.all([
         db.from('diagnosis_submissions').select('*').order('submitted_at', { ascending: false }).limit(200),
         db.from('diagnosis_forms').select('id,name,form_type,public_slug,definition'),
+        db.from('customers').select('company_id'),
       ]);
 
       if (subRes.error) {
@@ -181,6 +186,10 @@ export const UnifiedInboxView: React.FC<UnifiedInboxViewProps> = ({
           map.set(f.id, f as FormMeta);
         });
         setFormsMeta(map);
+      }
+
+      if (custRes.data) {
+        setCustomerCompanyIds(new Set(custRes.data.map((c: any) => c.company_id).filter(Boolean)));
       }
     } catch (err: any) {
       setSubmissionError(err.message || 'データ取得エラー');
@@ -283,6 +292,9 @@ export const UnifiedInboxView: React.FC<UnifiedInboxViewProps> = ({
   const visibleSubmissions = useMemo(() => {
     return submissions.filter((sub) => {
       if (formFilterStatus !== 'all' && sub.status !== formFilterStatus) return false;
+      const isContracted = sub.company_id ? customerCompanyIds.has(sub.company_id) : false;
+      if (customerStageFilter === 'customers' && !isContracted) return false;
+      if (customerStageFilter === 'leads' && isContracted) return false;
       if (!formSearchQuery.trim()) return true;
       const q = formSearchQuery.toLowerCase();
       const name = (sub.respondent_name || '').toLowerCase();
@@ -291,7 +303,7 @@ export const UnifiedInboxView: React.FC<UnifiedInboxViewProps> = ({
       const formName = (formsMeta.get(sub.form_id)?.name || '').toLowerCase();
       return name.includes(q) || email.includes(q) || company.includes(q) || formName.includes(q);
     });
-  }, [submissions, formFilterStatus, formSearchQuery, formsMeta]);
+  }, [submissions, formFilterStatus, customerStageFilter, formSearchQuery, formsMeta, customerCompanyIds]);
 
   const totalInboundNeedsAttention =
     counts.lineInbound + counts.dmInboundWaiting + counts.formsReceived;
@@ -309,24 +321,24 @@ export const UnifiedInboxView: React.FC<UnifiedInboxViewProps> = ({
               <div>
                 <h1 className="text-xl font-bold text-white flex items-center gap-2">
                   <span>統合受信トレイ</span>
-                  <span className="text-xs px-2 py-0.5 rounded-full bg-blue-500/20 text-blue-300 border border-blue-500/30 font-medium">
-                    全チャネル反響集約
+                  <span className="text-xs px-2.5 py-0.5 rounded-full bg-blue-500/20 text-blue-300 border border-blue-500/30 font-medium">
+                    反響・商談中 ＆ 契約後顧客 全チャネル集約
                   </span>
                 </h1>
                 <p className="text-xs text-slate-400 mt-0.5">
-                  LINE・メール・SNS DM・HP診断フォームの全受信反響を一元管理。見落としを防ぎ、1クリックでリード化・面談案内へ繋げます。
+                  LINE公式・メール・SNS DM・HP診断フォームの全受信メッセージを一元管理。見込み客の反響対応から契約中クライアントの連絡まで見落としゼロで対応します。
                 </p>
               </div>
             </div>
           </div>
 
-          <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center gap-2">
             <button
               onClick={() => {
                 void loadCounts();
                 void loadSubmissions();
               }}
-              className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-xs font-medium text-slate-200 border border-slate-700 transition"
+              className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-xs font-medium text-slate-200 border border-slate-700 transition cursor-pointer"
               title="最新の受信状態を再読み込み"
             >
               <RefreshCw className="w-3.5 h-3.5 text-slate-400" />
@@ -334,9 +346,24 @@ export const UnifiedInboxView: React.FC<UnifiedInboxViewProps> = ({
             </button>
             <button
               onClick={() => onNavigateTab('leads')}
-              className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-xs font-semibold text-white shadow transition"
+              className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-xs font-semibold text-slate-200 border border-slate-700 transition cursor-pointer"
             >
-              <span>反響リード一覧へ</span>
+              <span>反響リード</span>
+              <ArrowRight className="w-3.5 h-3.5 text-slate-400" />
+            </button>
+            <button
+              onClick={() => onNavigateTab('customers')}
+              className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-xs font-semibold text-slate-200 border border-slate-700 transition cursor-pointer"
+            >
+              <span>契約顧客台帳</span>
+              <ArrowRight className="w-3.5 h-3.5 text-slate-400" />
+            </button>
+            <button
+              onClick={() => onNavigateTab('communication_send')}
+              className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-xs font-semibold text-white shadow-md transition cursor-pointer"
+            >
+              <Send className="w-3.5 h-3.5" />
+              <span>送信センターへ</span>
               <ArrowRight className="w-3.5 h-3.5" />
             </button>
           </div>
@@ -554,34 +581,81 @@ export const UnifiedInboxView: React.FC<UnifiedInboxViewProps> = ({
       {activeChannel === 'forms' && (
         <div className="space-y-4">
           {/* Filter Bar */}
-          <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 p-4 rounded-xl border border-slate-800 bg-slate-900">
-            <div className="flex flex-wrap items-center gap-1.5">
-              <span className="text-xs text-slate-400 mr-1 flex items-center gap-1">
-                <Filter className="w-3.5 h-3.5" /> 状態:
-              </span>
-              {[
-                { key: 'all', label: `すべて (${submissions.length})` },
-                {
-                  key: 'received',
-                  label: `未対応 (${submissions.filter((s) => s.status === 'received').length})`,
-                  color: 'text-amber-300 font-bold',
-                },
-                { key: 'reviewing', label: `対応中 (${submissions.filter((s) => s.status === 'reviewing').length})` },
-                { key: 'completed', label: `完了 (${submissions.filter((s) => s.status === 'completed').length})` },
-                { key: 'rejected', label: `対象外 (${submissions.filter((s) => s.status === 'rejected').length})` },
-              ].map((filter) => (
+          <div className="flex flex-col xl:flex-row items-stretch xl:items-center justify-between gap-3 p-4 rounded-xl border border-slate-800 bg-slate-900">
+            <div className="flex flex-wrap items-center gap-2.5">
+              {/* Lifecycle Stage Filter */}
+              <div className="flex items-center bg-slate-950 p-1 rounded-lg border border-slate-800 text-xs">
                 <button
-                  key={filter.key}
-                  onClick={() => setFormFilterStatus(filter.key)}
-                  className={`px-3 py-1.5 rounded-lg text-xs font-medium transition ${
-                    formFilterStatus === filter.key
+                  type="button"
+                  onClick={() => setCustomerStageFilter('all')}
+                  className={`px-2.5 py-1 rounded font-medium transition cursor-pointer ${
+                    customerStageFilter === 'all'
                       ? 'bg-blue-600 text-white font-semibold'
-                      : 'bg-slate-800 text-slate-300 hover:bg-slate-700'
+                      : 'text-slate-400 hover:text-white'
                   }`}
                 >
-                  <span className={filter.color}>{filter.label}</span>
+                  全対象 ({submissions.length})
                 </button>
-              ))}
+                <button
+                  type="button"
+                  onClick={() => setCustomerStageFilter('leads')}
+                  className={`px-2.5 py-1 rounded font-medium transition cursor-pointer flex items-center gap-1 ${
+                    customerStageFilter === 'leads'
+                      ? 'bg-indigo-600 text-white font-semibold'
+                      : 'text-slate-400 hover:text-white'
+                  }`}
+                >
+                  <span>反響・リード</span>
+                  <span className="text-[10px] opacity-75">
+                    ({submissions.filter((s) => !s.company_id || !customerCompanyIds.has(s.company_id)).length})
+                  </span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setCustomerStageFilter('customers')}
+                  className={`px-2.5 py-1 rounded font-medium transition cursor-pointer flex items-center gap-1 ${
+                    customerStageFilter === 'customers'
+                      ? 'bg-emerald-600 text-white font-semibold'
+                      : 'text-slate-400 hover:text-white'
+                  }`}
+                >
+                  <Building2 className="w-3 h-3 text-emerald-400" />
+                  <span>契約中クライアント</span>
+                  <span className="text-[10px] opacity-75">
+                    ({submissions.filter((s) => s.company_id && customerCompanyIds.has(s.company_id)).length})
+                  </span>
+                </button>
+              </div>
+
+              {/* Status Filter */}
+              <div className="flex flex-wrap items-center gap-1">
+                <span className="text-xs text-slate-400 mr-1 flex items-center gap-1">
+                  <Filter className="w-3.5 h-3.5" /> 状態:
+                </span>
+                {[
+                  { key: 'all', label: `すべて` },
+                  {
+                    key: 'received',
+                    label: `未対応 (${submissions.filter((s) => s.status === 'received').length})`,
+                    color: 'text-amber-300 font-bold',
+                  },
+                  { key: 'reviewing', label: `対応中 (${submissions.filter((s) => s.status === 'reviewing').length})` },
+                  { key: 'completed', label: `完了 (${submissions.filter((s) => s.status === 'completed').length})` },
+                  { key: 'rejected', label: `対象外 (${submissions.filter((s) => s.status === 'rejected').length})` },
+                ].map((filter) => (
+                  <button
+                    key={filter.key}
+                    onClick={() => setFormFilterStatus(filter.key)}
+                    className={`px-2.5 py-1 rounded-lg text-xs font-medium transition cursor-pointer ${
+                      formFilterStatus === filter.key
+                        ? 'bg-slate-700 text-white font-semibold'
+                        : 'bg-slate-950 text-slate-400 hover:bg-slate-800'
+                    }`}
+                  >
+                    <span className={filter.color}>{filter.label}</span>
+                  </button>
+                ))}
+              </div>
             </div>
 
             <div className="relative min-w-[240px]">
@@ -621,6 +695,7 @@ export const UnifiedInboxView: React.FC<UnifiedInboxViewProps> = ({
               {visibleSubmissions.map((sub) => {
                 const form = formsMeta.get(sub.form_id);
                 const isExpanded = expandedSubmissionId === sub.id;
+                const isContracted = sub.company_id ? customerCompanyIds.has(sub.company_id) : false;
                 const statusBadge =
                   sub.status === 'received'
                     ? { label: '未対応（新規受付）', color: 'bg-amber-500/20 text-amber-300 border-amber-500/40' }
@@ -642,6 +717,16 @@ export const UnifiedInboxView: React.FC<UnifiedInboxViewProps> = ({
                           <span className={`px-2 py-0.5 rounded text-[11px] font-semibold border ${statusBadge.color}`}>
                             {statusBadge.label}
                           </span>
+                          {isContracted ? (
+                            <span className="text-[11px] px-2.5 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 font-semibold flex items-center gap-1">
+                              <CheckCircle2 className="w-3 h-3 text-emerald-400" />
+                              契約中クライアント
+                            </span>
+                          ) : (
+                            <span className="text-[11px] px-2 py-0.5 rounded-full bg-blue-500/20 text-blue-300 border border-blue-500/30 font-medium">
+                              反響リード
+                            </span>
+                          )}
                           <span className="text-sm font-bold text-white">
                             {sub.respondent_name || sub.respondent_email || '回答者（氏名未入力）'}
                           </span>
@@ -690,11 +775,24 @@ export const UnifiedInboxView: React.FC<UnifiedInboxViewProps> = ({
                           <option value="rejected">対象外</option>
                         </select>
 
+                        {/* Customer Workspace Shortcut for Contracted Clients */}
+                        {isContracted && sub.company_id && (
+                          <button
+                            type="button"
+                            onClick={() => onOpenCustomerWorkspace?.(sub.company_id!)}
+                            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-emerald-950/70 hover:bg-emerald-900/70 text-xs font-semibold text-emerald-300 border border-emerald-600/50 shadow transition cursor-pointer"
+                            title="契約顧客カルテ・支援タスクを開く"
+                          >
+                            <Building2 className="w-3.5 h-3.5 text-emerald-400" />
+                            <span>顧客カルテ</span>
+                          </button>
+                        )}
+
                         {/* 1-click Lead Conversion */}
                         {!sub.lead_id ? (
                           <button
                             onClick={() => void handleConvertToLead(sub)}
-                            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-xs font-semibold text-white shadow transition"
+                            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-xs font-semibold text-white shadow transition cursor-pointer"
                             title="この回答内容を営業リード台帳に登録"
                           >
                             <UserCheck className="w-3.5 h-3.5" />
@@ -703,10 +801,10 @@ export const UnifiedInboxView: React.FC<UnifiedInboxViewProps> = ({
                         ) : (
                           <button
                             onClick={() => onNavigateTab('leads')}
-                            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-indigo-950/60 hover:bg-indigo-900/60 text-xs font-semibold text-indigo-300 border border-indigo-700/60 transition"
+                            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-indigo-950/60 hover:bg-indigo-900/60 text-xs font-semibold text-indigo-300 border border-indigo-700/60 transition cursor-pointer"
                           >
                             <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" />
-                            <span>リード登録済（確認）</span>
+                            <span>リード登録済</span>
                           </button>
                         )}
 
@@ -718,15 +816,15 @@ export const UnifiedInboxView: React.FC<UnifiedInboxViewProps> = ({
                                 companyId: sub.company_id || undefined,
                                 contactId: sub.contact_id || undefined,
                                 formId: sub.form_id,
-                                sendKind: 'deal',
+                                sendKind: isContracted ? 'customer_meeting' : 'deal',
                               });
                             }
-                            onNavigateTab('deal_invitations');
+                            onNavigateTab(isContracted ? 'customer_meeting_invitations' : 'deal_invitations');
                           }}
-                          className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-xs font-medium text-slate-200 border border-slate-700 transition"
+                          className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-xs font-medium text-slate-200 border border-slate-700 transition cursor-pointer"
                         >
                           <Calendar className="w-3.5 h-3.5 text-blue-400" />
-                          <span>面談案内を作成</span>
+                          <span>{isContracted ? '面談案内' : '商談案内'}</span>
                         </button>
 
                         {/* Open Diagnosis / Report */}

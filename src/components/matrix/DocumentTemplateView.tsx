@@ -17,7 +17,8 @@ import {
   ExternalLink,
   Link2,
   Calculator,
-  BarChart3
+  BarChart3,
+  Send
 } from 'lucide-react';
 
 export type DocTemplateType = 'contract' | 'proposal' | 'invoice' | 'report' | 'estimate' | 'monthly_report';
@@ -615,9 +616,21 @@ const getTemplateDefaultValues = (templateId: string, today: string = todayJst()
 const templateWorkflowOrder: Record<DocTemplateType, number> = { report: 0, proposal: 1, estimate: 2, contract: 3, invoice: 4, monthly_report: 5 };
 const orderTemplatesByWorkflow = (items: DocTemplate[]) => [...items].sort((a, b) => templateWorkflowOrder[a.type] - templateWorkflowOrder[b.type]);
 
-interface DocumentTemplateViewProps { initialCompanyId?: string; initialLeadId?: string; initialDealId?: string; initialDocumentType?: DocTemplateType; }
+interface DocumentTemplateViewProps { 
+  initialCompanyId?: string; 
+  initialLeadId?: string; 
+  initialDealId?: string; 
+  initialDocumentType?: DocTemplateType; 
+  onOpenSendCenter?: (params: { companyId?: string; documentId?: string; dealId?: string; contactId?: string }) => void;
+}
 
-export const DocumentTemplateView: React.FC<DocumentTemplateViewProps> = ({ initialCompanyId, initialLeadId, initialDealId, initialDocumentType }) => {
+export const DocumentTemplateView: React.FC<DocumentTemplateViewProps> = ({ 
+  initialCompanyId, 
+  initialLeadId, 
+  initialDealId, 
+  initialDocumentType,
+  onOpenSendCenter
+}) => {
   const [templates, setTemplates] = useState<DocTemplate[]>(DEFAULT_TEMPLATES);
   const [templateStatus, setTemplateStatus] = useState('');
   const [selectedTemplateId, setSelectedTemplateId] = useState<string>(initialDocumentType === 'invoice' ? 'tpl-invoice-01' : initialDealId ? 'tpl-estimate-01' : 'tpl-report-01');
@@ -1032,6 +1045,54 @@ export const DocumentTemplateView: React.FC<DocumentTemplateViewProps> = ({ init
     setIsEditingTemplate(false);
   };
 
+  const handleSendViaSendCenter = async () => {
+    const templateId = currentTemplate.id;
+    let docIdToUse = savedDocIds[templateId] || autosavedDocumentIds.current[templateId];
+
+    if (!docIdToUse) {
+      const supabase = getSupabase();
+      if (supabase) {
+        setIsSavingDocument(true);
+        setSaveMessage('書類を保存して送信センターへ連携中…');
+        try {
+          const documentType = currentTemplate.type === 'report' ? 'diagnosis_report' : currentTemplate.type;
+          const payload = {
+            document_type: documentType,
+            title: currentTemplate.title,
+            body_html: populatedHtml,
+            company_id: companyId || null,
+            contact_id: contactId || null,
+            lead_id: leadId || null,
+            deal_id: dealId || null,
+          };
+          const { data, error } = await supabase.from('customer_documents')
+            .insert({ ...payload, status: 'awaiting_approval' })
+            .select('id')
+            .single();
+          if (!error && data?.id) {
+            docIdToUse = data.id;
+            autosavedDocumentIds.current[templateId] = data.id;
+            setSavedDocIds((prev) => ({ ...prev, [templateId]: data.id }));
+            setHasStartedDocument(true);
+          }
+        } catch (e: any) {
+          console.error('Error auto-saving before send center:', e);
+        } finally {
+          setIsSavingDocument(false);
+        }
+      }
+    }
+
+    if (onOpenSendCenter) {
+      onOpenSendCenter({
+        companyId: companyId || undefined,
+        documentId: docIdToUse || undefined,
+        dealId: dealId || undefined,
+        contactId: contactId || undefined,
+      });
+    }
+  };
+
   return (
     <div className="space-y-6">
       {/* Header Banner */}
@@ -1094,10 +1155,21 @@ export const DocumentTemplateView: React.FC<DocumentTemplateViewProps> = ({ init
           </button>
 
           <button
-            onClick={handlePrintPdf}
-            className="px-4 py-2.5 rounded-xl bg-blue-600 hover:bg-blue-500 text-white font-semibold text-xs flex items-center gap-2 shadow-lg shadow-blue-600/25 transition-all cursor-pointer"
+            type="button"
+            onClick={handleSendViaSendCenter}
+            disabled={isSavingDocument}
+            className="px-4 py-2.5 rounded-xl bg-gradient-to-r from-blue-600 via-indigo-600 to-indigo-700 hover:from-blue-500 hover:to-indigo-600 text-white font-semibold text-xs flex items-center gap-2 shadow-lg shadow-indigo-600/25 transition-all cursor-pointer"
+            title="仕上げた書類を送信センター（LINE・メール送信）へ連携して送付します"
           >
-            <Printer className="w-4 h-4" />
+            <Send className="w-4 h-4" />
+            <span>送信センターで送る</span>
+          </button>
+
+          <button
+            onClick={handlePrintPdf}
+            className="px-4 py-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 font-semibold text-xs flex items-center gap-2 transition-all cursor-pointer"
+          >
+            <Printer className="w-4 h-4 text-slate-400" />
             <span>PDF印刷・プレビュー</span>
           </button>
         </div>
@@ -1248,6 +1320,15 @@ export const DocumentTemplateView: React.FC<DocumentTemplateViewProps> = ({ init
             </div>
             <div className="flex items-center gap-2">
               <button
+                type="button"
+                onClick={handleSendViaSendCenter}
+                className="px-3 py-1.5 rounded-lg bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white text-xs font-semibold flex items-center gap-1.5 transition-all shadow-md cursor-pointer"
+                title="仕上げた書類を送信センター（LINE・メール送信）へ連携して送付します"
+              >
+                <Send className="w-3.5 h-3.5" />
+                <span>送信センターで送る</span>
+              </button>
+              <button
                 onClick={handleCopyHtml}
                 className="px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-semibold flex items-center gap-1.5 transition-colors cursor-pointer"
               >
@@ -1256,9 +1337,9 @@ export const DocumentTemplateView: React.FC<DocumentTemplateViewProps> = ({ init
               </button>
               <button
                 onClick={handlePrintPdf}
-                className="px-3 py-1.5 rounded-lg bg-blue-600 hover:bg-blue-500 text-white text-xs font-semibold flex items-center gap-1.5 transition-colors cursor-pointer shadow-md"
+                className="px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 text-xs font-semibold flex items-center gap-1.5 transition-colors cursor-pointer shadow-md"
               >
-                <Printer className="w-3.5 h-3.5" />
+                <Printer className="w-3.5 h-3.5 text-slate-400" />
                 <span>印刷 / PDF</span>
               </button>
             </div>
