@@ -25,6 +25,7 @@ import { TableKey, TABLE_CONFIGS } from '../types/database';
 export type UnifiedNavTab = 
   // 営業・顧客管理
   | 'mst_dashboard'
+  | 'inbox_hub'
   | 'inflow_dashboard'
   | 'unified_calendar'
   | 'mst_diagnoses'
@@ -238,13 +239,14 @@ export const UnifiedNavbar: React.FC<UnifiedNavbarProps> = ({
             const groups = [
               { id: 'dashboard', label: 'ダッシュボード', items: (['mst_dashboard'] as UnifiedNavTab[]) },
               { id: 'acquisition', label: '集客・開拓', items: (['ai_acquisition', 'marketing_automation', 'prospects', 'contacts'] as UnifiedNavTab[]) },
-              { id: 'pipeline', label: '反響・商談', items: (['leads', 'deals', 'mst_diagnoses'] as UnifiedNavTab[]) },
-              { id: 'contracts', label: '契約・書類', items: (['document_templates', 'communication_send'] as UnifiedNavTab[]) },
+              { id: 'pipeline', label: '反響・商談', items: (['inbox_hub', 'leads', 'deals', 'mst_diagnoses'] as UnifiedNavTab[]) },
+              { id: 'contracts', label: '書類・送信（重要書類・配信）', items: (['document_templates', 'communication_send'] as UnifiedNavTab[]) },
               { id: 'customers', label: '顧客・支援', items: (['customers', 'customer_operations', 'products', 'companies'] as UnifiedNavTab[]) },
               { id: 'calendar', label: '予定カレンダー', items: (['unified_calendar', 'deal_invitations', 'customer_meeting_invitations'] as UnifiedNavTab[]) },
             ];
             const activeGroup = groups.find((group) => group.items.includes(currentTab)) || groups[0];
             const labelFor = (tab: UnifiedNavTab) => {
+              if (tab === 'inbox_hub') return '📥 統合受信トレイ（反響対応）';
               if (tab === 'mst_dashboard') return '営業・反響 統合ダッシュボード';
               if (tab === 'inflow_dashboard') return '営業・反響 統合ダッシュボード';
               if (tab === 'unified_calendar') return '統合予定カレンダー（Google同期・全社日程）';
@@ -256,9 +258,9 @@ export const UnifiedNavbar: React.FC<UnifiedNavbarProps> = ({
               if (tab === 'marketing_automation') return 'LINE・メール自動配信';
               if (tab === 'leads') return '反響リード';
               if (tab === 'deals') return '商談一覧';
-              if (tab === 'mst_diagnoses') return 'フォーム・診断';
-              if (tab === 'document_templates') return '見積・契約・請求書';
-              if (tab === 'communication_send') return '送信・承認センター';
+              if (tab === 'mst_diagnoses') return 'フォーム・診断設計';
+              if (tab === 'document_templates') return '重要書類（見積・契約・請求・レポート）';
+              if (tab === 'communication_send') return '送信センター（個別・一斉配信）';
               if (tab === 'customers') return '契約顧客台帳';
               if (tab === 'customer_operations') return '支援案件・タスク';
               if (tab === 'products') return '商品マスタ（デジタル含む）';

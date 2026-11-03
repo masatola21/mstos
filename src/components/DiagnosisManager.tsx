@@ -886,9 +886,10 @@ ${JSON.stringify(context, null, 2)}`;
         if (supersedeError) throw supersedeError;
       }
 
+      const reportVersion = Math.max(0, ...reports.map((report) => report.version)) + 1;
       const { data, error } = await supabase.from('ai_reports').insert([{
         diagnosis_id: diagnosis.id,
-        version: Math.max(0, ...reports.map((report) => report.version)) + 1,
+        version: reportVersion,
         is_latest: true,
         status: 'generated',
         title: `${diagnosis.company?.company_name || diagnosis.company_id} 経営診断レポート`,
@@ -907,9 +908,32 @@ ${JSON.stringify(context, null, 2)}`;
         }
         throw error;
       }
+
+      // customer_documents（全社書類台帳）へ自動登録・一元同期
+      try {
+        const docHtml = `<div style="font-family: sans-serif; line-height: 1.8; color: #1e293b; max-width: 800px; margin: 0 auto; padding: 24px;">
+  <h1 style="font-size: 22px; color: #0f172a; border-bottom: 2px solid #2563eb; padding-bottom: 8px; margin-bottom: 20px;">
+    ${diagnosis.company?.company_name || '御社'} 経営診断・ボトルネック改善レポート
+  </h1>
+  <div style="white-space: pre-wrap; font-size: 14px; color: #334155;">
+${reportDraft.text.replace(/</g, '&lt;').replace(/>/g, '&gt;')}
+  </div>
+</div>`;
+        await supabase.from('customer_documents').insert({
+          company_id: diagnosis.company_id,
+          lead_id: diagnosis.lead_id || null,
+          document_type: 'diagnosis_report',
+          title: `${diagnosis.company?.company_name || '顧客'} 経営診断レポート (v${reportVersion})`,
+          body_html: docHtml,
+          status: 'draft',
+        });
+      } catch (docErr) {
+        console.warn('Failed to sync to customer_documents:', docErr);
+      }
+
       setReports((current) => [data as AiReport, ...current.filter((report) => report.id !== previousLatest?.id)]);
       setReportDraft(null);
-      setSaveSuccessMsg('診断レポートを保存しました。顧客書類にレポートと提案書の草案を作成しました。');
+      setSaveSuccessMsg('診断レポートを保存しました。全社書類台帳（契約・書類）にも同期登録されました。');
       onUpdated();
     } catch (error: any) {
       setErrorMsg(error.message || '診断レポートを保存できませんでした。');
@@ -939,6 +963,12 @@ ${JSON.stringify(context, null, 2)}`;
 
       // 2. 診断ステータスを reported に更新
       await supabase.from('diagnoses').update({ status: 'reported' }).eq('id', diagnosis.id);
+
+      // 3. 全社書類台帳（customer_documents）の該当レポートも approved に同期
+      await supabase.from('customer_documents')
+        .update({ status: 'approved' })
+        .eq('company_id', diagnosis.company_id)
+        .eq('document_type', 'diagnosis_report');
 
       // 3. 会社紐づきの連絡先を取得
       let contact: any = null;

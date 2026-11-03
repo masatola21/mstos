@@ -41,6 +41,7 @@ import { AIAcquisitionOperationsView } from './components/marketing/AIAcquisitio
 import { ContactsLineHub } from './components/ContactsLineHub';
 import { QuickPresidentDrawer, getPageAssistantProfile } from './components/matrix/QuickPresidentDrawer';
 import { IntegratedCalendarWorkspace } from './components/calendar/IntegratedCalendarWorkspace';
+import { UnifiedInboxView } from './components/inbox/UnifiedInboxView';
 
 // Storage and Types
 import {
@@ -2063,6 +2064,28 @@ function AppContent() {
           />
         )}
 
+        {currentTab === 'inbox_hub' && (
+          <UnifiedInboxView
+            initialChannel={lineInboxContact ? 'line' : 'forms'}
+            initialLineUserId={lineInboxContact?.lineUserId}
+            onNavigateTab={(tab) => setCurrentTab(tab)}
+            onOpenSendCenter={(params) => {
+              setCustomerWorkspaceContext((current) => ({
+                ...current,
+                companyId: params.companyId || current?.companyId || '',
+                contactId: params.contactId,
+                formId: params.formId,
+                sendKind: params.sendKind,
+              }));
+              setCurrentTab('communication_send');
+            }}
+            onOpenCustomerWorkspace={(companyId, destination) => {
+              setCustomerWorkspaceContext({ companyId });
+              setCurrentTab(destination === 'deals' ? 'deals' : 'customer_operations');
+            }}
+          />
+        )}
+
         {currentTab === 'unified_calendar' && (
           <IntegratedCalendarWorkspace
             invoices={invoices}
@@ -2205,7 +2228,7 @@ function AppContent() {
           </>
         )}
 
-        {currentTab === 'contacts' && <ContactsLineHub onOpenLineInbox={(contactId, lineUserId) => { setLineInboxContact({ contactId, lineUserId }); setCurrentTab('marketing_automation'); }} onOpenEmailSend={(contactId, companyId) => { setCustomerWorkspaceContext({ companyId: companyId || '', contactId, sendKind: 'announcement' }); setCurrentTab('communication_send'); }} />}
+        {currentTab === 'contacts' && <ContactsLineHub onOpenLineInbox={(contactId, lineUserId) => { setLineInboxContact({ contactId, lineUserId }); setCurrentTab('inbox_hub'); }} onOpenEmailSend={(contactId, companyId) => { setCustomerWorkspaceContext({ companyId: companyId || '', contactId, sendKind: 'announcement' }); setCurrentTab('communication_send'); }} />}
 
 
         {currentTab === 'ai_acquisition' && (

@@ -1,15 +1,8 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { getSupabase } from '../../lib/supabaseClient';
 import { LineMessagePreview } from '../LineMessagePreview';
-import { findUnknownPlaceholders, PLACEHOLDER_DEFS, PLACEHOLDER_SAMPLE_VALUES, renderPlaceholders } from '../../utils/placeholders';
-const PlaceholderAssist: React.FC<{ text: string; onInsert: (token: string) => void }> = ({ text, onInsert }) => {
-  const unknown = findUnknownPlaceholders(text);
-  return <div className="mt-2 space-y-2">
-    <div className="flex flex-wrap items-center gap-1.5"><span className="mr-1 text-[11px] text-slate-500">差し込み:</span>{PLACEHOLDER_DEFS.map(({ key, description }) => <button key={key} type="button" title={description} onClick={() => onInsert(`{${key}}`)} className="rounded border border-slate-700 px-1.5 py-0.5 font-mono text-[10px] text-indigo-200 hover:border-indigo-400">{`{${key}}`}</button>)}</div>
-    <div className="rounded border border-slate-800 bg-slate-950/70 p-2"><span className="text-[10px] text-slate-500">サンプル値プレビュー</span><p className="mt-1 whitespace-pre-wrap text-xs text-slate-300">{renderPlaceholders(text, PLACEHOLDER_SAMPLE_VALUES) || '（文面は空です）'}</p></div>
-    {unknown.length > 0 && <p className="text-[11px] text-amber-300">未定義の差し込みキー: {unknown.map((key) => `{${key}}`).join(', ')}（保存はできます）</p>}
-  </div>;
-};
+import { renderPlaceholders } from '../../utils/placeholders';
+import { PlaceholderAssist } from '../common/PlaceholderAssist';
 
 
 

@@ -43,7 +43,10 @@ export const ContactsLineHub: React.FC<Props> = ({ initialFilter = 'all', onOpen
   const [selectedTags, setSelectedTags] = useState<string[]>([]);
   const [search, setSearch] = useState('');
   const [filter, setFilter] = useState<FilterMode>(initialFilter);
+  const [selectedTagFilter, setSelectedTagFilter] = useState<string | null>(null);
   const [newTagName, setNewTagName] = useState('');
+  const [topNewTagName, setTopNewTagName] = useState('');
+  const [inlineNewTagName, setInlineNewTagName] = useState('');
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
@@ -134,19 +137,40 @@ export const ContactsLineHub: React.FC<Props> = ({ initialFilter = 'all', onOpen
 
   useEffect(() => { void load(); }, [load]);
 
+  const tagCounts = useMemo(() => {
+    const counts = new Map<string, number>();
+    people.forEach((p) => {
+      const friendTags = new Set(p.lineFriends.flatMap((f) => f.tags.map((t) => t.id)));
+      friendTags.forEach((tagId) => {
+        counts.set(tagId, (counts.get(tagId) || 0) + 1);
+      });
+    });
+    return counts;
+  }, [people]);
+
   const visiblePeople = useMemo(() => {
     const query = search.trim().toLowerCase();
     return people.filter((person) => {
       if (filter === 'line' && !person.lineFriends.length) return false;
       if (filter === 'no-line' && person.lineFriends.length) return false;
+      if (selectedTagFilter) {
+        const hasSelectedTag = person.lineFriends.some((f) =>
+          f.tags.some((t) => t.id === selectedTagFilter)
+        );
+        if (!hasSelectedTag) return false;
+      }
       if (!query) return true;
       const values = [
         person.name, person.email, person.phone, person.companyName,
-        ...person.lineFriends.flatMap((friend) => [friend.line_user_id, friend.display_name, ...friend.tags.map((tag) => tag.name)]),
+        ...person.lineFriends.flatMap((friend) => [
+          friend.line_user_id,
+          friend.display_name,
+          ...friend.tags.map((tag) => tag.name),
+        ]),
       ];
       return values.some((value) => String(value || '').toLowerCase().includes(query));
     });
-  }, [people, search, filter]);
+  }, [people, search, filter, selectedTagFilter]);
 
   const togglePerson = (id: string) => setSelectedPeople((current) =>
     current.includes(id) ? current.filter((item) => item !== id) : [...current, id]
@@ -155,24 +179,127 @@ export const ContactsLineHub: React.FC<Props> = ({ initialFilter = 'all', onOpen
     current.includes(id) ? current.filter((item) => item !== id) : [...current, id]
   );
 
-  const createTag = async (event: React.FormEvent) => {
-    event.preventDefault();
-    const name = newTagName.trim();
-    if (!name) return;
+  const createTagDirect = async (name: string) => {
+    const trimmed = name.trim();
+    if (!trimmed) return;
     const supabase = getSupabase();
     if (!supabase) return;
     setSaving(true);
     setError('');
     setNotice('');
-    const { error: insertError } = await supabase.from('contact_tags').insert({ name });
-    if (insertError) {
-      setError(insertError.message.includes('duplicate') ? '同じ名前のタグがすでにあります。' : insertError.message);
-    } else {
-      setNewTagName('');
-      setNotice('タグを作成しました。LINE友だちを選んで付与できます。');
+    try {
+      const { error: insertError } = await supabase.from('contact_tags').insert({ name: trimmed });
+      if (insertError) {
+        throw new Error(insertError.message.includes('duplicate') ? `タグ「${trimmed}」は既に存在します。` : insertError.message);
+      }
+      setNotice(`タグ「${trimmed}」を作成しました。`);
       await load();
+    } catch (err: any) {
+      setError(err.message || 'タグ作成に失敗しました。');
+    } finally {
+      setSaving(false);
     }
-    setSaving(false);
+  };
+
+  const createTag = async (event: React.FormEvent) => {
+    event.preventDefault();
+    if (!newTagName.trim()) return;
+    await createTagDirect(newTagName);
+    setNewTagName('');
+  };
+
+  const handleCreateTagTop = async (event: React.FormEvent) => {
+    event.preventDefault();
+    if (!topNewTagName.trim()) return;
+    await createTagDirect(topNewTagName);
+    setTopNewTagName('');
+  };
+
+  const toggleTagOnFriend = async (friendId: string, tagId: string, currentHasTag: boolean) => {
+    const supabase = getSupabase();
+    if (!supabase) return;
+    setSaving(true);
+    setError('');
+    setNotice('');
+    try {
+      if (currentHasTag) {
+        const { error: delErr } = await supabase.from('line_friend_tags')
+          .delete()
+          .eq('line_friend_id', friendId)
+          .eq('tag_id', tagId);
+        if (delErr) throw delErr;
+        setNotice('タグを解除しました。');
+      } else {
+        const { error: insErr } = await supabase.from('line_friend_tags')
+          .upsert(
+            { line_friend_id: friendId, tag_id: tagId, assigned_by: 'operator' },
+            { onConflict: 'line_friend_id,tag_id' }
+          );
+        if (insErr) throw insErr;
+        setNotice('タグを付与しました。');
+      }
+      await load();
+    } catch (err: any) {
+      setError('タグ操作エラー: ' + (err.message || '処理に失敗しました'));
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const createAndAssignTagInline = async (friendId: string, name: string) => {
+    const trimmed = name.trim();
+    if (!trimmed) return;
+    const supabase = getSupabase();
+    if (!supabase) return;
+    setSaving(true);
+    setError('');
+    setNotice('');
+    try {
+      let targetTagId = tags.find((t) => t.name.toLowerCase() === trimmed.toLowerCase())?.id;
+      if (!targetTagId) {
+        const { data: createdTag, error: tagErr } = await supabase
+          .from('contact_tags')
+          .insert({ name: trimmed })
+          .select('id')
+          .single();
+        if (tagErr) throw tagErr;
+        targetTagId = createdTag.id;
+      }
+      const { error: assignErr } = await supabase.from('line_friend_tags').upsert(
+        { line_friend_id: friendId, tag_id: targetTagId, assigned_by: 'operator' },
+        { onConflict: 'line_friend_id,tag_id' }
+      );
+      if (assignErr) throw assignErr;
+      setNotice(`タグ「${trimmed}」を作成して付与しました。`);
+      setInlineNewTagName('');
+      await load();
+    } catch (err: any) {
+      setError('タグ作成・付与エラー: ' + (err.message || '処理に失敗しました'));
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const deleteTag = async (tagId: string, tagName: string) => {
+    if (!window.confirm(`タグ「${tagName}」を削除しますか？\n付与されている全ての友だちからもタグが外れます。`)) return;
+    const supabase = getSupabase();
+    if (!supabase) return;
+    setSaving(true);
+    setError('');
+    setNotice('');
+    try {
+      await supabase.from('line_friend_tags').delete().eq('tag_id', tagId);
+      const { error: delErr } = await supabase.from('contact_tags').delete().eq('id', tagId);
+      if (delErr) throw delErr;
+      setNotice(`タグ「${tagName}」を完全に削除しました。`);
+      if (selectedTagFilter === tagId) setSelectedTagFilter(null);
+      setSelectedTags((prev) => prev.filter((id) => id !== tagId));
+      await load();
+    } catch (err: any) {
+      setError('タグ削除エラー: ' + (err.message || '削除に失敗しました'));
+    } finally {
+      setSaving(false);
+    }
   };
 
   const assignSelectedTags = async () => {
@@ -207,28 +334,11 @@ export const ContactsLineHub: React.FC<Props> = ({ initialFilter = 'all', onOpen
   };
 
   const assignTagToFriend = async (friendId: string, tagId: string) => {
-    const supabase = getSupabase();
-    if (!supabase) return;
-    setSaving(true);
-    setError('');
-    const { error: assignError } = await supabase.from('line_friend_tags')
-      .upsert({ line_friend_id: friendId, tag_id: tagId, assigned_by: 'operator' }, { onConflict: 'line_friend_id,tag_id' });
-    if (assignError) {
-      setError('タグ付与エラー: ' + assignError.message);
-    } else {
-      setNotice('タグを付与しました。');
-      await load();
-    }
-    setSaving(false);
+    await toggleTagOnFriend(friendId, tagId, false);
   };
 
   const removeTag = async (friendId: string, tagId: string) => {
-    const supabase = getSupabase();
-    if (!supabase) return;
-    const { error: removeError } = await supabase.from('line_friend_tags')
-      .delete().eq('line_friend_id', friendId).eq('tag_id', tagId);
-    if (removeError) setError(removeError.message);
-    else await load();
+    await toggleTagOnFriend(friendId, tagId, true);
   };
 
   const changeEmailConsent = async (contact: Contact, status: 'unknown' | 'opted_in' | 'opted_out') => {
@@ -407,6 +517,93 @@ export const ContactsLineHub: React.FC<Props> = ({ initialFilter = 'all', onOpen
             ))}
           </div>
         </div>
+
+        {/* 🏷️ タグ絞り込み & 新規タグ作成バー（一覧連動） */}
+        <div className="flex flex-wrap items-center gap-2 border-b border-slate-800 bg-slate-950/40 px-4 py-2.5 text-xs">
+          <div className="flex items-center gap-1.5 text-slate-300 font-semibold shrink-0">
+            <Tag className="h-3.5 w-3.5 text-blue-400" />
+            <span>タグ絞り込み:</span>
+          </div>
+          <button
+            type="button"
+            onClick={() => setSelectedTagFilter(null)}
+            className={`rounded-full px-2.5 py-1 text-xs font-medium transition cursor-pointer ${
+              selectedTagFilter === null
+                ? 'bg-blue-600 text-white font-bold shadow-sm'
+                : 'border border-slate-700 bg-slate-900 text-slate-300 hover:text-white hover:border-slate-600'
+            }`}
+          >
+            全タグ ({people.length})
+          </button>
+          {tags.map((tag) => {
+            const count = tagCounts.get(tag.id) || 0;
+            const isSelected = selectedTagFilter === tag.id;
+            return (
+              <div key={tag.id} className="inline-flex items-center">
+                <button
+                  type="button"
+                  onClick={() => setSelectedTagFilter(isSelected ? null : tag.id)}
+                  title={`クリックして「${tag.name}」タグで絞り込み`}
+                  className={`rounded-l-full border-y border-l px-2.5 py-1 text-xs font-medium transition cursor-pointer flex items-center gap-1.5 ${
+                    isSelected
+                      ? 'border-blue-500 bg-blue-600 text-white font-bold shadow-sm'
+                      : 'border-slate-700 bg-slate-900 text-slate-300 hover:border-slate-600 hover:text-white'
+                  }`}
+                >
+                  <span>{tag.name}</span>
+                  <span className={`text-[10px] px-1.5 py-0.2 rounded-full font-bold ${isSelected ? 'bg-blue-800 text-blue-100' : 'bg-slate-800 text-slate-400'}`}>
+                    {count}
+                  </span>
+                </button>
+                <button
+                  type="button"
+                  title={`タグ「${tag.name}」を完全に削除`}
+                  onClick={() => void deleteTag(tag.id, tag.name)}
+                  className={`rounded-r-full border px-1.5 py-1 text-xs transition cursor-pointer ${
+                    isSelected
+                      ? 'border-blue-500 bg-blue-700 text-blue-200 hover:bg-rose-600 hover:text-white'
+                      : 'border-slate-700 bg-slate-900 text-slate-500 hover:bg-rose-950 hover:text-rose-300 hover:border-rose-700'
+                  }`}
+                >
+                  <Trash2 className="h-3 w-3" />
+                </button>
+              </div>
+            );
+          })}
+
+          <form onSubmit={handleCreateTagTop} className="inline-flex items-center gap-1.5 ml-auto">
+            <input
+              value={topNewTagName}
+              onChange={(e) => setTopNewTagName(e.target.value)}
+              placeholder="＋新規タグ名..."
+              className="rounded-lg border border-slate-700 bg-slate-950 px-2.5 py-1 text-xs text-white placeholder-slate-500 outline-none focus:border-blue-500 w-28 sm:w-36"
+            />
+            <button
+              type="submit"
+              disabled={saving || !topNewTagName.trim()}
+              className="rounded-lg bg-blue-600 hover:bg-blue-500 px-2.5 py-1 text-xs font-semibold text-white disabled:opacity-40 cursor-pointer transition flex items-center gap-1"
+            >
+              <Plus className="h-3 w-3" />
+              <span>作成</span>
+            </button>
+          </form>
+        </div>
+
+        {selectedTagFilter && (
+          <div className="flex items-center justify-between border-b border-blue-900/40 bg-blue-950/30 px-4 py-2 text-xs text-blue-200">
+            <div className="flex items-center gap-2">
+              <span className="font-bold">🏷️ タグ「{tags.find((t) => t.id === selectedTagFilter)?.name}」で絞り込み中:</span>
+              <span>{visiblePeople.length} 件が該当</span>
+            </div>
+            <button
+              type="button"
+              onClick={() => setSelectedTagFilter(null)}
+              className="text-xs text-blue-300 hover:text-white underline cursor-pointer"
+            >
+              絞り込みを解除
+            </button>
+          </div>
+        )}
 
         {selectedPeople.length > 0 && (
           <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-800 bg-slate-950/70 p-4">
