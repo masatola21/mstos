@@ -28,7 +28,7 @@ const sections = [
 ] as const;
 type Tab = typeof sections[number][0];
 
-const cls = 'mt-1 block w-full rounded-lg border border-slate-700 bg-slate-950 p-2.5 text-sm text-white focus:outline-none focus:border-cyan-500';
+const cls = 'mt-1 block w-full rounded-xl border border-slate-300 bg-white p-2.5 text-xs text-slate-900 placeholder:text-slate-400 focus:outline-none focus:border-purple-500 focus:ring-1 focus:ring-purple-500';
 
 export const OwnMediaWorkspace: React.FC<{
   products: Product[];
@@ -63,16 +63,20 @@ export const OwnMediaWorkspace: React.FC<{
   // 自社公式HP / オウンドメディア URL設定（localStorage & Supabase連動）
   const [customSiteUrl, setCustomSiteUrl] = useState<string>(() => {
     if (typeof window !== 'undefined') {
-      return localStorage.getItem('mst_official_site_url') || 'https://corp.mstcorp.info';
+      const saved = localStorage.getItem('mst_official_site_url');
+      if (saved && !saved.includes('corp.mstcorp.info')) return saved;
+      return 'https://mstcorp.info';
     }
-    return 'https://corp.mstcorp.info';
+    return 'https://mstcorp.info';
   });
 
   const [customMediaUrl, setCustomMediaUrl] = useState<string>(() => {
     if (typeof window !== 'undefined') {
-      return localStorage.getItem('mst_official_media_url') || 'https://corp.mstcorp.info/media';
+      const saved = localStorage.getItem('mst_official_media_url');
+      if (saved && !saved.includes('corp.mstcorp.info')) return saved;
+      return 'https://mstcorp.info/media';
     }
-    return 'https://corp.mstcorp.info/media';
+    return 'https://mstcorp.info/media';
   });
 
   const [showUrlModal, setShowUrlModal] = useState<boolean>(false);
@@ -135,13 +139,13 @@ export const OwnMediaWorkspace: React.FC<{
     const rowsData = (data || []) as Row[];
     setRows(rowsData);
 
-    // 保存済みの公式メディアレコードがあればURLを同期
+    // 保存済みの公式メディアレコードがあればURLを同期（古いcorp.mstcorp.infoはmstcorp.infoへ優先移行）
     const officialRow = rowsData.find((r) => r.record_type === 'media' && (r.id === 'mst_official_corporate_hp' || (r.payload?.cms || '').includes('Astro') || (r.payload?.url || '').includes('mstcorp.info')));
-    if (officialRow?.payload?.url) {
+    if (officialRow?.payload?.url && !officialRow.payload.url.includes('corp.mstcorp.info')) {
       setCustomSiteUrl(officialRow.payload.url);
       if (typeof window !== 'undefined') localStorage.setItem('mst_official_site_url', officialRow.payload.url);
     }
-    if (officialRow?.payload?.mediaUrl) {
+    if (officialRow?.payload?.mediaUrl && !officialRow.payload.mediaUrl.includes('corp.mstcorp.info')) {
       setCustomMediaUrl(officialRow.payload.mediaUrl);
       if (typeof window !== 'undefined') localStorage.setItem('mst_official_media_url', officialRow.payload.mediaUrl);
     }
@@ -158,10 +162,10 @@ export const OwnMediaWorkspace: React.FC<{
     let cleanMediaUrl = tempMediaUrl.trim();
     let cleanSiteUrl = tempSiteUrl.trim();
     if (!cleanMediaUrl) {
-      cleanMediaUrl = 'https://corp.mstcorp.info/media';
+      cleanMediaUrl = 'https://mstcorp.info/media';
     }
     if (!cleanSiteUrl) {
-      cleanSiteUrl = 'https://corp.mstcorp.info';
+      cleanSiteUrl = 'https://mstcorp.info';
     }
     if (!cleanMediaUrl.startsWith('http://') && !cleanMediaUrl.startsWith('https://')) {
       cleanMediaUrl = `https://${cleanMediaUrl}`;
@@ -179,7 +183,6 @@ export const OwnMediaWorkspace: React.FC<{
         localStorage.setItem('mst_official_media_url', cleanMediaUrl);
       }
 
-      // Supabaseに反映
       const db = getSupabase();
       if (db && userId) {
         const targetMediaId = 'mst_official_corporate_hp';
@@ -225,7 +228,6 @@ export const OwnMediaWorkspace: React.FC<{
     }
   };
 
-  // 有限会社MST 公式オウンドメディア / コーポレートHP（Astro + Supabase + Vercel / Google Antigravity）
   const DEFAULT_OFFICIAL_MEDIA: Row = useMemo(() => ({
     id: 'mst_official_corporate_hp',
     record_type: 'media',
@@ -251,7 +253,7 @@ export const OwnMediaWorkspace: React.FC<{
     if (list.length === 0) {
       return [DEFAULT_OFFICIAL_MEDIA];
     }
-    const hasOfficial = list.some((m) => (m.payload?.url || '').includes('mstcorp.info') || (m.payload?.cms || '').includes('Astro'));
+    const hasOfficial = list.some((m) => m.id === 'mst_official_corporate_hp' || (m.payload?.cms || '').includes('Astro') || (m.payload?.url || '').includes('mstcorp.info'));
     if (!hasOfficial) {
       return [DEFAULT_OFFICIAL_MEDIA, ...list];
     }
@@ -261,7 +263,6 @@ export const OwnMediaWorkspace: React.FC<{
   const articles = useMemo(() => rows.filter((r) => r.record_type === 'article'), [rows]);
   const seoList = useMemo(() => rows.filter((r) => r.record_type === 'seo'), [rows]);
   const rewriteList = useMemo(() => rows.filter((r) => r.record_type === 'rewrite'), [rows]);
-  const attributionList = useMemo(() => rows.filter((r) => r.record_type === 'attribution'), [rows]);
 
   const reset = () => {
     setEditing(null);
@@ -270,28 +271,32 @@ export const OwnMediaWorkspace: React.FC<{
     setPayload(
       tab === 'articles'
         ? {
-            mediaId: media[0]?.id || DEFAULT_OFFICIAL_MEDIA.id,
+            mediaId: media[0]?.id ?? DEFAULT_OFFICIAL_MEDIA.id,
             publishStatus: '下書き',
             category: '経営改善・利益改善',
             slug: '',
+            body: '',
+            outline: '',
+            metaTitle: '',
+            metaDescription: '',
+            keyword: '',
+            thumbnailUrl: '',
           }
         : tab === 'settings'
         ? {
-            mediaType: '自社公式メディア / コーポレートHP',
-            cms: 'Astro + Supabase (Vercel)',
             url: customSiteUrl,
             mediaUrl: customMediaUrl,
-            githubRepo: 'mst-corporate-website (/hp)',
+            cms: 'Astro + Supabase (Vercel) / Google Antigravity',
+            target: '',
+            purpose: '',
             connectionType: 'supabase_direct',
-            target: '中小企業・小規模事業者の経営者・事業責任者',
-            purpose: '現場実践の利益改善・業務標準化・DX/AIノウハウの発信とリード獲得',
             vercelDeployHook: '',
           }
         : {}
     );
     setForm(true);
-    setError('');
     setNotice('');
+    setError('');
     setAiNotice('');
     setAiError('');
     setCmsResult(null);
@@ -310,7 +315,6 @@ export const OwnMediaWorkspace: React.FC<{
     setCmsResult(null);
   };
 
-  // 保存処理
   const save = async (e?: React.FormEvent, customPayload?: Record<string, string>) => {
     if (e) e.preventDefault();
     if (!title.trim()) {
@@ -375,7 +379,6 @@ export const OwnMediaWorkspace: React.FC<{
     setNotice('削除しました。');
   };
 
-  // ★ AIで記事を一括自動生成（見出し構成・本文・メタタイトル・ディスクリプション）
   const generateArticleByAI = async () => {
     if (!title.trim() && !payload.keyword?.trim()) {
       setAiError('記事のタイトル、または狙うキーワードを先に入力してください。');
@@ -451,117 +454,15 @@ export const OwnMediaWorkspace: React.FC<{
         cta: parsed.cta || prev.cta || '',
       }));
 
-      setAiNotice('✨ AIが記事構成・本文・メタ情報をすべて自動生成しました！内容を確認して微調整してください。');
+      setAiNotice('✨ AIが記事構成・本文・メタタグを一括生成しました！確認・微調整して保存または公開できます。');
     } catch (err: any) {
       console.error(err);
-      setAiError(err.message || 'AI記事生成中にエラーが発生しました。');
+      setAiError(err.message || 'AI記事生成に失敗しました。');
     } finally {
       setAiGenerating(false);
     }
   };
 
-  // ★ ボタン1つでWordPress（CMS）へ自動投稿
-  const postToWordPress = async (articleRow?: Row, postStatus: 'draft' | 'publish' = 'draft') => {
-    const targetArticle = articleRow || editing;
-    const articleTitle = articleRow ? articleRow.title : title;
-    const articlePayload = articleRow ? articleRow.payload : payload;
-    const articleId = articleRow ? articleRow.id : editing?.id;
-
-    if (!articleTitle.trim()) {
-      alert('記事タイトルを入力してください。');
-      return;
-    }
-
-    // 対象メディアを特定
-    const targetMediaId = articlePayload.mediaId || (media[0]?.id ?? '');
-    const targetMedia = media.find((m) => m.id === targetMediaId);
-
-    const wpUrl = targetMedia?.payload?.wpUrl || targetMedia?.payload?.url;
-    const wpUsername = targetMedia?.payload?.wpUsername;
-    const wpAppPassword = targetMedia?.payload?.wpAppPassword;
-
-    if (!wpUrl || !wpUsername || !wpAppPassword) {
-      setCmsResult({
-        id: articleId || 'current',
-        success: false,
-        message: 'WordPressの連携設定（URL・ユーザー名・アプリケーションパスワード）が未完了です。「⚙️ 自社メディア・CMS連携設定」タブで設定してください。',
-      });
-      return;
-    }
-
-    setCmsPosting(articleId || 'current');
-    setCmsResult(null);
-
-    try {
-      const response = await fetch('/api/cms/wordpress-post', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          wpUrl,
-          wpUsername,
-          wpAppPassword,
-          title: articleTitle,
-          content: articlePayload.body || articlePayload.outline || '',
-          excerpt: articlePayload.metaDescription || articlePayload.excerpt || '',
-          status: postStatus,
-        }),
-      });
-
-      const resData = await response.json();
-      if (!response.ok || !resData.success) {
-        throw new Error(resData.error || 'WordPress投稿に失敗しました。');
-      }
-
-      // レコードの更新
-      const updatedPayload = {
-        ...articlePayload,
-        publishedUrl: resData.postUrl,
-        wpPostId: String(resData.postId),
-        publishStatus: postStatus === 'publish' ? '公開済み' : '下書き（CMS送信済）',
-        publishedDate: new Date().toISOString().slice(0, 10),
-      };
-
-      if (!articleRow) {
-        setPayload(updatedPayload);
-      }
-
-      // Supabaseに反映
-      const db = getSupabase();
-      if (db && userId && articleId) {
-        await db.from('mst_ai_acquisition_records').update({
-          payload: updatedPayload,
-          status: postStatus === 'publish' ? '公開済み' : '下書き（CMS送信済）',
-          updated_at: new Date().toISOString(),
-        }).eq('user_id', userId).eq('id', articleId);
-
-        setRows((prev) =>
-          prev.map((r) =>
-            r.id === articleId
-              ? { ...r, payload: updatedPayload, status: postStatus === 'publish' ? '公開済み' : '下書き（CMS送信済）' }
-              : r
-          )
-        );
-      }
-
-      setCmsResult({
-        id: articleId || 'current',
-        success: true,
-        message: postStatus === 'publish' ? '🎉 WordPressに即時公開しました！' : '🚀 WordPressへ「下書き」として自動投稿しました！',
-        url: resData.postUrl,
-      });
-    } catch (err: any) {
-      console.error(err);
-      setCmsResult({
-        id: articleId || 'current',
-        success: false,
-        message: err.message || 'WordPressへの自動投稿に失敗しました。',
-      });
-    } finally {
-      setCmsPosting(null);
-    }
-  };
-
-  // ★ 自社公式HP（Astro + Supabase + Vercel / Google Antigravity）へワンクリック即時公開 / 下書き変更
   const publishToOfficialWebsite = async (articleRow?: Row, newStatus: '公開' | '下書き' = '公開') => {
     const targetArticle = articleRow || editing;
     const articleTitle = articleRow ? articleRow.title : title;
@@ -583,7 +484,6 @@ export const OwnMediaWorkspace: React.FC<{
     setCmsResult(null);
 
     try {
-      // スラッグを正規化
       let cleanSlug = (articlePayload.slug || '').trim();
       if (!cleanSlug) {
         cleanSlug = (articleId || `article-${Date.now().toString(36)}`).replace(/^article-/, '');
@@ -610,7 +510,6 @@ export const OwnMediaWorkspace: React.FC<{
 
       const rowId = articleId || `article-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
 
-      // 1. Supabaseの mst_ai_acquisition_records を更新（HP側の getLiveArticles がこれを直接読み出します）
       const { error: upsertErr } = await db.from('mst_ai_acquisition_records').upsert({
         user_id: userId,
         id: rowId,
@@ -637,7 +536,6 @@ export const OwnMediaWorkspace: React.FC<{
         ...prev.filter((r) => r.id !== rowId),
       ]);
 
-      // 2. Vercel Deploy Hook が設定されていればキック（静的ビルド再生成）
       const vercelHook = activeMedia?.payload?.vercelDeployHook;
       let deployNotice = '';
       if (vercelHook && vercelHook.startsWith('https://')) {
@@ -670,26 +568,29 @@ export const OwnMediaWorkspace: React.FC<{
   };
 
   return (
-    <section className="space-y-4 text-slate-100">
+    <section className="space-y-5 text-slate-800">
       {/* ヘッダー */}
-      <header className="flex flex-wrap items-start justify-between gap-3 rounded-2xl border border-cyan-500/20 bg-gradient-to-r from-cyan-950/70 via-slate-900 to-slate-900 p-5 shadow-lg">
+      <header className="flex flex-wrap items-start justify-between gap-3 rounded-2xl border border-slate-200 bg-white p-5 shadow-xs">
         <div>
-          <h2 className="text-xl font-bold flex items-center gap-2">
-            <Globe className="h-5 w-5 text-cyan-400" />
+          <h2 className="text-lg font-bold text-slate-900 flex items-center gap-2">
+            <Globe className="h-5 w-5 text-purple-600" />
             自社メディア・CMS運用ステーション
           </h2>
-          <p className="mt-1 text-sm text-slate-300">
-            面倒な手入力を削ぎ落とし、AIで記事構成・本文を一発作成。ボタン1つでWordPress等のCMSへ下書き・公開投稿できます。
+          <p className="mt-1 text-xs text-slate-500 leading-relaxed">
+            面倒な手入力を削ぎ落とし、AIで記事構成・本文を一発作成。ボタン1つで自社公式HP（Astro + Supabase）へ即時公開できます。
           </p>
         </div>
-        <button onClick={() => void load()} className="inline-flex items-center gap-2 rounded-lg border border-slate-700 bg-slate-800/80 px-3.5 py-2 text-sm hover:bg-slate-700 transition">
-          <RefreshCw className="h-4 w-4" />
-          一覧を再読み込み
+        <button
+          onClick={() => void load()}
+          className="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white hover:bg-slate-50 px-3.5 py-2 text-xs font-semibold text-slate-700 transition shadow-xs cursor-pointer"
+        >
+          <RefreshCw className={`h-3.5 w-3.5 ${loading ? 'animate-spin text-purple-600' : 'text-slate-500'}`} />
+          <span>一覧を再読み込み</span>
         </button>
       </header>
 
       {/* タブナビゲーション */}
-      <nav className="flex gap-1.5 overflow-x-auto rounded-xl border border-slate-800 bg-slate-900/90 p-1.5" aria-label="自社メディア運用">
+      <nav className="flex gap-1.5 overflow-x-auto rounded-xl border border-slate-200 bg-slate-100 p-1.5" aria-label="自社メディア運用">
         {sections.map(([id, label]) => (
           <button
             key={id}
@@ -703,8 +604,8 @@ export const OwnMediaWorkspace: React.FC<{
               setCmsResult(null);
             }}
             aria-current={tab === id ? 'page' : undefined}
-            className={`whitespace-nowrap rounded-lg px-4 py-2 text-xs sm:text-sm font-medium transition ${
-              tab === id ? 'bg-cyan-600 font-semibold text-white shadow-md' : 'text-slate-400 hover:bg-slate-800 hover:text-slate-200'
+            className={`whitespace-nowrap rounded-lg px-4 py-2 text-xs sm:text-sm font-medium transition cursor-pointer ${
+              tab === id ? 'bg-white font-bold text-purple-700 shadow-xs border border-purple-200' : 'text-slate-600 hover:text-slate-900'
             }`}
           >
             {label}
@@ -714,22 +615,22 @@ export const OwnMediaWorkspace: React.FC<{
 
       {/* アラート・通知メッセージ */}
       {(error || notice) && (
-        <div className={`flex items-center gap-2 rounded-lg p-3.5 text-sm ${error ? 'bg-rose-950/50 border border-rose-800 text-rose-200' : 'bg-emerald-950/50 border border-emerald-800 text-emerald-200'}`}>
-          {error ? <AlertCircle className="h-5 w-5 shrink-0" /> : <CheckCircle2 className="h-5 w-5 shrink-0" />}
+        <div className={`flex items-center gap-2 rounded-xl p-3.5 text-xs shadow-xs ${error ? 'bg-rose-50 border border-rose-200 text-rose-800' : 'bg-emerald-50 border border-emerald-200 text-emerald-800'}`}>
+          {error ? <AlertCircle className="h-4 w-4 shrink-0 text-rose-600" /> : <CheckCircle2 className="h-4 w-4 shrink-0 text-emerald-600" />}
           <span>{error || notice}</span>
         </div>
       )}
 
       {/* CMS投稿結果メッセージ */}
       {cmsResult && (
-        <div className={`flex flex-wrap items-center justify-between gap-3 rounded-xl p-4 text-sm ${cmsResult.success ? 'bg-cyan-950/70 border border-cyan-500/50 text-cyan-200' : 'bg-amber-950/60 border border-amber-600/50 text-amber-200'}`}>
+        <div className={`flex flex-wrap items-center justify-between gap-3 rounded-xl p-4 text-xs shadow-xs ${cmsResult.success ? 'bg-emerald-50 border border-emerald-200 text-emerald-900' : 'bg-amber-50 border border-amber-200 text-amber-900'}`}>
           <div className="flex items-center gap-2">
-            {cmsResult.success ? <CheckCircle2 className="h-5 w-5 text-cyan-400" /> : <AlertCircle className="h-5 w-5 text-amber-400" />}
+            {cmsResult.success ? <CheckCircle2 className="h-4 w-4 text-emerald-600" /> : <AlertCircle className="h-4 w-4 text-amber-600" />}
             <div>
               <p className="font-semibold">{cmsResult.message}</p>
               {cmsResult.url && (
-                <p className="text-xs text-slate-300 mt-0.5">
-                  記事URL: <a href={cmsResult.url} target="_blank" rel="noopener noreferrer" className="underline text-cyan-300 hover:text-cyan-200">{cmsResult.url}</a>
+                <p className="text-[11px] text-slate-600 mt-0.5">
+                  記事URL: <a href={cmsResult.url} target="_blank" rel="noopener noreferrer" className="underline text-purple-700 hover:text-purple-900 font-mono">{cmsResult.url}</a>
                 </p>
               )}
             </div>
@@ -739,7 +640,7 @@ export const OwnMediaWorkspace: React.FC<{
               href={cmsResult.url}
               target="_blank"
               rel="noopener noreferrer"
-              className="inline-flex items-center gap-1.5 rounded-lg bg-cyan-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-cyan-500"
+              className="inline-flex items-center gap-1.5 rounded-lg bg-purple-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-purple-700 shadow-xs"
             >
               <ExternalLink className="h-3.5 w-3.5" />
               投稿記事を確認
@@ -749,33 +650,33 @@ export const OwnMediaWorkspace: React.FC<{
       )}
 
       {loading ? (
-        <div className="rounded-xl border border-slate-800 bg-slate-900/40 p-8 text-center text-sm text-slate-400">
+        <div className="rounded-xl border border-slate-200 bg-white p-8 text-center text-xs text-slate-500 shadow-xs">
           メディアデータを読み込み中…
         </div>
       ) : (
         <>
           {/* ========================================================
-              TAB 1: 記事作成・CMS自動投稿（メイン画面）
+              TAB 1: 記事作成・自社HP公開
              ======================================================== */}
           {tab === 'articles' && (
             <div className="space-y-4">
               {/* ヘッダーガイド ＆ 新規作成ボタン */}
-              <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-indigo-500/30 bg-gradient-to-r from-indigo-950/60 via-slate-900 to-slate-900 p-4">
+              <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-slate-200 bg-white p-5 shadow-xs">
                 <div>
                   <div className="flex items-center gap-2">
-                    <Globe className="h-5 w-5 text-cyan-400" />
-                    <h3 className="font-bold text-base text-white">自社メディア記事一覧 & HP即時公開</h3>
-                    <span className="rounded-full bg-emerald-500/20 px-2 py-0.5 text-[10px] font-bold text-emerald-300 border border-emerald-500/30">
+                    <Globe className="h-5 w-5 text-purple-600" />
+                    <h3 className="font-bold text-base text-slate-900">自社メディア記事一覧 & HP即時公開</h3>
+                    <span className="rounded-full bg-emerald-50 px-2.5 py-0.5 text-[11px] font-bold text-emerald-700 border border-emerald-200">
                       Astro + Supabase 直結稼働
                     </span>
                   </div>
-                  <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-slate-300 mt-1.5">
+                  <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-slate-600 mt-1.5">
                     <span>手入力を減らし、AIで記事（見出し・本文・メタ）を一括作成。ボタン1つで自社公式HP（</span>
                     <a
                       href={customMediaUrl}
                       target="_blank"
                       rel="noopener noreferrer"
-                      className="text-cyan-300 underline font-mono inline-flex items-center gap-1 hover:text-cyan-200"
+                      className="text-purple-700 underline font-mono inline-flex items-center gap-1 hover:text-purple-900 font-semibold"
                     >
                       <span>{customMediaUrl}</span>
                       <ExternalLink className="h-3 w-3 inline" />
@@ -788,7 +689,7 @@ export const OwnMediaWorkspace: React.FC<{
                         setTempMediaUrl(customMediaUrl);
                         setShowUrlModal(true);
                       }}
-                      className="inline-flex items-center gap-1 rounded bg-slate-800 hover:bg-slate-700 text-[11px] font-semibold text-cyan-300 px-2.5 py-0.5 border border-cyan-500/30 transition cursor-pointer shadow-sm"
+                      className="inline-flex items-center gap-1 rounded bg-slate-100 hover:bg-slate-200 text-[11px] font-semibold text-slate-700 px-2.5 py-0.5 border border-slate-300 transition cursor-pointer shadow-2xs"
                       title="自社公式HPの公開先URL（ドメインやパス）を変更"
                     >
                       <Pencil className="h-2.5 w-2.5" />
@@ -799,7 +700,7 @@ export const OwnMediaWorkspace: React.FC<{
                 {!form && (
                   <button
                     onClick={reset}
-                    className="inline-flex items-center gap-2 rounded-xl bg-gradient-to-r from-cyan-600 to-blue-600 hover:from-cyan-500 hover:to-blue-500 px-4 py-2.5 text-xs font-bold text-white shadow-md shadow-cyan-600/20"
+                    className="inline-flex items-center gap-2 rounded-xl bg-purple-600 hover:bg-purple-700 px-4 py-2.5 text-xs font-bold text-white shadow-xs transition cursor-pointer"
                   >
                     <Plus className="h-4 w-4" />
                     新しい記事を作成
@@ -809,26 +710,25 @@ export const OwnMediaWorkspace: React.FC<{
 
               {/* 記事作成・編集フォーム */}
               {form && (
-                <form onSubmit={(e) => void save(e)} className="space-y-5 rounded-2xl border border-cyan-500/40 bg-slate-900 p-5 shadow-2xl">
-                  <div className="flex items-center justify-between border-b border-slate-800 pb-3">
-                    <h4 className="font-bold text-white text-base flex items-center gap-2">
-                      <FileText className="h-5 w-5 text-cyan-400" />
+                <form onSubmit={(e) => void save(e)} className="space-y-5 rounded-2xl border border-slate-200 bg-white p-5 shadow-xs">
+                  <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+                    <h4 className="font-bold text-slate-900 text-base flex items-center gap-2">
+                      <FileText className="h-5 w-5 text-purple-600" />
                       {editing ? `記事を編集: ${editing.title}` : '新規記事を作成'}
                     </h4>
                     <button
                       type="button"
                       onClick={() => setForm(false)}
-                      className="text-xs text-slate-400 hover:text-white"
+                      className="text-xs text-slate-500 hover:text-slate-800 cursor-pointer"
                     >
                       閉じる
                     </button>
                   </div>
 
-                  {/* 必須・基本情報（これだけでOK！） */}
                   <div className="grid gap-4 md:grid-cols-3">
                     <div>
-                      <label className="block text-xs font-medium text-slate-300">
-                        対象メディア（自社HP / Astro） <span className="text-cyan-400">*</span>
+                      <label className="block text-xs font-semibold text-slate-700">
+                        対象メディア（自社HP / Astro） <span className="text-rose-600">*</span>
                       </label>
                       <select
                         value={payload.mediaId || (media[0]?.id ?? '')}
@@ -844,8 +744,8 @@ export const OwnMediaWorkspace: React.FC<{
                     </div>
 
                     <div className="md:col-span-2">
-                      <label className="block text-xs font-medium text-slate-300">
-                        記事タイトル / テーマ <span className="text-cyan-400">*</span>
+                      <label className="block text-xs font-semibold text-slate-700">
+                        記事タイトル / テーマ <span className="text-rose-600">*</span>
                       </label>
                       <input
                         required
@@ -859,7 +759,7 @@ export const OwnMediaWorkspace: React.FC<{
 
                   <div className="grid gap-4 md:grid-cols-2">
                     <div>
-                      <label className="block text-xs font-medium text-slate-300">
+                      <label className="block text-xs font-semibold text-slate-700">
                         公式HP URLスラッグ（半角英数ハイフン）
                       </label>
                       <input
@@ -871,7 +771,7 @@ export const OwnMediaWorkspace: React.FC<{
                     </div>
 
                     <div>
-                      <label className="block text-xs font-medium text-slate-300">
+                      <label className="block text-xs font-semibold text-slate-700">
                         自社メディア カテゴリ
                       </label>
                       <select
@@ -888,7 +788,7 @@ export const OwnMediaWorkspace: React.FC<{
                     </div>
 
                     <div>
-                      <label className="block text-xs font-medium text-slate-300">
+                      <label className="block text-xs font-semibold text-slate-700">
                         狙うキーワード（任意）
                       </label>
                       <input
@@ -900,7 +800,7 @@ export const OwnMediaWorkspace: React.FC<{
                     </div>
 
                     <div>
-                      <label className="block text-xs font-medium text-slate-300">
+                      <label className="block text-xs font-semibold text-slate-700">
                         関連商品・サービス（任意）
                       </label>
                       <select
@@ -918,15 +818,15 @@ export const OwnMediaWorkspace: React.FC<{
                     </div>
                   </div>
 
-                  {/* ★ AI一括自動生成バナー（手入力ゼロで完成！） ★ */}
-                  <div className="rounded-xl border border-violet-500/40 bg-gradient-to-r from-violet-950/60 to-purple-950/30 p-4">
+                  {/* AI一括自動生成バナー */}
+                  <div className="rounded-xl border border-purple-200 bg-purple-50/50 p-4">
                     <div className="flex flex-wrap items-center justify-between gap-3">
                       <div>
-                        <h5 className="font-bold text-sm text-violet-200 flex items-center gap-1.5">
-                          <Sparkles className="h-4 w-4 text-violet-400" />
+                        <h5 className="font-bold text-sm text-purple-950 flex items-center gap-1.5">
+                          <Sparkles className="h-4 w-4 text-purple-600" />
                           AI記事一括自動生成
                         </h5>
-                        <p className="text-xs text-slate-300 mt-0.5">
+                        <p className="text-xs text-slate-600 mt-0.5">
                           タイトル・キーワードから、見出し構成・読み応えのある完全な本文・メタタグを一撃で自動執筆します。
                         </p>
                       </div>
@@ -934,21 +834,21 @@ export const OwnMediaWorkspace: React.FC<{
                         type="button"
                         disabled={aiGenerating}
                         onClick={() => void generateArticleByAI()}
-                        className="inline-flex items-center gap-2 rounded-xl bg-gradient-to-r from-violet-600 to-purple-600 hover:from-violet-500 hover:to-purple-500 px-4 py-2.5 text-xs font-bold text-white shadow-lg shadow-violet-600/30 disabled:opacity-50"
+                        className="inline-flex items-center gap-2 rounded-xl bg-purple-600 hover:bg-purple-700 px-4 py-2.5 text-xs font-bold text-white shadow-xs disabled:opacity-50 cursor-pointer"
                       >
                         <Sparkles className="h-4 w-4" />
                         {aiGenerating ? 'AIが記事を一括執筆中…' : '✨ AIで記事を一括生成する'}
                       </button>
                     </div>
-                    {aiNotice && <p className="mt-2 text-xs font-medium text-emerald-300">{aiNotice}</p>}
-                    {aiError && <p className="mt-2 text-xs font-medium text-rose-300">{aiError}</p>}
+                    {aiNotice && <p className="mt-2 text-xs font-semibold text-emerald-700">{aiNotice}</p>}
+                    {aiError && <p className="mt-2 text-xs font-semibold text-rose-700">{aiError}</p>}
                   </div>
 
                   {/* 記事本文 & 見出し構成 */}
                   <div className="space-y-4">
                     <div>
                       <div className="flex items-center justify-between mb-1">
-                        <label className="text-xs font-medium text-slate-300">
+                        <label className="text-xs font-semibold text-slate-700">
                           記事本文（HTMLまたはMarkdown）
                         </label>
                         <span className="text-[11px] text-slate-500">
@@ -960,13 +860,13 @@ export const OwnMediaWorkspace: React.FC<{
                         onChange={(e) => setPayload((p) => ({ ...p, body: e.target.value }))}
                         rows={14}
                         placeholder="AI一括生成ボタンを押すか、外部で作成した文章を貼り付けてください。見出しタグ（<h2>, <h3>）やMarkdown（##, ###）に対応しています。"
-                        className="w-full rounded-lg border border-slate-700 bg-slate-950 p-3 text-sm text-white font-mono leading-relaxed focus:outline-none focus:border-cyan-500"
+                        className="w-full rounded-xl border border-slate-300 bg-white p-3 text-xs text-slate-900 font-mono leading-relaxed focus:outline-none focus:border-purple-500 focus:ring-1 focus:ring-purple-500"
                       />
                     </div>
 
                     <div className="grid gap-4 md:grid-cols-2">
                       <div>
-                        <label className="block text-xs font-medium text-slate-300">
+                        <label className="block text-xs font-semibold text-slate-700">
                           メタタイトル案（検索結果表示）
                         </label>
                         <input
@@ -978,7 +878,7 @@ export const OwnMediaWorkspace: React.FC<{
                       </div>
 
                       <div>
-                        <label className="block text-xs font-medium text-slate-300">
+                        <label className="block text-xs font-semibold text-slate-700">
                           メタディスクリプション / 抜粋
                         </label>
                         <textarea
@@ -992,13 +892,13 @@ export const OwnMediaWorkspace: React.FC<{
                     </div>
                   </div>
 
-                  {/* 保存 & CMS自動投稿アクション */}
-                  <div className="flex flex-wrap items-center justify-between gap-3 border-t border-slate-800 pt-4">
+                  {/* 保存 & 公開アクション */}
+                  <div className="flex flex-wrap items-center justify-between gap-3 border-t border-slate-100 pt-4">
                     <div className="flex items-center gap-2">
                       <button
                         type="submit"
                         disabled={saving}
-                        className="inline-flex items-center gap-2 rounded-xl bg-slate-800 hover:bg-slate-700 border border-slate-700 px-4 py-2.5 text-xs font-bold text-white transition"
+                        className="inline-flex items-center gap-2 rounded-xl border border-slate-300 bg-white hover:bg-slate-50 px-4 py-2.5 text-xs font-semibold text-slate-700 shadow-xs transition cursor-pointer"
                       >
                         <Save className="h-4 w-4" />
                         {saving ? '保存中…' : '下書きとして保存'}
@@ -1006,34 +906,21 @@ export const OwnMediaWorkspace: React.FC<{
                       <button
                         type="button"
                         onClick={() => setForm(false)}
-                        className="rounded-xl border border-slate-700 px-4 py-2.5 text-xs text-slate-400 hover:text-white"
+                        className="rounded-xl border border-slate-200 px-4 py-2.5 text-xs text-slate-500 hover:text-slate-800 cursor-pointer"
                       >
                         キャンセル
                       </button>
                     </div>
 
-                    {/* 自社公式HP（Astro + Supabase）即時公開ボタン */}
                     <div className="flex items-center gap-2 flex-wrap">
                       <button
                         type="button"
                         disabled={cmsPosting === (editing?.id || 'current')}
                         onClick={() => void publishToOfficialWebsite(undefined, '公開')}
-                        className="inline-flex items-center gap-2 rounded-xl bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 px-5 py-2.5 text-xs font-bold text-white shadow-lg shadow-emerald-600/30 transition disabled:opacity-50 cursor-pointer"
+                        className="inline-flex items-center gap-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 px-5 py-2.5 text-xs font-bold text-white shadow-xs transition disabled:opacity-50 cursor-pointer"
                       >
                         <Globe className="h-4 w-4" />
                         {cmsPosting === (editing?.id || 'current') ? 'HPへ反映中…' : '🚀 自社公式HP（Astroメディア）へ即時公開'}
-                      </button>
-
-                      {/* 外部WordPress等との併用オプション（任意） */}
-                      <button
-                        type="button"
-                        disabled={cmsPosting === (editing?.id || 'current')}
-                        onClick={() => void postToWordPress(undefined, 'draft')}
-                        className="inline-flex items-center gap-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 border border-slate-700 px-3 py-2 text-xs font-medium text-slate-300 hover:text-white transition disabled:opacity-50"
-                        title="外部のWordPressブログにも送信する場合"
-                      >
-                        <Send className="h-3.5 w-3.5 text-slate-400" />
-                        <span>外部WordPressへ</span>
                       </button>
                     </div>
                   </div>
@@ -1044,51 +931,50 @@ export const OwnMediaWorkspace: React.FC<{
               {!form && (
                 <div className="space-y-3">
                   {articles.length === 0 ? (
-                    <div className="rounded-2xl border border-dashed border-slate-800 bg-slate-900/40 p-8 text-center">
-                      <FileText className="mx-auto h-8 w-8 text-slate-600 mb-2" />
-                      <p className="text-sm font-medium text-slate-400">作成された記事はまだありません。</p>
+                    <div className="rounded-2xl border border-dashed border-slate-300 bg-white p-8 text-center shadow-xs">
+                      <FileText className="mx-auto h-8 w-8 text-slate-400 mb-2" />
+                      <p className="text-sm font-semibold text-slate-700">作成された記事はまだありません。</p>
                       <p className="text-xs text-slate-500 mt-1">「新しい記事を作成」ボタンから、AIを使って一瞬で記事を作成できます。</p>
                     </div>
                   ) : (
                     articles.map((art) => {
                       const linkedMedia = media.find((m) => m.id === art.payload.mediaId);
-                      const isPosted = Boolean(art.payload.publishedUrl || art.payload.wpPostId);
+                      const isPosted = Boolean(art.payload.publishedUrl || art.payload.publishStatus === '公開');
 
                       return (
                         <article
                           key={art.id}
-                          className="rounded-2xl border border-slate-800 bg-slate-900/80 p-5 shadow-md hover:border-slate-700 transition"
+                          className="rounded-2xl border border-slate-200 bg-white p-5 shadow-xs hover:border-purple-200 transition"
                         >
                           <div className="flex flex-wrap items-start justify-between gap-3">
                             <div className="space-y-1">
                               <div className="flex items-center gap-2 flex-wrap">
-                                <h4 className="font-bold text-base text-white">{art.title}</h4>
+                                <h4 className="font-bold text-base text-slate-900">{art.title}</h4>
                                 {isPosted ? (
-                                  <span className="inline-flex items-center gap-1 rounded-full bg-cyan-950/80 border border-cyan-500/40 px-2.5 py-0.5 text-[11px] font-semibold text-cyan-300">
+                                  <span className="inline-flex items-center gap-1 rounded-full bg-emerald-50 border border-emerald-200 px-2.5 py-0.5 text-[11px] font-bold text-emerald-700">
                                     <CheckCircle2 className="h-3 w-3" />
-                                    {art.status || 'CMS送信済'}
+                                    公開中 (HP直結)
                                   </span>
                                 ) : (
-                                  <span className="inline-flex items-center gap-1 rounded-full bg-slate-800 border border-slate-700 px-2.5 py-0.5 text-[11px] font-medium text-slate-300">
-                                    下書き（未投稿）
+                                  <span className="inline-flex items-center gap-1 rounded-full bg-slate-100 border border-slate-200 px-2.5 py-0.5 text-[11px] font-medium text-slate-600">
+                                    下書き
                                   </span>
                                 )}
                               </div>
-                              <p className="text-xs text-slate-400 flex items-center gap-2 flex-wrap">
-                                <span>メディア: <strong className="text-slate-300">{linkedMedia?.title || '未設定'}</strong></span>
-                                {art.payload.keyword && <span>・ 狙うKW: <strong className="text-cyan-300">{art.payload.keyword}</strong></span>}
+                              <p className="text-xs text-slate-500 flex items-center gap-2 flex-wrap">
+                                <span>メディア: <strong className="text-slate-700">{linkedMedia?.title || '未設定'}</strong></span>
+                                {art.payload.keyword && <span>・ 狙うKW: <strong className="text-purple-700">{art.payload.keyword}</strong></span>}
                                 {art.payload.publishedDate && <span>・ 公開日: {art.payload.publishedDate}</span>}
                               </p>
                             </div>
 
                             <div className="flex items-center gap-2">
-                              {/* 公式HPへの公開・下書きトグル */}
                               {art.status === '公開' || art.payload?.publishStatus === '公開' ? (
                                 <button
                                   type="button"
                                   disabled={cmsPosting === art.id}
                                   onClick={() => void publishToOfficialWebsite(art, '下書き')}
-                                  className="inline-flex items-center gap-1.5 rounded-lg bg-emerald-950/80 border border-emerald-500/50 hover:bg-emerald-900 px-3 py-1.5 text-xs font-semibold text-emerald-300 transition disabled:opacity-50"
+                                  className="inline-flex items-center gap-1.5 rounded-lg bg-emerald-50 border border-emerald-300 hover:bg-emerald-100 px-3 py-1.5 text-xs font-semibold text-emerald-800 transition disabled:opacity-50 cursor-pointer"
                                   title="公式HPで公開中（クリックで下書きに戻す）"
                                 >
                                   <Globe className="h-3.5 w-3.5" />
@@ -1099,7 +985,7 @@ export const OwnMediaWorkspace: React.FC<{
                                   type="button"
                                   disabled={cmsPosting === art.id}
                                   onClick={() => void publishToOfficialWebsite(art, '公開')}
-                                  className="inline-flex items-center gap-1.5 rounded-lg bg-emerald-700 hover:bg-emerald-600 px-3 py-1.5 text-xs font-semibold text-white transition disabled:opacity-50 shadow"
+                                  className="inline-flex items-center gap-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-700 px-3 py-1.5 text-xs font-semibold text-white transition disabled:opacity-50 shadow-xs cursor-pointer"
                                   title="公式HPに即時公開する"
                                 >
                                   <Globe className="h-3.5 w-3.5" />
@@ -1109,30 +995,29 @@ export const OwnMediaWorkspace: React.FC<{
 
                               <button
                                 onClick={() => edit(art)}
-                                className="rounded-lg border border-slate-700 bg-slate-800 px-3 py-1.5 text-xs text-slate-200 hover:bg-slate-700 transition"
+                                className="rounded-lg border border-slate-200 bg-white hover:bg-slate-50 px-3 py-1.5 text-xs font-semibold text-slate-700 transition cursor-pointer shadow-2xs"
                               >
                                 編集
                               </button>
                               <button
                                 onClick={() => void remove(art)}
                                 aria-label={`${art.title}を削除`}
-                                className="rounded-lg border border-rose-900/50 bg-rose-950/20 px-2.5 py-1.5 text-xs text-rose-300 hover:bg-rose-950/60 transition"
+                                className="rounded-lg border border-slate-200 p-1.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 transition cursor-pointer"
                               >
                                 <Trash2 className="h-3.5 w-3.5" />
                               </button>
                             </div>
                           </div>
 
-                          {/* 本文プレビューまたはURL */}
                           {art.payload.publishedUrl && (
-                            <div className="mt-3 flex items-center gap-2 rounded-lg bg-cyan-950/30 border border-cyan-800/40 p-2.5 text-xs text-cyan-200">
-                              <Globe className="h-4 w-4 shrink-0 text-cyan-400" />
+                            <div className="mt-3 flex items-center gap-2 rounded-lg bg-purple-50/60 border border-purple-200 p-2.5 text-xs text-purple-900">
+                              <Globe className="h-4 w-4 shrink-0 text-purple-600" />
                               <span className="truncate">公開URL: {art.payload.publishedUrl}</span>
                               <a
                                 href={art.payload.publishedUrl}
                                 target="_blank"
                                 rel="noopener noreferrer"
-                                className="ml-auto inline-flex items-center gap-1 font-semibold underline text-cyan-300 hover:text-cyan-200 shrink-0"
+                                className="ml-auto inline-flex items-center gap-1 font-semibold underline text-purple-700 hover:text-purple-900 shrink-0"
                               >
                                 記事を開く
                                 <ExternalLink className="h-3 w-3" />
@@ -1141,7 +1026,7 @@ export const OwnMediaWorkspace: React.FC<{
                           )}
 
                           {art.payload.metaDescription && (
-                            <p className="mt-2 text-xs text-slate-400 line-clamp-2">
+                            <p className="mt-2 text-xs text-slate-500 line-clamp-2">
                               {art.payload.metaDescription}
                             </p>
                           )}
@@ -1155,28 +1040,27 @@ export const OwnMediaWorkspace: React.FC<{
           )}
 
           {/* ========================================================
-              TAB 2: 自社HP・メディア連携設定（Astro + Supabase + Vercel）
+              TAB 2: 自社HP・メディア連携設定
              ======================================================== */}
           {tab === 'settings' && (
             <div className="space-y-6">
-              {/* ヘッダー */}
-              <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-indigo-500/30 bg-gradient-to-r from-indigo-950/70 via-slate-900 to-slate-900 p-5 shadow-lg">
+              <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-slate-200 bg-white p-5 shadow-xs">
                 <div>
                   <div className="flex items-center gap-2">
-                    <Globe className="h-5 w-5 text-cyan-400" />
-                    <h3 className="font-bold text-base text-white">自社HP・オウンドメディア連携設定（Astro + Supabase + Vercel）</h3>
-                    <span className="rounded-full bg-emerald-500/20 px-2.5 py-0.5 text-[11px] font-bold text-emerald-300 border border-emerald-500/30">
+                    <Globe className="h-5 w-5 text-purple-600" />
+                    <h3 className="font-bold text-base text-slate-900">自社HP・オウンドメディア連携設定（Astro + Supabase + Vercel）</h3>
+                    <span className="rounded-full bg-emerald-50 px-2.5 py-0.5 text-[11px] font-bold text-emerald-700 border border-emerald-200">
                       ● Supabase直結稼働中
                     </span>
                   </div>
-                  <p className="text-xs text-slate-300 mt-1 leading-relaxed">
-                    Google Antigravityで構築された自社HP（Astro）とネイティブ連動しています。WordPressのような面倒なAPIキー設定は不要で、記事の自動同期とリード集約がリアルタイムに連携されます。
+                  <p className="text-xs text-slate-500 mt-1 leading-relaxed">
+                    Google Antigravityで構築された自社HP（Astro）とネイティブ連動しています。面倒なAPIキー設定は不要で、記事の自動同期とリード集約がリアルタイムに連携されます。
                   </p>
                 </div>
                 {!form && (
                   <button
                     onClick={reset}
-                    className="inline-flex items-center gap-2 rounded-xl bg-cyan-700 hover:bg-cyan-600 px-4 py-2 text-xs font-bold text-white shadow-md"
+                    className="inline-flex items-center gap-2 rounded-xl bg-purple-600 hover:bg-purple-700 px-4 py-2 text-xs font-bold text-white shadow-xs cursor-pointer"
                   >
                     <Plus className="h-4 w-4" />
                     連携設定を追加・編集
@@ -1184,23 +1068,23 @@ export const OwnMediaWorkspace: React.FC<{
                 )}
               </div>
 
-              {/* ★ メイン連携ステータスカード（Astro + Supabase + Vercel / Google Antigravity） ★ */}
-              <div className="rounded-2xl border border-cyan-500/30 bg-gradient-to-br from-slate-900 via-slate-900 to-cyan-950/20 p-5 space-y-4 shadow-xl">
-                <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-800 pb-3">
+              {/* メイン連携ステータスカード */}
+              <div className="rounded-2xl border border-slate-200 bg-white p-5 space-y-4 shadow-xs">
+                <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-100 pb-3">
                   <div className="flex items-center gap-2.5">
-                    <div className="h-9 w-9 rounded-xl bg-cyan-500/20 border border-cyan-500/30 flex items-center justify-center text-cyan-300 font-bold">
+                    <div className="h-9 w-9 rounded-xl bg-purple-50 border border-purple-200 flex items-center justify-center text-purple-700 font-bold">
                       <Code2 className="h-5 w-5" />
                     </div>
                     <div>
-                      <h4 className="text-sm font-bold text-white flex items-center gap-2">
+                      <h4 className="text-sm font-bold text-slate-900 flex items-center gap-2">
                         有限会社MST 公式コーポレートHP / オウンドメディア
-                        <span className="text-[10px] bg-cyan-500/20 text-cyan-300 px-2 py-0.5 rounded border border-cyan-500/30">
+                        <span className="text-[10px] bg-purple-50 text-purple-700 px-2 py-0.5 rounded border border-purple-200">
                           Google Antigravity 構築
                         </span>
                       </h4>
-                      <div className="flex items-center gap-3 text-xs text-slate-400 mt-0.5">
-                        <span>サイトURL: <a href={customSiteUrl} target="_blank" rel="noreferrer" className="text-cyan-400 underline font-mono">{customSiteUrl}</a></span>
-                        <span>・ メディア: <a href={customMediaUrl} target="_blank" rel="noreferrer" className="text-cyan-400 underline font-mono">{customMediaUrl}</a></span>
+                      <div className="flex items-center gap-3 text-xs text-slate-500 mt-0.5">
+                        <span>サイトURL: <a href={customSiteUrl} target="_blank" rel="noreferrer" className="text-purple-700 underline font-mono">{customSiteUrl}</a></span>
+                        <span>・ メディア: <a href={customMediaUrl} target="_blank" rel="noreferrer" className="text-purple-700 underline font-mono">{customMediaUrl}</a></span>
                       </div>
                     </div>
                   </div>
@@ -1213,109 +1097,87 @@ export const OwnMediaWorkspace: React.FC<{
                         setTempMediaUrl(customMediaUrl);
                         setShowUrlModal(true);
                       }}
-                      className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-cyan-950/80 hover:bg-cyan-900 border border-cyan-500/40 text-xs font-bold text-cyan-300 transition cursor-pointer"
+                      className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-slate-100 hover:bg-slate-200 border border-slate-300 text-xs font-bold text-slate-700 transition cursor-pointer shadow-2xs"
                     >
-                      <Pencil className="h-3.5 w-3.5" />
+                      <Pencil className="h-3.5 w-3.5 text-purple-600" />
                       <span>URL設定・変更</span>
                     </button>
                     <a
                       href={customMediaUrl}
                       target="_blank"
                       rel="noreferrer"
-                      className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-xs font-bold text-slate-200 border border-slate-700 transition"
+                      className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-white hover:bg-slate-50 text-xs font-semibold text-slate-700 border border-slate-200 transition shadow-xs"
                     >
                       <span>本番メディアを確認</span>
-                      <ExternalLink className="h-3.5 w-3.5" />
+                      <ExternalLink className="h-3.5 w-3.5 text-slate-400" />
                     </a>
                   </div>
                 </div>
 
                 {/* システム構成スペック */}
                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 text-xs">
-                  <div className="rounded-xl bg-slate-950/80 p-3 border border-slate-800 space-y-1">
-                    <span className="text-[10px] text-slate-400 font-semibold uppercase">Framework</span>
-                    <p className="font-bold text-white flex items-center gap-1.5">
-                      <Layers className="h-3.5 w-3.5 text-cyan-400" />
+                  <div className="rounded-xl bg-slate-50 p-3 border border-slate-200 space-y-1">
+                    <span className="text-[10px] text-slate-500 font-semibold uppercase">Framework</span>
+                    <p className="font-bold text-slate-900 flex items-center gap-1.5">
+                      <Layers className="h-3.5 w-3.5 text-purple-600" />
                       Astro 5 + Tailwind
                     </p>
-                    <p className="text-[10px] text-slate-400 font-mono">ソース: /hp ディレクトリ</p>
+                    <p className="text-[10px] text-slate-500 font-mono">ソース: /hp ディレクトリ</p>
                   </div>
 
-                  <div className="rounded-xl bg-slate-950/80 p-3 border border-slate-800 space-y-1">
-                    <span className="text-[10px] text-slate-400 font-semibold uppercase">Database (CMS)</span>
-                    <p className="font-bold text-emerald-300 flex items-center gap-1.5">
-                      <CheckCircle2 className="h-3.5 w-3.5 text-emerald-400" />
+                  <div className="rounded-xl bg-slate-50 p-3 border border-slate-200 space-y-1">
+                    <span className="text-[10px] text-slate-500 font-semibold uppercase">Database (CMS)</span>
+                    <p className="font-bold text-emerald-700 flex items-center gap-1.5">
+                      <CheckCircle2 className="h-3.5 w-3.5 text-emerald-600" />
                       Supabase 直結
                     </p>
-                    <p className="text-[10px] text-slate-400">mst_ai_acquisition_records</p>
+                    <p className="text-[10px] text-slate-500">mst_ai_acquisition_records</p>
                   </div>
 
-                  <div className="rounded-xl bg-slate-950/80 p-3 border border-slate-800 space-y-1">
-                    <span className="text-[10px] text-slate-400 font-semibold uppercase">Hosting / Deploy</span>
-                    <p className="font-bold text-white flex items-center gap-1.5">
-                      <Zap className="h-3.5 w-3.5 text-amber-400" />
+                  <div className="rounded-xl bg-slate-50 p-3 border border-slate-200 space-y-1">
+                    <span className="text-[10px] text-slate-500 font-semibold uppercase">Hosting / Deploy</span>
+                    <p className="font-bold text-slate-900 flex items-center gap-1.5">
+                      <Zap className="h-3.5 w-3.5 text-amber-600" />
                       Vercel
                     </p>
-                    <p className="text-[10px] text-slate-400">GitHub連携自動ビルド</p>
+                    <p className="text-[10px] text-slate-500">GitHub連携自動ビルド</p>
                   </div>
 
-                  <div className="rounded-xl bg-slate-950/80 p-3 border border-slate-800 space-y-1">
-                    <span className="text-[10px] text-slate-400 font-semibold uppercase">CRM & Lead Sync</span>
-                    <p className="font-bold text-indigo-300 flex items-center gap-1.5">
-                      <ArrowRight className="h-3.5 w-3.5 text-indigo-400" />
+                  <div className="rounded-xl bg-slate-50 p-3 border border-slate-200 space-y-1">
+                    <span className="text-[10px] text-slate-500 font-semibold uppercase">CRM & Lead Sync</span>
+                    <p className="font-bold text-indigo-700 flex items-center gap-1.5">
+                      <ArrowRight className="h-3.5 w-3.5 text-indigo-600" />
                       リード自動集約
                     </p>
-                    <p className="text-[10px] text-slate-400">leads テーブルに直接蓄積</p>
+                    <p className="text-[10px] text-slate-500">leads テーブルに直接蓄積</p>
                   </div>
                 </div>
 
-                {/* 自動同期の仕組みガイド */}
-                <div className="rounded-xl bg-indigo-950/30 border border-indigo-500/20 p-3.5 text-xs text-indigo-200 leading-relaxed space-y-2">
-                  <div className="font-bold text-white flex items-center gap-2">
-                    <CheckCircle2 className="h-4 w-4 text-emerald-400" />
-                    <span>Astro + Supabase 連携がなぜ自動で動くのか？（仕組みの解説）</span>
-                  </div>
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-[11px] text-slate-300">
-                    <div className="rounded-lg bg-slate-950/70 p-2.5 border border-slate-800/80 space-y-1">
-                      <strong className="text-white block font-bold">1. 記事作成 ➡ 自社HPへ即時反映</strong>
-                      <p className="text-slate-400">
-                        本システムで作成した記事を「自社HPに即時公開」すると、同じSupabaseの <code className="text-cyan-300">mst_ai_acquisition_records</code> に保存されます。自社HP（<code className="text-cyan-300">/hp/src/data/articles.ts</code>）が直接このテーブルを読み込むため、WordPressのようなAPIパスワード設定なしに完全同期されます。
-                      </p>
-                    </div>
-                    <div className="rounded-lg bg-slate-950/70 p-2.5 border border-slate-800/80 space-y-1">
-                      <strong className="text-white block font-bold">2. 自社HPからの問い合わせ ➡ CRM顧客台帳へ直結</strong>
-                      <p className="text-slate-400">
-                        自社HP（<code className="text-cyan-300">{customSiteUrl}</code>）の無料診断や資料請求から送信されたデータは、同じSupabaseの <code className="text-emerald-300">leads</code> テーブルに直接挿入されます。本システムの「CRM・リード台帳」でリアルタイムに確認・商談化できます。
-                      </p>
-                    </div>
-                  </div>
-                </div>
-
-                {/* Vercel Deploy Hook（即時再ビルド）設定セクション */}
-                <div className="rounded-xl border border-slate-800 bg-slate-950/80 p-4 space-y-3">
+                {/* Vercel Deploy Hook 設定セクション */}
+                <div className="rounded-xl border border-slate-200 bg-slate-50 p-4 space-y-3">
                   <div className="flex flex-wrap items-center justify-between gap-2">
                     <div>
-                      <h5 className="font-bold text-xs text-white flex items-center gap-1.5">
-                        <Zap className="h-4 w-4 text-amber-400" />
+                      <h5 className="font-bold text-xs text-slate-900 flex items-center gap-1.5">
+                        <Zap className="h-4 w-4 text-amber-600" />
                         Vercel Deploy Hook 設定（公開時の自動再ビルド用・任意）
                       </h5>
-                      <p className="text-[11px] text-slate-400 mt-0.5">
-                        Vercelのプロジェクト設定 ＞「Git」＞「Deploy Hooks」で発行したURLを登録すると、記事公開時にVercelの自動再ビルドを即座にキックできます。
+                      <p className="text-[11px] text-slate-500">
+                        Vercelのプロジェクト設定で作成した Deploy Hook URL を登録すると、本画面から「HPに公開」を実行した瞬間に静的再生成が自動キックされます。
                       </p>
                     </div>
                     <button
                       type="button"
                       disabled={testingDeployHook}
                       onClick={() => void testVercelDeployHook(media[0]?.payload?.vercelDeployHook)}
-                      className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 border border-slate-700 text-xs font-semibold text-slate-200 transition disabled:opacity-50"
+                      className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-white hover:bg-slate-50 border border-slate-300 text-xs font-semibold text-slate-700 transition disabled:opacity-50 cursor-pointer shadow-2xs"
                     >
-                      <RefreshCw className={`h-3.5 w-3.5 ${testingDeployHook ? 'animate-spin' : ''}`} />
+                      <RefreshCw className={`h-3.5 w-3.5 ${testingDeployHook ? 'animate-spin text-purple-600' : 'text-slate-500'}`} />
                       {testingDeployHook ? 'テスト送信中…' : '🔔 デプロイフックのテスト送信'}
                     </button>
                   </div>
 
                   {deployHookNotice && (
-                    <div className="p-2.5 rounded-lg bg-slate-900 border border-slate-700 text-xs text-cyan-200">
+                    <div className="p-2.5 rounded-lg bg-purple-50 border border-purple-200 text-xs text-purple-900">
                       {deployHookNotice}
                     </div>
                   )}
@@ -1336,7 +1198,7 @@ export const OwnMediaWorkspace: React.FC<{
                           );
                         }}
                         placeholder="例: https://api.vercel.com/v1/integrations/deploy/prj_.../..."
-                        className="w-full rounded-lg border border-slate-700 bg-slate-900 p-2 text-xs text-white font-mono focus:border-cyan-500 focus:outline-none"
+                        className="w-full rounded-xl border border-slate-300 bg-white p-2 text-xs text-slate-900 font-mono focus:border-purple-500 focus:outline-none"
                       />
                     </div>
                     <div className="sm:col-span-2">
@@ -1359,7 +1221,7 @@ export const OwnMediaWorkspace: React.FC<{
                             setTimeout(() => setNotice(''), 3000);
                           }
                         }}
-                        className="w-full py-2 rounded-lg bg-cyan-700 hover:bg-cyan-600 text-white font-bold text-xs transition shadow"
+                        className="w-full py-2 rounded-xl bg-purple-600 hover:bg-purple-700 text-white font-bold text-xs transition shadow-xs cursor-pointer"
                       >
                         Hook保存
                       </button>
@@ -1368,17 +1230,17 @@ export const OwnMediaWorkspace: React.FC<{
                 </div>
               </div>
 
-              {/* メディア登録・編集フォーム（新規追加または詳細編集時） */}
+              {/* メディア登録・編集フォーム */}
               {form && (
-                <form onSubmit={(e) => void save(e)} className="space-y-4 rounded-2xl border border-cyan-500/40 bg-slate-900 p-5 shadow-2xl">
-                  <h4 className="font-bold text-white text-base">
+                <form onSubmit={(e) => void save(e)} className="space-y-4 rounded-2xl border border-slate-200 bg-white p-5 shadow-xs">
+                  <h4 className="font-bold text-slate-900 text-base">
                     {editing ? `メディア設定を編集: ${editing.title}` : '新規メディア・CMSを登録'}
                   </h4>
 
                   <div className="grid gap-4 md:grid-cols-2">
                     <div>
-                      <label className="block text-xs font-medium text-slate-300">
-                        メディア名称 <span className="text-cyan-400">*</span>
+                      <label className="block text-xs font-semibold text-slate-700">
+                        メディア名称 <span className="text-rose-600">*</span>
                       </label>
                       <input
                         required
@@ -1390,14 +1252,14 @@ export const OwnMediaWorkspace: React.FC<{
                     </div>
 
                     <div>
-                      <label className="block text-xs font-medium text-slate-300">
-                        サイトURL <span className="text-cyan-400">*</span>
+                      <label className="block text-xs font-semibold text-slate-700">
+                        サイトURL <span className="text-rose-600">*</span>
                       </label>
                       <input
                         required
                         value={payload.url || ''}
                         onChange={(e) => setPayload((p) => ({ ...p, url: e.target.value }))}
-                        placeholder="https://corp.mstcorp.info"
+                        placeholder="https://mstcorp.info"
                         className={cls}
                       />
                     </div>
@@ -1405,7 +1267,7 @@ export const OwnMediaWorkspace: React.FC<{
 
                   <div className="grid gap-4 md:grid-cols-2">
                     <div>
-                      <label className="block text-xs font-medium text-slate-300">
+                      <label className="block text-xs font-semibold text-slate-700">
                         CMS・システム種別
                       </label>
                       <select
@@ -1422,7 +1284,7 @@ export const OwnMediaWorkspace: React.FC<{
                     </div>
 
                     <div>
-                      <label className="block text-xs font-medium text-slate-300">
+                      <label className="block text-xs font-semibold text-slate-700">
                         Vercel Deploy Hook URL（任意）
                       </label>
                       <input
@@ -1434,44 +1296,9 @@ export const OwnMediaWorkspace: React.FC<{
                     </div>
                   </div>
 
-                  {/* 外部WordPressを選択した場合のみ表示 */}
-                  {payload.cms === 'WordPress' && (
-                    <div className="rounded-xl border border-cyan-500/30 bg-cyan-950/20 p-4 space-y-3">
-                      <h5 className="font-bold text-xs text-cyan-300 flex items-center gap-1.5">
-                        <Wrench className="h-4 w-4" />
-                        外部WordPress REST API 連携（必要な場合のみ設定）
-                      </h5>
-                      <div className="grid gap-3 md:grid-cols-2">
-                        <div>
-                          <label className="block text-xs font-medium text-slate-300">
-                            WordPress ユーザー名
-                          </label>
-                          <input
-                            value={payload.wpUsername || ''}
-                            onChange={(e) => setPayload((p) => ({ ...p, wpUsername: e.target.value }))}
-                            placeholder="例: admin"
-                            className={cls}
-                          />
-                        </div>
-                        <div>
-                          <label className="block text-xs font-medium text-slate-300">
-                            アプリケーションパスワード
-                          </label>
-                          <input
-                            type="password"
-                            value={payload.wpAppPassword || ''}
-                            onChange={(e) => setPayload((p) => ({ ...p, wpAppPassword: e.target.value }))}
-                            placeholder="xxxx xxxx xxxx xxxx"
-                            className={cls}
-                          />
-                        </div>
-                      </div>
-                    </div>
-                  )}
-
-                  <div className="grid gap-3 md:grid-cols-2">
+                  <div className="grid gap-4 md:grid-cols-2">
                     <div>
-                      <label className="block text-xs font-medium text-slate-300">ターゲット読者</label>
+                      <label className="block text-xs font-semibold text-slate-700">ターゲット読者</label>
                       <input
                         value={payload.target || ''}
                         onChange={(e) => setPayload((p) => ({ ...p, target: e.target.value }))}
@@ -1481,7 +1308,7 @@ export const OwnMediaWorkspace: React.FC<{
                     </div>
 
                     <div>
-                      <label className="block text-xs font-medium text-slate-300">運用目的・ゴール</label>
+                      <label className="block text-xs font-semibold text-slate-700">運用目的・ゴール</label>
                       <input
                         value={payload.purpose || ''}
                         onChange={(e) => setPayload((p) => ({ ...p, purpose: e.target.value }))}
@@ -1495,14 +1322,14 @@ export const OwnMediaWorkspace: React.FC<{
                     <button
                       type="button"
                       onClick={() => setForm(false)}
-                      className="rounded-lg border border-slate-700 px-4 py-2 text-xs text-slate-400 hover:text-white"
+                      className="rounded-xl border border-slate-200 px-4 py-2 text-xs text-slate-600 hover:text-slate-900 cursor-pointer"
                     >
                       キャンセル
                     </button>
                     <button
                       type="submit"
                       disabled={saving}
-                      className="rounded-lg bg-cyan-700 hover:bg-cyan-600 px-4 py-2 text-xs font-bold text-white shadow"
+                      className="rounded-xl bg-purple-600 hover:bg-purple-700 px-4 py-2 text-xs font-bold text-white shadow-xs cursor-pointer"
                     >
                       {saving ? '保存中…' : '設定を保存'}
                     </button>
@@ -1517,40 +1344,40 @@ export const OwnMediaWorkspace: React.FC<{
                     const isAstro = (m.payload?.cms || '').includes('Astro') || (m.payload?.url || '').includes('mstcorp.info');
 
                     return (
-                      <article key={m.id} className="rounded-2xl border border-slate-800 bg-slate-900/80 p-5 shadow">
+                      <article key={m.id} className="rounded-2xl border border-slate-200 bg-white p-5 shadow-xs">
                         <div className="flex flex-wrap items-start justify-between gap-3">
                           <div>
                             <div className="flex items-center gap-2">
-                              <h4 className="font-bold text-base text-white">{m.title}</h4>
+                              <h4 className="font-bold text-base text-slate-900">{m.title}</h4>
                               <span className={`text-[10px] font-bold px-2 py-0.5 rounded border ${
                                 isAstro
-                                  ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/30'
-                                  : 'bg-cyan-500/20 text-cyan-300 border-cyan-500/30'
+                                  ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
+                                  : 'bg-purple-50 text-purple-700 border border-purple-200'
                               }`}>
                                 {m.payload?.cms || 'Astro + Supabase'}
                               </span>
                             </div>
-                            <p className="text-xs text-cyan-300 mt-1 flex items-center gap-1.5 font-mono">
+                            <p className="text-xs text-purple-700 mt-1 flex items-center gap-1.5 font-mono">
                               <Globe className="h-3.5 w-3.5" />
-                              <a href={m.payload?.url || 'https://mstcorp.info'} target="_blank" rel="noopener noreferrer" className="underline hover:text-cyan-200">
+                              <a href={m.payload?.url || 'https://mstcorp.info'} target="_blank" rel="noopener noreferrer" className="underline hover:text-purple-900">
                                 {m.payload?.url || 'https://mstcorp.info'}
                               </a>
                               {m.payload?.mediaUrl && (
-                                <span className="text-slate-400 font-normal">
-                                  （メディア: <a href={m.payload.mediaUrl} target="_blank" rel="noreferrer" className="text-cyan-400 underline">{m.payload.mediaUrl}</a>）
+                                <span className="text-slate-500 font-normal">
+                                  （メディア: <a href={m.payload.mediaUrl} target="_blank" rel="noreferrer" className="text-purple-700 underline">{m.payload.mediaUrl}</a>）
                                 </span>
                               )}
                             </p>
                           </div>
 
                           <div className="flex items-center gap-2">
-                            <span className="inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-[11px] font-semibold bg-emerald-950/80 border border-emerald-500/40 text-emerald-300">
+                            <span className="inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-[11px] font-semibold bg-emerald-50 border border-emerald-200 text-emerald-700">
                               <CheckCircle2 className="h-3 w-3" />
                               {isAstro ? 'Supabase直結同期中' : 'CMS設定済'}
                             </span>
                             <button
                               onClick={() => edit(m)}
-                              className="rounded-lg border border-slate-700 bg-slate-800 px-3 py-1.5 text-xs text-slate-200 hover:bg-slate-700"
+                              className="rounded-lg border border-slate-200 bg-white hover:bg-slate-50 px-3 py-1.5 text-xs font-semibold text-slate-700 shadow-2xs cursor-pointer"
                             >
                               編集
                             </button>
@@ -1558,7 +1385,7 @@ export const OwnMediaWorkspace: React.FC<{
                               <button
                                 onClick={() => void remove(m)}
                                 aria-label={`${m.title}を削除`}
-                                className="rounded-lg border border-rose-900/50 bg-rose-950/20 px-2.5 py-1.5 text-xs text-rose-300 hover:bg-rose-950/60"
+                                className="rounded-lg border border-slate-200 p-1.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 cursor-pointer"
                               >
                                 <Trash2 className="h-3.5 w-3.5" />
                               </button>
@@ -1567,7 +1394,7 @@ export const OwnMediaWorkspace: React.FC<{
                         </div>
 
                         {m.payload?.target && (
-                          <p className="mt-2 text-xs text-slate-400">
+                          <p className="mt-2 text-xs text-slate-600">
                             ターゲット: {m.payload.target}
                           </p>
                         )}
@@ -1583,7 +1410,7 @@ export const OwnMediaWorkspace: React.FC<{
               )}
 
               {/* 自社メディア用の素材・成果物管理セクション */}
-              <div className="pt-6 border-t border-slate-800">
+              <div className="pt-6 border-t border-slate-200">
                 <TabMarketingAssetManager
                   toolType="media"
                   title="自社メディアのHP URL・素材・成果物"
@@ -1603,17 +1430,17 @@ export const OwnMediaWorkspace: React.FC<{
              ======================================================== */}
           {tab === 'seo' && (
             <div className="space-y-4">
-              <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-slate-800 bg-slate-900/60 p-4">
+              <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-slate-200 bg-white p-5 shadow-xs">
                 <div>
-                  <h3 className="font-bold text-base text-white">SEO・検索アクセス分析</h3>
-                  <p className="text-xs text-slate-400 mt-0.5">
+                  <h3 className="font-bold text-base text-slate-900">SEO・検索アクセス分析</h3>
+                  <p className="text-xs text-slate-500 mt-0.5">
                     各記事の表示回数・クリック数・平均掲載順位を記録し、CTRを自動計算します。
                   </p>
                 </div>
                 {!form && (
                   <button
                     onClick={reset}
-                    className="inline-flex items-center gap-2 rounded-xl bg-cyan-700 hover:bg-cyan-600 px-4 py-2 text-xs font-bold text-white shadow"
+                    className="inline-flex items-center gap-2 rounded-xl bg-purple-600 hover:bg-purple-700 px-4 py-2 text-xs font-bold text-white shadow-xs cursor-pointer"
                   >
                     <Plus className="h-4 w-4" />
                     検索実績を記録
@@ -1622,40 +1449,40 @@ export const OwnMediaWorkspace: React.FC<{
               </div>
 
               {form && (
-                <form onSubmit={(e) => void save(e)} className="space-y-4 rounded-2xl border border-cyan-500/40 bg-slate-900 p-5 shadow-2xl">
-                  <h4 className="font-bold text-white text-base">SEO実績を記録</h4>
+                <form onSubmit={(e) => void save(e)} className="space-y-4 rounded-2xl border border-slate-200 bg-white p-5 shadow-xs">
+                  <h4 className="font-bold text-slate-900 text-base">SEO実績を記録</h4>
                   <div className="grid gap-3 md:grid-cols-2">
                     <div>
-                      <label className="block text-xs font-medium text-slate-300">記録タイトル</label>
+                      <label className="block text-xs font-semibold text-slate-700">記録タイトル</label>
                       <input required value={title} onChange={(e) => setTitle(e.target.value)} placeholder="例: 2026年10月度 検索順位レポート" className={cls} />
                     </div>
                     <div>
-                      <label className="block text-xs font-medium text-slate-300">対象記事</label>
+                      <label className="block text-xs font-semibold text-slate-700">対象記事</label>
                       <select value={payload.articleId || ''} onChange={(e) => setPayload((p) => ({ ...p, articleId: e.target.value }))} className={cls}>
                         <option value="">記事を選択してください</option>
                         {articles.map((a) => <option key={a.id} value={a.id}>{a.title}</option>)}
                       </select>
                     </div>
                     <div>
-                      <label className="block text-xs font-medium text-slate-300">検索表示回数</label>
+                      <label className="block text-xs font-semibold text-slate-700">検索表示回数</label>
                       <input type="number" min="0" value={payload.impressions || ''} onChange={(e) => setPayload((p) => ({ ...p, impressions: e.target.value }))} className={cls} />
                     </div>
                     <div>
-                      <label className="block text-xs font-medium text-slate-300">クリック数</label>
+                      <label className="block text-xs font-semibold text-slate-700">クリック数</label>
                       <input type="number" min="0" value={payload.clicks || ''} onChange={(e) => setPayload((p) => ({ ...p, clicks: e.target.value }))} className={cls} />
                     </div>
                     <div>
-                      <label className="block text-xs font-medium text-slate-300">平均掲載順位</label>
+                      <label className="block text-xs font-semibold text-slate-700">平均掲載順位</label>
                       <input type="number" step="0.1" min="1" value={payload.avgPosition || ''} onChange={(e) => setPayload((p) => ({ ...p, avgPosition: e.target.value }))} className={cls} />
                     </div>
                     <div>
-                      <label className="block text-xs font-medium text-slate-300">問い合わせ数 / リード数</label>
+                      <label className="block text-xs font-semibold text-slate-700">問い合わせ数 / リード数</label>
                       <input type="number" min="0" value={payload.leads || ''} onChange={(e) => setPayload((p) => ({ ...p, leads: e.target.value }))} className={cls} />
                     </div>
                   </div>
                   <div className="flex justify-end gap-2 pt-2">
-                    <button type="button" onClick={() => setForm(false)} className="rounded-lg border border-slate-700 px-4 py-2 text-xs text-slate-400">キャンセル</button>
-                    <button type="submit" disabled={saving} className="rounded-lg bg-cyan-700 px-4 py-2 text-xs font-bold text-white">保存</button>
+                    <button type="button" onClick={() => setForm(false)} className="rounded-xl border border-slate-200 px-4 py-2 text-xs text-slate-600 hover:text-slate-900 cursor-pointer">キャンセル</button>
+                    <button type="submit" disabled={saving} className="rounded-xl bg-purple-600 hover:bg-purple-700 px-4 py-2 text-xs font-bold text-white shadow-xs cursor-pointer">保存</button>
                   </div>
                 </form>
               )}
@@ -1663,7 +1490,7 @@ export const OwnMediaWorkspace: React.FC<{
               {!form && (
                 <div className="space-y-3">
                   {seoList.length === 0 ? (
-                    <div className="rounded-xl border border-slate-800 bg-slate-900/40 p-6 text-center text-sm text-slate-400">
+                    <div className="rounded-2xl border border-slate-200 bg-white p-6 text-center text-xs text-slate-500 shadow-xs">
                       SEO実績データはまだ登録されていません。
                     </div>
                   ) : (
@@ -1673,18 +1500,18 @@ export const OwnMediaWorkspace: React.FC<{
                         ? ((Number(r.payload.clicks || 0) / Number(r.payload.impressions)) * 100).toFixed(2) + '%'
                         : '-';
                       return (
-                        <article key={r.id} className="rounded-xl border border-slate-800 bg-slate-900 p-4">
+                        <article key={r.id} className="rounded-2xl border border-slate-200 bg-white p-4 shadow-xs">
                           <div className="flex justify-between items-start">
                             <div>
-                              <h4 className="font-semibold text-white">{r.title}</h4>
-                              <p className="text-xs text-slate-400">対象記事: {linkedArticle?.title || '未選択'}</p>
+                              <h4 className="font-bold text-slate-900 text-sm">{r.title}</h4>
+                              <p className="text-xs text-slate-500">対象記事: {linkedArticle?.title || '未選択'}</p>
                             </div>
                             <div className="flex gap-2">
-                              <button onClick={() => edit(r)} className="rounded border border-slate-700 px-2 py-1 text-xs">編集</button>
-                              <button onClick={() => void remove(r)} className="rounded border border-rose-900 px-2 py-1 text-xs text-rose-300"><Trash2 className="h-3.5 w-3.5" /></button>
+                              <button onClick={() => edit(r)} className="rounded-lg border border-slate-200 px-2 py-1 text-xs text-slate-700 hover:bg-slate-50 cursor-pointer">編集</button>
+                              <button onClick={() => void remove(r)} className="rounded-lg border border-slate-200 p-1 text-slate-400 hover:text-rose-600 cursor-pointer"><Trash2 className="h-3.5 w-3.5" /></button>
                             </div>
                           </div>
-                          <div className="mt-2 flex gap-4 text-xs text-cyan-300">
+                          <div className="mt-2 flex gap-4 text-xs text-purple-700 font-semibold">
                             <span>表示: {r.payload.impressions || 0}回</span>
                             <span>クリック: {r.payload.clicks || 0}回</span>
                             <span>CTR: {ctr}</span>
@@ -1705,15 +1532,15 @@ export const OwnMediaWorkspace: React.FC<{
              ======================================================== */}
           {tab === 'rewrite' && (
             <div className="space-y-4">
-              <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-slate-800 bg-slate-900/60 p-4">
+              <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-slate-200 bg-white p-5 shadow-xs">
                 <div>
-                  <h3 className="font-bold text-base text-white">記事リライト・改善管理</h3>
-                  <p className="text-xs text-slate-400 mt-0.5">
+                  <h3 className="font-bold text-base text-slate-900">記事リライト・改善管理</h3>
+                  <p className="text-xs text-slate-500 mt-0.5">
                     検索順位やCTRが低い記事の改善ポイントを記録・管理します。
                   </p>
                 </div>
                 {!form && (
-                  <button onClick={reset} className="inline-flex items-center gap-2 rounded-xl bg-cyan-700 hover:bg-cyan-600 px-4 py-2 text-xs font-bold text-white shadow">
+                  <button onClick={reset} className="inline-flex items-center gap-2 rounded-xl bg-purple-600 hover:bg-purple-700 px-4 py-2 text-xs font-bold text-white shadow-xs cursor-pointer">
                     <Plus className="h-4 w-4" />
                     改善タスクを登録
                   </button>
@@ -1721,28 +1548,28 @@ export const OwnMediaWorkspace: React.FC<{
               </div>
 
               {form && (
-                <form onSubmit={(e) => void save(e)} className="space-y-4 rounded-2xl border border-cyan-500/40 bg-slate-900 p-5 shadow-2xl">
-                  <h4 className="font-bold text-white text-base">リライト課題を登録</h4>
+                <form onSubmit={(e) => void save(e)} className="space-y-4 rounded-2xl border border-slate-200 bg-white p-5 shadow-xs">
+                  <h4 className="font-bold text-slate-900 text-base">リライト課題を登録</h4>
                   <div className="grid gap-3 md:grid-cols-2">
                     <div>
-                      <label className="block text-xs font-medium text-slate-300">課題タイトル</label>
+                      <label className="block text-xs font-semibold text-slate-700">課題タイトル</label>
                       <input required value={title} onChange={(e) => setTitle(e.target.value)} placeholder="例: CTR改善のための見出し・アイキャッチ見直し" className={cls} />
                     </div>
                     <div>
-                      <label className="block text-xs font-medium text-slate-300">対象記事</label>
+                      <label className="block text-xs font-semibold text-slate-700">対象記事</label>
                       <select value={payload.articleId || ''} onChange={(e) => setPayload((p) => ({ ...p, articleId: e.target.value }))} className={cls}>
                         <option value="">記事を選択してください</option>
                         {articles.map((a) => <option key={a.id} value={a.id}>{a.title}</option>)}
                       </select>
                     </div>
                     <div className="md:col-span-2">
-                      <label className="block text-xs font-medium text-slate-300">改善内容・指示</label>
+                      <label className="block text-xs font-semibold text-slate-700">改善内容・指示</label>
                       <textarea rows={3} value={payload.change || ''} onChange={(e) => setPayload((p) => ({ ...p, change: e.target.value }))} className={cls} />
                     </div>
                   </div>
                   <div className="flex justify-end gap-2 pt-2">
-                    <button type="button" onClick={() => setForm(false)} className="rounded-lg border border-slate-700 px-4 py-2 text-xs text-slate-400">キャンセル</button>
-                    <button type="submit" disabled={saving} className="rounded-lg bg-cyan-700 px-4 py-2 text-xs font-bold text-white">保存</button>
+                    <button type="button" onClick={() => setForm(false)} className="rounded-xl border border-slate-200 px-4 py-2 text-xs text-slate-600 hover:text-slate-900 cursor-pointer">キャンセル</button>
+                    <button type="submit" disabled={saving} className="rounded-xl bg-purple-600 hover:bg-purple-700 px-4 py-2 text-xs font-bold text-white shadow-xs cursor-pointer">保存</button>
                   </div>
                 </form>
               )}
@@ -1750,20 +1577,20 @@ export const OwnMediaWorkspace: React.FC<{
               {!form && (
                 <div className="space-y-3">
                   {rewriteList.length === 0 ? (
-                    <div className="rounded-xl border border-slate-800 bg-slate-900/40 p-6 text-center text-sm text-slate-400">
+                    <div className="rounded-2xl border border-slate-200 bg-white p-6 text-center text-xs text-slate-500 shadow-xs">
                       リライト課題は登録されていません。
                     </div>
                   ) : (
                     rewriteList.map((r) => (
-                      <article key={r.id} className="rounded-xl border border-slate-800 bg-slate-900 p-4">
+                      <article key={r.id} className="rounded-2xl border border-slate-200 bg-white p-4 shadow-xs">
                         <div className="flex justify-between items-start">
-                          <h4 className="font-semibold text-white">{r.title}</h4>
+                          <h4 className="font-bold text-slate-900 text-sm">{r.title}</h4>
                           <div className="flex gap-2">
-                            <button onClick={() => edit(r)} className="rounded border border-slate-700 px-2 py-1 text-xs">編集</button>
-                            <button onClick={() => void remove(r)} className="rounded border border-rose-900 px-2 py-1 text-xs text-rose-300"><Trash2 className="h-3.5 w-3.5" /></button>
+                            <button onClick={() => edit(r)} className="rounded-lg border border-slate-200 px-2 py-1 text-xs text-slate-700 hover:bg-slate-50 cursor-pointer">編集</button>
+                            <button onClick={() => void remove(r)} className="rounded-lg border border-slate-200 p-1 text-slate-400 hover:text-rose-600 cursor-pointer"><Trash2 className="h-3.5 w-3.5" /></button>
                           </div>
                         </div>
-                        {r.payload.change && <p className="mt-2 text-xs text-slate-300">{r.payload.change}</p>}
+                        {r.payload.change && <p className="mt-2 text-xs text-slate-600">{r.payload.change}</p>}
                       </article>
                     ))
                   )}
@@ -1777,9 +1604,9 @@ export const OwnMediaWorkspace: React.FC<{
              ======================================================== */}
           {tab === 'attribution' && (
             <div className="space-y-4">
-              <div className="rounded-xl border border-slate-800 bg-slate-900/60 p-4">
-                <h3 className="font-bold text-base text-white">リード・売上成果連携（CRM自動紐付け）</h3>
-                <p className="text-xs text-slate-400 mt-0.5">
+              <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-xs">
+                <h3 className="font-bold text-base text-slate-900">リード・売上成果連携（CRM自動紐付け）</h3>
+                <p className="text-xs text-slate-500 mt-0.5">
                   記事のURLとCRM内のリード獲得元・診断URLを自動照合し、流入成果を把握できます。
                 </p>
               </div>
@@ -1800,14 +1627,14 @@ export const OwnMediaWorkspace: React.FC<{
                   const matchingDeals = crmDeals.filter((d) => d.lead_id && ids.has(d.lead_id));
 
                   return (
-                    <div key={art.id} className="rounded-xl border border-slate-800 bg-slate-900 p-4">
-                      <h4 className="font-semibold text-white">{art.title}</h4>
-                      <p className="text-xs text-slate-400 mt-0.5">URL: {url || '公開URL未設定'}</p>
-                      <div className="mt-3 flex gap-4 text-xs">
-                        <span className="rounded-lg bg-cyan-950/60 border border-cyan-800/40 px-3 py-1 text-cyan-300">
+                    <div key={art.id} className="rounded-2xl border border-slate-200 bg-white p-5 shadow-xs">
+                      <h4 className="font-bold text-slate-900 text-sm">{art.title}</h4>
+                      <p className="text-xs text-slate-500 mt-0.5">URL: {url || '公開URL未設定'}</p>
+                      <div className="mt-3 flex gap-3 text-xs">
+                        <span className="rounded-lg bg-purple-50 border border-purple-200 px-3 py-1 text-purple-700 font-semibold">
                           獲得リード: <strong>{url ? matched.length : 0}</strong> 件
                         </span>
-                        <span className="rounded-lg bg-emerald-950/60 border border-emerald-800/40 px-3 py-1 text-emerald-300">
+                        <span className="rounded-lg bg-emerald-50 border border-emerald-200 px-3 py-1 text-emerald-700 font-semibold">
                           商談創出: <strong>{url ? matchingDeals.length : 0}</strong> 件
                         </span>
                       </div>
@@ -1822,36 +1649,35 @@ export const OwnMediaWorkspace: React.FC<{
 
       {/* 自社公式HP / オウンドメディア URL変更モーダル */}
       {showUrlModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
-          <div className="w-full max-w-lg rounded-2xl border border-cyan-500/40 bg-slate-900 p-6 shadow-2xl space-y-4">
-            <div className="flex items-center justify-between border-b border-slate-800 pb-3">
-              <div className="flex items-center gap-2 text-white font-bold text-base">
-                <Globe className="h-5 w-5 text-cyan-400" />
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-xs animate-in fade-in duration-150">
+          <div className="w-full max-w-lg rounded-2xl border border-slate-200 bg-white p-6 shadow-xl space-y-4">
+            <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+              <div className="flex items-center gap-2 font-bold text-base text-slate-900">
+                <Globe className="h-5 w-5 text-purple-600" />
                 <span>自社公式HP / オウンドメディア公開先URL設定</span>
               </div>
               <button
                 type="button"
                 onClick={() => setShowUrlModal(false)}
-                className="text-slate-400 hover:text-white text-sm cursor-pointer"
+                className="text-slate-400 hover:text-slate-700 text-sm cursor-pointer p-1 rounded-lg"
               >
-                ×
+                ✕
               </button>
             </div>
 
-            <p className="text-xs text-slate-300 leading-relaxed">
+            <p className="text-xs text-slate-600 leading-relaxed">
               記事公開ボタンを押した際に公開される自社公式HP（Astro + Supabase直結）のURLを設定します。
               変更すると記事一覧のリンク・案内文・即時公開先URLが自動で更新されます。
             </p>
 
             {/* プリセット選択チップ */}
             <div className="space-y-1.5">
-              <label className="text-[11px] font-semibold text-slate-400">ワンクリック選択（プリセット候補）:</label>
+              <label className="text-[11px] font-semibold text-slate-700">ワンクリック選択（プリセット候補）:</label>
               <div className="flex flex-wrap gap-1.5">
                 {[
-                  { site: 'https://corp.mstcorp.info', media: 'https://corp.mstcorp.info/media', label: 'corp.mstcorp.info/media（Astro公式HP）' },
-                  { site: 'https://mstcorp.info', media: 'https://mstcorp.info/media', label: 'mstcorp.info/media' },
+                  { site: 'https://mstcorp.info', media: 'https://mstcorp.info/media', label: 'mstcorp.info/media（公式本番メディア）' },
                   { site: 'https://mstcorp.info', media: 'https://mstcorp.info', label: 'mstcorp.info（トップ直下）' },
-                  { site: 'https://corp.mstcorp.info', media: 'https://corp.mstcorp.info', label: 'corp.mstcorp.info（トップ直下）' },
+                  { site: 'https://corp.mstcorp.info', media: 'https://corp.mstcorp.info/media', label: 'corp.mstcorp.info/media（サブドメイン）' },
                 ].map((preset) => (
                   <button
                     key={preset.media}
@@ -1860,7 +1686,7 @@ export const OwnMediaWorkspace: React.FC<{
                       setTempSiteUrl(preset.site);
                       setTempMediaUrl(preset.media);
                     }}
-                    className="text-[11px] px-2.5 py-1 rounded-lg bg-slate-800 hover:bg-slate-700 text-cyan-300 border border-slate-700 cursor-pointer transition font-mono"
+                    className="text-[11px] px-2.5 py-1 rounded-lg bg-slate-100 hover:bg-purple-50 text-slate-700 hover:text-purple-700 border border-slate-200 cursor-pointer transition font-mono"
                   >
                     {preset.label}
                   </button>
@@ -1871,40 +1697,40 @@ export const OwnMediaWorkspace: React.FC<{
             {/* 入力欄 */}
             <div className="space-y-3 pt-2">
               <div>
-                <label className="block text-xs font-semibold text-slate-200 mb-1">
-                  メディア・記事ディレクトリURL <span className="text-cyan-400">*</span>
+                <label className="block text-xs font-semibold text-slate-700 mb-1">
+                  メディア・記事ディレクトリURL <span className="text-purple-600">*</span>
                 </label>
                 <input
                   type="url"
                   value={tempMediaUrl}
                   onChange={(e) => setTempMediaUrl(e.target.value)}
-                  placeholder="例: https://corp.mstcorp.info/media"
-                  className="w-full rounded-xl border border-slate-700 bg-slate-950 px-3 py-2 text-xs text-white placeholder-slate-500 outline-none focus:border-cyan-500 font-mono"
+                  placeholder="例: https://mstcorp.info/media"
+                  className="w-full rounded-xl border border-slate-300 bg-white px-3 py-2 text-xs text-slate-900 placeholder:text-slate-400 outline-none focus:border-purple-500 font-mono"
                 />
-                <p className="text-[10px] text-slate-400 mt-1">
+                <p className="text-[10px] text-slate-500 mt-1">
                   ※ 記事公開時に <code>{tempMediaUrl ? tempMediaUrl.replace(/\/$/, '') : 'https://...'}/[記事スラッグ]</code> のURLが生成されます。
                 </p>
               </div>
 
               <div>
-                <label className="block text-xs font-semibold text-slate-200 mb-1">
-                  コーポレートHP トップURL <span className="text-cyan-400">*</span>
+                <label className="block text-xs font-semibold text-slate-700 mb-1">
+                  コーポレートHP トップURL <span className="text-purple-600">*</span>
                 </label>
                 <input
                   type="url"
                   value={tempSiteUrl}
                   onChange={(e) => setTempSiteUrl(e.target.value)}
-                  placeholder="例: https://corp.mstcorp.info"
-                  className="w-full rounded-xl border border-slate-700 bg-slate-950 px-3 py-2 text-xs text-white placeholder-slate-500 outline-none focus:border-cyan-500 font-mono"
+                  placeholder="例: https://mstcorp.info"
+                  className="w-full rounded-xl border border-slate-300 bg-white px-3 py-2 text-xs text-slate-900 placeholder:text-slate-400 outline-none focus:border-purple-500 font-mono"
                 />
               </div>
             </div>
 
-            <div className="flex items-center justify-end gap-2 border-t border-slate-800 pt-4">
+            <div className="flex items-center justify-end gap-2 border-t border-slate-100 pt-4">
               <button
                 type="button"
                 onClick={() => setShowUrlModal(false)}
-                className="rounded-xl border border-slate-700 px-3.5 py-2 text-xs font-medium text-slate-300 hover:bg-slate-800 cursor-pointer"
+                className="rounded-xl border border-slate-200 bg-white px-3.5 py-2 text-xs font-semibold text-slate-600 hover:bg-slate-50 cursor-pointer"
               >
                 キャンセル
               </button>
@@ -1912,7 +1738,7 @@ export const OwnMediaWorkspace: React.FC<{
                 type="button"
                 disabled={savingUrlConfig || !tempMediaUrl.trim()}
                 onClick={() => void handleSaveUrlConfig()}
-                className="inline-flex items-center gap-1.5 rounded-xl bg-cyan-600 hover:bg-cyan-500 px-4 py-2 text-xs font-bold text-white disabled:opacity-50 shadow-md shadow-cyan-600/30 cursor-pointer"
+                className="inline-flex items-center gap-1.5 rounded-xl bg-purple-600 hover:bg-purple-700 px-4 py-2 text-xs font-bold text-white disabled:opacity-50 shadow-xs cursor-pointer"
               >
                 {savingUrlConfig ? '保存中…' : '保存してURLを反映'}
               </button>

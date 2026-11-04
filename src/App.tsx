@@ -39,6 +39,10 @@ import { AutomationView } from './components/matrix/AutomationView';
 import { DocumentTemplateView } from './components/matrix/DocumentTemplateView';
 import { MarketingAutomationPrototypeView } from './components/marketing/MarketingAutomationPrototypeView';
 import { AIAcquisitionOperationsView } from './components/marketing/AIAcquisitionOperationsView';
+import { MarketingLeadListHub } from './components/marketing/MarketingLeadListHub';
+import { SalesPipelineHub } from './components/sales/SalesPipelineHub';
+import { ProductProjectHub } from './components/matrix/ProductProjectHub';
+import { AiPresetsAutomationsHub } from './components/matrix/AiPresetsAutomationsHub';
 import { ContactsLineHub } from './components/ContactsLineHub';
 import { QuickPresidentDrawer, getPageAssistantProfile } from './components/matrix/QuickPresidentDrawer';
 import { IntegratedCalendarWorkspace } from './components/calendar/IntegratedCalendarWorkspace';
@@ -2304,7 +2308,7 @@ function AppContent() {
         {currentTab === 'customer_meeting_invitations' && <CommunicationSendCenter initialKind="customer_meeting" />}
         {currentTab === 'communication_send' && <CommunicationSendCenter initialKind={customerWorkspaceContext?.documentId ? "document" : customerWorkspaceContext?.sendKind || "form"} initialCompanyId={customerWorkspaceContext?.companyId} initialDocumentId={customerWorkspaceContext?.documentId} initialFormId={customerWorkspaceContext?.formId} initialDealId={customerWorkspaceContext?.dealId} initialContactId={customerWorkspaceContext?.contactId} />}
 
-        {['companies', 'prospects', 'leads', 'products', 'deals', 'customers'].includes(currentTab) && (
+        {['companies', 'products'].includes(currentTab) && (
           <TableManager
             currentTable={currentTab as TableKey}
             onTableChange={(tab) => setCurrentTab(tab as UnifiedNavTab)}
@@ -2324,9 +2328,32 @@ function AppContent() {
           />
         )}
 
-        {/* ================= SECTION 2: MATRIX & UNIVERSAL PRODUCTS ================= */}
-        {currentTab === 'product_hub' && (
-          <ProductHubView
+        {(currentTab === 'leads' || currentTab === 'deals' || currentTab === 'customers') && (
+          <SalesPipelineHub
+            activeTab={currentTab}
+            onTabChange={(tab) => setCurrentTab(tab as UnifiedNavTab)}
+            onOpenRls={() => setIsRlsOpen(true)}
+            onOpenCustomerWorkspace={(companyId, destination, recordContext) => {
+              setCustomerWorkspaceContext({
+                companyId,
+                leadId: recordContext?.tableKey === 'leads' ? recordContext.recordId : recordContext?.leadId,
+                dealId: recordContext?.tableKey === 'deals' ? recordContext.recordId : undefined,
+                section: destination === 'forms' ? 'forms' : destination === 'diagnoses' ? 'diagnoses' : undefined,
+                sendKind: destination === 'send' ? (recordContext?.tableKey === 'deals' ? 'deal' : recordContext?.tableKey === 'customers' ? 'customer_meeting' : recordContext?.tableKey === 'prospects' || recordContext?.tableKey === 'leads' ? 'announcement' : 'form') : undefined,
+                formId: undefined,
+                contactId: recordContext?.contactId,
+              });
+              setCurrentTab(destination === 'send' ? 'communication_send' : destination === 'documents' ? 'document_templates' : destination === 'diagnoses' || destination === 'forms' ? 'mst_diagnoses' : 'customer_operations');
+            }}
+            onNavigateTab={(tab) => setCurrentTab(tab as UnifiedNavTab)}
+          />
+        )}
+
+        {/* ================= SECTION 2: PRODUCT DEVELOPMENT & PROJECTS ================= */}
+        {(currentTab === 'product_hub' || currentTab === 'ai_projects') && (
+          <ProductProjectHub
+            activeTab={currentTab === 'ai_projects' ? 'ai_projects' : 'product_hub'}
+            onTabChange={(tab) => setCurrentTab(tab as UnifiedNavTab)}
             products={products}
             contracts={contracts}
             invoices={invoices}
@@ -2350,6 +2377,15 @@ function AppContent() {
               recordActivityLog('project_created', `新商品プロジェクト「${newProject.name}」を作成`, 'AI社長');
               setActivityLogs(loadActivityLogs());
             }}
+            onCreateProject={handleCreateProject}
+            onUpdateProject={handleUpdateProject}
+            onDeleteProject={handleDeleteProject}
+            onNavigateToTasksWithFilter={(projId) => {
+              setSelectedProjectIdForTasks(projId);
+              setSelectedTaskWorkspaceSection('tasks');
+              setCurrentTab('ai_tasks');
+            }}
+            onNavigateTab={(tab) => setCurrentTab(tab as UnifiedNavTab)}
           />
         )}
 
@@ -2394,15 +2430,6 @@ function AppContent() {
           />
         )}
 
-        {currentTab === 'automations' && (
-          <AutomationView
-            automations={automations}
-            activityLogs={activityLogs}
-            onUpdateAutomation={handleUpdateAutomation}
-            onAddAutomation={handleAddAutomation}
-            onDeleteAutomation={handleDeleteAutomation}
-          />
-        )}
 
         {currentTab === 'document_templates' && (
           <>
@@ -2428,7 +2455,38 @@ function AppContent() {
           </>
         )}
 
-        {currentTab === 'contacts' && <ContactsLineHub onOpenLineInbox={(contactId, lineUserId) => { setLineInboxContact({ contactId, lineUserId }); setCurrentTab('inbox_hub'); }} onOpenEmailSend={(contactId, companyId) => { setCustomerWorkspaceContext({ companyId: companyId || '', contactId, sendKind: 'announcement' }); setCurrentTab('communication_send'); }} />}
+        {(currentTab === 'contacts' || currentTab === 'prospects') && (
+          <MarketingLeadListHub
+            activeTab={currentTab === 'prospects' ? 'prospects' : 'contacts'}
+            onTabChange={(tab) => setCurrentTab(tab as UnifiedNavTab)}
+            onOpenLineInbox={(contactId, lineUserId) => {
+              setLineInboxContact({ contactId, lineUserId });
+              setCurrentTab('inbox_hub');
+            }}
+            onOpenEmailSend={(contactId, companyId) => {
+              setCustomerWorkspaceContext({
+                companyId: companyId || '',
+                contactId,
+                sendKind: 'announcement',
+              });
+              setCurrentTab('communication_send');
+            }}
+            onOpenCustomerWorkspace={(companyId, destination, recordContext) => {
+              setCustomerWorkspaceContext({
+                companyId,
+                leadId: recordContext?.tableKey === 'leads' ? recordContext.recordId : recordContext?.leadId,
+                dealId: recordContext?.tableKey === 'deals' ? recordContext.recordId : undefined,
+                section: destination === 'forms' ? 'forms' : destination === 'diagnoses' ? 'diagnoses' : undefined,
+                sendKind: destination === 'send' ? (recordContext?.tableKey === 'deals' ? 'deal' : recordContext?.tableKey === 'customers' ? 'customer_meeting' : recordContext?.tableKey === 'prospects' || recordContext?.tableKey === 'leads' ? 'announcement' : 'form') : undefined,
+                formId: undefined,
+                contactId: recordContext?.contactId,
+              });
+              setCurrentTab(destination === 'send' ? 'communication_send' : destination === 'documents' ? 'document_templates' : destination === 'diagnoses' || destination === 'forms' ? 'mst_diagnoses' : 'customer_operations');
+            }}
+            onOpenRls={() => setIsRlsOpen(true)}
+            onNavigateTab={(tab) => setCurrentTab(tab as UnifiedNavTab)}
+          />
+        )}
 
 
         {currentTab === 'ai_acquisition' && (
@@ -2525,21 +2583,6 @@ function AppContent() {
           />
         )}
 
-        {currentTab === 'ai_projects' && (
-          <ProjectsView
-            projects={projects}
-            tasks={tasks}
-            onCreateProject={handleCreateProject}
-            onUpdateProject={handleUpdateProject}
-            onDeleteProject={handleDeleteProject}
-            onNavigateToTasksWithFilter={(projId) => {
-              setSelectedProjectIdForTasks(projId);
-              setSelectedTaskWorkspaceSection('tasks');
-              setCurrentTab('ai_tasks');
-            }}
-          />
-        )}
-
         {currentTab === 'ai_tasks' && (
           <TasksView
             tasks={tasks}
@@ -2574,8 +2617,10 @@ function AppContent() {
           />
         )}
 
-        {currentTab === 'ai_presets' && (
-          <PresetsView
+        {(currentTab === 'ai_presets' || currentTab === 'automations') && (
+          <AiPresetsAutomationsHub
+            activeTab={currentTab === 'automations' ? 'automations' : 'ai_presets'}
+            onTabChange={(tab) => setCurrentTab(tab as UnifiedNavTab)}
             characters={characters}
             activeCharacterId={activeCharacterId}
             activeWorkModeId={activeWorkModeId}
@@ -2598,6 +2643,11 @@ function AppContent() {
             onEditRole={setEditingRoleId}
             onOpenModelSettings={() => setIsModelSettingsOpen(true)}
             onDeleteCharacter={handleDeleteCharacter}
+            automations={automations}
+            activityLogs={activityLogs}
+            onUpdateAutomation={handleUpdateAutomation}
+            onAddAutomation={handleAddAutomation}
+            onDeleteAutomation={handleDeleteAutomation}
           />
         )}
 
@@ -2794,15 +2844,7 @@ function AppContent() {
         />
       )}
 
-      <button
-        type="button"
-        onClick={() => setIsQuickDrawerOpen(true)}
-        className="fixed bottom-5 right-5 z-40 inline-flex items-center gap-2 rounded-full border border-indigo-400/40 bg-indigo-600 px-4 py-3 text-sm font-semibold text-white shadow-lg shadow-indigo-950/40 transition hover:bg-indigo-500"
-        aria-label="現在のページについてAIに相談・依頼"
-      >
-        <span aria-hidden="true" className="grid h-6 w-6 place-items-center rounded-full bg-white/15 text-base">{pageAssistantMode.avatarEmoji}</span>
-        <span>AIに相談・依頼</span>
-      </button>
+
 
       {/* Page-aware AI helper drawer */}
       <QuickPresidentDrawer

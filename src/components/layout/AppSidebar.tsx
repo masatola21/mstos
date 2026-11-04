@@ -83,6 +83,7 @@ export const AppSidebar: React.FC<AppSidebarProps> = ({
       defaultOpen: true,
       items: [
         { id: 'ai_acquisition', label: '集客戦略・SNS・メディア' },
+        { id: 'contacts', label: '見込み・友だちリスト（LINE & 企業）' },
         { id: 'marketing_automation', label: 'LINE・メール自動配信' },
         { id: 'mst_diagnoses', label: '受付フォーム・診断設計' },
       ],
@@ -93,14 +94,11 @@ export const AppSidebar: React.FC<AppSidebarProps> = ({
       icon: Briefcase,
       defaultOpen: true,
       items: [
-        { id: 'prospects', label: '見込み企業（AI検索・アプローチ）' },
-        { id: 'contacts', label: '連絡先・LINE友だち（友だち・名簿）' },
-        { id: 'leads', label: '反響リード管理（問い合わせ・診断）' },
-        { id: 'deals', label: '商談パイプライン（提案・見積）' },
-        { id: 'customers', label: '契約顧客台帳（成約企業）' },
-        { id: 'companies', label: '会社台帳（法人マスタ）' },
-        { id: 'custom_lists', label: '配信対象セグメント' },
+        { id: 'deals', label: '商談パイプライン（リード・商談・顧客）' },
+        { id: 'customer_operations', label: '契約・請求・顧問支援' },
         { id: 'document_templates', label: '重要書類・見積・契約' },
+        { id: 'companies', label: '会社台帳（法人マスタ）' },
+        { id: 'products', label: '商品マスタ（販売商品・料金台帳）' },
       ],
     },
     {
@@ -115,33 +113,15 @@ export const AppSidebar: React.FC<AppSidebarProps> = ({
       ],
     },
     {
-      id: 'operations',
-      label: '事業運営',
-      icon: Layers,
-      defaultOpen: true,
-      items: [
-        { id: 'product_hub', label: '商品マスタ（商品・サービス設計）' },
-        { id: 'customer_operations', label: '契約・請求・顧問支援' },
-        { id: 'category_hub', label: '事業マトリクス' },
-      ],
-    },
-    {
       id: 'ai_president',
       label: 'AI経営室',
       icon: Sparkles,
       defaultOpen: true,
       items: [
         { id: 'ai_chat', label: 'AI社長室・対話' },
-        {
-          id: 'ai_tasks',
-          label: '共通タスク・承認',
-          badge: pendingApprovalsCount > 0 ? pendingApprovalsCount : undefined,
-          badgeColor: 'bg-amber-100 text-amber-800 border-amber-200',
-        },
-        { id: 'ai_projects', label: 'プロジェクト管理' },
+        { id: 'product_hub', label: '商品開発 & プロジェクト' },
         { id: 'ai_knowledge', label: 'ナレッジ・成果物保管庫' },
-        { id: 'ai_presets', label: '専門AI・役割一覧' },
-        { id: 'automations', label: 'AI自動化・承認ルール' },
+        { id: 'ai_presets', label: '専門AI・自動化ルール設定' },
       ],
     },
   ];
@@ -158,6 +138,10 @@ export const AppSidebar: React.FC<AppSidebarProps> = ({
 
   const isTabActive = (tabId: string): boolean => {
     if (currentTab === tabId) return true;
+    if (tabId === 'contacts' && currentTab === 'prospects') return true;
+    if (tabId === 'deals' && (currentTab === 'leads' || currentTab === 'customers')) return true;
+    if (tabId === 'product_hub' && currentTab === 'ai_projects') return true;
+    if (tabId === 'ai_presets' && currentTab === 'automations') return true;
     if (tabId === 'mst_dashboard' && currentTab === 'inflow_dashboard') return true;
     if (tabId === 'communication_send' && (currentTab === 'deal_invitations' || currentTab === 'customer_meeting_invitations')) return true;
     return false;
@@ -218,12 +202,12 @@ export const AppSidebar: React.FC<AppSidebarProps> = ({
 
         {/* Navigation List */}
         <div className="flex-1 overflow-y-auto px-3 py-4 space-y-6 custom-scrollbar text-sm">
-          {/* Dashboard Direct Link */}
-          <div>
+          {/* Top Quick Navigation: Dashboard & Company Tasks */}
+          <div className="space-y-1">
             <button
               type="button"
               onClick={() => handleItemClick('mst_dashboard')}
-              className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-semibold transition-colors cursor-pointer ${
+              className={`w-full flex items-center gap-3 px-3 py-2 rounded-lg text-xs sm:text-sm font-semibold transition-colors cursor-pointer ${
                 isTabActive('mst_dashboard')
                   ? 'bg-purple-50 text-purple-700 font-bold border border-purple-200/80 shadow-xs'
                   : 'text-slate-700 hover:bg-slate-100/80 hover:text-slate-900'
@@ -231,6 +215,26 @@ export const AppSidebar: React.FC<AppSidebarProps> = ({
             >
               <LayoutDashboard className={`w-4 h-4 ${isTabActive('mst_dashboard') ? 'text-purple-600' : 'text-slate-400'}`} />
               <span>📊 経営ダッシュボード</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => handleItemClick('ai_tasks')}
+              className={`w-full flex items-center justify-between px-3 py-2 rounded-lg text-xs sm:text-sm font-semibold transition-colors cursor-pointer ${
+                isTabActive('ai_tasks')
+                  ? 'bg-purple-50 text-purple-700 font-bold border border-purple-200/80 shadow-xs'
+                  : 'text-slate-700 hover:bg-slate-100/80 hover:text-slate-900'
+              }`}
+            >
+              <div className="flex items-center gap-3">
+                <CheckSquare className={`w-4 h-4 ${isTabActive('ai_tasks') ? 'text-purple-600' : 'text-slate-400'}`} />
+                <span>全社タスク・承認</span>
+              </div>
+              {pendingApprovalsCount > 0 && (
+                <span className="px-1.5 py-0.5 text-[10px] font-bold rounded-full bg-amber-100 text-amber-800 border border-amber-200">
+                  {pendingApprovalsCount}
+                </span>
+              )}
             </button>
           </div>
 
@@ -292,24 +296,6 @@ export const AppSidebar: React.FC<AppSidebarProps> = ({
             );
           })}
 
-          {/* Quick Calendar Jump from Sidebar */}
-          <div className="pt-2 border-t border-slate-100">
-            <button
-              type="button"
-              onClick={() => handleItemClick('unified_calendar')}
-              className={`w-full flex items-center justify-between px-3 py-2 rounded-lg text-xs font-medium transition-colors cursor-pointer ${
-                isTabActive('unified_calendar')
-                  ? 'bg-purple-50 text-purple-700 font-bold border border-purple-200/70'
-                  : 'text-slate-600 hover:bg-slate-100/70 hover:text-slate-900'
-              }`}
-            >
-              <div className="flex items-center gap-2">
-                <Calendar className="w-3.5 h-3.5 text-indigo-500" />
-                <span>全社予定カレンダー</span>
-              </div>
-              <span className="text-[10px] text-slate-400">Google同期</span>
-            </button>
-          </div>
         </div>
 
         {/* Footer Settings Accordion */}
