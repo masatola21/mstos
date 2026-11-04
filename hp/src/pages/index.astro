@@ -401,10 +401,10 @@ const steps = [
           </div>
         </div>
 
-        <!-- 対比 2: 属人化・社長依存 -->
+        <!-- 対比 2: 属人化解消 ＆ IT・DX・生成AIによる仕組み化 -->
         <div class="bg-sand-50 rounded-2xl border border-sand-300 p-6 sm:p-8 shadow-sm">
           <div class="text-xs font-bold text-brand-800 bg-brand-100/80 px-3 py-1 rounded-md inline-block mb-4">
-            構造改革 02｜業務フロー・属人化
+            構造改革 02｜業務フロー・属人化 ＆ IT・DX・生成AI実装
           </div>
           <div class="grid grid-cols-1 md:grid-cols-2 gap-6 items-stretch">
             <!-- BEFORE -->
@@ -414,13 +414,13 @@ const steps = [
                   <span class="w-5 h-5 rounded-full bg-red-200 flex items-center justify-center text-red-800 font-bold">✕</span>
                   <span>従来の現場（BEFORE）</span>
                 </div>
-                <h3 class="text-base font-bold text-slate-900">「あの人しか分からない」業務ばかりで社長が忙殺</h3>
+                <h3 class="text-base font-bold text-slate-900">「あの人しか分からない」ブラックボックス化と社長の現場忙殺</h3>
                 <p class="text-xs text-gray-600 leading-relaxed">
-                  担当者が休むと実務がストップ。新人教育にも手がかかり、社長自らがトラブル処理や現場作業に追われて戦略を考える暇がない。
+                  担当者が休むと実務が停滞。ITや生成AIをどう業務に活かせばよいか分からず、紙や手作業の二重転記が山積み。社長自らがトラブル処理や現場作業に追われて経営に向き合えない。
                 </p>
               </div>
               <div class="text-[11px] text-red-600 font-medium mt-3 pt-2 border-t border-red-200/60">
-                リスク：退職やミスが致命傷になり、事業拡大がストップ
+                リスク：退職やヒューマンエラーが致命傷になり、DX推進も形骸化
               </div>
             </div>
             <!-- AFTER -->
@@ -430,13 +430,13 @@ const steps = [
                   <span class="w-5 h-5 rounded-full bg-emerald-200 flex items-center justify-center text-emerald-800 font-bold">✓</span>
                   <span>MST伴走後（AFTER）</span>
                 </div>
-                <h3 class="text-base font-bold text-slate-900">業務フローが標準化され、誰でも回せる自走組織へ</h3>
+                <h3 class="text-base font-bold text-slate-900">IT・DX・生成AIが組み込まれ、現場が自動で回る自走組織へ</h3>
                 <p class="text-xs text-gray-700 leading-relaxed">
-                  属人化していた判断基準をマニュアル・ワークフロー化。手作業や転記はGASやシステムで自動化し、社長が「経営」に集中できる時間を創出。
+                  暗黙知の判断ルールを可視化・標準化。データ連携や生成AIによる要約・一次対応・帳票作成を現場業務に直接組み込み、誰でも均一な品質でミスなく回せる体制へ。社長の経営時間を確保。
                 </p>
               </div>
               <div class="text-[11px] text-emerald-800 font-bold mt-3 pt-2 border-t border-emerald-200/60">
-                成果：月間40時間以上の工数削減、人に依存しない組織基盤
+                成果：月間40h以上の工数削減、身の丈に合った実践的DX・AI運用の定着
               </div>
             </div>
           </div>
@@ -804,97 +804,138 @@ const steps = [
         ))}
       </div>
 
-      <!-- AUTORO風：業務自動化 連携パイプライン図解（受け取る ➔ 処理・連携 ➔ 通知・蓄積） -->
+      <!-- 業務自動化・システム実装アーキテクチャ（AUTORO風 連携パイプライン ＋ 多彩な実装選択肢） -->
       <div class="mt-16 bg-brand-950 text-white rounded-3xl p-8 sm:p-12 border border-brand-800 shadow-xl relative overflow-hidden">
         <div class="absolute inset-0 opacity-10 bg-[radial-gradient(#3984F5_1px,transparent_1px)] [background-size:20px_20px]"></div>
-        <div class="relative z-10 max-w-4xl mx-auto space-y-8">
+        <div class="relative z-10 max-w-5xl mx-auto space-y-10">
+          
           <div class="text-center space-y-2">
             <span class="text-xs font-bold text-brand-300 uppercase tracking-widest bg-brand-900/90 border border-brand-500/40 px-3 py-1 rounded-full">
-              AUTOMATION PIPELINE
+              FLEXIBLE IMPLEMENTATION ARCHITECTURE
             </span>
             <h3 class="text-xl sm:text-3xl font-bold font-serif text-white">
-              手作業と二重転記をゼロにする、MSTの自動化連携基盤
+              手作業・二重転記をゼロにする、多彩な実装アプローチ
             </h3>
-            <p class="text-xs sm:text-sm text-slate-300 font-light">
-              既存のGoogle Workspaceや自社ツールを活かし、身の丈に合ったローコード/ノーコード・API連携で構築します。
+            <p class="text-xs sm:text-sm text-slate-300 font-light max-w-3xl mx-auto">
+              特定の単一ツールに縛られず、貴社の予算規模・IT成熟度・業務特性に合わせ、既存SaaS連携から本格的なDBベース専用アプリまで最適な実装パターンをご提案します。
             </p>
           </div>
 
-          <!-- パイプライン 4ステップフロー -->
-          <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 relative">
+          <!-- パターン別 実装選択肢（3大実装アプローチ） -->
+          <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
             
-            <!-- STEP 1 -->
-            <div class="p-5 rounded-2xl bg-slate-900/90 border border-brand-500/30 flex flex-col justify-between space-y-3">
-              <div class="space-y-2">
+            <!-- パターン 1: 既存ツール・SaaS連携 -->
+            <div class="p-6 rounded-2xl bg-slate-900/90 border border-brand-500/30 flex flex-col justify-between space-y-4 hover:border-brand-400 transition">
+              <div class="space-y-3">
                 <div class="flex items-center justify-between">
-                  <span class="text-[10px] font-bold text-brand-300 bg-brand-900 px-2 py-0.5 rounded">01 RECEIVE</span>
-                  <span class="w-2 h-2 rounded-full bg-emerald-400"></span>
+                  <span class="text-[10px] font-bold text-brand-300 bg-brand-900/90 px-2.5 py-1 rounded">PATTERN 01</span>
+                  <span class="text-[11px] text-emerald-400 font-medium">最短導入・低コスト</span>
                 </div>
-                <div class="text-sm font-bold text-white">データ受取・入力</div>
-                <p class="text-[11px] text-slate-300 leading-relaxed font-light">
-                  Webフォーム、公式LINE、メール、取引先CSVなどの情報を自動受信。
+                <h4 class="text-base font-bold text-white">既存ツール連携・軽量自動化</h4>
+                <p class="text-xs text-slate-300 leading-relaxed font-light">
+                  現在お使いのGoogle Workspace、Excel、kintone、freee、LINE、Slack等をAPIやGAS、Webhookで相互接続。業務の「隙間」の手作業と二重転記をピンポイントで解消します。
                 </p>
               </div>
-              <div class="text-[10px] text-slate-400 pt-2 border-t border-slate-800">
-                LINE / フォーム / スプレッドシート
+              <div class="pt-3 border-t border-slate-800 text-[11px] text-slate-400 font-mono">
+                GAS / Webhook / Make / 各種SaaS API
               </div>
             </div>
 
-            <!-- STEP 2 -->
-            <div class="p-5 rounded-2xl bg-slate-900/90 border border-brand-500/30 flex flex-col justify-between space-y-3">
-              <div class="space-y-2">
+            <!-- パターン 2: 現場専用 簡易Webアプリ・管理画面 -->
+            <div class="p-6 rounded-2xl bg-slate-900/90 border border-brand-500/30 flex flex-col justify-between space-y-4 hover:border-brand-400 transition">
+              <div class="space-y-3">
                 <div class="flex items-center justify-between">
-                  <span class="text-[10px] font-bold text-brand-300 bg-brand-900 px-2 py-0.5 rounded">02 PROCESS</span>
-                  <span class="w-2 h-2 rounded-full bg-cyan-400"></span>
+                  <span class="text-[10px] font-bold text-cyan-300 bg-cyan-950/90 border border-cyan-500/30 px-2.5 py-1 rounded">PATTERN 02</span>
+                  <span class="text-[11px] text-cyan-400 font-medium">使いやすさ重視</span>
                 </div>
-                <div class="text-sm font-bold text-white">判定・採算計算</div>
-                <p class="text-[11px] text-slate-300 leading-relaxed font-light">
-                  GASや専用Webアプリが、粗利計算・重複チェック・データ加工を自動実行。
+                <h4 class="text-base font-bold text-white">現場特化型 簡易Webアプリ</h4>
+                <p class="text-xs text-slate-300 leading-relaxed font-light">
+                  「市販ソフトでは自社フローに合わない」方向けに、スマホやタブレットから入力・確認できる現場専用のUI画面を開発。入力バリデーションや自動採算判定を直感的に動かします。
                 </p>
               </div>
-              <div class="text-[10px] text-slate-400 pt-2 border-t border-slate-800">
-                GAS / Python / 専用Webシステム
+              <div class="pt-3 border-t border-slate-800 text-[11px] text-slate-400 font-mono">
+                React / Tailwind / 現場入力UI / 自動帳票PDF
               </div>
             </div>
 
-            <!-- STEP 3 -->
-            <div class="p-5 rounded-2xl bg-slate-900/90 border border-brand-500/30 flex flex-col justify-between space-y-3">
-              <div class="space-y-2">
+            <!-- パターン 3: 本格的DBベース専用アプリ・基幹システム -->
+            <div class="p-6 rounded-2xl bg-brand-900/90 border border-brand-400/60 shadow-xl flex flex-col justify-between space-y-4 hover:border-brand-300 transition">
+              <div class="space-y-3">
                 <div class="flex items-center justify-between">
-                  <span class="text-[10px] font-bold text-brand-300 bg-brand-900 px-2 py-0.5 rounded">03 EXECUTE</span>
-                  <span class="w-2 h-2 rounded-full bg-blue-400"></span>
+                  <span class="text-[10px] font-bold text-emerald-300 bg-brand-950 px-2.5 py-1 rounded border border-emerald-500/30">PATTERN 03</span>
+                  <span class="text-[11px] text-emerald-300 font-medium">高拡張・自社資産化</span>
                 </div>
-                <div class="text-sm font-bold text-white">即時通知・自動発信</div>
-                <p class="text-[11px] text-slate-300 leading-relaxed font-light">
-                  担当者のLINE/Slackへ即時通知、顧客へ自動返信やPDF帳票を自動生成。
+                <h4 class="text-base font-bold text-white">本格DBベース 専用Web基幹アプリ</h4>
+                <p class="text-xs text-slate-200 leading-relaxed font-light">
+                  顧客・案件・売上・契約データを一元管理するPostgreSQL等のクラウドデータベースを基盤に、権限管理やリアルタイムダッシュボードを備えた強固な専用システムをフルスタックで構築。
                 </p>
               </div>
-              <div class="text-[10px] text-slate-400 pt-2 border-t border-slate-800">
-                LINE Messaging API / 自動メール
-              </div>
-            </div>
-
-            <!-- STEP 4 -->
-            <div class="p-5 rounded-2xl bg-brand-900/90 border border-brand-400/60 shadow-lg flex flex-col justify-between space-y-3">
-              <div class="space-y-2">
-                <div class="flex items-center justify-between">
-                  <span class="text-[10px] font-bold text-emerald-400 bg-brand-950 px-2 py-0.5 rounded">04 STOCK</span>
-                  <span class="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
-                </div>
-                <div class="text-sm font-bold text-white">台帳蓄積・KPI可視化</div>
-                <p class="text-[11px] text-slate-200 leading-relaxed font-light">
-                  実績・顧客台帳に安全保管され、社長用ダッシュボードにリアルタイム反映。
-                </p>
-              </div>
-              <div class="text-[10px] text-emerald-300 pt-2 border-t border-brand-700/60">
-                クラウドDB / 経営ダッシュボード
+              <div class="pt-3 border-t border-brand-700/60 text-[11px] text-brand-200 font-mono">
+                PostgreSQL / Supabase / Node.js / 専用DB基盤
               </div>
             </div>
 
           </div>
 
+          <!-- AUTORO風：共通データ連携パイプライン（4ステップフロー） -->
+          <div class="pt-6 border-t border-brand-800/80 space-y-4">
+            <div class="text-center text-xs text-brand-300 font-bold uppercase tracking-wider">
+              AUTOMATION EXECUTION PIPELINE
+            </div>
+
+            <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 relative">
+              <!-- STEP 1 -->
+              <div class="p-4 rounded-xl bg-slate-900/80 border border-brand-500/20 space-y-2">
+                <div class="flex items-center justify-between text-[10px] font-bold text-brand-300">
+                  <span>01 RECEIVE</span>
+                  <span class="w-2 h-2 rounded-full bg-emerald-400"></span>
+                </div>
+                <div class="text-xs font-bold text-white">データ受取・入力</div>
+                <p class="text-[11px] text-slate-300 font-light leading-relaxed">
+                  Webフォーム、公式LINE、メール、取引先CSVの情報を自動受信。
+                </p>
+              </div>
+
+              <!-- STEP 2 -->
+              <div class="p-4 rounded-xl bg-slate-900/80 border border-brand-500/20 space-y-2">
+                <div class="flex items-center justify-between text-[10px] font-bold text-brand-300">
+                  <span>02 PROCESS</span>
+                  <span class="w-2 h-2 rounded-full bg-cyan-400"></span>
+                </div>
+                <div class="text-xs font-bold text-white">自動判定・AI要約・採算計算</div>
+                <p class="text-[11px] text-slate-300 font-light leading-relaxed">
+                  粗利計算、重複チェック、生成AIによる文章要約・データ整形を即時実行。
+                </p>
+              </div>
+
+              <!-- STEP 3 -->
+              <div class="p-4 rounded-xl bg-slate-900/80 border border-brand-500/20 space-y-2">
+                <div class="flex items-center justify-between text-[10px] font-bold text-brand-300">
+                  <span>03 EXECUTE</span>
+                  <span class="w-2 h-2 rounded-full bg-blue-400"></span>
+                </div>
+                <div class="text-xs font-bold text-white">即時通知・自動帳票生成</div>
+                <p class="text-[11px] text-slate-300 font-light leading-relaxed">
+                  担当者のLINE/Slackへ即時通知。顧客へ自動返信やPDF帳票を瞬時に作成。
+                </p>
+              </div>
+
+              <!-- STEP 4 -->
+              <div class="p-4 rounded-xl bg-slate-900/80 border border-brand-500/20 space-y-2">
+                <div class="flex items-center justify-between text-[10px] font-bold text-brand-300">
+                  <span>04 STOCK</span>
+                  <span class="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
+                </div>
+                <div class="text-xs font-bold text-white">DB台帳蓄積・KPI可視化</div>
+                <p class="text-[11px] text-slate-300 font-light leading-relaxed">
+                  顧客・案件台帳に安全保管され、経営ダッシュボードへリアルタイム反映。
+                </p>
+              </div>
+            </div>
+          </div>
+
           <div class="text-center text-xs text-brand-200 font-light pt-2">
-            ※ 大がかりな高額ERPを入れなくても、貴社の現行ツールを活かして月数万円〜の身の丈サイズで実装可能です。
+            ※ 高額なパッケージを押し付けることは一切ありません。現在の業務の無駄を棚卸しし、費用対効果が最も高くなる実装パターンを選定・開発します。
           </div>
         </div>
       </div>
