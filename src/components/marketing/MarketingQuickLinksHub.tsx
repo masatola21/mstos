@@ -51,16 +51,16 @@ export interface MediumPreset {
 }
 
 export const TRACKING_MEDIA_PRESETS: MediumPreset[] = [
-  { id: 'note', name: 'note（ブログ・解説記事）', category: 'Owned / Blog', badge: '記事', badgeColor: 'bg-emerald-500/20 text-emerald-300 border-emerald-500/30', description: 'note記事の文末CTAやマガジンに埋め込み', utmSource: 'note', utmMedium: 'article' },
-  { id: 'x_twitter', name: 'X / Twitter（SNS投稿・プロフ）', category: 'Social', badge: 'SNS', badgeColor: 'bg-sky-500/20 text-sky-300 border-sky-500/30', description: '固定ポスト・日々の投稿・プロフィールリンク用', utmSource: 'x_twitter', utmMedium: 'social' },
-  { id: 'instagram', name: 'Instagram（プロフ・ストーリーズ）', category: 'Social', badge: 'SNS', badgeColor: 'bg-pink-500/20 text-pink-300 border-pink-500/30', description: 'プロフのリンクツリーやストーリーズスタンプ用', utmSource: 'instagram', utmMedium: 'social' },
-  { id: 'line_broadcast', name: 'LINE公式（一斉配信・リッチメニュー）', category: 'Chat / CRM', badge: 'LINE', badgeColor: 'bg-emerald-600/20 text-emerald-400 border-emerald-500/30', description: 'LINE配信メッセージやリッチメニューのタップ先', utmSource: 'line_broadcast', utmMedium: 'chat' },
-  { id: 'flyer_qr', name: 'チラシ・名刺・POP（QRコード用）', category: 'Offline', badge: '紙/QR', badgeColor: 'bg-amber-500/20 text-amber-300 border-amber-500/30', description: '印刷物・展示会・店舗POP等のQRコード生成用URL', utmSource: 'flyer_qr', utmMedium: 'offline_qr' },
-  { id: 'meta_ads', name: 'Meta広告（FB / IG広告）', category: 'Paid Ads', badge: '広告', badgeColor: 'bg-indigo-500/20 text-indigo-300 border-indigo-500/30', description: 'Meta広告マネージャのリンク先URL設定用', utmSource: 'meta_ads', utmMedium: 'cpc' },
-  { id: 'google_ads', name: 'Google広告（検索・PMax）', category: 'Paid Ads', badge: '広告', badgeColor: 'bg-blue-500/20 text-blue-300 border-blue-500/30', description: 'リスティング・ディスプレイ広告の最終ページURL', utmSource: 'google_ads', utmMedium: 'cpc' },
-  { id: 'youtube', name: 'YouTube（概要欄・固定コメント）', category: 'Video', badge: '動画', badgeColor: 'bg-rose-500/20 text-rose-300 border-rose-500/30', description: '動画の概要欄や固定コメントの導線リンク', utmSource: 'youtube', utmMedium: 'video' },
-  { id: 'newsletter', name: 'メルマガ配信（Eメール）', category: 'Direct', badge: 'メール', badgeColor: 'bg-cyan-500/20 text-cyan-300 border-cyan-500/30', description: '定期メルマガやステップメール本文内のリンク', utmSource: 'newsletter', utmMedium: 'email' },
-  { id: 'partner', name: '提携パートナー・外部メディア紹介', category: 'Partner', badge: '外部', badgeColor: 'bg-purple-500/20 text-purple-300 border-purple-500/30', description: 'アライアンス先や紹介記事からの送客リンク', utmSource: 'partner', utmMedium: 'referral' },
+  { id: 'note', name: 'note（ブログ・解説記事）', category: 'Owned / Blog', badge: '記事', badgeColor: 'bg-emerald-50 text-emerald-700 border-emerald-200', description: 'note記事の文末CTAやマガジンに埋め込み', utmSource: 'note', utmMedium: 'article' },
+  { id: 'x_twitter', name: 'X / Twitter（SNS投稿・プロフ）', category: 'Social', badge: 'SNS', badgeColor: 'bg-sky-50 text-sky-700 border-sky-200', description: '固定ポスト・日々の投稿・プロフィールリンク用', utmSource: 'x_twitter', utmMedium: 'social' },
+  { id: 'instagram', name: 'Instagram（プロフ・ストーリーズ）', category: 'Social', badge: 'SNS', badgeColor: 'bg-pink-50 text-pink-700 border-pink-200', description: 'プロフのリンクツリーやストーリーズスタンプ用', utmSource: 'instagram', utmMedium: 'social' },
+  { id: 'line_broadcast', name: 'LINE公式（一斉配信・リッチメニュー）', category: 'Chat / CRM', badge: 'LINE', badgeColor: 'bg-emerald-50 text-emerald-700 border-emerald-200', description: 'LINE配信メッセージやリッチメニューのタップ先', utmSource: 'line_broadcast', utmMedium: 'chat' },
+  { id: 'flyer_qr', name: 'チラシ・名刺・POP（QRコード用）', category: 'Offline', badge: '紙/QR', badgeColor: 'bg-amber-50 text-amber-700 border-amber-200', description: '印刷物・展示会・店舗POP等のQRコード生成用URL', utmSource: 'flyer_qr', utmMedium: 'offline_qr' },
+  { id: 'meta_ads', name: 'Meta広告（FB / IG広告）', category: 'Paid Ads', badge: '広告', badgeColor: 'bg-purple-50 text-purple-700 border-purple-200', description: 'Meta広告マネージャのリンク先URL設定用', utmSource: 'meta_ads', utmMedium: 'cpc' },
+  { id: 'google_ads', name: 'Google広告（検索・PMax）', category: 'Paid Ads', badge: '広告', badgeColor: 'bg-blue-50 text-blue-700 border-blue-200', description: 'リスティング・ディスプレイ広告の最終ページURL', utmSource: 'google_ads', utmMedium: 'cpc' },
+  { id: 'youtube', name: 'YouTube（概要欄・固定コメント）', category: 'Video', badge: '動画', badgeColor: 'bg-rose-50 text-rose-700 border-rose-200', description: '動画の概要欄や固定コメントの導線リンク', utmSource: 'youtube', utmMedium: 'video' },
+  { id: 'newsletter', name: 'メルマガ配信（Eメール）', category: 'Direct', badge: 'メール', badgeColor: 'bg-cyan-50 text-cyan-700 border-cyan-200', description: '定期メルマガやステップメール本文内のリンク', utmSource: 'newsletter', utmMedium: 'email' },
+  { id: 'partner', name: '提携パートナー・外部メディア紹介', category: 'Partner', badge: '外部', badgeColor: 'bg-purple-50 text-purple-700 border-purple-200', description: 'アライアンス先や紹介記事からの送客リンク', utmSource: 'partner', utmMedium: 'referral' },
 ];
 
 const COMMON_MEDIUM_TYPES = [
@@ -87,15 +87,15 @@ const ICON_MAP = {
 type IconKey = keyof typeof ICON_MAP;
 
 const BADGE_COLOR_OPTIONS = [
-  { label: 'エメラルド（記事・ブログ）', value: 'bg-emerald-500/20 text-emerald-300 border-emerald-500/30' },
-  { label: 'スカイ（X / Twitter）', value: 'bg-sky-500/20 text-sky-300 border-sky-500/30' },
-  { label: 'ピンク（Instagram）', value: 'bg-pink-500/20 text-pink-300 border-pink-500/30' },
-  { label: 'グリーン（LINE）', value: 'bg-emerald-600/20 text-emerald-400 border-emerald-500/30' },
-  { label: 'アンバー（紙チラシ・QR）', value: 'bg-amber-500/20 text-amber-300 border-amber-500/30' },
-  { label: 'インディゴ（広告・LP）', value: 'bg-indigo-500/20 text-indigo-300 border-indigo-500/30' },
-  { label: 'ローズ（動画・YouTube）', value: 'bg-rose-500/20 text-rose-300 border-rose-500/30' },
-  { label: 'シアン（メール・予約）', value: 'bg-cyan-500/20 text-cyan-300 border-cyan-500/30' },
-  { label: 'パープル（提携・外部）', value: 'bg-purple-500/20 text-purple-300 border-purple-500/30' },
+  { label: 'エメラルド（記事・ブログ）', value: 'bg-emerald-50 text-emerald-700 border-emerald-200' },
+  { label: 'スカイ（X / Twitter）', value: 'bg-sky-50 text-sky-700 border-sky-200' },
+  { label: 'ピンク（Instagram）', value: 'bg-pink-50 text-pink-700 border-pink-200' },
+  { label: 'グリーン（LINE）', value: 'bg-emerald-50 text-emerald-700 border-emerald-200' },
+  { label: 'アンバー（紙チラシ・QR）', value: 'bg-amber-50 text-amber-700 border-amber-200' },
+  { label: 'パープル（広告・LP）', value: 'bg-purple-50 text-purple-700 border-purple-200' },
+  { label: 'ローズ（動画・YouTube）', value: 'bg-rose-50 text-rose-700 border-rose-200' },
+  { label: 'シアン（メール・予約）', value: 'bg-cyan-50 text-cyan-700 border-cyan-200' },
+  { label: 'ブルー（提携・外部）', value: 'bg-blue-50 text-blue-700 border-blue-200' },
 ];
 
 export const MarketingQuickLinksHub: React.FC = () => {
@@ -109,7 +109,7 @@ export const MarketingQuickLinksHub: React.FC = () => {
       description: '経営・業務の急所と改善処方箋を特定する自動診断フォーム',
       url: `${origin}/f/business-diagnosis`,
       badge: '高成約率',
-      badgeColor: 'bg-indigo-500/20 text-indigo-300 border-indigo-500/30',
+      badgeColor: 'bg-purple-50 text-purple-700 border-purple-200',
       iconName: 'sparkles',
     },
     {
@@ -118,7 +118,7 @@ export const MarketingQuickLinksHub: React.FC = () => {
       description: '診断不要で直接30分面談を申し込める専用受付フォーム',
       url: `${origin}/f/care-consultation`,
       badge: '高額パッケージ直結',
-      badgeColor: 'bg-emerald-500/20 text-emerald-300 border-emerald-500/30',
+      badgeColor: 'bg-emerald-50 text-emerald-700 border-emerald-200',
       iconName: 'file-text',
     },
     {
@@ -127,7 +127,7 @@ export const MarketingQuickLinksHub: React.FC = () => {
       description: 'ステップ配信（実話ストーリー7話）や無料ツール配布の入口',
       url: 'https://line.me/R/ti/p/@mst_management',
       badge: 'リスト獲得',
-      badgeColor: 'bg-green-500/20 text-green-300 border-green-500/30',
+      badgeColor: 'bg-emerald-50 text-emerald-700 border-emerald-200',
       iconName: 'message-circle',
     },
     {
@@ -136,7 +136,7 @@ export const MarketingQuickLinksHub: React.FC = () => {
       description: '対面営業や相談後に案内するオンライン面談カレンダー',
       url: `${origin}/apply/booking`,
       badge: '商談直行',
-      badgeColor: 'bg-cyan-500/20 text-cyan-300 border-cyan-500/30',
+      badgeColor: 'bg-cyan-50 text-cyan-700 border-cyan-200',
       iconName: 'calendar',
     },
     {
@@ -145,7 +145,7 @@ export const MarketingQuickLinksHub: React.FC = () => {
       description: '会社概要・専門コラム・デジタル商品の本拠地',
       url: `${origin}/`,
       badge: '信頼・資産',
-      badgeColor: 'bg-purple-500/20 text-purple-300 border-purple-500/30',
+      badgeColor: 'bg-purple-50 text-purple-700 border-purple-200',
       iconName: 'globe',
     },
   ], [origin]);

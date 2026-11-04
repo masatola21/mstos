@@ -152,7 +152,7 @@ export default function DiagnosisForm() {
           </div>
 
           <h4 className="text-lg sm:text-2xl font-bold font-serif leading-snug">
-            「具体的な削減時間」と「利益改善ロードマップ」は<br class="hidden sm:inline" />
+            「具体的な削減時間」と「利益改善ロードマップ」は<br className="hidden sm:inline" />
             30分のオンライン無料個別面談にて直接開示いたします
           </h4>
 

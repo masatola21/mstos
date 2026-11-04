@@ -338,4 +338,3 @@ export const MarketingLineSettingsView: React.FC<MarketingLineSettingsViewProps>
     </div>
   );
 };
-};
