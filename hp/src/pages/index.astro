@@ -4,6 +4,30 @@ import { getLiveArticles } from '../data/articles';
 
 const liveArticles = await getLiveArticles();
 
+// ファーストビュー背景用スライドショー（OWNERSONE-WITH風のズーム＆クロスフェード）
+const heroSlides = [
+  {
+    image: '/images/hero-consulting.jpg',
+    alt: 'MST 経営戦略・利益改善コンサルティングミーティング',
+    caption: 'STRATEGY & ADVISORY',
+  },
+  {
+    image: '/images/system-blueprint.jpg',
+    alt: 'パソコン画面での業務フロー設計図・システム自動化設計',
+    caption: 'WORKFLOW & ARCHITECTURE',
+  },
+  {
+    image: '/images/service-system.jpg',
+    alt: 'GAS・専用Webアプリ・API連携の直接開発・実装',
+    caption: 'BESPOKE AUTOMATION',
+  },
+  {
+    image: '/images/service-it-dx.jpg',
+    alt: '現場のIT・DX・生成AIワークフロー運用定着支援',
+    caption: 'DX & AI INTEGRATION',
+  },
+];
+
 // A. 主軸サービス（MSTの中心商品）
 const coreServices = [
   {
@@ -83,31 +107,44 @@ const steps = [
   title="有限会社MST | 経営の仕組み化で、利益が残る会社へ。"
   description="MST｜経営の仕組み化 × 利益改善。中小企業・小規模事業者の経営課題を整理し、利益改善につながる戦略と仕組みを設計。必要に応じてシステム構築や業務自動化まで、戦略と実行の両面から伴走支援します。"
 >
-  <!-- ① ファーストビュー -->
-  <section class="relative bg-brand-950 text-white pt-20 pb-20 sm:pt-28 sm:pb-32 overflow-hidden">
-    <!-- 背景画像レイヤー：打合せ・コンサルティング風景（参考例に準拠した高品位オーバーレイ） -->
-    <div class="absolute inset-0 z-0">
-      <img
-        src="/images/hero-consulting.jpg"
-        alt="MST 経営の仕組み化と利益改善コンサルティング"
-        class="w-full h-full object-cover object-right lg:object-center opacity-30 lg:opacity-40 mix-blend-luminosity filter contrast-125"
-      />
-      <!-- 深みのあるブランドネイビーのグラデーション（左側テキストの可読性と右側の洗練された雰囲気を両立） -->
-      <div class="absolute inset-0 bg-gradient-to-r from-brand-950 via-brand-950/95 sm:via-brand-950/90 to-brand-950/40 lg:to-brand-950/25"></div>
-      <div class="absolute inset-0 bg-gradient-to-b from-brand-950/90 via-transparent to-brand-950"></div>
-      <div class="absolute inset-0 opacity-15 bg-[radial-gradient(#3984F5_1px,transparent_1px)] [background-size:24px_24px]"></div>
+  <!-- ① ファーストビュー（OWNERSONE-WITH風 背景クロスフェード＆ズーム + AUTORO風 動的自動化コクピット） -->
+  <section class="relative bg-brand-950 text-white pt-20 pb-20 sm:pt-28 sm:pb-32 overflow-hidden min-h-[640px] flex items-center">
+    
+    <!-- 背景スライドショーコンテナ（OWNERSONE-WITH風の滑らかなクロスフェード ＆ ゆっくりズームアニメーション） -->
+    <div class="absolute inset-0 z-0 overflow-hidden" id="hero-slider-container">
+      {heroSlides.map((slide, idx) => (
+        <div
+          class={`hero-slide absolute inset-0 transition-opacity duration-1000 ease-in-out ${idx === 0 ? 'opacity-35 z-10 active-slide' : 'opacity-0 z-0'}`}
+          data-slide-index={idx}
+        >
+          <img
+            src={slide.image}
+            alt={slide.alt}
+            class="hero-slide-img w-full h-full object-cover object-right lg:object-center mix-blend-luminosity filter contrast-125 transition-transform duration-[6000ms] ease-out"
+          />
+        </div>
+      ))}
+      
+      <!-- 深みのあるブランドネイビーのオーバーレイ（可読性を100%維持しながら右側に上質な光彩） -->
+      <div class="absolute inset-0 bg-gradient-to-r from-brand-950 via-brand-950/95 sm:via-brand-950/90 to-brand-950/40 lg:to-brand-950/20 z-20"></div>
+      <div class="absolute inset-0 bg-gradient-to-b from-brand-950/90 via-transparent to-brand-950 z-20"></div>
+      <div class="absolute inset-0 opacity-15 bg-[radial-gradient(#3984F5_1px,transparent_1px)] [background-size:24px_24px] z-20"></div>
     </div>
-    <div class="absolute -top-40 -right-40 w-96 h-96 bg-brand-500/20 rounded-full blur-3xl pointer-events-none"></div>
 
-    <div class="relative z-10 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+    <!-- インフォディオ風の洗練された光彩ブラー -->
+    <div class="absolute -top-40 -right-40 w-96 h-96 bg-brand-500/25 rounded-full blur-3xl pointer-events-none z-10"></div>
+    <div class="absolute top-1/2 right-1/4 w-80 h-80 bg-cyan-500/15 rounded-full blur-3xl pointer-events-none z-10"></div>
+
+    <div class="relative z-30 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 w-full">
       <div class="grid grid-cols-1 lg:grid-cols-12 gap-12 items-center">
         
         <!-- 左側：キャッチコピー ＆ CTA（可読性と視認性を最優先） -->
         <div class="lg:col-span-7 space-y-6">
-          <!-- ブランド表記 -->
-          <div class="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-brand-900/90 border border-brand-400/40 text-brand-200 text-xs sm:text-sm font-medium backdrop-blur-md shadow-sm">
+          <!-- ブランド表記 ＆ スライドインジケーター連動バッジ -->
+          <div class="inline-flex items-center gap-2.5 px-3.5 py-1.5 rounded-full bg-brand-900/90 border border-brand-400/40 text-brand-200 text-xs sm:text-sm font-medium backdrop-blur-md shadow-sm">
             <span class="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
-            MST｜経営の仕組み化 × 利益改善
+            <span>MST｜経営の仕組み化 × 利益改善</span>
+            <span class="text-[10px] text-brand-300 font-mono pl-1 border-l border-brand-600/60" id="hero-slide-counter">01 / 04</span>
           </div>
 
           <!-- メインコピー（最も目立たせる） -->
@@ -174,7 +211,7 @@ const steps = [
           </div>
         </div>
 
-        <!-- 右側：ビジュアル図解 ＆ システム設計図コクピットカード（PCのみ表示で縦長化を防止） -->
+        <!-- 右側：ビジュアル図解 ＆ AUTORO風 動く自動化コクピット（PCのみ表示で縦長化を防止） -->
         <div class="hidden lg:block lg:col-span-5">
           <div class="bg-gradient-to-b from-white/10 to-slate-900/85 backdrop-blur-xl rounded-3xl border border-white/20 p-6 shadow-2xl space-y-5">
             
@@ -198,9 +235,12 @@ const steps = [
               />
               <div class="absolute inset-0 bg-gradient-to-t from-slate-950/90 via-slate-950/30 to-transparent"></div>
               
-              <!-- 画面内フローティングバッジ -->
+              <!-- 画面内フローティングバッジ（動的インジケーター） -->
               <div class="absolute top-2.5 right-2.5 bg-brand-950/85 backdrop-blur-md border border-brand-400/40 px-2.5 py-1 rounded-lg text-[10px] text-brand-200 font-semibold flex items-center gap-1.5 shadow">
-                <span class="w-1.5 h-1.5 rounded-full bg-emerald-400"></span>
+                <span class="relative flex h-2 w-2">
+                  <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+                  <span class="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
+                </span>
                 業務フロー・API連携稼働中
               </div>
 
@@ -213,26 +253,37 @@ const steps = [
               </div>
             </div>
 
-            <!-- ステップ図解ミニパイプライン -->
-            <div class="grid grid-cols-3 gap-2 text-center">
-              <div class="p-2.5 rounded-xl bg-slate-900/90 border border-brand-500/30">
+            <!-- AUTORO風：受け取る・読み取る・判断する・実行する のパイプライン連動ステップ -->
+            <div class="grid grid-cols-3 gap-2 text-center relative">
+              <div class="p-2.5 rounded-xl bg-slate-900/90 border border-brand-500/30 transition-all duration-300 hover:border-brand-400">
                 <div class="text-[10px] text-brand-300 font-bold">STEP 01</div>
                 <div class="text-xs font-bold text-white mt-0.5">課題整理</div>
                 <div class="text-[9px] text-slate-400 mt-0.5">採算・属人化分析</div>
               </div>
-              <div class="p-2.5 rounded-xl bg-slate-900/90 border border-brand-500/30">
+              <div class="p-2.5 rounded-xl bg-slate-900/90 border border-brand-500/30 transition-all duration-300 hover:border-brand-400">
                 <div class="text-[10px] text-brand-300 font-bold">STEP 02</div>
                 <div class="text-xs font-bold text-white mt-0.5">設計図策定</div>
                 <div class="text-[9px] text-slate-400 mt-0.5">業務標準化ロードマップ</div>
               </div>
-              <div class="p-2.5 rounded-xl bg-brand-900/90 border border-brand-400/60 shadow">
+              <div class="p-2.5 rounded-xl bg-brand-900/90 border border-brand-400/60 shadow transition-all duration-300 hover:scale-[1.02]">
                 <div class="text-[10px] text-emerald-400 font-bold">STEP 03</div>
                 <div class="text-xs font-bold text-white mt-0.5">仕組み実装</div>
                 <div class="text-[9px] text-brand-200 mt-0.5">GAS / 専用Webアプリ</div>
               </div>
             </div>
 
-            <div class="text-center text-[11px] text-slate-300 font-light pt-1">
+            <!-- スライドバー・インジケーター（OWNERSONE風のプログレスバー） -->
+            <div class="space-y-1.5 pt-1">
+              <div class="flex items-center justify-between text-[10px] text-slate-400">
+                <span>SYSTEM & CONSULTING REALTIME</span>
+                <span class="text-brand-300 font-mono">AUTORUNNING</span>
+              </div>
+              <div class="w-full bg-slate-800 rounded-full h-1 overflow-hidden">
+                <div class="bg-gradient-to-r from-brand-400 via-cyan-400 to-emerald-400 h-1 rounded-full animate-pulse" id="hero-progress-bar" style="width: 25%; transition: width 0.5s ease-in-out;"></div>
+              </div>
+            </div>
+
+            <div class="text-center text-[11px] text-slate-300 font-light pt-0.5">
               助言だけでなく、現場で動くシステム・業務フローを直接実装します
             </div>
           </div>
@@ -241,6 +292,56 @@ const steps = [
       </div>
     </div>
   </section>
+
+  <!-- OWNERSONE風 スライドショースクリプト（Ken Burns ズーム ＆ 自動クロスフェード） -->
+  <script is:inline>
+    document.addEventListener('DOMContentLoaded', () => {
+      const slides = document.querySelectorAll('.hero-slide');
+      const counter = document.getElementById('hero-slide-counter');
+      const progressBar = document.getElementById('hero-progress-bar');
+      if (!slides.length) return;
+
+      let currentIdx = 0;
+      const total = slides.length;
+      const intervalMs = 5000;
+
+      // 最初のスライドにズームインクラスを付与
+      const firstImg = slides[0].querySelector('.hero-slide-img');
+      if (firstImg) {
+        firstImg.style.transform = 'scale(1.08)';
+      }
+
+      setInterval(() => {
+        const nextIdx = (currentIdx + 1) % total;
+
+        // 現在のスライドをフェードアウト
+        slides[currentIdx].classList.remove('opacity-35', 'z-10', 'active-slide');
+        slides[currentIdx].classList.add('opacity-0', 'z-0');
+        const curImg = slides[currentIdx].querySelector('.hero-slide-img');
+        if (curImg) {
+          curImg.style.transform = 'scale(1.0)';
+        }
+
+        // 次のスライドをフェードイン ＆ ゆっくりズームイン
+        slides[nextIdx].classList.remove('opacity-0', 'z-0');
+        slides[nextIdx].classList.add('opacity-35', 'z-10', 'active-slide');
+        const nextImg = slides[nextIdx].querySelector('.hero-slide-img');
+        if (nextImg) {
+          nextImg.style.transform = 'scale(1.08)';
+        }
+
+        currentIdx = nextIdx;
+
+        // カウンターとプログレスバーを更新
+        if (counter) {
+          counter.textContent = `0${currentIdx + 1} / 0${total}`;
+        }
+        if (progressBar) {
+          progressBar.style.width = `${((currentIdx + 1) / total) * 100}%`;
+        }
+      }, intervalMs);
+    });
+  </script>
 
   <!-- ② 経営者が抱える課題 -->
   <section class="py-20 sm:py-28 bg-white border-b border-sand-200">
