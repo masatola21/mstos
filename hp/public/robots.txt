@@ -1,0 +1,7 @@
+User-agent: *
+Allow: /
+
+# noindex推奨ページはクロールは許可しつつ、各ページのmetaで制御
+Disallow: /api/
+
+Sitemap: https://corp.mstcorp.info/sitemap-index.xml

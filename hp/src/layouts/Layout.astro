@@ -7,12 +7,14 @@ interface Props {
   title?: string;
   description?: string;
   ogType?: string;
+  noindex?: boolean;
 }
 
 const {
   title = '有限会社MST | 経営の仕組み化で、利益が残る会社へ。',
   description = '中小企業・小規模事業者の成長と改善を、経営戦略とシステム実装の両面から支援する「経営の右腕」パートナー。利益改善顧問、業務自動化、AI経営OS導入、介護保険外サービス開業支援まで。',
   ogType = 'website',
+  noindex = false,
 } = Astro.props;
 
 const canonicalURL = new URL(Astro.url.pathname, Astro.site || 'https://corp.mstcorp.info');
@@ -31,6 +33,7 @@ const canonicalURL = new URL(Astro.url.pathname, Astro.site || 'https://corp.mst
     <title>{title}</title>
     <meta name="description" content={description} />
     <link rel="canonical" href={canonicalURL} />
+    <meta name="robots" content={noindex ? "noindex, follow" : "index, follow"} />
 
     <!-- OGP -->
     <meta property="og:title" content={title} />
@@ -38,14 +41,14 @@ const canonicalURL = new URL(Astro.url.pathname, Astro.site || 'https://corp.mst
     <meta property="og:type" content={ogType} />
     <meta property="og:url" content={canonicalURL} />
     <meta property="og:site_name" content="有限会社MST" />
-    <meta property="og:image" content="https://mstcorp.info/images/logo.png" />
+    <meta property="og:image" content="https://corp.mstcorp.info/og-image.png" />
     <meta property="og:locale" content="ja_JP" />
 
     <!-- Twitter Card -->
     <meta name="twitter:card" content="summary_large_image" />
     <meta name="twitter:title" content={title} />
     <meta name="twitter:description" content={description} />
-    <meta name="twitter:image" content="https://mstcorp.info/images/logo.png" />
+    <meta name="twitter:image" content="https://corp.mstcorp.info/og-image.png" />
 
     <!-- JSON-LD 構造化データ -->
     <script type="application/ld+json" set:html={JSON.stringify({
@@ -53,8 +56,8 @@ const canonicalURL = new URL(Astro.url.pathname, Astro.site || 'https://corp.mst
       "@type": "Corporation",
       "name": "有限会社MST",
       "alternateName": "MST Co., Ltd.",
-      "url": "https://mstcorp.info",
-      "logo": "https://mstcorp.info/images/logo.png",
+      "url": "https://corp.mstcorp.info",
+      "logo": "https://corp.mstcorp.info/og-image.png",
       "address": {
         "@type": "PostalAddress",
         "streetAddress": "桧町127番地",
