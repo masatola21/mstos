@@ -349,7 +349,7 @@ export default function DiagnosisForm() {
                 </p>
                 <div className="pt-2">
                   <a
-                    href="https://lin.ee/4Vl9v91"
+                    href="https://lin.ee/qWsuD6f"
                     target="_blank"
                     rel="noopener noreferrer"
                     className="inline-flex items-center gap-2 px-4 py-2 bg-[#06C755] text-white text-xs font-bold rounded-lg"

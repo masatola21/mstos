@@ -97,7 +97,7 @@ export default function ContactForm() {
             トップページへ戻る
           </a>
           <a
-            href="https://lin.ee/4Vl9v91"
+            href="https://lin.ee/qWsuD6f"
             target="_blank"
             rel="noopener noreferrer"
             className="px-6 py-2.5 bg-[#06C755] text-white rounded-lg text-sm font-semibold hover:opacity-90 transition"
