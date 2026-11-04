@@ -1,4 +1,4 @@
-﻿---
+---
 interface Props {
   currentPath?: string;
 }
@@ -10,7 +10,7 @@ const navLinks = [
   { name: 'サービス一覧', href: '/services' },
   { name: 'お役立ちメディア', href: '/media' },
   { name: '商品・ツール', href: '/products' },
-  { name: '無料経営診断', href: '/diagnosis' },
+  { name: '資料請求', href: '/materials' },
   { name: '会社概要', href: '/company' },
 ];
 ---
@@ -50,39 +50,58 @@ const navLinks = [
         })}
       </nav>
 
-      <!-- デスクトップ CTAボタン群 -->
-      <div class="hidden sm:flex items-center gap-3">
+      <!-- デスクトップ CTAボタン群（3分診断を最優先配置） -->
+      <div class="hidden sm:flex items-center gap-2.5">
+        <a
+          href="/diagnosis"
+          class="inline-flex items-center gap-1.5 px-3.5 py-2 text-xs font-bold text-amber-950 bg-amber-400 hover:bg-amber-300 rounded-lg shadow-sm transition-all duration-200 hover:shadow-md hover:scale-[1.02]"
+        >
+          <span>📊</span>
+          <span>3分無料診断</span>
+        </a>
+
         <a
           href="https://lin.ee/qWsuD6f" 
           target="_blank" 
           rel="noopener noreferrer"
-          class="inline-flex items-center gap-1.5 px-3.5 py-2 text-xs font-bold text-[#06C755] bg-[#06C755]/10 border border-[#06C755]/20 rounded-lg hover:bg-[#06C755] hover:text-white transition-all duration-200"
+          class="inline-flex items-center gap-1.5 px-3 py-2 text-xs font-bold text-[#06C755] bg-[#06C755]/10 border border-[#06C755]/20 rounded-lg hover:bg-[#06C755] hover:text-white transition-all duration-200"
         >
           <svg class="w-4 h-4 fill-current" viewBox="0 0 24 24">
             <path d="M19.365 9.863c.349.001.62.288.621.637v.018c-.001.35-.272.637-.621.637h-3.414v2.778h3.414c.349 0 .62.287.621.637 0 .349-.272.637-.621.637h-4.051a.636.636 0 01-.637-.637V7.094c0-.349.288-.636.637-.636h4.051c.349 0 .62.287.621.636 0 .35-.272.637-.621.637h-3.414v2.132h3.414zm-5.748-2.769a.638.638 0 01.637.636v7.351a.638.638 0 01-.637.637.637.637 0 01-.637-.637V7.73a.637.637 0 01.637-.636zm-3.136 0a.638.638 0 01.637.636v4.636l3.526-4.996a.638.638 0 01.895-.145.637.637 0 01.144.896l-4.148 5.875a.637.637 0 01-.522.271.637.637 0 01-.532-.284V7.73a.637.637 0 01.637-.636h-.637zm-6.19 0a.637.637 0 01.637.636v5.876h3.414c.349 0 .62.287.621.637 0 .349-.272.636-.621.636H4.291a.638.638 0 01-.637-.636V7.73a.637.637 0 01.637-.636h.637zM12 2C6.477 2 2 5.918 2 10.751c0 3.332 2.131 6.223 5.309 7.643-.233.784-.848 2.855-.972 3.29-.153.535.195.526.411.383.17-.113 2.709-1.841 3.806-2.587.47.07 1.05.108 1.646.108 5.523 0 10-3.918 10-8.751C22 5.918 17.523 2 12 2z"/>
           </svg>
-          LINE無料相談
+          LINE相談
         </a>
 
         <a
           href="/contact"
-          class="inline-flex items-center justify-center px-4 py-2 text-xs font-bold text-white bg-brand-900 rounded-lg hover:bg-brand-800 transition-colors shadow-sm"
+          class="inline-flex items-center justify-center px-3.5 py-2 text-xs font-bold text-white bg-brand-900 rounded-lg hover:bg-brand-800 transition-colors shadow-sm"
         >
           お問い合わせ
         </a>
       </div>
 
-      <!-- モバイル ハンバーガーメニューボタン -->
-      <button
-        id="mobile-menu-open"
-        type="button"
-        class="lg:hidden p-2 rounded-lg text-slate-700 hover:text-brand-900 hover:bg-sand-100 transition"
-        aria-label="メニューを開く"
-      >
-        <svg class="w-7 h-7" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16" />
-        </svg>
-      </button>
+      <!-- モバイル ヘッダー右端（診断ボタン ＋ ハンバーガー） -->
+      <div class="flex items-center gap-2 lg:hidden">
+        <a
+          href="/diagnosis"
+          class="inline-flex items-center gap-1 px-3 py-1.5 text-xs font-bold text-amber-950 bg-amber-400 rounded-lg shadow-sm"
+        >
+          <span>📊</span>
+          <span>無料診断</span>
+        </a>
+
+        <!-- モバイル ハンバーガーメニューボタン -->
+        <button
+          id="mobile-menu-open"
+          type="button"
+          class="p-2 rounded-lg text-slate-700 hover:text-brand-900 hover:bg-sand-100 transition"
+          aria-label="メニューを開く"
+        >
+          <svg class="w-7 h-7" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16" />
+          </svg>
+        </button>
+      </div>
 
     </div>
   </div>
@@ -115,13 +134,33 @@ const navLinks = [
           aria-label="メニューを閉じる"
         >
           <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12" />
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
           </svg>
         </button>
       </div>
 
+      <!-- 診断ハイライトバナー（ドロワー内最上部） -->
+      <div class="p-4 pb-2">
+        <a
+          href="/diagnosis"
+          class="block p-4 rounded-2xl bg-gradient-to-br from-amber-400 via-amber-300 to-amber-500 text-slate-950 shadow-md hover:shadow-lg transition group border border-amber-300"
+        >
+          <div class="flex items-center gap-1.5 text-[10px] font-black uppercase tracking-wider text-amber-900">
+            <span class="w-2 h-2 rounded-full bg-rose-600 animate-ping"></span>
+            わずか5問・登録不要で即判定
+          </div>
+          <div class="text-sm font-black mt-1 flex items-center justify-between">
+            <span>📊 3分経営ボトルネック診断</span>
+            <span class="text-xs group-hover:translate-x-1 transition-transform">→</span>
+          </div>
+          <p class="text-[11px] text-slate-800 mt-1 leading-snug font-medium">
+            自社が今一番手を打つべき急所がその場でわかります
+          </p>
+        </a>
+      </div>
+
       <!-- ナビゲーションリンク一覧 -->
-      <nav class="p-4 space-y-1">
+      <nav class="p-4 pt-1 space-y-1">
         {navLinks.map((link) => {
           const isActive = currentPath === link.href || (link.href !== '/' && currentPath.startsWith(link.href));
           return (
@@ -135,7 +174,7 @@ const navLinks = [
             >
               <span>{link.name}</span>
               <svg class="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 5l7 7-7 7" />
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
               </svg>
             </a>
           );
@@ -159,16 +198,10 @@ const navLinks = [
 
       <a
         href="/contact"
-        class="w-full py-3.5 px-4 bg-brand-900 hover:bg-brand-800 text-white font-bold text-xs rounded-xl flex items-center justify-center gap-2 shadow"
+        class="w-full py-3 px-4 bg-brand-900 hover:bg-brand-800 text-white font-bold text-xs rounded-xl text-center block transition shadow-sm"
       >
-        フォームでお問い合わせ
+        お問い合わせ・ご相談窓口
       </a>
-
-      <div class="pt-2 text-center">
-        <a href="tel:0584-71-7009" class="text-[11px] text-gray-500 hover:underline">
-          FAX: 0584-91-4897 / E-mail: contact@mstcorp.info
-        </a>
-      </div>
     </div>
 
   </div>
@@ -182,30 +215,35 @@ const navLinks = [
     const backdrop = document.getElementById('drawer-backdrop');
     const panel = document.getElementById('drawer-panel');
 
-    function openDrawer() {
-      if (!container || !panel) return;
-      container.classList.remove('opacity-0', 'pointer-events-none');
-      container.classList.add('opacity-100', 'pointer-events-auto');
+    if (!openBtn || !closeBtn || !container || !backdrop || !panel) return;
+
+    const openDrawer = () => {
+      container.classList.remove('pointer-events-none', 'opacity-0');
+      container.classList.add('pointer-events-auto', 'opacity-100');
       panel.classList.remove('translate-x-full');
       panel.classList.add('translate-x-0');
-      document.body.style.overflow = 'hidden'; // 背景スクロール防止
-    }
+      document.body.style.overflow = 'hidden';
+    };
 
-    function closeDrawer() {
-      if (!container || !panel) return;
+    const closeDrawer = () => {
+      container.classList.remove('pointer-events-auto', 'opacity-100');
+      container.classList.add('pointer-events-none', 'opacity-0');
       panel.classList.remove('translate-x-0');
       panel.classList.add('translate-x-full');
-      container.classList.remove('opacity-100', 'pointer-events-auto');
-      container.classList.add('opacity-0', 'pointer-events-none');
       document.body.style.overflow = '';
-    }
+    };
 
-    if (openBtn) openBtn.addEventListener('click', openDrawer);
-    if (closeBtn) closeBtn.addEventListener('click', closeDrawer);
-    if (backdrop) backdrop.addEventListener('click', closeDrawer);
+    openBtn.addEventListener('click', openDrawer);
+    closeBtn.addEventListener('click', closeDrawer);
+    backdrop.addEventListener('click', closeDrawer);
+
+    // Escapeキーで閉じる
+    window.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape') closeDrawer();
+    });
   }
 
-  // 初回実行およびAstroのページ遷移対応
+  // 初回マウント時 ＆ ページ遷移時の初期化
   setupDrawer();
   document.addEventListener('astro:page-load', setupDrawer);
 </script>
