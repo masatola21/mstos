@@ -2,13 +2,13 @@ import express from 'express';
 import dotenv from 'dotenv';
 import path from 'path';
 import { fileURLToPath } from 'url';
-import { getAIWorkMode, sanitizeRoleOverride } from './src/data/aiWorkModes';
-import { AIModelSetting, DEFAULT_MODEL_SETTING, sanitizeModelSetting } from './src/data/aiModels';
-import { getProviderStatus, runWithFallback, getEmbedding, cosineSimilarity } from './server/aiProviders';
+import { getAIWorkMode, sanitizeRoleOverride } from './src/data/aiWorkModes.ts';
+import { type AIModelSetting, DEFAULT_MODEL_SETTING, sanitizeModelSetting } from './src/data/aiModels.ts';
+import { getProviderStatus, runWithFallback, getEmbedding, cosineSimilarity } from './server/aiProviders.ts';
 import { createHmac, timingSafeEqual, createHash } from 'node:crypto';
 import fs from 'node:fs';
 import { createClient } from '@supabase/supabase-js';
-import { parseIcalendar } from './server/icalParser';
+import { parseIcalendar } from './server/icalParser.ts';
 
 dotenv.config();
 
@@ -4524,6 +4524,10 @@ app.post('/api/calendar/fetch-ical', async (req, res) => {
     return res.status(500).json({ error: err.message || 'カレンダー予定の同期に失敗しました。' });
   }
 });
+
+// Health check endpoints for Cloud Run
+app.get('/health', (_req, res) => res.status(200).send('OK'));
+app.get('/healthz', (_req, res) => res.status(200).send('OK'));
 
 // Vite middleware or static serving
 if (process.env.NODE_ENV !== 'production') {

@@ -52,7 +52,7 @@ type MarketingRecord = {
 
 type Product = { id: string; product_name: string };
 
-const inputClass = 'mt-1 block w-full rounded-lg border border-slate-700 bg-slate-950 p-2 text-sm text-white';
+const inputClass = 'mt-1 block w-full rounded-lg border border-slate-200 bg-slate-50 p-2 text-sm text-slate-900 focus:bg-white focus:border-purple-500 focus:outline-none';
 
 function detectAssetTypeFromFile(fileName: string): AssetType {
   const ext = fileName.split('.').pop()?.toLowerCase() || '';

@@ -613,11 +613,11 @@ export const MarketingQuickLinksHub: React.FC = () => {
       <section className="space-y-3">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div>
-            <h2 className="text-base font-bold text-white flex items-center gap-2">
-              <Link2 className="h-5 w-5 text-indigo-400" />
+            <h2 className="text-base font-bold text-slate-900 flex items-center gap-2">
+              <Link2 className="h-5 w-5 text-purple-700" />
               自社公式リンク一覧（URLハブ）
             </h2>
-            <p className="mt-0.5 text-xs text-slate-400">
+            <p className="mt-0.5 text-xs text-slate-500">
               診断フォーム・個別相談・LINE・予約カレンダー・HPなどのマスターURLです。編集すると、下の媒体別リンクも自動連動します。
             </p>
           </div>
@@ -625,7 +625,7 @@ export const MarketingQuickLinksHub: React.FC = () => {
             <button
               type="button"
               onClick={handleOpenCreate}
-              className="inline-flex items-center gap-1.5 rounded-lg bg-indigo-600 hover:bg-indigo-500 px-3 py-1.5 text-xs font-semibold text-white transition shadow-sm"
+              className="inline-flex items-center gap-1.5 rounded-lg bg-purple-700 hover:bg-purple-800 px-3 py-1.5 text-xs font-semibold text-white transition shadow-xs"
             >
               <Plus className="h-3.5 w-3.5" />
               新規リンク追加
@@ -633,7 +633,7 @@ export const MarketingQuickLinksHub: React.FC = () => {
             <button
               type="button"
               onClick={handleResetAllToDefaults}
-              className="inline-flex items-center gap-1 rounded-lg border border-slate-700 bg-slate-800/80 hover:bg-slate-800 px-2.5 py-1.5 text-xs text-slate-400 hover:text-slate-200 transition"
+              className="inline-flex items-center gap-1 rounded-lg border border-slate-200 bg-white hover:bg-slate-50 px-2.5 py-1.5 text-xs text-slate-600 hover:text-slate-900 transition shadow-xs"
               title="初期設定に戻す"
             >
               <RotateCcw className="h-3.5 w-3.5" />
@@ -642,7 +642,7 @@ export const MarketingQuickLinksHub: React.FC = () => {
           </div>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3.5">
           {links.map((item) => {
             const Icon = (item.iconName && ICON_MAP[item.iconName as IconKey]) || Link2;
             const isCopied = copiedKey === item.id;
@@ -651,41 +651,43 @@ export const MarketingQuickLinksHub: React.FC = () => {
             return (
               <div
                 key={item.id}
-                className="rounded-xl border border-slate-800 bg-slate-900/90 p-3.5 flex flex-col justify-between hover:border-slate-700 transition shadow-sm"
+                className="rounded-xl border border-slate-200 bg-white p-4 flex flex-col justify-between hover:border-purple-300 hover:shadow-xs transition-all shadow-xs"
               >
                 <div>
-                  <div className="flex items-center justify-between gap-2 mb-1.5">
+                  <div className="flex items-center justify-between gap-2 mb-2">
                     <div className="flex items-center gap-1.5 flex-wrap">
-                      <span className={`text-[10px] font-bold px-2 py-0.5 rounded border ${item.badgeColor || 'bg-slate-800 text-slate-300 border-slate-700'}`}>
+                      <span className={`text-[10px] font-bold px-2 py-0.5 rounded border ${item.badgeColor || 'bg-slate-100 text-slate-700 border-slate-200'}`}>
                         {item.badge}
                       </span>
                       {modified && (
-                        <span className="text-[10px] font-semibold px-1.5 py-0.2 rounded bg-amber-500/20 text-amber-300 border border-amber-500/30">
+                        <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded bg-amber-50 text-amber-700 border border-amber-200">
                           変更済み
                         </span>
                       )}
                     </div>
-                    <Icon className="h-4 w-4 text-indigo-400 shrink-0" />
+                    <div className="h-7 w-7 rounded-lg bg-purple-50 text-purple-700 flex items-center justify-center shrink-0">
+                      <Icon className="h-4 w-4" />
+                    </div>
                   </div>
 
-                  <h3 className="font-bold text-sm text-white">{item.title}</h3>
-                  <p className="mt-0.5 text-xs text-slate-400 line-clamp-1">
+                  <h3 className="font-bold text-sm text-slate-900">{item.title}</h3>
+                  <p className="mt-1 text-xs text-slate-500 line-clamp-2">
                     {item.description || '説明文はありません'}
                   </p>
                   
                   {/* URLボックス */}
-                  <div className="mt-2.5 p-2 rounded-lg bg-slate-950 border border-slate-800/80 text-[11px] font-mono text-slate-300 truncate select-all flex items-center justify-between gap-2">
+                  <div className="mt-2.5 p-2 rounded-lg bg-slate-50 border border-slate-200 text-[11px] font-mono text-slate-700 truncate select-all flex items-center justify-between gap-2">
                     <span className="truncate">{item.url}</span>
                   </div>
                 </div>
 
-                <div className="mt-3 flex items-center justify-between gap-2 pt-2 border-t border-slate-800/60">
+                <div className="mt-3.5 flex items-center justify-between gap-2 pt-2.5 border-t border-slate-100">
                   <div className="flex items-center gap-2">
                     <a
                       href={item.url}
                       target="_blank"
                       rel="noopener noreferrer"
-                      className="text-xs text-slate-400 hover:text-slate-200 inline-flex items-center gap-1"
+                      className="text-xs text-slate-500 hover:text-slate-800 inline-flex items-center gap-1 font-medium"
                       title="実際のリンクを開いて確認"
                     >
                       確認 <ExternalLink className="h-3 w-3" />
@@ -693,7 +695,7 @@ export const MarketingQuickLinksHub: React.FC = () => {
                     <button
                       type="button"
                       onClick={() => handleOpenEdit(item)}
-                      className="text-xs text-indigo-400 hover:text-indigo-300 inline-flex items-center gap-1 font-semibold hover:underline"
+                      className="text-xs text-purple-700 hover:text-purple-800 inline-flex items-center gap-1 font-semibold hover:underline"
                     >
                       <Pencil className="h-3 w-3" /> 編集
                     </button>
@@ -701,7 +703,7 @@ export const MarketingQuickLinksHub: React.FC = () => {
                       <button
                         type="button"
                         onClick={() => handleDeleteLink(item.id, item.title)}
-                        className="text-xs text-rose-400 hover:text-rose-300 inline-flex items-center gap-0.5"
+                        className="text-xs text-rose-600 hover:text-rose-700 inline-flex items-center gap-0.5"
                         title="削除"
                       >
                         <Trash2 className="h-3 w-3" />
@@ -712,10 +714,10 @@ export const MarketingQuickLinksHub: React.FC = () => {
                   <button
                     type="button"
                     onClick={() => copyToClipboard(item.url, item.id)}
-                    className={`inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-bold transition ${
+                    className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition ${
                       isCopied
                         ? 'bg-emerald-600 text-white'
-                        : 'bg-indigo-600 hover:bg-indigo-500 text-white'
+                        : 'bg-purple-700 hover:bg-purple-800 text-white shadow-xs'
                     }`}
                   >
                     {isCopied ? (
@@ -737,27 +739,27 @@ export const MarketingQuickLinksHub: React.FC = () => {
           <button
             type="button"
             onClick={handleOpenCreate}
-            className="rounded-xl border border-dashed border-indigo-500/30 hover:border-indigo-500/70 bg-indigo-950/10 hover:bg-indigo-950/25 p-4 flex flex-col items-center justify-center gap-1.5 transition text-center min-h-[130px] group cursor-pointer"
+            className="rounded-xl border border-dashed border-slate-300 hover:border-purple-400 bg-slate-50/70 hover:bg-purple-50/40 p-4 flex flex-col items-center justify-center gap-1.5 transition text-center min-h-[140px] group cursor-pointer"
           >
-            <div className="h-8 w-8 rounded-full bg-indigo-500/20 flex items-center justify-center text-indigo-400 group-hover:bg-indigo-500 group-hover:text-white transition">
+            <div className="h-8 w-8 rounded-full bg-purple-100 flex items-center justify-center text-purple-700 group-hover:bg-purple-700 group-hover:text-white transition">
               <Plus className="h-4 w-4" />
             </div>
-            <span className="text-xs font-bold text-slate-300 group-hover:text-white">＋ 新規リンクを追加</span>
+            <span className="text-xs font-bold text-slate-700 group-hover:text-purple-700">＋ 新規リンクを追加</span>
             <span className="text-[11px] text-slate-500">外部LPや別フォームを登録</span>
           </button>
         </div>
       </section>
 
       {/* ── 2. 媒体別 流入追跡リンク発行（媒体の編集・追加・削除対応） ── */}
-      <section className="rounded-2xl border border-indigo-500/30 bg-slate-900/90 p-4 sm:p-5 space-y-4">
+      <section className="rounded-2xl border border-slate-200 bg-white p-5 sm:p-6 space-y-5 shadow-xs">
         {/* セクション上部：タイトル ＆ コンパクトアクション */}
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div>
-            <h3 className="text-base font-bold text-white flex items-center gap-2">
-              <Share2 className="h-5 w-5 text-cyan-400" />
+            <h3 className="text-base font-bold text-slate-900 flex items-center gap-2">
+              <Share2 className="h-5 w-5 text-purple-700" />
               媒体別 流入追跡リンク（ワンクリック発行＆媒体編集）
             </h3>
-            <p className="mt-0.5 text-xs text-slate-400">
+            <p className="mt-0.5 text-xs text-slate-500">
               各媒体専用の計測URLを発行できます。各カードの「編集」から媒体名や用途、計測タグを自由に変更・追加できます。
             </p>
           </div>
@@ -766,7 +768,7 @@ export const MarketingQuickLinksHub: React.FC = () => {
             <button
               type="button"
               onClick={handleOpenCreateMedia}
-              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-bold transition shadow-sm"
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-purple-700 hover:bg-purple-800 text-white text-xs font-semibold transition shadow-xs"
               title="新しい媒体（TikTokや独自提携先など）を追加"
             >
               <Plus className="h-3.5 w-3.5" /> 新規媒体を追加
@@ -774,7 +776,7 @@ export const MarketingQuickLinksHub: React.FC = () => {
             <button
               type="button"
               onClick={() => handleCopyAllMatrixUrls(activeMatrixLink)}
-              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold transition shadow-sm"
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-semibold transition shadow-xs"
               title="全媒体のURLを改行区切りでまとめてコピー"
             >
               {copiedKey === 'matrix_all' ? (
@@ -790,7 +792,7 @@ export const MarketingQuickLinksHub: React.FC = () => {
             <button
               type="button"
               onClick={handleResetMediaToDefaults}
-              className="inline-flex items-center gap-1 text-xs text-slate-400 hover:text-slate-200 border border-slate-700 bg-slate-800/60 px-2 py-1.5 rounded-lg transition"
+              className="inline-flex items-center gap-1 text-xs text-slate-600 hover:text-slate-900 border border-slate-200 bg-white hover:bg-slate-50 px-2.5 py-1.5 rounded-lg transition shadow-xs"
               title="媒体一覧を初期設定に戻す"
             >
               <RotateCcw className="h-3 w-3" />
@@ -799,10 +801,10 @@ export const MarketingQuickLinksHub: React.FC = () => {
             <button
               type="button"
               onClick={() => setShowUtmGuide((prev) => !prev)}
-              className="inline-flex items-center gap-1 text-xs text-slate-400 hover:text-slate-200 border border-slate-700 bg-slate-800/60 px-2 py-1.5 rounded-lg transition"
+              className="inline-flex items-center gap-1 text-xs text-slate-600 hover:text-slate-900 border border-slate-200 bg-white hover:bg-slate-50 px-2.5 py-1.5 rounded-lg transition shadow-xs"
               title="流入分析の解説を表示"
             >
-              <HelpCircle className="h-3.5 w-3.5 text-slate-400" />
+              <HelpCircle className="h-3.5 w-3.5 text-slate-500" />
               <span className="hidden sm:inline">仕組み</span>
               {showUtmGuide ? <ChevronUp className="h-3 w-3" /> : <ChevronDown className="h-3 w-3" />}
             </button>
@@ -811,27 +813,27 @@ export const MarketingQuickLinksHub: React.FC = () => {
 
         {/* 開閉式解説ガイド（デフォルト非表示で画面をクリーンに保つ） */}
         {showUtmGuide && (
-          <div className="rounded-xl border border-indigo-500/30 bg-indigo-950/40 p-3.5 text-xs text-indigo-100 space-y-2.5 animate-in fade-in duration-200">
-            <div className="flex items-center gap-2 text-cyan-300 font-bold text-xs border-b border-indigo-800/60 pb-1.5">
-              <Info className="h-4 w-4 shrink-0 text-cyan-400" />
+          <div className="rounded-xl border border-purple-200 bg-purple-50/60 p-4 text-xs text-slate-700 space-y-3 animate-in fade-in duration-200">
+            <div className="flex items-center gap-2 text-purple-900 font-bold text-xs border-b border-purple-200 pb-2">
+              <Info className="h-4 w-4 shrink-0 text-purple-700" />
               <span>流入追跡と媒体編集のポイント</span>
             </div>
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-2.5 text-[11px] leading-relaxed">
-              <div className="rounded-lg bg-slate-900/80 p-2.5 border border-indigo-500/20">
-                <span className="font-bold text-white block mb-0.5">1. 自動計測</span>
-                <p className="text-slate-300">
-                  URL末尾の <code className="bg-slate-950 px-1 py-0.5 rounded text-cyan-300 font-mono">?utm_source=note</code> を検知し、顧客カルテへ「noteからの流入」と自動記録します。
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-3 text-[11px] leading-relaxed">
+              <div className="rounded-lg bg-white p-3 border border-purple-100 shadow-xs">
+                <span className="font-bold text-slate-900 block mb-1">1. 自動計測</span>
+                <p className="text-slate-600">
+                  URL末尾の <code className="bg-slate-100 px-1 py-0.5 rounded text-purple-700 font-mono">?utm_source=note</code> を検知し、顧客カルテへ「noteからの流入」と自動記録します。
                 </p>
               </div>
-              <div className="rounded-lg bg-slate-900/80 p-2.5 border border-indigo-500/20">
-                <span className="font-bold text-white block mb-0.5">2. 媒体名・タグの自由編集</span>
-                <p className="text-slate-300">
+              <div className="rounded-lg bg-white p-3 border border-purple-100 shadow-xs">
+                <span className="font-bold text-slate-900 block mb-1">2. 媒体名・タグの自由編集</span>
+                <p className="text-slate-600">
                   各カードの「編集」から、表示名や用途メモ、utm_sourceの英字タグを自社の運用に合わせて自由に変更できます。
                 </p>
               </div>
-              <div className="rounded-lg bg-slate-900/80 p-2.5 border border-indigo-500/20">
-                <span className="font-bold text-white block mb-0.5">3. 新規媒体の追加・削除</span>
-                <p className="text-slate-300">
+              <div className="rounded-lg bg-white p-3 border border-purple-100 shadow-xs">
+                <span className="font-bold text-slate-900 block mb-1">3. 新規媒体の追加・削除</span>
+                <p className="text-slate-600">
                   TikTokやThreads、外部提携先などを「＋新規媒体を追加」から何件でも追加可能。使わない広告枠等は削除できます。
                 </p>
               </div>
@@ -841,7 +843,7 @@ export const MarketingQuickLinksHub: React.FC = () => {
 
         {/* 対象URL切り替えタブ */}
         <div className="space-y-2">
-          <label className="text-xs font-semibold text-slate-300 block">
+          <label className="text-xs font-semibold text-slate-700 block">
             計測リンクを発行する公式URLを選択:
           </label>
           <div className="flex flex-wrap gap-2">
@@ -854,8 +856,8 @@ export const MarketingQuickLinksHub: React.FC = () => {
                   onClick={() => setSelectedMatrixLinkId(link.id)}
                   className={`px-3 py-1.5 rounded-lg text-xs font-medium transition flex items-center gap-1.5 ${
                     isSelected
-                      ? 'bg-indigo-600 text-white font-bold shadow-sm ring-1 ring-indigo-400'
-                      : 'bg-slate-800 text-slate-300 hover:bg-slate-700 hover:text-white border border-slate-700/60'
+                      ? 'bg-purple-700 text-white font-semibold shadow-xs ring-1 ring-purple-600'
+                      : 'bg-slate-100 text-slate-600 hover:bg-slate-200/80 border border-slate-200'
                   }`}
                 >
                   <span className="truncate max-w-[180px]">{link.title}</span>
@@ -871,12 +873,12 @@ export const MarketingQuickLinksHub: React.FC = () => {
             <button
               type="button"
               onClick={() => setShowCampaignOption((prev) => !prev)}
-              className="inline-flex items-center gap-1 text-[11px] text-slate-400 hover:text-indigo-300 transition"
+              className="inline-flex items-center gap-1 text-[11px] text-slate-500 hover:text-purple-700 transition font-medium"
             >
               <Tag className="h-3 w-3" />
               <span>特定の企画・イベント名タグを付与する（任意）</span>
               {campaignName.trim() && (
-                <span className="ml-1 text-[10px] font-mono bg-indigo-500/20 text-indigo-300 border border-indigo-500/30 px-1.5 py-0.2 rounded">
+                <span className="ml-1 text-[10px] font-mono bg-purple-50 text-purple-700 border border-purple-200 px-1.5 py-0.5 rounded">
                   適用中: {campaignName.trim()}
                 </span>
               )}
@@ -886,7 +888,7 @@ export const MarketingQuickLinksHub: React.FC = () => {
               <button
                 type="button"
                 onClick={() => setCampaignName('')}
-                className="text-[10px] text-slate-400 hover:text-rose-400 underline"
+                className="text-[10px] text-slate-500 hover:text-rose-600 underline font-medium"
               >
                 企画タグを解除
               </button>
@@ -894,9 +896,9 @@ export const MarketingQuickLinksHub: React.FC = () => {
           </div>
 
           {showCampaignOption && (
-            <div className="mt-2 p-3 rounded-xl border border-slate-800 bg-slate-950/70 space-y-2 animate-in fade-in duration-150">
+            <div className="mt-2 p-3.5 rounded-xl border border-slate-200 bg-slate-50 space-y-2 animate-in fade-in duration-150">
               <div className="flex items-center justify-between">
-                <span className="text-[11px] text-slate-300 font-semibold">企画タグ（utm_campaign）:</span>
+                <span className="text-[11px] text-slate-700 font-semibold">企画タグ（utm_campaign）:</span>
                 <span className="text-[10px] text-slate-500">空欄の場合はスッキリした基本URLが発行されます</span>
               </div>
               <div className="flex items-center gap-2">
@@ -905,13 +907,13 @@ export const MarketingQuickLinksHub: React.FC = () => {
                   value={campaignName}
                   onChange={(e) => setCampaignName(e.target.value)}
                   placeholder="例: spring2026, opening_fair （空欄でOK）"
-                  className="flex-1 rounded-lg border border-slate-700 bg-slate-900 px-3 py-1.5 text-xs text-white font-mono focus:border-indigo-500 focus:outline-none"
+                  className="flex-1 rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-xs text-slate-800 font-mono focus:border-purple-500 focus:ring-1 focus:ring-purple-500 focus:outline-none"
                 />
                 {campaignName && (
                   <button
                     type="button"
                     onClick={() => setCampaignName('')}
-                    className="px-2.5 py-1.5 rounded-lg border border-slate-700 text-xs text-slate-400 hover:text-white"
+                    className="px-2.5 py-1.5 rounded-lg border border-slate-300 bg-white text-xs text-slate-600 hover:text-slate-900 shadow-xs"
                   >
                     クリア
                   </button>
@@ -922,15 +924,15 @@ export const MarketingQuickLinksHub: React.FC = () => {
         </div>
 
         {/* 全媒体の追跡URL一覧グリッド */}
-        <div className="space-y-2 pt-2 border-t border-slate-800/80">
-          <div className="flex items-center justify-between text-xs text-slate-400">
-            <span className="font-semibold text-slate-300">
+        <div className="space-y-2.5 pt-3 border-t border-slate-100">
+          <div className="flex items-center justify-between text-xs text-slate-600">
+            <span className="font-semibold text-slate-800">
               「{activeMatrixLink?.title}」の媒体別URL（全 {mediaList.length} 媒体）:
             </span>
-            <span className="text-[11px] text-slate-400">ワンクリックでコピー / 「編集」から媒体設定を変更可能</span>
+            <span className="text-[11px] text-slate-500">ワンクリックでコピー / 「編集」から媒体設定を変更可能</span>
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-2.5">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
             {mediaList.map((preset) => {
               const utmUrl = buildUtmUrl(activeMatrixLink.url, preset.utmSource, campaignName, preset.utmMedium);
               const isCopied = copiedKey === `preset_${preset.id}`;
@@ -938,7 +940,7 @@ export const MarketingQuickLinksHub: React.FC = () => {
               return (
                 <div
                   key={preset.id}
-                  className="rounded-xl border border-slate-800 bg-slate-950/80 p-3 flex flex-col justify-between gap-2 hover:border-slate-700 transition group shadow-sm"
+                  className="rounded-xl border border-slate-200 bg-slate-50/50 p-3.5 flex flex-col justify-between gap-2.5 hover:bg-white hover:border-purple-300 hover:shadow-xs transition-all group shadow-xs"
                 >
                   <div className="flex items-start justify-between gap-2">
                     <div className="min-w-0 flex-1">
@@ -946,14 +948,14 @@ export const MarketingQuickLinksHub: React.FC = () => {
                         <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded border ${preset.badgeColor}`}>
                           {preset.badge}
                         </span>
-                        <span className="font-bold text-xs text-white truncate">{preset.name}</span>
+                        <span className="font-bold text-xs text-slate-900 truncate">{preset.name}</span>
                         {preset.isCustom && (
-                          <span className="text-[9px] px-1 py-0.2 rounded bg-indigo-500/20 text-indigo-300 border border-indigo-500/30">
+                          <span className="text-[9px] px-1 py-0.5 rounded bg-purple-50 text-purple-700 border border-purple-200">
                             追加媒体
                           </span>
                         )}
                       </div>
-                      <p className="mt-0.5 text-[11px] text-slate-400 leading-tight line-clamp-1">
+                      <p className="mt-1 text-[11px] text-slate-500 leading-tight line-clamp-1">
                         {preset.description || '用途メモなし'}
                       </p>
                     </div>
@@ -962,7 +964,7 @@ export const MarketingQuickLinksHub: React.FC = () => {
                       <button
                         type="button"
                         onClick={() => handleOpenEditMedia(preset)}
-                        className="p-1 rounded text-slate-400 hover:text-indigo-300 hover:bg-slate-800 transition"
+                        className="p-1 rounded text-slate-500 hover:text-purple-700 hover:bg-purple-50 transition"
                         title="この媒体の名称・用途・タグを編集"
                       >
                         <Pencil className="h-3.5 w-3.5" />
@@ -970,7 +972,7 @@ export const MarketingQuickLinksHub: React.FC = () => {
                       <button
                         type="button"
                         onClick={() => handleDeleteMedia(preset.id, preset.name)}
-                        className="p-1 rounded text-slate-500 hover:text-rose-400 hover:bg-slate-800 transition"
+                        className="p-1 rounded text-slate-400 hover:text-rose-600 hover:bg-rose-50 transition"
                         title="この媒体を一覧から削除"
                       >
                         <Trash2 className="h-3.5 w-3.5" />
@@ -979,7 +981,7 @@ export const MarketingQuickLinksHub: React.FC = () => {
                         href={utmUrl}
                         target="_blank"
                         rel="noopener noreferrer"
-                        className="p-1 rounded text-slate-500 hover:text-slate-200 hover:bg-slate-800 transition"
+                        className="p-1 rounded text-slate-400 hover:text-slate-700 hover:bg-slate-100 transition"
                         title="ブラウザでテスト表示"
                       >
                         <ExternalLink className="h-3.5 w-3.5" />
@@ -988,17 +990,17 @@ export const MarketingQuickLinksHub: React.FC = () => {
                   </div>
 
                   {/* URLプレビュー枠 & コピー */}
-                  <div className="flex items-center gap-2 pt-1 border-t border-slate-900">
-                    <div className="flex-1 p-1.5 rounded-lg bg-slate-900 border border-slate-800/80 text-[10px] font-mono text-cyan-300/90 truncate select-all">
+                  <div className="flex items-center gap-2 pt-1 border-t border-slate-200/60">
+                    <div className="flex-1 p-2 rounded-lg bg-white border border-slate-200 text-[10px] font-mono text-purple-900 truncate select-all">
                       {utmUrl}
                     </div>
                     <button
                       type="button"
                       onClick={() => copyToClipboard(utmUrl, `preset_${preset.id}`)}
-                      className={`inline-flex items-center gap-1 px-3 py-1.5 rounded-lg text-xs font-bold transition shrink-0 ${
+                      className={`inline-flex items-center gap-1 px-3 py-1.5 rounded-lg text-xs font-semibold transition shrink-0 ${
                         isCopied
                           ? 'bg-emerald-600 text-white'
-                          : 'bg-indigo-600 hover:bg-indigo-500 text-white'
+                          : 'bg-purple-700 hover:bg-purple-800 text-white shadow-xs'
                       }`}
                     >
                       {isCopied ? (
@@ -1021,17 +1023,17 @@ export const MarketingQuickLinksHub: React.FC = () => {
 
       {/* ── 1. 公式リンク 編集 / 追加モーダル ── */}
       {isEditModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4 backdrop-blur-sm animate-in fade-in duration-200">
-          <div className="relative w-full max-w-lg rounded-2xl border border-slate-700 bg-slate-900 p-5 sm:p-6 shadow-2xl space-y-4">
-            <div className="flex items-start justify-between border-b border-slate-800 pb-3">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 p-4 backdrop-blur-xs animate-in fade-in duration-200">
+          <div className="relative w-full max-w-lg rounded-2xl border border-slate-200 bg-white p-5 sm:p-6 shadow-xl space-y-4">
+            <div className="flex items-start justify-between border-b border-slate-100 pb-3">
               <div>
                 <div className="flex items-center gap-2">
-                  <Link2 className="h-5 w-5 text-indigo-400" />
-                  <h3 className="text-base font-bold text-white">
+                  <Link2 className="h-5 w-5 text-purple-700" />
+                  <h3 className="text-base font-bold text-slate-900">
                     {editingItem ? `「${editingItem.title}」の公式URL編集` : '新規公式URLの登録'}
                   </h3>
                 </div>
-                <p className="mt-1 text-[11px] text-slate-400">
+                <p className="mt-1 text-[11px] text-slate-500">
                   {editingItem 
                     ? '実運用の正しいURLを入力してください。保存すると媒体別追跡リンクも即座に自動更新されます。' 
                     : '自社のLP、個別相談フォーム、LINE登録リンクなどの公式URLを登録します。'}
@@ -1040,23 +1042,23 @@ export const MarketingQuickLinksHub: React.FC = () => {
               <button
                 type="button"
                 onClick={() => setIsEditModalOpen(false)}
-                className="rounded-lg p-1 text-slate-400 hover:bg-slate-800 hover:text-white"
+                className="rounded-lg p-1 text-slate-400 hover:bg-slate-100 hover:text-slate-700"
               >
                 <X className="h-5 w-5" />
               </button>
             </div>
 
             {editError && (
-              <div className="flex items-center gap-2 rounded-lg bg-rose-950/60 border border-rose-500/40 p-2.5 text-xs text-rose-200">
-                <AlertCircle className="h-4 w-4 shrink-0 text-rose-400" />
+              <div className="flex items-center gap-2 rounded-lg bg-rose-50 border border-rose-200 p-2.5 text-xs text-rose-700">
+                <AlertCircle className="h-4 w-4 shrink-0 text-rose-600" />
                 <span>{editError}</span>
               </div>
             )}
 
             <form onSubmit={handleSaveModal} className="space-y-3.5 text-xs">
               <div>
-                <label className="text-slate-300 font-semibold block mb-1">
-                  リンク名・タイトル <span className="text-rose-400">*</span>
+                <label className="text-slate-700 font-semibold block mb-1">
+                  リンク名・タイトル <span className="text-rose-500">*</span>
                 </label>
                 <input
                   type="text"
@@ -1064,14 +1066,14 @@ export const MarketingQuickLinksHub: React.FC = () => {
                   value={editTitle}
                   onChange={(e) => setEditTitle(e.target.value)}
                   placeholder="例: 3分無料ボトルネック診断"
-                  className="w-full rounded-lg border border-slate-700 bg-slate-950 p-2.5 text-white focus:border-indigo-500 focus:outline-none text-xs"
+                  className="w-full rounded-lg border border-slate-300 bg-white p-2.5 text-slate-900 focus:border-purple-500 focus:ring-1 focus:ring-purple-500 focus:outline-none text-xs"
                 />
               </div>
 
               <div>
                 <div className="flex items-center justify-between mb-1">
-                  <label className="text-slate-300 font-semibold">
-                    公式URL <span className="text-rose-400">*</span>
+                  <label className="text-slate-700 font-semibold">
+                    公式URL <span className="text-rose-500">*</span>
                   </label>
                   {editingItem && defaultLinks.some((d) => d.id === editingItem.id) && (
                     <button
@@ -1080,7 +1082,7 @@ export const MarketingQuickLinksHub: React.FC = () => {
                         const orig = defaultLinks.find((d) => d.id === editingItem.id);
                         if (orig) setEditUrl(orig.url);
                       }}
-                      className="text-[11px] text-indigo-400 hover:underline"
+                      className="text-[11px] text-purple-700 hover:underline font-medium"
                     >
                       初期URLを呼び出す
                     </button>
@@ -1092,41 +1094,41 @@ export const MarketingQuickLinksHub: React.FC = () => {
                   value={editUrl}
                   onChange={(e) => setEditUrl(e.target.value)}
                   placeholder="https://example.com/your-form または /f/your-slug"
-                  className="w-full rounded-lg border border-slate-700 bg-slate-950 p-2.5 text-white font-mono focus:border-indigo-500 focus:outline-none text-xs"
+                  className="w-full rounded-lg border border-slate-300 bg-white p-2.5 text-slate-900 font-mono focus:border-purple-500 focus:ring-1 focus:ring-purple-500 focus:outline-none text-xs"
                 />
-                <p className="mt-1 text-[11px] text-slate-400">
+                <p className="mt-1 text-[11px] text-slate-500">
                   ※ 外部URL（https://...）またはアプリ内パス（/f/...）どちらでも設定可能です。
                 </p>
               </div>
 
               <div>
-                <label className="text-slate-300 font-semibold block mb-1">説明文・用途（任意）</label>
+                <label className="text-slate-700 font-semibold block mb-1">説明文・用途（任意）</label>
                 <textarea
                   rows={2}
                   value={editDescription}
                   onChange={(e) => setEditDescription(e.target.value)}
                   placeholder="例: LINEステップ配信やブログ末尾から誘導する本命フォーム"
-                  className="w-full rounded-lg border border-slate-700 bg-slate-950 p-2.5 text-white focus:border-indigo-500 focus:outline-none text-xs"
+                  className="w-full rounded-lg border border-slate-300 bg-white p-2.5 text-slate-900 focus:border-purple-500 focus:ring-1 focus:ring-purple-500 focus:outline-none text-xs"
                 />
               </div>
 
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="text-slate-300 font-semibold block mb-1">バッジ表記</label>
+                  <label className="text-slate-700 font-semibold block mb-1">バッジ表記</label>
                   <input
                     type="text"
                     value={editBadge}
                     onChange={(e) => setEditBadge(e.target.value)}
                     placeholder="例: 高成約率, 商談直行"
-                    className="w-full rounded-lg border border-slate-700 bg-slate-950 p-2 text-white focus:border-indigo-500 focus:outline-none text-xs"
+                    className="w-full rounded-lg border border-slate-300 bg-white p-2 text-slate-900 focus:border-purple-500 focus:ring-1 focus:ring-purple-500 focus:outline-none text-xs"
                   />
                 </div>
                 <div>
-                  <label className="text-slate-300 font-semibold block mb-1">バッジカラー</label>
+                  <label className="text-slate-700 font-semibold block mb-1">バッジカラー</label>
                   <select
                     value={editBadgeColor}
                     onChange={(e) => setEditBadgeColor(e.target.value)}
-                    className="w-full rounded-lg border border-slate-700 bg-slate-950 p-2 text-white focus:border-indigo-500 focus:outline-none text-xs"
+                    className="w-full rounded-lg border border-slate-300 bg-white p-2 text-slate-900 focus:border-purple-500 focus:ring-1 focus:ring-purple-500 focus:outline-none text-xs"
                   >
                     {BADGE_COLOR_OPTIONS.map((c) => (
                       <option key={c.value} value={c.value}>
@@ -1138,12 +1140,12 @@ export const MarketingQuickLinksHub: React.FC = () => {
               </div>
 
               {/* ボタンエリア */}
-              <div className="flex items-center justify-between pt-3 border-t border-slate-800">
+              <div className="flex items-center justify-between pt-3 border-t border-slate-100">
                 {editingItem && defaultLinks.some((d) => d.id === editingItem.id) ? (
                   <button
                     type="button"
                     onClick={() => handleResetSingleLink(editingItem.id)}
-                    className="inline-flex items-center gap-1 text-xs text-slate-400 hover:text-amber-300"
+                    className="inline-flex items-center gap-1 text-xs text-slate-500 hover:text-amber-700 font-medium"
                   >
                     <RotateCcw className="h-3.5 w-3.5" /> このリンクを初期値に戻す
                   </button>
@@ -1153,13 +1155,13 @@ export const MarketingQuickLinksHub: React.FC = () => {
                   <button
                     type="button"
                     onClick={() => setIsEditModalOpen(false)}
-                    className="rounded-lg border border-slate-700 px-3 py-1.5 text-xs text-slate-300 hover:bg-slate-800"
+                    className="rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-xs text-slate-700 hover:bg-slate-50 font-medium shadow-xs"
                   >
                     キャンセル
                   </button>
                   <button
                     type="submit"
-                    className="rounded-lg bg-indigo-600 hover:bg-indigo-500 px-4 py-1.5 text-xs font-bold text-white transition shadow-sm"
+                    className="rounded-lg bg-purple-700 hover:bg-purple-800 px-4 py-1.5 text-xs font-semibold text-white transition shadow-xs"
                   >
                     {editingItem ? '変更を保存する' : '公式URLを登録する'}
                   </button>
@@ -1172,40 +1174,40 @@ export const MarketingQuickLinksHub: React.FC = () => {
 
       {/* ── 2. 媒体設定（名称・用途・タグ）編集 / 新規追加モーダル ── */}
       {isMediaModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4 backdrop-blur-sm animate-in fade-in duration-200">
-          <div className="relative w-full max-w-lg rounded-2xl border border-slate-700 bg-slate-900 p-5 sm:p-6 shadow-2xl space-y-4">
-            <div className="flex items-start justify-between border-b border-slate-800 pb-3">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 p-4 backdrop-blur-xs animate-in fade-in duration-200">
+          <div className="relative w-full max-w-lg rounded-2xl border border-slate-200 bg-white p-5 sm:p-6 shadow-xl space-y-4">
+            <div className="flex items-start justify-between border-b border-slate-100 pb-3">
               <div>
                 <div className="flex items-center gap-2">
-                  <Settings2 className="h-5 w-5 text-cyan-400" />
-                  <h3 className="text-base font-bold text-white">
+                  <Settings2 className="h-5 w-5 text-purple-700" />
+                  <h3 className="text-base font-bold text-slate-900">
                     {editingMedia ? `媒体設定の編集（${editingMedia.name}）` : '新規媒体の追加'}
                   </h3>
                 </div>
-                <p className="mt-1 text-[11px] text-slate-400">
+                <p className="mt-1 text-[11px] text-slate-500">
                   媒体名や用途メモ、顧客台帳へ記録される流入元識別タグ（utm_source）を設定できます。
                 </p>
               </div>
               <button
                 type="button"
                 onClick={() => setIsMediaModalOpen(false)}
-                className="rounded-lg p-1 text-slate-400 hover:bg-slate-800 hover:text-white"
+                className="rounded-lg p-1 text-slate-400 hover:bg-slate-100 hover:text-slate-700"
               >
                 <X className="h-5 w-5" />
               </button>
             </div>
 
             {mediaFormError && (
-              <div className="flex items-center gap-2 rounded-lg bg-rose-950/60 border border-rose-500/40 p-2.5 text-xs text-rose-200">
-                <AlertCircle className="h-4 w-4 shrink-0 text-rose-400" />
+              <div className="flex items-center gap-2 rounded-lg bg-rose-50 border border-rose-200 p-2.5 text-xs text-rose-700">
+                <AlertCircle className="h-4 w-4 shrink-0 text-rose-600" />
                 <span>{mediaFormError}</span>
               </div>
             )}
 
             <form onSubmit={handleSaveMediaModal} className="space-y-3.5 text-xs">
               <div>
-                <label className="text-slate-300 font-semibold block mb-1">
-                  媒体名・表示ラベル <span className="text-rose-400">*</span>
+                <label className="text-slate-700 font-semibold block mb-1">
+                  媒体名・表示ラベル <span className="text-rose-500">*</span>
                 </label>
                 <input
                   type="text"
@@ -1213,14 +1215,14 @@ export const MarketingQuickLinksHub: React.FC = () => {
                   value={mediaFormName}
                   onChange={(e) => setMediaFormName(e.target.value)}
                   placeholder="例: TikTok（ショート動画）, Threads（日常発信）, 〇〇提携先"
-                  className="w-full rounded-lg border border-slate-700 bg-slate-950 p-2.5 text-white focus:border-indigo-500 focus:outline-none text-xs"
+                  className="w-full rounded-lg border border-slate-300 bg-white p-2.5 text-slate-900 focus:border-purple-500 focus:ring-1 focus:ring-purple-500 focus:outline-none text-xs"
                 />
               </div>
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div>
-                  <label className="text-slate-300 font-semibold block mb-1">
-                    流入元タグ（utm_source） <span className="text-rose-400">*</span>
+                  <label className="text-slate-700 font-semibold block mb-1">
+                    流入元タグ（utm_source） <span className="text-rose-500">*</span>
                   </label>
                   <input
                     type="text"
@@ -1228,19 +1230,19 @@ export const MarketingQuickLinksHub: React.FC = () => {
                     value={mediaFormSource}
                     onChange={(e) => setMediaFormSource(e.target.value)}
                     placeholder="例: tiktok, threads, seminar"
-                    className="w-full rounded-lg border border-slate-700 bg-slate-950 p-2 text-white font-mono focus:border-indigo-500 focus:outline-none text-xs"
+                    className="w-full rounded-lg border border-slate-300 bg-white p-2 text-slate-900 font-mono focus:border-purple-500 focus:ring-1 focus:ring-purple-500 focus:outline-none text-xs"
                   />
-                  <span className="text-[10px] text-slate-400 mt-0.5 block">※ 半角英数字・アンダースコア</span>
+                  <span className="text-[10px] text-slate-500 mt-0.5 block">※ 半角英数字・アンダースコア</span>
                 </div>
 
                 <div>
-                  <label className="text-slate-300 font-semibold block mb-1">
+                  <label className="text-slate-700 font-semibold block mb-1">
                     媒体種別（utm_medium）
                   </label>
                   <select
                     value={mediaFormMedium}
                     onChange={(e) => setMediaFormMedium(e.target.value)}
-                    className="w-full rounded-lg border border-slate-700 bg-slate-950 p-2 text-white focus:border-indigo-500 focus:outline-none text-xs"
+                    className="w-full rounded-lg border border-slate-300 bg-white p-2 text-slate-900 focus:border-purple-500 focus:ring-1 focus:ring-purple-500 focus:outline-none text-xs"
                   >
                     {COMMON_MEDIUM_TYPES.map((t) => (
                       <option key={t.value} value={t.value}>
@@ -1252,33 +1254,33 @@ export const MarketingQuickLinksHub: React.FC = () => {
               </div>
 
               <div>
-                <label className="text-slate-300 font-semibold block mb-1">用途・運用のメモ（任意）</label>
+                <label className="text-slate-700 font-semibold block mb-1">用途・運用のメモ（任意）</label>
                 <input
                   type="text"
                   value={mediaFormDescription}
                   onChange={(e) => setMediaFormDescription(e.target.value)}
                   placeholder="例: プロフィールのリンクツリーや動画の固定コメントに配置"
-                  className="w-full rounded-lg border border-slate-700 bg-slate-950 p-2.5 text-white focus:border-indigo-500 focus:outline-none text-xs"
+                  className="w-full rounded-lg border border-slate-300 bg-white p-2.5 text-slate-900 focus:border-purple-500 focus:ring-1 focus:ring-purple-500 focus:outline-none text-xs"
                 />
               </div>
 
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="text-slate-300 font-semibold block mb-1">バッジ表記</label>
+                  <label className="text-slate-700 font-semibold block mb-1">バッジ表記</label>
                   <input
                     type="text"
                     value={mediaFormBadge}
                     onChange={(e) => setMediaFormBadge(e.target.value)}
                     placeholder="例: 動画, SNS, 外部"
-                    className="w-full rounded-lg border border-slate-700 bg-slate-950 p-2 text-white focus:border-indigo-500 focus:outline-none text-xs"
+                    className="w-full rounded-lg border border-slate-300 bg-white p-2 text-slate-900 focus:border-purple-500 focus:ring-1 focus:ring-purple-500 focus:outline-none text-xs"
                   />
                 </div>
                 <div>
-                  <label className="text-slate-300 font-semibold block mb-1">バッジカラー</label>
+                  <label className="text-slate-700 font-semibold block mb-1">バッジカラー</label>
                   <select
                     value={mediaFormBadgeColor}
                     onChange={(e) => setMediaFormBadgeColor(e.target.value)}
-                    className="w-full rounded-lg border border-slate-700 bg-slate-950 p-2 text-white focus:border-indigo-500 focus:outline-none text-xs"
+                    className="w-full rounded-lg border border-slate-300 bg-white p-2 text-slate-900 focus:border-purple-500 focus:ring-1 focus:ring-purple-500 focus:outline-none text-xs"
                   >
                     {BADGE_COLOR_OPTIONS.map((c) => (
                       <option key={c.value} value={c.value}>
@@ -1290,12 +1292,12 @@ export const MarketingQuickLinksHub: React.FC = () => {
               </div>
 
               {/* リアルタイム生成URLプレビュー */}
-              <div className="rounded-xl border border-indigo-500/30 bg-indigo-950/20 p-3 space-y-1">
-                <div className="flex items-center gap-1.5 text-indigo-300 font-semibold text-[11px]">
-                  <Share2 className="h-3.5 w-3.5" />
+              <div className="rounded-xl border border-purple-200 bg-purple-50/50 p-3 space-y-1">
+                <div className="flex items-center gap-1.5 text-purple-900 font-semibold text-[11px]">
+                  <Share2 className="h-3.5 w-3.5 text-purple-700" />
                   <span>この媒体設定で発行されるURLプレビュー:</span>
                 </div>
-                <div className="rounded bg-slate-950 p-2 font-mono text-[10px] text-cyan-300 truncate border border-slate-800">
+                <div className="rounded bg-white p-2 font-mono text-[10px] text-purple-950 truncate border border-purple-100">
                   {buildUtmUrl(
                     activeMatrixLink.url,
                     mediaFormSource.trim() || 'your_source',
@@ -1303,23 +1305,23 @@ export const MarketingQuickLinksHub: React.FC = () => {
                     mediaFormMedium.trim() || 'social'
                   )}
                 </div>
-                <p className="text-[10px] text-slate-400">
+                <p className="text-[10px] text-slate-500">
                   ※ 顧客カルテの流入元には「{mediaFormName || '媒体名'}（{mediaFormSource.trim() || 'source'}）」として記録されます。
                 </p>
               </div>
 
               {/* ボタンエリア */}
-              <div className="flex items-center justify-end gap-2 pt-3 border-t border-slate-800">
+              <div className="flex items-center justify-end gap-2 pt-3 border-t border-slate-100">
                 <button
                   type="button"
                   onClick={() => setIsMediaModalOpen(false)}
-                  className="rounded-lg border border-slate-700 px-3 py-1.5 text-xs text-slate-300 hover:bg-slate-800"
+                  className="rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-xs text-slate-700 hover:bg-slate-50 font-medium shadow-xs"
                 >
                   キャンセル
                 </button>
                 <button
                   type="submit"
-                  className="rounded-lg bg-indigo-600 hover:bg-indigo-500 px-4 py-1.5 text-xs font-bold text-white transition shadow-sm"
+                  className="rounded-lg bg-purple-700 hover:bg-purple-800 px-4 py-1.5 text-xs font-semibold text-white transition shadow-xs"
                 >
                   {editingMedia ? '媒体設定を更新する' : '媒体を追加する'}
                 </button>
@@ -1331,22 +1333,22 @@ export const MarketingQuickLinksHub: React.FC = () => {
 
       {/* ── 削除・初期化のインライン確認ダイアログ（iframeでも安全動作） ── */}
       {confirmDialog.isOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4 backdrop-blur-sm animate-in fade-in duration-150">
-          <div className="w-full max-w-sm rounded-xl border border-slate-700 bg-slate-900 p-5 shadow-2xl space-y-3">
-            <h4 className="font-bold text-white text-sm">{confirmDialog.title}</h4>
-            <p className="text-xs text-slate-300 leading-relaxed">{confirmDialog.message}</p>
-            <div className="flex justify-end gap-2 pt-2 border-t border-slate-800">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 p-4 backdrop-blur-xs animate-in fade-in duration-150">
+          <div className="w-full max-w-sm rounded-xl border border-slate-200 bg-white p-5 shadow-xl space-y-3">
+            <h4 className="font-bold text-slate-900 text-sm">{confirmDialog.title}</h4>
+            <p className="text-xs text-slate-600 leading-relaxed">{confirmDialog.message}</p>
+            <div className="flex justify-end gap-2 pt-2 border-t border-slate-100">
               <button
                 type="button"
                 onClick={() => setConfirmDialog((prev) => ({ ...prev, isOpen: false }))}
-                className="rounded-lg border border-slate-700 px-3 py-1.5 text-xs text-slate-300 hover:bg-slate-800"
+                className="rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-xs text-slate-700 hover:bg-slate-50 font-medium shadow-xs"
               >
                 キャンセル
               </button>
               <button
                 type="button"
                 onClick={confirmDialog.onConfirm}
-                className="rounded-lg bg-rose-600 hover:bg-rose-500 px-3 py-1.5 text-xs font-bold text-white transition shadow-sm"
+                className="rounded-lg bg-rose-600 hover:bg-rose-700 px-3.5 py-1.5 text-xs font-semibold text-white transition shadow-xs"
               >
                 実行する
               </button>

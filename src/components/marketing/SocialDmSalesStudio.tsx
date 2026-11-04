@@ -313,22 +313,22 @@ const DEFAULT_TEMPLATES: DmTemplatePreset[] = [
 ];
 
 export const PLATFORM_INFOS: Record<DmPlatform, { name: string; badge: string; color: string; domain: string; defaultUrl: string }> = {
-  x: { name: 'X (Twitter)', badge: 'X', color: 'bg-zinc-800 text-white border-zinc-700', domain: 'x.com', defaultUrl: 'https://x.com/messages' },
-  instagram: { name: 'Instagram', badge: 'IG', color: 'bg-pink-500/20 text-pink-300 border-pink-500/30', domain: 'instagram.com', defaultUrl: 'https://www.instagram.com/direct/inbox/' },
-  linkedin: { name: 'LinkedIn', badge: 'LI', color: 'bg-sky-500/20 text-sky-300 border-sky-500/30', domain: 'linkedin.com', defaultUrl: 'https://www.linkedin.com/messaging/' },
-  facebook: { name: 'Facebook', badge: 'FB', color: 'bg-blue-500/20 text-blue-300 border-blue-500/30', domain: 'facebook.com', defaultUrl: 'https://www.facebook.com/messages/' },
-  threads: { name: 'Threads', badge: 'TH', color: 'bg-zinc-700/30 text-zinc-300 border-zinc-600', domain: 'threads.net', defaultUrl: 'https://www.threads.net/' },
-  other: { name: 'その他SNS', badge: 'SNS', color: 'bg-purple-500/20 text-purple-300 border-purple-500/30', domain: '', defaultUrl: 'https://x.com/messages' },
+  x: { name: 'X (Twitter)', badge: 'X', color: 'bg-slate-900 text-white border-slate-700', domain: 'x.com', defaultUrl: 'https://x.com/messages' },
+  instagram: { name: 'Instagram', badge: 'IG', color: 'bg-pink-50 text-pink-700 border-pink-200', domain: 'instagram.com', defaultUrl: 'https://www.instagram.com/direct/inbox/' },
+  linkedin: { name: 'LinkedIn', badge: 'LI', color: 'bg-sky-50 text-sky-700 border-sky-200', domain: 'linkedin.com', defaultUrl: 'https://www.linkedin.com/messaging/' },
+  facebook: { name: 'Facebook', badge: 'FB', color: 'bg-blue-50 text-blue-700 border-blue-200', domain: 'facebook.com', defaultUrl: 'https://www.facebook.com/messages/' },
+  threads: { name: 'Threads', badge: 'TH', color: 'bg-slate-100 text-slate-800 border-slate-300', domain: 'threads.net', defaultUrl: 'https://www.threads.net/' },
+  other: { name: 'その他SNS', badge: 'SNS', color: 'bg-purple-50 text-purple-700 border-purple-200', domain: '', defaultUrl: 'https://x.com/messages' },
 };
 
 export const STATUS_LABELS: Record<DmStatus, { label: string; badgeColor: string }> = {
-  draft: { label: '下書き・準備中', badgeColor: 'bg-slate-700/40 text-slate-300 border-slate-600' },
-  sent_waiting: { label: '送信済・返信待ち', badgeColor: 'bg-amber-500/20 text-amber-300 border-amber-500/30' },
-  inbound_waiting: { label: 'DM受信・返信中', badgeColor: 'bg-cyan-500/20 text-cyan-300 border-cyan-500/30' },
-  replied: { label: '返信済・対話中', badgeColor: 'bg-indigo-500/20 text-indigo-300 border-indigo-500/30' },
-  meeting_scheduled: { label: '商談・相談確定', badgeColor: 'bg-emerald-500/20 text-emerald-300 border-emerald-500/30' },
-  converted: { label: 'リード化・成約', badgeColor: 'bg-purple-500/20 text-purple-300 border-purple-500/30' },
-  closed: { label: '見送り・終了', badgeColor: 'bg-zinc-700/30 text-zinc-400 border-zinc-700' },
+  draft: { label: '下書き・準備中', badgeColor: 'bg-slate-100 text-slate-700 border-slate-300' },
+  sent_waiting: { label: '送信済・返信待ち', badgeColor: 'bg-amber-50 text-amber-700 border-amber-200' },
+  inbound_waiting: { label: 'DM受信・返信中', badgeColor: 'bg-sky-50 text-sky-700 border-sky-200' },
+  replied: { label: '返信済・対話中', badgeColor: 'bg-purple-50 text-purple-700 border-purple-200' },
+  meeting_scheduled: { label: '商談・相談確定', badgeColor: 'bg-emerald-50 text-emerald-700 border-emerald-200' },
+  converted: { label: 'リード化・成約', badgeColor: 'bg-indigo-50 text-indigo-700 border-indigo-200' },
+  closed: { label: '見送り・終了', badgeColor: 'bg-slate-100 text-slate-500 border-slate-200' },
 };
 
 export interface SocialDmSalesStudioProps {
@@ -959,39 +959,39 @@ ${messageText.slice(0, 500)}`;
   const activeItem = dmList.find((i) => i.id === selectedDmId);
 
   return (
-    <div className="space-y-4 text-slate-100">
+    <div className="space-y-4 text-slate-800">
       {/* ── 最上部バナー & 相互ナビゲーション ── */}
-      <div className="rounded-2xl border border-indigo-500/30 bg-gradient-to-r from-indigo-950/60 via-slate-900 to-slate-900 p-4 shadow-lg">
+      <div className="rounded-2xl border border-purple-200 bg-white p-4 shadow-xs">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div>
             <div className="flex items-center gap-2">
               {isOutboundOnly ? (
                 <>
-                  <SendHorizontal className="h-5 w-5 text-indigo-400" />
-                  <h3 className="text-base font-bold text-white">🎯 攻めのSNS DM開拓（リストアップ ＆ 営業テンプレ送信）</h3>
-                  <span className="rounded-full bg-indigo-500/20 px-2.5 py-0.5 text-[11px] font-bold text-indigo-300 border border-indigo-500/30">
+                  <SendHorizontal className="h-5 w-5 text-purple-700" />
+                  <h3 className="text-base font-bold text-slate-900">🎯 攻めのSNS DM開拓（リストアップ ＆ 営業テンプレ送信）</h3>
+                  <span className="rounded-full bg-purple-50 px-2.5 py-0.5 text-[11px] font-bold text-purple-700 border border-purple-200">
                     新規開拓・アウトバウンド営業特化
                   </span>
                 </>
               ) : isInboundOnly ? (
                 <>
-                  <Inbox className="h-5 w-5 text-cyan-400" />
-                  <h3 className="text-base font-bold text-white">📥 SNS DM受信トレイ（返信対応 ＆ CRM連携）</h3>
-                  <span className="rounded-full bg-cyan-500/20 px-2.5 py-0.5 text-[11px] font-bold text-cyan-300 border border-cyan-500/30">
+                  <Inbox className="h-5 w-5 text-sky-600" />
+                  <h3 className="text-base font-bold text-slate-900">📥 SNS DM受信トレイ（返信対応 ＆ CRM連携）</h3>
+                  <span className="rounded-full bg-sky-50 px-2.5 py-0.5 text-[11px] font-bold text-sky-700 border border-sky-200">
                     守りの返信・CRM顧客化特化
                   </span>
                 </>
               ) : (
                 <>
-                  <MessageSquare className="h-5 w-5 text-indigo-400" />
-                  <h3 className="text-base font-bold text-white">💬 SNS営業・DM個別管理スタジオ</h3>
-                  <span className="rounded-full bg-indigo-500/20 px-2.5 py-0.5 text-[11px] font-bold text-indigo-300 border border-indigo-500/30">
+                  <MessageSquare className="h-5 w-5 text-purple-700" />
+                  <h3 className="text-base font-bold text-slate-900">💬 SNS営業・DM個別管理スタジオ</h3>
+                  <span className="rounded-full bg-purple-50 px-2.5 py-0.5 text-[11px] font-bold text-purple-700 border border-purple-200">
                     攻め（開拓）＆ 守り（返信）両対応
                   </span>
                 </>
               )}
             </div>
-            <p className="mt-1 text-xs text-slate-300 leading-relaxed">
+            <p className="mt-1 text-xs text-slate-600 leading-relaxed">
               {isOutboundOnly
                 ? 'アカウント名またはURLを入力し、営業テンプレを選ぶだけ。手入力なしでAI個別最適化と安全な手動送信が行えます。'
                 : isInboundOnly
@@ -1006,7 +1006,7 @@ ${messageText.slice(0, 500)}`;
                 <button
                   type="button"
                   onClick={() => handleCreateNew('outbound')}
-                  className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-bold transition shadow-sm cursor-pointer"
+                  className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg bg-purple-700 hover:bg-purple-800 text-white text-xs font-bold transition shadow-xs cursor-pointer"
                 >
                   <Plus className="h-3.5 w-3.5" />
                   ＋ 新規アプローチ追加
@@ -1018,10 +1018,10 @@ ${messageText.slice(0, 500)}`;
                       try { localStorage.setItem('unified_inbox_active_channel', 'social_dm'); } catch {}
                       onNavigateTab('inbox_hub', { inboxChannel: 'social_dm' });
                     }}
-                    className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-cyan-500/40 bg-cyan-950/40 hover:bg-cyan-900/60 text-cyan-200 text-xs font-semibold transition cursor-pointer"
+                    className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-sky-300 bg-sky-50 hover:bg-sky-100 text-sky-800 text-xs font-semibold transition cursor-pointer"
                     title="届いたDMの返信対応は統合受信トレイで行います"
                   >
-                    <Inbox className="h-3.5 w-3.5 text-cyan-400" />
+                    <Inbox className="h-3.5 w-3.5 text-sky-600" />
                     <span>📥 届いたDM返信トレイへ</span>
                   </button>
                 )}
@@ -1031,7 +1031,7 @@ ${messageText.slice(0, 500)}`;
                 <button
                   type="button"
                   onClick={() => handleCreateNew('inbound')}
-                  className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg bg-cyan-600 hover:bg-cyan-500 text-white text-xs font-bold transition shadow-sm cursor-pointer"
+                  className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg bg-sky-600 hover:bg-sky-700 text-white text-xs font-bold transition shadow-xs cursor-pointer"
                 >
                   <Plus className="h-3.5 w-3.5" />
                   ＋ 届いたDMを登録
@@ -1046,10 +1046,10 @@ ${messageText.slice(0, 500)}`;
                       } catch {}
                       onNavigateTab('ai_acquisition', { acquisitionTab: 'social_studio', studioMode: 'dm_sales' });
                     }}
-                    className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg border border-indigo-500/40 bg-indigo-950/40 hover:bg-indigo-900/60 text-indigo-200 text-xs font-semibold transition cursor-pointer"
+                    className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg border border-purple-300 bg-purple-50 hover:bg-purple-100 text-purple-800 text-xs font-semibold transition cursor-pointer"
                     title="攻めのDM営業（リストアップ）はAI集客運用で行います"
                   >
-                    <SendHorizontal className="h-3.5 w-3.5 text-indigo-400" />
+                    <SendHorizontal className="h-3.5 w-3.5 text-purple-600" />
                     <span>🎯 攻めのDM営業（リストアップ）へ</span>
                   </button>
                 )}
@@ -1059,7 +1059,7 @@ ${messageText.slice(0, 500)}`;
                 <button
                   type="button"
                   onClick={() => handleCreateNew('outbound')}
-                  className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-bold transition shadow-sm"
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-purple-700 hover:bg-purple-800 text-white text-xs font-bold transition shadow-xs"
                 >
                   <SendHorizontal className="h-3.5 w-3.5" />
                   ＋ 新規アプローチ (攻め)
@@ -1067,7 +1067,7 @@ ${messageText.slice(0, 500)}`;
                 <button
                   type="button"
                   onClick={() => handleCreateNew('inbound')}
-                  className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-cyan-600 hover:bg-cyan-500 text-white text-xs font-bold transition shadow-sm"
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-sky-600 hover:bg-sky-700 text-white text-xs font-bold transition shadow-xs"
                 >
                   <Inbox className="h-3.5 w-3.5" />
                   ＋ 届いたDM返信 (受け)
@@ -1081,20 +1081,20 @@ ${messageText.slice(0, 500)}`;
       {/* ── フィードバックトースト ── */}
       {feedback && (
         <div
-          className={`flex items-start gap-2.5 rounded-xl border p-3 text-xs shadow-md animate-in fade-in duration-150 ${
+          className={`flex items-start gap-2.5 rounded-xl border p-3 text-xs shadow-xs animate-in fade-in duration-150 ${
             feedback.type === 'success'
-              ? 'border-emerald-500/40 bg-emerald-950/80 text-emerald-200'
+              ? 'border-emerald-200 bg-emerald-50 text-emerald-800'
               : feedback.type === 'error'
-              ? 'border-rose-500/40 bg-rose-950/80 text-rose-200'
-              : 'border-cyan-500/40 bg-cyan-950/80 text-cyan-200'
+              ? 'border-rose-200 bg-rose-50 text-rose-800'
+              : 'border-purple-200 bg-purple-50 text-purple-800'
           }`}
         >
           {feedback.type === 'success' ? (
-            <CheckCircle2 className="h-4 w-4 text-emerald-400 shrink-0 mt-0.5" />
+            <CheckCircle2 className="h-4 w-4 text-emerald-600 shrink-0 mt-0.5" />
           ) : feedback.type === 'error' ? (
-            <AlertCircle className="h-4 w-4 text-rose-400 shrink-0 mt-0.5" />
+            <AlertCircle className="h-4 w-4 text-rose-600 shrink-0 mt-0.5" />
           ) : (
-            <Sparkles className="h-4 w-4 text-cyan-400 shrink-0 mt-0.5" />
+            <Sparkles className="h-4 w-4 text-purple-600 shrink-0 mt-0.5" />
           )}
           <span className="flex-1 font-medium leading-relaxed">{feedback.message}</span>
         </div>
@@ -1105,10 +1105,10 @@ ${messageText.slice(0, 500)}`;
         
         {/* ── 左カラム: リスト一覧 (5カラム) ── */}
         <div className="lg:col-span-5 space-y-3">
-          <div className="rounded-2xl border border-slate-800 bg-slate-900/90 p-3.5 space-y-3 shadow-md">
+          <div className="rounded-2xl border border-slate-200 bg-white p-3.5 space-y-3 shadow-xs">
             <div className="flex items-center justify-between">
-              <h4 className="text-xs font-bold text-white flex items-center gap-1.5">
-                <FolderOpen className="h-3.5 w-3.5 text-indigo-400" />
+              <h4 className="text-xs font-bold text-slate-900 flex items-center gap-1.5">
+                <FolderOpen className="h-3.5 w-3.5 text-purple-700" />
                 <span>
                   {isOutboundOnly
                     ? `🎯 アプローチ先リスト (${filteredList.length}件)`
@@ -1120,7 +1120,7 @@ ${messageText.slice(0, 500)}`;
               <button
                 type="button"
                 onClick={() => handleCreateNew(isInboundOnly ? 'inbound' : 'outbound')}
-                className="text-[11px] text-cyan-400 hover:text-cyan-300 font-semibold"
+                className="text-[11px] text-purple-700 hover:text-purple-800 font-semibold"
               >
                 ＋新規
               </button>
@@ -1129,20 +1129,20 @@ ${messageText.slice(0, 500)}`;
             {/* 検索ボックス & ステータスフィルター */}
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs">
               <div className="relative">
-                <Search className="absolute left-2.5 top-2.5 h-3.5 w-3.5 text-slate-500" />
+                <Search className="absolute left-2.5 top-2.5 h-3.5 w-3.5 text-slate-400" />
                 <input
                   type="text"
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
                   placeholder="検索（名前・文面）"
-                  className="w-full rounded-lg border border-slate-700 bg-slate-950 pl-8 pr-2.5 py-1.5 text-xs text-white placeholder-slate-500 focus:border-indigo-500 focus:outline-none"
+                  className="w-full rounded-lg border border-slate-200 bg-slate-50 pl-8 pr-2.5 py-1.5 text-xs text-slate-900 placeholder-slate-400 focus:bg-white focus:border-purple-500 focus:outline-none"
                 />
               </div>
 
               <select
                 value={filterStatus}
                 onChange={(e) => setFilterStatus(e.target.value)}
-                className="rounded-lg border border-slate-700 bg-slate-950 px-2 py-1.5 text-xs text-white"
+                className="rounded-lg border border-slate-200 bg-slate-50 px-2 py-1.5 text-xs text-slate-800 focus:bg-white focus:border-purple-500 focus:outline-none"
               >
                 <option value="all">全ステータス</option>
                 {Object.entries(STATUS_LABELS).map(([key, item]) => (
@@ -1154,7 +1154,7 @@ ${messageText.slice(0, 500)}`;
             {/* リスト表示 */}
             <div className="space-y-1.5 max-h-[580px] overflow-y-auto pr-1">
               {filteredList.length === 0 ? (
-                <div className="text-center py-8 rounded-xl border border-dashed border-slate-800 text-slate-500 text-xs">
+                <div className="text-center py-8 rounded-xl border border-dashed border-slate-200 text-slate-500 text-xs bg-slate-50">
                   {isOutboundOnly
                     ? 'アプローチ先がまだ登録されていません。「＋新規」から追加してください。'
                     : '届いたDM履歴がまだありません。'}
@@ -1171,8 +1171,8 @@ ${messageText.slice(0, 500)}`;
                       onClick={() => loadDmToForm(item)}
                       className={`p-2.5 rounded-xl border cursor-pointer transition text-xs space-y-1 relative group ${
                         isSelected
-                          ? 'bg-indigo-950/70 border-indigo-500 shadow-md ring-1 ring-indigo-500/80'
-                          : 'bg-slate-950/80 border-slate-800 hover:border-slate-700'
+                          ? 'bg-purple-50/80 border-purple-400 shadow-xs ring-1 ring-purple-300'
+                          : 'bg-white border-slate-200 hover:border-slate-300 hover:bg-slate-50/70'
                       }`}
                     >
                       <div className="flex items-center justify-between gap-1.5">
@@ -1180,7 +1180,7 @@ ${messageText.slice(0, 500)}`;
                           <span className={`text-[10px] font-bold px-1.5 py-0.2 rounded border ${platInfo.color}`}>
                             {platInfo.badge}
                           </span>
-                          <span className="font-bold text-white truncate">
+                          <span className="font-bold text-slate-900 truncate">
                             {item.contactName || item.accountHandle || item.companyName || 'ターゲット'}
                           </span>
                         </div>
@@ -1191,25 +1191,25 @@ ${messageText.slice(0, 500)}`;
                       </div>
 
                       {/* 本文プレビュー */}
-                      <p className="text-[11px] text-slate-300 line-clamp-2 leading-relaxed font-sans">
+                      <p className="text-[11px] text-slate-600 line-clamp-2 leading-relaxed font-sans">
                         {item.messageText || item.contextInfo || '(文面なし)'}
                       </p>
 
                       <div className="flex items-center justify-between text-[10px] pt-1 text-slate-500">
                         <span>
                           {item.crmLeadId ? (
-                            <span className="text-emerald-400 font-semibold flex items-center gap-0.5">
-                              <CheckCircle2 className="h-3 w-3" /> CRM登録済
+                            <span className="text-emerald-700 font-semibold flex items-center gap-0.5">
+                              <CheckCircle2 className="h-3 w-3 text-emerald-600" /> CRM登録済
                             </span>
                           ) : (
-                            <span>未登録</span>
+                            <span className="text-slate-400">未登録</span>
                           )}
                         </span>
 
                         <InlineDeleteButton
                           onConfirm={() => handleDeleteDm(item.id)}
                           confirmLabel="削除"
-                          className="p-1 rounded text-slate-500 hover:text-rose-400 hover:bg-slate-800 transition"
+                          className="p-1 rounded text-slate-400 hover:text-rose-600 hover:bg-rose-50 transition"
                           ariaLabel="この履歴を削除"
                         >
                           <Trash2 className="h-3 w-3" />
@@ -1225,22 +1225,22 @@ ${messageText.slice(0, 500)}`;
 
         {/* ── 右カラム: 超効率・手入力ゼロ志向のワークスペース (7カラム) ── */}
         <div className="lg:col-span-7 space-y-3">
-          <div className="rounded-2xl border border-slate-800 bg-slate-900/90 p-4 space-y-3.5 shadow-md">
+          <div className="rounded-2xl border border-slate-200 bg-white p-4 space-y-3.5 shadow-xs">
             
             {/* ヘッダー＆プラットフォーム選択（1タップボタン） */}
-            <div className="space-y-2 border-b border-slate-800 pb-3">
+            <div className="space-y-2 border-b border-slate-200 pb-3">
               <div className="flex flex-wrap items-center justify-between gap-2">
-                <span className="text-xs font-bold text-white flex items-center gap-1.5">
-                  <Share2 className="h-3.5 w-3.5 text-indigo-400" />
+                <span className="text-xs font-bold text-slate-900 flex items-center gap-1.5">
+                  <Share2 className="h-3.5 w-3.5 text-purple-700" />
                   <span>① 対象SNSを選択:</span>
                 </span>
                 {!isOutboundOnly && !isInboundOnly && (
-                  <div className="inline-flex rounded-lg bg-slate-950 p-0.5 border border-slate-800 text-xs">
+                  <div className="inline-flex rounded-lg bg-slate-100 p-0.5 border border-slate-200 text-xs">
                     <button
                       type="button"
                       onClick={() => setDirection('outbound')}
-                      className={`px-2 py-0.5 rounded-md font-bold transition ${
-                        direction === 'outbound' ? 'bg-indigo-600 text-white' : 'text-slate-400'
+                      className={`px-2 py-0.5 rounded-md font-bold transition cursor-pointer ${
+                        direction === 'outbound' ? 'bg-purple-700 text-white shadow-xs' : 'text-slate-600 hover:text-slate-900'
                       }`}
                     >
                       攻め (開拓)
@@ -1248,8 +1248,8 @@ ${messageText.slice(0, 500)}`;
                     <button
                       type="button"
                       onClick={() => setDirection('inbound')}
-                      className={`px-2 py-0.5 rounded-md font-bold transition ${
-                        direction === 'inbound' ? 'bg-cyan-600 text-white' : 'text-slate-400'
+                      className={`px-2 py-0.5 rounded-md font-bold transition cursor-pointer ${
+                        direction === 'inbound' ? 'bg-sky-600 text-white shadow-xs' : 'text-slate-600 hover:text-slate-900'
                       }`}
                     >
                       受け (届いたDM)
@@ -1278,8 +1278,8 @@ ${messageText.slice(0, 500)}`;
                       }}
                       className={`px-3 py-1.5 rounded-xl text-xs font-bold transition border cursor-pointer ${
                         isSelected
-                          ? `${info.color} ring-1 ring-white/50 shadow-sm`
-                          : 'bg-slate-950 border-slate-800 text-slate-400 hover:text-white hover:border-slate-700'
+                          ? `${info.color} ring-2 ring-purple-400 shadow-xs`
+                          : 'bg-slate-50 border-slate-200 text-slate-700 hover:text-slate-900 hover:bg-slate-100'
                       }`}
                     >
                       {info.name}
@@ -1294,39 +1294,39 @@ ${messageText.slice(0, 500)}`;
               /* INBOUND MODE: 届いたDMをペーストするだけ */
               <div className="space-y-3">
                 <div>
-                  <label className="text-xs font-bold text-white flex items-center justify-between">
+                  <label className="text-xs font-bold text-slate-900 flex items-center justify-between">
                     <span className="flex items-center gap-1.5">
-                      <Inbox className="h-3.5 w-3.5 text-cyan-400" />
+                      <Inbox className="h-3.5 w-3.5 text-sky-600" />
                       <span>② 届いたDM本文（ここに貼り付け）:</span>
                     </span>
-                    <span className="text-[10px] text-cyan-300 font-normal">※ペーストして下のテンプレを押すだけ</span>
+                    <span className="text-[10px] text-sky-700 font-normal">※ペーストして下のテンプレを押すだけ</span>
                   </label>
                   <textarea
                     rows={3}
                     value={contextInfo}
                     onChange={(e) => setContextInfo(e.target.value)}
                     placeholder="例: 「はじめまして！投稿で紹介されていた業務改善システムについて、導入費用と期間を教えていただきたいです」"
-                    className="mt-1 w-full rounded-xl border border-slate-700 bg-slate-950 p-2.5 text-xs text-white placeholder-slate-500 focus:border-cyan-500 focus:outline-none leading-relaxed"
+                    className="mt-1 w-full rounded-xl border border-slate-200 bg-slate-50 p-2.5 text-xs text-slate-900 placeholder-slate-400 focus:bg-white focus:border-sky-500 focus:outline-none leading-relaxed"
                   />
                 </div>
 
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs">
                   <div>
-                    <label className="text-slate-300 font-medium text-[11px]">相手のユーザー名 / お名前（任意）</label>
+                    <label className="text-slate-700 font-medium text-[11px]">相手のユーザー名 / お名前（任意）</label>
                     <input
                       type="text"
                       value={targetAccountInput}
                       onChange={(e) => handleTargetInputChange(e.target.value)}
                       placeholder="例: @yamada_biz または 山田社長"
-                      className="mt-1 block w-full rounded-lg border border-slate-700 bg-slate-950 p-2 text-white font-mono text-xs"
+                      className="mt-1 block w-full rounded-lg border border-slate-200 bg-slate-50 p-2 text-slate-900 font-mono text-xs focus:bg-white focus:border-purple-500 focus:outline-none"
                     />
                   </div>
                   <div>
-                    <label className="text-slate-300 font-medium text-[11px]">案内したい自社リンク</label>
+                    <label className="text-slate-700 font-medium text-[11px]">案内したい自社リンク</label>
                     <select
                       value={selectedOfficialLinkId}
                       onChange={(e) => setSelectedOfficialLinkId(e.target.value)}
-                      className="mt-1 block w-full rounded-lg border border-slate-700 bg-slate-950 p-2 text-white text-xs truncate"
+                      className="mt-1 block w-full rounded-lg border border-slate-200 bg-slate-50 p-2 text-slate-800 text-xs truncate focus:bg-white focus:border-purple-500 focus:outline-none"
                     >
                       {officialLinks.map((link) => (
                         <option key={link.id} value={link.id}>
@@ -1342,8 +1342,8 @@ ${messageText.slice(0, 500)}`;
               <div className="space-y-3">
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 text-xs">
                   <div>
-                    <label className="text-xs font-bold text-white flex items-center gap-1.5">
-                      <User className="h-3.5 w-3.5 text-indigo-400" />
+                    <label className="text-xs font-bold text-slate-900 flex items-center gap-1.5">
+                      <User className="h-3.5 w-3.5 text-purple-700" />
                       <span>② アプローチ先（@アカウント名 または URL）:</span>
                     </label>
                     <input
@@ -1351,19 +1351,19 @@ ${messageText.slice(0, 500)}`;
                       value={targetAccountInput}
                       onChange={(e) => handleTargetInputChange(e.target.value)}
                       placeholder="例: @yamada_biz または https://x.com/..."
-                      className="mt-1 block w-full rounded-lg border border-slate-700 bg-slate-950 p-2 text-white font-mono text-xs focus:border-indigo-500 focus:outline-none"
+                      className="mt-1 block w-full rounded-lg border border-slate-200 bg-slate-50 p-2 text-slate-900 font-mono text-xs focus:bg-white focus:border-purple-500 focus:outline-none"
                     />
                   </div>
 
                   <div>
-                    <label className="text-xs font-bold text-white flex items-center gap-1.5">
-                      <Link2 className="h-3.5 w-3.5 text-indigo-400" />
+                    <label className="text-xs font-bold text-slate-900 flex items-center gap-1.5">
+                      <Link2 className="h-3.5 w-3.5 text-purple-700" />
                       <span>案内したい自社リンク:</span>
                     </label>
                     <select
                       value={selectedOfficialLinkId}
                       onChange={(e) => setSelectedOfficialLinkId(e.target.value)}
-                      className="mt-1 block w-full rounded-lg border border-slate-700 bg-slate-950 p-2 text-white text-xs truncate focus:border-indigo-500"
+                      className="mt-1 block w-full rounded-lg border border-slate-200 bg-slate-50 p-2 text-slate-800 text-xs truncate focus:bg-white focus:border-purple-500 focus:outline-none"
                     >
                       {officialLinks.map((link) => (
                         <option key={link.id} value={link.id}>
@@ -1375,29 +1375,29 @@ ${messageText.slice(0, 500)}`;
                 </div>
 
                 <div>
-                  <label className="text-slate-300 font-medium text-[11px] flex items-center justify-between">
+                  <label className="text-slate-700 font-medium text-[11px] flex items-center justify-between">
                     <span>相手の発信内容・関心メモ（任意・1行でOK）</span>
-                    <span className="text-[10px] text-indigo-300 font-normal">※AIがこの内容に共感した文面を作成</span>
+                    <span className="text-[10px] text-purple-700 font-normal">※AIがこの内容に共感した文面を作成</span>
                   </label>
                   <input
                     type="text"
                     value={contextInfo}
                     onChange={(e) => setContextInfo(e.target.value)}
                     placeholder="例: 「採用課題に苦戦している」と発信していた / 介護事業所のDXに関心あり"
-                    className="mt-1 block w-full rounded-lg border border-slate-700 bg-slate-950 p-2 text-white text-xs placeholder-slate-500 focus:border-indigo-500 focus:outline-none"
+                    className="mt-1 block w-full rounded-lg border border-slate-200 bg-slate-50 p-2 text-slate-900 text-xs placeholder-slate-400 focus:bg-white focus:border-purple-500 focus:outline-none"
                   />
                 </div>
               </div>
             )}
 
             {/* ── ワンタップ・テンプレート選択（手入力なしで即文面完成） ── */}
-            <div className="rounded-xl border border-slate-800 bg-slate-950/70 p-3 space-y-2">
-              <div className="text-[11px] font-bold text-slate-300 flex items-center justify-between">
+            <div className="rounded-xl border border-purple-100 bg-purple-50/40 p-3 space-y-2">
+              <div className="text-[11px] font-bold text-slate-800 flex items-center justify-between">
                 <span className="flex items-center gap-1">
-                  <Bookmark className="h-3.5 w-3.5 text-indigo-400" />
+                  <Bookmark className="h-3.5 w-3.5 text-purple-700" />
                   <span>③ ワンクリックで文面を呼び出し:</span>
                 </span>
-                <span className="text-[10px] text-slate-400">タップで文面が即座に入ります</span>
+                <span className="text-[10px] text-slate-500">タップで文面が即座に入ります</span>
               </div>
 
               <div className="flex flex-wrap gap-1.5">
@@ -1406,7 +1406,7 @@ ${messageText.slice(0, 500)}`;
                     key={tpl.id}
                     type="button"
                     onClick={() => handleApplyTemplate(tpl)}
-                    className="inline-flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg border border-slate-700 bg-slate-900 hover:bg-slate-800 text-slate-200 hover:text-white transition shadow-sm cursor-pointer"
+                    className="inline-flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg border border-slate-200 bg-white hover:bg-purple-50 hover:border-purple-300 text-slate-700 hover:text-purple-900 transition shadow-xs cursor-pointer"
                     title={tpl.description}
                   >
                     <span>{tpl.icon}</span>
@@ -1419,10 +1419,10 @@ ${messageText.slice(0, 500)}`;
             {/* ── 送信DM本文（テキストエリア ＋ AI個別最適化ボタン） ── */}
             <div className="space-y-2">
               <div className="flex flex-wrap items-center justify-between gap-2">
-                <label className="text-xs font-bold text-white flex items-center gap-1.5">
-                  <FileText className="h-4 w-4 text-indigo-400" />
+                <label className="text-xs font-bold text-slate-900 flex items-center gap-1.5">
+                  <FileText className="h-4 w-4 text-purple-700" />
                   <span>④ 送信DM本文（そのまま送信可能・直接微調整もOK）</span>
-                  <span className="text-[11px] font-normal text-slate-400">
+                  <span className="text-[11px] font-normal text-slate-500">
                     ({messageText.length}文字)
                   </span>
                 </label>
@@ -1431,7 +1431,7 @@ ${messageText.slice(0, 500)}`;
                   type="button"
                   onClick={handleAIGenerateCustomDM}
                   disabled={aiGenerating}
-                  className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-gradient-to-r from-indigo-600 via-purple-600 to-cyan-600 hover:opacity-90 text-white text-xs font-bold transition shadow-sm disabled:opacity-50 cursor-pointer"
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-purple-700 hover:bg-purple-800 text-white text-xs font-bold transition shadow-xs disabled:opacity-50 cursor-pointer"
                 >
                   <Sparkles className="h-3.5 w-3.5" />
                   {aiGenerating ? 'AIが文面を最適化中…' : direction === 'outbound' ? '✨ 相手に合わせてAIで個別最適化' : '✨ 相手のDMに合わせてAI返信文を作成'}
@@ -1443,43 +1443,43 @@ ${messageText.slice(0, 500)}`;
                 value={messageText}
                 onChange={(e) => setMessageText(e.target.value)}
                 placeholder="上記のテンプレートを押すか、AI生成を押すとここに文面が自動入力されます…"
-                className="w-full rounded-xl border border-slate-700 bg-slate-950 p-3 text-xs text-white leading-relaxed focus:border-indigo-500 focus:outline-none font-sans"
+                className="w-full rounded-xl border border-slate-200 bg-slate-50 p-3 text-xs text-slate-900 leading-relaxed focus:bg-white focus:border-purple-500 focus:outline-none font-sans"
               />
             </div>
 
             {/* ── 詳細オプション（通常は開く必要なし・折りたたみ） ── */}
-            <details className="rounded-xl border border-slate-800 bg-slate-950/40 p-2.5 text-xs">
-              <summary className="cursor-pointer text-slate-400 hover:text-slate-200 font-medium flex items-center justify-between">
+            <details className="rounded-xl border border-slate-200 bg-slate-50/50 p-2.5 text-xs">
+              <summary className="cursor-pointer text-slate-600 hover:text-slate-900 font-medium flex items-center justify-between">
                 <span>⚙️ 補足詳細設定（会社名・次回アクションメモ・ステータス手動変更）</span>
                 <span className="text-[10px] text-slate-500">※必要な場合のみ開く</span>
               </summary>
-              <div className="mt-3 pt-2 border-t border-slate-800/80 grid grid-cols-1 sm:grid-cols-3 gap-2.5">
+              <div className="mt-3 pt-2 border-t border-slate-200 grid grid-cols-1 sm:grid-cols-3 gap-2.5">
                 <div>
-                  <label className="text-slate-400 text-[10px] block">会社名・屋号</label>
+                  <label className="text-slate-600 text-[10px] block">会社名・屋号</label>
                   <input
                     type="text"
                     value={companyName}
                     onChange={(e) => setCompanyName(e.target.value)}
                     placeholder="例: 株式会社サンプル"
-                    className="mt-0.5 w-full rounded border border-slate-700 bg-slate-900 p-1.5 text-xs text-white"
+                    className="mt-0.5 w-full rounded border border-slate-200 bg-white p-1.5 text-xs text-slate-900 focus:border-purple-500 focus:outline-none"
                   />
                 </div>
                 <div>
-                  <label className="text-slate-400 text-[10px] block">担当者名</label>
+                  <label className="text-slate-600 text-[10px] block">担当者名</label>
                   <input
                     type="text"
                     value={contactName}
                     onChange={(e) => setContactName(e.target.value)}
                     placeholder="例: 田中 太郎"
-                    className="mt-0.5 w-full rounded border border-slate-700 bg-slate-900 p-1.5 text-xs text-white"
+                    className="mt-0.5 w-full rounded border border-slate-200 bg-white p-1.5 text-xs text-slate-900 focus:border-purple-500 focus:outline-none"
                   />
                 </div>
                 <div>
-                  <label className="text-slate-400 text-[10px] block">ステータス手動選択</label>
+                  <label className="text-slate-600 text-[10px] block">ステータス手動選択</label>
                   <select
                     value={status}
                     onChange={(e) => setStatus(e.target.value as DmStatus)}
-                    className="mt-0.5 w-full rounded border border-slate-700 bg-slate-900 p-1.5 text-xs text-white"
+                    className="mt-0.5 w-full rounded border border-slate-200 bg-white p-1.5 text-xs text-slate-900 focus:border-purple-500 focus:outline-none"
                   >
                     {Object.entries(STATUS_LABELS).map(([k, v]) => (
                       <option key={k} value={k}>{v.label}</option>
@@ -1487,36 +1487,36 @@ ${messageText.slice(0, 500)}`;
                   </select>
                 </div>
                 <div className="sm:col-span-1">
-                  <label className="text-slate-400 text-[10px] block">次回アクション日</label>
+                  <label className="text-slate-600 text-[10px] block">次回アクション日</label>
                   <input
                     type="date"
                     value={nextActionDate}
                     onChange={(e) => setNextActionDate(e.target.value)}
-                    className="mt-0.5 w-full rounded border border-slate-700 bg-slate-900 p-1.5 text-xs text-white"
+                    className="mt-0.5 w-full rounded border border-slate-200 bg-white p-1.5 text-xs text-slate-900 focus:border-purple-500 focus:outline-none"
                   />
                 </div>
                 <div className="sm:col-span-2">
-                  <label className="text-slate-400 text-[10px] block">次回アクションメモ</label>
+                  <label className="text-slate-600 text-[10px] block">次回アクションメモ</label>
                   <input
                     type="text"
                     value={nextActionNote}
                     onChange={(e) => setNextActionNote(e.target.value)}
                     placeholder="例: 反応がなければ来週別テーマで再連絡"
-                    className="mt-0.5 w-full rounded border border-slate-700 bg-slate-900 p-1.5 text-xs text-white"
+                    className="mt-0.5 w-full rounded border border-slate-200 bg-white p-1.5 text-xs text-slate-900 focus:border-purple-500 focus:outline-none"
                   />
                 </div>
               </div>
             </details>
 
             {/* ── アクション実行バー（超巨大ワンタップCTA） ── */}
-            <div className="flex flex-wrap items-center justify-between gap-2.5 pt-3 border-t border-slate-800">
+            <div className="flex flex-wrap items-center justify-between gap-2.5 pt-3 border-t border-slate-200">
               <div className="flex items-center gap-2">
                 <button
                   type="button"
                   onClick={handleSaveDm}
-                  className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-white text-xs font-bold transition border border-slate-700 cursor-pointer"
+                  className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl bg-white hover:bg-slate-50 text-slate-700 text-xs font-bold transition border border-slate-200 shadow-xs cursor-pointer"
                 >
-                  <Bookmark className="h-3.5 w-3.5 text-indigo-400" />
+                  <Bookmark className="h-3.5 w-3.5 text-purple-700" />
                   保存のみ
                 </button>
 
@@ -1524,7 +1524,7 @@ ${messageText.slice(0, 500)}`;
                   type="button"
                   onClick={handleRegisterToCrm}
                   disabled={crmLoading}
-                  className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-purple-700 hover:bg-purple-600 text-white text-xs font-bold transition shadow-sm disabled:opacity-50 cursor-pointer"
+                  className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-purple-700 hover:bg-purple-800 text-white text-xs font-bold transition shadow-xs disabled:opacity-50 cursor-pointer"
                   title="CRM見込み客台帳に正式登録"
                 >
                   <Building className="h-3.5 w-3.5" />
@@ -1538,11 +1538,7 @@ ${messageText.slice(0, 500)}`;
                 target="_blank"
                 rel="noopener noreferrer"
                 onClick={handleCopyAndMarkSent}
-                className={`inline-flex items-center gap-2 px-5 py-2.5 rounded-xl text-white text-xs font-bold transition shadow-lg cursor-pointer ${
-                  direction === 'inbound'
-                    ? 'bg-gradient-to-r from-cyan-600 to-blue-600 hover:from-cyan-500 hover:to-blue-500 shadow-cyan-950/50'
-                    : 'bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-500 hover:to-purple-500 shadow-indigo-950/50'
-                }`}
+                className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl text-white text-xs font-bold transition shadow-xs cursor-pointer bg-purple-700 hover:bg-purple-800"
               >
                 <Copy className="h-4 w-4" />
                 <span>
