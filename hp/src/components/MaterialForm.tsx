@@ -122,7 +122,7 @@ export default function MaterialForm() {
                   経営改善実務ガイド
                 </div>
                 <span className="text-[11px] text-slate-300 group-hover:text-white">
-                  全13スライド / PDFを開く →
+                  要点解説スライド / PDFを開く →
                 </span>
               </a>
             )}
@@ -232,7 +232,7 @@ export default function MaterialForm() {
             />
             <div>
               <div className="text-xs sm:text-sm font-bold text-slate-900">
-                ① 経営改善実務ガイドブック（全13スライド）
+                ① 経営改善実務ガイドブック（要点解説スライド）
               </div>
               <div className="text-[11px] text-gray-600 mt-0.5">
                 中小企業が「手作業の山」「属人化」から脱却し、利益を残すための仕組み化実践論。
