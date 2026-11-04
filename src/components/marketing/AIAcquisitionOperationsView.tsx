@@ -591,117 +591,652 @@ export const AIAcquisitionOperationsView: React.FC<{
   const createRecord = (next: RecordType) => { resetForm(next); setActiveTab(next === 'result' || next === 'proposal' ? 'analysis' : next); };
   const formVisible = isFormOpen;
 
-  return <main className="space-y-5 text-slate-100">
-    <header className="flex flex-wrap items-start justify-between gap-3 rounded-2xl border border-indigo-500/20 bg-gradient-to-r from-indigo-950/70 to-slate-900 p-5">
-      <div><div className="flex items-center gap-2"><Megaphone className="h-5 w-5 text-indigo-300"/><h1 className="text-xl font-bold">AI集客運用</h1></div><p className="mt-1 text-sm text-slate-300">集客導線（自社メディア・LP・公式URL）、営業資料アセット、流入成果を一元管理する管制塔です。</p></div>
-      <button onClick={() => void load()} className="rounded-lg border border-slate-700 px-3 py-2 text-sm">更新</button>
-    </header>
-    <nav className="flex gap-1 overflow-x-auto rounded-xl border border-slate-800 bg-slate-900 p-1" aria-label="AI集客運用メニュー">{tabs.map((tab) => <button key={tab.id} onClick={() => { if (tab.id !== activeTab) { cancelAIRequest(); setIsFormOpen(false); setEditing(null); setPendingToolDrafts([]); setExternalPrompt(''); setExternalDraft(''); setExternalReview(''); } setActiveTab(tab.id); try { localStorage.setItem('ai_acquisition_active_tab', tab.id); } catch {} setNotice(''); setError(''); }} aria-current={activeTab === tab.id ? 'page' : undefined} className={`whitespace-nowrap rounded-lg px-3 py-2 text-xs sm:text-sm ${activeTab === tab.id ? 'bg-indigo-600 font-semibold text-white' : 'text-slate-400 hover:bg-slate-800 hover:text-white'}`}>{tab.label}</button>)}</nav>
-    {(error || notice) && <p role={error ? 'alert' : 'status'} className={`rounded-lg px-3 py-2 text-sm ${error ? 'bg-rose-950/50 text-rose-200' : 'bg-emerald-950/40 text-emerald-200'}`}>{error || notice}</p>}
-    {loading ? <p className="rounded-xl border border-slate-800 p-5 text-sm text-slate-400">集客データを読み込み中…</p> : <>
-      {activeTab === 'media' && <OwnMediaWorkspace products={products} onAskAI={onSendPresidentSummary} strategyContext={records.find((record) => record.record_type === 'strategy') ? JSON.stringify({ title: records.find((record) => record.record_type === 'strategy')?.title, payload: records.find((record) => record.record_type === 'strategy')?.payload }) : ''} />}
-      {activeTab === 'assets' && <MarketingAssetLibrary records={records} products={products} onOpenRecord={(r) => startEdit(r as AcquisitionRecord)} />}
-
-
-
-      {activeTab === 'analysis' && <section className="space-y-4">
-        <div className="grid gap-4 lg:grid-cols-2">
-          <article className="rounded-xl border border-slate-800 bg-slate-900 p-4"><div className="flex items-center gap-2"><BarChart3 className="h-4 w-4 text-cyan-300"/><h2 className="font-semibold">登録済み実績の集計</h2></div>{metrics.hasActuals ? <dl className="mt-3 grid grid-cols-2 gap-3 text-sm">{[['広告費',metrics.spend,metrics.known.spend],['表示回数',metrics.impressions,metrics.known.impressions],['クリック数',metrics.clicks,metrics.known.clicks],['CV数',metrics.conversions,metrics.known.conversions],['リード',metrics.leads,metrics.known.leads],['商談',metrics.meetings,metrics.known.meetings],['契約',metrics.contracts,metrics.known.contracts],['売上',metrics.revenue,metrics.known.revenue],['利益',metrics.profit,metrics.known.profit]].map(([label,value,isKnown])=><div key={String(label)}><dt className="text-slate-400">{label}</dt><dd className="font-semibold">{!isKnown ? '未入力' : typeof value === 'number' && ['広告費','売上','利益'].includes(String(label)) ? yen(value) : `${value}件`}</dd></div>)}</dl> : <p className="mt-3 text-sm text-slate-400">成果データ未入力・未連携のため分析できません。</p>}
-            <div className="mt-4 grid gap-2 border-t border-slate-800 pt-3 text-sm sm:grid-cols-3"><p><span className="text-slate-400">CPA</span><br/>{metrics.known.spend && metrics.known.leads && metrics.leads > 0 ? yen(Math.round(metrics.spend / metrics.leads)) : '算出に必要な広告費・リード数が不足'}</p><p><span className="text-slate-400">CVR</span><br/>{metrics.known.clicks && metrics.known.conversions && metrics.clicks > 0 ? `${(metrics.conversions / metrics.clicks * 100).toFixed(2)}%` : '算出に必要なクリック・CV数が不足'}</p><p><span className="text-slate-400">ROAS</span><br/>{metrics.known.revenue && metrics.known.spend && metrics.spend > 0 ? `${(metrics.revenue / metrics.spend * 100).toFixed(1)}%` : '算出に必要な売上・広告費が不足'}</p></div>
-            <p className="mt-3 text-xs text-slate-500">項目ごとに成果記録を優先し、未入力時は広告記録を集計します。同じ数値の二重計上を防ぎ、空欄を実績として補完しません。</p></article>
-          <article className="rounded-xl border border-slate-800 bg-slate-900 p-4"><h2 className="font-semibold">AI社長との連携</h2><p className="mt-2 text-sm text-slate-400">AI社長には経営判断向けの要約だけを共有できます。投稿全文や個人情報は共有しません。</p><button onClick={() => onSendPresidentSummary?.(summary)} disabled={!onSendPresidentSummary} className="mt-3 inline-flex items-center gap-2 rounded-lg bg-purple-700 px-3 py-2 text-sm disabled:opacity-50"><ArrowRight className="h-4 w-4"/>集客状況を共有して分析を依頼</button></article>
-        </div>
-        <div className="flex flex-wrap items-center justify-between gap-2"><h2 className="font-semibold">成果記録・改善提案</h2><div className="flex gap-2"><button onClick={() => createRecord('result')} className="rounded-lg border border-slate-700 px-3 py-2 text-sm">成果を記録</button><button onClick={() => createRecord('proposal')} className="rounded-lg bg-indigo-600 px-3 py-2 text-sm">改善提案を登録</button></div></div>
-        <RecordList records={visibleRecords} products={products} segments={segments} onEdit={startEdit} onDelete={remove}/>
-      </section>}
-
-      {formVisible && (activeTab === 'strategy' || activeTab === 'analysis') && <form onSubmit={(event) => { if (type === 'strategy' && (payload.channels || '').split('|').some((toolType) => expandableToolTypes.includes(toolType as RecordType))) { event.preventDefault(); void saveToolDrafts(); } else void save(event); }} className="space-y-4 rounded-xl border border-indigo-500/30 bg-slate-900 p-4">
-        <div className="flex items-center justify-between gap-2"><h2 className="font-semibold">{editing ? '編集' : '新規登録'} · {typeLabels[type]}</h2><button type="button" onClick={() => resetForm(type)} className="text-xs text-slate-400">入力をクリア</button></div>
-        <section className="space-y-3 rounded-xl border border-violet-500/30 bg-violet-950/20 p-4">
-          <div className="flex items-center justify-between gap-2"><div className="flex items-center gap-2"><Sparkles className="h-4 w-4 text-violet-300"/><h3 className="text-sm font-semibold text-white">{type === 'result' ? 'AIで記録内容を整理（実績値は反映しません）' : `${typeLabels[type]}をAIと作成・ブラッシュアップ`}</h3></div>{aiGenerating && <button type="button" onClick={stopAI} className="rounded-lg border border-rose-500/50 px-3 py-1.5 text-xs font-semibold text-rose-200 hover:bg-rose-950/50">停止</button>}</div>
-          <p className="text-xs text-slate-300">{type === 'result' ? '実績数値・日付・URLはAIに補わせません。実績分析は「成果分析・改善提案」画面から依頼できます。' : '集客戦略・対象商品・この画面の入力欄をもとに草案を作ります。追加の指示で何度でも調整できます。'}</p>
-          {aiConversation.length > 0 && <ol className="max-h-48 space-y-2 overflow-y-auto rounded-lg bg-slate-950/70 p-3 text-xs">{aiConversation.map((turn, index) => <li key={index} className={turn.role === 'assistant' ? 'text-violet-200' : 'text-slate-300'}><span className="font-semibold">{turn.role === 'assistant' ? 'AI' : 'あなた'}:</span> {turn.text}</li>)}</ol>}
-          {aiConversation.length > 0 && <section role="status" className="max-h-64 space-y-2 overflow-y-auto rounded-lg border border-violet-500/30 bg-slate-950/70 p-3"><div><p className="text-[11px] font-semibold text-violet-200">現在の草案（下の入力欄にも反映済み）</p><p className="mt-1 text-sm font-semibold text-white">{title || '名称未設定'}</p></div><dl className="space-y-2">{fields[type].filter((field) => Boolean(payload[field.key]?.trim())).map((field) => <div key={field.key}><dt className="text-[10px] text-slate-500">{field.label}</dt><dd className="whitespace-pre-wrap break-words text-xs text-slate-300">{payload[field.key]}</dd></div>)}</dl></section>}
-          <textarea value={aiInstruction} onChange={(event) => setAiInstruction(event.target.value)} rows={2} placeholder={aiConversation.length ? '例：専門用語を減らして、初めての人にも伝わる表現にして' : '例：中小企業の経営者向けに、AI導入の無料相談へつながるnote企画を作って'} className="block w-full rounded-lg border border-slate-700 bg-slate-950 p-3 text-sm text-white placeholder:text-slate-500"/>
-          {aiError && <p role="alert" className="text-xs text-rose-300">{aiError}</p>}
-          <div className="flex flex-wrap items-center justify-between gap-2"><button type="button" disabled={aiGenerating || !aiInstruction.trim()} onClick={() => void askAIForDraft()} className="inline-flex items-center gap-2 rounded-lg bg-violet-700 px-3 py-2 text-sm font-semibold disabled:opacity-50"><Sparkles className="h-4 w-4"/>{aiGenerating ? '草案を考えています…' : aiConversation.length ? '社内AIで草案を作成・調整' : '社内AIに草案を作ってもらう'}</button><span className="text-[11px] text-slate-400">直接作成した案も保存・公開前に確認できます。</span></div>
-          <div className="border-t border-slate-800 pt-3">
-            <h4 className="text-sm font-semibold text-white">外部AIに作成を依頼して、社内AIでレビュー</h4>
-            <p className="mt-1 text-xs text-slate-400">同じ依頼を外部AIへ渡し、戻ってきた原稿を下に貼り付けて社内AIにレビューさせます。</p>
-            <div className="mt-3 flex flex-wrap gap-2"><button type="button" disabled={!aiInstruction.trim()} onClick={createExternalPrompt} className="rounded-lg border border-violet-400/40 px-3 py-2 text-xs text-violet-200 disabled:opacity-50">外部AIへの依頼文を作る</button>{externalPrompt && <button type="button" onClick={() => void copyExternalPrompt()} className="rounded-lg border border-slate-700 px-3 py-2 text-xs text-slate-200">依頼文をコピー</button>}</div>
-            {externalPrompt && <textarea readOnly value={externalPrompt} rows={5} className="mt-2 block w-full rounded-lg border border-slate-700 bg-slate-950 p-3 text-xs text-slate-300"/>}
-            <textarea value={externalDraft} onChange={(event) => { setExternalDraft(event.target.value); setExternalReview(''); }} rows={6} placeholder="外部AIが作成した原稿をここに貼り付け" className="mt-3 block w-full rounded-lg border border-slate-700 bg-slate-950 p-3 text-sm text-white placeholder:text-slate-500"/>
-            <button type="button" disabled={aiGenerating || !externalDraft.trim()} onClick={() => void reviewExternalDraft()} className="mt-2 inline-flex items-center gap-2 rounded-lg bg-emerald-700 px-3 py-2 text-sm font-semibold disabled:opacity-50"><Sparkles className="h-4 w-4"/>{aiGenerating ? '社内AIがレビュー中…' : '社内AIにレビューを依頼'}</button>
-            {externalReview && <div className="mt-3 rounded-lg border border-emerald-700/40 bg-emerald-950/30 p-3 text-xs text-emerald-100"><p className="mb-1 font-semibold">社内AIのレビュー</p><p className="whitespace-pre-wrap">{externalReview}</p><p className="mt-2 text-emerald-200/70">修正版は下の入力欄に反映されています。元原稿と比べて確認してください。</p></div>}
-          </div>
-        </section>
-        {type === 'strategy' && (payload.channels || '').split('|').some((toolType) => expandableToolTypes.includes(toolType as RecordType)) && pendingToolDrafts.length === 0 && <p className="rounded-lg border border-emerald-500/20 bg-emerald-950/10 p-3 text-xs text-emerald-100">保存すると、選んだツールに戦略のターゲット・課題・訴求・目標・誘導先などを自動反映した草案を作成します。手入力の戦略でも同じように反映され、ツール固有の投稿文・台本・素材は草案のまま確認できます。</p>}{pendingToolDrafts.length > 0 && <section className="space-y-3 rounded-xl border border-emerald-500/30 bg-emerald-950/20 p-4"><div><h3 className="text-sm font-semibold text-emerald-100">選定した運用ツールの草案</h3><p className="mt-1 text-xs text-emerald-200/80">保存すると、集客戦略と各ツールの運用欄に下書きとして登録します。公開・投稿・出稿はしません。草案ファイルやHP・LP・素材は「素材・成果物」にも保管できます。</p></div><ul className="space-y-2">{pendingToolDrafts.map((draft) => <li key={draft.record_type} className="rounded-lg bg-slate-950/70 p-3"><p className="font-semibold">{typeLabels[draft.record_type]} · {draft.title}</p><p className="mt-1 whitespace-pre-wrap text-xs text-slate-300">{Object.entries(draft.payload).filter(([key, value]) => key !== 'status' && Boolean(value)).map(([key, value]) => `${fields[draft.record_type].find((field) => field.key === key)?.label || key}: ${value}`).join(' / ')}</p></li>)}</ul><button type="button" disabled={saving || aiGenerating} onClick={() => void saveToolDrafts()} className="rounded-lg bg-emerald-700 px-3 py-2 text-sm font-semibold disabled:opacity-50">{saving ? '保存中…' : '集客戦略と選択ツールの草案を保存'}</button></section>}
-        {aiConversation.length > 0 && <p className="rounded-lg border border-violet-500/30 bg-violet-950/20 p-3 text-xs text-violet-100">草案の反映先はこの下の「名称」と各入力欄です。内容を直接編集してから保存できます。</p>}
-        <div id="acquisition-draft-fields" className="grid gap-3 md:grid-cols-2"><label className="text-sm">名称<input required value={title} onChange={(event) => setTitle(event.target.value)} className="mt-1 block w-full rounded-lg border border-slate-700 bg-slate-950 p-2 text-white" placeholder={`${typeLabels[type]}の名称`}/></label>
-          <label className="text-sm">対象商品<select value={productId} onChange={(event) => setProductId(event.target.value)} className="mt-1 block w-full rounded-lg border border-slate-700 bg-slate-950 p-2 text-white"><option value="">商品を選択（任意）</option>{products.map((product) => <option key={product.id} value={product.id}>{product.product_name}</option>)}</select>{!products.length && <span className="text-xs text-slate-500">商品マスターの情報は未連携、または未登録です。</span>}</label>
-          {fields[type].map((field) => <label key={field.key} className={`text-sm ${field.kind === 'textarea' ? 'md:col-span-2' : ''}`}>{field.label}{field.kind === 'multiselect' ? <div className="mt-1 grid gap-2 rounded-lg border border-slate-700 bg-slate-950 p-3 sm:grid-cols-2">{field.options?.map((option) => <label key={option} className="flex items-center gap-2 text-sm"><input type="checkbox" checked={(payload[field.key] || '').split('|').includes(option)} onChange={(event) => setPayload((previous) => { const selected = new Set((previous[field.key] || '').split('|').filter(Boolean)); event.target.checked ? selected.add(option) : selected.delete(option); return { ...previous, [field.key]: [...selected].join('|') }; })}/>{typeLabels[option as RecordType]}</label>)}</div> : field.key === 'audienceSegmentId' ? <><select value={payload[field.key] || ''} onChange={(event) => setPayload((previous) => ({ ...previous, [field.key]: event.target.value }))} className="mt-1 block w-full rounded-lg border border-slate-700 bg-slate-950 p-2 text-white"><option value="">配信対象リストを選択（任意）</option>{segments.map((segment) => <option key={segment.id} value={segment.id}>{segment.name}</option>)}</select>{!segments.length && <span className="text-xs text-slate-500">利用できる配信対象リストがありません。教育・フォロー側で作成できます。</span>}</> : field.kind === 'select' ? <select value={payload[field.key] || ''} onChange={(event) => setPayload((previous) => ({ ...previous, [field.key]: event.target.value }))} className="mt-1 block w-full rounded-lg border border-slate-700 bg-slate-950 p-2 text-white"><option value="">選択してください</option>{field.options?.map((option) => <option key={option}>{option}</option>)}</select> : field.kind === 'textarea' ? <textarea value={payload[field.key] || ''} onChange={(event) => setPayload((previous) => ({ ...previous, [field.key]: event.target.value }))} rows={3} className="mt-1 block w-full rounded-lg border border-slate-700 bg-slate-950 p-2 text-white"/> : <input type={field.kind || 'text'} min={field.kind === 'number' ? 0 : undefined} value={payload[field.key] || ''} placeholder={field.placeholder} onChange={(event) => setPayload((previous) => ({ ...previous, [field.key]: event.target.value }))} className="mt-1 block w-full rounded-lg border border-slate-700 bg-slate-950 p-2 text-white"/>}</label>)}
-        </div>
-        {['social','video'].includes(type) && <p className="rounded-lg bg-amber-950/30 p-3 text-xs text-amber-200">各媒体への自動投稿・実績自動取得は未連携です。ここでは手動投稿の予定・公開URL・入力済み実績を管理します。</p>}
-        {type === 'ad' && <p className="rounded-lg bg-amber-950/30 p-3 text-xs text-amber-200">広告の出稿・停止・予算変更は実行しません。費用と成果を記録し、配信判断は人が確認してください。</p>}
-        <div className="flex gap-2"><button disabled={saving || aiGenerating} className="inline-flex items-center gap-2 rounded-lg bg-indigo-600 px-4 py-2 text-sm font-semibold disabled:opacity-50"><Save className="h-4 w-4"/>{aiGenerating ? 'AI処理中…' : saving ? '保存中…' : type === 'strategy' && (payload.channels || '').trim() ? '戦略と選定ツールを保存' : '保存'}</button><button type="button" onClick={() => { cancelAIRequest(); setEditing(null); setIsFormOpen(false); setTitle(''); setProductId(''); setPayload(emptyPayload()); }} className="rounded-lg border border-slate-700 px-4 py-2 text-sm">キャンセル</button></div>
-      </form>}
-
-      {activeTab === 'funnel' && (
-        <section className="space-y-4">
-          {/* 介護保険外サービス開業パッケージ 導線集計 */}
-          <div className="rounded-xl border border-sky-500/30 bg-sky-950/30 p-4 space-y-2">
-            <div className="flex items-center justify-between">
-              <span className="text-xs font-bold text-sky-300 flex items-center gap-1.5">
-                <span>🏥</span> 介護保険外サービス開業パッケージ成果（LINE／専用フォーム）
-              </span>
-              <span className="text-[11px] text-sky-400 font-semibold">
-                専用フォーム送信: {crmMetrics.carePackageMetrics.totalCareSubmissions} 件
-              </span>
+  return (
+    <main className="space-y-5 text-slate-800">
+      <header className="flex flex-wrap items-start justify-between gap-3 rounded-2xl border border-slate-200 bg-white p-5 shadow-xs">
+        <div>
+          <div className="flex items-center gap-2">
+            <div className="rounded-lg bg-purple-50 p-2 text-purple-700 border border-purple-200">
+              <Megaphone className="h-5 w-5" />
             </div>
+            <h1 className="text-xl font-bold text-slate-900">AI集客運用</h1>
+          </div>
+          <p className="mt-1 text-sm text-slate-500">集客導線（自社メディア・LP・公式URL）、営業資料アセット、流入成果を一元管理する管制塔です。</p>
+        </div>
+        <button
+          onClick={() => void load()}
+          className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50 shadow-xs transition"
+        >
+          更新
+        </button>
+      </header>
 
-            {!careMaterialConfig.isConfigured && (
-              <div className="flex items-start gap-2.5 rounded-lg bg-amber-500/10 border border-amber-500/30 p-2.5 text-xs text-amber-200">
-                <AlertCircle className="h-4 w-4 text-amber-400 shrink-0 mt-0.5" />
-                <div className="flex-1 space-y-0.5">
-                  <p className="font-semibold text-amber-300">【警告】概要資料URL（PDF/Web）が未設定です</p>
-                  <p className="text-[11px] text-amber-200/90 leading-relaxed">
-                    フォーム定義（diagnosis_forms）に資料URL（material_url）が設定されていません。LINEや専用フォームで「資料請求」を選んだユーザーには「準備中」の案内が返信され、スタッフに至急タスクが起票されます。速やかに資料URLをご設定ください。
-                  </p>
+      <nav className="flex gap-1.5 overflow-x-auto rounded-xl border border-slate-200 bg-slate-100 p-1.5" aria-label="AI集客運用メニュー">
+        {tabs.map((tab) => (
+          <button
+            key={tab.id}
+            onClick={() => {
+              if (tab.id !== activeTab) {
+                cancelAIRequest();
+                setIsFormOpen(false);
+                setEditing(null);
+                setPendingToolDrafts([]);
+                setExternalPrompt('');
+                setExternalDraft('');
+                setExternalReview('');
+              }
+              setActiveTab(tab.id);
+              try { localStorage.setItem('ai_acquisition_active_tab', tab.id); } catch {}
+              setNotice('');
+              setError('');
+            }}
+            aria-current={activeTab === tab.id ? 'page' : undefined}
+            className={`whitespace-nowrap rounded-lg px-3.5 py-2 text-xs sm:text-sm font-medium transition ${
+              activeTab === tab.id
+                ? 'bg-white font-semibold text-purple-700 shadow-xs'
+                : 'text-slate-600 hover:bg-white/60 hover:text-slate-900'
+            }`}
+          >
+            {tab.label}
+          </button>
+        ))}
+      </nav>
+
+      {(error || notice) && (
+        <p
+          role={error ? 'alert' : 'status'}
+          className={`rounded-lg px-3.5 py-2.5 text-sm border font-medium ${
+            error
+              ? 'bg-red-50 border-red-200 text-red-700'
+              : 'bg-emerald-50 border-emerald-200 text-emerald-700'
+          }`}
+        >
+          {error || notice}
+        </p>
+      )}
+
+      {loading ? (
+        <p className="rounded-xl border border-slate-200 bg-white p-5 text-sm text-slate-500 shadow-xs">集客データを読み込み中…</p>
+      ) : (
+        <>
+          {activeTab === 'media' && (
+            <OwnMediaWorkspace
+              products={products}
+              onAskAI={onSendPresidentSummary}
+              strategyContext={
+                records.find((record) => record.record_type === 'strategy')
+                  ? JSON.stringify({
+                      title: records.find((record) => record.record_type === 'strategy')?.title,
+                      payload: records.find((record) => record.record_type === 'strategy')?.payload,
+                    })
+                  : ''
+              }
+            />
+          )}
+
+          {activeTab === 'assets' && (
+            <MarketingAssetLibrary
+              records={records}
+              products={products}
+              onOpenRecord={(r) => startEdit(r as AcquisitionRecord)}
+            />
+          )}
+
+          {activeTab === 'analysis' && (
+            <section className="space-y-4">
+              <div className="grid gap-4 lg:grid-cols-2">
+                <article className="rounded-xl border border-slate-200 bg-white p-5 shadow-xs">
+                  <div className="flex items-center gap-2">
+                    <BarChart3 className="h-4 w-4 text-purple-600" />
+                    <h2 className="font-semibold text-slate-900">登録済み実績の集計</h2>
+                  </div>
+                  {metrics.hasActuals ? (
+                    <dl className="mt-3 grid grid-cols-2 gap-3 text-sm">
+                      {[
+                        ['広告費', metrics.spend, metrics.known.spend],
+                        ['表示回数', metrics.impressions, metrics.known.impressions],
+                        ['クリック数', metrics.clicks, metrics.known.clicks],
+                        ['CV数', metrics.conversions, metrics.known.conversions],
+                        ['リード', metrics.leads, metrics.known.leads],
+                        ['商談', metrics.meetings, metrics.known.meetings],
+                        ['契約', metrics.contracts, metrics.known.contracts],
+                        ['売上', metrics.revenue, metrics.known.revenue],
+                        ['利益', metrics.profit, metrics.known.profit],
+                      ].map(([label, value, isKnown]) => (
+                        <div key={String(label)} className="rounded-lg bg-slate-50 p-2.5 border border-slate-100">
+                          <dt className="text-xs text-slate-500">{label}</dt>
+                          <dd className="font-semibold text-slate-900 mt-0.5">
+                            {!isKnown ? '未入力' : typeof value === 'number' && ['広告費', '売上', '利益'].includes(String(label)) ? yen(value) : `${value}件`}
+                          </dd>
+                        </div>
+                      ))}
+                    </dl>
+                  ) : (
+                    <p className="mt-3 text-sm text-slate-500">成果データ未入力・未連携のため分析できません。</p>
+                  )}
+                  <div className="mt-4 grid gap-2 border-t border-slate-100 pt-3 text-sm sm:grid-cols-3">
+                    <div className="rounded-lg bg-slate-50 p-2">
+                      <span className="text-xs text-slate-500">CPA</span>
+                      <p className="font-semibold text-slate-900 mt-0.5">
+                        {metrics.known.spend && metrics.known.leads && metrics.leads > 0 ? yen(Math.round(metrics.spend / metrics.leads)) : '算出に必要なデータ不足'}
+                      </p>
+                    </div>
+                    <div className="rounded-lg bg-slate-50 p-2">
+                      <span className="text-xs text-slate-500">CVR</span>
+                      <p className="font-semibold text-slate-900 mt-0.5">
+                        {metrics.known.clicks && metrics.known.conversions && metrics.clicks > 0 ? `${(metrics.conversions / metrics.clicks * 100).toFixed(2)}%` : '算出に必要なデータ不足'}
+                      </p>
+                    </div>
+                    <div className="rounded-lg bg-slate-50 p-2">
+                      <span className="text-xs text-slate-500">ROAS</span>
+                      <p className="font-semibold text-slate-900 mt-0.5">
+                        {metrics.known.revenue && metrics.known.spend && metrics.spend > 0 ? `${(metrics.revenue / metrics.spend * 100).toFixed(1)}%` : '算出に必要なデータ不足'}
+                      </p>
+                    </div>
+                  </div>
+                  <p className="mt-3 text-xs text-slate-500">項目ごとに成果記録を優先し、未入力時は広告記録を集計します。同じ数値の二重計上を防ぎ、空欄を実績として補完しません。</p>
+                </article>
+
+                <article className="rounded-xl border border-slate-200 bg-white p-5 shadow-xs flex flex-col justify-between">
+                  <div>
+                    <h2 className="font-semibold text-slate-900">AI社長との連携</h2>
+                    <p className="mt-2 text-sm text-slate-600 leading-relaxed">
+                      AI社長には経営判断向けの要約だけを共有できます。投稿全文や個人情報は共有しません。
+                    </p>
+                  </div>
+                  <button
+                    onClick={() => onSendPresidentSummary?.(summary)}
+                    disabled={!onSendPresidentSummary}
+                    className="mt-4 inline-flex items-center justify-center gap-2 rounded-lg bg-purple-600 hover:bg-purple-700 text-white font-medium px-4 py-2.5 text-sm shadow-xs disabled:opacity-50 transition"
+                  >
+                    <ArrowRight className="h-4 w-4" />
+                    集客状況を共有して分析を依頼
+                  </button>
+                </article>
+              </div>
+
+              <div className="flex flex-wrap items-center justify-between gap-2 pt-2">
+                <h2 className="font-semibold text-slate-900">成果記録・改善提案</h2>
+                <div className="flex gap-2">
+                  <button
+                    onClick={() => createRecord('result')}
+                    className="rounded-lg border border-slate-200 bg-white hover:bg-slate-50 text-slate-700 font-medium px-3 py-1.5 text-sm shadow-xs transition"
+                  >
+                    成果を記録
+                  </button>
+                  <button
+                    onClick={() => createRecord('proposal')}
+                    className="rounded-lg bg-purple-600 hover:bg-purple-700 text-white font-medium px-3.5 py-1.5 text-sm shadow-xs transition"
+                  >
+                    改善提案を登録
+                  </button>
                 </div>
               </div>
-            )}
-            <div className="grid gap-2 grid-cols-2 sm:grid-cols-5 pt-1">
-              <div className="rounded-lg bg-slate-900/80 border border-slate-800 p-2.5">
-                <p className="text-[11px] text-slate-400">📄 資料請求数</p>
-                <p className="mt-1 text-lg font-bold text-sky-400">{crmMetrics.carePackageMetrics.materialRequests} 件</p>
+              <RecordList records={visibleRecords} products={products} segments={segments} onEdit={startEdit} onDelete={remove} />
+            </section>
+          )}
+
+          {formVisible && (activeTab === 'strategy' || activeTab === 'analysis') && (
+            <form
+              onSubmit={(event) => {
+                if (type === 'strategy' && (payload.channels || '').split('|').some((toolType) => expandableToolTypes.includes(toolType as RecordType))) {
+                  event.preventDefault();
+                  void saveToolDrafts();
+                } else void save(event);
+              }}
+              className="space-y-4 rounded-xl border border-slate-200 bg-white p-5 shadow-xs"
+            >
+              <div className="flex items-center justify-between gap-2 border-b border-slate-100 pb-3">
+                <h2 className="font-semibold text-slate-900">{editing ? '編集' : '新規登録'} · {typeLabels[type]}</h2>
+                <button type="button" onClick={() => resetForm(type)} className="text-xs text-slate-500 hover:text-slate-700">入力をクリア</button>
               </div>
-              <div className="rounded-lg bg-slate-900/80 border border-slate-800 p-2.5">
-                <p className="text-[11px] text-slate-400">💬 開業相談希望数</p>
-                <p className="mt-1 text-lg font-bold text-emerald-400">{crmMetrics.carePackageMetrics.consultationRequests} 件</p>
+
+              <section className="space-y-3 rounded-xl border border-purple-200 bg-purple-50/50 p-4">
+                <div className="flex items-center justify-between gap-2">
+                  <div className="flex items-center gap-2">
+                    <Sparkles className="h-4 w-4 text-purple-600" />
+                    <h3 className="text-sm font-semibold text-purple-900">
+                      {type === 'result' ? 'AIで記録内容を整理（実績値は反映しません）' : `${typeLabels[type]}をAIと作成・ブラッシュアップ`}
+                    </h3>
+                  </div>
+                  {aiGenerating && (
+                    <button
+                      type="button"
+                      onClick={stopAI}
+                      className="rounded-lg border border-red-200 bg-white px-3 py-1 text-xs font-semibold text-red-600 hover:bg-red-50"
+                    >
+                      停止
+                    </button>
+                  )}
+                </div>
+                <p className="text-xs text-slate-600">
+                  {type === 'result'
+                    ? '実績数値・日付・URLはAIに補わせません。実績分析は「成果分析・改善提案」画面から依頼できます。'
+                    : '集客戦略・対象商品・この画面の入力欄をもとに草案を作ります。追加の指示で何度でも調整できます。'}
+                </p>
+
+                {aiConversation.length > 0 && (
+                  <ol className="max-h-48 space-y-2 overflow-y-auto rounded-lg bg-white border border-purple-100 p-3 text-xs">
+                    {aiConversation.map((turn, index) => (
+                      <li key={index} className={turn.role === 'assistant' ? 'text-purple-900' : 'text-slate-700'}>
+                        <span className="font-semibold">{turn.role === 'assistant' ? 'AI' : 'あなた'}:</span> {turn.text}
+                      </li>
+                    ))}
+                  </ol>
+                )}
+
+                {aiConversation.length > 0 && (
+                  <section role="status" className="max-h-64 space-y-2 overflow-y-auto rounded-lg border border-purple-200 bg-white p-3 shadow-xs">
+                    <div>
+                      <p className="text-[11px] font-semibold text-purple-700">現在の草案（下の入力欄にも反映済み）</p>
+                      <p className="mt-1 text-sm font-semibold text-slate-900">{title || '名称未設定'}</p>
+                    </div>
+                    <dl className="space-y-2">
+                      {fields[type].filter((field) => Boolean(payload[field.key]?.trim())).map((field) => (
+                        <div key={field.key}>
+                          <dt className="text-[10px] text-slate-500">{field.label}</dt>
+                          <dd className="whitespace-pre-wrap break-words text-xs text-slate-700">{payload[field.key]}</dd>
+                        </div>
+                      ))}
+                    </dl>
+                  </section>
+                )}
+
+                <textarea
+                  value={aiInstruction}
+                  onChange={(event) => setAiInstruction(event.target.value)}
+                  rows={2}
+                  placeholder={aiConversation.length ? '例：専門用語を減らして、初めての人にも伝わる表現にして' : '例：中小企業の経営者向けに、AI導入の無料相談へつながるnote企画を作って'}
+                  className="block w-full rounded-lg border border-slate-200 bg-white p-3 text-sm text-slate-900 placeholder:text-slate-400 focus:border-purple-600 focus:outline-none"
+                />
+                {aiError && <p role="alert" className="text-xs text-red-600">{aiError}</p>}
+
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <button
+                    type="button"
+                    disabled={aiGenerating || !aiInstruction.trim()}
+                    onClick={() => void askAIForDraft()}
+                    className="inline-flex items-center gap-2 rounded-lg bg-purple-600 hover:bg-purple-700 text-white px-3.5 py-2 text-sm font-semibold shadow-xs disabled:opacity-50 transition"
+                  >
+                    <Sparkles className="h-4 w-4" />
+                    {aiGenerating ? '草案を考えています…' : aiConversation.length ? '社内AIで草案を作成・調整' : '社内AIに草案を作ってもらう'}
+                  </button>
+                  <span className="text-[11px] text-slate-500">直接作成した案も保存・公開前に確認できます。</span>
+                </div>
+
+                <div className="border-t border-purple-200/60 pt-3">
+                  <h4 className="text-sm font-semibold text-purple-950">外部AIに作成を依頼して、社内AIでレビュー</h4>
+                  <p className="mt-0.5 text-xs text-slate-600">同じ依頼を外部AIへ渡し、戻ってきた原稿を下に貼り付けて社内AIにレビューさせます。</p>
+                  <div className="mt-3 flex flex-wrap gap-2">
+                    <button
+                      type="button"
+                      disabled={!aiInstruction.trim()}
+                      onClick={createExternalPrompt}
+                      className="rounded-lg border border-purple-300 bg-white px-3 py-1.5 text-xs font-medium text-purple-700 hover:bg-purple-50 disabled:opacity-50"
+                    >
+                      外部AIへの依頼文を作る
+                    </button>
+                    {externalPrompt && (
+                      <button
+                        type="button"
+                        onClick={() => void copyExternalPrompt()}
+                        className="rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs text-slate-700 hover:bg-slate-50"
+                      >
+                        依頼文をコピー
+                      </button>
+                    )}
+                  </div>
+                  {externalPrompt && (
+                    <textarea
+                      readOnly
+                      value={externalPrompt}
+                      rows={5}
+                      className="mt-2 block w-full rounded-lg border border-slate-200 bg-slate-50 p-3 text-xs text-slate-700 font-mono"
+                    />
+                  )}
+                  <textarea
+                    value={externalDraft}
+                    onChange={(event) => { setExternalDraft(event.target.value); setExternalReview(''); }}
+                    rows={6}
+                    placeholder="外部AIが作成した原稿をここに貼り付け"
+                    className="mt-3 block w-full rounded-lg border border-slate-200 bg-white p-3 text-sm text-slate-900 placeholder:text-slate-400 focus:border-purple-600 focus:outline-none"
+                  />
+                  <button
+                    type="button"
+                    disabled={aiGenerating || !externalDraft.trim()}
+                    onClick={() => void reviewExternalDraft()}
+                    className="mt-2 inline-flex items-center gap-2 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white px-3.5 py-2 text-sm font-semibold shadow-xs disabled:opacity-50 transition"
+                  >
+                    <Sparkles className="h-4 w-4" />
+                    {aiGenerating ? '社内AIがレビュー中…' : '社内AIにレビューを依頼'}
+                  </button>
+                  {externalReview && (
+                    <div className="mt-3 rounded-lg border border-emerald-200 bg-emerald-50 p-3 text-xs text-emerald-900">
+                      <p className="mb-1 font-semibold text-emerald-950">社内AIのレビュー</p>
+                      <p className="whitespace-pre-wrap">{externalReview}</p>
+                      <p className="mt-2 text-emerald-700">修正版は下の入力欄に反映されています。元原稿と比べて確認してください。</p>
+                    </div>
+                  )}
+                </div>
+              </section>
+
+              {type === 'strategy' && (payload.channels || '').split('|').some((toolType) => expandableToolTypes.includes(toolType as RecordType)) && pendingToolDrafts.length === 0 && (
+                <p className="rounded-lg border border-emerald-200 bg-emerald-50 p-3 text-xs text-emerald-800">
+                  保存すると、選んだツールに戦略のターゲット・課題・訴求・目標・誘導先などを自動反映した草案を作成します。手入力の戦略でも同じように反映され、ツール固有の投稿文・台本・素材は草案のまま確認できます。
+                </p>
+              )}
+
+              {pendingToolDrafts.length > 0 && (
+                <section className="space-y-3 rounded-xl border border-emerald-200 bg-emerald-50/60 p-4">
+                  <div>
+                    <h3 className="text-sm font-semibold text-emerald-900">選定した運用ツールの草案</h3>
+                    <p className="mt-0.5 text-xs text-emerald-700">保存すると、集客戦略と各ツールの運用欄に下書きとして登録します。公開・投稿・出稿はしません。草案ファイルやHP・LP・素材は「素材・成果物」にも保管できます。</p>
+                  </div>
+                  <ul className="space-y-2">
+                    {pendingToolDrafts.map((draft) => (
+                      <li key={draft.record_type} className="rounded-lg bg-white border border-emerald-100 p-3 shadow-xs">
+                        <p className="font-semibold text-slate-900 text-sm">{typeLabels[draft.record_type]} · {draft.title}</p>
+                        <p className="mt-1 whitespace-pre-wrap text-xs text-slate-600">
+                          {Object.entries(draft.payload).filter(([key, value]) => key !== 'status' && Boolean(value)).map(([key, value]) => `${fields[draft.record_type].find((field) => field.key === key)?.label || key}: ${value}`).join(' / ')}
+                        </p>
+                      </li>
+                    ))}
+                  </ul>
+                  <button
+                    type="button"
+                    disabled={saving || aiGenerating}
+                    onClick={() => void saveToolDrafts()}
+                    className="rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white px-3.5 py-2 text-sm font-semibold shadow-xs disabled:opacity-50 transition"
+                  >
+                    {saving ? '保存中…' : '集客戦略と選択ツールの草案を保存'}
+                  </button>
+                </section>
+              )}
+
+              {aiConversation.length > 0 && (
+                <p className="rounded-lg border border-purple-200 bg-purple-50 p-3 text-xs text-purple-900">
+                  草案の反映先はこの下の「名称」と各入力欄です。内容を直接編集してから保存できます。
+                </p>
+              )}
+
+              <div id="acquisition-draft-fields" className="grid gap-3 md:grid-cols-2">
+                <label className="text-sm font-medium text-slate-700">
+                  名称
+                  <input
+                    required
+                    value={title}
+                    onChange={(event) => setTitle(event.target.value)}
+                    className="mt-1 block w-full rounded-lg border border-slate-200 bg-white p-2.5 text-slate-900 focus:border-purple-600 focus:outline-none"
+                    placeholder={`${typeLabels[type]}の名称`}
+                  />
+                </label>
+                <label className="text-sm font-medium text-slate-700">
+                  対象商品
+                  <select
+                    value={productId}
+                    onChange={(event) => setProductId(event.target.value)}
+                    className="mt-1 block w-full rounded-lg border border-slate-200 bg-white p-2.5 text-slate-900 focus:border-purple-600 focus:outline-none"
+                  >
+                    <option value="">商品を選択（任意）</option>
+                    {products.map((product) => (
+                      <option key={product.id} value={product.id}>{product.product_name}</option>
+                    ))}
+                  </select>
+                  {!products.length && <span className="text-xs text-slate-400">商品マスターの情報は未連携、または未登録です。</span>}
+                </label>
+
+                {fields[type].map((field) => (
+                  <label key={field.key} className={`text-sm font-medium text-slate-700 ${field.kind === 'textarea' ? 'md:col-span-2' : ''}`}>
+                    {field.label}
+                    {field.kind === 'multiselect' ? (
+                      <div className="mt-1 grid gap-2 rounded-lg border border-slate-200 bg-slate-50 p-3 sm:grid-cols-2">
+                        {field.options?.map((option) => (
+                          <label key={option} className="flex items-center gap-2 text-sm text-slate-800">
+                            <input
+                              type="checkbox"
+                              checked={(payload[field.key] || '').split('|').includes(option)}
+                              onChange={(event) =>
+                                setPayload((previous) => {
+                                  const selected = new Set((previous[field.key] || '').split('|').filter(Boolean));
+                                  event.target.checked ? selected.add(option) : selected.delete(option);
+                                  return { ...previous, [field.key]: [...selected].join('|') };
+                                })
+                              }
+                            />
+                            {typeLabels[option as RecordType]}
+                          </label>
+                        ))}
+                      </div>
+                    ) : field.key === 'audienceSegmentId' ? (
+                      <>
+                        <select
+                          value={payload[field.key] || ''}
+                          onChange={(event) => setPayload((previous) => ({ ...previous, [field.key]: event.target.value }))}
+                          className="mt-1 block w-full rounded-lg border border-slate-200 bg-white p-2.5 text-slate-900 focus:border-purple-600 focus:outline-none"
+                        >
+                          <option value="">配信対象リストを選択（任意）</option>
+                          {segments.map((segment) => (
+                            <option key={segment.id} value={segment.id}>{segment.name}</option>
+                          ))}
+                        </select>
+                        {!segments.length && <span className="text-xs text-slate-400">利用できる配信対象リストがありません。教育・フォロー側で作成できます。</span>}
+                      </>
+                    ) : field.kind === 'select' ? (
+                      <select
+                        value={payload[field.key] || ''}
+                        onChange={(event) => setPayload((previous) => ({ ...previous, [field.key]: event.target.value }))}
+                        className="mt-1 block w-full rounded-lg border border-slate-200 bg-white p-2.5 text-slate-900 focus:border-purple-600 focus:outline-none"
+                      >
+                        <option value="">選択してください</option>
+                        {field.options?.map((option) => (
+                          <option key={option}>{option}</option>
+                        ))}
+                      </select>
+                    ) : field.kind === 'textarea' ? (
+                      <textarea
+                        value={payload[field.key] || ''}
+                        onChange={(event) => setPayload((previous) => ({ ...previous, [field.key]: event.target.value }))}
+                        rows={3}
+                        className="mt-1 block w-full rounded-lg border border-slate-200 bg-white p-2.5 text-slate-900 focus:border-purple-600 focus:outline-none"
+                      />
+                    ) : (
+                      <input
+                        type={field.kind || 'text'}
+                        min={field.kind === 'number' ? 0 : undefined}
+                        value={payload[field.key] || ''}
+                        placeholder={field.placeholder}
+                        onChange={(event) => setPayload((previous) => ({ ...previous, [field.key]: event.target.value }))}
+                        className="mt-1 block w-full rounded-lg border border-slate-200 bg-white p-2.5 text-slate-900 focus:border-purple-600 focus:outline-none"
+                      />
+                    )}
+                  </label>
+                ))}
               </div>
-              <div className="rounded-lg bg-slate-900/80 border border-slate-800 p-2.5">
-                <p className="text-[11px] text-slate-400">📄💬 両方希望数</p>
-                <p className="mt-1 text-lg font-bold text-amber-300">{crmMetrics.carePackageMetrics.bothRequests} 件</p>
+
+              {['social', 'video'].includes(type) && (
+                <p className="rounded-lg bg-amber-50 border border-amber-200 p-3 text-xs text-amber-800">
+                  各媒体への自動投稿・実績自動取得は未連携です。ここでは手動投稿の予定・公開URL・入力済み実績を管理します。
+                </p>
+              )}
+              {type === 'ad' && (
+                <p className="rounded-lg bg-amber-50 border border-amber-200 p-3 text-xs text-amber-800">
+                  広告の出稿・停止・予算変更は実行しません。費用と成果を記録し、配信判断は人が確認してください。
+                </p>
+              )}
+
+              <div className="flex gap-2 pt-2 border-t border-slate-100">
+                <button
+                  disabled={saving || aiGenerating}
+                  className="inline-flex items-center gap-2 rounded-lg bg-purple-600 hover:bg-purple-700 text-white font-medium px-4 py-2 text-sm shadow-xs disabled:opacity-50 transition"
+                >
+                  <Save className="h-4 w-4" />
+                  {aiGenerating ? 'AI処理中…' : saving ? '保存中…' : type === 'strategy' && (payload.channels || '').trim() ? '戦略と選定ツールを保存' : '保存'}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    cancelAIRequest();
+                    setEditing(null);
+                    setIsFormOpen(false);
+                    setTitle('');
+                    setProductId('');
+                    setPayload(emptyPayload());
+                  }}
+                  className="rounded-lg border border-slate-200 bg-white px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50 transition"
+                >
+                  キャンセル
+                </button>
               </div>
-              <div className="rounded-lg bg-slate-900/80 border border-slate-800 p-2.5">
-                <p className="text-[11px] text-slate-400">📝 フォーム送信総数</p>
-                <p className="mt-1 text-lg font-bold text-indigo-300">{crmMetrics.carePackageMetrics.totalCareSubmissions} 件</p>
+            </form>
+          )}
+
+          {activeTab === 'funnel' && (
+            <section className="space-y-4">
+              {/* 介護保険外サービス開業パッケージ 導線集計 */}
+              <div className="rounded-xl border border-sky-200 bg-sky-50/60 p-4 space-y-3 shadow-xs">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-bold text-sky-900 flex items-center gap-1.5">
+                    <span>🏥</span> 介護保険外サービス開業パッケージ成果（LINE／専用フォーム）
+                  </span>
+                  <span className="text-xs text-sky-800 font-semibold bg-white/80 px-2.5 py-0.5 rounded-full border border-sky-200">
+                    専用フォーム送信: {crmMetrics.carePackageMetrics.totalCareSubmissions} 件
+                  </span>
+                </div>
+
+                {!careMaterialConfig.isConfigured && (
+                  <div className="flex items-start gap-2.5 rounded-lg bg-amber-50 border border-amber-200 p-2.5 text-xs text-amber-800">
+                    <AlertCircle className="h-4 w-4 text-amber-600 shrink-0 mt-0.5" />
+                    <div className="flex-1 space-y-0.5">
+                      <p className="font-semibold text-amber-900">【警告】概要資料URL（PDF/Web）が未設定です</p>
+                      <p className="text-[11px] text-amber-800 leading-relaxed">
+                        フォーム定義（diagnosis_forms）に資料URL（material_url）が設定されていません。LINEや専用フォームで「資料請求」を選んだユーザーには「準備中」の案内が返信され、スタッフに至急タスクが起票されます。速やかに資料URLをご設定ください。
+                      </p>
+                    </div>
+                  </div>
+                )}
+                <div className="grid gap-2 grid-cols-2 sm:grid-cols-5 pt-1">
+                  <div className="rounded-lg bg-white border border-slate-200 p-2.5 shadow-xs">
+                    <p className="text-[11px] text-slate-500">📄 資料請求数</p>
+                    <p className="mt-1 text-lg font-bold text-sky-600">{crmMetrics.carePackageMetrics.materialRequests} 件</p>
+                  </div>
+                  <div className="rounded-lg bg-white border border-slate-200 p-2.5 shadow-xs">
+                    <p className="text-[11px] text-slate-500">💬 開業相談希望数</p>
+                    <p className="mt-1 text-lg font-bold text-emerald-600">{crmMetrics.carePackageMetrics.consultationRequests} 件</p>
+                  </div>
+                  <div className="rounded-lg bg-white border border-slate-200 p-2.5 shadow-xs">
+                    <p className="text-[11px] text-slate-500">📄💬 両方希望数</p>
+                    <p className="mt-1 text-lg font-bold text-amber-600">{crmMetrics.carePackageMetrics.bothRequests} 件</p>
+                  </div>
+                  <div className="rounded-lg bg-white border border-slate-200 p-2.5 shadow-xs">
+                    <p className="text-[11px] text-slate-500">📝 フォーム送信総数</p>
+                    <p className="mt-1 text-lg font-bold text-purple-600">{crmMetrics.carePackageMetrics.totalCareSubmissions} 件</p>
+                  </div>
+                  <div className="rounded-lg bg-amber-50/70 border border-amber-200 p-2.5">
+                    <p className="text-[11px] text-amber-800 font-semibold">⏳ 相談日程調整中</p>
+                    <p className="mt-1 text-lg font-bold text-amber-600">{crmMetrics.carePackageMetrics.schedulingPending} 件</p>
+                  </div>
+                </div>
               </div>
-              <div className="rounded-lg bg-slate-900/80 border border-amber-900/50 p-2.5 bg-amber-950/20">
-                <p className="text-[11px] text-amber-300 font-semibold">⏳ 相談日程調整中</p>
-                <p className="mt-1 text-lg font-bold text-amber-400">{crmMetrics.carePackageMetrics.schedulingPending} 件</p>
+              <MarketingQuickLinksHub />
+            </section>
+          )}
+
+          {activeTab === 'social_studio' && <SocialMediaBroadcastStudio onNavigateTab={onNavigateTab} />}
+
+          {activeTab === 'strategy' && !formVisible && (
+            <section className="space-y-3">
+              <div className="flex items-center justify-between">
+                <div>
+                  <h2 className="font-semibold text-slate-900">{tabs.find((tab) => tab.id === activeTab)?.label}</h2>
+                  <p className="mt-0.5 text-xs text-slate-500">商品マスターの商品と関連付けて登録できます。実行・公開は外部サービスで行ってください。</p>
+                </div>
+                <button
+                  onClick={() => createRecord('strategy')}
+                  className="inline-flex items-center gap-2 rounded-lg bg-purple-600 hover:bg-purple-700 text-white font-medium px-3.5 py-2 text-sm shadow-xs transition"
+                >
+                  <Plus className="h-4 w-4" />
+                  新規登録
+                </button>
               </div>
-            </div>
-          </div>
-          <MarketingQuickLinksHub />
-        </section>
+              <RecordList records={visibleRecords} products={products} segments={segments} onEdit={startEdit} onDelete={remove} />
+            </section>
+          )}
+        </>
       )}
-      {activeTab === 'social_studio' && <SocialMediaBroadcastStudio onNavigateTab={onNavigateTab} />}
-      {activeTab === 'strategy' && !formVisible && <section className="space-y-3"><div className="flex items-center justify-between"><div><h2 className="font-semibold">{tabs.find((tab) => tab.id === activeTab)?.label}</h2><p className="mt-1 text-xs text-slate-500">商品マスターの商品と関連付けて登録できます。実行・公開は外部サービスで行ってください。</p></div><button onClick={() => createRecord('strategy')} className="inline-flex items-center gap-2 rounded-lg bg-indigo-600 px-3 py-2 text-sm"><Plus className="h-4 w-4"/>新規登録</button></div><RecordList records={visibleRecords} products={products} segments={segments} onEdit={startEdit} onDelete={remove}/></section>}
-    </>}
-  </main>;
+    </main>
+  );
 };
 
-const RecordList: React.FC<{ records: AcquisitionRecord[]; products: Product[]; segments: AudienceSegment[]; onEdit: (record: AcquisitionRecord) => void; onDelete: (record: AcquisitionRecord) => void }> = ({ records, products, segments, onEdit, onDelete }) => !records.length
-  ? <p className="rounded-xl border border-slate-800 bg-slate-900 p-5 text-sm text-slate-400">登録データはありません。</p>
-  : <ul className="space-y-2">{records.map((record) => <li key={record.id} className="rounded-xl border border-slate-800 bg-slate-900 p-4"><div className="flex flex-wrap items-start justify-between gap-3"><div className="min-w-0"><p className="font-semibold">{record.title}</p><p className="mt-1 text-xs text-slate-500">{typeLabels[record.record_type]}{record.product_id ? ` · ${products.find((product) => product.id === record.product_id)?.product_name || '商品'}` : ''}{record.status ? ` · ${record.status}` : ''}{record.payload?.strategyTitle ? ` · 戦略: ${record.payload.strategyTitle}` : ''} · 更新 {new Date(record.updated_at).toLocaleDateString('ja-JP')}</p></div><div className="flex gap-2"><button onClick={() => onEdit(record)} className="rounded border border-slate-700 px-2 py-1 text-xs">編集</button><InlineDeleteButton onConfirm={()=>void onDelete(record)} warning={`「${record.title}」を削除しますか？`} ariaLabel={`${record.title}を削除`}><Trash2 className="h-3.5 w-3.5"/></InlineDeleteButton></div></div><dl className="mt-3 grid gap-2 sm:grid-cols-2">{(fields[record.record_type] || []).filter((field) => Boolean(record.payload?.[field.key])).slice(0, 8).map((field) => <div key={field.key} className="min-w-0"><dt className="text-[11px] text-slate-500">{field.label}</dt><dd className="whitespace-pre-wrap break-words text-xs text-slate-300">{field.key === 'audienceSegmentId' ? segments.find((segment) => segment.id === record.payload[field.key])?.name || '配信対象リスト（未選択）' : field.key === 'channels' ? record.payload[field.key].split('|').map((toolType) => typeLabels[toolType as RecordType] || toolType).join('、') : record.payload[field.key]}</dd></div>)}</dl></li>)}</ul>;
+const RecordList: React.FC<{
+  records: AcquisitionRecord[];
+  products: Product[];
+  segments: AudienceSegment[];
+  onEdit: (record: AcquisitionRecord) => void;
+  onDelete: (record: AcquisitionRecord) => void;
+}> = ({ records, products, segments, onEdit, onDelete }) =>
+  !records.length ? (
+    <p className="rounded-xl border border-slate-200 bg-white p-5 text-sm text-slate-500 shadow-xs">登録データはありません。</p>
+  ) : (
+    <ul className="space-y-2.5">
+      {records.map((record) => (
+        <li key={record.id} className="rounded-xl border border-slate-200 bg-white p-4 shadow-xs hover:border-purple-200 transition">
+          <div className="flex flex-wrap items-start justify-between gap-3">
+            <div className="min-w-0">
+              <p className="font-semibold text-slate-900 text-base">{record.title}</p>
+              <div className="mt-1 flex items-center gap-1.5 flex-wrap text-xs text-slate-500">
+                <span className="rounded bg-purple-50 text-purple-700 px-2 py-0.5 font-medium border border-purple-200">
+                  {typeLabels[record.record_type]}
+                </span>
+                {record.product_id && (
+                  <span className="rounded bg-slate-100 text-slate-700 px-2 py-0.5 border border-slate-200">
+                    {products.find((product) => product.id === record.product_id)?.product_name || '商品'}
+                  </span>
+                )}
+                {record.status && (
+                  <span className="rounded bg-slate-100 text-slate-600 px-2 py-0.5 border border-slate-200">
+                    {record.status}
+                  </span>
+                )}
+                {record.payload?.strategyTitle && (
+                  <span className="text-slate-500">戦略: {record.payload.strategyTitle}</span>
+                )}
+                <span>· 更新 {new Date(record.updated_at).toLocaleDateString('ja-JP')}</span>
+              </div>
+            </div>
+            <div className="flex items-center gap-2">
+              <button
+                onClick={() => onEdit(record)}
+                className="rounded-lg border border-slate-200 bg-white px-2.5 py-1 text-xs font-medium text-slate-700 hover:bg-slate-50 shadow-xs transition"
+              >
+                編集
+              </button>
+              <InlineDeleteButton
+                onConfirm={() => void onDelete(record)}
+                warning={`「${record.title}」を削除しますか？`}
+                ariaLabel={`${record.title}を削除`}
+              >
+                <Trash2 className="h-3.5 w-3.5 text-slate-400 hover:text-red-500" />
+              </InlineDeleteButton>
+            </div>
+          </div>
+          <dl className="mt-3 grid gap-2 sm:grid-cols-2 pt-2 border-t border-slate-100">
+            {(fields[record.record_type] || [])
+              .filter((field) => Boolean(record.payload?.[field.key]))
+              .slice(0, 8)
+              .map((field) => (
+                <div key={field.key} className="min-w-0 rounded-lg bg-slate-50 p-2 border border-slate-100">
+                  <dt className="text-[11px] font-medium text-slate-500">{field.label}</dt>
+                  <dd className="whitespace-pre-wrap break-words text-xs text-slate-800 mt-0.5">
+                    {field.key === 'audienceSegmentId'
+                      ? segments.find((segment) => segment.id === record.payload[field.key])?.name || '配信対象リスト（未選択）'
+                      : field.key === 'channels'
+                      ? record.payload[field.key].split('|').map((toolType) => typeLabels[toolType as RecordType] || toolType).join('、')
+                      : record.payload[field.key]}
+                  </dd>
+                </div>
+              ))}
+          </dl>
+        </li>
+      ))}
+    </ul>
+  );
