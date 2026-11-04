@@ -100,27 +100,27 @@ export const ProjectsView: React.FC<ProjectsViewProps> = ({
   const getStatusBadge = (s: ProjectStatus) => {
     switch (s) {
       case 'in_progress':
-        return <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-blue-500/20 text-blue-300 border border-blue-500/30">進行中</span>;
+        return <span className="px-2 py-0.5 rounded-full text-[10px] font-semibold bg-blue-50 text-blue-700 border border-blue-200">進行中</span>;
       case 'planning':
-        return <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-purple-500/20 text-purple-300 border border-purple-500/30">計画中</span>;
+        return <span className="px-2 py-0.5 rounded-full text-[10px] font-semibold bg-purple-50 text-purple-700 border border-purple-200">計画中</span>;
       case 'completed':
-        return <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">完了</span>;
+        return <span className="px-2 py-0.5 rounded-full text-[10px] font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200">完了</span>;
       case 'on_hold':
-        return <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-slate-700 text-slate-300 border border-slate-600">保留</span>;
+        return <span className="px-2 py-0.5 rounded-full text-[10px] font-semibold bg-slate-100 text-slate-600 border border-slate-200">保留</span>;
     }
   };
 
   return (
     <div className="max-w-6xl mx-auto px-4 sm:px-6 py-6 space-y-6">
       {/* Top Banner */}
-      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 p-5 rounded-3xl bg-slate-900 border border-slate-800 shadow-xl">
+      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 p-5 rounded-2xl bg-white border border-slate-200 shadow-sm">
         <div className="flex items-center gap-3">
-          <div className="w-11 h-11 rounded-2xl bg-indigo-600/20 border border-indigo-500/30 flex items-center justify-center text-indigo-400">
+          <div className="w-11 h-11 rounded-2xl bg-purple-50 border border-purple-200 flex items-center justify-center text-purple-600">
             <Briefcase className="w-5 h-5" />
           </div>
           <div>
-            <h1 className="text-lg font-extrabold text-white">プロジェクト管理</h1>
-            <p className="text-xs text-slate-400 mt-0.5">
+            <h1 className="text-lg font-bold text-slate-900">プロジェクト管理</h1>
+            <p className="text-xs text-slate-500 mt-0.5">
               各プロジェクトの目的・状態・期限と、紐づくタスクの進捗を管理
             </p>
           </div>
@@ -129,7 +129,7 @@ export const ProjectsView: React.FC<ProjectsViewProps> = ({
         <button
           type="button"
           onClick={openCreateModal}
-          className="flex items-center gap-1.5 px-4 py-2 rounded-xl bg-gradient-to-r from-indigo-500 to-purple-600 hover:from-indigo-600 hover:to-purple-700 text-white text-xs font-bold transition-all shadow-md shadow-indigo-500/20 cursor-pointer"
+          className="flex items-center gap-1.5 px-4 py-2 rounded-xl bg-purple-600 hover:bg-purple-700 text-white text-xs font-semibold transition-all shadow-sm cursor-pointer"
         >
           <Plus className="w-3.5 h-3.5" />
           <span>新規プロジェクトを作成</span>
@@ -137,7 +137,7 @@ export const ProjectsView: React.FC<ProjectsViewProps> = ({
       </div>
 
       {/* Filter Tabs */}
-      <div className="flex items-center justify-between gap-2 flex-wrap border-b border-slate-800 pb-2">
+      <div className="flex items-center justify-between gap-2 flex-wrap border-b border-slate-200 pb-2">
         <div className="flex items-center gap-1.5">
           <Filter className="w-3.5 h-3.5 text-slate-400 mr-1" />
           {[
@@ -153,8 +153,8 @@ export const ProjectsView: React.FC<ProjectsViewProps> = ({
               onClick={() => setFilterStatus(tab.id)}
               className={`px-3 py-1.5 rounded-xl text-xs font-semibold transition-all cursor-pointer ${
                 filterStatus === tab.id
-                  ? 'bg-indigo-600 text-white shadow-sm'
-                  : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/60'
+                  ? 'bg-purple-600 text-white shadow-sm'
+                  : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100 border border-slate-200 bg-white'
               }`}
             >
               {tab.label}
@@ -165,16 +165,16 @@ export const ProjectsView: React.FC<ProjectsViewProps> = ({
 
       {/* Projects Grid */}
       {filteredProjects.length === 0 ? (
-        <div className="p-10 rounded-3xl bg-slate-900 border border-slate-800 text-center space-y-3">
-          <Briefcase className="w-8 h-8 text-slate-500 mx-auto" />
-          <h3 className="text-sm font-bold text-slate-200">表示できるプロジェクトがありません</h3>
-          <p className="text-xs text-slate-400 max-w-md mx-auto">
+        <div className="p-10 rounded-2xl bg-white border border-slate-200 text-center space-y-3 shadow-sm">
+          <Briefcase className="w-8 h-8 text-slate-400 mx-auto" />
+          <h3 className="text-sm font-bold text-slate-900">表示できるプロジェクトがありません</h3>
+          <p className="text-xs text-slate-500 max-w-md mx-auto">
             右上の「新規プロジェクトを作成」ボタンから作成するか、AI社長チャットで事業目標を相談してタスク分解計画を作成してください。
           </p>
           <button
             type="button"
             onClick={openCreateModal}
-            className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-bold transition-all cursor-pointer"
+            className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-purple-600 hover:bg-purple-700 text-white text-xs font-semibold transition-all shadow-sm cursor-pointer"
           >
             <Plus className="w-3.5 h-3.5" />
             <span>新しいプロジェクトを作成する</span>
@@ -194,25 +194,25 @@ export const ProjectsView: React.FC<ProjectsViewProps> = ({
             return (
               <div
                 key={p.id}
-                className="p-5 rounded-3xl bg-slate-900 border border-slate-800 hover:border-slate-700 transition-all flex flex-col justify-between space-y-4 shadow-sm group"
+                className="p-5 rounded-2xl bg-white border border-slate-200 hover:border-purple-300 transition-all flex flex-col justify-between space-y-4 shadow-sm group"
               >
                 <div className="space-y-3">
                   <div className="flex items-start justify-between gap-2">
                     <div className="flex items-center gap-2 flex-wrap">
                       {getStatusBadge(p.status)}
                       <span
-                        className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${
+                        className={`px-2 py-0.5 rounded-full text-[10px] font-bold border ${
                           p.priority === 'high'
-                            ? 'bg-rose-500/20 text-rose-300'
+                            ? 'bg-rose-50 text-rose-700 border-rose-200'
                             : p.priority === 'medium'
-                            ? 'bg-amber-500/20 text-amber-300'
-                            : 'bg-slate-700 text-slate-300'
+                            ? 'bg-amber-50 text-amber-700 border-amber-200'
+                            : 'bg-slate-100 text-slate-600 border-slate-200'
                         }`}
                       >
                         優先度: {p.priority === 'high' ? '高' : p.priority === 'medium' ? '中' : '低'}
                       </span>
                       {p.isSample && (
-                        <span className="px-1.5 py-0.5 rounded text-[10px] bg-amber-500/10 text-amber-400 border border-amber-500/20 font-medium">
+                        <span className="px-1.5 py-0.5 rounded text-[10px] bg-amber-50 text-amber-700 border border-amber-200 font-medium">
                           サンプル
                         </span>
                       )}
@@ -223,7 +223,7 @@ export const ProjectsView: React.FC<ProjectsViewProps> = ({
                         type="button"
                         onClick={() => openEditModal(p)}
                         title="編集"
-                        className="p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 cursor-pointer"
+                        className="p-1.5 rounded-lg text-slate-400 hover:text-slate-700 hover:bg-slate-100 cursor-pointer transition-colors"
                       >
                         <Edit2 className="w-3.5 h-3.5" />
                       </button>
@@ -234,24 +234,24 @@ export const ProjectsView: React.FC<ProjectsViewProps> = ({
                           : `プロジェクト「${p.name}」を削除しますか？`}
                         confirmLabel={relatedTaskCount > 0 ? 'プロジェクトとタスクを削除' : 'プロジェクト削除を確定'}
                         ariaLabel={`プロジェクト「${p.name}」を削除`}
-                        className="p-1.5 rounded-lg text-slate-400 hover:text-rose-400 hover:bg-slate-800 cursor-pointer">
+                        className="p-1.5 rounded-lg text-slate-400 hover:text-rose-600 hover:bg-rose-50 cursor-pointer transition-colors">
                         <Trash2 className="w-3.5 h-3.5" />
                       </InlineDeleteButton>
                     </div>
                   </div>
 
                   <div>
-                    <h3 className="text-base font-bold text-white group-hover:text-indigo-300 transition-colors">
+                    <h3 className="text-base font-bold text-slate-900 group-hover:text-purple-600 transition-colors">
                       {p.name}
                     </h3>
-                    <p className="text-xs text-slate-400 mt-1 leading-relaxed line-clamp-2">
+                    <p className="text-xs text-slate-500 mt-1 leading-relaxed line-clamp-2">
                       {p.objective || '目的・目標未設定'}
                     </p>
                   </div>
 
                   <div className="flex items-center gap-4 text-[11px] text-slate-400 flex-wrap">
                     {p.dueDate && (
-                      <span className="flex items-center gap-1 text-indigo-300">
+                      <span className="flex items-center gap-1 text-purple-700 font-medium">
                         <Calendar className="w-3.5 h-3.5" /> 期限: {p.dueDate}
                       </span>
                     )}
@@ -262,14 +262,14 @@ export const ProjectsView: React.FC<ProjectsViewProps> = ({
                 </div>
 
                 {/* Progress & Task Navigation Button */}
-                <div className="pt-3 border-t border-slate-800/80 space-y-2.5">
-                  <div className="flex items-center justify-between text-xs text-slate-400">
+                <div className="pt-3 border-t border-slate-100 space-y-2.5">
+                  <div className="flex items-center justify-between text-xs text-slate-500 font-medium">
                     <span>進捗状況 ({doneTasks.length}/{relatedTasks.length} 完了)</span>
-                    <span className="font-bold text-slate-200">{percent}%</span>
+                    <span className="font-bold text-slate-900">{percent}%</span>
                   </div>
-                  <div className="h-2 w-full bg-slate-950 rounded-full overflow-hidden">
+                  <div className="h-2 w-full bg-slate-100 rounded-full overflow-hidden">
                     <div
-                      className="h-full bg-gradient-to-r from-indigo-500 to-purple-500 transition-all duration-300"
+                      className="h-full bg-purple-600 transition-all duration-300"
                       style={{ width: `${percent}%` }}
                     />
                   </div>
@@ -277,7 +277,7 @@ export const ProjectsView: React.FC<ProjectsViewProps> = ({
                   <button
                     type="button"
                     onClick={() => onNavigateToTasksWithFilter(p.id)}
-                    className="w-full py-2 px-3 rounded-xl bg-slate-950 hover:bg-slate-800/80 text-xs font-semibold text-indigo-300 hover:text-white border border-slate-800 flex items-center justify-center gap-1.5 transition-colors cursor-pointer mt-1"
+                    className="w-full py-2 px-3 rounded-xl bg-purple-50 hover:bg-purple-100 text-xs font-semibold text-purple-700 border border-purple-200 flex items-center justify-center gap-1.5 transition-colors cursor-pointer mt-1"
                   >
                     <span>このプロジェクトのタスク一覧を見る ({relatedTasks.length}件)</span>
                     <ArrowRight className="w-3.5 h-3.5" />
@@ -291,17 +291,17 @@ export const ProjectsView: React.FC<ProjectsViewProps> = ({
 
       {/* Create / Edit Project Modal */}
       {isModalOpen && (
-        <div className="fixed inset-0 z-50 bg-black/75 backdrop-blur-sm flex items-center justify-center p-4 animate-in fade-in">
-          <div className="w-full max-w-lg rounded-3xl bg-slate-900 border border-slate-800 shadow-2xl p-6 space-y-4">
-            <div className="flex items-center justify-between border-b border-slate-800 pb-3">
-              <h2 className="text-base font-bold text-white flex items-center gap-2">
-                <Briefcase className="w-4 h-4 text-indigo-400" />
+        <div className="fixed inset-0 z-50 bg-slate-900/40 backdrop-blur-xs flex items-center justify-center p-4 animate-in fade-in">
+          <div className="w-full max-w-lg rounded-2xl bg-white border border-slate-200 shadow-xl p-6 space-y-4">
+            <div className="flex items-center justify-between border-b border-slate-200 pb-3">
+              <h2 className="text-base font-bold text-slate-900 flex items-center gap-2">
+                <Briefcase className="w-4 h-4 text-purple-600" />
                 <span>{editingProject ? 'プロジェクトを編集' : '新規プロジェクト作成'}</span>
               </h2>
               <button
                 type="button"
                 onClick={() => setIsModalOpen(false)}
-                className="text-slate-400 hover:text-white p-1 rounded-lg cursor-pointer"
+                className="text-slate-400 hover:text-slate-700 p-1 rounded-lg hover:bg-slate-100 cursor-pointer"
               >
                 <X className="w-5 h-5" />
               </button>
@@ -309,20 +309,20 @@ export const ProjectsView: React.FC<ProjectsViewProps> = ({
 
             <div className="space-y-3.5">
               <div>
-                <label className="block text-xs font-semibold text-slate-300 mb-1">
-                  プロジェクト名 <span className="text-rose-400">*</span>
+                <label className="block text-xs font-semibold text-slate-700 mb-1">
+                  プロジェクト名 <span className="text-rose-500">*</span>
                 </label>
                 <input
                   type="text"
                   value={name}
                   onChange={(e) => setName(e.target.value)}
                   placeholder="例: 新規WebサービスのMVP開発"
-                  className="w-full rounded-xl bg-slate-950 border border-slate-800 px-3 py-2 text-sm text-slate-100 focus:outline-none focus:border-indigo-500"
+                  className="w-full rounded-xl bg-white border border-slate-200 px-3 py-2 text-sm text-slate-900 focus:outline-none focus:border-purple-500 focus:ring-1 focus:ring-purple-500 shadow-2xs"
                 />
               </div>
 
               <div>
-                <label className="block text-xs font-semibold text-slate-300 mb-1">
+                <label className="block text-xs font-semibold text-slate-700 mb-1">
                   目的・達成目標
                 </label>
                 <textarea
@@ -330,19 +330,19 @@ export const ProjectsView: React.FC<ProjectsViewProps> = ({
                   value={objective}
                   onChange={(e) => setObjective(e.target.value)}
                   placeholder="このプロジェクトで達成すべき成果や完了条件を記載"
-                  className="w-full rounded-xl bg-slate-950 border border-slate-800 p-2.5 text-xs text-slate-100 focus:outline-none focus:border-indigo-500"
+                  className="w-full rounded-xl bg-white border border-slate-200 p-2.5 text-xs text-slate-900 focus:outline-none focus:border-purple-500 focus:ring-1 focus:ring-purple-500 shadow-2xs"
                 />
               </div>
 
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="block text-xs font-semibold text-slate-300 mb-1">
+                  <label className="block text-xs font-semibold text-slate-700 mb-1">
                     状態
                   </label>
                   <select
                     value={status}
                     onChange={(e) => setStatus(e.target.value as ProjectStatus)}
-                    className="w-full rounded-xl bg-slate-950 border border-slate-800 px-3 py-2 text-xs text-slate-100 focus:outline-none focus:border-indigo-500 cursor-pointer"
+                    className="w-full rounded-xl bg-white border border-slate-200 px-3 py-2 text-xs text-slate-900 focus:outline-none focus:border-purple-500 focus:ring-1 focus:ring-purple-500 cursor-pointer shadow-2xs"
                   >
                     <option value="in_progress">進行中</option>
                     <option value="planning">計画中</option>
@@ -352,13 +352,13 @@ export const ProjectsView: React.FC<ProjectsViewProps> = ({
                 </div>
 
                 <div>
-                  <label className="block text-xs font-semibold text-slate-300 mb-1">
+                  <label className="block text-xs font-semibold text-slate-700 mb-1">
                     優先順位
                   </label>
                   <select
                     value={priority}
                     onChange={(e) => setPriority(e.target.value as Priority)}
-                    className="w-full rounded-xl bg-slate-950 border border-slate-800 px-3 py-2 text-xs text-slate-100 focus:outline-none focus:border-indigo-500 cursor-pointer"
+                    className="w-full rounded-xl bg-white border border-slate-200 px-3 py-2 text-xs text-slate-900 focus:outline-none focus:border-purple-500 focus:ring-1 focus:ring-purple-500 cursor-pointer shadow-2xs"
                   >
                     <option value="high">高 (High)</option>
                     <option value="medium">中 (Medium)</option>
@@ -368,30 +368,30 @@ export const ProjectsView: React.FC<ProjectsViewProps> = ({
               </div>
 
               <div>
-                <label className="block text-xs font-semibold text-slate-300 mb-1">
+                <label className="block text-xs font-semibold text-slate-700 mb-1">
                   目標期日 (任意)
                 </label>
                 <input
                   type="date"
                   value={dueDate}
                   onChange={(e) => setDueDate(e.target.value)}
-                  className="w-full rounded-xl bg-slate-950 border border-slate-800 px-3 py-2 text-xs text-slate-100 focus:outline-none focus:border-indigo-500"
+                  className="w-full rounded-xl bg-white border border-slate-200 px-3 py-2 text-xs text-slate-900 focus:outline-none focus:border-purple-500 focus:ring-1 focus:ring-purple-500 shadow-2xs"
                 />
               </div>
             </div>
 
-            <div className="flex items-center justify-end gap-2 pt-3 border-t border-slate-800">
+            <div className="flex items-center justify-end gap-2 pt-3 border-t border-slate-200">
               <button
                 type="button"
                 onClick={() => setIsModalOpen(false)}
-                className="px-4 py-2 rounded-xl text-xs font-semibold text-slate-400 hover:text-white cursor-pointer"
+                className="px-4 py-2 rounded-xl text-xs font-semibold text-slate-700 border border-slate-200 bg-white hover:bg-slate-50 cursor-pointer transition-colors"
               >
                 キャンセル
               </button>
               <button
                 type="button"
                 onClick={handleSave}
-                className="px-5 py-2 rounded-xl bg-gradient-to-r from-indigo-500 to-purple-600 hover:from-indigo-600 hover:to-purple-700 text-white text-xs font-bold transition-all shadow-md shadow-indigo-500/20 cursor-pointer"
+                className="px-5 py-2 rounded-xl bg-purple-600 hover:bg-purple-700 text-white text-xs font-semibold transition-all shadow-sm cursor-pointer"
               >
                 {editingProject ? '変更を保存' : 'プロジェクトを作成'}
               </button>

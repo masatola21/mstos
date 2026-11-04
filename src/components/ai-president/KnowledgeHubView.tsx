@@ -142,32 +142,32 @@ export const KnowledgeHubView: React.FC<KnowledgeHubViewProps> = ({ items, onSav
 
   return (
     <div className="max-w-6xl mx-auto px-4 py-6 space-y-5">
-      <div className="rounded-3xl border border-slate-800 bg-slate-900 p-6 flex items-center justify-between gap-4">
+      <div className="rounded-2xl border border-slate-200 bg-white p-6 flex items-center justify-between gap-4 shadow-sm">
         <div className="flex items-center gap-3">
-          <div className="w-12 h-12 rounded-2xl bg-indigo-600/20 text-indigo-300 flex items-center justify-center"><BookOpen /></div>
+          <div className="w-12 h-12 rounded-2xl bg-purple-50 text-purple-600 border border-purple-200 flex items-center justify-center"><BookOpen /></div>
           <div>
-            <h1 className="text-lg font-extrabold text-white">事業ナレッジ・成果物</h1>
-            <p className="text-xs text-slate-400 mt-1">MDの方針書、商品情報、決定事項、調査結果などを保存。関連資料はAIへの依頼時に必要な分だけ参照します。</p>
+            <h1 className="text-lg font-bold text-slate-900">事業ナレッジ・成果物</h1>
+            <p className="text-xs text-slate-500 mt-1">MDの方針書、商品情報、決定事項、調査結果などを保存。関連資料はAIへの依頼時に必要な分だけ参照します。</p>
           </div>
         </div>
-        <button onClick={startNew} className="shrink-0 rounded-xl bg-indigo-600 px-3 py-2 text-sm font-semibold text-white flex items-center gap-2"><FilePlus2 className="w-4 h-4" />資料を追加</button>
+        <button onClick={startNew} className="shrink-0 rounded-xl bg-purple-600 px-3.5 py-2 text-xs font-semibold text-white flex items-center gap-2 hover:bg-purple-700 shadow-sm transition cursor-pointer"><FilePlus2 className="w-4 h-4" />資料を追加</button>
       </div>
 
       {editing && (
-        <section className="rounded-2xl border border-indigo-500/40 bg-slate-900 p-5 space-y-3">
-          <input value={editing.title} onChange={(e) => setEditing({ ...editing, title: e.target.value })} placeholder="タイトル（例：事業方針.md）" className="w-full rounded-xl border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-white" />
+        <section className="rounded-2xl border border-purple-200 bg-white p-5 space-y-3 shadow-md">
+          <input value={editing.title} onChange={(e) => setEditing({ ...editing, title: e.target.value })} placeholder="タイトル（例：事業方針.md）" className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 focus:outline-none focus:border-purple-500 focus:ring-1 focus:ring-purple-500 shadow-2xs" />
           <div className="grid md:grid-cols-2 gap-3">
-            <select value={editing.category} onChange={(e) => setEditing({ ...editing, category: e.target.value as KnowledgeCategory })} className="rounded-xl border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-white">
+            <select value={editing.category} onChange={(e) => setEditing({ ...editing, category: e.target.value as KnowledgeCategory })} className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 focus:outline-none focus:border-purple-500 shadow-2xs">
               {CATEGORIES.map((category) => <option key={category.id} value={category.id}>{category.label}</option>)}
             </select>
-            <input value={tagText} onChange={(e) => setTagText(e.target.value)} placeholder="タグ（カンマ区切り）" className="rounded-xl border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-white" />
+            <input value={tagText} onChange={(e) => setTagText(e.target.value)} placeholder="タグ（カンマ区切り）" className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 focus:outline-none focus:border-purple-500 shadow-2xs" />
           </div>
-          <label className="block text-xs font-semibold text-slate-300">
+          <label className="block text-xs font-semibold text-slate-700">
             AIの参照範囲
             <select
               value={editing.knowledgeAccess?.scope || 'president'}
               onChange={(e) => setEditing({ ...editing, knowledgeAccess: { ...editing.knowledgeAccess, scope: e.target.value as 'all' | 'president' | 'roles', roleIds: editing.knowledgeAccess?.roleIds || [] } })}
-              className="mt-1 w-full rounded-xl border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-white"
+              className="mt-1 w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 focus:outline-none focus:border-purple-500 shadow-2xs"
             >
               <option value="all">AI社長・すべての役割AI</option>
               <option value="president">AI社長のみ</option>
@@ -175,13 +175,13 @@ export const KnowledgeHubView: React.FC<KnowledgeHubViewProps> = ({ items, onSav
             </select>
           </label>
           {editing.knowledgeAccess?.scope === 'roles' && (
-            <fieldset className="rounded-xl border border-slate-800 bg-slate-950/60 p-3">
-              <legend className="px-1 text-xs font-semibold text-slate-300">参照を許可する役割AI</legend>
+            <fieldset className="rounded-xl border border-slate-200 bg-slate-50 p-3">
+              <legend className="px-1 text-xs font-semibold text-slate-700">参照を許可する役割AI</legend>
               <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
                 {AI_WORK_MODES.filter((mode) => mode.id !== 'president').map((mode) => {
                   const roleIds = editing.knowledgeAccess?.roleIds || [];
                   return (
-                    <label key={mode.id} className="flex items-center gap-2 text-xs text-slate-300">
+                    <label key={mode.id} className="flex items-center gap-2 text-xs text-slate-700 cursor-pointer">
                       <input
                         type="checkbox"
                         checked={roleIds.includes(mode.id)}
@@ -192,56 +192,57 @@ export const KnowledgeHubView: React.FC<KnowledgeHubViewProps> = ({ items, onSav
                             roleIds: e.target.checked ? [...roleIds, mode.id] : roleIds.filter((id) => id !== mode.id),
                           },
                         })}
+                        className="accent-purple-600"
                       />
                       {mode.avatarEmoji} {mode.label}
                     </label>
                   );
                 })}
               </div>
-              {!editing.knowledgeAccess?.roleIds?.length && <p className="mt-2 text-[11px] text-amber-300">役割AIを1つ以上選ぶまで、この資料は役割AIから参照されません。</p>}
+              {!editing.knowledgeAccess?.roleIds?.length && <p className="mt-2 text-[11px] text-amber-700 font-medium">役割AIを1つ以上選ぶまで、この資料は役割AIから参照されません。</p>}
             </fieldset>
           )}
-          <textarea value={editing.content} onChange={(e) => setEditing({ ...editing, content: e.target.value })} rows={8} placeholder="本文を貼り付けて保存。AIは依頼内容に関連する資料を最大3件参照します。" className="w-full rounded-xl border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-white" />
-          <div className="rounded-xl border border-slate-800 bg-slate-950/60 p-3 space-y-3">
+          <textarea value={editing.content} onChange={(e) => setEditing({ ...editing, content: e.target.value })} rows={8} placeholder="本文を貼り付けて保存。AIは依頼内容に関連する資料を最大3件参照します。" className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 focus:outline-none focus:border-purple-500 focus:ring-1 focus:ring-purple-500 shadow-2xs" />
+          <div className="rounded-xl border border-slate-200 bg-slate-50 p-3 space-y-3">
             <div className="flex flex-wrap items-center justify-between gap-3">
               <div>
-                <h3 className="text-xs font-semibold text-slate-200">添付ファイル</h3>
+                <h3 className="text-xs font-semibold text-slate-700">添付ファイル</h3>
                 <p className="mt-1 text-[11px] text-slate-500">Supabase Storageに非公開で保存。1ファイル20MBまで。</p>
               </div>
-              <label className={`inline-flex cursor-pointer items-center gap-2 rounded-lg border border-slate-700 px-3 py-2 text-xs text-slate-200 hover:bg-slate-800 ${isUploading || !items.some((item) => item.id === editing.id) ? 'pointer-events-none opacity-50' : ''}`}>
-                {isUploading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Paperclip className="h-4 w-4" />}
+              <label className={`inline-flex cursor-pointer items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-50 shadow-2xs transition ${isUploading || !items.some((item) => item.id === editing.id) ? 'pointer-events-none opacity-50' : ''}`}>
+                {isUploading ? <Loader2 className="h-4 w-4 animate-spin text-purple-600" /> : <Paperclip className="h-4 w-4 text-purple-600" />}
                 {isUploading ? 'アップロード中…' : 'ファイルを添付'}
                 <input type="file" multiple className="hidden" disabled={isUploading || !items.some((item) => item.id === editing.id)} onChange={(event) => { void uploadAttachments(event.target.files); event.currentTarget.value = ''; }} />
               </label>
             </div>
             {(editing.attachments || []).map((attachment) => (
-              <div key={attachment.id} className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-slate-800 px-3 py-2">
-                <span className="min-w-0 truncate text-xs text-slate-300">{attachment.fileName} <span className="text-slate-500">({(attachment.size / 1024 / 1024).toFixed(2)} MB)</span></span>
+              <div key={attachment.id} className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2 shadow-2xs">
+                <span className="min-w-0 truncate text-xs text-slate-700">{attachment.fileName} <span className="text-slate-400">({(attachment.size / 1024 / 1024).toFixed(2)} MB)</span></span>
                 <div className="flex gap-2">
-                  <button type="button" onClick={() => void downloadAttachment(attachment)} className="inline-flex items-center gap-1 text-xs text-cyan-300 hover:text-cyan-200"><Download className="h-3.5 w-3.5" />ダウンロード</button>
-                  <button type="button" onClick={() => void removeAttachment(attachment)} className="text-xs text-rose-300 hover:text-rose-200">削除</button>
+                  <button type="button" onClick={() => void downloadAttachment(attachment)} className="inline-flex items-center gap-1 text-xs text-purple-700 font-semibold hover:text-purple-800"><Download className="h-3.5 w-3.5" />ダウンロード</button>
+                  <button type="button" onClick={() => void removeAttachment(attachment)} className="text-xs text-rose-600 font-medium hover:text-rose-700">削除</button>
                 </div>
               </div>
             ))}
-            {attachmentError && <p role="alert" className="text-xs text-rose-300">{attachmentError}</p>}
+            {attachmentError && <p role="alert" className="text-xs text-rose-600 font-medium">{attachmentError}</p>}
           </div>
           {items.some((item) => item.id === editing.id) && (
-            <button type="button" onClick={() => saveMarkdown(editing)} className="inline-flex items-center gap-2 rounded-lg border border-slate-700 px-3 py-2 text-xs text-slate-200 hover:bg-slate-800"><Download className="h-4 w-4" />本文をMarkdownでダウンロード</button>
+            <button type="button" onClick={() => saveMarkdown(editing)} className="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-50 transition shadow-2xs"><Download className="h-4 w-4 text-purple-600" />本文をMarkdownでダウンロード</button>
           )}
-          <div className="flex justify-end gap-2">
-            <button onClick={() => setEditing(null)} className="rounded-lg px-3 py-2 text-sm text-slate-300">キャンセル</button>
-            <button onClick={save} disabled={!editing.title.trim() || !editing.content.trim()} className="rounded-lg bg-indigo-600 px-3 py-2 text-sm text-white disabled:opacity-40 flex items-center gap-2"><Save className="w-4 h-4" />保存</button>
+          <div className="flex justify-end gap-2 pt-2 border-t border-slate-100">
+            <button onClick={() => setEditing(null)} className="rounded-xl border border-slate-200 bg-white px-4 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-50 transition">キャンセル</button>
+            <button onClick={save} disabled={!editing.title.trim() || !editing.content.trim()} className="rounded-xl bg-purple-600 px-4 py-2 text-xs font-semibold text-white disabled:opacity-40 flex items-center gap-2 hover:bg-purple-700 shadow-sm transition"><Save className="w-4 h-4" />保存</button>
           </div>
         </section>
       )}
 
       <div className="flex flex-col sm:flex-row gap-3">
-        <div className="relative flex-1"><Search className="absolute left-3 top-2.5 w-4 h-4 text-slate-500" /><input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="タイトル・本文・タグを検索" className="w-full rounded-xl border border-slate-800 bg-slate-900 pl-9 pr-3 py-2 text-sm text-white" /></div>
-        <select value={activeCategory} onChange={(e) => setActiveCategory(e.target.value as KnowledgeCategory | 'all')} className="rounded-xl border border-slate-800 bg-slate-900 px-3 py-2 text-sm text-white">
+        <div className="relative flex-1"><Search className="absolute left-3 top-2.5 w-4 h-4 text-slate-400" /><input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="タイトル・本文・タグを検索" className="w-full rounded-xl border border-slate-200 bg-white pl-9 pr-3 py-2 text-sm text-slate-900 focus:outline-none focus:border-purple-500 focus:ring-1 focus:ring-purple-500 shadow-2xs" /></div>
+        <select value={activeCategory} onChange={(e) => setActiveCategory(e.target.value as KnowledgeCategory | 'all')} className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 focus:outline-none focus:border-purple-500 shadow-2xs">
           <option value="all">すべての分類</option>
           {CATEGORIES.map((category) => <option key={category.id} value={category.id}>{category.label}</option>)}
         </select>
-        <select value={activeRoleId} onChange={(e) => setActiveRoleId(e.target.value as AIWorkModeId | 'all')} className="rounded-xl border border-slate-800 bg-slate-900 px-3 py-2 text-sm text-white">
+        <select value={activeRoleId} onChange={(e) => setActiveRoleId(e.target.value as AIWorkModeId | 'all')} className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 focus:outline-none focus:border-purple-500 shadow-2xs">
           <option value="all">すべての担当AI</option>
           {AI_WORK_MODES.map((mode) => <option key={mode.id} value={mode.id}>{mode.label}が参照できる資料</option>)}
         </select>
@@ -249,38 +250,38 @@ export const KnowledgeHubView: React.FC<KnowledgeHubViewProps> = ({ items, onSav
 
       <div className="grid md:grid-cols-2 gap-3">
         {visibleItems.map((item) => (
-          <article key={item.id} className="rounded-2xl border border-slate-800 bg-slate-900 p-4">
+          <article key={item.id} className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm hover:border-purple-300 transition">
             <div className="flex justify-between gap-3">
-              <button onClick={() => startEdit(item)} className="text-left min-w-0 flex-1">
-                <span className="text-[10px] text-indigo-300">{CATEGORIES.find((category) => category.id === item.category)?.label} · {(item.knowledgeAccess?.scope || 'president') === 'president' ? 'AI社長のみ' : item.knowledgeAccess?.scope === 'roles' ? 'AI社長と指定役割' : '全AI共通'}</span>
-                <h2 className="font-bold text-white truncate">{item.title}</h2>
-                {item.sourceTaskId && <span className="mt-1 inline-block text-[10px] text-emerald-300">タスク成果物 · {item.sourceRoleId || '担当AI'}</span>}
-                {!!item.attachments?.length && <span className="mt-1 inline-block text-[10px] text-cyan-300">添付 {item.attachments.length}件</span>}
+              <button onClick={() => startEdit(item)} className="text-left min-w-0 flex-1 cursor-pointer">
+                <span className="text-[10px] text-purple-700 font-semibold">{CATEGORIES.find((category) => category.id === item.category)?.label} · {(item.knowledgeAccess?.scope || 'president') === 'president' ? 'AI社長のみ' : item.knowledgeAccess?.scope === 'roles' ? 'AI社長と指定役割' : '全AI共通'}</span>
+                <h2 className="font-bold text-slate-900 truncate mt-0.5">{item.title}</h2>
+                {item.sourceTaskId && <span className="mt-1 inline-block text-[10px] text-emerald-700 font-medium bg-emerald-50 px-1.5 py-0.5 rounded border border-emerald-200">タスク成果物 · {item.sourceRoleId || '担当AI'}</span>}
+                {!!item.attachments?.length && <span className="mt-1 ml-1 inline-block text-[10px] text-purple-700 font-medium bg-purple-50 px-1.5 py-0.5 rounded border border-purple-200">添付 {item.attachments.length}件</span>}
               </button>
               <div className="flex shrink-0 items-start gap-1">
-                <button onClick={() => saveMarkdown(item)} title="Markdownをダウンロード" className="p-2 text-slate-500 hover:text-cyan-300"><Download className="w-4 h-4" /></button>
-                <button onClick={() => setItemToDelete(item)} title="削除" className="p-2 text-slate-500 hover:text-rose-400"><Trash2 className="w-4 h-4" /></button>
+                <button onClick={() => saveMarkdown(item)} title="Markdownをダウンロード" className="p-2 text-slate-400 hover:text-purple-600 cursor-pointer"><Download className="w-4 h-4" /></button>
+                <button onClick={() => setItemToDelete(item)} title="削除" className="p-2 text-slate-400 hover:text-rose-600 cursor-pointer"><Trash2 className="w-4 h-4" /></button>
               </div>
             </div>
-            <p className="mt-2 text-xs text-slate-400 whitespace-pre-wrap line-clamp-4">{item.content}</p>
-            <div className="flex flex-wrap gap-1 mt-3">{item.tags.map((tag) => <span key={tag} className="rounded-full bg-slate-800 px-2 py-0.5 text-[10px] text-slate-300">#{tag}</span>)}</div>
+            <p className="mt-2 text-xs text-slate-500 whitespace-pre-wrap line-clamp-4">{item.content}</p>
+            <div className="flex flex-wrap gap-1 mt-3">{item.tags.map((tag) => <span key={tag} className="rounded-full bg-slate-100 border border-slate-200 px-2 py-0.5 text-[10px] text-slate-600">#{tag}</span>)}</div>
           </article>
         ))}
-        {visibleItems.length === 0 && <div className="md:col-span-2 rounded-2xl border border-dashed border-slate-700 p-8 text-center text-sm text-slate-500">資料はまだありません。最初の方針書やMDを登録できます。</div>}
+        {visibleItems.length === 0 && <div className="md:col-span-2 rounded-2xl border border-dashed border-slate-300 p-8 text-center text-sm text-slate-400 bg-white">資料はまだありません。最初の方針書やMDを登録できます。</div>}
       </div>
       {itemToDelete && (
-        <div className="fixed inset-0 z-[80] flex items-center justify-center bg-slate-950/80 p-4 backdrop-blur-sm" role="presentation">
-          <section role="dialog" aria-modal="true" aria-labelledby="delete-knowledge-title" className="w-full max-w-md rounded-2xl border border-slate-700 bg-slate-900 p-6 shadow-2xl">
-            <h2 id="delete-knowledge-title" className="text-base font-bold text-white">資料を削除しますか？</h2>
-            <p className="mt-3 text-sm text-slate-300">「{itemToDelete.title}」と添付ファイルを削除します。</p>
+        <div className="fixed inset-0 z-[80] flex items-center justify-center bg-slate-900/40 p-4 backdrop-blur-xs" role="presentation">
+          <section role="dialog" aria-modal="true" aria-labelledby="delete-knowledge-title" className="w-full max-w-md rounded-2xl border border-slate-200 bg-white p-6 shadow-xl">
+            <h2 id="delete-knowledge-title" className="text-base font-bold text-slate-900">資料を削除しますか？</h2>
+            <p className="mt-3 text-sm text-slate-600">「{itemToDelete.title}」と添付ファイルを削除します。</p>
             <div className="mt-6 flex justify-end gap-2">
-              <button type="button" onClick={() => setItemToDelete(null)} className="rounded-xl border border-slate-700 px-4 py-2 text-sm text-slate-300 hover:bg-slate-800">キャンセル</button>
-              <button type="button" onClick={() => { onDelete(itemToDelete.id); setItemToDelete(null); }} className="rounded-xl bg-rose-600 px-4 py-2 text-sm font-semibold text-white hover:bg-rose-500">削除する</button>
+              <button type="button" onClick={() => setItemToDelete(null)} className="rounded-xl border border-slate-200 bg-white px-4 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-50 transition">キャンセル</button>
+              <button type="button" onClick={() => { onDelete(itemToDelete.id); setItemToDelete(null); }} className="rounded-xl bg-rose-600 px-4 py-2 text-xs font-semibold text-white hover:bg-rose-700 shadow-sm transition">削除する</button>
             </div>
           </section>
         </div>
       )}
-      <p className="text-[11px] text-slate-500">本文はMarkdownで書き出せます。添付ファイルはSupabase Storageに非公開で保存されます。</p>
+      <p className="text-[11px] text-slate-400">本文はMarkdownで書き出せます。添付ファイルはSupabase Storageに非公開で保存されます。</p>
     </div>
   );
 };

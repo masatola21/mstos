@@ -239,36 +239,36 @@ export const ProductCoCreationWizard: React.FC<ProductCoCreationWizardProps> = (
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-sm">
-      <div className="bg-slate-900 border border-slate-800 rounded-2xl w-full max-w-3xl overflow-hidden shadow-2xl flex flex-col max-h-[90vh]">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-xs">
+      <div className="bg-white border border-slate-200 rounded-2xl w-full max-w-3xl overflow-hidden shadow-xl flex flex-col max-h-[90vh]">
         {/* Header */}
-        <div className="px-6 py-4 border-b border-slate-800 flex items-center justify-between bg-slate-950/60">
+        <div className="px-6 py-4 border-b border-slate-200 flex items-center justify-between bg-slate-50/70">
           <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-xl bg-gradient-to-tr from-purple-600 to-blue-600 flex items-center justify-center text-white shadow-lg shadow-purple-500/20">
+            <div className="w-10 h-10 rounded-xl bg-purple-600 flex items-center justify-center text-white shadow-sm">
               <Sparkles className="w-5 h-5" />
             </div>
             <div>
-              <h3 className="font-bold text-white text-base flex items-center gap-2">
+              <h3 className="font-bold text-slate-900 text-base flex items-center gap-2">
                 AIプロダクト設計（新規プロダクトの共創）
-                <span className="text-[10px] px-2 py-0.5 rounded-full bg-purple-500/20 text-purple-300 border border-purple-500/30">
+                <span className="text-[10px] px-2 py-0.5 rounded-full bg-purple-100 text-purple-700 border border-purple-200">
                   全業種対応
                 </span>
               </h3>
-              <p className="text-xs text-slate-400">
+              <p className="text-xs text-slate-500">
                 構想をAIと対話し、ビジネスモデル・仕様・開発タスク・マーケティング計画まで具体化します。
               </p>
             </div>
           </div>
           <button
             onClick={onClose}
-            className="text-slate-400 hover:text-white p-1 rounded-lg hover:bg-slate-800 transition-colors"
+            className="text-slate-400 hover:text-slate-700 p-1.5 rounded-lg hover:bg-slate-100 transition-colors"
           >
             <X className="w-5 h-5" />
           </button>
         </div>
 
         {/* Step Indicator */}
-        <div className="px-6 py-3 bg-slate-950/40 border-b border-slate-800 flex items-center justify-between text-xs">
+        <div className="px-6 py-3 bg-white border-b border-slate-200 flex items-center justify-between text-xs">
           {[
             { num: 1, label: 'ビジネスモデル' },
             { num: 2, label: 'ターゲット＆課題' },
@@ -282,15 +282,15 @@ export const ProductCoCreationWizard: React.FC<ProductCoCreationWizardProps> = (
                     ? 'bg-purple-600 text-white'
                     : step > s.num
                     ? 'bg-emerald-600 text-white'
-                    : 'bg-slate-800 text-slate-400'
+                    : 'bg-slate-100 text-slate-400 border border-slate-200'
                 }`}
               >
                 {step > s.num ? <CheckCircle2 className="w-3.5 h-3.5" /> : s.num}
               </div>
-              <span className={step === s.num ? 'text-white font-medium' : 'text-slate-400'}>
+              <span className={step === s.num ? 'text-slate-900 font-semibold' : 'text-slate-500'}>
                 {s.label}
               </span>
-              {s.num < 4 && <div className="w-8 h-px bg-slate-800 hidden sm:block" />}
+              {s.num < 4 && <div className="w-8 h-px bg-slate-200 hidden sm:block" />}
             </div>
           ))}
         </div>
@@ -301,10 +301,10 @@ export const ProductCoCreationWizard: React.FC<ProductCoCreationWizardProps> = (
           {step === 1 && (
             <div className="space-y-4">
               <div>
-                <h4 className="text-sm font-semibold text-white mb-1">
+                <h4 className="text-sm font-semibold text-slate-900 mb-1">
                   Step 1. どのようなビジネスモデルのプロダクトを設計しますか？
                 </h4>
-                <p className="text-xs text-slate-400">
+                <p className="text-xs text-slate-500">
                   本OSはあらゆる商材に対応しています。最適なテンプレートを選択してください。
                 </p>
               </div>
@@ -319,26 +319,26 @@ export const ProductCoCreationWizard: React.FC<ProductCoCreationWizardProps> = (
                       onClick={() => setArchetype(key)}
                       className={`text-left p-4 rounded-xl border transition-all ${
                         isSelected
-                          ? 'border-purple-500 bg-purple-950/30 shadow-lg shadow-purple-500/10 ring-1 ring-purple-500'
-                          : 'border-slate-800 bg-slate-900/60 hover:bg-slate-800/60 hover:border-slate-700'
+                          ? 'border-purple-500 bg-purple-50/70 shadow-sm ring-1 ring-purple-500'
+                          : 'border-slate-200 bg-white hover:bg-slate-50 hover:border-slate-300'
                       }`}
                     >
                       <div className="flex items-center justify-between mb-2">
-                        <span className="font-semibold text-sm text-white">{info.label}</span>
-                        {key === 'service_project' && <Code2 className="w-4 h-4 text-blue-400" />}
-                        {key === 'retainer' && <Award className="w-4 h-4 text-emerald-400" />}
-                        {key === 'digital_asset' && <Package className="w-4 h-4 text-amber-400" />}
-                        {key === 'media_content' && <TrendingUp className="w-4 h-4 text-purple-400" />}
-                        {key === 'custom' && <Sparkles className="w-4 h-4 text-cyan-400" />}
+                        <span className="font-semibold text-sm text-slate-900">{info.label}</span>
+                        {key === 'service_project' && <Code2 className="w-4 h-4 text-blue-500" />}
+                        {key === 'retainer' && <Award className="w-4 h-4 text-emerald-500" />}
+                        {key === 'digital_asset' && <Package className="w-4 h-4 text-amber-500" />}
+                        {key === 'media_content' && <TrendingUp className="w-4 h-4 text-purple-500" />}
+                        {key === 'custom' && <Sparkles className="w-4 h-4 text-cyan-500" />}
                       </div>
-                      <p className="text-xs text-slate-400 mb-2 leading-relaxed">
+                      <p className="text-xs text-slate-500 mb-2 leading-relaxed">
                         {info.description}
                       </p>
                       <div className="flex flex-wrap gap-1">
                         {info.typicalItems.slice(0, 3).map((item, idx) => (
                           <span
                             key={idx}
-                            className="text-[10px] px-1.5 py-0.5 rounded bg-slate-800 text-slate-300"
+                            className="text-[10px] px-1.5 py-0.5 rounded bg-slate-100 text-slate-600 border border-slate-200"
                           >
                             {item}
                           </span>
@@ -355,17 +355,17 @@ export const ProductCoCreationWizard: React.FC<ProductCoCreationWizardProps> = (
           {step === 2 && (
             <div className="space-y-4">
               <div>
-                <h4 className="text-sm font-semibold text-white mb-1">
+                <h4 className="text-sm font-semibold text-slate-900 mb-1">
                   Step 2. プロダクトの構想と対象顧客を教えてください
                 </h4>
-                <p className="text-xs text-slate-400">
+                <p className="text-xs text-slate-500">
                   大まかなアイデアで構いません。AIと一緒にサービス体系や開発タスクまで具体化します。
                 </p>
               </div>
 
               <div className="space-y-3 pt-2">
                 <div>
-                  <label className="block text-xs font-medium text-slate-300 mb-1">
+                  <label className="block text-xs font-medium text-slate-700 mb-1">
                     商品名（仮称でOK）
                   </label>
                   <input
@@ -373,12 +373,12 @@ export const ProductCoCreationWizard: React.FC<ProductCoCreationWizardProps> = (
                     value={productName}
                     onChange={(e) => setProductName(e.target.value)}
                     placeholder="例: 中小企業向けAI導入・自動化パック / 月額顧問DX支援"
-                    className="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-2 text-sm text-white placeholder-slate-500 focus:outline-none focus:border-purple-500"
+                    className="w-full bg-white border border-slate-200 rounded-xl px-3 py-2 text-sm text-slate-900 placeholder-slate-400 focus:outline-none focus:border-purple-500 focus:ring-1 focus:ring-purple-500 shadow-2xs"
                   />
                 </div>
 
                 <div>
-                  <label className="block text-xs font-medium text-slate-300 mb-1">
+                  <label className="block text-xs font-medium text-slate-700 mb-1">
                     想定ターゲット顧客
                   </label>
                   <input
@@ -386,12 +386,12 @@ export const ProductCoCreationWizard: React.FC<ProductCoCreationWizardProps> = (
                     value={targetAudience}
                     onChange={(e) => setTargetAudience(e.target.value)}
                     placeholder="例: 年商1億〜5億の製造業・サービス業の経営者、業務効率化したいチームリーダー"
-                    className="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-2 text-sm text-white placeholder-slate-500 focus:outline-none focus:border-purple-500"
+                    className="w-full bg-white border border-slate-200 rounded-xl px-3 py-2 text-sm text-slate-900 placeholder-slate-400 focus:outline-none focus:border-purple-500 focus:ring-1 focus:ring-purple-500 shadow-2xs"
                   />
                 </div>
 
                 <div>
-                  <label className="block text-xs font-medium text-slate-300 mb-1">
+                  <label className="block text-xs font-medium text-slate-700 mb-1">
                     解決する主要な課題
                   </label>
                   <textarea
@@ -399,13 +399,13 @@ export const ProductCoCreationWizard: React.FC<ProductCoCreationWizardProps> = (
                     onChange={(e) => setProblemToSolve(e.target.value)}
                     placeholder="例: 属人化していて引き継ぎができない、見積・請求やリード管理がExcelで限界、人手不足"
                     rows={2}
-                    className="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-2 text-sm text-white placeholder-slate-500 focus:outline-none focus:border-purple-500"
+                    className="w-full bg-white border border-slate-200 rounded-xl px-3 py-2 text-sm text-slate-900 placeholder-slate-400 focus:outline-none focus:border-purple-500 focus:ring-1 focus:ring-purple-500 shadow-2xs"
                   />
                 </div>
 
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                   <div>
-                    <label className="block text-xs font-medium text-slate-300 mb-1">
+                    <label className="block text-xs font-medium text-slate-700 mb-1">
                       想定価格帯（税抜・円）
                     </label>
                     <input
@@ -413,16 +413,16 @@ export const ProductCoCreationWizard: React.FC<ProductCoCreationWizardProps> = (
                       value={priceExpectation}
                       onChange={(e) => setPriceExpectation(e.target.value)}
                       placeholder="例: 300000"
-                      className="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-2 text-sm text-white placeholder-slate-500 focus:outline-none focus:border-purple-500"
+                      className="w-full bg-white border border-slate-200 rounded-xl px-3 py-2 text-sm text-slate-900 placeholder-slate-400 focus:outline-none focus:border-purple-500 focus:ring-1 focus:ring-purple-500 shadow-2xs"
                     />
                     {priceExpectation && !isNaN(Number(priceExpectation)) && (
-                      <p className="mt-1 text-[11px] font-medium text-cyan-300">
+                      <p className="mt-1 text-[11px] font-semibold text-purple-700">
                         税込 (10%): ¥{Math.floor(Number(priceExpectation) * 1.1).toLocaleString()}
                       </p>
                     )}
                   </div>
                   <div>
-                    <label className="block text-xs font-medium text-slate-300 mb-1">
+                    <label className="block text-xs font-medium text-slate-700 mb-1">
                       補足要望・特記事項
                     </label>
                     <input
@@ -430,7 +430,7 @@ export const ProductCoCreationWizard: React.FC<ProductCoCreationWizardProps> = (
                       value={customNotes}
                       onChange={(e) => setCustomNotes(e.target.value)}
                       placeholder="例: 初月で成果が出るようにしたい、オンライン完結"
-                      className="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-2 text-sm text-white placeholder-slate-500 focus:outline-none focus:border-purple-500"
+                      className="w-full bg-white border border-slate-200 rounded-xl px-3 py-2 text-sm text-slate-900 placeholder-slate-400 focus:outline-none focus:border-purple-500 focus:ring-1 focus:ring-purple-500 shadow-2xs"
                     />
                   </div>
                 </div>
@@ -441,14 +441,14 @@ export const ProductCoCreationWizard: React.FC<ProductCoCreationWizardProps> = (
           {/* STEP 3: Trigger AI Generation */}
           {step === 3 && (
             <div className="py-8 text-center space-y-4">
-              <div className="w-16 h-16 rounded-2xl bg-gradient-to-tr from-purple-600 via-indigo-600 to-blue-500 flex items-center justify-center mx-auto shadow-xl shadow-purple-500/20 text-white">
+              <div className="w-16 h-16 rounded-2xl bg-purple-600 flex items-center justify-center mx-auto shadow-md text-white">
                 <Sparkles className="w-8 h-8 animate-pulse" />
               </div>
               <div>
-                <h4 className="text-base font-bold text-white mb-1">
+                <h4 className="text-base font-bold text-slate-900 mb-1">
                   AI社長「シドウ」とプロダクト設計を始めます
                 </h4>
-                <p className="text-xs text-slate-400 max-w-md mx-auto">
+                <p className="text-xs text-slate-500 max-w-md mx-auto">
                   入力された構想をもとに、プロダクト仕様、キャッチコピー、開発タスク、マーケティング計画、契約形態をAIと一緒に設計します。
                 </p>
               </div>
@@ -457,7 +457,7 @@ export const ProductCoCreationWizard: React.FC<ProductCoCreationWizardProps> = (
                 <button
                   onClick={handleGenerateProposal}
                   disabled={isGenerating}
-                  className="px-6 py-3 rounded-xl bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 text-white font-semibold text-sm shadow-lg shadow-purple-600/30 flex items-center gap-2 mx-auto disabled:opacity-50 transition-all cursor-pointer"
+                  className="px-6 py-3 rounded-xl bg-purple-600 hover:bg-purple-700 text-white font-semibold text-sm shadow-sm flex items-center gap-2 mx-auto disabled:opacity-50 transition-all cursor-pointer"
                 >
                   {isGenerating ? (
                     <>
@@ -480,64 +480,64 @@ export const ProductCoCreationWizard: React.FC<ProductCoCreationWizardProps> = (
             <div className="space-y-4">
               <div className="flex items-center justify-between">
                 <div>
-                  <h4 className="text-sm font-semibold text-white">
+                  <h4 className="text-sm font-semibold text-slate-900">
                     Step 4. AIと作成したプロダクト設計案の確認
                   </h4>
-                  <p className="text-xs text-slate-400">
+                  <p className="text-xs text-slate-500">
                     内容を確認し、問題なければOSに登録して開発プロジェクトを開始します。
                   </p>
                 </div>
-                <span className="text-xs font-semibold px-2.5 py-1 rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">
+                <span className="text-xs font-semibold px-2.5 py-1 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200">
                   生成完了
                 </span>
               </div>
 
               {/* Product Card Preview */}
-              <div className="p-4 rounded-xl bg-slate-950 border border-purple-500/30 space-y-3">
+              <div className="p-4 rounded-xl bg-purple-50/40 border border-purple-200 space-y-3">
                 <div className="flex items-start justify-between">
                   <div>
-                    <span className="text-[10px] font-semibold uppercase tracking-wider text-purple-400">
+                    <span className="text-[10px] font-semibold uppercase tracking-wider text-purple-700">
                       {PRODUCT_ARCHETYPES[archetype].label}
                     </span>
-                    <h5 className="text-base font-bold text-white mt-0.5">
+                    <h5 className="text-base font-bold text-slate-900 mt-0.5">
                       {aiProposal.refinedName}
                     </h5>
-                    <p className="text-xs text-purple-200 mt-1 italic">
+                    <p className="text-xs text-purple-700 mt-1 italic">
                       "{aiProposal.tagline}"
                     </p>
                   </div>
                   <div className="text-right">
-                    <span className="text-[10px] text-slate-400 block">想定価格</span>
-                    <span className="text-sm font-black text-emerald-400">
+                    <span className="text-[10px] text-slate-500 block">想定価格</span>
+                    <span className="text-sm font-black text-purple-700">
                       ¥{aiProposal.targetPrice.toLocaleString()}
                     </span>
                   </div>
                 </div>
 
-                <p className="text-xs text-slate-300 leading-relaxed border-t border-slate-900 pt-2">
+                <p className="text-xs text-slate-700 leading-relaxed border-t border-purple-100 pt-2">
                   {aiProposal.description}
                 </p>
 
                 <div className="grid grid-cols-2 gap-2 text-xs pt-1">
-                  <div className="bg-slate-900/80 p-2 rounded-lg border border-slate-800">
-                    <span className="text-[10px] text-slate-400 block">マーケティング計画</span>
-                    <span className="text-slate-200 text-xs font-medium">
+                  <div className="bg-white p-2.5 rounded-xl border border-slate-200">
+                    <span className="text-[10px] text-slate-500 block">マーケティング計画</span>
+                    <span className="text-slate-800 text-xs font-medium">
                       {aiProposal.marketingPlan}
                     </span>
                   </div>
-                  <div className="bg-slate-900/80 p-2 rounded-lg border border-slate-800">
-                    <span className="text-[10px] text-slate-400 block">推奨契約タイプ</span>
-                    <span className="text-slate-200 text-xs font-medium">
+                  <div className="bg-white p-2.5 rounded-xl border border-slate-200">
+                    <span className="text-[10px] text-slate-500 block">推奨契約タイプ</span>
+                    <span className="text-slate-800 text-xs font-medium">
                       {aiProposal.contractType}
                     </span>
                   </div>
                 </div>
 
-                <div className="bg-slate-900/90 p-3 rounded-xl border border-indigo-500/30 mt-2">
+                <div className="bg-white p-3 rounded-xl border border-purple-200 mt-2">
                   <div className="flex items-center justify-between gap-3">
                     <div>
-                      <span className="text-xs font-bold text-white block">目標売上設定（税抜・円）</span>
-                      <span className="text-[10px] text-slate-400">ビジネスモデルに応じた初期目標（必要に応じて変更可能）</span>
+                      <span className="text-xs font-bold text-slate-900 block">目標売上設定（税抜・円）</span>
+                      <span className="text-[10px] text-slate-500">ビジネスモデルに応じた初期目標（必要に応じて変更可能）</span>
                     </div>
                     <div className="w-44">
                       <input
@@ -545,7 +545,7 @@ export const ProductCoCreationWizard: React.FC<ProductCoCreationWizardProps> = (
                         min="0"
                         value={customTargetRevenue}
                         onChange={(e) => setCustomTargetRevenue(e.target.value)}
-                        className="w-full bg-slate-950 border border-slate-700 rounded-lg px-2.5 py-1.5 text-xs text-white font-semibold text-right"
+                        className="w-full bg-white border border-slate-200 rounded-xl px-2.5 py-1.5 text-xs text-slate-900 font-semibold text-right focus:outline-none focus:border-purple-500 focus:ring-1 focus:ring-purple-500 shadow-2xs"
                       />
                     </div>
                   </div>
@@ -554,30 +554,30 @@ export const ProductCoCreationWizard: React.FC<ProductCoCreationWizardProps> = (
 
               {/* WBS Tasks Preview */}
               <div>
-                <h5 className="text-xs font-semibold text-slate-300 mb-2 flex items-center gap-1.5">
-                  <Target className="w-3.5 h-3.5 text-blue-400" />
+                <h5 className="text-xs font-semibold text-slate-700 mb-2 flex items-center gap-1.5">
+                  <Target className="w-3.5 h-3.5 text-purple-600" />
                   自動展開される開発タスク（WBS）
                 </h5>
                 <div className="space-y-1.5">
                   {aiProposal.wbsTasks.map((task, idx) => (
                     <div
                       key={idx}
-                      className="p-2.5 rounded-lg bg-slate-950 border border-slate-800 flex items-center justify-between text-xs"
+                      className="p-2.5 rounded-xl bg-white border border-slate-200 flex items-center justify-between text-xs"
                     >
                       <div className="flex items-center gap-2">
-                        <span className="w-5 h-5 rounded bg-slate-800 text-slate-300 flex items-center justify-center font-bold text-[10px]">
+                        <span className="w-5 h-5 rounded-lg bg-purple-50 text-purple-700 flex items-center justify-center font-bold text-[10px] border border-purple-100">
                           {idx + 1}
                         </span>
                         <div>
-                          <span className="font-medium text-white">{task.title}</span>
-                          <p className="text-[10px] text-slate-400">{task.description}</p>
+                          <span className="font-semibold text-slate-900">{task.title}</span>
+                          <p className="text-[10px] text-slate-500">{task.description}</p>
                         </div>
                       </div>
                       <span
                         className={`text-[10px] px-2 py-0.5 rounded font-medium ${
                           task.priority === 'high'
-                            ? 'bg-rose-500/20 text-rose-300 border border-rose-500/30'
-                            : 'bg-amber-500/20 text-amber-300 border border-amber-500/30'
+                            ? 'bg-rose-50 text-rose-700 border border-rose-200'
+                            : 'bg-amber-50 text-amber-700 border border-amber-200'
                         }`}
                       >
                         {task.priority === 'high' ? '高優先度' : '中優先度'}
@@ -591,13 +591,13 @@ export const ProductCoCreationWizard: React.FC<ProductCoCreationWizardProps> = (
         </div>
 
         {/* Footer Actions */}
-        <div className="px-6 py-4 bg-slate-950/80 border-t border-slate-800 flex items-center justify-between">
+        <div className="px-6 py-4 bg-slate-50/70 border-t border-slate-200 flex items-center justify-between">
           <div>
             {step > 1 && (
               <button
                 onClick={() => setStep(step - 1)}
                 disabled={isGenerating}
-                className="px-4 py-2 rounded-lg text-xs font-medium text-slate-400 hover:text-white hover:bg-slate-800 transition-colors flex items-center gap-1.5"
+                className="px-4 py-2 rounded-xl text-xs font-semibold text-slate-700 border border-slate-200 bg-white hover:bg-slate-100 transition-colors flex items-center gap-1.5"
               >
                 <ArrowLeft className="w-3.5 h-3.5" />
                 戻る
@@ -609,7 +609,7 @@ export const ProductCoCreationWizard: React.FC<ProductCoCreationWizardProps> = (
             {step < 3 && (
               <button
                 onClick={() => setStep(step + 1)}
-                className="px-4 py-2 rounded-lg text-xs font-semibold bg-purple-600 hover:bg-purple-500 text-white transition-colors flex items-center gap-1.5 shadow-md shadow-purple-600/20"
+                className="px-4 py-2 rounded-xl text-xs font-semibold bg-purple-600 hover:bg-purple-700 text-white transition-colors flex items-center gap-1.5 shadow-sm"
               >
                 次へ
                 <ArrowRight className="w-3.5 h-3.5" />
@@ -619,7 +619,7 @@ export const ProductCoCreationWizard: React.FC<ProductCoCreationWizardProps> = (
             {step === 4 && (
               <button
                 onClick={handleFinish}
-                className="px-5 py-2.5 rounded-lg text-xs font-bold bg-emerald-600 hover:bg-emerald-500 text-white transition-colors flex items-center gap-1.5 shadow-lg shadow-emerald-600/30 cursor-pointer"
+                className="px-5 py-2.5 rounded-xl text-xs font-bold bg-purple-600 hover:bg-purple-700 text-white transition-colors flex items-center gap-1.5 shadow-sm cursor-pointer"
               >
                 <CheckCircle2 className="w-4 h-4" />
                 設計内容を登録してプロダクト開発を開始する

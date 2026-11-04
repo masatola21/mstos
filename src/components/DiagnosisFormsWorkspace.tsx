@@ -360,65 +360,65 @@ export const DiagnosisFormsWorkspace: React.FC<DiagnosisFormsWorkspaceProps> = (
   };
   const removeQuestion = (index: number) => setQuestions((current) => current.filter((_, i) => i !== index));
 
-  const inputClass = 'mt-1 w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-white';
-  const labelClass = 'block text-xs text-slate-400';
+  const inputClass = 'mt-1 w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-800 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-purple-500/20 focus:border-purple-500 transition-all';
+  const labelClass = 'block text-xs font-semibold text-slate-700';
 
   return (
     <div className="space-y-4">
-      {showHeader && <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-slate-800 bg-slate-900 p-4">
-        <div><h2 className="font-bold text-white">フォーム・診断の受付管理</h2><p className="mt-1 text-xs text-slate-400">フォーム名・設問・説明文を自由に作成・管理できます。</p></div>
+      {showHeader && <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
+        <div><h2 className="font-bold text-slate-900">フォーム・診断の受付管理</h2><p className="mt-1 text-xs text-slate-500">フォーム名・設問・説明文を自由に作成・管理できます。</p></div>
         <div className="flex gap-2">
-          <button onClick={() => setSection('forms')} className={'rounded-lg px-3 py-2 text-sm ' + (section === 'forms' ? 'bg-blue-600 text-white' : 'text-slate-300 hover:bg-slate-800')}>フォーム設定</button>
-          <button onClick={() => setSection('answers')} className={'rounded-lg px-3 py-2 text-sm ' + (section === 'answers' ? 'bg-blue-600 text-white' : 'text-slate-300 hover:bg-slate-800')}>フォーム回答 ({visibleAnswers.length})</button>
-          <button onClick={() => void load()} title="更新" className="rounded-lg border border-slate-700 px-3 py-2 text-slate-300"><RefreshCw className="h-4 w-4" /></button>
+          <button onClick={() => setSection('forms')} className={'rounded-lg px-3 py-2 text-sm font-medium transition-colors ' + (section === 'forms' ? 'bg-purple-600 text-white shadow-sm' : 'text-slate-600 hover:bg-slate-100')}>フォーム設定</button>
+          <button onClick={() => setSection('answers')} className={'rounded-lg px-3 py-2 text-sm font-medium transition-colors ' + (section === 'answers' ? 'bg-purple-600 text-white shadow-sm' : 'text-slate-600 hover:bg-slate-100')}>フォーム回答 ({visibleAnswers.length})</button>
+          <button onClick={() => void load()} title="更新" className="rounded-lg border border-slate-200 px-3 py-2 text-slate-600 hover:bg-slate-50"><RefreshCw className="h-4 w-4" /></button>
         </div>
       </div>}
-      {error && <div role="alert" className="rounded-lg border border-rose-800 bg-rose-950/40 p-3 text-sm text-rose-200">{error}</div>}
-      {notice && <div role="status" className="rounded-lg border border-emerald-800 bg-emerald-950/40 p-3 text-sm text-emerald-200">{notice}</div>}
+      {error && <div role="alert" className="rounded-lg border border-rose-200 bg-rose-50 p-3 text-sm text-rose-700">{error}</div>}
+      {notice && <div role="status" className="rounded-lg border border-emerald-200 bg-emerald-50 p-3 text-sm text-emerald-700">{notice}</div>}
       {section === 'forms' && (
         <div className="grid gap-4 xl:grid-cols-[minmax(260px,0.8fr)_minmax(0,1.2fr)]">
-          <section className="rounded-xl border border-slate-800 bg-slate-900 p-4">
+          <section className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
             <div className="mb-3 flex items-center justify-between">
-              <h3 className="font-semibold text-white">フォーム一覧</h3>
+              <h3 className="font-semibold text-slate-900">フォーム一覧</h3>
               <div className="flex items-center gap-2">
-                <span className="text-xs text-slate-400">{forms.length}件</span>
-                <button type="button" onClick={resetForm} className="inline-flex items-center gap-1 rounded bg-blue-600 px-2.5 py-1 text-xs font-semibold text-white hover:bg-blue-500">
+                <span className="text-xs text-slate-500">{forms.length}件</span>
+                <button type="button" onClick={resetForm} className="inline-flex items-center gap-1 rounded bg-purple-600 px-2.5 py-1 text-xs font-semibold text-white hover:bg-purple-700 shadow-sm">
                   <Plus className="h-3 w-3" />新規作成
                 </button>
               </div>
             </div>
             {loading ? (
-              <p className="text-sm text-slate-400">読み込み中…</p>
+              <p className="text-sm text-slate-500">読み込み中…</p>
             ) : forms.length === 0 ? (
-              <div className="rounded-lg border border-dashed border-slate-800 p-6 text-center text-sm text-slate-400">
+              <div className="rounded-lg border border-dashed border-slate-200 p-6 text-center text-sm text-slate-500">
                 フォームはまだ登録されていません。右側の入力欄から新規作成してください。
               </div>
             ) : (
               <ul className="space-y-2">
                 {forms.map(form => (
                   <li key={form.id}>
-                    <button onClick={() => selectForm(form)} className={'w-full rounded-lg border p-3 text-left ' + (selectedId === form.id ? 'border-blue-500 bg-blue-950/30' : 'border-slate-800 bg-slate-950 hover:bg-slate-800')}>
+                    <button onClick={() => selectForm(form)} className={'w-full rounded-lg border p-3 text-left transition-colors ' + (selectedId === form.id ? 'border-purple-400 bg-purple-50/70 shadow-sm' : 'border-slate-200 bg-slate-50/70 hover:bg-slate-100/70')}>
                       <div className="flex justify-between gap-2">
-                        <span className="font-medium text-white">{form.name}</span>
+                        <span className="font-medium text-slate-900">{form.name}</span>
                         <div className="flex items-center gap-1.5">
                           {((form.form_type === 'diagnosis' || form.name.includes('診断')) && !readDefinition(form.definition).questions.some((q) => q.id === 'q_ops_bottleneck')) && (
-                            <span className="rounded border border-amber-600/50 bg-amber-950/80 px-1.5 py-0.5 text-[10px] font-semibold text-amber-300">最新化推奨</span>
+                            <span className="rounded border border-amber-300 bg-amber-50 px-1.5 py-0.5 text-[10px] font-semibold text-amber-700">最新化推奨</span>
                           )}
-                          <span className="text-xs text-slate-400">{FORM_TYPES.find(x => x.value === form.form_type)?.label || '診断申込'} · {form.status}</span>
+                          <span className="text-xs text-slate-500">{FORM_TYPES.find(x => x.value === form.form_type)?.label || '診断申込'} · {form.status}</span>
                         </div>
                       </div>
-                      <div className="mt-1 break-all text-xs text-slate-500">/{form.public_slug}</div>
+                      <div className="mt-1 break-all text-xs text-slate-400">/{form.public_slug}</div>
                     </button>
                     {form.status === 'published' && (
                       <div className="mt-2 flex items-center gap-2 pl-2">
-                        <a href={publicUrl(form)} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 text-xs text-sky-300 hover:text-sky-200">
+                        <a href={publicUrl(form)} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 text-xs font-medium text-purple-600 hover:text-purple-700">
                           <ExternalLink className="h-3 w-3" />公開フォームを開く
                         </a>
-                        <button type="button" onClick={() => void copyUrl(form)} className="inline-flex items-center gap-1 rounded border border-slate-700 px-2 py-1 text-xs text-slate-300">
-                          {copiedId === form.id ? <ClipboardCheck className="h-3 w-3" /> : <Clipboard className="h-3 w-3" />}
+                        <button type="button" onClick={() => void copyUrl(form)} className="inline-flex items-center gap-1 rounded border border-slate-200 bg-white px-2 py-1 text-xs text-slate-600 hover:bg-slate-50">
+                          {copiedId === form.id ? <ClipboardCheck className="h-3 w-3 text-emerald-600" /> : <Clipboard className="h-3 w-3" />}
                           {copiedId === form.id ? 'コピー済み' : 'URLをコピー'}
                         </button>
-                        <button type="button" onClick={() => onOpenSendCenter?.(form.id, publicUrl(form), form.form_type === 'diagnosis' ? 'diagnosis' : 'form')} className="rounded bg-indigo-700 px-2 py-1 text-xs text-white">送信センターで案内</button>
+                        <button type="button" onClick={() => onOpenSendCenter?.(form.id, publicUrl(form), form.form_type === 'diagnosis' ? 'diagnosis' : 'form')} className="rounded bg-indigo-600 px-2 py-1 text-xs font-medium text-white hover:bg-indigo-700">送信センターで案内</button>
                       </div>
                     )}
                   </li>
@@ -426,38 +426,38 @@ export const DiagnosisFormsWorkspace: React.FC<DiagnosisFormsWorkspaceProps> = (
               </ul>
             )}
             {selectedId && (
-              <div className="mt-4 flex flex-wrap gap-2 border-t border-slate-800 pt-3">
+              <div className="mt-4 flex flex-wrap gap-2 border-t border-slate-100 pt-3">
                 {forms.find(x => x.id === selectedId)?.status !== 'published' ? (
-                  <button type="button" onClick={publishSelectedForm} className="rounded bg-emerald-700 px-3 py-1.5 text-xs font-semibold text-white hover:bg-emerald-600">公開する</button>
+                  <button type="button" onClick={publishSelectedForm} className="rounded bg-emerald-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-emerald-500 shadow-sm">公開する</button>
                 ) : (
-                  <button type="button" onClick={() => { const f = forms.find(x => x.id === selectedId); if (f) void updateStatus(f, 'paused'); }} className="rounded border border-amber-800 px-3 py-1.5 text-xs text-amber-300 hover:bg-amber-950/50">受付停止</button>
+                  <button type="button" onClick={() => { const f = forms.find(x => x.id === selectedId); if (f) void updateStatus(f, 'paused'); }} className="rounded border border-amber-300 bg-amber-50 px-3 py-1.5 text-xs font-semibold text-amber-700 hover:bg-amber-100">受付停止</button>
                 )}
-                <button type="button" onClick={() => { const f = forms.find(x => x.id === selectedId); if (f) void updateStatus(f, 'archived'); }} className="rounded border border-slate-700 px-3 py-1.5 text-xs text-slate-300 hover:bg-slate-800">アーカイブ</button>
-                <button type="button" onClick={() => { const f = forms.find(x => x.id === selectedId); if (f) void updateStatus(f, 'draft'); }} className="rounded border border-slate-700 px-3 py-1.5 text-xs text-slate-300 hover:bg-slate-800">下書きに戻す</button>
-                <InlineDeleteButton onConfirm={()=>void deleteSelectedForm()} warning={`フォーム「${forms.find(item => item.id === selectedId)?.name || ''}」と関連する回答データを完全に削除しますか？この操作は取り消せません。`} confirmLabel="フォーム削除を確定" className="rounded border border-rose-800 bg-rose-950/40 px-3 py-1.5 text-xs text-rose-300 hover:bg-rose-900/60">フォームを削除</InlineDeleteButton>
+                <button type="button" onClick={() => { const f = forms.find(x => x.id === selectedId); if (f) void updateStatus(f, 'archived'); }} className="rounded border border-slate-200 bg-white px-3 py-1.5 text-xs text-slate-600 hover:bg-slate-50">アーカイブ</button>
+                <button type="button" onClick={() => { const f = forms.find(x => x.id === selectedId); if (f) void updateStatus(f, 'draft'); }} className="rounded border border-slate-200 bg-white px-3 py-1.5 text-xs text-slate-600 hover:bg-slate-50">下書きに戻す</button>
+                <InlineDeleteButton onConfirm={()=>void deleteSelectedForm()} warning={`フォーム「${forms.find(item => item.id === selectedId)?.name || ''}」と関連する回答データを完全に削除しますか？この操作は取り消せません。`} confirmLabel="フォーム削除を確定" className="rounded border border-rose-200 bg-rose-50 px-3 py-1.5 text-xs font-semibold text-rose-700 hover:bg-rose-100">フォームを削除</InlineDeleteButton>
               </div>
             )}
           </section>
 
-          <form onSubmit={saveForm} className="space-y-4 rounded-xl border border-slate-800 bg-slate-900 p-4">
+          <form onSubmit={saveForm} className="space-y-4 rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
             <div className="mb-2 flex items-center justify-between">
-              <h3 className="font-semibold text-white">
-                <Plus className="mr-1 inline h-4 w-4" />{selectedId ? 'フォームを編集' : '新しいフォームを作成'}
+              <h3 className="font-semibold text-slate-900">
+                <Plus className="mr-1 inline h-4 w-4 text-purple-600" />{selectedId ? 'フォームを編集' : '新しいフォームを作成'}
               </h3>
               {selectedId && (
-                <button type="button" onClick={resetForm} className="text-xs text-blue-300 hover:underline">新規フォームを作成</button>
+                <button type="button" onClick={resetForm} className="text-xs font-medium text-purple-600 hover:underline">新規フォームを作成</button>
               )}
             </div>
 
             {formType === 'diagnosis' && (
-            <div className="rounded-xl border border-blue-500/40 bg-gradient-to-r from-blue-950/60 via-slate-900 to-indigo-950/60 p-4 shadow-sm">
+            <div className="rounded-xl border border-purple-200 bg-gradient-to-r from-purple-50 via-slate-50 to-indigo-50 p-4 shadow-sm">
               <div className="flex flex-wrap items-center justify-between gap-3">
                 <div>
-                  <div className="flex items-center gap-2 font-bold text-sky-200 text-sm">
-                    <Sparkles className="h-4 w-4 text-sky-400" />
+                  <div className="flex items-center gap-2 font-bold text-purple-900 text-sm">
+                    <Sparkles className="h-4 w-4 text-purple-600" />
                     営業資料準拠：経営の仕組み化 × 利益改善 ボトルネック診断（公式プリセット）
                   </div>
-                  <p className="mt-1 text-xs text-slate-300">
+                  <p className="mt-1 text-xs text-slate-600">
                     日々の手作業・売上利益・改善停滞原因・目指したい未来の4大ボトルネックを特定する最新設問構成です。
                   </p>
                 </div>
@@ -465,7 +465,7 @@ export const DiagnosisFormsWorkspace: React.FC<DiagnosisFormsWorkspaceProps> = (
                   <button
                     type="button"
                     onClick={() => applyOfficialBottleneckPreset(false)}
-                    className="inline-flex items-center gap-1.5 rounded-lg border border-sky-400/50 bg-sky-900/60 px-3 py-1.5 text-xs font-semibold text-sky-100 hover:bg-sky-800 transition"
+                    className="inline-flex items-center gap-1.5 rounded-lg border border-purple-200 bg-white px-3 py-1.5 text-xs font-semibold text-purple-700 hover:bg-purple-50 transition shadow-sm"
                   >
                     <Sparkles className="h-3.5 w-3.5" />
                     編集欄に反映
@@ -473,7 +473,7 @@ export const DiagnosisFormsWorkspace: React.FC<DiagnosisFormsWorkspaceProps> = (
                   <button
                     type="button"
                     onClick={() => void applyOfficialBottleneckPreset(true)}
-                    className="inline-flex items-center gap-1.5 rounded-lg bg-blue-600 px-3.5 py-1.5 text-xs font-semibold text-white shadow hover:bg-blue-500 transition"
+                    className="inline-flex items-center gap-1.5 rounded-lg bg-purple-600 px-3.5 py-1.5 text-xs font-semibold text-white shadow-sm hover:bg-purple-700 transition"
                   >
                     <Save className="h-3.5 w-3.5" />
                     反映して即時保存
@@ -485,15 +485,15 @@ export const DiagnosisFormsWorkspace: React.FC<DiagnosisFormsWorkspaceProps> = (
             )}
 
             {formType === 'diagnosis' && !questions.some((q) => q.id === 'q_ops_bottleneck') && (
-              <div className="rounded-lg border border-amber-600/60 bg-amber-950/40 p-3 text-xs text-amber-200 flex flex-wrap items-center justify-between gap-2">
+              <div className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-xs text-amber-800 flex flex-wrap items-center justify-between gap-2">
                 <div className="flex items-center gap-2">
-                  <AlertCircle className="h-4 w-4 shrink-0 text-amber-400" />
+                  <AlertCircle className="h-4 w-4 shrink-0 text-amber-600" />
                   <span>現在の設問は旧構成です。「反映して即時保存」を押すと、営業資料に合わせた最新ボトルネック設問（4問＋自由記述）に一括更新されます。</span>
                 </div>
                 <button
                   type="button"
                   onClick={() => void applyOfficialBottleneckPreset(true)}
-                  className="rounded bg-amber-600 px-3 py-1 text-xs font-bold text-white hover:bg-amber-500 transition shadow"
+                  className="rounded bg-amber-600 px-3 py-1 text-xs font-bold text-white hover:bg-amber-700 transition shadow-sm"
                 >
                   今すぐ更新して保存
                 </button>
@@ -536,26 +536,26 @@ export const DiagnosisFormsWorkspace: React.FC<DiagnosisFormsWorkspaceProps> = (
             <div className="space-y-3">
               <div className="flex flex-wrap items-center justify-between gap-2">
                 <div>
-                  <h4 className="text-sm font-semibold text-white">設問 ({questions.length}/40)</h4>
+                  <h4 className="text-sm font-semibold text-slate-900">設問 ({questions.length}/40)</h4>
                   <p className="mt-1 text-xs text-slate-500">設問文、形式、選択肢、必須フラグを自由に設定できます。</p>
                 </div>
-                <button type="button" onClick={addQuestion} className="inline-flex items-center gap-1 rounded-lg border border-blue-700 px-3 py-2 text-xs font-semibold text-blue-200 hover:bg-blue-900/40">
+                <button type="button" onClick={addQuestion} className="inline-flex items-center gap-1 rounded-lg border border-purple-200 bg-purple-50 px-3 py-2 text-xs font-semibold text-purple-700 hover:bg-purple-100 transition-colors">
                   <Plus className="h-3.5 w-3.5" />設問を追加
                 </button>
               </div>
 
               {questions.map((question, index) => (
-                <div key={question.id} className="rounded-xl border border-slate-800 bg-slate-950 p-3 sm:p-4">
+                <div key={question.id} className="rounded-xl border border-slate-200 bg-slate-50/70 p-3 sm:p-4">
                   <div className="mb-3 flex items-center justify-between">
-                    <span className="text-xs font-semibold text-slate-400">設問 {index + 1}</span>
+                    <span className="text-xs font-semibold text-slate-600">設問 {index + 1}</span>
                     <div className="flex items-center gap-1">
-                      <button type="button" disabled={index === 0} onClick={() => moveQuestion(index, -1)} aria-label="上へ移動" className="rounded p-1.5 text-slate-400 hover:bg-slate-800 disabled:opacity-30"><ArrowUp className="h-4 w-4" /></button>
-                      <button type="button" disabled={index === questions.length - 1} onClick={() => moveQuestion(index, 1)} aria-label="下へ移動" className="rounded p-1.5 text-slate-400 hover:bg-slate-800 disabled:opacity-30"><ArrowDown className="h-4 w-4" /></button>
-                      <button type="button" disabled={questions.length <= 1} onClick={() => removeQuestion(index)} aria-label="設問を削除" className="rounded p-1.5 text-rose-300 hover:bg-rose-950 disabled:opacity-30"><Trash2 className="h-4 w-4" /></button>
+                      <button type="button" disabled={index === 0} onClick={() => moveQuestion(index, -1)} aria-label="上へ移動" className="rounded p-1.5 text-slate-500 hover:bg-slate-200 disabled:opacity-30"><ArrowUp className="h-4 w-4" /></button>
+                      <button type="button" disabled={index === questions.length - 1} onClick={() => moveQuestion(index, 1)} aria-label="下へ移動" className="rounded p-1.5 text-slate-500 hover:bg-slate-200 disabled:opacity-30"><ArrowDown className="h-4 w-4" /></button>
+                      <button type="button" disabled={questions.length <= 1} onClick={() => removeQuestion(index)} aria-label="設問を削除" className="rounded p-1.5 text-rose-600 hover:bg-rose-50 disabled:opacity-30"><Trash2 className="h-4 w-4" /></button>
                     </div>
                   </div>
                   <div className="grid gap-3 md:grid-cols-2">
-                    <label className={labelClass}>設問文 <span className="text-rose-400">*</span>
+                    <label className={labelClass}>設問文 <span className="text-rose-500">*</span>
                       <input value={question.label} onChange={event => updateQuestion(index, { label: event.target.value })} className={inputClass} placeholder="設問文を入力してください" />
                     </label>
                     <label className={labelClass}>回答形式
@@ -565,7 +565,7 @@ export const DiagnosisFormsWorkspace: React.FC<DiagnosisFormsWorkspaceProps> = (
                     </label>
                   </div>
                   {(question.type === 'select' || question.type === 'radio') && (
-                    <label className={'mt-3 ' + labelClass}>選択肢（1行に1つ） <span className="text-rose-400">*</span>
+                    <label className={'mt-3 ' + labelClass}>選択肢（1行に1つ） <span className="text-rose-500">*</span>
                       <textarea value={question.options.join('\n')} onChange={event => updateQuestion(index, { options: event.target.value.split('\n').map(option => option.trim()).filter(Boolean) })} rows={3} className={inputClass} placeholder={'選択肢1\n選択肢2\n選択肢3'} />
                     </label>
                   )}
@@ -574,31 +574,31 @@ export const DiagnosisFormsWorkspace: React.FC<DiagnosisFormsWorkspaceProps> = (
                       <input value={question.options[0] || ''} onChange={event => updateQuestion(index, { options: event.target.value ? [event.target.value] : [] })} className={inputClass} placeholder="例：該当する / 同意する" />
                     </label>
                   )}
-                  <label className="mt-3 inline-flex items-center gap-2 text-xs text-slate-300">
-                    <input type="checkbox" checked={question.required} onChange={event => updateQuestion(index, { required: event.target.checked })} className="h-4 w-4 accent-blue-600" />
+                  <label className="mt-3 inline-flex items-center gap-2 text-xs font-medium text-slate-700 cursor-pointer">
+                    <input type="checkbox" checked={question.required} onChange={event => updateQuestion(index, { required: event.target.checked })} className="h-4 w-4 rounded accent-purple-600" />
                     回答必須にする
                   </label>
                 </div>
               ))}
             </div>
 
-            <section className="rounded-xl border border-slate-800 bg-slate-950 p-4">
+            <section className="rounded-xl border border-slate-200 bg-slate-50 p-4">
               <div className="flex items-center justify-between">
-                <h4 className="text-sm font-semibold text-white">公開画面プレビュー</h4>
-                {category && <span className="rounded border border-sky-800 bg-sky-950 px-2 py-0.5 text-xs text-sky-300">{category}</span>}
+                <h4 className="text-sm font-semibold text-slate-900">公開画面プレビュー</h4>
+                {category && <span className="rounded border border-purple-200 bg-purple-50 px-2 py-0.5 text-xs font-semibold text-purple-700">{category}</span>}
               </div>
-              <div className="mt-2 text-base font-bold text-white">{name || '（フォーム名未設定）'}</div>
+              <div className="mt-2 text-base font-bold text-slate-900">{name || '（フォーム名未設定）'}</div>
               {description ? (
-                <p className="mt-2 whitespace-pre-wrap text-xs leading-5 text-slate-400">{description}</p>
+                <p className="mt-2 whitespace-pre-wrap text-xs leading-5 text-slate-600">{description}</p>
               ) : (
-                <p className="mt-2 text-xs italic text-slate-600">説明文は未設定です。</p>
+                <p className="mt-2 text-xs italic text-slate-400">説明文は未設定です。</p>
               )}
               <div className="mt-3 space-y-2">
                 {questions.map((question, index) => (
-                  <div key={question.id} className="rounded-lg border border-slate-800 bg-slate-900 p-3">
-                    <div className="text-xs font-medium text-slate-200">
+                  <div key={question.id} className="rounded-lg border border-slate-200 bg-white p-3 shadow-2xs">
+                    <div className="text-xs font-medium text-slate-800">
                       {index + 1}. {question.label || '設問文未入力'}
-                      {question.required && <span className="ml-1 text-rose-300">必須</span>}
+                      {question.required && <span className="ml-1 text-rose-500 font-bold">必須</span>}
                     </div>
                     <div className="mt-1 text-xs text-slate-500">
                       {QUESTION_TYPES.find(type => type.value === question.type)?.label}
@@ -609,7 +609,7 @@ export const DiagnosisFormsWorkspace: React.FC<DiagnosisFormsWorkspaceProps> = (
               </div>
             </section>
 
-            <button disabled={loading} className="flex items-center gap-2 rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-blue-500 disabled:opacity-50">
+            <button disabled={loading} className="flex items-center gap-2 rounded-lg bg-purple-600 px-4 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-purple-700 disabled:opacity-50">
               <Save className="h-4 w-4" />{selectedId ? '変更を保存' : '下書き保存'}
             </button>
             <p className="text-xs text-slate-500">保存後、フォーム一覧から「公開する」を選択すると公開URLが発行されます。</p>
@@ -618,16 +618,16 @@ export const DiagnosisFormsWorkspace: React.FC<DiagnosisFormsWorkspaceProps> = (
       )}
 
       {section === 'answers' && (
-        <section className="overflow-hidden rounded-xl border border-slate-800 bg-slate-900">
+        <section className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
           {loading ? (
-            <p className="p-4 text-sm text-slate-400">読み込み中…</p>
+            <p className="p-4 text-sm text-slate-500">読み込み中…</p>
           ) : visibleAnswers.length === 0 ? (
-            <p className="p-6 text-center text-sm text-slate-400">フォーム回答はまだありません。</p>
+            <p className="p-6 text-center text-sm text-slate-500">フォーム回答はまだありません。</p>
           ) : (
             <div className="overflow-x-auto">
               <table className="w-full text-left text-sm">
-                <thead className="text-xs text-slate-400">
-                  <tr className="border-b border-slate-800">
+                <thead className="bg-slate-50 text-xs font-semibold text-slate-600">
+                  <tr className="border-b border-slate-200">
                     <th className="p-3">回答者</th>
                     <th className="p-3">フォーム</th>
                     <th className="p-3">受付日時</th>
@@ -635,29 +635,29 @@ export const DiagnosisFormsWorkspace: React.FC<DiagnosisFormsWorkspaceProps> = (
                     <th className="p-3">確認</th>
                   </tr>
                 </thead>
-                <tbody>
+                <tbody className="divide-y divide-slate-100">
                   {visibleAnswers.map(answer => (
                     <Fragment key={answer.id}>
-                      <tr className="border-b border-slate-800/70">
-                        <td className="p-3 text-white">
+                      <tr className="border-b border-slate-100 hover:bg-slate-50/60 transition-colors">
+                        <td className="p-3 text-slate-900 font-medium">
                           {answer.respondent_name || answer.respondent_email || '回答者未特定'}
-                          <div className="text-xs text-slate-500">{answer.respondent_email || ''}</div>
-                          {answer.respondent_company_name && <div className="mt-1 text-xs text-sky-300">会社名・屋号: {answer.respondent_company_name}</div>}
+                          <div className="text-xs text-slate-500 font-normal">{answer.respondent_email || ''}</div>
+                          {answer.respondent_company_name && <div className="mt-1 text-xs text-purple-700 font-medium">会社名・屋号: {answer.respondent_company_name}</div>}
                         </td>
-                        <td className="p-3 text-slate-300">
+                        <td className="p-3 text-slate-700">
                           {forms.find(form => form.id === answer.form_id)?.name || answer.form_id.slice(0, 8)}
                           <div className="mt-1 text-xs">
                             {answer.diagnosis_id ? (
-                              <button type="button" onClick={() => onOpenDiagnosis?.(answer.diagnosis_id!)} className="text-sky-300 underline hover:text-sky-200">診断を開く</button>
+                              <button type="button" onClick={() => onOpenDiagnosis?.(answer.diagnosis_id!)} className="text-purple-600 underline font-medium hover:text-purple-700">診断を開く</button>
                             ) : forms.find(form => form.id === answer.form_id)?.form_type === 'diagnosis' ? (
-                              <span className="text-amber-300">{answer.company_id ? '診断未作成' : '会社未紐付け'}</span>
+                              <span className="text-amber-700 font-medium">{answer.company_id ? '診断未作成' : '会社未紐付け'}</span>
                             ) : null}
                           </div>
                         </td>
-                        <td className="p-3 text-slate-400">{new Date(answer.submitted_at).toLocaleString('ja-JP')}</td>
-                        <td className="p-3 text-slate-300">{answer.status}</td>
+                        <td className="p-3 text-slate-500 text-xs">{new Date(answer.submitted_at).toLocaleString('ja-JP')}</td>
+                        <td className="p-3 text-slate-700">{answer.status}</td>
                         <td className="p-3">
-                          <select value={answer.status} onChange={event => void updateSubmission(answer, event.target.value as Submission['status'])} className="rounded border border-slate-700 bg-slate-950 px-2 py-1 text-xs text-white">
+                          <select value={answer.status} onChange={event => void updateSubmission(answer, event.target.value as Submission['status'])} className="rounded border border-slate-200 bg-white px-2 py-1 text-xs text-slate-800 shadow-2xs focus:outline-none focus:ring-1 focus:ring-purple-500">
                             <option value="received">受付</option>
                             <option value="reviewing">対応中</option>
                             <option value="completed">完了</option>
@@ -665,10 +665,10 @@ export const DiagnosisFormsWorkspace: React.FC<DiagnosisFormsWorkspaceProps> = (
                           </select>
                         </td>
                       </tr>
-                      <tr className="border-b border-slate-800/70">
+                      <tr className="border-b border-slate-100 bg-slate-50/40">
                         <td colSpan={5} className="px-3 pb-3">
                           <details>
-                            <summary className="cursor-pointer text-xs text-blue-300">回答内容を確認</summary>
+                            <summary className="cursor-pointer text-xs font-medium text-purple-600 hover:text-purple-700">回答内容を確認</summary>
                             {(() => {
                               const form = forms.find(item => item.id === answer.form_id);
                               const questions = readDefinition(form?.definition).questions;
@@ -683,16 +683,16 @@ export const DiagnosisFormsWorkspace: React.FC<DiagnosisFormsWorkspaceProps> = (
                                       ? (value ? (question?.options[0] || 'はい') : 'いいえ')
                                       : Array.isArray(value) ? value.join('、') : String(value ?? '—');
                                     return (
-                                      <div key={id} className="grid gap-1 rounded-lg border border-slate-800 bg-slate-950 p-3 sm:grid-cols-[minmax(180px,0.8fr)_minmax(0,1.2fr)]">
-                                        <dt className="text-xs font-medium text-slate-400">{question?.label || '設問 (' + id + ')'}</dt>
-                                        <dd className="whitespace-pre-wrap break-words text-sm text-slate-200">{displayValue}</dd>
+                                      <div key={id} className="grid gap-1 rounded-lg border border-slate-200 bg-white p-3 sm:grid-cols-[minmax(180px,0.8fr)_minmax(0,1.2fr)] shadow-2xs">
+                                        <dt className="text-xs font-semibold text-slate-600">{question?.label || '設問 (' + id + ')'}</dt>
+                                        <dd className="whitespace-pre-wrap break-words text-sm text-slate-800">{displayValue}</dd>
                                       </div>
                                     );
                                   })}
                                 </dl>
                               );
                             })()}
-                            {answer.reviewer_memo && <p className="mt-2 text-xs text-slate-400">確認メモ: {answer.reviewer_memo}</p>}
+                            {answer.reviewer_memo && <p className="mt-2 text-xs text-slate-600">確認メモ: {answer.reviewer_memo}</p>}
                           </details>
                         </td>
                       </tr>
@@ -702,7 +702,7 @@ export const DiagnosisFormsWorkspace: React.FC<DiagnosisFormsWorkspaceProps> = (
               </table>
             </div>
           )}
-          <p className="border-t border-slate-800 p-3 text-xs text-slate-400">診断フォームの回答は、対象会社が紐付いている場合に「未確認」の診断として自動作成されます。回答行の「診断を開く」から内容を確認できます。会社を特定できない回答は受付記録に保持します。</p>
+          <p className="border-t border-slate-100 p-3 text-xs text-slate-500">診断フォームの回答は、対象会社が紐付いている場合に「未確認」の診断として自動作成されます。回答行の「診断を開く」から内容を確認できます。会社を特定できない回答は受付記録に保持します。</p>
         </section>
       )}
     </div>

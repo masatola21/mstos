@@ -229,31 +229,31 @@ export const ChatView: React.FC<ChatViewProps> = ({
   };
 
   return (
-    <div className="flex flex-col h-[calc(100vh-180px)] min-h-[420px] bg-slate-950">
+    <div className="flex flex-col h-[calc(100vh-180px)] min-h-[420px] bg-[#f8fafc] rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
       {/* Character Profile Top Banner */}
-      <div className="border-b border-slate-800/80 bg-slate-900/60 px-4 py-1.5 backdrop-blur-sm">
+      <div className="border-b border-slate-200 bg-white px-4 py-2">
         <div className="max-w-4xl mx-auto flex items-center justify-between gap-2">
           <div className="flex items-center gap-3 min-w-0">
             <div
-              className={`w-9 h-9 rounded-xl bg-gradient-to-tr ${scheme.bgGradient} flex items-center justify-center text-2xl shadow-lg ${scheme.glow} border border-white/10 shrink-0`}
+              className={`w-9 h-9 rounded-xl bg-purple-600 flex items-center justify-center text-xl shadow-sm text-white shrink-0`}
             >
               {character.avatarEmoji || '🤖'}
             </div>
             <div className="min-w-0">
               <div className="flex items-center gap-2 flex-wrap">
-                <h2 className="text-base font-bold text-white tracking-tight truncate">{selectedWorkModeId === 'president' ? character.name : selectedWorkMode.name}</h2>
+                <h2 className="text-base font-bold text-slate-900 tracking-tight truncate">{selectedWorkModeId === 'president' ? character.name : selectedWorkMode.name}</h2>
                 <span
-                  className={`text-[11px] font-semibold px-2 py-0.5 rounded-full ${scheme.badgeBg} ${scheme.badgeText} border ${scheme.border}`}
+                  className="text-[11px] font-semibold px-2 py-0.5 rounded-full bg-purple-50 text-purple-700 border border-purple-200"
                 >
                   {selectedWorkModeId === 'president' ? character.role : selectedWorkMode.label}
                 </span>
                 {selectedWorkModeId === 'president' && character.speechStyle && (
-                  <span className="hidden sm:inline-block text-[11px] text-slate-400 bg-slate-800/70 px-2 py-0.5 rounded-full border border-slate-700/60 truncate max-w-[200px]">
+                  <span className="hidden sm:inline-block text-[11px] text-slate-500 bg-slate-100 px-2 py-0.5 rounded-full border border-slate-200 truncate max-w-[200px]">
                     口癖: {character.speechStyle}
                   </span>
                 )}
               </div>
-              <p className="text-xs text-slate-400 truncate">{selectedWorkModeId === 'president' ? character.tagline || character.personality : selectedWorkMode.description}</p>
+              <p className="text-xs text-slate-500 truncate">{selectedWorkModeId === 'president' ? character.tagline || character.personality : selectedWorkMode.description}</p>
             </div>
           </div>
 
@@ -264,7 +264,7 @@ export const ChatView: React.FC<ChatViewProps> = ({
               onClick={handleExtractMemory}
               disabled={isExtractingMemory}
               title="会話からあなたの情報を記憶"
-              className="flex items-center gap-1 px-2.5 py-1.5 rounded-xl text-xs font-medium text-indigo-300 hover:text-white bg-indigo-500/10 hover:bg-indigo-500/20 border border-indigo-500/30 transition-all cursor-pointer disabled:opacity-50"
+              className="flex items-center gap-1 px-2.5 py-1.5 rounded-xl text-xs font-semibold text-purple-700 hover:text-purple-800 bg-purple-50 hover:bg-purple-100 border border-purple-200 transition-all cursor-pointer disabled:opacity-50"
             >
               <BrainCircuit className={`w-3.5 h-3.5 ${isExtractingMemory ? 'animate-spin' : ''}`} />
               <span className="hidden md:inline">記憶を更新</span>
@@ -276,8 +276,8 @@ export const ChatView: React.FC<ChatViewProps> = ({
               title={ttsEnabled ? '音声読み上げON (クリックでOFF)' : '音声読み上げOFF (クリックでON)'}
               className={`p-2 rounded-xl border transition-all cursor-pointer ${
                 ttsEnabled
-                  ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/40'
-                  : 'text-slate-400 hover:text-slate-200 bg-slate-800/60 border-slate-700/60'
+                  ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
+                  : 'text-slate-500 hover:text-slate-700 bg-slate-100 border-slate-200'
               }`}
             >
               {ttsEnabled ? <Volume2 className="w-4 h-4" /> : <VolumeX className="w-4 h-4" />}
@@ -291,7 +291,7 @@ export const ChatView: React.FC<ChatViewProps> = ({
                 }
               }}
               title="履歴をクリア"
-              className="p-2 rounded-xl text-slate-400 hover:text-rose-400 bg-slate-800/60 hover:bg-slate-800 border border-slate-700/60 transition-colors cursor-pointer"
+              className="p-2 rounded-xl text-slate-500 hover:text-rose-600 bg-slate-100 hover:bg-rose-50 border border-slate-200 transition-colors cursor-pointer"
             >
               <Trash2 className="w-4 h-4" />
             </button>
@@ -299,9 +299,9 @@ export const ChatView: React.FC<ChatViewProps> = ({
         </div>
 
         {/* Unified assigned AI selector */}
-      <div className="border-b border-slate-800/70 bg-slate-950 px-4 py-1">
-        <div className="max-w-4xl mx-auto flex flex-wrap items-center gap-1.5">
-          <label htmlFor="ai-work-mode" className="shrink-0 text-xs font-bold text-indigo-300">
+      <div className="mt-2 pt-2 border-t border-slate-100">
+        <div className="max-w-4xl mx-auto flex flex-wrap items-center gap-2">
+          <label htmlFor="ai-work-mode" className="shrink-0 text-xs font-bold text-purple-700">
             担当AI
           </label>
           <select
@@ -314,7 +314,7 @@ export const ChatView: React.FC<ChatViewProps> = ({
               else if (kind === 'character') onSelectCharacter(id);
             }}
             disabled={isStreaming}
-            className="max-w-full sm:max-w-72 rounded-lg border border-slate-700 bg-slate-900 px-2.5 py-1 text-[11px] font-semibold text-white focus:outline-none focus:border-indigo-500 disabled:opacity-50"
+            className="max-w-full sm:max-w-72 rounded-xl border border-slate-200 bg-white px-2.5 py-1 text-[11px] font-semibold text-slate-900 focus:outline-none focus:border-purple-500 disabled:opacity-50 shadow-2xs"
           >
             <optgroup label="専門の役割">
               {AI_WORK_MODES.map((baseMode) => {
@@ -330,18 +330,18 @@ export const ChatView: React.FC<ChatViewProps> = ({
               ))}
             </optgroup>
           </select>
-          <p className="min-w-0 flex-1 text-[11px] text-slate-400">{selectedWorkMode.description}</p>
+          <p className="min-w-0 flex-1 text-[11px] text-slate-500">{selectedWorkMode.description}</p>
         </div>
       </div>
 
       {/* Memory Notification Banner */}
         {memoryNotification && (
-          <div className="max-w-4xl mx-auto mt-2 px-3 py-1.5 rounded-lg bg-indigo-950/80 border border-indigo-500/40 text-xs text-indigo-200 flex items-center justify-between animate-in fade-in">
+          <div className="max-w-4xl mx-auto mt-2 px-3 py-1.5 rounded-xl bg-purple-50 border border-purple-200 text-xs text-purple-900 flex items-center justify-between animate-in fade-in">
             <span>{memoryNotification}</span>
             <button
               type="button"
               onClick={() => setMemoryNotification(null)}
-              className="text-indigo-400 hover:text-white font-bold ml-2 cursor-pointer"
+              className="text-purple-600 hover:text-purple-900 font-bold ml-2 cursor-pointer"
             >
               ✕
             </button>
@@ -350,27 +350,27 @@ export const ChatView: React.FC<ChatViewProps> = ({
       </div>
 
       {/* Messages Scroll Area */}
-      <div className="flex-1 min-h-0 overflow-y-auto px-3 sm:px-6 py-3 space-y-4">
+      <div className="flex-1 min-h-0 overflow-y-auto px-3 sm:px-6 py-4 space-y-4 bg-[#f8fafc]">
         <div className="max-w-4xl mx-auto space-y-4">
           {/* Welcome Card & Greeting */}
           {messages.length === 0 && (
             <div className="space-y-4 py-3 animate-in fade-in slide-in-from-bottom-2 duration-300">
-              <div className="p-4 rounded-2xl bg-gradient-to-b from-slate-900/90 to-slate-900/40 border border-slate-800 text-center shadow-xl">
+              <div className="p-6 rounded-2xl bg-white border border-slate-200 text-center shadow-sm">
                 <div
-                  className={`w-12 h-12 rounded-2xl bg-gradient-to-tr ${scheme.bgGradient} flex items-center justify-center text-3xl shadow-xl ${scheme.glow} mx-auto mb-4 border border-white/20`}
+                  className="w-12 h-12 rounded-2xl bg-purple-600 flex items-center justify-center text-3xl shadow-sm mx-auto mb-4 text-white"
                 >
                   {selectedWorkModeId === 'president' ? character.avatarEmoji || '🤖' : selectedWorkMode.avatarEmoji}
                 </div>
-                <h3 className="text-xl font-extrabold text-white mb-1">{selectedWorkModeId === 'president' ? character.name : selectedWorkMode.name}</h3>
-                <p className="text-sm font-medium text-indigo-300 mb-2">{selectedWorkModeId === 'president' ? character.role : selectedWorkMode.label}</p>
-                <p className="text-xs text-slate-400 max-w-md mx-auto leading-relaxed mb-4">
+                <h3 className="text-xl font-bold text-slate-900 mb-1">{selectedWorkModeId === 'president' ? character.name : selectedWorkMode.name}</h3>
+                <p className="text-sm font-semibold text-purple-700 mb-2">{selectedWorkModeId === 'president' ? character.role : selectedWorkMode.label}</p>
+                <p className="text-xs text-slate-500 max-w-md mx-auto leading-relaxed mb-4">
                   {selectedWorkModeId === 'president' ? character.tagline || character.personality : selectedWorkMode.description}
                 </p>
 
                 {selectedWorkModeId === 'president' && <>
                 <div className="flex flex-wrap items-center justify-center gap-1.5 max-w-lg mx-auto mb-6">
                   {userProfile.userName && (
-                    <span className="text-[11px] px-2.5 py-1 rounded-full bg-indigo-950/60 text-indigo-300 border border-indigo-500/30">
+                    <span className="text-[11px] px-2.5 py-1 rounded-full bg-purple-50 text-purple-700 border border-purple-200 font-semibold">
                       あなたの登録名: {userProfile.userName}
                     </span>
                   )}
@@ -379,12 +379,12 @@ export const ChatView: React.FC<ChatViewProps> = ({
                 </>}
 
                 {/* Greeting Speech Bubble */}
-                <div className="p-3 rounded-xl bg-slate-800/80 border border-slate-700/70 text-left max-w-xl mx-auto shadow-md">
-                  <div className="text-xs font-semibold text-indigo-400 mb-1 flex items-center gap-1">
-                    <Sparkles className="w-3.5 h-3.5" />
+                <div className="p-3.5 rounded-xl bg-purple-50/60 border border-purple-200 text-left max-w-xl mx-auto shadow-2xs">
+                  <div className="text-xs font-semibold text-purple-800 mb-1 flex items-center gap-1">
+                    <Sparkles className="w-3.5 h-3.5 text-purple-600" />
                     <span>{selectedWorkModeId === 'president' ? character.name : selectedWorkMode.name} からのメッセージ</span>
                   </div>
-                  <p className="text-sm text-slate-200 leading-relaxed">
+                  <p className="text-sm text-slate-800 leading-relaxed">
                     {selectedWorkModeId === 'president' ? character.greetingMessage || 'こんにちは！今日もよろしくお願いします。何でも話してくださいね。' : selectedWorkMode.description}
                   </p>
                 </div>
@@ -393,7 +393,7 @@ export const ChatView: React.FC<ChatViewProps> = ({
               {/* Suggested conversation starters */}
               {character.suggestedTopics && character.suggestedTopics.length > 0 && (
                 <div className="space-y-2">
-                  <div className="text-xs font-bold text-slate-400 uppercase tracking-wider text-center">
+                  <div className="text-xs font-bold text-slate-500 uppercase tracking-wider text-center">
                     話しかけるきっかけ・おすすめの指示
                   </div>
                   <div className="flex flex-wrap items-center justify-center gap-2">
@@ -402,7 +402,7 @@ export const ChatView: React.FC<ChatViewProps> = ({
                         key={i}
                         type="button"
                         onClick={() => onSendMessage(topic, selectedWorkModeId)}
-                        className="px-3.5 py-2 rounded-xl text-xs font-medium bg-slate-900 hover:bg-slate-800 text-slate-300 hover:text-white border border-slate-800 hover:border-indigo-500/40 shadow-sm transition-all cursor-pointer text-left"
+                        className="px-3.5 py-2 rounded-xl text-xs font-medium bg-white hover:bg-purple-50 text-slate-700 hover:text-purple-700 border border-slate-200 hover:border-purple-200 shadow-2xs transition-all cursor-pointer text-left"
                       >
                         💬 {topic}
                       </button>
@@ -423,7 +423,7 @@ export const ChatView: React.FC<ChatViewProps> = ({
               >
                 {!isUser && (
                   <div
-                    className={`w-9 h-9 rounded-xl bg-gradient-to-tr ${scheme.bgGradient} flex items-center justify-center text-lg shadow-md shrink-0 border border-white/10 mt-1`}
+                    className="w-9 h-9 rounded-xl bg-purple-600 flex items-center justify-center text-lg text-white shadow-sm shrink-0 mt-1"
                   >
                     {selectedWorkModeId === 'president' ? character.avatarEmoji || '🤖' : selectedWorkMode.avatarEmoji}
                   </div>
@@ -431,10 +431,10 @@ export const ChatView: React.FC<ChatViewProps> = ({
 
                 <div className={`max-w-[88%] sm:max-w-[78%] group relative`}>
                   <div
-                    className={`p-3 rounded-xl shadow-md ${
+                    className={`p-3.5 rounded-xl shadow-2xs ${
                       isUser
-                        ? 'bg-gradient-to-r from-indigo-600 to-indigo-700 text-white rounded-tr-xs'
-                        : 'bg-slate-900 border border-slate-800/90 text-slate-200 rounded-tl-xs'
+                        ? 'bg-purple-600 text-white rounded-tr-xs'
+                        : 'bg-white border border-slate-200 text-slate-900 rounded-tl-xs'
                     }`}
                   >
                     {isUser ? (
@@ -448,7 +448,7 @@ export const ChatView: React.FC<ChatViewProps> = ({
                   </div>
 
                   {!isUser && msg.modelLabel && (
-                    <p className="mt-1 pl-1 text-[10px] text-slate-500">使用モデル: {msg.modelLabel}</p>
+                    <p className="mt-1 pl-1 text-[10px] text-slate-400">使用モデル: {msg.modelLabel}</p>
                   )}
 
                   {/* Actions under bubble */}
@@ -457,12 +457,12 @@ export const ChatView: React.FC<ChatViewProps> = ({
                       <button
                         type="button"
                         onClick={() => handleCopy(msg.content, msg.id)}
-                        className="text-[11px] text-slate-400 hover:text-slate-200 flex items-center gap-1 cursor-pointer"
+                        className="text-[11px] text-slate-500 hover:text-slate-800 flex items-center gap-1 cursor-pointer"
                       >
                         {copiedId === msg.id ? (
                           <>
-                            <Check className="w-3 h-3 text-emerald-400" />
-                            <span className="text-emerald-400">コピー済み</span>
+                            <Check className="w-3 h-3 text-emerald-600" />
+                            <span className="text-emerald-600 font-semibold">コピー済み</span>
                           </>
                         ) : (
                           <>
@@ -474,7 +474,7 @@ export const ChatView: React.FC<ChatViewProps> = ({
                       <button
                         type="button"
                         onClick={() => speakText(msg.content)}
-                        className="text-[11px] text-slate-400 hover:text-slate-200 flex items-center gap-1 cursor-pointer"
+                        className="text-[11px] text-slate-500 hover:text-slate-800 flex items-center gap-1 cursor-pointer"
                       >
                         <Volume2 className="w-3 h-3" />
                         <span>読み上げ</span>
@@ -490,15 +490,15 @@ export const ChatView: React.FC<ChatViewProps> = ({
           {isStreaming && (
             <div className="flex items-center gap-3 animate-in fade-in">
               <div
-                className={`w-9 h-9 rounded-xl bg-gradient-to-tr ${scheme.bgGradient} flex items-center justify-center text-lg shadow-md shrink-0 border border-white/10`}
+                className="w-9 h-9 rounded-xl bg-purple-600 flex items-center justify-center text-lg text-white shadow-sm shrink-0"
               >
                 {character.avatarEmoji || '🤖'}
               </div>
-              <div className="px-4 py-3 rounded-2xl bg-slate-900 border border-slate-800 flex items-center gap-1.5 shadow-md">
-                <span className="w-2 h-2 rounded-full bg-indigo-400 animate-bounce" style={{ animationDelay: '0ms' }} />
-                <span className="w-2 h-2 rounded-full bg-indigo-400 animate-bounce" style={{ animationDelay: '150ms' }} />
-                <span className="w-2 h-2 rounded-full bg-indigo-400 animate-bounce" style={{ animationDelay: '300ms' }} />
-                <span className="text-xs text-slate-400 ml-1.5 font-medium">{character.name} が思考中…</span>
+              <div className="px-4 py-3 rounded-2xl bg-white border border-slate-200 flex items-center gap-1.5 shadow-sm">
+                <span className="w-2 h-2 rounded-full bg-purple-600 animate-bounce" style={{ animationDelay: '0ms' }} />
+                <span className="w-2 h-2 rounded-full bg-purple-600 animate-bounce" style={{ animationDelay: '150ms' }} />
+                <span className="w-2 h-2 rounded-full bg-purple-600 animate-bounce" style={{ animationDelay: '300ms' }} />
+                <span className="text-xs text-slate-500 ml-1.5 font-medium">{character.name} が思考中…</span>
               </div>
             </div>
           )}
@@ -508,11 +508,11 @@ export const ChatView: React.FC<ChatViewProps> = ({
       </div>
 
       {/* Input Box Bottom Bar */}
-      <div className="border-t border-slate-800/80 bg-slate-900/90 p-2 sm:p-3 backdrop-blur-md">
-        <div className="max-w-4xl mx-auto space-y-1.5">
+      <div className="border-t border-slate-200 bg-white p-2.5 sm:p-3">
+        <div className="max-w-4xl mx-auto space-y-2">
           {/* Quick AI President Action Chips */}
           <div className="flex items-center gap-1.5 overflow-x-auto pb-1 text-[11px] no-scrollbar">
-            <span className="text-slate-400 shrink-0 font-semibold">クイック指示:</span>
+            <span className="text-slate-500 shrink-0 font-semibold">クイック指示:</span>
             <button
               type="button"
               onClick={() =>
@@ -520,7 +520,7 @@ export const ChatView: React.FC<ChatViewProps> = ({
                   '次の経営目標を達成するためのプロジェクト概要と具体的タスク一覧（目的、優先度、完了条件、担当案）を計画立案してください：\n「新規顧客獲得のためのプロモーション施策」'
                 )
               }
-              className="px-2.5 py-1 rounded-lg bg-indigo-500/15 hover:bg-indigo-500/25 text-indigo-300 border border-indigo-500/30 shrink-0 transition-colors cursor-pointer"
+              className="px-2.5 py-1 rounded-xl bg-purple-50 hover:bg-purple-100 text-purple-700 border border-purple-200 shrink-0 transition-colors cursor-pointer font-medium"
             >
               ⚡ 目標のタスク分解を依頼
             </button>
@@ -531,7 +531,7 @@ export const ChatView: React.FC<ChatViewProps> = ({
                   '現在のプロジェクト状況を踏まえ、今週最優先で着手すべきタスクとその理由を教えてください。'
                 )
               }
-              className="px-2.5 py-1 rounded-lg bg-slate-800 hover:bg-slate-750 text-slate-300 border border-slate-700 shrink-0 transition-colors cursor-pointer"
+              className="px-2.5 py-1 rounded-xl bg-slate-50 hover:bg-slate-100 text-slate-700 border border-slate-200 shrink-0 transition-colors cursor-pointer font-medium"
             >
               📊 今週の優先タスク確認
             </button>
@@ -542,13 +542,13 @@ export const ChatView: React.FC<ChatViewProps> = ({
                   '開発エージェントや各専門AIに割り当てるべき開発要件の定義をサポートしてください。'
                 )
               }
-              className="px-2.5 py-1 rounded-lg bg-slate-800 hover:bg-slate-750 text-slate-300 border border-slate-700 shrink-0 transition-colors cursor-pointer"
+              className="px-2.5 py-1 rounded-xl bg-slate-50 hover:bg-slate-100 text-slate-700 border border-slate-200 shrink-0 transition-colors cursor-pointer font-medium"
             >
               ⚙️ 開発タスクの切り出し相談
             </button>
           </div>
 
-          <form onSubmit={handleSubmit} className="relative flex items-end gap-2 bg-slate-950 rounded-2xl border border-slate-800 focus-within:border-indigo-500/60 focus-within:ring-2 focus-within:ring-indigo-500/20 transition-all p-1.5 shadow-lg">
+          <form onSubmit={handleSubmit} className="relative flex items-end gap-2 bg-white rounded-2xl border border-slate-200 focus-within:border-purple-500 focus-within:ring-2 focus-within:ring-purple-500/20 transition-all p-1.5 shadow-2xs">
             <textarea
               ref={textareaRef}
               rows={1}
@@ -557,7 +557,7 @@ export const ChatView: React.FC<ChatViewProps> = ({
               onKeyDown={handleKeyDown}
               placeholder={`${selectedWorkMode.name} に指示・相談を入力してください...`}
               disabled={isStreaming}
-              className="w-full resize-none bg-transparent px-3 py-2 text-sm md:text-[15px] text-slate-100 placeholder-slate-500 focus:outline-none min-h-[44px] max-h-[180px] leading-relaxed disabled:opacity-50"
+              className="w-full resize-none bg-transparent px-3 py-2 text-sm md:text-[15px] text-slate-900 placeholder-slate-400 focus:outline-none min-h-[44px] max-h-[180px] leading-relaxed disabled:opacity-50"
             />
 
             <div className="flex items-center gap-1 shrink-0 pb-1 pr-1">
@@ -568,8 +568,8 @@ export const ChatView: React.FC<ChatViewProps> = ({
                 title={isListening ? '音声入力を停止' : '音声で入力'}
                 className={`p-2 rounded-xl transition-all cursor-pointer ${
                   isListening
-                    ? 'bg-rose-500/20 text-rose-400 border border-rose-500/40 animate-pulse'
-                    : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/80'
+                    ? 'bg-rose-50 text-rose-600 border border-rose-200 animate-pulse'
+                    : 'text-slate-400 hover:text-slate-600 hover:bg-slate-100'
                 }`}
               >
                 {isListening ? <MicOff className="w-4 h-4" /> : <Mic className="w-4 h-4" />}
@@ -581,7 +581,7 @@ export const ChatView: React.FC<ChatViewProps> = ({
                   type="button"
                   onClick={onStopStreaming}
                   title="生成を中断"
-                  className="p-2.5 rounded-xl bg-rose-600 hover:bg-rose-700 text-white font-bold transition-all shadow-md shadow-rose-600/30 cursor-pointer"
+                  className="p-2.5 rounded-xl bg-rose-600 hover:bg-rose-700 text-white font-bold transition-all shadow-sm cursor-pointer"
                 >
                   <Square className="w-4 h-4 fill-white" />
                 </button>
@@ -590,10 +590,10 @@ export const ChatView: React.FC<ChatViewProps> = ({
                   type="submit"
                   disabled={!inputText.trim()}
                   title="送信"
-                  className={`p-2.5 rounded-xl font-bold transition-all shadow-md cursor-pointer ${
+                  className={`p-2.5 rounded-xl font-bold transition-all shadow-sm cursor-pointer ${
                     inputText.trim()
-                      ? 'bg-gradient-to-r from-indigo-500 to-purple-600 hover:from-indigo-600 hover:to-purple-700 text-white shadow-indigo-500/30'
-                      : 'bg-slate-800 text-slate-500 cursor-not-allowed shadow-none'
+                      ? 'bg-purple-600 hover:bg-purple-700 text-white shadow-purple-600/20'
+                      : 'bg-slate-100 text-slate-400 cursor-not-allowed shadow-none'
                   }`}
                 >
                   <Send className="w-4 h-4" />

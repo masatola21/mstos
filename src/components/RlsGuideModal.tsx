@@ -134,35 +134,35 @@ CREATE POLICY "Allow authenticated update customers"
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-fade-in">
-      <div className="bg-slate-900 border border-slate-800 rounded-2xl max-w-3xl w-full shadow-2xl overflow-hidden flex flex-col max-h-[90vh]">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-xs animate-fade-in">
+      <div className="bg-white border border-slate-200 rounded-2xl max-w-3xl w-full shadow-2xl overflow-hidden flex flex-col max-h-[90vh] text-slate-900">
         {/* Header */}
-        <div className="px-6 py-4 border-b border-slate-800 flex items-center justify-between bg-slate-900/90 sticky top-0">
+        <div className="px-6 py-4 border-b border-slate-200 flex items-center justify-between bg-white sticky top-0">
           <div className="flex items-center gap-2.5">
-            <div className="p-2 bg-indigo-500/10 border border-indigo-500/20 rounded-xl text-indigo-400">
+            <div className="p-2 bg-purple-50 border border-purple-200 rounded-xl text-purple-700">
               <ShieldCheck className="w-5 h-5" />
             </div>
             <div>
-              <h2 className="text-lg font-bold text-white">Supabase RLS（行レベルセキュリティ）設定ガイド</h2>
-              <p className="text-xs text-slate-400">社内データ保護のための認証ポリシー設定</p>
+              <h2 className="text-lg font-bold text-slate-900">Supabase RLS（行レベルセキュリティ）設定ガイド</h2>
+              <p className="text-xs text-slate-500">社内データ保護のための認証ポリシー設定</p>
             </div>
           </div>
           <button
             onClick={onClose}
-            className="p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 transition-colors"
+            className="p-1.5 rounded-lg text-slate-400 hover:text-slate-700 hover:bg-slate-100 transition-colors cursor-pointer"
           >
             <X className="w-5 h-5" />
           </button>
         </div>
 
         {/* Content Body */}
-        <div className="p-6 overflow-y-auto space-y-6 text-slate-300 text-sm">
+        <div className="p-6 overflow-y-auto space-y-6 text-slate-700 text-sm">
           {/* Safety & Non-destructive Notice */}
-          <div className="p-4 rounded-xl bg-blue-500/10 border border-blue-500/30 flex gap-3 text-blue-200">
-            <Database className="w-5 h-5 shrink-0 text-blue-400 mt-0.5" />
+          <div className="p-4 rounded-xl bg-purple-50 border border-purple-200 flex gap-3 text-purple-950">
+            <Database className="w-5 h-5 shrink-0 text-purple-700 mt-0.5" />
             <div className="text-xs space-y-1">
-              <p className="font-semibold text-blue-300">非破壊的な安全設計</p>
-              <p>
+              <p className="font-semibold text-purple-900">非破壊的な安全設計</p>
+              <p className="text-purple-800">
                 このSQLは既存のテーブル定義やテストデータを変更・削除しません。
                 対象6テーブル（companies, prospects, leads, products, deals, customers）に対して
                 ログイン済み社内メンバー（authenticatedロール）のみが安全にアクセスできるようアクセス制御を付与します。
@@ -170,11 +170,11 @@ CREATE POLICY "Allow authenticated update customers"
             </div>
           </div>
 
-          <div className="p-4 rounded-xl bg-amber-500/10 border border-amber-500/30 flex gap-3 text-amber-200">
-            <AlertTriangle className="w-5 h-5 shrink-0 text-amber-400 mt-0.5" />
+          <div className="p-4 rounded-xl bg-amber-50 border border-amber-200 flex gap-3 text-amber-900">
+            <AlertTriangle className="w-5 h-5 shrink-0 text-amber-600 mt-0.5" />
             <div className="text-xs space-y-1">
-              <p className="font-semibold text-amber-300">companies テーブルの接続テスト用 anon ポリシーについて</p>
-              <p>
+              <p className="font-semibold text-amber-800">companies テーブルの接続テスト用 anon ポリシーについて</p>
+              <p className="text-amber-700">
                 もしSupabase上で、接続確認用に <code>companies</code> に anon (未認証) に対する SELECT ポリシーが残っている場合は、
                 第三者が社名や連絡先を閲覧できてしまうリスクがあるため、本番利用前に削除または置換することを推奨します。
               </p>
@@ -183,11 +183,11 @@ CREATE POLICY "Allow authenticated update customers"
 
           {/* Execution steps */}
           <div className="space-y-2">
-            <h3 className="font-semibold text-white flex items-center gap-2 text-xs uppercase tracking-wider text-slate-400">
-              <Terminal className="w-4 h-4 text-slate-400" />
+            <h3 className="font-semibold text-slate-700 flex items-center gap-2 text-xs uppercase tracking-wider">
+              <Terminal className="w-4 h-4 text-purple-600" />
               Supabase での適用手順
             </h3>
-            <ol className="list-decimal list-inside text-xs text-slate-300 space-y-1.5 pl-1">
+            <ol className="list-decimal list-inside text-xs text-slate-600 space-y-1.5 pl-1">
               <li>Supabaseの管理ダッシュボードを開きます。</li>
               <li>左メニューの <strong>SQL Editor</strong> をクリックします。</li>
               <li>「New query」を開き、以下のSQLを貼り付けて <strong>Run</strong> を実行します。</li>
@@ -200,12 +200,12 @@ CREATE POLICY "Allow authenticated update customers"
           {/* Code Viewer with Copy Button */}
           <div className="space-y-2">
             <div className="flex items-center justify-between">
-              <span className="text-xs font-medium text-slate-400 flex items-center gap-1.5">
-                <FileCode2 className="w-3.5 h-3.5" /> supabase_rls_setup.sql
+              <span className="text-xs font-medium text-slate-500 flex items-center gap-1.5">
+                <FileCode2 className="w-3.5 h-3.5 text-purple-600" /> supabase_rls_setup.sql
               </span>
               <button
                 onClick={handleCopy}
-                className="px-3 py-1.5 rounded-lg bg-blue-600 hover:bg-blue-500 text-white flex items-center gap-1.5 text-xs font-medium shadow-md shadow-blue-600/30 transition-colors"
+                className="px-3 py-1.5 rounded-xl bg-purple-600 hover:bg-purple-700 text-white flex items-center gap-1.5 text-xs font-semibold shadow-xs transition-colors cursor-pointer"
               >
                 {copied ? (
                   <>
@@ -221,17 +221,17 @@ CREATE POLICY "Allow authenticated update customers"
               </button>
             </div>
 
-            <div className="bg-slate-950 rounded-xl p-4 border border-slate-800 font-mono text-xs text-emerald-300 max-h-72 overflow-y-auto leading-relaxed select-all">
+            <div className="bg-slate-900 rounded-xl p-4 border border-slate-800 font-mono text-xs text-emerald-300 max-h-72 overflow-y-auto leading-relaxed select-all">
               <pre>{rlsSqlContent}</pre>
             </div>
           </div>
         </div>
 
         {/* Footer */}
-        <div className="px-6 py-3 border-t border-slate-800 bg-slate-900 flex justify-end">
+        <div className="px-6 py-3 border-t border-slate-200 bg-white flex justify-end">
           <button
             onClick={onClose}
-            className="px-4 py-2 rounded-xl text-xs font-medium text-slate-300 hover:bg-slate-800 border border-slate-700 transition-colors"
+            className="px-4 py-2 rounded-xl text-xs font-semibold text-slate-700 hover:bg-slate-50 border border-slate-200 bg-white transition-colors cursor-pointer shadow-2xs"
           >
             閉じる
           </button>

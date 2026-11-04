@@ -254,23 +254,23 @@ export const CharacterEditor: React.FC<CharacterEditorProps> = ({
   const scheme = getColorScheme(formData.avatarColor);
 
   return (
-    <div className="max-w-5xl mx-auto px-4 pt-12 pb-6 space-y-6">
+    <div className="max-w-5xl mx-auto px-4 pt-12 pb-6 space-y-6 text-slate-900">
       {/* Top Banner & Mode Toggle */}
-      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 p-5 rounded-3xl bg-slate-900 border border-slate-800 shadow-xl">
+      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 p-5 rounded-2xl bg-white border border-slate-200 shadow-xs">
         <div className="flex items-center gap-3.5">
           <div
-            className={`w-14 h-14 rounded-2xl bg-gradient-to-tr ${scheme.bgGradient} flex items-center justify-center text-3xl shadow-lg ${scheme.glow} border border-white/20 shrink-0`}
+            className={`w-14 h-14 rounded-2xl bg-gradient-to-tr ${scheme.bgGradient} flex items-center justify-center text-3xl shadow-sm ${scheme.glow} border border-slate-200 shrink-0`}
           >
             {formData.avatarEmoji || '🤖'}
           </div>
           <div>
             <div className="flex items-center gap-2">
-              <h1 className="text-xl font-extrabold text-white">{formData.name || '名前未設定'}</h1>
+              <h1 className="text-xl font-extrabold text-slate-900">{formData.name || '名前未設定'}</h1>
               <span className={`text-xs font-semibold px-2.5 py-0.5 rounded-full ${scheme.badgeBg} ${scheme.badgeText}`}>
                 {formData.role || '役割未設定'}
               </span>
             </div>
-            <p className="text-xs text-slate-400 mt-0.5">{formData.tagline || 'あなた好みに自由にカスタマイズしましょう'}</p>
+            <p className="text-xs text-slate-500 mt-0.5">{formData.tagline || 'あなた好みに自由にカスタマイズしましょう'}</p>
           </div>
         </div>
 
@@ -279,7 +279,7 @@ export const CharacterEditor: React.FC<CharacterEditorProps> = ({
           <button
             type="button"
             onClick={handleSave}
-            className="flex items-center gap-1.5 px-4 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-bold transition-all border border-slate-700 cursor-pointer shadow-sm"
+            className="flex items-center gap-1.5 px-4 py-2 rounded-xl bg-white hover:bg-slate-50 text-slate-700 text-xs font-semibold transition-all border border-slate-200 cursor-pointer shadow-xs"
           >
             <Save className="w-3.5 h-3.5" />
             <span>保存</span>
@@ -288,7 +288,7 @@ export const CharacterEditor: React.FC<CharacterEditorProps> = ({
           <button
             type="button"
             onClick={handleSaveAndChat}
-            className="flex items-center gap-1.5 px-5 py-2 rounded-xl bg-gradient-to-r from-indigo-500 to-purple-600 hover:from-indigo-600 hover:to-purple-700 text-white text-xs font-bold transition-all shadow-md shadow-indigo-500/20 cursor-pointer"
+            className="flex items-center gap-1.5 px-5 py-2 rounded-xl bg-purple-600 hover:bg-purple-700 text-white text-xs font-bold transition-all shadow-xs cursor-pointer"
           >
             <span>対話を開始</span>
             <ArrowRight className="w-3.5 h-3.5" />
@@ -297,21 +297,21 @@ export const CharacterEditor: React.FC<CharacterEditorProps> = ({
       </div>
 
       {saveSuccessNotice && (
-        <div className="p-3 rounded-2xl bg-emerald-950/80 border border-emerald-500/50 text-emerald-200 text-xs flex items-center justify-center gap-2 animate-in fade-in">
-          <Check className="w-4 h-4 text-emerald-400" />
+        <div className="p-3 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-700 text-xs flex items-center justify-center gap-2 animate-in fade-in">
+          <Check className="w-4 h-4 text-emerald-600" />
           <span>AIキャラクターの設定を保存しました！</span>
         </div>
       )}
 
       {/* Sub Tabs: AI Auto Generator vs Manual Customization */}
-      <div className="flex items-center border-b border-slate-800 gap-2">
+      <div className="flex items-center border-b border-slate-200 gap-2">
         <button
           type="button"
           onClick={() => setActiveSubTab('magic')}
           className={`flex items-center gap-2 px-4 py-2.5 text-xs font-bold border-b-2 transition-all cursor-pointer ${
             activeSubTab === 'magic'
-              ? 'border-indigo-500 text-indigo-400'
-              : 'border-transparent text-slate-400 hover:text-slate-200'
+              ? 'border-purple-600 text-purple-600'
+              : 'border-transparent text-slate-500 hover:text-slate-800'
           }`}
         >
           <Wand2 className="w-4 h-4" />
@@ -323,8 +323,8 @@ export const CharacterEditor: React.FC<CharacterEditorProps> = ({
           onClick={() => setActiveSubTab('manual')}
           className={`flex items-center gap-2 px-4 py-2.5 text-xs font-bold border-b-2 transition-all cursor-pointer ${
             activeSubTab === 'manual'
-              ? 'border-indigo-500 text-indigo-400'
-              : 'border-transparent text-slate-400 hover:text-slate-200'
+              ? 'border-purple-600 text-purple-600'
+              : 'border-transparent text-slate-500 hover:text-slate-800'
           }`}
         >
           <Bot className="w-4 h-4" />
@@ -335,12 +335,12 @@ export const CharacterEditor: React.FC<CharacterEditorProps> = ({
       {/* Tab Content: 1. Magic Generator */}
       {activeSubTab === 'magic' && (
         <div className="space-y-6 animate-in fade-in">
-          <div className="p-6 rounded-3xl bg-gradient-to-b from-indigo-950/40 to-slate-900 border border-indigo-500/30 space-y-4">
-            <div className="flex items-center gap-2 text-indigo-300">
-              <Sparkles className="w-5 h-5 text-indigo-400" />
-              <h2 className="text-base font-bold text-white">「こんなAIが欲しい」を一言入力するだけ</h2>
+          <div className="p-6 rounded-2xl bg-purple-50/50 border border-purple-200/80 space-y-4">
+            <div className="flex items-center gap-2 text-purple-700">
+              <Sparkles className="w-5 h-5 text-purple-600" />
+              <h2 className="text-base font-bold text-slate-900">「こんなAIが欲しい」を一言入力するだけ</h2>
             </div>
-            <p className="text-xs text-slate-300 leading-relaxed">
+            <p className="text-xs text-slate-600 leading-relaxed">
               あなたの作りたいAIのイメージを自由に教えてください。Geminiが名前、性格、口調、口癖、行動ルール、初回の挨拶まで自動で完璧にプロンプトを設計します。
             </p>
 
@@ -350,18 +350,18 @@ export const CharacterEditor: React.FC<CharacterEditorProps> = ({
                 value={aiPromptConcept}
                 onChange={(e) => setAiPromptConcept(e.target.value)}
                 placeholder="例: 私のプログラミング学習を見守ってくれる、ツンデレだけど教え方が上手いメンターAIを作って！"
-                className="w-full rounded-2xl bg-slate-950 border border-slate-700/80 p-3.5 text-sm text-slate-100 placeholder-slate-500 focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500"
+                className="w-full rounded-xl bg-white border border-slate-200 p-3.5 text-sm text-slate-900 placeholder-slate-400 focus:outline-none focus:border-purple-500 focus:ring-1 focus:ring-purple-500 shadow-2xs"
               />
 
               <div className="flex items-center justify-between flex-wrap gap-2">
-                <span className="text-[11px] text-slate-400 flex items-center gap-1">
-                  <Lightbulb className="w-3.5 h-3.5 text-amber-400" /> クリックしてアイデアを試す:
+                <span className="text-[11px] text-slate-500 flex items-center gap-1">
+                  <Lightbulb className="w-3.5 h-3.5 text-amber-500" /> クリックしてアイデアを試す:
                 </span>
                 <button
                   type="button"
                   onClick={() => handleGenerateAI(aiPromptConcept)}
                   disabled={!aiPromptConcept.trim() || isGenerating}
-                  className="px-5 py-2.5 rounded-xl bg-gradient-to-r from-indigo-500 to-purple-600 hover:from-indigo-600 hover:to-purple-700 text-white text-xs font-bold flex items-center gap-2 shadow-lg shadow-indigo-500/20 cursor-pointer disabled:opacity-50"
+                  className="px-5 py-2.5 rounded-xl bg-purple-600 hover:bg-purple-700 text-white text-xs font-bold flex items-center gap-2 shadow-xs cursor-pointer disabled:opacity-50"
                 >
                   <Wand2 className={`w-4 h-4 ${isGenerating ? 'animate-spin' : ''}`} />
                   <span>{isGenerating ? 'AIがキャラクターを設計中…' : 'AIキャラクターを自動生成する'}</span>
@@ -378,7 +378,7 @@ export const CharacterEditor: React.FC<CharacterEditorProps> = ({
                       setAiPromptConcept(idea);
                       handleGenerateAI(idea);
                     }}
-                    className="text-[11px] px-3 py-1.5 rounded-xl bg-slate-900 hover:bg-slate-800 text-slate-300 hover:text-white border border-slate-800 hover:border-indigo-500/40 transition-all cursor-pointer text-left"
+                    className="text-[11px] px-3 py-1.5 rounded-xl bg-white hover:bg-purple-50 text-slate-700 hover:text-purple-700 border border-slate-200 hover:border-purple-300 transition-all cursor-pointer text-left shadow-2xs"
                   >
                     ✨ {idea}
                   </button>
@@ -393,62 +393,62 @@ export const CharacterEditor: React.FC<CharacterEditorProps> = ({
       {activeSubTab === 'manual' && (
         <div className="space-y-6 animate-in fade-in">
           {/* Section 1: Basic Identity */}
-          <div className="p-5 rounded-3xl bg-slate-900 border border-slate-800 space-y-4">
-            <h3 className="text-sm font-bold text-indigo-300 uppercase tracking-wider flex items-center gap-1.5">
+          <div className="p-5 rounded-2xl bg-white border border-slate-200 shadow-xs space-y-4">
+            <h3 className="text-xs font-bold text-purple-700 uppercase tracking-wider flex items-center gap-1.5">
               <span>1. 基本プロファイル</span>
             </h3>
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div>
-                <label className="block text-xs font-semibold text-slate-300 mb-1">AIの名前</label>
+                <label className="block text-xs font-semibold text-slate-700 mb-1">AIの名前</label>
                 <input
                   type="text"
                   value={formData.name}
                   onChange={(e) => setFormData({ ...formData, name: e.target.value })}
                   placeholder="例: セラ, アルフレッド, アオイ"
-                  className="w-full rounded-xl bg-slate-950 border border-slate-800 px-3 py-2 text-sm text-slate-100 focus:outline-none focus:border-indigo-500"
+                  className="w-full rounded-xl bg-white border border-slate-200 px-3 py-2 text-sm text-slate-900 focus:outline-none focus:border-purple-500 focus:ring-1 focus:ring-purple-500 shadow-2xs"
                 />
               </div>
 
               <div>
-                <label className="block text-xs font-semibold text-slate-300 mb-1">役割・肩書</label>
+                <label className="block text-xs font-semibold text-slate-700 mb-1">役割・肩書</label>
                 <input
                   type="text"
                   value={formData.role}
                   onChange={(e) => setFormData({ ...formData, role: e.target.value })}
                   placeholder="例: 超理解者・親友AI, 辛口ビジネス参謀"
-                  className="w-full rounded-xl bg-slate-950 border border-slate-800 px-3 py-2 text-sm text-slate-100 focus:outline-none focus:border-indigo-500"
+                  className="w-full rounded-xl bg-white border border-slate-200 px-3 py-2 text-sm text-slate-900 focus:outline-none focus:border-purple-500 focus:ring-1 focus:ring-purple-500 shadow-2xs"
                 />
               </div>
 
               <div className="md:col-span-2">
-                <label className="block text-xs font-semibold text-slate-300 mb-1">キャッチフレーズ</label>
+                <label className="block text-xs font-semibold text-slate-700 mb-1">キャッチフレーズ</label>
                 <input
                   type="text"
                   value={formData.tagline}
                   onChange={(e) => setFormData({ ...formData, tagline: e.target.value })}
                   placeholder="例: どんなあなたも丸ごと受け止める生涯の味方"
-                  className="w-full rounded-xl bg-slate-950 border border-slate-800 px-3 py-2 text-sm text-slate-100 focus:outline-none focus:border-indigo-500"
+                  className="w-full rounded-xl bg-white border border-slate-200 px-3 py-2 text-sm text-slate-900 focus:outline-none focus:border-purple-500 focus:ring-1 focus:ring-purple-500 shadow-2xs"
                 />
               </div>
 
               {/* Emoji & Theme Color */}
               <div>
-                <label className="block text-xs font-semibold text-slate-300 mb-1.5">アバター絵文字</label>
+                <label className="block text-xs font-semibold text-slate-700 mb-1.5">アバター絵文字</label>
                 <div className="flex items-center gap-1.5 flex-wrap">
                   <input
                     type="text"
                     value={formData.avatarEmoji}
                     onChange={(e) => setFormData({ ...formData, avatarEmoji: e.target.value })}
-                    className="w-12 text-center text-xl rounded-xl bg-slate-950 border border-slate-800 py-1 text-slate-100 focus:outline-none focus:border-indigo-500 mr-2"
+                    className="w-12 text-center text-xl rounded-xl bg-white border border-slate-200 py-1 text-slate-900 focus:outline-none focus:border-purple-500 mr-2 shadow-2xs"
                   />
                   {EMOJI_PALETTE.map((emoji) => (
                     <button
                       key={emoji}
                       type="button"
                       onClick={() => setFormData({ ...formData, avatarEmoji: emoji })}
-                      className={`text-lg p-1.5 rounded-xl hover:bg-slate-800 transition-colors cursor-pointer ${
-                        formData.avatarEmoji === emoji ? 'bg-indigo-600/30 ring-1 ring-indigo-500' : ''
+                      className={`text-lg p-1.5 rounded-xl hover:bg-slate-100 transition-colors cursor-pointer ${
+                        formData.avatarEmoji === emoji ? 'bg-purple-100 ring-1 ring-purple-500' : ''
                       }`}
                     >
                       {emoji}
@@ -458,7 +458,7 @@ export const CharacterEditor: React.FC<CharacterEditorProps> = ({
               </div>
 
               <div>
-                <label className="block text-xs font-semibold text-slate-300 mb-1.5">テーマカラー</label>
+                <label className="block text-xs font-semibold text-slate-700 mb-1.5">テーマカラー</label>
                 <div className="flex items-center gap-2 flex-wrap">
                   {COLOR_OPTIONS.map((col) => (
                     <button
@@ -466,7 +466,7 @@ export const CharacterEditor: React.FC<CharacterEditorProps> = ({
                       type="button"
                       onClick={() => setFormData({ ...formData, avatarColor: col.id })}
                       className={`w-7 h-7 rounded-full ${col.class} flex items-center justify-center transition-all cursor-pointer ${
-                        formData.avatarColor === col.id ? 'ring-2 ring-white ring-offset-2 ring-offset-slate-900 scale-110' : 'opacity-70 hover:opacity-100'
+                        formData.avatarColor === col.id ? 'ring-2 ring-purple-500 ring-offset-2 scale-110' : 'opacity-70 hover:opacity-100'
                       }`}
                       title={col.label}
                     >
@@ -479,78 +479,78 @@ export const CharacterEditor: React.FC<CharacterEditorProps> = ({
           </div>
 
           {/* Section 2: Personality & Speech Style */}
-          <div className="p-5 rounded-3xl bg-slate-900 border border-slate-800 space-y-4">
-            <h3 className="text-sm font-bold text-indigo-300 uppercase tracking-wider flex items-center gap-1.5">
+          <div className="p-5 rounded-2xl bg-white border border-slate-200 shadow-xs space-y-4">
+            <h3 className="text-xs font-bold text-purple-700 uppercase tracking-wider flex items-center gap-1.5">
               <span>2. 性格・口調・話し方</span>
             </h3>
 
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
               <div>
-                <label className="block text-xs font-semibold text-slate-300 mb-1">一人称（AIの自分呼び）</label>
+                <label className="block text-xs font-semibold text-slate-700 mb-1">一人称（AIの自分呼び）</label>
                 <input
                   type="text"
                   value={formData.firstPerson}
                   onChange={(e) => setFormData({ ...formData, firstPerson: e.target.value })}
                   placeholder="例: 私, 僕, 俺, うち, アタシ"
-                  className="w-full rounded-xl bg-slate-950 border border-slate-800 px-3 py-2 text-sm text-slate-100 focus:outline-none focus:border-indigo-500"
+                  className="w-full rounded-xl bg-white border border-slate-200 px-3 py-2 text-sm text-slate-900 focus:outline-none focus:border-purple-500 focus:ring-1 focus:ring-purple-500 shadow-2xs"
                 />
               </div>
 
               <div>
-                <label className="block text-xs font-semibold text-slate-300 mb-1">二人称（あなたへの呼び方）</label>
+                <label className="block text-xs font-semibold text-slate-700 mb-1">二人称（あなたへの呼び方）</label>
                 <input
                   type="text"
                   value={formData.secondPerson}
                   onChange={(e) => setFormData({ ...formData, secondPerson: e.target.value })}
                   placeholder="例: 君, あなた, ◯◯さん, マスター"
-                  className="w-full rounded-xl bg-slate-950 border border-slate-800 px-3 py-2 text-sm text-slate-100 focus:outline-none focus:border-indigo-500"
+                  className="w-full rounded-xl bg-white border border-slate-200 px-3 py-2 text-sm text-slate-900 focus:outline-none focus:border-purple-500 focus:ring-1 focus:ring-purple-500 shadow-2xs"
                 />
               </div>
 
               <div>
-                <label className="block text-xs font-semibold text-slate-300 mb-1">語尾・口癖</label>
+                <label className="block text-xs font-semibold text-slate-700 mb-1">語尾・口癖</label>
                 <input
                   type="text"
                   value={formData.speechStyle}
                   onChange={(e) => setFormData({ ...formData, speechStyle: e.target.value })}
                   placeholder="例: 〜だよ！, 〜でござる, 〜っすね"
-                  className="w-full rounded-xl bg-slate-950 border border-slate-800 px-3 py-2 text-sm text-slate-100 focus:outline-none focus:border-indigo-500"
+                  className="w-full rounded-xl bg-white border border-slate-200 px-3 py-2 text-sm text-slate-900 focus:outline-none focus:border-purple-500 focus:ring-1 focus:ring-purple-500 shadow-2xs"
                 />
               </div>
 
               <div className="md:col-span-3">
-                <label className="block text-xs font-semibold text-slate-300 mb-1">性格・パーソナリティの詳細</label>
+                <label className="block text-xs font-semibold text-slate-700 mb-1">性格・パーソナリティの詳細</label>
                 <textarea
                   rows={2}
                   value={formData.personality}
                   onChange={(e) => setFormData({ ...formData, personality: e.target.value })}
                   placeholder="例: とことん温かく親身。好奇心旺盛で、相手の感情に優しく寄り添う。"
-                  className="w-full rounded-xl bg-slate-950 border border-slate-800 p-2.5 text-sm text-slate-100 focus:outline-none focus:border-indigo-500"
+                  className="w-full rounded-xl bg-white border border-slate-200 p-2.5 text-sm text-slate-900 focus:outline-none focus:border-purple-500 focus:ring-1 focus:ring-purple-500 shadow-2xs"
                 />
               </div>
 
               <div className="md:col-span-3">
-                <label className="block text-xs font-semibold text-slate-300 mb-1">口調・トーンの説明</label>
+                <label className="block text-xs font-semibold text-slate-700 mb-1">口調・トーンの説明</label>
                 <input
                   type="text"
                   value={formData.tone}
                   onChange={(e) => setFormData({ ...formData, tone: e.target.value })}
                   placeholder="例: 親しみやすく自然なタメ口。絵文字も交えてリラックスした雰囲気。"
-                  className="w-full rounded-xl bg-slate-950 border border-slate-800 px-3 py-2 text-sm text-slate-100 focus:outline-none focus:border-indigo-500"
+                  className="w-full rounded-xl bg-white border border-slate-200 px-3 py-2 text-sm text-slate-900 focus:outline-none focus:border-purple-500 focus:ring-1 focus:ring-purple-500 shadow-2xs"
                 />
               </div>
             </div>
           </div>
 
           {/* Section 3: Rules & Response Style */}
-          <div className="p-5 rounded-3xl bg-slate-900 border border-slate-800 space-y-4">
-            <h3 className="text-sm font-bold text-indigo-300 uppercase tracking-wider flex items-center gap-1.5">
+          <div className="p-5 rounded-2xl bg-white border border-slate-200 shadow-xs space-y-4">
+            <h3 className="text-xs font-bold text-purple-700 uppercase tracking-wider flex items-center gap-1.5">
               <span>3. 行動ルール & 回答スタイル</span>
             </h3>
 
             {/* Response length */}
             <div>
-              <label className="block text-xs font-semibold text-slate-300 mb-1.5">返答の長さ</label>
+              <label className="block text-xs font-semibold text-slate-700 mb-1.5">返答の長さ</label>
               <div className="grid grid-cols-3 gap-2">
                 {[
                   { id: 'short', title: '簡潔・短め', desc: '1〜3文程度でテンポの良い会話' },
@@ -561,14 +561,14 @@ export const CharacterEditor: React.FC<CharacterEditorProps> = ({
                     key={item.id}
                     type="button"
                     onClick={() => setFormData({ ...formData, responseLength: item.id as any })}
-                    className={`p-3 rounded-2xl border text-left transition-all cursor-pointer ${
+                    className={`p-3 rounded-xl border text-left transition-all cursor-pointer ${
                       formData.responseLength === item.id
-                        ? 'bg-indigo-600/20 border-indigo-500 text-white'
-                        : 'bg-slate-950 border-slate-800 text-slate-400 hover:text-slate-200'
+                        ? 'bg-purple-50 border-purple-400 text-purple-900 font-bold shadow-2xs'
+                        : 'bg-white border-slate-200 text-slate-600 hover:bg-slate-50'
                     }`}
                   >
                     <div className="text-xs font-bold">{item.title}</div>
-                    <div className="text-[10px] text-slate-400 mt-0.5">{item.desc}</div>
+                    <div className="text-[10px] text-slate-500 mt-0.5">{item.desc}</div>
                   </button>
                 ))}
               </div>
@@ -576,20 +576,20 @@ export const CharacterEditor: React.FC<CharacterEditorProps> = ({
 
             {/* Behavior Rules List */}
             <div>
-              <label className="block text-xs font-semibold text-slate-300 mb-1.5">
+              <label className="block text-xs font-semibold text-slate-700 mb-1.5">
                 絶対遵守すべき行動ルール
               </label>
               <div className="space-y-2 mb-2">
                 {formData.behaviorRules?.map((rule, idx) => (
                   <div
                     key={idx}
-                    className="flex items-center justify-between gap-2 px-3 py-2 rounded-xl bg-slate-950 border border-slate-800 text-xs text-slate-200"
+                    className="flex items-center justify-between gap-2 px-3 py-2 rounded-xl bg-slate-50 border border-slate-200 text-xs text-slate-800"
                   >
                     <span className="flex-1">{rule}</span>
                     <button
                       type="button"
                       onClick={() => removeRule(idx)}
-                      className="text-slate-500 hover:text-rose-400 cursor-pointer"
+                      className="text-slate-400 hover:text-rose-600 cursor-pointer transition-colors"
                     >
                       <Trash2 className="w-3.5 h-3.5" />
                     </button>
@@ -609,12 +609,12 @@ export const CharacterEditor: React.FC<CharacterEditorProps> = ({
                     }
                   }}
                   placeholder="新しいルールを入力（例: 結論から端的に答える、批判せず共感する）"
-                  className="flex-1 rounded-xl bg-slate-950 border border-slate-800 px-3 py-2 text-xs text-slate-100 focus:outline-none focus:border-indigo-500"
+                  className="flex-1 rounded-xl bg-white border border-slate-200 px-3 py-2 text-xs text-slate-900 focus:outline-none focus:border-purple-500 focus:ring-1 focus:ring-purple-500 shadow-2xs"
                 />
                 <button
                   type="button"
                   onClick={addRule}
-                  className="px-3.5 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-xs font-bold text-slate-200 transition-colors cursor-pointer"
+                  className="px-3.5 py-2 rounded-xl border border-slate-200 bg-white hover:bg-slate-50 text-xs font-bold text-slate-700 shadow-2xs transition-colors cursor-pointer"
                 >
                   追加
                 </button>
@@ -623,13 +623,13 @@ export const CharacterEditor: React.FC<CharacterEditorProps> = ({
           </div>
 
           {/* Section 4: Greetings & Suggestions */}
-          <div className="p-5 rounded-3xl bg-slate-900 border border-slate-800 space-y-4">
-            <h3 className="text-sm font-bold text-indigo-300 uppercase tracking-wider flex items-center gap-1.5">
+          <div className="p-5 rounded-2xl bg-white border border-slate-200 shadow-xs space-y-4">
+            <h3 className="text-xs font-bold text-purple-700 uppercase tracking-wider flex items-center gap-1.5">
               <span>4. 初回の挨拶とおすすめの話題</span>
             </h3>
 
             <div>
-              <label className="block text-xs font-semibold text-slate-300 mb-1">
+              <label className="block text-xs font-semibold text-slate-700 mb-1">
                 最初の挨拶メッセージ (キャラクターらしさの詰まった第一声)
               </label>
               <textarea
@@ -637,26 +637,26 @@ export const CharacterEditor: React.FC<CharacterEditorProps> = ({
                 value={formData.greetingMessage}
                 onChange={(e) => setFormData({ ...formData, greetingMessage: e.target.value })}
                 placeholder="例: やっほー！今日も来てくれて嬉しいな。今日どんな一日だった？"
-                className="w-full rounded-xl bg-slate-950 border border-slate-800 p-2.5 text-sm text-slate-100 focus:outline-none focus:border-indigo-500"
+                className="w-full rounded-xl bg-white border border-slate-200 p-2.5 text-sm text-slate-900 focus:outline-none focus:border-purple-500 focus:ring-1 focus:ring-purple-500 shadow-2xs"
               />
             </div>
 
             {/* Suggested topics */}
             <div>
-              <label className="block text-xs font-semibold text-slate-300 mb-1.5">
+              <label className="block text-xs font-semibold text-slate-700 mb-1.5">
                 おすすめの質問・話題（ボタンで一発送信できる候補）
               </label>
               <div className="flex flex-wrap gap-2 mb-2">
                 {formData.suggestedTopics?.map((topic, idx) => (
                   <span
                     key={idx}
-                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-slate-950 border border-slate-800 text-xs text-slate-300"
+                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-slate-50 border border-slate-200 text-xs text-slate-700"
                   >
                     <span>💬 {topic}</span>
                     <button
                       type="button"
                       onClick={() => removeTopic(idx)}
-                      className="text-slate-500 hover:text-rose-400 cursor-pointer ml-1"
+                      className="text-slate-400 hover:text-rose-600 cursor-pointer ml-1 transition-colors"
                     >
                       ×
                     </button>
@@ -676,12 +676,12 @@ export const CharacterEditor: React.FC<CharacterEditorProps> = ({
                     }
                   }}
                   placeholder="話題を追加（例: 今日のタスクを整理してほしい）"
-                  className="flex-1 rounded-xl bg-slate-950 border border-slate-800 px-3 py-2 text-xs text-slate-100 focus:outline-none focus:border-indigo-500"
+                  className="flex-1 rounded-xl bg-white border border-slate-200 px-3 py-2 text-xs text-slate-900 focus:outline-none focus:border-purple-500 focus:ring-1 focus:ring-purple-500 shadow-2xs"
                 />
                 <button
                   type="button"
                   onClick={addTopic}
-                  className="px-3.5 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-xs font-bold text-slate-200 transition-colors cursor-pointer"
+                  className="px-3.5 py-2 rounded-xl border border-slate-200 bg-white hover:bg-slate-50 text-xs font-bold text-slate-700 shadow-2xs transition-colors cursor-pointer"
                 >
                   追加
                 </button>
@@ -690,9 +690,9 @@ export const CharacterEditor: React.FC<CharacterEditorProps> = ({
           </div>
 
           {/* Section 5: Advanced System Instructions & AI Refiner */}
-          <div className="p-5 rounded-3xl bg-slate-900 border border-slate-800 space-y-4">
+          <div className="p-5 rounded-2xl bg-white border border-slate-200 shadow-xs space-y-4">
             <div className="flex items-center justify-between flex-wrap gap-2">
-              <h3 className="text-sm font-bold text-indigo-300 uppercase tracking-wider flex items-center gap-1.5">
+              <h3 className="text-xs font-bold text-purple-700 uppercase tracking-wider flex items-center gap-1.5">
                 <span>5. プロンプト補足・高度な指示</span>
               </h3>
 
@@ -700,9 +700,9 @@ export const CharacterEditor: React.FC<CharacterEditorProps> = ({
                 type="button"
                 onClick={handleRefinePrompt}
                 disabled={isRefiningPrompt}
-                className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold text-indigo-300 hover:text-white bg-indigo-500/10 hover:bg-indigo-500/20 border border-indigo-500/30 transition-all cursor-pointer disabled:opacity-50"
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold text-purple-700 hover:text-purple-800 bg-purple-50 hover:bg-purple-100 border border-purple-200 transition-all cursor-pointer disabled:opacity-50"
               >
-                <Sparkles className={`w-3.5 h-3.5 text-indigo-400 ${isRefiningPrompt ? 'animate-spin' : ''}`} />
+                <Sparkles className={`w-3.5 h-3.5 text-purple-600 ${isRefiningPrompt ? 'animate-spin' : ''}`} />
                 <span>{isRefiningPrompt ? 'プロンプト改善中…' : '✨ AIにプロンプト改善を依頼'}</span>
               </button>
             </div>
@@ -712,16 +712,16 @@ export const CharacterEditor: React.FC<CharacterEditorProps> = ({
               value={formData.customInstructions}
               onChange={(e) => setFormData({ ...formData, customInstructions: e.target.value })}
               placeholder="Geminiのシステム指示に追加したい任意の詳細設定（世界観、秘密の設定、特殊な専門知識など）を入力できます。"
-              className="w-full rounded-xl bg-slate-950 border border-slate-800 p-3 text-xs md:text-sm text-slate-200 focus:outline-none focus:border-indigo-500 font-mono leading-relaxed"
+              className="w-full rounded-xl bg-white border border-slate-200 p-3 text-xs md:text-sm text-slate-900 focus:outline-none focus:border-purple-500 focus:ring-1 focus:ring-purple-500 font-mono leading-relaxed shadow-2xs"
             />
           </div>
 
           {/* Section 6: Model */}
-          <div className="p-5 rounded-3xl bg-slate-900 border border-slate-800 space-y-4">
-            <h3 className="text-sm font-bold text-indigo-300 uppercase tracking-wider">
+          <div className="p-5 rounded-2xl bg-white border border-slate-200 shadow-xs space-y-4">
+            <h3 className="text-xs font-bold text-purple-700 uppercase tracking-wider">
               <span>6. 使用するAIモデル</span>
             </h3>
-            <label className="flex items-center gap-2 text-xs text-slate-300">
+            <label className="flex items-center gap-2 text-xs text-slate-700">
               <input
                 type="checkbox"
                 checked={!formData.modelSetting}
@@ -738,7 +738,7 @@ export const CharacterEditor: React.FC<CharacterEditorProps> = ({
                 statuses={providerStatuses}
               />
             )}
-            {modelError && <p className="rounded-lg bg-rose-950/60 p-3 text-xs text-rose-200">{modelError}</p>}
+            {modelError && <p className="rounded-xl bg-rose-50 border border-rose-200 p-3 text-xs text-rose-700">{modelError}</p>}
           </div>
 
           {/* Bottom Actions */}
@@ -747,14 +747,14 @@ export const CharacterEditor: React.FC<CharacterEditorProps> = ({
               <button
                 type="button"
                 onClick={() => onDuplicateCharacter(formData)}
-                className="px-3.5 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-xs font-semibold text-slate-300 transition-colors cursor-pointer"
+                className="px-3.5 py-2 rounded-xl border border-slate-200 bg-white hover:bg-slate-50 text-xs font-semibold text-slate-700 shadow-2xs transition-colors cursor-pointer"
               >
                 このAIを複製する
               </button>
               <button
                 type="button"
                 onClick={() => setIsDeleteConfirmOpen(true)}
-                className="px-3.5 py-2 rounded-xl text-rose-400 hover:bg-rose-950/40 text-xs font-semibold transition-colors cursor-pointer"
+                className="px-3.5 py-2 rounded-xl text-rose-600 hover:bg-rose-50 border border-rose-200 text-xs font-semibold transition-colors cursor-pointer"
               >
                 削除
               </button>
@@ -763,7 +763,7 @@ export const CharacterEditor: React.FC<CharacterEditorProps> = ({
             <button
               type="button"
               onClick={handleSaveAndChat}
-              className="flex items-center gap-2 px-6 py-2.5 rounded-xl bg-gradient-to-r from-indigo-500 to-purple-600 hover:from-indigo-600 hover:to-purple-700 text-white text-xs font-bold shadow-lg shadow-indigo-500/20 transition-all cursor-pointer"
+              className="flex items-center gap-2 px-6 py-2.5 rounded-xl bg-purple-600 hover:bg-purple-700 text-white text-xs font-bold shadow-xs transition-all cursor-pointer"
             >
               <span>設定を保存して対話する</span>
               <ArrowRight className="w-4 h-4" />
@@ -772,13 +772,13 @@ export const CharacterEditor: React.FC<CharacterEditorProps> = ({
         </div>
       )}
       {isDeleteConfirmOpen && (
-        <div className="fixed inset-0 z-[90] flex items-center justify-center bg-slate-950/80 p-4 backdrop-blur-sm" role="presentation">
-          <section role="dialog" aria-modal="true" aria-labelledby="editor-delete-character-title" className="w-full max-w-md rounded-2xl border border-slate-700 bg-slate-900 p-6 shadow-2xl">
-            <h2 id="editor-delete-character-title" className="text-base font-bold text-white">専門AIを削除しますか？</h2>
-            <p className="mt-3 text-sm text-slate-300">「{formData.name}」を一覧から削除します。会話履歴は残ります。</p>
+        <div className="fixed inset-0 z-[90] flex items-center justify-center bg-slate-900/40 p-4 backdrop-blur-xs" role="presentation">
+          <section role="dialog" aria-modal="true" aria-labelledby="editor-delete-character-title" className="w-full max-w-md rounded-2xl border border-slate-200 bg-white p-6 shadow-2xl text-slate-900">
+            <h2 id="editor-delete-character-title" className="text-base font-bold text-slate-900">専門AIを削除しますか？</h2>
+            <p className="mt-3 text-sm text-slate-600">「{formData.name}」を一覧から削除します。会話履歴は残ります。</p>
             <div className="mt-6 flex justify-end gap-2">
-              <button type="button" onClick={() => setIsDeleteConfirmOpen(false)} className="rounded-xl border border-slate-700 px-4 py-2 text-sm text-slate-300 hover:bg-slate-800">キャンセル</button>
-              <button type="button" onClick={() => onDeleteCharacter(formData.id)} className="rounded-xl bg-rose-600 px-4 py-2 text-sm font-semibold text-white hover:bg-rose-500">削除する</button>
+              <button type="button" onClick={() => setIsDeleteConfirmOpen(false)} className="rounded-xl border border-slate-200 bg-white px-4 py-2 text-sm text-slate-700 hover:bg-slate-50 shadow-2xs">キャンセル</button>
+              <button type="button" onClick={() => onDeleteCharacter(formData.id)} className="rounded-xl bg-rose-600 px-4 py-2 text-sm font-semibold text-white hover:bg-rose-700 shadow-xs">削除する</button>
             </div>
           </section>
         </div>

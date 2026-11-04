@@ -168,29 +168,29 @@ export const QuickPresidentDrawer: React.FC<QuickPresidentDrawerProps> = ({
 
   return (
     <div className={isExpanded
-      ? "fixed inset-4 z-50 bg-slate-900 border border-slate-700 rounded-2xl shadow-2xl flex flex-col"
-      : "fixed inset-y-0 right-0 z-50 w-full max-w-md bg-slate-900 border-l border-slate-800 shadow-2xl flex flex-col animate-in slide-in-from-right duration-200"}>
+      ? "fixed inset-4 z-50 bg-white border border-slate-200 rounded-2xl shadow-2xl flex flex-col"
+      : "fixed inset-y-0 right-0 z-50 w-full max-w-md bg-white border-l border-slate-200 shadow-2xl flex flex-col animate-in slide-in-from-right duration-200"}>
       {/* Drawer Header */}
-      <div className="p-4 border-b border-slate-800 bg-slate-950 flex items-center justify-between">
+      <div className="p-4 border-b border-slate-200 bg-slate-50 flex items-center justify-between">
         <div className="flex items-center gap-3">
-          <div className="w-9 h-9 rounded-xl bg-gradient-to-tr from-indigo-600 to-blue-500 flex items-center justify-center text-white text-lg shadow-lg shadow-indigo-500/20">
+          <div className="w-9 h-9 rounded-xl bg-purple-600 flex items-center justify-center text-white text-lg shadow-sm">
             {selectedWorkMode.avatarEmoji || character.avatarEmoji || '👔'}
           </div>
           <div>
             <div className="flex items-center gap-1.5">
-              <span className="font-bold text-white text-sm">{selectedWorkMode.name}</span>
-              <span className="text-[10px] px-1.5 py-0.2 rounded bg-indigo-500/20 text-indigo-300 font-medium">
+              <span className="font-bold text-slate-900 text-sm">{selectedWorkMode.name}</span>
+              <span className="text-[10px] px-2 py-0.5 rounded-full bg-purple-100 text-purple-700 font-semibold border border-purple-200">
                 クイック相談
               </span>
             </div>
-            <p className="text-[10px] text-slate-400 truncate max-w-[200px]">{selectedWorkMode.label}担当</p>
+            <p className="text-[10px] text-slate-500 truncate max-w-[200px]">{selectedWorkMode.label}担当</p>
           </div>
         </div>
 
         <div className="flex items-center gap-1">
           <button
             onClick={() => setIsExpanded((expanded) => !expanded)}
-            className="p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 transition-colors"
+            className="p-1.5 rounded-lg text-slate-400 hover:text-slate-700 hover:bg-slate-100 transition-colors"
             title={isExpanded ? "相談パネルを元の大きさに戻す" : "相談パネルを拡大"}
             aria-label={isExpanded ? "相談パネルを元の大きさに戻す" : "相談パネルを拡大"}
           >
@@ -198,33 +198,33 @@ export const QuickPresidentDrawer: React.FC<QuickPresidentDrawerProps> = ({
           </button>
           <button
             onClick={onClose}
-            className="p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 transition-colors"
+            className="p-1.5 rounded-lg text-slate-400 hover:text-slate-700 hover:bg-slate-100 transition-colors"
           >
             <X className="w-4 h-4" />
           </button>
         </div>
       </div>
 
-      <div className="border-b border-slate-800 bg-slate-950/60 px-4 py-3">
+      <div className="border-b border-slate-200 bg-slate-50/50 px-4 py-3">
         <div>
-          <p className="text-xs text-slate-300">依頼の種類</p>
+          <p className="text-xs font-semibold text-slate-700">依頼の種類</p>
           <div className="mt-2 grid grid-cols-3 gap-1.5">
-            <button type="button" onClick={() => setRequestMode('consult')} className={`rounded-lg px-2 py-1.5 text-[10px] font-semibold ${requestMode === 'consult' ? 'bg-indigo-600 text-white' : 'bg-slate-800 text-slate-300'}`}>相談</button>
-            <button type="button" onClick={() => setRequestMode('action_plan')} className={`rounded-lg px-2 py-1.5 text-[10px] font-semibold ${requestMode === 'action_plan' ? 'bg-indigo-600 text-white' : 'bg-slate-800 text-slate-300'}`}>操作の実行案</button>
-            <button type="button" onClick={() => setRequestMode('external_prompt')} className={`rounded-lg px-2 py-1.5 text-[10px] font-semibold ${requestMode === 'external_prompt' ? 'bg-indigo-600 text-white' : 'bg-slate-800 text-slate-300'}`}>外部依頼文</button>
+            <button type="button" onClick={() => setRequestMode('consult')} className={`rounded-xl px-2 py-1.5 text-[10px] font-semibold transition cursor-pointer ${requestMode === 'consult' ? 'bg-purple-600 text-white shadow-sm' : 'bg-white border border-slate-200 text-slate-600 hover:bg-slate-50'}`}>相談</button>
+            <button type="button" onClick={() => setRequestMode('action_plan')} className={`rounded-xl px-2 py-1.5 text-[10px] font-semibold transition cursor-pointer ${requestMode === 'action_plan' ? 'bg-purple-600 text-white shadow-sm' : 'bg-white border border-slate-200 text-slate-600 hover:bg-slate-50'}`}>操作の実行案</button>
+            <button type="button" onClick={() => setRequestMode('external_prompt')} className={`rounded-xl px-2 py-1.5 text-[10px] font-semibold transition cursor-pointer ${requestMode === 'external_prompt' ? 'bg-purple-600 text-white shadow-sm' : 'bg-white border border-slate-200 text-slate-600 hover:bg-slate-50'}`}>外部依頼文</button>
           </div>
         </div>
-        <label className="mt-3 flex items-center justify-between gap-3 text-xs text-slate-300">
+        <label className="mt-3 flex items-center justify-between gap-3 text-xs font-semibold text-slate-700">
           <span>相談するAI</span>
-          <select value={selectedWorkModeId} onChange={(event) => setSelectedWorkModeId(event.target.value as AIWorkModeId)} className="max-w-[220px] rounded-lg border border-slate-700 bg-slate-900 px-2 py-1.5 text-xs text-white">
+          <select value={selectedWorkModeId} onChange={(event) => setSelectedWorkModeId(event.target.value as AIWorkModeId)} className="max-w-[220px] rounded-xl border border-slate-200 bg-white px-2.5 py-1.5 text-xs text-slate-900 focus:outline-none focus:border-purple-500 shadow-2xs">
             {getAvailableAssistantModes(pageId).map((mode) => <option key={mode.id} value={mode.id}>{mode.id === 'marketing_execution' ? 'マーケティングAI' : mode.label}</option>)}
           </select>
         </label>
-        <p className="mt-2 text-[10px] leading-relaxed text-slate-500">現在の画面に合わせたAIを初期選択しています。実行案も操作内容を提案する段階で、この窓から直接保存・送信はしません。画面データは自動送信されないため、必要な情報を入力してください。外部依頼文はコピーして他のAIや依頼先に渡せます。</p>
+        <p className="mt-2 text-[10px] leading-relaxed text-slate-400">現在の画面に合わせたAIを初期選択しています。実行案も操作内容を提案する段階で、この窓から直接保存・送信はしません。画面データは自動送信されないため、必要な情報を入力してください。外部依頼文はコピーして他のAIや依頼先に渡せます。</p>
       </div>
 
       {/* Messages Scroll Area */}
-      <div className="flex-1 overflow-y-auto p-4 space-y-3">
+      <div className="flex-1 overflow-y-auto p-4 space-y-3 bg-slate-50/60">
         {messages.map((m) => (
           <div
             key={m.id}
@@ -233,20 +233,20 @@ export const QuickPresidentDrawer: React.FC<QuickPresidentDrawerProps> = ({
             <div
               className={`max-w-[88%] rounded-2xl px-3.5 py-2.5 text-xs leading-relaxed whitespace-pre-wrap ${
                 m.role === 'user'
-                  ? 'bg-blue-600 text-white rounded-br-none shadow-md shadow-blue-600/20'
-                  : 'bg-slate-950 text-slate-200 border border-slate-800 rounded-bl-none shadow-md'
+                  ? 'bg-purple-600 text-white rounded-br-xs shadow-sm'
+                  : 'bg-white text-slate-900 border border-slate-200 rounded-bl-xs shadow-2xs'
               }`}
             >
               {m.content}
             </div>
-            <span className="text-[9px] text-slate-500 mt-1 px-1">
+            <span className="text-[9px] text-slate-400 mt-1 px-1">
               {new Date(m.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
             </span>
           </div>
         ))}
         {isLoading && (
-          <div className="flex items-center gap-2 p-3 rounded-xl bg-slate-950 border border-slate-800 text-xs text-slate-400">
-            <Loader2 className="w-3.5 h-3.5 animate-spin text-indigo-400" />
+          <div className="flex items-center gap-2 p-3 rounded-xl bg-white border border-slate-200 text-xs text-slate-600 shadow-2xs">
+            <Loader2 className="w-3.5 h-3.5 animate-spin text-purple-600" />
             <span>AI社長が思考中...</span>
           </div>
         )}
@@ -254,12 +254,12 @@ export const QuickPresidentDrawer: React.FC<QuickPresidentDrawerProps> = ({
       </div>
 
       {/* Quick Prompts */}
-      <div className="px-4 py-2 border-t border-slate-800/60 bg-slate-950/60 flex gap-1.5 overflow-x-auto scrollbar-none">
+      <div className="px-4 py-2 border-t border-slate-200 bg-white flex gap-1.5 overflow-x-auto scrollbar-none">
         {quickPrompts.map((prompt, idx) => (
           <button
             key={idx}
             onClick={() => handleSend(prompt)}
-            className="whitespace-nowrap px-2.5 py-1 rounded-lg bg-slate-900 border border-slate-800 text-[10px] text-slate-300 hover:bg-slate-800 hover:text-white transition-colors cursor-pointer"
+            className="whitespace-nowrap px-2.5 py-1 rounded-lg bg-slate-50 border border-slate-200 text-[10px] text-slate-700 hover:bg-purple-50 hover:text-purple-700 hover:border-purple-200 transition-colors cursor-pointer shadow-2xs"
           >
             {prompt}
           </button>
@@ -267,7 +267,7 @@ export const QuickPresidentDrawer: React.FC<QuickPresidentDrawerProps> = ({
       </div>
 
       {/* Input Box */}
-      <div className="p-3 border-t border-slate-800 bg-slate-950">
+      <div className="p-3 border-t border-slate-200 bg-white">
         <form
           onSubmit={(e) => {
             e.preventDefault();
@@ -280,12 +280,12 @@ export const QuickPresidentDrawer: React.FC<QuickPresidentDrawerProps> = ({
             value={input}
             onChange={(e) => setInput(e.target.value)}
             placeholder="AI社長に指示・相談を入力..."
-            className="flex-1 bg-slate-900 border border-slate-800 rounded-xl px-3.5 py-2 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-indigo-500"
+            className="flex-1 bg-white border border-slate-200 rounded-xl px-3.5 py-2 text-xs text-slate-900 placeholder-slate-400 focus:outline-none focus:border-purple-500 focus:ring-1 focus:ring-purple-500 shadow-2xs"
           />
           <button
             type="submit"
             disabled={!input.trim() || isLoading}
-            className="p-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white disabled:opacity-40 transition-colors shadow-md shadow-indigo-600/30 cursor-pointer"
+            className="p-2 rounded-xl bg-purple-600 hover:bg-purple-700 text-white disabled:opacity-40 transition-colors shadow-sm cursor-pointer"
           >
             <Send className="w-4 h-4" />
           </button>

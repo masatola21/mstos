@@ -35,7 +35,7 @@ export function useProviderStatus() {
 }
 
 const inputClass =
-  'w-full rounded-lg border border-slate-700 bg-slate-900 px-2.5 py-2 text-xs text-white focus:outline-none focus:border-indigo-500';
+  'w-full rounded-xl border border-slate-200 bg-white px-2.5 py-2 text-xs text-slate-900 focus:outline-none focus:border-purple-500 focus:ring-1 focus:ring-purple-500 shadow-2xs';
 
 interface TargetRowProps {
   label: string;
@@ -51,10 +51,10 @@ const TargetRow: React.FC<TargetRowProps> = ({ label, target, statuses, onChange
   const invalid = sanitizeTarget(target) === null;
   return (
     <div className="space-y-1.5">
-      <div className="flex items-center justify-between text-[11px] font-semibold text-slate-300">
+      <div className="flex items-center justify-between text-[11px] font-semibold text-slate-700">
         <span>{label}</span>
         {onRemove && (
-          <button type="button" onClick={onRemove} aria-label={`${label}を削除`} className="text-slate-500 hover:text-rose-300">
+          <button type="button" onClick={onRemove} aria-label={`${label}を削除`} className="text-slate-400 hover:text-rose-600 transition-colors cursor-pointer">
             <Trash2 className="h-3.5 w-3.5" />
           </button>
         )}
@@ -88,9 +88,9 @@ const TargetRow: React.FC<TargetRowProps> = ({ label, target, statuses, onChange
           </datalist>
         </div>
       </div>
-      {invalid && <p className="text-[11px] text-rose-300">モデル名は半角の英数字と . _ : / - のみ使えます。</p>}
+      {invalid && <p className="text-[11px] text-rose-600">モデル名は半角の英数字と . _ : / - のみ使えます。</p>}
       {configured === false && (
-        <p className="text-[11px] text-amber-300">
+        <p className="text-[11px] text-amber-800 bg-amber-50 p-2 rounded-lg border border-amber-200">
           サーバーに {AI_PROVIDERS[target.provider].envKey} が設定されていないため、このモデルは使えません。
         </p>
       )}
@@ -126,7 +126,7 @@ export const ModelSettingEditor: React.FC<ModelSettingEditorProps> = ({ value, o
       <button
         type="button"
         onClick={() => onChange({ ...value, fallbacks: [...value.fallbacks, { provider: 'groq', model: AI_PROVIDERS.groq.suggestedModels[0] }] })}
-        className="inline-flex items-center gap-1 rounded-lg border border-slate-700 px-3 py-1.5 text-[11px] font-semibold text-slate-200 hover:bg-slate-800"
+        className="inline-flex items-center gap-1 rounded-xl border border-slate-200 bg-white px-3 py-1.5 text-[11px] font-semibold text-slate-700 hover:bg-slate-50 shadow-2xs transition-colors cursor-pointer"
       >
         <Plus className="h-3.5 w-3.5" /> 切り替え先を追加
       </button>

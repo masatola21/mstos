@@ -16,8 +16,8 @@ interface RoleAIEditorProps {
 }
 
 const fieldClass =
-  'mt-1 w-full rounded-lg border border-slate-700 bg-slate-900 px-3 py-2 text-sm text-white placeholder-slate-600 focus:outline-none focus:border-indigo-500';
-const labelClass = 'block text-xs font-semibold text-slate-300';
+  'mt-1 w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 placeholder-slate-400 focus:outline-none focus:border-purple-500 focus:ring-1 focus:ring-purple-500 shadow-2xs';
+const labelClass = 'block text-xs font-semibold text-slate-700';
 
 export const RoleAIEditor: React.FC<RoleAIEditorProps> = ({
   mode,
@@ -59,12 +59,12 @@ export const RoleAIEditor: React.FC<RoleAIEditorProps> = ({
 
   return (
     <ModalShell title={`${mode.label}の詳細設定`} onClose={onClose} maxWidthClass="max-w-3xl">
-      <div className="space-y-5 p-5 sm:p-6">
+      <div className="space-y-5 p-5 sm:p-6 text-slate-900">
         <div className="pr-10">
-          <h2 className="text-lg font-extrabold text-white">
+          <h2 className="text-lg font-extrabold text-slate-900">
             {(emoji || mode.avatarEmoji)} {(name || mode.name)}｜{mode.label}
           </h2>
-          <p className="mt-1 text-xs text-slate-400">
+          <p className="mt-1 text-xs text-slate-500">
             名前・口調・追加指示・使うモデルを変更できます。空欄の項目は標準設定のままです。
           </p>
         </div>
@@ -111,37 +111,37 @@ export const RoleAIEditor: React.FC<RoleAIEditorProps> = ({
           <textarea value={extra} rows={5} maxLength={4000} onChange={(e) => setExtra(e.target.value)} placeholder="例: 当社は中小企業向けの経営支援サービスです。提案は必ず3案に絞ってください。" className={fieldClass} />
         </label>
 
-        <details className="rounded-xl border border-slate-800 bg-slate-900/60 p-3 text-xs text-slate-400">
-          <summary className="cursor-pointer font-semibold text-slate-300">標準の役割指示を確認する（変更不可）</summary>
+        <details className="rounded-xl border border-slate-200 bg-slate-50 p-3 text-xs text-slate-600">
+          <summary className="cursor-pointer font-semibold text-slate-700">標準の役割指示を確認する（変更不可）</summary>
           <p className="mt-2 leading-5">{mode.systemInstruction}</p>
         </details>
 
-        <section className="space-y-3 rounded-2xl border border-slate-800 bg-slate-900/60 p-4">
-          <h3 className="text-sm font-bold text-white">この役割が使うAIモデル</h3>
-          <label className="flex items-center gap-2 text-xs text-slate-300">
+        <section className="space-y-3 rounded-2xl border border-slate-200 bg-slate-50/60 p-4">
+          <h3 className="text-sm font-bold text-slate-900">この役割が使うAIモデル</h3>
+          <label className="flex items-center gap-2 text-xs text-slate-700">
             <input type="checkbox" checked={!useCustomModel} onChange={(e) => setUseCustomModel(!e.target.checked)} />
             全体のデフォルト設定を使う（現在: {defaultSetting.primary.model}）
           </label>
           {useCustomModel && <ModelSettingEditor value={modelSetting} onChange={setModelSetting} statuses={statuses} />}
         </section>
 
-        {error && <p className="rounded-lg bg-rose-950/60 p-3 text-xs text-rose-200">{error}</p>}
+        {error && <p className="rounded-xl bg-rose-50 border border-rose-200 p-3 text-xs text-rose-700">{error}</p>}
 
-        <div className="flex flex-wrap items-center justify-between gap-2">
+        <div className="flex flex-wrap items-center justify-between gap-2 pt-2 border-t border-slate-200">
           <button
             type="button"
             onClick={() => {
               if (window.confirm('この役割の設定をすべて標準に戻しますか？')) onReset();
             }}
-            className="inline-flex items-center gap-1.5 rounded-xl border border-slate-700 px-3 py-2 text-xs font-semibold text-slate-300 hover:bg-slate-800"
+            className="inline-flex items-center gap-1.5 rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-50 shadow-2xs transition-colors cursor-pointer"
           >
             <RotateCcw className="h-3.5 w-3.5" /> 標準に戻す
           </button>
           <div className="flex gap-2">
-            <button type="button" onClick={onClose} className="rounded-xl bg-slate-800 px-4 py-2 text-xs font-bold text-slate-200 hover:bg-slate-700">
+            <button type="button" onClick={onClose} className="rounded-xl border border-slate-200 bg-white px-4 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-50 shadow-2xs transition-colors cursor-pointer">
               キャンセル
             </button>
-            <button type="button" onClick={handleSave} className="inline-flex items-center gap-1.5 rounded-xl bg-indigo-600 px-5 py-2 text-xs font-bold text-white hover:bg-indigo-500">
+            <button type="button" onClick={handleSave} className="inline-flex items-center gap-1.5 rounded-xl bg-purple-600 px-5 py-2 text-xs font-bold text-white hover:bg-purple-700 shadow-xs transition-colors cursor-pointer">
               <Save className="h-3.5 w-3.5" /> 保存
             </button>
           </div>

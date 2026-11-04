@@ -60,45 +60,45 @@ interface Props {
 const CATEGORY_CONFIG: Record<CalendarEventCategory, { label: string; badgeBg: string; text: string; border: string; dot: string }> = {
   deal: { 
     label: '商談・リード面談', 
-    badgeBg: 'bg-blue-950/60', 
-    text: 'text-blue-300', 
-    border: 'border-blue-500/30', 
-    dot: 'bg-blue-400' 
+    badgeBg: 'bg-blue-50', 
+    text: 'text-blue-700', 
+    border: 'border-blue-200', 
+    dot: 'bg-blue-600' 
   },
   support: { 
     label: '顧客支援・定期面談', 
-    badgeBg: 'bg-amber-950/60', 
-    text: 'text-amber-300', 
-    border: 'border-amber-500/30', 
-    dot: 'bg-amber-400' 
+    badgeBg: 'bg-amber-50', 
+    text: 'text-amber-700', 
+    border: 'border-amber-200', 
+    dot: 'bg-amber-500' 
   },
   task: { 
     label: '業務タスク期限', 
-    badgeBg: 'bg-purple-950/60', 
-    text: 'text-purple-300', 
-    border: 'border-purple-500/30', 
-    dot: 'bg-purple-400' 
+    badgeBg: 'bg-purple-50', 
+    text: 'text-purple-700', 
+    border: 'border-purple-200', 
+    dot: 'bg-purple-600' 
   },
   finance: { 
     label: '請求・契約期日', 
-    badgeBg: 'bg-emerald-950/60', 
-    text: 'text-emerald-300', 
-    border: 'border-emerald-500/30', 
-    dot: 'bg-emerald-400' 
+    badgeBg: 'bg-emerald-50', 
+    text: 'text-emerald-700', 
+    border: 'border-emerald-200', 
+    dot: 'bg-emerald-600' 
   },
   custom: { 
     label: '登録予定・MTG', 
-    badgeBg: 'bg-cyan-950/60', 
-    text: 'text-cyan-300', 
-    border: 'border-cyan-500/30', 
-    dot: 'bg-cyan-400' 
+    badgeBg: 'bg-indigo-50', 
+    text: 'text-indigo-700', 
+    border: 'border-indigo-200', 
+    dot: 'bg-indigo-600' 
   },
   google: { 
     label: 'Googleカレンダー（事業用）', 
-    badgeBg: 'bg-sky-950/70', 
-    text: 'text-sky-300', 
-    border: 'border-sky-500/40', 
-    dot: 'bg-sky-400' 
+    badgeBg: 'bg-sky-50', 
+    text: 'text-sky-700', 
+    border: 'border-sky-200', 
+    dot: 'bg-sky-500' 
   },
 };
 
@@ -604,22 +604,22 @@ export const IntegratedCalendarWorkspace: React.FC<Props> = ({
   return (
     <div className="space-y-6">
       {/* Top Header Banner */}
-      <div className="bg-slate-900/90 border border-slate-800 rounded-2xl p-5 shadow-xl backdrop-blur-md">
+      <div className="bg-white border border-slate-200 rounded-2xl p-5 shadow-sm">
         <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
           <div className="flex items-center gap-3">
-            <div className="w-12 h-12 rounded-xl bg-gradient-to-tr from-blue-600 via-indigo-600 to-cyan-500 flex items-center justify-center shadow-lg shadow-blue-500/20 text-white">
+            <div className="w-12 h-12 rounded-xl bg-purple-600 flex items-center justify-center shadow-md shadow-purple-600/20 text-white">
               <CalendarIcon className="w-6 h-6" />
             </div>
             <div>
               <div className="flex items-center gap-2">
-                <h1 className="text-xl font-bold text-white tracking-tight">
+                <h1 className="text-xl font-bold text-slate-900 tracking-tight">
                   統合予定カレンダー
                 </h1>
-                <span className="px-2.5 py-0.5 rounded-full text-xs font-semibold bg-blue-500/20 text-blue-300 border border-blue-500/30">
+                <span className="px-2.5 py-0.5 rounded-full text-xs font-semibold bg-purple-50 text-purple-700 border border-purple-200">
                   商談 × 顧客支援 × タスク期日
                 </span>
               </div>
-              <p className="text-xs text-slate-400 mt-0.5">
+              <p className="text-xs text-slate-500 mt-0.5">
                 商談面談・顧客支援ミーティング・請求期日・タスク納期を一元管理。Googleカレンダーへの即時1クリック追加に対応。
               </p>
             </div>
@@ -633,18 +633,18 @@ export const IntegratedCalendarWorkspace: React.FC<Props> = ({
                 setSyncUrlInput(googleIcalUrl);
                 setIsGoogleSyncModalOpen(true);
               }}
-              className="px-3.5 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700/70 font-semibold text-xs transition shadow-sm flex items-center gap-2 cursor-pointer group"
+              className="px-3.5 py-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-200 font-semibold text-xs transition shadow-2xs flex items-center gap-2 cursor-pointer group"
               title="事業用Googleカレンダーの予定を非公開URLで安全に同期"
             >
-              <Globe className="w-4 h-4 text-sky-400 group-hover:scale-110 transition" />
+              <Globe className="w-4 h-4 text-sky-600 group-hover:scale-110 transition" />
               <span>事業用Googleカレンダー同期</span>
               {googleIcalUrl ? (
-                <span className="flex items-center gap-1 text-[10px] px-1.5 py-0.5 rounded-full bg-emerald-950/80 text-emerald-300 border border-emerald-500/40 font-mono">
-                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+                <span className="flex items-center gap-1 text-[10px] px-1.5 py-0.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200 font-mono">
+                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
                   {googleEvents.length}件同期
                 </span>
               ) : (
-                <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-slate-900 text-slate-400 border border-slate-800">
+                <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-slate-200 text-slate-600 border border-slate-300">
                   未設定
                 </span>
               )}
@@ -652,7 +652,7 @@ export const IntegratedCalendarWorkspace: React.FC<Props> = ({
 
             <button
               onClick={() => handleOpenAddModal()}
-              className="px-4 py-2 rounded-xl bg-blue-600 hover:bg-blue-500 text-white font-semibold text-xs transition shadow-md shadow-blue-600/30 flex items-center gap-2 cursor-pointer"
+              className="px-4 py-2 rounded-xl bg-purple-600 hover:bg-purple-700 text-white font-semibold text-xs transition shadow-sm flex items-center gap-2 cursor-pointer"
             >
               <Plus className="w-4 h-4" />
               <span>予定・面談を登録</span>
@@ -661,33 +661,33 @@ export const IntegratedCalendarWorkspace: React.FC<Props> = ({
             <button
               onClick={fetchData}
               disabled={loading}
-              className="p-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700/60 transition cursor-pointer"
+              className="p-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-600 border border-slate-200 transition cursor-pointer"
               title="データを再読み込み"
             >
-              <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin text-blue-400' : ''}`} />
+              <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin text-purple-600' : ''}`} />
             </button>
           </div>
         </div>
 
         {/* View Mode & Month Navigation Bar */}
-        <div className="mt-5 pt-4 border-t border-slate-800/80 flex flex-col md:flex-row md:items-center justify-between gap-4">
+        <div className="mt-5 pt-4 border-t border-slate-100 flex flex-col md:flex-row md:items-center justify-between gap-4">
           {/* Month Navigator */}
           <div className="flex items-center gap-2">
             <button
               onClick={handlePrevMonth}
-              className="p-1.5 rounded-lg bg-slate-800/90 hover:bg-slate-700 text-slate-300 transition"
+              className="p-1.5 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 transition"
               title="前月"
             >
               <ChevronLeft className="w-4 h-4" />
             </button>
 
-            <div className="text-base font-bold text-white px-2 tracking-tight min-w-[120px] text-center">
+            <div className="text-base font-bold text-slate-900 px-2 tracking-tight min-w-[120px] text-center">
               {currentYear}年 {currentMonth + 1}月
             </div>
 
             <button
               onClick={handleNextMonth}
-              className="p-1.5 rounded-lg bg-slate-800/90 hover:bg-slate-700 text-slate-300 transition"
+              className="p-1.5 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 transition"
               title="翌月"
             >
               <ChevronRight className="w-4 h-4" />
@@ -695,20 +695,20 @@ export const IntegratedCalendarWorkspace: React.FC<Props> = ({
 
             <button
               onClick={handleGoToday}
-              className="px-2.5 py-1 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-medium border border-slate-700/50 transition ml-1"
+              className="px-2.5 py-1 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-medium border border-slate-200 transition ml-1"
             >
               今月 (今日)
             </button>
           </div>
 
           {/* View Mode Toggles */}
-          <div className="flex items-center bg-slate-950 p-1 rounded-xl border border-slate-800 text-xs self-start md:self-auto">
+          <div className="flex items-center bg-slate-100 p-1 rounded-xl border border-slate-200 text-xs self-start md:self-auto">
             <button
               onClick={() => setViewMode('month')}
               className={`px-3 py-1.5 rounded-lg font-medium transition cursor-pointer flex items-center gap-1.5 ${
                 viewMode === 'month'
-                  ? 'bg-blue-600 text-white font-bold shadow-md shadow-blue-600/30'
-                  : 'text-slate-400 hover:text-white'
+                  ? 'bg-purple-600 text-white font-bold shadow-sm'
+                  : 'text-slate-600 hover:text-slate-900'
               }`}
             >
               <CalendarDays className="w-3.5 h-3.5" />
@@ -719,8 +719,8 @@ export const IntegratedCalendarWorkspace: React.FC<Props> = ({
               onClick={() => setViewMode('week')}
               className={`px-3 py-1.5 rounded-lg font-medium transition cursor-pointer flex items-center gap-1.5 ${
                 viewMode === 'week'
-                  ? 'bg-blue-600 text-white font-bold shadow-md shadow-blue-600/30'
-                  : 'text-slate-400 hover:text-white'
+                  ? 'bg-purple-600 text-white font-bold shadow-sm'
+                  : 'text-slate-600 hover:text-slate-900'
               }`}
             >
               <Clock className="w-3.5 h-3.5" />
@@ -731,8 +731,8 @@ export const IntegratedCalendarWorkspace: React.FC<Props> = ({
               onClick={() => setViewMode('agenda')}
               className={`px-3 py-1.5 rounded-lg font-medium transition cursor-pointer flex items-center gap-1.5 ${
                 viewMode === 'agenda'
-                  ? 'bg-blue-600 text-white font-bold shadow-md shadow-blue-600/30'
-                  : 'text-slate-400 hover:text-white'
+                  ? 'bg-purple-600 text-white font-bold shadow-sm'
+                  : 'text-slate-600 hover:text-slate-900'
               }`}
             >
               <ListFilter className="w-3.5 h-3.5" />
@@ -742,15 +742,15 @@ export const IntegratedCalendarWorkspace: React.FC<Props> = ({
         </div>
 
         {/* Filter Pills & Search */}
-        <div className="mt-4 pt-3 border-t border-slate-800/60 flex flex-col md:flex-row md:items-center justify-between gap-3">
+        <div className="mt-4 pt-3 border-t border-slate-100 flex flex-col md:flex-row md:items-center justify-between gap-3">
           {/* Category Filter Pills */}
           <div className="flex flex-wrap items-center gap-1.5">
             <button
               onClick={() => setSelectedCategory('all')}
               className={`px-2.5 py-1 rounded-lg text-xs font-medium transition cursor-pointer ${
                 selectedCategory === 'all'
-                  ? 'bg-slate-200 text-slate-950 font-bold'
-                  : 'bg-slate-800/80 text-slate-400 hover:text-slate-200 hover:bg-slate-700'
+                  ? 'bg-purple-600 text-white font-bold shadow-2xs'
+                  : 'bg-slate-100 text-slate-600 hover:text-slate-900 hover:bg-slate-200'
               }`}
             >
               すべて ({allCalendarItems.length})
@@ -766,8 +766,8 @@ export const IntegratedCalendarWorkspace: React.FC<Props> = ({
                   onClick={() => setSelectedCategory(cat)}
                   className={`px-2.5 py-1 rounded-lg text-xs font-medium transition cursor-pointer flex items-center gap-1.5 border ${
                     isSelected
-                      ? `${conf.badgeBg} ${conf.text} ${conf.border} font-bold ring-1 ring-blue-500/50`
-                      : 'bg-slate-900 text-slate-400 border-slate-800 hover:text-slate-200 hover:bg-slate-800'
+                      ? `${conf.badgeBg} ${conf.text} ${conf.border} font-bold ring-1 ring-purple-500`
+                      : 'bg-white text-slate-600 border-slate-200 hover:text-slate-900 hover:bg-slate-50'
                   }`}
                 >
                   <span className={`w-2 h-2 rounded-full ${conf.dot}`} />
@@ -786,12 +786,12 @@ export const IntegratedCalendarWorkspace: React.FC<Props> = ({
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               placeholder="企業名・案件名・メモ検索..."
-              className="w-full pl-8 pr-3 py-1.5 rounded-lg bg-slate-950 border border-slate-800 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-blue-500"
+              className="w-full pl-8 pr-3 py-1.5 rounded-lg bg-white border border-slate-200 text-xs text-slate-900 placeholder-slate-400 focus:outline-none focus:border-purple-500 focus:ring-1 focus:ring-purple-500"
             />
             {searchQuery && (
               <button
                 onClick={() => setSearchQuery('')}
-                className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-white"
+                className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
               >
                 <X className="w-3.5 h-3.5" />
               </button>
@@ -802,20 +802,20 @@ export const IntegratedCalendarWorkspace: React.FC<Props> = ({
 
       {/* ================= VIEW 1: MONTH VIEW ================= */}
       {viewMode === 'month' && (
-        <div className="bg-slate-900/90 border border-slate-800 rounded-2xl shadow-xl overflow-hidden backdrop-blur-md">
+        <div className="bg-white border border-slate-200 rounded-2xl shadow-sm overflow-hidden">
           {/* Day of Week Headers */}
-          <div className="grid grid-cols-7 border-b border-slate-800 bg-slate-950/70 text-center text-xs font-semibold py-2.5">
-            <span className="text-rose-400">日</span>
-            <span className="text-slate-300">月</span>
-            <span className="text-slate-300">火</span>
-            <span className="text-slate-300">水</span>
-            <span className="text-slate-300">木</span>
-            <span className="text-slate-300">金</span>
-            <span className="text-cyan-400">土</span>
+          <div className="grid grid-cols-7 border-b border-slate-200 bg-slate-50 text-center text-xs font-semibold py-2.5">
+            <span className="text-rose-600">日</span>
+            <span className="text-slate-700">月</span>
+            <span className="text-slate-700">火</span>
+            <span className="text-slate-700">水</span>
+            <span className="text-slate-700">木</span>
+            <span className="text-slate-700">金</span>
+            <span className="text-sky-600">土</span>
           </div>
 
           {/* Month Days Grid */}
-          <div className="grid grid-cols-7 auto-rows-fr divide-x divide-y divide-slate-800/70 bg-slate-950/20">
+          <div className="grid grid-cols-7 auto-rows-fr divide-x divide-y divide-slate-200 bg-slate-50/50">
             {monthDays.map((day) => {
               const dayEvents = eventsByDate.get(day.dateStr) || [];
               const isWeekend = day.dayOfWeek === 0 || day.dayOfWeek === 6;
@@ -825,25 +825,25 @@ export const IntegratedCalendarWorkspace: React.FC<Props> = ({
                   key={day.dateStr}
                   className={`min-h-[115px] p-1.5 sm:p-2 flex flex-col justify-between transition group relative ${
                     !day.isCurrentMonth
-                      ? 'bg-slate-950/40 text-slate-600'
+                      ? 'bg-slate-100/60 text-slate-400'
                       : isWeekend
-                      ? 'bg-slate-900/30'
-                      : 'bg-slate-900/60 hover:bg-slate-800/40'
-                  } ${day.isToday ? 'ring-2 ring-blue-500/70 bg-blue-950/20' : ''}`}
+                      ? 'bg-slate-50/80'
+                      : 'bg-white hover:bg-slate-50'
+                  } ${day.isToday ? 'ring-2 ring-purple-500 bg-purple-50/30' : ''}`}
                 >
                   {/* Date number header */}
                   <div className="flex items-center justify-between">
                     <span
                       className={`text-xs font-bold w-6 h-6 rounded-full flex items-center justify-center ${
                         day.isToday
-                          ? 'bg-blue-600 text-white shadow-md shadow-blue-500/40'
+                          ? 'bg-purple-600 text-white shadow-sm'
                           : day.dayOfWeek === 0
-                          ? 'text-rose-400'
+                          ? 'text-rose-600'
                           : day.dayOfWeek === 6
-                          ? 'text-cyan-400'
+                          ? 'text-sky-600'
                           : day.isCurrentMonth
-                          ? 'text-slate-300'
-                          : 'text-slate-600'
+                          ? 'text-slate-800'
+                          : 'text-slate-400'
                       }`}
                     >
                       {day.dayNumber}
@@ -852,7 +852,7 @@ export const IntegratedCalendarWorkspace: React.FC<Props> = ({
                     {/* Quick Add Button on Hover */}
                     <button
                       onClick={() => handleOpenAddModal(day.dateStr)}
-                      className="opacity-0 group-hover:opacity-100 p-1 rounded hover:bg-slate-700 text-slate-400 hover:text-white transition text-[10px]"
+                      className="opacity-0 group-hover:opacity-100 p-1 rounded hover:bg-slate-200 text-slate-500 hover:text-slate-800 transition text-[10px]"
                       title="この日に予定を追加"
                     >
                       <Plus className="w-3.5 h-3.5" />
@@ -867,12 +867,12 @@ export const IntegratedCalendarWorkspace: React.FC<Props> = ({
                         <div
                           key={event.id}
                           onClick={() => setSelectedEvent(event)}
-                          className={`px-1.5 py-0.5 rounded text-[10px] font-medium border truncate cursor-pointer transition flex items-center gap-1 shadow-sm ${conf.badgeBg} ${conf.text} ${conf.border} hover:brightness-125`}
+                          className={`px-1.5 py-0.5 rounded text-[10px] font-medium border truncate cursor-pointer transition flex items-center gap-1 shadow-2xs ${conf.badgeBg} ${conf.text} ${conf.border} hover:opacity-90`}
                           title={`${event.startTime ? event.startTime + ' ' : ''}${event.title}`}
                         >
                           <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${conf.dot}`} />
                           {event.startTime && (
-                            <span className="opacity-80 shrink-0">{event.startTime}</span>
+                            <span className="opacity-80 shrink-0 font-mono">{event.startTime}</span>
                           )}
                           <span className="truncate">{event.title}</span>
                         </div>
@@ -882,11 +882,10 @@ export const IntegratedCalendarWorkspace: React.FC<Props> = ({
                     {dayEvents.length > 3 && (
                       <button
                         onClick={() => {
-                          // Filter view to this day or open details
                           setSearchQuery(day.dateStr);
                           setViewMode('agenda');
                         }}
-                        className="text-[10px] text-blue-400 hover:text-blue-300 font-semibold px-1 block text-left"
+                        className="text-[10px] text-purple-600 hover:text-purple-800 font-semibold px-1 block text-left"
                       >
                         他 {dayEvents.length - 3} 件の予定...
                       </button>
@@ -907,36 +906,36 @@ export const IntegratedCalendarWorkspace: React.FC<Props> = ({
             return (
               <div
                 key={day.dateStr}
-                className={`bg-slate-900/90 border rounded-2xl p-3 flex flex-col min-h-[360px] shadow-lg ${
+                className={`bg-white border rounded-2xl p-3 flex flex-col min-h-[360px] shadow-sm ${
                   day.isToday
-                    ? 'border-blue-500/80 bg-blue-950/20 ring-1 ring-blue-500/30'
-                    : 'border-slate-800'
+                    ? 'border-purple-500 bg-purple-50/20 ring-1 ring-purple-500'
+                    : 'border-slate-200'
                 }`}
               >
                 {/* Day Header */}
-                <div className="flex items-center justify-between pb-2 mb-2 border-b border-slate-800">
+                <div className="flex items-center justify-between pb-2 mb-2 border-b border-slate-100">
                   <div className="flex items-center gap-1.5">
                     <span
                       className={`text-xs font-bold px-2 py-0.5 rounded-lg ${
                         day.isToday
-                          ? 'bg-blue-600 text-white'
+                          ? 'bg-purple-600 text-white'
                           : day.dayOfWeek === 0
-                          ? 'bg-rose-950/60 text-rose-400'
+                          ? 'bg-rose-50 text-rose-700'
                           : day.dayOfWeek === 6
-                          ? 'bg-cyan-950/60 text-cyan-400'
-                          : 'bg-slate-800 text-slate-300'
+                          ? 'bg-sky-50 text-sky-700'
+                          : 'bg-slate-100 text-slate-700'
                       }`}
                     >
                       {day.dayName}
                     </span>
-                    <span className="text-sm font-bold text-white">
+                    <span className="text-sm font-bold text-slate-900">
                       {day.dayNumber}日
                     </span>
                   </div>
 
                   <button
                     onClick={() => handleOpenAddModal(day.dateStr)}
-                    className="p-1 rounded-md bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white transition"
+                    className="p-1 rounded-md bg-slate-100 hover:bg-slate-200 text-slate-600 hover:text-slate-900 transition"
                     title="この日に予定を追加"
                   >
                     <Plus className="w-3.5 h-3.5" />
@@ -946,7 +945,7 @@ export const IntegratedCalendarWorkspace: React.FC<Props> = ({
                 {/* Day Events Stack */}
                 <div className="space-y-2 flex-1 overflow-y-auto max-h-[460px] pr-1">
                   {dayEvents.length === 0 ? (
-                    <div className="text-[11px] text-slate-500 text-center py-8">
+                    <div className="text-[11px] text-slate-400 text-center py-8">
                       予定なし
                     </div>
                   ) : (
@@ -956,14 +955,14 @@ export const IntegratedCalendarWorkspace: React.FC<Props> = ({
                         <div
                           key={event.id}
                           onClick={() => setSelectedEvent(event)}
-                          className={`p-2 rounded-xl border text-xs cursor-pointer transition hover:scale-[1.01] ${conf.badgeBg} ${conf.border} shadow-sm`}
+                          className={`p-2 rounded-xl border text-xs cursor-pointer transition hover:scale-[1.01] ${conf.badgeBg} ${conf.border} shadow-2xs`}
                         >
                           <div className="flex items-center justify-between text-[10px] opacity-80 mb-1">
                             <span className="flex items-center gap-1 font-semibold">
                               <span className={`w-1.5 h-1.5 rounded-full ${conf.dot}`} />
                               {conf.label}
                             </span>
-                            {event.startTime && <span>{event.startTime}</span>}
+                            {event.startTime && <span className="font-mono">{event.startTime}</span>}
                           </div>
 
                           <div className={`font-semibold ${conf.text} line-clamp-2`}>
@@ -971,14 +970,14 @@ export const IntegratedCalendarWorkspace: React.FC<Props> = ({
                           </div>
 
                           {event.companyName && (
-                            <div className="mt-1 text-[11px] text-slate-400 flex items-center gap-1 truncate">
-                              <Building2 className="w-3 h-3 shrink-0" />
+                            <div className="mt-1 text-[11px] text-slate-600 flex items-center gap-1 truncate">
+                              <Building2 className="w-3 h-3 shrink-0 text-slate-400" />
                               <span className="truncate">{event.companyName}</span>
                             </div>
                           )}
 
                           {event.amount !== undefined && (
-                            <div className="mt-1 text-[10px] text-emerald-400 font-mono">
+                            <div className="mt-1 text-[10px] text-emerald-700 font-mono font-semibold">
                               税抜 ¥{event.amount.toLocaleString()} + 税10% = 税込 ¥{(event.totalAmount || event.amount * 1.1).toLocaleString()}
                             </div>
                           )}
@@ -998,9 +997,9 @@ export const IntegratedCalendarWorkspace: React.FC<Props> = ({
         <div className="space-y-5">
           {/* Overdue Section */}
           {agendaGroups.overdue.length > 0 && (
-            <div className="bg-rose-950/20 border border-rose-800/40 rounded-2xl p-4 shadow-lg">
-              <div className="flex items-center gap-2 text-rose-300 font-bold text-sm mb-3">
-                <AlertCircle className="w-4 h-4 text-rose-400" />
+            <div className="bg-rose-50/70 border border-rose-200 rounded-2xl p-4 shadow-sm">
+              <div className="flex items-center gap-2 text-rose-700 font-bold text-sm mb-3">
+                <AlertCircle className="w-4 h-4 text-rose-600" />
                 <span>期限超過 / 要対応 ({agendaGroups.overdue.length}件)</span>
               </div>
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
@@ -1017,18 +1016,18 @@ export const IntegratedCalendarWorkspace: React.FC<Props> = ({
           )}
 
           {/* Today Section */}
-          <div className="bg-slate-900/90 border border-blue-500/40 rounded-2xl p-4 shadow-xl">
-            <div className="flex items-center justify-between mb-3 pb-2 border-b border-slate-800">
+          <div className="bg-white border border-purple-200 rounded-2xl p-4 shadow-sm">
+            <div className="flex items-center justify-between mb-3 pb-2 border-b border-slate-100">
               <div className="flex items-center gap-2">
-                <span className="w-2.5 h-2.5 rounded-full bg-blue-500 animate-pulse" />
-                <h2 className="text-sm font-bold text-white">
+                <span className="w-2.5 h-2.5 rounded-full bg-purple-600 animate-pulse" />
+                <h2 className="text-sm font-bold text-slate-900">
                   本日の予定 ({agendaGroups.today.length}件)
                 </h2>
                 <span className="text-xs text-slate-400 font-mono">{todayJst()}</span>
               </div>
               <button
                 onClick={() => handleOpenAddModal(todayJst())}
-                className="text-xs text-blue-400 hover:text-blue-300 flex items-center gap-1 font-semibold"
+                className="text-xs text-purple-600 hover:text-purple-800 flex items-center gap-1 font-semibold"
               >
                 <Plus className="w-3.5 h-3.5" />
                 <span>今日に追加</span>
@@ -1036,7 +1035,7 @@ export const IntegratedCalendarWorkspace: React.FC<Props> = ({
             </div>
 
             {agendaGroups.today.length === 0 ? (
-              <div className="text-xs text-slate-500 py-4 text-center">
+              <div className="text-xs text-slate-400 py-4 text-center">
                 本日の予定はありません。
               </div>
             ) : (
@@ -1055,9 +1054,9 @@ export const IntegratedCalendarWorkspace: React.FC<Props> = ({
 
           {/* Tomorrow Section */}
           {agendaGroups.tomorrow.length > 0 && (
-            <div className="bg-slate-900/90 border border-slate-800 rounded-2xl p-4 shadow-xl">
-              <div className="text-sm font-bold text-white mb-3 pb-2 border-b border-slate-800 flex items-center gap-2">
-                <Clock className="w-4 h-4 text-cyan-400" />
+            <div className="bg-white border border-slate-200 rounded-2xl p-4 shadow-sm">
+              <div className="text-sm font-bold text-slate-900 mb-3 pb-2 border-b border-slate-100 flex items-center gap-2">
+                <Clock className="w-4 h-4 text-sky-600" />
                 <span>明日の予定 ({agendaGroups.tomorrow.length}件)</span>
               </div>
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
@@ -1075,9 +1074,9 @@ export const IntegratedCalendarWorkspace: React.FC<Props> = ({
 
           {/* This Week Section */}
           {agendaGroups.thisWeek.length > 0 && (
-            <div className="bg-slate-900/90 border border-slate-800 rounded-2xl p-4 shadow-xl">
-              <div className="text-sm font-bold text-white mb-3 pb-2 border-b border-slate-800 flex items-center gap-2">
-                <CalendarIcon className="w-4 h-4 text-purple-400" />
+            <div className="bg-white border border-slate-200 rounded-2xl p-4 shadow-sm">
+              <div className="text-sm font-bold text-slate-900 mb-3 pb-2 border-b border-slate-100 flex items-center gap-2">
+                <CalendarIcon className="w-4 h-4 text-purple-600" />
                 <span>今週の予定 ({agendaGroups.thisWeek.length}件)</span>
               </div>
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
@@ -1095,9 +1094,9 @@ export const IntegratedCalendarWorkspace: React.FC<Props> = ({
 
           {/* Upcoming Section */}
           {agendaGroups.upcoming.length > 0 && (
-            <div className="bg-slate-900/90 border border-slate-800 rounded-2xl p-4 shadow-xl">
-              <div className="text-sm font-bold text-white mb-3 pb-2 border-b border-slate-800 flex items-center gap-2">
-                <ArrowRight className="w-4 h-4 text-slate-400" />
+            <div className="bg-white border border-slate-200 rounded-2xl p-4 shadow-sm">
+              <div className="text-sm font-bold text-slate-900 mb-3 pb-2 border-b border-slate-100 flex items-center gap-2">
+                <ArrowRight className="w-4 h-4 text-slate-500" />
                 <span>来週以降の予定 ({agendaGroups.upcoming.length}件)</span>
               </div>
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
@@ -1117,12 +1116,12 @@ export const IntegratedCalendarWorkspace: React.FC<Props> = ({
 
       {/* ================= MODAL: EVENT DETAIL ================= */}
       {selectedEvent && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-sm overflow-y-auto">
-          <div className="relative w-full max-w-lg bg-slate-900 border border-slate-800 rounded-2xl shadow-2xl p-6 text-slate-100">
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-xs overflow-y-auto">
+          <div className="relative w-full max-w-lg bg-white border border-slate-200 rounded-2xl shadow-xl p-6 text-slate-800">
             {/* Close button */}
             <button
               onClick={() => setSelectedEvent(null)}
-              className="absolute top-4 right-4 p-2 rounded-xl bg-slate-800 text-slate-400 hover:text-white transition"
+              className="absolute top-4 right-4 p-2 rounded-xl bg-slate-100 text-slate-400 hover:text-slate-700 transition"
             >
               <X className="w-4 h-4" />
             </button>
@@ -1138,26 +1137,26 @@ export const IntegratedCalendarWorkspace: React.FC<Props> = ({
                 );
               })()}
               {selectedEvent.statusLabel && (
-                <span className="px-2 py-0.5 rounded-md text-[11px] bg-slate-800 text-slate-300 font-medium">
+                <span className="px-2 py-0.5 rounded-md text-[11px] bg-slate-100 text-slate-700 font-medium border border-slate-200">
                   {selectedEvent.statusLabel}
                 </span>
               )}
             </div>
 
             {/* Title */}
-            <h3 className="text-lg font-bold text-white mb-4 pr-6">
+            <h3 className="text-lg font-bold text-slate-900 mb-4 pr-6">
               {selectedEvent.title}
             </h3>
 
             {/* Event Details Grid */}
-            <div className="space-y-3 bg-slate-950/60 p-4 rounded-xl border border-slate-800/80 text-xs">
+            <div className="space-y-3 bg-slate-50 p-4 rounded-xl border border-slate-200 text-xs">
               {/* Date & Time */}
-              <div className="flex items-center gap-2 text-slate-300">
-                <Clock className="w-4 h-4 text-blue-400 shrink-0" />
-                <span className="font-semibold text-white">日時:</span>
+              <div className="flex items-center gap-2 text-slate-700">
+                <Clock className="w-4 h-4 text-purple-600 shrink-0" />
+                <span className="font-semibold text-slate-900">日時:</span>
                 <span>{selectedEvent.date}</span>
                 {selectedEvent.startTime && (
-                  <span className="text-blue-300 font-mono font-bold">
+                  <span className="text-purple-700 font-mono font-bold">
                     {selectedEvent.startTime}
                     {selectedEvent.endTime ? ` 〜 ${selectedEvent.endTime}` : ''}
                   </span>
@@ -1167,23 +1166,23 @@ export const IntegratedCalendarWorkspace: React.FC<Props> = ({
 
               {/* Company */}
               {selectedEvent.companyName && (
-                <div className="flex items-center gap-2 text-slate-300">
-                  <Building2 className="w-4 h-4 text-indigo-400 shrink-0" />
-                  <span className="font-semibold text-white">対象企業:</span>
-                  <span className="text-indigo-200 font-medium">{selectedEvent.companyName}</span>
+                <div className="flex items-center gap-2 text-slate-700">
+                  <Building2 className="w-4 h-4 text-indigo-600 shrink-0" />
+                  <span className="font-semibold text-slate-900">対象企業:</span>
+                  <span className="text-indigo-900 font-medium">{selectedEvent.companyName}</span>
                 </div>
               )}
 
               {/* Financial amounts (tax exclusive + 10% tax) */}
               {selectedEvent.amount !== undefined && (
-                <div className="flex items-start gap-2 text-slate-300">
-                  <Coins className="w-4 h-4 text-emerald-400 shrink-0 mt-0.5" />
+                <div className="flex items-start gap-2 text-slate-700">
+                  <Coins className="w-4 h-4 text-emerald-600 shrink-0 mt-0.5" />
                   <div>
-                    <span className="font-semibold text-white">金額: </span>
-                    <span className="text-emerald-300 font-bold">
+                    <span className="font-semibold text-slate-900">金額: </span>
+                    <span className="text-emerald-700 font-bold">
                       税抜 ¥{selectedEvent.amount.toLocaleString()}
                     </span>
-                    <span className="text-slate-400 ml-2">
+                    <span className="text-slate-500 ml-2">
                       （消費税10% ¥{(selectedEvent.taxAmount ?? Math.round(selectedEvent.amount * 0.1)).toLocaleString()} / 税込 ¥{(selectedEvent.totalAmount ?? Math.round(selectedEvent.amount * 1.1)).toLocaleString()}）
                     </span>
                   </div>
@@ -1192,26 +1191,26 @@ export const IntegratedCalendarWorkspace: React.FC<Props> = ({
 
               {/* Location or Meet URL with Zoom/Meet detection */}
               {(selectedEvent.location || selectedEvent.meetUrl) && (
-                <div className="p-3 rounded-xl bg-slate-950/70 border border-slate-800/80 flex flex-col sm:flex-row sm:items-center justify-between gap-2.5">
-                  <div className="flex items-center gap-2 text-slate-300 text-xs">
+                <div className="p-3 rounded-xl bg-white border border-slate-200 flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 shadow-2xs">
+                  <div className="flex items-center gap-2 text-slate-700 text-xs">
                     {selectedEvent.meetUrl?.includes('zoom.us') || selectedEvent.location?.toLowerCase().includes('zoom') ? (
-                      <span className="px-2 py-0.5 rounded-full bg-blue-500/20 text-blue-300 border border-blue-500/40 text-[11px] font-bold flex items-center gap-1">
-                        <Video className="w-3 h-3 text-blue-400" />
+                      <span className="px-2 py-0.5 rounded-full bg-blue-50 text-blue-700 border border-blue-200 text-[11px] font-bold flex items-center gap-1">
+                        <Video className="w-3 h-3 text-blue-600" />
                         <span>Zoom面談</span>
                       </span>
                     ) : selectedEvent.meetUrl?.includes('meet.google.com') || selectedEvent.location?.toLowerCase().includes('google meet') ? (
-                      <span className="px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 text-[11px] font-bold flex items-center gap-1">
-                        <Video className="w-3 h-3 text-emerald-400" />
+                      <span className="px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200 text-[11px] font-bold flex items-center gap-1">
+                        <Video className="w-3 h-3 text-emerald-600" />
                         <span>Google Meet</span>
                       </span>
                     ) : (
-                      <span className="px-2 py-0.5 rounded-full bg-slate-800 text-slate-300 border border-slate-700 text-[11px] font-medium flex items-center gap-1">
-                        <MapPin className="w-3 h-3 text-amber-400" />
+                      <span className="px-2 py-0.5 rounded-full bg-slate-100 text-slate-700 border border-slate-200 text-[11px] font-medium flex items-center gap-1">
+                        <MapPin className="w-3 h-3 text-amber-500" />
                         <span>場所 / 形式</span>
                       </span>
                     )}
 
-                    <span className="font-semibold text-white">
+                    <span className="font-semibold text-slate-900">
                       {selectedEvent.location || (selectedEvent.meetUrl?.includes('zoom.us') ? 'Zoom' : 'オンライン面談')}
                     </span>
                   </div>
@@ -1221,10 +1220,10 @@ export const IntegratedCalendarWorkspace: React.FC<Props> = ({
                       href={selectedEvent.meetUrl}
                       target="_blank"
                       rel="noopener noreferrer"
-                      className={`px-3 py-1.5 rounded-lg text-xs font-semibold flex items-center gap-1.5 transition shadow-sm ${
+                      className={`px-3 py-1.5 rounded-lg text-xs font-semibold flex items-center gap-1.5 transition shadow-2xs ${
                         selectedEvent.meetUrl.includes('zoom.us') || selectedEvent.location?.toLowerCase().includes('zoom')
-                          ? 'bg-blue-600 hover:bg-blue-500 text-white shadow-blue-600/30'
-                          : 'bg-emerald-600 hover:bg-emerald-500 text-white shadow-emerald-600/30'
+                          ? 'bg-blue-600 hover:bg-blue-700 text-white'
+                          : 'bg-emerald-600 hover:bg-emerald-700 text-white'
                       }`}
                     >
                       <Video className="w-3.5 h-3.5" />
@@ -1237,9 +1236,9 @@ export const IntegratedCalendarWorkspace: React.FC<Props> = ({
 
               {/* Notes */}
               {selectedEvent.notes && (
-                <div className="pt-2 border-t border-slate-800/80">
-                  <div className="font-semibold text-slate-400 mb-1">アジェンダ・詳細メモ:</div>
-                  <p className="text-slate-200 whitespace-pre-wrap leading-relaxed bg-slate-900/80 p-2.5 rounded-lg border border-slate-800">
+                <div className="pt-2 border-t border-slate-200">
+                  <div className="font-semibold text-slate-600 mb-1">アジェンダ・詳細メモ:</div>
+                  <p className="text-slate-800 whitespace-pre-wrap leading-relaxed bg-white p-2.5 rounded-lg border border-slate-200">
                     {selectedEvent.notes}
                   </p>
                 </div>
@@ -1264,7 +1263,7 @@ export const IntegratedCalendarWorkspace: React.FC<Props> = ({
                   })}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="px-4 py-2 rounded-xl bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white font-semibold text-xs transition shadow-md shadow-blue-600/30 flex items-center gap-2"
+                  className="px-4 py-2 rounded-xl bg-purple-600 hover:bg-purple-700 text-white font-semibold text-xs transition shadow-sm flex items-center gap-2"
                 >
                   <Share2 className="w-3.5 h-3.5" />
                   <span>Googleカレンダーに追加</span>
@@ -1277,10 +1276,10 @@ export const IntegratedCalendarWorkspace: React.FC<Props> = ({
                       handleJumpToEvent(selectedEvent);
                       setSelectedEvent(null);
                     }}
-                    className="px-3.5 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-semibold border border-slate-700/60 transition flex items-center gap-1.5"
+                    className="px-3.5 py-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-semibold border border-slate-200 transition flex items-center gap-1.5"
                   >
                     <span>該当台帳を開く</span>
-                    <ArrowRight className="w-3.5 h-3.5 text-blue-400" />
+                    <ArrowRight className="w-3.5 h-3.5 text-purple-600" />
                   </button>
                 )}
               </div>
@@ -1290,14 +1289,14 @@ export const IntegratedCalendarWorkspace: React.FC<Props> = ({
                 <div className="flex items-center gap-2">
                   <button
                     onClick={() => handleEditCustomEvent(selectedEvent)}
-                    className="p-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white transition"
+                    className="p-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-600 hover:text-slate-900 transition border border-slate-200"
                     title="編集"
                   >
                     <Edit3 className="w-4 h-4" />
                   </button>
                   <button
                     onClick={() => handleDeleteCustomEvent(selectedEvent.id)}
-                    className="p-2 rounded-xl bg-rose-950/60 hover:bg-rose-900/80 text-rose-300 border border-rose-800/40 transition"
+                    className="p-2 rounded-xl bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200 transition"
                     title="削除"
                   >
                     <Trash2 className="w-4 h-4" />
@@ -1311,38 +1310,38 @@ export const IntegratedCalendarWorkspace: React.FC<Props> = ({
 
       {/* ================= MODAL: ADD / EDIT CUSTOM EVENT ================= */}
       {isNewEventModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-sm overflow-y-auto">
-          <div className="relative w-full max-w-lg bg-slate-900 border border-slate-800 rounded-2xl shadow-2xl p-6 text-slate-100">
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-xs overflow-y-auto">
+          <div className="relative w-full max-w-lg bg-white border border-slate-200 rounded-2xl shadow-xl p-6 text-slate-800">
             <button
               onClick={() => setIsNewEventModalOpen(false)}
-              className="absolute top-4 right-4 p-2 rounded-xl bg-slate-800 text-slate-400 hover:text-white transition"
+              className="absolute top-4 right-4 p-2 rounded-xl bg-slate-100 text-slate-400 hover:text-slate-700 transition"
             >
               <X className="w-4 h-4" />
             </button>
 
-            <h3 className="text-lg font-bold text-white mb-4 flex items-center gap-2">
-              <CalendarIcon className="w-5 h-5 text-blue-400" />
+            <h3 className="text-lg font-bold text-slate-900 mb-4 flex items-center gap-2">
+              <CalendarIcon className="w-5 h-5 text-purple-600" />
               <span>{editingCustomEventId ? '予定・面談を編集' : '新規予定・面談を登録'}</span>
             </h3>
 
             <div className="space-y-4 text-xs">
               {/* Title */}
               <div>
-                <label className="block text-slate-300 font-semibold mb-1">
-                  予定・面談タイトル <span className="text-rose-400">*</span>
+                <label className="block text-slate-700 font-semibold mb-1">
+                  予定・面談タイトル <span className="text-rose-500">*</span>
                 </label>
                 <input
                   type="text"
                   value={newEventTitle}
                   onChange={(e) => setNewEventTitle(e.target.value)}
                   placeholder="例: 株式会社○○様 DX伴走月次ミーティング"
-                  className="w-full px-3 py-2 rounded-xl bg-slate-950 border border-slate-800 text-white placeholder-slate-500 focus:outline-none focus:border-blue-500"
+                  className="w-full px-3 py-2 rounded-xl bg-white border border-slate-200 text-slate-900 placeholder-slate-400 focus:outline-none focus:border-purple-500 focus:ring-1 focus:ring-purple-500 shadow-2xs"
                 />
               </div>
 
               {/* Category */}
               <div>
-                <label className="block text-slate-300 font-semibold mb-1">区分・分類</label>
+                <label className="block text-slate-700 font-semibold mb-1">区分・分類</label>
                 <div className="grid grid-cols-3 gap-2">
                   {(Object.keys(CATEGORY_CONFIG) as CalendarEventCategory[])
                     .filter((c) => c !== 'google')
@@ -1356,8 +1355,8 @@ export const IntegratedCalendarWorkspace: React.FC<Props> = ({
                         onClick={() => setNewEventCategory(cat)}
                         className={`p-2 rounded-xl border text-center font-semibold transition flex items-center justify-center gap-1.5 ${
                           active
-                            ? `${conf.badgeBg} ${conf.text} ${conf.border} ring-1 ring-blue-500`
-                            : 'bg-slate-950 text-slate-400 border-slate-800 hover:bg-slate-800'
+                            ? `${conf.badgeBg} ${conf.text} ${conf.border} ring-1 ring-purple-500`
+                            : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-50'
                         }`}
                       >
                         <span className={`w-2 h-2 rounded-full ${conf.dot}`} />
@@ -1371,24 +1370,24 @@ export const IntegratedCalendarWorkspace: React.FC<Props> = ({
               {/* Date & Time */}
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="block text-slate-300 font-semibold mb-1">日付</label>
+                  <label className="block text-slate-700 font-semibold mb-1">日付</label>
                   <input
                     type="date"
                     value={newEventDate}
                     onChange={(e) => setNewEventDate(e.target.value)}
-                    className="w-full px-3 py-2 rounded-xl bg-slate-950 border border-slate-800 text-white focus:outline-none focus:border-blue-500"
+                    className="w-full px-3 py-2 rounded-xl bg-white border border-slate-200 text-slate-900 focus:outline-none focus:border-purple-500 focus:ring-1 focus:ring-purple-500 shadow-2xs"
                   />
                 </div>
 
                 <div>
                   <div className="flex items-center justify-between mb-1">
-                    <label className="text-slate-300 font-semibold">時間帯</label>
-                    <label className="flex items-center gap-1 text-[11px] text-slate-400 cursor-pointer">
+                    <label className="text-slate-700 font-semibold">時間帯</label>
+                    <label className="flex items-center gap-1 text-[11px] text-slate-500 cursor-pointer">
                       <input
                         type="checkbox"
                         checked={newEventIsAllDay}
                         onChange={(e) => setNewEventIsAllDay(e.target.checked)}
-                        className="rounded border-slate-700 bg-slate-950 text-blue-600 focus:ring-0"
+                        className="rounded border-slate-300 text-purple-600 focus:ring-purple-500"
                       />
                       <span>終日</span>
                     </label>
@@ -1399,18 +1398,18 @@ export const IntegratedCalendarWorkspace: React.FC<Props> = ({
                         type="time"
                         value={newEventStartTime}
                         onChange={(e) => setNewEventStartTime(e.target.value)}
-                        className="w-full px-2 py-2 rounded-xl bg-slate-950 border border-slate-800 text-white text-center focus:outline-none focus:border-blue-500 font-mono"
+                        className="w-full px-2 py-2 rounded-xl bg-white border border-slate-200 text-slate-900 text-center focus:outline-none focus:border-purple-500 font-mono"
                       />
                       <span className="text-slate-400">〜</span>
                       <input
                         type="time"
                         value={newEventEndTime}
                         onChange={(e) => setNewEventEndTime(e.target.value)}
-                        className="w-full px-2 py-2 rounded-xl bg-slate-950 border border-slate-800 text-white text-center focus:outline-none focus:border-blue-500 font-mono"
+                        className="w-full px-2 py-2 rounded-xl bg-white border border-slate-200 text-slate-900 text-center focus:outline-none focus:border-purple-500 font-mono"
                       />
                     </div>
                   ) : (
-                    <div className="px-3 py-2 rounded-xl bg-slate-950 border border-slate-800 text-slate-500 text-center font-medium">
+                    <div className="px-3 py-2 rounded-xl bg-slate-50 border border-slate-200 text-slate-500 text-center font-medium">
                       終日イベント
                     </div>
                   )}
@@ -1419,13 +1418,13 @@ export const IntegratedCalendarWorkspace: React.FC<Props> = ({
 
               {/* Related Company */}
               <div>
-                <label className="block text-slate-300 font-semibold mb-1">
+                <label className="block text-slate-700 font-semibold mb-1">
                   対象企業（任意）
                 </label>
                 <select
                   value={newEventCompanyId}
                   onChange={(e) => setNewEventCompanyId(e.target.value)}
-                  className="w-full px-3 py-2 rounded-xl bg-slate-950 border border-slate-800 text-white focus:outline-none focus:border-blue-500"
+                  className="w-full px-3 py-2 rounded-xl bg-white border border-slate-200 text-slate-900 focus:outline-none focus:border-purple-500 shadow-2xs"
                 >
                   <option value="">企業を選択しない（社内・一般）</option>
                   {companies.map((c) => (
@@ -1438,7 +1437,7 @@ export const IntegratedCalendarWorkspace: React.FC<Props> = ({
 
               {/* Meeting Format & Location Selection (Zoom, Google Meet, In-person, etc.) */}
               <div>
-                <label className="block text-slate-300 font-semibold mb-1.5">
+                <label className="block text-slate-700 font-semibold mb-1.5">
                   開催場所 / 実施形式
                 </label>
                 <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 mb-2">
@@ -1453,11 +1452,11 @@ export const IntegratedCalendarWorkspace: React.FC<Props> = ({
                     }}
                     className={`px-3 py-2 rounded-xl border text-xs font-semibold transition flex items-center justify-center gap-1.5 cursor-pointer ${
                       newEventLocation.toLowerCase().includes('zoom')
-                        ? 'bg-blue-600 text-white border-blue-400 shadow-md shadow-blue-600/30 ring-1 ring-blue-300'
-                        : 'bg-slate-950 text-slate-300 border-slate-800 hover:bg-slate-800'
+                        ? 'bg-blue-50 text-blue-700 border-blue-300 ring-1 ring-blue-400'
+                        : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-50'
                     }`}
                   >
-                    <Video className="w-3.5 h-3.5 text-blue-300" />
+                    <Video className="w-3.5 h-3.5 text-blue-600" />
                     <span>Zoom</span>
                   </button>
 
@@ -1471,11 +1470,11 @@ export const IntegratedCalendarWorkspace: React.FC<Props> = ({
                     }}
                     className={`px-3 py-2 rounded-xl border text-xs font-semibold transition flex items-center justify-center gap-1.5 cursor-pointer ${
                       newEventLocation.toLowerCase().includes('google meet')
-                        ? 'bg-emerald-600 text-white border-emerald-400 shadow-md shadow-emerald-600/30 ring-1 ring-emerald-300'
-                        : 'bg-slate-950 text-slate-300 border-slate-800 hover:bg-slate-800'
+                        ? 'bg-emerald-50 text-emerald-700 border-emerald-300 ring-1 ring-emerald-400'
+                        : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-50'
                     }`}
                   >
-                    <Video className="w-3.5 h-3.5 text-emerald-300" />
+                    <Video className="w-3.5 h-3.5 text-emerald-600" />
                     <span>Google Meet</span>
                   </button>
 
@@ -1487,11 +1486,11 @@ export const IntegratedCalendarWorkspace: React.FC<Props> = ({
                     }}
                     className={`px-3 py-2 rounded-xl border text-xs font-semibold transition flex items-center justify-center gap-1.5 cursor-pointer ${
                       newEventLocation.includes('訪問')
-                        ? 'bg-amber-600 text-white border-amber-400 shadow-md shadow-amber-600/30 ring-1 ring-amber-300'
-                        : 'bg-slate-950 text-slate-300 border-slate-800 hover:bg-slate-800'
+                        ? 'bg-amber-50 text-amber-700 border-amber-300 ring-1 ring-amber-400'
+                        : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-50'
                     }`}
                   >
-                    <MapPin className="w-3.5 h-3.5 text-amber-300" />
+                    <MapPin className="w-3.5 h-3.5 text-amber-500" />
                     <span>現地訪問</span>
                   </button>
 
@@ -1503,29 +1502,29 @@ export const IntegratedCalendarWorkspace: React.FC<Props> = ({
                     }}
                     className={`px-3 py-2 rounded-xl border text-xs font-semibold transition flex items-center justify-center gap-1.5 cursor-pointer ${
                       newEventLocation.includes('来社')
-                        ? 'bg-indigo-600 text-white border-indigo-400 shadow-md shadow-indigo-600/30 ring-1 ring-indigo-300'
-                        : 'bg-slate-950 text-slate-300 border-slate-800 hover:bg-slate-800'
+                        ? 'bg-purple-50 text-purple-700 border-purple-300 ring-1 ring-purple-400'
+                        : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-50'
                     }`}
                   >
-                    <Building2 className="w-3.5 h-3.5 text-indigo-300" />
+                    <Building2 className="w-3.5 h-3.5 text-purple-600" />
                     <span>来社・自社</span>
                   </button>
                 </div>
 
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                   <div>
-                    <label className="block text-slate-400 text-[11px] mb-1">場所 / 形式の名称（調整可能）</label>
+                    <label className="block text-slate-500 text-[11px] mb-1">場所 / 形式の名称（調整可能）</label>
                     <input
                       type="text"
                       value={newEventLocation}
                       onChange={(e) => setNewEventLocation(e.target.value)}
                       placeholder="例: Zoom, Google Meet, 訪問先"
-                      className="w-full px-3 py-2 rounded-xl bg-slate-950 border border-slate-800 text-white placeholder-slate-500 focus:outline-none focus:border-blue-500 text-xs"
+                      className="w-full px-3 py-2 rounded-xl bg-white border border-slate-200 text-slate-900 placeholder-slate-400 focus:outline-none focus:border-purple-500 text-xs shadow-2xs"
                     />
                   </div>
                   <div>
                     <div className="flex items-center justify-between mb-1">
-                      <label className="text-slate-400 text-[11px]">面談URL（Zoom / Meet等）</label>
+                      <label className="text-slate-500 text-[11px]">面談URL（Zoom / Meet等）</label>
                       {newEventLocation.toLowerCase().includes('zoom') && newEventMeetUrl && (
                         <button
                           type="button"
@@ -1533,7 +1532,7 @@ export const IntegratedCalendarWorkspace: React.FC<Props> = ({
                             localStorage.setItem('mst_default_zoom_url', newEventMeetUrl);
                             alert('このZoom URLをデフォルトURLとして記憶しました');
                           }}
-                          className="text-[10px] text-sky-400 hover:underline cursor-pointer"
+                          className="text-[10px] text-purple-600 hover:underline cursor-pointer"
                         >
                           次回もこのURLを使う
                         </button>
@@ -1544,7 +1543,7 @@ export const IntegratedCalendarWorkspace: React.FC<Props> = ({
                       value={newEventMeetUrl}
                       onChange={(e) => setNewEventMeetUrl(e.target.value)}
                       placeholder={newEventLocation.toLowerCase().includes('zoom') ? 'https://zoom.us/j/...' : 'https://meet.google.com/...'}
-                      className="w-full px-3 py-2 rounded-xl bg-slate-950 border border-slate-800 text-white placeholder-slate-500 focus:outline-none focus:border-blue-500 font-mono text-xs"
+                      className="w-full px-3 py-2 rounded-xl bg-white border border-slate-200 text-slate-900 placeholder-slate-400 focus:outline-none focus:border-purple-500 font-mono text-xs shadow-2xs"
                     />
                   </div>
                 </div>
@@ -1552,23 +1551,23 @@ export const IntegratedCalendarWorkspace: React.FC<Props> = ({
 
               {/* Notes / Agenda */}
               <div>
-                <label className="block text-slate-300 font-semibold mb-1">アジェンダ・メモ</label>
+                <label className="block text-slate-700 font-semibold mb-1">アジェンダ・メモ</label>
                 <textarea
                   rows={3}
                   value={newEventNotes}
                   onChange={(e) => setNewEventNotes(e.target.value)}
                   placeholder="アジェンダ、持ち物、検討事項など..."
-                  className="w-full px-3 py-2 rounded-xl bg-slate-950 border border-slate-800 text-white placeholder-slate-500 focus:outline-none focus:border-blue-500"
+                  className="w-full px-3 py-2 rounded-xl bg-white border border-slate-200 text-slate-900 placeholder-slate-400 focus:outline-none focus:border-purple-500 shadow-2xs"
                 />
               </div>
             </div>
 
             {/* Modal Footer */}
-            <div className="mt-6 flex items-center justify-end gap-3 pt-3 border-t border-slate-800">
+            <div className="mt-6 flex items-center justify-end gap-3 pt-3 border-t border-slate-100">
               <button
                 type="button"
                 onClick={() => setIsNewEventModalOpen(false)}
-                className="px-4 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 font-medium text-xs transition"
+                className="px-4 py-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-600 font-medium text-xs transition"
               >
                 キャンセル
               </button>
@@ -1576,7 +1575,7 @@ export const IntegratedCalendarWorkspace: React.FC<Props> = ({
                 type="button"
                 onClick={handleSaveCustomEvent}
                 disabled={!newEventTitle.trim()}
-                className="px-5 py-2 rounded-xl bg-blue-600 hover:bg-blue-500 disabled:opacity-50 text-white font-semibold text-xs transition shadow-md shadow-blue-600/30"
+                className="px-5 py-2 rounded-xl bg-purple-600 hover:bg-purple-700 disabled:opacity-50 text-white font-semibold text-xs transition shadow-sm"
               >
                 {editingCustomEventId ? '変更を保存' : '予定を登録'}
               </button>
@@ -1587,67 +1586,67 @@ export const IntegratedCalendarWorkspace: React.FC<Props> = ({
 
       {/* ================= MODAL: GOOGLE CALENDAR SYNC CONFIG ================= */}
       {isGoogleSyncModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-sm overflow-y-auto">
-          <div className="relative w-full max-w-2xl bg-slate-900 border border-slate-800 rounded-3xl shadow-2xl p-6 text-slate-100">
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-xs overflow-y-auto">
+          <div className="relative w-full max-w-2xl bg-white border border-slate-200 rounded-3xl shadow-xl p-6 text-slate-800">
             <button
               onClick={() => setIsGoogleSyncModalOpen(false)}
-              className="absolute top-5 right-5 p-2 rounded-xl bg-slate-800 text-slate-400 hover:text-white transition"
+              className="absolute top-5 right-5 p-2 rounded-xl bg-slate-100 text-slate-400 hover:text-slate-700 transition"
             >
               <X className="w-5 h-5" />
             </button>
 
             {/* Header */}
             <div className="flex items-center gap-3 mb-4">
-              <div className="w-12 h-12 rounded-2xl bg-gradient-to-tr from-sky-600 to-blue-500 flex items-center justify-center shadow-lg shadow-sky-500/20 text-white">
+              <div className="w-12 h-12 rounded-2xl bg-sky-600 flex items-center justify-center shadow-md shadow-sky-600/20 text-white">
                 <Globe className="w-6 h-6" />
               </div>
               <div>
-                <h3 className="text-lg font-bold text-white flex items-center gap-2">
+                <h3 className="text-lg font-bold text-slate-900 flex items-center gap-2">
                   <span>事業用Googleカレンダー同期設定</span>
-                  <span className="text-[11px] px-2 py-0.5 rounded-full bg-sky-500/20 text-sky-300 border border-sky-500/30">
+                  <span className="text-[11px] px-2 py-0.5 rounded-full bg-sky-50 text-sky-700 border border-sky-200 font-semibold">
                     プライベート分離型
                   </span>
                 </h3>
-                <p className="text-xs text-slate-400">
+                <p className="text-xs text-slate-500">
                   個人アカウント（masato.la21@gmail.com等）と混同せず、事業用カレンダーの予定のみを安全に本アプリへ取り込みます。
                 </p>
               </div>
             </div>
 
             {/* Privacy & Safety Note */}
-            <div className="mb-5 p-3.5 rounded-2xl bg-sky-950/40 border border-sky-500/30 text-xs text-sky-200 flex items-start gap-3">
-              <Info className="w-5 h-5 text-sky-400 shrink-0 mt-0.5" />
+            <div className="mb-5 p-3.5 rounded-2xl bg-sky-50/70 border border-sky-200 text-xs text-sky-900 flex items-start gap-3">
+              <Info className="w-5 h-5 text-sky-600 shrink-0 mt-0.5" />
               <div className="space-y-1">
-                <p className="font-semibold text-sky-100">
+                <p className="font-semibold text-sky-950">
                   安心の独立同期（ブラウザ認証ポップアップ不要）
                 </p>
-                <p className="text-[11px] text-sky-300/90 leading-relaxed">
+                <p className="text-[11px] text-sky-800 leading-relaxed">
                   現在AI Studioをご利用中の個人Googleアカウントとは一切連動しません。事業用Googleカレンダーの「iCal形式の秘密のアドレス」を使用するため、個人情報が漏洩したり混同されたりする心配なく、事業の予定のみを統合カレンダーへ重ねて表示できます。
                 </p>
               </div>
             </div>
 
             {/* Instructions Guide */}
-            <div className="mb-5 bg-slate-950/70 border border-slate-800/80 rounded-2xl p-4 text-xs">
-              <h4 className="font-bold text-white mb-2.5 flex items-center gap-1.5 text-xs">
-                <HelpCircle className="w-4 h-4 text-amber-400" />
+            <div className="mb-5 bg-slate-50 border border-slate-200 rounded-2xl p-4 text-xs">
+              <h4 className="font-bold text-slate-900 mb-2.5 flex items-center gap-1.5 text-xs">
+                <HelpCircle className="w-4 h-4 text-amber-500" />
                 <span>Googleカレンダーでの「秘密のアドレス（iCal URL）」の取得手順</span>
               </h4>
-              <ol className="space-y-2 text-slate-300 pl-4 list-decimal text-[11px] leading-relaxed">
+              <ol className="space-y-2 text-slate-600 pl-4 list-decimal text-[11px] leading-relaxed">
                 <li>
-                  ブラウザで事業用アカウントの <span className="font-mono text-sky-400 underline">calendar.google.com</span> を開く
+                  ブラウザで事業用アカウントの <span className="font-mono text-purple-700 underline">calendar.google.com</span> を開く
                 </li>
                 <li>
-                  左側の「マイカレンダー」から同期したい事業用カレンダーを見つけ、右側の <strong className="text-white">「︙（オプション）」→「設定と共有」</strong> を選択
+                  左側の「マイカレンダー」から同期したい事業用カレンダーを見つけ、右側の <strong className="text-slate-900">「︙（オプション）」→「設定と共有」</strong> を選択
                 </li>
                 <li>
-                  左メニューの <strong className="text-white">「カレンダーの統合」</strong> をクリック
+                  左メニューの <strong className="text-slate-900">「カレンダーの統合」</strong> をクリック
                 </li>
                 <li>
-                  <strong className="text-white">「iCal 形式の非公開 URL」</strong>（または「秘密のアドレス」）欄に表示されているURLをコピー
+                  <strong className="text-slate-900">「iCal 形式の非公開 URL」</strong>（または「秘密のアドレス」）欄に表示されているURLをコピー
                 </li>
                 <li>
-                  下記の入力枠に貼り付けて、<strong className="text-sky-300">「今すぐ同期する」</strong> ボタンを押してください
+                  下記の入力枠に貼り付けて、<strong className="text-purple-700">「今すぐ同期する」</strong> ボタンを押してください
                 </li>
               </ol>
             </div>
@@ -1655,7 +1654,7 @@ export const IntegratedCalendarWorkspace: React.FC<Props> = ({
             {/* Sync URL Input Form */}
             <div className="space-y-3">
               <div>
-                <label className="block text-xs font-semibold text-slate-200 mb-1.5">
+                <label className="block text-xs font-semibold text-slate-700 mb-1.5">
                   事業用Googleカレンダーの iCal URL（非公開アドレス）
                 </label>
                 <div className="flex gap-2">
@@ -1664,12 +1663,12 @@ export const IntegratedCalendarWorkspace: React.FC<Props> = ({
                     value={syncUrlInput}
                     onChange={(e) => setSyncUrlInput(e.target.value)}
                     placeholder="https://calendar.google.com/calendar/ical/.../basic.ics"
-                    className="flex-1 px-3.5 py-2.5 rounded-xl bg-slate-950 border border-slate-800 text-xs text-white placeholder-slate-600 focus:outline-none focus:border-sky-500 font-mono"
+                    className="flex-1 px-3.5 py-2.5 rounded-xl bg-white border border-slate-200 text-xs text-slate-900 placeholder-slate-400 focus:outline-none focus:border-purple-500 font-mono shadow-2xs"
                   />
                   <button
                     onClick={handlePerformGoogleSync}
                     disabled={syncLoading || !syncUrlInput.trim()}
-                    className="px-4 py-2.5 rounded-xl bg-sky-600 hover:bg-sky-500 disabled:opacity-50 text-white font-semibold text-xs transition shadow-md shadow-sky-600/30 flex items-center gap-2 cursor-pointer shrink-0"
+                    className="px-4 py-2.5 rounded-xl bg-sky-600 hover:bg-sky-700 disabled:opacity-50 text-white font-semibold text-xs transition shadow-sm flex items-center gap-2 cursor-pointer shrink-0"
                   >
                     <RefreshCw className={`w-3.5 h-3.5 ${syncLoading ? 'animate-spin' : ''}`} />
                     <span>{syncLoading ? '同期中...' : '今すぐ同期する'}</span>
@@ -1682,18 +1681,18 @@ export const IntegratedCalendarWorkspace: React.FC<Props> = ({
                 <div
                   className={`p-3 rounded-xl text-xs flex items-center gap-2 border ${
                     syncStatusMsg.type === 'success'
-                      ? 'bg-emerald-950/60 border-emerald-500/40 text-emerald-300'
+                      ? 'bg-emerald-50 border-emerald-200 text-emerald-800'
                       : syncStatusMsg.type === 'error'
-                      ? 'bg-rose-950/60 border-rose-500/40 text-rose-300'
-                      : 'bg-blue-950/60 border-blue-500/40 text-blue-300'
+                      ? 'bg-rose-50 border-rose-200 text-rose-800'
+                      : 'bg-purple-50 border-purple-200 text-purple-800'
                   }`}
                 >
                   {syncStatusMsg.type === 'success' ? (
-                    <CheckCircle2 className="w-4 h-4 shrink-0 text-emerald-400" />
+                    <CheckCircle2 className="w-4 h-4 shrink-0 text-emerald-600" />
                   ) : syncStatusMsg.type === 'error' ? (
-                    <AlertCircle className="w-4 h-4 shrink-0 text-rose-400" />
+                    <AlertCircle className="w-4 h-4 shrink-0 text-rose-600" />
                   ) : (
-                    <RefreshCw className="w-4 h-4 shrink-0 animate-spin text-blue-400" />
+                    <RefreshCw className="w-4 h-4 shrink-0 animate-spin text-purple-600" />
                   )}
                   <span>{syncStatusMsg.text}</span>
                 </div>
@@ -1701,19 +1700,19 @@ export const IntegratedCalendarWorkspace: React.FC<Props> = ({
 
               {/* Current Connection Status Box */}
               {googleIcalUrl && (
-                <div className="p-3.5 rounded-2xl bg-slate-950/80 border border-slate-800 flex items-center justify-between text-xs">
+                <div className="p-3.5 rounded-2xl bg-slate-50 border border-slate-200 flex items-center justify-between text-xs">
                   <div>
                     <div className="flex items-center gap-2">
-                      <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
-                      <span className="font-semibold text-white">
+                      <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+                      <span className="font-semibold text-slate-900">
                         {googleSyncInfo.calendarName || '事業用Googleカレンダー'}
                       </span>
-                      <span className="text-[10px] px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 font-mono">
+                      <span className="text-[10px] px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800 font-mono font-semibold">
                         {googleEvents.length} 件の予定を同期中
                       </span>
                     </div>
                     {googleSyncInfo.lastSync && (
-                      <p className="text-[10px] text-slate-400 mt-1">
+                      <p className="text-[10px] text-slate-500 mt-1">
                         最終同期日時: {new Date(googleSyncInfo.lastSync).toLocaleString('ja-JP')}
                       </p>
                     )}
@@ -1723,7 +1722,7 @@ export const IntegratedCalendarWorkspace: React.FC<Props> = ({
                     <button
                       onClick={handlePerformGoogleSync}
                       disabled={syncLoading}
-                      className="px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white transition text-xs flex items-center gap-1.5"
+                      className="px-3 py-1.5 rounded-lg bg-white hover:bg-slate-100 text-slate-700 border border-slate-200 transition text-xs flex items-center gap-1.5 shadow-2xs"
                       title="最新の予定を再取得"
                     >
                       <RefreshCw className={`w-3.5 h-3.5 ${syncLoading ? 'animate-spin' : ''}`} />
@@ -1731,7 +1730,7 @@ export const IntegratedCalendarWorkspace: React.FC<Props> = ({
                     </button>
                     <button
                       onClick={handleClearGoogleSync}
-                      className="px-3 py-1.5 rounded-lg bg-rose-950/60 hover:bg-rose-900/80 text-rose-300 border border-rose-800/40 transition text-xs flex items-center gap-1.5"
+                      className="px-3 py-1.5 rounded-lg bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200 transition text-xs flex items-center gap-1.5"
                       title="連携を解除して取り込んだ予定を消去"
                     >
                       <Trash2 className="w-3.5 h-3.5" />
@@ -1742,13 +1741,13 @@ export const IntegratedCalendarWorkspace: React.FC<Props> = ({
               )}
 
               {/* Alternative: Direct ICS file upload */}
-              <div className="pt-3 border-t border-slate-800/80 flex items-center justify-between text-xs">
+              <div className="pt-3 border-t border-slate-200 flex items-center justify-between text-xs">
                 <div>
-                  <span className="text-slate-400">またはファイルで直接取り込む:</span>
-                  <p className="text-[11px] text-slate-500">Googleカレンダーで書き出した .ics ファイルを読み込めます</p>
+                  <span className="text-slate-600">またはファイルで直接取り込む:</span>
+                  <p className="text-[11px] text-slate-400">Googleカレンダーで書き出した .ics ファイルを読み込めます</p>
                 </div>
-                <label className="px-3.5 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white border border-slate-700/60 font-medium cursor-pointer transition flex items-center gap-1.5">
-                  <Upload className="w-3.5 h-3.5 text-sky-400" />
+                <label className="px-3.5 py-1.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-200 font-medium cursor-pointer transition flex items-center gap-1.5">
+                  <Upload className="w-3.5 h-3.5 text-purple-600" />
                   <span>.ics ファイルを選択</span>
                   <input
                     type="file"
@@ -1761,11 +1760,11 @@ export const IntegratedCalendarWorkspace: React.FC<Props> = ({
             </div>
 
             {/* Modal Footer */}
-            <div className="mt-6 flex items-center justify-end pt-3 border-t border-slate-800">
+            <div className="mt-6 flex items-center justify-end pt-3 border-t border-slate-100">
               <button
                 type="button"
                 onClick={() => setIsGoogleSyncModalOpen(false)}
-                className="px-5 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 font-semibold text-xs transition"
+                className="px-5 py-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 font-semibold text-xs transition"
               >
                 閉じる
               </button>
@@ -1789,7 +1788,7 @@ const AgendaEventCard: React.FC<AgendaEventCardProps> = ({ item, onSelect, onJum
   return (
     <div
       onClick={onSelect}
-      className={`p-3.5 rounded-2xl border text-xs cursor-pointer transition hover:scale-[1.01] flex flex-col justify-between ${conf.badgeBg} ${conf.border} shadow-sm group`}
+      className={`p-3.5 rounded-2xl border text-xs cursor-pointer transition hover:scale-[1.01] flex flex-col justify-between ${conf.badgeBg} ${conf.border} shadow-2xs group`}
     >
       <div>
         <div className="flex items-center justify-between text-[11px] opacity-80 mb-1.5">
@@ -1797,24 +1796,24 @@ const AgendaEventCard: React.FC<AgendaEventCardProps> = ({ item, onSelect, onJum
             <span className={`w-2 h-2 rounded-full ${conf.dot}`} />
             <span className={conf.text}>{conf.label}</span>
           </span>
-          <span className="font-mono text-slate-300">
+          <span className="font-mono text-slate-500">
             {item.date} {item.startTime ? item.startTime : '(終日)'}
           </span>
         </div>
 
-        <h4 className="font-bold text-white text-sm line-clamp-2 group-hover:text-blue-300 transition">
+        <h4 className="font-bold text-slate-900 text-sm line-clamp-2 group-hover:text-purple-700 transition">
           {item.title}
         </h4>
 
         {item.companyName && (
-          <div className="mt-1.5 flex items-center gap-1 text-[11px] text-slate-300">
+          <div className="mt-1.5 flex items-center gap-1 text-[11px] text-slate-600">
             <Building2 className="w-3.5 h-3.5 text-slate-400 shrink-0" />
             <span className="font-medium truncate">{item.companyName}</span>
           </div>
         )}
 
         {item.amount !== undefined && (
-          <div className="mt-1 text-[11px] text-emerald-300 font-mono">
+          <div className="mt-1 text-[11px] text-emerald-700 font-mono font-semibold">
             税抜 ¥{item.amount.toLocaleString()} + 税10% = 税込 ¥{(item.totalAmount || item.amount * 1.1).toLocaleString()}
           </div>
         )}
@@ -1822,18 +1821,18 @@ const AgendaEventCard: React.FC<AgendaEventCardProps> = ({ item, onSelect, onJum
         {(item.location || item.meetUrl) && (
           <div className="mt-2 flex items-center gap-1.5 flex-wrap">
             {item.meetUrl?.includes('zoom.us') || item.location?.toLowerCase().includes('zoom') ? (
-              <span className="px-2 py-0.5 rounded-full bg-blue-500/20 text-blue-300 border border-blue-500/40 text-[10px] font-bold flex items-center gap-1">
-                <Video className="w-3 h-3 text-blue-400" />
+              <span className="px-2 py-0.5 rounded-full bg-blue-50 text-blue-700 border border-blue-200 text-[10px] font-bold flex items-center gap-1">
+                <Video className="w-3 h-3 text-blue-600" />
                 <span>Zoom</span>
               </span>
             ) : item.meetUrl?.includes('meet.google.com') || item.location?.toLowerCase().includes('google meet') ? (
-              <span className="px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 text-[10px] font-bold flex items-center gap-1">
-                <Video className="w-3 h-3 text-emerald-400" />
+              <span className="px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200 text-[10px] font-bold flex items-center gap-1">
+                <Video className="w-3 h-3 text-emerald-600" />
                 <span>Google Meet</span>
               </span>
             ) : (
-              <span className="px-2 py-0.5 rounded-full bg-slate-800 text-slate-300 border border-slate-700 text-[10px] flex items-center gap-1">
-                <MapPin className="w-3 h-3 text-amber-400" />
+              <span className="px-2 py-0.5 rounded-full bg-slate-100 text-slate-700 border border-slate-200 text-[10px] flex items-center gap-1">
+                <MapPin className="w-3 h-3 text-amber-500" />
                 <span className="truncate max-w-[140px]">{item.location}</span>
               </span>
             )}
@@ -1846,8 +1845,8 @@ const AgendaEventCard: React.FC<AgendaEventCardProps> = ({ item, onSelect, onJum
                 onClick={(e) => e.stopPropagation()}
                 className={`px-2 py-0.5 rounded text-[10px] font-semibold flex items-center gap-1 transition ${
                   item.meetUrl.includes('zoom.us') || item.location?.toLowerCase().includes('zoom')
-                    ? 'bg-blue-600 hover:bg-blue-500 text-white'
-                    : 'bg-emerald-600 hover:bg-emerald-500 text-white'
+                    ? 'bg-blue-600 hover:bg-blue-700 text-white'
+                    : 'bg-emerald-600 hover:bg-emerald-700 text-white'
                 }`}
               >
                 <span>参加</span>
@@ -1858,7 +1857,7 @@ const AgendaEventCard: React.FC<AgendaEventCardProps> = ({ item, onSelect, onJum
         )}
       </div>
 
-      <div className="mt-3 pt-2 border-t border-slate-800/80 flex items-center justify-between">
+      <div className="mt-3 pt-2 border-t border-slate-200/80 flex items-center justify-between">
         <span className="text-[10px] text-slate-400">クリックして詳細表示</span>
         <div className="flex items-center gap-1">
           <a
@@ -1876,10 +1875,10 @@ const AgendaEventCard: React.FC<AgendaEventCardProps> = ({ item, onSelect, onJum
             target="_blank"
             rel="noopener noreferrer"
             onClick={(e) => e.stopPropagation()}
-            className="p-1 rounded bg-slate-800 hover:bg-slate-700 text-blue-300 transition text-[10px] flex items-center gap-1 px-1.5"
+            className="p-1 rounded bg-white hover:bg-slate-100 text-purple-700 border border-purple-200 transition text-[10px] flex items-center gap-1 px-1.5 shadow-2xs"
             title="Googleカレンダーに追加"
           >
-            <Share2 className="w-3 h-3" />
+            <Share2 className="w-3.5 h-3.5 text-purple-600" />
             <span>Gカレンダー</span>
           </a>
 
@@ -1889,11 +1888,11 @@ const AgendaEventCard: React.FC<AgendaEventCardProps> = ({ item, onSelect, onJum
                 e.stopPropagation();
                 onJump();
               }}
-              className="p-1 rounded bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white transition text-[10px] flex items-center gap-1 px-1.5"
+              className="p-1 rounded bg-white hover:bg-slate-100 text-slate-700 border border-slate-200 transition text-[10px] flex items-center gap-1 px-1.5 shadow-2xs"
               title="該当台帳を開く"
             >
               <span>台帳</span>
-              <ArrowRight className="w-3 h-3" />
+              <ArrowRight className="w-3.5 h-3.5 text-slate-500" />
             </button>
           )}
         </div>

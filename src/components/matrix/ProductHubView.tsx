@@ -334,14 +334,14 @@ export const ProductHubView: React.FC<ProductHubViewProps> = ({
         <div className="flex items-center gap-2.5">
           <button
             onClick={() => setIsWizardOpen(true)}
-            className="px-4 py-2.5 rounded-xl bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 text-white font-semibold text-xs shadow-lg shadow-purple-600/30 flex items-center gap-2 transition-all cursor-pointer"
+            className="px-4 py-2.5 rounded-xl bg-purple-600 hover:bg-purple-700 text-white font-semibold text-xs shadow-sm flex items-center gap-2 transition-all cursor-pointer"
           >
             <Sparkles className="w-4 h-4" />
             <span>AIとプロダクトを設計する</span>
           </button>
           <button
             onClick={() => setIsNewProductModalOpen(true)}
-            className="px-3.5 py-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 font-medium text-xs flex items-center gap-1.5 transition-colors cursor-pointer"
+            className="px-3.5 py-2.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-200 font-medium text-xs flex items-center gap-1.5 transition-colors cursor-pointer"
           >
             <Plus className="w-4 h-4" />
             <span>設計済みプロダクトを登録</span>
@@ -350,18 +350,18 @@ export const ProductHubView: React.FC<ProductHubViewProps> = ({
       </div>
 
       {/* Product Selection List with Drag & Drop Reordering */}
-      <div className="overflow-hidden rounded-xl border border-slate-800 bg-slate-950/70 shadow-lg">
+      <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
         {/* Top Control Bar */}
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between border-b border-slate-800 px-3 py-2.5 gap-2">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between border-b border-slate-100 px-4 py-3 gap-2">
           <div className="flex items-center gap-2 flex-wrap">
-            <div className="flex gap-1">
+            <div className="flex gap-1 bg-slate-100 p-0.5 rounded-xl border border-slate-200">
               {(['active', 'archived'] as const).map((view) => (
                 <button
                   key={view}
                   type="button"
                   onClick={() => setProductListView(view)}
                   className={`rounded-lg px-3 py-1.5 text-xs font-semibold transition-colors cursor-pointer ${
-                    productListView === view ? 'bg-indigo-600 text-white' : 'text-slate-400 hover:bg-slate-800 hover:text-white'
+                    productListView === view ? 'bg-white text-slate-900 shadow-2xs' : 'text-slate-600 hover:text-slate-900'
                   }`}
                 >
                   {view === 'active' ? '取扱中' : '取扱停止'}
@@ -369,28 +369,28 @@ export const ProductHubView: React.FC<ProductHubViewProps> = ({
               ))}
             </div>
 
-            <span className="text-[11px] text-indigo-400/90 font-medium hidden sm:inline-flex items-center gap-1 bg-indigo-500/10 px-2 py-0.5 rounded border border-indigo-500/20">
-              <GripVertical className="w-3 h-3 text-indigo-400" />
+            <span className="text-[11px] text-purple-700 font-medium hidden sm:inline-flex items-center gap-1 bg-purple-50 px-2 py-0.5 rounded border border-purple-200">
+              <GripVertical className="w-3 h-3 text-purple-600" />
               <span>ドラッグで並び替え可能</span>
             </span>
           </div>
 
-          <div className="flex items-center gap-2 text-[11px] text-slate-400">
+          <div className="flex items-center gap-2 text-xs text-slate-500">
             <span>全 {products.filter((p) => (p.status === 'archived') === (productListView === 'archived')).length} 件</span>
           </div>
         </div>
 
         {/* Draggable Category Filter Bar */}
         {distinctCategories.length > 0 && (
-          <div className="flex items-center gap-1.5 overflow-x-auto px-3 py-2 border-b border-slate-800/80 bg-slate-900/40 text-xs no-scrollbar">
+          <div className="flex items-center gap-1.5 overflow-x-auto px-4 py-2 border-b border-slate-100 bg-slate-50/70 text-xs no-scrollbar">
             <span className="text-[10px] text-slate-500 shrink-0 font-semibold uppercase tracking-wider">カテゴリ:</span>
             <button
               type="button"
               onClick={() => setSelectedCategoryFilter('ALL')}
               className={`px-2.5 py-1 rounded-lg text-xs font-semibold shrink-0 transition-colors cursor-pointer ${
                 selectedCategoryFilter === 'ALL'
-                  ? 'bg-slate-700 text-white shadow-sm'
-                  : 'text-slate-400 hover:bg-slate-800 hover:text-slate-200'
+                  ? 'bg-purple-600 text-white shadow-2xs'
+                  : 'text-slate-600 hover:bg-slate-200 hover:text-slate-900'
               }`}
             >
               すべて
@@ -426,11 +426,11 @@ export const ProductHubView: React.FC<ProductHubViewProps> = ({
                   title="ドラッグでカテゴリの並び替えができます"
                   className={`flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-semibold shrink-0 cursor-grab active:cursor-grabbing transition-all select-none border ${
                     isCatSelected
-                      ? 'bg-indigo-600 text-white border-indigo-500 shadow-sm'
-                      : 'text-slate-400 hover:bg-slate-800 hover:text-slate-200 border-slate-800'
-                  } ${isBeingDragged ? 'opacity-40 scale-95' : ''} ${isDragOver ? 'border-indigo-400 bg-indigo-500/20' : ''}`}
+                      ? 'bg-purple-600 text-white border-purple-600 shadow-2xs'
+                      : 'text-slate-600 hover:bg-slate-200 hover:text-slate-900 border-slate-200 bg-white'
+                  } ${isBeingDragged ? 'opacity-40 scale-95' : ''} ${isDragOver ? 'border-purple-400 bg-purple-50' : ''}`}
                 >
-                  <GripVertical className="w-3 h-3 text-slate-500 shrink-0 opacity-60" />
+                  <GripVertical className="w-3 h-3 text-slate-400 shrink-0 opacity-60" />
                   <span>{cat}</span>
                 </div>
               );
@@ -439,7 +439,7 @@ export const ProductHubView: React.FC<ProductHubViewProps> = ({
         )}
 
         {/* Column Headers */}
-        <div className="grid grid-cols-[28px_minmax(0,1fr)_minmax(100px,0.35fr)_minmax(115px,0.4fr)] gap-3 border-b border-slate-800 px-4 py-2 text-[10px] font-semibold text-slate-500">
+        <div className="grid grid-cols-[28px_minmax(0,1fr)_minmax(100px,0.35fr)_minmax(115px,0.4fr)] gap-3 border-b border-slate-100 px-4 py-2 text-[10px] font-semibold text-slate-400 bg-slate-50/50">
           <span title="並び替えハンドル">順</span>
           <span>商品名</span>
           <span>商品タイプ / 分類</span>
@@ -447,7 +447,7 @@ export const ProductHubView: React.FC<ProductHubViewProps> = ({
         </div>
 
         {/* Product Rows */}
-        <div className="max-h-72 overflow-y-auto divide-y divide-slate-800/70">
+        <div className="max-h-72 overflow-y-auto divide-y divide-slate-100">
           {(() => {
             const displayProducts = products
               .filter((p) => (p.status === 'archived') === (productListView === 'archived'))
@@ -455,7 +455,7 @@ export const ProductHubView: React.FC<ProductHubViewProps> = ({
 
             if (displayProducts.length === 0) {
               return (
-                <p className="px-4 py-6 text-center text-xs text-slate-500">
+                <p className="px-4 py-6 text-center text-xs text-slate-400">
                   {productListView === 'archived'
                     ? '取扱停止の商品はありません。'
                     : selectedCategoryFilter !== 'ALL'
@@ -496,14 +496,14 @@ export const ProductHubView: React.FC<ProductHubViewProps> = ({
                   }}
                   onClick={() => setSelectedProductId(p.id)}
                   className={`grid w-full grid-cols-[28px_minmax(0,1fr)_minmax(100px,0.35fr)_minmax(125px,0.45fr)] items-center gap-3 px-4 py-2.5 text-left transition-all cursor-pointer ${
-                    isSelected ? 'bg-indigo-500/15 text-white' : 'text-slate-300 hover:bg-slate-900'
-                  } ${isBeingDragged ? 'opacity-40 bg-slate-900' : ''} ${
-                    isDragOver ? 'border-t-2 border-indigo-400 bg-indigo-500/20' : ''
+                    isSelected ? 'bg-purple-50/70 text-purple-950 font-medium' : 'text-slate-700 hover:bg-slate-50'
+                  } ${isBeingDragged ? 'opacity-40 bg-slate-100' : ''} ${
+                    isDragOver ? 'border-t-2 border-purple-500 bg-purple-50' : ''
                   }`}
                 >
                   <div
                     title="ドラッグして並び替え"
-                    className="flex items-center justify-center cursor-grab active:cursor-grabbing text-slate-500 hover:text-indigo-300"
+                    className="flex items-center justify-center cursor-grab active:cursor-grabbing text-slate-400 hover:text-purple-600"
                     onClick={(e) => e.stopPropagation()}
                   >
                     <GripVertical className="w-4 h-4" />
@@ -511,18 +511,18 @@ export const ProductHubView: React.FC<ProductHubViewProps> = ({
                   <div className="truncate text-xs font-semibold flex items-center gap-1.5 min-w-0">
                     <span className="truncate">{p.name}</span>
                     {p.code && (
-                      <span className="text-[10px] px-1 py-0.2 rounded bg-slate-800 text-slate-400 font-mono shrink-0">
+                      <span className="text-[10px] px-1 py-0.2 rounded bg-slate-100 text-slate-500 font-mono shrink-0">
                         {p.code}
                       </span>
                     )}
                   </div>
-                  <span className="truncate text-[11px] text-slate-400">
+                  <span className="truncate text-[11px] text-slate-500">
                     {PRODUCT_ARCHETYPES[p.archetype]?.label || p.category}
                   </span>
                   <div className="text-right text-[11px] font-mono min-w-0">
-                    <div className="truncate text-slate-200 font-semibold">{priceInfo.label}</div>
+                    <div className="truncate text-slate-900 font-bold">{priceInfo.label}</div>
                     {priceInfo.isFlexible ? (
-                      <span className="inline-block px-1.5 py-0.2 rounded bg-cyan-950/80 text-[10px] text-cyan-300 font-sans border border-cyan-800/40">
+                      <span className="inline-block px-1.5 py-0.2 rounded bg-purple-50 text-[10px] text-purple-700 font-sans border border-purple-200">
                         {priceInfo.badge}
                       </span>
                     ) : (
@@ -540,47 +540,47 @@ export const ProductHubView: React.FC<ProductHubViewProps> = ({
 
       {/* Selected Product Detail Card & Subtabs */}
       {selectedProduct && (
-        <div className="bg-slate-900 border border-slate-800 rounded-2xl overflow-hidden shadow-xl">
+        <div className="bg-white border border-slate-200 rounded-2xl overflow-hidden shadow-sm">
           {/* Product Header */}
-          <div className="p-6 border-b border-slate-800 bg-slate-950/40">
+          <div className="p-6 border-b border-slate-100 bg-slate-50/50">
             <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
               <div>
                 <div className="flex items-center gap-2 mb-1">
-                  <span className="text-xs font-semibold px-2.5 py-0.5 rounded-full bg-blue-500/20 text-blue-300 border border-blue-500/30 flex items-center gap-1">
+                  <span className="text-xs font-semibold px-2.5 py-0.5 rounded-full bg-blue-50 text-blue-700 border border-blue-200 flex items-center gap-1">
                     {getArchetypeIcon(selectedProduct.archetype)}
                     {PRODUCT_ARCHETYPES[selectedProduct.archetype]?.label}
                   </span>
-                  <span className="text-xs text-slate-400 font-mono">
+                  <span className="text-xs text-slate-500 font-mono">
                     コード: {selectedProduct.code || selectedProduct.id}
                   </span>
                   <span className={`text-[10px] px-2 py-0.5 rounded font-semibold ${
                     selectedProduct.status === 'active' 
-                      ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/30'
-                      : 'bg-amber-500/20 text-amber-300 border border-amber-500/30'
+                      ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
+                      : 'bg-amber-50 text-amber-700 border border-amber-200'
                   }`}>
                     {selectedProduct.status === 'active' ? '運用中' : selectedProduct.status === 'archived' ? '取扱停止' : '開発・準備中'}
                   </span>
                 </div>
-                <h3 className="text-2xl font-black text-white">{selectedProduct.name}</h3>
-                <p className="text-xs text-slate-400 mt-1 max-w-3xl">
+                <h3 className="text-2xl font-black text-slate-900">{selectedProduct.name}</h3>
+                <p className="text-xs text-slate-500 mt-1 max-w-3xl">
                   {selectedProduct.description || '概要未入力'}
                 </p>
                 <div className="mt-3 flex flex-wrap items-center gap-2">
-                  <button type="button" onClick={openProductEditor} className="inline-flex items-center gap-2 rounded-lg border border-slate-600 bg-slate-800 px-3 py-2 text-xs font-semibold text-slate-200 hover:bg-slate-700">
-                    <Edit2 className="h-4 w-4" />AIプロダクトを編集
+                  <button type="button" onClick={openProductEditor} className="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-50 shadow-2xs transition">
+                    <Edit2 className="h-3.5 w-3.5" />AIプロダクトを編集
                   </button>
                   <button type="button" onClick={() => {
                     setPublishInitialFee(String(selectedProduct.salesInitialFee ?? selectedProduct.price ?? 0));
                     setPublishMonthlyFee(String(selectedProduct.salesMonthlyFee ?? 0));
                     setPublishError('');
                     setIsPublishModalOpen(true);
-                  }} className="inline-flex items-center gap-2 rounded-lg border border-indigo-400/30 bg-indigo-500/10 px-3 py-2 text-xs font-semibold text-indigo-200 hover:bg-indigo-500/20">
-                    {selectedProduct.salesCatalogPublishedAt ? <Check className="h-4 w-4" /> : <Link2 className="h-4 w-4" />}
+                  }} className="inline-flex items-center gap-2 rounded-xl border border-purple-200 bg-purple-50 px-3 py-1.5 text-xs font-semibold text-purple-700 hover:bg-purple-100 shadow-2xs transition">
+                    {selectedProduct.salesCatalogPublishedAt ? <Check className="h-3.5 w-3.5" /> : <Link2 className="h-3.5 w-3.5" />}
                     {selectedProduct.salesCatalogPublishedAt ? '営業商品マスタを更新' : '営業商品マスタに反映'}
                   </button>
                   {selectedProduct.salesCatalogPublishedAt && (
                     <div className="flex items-center gap-2">
-                      <span className="text-[10px] text-emerald-300">CRM商品マスタ連携済</span>
+                      <span className="text-[10px] text-emerald-700 font-semibold bg-emerald-50 border border-emerald-200 px-2 py-0.5 rounded-full">CRM商品マスタ連携済</span>
                       <button
                         type="button"
                         onClick={() => {
@@ -591,7 +591,7 @@ export const ProductHubView: React.FC<ProductHubViewProps> = ({
                           setProductActionMessage(`「${selectedProduct.name}」を商品マスタへ移行完了として設計一覧から整理しました（商品マスタには保持されます）。`);
                           setProductActionIsError(false);
                         }}
-                        className="inline-flex items-center gap-1.5 rounded-lg border border-slate-700 bg-slate-900 px-2.5 py-1.5 text-xs text-slate-300 hover:bg-slate-800 hover:text-white"
+                        className="inline-flex items-center gap-1.5 rounded-xl border border-slate-200 bg-white px-2.5 py-1.5 text-xs text-slate-600 hover:bg-slate-50 shadow-2xs transition"
                         title="AIプロダクト設計ワークベンチから除外し、商品マスタのみに保持します"
                       >
                         <Layers className="h-3.5 w-3.5 text-slate-400" />
@@ -655,14 +655,14 @@ export const ProductHubView: React.FC<ProductHubViewProps> = ({
 
               {/* KPI Badges (契約書・請求書の実データから自動集計) */}
               <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-                <div className="p-3 bg-slate-950 border border-slate-800 rounded-xl text-center">
+                <div className="p-3 bg-white border border-slate-200 rounded-xl text-center shadow-2xs">
                   <span className="text-[10px] text-slate-500 block">料金体系 / 単価</span>
-                  <span className="text-sm font-bold text-white block truncate">
+                  <span className="text-sm font-bold text-slate-900 block truncate">
                     {formatProductPrice(selectedProduct).label}
                   </span>
-                  <span className="text-[11px] font-semibold text-cyan-300 block truncate">
+                  <span className="text-[11px] font-semibold text-purple-700 block truncate">
                     {selectedProduct.pricingModel && selectedProduct.pricingModel !== 'fixed' ? (
-                      <span className="inline-block px-1.5 py-0.2 rounded bg-cyan-950/80 text-[10px] text-cyan-300 border border-cyan-800/50">
+                      <span className="inline-block px-1.5 py-0.2 rounded bg-purple-50 text-[10px] text-purple-700 border border-purple-200">
                         {selectedProduct.pricingModel === 'starting_at' ? '最低価格〜 (商談で本決め)' : selectedProduct.pricingModel === 'range' ? '価格帯 (商談で本決め)' : '個別見積'}
                       </span>
                     ) : (
@@ -670,26 +670,26 @@ export const ProductHubView: React.FC<ProductHubViewProps> = ({
                     )}
                   </span>
                 </div>
-                <div className="p-3 bg-slate-950 border border-slate-800 rounded-xl text-center">
+                <div className="p-3 bg-white border border-slate-200 rounded-xl text-center shadow-2xs">
                   <span className="text-[10px] text-slate-500 block">契約中社数 (自動集計)</span>
-                  <span className="text-sm font-bold text-emerald-400">
+                  <span className="text-sm font-bold text-emerald-600">
                     {selectedProductKpi?.activeClients ?? 0} 社
                   </span>
-                  <span className="text-[10px] text-slate-500 block mt-0.5">締結済契約より</span>
+                  <span className="text-[10px] text-slate-400 block mt-0.5">締結済契約より</span>
                 </div>
-                <div className="p-3 bg-slate-950 border border-slate-800 rounded-xl text-center">
+                <div className="p-3 bg-white border border-slate-200 rounded-xl text-center shadow-2xs">
                   <span className="text-[10px] text-slate-500 block">確定売上 (税込・自動集計)</span>
-                  <span className="text-sm font-bold text-cyan-400">
+                  <span className="text-sm font-bold text-sky-600">
                     ¥{(selectedProductKpi?.currentRevenue ?? 0).toLocaleString()}
                   </span>
-                  <span className="text-[10px] text-slate-500 block mt-0.5">入金済請求より</span>
+                  <span className="text-[10px] text-slate-400 block mt-0.5">入金済請求より</span>
                 </div>
-                <div className="p-3 bg-slate-950 border border-slate-800 rounded-xl text-center">
+                <div className="p-3 bg-white border border-slate-200 rounded-xl text-center shadow-2xs">
                   <span className="text-[10px] text-slate-500 block">目標売上 / 達成率</span>
-                  <span className="text-sm font-bold text-purple-400">
+                  <span className="text-sm font-bold text-purple-700">
                     ¥{(selectedProductKpi?.targetRevenue ?? 0).toLocaleString()}
                   </span>
-                  <span className="text-[10px] text-purple-300 block mt-0.5 font-medium">
+                  <span className="text-[10px] text-purple-600 block mt-0.5 font-medium">
                     達成率: {selectedProductKpi?.achievementRate ?? 0}%
                   </span>
                 </div>
@@ -697,12 +697,11 @@ export const ProductHubView: React.FC<ProductHubViewProps> = ({
             </div>
 
             {/* Sub-navigation Tabs */}
-            <div className="flex space-x-2 mt-6 border-t border-slate-800 pt-4">
+            <div className="flex space-x-2 mt-6 border-t border-slate-100 pt-4">
               {[
                 { id: 'overview', label: '① 概要・カスタム属性', icon: Layers },
                 { id: 'tasks', label: '② 開発・WBSタスク', icon: Code2 },
                 { id: 'marketing', label: '③ マーケティング・販促', icon: TrendingUp },
-                
               ].map((tab) => {
                 const Icon = tab.icon;
                 const isActive = activeTab === tab.id;
@@ -712,8 +711,8 @@ export const ProductHubView: React.FC<ProductHubViewProps> = ({
                     onClick={() => setActiveTab(tab.id as any)}
                     className={`px-4 py-2 rounded-xl text-xs font-semibold flex items-center gap-2 transition-colors cursor-pointer ${
                       isActive
-                        ? 'bg-blue-600 text-white shadow-md shadow-blue-600/20'
-                        : 'text-slate-400 hover:text-white hover:bg-slate-800'
+                        ? 'bg-purple-600 text-white shadow-2xs'
+                        : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100'
                     }`}
                   >
                     <Icon className="w-3.5 h-3.5" />
@@ -730,8 +729,8 @@ export const ProductHubView: React.FC<ProductHubViewProps> = ({
             {activeTab === 'overview' && (
               <div className="space-y-6">
                 <div>
-                  <h4 className="text-sm font-bold text-white mb-3 flex items-center gap-2">
-                    <Layers className="w-4 h-4 text-blue-400" />
+                  <h4 className="text-sm font-bold text-slate-900 mb-3 flex items-center gap-2">
+                    <Layers className="w-4 h-4 text-purple-600" />
                     商品タイプ別 特有属性（カスタムフィールド）
                   </h4>
 
@@ -740,8 +739,8 @@ export const ProductHubView: React.FC<ProductHubViewProps> = ({
                     {PRODUCT_ARCHETYPES[selectedProduct.archetype]?.customFieldTemplates.map((field) => {
                       const val = selectedProduct.customFields?.[field.key];
                       return (
-                        <div key={field.key} className="p-4 rounded-xl bg-slate-950 border border-slate-800">
-                          <span className="text-xs font-medium text-slate-400 block mb-1">
+                        <div key={field.key} className="p-4 rounded-xl bg-slate-50 border border-slate-200">
+                          <span className="text-xs font-medium text-slate-500 block mb-1">
                             {field.label}
                           </span>
                           {field.type === 'url' && val ? (
@@ -749,13 +748,13 @@ export const ProductHubView: React.FC<ProductHubViewProps> = ({
                               href={String(val)}
                               target="_blank"
                               rel="noreferrer"
-                              className="text-xs text-blue-400 hover:underline flex items-center gap-1 truncate"
+                              className="text-xs text-purple-600 hover:underline flex items-center gap-1 truncate font-medium"
                             >
                               <span>{String(val)}</span>
                               <ExternalLink className="w-3 h-3 shrink-0" />
                             </a>
                           ) : (
-                            <span className="text-sm font-semibold text-white">
+                            <span className="text-sm font-semibold text-slate-900">
                               {val !== undefined && val !== null ? String(val) : '未設定'}
                             </span>
                           )}
@@ -763,11 +762,11 @@ export const ProductHubView: React.FC<ProductHubViewProps> = ({
                       );
                     })}
 
-                    <div className="p-4 rounded-xl bg-slate-950 border border-slate-800">
-                      <span className="text-xs font-medium text-slate-400 block mb-1">
+                    <div className="p-4 rounded-xl bg-slate-50 border border-slate-200">
+                      <span className="text-xs font-medium text-slate-500 block mb-1">
                         目標売上 KPI
                       </span>
-                      <span className="text-sm font-semibold text-white">
+                      <span className="text-sm font-semibold text-slate-900">
                         ¥{(selectedProduct.kpis?.targetRevenue || 0).toLocaleString()}
                       </span>
                     </div>
@@ -775,15 +774,15 @@ export const ProductHubView: React.FC<ProductHubViewProps> = ({
                 </div>
 
                 {/* Typical Items for this archetype */}
-                <div className="p-4 rounded-xl bg-slate-950/60 border border-slate-800">
-                  <span className="text-xs font-semibold text-slate-300 block mb-2">
+                <div className="p-4 rounded-xl bg-purple-50/50 border border-purple-200">
+                  <span className="text-xs font-semibold text-purple-950 block mb-2">
                     💡 {PRODUCT_ARCHETYPES[selectedProduct.archetype]?.label} で推奨される標準管理セット:
                   </span>
                   <div className="flex flex-wrap gap-2">
                     {PRODUCT_ARCHETYPES[selectedProduct.archetype]?.typicalItems.map((item, idx) => (
                       <span
                         key={idx}
-                        className="text-xs px-2.5 py-1 rounded-lg bg-slate-800 text-slate-300 border border-slate-700/60"
+                        className="text-xs px-2.5 py-1 rounded-lg bg-white text-purple-800 border border-purple-200 shadow-2xs"
                       >
                         ✓ {item}
                       </span>
@@ -797,11 +796,11 @@ export const ProductHubView: React.FC<ProductHubViewProps> = ({
             {activeTab === 'tasks' && (
               <div className="space-y-4">
                 <div className="flex items-center justify-between">
-                  <h4 className="text-sm font-bold text-white flex items-center gap-2">
-                    <Code2 className="w-4 h-4 text-blue-400" />
+                  <h4 className="text-sm font-bold text-slate-900 flex items-center gap-2">
+                    <Code2 className="w-4 h-4 text-purple-600" />
                     商品開発・推進タスク一覧 ({selectedProduct?.name})
                   </h4>
-                  <span className="text-xs text-slate-400">
+                  <span className="text-xs text-slate-500">
                     関連 {productTasks.length} 件 / 全 {tasks.length} タスク中
                   </span>
                 </div>
@@ -811,32 +810,32 @@ export const ProductHubView: React.FC<ProductHubViewProps> = ({
                     productTasks.map((task) => (
                       <div
                         key={task.id}
-                        className="p-3 rounded-xl bg-slate-950 border border-slate-800 flex items-center justify-between text-xs"
+                        className="p-3 rounded-xl bg-white border border-slate-200 flex items-center justify-between text-xs shadow-2xs"
                       >
                         <div className="flex items-center gap-3">
                           <span className={`w-2.5 h-2.5 rounded-full ${
                             task.status === 'completed'
                               ? 'bg-emerald-500'
                               : task.status === 'in_progress'
-                              ? 'bg-blue-500 animate-pulse'
-                              : 'bg-slate-600'
+                              ? 'bg-purple-600 animate-pulse'
+                              : 'bg-slate-300'
                           }`} />
                           <div>
-                            <span className="font-semibold text-white">{task.title}</span>
-                            <p className="text-[10px] text-slate-400">{task.description}</p>
+                            <span className="font-semibold text-slate-900">{task.title}</span>
+                            <p className="text-[10px] text-slate-500">{task.description}</p>
                             {task.dueDate && (
-                              <span className="text-[10px] text-amber-400/90 font-mono mt-0.5 block">
+                              <span className="text-[10px] text-amber-700 font-mono mt-0.5 block">
                                 期限: {task.dueDate}
                               </span>
                             )}
                           </div>
                         </div>
                         <div className="flex items-center gap-2 shrink-0">
-                          <span className="text-[10px] px-2 py-0.5 rounded bg-slate-800 text-slate-300">
+                          <span className="text-[10px] px-2 py-0.5 rounded bg-slate-100 text-slate-700">
                             {task.assignee?.name || '担当者'}
                           </span>
                           <span className={`text-[10px] px-2 py-0.5 rounded font-medium ${
-                            task.priority === 'high' ? 'bg-rose-500/20 text-rose-300' : 'bg-slate-800 text-slate-400'
+                            task.priority === 'high' ? 'bg-rose-50 text-rose-700 border border-rose-200' : 'bg-slate-100 text-slate-500'
                           }`}>
                             {task.priority === 'high' ? '高' : '通常'}
                           </span>
@@ -844,12 +843,12 @@ export const ProductHubView: React.FC<ProductHubViewProps> = ({
                       </div>
                     ))
                   ) : (
-                    <div className="p-6 rounded-xl bg-slate-950/60 border border-slate-800 text-center text-xs text-slate-500 space-y-2">
+                    <div className="p-6 rounded-xl bg-slate-50 border border-slate-200 text-center text-xs text-slate-500 space-y-2">
                       <p>現在「{selectedProduct?.name}」に紐付く個別開発タスクはありません。</p>
                       <button
                         type="button"
                         onClick={() => setIsWizardOpen(true)}
-                        className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-indigo-600/20 text-indigo-300 border border-indigo-500/30 hover:bg-indigo-600/30 font-medium"
+                        className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-purple-50 text-purple-700 border border-purple-200 hover:bg-purple-100 font-semibold shadow-2xs transition"
                       >
                         <Sparkles className="w-3.5 h-3.5" />
                         <span>AIとWBSタスクを自動策定する</span>
@@ -864,11 +863,11 @@ export const ProductHubView: React.FC<ProductHubViewProps> = ({
             {activeTab === 'marketing' && (
               <div className="space-y-4">
                 <div className="flex items-center justify-between">
-                  <h4 className="text-sm font-bold text-white flex items-center gap-2">
-                    <TrendingUp className="w-4 h-4 text-purple-400" />
+                  <h4 className="text-sm font-bold text-slate-900 flex items-center gap-2">
+                    <TrendingUp className="w-4 h-4 text-purple-600" />
                     マーケティング施策・販促ツール
                   </h4>
-                  <span className="text-xs text-slate-400">
+                  <span className="text-xs text-slate-500">
                     紐づきツール: {productTools.length} 件
                   </span>
                 </div>
@@ -876,20 +875,20 @@ export const ProductHubView: React.FC<ProductHubViewProps> = ({
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                   {productTools.length > 0 ? (
                     productTools.map((t) => (
-                      <div key={t.id} className="p-4 rounded-xl bg-slate-950 border border-slate-800 space-y-2">
+                      <div key={t.id} className="p-4 rounded-xl bg-white border border-slate-200 space-y-2 shadow-2xs">
                         <div className="flex items-center justify-between">
-                          <span className="text-xs font-bold text-white">{t.name}</span>
-                          <span className="text-[10px] px-2 py-0.5 rounded bg-purple-500/20 text-purple-300 border border-purple-500/30">
+                          <span className="text-xs font-bold text-slate-900">{t.name}</span>
+                          <span className="text-[10px] px-2 py-0.5 rounded bg-purple-50 text-purple-700 border border-purple-200">
                             {t.toolType}
                           </span>
                         </div>
-                        <p className="text-xs text-slate-400">{t.description}</p>
+                        <p className="text-xs text-slate-500">{t.description}</p>
                         {t.url && (
                           <a
                             href={t.url}
                             target="_blank"
                             rel="noreferrer"
-                            className="text-xs text-blue-400 hover:underline flex items-center gap-1"
+                            className="text-xs text-purple-600 hover:underline flex items-center gap-1 font-semibold"
                           >
                             <span>リンクを開く</span>
                             <ExternalLink className="w-3 h-3" />
@@ -898,93 +897,10 @@ export const ProductHubView: React.FC<ProductHubViewProps> = ({
                       </div>
                     ))
                   ) : (
-                    <div className="p-6 rounded-xl bg-slate-950/60 border border-slate-800 text-center col-span-2 text-xs text-slate-500">
+                    <div className="p-6 rounded-xl bg-slate-50 border border-slate-200 text-center col-span-2 text-xs text-slate-500">
                       現在この商品に紐づいたプロモーションツールはありません。「販促ツール一覧」より追加できます。
                     </div>
                   )}
-                </div>
-              </div>
-            )}
-
-            {/* 4. FINANCE (CONTRACTS & INVOICES) */}
-            {activeTab === 'finance' && (
-              <div className="space-y-6">
-                {/* Contracts */}
-                <div>
-                  <h4 className="text-sm font-bold text-white mb-3 flex items-center gap-2">
-                    <FileCheck2 className="w-4 h-4 text-emerald-400" />
-                    関連契約書 ({productContracts.length} 件)
-                  </h4>
-                  <div className="space-y-2">
-                    {productContracts.length > 0 ? (
-                      productContracts.map((cnt) => (
-                        <div
-                          key={cnt.id}
-                          className="p-3 rounded-xl bg-slate-950 border border-slate-800 flex items-center justify-between text-xs"
-                        >
-                          <div>
-                            <span className="font-semibold text-white">{cnt.title}</span>
-                            <span className="text-slate-400 ml-2">相手先: {cnt.counterpartyName}</span>
-                          </div>
-                          <div className="flex items-center gap-2">
-                            <span className="text-emerald-400 font-bold">
-                              ¥{(cnt.amount || 0).toLocaleString()}
-                            </span>
-                            <span className={`text-[10px] px-2 py-0.5 rounded font-medium ${
-                              cnt.status === 'signed'
-                                ? 'bg-emerald-500/20 text-emerald-300'
-                                : 'bg-amber-500/20 text-amber-300'
-                            }`}>
-                              {cnt.status === 'signed' ? '締結済' : '確認中'}
-                            </span>
-                          </div>
-                        </div>
-                      ))
-                    ) : (
-                      <div className="p-4 rounded-xl bg-slate-950/60 border border-slate-800 text-xs text-slate-500 text-center">
-                        登録された契約書はありません
-                      </div>
-                    )}
-                  </div>
-                </div>
-
-                {/* Invoices */}
-                <div>
-                  <h4 className="text-sm font-bold text-white mb-3 flex items-center gap-2">
-                    <Receipt className="w-4 h-4 text-cyan-400" />
-                    関連請求書・入金状況 ({productInvoices.length} 件)
-                  </h4>
-                  <div className="space-y-2">
-                    {productInvoices.length > 0 ? (
-                      productInvoices.map((inv) => (
-                        <div
-                          key={inv.id}
-                          className="p-3 rounded-xl bg-slate-950 border border-slate-800 flex items-center justify-between text-xs"
-                        >
-                          <div>
-                            <span className="font-semibold text-white">{inv.title}</span>
-                            <span className="text-slate-400 ml-2">({inv.invoiceNumber}) - {inv.recipientName}</span>
-                          </div>
-                          <div className="flex items-center gap-2">
-                            <span className="text-cyan-400 font-bold">
-                              ¥{inv.amount.toLocaleString()}
-                            </span>
-                            <span className={`text-[10px] px-2 py-0.5 rounded font-medium ${
-                              inv.status === 'paid'
-                                ? 'bg-emerald-500/20 text-emerald-300'
-                                : 'bg-amber-500/20 text-amber-300'
-                            }`}>
-                              {inv.status === 'paid' ? '入金済' : '入金待ち'}
-                            </span>
-                          </div>
-                        </div>
-                      ))
-                    ) : (
-                      <div className="p-4 rounded-xl bg-slate-950/60 border border-slate-800 text-xs text-slate-500 text-center">
-                        登録された請求書はありません
-                      </div>
-                    )}
-                  </div>
                 </div>
               </div>
             )}
@@ -1009,73 +925,73 @@ export const ProductHubView: React.FC<ProductHubViewProps> = ({
             } finally {
               setIsPublishing(false);
             }
-          }} className="w-full max-w-lg space-y-4 rounded-2xl border border-slate-800 bg-slate-900 p-6 shadow-2xl">
+          }} className="w-full max-w-lg space-y-4 rounded-2xl border border-slate-200 bg-white p-6 shadow-xl">
             <div>
-              <h3 className="text-lg font-bold text-white">営業商品マスタに反映</h3>
-              <p className="mt-1 text-xs leading-5 text-slate-400">「{selectedProduct.name}」をCRM商品マスタへ登録します。商品IDは維持し、同じIDを参照する契約・請求・商談と紐づけます。</p>
+              <h3 className="text-lg font-bold text-slate-900">営業商品マスタに反映</h3>
+              <p className="mt-1 text-xs leading-5 text-slate-500">「{selectedProduct.name}」をCRM商品マスタへ登録します。商品IDは維持し、同じIDを参照する契約・請求・商談と紐づけます。</p>
             </div>
             {selectedProduct.pricingModel && selectedProduct.pricingModel !== 'fixed' && (
-              <div className="rounded-lg border border-cyan-500/40 bg-cyan-950/40 p-2.5 text-xs text-cyan-200 space-y-1">
-                <div className="flex items-center gap-1 font-semibold text-cyan-300">
-                  <Sparkles className="w-3.5 h-3.5 text-cyan-400" />
+              <div className="rounded-xl border border-purple-200 bg-purple-50/70 p-3 text-xs text-purple-900 space-y-1">
+                <div className="flex items-center gap-1.5 font-semibold text-purple-800">
+                  <Sparkles className="w-4 h-4 text-purple-600" />
                   <span>融通設定: {selectedProduct.pricingModel === 'starting_at' ? '最低価格〜（商談で本決め）' : selectedProduct.pricingModel === 'range' ? '価格帯（商談で本決め）' : '個別見積'}</span>
                 </div>
-                {selectedProduct.priceNote && <div className="text-[11px] text-cyan-200/90">メモ: {selectedProduct.priceNote}</div>}
+                {selectedProduct.priceNote && <div className="text-[11px] text-purple-700">メモ: {selectedProduct.priceNote}</div>}
               </div>
             )}
-            <label className="block text-xs text-slate-300">
+            <label className="block text-xs font-medium text-slate-700">
               {selectedProduct.pricingModel === 'starting_at' ? '最低初期費用（税抜・円）' : '初期費用（税抜・円）'}
-              <input type="number" min="0" step="1" value={publishInitialFee} onChange={(event) => setPublishInitialFee(event.target.value)} className="mt-1 w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-white" />
+              <input type="number" min="0" step="1" value={publishInitialFee} onChange={(event) => setPublishInitialFee(event.target.value)} className="mt-1 w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 focus:outline-none focus:border-purple-500 focus:ring-1 focus:ring-purple-500 shadow-2xs" />
               {publishInitialFee && !isNaN(Number(publishInitialFee)) && (
-                <span className="mt-1 block text-[11px] text-cyan-300 font-medium">税込 (10%): ¥{Math.floor(Number(publishInitialFee) * 1.1).toLocaleString()}</span>
+                <span className="mt-1 block text-[11px] text-purple-700 font-semibold">税込 (10%): ¥{Math.floor(Number(publishInitialFee) * 1.1).toLocaleString()}</span>
               )}
             </label>
-            <label className="block text-xs text-slate-300">
+            <label className="block text-xs font-medium text-slate-700">
               {selectedProduct.pricingModel === 'starting_at' ? '最低月額費用（税抜・円）' : '月額費用（税抜・円）'}
-              <input type="number" min="0" step="1" value={publishMonthlyFee} onChange={(event) => setPublishMonthlyFee(event.target.value)} className="mt-1 w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-white" />
+              <input type="number" min="0" step="1" value={publishMonthlyFee} onChange={(event) => setPublishMonthlyFee(event.target.value)} className="mt-1 w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 focus:outline-none focus:border-purple-500 focus:ring-1 focus:ring-purple-500 shadow-2xs" />
               {publishMonthlyFee && !isNaN(Number(publishMonthlyFee)) && (
-                <span className="mt-1 block text-[11px] text-cyan-300 font-medium">税込 (10%): ¥{Math.floor(Number(publishMonthlyFee) * 1.1).toLocaleString()}</span>
+                <span className="mt-1 block text-[11px] text-purple-700 font-semibold">税込 (10%): ¥{Math.floor(Number(publishMonthlyFee) * 1.1).toLocaleString()}</span>
               )}
             </label>
-            {publishError && <p role="alert" className="rounded-lg border border-rose-500/30 bg-rose-950/30 p-3 text-xs text-rose-200">{publishError}</p>}
-            <p className="text-[11px] leading-5 text-slate-500">実行するとSupabaseのCRM商品マスタを作成または更新します。ローカルの商品・契約・請求データは削除しません。</p>
-            <div className="flex justify-end gap-2">
-              <button type="button" disabled={isPublishing} onClick={() => setIsPublishModalOpen(false)} className="rounded-lg border border-slate-700 px-4 py-2 text-xs text-slate-300">キャンセル</button>
-              <button type="submit" disabled={isPublishing} className="rounded-lg bg-indigo-600 px-4 py-2 text-xs font-semibold text-white hover:bg-indigo-500 disabled:opacity-50">{isPublishing ? '反映中…' : 'CRM商品マスタに保存'}</button>
+            {publishError && <p role="alert" className="rounded-xl border border-rose-200 bg-rose-50 p-3 text-xs text-rose-700">{publishError}</p>}
+            <p className="text-[11px] leading-5 text-slate-400">実行するとSupabaseのCRM商品マスタを作成または更新します。ローカルの商品・契約・請求データは削除しません。</p>
+            <div className="flex justify-end gap-2 pt-2">
+              <button type="button" disabled={isPublishing} onClick={() => setIsPublishModalOpen(false)} className="rounded-xl border border-slate-200 bg-white px-4 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-50 transition">キャンセル</button>
+              <button type="submit" disabled={isPublishing} className="rounded-xl bg-purple-600 px-4 py-2 text-xs font-semibold text-white hover:bg-purple-700 disabled:opacity-50 shadow-sm transition">{isPublishing ? '反映中…' : 'CRM商品マスタに保存'}</button>
             </div>
           </form>
         </div>
       )}
 
       {editProductDraft && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/80 p-4 backdrop-blur-sm">
-          <form onSubmit={saveProductEditor} className="max-h-[90vh] w-full max-w-3xl overflow-y-auto rounded-2xl border border-slate-800 bg-slate-900 p-6 shadow-2xl">
-            <h3 className="mb-1 text-lg font-bold text-white">AIプロダクトを編集</h3>
-            <p className="mb-5 text-xs text-slate-400">コード・価格・状態・KPI・追加項目を更新できます。IDは関連する契約やタスクの紐付け維持のため変更できません。</p>
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 p-4 backdrop-blur-xs">
+          <form onSubmit={saveProductEditor} className="max-h-[90vh] w-full max-w-3xl overflow-y-auto rounded-2xl border border-slate-200 bg-white p-6 shadow-xl">
+            <h3 className="mb-1 text-lg font-bold text-slate-900">AIプロダクトを編集</h3>
+            <p className="mb-5 text-xs text-slate-500">コード・価格・状態・KPI・追加項目を更新できます。IDは関連する契約やタスクの紐付け維持のため変更できません。</p>
             <div className="grid gap-4 md:grid-cols-2">
-              <label className="space-y-1 text-xs text-slate-300">商品コード<input value={editProductDraft.code || ''} onChange={e=>setEditProductDraft({...editProductDraft,code:e.target.value})} className="w-full rounded-lg border border-slate-700 bg-slate-950 p-2 text-sm text-white" /></label>
-              <label className="space-y-1 text-xs text-slate-300">商品名<input required value={editProductDraft.name} onChange={e=>setEditProductDraft({...editProductDraft,name:e.target.value})} className="w-full rounded-lg border border-slate-700 bg-slate-950 p-2 text-sm text-white" /></label>
-              <label className="space-y-1 text-xs text-slate-300">商品タイプ<select value={editProductDraft.archetype} onChange={e=>setEditProductDraft({...editProductDraft,archetype:e.target.value as ProductArchetype})} className="w-full rounded-lg border border-slate-700 bg-slate-950 p-2 text-sm text-white">{(Object.keys(PRODUCT_ARCHETYPES) as ProductArchetype[]).map(key=><option key={key} value={key}>{PRODUCT_ARCHETYPES[key].label}</option>)}</select></label>
-              <label className="space-y-1 text-xs text-slate-300">分類<input value={editProductDraft.category || ''} onChange={e=>setEditProductDraft({...editProductDraft,category:e.target.value})} className="w-full rounded-lg border border-slate-700 bg-slate-950 p-2 text-sm text-white" /></label>
-              <label className="space-y-1 text-xs text-slate-300">ステータス<select value={editProductDraft.status} onChange={e=>setEditProductDraft({...editProductDraft,status:e.target.value as ManagedProduct['status']})} className="w-full rounded-lg border border-slate-700 bg-slate-950 p-2 text-sm text-white"><option value="planning">企画中</option><option value="developing">開発中</option><option value="active">運用中</option><option value="archived">取扱停止</option></select></label>
-              <div className="md:col-span-2 rounded-xl border border-indigo-500/30 bg-indigo-950/20 p-4 space-y-3">
+              <label className="space-y-1 text-xs font-medium text-slate-700">商品コード<input value={editProductDraft.code || ''} onChange={e=>setEditProductDraft({...editProductDraft,code:e.target.value})} className="w-full rounded-xl border border-slate-200 bg-white p-2 text-sm text-slate-900 focus:outline-none focus:border-purple-500 focus:ring-1 focus:ring-purple-500 shadow-2xs" /></label>
+              <label className="space-y-1 text-xs font-medium text-slate-700">商品名<input required value={editProductDraft.name} onChange={e=>setEditProductDraft({...editProductDraft,name:e.target.value})} className="w-full rounded-xl border border-slate-200 bg-white p-2 text-sm text-slate-900 focus:outline-none focus:border-purple-500 focus:ring-1 focus:ring-purple-500 shadow-2xs" /></label>
+              <label className="space-y-1 text-xs font-medium text-slate-700">商品タイプ<select value={editProductDraft.archetype} onChange={e=>setEditProductDraft({...editProductDraft,archetype:e.target.value as ProductArchetype})} className="w-full rounded-xl border border-slate-200 bg-white p-2 text-sm text-slate-900 focus:outline-none focus:border-purple-500 focus:ring-1 focus:ring-purple-500 shadow-2xs">{(Object.keys(PRODUCT_ARCHETYPES) as ProductArchetype[]).map(key=><option key={key} value={key}>{PRODUCT_ARCHETYPES[key].label}</option>)}</select></label>
+              <label className="space-y-1 text-xs font-medium text-slate-700">分類<input value={editProductDraft.category || ''} onChange={e=>setEditProductDraft({...editProductDraft,category:e.target.value})} className="w-full rounded-xl border border-slate-200 bg-white p-2 text-sm text-slate-900 focus:outline-none focus:border-purple-500 focus:ring-1 focus:ring-purple-500 shadow-2xs" /></label>
+              <label className="space-y-1 text-xs font-medium text-slate-700">ステータス<select value={editProductDraft.status} onChange={e=>setEditProductDraft({...editProductDraft,status:e.target.value as ManagedProduct['status']})} className="w-full rounded-xl border border-slate-200 bg-white p-2 text-sm text-slate-900 focus:outline-none focus:border-purple-500 focus:ring-1 focus:ring-purple-500 shadow-2xs"><option value="planning">企画中</option><option value="developing">開発中</option><option value="active">運用中</option><option value="archived">取扱停止</option></select></label>
+              <div className="md:col-span-2 rounded-xl border border-purple-200 bg-purple-50/50 p-4 space-y-3">
                 <div>
-                  <h4 className="text-xs font-bold text-white flex items-center gap-1.5">
-                    <Sparkles className="w-4 h-4 text-cyan-400" />
+                  <h4 className="text-xs font-bold text-purple-900 flex items-center gap-1.5">
+                    <Sparkles className="w-4 h-4 text-purple-600" />
                     <span>料金体系・融通設定（商談で本決め）</span>
                   </h4>
-                  <p className="text-[11px] text-slate-400 mt-0.5">
+                  <p className="text-[11px] text-purple-700 mt-0.5">
                     システム保守など「月額 ¥10,000〜」のように設定し、商談でアカウント規模や要件に合わせて本決めできます。何パターンもマスタを作る手間を削減できます。
                   </p>
                 </div>
 
                 <div className="grid gap-3 sm:grid-cols-2">
-                  <label className="space-y-1 text-xs text-slate-300">
+                  <label className="space-y-1 text-xs font-medium text-slate-700">
                     料金モデル
                     <select
                       value={editProductDraft.pricingModel || 'fixed'}
                       onChange={(e) => setEditProductDraft({ ...editProductDraft, pricingModel: e.target.value as PricingModel })}
-                      className="w-full rounded-lg border border-slate-700 bg-slate-950 p-2 text-sm text-white"
+                      className="w-full rounded-xl border border-slate-200 bg-white p-2 text-sm text-slate-900 focus:outline-none focus:border-purple-500 focus:ring-1 focus:ring-purple-500 shadow-2xs"
                     >
                       <option value="fixed">固定価格（通常設定）</option>
                       <option value="starting_at">最低価格〜（商談で本決め・おすすめ）</option>
@@ -1085,7 +1001,7 @@ export const ProductHubView: React.FC<ProductHubViewProps> = ({
                   </label>
 
                   {editProductDraft.pricingModel === 'range' && (
-                    <label className="space-y-1 text-xs text-slate-300">
+                    <label className="space-y-1 text-xs font-medium text-slate-700">
                       上限価格（税抜・円）
                       <input
                         type="number"
@@ -1093,50 +1009,50 @@ export const ProductHubView: React.FC<ProductHubViewProps> = ({
                         placeholder="例: 50000"
                         value={editProductDraft.priceRangeMax ?? ''}
                         onChange={(e) => setEditProductDraft({ ...editProductDraft, priceRangeMax: e.target.value === '' ? undefined : Number(e.target.value) })}
-                        className="w-full rounded-lg border border-slate-700 bg-slate-950 p-2 text-sm text-white"
+                        className="w-full rounded-xl border border-slate-200 bg-white p-2 text-sm text-slate-900 focus:outline-none focus:border-purple-500 focus:ring-1 focus:ring-purple-500 shadow-2xs"
                       />
                     </label>
                   )}
 
-                  <label className="space-y-1 text-xs text-slate-300 sm:col-span-2">
+                  <label className="space-y-1 text-xs font-medium text-slate-700 sm:col-span-2">
                     商談時ガイド・融通メモ
                     <input
                       type="text"
                       placeholder="例: アカウント数やサーバー規模、対応時間に応じて商談で本決め"
                       value={editProductDraft.priceNote || ''}
                       onChange={(e) => setEditProductDraft({ ...editProductDraft, priceNote: e.target.value })}
-                      className="w-full rounded-lg border border-slate-700 bg-slate-950 p-2 text-sm text-white"
+                      className="w-full rounded-xl border border-slate-200 bg-white p-2 text-sm text-slate-900 focus:outline-none focus:border-purple-500 focus:ring-1 focus:ring-purple-500 shadow-2xs"
                     />
                   </label>
                 </div>
               </div>
 
-              <label className="space-y-1 text-xs text-slate-300">
+              <label className="space-y-1 text-xs font-medium text-slate-700">
                 {editProductDraft.pricingModel === 'starting_at' ? '最低標準価格（税抜・円）' : editProductDraft.pricingModel === 'range' ? '下限標準価格（税抜・円）' : '標準価格（税抜・円）'}
-                <input type="number" min="0" value={editProductDraft.price ?? ''} onChange={e=>setEditProductDraft({...editProductDraft,price:e.target.value===''?undefined:Number(e.target.value)})} className="w-full rounded-lg border border-slate-700 bg-slate-950 p-2 text-sm text-white" />
+                <input type="number" min="0" value={editProductDraft.price ?? ''} onChange={e=>setEditProductDraft({...editProductDraft,price:e.target.value===''?undefined:Number(e.target.value)})} className="w-full rounded-xl border border-slate-200 bg-white p-2 text-sm text-slate-900 focus:outline-none focus:border-purple-500 focus:ring-1 focus:ring-purple-500 shadow-2xs" />
                 {editProductDraft.price != null && !isNaN(editProductDraft.price) && (
-                  <span className="block text-[11px] text-cyan-300 font-medium">
+                  <span className="block text-[11px] text-purple-700 font-semibold">
                     {editProductDraft.pricingModel === 'starting_at'
                       ? `税込 ¥${Math.floor(editProductDraft.price * 1.1).toLocaleString()}〜 (商談で本決め)`
                       : `税込 (10%): ¥${Math.floor(editProductDraft.price * 1.1).toLocaleString()}`}
                   </span>
                 )}
               </label>
-              <label className="space-y-1 text-xs text-slate-300">
+              <label className="space-y-1 text-xs font-medium text-slate-700">
                 {editProductDraft.pricingModel === 'starting_at' ? '営業マスタ 最低初期費用（税抜・円）' : '営業マスタ 初期費用（税抜・円）'}
-                <input type="number" min="0" value={editProductDraft.salesInitialFee ?? ''} onChange={e=>setEditProductDraft({...editProductDraft,salesInitialFee:e.target.value===''?undefined:Number(e.target.value)})} className="w-full rounded-lg border border-slate-700 bg-slate-950 p-2 text-sm text-white" />
+                <input type="number" min="0" value={editProductDraft.salesInitialFee ?? ''} onChange={e=>setEditProductDraft({...editProductDraft,salesInitialFee:e.target.value===''?undefined:Number(e.target.value)})} className="w-full rounded-xl border border-slate-200 bg-white p-2 text-sm text-slate-900 focus:outline-none focus:border-purple-500 focus:ring-1 focus:ring-purple-500 shadow-2xs" />
                 {editProductDraft.salesInitialFee != null && !isNaN(editProductDraft.salesInitialFee) && (
-                  <span className="block text-[11px] text-cyan-300 font-medium">税込 (10%): ¥{Math.floor(editProductDraft.salesInitialFee * 1.1).toLocaleString()}</span>
+                  <span className="block text-[11px] text-purple-700 font-semibold">税込 (10%): ¥{Math.floor(editProductDraft.salesInitialFee * 1.1).toLocaleString()}</span>
                 )}
               </label>
-              <label className="space-y-1 text-xs text-slate-300">
+              <label className="space-y-1 text-xs font-medium text-slate-700">
                 {editProductDraft.pricingModel === 'starting_at' ? '営業マスタ 最低月額費用（税抜・円）' : '営業マスタ 月額費用（税抜・円）'}
-                <input type="number" min="0" value={editProductDraft.salesMonthlyFee ?? ''} onChange={e=>setEditProductDraft({...editProductDraft,salesMonthlyFee:e.target.value===''?undefined:Number(e.target.value)})} className="w-full rounded-lg border border-slate-700 bg-slate-950 p-2 text-sm text-white" />
+                <input type="number" min="0" value={editProductDraft.salesMonthlyFee ?? ''} onChange={e=>setEditProductDraft({...editProductDraft,salesMonthlyFee:e.target.value===''?undefined:Number(e.target.value)})} className="w-full rounded-xl border border-slate-200 bg-white p-2 text-sm text-slate-900 focus:outline-none focus:border-purple-500 focus:ring-1 focus:ring-purple-500 shadow-2xs" />
                 {editProductDraft.salesMonthlyFee != null && !isNaN(editProductDraft.salesMonthlyFee) && (
-                  <span className="block text-[11px] text-cyan-300 font-medium">税込 (10%): ¥{Math.floor(editProductDraft.salesMonthlyFee * 1.1).toLocaleString()}</span>
+                  <span className="block text-[11px] text-purple-700 font-semibold">税込 (10%): ¥{Math.floor(editProductDraft.salesMonthlyFee * 1.1).toLocaleString()}</span>
                 )}
               </label>
-              <label className="space-y-1 text-xs text-slate-300">
+              <label className="space-y-1 text-xs font-medium text-slate-700">
                 目標売上（税抜・円）
                 <input
                   type="number"
@@ -1144,30 +1060,30 @@ export const ProductHubView: React.FC<ProductHubViewProps> = ({
                   placeholder="例: 10000000"
                   value={editProductDraft.kpis?.targetRevenue ?? ''}
                   onChange={e=>setEditProductDraft({...editProductDraft,kpis:{...editProductDraft.kpis,targetRevenue:e.target.value===''?undefined:Number(e.target.value)}})}
-                  className="w-full rounded-lg border border-slate-700 bg-slate-950 p-2 text-sm text-white"
+                  className="w-full rounded-xl border border-slate-200 bg-white p-2 text-sm text-slate-900 focus:outline-none focus:border-purple-500 focus:ring-1 focus:ring-purple-500 shadow-2xs"
                 />
-                <span className="block text-[10px] text-slate-500">事業で目指す売上目標額を入力</span>
+                <span className="block text-[10px] text-slate-400">事業で目指す売上目標額を入力</span>
               </label>
-              <div className="space-y-1 text-xs text-slate-400 bg-slate-950/70 p-2.5 rounded-lg border border-slate-800">
-                <span className="block font-semibold text-slate-300">現在売上（税込・自動集計）</span>
-                <span className="text-sm font-bold text-cyan-300 block">
+              <div className="space-y-1 text-xs text-slate-600 bg-slate-50 p-2.5 rounded-xl border border-slate-200">
+                <span className="block font-semibold text-slate-700">現在売上（税込・自動集計）</span>
+                <span className="text-sm font-bold text-slate-900 block">
                   ¥{(selectedProductKpi?.currentRevenue ?? 0).toLocaleString()}
                 </span>
-                <span className="text-[10px] text-slate-500">※入金済み請求書から自動計算</span>
+                <span className="text-[10px] text-slate-400">※入金済み請求書から自動計算</span>
               </div>
-              <div className="space-y-1 text-xs text-slate-400 bg-slate-950/70 p-2.5 rounded-lg border border-slate-800">
-                <span className="block font-semibold text-slate-300">稼働顧客数（自動集計）</span>
-                <span className="text-sm font-bold text-emerald-300 block">
+              <div className="space-y-1 text-xs text-slate-600 bg-slate-50 p-2.5 rounded-xl border border-slate-200">
+                <span className="block font-semibold text-slate-700">稼働顧客数（自動集計）</span>
+                <span className="text-sm font-bold text-purple-700 block">
                   {selectedProductKpi?.activeClients ?? 0} 社
                 </span>
-                <span className="text-[10px] text-slate-500">※締結済み契約書から自動計算</span>
+                <span className="text-[10px] text-slate-400">※締結済み契約書から自動計算</span>
               </div>
-              {PRODUCT_ARCHETYPES[editProductDraft.archetype]?.customFieldTemplates.map((field) => <label key={field.key} className="space-y-1 text-xs text-slate-300">{field.label}<input type={field.type==='date'?'date':field.type==='number'?'number':field.type==='url'?'url':'text'} value={String(editProductDraft.customFields?.[field.key] ?? '')} onChange={e=>{const next={...(editProductDraft.customFields||{}),[field.key]:field.type==='number'?(e.target.value===''?undefined:Number(e.target.value)):e.target.value};setEditProductDraft({...editProductDraft,customFields:next});setEditCustomFieldsJson(JSON.stringify(next,null,2))}} className="w-full rounded-lg border border-slate-700 bg-slate-950 p-2 text-sm text-white" /></label>)}
-              <label className="space-y-1 text-xs text-slate-300 md:col-span-2">説明<textarea rows={4} value={editProductDraft.description || ''} onChange={e=>setEditProductDraft({...editProductDraft,description:e.target.value})} className="w-full rounded-lg border border-slate-700 bg-slate-950 p-2 text-sm text-white" /></label>
-              <details className="md:col-span-2"><summary className="cursor-pointer text-xs text-slate-400">その他の追加項目をJSONで編集</summary><textarea aria-label="すべての追加項目（JSON）" rows={7} value={editCustomFieldsJson} onChange={e=>setEditCustomFieldsJson(e.target.value)} className="mt-2 w-full rounded-lg border border-slate-700 bg-slate-950 p-2 font-mono text-xs text-white" /><span className="text-[10px] text-slate-500">標準項目にない独自の追加項目はこちらで編集できます。</span></details>
+              {PRODUCT_ARCHETYPES[editProductDraft.archetype]?.customFieldTemplates.map((field) => <label key={field.key} className="space-y-1 text-xs font-medium text-slate-700">{field.label}<input type={field.type==='date'?'date':field.type==='number'?'number':field.type==='url'?'url':'text'} value={String(editProductDraft.customFields?.[field.key] ?? '')} onChange={e=>{const next={...(editProductDraft.customFields||{}),[field.key]:field.type==='number'?(e.target.value===''?undefined:Number(e.target.value)):e.target.value};setEditProductDraft({...editProductDraft,customFields:next});setEditCustomFieldsJson(JSON.stringify(next,null,2))}} className="w-full rounded-xl border border-slate-200 bg-white p-2 text-sm text-slate-900 focus:outline-none focus:border-purple-500 focus:ring-1 focus:ring-purple-500 shadow-2xs" /></label>)}
+              <label className="space-y-1 text-xs font-medium text-slate-700 md:col-span-2">説明<textarea rows={4} value={editProductDraft.description || ''} onChange={e=>setEditProductDraft({...editProductDraft,description:e.target.value})} className="w-full rounded-xl border border-slate-200 bg-white p-2 text-sm text-slate-900 focus:outline-none focus:border-purple-500 focus:ring-1 focus:ring-purple-500 shadow-2xs" /></label>
+              <details className="md:col-span-2"><summary className="cursor-pointer text-xs font-medium text-slate-500 hover:text-purple-600">その他の追加項目をJSONで編集</summary><textarea aria-label="すべての追加項目（JSON）" rows={7} value={editCustomFieldsJson} onChange={e=>setEditCustomFieldsJson(e.target.value)} className="mt-2 w-full rounded-xl border border-slate-200 bg-slate-50 p-2 font-mono text-xs text-slate-900 focus:outline-none focus:border-purple-500" /><span className="text-[10px] text-slate-400">標準項目にない独自の追加項目はこちらで編集できます。</span></details>
             </div>
-            {editProductError && <p role="alert" className="mt-3 text-sm text-rose-300">{editProductError}</p>}
-            <div className="mt-5 flex justify-end gap-2"><button type="button" onClick={()=>setEditProductDraft(null)} className="rounded-lg border border-slate-700 px-4 py-2 text-xs text-slate-300">キャンセル</button><button type="submit" className="rounded-lg bg-indigo-600 px-4 py-2 text-xs font-semibold text-white">変更を保存</button></div>
+            {editProductError && <p role="alert" className="mt-3 text-sm font-medium text-rose-600 bg-rose-50 border border-rose-200 rounded-xl p-3">{editProductError}</p>}
+            <div className="mt-5 flex justify-end gap-2"><button type="button" onClick={()=>setEditProductDraft(null)} className="rounded-xl border border-slate-200 bg-white px-4 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-50 transition">キャンセル</button><button type="submit" className="rounded-xl bg-purple-600 px-4 py-2 text-xs font-semibold text-white hover:bg-purple-700 shadow-sm transition">変更を保存</button></div>
           </form>
         </div>
       )}
@@ -1193,28 +1109,28 @@ export const ProductHubView: React.FC<ProductHubViewProps> = ({
 
       {/* Manual Product Create Modal */}
       {isNewProductModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-sm">
-          <div className="bg-slate-900 border border-slate-800 rounded-2xl w-full max-w-lg p-6 shadow-2xl">
-            <h3 className="text-base font-bold text-white mb-4">プロダクトを登録</h3>
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-xs">
+          <div className="bg-white border border-slate-200 rounded-2xl w-full max-w-lg p-6 shadow-xl">
+            <h3 className="text-base font-bold text-slate-900 mb-4">プロダクトを登録</h3>
             <form onSubmit={handleManualCreate} className="space-y-4">
               <div>
-                <label className="block text-xs font-medium text-slate-300 mb-1">商品名</label>
+                <label className="block text-xs font-medium text-slate-700 mb-1">商品名</label>
                 <input
                   type="text"
                   required
                   value={manualName}
                   onChange={(e) => setManualName(e.target.value)}
                   placeholder="例: 法人向け顧問AI伴走プラン"
-                  className="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-indigo-500"
+                  className="w-full bg-white border border-slate-200 rounded-xl px-3 py-2 text-sm text-slate-900 focus:outline-none focus:border-purple-500 focus:ring-1 focus:ring-purple-500 shadow-2xs"
                 />
               </div>
 
               <div>
-                <label className="block text-xs font-medium text-slate-300 mb-1">商品タイプ</label>
+                <label className="block text-xs font-medium text-slate-700 mb-1">商品タイプ</label>
                 <select
                   value={manualArchetype}
                   onChange={(e) => setManualArchetype(e.target.value as any)}
-                  className="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-indigo-500"
+                  className="w-full bg-white border border-slate-200 rounded-xl px-3 py-2 text-sm text-slate-900 focus:outline-none focus:border-purple-500 focus:ring-1 focus:ring-purple-500 shadow-2xs"
                 >
                   {(Object.keys(PRODUCT_ARCHETYPES) as ProductArchetype[]).map((key) => (
                     <option key={key} value={key}>
@@ -1224,12 +1140,12 @@ export const ProductHubView: React.FC<ProductHubViewProps> = ({
                 </select>
               </div>
 
-              <div className="rounded-xl border border-indigo-500/30 bg-indigo-950/20 p-3 space-y-2">
-                <label className="block text-xs font-semibold text-white">料金モデル（融通設定）</label>
+              <div className="rounded-xl border border-purple-200 bg-purple-50/50 p-3.5 space-y-2">
+                <label className="block text-xs font-semibold text-purple-900">料金モデル（融通設定）</label>
                 <select
                   value={manualPricingModel}
                   onChange={(e) => setManualPricingModel(e.target.value as PricingModel)}
-                  className="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-indigo-500"
+                  className="w-full bg-white border border-slate-200 rounded-xl px-3 py-2 text-sm text-slate-900 focus:outline-none focus:border-purple-500 focus:ring-1 focus:ring-purple-500 shadow-2xs"
                 >
                   <option value="fixed">固定価格</option>
                   <option value="starting_at">最低価格〜（商談で本決め・おすすめ）</option>
@@ -1239,32 +1155,32 @@ export const ProductHubView: React.FC<ProductHubViewProps> = ({
 
                 {manualPricingModel === 'range' && (
                   <div>
-                    <label className="block text-xs font-medium text-slate-300 mb-1">上限価格（税抜・円）</label>
+                    <label className="block text-xs font-medium text-slate-700 mb-1">上限価格（税抜・円）</label>
                     <input
                       type="number"
                       min="0"
                       value={manualPriceRangeMax}
                       onChange={(e) => setManualPriceRangeMax(e.target.value)}
                       placeholder="例: 50000"
-                      className="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-indigo-500"
+                      className="w-full bg-white border border-slate-200 rounded-xl px-3 py-2 text-sm text-slate-900 focus:outline-none focus:border-purple-500 focus:ring-1 focus:ring-purple-500 shadow-2xs"
                     />
                   </div>
                 )}
 
                 <div>
-                  <label className="block text-xs font-medium text-slate-300 mb-1">商談時ガイド・メモ</label>
+                  <label className="block text-xs font-medium text-slate-700 mb-1">商談時ガイド・メモ</label>
                   <input
                     type="text"
                     value={manualPriceNote}
                     onChange={(e) => setManualPriceNote(e.target.value)}
                     placeholder="例: アカウント数やシステム規模により商談で本決め"
-                    className="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-indigo-500"
+                    className="w-full bg-white border border-slate-200 rounded-xl px-3 py-2 text-sm text-slate-900 focus:outline-none focus:border-purple-500 focus:ring-1 focus:ring-purple-500 shadow-2xs"
                   />
                 </div>
               </div>
 
               <div>
-                <label className="block text-xs font-medium text-slate-300 mb-1">
+                <label className="block text-xs font-medium text-slate-700 mb-1">
                   {manualPricingModel === 'starting_at' ? '最低価格（税抜・円）' : manualPricingModel === 'range' ? '下限価格（税抜・円）' : '標準価格 (税抜・円)'}
                 </label>
                 <input
@@ -1272,10 +1188,10 @@ export const ProductHubView: React.FC<ProductHubViewProps> = ({
                   value={manualPrice}
                   onChange={(e) => setManualPrice(e.target.value)}
                   placeholder="例: 10000"
-                  className="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-indigo-500"
+                  className="w-full bg-white border border-slate-200 rounded-xl px-3 py-2 text-sm text-slate-900 focus:outline-none focus:border-purple-500 focus:ring-1 focus:ring-purple-500 shadow-2xs"
                 />
                 {manualPrice && !isNaN(Number(manualPrice)) && (
-                  <p className="mt-1 text-[11px] font-medium text-cyan-300">
+                  <p className="mt-1 text-[11px] font-semibold text-purple-700">
                     {manualPricingModel === 'starting_at'
                       ? `税込金額 (10%): ¥${Math.floor(Number(manualPrice) * 1.1).toLocaleString()}〜 (商談で本決め)`
                       : `税込金額 (10%): ¥${Math.floor(Number(manualPrice) * 1.1).toLocaleString()}`}
@@ -1284,26 +1200,26 @@ export const ProductHubView: React.FC<ProductHubViewProps> = ({
               </div>
 
               <div>
-                <label className="block text-xs font-medium text-slate-300 mb-1">目標売上（税抜・円）</label>
+                <label className="block text-xs font-medium text-slate-700 mb-1">目標売上（税抜・円）</label>
                 <input
                   type="number"
                   min="0"
                   value={manualTargetRevenue}
                   onChange={(e) => setManualTargetRevenue(e.target.value)}
                   placeholder={manualPrice ? `空欄時は自動目安: ¥${((Number(manualPrice) || 0) * (manualArchetype === 'retainer' ? 60 : 10)).toLocaleString()}` : '例: 10000000'}
-                  className="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-indigo-500"
+                  className="w-full bg-white border border-slate-200 rounded-xl px-3 py-2 text-sm text-slate-900 focus:outline-none focus:border-purple-500 focus:ring-1 focus:ring-purple-500 shadow-2xs"
                 />
                 <span className="block mt-1 text-[10px] text-slate-400">達成を目指す売上目標。空欄の場合は価格とモデル種別に応じた目安を自動設定します。</span>
               </div>
 
               <div>
-                <label className="block text-xs font-medium text-slate-300 mb-1">概要・詳細</label>
+                <label className="block text-xs font-medium text-slate-700 mb-1">概要・詳細</label>
                 <textarea
                   value={manualDesc}
                   onChange={(e) => setManualDesc(e.target.value)}
                   placeholder="プロダクトの内容を入力"
                   rows={3}
-                  className="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-indigo-500"
+                  className="w-full bg-white border border-slate-200 rounded-xl px-3 py-2 text-sm text-slate-900 focus:outline-none focus:border-purple-500 focus:ring-1 focus:ring-purple-500 shadow-2xs"
                 />
               </div>
 
@@ -1311,13 +1227,13 @@ export const ProductHubView: React.FC<ProductHubViewProps> = ({
                 <button
                   type="button"
                   onClick={() => setIsNewProductModalOpen(false)}
-                  className="px-4 py-2 rounded-lg text-xs font-medium text-slate-400 hover:text-white hover:bg-slate-800"
+                  className="px-4 py-2 rounded-xl text-xs font-semibold text-slate-600 hover:text-slate-900 hover:bg-slate-100 transition border border-slate-200 bg-white"
                 >
                   キャンセル
                 </button>
                 <button
                   type="submit"
-                  className="px-4 py-2 rounded-lg text-xs font-bold bg-indigo-600 hover:bg-indigo-500 text-white"
+                  className="px-4 py-2 rounded-xl text-xs font-bold bg-purple-600 hover:bg-purple-700 text-white shadow-sm transition"
                 >
                   登録する
                 </button>

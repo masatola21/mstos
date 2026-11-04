@@ -21,13 +21,13 @@ class ModalErrorBoundary extends React.Component<ErrorBoundaryProps, { error: Er
   render() {
     if (!this.state.error) return this.props.children;
     return (
-      <div className="p-6 space-y-3 text-sm text-slate-200">
-        <p className="font-bold text-rose-300">この画面の表示中にエラーが発生しました。</p>
-        <p className="text-xs text-slate-400 break-words">{this.state.error.message}</p>
+      <div className="p-6 space-y-3 text-sm text-slate-800">
+        <p className="font-bold text-rose-600">この画面の表示中にエラーが発生しました。</p>
+        <p className="text-xs text-slate-500 break-words">{this.state.error.message}</p>
         <button
           type="button"
           onClick={this.props.onClose}
-          className="rounded-lg bg-slate-800 px-4 py-2 text-xs font-bold text-white hover:bg-slate-700"
+          className="rounded-xl bg-purple-600 px-4 py-2 text-xs font-bold text-white hover:bg-purple-700 shadow-xs cursor-pointer"
         >
           閉じる
         </button>
@@ -59,7 +59,7 @@ export const ModalShell: React.FC<ModalShellProps> = ({ title, onClose, children
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-slate-950/80 p-3 backdrop-blur-sm sm:p-6"
+      className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-slate-900/40 p-3 backdrop-blur-xs sm:p-6"
       onMouseDown={(event) => {
         if (event.target === event.currentTarget) onClose();
       }}
@@ -68,13 +68,13 @@ export const ModalShell: React.FC<ModalShellProps> = ({ title, onClose, children
         role="dialog"
         aria-modal="true"
         aria-label={title}
-        className={`relative w-full ${maxWidthClass} rounded-3xl border border-slate-800 bg-slate-950 shadow-2xl`}
+        className={`relative w-full ${maxWidthClass} rounded-2xl border border-slate-200 bg-white shadow-2xl text-slate-900`}
       >
         <button
           type="button"
           onClick={onClose}
           aria-label="閉じる"
-          className="absolute right-3 top-3 z-10 rounded-xl bg-slate-800 p-2 text-slate-300 hover:text-white"
+          className="absolute right-3 top-3 z-10 rounded-xl border border-slate-200 bg-slate-50 p-2 text-slate-400 hover:text-slate-700 hover:bg-slate-100 transition-colors cursor-pointer"
         >
           <X className="h-4 w-4" />
         </button>

@@ -55,31 +55,31 @@ interface DiagnosisManagerProps {
 const STATUS_LABELS: Record<DiagnosisStatus, { label: string; color: string; bg: string; border: string; icon: React.ReactNode }> = {
   received: {
     label: '未確認',
-    color: 'text-amber-300',
-    bg: 'bg-amber-950/60',
-    border: 'border-amber-700/50',
-    icon: <Clock className="w-3.5 h-3.5 text-amber-400" />
+    color: 'text-amber-700',
+    bg: 'bg-amber-50',
+    border: 'border-amber-200',
+    icon: <Clock className="w-3.5 h-3.5 text-amber-500" />
   },
   completed: {
     label: '回答完了',
-    color: 'text-emerald-300',
-    bg: 'bg-emerald-950/60',
-    border: 'border-emerald-700/50',
-    icon: <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" />
+    color: 'text-emerald-700',
+    bg: 'bg-emerald-50',
+    border: 'border-emerald-200',
+    icon: <CheckCircle2 className="w-3.5 h-3.5 text-emerald-500" />
   },
   generating: {
     label: 'AI生成中',
-    color: 'text-purple-300',
-    bg: 'bg-purple-950/60',
-    border: 'border-purple-700/50',
-    icon: <Sparkles className="w-3.5 h-3.5 text-purple-400 animate-spin" />
+    color: 'text-purple-700',
+    bg: 'bg-purple-50',
+    border: 'border-purple-200',
+    icon: <Sparkles className="w-3.5 h-3.5 text-purple-500 animate-spin" />
   },
   reported: {
     label: 'レポート発行済',
-    color: 'text-indigo-300',
-    bg: 'bg-indigo-950/60',
-    border: 'border-indigo-700/50',
-    icon: <Award className="w-3.5 h-3.5 text-indigo-400" />
+    color: 'text-indigo-700',
+    bg: 'bg-indigo-50',
+    border: 'border-indigo-200',
+    icon: <Award className="w-3.5 h-3.5 text-indigo-500" />
   }
 };
 
@@ -177,16 +177,16 @@ const DiagnosisRecordsView: React.FC<DiagnosisManagerProps> = ({ onOpenRls, init
   return (
     <div className="space-y-6 animate-fade-in pb-16">
       {/* Header Banner */}
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 bg-slate-900/80 p-6 rounded-3xl border border-slate-800 shadow-xl">
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 bg-white p-6 rounded-2xl border border-slate-200 shadow-sm">
         <div className="space-y-1">
-          <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-blue-500/10 border border-blue-500/20 text-blue-400 text-xs font-semibold">
+          <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-purple-50 border border-purple-200 text-purple-700 text-xs font-semibold">
             <ClipboardList className="w-3.5 h-3.5" />
             <span>Phase 1-C 診断＆AIレポート管理</span>
           </div>
-          <h1 className="text-2xl font-bold tracking-tight text-white flex items-center gap-2">
+          <h1 className="text-2xl font-bold tracking-tight text-slate-900 flex items-center gap-2">
             診断管理（Diagnoses）
           </h1>
-          <p className="text-xs sm:text-sm text-slate-400">
+          <p className="text-xs sm:text-sm text-slate-500">
             取引先企業のヒアリング回答収集、カテゴリ別スコア分析、AIレポート発行パイプライン
           </p>
         </div>
@@ -194,7 +194,7 @@ const DiagnosisRecordsView: React.FC<DiagnosisManagerProps> = ({ onOpenRls, init
         <div className="flex items-center gap-3">
           <button
             onClick={() => setIsCreateOpen(true)}
-            className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-blue-600 hover:bg-blue-500 text-white font-medium text-sm shadow-lg shadow-blue-600/20 transition-all active:scale-95 cursor-pointer"
+            className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-purple-600 hover:bg-purple-700 text-white font-medium text-sm shadow-sm transition-all active:scale-95 cursor-pointer"
           >
             <Plus className="w-4 h-4" />
             <span>新規診断を起票</span>
@@ -202,7 +202,7 @@ const DiagnosisRecordsView: React.FC<DiagnosisManagerProps> = ({ onOpenRls, init
           <button
             onClick={loadData}
             disabled={loading}
-            className="p-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700 transition-colors"
+            className="p-2.5 rounded-xl bg-slate-50 hover:bg-slate-100 text-slate-600 border border-slate-200 transition-colors"
             title="再読み込み"
           >
             <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
@@ -211,26 +211,26 @@ const DiagnosisRecordsView: React.FC<DiagnosisManagerProps> = ({ onOpenRls, init
       </div>
 
       {/* 安全ガード告知バナー */}
-      <div className="bg-amber-950/40 border border-amber-600/30 rounded-2xl p-4 flex items-start gap-3 text-amber-200">
-        <ShieldCheck className="w-5 h-5 text-amber-400 shrink-0 mt-0.5" />
+      <div className="bg-amber-50 border border-amber-200 rounded-2xl p-4 flex items-start gap-3 text-amber-800">
+        <ShieldCheck className="w-5 h-5 text-amber-600 shrink-0 mt-0.5" />
         <div className="space-y-1 text-xs sm:text-sm">
-          <p className="font-semibold text-amber-300">
+          <p className="font-semibold text-amber-900">
             【安全ガード作動中】設問定義・必須設問IDが未確定のため、完了（completed）への確定遷移は安全のため意図的にロックされています
           </p>
-          <p className="text-amber-200/80 leading-relaxed text-xs">
-送信済みフォーム回答は「未確認」として診断に引き継がれます。内容を確認して必要な修正を保存してください。
+          <p className="text-amber-800/90 leading-relaxed text-xs">
+            送信済みフォーム回答は「未確認」として診断に引き継がれます。内容を確認して必要な修正を保存してください。
           </p>
         </div>
       </div>
 
       {/* 成功バナー */}
       {successBanner && (
-        <div className="bg-emerald-950/60 border border-emerald-500/40 text-emerald-300 px-4 py-3 rounded-2xl text-xs sm:text-sm flex items-center justify-between animate-fade-in">
+        <div className="bg-emerald-50 border border-emerald-200 text-emerald-800 px-4 py-3 rounded-2xl text-xs sm:text-sm flex items-center justify-between animate-fade-in shadow-2xs">
           <div className="flex items-center gap-2">
-            <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
+            <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
             <span>{successBanner}</span>
           </div>
-          <button onClick={() => setSuccessBanner(null)} className="text-emerald-400 hover:text-white">
+          <button onClick={() => setSuccessBanner(null)} className="text-emerald-600 hover:text-emerald-800">
             <X className="w-4 h-4" />
           </button>
         </div>
@@ -238,27 +238,27 @@ const DiagnosisRecordsView: React.FC<DiagnosisManagerProps> = ({ onOpenRls, init
 
       {/* エラー表示 */}
       {error && (
-        <div className="bg-rose-950/60 border border-rose-500/40 text-rose-300 p-4 rounded-2xl text-xs sm:text-sm flex items-start gap-3">
-          <AlertTriangle className="w-5 h-5 text-rose-400 shrink-0 mt-0.5" />
+        <div className="bg-rose-50 border border-rose-200 text-rose-800 p-4 rounded-2xl text-xs sm:text-sm flex items-start gap-3 shadow-2xs">
+          <AlertTriangle className="w-5 h-5 text-rose-600 shrink-0 mt-0.5" />
           <div className="space-y-1 flex-1">
             <p className="font-semibold">{error.message}</p>
             {error.type === 'PERMISSION_DENIED' && onOpenRls && (
               <button
                 onClick={onOpenRls}
-                className="text-xs text-rose-200 underline hover:text-white"
+                className="text-xs text-rose-700 underline font-medium hover:text-rose-900"
               >
                 RLSポリシーの設定手順を確認する
               </button>
             )}
           </div>
-          <button onClick={() => setError(null)} className="text-rose-400 hover:text-white">
+          <button onClick={() => setError(null)} className="text-rose-600 hover:text-rose-800">
             <X className="w-4 h-4" />
           </button>
         </div>
       )}
 
       {/* 検索・ステータスフィルタ */}
-      <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 bg-slate-900/50 p-3 rounded-2xl border border-slate-800">
+      <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 bg-white p-3 rounded-2xl border border-slate-200 shadow-2xs">
         <div className="relative flex-1 max-w-md">
           <Search className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
           <input
@@ -266,7 +266,7 @@ const DiagnosisRecordsView: React.FC<DiagnosisManagerProps> = ({ onOpenRls, init
             placeholder="対象会社名・ID・種別・メモで検索..."
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            className="w-full pl-9 pr-4 py-2 bg-slate-950 border border-slate-800 rounded-xl text-xs sm:text-sm text-slate-200 placeholder-slate-500 focus:outline-none focus:border-blue-500 transition-colors"
+            className="w-full pl-9 pr-4 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs sm:text-sm text-slate-800 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-purple-500/20 focus:border-purple-500 transition-colors"
           />
         </div>
 
@@ -280,8 +280,8 @@ const DiagnosisRecordsView: React.FC<DiagnosisManagerProps> = ({ onOpenRls, init
                 onClick={() => setStatusFilter(st)}
                 className={`px-3 py-1.5 rounded-lg whitespace-nowrap font-medium transition-colors ${
                   isActive
-                    ? 'bg-blue-600 text-white shadow-sm'
-                    : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800'
+                    ? 'bg-purple-600 text-white shadow-2xs'
+                    : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100'
                 }`}
               >
                 {label}
@@ -292,10 +292,10 @@ const DiagnosisRecordsView: React.FC<DiagnosisManagerProps> = ({ onOpenRls, init
       </div>
 
       {/* 診断一覧テーブル */}
-      <div className="bg-slate-900/60 rounded-3xl border border-slate-800 overflow-hidden shadow-xl">
+      <div className="bg-white rounded-2xl border border-slate-200 overflow-hidden shadow-sm">
         <div className="overflow-x-auto">
-          <table className="w-full text-left text-xs sm:text-sm text-slate-300">
-            <thead className="bg-slate-950/80 text-slate-400 text-[11px] sm:text-xs uppercase tracking-wider border-b border-slate-800">
+          <table className="w-full text-left text-xs sm:text-sm text-slate-700">
+            <thead className="bg-slate-50 text-slate-600 text-[11px] sm:text-xs uppercase tracking-wider border-b border-slate-200 font-semibold">
               <tr>
                 <th className="py-3.5 px-4 font-semibold">ステータス</th>
                 <th className="py-3.5 px-4 font-semibold">対象会社</th>
@@ -306,12 +306,12 @@ const DiagnosisRecordsView: React.FC<DiagnosisManagerProps> = ({ onOpenRls, init
                 <th className="py-3.5 px-4 font-semibold text-right">操作</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-slate-800/60">
+            <tbody className="divide-y divide-slate-100">
               {loading ? (
                 <tr>
                   <td colSpan={7} className="py-12 text-center text-slate-500">
                     <div className="flex flex-col items-center justify-center gap-2">
-                      <RefreshCw className="w-6 h-6 animate-spin text-blue-500" />
+                      <RefreshCw className="w-6 h-6 animate-spin text-purple-600" />
                       <span>診断データを読み込み中...</span>
                     </div>
                   </td>
@@ -320,11 +320,11 @@ const DiagnosisRecordsView: React.FC<DiagnosisManagerProps> = ({ onOpenRls, init
                 <tr>
                   <td colSpan={7} className="py-12 text-center text-slate-500">
                     <div className="flex flex-col items-center justify-center gap-2">
-                      <ClipboardList className="w-8 h-8 text-slate-600" />
-                      <p className="font-medium text-slate-400">該当する診断レコードがありません</p>
+                      <ClipboardList className="w-8 h-8 text-slate-400" />
+                      <p className="font-medium text-slate-600">該当する診断レコードがありません</p>
                       <button
                         onClick={() => setIsCreateOpen(true)}
-                        className="mt-2 text-xs text-blue-400 hover:text-blue-300 font-medium inline-flex items-center gap-1"
+                        className="mt-2 text-xs text-purple-600 hover:text-purple-700 font-semibold inline-flex items-center gap-1"
                       >
                         <Plus className="w-3.5 h-3.5" /> 新しい診断を作成する
                       </button>
@@ -341,7 +341,7 @@ const DiagnosisRecordsView: React.FC<DiagnosisManagerProps> = ({ onOpenRls, init
                     <tr
                       key={diag.id}
                       onClick={() => handleOpenDetail(diag.id)}
-                      className="hover:bg-slate-800/40 transition-colors cursor-pointer group"
+                      className="hover:bg-slate-50/70 transition-colors cursor-pointer group"
                     >
                       {/* ステータス */}
                       <td className="py-3.5 px-4 whitespace-nowrap">
@@ -353,10 +353,10 @@ const DiagnosisRecordsView: React.FC<DiagnosisManagerProps> = ({ onOpenRls, init
 
                       {/* 対象会社 */}
                       <td className="py-3.5 px-4">
-                        <div className="font-semibold text-slate-100 group-hover:text-blue-400 transition-colors">
+                        <div className="font-semibold text-slate-900 group-hover:text-purple-600 transition-colors">
                           {diag.company?.company_name || diag.company_id}
                         </div>
-                        <div className="text-[11px] text-slate-500 flex items-center gap-1 font-mono">
+                        <div className="text-[11px] text-slate-400 flex items-center gap-1 font-mono">
                           <Building2 className="w-3 h-3" />
                           <span>{diag.company_id}</span>
                         </div>
@@ -366,25 +366,25 @@ const DiagnosisRecordsView: React.FC<DiagnosisManagerProps> = ({ onOpenRls, init
                       <td className="py-3.5 px-4">
                         {diag.lead ? (
                           <div className="space-y-0.5">
-                            <span className="inline-flex items-center gap-1 text-xs text-cyan-300">
-                              <Layers className="w-3 h-3 text-cyan-400" />
+                            <span className="inline-flex items-center gap-1 text-xs text-purple-700 font-medium">
+                              <Layers className="w-3 h-3 text-purple-500" />
                               <span>{diag.lead.service_type || 'リードあり'}</span>
                             </span>
-                            <div className="text-[10px] text-slate-500 font-mono truncate max-w-[120px]">
+                            <div className="text-[10px] text-slate-400 font-mono truncate max-w-[120px]">
                               {diag.lead_id}
                             </div>
                           </div>
                         ) : (
-                          <span className="text-slate-500 text-xs">-</span>
+                          <span className="text-slate-400 text-xs">-</span>
                         )}
                       </td>
 
                       {/* 診断種別 / 設問版 */}
                       <td className="py-3.5 px-4 whitespace-nowrap">
-                        <div className="font-medium text-slate-200">
+                        <div className="font-medium text-slate-800">
                           {DIAGNOSIS_TYPE_LABELS[diag.diagnosis_type] || diag.diagnosis_type}
                         </div>
-                        <span className="text-[10px] px-1.5 py-0.5 rounded bg-slate-800 text-slate-400 border border-slate-700 font-mono">
+                        <span className="text-[10px] px-1.5 py-0.5 rounded bg-slate-100 text-slate-600 border border-slate-200 font-mono">
                           {diag.questionnaire_version}
                         </span>
                       </td>
@@ -393,26 +393,26 @@ const DiagnosisRecordsView: React.FC<DiagnosisManagerProps> = ({ onOpenRls, init
                       <td className="py-3.5 px-4 whitespace-nowrap">
                         <div className="flex items-center gap-2">
                           {diag.score !== null && diag.score !== undefined ? (
-                            <span className="font-bold text-emerald-400 text-sm">
+                            <span className="font-bold text-emerald-600 text-sm">
                               {diag.score}点
                             </span>
                           ) : (
-                            <span className="text-slate-500 text-xs">未算出</span>
+                            <span className="text-slate-400 text-xs">未算出</span>
                           )}
-                          <span className="text-[11px] text-slate-400">
+                          <span className="text-[11px] text-slate-500">
                             ({answersCount}問 回答済)
                           </span>
                         </div>
                       </td>
 
                       {/* 実施 / 起票日 */}
-                      <td className="py-3.5 px-4 whitespace-nowrap text-xs text-slate-400">
+                      <td className="py-3.5 px-4 whitespace-nowrap text-xs text-slate-500">
                         <div>
                           {diag.conducted_at 
                             ? new Date(diag.conducted_at).toLocaleDateString('ja-JP') 
                             : '未実施'}
                         </div>
-                        <div className="text-[10px] text-slate-500">
+                        <div className="text-[10px] text-slate-400">
                           起票: {diag.created_at ? new Date(diag.created_at).toLocaleDateString('ja-JP') : '-'}
                         </div>
                       </td>
@@ -421,7 +421,7 @@ const DiagnosisRecordsView: React.FC<DiagnosisManagerProps> = ({ onOpenRls, init
                       <td className="py-3.5 px-4 text-right whitespace-nowrap" onClick={(e) => e.stopPropagation()}>
                         <button
                           onClick={() => handleOpenDetail(diag.id)}
-                          className="px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-medium border border-slate-700 transition-colors inline-flex items-center gap-1 group-hover:border-blue-500/50"
+                          className="px-3 py-1.5 rounded-lg bg-white hover:bg-slate-50 text-slate-700 text-xs font-medium border border-slate-200 shadow-2xs transition-colors inline-flex items-center gap-1 group-hover:border-purple-300"
                         >
                           <span>回答・詳細</span>
                           <ChevronRight className="w-3 h-3 text-slate-400" />
@@ -537,17 +537,17 @@ const DiagnosisCreateModal: React.FC<DiagnosisCreateModalProps> = ({
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-sm animate-fade-in">
       <div className="bg-slate-900 border border-slate-800 rounded-3xl max-w-lg w-full overflow-hidden shadow-2xl flex flex-col">
         {/* Modal Header */}
-        <div className="px-6 py-5 border-b border-slate-800 flex items-center justify-between bg-slate-950/40">
+        <div className="px-6 py-5 border-b border-slate-200 flex items-center justify-between bg-slate-50">
           <div className="flex items-center gap-2.5">
-            <div className="w-9 h-9 rounded-xl bg-blue-600/20 border border-blue-500/30 flex items-center justify-center text-blue-400">
+            <div className="w-9 h-9 rounded-xl bg-purple-100 border border-purple-200 flex items-center justify-center text-purple-700">
               <ClipboardList className="w-5 h-5" />
             </div>
             <div>
-              <h3 className="text-base font-bold text-white">新規診断の起票</h3>
-              <p className="text-xs text-slate-400">対象企業を選択し診断レコードを開始します</p>
+              <h3 className="text-base font-bold text-slate-900">新規診断の起票</h3>
+              <p className="text-xs text-slate-500">対象企業を選択し診断レコードを開始します</p>
             </div>
           </div>
-          <button onClick={onClose} className="text-slate-400 hover:text-white p-1 rounded-lg">
+          <button onClick={onClose} className="text-slate-400 hover:text-slate-600 p-1 rounded-lg">
             <X className="w-5 h-5" />
           </button>
         </div>
@@ -555,17 +555,17 @@ const DiagnosisCreateModal: React.FC<DiagnosisCreateModalProps> = ({
         {/* Modal Body */}
         <form onSubmit={handleSubmit} className="p-6 space-y-4">
           {errorMsg && (
-            <div className="bg-rose-950/60 border border-rose-500/40 text-rose-300 p-3 rounded-xl text-xs flex items-center gap-2">
-              <AlertTriangle className="w-4 h-4 text-rose-400 shrink-0" />
+            <div className="bg-rose-50 border border-rose-200 text-rose-800 p-3 rounded-xl text-xs flex items-center gap-2">
+              <AlertTriangle className="w-4 h-4 text-rose-600 shrink-0" />
               <span>{errorMsg}</span>
             </div>
           )}
 
           {/* 対象会社 (必須) */}
           <div className="space-y-1.5">
-            <label className="text-xs font-semibold text-slate-300 flex items-center justify-between">
-              <span>対象会社 <span className="text-rose-400">*</span></span>
-              <span className="text-[10px] text-slate-500">companies テーブル参照</span>
+            <label className="text-xs font-semibold text-slate-700 flex items-center justify-between">
+              <span>対象会社 <span className="text-rose-500">*</span></span>
+              <span className="text-[10px] text-slate-400">companies テーブル参照</span>
             </label>
             <select
               value={companyId}
@@ -574,7 +574,7 @@ const DiagnosisCreateModal: React.FC<DiagnosisCreateModalProps> = ({
                 setLeadId(''); // 会社変更時はリード選択をリセット
               }}
               required
-              className="w-full px-3.5 py-2.5 bg-slate-950 border border-slate-800 rounded-xl text-xs sm:text-sm text-slate-200 focus:outline-none focus:border-blue-500 transition-colors"
+              className="w-full px-3.5 py-2.5 bg-white border border-slate-200 rounded-xl text-xs sm:text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-purple-500/20 focus:border-purple-500 transition-colors"
             >
               <option value="">対象会社を選択してください</option>
               {companies.map((c) => (
@@ -587,15 +587,15 @@ const DiagnosisCreateModal: React.FC<DiagnosisCreateModalProps> = ({
 
           {/* 紐づくリード (任意) */}
           <div className="space-y-1.5">
-            <label className="text-xs font-semibold text-slate-300 flex items-center justify-between">
+            <label className="text-xs font-semibold text-slate-700 flex items-center justify-between">
               <span>紐づくリード（任意）</span>
-              <span className="text-[10px] text-slate-500">整合性トリガーにより同社リードのみ選択可</span>
+              <span className="text-[10px] text-slate-400">整合性トリガーにより同社リードのみ選択可</span>
             </label>
             <select
               value={leadId}
               onChange={(e) => setLeadId(e.target.value)}
               disabled={!companyId}
-              className="w-full px-3.5 py-2.5 bg-slate-950 border border-slate-800 rounded-xl text-xs sm:text-sm text-slate-200 focus:outline-none focus:border-blue-500 disabled:opacity-50 transition-colors"
+              className="w-full px-3.5 py-2.5 bg-white border border-slate-200 rounded-xl text-xs sm:text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-purple-500/20 focus:border-purple-500 disabled:opacity-50 transition-colors"
             >
               <option value="">なし（会社単体での診断）</option>
               {matchingLeads.map((l) => (
@@ -605,17 +605,17 @@ const DiagnosisCreateModal: React.FC<DiagnosisCreateModalProps> = ({
               ))}
             </select>
             {companyId && matchingLeads.length === 0 && (
-              <p className="text-[11px] text-slate-500">※ この会社に紐づくリードは現在ありません</p>
+              <p className="text-[11px] text-slate-400">※ この会社に紐づくリードは現在ありません</p>
             )}
           </div>
 
           {/* 診断種別 */}
           <div className="space-y-1.5">
-            <label className="text-xs font-semibold text-slate-300">診断種別</label>
+            <label className="text-xs font-semibold text-slate-700">診断種別</label>
             <select
               value={diagnosisType}
               onChange={(e) => setDiagnosisType(e.target.value)}
-              className="w-full px-3.5 py-2.5 bg-slate-950 border border-slate-800 rounded-xl text-xs sm:text-sm text-slate-200 focus:outline-none focus:border-blue-500 transition-colors"
+              className="w-full px-3.5 py-2.5 bg-white border border-slate-200 rounded-xl text-xs sm:text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-purple-500/20 focus:border-purple-500 transition-colors"
             >
               <option value="standard">AI経営診断（標準プラン・5カテゴリ）</option>
               <option value="comprehensive">総合AI導入診断（詳細プラン）</option>
@@ -625,19 +625,19 @@ const DiagnosisCreateModal: React.FC<DiagnosisCreateModalProps> = ({
 
           {/* 社内メモ */}
           <div className="space-y-1.5">
-            <label className="text-xs font-semibold text-slate-300">社内メモ・備考（任意）</label>
+            <label className="text-xs font-semibold text-slate-700">社内メモ・備考（任意）</label>
             <textarea
               value={memo}
               onChange={(e) => setMemo(e.target.value)}
               placeholder="診断の目的や商談背景、ヒアリング担当者など"
               rows={3}
-              className="w-full px-3.5 py-2 bg-slate-950 border border-slate-800 rounded-xl text-xs sm:text-sm text-slate-200 focus:outline-none focus:border-blue-500 transition-colors"
+              className="w-full px-3.5 py-2 bg-white border border-slate-200 rounded-xl text-xs sm:text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-purple-500/20 focus:border-purple-500 transition-colors"
             />
           </div>
 
-          <div className="bg-slate-950 p-3 rounded-xl border border-slate-800 text-[11px] text-slate-400 space-y-1">
-            <p className="text-slate-300 font-semibold flex items-center gap-1">
-              <Info className="w-3.5 h-3.5 text-blue-400" />
+          <div className="bg-slate-50 p-3 rounded-xl border border-slate-200 text-[11px] text-slate-600 space-y-1">
+            <p className="text-slate-800 font-semibold flex items-center gap-1">
+              <Info className="w-3.5 h-3.5 text-purple-600" />
               起票時のステータスについて
             </p>
             <p>
@@ -646,18 +646,18 @@ const DiagnosisCreateModal: React.FC<DiagnosisCreateModalProps> = ({
           </div>
 
           {/* Action buttons */}
-          <div className="pt-3 border-t border-slate-800 flex items-center justify-end gap-3">
+          <div className="pt-3 border-t border-slate-100 flex items-center justify-end gap-3">
             <button
               type="button"
               onClick={onClose}
-              className="px-4 py-2 rounded-xl text-xs sm:text-sm font-medium text-slate-400 hover:text-slate-200 hover:bg-slate-800 transition-colors"
+              className="px-4 py-2 rounded-xl text-xs sm:text-sm font-medium text-slate-600 hover:text-slate-900 hover:bg-slate-100 transition-colors"
             >
               キャンセル
             </button>
             <button
               type="submit"
               disabled={isSubmitting || !companyId}
-              className="px-5 py-2 rounded-xl text-xs sm:text-sm font-medium bg-blue-600 hover:bg-blue-500 text-white shadow-lg shadow-blue-600/20 disabled:opacity-50 transition-all flex items-center gap-2 cursor-pointer"
+              className="px-5 py-2 rounded-xl text-xs sm:text-sm font-semibold bg-purple-600 hover:bg-purple-700 text-white shadow-sm disabled:opacity-50 transition-all flex items-center gap-2 cursor-pointer"
             >
               {isSubmitting ? (
                 <>
@@ -1067,10 +1067,10 @@ ${reportDraft.text.replace(/</g, '&lt;').replace(/>/g, '&gt;')}
 
   if (isLoading || !diagnosis) {
     return (
-      <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-sm animate-fade-in">
-        <div className="bg-slate-900 border border-slate-800 rounded-3xl p-8 max-w-sm w-full flex flex-col items-center justify-center space-y-3 shadow-2xl">
-          <RefreshCw className="w-8 h-8 animate-spin text-blue-500" />
-          <p className="text-sm font-semibold text-slate-300">診断詳細を読み込み中...</p>
+      <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-xs animate-fade-in">
+        <div className="bg-white border border-slate-200 rounded-3xl p-8 max-w-sm w-full flex flex-col items-center justify-center space-y-3 shadow-xl">
+          <RefreshCw className="w-8 h-8 animate-spin text-purple-600" />
+          <p className="text-sm font-semibold text-slate-700">診断詳細を読み込み中...</p>
         </div>
       </div>
     );
@@ -1080,28 +1080,28 @@ ${reportDraft.text.replace(/</g, '&lt;').replace(/>/g, '&gt;')}
   const isFormDiagnosis = diagnosis.questionnaire_version.startsWith('form-');
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-2 sm:p-4 bg-slate-950/80 backdrop-blur-sm animate-fade-in overflow-y-auto">
-      <div className="bg-slate-900 border border-slate-800 rounded-3xl max-w-4xl w-full my-auto overflow-hidden shadow-2xl flex flex-col max-h-[92vh]">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-2 sm:p-4 bg-slate-900/40 backdrop-blur-xs animate-fade-in overflow-y-auto">
+      <div className="bg-white border border-slate-200 rounded-3xl max-w-4xl w-full my-auto overflow-hidden shadow-2xl flex flex-col max-h-[92vh]">
         {/* Modal Header */}
-        <div className="px-6 py-4 border-b border-slate-800 bg-slate-950/60 flex items-center justify-between shrink-0">
+        <div className="px-6 py-4 border-b border-slate-200 bg-slate-50 flex items-center justify-between shrink-0">
           <div className="flex items-center gap-3">
             <span className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold border ${statusInfo.bg} ${statusInfo.border} ${statusInfo.color}`}>
               {statusInfo.icon}
               <span>{statusInfo.label}</span>
             </span>
             <div>
-              <h2 className="text-base sm:text-lg font-bold text-white flex items-center gap-2">
+              <h2 className="text-base sm:text-lg font-bold text-slate-900 flex items-center gap-2">
                 <span>{diagnosis.company?.company_name || diagnosis.company_id}</span>
-                <span className="text-xs px-2 py-0.5 rounded bg-slate-800 text-slate-400 font-mono">
+                <span className="text-xs px-2 py-0.5 rounded bg-slate-100 text-slate-600 font-mono">
                   {DIAGNOSIS_TYPE_LABELS[diagnosis.diagnosis_type] || diagnosis.diagnosis_type}
                 </span>
               </h2>
-              <p className="text-xs text-slate-400 font-mono">
+              <p className="text-xs text-slate-500 font-mono">
                 ID: {diagnosis.id} / 設問版: {diagnosis.questionnaire_version}
               </p>
             </div>
           </div>
-          <button onClick={onClose} className="text-slate-400 hover:text-white p-1 rounded-lg">
+          <button onClick={onClose} className="text-slate-400 hover:text-slate-600 p-1 rounded-lg">
             <X className="w-5 h-5" />
           </button>
         </div>
@@ -1110,40 +1110,40 @@ ${reportDraft.text.replace(/</g, '&lt;').replace(/>/g, '&gt;')}
         <div className="p-6 space-y-6 overflow-y-auto flex-1">
           {/* 通知メッセージ */}
           {saveSuccessMsg && (
-            <div className="bg-emerald-950/60 border border-emerald-500/40 text-emerald-300 p-3 rounded-2xl text-xs sm:text-sm flex items-center gap-2">
-              <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
+            <div className="bg-emerald-50 border border-emerald-200 text-emerald-800 p-3 rounded-2xl text-xs sm:text-sm flex items-center gap-2">
+              <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
               <span>{saveSuccessMsg}</span>
             </div>
           )}
 
           {errorMsg && (
-            <div className="bg-rose-950/60 border border-rose-500/40 text-rose-300 p-3 rounded-2xl text-xs sm:text-sm flex items-center gap-2">
-              <AlertTriangle className="w-4 h-4 text-rose-400 shrink-0" />
+            <div className="bg-rose-50 border border-rose-200 text-rose-800 p-3 rounded-2xl text-xs sm:text-sm flex items-center gap-2">
+              <AlertTriangle className="w-4 h-4 text-rose-600 shrink-0" />
               <span>{errorMsg}</span>
             </div>
           )}
 
           {/* 安全ガード説明バナー */}
-          <div className="bg-amber-950/30 border border-amber-500/30 rounded-2xl p-4 text-amber-200 space-y-1">
-            <div className="flex items-center gap-2 text-amber-300 font-semibold text-xs sm:text-sm">
-              <ShieldCheck className="w-4 h-4 text-amber-400" />
+          <div className="bg-amber-50 border border-amber-200 rounded-2xl p-4 text-amber-800 space-y-1">
+            <div className="flex items-center gap-2 text-amber-900 font-semibold text-xs sm:text-sm">
+              <ShieldCheck className="w-4 h-4 text-amber-600" />
               <span>必須設問に回答すると診断を完了できます</span>
             </div>
-            <p className="text-xs text-amber-200/80 leading-relaxed pl-6">
+            <p className="text-xs text-amber-800/90 leading-relaxed pl-6">
               送信済みのフォーム回答を「未確認」として引き継ぎます。内容を確認して必要な修正を保存してください。
             </p>
           </div>
 
           {/* 編集ロック通知（completed / reported の場合） */}
           {isLockedForDirectEdit && (
-            <div className="bg-slate-950 border border-slate-800 rounded-2xl p-4 flex items-center justify-between gap-4">
+            <div className="bg-slate-50 border border-slate-200 rounded-2xl p-4 flex items-center justify-between gap-4">
               <div className="flex items-center gap-3">
-                <Lock className="w-5 h-5 text-amber-400 shrink-0" />
+                <Lock className="w-5 h-5 text-amber-600 shrink-0" />
                 <div className="text-xs space-y-0.5">
-                  <p className="font-semibold text-slate-200">
+                  <p className="font-semibold text-slate-800">
                     回答内容は現在ロックされています（ステータス: {statusInfo.label}）
                   </p>
-                  <p className="text-slate-400">
+                  <p className="text-slate-500">
                     完了済み・レポート発行済みの回答の直接編集はDBトリガーにより安全に遮断されています。
                   </p>
                 </div>
@@ -1153,54 +1153,54 @@ ${reportDraft.text.replace(/</g, '&lt;').replace(/>/g, '&gt;')}
           )}
 
           {isFormDiagnosis ? (
-            <div className="rounded-2xl border border-slate-800 bg-slate-950/60 p-4 text-sm text-slate-300">
+            <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4 text-sm text-slate-700">
               送信済みのフォーム回答を受け付けました。内容を確認してから、診断結果やレポートを作成できます。
             </div>
           ) : (
           <>
           {/* スコア・進捗サマリーカード */}
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 bg-slate-950/60 p-4 rounded-2xl border border-slate-800">
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 bg-slate-50 p-4 rounded-2xl border border-slate-200">
             <div className="space-y-1">
-              <span className="text-[11px] font-medium text-slate-400">総合スコア（リアルタイム）</span>
+              <span className="text-[11px] font-medium text-slate-500">総合スコア（リアルタイム）</span>
               <div className="flex items-baseline gap-2">
-                <span className="text-2xl font-black text-emerald-400">
+                <span className="text-2xl font-black text-emerald-600">
                   {currentScores.totalScore}
                 </span>
-                <span className="text-xs text-slate-500">/ 100点</span>
+                <span className="text-xs text-slate-400">/ 100点</span>
               </div>
             </div>
 
             <div className="space-y-1">
-              <span className="text-[11px] font-medium text-slate-400">回答進捗状況</span>
+              <span className="text-[11px] font-medium text-slate-500">回答進捗状況</span>
               <div className="flex items-baseline gap-2">
-                <span className="text-2xl font-black text-blue-400">
+                <span className="text-2xl font-black text-purple-600">
                   {currentScores.answeredCount}
                 </span>
-                <span className="text-xs text-slate-500">/ {currentScores.totalQuestions} 問回答済</span>
+                <span className="text-xs text-slate-400">/ {currentScores.totalQuestions} 問回答済</span>
               </div>
             </div>
 
             <div className="space-y-1">
-              <span className="text-[11px] font-medium text-slate-400">AIレポート発行状況</span>
+              <span className="text-[11px] font-medium text-slate-500">AIレポート発行状況</span>
               <div className="flex items-center gap-1.5 pt-1">
                 {reports.length > 0 ? (
-                  <span className="text-xs text-indigo-300 font-semibold flex items-center gap-1">
-                    <Award className="w-3.5 h-3.5 text-indigo-400" />
+                  <span className="text-xs text-purple-700 font-semibold flex items-center gap-1">
+                    <Award className="w-3.5 h-3.5 text-purple-600" />
                     <span>最新レポートあり (v{reports[0].version})</span>
                   </span>
                 ) : (
-                  <span className="text-xs text-slate-500">レポート未発行</span>
+                  <span className="text-xs text-slate-400">レポート未発行</span>
                 )}
               </div>
             </div>
           </div>
 
           {reports[0] && (
-            <details className="rounded-2xl border border-indigo-800/70 bg-indigo-950/20 p-4">
-              <summary className="cursor-pointer text-sm font-semibold text-indigo-100">
+            <details className="rounded-2xl border border-purple-200 bg-purple-50/40 p-4">
+              <summary className="cursor-pointer text-sm font-semibold text-purple-900">
                 最新のAI診断レポートを確認（v{reports[0].version}）
               </summary>
-              <div className="mt-3 max-h-[32rem] overflow-y-auto whitespace-pre-wrap rounded-xl bg-slate-950/70 p-4 text-sm leading-7 text-slate-200">
+              <div className="mt-3 max-h-[32rem] overflow-y-auto whitespace-pre-wrap rounded-xl bg-white border border-purple-100 p-4 text-sm leading-7 text-slate-800">
                 {reports[0].full_report_text || reports[0].summary || 'レポート本文はまだ作成されていません。'}
               </div>
             </details>
@@ -1208,25 +1208,25 @@ ${reportDraft.text.replace(/</g, '&lt;').replace(/>/g, '&gt;')}
           </>
           )}
 
-          <section className="space-y-3 rounded-2xl border border-indigo-800/60 bg-indigo-950/10 p-4">
+          <section className="space-y-3 rounded-2xl border border-purple-200 bg-purple-50/30 p-4">
             <div className="flex flex-wrap items-center justify-between gap-3">
               <div>
-                <h3 className="text-sm font-bold text-indigo-100">診断レポート</h3>
-                <p className="mt-1 text-xs text-slate-400">フォーム回答と社内CRM情報から草案を生成します。内容を確認・修正して保存すると、顧客書類にレポートと提案書の草案を作成します。</p>
+                <h3 className="text-sm font-bold text-slate-900">診断レポート</h3>
+                <p className="mt-1 text-xs text-slate-500">フォーム回答と社内CRM情報から草案を生成します。内容を確認・修正して保存すると、顧客書類にレポートと提案書の草案を作成します。</p>
               </div>
-              <p className="text-xs text-slate-400">診断回答と会社名・業種などをAIサービスに送信します。個人の連絡先と社内メモは送信しません。</p>
-              <button type="button" onClick={handleGenerateReportDraft} disabled={generatingReport || savingReport} className="inline-flex items-center gap-2 rounded-xl bg-indigo-600 px-4 py-2 text-xs font-semibold text-white hover:bg-indigo-500 disabled:cursor-not-allowed disabled:opacity-50">
+              <p className="text-xs text-slate-500">診断回答と会社名・業種などをAIサービスに送信します。個人の連絡先と社内メモは送信しません。</p>
+              <button type="button" onClick={handleGenerateReportDraft} disabled={generatingReport || savingReport} className="inline-flex items-center gap-2 rounded-xl bg-purple-600 px-4 py-2 text-xs font-semibold text-white hover:bg-purple-700 disabled:cursor-not-allowed disabled:opacity-50 transition-colors shadow-sm">
                 {generatingReport ? <RefreshCw className="h-4 w-4 animate-spin" /> : <Sparkles className="h-4 w-4" />}
                 {generatingReport ? '草案を生成中…' : 'AIで草案を生成'}
               </button>
             </div>
             {reportDraft && (
-              <div className="space-y-3 rounded-xl border border-slate-700 bg-slate-950/70 p-3">
-                <label className="block text-xs font-medium text-slate-300">草案（保存前に編集できます）</label>
-                <textarea value={reportDraft.text} onChange={(event) => setReportDraft({ ...reportDraft, text: event.target.value })} rows={16} className="w-full resize-y rounded-lg border border-slate-700 bg-slate-950 p-3 text-sm leading-6 text-slate-200" />
+              <div className="space-y-3 rounded-xl border border-slate-200 bg-white p-3 shadow-sm">
+                <label className="block text-xs font-medium text-slate-700">草案（保存前に編集できます）</label>
+                <textarea value={reportDraft.text} onChange={(event) => setReportDraft({ ...reportDraft, text: event.target.value })} rows={16} className="w-full resize-y rounded-lg border border-slate-200 bg-slate-50 p-3 text-sm leading-6 text-slate-900 focus:bg-white focus:outline-none focus:ring-2 focus:ring-purple-500" />
                 <div className="flex flex-wrap items-center justify-end gap-2">
-                  <button type="button" onClick={() => setReportDraft(null)} className="rounded-lg px-3 py-2 text-xs text-slate-300 hover:bg-slate-800">破棄</button>
-                  <button type="button" onClick={handleSaveGeneratedReport} disabled={savingReport || !reportDraft.text.trim()} className="inline-flex items-center gap-2 rounded-lg bg-emerald-600 px-4 py-2 text-xs font-semibold text-white hover:bg-emerald-500 disabled:opacity-50">
+                  <button type="button" onClick={() => setReportDraft(null)} className="rounded-lg px-3 py-2 text-xs text-slate-600 hover:bg-slate-100 transition-colors">破棄</button>
+                  <button type="button" onClick={handleSaveGeneratedReport} disabled={savingReport || !reportDraft.text.trim()} className="inline-flex items-center gap-2 rounded-lg bg-emerald-600 px-4 py-2 text-xs font-semibold text-white hover:bg-emerald-700 disabled:opacity-50 shadow-sm transition-colors">
                     {savingReport && <RefreshCw className="h-3.5 w-3.5 animate-spin" />}
                     顧客書類に保存
                   </button>
@@ -1234,11 +1234,11 @@ ${reportDraft.text.replace(/</g, '&lt;').replace(/>/g, '&gt;')}
               </div>
             )}
             {reports[0] && !reportDraft && (
-              <div className="rounded-xl border border-indigo-800/80 bg-indigo-950/40 p-3 space-y-3">
+              <div className="rounded-xl border border-purple-200 bg-white p-3 space-y-3 shadow-sm">
                 <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
                   <div className="flex items-center gap-2">
-                    <Award className="w-4 h-4 text-indigo-400" />
-                    <span className="text-xs font-bold text-indigo-200">
+                    <Award className="w-4 h-4 text-purple-600" />
+                    <span className="text-xs font-bold text-slate-800">
                       最新レポート v{reports[0].version} ({reports[0].status === 'approved' ? '承認済' : '承認待ち'})
                     </span>
                   </div>
@@ -1246,7 +1246,7 @@ ${reportDraft.text.replace(/</g, '&lt;').replace(/>/g, '&gt;')}
                     type="button"
                     onClick={() => handleApproveAndSendReport(reports[0])}
                     disabled={approvingAndSendingReport}
-                    className="inline-flex items-center gap-1.5 rounded-lg bg-gradient-to-r from-indigo-600 to-purple-600 px-3.5 py-1.5 text-xs font-bold text-white hover:from-indigo-500 hover:to-purple-500 transition-all shadow-md shadow-indigo-600/25 disabled:opacity-50 cursor-pointer"
+                    className="inline-flex items-center gap-1.5 rounded-lg bg-gradient-to-r from-purple-600 to-indigo-600 px-3.5 py-1.5 text-xs font-bold text-white hover:from-purple-700 hover:to-indigo-700 transition-all shadow-sm disabled:opacity-50 cursor-pointer"
                   >
                     {approvingAndSendingReport ? (
                       <>
@@ -1255,15 +1255,15 @@ ${reportDraft.text.replace(/</g, '&lt;').replace(/>/g, '&gt;')}
                       </>
                     ) : (
                       <>
-                        <CheckCircle2 className="h-3.5 w-3.5 text-indigo-200" />
+                        <CheckCircle2 className="h-3.5 w-3.5 text-purple-200" />
                         <span>1クリック承認＆レポート送信</span>
                       </>
                     )}
                   </button>
                 </div>
-                <details className="rounded-lg border border-slate-800 bg-slate-950/80 p-3" open>
-                  <summary className="cursor-pointer text-xs font-semibold text-slate-300">レポート本文を確認</summary>
-                  <div className="mt-3 max-h-96 overflow-y-auto whitespace-pre-wrap rounded-lg bg-slate-950 p-3 text-sm leading-6 text-slate-200">
+                <details className="rounded-lg border border-slate-200 bg-slate-50 p-3" open>
+                  <summary className="cursor-pointer text-xs font-semibold text-slate-700">レポート本文を確認</summary>
+                  <div className="mt-3 max-h-96 overflow-y-auto whitespace-pre-wrap rounded-lg bg-white border border-slate-200 p-3 text-sm leading-6 text-slate-800">
                     {reports[0].full_report_text || reports[0].summary || 'レポート本文がありません。'}
                   </div>
                 </details>
@@ -1273,53 +1273,53 @@ ${reportDraft.text.replace(/</g, '&lt;').replace(/>/g, '&gt;')}
 
           {/* 設問回答フォーム（カテゴリ別） */}
           {diagnosis.questionnaire_version.startsWith('form-') ? (
-            <section className="space-y-3 rounded-2xl border border-slate-800 bg-slate-950/40 p-4">
-              <h3 className="text-sm font-bold text-slate-200">フォーム回答（送信済み）</h3>
+            <section className="space-y-3 rounded-2xl border border-slate-200 bg-slate-50/70 p-4">
+              <h3 className="text-sm font-bold text-slate-800">フォーム回答（送信済み）</h3>
               <dl className="space-y-2">
                 {Object.entries(answers).filter(([key]) => key !== '_intake').map(([key, value]) => (
-                  <div key={key} className="grid gap-1 rounded-xl border border-slate-800 bg-slate-900/60 p-3 sm:grid-cols-[minmax(180px,0.8fr)_minmax(0,1.2fr)]">
-                    <dt className="text-xs font-medium text-slate-400">{key}</dt>
-                    <dd><textarea value={typeof value === 'string' ? value : Array.isArray(value) ? value.join('、') : JSON.stringify(value)} onChange={(event) => handleAnswerChange(key, event.target.value)} disabled={isLockedForDirectEdit} rows={Math.min(6, Math.max(2, String(value ?? '').split('\n').length))} className="w-full resize-y rounded-lg border border-slate-800 bg-slate-950 p-2 text-sm text-slate-200 disabled:opacity-60" /></dd>
+                  <div key={key} className="grid gap-1 rounded-xl border border-slate-200 bg-white p-3 sm:grid-cols-[minmax(180px,0.8fr)_minmax(0,1.2fr)] shadow-sm">
+                    <dt className="text-xs font-medium text-slate-600">{key}</dt>
+                    <dd><textarea value={typeof value === 'string' ? value : Array.isArray(value) ? value.join('、') : JSON.stringify(value)} onChange={(event) => handleAnswerChange(key, event.target.value)} disabled={isLockedForDirectEdit} rows={Math.min(6, Math.max(2, String(value ?? '').split('\n').length))} className="w-full resize-y rounded-lg border border-slate-200 bg-slate-50 p-2 text-sm text-slate-800 focus:bg-white focus:border-purple-400 disabled:opacity-60" /></dd>
                   </div>
                 ))}
               </dl>
-              {Boolean(answers._intake) && <details className="text-xs text-slate-500"><summary className="cursor-pointer">受付情報</summary><pre className="mt-2 whitespace-pre-wrap">{JSON.stringify(answers._intake, null, 2)}</pre></details>}
+              {Boolean(answers._intake) && <details className="text-xs text-slate-500"><summary className="cursor-pointer">受付情報</summary><pre className="mt-2 whitespace-pre-wrap bg-white border border-slate-200 p-2 rounded-lg text-slate-700">{JSON.stringify(answers._intake, null, 2)}</pre></details>}
             </section>
           ) : (
           <div className="space-y-6">
-            <div className="flex items-center justify-between border-b border-slate-800 pb-2">
-              <h3 className="text-sm font-bold text-slate-200 flex items-center gap-2">
-                <Sliders className="w-4 h-4 text-blue-400" />
+            <div className="flex items-center justify-between border-b border-slate-200 pb-2">
+              <h3 className="text-sm font-bold text-slate-800 flex items-center gap-2">
+                <Sliders className="w-4 h-4 text-purple-600" />
                 <span>診断設問への回答入力（バージョン: {diagnosis.questionnaire_version}）</span>
               </h3>
-              <span className="text-xs text-slate-400">各設問 1〜5段階評価</span>
+              <span className="text-xs text-slate-500">各設問 1〜5段階評価</span>
             </div>
 
             {QUESTIONNAIRE_V1.map((cat: QuestionCategory) => {
               const catScore = currentScores.categoryScores[cat.key] || 0;
               return (
-                <div key={cat.key} className="bg-slate-950/40 rounded-2xl border border-slate-800/80 p-4 space-y-4">
-                  <div className="flex items-center justify-between border-b border-slate-800/60 pb-2">
+                <div key={cat.key} className="bg-slate-50/80 rounded-2xl border border-slate-200 p-4 space-y-4">
+                  <div className="flex items-center justify-between border-b border-slate-200 pb-2">
                     <div>
-                      <h4 className="text-xs sm:text-sm font-bold text-white">{cat.name}</h4>
-                      <p className="text-[11px] text-slate-400">{cat.description}</p>
+                      <h4 className="text-xs sm:text-sm font-bold text-slate-900">{cat.name}</h4>
+                      <p className="text-[11px] text-slate-500">{cat.description}</p>
                     </div>
                     <div className="text-right">
-                      <span className="text-xs font-semibold text-emerald-400">{catScore}点</span>
+                      <span className="text-xs font-bold text-purple-700 bg-purple-100 px-2 py-0.5 rounded-full">{catScore}点</span>
                     </div>
                   </div>
 
-                  <div className="space-y-4">
+                  <div className="space-y-3">
                     {cat.questions.map((q) => {
                       const currentVal = answers[q.id];
                       return (
-                        <div key={q.id} className="space-y-2 p-3 rounded-xl bg-slate-900/60 border border-slate-800/40">
+                        <div key={q.id} className="space-y-2 p-3 rounded-xl bg-white border border-slate-200 shadow-xs">
                           <div className="space-y-0.5">
-                            <label className="text-xs font-semibold text-slate-200 flex items-center justify-between">
+                            <label className="text-xs font-semibold text-slate-800 flex items-center justify-between">
                               <span>{q.label}</span>
-                              <span className="text-[10px] text-slate-500 font-mono">ID: {q.id}</span>
+                              <span className="text-[10px] text-slate-400 font-mono">ID: {q.id}</span>
                             </label>
-                            <p className="text-[11px] text-slate-400">{q.description}</p>
+                            <p className="text-[11px] text-slate-500">{q.description}</p>
                           </div>
 
                           {/* 5段階評価ボタン */}
@@ -1334,8 +1334,8 @@ ${reportDraft.text.replace(/</g, '&lt;').replace(/>/g, '&gt;')}
                                   onClick={() => handleAnswerChange(q.id, val)}
                                   className={`flex-1 py-1.5 px-2 rounded-lg text-xs font-bold transition-all ${
                                     isSelected
-                                      ? 'bg-blue-600 text-white shadow-md shadow-blue-500/20 scale-[1.02]'
-                                      : 'bg-slate-800 text-slate-300 hover:bg-slate-700 hover:text-white border border-slate-700/60'
+                                      ? 'bg-purple-600 text-white shadow-sm scale-[1.02]'
+                                      : 'bg-slate-100 text-slate-700 hover:bg-slate-200 border border-slate-200'
                                   } disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer`}
                                 >
                                   {val}
@@ -1354,25 +1354,25 @@ ${reportDraft.text.replace(/</g, '&lt;').replace(/>/g, '&gt;')}
           )}
 
           {/* 社内メモの編集 */}
-          <div className="space-y-2 pt-2 border-t border-slate-800">
-            <label className="text-xs font-semibold text-slate-300 flex items-center justify-between">
+          <div className="space-y-2 pt-2 border-t border-slate-200">
+            <label className="text-xs font-semibold text-slate-700 flex items-center justify-between">
               <span>社内メモ・診断総括（memo）</span>
-              <span className="text-[10px] text-slate-500">※完了後も随時追記可能</span>
+              <span className="text-[10px] text-slate-400">※完了後も随時追記可能</span>
             </label>
             <textarea
               value={memo}
               onChange={(e) => setMemo(e.target.value)}
               placeholder="経営課題や商談でのやり取り、提案方針など"
               rows={3}
-              className="w-full px-3.5 py-2.5 bg-slate-950 border border-slate-800 rounded-xl text-xs sm:text-sm text-slate-200 focus:outline-none focus:border-blue-500 transition-colors"
+              className="w-full px-3.5 py-2.5 bg-white border border-slate-200 rounded-xl text-xs sm:text-sm text-slate-800 focus:outline-none focus:border-purple-500 focus:ring-1 focus:ring-purple-500 transition-colors shadow-xs"
             />
           </div>
         </div>
 
         {/* Modal Footer Actions */}
-        <div className="px-6 py-4 border-t border-slate-800 bg-slate-950/80 flex flex-col sm:flex-row items-center justify-between gap-3 shrink-0">
-          <div className="text-xs text-slate-400 flex items-center gap-1.5">
-            <Info className="w-4 h-4 text-slate-500" />
+        <div className="px-6 py-4 border-t border-slate-200 bg-slate-50 flex flex-col sm:flex-row items-center justify-between gap-3 shrink-0">
+          <div className="text-xs text-slate-500 flex items-center gap-1.5">
+            <Info className="w-4 h-4 text-slate-400" />
             <span>回答内容や社内メモを変更した後は「回答を保存」を押してください</span>
           </div>
 
@@ -1380,25 +1380,25 @@ ${reportDraft.text.replace(/</g, '&lt;').replace(/>/g, '&gt;')}
             <button
               type="button"
               onClick={onClose}
-              className="px-4 py-2 rounded-xl text-xs sm:text-sm font-medium text-slate-400 hover:text-slate-200 hover:bg-slate-800 transition-colors"
+              className="px-4 py-2 rounded-xl text-xs sm:text-sm font-medium text-slate-600 hover:text-slate-900 hover:bg-slate-200/60 transition-colors"
             >
               閉じる
             </button>
 
-            <button type="button" disabled={saving || isLockedForDirectEdit} onClick={() => handleSaveAnswers()} className="px-4 py-2 rounded-xl text-xs sm:text-sm font-medium bg-blue-700 hover:bg-blue-600 text-white transition-colors flex items-center gap-1.5 disabled:opacity-50 cursor-pointer"><Save className="w-3.5 h-3.5 text-blue-200" /><span>回答を保存</span></button>
+            <button type="button" disabled={saving || isLockedForDirectEdit} onClick={() => handleSaveAnswers()} className="px-4 py-2 rounded-xl text-xs sm:text-sm font-medium bg-purple-600 hover:bg-purple-700 text-white transition-colors flex items-center gap-1.5 disabled:opacity-50 cursor-pointer shadow-sm"><Save className="w-3.5 h-3.5 text-purple-200" /><span>回答を保存</span></button>
 
             {/* 診断完了ボタン（安全ガードによりロック・ツールチップ案内） */}
             <div className="relative group">
               <button
                 type="button"
                 disabled={true}
-                className="px-4 py-2 rounded-xl text-xs sm:text-sm font-medium bg-slate-800/80 text-slate-500 border border-slate-700/50 cursor-not-allowed flex items-center gap-1.5"
+                className="px-4 py-2 rounded-xl text-xs sm:text-sm font-medium bg-slate-100 text-slate-400 border border-slate-200 cursor-not-allowed flex items-center gap-1.5"
                 title="設問仕様の必須キー一覧が確定するまで完了化は安全にロックされています"
               >
-                <Lock className="w-3.5 h-3.5 text-amber-500/80" />
+                <Lock className="w-3.5 h-3.5 text-amber-500" />
                 <span>診断完了（ロック中）</span>
               </button>
-              <div className="absolute bottom-full right-0 mb-2 w-64 p-2 bg-slate-950 border border-slate-800 rounded-xl text-[11px] text-amber-300 shadow-xl opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none z-50">
+              <div className="absolute bottom-full right-0 mb-2 w-64 p-2 bg-slate-800 border border-slate-700 rounded-xl text-[11px] text-amber-200 shadow-xl opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none z-50">
                 ⚠️ 設問バージョン {diagnosis.questionnaire_version} の必須設問IDが未確定のため、completed への完了確定は安全のため現在ロックされています。
               </div>
             </div>
@@ -1417,29 +1417,29 @@ export const DiagnosisManager: React.FC<DiagnosisManagerProps> = (props) => {
   const [requestedDiagnosisId, setRequestedDiagnosisId] = useState<string | null>(null);
   return (
     <div className="space-y-4">
-      <div className="space-y-3 rounded-xl border border-slate-800 bg-slate-900 p-3">
+      <div className="space-y-3 rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
           <div>
-            <h1 className="text-lg font-bold text-white">フォーム設計・診断レポート</h1>
-            <p className="text-xs text-slate-400">受付フォームの設問・デザイン設計と、社内診断・AIレポート作成を管理します。</p>
+            <h1 className="text-lg font-bold text-slate-900">フォーム設計・診断レポート</h1>
+            <p className="text-xs text-slate-500">受付フォームの設問・デザイン設計と、社内診断・AIレポート作成を管理します。</p>
           </div>
           {props.onNavigateTab && (
             <button
               onClick={() => props.onNavigateTab?.('inbox_hub')}
-              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold text-sky-300 hover:text-white bg-sky-950/60 hover:bg-sky-900/70 border border-sky-800/60 shadow-sm transition"
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold text-purple-700 hover:text-purple-900 bg-purple-50 hover:bg-purple-100 border border-purple-200 shadow-2xs transition"
             >
-              <Inbox className="w-3.5 h-3.5 text-sky-400" />
+              <Inbox className="w-3.5 h-3.5 text-purple-600" />
               <span>届いたWeb回答は「統合受信トレイ」で即時確認・CRM連携</span>
-              <ArrowRight className="w-3.5 h-3.5 text-sky-400" />
+              <ArrowRight className="w-3.5 h-3.5 text-purple-600" />
             </button>
           )}
         </div>
-        <nav className="flex flex-wrap items-center gap-2 border-t border-slate-800 pt-3" aria-label="フォーム・診断">
+        <nav className="flex flex-wrap items-center gap-2 border-t border-slate-100 pt-3" aria-label="フォーム・診断">
           <button
             onClick={() => setSection('forms')}
             aria-current={section === 'forms' ? 'page' : undefined}
             className={`rounded-lg px-3 py-2 text-sm font-medium transition ${
-              section === 'forms' ? 'bg-blue-600 text-white shadow-sm' : 'text-slate-300 hover:bg-slate-800'
+              section === 'forms' ? 'bg-purple-600 text-white shadow-2xs' : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900'
             }`}
           >
             フォーム設計
@@ -1448,7 +1448,7 @@ export const DiagnosisManager: React.FC<DiagnosisManagerProps> = (props) => {
             onClick={() => setSection('diagnoses')}
             aria-current={section === 'diagnoses' ? 'page' : undefined}
             className={`rounded-lg px-3 py-2 text-sm font-medium transition ${
-              section === 'diagnoses' ? 'bg-blue-600 text-white shadow-sm' : 'text-slate-300 hover:bg-slate-800'
+              section === 'diagnoses' ? 'bg-purple-600 text-white shadow-2xs' : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900'
             }`}
           >
             診断・レポート作成

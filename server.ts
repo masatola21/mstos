@@ -2,13 +2,13 @@ import express from 'express';
 import dotenv from 'dotenv';
 import path from 'path';
 import { fileURLToPath } from 'url';
-import { getAIWorkMode, sanitizeRoleOverride } from './src/data/aiWorkModes.ts';
-import { type AIModelSetting, DEFAULT_MODEL_SETTING, sanitizeModelSetting } from './src/data/aiModels.ts';
-import { getProviderStatus, runWithFallback, getEmbedding, cosineSimilarity } from './server/aiProviders.ts';
+import { getAIWorkMode, sanitizeRoleOverride } from './src/data/aiWorkModes';
+import { AIModelSetting, DEFAULT_MODEL_SETTING, sanitizeModelSetting } from './src/data/aiModels';
+import { getProviderStatus, runWithFallback, getEmbedding, cosineSimilarity } from './server/aiProviders';
 import { createHmac, timingSafeEqual, createHash } from 'node:crypto';
 import fs from 'node:fs';
 import { createClient } from '@supabase/supabase-js';
-import { parseIcalendar } from './server/icalParser.ts';
+import { parseIcalendar } from './server/icalParser';
 
 dotenv.config();
 
