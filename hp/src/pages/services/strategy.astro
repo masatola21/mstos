@@ -52,7 +52,7 @@ import Layout from '../../layouts/Layout.astro';
           <span class="text-xs font-bold text-brand-700 bg-brand-50 px-3 py-1 rounded-full border border-brand-200">
             TARGET & CHALLENGES
           </span>
-          <h2 class="text-2xl sm:text-3xl font-bold font-serif text-slate-900">
+          <h2 class="text-2xl sm:text-3xl font-black font-serif text-slate-900 tracking-tight">
             このようなお悩みを持つ企業が対象です
           </h2>
           <p class="text-sm text-gray-600 leading-relaxed">
@@ -101,7 +101,7 @@ import Layout from '../../layouts/Layout.astro';
         <span class="text-xs font-bold text-brand-700 bg-brand-50 px-3 py-1 rounded-full border border-brand-200">
           SUPPORT SCOPE
         </span>
-        <h2 class="text-2xl sm:text-4xl font-bold font-serif text-slate-900">
+        <h2 class="text-2xl sm:text-3xl lg:text-4xl font-black font-serif text-slate-900 tracking-tight">
           経営戦略・利益改善顧問の支援内容
         </h2>
         <p class="text-sm text-gray-600">
@@ -161,23 +161,56 @@ import Layout from '../../layouts/Layout.astro';
     </div>
   </section>
 
-  <!-- 支援範囲（顧問・構築・保守の区分） -->
-  <section class="py-16 bg-white border-t border-sand-200">
-    <div class="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 space-y-6">
-      <h3 class="text-xl font-bold font-serif text-slate-900 text-center">
-        本サービスにおける支援範囲の区分
-      </h3>
-      <div class="bg-sand-50 p-6 sm:p-8 rounded-2xl border border-sand-300 text-xs sm:text-sm text-gray-700 space-y-3">
-        <p><strong>【顧問に含まれる範囲】</strong> 課題分析、戦略策定、業務フロー設計、利益改善案の提示、定例ミーティング、チャット・電話による経営相談。</p>
-        <p><strong>【別途構築となる範囲】</strong> 専用Web管理システムの開発、複雑なGASプログラム実装、LPやWebサイト自体の受託制作など、具体的なシステム制作・実装業務（構築契約として別途ご案内）。</p>
+  <!-- 支援範囲（顧問・構築の明確な区分） -->
+  <section class="py-16 sm:py-20 bg-gradient-to-b from-slate-950 to-slate-900 text-white">
+    <div class="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 space-y-8">
+      <div class="text-center space-y-2">
+        <span class="text-xs font-bold text-amber-400 uppercase tracking-widest bg-amber-400/10 px-3 py-1 rounded-full border border-amber-400/30">
+          SCOPE CLARITY
+        </span>
+        <h3 class="text-xl sm:text-2xl font-black font-serif text-white tracking-tight">
+          本サービスにおける支援範囲の区分
+        </h3>
       </div>
+
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+        <!-- 顧問に含まれる範囲 -->
+        <div class="bg-slate-800/80 rounded-2xl border border-slate-700 p-6 sm:p-8 space-y-4">
+          <div class="flex items-center gap-3">
+            <span class="w-10 h-10 rounded-xl bg-emerald-500/20 text-emerald-400 flex items-center justify-center font-black text-lg shrink-0">✓</span>
+            <h4 class="text-base sm:text-lg font-black text-white">顧問に含まれる範囲</h4>
+          </div>
+          <ul class="space-y-2 text-xs sm:text-sm text-slate-300 leading-relaxed font-light">
+            <li class="flex items-start gap-2"><span class="text-emerald-400 mt-0.5 shrink-0">•</span>課題分析・ボトルネック特定</li>
+            <li class="flex items-start gap-2"><span class="text-emerald-400 mt-0.5 shrink-0">•</span>戦略策定・利益改善案の提示</li>
+            <li class="flex items-start gap-2"><span class="text-emerald-400 mt-0.5 shrink-0">•</span>業務フロー設計・標準化</li>
+            <li class="flex items-start gap-2"><span class="text-emerald-400 mt-0.5 shrink-0">•</span>定例ミーティング・チャット・電話相談</li>
+          </ul>
+        </div>
+
+        <!-- 別途構築となる範囲 -->
+        <div class="bg-slate-800/80 rounded-2xl border border-slate-700 p-6 sm:p-8 space-y-4">
+          <div class="flex items-center gap-3">
+            <span class="w-10 h-10 rounded-xl bg-amber-500/20 text-amber-400 flex items-center justify-center font-black text-lg shrink-0">＋</span>
+            <h4 class="text-base sm:text-lg font-black text-white">別途構築となる範囲</h4>
+          </div>
+          <ul class="space-y-2 text-xs sm:text-sm text-slate-300 leading-relaxed font-light">
+            <li class="flex items-start gap-2"><span class="text-amber-400 mt-0.5 shrink-0">•</span>専用Web管理システムの開発</li>
+            <li class="flex items-start gap-2"><span class="text-amber-400 mt-0.5 shrink-0">•</span>GAS/API連携プログラム実装</li>
+            <li class="flex items-start gap-2"><span class="text-amber-400 mt-0.5 shrink-0">•</span>LP・Webサイトの受託制作</li>
+            <li class="flex items-start gap-2"><span class="text-amber-400 mt-0.5 shrink-0">•</span>構築契約として別途ご案内</li>
+          </ul>
+        </div>
+      </div>
+
+      <p class="text-[11px] text-slate-500 text-center">※ すべての企業にシステム開発を強制することはありません。まずは顧問として現状を整理し、必要な部分だけを最小限で実装します。</p>
     </div>
   </section>
 
   <!-- CTA -->
   <section class="py-16 sm:py-20 bg-gradient-to-r from-brand-900 to-slate-900 text-white text-center">
     <div class="max-w-3xl mx-auto px-4 space-y-6">
-      <h3 class="text-2xl sm:text-3xl font-bold font-serif">
+      <h3 class="text-2xl sm:text-3xl font-black font-serif tracking-tight">
         まずは初回ヒアリング（無料）でお話しをお聞かせください
       </h3>
       <p class="text-xs sm:text-sm text-brand-200 leading-relaxed">
