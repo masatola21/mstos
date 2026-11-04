@@ -1,12 +1,12 @@
 import { GoogleGenAI } from '@google/genai';
 import {
   AI_PROVIDERS,
-  AIModelSetting,
-  AIModelTarget,
-  AIProviderId,
+  type AIModelSetting,
+  type AIModelTarget,
+  type AIProviderId,
   buildModelChain,
   describeTarget,
-} from '../src/data/aiModels';
+} from '../src/data/aiModels.ts';
 
 export interface ProviderMessage {
   role: 'user' | 'model';
