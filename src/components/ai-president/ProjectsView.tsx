@@ -112,24 +112,14 @@ export const ProjectsView: React.FC<ProjectsViewProps> = ({
 
   return (
     <div className="max-w-6xl mx-auto px-4 sm:px-6 py-6 space-y-6">
-      {/* Top Banner */}
-      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 p-5 rounded-2xl bg-white border border-slate-200 shadow-sm">
-        <div className="flex items-center gap-3">
-          <div className="w-11 h-11 rounded-2xl bg-purple-50 border border-purple-200 flex items-center justify-center text-purple-600">
-            <Briefcase className="w-5 h-5" />
-          </div>
-          <div>
-            <h1 className="text-lg font-bold text-slate-900">プロジェクト管理</h1>
-            <p className="text-xs text-slate-500 mt-0.5">
-              各プロジェクトの目的・状態・期限と、紐づくタスクの進捗を管理
-            </p>
-          </div>
-        </div>
+      {/* Header */}
+      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 mb-2">
+        <h1 className="text-[19px] font-bold text-slate-800 tracking-tight">新規商品企画・プロジェクト開発</h1>
 
         <button
           type="button"
           onClick={openCreateModal}
-          className="flex items-center gap-1.5 px-4 py-2 rounded-xl bg-purple-600 hover:bg-purple-700 text-white text-xs font-semibold transition-all shadow-sm cursor-pointer"
+          className="flex items-center gap-1.5 px-3 py-1.5 rounded-md bg-purple-600 hover:bg-purple-700 text-white text-xs font-medium transition-all cursor-pointer"
         >
           <Plus className="w-3.5 h-3.5" />
           <span>新規プロジェクトを作成</span>

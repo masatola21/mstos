@@ -544,19 +544,9 @@ export const TasksView: React.FC<TasksViewProps> = ({
 
   return (
     <div className="max-w-6xl mx-auto px-4 sm:px-6 py-6 space-y-6">
-      {/* Top Banner */}
-      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 p-5 rounded-2xl bg-white border border-slate-200 shadow-xs">
-        <div className="flex items-center gap-3">
-          <div className="w-11 h-11 rounded-xl bg-purple-50 border border-purple-200 flex items-center justify-center text-purple-700">
-            <CheckSquare className="w-5 h-5" />
-          </div>
-          <div>
-            <h1 className="text-lg font-bold text-slate-900">共通タスク管理</h1>
-            <p className="text-xs text-slate-500 mt-0.5">
-              営業・顧客、商品開発、プロジェクト、契約後支援の仕事を一元管理
-            </p>
-          </div>
-        </div>
+      {/* Header */}
+      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 mb-2">
+        <h1 className="text-[19px] font-bold text-slate-800 tracking-tight">全社タスク・承認管理</h1>
 
         {activeSection === 'tasks' && (
           <div className="flex items-center gap-2 flex-wrap">
@@ -568,7 +558,7 @@ export const TasksView: React.FC<TasksViewProps> = ({
                   label: '完了タスク',
                   taskIds: tasks.filter((t) => t.status === 'completed').map((t) => t.id),
                 })}
-                className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-white hover:bg-slate-50 text-slate-600 border border-slate-200 hover:border-slate-300 text-xs font-semibold transition-all cursor-pointer shadow-2xs"
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-md bg-white hover:bg-slate-50 text-slate-600 border border-slate-200 text-xs font-medium transition-all cursor-pointer"
                 title="完了したタスクを一括削除して一覧を整理"
               >
                 <Trash2 className="w-3.5 h-3.5 text-slate-400" />
@@ -578,7 +568,7 @@ export const TasksView: React.FC<TasksViewProps> = ({
             <button
               type="button"
               onClick={openCreateModal}
-              className="flex items-center gap-1.5 px-4 py-2 rounded-xl bg-purple-600 hover:bg-purple-700 text-white text-xs font-bold transition-all shadow-xs cursor-pointer"
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-md bg-purple-600 hover:bg-purple-700 text-white text-xs font-medium transition-all cursor-pointer"
             >
               <Plus className="w-3.5 h-3.5" />
               <span>新規タスクを作成</span>

@@ -315,36 +315,23 @@ export const ProductHubView: React.FC<ProductHubViewProps> = ({
   return (
     <div className="space-y-6">
       {/* Top Banner / Actions */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-white border border-slate-200 p-5 rounded-2xl shadow-sm">
-        <div>
-          <div className="flex items-center gap-2">
-            <h2 className="text-xl font-black text-slate-900 tracking-tight flex items-center gap-2">
-              <Package className="w-6 h-6 text-purple-600" />
-              商品マスタ（サービス・プロダクト設計）
-            </h2>
-            <span className="text-xs px-2.5 py-0.5 rounded-full bg-purple-50 text-purple-700 border border-purple-200 font-semibold">
-              全プロダクト・単価一元管理
-            </span>
-          </div>
-          <p className="text-xs text-slate-500 mt-1">
-            提供する全サービス・プロダクトの仕様、料金体系（固定・最低価格〜・価格帯）、売上目標を一元管理・更新します。AIと共創した新商品アイデアの具体化や開発タスクへの連携もここから実行できます。
-          </p>
-        </div>
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-2">
+        <h1 className="text-[19px] font-bold text-slate-800 tracking-tight">商品マスタ・プロダクト設計</h1>
 
-        <div className="flex items-center gap-2.5">
+        <div className="flex items-center gap-2">
           <button
             onClick={() => setIsWizardOpen(true)}
-            className="px-4 py-2.5 rounded-xl bg-purple-600 hover:bg-purple-700 text-white font-semibold text-xs shadow-sm flex items-center gap-2 transition-all cursor-pointer"
+            className="px-3 py-1.5 rounded-md bg-purple-600 hover:bg-purple-700 text-white font-medium text-xs flex items-center gap-1.5 transition-all cursor-pointer"
           >
-            <Sparkles className="w-4 h-4" />
-            <span>AIとプロダクトを設計する</span>
+            <Sparkles className="w-3.5 h-3.5" />
+            <span>AIと商品設計</span>
           </button>
           <button
             onClick={() => setIsNewProductModalOpen(true)}
-            className="px-3.5 py-2.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-200 font-medium text-xs flex items-center gap-1.5 transition-colors cursor-pointer"
+            className="px-3 py-1.5 rounded-md bg-white hover:bg-slate-50 text-slate-700 border border-slate-200 font-medium text-xs flex items-center gap-1.5 transition-colors cursor-pointer"
           >
-            <Plus className="w-4 h-4" />
-            <span>設計済みプロダクトを登録</span>
+            <Plus className="w-3.5 h-3.5" />
+            <span>商品を手動追加</span>
           </button>
         </div>
       </div>

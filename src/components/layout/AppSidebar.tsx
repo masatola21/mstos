@@ -78,14 +78,14 @@ export const AppSidebar: React.FC<AppSidebarProps> = ({
   const navGroups: NavGroupConfig[] = [
     {
       id: 'marketing',
-      label: 'マーケティング',
+      label: '集客・営業開拓',
       icon: Megaphone,
       defaultOpen: true,
       items: [
         { id: 'ai_acquisition', label: '集客戦略・SNS・メディア' },
-        { id: 'contacts', label: '見込み・友だちリスト（LINE & 企業）' },
-        { id: 'marketing_automation', label: 'LINE・メール自動配信' },
-        { id: 'mst_diagnoses', label: '受付フォーム・診断設計' },
+        { id: 'contacts', label: '見込み企業・友だちリスト（AI調査 & LINE）' },
+        { id: 'marketing_automation', label: 'LINE・メール自動配信（営業メール5段階 & シナリオ）' },
+        { id: 'mst_diagnoses', label: '受付フォーム・診断設計（反響獲得・フック）' },
       ],
     },
     {
@@ -95,21 +95,10 @@ export const AppSidebar: React.FC<AppSidebarProps> = ({
       defaultOpen: true,
       items: [
         { id: 'deals', label: '商談パイプライン（リード・商談・顧客）' },
-        { id: 'customer_operations', label: '契約・請求・顧問支援' },
-        { id: 'document_templates', label: '重要書類・見積・契約' },
+        { id: 'document_templates', label: '重要書類・見積・契約（見積書・契約書作成）' },
+        { id: 'customer_operations', label: '契約・請求・顧問支援（月次請求・支援進捗）' },
         { id: 'companies', label: '会社台帳（法人マスタ）' },
-        { id: 'products', label: '商品マスタ（販売商品・料金台帳）' },
-      ],
-    },
-    {
-      id: 'communication',
-      label: 'コミュニケーション',
-      icon: Inbox,
-      defaultOpen: true,
-      items: [
-        { id: 'inbox_hub', label: '統合受信トレイ' },
-        { id: 'communication_send', label: '送信センター' },
-        { id: 'unified_calendar', label: '予定カレンダー' },
+        { id: 'products', label: '販売商品・料金台帳（見積・請求用）' },
       ],
     },
     {
@@ -119,7 +108,7 @@ export const AppSidebar: React.FC<AppSidebarProps> = ({
       defaultOpen: true,
       items: [
         { id: 'ai_chat', label: 'AI社長室・対話' },
-        { id: 'product_hub', label: '商品開発 & プロジェクト' },
+        { id: 'product_hub', label: '新規商品企画・プロジェクト開発（AI共創）' },
         { id: 'ai_knowledge', label: 'ナレッジ・成果物保管庫' },
         { id: 'ai_presets', label: '専門AI・自動化ルール設定' },
       ],
@@ -202,8 +191,11 @@ export const AppSidebar: React.FC<AppSidebarProps> = ({
 
         {/* Navigation List */}
         <div className="flex-1 overflow-y-auto px-3 py-4 space-y-6 custom-scrollbar text-sm">
-          {/* Top Quick Navigation: Dashboard & Company Tasks */}
+          {/* Top Quick Navigation: Daily Business Routine (経営・連絡・タスク) */}
           <div className="space-y-1">
+            <div className="px-3 pb-1 pt-0.5 text-[11px] font-bold tracking-wider text-slate-400 uppercase">
+              経営・デイリー業務
+            </div>
             <button
               type="button"
               onClick={() => handleItemClick('mst_dashboard')}
@@ -215,6 +207,45 @@ export const AppSidebar: React.FC<AppSidebarProps> = ({
             >
               <LayoutDashboard className={`w-4 h-4 ${isTabActive('mst_dashboard') ? 'text-purple-600' : 'text-slate-400'}`} />
               <span>📊 経営ダッシュボード</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => handleItemClick('unified_calendar')}
+              className={`w-full flex items-center gap-3 px-3 py-2 rounded-lg text-xs sm:text-sm font-semibold transition-colors cursor-pointer ${
+                isTabActive('unified_calendar')
+                  ? 'bg-purple-50 text-purple-700 font-bold border border-purple-200/80 shadow-xs'
+                  : 'text-slate-700 hover:bg-slate-100/80 hover:text-slate-900'
+              }`}
+            >
+              <Calendar className={`w-4 h-4 ${isTabActive('unified_calendar') ? 'text-purple-600' : 'text-slate-400'}`} />
+              <span>📅 予定カレンダー</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => handleItemClick('inbox_hub')}
+              className={`w-full flex items-center gap-3 px-3 py-2 rounded-lg text-xs sm:text-sm font-semibold transition-colors cursor-pointer ${
+                isTabActive('inbox_hub')
+                  ? 'bg-purple-50 text-purple-700 font-bold border border-purple-200/80 shadow-xs'
+                  : 'text-slate-700 hover:bg-slate-100/80 hover:text-slate-900'
+              }`}
+            >
+              <Inbox className={`w-4 h-4 ${isTabActive('inbox_hub') ? 'text-purple-600' : 'text-slate-400'}`} />
+              <span>📥 統合受信トレイ</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => handleItemClick('communication_send')}
+              className={`w-full flex items-center gap-3 px-3 py-2 rounded-lg text-xs sm:text-sm font-semibold transition-colors cursor-pointer ${
+                isTabActive('communication_send')
+                  ? 'bg-purple-50 text-purple-700 font-bold border border-purple-200/80 shadow-xs'
+                  : 'text-slate-700 hover:bg-slate-100/80 hover:text-slate-900'
+              }`}
+            >
+              <Send className={`w-4 h-4 ${isTabActive('communication_send') ? 'text-purple-600' : 'text-slate-400'}`} />
+              <span>📤 送信センター</span>
             </button>
 
             <button

@@ -761,61 +761,61 @@ export const MarketingAutomationPrototypeView: React.FC<Props> = ({ scenarios, o
 
   return (
     <div className="space-y-6">
-      <section className="rounded-2xl border border-slate-200 bg-white p-6 shadow-xs">
-        <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
-          <div>
-            <div className="mb-2 flex flex-wrap items-center gap-2">
-              <h1 className="text-2xl font-black text-slate-900">マーケティング自動配信</h1>
-              <span className="rounded-full border border-purple-200 bg-purple-50 px-2.5 py-1 text-xs font-semibold text-purple-700">シナリオ・自動応答・ジョブ監視</span>
-            </div>
-            <p className="max-w-3xl text-sm leading-6 text-slate-600">
-              見込み客や顧客リストに向けた「ステップシナリオ」「キーワード自動応答」「配信ジョブ」を自動運用します。
-              ※一斉配信（メール・LINE一括）や定型テンプレート管理は「<strong className="text-slate-900 font-semibold">📤 送信センター</strong>」、受信対応は「<strong className="text-slate-900 font-semibold">📥 統合受信トレイ</strong>」で一元管理されています。
-            </p>
-          </div>
-          <div className="flex flex-wrap items-center gap-2">
-            {onNavigateTab && (
-              <>
-                <button
-                  type="button"
-                  onClick={() => onNavigateTab('communication_send')}
-                  className="flex items-center gap-1.5 rounded-xl border border-purple-200 bg-purple-50 px-3.5 py-2.5 text-xs font-bold text-purple-700 hover:bg-purple-100 transition shadow-xs cursor-pointer"
-                  title="全社共通の一斉配信を実行します"
-                >
-                  <Send className="h-3.5 w-3.5 text-purple-600" />
-                  <span>📢 一斉配信（送信センター）</span>
-                </button>
-                <button
-                  type="button"
-                  onClick={() => onNavigateTab('communication_send')}
-                  className="flex items-center gap-1.5 rounded-xl border border-emerald-200 bg-emerald-50 px-3.5 py-2.5 text-xs font-bold text-emerald-700 hover:bg-emerald-100 transition shadow-xs cursor-pointer"
-                  title="全社共通の定型テンプレート保管庫を開きます"
-                >
-                  <Library className="h-3.5 w-3.5 text-emerald-600" />
-                  <span>📚 テンプレート保管庫（送信センター）</span>
-                </button>
-              </>
-            )}
-            <button onClick={startNew} className="flex shrink-0 items-center justify-center gap-2 rounded-xl bg-purple-600 px-4 py-2.5 text-sm font-semibold text-white hover:bg-purple-700 cursor-pointer shadow-xs transition-colors"><Plus className="h-4 w-4" />シナリオ作成</button>
-          </div>
+      {/* Top Header */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-2">
+        <h1 className="text-[19px] font-bold text-slate-800 tracking-tight">
+          LINE・メール自動配信
+        </h1>
+
+        <div className="flex flex-wrap items-center gap-2">
+          {onNavigateTab && (
+            <>
+              <button
+                type="button"
+                onClick={() => onNavigateTab('communication_send')}
+                className="flex items-center gap-1.5 rounded-md border border-slate-200 bg-white px-3 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-50 transition cursor-pointer"
+                title="全社共通の一斉配信を実行します"
+              >
+                <Send className="h-3.5 w-3.5 text-purple-600" />
+                <span>一斉配信</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => onNavigateTab('communication_send')}
+                className="flex items-center gap-1.5 rounded-md border border-slate-200 bg-white px-3 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-50 transition cursor-pointer"
+                title="全社共通の定型テンプレート保管庫を開きます"
+              >
+                <Library className="h-3.5 w-3.5 text-emerald-600" />
+                <span>定型文テンプレート</span>
+              </button>
+            </>
+          )}
+          <button
+            onClick={startNew}
+            className="flex shrink-0 items-center justify-center gap-1.5 rounded-md bg-purple-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-purple-700 cursor-pointer transition-colors"
+          >
+            <Plus className="h-3.5 w-3.5" />
+            <span>シナリオ作成</span>
+          </button>
         </div>
-        <div className="mt-5 flex gap-2 overflow-x-auto border-t border-slate-200 pt-4">
-          {tabs.map(({ id, label, icon: Icon }) => (
-            <button
-              key={id}
-              onClick={() => { setActiveTab(id); setNotice(''); }}
-              className={`flex shrink-0 items-center gap-2 rounded-lg px-3.5 py-2 text-xs font-semibold transition cursor-pointer ${
-                activeTab === id
-                  ? 'bg-purple-600 text-white shadow-xs'
-                  : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900'
-              }`}
-            >
-              <Icon className="h-4 w-4" />
-              {label}
-            </button>
-          ))}
-        </div>
-      </section>
+      </div>
+
+      <nav className="flex gap-1.5 overflow-x-auto rounded-xl border border-slate-200 bg-slate-100 p-1.5" aria-label="自動配信メニュー">
+        {tabs.map(({ id, label, icon: Icon }) => (
+          <button
+            key={id}
+            onClick={() => { setActiveTab(id); setNotice(''); }}
+            className={`flex shrink-0 items-center gap-2 rounded-lg px-3 py-1.5 text-xs font-medium transition cursor-pointer ${
+              activeTab === id
+                ? 'bg-purple-600 text-white font-bold shadow-2xs'
+                : 'text-slate-600 hover:bg-white hover:text-slate-900'
+            }`}
+          >
+            <Icon className="h-3.5 w-3.5" />
+            {label}
+          </button>
+        ))}
+      </nav>
 
       {notice && <div role="status" className="rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-800 font-medium">{notice}</div>}
 

@@ -553,15 +553,10 @@ export const SalesOperationsWorkspace: React.FC<Props> = ({ tab, companyId, lead
       : '契約・請求・顧問・構築支援の状態を管理します。顧客への連絡は送信センターへ渡します。';
 
   return <div className="space-y-5">
-    <header className="rounded-2xl border border-slate-200 bg-white p-5 shadow-xs">
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <div>
-          <h1 className="text-xl sm:text-2xl font-bold text-slate-900 tracking-tight">{title}</h1>
-          <p className="mt-1 text-xs text-slate-500">{description}</p>
-        </div>
-        <button onClick={() => void load()} className="flex items-center gap-2 rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-50 transition cursor-pointer shadow-2xs"><RefreshCw className="h-3.5 w-3.5" />更新</button>
-      </div>
-    </header>
+    <div className="flex items-center justify-between gap-3 mb-2">
+      <h1 className="text-[19px] font-bold text-slate-800 tracking-tight">{title}</h1>
+      <button onClick={() => void load()} className="flex items-center gap-1.5 rounded-md border border-slate-200 bg-white px-3 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-50 transition cursor-pointer"><RefreshCw className="h-3.5 w-3.5" />更新</button>
+    </div>
     {error && <div role="alert" className="rounded-xl border border-rose-200 bg-rose-50 p-3 text-xs text-rose-800 shadow-2xs">{error}</div>}
     {notice && <div role="status" className="rounded-xl border border-purple-200 bg-purple-50 p-3 text-xs text-purple-800 shadow-2xs">{notice}</div>}
 

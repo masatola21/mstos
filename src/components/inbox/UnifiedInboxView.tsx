@@ -310,67 +310,51 @@ export const UnifiedInboxView: React.FC<UnifiedInboxViewProps> = ({
 
   return (
     <div className="space-y-6">
-      {/* ── Top Header & Executive Summary Cockpit ── */}
-      <section className="rounded-2xl border border-slate-200 bg-white p-6 shadow-xs">
-        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-          <div>
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-xl bg-purple-50 border border-purple-200 flex items-center justify-center text-purple-600">
-                <Inbox className="w-5 h-5" />
-              </div>
-              <div>
-                <h1 className="text-xl font-bold text-slate-900 flex items-center gap-2">
-                  <span>統合受信トレイ</span>
-                  <span className="text-xs px-2.5 py-0.5 rounded-full bg-purple-50 text-purple-700 border border-purple-200 font-semibold">
-                    全チャネル集約・未対応ゼロ化
-                  </span>
-                </h1>
-                <p className="text-xs text-slate-500 mt-1">
-                  LINE公式・メール・SNS DM・HP診断フォームの全受信メッセージを一元管理。見込み客の反響対応から契約中クライアントの連絡まで見落としゼロで対応します。
-                </p>
-              </div>
-            </div>
-          </div>
+      {/* ── Top Header ── */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-2">
+        <h1 className="text-[19px] font-bold text-slate-800 tracking-tight">
+          統合受信トレイ
+        </h1>
 
-          <div className="flex flex-wrap items-center gap-2">
-            <button
-              onClick={() => {
-                void loadCounts();
-                void loadSubmissions();
-              }}
-              className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl bg-white hover:bg-slate-50 text-xs font-medium text-slate-700 border border-slate-200 transition cursor-pointer shadow-xs"
-              title="最新の受信状態を再読み込み"
-            >
-              <RefreshCw className="w-3.5 h-3.5 text-slate-400" />
-              <span>更新</span>
-            </button>
-            <button
-              onClick={() => onNavigateTab('leads')}
-              className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl bg-white hover:bg-slate-50 text-xs font-semibold text-slate-700 border border-slate-200 transition cursor-pointer shadow-xs"
-            >
-              <span>反響リード</span>
-              <ArrowRight className="w-3.5 h-3.5 text-slate-400" />
-            </button>
-            <button
-              onClick={() => onNavigateTab('customers')}
-              className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl bg-white hover:bg-slate-50 text-xs font-semibold text-slate-700 border border-slate-200 transition cursor-pointer shadow-xs"
-            >
-              <span>契約顧客台帳</span>
-              <ArrowRight className="w-3.5 h-3.5 text-slate-400" />
-            </button>
-            <button
-              onClick={() => onNavigateTab('communication_send')}
-              className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-purple-600 hover:bg-purple-700 text-xs font-semibold text-white shadow-xs transition cursor-pointer"
-            >
-              <Send className="w-3.5 h-3.5" />
-              <span>送信センターへ</span>
-              <ArrowRight className="w-3.5 h-3.5" />
-            </button>
-          </div>
+        <div className="flex flex-wrap items-center gap-2">
+          <button
+            onClick={() => {
+              void loadCounts();
+              void loadSubmissions();
+            }}
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md bg-white hover:bg-slate-50 text-xs font-medium text-slate-700 border border-slate-200 transition cursor-pointer"
+            title="最新の受信状態を再読み込み"
+          >
+            <RefreshCw className="w-3.5 h-3.5 text-slate-400" />
+            <span>更新</span>
+          </button>
+          <button
+            onClick={() => onNavigateTab('leads')}
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md bg-white hover:bg-slate-50 text-xs font-medium text-slate-700 border border-slate-200 transition cursor-pointer"
+          >
+            <span>反響リード</span>
+            <ArrowRight className="w-3.5 h-3.5 text-slate-400" />
+          </button>
+          <button
+            onClick={() => onNavigateTab('customers')}
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md bg-white hover:bg-slate-50 text-xs font-medium text-slate-700 border border-slate-200 transition cursor-pointer"
+          >
+            <span>契約顧客台帳</span>
+            <ArrowRight className="w-3.5 h-3.5 text-slate-400" />
+          </button>
+          <button
+            onClick={() => onNavigateTab('communication_send')}
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md bg-purple-600 hover:bg-purple-700 text-xs font-medium text-white transition cursor-pointer"
+          >
+            <Send className="w-3.5 h-3.5" />
+            <span>送信センター</span>
+            <ArrowRight className="w-3.5 h-3.5" />
+          </button>
         </div>
+      </div>
 
-        {/* ── Channel Quick Overview Cards ── */}
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mt-5">
+      {/* ── Channel Quick Overview Cards ── */}
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
           {/* Channel 1: Form / Diagnoses */}
           <button
             onClick={() => handleSelectChannel('forms')}
@@ -485,7 +469,6 @@ export const UnifiedInboxView: React.FC<UnifiedInboxViewProps> = ({
             </p>
           </button>
         </div>
-      </section>
 
       {/* ── Channel Navigation Tabs ── */}
       <div className="flex flex-wrap items-center gap-2 border-b border-slate-200 pb-2">

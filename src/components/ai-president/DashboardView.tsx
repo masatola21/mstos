@@ -166,46 +166,34 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
 
   return (
     <div className="space-y-6 pb-12 animate-fade-in">
-      {/* 1. Top Header Banner: AI President & Top Priority Goal */}
-      <div className="bg-gradient-to-r from-purple-50/80 via-white to-slate-50 border border-purple-200/80 rounded-2xl p-6 shadow-xs space-y-5">
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-          <div className="space-y-1">
-            <div className="inline-flex items-center gap-2 px-2.5 py-0.5 rounded-full bg-purple-100 text-purple-800 border border-purple-200 text-xs font-semibold">
-              <Sparkles className="w-3.5 h-3.5 text-purple-600" />
-              <span>AI経営室・統合コックピット</span>
-            </div>
-            <h1 className="text-xl sm:text-2xl font-bold text-slate-900 tracking-tight flex items-center gap-2">
-              経営ダッシュボード
-            </h1>
-            <p className="text-xs sm:text-sm text-slate-600">
-              全社最優先目標の進捗、確定業績、プロダクト進捗、直近タスクを一覧で集中把握
-            </p>
-          </div>
+      {/* 1. Header */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-2">
+        <h1 className="text-[19px] font-bold text-slate-800 tracking-tight">経営状況・全社目標</h1>
 
-          <div className="flex items-center gap-2.5 flex-wrap">
+        <div className="flex items-center gap-2 flex-wrap">
+          <button
+            type="button"
+            onClick={() => onNavigateTab('chat')}
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-md bg-purple-600 hover:bg-purple-700 text-white text-xs font-medium transition-all cursor-pointer"
+          >
+            <MessageSquare className="w-3.5 h-3.5" />
+            <span>AI社長に相談</span>
+          </button>
+          {onNavigateToTab && (
             <button
               type="button"
-              onClick={() => onNavigateTab('chat')}
-              className="flex items-center gap-1.5 px-4 py-2 rounded-xl bg-purple-600 hover:bg-purple-700 text-white text-xs font-bold transition-all shadow-xs cursor-pointer"
+              onClick={() => onNavigateToTab('mst_dashboard')}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-md bg-white hover:bg-slate-50 text-slate-700 border border-slate-200 text-xs font-medium transition-all cursor-pointer"
             >
-              <MessageSquare className="w-3.5 h-3.5" />
-              <span>AI社長に指示・相談</span>
+              <span>営業・反響ダッシュボード</span>
+              <ArrowRight className="w-3.5 h-3.5 text-slate-400" />
             </button>
-            {onNavigateToTab && (
-              <button
-                type="button"
-                onClick={() => onNavigateToTab('mst_dashboard')}
-                className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-white hover:bg-slate-50 text-slate-700 border border-slate-200 text-xs font-semibold transition-all shadow-xs cursor-pointer"
-              >
-                <span>営業・反響ダッシュボード</span>
-                <ArrowRight className="w-3.5 h-3.5 text-slate-400" />
-              </button>
-            )}
-          </div>
+          )}
         </div>
+      </div>
 
-        {/* Top Priority Goal Box */}
-        <div className="p-4 rounded-xl bg-white border border-purple-200 shadow-2xs">
+      {/* Top Priority Goal Box */}
+      <div className="p-3.5 rounded-lg bg-white border border-slate-200 shadow-2xs">
           <div className="flex items-center justify-between mb-1.5">
             <span className="text-[11px] font-bold text-purple-700 uppercase tracking-wider flex items-center gap-1.5">
               <Target className="w-3.5 h-3.5 text-purple-600" />
@@ -277,7 +265,6 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
             />
           )}
         </div>
-      </div>
 
       {/* 2. Top Alert Banner: Pending Approvals (Prominent when needed) */}
       {pendingApprovals.length > 0 && (

@@ -89,26 +89,9 @@ export const CategoryHubView: React.FC<CategoryHubViewProps> = ({
 
   return (
     <div className="space-y-6">
-      {/* Top Banner */}
-      <div className="bg-white border border-slate-200 p-5 rounded-2xl shadow-sm flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-        <div>
-          <div className="flex items-center gap-2">
-            <h2 className="text-xl font-bold text-slate-900 tracking-tight flex items-center gap-2">
-              <Layers className="w-6 h-6 text-purple-600" />
-              業務機能カテゴリー管理
-            </h2>
-            <span className="text-xs px-2.5 py-0.5 rounded-full bg-purple-50 text-purple-700 border border-purple-200 font-semibold">
-              マトリクス横軸ビュー
-            </span>
-            <span className="text-xs px-2 py-0.5 rounded-full bg-slate-100 text-slate-600 border border-slate-200 font-medium hidden sm:inline-flex items-center gap-1">
-              <GripVertical className="w-3 h-3 text-slate-400" />
-              <span>ドラッグで並び替え可能</span>
-            </span>
-          </div>
-          <p className="text-xs text-slate-500 mt-1">
-            経営・開発・マーケティング・顧客サービス（契約・請求）の職能別ステータスを一括統括
-          </p>
-        </div>
+      {/* Top Header */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-2">
+        <h1 className="text-[19px] font-bold text-slate-800 tracking-tight">業務機能カテゴリー管理</h1>
 
         {/* Global Mini Stats */}
         <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">

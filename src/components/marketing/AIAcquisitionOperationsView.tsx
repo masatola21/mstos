@@ -2,7 +2,7 @@ import React, { useEffect, useMemo, useRef, useState } from 'react';
 import type { TaskItem } from '../../types';
 import { getSupabase } from '../../lib/supabaseClient';
 import { InlineDeleteButton } from '../InlineDeleteButton';
-import { AlertCircle, ArrowRight, BarChart3, Megaphone, Plus, Save, Sparkles, Trash2 } from 'lucide-react';
+import { AlertCircle, ArrowRight, BarChart3, Megaphone, Plus, RefreshCw, Save, Sparkles, Trash2 } from 'lucide-react';
 import { OwnMediaWorkspace } from './OwnMediaWorkspace';
 import { MarketingAssetLibrary } from './MarketingAssetLibrary';
 import { MarketingQuickLinksHub } from './MarketingQuickLinksHub';
@@ -593,23 +593,16 @@ export const AIAcquisitionOperationsView: React.FC<{
 
   return (
     <main className="space-y-5 text-slate-800">
-      <header className="flex flex-wrap items-start justify-between gap-3 rounded-2xl border border-slate-200 bg-white p-5 shadow-xs">
-        <div>
-          <div className="flex items-center gap-2">
-            <div className="rounded-lg bg-purple-50 p-2 text-purple-700 border border-purple-200">
-              <Megaphone className="h-5 w-5" />
-            </div>
-            <h1 className="text-xl font-bold text-slate-900">AI集客運用</h1>
-          </div>
-          <p className="mt-1 text-sm text-slate-500">集客導線（自社メディア・LP・公式URL）、営業資料アセット、流入成果を一元管理する管制塔です。</p>
-        </div>
+      <div className="flex items-center justify-between gap-3 mb-2">
+        <h1 className="text-[19px] font-bold text-slate-800 tracking-tight">集客戦略・SNS・メディア</h1>
         <button
           onClick={() => void load()}
-          className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50 shadow-xs transition"
+          className="flex items-center gap-1.5 rounded-md border border-slate-200 bg-white px-3 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-50 transition cursor-pointer"
         >
-          更新
+          <RefreshCw className="w-3.5 h-3.5" />
+          <span>更新</span>
         </button>
-      </header>
+      </div>
 
       <nav className="flex gap-1.5 overflow-x-auto rounded-xl border border-slate-200 bg-slate-100 p-1.5" aria-label="AI集客運用メニュー">
         {tabs.map((tab) => (

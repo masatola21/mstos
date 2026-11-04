@@ -10,7 +10,8 @@ import {
   CheckCircle2,
   AlertCircle,
   RefreshCw,
-  ExternalLink
+  ExternalLink,
+  Inbox
 } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import { UnifiedNavTab } from '../UnifiedNavbar';
@@ -47,41 +48,43 @@ export const AppHeader: React.FC<AppHeaderProps> = ({
       case 'inflow_dashboard':
         return { category: '経営全般', page: 'ダッシュボード' };
       case 'ai_acquisition':
-        return { category: 'マーケティング', page: '集客戦略・SNS・メディア' };
+        return { category: '集客・営業開拓', page: '集客戦略・SNS・メディア' };
       case 'marketing_automation':
-        return { category: 'マーケティング', page: 'LINE・メール自動配信' };
+        return { category: '集客・営業開拓', page: 'LINE・メール自動配信（営業メール5段階 & シナリオ）' };
       case 'mst_diagnoses':
-        return { category: 'マーケティング', page: '受付フォーム・診断設計' };
+        return { category: '集客・営業開拓', page: '受付フォーム・診断設計（反響獲得・フック）' };
       case 'prospects':
-        return { category: '営業・顧客管理', page: '見込み企業（AI検索）' };
+        return { category: '集客・営業開拓', page: '見込み企業（AI検索・開拓）' };
+      case 'contacts':
+        return { category: '集客・営業開拓', page: '見込み企業・友だちリスト（AI調査 & LINE）' };
       case 'leads':
         return { category: '営業・顧客管理', page: '反響リード管理' };
       case 'deals':
         return { category: '営業・顧客管理', page: '商談パイプライン' };
       case 'companies':
         return { category: '営業・顧客管理', page: '会社台帳（法人マスタ）' };
-      case 'contacts':
-        return { category: '営業・顧客管理', page: '連絡先・LINE友だち' };
       case 'customers':
         return { category: '営業・顧客管理', page: '契約顧客台帳' };
       case 'custom_lists':
         return { category: '営業・顧客管理', page: '配信対象セグメント' };
       case 'document_templates':
-        return { category: '営業・顧客管理', page: '重要書類・見積・契約' };
+        return { category: '営業・顧客管理', page: '重要書類・見積・契約（見積書・契約書作成）' };
+      case 'customer_operations':
+        return { category: '営業・顧客管理', page: '契約・請求・顧問支援（月次請求・支援進捗）' };
+      case 'products':
+        return { category: '営業・顧客管理', page: '販売商品・料金台帳（見積・請求用）' };
       case 'inbox_hub':
-        return { category: 'コミュニケーション', page: '統合受信トレイ' };
+        return { category: 'デイリー業務', page: '統合受信トレイ' };
       case 'communication_send':
       case 'deal_invitations':
       case 'customer_meeting_invitations':
-        return { category: 'コミュニケーション', page: '送信センター' };
+        return { category: 'デイリー業務', page: '送信センター' };
       case 'unified_calendar':
-        return { category: '全社共通', page: '予定カレンダー（Google連携）' };
+        return { category: 'デイリー業務', page: '予定カレンダー（Google同期・全社日程）' };
       case 'product_hub':
-        return { category: '事業運営', page: '商品マスタ（商品・サービス設計）' };
-      case 'customer_operations':
-        return { category: '事業運営', page: '契約・請求・顧問支援' };
+        return { category: 'AI経営室', page: '新規商品企画・プロジェクト開発（AI共創）' };
       case 'category_hub':
-        return { category: '事業運営', page: '事業マトリクス' };
+        return { category: 'AI経営室', page: '事業マトリクス' };
       case 'ai_chat':
         return { category: 'AI経営室', page: 'AI社長室・対話' };
       case 'ai_tasks':
@@ -102,22 +105,22 @@ export const AppHeader: React.FC<AppHeaderProps> = ({
   const breadcrumbs = getBreadcrumbs();
 
   return (
-    <header className="sticky top-0 z-30 h-16 bg-white/95 backdrop-blur-xs border-b border-slate-200 px-4 sm:px-6 flex items-center justify-between">
+    <header className="sticky top-0 z-30 h-14 bg-white/95 backdrop-blur-xs border-b border-slate-200 px-4 sm:px-6 flex items-center justify-between">
       {/* Left: Mobile Toggle & Breadcrumbs */}
       <div className="flex items-center gap-3 min-w-0">
         <button
           type="button"
           onClick={onOpenMobileSidebar}
-          className="p-2 -ml-2 rounded-lg text-slate-500 hover:text-slate-800 hover:bg-slate-100 lg:hidden cursor-pointer"
+          className="p-1.5 -ml-1 rounded-md text-slate-500 hover:text-slate-800 hover:bg-slate-100 lg:hidden cursor-pointer"
           aria-label="メニューを開く"
         >
           <Menu className="w-5 h-5" />
         </button>
 
         <div className="flex items-center gap-1.5 text-xs text-slate-500 truncate">
-          <span className="font-semibold text-slate-400 hidden sm:inline">{breadcrumbs.category}</span>
+          <span className="font-medium text-slate-400 hidden sm:inline">{breadcrumbs.category}</span>
           <span className="text-slate-300 hidden sm:inline">/</span>
-          <h1 className="font-bold text-slate-800 text-sm sm:text-base truncate">{breadcrumbs.page}</h1>
+          <span className="font-semibold text-slate-800 text-sm truncate">{breadcrumbs.page}</span>
         </div>
       </div>
 
@@ -140,6 +143,21 @@ export const AppHeader: React.FC<AppHeaderProps> = ({
 
       {/* Right Controls */}
       <div className="flex items-center gap-2 sm:gap-3 shrink-0">
+        {/* Quick Inbox Jump */}
+        <button
+          type="button"
+          onClick={() => onSelectTab('inbox_hub')}
+          className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-medium border transition-colors cursor-pointer ${
+            currentTab === 'inbox_hub'
+              ? 'bg-purple-50 text-purple-700 border-purple-200 font-bold'
+              : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-50'
+          }`}
+          title="全チャネルの未対応メッセージ・反響を確認"
+        >
+          <Inbox className="w-3.5 h-3.5 text-purple-600" />
+          <span className="hidden sm:inline">受信トレイ</span>
+        </button>
+
         {/* Quick Calendar Jump */}
         <button
           type="button"

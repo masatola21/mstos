@@ -237,13 +237,12 @@ export const UnifiedNavbar: React.FC<UnifiedNavbarProps> = ({
         <nav className="border-t border-slate-800/70 py-2 text-xs font-medium">
           {activeSection === 'mst' && (() => {
             const groups = [
-              { id: 'dashboard', label: 'ダッシュボード', items: (['mst_dashboard'] as UnifiedNavTab[]) },
-              { id: 'communications', label: '対話・送受信', items: (['inbox_hub', 'communication_send'] as UnifiedNavTab[]) },
+              { id: 'dashboard', label: '経営・日程', items: (['mst_dashboard', 'unified_calendar'] as UnifiedNavTab[]) },
+              { id: 'communications', label: '対話・送受信', items: (['inbox_hub', 'communication_send', 'deal_invitations', 'customer_meeting_invitations'] as UnifiedNavTab[]) },
               { id: 'acquisition', label: '集客・開拓', items: (['ai_acquisition', 'marketing_automation', 'prospects', 'contacts'] as UnifiedNavTab[]) },
               { id: 'pipeline', label: '反響・商談', items: (['leads', 'deals', 'mst_diagnoses'] as UnifiedNavTab[]) },
               { id: 'contracts', label: '書類・契約', items: (['document_templates'] as UnifiedNavTab[]) },
               { id: 'customers', label: '顧客・支援', items: (['customers', 'customer_operations', 'products', 'companies'] as UnifiedNavTab[]) },
-              { id: 'calendar', label: '予定カレンダー', items: (['unified_calendar', 'deal_invitations', 'customer_meeting_invitations'] as UnifiedNavTab[]) },
             ];
             const activeGroup = groups.find((group) => group.items.includes(currentTab)) || groups[0];
             const labelFor = (tab: UnifiedNavTab) => {

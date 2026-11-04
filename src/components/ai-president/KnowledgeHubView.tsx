@@ -142,15 +142,9 @@ export const KnowledgeHubView: React.FC<KnowledgeHubViewProps> = ({ items, onSav
 
   return (
     <div className="max-w-6xl mx-auto px-4 py-6 space-y-5">
-      <div className="rounded-2xl border border-slate-200 bg-white p-6 flex items-center justify-between gap-4 shadow-sm">
-        <div className="flex items-center gap-3">
-          <div className="w-12 h-12 rounded-2xl bg-purple-50 text-purple-600 border border-purple-200 flex items-center justify-center"><BookOpen /></div>
-          <div>
-            <h1 className="text-lg font-bold text-slate-900">事業ナレッジ・成果物</h1>
-            <p className="text-xs text-slate-500 mt-1">MDの方針書、商品情報、決定事項、調査結果などを保存。関連資料はAIへの依頼時に必要な分だけ参照します。</p>
-          </div>
-        </div>
-        <button onClick={startNew} className="shrink-0 rounded-xl bg-purple-600 px-3.5 py-2 text-xs font-semibold text-white flex items-center gap-2 hover:bg-purple-700 shadow-sm transition cursor-pointer"><FilePlus2 className="w-4 h-4" />資料を追加</button>
+      <div className="flex items-center justify-between gap-3 mb-2">
+        <h1 className="text-[19px] font-bold text-slate-800 tracking-tight">事業ナレッジ・成果物</h1>
+        <button onClick={startNew} className="shrink-0 rounded-md bg-purple-600 px-3 py-1.5 text-xs font-medium text-white flex items-center gap-1.5 hover:bg-purple-700 transition cursor-pointer"><FilePlus2 className="w-3.5 h-3.5" />資料を追加</button>
       </div>
 
       {editing && (

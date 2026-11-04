@@ -1095,22 +1095,11 @@ export const DocumentTemplateView: React.FC<DocumentTemplateViewProps> = ({
 
   return (
     <div className="space-y-6">
-      {/* Header Banner */}
-      <div className="bg-white border border-slate-200 rounded-2xl p-6 shadow-xs flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
-        <div>
-          <div className="flex items-center gap-2">
-            <span className="px-3 py-1 rounded-full bg-purple-50 text-purple-700 text-xs font-bold border border-purple-200">
-              AIを使わない高精度自動入力
-            </span>
-            <span className="text-xs text-slate-500 font-medium">テンプレートに顧客・商談・自社データを自動反映</span>
-          </div>
-          <h1 className="text-2xl font-bold text-slate-900 tracking-tight mt-1.5">書類テンプレート・PDF出力</h1>
-          <p className="text-sm text-slate-600 mt-1 max-w-2xl leading-relaxed">
-            契約書・提案書・見積書・請求書・診断レポートのひな形に最新データを自動反映。内容を確認・編集し、PDF印刷や送信センター経由の送付が可能です。
-          </p>
-        </div>
+      {/* Header */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-2">
+        <h1 className="text-[19px] font-bold text-slate-800 tracking-tight">重要書類・見積・契約</h1>
 
-        <div className="flex flex-wrap items-center gap-2.5">
+        <div className="flex flex-wrap items-center gap-2">
           {(savedDocIds[currentTemplate.id] || autosavedDocumentIds.current[currentTemplate.id]) && (
             <>
               <button
@@ -1123,22 +1112,22 @@ export const DocumentTemplateView: React.FC<DocumentTemplateViewProps> = ({
                   setCopiedApplyUrl(true);
                   setTimeout(() => setCopiedApplyUrl(false), 2500);
                 }}
-                className="px-3.5 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-semibold text-xs flex items-center gap-1.5 shadow-xs transition-all cursor-pointer"
+                className="px-3 py-1.5 rounded-md bg-emerald-600 hover:bg-emerald-700 text-white font-medium text-xs flex items-center gap-1.5 transition-all cursor-pointer"
                 title="顧客に送信するワンタップ申込用URLをコピーします"
               >
-                <Link2 className="w-4 h-4" />
-                <span>{copiedApplyUrl ? '申込URLをコピーしました！' : 'Web申込URLをコピー'}</span>
+                <Link2 className="w-3.5 h-3.5" />
+                <span>{copiedApplyUrl ? 'コピー完了' : 'Web申込URL'}</span>
               </button>
 
               <a
                 href={`/apply/${savedDocIds[currentTemplate.id] || autosavedDocumentIds.current[currentTemplate.id]}`}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="px-3 py-2.5 rounded-xl border border-slate-200 bg-slate-50 hover:bg-slate-100 text-slate-700 font-semibold text-xs flex items-center gap-1.5 transition-all shadow-2xs"
+                className="px-3 py-1.5 rounded-md border border-slate-200 bg-white hover:bg-slate-50 text-slate-700 font-medium text-xs flex items-center gap-1.5 transition-all"
                 title="顧客向けWeb申込画面を別タブでプレビュー確認します"
               >
                 <ExternalLink className="w-3.5 h-3.5 text-slate-500" />
-                <span className="hidden sm:inline">申込画面を開く</span>
+                <span className="hidden sm:inline">申込プレビュー</span>
               </a>
             </>
           )}
@@ -1147,30 +1136,30 @@ export const DocumentTemplateView: React.FC<DocumentTemplateViewProps> = ({
             type="button"
             onClick={handleManualSave}
             disabled={isSavingDocument}
-            className="px-4 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white font-semibold text-xs flex items-center gap-2 shadow-xs transition-all cursor-pointer"
+            className="px-3 py-1.5 rounded-md bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white font-medium text-xs flex items-center gap-1.5 transition-all cursor-pointer"
             title="現在の内容で確認待ち書類として保存します"
           >
-            <Save className="w-4 h-4" />
-            <span>{isSavingDocument ? '保存中…' : (savedDocIds[currentTemplate.id] || autosavedDocumentIds.current[currentTemplate.id]) ? '書類を上書き保存' : '確認待ちとして保存'}</span>
+            <Save className="w-3.5 h-3.5" />
+            <span>{isSavingDocument ? '保存中…' : (savedDocIds[currentTemplate.id] || autosavedDocumentIds.current[currentTemplate.id]) ? '上書き保存' : '確認待ち保存'}</span>
           </button>
 
           <button
             type="button"
             onClick={handleSendViaSendCenter}
             disabled={isSavingDocument}
-            className="px-4 py-2.5 rounded-xl bg-purple-600 hover:bg-purple-700 text-white font-semibold text-xs flex items-center gap-2 shadow-xs shadow-purple-600/20 transition-all cursor-pointer"
+            className="px-3 py-1.5 rounded-md bg-purple-600 hover:bg-purple-700 text-white font-medium text-xs flex items-center gap-1.5 transition-all cursor-pointer"
             title="仕上げた書類を送信センター（LINE・メール送信）へ連携して送付します"
           >
-            <Send className="w-4 h-4" />
+            <Send className="w-3.5 h-3.5" />
             <span>送信センターで送る</span>
           </button>
 
           <button
             onClick={handlePrintPdf}
-            className="px-4 py-2.5 rounded-xl bg-white hover:bg-slate-50 text-slate-700 border border-slate-200 font-semibold text-xs flex items-center gap-2 transition-all cursor-pointer shadow-2xs"
+            className="px-3 py-1.5 rounded-md bg-white hover:bg-slate-50 text-slate-700 border border-slate-200 font-medium text-xs flex items-center gap-1.5 transition-all cursor-pointer"
           >
-            <Printer className="w-4 h-4 text-slate-500" />
-            <span>PDF印刷・プレビュー</span>
+            <Printer className="w-3.5 h-3.5 text-slate-500" />
+            <span>PDF出力</span>
           </button>
         </div>
       </div>

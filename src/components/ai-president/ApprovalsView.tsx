@@ -86,18 +86,8 @@ export const ApprovalsView: React.FC<ApprovalsViewProps> = ({
   return (
     <div className="max-w-6xl mx-auto px-4 sm:px-6 py-6 space-y-6">
       {!embedded && (
-        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 p-5 rounded-2xl bg-white border border-slate-200 shadow-xs">
-          <div className="flex items-center gap-3">
-            <div className="w-11 h-11 rounded-xl bg-amber-50 border border-amber-200 flex items-center justify-center text-amber-600">
-              <ShieldAlert className="w-5 h-5" />
-            </div>
-            <div>
-              <h1 className="text-lg font-bold text-slate-900">承認・活動履歴</h1>
-              <p className="text-xs text-slate-500 mt-0.5">
-                人間の判断・意思決定が必要な承認待ち項目と、アプリ内で実際に起きた操作の監査ログ
-              </p>
-            </div>
-          </div>
+        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 mb-2">
+          <h1 className="text-[19px] font-bold text-slate-800 tracking-tight">承認・活動履歴</h1>
 
           <div className="flex items-center bg-slate-100 p-1 rounded-xl border border-slate-200">
             <button

@@ -384,17 +384,14 @@ export const TableManager: React.FC<TableManagerProps> = ({
         </div>
       )}
       {/* Table Selector Sub-Bar */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-white p-5 rounded-2xl border border-slate-200 shadow-xs">
-        <div>
-          <div className="flex items-center gap-2">
-            <h1 className="text-xl sm:text-2xl font-bold text-slate-900 tracking-tight">
-              {config.label}
-            </h1>
-            <span className="text-xs px-2.5 py-0.5 rounded-full bg-slate-100 border border-slate-200 text-slate-600 font-mono">
-              {config.name}
-            </span>
-          </div>
-          <p className="text-xs text-slate-500 mt-1">{config.description}</p>
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-2">
+        <div className="flex items-center gap-2">
+          <h1 className="text-[19px] font-bold text-slate-800 tracking-tight">
+            {config.label}
+          </h1>
+          <span className="text-xs px-2 py-0.5 rounded bg-slate-100 border border-slate-200 text-slate-500 font-mono">
+            {config.name}
+          </span>
         </div>
 
         {/* Action Button: 新規登録 */}
@@ -402,7 +399,7 @@ export const TableManager: React.FC<TableManagerProps> = ({
           {currentTable === 'prospects' && (
             <button
               onClick={() => setIsProspectImportOpen(true)}
-              className="px-3 py-2 rounded-lg font-semibold text-xs bg-purple-50 hover:bg-purple-100 text-purple-700 border border-purple-200 flex items-center gap-2 transition-colors cursor-pointer shadow-xs"
+              className="px-3 py-1.5 rounded-md font-medium text-xs bg-purple-50 hover:bg-purple-100 text-purple-700 border border-purple-200 flex items-center gap-1.5 transition-colors cursor-pointer"
             >
               <span>見込み企業調査</span>
             </button>
@@ -410,17 +407,17 @@ export const TableManager: React.FC<TableManagerProps> = ({
           <button
             onClick={loadData}
             disabled={loading}
-            className="p-2 rounded-lg text-slate-500 hover:text-slate-800 bg-white hover:bg-slate-50 border border-slate-200 transition-colors shadow-xs cursor-pointer"
+            className="p-1.5 rounded-md text-slate-500 hover:text-slate-800 bg-white hover:bg-slate-50 border border-slate-200 transition-colors cursor-pointer"
             title="再読み込み"
           >
-            <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
+            <RefreshCw className={`w-3.5 h-3.5 ${loading ? 'animate-spin' : ''}`} />
           </button>
           <button
             onClick={handleOpenCreate}
-            className="px-4 py-2 rounded-lg font-semibold text-xs bg-purple-600 hover:bg-purple-700 text-white shadow-xs flex items-center gap-2 transition-colors cursor-pointer"
+            className="px-3 py-1.5 rounded-md font-medium text-xs bg-purple-600 hover:bg-purple-700 text-white flex items-center gap-1.5 transition-colors cursor-pointer"
           >
-            <Plus className="w-4 h-4" />
-            <span>{config.label}を新規登録</span>
+            <Plus className="w-3.5 h-3.5" />
+            <span>新規登録</span>
           </button>
         </div>
       </div>
