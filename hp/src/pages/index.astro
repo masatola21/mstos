@@ -10,8 +10,8 @@ const coreServices = [
     num: '01',
     title: '経営戦略・利益改善顧問',
     badge: '主軸サービス',
-    image: '/images/consulting-meeting.jpg',
-    imageAlt: '経営戦略・利益改善のミーティング・課題棚卸し風景',
+    image: '/images/service-strategy.jpg',
+    imageAlt: '経営戦略・利益構造分析と意思決定支援の顧問セッション風景',
     desc: '経営者の右腕として、利益構造の改善・戦略立案といった経営面から、業務フローの属人化解消・効率化といった現場改善まで、会社全体を見渡して伴走します。',
     points: ['利益構造・採算の可視化と改善', '業務の属人化解消・標準化', '中長期の経営戦略・判断支援'],
     href: '/services/strategy',
@@ -20,8 +20,8 @@ const coreServices = [
     num: '02',
     title: '業務改善・IT・DX・AI顧問',
     badge: '主軸サービス',
-    image: '/images/system-blueprint.jpg',
-    imageAlt: 'パソコン画面での業務フロー設計図・IT/AI活用設計',
+    image: '/images/service-it-dx.jpg',
+    imageAlt: '現場のIT・DX・生成AIワークフロー設計と運用定着支援風景',
     desc: '業務プロセスの分析、属人化の解消、業務効率化、身の丈に合ったIT・DX・生成AI活用の設計と継続支援を行います。',
     points: ['業務フロー可視化・標準化', '現場の属人化ボトルネック解消', '身の丈に合ったIT・AI活用設計'],
     href: '/services/it-dx',
@@ -34,6 +34,8 @@ const implementationServices = [
     num: '03',
     title: 'システム構築・業務自動化',
     badge: '主要サービス（実装）',
+    image: '/images/service-system.jpg',
+    imageAlt: 'GAS・専用Webアプリ・API連携による業務自動化システムの開発風景',
     desc: '業務フローや管理体制に合わせ、Google Workspace/GAS、専用Webアプリ、API連携により、手作業の削減や業務ミスの防止につながる仕組みを構築します。',
     href: '/services/system',
   },
@@ -41,6 +43,8 @@ const implementationServices = [
     num: '04',
     title: 'マーケティング戦略・集客導線構築',
     badge: '主要サービス（実装）',
+    image: '/images/service-marketing.jpg',
+    imageAlt: 'マルチチャネル集客・公式LINE・成約ファネルの導線設計風景',
     desc: 'ターゲット、商品、販売戦略に合わせて、認知から問い合わせ・成約までの導線を設計・構築。紹介頼みを脱却する集客基盤をつくります。',
     href: '/services/marketing',
   },
@@ -332,31 +336,31 @@ const steps = [
         </p>
       </div>
 
-      <!-- 打合せ風景 ＆ パソコン画面での仕組み化・設計図の2大実践ビジュアル -->
+      <!-- 経営の右腕（戦略設計） ＆ 仕組みの実装（実務定着）の2大提供価値ビジュアル -->
       <div class="grid grid-cols-1 md:grid-cols-2 gap-8 mb-12">
         <div class="bg-white rounded-2xl border border-sand-300 overflow-hidden shadow-sm hover:shadow-md transition group">
           <div class="relative h-48 sm:h-56 overflow-hidden">
             <img
               src="/images/consulting-meeting.jpg"
-              alt="経営戦略・課題棚卸しミーティング風景"
+              alt="経営戦略の策定と課題棚卸しミーティング"
               class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
             />
-            <div class="absolute inset-0 bg-gradient-to-t from-slate-950/80 via-transparent to-transparent"></div>
+            <div class="absolute inset-0 bg-gradient-to-t from-slate-950/85 via-slate-950/20 to-transparent"></div>
             <div class="absolute bottom-3 left-4 right-4">
-              <span class="text-[10px] font-bold text-brand-300 uppercase tracking-widest bg-brand-950/80 px-2.5 py-1 rounded backdrop-blur-sm border border-brand-500/30">
-                STRATEGIC CONSULTING
+              <span class="text-[10px] font-bold text-brand-300 uppercase tracking-widest bg-brand-950/90 px-2.5 py-1 rounded backdrop-blur-sm border border-brand-500/30">
+                STRATEGIC ARCHITECTURE
               </span>
               <h3 class="text-base sm:text-lg font-bold font-serif text-white mt-1">
-                【助言・設計】課題棚卸し・戦略ミーティング
+                【経営の右腕】利益構造の可視化と改善ロードマップ策定
               </h3>
             </div>
           </div>
           <div class="p-5 sm:p-6 space-y-2">
             <p class="text-xs sm:text-sm text-gray-600 leading-relaxed font-light">
-              数字と業務フローを徹底的に棚卸し。手元資金が残らない原因や、社長・現場リーダーの属人化ボトルネックを特定し、貴社に最適な改善ロードマップを設計します。
+              決算書や現場の業務フローを徹底的に棚卸し。「売上はあるのに手元資金が残らない真因」や「属人化ボトルネック」を抽出し、数字に直結する現実的な改善計画を共に描きます。
             </p>
             <div class="text-[11px] text-brand-700 font-semibold pt-1">
-              ✓ 採算の可視化　✓ 属人化リスクの解消　✓ 継続的な月次伴走
+              ✓ 案件・部門別採算の明確化　✓ 社長の現場依存からの脱却　✓ 毎月の定例伴走
             </div>
           </div>
         </div>
@@ -365,25 +369,25 @@ const steps = [
           <div class="relative h-48 sm:h-56 overflow-hidden">
             <img
               src="/images/system-blueprint.jpg"
-              alt="パソコン画面での業務フロー設計図・システム構築"
+              alt="パソコン画面での業務フロー設計図とシステム自動化の実装"
               class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
             />
-            <div class="absolute inset-0 bg-gradient-to-t from-slate-950/80 via-transparent to-transparent"></div>
+            <div class="absolute inset-0 bg-gradient-to-t from-slate-950/85 via-slate-950/20 to-transparent"></div>
             <div class="absolute bottom-3 left-4 right-4">
-              <span class="text-[10px] font-bold text-emerald-300 uppercase tracking-widest bg-slate-950/80 px-2.5 py-1 rounded backdrop-blur-sm border border-emerald-500/30">
-                SYSTEM IMPLEMENTATION
+              <span class="text-[10px] font-bold text-emerald-300 uppercase tracking-widest bg-slate-950/90 px-2.5 py-1 rounded backdrop-blur-sm border border-emerald-500/30">
+                SYSTEM & AUTOMATION
               </span>
               <h3 class="text-base sm:text-lg font-bold font-serif text-white mt-1">
-                【現場実装】パソコン画面での仕組み化・システム設計図
+                【仕組みの実装】現場が自走する業務自動化・システム設計
               </h3>
             </div>
           </div>
           <div class="p-5 sm:p-6 space-y-2">
             <p class="text-xs sm:text-sm text-gray-600 leading-relaxed font-light">
-              助言だけで終わらせず、GAS・専用Webアプリ・API連携・成約LPなど、現場で手作業やミスを減らす「動く仕組み」を自社で具体的に構築します。
+              助言にとどまらず、GAS・Webアプリ・API連携など、手作業・二重転記・ミスを根本から無くす「現場で確実に動く仕組み」を直接構築。人に依存しない強い体制を作ります。
             </p>
             <div class="text-[11px] text-brand-700 font-semibold pt-1">
-              ✓ 手作業・転記の自動化　✓ Google Workspace連携　✓ 安定集客基盤
+              ✓ 手作業・転記の自動化　✓ 業務フローの標準化　✓ 身の丈に合ったIT・AI基盤
             </div>
           </div>
         </div>
@@ -586,30 +590,48 @@ const steps = [
       <div class="grid grid-cols-1 md:grid-cols-2 gap-8">
         {implementationServices.map((s) => (
           <div class="bg-white rounded-2xl border border-sand-300 p-8 flex flex-col justify-between hover:border-brand-500 hover:shadow-lg transition-all group relative overflow-hidden">
-            <div class="absolute left-0 top-0 bottom-0 w-1.5 bg-amber-400 rounded-l-2xl"></div>
-            <div class="space-y-3">
-              <div class="flex items-center justify-between">
-                <span class="text-xs font-bold text-brand-700 bg-brand-50 px-3 py-1 rounded-full border border-brand-200">
-                  {s.badge}
-                </span>
-                <span class="text-2xl font-bold font-serif text-gray-300 group-hover:text-brand-500 transition-colors">
-                  {s.num}
-                </span>
+            <div class="absolute left-0 top-0 bottom-0 w-1.5 bg-amber-500 rounded-l-2xl"></div>
+            <div class="space-y-4">
+              <!-- 実装サービスビジュアルイメージ -->
+              <div class="relative h-40 sm:h-44 rounded-xl overflow-hidden border border-sand-200">
+                <img
+                  src={s.image}
+                  alt={s.imageAlt}
+                  class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
+                />
+                <div class="absolute inset-0 bg-gradient-to-t from-slate-950/75 via-transparent to-transparent"></div>
+                <div class="absolute top-3 left-3">
+                  <span class="text-xs font-bold text-slate-800 bg-white/95 backdrop-blur-sm px-3 py-1 rounded-full shadow-sm border border-sand-200">
+                    {s.badge}
+                  </span>
+                </div>
+                <div class="absolute bottom-2.5 right-3">
+                  <span class="text-3xl font-bold font-serif text-white/90">
+                    {s.num}
+                  </span>
+                </div>
               </div>
+
               <h3 class="text-xl font-bold font-serif text-slate-900 group-hover:text-brand-600 transition-colors">
                 {s.title}
               </h3>
-              <p class="text-xs text-gray-600 leading-relaxed">
+              <p class="text-xs sm:text-sm text-gray-600 leading-relaxed font-light">
                 {s.desc}
               </p>
             </div>
-            <div class="pt-6 border-t border-sand-200 mt-6">
+            <div class="pt-6 border-t border-sand-200 mt-6 flex items-center justify-between">
               <a
                 href={s.href}
                 class="inline-flex items-center gap-1.5 text-xs font-bold text-brand-700 hover:text-brand-900 group-hover:translate-x-1 transition-all"
               >
                 <span>サービス詳細を見る</span>
                 <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M14 5l7 7m0 0l-7 7m7-7H3"/></svg>
+              </a>
+              <a
+                href={`/contact?service=${s.num === '03' ? 'system' : 'marketing'}`}
+                class="text-xs font-bold text-brand-900 bg-sand-50 px-3 py-1.5 rounded-lg border border-sand-300 hover:bg-brand-50 transition"
+              >
+                相談する
               </a>
             </div>
           </div>
