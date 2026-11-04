@@ -310,60 +310,193 @@ const implementationServices = [
     </div>
   </section>
 
-  <!-- 顧問・構築・保守の違い（提供形態の説明） -->
-  <section class="py-16 bg-sand-100 border-b border-sand-200">
+  <!-- ③ OWNERSONE風：支援形態・料金体系の透明な比較テーブル（プラン比較） -->
+  <section class="py-16 sm:py-24 bg-sand-100 border-b border-sand-200">
     <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-      <div class="text-center max-w-2xl mx-auto mb-10">
+      <div class="text-center max-w-3xl mx-auto mb-12">
         <span class="text-xs font-bold text-brand-700 uppercase tracking-widest bg-brand-50 px-3 py-1 rounded-full border border-brand-200">
-          ENGAGEMENT MODEL
+          PLAN & SCOPE COMPARISON
         </span>
-        <h2 class="text-2xl font-bold font-serif text-slate-900 mt-2">
-          顧問・構築・保守の提供形態の違い
+        <h2 class="text-2xl sm:text-3xl font-bold font-serif text-slate-900 mt-2">
+          支援形態・役割範囲の透明な比較表
         </h2>
-        <p class="text-xs sm:text-sm text-gray-600 mt-1">
-          MSTでは、支援範囲と責任の所在を曖昧にせず、安心してご依頼いただけるよう3つの提供形態を明確に区分しています。
+        <p class="text-xs sm:text-sm text-gray-600 mt-2">
+          MSTでは、助言と実装の責任範囲を曖昧にせず、安心してご依頼いただけるよう3つの提供形態を明確に区分してご提示しています。
         </p>
       </div>
 
-      <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
-        <div class="bg-white p-6 rounded-2xl border border-sand-300 shadow-sm space-y-3">
-          <div class="text-xs font-bold text-brand-700 bg-brand-50 px-2.5 py-1 rounded inline-block">
-            提供形態 ① 顧問
-          </div>
-          <h3 class="text-lg font-bold font-serif text-slate-900">戦略設計・助言・伴走支援</h3>
-          <p class="text-xs text-gray-600 leading-relaxed">
-            課題整理、現状分析、戦略設計、改善方針の策定、助言、進捗確認、継続的な改善支援を行います。
-          </p>
-          <div class="text-xs text-amber-800 bg-amber-50 p-2.5 rounded-lg border border-amber-200">
-            ※ 顧問には設計・助言が含まれますが、システム構築や個別ツール設定などの実装作業は原則として別料金です。
-          </div>
+      <!-- 比較テーブル（PC/スマホ対応） -->
+      <div class="bg-white rounded-2xl border border-sand-300 shadow-sm overflow-hidden max-w-5xl mx-auto">
+        <div class="overflow-x-auto">
+          <table class="w-full text-left border-collapse">
+            <thead>
+              <tr class="bg-brand-950 text-white border-b border-brand-800">
+                <th class="py-4 px-5 text-xs font-bold w-1/4">支援項目・提供内容</th>
+                <th class="py-4 px-5 text-xs font-bold w-1/4 text-center bg-brand-900/90 border-x border-brand-800">
+                  <span class="block text-brand-300 text-[10px]">主軸</span>
+                  ① 顧問支援（戦略・伴走）
+                </th>
+                <th class="py-4 px-5 text-xs font-bold w-1/4 text-center border-r border-brand-800">
+                  <span class="block text-amber-300 text-[10px]">必要に応じて</span>
+                  ② 構築支援（現場実装）
+                </th>
+                <th class="py-4 px-5 text-xs font-bold w-1/4 text-center">
+                  <span class="block text-slate-400 text-[10px]">稼働後</span>
+                  ③ 保守支援（運用維持）
+                </th>
+              </tr>
+            </thead>
+            <tbody class="divide-y divide-sand-200 text-xs text-gray-700">
+              <tr class="hover:bg-sand-50/50">
+                <td class="py-3.5 px-5 font-bold text-slate-900 bg-sand-50/60">主な目的</td>
+                <td class="py-3.5 px-5 text-center font-medium bg-brand-50/30 border-x border-sand-200">経営課題の整理・採算設計</td>
+                <td class="py-3.5 px-5 text-center border-r border-sand-200">動くシステム・自動化の具現化</td>
+                <td class="py-3.5 px-5 text-center">システムの安定稼働・定着</td>
+              </tr>
+              <tr class="hover:bg-sand-50/50">
+                <td class="py-3.5 px-5 font-bold text-slate-900 bg-sand-50/60">課題棚卸し・ボトルネック特定</td>
+                <td class="py-3.5 px-5 text-center bg-brand-50/30 border-x border-sand-200 text-emerald-600 font-bold text-base">● 標準提供</td>
+                <td class="py-3.5 px-5 text-center border-r border-sand-200 text-slate-400">ー</td>
+                <td class="py-3.5 px-5 text-center text-slate-400">ー</td>
+              </tr>
+              <tr class="hover:bg-sand-50/50">
+                <td class="py-3.5 px-5 font-bold text-slate-900 bg-sand-50/60">改善ロードマップ・業務フロー設計</td>
+                <td class="py-3.5 px-5 text-center bg-brand-50/30 border-x border-sand-200 text-emerald-600 font-bold text-base">● 標準提供</td>
+                <td class="py-3.5 px-5 text-center border-r border-sand-200 text-slate-500">仕様確定時</td>
+                <td class="py-3.5 px-5 text-center text-slate-400">ー</td>
+              </tr>
+              <tr class="hover:bg-sand-50/50">
+                <td class="py-3.5 px-5 font-bold text-slate-900 bg-sand-50/60">GAS/API連携/専用Webアプリ開発</td>
+                <td class="py-3.5 px-5 text-center bg-brand-50/30 border-x border-sand-200 text-slate-500 text-[11px]">要件設計・助言まで</td>
+                <td class="py-3.5 px-5 text-center border-r border-sand-200 text-emerald-600 font-bold text-base">● 直接実装</td>
+                <td class="py-3.5 px-5 text-center text-slate-400">ー</td>
+              </tr>
+              <tr class="hover:bg-sand-50/50">
+                <td class="py-3.5 px-5 font-bold text-slate-900 bg-sand-50/60">成約LP制作・LINE導線構築</td>
+                <td class="py-3.5 px-5 text-center bg-brand-50/30 border-x border-sand-200 text-slate-500 text-[11px]">マーケティング戦略設計</td>
+                <td class="py-3.5 px-5 text-center border-r border-sand-200 text-emerald-600 font-bold text-base">● 直接実装</td>
+                <td class="py-3.5 px-5 text-center text-slate-400">ー</td>
+              </tr>
+              <tr class="hover:bg-sand-50/50">
+                <td class="py-3.5 px-5 font-bold text-slate-900 bg-sand-50/60">定例ミーティング・経営伴走</td>
+                <td class="py-3.5 px-5 text-center bg-brand-50/30 border-x border-sand-200 text-emerald-600 font-bold text-base">● 毎月定期実施</td>
+                <td class="py-3.5 px-5 text-center border-r border-sand-200 text-slate-500 text-[11px]">開発進捗確認</td>
+                <td class="py-3.5 px-5 text-center text-slate-500 text-[11px]">運用報告</td>
+              </tr>
+              <tr class="hover:bg-sand-50/50">
+                <td class="py-3.5 px-5 font-bold text-slate-900 bg-sand-50/60">不具合対応・サーバー保守</td>
+                <td class="py-3.5 px-5 text-center bg-brand-50/30 border-x border-sand-200 text-slate-400">ー</td>
+                <td class="py-3.5 px-5 text-center border-r border-sand-200 text-slate-500 text-[11px]">納品時検収対応</td>
+                <td class="py-3.5 px-5 text-center text-emerald-600 font-bold text-base">● 契約範囲内</td>
+              </tr>
+              <tr class="bg-sand-50/40">
+                <td class="py-4 px-5 font-bold text-slate-900 bg-sand-50/80">契約・料金の目安</td>
+                <td class="py-4 px-5 text-center bg-brand-50/50 border-x border-sand-200 font-bold text-brand-900">月額固定制（顧問契約）</td>
+                <td class="py-4 px-5 text-center border-r border-sand-200 font-bold text-slate-800">都度お見積り（開発受託）</td>
+                <td class="py-4 px-5 text-center font-bold text-slate-800">月額保守（希望企業のみ）</td>
+              </tr>
+            </tbody>
+          </table>
         </div>
+        <div class="p-4 bg-brand-50/60 border-t border-sand-200 text-[11px] text-gray-600 text-center">
+          ※ すべての企業に高額なシステム開発や保守を強制することはありません。まずは顧問支援として現状を整理し、必要な部分だけを最小限で実装します。
+        </div>
+      </div>
+    </div>
+  </section>
 
-        <div class="bg-white p-6 rounded-2xl border border-sand-300 shadow-sm space-y-3">
-          <div class="text-xs font-bold text-brand-700 bg-brand-50 px-2.5 py-1 rounded inline-block">
-            提供形態 ② 構築
-          </div>
-          <h3 class="text-lg font-bold font-serif text-slate-900">システム開発・実装・制作</h3>
-          <p class="text-xs text-gray-600 leading-relaxed">
-            システム開発、GAS、Webアプリ、API連携、LP制作、ツール設定、業務自動化など、具体的な実装作業を受託開発します。
-          </p>
-          <div class="text-xs text-slate-700 bg-sand-50 p-2.5 rounded-lg border border-sand-200">
-            ※ マーケティング支援でも、戦略・導線設計と、LP制作・設定・自動化などの実装作業を明確に区別します。
-          </div>
-        </div>
+  <!-- ④ インフォディオ風：よくある質問（FAQアコーディオン） -->
+  <section class="py-16 sm:py-24 bg-white border-b border-sand-200">
+    <div class="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8">
+      <div class="text-center space-y-2 mb-12">
+        <span class="text-xs font-bold text-brand-700 uppercase tracking-widest bg-brand-50 px-3 py-1 rounded-full border border-brand-200">
+          FAQ
+        </span>
+        <h2 class="text-2xl sm:text-3xl font-bold font-serif text-slate-900">
+          よくあるご質問
+        </h2>
+        <p class="text-xs sm:text-sm text-gray-600">
+          ご検討中の経営者様からよくいただくご質問にお答えしています。
+        </p>
+      </div>
 
-        <div class="bg-white p-6 rounded-2xl border border-sand-300 shadow-sm space-y-3">
-          <div class="text-xs font-bold text-slate-700 bg-gray-100 px-2.5 py-1 rounded inline-block">
-            提供形態 ③ 保守
+      <!-- FAQアコーディオンリスト -->
+      <div class="space-y-4">
+        
+        <details class="group bg-sand-50 rounded-2xl border border-sand-300 p-5 [&_summary::-webkit-details-marker]:hidden">
+          <summary class="flex items-center justify-between cursor-pointer font-bold text-sm sm:text-base text-slate-900">
+            <span class="flex items-center gap-3">
+              <span class="w-6 h-6 rounded-md bg-brand-900 text-brand-300 text-xs flex items-center justify-center shrink-0 font-serif">Q</span>
+              <span>自社にどのような改善が必要か分かっていませんが、相談できますか？</span>
+            </span>
+            <span class="transition group-open:rotate-180 text-brand-700 ml-2 shrink-0">
+              <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7"/></svg>
+            </span>
+          </summary>
+          <div class="mt-4 pt-3 border-t border-sand-200 text-xs sm:text-sm text-gray-600 leading-relaxed space-y-2 pl-9 font-light">
+            <p>
+              はい、全く問題ございません。むしろ「何がボトルネックか分からない」「どこから手をつけるべきか整理したい」という段階でのご相談が最も多く、効果的です。
+            </p>
+            <p>
+              初回無料相談にて、決算数字や現場の業務状況をお伺いし、優先的に解決すべき課題を整理いたします。
+            </p>
           </div>
-          <h3 class="text-lg font-bold font-serif text-slate-900">稼働維持・不具合対応</h3>
-          <p class="text-xs text-gray-600 leading-relaxed">
-            MSTが構築・保守を受託したシステム等を対象に、契約範囲内の稼働維持、不具合対応、軽微な修正を行います。
-          </p>
-          <div class="text-xs text-slate-700 bg-sand-50 p-2.5 rounded-lg border border-sand-200">
-            ※ 大規模な機能追加、仕様変更、新規開発などは別途お見積もりとなる場合があります。
+        </details>
+
+        <details class="group bg-sand-50 rounded-2xl border border-sand-300 p-5 [&_summary::-webkit-details-marker]:hidden">
+          <summary class="flex items-center justify-between cursor-pointer font-bold text-sm sm:text-base text-slate-900">
+            <span class="flex items-center gap-3">
+              <span class="w-6 h-6 rounded-md bg-brand-900 text-brand-300 text-xs flex items-center justify-center shrink-0 font-serif">Q</span>
+              <span>顧問契約を結んだ場合、必ずシステム構築も発注しなければいけませんか？</span>
+            </span>
+            <span class="transition group-open:rotate-180 text-brand-700 ml-2 shrink-0">
+              <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7"/></svg>
+            </span>
+          </summary>
+          <div class="mt-4 pt-3 border-t border-sand-200 text-xs sm:text-sm text-gray-600 leading-relaxed space-y-2 pl-9 font-light">
+            <p>
+              いいえ、強制することは一切ございません。MSTでは「顧問支援（戦略・整理・助言）」と「構築支援（システム・LP実装）」を明確に区分しております。
+            </p>
+            <p>
+              業務フローの見直しやマニュアル作成のみで解決する場合も多く、必要となった場合のみ、貴社の予算に合わせた最適な実装パターン（既存SaaS連携・簡易アプリ・本格DB等）をお見積もりいたします。
+            </p>
           </div>
-        </div>
+        </details>
+
+        <details class="group bg-sand-50 rounded-2xl border border-sand-300 p-5 [&_summary::-webkit-details-marker]:hidden">
+          <summary class="flex items-center justify-between cursor-pointer font-bold text-sm sm:text-base text-slate-900">
+            <span class="flex items-center gap-3">
+              <span class="w-6 h-6 rounded-md bg-brand-900 text-brand-300 text-xs flex items-center justify-center shrink-0 font-serif">Q</span>
+              <span>すでに他社の基幹システムや会計ソフトを使っていますが、連携できますか？</span>
+            </span>
+            <span class="transition group-open:rotate-180 text-brand-700 ml-2 shrink-0">
+              <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7"/></svg>
+            </span>
+          </summary>
+          <div class="mt-4 pt-3 border-t border-sand-200 text-xs sm:text-sm text-gray-600 leading-relaxed space-y-2 pl-9 font-light">
+            <p>
+              はい、可能です。既存のシステムを無理に入れ替えるのではなく、現在のツールを活かしながら、API連携、Webhook、GAS、データ連携バッチ等を用いて、システム間の「隙間」の手作業や二重転記を解消します。
+            </p>
+          </div>
+        </details>
+
+        <details class="group bg-sand-50 rounded-2xl border border-sand-300 p-5 [&_summary::-webkit-details-marker]:hidden">
+          <summary class="flex items-center justify-between cursor-pointer font-bold text-sm sm:text-base text-slate-900">
+            <span class="flex items-center gap-3">
+              <span class="w-6 h-6 rounded-md bg-brand-900 text-brand-300 text-xs flex items-center justify-center shrink-0 font-serif">Q</span>
+              <span>遠方（東海エリア以外）の企業でも対応してもらえますか？</span>
+            </span>
+            <span class="transition group-open:rotate-180 text-brand-700 ml-2 shrink-0">
+              <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7"/></svg>
+            </span>
+          </summary>
+          <div class="mt-4 pt-3 border-t border-sand-200 text-xs sm:text-sm text-gray-600 leading-relaxed space-y-2 pl-9 font-light">
+            <p>
+              はい、全国対応しております。ZoomやGoogle Meetを活用したオンラインでの月次ミーティング、画面共有を通じたシステム構築・保守により、全国のクライアント様とスムーズに伴走しております（必要に応じた現地訪問もご相談可能です）。
+            </p>
+          </div>
+        </details>
+
       </div>
     </div>
   </section>
