@@ -1,0 +1,40 @@
+Line 110: <!-- ① ファーストビュー（OWNERSONE-WITH風 背景クロスフェード＆ズーム + AUTORO風 動的自動化コクピット） -->
+Line 111: <section class="relative bg-brand-950 text-white pt-20 pb-20 sm:pt-28 sm:pb-32 overflow-hidden min-h-[640px] flex items-center">
+Line 140: <!-- 左側：キャッチコピー ＆ CTA（可読性と視認性を最優先） -->
+Line 164: <!-- CTA（優先順位を明確化：LINE相談を主CTA、無料診断を副CTAとして配置） -->
+Line 166: <!-- 主CTA: LINEで無料相談する -->
+Line 179: <!-- 副CTA: 3分無料経営診断 -->
+Line 191: <!-- 支援内容説明文（CTA下の安心材料として配置） -->
+Line 345: <!-- ② 経営者が抱える課題（OWNERSONE-WITH風：Before ➔ After 構造改革対比） -->
+Line 346: <section class="py-20 sm:py-28 bg-white border-b border-sand-200">
+Line 425: <!-- ① 社内の効率化（バックオフィス・事務・属人化解消） -->
+Line 474: <!-- ② 現場の効率化（直感操作の現場専用Webアプリ） -->
+Line 606: <!-- ②-B 【専用診断誘導セクション】3分無料経営ボトルネック診断（Before/After直後の高CVRフック） -->
+Line 607: <section class="py-16 sm:py-20 bg-gradient-to-br from-brand-950 via-slate-900 to-sky-950 text-white relative overflow-hidden border-b border-brand-800">
+Line 640: <!-- 右側CTAボタン ＆ 特徴 -->
+Line 662: <!-- ③ MSTの提供価値と支援方針 -->
+Line 663: <section class="py-20 sm:py-28 bg-sand-100">
+Line 831: <!-- ④ 主軸サービス（MSTの中心商品） -->
+Line 832: <section class="py-20 sm:py-28 bg-white border-b border-sand-200">
+Line 851: <!-- サービスビジュアルイメージ -->
+Line 913: <!-- ⑤ 主要サービス（実装・構築） -->
+Line 914: <section class="py-20 sm:py-28 bg-sand-100 border-b border-sand-200">
+Line 933: <!-- 実装サービスビジュアルイメージ -->
+Line 1117: <!-- ⑥ 関連サービス ＆ ⑦ 専門商品 -->
+Line 1118: <section class="py-20 sm:py-28 bg-white border-b border-sand-200">
+Line 1122: <!-- ⑥ 関連サービス：新規事業支援 -->
+Line 1152: <!-- ⑦ 専門商品：介護保険外サービス開業パッケージ -->
+Line 1194: <!-- ⑧ お役立ち情報・自社メディア最新記事 -->
+Line 1195: <section class="py-20 sm:py-28 bg-sand-100 border-b border-sand-200">
+Line 1253: <!-- ⑨ 状況に合わせて選べる、3つの無料スタート（診断・資料・個別相談） -->
+Line 1254: <section class="py-20 sm:py-28 bg-white border-b border-sand-200">
+Line 1270: <!-- スタート①：3分無料診断 -->
+Line 1303: <!-- スタート②：資料請求 -->
+Line 1330: <!-- スタート③：直接個別面談 ＆ LINE -->
+Line 1369: <!-- ⑩ 支援の流れ -->
+Line 1370: <section class="py-20 sm:py-28 bg-sand-100 border-b border-sand-200">
+Line 1416: <!-- ⑪ 会社概要・代表紹介 -->
+Line 1417: <section class="py-20 sm:py-28 bg-white border-b border-sand-200">
+Line 1421: <!-- 代表者紹介カード -->
+Line 1480: <!-- ⑫ 最後の相談CTA -->
+Line 1481: <section class="py-20 sm:py-28 bg-gradient-to-b from-brand-950 via-brand-900 to-slate-900 text-white text-center">

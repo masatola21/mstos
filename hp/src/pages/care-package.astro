@@ -176,4 +176,50 @@ import Layout from '../layouts/Layout.astro';
       </div>
     </div>
   </section>
+
+  <!-- 終端CTA（OWNERSONE風：高コントラスト・ダークネイビー） -->
+  <section class="py-20 sm:py-28 bg-gradient-to-b from-slate-950 via-slate-900 to-slate-950 text-white relative overflow-hidden text-center">
+    <div class="absolute -top-32 left-1/2 -translate-x-1/2 w-[600px] h-[300px] bg-amber-500/10 rounded-full blur-3xl pointer-events-none"></div>
+
+    <div class="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 relative z-10 space-y-6">
+      <span class="text-xs font-bold text-amber-400 uppercase tracking-widest bg-amber-400/10 px-4 py-1.5 rounded-full border border-amber-400/30">
+        NEXT STEP
+      </span>
+      <h2 class="text-2xl sm:text-4xl font-black font-serif text-white tracking-tight leading-snug">
+        新しい事業を、ゼロから作らない。<br />
+        <span class="text-amber-300">実証済みの仕組みで、確実なスタートを。</span>
+      </h2>
+      <p class="text-xs sm:text-sm text-slate-300 max-w-2xl mx-auto leading-relaxed font-light">
+        初期投資・月次収支モデル、提供メニュー設計、集客導線、サポート内容は専用LPで全て公開しています。まずはお気軽にご確認ください。
+      </p>
+      
+      <div class="pt-4 flex flex-col sm:flex-row justify-center items-center gap-4">
+        <a
+          href="https://business.mstcorp.info/"
+          target="_blank"
+          rel="noopener noreferrer"
+          class="w-full sm:w-auto px-8 py-4 bg-gradient-to-r from-amber-400 to-amber-500 hover:from-amber-300 hover:to-amber-400 text-slate-950 font-black rounded-xl text-sm transition shadow-xl hover:scale-105 flex items-center justify-center gap-2"
+        >
+          <span>専用LPで料金・詳細を見る</span>
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"/></svg>
+        </a>
+        <a
+          href="/contact?service=care-package"
+          class="w-full sm:w-auto px-8 py-4 bg-white/10 hover:bg-white/20 text-white font-bold rounded-xl text-sm transition border border-white/20 text-center"
+        >
+          MSTに直接相談する（無料）
+        </a>
+      </div>
+
+      <div class="mt-8 pt-6 border-t border-slate-800 max-w-xl mx-auto flex flex-col sm:flex-row items-center justify-center gap-3">
+        <span class="text-xs text-amber-300 font-bold">自社に合うか事前に確かめたい方へ</span>
+        <a
+          href="/diagnosis?source=care-package"
+          class="inline-flex items-center gap-2 px-5 py-2.5 bg-amber-400 hover:bg-amber-300 text-slate-950 font-black rounded-xl text-xs transition shadow-md hover:scale-105"
+        >
+          <span>📊 3分ボトルネック無料診断を受ける →</span>
+        </a>
+      </div>
+    </div>
+  </section>
 </Layout>
