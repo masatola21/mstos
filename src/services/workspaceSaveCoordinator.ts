@@ -1,5 +1,6 @@
 import { WorkspaceData, saveWorkspaceData, isWorkspaceConflictError, SaveWorkspaceResult } from './workspaceStateService';
 import { matrixService } from './matrixService';
+import { mergeCollectionPreservingUserEdits } from '../utils/workspaceMergeUtils';
 
 export type WorkspaceSyncStatus = 'loading' | 'saving' | 'saved' | 'error' | 'conflict';
 
@@ -213,6 +214,20 @@ export class WorkspaceSaveCoordinator {
       // 競合自動マージが発生した場合は、マージ前（data）とマージ後（result.savedData）の両方をUIに通知
       if (result.wasMerged) {
         this.notifyMergedData(result.savedData, data);
+
+        // 指摘修正2: S1実行中にキューイングされた pendingData をマージ結果へ再基底化
+        // これにより他端末の新規追加レコード等がS2によって上書き消失するのを防止
+        if (this.pendingData) {
+          this.pendingData = {
+            ...this.pendingData,
+            products: mergeCollectionPreservingUserEdits(this.pendingData.products, data.products, result.savedData.products),
+            contracts: mergeCollectionPreservingUserEdits(this.pendingData.contracts, data.contracts, result.savedData.contracts),
+            invoices: mergeCollectionPreservingUserEdits(this.pendingData.invoices, data.invoices, result.savedData.invoices),
+            tools: mergeCollectionPreservingUserEdits(this.pendingData.tools, data.tools, result.savedData.tools),
+            customLists: mergeCollectionPreservingUserEdits(this.pendingData.customLists, data.customLists, result.savedData.customLists),
+            marketingScenarios: mergeCollectionPreservingUserEdits(this.pendingData.marketingScenarios, data.marketingScenarios, result.savedData.marketingScenarios),
+          };
+        }
       }
 
       currentDeferreds.forEach((d) => d.resolve(result));

@@ -135,8 +135,160 @@ async function runTests() {
     console.log('  -> PASSED: cnt-2 deletion during S1 was preserved and sent in S2.\n');
   }
 
+  
+  // --------------------------------------------------------------------------
+  // Test (b): マージ後の割り込みと pendingData の再基底化 (Fix 2)
+  // --------------------------------------------------------------------------
+  console.log('Test (b): wasMerged must rebase pendingData so remote additions (P2) survive in S2');
+  {
+    const userId = 'user-race-rebase';
+    matrixService.setActiveUserId(userId);
+    matrixService.clearPendingDeletions(userId);
+
+    let s1StartedResolve: () => void;
+    const s1StartedPromise = new Promise<void>((r) => { s1StartedResolve = r; });
+    let s1FinishResolve: (result: SaveWorkspaceResult) => void;
+    const s1FinishPromise = new Promise<SaveWorkspaceResult>((r) => { s1FinishResolve = r; });
+
+    const calls: { userId: string; data: WorkspaceData }[] = [];
+
+    const mockSaveFn = async (uId: string, d: WorkspaceData) => {
+      calls.push({ userId: uId, data: d });
+      if (calls.length === 1) {
+        s1StartedResolve();
+        return await s1FinishPromise;
+      } else {
+        return { savedData: d, wasMerged: false };
+      }
+    };
+
+    const coordinator = new WorkspaceSaveCoordinator(mockSaveFn);
+
+    // S1 開始時のデータ: products に P1
+    const p1Original = { id: 'p1', name: 'Product 1 Original' } as any;
+    const initialData = createDummyWorkspaceData({
+      products: [p1Original],
+    });
+
+    const s1Promise = coordinator.requestImmediateSave(userId, initialData);
+    await s1StartedPromise;
+
+    // S1 実行中にユーザーが P1 をローカルで編集し、S2 をリクエスト
+    const p1Edited = { id: 'p1', name: 'Product 1 User Edited' } as any;
+    const pendingDataBeforeRebase = createDummyWorkspaceData({
+      products: [p1Edited],
+    });
+    const s2Promise = coordinator.requestImmediateSave(userId, pendingDataBeforeRebase);
+
+    // S1 が完了: 他端末が追加した P2 を含むマージ結果 (wasMerged: true) が返ってくる
+    const p2Remote = { id: 'p2', name: 'Product 2 Added By Colleague' } as any;
+    const mergedResultData = createDummyWorkspaceData({
+      products: [p1Original, p2Remote],
+    });
+
+    s1FinishResolve!({ savedData: mergedResultData, wasMerged: true });
+    await s1Promise;
+    await s2Promise;
+
+    // S2 が呼び出されたことを確認
+    assert(calls.length === 2, 'Expected 2 save calls, got ' + calls.length);
+    const s2Data = calls[1].data;
+
+    // 【最重要】S2 に渡された products に、S1でマージされた P2 が含まれていること！
+    const hasP2 = s2Data.products.some((p: any) => p.id === 'p2');
+    assert(
+      hasP2,
+      'CRITICAL: S2 payload must include remotely added product P2 after S1 wasMerged'
+    );
+
+    // かつ、ユーザー編集 P1(User Edited) も保持されていること！
+    const p1InS2 = s2Data.products.find((p: any) => p.id === 'p1');
+    assert(
+      p1InS2?.name === 'Product 1 User Edited',
+      'User edit on P1 must be preserved in S2'
+    );
+
+    console.log('  -> PASSED: Pending data rebased successfully; P2 preserved and user edit kept.\n');
+  }
+
   console.log('=====================================================');
   console.log('ALL TESTS COMPLETED!');
+  
+  // --------------------------------------------------------------------------
+  // Test (b): マージ後の割り込みと pendingData の再基底化 (Fix 2)
+  // --------------------------------------------------------------------------
+  console.log('Test (b): wasMerged must rebase pendingData so remote additions (P2) survive in S2');
+  {
+    const userId = 'user-race-rebase';
+    matrixService.setActiveUserId(userId);
+    matrixService.clearPendingDeletions(userId);
+
+    let s1StartedResolve: () => void;
+    const s1StartedPromise = new Promise<void>((r) => { s1StartedResolve = r; });
+    let s1FinishResolve: (result: SaveWorkspaceResult) => void;
+    const s1FinishPromise = new Promise<SaveWorkspaceResult>((r) => { s1FinishResolve = r; });
+
+    const calls: { userId: string; data: WorkspaceData }[] = [];
+
+    const mockSaveFn = async (uId: string, d: WorkspaceData) => {
+      calls.push({ userId: uId, data: d });
+      if (calls.length === 1) {
+        s1StartedResolve();
+        return await s1FinishPromise;
+      } else {
+        return { savedData: d, wasMerged: false };
+      }
+    };
+
+    const coordinator = new WorkspaceSaveCoordinator(mockSaveFn);
+
+    // S1 開始時のデータ: products に P1
+    const p1Original = { id: 'p1', name: 'Product 1 Original' } as any;
+    const initialData = createDummyWorkspaceData({
+      products: [p1Original],
+    });
+
+    const s1Promise = coordinator.requestImmediateSave(userId, initialData);
+    await s1StartedPromise;
+
+    // S1 実行中にユーザーが P1 をローカルで編集し、S2 をリクエスト
+    const p1Edited = { id: 'p1', name: 'Product 1 User Edited' } as any;
+    const pendingDataBeforeRebase = createDummyWorkspaceData({
+      products: [p1Edited],
+    });
+    const s2Promise = coordinator.requestImmediateSave(userId, pendingDataBeforeRebase);
+
+    // S1 が完了: 他端末が追加した P2 を含むマージ結果 (wasMerged: true) が返ってくる
+    const p2Remote = { id: 'p2', name: 'Product 2 Added By Colleague' } as any;
+    const mergedResultData = createDummyWorkspaceData({
+      products: [p1Original, p2Remote],
+    });
+
+    s1FinishResolve!({ savedData: mergedResultData, wasMerged: true });
+    await s1Promise;
+    await s2Promise;
+
+    // S2 が呼び出されたことを確認
+    assert(calls.length === 2, 'Expected 2 save calls, got ' + calls.length);
+    const s2Data = calls[1].data;
+
+    // 【最重要】S2 に渡された products に、S1でマージされた P2 が含まれていること！
+    const hasP2 = s2Data.products.some((p: any) => p.id === 'p2');
+    assert(
+      hasP2,
+      'CRITICAL: S2 payload must include remotely added product P2 after S1 wasMerged'
+    );
+
+    // かつ、ユーザー編集 P1(User Edited) も保持されていること！
+    const p1InS2 = s2Data.products.find((p: any) => p.id === 'p1');
+    assert(
+      p1InS2?.name === 'Product 1 User Edited',
+      'User edit on P1 must be preserved in S2'
+    );
+
+    console.log('  -> PASSED: Pending data rebased successfully; P2 preserved and user edit kept.\n');
+  }
+
   console.log('=====================================================');
 }
 
