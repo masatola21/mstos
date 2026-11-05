@@ -10,7 +10,7 @@
     "preview": "vite preview",
     "clean": "rm -rf dist server.js",
     "lint": "tsc --noEmit",
-    "test": "tsx tests/workspaceSaveReviewFixes.test.ts && tsx tests/workspaceSyncRaces.test.ts"
+    "test": "tsx tests/workspaceSaveReviewFixes.test.ts && tsx tests/workspaceSyncRaces.test.ts && tsx tests/billingAndAutomation.test.ts"
   },
   "dependencies": {
     "@google/genai": "^2.4.0",

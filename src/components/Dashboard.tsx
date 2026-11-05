@@ -23,7 +23,12 @@ import {
   Globe,
   CheckCircle2,
   Sparkles,
-  MessageSquare
+  MessageSquare,
+  ShieldAlert,
+  Power,
+  Play,
+  Pause,
+  X
 } from 'lucide-react';
 
 interface DashboardProps {
@@ -68,9 +73,101 @@ export const Dashboard: React.FC<DashboardProps> = ({
   const [loading, setLoading] = useState(true);
   const [fetchError, setFetchError] = useState<DataFetchError | null>(null);
 
+  // ─── 緊急停止（キルスイッチ）状態管理 ───
+  const [automationControls, setAutomationControls] = useState<Array<{
+    target: 'all' | 'ai' | 'send' | 'billing';
+    paused: boolean;
+    reason: string;
+    updated_by?: string;
+    updated_at?: string;
+  }>>([
+    { target: 'all', paused: false, reason: '' },
+    { target: 'ai', paused: false, reason: '' },
+    { target: 'send', paused: false, reason: '' },
+    { target: 'billing', paused: false, reason: '' },
+  ]);
+  const [isKillSwitchModalOpen, setIsKillSwitchModalOpen] = useState(false);
+  const [selectedKillSwitchTarget, setSelectedKillSwitchTarget] = useState<'all' | 'ai' | 'send' | 'billing'>('all');
+  const [killSwitchReasonInput, setKillSwitchReasonInput] = useState('');
+  const [killSwitchUpdating, setKillSwitchUpdating] = useState(false);
+  const [killSwitchMessage, setKillSwitchMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
+
+  const loadAutomationControls = async () => {
+    try {
+      const res = await fetch('/api/admin/automation-controls');
+      if (res.ok) {
+        const data = await res.json();
+        if (data.controls && Array.isArray(data.controls)) {
+          const map = new Map<string, any>();
+          ['all', 'ai', 'send', 'billing'].forEach((t) => {
+            map.set(t, { target: t, paused: false, reason: '' });
+          });
+          data.controls.forEach((c: any) => {
+            if (map.has(c.target)) map.set(c.target, c);
+          });
+          setAutomationControls(Array.from(map.values()));
+        }
+      }
+    } catch (err) {
+      console.warn('Failed to fetch automation controls:', err);
+    }
+  };
+
+  const handleToggleKillSwitch = async (
+    target: 'all' | 'ai' | 'send' | 'billing',
+    nextPaused: boolean,
+    customReason?: string
+  ) => {
+    setKillSwitchUpdating(true);
+    setKillSwitchMessage(null);
+    try {
+      const supabase = getSupabase();
+      let token = '';
+      if (supabase) {
+        const session = (await supabase.auth.getSession()).data.session;
+        token = session?.access_token || '';
+      }
+
+      const reason = customReason !== undefined ? customReason : killSwitchReasonInput.trim();
+      const res = await fetch('/api/admin/automation-controls', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
+        body: JSON.stringify({
+          target,
+          paused: nextPaused,
+          reason: reason || (nextPaused ? '管理者による緊急停止' : '通常稼働に復旧'),
+        }),
+      });
+
+      if (!res.ok) {
+        const errData = await res.json().catch(() => ({}));
+        throw new Error(errData.error || 'キルスイッチの更新に失敗しました');
+      }
+
+      await loadAutomationControls();
+      const targetLabel = target === 'all' ? '全体' : target === 'ai' ? 'AI機能' : target === 'send' ? '自動配信' : '請求自動化';
+      setKillSwitchMessage({
+        type: 'success',
+        text: nextPaused ? `【緊急停止】${targetLabel}の自動処理を停止しました。` : `【稼働再開】${targetLabel}の自動処理を再開しました。`,
+      });
+      setKillSwitchReasonInput('');
+    } catch (err: any) {
+      setKillSwitchMessage({
+        type: 'error',
+        text: err.message || '更新中にエラーが発生しました。',
+      });
+    } finally {
+      setKillSwitchUpdating(false);
+    }
+  };
+
   const loadData = async () => {
     setLoading(true);
     setFetchError(null);
+    loadAutomationControls();
     try {
       const [tableRes, diagRes, dealsRes, pipelineRes, leadsRes] = await Promise.all([
         fetchTableCounts(),
@@ -221,6 +318,31 @@ export const Dashboard: React.FC<DashboardProps> = ({
             <Calendar className="w-3.5 h-3.5 text-indigo-600" />
             <span>予定カレンダー</span>
           </button>
+
+          {/* Claudeレビュー指摘: 緊急停止（キルスイッチ）ボタン */}
+          {(() => {
+            const pausedItems = automationControls.filter((c) => c.paused);
+            const isAnyPaused = pausedItems.length > 0;
+            const targetMap: Record<string, string> = { all: '全体', ai: 'AI', send: '配信', billing: '請求' };
+            return (
+              <button
+                type="button"
+                onClick={() => {
+                  setIsKillSwitchModalOpen(true);
+                  setKillSwitchMessage(null);
+                }}
+                className={`px-3 py-1.5 rounded-md text-xs font-semibold flex items-center gap-1.5 transition-all cursor-pointer ${
+                  isAnyPaused
+                    ? 'bg-rose-600 hover:bg-rose-700 text-white shadow-sm ring-2 ring-rose-400/50 animate-pulse'
+                    : 'bg-white hover:bg-slate-50 text-slate-700 border border-slate-200'
+                }`}
+                title="AI・配信・請求自動化の緊急停止（キルスイッチ）を設定"
+              >
+                <ShieldAlert className={`w-3.5 h-3.5 ${isAnyPaused ? 'text-white' : 'text-rose-500'}`} />
+                <span>{isAnyPaused ? `🚨 緊急停止中 (${pausedItems.map((p) => targetMap[p.target] || p.target).join('/')})` : '緊急停止'}</span>
+              </button>
+            );
+          })()}
 
           <button
             type="button"
@@ -585,6 +707,223 @@ export const Dashboard: React.FC<DashboardProps> = ({
           ))}
         </div>
       </section>
+
+      {/* ─── 緊急停止（キルスイッチ）管理モーダル ─── */}
+      {isKillSwitchModalOpen && (
+        <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl shadow-2xl border border-slate-200 max-w-2xl w-full overflow-hidden animate-in fade-in zoom-in-95 duration-200">
+            {/* Modal Header */}
+            <div className="px-6 py-4 border-b border-slate-100 flex items-center justify-between bg-slate-50">
+              <div className="flex items-center gap-2.5">
+                <div className="p-2 rounded-lg bg-rose-100 text-rose-700">
+                  <ShieldAlert className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="text-base font-bold text-slate-900">自動化緊急停止（キルスイッチ）</h3>
+                  <p className="text-xs text-slate-500">
+                    暴走防止・メンテナンス時の即時停止用スイッチ（DB連動・サーバーリアルタイム反映）
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setIsKillSwitchModalOpen(false)}
+                className="p-1.5 rounded-lg text-slate-400 hover:text-slate-600 hover:bg-slate-200/60 transition-colors"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {/* Notification message */}
+            {killSwitchMessage && (
+              <div
+                className={`mx-6 mt-4 p-3 rounded-lg text-xs font-medium flex items-center justify-between ${
+                  killSwitchMessage.type === 'success'
+                    ? 'bg-emerald-50 text-emerald-800 border border-emerald-200'
+                    : 'bg-rose-50 text-rose-800 border border-rose-200'
+                }`}
+              >
+                <span>{killSwitchMessage.text}</span>
+                <button
+                  type="button"
+                  onClick={() => setKillSwitchMessage(null)}
+                  className="text-slate-400 hover:text-slate-600 ml-2"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
+            )}
+
+            {/* Modal Body */}
+            <div className="p-6 space-y-5 max-h-[75vh] overflow-y-auto">
+              {/* Targets List */}
+              <div className="space-y-3">
+                <label className="text-xs font-bold text-slate-700 uppercase tracking-wider block">
+                  停止対象を選択
+                </label>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  {[
+                    {
+                      target: 'all' as const,
+                      title: '🚨 全体一括停止',
+                      desc: 'AI、メール/LINE自動配信、請求連携すべての自動処理を即座に停止します。',
+                      tagColor: 'border-slate-300',
+                    },
+                    {
+                      target: 'ai' as const,
+                      title: '🤖 AI機能停止',
+                      desc: 'チャット、キャラクター自動生成、記憶抽出などのLLM呼び出しを停止（503返却）。',
+                      tagColor: 'border-purple-200',
+                    },
+                    {
+                      target: 'send' as const,
+                      title: '✉️ 自動配信停止',
+                      desc: 'マーケティングシナリオのメール・LINE送信キュー処理を一時中断します。',
+                      tagColor: 'border-blue-200',
+                    },
+                    {
+                      target: 'billing' as const,
+                      title: '📑 請求自動化停止',
+                      desc: '期限超過請求書の督促タスク起票・当月定期請求書の下書き自動生成を停止します。',
+                      tagColor: 'border-emerald-200',
+                    },
+                  ].map((item) => {
+                    const control = automationControls.find((c) => c.target === item.target);
+                    const isPaused = Boolean(control?.paused);
+                    const isSelected = selectedKillSwitchTarget === item.target;
+
+                    return (
+                      <div
+                        key={item.target}
+                        onClick={() => setSelectedKillSwitchTarget(item.target)}
+                        className={`p-3.5 rounded-xl border-2 transition-all cursor-pointer text-left relative ${
+                          isSelected
+                            ? 'border-indigo-600 bg-indigo-50/40 shadow-xs'
+                            : 'border-slate-200 hover:border-slate-300 bg-white'
+                        }`}
+                      >
+                        <div className="flex items-start justify-between gap-2 mb-1.5">
+                          <span className="font-bold text-sm text-slate-800">{item.title}</span>
+                          <span
+                            className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${
+                              isPaused
+                                ? 'bg-rose-100 text-rose-700 border border-rose-300'
+                                : 'bg-emerald-100 text-emerald-700 border border-emerald-300'
+                            }`}
+                          >
+                            {isPaused ? '🔴 停止中' : '🟢 稼働中'}
+                          </span>
+                        </div>
+                        <p className="text-xs text-slate-500 line-clamp-2 leading-relaxed">{item.desc}</p>
+                        {isPaused && control?.reason && (
+                          <div className="mt-2 text-[11px] text-rose-700 bg-rose-50 p-1.5 rounded border border-rose-100">
+                            理由: {control.reason}
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+
+              {/* Selected Target Action Panel */}
+              {(() => {
+                const currentControl = automationControls.find((c) => c.target === selectedKillSwitchTarget);
+                const isPaused = Boolean(currentControl?.paused);
+                const targetLabels: Record<string, string> = {
+                  all: '全体一括',
+                  ai: 'AI機能',
+                  send: '自動配信（メール/LINE）',
+                  billing: '請求自動化',
+                };
+
+                return (
+                  <div className="p-4 rounded-xl bg-slate-50 border border-slate-200 space-y-3">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-2">
+                        <span className="font-bold text-sm text-slate-800">
+                          選択中: {targetLabels[selectedKillSwitchTarget]}
+                        </span>
+                        <span
+                          className={`text-xs font-semibold px-2 py-0.5 rounded-full ${
+                            isPaused
+                              ? 'bg-rose-100 text-rose-700 border border-rose-300'
+                              : 'bg-emerald-100 text-emerald-700 border border-emerald-300'
+                          }`}
+                        >
+                          現在: {isPaused ? '緊急停止中' : '正常稼働中'}
+                        </span>
+                      </div>
+                      {currentControl?.updated_at && (
+                        <span className="text-[11px] text-slate-400">
+                          最終更新: {new Date(currentControl.updated_at).toLocaleString('ja-JP')}
+                          {currentControl.updated_by ? ` (${currentControl.updated_by})` : ''}
+                        </span>
+                      )}
+                    </div>
+
+                    <div>
+                      <label className="text-xs font-medium text-slate-600 block mb-1">
+                        停止・再開の理由 / メモ（任意）
+                      </label>
+                      <input
+                        type="text"
+                        value={killSwitchReasonInput}
+                        onChange={(e) => setKillSwitchReasonInput(e.target.value)}
+                        placeholder={
+                          isPaused
+                            ? '例: メンテナンス完了のため再開'
+                            : '例: API制限到達による一時停止 / 誤配信防止'
+                        }
+                        className="w-full text-xs px-3 py-2 rounded-lg border border-slate-300 focus:outline-hidden focus:ring-2 focus:ring-indigo-500 bg-white"
+                      />
+                    </div>
+
+                    <div className="pt-1 flex items-center justify-end gap-2">
+                      {isPaused ? (
+                        <button
+                          type="button"
+                          disabled={killSwitchUpdating}
+                          onClick={() => handleToggleKillSwitch(selectedKillSwitchTarget, false)}
+                          className="px-4 py-2 rounded-lg text-xs font-bold bg-emerald-600 hover:bg-emerald-700 text-white flex items-center gap-1.5 transition-colors disabled:opacity-50 cursor-pointer shadow-xs"
+                        >
+                          <Play className="w-3.5 h-3.5 fill-current" />
+                          <span>{killSwitchUpdating ? '更新中...' : '稼働を再開する'}</span>
+                        </button>
+                      ) : (
+                        <button
+                          type="button"
+                          disabled={killSwitchUpdating}
+                          onClick={() => handleToggleKillSwitch(selectedKillSwitchTarget, true)}
+                          className="px-4 py-2 rounded-lg text-xs font-bold bg-rose-600 hover:bg-rose-700 text-white flex items-center gap-1.5 transition-colors disabled:opacity-50 cursor-pointer shadow-xs"
+                        >
+                          <Pause className="w-3.5 h-3.5 fill-current" />
+                          <span>{killSwitchUpdating ? '更新中...' : '緊急停止を実行する'}</span>
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                );
+              })()}
+            </div>
+
+            {/* Modal Footer */}
+            <div className="px-6 py-3 bg-slate-50 border-t border-slate-100 flex items-center justify-between">
+              <span className="text-[11px] text-slate-400">
+                ※ 停止すると該当機能へのAPIリクエストは直ちに拒否またはスキップされます。
+              </span>
+              <button
+                type="button"
+                onClick={() => setIsKillSwitchModalOpen(false)}
+                className="px-3 py-1.5 rounded-lg text-xs font-medium text-slate-600 hover:bg-slate-200/60 transition-colors cursor-pointer"
+              >
+                閉じる
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

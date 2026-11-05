@@ -9,6 +9,8 @@ import { createHmac, timingSafeEqual, createHash } from 'node:crypto';
 import fs from 'node:fs';
 import { createClient } from '@supabase/supabase-js';
 import { parseIcalendar } from './server/icalParser.ts';
+import { calculateBillingAmount, determineContractMonthlyFee, isContractAlreadyBilled } from './src/utils/billingUtils.ts';
+import { calculateExponentialBackoff, shouldSkipAutomationDelivery } from './src/utils/automationRuleUtils.ts';
 
 dotenv.config();
 
@@ -17,6 +19,59 @@ const app = express();
 const port = process.env.PORT || 3000;
 const MAX_CHAT_CONTEXT_MESSAGES = 12;
 const MAX_CHAT_CONTEXT_CHARACTERS = 16000;
+
+// ─── 緊急停止（キルスイッチ）キャッシュ＆ステータス確認 ───
+interface KillSwitchStatus {
+  paused: boolean;
+  reason: string;
+  target: string;
+  updatedAt: string;
+}
+let killSwitchCache: { [target: string]: { status: KillSwitchStatus; cachedAt: number } } = {};
+
+async function getKillSwitchStatus(target: 'all' | 'ai' | 'send' | 'billing' = 'all'): Promise<KillSwitchStatus> {
+  const now = Date.now();
+  const cached = killSwitchCache[target];
+  if (cached && now - cached.cachedAt < 5000) {
+    return cached.status;
+  }
+  if (!lineSupabase) {
+    return { paused: false, reason: '', target, updatedAt: new Date().toISOString() };
+  }
+  try {
+    const { data } = await lineSupabase
+      .from('automation_controls')
+      .select('id, target, paused, reason, updated_at')
+      .in('target', ['all', target]);
+
+    const allControl = data?.find((d: any) => d.target === 'all');
+    const targetControl = data?.find((d: any) => d.target === target);
+
+    let paused = false;
+    let reason = '';
+    let effectiveTarget = target;
+    let updatedAt = new Date().toISOString();
+
+    if (allControl?.paused) {
+      paused = true;
+      reason = allControl.reason || '全体緊急停止中';
+      effectiveTarget = 'all';
+      updatedAt = allControl.updated_at;
+    } else if (targetControl?.paused) {
+      paused = true;
+      reason = targetControl.reason || `${target}機能は緊急停止中`;
+      effectiveTarget = target;
+      updatedAt = targetControl.updated_at;
+    }
+
+    const result: KillSwitchStatus = { paused, reason, target: effectiveTarget, updatedAt };
+    killSwitchCache[target] = { status: result, cachedAt: now };
+    return result;
+  } catch (err) {
+    console.warn('[getKillSwitchStatus] Error checking kill switch:', err);
+    return { paused: false, reason: '', target, updatedAt: new Date().toISOString() };
+  }
+}
 
 // 全オリジンからの安全なアクセスを許可するCORS設定（HP・外部連携用）
 app.use((req, res, next) => {
@@ -2384,6 +2439,13 @@ let lastStaleJobsCheckAt = 0;
 async function processMarketingAutomationJobs(): Promise<number> {
   marketingRunnerLastRunAt = new Date().toISOString();
   if (!lineSupabase || marketingQueueBusy) return 0;
+
+  // キルスイッチ（緊急停止）確認: 全体または配信停止中の場合はジョブ処理をスキップ
+  const killSwitch = await getKillSwitchStatus('send');
+  if (killSwitch.paused) {
+    return 0;
+  }
+
   marketingQueueBusy = true;
   let processedJobsCount = 0;
   try {
@@ -2403,14 +2465,28 @@ async function processMarketingAutomationJobs(): Promise<number> {
     }
 
     // 待機中かつ送信予定時刻到来済みのジョブのみ取得（必要なカラムに限定して取得負荷を低減）
-    const { data: jobs, error } = await lineSupabase.from('marketing_automation_jobs')
-      .select('id, owner_id, scenario_id, contact_id, channel, subject, body_text, payload, line_message_payload, consent_basis, created_at')
+    // retry_count カラムも含めて取得（DBマイグレーション適用前後どちらでも安全に動作）
+    let jobs: any[] | null = null;
+    const fetchWithRetry = await lineSupabase.from('marketing_automation_jobs')
+      .select('id, owner_id, scenario_id, contact_id, channel, subject, body_text, payload, line_message_payload, consent_basis, retry_count, created_at')
       .eq('status', 'queued')
       .lte('due_at', now)
       .order('due_at', { ascending: true })
       .limit(20);
 
-    if (error) throw error;
+    if (fetchWithRetry.error) {
+      const fallbackFetch = await lineSupabase.from('marketing_automation_jobs')
+        .select('id, owner_id, scenario_id, contact_id, channel, subject, body_text, payload, line_message_payload, consent_basis, created_at')
+        .eq('status', 'queued')
+        .lte('due_at', now)
+        .order('due_at', { ascending: true })
+        .limit(20);
+      if (fallbackFetch.error) throw fallbackFetch.error;
+      jobs = fallbackFetch.data;
+    } else {
+      jobs = fetchWithRetry.data;
+    }
+
     if (!jobs || jobs.length === 0) {
       return 0; // ジョブなし時は早期リターンしDBへの不要なアクセス・ロックを完全にゼロ化
     }
@@ -2737,9 +2813,56 @@ async function processMarketingAutomationJobs(): Promise<number> {
         if(saveError)throw saveError;
         await lineSupabase.from('marketing_automation_jobs').update({status:'sent',updated_at:sentAt,error_message:null}).eq('id',job.id);
       } catch (error) {
-        const message=error instanceof Error?error.message:'自動配信に失敗しました。';
-        if(outboxId)await lineSupabase.from('communication_outbox').update({status:'failed',error_message:message.slice(0,1000),updated_at:new Date().toISOString()}).eq('id',outboxId);
-        await lineSupabase.from('marketing_automation_jobs').update({status:'failed',error_message:message.slice(0,1000),updated_at:new Date().toISOString()}).eq('id',job.id);
+        const message = error instanceof Error ? error.message : '自動配信に失敗しました。';
+        if (outboxId) {
+          await lineSupabase.from('communication_outbox').update({
+            status: 'failed',
+            error_message: message.slice(0, 1000),
+            updated_at: new Date().toISOString(),
+          }).eq('id', outboxId);
+        }
+
+        // タスク1: 失敗時の自動リトライ（指数バックオフ: 1分後、5分後、15分後、3回上限）
+        const currentRetryCount = typeof (job as any).retry_count === 'number' ? (job as any).retry_count : 0;
+        const backoff = calculateExponentialBackoff(currentRetryCount, 3);
+        const nowIso = new Date().toISOString();
+
+        if (backoff.canRetry && backoff.nextDueAt) {
+          // リトライ可能な場合は status を 'queued' に戻し、due_at を次回時刻に更新
+          const updatePayload: Record<string, any> = {
+            status: 'queued',
+            due_at: backoff.nextDueAt,
+            retry_count: backoff.nextRetryCount,
+            error_message: `自動リトライ待機中（試行 ${backoff.nextRetryCount}/3）: ${message.slice(0, 500)}`,
+            updated_at: nowIso,
+          };
+          const { error: retryErr } = await lineSupabase.from('marketing_automation_jobs').update(updatePayload).eq('id', job.id);
+          if (retryErr) {
+            // retry_count カラムが未適用時のフォールバック
+            await lineSupabase.from('marketing_automation_jobs').update({
+              status: 'queued',
+              due_at: backoff.nextDueAt,
+              error_message: `自動リトライ待機中: ${message.slice(0, 500)}`,
+              updated_at: nowIso,
+            }).eq('id', job.id);
+          }
+        } else {
+          // リトライ回数超過（3回）またはリトライ不可時は failed に更新
+          const updatePayload: Record<string, any> = {
+            status: 'failed',
+            retry_count: backoff.nextRetryCount,
+            error_message: `送信失敗（上限試行 ${backoff.nextRetryCount}回 完了）: ${message.slice(0, 800)}`,
+            updated_at: nowIso,
+          };
+          const { error: failErr } = await lineSupabase.from('marketing_automation_jobs').update(updatePayload).eq('id', job.id);
+          if (failErr) {
+            await lineSupabase.from('marketing_automation_jobs').update({
+              status: 'failed',
+              error_message: message.slice(0, 1000),
+              updated_at: nowIso,
+            }).eq('id', job.id);
+          }
+        }
       }
     }
   } catch (error) {
@@ -2770,6 +2893,308 @@ app.all('/api/cron/marketing-automation', async (req, res) => {
   } catch (error) {
     console.error('Cron marketing-automation execution failed:', error);
     return res.status(500).json({ error: error instanceof Error ? error.message : 'Unknown error' });
+  }
+});
+
+// pg_cron / 手動実行対応 請求スケジュール実行エンドポイント（毎日9時実行）
+app.all('/api/cron/billing-automation', async (req, res) => {
+  // CRON_SECRETが環境変数に設定されている場合はBearerトークンを検証
+  const cronSecret = process.env.CRON_SECRET?.trim();
+  if (cronSecret) {
+    const authorization = req.header('authorization') || '';
+    const token = authorization.startsWith('Bearer ') ? authorization.slice(7).trim() : '';
+    if (token !== cronSecret) {
+      return res.status(401).json({ error: 'Unauthorized cron request' });
+    }
+  }
+
+  // キルスイッチ確認（all または billing が停止中ならスキップ）
+  const killSwitch = await getKillSwitchStatus('billing');
+  if (killSwitch.paused) {
+    return res.status(503).json({
+      error: `請求自動化は緊急停止中です: ${killSwitch.reason || '一時停止中'}`,
+      paused: true,
+    });
+  }
+
+  if (!lineSupabase) {
+    return res.status(503).json({ error: 'Database connection unavailable.' });
+  }
+
+  try {
+    const nowJst = new Date(Date.now() + 9 * 3600 * 1000);
+    const todayStr = nowJst.toISOString().slice(0, 10); // YYYY-MM-DD
+    const targetMonth = todayStr.slice(0, 7); // YYYY-MM
+    const [yearStr, monthStr] = targetMonth.split('-');
+    const year = parseInt(yearStr, 10);
+    const month = parseInt(monthStr, 10);
+    const monthLabel = `${year}年${month}月分`;
+
+    const summary = {
+      timestamp: new Date().toISOString(),
+      targetMonth,
+      overdueDetected: 0,
+      reminderTasksCreated: 0,
+      recurringInvoicesGenerated: 0,
+      recurringSkipped: 0,
+      errors: [] as string[],
+    };
+
+    // 1. 期限超過の請求書（customer_invoices）を検知し、督促タスクを自動起票
+    const { data: openInvoices, error: invFetchErr } = await lineSupabase
+      .from('customer_invoices')
+      .select('id, owner_id, company_id, invoice_number, title, amount, tax_amount, due_date, status, recipient_name')
+      .lt('due_date', todayStr)
+      .in('status', ['sent', 'issued', 'open', 'draft', 'pending', 'overdue'])
+      .order('due_date', { ascending: true })
+      .limit(100);
+
+    if (invFetchErr) {
+      summary.errors.push(`期限超過請求書の取得失敗: ${invFetchErr.message}`);
+    } else if (openInvoices && openInvoices.length > 0) {
+      for (const inv of openInvoices) {
+        summary.overdueDetected++;
+
+        // ステータスがまだ overdue でなければ更新
+        if (inv.status !== 'overdue') {
+          await lineSupabase
+            .from('customer_invoices')
+            .update({ status: 'overdue', updated_at: new Date().toISOString() })
+            .eq('id', inv.id);
+        }
+
+        // 督促タスクが既に起票されているか重複チェック（title または description に請求番号やIDを含むタスク）
+        const taskTag = inv.invoice_number || inv.id.slice(0, 8);
+        const { data: existingTasks } = await lineSupabase
+          .from('tasks')
+          .select('id')
+          .ilike('description', `%${taskTag}%`)
+          .limit(1);
+
+        if (!existingTasks || existingTasks.length === 0) {
+          const invAmt = (inv.amount || 0) + (inv.tax_amount || 0);
+          const taskInsert = await lineSupabase.from('tasks').insert({
+            title: `【支払督促・要確認】${inv.recipient_name || '取引先'} 請求書未払い（期限: ${inv.due_date}）`,
+            description: `請求番号: ${inv.invoice_number || inv.id}、金額: ¥${invAmt.toLocaleString('ja-JP')}のお支払期日（${inv.due_date}）が経過しています。入金状況を確認の上、必要に応じて督促の連絡を行ってください。`,
+            status: 'todo',
+            priority: 'urgent',
+            due_date: todayStr,
+            company_id: inv.company_id || null,
+          });
+
+          if (!taskInsert.error) {
+            summary.reminderTasksCreated++;
+          }
+        }
+      }
+    }
+
+    // 2. 当月分の定期請求の下書き（customer_invoices と customer_documents）を自動生成
+    const finalIssueDate = `${targetMonth}-01`;
+    const lastDay = new Date(year, month, 0).getDate();
+    const finalDueDate = `${targetMonth}-${String(Math.min(25, lastDay)).padStart(2, '0')}`;
+
+    const [contractsRes, companiesRes, invoicesRes, dealsRes] = await Promise.all([
+      lineSupabase.from('customer_contracts').select('*'),
+      lineSupabase.from('companies').select('id, company_name'),
+      lineSupabase.from('customer_invoices').select('*'),
+      lineSupabase.from('deals').select('id, company_id, monthly_fee, total_amount'),
+    ]);
+
+    const contracts = contractsRes.data || [];
+    const companies = companiesRes.data || [];
+    const invoices = invoicesRes.data || [];
+    const deals = dealsRes.data || [];
+
+    const companyMap = new Map(companies.map((c: any) => [c.id, c.company_name]));
+    const dealMap = new Map(deals.map((d: any) => [d.id, d]));
+
+    for (const contract of contracts) {
+      const linkedDeal = contract.deal_id ? dealMap.get(contract.deal_id) : undefined;
+      const monthlyFee = determineContractMonthlyFee(contract, linkedDeal);
+
+      if (monthlyFee <= 0) continue;
+
+      // Idempotency check: check if already billed for this target month
+      const alreadyBilled = isContractAlreadyBilled(invoices, contract.id, contract.company_id, targetMonth);
+      if (alreadyBilled) {
+        summary.recurringSkipped++;
+        continue;
+      }
+
+      const companyName = companyMap.get(contract.company_id) || contract.counterparty_name || '取引先';
+      const billing = calculateBillingAmount(monthlyFee);
+      const invoiceNumber = `INV-${yearStr}${monthStr}-${contract.id.slice(0, 6).toUpperCase()}`;
+      const invoiceTitle = `${companyName} 【${monthLabel}】定期請求書`;
+
+      const invoiceHtml = `
+        <div style="font-family: sans-serif; padding: 30px; line-height: 1.8; color: #1e293b;">
+          <h1 style="text-align: center; border-bottom: 2px solid #0f172a; padding-bottom: 10px;">御 請 求 書</h1>
+          <p style="text-align: right;">請求番号: ${invoiceNumber}<br>発行日: ${finalIssueDate}</p>
+          <p style="font-size: 18px;"><strong>${companyName} 御中</strong></p>
+          <p>下記の通り、${monthLabel}の月次顧問料・運用支援費用をご請求申し上げます。</p>
+          <div style="background: #f8fafc; border: 1px solid #cbd5e1; padding: 15px; border-radius: 8px; margin-bottom: 20px;">
+            <table style="width: 100%; border-collapse: collapse; font-size: 14px;">
+              <thead>
+                <tr style="border-bottom: 2px solid #94a3b8; text-align: left;">
+                  <th style="padding: 8px 0;">品目・内容</th>
+                  <th style="padding: 8px 0; text-align: right;">金額（税抜）</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td style="padding: 8px 0;">月額顧問・システム運用支援費用（${monthLabel}）</td>
+                  <td style="padding: 8px 0; text-align: right; font-weight: bold;">¥${monthlyFee.toLocaleString('ja-JP')}</td>
+                </tr>
+                <tr style="border-top: 1px solid #cbd5e1;">
+                  <td style="padding: 6px 0; color: #64748b;">小計（税抜）:</td>
+                  <td style="padding: 6px 0; text-align: right; font-weight: bold;">¥${billing.subtotal.toLocaleString('ja-JP')}</td>
+                </tr>
+                <tr>
+                  <td style="padding: 6px 0; color: #64748b; border-bottom: 1px solid #cbd5e1;">消費税（10%）:</td>
+                  <td style="padding: 6px 0; text-align: right; font-weight: bold; border-bottom: 1px solid #cbd5e1;">¥${billing.taxAmount.toLocaleString('ja-JP')}</td>
+                </tr>
+                <tr>
+                  <td style="padding: 10px 0 4px 0; font-size: 18px; font-weight: bold; color: #0f172a;">ご請求金額合計（税込）:</td>
+                  <td style="padding: 10px 0 4px 0; text-align: right; font-size: 20px; font-weight: 800; color: #1e3a8a;">¥${billing.totalWithTax.toLocaleString('ja-JP')}</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <p style="margin-top: 20px;">お支払期日: <strong>${finalDueDate}</strong></p>
+          <div style="background: #eff6ff; border: 1px solid #bfdbfe; padding: 12px 16px; border-radius: 6px; font-size: 13px;">
+            <strong>お振込先口座:</strong><br>
+            ドコモSMTBネット銀行 法人第一支店 普通 2223730<br>
+            口座名義: 有限会社MST
+          </div>
+        </div>
+      `;
+
+      let documentId: string | undefined;
+      const { data: docData } = await lineSupabase
+        .from('customer_documents')
+        .insert({
+          document_type: 'invoice',
+          title: `${companyName} · 定期請求書（${monthLabel}）`,
+          body_html: invoiceHtml,
+          company_id: contract.company_id,
+          deal_id: contract.deal_id || null,
+          status: 'draft',
+        })
+        .select('id')
+        .maybeSingle();
+
+      if (docData?.id) documentId = docData.id;
+
+      const { data: invData, error: invError } = await lineSupabase
+        .from('customer_invoices')
+        .insert({
+          company_id: contract.company_id,
+          contract_id: contract.id,
+          product_id: contract.product_id || null,
+          document_id: documentId || null,
+          title: invoiceTitle,
+          invoice_number: invoiceNumber,
+          amount: monthlyFee,
+          tax_amount: billing.taxAmount,
+          issue_date: finalIssueDate,
+          due_date: finalDueDate,
+          status: 'draft',
+          recipient_name: companyName,
+          notes: `定期月次請求（${monthLabel} 自動起票）。お支払期日: ${finalDueDate}。書類ID: ${documentId || 'なし'}`,
+        })
+        .select('id')
+        .single();
+
+      if (!invError && invData?.id) {
+        summary.recurringInvoicesGenerated++;
+      }
+    }
+
+    return res.json({
+      success: true,
+      summary,
+    });
+  } catch (error: any) {
+    console.error('Cron billing-automation execution failed:', error);
+    return res.status(500).json({ error: error instanceof Error ? error.message : 'Unknown error' });
+  }
+});
+
+// キルスイッチ（緊急停止）一覧取得 API
+app.get('/api/admin/automation-controls', async (req, res) => {
+  if (!lineSupabase) return res.status(503).json({ error: 'Database connection unavailable.' });
+  try {
+    const { data, error } = await lineSupabase.from('automation_controls').select('*').order('id', { ascending: true });
+    if (error) {
+      // テーブル未初期化時のフォールバック
+      return res.json({
+        controls: [
+          { target: 'all', paused: false, reason: '' },
+          { target: 'ai', paused: false, reason: '' },
+          { target: 'send', paused: false, reason: '' },
+          { target: 'billing', paused: false, reason: '' },
+        ]
+      });
+    }
+    return res.json({ controls: data || [] });
+  } catch (err: any) {
+    return res.status(500).json({ error: err.message || 'Failed to fetch automation controls' });
+  }
+});
+
+// キルスイッチ（緊急停止）更新 API
+app.post('/api/admin/automation-controls', async (req, res) => {
+  if (!lineSupabase) return res.status(503).json({ error: 'Database connection unavailable.' });
+  try {
+    const { target = 'all', paused, reason = '' } = req.body || {};
+    if (typeof paused !== 'boolean') {
+      return res.status(400).json({ error: 'paused (boolean) is required' });
+    }
+    const validTargets = ['all', 'ai', 'send', 'billing'];
+    if (!validTargets.includes(target)) {
+      return res.status(400).json({ error: `Invalid target: ${target}. Allowed: ${validTargets.join(', ')}` });
+    }
+
+    let updatedBy = '管理者';
+    const authHeader = req.header('authorization') || '';
+    const token = authHeader.startsWith('Bearer ') ? authHeader.slice(7).trim() : '';
+    if (token) {
+      const { data: authData } = await lineSupabase.auth.getUser(token).catch(() => ({ data: null }));
+      if (authData?.user?.email) updatedBy = authData.user.email;
+    }
+
+    const nowIso = new Date().toISOString();
+    const { data, error } = await lineSupabase
+      .from('automation_controls')
+      .upsert(
+        {
+          target,
+          paused,
+          reason,
+          updated_by: updatedBy,
+          updated_at: nowIso,
+        },
+        { onConflict: 'target' }
+      )
+      .select('*')
+      .maybeSingle();
+
+    if (error) {
+      const { data: existing } = await lineSupabase.from('automation_controls').select('id').eq('target', target).maybeSingle();
+      if (existing) {
+        await lineSupabase.from('automation_controls').update({ paused, reason, updated_by: updatedBy, updated_at: nowIso }).eq('id', existing.id);
+      } else {
+        await lineSupabase.from('automation_controls').insert({ target, paused, reason, updated_by: updatedBy, updated_at: nowIso });
+      }
+    }
+
+    // メモリキャッシュをクリア
+    killSwitchCache = {};
+
+    return res.json({ success: true, target, paused, reason, updated_by: updatedBy, updated_at: nowIso });
+  } catch (err: any) {
+    return res.status(500).json({ error: err.message || 'Failed to update automation controls' });
   }
 });
 
@@ -2827,6 +3252,13 @@ app.post('/api/marketing/jobs/:id/cancel', async (req, res) => {
 
 app.post('/api/communications/send', async (req, res) => {
   if (!lineSupabase) return res.status(503).json({ error: '送信サーバーのSupabase設定がありません。' });
+
+  // キルスイッチ確認（all または send が停止中なら送信を拒否）
+  const killSwitch = await getKillSwitchStatus('send');
+  if (killSwitch.paused) {
+    return res.status(503).json({ error: `自動配信・メッセージ送信は緊急停止中です: ${killSwitch.reason || '一時停止中'}` });
+  }
+
   const authorization = req.header('authorization') || '';
   const token = authorization.startsWith('Bearer ') ? authorization.slice(7) : '';
   if (!token) return res.status(401).json({ error: '認証が必要です。' });
@@ -4447,6 +4879,11 @@ app.get('/api/ai-providers', (_req, res) => {
 // 1. Chat Completion / Streaming
 app.post('/api/chat', requireAuth, async (req, res) => {
   try {
+    const killSwitch = await getKillSwitchStatus('ai');
+    if (killSwitch.paused) {
+      return res.status(503).json({ error: `AI呼び出し機能は緊急停止中です: ${killSwitch.reason || '一時停止中'}` });
+    }
+
     const { messages, message, history, character, stream, workModeId, knowledgeContext, businessSummaryContext } = req.body;
     const requestedMessages = Array.isArray(messages)
       ? messages
@@ -4653,6 +5090,11 @@ app.post('/api/knowledge/semantic-search', requireAuth, async (req, res) => {
 // 2. AI Character Architect (ワンクリック自動生成)
 app.post('/api/generate-character', requireAuth, async (req, res) => {
   try {
+    const killSwitch = await getKillSwitchStatus('ai');
+    if (killSwitch.paused) {
+      return res.status(503).json({ error: `AI機能は緊急停止中です: ${killSwitch.reason || '一時停止中'}` });
+    }
+
     const { concept, userProfile } = req.body;
     if (!concept || typeof concept !== 'string') {
       return res.status(400).json({ error: 'concept string is required' });
@@ -4739,6 +5181,11 @@ ${userProfile ? `【ユーザー自身の情報】:\n- 名前: ${userProfile.use
 // 3. Extract Memory from Conversation (対話から記憶・メモを抽出)
 app.post('/api/extract-memory', requireAuth, async (req, res) => {
   try {
+    const killSwitch = await getKillSwitchStatus('ai');
+    if (killSwitch.paused) {
+      return res.status(503).json({ error: `AI機能は緊急停止中です: ${killSwitch.reason || '一時停止中'}` });
+    }
+
     const { messages, currentNotes } = req.body;
     if (!messages || !Array.isArray(messages) || messages.length === 0) {
       return res.status(400).json({ error: 'messages array is required' });
@@ -4750,7 +5197,7 @@ app.post('/api/extract-memory', requireAuth, async (req, res) => {
       .join('\n');
 
     const prompt = `以下の直近の会話から、AIが今後ユーザーをサポートする上で【記憶しておくべきユーザーの個人的な特徴、好み、現状、悩み、目標、新事実】を抽出してください。
-すでに記録されている既存メモと重複しない、新しい有用な情報のみを箇条書きで抽出してください。
+すで記録されている既存メモと重複しない、新しい有用な情報のみを箇条書きで抽出してください。
 
 【既存のメモ】:
 ${currentNotes || 'なし'}
@@ -4777,6 +5224,11 @@ ${conversationText}
 // 4. Prompt Improvement / Optimizer
 app.post('/api/refine-prompt', requireAuth, async (req, res) => {
   try {
+    const killSwitch = await getKillSwitchStatus('ai');
+    if (killSwitch.paused) {
+      return res.status(503).json({ error: `AI機能は緊急停止中です: ${killSwitch.reason || '一時停止中'}` });
+    }
+
     const { character } = req.body;
     const prompt = `以下のAIキャラクター設定をレビューし、GeminiなどのLLMがより忠実にキャラクターになりきれるようにSystem Instructionの改善版を提案してください。
 
