@@ -120,6 +120,7 @@ import {
   WorkspaceData,
   isWorkspaceConflictError,
 } from './services/workspaceStateService';
+import { mergeCollectionPreservingUserEdits } from './utils/workspaceMergeUtils';
 import {
   workspaceSaveCoordinator,
 } from './services/workspaceSaveCoordinator';
@@ -318,43 +319,6 @@ async function loadTaskRelatedContext(task: TaskItem): Promise<string> {
  * 保存開始時(saving)から現在(current)までに変更されたローカル編集を最優先し、
  * 保存中に変更されていない項目のみマージ結果(merged)を取り込む。
  */
-function mergeCollectionPreservingUserEdits<T extends { id: string }>(
-  currentState: T[],
-  savingState: T[],
-  mergedState: T[],
-): T[] {
-  const savingById = new Map(savingState.map((r) => [r.id, r]));
-  const mergedById = new Map(mergedState.map((r) => [r.id, r]));
-  const result: T[] = [];
-  const processedIds = new Set<string>();
-
-  for (const current of currentState) {
-    processedIds.add(current.id);
-    const saving = savingById.get(current.id);
-    const merged = mergedById.get(current.id);
-
-    if (!saving) {
-      // 保存開始後にユーザーが新規追加したレコード -> currentを最優先
-      result.push(current);
-    } else if (JSON.stringify(current) !== JSON.stringify(saving)) {
-      // 保存中にユーザーがローカルで編集したレコード -> currentを最優先
-      result.push(current);
-    } else if (merged) {
-      // 保存中にローカル変更なし -> リモートとのマージ結果を採用
-      result.push(merged);
-    }
-  }
-
-  // リモートで新規追加されたレコード（savingには無かったがmergedにはある、かつcurrentにもまだ無い）
-  for (const merged of mergedState) {
-    if (!processedIds.has(merged.id)) {
-      result.push(merged);
-    }
-  }
-
-  return result;
-}
-
 function AppContent() {
   const { user, isLoading } = useAuth();
   const [currentTab, setCurrentTab] = useState<UnifiedNavTab>('mst_dashboard');

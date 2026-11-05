@@ -13,7 +13,7 @@ interface QueuedDeferred {
   reject: (error: unknown) => void;
 }
 
-class WorkspaceSaveCoordinator {
+export class WorkspaceSaveCoordinator {
   private isSaving = false;
   private pendingUserId: string | null = null;
   private pendingData: WorkspaceData | null = null;
@@ -212,9 +212,15 @@ class WorkspaceSaveCoordinator {
       const errorMessage = (error as { message?: string })?.message || '';
 
       if (isWorkspaceConflictError(error)) {
-        // 自動マージ上限を超えて競合が解消しなかった場合は自動保存を停止（有界化）
+        // 指摘2対応: 自動マージ上限を超えて競合が解消しなかった場合は自動保存を停止（有界化）
         this.isConflictStopped = true;
-        this.pendingData = null; // 保留中のリクエストも破棄
+        this.pendingData = null; // 保留中のリクエストを破棄
+
+        // 【最重要】実行中に入ってきた pendingDeferreds（手動削除のawait等）もすべて reject して固まりを防止
+        const remainingDeferreds = [...this.pendingDeferreds];
+        this.pendingDeferreds = [];
+        remainingDeferreds.forEach((d) => d.reject(error));
+
         this.setStatus('conflict', '他の端末で更新されています。再読み込みしてください');
       } else {
         const errorDetails = `${errorMessage} ${(error as { details?: string })?.details || ''} ${(error as { hint?: string })?.hint || ''}`;

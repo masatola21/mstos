@@ -477,6 +477,53 @@ function getSupabaseClient() {
   return supabase;
 }
 
+function hasPendingLocalChanges(
+  cloudData: {
+    snapshot: Partial<WorkspaceData> | null;
+    relationalAI: RelationalAIOperations | null;
+    relationalMatrix: RelationalMatrixWorkspace | null;
+    relationalSales: RelationalSalesOperations | null;
+  },
+  merged: WorkspaceData
+): boolean {
+  // クラウドに一切データがない場合は初回移行が必要
+  if (!cloudData.snapshot && !cloudData.relationalAI && !cloudData.relationalMatrix && !cloudData.relationalSales) {
+    return true;
+  }
+
+  // 1. Matrix テーブル群の差分確認
+  if (cloudData.relationalMatrix) {
+    if (JSON.stringify(cloudData.relationalMatrix.products || []) !== JSON.stringify(merged.products || [])) return true;
+    if (JSON.stringify(cloudData.relationalMatrix.tools || []) !== JSON.stringify(merged.tools || [])) return true;
+    if (JSON.stringify(cloudData.relationalMatrix.customLists || []) !== JSON.stringify(merged.customLists || [])) return true;
+    if (JSON.stringify(cloudData.relationalMatrix.marketingScenarios || []) !== JSON.stringify(merged.marketingScenarios || [])) return true;
+  } else if ((merged.products || []).length > 0 || (merged.tools || []).length > 0) {
+    return true;
+  }
+
+  // 2. Sales テーブル群（contracts, invoices）の差分確認
+  if (cloudData.relationalSales) {
+    if (JSON.stringify(cloudData.relationalSales.contracts || []) !== JSON.stringify(merged.contracts || [])) return true;
+    if (JSON.stringify(cloudData.relationalSales.invoices || []) !== JSON.stringify(merged.invoices || [])) return true;
+  } else if ((merged.contracts || []).length > 0 || (merged.invoices || []).length > 0) {
+    return true;
+  }
+
+  // 3. AI Operations の差分確認
+  if (cloudData.relationalAI) {
+    if (JSON.stringify(cloudData.relationalAI.projects || []) !== JSON.stringify(merged.projects || [])) return true;
+    if (JSON.stringify(cloudData.relationalAI.tasks || []) !== JSON.stringify(merged.tasks || [])) return true;
+    if (JSON.stringify(cloudData.relationalAI.approvals || []) !== JSON.stringify(merged.approvals || [])) return true;
+    if (JSON.stringify(cloudData.relationalAI.automations || []) !== JSON.stringify(merged.automations || [])) return true;
+    if (cloudData.relationalAI.topGoal !== merged.topGoal) return true;
+    if (cloudData.relationalAI.activeCharacterId !== merged.activeCharacterId) return true;
+  } else if ((merged.projects || []).length > 0 || (merged.tasks || []).length > 0) {
+    return true;
+  }
+
+  return false;
+}
+
 export async function loadOrMigrateWorkspaceData(userId: string): Promise<WorkspaceData> {
   matrixService.setActiveUserId(userId);
   const supabase = getSupabaseClient();
@@ -566,15 +613,23 @@ export async function loadOrMigrateWorkspaceData(userId: string): Promise<Worksp
 
   applyWorkspaceData(merged);
 
-  // 指摘3対応: 読み込み時の無条件保存を廃止。
-  // クラウド（workspace_state, AI operations, Matrix workspace）のいずれにもデータが存在しない初回移行時のみ保存する。
-  const hasCloudData = Boolean(row || relationalAI || relationalMatrix);
-  if (!hasCloudData) {
-    // 初回移行：読み込み経路で競合が起きた場合は自動マージせず conflict として扱う（maxConflictRetries: 0）
+  // 指摘1対応: クラウド側の内容(remote)と merged が実質同一のときだけ保存を省略する。
+  // ローカルだけの編集や削除がある場合は保存する（競合時は maxConflictRetries: 0 で conflict 扱い）。
+  const needsSave = hasPendingLocalChanges(
+    {
+      snapshot: remote,
+      relationalAI,
+      relationalMatrix,
+      relationalSales,
+    },
+    merged
+  );
+
+  if (needsSave) {
+    // ローカル差分あり、または初回移行：保存を実行（成功すれば saveWorkspaceData 内でベースライン更新）
     await saveWorkspaceData(userId, merged, { maxConflictRetries: 0 });
   } else {
-    // すでにクラウドにデータが存在する場合、読み込み時の無条件保存は行わず、
-    // ローカルの同期ベースラインを更新する（updated_atの不要な更新を防止）。
+    // クラウド側と実質同一：保存を省略し、ベースラインのみ更新（updated_atの不要な更新を防止）
     try {
       localStorage.setItem(`${LAST_SYNC_PREFIX}${userId}`, JSON.stringify(merged));
     } catch (storageError) {

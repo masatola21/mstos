@@ -70,6 +70,30 @@ export const AppShell: React.FC<AppShellProps> = ({
           onOpenProfile={onOpenProfile}
         />
 
+        {/* 指摘4対応: 競合停止通知バナー（未保存警告 ＆ 再同期・再読み込み導線） */}
+        {workspaceSyncStatus === 'conflict' && (
+          <div className="bg-rose-50 border-b border-rose-200 px-4 py-3 text-xs text-rose-800 flex flex-wrap items-center justify-between gap-3 shadow-sm">
+            <div className="flex items-center gap-2">
+              <span className="text-base">⚠️</span>
+              <div>
+                <span className="font-bold">同期停止中（未保存）:</span>{' '}
+                他の端末でデータが更新されたため自動保存を停止しています。現在の画面の入力・編集内容はまだクラウドに保存されていません。
+              </div>
+            </div>
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={() => {
+                  window.location.reload();
+                }}
+                className="px-3 py-1.5 bg-rose-600 hover:bg-rose-700 text-white rounded-md font-bold text-xs transition cursor-pointer shadow-sm"
+              >
+                最新データを再読み込み
+              </button>
+            </div>
+          </div>
+        )}
+
         {/* Dynamic Workspace Content */}
         <main className="flex-1 w-full max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
           {children}
