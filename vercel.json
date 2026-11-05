@@ -11,12 +11,6 @@
       "config": { "distDir": "dist" }
     }
   ],
-  "crons": [
-    {
-      "path": "/api/cron/marketing-automation",
-      "schedule": "*/3 * * * *"
-    }
-  ],
   "routes": [
     {
       "src": "/api/(.*)",

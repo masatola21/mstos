@@ -2748,8 +2748,8 @@ async function processMarketingAutomationJobs(): Promise<number> {
   return processedJobsCount;
 }
 
-// Vercel Cron Jobs / スケジュール実行エンドポイント（外部またはVercel Cronからの定期呼び出し）
-app.get('/api/cron/marketing-automation', async (req, res) => {
+// Vercel Cron Jobs / Supabase pg_cron スケジュール実行エンドポイント（GET / POST両対応）
+app.all('/api/cron/marketing-automation', async (req, res) => {
   // CRON_SECRETが環境変数に設定されている場合はBearerトークンを検証
   const cronSecret = process.env.CRON_SECRET?.trim();
   if (cronSecret) {
