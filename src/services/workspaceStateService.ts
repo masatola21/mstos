@@ -558,15 +558,111 @@ export async function loadOrMigrateWorkspaceData(userId: string): Promise<Worksp
   return merged;
 }
 
-export async function saveWorkspaceData(userId: string, data: WorkspaceData): Promise<void> {
+
+export function isWorkspaceConflictError(error: unknown): boolean {
+  if (!error || typeof error !== 'object') return false;
+  const err = error as { code?: string; message?: string; details?: string };
+  return err.code === '40001' ||
+    (typeof err.message === 'string' && err.message.includes('WORKSPACE_CONFLICT')) ||
+    (typeof err.details === 'string' && err.details.includes('WORKSPACE_CONFLICT'));
+}
+
+export async function fetchLatestMatrixWorkspaceSyncState(userId: string): Promise<string | null> {
+  const supabase = getSupabaseClient();
+  const { data, error } = await supabase
+    .from('mst_matrix_workspace_sync_state')
+    .select('updated_at')
+    .eq('user_id', userId)
+    .maybeSingle();
+  if (error) {
+    console.warn('Failed to fetch latest matrix sync state:', error);
+    return null;
+  }
+  if (data?.updated_at) {
+    matrixWorkspaceUpdatedAtByUser.set(userId, data.updated_at);
+    return data.updated_at;
+  }
+  return null;
+}
+
+export async function resolveMatrixConflictAndMerge(
+  userId: string,
+  localData: WorkspaceData
+): Promise<{ mergedData: WorkspaceData; newUpdatedAt: string }> {
+  const relationalMatrix = await loadRelationalMatrixWorkspace(userId);
+  const relationalSales = await loadRelationalSalesOperations();
+  const baseline = loadLastSyncedData(userId);
+  const newUpdatedAt = matrixWorkspaceUpdatedAtByUser.get(userId) || '';
+
+  const merged = { ...localData };
+
+  if (relationalMatrix) {
+    merged.products = mergeRecords(relationalMatrix.products, localData.products, baseline.products || []);
+    merged.tools = mergeRecords(relationalMatrix.tools, localData.tools, baseline.tools || []);
+    merged.customLists = mergeRecords(relationalMatrix.customLists, localData.customLists, baseline.customLists || []);
+    merged.marketingScenarios = deduplicateMarketingScenarios(
+      mergeRecords(relationalMatrix.marketingScenarios, localData.marketingScenarios, baseline.marketingScenarios || [])
+    );
+  }
+
+  if (relationalSales) {
+    merged.contracts = mergeRecords(relationalSales.contracts, localData.contracts, baseline.contracts || []);
+    merged.invoices = mergeRecords(relationalSales.invoices, localData.invoices, baseline.invoices || []);
+  }
+
+  const pendingDeletions = matrixService.getPendingDeletions(userId);
+  merged.products = (merged.products || []).filter((record) => !pendingDeletions.products.has(record.id));
+  merged.contracts = (merged.contracts || []).filter((record) => !pendingDeletions.contracts.has(record.id));
+  merged.invoices = (merged.invoices || []).filter((record) => !pendingDeletions.invoices.has(record.id));
+
+  return { mergedData: merged, newUpdatedAt };
+}
+
+export interface SaveWorkspaceOptions {
+  maxConflictRetries?: number;
+}
+
+export interface SaveWorkspaceResult {
+  savedData: WorkspaceData;
+  wasMerged: boolean;
+}
+
+export async function saveWorkspaceData(
+  userId: string,
+  data: WorkspaceData,
+  options?: SaveWorkspaceOptions
+): Promise<SaveWorkspaceResult> {
   matrixService.setActiveUserId(userId);
   const supabase = getSupabaseClient();
-  await saveRelationalAIOperations(userId, data);
-  await saveRelationalMatrixWorkspace(userId, data);
+  const maxRetries = options?.maxConflictRetries ?? 2;
+  let currentData = data;
+  let wasMerged = false;
+  let retryCount = 0;
 
-  // AI and Matrix business records are stored in user-scoped relational tables.
-  // The compatibility snapshot retains only auxiliary workspace state.
-  const snapshotData = { ...data } as Partial<WorkspaceData>;
+  // 1. Matrix Workspace 保存（楽観的ロック・競合検知）を先に実行
+  // これにより、Matrix競合時に AI Operations だけが先行保存される不整合を防ぐ
+  while (true) {
+    try {
+      await saveRelationalMatrixWorkspace(userId, currentData);
+      break; // 成功
+    } catch (err) {
+      if (isWorkspaceConflictError(err) && retryCount < maxRetries) {
+        retryCount++;
+        console.warn(`[WorkspaceSync] WORKSPACE_CONFLICT detected. Attempting 3-way auto-merge (attempt ${retryCount}/${maxRetries})...`);
+        const result = await resolveMatrixConflictAndMerge(userId, currentData);
+        currentData = result.mergedData;
+        wasMerged = true;
+        continue;
+      }
+      throw err;
+    }
+  }
+
+  // 2. Matrix保存成功後に AI Operations を保存
+  await saveRelationalAIOperations(userId, currentData);
+
+  // 3. 互換用スナップショットを更新
+  const snapshotData = { ...currentData } as Partial<WorkspaceData>;
   delete snapshotData.topGoal;
   delete snapshotData.characters;
   delete snapshotData.activeCharacterId;
@@ -592,10 +688,17 @@ export async function saveWorkspaceData(userId: string, data: WorkspaceData): Pr
     .from(WORKSPACE_STATE_TABLE)
     .upsert({ user_id: userId, data: snapshotData, updated_at: new Date().toISOString() }, { onConflict: 'user_id' });
   if (error) throw error;
+
+  // 4. マージが発生した場合はローカルストレージも最新データで更新
+  if (wasMerged) {
+    applyWorkspaceData(currentData);
+  }
+
   try {
-    localStorage.setItem(`${LAST_SYNC_PREFIX}${userId}`, JSON.stringify(data));
+    localStorage.setItem(`${LAST_SYNC_PREFIX}${userId}`, JSON.stringify(currentData));
   } catch (storageError) {
     console.warn('Could not update the local workspace sync baseline:', storageError);
   }
-}
 
+  return { savedData: currentData, wasMerged };
+}

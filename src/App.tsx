@@ -118,7 +118,11 @@ import {
   loadOrMigrateWorkspaceData,
   saveWorkspaceData,
   WorkspaceData,
+  isWorkspaceConflictError,
 } from './services/workspaceStateService';
+import {
+  workspaceSaveCoordinator,
+} from './services/workspaceSaveCoordinator';
 import { 
   ManagedProduct, 
   ManagedContract, 
@@ -353,6 +357,29 @@ function AppContent() {
   const workspaceSaveRevisionRef = useRef(0);
   const workspaceSyncEnabledRef = useRef(false);
 
+  // 保存コーディネーターのステータス変化とマージイベントを監視
+  useEffect(() => {
+    const unsubscribe = workspaceSaveCoordinator.addListener({
+      onStatusChange: (status, errorMessage) => {
+        setWorkspaceSyncStatus(status);
+        if (errorMessage !== undefined) {
+          setWorkspaceSaveError(errorMessage);
+        }
+      },
+      onMergedData: (mergedData) => {
+        // 競合解消マージでリモートから取り込まれた最新データをReact stateに同期
+        console.info('[App] Synchronizing React states with 3-way merged workspace data');
+        setProducts(mergedData.products || []);
+        setContracts(mergedData.contracts || []);
+        setInvoices(mergedData.invoices || []);
+        setTools(mergedData.tools || []);
+        setCustomLists(mergedData.customLists || []);
+        setMarketingScenarios(mergedData.marketingScenarios || []);
+      },
+    });
+    return unsubscribe;
+  }, []);
+
   // MST Modals
   const [isConfigOpen, setIsConfigOpen] = useState(false);
   const [isRlsOpen, setIsRlsOpen] = useState(false);
@@ -458,6 +485,7 @@ function AppContent() {
         const savedChat = data.workModeHistories?.[initialChatKey] || loadChatHistory(initialChatKey);
         setMessages(savedChat.length ? savedChat : activeWorkModeId === 'president' ? loadChatHistory(nextActiveCharacterId) : []);
         lastSavedWorkspaceRef.current = JSON.stringify(data);
+        workspaceSaveCoordinator.setInitialSavedSnapshot(data);
         workspaceSyncEnabledRef.current = true;
         setWorkspaceSyncStatus('saved');
         setWorkspaceReady(true);
@@ -483,70 +511,36 @@ function AppContent() {
     return () => { cancelled = true; };
   }, [user?.id]);
 
+  // 保存最適化：タイマーが発火するまで巨大オブジェクト構築・JSON.stringifyを行わない
   useEffect(() => {
     if (!user || !workspaceReady || !workspaceSyncEnabledRef.current) return;
 
-    const workspaceData: WorkspaceData = {
-      topGoal,
-      characters,
-      activeCharacterId,
-      userProfile,
-      aiModelSettings,
-      projects,
-      tasks,
-      approvals,
-      activityLogs,
-      pricingRates,
-      tokenUsage: tokenUsageRecords,
-      products,
-      contracts,
-      invoices,
-      tools,
-      customLists,
-      automations,
-      marketingScenarios,
-      workModeHistories,
-      knowledgeItems,
-    };
-    const snapshot = JSON.stringify(workspaceData);
-    if (snapshot === lastSavedWorkspaceRef.current) return;
-
-    const revision = ++workspaceSaveRevisionRef.current;
-    setWorkspaceSyncStatus('saving');
-    const timer = window.setTimeout(() => {
-      saveWorkspaceData(user.id, workspaceData)
-        .then(() => {
-          if (revision !== workspaceSaveRevisionRef.current) return;
-          lastSavedWorkspaceRef.current = snapshot;
-          setWorkspaceSaveError('');
-          setWorkspaceSyncStatus('saved');
-        })
-        .catch((error) => {
-          if (revision !== workspaceSaveRevisionRef.current) return;
-          console.error('Workspace cloud save failed:', error);
-          const errorCode = (error as { code?: string })?.code;
-          const errorMessage = (error as { message?: string })?.message || '';
-          if (errorCode === '40001' || errorMessage.includes('WORKSPACE_CONFLICT')) {
-            workspaceSyncEnabledRef.current = false;
-            setWorkspaceSyncStatus('conflict');
-            setWorkspaceSaveError('他の端末で更新されています。再読み込みしてください');
-            return;
-          }
-          const errorDetails = `${errorMessage} ${(error as { details?: string })?.details || ''} ${(error as { hint?: string })?.hint || ''}`;
-          if (errorCode === '23505' && /invoice_number|invoice number|customer_invoices/i.test(errorDetails)) {
-            setWorkspaceSaveError('請求書番号が重複しています。請求番号を確認して再度保存してください。');
-          } else if (errorCode === '23505' || /duplicate key|unique constraint/i.test(errorMessage)) {
-            setWorkspaceSaveError('保存時に一意制約の重複が発生しました。重複するデータを確認してください。');
-          } else {
-            setWorkspaceSaveError(errorMessage
-              ? `クラウド同期に失敗しました: ${errorMessage}`
-              : 'クラウド同期に失敗しました。接続設定と mst_workspace_state テーブルのマイグレーションを確認してください。');
-          }
-          setWorkspaceSyncStatus('error');
-        });
-    }, 700);
-
-    return () => window.clearTimeout(timer);
+    workspaceSaveCoordinator.requestDebouncedSave(
+      user.id,
+      () => ({
+        topGoal,
+        characters,
+        activeCharacterId,
+        userProfile,
+        aiModelSettings,
+        projects,
+        tasks,
+        approvals,
+        activityLogs,
+        pricingRates,
+        tokenUsage: tokenUsageRecords,
+        products,
+        contracts,
+        invoices,
+        tools,
+        customLists,
+        automations,
+        marketingScenarios,
+        workModeHistories,
+        knowledgeItems,
+      }),
+      700
+    );
   }, [
     user?.id,
     workspaceReady,
@@ -2019,29 +2013,14 @@ function AppContent() {
       workModeHistories,
       knowledgeItems,
     };
-    const snapshot = JSON.stringify(workspaceData);
-    const revision = ++workspaceSaveRevisionRef.current;
-    lastSavedWorkspaceRef.current = snapshot;
-    setWorkspaceSyncStatus('saving');
+
     try {
-      await saveWorkspaceData(user.id, workspaceData);
-      if (revision !== workspaceSaveRevisionRef.current) return;
-      setWorkspaceSaveError('');
-      setWorkspaceSyncStatus('saved');
+      await workspaceSaveCoordinator.requestImmediateSave(user.id, workspaceData);
     } catch (error) {
-      if (revision !== workspaceSaveRevisionRef.current) throw error;
-      const errorCode = (error as { code?: string })?.code;
-      const errorMessage = (error as { message?: string })?.message || '';
-      if (errorCode === '40001' || errorMessage.includes('WORKSPACE_CONFLICT')) {
-        workspaceSyncEnabledRef.current = false;
-        setWorkspaceSyncStatus('conflict');
-        const message = '他の端末で更新されています。再読み込みしてください';
-        setWorkspaceSaveError(message);
-        throw new Error(message);
+      if (isWorkspaceConflictError(error)) {
+        throw new Error('他の端末で更新されています。再読み込みしてください');
       }
-      setWorkspaceSyncStatus('error');
-      const message = errorMessage || '削除の保存に失敗しました。未反映の削除は次回の保存時に再試行されます。';
-      setWorkspaceSaveError(message);
+      const message = (error as { message?: string })?.message || '削除の保存に失敗しました。未反映の削除は次回の保存時に再試行されます。';
       throw new Error(message);
     }
   };
