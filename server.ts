@@ -2379,6 +2379,8 @@ function checkSendTimeWindow(windowStr: string | null | undefined, now: Date = n
 
 let marketingQueueBusy = false;
 let marketingRunnerLastRunAt: string | null = null;
+let lastStaleJobsCheckAt = 0;
+
 async function processMarketingAutomationJobs(): Promise<number> {
   marketingRunnerLastRunAt = new Date().toISOString();
   if (!lineSupabase || marketingQueueBusy) return 0;
@@ -2386,20 +2388,35 @@ async function processMarketingAutomationJobs(): Promise<number> {
   let processedJobsCount = 0;
   try {
     const now = new Date().toISOString();
-    const staleBefore = new Date(Date.now() - 15 * 60 * 1000).toISOString();
-    const { error: staleError } = await lineSupabase.from('marketing_automation_jobs').update({
-      status: 'failed',
-      error_message: '送信中に中断された可能性があります。送信済みか確認してから再実行してください。',
-      updated_at: now,
-    }).eq('status', 'sending').lt('updated_at', staleBefore);
-    if (staleError) throw staleError;
-    const { data: jobs, error } = await lineSupabase.from('marketing_automation_jobs')
-      .select('*').eq('status','queued').lte('due_at',now).order('due_at',{ascending:true}).limit(20);
-    if (error) throw error;
-    if (jobs && jobs.length > 0) {
-      processedJobsCount = jobs.length;
+
+    // ★ディスクI/O 99%逼迫の根本原因を解消★
+    // 従来の毎ポーリングでの UPDATE 実行（WAL書き込み・ロック発生）を廃止し、
+    // 滞留ジョブのリカバリは1時間に1回のみ実行。通常のポーリングでは更新を走らせない。
+    if (Date.now() - lastStaleJobsCheckAt > 3600000) {
+      lastStaleJobsCheckAt = Date.now();
+      const staleBefore = new Date(Date.now() - 15 * 60 * 1000).toISOString();
+      await lineSupabase.from('marketing_automation_jobs').update({
+        status: 'failed',
+        error_message: '送信中に中断された可能性があります。送信済みか確認してから再実行してください。',
+        updated_at: now,
+      }).eq('status', 'sending').lt('updated_at', staleBefore);
     }
-    for (const job of jobs || []) {
+
+    // 待機中かつ送信予定時刻到来済みのジョブのみ取得（必要なカラムに限定して取得負荷を低減）
+    const { data: jobs, error } = await lineSupabase.from('marketing_automation_jobs')
+      .select('id, owner_id, scenario_id, contact_id, channel, subject, body_text, payload, line_message_payload, consent_basis, created_at')
+      .eq('status', 'queued')
+      .lte('due_at', now)
+      .order('due_at', { ascending: true })
+      .limit(20);
+
+    if (error) throw error;
+    if (!jobs || jobs.length === 0) {
+      return 0; // ジョブなし時は早期リターンしDBへの不要なアクセス・ロックを完全にゼロ化
+    }
+
+    processedJobsCount = jobs.length;
+    for (const job of jobs) {
       const { data: claimed } = await lineSupabase.from('marketing_automation_jobs')
         .update({ status:'sending', updated_at:new Date().toISOString() }).eq('id',job.id).eq('status','queued').select('*').maybeSingle();
       if (!claimed) continue;
@@ -2730,6 +2747,31 @@ async function processMarketingAutomationJobs(): Promise<number> {
   } finally { marketingQueueBusy = false; }
   return processedJobsCount;
 }
+
+// Vercel Cron Jobs / スケジュール実行エンドポイント（外部またはVercel Cronからの定期呼び出し）
+app.get('/api/cron/marketing-automation', async (req, res) => {
+  // CRON_SECRETが環境変数に設定されている場合はBearerトークンを検証
+  const cronSecret = process.env.CRON_SECRET?.trim();
+  if (cronSecret) {
+    const authorization = req.header('authorization') || '';
+    const token = authorization.startsWith('Bearer ') ? authorization.slice(7).trim() : '';
+    if (token !== cronSecret) {
+      return res.status(401).json({ error: 'Unauthorized cron request' });
+    }
+  }
+
+  try {
+    const processed = await processMarketingAutomationJobs();
+    return res.json({
+      success: true,
+      processedJobs: processed,
+      timestamp: new Date().toISOString(),
+    });
+  } catch (error) {
+    console.error('Cron marketing-automation execution failed:', error);
+    return res.status(500).json({ error: error instanceof Error ? error.message : 'Unknown error' });
+  }
+});
 
 app.get('/api/marketing/health', async (req, res) => {
   if (!lineSupabase) return res.status(503).json({ error: '自動配信サーバーのSupabase設定がありません。' });
@@ -4742,28 +4784,29 @@ if (!process.env.VERCEL) {
     });
   }
 
-  // マーケティング自動化ジョブのポーリング（バックオフ最適化）
-  // ジョブが空の時はポーリング間隔を徐々に伸ばし（15秒→30秒→1分→2分→最大5分）、ジョブ処理時は15秒にリセット
-  const MIN_MARKETING_POLL_INTERVAL_MS = 15000; // 15秒
-  const MAX_MARKETING_POLL_INTERVAL_MS = 300000; // 5分
+  // マーケティング自動化ジョブのポーリング（スタンドアロン／コンテナ環境用バックオフ処理）
+  // Vercel Serverless上ではこのブロックはスキップされ、Vercel Cron Jobs (/api/cron/marketing-automation) で3分ごとに1回のみ実行されるため、多重起動・同時実行競合を完全に防止。
+  // スタンドアロン実行時は基本間隔を「1分〜3分（2分=120秒）」とし、ジョブ空時は最大10分まで段階的バックオフ。
+  const MIN_MARKETING_POLL_INTERVAL_MS = 120000; // 2分（120秒）
+  const MAX_MARKETING_POLL_INTERVAL_MS = 600000; // 10分（600秒）
   let currentMarketingPollIntervalMs = MIN_MARKETING_POLL_INTERVAL_MS;
 
   const runMarketingAutomationLoop = async () => {
     try {
       const processedCount = await processMarketingAutomationJobs();
       if (processedCount > 0) {
-        // ジョブが処理された場合は最短間隔（15秒）にリセット
+        // ジョブが処理された場合は基本間隔（2分）にリセット
         currentMarketingPollIntervalMs = MIN_MARKETING_POLL_INTERVAL_MS;
       } else {
-        // ジョブが空の場合は間隔を徐々に拡大（15s -> 30s -> 60s -> 120s -> 最大300s）
+        // ジョブが空の場合は間隔を徐々に拡大（2分 -> 3分 -> 4.5分 -> 最大10分）
         currentMarketingPollIntervalMs = Math.min(
-          Math.max(currentMarketingPollIntervalMs * 2, 30000),
+          Math.round(currentMarketingPollIntervalMs * 1.5),
           MAX_MARKETING_POLL_INTERVAL_MS
         );
       }
     } catch {
       currentMarketingPollIntervalMs = Math.min(
-        Math.max(currentMarketingPollIntervalMs * 2, 30000),
+        Math.round(currentMarketingPollIntervalMs * 1.5),
         MAX_MARKETING_POLL_INTERVAL_MS
       );
     } finally {

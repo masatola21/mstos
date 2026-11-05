@@ -2113,7 +2113,6 @@ function AppContent() {
     if (!supabase) return;
 
     let isMounted = true;
-    let channel: ReturnType<typeof supabase.channel> | null = null;
     let pollingTimer: number | null = null;
     let isCatchingUp = false;
 
@@ -2161,98 +2160,20 @@ function AppContent() {
       }
     };
 
-    // 初回マウント時に確実に未処理分を同期（Realtime接続の成否に依存しない）
+    // 初回マウント時に確実に未処理分を同期
     void catchUpMissedSubmissions();
 
-    // Supabase Realtime が明示的に無効化されているかチェック
-    const isRealtimeDisabled =
-      typeof window !== 'undefined' &&
-      (window.localStorage.getItem('disable_supabase_realtime') === 'true' ||
-       window.sessionStorage.getItem('supabase_realtime_failed') === 'true');
-
-    if (isRealtimeDisabled) {
-      // Realtimeが無効または一度失敗している場合は、安全な低頻度ポーリング（3分毎）にフォールバック
-      pollingTimer = window.setInterval(() => {
-        if (isMounted) void catchUpMissedSubmissions();
-      }, 180000);
-
-      return () => {
-        isMounted = false;
-        if (pollingTimer) window.clearInterval(pollingTimer);
-      };
-    }
-
-    // 既存の同名チャンネルが残っていれば事前にすべて破棄（多重接続・リーク防止）
-    const topicName = `automation-diagnosis-submissions-${user.id}`;
-    const existingChannels = supabase.getChannels().filter((c) => c.topic.includes(topicName));
-    existingChannels.forEach((c) => {
-      try {
-        void c.unsubscribe();
-        void supabase.removeChannel(c);
-      } catch {}
-    });
-
-    try {
-      channel = supabase
-        .channel(topicName)
-        .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'diagnosis_submissions' }, (payload) => {
-          if (!isMounted) return;
-          const event = payload.new as DiagnosisSubmissionAutomationEvent;
-          if (!event?.id || !event.form_id) return;
-          void supabase.from('diagnosis_forms').select('form_type').eq('id', event.form_id).maybeSingle()
-            .then(({ data, error }) => {
-              if (error || !isMounted) return;
-              if (data?.form_type === 'diagnosis') processSubmission(event);
-            });
-        })
-        .subscribe((status) => {
-          if (!isMounted) return;
-          if (status === 'SUBSCRIBED') {
-            void catchUpMissedSubmissions();
-          } else if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT' || status === 'CLOSED') {
-            // ★最重要：エラー・タイムアウト発生時は直ちに購読解除・チャンネル破棄！
-            // Supabase内部の無限再接続ループを停止させ、DBへの set_config / Rollback の嵐を完全に防止する
-            console.warn(`[Supabase Realtime] Channel status: ${status}. Teardown channel to prevent CPU load & rollback storm.`);
-            try {
-              if (typeof window !== 'undefined') {
-                window.sessionStorage.setItem('supabase_realtime_failed', 'true');
-              }
-              if (channel) {
-                void channel.unsubscribe();
-                void supabase.removeChannel(channel);
-                channel = null;
-              }
-            } catch {}
-
-            // 低頻度ポーリングにフォールバック
-            if (!pollingTimer) {
-              pollingTimer = window.setInterval(() => {
-                if (isMounted) void catchUpMissedSubmissions();
-              }, 180000);
-            }
-          }
-        });
-    } catch (err) {
-      console.warn('[Supabase Realtime] Subscription error:', err);
-      if (!pollingTimer) {
-        pollingTimer = window.setInterval(() => {
-          if (isMounted) void catchUpMissedSubmissions();
-        }, 180000);
-      }
-    }
+    // 【Realtime廃止】WebSocket接続（/realtime/v1/websocket）による403 Forbiddenや再接続ループを解消するため、
+    // Realtime購読（supabase.channel / subscribe）を完全廃止し、安全な3分ポーリング（REST API）のみで同期運用。
+    pollingTimer = window.setInterval(() => {
+      if (isMounted) void catchUpMissedSubmissions();
+    }, 180000);
 
     return () => {
       isMounted = false;
       if (pollingTimer) {
         window.clearInterval(pollingTimer);
         pollingTimer = null;
-      }
-      if (channel) {
-        try {
-          void channel.unsubscribe();
-          void supabase.removeChannel(channel);
-        } catch {}
-        channel = null;
       }
     };
   }, [user?.id, workspaceReady]);
