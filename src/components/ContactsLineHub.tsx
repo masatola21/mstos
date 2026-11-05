@@ -667,31 +667,31 @@ export const ContactsLineHub: React.FC<Props> = ({
       )}
 
       {/* ヘッダー */}
-      <section className="flex flex-wrap items-center justify-between gap-4 rounded-2xl border border-slate-200 bg-white p-5 shadow-xs">
+      <section className="flex flex-wrap items-center justify-between gap-4 border-b border-slate-200 pb-4">
         <div>
           <div className="flex items-center gap-2">
-            <h1 className="text-xl sm:text-2xl font-bold text-slate-900 tracking-tight">連絡先・LINE友だち台帳（タグ管理）</h1>
-            <span className="rounded-full bg-purple-50 border border-purple-200 px-2.5 py-0.5 text-[10px] font-bold text-purple-700">
-              配信共通タグ辞書 連携中
+            <h1 className="text-[19px] font-bold text-slate-800 tracking-tight">連絡先・LINE友だち台帳</h1>
+            <span className="rounded-md bg-purple-50 border border-purple-200 px-2 py-0.5 text-[11px] font-semibold text-purple-700">
+              タグ辞書連動
             </span>
           </div>
           <p className="mt-1 text-xs text-slate-500">
-            CRM連絡先とLINE公式アカウントの友だち情報を一元統合管理します。配信シナリオでの自動付与（⚡自動）と、スタッフによる商談進捗の手動付与（👤手動）が同一のタグ辞書で完全連動します。
+            CRM連絡先とLINE公式アカウント友だちを一元管理。タグ付与で自動配信と商談進捗が連動します。
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
           <button
             onClick={() => void syncMasterTags()}
             disabled={saving}
-            title="マーケティング配信シナリオで使われている共通タグ辞書（全16種）をCRMタグ台帳に一括同期します"
-            className="flex items-center gap-1.5 rounded-lg border border-purple-200 bg-purple-50 px-3 py-2 text-xs font-semibold text-purple-700 hover:bg-purple-100 transition cursor-pointer disabled:opacity-40 shadow-2xs"
+            title="マーケティング配信共通タグ辞書（全16種）を一括同期します"
+            className="flex items-center gap-1.5 rounded-lg border border-purple-200 bg-purple-50 px-3 py-1.5 text-xs font-semibold text-purple-700 hover:bg-purple-100 transition cursor-pointer disabled:opacity-40 shadow-2xs"
           >
             <BookOpen className="h-3.5 w-3.5" />
-            <span>辞書タグ全同期 ({tags.length}/16)</span>
+            <span>タグ辞書全同期 ({tags.length}/16)</span>
           </button>
           <button
             onClick={() => setIsCreateOpen(true)}
-            className="flex items-center gap-1.5 rounded-lg bg-purple-600 px-3 py-2 text-xs font-semibold text-white hover:bg-purple-700 transition cursor-pointer shadow-xs"
+            className="flex items-center gap-1.5 rounded-lg bg-purple-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-purple-700 transition cursor-pointer shadow-xs"
           >
             <Plus className="h-3.5 w-3.5" />
             <span>連絡先を追加</span>
@@ -699,48 +699,11 @@ export const ContactsLineHub: React.FC<Props> = ({
           <button
             onClick={() => void load()}
             disabled={loading}
-            className="rounded-lg border border-slate-200 bg-white p-2 text-slate-600 hover:bg-slate-50 hover:text-slate-900 transition cursor-pointer disabled:opacity-50 shadow-2xs"
+            className="rounded-lg border border-slate-200 bg-white p-1.5 text-slate-600 hover:bg-slate-50 hover:text-slate-900 transition cursor-pointer disabled:opacity-50 shadow-2xs"
             title="再読み込み"
           >
             <RefreshCw className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`} />
           </button>
-        </div>
-      </section>
-
-      {/* 💡 配信・友だちタグ連携の解説カード（ユーザーの疑問を解消） */}
-      <section className="rounded-2xl border border-purple-200 bg-gradient-to-r from-purple-50/60 via-purple-50/30 to-indigo-50/40 p-4 shadow-2xs">
-        <div className="flex items-start gap-3">
-          <div className="rounded-lg bg-purple-100 p-2 border border-purple-200 text-purple-700 shrink-0 mt-0.5">
-            <Zap className="h-4 w-4" />
-          </div>
-          <div className="space-y-1.5 text-xs">
-            <div className="flex items-center gap-2">
-              <span className="font-bold text-slate-900">
-                💡 自動配信と友だち台帳のタグ連携仕様について
-              </span>
-              <span className="text-[10px] text-emerald-700 font-semibold bg-emerald-50 border border-emerald-200 px-2 py-0.2 rounded-full">
-                正常連携
-              </span>
-            </div>
-            <div className="grid sm:grid-cols-2 gap-3 text-slate-600 leading-relaxed text-[11px] pt-1">
-              <div className="rounded-xl border border-slate-200 bg-white p-3 space-y-1 shadow-2xs">
-                <div className="font-bold text-purple-700 flex items-center gap-1.5">
-                  <span className="text-amber-500">⚡</span> 自動配信（シナリオ・自動返信・診断）
-                </div>
-                <p className="text-slate-500">
-                  友だち追加、診断回答完了、面談予約、選択肢タップ時にトリガーで<span className="text-amber-700 font-semibold">「⚡自動付与」</span>されます。また「成約」「予約済」タグが付いた際は、シナリオ配信が<span className="text-emerald-700 font-semibold">自動停止</span>します。
-                </p>
-              </div>
-              <div className="rounded-xl border border-slate-200 bg-white p-3 space-y-1 shadow-2xs">
-                <div className="font-bold text-emerald-700 flex items-center gap-1.5">
-                  <span className="text-emerald-600">👤</span> 連絡先・友だち台帳（この画面）
-                </div>
-                <p className="text-slate-500">
-                  面談や商談の進捗に応じて、オペレーターが<span className="text-emerald-700 font-semibold">「👤手動付与」</span>します。同じ共通タグ辞書を使っているため、手動で「成約」や「相談済」を付与した場合も自動配信は即時停止します。
-                </p>
-              </div>
-            </div>
-          </div>
         </div>
       </section>
 

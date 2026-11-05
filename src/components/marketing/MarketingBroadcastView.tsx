@@ -211,15 +211,23 @@ export const MarketingBroadcastView: React.FC<{initialChannel?:Channel}> = ({ini
     finally{setBusy(false)}
   };
 
-  return <div className="space-y-5">
-    <section className="rounded-2xl border border-indigo-500/30 bg-slate-900 p-5">
-      <h2 className="text-xl font-bold text-white">{channel==='email'?'メール送信・営業':'LINE一斉配信'}</h2>
-      <p className="mt-1 text-sm text-slate-400">CRM条件から対象を抽出したフォロー配信と、外部AI調査からCRMへ登録した見込み企業への営業メールを管理します。宛先選択・プレビュー後に既存の送信処理を使い、結果を履歴に記録します。</p>
-      {error&&<p role="alert" className="mt-3 rounded-lg bg-rose-950/60 p-3 text-sm text-rose-200">{error}</p>}
-      {notice&&<p role="status" className="mt-3 rounded-lg bg-emerald-950/60 p-3 text-sm text-emerald-200">{notice}</p>}
-      <div className="mt-4 grid gap-3 md:grid-cols-2">
+  return <div className="space-y-5 text-slate-800">
+    <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-xs space-y-4">
+      <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-200 pb-3">
         <div>
-          <span className="block text-sm font-semibold text-slate-300 mb-1.5">配信チャネル（配信方法）</span>
+          <h2 className="text-[19px] font-bold text-slate-800 tracking-tight">一斉配信（メール・LINE）</h2>
+          <p className="mt-0.5 text-xs text-slate-500">
+            CRM条件から対象を抽出したフォロー配信や、見込み企業への一括営業メールを送信します。
+          </p>
+        </div>
+      </div>
+
+      {error && <p role="alert" className="rounded-xl border border-rose-200 bg-rose-50 p-3 text-xs text-rose-800 shadow-2xs">{error}</p>}
+      {notice && <p role="status" className="rounded-xl border border-emerald-200 bg-emerald-50 p-3 text-xs text-emerald-800 shadow-2xs">{notice}</p>}
+
+      <div className="grid gap-4 md:grid-cols-2">
+        <div>
+          <span className="block text-xs font-bold text-slate-700 mb-1.5">配信チャネル</span>
           <div className="grid grid-cols-2 gap-2">
             <button
               type="button"
@@ -228,13 +236,13 @@ export const MarketingBroadcastView: React.FC<{initialChannel?:Channel}> = ({ini
                 setSelected([]);
                 setPreview(false);
               }}
-              className={`flex items-center justify-center gap-2 rounded-lg py-2.5 px-3 text-xs font-bold transition border cursor-pointer ${
+              className={`flex items-center justify-center gap-2 rounded-xl py-2 px-3 text-xs font-bold transition border cursor-pointer ${
                 channel === 'email'
-                  ? 'bg-indigo-600 border-indigo-500 text-white shadow-md shadow-indigo-600/30 ring-1 ring-indigo-400'
-                  : 'bg-slate-950 border-slate-700 text-slate-300 hover:bg-slate-800'
+                  ? 'bg-purple-600 border-purple-600 text-white shadow-xs'
+                  : 'bg-white border-slate-200 text-slate-700 hover:bg-slate-50'
               }`}
             >
-              <Mail className="w-4 h-4 text-indigo-300" />
+              <Mail className="w-4 h-4" />
               <span>メール一斉配信</span>
             </button>
             <button
@@ -245,73 +253,113 @@ export const MarketingBroadcastView: React.FC<{initialChannel?:Channel}> = ({ini
                 setSelected([]);
                 setPreview(false);
               }}
-              className={`flex items-center justify-center gap-2 rounded-lg py-2.5 px-3 text-xs font-bold transition border cursor-pointer ${
+              className={`flex items-center justify-center gap-2 rounded-xl py-2 px-3 text-xs font-bold transition border cursor-pointer ${
                 channel === 'line'
-                  ? 'bg-emerald-600 border-emerald-500 text-white shadow-md shadow-emerald-600/30 ring-1 ring-emerald-400'
-                  : 'bg-slate-950 border-slate-700 text-slate-300 hover:bg-slate-800'
+                  ? 'bg-emerald-600 border-emerald-600 text-white shadow-xs'
+                  : 'bg-white border-slate-200 text-slate-700 hover:bg-slate-50'
               }`}
             >
-              <MessageCircle className="w-4 h-4 text-emerald-300" />
+              <MessageCircle className="w-4 h-4" />
               <span>LINE一斉配信</span>
             </button>
           </div>
         </div>
 
-        <label className="text-sm font-semibold text-slate-300">配信対象の種類
-          <select value={audienceMode} onChange={e=>{setAudienceMode(e.target.value as 'crm'|'prospect_outreach');setSelected([]);setSelectedProspectIds([]);setPreview(false);if(e.target.value==='prospect_outreach')setChannel('email')}} className="mt-1.5 block w-full rounded-lg border border-slate-700 bg-slate-950 p-2.5 text-xs text-white">
+        <label className="text-xs font-bold text-slate-700">配信対象の種類
+          <select value={audienceMode} onChange={e=>{setAudienceMode(e.target.value as 'crm'|'prospect_outreach');setSelected([]);setSelectedProspectIds([]);setPreview(false);if(e.target.value==='prospect_outreach')setChannel('email')}} className="mt-1.5 block w-full rounded-xl border border-slate-200 bg-white p-2.5 text-xs text-slate-800 focus:border-purple-500 shadow-2xs">
             <option value="crm">CRM条件によるフォロー（連絡先・顧客）</option>
             {channel === 'email' && <option value="prospect_outreach">見込み企業への営業メール（AI調査対象）</option>}
           </select>
         </label>
 
-        {audienceMode==='crm'&&<label className="md:col-span-2 text-sm font-semibold text-slate-300">CRMセグメント絞り込み
-          <select value={segmentId} onChange={e=>{setSegmentId(e.target.value);setSelected([]);setPreview(false)}} className="mt-1.5 block w-full rounded-lg border border-slate-700 bg-slate-950 p-2.5 text-xs text-white">
+        {audienceMode==='crm'&&<label className="md:col-span-2 text-xs font-bold text-slate-700">CRMセグメント絞り込み
+          <select value={segmentId} onChange={e=>{setSegmentId(e.target.value);setSelected([]);setPreview(false)}} className="mt-1.5 block w-full rounded-xl border border-slate-200 bg-white p-2.5 text-xs text-slate-800 focus:border-purple-500 shadow-2xs">
             <option value="all">全連絡先から抽出（メールまたは有効なLINE連携済み友だち）</option>
             {segments.map(x=><option key={x.id} value={x.id}>{x.name}（{segmentEntityLabels[x.entity_type]||x.entity_type}）</option>)}
           </select>
         </label>}
       </div>
-      {audienceMode==='prospect_outreach'&&<section className="rounded-xl border border-amber-500/30 bg-amber-950/10 p-4">
-        <div className="font-semibold text-white">営業対象の見込み企業を選択</div>
-        <p className="mt-1 text-xs text-slate-400">外部AI調査からCRMへ登録した見込み企業だけを表示します。AIは送信せず、選択企業に紐づく連絡先のメールアドレスだけを宛先候補にします。見込み企業に連絡先が紐づいていない場合は送信対象になりません。</p>
-        <div className="mt-3 max-h-48 space-y-1 overflow-auto">{outreachProspects.length===0?<p className="text-sm text-slate-500">会社情報と関連付いた見込み企業がありません。</p>:outreachProspects.map(row=>{const company=companies[String(row.company_id||'')]||{};const id=String(row.id||'');return <label key={id} className="flex items-center gap-2 rounded px-2 py-1.5 text-sm text-slate-300 hover:bg-slate-900"><input type="checkbox" checked={selectedProspectIds.includes(id)} onChange={()=>{setSelectedProspectIds(current=>current.includes(id)?current.filter(x=>x!==id):[...current,id]);setSelected([]);setPreview(false)}}/><span className="min-w-0 flex-1 truncate">{String(company.company_name||company.name||'会社名未設定')}</span><span className="text-xs text-slate-500">{String(row.status||'未設定')}</span></label>})}</div>
-        <p className="mt-2 text-xs text-amber-200">営業メールの送信根拠と、宛先情報を営業目的で利用できることを確認してください。</p>
+
+      {audienceMode==='prospect_outreach'&&<section className="rounded-xl border border-amber-200 bg-amber-50/50 p-4 space-y-2">
+        <div className="font-bold text-amber-900 text-xs">営業対象の見込み企業を選択</div>
+        <p className="text-xs text-slate-600">外部AI調査からCRMへ登録した見込み企業だけを表示します。選択企業に紐づく連絡先のメールアドレスだけを宛先候補にします。</p>
+        <div className="max-h-48 space-y-1 overflow-auto rounded-lg border border-amber-200/80 bg-white p-2">{outreachProspects.length===0?<p className="text-xs text-slate-500 p-2">会社情報と関連付いた見込み企業がありません。</p>:outreachProspects.map(row=>{const company=companies[String(row.company_id||'')]||{};const id=String(row.id||'');return <label key={id} className="flex items-center gap-2 rounded px-2 py-1.5 text-xs text-slate-800 hover:bg-slate-50 cursor-pointer"><input type="checkbox" checked={selectedProspectIds.includes(id)} onChange={()=>{setSelectedProspectIds(current=>current.includes(id)?current.filter(x=>x!==id):[...current,id]);setSelected([]);setPreview(false)}}/><span className="min-w-0 flex-1 truncate font-medium">{String(company.company_name||company.name||'会社名未設定')}</span><span className="text-xs text-slate-400">{String(row.status||'未設定')}</span></label>})}</div>
+        <p className="text-[11px] text-amber-700">営業メールの送信根拠と、宛先情報を営業目的で利用できることを確認してください。</p>
       </section>}
-      <div className="mt-4 rounded-xl border border-slate-800 bg-slate-950/60 p-4">
+
+      <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
         <div className="flex flex-wrap items-center justify-between gap-2">
-          <div><div className="font-semibold text-white">送信対象</div><div className="text-xs text-slate-400">{audienceMode==='crm'&&selectedSegment?`「${selectedSegment.name}」の条件から抽出：`:'条件に合う宛先：'}{eligible.length}件・選択中 {selectedContacts.length}件</div></div>
-          <div className="flex gap-2"><button type="button" onClick={selectAll} className="rounded border border-slate-700 px-3 py-1.5 text-xs text-slate-200">対象をすべて選択</button><button type="button" onClick={clearSelected} className="rounded border border-slate-700 px-3 py-1.5 text-xs text-slate-300">解除</button></div>
+          <div><div className="font-bold text-slate-800 text-xs">送信対象リスト</div><div className="text-xs text-slate-500">{audienceMode==='crm'&&selectedSegment?`「${selectedSegment.name}」の条件から抽出：`:'条件に合う宛先：'}{eligible.length}件・選択中 {selectedContacts.length}件</div></div>
+          <div className="flex gap-2"><button type="button" onClick={selectAll} className="rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-50 shadow-2xs cursor-pointer">すべて選択</button><button type="button" onClick={clearSelected} className="rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-50 shadow-2xs cursor-pointer">選択解除</button></div>
         </div>
-        <div className="mt-3 max-h-52 space-y-1 overflow-auto">
-          {eligible.length===0?<p className="text-sm text-slate-500">{audienceMode==='prospect_outreach'?'選択した企業にメールアドレス付きの連絡先が登録されていません。連絡先を登録して会社に紐づけてください。':'対象となる連絡先がありません。LINEは有効な友だちかつ配信同意済みの連絡先だけ表示されます。'}</p>:eligible.map(contact=><label key={contact.id} className="flex cursor-pointer items-center gap-2 rounded px-2 py-1.5 text-sm text-slate-300 hover:bg-slate-900">
-            <input type="checkbox" checked={selected.includes(contact.id)} onChange={()=>toggle(contact.id)} />
-            <span className="min-w-0 flex-1 truncate">{contact.full_name||'名前未設定'}</span>
+        <div className="mt-3 max-h-52 space-y-1 overflow-auto rounded-lg border border-slate-200 bg-white p-2">
+          {eligible.length===0?<p className="text-xs text-slate-500 p-2">{audienceMode==='prospect_outreach'?'選択した企業にメールアドレス付きの連絡先が登録されていません。連絡先を登録して会社に紐づけてください。':'対象となる連絡先がありません。LINEは有効な友だちかつ配信同意済みの連絡先だけ表示されます。'}</p>:eligible.map(contact=><label key={contact.id} className="flex cursor-pointer items-center gap-2 rounded px-2 py-1.5 text-xs text-slate-800 hover:bg-purple-50/50">
+            <input type="checkbox" checked={selected.includes(contact.id)} onChange={()=>toggle(contact.id)} className="accent-purple-600" />
+            <span className="min-w-0 flex-1 truncate font-medium">{contact.full_name||'名前未設定'}</span>
             <span className="max-w-56 truncate text-xs text-slate-500">{channel==='email'?contact.email:contact.line_user_id}</span>
           </label>)}
         </div>
       </div>
-      {channel==='email'&&<label className="block text-sm text-slate-300">メールテンプレート<select value={selectedEmailTemplateId} onChange={e=>{const id=e.target.value;setSelectedEmailTemplateId(id);const item=emailTemplates.find(x=>x.id===id);if(item){setSubject(item.subject||'');setBody(item.body_text||'')}}} className="mt-1 block w-full rounded-lg border border-slate-700 bg-slate-950 p-2 text-white"><option value="">テンプレートを選択</option>{emailTemplates.filter(item=>item.channel==='email').map(item=><option key={item.id} value={item.id}>{item.name?.trim() || `${item.category} · ${item.template_key}`}</option>)}</select></label>}
-      {channel==='email'&&<label className="block text-sm text-slate-300">メール件名<input value={subject} onChange={e=>setSubject(e.target.value)} maxLength={200} className="mt-1 block w-full rounded-lg border border-slate-700 bg-slate-950 p-2 text-white" /><PlaceholderAssist text={subject} onInsert={(token)=>setSubject(current=>current+token)} /></label>}
-      {channel==='line'&&<label className="block text-sm text-slate-300">LINEメッセージ形式<select value={lineContentType} onChange={e=>{setLineContentType(e.target.value as 'text'|'image'|'flex'|'video');setSelectedLineTemplateId('');setPreview(false)}} className="mt-1 block w-full rounded-lg border border-slate-700 bg-slate-950 p-2 text-white"><option value="text">テキスト</option><option value="image">画像</option><option value="flex">Flex</option><option value="video">動画（MP4）</option></select></label>}
-      {channel==='line'&&<label className="block text-sm text-slate-300">LINEテンプレート<select value={selectedLineTemplateId} onChange={e=>{const id=e.target.value;setSelectedLineTemplateId(id);const item=lineTemplates.find(x=>x.id===id);if(!item)return;const payload=item.payload||{};setBody(item.reply_type==='text'?String(payload.text||''):'');setVideoUrl(String(payload.originalContentUrl||''));setVideoPreviewUrl(String(payload.previewImageUrl||''));setLineAltText(String(payload.altText||''));setLineFlexJson(payload.contents?JSON.stringify(payload.contents,null,2):'')}} className="mt-1 block w-full rounded-lg border border-slate-700 bg-slate-950 p-2 text-white"><option value="">テンプレートを選択</option>{lineTemplates.filter(item=>item.reply_type===lineContentType).map(item=><option key={item.id} value={item.id}>{item.name}</option>)}</select></label>}
-      {(channel==='email'||lineContentType==='text')&&<label className="block text-sm text-slate-300">{channel==='email'?'メール本文':'配信本文'}<textarea value={body} onChange={e=>setBody(e.target.value)} maxLength={channel==='line'?5000:10000} rows={6} className="mt-1 block w-full rounded-lg border border-slate-700 bg-slate-950 p-3 text-white" /><PlaceholderAssist text={body} onInsert={(token)=>setBody(current=>current+token)} />{channel==='email'&&<span className="mt-1 block text-xs text-slate-500">動画は公開リンクを本文に貼り付けて送信できます。</span>}</label>}
+
+      {channel==='email'&&<label className="block text-xs font-bold text-slate-700">メールテンプレート<select value={selectedEmailTemplateId} onChange={e=>{const id=e.target.value;setSelectedEmailTemplateId(id);const item=emailTemplates.find(x=>x.id===id);if(item){setSubject(item.subject||'');setBody(item.body_text||'')}}} className="mt-1 block w-full rounded-xl border border-slate-200 bg-white p-2 text-xs text-slate-800 shadow-2xs"><option value="">テンプレートを選択</option>{emailTemplates.filter(item=>item.channel==='email').map(item=><option key={item.id} value={item.id}>{item.name?.trim() || `${item.category} · ${item.template_key}`}</option>)}</select></label>}
+      {channel==='email'&&<label className="block text-xs font-bold text-slate-700">メール件名<input value={subject} onChange={e=>setSubject(e.target.value)} maxLength={200} className="mt-1 block w-full rounded-xl border border-slate-200 bg-white p-2 text-xs text-slate-800 shadow-2xs" /><PlaceholderAssist text={subject} onInsert={(token)=>setSubject(current=>current+token)} /></label>}
+      {channel==='line'&&<label className="block text-xs font-bold text-slate-700">LINEメッセージ形式<select value={lineContentType} onChange={e=>{setLineContentType(e.target.value as 'text'|'image'|'flex'|'video');setSelectedLineTemplateId('');setPreview(false)}} className="mt-1 block w-full rounded-xl border border-slate-200 bg-white p-2 text-xs text-slate-800 shadow-2xs"><option value="text">テキスト</option><option value="image">画像</option><option value="flex">Flex</option><option value="video">動画（MP4）</option></select></label>}
+      {channel==='line'&&<label className="block text-xs font-bold text-slate-700">LINEテンプレート<select value={selectedLineTemplateId} onChange={e=>{const id=e.target.value;setSelectedLineTemplateId(id);const item=lineTemplates.find(x=>x.id===id);if(!item)return;const payload=item.payload||{};setBody(item.reply_type==='text'?String(payload.text||''):'');setVideoUrl(String(payload.originalContentUrl||''));setVideoPreviewUrl(String(payload.previewImageUrl||''));setLineAltText(String(payload.altText||''));setLineFlexJson(payload.contents?JSON.stringify(payload.contents,null,2):'')}} className="mt-1 block w-full rounded-xl border border-slate-200 bg-white p-2 text-xs text-slate-800 shadow-2xs"><option value="">テンプレートを選択</option>{lineTemplates.filter(item=>item.reply_type===lineContentType).map(item=><option key={item.id} value={item.id}>{item.name}</option>)}</select></label>}
+      {(channel==='email'||lineContentType==='text')&&<label className="block text-xs font-bold text-slate-700">{channel==='email'?'メール本文':'配信本文'}<textarea value={body} onChange={e=>setBody(e.target.value)} maxLength={channel==='line'?5000:10000} rows={6} className="mt-1 block w-full rounded-xl border border-slate-200 bg-white p-3 text-xs text-slate-800 leading-relaxed font-sans shadow-2xs" /><PlaceholderAssist text={body} onInsert={(token)=>setBody(current=>current+token)} />{channel==='email'&&<span className="mt-1 block text-xs text-slate-500">動画は公開リンクを本文に貼り付けて送信できます。</span>}</label>}
       {channel==='line'&&lineContentType==='flex'&&selectedLineTemplate&&<div className="mt-2"><LineMessagePreview type="flex" title={lineAltText||selectedLineTemplate.name} payload={selectedLineTemplate.payload||{altText:lineAltText,contents:lineFlexJson}} /></div>}
-      {channel==='line'&&lineContentType==='image'&&selectedLineTemplate&&<div className="rounded-lg border border-slate-700 bg-slate-950 p-3"><img src={String(selectedLineTemplate.payload.originalContentUrl||'')} alt="LINE画像テンプレート" className="max-h-60 rounded"/><p className="mt-2 text-xs text-slate-400">{selectedLineTemplate.name}</p></div>}
-      {channel==='line'&&lineContentType==='video'&&selectedLineTemplate&&<div className="rounded-lg border border-slate-700 bg-slate-950 p-3"><video src={videoUrl} poster={videoPreviewUrl} controls className="max-h-60 rounded"/><p className="mt-2 text-xs text-slate-400">テンプレート管理でアップロードしたLINE動画を使用します。</p></div>}
-      <label className="block text-sm text-slate-300">{audienceMode==='prospect_outreach'?'送信根拠・連絡先の取得元':'配信同意・送信根拠'}<input value={consentBasis} onChange={e=>setConsentBasis(e.target.value)} placeholder="例：配信登録フォームで同意取得済み" className="mt-1 block w-full rounded-lg border border-slate-700 bg-slate-950 p-2 text-white" /></label>
-      {!preview?<button type="button" onClick={()=>setPreview(true)} className="rounded-lg bg-indigo-600 px-4 py-2 font-semibold text-white disabled:opacity-40">プレビュー</button>:<div className="space-y-3 rounded-xl border border-amber-500/30 bg-amber-950/20 p-4">
-        <h3 className="font-bold text-amber-100">配信プレビュー</h3>
-        <p className="text-sm text-slate-300">{channel==='email'?'メール':'LINE'}・選択中 {selectedContacts.length}件。LINEでは友だち状態と配信同意を送信時にも再確認します。</p>
-        <p className="text-xs text-slate-400">{selectedContacts.length?`送信先例：${selectedContacts.slice(0,5).map(x=>x.full_name||x.email||x.line_user_id).join('、')}${selectedContacts.length>5?' ほか':''}`:'宛先未選択のため、差し込み例（ご担当者・貴社）で表示しています。'}</p>
-        {channel==='email'&&<><p className="font-semibold text-white">{fillForContact(subject,previewContact)}</p><p className="whitespace-pre-wrap rounded bg-slate-950 p-3 text-sm text-slate-200">{fillForContact(body,previewContact)}</p></>}
-        {channel==='line'&&<LineMessagePreview type={lineContentType} payload={lineContentType==='text'?{text:fillForContact(body,previewContact)}:lineContentType==='image'?fillLinePayload(selectedLineTemplate?.payload||{},previewContact):lineContentType==='video'?{originalContentUrl:videoUrl,previewImageUrl:videoPreviewUrl,altText:lineAltText}:fillLinePayload(selectedLineTemplate?.payload||{altText:lineAltText,contents:lineFlexJson},previewContact)} title="一斉配信プレビュー" />}
-        <div className="flex gap-2"><button type="button" onClick={()=>setPreview(false)} className="rounded border border-slate-700 px-3 py-2 text-sm text-slate-200">戻って修正</button><button type="button" disabled={busy||!selectedContacts.length} onClick={()=>void send()} className="rounded bg-rose-600 px-4 py-2 text-sm font-bold text-white disabled:opacity-50">{busy?'配信中…':selectedContacts.length?'この内容で配信':'宛先を選択してください'}</button></div>
-      </div>}
+      {channel==='line'&&lineContentType==='image'&&selectedLineTemplate&&<div className="rounded-xl border border-slate-200 bg-white p-3"><img src={String(selectedLineTemplate.payload.originalContentUrl||'')} alt="LINE画像テンプレート" className="max-h-60 rounded object-contain mx-auto"/><p className="mt-2 text-center text-xs text-slate-600 font-medium">{selectedLineTemplate.name}</p></div>}
+      {channel==='line'&&lineContentType==='video'&&selectedLineTemplate&&<div className="rounded-xl border border-slate-200 bg-white p-3"><video src={videoUrl} poster={videoPreviewUrl} controls className="max-h-60 rounded mx-auto"/><p className="mt-2 text-center text-xs text-slate-600 font-medium">テンプレート管理でアップロードしたLINE動画を使用します。</p></div>}
+      <label className="block text-xs font-bold text-slate-700">{audienceMode==='prospect_outreach'?'送信根拠・連絡先の取得元':'配信同意・送信根拠'}<input value={consentBasis} onChange={e=>setConsentBasis(e.target.value)} placeholder="例：配信登録フォームで同意取得済み" className="mt-1 block w-full rounded-xl border border-slate-200 bg-white p-2 text-xs text-slate-800 shadow-2xs" /></label>
+
+      {!preview ? (
+        <button type="button" onClick={()=>setPreview(true)} className="rounded-xl bg-purple-600 px-5 py-2.5 text-xs font-bold text-white hover:bg-purple-700 transition shadow-xs cursor-pointer">
+          配信プレビューを確認
+        </button>
+      ) : (
+        <div className="space-y-3 rounded-2xl border-2 border-slate-300 bg-white p-5 shadow-sm">
+          <div className="flex items-center justify-between border-b border-slate-200 pb-2">
+            <h3 className="font-bold text-slate-900 text-sm">一斉配信プレビュー</h3>
+            <span className="text-xs text-slate-500">{channel==='email'?'メール':'LINE'} · 選択中 {selectedContacts.length}件</span>
+          </div>
+          <p className="text-xs text-slate-500">{selectedContacts.length?`送信先例：${selectedContacts.slice(0,5).map(x=>x.full_name||x.email||x.line_user_id).join('、')}${selectedContacts.length>5?' ほか':''}`:'宛先未選択のため、差し込み例（ご担当者・貴社）で表示しています。'}</p>
+          {channel==='email' && (
+            <div className="rounded-xl border border-slate-300 bg-white shadow-2xs overflow-hidden">
+              <div className="bg-slate-50 p-3 border-b border-slate-200">
+                <p className="text-sm font-bold text-slate-900">件名: {fillForContact(subject,previewContact)}</p>
+              </div>
+              <p className="whitespace-pre-wrap p-4 text-xs font-sans leading-relaxed text-slate-900">{fillForContact(body,previewContact)}</p>
+            </div>
+          )}
+          {channel==='line' && (
+            <LineMessagePreview
+              type={lineContentType}
+              payload={lineContentType==='text'?{text:fillForContact(body,previewContact)}:lineContentType==='image'?fillLinePayload(selectedLineTemplate?.payload||{},previewContact):lineContentType==='video'?{originalContentUrl:videoUrl,previewImageUrl:videoPreviewUrl,altText:lineAltText}:fillLinePayload(selectedLineTemplate?.payload||{altText:lineAltText,contents:lineFlexJson},previewContact)}
+              title="一斉配信プレビュー"
+            />
+          )}
+          <div className="flex items-center justify-between pt-2">
+            <button type="button" onClick={()=>setPreview(false)} className="rounded-xl border border-slate-300 bg-white px-4 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-50 cursor-pointer">
+              ← 閉じて編集に戻る
+            </button>
+            <button type="button" disabled={busy||!selectedContacts.length} onClick={()=>void send()} className="rounded-xl bg-emerald-600 px-6 py-2.5 text-xs font-bold text-white hover:bg-emerald-700 disabled:opacity-50 shadow-xs cursor-pointer">
+              {busy?'配信中…':selectedContacts.length?'この内容で配信を実行する':'宛先を選択してください'}
+            </button>
+          </div>
+        </div>
+      )}
     </section>
-    <section className="rounded-2xl border border-slate-800 bg-slate-900 p-5">
-      <div className="flex items-center justify-between"><h3 className="font-bold text-white">一斉配信履歴</h3><button onClick={()=>void refreshRuns()} className="rounded border border-slate-700 px-3 py-1.5 text-xs text-slate-300">更新</button></div>
-      <div className="mt-3 divide-y divide-slate-800">{runs.length===0?<p className="py-4 text-sm text-slate-500">配信履歴はありません。</p>:runs.map(run=><div key={run.id} className="flex flex-wrap justify-between gap-2 py-3 text-sm"><div><div className="font-medium text-white">{run.name}</div><div className="text-xs text-slate-500">{new Date(run.created_at).toLocaleString()} ・ {run.channel==='email'?'メール':'LINE'}</div></div><div className="text-right text-xs text-slate-300"><div>{run.status==='sent'?'完了':run.status==='partial'?'一部失敗':run.status==='failed'?'失敗':'配信中'}</div><div className="text-slate-500">{run.sent_count}/{run.total_count}件 成功・失敗 {run.failed_count}件</div></div></div>)}</div>
-      <p className="mt-2 text-xs text-slate-500">個々の宛先・送信エラーは既存の送信センター履歴から確認できます。</p>
+
+    <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-xs">
+      <div className="flex items-center justify-between border-b border-slate-200 pb-3">
+        <h3 className="font-bold text-slate-800 text-sm">一斉配信履歴</h3>
+        <button onClick={()=>void refreshRuns()} className="rounded-lg border border-slate-200 bg-white px-3 py-1 text-xs font-medium text-slate-700 hover:bg-slate-50 cursor-pointer shadow-2xs">
+          更新
+        </button>
+      </div>
+      <div className="mt-3 divide-y divide-slate-100">
+        {runs.length===0?<p className="py-4 text-xs text-slate-500">配信履歴はありません。</p>:runs.map(run=><div key={run.id} className="flex flex-wrap justify-between items-center gap-2 py-3 text-xs"><div><div className="font-bold text-slate-800">{run.name}</div><div className="text-slate-500">{new Date(run.created_at).toLocaleString()} ・ {run.channel==='email'?'メール':'LINE'}</div></div><div className="text-right"><div><span className={`inline-block rounded-full px-2 py-0.5 text-[10px] font-bold ${run.status==='sent'?'bg-emerald-50 text-emerald-700 border border-emerald-200':run.status==='failed'?'bg-rose-50 text-rose-700 border border-rose-200':'bg-amber-50 text-amber-700 border border-amber-200'}`}>{run.status==='sent'?'完了':run.status==='partial'?'一部失敗':run.status==='failed'?'失敗':'配信中'}</span></div><div className="text-slate-500 mt-1">{run.sent_count}/{run.total_count}件 成功 (失敗 {run.failed_count}件)</div></div></div>)}
+      </div>
+      <p className="mt-2 text-[11px] text-slate-400">個々の宛先・送信エラーは送信センターの履歴から確認できます。</p>
     </section>
   </div>;
 };

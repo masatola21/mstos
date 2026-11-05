@@ -514,31 +514,6 @@ ${postText}`;
 
   return (
     <div className="space-y-5 text-slate-800">
-      {/* ── ヘッダー ── */}
-      <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-slate-200 bg-white p-5 shadow-xs">
-        <div>
-          <div className="flex items-center gap-2">
-            <Share2 className="h-5 w-5 text-purple-600" />
-            <h2 className="text-lg font-bold text-slate-900">📱 SNS一括投稿スタジオ</h2>
-            <span className="rounded-full bg-emerald-50 px-2.5 py-0.5 text-[11px] font-bold text-emerald-700 border border-emerald-200">
-              5大SNSマルチ配信
-            </span>
-          </div>
-          <p className="mt-1 text-xs text-slate-500 leading-relaxed">
-            Facebook、Threads、LinkedIn、Instagramへの一括同時配信と、X（Twitter）へのワンクリック即時シェアを行える統合管制スタジオです。
-          </p>
-        </div>
-
-        <button
-          type="button"
-          onClick={() => setIsSettingsOpen(!isSettingsOpen)}
-          className="inline-flex items-center gap-1.5 rounded-xl border border-slate-200 bg-white hover:bg-slate-50 px-3.5 py-2 text-xs font-semibold text-slate-700 transition shadow-xs cursor-pointer"
-        >
-          <Settings className="h-3.5 w-3.5 text-purple-600" />
-          <span>{isSettingsOpen ? '設定パネルを閉じる' : '⚙️ API・Webhook連携設定'}</span>
-        </button>
-      </div>
-
       {/* ── スタジオ機能切り替えサブタブ ── */}
       <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-200 pb-3">
         <div className="inline-flex rounded-xl bg-slate-100 p-1 border border-slate-200">
@@ -548,14 +523,14 @@ ${postText}`;
               setStudioMode('broadcast');
               try { localStorage.setItem('social_studio_mode', 'broadcast'); } catch {}
             }}
-            className={`flex items-center gap-2 px-4 py-2 rounded-lg text-xs font-bold transition cursor-pointer ${
+            className={`flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg text-xs font-bold transition cursor-pointer ${
               studioMode === 'broadcast'
                 ? 'bg-white text-purple-700 shadow-xs border border-purple-200'
                 : 'text-slate-600 hover:text-slate-900'
             }`}
           >
-            <Share2 className="h-4 w-4" />
-            <span>📱 SNS一括投稿（全体発信）</span>
+            <Share2 className="h-3.5 w-3.5" />
+            <span>SNS一括投稿（全体発信）</span>
           </button>
           <button
             type="button"
@@ -563,24 +538,25 @@ ${postText}`;
               setStudioMode('dm_sales');
               try { localStorage.setItem('social_studio_mode', 'dm_sales'); } catch {}
             }}
-            className={`flex items-center gap-2 px-4 py-2 rounded-lg text-xs font-bold transition cursor-pointer ${
+            className={`flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg text-xs font-bold transition cursor-pointer ${
               studioMode === 'dm_sales'
                 ? 'bg-purple-600 text-white shadow-xs'
                 : 'text-slate-600 hover:text-slate-900'
             }`}
           >
-            <MessageSquare className="h-4 w-4 text-purple-300" />
-            <span>🎯 攻めのSNS DM開拓（リスト営業）</span>
-            <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-purple-50 text-purple-700 border border-purple-200 font-semibold">
-              テンプレ送信特化
-            </span>
+            <MessageSquare className="h-3.5 w-3.5" />
+            <span>SNS DM開拓（リスト営業）</span>
           </button>
         </div>
-        <span className="text-xs text-slate-500">
-          {studioMode === 'broadcast'
-            ? '全体発信: 5大SNSへの同時投稿・プレビュー確認・ワンクリックシェア'
-            : '個別営業: 見込み顧客リストアップ・営業テンプレ選択・送信記録・CRM連携'}
-        </span>
+
+        <button
+          type="button"
+          onClick={() => setIsSettingsOpen(!isSettingsOpen)}
+          className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 bg-white hover:bg-slate-50 px-3 py-1.5 text-xs font-semibold text-slate-700 transition shadow-2xs cursor-pointer"
+        >
+          <Settings className="h-3.5 w-3.5 text-purple-600" />
+          <span>{isSettingsOpen ? '設定を閉じる' : 'API・連携設定'}</span>
+        </button>
       </div>
 
       {studioMode === 'dm_sales' ? (

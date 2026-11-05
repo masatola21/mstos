@@ -960,43 +960,34 @@ ${messageText.slice(0, 500)}`;
 
   return (
     <div className="space-y-4 text-slate-800">
-      {/* ── 最上部バナー & 相互ナビゲーション ── */}
-      <div className="rounded-2xl border border-purple-200 bg-white p-4 shadow-xs">
+      {/* ── 最上部ヘッダー & 相互ナビゲーション ── */}
+      <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-xs">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div>
             <div className="flex items-center gap-2">
               {isOutboundOnly ? (
                 <>
                   <SendHorizontal className="h-5 w-5 text-purple-700" />
-                  <h3 className="text-base font-bold text-slate-900">🎯 攻めのSNS DM開拓（リストアップ ＆ 営業テンプレ送信）</h3>
-                  <span className="rounded-full bg-purple-50 px-2.5 py-0.5 text-[11px] font-bold text-purple-700 border border-purple-200">
-                    新規開拓・アウトバウンド営業特化
-                  </span>
+                  <h3 className="text-[19px] font-bold text-slate-800 tracking-tight">SNS DM新規開拓</h3>
                 </>
               ) : isInboundOnly ? (
                 <>
                   <Inbox className="h-5 w-5 text-sky-600" />
-                  <h3 className="text-base font-bold text-slate-900">📥 SNS DM受信トレイ（返信対応 ＆ CRM連携）</h3>
-                  <span className="rounded-full bg-sky-50 px-2.5 py-0.5 text-[11px] font-bold text-sky-700 border border-sky-200">
-                    守りの返信・CRM顧客化特化
-                  </span>
+                  <h3 className="text-[19px] font-bold text-slate-800 tracking-tight">SNS DM受信トレイ</h3>
                 </>
               ) : (
                 <>
                   <MessageSquare className="h-5 w-5 text-purple-700" />
-                  <h3 className="text-base font-bold text-slate-900">💬 SNS営業・DM個別管理スタジオ</h3>
-                  <span className="rounded-full bg-purple-50 px-2.5 py-0.5 text-[11px] font-bold text-purple-700 border border-purple-200">
-                    攻め（開拓）＆ 守り（返信）両対応
-                  </span>
+                  <h3 className="text-[19px] font-bold text-slate-800 tracking-tight">SNS営業・DM個別管理</h3>
                 </>
               )}
             </div>
-            <p className="mt-1 text-xs text-slate-600 leading-relaxed">
+            <p className="mt-1 text-xs text-slate-500">
               {isOutboundOnly
-                ? 'アカウント名またはURLを入力し、営業テンプレを選ぶだけ。手入力なしでAI個別最適化と安全な手動送信が行えます。'
+                ? 'アカウントやURLを入力し、営業テンプレートを選んで送信文面を作成・管理します。'
                 : isInboundOnly
-                ? '届いたDMをペーストして返信テンプレを選ぶだけ。ワンクリックで返信文をコピーしてSNSを開けます。'
-                : '見込み客への個別アプローチと届いたDMへの返信対応を一元管理できます。'}
+                ? '届いたDMの返信文面作成と対応状況を一元管理します。'
+                : '見込み客への個別アプローチと返信対応を一元管理できます。'}
             </p>
           </div>
 
@@ -1006,10 +997,10 @@ ${messageText.slice(0, 500)}`;
                 <button
                   type="button"
                   onClick={() => handleCreateNew('outbound')}
-                  className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg bg-purple-700 hover:bg-purple-800 text-white text-xs font-bold transition shadow-xs cursor-pointer"
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-purple-700 hover:bg-purple-800 text-white text-xs font-medium transition shadow-xs cursor-pointer"
                 >
                   <Plus className="h-3.5 w-3.5" />
-                  ＋ 新規アプローチ追加
+                  新規アプローチ
                 </button>
                 {onNavigateTab && (
                   <button
@@ -1018,11 +1009,11 @@ ${messageText.slice(0, 500)}`;
                       try { localStorage.setItem('unified_inbox_active_channel', 'social_dm'); } catch {}
                       onNavigateTab('inbox_hub', { inboxChannel: 'social_dm' });
                     }}
-                    className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-sky-300 bg-sky-50 hover:bg-sky-100 text-sky-800 text-xs font-semibold transition cursor-pointer"
+                    className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-slate-200 bg-slate-50 hover:bg-slate-100 text-slate-700 text-xs font-medium transition cursor-pointer"
                     title="届いたDMの返信対応は統合受信トレイで行います"
                   >
-                    <Inbox className="h-3.5 w-3.5 text-sky-600" />
-                    <span>📥 届いたDM返信トレイへ</span>
+                    <Inbox className="h-3.5 w-3.5 text-slate-500" />
+                    <span>受信トレイへ</span>
                   </button>
                 )}
               </>
@@ -1031,10 +1022,10 @@ ${messageText.slice(0, 500)}`;
                 <button
                   type="button"
                   onClick={() => handleCreateNew('inbound')}
-                  className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg bg-sky-600 hover:bg-sky-700 text-white text-xs font-bold transition shadow-xs cursor-pointer"
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-sky-600 hover:bg-sky-700 text-white text-xs font-medium transition shadow-xs cursor-pointer"
                 >
                   <Plus className="h-3.5 w-3.5" />
-                  ＋ 届いたDMを登録
+                  DMを登録
                 </button>
                 {onNavigateTab && (
                   <button
@@ -1046,11 +1037,11 @@ ${messageText.slice(0, 500)}`;
                       } catch {}
                       onNavigateTab('ai_acquisition', { acquisitionTab: 'social_studio', studioMode: 'dm_sales' });
                     }}
-                    className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg border border-purple-300 bg-purple-50 hover:bg-purple-100 text-purple-800 text-xs font-semibold transition cursor-pointer"
-                    title="攻めのDM営業（リストアップ）はAI集客運用で行います"
+                    className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-purple-200 bg-purple-50 hover:bg-purple-100 text-purple-700 text-xs font-medium transition cursor-pointer"
+                    title="DM営業（開拓）へ切り替え"
                   >
                     <SendHorizontal className="h-3.5 w-3.5 text-purple-600" />
-                    <span>🎯 攻めのDM営業（リストアップ）へ</span>
+                    <span>DM開拓へ</span>
                   </button>
                 )}
               </>
@@ -1059,18 +1050,18 @@ ${messageText.slice(0, 500)}`;
                 <button
                   type="button"
                   onClick={() => handleCreateNew('outbound')}
-                  className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-purple-700 hover:bg-purple-800 text-white text-xs font-bold transition shadow-xs"
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-purple-700 hover:bg-purple-800 text-white text-xs font-medium transition shadow-xs cursor-pointer"
                 >
-                  <SendHorizontal className="h-3.5 w-3.5" />
-                  ＋ 新規アプローチ (攻め)
+                  <Plus className="h-3.5 w-3.5" />
+                  新規アプローチ
                 </button>
                 <button
                   type="button"
                   onClick={() => handleCreateNew('inbound')}
-                  className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-sky-600 hover:bg-sky-700 text-white text-xs font-bold transition shadow-xs"
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-sky-600 hover:bg-sky-700 text-white text-xs font-medium transition shadow-xs cursor-pointer"
                 >
-                  <Inbox className="h-3.5 w-3.5" />
-                  ＋ 届いたDM返信 (受け)
+                  <Plus className="h-3.5 w-3.5" />
+                  DM登録
                 </button>
               </>
             )}

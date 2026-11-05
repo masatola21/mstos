@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { getSalesEmailTemplate, getNurturingStepTemplate } from '../utils/salesOutreachTemplates';
-import { Eye, Save, Send, Users, SendHorizonal, FileText, Library } from 'lucide-react';
+import { Eye, Save, Send, Users, SendHorizonal, FileText, Library, Mail, MessageSquare, Paperclip, CheckCircle2, X } from 'lucide-react';
 import { getSupabase } from '../lib/supabaseClient';
 import { LineMessagePreview } from './LineMessagePreview';
 import { renderPlaceholders } from '../utils/placeholders';
@@ -663,18 +663,7 @@ export const CommunicationSendCenter: React.FC<Props> = ({
 
       {/* 画面1: 一斉配信（1対N） */}
       {screen === 'broadcast' && (
-        <div className="space-y-4">
-          <div className="rounded-2xl border border-purple-200 bg-purple-50/60 p-4">
-            <div className="flex items-center gap-2 text-purple-900 text-sm font-bold">
-              <Users className="h-4 w-4 text-purple-700" />
-              <span>セグメント・一括配信モード（1対N）</span>
-            </div>
-            <p className="mt-1 text-xs text-purple-800/90 leading-relaxed">
-              見込み客リストや顧客セグメント、LINE友だちへの一斉告知・メルマガ配信を行います。差込変数（<code>&#123;お名前&#125;</code>, <code>&#123;会社名&#125;</code>）は各宛先の情報に自動変換されます。
-            </p>
-          </div>
-          <MarketingBroadcastView initialChannel={initialBroadcastChannel} />
-        </div>
+        <MarketingBroadcastView initialChannel={initialBroadcastChannel} />
       )}
 
       {/* 画面2: 個別送信（1対1） */}
@@ -1075,63 +1064,154 @@ export const CommunicationSendCenter: React.FC<Props> = ({
           </div>
 
           {preview && (
-            <div className="rounded-2xl border border-purple-200 bg-purple-50/40 p-5 space-y-4 shadow-xs">
-              <div className="flex items-center justify-between border-b border-purple-200 pb-3">
-                <h3 className="font-bold text-slate-900 text-sm">送信プレビュー（差込解決済み）</h3>
-                <button
-                  type="button"
-                  onClick={() => setPreview(false)}
-                  className="text-xs text-slate-500 hover:text-slate-800 font-semibold cursor-pointer"
-                >
-                  プレビューを閉じる
-                </button>
+            <div className="rounded-2xl border-2 border-slate-300 bg-white p-5 space-y-4 shadow-md">
+              <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-200 pb-3">
+                <div className="flex items-center gap-2.5">
+                  <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-purple-600 text-white shadow-2xs">
+                    <Eye className="h-4 w-4" />
+                  </span>
+                  <div>
+                    <h3 className="font-bold text-slate-900 text-sm">送信直前プレビュー（差込変数反映済み）</h3>
+                    <p className="text-xs text-slate-600">
+                      変数（お名前・会社名・書類名・URL等）がすべて実データに置き換わった実際の表示です
+                    </p>
+                  </div>
+                </div>
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setPreview(false)}
+                    className="inline-flex items-center gap-1 rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-50 hover:text-slate-950 cursor-pointer shadow-2xs"
+                  >
+                    <X className="h-3.5 w-3.5" />
+                    プレビューを閉じる
+                  </button>
+                  <button
+                    type="button"
+                    disabled={busy}
+                    onClick={() => void send()}
+                    className="inline-flex items-center gap-2 rounded-lg bg-emerald-600 px-5 py-1.5 text-xs font-bold text-white hover:bg-emerald-700 shadow-xs shadow-emerald-600/20 cursor-pointer disabled:opacity-50"
+                  >
+                    <Send className="h-3.5 w-3.5" />
+                    {busy ? '送信中…' : '確定して送信する'}
+                  </button>
+                </div>
               </div>
 
               {(channel === 'email' || channel === 'both') && (
-                <div className="space-y-2 rounded-xl border border-slate-200 bg-white p-4 shadow-2xs">
-                  <div className="flex flex-wrap items-center justify-between text-xs text-slate-500">
-                    <span>
-                      差出人: <strong className="text-slate-800">{senderSettings.fromName}</strong> &lt;{senderSettings.fromEmail || '未設定'}&gt;
-                      {senderSettings.replyTo.trim() ? ` · 返信先: ${senderSettings.replyTo}` : ''}
-                    </span>
-                    <span className="rounded-full bg-blue-50 border border-blue-200 px-2.5 py-0.5 text-blue-700 font-bold text-[10px]">メール送信</span>
-                  </div>
-                  <div className="text-xs text-slate-600">
-                    宛先: <strong className="text-slate-800">{contact?.full_name}</strong> &lt;{contact?.email || 'メール未登録'}&gt;
-                  </div>
-                  <div className="text-sm font-bold text-slate-900 pt-1">
-                    件名: {fill(selectedEmailTemplate?.subject || (templateChannel === 'email' ? subject : resolveTemplate('email')?.subject || ''), vals)}
-                  </div>
-                  <pre className="whitespace-pre-wrap rounded-xl bg-slate-50 p-3.5 text-xs text-slate-800 font-sans leading-relaxed border border-slate-200 shadow-inner">
-                    {fill(
-                      kind === 'document' && documentCategory(doc) === 'contract'
-                        ? ensureContractReplySection(selectedEmailTemplate?.body_text || (templateChannel === 'email' ? body : resolveTemplate('email')?.body_text || ''))
-                        : selectedEmailTemplate?.body_text || (templateChannel === 'email' ? body : resolveTemplate('email')?.body_text || ''),
-                      vals,
+                <div className="rounded-xl border border-slate-300 bg-white shadow-xs overflow-hidden">
+                  {/* メールクライアント風ヘッダー */}
+                  <div className="border-b border-slate-200 bg-slate-50 px-5 py-3.5 space-y-2">
+                    <div className="flex flex-wrap items-center justify-between gap-2 text-xs">
+                      <div className="flex items-center gap-2 text-slate-800">
+                        <Mail className="h-4 w-4 text-blue-600 shrink-0" />
+                        <span className="font-bold text-slate-900">メール送信プレビュー</span>
+                      </div>
+                      <span className="rounded-full bg-blue-50 border border-blue-200 px-2.5 py-0.5 text-blue-700 font-bold text-[10px]">
+                        SMTP / Resend 送信
+                      </span>
+                    </div>
+
+                    <div className="grid gap-1.5 text-xs text-slate-700 pt-1">
+                      <div className="flex items-baseline gap-2">
+                        <span className="w-16 shrink-0 font-bold text-slate-700">差出人:</span>
+                        <span className="text-slate-900 font-medium">
+                          <strong className="font-bold text-slate-950">{senderSettings.fromName}</strong> &lt;{senderSettings.fromEmail || '未設定'}&gt;
+                          {senderSettings.replyTo.trim() && (
+                            <span className="text-slate-600 ml-2">（返信先: {senderSettings.replyTo}）</span>
+                          )}
+                        </span>
+                      </div>
+                      <div className="flex items-baseline gap-2">
+                        <span className="w-16 shrink-0 font-bold text-slate-700">宛先:</span>
+                        <span className="text-slate-900 font-medium">
+                          <strong className="font-bold text-slate-950">{contact?.full_name} 様</strong>
+                          {contact?.email ? (
+                            <span className="text-slate-700 font-mono ml-1.5">&lt;{contact.email}&gt;</span>
+                          ) : (
+                            <span className="ml-1.5 text-rose-600 font-bold">⚠️ メールアドレス未登録</span>
+                          )}
+                        </span>
+                      </div>
+                      <div className="flex items-baseline gap-2 pt-1 border-t border-slate-200">
+                        <span className="w-16 shrink-0 font-bold text-slate-700">件名:</span>
+                        <span className="text-[14px] font-bold text-slate-950">
+                          {fill(selectedEmailTemplate?.subject || (templateChannel === 'email' ? subject : resolveTemplate('email')?.subject || ''), vals)}
+                        </span>
+                      </div>
+                    </div>
+
+                    {/* 添付書類表示 */}
+                    {kind === 'document' && doc && (
+                      <div className="mt-2 flex items-center gap-2 rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-xs text-slate-800">
+                        <Paperclip className="h-3.5 w-3.5 text-purple-600 shrink-0" />
+                        <span className="font-bold text-slate-900">添付・送付書類:</span>
+                        <span className="font-semibold text-purple-900">{doc.title}</span>
+                        <span className="ml-auto text-[11px] text-slate-500 font-mono">（書類閲覧URLが本文に自動差込されます）</span>
+                      </div>
                     )}
-                  </pre>
+                  </div>
+
+                  {/* メール本文プレビュー */}
+                  <div className="p-6 bg-white">
+                    <div className="whitespace-pre-wrap font-sans text-sm leading-relaxed text-slate-900 selection:bg-purple-100">
+                      {fill(
+                        kind === 'document' && documentCategory(doc) === 'contract'
+                          ? ensureContractReplySection(selectedEmailTemplate?.body_text || (templateChannel === 'email' ? body : resolveTemplate('email')?.body_text || ''))
+                          : selectedEmailTemplate?.body_text || (templateChannel === 'email' ? body : resolveTemplate('email')?.body_text || ''),
+                        vals,
+                      )}
+                    </div>
+                  </div>
                 </div>
               )}
 
               {(channel === 'line' || channel === 'both') && (
-                <div className="space-y-2 rounded-xl border border-slate-200 bg-white p-4 shadow-2xs">
-                  <div className="flex items-center justify-between text-xs text-slate-500">
-                    <span>
-                      宛先: <strong className="text-slate-800">{contact?.full_name}</strong> · LINE
+                <div className="rounded-xl border border-slate-300 bg-white shadow-xs overflow-hidden">
+                  <div className="border-b border-slate-200 bg-slate-50 px-5 py-3 flex items-center justify-between">
+                    <div className="flex items-center gap-2 text-xs">
+                      <MessageSquare className="h-4 w-4 text-emerald-600 shrink-0" />
+                      <span className="font-bold text-slate-900">LINE送信プレビュー</span>
+                      <span className="text-slate-600 text-xs">（宛先: {contact?.full_name} 様）</span>
+                    </div>
+                    <span className="rounded-full bg-emerald-50 border border-emerald-200 px-2.5 py-0.5 text-emerald-700 font-bold text-[10px]">
+                      LINE Messaging API 送信
                     </span>
-                    <span className="rounded-full bg-emerald-50 border border-emerald-200 px-2.5 py-0.5 text-emerald-700 font-bold text-[10px]">LINE送信</span>
                   </div>
-                  <LineMessagePreview
-                    type={selectedLineTemplate?.reply_type || 'text'}
-                    title={selectedLineTemplate?.name || 'LINE送信内容'}
-                    payload={
-                      selectedLineTemplate
-                        ? fillPayload(selectedLineTemplate.payload)
-                        : { text: fill(templateChannel === 'line' ? body : resolveTemplate('line')?.body_text || '', vals) }
-                    }
-                  />
+
+                  <div className="p-4 bg-slate-50">
+                    <LineMessagePreview
+                      type={selectedLineTemplate?.reply_type || 'text'}
+                      title={selectedLineTemplate?.name || 'LINE送信内容'}
+                      payload={
+                        selectedLineTemplate
+                          ? fillPayload(selectedLineTemplate.payload)
+                          : { text: fill(templateChannel === 'line' ? body : resolveTemplate('line')?.body_text || '', vals) }
+                      }
+                    />
+                  </div>
                 </div>
               )}
+
+              {/* 下部アクション */}
+              <div className="flex items-center justify-between pt-2">
+                <button
+                  type="button"
+                  onClick={() => setPreview(false)}
+                  className="text-xs text-slate-600 hover:text-slate-900 font-semibold cursor-pointer"
+                >
+                  ← プレビューを閉じて編集に戻る
+                </button>
+                <button
+                  type="button"
+                  disabled={busy}
+                  onClick={() => void send()}
+                  className="inline-flex items-center gap-2 rounded-xl bg-emerald-600 px-6 py-2.5 text-xs font-bold text-white hover:bg-emerald-700 shadow-xs shadow-emerald-600/20 cursor-pointer disabled:opacity-50"
+                >
+                  <Send className="h-4 w-4" />
+                  {busy ? '送信中…' : '確定して送信する'}
+                </button>
+              </div>
             </div>
           )}
         </>

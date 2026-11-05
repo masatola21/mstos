@@ -16,11 +16,11 @@ type Product = { id: string; product_name: string };
 type AudienceSegment = { id: string; name: string; entity_type: string; conditions: { field?: string } | null };
 
 const tabs: Array<{ id: ViewTab; label: string }> = [
-  { id: 'strategy', label: '📋 集客戦略・施策一覧' },
-  { id: 'funnel', label: '🔗 集客導線・公式URLハブ' },
-  { id: 'social_studio', label: '📱 SNS一括投稿 & DM営業' },
-  { id: 'assets', label: '📁 営業資料・成果物保管庫' },
-  { id: 'media', label: '🌐 自社メディア・HP設定' },
+  { id: 'strategy', label: '集客戦略・施策一覧' },
+  { id: 'funnel', label: '集客導線・公式URL' },
+  { id: 'social_studio', label: 'SNS一括投稿・DM営業' },
+  { id: 'assets', label: '資料・成果物保管庫' },
+  { id: 'media', label: '自社メディア・HP設定' },
 ];
 const typeLabels: Record<RecordType, string> = { strategy: '集客戦略', content: 'コンテンツ企画', social: 'SNS・note運用', video: '動画運用', ad: '広告運用', media: '自社メディア運用', funnel: 'LP・集客導線', result: '成果記録', proposal: '改善提案' };
 const expandableToolTypes: RecordType[] = ['content', 'social', 'video', 'ad', 'media', 'funnel'];

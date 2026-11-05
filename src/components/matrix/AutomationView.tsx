@@ -82,42 +82,28 @@ export const AutomationView: React.FC<AutomationViewProps> = ({
 
   return (
     <div className="space-y-6">
-      <header className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
-        <div className="flex flex-wrap items-center justify-between gap-3">
+      <header className="flex flex-wrap items-center justify-between gap-4 border-b border-slate-200 pb-4">
+        <div>
           <div className="flex items-center gap-2">
-            <h2 className="flex items-center gap-2 text-xl font-bold tracking-tight text-slate-900">
-              <Zap className="h-6 w-6 text-purple-600" />
-              AI自動化・承認ルール
-            </h2>
-            <span className="rounded-full border border-purple-200 bg-purple-50 px-2.5 py-0.5 text-xs font-semibold text-purple-700">
-              カスタム編集対応
+            <h1 className="text-[19px] font-bold text-slate-800 tracking-tight">AI自動化・承認ルール</h1>
+            <span className="rounded-md bg-purple-50 border border-purple-200 px-2 py-0.5 text-[11px] font-semibold text-purple-700">
+              有効 {enabledCount} / {automations.length}
             </span>
           </div>
-          {onAddAutomation && (
-            <button
-              type="button"
-              onClick={() => setIsCreating(true)}
-              className="inline-flex items-center gap-1.5 rounded-xl bg-purple-600 px-3.5 py-2 text-xs font-bold text-white shadow-sm hover:bg-purple-700 transition cursor-pointer"
-            >
-              <Plus className="h-4 w-4" />
-              新しいルールを追加
-            </button>
-          )}
+          <p className="mt-1 text-xs text-slate-500">
+            診断回答・商談成約・契約締結などの検知時に、AIの自動処理範囲と人の承認ポリシーを定めます。
+          </p>
         </div>
-        <p className="mt-2 text-sm text-slate-500">
-          業務の開始条件ごとに、AIへ任せる範囲と人が確認する箇所を設定します。
-        </p>
-        <div className="mt-4 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-amber-200 bg-amber-50/70 p-3.5">
-          <div className="flex items-start gap-2 text-xs leading-5 text-amber-900">
-            <Clock3 className="mt-0.5 h-4 w-4 shrink-0 text-amber-600" />
-            <span>
-              診断フォーム回答、商談の成約、契約締結、請求期限超過、支援マイルストーンの到達を検知して期限付きタスクを作成します。ルールの追加や不要なルールの削除も自由に行えます。
-            </span>
-          </div>
-          <span className="whitespace-nowrap text-xs text-slate-500 font-medium">
-            有効設定 {enabledCount} / {automations.length}
-          </span>
-        </div>
+        {onAddAutomation && (
+          <button
+            type="button"
+            onClick={() => setIsCreating(true)}
+            className="inline-flex items-center gap-1.5 rounded-lg bg-purple-600 px-3.5 py-1.5 text-xs font-semibold text-white shadow-xs hover:bg-purple-700 transition cursor-pointer"
+          >
+            <Plus className="h-3.5 w-3.5" />
+            <span>ルールを追加</span>
+          </button>
+        )}
       </header>
 
       {/* ルール追加モーダル / フォーム */}
@@ -252,26 +238,26 @@ export const AutomationView: React.FC<AutomationViewProps> = ({
         {automations.map((rule) => {
           const isCustom = rule.id.startsWith('custom-');
           return (
-            <article key={rule.id} className="space-y-4 rounded-2xl border border-slate-200 bg-white p-5 shadow-sm relative group">
+            <article key={rule.id} className="space-y-3 rounded-xl border border-slate-200 bg-white p-4 shadow-2xs relative">
               <div className="flex items-start justify-between gap-3">
-                <div className="flex items-start gap-3">
-                  <span className="rounded-xl bg-purple-50 p-2 text-purple-700 border border-purple-100">
-                    <GitBranch className="h-4 w-4" />
+                <div className="flex items-start gap-2.5">
+                  <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-purple-50 text-purple-700 border border-purple-100 shrink-0 mt-0.5">
+                    <GitBranch className="h-3.5 w-3.5" />
                   </span>
                   <div>
                     <div className="flex items-center gap-2">
-                      <h3 className="font-bold text-slate-900">{rule.name}</h3>
+                      <h3 className="font-bold text-slate-800 text-sm">{rule.name}</h3>
                       {isCustom && (
-                        <span className="rounded bg-purple-100 text-purple-700 text-[10px] px-1.5 py-0.5 border border-purple-200 font-semibold">
+                        <span className="rounded bg-purple-100 text-purple-700 text-[10px] px-1.5 py-0.2 border border-purple-200 font-medium">
                           カスタム
                         </span>
                       )}
                     </div>
-                    <p className="mt-1 text-xs leading-5 text-slate-500">{rule.description}</p>
+                    <p className="mt-0.5 text-xs text-slate-500 leading-normal">{rule.description}</p>
                   </div>
                 </div>
                 <div className="flex items-center gap-2 shrink-0">
-                  <label className="flex items-center gap-2 text-xs font-medium text-slate-700 cursor-pointer">
+                  <label className="flex items-center gap-1.5 text-xs font-medium text-slate-700 cursor-pointer">
                     <input
                       type="checkbox"
                       checked={rule.isEnabled}
@@ -281,7 +267,9 @@ export const AutomationView: React.FC<AutomationViewProps> = ({
                       className="h-4 w-4 accent-purple-600 cursor-pointer"
                       aria-label={rule.name + 'の有効設定'}
                     />
-                    設定を有効化
+                    <span className={rule.isEnabled ? 'text-purple-700 font-semibold' : 'text-slate-400'}>
+                      {rule.isEnabled ? '有効' : '停止中'}
+                    </span>
                   </label>
                   {onDeleteAutomation && (
                     <button
@@ -292,70 +280,26 @@ export const AutomationView: React.FC<AutomationViewProps> = ({
                           onDeleteAutomation(rule.id);
                         }
                       }}
-                      className="p-1.5 rounded-lg text-slate-400 hover:text-rose-600 hover:bg-rose-50 transition-colors"
+                      className="p-1 rounded-md text-slate-400 hover:text-rose-600 hover:bg-rose-50 transition-colors"
                     >
-                      <Trash2 className="h-4 w-4" />
+                      <Trash2 className="h-3.5 w-3.5" />
                     </button>
                   )}
                 </div>
               </div>
 
-              <div className="rounded-xl border border-slate-200 bg-slate-50 p-3">
-                <div className="flex items-center gap-2 text-xs font-semibold text-purple-700">
-                  <Zap className="h-3.5 w-3.5" />開始条件
-                </div>
-                <p className="mt-1 text-sm font-medium text-slate-800">{triggerLabels[rule.triggerEvent] || rule.triggerEvent}</p>
+              {/* 開始条件 */}
+              <div className="flex items-center gap-2 rounded-lg bg-slate-50 px-3 py-1.5 border border-slate-150 text-xs">
+                <span className="font-semibold text-purple-700 shrink-0 flex items-center gap-1">
+                  <Zap className="h-3 w-3" /> トリガー:
+                </span>
+                <span className="text-slate-800 font-medium truncate">{triggerLabels[rule.triggerEvent] || rule.triggerEvent}</span>
               </div>
 
-              <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
-                <label className="block text-xs font-medium text-slate-700">
-                  <span className="mb-1.5 flex items-center gap-1.5 text-slate-600">
-                    <Clock3 className="h-3.5 w-3.5 text-amber-600" />
-                    タスク期限（発生後の日数）
-                  </span>
-                  <input
-                    type="number"
-                    min={1}
-                    max={90}
-                    value={rule.taskDueInDays}
-                    onChange={(event) => {
-                      const value = Number(event.target.value);
-                      if (Number.isFinite(value))
-                        onUpdateAutomation(rule.id, {
-                          taskDueInDays: Math.min(90, Math.max(1, Math.floor(value))),
-                          updatedAt: Date.now(),
-                        });
-                    }}
-                    className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs text-slate-900 focus:outline-none focus:border-purple-500 focus:ring-1 focus:ring-purple-500 shadow-2xs"
-                  />
-                </label>
-                <label className="block text-xs font-medium text-slate-700">
-                  <span className="mb-1.5 flex items-center gap-1.5 text-slate-600">
-                    <Bot className="h-3.5 w-3.5 text-purple-600" />
-                    AIに任せる範囲
-                  </span>
-                  <select
-                    value={rule.aiMode}
-                    onChange={(event) =>
-                      onUpdateAutomation(rule.id, {
-                        aiMode: event.target.value as AutomationRule['aiMode'],
-                        updatedAt: Date.now(),
-                      })
-                    }
-                    className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs text-slate-900 focus:outline-none focus:border-purple-500 focus:ring-1 focus:ring-purple-500 shadow-2xs"
-                  >
-                    {Object.entries(aiModeLabels).map(([value, label]) => (
-                      <option key={value} value={value}>
-                        {label}
-                      </option>
-                    ))}
-                  </select>
-                </label>
-                <label className="block text-xs font-medium text-slate-700">
-                  <span className="mb-1.5 flex items-center gap-1.5 text-slate-600">
-                    <Bot className="h-3.5 w-3.5 text-purple-600" />
-                    担当役割AI
-                  </span>
+              {/* 設定項目グリッド */}
+              <div className="grid gap-2 sm:grid-cols-2 text-xs">
+                <div>
+                  <span className="text-slate-500 block mb-1">担当AI</span>
                   <select
                     value={rule.workModeId || 'president'}
                     onChange={(event) =>
@@ -364,7 +308,7 @@ export const AutomationView: React.FC<AutomationViewProps> = ({
                         updatedAt: Date.now(),
                       })
                     }
-                    className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs text-slate-900 focus:outline-none focus:border-purple-500 focus:ring-1 focus:ring-purple-500 shadow-2xs"
+                    className="w-full rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 text-xs text-slate-800 focus:outline-none focus:border-purple-500 shadow-2xs"
                   >
                     {AI_WORK_MODES.map((mode) => (
                       <option key={mode.id} value={mode.id}>
@@ -372,12 +316,30 @@ export const AutomationView: React.FC<AutomationViewProps> = ({
                       </option>
                     ))}
                   </select>
-                </label>
-                <label className="block text-xs font-medium text-slate-700">
-                  <span className="mb-1.5 flex items-center gap-1.5 text-slate-600">
-                    <ShieldCheck className="h-3.5 w-3.5 text-emerald-600" />
-                    人の承認
-                  </span>
+                </div>
+
+                <div>
+                  <span className="text-slate-500 block mb-1">AI範囲</span>
+                  <select
+                    value={rule.aiMode}
+                    onChange={(event) =>
+                      onUpdateAutomation(rule.id, {
+                        aiMode: event.target.value as AutomationRule['aiMode'],
+                        updatedAt: Date.now(),
+                      })
+                    }
+                    className="w-full rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 text-xs text-slate-800 focus:outline-none focus:border-purple-500 shadow-2xs"
+                  >
+                    {Object.entries(aiModeLabels).map(([value, label]) => (
+                      <option key={value} value={value}>
+                        {label}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                <div>
+                  <span className="text-slate-500 block mb-1">人の承認</span>
                   <select
                     value={rule.approvalPolicy}
                     onChange={(event) =>
@@ -386,7 +348,7 @@ export const AutomationView: React.FC<AutomationViewProps> = ({
                         updatedAt: Date.now(),
                       })
                     }
-                    className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs text-slate-900 focus:outline-none focus:border-purple-500 focus:ring-1 focus:ring-purple-500 shadow-2xs"
+                    className="w-full rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 text-xs text-slate-800 focus:outline-none focus:border-purple-500 shadow-2xs"
                   >
                     {Object.entries(approvalLabels).map(([value, label]) => (
                       <option key={value} value={value}>
@@ -394,19 +356,43 @@ export const AutomationView: React.FC<AutomationViewProps> = ({
                       </option>
                     ))}
                   </select>
-                </label>
+                </div>
+
+                <div>
+                  <span className="text-slate-500 block mb-1">タスク期限</span>
+                  <div className="flex items-center gap-1.5">
+                    <input
+                      type="number"
+                      min={1}
+                      max={90}
+                      value={rule.taskDueInDays}
+                      onChange={(event) => {
+                        const value = Number(event.target.value);
+                        if (Number.isFinite(value))
+                          onUpdateAutomation(rule.id, {
+                            taskDueInDays: Math.min(90, Math.max(1, Math.floor(value))),
+                            updatedAt: Date.now(),
+                          });
+                      }}
+                      className="w-20 rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 text-xs text-slate-800 focus:outline-none focus:border-purple-500 shadow-2xs"
+                    />
+                    <span className="text-slate-500 text-xs">日後</span>
+                  </div>
+                </div>
               </div>
 
-              <div className="flex items-center gap-2 border-t border-slate-100 pt-3 text-[11px] text-slate-500">
-                {rule.isEnabled ? <Check className="h-3.5 w-3.5 text-emerald-600" /> : <Clock3 className="h-3.5 w-3.5 text-slate-400" />}
-                {rule.isEnabled
-                  ? connectedTriggerEvents.has(rule.triggerEvent)
-                    ? '有効（期限付きタスクを作成し、設定に応じてAI処理）'
-                    : '設定を有効にしました（業務連携後に適用）'
-                  : '停止中'}
+              <div className="flex items-center gap-1.5 border-t border-slate-100 pt-2 text-[11px] text-slate-500">
+                {rule.isEnabled ? <Check className="h-3 w-3 text-emerald-600" /> : <Clock3 className="h-3 w-3 text-slate-400" />}
+                <span>
+                  {rule.isEnabled
+                    ? connectedTriggerEvents.has(rule.triggerEvent)
+                      ? '有効（イベント検知時に自動実行・タスク生成）'
+                      : '有効（業務連携時に自動適用）'
+                    : '停止中'}
+                </span>
                 {rule.aiMode === 'execute' && (
                   <span className="ml-auto inline-flex items-center gap-1 text-amber-700 font-medium">
-                    <Sparkles className="h-3 w-3" />草案を自動作成・外部送信はしません
+                    <Sparkles className="h-3 w-3" />草案自動作成
                   </span>
                 )}
               </div>
