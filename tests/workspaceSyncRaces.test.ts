@@ -1,6 +1,7 @@
 import { WorkspaceSaveCoordinator } from '../src/services/workspaceSaveCoordinator';
 import { matrixService } from '../src/services/matrixService';
-import { WorkspaceData, SaveWorkspaceResult } from '../src/services/workspaceStateService';
+import { WorkspaceData, SaveWorkspaceResult, mergeRecords } from '../src/services/workspaceStateService';
+import { stableStringify } from '../src/utils/stableSerialize';
 
 // localStorage stub
 if (typeof (globalThis as any).localStorage === 'undefined') {
@@ -295,8 +296,132 @@ async function runTests() {
     console.log('  -> PASSED: Non-conflict failure properly drained pendingData A.\n');
   }
 
+  
+  // --------------------------------------------------------------------------
+  // Test (d): キー順序違いのマージと安定シリアライズ (Fix 5)
+  // --------------------------------------------------------------------------
+  console.log('Test (d): Key-order differences in JSON should not cause false merge conflicts');
+  {
+    // baseline と remote でプロパティの挿入順序（キー順）が異なるレコード
+    // （jsonb はキーをアルファベット順等で格納・返却するため、クライアント側の順序と異なる場合がある）
+    const baselineItem = { id: 'item-1', b: 'value-b', a: 'value-a' };
+    const remoteItem = { id: 'item-1', a: 'value-a', b: 'value-b' };
+
+    // JSON.stringify だと順序違いで不一致と判定されることを前提として確認
+    assert(
+      JSON.stringify(baselineItem) !== JSON.stringify(remoteItem),
+      'Standard JSON.stringify must be sensitive to key order for this test'
+    );
+
+    // ケース d-1: ローカル削除
+    // ユーザーはローカルで item-1 を削除した（local = []）
+    // リモートは未変更（キー順が違うだけ）。期待: item-1 は削除される（空配列）
+    const mergedAfterDelete = mergeRecords(
+      [remoteItem],
+      [],
+      [baselineItem]
+    );
+    assert(
+      mergedAfterDelete.length === 0,
+      'CRITICAL: Local deletion must be applied even when remote has different JSON key order'
+    );
+
+    // ケース d-2: ローカル編集
+    // ユーザーはローカルで b を編集した
+    // リモートは未変更（キー順が違うだけ）。期待: リモート未変更と認識されローカル編集が採用される
+    const localItemEdited = { id: 'item-1', b: 'value-b-edited', a: 'value-a' };
+    const mergedAfterEdit = mergeRecords(
+      [remoteItem],
+      [localItemEdited],
+      [baselineItem]
+    );
+    assert(
+      mergedAfterEdit.length === 1 && (mergedAfterEdit[0] as any).b === 'value-b-edited',
+      'CRITICAL: Local edit must be preserved over remote when remote only differs by key order'
+    );
+
+    
+    // 安定シリアライズ関数の単体検証
+    assert(
+      stableStringify({ z: 1, a: { y: 2, b: 3 } }) === stableStringify({ a: { b: 3, y: 2 }, z: 1 }),
+      'Nested keys must be sorted and match exactly'
+    );
+    assert(
+      stableStringify([1, 2, 3]) !== stableStringify([3, 2, 1]),
+      'Array element order must be preserved'
+    );
+    assert(
+      stableStringify({ a: undefined, b: 1 }) === JSON.stringify({ b: 1 }),
+      'Undefined values must be omitted in object'
+    );
+
+    console.log('  -> PASSED: Key order independence verified for both deletion and edit.\n');
+  }
+
   console.log('=====================================================');
   console.log('ALL TESTS COMPLETED!');
+  
+  // --------------------------------------------------------------------------
+  // Test (d): キー順序違いのマージと安定シリアライズ (Fix 5)
+  // --------------------------------------------------------------------------
+  console.log('Test (d): Key-order differences in JSON should not cause false merge conflicts');
+  {
+    // baseline と remote でプロパティの挿入順序（キー順）が異なるレコード
+    // （jsonb はキーをアルファベット順等で格納・返却するため、クライアント側の順序と異なる場合がある）
+    const baselineItem = { id: 'item-1', b: 'value-b', a: 'value-a' };
+    const remoteItem = { id: 'item-1', a: 'value-a', b: 'value-b' };
+
+    // JSON.stringify だと順序違いで不一致と判定されることを前提として確認
+    assert(
+      JSON.stringify(baselineItem) !== JSON.stringify(remoteItem),
+      'Standard JSON.stringify must be sensitive to key order for this test'
+    );
+
+    // ケース d-1: ローカル削除
+    // ユーザーはローカルで item-1 を削除した（local = []）
+    // リモートは未変更（キー順が違うだけ）。期待: item-1 は削除される（空配列）
+    const mergedAfterDelete = mergeRecords(
+      [remoteItem],
+      [],
+      [baselineItem]
+    );
+    assert(
+      mergedAfterDelete.length === 0,
+      'CRITICAL: Local deletion must be applied even when remote has different JSON key order'
+    );
+
+    // ケース d-2: ローカル編集
+    // ユーザーはローカルで b を編集した
+    // リモートは未変更（キー順が違うだけ）。期待: リモート未変更と認識されローカル編集が採用される
+    const localItemEdited = { id: 'item-1', b: 'value-b-edited', a: 'value-a' };
+    const mergedAfterEdit = mergeRecords(
+      [remoteItem],
+      [localItemEdited],
+      [baselineItem]
+    );
+    assert(
+      mergedAfterEdit.length === 1 && (mergedAfterEdit[0] as any).b === 'value-b-edited',
+      'CRITICAL: Local edit must be preserved over remote when remote only differs by key order'
+    );
+
+    
+    // 安定シリアライズ関数の単体検証
+    assert(
+      stableStringify({ z: 1, a: { y: 2, b: 3 } }) === stableStringify({ a: { b: 3, y: 2 }, z: 1 }),
+      'Nested keys must be sorted and match exactly'
+    );
+    assert(
+      stableStringify([1, 2, 3]) !== stableStringify([3, 2, 1]),
+      'Array element order must be preserved'
+    );
+    assert(
+      stableStringify({ a: undefined, b: 1 }) === JSON.stringify({ b: 1 }),
+      'Undefined values must be omitted in object'
+    );
+
+    console.log('  -> PASSED: Key order independence verified for both deletion and edit.\n');
+  }
+
   console.log('=====================================================');
 }
 

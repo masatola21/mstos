@@ -41,6 +41,7 @@ import { MarketingScenario } from '../types/marketing';
 import { loadMarketingScenarios, saveMarketingScenarios, deduplicateMarketingScenarios } from '../utils/marketingStorage';
 import { AIModelSettings, loadAIModelSettings, saveAIModelSettings } from '../utils/aiSettingsStorage';
 import { matrixService, SAMPLE_RECORD_IDS } from './matrixService';
+import { stableStringify } from '../utils/stableSerialize';
 import {
   AutomationRule,
   CustomListDefinition,
@@ -323,7 +324,7 @@ async function saveRelationalAIOperations(userId: string, data: WorkspaceData): 
   if (error) throw error;
 }
 
-function mergeRecordsByKey<T>(
+export function mergeRecordsByKey<T>(
   remoteRecords: T[],
   localRecords: T[],
   baselineRecords: T[],
@@ -344,16 +345,16 @@ function mergeRecordsByKey<T>(
     const key = getKey(baseline);
     if (localById.has(key)) return;
     const remote = remoteById.get(key);
-    if (remote && JSON.stringify(remote) === JSON.stringify(baseline)) merged.delete(key);
+    if (remote && stableStringify(remote) === stableStringify(baseline)) merged.delete(key);
   });
 
   localRecords.forEach((local) => {
     const key = getKey(local);
     const baseline = baselineById.get(key);
     const remote = remoteById.get(key);
-    const localChanged = !baseline || JSON.stringify(local) !== JSON.stringify(baseline);
+    const localChanged = !baseline || stableStringify(local) !== stableStringify(baseline);
     if (!localChanged) return;
-    if (!remote || (baseline && JSON.stringify(remote) === JSON.stringify(baseline))) {
+    if (!remote || (baseline && stableStringify(remote) === stableStringify(baseline))) {
       merged.set(key, local);
       return;
     }
@@ -375,7 +376,7 @@ function mergeRecordsByKey<T>(
   return [...merged.values()];
 }
 
-function mergeRecords<T extends { id: string }>(remoteRecords: T[], localRecords: T[], baselineRecords: T[]): T[] {
+export function mergeRecords<T extends { id: string }>(remoteRecords: T[], localRecords: T[], baselineRecords: T[]): T[] {
   return mergeRecordsByKey(remoteRecords, localRecords, baselineRecords, (record) => record.id);
 }
 
@@ -501,28 +502,28 @@ function hasPendingLocalChanges(
 
   // 1. Matrix テーブル群の差分確認
   if (cloudData.relationalMatrix) {
-    if (JSON.stringify(cloudData.relationalMatrix.products || []) !== JSON.stringify(merged.products || [])) return true;
-    if (JSON.stringify(cloudData.relationalMatrix.tools || []) !== JSON.stringify(merged.tools || [])) return true;
-    if (JSON.stringify(cloudData.relationalMatrix.customLists || []) !== JSON.stringify(merged.customLists || [])) return true;
-    if (JSON.stringify(cloudData.relationalMatrix.marketingScenarios || []) !== JSON.stringify(merged.marketingScenarios || [])) return true;
+    if (stableStringify(cloudData.relationalMatrix.products || []) !== stableStringify(merged.products || [])) return true;
+    if (stableStringify(cloudData.relationalMatrix.tools || []) !== stableStringify(merged.tools || [])) return true;
+    if (stableStringify(cloudData.relationalMatrix.customLists || []) !== stableStringify(merged.customLists || [])) return true;
+    if (stableStringify(cloudData.relationalMatrix.marketingScenarios || []) !== stableStringify(merged.marketingScenarios || [])) return true;
   } else if ((merged.products || []).length > 0 || (merged.tools || []).length > 0) {
     return true;
   }
 
   // 2. Sales テーブル群（contracts, invoices）の差分確認
   if (cloudData.relationalSales) {
-    if (JSON.stringify(cloudData.relationalSales.contracts || []) !== JSON.stringify(merged.contracts || [])) return true;
-    if (JSON.stringify(cloudData.relationalSales.invoices || []) !== JSON.stringify(merged.invoices || [])) return true;
+    if (stableStringify(cloudData.relationalSales.contracts || []) !== stableStringify(merged.contracts || [])) return true;
+    if (stableStringify(cloudData.relationalSales.invoices || []) !== stableStringify(merged.invoices || [])) return true;
   } else if ((merged.contracts || []).length > 0 || (merged.invoices || []).length > 0) {
     return true;
   }
 
   // 3. AI Operations の差分確認
   if (cloudData.relationalAI) {
-    if (JSON.stringify(cloudData.relationalAI.projects || []) !== JSON.stringify(merged.projects || [])) return true;
-    if (JSON.stringify(cloudData.relationalAI.tasks || []) !== JSON.stringify(merged.tasks || [])) return true;
-    if (JSON.stringify(cloudData.relationalAI.approvals || []) !== JSON.stringify(merged.approvals || [])) return true;
-    if (JSON.stringify(cloudData.relationalAI.automations || []) !== JSON.stringify(merged.automations || [])) return true;
+    if (stableStringify(cloudData.relationalAI.projects || []) !== stableStringify(merged.projects || [])) return true;
+    if (stableStringify(cloudData.relationalAI.tasks || []) !== stableStringify(merged.tasks || [])) return true;
+    if (stableStringify(cloudData.relationalAI.approvals || []) !== stableStringify(merged.approvals || [])) return true;
+    if (stableStringify(cloudData.relationalAI.automations || []) !== stableStringify(merged.automations || [])) return true;
     if (cloudData.relationalAI.topGoal !== merged.topGoal) return true;
     if (cloudData.relationalAI.activeCharacterId !== merged.activeCharacterId) return true;
   } else if ((merged.projects || []).length > 0 || (merged.tasks || []).length > 0) {
