@@ -92,6 +92,18 @@ export function clearGoogleCalendarSync(): void {
   }
 }
 
+async function getAuthHeaders(): Promise<Record<string, string>> {
+  try {
+    const supabase = getSupabase();
+    if (!supabase) return {};
+    const { data } = await supabase.auth.getSession();
+    const token = data.session?.access_token;
+    return token ? { Authorization: `Bearer ${token}` } : {};
+  } catch {
+    return {};
+  }
+}
+
 /**
  * サーバー経由で事業用GoogleカレンダーのiCal feedを取得・パース
  */
@@ -102,9 +114,13 @@ export async function fetchGoogleCalendarFromIcal(icalUrl: string): Promise<{
   error?: string;
 }> {
   try {
+    const authHeaders = await getAuthHeaders();
     const res = await fetch('/api/calendar/fetch-ical', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: {
+        'Content-Type': 'application/json',
+        ...authHeaders,
+      },
       body: JSON.stringify({ icalUrl }),
     });
 

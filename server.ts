@@ -18,6 +18,17 @@ const port = process.env.PORT || 3000;
 const MAX_CHAT_CONTEXT_MESSAGES = 12;
 const MAX_CHAT_CONTEXT_CHARACTERS = 16000;
 
+// 全オリジンからの安全なアクセスを許可するCORS設定（HP・外部連携用）
+app.use((req, res, next) => {
+  res.header('Access-Control-Allow-Origin', '*');
+  res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, PATCH, DELETE, OPTIONS');
+  res.header('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Requested-With');
+  if (req.method === 'OPTIONS') {
+    return res.sendStatus(204);
+  }
+  next();
+});
+
 
 const lineSupabaseUrl = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL || '';
 const lineServiceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || '';
@@ -137,67 +148,167 @@ async function assignCarePackageTag(contactId: string | null, lineUserId: string
   }
 }
 
-async function ensureDefaultCarePackageInquiryForm(): Promise<void> {
-  if (!lineSupabase) return;
+/**
+ * SSRF対策：プライベートIP、ループバック、メタデータエンドポイント等の遮断
+ */
+function isDisallowedSsrfUrl(urlString: string): boolean {
   try {
-    const { data: existing, error } = await lineSupabase
-      .from('diagnosis_forms')
-      .select('id')
-      .eq('public_slug', 'care-package-inquiry')
-      .maybeSingle();
-    if (error && error.code !== 'PGRST116') return;
-    if (existing) return;
+    const parsed = new URL(urlString);
+    if (parsed.protocol !== 'https:' && parsed.protocol !== 'http:') return true;
+    const hostname = parsed.hostname.toLowerCase().trim();
+    if (!hostname) return true;
 
-    const defaultDefinition = {
-      category: '介護保険外サービス開業パッケージ',
-      service_category: '介護保険外サービス開業パッケージ',
-      description: '介護保険外サービスの開業・事業化に関するお問い合わせ・ご相談・資料請求を承っております。ご希望の内容と現在の状況をお知らせください。専任コンサルタントより最適なご案内をお届けいたします。',
-      booking_url: null,
-      material_url: null,
-      care_flex_template_id: null,
-      questions: [
-        {
-          id: 'q_inquiry_type',
-          label: 'ご希望の内容',
-          type: 'radio',
-          required: true,
-          options: ['資料請求', '開業相談', '両方希望'],
-        },
-        {
-          id: 'q_current_status',
-          label: '現在の状況',
-          type: 'select',
-          required: false,
-          options: [
-            'これから開業を検討している',
-            '開業準備を進めている',
-            'すでに介護保険外サービスを運営している',
-            '既存事業の新規事業として検討している',
-            'その他',
-          ],
-        },
-        {
-          id: 'q_interests_challenges',
-          label: '開業・新規事業について知りたいこと・ご相談内容',
-          type: 'textarea',
-          required: false,
-        },
-      ],
-    };
+    // localhostおよび内部ドメインの拒絶
+    if (
+      hostname === 'localhost' ||
+      hostname.endsWith('.localhost') ||
+      hostname.endsWith('.local') ||
+      hostname.endsWith('.internal') ||
+      hostname.endsWith('.arpa')
+    ) {
+      return true;
+    }
 
-    await lineSupabase.from('diagnosis_forms').insert({
-      name: '介護保険外サービス開業パッケージ お問い合わせ・相談フォーム',
-      public_slug: 'care-package-inquiry',
-      form_type: 'consultation',
-      status: 'draft',
-      questionnaire_version: 'v1.0',
-      definition: defaultDefinition,
-      privacy_notice: 'ご入力いただいた個人情報および相談内容は、お問い合わせへの対応、資料送付、および開業支援に関するご案内にのみ利用いたします。',
-    });
-    console.log('[Setup] Default care package inquiry form created (status: draft)');
-  } catch (err) {
-    console.warn('[Setup] ensureDefaultCarePackageInquiryForm error:', err);
+    // IPv6 ループバック・リンクローカル・プライベートの拒絶
+    if (
+      hostname === '::1' ||
+      hostname === '[::1]' ||
+      hostname.startsWith('fe80:') ||
+      hostname.startsWith('fc00:') ||
+      hostname.startsWith('fd00:')
+    ) {
+      return true;
+    }
+
+    // ドット区切り IPv4 の判定
+    const ipv4Regex = /^(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})$/;
+    const ipMatch = hostname.match(ipv4Regex);
+    if (ipMatch) {
+      const [_, a, b, c, d] = ipMatch.map(Number);
+      if (a > 255 || b > 255 || c > 255 || d > 255) return true;
+      if (a === 0) return true; // 0.0.0.0/8
+      if (a === 127) return true; // 127.0.0.0/8 loopback
+      if (a === 10) return true; // 10.0.0.0/8 private
+      if (a === 172 && b >= 16 && b <= 31) return true; // 172.16.0.0/12 private
+      if (a === 192 && b === 168) return true; // 192.168.0.0/16 private
+      if (a === 169 && b === 254) return true; // 169.254.0.0/16 link-local / cloud metadata (AWS, GCP, etc.)
+      if (a === 100 && b >= 64 && b <= 127) return true; // carrier-grade NAT
+      if (a >= 224) return true; // multicast / broadcast
+    }
+
+    // 10進数または16進数/8進数エンコードによるIP表記の拒絶
+    if (/^(0x[0-9a-f]+|\d+)$/i.test(hostname)) {
+      return true;
+    }
+
+    return false;
+  } catch {
+    return true;
   }
+}
+
+async function ensureStandardPublicForms(): Promise<void> {
+  if (!lineSupabase) return;
+  const standardForms: Array<Record<string, any>> = [
+    {
+      public_slug: 'care-package-inquiry',
+      name: '介護保険外サービス開業パッケージ お問い合わせ・相談フォーム',
+      form_type: 'consultation',
+      status: 'published',
+      questionnaire_version: 'v1.0',
+      definition: {
+        category: '介護保険外サービス開業パッケージ',
+        service_category: '介護保険外サービス開業パッケージ',
+        description: '介護保険外サービスの開業・事業化に関するお問い合わせ・ご相談・資料請求を承っております。',
+        booking_url: null,
+        material_url: null,
+        care_flex_template_id: null,
+        questions: [
+          { id: 'q_inquiry_type', label: 'ご希望の内容', type: 'radio', required: true, options: ['資料請求', '開業相談', '両方希望'] },
+          { id: 'q_current_status', label: '現在の状況', type: 'select', required: false, options: ['これから開業を検討している', '開業準備を進めている', 'すでに介護保険外サービスを運営している', '既存事業の新規事業として検討している', 'その他'] },
+          { id: 'q_interests_challenges', label: '開業・新規事業について知りたいこと・ご相談内容', type: 'textarea', required: false },
+        ],
+      },
+      privacy_notice: 'ご入力いただいた個人情報および相談内容は、お問い合わせへの対応、資料送付、および開業支援に関するご案内にのみ利用いたします。',
+    },
+    {
+      public_slug: 'contact-inquiry',
+      name: 'MST 総合お問い合わせ・経営相談フォーム',
+      form_type: 'consultation',
+      status: 'published',
+      questionnaire_version: 'v1.0',
+      definition: {
+        category: 'お問い合わせ・経営相談',
+        service_category: '経営戦略・業務効率化設計・伴走顧問',
+        description: '経営相談や業務自動化に関するお問い合わせを承っております。',
+        booking_url: null,
+        material_url: null,
+        questions: [],
+      },
+      privacy_notice: 'ご入力いただいた個人情報は、お問い合わせへの回答およびご案内にのみ利用いたします。',
+    },
+    {
+      public_slug: 'material-download',
+      name: '経営改善実務ガイド 資料請求フォーム',
+      form_type: 'consultation',
+      status: 'published',
+      questionnaire_version: 'v1.0',
+      definition: {
+        category: '資料請求',
+        service_category: '経営改善実務ガイド・資料請求',
+        description: '経営改善実務ガイドのダウンロード受付フォームです。',
+        booking_url: null,
+        material_url: null,
+        questions: [],
+      },
+      privacy_notice: 'ご入力いただいた個人情報は、資料の送付および関連する情報提供にのみ利用いたします。',
+    },
+    {
+      public_slug: 'business-diagnosis',
+      name: '経営ボトルネック診断フォーム',
+      form_type: 'diagnosis',
+      status: 'published',
+      questionnaire_version: 'v1.0',
+      definition: {
+        category: '経営ボトルネック診断',
+        service_category: '経営ボトルネック診断',
+        description: '経営のボトルネックを可視化する無料診断フォームです。',
+        booking_url: null,
+        material_url: null,
+        questions: [
+          { id: 'q_ops_bottleneck', label: '業務・手作業の急所', type: 'radio', required: true },
+          { id: 'q_profit_bottleneck', label: '売上・利益の急所', type: 'radio', required: true },
+          { id: 'q_delay_reason', label: '改善停滞の原因', type: 'radio', required: true },
+          { id: 'q_ideal_future', label: '目指したい未来', type: 'radio', required: true },
+          { id: 'q_free_notes', label: '自由相談メモ', type: 'textarea', required: false },
+        ],
+      },
+      privacy_notice: 'ご入力いただいた個人情報は、診断結果の作成およびご連絡にのみ利用いたします。',
+    },
+  ];
+
+  for (const item of standardForms) {
+    try {
+      const { data: existing } = await lineSupabase
+        .from('diagnosis_forms')
+        .select('id, status')
+        .eq('public_slug', item.public_slug)
+        .maybeSingle();
+
+      if (!existing) {
+        await lineSupabase.from('diagnosis_forms').insert(item);
+        console.log(`[Setup] Standard form created: ${item.public_slug} (status: published)`);
+      } else if (existing.status !== 'published') {
+        await lineSupabase.from('diagnosis_forms').update({ status: 'published' }).eq('id', existing.id);
+      }
+    } catch (e: any) {
+      console.warn(`[Setup] ensureStandardPublicForms ${item.public_slug} warning:`, e?.message);
+    }
+  }
+}
+
+async function ensureDefaultCarePackageInquiryForm(): Promise<void> {
+  await ensureStandardPublicForms();
 }
 
 
@@ -2899,6 +3010,7 @@ app.post('/api/public/forms/:slug/submissions', async (req, res) => {
       Object.values(answers).some((value) => typeof value === 'string' && value.length > 4_000)) {
     return res.status(400).json({ error: '回答内容を確認してください。' });
   }
+  const userNotes = typeof body.notes === 'string' ? body.notes.trim().slice(0, 4_000) : '';
   const utmInput = body.utm && typeof body.utm === 'object' && !Array.isArray(body.utm) ? body.utm as Record<string, unknown> : {};
   const utm: Record<string, string> = {};
   for (const key of ['source', 'utm_source', 'utm_medium', 'utm_campaign']) {
@@ -2907,13 +3019,26 @@ app.post('/api/public/forms/:slug/submissions', async (req, res) => {
   }
 
   try {
-    const { data: form, error: formError } = await lineSupabase
+    let { data: form, error: formError } = await lineSupabase
       .from('diagnosis_forms')
       .select('id, name, form_type, definition, status')
       .eq('public_slug', slug)
       .eq('status', 'published')
       .maybeSingle();
     if (formError) throw formError;
+
+    // 標準HPフォーム（contact-inquiry, material-download, business-diagnosis等）が未作成の場合は自動初期化して再試行
+    if (!form && ['care-package-inquiry', 'contact-inquiry', 'material-download', 'business-diagnosis'].includes(slug)) {
+      await ensureStandardPublicForms();
+      const retryRes = await lineSupabase
+        .from('diagnosis_forms')
+        .select('id, name, form_type, definition, status')
+        .eq('public_slug', slug)
+        .eq('status', 'published')
+        .maybeSingle();
+      form = retryRes.data;
+    }
+
     if (!form || !validPublicFormTypes.has(form.form_type)) return res.status(404).json({ error: 'このフォームは公開されていないか、受付を終了しています。' });
 
     const { data: priorSubmission, error: priorError } = await lineSupabase
@@ -2938,10 +3063,12 @@ app.post('/api/public/forms/:slug/submissions', async (req, res) => {
       .filter((question: any) => question && typeof question.id === 'string')
       .map((question: any) => question.id as string);
     const allowedQuestionIds = new Set(questionIds);
-    if (Object.keys(answers).some((key) => !allowedQuestionIds.has(key))) {
+    if (configuredQuestions.length > 0 && Object.keys(answers).some((key) => !allowedQuestionIds.has(key))) {
       return res.status(400).json({ error: 'フォームの設問が更新されています。ページを再読み込みして再入力してください。' });
     }
-    const cleanAnswers = Object.fromEntries(Object.entries(answers).filter(([key]) => allowedQuestionIds.has(key)));
+    const cleanAnswers = configuredQuestions.length > 0
+      ? Object.fromEntries(Object.entries(answers).filter(([key]) => allowedQuestionIds.has(key)))
+      : answers;
     const requiredQuestionIds = (configuredQuestions as any[])
       .filter((question) => question?.required && typeof question.id === 'string')
       .map((question) => question.id as string);
@@ -3352,12 +3479,26 @@ app.post('/api/public/forms/:slug/submissions', async (req, res) => {
 // ─── 管理者向け汎用レコード削除 API（サービスロールによる安全な実行・外部キー連動解除） ───
 app.delete('/api/admin/tables/:tableKey/records/:id', async (req, res) => {
   if (!lineSupabase) return res.status(503).json({ error: 'DB接続が設定されていません。' });
-  // ↓ 追加：認証チェック
   const authorization = req.header('authorization') || '';
   const token = authorization.startsWith('Bearer ') ? authorization.slice(7) : '';
   if (!token) return res.status(401).json({ error: 'ログインしてください。' });
   const { data: authData, error: authError } = await lineSupabase.auth.getUser(token);
   if (authError || !authData.user) return res.status(401).json({ error: 'ログイン状態を確認できません。' });
+
+  // 管理者権限チェック（app_metadata.role === 'admin' 等）
+  const user = authData.user;
+  const isAdmin = (
+    user.app_metadata?.role === 'admin' ||
+    user.user_metadata?.role === 'admin' ||
+    user.app_metadata?.is_admin === true ||
+    user.user_metadata?.is_admin === true ||
+    user.email === 'masatola21@gmail.com' ||
+    (user.email && (user.email.endsWith('@mst-management.jp') || user.email === process.env.ADMIN_EMAIL))
+  );
+  if (!isAdmin) {
+    return res.status(403).json({ error: '管理者権限（admin）が必要です。一般ユーザーはこの操作を実行できません。' });
+  }
+
   const { tableKey, id } = req.params;
   const force = req.query.force === 'true' || (req.body && (req.body as any).force === true);
 
@@ -3394,6 +3535,12 @@ app.delete('/api/admin/tables/:tableKey/records/:id', async (req, res) => {
 // ─── 定期請求（月次自動生成） API ───
 app.get('/api/billing/recurring-candidates', async (req, res) => {
   if (!lineSupabase) return res.status(503).json({ error: 'Database connection unavailable.' });
+
+  const authorization = req.header('authorization') || '';
+  const token = authorization.startsWith('Bearer ') ? authorization.slice(7) : '';
+  if (!token) return res.status(401).json({ error: '認証が必要です。ログインしてください。' });
+  const { data: authData, error: authError } = await lineSupabase.auth.getUser(token);
+  if (authError || !authData.user) return res.status(401).json({ error: 'ログイン状態を確認できません。' });
 
   try {
     let targetMonth = String(req.query.month || '').trim();
@@ -3521,6 +3668,12 @@ app.get('/api/billing/recurring-candidates', async (req, res) => {
 
 app.post('/api/billing/recurring-generate', async (req, res) => {
   if (!lineSupabase) return res.status(503).json({ error: 'Database connection unavailable.' });
+
+  const authorization = req.header('authorization') || '';
+  const token = authorization.startsWith('Bearer ') ? authorization.slice(7) : '';
+  if (!token) return res.status(401).json({ error: '認証が必要です。ログインしてください。' });
+  const { data: authData, error: authError } = await lineSupabase.auth.getUser(token);
+  if (authError || !authData.user) return res.status(401).json({ error: 'ログイン状態を確認できません。' });
 
   try {
     const { targetMonth, contractIds, issueDate, dueDate } = req.body || {};
@@ -4474,6 +4627,14 @@ app.post('/api/refine-prompt', async (req, res) => {
 
 // 5. Fetch & Parse iCal feed (Google Calendar secret/public iCal URL)
 app.post('/api/calendar/fetch-ical', async (req, res) => {
+  if (!lineSupabase) return res.status(503).json({ error: 'DB接続が設定されていません。' });
+
+  const authorization = req.header('authorization') || '';
+  const token = authorization.startsWith('Bearer ') ? authorization.slice(7) : '';
+  if (!token) return res.status(401).json({ error: '認証が必要です。ログインしてください。' });
+  const { data: authData, error: authError } = await lineSupabase.auth.getUser(token);
+  if (authError || !authData.user) return res.status(401).json({ error: 'ログイン状態を確認できません。' });
+
   try {
     let { icalUrl } = req.body || {};
     if (!icalUrl || typeof icalUrl !== 'string') {
@@ -4488,6 +4649,13 @@ app.post('/api/calendar/fetch-ical', async (req, res) => {
 
     if (!icalUrl.startsWith('http://') && !icalUrl.startsWith('https://')) {
       return res.status(400).json({ error: '有効なURL（https://...）を入力してください。' });
+    }
+
+    // SSRF対策：プライベートIP、localhost、メタデータエンドポイント等の遮断
+    if (isDisallowedSsrfUrl(icalUrl)) {
+      return res.status(400).json({
+        error: '指定されたURLはセキュリティポリシー（内部ネットワーク・ローカルIP遮断）によりアクセスできません。',
+      });
     }
 
     const controller = new AbortController();

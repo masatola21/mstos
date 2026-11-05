@@ -167,188 +167,121 @@ export interface IntakeSubmissionResult {
   materialUrl?: string;
 }
 
-// 面談予約URLの取得
+// 面談予約URLの取得（フォールバック用）
 export async function getBookingPageUrl(): Promise<string> {
-  try {
-    if (supabase) {
-      const { data } = await supabase
-        .from('sales_workspace_settings')
-        .select('booking_page_url')
-        .maybeSingle();
-      if (data?.booking_page_url && /^https?:\/\//i.test(data.booking_page_url)) {
-        return data.booking_page_url.trim();
-      }
-    }
-  } catch (e) {
-    console.warn('Failed to load booking_page_url:', e);
-  }
-  // 未設定時のフォールバック（公式LINEまたは予約導線）
   return 'https://lin.ee/qWsuD6f';
 }
 
-// OS・CRMへの直接連携
+/**
+ * UUID v4 生成関数（RFC 4122準拠）
+ */
+function generateUuid(): string {
+  if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
+    return crypto.randomUUID();
+  }
+  return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, (c) => {
+    const r = (Math.random() * 16) | 0;
+    const v = c === 'x' ? r : (r & 0x3) | 0x8;
+    return v.toString(16);
+  });
+}
+
+/**
+ * バックエンド API エンドポイントの解決
+ */
+function resolveApiEndpoint(path: string): string {
+  const envUrl = (
+    import.meta.env.PUBLIC_API_URL ||
+    import.meta.env.NEXT_PUBLIC_API_URL ||
+    ''
+  ).trim();
+
+  if (envUrl) {
+    return `${envUrl.replace(/\/+$/, '')}${path}`;
+  }
+
+  if (typeof window !== 'undefined') {
+    const { hostname, port, origin } = window.location;
+    // 開発環境で別ポート（例: Astro 4321）から起動している場合はExpressサーバー(3000)へ
+    if ((hostname === 'localhost' || hostname === '127.0.0.1') && port !== '3000') {
+      return `http://${hostname}:3000${path}`;
+    }
+    return `${origin}${path}`;
+  }
+
+  return path;
+}
+
+/**
+ * OS・CRMへの安全な連携
+ * ブラウザから直接Supabaseへ書き込まず、サーバーの POST /api/public/forms/:slug/submissions 経由で実行します。
+ * 送信失敗時は確実に success: false とエラーメッセージを返却し、誤った完了表示を防ぎます。
+ */
 export async function submitIntakeToCRM(payload: IntakeSubmissionPayload): Promise<IntakeSubmissionResult> {
-  const requestId = typeof crypto !== 'undefined' && crypto.randomUUID ? crypto.randomUUID() : `req_${Date.now()}`;
+  const requestId = generateUuid();
   const cleanEmail = payload.email.trim().toLowerCase();
   const cleanPhone = (payload.phone || '').trim();
   const cleanName = payload.name.trim();
   const cleanCompany = (payload.companyName || '').trim();
 
-  let bookingUrl = 'https://lin.ee/qWsuD6f';
-  let materialUrl: string | undefined = undefined;
+  if (!cleanName || !cleanEmail || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(cleanEmail)) {
+    return {
+      success: false,
+      message: 'お名前と有効なメールアドレスをご入力ください。',
+    };
+  }
+
+  const endpoint = resolveApiEndpoint(`/api/public/forms/${encodeURIComponent(payload.slug)}/submissions`);
+
+  const requestBody = {
+    name: cleanName,
+    companyName: cleanCompany,
+    email: cleanEmail,
+    phone: cleanPhone,
+    requestId,
+    privacyAgreed: true,
+    answers: payload.answers || {},
+    notes: payload.notes || '',
+    customFields: payload.customFields || {},
+    utm: {
+      source: payload.source || 'corporate_website',
+      inquiryType: payload.inquiryType,
+    },
+  };
 
   try {
-    // 1. 最新の予約URLを取得
-    bookingUrl = await getBookingPageUrl();
+    const response = await fetch(endpoint, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Accept: 'application/json',
+      },
+      body: JSON.stringify(requestBody),
+    });
 
-    if (supabase) {
-      // 2. 名寄せ (contacts)
-      let contactId: string | null = null;
-      let matchedCompanyId: string | null = null;
+    const data = await response.json().catch(() => ({}));
 
-      // 会社名検索
-      if (cleanCompany) {
-        const { data: companies } = await supabase
-          .from('companies')
-          .select('id, company_name')
-          .ilike('company_name', cleanCompany)
-          .limit(1);
-        if (companies && companies.length > 0) {
-          matchedCompanyId = companies[0].id;
-        }
-      }
-
-      // 連絡先検索（Email優先）
-      const { data: existingContacts } = await supabase
-        .from('contacts')
-        .select('id, full_name, phone, company_id')
-        .ilike('email', cleanEmail)
-        .limit(1);
-
-      if (existingContacts && existingContacts.length > 0) {
-        contactId = existingContacts[0].id;
-        // 既存連絡先の更新
-        await supabase
-          .from('contacts')
-          .update({
-            ...(cleanName && cleanName !== 'LINE友だち' ? { full_name: cleanName } : {}),
-            ...(cleanPhone ? { phone: cleanPhone } : {}),
-            ...(matchedCompanyId && !existingContacts[0].company_id ? { company_id: matchedCompanyId } : {}),
-          })
-          .eq('id', contactId);
-      } else {
-        // 新規連絡先作成
-        const { data: newContact } = await supabase
-          .from('contacts')
-          .insert({
-            full_name: cleanName,
-            email: cleanEmail,
-            phone: cleanPhone || null,
-            company_id: matchedCompanyId,
-            source: payload.source || 'corporate_website',
-          })
-          .select('id')
-          .single();
-        if (newContact) {
-          contactId = newContact.id;
-        }
-      }
-
-      // 3. リード・商談パイプライン作成 (leads)
-      const serviceType = payload.inquiryType === 'diagnosis'
-        ? '経営ボトルネック診断'
-        : payload.inquiryType === 'material'
-          ? '経営改善実務ガイド・資料請求'
-          : payload.inquiryType === 'care_package'
-            ? '介護保険外サービス開業パッケージ'
-            : 'お問い合わせ・経営相談';
-
-      const status = payload.inquiryType === 'material'
-        ? '資料請求'
-        : payload.inquiryType === 'diagnosis'
-          ? '診断申込'
-          : '新規';
-
-      const { data: insertedLead } = await supabase
-        .from('leads')
-        .insert({
-          contact_id: contactId,
-          company_id: matchedCompanyId,
-          source: payload.source || 'corporate_website',
-          service_type: serviceType,
-          status,
-          first_registered_at: new Date().toISOString(),
-          last_contacted_at: new Date().toISOString(),
-          notes: payload.notes || `[申込 ${requestId}] ${serviceType}`,
-          custom_fields: payload.customFields || {},
-        })
-        .select('id')
-        .single();
-
-      const leadId = insertedLead?.id;
-
-      // 4. 診断・回答詳細の保存 (diagnosis_submissions)
-      if (payload.answers && Object.keys(payload.answers).length > 0) {
-        // diagnosis_forms の ID を取得（なければ slug から探す）
-        const { data: formRow } = await supabase
-          .from('diagnosis_forms')
-          .select('id, definition')
-          .eq('public_slug', payload.slug)
-          .maybeSingle();
-
-        const formId = formRow?.id || null;
-
-        await supabase
-          .from('diagnosis_submissions')
-          .insert({
-            form_id: formId,
-            contact_id: contactId,
-            company_id: matchedCompanyId,
-            lead_id: leadId,
-            respondent_name: cleanName,
-            respondent_company_name: cleanCompany || null,
-            respondent_email: cleanEmail,
-            answers: payload.answers,
-            privacy_agreed_at: new Date().toISOString(),
-            source: 'corporate_website',
-            idempotency_key: requestId,
-          });
-      }
-
-      // 5. 自動通知タスクの起票（OS管理画面用）
-      await supabase
-        .from('tasks')
-        .insert({
-          title: `【HP ${serviceType}】${cleanName} 様（${cleanCompany || '個人・未登録'}）`,
-          description: `HPから${serviceType}を受領しました。\n氏名: ${cleanName}\nEmail: ${cleanEmail}\n電話: ${cleanPhone || '未入力'}\n\n内容:\n${payload.notes || 'なし'}`,
-          status: 'todo',
-          priority: payload.inquiryType === 'consultation' ? 'urgent' : 'high',
-          due_date: new Date().toISOString().slice(0, 10),
-        });
-
+    if (!response.ok || !data.success) {
+      const errorMessage = data?.error || data?.message || `送信に失敗しました。(HTTP ${response.status})`;
+      console.error('submitIntakeToCRM API failed:', errorMessage, response.status);
       return {
-        success: true,
-        message: '送信が完了しました。',
-        leadId,
-        bookingUrl,
-        materialUrl,
+        success: false,
+        message: errorMessage,
       };
     }
 
     return {
       success: true,
-      message: '送信を受け付けました。',
-      bookingUrl,
-      materialUrl,
+      message: data.message || '送信を受け付けました。',
+      leadId: data.leadId,
+      bookingUrl: data.bookingUrl || 'https://lin.ee/qWsuD6f',
+      materialUrl: data.materialUrl,
     };
-  } catch (err) {
-    console.error('submitIntakeToCRM error:', err);
-    // ネットワークや設定の不備があってもユーザー体験を損なわないよう成功を返す
+  } catch (err: any) {
+    console.error('submitIntakeToCRM network/fetch error:', err);
     return {
-      success: true,
-      message: '送信を受け付けました。順次担当よりご連絡いたします。',
-      bookingUrl,
-      materialUrl,
+      success: false,
+      message: 'サーバーとの通信に失敗しました。インターネット接続をご確認の上、再度お試しください。',
     };
   }
 }

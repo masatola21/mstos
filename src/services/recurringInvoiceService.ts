@@ -76,10 +76,25 @@ export function formatTargetMonthLabel(targetMonth: string): string {
   return `${y}年${parseInt(m, 10)}月分`;
 }
 
+async function getAuthHeaders(): Promise<Record<string, string>> {
+  try {
+    const supabase = getSupabase();
+    if (!supabase) return {};
+    const { data } = await supabase.auth.getSession();
+    const token = data.session?.access_token;
+    return token ? { Authorization: `Bearer ${token}` } : {};
+  } catch {
+    return {};
+  }
+}
+
 export async function fetchRecurringCandidates(targetMonth?: string): Promise<RecurringCandidatesResponse> {
   const month = targetMonth || getCurrentTargetMonth();
   try {
-    const res = await fetch(`/api/billing/recurring-candidates?month=${encodeURIComponent(month)}`);
+    const authHeaders = await getAuthHeaders();
+    const res = await fetch(`/api/billing/recurring-candidates?month=${encodeURIComponent(month)}`, {
+      headers: { ...authHeaders },
+    });
     if (res.ok) {
       return (await res.json()) as RecurringCandidatesResponse;
     }
@@ -93,9 +108,13 @@ export async function fetchRecurringCandidates(targetMonth?: string): Promise<Re
 
 export async function generateRecurringInvoices(params: GenerateRecurringParams): Promise<GenerateRecurringResult> {
   try {
+    const authHeaders = await getAuthHeaders();
     const res = await fetch('/api/billing/recurring-generate', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: {
+        'Content-Type': 'application/json',
+        ...authHeaders,
+      },
       body: JSON.stringify(params),
     });
     if (res.ok) {
