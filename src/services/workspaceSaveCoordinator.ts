@@ -23,6 +23,7 @@ interface QueuedDeferred {
 export class WorkspaceSaveCoordinator {
   private saveFn: WorkspaceSaveFn;
   private isSaving = false;
+  private inFlightSnapshot: string = '';
   private pendingUserId: string | null = null;
   private pendingData: WorkspaceData | null = null;
   private pendingDeferreds: QueuedDeferred[] = [];
@@ -69,6 +70,7 @@ export class WorkspaceSaveCoordinator {
     this.pendingDeferreds.forEach((d) => d.reject(new Error('User logged out or switched')));
     this.pendingDeferreds = [];
     this.lastSavedSnapshot = '';
+    this.inFlightSnapshot = '';
     this.syncStatus = 'loading';
     this.syncError = '';
     this.isConflictStopped = false;
@@ -169,19 +171,29 @@ export class WorkspaceSaveCoordinator {
       pendingDeletions.invoices.size > 0 ||
       pendingDeletions.products.size > 0;
 
-    if (snapshot === this.lastSavedSnapshot && !hasPendingDeletions) {
-      // 変更なし：即時成功として返す
-      deferred?.resolve({ savedData: data, wasMerged: false });
-      return;
-    }
-
     if (this.isSaving) {
-      // 現在保存処理が実行中：最新データに集約（coalesce）して待機
+      // 指摘4対応: 保存実行中は現在保存中の inFlightSnapshot と比較する
+      // 実行中と同一なら追加保存は不要
+      if (snapshot === this.inFlightSnapshot && !hasPendingDeletions) {
+        if (deferred) {
+          this.pendingDeferreds.push(deferred);
+        }
+        return;
+      }
+
+      // 実行中と異なる場合（例: A -> B(保存中) -> A と元に戻した場合）：
+      // lastSavedSnapshot と一致していても、実行中(B)と異なるため enqueue する
       this.pendingUserId = userId;
       this.pendingData = data;
       if (deferred) {
         this.pendingDeferreds.push(deferred);
       }
+      return;
+    }
+
+    if (snapshot === this.lastSavedSnapshot && !hasPendingDeletions) {
+      // 変更なし：即時成功として返す
+      deferred?.resolve({ savedData: data, wasMerged: false });
       return;
     }
 
@@ -194,6 +206,7 @@ export class WorkspaceSaveCoordinator {
 
   private async executeSave(userId: string, data: WorkspaceData, snapshot: string): Promise<void> {
     this.isSaving = true;
+    this.inFlightSnapshot = snapshot;
     this.setStatus('saving');
 
     const currentDeferreds = [...this.pendingDeferreds];
@@ -262,6 +275,7 @@ export class WorkspaceSaveCoordinator {
       currentDeferreds.forEach((d) => d.reject(error));
     } finally {
       this.isSaving = false;
+      this.inFlightSnapshot = '';
 
       // 競合停止されていない場合で、実行中に新たな変更がペンディングされていたら次を実行
       if (!this.isConflictStopped && this.pendingData && this.pendingUserId) {

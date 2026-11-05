@@ -75,19 +75,15 @@ async function runTests() {
       calls.push({ userId: uId, data: d, pendingContracts: [...pending.contracts] });
 
       if (calls.length === 1) {
-        // S1: 呼び出し開始を通知して待機
         s1StartedResolve();
         const res = await s1FinishPromise;
-        // 古い実装の模倣：S1完了時に clearPendingDeletions(uId) を呼ぶ（もし修正前なら）
         if (typeof (matrixService as any).clearPendingDeletionsByIds === 'function') {
           (matrixService as any).clearPendingDeletionsByIds(uId, { contracts: ['cnt-1'] });
         } else {
-          // 修正前: 全消ししてしまう
           matrixService.clearPendingDeletions(uId);
         }
         return res;
       } else {
-        // S2
         if (typeof (matrixService as any).clearPendingDeletionsByIds === 'function') {
           (matrixService as any).clearPendingDeletionsByIds(uId, { contracts: [...pending.contracts] });
         } else {
@@ -103,7 +99,6 @@ async function runTests() {
       contracts: [{ id: 'cnt-keep', title: 'Keep' } as any],
     });
 
-    // S1 開始
     const s1Promise = coordinator.requestImmediateSave(userId, initialData);
     await s1StartedPromise;
 
@@ -121,12 +116,8 @@ async function runTests() {
     await s1Promise;
     await s2Promise;
 
-    // 検証:
-    // S1 は cnt-1 を送信
     assert(calls.length === 2, 'Expected 2 save calls, got ' + calls.length);
     assert(calls[0].pendingContracts.includes('cnt-1'), 'S1 must include cnt-1');
-    
-    // 【最重要】S2 は S1 実行中に追加された cnt-2 を保持して送信できていること！
     assert(
       calls[1].pendingContracts.includes('cnt-2'),
       'CRITICAL: S2 must send pending deletion cnt-2 which was recorded during S1'
@@ -135,7 +126,6 @@ async function runTests() {
     console.log('  -> PASSED: cnt-2 deletion during S1 was preserved and sent in S2.\n');
   }
 
-  
   // --------------------------------------------------------------------------
   // Test (b): マージ後の割り込みと pendingData の再基底化 (Fix 2)
   // --------------------------------------------------------------------------
@@ -164,7 +154,6 @@ async function runTests() {
 
     const coordinator = new WorkspaceSaveCoordinator(mockSaveFn);
 
-    // S1 開始時のデータ: products に P1
     const p1Original = { id: 'p1', name: 'Product 1 Original' } as any;
     const initialData = createDummyWorkspaceData({
       products: [p1Original],
@@ -180,7 +169,7 @@ async function runTests() {
     });
     const s2Promise = coordinator.requestImmediateSave(userId, pendingDataBeforeRebase);
 
-    // S1 が完了: 他端末が追加した P2 を含むマージ結果 (wasMerged: true) が返ってくる
+    // S1 が完了: 他端末が追加した P2 を含むマージ結果 (wasMerged: true)
     const p2Remote = { id: 'p2', name: 'Product 2 Added By Colleague' } as any;
     const mergedResultData = createDummyWorkspaceData({
       products: [p1Original, p2Remote],
@@ -190,18 +179,14 @@ async function runTests() {
     await s1Promise;
     await s2Promise;
 
-    // S2 が呼び出されたことを確認
     assert(calls.length === 2, 'Expected 2 save calls, got ' + calls.length);
     const s2Data = calls[1].data;
 
-    // 【最重要】S2 に渡された products に、S1でマージされた P2 が含まれていること！
     const hasP2 = s2Data.products.some((p: any) => p.id === 'p2');
     assert(
       hasP2,
       'CRITICAL: S2 payload must include remotely added product P2 after S1 wasMerged'
     );
-
-    // かつ、ユーザー編集 P1(User Edited) も保持されていること！
     const p1InS2 = s2Data.products.find((p: any) => p.id === 'p1');
     assert(
       p1InS2?.name === 'Product 1 User Edited',
@@ -209,86 +194,109 @@ async function runTests() {
     );
 
     console.log('  -> PASSED: Pending data rebased successfully; P2 preserved and user edit kept.\n');
+  }
+
+  // --------------------------------------------------------------------------
+  // Test (c): 保存中の元戻し (A -> B(保存中) -> A) (Fix 4)
+  // --------------------------------------------------------------------------
+  console.log('Test (c): Undo during save (A -> B(in-flight) -> A) must enqueue A and save A');
+  {
+    const userId = 'user-race-undo';
+    matrixService.setActiveUserId(userId);
+    matrixService.clearPendingDeletions(userId);
+
+    const calls: { userId: string; data: WorkspaceData }[] = [];
+    let bStartedResolve: () => void;
+    const bStartedPromise = new Promise<void>((r) => { bStartedResolve = r; });
+    let bFinishResolve: (result: SaveWorkspaceResult) => void;
+    const bFinishPromise = new Promise<SaveWorkspaceResult>((r) => { bFinishResolve = r; });
+
+    const mockSaveFn = async (uId: string, d: WorkspaceData) => {
+      calls.push({ userId: uId, data: d });
+      if (calls.length === 1) {
+        bStartedResolve();
+        return await bFinishPromise;
+      } else {
+        return { savedData: d, wasMerged: false };
+      }
+    };
+
+    const coordinator = new WorkspaceSaveCoordinator(mockSaveFn);
+
+    const dataA = createDummyWorkspaceData({ topGoal: 'Goal A' });
+    const dataB = createDummyWorkspaceData({ topGoal: 'Goal B' });
+
+    coordinator.setInitialSavedSnapshot(dataA);
+
+    const saveBPromise = coordinator.requestImmediateSave(userId, dataB);
+    await bStartedPromise;
+
+    // B の保存中に A に戻す
+    const undoPromise = coordinator.requestImmediateSave(userId, dataA);
+
+    // B 完了
+    bFinishResolve!({ savedData: dataB, wasMerged: false });
+    await saveBPromise;
+    await undoPromise;
+
+    assert(calls.length === 2, 'Expected 2 save calls for A->B->A, got ' + calls.length);
+    assert(calls[0].data.topGoal === 'Goal B', 'First call should have saved B');
+    assert(calls[1].data.topGoal === 'Goal A', 'CRITICAL: Second call must save undone state A, not skip it!');
+
+    console.log('  -> PASSED: Undo during save (A->B->A) successfully scheduled and saved A.\n');
+  }
+
+  // --------------------------------------------------------------------------
+  // Test (c-2): 実行中保存が一般エラーで失敗した場合の pendingData の扱い (Fix 4 補足)
+  // --------------------------------------------------------------------------
+  console.log('Test (c-2): In-flight save error correctly handles queued pendingData');
+  {
+    const userId = 'user-race-fail';
+    matrixService.setActiveUserId(userId);
+    matrixService.clearPendingDeletions(userId);
+
+    const calls: { userId: string; data: WorkspaceData }[] = [];
+    let bStartedResolve: () => void;
+    const bStartedPromise = new Promise<void>((r) => { bStartedResolve = r; });
+    let bFinishReject: (error: any) => void;
+    const bFinishPromise = new Promise<SaveWorkspaceResult>((_, rej) => { bFinishReject = rej; });
+
+    const mockSaveFn = async (uId: string, d: WorkspaceData) => {
+      calls.push({ userId: uId, data: d });
+      if (calls.length === 1) {
+        bStartedResolve();
+        return await bFinishPromise;
+      } else {
+        return { savedData: d, wasMerged: false };
+      }
+    };
+
+    const coordinator = new WorkspaceSaveCoordinator(mockSaveFn);
+    const dataA = createDummyWorkspaceData({ topGoal: 'Goal A' });
+    const dataB = createDummyWorkspaceData({ topGoal: 'Goal B' });
+    coordinator.setInitialSavedSnapshot(dataA);
+
+    let bFailed = false as boolean;
+    const saveBPromise = coordinator.requestImmediateSave(userId, dataB).catch(() => {
+      bFailed = true;
+    });
+    await bStartedPromise;
+
+    const saveAPromise = coordinator.requestImmediateSave(userId, dataA);
+
+    bFinishReject!(new Error('Network temporary glitch'));
+    await saveBPromise;
+    await saveAPromise;
+
+    assert(Boolean(bFailed), 'B should have failed');
+    assert(calls.length === 2, 'A should have been executed next after non-conflict failure');
+    assert(calls[1].data.topGoal === 'Goal A', 'Next execution should be A');
+
+    console.log('  -> PASSED: Non-conflict failure properly drained pendingData A.\n');
   }
 
   console.log('=====================================================');
   console.log('ALL TESTS COMPLETED!');
-  
-  // --------------------------------------------------------------------------
-  // Test (b): マージ後の割り込みと pendingData の再基底化 (Fix 2)
-  // --------------------------------------------------------------------------
-  console.log('Test (b): wasMerged must rebase pendingData so remote additions (P2) survive in S2');
-  {
-    const userId = 'user-race-rebase';
-    matrixService.setActiveUserId(userId);
-    matrixService.clearPendingDeletions(userId);
-
-    let s1StartedResolve: () => void;
-    const s1StartedPromise = new Promise<void>((r) => { s1StartedResolve = r; });
-    let s1FinishResolve: (result: SaveWorkspaceResult) => void;
-    const s1FinishPromise = new Promise<SaveWorkspaceResult>((r) => { s1FinishResolve = r; });
-
-    const calls: { userId: string; data: WorkspaceData }[] = [];
-
-    const mockSaveFn = async (uId: string, d: WorkspaceData) => {
-      calls.push({ userId: uId, data: d });
-      if (calls.length === 1) {
-        s1StartedResolve();
-        return await s1FinishPromise;
-      } else {
-        return { savedData: d, wasMerged: false };
-      }
-    };
-
-    const coordinator = new WorkspaceSaveCoordinator(mockSaveFn);
-
-    // S1 開始時のデータ: products に P1
-    const p1Original = { id: 'p1', name: 'Product 1 Original' } as any;
-    const initialData = createDummyWorkspaceData({
-      products: [p1Original],
-    });
-
-    const s1Promise = coordinator.requestImmediateSave(userId, initialData);
-    await s1StartedPromise;
-
-    // S1 実行中にユーザーが P1 をローカルで編集し、S2 をリクエスト
-    const p1Edited = { id: 'p1', name: 'Product 1 User Edited' } as any;
-    const pendingDataBeforeRebase = createDummyWorkspaceData({
-      products: [p1Edited],
-    });
-    const s2Promise = coordinator.requestImmediateSave(userId, pendingDataBeforeRebase);
-
-    // S1 が完了: 他端末が追加した P2 を含むマージ結果 (wasMerged: true) が返ってくる
-    const p2Remote = { id: 'p2', name: 'Product 2 Added By Colleague' } as any;
-    const mergedResultData = createDummyWorkspaceData({
-      products: [p1Original, p2Remote],
-    });
-
-    s1FinishResolve!({ savedData: mergedResultData, wasMerged: true });
-    await s1Promise;
-    await s2Promise;
-
-    // S2 が呼び出されたことを確認
-    assert(calls.length === 2, 'Expected 2 save calls, got ' + calls.length);
-    const s2Data = calls[1].data;
-
-    // 【最重要】S2 に渡された products に、S1でマージされた P2 が含まれていること！
-    const hasP2 = s2Data.products.some((p: any) => p.id === 'p2');
-    assert(
-      hasP2,
-      'CRITICAL: S2 payload must include remotely added product P2 after S1 wasMerged'
-    );
-
-    // かつ、ユーザー編集 P1(User Edited) も保持されていること！
-    const p1InS2 = s2Data.products.find((p: any) => p.id === 'p1');
-    assert(
-      p1InS2?.name === 'Product 1 User Edited',
-      'User edit on P1 must be preserved in S2'
-    );
-
-    console.log('  -> PASSED: Pending data rebased successfully; P2 preserved and user edit kept.\n');
-  }
-
   console.log('=====================================================');
 }
 
