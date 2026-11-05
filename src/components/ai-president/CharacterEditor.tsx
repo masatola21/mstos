@@ -17,6 +17,7 @@ import { CharacterConfig, AvatarColor, UserProfile, ApiUsageData } from '../type
 import { getColorScheme } from '../../utils/theme';
 import { ModelSettingEditor, useProviderStatus } from './ModelSettingEditor';
 import { AIModelSetting, DEFAULT_MODEL_SETTING, sanitizeModelSetting } from '../../data/aiModels';
+import { getAuthHeaders } from '../../lib/supabaseClient';
 
 interface CharacterEditorProps {
   character: CharacterConfig;
@@ -113,9 +114,10 @@ export const CharacterEditor: React.FC<CharacterEditorProps> = ({
     if (!conceptPrompt.trim()) return;
     setIsGenerating(true);
     try {
+      const authHeaders = await getAuthHeaders();
       const res = await fetch('/api/generate-character', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', ...authHeaders },
         body: JSON.stringify({
           concept: conceptPrompt,
           userProfile,
@@ -169,9 +171,10 @@ export const CharacterEditor: React.FC<CharacterEditorProps> = ({
   const handleRefinePrompt = async () => {
     setIsRefiningPrompt(true);
     try {
+      const authHeaders = await getAuthHeaders();
       const res = await fetch('/api/refine-prompt', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', ...authHeaders },
         body: JSON.stringify({ character: formData, modelSetting: defaultModelSetting }),
       });
       const data = await res.json();

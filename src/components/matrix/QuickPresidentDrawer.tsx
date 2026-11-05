@@ -14,6 +14,7 @@ import {
 } from 'lucide-react';
 import { ApiUsageData, CharacterConfig, ChatMessage, UserProfile } from '../../types/ai-president';
 import { AI_WORK_MODES, AIWorkModeId } from '../../data/aiWorkModes';
+import { getAuthHeaders } from '../../lib/supabaseClient';
 
 type PageAssistantProfile = { label: string; mode: AIWorkModeId };
 type RequestMode = 'consult' | 'action_plan' | 'external_prompt';
@@ -105,9 +106,10 @@ export const QuickPresidentDrawer: React.FC<QuickPresidentDrawerProps> = ({
     setIsLoading(true);
 
     try {
+      const authHeaders = await getAuthHeaders();
       const response = await fetch('/api/chat', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', ...authHeaders },
         body: JSON.stringify({
           message: text.trim(),
           history: messages.slice(-6).map((m) => ({

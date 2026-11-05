@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { DiagnosisFormsWorkspace } from './DiagnosisFormsWorkspace';
-import { getSupabase } from '../lib/supabaseClient';
+import { getSupabase, getAuthHeaders } from '../lib/supabaseClient';
 import { Diagnosis, DiagnosisStatus, Company, Lead, AiReport } from '../types/database';
 import { 
   fetchDiagnosesList, 
@@ -838,9 +838,10 @@ Markdown見出しを使い、前置きは付けず本文だけ出力してくだ
 【社内データ】
 ${JSON.stringify(context, null, 2)}`;
 
+      const authHeaders = await getAuthHeaders();
       const response = await fetch('/api/chat', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', ...authHeaders },
         body: JSON.stringify({
           messages: [{ role: 'user', content: prompt }],
           character: { name: '経営診断レポート作成AI', role: '診断レポート作成専門AI', personality: '事実に忠実で慎重', tone: '明確で丁寧' },

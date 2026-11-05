@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import type { TaskItem } from '../../types';
-import { getSupabase } from '../../lib/supabaseClient';
+import { getSupabase, getAuthHeaders } from '../../lib/supabaseClient';
 import { InlineDeleteButton } from '../InlineDeleteButton';
 import { AlertCircle, ArrowRight, BarChart3, Megaphone, Plus, RefreshCw, Save, Sparkles, Trash2 } from 'lucide-react';
 import { OwnMediaWorkspace } from './OwnMediaWorkspace';
@@ -352,9 +352,10 @@ export const AIAcquisitionOperationsView: React.FC<{
       `今回の依頼: ${instruction}`,
     ].join('\n');
     try {
+      const authHeaders = await getAuthHeaders();
       const response = await fetch('/api/chat', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', ...authHeaders },
         body: JSON.stringify({
           messages: [{ role: 'user', content: prompt }],
           workModeId: 'marketing_execution',
@@ -504,9 +505,10 @@ export const AIAcquisitionOperationsView: React.FC<{
       `外部AIの原稿: ${externalDraft.trim()}`,
     ].join('\n');
     try {
+      const authHeaders = await getAuthHeaders();
       const response = await fetch('/api/chat', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', ...authHeaders },
         body: JSON.stringify({
           messages: [{ role: 'user', content: prompt }],
           workModeId: 'marketing_execution',

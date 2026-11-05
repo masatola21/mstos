@@ -32,7 +32,7 @@ import {
 } from 'lucide-react';
 import { OfficialLinkItem } from '../../types/marketing';
 import { loadStoredOfficialLinks } from '../../utils/marketingStorage';
-import { getSupabase } from '../../lib/supabaseClient';
+import { getSupabase, getAuthHeaders } from '../../lib/supabaseClient';
 import { fetchMarketingAssets, getAssetViewUrl, MarketingAsset } from '../../services/marketingAssetService';
 import { SocialDmSalesStudio } from './SocialDmSalesStudio';
 
@@ -261,9 +261,10 @@ export const SocialMediaBroadcastStudio: React.FC<{ onNavigateTab?: (tab: string
         reader.readAsDataURL(file);
       });
 
+      const authHeaders = await getAuthHeaders();
       const res = await fetch('/api/marketing/upload-media', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', ...authHeaders },
         body: JSON.stringify({ dataUrl, filename: file.name }),
       });
       const data = await res.json();
@@ -347,9 +348,10 @@ export const SocialMediaBroadcastStudio: React.FC<{ onNavigateTab?: (tab: string
 【元の文章】:
 ${postText}`;
 
+      const authHeaders = await getAuthHeaders();
       const res = await fetch('/api/chat', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', ...authHeaders },
         body: JSON.stringify({
           messages: [{ role: 'user', content: prompt }],
           workModeId: 'marketing_execution',
@@ -422,9 +424,10 @@ ${postText}`;
     setFeedback({ type: 'info', message: '選択したSNSへ一括配信リクエストを送信中…' });
 
     try {
+      const authHeaders = await getAuthHeaders();
       const response = await fetch('/api/marketing/social-broadcast', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', ...authHeaders },
         body: JSON.stringify({
           text: postText,
           imageUrl: imageUrl.trim() || undefined,

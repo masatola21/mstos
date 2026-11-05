@@ -12,7 +12,7 @@ import { ConfigGuideModal } from './components/ConfigGuideModal';
 import { RlsGuideModal } from './components/RlsGuideModal';
 import { RecordFormModal } from './components/RecordFormModal';
 import { TableKey } from './types/database';
-import { getSupabase } from './lib/supabaseClient';
+import { getSupabase, getAuthHeaders } from './lib/supabaseClient';
 import { deleteTableRecord } from './services/dataService';
 import { Loader2 } from 'lucide-react';
 
@@ -218,9 +218,10 @@ async function retrieveKnowledgeContext(
   try {
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), 1800);
+    const authHeaders = await getAuthHeaders();
     const res = await fetch('/api/knowledge/semantic-search', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 'Content-Type': 'application/json', ...authHeaders },
       signal: controller.signal,
       body: JSON.stringify({
         query: request,
@@ -662,9 +663,10 @@ function AppContent() {
       void (async () => {
         try {
           const sample = `${item.title}\n${(item.tags || []).join(' ')}\n${item.content.slice(0, 1000)}`;
+          const authHeaders = await getAuthHeaders();
           const res = await fetch('/api/knowledge/embed', {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
+            headers: { 'Content-Type': 'application/json', ...authHeaders },
             body: JSON.stringify({ text: sample }),
           });
           if (res.ok) {
@@ -899,9 +901,10 @@ function AppContent() {
       task.assignee.type === 'custom_ai' ? 'custom' : workModeId === 'president' ? 'president' : 'role'
     );
 
+    const authHeaders = await getAuthHeaders();
     const response = await fetch('/api/chat', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 'Content-Type': 'application/json', ...authHeaders },
       body: JSON.stringify({
         messages: [{ role: 'user', content: prompt }],
         character: { ...agentCharacter, userProfile },
@@ -1610,9 +1613,10 @@ function AppContent() {
       });
       const knowledgeContext = await retrieveKnowledgeContext(knowledgeItems, text, workModeId);
 
+      const authHeaders = await getAuthHeaders();
       const response = await fetch('/api/chat', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', ...authHeaders },
         signal: abortController.signal,
         body: JSON.stringify({
           messages: buildBoundedChatContext(newHistory),

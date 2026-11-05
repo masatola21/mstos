@@ -20,6 +20,7 @@ import { CharacterConfig, ChatMessage, UserProfile, ProposedPlan, ApiUsageData }
 import { ChatMessageContent } from './ChatMessageContent';
 import { getColorScheme } from '../../utils/theme';
 import { AI_WORK_MODES, AIWorkModeId, RoleAIOverrides, getAIWorkMode, resolveWorkMode } from '../../data/aiWorkModes';
+import { getAuthHeaders } from '../../lib/supabaseClient';
 
 interface ChatViewProps {
   character: CharacterConfig;
@@ -189,9 +190,10 @@ export const ChatView: React.FC<ChatViewProps> = ({
     setMemoryNotification(null);
 
     try {
+      const authHeaders = await getAuthHeaders();
       const res = await fetch('/api/extract-memory', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', ...authHeaders },
         body: JSON.stringify({
           messages,
           currentNotes: userProfile.userNotes,

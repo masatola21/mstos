@@ -43,6 +43,7 @@ import {
   MarketingAsset,
   updateMarketingAssetStatus,
 } from '../../services/marketingAssetService';
+import { getAuthHeaders } from '../../lib/supabaseClient';
 
 type MarketingRecord = {
   id: string;
@@ -213,9 +214,10 @@ export const MarketingAssetLibrary: React.FC<{
         '}',
       ].join('\n');
 
+      const authHeaders = await getAuthHeaders();
       const response = await fetch('/api/chat', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', ...authHeaders },
         body: JSON.stringify({
           messages: [{ role: 'user', content: prompt }],
           workModeId: 'marketing_execution',

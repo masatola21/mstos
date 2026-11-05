@@ -153,6 +153,17 @@ export async function fetchCustomerByCompanyId(companyId: string): Promise<Custo
   }
 }
 
+// テーブルごとに画面表示・編集で必要な主要カラムを定義（全件・全カラム取得の抑制）
+const TABLE_SELECT_COLUMNS: Record<TableKey, string> = {
+  companies: 'id, company_name, industry, contact_name, website, email, phone, social_account, postal_code, address, created_at, updated_at',
+  contacts: 'id, company_id, full_name, email, phone, role_title, preferred_channel, line_user_id, source, notes, created_at, updated_at',
+  prospects: 'id, company_id, source, approach_method, recommended_product_id, status, reply_flag, last_reply_at, registered_at, email_step, memo, ai_score, ai_reason, target_flag, created_at, updated_at',
+  leads: 'id, company_id, line_user_id, source, service_type, inquiry_type, interested_product_id, status, priority_channel, first_registered_at, last_contacted_at, next_action_at, meeting_date, meeting_start_time, report_url, email_step, notes, created_at, updated_at',
+  products: 'id, product_name, product_type, phase, pricing_model, price_range_max, price_note, initial_fee, monthly_fee, description, status, created_at, updated_at',
+  deals: 'id, company_id, lead_id, product_id, deal_name, amount, stage, status, probability, close_date, memo, created_at, updated_at',
+  customers: 'id, company_id, contract_status, monthly_revenue, ltv, started_at, renewal_date, status, memo, created_at, updated_at',
+};
+
 // テーブルデータ取得＋外部キーリレーション情報結合
 export async function fetchTableData(
   tableKey: TableKey
@@ -163,8 +174,9 @@ export async function fetchTableData(
   }
 
   try {
-    // 基本クエリ
-    const { data, error } = await supabase.from(tableKey).select('*');
+    // 基本クエリ（画面で必要なカラムのみ指定し、リミット100件を付与してパフォーマンスを最適化）
+    const columns = TABLE_SELECT_COLUMNS[tableKey] || 'id, status, created_at, updated_at';
+    const { data, error } = (await supabase.from(tableKey).select(columns).limit(100)) as { data: any[] | null; error: any };
     if (error) {
       return { data: [], error: parseSupabaseError(error) };
     }
@@ -174,7 +186,7 @@ export async function fetchTableData(
     }
 
     // 関連テーブルのルックアップを行い、会社名や商品名を人間に見やすい形で付与
-    let enrichedData = [...data];
+    let enrichedData: any[] = [...data];
 
     if (tableKey === 'products') {
       const localProducts = matrixService.loadProducts();

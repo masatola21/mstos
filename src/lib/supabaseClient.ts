@@ -194,3 +194,19 @@ export function clearCustomConfig() {
   lastUsedUrl = '';
   lastUsedKey = '';
 }
+
+/**
+ * 現在ログインしているSupabaseユーザーのセッションからAuthorization Bearerヘッダーを取得
+ */
+export async function getAuthHeaders(): Promise<Record<string, string>> {
+  try {
+    const client = getSupabase();
+    if (!client) return {};
+    const { data } = await client.auth.getSession();
+    const token = data.session?.access_token;
+    return token ? { Authorization: `Bearer ${token}` } : {};
+  } catch {
+    return {};
+  }
+}
+

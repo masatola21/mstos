@@ -1,6 +1,6 @@
 import React, { useMemo, useState } from 'react';
 import { AlertCircle, Check, Loader2, Sparkles, X } from 'lucide-react';
-import { getSupabase } from '../lib/supabaseClient';
+import { getSupabase, getAuthHeaders } from '../lib/supabaseClient';
 
 type Candidate = {
   company_name: string;
@@ -64,9 +64,10 @@ JSONオブジェクトのみを返してください。形式: {"candidates":[{"
 候補は最大50社。会社名が読み取れない項目は除外してください。
 【CRM既存会社・見込み登録状況】${JSON.stringify(crmContext)}
 【外部AI調査結果】${rawResearch.trim()}`;
+      const authHeaders = await getAuthHeaders();
       const response = await fetch('/api/chat', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', ...authHeaders },
         body: JSON.stringify({
           messages: [{ role: 'user', content: prompt }],
           workModeId: 'research',

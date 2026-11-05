@@ -32,7 +32,7 @@ import {
   Link2,
   ChevronDown
 } from 'lucide-react';
-import { getSupabase } from '../../lib/supabaseClient';
+import { getSupabase, getAuthHeaders } from '../../lib/supabaseClient';
 import { OfficialLinkItem } from '../../types/marketing';
 import { loadStoredOfficialLinks } from '../../utils/marketingStorage';
 import { InlineDeleteButton } from '../InlineDeleteButton';
@@ -654,9 +654,10 @@ ${linkInfo}
 4. 押し売り感を出さず、質問があればいつでも追加で聞ける安心感を提供する。
 5. 出力はDM返信文面のみを返してください。`;
 
+      const authHeaders = await getAuthHeaders();
       const res = await fetch('/api/chat', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', ...authHeaders },
         body: JSON.stringify({
           messages: [{ role: 'user', content: prompt }],
           workModeId: 'marketing_execution',

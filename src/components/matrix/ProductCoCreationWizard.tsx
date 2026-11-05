@@ -20,6 +20,7 @@ import { ProductArchetype, PRODUCT_ARCHETYPES, ManagedProduct } from '../../type
 import { ApiUsageData, Project, TaskItem, CharacterConfig, UserProfile } from '../../types/ai-president';
 import { dateAfterDaysJst } from '../../utils/date';
 import { generateNextProductCode } from '../../services/productCatalogService';
+import { getAuthHeaders } from '../../lib/supabaseClient';
 
 interface ProductCoCreationWizardProps {
   isOpen: boolean;
@@ -68,9 +69,10 @@ export const ProductCoCreationWizard: React.FC<ProductCoCreationWizardProps> = (
   const handleGenerateProposal = async () => {
     setIsGenerating(true);
     try {
+      const authHeaders = await getAuthHeaders();
       const response = await fetch('/api/chat', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', ...authHeaders },
         body: JSON.stringify({
           message: `新商品開発の要件定義とWBSタスクの策定を行ってください。
 【商品タイプ】: ${PRODUCT_ARCHETYPES[archetype].label}

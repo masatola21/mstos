@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { getSupabase } from '../../lib/supabaseClient';
+import { getSupabase, getAuthHeaders } from '../../lib/supabaseClient';
 import { Plus, Save, Trash2, Sparkles, RefreshCw, Globe, ExternalLink, Send, CheckCircle2, AlertCircle, Wrench, FileText, ArrowRight, Code2, Zap, Layers, Pencil } from 'lucide-react';
 import { TabMarketingAssetManager } from './TabMarketingAssetManager';
 
@@ -416,9 +416,10 @@ export const OwnMediaWorkspace: React.FC<{
         '}',
       ].join('\n');
 
+      const authHeaders = await getAuthHeaders();
       const response = await fetch('/api/chat', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', ...authHeaders },
         body: JSON.stringify({
           messages: [{ role: 'user', content: promptText }],
           workModeId: 'marketing_execution',

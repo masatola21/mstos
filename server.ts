@@ -38,6 +38,24 @@ const lineSupabase = lineSupabaseUrl && lineServiceRoleKey
   ? createClient(lineSupabaseUrl, lineServiceRoleKey, { auth: { persistSession: false, autoRefreshToken: false } })
   : null;
 
+// API認証ミドルウェア: Bearerトークンを検証し、未ログインアクセスを401で遮断
+async function requireAuth(req: express.Request, res: express.Response, next: express.NextFunction) {
+  if (!lineSupabase) {
+    return res.status(503).json({ error: '認証サーバー（Supabase）が設定されていません。' });
+  }
+  const authorization = req.header('authorization') || '';
+  const token = authorization.startsWith('Bearer ') ? authorization.slice(7).trim() : '';
+  if (!token) {
+    return res.status(401).json({ error: '認証が必要です（ログインしてください）。' });
+  }
+  const { data: authData, error: authError } = await lineSupabase.auth.getUser(token);
+  if (authError || !authData?.user) {
+    return res.status(401).json({ error: '無効な認証トークンです。再度ログインしてください。' });
+  }
+  (req as any).user = authData.user;
+  next();
+}
+
 function createEmailUnsubscribeToken(contactId: string): string {
   const secret = process.env.EMAIL_UNSUBSCRIBE_SECRET?.trim() || 'mst-email-unsubscribe-default-secret';
   const encodedContactId = Buffer.from(contactId, 'utf8').toString('base64url');
@@ -1607,7 +1625,7 @@ app.use(express.json({ limit: '80mb' }));
 app.use(express.urlencoded({ extended: false, limit: '20kb' }));
 
 // SNS一括配信（Facebook, Threads, LinkedIn, Instagram, Webhook）エンドポイント（画像・動画対応）
-app.post('/api/marketing/social-broadcast', async (req, res) => {
+app.post('/api/marketing/social-broadcast', requireAuth, async (req, res) => {
   const {
     text,
     imageUrl,
@@ -1899,11 +1917,11 @@ const handleMediaUpload = async (req: express.Request, res: express.Response) =>
   }
 };
 
-app.post('/api/marketing/upload-media', handleMediaUpload);
-app.post('/api/marketing/upload-image', handleMediaUpload);
+app.post('/api/marketing/upload-media', requireAuth, handleMediaUpload);
+app.post('/api/marketing/upload-image', requireAuth, handleMediaUpload);
 
 // WordPress REST API 自動投稿プロキシ
-app.post('/api/cms/wordpress-post', async (req, res) => {
+app.post('/api/cms/wordpress-post', requireAuth, async (req, res) => {
   try {
     const { wpUrl, wpUsername, wpAppPassword, title, content, excerpt, status = 'draft' } = req.body || {};
 
@@ -2361,10 +2379,11 @@ function checkSendTimeWindow(windowStr: string | null | undefined, now: Date = n
 
 let marketingQueueBusy = false;
 let marketingRunnerLastRunAt: string | null = null;
-async function processMarketingAutomationJobs(): Promise<void> {
+async function processMarketingAutomationJobs(): Promise<number> {
   marketingRunnerLastRunAt = new Date().toISOString();
-  if (!lineSupabase || marketingQueueBusy) return;
+  if (!lineSupabase || marketingQueueBusy) return 0;
   marketingQueueBusy = true;
+  let processedJobsCount = 0;
   try {
     const now = new Date().toISOString();
     const staleBefore = new Date(Date.now() - 15 * 60 * 1000).toISOString();
@@ -2377,6 +2396,9 @@ async function processMarketingAutomationJobs(): Promise<void> {
     const { data: jobs, error } = await lineSupabase.from('marketing_automation_jobs')
       .select('*').eq('status','queued').lte('due_at',now).order('due_at',{ascending:true}).limit(20);
     if (error) throw error;
+    if (jobs && jobs.length > 0) {
+      processedJobsCount = jobs.length;
+    }
     for (const job of jobs || []) {
       const { data: claimed } = await lineSupabase.from('marketing_automation_jobs')
         .update({ status:'sending', updated_at:new Date().toISOString() }).eq('id',job.id).eq('status','queued').select('*').maybeSingle();
@@ -2706,6 +2728,7 @@ async function processMarketingAutomationJobs(): Promise<void> {
   } catch (error) {
     console.error('Marketing automation queue processing failed:',error instanceof Error?error.message:'unknown error');
   } finally { marketingQueueBusy = false; }
+  return processedJobsCount;
 }
 
 app.get('/api/marketing/health', async (req, res) => {
@@ -4265,7 +4288,7 @@ app.get('/api/ai-providers', (_req, res) => {
 });
 
 // 1. Chat Completion / Streaming
-app.post('/api/chat', async (req, res) => {
+app.post('/api/chat', requireAuth, async (req, res) => {
   try {
     const { messages, message, history, character, stream, workModeId, knowledgeContext, businessSummaryContext } = req.body;
     const requestedMessages = Array.isArray(messages)
@@ -4421,7 +4444,7 @@ app.post('/api/chat', async (req, res) => {
 });
 
 // 1.5 最先端セマンティックRAG（ベクトル検索 & 埋め込み）
-app.post('/api/knowledge/embed', async (req, res) => {
+app.post('/api/knowledge/embed', requireAuth, async (req, res) => {
   try {
     const { text } = req.body;
     if (typeof text !== 'string' || !text.trim()) {
@@ -4434,7 +4457,7 @@ app.post('/api/knowledge/embed', async (req, res) => {
   }
 });
 
-app.post('/api/knowledge/semantic-search', async (req, res) => {
+app.post('/api/knowledge/semantic-search', requireAuth, async (req, res) => {
   try {
     const { query, items, limit = 3 } = req.body;
     if (!query || typeof query !== 'string' || !Array.isArray(items) || items.length === 0) {
@@ -4471,7 +4494,7 @@ app.post('/api/knowledge/semantic-search', async (req, res) => {
 });
 
 // 2. AI Character Architect (ワンクリック自動生成)
-app.post('/api/generate-character', async (req, res) => {
+app.post('/api/generate-character', requireAuth, async (req, res) => {
   try {
     const { concept, userProfile } = req.body;
     if (!concept || typeof concept !== 'string') {
@@ -4557,7 +4580,7 @@ ${userProfile ? `【ユーザー自身の情報】:\n- 名前: ${userProfile.use
 });
 
 // 3. Extract Memory from Conversation (対話から記憶・メモを抽出)
-app.post('/api/extract-memory', async (req, res) => {
+app.post('/api/extract-memory', requireAuth, async (req, res) => {
   try {
     const { messages, currentNotes } = req.body;
     if (!messages || !Array.isArray(messages) || messages.length === 0) {
@@ -4595,7 +4618,7 @@ ${conversationText}
 });
 
 // 4. Prompt Improvement / Optimizer
-app.post('/api/refine-prompt', async (req, res) => {
+app.post('/api/refine-prompt', requireAuth, async (req, res) => {
   try {
     const { character } = req.body;
     const prompt = `以下のAIキャラクター設定をレビューし、GeminiなどのLLMがより忠実にキャラクターになりきれるようにSystem Instructionの改善版を提案してください。
@@ -4719,8 +4742,36 @@ if (!process.env.VERCEL) {
     });
   }
 
-  setInterval(() => { void processMarketingAutomationJobs(); }, 15000);
-  setTimeout(() => { void processMarketingAutomationJobs(); }, 15000);
+  // マーケティング自動化ジョブのポーリング（バックオフ最適化）
+  // ジョブが空の時はポーリング間隔を徐々に伸ばし（15秒→30秒→1分→2分→最大5分）、ジョブ処理時は15秒にリセット
+  const MIN_MARKETING_POLL_INTERVAL_MS = 15000; // 15秒
+  const MAX_MARKETING_POLL_INTERVAL_MS = 300000; // 5分
+  let currentMarketingPollIntervalMs = MIN_MARKETING_POLL_INTERVAL_MS;
+
+  const runMarketingAutomationLoop = async () => {
+    try {
+      const processedCount = await processMarketingAutomationJobs();
+      if (processedCount > 0) {
+        // ジョブが処理された場合は最短間隔（15秒）にリセット
+        currentMarketingPollIntervalMs = MIN_MARKETING_POLL_INTERVAL_MS;
+      } else {
+        // ジョブが空の場合は間隔を徐々に拡大（15s -> 30s -> 60s -> 120s -> 最大300s）
+        currentMarketingPollIntervalMs = Math.min(
+          Math.max(currentMarketingPollIntervalMs * 2, 30000),
+          MAX_MARKETING_POLL_INTERVAL_MS
+        );
+      }
+    } catch {
+      currentMarketingPollIntervalMs = Math.min(
+        Math.max(currentMarketingPollIntervalMs * 2, 30000),
+        MAX_MARKETING_POLL_INTERVAL_MS
+      );
+    } finally {
+      setTimeout(runMarketingAutomationLoop, currentMarketingPollIntervalMs);
+    }
+  };
+
+  setTimeout(runMarketingAutomationLoop, MIN_MARKETING_POLL_INTERVAL_MS);
 
   void ensureDefaultCarePackageInquiryForm();
   app.listen(Number(port), '0.0.0.0', () => {

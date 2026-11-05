@@ -74,14 +74,14 @@ export const MarketingBroadcastView: React.FC<{initialChannel?:Channel}> = ({ini
       db.from('contacts').select('id,full_name,email,line_user_id,company_id').order('full_name').limit(5000),
       db.from('crm_segments').select('id,name,entity_type,conditions').order('name'),
       db.from('line_friends').select('line_user_id,status,consent_status'),
-      db.from('companies').select('*'),
-      db.from('prospects').select('*'),
-      db.from('leads').select('*'),
-      db.from('deals').select('*'),
-      db.from('customers').select('*'),
+      db.from('companies').select('id,company_name,industry,status').limit(100),
+      db.from('prospects').select('id,company_id,source,status').limit(100),
+      db.from('leads').select('id,contact_id,status').limit(100),
+      db.from('deals').select('id,lead_id,status').limit(100),
+      db.from('customers').select('id,company_id,status').limit(100),
       db.from('communication_outbox').select('source_id,channel,status,subject,body_text,created_at').in('source_type',['marketing_broadcast','marketing_outreach','marketing_automation']).order('created_at',{ascending:false}).limit(1000),
-      db.from('communication_templates').select('*').order('updated_at',{ascending:false}),
-      db.from('line_auto_reply_templates').select('*').order('created_at',{ascending:false}),
+      db.from('communication_templates').select('id,name,channel,category,template_key,subject,body_text,updated_at').order('updated_at',{ascending:false}).limit(100),
+      db.from('line_auto_reply_templates').select('id,name,reply_type,payload,created_at').order('created_at',{ascending:false}).limit(100),
     ]).then(([c,s,f,co,p,l,d,cu,h,et,lt])=>{
       if(!active)return;
       const failed=[c,s,f,co,p,l,d,cu,h,et,lt].find(x=>x.error)?.error;
