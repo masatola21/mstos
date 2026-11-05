@@ -334,6 +334,38 @@ export const matrixService = {
       // The cloud save succeeded; a stale local marker is harmless and will be retried.
     }
   },
+  clearPendingDeletionsByIds(
+    userId: string,
+    ids: { contracts?: Iterable<string>; invoices?: Iterable<string>; products?: Iterable<string> }
+  ) {
+    if (!userId) return;
+    const pending = this.getPendingDeletions(userId);
+    if (ids.contracts) {
+      for (const id of ids.contracts) {
+        pending.contracts.delete(id);
+      }
+    }
+    if (ids.invoices) {
+      for (const id of ids.invoices) {
+        pending.invoices.delete(id);
+      }
+    }
+    if (ids.products) {
+      for (const id of ids.products) {
+        pending.products.delete(id);
+      }
+    }
+    pendingDeletionMemory.set(userId, pending);
+    try {
+      localStorage.setItem(`${MATRIX_STORAGE_KEYS.PENDING_DELETIONS}${userId}`, JSON.stringify({
+        contracts: [...pending.contracts],
+        invoices: [...pending.invoices],
+        products: [...pending.products],
+      }));
+    } catch {
+      // Keep the in-memory marker
+    }
+  },
   recordPendingDeletion(userId: string, kind: 'contracts' | 'invoices' | 'products', id: string) {
     if (!userId) return;
     const pending = this.getPendingDeletions(userId);

@@ -41,6 +41,7 @@ import { MarketingScenario } from '../types/marketing';
 import { loadMarketingScenarios, saveMarketingScenarios, deduplicateMarketingScenarios } from '../utils/marketingStorage';
 import { AIModelSettings, loadAIModelSettings, saveAIModelSettings } from '../utils/aiSettingsStorage';
 import { matrixService, SAMPLE_RECORD_IDS } from './matrixService';
+import { stableStringify } from '../utils/stableSerialize';
 import {
   AutomationRule,
   CustomListDefinition,
@@ -186,9 +187,21 @@ async function loadRelationalMatrixWorkspace(userId: string): Promise<Relational
   };
 }
 
-async function saveRelationalMatrixWorkspace(userId: string, data: WorkspaceData): Promise<void> {
-  const supabase = getSupabaseClient();
+export interface MinimalSupabaseRpcClient {
+  rpc: (fn: string, args: Record<string, unknown>) => Promise<{ data: unknown; error: unknown }>;
+}
+
+export async function saveRelationalMatrixWorkspace(
+  userId: string,
+  data: WorkspaceData,
+  clientOverride?: MinimalSupabaseRpcClient
+): Promise<void> {
+  const supabase = clientOverride || getSupabaseClient();
   const pendingDeletions = matrixService.getPendingDeletions(userId);
+  const sentContractIds = [...pendingDeletions.contracts];
+  const sentInvoiceIds = [...pendingDeletions.invoices];
+  const sentProductIds = [...pendingDeletions.products];
+
   const { data: updatedAt, error } = await supabase.rpc('mst_save_matrix_workspace', {
     p_user_id: userId,
     p_products: data.products,
@@ -198,12 +211,16 @@ async function saveRelationalMatrixWorkspace(userId: string, data: WorkspaceData
     p_custom_lists: data.customLists,
     p_marketing_scenarios: data.marketingScenarios,
     p_expected_updated_at: matrixWorkspaceUpdatedAtByUser.get(userId) || null,
-    p_deleted_contract_ids: [...pendingDeletions.contracts],
-    p_deleted_invoice_ids: [...pendingDeletions.invoices],
+    p_deleted_contract_ids: sentContractIds,
+    p_deleted_invoice_ids: sentInvoiceIds,
   });
   if (error) throw error;
   if (typeof updatedAt === 'string') matrixWorkspaceUpdatedAtByUser.set(userId, updatedAt);
-  matrixService.clearPendingDeletions(userId);
+  matrixService.clearPendingDeletionsByIds(userId, {
+    contracts: sentContractIds,
+    invoices: sentInvoiceIds,
+    products: sentProductIds,
+  });
 }
 
 const WORKSPACE_STATE_TABLE = 'mst_workspace_state';
@@ -315,7 +332,7 @@ async function saveRelationalAIOperations(userId: string, data: WorkspaceData): 
   if (error) throw error;
 }
 
-function mergeRecordsByKey<T>(
+export function mergeRecordsByKey<T>(
   remoteRecords: T[],
   localRecords: T[],
   baselineRecords: T[],
@@ -326,26 +343,37 @@ function mergeRecordsByKey<T>(
   const baselineById = new Map(baselineRecords.map((record) => [getKey(record), record]));
   const merged = new Map(remoteById);
 
-  // Apply local deletions only when the cloud record is still unchanged from the last synchronized snapshot.
+  // =========================================================================================
+  // 【仕様明記 1: ベースライン欠落時のローカル削除の扱い】
+  // baselineRecords が存在しない（空の）場合、削除判定のループが走らないため、
+  // ローカルで削除されたレコードは remoteById（リモート側）が優先維持されます。
+  // （将来の改善提案: ベースライン欠落時でも明示的な pendingDeletions があればそれを優先適用する）
+  // =========================================================================================
   baselineRecords.forEach((baseline) => {
     const key = getKey(baseline);
     if (localById.has(key)) return;
     const remote = remoteById.get(key);
-    if (remote && JSON.stringify(remote) === JSON.stringify(baseline)) merged.delete(key);
+    if (remote && stableStringify(remote) === stableStringify(baseline)) merged.delete(key);
   });
 
   localRecords.forEach((local) => {
     const key = getKey(local);
     const baseline = baselineById.get(key);
     const remote = remoteById.get(key);
-    const localChanged = !baseline || JSON.stringify(local) !== JSON.stringify(baseline);
+    const localChanged = !baseline || stableStringify(local) !== stableStringify(baseline);
     if (!localChanged) return;
-    if (!remote || (baseline && JSON.stringify(remote) === JSON.stringify(baseline))) {
+    if (!remote || (baseline && stableStringify(remote) === stableStringify(baseline))) {
       merged.set(key, local);
       return;
     }
 
-    // Both copies changed since the baseline. Keep the newer edit when both records expose updatedAt.
+    // =========================================================================================
+    // 【仕様明記 2: updatedAt を持たないレコードの競合時挙動】
+    // ローカル・リモート双方が baseline から変更され、かつ両者が updatedAt を持たない（または解析不能な）場合、
+    // localTime > remoteTime の条件が不成立となり、リモートレコード（remote）が暗黙的に優先採用されます。
+    // （将来の改善提案: updatedAt を持たないエンティティに作成/更新タイムスタンプを付与するか、
+    //   フィールド単位の3-wayマージを導入してローカル編集の消失を防ぐ）
+    // =========================================================================================
     const localUpdatedAt = (local as T & { updatedAt?: unknown }).updatedAt;
     const remoteUpdatedAt = (remote as T & { updatedAt?: unknown }).updatedAt;
     const localTime = typeof localUpdatedAt === 'number' ? localUpdatedAt : typeof localUpdatedAt === 'string' ? Date.parse(localUpdatedAt) : NaN;
@@ -356,7 +384,7 @@ function mergeRecordsByKey<T>(
   return [...merged.values()];
 }
 
-function mergeRecords<T extends { id: string }>(remoteRecords: T[], localRecords: T[], baselineRecords: T[]): T[] {
+export function mergeRecords<T extends { id: string }>(remoteRecords: T[], localRecords: T[], baselineRecords: T[]): T[] {
   return mergeRecordsByKey(remoteRecords, localRecords, baselineRecords, (record) => record.id);
 }
 
@@ -466,6 +494,53 @@ function getSupabaseClient() {
   return supabase;
 }
 
+function hasPendingLocalChanges(
+  cloudData: {
+    snapshot: Partial<WorkspaceData> | null;
+    relationalAI: RelationalAIOperations | null;
+    relationalMatrix: RelationalMatrixWorkspace | null;
+    relationalSales: RelationalSalesOperations | null;
+  },
+  merged: WorkspaceData
+): boolean {
+  // クラウドに一切データがない場合は初回移行が必要
+  if (!cloudData.snapshot && !cloudData.relationalAI && !cloudData.relationalMatrix && !cloudData.relationalSales) {
+    return true;
+  }
+
+  // 1. Matrix テーブル群の差分確認
+  if (cloudData.relationalMatrix) {
+    if (stableStringify(cloudData.relationalMatrix.products || []) !== stableStringify(merged.products || [])) return true;
+    if (stableStringify(cloudData.relationalMatrix.tools || []) !== stableStringify(merged.tools || [])) return true;
+    if (stableStringify(cloudData.relationalMatrix.customLists || []) !== stableStringify(merged.customLists || [])) return true;
+    if (stableStringify(cloudData.relationalMatrix.marketingScenarios || []) !== stableStringify(merged.marketingScenarios || [])) return true;
+  } else if ((merged.products || []).length > 0 || (merged.tools || []).length > 0) {
+    return true;
+  }
+
+  // 2. Sales テーブル群（contracts, invoices）の差分確認
+  if (cloudData.relationalSales) {
+    if (stableStringify(cloudData.relationalSales.contracts || []) !== stableStringify(merged.contracts || [])) return true;
+    if (stableStringify(cloudData.relationalSales.invoices || []) !== stableStringify(merged.invoices || [])) return true;
+  } else if ((merged.contracts || []).length > 0 || (merged.invoices || []).length > 0) {
+    return true;
+  }
+
+  // 3. AI Operations の差分確認
+  if (cloudData.relationalAI) {
+    if (stableStringify(cloudData.relationalAI.projects || []) !== stableStringify(merged.projects || [])) return true;
+    if (stableStringify(cloudData.relationalAI.tasks || []) !== stableStringify(merged.tasks || [])) return true;
+    if (stableStringify(cloudData.relationalAI.approvals || []) !== stableStringify(merged.approvals || [])) return true;
+    if (stableStringify(cloudData.relationalAI.automations || []) !== stableStringify(merged.automations || [])) return true;
+    if (cloudData.relationalAI.topGoal !== merged.topGoal) return true;
+    if (cloudData.relationalAI.activeCharacterId !== merged.activeCharacterId) return true;
+  } else if ((merged.projects || []).length > 0 || (merged.tasks || []).length > 0) {
+    return true;
+  }
+
+  return false;
+}
+
 export async function loadOrMigrateWorkspaceData(userId: string): Promise<WorkspaceData> {
   matrixService.setActiveUserId(userId);
   const supabase = getSupabaseClient();
@@ -554,19 +629,141 @@ export async function loadOrMigrateWorkspaceData(userId: string): Promise<Worksp
   merged.invoices = merged.invoices.filter((record) => !pendingDeletions.invoices.has(record.id));
 
   applyWorkspaceData(merged);
-  await saveWorkspaceData(userId, merged);
+
+  // 指摘1対応: クラウド側の内容(remote)と merged が実質同一のときだけ保存を省略する。
+  // ローカルだけの編集や削除がある場合は保存する（競合時は maxConflictRetries: 0 で conflict 扱い）。
+  const needsSave = hasPendingLocalChanges(
+    {
+      snapshot: remote,
+      relationalAI,
+      relationalMatrix,
+      relationalSales,
+    },
+    merged
+  );
+
+  if (needsSave) {
+    // ローカル差分あり、または初回移行：保存を実行（成功すれば saveWorkspaceData 内でベースライン更新）
+    await saveWorkspaceData(userId, merged, { maxConflictRetries: 0 });
+  } else {
+    // クラウド側と実質同一：保存を省略し、ベースラインのみ更新（updated_atの不要な更新を防止）
+    try {
+      localStorage.setItem(`${LAST_SYNC_PREFIX}${userId}`, JSON.stringify(merged));
+    } catch (storageError) {
+      console.warn('Could not update the local workspace sync baseline after load:', storageError);
+    }
+  }
+
   return merged;
 }
 
-export async function saveWorkspaceData(userId: string, data: WorkspaceData): Promise<void> {
+
+export function isWorkspaceConflictError(error: unknown): boolean {
+  if (!error || typeof error !== 'object') return false;
+  const err = error as { code?: string; message?: string; details?: string };
+  return err.code === '40001' ||
+    (typeof err.message === 'string' && err.message.includes('WORKSPACE_CONFLICT')) ||
+    (typeof err.details === 'string' && err.details.includes('WORKSPACE_CONFLICT'));
+}
+
+export async function fetchLatestMatrixWorkspaceSyncState(userId: string): Promise<string | null> {
+  const supabase = getSupabaseClient();
+  const { data, error } = await supabase
+    .from('mst_matrix_workspace_sync_state')
+    .select('updated_at')
+    .eq('user_id', userId)
+    .maybeSingle();
+  if (error) {
+    console.warn('Failed to fetch latest matrix sync state:', error);
+    return null;
+  }
+  if (data?.updated_at) {
+    matrixWorkspaceUpdatedAtByUser.set(userId, data.updated_at);
+    return data.updated_at;
+  }
+  return null;
+}
+
+export async function resolveMatrixConflictAndMerge(
+  userId: string,
+  localData: WorkspaceData
+): Promise<{ mergedData: WorkspaceData; newUpdatedAt: string }> {
+  const relationalMatrix = await loadRelationalMatrixWorkspace(userId);
+  const relationalSales = await loadRelationalSalesOperations();
+  const baseline = loadLastSyncedData(userId);
+  const newUpdatedAt = matrixWorkspaceUpdatedAtByUser.get(userId) || '';
+
+  const merged = { ...localData };
+
+  if (relationalMatrix) {
+    merged.products = mergeRecords(relationalMatrix.products, localData.products, baseline.products || []);
+    merged.tools = mergeRecords(relationalMatrix.tools, localData.tools, baseline.tools || []);
+    merged.customLists = mergeRecords(relationalMatrix.customLists, localData.customLists, baseline.customLists || []);
+    merged.marketingScenarios = deduplicateMarketingScenarios(
+      mergeRecords(relationalMatrix.marketingScenarios, localData.marketingScenarios, baseline.marketingScenarios || [])
+    );
+  }
+
+  if (relationalSales) {
+    merged.contracts = mergeRecords(relationalSales.contracts, localData.contracts, baseline.contracts || []);
+    merged.invoices = mergeRecords(relationalSales.invoices, localData.invoices, baseline.invoices || []);
+  }
+
+  const pendingDeletions = matrixService.getPendingDeletions(userId);
+  merged.products = (merged.products || []).filter((record) => !pendingDeletions.products.has(record.id));
+  merged.contracts = (merged.contracts || []).filter((record) => !pendingDeletions.contracts.has(record.id));
+  merged.invoices = (merged.invoices || []).filter((record) => !pendingDeletions.invoices.has(record.id));
+
+  return { mergedData: merged, newUpdatedAt };
+}
+
+export interface SaveWorkspaceOptions {
+  maxConflictRetries?: number;
+}
+
+export interface SaveWorkspaceResult {
+  savedData: WorkspaceData;
+  wasMerged: boolean;
+}
+
+export async function saveWorkspaceData(
+  userId: string,
+  data: WorkspaceData,
+  options?: SaveWorkspaceOptions
+): Promise<SaveWorkspaceResult> {
   matrixService.setActiveUserId(userId);
   const supabase = getSupabaseClient();
-  await saveRelationalAIOperations(userId, data);
-  await saveRelationalMatrixWorkspace(userId, data);
+  const maxRetries = options?.maxConflictRetries ?? 2;
+  let currentData = data;
+  let wasMerged = false;
+  let retryCount = 0;
 
-  // AI and Matrix business records are stored in user-scoped relational tables.
-  // The compatibility snapshot retains only auxiliary workspace state.
-  const snapshotData = { ...data } as Partial<WorkspaceData>;
+  // 1. Matrix Workspace 保存（楽観的ロック・競合検知）を先に実行
+  // これにより、Matrix競合時に AI Operations だけが先行保存される不整合を防ぐ
+  while (true) {
+    try {
+      await saveRelationalMatrixWorkspace(userId, currentData);
+      break; // 成功
+    } catch (err) {
+      if (isWorkspaceConflictError(err) && retryCount < maxRetries) {
+        retryCount++;
+        console.warn(`[WorkspaceSync] WORKSPACE_CONFLICT detected. Attempting 3-way auto-merge (attempt ${retryCount}/${maxRetries})...`);
+        // 指摘2対応: 指数バックオフ（1回目250ms, 2回目500ms）を入れてリトライの負荷を有界化
+        await new Promise((resolve) => setTimeout(resolve, retryCount * 250));
+        const result = await resolveMatrixConflictAndMerge(userId, currentData);
+        currentData = result.mergedData;
+        wasMerged = true;
+        continue;
+      }
+      throw err;
+    }
+  }
+
+  // 2. Matrix保存成功後に AI Operations を保存
+  await saveRelationalAIOperations(userId, currentData);
+
+  // 3. 互換用スナップショットを更新
+  const snapshotData = { ...currentData } as Partial<WorkspaceData>;
   delete snapshotData.topGoal;
   delete snapshotData.characters;
   delete snapshotData.activeCharacterId;
@@ -592,10 +789,17 @@ export async function saveWorkspaceData(userId: string, data: WorkspaceData): Pr
     .from(WORKSPACE_STATE_TABLE)
     .upsert({ user_id: userId, data: snapshotData, updated_at: new Date().toISOString() }, { onConflict: 'user_id' });
   if (error) throw error;
+
+  // 4. マージが発生した場合はローカルストレージも最新データで更新
+  if (wasMerged) {
+    applyWorkspaceData(currentData);
+  }
+
   try {
-    localStorage.setItem(`${LAST_SYNC_PREFIX}${userId}`, JSON.stringify(data));
+    localStorage.setItem(`${LAST_SYNC_PREFIX}${userId}`, JSON.stringify(currentData));
   } catch (storageError) {
     console.warn('Could not update the local workspace sync baseline:', storageError);
   }
-}
 
+  return { savedData: currentData, wasMerged };
+}
