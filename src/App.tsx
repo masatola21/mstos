@@ -2107,70 +2107,150 @@ function AppContent() {
     if (!user || !workspaceReady) return;
     const supabase = getSupabase();
     if (!supabase) return;
-    let catchUpStarted = false;
+
+    let isMounted = true;
+    let channel: ReturnType<typeof supabase.channel> | null = null;
+    let pollingTimer: number | null = null;
+    let isCatchingUp = false;
 
     const processSubmission = (event: DiagnosisSubmissionAutomationEvent) => {
-      if (!event?.id || processedDiagnosisSubmissionIdsRef.current.has(event.id)) return;
+      if (!isMounted || !event?.id || processedDiagnosisSubmissionIdsRef.current.has(event.id)) return;
       const created = automationSubmissionHandlerRef.current(event);
       if (created) processedDiagnosisSubmissionIdsRef.current.add(event.id);
     };
 
     const catchUpMissedSubmissions = async () => {
-      const { data: diagnosisForms, error: formsError } = await supabase
-        .from('diagnosis_forms')
-        .select('id')
-        .eq('form_type', 'diagnosis');
-      if (formsError) {
-        console.warn('Could not load diagnosis forms for automation catch-up:', formsError.message);
-        return;
-      }
-      const formIds = (diagnosisForms || []).map((form) => form.id);
-      if (formIds.length === 0) return;
-
-      const pageSize = 500;
-      let offset = 0;
-      while (true) {
-        const { data: submissions, error } = await supabase
-          .from('diagnosis_submissions')
-          .select('id, form_id, lead_id, company_id, diagnosis_id')
-          .in('form_id', formIds)
-          .order('submitted_at', { ascending: true })
-          .range(offset, offset + pageSize - 1);
-        if (error) {
-          console.warn('Could not catch up diagnosis submissions:', error.message);
+      if (isCatchingUp) return;
+      isCatchingUp = true;
+      try {
+        const { data: diagnosisForms, error: formsError } = await supabase
+          .from('diagnosis_forms')
+          .select('id')
+          .eq('form_type', 'diagnosis');
+        if (formsError || !isMounted) {
+          if (formsError) console.warn('Could not load diagnosis forms for automation catch-up:', formsError.message);
           return;
         }
-        const batch = submissions || [];
-        batch.forEach((submission) => processSubmission(submission as DiagnosisSubmissionAutomationEvent));
-        if (batch.length < pageSize) return;
-        offset += pageSize;
+        const formIds = (diagnosisForms || []).map((form) => form.id);
+        if (formIds.length === 0) return;
+
+        const pageSize = 100;
+        let offset = 0;
+        while (isMounted) {
+          const { data: submissions, error } = await supabase
+            .from('diagnosis_submissions')
+            .select('id, form_id, lead_id, company_id, diagnosis_id')
+            .in('form_id', formIds)
+            .order('submitted_at', { ascending: true })
+            .range(offset, offset + pageSize - 1);
+          if (error || !isMounted) {
+            if (error) console.warn('Could not catch up diagnosis submissions:', error.message);
+            return;
+          }
+          const batch = submissions || [];
+          batch.forEach((submission) => processSubmission(submission as DiagnosisSubmissionAutomationEvent));
+          if (batch.length < pageSize) return;
+          offset += pageSize;
+        }
+      } finally {
+        isCatchingUp = false;
       }
     };
 
-    const channel = supabase
-      .channel(`automation-diagnosis-submissions-${user.id}`)
-      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'diagnosis_submissions' }, (payload) => {
-        const event = payload.new as DiagnosisSubmissionAutomationEvent;
-        if (!event?.id || !event.form_id) return;
-        void supabase.from('diagnosis_forms').select('form_type').eq('id', event.form_id).maybeSingle()
-          .then(({ data, error }) => {
-            if (error) {
-              console.warn('Could not identify diagnosis submission type:', error.message);
-              return;
+    // 初回マウント時に確実に未処理分を同期（Realtime接続の成否に依存しない）
+    void catchUpMissedSubmissions();
+
+    // Supabase Realtime が明示的に無効化されているかチェック
+    const isRealtimeDisabled =
+      typeof window !== 'undefined' &&
+      (window.localStorage.getItem('disable_supabase_realtime') === 'true' ||
+       window.sessionStorage.getItem('supabase_realtime_failed') === 'true');
+
+    if (isRealtimeDisabled) {
+      // Realtimeが無効または一度失敗している場合は、安全な低頻度ポーリング（3分毎）にフォールバック
+      pollingTimer = window.setInterval(() => {
+        if (isMounted) void catchUpMissedSubmissions();
+      }, 180000);
+
+      return () => {
+        isMounted = false;
+        if (pollingTimer) window.clearInterval(pollingTimer);
+      };
+    }
+
+    // 既存の同名チャンネルが残っていれば事前にすべて破棄（多重接続・リーク防止）
+    const topicName = `automation-diagnosis-submissions-${user.id}`;
+    const existingChannels = supabase.getChannels().filter((c) => c.topic.includes(topicName));
+    existingChannels.forEach((c) => {
+      try {
+        void c.unsubscribe();
+        void supabase.removeChannel(c);
+      } catch {}
+    });
+
+    try {
+      channel = supabase
+        .channel(topicName)
+        .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'diagnosis_submissions' }, (payload) => {
+          if (!isMounted) return;
+          const event = payload.new as DiagnosisSubmissionAutomationEvent;
+          if (!event?.id || !event.form_id) return;
+          void supabase.from('diagnosis_forms').select('form_type').eq('id', event.form_id).maybeSingle()
+            .then(({ data, error }) => {
+              if (error || !isMounted) return;
+              if (data?.form_type === 'diagnosis') processSubmission(event);
+            });
+        })
+        .subscribe((status) => {
+          if (!isMounted) return;
+          if (status === 'SUBSCRIBED') {
+            void catchUpMissedSubmissions();
+          } else if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT' || status === 'CLOSED') {
+            // ★最重要：エラー・タイムアウト発生時は直ちに購読解除・チャンネル破棄！
+            // Supabase内部の無限再接続ループを停止させ、DBへの set_config / Rollback の嵐を完全に防止する
+            console.warn(`[Supabase Realtime] Channel status: ${status}. Teardown channel to prevent CPU load & rollback storm.`);
+            try {
+              if (typeof window !== 'undefined') {
+                window.sessionStorage.setItem('supabase_realtime_failed', 'true');
+              }
+              if (channel) {
+                void channel.unsubscribe();
+                void supabase.removeChannel(channel);
+                channel = null;
+              }
+            } catch {}
+
+            // 低頻度ポーリングにフォールバック
+            if (!pollingTimer) {
+              pollingTimer = window.setInterval(() => {
+                if (isMounted) void catchUpMissedSubmissions();
+              }, 180000);
             }
-            if (data?.form_type === 'diagnosis') processSubmission(event);
-          });
-      })
-      .subscribe((status) => {
-        if (status === 'SUBSCRIBED' && !catchUpStarted) {
-          catchUpStarted = true;
-          void catchUpMissedSubmissions();
-        }
-        if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') {
-          console.warn('Diagnosis submission automation realtime channel is unavailable.');
-        }
-      });
-    return () => { void supabase.removeChannel(channel); };
+          }
+        });
+    } catch (err) {
+      console.warn('[Supabase Realtime] Subscription error:', err);
+      if (!pollingTimer) {
+        pollingTimer = window.setInterval(() => {
+          if (isMounted) void catchUpMissedSubmissions();
+        }, 180000);
+      }
+    }
+
+    return () => {
+      isMounted = false;
+      if (pollingTimer) {
+        window.clearInterval(pollingTimer);
+        pollingTimer = null;
+      }
+      if (channel) {
+        try {
+          void channel.unsubscribe();
+          void supabase.removeChannel(channel);
+        } catch {}
+        channel = null;
+      }
+    };
   }, [user?.id, workspaceReady]);
 
   if (isLoading || (user && !workspaceReady)) {
