@@ -1,6 +1,6 @@
 import { WorkspaceSaveCoordinator } from '../src/services/workspaceSaveCoordinator';
 import { matrixService } from '../src/services/matrixService';
-import { WorkspaceData, SaveWorkspaceResult, mergeRecords } from '../src/services/workspaceStateService';
+import { WorkspaceData, SaveWorkspaceResult, mergeRecords, saveRelationalMatrixWorkspace, MinimalSupabaseRpcClient } from '../src/services/workspaceStateService';
 import { stableStringify } from '../src/utils/stableSerialize';
 
 // localStorage stub
@@ -534,6 +534,109 @@ async function runTests() {
     assert(callCount === 1, 'Save calls must remain exactly 1, got ' + callCount);
 
     console.log('  -> PASSED: Repeated identical requests do not produce additional save calls.\n');
+  }
+
+  
+  // --------------------------------------------------------------------------
+  // Test (h): 修正B: saveRelationalMatrixWorkspace 本体における削除マーカーの部分クリア保護
+  // --------------------------------------------------------------------------
+  console.log('Test (h): Real saveRelationalMatrixWorkspace clears only sent pending deletions');
+  {
+    const userId = 'user-race-real-save-matrix';
+    matrixService.setActiveUserId(userId);
+    matrixService.clearPendingDeletions(userId);
+
+    // 1. 削除マーカー X を事前に記録 (contracts: cnt-X, products: prod-X)
+    matrixService.recordPendingDeletion(userId, 'contracts', 'cnt-X');
+    matrixService.recordPendingDeletion(userId, 'products', 'prod-X');
+
+    let rpcArgsReceived: any = null;
+    let rpcResolve: (val: any) => void;
+    const rpcPromise = new Promise<{ data: any; error: any }>((res) => {
+      rpcResolve = res;
+    });
+
+    const fakeSupabase: MinimalSupabaseRpcClient = {
+      rpc: async (fn: string, args: Record<string, unknown>) => {
+        if (fn === 'mst_save_matrix_workspace') {
+          rpcArgsReceived = args;
+          return await rpcPromise;
+        }
+        return { data: null, error: new Error('Unknown RPC: ' + fn) };
+      },
+    };
+
+    const dummyData = createDummyWorkspaceData({
+      products: [],
+      contracts: [],
+    });
+
+    // 2. saveRelationalMatrixWorkspace を呼ぶ (RPC 保留中)
+    const savePromise = saveRelationalMatrixWorkspace(userId, dummyData, fakeSupabase);
+
+    // 3. 保留中に新たな削除マーカー Y を記録 (contracts: cnt-Y, products: prod-Y)
+    matrixService.recordPendingDeletion(userId, 'contracts', 'cnt-Y');
+    matrixService.recordPendingDeletion(userId, 'products', 'prod-Y');
+
+    // 4. RPC を成功で解決
+    rpcResolve!({ data: '2026-11-05T12:00:00Z', error: null });
+    await savePromise;
+
+    // 検証 1: RPC に送信された削除IDは X のみであり、保留中に追加された Y は含まれていないこと
+    const sentContracts = rpcArgsReceived?.p_deleted_contract_ids || [];
+    assert(
+      sentContracts.includes('cnt-X'),
+      'RPC args must include pre-recorded deletion cnt-X'
+    );
+    assert(
+      !sentContracts.includes('cnt-Y'),
+      'CRITICAL: RPC args must NOT include deletion cnt-Y recorded after RPC dispatch'
+    );
+
+    // 検証 2: 保存成功後、pendingDeletions に Y が残り、X は消えていること
+    const remainingDeletions = matrixService.getPendingDeletions(userId);
+    assert(
+      !remainingDeletions.contracts.has('cnt-X'),
+      'Pre-recorded contract deletion cnt-X must be cleared on success'
+    );
+    assert(
+      remainingDeletions.contracts.has('cnt-Y'),
+      'CRITICAL: In-flight contract deletion cnt-Y must survive and remain in pendingDeletions'
+    );
+    assert(
+      !remainingDeletions.products.has('prod-X'),
+      'Pre-recorded product deletion prod-X must be cleared on success'
+    );
+    assert(
+      remainingDeletions.products.has('prod-Y'),
+      'CRITICAL: In-flight product deletion prod-Y must survive and remain in pendingDeletions'
+    );
+
+    console.log('  -> PASSED: In-flight additions Y survived while sent items X were cleared on success.');
+
+    // 5. 失敗ケースの検証: RPC が error を返した場合は X も Y も消えないこと
+    matrixService.clearPendingDeletions(userId);
+    matrixService.recordPendingDeletion(userId, 'contracts', 'cnt-fail-1');
+
+    const failingSupabase: MinimalSupabaseRpcClient = {
+      rpc: async () => ({ data: null, error: new Error('RPC server-side failure') }),
+    };
+
+    let saveFailed = false as boolean;
+    try {
+      await saveRelationalMatrixWorkspace(userId, dummyData, failingSupabase);
+    } catch {
+      saveFailed = true;
+    }
+
+    assert(Boolean(saveFailed), 'saveRelationalMatrixWorkspace must throw when RPC returns error');
+    const afterFailDeletions = matrixService.getPendingDeletions(userId);
+    assert(
+      afterFailDeletions.contracts.has('cnt-fail-1'),
+      'CRITICAL: Deletions must NOT be cleared when RPC fails'
+    );
+
+    console.log('  -> PASSED: Pending deletions completely preserved when RPC fails.\n');
   }
 
   console.log('=====================================================');

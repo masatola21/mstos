@@ -187,8 +187,16 @@ async function loadRelationalMatrixWorkspace(userId: string): Promise<Relational
   };
 }
 
-async function saveRelationalMatrixWorkspace(userId: string, data: WorkspaceData): Promise<void> {
-  const supabase = getSupabaseClient();
+export interface MinimalSupabaseRpcClient {
+  rpc: (fn: string, args: Record<string, unknown>) => Promise<{ data: unknown; error: unknown }>;
+}
+
+export async function saveRelationalMatrixWorkspace(
+  userId: string,
+  data: WorkspaceData,
+  clientOverride?: MinimalSupabaseRpcClient
+): Promise<void> {
+  const supabase = clientOverride || getSupabaseClient();
   const pendingDeletions = matrixService.getPendingDeletions(userId);
   const sentContractIds = [...pendingDeletions.contracts];
   const sentInvoiceIds = [...pendingDeletions.invoices];
