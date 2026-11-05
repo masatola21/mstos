@@ -358,70 +358,186 @@ async function runTests() {
     console.log('  -> PASSED: Key order independence verified for both deletion and edit.\n');
   }
 
-  console.log('=====================================================');
-  console.log('ALL TESTS COMPLETED!');
-  
   // --------------------------------------------------------------------------
-  // Test (d): キー順序違いのマージと安定シリアライズ (Fix 5)
+  // Test (e): 修正A 欠陥1: キュー済みの別状態(C)が、実行中状態(B)への復帰で破棄されること
   // --------------------------------------------------------------------------
-  console.log('Test (d): Key-order differences in JSON should not cause false merge conflicts');
+  console.log('Test (e): Reverting to in-flight state (A -> B(in-flight) -> C(queued) -> B) must drop queued C');
   {
-    // baseline と remote でプロパティの挿入順序（キー順）が異なるレコード
-    // （jsonb はキーをアルファベット順等で格納・返却するため、クライアント側の順序と異なる場合がある）
-    const baselineItem = { id: 'item-1', b: 'value-b', a: 'value-a' };
-    const remoteItem = { id: 'item-1', a: 'value-a', b: 'value-b' };
+    const userId = 'user-race-revert-inflight';
+    matrixService.setActiveUserId(userId);
+    matrixService.clearPendingDeletions(userId);
 
-    // JSON.stringify だと順序違いで不一致と判定されることを前提として確認
+    const calls: { userId: string; data: WorkspaceData }[] = [];
+    let bStartedResolve: () => void;
+    const bStartedPromise = new Promise<void>((r) => { bStartedResolve = r; });
+    let bFinishResolve: (result: SaveWorkspaceResult) => void;
+    const bFinishPromise = new Promise<SaveWorkspaceResult>((r) => { bFinishResolve = r; });
+
+    const mockSaveFn = async (uId: string, d: WorkspaceData) => {
+      calls.push({ userId: uId, data: d });
+      if (calls.length === 1) {
+        bStartedResolve();
+        return await bFinishPromise;
+      } else {
+        return { savedData: d, wasMerged: false };
+      }
+    };
+
+    const coordinator = new WorkspaceSaveCoordinator(mockSaveFn);
+    const dataA = createDummyWorkspaceData({ topGoal: 'Goal A' });
+    const dataB = createDummyWorkspaceData({ topGoal: 'Goal B' });
+    const dataC = createDummyWorkspaceData({ topGoal: 'Goal C' });
+
+    coordinator.setInitialSavedSnapshot(dataA);
+
+    // 1. B を保存開始
+    const saveBPromise = coordinator.requestImmediateSave(userId, dataB);
+    await bStartedPromise;
+
+    // 2. 保存中に C をリクエスト (pendingData = C)
+    const saveCPromise = coordinator.requestImmediateSave(userId, dataC);
+
+    // 3. 画面上で B に戻してリクエスト (現在の画面状態は B、保存実行中の状態も B)
+    // 期待: pendingData(C) が破棄され、S2 は走らない
+    const returnToBPromise = coordinator.requestImmediateSave(userId, dataB);
+
+    // 4. B の保存完了
+    bFinishResolve!({ savedData: dataB, wasMerged: false });
+    await saveBPromise;
+    await saveCPromise;
+    await returnToBPromise;
+
+    // 検証: calls は B の 1 回のみであること！ (C は送信されない)
     assert(
-      JSON.stringify(baselineItem) !== JSON.stringify(remoteItem),
-      'Standard JSON.stringify must be sensitive to key order for this test'
+      calls.length === 1,
+      'CRITICAL: Save calls must be exactly 1 (B only). Queued C must be dropped, got ' + calls.length
+    );
+    assert(
+      calls[0].data.topGoal === 'Goal B',
+      'The only save call must be B'
     );
 
-    // ケース d-1: ローカル削除
-    // ユーザーはローカルで item-1 を削除した（local = []）
-    // リモートは未変更（キー順が違うだけ）。期待: item-1 は削除される（空配列）
-    const mergedAfterDelete = mergeRecords(
-      [remoteItem],
-      [],
-      [baselineItem]
-    );
-    assert(
-      mergedAfterDelete.length === 0,
-      'CRITICAL: Local deletion must be applied even when remote has different JSON key order'
-    );
-
-    // ケース d-2: ローカル編集
-    // ユーザーはローカルで b を編集した
-    // リモートは未変更（キー順が違うだけ）。期待: リモート未変更と認識されローカル編集が採用される
-    const localItemEdited = { id: 'item-1', b: 'value-b-edited', a: 'value-a' };
-    const mergedAfterEdit = mergeRecords(
-      [remoteItem],
-      [localItemEdited],
-      [baselineItem]
-    );
-    assert(
-      mergedAfterEdit.length === 1 && (mergedAfterEdit[0] as any).b === 'value-b-edited',
-      'CRITICAL: Local edit must be preserved over remote when remote only differs by key order'
-    );
-
-    
-    // 安定シリアライズ関数の単体検証
-    assert(
-      stableStringify({ z: 1, a: { y: 2, b: 3 } }) === stableStringify({ a: { b: 3, y: 2 }, z: 1 }),
-      'Nested keys must be sorted and match exactly'
-    );
-    assert(
-      stableStringify([1, 2, 3]) !== stableStringify([3, 2, 1]),
-      'Array element order must be preserved'
-    );
-    assert(
-      stableStringify({ a: undefined, b: 1 }) === JSON.stringify({ b: 1 }),
-      'Undefined values must be omitted in object'
-    );
-
-    console.log('  -> PASSED: Key order independence verified for both deletion and edit.\n');
+    console.log('  -> PASSED: Queued state C successfully dropped when user reverted to in-flight state B.\n');
   }
 
+  // --------------------------------------------------------------------------
+  // Test (f): 修正A 欠陥2: 同一内容リクエストの deferred が未解決のまま固まらず解決されること
+  // --------------------------------------------------------------------------
+  console.log('Test (f): In-flight identical request deferred must resolve or reject with in-flight save');
+  {
+    const userId = 'user-race-waiter-resolve';
+    matrixService.setActiveUserId(userId);
+    matrixService.clearPendingDeletions(userId);
+
+    let bStartedResolve: () => void;
+    const bStartedPromise = new Promise<void>((r) => { bStartedResolve = r; });
+    let bFinishResolve: (result: SaveWorkspaceResult) => void;
+    const bFinishPromise = new Promise<SaveWorkspaceResult>((r) => { bFinishResolve = r; });
+
+    const mockSaveFn = async (uId: string, d: WorkspaceData) => {
+      bStartedResolve();
+      return await bFinishPromise;
+    };
+
+    const coordinator = new WorkspaceSaveCoordinator(mockSaveFn);
+    const dataB = createDummyWorkspaceData({ topGoal: 'Goal B' });
+
+    // 1. B を保存開始
+    const saveB1 = coordinator.requestImmediateSave(userId, dataB);
+    await bStartedPromise;
+
+    // 2. pendingData が無い状態で、B と同一内容を deferred 付きでリクエスト
+    const saveB2 = coordinator.requestImmediateSave(userId, dataB);
+
+    // 3. 500ms タイマーを仕掛けて解決されるか検証
+    let timeoutId: any;
+    const timeoutPromise = new Promise((_, rej) => {
+      timeoutId = setTimeout(() => rej(new Error('TIMEOUT: saveB2 deferred hung for >500ms')), 500);
+    });
+
+    // B 完了
+    bFinishResolve!({ savedData: dataB, wasMerged: false });
+
+    // saveB2 が正常に resolve されること
+    const resB2 = await Promise.race([saveB2, timeoutPromise]);
+    clearTimeout(timeoutId);
+    await saveB1;
+
+    assert((resB2 as any)?.savedData?.topGoal === 'Goal B', 'saveB2 must resolve with B result');
+
+    // サブテスト: S1 が失敗した場合は inFlightWaiters も reject されること
+    let bFailStartedResolve: () => void;
+    const bFailStartedPromise = new Promise<void>((r) => { bFailStartedResolve = r; });
+    let bFailFinishReject: (err: any) => void;
+    const bFailFinishPromise = new Promise<SaveWorkspaceResult>((_, rej) => { bFailFinishReject = rej; });
+
+    const failSaveFn = async () => {
+      bFailStartedResolve();
+      return await bFailFinishPromise;
+    };
+    const failCoordinator = new WorkspaceSaveCoordinator(failSaveFn);
+    const failPromise1 = failCoordinator.requestImmediateSave(userId, dataB).catch((e) => e);
+    await bFailStartedPromise;
+
+    // 同一内容リクエスト
+    let waiterRejected = false as boolean;
+    const failPromise2 = failCoordinator.requestImmediateSave(userId, dataB).catch(() => {
+      waiterRejected = true;
+    });
+
+    bFailFinishReject!(new Error('Save failed in cloud'));
+    await failPromise1;
+    await failPromise2;
+
+    assert(Boolean(waiterRejected), 'CRITICAL: In-flight identical request must reject when in-flight save fails');
+
+    console.log('  -> PASSED: In-flight identical request deferreds resolve/reject in lockstep with in-flight save.\n');
+  }
+
+  // --------------------------------------------------------------------------
+  // Test (g): 同一内容のリクエストを繰り返しても保存の呼び出しが増えないこと
+  // --------------------------------------------------------------------------
+  console.log('Test (g): Repeated identical requests during save do not increase save calls');
+  {
+    const userId = 'user-race-repeat';
+    matrixService.setActiveUserId(userId);
+    matrixService.clearPendingDeletions(userId);
+
+    let callCount = 0;
+    let bStartedResolve: () => void;
+    const bStartedPromise = new Promise<void>((r) => { bStartedResolve = r; });
+    let bFinishResolve: (result: SaveWorkspaceResult) => void;
+    const bFinishPromise = new Promise<SaveWorkspaceResult>((r) => { bFinishResolve = r; });
+
+    const mockSaveFn = async (uId: string, d: WorkspaceData) => {
+      callCount++;
+      bStartedResolve();
+      return await bFinishPromise;
+    };
+
+    const coordinator = new WorkspaceSaveCoordinator(mockSaveFn);
+    const dataB = createDummyWorkspaceData({ topGoal: 'Goal B' });
+
+    // 1. B 保存開始
+    const p1 = coordinator.requestImmediateSave(userId, dataB);
+    await bStartedPromise;
+
+    // 2. 同一内容 B を 5 回連続でリクエスト
+    const promises = [p1];
+    for (let i = 0; i < 5; i++) {
+      promises.push(coordinator.requestImmediateSave(userId, dataB));
+    }
+
+    bFinishResolve!({ savedData: dataB, wasMerged: false });
+    await Promise.all(promises);
+
+    assert(callCount === 1, 'Save calls must remain exactly 1, got ' + callCount);
+
+    console.log('  -> PASSED: Repeated identical requests do not produce additional save calls.\n');
+  }
+
+  console.log('=====================================================');
+  console.log('ALL TESTS COMPLETED!');
   console.log('=====================================================');
 }
 

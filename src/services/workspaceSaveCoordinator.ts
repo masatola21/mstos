@@ -24,6 +24,7 @@ export class WorkspaceSaveCoordinator {
   private saveFn: WorkspaceSaveFn;
   private isSaving = false;
   private inFlightSnapshot: string = '';
+  private inFlightWaiters: QueuedDeferred[] = [];
   private pendingUserId: string | null = null;
   private pendingData: WorkspaceData | null = null;
   private pendingDeferreds: QueuedDeferred[] = [];
@@ -69,6 +70,8 @@ export class WorkspaceSaveCoordinator {
     this.pendingData = null;
     this.pendingDeferreds.forEach((d) => d.reject(new Error('User logged out or switched')));
     this.pendingDeferreds = [];
+    this.inFlightWaiters.forEach((d) => d.reject(new Error('User logged out or switched')));
+    this.inFlightWaiters = [];
     this.lastSavedSnapshot = '';
     this.inFlightSnapshot = '';
     this.syncStatus = 'loading';
@@ -172,16 +175,23 @@ export class WorkspaceSaveCoordinator {
       pendingDeletions.products.size > 0;
 
     if (this.isSaving) {
-      // 指摘4対応: 保存実行中は現在保存中の inFlightSnapshot と比較する
-      // 実行中と同一なら追加保存は不要
+      // 指摘4・再指摘A対応: 保存実行中は現在保存中の inFlightSnapshot と比較する
       if (snapshot === this.inFlightSnapshot && !hasPendingDeletions) {
+        // 現在のユーザー状態が保存実行中の内容と同一
+        // 1. キュー済みの pendingData と pendingUserId を破棄して S2 を抑止
+        this.pendingData = null;
+        this.pendingUserId = null;
+        // 2. pendingDeferreds にあるものを inFlightWaiters へ移す
+        this.inFlightWaiters.push(...this.pendingDeferreds);
+        this.pendingDeferreds = [];
+        // 3. 今回の deferred も inFlightWaiters に積む
         if (deferred) {
-          this.pendingDeferreds.push(deferred);
+          this.inFlightWaiters.push(deferred);
         }
         return;
       }
 
-      // 実行中と異なる場合（例: A -> B(保存中) -> A と元に戻した場合）：
+      // 実行中と異なる場合（例: A -> B(保存中) -> A と元に戻した場合、または C への新規変更）：
       // lastSavedSnapshot と一致していても、実行中(B)と異なるため enqueue する
       this.pendingUserId = userId;
       this.pendingData = data;
@@ -244,6 +254,9 @@ export class WorkspaceSaveCoordinator {
       }
 
       currentDeferreds.forEach((d) => d.resolve(result));
+      const currentWaiters = [...this.inFlightWaiters];
+      this.inFlightWaiters = [];
+      currentWaiters.forEach((d) => d.resolve(result));
     } catch (error) {
       console.error('[WorkspaceSaveCoordinator] Cloud save failed:', error);
 
@@ -260,6 +273,10 @@ export class WorkspaceSaveCoordinator {
         this.pendingDeferreds = [];
         remainingDeferreds.forEach((d) => d.reject(error));
 
+        const conflictWaiters = [...this.inFlightWaiters];
+        this.inFlightWaiters = [];
+        conflictWaiters.forEach((d) => d.reject(error));
+
         this.setStatus('conflict', '他の端末で更新されています。再読み込みしてください');
       } else {
         const errorDetails = `${errorMessage} ${(error as { details?: string })?.details || ''} ${(error as { hint?: string })?.hint || ''}`;
@@ -273,6 +290,9 @@ export class WorkspaceSaveCoordinator {
       }
 
       currentDeferreds.forEach((d) => d.reject(error));
+      const remainingWaiters = [...this.inFlightWaiters];
+      this.inFlightWaiters = [];
+      remainingWaiters.forEach((d) => d.reject(error));
     } finally {
       this.isSaving = false;
       this.inFlightSnapshot = '';
