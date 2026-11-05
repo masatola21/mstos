@@ -3352,6 +3352,12 @@ app.post('/api/public/forms/:slug/submissions', async (req, res) => {
 // ─── 管理者向け汎用レコード削除 API（サービスロールによる安全な実行・外部キー連動解除） ───
 app.delete('/api/admin/tables/:tableKey/records/:id', async (req, res) => {
   if (!lineSupabase) return res.status(503).json({ error: 'DB接続が設定されていません。' });
+  // ↓ 追加：認証チェック
+  const authorization = req.header('authorization') || '';
+  const token = authorization.startsWith('Bearer ') ? authorization.slice(7) : '';
+  if (!token) return res.status(401).json({ error: 'ログインしてください。' });
+  const { data: authData, error: authError } = await lineSupabase.auth.getUser(token);
+  if (authError || !authData.user) return res.status(401).json({ error: 'ログイン状態を確認できません。' });
   const { tableKey, id } = req.params;
   const force = req.query.force === 'true' || (req.body && (req.body as any).force === true);
 
