@@ -4535,27 +4535,33 @@ app.post('/api/calendar/fetch-ical', async (req, res) => {
 app.get('/health', (_req, res) => res.status(200).send('OK'));
 app.get('/healthz', (_req, res) => res.status(200).send('OK'));
 
-// Vite middleware or static serving
-if (process.env.NODE_ENV !== 'production') {
-  const { createServer } = await import('vite');
-  const vite = await createServer({
-    server: { middlewareMode: true, host: '0.0.0.0' },
-    appType: 'spa',
-  });
-  app.use(vite.middlewares);
-} else {
-  app.use(express.static(path.resolve(__dirname, 'dist')));
-  app.get('*', (req, res) => {
-    res.sendFile(path.resolve(__dirname, 'dist', 'index.html'));
+// Vite middleware or static serving (for standalone / local development)
+if (!process.env.VERCEL) {
+  if (process.env.NODE_ENV !== 'production') {
+    const { createServer } = await import('vite');
+    const vite = await createServer({
+      server: { middlewareMode: true, host: '0.0.0.0' },
+      appType: 'spa',
+    });
+    app.use(vite.middlewares);
+  } else {
+    app.use(express.static(path.resolve(__dirname, 'dist')));
+    app.get('*', (req, res) => {
+      res.sendFile(path.resolve(__dirname, 'dist', 'index.html'));
+    });
+  }
+
+  setInterval(() => { void processMarketingAutomationJobs(); }, 15000);
+  setTimeout(() => { void processMarketingAutomationJobs(); }, 15000);
+
+  void ensureDefaultCarePackageInquiryForm();
+  app.listen(Number(port), '0.0.0.0', () => {
+    console.log(`Server listening on port ${port} (0.0.0.0)`);
   });
 }
 
-setInterval(() => { void processMarketingAutomationJobs(); }, 15000);
-setTimeout(() => { void processMarketingAutomationJobs(); }, 15000);
+export default app;
+export { app };
 
-void ensureDefaultCarePackageInquiryForm();
-app.listen(Number(port), '0.0.0.0', () => {
-  console.log(`Server listening on port ${port} (0.0.0.0)`);
-});
 
 
