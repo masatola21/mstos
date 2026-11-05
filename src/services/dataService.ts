@@ -175,8 +175,18 @@ export async function fetchTableData(
 
   try {
     // 基本クエリ（画面で必要なカラムのみ指定し、リミット100件を付与してパフォーマンスを最適化）
-    const columns = TABLE_SELECT_COLUMNS[tableKey] || 'id, status, created_at, updated_at';
-    const { data, error } = (await supabase.from(tableKey).select(columns).limit(100)) as { data: any[] | null; error: any };
+    const columns = TABLE_SELECT_COLUMNS[tableKey] || '*';
+    let { data, error } = (await supabase.from(tableKey).select(columns).limit(100)) as { data: any[] | null; error: any };
+    
+    // リモートDBに未マイグレーションの列がある場合は select('*') で安全にフォールバック取得
+    if (error && (error.code === '42703' || error.message?.includes('column') || error.message?.includes('schema cache'))) {
+      const fallback = (await supabase.from(tableKey).select('*').limit(100)) as { data: any[] | null; error: any };
+      if (!fallback.error) {
+        data = fallback.data;
+        error = null;
+      }
+    }
+
     if (error) {
       return { data: [], error: parseSupabaseError(error) };
     }
@@ -352,9 +362,15 @@ export async function deleteTableRecord(
 
     // 3. RLSポリシー等でクライアント側から削除できない場合のサーバーAPIフォールバック
     try {
+      const { data: sessionData } = await supabase.auth.getSession();
+      const token = sessionData?.session?.access_token;
+      const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+      if (token) {
+        headers['Authorization'] = `Bearer ${token}`;
+      }
       const resp = await fetch(`/api/admin/tables/${encodeURIComponent(tableKey)}/records/${encodeURIComponent(String(record.id))}?force=${options?.force ? 'true' : 'false'}`, {
         method: 'DELETE',
-        headers: { 'Content-Type': 'application/json' },
+        headers,
       });
       if (resp.ok) {
         if (tableKey === 'products') {
@@ -363,6 +379,11 @@ export async function deleteTableRecord(
           await supabase.from('mst_managed_products').delete().eq('id', prodId);
         }
         return {};
+      } else {
+        const errJson = await resp.json().catch(() => null);
+        if (errJson?.error) {
+          return { error: { type: 'UNKNOWN', message: errJson.error } };
+        }
       }
     } catch {
       // ネットワークエラー時は元の判定へフォールバック
@@ -375,6 +396,81 @@ export async function deleteTableRecord(
     return {};
   } catch (err: any) {
     return { error: parseSupabaseError(err) };
+  }
+}
+
+// 複数レコードの一括削除
+export async function bulkDeleteTableRecords(
+  tableKey: TableKey,
+  ids: (string | number)[],
+  options?: { force?: boolean }
+): Promise<{ successCount?: number; error?: DataFetchError }> {
+  const supabase = getSupabase();
+  if (!supabase) return { error: { type: 'NOT_CONFIGURED', message: 'Supabaseが初期化されていません。' } };
+  if (!ids.length) return { successCount: 0 };
+
+  try {
+    const { data: sessionData } = await supabase.auth.getSession();
+    const token = sessionData?.session?.access_token;
+    const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+    if (token) {
+      headers['Authorization'] = `Bearer ${token}`;
+    }
+
+    // サーバーサイド一括削除APIを直接呼び出し
+    const resp = await fetch(`/api/admin/tables/${encodeURIComponent(tableKey)}/bulk-delete`, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify({ ids: ids.map(String), force: options?.force ?? false }),
+    });
+
+    if (resp.ok) {
+      const resJson = await resp.json().catch(() => ({ count: ids.length }));
+      if (tableKey === 'products') {
+        for (const id of ids) {
+          matrixService.deleteProduct(String(id));
+        }
+      }
+      return { successCount: resJson.count ?? ids.length };
+    }
+
+    // クライアント側フォールバック
+    const { data, error } = await supabase.from(tableKey).delete().in('id', ids).select('id');
+    if (error) return { error: parseSupabaseError(error) };
+    return { successCount: data?.length || 0 };
+  } catch (err: any) {
+    return { error: parseSupabaseError(err) };
+  }
+}
+
+// ダミーデータ一括初期化（依存関係順）
+export async function cleanDummyData(
+  targets: string[] = ['prospects', 'leads', 'deals', 'customers', 'companies']
+): Promise<{ success: boolean; deleted?: Record<string, number>; error?: string }> {
+  try {
+    const supabase = getSupabase();
+    const sessionData = await supabase?.auth.getSession();
+    const token = sessionData?.data.session?.access_token;
+    const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+    if (token) {
+      headers['Authorization'] = `Bearer ${token}`;
+    }
+
+    const resp = await fetch('/api/admin/clean-dummy-data', {
+      method: 'POST',
+      headers,
+      body: JSON.stringify({ targets }),
+    });
+
+    if (!resp.ok) {
+      const errJson = await resp.json().catch(() => null);
+      return { success: false, error: errJson?.error || 'ダミーデータ削除に失敗しました。' };
+    }
+
+    const json = await resp.json();
+    return { success: true, deleted: json.deleted };
+  } catch (err: any) {
+    return { success: false, error: err.message || '通信エラーが発生しました。' };
   }
 }
 

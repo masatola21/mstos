@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { TableKey, TABLE_CONFIGS } from '../types/database';
-import { deleteTableRecord, fetchTableData, updateRecord, DataFetchError } from '../services/dataService';
+import { deleteTableRecord, fetchTableData, updateRecord, bulkDeleteTableRecords, cleanDummyData, DataFetchError } from '../services/dataService';
 import { InlineDeleteButton } from './InlineDeleteButton';
 import { RecordDetailModal } from './RecordDetailModal';
 import { RecordFormModal } from './RecordFormModal';
@@ -74,6 +74,14 @@ export const TableManager: React.FC<TableManagerProps> = ({
   const [isDetailOpen, setIsDetailOpen] = useState(false);
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [editRecord, setEditRecord] = useState<any | null>(null);
+
+  // 一括操作・エラーバナー・ダミーデータ整理状態
+  const [rowActionError, setRowActionError] = useState<string | null>(null);
+  const [selectedIds, setSelectedIds] = useState<string[]>([]);
+  const [isBulkDeleting, setIsBulkDeleting] = useState(false);
+  const [isCleanDummyModalOpen, setIsCleanDummyModalOpen] = useState(false);
+  const [cleanDummyTargets, setCleanDummyTargets] = useState<string[]>(['prospects', 'leads', 'deals', 'customers', 'companies']);
+  const [isCleaningDummy, setIsCleaningDummy] = useState(false);
 
   // ステージ移行モーダル状態
   const [transitionOpen, setTransitionOpen] = useState(false);
@@ -186,6 +194,8 @@ export const TableManager: React.FC<TableManagerProps> = ({
     setSelectedRecord(null);
     setIsDetailOpen(false);
     setIsFormOpen(false);
+    setSelectedIds([]);
+    setRowActionError(null);
     loadData();
   }, [currentTable]);
 
@@ -259,7 +269,7 @@ export const TableManager: React.FC<TableManagerProps> = ({
   const handleDeleteRecord = async (record: any, force = false) => {
     const label = record.company_name || record.full_name || record.proposal_plan_name || record.product_name || record.contact_name || String(record.id);
     setDeletingRecordId(String(record.id));
-    setError(null);
+    setRowActionError(null);
     setSuccessBanner(null);
     const result = await deleteTableRecord(currentTable, { id: record.id, company_id: record.company_id }, { force });
     setDeletingRecordId(null);
@@ -268,16 +278,62 @@ export const TableManager: React.FC<TableManagerProps> = ({
         setForceDeleteConfirmRecord({ record, blockedBy: result.blockedBy });
         return;
       }
-      setError({ type: 'UNKNOWN', message: `関連する「${result.blockedBy}」データがあるため削除できません。先に関連データを整理してください。` });
+      setRowActionError(`関連する「${result.blockedBy}」データがあるため削除できません。先に関連データを整理してください。`);
       return;
     }
     if (result.error) {
-      setError(result.error);
+      setRowActionError(result.error.message || '削除に失敗しました。');
       return;
     }
     setData((current) => current.filter((item) => String(item.id) !== String(record.id)));
+    setSelectedIds((prev) => prev.filter((id) => id !== String(record.id)));
     setSuccessBanner(force ? `「${label}」を関連付け解除の上、完全削除しました。` : `「${label}」を削除しました。`);
     window.setTimeout(() => setSuccessBanner(null), 5000);
+  };
+
+  const handleBulkDelete = async () => {
+    if (selectedIds.length === 0) return;
+    const confirmMsg = `選択した ${selectedIds.length} 件のレコードを一括削除しますか？\n（関連するデータがある場合は安全に解除または除外されます）`;
+    if (!window.confirm(confirmMsg)) return;
+
+    setIsBulkDeleting(true);
+    setRowActionError(null);
+    const result = await bulkDeleteTableRecords(currentTable, selectedIds, { force: true });
+    setIsBulkDeleting(false);
+
+    if (result.error) {
+      setRowActionError(result.error.message);
+      return;
+    }
+
+    const count = result.successCount ?? selectedIds.length;
+    setData((current) => current.filter((item) => !selectedIds.includes(String(item.id))));
+    setSelectedIds([]);
+    setSuccessBanner(`${count} 件のレコードを一括削除しました。`);
+    window.setTimeout(() => setSuccessBanner(null), 5000);
+  };
+
+  const handleExecuteCleanDummy = async () => {
+    if (cleanDummyTargets.length === 0) return;
+    setIsCleaningDummy(true);
+    setRowActionError(null);
+    const result = await cleanDummyData(cleanDummyTargets);
+    setIsCleaningDummy(false);
+
+    if (!result.success) {
+      setRowActionError(result.error || 'ダミーデータ一括整理に失敗しました。');
+      return;
+    }
+
+    setIsCleanDummyModalOpen(false);
+    const deletedSummary = Object.entries(result.deleted || {})
+      .filter(([, count]) => count > 0)
+      .map(([table, count]) => `${table}: ${count}件`)
+      .join('、 ');
+
+    setSuccessBanner(`ダミーデータを安全に一括整理しました（${deletedSummary || '全対象 0件'}）。`);
+    window.setTimeout(() => setSuccessBanner(null), 6000);
+    await loadData();
   };
 
   const handleQuickPricingModelChange = async (product: any, newModel: string) => {
@@ -383,6 +439,20 @@ export const TableManager: React.FC<TableManagerProps> = ({
           </div>
         </div>
       )}
+      {rowActionError && (
+        <div className="rounded-xl border border-rose-200 bg-rose-50 p-4 text-rose-900 flex items-center justify-between gap-3 animate-fade-in shadow-xs">
+          <div className="flex items-center gap-2 text-xs">
+            <AlertCircle className="w-4 h-4 text-rose-600 shrink-0" />
+            <span className="font-semibold">{rowActionError}</span>
+          </div>
+          <button
+            onClick={() => setRowActionError(null)}
+            className="text-xs font-semibold text-rose-700 hover:text-rose-900 cursor-pointer"
+          >
+            閉じる
+          </button>
+        </div>
+      )}
       {/* Table Selector Sub-Bar */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-2">
         <div className="flex items-center gap-2">
@@ -404,6 +474,14 @@ export const TableManager: React.FC<TableManagerProps> = ({
               <span>見込み企業調査</span>
             </button>
           )}
+          <button
+            onClick={() => setIsCleanDummyModalOpen(true)}
+            className="px-3 py-1.5 rounded-md font-medium text-xs bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200 flex items-center gap-1.5 transition-colors cursor-pointer shadow-2xs"
+            title="ダミー・テストデータを安全に一括整理"
+          >
+            <Trash2 className="w-3.5 h-3.5 text-rose-600" />
+            <span>ダミーデータ整理</span>
+          </button>
           <button
             onClick={loadData}
             disabled={loading}
@@ -849,6 +927,21 @@ export const TableManager: React.FC<TableManagerProps> = ({
               <table className="w-full text-left text-xs">
                 <thead className="bg-slate-50/80 text-slate-600 font-semibold text-[11px] tracking-wider border-b border-slate-200">
                   <tr>
+                    <th className="py-3 px-3 text-center w-10">
+                      <input
+                        type="checkbox"
+                        checked={filteredData.length > 0 && selectedIds.length === filteredData.length}
+                        onChange={(e) => {
+                          if (e.target.checked) {
+                            setSelectedIds(filteredData.map((d) => String(d.id)));
+                          } else {
+                            setSelectedIds([]);
+                          }
+                        }}
+                        aria-label="全選択"
+                        className="rounded border-slate-300 text-purple-600 focus:ring-purple-500 cursor-pointer"
+                      />
+                    </th>
                     {currentTable === 'products' && (
                       <th className="py-3 px-3 text-center w-12 whitespace-nowrap" title="ドラッグで並び替え">
                         <span className="flex items-center justify-center gap-0.5 text-[11px] text-purple-600 font-semibold">
@@ -899,11 +992,30 @@ export const TableManager: React.FC<TableManagerProps> = ({
                       } : undefined}
                       onClick={() => handleOpenDetail(item)}
                       className={`hover:bg-purple-50/40 cursor-pointer transition-colors group ${
+                        selectedIds.includes(String(item.id)) ? 'bg-purple-50/60' : ''
+                      } ${
                         draggedProductId === String(item.id) ? 'opacity-40 bg-slate-100' : ''
                       } ${
                         dragOverProductId === String(item.id) ? 'border-t-2 border-purple-500 bg-purple-50' : ''
                       }`}
                     >
+                      <td className="py-3 px-3 text-center w-10" onClick={(e) => e.stopPropagation()}>
+                        <input
+                          type="checkbox"
+                          checked={selectedIds.includes(String(item.id))}
+                          onChange={(e) => {
+                            e.stopPropagation();
+                            const sId = String(item.id);
+                            if (e.target.checked) {
+                              setSelectedIds((prev) => [...prev, sId]);
+                            } else {
+                              setSelectedIds((prev) => prev.filter((id) => id !== sId));
+                            }
+                          }}
+                          aria-label={`選択 ${item.id}`}
+                          className="rounded border-slate-300 text-purple-600 focus:ring-purple-500 cursor-pointer"
+                        />
+                      </td>
                       {currentTable === 'products' && (
                         <td
                           className="py-3 px-2 text-center cursor-grab active:cursor-grabbing text-slate-400 hover:text-purple-600"
@@ -1374,6 +1486,113 @@ export const TableManager: React.FC<TableManagerProps> = ({
           onSuccess={handleTransitionSuccess}
           onViewExistingCustomer={handleViewExistingCustomer}
         />
+      )}
+
+      {/* Floating Bulk Actions Bar */}
+      {selectedIds.length > 0 && (
+        <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-40 bg-slate-900 text-white px-5 py-3 rounded-2xl shadow-2xl flex items-center gap-4 animate-fade-in border border-slate-700">
+          <div className="text-xs font-semibold">
+            <span className="text-purple-400 font-bold">{selectedIds.length}</span> 件を選択中
+          </div>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={handleBulkDelete}
+              disabled={isBulkDeleting}
+              className="px-3 py-1.5 bg-rose-600 hover:bg-rose-700 text-white rounded-lg text-xs font-bold transition flex items-center gap-1.5 cursor-pointer disabled:opacity-50"
+            >
+              <Trash2 className="w-3.5 h-3.5" />
+              <span>{isBulkDeleting ? '削除中...' : '選択したレコードを一括削除'}</span>
+            </button>
+            <button
+              onClick={() => setSelectedIds([])}
+              className="px-2.5 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-lg text-xs transition cursor-pointer"
+            >
+              選択解除
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Clean Dummy Data Modal */}
+      {isCleanDummyModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/70 p-4 backdrop-blur-xs animate-fade-in">
+          <div className="bg-white rounded-2xl max-w-lg w-full p-6 shadow-2xl border border-slate-200 space-y-4">
+            <div className="flex items-center justify-between pb-3 border-b border-slate-100">
+              <div className="flex items-center gap-2.5">
+                <div className="w-9 h-9 rounded-xl bg-rose-100 text-rose-600 flex items-center justify-center shrink-0">
+                  <Trash2 className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="font-bold text-slate-900 text-base">ダミー・テストデータの一括整理</h3>
+                  <p className="text-xs text-slate-500">外部キー制約を考慮し、依存関係の深い順に安全に一括削除します</p>
+                </div>
+              </div>
+              <button
+                onClick={() => setIsCleanDummyModalOpen(false)}
+                className="text-slate-400 hover:text-slate-600 p-1 cursor-pointer"
+              >
+                ×
+              </button>
+            </div>
+
+            <div className="space-y-2 text-xs text-slate-700 bg-slate-50 p-3.5 rounded-xl border border-slate-200">
+              <p className="font-semibold text-slate-800 mb-1">削除する対象カテゴリを選択してください：</p>
+              {[
+                { key: 'prospects', label: '見込み企業リスト (prospects)' },
+                { key: 'leads', label: 'リード・反響一覧 (leads)' },
+                { key: 'deals', label: '商談パイプライン (deals)' },
+                { key: 'customers', label: '顧客・契約・請求書・送付書類 (customers, contracts, invoices)' },
+                { key: 'companies', label: '法人マスタ・連絡先 (companies, contacts)' },
+              ].map((item) => (
+                <label key={item.key} className="flex items-center gap-2.5 p-1.5 hover:bg-white rounded cursor-pointer transition">
+                  <input
+                    type="checkbox"
+                    checked={cleanDummyTargets.includes(item.key)}
+                    onChange={(e) => {
+                      if (e.target.checked) {
+                        setCleanDummyTargets([...cleanDummyTargets, item.key]);
+                      } else {
+                        setCleanDummyTargets(cleanDummyTargets.filter((k) => k !== item.key));
+                      }
+                    }}
+                    className="rounded border-slate-300 text-purple-600 focus:ring-purple-500 cursor-pointer"
+                  />
+                  <span className="font-medium text-slate-800">{item.label}</span>
+                </label>
+              ))}
+              <div className="text-[11px] text-amber-700 bg-amber-50 p-2.5 rounded-lg border border-amber-200 mt-2">
+                ※ 「商品マスタ」や「LINE設定・テンプレート」は保護され削除されません。
+              </div>
+            </div>
+
+            <div className="flex items-center justify-end gap-2 pt-2">
+              <button
+                onClick={() => setIsCleanDummyModalOpen(false)}
+                disabled={isCleaningDummy}
+                className="px-4 py-2 border border-slate-200 hover:bg-slate-50 rounded-lg text-xs font-semibold text-slate-700 cursor-pointer"
+              >
+                キャンセル
+              </button>
+              <button
+                onClick={handleExecuteCleanDummy}
+                disabled={isCleaningDummy || cleanDummyTargets.length === 0}
+                className="px-4 py-2 bg-rose-600 hover:bg-rose-700 text-white rounded-lg text-xs font-bold flex items-center gap-1.5 cursor-pointer transition shadow-xs disabled:opacity-50"
+              >
+                {isCleaningDummy ? (
+                  <>
+                    <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                    <span>整理実行中...</span>
+                  </>
+                ) : (
+                  <>
+                    <Trash2 className="w-3.5 h-3.5" />
+                    <span>選択カテゴリを一括削除</span>
+                  </>
+                )}
+              </button>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );
