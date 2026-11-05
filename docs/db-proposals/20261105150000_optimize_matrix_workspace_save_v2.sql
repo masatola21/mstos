@@ -4,9 +4,9 @@
 --              with differential UPSERT, explicit row-level locking (FOR UPDATE),
 --              and conditional updates.
 --
--- 【重要：未適用注記】
--- 本ファイルは最適化設計案であり、本番環境・ステージング環境のいずれのDBにも
--- 適用されていません（レビュー・検証用）。
+-- 【未検証の設計案】
+-- 本ファイルは未検証の設計案です。supabase/migrations/ に戻す前にステージングで並行保存・削除のテストを行うこと。
+-- 本番環境・ステージング環境のいずれのDBにも適用されていません（レビュー・検証用）。
 --
 -- 【トリガー発火に関する挙動変更の注記】
 -- 本マイグレーションでは、customer_invoices および customer_contracts の UPSERT において
@@ -49,6 +49,8 @@ BEGIN
   WHERE user_id = p_user_id
   FOR UPDATE;
 
+  -- 【要検討1】p_expected_updated_at が NULL で sync_state の行が存在する場合も、WORKSPACE_CONFLICT にする案
+  -- （例: IF v_current_updated_at IS NOT NULL AND (p_expected_updated_at IS NULL OR v_current_updated_at IS DISTINCT FROM p_expected_updated_at) THEN ...）
   IF v_current_updated_at IS NOT NULL AND p_expected_updated_at IS NOT NULL THEN
     IF v_current_updated_at IS DISTINCT FROM p_expected_updated_at THEN
       RAISE EXCEPTION 'WORKSPACE_CONFLICT' USING ERRCODE = '40001';
@@ -225,6 +227,8 @@ BEGIN
   END IF;
 
   -- 10. sync_state の updated_at 更新
+  -- 【要検討2】行が実際に変更されたときだけ sync_state.updated_at を更新する案（偽の競合の削減）
+  -- （例: UPSERT / DELETE で実変更があった行数をカウントし、実変更ゼロなら updated_at を更新せず既存の値を返す案）
   INSERT INTO public.mst_matrix_workspace_sync_state (user_id, updated_at)
   VALUES (p_user_id, now())
   ON CONFLICT (user_id) DO UPDATE SET updated_at = now()
@@ -234,4 +238,7 @@ BEGIN
 END;
 $$;
 
+-- 【要検討3: 権限明示的剥奪案】
+-- REVOKE EXECUTE ON FUNCTION public.mst_save_matrix_workspace(uuid, jsonb, jsonb, jsonb, jsonb, jsonb, jsonb, timestamptz, text[], text[]) FROM PUBLIC;
+-- REVOKE EXECUTE ON FUNCTION public.mst_save_matrix_workspace(uuid, jsonb, jsonb, jsonb, jsonb, jsonb, jsonb, timestamptz, text[], text[]) FROM anon;
 GRANT EXECUTE ON FUNCTION public.mst_save_matrix_workspace(uuid, jsonb, jsonb, jsonb, jsonb, jsonb, jsonb, timestamptz, text[], text[]) TO authenticated;
