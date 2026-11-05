@@ -8,12 +8,19 @@ export interface CoordinatorListener {
   onMergedData?: (mergedData: WorkspaceData, savingData: WorkspaceData) => void;
 }
 
+export type WorkspaceSaveFn = (
+  userId: string,
+  data: WorkspaceData,
+  options?: { maxConflictRetries?: number }
+) => Promise<SaveWorkspaceResult>;
+
 interface QueuedDeferred {
   resolve: (result: SaveWorkspaceResult) => void;
   reject: (error: unknown) => void;
 }
 
 export class WorkspaceSaveCoordinator {
+  private saveFn: WorkspaceSaveFn;
   private isSaving = false;
   private pendingUserId: string | null = null;
   private pendingData: WorkspaceData | null = null;
@@ -24,6 +31,10 @@ export class WorkspaceSaveCoordinator {
   private syncError: string = '';
   private isConflictStopped = false;
   private listeners = new Set<CoordinatorListener>();
+
+  constructor(saveFn: WorkspaceSaveFn = saveWorkspaceData) {
+    this.saveFn = saveFn;
+  }
 
   public setInitialSavedSnapshot(data: WorkspaceData) {
     try {
@@ -188,7 +199,7 @@ export class WorkspaceSaveCoordinator {
     this.pendingDeferreds = [];
 
     try {
-      const result = await saveWorkspaceData(userId, data, { maxConflictRetries: 2 });
+      const result = await this.saveFn(userId, data, { maxConflictRetries: 2 });
 
       // 保存成功時のみ lastSavedSnapshot を更新
       try {

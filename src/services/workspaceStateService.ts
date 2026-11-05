@@ -189,6 +189,10 @@ async function loadRelationalMatrixWorkspace(userId: string): Promise<Relational
 async function saveRelationalMatrixWorkspace(userId: string, data: WorkspaceData): Promise<void> {
   const supabase = getSupabaseClient();
   const pendingDeletions = matrixService.getPendingDeletions(userId);
+  const sentContractIds = [...pendingDeletions.contracts];
+  const sentInvoiceIds = [...pendingDeletions.invoices];
+  const sentProductIds = [...pendingDeletions.products];
+
   const { data: updatedAt, error } = await supabase.rpc('mst_save_matrix_workspace', {
     p_user_id: userId,
     p_products: data.products,
@@ -198,12 +202,16 @@ async function saveRelationalMatrixWorkspace(userId: string, data: WorkspaceData
     p_custom_lists: data.customLists,
     p_marketing_scenarios: data.marketingScenarios,
     p_expected_updated_at: matrixWorkspaceUpdatedAtByUser.get(userId) || null,
-    p_deleted_contract_ids: [...pendingDeletions.contracts],
-    p_deleted_invoice_ids: [...pendingDeletions.invoices],
+    p_deleted_contract_ids: sentContractIds,
+    p_deleted_invoice_ids: sentInvoiceIds,
   });
   if (error) throw error;
   if (typeof updatedAt === 'string') matrixWorkspaceUpdatedAtByUser.set(userId, updatedAt);
-  matrixService.clearPendingDeletions(userId);
+  matrixService.clearPendingDeletionsByIds(userId, {
+    contracts: sentContractIds,
+    invoices: sentInvoiceIds,
+    products: sentProductIds,
+  });
 }
 
 const WORKSPACE_STATE_TABLE = 'mst_workspace_state';
