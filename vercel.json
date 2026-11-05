@@ -1,28 +1,28 @@
 {
-  "$schema": "https://openapi.vercel.sh/vercel.json",
-  "framework": "vite",
-  "buildCommand": "npm run build",
-  "outputDirectory": "dist",
-  "rewrites": [
+  "version": 2,
+  "builds": [
     {
-      "source": "/health",
-      "destination": "/api/index"
+      "src": "server.ts",
+      "use": "@vercel/node"
     },
     {
-      "source": "/healthz",
-      "destination": "/api/index"
+      "src": "package.json",
+      "use": "@vercel/static-build",
+      "config": { "distDir": "dist" }
+    }
+  ],
+  "routes": [
+    {
+      "src": "/api/(.*)",
+      "dest": "server.ts"
     },
     {
-      "source": "/api",
-      "destination": "/api/index"
+      "src": "/health",
+      "dest": "server.ts"
     },
     {
-      "source": "/api/:path*",
-      "destination": "/api/index"
-    },
-    {
-      "source": "/((?!api/|health|healthz).*)",
-      "destination": "/index.html"
+      "src": "/(.*)",
+      "dest": "/$1"
     }
   ]
 }
