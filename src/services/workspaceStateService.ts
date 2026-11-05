@@ -326,7 +326,12 @@ function mergeRecordsByKey<T>(
   const baselineById = new Map(baselineRecords.map((record) => [getKey(record), record]));
   const merged = new Map(remoteById);
 
-  // Apply local deletions only when the cloud record is still unchanged from the last synchronized snapshot.
+  // =========================================================================================
+  // 【仕様明記 1: ベースライン欠落時のローカル削除の扱い】
+  // baselineRecords が存在しない（空の）場合、削除判定のループが走らないため、
+  // ローカルで削除されたレコードは remoteById（リモート側）が優先維持されます。
+  // （将来の改善提案: ベースライン欠落時でも明示的な pendingDeletions があればそれを優先適用する）
+  // =========================================================================================
   baselineRecords.forEach((baseline) => {
     const key = getKey(baseline);
     if (localById.has(key)) return;
@@ -345,7 +350,13 @@ function mergeRecordsByKey<T>(
       return;
     }
 
-    // Both copies changed since the baseline. Keep the newer edit when both records expose updatedAt.
+    // =========================================================================================
+    // 【仕様明記 2: updatedAt を持たないレコードの競合時挙動】
+    // ローカル・リモート双方が baseline から変更され、かつ両者が updatedAt を持たない（または解析不能な）場合、
+    // localTime > remoteTime の条件が不成立となり、リモートレコード（remote）が暗黙的に優先採用されます。
+    // （将来の改善提案: updatedAt を持たないエンティティに作成/更新タイムスタンプを付与するか、
+    //   フィールド単位の3-wayマージを導入してローカル編集の消失を防ぐ）
+    // =========================================================================================
     const localUpdatedAt = (local as T & { updatedAt?: unknown }).updatedAt;
     const remoteUpdatedAt = (remote as T & { updatedAt?: unknown }).updatedAt;
     const localTime = typeof localUpdatedAt === 'number' ? localUpdatedAt : typeof localUpdatedAt === 'string' ? Date.parse(localUpdatedAt) : NaN;
@@ -554,7 +565,23 @@ export async function loadOrMigrateWorkspaceData(userId: string): Promise<Worksp
   merged.invoices = merged.invoices.filter((record) => !pendingDeletions.invoices.has(record.id));
 
   applyWorkspaceData(merged);
-  await saveWorkspaceData(userId, merged);
+
+  // 指摘3対応: 読み込み時の無条件保存を廃止。
+  // クラウド（workspace_state, AI operations, Matrix workspace）のいずれにもデータが存在しない初回移行時のみ保存する。
+  const hasCloudData = Boolean(row || relationalAI || relationalMatrix);
+  if (!hasCloudData) {
+    // 初回移行：読み込み経路で競合が起きた場合は自動マージせず conflict として扱う（maxConflictRetries: 0）
+    await saveWorkspaceData(userId, merged, { maxConflictRetries: 0 });
+  } else {
+    // すでにクラウドにデータが存在する場合、読み込み時の無条件保存は行わず、
+    // ローカルの同期ベースラインを更新する（updated_atの不要な更新を防止）。
+    try {
+      localStorage.setItem(`${LAST_SYNC_PREFIX}${userId}`, JSON.stringify(merged));
+    } catch (storageError) {
+      console.warn('Could not update the local workspace sync baseline after load:', storageError);
+    }
+  }
+
   return merged;
 }
 
@@ -649,6 +676,8 @@ export async function saveWorkspaceData(
       if (isWorkspaceConflictError(err) && retryCount < maxRetries) {
         retryCount++;
         console.warn(`[WorkspaceSync] WORKSPACE_CONFLICT detected. Attempting 3-way auto-merge (attempt ${retryCount}/${maxRetries})...`);
+        // 指摘2対応: 指数バックオフ（1回目250ms, 2回目500ms）を入れてリトライの負荷を有界化
+        await new Promise((resolve) => setTimeout(resolve, retryCount * 250));
         const result = await resolveMatrixConflictAndMerge(userId, currentData);
         currentData = result.mergedData;
         wasMerged = true;

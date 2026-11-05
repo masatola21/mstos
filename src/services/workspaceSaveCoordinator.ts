@@ -5,7 +5,7 @@ export type WorkspaceSyncStatus = 'loading' | 'saving' | 'saved' | 'error' | 'co
 
 export interface CoordinatorListener {
   onStatusChange?: (status: WorkspaceSyncStatus, errorMessage?: string) => void;
-  onMergedData?: (mergedData: WorkspaceData) => void;
+  onMergedData?: (mergedData: WorkspaceData, savingData: WorkspaceData) => void;
 }
 
 interface QueuedDeferred {
@@ -18,10 +18,11 @@ class WorkspaceSaveCoordinator {
   private pendingUserId: string | null = null;
   private pendingData: WorkspaceData | null = null;
   private pendingDeferreds: QueuedDeferred[] = [];
-  private debounceTimer: number | null = null;
+  private debounceTimer: ReturnType<typeof setTimeout> | null = null;
   private lastSavedSnapshot: string = '';
   private syncStatus: WorkspaceSyncStatus = 'loading';
   private syncError: string = '';
+  private isConflictStopped = false;
   private listeners = new Set<CoordinatorListener>();
 
   public setInitialSavedSnapshot(data: WorkspaceData) {
@@ -30,6 +31,7 @@ class WorkspaceSaveCoordinator {
     } catch {
       this.lastSavedSnapshot = '';
     }
+    this.isConflictStopped = false;
     this.setStatus('saved');
   }
 
@@ -39,6 +41,35 @@ class WorkspaceSaveCoordinator {
 
   public getError(): string {
     return this.syncError;
+  }
+
+  public isStopped(): boolean {
+    return this.isConflictStopped;
+  }
+
+  /**
+   * ログアウトやユーザー切替時の完全リセット
+   */
+  public reset(): void {
+    this.cancelDebounce();
+    this.pendingUserId = null;
+    this.pendingData = null;
+    this.pendingDeferreds.forEach((d) => d.reject(new Error('User logged out or switched')));
+    this.pendingDeferreds = [];
+    this.lastSavedSnapshot = '';
+    this.syncStatus = 'loading';
+    this.syncError = '';
+    this.isConflictStopped = false;
+  }
+
+  /**
+   * ユーザーの再同期操作等で競合停止を解除する
+   */
+  public resetConflict(): void {
+    this.isConflictStopped = false;
+    this.syncStatus = 'saved';
+    this.syncError = '';
+    this.listeners.forEach((l) => l.onStatusChange?.('saved', ''));
   }
 
   public addListener(listener: CoordinatorListener): () => void {
@@ -54,25 +85,31 @@ class WorkspaceSaveCoordinator {
     this.listeners.forEach((l) => l.onStatusChange?.(status, errorMessage));
   }
 
-  private notifyMergedData(mergedData: WorkspaceData) {
-    this.listeners.forEach((l) => l.onMergedData?.(mergedData));
+  private notifyMergedData(mergedData: WorkspaceData, savingData: WorkspaceData) {
+    this.listeners.forEach((l) => l.onMergedData?.(mergedData, savingData));
   }
 
   /**
    * 自動保存用：debounceタイマーを経て保存をリクエストする。
-   * 連続したstate更新があっても、タイマーが発火するまでJSON.stringifyなどの重い比較は行わない。
+   * 競合発生中（conflictStopped）は自動保存を停止（有界化）。
    */
   public requestDebouncedSave(
     userId: string,
     getData: () => WorkspaceData,
     delayMs = 700
   ): void {
-    if (this.debounceTimer !== null) {
-      window.clearTimeout(this.debounceTimer);
+    // 競合停止中なら自動保存を行わない
+    if (this.isConflictStopped) {
+      return;
     }
 
-    this.debounceTimer = window.setTimeout(() => {
+    if (this.debounceTimer !== null) {
+      clearTimeout(this.debounceTimer);
+    }
+
+    this.debounceTimer = setTimeout(() => {
       this.debounceTimer = null;
+      if (this.isConflictStopped) return;
       const data = getData();
       this.enqueueSave(userId, data);
     }, delayMs);
@@ -87,7 +124,7 @@ class WorkspaceSaveCoordinator {
     data: WorkspaceData
   ): Promise<SaveWorkspaceResult> {
     if (this.debounceTimer !== null) {
-      window.clearTimeout(this.debounceTimer);
+      clearTimeout(this.debounceTimer);
       this.debounceTimer = null;
     }
 
@@ -101,6 +138,11 @@ class WorkspaceSaveCoordinator {
     data: WorkspaceData,
     deferred?: QueuedDeferred
   ): void {
+    if (this.isConflictStopped) {
+      deferred?.reject(new Error('WORKSPACE_CONFLICT: 自動保存は停止されています。再読み込みしてください。'));
+      return;
+    }
+
     // 変更があるか確認（ただし未反映の削除がある場合は必ず保存）
     let snapshot = '';
     try {
@@ -157,9 +199,9 @@ class WorkspaceSaveCoordinator {
 
       this.setStatus('saved');
 
-      // 競合自動マージが発生した場合はUIに最新データを通知
+      // 競合自動マージが発生した場合は、マージ前（data）とマージ後（result.savedData）の両方をUIに通知
       if (result.wasMerged) {
-        this.notifyMergedData(result.savedData);
+        this.notifyMergedData(result.savedData, data);
       }
 
       currentDeferreds.forEach((d) => d.resolve(result));
@@ -170,6 +212,9 @@ class WorkspaceSaveCoordinator {
       const errorMessage = (error as { message?: string })?.message || '';
 
       if (isWorkspaceConflictError(error)) {
+        // 自動マージ上限を超えて競合が解消しなかった場合は自動保存を停止（有界化）
+        this.isConflictStopped = true;
+        this.pendingData = null; // 保留中のリクエストも破棄
         this.setStatus('conflict', '他の端末で更新されています。再読み込みしてください');
       } else {
         const errorDetails = `${errorMessage} ${(error as { details?: string })?.details || ''} ${(error as { hint?: string })?.hint || ''}`;
@@ -186,8 +231,8 @@ class WorkspaceSaveCoordinator {
     } finally {
       this.isSaving = false;
 
-      // 実行中に新たな変更がペンディングされていた場合、最新データで直ちに次を実行
-      if (this.pendingData && this.pendingUserId) {
+      // 競合停止されていない場合で、実行中に新たな変更がペンディングされていたら次を実行
+      if (!this.isConflictStopped && this.pendingData && this.pendingUserId) {
         const nextUserId = this.pendingUserId;
         const nextData = this.pendingData;
         this.pendingUserId = null;
@@ -200,7 +245,6 @@ class WorkspaceSaveCoordinator {
           nextSnapshot = '';
         }
 
-        // 次の保存を再帰呼び出し
         this.executeSave(nextUserId, nextData, nextSnapshot);
       }
     }
@@ -208,7 +252,7 @@ class WorkspaceSaveCoordinator {
 
   public cancelDebounce() {
     if (this.debounceTimer !== null) {
-      window.clearTimeout(this.debounceTimer);
+      clearTimeout(this.debounceTimer);
       this.debounceTimer = null;
     }
   }

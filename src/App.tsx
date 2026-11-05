@@ -313,6 +313,48 @@ async function loadTaskRelatedContext(task: TaskItem): Promise<string> {
   }
 }
 
+/**
+ * 指摘1対応: 競合マージ時に保存中のユーザー編集を消失させないマージヘルパー
+ * 保存開始時(saving)から現在(current)までに変更されたローカル編集を最優先し、
+ * 保存中に変更されていない項目のみマージ結果(merged)を取り込む。
+ */
+function mergeCollectionPreservingUserEdits<T extends { id: string }>(
+  currentState: T[],
+  savingState: T[],
+  mergedState: T[],
+): T[] {
+  const savingById = new Map(savingState.map((r) => [r.id, r]));
+  const mergedById = new Map(mergedState.map((r) => [r.id, r]));
+  const result: T[] = [];
+  const processedIds = new Set<string>();
+
+  for (const current of currentState) {
+    processedIds.add(current.id);
+    const saving = savingById.get(current.id);
+    const merged = mergedById.get(current.id);
+
+    if (!saving) {
+      // 保存開始後にユーザーが新規追加したレコード -> currentを最優先
+      result.push(current);
+    } else if (JSON.stringify(current) !== JSON.stringify(saving)) {
+      // 保存中にユーザーがローカルで編集したレコード -> currentを最優先
+      result.push(current);
+    } else if (merged) {
+      // 保存中にローカル変更なし -> リモートとのマージ結果を採用
+      result.push(merged);
+    }
+  }
+
+  // リモートで新規追加されたレコード（savingには無かったがmergedにはある、かつcurrentにもまだ無い）
+  for (const merged of mergedState) {
+    if (!processedIds.has(merged.id)) {
+      result.push(merged);
+    }
+  }
+
+  return result;
+}
+
 function AppContent() {
   const { user, isLoading } = useAuth();
   const [currentTab, setCurrentTab] = useState<UnifiedNavTab>('mst_dashboard');
@@ -353,8 +395,7 @@ function AppContent() {
   const [workspaceReady, setWorkspaceReady] = useState(false);
   const [workspaceSyncStatus, setWorkspaceSyncStatus] = useState<'loading' | 'saving' | 'saved' | 'error' | 'conflict'>('loading');
   const [workspaceSaveError, setWorkspaceSaveError] = useState('');
-  const lastSavedWorkspaceRef = useRef('');
-  const workspaceSaveRevisionRef = useRef(0);
+
   const workspaceSyncEnabledRef = useRef(false);
 
   // 保存コーディネーターのステータス変化とマージイベントを監視
@@ -365,16 +406,20 @@ function AppContent() {
         if (errorMessage !== undefined) {
           setWorkspaceSaveError(errorMessage);
         }
+        // 指摘2: 競合発生時は自動同期フラグを停止
+        if (status === 'conflict') {
+          workspaceSyncEnabledRef.current = false;
+        }
       },
-      onMergedData: (mergedData) => {
-        // 競合解消マージでリモートから取り込まれた最新データをReact stateに同期
-        console.info('[App] Synchronizing React states with 3-way merged workspace data');
-        setProducts(mergedData.products || []);
-        setContracts(mergedData.contracts || []);
-        setInvoices(mergedData.invoices || []);
-        setTools(mergedData.tools || []);
-        setCustomLists(mergedData.customLists || []);
-        setMarketingScenarios(mergedData.marketingScenarios || []);
+      onMergedData: (mergedData, savingData) => {
+        // 指摘1: 保存中のローカル編集を優先維持しながら最新マージ結果を反映
+        console.info('[App] Synchronizing React states with 3-way merged workspace data (preserving active edits)');
+        setProducts((current) => mergeCollectionPreservingUserEdits(current, savingData.products || [], mergedData.products || []));
+        setContracts((current) => mergeCollectionPreservingUserEdits(current, savingData.contracts || [], mergedData.contracts || []));
+        setInvoices((current) => mergeCollectionPreservingUserEdits(current, savingData.invoices || [], mergedData.invoices || []));
+        setTools((current) => mergeCollectionPreservingUserEdits(current, savingData.tools || [], mergedData.tools || []));
+        setCustomLists((current) => mergeCollectionPreservingUserEdits(current, savingData.customLists || [], mergedData.customLists || []));
+        setMarketingScenarios((current) => mergeCollectionPreservingUserEdits(current, savingData.marketingScenarios || [], mergedData.marketingScenarios || []));
       },
     });
     return unsubscribe;
@@ -447,13 +492,19 @@ function AppContent() {
   // AI社長とMatrixのデータをユーザー単位でSupabaseに同期し、初回は既存LocalStorageを移行する。
   useEffect(() => {
     let cancelled = false;
+    // 指摘4対応: ユーザー切替・ログアウト時にコーディネーターを完全リセット
+    workspaceSaveCoordinator.reset();
     workspaceSyncEnabledRef.current = false;
-    workspaceSaveRevisionRef.current += 1;
     setWorkspaceReady(false);
     setWorkspaceSyncStatus('loading');
     setWorkspaceSaveError('');
 
-    if (!user) return () => { cancelled = true; };
+    if (!user) {
+      return () => {
+        cancelled = true;
+        workspaceSaveCoordinator.reset();
+      };
+    }
 
     loadOrMigrateWorkspaceData(user.id)
       .then((data) => {
@@ -484,7 +535,6 @@ function AppContent() {
         const initialChatKey = `${nextActiveCharacterId}:${activeWorkModeId}`;
         const savedChat = data.workModeHistories?.[initialChatKey] || loadChatHistory(initialChatKey);
         setMessages(savedChat.length ? savedChat : activeWorkModeId === 'president' ? loadChatHistory(nextActiveCharacterId) : []);
-        lastSavedWorkspaceRef.current = JSON.stringify(data);
         workspaceSaveCoordinator.setInitialSavedSnapshot(data);
         workspaceSyncEnabledRef.current = true;
         setWorkspaceSyncStatus('saved');
@@ -508,7 +558,10 @@ function AppContent() {
         setWorkspaceReady(true);
       });
 
-    return () => { cancelled = true; };
+    return () => {
+      cancelled = true;
+      workspaceSaveCoordinator.reset();
+    };
   }, [user?.id]);
 
   // 保存最適化：タイマーが発火するまで巨大オブジェクト構築・JSON.stringifyを行わない
@@ -541,6 +594,11 @@ function AppContent() {
       }),
       700
     );
+
+    // 指摘4: アンマウント時・依存変更時にタイマークリーンアップ
+    return () => {
+      workspaceSaveCoordinator.cancelDebounce();
+    };
   }, [
     user?.id,
     workspaceReady,
