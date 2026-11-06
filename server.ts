@@ -1633,7 +1633,16 @@ async function processLineFollowWelcome(event: any, contact: any, eventId: strin
     };
     inboxBody = '[友だち追加ウェルカムメッセージ: 大橋真人よりご挨拶・選択肢Flex]';
   }
-
+  // 送信前の最終検証: Flexの contents が bubble/carousel でなければ固定版に差し替える
+  if (lineMessage?.type === 'flex') {
+    const t = lineMessage.contents?.type;
+    if (t !== 'bubble' && t !== 'carousel') {
+      console.warn('[LineWelcome] Invalid flex contents.type =', t, '- falling back to default welcome flex');
+      const d = buildDefaultWelcomeFlexMessage();
+      lineMessage = { type: 'flex', altText: d.altText, contents: d.contents };
+      inboxBody = '[友だち追加ウェルカムメッセージ: 不正なFlexのため固定版を送信]';
+    }
+  }
   // 送信 (replyToken があれば reply、無ければ push)
   try {
     let sentOk = false;
