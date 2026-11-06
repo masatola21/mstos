@@ -61,22 +61,23 @@ export const OwnMediaWorkspace: React.FC<{
   const [cmsResult, setCmsResult] = useState<{ id: string; success: boolean; message: string; url?: string } | null>(null);
 
   // 自社公式HP / オウンドメディア URL設定（localStorage & Supabase連動）
+  // メイン公式URL: https://corp.mstcorp.info / https://corp.mstcorp.info/media
   const [customSiteUrl, setCustomSiteUrl] = useState<string>(() => {
     if (typeof window !== 'undefined') {
       const saved = localStorage.getItem('mst_official_site_url');
-      if (saved && !saved.includes('corp.mstcorp.info')) return saved;
-      return 'https://mstcorp.info';
+      if (saved && saved.startsWith('http')) return saved;
+      return 'https://corp.mstcorp.info';
     }
-    return 'https://mstcorp.info';
+    return 'https://corp.mstcorp.info';
   });
 
   const [customMediaUrl, setCustomMediaUrl] = useState<string>(() => {
     if (typeof window !== 'undefined') {
       const saved = localStorage.getItem('mst_official_media_url');
-      if (saved && !saved.includes('corp.mstcorp.info')) return saved;
-      return 'https://mstcorp.info/media';
+      if (saved && saved.startsWith('http')) return saved;
+      return 'https://corp.mstcorp.info/media';
     }
-    return 'https://mstcorp.info/media';
+    return 'https://corp.mstcorp.info/media';
   });
 
   const [showUrlModal, setShowUrlModal] = useState<boolean>(false);
@@ -139,13 +140,13 @@ export const OwnMediaWorkspace: React.FC<{
     const rowsData = (data || []) as Row[];
     setRows(rowsData);
 
-    // 保存済みの公式メディアレコードがあればURLを同期（古いcorp.mstcorp.infoはmstcorp.infoへ優先移行）
+    // 保存済みの公式メディアレコードがあればURLを同期
     const officialRow = rowsData.find((r) => r.record_type === 'media' && (r.id === 'mst_official_corporate_hp' || (r.payload?.cms || '').includes('Astro') || (r.payload?.url || '').includes('mstcorp.info')));
-    if (officialRow?.payload?.url && !officialRow.payload.url.includes('corp.mstcorp.info')) {
+    if (officialRow?.payload?.url) {
       setCustomSiteUrl(officialRow.payload.url);
       if (typeof window !== 'undefined') localStorage.setItem('mst_official_site_url', officialRow.payload.url);
     }
-    if (officialRow?.payload?.mediaUrl && !officialRow.payload.mediaUrl.includes('corp.mstcorp.info')) {
+    if (officialRow?.payload?.mediaUrl) {
       setCustomMediaUrl(officialRow.payload.mediaUrl);
       if (typeof window !== 'undefined') localStorage.setItem('mst_official_media_url', officialRow.payload.mediaUrl);
     }
@@ -162,10 +163,10 @@ export const OwnMediaWorkspace: React.FC<{
     let cleanMediaUrl = tempMediaUrl.trim();
     let cleanSiteUrl = tempSiteUrl.trim();
     if (!cleanMediaUrl) {
-      cleanMediaUrl = 'https://mstcorp.info/media';
+      cleanMediaUrl = 'https://corp.mstcorp.info/media';
     }
     if (!cleanSiteUrl) {
-      cleanSiteUrl = 'https://mstcorp.info';
+      cleanSiteUrl = 'https://corp.mstcorp.info';
     }
     if (!cleanMediaUrl.startsWith('http://') && !cleanMediaUrl.startsWith('https://')) {
       cleanMediaUrl = `https://${cleanMediaUrl}`;
@@ -248,17 +249,10 @@ export const OwnMediaWorkspace: React.FC<{
     updated_at: new Date().toISOString(),
   }), [customSiteUrl, customMediaUrl]);
 
+  // ユーザー指示に基づき、他のメディアは全統合・排除し、メインの公式自社メディア1本に集約
   const media = useMemo(() => {
-    const list = rows.filter((r) => r.record_type === 'media');
-    if (list.length === 0) {
-      return [DEFAULT_OFFICIAL_MEDIA];
-    }
-    const hasOfficial = list.some((m) => m.id === 'mst_official_corporate_hp' || (m.payload?.cms || '').includes('Astro') || (m.payload?.url || '').includes('mstcorp.info'));
-    if (!hasOfficial) {
-      return [DEFAULT_OFFICIAL_MEDIA, ...list];
-    }
-    return list;
-  }, [rows, DEFAULT_OFFICIAL_MEDIA]);
+    return [DEFAULT_OFFICIAL_MEDIA];
+  }, [DEFAULT_OFFICIAL_MEDIA]);
 
   const articles = useMemo(() => rows.filter((r) => r.record_type === 'article'), [rows]);
   const seoList = useMemo(() => rows.filter((r) => r.record_type === 'seo'), [rows]);
@@ -1665,9 +1659,8 @@ export const OwnMediaWorkspace: React.FC<{
               <label className="text-[11px] font-semibold text-slate-700">ワンクリック選択（プリセット候補）:</label>
               <div className="flex flex-wrap gap-1.5">
                 {[
-                  { site: 'https://mstcorp.info', media: 'https://mstcorp.info/media', label: 'mstcorp.info/media（公式本番メディア）' },
-                  { site: 'https://mstcorp.info', media: 'https://mstcorp.info', label: 'mstcorp.info（トップ直下）' },
-                  { site: 'https://corp.mstcorp.info', media: 'https://corp.mstcorp.info/media', label: 'corp.mstcorp.info/media（サブドメイン）' },
+                  { site: 'https://corp.mstcorp.info', media: 'https://corp.mstcorp.info/media', label: 'corp.mstcorp.info/media（公式本番メディア・メイン）' },
+                  { site: 'https://corp.mstcorp.info', media: 'https://corp.mstcorp.info', label: 'corp.mstcorp.info（トップ直下）' },
                 ].map((preset) => (
                   <button
                     key={preset.media}
@@ -1694,7 +1687,7 @@ export const OwnMediaWorkspace: React.FC<{
                   type="url"
                   value={tempMediaUrl}
                   onChange={(e) => setTempMediaUrl(e.target.value)}
-                  placeholder="例: https://mstcorp.info/media"
+                  placeholder="例: https://corp.mstcorp.info/media"
                   className="w-full rounded-xl border border-slate-300 bg-white px-3 py-2 text-xs text-slate-900 placeholder:text-slate-400 outline-none focus:border-purple-500 font-mono"
                 />
                 <p className="text-[10px] text-slate-500 mt-1">
@@ -1710,7 +1703,7 @@ export const OwnMediaWorkspace: React.FC<{
                   type="url"
                   value={tempSiteUrl}
                   onChange={(e) => setTempSiteUrl(e.target.value)}
-                  placeholder="例: https://mstcorp.info"
+                  placeholder="例: https://corp.mstcorp.info"
                   className="w-full rounded-xl border border-slate-300 bg-white px-3 py-2 text-xs text-slate-900 placeholder:text-slate-400 outline-none focus:border-purple-500 font-mono"
                 />
               </div>

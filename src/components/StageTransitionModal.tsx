@@ -253,13 +253,11 @@ export const StageTransitionModal: React.FC<StageTransitionModalProps> = ({
           customerRecordId = res.data?.id;
         }
 
-        // 商談ステータスを「成約」に更新
+        // 商談ステータスを「成約」に更新（updateRecord内部でexecuteDealWonAutomationが自動実行されます）
         if (sourceRecord?.id && sourceRecord.proposal_status !== '成約') {
           await updateRecord('deals', sourceRecord.id, { proposal_status: '成約' });
-        }
-
-        // 契約書下書き・初回請求書下書き・書類HTMLの一発自動生成を実行
-        if (sourceRecord?.id) {
+        } else if (sourceRecord?.id) {
+          // 既に成約ステータスだった場合は念のため直接自動起票を実行（冪等性ガード付き）
           await executeDealWonAutomation(sourceRecord.id);
         }
 

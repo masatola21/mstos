@@ -20,6 +20,9 @@ const defaultInvoiceDueDate = (date = new Date()) => {
   return `${year}-${month}-${day}`;
 };
 
+// 同時並行実行を防ぐインフライトMutexロック
+const inFlightDealLocks = new Set<string>();
+
 /**
  * 商談が成約（Won）になった際に、
  * ① 顧客レコード（customers）
@@ -28,14 +31,66 @@ const defaultInvoiceDueDate = (date = new Date()) => {
  * ④ 初回請求書レコード（customer_invoices - 書類ID・契約ID完全連結）
  * ⑤ 契約後サポート案件（customer_service_engagements - 工程マイルストーン付き）
  * を一括で自動生成・相互連携する
+ * ※ 同一商談に対する二重実行・二重起票（契約・請求書の重複）を防ぐべき冪等性を保証
  */
 export async function executeDealWonAutomation(dealId: string): Promise<DealWonResult> {
+  const safeDealId = String(dealId || '').trim();
+  if (!safeDealId) {
+    return { success: false, message: '商談IDが指定されていません。' };
+  }
+
+  // 既にこの商談の自動生成が実行中であれば重複実行をスキップ
+  if (inFlightDealLocks.has(safeDealId)) {
+    return {
+      success: true,
+      message: `商談（ID: ${safeDealId}）の成約自動処理は現在既にバックグラウンドで実行中です。二重起票を防止しました。`,
+    };
+  }
+
+  inFlightDealLocks.add(safeDealId);
+  try {
+    return await executeDealWonAutomationInternal(safeDealId);
+  } finally {
+    inFlightDealLocks.delete(safeDealId);
+  }
+}
+
+async function executeDealWonAutomationInternal(dealId: string): Promise<DealWonResult> {
   const supabase = getSupabase();
   if (!supabase) {
     return { success: false, message: 'Supabaseクライアントに接続できません。' };
   }
 
   try {
+    // 既存の契約レコードが既にこの商談で作成されているか確認（二重起票の完全防止）
+    const { data: existingContracts } = await supabase
+      .from('customer_contracts')
+      .select('id, document_id, company_id')
+      .eq('deal_id', dealId)
+      .limit(1);
+
+    if (existingContracts && existingContracts.length > 0) {
+      const existingContract = existingContracts[0];
+      const { data: existingInvoices } = await supabase
+        .from('customer_invoices')
+        .select('id')
+        .eq('contract_id', existingContract.id)
+        .limit(1);
+      const { data: existingEngagement } = await supabase
+        .from('customer_service_engagements')
+        .select('id')
+        .eq('contract_id', existingContract.id)
+        .limit(1);
+
+      return {
+        success: true,
+        contractId: existingContract.id,
+        invoiceId: existingInvoices?.[0]?.id,
+        engagementId: existingEngagement?.[0]?.id,
+        message: `商談（ID: ${dealId}）に対する契約書・請求書は既に作成済みです（二重生成をスキップしました）。`,
+      };
+    }
+
     // 1. 商談データの取得
     const { data: deal, error: dealError } = await supabase
       .from('deals')
