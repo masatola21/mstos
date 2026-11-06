@@ -1581,8 +1581,8 @@ async function processLineFollowWelcome(event: any, contact: any, eventId: strin
             usedFallback = true;
           } else {
             const altText = String(personalizedPayload.altText || '友だち追加ありがとうございます').slice(0, 400);
-            const contents = personalizedPayload.contents || (['bubble', 'carousel'].includes(personalizedPayload.type) ? personalizedPayload : null);
-            if (contents && typeof contents === 'object') {
+                        const contents = normalizeFlexContents(personalizedPayload);
+            if (contents) {
               lineMessage = { type: 'flex', altText, contents };
               inboxBody = `[ウェルカムFlexメッセージ: ${altText}]`;
             } else {
