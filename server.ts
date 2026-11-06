@@ -34,8 +34,7 @@ const port = process.env.PORT || 3000;
 const MAX_CHAT_CONTEXT_MESSAGES = 12;
 const MAX_CHAT_CONTEXT_CHARACTERS = 16000;
 
-// ↓ここから追加（または修正）↓
-// 全オリジンからの安全なアクセスを許可するCORS設定（HP・外部連携用）
+// 1. CORS設定（一番最初に書く）
 app.use((req, res, next) => {
   res.header('Access-Control-Allow-Origin', '*');
   res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, PATCH, DELETE, OPTIONS');
@@ -45,9 +44,17 @@ app.use((req, res, next) => {
   }
   next();
 });
-// ↑ここまで追加↑
 
-// ─── 緊急停止（キルスイッチ）キャッシュ＆ステータス確認 ───
+// 2. ★Supabaseの初期化（関数より先に定義する！）★
+const lineSupabaseUrl = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL || '';
+const lineServiceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || '';
+const lineChannelSecret = process.env.LINE_CHANNEL_SECRET || '';
+const lineChannelAccessToken = process.env.LINE_CHANNEL_ACCESS_TOKEN || '';
+const lineSupabase = lineSupabaseUrl && lineServiceRoleKey
+  ? createClient(lineSupabaseUrl, lineServiceRoleKey, { auth: { persistSession: false, autoRefreshToken: false } })
+  : null;
+
+// 3. 緊急停止（キルスイッチ）キャッシュ＆ステータス確認
 interface KillSwitchStatus {
   paused: boolean;
   reason: string;
@@ -100,18 +107,7 @@ async function getKillSwitchStatus(target: 'all' | 'ai' | 'send' | 'billing' = '
   }
 }
 
-
-
-
-const lineSupabaseUrl = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL || '';
-const lineServiceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || '';
-const lineChannelSecret = process.env.LINE_CHANNEL_SECRET || '';
-const lineChannelAccessToken = process.env.LINE_CHANNEL_ACCESS_TOKEN || '';
-const lineSupabase = lineSupabaseUrl && lineServiceRoleKey
-  ? createClient(lineSupabaseUrl, lineServiceRoleKey, { auth: { persistSession: false, autoRefreshToken: false } })
-  : null;
-
-// API認証ミドルウェア: Bearerトークンを検証し、未ログインアクセスを401で遮断
+// 4. API認証ミドルウェア
 async function requireAuth(req: express.Request, res: express.Response, next: express.NextFunction) {
   if (!lineSupabase) {
     return res.status(503).json({ error: '認証サーバー（Supabase）が設定されていません。' });
@@ -128,6 +124,8 @@ async function requireAuth(req: express.Request, res: express.Response, next: ex
   (req as any).user = authData.user;
   next();
 }
+
+// （これ以降のコードは元のまま）
 
 function createEmailUnsubscribeToken(contactId: string): string {
   const secret = process.env.EMAIL_UNSUBSCRIBE_SECRET?.trim() || 'mst-email-unsubscribe-default-secret';
