@@ -677,8 +677,8 @@ async function processLineInboxAndAutoReply(event: any, contact: any, eventId: s
     }
   }
 
-  // 自動返信が無効またはアクセストークン未設定ならここで終了
-  if (!isAutoReplyEnabled || !lineChannelAccessToken) return;
+  // LINE送信トークン未設定ならここで終了
+  if (!lineChannelAccessToken) return;
 
   // 4. 自動返信ルール（line_auto_reply_rules）の検索
   let rules: any[] = [];
@@ -766,8 +766,9 @@ async function processLineInboxAndAutoReply(event: any, contact: any, eventId: s
     }
   }
 
-  // ルール未一致時の組み込み自動返信
+  // ルール未一致時の組み込み自動返信（自動返信が明示的に無効の場合は送信をスキップ）
   if (!lineMessage) {
+    if (!isAutoReplyEnabled) return;
     const appUrl = (process.env.PUBLIC_APP_URL || 'https://os.mstcorp.info').replace(/\/$/, '');
     let defaultReplyText = '';
 
@@ -1324,28 +1325,196 @@ async function processLinePostback(event: any, contact: any, eventId: string, bo
   }
 }
 
-async function processLineFollowWelcome(event: any, contact: any, eventId: string, botUserId: string): Promise<void> {
-  if (!lineSupabase || !lineChannelAccessToken || event.type !== 'follow' || !botUserId) return;
-  const { data: integration, error: integrationError } = await lineSupabase
-    .from('line_channel_integrations').select('owner_id,auto_reply_enabled').eq('bot_user_id', botUserId).maybeSingle();
-  if (integrationError) {
-    if (isOptionalLineAutomationSchemaMissing(integrationError)) return;
-    throw integrationError;
-  }
-  if (!integration || !integration.auto_reply_enabled) return;
+async function enqueueScenariosForContact(contactId: string, triggerName: string): Promise<number> {
+  if (!lineSupabase || !contactId || !triggerName) return 0;
+  try {
+    const { data: contact, error: contactErr } = await lineSupabase
+      .from('contacts')
+      .select('id, full_name, email, line_user_id, company_id')
+      .eq('id', contactId)
+      .maybeSingle();
+    if (contactErr || !contact) return 0;
 
+    const { data: scenarios, error: scenErr } = await lineSupabase
+      .from('marketing_automation_scenarios')
+      .select('owner_id, scenario_id, config');
+    if (scenErr || !scenarios || scenarios.length === 0) return 0;
+
+    const matchedScenarios = scenarios.filter((s: any) => {
+      const cfg = s.config || {};
+      const isEnabled = cfg.automationEnabled === true || cfg.status === 'prepared' || cfg.status === 'active';
+      return isEnabled && cfg.trigger === triggerName;
+    });
+
+    if (matchedScenarios.length === 0) return 0;
+
+    let enqueued = 0;
+    const nowMs = Date.now();
+    for (const s of matchedScenarios) {
+      const cfg = s.config || {};
+      const channelSetting = cfg.channel || 'both';
+      const targetChannels: ('line' | 'email')[] = [];
+      if ((channelSetting === 'both' || channelSetting === 'line') && contact.line_user_id) {
+        targetChannels.push('line');
+      }
+      if ((channelSetting === 'both' || channelSetting === 'email') && contact.email) {
+        targetChannels.push('email');
+      }
+
+      const waitMinutes = Number(cfg.waitMinutes || 0);
+      const dueAt = new Date(nowMs + (waitMinutes * 60 * 1000)).toISOString();
+
+      for (const ch of targetChannels) {
+        let bodyText = ch === 'email' ? String(cfg.emailBody || '') : String(cfg.messageBody || '');
+        let linePayload: Record<string, any> | null = null;
+
+        if (ch === 'line') {
+          const lType = cfg.lineMessageType || 'text';
+          if (lType === 'flex' && (cfg.flexTitle || cfg.flexBody)) {
+            const altText = cfg.flexAltText || cfg.flexTitle || 'ご案内';
+            linePayload = {
+              type: 'flex',
+              altText,
+              contents: {
+                type: 'bubble',
+                body: {
+                  type: 'box',
+                  layout: 'vertical',
+                  spacing: 'md',
+                  contents: [
+                    { type: 'text', text: cfg.flexTitle || '', weight: 'bold', size: 'lg', wrap: true },
+                    { type: 'text', text: cfg.flexBody || '', size: 'sm', wrap: true, color: '#475569' }
+                  ].filter((c: any) => c.text)
+                },
+                ...(cfg.flexButtonLabel && cfg.flexButtonUrl ? {
+                  footer: {
+                    type: 'box',
+                    layout: 'vertical',
+                    contents: [
+                      {
+                        type: 'button',
+                        style: 'primary',
+                        color: '#059669',
+                        action: { type: 'uri', label: cfg.flexButtonLabel.slice(0, 20), uri: cfg.flexButtonUrl }
+                      }
+                    ]
+                  }
+                } : {})
+              }
+            };
+            if (!bodyText) bodyText = `[Flex: ${altText}]`;
+          } else if (lType === 'video' && cfg.lineVideoUrl) {
+            linePayload = {
+              type: 'video',
+              originalContentUrl: cfg.lineVideoUrl,
+              previewImageUrl: cfg.lineVideoPreviewUrl || cfg.lineVideoUrl
+            };
+            if (!bodyText) bodyText = '[動画メッセージ]';
+          } else if (lType === 'image' && cfg.lineImageUrl) {
+            linePayload = {
+              type: 'image',
+              originalContentUrl: cfg.lineImageUrl,
+              previewImageUrl: cfg.linePreviewImageUrl || cfg.lineImageUrl
+            };
+            if (!bodyText) bodyText = '[画像メッセージ]';
+          }
+        }
+
+        if (!bodyText && !linePayload) continue;
+
+        const eventKey = `${triggerName}:${contact.id}:${s.scenario_id}:${ch}`;
+        const consentBasis = cfg.consentBasis || (ch === 'line' ? 'LINE友だち登録時の配信同意に基づく' : '特定電子メール法に基づく業務改善情報の提供');
+
+        const { error: insErr } = await lineSupabase
+          .from('marketing_automation_jobs')
+          .upsert({
+            owner_id: s.owner_id,
+            event_key: eventKey,
+            scenario_id: s.scenario_id,
+            contact_id: contact.id,
+            channel: ch,
+            subject: ch === 'email' ? (cfg.emailSubject || null) : null,
+            body_text: bodyText,
+            line_message_payload: linePayload,
+            consent_basis: consentBasis,
+            due_at: dueAt,
+            status: 'queued',
+          }, { onConflict: 'owner_id,event_key', ignoreDuplicates: true });
+
+        if (!insErr) enqueued++;
+      }
+    }
+
+    if (enqueued > 0) {
+      setTimeout(() => {
+        void processMarketingAutomationJobs().catch((err) => {
+          console.warn('[Automation] Immediate jobs processing error:', err);
+        });
+      }, 500);
+    }
+
+    return enqueued;
+  } catch (err) {
+    console.warn('[Automation] enqueueScenariosForContact exception:', err);
+    return 0;
+  }
+}
+
+async function processLineFollowWelcome(event: any, contact: any, eventId: string, botUserId: string): Promise<void> {
+  if (!lineSupabase || !lineChannelAccessToken || event.type !== 'follow') return;
   const userId = typeof event.source?.userId === 'string' ? event.source.userId : '';
   if (!userId) return;
 
-  // 1. 有効な __welcome__ ルールを取得
-  const { data: welcomeRules, error: rulesError } = await lineSupabase.from('line_auto_reply_rules')
-    .select('id,name,reply_text,reply_type,reply_payload,tag_id,enabled')
-    .eq('owner_id', integration.owner_id)
-    .eq('enabled', true)
-    .in('match_text', ['__welcome__', '友だち追加', 'ウェルカム'])
-    .order('priority', { ascending: true });
+  // 1. 連携設定の解決（botUserId優先、無ければ1件目を採用）
+  let integration: any = null;
+  try {
+    if (botUserId) {
+      const { data: byBot } = await lineSupabase
+        .from('line_channel_integrations').select('owner_id,auto_reply_enabled,bot_user_id').eq('bot_user_id', botUserId).maybeSingle();
+      if (byBot) integration = byBot;
+    }
+    if (!integration) {
+      const { data: firstInt } = await lineSupabase
+        .from('line_channel_integrations').select('owner_id,auto_reply_enabled,bot_user_id').limit(1).maybeSingle();
+      if (firstInt) integration = firstInt;
+    }
+  } catch (lookupErr) {
+    console.warn('[LineWelcome] Integration lookup warning:', lookupErr);
+  }
 
-  const matchedRule = (!rulesError && welcomeRules && welcomeRules.length > 0) ? welcomeRules[0] : null;
+  let ownerId = integration?.owner_id || null;
+  if (!ownerId) {
+    try {
+      const { data: firstUser } = await lineSupabase.from('line_inbox_messages').select('owner_id').limit(1).maybeSingle();
+      ownerId = firstUser?.owner_id || null;
+    } catch {}
+  }
+
+  // 2. 有効な __welcome__ ルールを取得（owner_id優先、なければ全ルールから検索）
+  let welcomeRules: any[] = [];
+  try {
+    if (ownerId) {
+      const { data: ownerRules } = await lineSupabase.from('line_auto_reply_rules')
+        .select('id,name,reply_text,reply_type,reply_payload,tag_id,enabled')
+        .eq('owner_id', ownerId)
+        .eq('enabled', true)
+        .in('match_text', ['__welcome__', '友だち追加', 'ウェルカム', 'あいさつ', '挨拶'])
+        .order('priority', { ascending: true });
+      if (ownerRules && ownerRules.length > 0) welcomeRules = ownerRules;
+    }
+    if (welcomeRules.length === 0) {
+      const { data: anyRules } = await lineSupabase.from('line_auto_reply_rules')
+        .select('id,name,reply_text,reply_type,reply_payload,tag_id,enabled')
+        .eq('enabled', true)
+        .in('match_text', ['__welcome__', '友だち追加', 'ウェルカム', 'あいさつ', '挨拶'])
+        .order('priority', { ascending: true });
+      if (anyRules && anyRules.length > 0) welcomeRules = anyRules;
+    }
+  } catch (rulesErr) {
+    console.warn('[LineWelcome] Welcome rules lookup error:', rulesErr);
+  }
+
+  const matchedRule = welcomeRules && welcomeRules.length > 0 ? welcomeRules[0] : null;
 
   let lineMessage: Record<string, any> | null = null;
   let inboxBody = '';
@@ -1360,7 +1529,7 @@ async function processLineFollowWelcome(event: any, contact: any, eventId: strin
 
     try {
       const { data: salesSettings } = await lineSupabase.from('sales_workspace_settings')
-        .select('booking_page_url').eq('owner_id', integration.owner_id).maybeSingle();
+        .select('booking_page_url').eq('owner_id', ownerId).maybeSingle();
       const { data: pubForms } = await lineSupabase.from('diagnosis_forms')
         .select('id,name,public_slug,definition,form_type,status')
         .eq('status', 'published').order('created_at', { ascending: false }).limit(5);
@@ -1441,10 +1610,10 @@ async function processLineFollowWelcome(event: any, contact: any, eventId: strin
     inboxBody = '[友だち追加ウェルカムメッセージ: 大橋真人よりご挨拶・選択肢Flex]';
   }
 
-  // 1通だけ送信 (replyToken があれば reply、無ければ push)
+  // 送信 (replyToken があれば reply、無ければ push)
   try {
     let sentOk = false;
-    if (typeof event.replyToken === 'string') {
+    if (typeof event.replyToken === 'string' && event.replyToken) {
       const response = await fetch('https://api.line.me/v2/bot/message/reply', {
         method: 'POST',
         headers: { Authorization: 'Bearer ' + lineChannelAccessToken, 'Content-Type': 'application/json' },
@@ -1462,17 +1631,19 @@ async function processLineFollowWelcome(event: any, contact: any, eventId: strin
       if (!pushRes.ok) console.warn('LINE welcome push error:', await pushRes.text().catch(() => ''));
     }
 
-    await lineSupabase.from('line_inbox_messages').upsert({
-      owner_id: integration.owner_id,
-      line_event_id: `welcome-${eventId}`,
-      direction: 'outbound',
-      contact_id: contact.id,
-      line_user_id: userId,
-      message_type: lineMessage.type,
-      body: inboxBody,
-      status: 'sent',
-      received_at: new Date().toISOString(),
-    }, { onConflict: 'owner_id,line_event_id,direction', ignoreDuplicates: true });
+    if (ownerId) {
+      await lineSupabase.from('line_inbox_messages').upsert({
+        owner_id: ownerId,
+        line_event_id: `welcome-${eventId}`,
+        direction: 'outbound',
+        contact_id: contact?.id || null,
+        line_user_id: userId,
+        message_type: lineMessage.type,
+        body: inboxBody,
+        status: 'sent',
+        received_at: new Date().toISOString(),
+      }, { onConflict: 'owner_id,line_event_id,direction', ignoreDuplicates: true });
+    }
 
     if (matchedRule?.tag_id) {
       const { data: friend } = await lineSupabase.from('line_friends')
@@ -1482,6 +1653,11 @@ async function processLineFollowWelcome(event: any, contact: any, eventId: strin
           line_friend_id: friend.id, tag_id: matchedRule.tag_id, assigned_by: 'automation',
         }, { onConflict: 'line_friend_id,tag_id', ignoreDuplicates: true });
       }
+    }
+
+    // シナリオ自動配信（line_registered）のジョブ登録と即時キック
+    if (contact?.id) {
+      await enqueueScenariosForContact(contact.id, 'line_registered');
     }
   } catch (err) {
     console.warn('processLineFollowWelcome failed:', err);
@@ -1541,10 +1717,13 @@ async function processLineWebhookEvent(event: any, botUserId = '') {
       if (event.type === 'follow') {
         update.followed_at = eventTime;
         update.unfollowed_at = null;
+        update.consent_status = 'opted_in';
       } else if (event.type === 'unfollow') {
         update.unfollowed_at = eventTime;
+        update.consent_status = 'opted_out';
       } else if (event.type === 'message') {
         update.last_message_at = eventTime;
+        update.consent_status = 'opted_in';
       }
       if (contact.full_name) update.display_name = contact.full_name;
       const { error: friendError } = await lineSupabase
@@ -3994,6 +4173,14 @@ app.post('/api/public/forms/:slug/submissions', async (req, res) => {
       const { data, error } = await lineSupabase.rpc('create_diagnosis_from_form_submission', { p_submission_id: submission.id });
       if (error) console.error('Diagnosis handoff failed:', error.message);
       else diagnosisId = data || null;
+    }
+
+    if (contact?.id) {
+      if (form.form_type === 'diagnosis') {
+        void enqueueScenariosForContact(contact.id, 'diagnosis_completed');
+      } else {
+        void enqueueScenariosForContact(contact.id, 'lead_created');
+      }
     }
 
     // 診断・相談・資料請求回答時の自動通知（LINE / Email）
