@@ -609,7 +609,7 @@ function buildDefaultWelcomeFlexMessage(): { altText: string; contents: Record<s
             type: 'button',
             style: 'primary',
             color: '#10B981',
-            height: 'lg',
+            height: 'md',
             margin: 'lg',
             action: {
               type: 'postback',
@@ -622,7 +622,7 @@ function buildDefaultWelcomeFlexMessage(): { altText: string; contents: Record<s
             type: 'button',
             style: 'primary',
             color: '#1E3A5F',
-            height: 'lg',
+            height: 'md',
             margin: 'sm',
             action: {
               type: 'postback',
@@ -635,7 +635,7 @@ function buildDefaultWelcomeFlexMessage(): { altText: string; contents: Record<s
             type: 'button',
             style: 'primary',
             color: '#0284C7',
-            height: 'lg',
+            height: 'md',
             margin: 'sm',
             action: {
               type: 'postback',
