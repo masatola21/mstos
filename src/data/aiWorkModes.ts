@@ -1,4 +1,4 @@
-import { type AIModelSetting, sanitizeModelSetting } from './aiModels.ts';
+import { type AIModelSetting, sanitizeModelSetting } from './aiModels';
 
 export const AI_WORK_MODES = [
   {

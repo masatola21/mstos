@@ -2,15 +2,15 @@ import express from 'express';
 import dotenv from 'dotenv';
 import path from 'path';
 import { fileURLToPath } from 'url';
-import { getAIWorkMode, sanitizeRoleOverride } from './src/data/aiWorkModes.ts';
-import { type AIModelSetting, DEFAULT_MODEL_SETTING, sanitizeModelSetting } from './src/data/aiModels.ts';
-import { getProviderStatus, runWithFallback, getEmbedding, cosineSimilarity } from './server/aiProviders.ts';
+import { getAIWorkMode, sanitizeRoleOverride } from './src/data/aiWorkModes';
+import { type AIModelSetting, DEFAULT_MODEL_SETTING, sanitizeModelSetting } from './src/data/aiModels';
+import { getProviderStatus, runWithFallback, getEmbedding, cosineSimilarity } from './server/aiProviders';
 import { createHmac, timingSafeEqual, createHash } from 'node:crypto';
 import fs from 'node:fs';
 import { createClient } from '@supabase/supabase-js';
-import { parseIcalendar } from './server/icalParser.ts';
-import { calculateBillingAmount, determineContractMonthlyFee, isContractAlreadyBilled } from './src/utils/billingUtils.ts';
-import { calculateExponentialBackoff, shouldSkipAutomationDelivery } from './src/utils/automationRuleUtils.ts';
+import { parseIcalendar } from './server/icalParser';
+import { calculateBillingAmount, determineContractMonthlyFee, isContractAlreadyBilled } from './src/utils/billingUtils';
+import { calculateExponentialBackoff, shouldSkipAutomationDelivery, checkSendTimeWindow, type SendTimeWindowCheck } from './src/utils/automationRuleUtils';
 
 dotenv.config();
 
@@ -2680,87 +2680,7 @@ function buildFlexBubblePayload(title: string, body: string, buttonLabel?: strin
   return contents;
 }
 
-interface SendTimeWindowCheck {
-  allowed: boolean;
-  nextDueAt?: string;
-}
 
-function checkSendTimeWindow(windowStr: string | null | undefined, now: Date = new Date()): SendTimeWindowCheck {
-  if (!windowStr || typeof windowStr !== 'string' || !windowStr.trim()) {
-    return { allowed: true };
-  }
-  const match = windowStr.trim().match(/^(\d{1,2}):(\d{2})\s*-\s*(\d{1,2}):(\d{2})$/);
-  if (!match) {
-    return { allowed: true };
-  }
-
-  const startHour = parseInt(match[1], 10);
-  const startMinute = parseInt(match[2], 10);
-  const endHour = parseInt(match[3], 10);
-  const endMinute = parseInt(match[4], 10);
-
-  if (
-    startHour < 0 || startHour > 23 || startMinute < 0 || startMinute > 59 ||
-    endHour < 0 || endHour > 23 || endMinute < 0 || endMinute > 59
-  ) {
-    return { allowed: true };
-  }
-
-  const formatter = new Intl.DateTimeFormat('en-US', {
-    timeZone: 'Asia/Tokyo',
-    year: 'numeric',
-    month: '2-digit',
-    day: '2-digit',
-    hour: '2-digit',
-    minute: '2-digit',
-    second: '2-digit',
-    hour12: false,
-  });
-  const parts = formatter.formatToParts(now);
-  const get = (type: string) => parts.find((p) => p.type === type)?.value || '0';
-  const year = parseInt(get('year'), 10);
-  const month = parseInt(get('month'), 10);
-  const day = parseInt(get('day'), 10);
-  let hour = parseInt(get('hour'), 10);
-  if (hour === 24) hour = 0;
-  const minute = parseInt(get('minute'), 10);
-
-  const currentMins = hour * 60 + minute;
-  const startMins = startHour * 60 + startMinute;
-  const endMins = endHour * 60 + endMinute;
-
-  let isAllowed = false;
-  let nextStartDayOffset = 0;
-
-  if (startMins <= endMins) {
-    if (currentMins >= startMins && currentMins < endMins) {
-      isAllowed = true;
-    } else if (currentMins < startMins) {
-      nextStartDayOffset = 0;
-    } else {
-      nextStartDayOffset = 1;
-    }
-  } else {
-    if (currentMins >= startMins || currentMins < endMins) {
-      isAllowed = true;
-    } else {
-      nextStartDayOffset = 0;
-    }
-  }
-
-  if (isAllowed) {
-    return { allowed: true };
-  }
-
-  const pad = (n: number) => String(n).padStart(2, '0');
-  const baseTokyoDate = new Date(`${year}-${pad(month)}-${pad(day)}T${pad(startHour)}:${pad(startMinute)}:00+09:00`);
-  const nextStartTime = new Date(baseTokyoDate.getTime() + nextStartDayOffset * 24 * 60 * 60 * 1000);
-
-  return {
-    allowed: false,
-    nextDueAt: nextStartTime.toISOString(),
-  };
-}
 
 let marketingQueueBusy = false;
 let marketingRunnerLastRunAt: string | null = null;
@@ -5790,7 +5710,8 @@ app.get('/healthz', (_req, res) => res.status(200).send('OK'));
 // Vite middleware or static serving (for standalone / local development)
 if (!process.env.VERCEL) {
   if (process.env.NODE_ENV !== 'production') {
-    const { createServer } = await import('vite');
+    const vitePackageName = 'vite';
+    const { createServer } = await import(/* @vite-ignore */ vitePackageName);
     const vite = await createServer({
       server: { middlewareMode: true, host: '0.0.0.0' },
       appType: 'spa',
