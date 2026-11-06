@@ -2,15 +2,15 @@ import express from 'express';
 import dotenv from 'dotenv';
 import path from 'path';
 import { fileURLToPath } from 'url';
-import { getAIWorkMode, sanitizeRoleOverride } from './src/data/aiWorkModes';
-import { type AIModelSetting, DEFAULT_MODEL_SETTING, sanitizeModelSetting } from './src/data/aiModels';
-import { getProviderStatus, runWithFallback, getEmbedding, cosineSimilarity } from './server/aiProviders';
+import { getAIWorkMode, sanitizeRoleOverride } from './src/data/aiWorkModes.js';
+import { type AIModelSetting, DEFAULT_MODEL_SETTING, sanitizeModelSetting } from './src/data/aiModels.js';
+import { getProviderStatus, runWithFallback, getEmbedding, cosineSimilarity } from './server/aiProviders.js';
 import { createHmac, timingSafeEqual, createHash } from 'node:crypto';
 import fs from 'node:fs';
 import { createClient } from '@supabase/supabase-js';
-import { parseIcalendar } from './server/icalParser';
-import { calculateBillingAmount, determineContractMonthlyFee, isContractAlreadyBilled } from './src/utils/billingUtils';
-import { calculateExponentialBackoff, shouldSkipAutomationDelivery, checkSendTimeWindow, type SendTimeWindowCheck } from './src/utils/automationRuleUtils';
+import { parseIcalendar } from './server/icalParser.js';
+import { calculateBillingAmount, determineContractMonthlyFee, isContractAlreadyBilled } from './src/utils/billingUtils.js';
+import { calculateExponentialBackoff, shouldSkipAutomationDelivery, checkSendTimeWindow, type SendTimeWindowCheck } from './src/utils/automationRuleUtils.js';
 
 dotenv.config();
 
