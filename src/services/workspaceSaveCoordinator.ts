@@ -89,6 +89,17 @@ export class WorkspaceSaveCoordinator {
     this.listeners.forEach((l) => l.onStatusChange?.('saved', ''));
   }
 
+  /**
+   * 競合エラー検知時に自動保存を強制停止し、手動リロードを促す状態にする
+   */
+  public haltOnConflict(message = '他の端末で更新されています。再読み込みしてください'): void {
+    this.cancelDebounce();
+    this.isConflictStopped = true;
+    this.pendingData = null;
+    this.pendingUserId = null;
+    this.setStatus('conflict', message);
+  }
+
   public addListener(listener: CoordinatorListener): () => void {
     this.listeners.add(listener);
     return () => {
@@ -140,6 +151,10 @@ export class WorkspaceSaveCoordinator {
     userId: string,
     data: WorkspaceData
   ): Promise<SaveWorkspaceResult> {
+    if (this.isConflictStopped) {
+      return Promise.reject(new Error('WORKSPACE_CONFLICT: 自動保存は停止されています。再読み込みしてください。'));
+    }
+
     if (this.debounceTimer !== null) {
       clearTimeout(this.debounceTimer);
       this.debounceTimer = null;
@@ -265,8 +280,10 @@ export class WorkspaceSaveCoordinator {
 
       if (isWorkspaceConflictError(error)) {
         // 指摘2対応: 自動マージ上限を超えて競合が解消しなかった場合は自動保存を停止（有界化）
+        this.cancelDebounce();
         this.isConflictStopped = true;
         this.pendingData = null; // 保留中のリクエストを破棄
+        this.pendingUserId = null;
 
         // 【最重要】実行中に入ってきた pendingDeferreds（手動削除のawait等）もすべて reject して固まりを防止
         const remainingDeferreds = [...this.pendingDeferreds];

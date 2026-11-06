@@ -27,12 +27,48 @@ const statusLabels: Record<JobStatus, string> = {
 };
 const statuses: JobStatus[] = ['queued', 'sending', 'sent', 'failed', 'skipped', 'canceled'];
 
+export class MarketingApiAuthError extends Error {
+  status: number;
+  constructor(message = '認証エラー（401）: ログインが必要です。') {
+    super(message);
+    this.name = 'MarketingApiAuthError';
+    this.status = 401;
+  }
+}
+
+export function isMarketingAuthError(error: any): boolean {
+  if (!error) return false;
+  if (error instanceof MarketingApiAuthError) return true;
+  const status = error.status || (error.response && error.response.status);
+  const code = String(error.code || '');
+  const msg = String(error.message || '').toLowerCase();
+  return (
+    status === 401 ||
+    status === 403 ||
+    code === '401' ||
+    code === '403' ||
+    code === '42501' ||
+    code === 'PGRST301' ||
+    msg.includes('401') ||
+    msg.includes('jwt') ||
+    msg.includes('permission denied') ||
+    msg.includes('not authorized') ||
+    msg.includes('unauthorized') ||
+    msg.includes('row-level security')
+  );
+}
+
 export async function fetchMarketingAutomationHealth(): Promise<MarketingAutomationHealth | null> {
   const db = getSupabase();
   if (!db) return null;
-  const { data: { session } } = await db.auth.getSession();
-  if (!session?.access_token) return null;
+  const { data: { session }, error: sessionError } = await db.auth.getSession();
+  if (sessionError || !session?.access_token) {
+    throw new MarketingApiAuthError('ログインしていません。');
+  }
   const response = await fetch('/api/marketing/health', { headers: { Authorization: `Bearer ${session.access_token}` } });
+  if (response.status === 401 || response.status === 403) {
+    throw new MarketingApiAuthError('401: 認証が切れているか、アクセス権限がありません。');
+  }
   if (!response.ok) return null;
   return await response.json() as MarketingAutomationHealth;
 }
@@ -48,42 +84,99 @@ export const MarketingAutomationJobsPanel: React.FC<Props> = ({ health, onHealth
   const [filter, setFilter] = useState<JobStatus | 'all'>('all');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const [authBlocked, setAuthBlocked] = useState(false);
+  const authBlockedRef = React.useRef(false);
   const [busyJobId, setBusyJobId] = useState('');
   const db = getSupabase();
 
   const refresh = useCallback(async () => {
+    if (authBlockedRef.current) return;
     if (!db) { setError('データベースに接続できません。'); setLoading(false); return; }
     setLoading(true);
-    const { data, error: queryError } = await db.from('marketing_automation_jobs')
-      .select('id,status,scenario_id,contact_id,channel,due_at,error_message')
-      .order('created_at', { ascending: false }).limit(200);
-    if (queryError) { setError('配信ジョブを読み込めませんでした。'); setLoading(false); return; }
-    const rows = (data || []) as unknown as JobRow[];
-    const contactIds = [...new Set(rows.map((row) => row.contact_id).filter(Boolean))];
-    const scenarioIds = [...new Set(rows.map((row) => row.scenario_id).filter(Boolean))];
-    const [contactsResult, scenariosResult, ...countResults] = await Promise.all([
-      contactIds.length ? db.from('contacts').select('id,full_name').in('id', contactIds) : Promise.resolve({ data: [], error: null }),
-      scenarioIds.length ? db.from('marketing_automation_scenarios').select('scenario_id,config').in('scenario_id', scenarioIds) : Promise.resolve({ data: [], error: null }),
-      ...statuses.map((status) => db.from('marketing_automation_jobs').select('id', { count: 'exact', head: true }).eq('status', status)),
-    ]);
-    const contactsById = new Map((contactsResult.data || []).map((contact: any) => [contact.id, contact.full_name]));
-    const scenariosById = new Map((scenariosResult.data || []).map((scenario: any) => [scenario.scenario_id, scenario.config?.name || scenario.scenario_id]));
-    setJobs(rows.map((row) => ({ ...row, contactName: String(contactsById.get(row.contact_id) || '連絡先不明'), scenarioName: String(scenariosById.get(row.scenario_id) || row.scenario_id || 'シナリオ不明') })));
-    setJobCounts(Object.fromEntries(statuses.map((status, index) => [status, countResults[index]?.count || 0])) as Record<JobStatus, number>);
-    setError(contactsResult.error || scenariosResult.error ? '連絡先またはシナリオ名を取得できないジョブがあります。' : '');
-    setLoading(false);
+
+    try {
+      const { data, error: queryError } = await db.from('marketing_automation_jobs')
+        .select('id,status,scenario_id,contact_id,channel,due_at,error_message')
+        .order('created_at', { ascending: false }).limit(200);
+
+      if (queryError) {
+        if (isMarketingAuthError(queryError)) {
+          authBlockedRef.current = true;
+          setAuthBlocked(true);
+          setError('権限エラー（401）: 配信ジョブへのアクセス権限がありません。無限リトライ防止のため処理を中断しました。');
+          setLoading(false);
+          return;
+        }
+        setError('配信ジョブを読み込めませんでした。');
+        setLoading(false);
+        return;
+      }
+
+      const rows = (data || []) as unknown as JobRow[];
+      const contactIds = [...new Set(rows.map((row) => row.contact_id).filter(Boolean))];
+      const scenarioIds = [...new Set(rows.map((row) => row.scenario_id).filter(Boolean))];
+      const [contactsResult, scenariosResult, ...countResults] = await Promise.all([
+        contactIds.length ? db.from('contacts').select('id,full_name').in('id', contactIds) : Promise.resolve({ data: [], error: null }),
+        scenarioIds.length ? db.from('marketing_automation_scenarios').select('scenario_id,config').in('scenario_id', scenarioIds) : Promise.resolve({ data: [], error: null }),
+        ...statuses.map((status) => db.from('marketing_automation_jobs').select('id', { count: 'exact', head: true }).eq('status', status)),
+      ]);
+
+      const countAuthErr = countResults.find((r) => r.error && isMarketingAuthError(r.error));
+      if (countAuthErr) {
+        authBlockedRef.current = true;
+        setAuthBlocked(true);
+        setError('権限エラー（401）: 配信ジョブ集計へのアクセス権限がありません。処理を中断しました。');
+        setLoading(false);
+        return;
+      }
+
+      const contactsById = new Map((contactsResult.data || []).map((contact: any) => [contact.id, contact.full_name]));
+      const scenariosById = new Map((scenariosResult.data || []).map((scenario: any) => [scenario.scenario_id, scenario.config?.name || scenario.scenario_id]));
+      setJobs(rows.map((row) => ({ ...row, contactName: String(contactsById.get(row.contact_id) || '連絡先不明'), scenarioName: String(scenariosById.get(row.scenario_id) || row.scenario_id || 'シナリオ不明') })));
+      setJobCounts(Object.fromEntries(statuses.map((status, index) => [status, countResults[index]?.count || 0])) as Record<JobStatus, number>);
+      setError(contactsResult.error || scenariosResult.error ? '連絡先またはシナリオ名を取得できないジョブがあります。' : '');
+    } catch (err: any) {
+      if (isMarketingAuthError(err)) {
+        authBlockedRef.current = true;
+        setAuthBlocked(true);
+        setError('権限エラー（401）: アクセス権限がありません。処理を中断しました。');
+      } else {
+        setError(err?.message || '配信ジョブの読み込み中にエラーが発生しました。');
+      }
+    } finally {
+      setLoading(false);
+    }
   }, [db]);
 
   const refreshHealth = useCallback(async () => {
-    try { onHealthChange(await fetchMarketingAutomationHealth()); } catch { onHealthChange(null); }
+    if (authBlockedRef.current) return;
+    try {
+      const h = await fetchMarketingAutomationHealth();
+      onHealthChange(h);
+    } catch (err: any) {
+      if (isMarketingAuthError(err)) {
+        authBlockedRef.current = true;
+        setAuthBlocked(true);
+        setError('権限エラー（401）: 自動配信の稼働状態へのアクセス権限がありません。処理を中断しました。');
+      }
+      onHealthChange(null);
+    }
   }, [onHealthChange]);
 
   useEffect(() => {
+    if (authBlocked) return;
     void refresh();
     void refreshHealth();
-    const timer = window.setInterval(() => { void refresh(); void refreshHealth(); }, 60000);
+    const timer = window.setInterval(() => {
+      if (authBlockedRef.current) {
+        window.clearInterval(timer);
+        return;
+      }
+      void refresh();
+      void refreshHealth();
+    }, 60000);
     return () => window.clearInterval(timer);
-  }, [refresh, refreshHealth]);
+  }, [refresh, refreshHealth, authBlocked]);
 
   const changeJob = async (job: JobView, action: 'retry' | 'cancel') => {
     const label = action === 'retry' ? '再実行待ちに戻しますか？' : 'この配信ジョブを取り消しますか？';
@@ -190,7 +283,26 @@ export const MarketingAutomationJobsPanel: React.FC<Props> = ({ health, onHealth
             </button>
           ))}
         </div>
-        {error && <p role="alert" className="border-b border-amber-200 bg-amber-50 px-4 py-3 text-xs text-amber-800">{error}</p>}
+        {error && (
+          <div role="alert" className="border-b border-amber-200 bg-amber-50 px-4 py-3 text-xs text-amber-800 flex items-center justify-between gap-3">
+            <span>{error}</span>
+            {authBlocked && (
+              <button
+                type="button"
+                onClick={() => {
+                  authBlockedRef.current = false;
+                  setAuthBlocked(false);
+                  setError('');
+                  void refresh();
+                  void refreshHealth();
+                }}
+                className="shrink-0 px-2.5 py-1 bg-amber-600 hover:bg-amber-700 text-white rounded font-medium text-xs shadow-xs transition cursor-pointer"
+              >
+                再試行
+              </button>
+            )}
+          </div>
+        )}
         {loading ? (
           <p className="p-8 text-center text-sm text-slate-400">読み込み中…</p>
         ) : visibleJobs.length === 0 ? (

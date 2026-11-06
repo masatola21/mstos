@@ -509,12 +509,12 @@ function AppContent() {
         if (cancelled) return;
         console.error('Workspace cloud load failed:', error);
         workspaceSyncEnabledRef.current = false;
-        const errorCode = (error as { code?: string })?.code;
-        const errorMessage = (error as { message?: string })?.message || '';
-        if (errorCode === '40001' || errorMessage.includes('WORKSPACE_CONFLICT')) {
+        if (isWorkspaceConflictError(error)) {
+          workspaceSaveCoordinator.haltOnConflict('他の端末で更新されています。最新データを再読み込みしてください');
           setWorkspaceSyncStatus('conflict');
-          setWorkspaceSaveError('他の端末で更新されています。再読み込みしてください');
+          setWorkspaceSaveError('他の端末で更新されています。最新データを再読み込みしてください');
         } else {
+          const errorMessage = (error as { message?: string })?.message || '';
           setWorkspaceSyncStatus('error');
           setWorkspaceSaveError(errorMessage
             ? `クラウド同期に失敗しました: ${errorMessage}`

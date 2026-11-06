@@ -428,13 +428,30 @@ export const MarketingAutomationPrototypeView: React.FC<Props> = ({ scenarios, o
   const [automationHealth, setAutomationHealth] = useState<MarketingAutomationHealth | null>(null);
   useEffect(() => {
     let active = true;
+    let timer: number | null = null;
     const refresh = async () => {
-      try { const result = await fetchMarketingAutomationHealth(); if (active) setAutomationHealth(result); }
-      catch { if (active) setAutomationHealth(null); }
+      try {
+        const result = await fetchMarketingAutomationHealth();
+        if (active) setAutomationHealth(result);
+      } catch (err: any) {
+        if (active) {
+          setAutomationHealth(null);
+          // 401エラー（権限なし）が発生した場合、無限ポーリングを即座に中断
+          if (err?.status === 401 || String(err?.message || '').includes('401')) {
+            if (timer) {
+              window.clearInterval(timer);
+              timer = null;
+            }
+          }
+        }
+      }
     };
     void refresh();
-    const timer = window.setInterval(() => { void refresh(); }, 60000);
-    return () => { active = false; window.clearInterval(timer); };
+    timer = window.setInterval(() => { void refresh(); }, 60000);
+    return () => {
+      active = false;
+      if (timer) window.clearInterval(timer);
+    };
   }, []);
   useEffect(() => {
     const revision = ++scenarioSyncRevision.current;

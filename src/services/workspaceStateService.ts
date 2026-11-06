@@ -659,11 +659,27 @@ export async function loadOrMigrateWorkspaceData(userId: string): Promise<Worksp
 
 
 export function isWorkspaceConflictError(error: unknown): boolean {
-  if (!error || typeof error !== 'object') return false;
-  const err = error as { code?: string; message?: string; details?: string };
-  return err.code === '40001' ||
-    (typeof err.message === 'string' && err.message.includes('WORKSPACE_CONFLICT')) ||
-    (typeof err.details === 'string' && err.details.includes('WORKSPACE_CONFLICT'));
+  if (!error) return false;
+  if (typeof error === 'string') {
+    return error.includes('WORKSPACE_CONFLICT') || error.includes('40001');
+  }
+  if (typeof error !== 'object') return false;
+  const err = error as Record<string, unknown>;
+  const code = String(err.code ?? err.status ?? (err.error as any)?.code ?? '');
+  const message = String(err.message ?? (err.error as any)?.message ?? '');
+  const details = String(err.details ?? (err.error as any)?.details ?? '');
+  const hint = String(err.hint ?? (err.error as any)?.hint ?? '');
+
+  return (
+    code === '40001' ||
+    code === '409' ||
+    (code === 'P0001' && (message.includes('WORKSPACE_CONFLICT') || details.includes('WORKSPACE_CONFLICT'))) ||
+    message.includes('WORKSPACE_CONFLICT') ||
+    details.includes('WORKSPACE_CONFLICT') ||
+    hint.includes('WORKSPACE_CONFLICT') ||
+    message.includes('40001') ||
+    details.includes('40001')
+  );
 }
 
 export async function fetchLatestMatrixWorkspaceSyncState(userId: string): Promise<string | null> {
@@ -747,9 +763,14 @@ export async function saveWorkspaceData(
     } catch (err) {
       if (isWorkspaceConflictError(err) && retryCount < maxRetries) {
         retryCount++;
-        console.warn(`[WorkspaceSync] WORKSPACE_CONFLICT detected. Attempting 3-way auto-merge (attempt ${retryCount}/${maxRetries})...`);
-        // 指摘2対応: 指数バックオフ（1回目250ms, 2回目500ms）を入れてリトライの負荷を有界化
-        await new Promise((resolve) => setTimeout(resolve, retryCount * 250));
+        // 指数バックオフ（数秒待機: 1回目 約2.5秒, 2回目 約5.0秒 + ランダムジッター）
+        // 即座の再試行によるDB CPU 100%負荷を完全に防止
+        const baseDelayMs = 2500;
+        const backoffMs = Math.round(baseDelayMs * Math.pow(2, retryCount - 1) + Math.random() * 800);
+        console.warn(
+          `[WorkspaceSync] WORKSPACE_CONFLICT (40001) detected. Backing off for ${backoffMs}ms before 3-way auto-merge (attempt ${retryCount}/${maxRetries})...`
+        );
+        await new Promise((resolve) => setTimeout(resolve, backoffMs));
         const result = await resolveMatrixConflictAndMerge(userId, currentData);
         currentData = result.mergedData;
         wasMerged = true;
