@@ -225,56 +225,131 @@ export const UnifiedInboxView: React.FC<UnifiedInboxViewProps> = ({
     setSubmissionError('');
     try {
       const formMeta = formsMeta.get(sub.form_id);
-      const companyName = sub.respondent_company_name || '新規反響企業（フォーム経由）';
+      const effectiveCompName = sub.respondent_company_name?.trim() || (sub.respondent_name ? `${sub.respondent_name}様（個人）` : '新規反響企業（フォーム経由）');
 
-      // 1. Check or create company
+      // 1. Check or create company with valid CID
       let companyId = sub.company_id;
       if (!companyId) {
-        const { data: comp, error: compErr } = await db
+        const { data: existingComp } = await db
           .from('companies')
-          .insert({
-            company_name: companyName,
-            status: 'active',
-          })
           .select('id')
-          .single();
-        if (!compErr && comp) {
-          companyId = comp.id;
+          .eq('company_name', effectiveCompName)
+          .maybeSingle();
+
+        if (existingComp?.id) {
+          companyId = existingComp.id;
+        } else {
+          const { data: existingCids } = await db
+            .from('companies')
+            .select('id')
+            .like('id', 'CID-%')
+            .limit(2000);
+          const maxNum = Math.max(0, ...(existingCids || []).map((row: any) => Number(String(row.id).match(/^CID-(\d+)$/)?.[1] || 0)));
+          const nextCid = `CID-${String(maxNum + 1).padStart(3, '0')}`;
+
+          const { data: comp, error: compErr } = await db
+            .from('companies')
+            .insert({
+              id: nextCid,
+              company_name: effectiveCompName,
+              contact_name: sub.respondent_name || null,
+              email: sub.respondent_email || null,
+            })
+            .select('id')
+            .single();
+
+          if (!compErr && comp) {
+            companyId = comp.id;
+          } else if (compErr) {
+            console.error('Failed to create company:', compErr);
+            throw new Error(`会社マスタの作成に失敗しました: ${compErr.message}`);
+          }
         }
       }
 
-      // 2. Insert Lead
-      const { data: newLead, error: leadErr } = await db
-        .from('leads')
-        .insert({
-          company_id: companyId,
-          source: 'form_diagnosis',
-          status: 'uncontacted',
-          inquiry_type: formMeta?.name || 'フォーム回答',
-          notes: `【フォーム・診断回答より自動リード化】\n回答者: ${sub.respondent_name || '未記入'} (${sub.respondent_email || 'メール未記入'})\n受付日時: ${new Date(sub.submitted_at).toLocaleString('ja-JP')}`,
-        })
-        .select('id')
-        .single();
-
-      if (leadErr) {
-        setSubmissionError(`リード作成に失敗しました: ${leadErr.message}`);
-        return;
+      // 2. Check or create contact
+      let contactId = sub.contact_id;
+      if (!contactId && (sub.respondent_name || sub.respondent_email)) {
+        if (sub.respondent_email) {
+          const { data: existingContact } = await db
+            .from('contacts')
+            .select('id')
+            .eq('email', sub.respondent_email.trim().toLowerCase())
+            .maybeSingle();
+          if (existingContact?.id) {
+            contactId = existingContact.id;
+          }
+        }
+        if (!contactId) {
+          const { data: newContact, error: cErr } = await db
+            .from('contacts')
+            .insert({
+              full_name: sub.respondent_name || 'フォーム回答者',
+              email: sub.respondent_email || null,
+              company_id: companyId || null,
+              source: 'public_form',
+            })
+            .select('id')
+            .single();
+          if (!cErr && newContact) {
+            contactId = newContact.id;
+          }
+        }
       }
 
-      // 3. Update Submission with lead_id & company_id
+      // 3. Insert Lead (with fallback for schema mismatch)
+      const leadPayload: Record<string, any> = {
+        company_id: companyId,
+        contact_id: contactId || null,
+        source: 'Webフォーム',
+        status: '新規',
+        service_type: formMeta?.name || 'フォーム回答',
+        notes: `【フォーム・診断回答より自動リード化】\n会社名: ${effectiveCompName}\n回答者: ${sub.respondent_name || '未記入'} (${sub.respondent_email || 'メール未記入'})\n受付日時: ${new Date(sub.submitted_at).toLocaleString('ja-JP')}`,
+        first_registered_at: new Date().toISOString(),
+        last_contacted_at: new Date().toISOString(),
+      };
+
+      let newLeadId: string | null = null;
+      for (let attempt = 0; attempt < 4; attempt++) {
+        const { data: newLead, error: leadErr } = await db
+          .from('leads')
+          .insert(leadPayload)
+          .select('id')
+          .single();
+
+        if (!leadErr && newLead?.id) {
+          newLeadId = newLead.id;
+          break;
+        }
+
+        const errMsg = leadErr?.message || '';
+        const match = errMsg.match(/Could not find the '([^']+)' column/i) || errMsg.match(/column "([^"]+)" of relation/i);
+        if (match && match[1] && match[1] in leadPayload) {
+          delete leadPayload[match[1]];
+          continue;
+        }
+        throw new Error(`リード作成に失敗しました: ${errMsg}`);
+      }
+
+      if (!newLeadId) {
+        throw new Error('リード作成に失敗しました');
+      }
+
+      // 4. Update Submission with lead_id, company_id & contact_id
       await db
         .from('diagnosis_submissions')
         .update({
-          lead_id: newLead.id,
+          lead_id: newLeadId,
           company_id: companyId,
+          contact_id: contactId,
           status: 'reviewing',
         })
         .eq('id', sub.id);
 
       setSubmissions((prev) =>
-        prev.map((s) => (s.id === sub.id ? { ...s, lead_id: newLead.id, company_id: companyId, status: 'reviewing' } : s))
+        prev.map((s) => (s.id === sub.id ? { ...s, lead_id: newLeadId!, company_id: companyId, contact_id: contactId, status: 'reviewing' } : s))
       );
-      setSubmissionNotice(`「${companyName}」を反響リードに登録しました。リード一覧で詳細確認やフォローが可能です。`);
+      setSubmissionNotice(`「${effectiveCompName}」を反響リードに登録しました。リード一覧で詳細確認やフォローが可能です。`);
       void loadCounts();
     } catch (err: any) {
       setSubmissionError(`エラーが発生しました: ${err.message}`);

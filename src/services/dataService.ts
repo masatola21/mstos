@@ -158,7 +158,7 @@ const TABLE_SELECT_COLUMNS: Record<TableKey, string> = {
   companies: 'id, company_name, industry, contact_name, website, email, phone, social_account, postal_code, address, created_at, updated_at',
   contacts: 'id, company_id, full_name, email, phone, role_title, preferred_channel, line_user_id, source, notes, created_at, updated_at',
   prospects: 'id, company_id, source, approach_method, recommended_product_id, status, reply_flag, last_reply_at, registered_at, email_step, memo, ai_score, ai_reason, target_flag, created_at, updated_at',
-  leads: 'id, company_id, line_user_id, source, service_type, inquiry_type, interested_product_id, status, priority_channel, first_registered_at, last_contacted_at, next_action_at, meeting_date, meeting_start_time, report_url, email_step, notes, created_at, updated_at',
+  leads: 'id, company_id, contact_id, line_user_id, source, service_type, inquiry_type, interested_product_id, status, priority_channel, first_registered_at, last_contacted_at, next_action_at, meeting_date, meeting_start_time, report_url, email_step, notes, created_at, updated_at',
   products: 'id, product_name, product_type, phase, pricing_model, price_range_max, price_note, initial_fee, monthly_fee, description, status, created_at, updated_at',
   deals: 'id, company_id, lead_id, product_id, deal_name, amount, stage, status, probability, close_date, memo, created_at, updated_at',
   customers: 'id, company_id, contract_status, monthly_revenue, ltv, started_at, renewal_date, status, memo, created_at, updated_at',
@@ -219,6 +219,44 @@ export async function fetchTableData(
         ...item,
         company: compMap.get(String(item.company_id)),
       }));
+    }
+
+    if (tableKey === 'leads') {
+      const contactIds = Array.from(new Set(data.map(item => item.contact_id).filter(Boolean)));
+      let contactMap = new Map<string, any>();
+      if (contactIds.length > 0) {
+        try {
+          const { data: contactsData } = await supabase
+            .from('contacts')
+            .select('id, full_name, email, phone, company_id')
+            .in('id', contactIds);
+          if (contactsData) {
+            contactMap = new Map(contactsData.map((c: any) => [String(c.id), c]));
+          }
+        } catch (e) {
+          console.warn('[dataService] Failed to load contacts for leads:', e);
+        }
+      }
+
+      enrichedData = enrichedData.map(item => {
+        const contact = item.contact_id ? contactMap.get(String(item.contact_id)) : undefined;
+        const notes = String(item.notes || '');
+        const emailMatch = notes.match(/[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/);
+        const nameMatch = notes.match(/(?:回答者|申込時の氏名|氏名|担当者)[:：]\s*([^\s(（\n]+)/);
+        const phoneMatch = notes.match(/(?:0\d{1,4}-?\d{1,4}-?\d{4})/);
+
+        const contactName = contact?.full_name || (nameMatch ? nameMatch[1] : '');
+        const email = contact?.email || (emailMatch ? emailMatch[0] : '');
+        const phone = contact?.phone || (phoneMatch ? phoneMatch[0] : '');
+
+        return {
+          ...item,
+          contact,
+          contact_name: contactName,
+          email,
+          phone,
+        };
+      });
     }
 
     if (tableKey === 'deals') {
@@ -504,6 +542,17 @@ export async function insertRecord(
     // 自動生成UUIDテーブルの場合、空のidは確実に削除してDB自動採番に任せる
     if (['contacts', 'prospects', 'leads', 'customers'].includes(tableKey)) {
       delete payload.id;
+    }
+
+    // 会社テーブルでidが未指定の場合はCID-xxxを自動採番
+    if (tableKey === 'companies' && (!payload.id || !String(payload.id).trim())) {
+      const { data: existingCids } = await supabase
+        .from('companies')
+        .select('id')
+        .like('id', 'CID-%')
+        .limit(2000);
+      const maxNum = Math.max(0, ...(existingCids || []).map((row: any) => Number(String(row.id).match(/^CID-(\d+)$/)?.[1] || 0)));
+      payload.id = `CID-${String(maxNum + 1).padStart(3, '0')}`;
     }
 
     // 商品テーブルの場合、柔軟価格設定をローカル/matrixServiceに退避保存

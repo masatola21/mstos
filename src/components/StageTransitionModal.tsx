@@ -5,6 +5,7 @@ import { todayJst } from '../utils/date';
 import type { ProposalPlanTemplate } from './ProposalPlanTemplatePicker';
 import { 
   fetchProductsList, 
+  fetchCompaniesList,
   fetchCustomerByCompanyId, 
   insertRecord,
   updateRecord

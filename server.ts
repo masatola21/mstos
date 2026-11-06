@@ -3849,10 +3849,11 @@ app.post(['/api/public/forms/:slug/submissions', '/public/forms/:slug/submission
       if (answer === undefined || answer === '' || answer === false) return res.status(400).json({ error: '必須の設問に回答してください。' });
     }
 
+    const effectiveCompanyName = companyName || (name ? `${name}様（個人）` : '新規反響企業（フォーム経由）');
     let matchedCompanyId: string | null = null;
     let matchingCompanyNames: string[] = [];
-    if (companyName) {
-      const normalizedCompanyName = normalizePublicCompanyName(companyName);
+    if (effectiveCompanyName) {
+      const normalizedCompanyName = normalizePublicCompanyName(effectiveCompanyName);
       const allCompanies: Array<{ id: string; company_name: string | null }> = [];
       if (normalizedCompanyName) {
         const pageSize = 1000;
@@ -3884,7 +3885,7 @@ app.post(['/api/public/forms/:slug/submissions', '/public/forms/:slug/submission
             .from('companies')
             .insert({
               id: nextCid,
-              company_name: companyName,
+              company_name: effectiveCompanyName,
               contact_name: name || null,
               email: email || null,
               phone: phone || null,
@@ -3901,7 +3902,7 @@ app.post(['/api/public/forms/:slug/submissions', '/public/forms/:slug/submission
               .from('companies')
               .insert({
                 id: fallbackCid,
-                company_name: companyName,
+                company_name: effectiveCompanyName,
                 contact_name: name || null,
                 email: email || null,
                 phone: phone || null,
@@ -4030,17 +4031,17 @@ app.post(['/api/public/forms/:slug/submissions', '/public/forms/:slug/submission
       contact = { id: null, full_name: name, email, phone, company_id: matchedCompanyId };
     }
 
-    const resolvedCompanyId = companyName ? matchedCompanyId : contact.company_id || null;
+    const resolvedCompanyId = matchedCompanyId || contact.company_id || null;
     const answerSummary = JSON.stringify(cleanAnswers).slice(0, 6_000);
     const sourceLabel = publicFormSourceLabels[form.form_type] || 'Webフォーム';
     const originLabel = utm.source ? `（流入: ${utm.source.slice(0, 80)}）` : '';
     const requestMarker = `[申込 ${requestId}]`;
-    const companyNote = companyName
+    const companyNote = effectiveCompanyName
       ? matchingCompanyNames.length > 1
         ? `会社名の候補が複数あります: ${matchingCompanyNames.join('、')}`
         : matchedCompanyId
-          ? `会社名・屋号（申込時）: ${companyName}`
-          : `申込時の会社名: ${companyName}（未登録）`
+          ? `会社名・屋号（申込時）: ${effectiveCompanyName}`
+          : `申込時の会社名: ${effectiveCompanyName}（未登録）`
       : '';
     const noteEntry = `${requestMarker} ${form.name}${originLabel} / ${new Date().toISOString()}\n${[companyNote, contactNameNote].filter(Boolean).join('\n')}${companyNote || contactNameNote ? '\n' : ''}${answerSummary}`;
     const validInquiryTypes = ['資料請求', '開業相談', '両方希望'] as const;
@@ -4100,6 +4101,40 @@ app.post(['/api/public/forms/:slug/submissions', '/public/forms/:slug/submission
       .limit(1);
     if (leadLookupError) throw leadLookupError;
 
+    // スキーマ互換性担保: leads テーブルのカラム不一致時に安全に再試行
+    const safeUpsertLead = async (isUpdate: boolean, payload: Record<string, any>, targetId?: string): Promise<string> => {
+      let currentPayload = { ...payload };
+      for (let attempt = 0; attempt < 5; attempt++) {
+        let res: any;
+        if (isUpdate && targetId) {
+          res = await lineSupabase
+            .from('leads')
+            .update(currentPayload)
+            .eq('id', targetId)
+            .select('id')
+            .single();
+        } else {
+          res = await lineSupabase
+            .from('leads')
+            .insert(currentPayload)
+            .select('id')
+            .single();
+        }
+        if (!res.error && res.data?.id) {
+          return String(res.data.id);
+        }
+        const errMsg = res.error?.message || '';
+        const match = errMsg.match(/Could not find the '([^']+)' column/i) || errMsg.match(/column "([^"]+)" of relation/i);
+        if (match && match[1] && match[1] in currentPayload) {
+          console.warn(`[PublicForm] Removing missing column '${match[1]}' from leads payload and retrying`);
+          delete currentPayload[match[1]];
+          continue;
+        }
+        throw res.error;
+      }
+      throw new Error('リードの保存に失敗しました');
+    };
+
     let lead: any = existingLeads?.[0];
     if (lead && !['新規', 'ヒアリング済'].includes(lead.status)) lead = undefined;
     let leadId = '';
@@ -4110,44 +4145,31 @@ app.post(['/api/public/forms/:slug/submissions', '/public/forms/:slug/submission
       leadId = lead.id;
       if (typeof lead.notes !== 'string' || !lead.notes.includes(requestMarker)) {
         const notes = [lead.notes, noteEntry].filter(Boolean).join('\n\n').slice(-12_000);
-        const { data: updatedLead, error: updateLeadError } = await lineSupabase
-          .from('leads')
-          .update({
-            notes,
-            last_contacted_at: new Date().toISOString(),
-            ...(resolvedCompanyId && !lead.company_id ? { company_id: resolvedCompanyId } : {}),
-            ...(lead.service_type ? {} : { service_type: formServiceType }),
-            ...(meetingDate ? { meeting_date: meetingDate } : {}),
-            ...(inquiryType ? { inquiry_type: inquiryType } : {}),
-            ...(isCarePackage && ['新規', 'ヒアリング済'].includes(lead.status) ? { status: leadStatus } : {}),
-            ...(!isCarePackage && inquiryType === '資料請求' && lead.status === '新規' ? { status: '資料請求' } : {}),
-          })
-          .eq('id', lead.id)
-          .select('id')
-          .single();
-        if (updateLeadError) throw updateLeadError;
-        leadId = updatedLead.id;
+        leadId = await safeUpsertLead(true, {
+          notes,
+          last_contacted_at: new Date().toISOString(),
+          ...(resolvedCompanyId && !lead.company_id ? { company_id: resolvedCompanyId } : {}),
+          ...(lead.service_type ? {} : { service_type: formServiceType }),
+          ...(meetingDate ? { meeting_date: meetingDate } : {}),
+          ...(inquiryType ? { inquiry_type: inquiryType } : {}),
+          ...(isCarePackage && ['新規', 'ヒアリング済'].includes(lead.status) ? { status: leadStatus } : {}),
+          ...(!isCarePackage && inquiryType === '資料請求' && lead.status === '新規' ? { status: '資料請求' } : {}),
+        }, lead.id);
       }
     } else {
-      const { data: insertedLead, error: insertLeadError } = await lineSupabase
-        .from('leads')
-        .insert({
-          contact_id: contact.id,
-          company_id: resolvedCompanyId,
-          source: leadSource,
-          service_type: formServiceType,
-          priority_channel: utm.source === 'line' || utm.utm_source === 'line' ? 'LINE' : 'メール',
-          status: leadStatus,
-          first_registered_at: new Date().toISOString(),
-          last_contacted_at: new Date().toISOString(),
-          ...(meetingDate ? { meeting_date: meetingDate } : {}),
-          notes: noteEntry,
-          ...(inquiryType ? { inquiry_type: inquiryType } : {}),
-        })
-        .select('id')
-        .single();
-      if (insertLeadError) throw insertLeadError;
-      leadId = insertedLead.id;
+      leadId = await safeUpsertLead(false, {
+        contact_id: contact.id,
+        company_id: resolvedCompanyId,
+        source: leadSource,
+        service_type: formServiceType,
+        priority_channel: utm.source === 'line' || utm.utm_source === 'line' ? 'LINE' : 'メール',
+        status: leadStatus,
+        first_registered_at: new Date().toISOString(),
+        last_contacted_at: new Date().toISOString(),
+        ...(meetingDate ? { meeting_date: meetingDate } : {}),
+        notes: noteEntry,
+        ...(inquiryType ? { inquiry_type: inquiryType } : {}),
+      });
     }
 
     const { data: submission, error: submissionError } = await lineSupabase

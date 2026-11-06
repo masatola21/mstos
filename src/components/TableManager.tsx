@@ -1062,12 +1062,13 @@ export const TableManager: React.FC<TableManagerProps> = ({
 
                         // 会社外部キーのレンダリング
                         if (colKey === 'company_id') {
+                          const compName = item.company?.company_name || item.company_name;
                           return (
                             <td key={colKey} className="py-3 px-4">
-                              {item.company?.company_name ? (
+                              {compName ? (
                                 <div>
                                   <div className="font-semibold text-slate-900 group-hover:text-purple-700">
-                                    {item.company.company_name}
+                                    {compName}
                                   </div>
                                   <div className="text-[10px] font-mono text-slate-400">
                                     {item.company_id}
@@ -1075,6 +1076,67 @@ export const TableManager: React.FC<TableManagerProps> = ({
                                 </div>
                               ) : (
                                 <span className="font-mono text-slate-400">{val || '-'}</span>
+                              )}
+                            </td>
+                          );
+                        }
+
+                        // 担当者名のレンダリング
+                        if (colKey === 'contact_name') {
+                          const contactName = item.contact_name || item.contact?.full_name || '';
+                          return (
+                            <td key={colKey} className="py-3 px-4 whitespace-nowrap">
+                              {contactName ? (
+                                <div className="font-medium text-slate-900 flex items-center gap-1.5">
+                                  <span className="w-5 h-5 rounded-full bg-purple-100 text-purple-700 text-[10px] flex items-center justify-center font-bold">
+                                    {contactName[0]}
+                                  </span>
+                                  <span>{contactName}</span>
+                                </div>
+                              ) : (
+                                <span className="text-slate-400 font-mono text-xs">-</span>
+                              )}
+                            </td>
+                          );
+                        }
+
+                        // メールアドレスのレンダリング
+                        if (colKey === 'email') {
+                          const email = item.email || item.contact?.email || '';
+                          return (
+                            <td key={colKey} className="py-3 px-4 whitespace-nowrap" onClick={(e) => e.stopPropagation()}>
+                              {email ? (
+                                <a
+                                  href={`mailto:${email}`}
+                                  className="inline-flex items-center gap-1 text-xs text-purple-700 hover:text-purple-900 hover:underline font-mono"
+                                  title={`${email} にメール作成`}
+                                >
+                                  <Mail className="w-3.5 h-3.5 text-slate-400" />
+                                  <span>{email}</span>
+                                </a>
+                              ) : (
+                                <span className="text-slate-400 font-mono text-xs">-</span>
+                              )}
+                            </td>
+                          );
+                        }
+
+                        // 電話番号のレンダリング
+                        if (colKey === 'phone') {
+                          const phone = item.phone || item.contact?.phone || '';
+                          return (
+                            <td key={colKey} className="py-3 px-4 whitespace-nowrap" onClick={(e) => e.stopPropagation()}>
+                              {phone ? (
+                                <a
+                                  href={`tel:${phone}`}
+                                  className="inline-flex items-center gap-1 text-xs text-slate-800 hover:text-purple-700 hover:underline font-mono"
+                                  title={`${phone} に発信`}
+                                >
+                                  <Phone className="w-3.5 h-3.5 text-slate-400" />
+                                  <span>{phone}</span>
+                                </a>
+                              ) : (
+                                <span className="text-slate-400 font-mono text-xs">-</span>
                               )}
                             </td>
                           );
