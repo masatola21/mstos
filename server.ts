@@ -524,6 +524,27 @@ function normalizeFlexContents(input: any): Record<string, any> | null {
   }
   return null;
 }
+function sanitizeFlexNode(node: any): any {
+  if (Array.isArray(node)) return node.map(sanitizeFlexNode);
+  if (node && typeof node === 'object') {
+    const out: Record<string, any> = {};
+    for (const [k, v] of Object.entries(node)) out[k] = sanitizeFlexNode(v);
+    // ボタンの height は sm / md のみ有効（lg 等はLINEに拒否される）
+    if (out.type === 'button' && out.height !== undefined && !['sm', 'md'].includes(out.height)) out.height = 'md';
+    return out;
+  }
+  return node;
+}
+
+function normalizeFlexContents(input: any): Record<string, any> | null {
+  // 二重ラップされていても bubble/carousel を取り出し、無効なボタン高さを補正する
+  let node = input;
+  for (let i = 0; i < 4 && node && typeof node === 'object'; i++) {
+    if (node.type === 'bubble' || node.type === 'carousel') return sanitizeFlexNode(node);
+    node = node.contents;
+  }
+  return null;
+}
 function buildDefaultWelcomeFlexMessage(): { altText: string; contents: Record<string, any> } {
   return {
     altText: '大橋真人よりLINE友だち登録のご挨拶とご案内',
