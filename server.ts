@@ -100,16 +100,7 @@ async function getKillSwitchStatus(target: 'all' | 'ai' | 'send' | 'billing' = '
   }
 }
 
-// 全オリジンからの安全なアクセスを許可するCORS設定（HP・外部連携用）
-app.use((req, res, next) => {
-  res.header('Access-Control-Allow-Origin', '*');
-  res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, PATCH, DELETE, OPTIONS');
-  res.header('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Requested-With');
-  if (req.method === 'OPTIONS') {
-    return res.sendStatus(204);
-  }
-  next();
-});
+
 
 
 const lineSupabaseUrl = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL || '';
