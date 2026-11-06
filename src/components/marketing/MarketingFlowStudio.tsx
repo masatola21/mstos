@@ -215,7 +215,7 @@ export const MarketingFlowStudio: React.FC<MarketingFlowStudioProps> = ({
         type: 'button',
         style: 'primary',
         color: c.color || defaultColors[i % defaultColors.length],
-        height: 'lg',
+        height: 'md',
         margin: i === 0 ? 'lg' : 'sm',
         action,
       };
