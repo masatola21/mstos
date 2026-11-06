@@ -1288,7 +1288,7 @@ async function processLinePostback(event: any, contact: any, eventId: string, bo
             const tType = templateRow.reply_type || 'flex';
             if (tType === 'flex') {
               const altText = String(personalized.altText || templateRow.name || '介護保険外サービス開業パッケージのご案内').slice(0, 400);
-              const contents = personalized.contents || (['bubble', 'carousel'].includes(personalized.type) ? personalized : null);
+                            const contents = normalizeFlexContents(personalized);
               if (contents) {
                 replyMessage = { type: 'flex', altText, contents };
                 inboxBody = `[テンプレートFlex返信: ${templateRow.name}]`;
