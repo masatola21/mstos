@@ -188,28 +188,19 @@ function generateUuid(): string {
 
 /**
  * バックエンド API エンドポイントの解決
+ * 環境変数 VITE_OS_API_URL を優先し、未設定時は https://os.mstcorp.info を使用
  */
 function resolveApiEndpoint(path: string): string {
   const envUrl = (
+    import.meta.env.VITE_OS_API_URL ||
+    import.meta.env.PUBLIC_OS_API_URL ||
     import.meta.env.PUBLIC_API_URL ||
     import.meta.env.NEXT_PUBLIC_API_URL ||
-    ''
+    'https://os.mstcorp.info'
   ).trim();
 
-  if (envUrl) {
-    return `${envUrl.replace(/\/+$/, '')}${path}`;
-  }
-
-  if (typeof window !== 'undefined') {
-    const { hostname, port, origin } = window.location;
-    // 開発環境で別ポート（例: Astro 4321）から起動している場合はExpressサーバー(3000)へ
-    if ((hostname === 'localhost' || hostname === '127.0.0.1') && port !== '3000') {
-      return `http://${hostname}:3000${path}`;
-    }
-    return `${origin}${path}`;
-  }
-
-  return path;
+  const baseUrl = envUrl || 'https://os.mstcorp.info';
+  return `${baseUrl.replace(/\/+$/, '')}${path}`;
 }
 
 /**

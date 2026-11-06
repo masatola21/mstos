@@ -402,42 +402,98 @@ function isTransactionalOutboxEmail(row: any): boolean {
     .some((prefix) => sourceType === prefix || sourceType.startsWith(`${prefix}_`));
 }
 
-async function getLineDisplayName(userId: string): Promise<string | undefined> {
-  if (!lineChannelAccessToken) return undefined;
+interface LineUserProfile {
+  displayName?: string;
+  pictureUrl?: string;
+  statusMessage?: string;
+}
+
+async function getLineUserProfile(userId: string): Promise<LineUserProfile | null> {
+  if (!lineChannelAccessToken || !userId) return null;
   try {
     const response = await fetch(`https://api.line.me/v2/bot/profile/${encodeURIComponent(userId)}`, {
       headers: { Authorization: `Bearer ${lineChannelAccessToken}` },
     });
-    if (!response.ok) return undefined;
-    const profile = await response.json() as { displayName?: string };
-    return profile.displayName;
-  } catch {
-    return undefined;
+    if (!response.ok) {
+      console.warn(`[LineProfile] Failed to fetch profile for ${userId}: HTTP ${response.status}`);
+      return null;
+    }
+    const profile = await response.json() as LineUserProfile;
+    return profile;
+  } catch (err) {
+    console.warn(`[LineProfile] Exception fetching profile for ${userId}:`, err);
+    return null;
   }
+}
+
+async function getLineDisplayName(userId: string): Promise<string | undefined> {
+  const profile = await getLineUserProfile(userId);
+  return profile?.displayName;
 }
 
 async function resolveLineContact(userId: string) {
   if (!lineSupabase) throw new Error('Supabase server credentials are missing.');
   const { data: existing, error: lookupError } = await lineSupabase
-    .from('contacts').select('id, full_name').eq('line_user_id', userId).maybeSingle();
+    .from('contacts').select('id, full_name, line_user_id').eq('line_user_id', userId).maybeSingle();
   if (lookupError) throw lookupError;
-  if (existing) return existing;
 
-  const displayName = await getLineDisplayName(userId);
+  // LINE公式APIからアカウント表示名・プロフィールアイコンを取得
+  const profile = await getLineUserProfile(userId);
+  const displayName = profile?.displayName?.trim();
+  const pictureUrl = profile?.pictureUrl?.trim();
+
+  if (existing) {
+    // 既存連絡先の名前が未設定またはプレースホルダーの場合、LINEアカウント表示名に同期
+    const currentName = String(existing.full_name || '').trim();
+    const isPlaceholder = !currentName || currentName === 'LINE友だち' || currentName === 'LINE登録者' || currentName === userId;
+    if (displayName && isPlaceholder) {
+      await lineSupabase.from('contacts').update({ full_name: displayName }).eq('id', existing.id);
+      existing.full_name = displayName;
+    }
+
+    // line_friends テーブルに表示名・プロフィール画像を同期保存
+    if (displayName || pictureUrl) {
+      await lineSupabase.from('line_friends').upsert({
+        contact_id: existing.id,
+        line_user_id: userId,
+        ...(displayName ? { display_name: displayName } : {}),
+        ...(pictureUrl ? { picture_url: pictureUrl } : {}),
+        status: 'active',
+      }, { onConflict: 'line_user_id' });
+    }
+
+    return existing;
+  }
+
+  // 新規連絡先作成
+  const contactName = displayName || 'LINE友だち';
   const { data: inserted, error: insertError } = await lineSupabase
     .from('contacts')
-    .insert({ line_user_id: userId, full_name: displayName || 'LINE友だち', source: 'line_webhook' })
-    .select('id, full_name')
-    .single();
-  if (!insertError && inserted) return inserted;
+    .insert({ line_user_id: userId, full_name: contactName, source: 'line_webhook' })
+    .select('id, full_name, line_user_id')
+    .maybeSingle();
 
-  // A concurrent webhook may have created the same contact between lookup and insert.
-  if (insertError?.code === '23505') {
-    const { data: concurrent, error } = await lineSupabase
-      .from('contacts').select('id, full_name').eq('line_user_id', userId).single();
-    if (!error && concurrent) return concurrent;
+  let resolvedContact = inserted;
+  if (insertError?.code === '23505' || !resolvedContact) {
+    const { data: concurrent } = await lineSupabase
+      .from('contacts').select('id, full_name, line_user_id').eq('line_user_id', userId).maybeSingle();
+    resolvedContact = concurrent;
   }
-  throw insertError || new Error('Unable to create LINE contact.');
+
+  if (!resolvedContact) {
+    throw insertError || new Error('Unable to create LINE contact.');
+  }
+
+  // line_friends テーブルに新規保存
+  await lineSupabase.from('line_friends').upsert({
+    contact_id: resolvedContact.id,
+    line_user_id: userId,
+    display_name: displayName || contactName,
+    ...(pictureUrl ? { picture_url: pictureUrl } : {}),
+    status: 'active',
+  }, { onConflict: 'line_user_id' });
+
+  return resolvedContact;
 }
 
 function isOptionalLineAutomationSchemaMissing(error: any): boolean {
@@ -551,191 +607,234 @@ function buildDefaultWelcomeFlexMessage(): { altText: string; contents: Record<s
 
 
 async function processLineInboxAndAutoReply(event: any, contact: any, eventId: string, botUserId: string): Promise<void> {
-  if (!lineSupabase || event.type !== 'message' || event.message?.type !== 'text' || !botUserId) return;
-  const { data: integration, error: integrationError } = await lineSupabase
-    .from('line_channel_integrations').select('owner_id,auto_reply_enabled').eq('bot_user_id', botUserId).maybeSingle();
-  if (integrationError) {
-    if (isOptionalLineAutomationSchemaMissing(integrationError)) return;
-    throw integrationError;
-  }
-  if (!integration) return;
+  if (!lineSupabase || event.type !== 'message' || event.message?.type !== 'text') return;
 
   const userId = typeof event.source?.userId === 'string' ? event.source.userId : '';
   const messageText = String(event.message.text || '').slice(0, 5000);
   if (!userId || !messageText) return;
-  const receivedAt = typeof event.timestamp === 'number' ? new Date(event.timestamp).toISOString() : new Date().toISOString();
-  const { error: inboxError } = await lineSupabase.from('line_inbox_messages').upsert({
-    owner_id: integration.owner_id,
-    line_event_id: eventId,
-    direction: 'inbound',
-    contact_id: contact.id,
-    line_user_id: userId,
-    message_type: 'text',
-    body: messageText,
-    status: 'received',
-    received_at: receivedAt,
-  }, { onConflict: 'owner_id,line_event_id,direction', ignoreDuplicates: true });
-  if (inboxError) {
-    if (isOptionalLineAutomationSchemaMissing(inboxError)) return;
-    throw inboxError;
-  }
 
-  // ★ 相手側からのアクション（返信メッセージ）があった場合、配信予定の自動シナリオジョブを自動停止
-  // （機械的ボット配信をストップし、個別チャットや有人サポート対応へ自動で切り替え）
+  // 1. 連携設定（line_channel_integrations）の解決（botUserId完全一致優先、なければ1件目の設定を採用）
+  let integration: any = null;
   try {
-    await lineSupabase
-      .from('marketing_automation_jobs')
-      .update({
-        status: 'skipped',
-        error_message: '顧客側からのLINE返信アクションがあったため自動ステップシナリオを停止（個別チャット対応へ移行）',
-        updated_at: receivedAt,
-      })
-      .eq('contact_id', contact.id)
-      .eq('channel', 'line')
-      .eq('status', 'queued');
-  } catch (jobCancelErr) {
-    console.warn('LINE scenario auto-pause on inbound message warning:', jobCancelErr);
+    if (botUserId) {
+      const { data: byBot } = await lineSupabase
+        .from('line_channel_integrations')
+        .select('owner_id,auto_reply_enabled,bot_user_id')
+        .eq('bot_user_id', botUserId)
+        .maybeSingle();
+      if (byBot) integration = byBot;
+    }
+    if (!integration) {
+      const { data: firstIntegration } = await lineSupabase
+        .from('line_channel_integrations')
+        .select('owner_id,auto_reply_enabled,bot_user_id')
+        .limit(1)
+        .maybeSingle();
+      if (firstIntegration) integration = firstIntegration;
+    }
+  } catch (lookupErr) {
+    console.warn('[LineAutoReply] Integration lookup warning:', lookupErr);
   }
 
-  if (!integration.auto_reply_enabled || !lineChannelAccessToken) return;
+  const ownerId = integration?.owner_id || null;
+  const isAutoReplyEnabled = integration ? integration.auto_reply_enabled !== false : true;
 
-  const { data: rules, error: rulesError } = await lineSupabase.from('line_auto_reply_rules')
-    .select('id,match_mode,match_text,reply_text,reply_type,reply_payload,tag_id')
-    .eq('owner_id', integration.owner_id).eq('enabled', true).order('priority', { ascending: true });
-  if (rulesError) {
-    if (isOptionalLineAutomationSchemaMissing(rulesError)) return;
-    throw rulesError;
+  // 2. 受信メッセージを line_inbox_messages に保存
+  const receivedAt = typeof event.timestamp === 'number' ? new Date(event.timestamp).toISOString() : new Date().toISOString();
+  if (ownerId) {
+    try {
+      await lineSupabase.from('line_inbox_messages').upsert({
+        owner_id: ownerId,
+        line_event_id: eventId,
+        direction: 'inbound',
+        contact_id: contact?.id || null,
+        line_user_id: userId,
+        message_type: 'text',
+        body: messageText,
+        status: 'received',
+        received_at: receivedAt,
+      }, { onConflict: 'owner_id,line_event_id,direction', ignoreDuplicates: true });
+    } catch (inboxErr) {
+      console.warn('[LineAutoReply] Inbound message record warning:', inboxErr);
+    }
   }
-  const normalizedMessage = messageText.trim().toLocaleLowerCase();
+
+  // 3. 顧客からの返信メッセージ受領時、進行中のステップ配信（自動シナリオ）を停止
+  if (contact?.id) {
+    try {
+      await lineSupabase
+        .from('marketing_automation_jobs')
+        .update({
+          status: 'skipped',
+          error_message: '顧客側からのLINE返信アクションがあったため自動ステップシナリオを停止（個別チャット対応へ移行）',
+          updated_at: receivedAt,
+        })
+        .eq('contact_id', contact.id)
+        .eq('channel', 'line')
+        .eq('status', 'queued');
+    } catch (jobCancelErr) {
+      console.warn('[LineAutoReply] Scenario auto-pause warning:', jobCancelErr);
+    }
+  }
+
+  // 自動返信が無効またはアクセストークン未設定ならここで終了
+  if (!isAutoReplyEnabled || !lineChannelAccessToken) return;
+
+  // 4. 自動返信ルール（line_auto_reply_rules）の検索
+  let rules: any[] = [];
+  try {
+    if (ownerId) {
+      const { data: ownerRules } = await lineSupabase
+        .from('line_auto_reply_rules')
+        .select('id,match_mode,match_text,reply_text,reply_type,reply_payload,tag_id')
+        .eq('owner_id', ownerId)
+        .eq('enabled', true)
+        .order('priority', { ascending: true });
+      if (ownerRules && ownerRules.length > 0) rules = ownerRules;
+    }
+    if (rules.length === 0) {
+      const { data: allRules } = await lineSupabase
+        .from('line_auto_reply_rules')
+        .select('id,match_mode,match_text,reply_text,reply_type,reply_payload,tag_id')
+        .eq('enabled', true)
+        .order('priority', { ascending: true });
+      if (allRules && allRules.length > 0) rules = allRules;
+    }
+  } catch (ruleErr) {
+    console.warn('[LineAutoReply] Rules lookup warning:', ruleErr);
+  }
+
+  const normalizedMessage = messageText.trim().toLowerCase();
   const matchedRule = (rules || []).find((rule: any) => {
-    const expected = String(rule.match_text || '').trim().toLocaleLowerCase();
+    const expected = String(rule.match_text || '').trim().toLowerCase();
     return expected && (rule.match_mode === 'exact' ? normalizedMessage === expected : normalizedMessage.includes(expected));
   });
 
-  if (!matchedRule) {
-    // 組み込みデフォルト自動返信（経営改善・介護保険外サービス・無料診断誘導）
-    const appUrl = (process.env.PUBLIC_APP_URL || '').replace(/\/$/, '');
-    if (!appUrl) {
-      console.warn('PUBLIC_APP_URL is not set. Default auto-reply URL omitted.');
+  // 5. 返信メッセージの組み立て
+  let lineMessage: Record<string, any> | null = null;
+  let inboxBody = '';
+
+  if (matchedRule) {
+    const replyType = String(matchedRule.reply_type || 'text');
+    const replyPayload = matchedRule.reply_payload && typeof matchedRule.reply_payload === 'object'
+      ? matchedRule.reply_payload as Record<string, any>
+      : {};
+
+    if (replyType === 'text') {
+      const replyText = String(matchedRule.reply_text || '').slice(0, 5000);
+      if (replyText) {
+        lineMessage = { type: 'text', text: replyText };
+        inboxBody = replyText;
+      }
+    } else if (replyType === 'image') {
+      const originalContentUrl = String(replyPayload.originalContentUrl || '');
+      const previewImageUrl = String(replyPayload.previewImageUrl || '');
+      if (originalContentUrl.startsWith('https://') && previewImageUrl.startsWith('https://')) {
+        lineMessage = { type: 'image', originalContentUrl, previewImageUrl };
+        inboxBody = '[画像メッセージ]';
+      }
+    } else if (replyType === 'flex') {
+      const altText = String(replyPayload.altText || '').slice(0, 1500);
+      const contents = replyPayload.contents;
+      if (altText && contents && typeof contents === 'object' && ['bubble', 'carousel'].includes(contents.type)) {
+        lineMessage = { type: 'flex', altText, contents };
+        inboxBody = '[Flexメッセージ]';
+      }
+    } else if (replyType === 'video') {
+      const originalContentUrl = String(replyPayload.originalContentUrl || '');
+      const previewImageUrl = String(replyPayload.previewImageUrl || '');
+      const altText = String(replyPayload.altText || '').slice(0, 1500);
+      if (originalContentUrl.startsWith('https://') && previewImageUrl.startsWith('https://') && altText) {
+        lineMessage = { type: 'video', originalContentUrl, previewImageUrl };
+        inboxBody = '[動画メッセージ]';
+      }
     }
+
+    // タグ付与処理
+    if (matchedRule.tag_id && userId) {
+      try {
+        const { data: friend } = await lineSupabase.from('line_friends')
+          .select('id').eq('line_user_id', userId).maybeSingle();
+        if (friend?.id) {
+          await lineSupabase.from('line_friend_tags').upsert({
+            line_friend_id: friend.id, tag_id: matchedRule.tag_id, assigned_by: 'automation',
+          }, { onConflict: 'line_friend_id,tag_id', ignoreDuplicates: true });
+        }
+      } catch (tagErr) {
+        console.warn('[LineAutoReply] Tagging error:', tagErr);
+      }
+    }
+  }
+
+  // ルール未一致時の組み込み自動返信
+  if (!lineMessage) {
+    const appUrl = (process.env.PUBLIC_APP_URL || 'https://os.mstcorp.info').replace(/\/$/, '');
     let defaultReplyText = '';
 
-    if (normalizedMessage.includes('経営改善')) {
-      if (appUrl) {
-        const diagUrl = `${appUrl}/forms/business-diagnosis?source=line&topic=management&cid=${encodeURIComponent(contact.id)}&luid=${encodeURIComponent(userId)}`;
-        defaultReplyText = `経営改善についてのご相談ありがとうございます！\n有限会社MST代表の大橋真人です。\n\n貴社の現状の経営課題（集客・営業・業務フロー・利益率）を明確にするため、まずは【3分無料経営診断】へのご回答をおすすめしております。\n\n回答内容を元に、専任コンサルタントによる改善アドバイスレポートを個別にお届けいたします。\n\n▼ 3分無料経営診断はこちら\n${diagUrl}\n\nまた、個別面談や直接のご相談も受け付けております。お気軽にご希望日程やご質問をそのまま返信してください。`;
-      } else {
-        defaultReplyText = `経営改善についてのご相談ありがとうございます！\n有限会社MST代表の大橋真人です。\n\n貴社の現状の経営課題（集客・営業・業務フロー・利益率）を明確にするため、まずは無料経営診断をおすすめしております。\n現在システム公開URLの設定準備中のため、担当者より直接ご案内をお送りいたします。\nお気軽にご希望日程やご質問をそのまま返信してください。`;
-      }
-    } else if (normalizedMessage.includes('介護保険外')) {
-      if (appUrl) {
-        const diagUrl = `${appUrl}/forms/business-diagnosis?source=line&topic=care&cid=${encodeURIComponent(contact.id)}&luid=${encodeURIComponent(userId)}`;
-        defaultReplyText = `介護保険外サービスの開業・事業展開についてのご相談ありがとうございます！\n有限会社MST代表の大橋真人です。\n\n介護保険外サービス（自費リハビリ・自費看護・生活支援等）の立ち上げでは、収益モデルの設計と地域集客が成功の鍵となります。\n\nまずは貴社の構想や適性を把握するため、無料診断フォームよりお聞かせください。\n\n▼ 開業・経営診断フォームはこちら\n${diagUrl}\n\n回答を確認後、大橋より専門レポートを作成してお届けします。`;
-      } else {
-        defaultReplyText = `介護保険外サービスの開業・事業展開についてのご相談ありがとうございます！\n有限会社MST代表の大橋真人です。\n\n介護保険外サービス（自費リハビリ・自費看護・生活支援等）の立ち上げでは、収益モデルの設計と地域集客が成功の鍵となります。\n担当の大橋より詳細資料をお送りいたしますので、今しばらくお待ちください。`;
-      }
+    if (normalizedMessage.includes('経営改善') || normalizedMessage.includes('相談') || normalizedMessage.includes('業務効率')) {
+      const diagUrl = `${appUrl}/forms/business-diagnosis?source=line&topic=management&cid=${encodeURIComponent(contact?.id || '')}&luid=${encodeURIComponent(userId)}`;
+      defaultReplyText = `経営改善についてのご相談ありがとうございます！\n有限会社MST代表の大橋真人です。\n\n貴社の現状の経営課題（集客・営業・業務フロー・利益率）を明確にするため、まずは【3分無料経営診断】へのご回答をおすすめしております。\n\n回答内容を元に、専任コンサルタントによる改善アドバイスレポートを個別にお届けいたします。\n\n▼ 3分無料経営診断はこちら\n${diagUrl}\n\nまた、個別面談や直接のご相談も受け付けております。お気軽にご希望日程やご質問をそのまま返信してください。`;
+    } else if (normalizedMessage.includes('介護') || normalizedMessage.includes('保険外') || normalizedMessage.includes('開業')) {
+      const diagUrl = `${appUrl}/forms/business-diagnosis?source=line&topic=care&cid=${encodeURIComponent(contact?.id || '')}&luid=${encodeURIComponent(userId)}`;
+      defaultReplyText = `介護保険外サービスの開業・事業展開についてのご相談ありがとうございます！\n有限会社MST代表の大橋真人です。\n\n介護保険外サービス（自費リハビリ・自費看護・生活支援等）の立ち上げでは、収益モデルの設計と地域集客が成功の鍵となります。\n\nまずは貴社の構想や適性を把握するため、無料診断フォームよりお聞かせください。\n\n▼ 開業・経営診断フォームはこちら\n${diagUrl}\n\n回答を確認後、大橋より専門レポートを作成してお届けします。`;
     } else if (normalizedMessage.includes('診断')) {
-      if (appUrl) {
-        const diagUrl = `${appUrl}/forms/business-diagnosis?source=line&cid=${encodeURIComponent(contact.id)}&luid=${encodeURIComponent(userId)}`;
-        defaultReplyText = `無料経営診断のご案内です。\n以下のURLより約3分でご回答いただけます。回答受領後、大橋真人より専任レポートをお届けします。\n\n▼ 3分無料経営診断\n${diagUrl}`;
+      const diagUrl = `${appUrl}/forms/business-diagnosis?source=line&cid=${encodeURIComponent(contact?.id || '')}&luid=${encodeURIComponent(userId)}`;
+      defaultReplyText = `無料経営診断のご案内です。\n以下のURLより約3分でご回答いただけます。回答受領後、大橋真人より専任レポートをお届けします。\n\n▼ 3分無料経営診断\n${diagUrl}`;
+    } else {
+      defaultReplyText = `メッセージありがとうございます！\n有限会社MST代表の大橋真人です。\n\n現在メッセージを確認しております。\nご相談・お問い合わせの内容に合わせて担当より順次ご返信いたしますので、今しばらくお待ちくださいませ。\n\n▼ 無料診断やサービス概要はこちら\n${appUrl}`;
+    }
+
+    lineMessage = { type: 'text', text: defaultReplyText };
+    inboxBody = defaultReplyText;
+  }
+
+  // 6. 返信メッセージの送信（replyToken優先、失効時はpushフォールバック）
+  try {
+    let sentOk = false;
+    if (typeof event.replyToken === 'string' && event.replyToken) {
+      const replyRes = await fetch('https://api.line.me/v2/bot/message/reply', {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${lineChannelAccessToken}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ replyToken: event.replyToken, messages: [lineMessage] }),
+      });
+      if (replyRes.ok) {
+        sentOk = true;
       } else {
-        defaultReplyText = `無料経営診断のご案内です。\n現在システム公開URLの設定準備中のため、担当者より直接診断フォームをご案内いたします。`;
+        const errText = await replyRes.text().catch(() => '');
+        console.warn('[LineAutoReply] Reply token attempt failed:', replyRes.status, errText);
       }
     }
 
-    if (defaultReplyText && typeof event.replyToken === 'string') {
-      try {
-        const replyResponse = await fetch('https://api.line.me/v2/bot/message/reply', {
-          method: 'POST',
-          headers: { Authorization: 'Bearer ' + lineChannelAccessToken, 'Content-Type': 'application/json' },
-          body: JSON.stringify({ replyToken: event.replyToken, messages: [{ type: 'text', text: defaultReplyText }] }),
-        });
-        if (replyResponse.ok) {
-          await lineSupabase.from('line_inbox_messages').upsert({
-            owner_id: integration.owner_id,
-            line_event_id: `reply-${eventId}`,
-            direction: 'outbound',
-            contact_id: contact.id,
-            line_user_id: userId,
-            message_type: 'text',
-            body: defaultReplyText,
-            status: 'sent',
-            received_at: new Date().toISOString(),
-          }, { onConflict: 'owner_id,line_event_id,direction', ignoreDuplicates: true });
-        }
-      } catch (defErr) {
-        console.warn('Default auto reply warning:', defErr);
+    if (!sentOk && userId) {
+      const pushRes = await fetch('https://api.line.me/v2/bot/message/push', {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${lineChannelAccessToken}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ to: userId, messages: [lineMessage] }),
+      });
+      if (pushRes.ok) {
+        sentOk = true;
+      } else {
+        const pushErr = await pushRes.text().catch(() => '');
+        console.error('[LineAutoReply] Push fallback attempt failed:', pushRes.status, pushErr);
       }
     }
-    return;
-  }
 
-  if (matchedRule.tag_id) {
-    const { data: friend, error: friendError } = await lineSupabase.from('line_friends')
-      .select('id').eq('line_user_id', userId).maybeSingle();
-    if (friendError) throw friendError;
-    if (friend?.id) {
-      const { error: tagError } = await lineSupabase.from('line_friend_tags').upsert({
-        line_friend_id: friend.id, tag_id: matchedRule.tag_id, assigned_by: 'automation',
-      }, { onConflict: 'line_friend_id,tag_id', ignoreDuplicates: true });
-      if (tagError) throw tagError;
+    if (sentOk && ownerId) {
+      await lineSupabase.from('line_inbox_messages').upsert({
+        owner_id: ownerId,
+        line_event_id: `reply-${eventId}`,
+        direction: 'outbound',
+        contact_id: contact?.id || null,
+        line_user_id: userId,
+        message_type: lineMessage.type,
+        body: inboxBody,
+        status: 'sent',
+        received_at: new Date().toISOString(),
+      }, { onConflict: 'owner_id,line_event_id,direction', ignoreDuplicates: true });
     }
+  } catch (sendErr) {
+    console.error('[LineAutoReply] Sending reply failed:', sendErr);
   }
-
-  const replyType = String(matchedRule.reply_type || 'text');
-  const replyPayload = matchedRule.reply_payload && typeof matchedRule.reply_payload === 'object'
-    ? matchedRule.reply_payload as Record<string, any>
-    : {};
-  let lineMessage: Record<string, any>;
-  let inboxBody: string;
-  if (replyType === 'text') {
-    const replyText = String(matchedRule.reply_text || '').slice(0, 5000);
-    if (!replyText) return;
-    lineMessage = { type: 'text', text: replyText };
-    inboxBody = replyText;
-  } else if (replyType === 'image') {
-    const originalContentUrl = String(replyPayload.originalContentUrl || '');
-    const previewImageUrl = String(replyPayload.previewImageUrl || '');
-    if (!originalContentUrl.startsWith('https://') || !previewImageUrl.startsWith('https://')) return;
-    lineMessage = { type: 'image', originalContentUrl, previewImageUrl };
-    inboxBody = '[画像メッセージ]';
-  } else if (replyType === 'flex') {
-    const altText = String(replyPayload.altText || '').slice(0, 1500);
-    const contents = replyPayload.contents;
-    if (!altText || !contents || typeof contents !== 'object' || !['bubble', 'carousel'].includes(contents.type)) return;
-    lineMessage = { type: 'flex', altText, contents };
-    inboxBody = '[Flexメッセージ]';
-  } else if (replyType === 'video') {
-    const originalContentUrl = String(replyPayload.originalContentUrl || '');
-    const previewImageUrl = String(replyPayload.previewImageUrl || '');
-    const altText = String(replyPayload.altText || '').slice(0, 1500);
-    if (!originalContentUrl.startsWith('https://') || !previewImageUrl.startsWith('https://') || !altText) return;
-    lineMessage = { type: 'video', originalContentUrl, previewImageUrl };
-    inboxBody = '[動画メッセージ]';
-  } else {
-    return;
-  }
-  const replyResponse = await fetch('https://api.line.me/v2/bot/message/reply', {
-    method: 'POST',
-    headers: { Authorization: 'Bearer ' + lineChannelAccessToken, 'Content-Type': 'application/json' },
-    body: JSON.stringify({ replyToken: event.replyToken, messages: [lineMessage] }),
-  });
-  if (!replyResponse.ok) {
-    const detail = await replyResponse.text().catch(() => '');
-    throw new Error(detail || 'LINE自動返信の送信に失敗しました。');
-  }
-  const { error: outboundError } = await lineSupabase.from('line_inbox_messages').upsert({
-    owner_id: integration.owner_id,
-    line_event_id: eventId,
-    direction: 'outbound',
-    contact_id: contact.id,
-    line_user_id: userId,
-    message_type: replyType,
-    body: inboxBody,
-    status: 'sent',
-    received_at: new Date().toISOString(),
-  }, { onConflict: 'owner_id,line_event_id,direction', ignoreDuplicates: true });
-  if (outboundError) throw outboundError;
 }
 
 
@@ -1540,6 +1639,38 @@ app.get('/api/line/account', async (req, res) => {
   }
 });
 
+app.get('/api/line/profile/:userId', async (req, res) => {
+  if (!lineSupabase) return res.status(503).json({ error: 'LINE連携サーバーのSupabase設定がありません。' });
+  const authorization = req.header('authorization') || '';
+  const token = authorization.startsWith('Bearer ') ? authorization.slice(7) : '';
+  if (!token) return res.status(401).json({ error: 'ログインしてください。' });
+  const { data: authData, error: authError } = await lineSupabase.auth.getUser(token);
+  if (authError || !authData.user) return res.status(401).json({ error: 'ログイン状態を確認できません。' });
+  const userId = req.params.userId;
+  if (!userId) return res.status(400).json({ error: 'ユーザーIDが指定されていません。' });
+
+  try {
+    const profile = await getLineUserProfile(userId);
+    if (profile && profile.displayName) {
+      await lineSupabase.from('line_friends').upsert({
+        line_user_id: userId,
+        display_name: profile.displayName.trim(),
+        picture_url: profile.pictureUrl?.trim() || null,
+        status: 'active',
+        source: 'line_profile_api',
+        updated_at: new Date().toISOString(),
+      }, { onConflict: 'line_user_id' });
+    }
+    return res.json({
+      userId,
+      displayName: profile?.displayName || null,
+      pictureUrl: profile?.pictureUrl || null,
+    });
+  } catch (err: any) {
+    return res.status(500).json({ error: 'プロフィール取得中にエラーが発生しました。', details: err?.message });
+  }
+});
+
 app.post('/api/email/webhook', express.raw({ type: 'application/json', limit: '2mb' }), async (req, res) => {
   const secret = process.env.RESEND_WEBHOOK_SECRET || '';
   if (!secret || !lineSupabase || !Buffer.isBuffer(req.body)) return res.status(503).json({ error: 'メール受信Webhookの設定がありません。' });
@@ -1623,9 +1754,26 @@ app.post('/api/email/webhook', express.raw({ type: 'application/json', limit: '2
   const recipients = Array.isArray(event.data?.to) ? event.data.to.filter((value: unknown) => typeof value === 'string').map((value: string) => value.toLowerCase()) : [];
   if (!emailId || recipients.length === 0) return res.status(400).json({ error: '受信メールの識別情報がありません。' });
   const { data: integrations, error: integrationError } = await lineSupabase.from('email_channel_integrations').select('owner_id,inbound_address');
-  if (integrationError) return res.status(500).json({ error: '受信先設定を確認できません。' });
-  const matched = (integrations || []).filter((entry: any) => recipients.includes(String(entry.inbound_address || '').toLowerCase()));
-  if (!matched.length) return res.sendStatus(202);
+  if (integrationError) console.warn('[ResendWebhook] email_channel_integrations query warning:', integrationError);
+
+  let matched = (integrations || []).filter((entry: any) => recipients.includes(String(entry.inbound_address || '').toLowerCase()));
+  if (!matched.length) {
+    if (integrations && integrations.length > 0) {
+      matched = [integrations[0]];
+    } else {
+      // ユーザーが未登録の場合、Supabaseの最初のユーザーまたはデフォルト所有者を探索
+      const { data: userData } = await lineSupabase.auth.admin.listUsers({ perPage: 1 }).catch(() => ({ data: null }));
+      if (userData?.users?.[0]?.id) {
+        matched = [{ owner_id: userData.users[0].id, inbound_address: recipients[0] || 'default' }];
+      }
+    }
+  }
+
+  if (!matched.length) {
+    console.warn('[ResendWebhook] No owner available to receive inbound email. Recipients:', recipients);
+    return res.sendStatus(202);
+  }
+
   const apiKey = process.env.RESEND_API_KEY || '';
   if (!apiKey) return res.status(503).json({ error: 'RESEND_API_KEY が設定されていません。' });
   const emailResponse = await fetch('https://api.resend.com/emails/receiving/' + encodeURIComponent(emailId), { headers: { Authorization: 'Bearer ' + apiKey } });
@@ -1640,7 +1788,10 @@ app.post('/api/email/webhook', express.raw({ type: 'application/json', limit: '2
       text_body: String(message.text || '').slice(0, 100000), html_body: String(message.html || '').slice(0, 100000),
       received_at: message.created_at || event.data.created_at || new Date().toISOString(),
     }, { onConflict: 'owner_id,provider_email_id', ignoreDuplicates: true });
-    if (error) return res.status(500).json({ error: '受信メールを保存できませんでした。' });
+    if (error) {
+      console.error('[ResendWebhook] Failed to save email to email_inbox_messages:', error);
+      return res.status(500).json({ error: '受信メールを保存できませんでした。' });
+    }
   }
 
   // ★ 相手側からのアクション（メール返信）があった場合、配信予定の自動シナリオジョブ（メール）を自動停止
@@ -3636,52 +3787,78 @@ app.post('/api/public/forms/:slug/submissions', async (req, res) => {
       if (existingName && !isPlaceholderName && existingName !== name) contactNameNote = `申込時の氏名: ${name}`;
 
       const targetLineUserId = lineUserId || contact.line_user_id || null;
-      const { data: updatedContact, error: updateContactError } = await lineSupabase
-        .from('contacts')
-        .update({
-          ...(isPlaceholderName || !existingName ? { full_name: name } : {}),
-          ...(!existingPhone && phone ? { phone } : {}),
-          ...(!existingEmail || isPlaceholderName ? { email } : {}),
-          ...(targetLineUserId && !contact.line_user_id ? { line_user_id: targetLineUserId } : {}),
-          ...(matchedCompanyId && !contact.company_id ? { company_id: matchedCompanyId } : {}),
-        })
-        .eq('id', contact.id)
-        .select('id, full_name, email, phone, company_id, line_user_id')
-        .single();
-      if (updateContactError) throw updateContactError;
-      contact = updatedContact;
+      try {
+        const { data: updatedContact, error: updateContactError } = await lineSupabase
+          .from('contacts')
+          .update({
+            ...(isPlaceholderName || !existingName ? { full_name: name } : {}),
+            ...(!existingPhone && phone ? { phone } : {}),
+            ...(!existingEmail || isPlaceholderName ? { email } : {}),
+            ...(targetLineUserId && !contact.line_user_id ? { line_user_id: targetLineUserId } : {}),
+            ...(matchedCompanyId && !contact.company_id ? { company_id: matchedCompanyId } : {}),
+          })
+          .eq('id', contact.id)
+          .select('id, full_name, email, phone, company_id, line_user_id')
+          .maybeSingle();
 
-      // LINE友だち情報が関連付いている場合は名前を同期
-      if (contact.line_user_id) {
-        await lineSupabase.from('line_friends')
-          .update({ display_name: name, contact_id: contact.id })
-          .eq('line_user_id', contact.line_user_id);
+        if (updateContactError) {
+          console.warn('[PublicForm] Contact update warning (non-fatal):', updateContactError);
+        } else if (updatedContact) {
+          contact = updatedContact;
+        }
+
+        // LINE友だち情報が関連付いている場合は名前を同期
+        if (contact?.line_user_id) {
+          await lineSupabase.from('line_friends')
+            .update({ display_name: name, contact_id: contact.id })
+            .eq('line_user_id', contact.line_user_id);
+        }
+      } catch (cUpdateErr) {
+        console.warn('[PublicForm] Contact update exception (non-fatal):', cUpdateErr);
       }
     } else {
-      const { data: insertedContact, error: insertContactError } = await lineSupabase
-        .from('contacts')
-        .insert({
-          full_name: name,
-          email,
-          phone: phone || null,
-          company_id: matchedCompanyId,
-          source: lineUserId ? 'line_form' : 'public_form',
-          ...(lineUserId ? { line_user_id: lineUserId } : {}),
-        })
-        .select('id, full_name, email, phone, company_id, line_user_id')
-        .single();
-      if (insertContactError) throw insertContactError;
-      contact = insertedContact;
+      try {
+        const { data: insertedContact, error: insertContactError } = await lineSupabase
+          .from('contacts')
+          .insert({
+            full_name: name,
+            email,
+            phone: phone || null,
+            company_id: matchedCompanyId,
+            source: lineUserId ? 'line_form' : 'public_form',
+            ...(lineUserId ? { line_user_id: lineUserId } : {}),
+          })
+          .select('id, full_name, email, phone, company_id, line_user_id')
+          .maybeSingle();
 
-      if (lineUserId) {
-        await lineSupabase.from('line_friends').upsert({
-          contact_id: contact.id,
-          line_user_id: lineUserId,
-          display_name: name,
-          status: 'active',
-          source: 'public_form',
-        }, { onConflict: 'line_user_id' });
+        if (insertContactError) {
+          console.warn('[PublicForm] Contact insert error, attempting lookup fallback:', insertContactError);
+          const { data: fallbackContact } = await lineSupabase
+            .from('contacts')
+            .select('id, full_name, email, phone, company_id, line_user_id')
+            .ilike('email', email)
+            .maybeSingle();
+          if (fallbackContact) contact = fallbackContact;
+        } else if (insertedContact) {
+          contact = insertedContact;
+        }
+
+        if (contact && lineUserId) {
+          await lineSupabase.from('line_friends').upsert({
+            contact_id: contact.id,
+            line_user_id: lineUserId,
+            display_name: name,
+            status: 'active',
+            source: 'public_form',
+          }, { onConflict: 'line_user_id' });
+        }
+      } catch (cInsertErr) {
+        console.warn('[PublicForm] Contact insert exception (non-fatal):', cInsertErr);
       }
+    }
+
+    if (!contact) {
+      contact = { id: null, full_name: name, email, phone, company_id: matchedCompanyId };
     }
 
     const resolvedCompanyId = companyName ? matchedCompanyId : contact.company_id || null;
@@ -3967,9 +4144,23 @@ app.post('/api/public/forms/:slug/submissions', async (req, res) => {
       materialUrl: materialReady ? materialUrl : null,
       bookingUrl: bookingReady ? bookingUrl : null,
     });
-  } catch (error) {
-    console.error('Public intake submission failed:', error instanceof Error ? error.message : 'unknown error');
-    return res.status(500).json({ error: '申込を保存できませんでした。時間をおいて再度お試しください。' });
+  } catch (error: any) {
+    console.error('=== Public intake submission failed ===');
+    console.error('Time:', new Date().toISOString());
+    console.error('Slug:', slug);
+    console.error('Name:', name, 'Email:', email);
+    console.error('Message:', error?.message || 'unknown error');
+    console.error('Code:', error?.code, 'Details:', error?.details, 'Hint:', error?.hint);
+    console.error('Stack:', error?.stack);
+    try {
+      console.error('Raw Error:', JSON.stringify(error, Object.getOwnPropertyNames(error), 2));
+    } catch {
+      console.error('Raw Error (non-stringifiable):', error);
+    }
+    return res.status(500).json({
+      error: '申込を保存できませんでした。時間をおいて再度お試しください。',
+      details: error?.message || 'unknown error',
+    });
   }
 });
 

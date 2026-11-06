@@ -74,7 +74,7 @@ export const MarketingBroadcastView: React.FC<{initialChannel?:Channel}> = ({ini
       db.from('contacts').select('id,full_name,email,line_user_id,company_id').order('full_name').limit(5000),
       db.from('crm_segments').select('id,name,entity_type,conditions').order('name'),
       db.from('line_friends').select('line_user_id,status,consent_status'),
-      db.from('companies').select('id,company_name,industry,status').limit(100),
+      db.from('companies').select('id,company_name,industry').limit(100),
       db.from('prospects').select('id,company_id,source,status').limit(100),
       db.from('leads').select('id,contact_id,status').limit(100),
       db.from('deals').select('id,lead_id,status').limit(100),

@@ -9,6 +9,7 @@ type Tag={id:string;name:string};
 type ReplyTemplate={id:string;name:string;reply_type:'text'|'image'|'flex'|'video';payload:Record<string,unknown>};
 const LINE_TEMPLATE_BUCKET='mst-line-message-assets';
 const MAX_LINE_TEMPLATE_FILE_BYTES=20*1024*1024;
+type LineFriend = { line_user_id: string; display_name: string | null; picture_url: string | null };
 type ChannelIntegration={owner_id:string;bot_user_id:string;auto_reply_enabled:boolean};
 
 export interface MarketingLineInboxViewProps {
@@ -24,6 +25,7 @@ export const MarketingLineInboxView: React.FC<MarketingLineInboxViewProps> = ({
 }) => {
   const db=getSupabase();
   const [messages,setMessages]=useState<InboxMessage[]>([]);
+  const [friends,setFriends]=useState<Record<string,LineFriend>>({});
   const [rules,setRules]=useState<ReplyRule[]>([]);
   const [templates,setTemplates]=useState<ReplyTemplate[]>([]);
   const [activeView,setActiveView]=useState<'inbox'|'templates'>('inbox');
@@ -64,12 +66,13 @@ export const MarketingLineInboxView: React.FC<MarketingLineInboxViewProps> = ({
     const {data:auth}=await db.auth.getUser();
     if(!auth.user){setError('ログインしてください。');return}
     setOwnerId(auth.user.id);
-    const [m,r,t,i,templateResult]=await Promise.all([
+    const [m,r,t,i,templateResult,fResult]=await Promise.all([
       db.from('line_inbox_messages').select('*').order('received_at',{ascending:false}).limit(500),
       db.from('line_auto_reply_rules').select('*').order('priority',{ascending:true}),
       db.from('contact_tags').select('id,name').order('name'),
       db.from('line_channel_integrations').select('owner_id,bot_user_id,auto_reply_enabled').maybeSingle(),
       db.from('line_auto_reply_templates').select('*').order('created_at',{ascending:false}),
+      db.from('line_friends').select('line_user_id,display_name,picture_url'),
     ]);
     const missing=[m,r,i,templateResult].find(x=>x.error&&x.error.code==='PGRST205');
     if(missing){setError('受信箱・自動返信用のDBマイグレーションが未適用です。supabase/migrations/20261019130000_line_inbox_autoreply.sql、20261020140000_line_auto_reply_rich_messages.sql、20261020150000_line_auto_reply_templates.sql を適用してください。');return}
@@ -80,8 +83,44 @@ export const MarketingLineInboxView: React.FC<MarketingLineInboxViewProps> = ({
     setTemplates((templateResult.data||[]) as ReplyTemplate[]);
     setTags((t.data||[]) as Tag[]);
     setIntegration((i.data||null) as ChannelIntegration|null);
+    if(fResult?.data){
+      const map:Record<string,LineFriend>={};
+      for(const item of fResult.data as LineFriend[]){
+        if(item.line_user_id) map[item.line_user_id]=item;
+      }
+      setFriends(map);
+    }
   };
   useEffect(()=>{void load()},[]);
+
+  useEffect(()=>{
+    if(!selectedLineUserId||!db)return;
+    const current=friends[selectedLineUserId];
+    if(current&&current.display_name&&current.picture_url)return;
+    (async()=>{
+      try{
+        const {data:authSession}=await db.auth.getSession();
+        const token=authSession.session?.access_token;
+        if(!token)return;
+        const res=await fetch(`/api/line/profile/${encodeURIComponent(selectedLineUserId)}`,{headers:{Authorization:'Bearer '+token}});
+        if(res.ok){
+          const p=await res.json();
+          if(p.displayName||p.pictureUrl){
+            setFriends(prev=>({
+              ...prev,
+              [selectedLineUserId]:{
+                line_user_id:selectedLineUserId,
+                display_name:p.displayName||prev[selectedLineUserId]?.display_name||null,
+                picture_url:p.pictureUrl||prev[selectedLineUserId]?.picture_url||null,
+              }
+            }));
+          }
+        }
+      }catch{
+        // Non-blocking background fetch
+      }
+    })();
+  },[selectedLineUserId,db,friends]);
 
   const conversations=useMemo(()=>{
     const grouped=new Map<string,InboxMessage[]>();
@@ -327,25 +366,51 @@ export const MarketingLineInboxView: React.FC<MarketingLineInboxViewProps> = ({
                 conversations.map((conversation) => {
                   const lastMsg = conversation.items[conversation.items.length - 1];
                   const isSelected = selectedLineUserId === conversation.lineUserId;
+                  const friend = friends[conversation.lineUserId];
+                  const displayName = friend?.display_name || conversation.lineUserId;
+                  const hasCustomName = Boolean(friend?.display_name);
+
                   return (
                     <button
                       key={conversation.lineUserId}
                       type="button"
                       onClick={() => setSelectedLineUserId(conversation.lineUserId)}
-                      className={`w-full rounded-xl p-3 text-left transition cursor-pointer border ${
+                      className={`w-full rounded-xl p-3 text-left transition cursor-pointer border flex items-start gap-3 ${
                         isSelected
                           ? 'bg-emerald-50 border-emerald-300 shadow-xs ring-1 ring-emerald-300/40'
                           : 'bg-slate-50/70 border-slate-200 hover:bg-slate-100/80 hover:border-slate-300'
                       }`}
                     >
-                      <div className="truncate text-[11px] font-semibold text-slate-500">
-                        {conversation.lineUserId}
+                      <div className="shrink-0 mt-0.5">
+                        {friend?.picture_url ? (
+                          <img
+                            src={friend.picture_url}
+                            alt={displayName}
+                            className="w-9 h-9 rounded-full object-cover border border-slate-200 shadow-2xs"
+                          />
+                        ) : (
+                          <div className="w-9 h-9 rounded-full bg-emerald-100 text-emerald-700 font-bold text-xs flex items-center justify-center border border-emerald-200 shadow-2xs">
+                            {(displayName[0] || 'L').toUpperCase()}
+                          </div>
+                        )}
                       </div>
-                      <div className="truncate text-xs font-semibold text-slate-900 mt-0.5">
-                        {lastMsg?.body || '（本文なし）'}
-                      </div>
-                      <div className="text-[10px] text-slate-400 mt-1">
-                        {new Date(lastMsg?.received_at || '').toLocaleString('ja-JP', { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' })}
+                      <div className="min-w-0 flex-1">
+                        <div className="flex items-center justify-between gap-1">
+                          <span className="truncate text-xs font-bold text-slate-900">
+                            {displayName}
+                          </span>
+                          <span className="text-[10px] text-slate-400 shrink-0">
+                            {new Date(lastMsg?.received_at || '').toLocaleString('ja-JP', { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' })}
+                          </span>
+                        </div>
+                        {hasCustomName && (
+                          <div className="truncate text-[10px] font-mono text-slate-400">
+                            {conversation.lineUserId}
+                          </div>
+                        )}
+                        <div className="truncate text-xs text-slate-600 mt-1">
+                          {lastMsg?.body || '（本文なし）'}
+                        </div>
                       </div>
                     </button>
                   );
@@ -355,13 +420,35 @@ export const MarketingLineInboxView: React.FC<MarketingLineInboxViewProps> = ({
           </section>
 
           <section className="rounded-2xl border border-slate-200 bg-white p-4 flex flex-col min-h-[460px] shadow-xs">
-            <h3 className="font-bold text-slate-900 text-xs border-b border-slate-200 pb-2 flex items-center justify-between">
-              <span>チャット履歴</span>
-              {selectedLineUserId && (
-                <span className="text-[11px] font-mono text-emerald-600 truncate max-w-[220px]">
-                  {selectedLineUserId}
-                </span>
-              )}
+            <h3 className="font-bold text-slate-900 text-xs border-b border-slate-200 pb-2.5 flex items-center justify-between">
+              <span className="text-slate-600">チャット履歴</span>
+              {selectedLineUserId && (() => {
+                const activeFriend = friends[selectedLineUserId];
+                const activeName = activeFriend?.display_name || selectedLineUserId;
+                return (
+                  <div className="flex items-center gap-2 max-w-[280px]">
+                    {activeFriend?.picture_url ? (
+                      <img
+                        src={activeFriend.picture_url}
+                        alt={activeName}
+                        className="w-6 h-6 rounded-full object-cover border border-slate-200 shrink-0"
+                      />
+                    ) : (
+                      <div className="w-6 h-6 rounded-full bg-emerald-100 text-emerald-700 text-[10px] font-bold flex items-center justify-center shrink-0">
+                        {(activeName[0] || 'L').toUpperCase()}
+                      </div>
+                    )}
+                    <span className="text-xs font-bold text-slate-900 truncate">
+                      {activeName}
+                    </span>
+                    {activeFriend?.display_name && (
+                      <span className="text-[10px] font-mono text-slate-400 truncate">
+                        ({selectedLineUserId.slice(0, 8)}...)
+                      </span>
+                    )}
+                  </div>
+                );
+              })()}
             </h3>
 
             {!activeConversation ? (
@@ -371,21 +458,44 @@ export const MarketingLineInboxView: React.FC<MarketingLineInboxViewProps> = ({
             ) : (
               <>
                 <div className="mt-3 flex-1 max-h-[460px] space-y-2.5 overflow-auto rounded-xl bg-slate-50 p-4 border border-slate-200">
-                  {activeConversation.items.map((message) => (
-                    <div
-                      key={message.id}
-                      className={`max-w-[85%] rounded-2xl px-4 py-2.5 text-xs shadow-xs ${
-                        message.direction === 'outbound'
-                          ? 'ml-auto bg-emerald-600 text-white rounded-br-none'
-                          : 'bg-white text-slate-900 rounded-bl-none border border-slate-200'
-                      }`}
-                    >
-                      <div className="whitespace-pre-wrap leading-relaxed">{message.body}</div>
-                      <div className={`mt-1 text-[10px] text-right ${message.direction === 'outbound' ? 'text-emerald-100' : 'text-slate-400'}`}>
-                        {new Date(message.received_at).toLocaleString('ja-JP', { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' })}
+                  {activeConversation.items.map((message) => {
+                    const activeFriend = friends[selectedLineUserId];
+                    const isOutbound = message.direction === 'outbound';
+                    return (
+                      <div
+                        key={message.id}
+                        className={`flex items-start gap-2 ${isOutbound ? 'justify-end' : 'justify-start'}`}
+                      >
+                        {!isOutbound && (
+                          <div className="shrink-0 mt-0.5">
+                            {activeFriend?.picture_url ? (
+                              <img
+                                src={activeFriend.picture_url}
+                                alt="LINE Friend"
+                                className="w-6 h-6 rounded-full object-cover border border-slate-200"
+                              />
+                            ) : (
+                              <div className="w-6 h-6 rounded-full bg-emerald-100 text-emerald-700 text-[10px] font-bold flex items-center justify-center">
+                                L
+                              </div>
+                            )}
+                          </div>
+                        )}
+                        <div
+                          className={`max-w-[80%] rounded-2xl px-4 py-2.5 text-xs shadow-xs ${
+                            isOutbound
+                              ? 'bg-emerald-600 text-white rounded-br-none'
+                              : 'bg-white text-slate-900 rounded-tl-none border border-slate-200'
+                          }`}
+                        >
+                          <div className="whitespace-pre-wrap leading-relaxed">{message.body}</div>
+                          <div className={`mt-1 text-[10px] text-right ${isOutbound ? 'text-emerald-100' : 'text-slate-400'}`}>
+                            {new Date(message.received_at).toLocaleString('ja-JP', { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' })}
+                          </div>
+                        </div>
                       </div>
-                    </div>
-                  ))}
+                    );
+                  })}
                 </div>
 
                 <div className="mt-3 flex items-end gap-2 pt-2 border-t border-slate-200">
