@@ -831,91 +831,24 @@ export const UnifiedInboxView: React.FC<UnifiedInboxViewProps> = ({
 
       {/* 2. LINE INBOX & INDIVIDUAL CHAT */}
       {activeChannel === 'line' && (
-        <div className="space-y-4">
-          <div className="flex flex-wrap items-center justify-between gap-3 p-4 rounded-xl border border-emerald-200 bg-emerald-50/70 text-xs text-emerald-900">
-            <div className="flex items-center gap-2">
-              <span className="w-2 h-2 rounded-full bg-emerald-600 animate-pulse" />
-              <span>
-                LINE公式アカウントの1:1個別チャット画面です。友だちへの個別返信やメッセージ履歴を閲覧できます。
-              </span>
-            </div>
-            <div className="flex items-center gap-2">
-              <button
-                onClick={() => onNavigateTab('contacts')}
-                className="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg bg-white hover:bg-emerald-50 text-emerald-800 text-xs font-semibold border border-emerald-200 shadow-xs transition cursor-pointer"
-              >
-                <TagIcon className="w-3.5 h-3.5 text-emerald-600" />
-                <span>友だち・タグ管理</span>
-              </button>
-              <button
-                onClick={() => onNavigateTab('marketing_automation')}
-                className="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-semibold shadow-xs transition cursor-pointer"
-                title="マーケティング自動化のLINE設定へ"
-              >
-                <Sparkles className="w-3.5 h-3.5" />
-                <span>ウェルカムFlex・自動返信設定へ</span>
-              </button>
-            </div>
-          </div>
-
-          <MarketingLineInboxView
-            initialLineUserId={initialLineUserId}
-            chatOnly={true}
-            onNavigateSettings={() => onNavigateTab('marketing_automation')}
-          />
-        </div>
+        <MarketingLineInboxView
+          initialLineUserId={initialLineUserId}
+          chatOnly={true}
+          onNavigateSettings={() => onNavigateTab('marketing_automation')}
+          onNavigateContacts={() => onNavigateTab('contacts')}
+        />
       )}
 
       {/* 3. EMAIL INBOX */}
       {activeChannel === 'email' && (
-        <div className="space-y-4">
-          <div className="flex items-center justify-between p-4 rounded-xl border border-purple-200 bg-purple-50/70 text-xs text-purple-900">
-            <div className="flex items-center gap-2">
-              <span className="w-2 h-2 rounded-full bg-purple-600" />
-              <span>
-                受信用メールアドレス宛に届いたお問い合わせやアウトリーチ返信を閲覧・管理します。
-              </span>
-            </div>
-            <button
-              onClick={() => onNavigateTab('communication_send')}
-              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-white hover:bg-purple-50 text-purple-700 text-xs font-semibold border border-purple-200 shadow-xs transition cursor-pointer"
-            >
-              <Send className="w-3.5 h-3.5 text-purple-600" />
-              <span>送信センター（返信・商談案内）を開く</span>
-            </button>
-          </div>
-
-          <MarketingEmailInboxView />
-        </div>
+        <MarketingEmailInboxView
+          onNavigateSendCenter={() => onNavigateTab('communication_send')}
+        />
       )}
 
       {/* 4. SOCIAL DM STUDIO */}
       {activeChannel === 'social_dm' && (
-        <div className="space-y-4">
-          <div className="flex flex-wrap items-center justify-between gap-3 p-4 rounded-xl border border-purple-200 bg-purple-50/70 text-xs text-purple-900">
-            <div className="flex items-center gap-2">
-              <span className="w-2 h-2 rounded-full bg-purple-600 animate-pulse" />
-              <span>
-                SNSから届いたDM・問い合わせの受信トレイです。テンプレ選択や手動返信、CRM見込み客登録を行えます。
-              </span>
-            </div>
-            <button
-              onClick={() => {
-                try {
-                  localStorage.setItem('ai_acquisition_active_tab', 'social_studio');
-                  localStorage.setItem('social_studio_mode', 'dm_sales');
-                } catch {}
-                onNavigateTab('ai_acquisition', { acquisitionTab: 'social_studio', studioMode: 'dm_sales' });
-              }}
-              className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg bg-purple-600 hover:bg-purple-700 text-white text-xs font-semibold shadow-xs transition cursor-pointer"
-            >
-              <Send className="w-3.5 h-3.5" />
-              <span>🎯 攻めのDM営業（リストアップ・テンプレ送信）へ</span>
-            </button>
-          </div>
-
-          <SocialDmSalesStudio mode="inbound" onNavigateTab={onNavigateTab} />
-        </div>
+        <SocialDmSalesStudio mode="inbound" onNavigateTab={onNavigateTab} />
       )}
     </div>
   );

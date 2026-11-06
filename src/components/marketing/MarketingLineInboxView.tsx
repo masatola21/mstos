@@ -16,12 +16,14 @@ export interface MarketingLineInboxViewProps {
   initialLineUserId?: string;
   chatOnly?: boolean;
   onNavigateSettings?: () => void;
+  onNavigateContacts?: () => void;
 }
 
 export const MarketingLineInboxView: React.FC<MarketingLineInboxViewProps> = ({
   initialLineUserId,
   chatOnly = false,
   onNavigateSettings,
+  onNavigateContacts,
 }) => {
   const db=getSupabase();
   const [messages,setMessages]=useState<InboxMessage[]>([]);
@@ -304,55 +306,64 @@ export const MarketingLineInboxView: React.FC<MarketingLineInboxViewProps> = ({
   if (chatOnly) {
     return (
       <div className="space-y-4">
-        <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-xs">
-          <div className="flex flex-wrap items-center justify-between gap-3">
-            <div>
-              <h2 className="text-base font-bold text-slate-900 flex items-center gap-2">
-                <span>💬 LINE公式 1:1 個別チャット</span>
-              </h2>
-              <p className="mt-0.5 text-xs text-slate-500">
-                LINE友だちからの受信メッセージを確認し、1対1の個別返信を行います。
-              </p>
-            </div>
-            <div className="flex items-center gap-2">
-              <button
-                type="button"
-                onClick={() => void load()}
-                className="rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs text-slate-700 hover:bg-slate-50 shadow-xs transition cursor-pointer"
-              >
-                更新
-              </button>
-              {onNavigateSettings && (
-                <button
-                  type="button"
-                  onClick={onNavigateSettings}
-                  className="inline-flex items-center gap-1.5 rounded-lg bg-emerald-50 hover:bg-emerald-100 border border-emerald-200 px-3 py-1.5 text-xs font-semibold text-emerald-800 shadow-xs transition cursor-pointer"
-                >
-                  <span>⚙️ 自動返信・ウェルカム設定へ</span>
-                </button>
+        {/* すっきりとした単一のツールバー */}
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-3 sm:px-4 rounded-xl border border-slate-200 bg-white shadow-xs">
+          <div className="flex flex-wrap items-center gap-2.5 text-xs">
+            <div className="flex items-center gap-1.5 font-semibold text-slate-800">
+              <span className={`inline-block w-2 h-2 rounded-full ${integration ? 'bg-emerald-500' : 'bg-amber-500'}`} />
+              <span>{integration ? 'LINE公式連携中' : 'LINE公式未連携'}</span>
+              {integration && (
+                <span className="text-slate-400 font-mono text-[11px] hidden md:inline">({integration.bot_user_id})</span>
               )}
             </div>
-          </div>
-
-          {error && <p role="alert" className="mt-3 rounded-lg bg-rose-50 border border-rose-200 p-3 text-xs text-rose-800">{error}</p>}
-          {notice && <p role="status" className="mt-3 rounded-lg bg-emerald-50 border border-emerald-200 p-3 text-xs text-emerald-800">{notice}</p>}
-
-          <div className="mt-3 flex flex-wrap items-center gap-2.5 rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-xs">
-            <span className={`inline-block w-2 h-2 rounded-full ${integration ? 'bg-emerald-500' : 'bg-amber-500'}`} />
-            <span className="text-slate-700 font-medium">{integration ? 'LINE公式アカウント連携中' : 'LINE公式アカウント未関連付け'}</span>
-            {integration && <span className="text-slate-500 font-mono text-[11px]">(Bot ID: {integration.bot_user_id})</span>}
             {!integration && (
               <button
                 disabled={busy}
                 type="button"
                 onClick={() => void connect()}
-                className="ml-auto rounded border border-slate-200 bg-white px-2.5 py-1 text-xs text-slate-700 hover:bg-slate-50 shadow-xs cursor-pointer"
+                className="rounded border border-slate-200 bg-slate-50 px-2 py-0.5 text-[11px] text-slate-700 hover:bg-slate-100 cursor-pointer"
               >
                 連携を再確認
               </button>
             )}
+            <span className="text-slate-300">·</span>
+            <span className="text-slate-500 font-medium">
+              チャット履歴 <span className="font-semibold text-slate-800">{conversations.length}名</span>
+            </span>
           </div>
-        </section>
+
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={() => void load()}
+              className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg border border-slate-200 bg-white text-xs text-slate-700 hover:bg-slate-50 shadow-xs transition cursor-pointer"
+              title="最新メッセージを再読み込み"
+            >
+              更新
+            </button>
+            {onNavigateContacts && (
+              <button
+                type="button"
+                onClick={onNavigateContacts}
+                className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg border border-slate-200 bg-white hover:bg-slate-50 text-slate-700 text-xs font-medium shadow-xs transition cursor-pointer"
+              >
+                <span>友だち・タグ管理</span>
+              </button>
+            )}
+            {onNavigateSettings && (
+              <button
+                type="button"
+                onClick={onNavigateSettings}
+                className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-emerald-50 hover:bg-emerald-100 border border-emerald-200 text-emerald-800 text-xs font-semibold shadow-xs transition cursor-pointer"
+              >
+                <span>自動返信・設定</span>
+              </button>
+            )}
+          </div>
+        </div>
+
+        {error && <p role="alert" className="rounded-lg bg-rose-50 border border-rose-200 p-3 text-xs text-rose-800">{error}</p>}
+        {notice && <p role="status" className="rounded-lg bg-emerald-50 border border-emerald-200 p-3 text-xs text-emerald-800">{notice}</p>}
 
         <div className="grid gap-4 xl:grid-cols-[280px_1fr]">
           <section className="rounded-2xl border border-slate-200 bg-white p-4 shadow-xs">
