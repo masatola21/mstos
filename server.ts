@@ -759,8 +759,8 @@ async function processLineInboxAndAutoReply(event: any, contact: any, eventId: s
       }
     } else if (replyType === 'flex') {
       const altText = String(replyPayload.altText || '').slice(0, 1500);
-      const contents = replyPayload.contents;
-      if (altText && contents && typeof contents === 'object' && ['bubble', 'carousel'].includes(contents.type)) {
+            const contents = normalizeFlexContents(replyPayload);
+      if (altText && contents) {
         lineMessage = { type: 'flex', altText, contents };
         inboxBody = '[Flexメッセージ]';
       }
