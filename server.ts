@@ -3734,7 +3734,10 @@ app.get(['/api/public/forms/:slug', '/public/forms/:slug'], async (req, res) => 
   }
 });
 
-app.post(['/api/public/forms/:slug/submissions', '/public/forms/:slug/submissions'], async (req, res) => {
+app.post(
+  ['/api/public/forms/:slug/submissions', '/public/forms/:slug/submissions'],
+  express.json({ limit: '50kb' }),
+  async (req, res) => {
   if (!lineSupabase) return res.status(503).json({ error: 'フォーム受付サーバーが設定されていません。' });
   const ip = req.ip || req.socket.remoteAddress || 'unknown';
   if (publicFormRateLimited(ip)) return res.status(429).json({ error: '送信回数が上限に達しました。少し時間をおいて再度お試しください。' });
