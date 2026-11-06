@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { getSalesEmailTemplate, getNurturingStepTemplate } from '../utils/salesOutreachTemplates';
-import { Eye, Save, Send, Users, SendHorizonal, FileText, Library, Mail, MessageSquare, Paperclip, CheckCircle2, X } from 'lucide-react';
+import { Eye, Save, Send, Users, SendHorizonal, FileText, Library, Mail, MessageSquare, Paperclip, CheckCircle2, X, Inbox } from 'lucide-react';
 import { getSupabase } from '../lib/supabaseClient';
 import { LineMessagePreview } from './LineMessagePreview';
 import { renderPlaceholders } from '../utils/placeholders';
@@ -23,6 +23,7 @@ type Props = {
   initialContactId?: string;
   initialMode?: 'send' | 'broadcast' | 'templates';
   initialBroadcastChannel?: 'email' | 'line';
+  onNavigateTab?: (tab: string) => void;
 };
 
 const labels: Record<Kind, string> = {
@@ -184,6 +185,7 @@ export const CommunicationSendCenter: React.FC<Props> = ({
   initialContactId,
   initialMode = 'send',
   initialBroadcastChannel = 'email',
+  onNavigateTab,
 }) => {
   const [screen, setScreen] = useState<'send' | 'broadcast' | 'templates'>(initialMode);
   const [kind, setKind] = useState<Kind>(initialKind);
@@ -655,6 +657,29 @@ export const CommunicationSendCenter: React.FC<Props> = ({
             <Library className="h-3.5 w-3.5" />
             <span>定型文テンプレート</span>
           </button>
+
+          {onNavigateTab && (
+            <div className="flex items-center gap-1.5 sm:ml-2 sm:pl-2 sm:border-l border-slate-200">
+              <button
+                type="button"
+                onClick={() => onNavigateTab('inbox_hub')}
+                className="flex items-center gap-1.5 rounded-md border border-slate-200 bg-white px-2.5 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-50 transition cursor-pointer"
+                title="受信トレイを開く"
+              >
+                <Inbox className="h-3.5 w-3.5 text-purple-600" />
+                <span>受信トレイ</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => onNavigateTab('document_templates')}
+                className="flex items-center gap-1.5 rounded-md border border-slate-200 bg-white px-2.5 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-50 transition cursor-pointer"
+                title="提案書・診断レポート・見積書作成を開く"
+              >
+                <FileText className="h-3.5 w-3.5 text-purple-600" />
+                <span>書類作成</span>
+              </button>
+            </div>
+          )}
         </div>
       </div>
 

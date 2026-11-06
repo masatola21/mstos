@@ -3810,7 +3810,23 @@ app.post('/api/public/forms/:slug/submissions', async (req, res) => {
   if (!/^[a-z0-9ぁ-んァ-ヶ一-龠-]{1,120}$/i.test(slug)) return res.status(404).json({ error: 'フォームが見つかりません。' });
 
   const name = typeof body.name === 'string' ? body.name.trim().slice(0, 120) : '';
-  const companyName = typeof body.companyName === 'string' ? body.companyName.trim().slice(0, 200) : '';
+  const answers = body.answers && typeof body.answers === 'object' && !Array.isArray(body.answers) ? body.answers as Record<string, unknown> : {};
+  if (Object.values(answers).some((value) => typeof value !== 'string' && typeof value !== 'boolean') ||
+      Object.values(answers).some((value) => typeof value === 'string' && value.length > 4_000)) {
+    return res.status(400).json({ error: '回答内容を確認してください。' });
+  }
+
+  const rawCompanyFromAnswers =
+    (typeof answers.companyName === 'string' && answers.companyName.trim()) ||
+    (typeof answers.company === 'string' && answers.company.trim()) ||
+    (typeof answers.company_name === 'string' && answers.company_name.trim()) ||
+    (typeof answers.organization === 'string' && answers.organization.trim()) ||
+    (typeof answers.target_company === 'string' && answers.target_company.trim()) ||
+    (typeof answers.q_company === 'string' && answers.q_company.trim()) ||
+    '';
+  const companyName = typeof body.companyName === 'string' && body.companyName.trim()
+    ? body.companyName.trim().slice(0, 200)
+    : rawCompanyFromAnswers.slice(0, 200);
   const email = typeof body.email === 'string' ? body.email.trim().toLowerCase().slice(0, 254) : '';
   const phone = typeof body.phone === 'string' ? body.phone.trim().slice(0, 40) : '';
   let lineUserId = typeof body.lineUserId === 'string' && /^U[0-9a-f]{32}$/i.test(body.lineUserId.trim()) ? body.lineUserId.trim() : '';
@@ -3832,15 +3848,10 @@ app.post('/api/public/forms/:slug/submissions', async (req, res) => {
   if (!name || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email) || !isPublicUuid(requestId) || body.privacyAgreed !== true) {
     return res.status(400).json({ error: 'お名前・有効なメールアドレス・個人情報の同意をご確認ください。' });
   }
-  const answers = body.answers && typeof body.answers === 'object' && !Array.isArray(body.answers) ? body.answers as Record<string, unknown> : {};
-  if (Object.values(answers).some((value) => typeof value !== 'string' && typeof value !== 'boolean') ||
-      Object.values(answers).some((value) => typeof value === 'string' && value.length > 4_000)) {
-    return res.status(400).json({ error: '回答内容を確認してください。' });
-  }
   const userNotes = typeof body.notes === 'string' ? body.notes.trim().slice(0, 4_000) : '';
   const utmInput = body.utm && typeof body.utm === 'object' && !Array.isArray(body.utm) ? body.utm as Record<string, unknown> : {};
   const utm: Record<string, string> = {};
-  for (const key of ['source', 'utm_source', 'utm_medium', 'utm_campaign']) {
+  for (const key of ['source', 'utm_source', 'utm_medium', 'utm_campaign', 'inquiryType']) {
     const value = utmInput[key];
     if (typeof value === 'string' && value.trim()) utm[key] = value.trim().slice(0, 120);
   }
@@ -3876,7 +3887,7 @@ app.post('/api/public/forms/:slug/submissions', async (req, res) => {
     if (priorError) throw priorError;
     if (priorSubmission) {
       let diagnosisId: string | null = null;
-      if (form.form_type === 'diagnosis') {
+      if (form.form_type === 'diagnosis' || slug === 'business-diagnosis' || form.name.includes('診断')) {
         const { data, error } = await lineSupabase.rpc('create_diagnosis_from_form_submission', { p_submission_id: priorSubmission.id });
         if (error) console.error('Diagnosis handoff retry failed:', error.message);
         else diagnosisId = data || null;
@@ -3923,7 +3934,52 @@ app.post('/api/public/forms/:slug/submissions', async (req, res) => {
       }
       const matchingCompanies = allCompanies.filter((company) => normalizePublicCompanyName(company.company_name) === normalizedCompanyName);
       matchingCompanyNames = matchingCompanies.map((company) => String(company.company_name || '')).filter(Boolean);
-      if (matchingCompanies.length === 1) matchedCompanyId = matchingCompanies[0].id;
+      if (matchingCompanies.length >= 1) {
+        matchedCompanyId = matchingCompanies[0].id;
+      } else {
+        // 会社が未登録の場合はCIDを自動採番してcompaniesテーブルへ確実に追加
+        try {
+          const { data: existingCids } = await lineSupabase
+            .from('companies')
+            .select('id')
+            .like('id', 'CID-%')
+            .limit(2000);
+          const maxNum = Math.max(0, ...(existingCids || []).map((row: any) => Number(String(row.id).match(/^CID-(\d+)$/)?.[1] || 0)));
+          const nextCid = `CID-${String(maxNum + 1).padStart(3, '0')}`;
+          const { data: newCompany, error: createCompanyErr } = await lineSupabase
+            .from('companies')
+            .insert({
+              id: nextCid,
+              company_name: companyName,
+              contact_name: name || null,
+              email: email || null,
+              phone: phone || null,
+            })
+            .select('id, company_name')
+            .maybeSingle();
+
+          if (!createCompanyErr && newCompany) {
+            matchedCompanyId = newCompany.id;
+          } else if (createCompanyErr) {
+            console.warn('[PublicForm] Company insert retry with unique timestamp:', createCompanyErr.message);
+            const fallbackCid = `CID-${Date.now().toString().slice(-6)}`;
+            const { data: fallbackCompany } = await lineSupabase
+              .from('companies')
+              .insert({
+                id: fallbackCid,
+                company_name: companyName,
+                contact_name: name || null,
+                email: email || null,
+                phone: phone || null,
+              })
+              .select('id, company_name')
+              .maybeSingle();
+            if (fallbackCompany) matchedCompanyId = fallbackCompany.id;
+          }
+        } catch (e) {
+          console.warn('[PublicForm] Company auto-creation exception:', e);
+        }
+      }
     }
     // 1. LINE User ID または Contact ID が渡されていれば最優先で該当連絡先を特定
     let contact: any = null;
@@ -4056,15 +4112,33 @@ app.post('/api/public/forms/:slug/submissions', async (req, res) => {
     const validInquiryTypes = ['資料請求', '開業相談', '両方希望'] as const;
     type ValidInquiryType = typeof validInquiryTypes[number];
     let inquiryType: ValidInquiryType | null = null;
-    const rawInquiry = String(cleanAnswers.q_inquiry_type || cleanAnswers.inquiry_type || tokenData?.rt || '').trim();
+    const rawInquiry = String(
+      cleanAnswers.q_inquiry_type ||
+      cleanAnswers.inquiry_type ||
+      cleanAnswers.inquiryType ||
+      cleanAnswers.type ||
+      cleanAnswers.subject ||
+      cleanAnswers.category ||
+      (utmInput as any).inquiryType ||
+      (body as any).inquiryType ||
+      tokenData?.rt ||
+      ''
+    ).trim();
+
     if ((validInquiryTypes as readonly string[]).includes(rawInquiry)) {
       inquiryType = rawInquiry as ValidInquiryType;
     } else if (rawInquiry.includes('両方') || (rawInquiry.includes('資料') && rawInquiry.includes('相談'))) {
       inquiryType = '両方希望';
-    } else if (rawInquiry.includes('資料')) {
+    } else if (rawInquiry.includes('資料') || rawInquiry.includes('ダウンロード')) {
       inquiryType = '資料請求';
-    } else if (rawInquiry.includes('相談')) {
+    } else if (rawInquiry.includes('相談') || rawInquiry.includes('面談') || rawInquiry.includes('診断')) {
       inquiryType = '開業相談';
+    } else if (slug === 'material-download' || form.name.includes('資料')) {
+      inquiryType = '資料請求';
+    } else if (slug === 'business-diagnosis' || form.form_type === 'diagnosis' || form.form_type === 'consultation' || form.name.includes('相談')) {
+      inquiryType = '開業相談';
+    } else if (slug === 'care-package-inquiry') {
+      inquiryType = '資料請求';
     }
 
     const isCarePackage = slug === 'care-package-inquiry' || Boolean(inquiryType);

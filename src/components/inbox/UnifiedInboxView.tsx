@@ -343,6 +343,14 @@ export const UnifiedInboxView: React.FC<UnifiedInboxViewProps> = ({
             <ArrowRight className="w-3.5 h-3.5 text-slate-400" />
           </button>
           <button
+            onClick={() => onNavigateTab('document_templates')}
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md bg-white hover:bg-slate-50 text-xs font-medium text-slate-700 border border-slate-200 transition cursor-pointer"
+          >
+            <FileText className="w-3.5 h-3.5 text-purple-600" />
+            <span>書類・提案書作成</span>
+            <ArrowRight className="w-3.5 h-3.5 text-slate-400" />
+          </button>
+          <button
             onClick={() => onNavigateTab('communication_send')}
             className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md bg-purple-600 hover:bg-purple-700 text-xs font-medium text-white transition cursor-pointer"
           >
@@ -353,189 +361,94 @@ export const UnifiedInboxView: React.FC<UnifiedInboxViewProps> = ({
         </div>
       </div>
 
-      {/* ── Channel Quick Overview Cards ── */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-          {/* Channel 1: Form / Diagnoses */}
-          <button
-            onClick={() => handleSelectChannel('forms')}
-            className={`p-4 rounded-xl border text-left transition-all cursor-pointer ${
-              activeChannel === 'forms'
-                ? 'bg-purple-50/80 border-purple-400 shadow-xs ring-2 ring-purple-400/20'
-                : 'bg-slate-50/70 border-slate-200 hover:border-slate-300 hover:bg-slate-100/60'
-            }`}
-          >
-            <div className="flex items-center justify-between">
-              <span className="flex items-center gap-1.5 text-xs font-semibold text-slate-700">
-                <FileText className="w-4 h-4 text-emerald-600" />
-                フォーム・診断回答
-              </span>
-              {counts.formsReceived > 0 && (
-                <span className="px-1.5 py-0.5 rounded text-[10px] font-bold bg-amber-100 text-amber-800 border border-amber-300 animate-pulse">
-                  未対応 {counts.formsReceived}
-                </span>
-              )}
-            </div>
-            <div className="mt-2 flex items-baseline gap-2">
-              <span className="text-2xl font-black text-slate-900">{counts.formsTotal}</span>
-              <span className="text-xs text-slate-500">件受付</span>
-            </div>
-            <p className="text-[11px] text-slate-500 mt-1 truncate">
-              HP問い合わせ・ボトルネック診断
-            </p>
-          </button>
-
-          {/* Channel 2: LINE */}
-          <button
-            onClick={() => handleSelectChannel('line')}
-            className={`p-4 rounded-xl border text-left transition-all cursor-pointer ${
-              activeChannel === 'line'
-                ? 'bg-emerald-50/80 border-emerald-400 shadow-xs ring-2 ring-emerald-400/20'
-                : 'bg-slate-50/70 border-slate-200 hover:border-slate-300 hover:bg-slate-100/60'
-            }`}
-          >
-            <div className="flex items-center justify-between">
-              <span className="flex items-center gap-1.5 text-xs font-semibold text-slate-700">
-                <MessageSquare className="w-4 h-4 text-emerald-600" />
-                LINE公式アカウント
-              </span>
-              {counts.lineInbound > 0 && (
-                <span className="px-1.5 py-0.5 rounded text-[10px] font-bold bg-emerald-100 text-emerald-800 border border-emerald-300">
-                  受信 {counts.lineInbound}
-                </span>
-              )}
-            </div>
-            <div className="mt-2 flex items-baseline gap-2">
-              <span className="text-2xl font-black text-slate-900">{counts.lineTotal}</span>
-              <span className="text-xs text-slate-500">通履歴</span>
-            </div>
-            <p className="text-[11px] text-slate-500 mt-1 truncate">
-              友だち返信・個別チャット（1:1）
-            </p>
-          </button>
-
-          {/* Channel 3: Email */}
-          <button
-            onClick={() => handleSelectChannel('email')}
-            className={`p-4 rounded-xl border text-left transition-all cursor-pointer ${
-              activeChannel === 'email'
-                ? 'bg-sky-50/80 border-sky-400 shadow-xs ring-2 ring-sky-400/20'
-                : 'bg-slate-50/70 border-slate-200 hover:border-slate-300 hover:bg-slate-100/60'
-            }`}
-          >
-            <div className="flex items-center justify-between">
-              <span className="flex items-center gap-1.5 text-xs font-semibold text-slate-700">
-                <Mail className="w-4 h-4 text-sky-600" />
-                メール受信箱
-              </span>
-              <span className="px-1.5 py-0.5 rounded text-[10px] font-medium bg-slate-200 text-slate-700">
-                Resend連携
-              </span>
-            </div>
-            <div className="mt-2 flex items-baseline gap-2">
-              <span className="text-2xl font-black text-slate-900">{counts.emailTotal}</span>
-              <span className="text-xs text-slate-500">通受信</span>
-            </div>
-            <p className="text-[11px] text-slate-500 mt-1 truncate">
-              問い合わせ・アウトリーチ返信
-            </p>
-          </button>
-
-          {/* Channel 4: Social DM */}
-          <button
-            onClick={() => handleSelectChannel('social_dm')}
-            className={`p-4 rounded-xl border text-left transition-all cursor-pointer ${
-              activeChannel === 'social_dm'
-                ? 'bg-purple-50/80 border-purple-400 shadow-xs ring-2 ring-purple-400/20'
-                : 'bg-slate-50/70 border-slate-200 hover:border-slate-300 hover:bg-slate-100/60'
-            }`}
-          >
-            <div className="flex items-center justify-between">
-              <span className="flex items-center gap-1.5 text-xs font-semibold text-slate-700">
-                <Share2 className="w-4 h-4 text-purple-600" />
-                SNS DM受信対応
-              </span>
-              {counts.dmInboundWaiting > 0 && (
-                <span className="px-1.5 py-0.5 rounded text-[10px] font-bold bg-purple-100 text-purple-800 border border-purple-300 animate-pulse">
-                  未対応 {counts.dmInboundWaiting}
-                </span>
-              )}
-            </div>
-            <div className="mt-2 flex items-baseline gap-2">
-              <span className="text-2xl font-black text-slate-900">{counts.dmInboundWaiting}</span>
-              <span className="text-xs text-slate-500">件返信待ち</span>
-            </div>
-            <p className="text-[11px] text-slate-500 mt-1 truncate">
-              X・Instagram・LinkedIn・FB
-            </p>
-          </button>
-        </div>
-
-      {/* ── Channel Navigation Tabs ── */}
-      <div className="flex flex-wrap items-center gap-2 border-b border-slate-200 pb-2">
+      {/* ── Channel Navigation Tabs (統合タブバー・件数集約) ── */}
+      <div className="flex flex-wrap items-center gap-2 border-b border-slate-200 pb-3">
         <button
           onClick={() => handleSelectChannel('forms')}
-          className={`flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-semibold transition cursor-pointer ${
+          className={`flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs sm:text-sm font-semibold transition cursor-pointer ${
             activeChannel === 'forms'
               ? 'bg-purple-600 text-white shadow-xs'
-              : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100'
+              : 'bg-white border border-slate-200 text-slate-700 hover:text-slate-900 hover:bg-slate-50'
           }`}
         >
-          <FileText className="w-4 h-4" />
-          <span>📝 フォーム・無料診断回答</span>
+          <FileText className={`w-4 h-4 ${activeChannel === 'forms' ? 'text-white' : 'text-emerald-600'}`} />
+          <span>フォーム・無料診断回答</span>
+          <span className={`px-2 py-0.5 rounded-full text-xs font-bold ${
+            activeChannel === 'forms' ? 'bg-purple-700 text-purple-100' : 'bg-slate-100 text-slate-700'
+          }`}>
+            {counts.formsTotal}件
+          </span>
           {counts.formsReceived > 0 && (
-            <span className="px-1.5 py-0.2 rounded-full text-xs font-bold bg-amber-200 text-amber-900">
-              {counts.formsReceived}
+            <span className={`px-2 py-0.5 rounded-full text-[11px] font-bold ${
+              activeChannel === 'forms' ? 'bg-amber-300 text-amber-950' : 'bg-amber-100 text-amber-800 border border-amber-300 animate-pulse'
+            }`}>
+              未対応 {counts.formsReceived}
             </span>
           )}
         </button>
 
         <button
           onClick={() => handleSelectChannel('line')}
-          className={`flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-semibold transition cursor-pointer ${
+          className={`flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs sm:text-sm font-semibold transition cursor-pointer ${
             activeChannel === 'line'
               ? 'bg-purple-600 text-white shadow-xs'
-              : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100'
+              : 'bg-white border border-slate-200 text-slate-700 hover:text-slate-900 hover:bg-slate-50'
           }`}
         >
-          <MessageSquare className="w-4 h-4" />
-          <span>💬 LINE公式チャット・受信</span>
+          <MessageSquare className={`w-4 h-4 ${activeChannel === 'line' ? 'text-white' : 'text-emerald-600'}`} />
+          <span>LINE公式チャット</span>
+          <span className={`px-2 py-0.5 rounded-full text-xs font-bold ${
+            activeChannel === 'line' ? 'bg-purple-700 text-purple-100' : 'bg-slate-100 text-slate-700'
+          }`}>
+            {counts.lineTotal}通
+          </span>
           {counts.lineInbound > 0 && (
-            <span className="px-1.5 py-0.2 rounded-full text-xs font-bold bg-emerald-100 text-emerald-800">
-              {counts.lineInbound}
+            <span className={`px-2 py-0.5 rounded-full text-[11px] font-bold ${
+              activeChannel === 'line' ? 'bg-emerald-300 text-emerald-950' : 'bg-emerald-100 text-emerald-800 border border-emerald-300'
+            }`}>
+              受信 {counts.lineInbound}
             </span>
           )}
         </button>
 
         <button
           onClick={() => handleSelectChannel('email')}
-          className={`flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-semibold transition cursor-pointer ${
+          className={`flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs sm:text-sm font-semibold transition cursor-pointer ${
             activeChannel === 'email'
               ? 'bg-purple-600 text-white shadow-xs'
-              : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100'
+              : 'bg-white border border-slate-200 text-slate-700 hover:text-slate-900 hover:bg-slate-50'
           }`}
         >
-          <Mail className="w-4 h-4" />
-          <span>✉️ メール受信箱</span>
-          {counts.emailTotal > 0 && (
-            <span className="px-1.5 py-0.2 rounded-full text-xs font-bold bg-slate-200 text-slate-800">
-              {counts.emailTotal}
-            </span>
-          )}
+          <Mail className={`w-4 h-4 ${activeChannel === 'email' ? 'text-white' : 'text-sky-600'}`} />
+          <span>メール受信箱</span>
+          <span className={`px-2 py-0.5 rounded-full text-xs font-bold ${
+            activeChannel === 'email' ? 'bg-purple-700 text-purple-100' : 'bg-slate-100 text-slate-700'
+          }`}>
+            {counts.emailTotal}通
+          </span>
         </button>
 
         <button
           onClick={() => handleSelectChannel('social_dm')}
-          className={`flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-semibold transition cursor-pointer ${
+          className={`flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs sm:text-sm font-semibold transition cursor-pointer ${
             activeChannel === 'social_dm'
               ? 'bg-purple-600 text-white shadow-xs'
-              : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100'
+              : 'bg-white border border-slate-200 text-slate-700 hover:text-slate-900 hover:bg-slate-50'
           }`}
         >
-          <Share2 className="w-4 h-4" />
-          <span>📱 SNS DM営業・受信対応</span>
-          {counts.dmInboundWaiting > 0 && (
-            <span className="px-1.5 py-0.2 rounded-full text-xs font-bold bg-purple-100 text-purple-800">
-              {counts.dmInboundWaiting}
+          <Share2 className={`w-4 h-4 ${activeChannel === 'social_dm' ? 'text-white' : 'text-purple-600'}`} />
+          <span>SNS DM営業・受信</span>
+          {counts.dmInboundWaiting > 0 ? (
+            <span className={`px-2 py-0.5 rounded-full text-[11px] font-bold ${
+              activeChannel === 'social_dm' ? 'bg-purple-300 text-purple-950' : 'bg-purple-100 text-purple-800 border border-purple-300 animate-pulse'
+            }`}>
+              返信待ち {counts.dmInboundWaiting}
+            </span>
+          ) : (
+            <span className={`px-2 py-0.5 rounded-full text-xs font-bold ${
+              activeChannel === 'social_dm' ? 'bg-purple-700 text-purple-100' : 'bg-slate-100 text-slate-700'
+            }`}>
+              0件
             </span>
           )}
         </button>
@@ -810,14 +723,20 @@ export const UnifiedInboxView: React.FC<UnifiedInboxViewProps> = ({
                           <span>{isContracted ? '面談案内' : '商談案内'}</span>
                         </button>
 
-                        {/* Open Diagnosis / Report */}
+                        {/* Direct Proposal & Report Creation */}
                         <button
-                          onClick={() => onNavigateTab('mst_diagnoses')}
-                          className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-emerald-50 hover:bg-emerald-100 text-xs font-medium text-emerald-800 border border-emerald-200 transition cursor-pointer"
-                          title="社内診断・AIレポート作成へ"
+                          onClick={() => {
+                            if (onOpenCustomerWorkspace && sub.company_id) {
+                              onOpenCustomerWorkspace(sub.company_id, 'documents');
+                            } else {
+                              onNavigateTab('document_templates');
+                            }
+                          }}
+                          className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-emerald-50 hover:bg-emerald-100 text-xs font-semibold text-emerald-800 border border-emerald-200 transition cursor-pointer"
+                          title="フォーム回答を基に重要書類（診断レポート・提案書）を直接AI生成・作成します"
                         >
-                          <FileText className="w-3.5 h-3.5 text-emerald-600" />
-                          <span>診断・レポートへ</span>
+                          <Sparkles className="w-3.5 h-3.5 text-emerald-600" />
+                          <span>提案書・レポート作成</span>
                         </button>
 
                         {/* Expand Details Toggle */}

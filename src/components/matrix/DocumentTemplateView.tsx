@@ -18,7 +18,8 @@ import {
   Link2,
   Calculator,
   BarChart3,
-  Send
+  Send,
+  Inbox
 } from 'lucide-react';
 
 export type DocTemplateType = 'contract' | 'proposal' | 'invoice' | 'report' | 'estimate' | 'monthly_report';
@@ -622,6 +623,7 @@ interface DocumentTemplateViewProps {
   initialDealId?: string; 
   initialDocumentType?: DocTemplateType; 
   onOpenSendCenter?: (params: { companyId?: string; documentId?: string; dealId?: string; contactId?: string }) => void;
+  onNavigateTab?: (tab: string) => void;
 }
 
 export const DocumentTemplateView: React.FC<DocumentTemplateViewProps> = ({ 
@@ -629,7 +631,8 @@ export const DocumentTemplateView: React.FC<DocumentTemplateViewProps> = ({
   initialLeadId, 
   initialDealId, 
   initialDocumentType,
-  onOpenSendCenter
+  onOpenSendCenter,
+  onNavigateTab
 }) => {
   const [templates, setTemplates] = useState<DocTemplate[]>(DEFAULT_TEMPLATES);
   const [templateStatus, setTemplateStatus] = useState('');
@@ -749,11 +752,17 @@ export const DocumentTemplateView: React.FC<DocumentTemplateViewProps> = ({
         : null);
       const customerResult = resolvedCompanyId ? await supabase.from('customers').select('contract_start_date').eq('company_id', resolvedCompanyId).maybeSingle() : { data: null };
       let diagnosis: any = null;
+      let formSubmission: any = null;
       if (leadId || resolvedCompanyId) {
         let diagnosisQuery = supabase.from('diagnoses').select('*').order('created_at', {ascending:false}).limit(1);
         diagnosisQuery = leadId ? diagnosisQuery.eq('lead_id', leadId) : diagnosisQuery.eq('company_id', resolvedCompanyId);
         const result = await diagnosisQuery.maybeSingle();
         diagnosis = result.data;
+
+        let subQuery = supabase.from('diagnosis_submissions').select('*').order('submitted_at', {ascending:false}).limit(1);
+        subQuery = leadId ? subQuery.eq('lead_id', leadId) : subQuery.eq('company_id', resolvedCompanyId);
+        const subResult = await subQuery.maybeSingle();
+        formSubmission = subResult.data;
       }
       let report: any = null;
       if (diagnosis?.id) {
@@ -772,7 +781,9 @@ export const DocumentTemplateView: React.FC<DocumentTemplateViewProps> = ({
       const categoryScores = diagnosis?.category_scores || {};
       const recommendations = report?.recommendations;
       const recommendationText = formatDocumentValue(recommendations);
-      const challengeText = formatDocumentValue(report?.challenges);
+      const submissionAnswers = (formSubmission?.answers || diagnosis?.answers || {}) as Record<string, unknown>;
+      const rawBottleneck = Object.entries(submissionAnswers).find(([k, v]) => typeof v === 'string' && (k.includes('bottleneck') || k.includes('issue') || k.includes('challenge') || k.includes('problem') || k.includes('悩') || k.includes('課題')))?.[1] as string | undefined;
+      const challengeText = formatDocumentValue(report?.challenges) || rawBottleneck || '';
       const today = todayJst();
       const quoteExpiry = addOneMonthDate();
       const invoiceDue = invoiceDueDate();
@@ -1100,6 +1111,18 @@ export const DocumentTemplateView: React.FC<DocumentTemplateViewProps> = ({
         <h1 className="text-[19px] font-bold text-slate-800 tracking-tight">重要書類・見積・契約</h1>
 
         <div className="flex flex-wrap items-center gap-2">
+          {onNavigateTab && (
+            <button
+              type="button"
+              onClick={() => onNavigateTab('inbox_hub')}
+              className="px-3 py-1.5 rounded-md border border-slate-200 bg-white hover:bg-slate-50 text-slate-700 font-medium text-xs flex items-center gap-1.5 transition-all cursor-pointer"
+              title="受信トレイを開いて届いたフォーム回答やLINE返信を確認します"
+            >
+              <Inbox className="w-3.5 h-3.5 text-purple-600" />
+              <span>受信トレイ</span>
+            </button>
+          )}
+
           {(savedDocIds[currentTemplate.id] || autosavedDocumentIds.current[currentTemplate.id]) && (
             <>
               <button

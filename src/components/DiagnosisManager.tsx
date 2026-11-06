@@ -1403,64 +1403,49 @@ ${reportDraft.text.replace(/</g, '&lt;').replace(/>/g, '&gt;')}
 
 
 export const DiagnosisManager: React.FC<DiagnosisManagerProps> = (props) => {
-  const [section, setSection] = useState<'forms' | 'diagnoses'>(() =>
-    props.initialSection === 'diagnoses' || props.initialLeadId || props.initialCompanyId ? 'diagnoses' : 'forms'
-  );
-  const [requestedDiagnosisId, setRequestedDiagnosisId] = useState<string | null>(null);
   return (
     <div className="space-y-4">
       <div className="space-y-3 rounded-xl border border-slate-200 bg-white p-4 shadow-xs">
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
           <div>
-            <h1 className="text-[19px] font-bold text-slate-800 tracking-tight">フォーム設計・診断レポート</h1>
-            <p className="mt-0.5 text-xs text-slate-500">受付フォームの設問設計と社内診断・AIレポート作成を管理します。</p>
+            <h1 className="text-[19px] font-bold text-slate-800 tracking-tight">受付フォーム設計</h1>
+            <p className="mt-0.5 text-xs text-slate-500">HP・LINE向けの反響受付フォームや診断設問をノーコードで設計・公開管理できます。（回答は統合受信トレイ・商談パイプラインへ自動反映）</p>
           </div>
-          {props.onNavigateTab && (
-            <button
-              onClick={() => props.onNavigateTab?.('inbox_hub')}
-              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium text-slate-700 hover:text-slate-900 bg-slate-50 hover:bg-slate-100 border border-slate-200 transition cursor-pointer"
-            >
-              <Inbox className="w-3.5 h-3.5 text-slate-500" />
-              <span>受信トレイで回答を確認</span>
-              <ArrowRight className="w-3.5 h-3.5 text-slate-400" />
-            </button>
-          )}
+          <div className="flex items-center gap-2">
+            {props.onNavigateTab && (
+              <>
+                <button
+                  onClick={() => props.onNavigateTab?.('document_templates')}
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold text-purple-700 hover:text-purple-900 bg-purple-50 hover:bg-purple-100 border border-purple-200 transition cursor-pointer"
+                  title="重要書類・見積・契約でレポートや提案書を直接AI作成"
+                >
+                  <FileText className="w-3.5 h-3.5 text-purple-600" />
+                  <span>重要書類・見積・契約を開く</span>
+                  <ArrowRight className="w-3.5 h-3.5 text-purple-400" />
+                </button>
+                <button
+                  onClick={() => props.onNavigateTab?.('inbox_hub')}
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium text-slate-700 hover:text-slate-900 bg-slate-50 hover:bg-slate-100 border border-slate-200 transition cursor-pointer"
+                >
+                  <Inbox className="w-3.5 h-3.5 text-slate-500" />
+                  <span>受信トレイで回答確認</span>
+                  <ArrowRight className="w-3.5 h-3.5 text-slate-400" />
+                </button>
+              </>
+            )}
+          </div>
         </div>
-        <nav className="flex flex-wrap items-center gap-2 border-t border-slate-100 pt-3" aria-label="フォーム・診断">
-          <button
-            onClick={() => setSection('forms')}
-            aria-current={section === 'forms' ? 'page' : undefined}
-            className={`rounded-lg px-3 py-1.5 text-xs font-medium transition cursor-pointer ${
-              section === 'forms' ? 'bg-purple-700 text-white shadow-2xs' : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900'
-            }`}
-          >
-            フォーム設計
-          </button>
-          <button
-            onClick={() => setSection('diagnoses')}
-            aria-current={section === 'diagnoses' ? 'page' : undefined}
-            className={`rounded-lg px-3 py-1.5 text-xs font-medium transition cursor-pointer ${
-              section === 'diagnoses' ? 'bg-purple-700 text-white shadow-2xs' : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900'
-            }`}
-          >
-            診断・レポート作成
-          </button>
-        </nav>
       </div>
-      {section === 'forms' ? (
-        <DiagnosisFormsWorkspace
-          key="forms"
-          initialLeadId={props.initialLeadId}
-          initialCompanyId={props.initialCompanyId}
-          initialSection="forms"
-          activeSection="forms"
-          showHeader={false}
-          onOpenDiagnosis={(id) => { setRequestedDiagnosisId(id); setSection('diagnoses'); }}
-          onOpenSendCenter={props.onOpenSendCenter}
-        />
-      ) : (
-        <DiagnosisRecordsView {...props} initialDiagnosisId={requestedDiagnosisId || undefined} />
-      )}
+      <DiagnosisFormsWorkspace
+        key="forms"
+        initialLeadId={props.initialLeadId}
+        initialCompanyId={props.initialCompanyId}
+        initialSection="forms"
+        activeSection="forms"
+        showHeader={false}
+        onOpenDiagnosis={() => {}}
+        onOpenSendCenter={props.onOpenSendCenter}
+      />
     </div>
   );
 };

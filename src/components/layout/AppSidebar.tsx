@@ -85,7 +85,7 @@ export const AppSidebar: React.FC<AppSidebarProps> = ({
         { id: 'ai_acquisition', label: '集客戦略・SNS・メディア' },
         { id: 'contacts', label: '見込み企業・友だちリスト（AI調査 & LINE）' },
         { id: 'marketing_automation', label: 'LINE・メール自動配信（営業メール5段階 & シナリオ）' },
-        { id: 'mst_diagnoses', label: '受付フォーム・診断設計（反響獲得・フック）' },
+        { id: 'mst_diagnoses', label: '受付フォーム設計（反響獲得・設問管理）' },
       ],
     },
     {
@@ -94,11 +94,10 @@ export const AppSidebar: React.FC<AppSidebarProps> = ({
       icon: Briefcase,
       defaultOpen: true,
       items: [
-        { id: 'deals', label: '商談パイプライン（リード・商談・顧客）' },
-        { id: 'document_templates', label: '重要書類・見積・契約（見積書・契約書作成）' },
+        { id: 'leads', label: '商談パイプライン（反響リード・商談・顧客）' },
+        { id: 'document_templates', label: '重要書類・見積・契約' },
         { id: 'customer_operations', label: '契約・請求・顧問支援（月次請求・支援進捗）' },
-        { id: 'companies', label: '会社台帳（法人マスタ）' },
-        { id: 'products', label: '販売商品・料金台帳（見積・請求用）' },
+        { id: 'companies', label: '会社・商品台帳（マスタ管理）' },
       ],
     },
     {
@@ -127,8 +126,9 @@ export const AppSidebar: React.FC<AppSidebarProps> = ({
 
   const isTabActive = (tabId: string): boolean => {
     if (currentTab === tabId) return true;
+    if (tabId === 'companies' && (currentTab === 'companies' || currentTab === 'products')) return true;
     if (tabId === 'contacts' && currentTab === 'prospects') return true;
-    if (tabId === 'deals' && (currentTab === 'leads' || currentTab === 'customers')) return true;
+    if ((tabId === 'leads' || tabId === 'deals') && (currentTab === 'leads' || currentTab === 'deals' || currentTab === 'customers')) return true;
     if (tabId === 'product_hub' && currentTab === 'ai_projects') return true;
     if (tabId === 'ai_presets' && currentTab === 'automations') return true;
     if (tabId === 'mst_dashboard' && currentTab === 'inflow_dashboard') return true;

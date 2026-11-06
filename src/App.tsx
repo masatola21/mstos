@@ -2310,9 +2310,9 @@ function AppContent() {
           />
         )}
 
-        {currentTab === 'deal_invitations' && <CommunicationSendCenter initialKind="deal" />}
-        {currentTab === 'customer_meeting_invitations' && <CommunicationSendCenter initialKind="customer_meeting" />}
-        {currentTab === 'communication_send' && <CommunicationSendCenter initialKind={customerWorkspaceContext?.documentId ? "document" : customerWorkspaceContext?.sendKind || "form"} initialCompanyId={customerWorkspaceContext?.companyId} initialDocumentId={customerWorkspaceContext?.documentId} initialFormId={customerWorkspaceContext?.formId} initialDealId={customerWorkspaceContext?.dealId} initialContactId={customerWorkspaceContext?.contactId} />}
+        {currentTab === 'deal_invitations' && <CommunicationSendCenter initialKind="deal" onNavigateTab={(tab) => setCurrentTab(tab as UnifiedNavTab)} />}
+        {currentTab === 'customer_meeting_invitations' && <CommunicationSendCenter initialKind="customer_meeting" onNavigateTab={(tab) => setCurrentTab(tab as UnifiedNavTab)} />}
+        {currentTab === 'communication_send' && <CommunicationSendCenter initialKind={customerWorkspaceContext?.documentId ? "document" : customerWorkspaceContext?.sendKind || "form"} initialCompanyId={customerWorkspaceContext?.companyId} initialDocumentId={customerWorkspaceContext?.documentId} initialFormId={customerWorkspaceContext?.formId} initialDealId={customerWorkspaceContext?.dealId} initialContactId={customerWorkspaceContext?.contactId} onNavigateTab={(tab) => setCurrentTab(tab as UnifiedNavTab)} />}
 
         {['companies', 'products'].includes(currentTab) && (
           <TableManager
@@ -2445,6 +2445,7 @@ function AppContent() {
               initialLeadId={customerWorkspaceContext?.leadId} 
               initialDealId={customerWorkspaceContext?.dealId} 
               initialDocumentType={customerWorkspaceContext?.documentType} 
+              onNavigateTab={(tab) => setCurrentTab(tab as UnifiedNavTab)}
               onOpenSendCenter={(params) => {
                 setCustomerWorkspaceContext((current) => ({
                   ...current,

@@ -453,6 +453,36 @@ export const TableManager: React.FC<TableManagerProps> = ({
           </button>
         </div>
       )}
+      {/* 会社・商品マスタ切り替えタブ */}
+      {(currentTable === 'companies' || currentTable === 'products') && (
+        <div className="flex items-center gap-1.5 p-1 rounded-xl bg-slate-100 border border-slate-200/80 w-fit mb-1">
+          <button
+            type="button"
+            onClick={() => onTableChange('companies')}
+            className={`px-3.5 py-1.5 rounded-lg text-xs font-bold transition cursor-pointer flex items-center gap-2 ${
+              currentTable === 'companies'
+                ? 'bg-white text-purple-700 shadow-xs border border-purple-200/80'
+                : 'text-slate-600 hover:text-slate-900 hover:bg-slate-200/50'
+            }`}
+          >
+            <Building2 className={`w-3.5 h-3.5 ${currentTable === 'companies' ? 'text-purple-600' : 'text-slate-400'}`} />
+            <span>会社台帳（法人マスタ）</span>
+          </button>
+          <button
+            type="button"
+            onClick={() => onTableChange('products')}
+            className={`px-3.5 py-1.5 rounded-lg text-xs font-bold transition cursor-pointer flex items-center gap-2 ${
+              currentTable === 'products'
+                ? 'bg-white text-purple-700 shadow-xs border border-purple-200/80'
+                : 'text-slate-600 hover:text-slate-900 hover:bg-slate-200/50'
+            }`}
+          >
+            <Tag className={`w-3.5 h-3.5 ${currentTable === 'products' ? 'text-purple-600' : 'text-slate-400'}`} />
+            <span>販売商品・料金台帳</span>
+          </button>
+        </div>
+      )}
+
       {/* Table Selector Sub-Bar */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-2">
         <div className="flex items-center gap-2">
