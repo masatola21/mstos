@@ -515,7 +515,15 @@ async function resolveLineContact(userId: string) {
 function isOptionalLineAutomationSchemaMissing(error: any): boolean {
   return error?.code === 'PGRST205' || /line_channel_integrations|line_inbox_messages|line_auto_reply_rules/.test(String(error?.message || ''));
 }
-
+function normalizeFlexContents(input: any): Record<string, any> | null {
+  // reply_payload が二重ラップされていても bubble/carousel を取り出す
+  let node = input;
+  for (let i = 0; i < 4 && node && typeof node === 'object'; i++) {
+    if (node.type === 'bubble' || node.type === 'carousel') return node;
+    node = node.contents;
+  }
+  return null;
+}
 function buildDefaultWelcomeFlexMessage(): { altText: string; contents: Record<string, any> } {
   return {
     altText: '大橋真人よりLINE友だち登録のご挨拶とご案内',
