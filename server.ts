@@ -14,7 +14,21 @@ import { calculateExponentialBackoff, shouldSkipAutomationDelivery, checkSendTim
 
 dotenv.config();
 
-const __dirname = path.dirname(fileURLToPath(import.meta.url));
+function getSafeDirname(): string {
+  try {
+    const globalScope = globalThis as unknown as { __dirname?: string };
+    if (typeof globalScope.__dirname === 'string' && globalScope.__dirname) {
+      return globalScope.__dirname;
+    }
+    if (typeof import.meta !== 'undefined' && import.meta?.url) {
+      return path.dirname(fileURLToPath(import.meta.url));
+    }
+  } catch {
+    // fallback
+  }
+  return process.cwd();
+}
+const appDir: string = getSafeDirname();
 const app = express();
 const port = process.env.PORT || 3000;
 const MAX_CHAT_CONTEXT_MESSAGES = 12;
@@ -2226,7 +2240,7 @@ app.post('/api/marketing/social-broadcast', requireAuth, async (req, res) => {
   });
 });
 
-app.use('/uploads', express.static(path.resolve(__dirname, 'public', 'uploads')));
+app.use('/uploads', express.static(path.resolve(appDir, 'public', 'uploads')));
 
 // SNSメディア（画像・動画）アップロード用エンドポイント (Base64 -> public/uploads)
 const handleMediaUpload = async (req: express.Request, res: express.Response) => {
@@ -2276,7 +2290,7 @@ const handleMediaUpload = async (req: express.Request, res: express.Response) =>
     }
 
     const safeFilename = `sns_${isVideo ? 'video' : 'img'}_${Date.now()}_${Math.random().toString(36).slice(2, 8)}.${ext}`;
-    const uploadsDir = path.resolve(__dirname, 'public', 'uploads');
+    const uploadsDir = path.resolve(appDir, 'public', 'uploads');
     if (!fs.existsSync(uploadsDir)) {
       fs.mkdirSync(uploadsDir, { recursive: true });
     }
@@ -3664,7 +3678,7 @@ function publicFormRateLimited(ip: string): boolean {
   return current.count > 10;
 }
 
-app.get('/api/public/forms/:slug', async (req, res) => {
+app.get(['/api/public/forms/:slug', '/public/forms/:slug'], async (req, res) => {
   if (!lineSupabase) return res.status(503).json({ error: 'フォーム受付サーバーが設定されていません。' });
   const slug = String(req.params.slug || '');
   if (!/^[a-z0-9ぁ-んァ-ヶ一-龠-]{1,120}$/i.test(slug)) return res.status(404).json({ error: 'フォームが見つかりません。' });
@@ -3718,7 +3732,7 @@ app.get('/api/public/forms/:slug', async (req, res) => {
   }
 });
 
-app.post('/api/public/forms/:slug/submissions', async (req, res) => {
+app.post(['/api/public/forms/:slug/submissions', '/public/forms/:slug/submissions'], async (req, res) => {
   if (!lineSupabase) return res.status(503).json({ error: 'フォーム受付サーバーが設定されていません。' });
   const ip = req.ip || req.socket.remoteAddress || 'unknown';
   if (publicFormRateLimited(ip)) return res.status(429).json({ error: '送信回数が上限に達しました。少し時間をおいて再度お試しください。' });
@@ -5708,7 +5722,9 @@ app.get('/health', (_req, res) => res.status(200).send('OK'));
 app.get('/healthz', (_req, res) => res.status(200).send('OK'));
 
 // Vite middleware or static serving (for standalone / local development)
-if (!process.env.VERCEL) {
+async function startStandaloneServer() {
+  if (process.env.VERCEL) return;
+
   if (process.env.NODE_ENV !== 'production') {
     const vitePackageName = 'vite';
     const { createServer } = await import(/* @vite-ignore */ vitePackageName);
@@ -5718,9 +5734,9 @@ if (!process.env.VERCEL) {
     });
     app.use(vite.middlewares);
   } else {
-    app.use(express.static(path.resolve(__dirname, 'dist')));
+    app.use(express.static(path.resolve(appDir, 'dist')));
     app.get('*', (req, res) => {
-      res.sendFile(path.resolve(__dirname, 'dist', 'index.html'));
+      res.sendFile(path.resolve(appDir, 'dist', 'index.html'));
     });
   }
 
@@ -5761,6 +5777,8 @@ if (!process.env.VERCEL) {
     console.log(`Server listening on port ${port} (0.0.0.0)`);
   });
 }
+
+void startStandaloneServer();
 
 export default app;
 export { app };
