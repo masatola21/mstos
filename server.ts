@@ -34,6 +34,19 @@ const port = process.env.PORT || 3000;
 const MAX_CHAT_CONTEXT_MESSAGES = 12;
 const MAX_CHAT_CONTEXT_CHARACTERS = 16000;
 
+// ↓ここから追加（または修正）↓
+// 全オリジンからの安全なアクセスを許可するCORS設定（HP・外部連携用）
+app.use((req, res, next) => {
+  res.header('Access-Control-Allow-Origin', '*');
+  res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, PATCH, DELETE, OPTIONS');
+  res.header('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Requested-With');
+  if (req.method === 'OPTIONS') {
+    return res.sendStatus(204);
+  }
+  next();
+});
+// ↑ここまで追加↑
+
 // ─── 緊急停止（キルスイッチ）キャッシュ＆ステータス確認 ───
 interface KillSwitchStatus {
   paused: boolean;
