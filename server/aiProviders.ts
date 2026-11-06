@@ -6,7 +6,7 @@ import {
   type AIProviderId,
   buildModelChain,
   describeTarget,
-} from '../src/data/aiModels';
+} from '../src/data/aiModels.js';
 
 export interface ProviderMessage {
   role: 'user' | 'model';
