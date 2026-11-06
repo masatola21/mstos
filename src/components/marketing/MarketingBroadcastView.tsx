@@ -77,8 +77,8 @@ export const MarketingBroadcastView: React.FC<{initialChannel?:Channel}> = ({ini
       db.from('companies').select('id,company_name,industry').limit(100),
       db.from('prospects').select('id,company_id,source,status').limit(100),
       db.from('leads').select('id,contact_id,status').limit(100),
-      db.from('deals').select('id,lead_id,status').limit(100),
-      db.from('customers').select('id,company_id,status').limit(100),
+      db.from('deals').select('id,lead_id,proposal_status').limit(100),
+      db.from('customers').select('id,company_id,contract_status').limit(100),
       db.from('communication_outbox').select('source_id,channel,status,subject,body_text,created_at').in('source_type',['marketing_broadcast','marketing_outreach','marketing_automation']).order('created_at',{ascending:false}).limit(1000),
       db.from('communication_templates').select('id,name,channel,category,template_key,subject,body_text,updated_at').order('updated_at',{ascending:false}).limit(100),
       db.from('line_auto_reply_templates').select('id,name,reply_type,payload,created_at').order('created_at',{ascending:false}).limit(100),
@@ -92,8 +92,8 @@ export const MarketingBroadcastView: React.FC<{initialChannel?:Channel}> = ({ini
       setCompanies(Object.fromEntries((co.data||[]).map((x:any)=>[x.id,x])));
       setProspects((p.data||[]) as CrmRecord[]);
       setLeads((l.data||[]) as CrmRecord[]);
-      setDeals((d.data||[]) as CrmRecord[]);
-      setCustomers((cu.data||[]) as CrmRecord[]);
+      setDeals(((d.data||[]) as any[]).map(row=>({...row, status: row.status || row.proposal_status, proposal_status: row.proposal_status})));
+      setCustomers(((cu.data||[]) as any[]).map(row=>({...row, status: row.status || row.contract_status, contract_status: row.contract_status})));
       setRuns(summarizeBroadcastHistory((h.data||[]) as OutboxHistoryRow[]));
       setEmailTemplates((et.data||[]) as any[]);
       setLineTemplates((lt.data||[]) as LineTemplate[]);
