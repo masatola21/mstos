@@ -165,11 +165,15 @@ export interface IntakeSubmissionResult {
   leadId?: string;
   bookingUrl?: string;
   materialUrl?: string;
+  materialUrls?: Array<{ key: string; label: string; url: string }>;
 }
+
+// 面談予約公式URL（TimeRex）
+export const OFFICIAL_TIMEREX_BOOKING_URL = 'https://timerex.net/s/mst.shikumikaizen_b173/4ac78e37';
 
 // 面談予約URLの取得（フォールバック用）
 export async function getBookingPageUrl(): Promise<string> {
-  return 'https://lin.ee/qWsuD6f';
+  return OFFICIAL_TIMEREX_BOOKING_URL;
 }
 
 /**
@@ -190,7 +194,7 @@ function generateUuid(): string {
  * バックエンド API エンドポイントの解決
  * 環境変数 VITE_OS_API_URL を優先し、未設定時は https://os.mstcorp.info を使用
  */
-function resolveApiEndpoint(path: string): string {
+export function resolveApiEndpoint(path: string): string {
   const envUrl = (
     import.meta.env.VITE_OS_API_URL ||
     import.meta.env.PUBLIC_OS_API_URL ||
@@ -224,6 +228,21 @@ export async function submitIntakeToCRM(payload: IntakeSubmissionPayload): Promi
 
   const endpoint = resolveApiEndpoint(`/api/public/forms/${encodeURIComponent(payload.slug)}/submissions`);
 
+  // ブラウザ環境から詳細UTMパラメータを自動収集
+  let browserUtm: Record<string, string> = {};
+  if (typeof window !== 'undefined') {
+    try {
+      const searchParams = new URLSearchParams(window.location.search);
+      for (const [k, v] of searchParams.entries()) {
+        if (k.startsWith('utm_') || k === 'source' || k === 'ref') {
+          browserUtm[k] = v;
+        }
+      }
+      if (document.referrer) browserUtm.referrer = document.referrer.slice(0, 300);
+      browserUtm.landing_page = window.location.href.slice(0, 300);
+    } catch {}
+  }
+
   const requestBody = {
     name: cleanName,
     companyName: cleanCompany,
@@ -237,6 +256,7 @@ export async function submitIntakeToCRM(payload: IntakeSubmissionPayload): Promi
     utm: {
       source: payload.source || 'corporate_website',
       inquiryType: payload.inquiryType,
+      ...browserUtm,
     },
   };
 
@@ -265,8 +285,9 @@ export async function submitIntakeToCRM(payload: IntakeSubmissionPayload): Promi
       success: true,
       message: data.message || '送信を受け付けました。',
       leadId: data.leadId,
-      bookingUrl: data.bookingUrl || 'https://lin.ee/qWsuD6f',
+      bookingUrl: data.bookingUrl || OFFICIAL_TIMEREX_BOOKING_URL,
       materialUrl: data.materialUrl,
+      materialUrls: data.materialUrls,
     };
   } catch (err: any) {
     console.error('submitIntakeToCRM network/fetch error:', err);

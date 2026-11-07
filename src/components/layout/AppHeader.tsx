@@ -26,6 +26,7 @@ interface AppHeaderProps {
   onOpenQuickAiDrawer: () => void;
   pageAssistantEmoji: string;
   onOpenProfile: () => void;
+  onRetrySync?: () => void;
 }
 
 export const AppHeader: React.FC<AppHeaderProps> = ({
@@ -38,6 +39,7 @@ export const AppHeader: React.FC<AppHeaderProps> = ({
   onOpenQuickAiDrawer,
   pageAssistantEmoji,
   onOpenProfile,
+  onRetrySync,
 }) => {
   const { user, signOut } = useAuth();
 
@@ -205,10 +207,15 @@ export const AppHeader: React.FC<AppHeaderProps> = ({
             </button>
           )}
           {workspaceSyncStatus === 'error' && (
-            <span className="flex items-center gap-1 text-rose-600" title={workspaceSaveError}>
+            <button
+              type="button"
+              onClick={onRetrySync}
+              className="flex items-center gap-1 text-rose-600 hover:text-rose-700 bg-rose-50 hover:bg-rose-100 border border-rose-200 px-2 py-0.5 rounded transition cursor-pointer"
+              title={`${workspaceSaveError || 'クラウド同期に失敗しました'}\n（クリックして再接続・再同期を試行）`}
+            >
               <AlertCircle className="w-3 h-3 text-rose-500" />
-              <span>同期エラー</span>
-            </span>
+              <span>同期エラー（再試行）</span>
+            </button>
           )}
         </div>
 

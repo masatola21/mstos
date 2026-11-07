@@ -1,8 +1,27 @@
 import { Fragment as _Fragment, jsx as _jsx, jsxs as _jsxs } from "react/jsx-runtime";
 import { useState, useEffect } from 'react';
-import { submitIntakeToCRM } from '../lib/supabase';
+import { submitIntakeToCRM, resolveApiEndpoint, OFFICIAL_TIMEREX_BOOKING_URL } from '../lib/supabase';
+
+const FALLBACK_MATERIALS = [
+    {
+        key: 'management-guide',
+        label: '① 経営改善実務ガイドブック（要点解説スライド）',
+        description: '中小企業が「手作業の山」「属人化」から脱却し、利益を残すための仕組み化実践論。',
+        url: '/materials/mst-management-guide.pdf',
+        category: '経営実務・仕組み化',
+    },
+    {
+        key: 'care-package-overview',
+        label: '② 介護保険外サービス開業・収益化パッケージ資料',
+        description: '直営店舗の実践データ、初期収支モデル、集客・カルテ自動化の開業手順を網羅。',
+        url: '/materials/care-package-overview.pdf',
+        category: '開業パッケージ',
+    },
+];
+
 export default function MaterialForm() {
-    const [materialChoice, setMaterialChoice] = useState('management');
+    const [availableMaterials, setAvailableMaterials] = useState(FALLBACK_MATERIALS);
+    const [selectedKeys, setSelectedKeys] = useState(['management-guide']);
     const [formData, setFormData] = useState({
         company_name: '',
         name: '',
@@ -13,35 +32,77 @@ export default function MaterialForm() {
     const [loading, setLoading] = useState(false);
     const [submitted, setSubmitted] = useState(false);
     const [bookingUrl, setBookingUrl] = useState('');
+    const [downloadUrls, setDownloadUrls] = useState([]);
     const [errorMsg, setErrorMsg] = useState('');
+
     useEffect(() => {
-        if (typeof window !== 'undefined') {
-            const params = new URLSearchParams(window.location.search);
-            const typeParam = params.get('type') || params.get('material');
-            if (typeParam === 'care' || typeParam === 'care-package') {
-                setMaterialChoice('care');
-            }
-            else if (typeParam === 'both') {
-                setMaterialChoice('both');
-            }
-            else if (typeParam === 'management' || typeParam === 'guide') {
-                setMaterialChoice('management');
-            }
-            const sourceParam = params.get('source');
-            if (sourceParam) {
-                setSource(sourceParam);
+        let cancelled = false;
+        async function fetchMaterials() {
+            try {
+                const endpoint = resolveApiEndpoint('/api/public/materials');
+                const res = await fetch(endpoint, {
+                    headers: { Accept: 'application/json' },
+                });
+                if (!res.ok) throw new Error(`HTTP ${res.status}`);
+                const data = await res.json();
+                if (!cancelled && data.success && Array.isArray(data.materials) && data.materials.length > 0) {
+                    setAvailableMaterials(data.materials);
+                    const params = new URLSearchParams(window.location.search);
+                    const typeParam = params.get('type') || params.get('material') || '';
+                    if (typeParam === 'care' || typeParam === 'care-package' || typeParam === 'care-package-overview') {
+                        setSelectedKeys(['care-package-overview']);
+                    } else if (typeParam === 'both') {
+                        setSelectedKeys(data.materials.map((m) => m.key));
+                    } else if (typeParam === 'management' || typeParam === 'guide' || typeParam === 'management-guide') {
+                        setSelectedKeys(['management-guide']);
+                    } else if (typeParam) {
+                        const matched = data.materials.find((m) => m.key === typeParam);
+                        if (matched) setSelectedKeys([matched.key]);
+                    }
+                }
+            } catch (e) {
+                console.warn('[MaterialForm] Failed to fetch dynamic materials, falling back to static:', e);
             }
         }
+        if (typeof window !== 'undefined') {
+            const params = new URLSearchParams(window.location.search);
+            const typeParam = params.get('type') || params.get('material') || '';
+            if (typeParam === 'care' || typeParam === 'care-package') {
+                setSelectedKeys(['care-package-overview']);
+            } else if (typeParam === 'both') {
+                setSelectedKeys(['management-guide', 'care-package-overview']);
+            }
+            const sourceParam = params.get('source');
+            if (sourceParam) setSource(sourceParam);
+            void fetchMaterials();
+        }
+        return () => { cancelled = true; };
     }, []);
+
+    const toggleMaterial = (key) => {
+        setSelectedKeys((prev) =>
+            prev.includes(key)
+                ? prev.filter((k) => k !== key)
+                : [...prev, key]
+        );
+    };
+
+    const selectAll = () => {
+        setSelectedKeys(availableMaterials.map((m) => m.key));
+    };
+
     const handleSubmit = async (e) => {
         e.preventDefault();
+        if (selectedKeys.length === 0) {
+            setErrorMsg('ご希望の資料を1つ以上選択してください。');
+            return;
+        }
         setLoading(true);
         setErrorMsg('');
-        const choiceLabel = materialChoice === 'care'
-            ? '介護保険外サービス開業パッケージ資料'
-            : materialChoice === 'both'
-                ? '経営改善実務ガイド ＆ 介護保険外サービス開業パッケージ資料（両方）'
-                : '経営改善実務ガイドブック';
+        const chosenItems = availableMaterials.filter((m) => selectedKeys.includes(m.key));
+        const choiceLabel = chosenItems.map((m) => m.label).join('、');
+        const isCareOnly = selectedKeys.length === 1 && selectedKeys[0] === 'care-package-overview';
+
         try {
             const res = await submitIntakeToCRM({
                 slug: 'material-download',
@@ -49,42 +110,130 @@ export default function MaterialForm() {
                 companyName: formData.company_name,
                 email: formData.email,
                 phone: formData.phone,
-                inquiryType: materialChoice === 'care' ? 'care_package' : 'material',
+                inquiryType: isCareOnly ? 'care_package' : 'material',
                 source: source,
                 notes: `【資料請求】ご希望資料: ${choiceLabel}`,
+                answers: {
+                    material_keys: selectedKeys,
+                    choice_label: choiceLabel,
+                },
                 customFields: {
-                    material_choice: materialChoice,
+                    material_keys: selectedKeys,
                     choice_label: choiceLabel,
                 },
             });
+
             if (res.success) {
-                let targetBookingUrl = res.bookingUrl || 'https://lin.ee/qWsuD6f';
+                let targetBookingUrl = res.bookingUrl || OFFICIAL_TIMEREX_BOOKING_URL;
                 if (targetBookingUrl.includes('timerex') || targetBookingUrl.includes('booking') || targetBookingUrl.includes('calendar')) {
                     const delim = targetBookingUrl.includes('?') ? '&' : '?';
                     targetBookingUrl += `${delim}name=${encodeURIComponent(formData.name)}&email=${encodeURIComponent(formData.email)}`;
                 }
                 setBookingUrl(targetBookingUrl);
+
+                if (res.materialUrls && Array.isArray(res.materialUrls) && res.materialUrls.length > 0) {
+                    setDownloadUrls(res.materialUrls);
+                } else if (res.materialUrl) {
+                    setDownloadUrls([{ label: choiceLabel, url: res.materialUrl }]);
+                } else {
+                    setDownloadUrls(chosenItems.map((m) => ({ key: m.key, label: m.label, url: m.url })));
+                }
                 setSubmitted(true);
-            }
-            else {
+            } else {
                 setErrorMsg('送信に失敗しました。時間をおいて再度お試しください。');
             }
-        }
-        catch (err) {
+        } catch (err) {
             setErrorMsg('エラーが発生しました。通信環境をご確認ください。');
-        }
-        finally {
+        } finally {
             setLoading(false);
         }
     };
+
     if (submitted) {
-        return (_jsxs("div", { className: "bg-white p-8 sm:p-12 rounded-2xl border border-sand-300 shadow-xl space-y-8 animate-fadeIn", children: [_jsxs("div", { className: "text-center space-y-3", children: [_jsx("div", { className: "w-16 h-16 bg-emerald-100 text-emerald-700 rounded-full flex items-center justify-center mx-auto shadow-sm", children: _jsx("svg", { className: "w-8 h-8", fill: "none", stroke: "currentColor", viewBox: "0 0 24 24", children: _jsx("path", { strokeLinecap: "round", strokeLinejoin: "round", strokeWidth: 2.5, d: "M5 13l4 4L19 7" }) }) }), _jsx("span", { className: "text-xs font-bold text-emerald-700 bg-emerald-50 px-3 py-1 rounded-full border border-emerald-200 uppercase tracking-wider", children: "\u8ACB\u6C42\u53D7\u4ED8\u5B8C\u4E86" }), _jsx("h3", { className: "text-2xl sm:text-3xl font-bold font-serif text-slate-900", children: "\u8CC7\u6599\u8ACB\u6C42\u3092\u53D7\u3051\u4ED8\u3051\u307E\u3057\u305F" }), _jsxs("p", { className: "text-xs sm:text-sm text-gray-600 max-w-lg mx-auto leading-relaxed", children: ["\u3054\u5165\u529B\u3044\u305F\u3060\u3044\u305F\u30E1\u30FC\u30EB\u30A2\u30C9\u30EC\u30B9\uFF08", _jsx("strong", { className: "text-slate-900", children: formData.email }), "\uFF09\u5B9B\u3066\u306B\u3082\u8CC7\u6599\u30EA\u30F3\u30AF\u3092\u9001\u4FE1\u3044\u305F\u3057\u307E\u3057\u305F\u3002\u4EE5\u4E0B\u306E\u30DC\u30BF\u30F3\u304B\u3089\u3082\u4ECA\u3059\u3050\u76F4\u63A5\u3054\u89A7\u3044\u305F\u3060\u3051\u307E\u3059\u3002"] })] }), _jsxs("div", { className: "p-6 bg-sand-50/80 rounded-2xl border border-sand-200 space-y-3", children: [_jsx("span", { className: "text-xs font-bold text-slate-500 uppercase tracking-wider block text-center", children: "\u3054\u8ACB\u6C42\u3044\u305F\u3060\u3044\u305FPDF\u8CC7\u6599" }), _jsxs("div", { className: "grid grid-cols-1 sm:grid-cols-2 gap-3", children: [(materialChoice === 'management' || materialChoice === 'both') && (_jsxs("a", { href: "/materials/mst-management-guide.pdf", target: "_blank", rel: "noopener noreferrer", className: "p-4 bg-brand-900 hover:bg-brand-800 text-white rounded-xl shadow transition text-center flex flex-col justify-center items-center gap-1 group", children: [_jsxs("div", { className: "flex items-center gap-2 font-bold text-sm", children: [_jsx("svg", { className: "w-4 h-4 text-brand-300", fill: "none", stroke: "currentColor", viewBox: "0 0 24 24", children: _jsx("path", { strokeLinecap: "round", strokeLinejoin: "round", strokeWidth: 2, d: "M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" }) }), "\u7D4C\u55B6\u6539\u5584\u5B9F\u52D9\u30AC\u30A4\u30C9"] }), _jsx("span", { className: "text-[11px] text-slate-300 group-hover:text-white", children: "\u8981\u70B9\u89E3\u8AAC\u30B9\u30E9\u30A4\u30C9 / PDF\u3092\u958B\u304F \u2192" })] })), (materialChoice === 'care' || materialChoice === 'both') && (_jsxs("a", { href: "/materials/care-package-overview.pdf", target: "_blank", rel: "noopener noreferrer", className: "p-4 bg-emerald-800 hover:bg-emerald-700 text-white rounded-xl shadow transition text-center flex flex-col justify-center items-center gap-1 group", children: [_jsxs("div", { className: "flex items-center gap-2 font-bold text-sm", children: [_jsx("svg", { className: "w-4 h-4 text-emerald-300", fill: "none", stroke: "currentColor", viewBox: "0 0 24 24", children: _jsx("path", { strokeLinecap: "round", strokeLinejoin: "round", strokeWidth: 2, d: "M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" }) }), "\u4ECB\u8B77\u4FDD\u967A\u5916\u958B\u696D\u30D1\u30C3\u30B1\u30FC\u30B8"] }), _jsx("span", { className: "text-[11px] text-emerald-100 group-hover:text-white", children: "\u53CE\u652F\u30E2\u30C7\u30EB\u30FB\u624B\u9806 / PDF\u3092\u958B\u304F \u2192" })] }))] })] }), _jsxs("div", { className: "bg-gradient-to-br from-brand-950 via-brand-900 to-slate-900 text-white p-6 sm:p-8 rounded-2xl shadow-lg border border-brand-800 space-y-4", children: [_jsxs("div", { className: "flex items-center gap-2 text-xs font-bold text-amber-300 uppercase tracking-wider", children: [_jsx("span", { className: "inline-block w-2 h-2 rounded-full bg-amber-400 animate-ping" }), "\u8CC7\u6599\u3068\u5408\u308F\u305B\u3066\u5177\u4F53\u7684\u306A\u76F8\u8AC7\u3092\u3057\u305F\u3044\u65B9\u3078"] }), _jsx("h4", { className: "text-lg sm:text-xl font-bold text-white font-serif", children: "\u81EA\u793E\u3078\u306E\u5F53\u3066\u306F\u3081\u3084\u6570\u5024\u3092\u500B\u5225\u89E3\u8AAC\u300C30\u5206\u30AA\u30F3\u30E9\u30A4\u30F3\u7121\u6599\u500B\u5225\u9762\u8AC7\u300D" }), _jsx("p", { className: "text-xs sm:text-sm text-slate-300 leading-relaxed font-light", children: "\u8CC7\u6599\u306E\u5185\u5BB9\u3092\u300C\u81EA\u793E\u306B\u7F6E\u304D\u63DB\u3048\u305F\u3089\u3069\u3046\u306A\u308B\u304B\uFF1F\u300D\u300C\u3069\u3053\u304B\u3089\u7740\u624B\u3059\u3079\u304D\u304B\uFF1F\u300D\u3092\u3001\u4EE3\u8868\u307E\u305F\u306F\u5C02\u4EFB\u30B3\u30F3\u30B5\u30EB\u30BF\u30F3\u30C8\u304C\u76F4\u63A5\u30A2\u30C9\u30D0\u30A4\u30B9\u3044\u305F\u3057\u307E\u3059\uFF08Zoom\u5BFE\u5FDC\u30FB\u5B8C\u5168\u7121\u6599\uFF09\u3002" }), _jsxs("div", { className: "pt-2 flex flex-col sm:flex-row gap-3", children: [_jsxs("a", { href: bookingUrl, target: "_blank", rel: "noopener noreferrer", className: "inline-flex items-center justify-center gap-2 px-6 py-3.5 bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold rounded-xl text-sm transition shadow-md hover:shadow-lg", children: [_jsx("svg", { className: "w-4 h-4", fill: "none", stroke: "currentColor", viewBox: "0 0 24 24", children: _jsx("path", { strokeLinecap: "round", strokeLinejoin: "round", strokeWidth: 2, d: "M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" }) }), "\u4ECA\u3059\u3050\u9762\u8AC7\u306E\u65E5\u7A0B\u3092\u4E88\u7D04\u3059\u308B\uFF08\u7121\u6599\uFF09 \u2192"] }), _jsx("a", { href: "/diagnosis", className: "inline-flex items-center justify-center gap-2 px-6 py-3.5 bg-sand-800 hover:bg-sand-700 text-white font-bold rounded-xl text-sm transition shadow-md border border-sand-600", children: "\u81EA\u793E\u306E3\u5206\u30DC\u30C8\u30EB\u30CD\u30C3\u30AF\u8A3A\u65AD\u3092\u3059\u308B" })] })] }), _jsx("div", { className: "text-center pt-2", children: _jsx("a", { href: "/", className: "text-xs font-bold text-brand-700 hover:text-brand-900 underline", children: "\u2190 \u30C8\u30C3\u30D7\u30DA\u30FC\u30B8\u3078\u623B\u308B" }) })] }));
+        return (_jsxs("div", { className: "bg-white p-8 sm:p-12 rounded-2xl border border-sand-300 shadow-xl space-y-8 animate-fadeIn", children: [
+            _jsxs("div", { className: "text-center space-y-3", children: [
+                _jsx("div", { className: "w-16 h-16 bg-emerald-100 text-emerald-700 rounded-full flex items-center justify-center mx-auto shadow-sm", children: _jsx("svg", { className: "w-8 h-8", fill: "none", stroke: "currentColor", viewBox: "0 0 24 24", children: _jsx("path", { strokeLinecap: "round", strokeLinejoin: "round", strokeWidth: 2.5, d: "M5 13l4 4L19 7" }) }) }),
+                _jsx("span", { className: "text-xs font-bold text-emerald-700 bg-emerald-50 px-3 py-1 rounded-full border border-emerald-200 uppercase tracking-wider", children: "請求受付完了" }),
+                _jsx("h3", { className: "text-2xl sm:text-3xl font-bold font-serif text-slate-900", children: "資料請求を受け付けました" }),
+                _jsxs("p", { className: "text-xs sm:text-sm text-gray-600 max-w-lg mx-auto leading-relaxed", children: ["ご入力いただいたメールアドレス（", _jsx("strong", { className: "text-slate-900", children: formData.email }), "）宛てにも資料リンクを送信いたしました。以下のボタンからも今すぐ直接ご覧いただけます。"] })
+            ] }),
+            _jsxs("div", { className: "p-6 bg-sand-50/80 rounded-2xl border border-sand-200 space-y-3", children: [
+                _jsx("span", { className: "text-xs font-bold text-slate-500 uppercase tracking-wider block text-center", children: "ご請求いただいたPDF資料" }),
+                _jsx("div", { className: "grid grid-cols-1 sm:grid-cols-2 gap-3", children: downloadUrls.map((item, idx) => (_jsxs("a", { href: item.url, target: "_blank", rel: "noopener noreferrer", className: "p-4 bg-brand-900 hover:bg-brand-800 text-white rounded-xl shadow transition text-center flex flex-col justify-center items-center gap-1 group", children: [
+                    _jsxs("div", { className: "flex items-center gap-2 font-bold text-sm", children: [
+                        _jsx("svg", { className: "w-4 h-4 text-brand-300", fill: "none", stroke: "currentColor", viewBox: "0 0 24 24", children: _jsx("path", { strokeLinecap: "round", strokeLinejoin: "round", strokeWidth: 2, d: "M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" }) }),
+                        item.label
+                    ] }),
+                    _jsx("span", { className: "text-[11px] text-slate-300 group-hover:text-white", children: "PDFを開く・ダウンロードする →" })
+                ] }, item.url || idx))) })
+            ] }),
+            _jsxs("div", { className: "p-6 bg-brand-50/50 rounded-2xl border border-brand-200 text-center space-y-4", children: [
+                _jsx("span", { className: "text-xs font-bold text-brand-700 bg-brand-100/60 px-3 py-1 rounded-full uppercase tracking-wider border border-brand-300", children: "代表または専任コンサルタントによる個別相談" }),
+                _jsx("h4", { className: "text-lg sm:text-xl font-bold font-serif text-slate-900", children: "資料の内容を自社に落とし込む「30分無料オンライン相談」" }),
+                _jsx("p", { className: "text-xs text-gray-600 max-w-md mx-auto leading-relaxed", children: "「自社の場合、どのツールで自動化できるか」「自社の業態で介護保険外サービスを開業できるか」など、具体的な疑問を直接画面共有しながら相談いただけます。" }),
+                _jsxs("div", { className: "pt-2 flex flex-col sm:flex-row justify-center gap-3", children: [
+                    _jsxs("a", { href: bookingUrl, target: "_blank", rel: "noopener noreferrer", className: "inline-flex items-center justify-center gap-2 px-6 py-3.5 bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold rounded-xl text-xs sm:text-sm transition shadow-md hover:shadow-lg", children: [
+                        _jsx("svg", { className: "w-4 h-4", fill: "none", stroke: "currentColor", viewBox: "0 0 24 24", children: _jsx("path", { strokeLinecap: "round", strokeLinejoin: "round", strokeWidth: 2, d: "M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" }) }),
+                        "無料相談の日程を予約する（TimeRex・30分）"
+                    ] }),
+                    _jsx("a", { href: "https://lin.ee/qWsuD6f", target: "_blank", rel: "noopener noreferrer", className: "inline-flex items-center justify-center gap-2 px-5 py-3.5 bg-[#06C755] hover:bg-[#05b34c] text-white font-bold rounded-xl text-xs sm:text-sm transition shadow", children: "LINEで質問・日程調整する" })
+                ] })
+            ] }),
+            _jsx("div", { className: "text-center pt-2", children: _jsx("a", { href: "/", className: "text-xs font-bold text-brand-700 hover:text-brand-900 underline", children: "← トップページへ戻る" }) })
+        ] }));
     }
-    return (_jsxs("form", { onSubmit: handleSubmit, className: "bg-white p-6 sm:p-10 rounded-2xl border border-sand-300 shadow-lg space-y-6", children: [_jsxs("div", { className: "border-b border-sand-200 pb-4", children: [_jsx("span", { className: "text-xs font-bold text-brand-700 bg-brand-50 px-3 py-1 rounded-full uppercase tracking-wider border border-brand-200", children: "\u7121\u6599\u30C0\u30A6\u30F3\u30ED\u30FC\u30C9" }), _jsx("h2", { className: "text-xl sm:text-2xl font-bold font-serif text-slate-900 mt-2", children: "\u8CC7\u6599\u8ACB\u6C42\u30D5\u30A9\u30FC\u30E0" }), _jsx("p", { className: "text-xs text-gray-500 mt-1", children: "\u30D5\u30A9\u30FC\u30E0\u9001\u4FE1\u5F8C\u3001\u3059\u3050\u306BPDF\u8CC7\u6599\u3092\u753B\u9762\u4E0A\u3067\u3054\u78BA\u8A8D\u30FB\u30C0\u30A6\u30F3\u30ED\u30FC\u30C9\u3044\u305F\u3060\u3051\u307E\u3059\u3002" })] }), errorMsg && (_jsx("div", { className: "p-4 bg-rose-50 border border-rose-200 rounded-xl text-xs text-rose-700 font-medium", children: errorMsg })), _jsxs("div", { children: [_jsxs("label", { className: "block text-xs font-bold text-slate-800 mb-2", children: ["\u3054\u5E0C\u671B\u306E\u8CC7\u6599\u3092\u9078\u629E\u3057\u3066\u304F\u3060\u3055\u3044 ", _jsx("span", { className: "text-rose-500", children: "*" })] }), _jsxs("div", { className: "space-y-2.5", children: [_jsxs("label", { className: `flex items-start gap-3 p-3.5 rounded-xl border cursor-pointer transition ${materialChoice === 'management'
-                                    ? 'border-brand-700 bg-brand-50/60 shadow-sm'
-                                    : 'border-sand-300 bg-white hover:bg-sand-50/50'}`, children: [_jsx("input", { type: "radio", name: "material_choice", value: "management", checked: materialChoice === 'management', onChange: () => setMaterialChoice('management'), className: "mt-1 text-brand-700 focus:ring-brand-500" }), _jsxs("div", { children: [_jsx("div", { className: "text-xs sm:text-sm font-bold text-slate-900", children: "\u2460 \u7D4C\u55B6\u6539\u5584\u5B9F\u52D9\u30AC\u30A4\u30C9\u30D6\u30C3\u30AF\uFF08\u8981\u70B9\u89E3\u8AAC\u30B9\u30E9\u30A4\u30C9\uFF09" }), _jsx("div", { className: "text-[11px] text-gray-600 mt-0.5", children: "\u4E2D\u5C0F\u4F01\u696D\u304C\u300C\u624B\u4F5C\u696D\u306E\u5C71\u300D\u300C\u5C5E\u4EBA\u5316\u300D\u304B\u3089\u8131\u5374\u3057\u3001\u5229\u76CA\u3092\u6B8B\u3059\u305F\u3081\u306E\u4ED5\u7D44\u307F\u5316\u5B9F\u8DF5\u8AD6\u3002" })] })] }), _jsxs("label", { className: `flex items-start gap-3 p-3.5 rounded-xl border cursor-pointer transition ${materialChoice === 'care'
-                                    ? 'border-brand-700 bg-brand-50/60 shadow-sm'
-                                    : 'border-sand-300 bg-white hover:bg-sand-50/50'}`, children: [_jsx("input", { type: "radio", name: "material_choice", value: "care", checked: materialChoice === 'care', onChange: () => setMaterialChoice('care'), className: "mt-1 text-brand-700 focus:ring-brand-500" }), _jsxs("div", { children: [_jsx("div", { className: "text-xs sm:text-sm font-bold text-slate-900", children: "\u2461 \u4ECB\u8B77\u4FDD\u967A\u5916\u30B5\u30FC\u30D3\u30B9\u958B\u696D\u30FB\u53CE\u76CA\u5316\u30D1\u30C3\u30B1\u30FC\u30B8\u8CC7\u6599" }), _jsx("div", { className: "text-[11px] text-gray-600 mt-0.5", children: "\u76F4\u55B6\u5E97\u8217\u306E\u5B9F\u8DF5\u30C7\u30FC\u30BF\u3001\u521D\u671F\u53CE\u652F\u30E2\u30C7\u30EB\u3001\u96C6\u5BA2\u30FB\u30AB\u30EB\u30C6\u81EA\u52D5\u5316\u306E\u958B\u696D\u624B\u9806\u3092\u7DB2\u7F85\u3002" })] })] }), _jsxs("label", { className: `flex items-start gap-3 p-3.5 rounded-xl border cursor-pointer transition ${materialChoice === 'both'
-                                    ? 'border-brand-700 bg-brand-50/60 shadow-sm'
-                                    : 'border-sand-300 bg-white hover:bg-sand-50/50'}`, children: [_jsx("input", { type: "radio", name: "material_choice", value: "both", checked: materialChoice === 'both', onChange: () => setMaterialChoice('both'), className: "mt-1 text-brand-700 focus:ring-brand-500" }), _jsxs("div", { children: [_jsx("div", { className: "text-xs sm:text-sm font-bold text-slate-900", children: "\u2462 \u4E21\u65B9\u306E\u8CC7\u6599\u3092\u307E\u3068\u3081\u3066\u5E0C\u671B\u3059\u308B" }), _jsx("div", { className: "text-[11px] text-gray-600 mt-0.5", children: "\u7D4C\u55B6\u6539\u5584\u30AC\u30A4\u30C9\u3068\u4ECB\u8B77\u4FDD\u967A\u5916\u958B\u696D\u8CC7\u6599\u306E2\u70B9\u3068\u3082\u30C0\u30A6\u30F3\u30ED\u30FC\u30C9\u3044\u305F\u3060\u3051\u307E\u3059\u3002" })] })] })] })] }), _jsxs("div", { className: "grid grid-cols-1 sm:grid-cols-2 gap-4", children: [_jsxs("div", { children: [_jsxs("label", { className: "block text-xs font-bold text-slate-800 mb-2", children: ["\u8CB4\u793E\u540D\u30FB\u5C4B\u53F7 ", _jsx("span", { className: "text-gray-400 font-normal", children: "\uFF08\u4EFB\u610F\uFF09" })] }), _jsx("input", { type: "text", placeholder: "\u4F8B\uFF1A\u682A\u5F0F\u4F1A\u793E\u3007\u3007 / \u500B\u4EBA", value: formData.company_name, onChange: (e) => setFormData({ ...formData, company_name: e.target.value }), className: "w-full px-4 py-3 rounded-xl border border-sand-300 focus:border-brand-600 focus:ring-2 focus:ring-brand-100 text-sm outline-none transition" })] }), _jsxs("div", { children: [_jsxs("label", { className: "block text-xs font-bold text-slate-800 mb-2", children: ["\u304A\u540D\u524D ", _jsx("span", { className: "text-rose-500", children: "*" })] }), _jsx("input", { type: "text", required: true, placeholder: "\u4F8B\uFF1A\u5C71\u7530 \u592A\u90CE", value: formData.name, onChange: (e) => setFormData({ ...formData, name: e.target.value }), className: "w-full px-4 py-3 rounded-xl border border-sand-300 focus:border-brand-600 focus:ring-2 focus:ring-brand-100 text-sm outline-none transition" })] })] }), _jsxs("div", { className: "grid grid-cols-1 sm:grid-cols-2 gap-4", children: [_jsxs("div", { children: [_jsxs("label", { className: "block text-xs font-bold text-slate-800 mb-2", children: ["\u30E1\u30FC\u30EB\u30A2\u30C9\u30EC\u30B9 ", _jsx("span", { className: "text-rose-500", children: "*" })] }), _jsx("input", { type: "email", required: true, placeholder: "\u4F8B\uFF1Ayamada@example.com", value: formData.email, onChange: (e) => setFormData({ ...formData, email: e.target.value }), className: "w-full px-4 py-3 rounded-xl border border-sand-300 focus:border-brand-600 focus:ring-2 focus:ring-brand-100 text-sm outline-none transition" })] }), _jsxs("div", { children: [_jsxs("label", { className: "block text-xs font-bold text-slate-800 mb-2", children: ["\u304A\u96FB\u8A71\u756A\u53F7 ", _jsx("span", { className: "text-gray-400 font-normal", children: "\uFF08\u4EFB\u610F\uFF09" })] }), _jsx("input", { type: "tel", placeholder: "\u4F8B\uFF1A090-1234-5678", value: formData.phone, onChange: (e) => setFormData({ ...formData, phone: e.target.value }), className: "w-full px-4 py-3 rounded-xl border border-sand-300 focus:border-brand-600 focus:ring-2 focus:ring-brand-100 text-sm outline-none transition" })] })] }), _jsxs("div", { className: "text-xs text-gray-500 leading-relaxed bg-sand-50/70 p-3.5 rounded-xl border border-sand-200", children: ["\u3054\u5165\u529B\u3044\u305F\u3060\u3044\u305F\u60C5\u5831\u306F\u3001\u8CC7\u6599\u9001\u4ED8\u304A\u3088\u3073\u95A2\u9023\u3059\u308B\u3054\u6848\u5185\u306B\u306E\u307F\u5229\u7528\u3044\u305F\u3057\u307E\u3059\u3002\u8A73\u7D30\u306F\u5F53\u793E\u306E", _jsx("a", { href: "/privacy", target: "_blank", className: "text-brand-700 underline font-semibold", children: "\u30D7\u30E9\u30A4\u30D0\u30B7\u30FC\u30DD\u30EA\u30B7\u30FC" }), "\u3092\u3054\u78BA\u8A8D\u304F\u3060\u3055\u3044\u3002"] }), _jsx("button", { type: "submit", disabled: loading, className: "w-full py-4 px-6 bg-brand-900 hover:bg-brand-800 disabled:bg-gray-400 text-white font-bold rounded-xl text-sm sm:text-base transition shadow-md flex items-center justify-center gap-2", children: loading ? (_jsxs(_Fragment, { children: [_jsxs("svg", { className: "animate-spin -ml-1 mr-2 h-4 w-4 text-white", fill: "none", viewBox: "0 0 24 24", children: [_jsx("circle", { className: "opacity-25", cx: "12", cy: "12", r: "10", stroke: "currentColor", strokeWidth: "4" }), _jsx("path", { className: "opacity-75", fill: "currentColor", d: "M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" })] }), "\u9001\u4FE1\u4E2D..."] })) : (_jsx(_Fragment, { children: "\u8CC7\u6599\u3092\u4ECA\u3059\u3050\u7121\u6599\u3067\u53D7\u3051\u53D6\u308B \u2192" })) })] }));
+
+    return (_jsxs("form", { onSubmit: handleSubmit, className: "bg-white p-6 sm:p-10 rounded-2xl border border-sand-300 shadow-lg space-y-6", children: [
+        _jsxs("div", { className: "border-b border-sand-200 pb-4", children: [
+            _jsx("span", { className: "text-xs font-bold text-brand-700 bg-brand-50 px-3 py-1 rounded-full uppercase tracking-wider border border-brand-200", children: "無料ダウンロード" }),
+            _jsx("h2", { className: "text-xl sm:text-2xl font-bold font-serif text-slate-900 mt-2", children: "資料請求フォーム" }),
+            _jsx("p", { className: "text-xs text-gray-500 mt-1", children: "フォーム送信後、すぐにPDF資料を画面上でご確認・ダウンロードいただけます。" })
+        ] }),
+        errorMsg && (_jsx("div", { className: "p-4 bg-rose-50 border border-rose-200 rounded-xl text-xs text-rose-700 font-medium", children: errorMsg })),
+        _jsxs("div", { children: [
+            _jsxs("div", { className: "flex items-center justify-between mb-2", children: [
+                _jsxs("label", { className: "block text-xs font-bold text-slate-800", children: ["ご希望の資料を選択してください（複数選択可） ", _jsx("span", { className: "text-rose-500", children: "*" })] }),
+                availableMaterials.length > 1 && (_jsx("button", { type: "button", onClick: selectAll, className: "text-[11px] font-bold text-brand-700 hover:text-brand-900 underline", children: "すべて選択" }))
+            ] }),
+            _jsx("div", { className: "space-y-2.5", children: availableMaterials.map((mat) => {
+                const isChecked = selectedKeys.includes(mat.key);
+                return (_jsxs("label", { className: `flex items-start gap-3 p-3.5 rounded-xl border cursor-pointer transition ${isChecked
+                    ? 'border-brand-700 bg-brand-50/60 shadow-sm'
+                    : 'border-sand-300 bg-white hover:bg-sand-50/50'}`, children: [
+                    _jsx("input", { type: "checkbox", name: "material_keys", value: mat.key, checked: isChecked, onChange: () => toggleMaterial(mat.key), className: "mt-1 text-brand-700 rounded focus:ring-brand-500" }),
+                    _jsxs("div", { children: [
+                        _jsx("div", { className: "text-xs sm:text-sm font-bold text-slate-900", children: mat.label }),
+                        mat.description && (_jsx("div", { className: "text-[11px] text-gray-600 mt-0.5", children: mat.description }))
+                    ] })
+                ] }, mat.key));
+            }) })
+        ] }),
+        _jsxs("div", { className: "space-y-4 pt-2", children: [
+            _jsxs("div", { children: [
+                _jsxs("label", { className: "block text-xs font-bold text-slate-800 mb-1", children: ["会社名・屋号 ", _jsx("span", { className: "text-gray-400 font-normal", children: "（個人の場合は「個人」とご記入ください）" })] }),
+                _jsx("input", { type: "text", value: formData.company_name, onChange: (e) => setFormData({ ...formData, company_name: e.target.value }), placeholder: "例: 有限会社〇〇 / 個人開業準備中", className: "w-full px-4 py-3 rounded-xl border border-sand-300 focus:outline-none focus:ring-2 focus:ring-brand-500 text-xs sm:text-sm" })
+            ] }),
+            _jsxs("div", { className: "grid grid-cols-1 sm:grid-cols-2 gap-4", children: [
+                _jsxs("div", { children: [
+                    _jsxs("label", { className: "block text-xs font-bold text-slate-800 mb-1", children: ["お名前 ", _jsx("span", { className: "text-rose-500", children: "*" })] }),
+                    _jsx("input", { type: "text", required: true, value: formData.name, onChange: (e) => setFormData({ ...formData, name: e.target.value }), placeholder: "例: 山田 太郎", className: "w-full px-4 py-3 rounded-xl border border-sand-300 focus:outline-none focus:ring-2 focus:ring-brand-500 text-xs sm:text-sm" })
+                ] }),
+                _jsxs("div", { children: [
+                    _jsxs("label", { className: "block text-xs font-bold text-slate-800 mb-1", children: ["メールアドレス ", _jsx("span", { className: "text-rose-500", children: "*" })] }),
+                    _jsx("input", { type: "email", required: true, value: formData.email, onChange: (e) => setFormData({ ...formData, email: e.target.value }), placeholder: "例: yamada@example.com", className: "w-full px-4 py-3 rounded-xl border border-sand-300 focus:outline-none focus:ring-2 focus:ring-brand-500 text-xs sm:text-sm" })
+                ] })
+            ] }),
+            _jsxs("div", { children: [
+                _jsxs("label", { className: "block text-xs font-bold text-slate-800 mb-1", children: ["電話番号 ", _jsx("span", { className: "text-gray-400 font-normal", children: "（任意）" })] }),
+                _jsx("input", { type: "tel", value: formData.phone, onChange: (e) => setFormData({ ...formData, phone: e.target.value }), placeholder: "例: 090-1234-5678", className: "w-full px-4 py-3 rounded-xl border border-sand-300 focus:outline-none focus:ring-2 focus:ring-brand-500 text-xs sm:text-sm" })
+            ] })
+        ] }),
+        _jsxs("div", { className: "pt-2", children: [
+            _jsx("button", { type: "submit", disabled: loading, className: "w-full py-4 px-6 bg-brand-900 hover:bg-brand-800 text-white font-bold rounded-xl shadow-md transition flex items-center justify-center gap-2 text-sm sm:text-base group disabled:opacity-50", children: loading ? (_jsx("span", { className: "animate-pulse", children: "送信中..." })) : (_jsxs(_Fragment, { children: [
+                _jsx("span", { children: "無料資料を今すぐ受け取る" }),
+                _jsx("svg", { className: "w-4 h-4 group-hover:translate-x-1 transition-transform", fill: "none", stroke: "currentColor", viewBox: "0 0 24 24", children: _jsx("path", { strokeLinecap: "round", strokeLinejoin: "round", strokeWidth: 2, d: "M14 5l7 7m0 0l-7 7m7-7H3" }) })
+            ] })) }),
+            _jsx("p", { className: "text-[11px] text-gray-500 text-center mt-2", children: "ご入力いただいた情報は、資料送付および関連するご案内のみに使用いたします。強引な営業は一切行いません。" })
+        ] })
+    ] }));
 }

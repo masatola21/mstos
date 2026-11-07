@@ -315,6 +315,28 @@ async function loadTaskRelatedContext(task: TaskItem): Promise<string> {
   }
 }
 
+type AppModalKey =
+  | 'config'
+  | 'rls'
+  | 'quick_create'
+  | 'character_editor'
+  | 'role_editor'
+  | 'model_settings'
+  | 'profile'
+  | 'plan'
+  | 'pricing'
+  | 'backup'
+  | 'quick_drawer';
+
+interface AppHistoryState {
+  mst: true;
+  tab: UnifiedNavTab;
+  acquisitionTargetTab?: string;
+  inboxTargetChannel?: 'line' | 'email' | 'social_dm' | 'forms';
+  customerWorkspaceContext?: any;
+  modal?: AppModalKey | null;
+}
+
 /**
  * 指摘1対応: 競合マージ時に保存中のユーザー編集を消失させないマージヘルパー
  * 保存開始時(saving)から現在(current)までに変更されたローカル編集を最優先し、
@@ -328,14 +350,18 @@ function AppContent() {
   const [inboxTargetChannel, setInboxTargetChannel] = useState<'line' | 'email' | 'social_dm' | 'forms' | undefined>(undefined);
   const [acquisitionTargetTab, setAcquisitionTargetTab] = useState<string | undefined>(undefined);
 
+  const isPopStateRef = useRef(false);
+
   const handleNavigateWorkspaceTab = (
     tab: UnifiedNavTab | string,
     options?: {
       inboxChannel?: 'line' | 'email' | 'social_dm' | 'forms';
       acquisitionTab?: string;
       studioMode?: 'broadcast' | 'dm_sales';
+      context?: any;
     }
   ) => {
+    const targetTab = tab as UnifiedNavTab;
     if (options?.inboxChannel) {
       setInboxTargetChannel(options.inboxChannel);
       try {
@@ -353,7 +379,35 @@ function AppContent() {
         localStorage.setItem('social_studio_mode', options.studioMode);
       } catch {}
     }
-    setCurrentTab(tab as UnifiedNavTab);
+    if (options?.context !== undefined) {
+      setCustomerWorkspaceContext(options.context);
+    }
+    if (targetTab === 'ai_tasks') setSelectedTaskWorkspaceSection('tasks');
+    if (targetTab === 'marketing_automation') setLineInboxContact(undefined);
+
+    setCurrentTab(targetTab);
+
+    if (!isPopStateRef.current && typeof window !== 'undefined') {
+      const cur = window.history.state as AppHistoryState | null;
+      if (
+        cur?.mst &&
+        cur.tab === targetTab &&
+        cur.acquisitionTargetTab === (options?.acquisitionTab ?? acquisitionTargetTab) &&
+        cur.inboxTargetChannel === (options?.inboxChannel ?? inboxTargetChannel) &&
+        !cur.modal
+      ) {
+        return;
+      }
+      const nextState: AppHistoryState = {
+        mst: true,
+        tab: targetTab,
+        acquisitionTargetTab: options?.acquisitionTab ?? acquisitionTargetTab,
+        inboxTargetChannel: options?.inboxChannel ?? inboxTargetChannel,
+        customerWorkspaceContext: options?.context ?? customerWorkspaceContext,
+        modal: null,
+      };
+      window.history.pushState(nextState, '', window.location.href);
+    }
   };
 
   const customerWorkspaceCompanyId = customerWorkspaceContext?.companyId;
@@ -443,6 +497,130 @@ function AppContent() {
   const [selectedProjectIdForTasks, setSelectedProjectIdForTasks] = useState<string | null>(null);
   const [selectedTaskWorkspaceSection, setSelectedTaskWorkspaceSection] = useState<'tasks' | 'approvals' | 'logs'>('tasks');
 
+  const openModalWithHistory = (modalKey: AppModalKey) => {
+    if (modalKey === 'config') setIsConfigOpen(true);
+    else if (modalKey === 'rls') setIsRlsOpen(true);
+    else if (modalKey === 'quick_create') setQuickCreateOpen(true);
+    else if (modalKey === 'character_editor') setIsCharacterEditorOpen(true);
+    else if (modalKey === 'model_settings') setIsModelSettingsOpen(true);
+    else if (modalKey === 'profile') setIsProfileModalOpen(true);
+    else if (modalKey === 'pricing') setIsPricingModalOpen(true);
+    else if (modalKey === 'backup') setIsBackupModalOpen(true);
+    else if (modalKey === 'quick_drawer') setIsQuickDrawerOpen(true);
+
+    if (!isPopStateRef.current && typeof window !== 'undefined') {
+      const nextState: AppHistoryState = {
+        mst: true,
+        tab: currentTab,
+        acquisitionTargetTab,
+        inboxTargetChannel,
+        customerWorkspaceContext,
+        modal: modalKey,
+      };
+      window.history.pushState(nextState, '', window.location.href);
+    }
+  };
+
+  const closeModalWithHistory = (modalKey: AppModalKey) => {
+    if (typeof window !== 'undefined') {
+      const cur = window.history.state as AppHistoryState | null;
+      if (cur?.mst && cur.modal === modalKey) {
+        window.history.back();
+        return;
+      }
+    }
+    if (modalKey === 'config') setIsConfigOpen(false);
+    else if (modalKey === 'rls') setIsRlsOpen(false);
+    else if (modalKey === 'quick_create') setQuickCreateOpen(false);
+    else if (modalKey === 'character_editor') {
+      setIsCharacterEditorOpen(false);
+      setEditingCharacterId(null);
+    }
+    else if (modalKey === 'model_settings') setIsModelSettingsOpen(false);
+    else if (modalKey === 'profile') setIsProfileModalOpen(false);
+    else if (modalKey === 'pricing') setIsPricingModalOpen(false);
+    else if (modalKey === 'backup') setIsBackupModalOpen(false);
+    else if (modalKey === 'quick_drawer') setIsQuickDrawerOpen(false);
+    else if (modalKey === 'plan') setActivePlanForModal(null);
+    else if (modalKey === 'role_editor') setEditingRoleId(null);
+  };
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+
+    const initialState: AppHistoryState = {
+      mst: true,
+      tab: currentTab,
+      acquisitionTargetTab,
+      inboxTargetChannel,
+      customerWorkspaceContext,
+      modal: null,
+    };
+    if (!window.history.state?.mst) {
+      window.history.replaceState(initialState, '', window.location.href);
+    } else {
+      const s = window.history.state as AppHistoryState;
+      if (s.tab) setCurrentTab(s.tab);
+      if (s.acquisitionTargetTab) setAcquisitionTargetTab(s.acquisitionTargetTab);
+      if (s.inboxTargetChannel) setInboxTargetChannel(s.inboxTargetChannel);
+      if (s.customerWorkspaceContext) setCustomerWorkspaceContext(s.customerWorkspaceContext);
+    }
+
+    const handlePopState = (event: PopStateEvent) => {
+      const state = event.state as AppHistoryState | undefined;
+      if (!state || !state.mst) {
+        return;
+      }
+      isPopStateRef.current = true;
+
+      if (state.tab) {
+        setCurrentTab(state.tab);
+      }
+      if (state.acquisitionTargetTab !== undefined) {
+        setAcquisitionTargetTab(state.acquisitionTargetTab);
+        try {
+          if (state.acquisitionTargetTab) {
+            localStorage.setItem('ai_acquisition_active_tab', state.acquisitionTargetTab);
+          }
+        } catch {}
+      }
+      if (state.inboxTargetChannel !== undefined) {
+        setInboxTargetChannel(state.inboxTargetChannel);
+        try {
+          if (state.inboxTargetChannel) {
+            localStorage.setItem('unified_inbox_active_channel', state.inboxTargetChannel);
+          }
+        } catch {}
+      }
+      setCustomerWorkspaceContext(state.customerWorkspaceContext);
+
+      setIsConfigOpen(state.modal === 'config');
+      setIsRlsOpen(state.modal === 'rls');
+      setQuickCreateOpen(state.modal === 'quick_create');
+      setIsCharacterEditorOpen(state.modal === 'character_editor');
+      setIsModelSettingsOpen(state.modal === 'model_settings');
+      setIsProfileModalOpen(state.modal === 'profile');
+      setIsPricingModalOpen(state.modal === 'pricing');
+      setIsBackupModalOpen(state.modal === 'backup');
+      setIsQuickDrawerOpen(state.modal === 'quick_drawer');
+      if (state.modal !== 'plan') {
+        setActivePlanForModal(null);
+      }
+      if (state.modal !== 'role_editor') {
+        setEditingRoleId(null);
+      }
+
+      setTimeout(() => {
+        isPopStateRef.current = false;
+      }, 50);
+    };
+
+    window.addEventListener('popstate', handlePopState);
+    return () => {
+      window.removeEventListener('popstate', handlePopState);
+    };
+  }, []);
+
   // Matrix & Product States
   const [products, setProducts] = useState<ManagedProduct[]>(() => matrixService.loadProducts());
   const [contracts, setContracts] = useState<ManagedContract[]>(() => matrixService.loadContracts());
@@ -528,6 +706,58 @@ function AppContent() {
       workspaceSaveCoordinator.reset();
     };
   }, [user?.id]);
+
+  const handleRetrySync = () => {
+    if (!user) return;
+    setWorkspaceSyncStatus('loading');
+    setWorkspaceSaveError('');
+    loadOrMigrateWorkspaceData(user.id)
+      .then((data) => {
+        setTopGoal(data.topGoal);
+        setCharacters(data.characters);
+        const nextActiveCharacterId = data.characters.some((character) => character.id === data.activeCharacterId)
+          ? data.activeCharacterId
+          : data.characters[0]?.id || activeCharacterId;
+        setActiveCharacterId(nextActiveCharacterId);
+        setUserProfile(data.userProfile);
+        setAiModelSettings(data.aiModelSettings);
+        setProjects(data.projects);
+        setTasks(data.tasks);
+        setApprovals(data.approvals);
+        setActivityLogs(data.activityLogs);
+        setPricingRates(data.pricingRates);
+        setTokenUsageRecords(data.tokenUsage);
+        setProducts(data.products);
+        setContracts(data.contracts);
+        setInvoices(data.invoices);
+        setTools(data.tools);
+        setCustomLists(data.customLists);
+        setAutomations(matrixService.normalizeAutomationRules(data.automations));
+        setMarketingScenarios(data.marketingScenarios || []);
+        setKnowledgeItems(data.knowledgeItems || []);
+        setWorkModeHistories(data.workModeHistories || {});
+        workspaceSaveCoordinator.setInitialSavedSnapshot(data);
+        workspaceSyncEnabledRef.current = true;
+        setWorkspaceSyncStatus('saved');
+        setWorkspaceReady(true);
+      })
+      .catch((error) => {
+        console.error('Retry workspace cloud load failed:', error);
+        workspaceSyncEnabledRef.current = false;
+        if (isWorkspaceConflictError(error)) {
+          workspaceSaveCoordinator.haltOnConflict('他の端末で更新されています。最新データを再読み込みしてください');
+          setWorkspaceSyncStatus('conflict');
+          setWorkspaceSaveError('他の端末で更新されています。最新データを再読み込みしてください');
+        } else {
+          const errorMessage = (error as { message?: string })?.message || '';
+          setWorkspaceSyncStatus('error');
+          setWorkspaceSaveError(errorMessage
+            ? `クラウド同期に失敗しました: ${errorMessage}`
+            : 'クラウド同期に失敗しました。接続設定と mst_workspace_state テーブルのマイグレーションを確認してください。');
+        }
+        setWorkspaceReady(true);
+      });
+  };
 
   // 保存最適化：タイマーが発火するまで巨大オブジェクト構築・JSON.stringifyを行わない
   useEffect(() => {
@@ -727,7 +957,7 @@ function AppContent() {
   // Quick Create Handler for MST
   const handleOpenCreate = (table: TableKey) => {
     setQuickCreateTable(table);
-    setQuickCreateOpen(true);
+    openModalWithHistory('quick_create');
   };
 
   // --- Character Switching & Saving ---
@@ -2221,16 +2451,16 @@ function AppContent() {
     return (
       <>
         <AuthScreen 
-          onOpenConfig={() => setIsConfigOpen(true)} 
-          onOpenRls={() => setIsRlsOpen(true)} 
+          onOpenConfig={() => openModalWithHistory('config')} 
+          onOpenRls={() => openModalWithHistory('rls')} 
         />
         <ConfigGuideModal
           isOpen={isConfigOpen}
-          onClose={() => setIsConfigOpen(false)}
+          onClose={() => closeModalWithHistory('config')}
         />
         <RlsGuideModal
           isOpen={isRlsOpen}
-          onClose={() => setIsRlsOpen(false)}
+          onClose={() => closeModalWithHistory('rls')}
         />
       </>
     );
@@ -2240,21 +2470,20 @@ function AppContent() {
     <AppShell
       currentTab={currentTab}
       onSelectTab={(tab) => {
-        if (tab === 'ai_tasks') setSelectedTaskWorkspaceSection('tasks');
-        if (tab === 'marketing_automation') setLineInboxContact(undefined);
-        setCurrentTab(tab);
+        handleNavigateWorkspaceTab(tab);
       }}
       pendingApprovalsCount={approvals.filter((a) => a.status === 'pending').length}
       workspaceSyncStatus={workspaceSyncStatus}
       workspaceSaveError={workspaceSaveError}
       pageAssistantEmoji={pageAssistantMode.avatarEmoji}
-      onOpenQuickAiDrawer={() => setIsQuickDrawerOpen(true)}
-      onOpenConfig={() => setIsConfigOpen(true)}
-      onOpenRls={() => setIsRlsOpen(true)}
-      onOpenPricing={() => setIsPricingModalOpen(true)}
-      onOpenBackup={() => setIsBackupModalOpen(true)}
-      onOpenProfile={() => setIsProfileModalOpen(true)}
-      onOpenModelSettings={() => setIsModelSettingsOpen(true)}
+      onOpenQuickAiDrawer={() => openModalWithHistory('quick_drawer')}
+      onOpenConfig={() => openModalWithHistory('config')}
+      onOpenRls={() => openModalWithHistory('rls')}
+      onOpenPricing={() => openModalWithHistory('pricing')}
+      onOpenBackup={() => openModalWithHistory('backup')}
+      onOpenProfile={() => openModalWithHistory('profile')}
+      onOpenModelSettings={() => openModalWithHistory('model_settings')}
+      onRetrySync={handleRetrySync}
     >
         {/* ================= SECTION 1: MST AI経営OS ================= */}
         {(currentTab === 'mst_dashboard' || currentTab === 'inflow_dashboard') && (
@@ -2691,12 +2920,12 @@ function AppContent() {
       {/* Global Modals */}
       <ConfigGuideModal
         isOpen={isConfigOpen}
-        onClose={() => setIsConfigOpen(false)}
+        onClose={() => closeModalWithHistory('config')}
       />
 
       <RlsGuideModal
         isOpen={isRlsOpen}
-        onClose={() => setIsRlsOpen(false)}
+        onClose={() => closeModalWithHistory('rls')}
       />
 
       {quickCreateOpen && (
@@ -2704,10 +2933,10 @@ function AppContent() {
           isOpen={quickCreateOpen}
           tableKey={quickCreateTable}
           editRecord={null}
-          onClose={() => setQuickCreateOpen(false)}
+          onClose={() => closeModalWithHistory('quick_create')}
           onSuccess={() => {
             if (currentTab !== quickCreateTable) {
-              setCurrentTab(quickCreateTable as UnifiedNavTab);
+              handleNavigateWorkspaceTab(quickCreateTable as UnifiedNavTab);
             }
           }}
         />
@@ -2715,7 +2944,7 @@ function AppContent() {
 
       {/* AI President Modals */}
       {isCharacterEditorOpen && editingCharacter && (
-        <ModalShell title="専門AIの編集" onClose={closeCharacterEditor}>
+        <ModalShell title="専門AIの編集" onClose={() => closeModalWithHistory('character_editor')}>
           <CharacterEditor
             key={editingCharacter.id}
             character={editingCharacter}
@@ -2726,10 +2955,10 @@ function AppContent() {
             onDuplicateCharacter={handleDuplicateCharacter}
             onStartChat={(char) => {
               handleSelectCharacter(char.id);
-              closeCharacterEditor();
-              setCurrentTab('ai_chat');
+              closeModalWithHistory('character_editor');
+              handleNavigateWorkspaceTab('ai_chat');
             }}
-            onClose={closeCharacterEditor}
+            onClose={() => closeModalWithHistory('character_editor')}
             onRecordUsage={handleRecordUsage}
           />
         </ModalShell>
@@ -2744,7 +2973,7 @@ function AppContent() {
           statuses={providerStatuses}
           onSave={(override) => handleSaveRoleOverride(editingRoleId, override)}
           onReset={() => handleSaveRoleOverride(editingRoleId, null)}
-          onClose={() => setEditingRoleId(null)}
+          onClose={() => closeModalWithHistory('role_editor')}
         />
       )}
 
@@ -2753,9 +2982,9 @@ function AppContent() {
           defaultSetting={aiModelSettings.defaultSetting}
           onSave={(defaultSetting) => {
             updateAiModelSettings({ ...aiModelSettings, defaultSetting });
-            setIsModelSettingsOpen(false);
+            closeModalWithHistory('model_settings');
           }}
-          onClose={() => setIsModelSettingsOpen(false)}
+          onClose={() => closeModalWithHistory('model_settings')}
         />
       )}
 
@@ -2763,7 +2992,7 @@ function AppContent() {
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-sm overflow-y-auto">
           <div className="relative w-full max-w-4xl">
             <button
-              onClick={() => setIsProfileModalOpen(false)}
+              onClick={() => closeModalWithHistory('profile')}
               className="absolute top-4 right-4 z-10 p-2 rounded-xl bg-slate-800 text-slate-400 hover:text-white"
             >
               ✕
@@ -2772,7 +3001,7 @@ function AppContent() {
               userProfile={userProfile}
               onSaveProfile={(prof) => {
                 handleUpdateUserProfile(prof);
-                setIsProfileModalOpen(false);
+                closeModalWithHistory('profile');
               }}
             />
           </div>
@@ -2783,7 +3012,7 @@ function AppContent() {
         <PlanRegistrationModal
           plan={activePlanForModal}
           isOpen={true}
-          onClose={() => setActivePlanForModal(null)}
+          onClose={() => closeModalWithHistory('plan')}
           characters={characters}
           roleOverrides={aiModelSettings.roleOverrides}
           onConfirmRegistration={(pName, pObj, pPri, pDue, pTasks) => {
@@ -2822,8 +3051,8 @@ function AppContent() {
               'AI社長'
             );
             setActivityLogs(loadActivityLogs());
-            setActivePlanForModal(null);
-            setCurrentTab('ai_tasks');
+            closeModalWithHistory('plan');
+            handleNavigateWorkspaceTab('ai_tasks');
           }}
         />
       )}
@@ -2831,7 +3060,7 @@ function AppContent() {
       {isPricingModalOpen && (
         <PricingSettingsModal
           isOpen={isPricingModalOpen}
-          onClose={() => setIsPricingModalOpen(false)}
+          onClose={() => closeModalWithHistory('pricing')}
           pricingRates={pricingRates}
           tokenUsageRecords={tokenUsageRecords}
           onSavePricingRates={handleSavePricingRates}
@@ -2842,7 +3071,7 @@ function AppContent() {
       {isBackupModalOpen && (
         <BackupModal
           isOpen={isBackupModalOpen}
-          onClose={() => setIsBackupModalOpen(false)}
+          onClose={() => closeModalWithHistory('backup')}
           characters={characters}
           userProfile={userProfile}
           projects={projects}
@@ -2875,21 +3104,22 @@ function AppContent() {
               Object.entries(restored.workModeHistories).forEach(([key, history]) => saveChatHistory(key, history));
               setMessages(restored.workModeHistories[`${activeCharacter.id}:${activeWorkModeId}`] || []);
             }
-            setIsBackupModalOpen(false);
+            closeModalWithHistory('backup');
           }}
         />
       )}
-
-
 
       {/* Page-aware AI helper drawer */}
       <QuickPresidentDrawer
         isOpen={isQuickDrawerOpen}
         pageId={currentTab}
-        onClose={() => setIsQuickDrawerOpen(false)}
+        onClose={() => closeModalWithHistory('quick_drawer')}
         character={presidentCharacter}
         userProfile={userProfile}
-        onOpenPlanProposal={(plan) => setActivePlanForModal(plan)}
+        onOpenPlanProposal={(plan) => {
+          setActivePlanForModal(plan);
+          openModalWithHistory('plan');
+        }}
         onRecordUsage={handleRecordUsage}
       />
 

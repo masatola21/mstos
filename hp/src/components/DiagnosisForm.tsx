@@ -3,6 +3,7 @@ import {
   MST_OFFICIAL_BOTTLENECK_QUESTIONS,
   analyzeBottleneck,
   submitIntakeToCRM,
+  OFFICIAL_TIMEREX_BOOKING_URL,
   type DiagnosisAnalysisResult
 } from '../lib/supabase';
 
@@ -77,7 +78,7 @@ export default function DiagnosisForm() {
       });
 
       if (res.success) {
-        let targetBookingUrl = res.bookingUrl || 'https://lin.ee/qWsuD6f';
+        let targetBookingUrl = res.bookingUrl || OFFICIAL_TIMEREX_BOOKING_URL;
         if (targetBookingUrl.includes('timerex') || targetBookingUrl.includes('booking') || targetBookingUrl.includes('calendar')) {
           const delim = targetBookingUrl.includes('?') ? '&' : '?';
           targetBookingUrl += `${delim}name=${encodeURIComponent(lead.name)}&email=${encodeURIComponent(lead.email)}`;

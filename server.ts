@@ -309,7 +309,7 @@ async function ensureStandardPublicForms(): Promise<void> {
         category: '介護保険外サービス開業パッケージ',
         service_category: '介護保険外サービス開業パッケージ',
         description: '介護保険外サービスの開業・事業化に関するお問い合わせ・ご相談・資料請求を承っております。',
-        booking_url: null,
+        booking_url: 'https://timerex.net/s/mst.shikumikaizen_b173/4ac78e37',
         material_url: null,
         care_flex_template_id: null,
         questions: [
@@ -330,7 +330,7 @@ async function ensureStandardPublicForms(): Promise<void> {
         category: 'お問い合わせ・経営相談',
         service_category: '経営戦略・業務効率化設計・伴走顧問',
         description: '経営相談や業務自動化に関するお問い合わせを承っております。',
-        booking_url: null,
+        booking_url: 'https://timerex.net/s/mst.shikumikaizen_b173/4ac78e37',
         material_url: null,
         questions: [],
       },
@@ -346,7 +346,7 @@ async function ensureStandardPublicForms(): Promise<void> {
         category: '資料請求',
         service_category: '経営改善実務ガイド・資料請求',
         description: '経営改善実務ガイドのダウンロード受付フォームです。',
-        booking_url: null,
+        booking_url: 'https://timerex.net/s/mst.shikumikaizen_b173/4ac78e37',
         material_url: null,
         questions: [],
       },
@@ -362,7 +362,7 @@ async function ensureStandardPublicForms(): Promise<void> {
         category: '経営ボトルネック診断',
         service_category: '経営ボトルネック診断',
         description: '経営のボトルネックを可視化する無料診断フォームです。',
-        booking_url: null,
+        booking_url: 'https://timerex.net/s/mst.shikumikaizen_b173/4ac78e37',
         material_url: null,
         questions: [
           { id: 'q_ops_bottleneck', label: '業務・手作業の急所', type: 'radio', required: true },
@@ -3775,6 +3775,70 @@ app.get(['/api/public/forms/:slug', '/public/forms/:slug'], async (req, res) => 
   }
 });
 
+// ラウンド2-2: 公式配布資料（PDF）の公開API（HP自動連動・CORS対応）
+app.options('/api/public/materials', (req, res) => {
+  res.setHeader('Access-Control-Allow-Origin', '*');
+  res.setHeader('Access-Control-Allow-Methods', 'GET, OPTIONS');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Accept');
+  return res.sendStatus(204);
+});
+
+app.get('/api/public/materials', async (req, res) => {
+  res.setHeader('Access-Control-Allow-Origin', '*');
+  res.setHeader('Access-Control-Allow-Methods', 'GET, OPTIONS');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Accept');
+
+  try {
+    if (lineSupabase) {
+      const { data, error } = await lineSupabase
+        .from('public_materials')
+        .select('key, label, description, public_url, category, sort_order')
+        .eq('is_active', true)
+        .order('sort_order', { ascending: true });
+
+      if (!error && data && data.length > 0) {
+        return res.json({
+          success: true,
+          materials: data.map((item) => ({
+            key: item.key,
+            label: item.label,
+            description: item.description || '',
+            category: item.category || '経営実務',
+            url: item.public_url,
+            sort_order: item.sort_order,
+          })),
+        });
+      }
+    }
+
+    // DB未初期化時の安全なフォールバック（公式HPの初期2資料）
+    return res.json({
+      success: true,
+      materials: [
+        {
+          key: 'management-guide',
+          label: '経営改善実務ガイドブック（要点解説スライド）',
+          description: '中小企業が「手作業の山」「属人化」から脱却し、利益を残すための仕組み化実践論。',
+          category: '経営実務・仕組み化',
+          url: 'https://corp.mstcorp.info/materials/mst-management-guide.pdf',
+          sort_order: 10,
+        },
+        {
+          key: 'care-package-overview',
+          label: '介護保険外サービス開業パッケージ概要資料',
+          description: '介護事業所・法人が保険外の自費収益柱（月30万〜100万円超）を最短で立ち上げるための実務手順。',
+          category: '開業パッケージ',
+          url: 'https://corp.mstcorp.info/materials/care-package-overview.pdf',
+          sort_order: 20,
+        },
+      ],
+    });
+  } catch (err) {
+    console.error('Public materials lookup failed:', err);
+    return res.status(500).json({ error: '資料一覧を取得できませんでした。' });
+  }
+});
+
 app.post(
   ['/api/public/forms/:slug/submissions', '/public/forms/:slug/submissions'],
   express.json({ limit: '50kb' }),
@@ -3791,7 +3855,11 @@ app.post(
 
   const name = typeof body.name === 'string' ? body.name.trim().slice(0, 120) : '';
   const answers = body.answers && typeof body.answers === 'object' && !Array.isArray(body.answers) ? body.answers as Record<string, unknown> : {};
-  if (Object.values(answers).some((value) => typeof value !== 'string' && typeof value !== 'boolean') ||
+  if (Object.values(answers).some((value) => 
+        typeof value !== 'string' && 
+        typeof value !== 'boolean' && 
+        !(Array.isArray(value) && value.every((v) => typeof v === 'string' && v.length < 200))
+      ) ||
       Object.values(answers).some((value) => typeof value === 'string' && value.length > 4_000)) {
     return res.status(400).json({ error: '回答内容を確認してください。' });
   }
@@ -3831,9 +3899,9 @@ app.post(
   const userNotes = typeof body.notes === 'string' ? body.notes.trim().slice(0, 4_000) : '';
   const utmInput = body.utm && typeof body.utm === 'object' && !Array.isArray(body.utm) ? body.utm as Record<string, unknown> : {};
   const utm: Record<string, string> = {};
-  for (const key of ['source', 'utm_source', 'utm_medium', 'utm_campaign', 'inquiryType']) {
+  for (const key of ['source', 'utm_source', 'utm_medium', 'utm_campaign', 'inquiryType', 'referrer', 'landing_page', 'page_url']) {
     const value = utmInput[key];
-    if (typeof value === 'string' && value.trim()) utm[key] = value.trim().slice(0, 120);
+    if (typeof value === 'string' && value.trim()) utm[key] = value.trim().slice(0, 300);
   }
 
   try {
@@ -4081,15 +4149,20 @@ app.post(
     const answerSummary = JSON.stringify(cleanAnswers).slice(0, 6_000);
     const sourceLabel = publicFormSourceLabels[form.form_type] || 'Webフォーム';
     const originLabel = utm.source ? `（流入: ${utm.source.slice(0, 80)}）` : '';
-    const requestMarker = `[申込 ${requestId}]`;
-    const companyNote = effectiveCompanyName
-      ? matchingCompanyNames.length > 1
-        ? `会社名の候補が複数あります: ${matchingCompanyNames.join('、')}`
-        : matchedCompanyId
-          ? `会社名・屋号（申込時）: ${effectiveCompanyName}`
-          : `申込時の会社名: ${effectiveCompanyName}（未登録）`
-      : '';
-    const noteEntry = `${requestMarker} ${form.name}${originLabel} / ${new Date().toISOString()}\n${[companyNote, contactNameNote].filter(Boolean).join('\n')}${companyNote || contactNameNote ? '\n' : ''}${answerSummary}`;
+    // ラウンド2-2: 請求資料キーの抽出
+    let requestedMaterialKeys: string[] = [];
+    if (Array.isArray(body.materialKeys)) {
+      requestedMaterialKeys = body.materialKeys.filter((k: any) => typeof k === 'string' && k.trim());
+    } else if (Array.isArray(cleanAnswers.material_keys)) {
+      requestedMaterialKeys = (cleanAnswers.material_keys as string[]).filter((k) => typeof k === 'string' && k.trim());
+    } else if (typeof cleanAnswers.material_choice === 'string') {
+      const choice = cleanAnswers.material_choice.trim();
+      if (choice === 'care') requestedMaterialKeys = ['care-package-overview'];
+      else if (choice === 'management') requestedMaterialKeys = ['management-guide'];
+      else if (choice === 'both') requestedMaterialKeys = ['management-guide', 'care-package-overview'];
+      else if (choice) requestedMaterialKeys = [choice];
+    }
+
     const validInquiryTypes = ['資料請求', '開業相談', '両方希望'] as const;
     type ValidInquiryType = typeof validInquiryTypes[number];
     let inquiryType: ValidInquiryType | null = null;
@@ -4116,28 +4189,116 @@ app.post(
       inquiryType = '開業相談';
     } else if (slug === 'material-download' || form.name.includes('資料')) {
       inquiryType = '資料請求';
-    } else if (slug === 'business-diagnosis' || form.form_type === 'diagnosis' || form.form_type === 'consultation' || form.name.includes('相談')) {
+    } else if (slug === 'business-diagnosis' || form.form_type === 'diagnosis') {
       inquiryType = '開業相談';
     } else if (slug === 'care-package-inquiry') {
       inquiryType = '資料請求';
     }
 
-    const isCarePackage = slug === 'care-package-inquiry' || Boolean(inquiryType);
+    // public_materials から該当資料を検索
+    let resolvedMaterials: Array<{ key: string; label: string; url: string }> = [];
+    try {
+      const { data: activeMaterials } = await lineSupabase
+        .from('public_materials')
+        .select('key, label, public_url, sort_order')
+        .eq('is_active', true)
+        .order('sort_order', { ascending: true });
 
-    const formServiceType = isCarePackage
-      ? '介護保険外サービス開業パッケージ'
-      : (typeof definition.category === 'string' && definition.category.trim())
-      || (typeof definition.service_category === 'string' && definition.service_category.trim())
-      || form.name
-      || 'Webフォーム受付';
+      if (activeMaterials && activeMaterials.length > 0) {
+        if (requestedMaterialKeys.length > 0) {
+          resolvedMaterials = activeMaterials
+            .filter((m) => requestedMaterialKeys.includes(m.key))
+            .map((m) => ({ key: m.key, label: m.label, url: m.public_url }));
+        }
+        // 資料キー未指定だが資料請求の場合、先頭の有効資料を採用
+        if (resolvedMaterials.length === 0 && (slug === 'material-download' || rawInquiry.includes('資料'))) {
+          resolvedMaterials = [activeMaterials[0]].map((m) => ({ key: m.key, label: m.label, url: m.public_url }));
+        }
+      }
+    } catch (matLookupErr) {
+      console.warn('[PublicForm] Materials lookup exception:', matLookupErr);
+    }
 
-    const leadStatus = isCarePackage
-      ? (inquiryType === '資料請求' ? '資料請求' : '相談申込')
-      : (form.form_type === 'diagnosis' ? '診断申込' : form.form_type === 'consultation' ? '相談申込' : '面談申込');
+    // ラウンド2-3: 介護保険外パッケージの判定を slug === 'care-package-inquiry' に限定（material-downloadを誤判定させない）
+    const isCarePackage = slug === 'care-package-inquiry' || (slug !== 'material-download' && slug !== 'contact-inquiry' && slug !== 'business-diagnosis' && (cleanAnswers.service_interest === '介護保険外サービス開業パッケージ' || rawInquiry.includes('介護')));
 
-    const leadSource = isCarePackage
-      ? (lineUserId ? 'LINE（介護保険外サービス開業パッケージ）' : 'Web（介護保険外サービス開業パッケージ）')
-      : `${sourceLabel}${originLabel}`;
+    // ラウンド2-3: leads.source をフォームslugで一意に決定
+    let leadSource = 'HP：Web受付';
+    if (slug === 'material-download') {
+      leadSource = 'HP：資料請求';
+    } else if (slug === 'contact-inquiry') {
+      leadSource = 'HP：お問い合わせ';
+    } else if (slug === 'business-diagnosis') {
+      leadSource = 'HP：経営診断';
+    } else if (slug === 'care-package-inquiry') {
+      leadSource = 'HP：開業パッケージ';
+    } else if (form.form_type === 'diagnosis') {
+      leadSource = 'HP：経営診断';
+    } else if (form.form_type === 'consultation') {
+      leadSource = 'HP：相談・問い合わせ';
+    } else {
+      leadSource = `HP：${form.name || 'Webフォーム'}`;
+    }
+
+    // ラウンド2-3: leads.status を slug / 種別別に一意に決定
+    let leadStatus = '相談申込';
+    if (slug === 'material-download') {
+      leadStatus = '資料請求';
+    } else if (slug === 'business-diagnosis' || form.form_type === 'diagnosis') {
+      leadStatus = '診断申込';
+    } else if (slug === 'contact-inquiry') {
+      leadStatus = '相談申込';
+    } else if (slug === 'care-package-inquiry') {
+      leadStatus = (inquiryType === '資料請求' || rawInquiry.includes('資料')) ? '資料請求' : '相談申込';
+    } else if (inquiryType === '資料請求') {
+      leadStatus = '資料請求';
+    }
+
+    let formServiceType = '経営の仕組み化・利益改善';
+    if (isCarePackage) {
+      formServiceType = '介護保険外サービス開業パッケージ';
+    } else if (slug === 'material-download') {
+      formServiceType = requestedMaterialKeys.includes('care-package-overview') && requestedMaterialKeys.length === 1
+        ? '介護保険外サービス開業パッケージ'
+        : '経営改善実務ガイド・資料請求';
+    } else if (slug === 'contact-inquiry') {
+      formServiceType = (typeof cleanAnswers.service_interest === 'string' && cleanAnswers.service_interest.trim())
+        || '経営戦略・業務効率化設計・伴走顧問';
+    } else if (slug === 'business-diagnosis') {
+      formServiceType = '経営ボトルネック診断（仕組み化・利益改善）';
+    } else {
+      formServiceType = (typeof definition.category === 'string' && definition.category.trim())
+        || (typeof definition.service_category === 'string' && definition.service_category.trim())
+        || form.name
+        || 'Webフォーム受付';
+    }
+
+    // 流入元詳細（utm, referrer, landing page）と請求資料の構造化メモ
+    const requestMarker = `[申込 ${requestId}]`;
+    const utmDetails = [
+      utm.utm_source ? `utm_source: ${utm.utm_source}` : '',
+      utm.utm_medium ? `utm_medium: ${utm.utm_medium}` : '',
+      utm.utm_campaign ? `utm_campaign: ${utm.utm_campaign}` : '',
+      utm.source && utm.source !== 'corporate_website' ? `source: ${utm.source}` : '',
+      utm.referrer ? `referrer: ${utm.referrer}` : '',
+      utm.landing_page ? `LP: ${utm.landing_page}` : '',
+    ].filter(Boolean).join(' | ');
+
+    const requestedMaterialText = resolvedMaterials.length > 0
+      ? `【請求資料】${resolvedMaterials.map((m) => m.label).join('、')}`
+      : (typeof cleanAnswers.choice_label === 'string' && cleanAnswers.choice_label.trim())
+        ? `【請求資料】${cleanAnswers.choice_label.trim()}`
+        : '';
+
+    const noteEntry = [
+      `${requestMarker} ${leadSource} / ${new Date().toISOString()}`,
+      utmDetails ? `【流入詳細】${utmDetails}` : '',
+      companyName ? `【会社名】${companyName}` : '',
+      contactNameNote,
+      requestedMaterialText,
+      userNotes ? `【自由記入メモ】${userNotes}` : '',
+      answerSummary,
+    ].filter(Boolean).join('\n');
 
     const { data: existingLeads, error: leadLookupError } = await lineSupabase
       .from('leads')
@@ -4269,10 +4430,20 @@ app.post(
         .maybeSingle();
       bookingUrl = salesSettings?.booking_page_url || '';
     }
+    // ラウンド2-6: sales_workspace_settings が未設定でも TimeRex 公式URLにフォールバック
+    if (!bookingUrl) {
+      bookingUrl = 'https://timerex.net/s/mst.shikumikaizen_b173/4ac78e37';
+    }
 
     const rawMaterialUrl = typeof (formDef as any).material_url === 'string' ? (formDef as any).material_url.trim() : '';
-    const materialReady = Boolean(rawMaterialUrl && /^https?:\/\//i.test(rawMaterialUrl));
-    const materialUrl = materialReady ? rawMaterialUrl : null;
+    const fallbackMaterialUrl = Boolean(rawMaterialUrl && /^https?:\/\//i.test(rawMaterialUrl)) ? rawMaterialUrl : null;
+    
+    // ラウンド2-2: public_materials から引いた資料URLを最優先（複数なら改行区切りで展開）
+    const effectiveMaterialUrls = resolvedMaterials.length > 0
+      ? resolvedMaterials.map((m) => `▼ ${m.label}\n${m.url}`).join('\n\n')
+      : fallbackMaterialUrl || '';
+    const singleMaterialUrl = resolvedMaterials[0]?.url || fallbackMaterialUrl || null;
+    const materialReady = resolvedMaterials.length > 0 || Boolean(fallbackMaterialUrl);
     const bookingReady = Boolean(bookingUrl && /^https?:\/\//i.test(bookingUrl));
 
     const bookingPrompt = bookingReady
@@ -4284,7 +4455,7 @@ app.post(
       if (inquiryType === '資料請求') {
         customNotificationText = `【MST】「介護保険外サービス開業パッケージ」資料請求を承りました。\n\n${name} 様\n資料請求いただき誠にありがとうございます！\n\n` +
           (materialReady
-            ? `以下のURLより開業パッケージの概要資料をご確認いただけます。\n▼ 開業パッケージ資料URL\n${materialUrl}\n\nご不明点や具体的な相談をご希望の場合は、いつでも本LINE／メールまでお気軽に返信してください。`
+            ? `以下のURLより開業パッケージの概要資料をご確認いただけます。\n${effectiveMaterialUrls}\n\nご不明点や具体的な相談をご希望の場合は、いつでも本LINE／メールまでお気軽に返信してください。`
             : `現在、最新版資料の送付準備中となっております。専任担当者より折り返しご案内をお送りいたしますので、恐れ入りますが少々お待ちくださいませ。`);
       } else if (inquiryType === '開業相談') {
         customNotificationText = `【MST】「介護保険外サービス開業パッケージ」開業相談のお申し込みを承りました。\n\n${name} 様\nご相談のお申し込み誠にありがとうございます！\n\n専任コンサルタントによる30分のオンライン個別面談（Zoom・無料）にて、貴社の構想に合わせた開業ステップや収益設計をご案内いたします。` +
@@ -4292,7 +4463,7 @@ app.post(
       } else {
         const parts = [`【MST】「介護保険外サービス開業パッケージ」資料請求・個別相談を承りました。\n\n${name} 様\nお申し込み誠にありがとうございます！`];
         if (materialReady) {
-          parts.push(`▼ 開業パッケージ資料URL\n${materialUrl}`);
+          parts.push(`▼ 開業パッケージ資料URL\n${effectiveMaterialUrls}`);
         } else {
           parts.push(`※最新版資料はただいま送付準備中となっております。準備が整い次第ご案内いたします。`);
         }
@@ -4303,6 +4474,13 @@ app.post(
         }
         customNotificationText = parts.join('\n\n');
       }
+    } else if (slug === 'material-download' || inquiryType === '資料請求') {
+      // 一般資料請求のメール・LINE通知
+      const materialListText = effectiveMaterialUrls
+        ? `ご請求いただいた資料は、以下のURLより今すぐご確認・ダウンロードいただけます。\n\n${effectiveMaterialUrls}\n\n※ダウンロード期限はございませんので、いつでもお見返しいただけます。`
+        : '現在、最新版資料の送付準備中となっております。担当者より折り返しご案内をお送りいたします。';
+
+      customNotificationText = `【MST】資料請求を受け付けました。\n\n${name} 様\nこの度は資料をご請求いただき誠にありがとうございます！\n\n${materialListText}${bookingPrompt}\n\n--------------------------------------------------\n有限会社MST\n代表取締役: 大橋真人\n〒503-0981 岐阜県大垣市桧町127番地\n--------------------------------------------------`;
     }
 
     if (contact.line_user_id && lineChannelAccessToken) {
@@ -4338,7 +4516,9 @@ app.post(
         const emailFrom = process.env.RESEND_FROM_EMAIL || '';
         const subject = isCarePackage
           ? `【MST】「介護保険外サービス開業パッケージ」${inquiryType || 'お問い合わせ'}の受付完了`
-          : `【MST】「${form.name || '無料診断'}」の受付と個別面談のご案内`;
+          : slug === 'material-download' || inquiryType === '資料請求'
+            ? `【MST】資料請求の受付完了（ダウンロードリンクのご案内）`
+            : `【MST】「${form.name || '無料診断'}」の受付と個別面談のご案内`;
         const bodyText = customNotificationText || `${name} 様\n\n有限会社MST代表の大橋真人です。\nこの度は「${form.name || '無料診断'}」にご回答いただき誠にありがとうございます。\n\n現在、ご入力いただいた内容を精査し、御社の業務・売上・時間の急所を特定した個別診断レポートを作成しております。\n机上の空論ではなく「御社がどこから手を付ければ一番利益が残るか」を明確にするため、30分のオンライン面談にて解説と質疑応答を行わせていただきます。${bookingPrompt}\n\n--------------------------------------------------\n有限会社MST\n代表取締役: 大橋真人\n〒503-0981 岐阜県大垣市桧町127番地\n--------------------------------------------------`;
         if (emailKey && emailFrom) {
           await fetch('https://api.resend.com/emails', {
@@ -4375,18 +4555,18 @@ app.post(
     // 管理者向けタスク起票（レポート承認通知 / 資料URL未設定警告）
     if (lineSupabase) {
       try {
-        if (isCarePackage && (inquiryType === '資料請求' || inquiryType === '両方希望') && !materialReady) {
+        if ((isCarePackage || slug === 'material-download' || inquiryType === '資料請求') && !materialReady) {
           await lineSupabase.from('tasks').insert({
             title: `【未設定警告】資料URLが未登録です（${name} 様の資料請求）`,
-            description: `「介護保険外サービス開業パッケージ」で資料請求を受領しましたが、フォーム定義（diagnosis_forms.definition.material_url）に資料URL（PDF等）が未設定です。至急URLを設定し、申込者（${name}様 / ${email}）へ資料を送付してください。`,
+            description: `資料請求（${requestedMaterialText || slug}）を受領しましたが、公開資料マスタ（public_materials）およびフォーム定義に有効な資料URLが未設定です。至急URLを設定し、申込者（${name}様 / ${email}）へ資料を送付してください。`,
             status: 'todo',
             priority: 'urgent',
             due_date: new Date().toISOString().slice(0, 10),
           });
         }
         await lineSupabase.from('tasks').insert({
-          title: `【要対応・${isCarePackage ? '開業パッケージ申込' : 'レポート承認'}】${name} 様（${companyName || '個人'}）の回答`,
-          description: `フォーム「${form.name}」の回答（希望: ${inquiryType || '未指定'}）が届きました。内容を確認し、案内または面談日程の調整を行ってください。`,
+          title: `【要対応・${isCarePackage ? '開業パッケージ申込' : slug === 'material-download' ? '資料請求' : 'レポート承認'}】${name} 様（${companyName || '個人'}）の回答`,
+          description: `フォーム「${form.name}」の回答（希望: ${inquiryType || '未指定'}${requestedMaterialText ? ` / ${requestedMaterialText}` : ''}）が届きました。内容を確認し、案内または面談日程の調整を行ってください。`,
           status: 'todo',
           priority: 'high',
           due_date: new Date().toISOString().slice(0, 10),
@@ -4404,7 +4584,8 @@ app.post(
       diagnosisPending: form.form_type === 'diagnosis' && !diagnosisId,
       inquiryType: inquiryType || null,
       materialReady,
-      materialUrl: materialReady ? materialUrl : null,
+      materialUrl: singleMaterialUrl,
+      materialUrls: resolvedMaterials,
       bookingUrl: bookingReady ? bookingUrl : null,
     });
   } catch (error: any) {

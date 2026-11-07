@@ -89,6 +89,21 @@ export const OwnMediaWorkspace: React.FC<{
   const [testingDeployHook, setTestingDeployHook] = useState(false);
   const [deployHookNotice, setDeployHookNotice] = useState<string | null>(null);
 
+  const kickDeployHook = async (mediaId?: string | null): Promise<{ triggered: boolean; error?: string }> => {
+    const targetMedia = media.find((m) => m.id === mediaId) || media[0] || DEFAULT_OFFICIAL_MEDIA;
+    const hook = targetMedia?.payload?.vercelDeployHook;
+    if (!hook || !hook.startsWith('https://')) {
+      return { triggered: false };
+    }
+    try {
+      await fetch(hook, { method: 'POST', mode: 'no-cors' });
+      return { triggered: true };
+    } catch (e: any) {
+      console.warn('Deploy hook invocation failed:', e);
+      return { triggered: false, error: e?.message || 'Network error' };
+    }
+  };
+
   const testVercelDeployHook = async (hookUrl?: string) => {
     const url = hookUrl || payload.vercelDeployHook;
     if (!url || !url.startsWith('https://')) {
@@ -98,7 +113,7 @@ export const OwnMediaWorkspace: React.FC<{
     setTestingDeployHook(true);
     setDeployHookNotice(null);
     try {
-      await fetch(url, { method: 'POST' });
+      await fetch(url, { method: 'POST', mode: 'no-cors' });
       setDeployHookNotice('✅ Vercel Deploy Hook の送信に成功しました！Vercel側で再デプロイが開始されました。');
     } catch (err: any) {
       setDeployHookNotice('⚠️ Deploy Hook へのリクエストに失敗しました: ' + (err.message || 'ネットワークエラー'));
@@ -370,7 +385,17 @@ export const OwnMediaWorkspace: React.FC<{
       return;
     }
     setRows((p) => p.filter((x) => x.id !== r.id));
-    setNotice('削除しました。');
+
+    let deployNote = '';
+    if (r.record_type === 'article' && (r.status === '公開' || r.status === 'published' || r.status === '公開済み')) {
+      const deployRes = await kickDeployHook(r.payload?.mediaId);
+      if (deployRes.triggered) {
+        deployNote = '（公開中記事の削除に伴い、HPの再デプロイフックを送信しました）';
+      } else {
+        deployNote = '（※HPに反映するには再デプロイが必要です）';
+      }
+    }
+    setNotice(`削除しました。${deployNote}`);
   };
 
   const generateArticleByAI = async () => {
@@ -531,15 +556,12 @@ export const OwnMediaWorkspace: React.FC<{
         ...prev.filter((r) => r.id !== rowId),
       ]);
 
-      const vercelHook = activeMedia?.payload?.vercelDeployHook;
       let deployNotice = '';
-      if (vercelHook && vercelHook.startsWith('https://')) {
-        try {
-          await fetch(vercelHook, { method: 'POST' });
-          deployNotice = '（Vercel再デプロイを自動キックしました）';
-        } catch (e) {
-          console.warn('Vercel Deploy Hook notice:', e);
-        }
+      const deployRes = await kickDeployHook(activeMedia?.id);
+      if (deployRes.triggered) {
+        deployNotice = '（Vercel再デプロイを自動キックしました）';
+      } else {
+        deployNotice = '（※HPに反映するには再デプロイが必要です）';
       }
 
       setCmsResult({

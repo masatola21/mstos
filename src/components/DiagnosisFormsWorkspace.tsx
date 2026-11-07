@@ -1,7 +1,23 @@
 import React, { Fragment, useEffect, useState } from 'react';
 import { getSupabase } from '../lib/supabaseClient';
 import { InlineDeleteButton } from './InlineDeleteButton';
-import { ArrowDown, ArrowUp, Clipboard, ClipboardCheck, ExternalLink, Plus, RefreshCw, Save, Trash2, Sparkles, AlertCircle } from 'lucide-react';
+import { ArrowDown, ArrowUp, Clipboard, ClipboardCheck, ExternalLink, Plus, RefreshCw, Save, Trash2, Sparkles, AlertCircle, FileText, Upload, CheckCircle2, Eye, Copy, Link as LinkIcon } from 'lucide-react';
+
+export interface PublicMaterial {
+  id: string;
+  key: string;
+  label: string;
+  description: string;
+  category: string;
+  file_path: string | null;
+  external_url: string | null;
+  public_url: string;
+  size_bytes: number;
+  is_active: boolean;
+  sort_order: number;
+  created_at: string;
+  updated_at: string;
+}
 
 type FormType = 'diagnosis' | 'consultation' | 'meeting';
 type QuestionType = 'text' | 'textarea' | 'select' | 'radio' | 'checkbox' | 'date';
@@ -112,12 +128,25 @@ function readDefinition(value: Record<string, unknown> | null | undefined): Form
   };
 }
 
-interface DiagnosisFormsWorkspaceProps { initialLeadId?: string; initialCompanyId?: string; initialSection?: 'forms'|'answers'; activeSection?: 'forms'|'answers'; showHeader?: boolean; onOpenDiagnosis?: (diagnosisId: string) => void; onOpenSendCenter?: (formId: string, url: string, kind: 'form'|'diagnosis') => void; }
+interface DiagnosisFormsWorkspaceProps {
+  initialLeadId?: string;
+  initialCompanyId?: string;
+  initialSection?: 'forms'|'answers'|'materials';
+  activeSection?: 'forms'|'answers'|'materials';
+  showHeader?: boolean;
+  onOpenDiagnosis?: (diagnosisId: string) => void;
+  onOpenSendCenter?: (formId: string, url: string, kind: 'form'|'diagnosis') => void;
+}
 
 export const DiagnosisFormsWorkspace: React.FC<DiagnosisFormsWorkspaceProps> = ({ initialLeadId, initialCompanyId, initialSection, activeSection, showHeader = true, onOpenDiagnosis, onOpenSendCenter }) => {
-  const [section, setSection] = useState<'forms'|'answers'>(initialSection || (initialLeadId || initialCompanyId ? 'answers' : 'forms'));
+  const [section, setSection] = useState<'forms'|'answers'|'materials'>(initialSection || (initialLeadId || initialCompanyId ? 'answers' : 'forms'));
   const [forms, setForms] = useState<DiagnosisForm[]>([]);
   const [answers, setAnswers] = useState<Submission[]>([]);
+  const [materials, setMaterials] = useState<PublicMaterial[]>([]);
+  const [editingMaterial, setEditingMaterial] = useState<Partial<PublicMaterial> | null>(null);
+  const [uploadingPdf, setUploadingPdf] = useState(false);
+  const [materialFormOpen, setMaterialFormOpen] = useState(false);
+  const [copiedMaterialUrl, setCopiedMaterialUrl] = useState('');
   const [selectedId, setSelectedId] = useState('');
   const [name, setName] = useState('');
   const [category, setCategory] = useState('');
@@ -209,9 +238,10 @@ export const DiagnosisFormsWorkspace: React.FC<DiagnosisFormsWorkspaceProps> = (
     if (!supabase) { setError('Supabaseに接続してください。'); return; }
     setLoading(true); setError('');
     try {
-      const [formResult, answerResult] = await Promise.all([
+      const [formResult, answerResult, materialResult] = await Promise.all([
         supabase.from('diagnosis_forms').select('*').order('created_at', { ascending: false }),
         supabase.from('diagnosis_submissions').select('*').order('submitted_at', { ascending: false }).limit(200),
+        supabase.from('public_materials').select('*').order('sort_order', { ascending: true }),
       ]);
       if (formResult.error) throw formResult.error;
       if (answerResult.error) throw answerResult.error;
@@ -225,10 +255,201 @@ export const DiagnosisFormsWorkspace: React.FC<DiagnosisFormsWorkspaceProps> = (
         selectForm(loadedForms[0]);
       }
       setAnswers((answerResult.data || []) as Submission[]);
+      if (!materialResult.error && materialResult.data) {
+        setMaterials(materialResult.data as PublicMaterial[]);
+      }
     } catch (e: any) {
-      setError(e?.message || 'フォーム・回答を読み込めませんでした。');
+      setError(e?.message || 'フォーム・回答・資料データを読み込めませんでした。');
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleToggleMaterialActive = async (material: PublicMaterial) => {
+    const supabase = getSupabase();
+    if (!supabase) return;
+    try {
+      const { error: updateErr } = await supabase
+        .from('public_materials')
+        .update({ is_active: !material.is_active })
+        .eq('id', material.id);
+      if (updateErr) throw updateErr;
+      setMaterials((prev) => prev.map((m) => m.id === material.id ? { ...m, is_active: !m.is_active } : m));
+      setNotice(`資料「${material.label}」を${!material.is_active ? '公開（有効）' : '非公開（無効）'}に切り替えました。`);
+    } catch (e: any) {
+      setError('ステータス変更に失敗しました: ' + (e?.message || ''));
+    }
+  };
+
+  const handleDeleteMaterial = async (material: PublicMaterial) => {
+    const confirmed = window.confirm(
+      `資料「${material.label}」を完全に削除しますか？\n\n【注意】\n・削除すると、過去にメールやLINEで送信したダウンロードリンクが開けなくなります。\n・一時的に配布を止めたい場合は「有効 / 無効」の切り替えをご利用ください。\n\n本当に削除してよろしいですか？`
+    );
+    if (!confirmed) return;
+
+    const supabase = getSupabase();
+    if (!supabase) return;
+    setLoading(true);
+    try {
+      // 1. Storageファイルが存在すれば削除
+      if (material.file_path) {
+        const { error: storageErr } = await supabase.storage.from('materials').remove([material.file_path]);
+        if (storageErr) console.warn('Storage file deletion notice:', storageErr.message);
+      }
+      // 2. DBレコードを削除
+      const { error: deleteErr, count } = await supabase
+        .from('public_materials')
+        .delete({ count: 'exact' })
+        .eq('id', material.id);
+      if (deleteErr) throw deleteErr;
+      if (count === 0) throw new Error('資料レコードが見つかりませんでした。');
+
+      setMaterials((prev) => prev.filter((m) => m.id !== material.id));
+      setNotice(`資料「${material.label}」を完全に削除しました。`);
+    } catch (e: any) {
+      setError('削除に失敗しました: ' + (e?.message || ''));
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleUploadPdfFile = async (file: File, targetMaterial?: Partial<PublicMaterial>) => {
+    if (file.type !== 'application/pdf') {
+      alert('PDFファイル（.pdf）のみアップロード可能です。');
+      return;
+    }
+    if (file.size > 20 * 1024 * 1024) {
+      alert('ファイルサイズが20MBを超えています。20MB以下のPDFを選択してください。');
+      return;
+    }
+
+    const supabase = getSupabase();
+    if (!supabase) {
+      alert('Supabaseに接続されていません。');
+      return;
+    }
+
+    setUploadingPdf(true);
+    setError('');
+    setNotice('');
+
+    try {
+      const rawKey = (targetMaterial?.key || editingMaterial?.key || file.name.replace(/\.pdf$/i, '')).trim();
+      const safeKey = rawKey.toLowerCase().replace(/[^a-z0-9_-]/g, '-').replace(/-+/g, '-') || `doc-${Date.now().toString(36)}`;
+      
+      // 差し替え時は既存の file_path を優先してURL不変を維持
+      const filePath = targetMaterial?.file_path || editingMaterial?.file_path || `${safeKey}.pdf`;
+
+      // Supabase Storage に直接アップロード（Vercelプロキシ制限を回避）
+      const { error: uploadError } = await supabase.storage
+        .from('materials')
+        .upload(filePath, file, {
+          cacheControl: '120',
+          upsert: true,
+          contentType: 'application/pdf',
+        });
+
+      if (uploadError) throw uploadError;
+
+      const { data: publicUrlData } = supabase.storage.from('materials').getPublicUrl(filePath);
+      const publicUrl = publicUrlData.publicUrl;
+
+      // 編集フォームのステートを更新
+      setEditingMaterial((prev) => ({
+        ...prev,
+        key: safeKey,
+        label: prev?.label || file.name.replace(/\.pdf$/i, ''),
+        file_path: filePath,
+        public_url: publicUrl,
+        size_bytes: file.size,
+      }));
+
+      // 即時差し替えモード（一覧の差し替えボタンから実行された場合）
+      if (targetMaterial?.id) {
+        const { error: dbErr } = await supabase
+          .from('public_materials')
+          .update({
+            file_path: filePath,
+            public_url: publicUrl,
+            size_bytes: file.size,
+            updated_at: new Date().toISOString(),
+          })
+          .eq('id', targetMaterial.id);
+        if (dbErr) throw dbErr;
+        setNotice(`資料「${targetMaterial.label}」のPDFファイルを上書き差し替えしました（公開URLは維持されます）。`);
+        await load();
+      } else {
+        setNotice('PDFファイルをアップロードしました。内容を確認して「保存」を押してください。');
+      }
+    } catch (e: any) {
+      console.error('PDF upload failed:', e);
+      setError('PDFのアップロード・差し替えに失敗しました: ' + (e?.message || ''));
+    } finally {
+      setUploadingPdf(false);
+    }
+  };
+
+  const handleSaveMaterial = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editingMaterial) return;
+    const cleanKey = (editingMaterial.key || '').trim().toLowerCase().replace(/[^a-z0-9_-]/g, '-');
+    const cleanLabel = (editingMaterial.label || '').trim();
+    const cleanPublicUrl = (editingMaterial.public_url || editingMaterial.external_url || '').trim();
+
+    if (!cleanKey) { setError('資料キー（半角英数・ハイフン）を入力してください。'); return; }
+    if (!cleanLabel) { setError('資料の表示名を入力してください。'); return; }
+    if (!cleanPublicUrl) { setError('公開URL、またはPDFファイルが必要です。'); return; }
+
+    const supabase = getSupabase();
+    if (!supabase) return;
+    setLoading(true); setError(''); setNotice('');
+
+    try {
+      const payload = {
+        key: cleanKey,
+        label: cleanLabel,
+        description: (editingMaterial.description || '').trim(),
+        category: (editingMaterial.category || '経営実務').trim(),
+        file_path: editingMaterial.file_path || null,
+        external_url: editingMaterial.external_url?.trim() || null,
+        public_url: cleanPublicUrl,
+        size_bytes: editingMaterial.size_bytes || 0,
+        is_active: editingMaterial.is_active !== false,
+        sort_order: Number(editingMaterial.sort_order) || 0,
+      };
+
+      if (editingMaterial.id) {
+        const { error: updateErr } = await supabase
+          .from('public_materials')
+          .update(payload)
+          .eq('id', editingMaterial.id);
+        if (updateErr) throw updateErr;
+        setNotice(`資料「${cleanLabel}」を更新しました。`);
+      } else {
+        const { error: insertErr } = await supabase
+          .from('public_materials')
+          .insert(payload);
+        if (insertErr) throw insertErr;
+        setNotice(`新規資料「${cleanLabel}」を登録しました。HPに自動反映されます。`);
+      }
+
+      setMaterialFormOpen(false);
+      setEditingMaterial(null);
+      await load();
+    } catch (e: any) {
+      setError('資料の保存に失敗しました: ' + (e?.message || ''));
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const copyMaterialUrl = async (url: string) => {
+    try {
+      await navigator.clipboard.writeText(url);
+      setCopiedMaterialUrl(url);
+      setTimeout(() => setCopiedMaterialUrl(''), 2000);
+    } catch {
+      alert('URLをコピーできませんでした。');
     }
   };
 
@@ -239,7 +460,7 @@ export const DiagnosisFormsWorkspace: React.FC<DiagnosisFormsWorkspaceProps> = (
     event.preventDefault();
     const supabase = getSupabase();
     if (!supabase || !name.trim()) return;
-    if (!questions.length) { setError('設問を1つ以上追加してください。'); return; }
+    if (formType === 'diagnosis' && !questions.length) { setError('診断フォームには設問を1つ以上追加してください。'); return; }
     if (questions.some((question) => !question.label.trim())) { setError('設問文を入力してください。'); return; }
     if (questions.some((question) => (question.type === 'select' || question.type === 'radio') && question.options.filter(Boolean).length < 2)) {
       setError('選択式の設問には選択肢を2つ以上入力してください。'); return;
@@ -370,6 +591,7 @@ export const DiagnosisFormsWorkspace: React.FC<DiagnosisFormsWorkspaceProps> = (
         <div className="flex gap-2">
           <button onClick={() => setSection('forms')} className={'rounded-lg px-3 py-2 text-sm font-medium transition-colors ' + (section === 'forms' ? 'bg-purple-600 text-white shadow-sm' : 'text-slate-600 hover:bg-slate-100')}>フォーム設定</button>
           <button onClick={() => setSection('answers')} className={'rounded-lg px-3 py-2 text-sm font-medium transition-colors ' + (section === 'answers' ? 'bg-purple-600 text-white shadow-sm' : 'text-slate-600 hover:bg-slate-100')}>フォーム回答 ({visibleAnswers.length})</button>
+          <button onClick={() => setSection('materials')} className={'rounded-lg px-3 py-2 text-sm font-medium transition-colors ' + (section === 'materials' ? 'bg-purple-600 text-white shadow-sm' : 'text-slate-600 hover:bg-slate-100')}>配布資料・PDF管理 ({materials.length})</button>
           <button onClick={() => void load()} title="更新" className="rounded-lg border border-slate-200 px-3 py-2 text-slate-600 hover:bg-slate-50"><RefreshCw className="h-4 w-4" /></button>
         </div>
       </div>}
@@ -551,7 +773,7 @@ export const DiagnosisFormsWorkspace: React.FC<DiagnosisFormsWorkspaceProps> = (
                     <div className="flex items-center gap-1">
                       <button type="button" disabled={index === 0} onClick={() => moveQuestion(index, -1)} aria-label="上へ移動" className="rounded p-1.5 text-slate-500 hover:bg-slate-200 disabled:opacity-30"><ArrowUp className="h-4 w-4" /></button>
                       <button type="button" disabled={index === questions.length - 1} onClick={() => moveQuestion(index, 1)} aria-label="下へ移動" className="rounded p-1.5 text-slate-500 hover:bg-slate-200 disabled:opacity-30"><ArrowDown className="h-4 w-4" /></button>
-                      <button type="button" disabled={questions.length <= 1} onClick={() => removeQuestion(index)} aria-label="設問を削除" className="rounded p-1.5 text-rose-600 hover:bg-rose-50 disabled:opacity-30"><Trash2 className="h-4 w-4" /></button>
+                      <button type="button" disabled={formType === 'diagnosis' && questions.length <= 1} onClick={() => removeQuestion(index)} aria-label="設問を削除" className="rounded p-1.5 text-rose-600 hover:bg-rose-50 disabled:opacity-30"><Trash2 className="h-4 w-4" /></button>
                     </div>
                   </div>
                   <div className="grid gap-3 md:grid-cols-2">
@@ -703,6 +925,343 @@ export const DiagnosisFormsWorkspace: React.FC<DiagnosisFormsWorkspaceProps> = (
             </div>
           )}
           <p className="border-t border-slate-100 p-3 text-xs text-slate-500">診断フォームの回答は、対象会社が紐付いている場合に「未確認」の診断として自動作成されます。回答行の「診断を開く」から内容を確認できます。会社を特定できない回答は受付記録に保持します。</p>
+        </section>
+      )}
+
+      {section === 'materials' && (
+        <section className="space-y-4">
+          {/* 説明バナー */}
+          <div className="rounded-xl border border-sky-200 bg-sky-50/70 p-4 text-sky-950 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 shadow-sm">
+            <div>
+              <h3 className="font-bold flex items-center gap-1.5 text-sm sm:text-base">
+                <FileText className="w-4 h-4 text-sky-600" />
+                公式配布資料・PDFマスタ管理（公式HP自動連動）
+              </h3>
+              <p className="text-xs text-sky-800 mt-1 leading-relaxed">
+                ここで資料の追加・差し替え・非表示を行うと、公式HPの資料請求フォームの選択肢、完了画面のダウンロードボタン、および送信されるメール・LINEの案内URLに即時反映されます（HPの再デプロイ不要）。
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={() => {
+                setEditingMaterial({
+                  key: '',
+                  label: '',
+                  description: '',
+                  category: '経営実務',
+                  sort_order: (materials.length + 1) * 10,
+                  is_active: true,
+                  external_url: '',
+                  public_url: '',
+                });
+                setMaterialFormOpen(true);
+              }}
+              className="inline-flex items-center gap-1 px-3 py-2 rounded-lg bg-sky-600 hover:bg-sky-700 text-white text-xs font-bold shadow-sm transition whitespace-nowrap cursor-pointer"
+            >
+              <Plus className="w-3.5 h-3.5" />
+              新規資料を追加
+            </button>
+          </div>
+
+          {/* 新規登録 / 編集モーダル */}
+          {materialFormOpen && editingMaterial && (
+            <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 backdrop-blur-sm p-4 overflow-y-auto">
+              <div className="bg-white rounded-2xl border border-slate-200 shadow-2xl max-w-lg w-full p-6 space-y-4">
+                <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+                  <h4 className="font-bold text-slate-900 flex items-center gap-2 text-base">
+                    <FileText className="w-5 h-5 text-purple-600" />
+                    {editingMaterial.id ? '資料情報の編集・差し替え' : '新規配布資料の登録'}
+                  </h4>
+                  <button
+                    type="button"
+                    onClick={() => { setMaterialFormOpen(false); setEditingMaterial(null); }}
+                    className="p-1 rounded text-slate-400 hover:text-slate-600 hover:bg-slate-100"
+                  >
+                    ✕
+                  </button>
+                </div>
+
+                <form onSubmit={handleSaveMaterial} className="space-y-4">
+                  <div className="grid gap-3 sm:grid-cols-2">
+                    <label className={labelClass}>
+                      資料キー（英数字・ハイフン） <span className="text-rose-500">*</span>
+                      <input
+                        value={editingMaterial.key || ''}
+                        onChange={(e) => setEditingMaterial({ ...editingMaterial, key: e.target.value })}
+                        disabled={Boolean(editingMaterial.id)}
+                        className={inputClass}
+                        placeholder="例: management-guide"
+                        required
+                      />
+                      <span className="text-[10px] text-slate-400 mt-0.5 block">URLやHPクエリ（?type=...）で参照</span>
+                    </label>
+
+                    <label className={labelClass}>
+                      カテゴリ
+                      <input
+                        value={editingMaterial.category || ''}
+                        onChange={(e) => setEditingMaterial({ ...editingMaterial, category: e.target.value })}
+                        className={inputClass}
+                        placeholder="例: 経営実務・仕組み化"
+                      />
+                    </label>
+                  </div>
+
+                  <label className={labelClass}>
+                    資料の表示名（タイトル） <span className="text-rose-500">*</span>
+                    <input
+                      value={editingMaterial.label || ''}
+                      onChange={(e) => setEditingMaterial({ ...editingMaterial, label: e.target.value })}
+                      className={inputClass}
+                      placeholder="例: 経営改善実務ガイドブック（要点解説スライド）"
+                      required
+                    />
+                  </label>
+
+                  <label className={labelClass}>
+                    資料の説明（HPのチェックボックス下に表示）
+                    <textarea
+                      value={editingMaterial.description || ''}
+                      onChange={(e) => setEditingMaterial({ ...editingMaterial, description: e.target.value })}
+                      rows={2}
+                      className={inputClass}
+                      placeholder="例: 中小企業が「手作業の山」「属人化」から脱却し、利益を残すための仕組み化実践論。"
+                    />
+                  </label>
+
+                  {/* PDFアップロード枠 */}
+                  <div className="p-4 rounded-xl border-2 border-dashed border-purple-200 bg-purple-50/40 space-y-2">
+                    <div className="flex items-center justify-between">
+                      <span className="text-xs font-bold text-purple-900 flex items-center gap-1.5">
+                        <Upload className="w-4 h-4 text-purple-600" />
+                        PDF実体ファイルのアップロード（最大20MB）
+                      </span>
+                      {uploadingPdf && <span className="text-xs text-purple-700 animate-pulse font-medium">アップロード中...</span>}
+                    </div>
+
+                    <p className="text-[11px] text-slate-500 leading-normal">
+                      Supabase Storage（materialsバケット）に直接保存されます。差し替え時は同じファイル名・同じ公開URLで上書きされるため、既存の配布リンクが切れずに保たれます。
+                    </p>
+
+                    <input
+                      type="file"
+                      accept="application/pdf"
+                      onChange={(e) => {
+                        const file = e.target.files?.[0];
+                        if (file) void handleUploadPdfFile(file);
+                      }}
+                      disabled={uploadingPdf}
+                      className="block w-full text-xs text-slate-500 file:mr-3 file:py-2 file:px-3 file:rounded-lg file:border-0 file:text-xs file:font-semibold file:bg-purple-600 file:text-white hover:file:bg-purple-700 file:cursor-pointer cursor-pointer"
+                    />
+
+                    {editingMaterial.public_url && (
+                      <div className="pt-2 text-xs text-slate-600 space-y-1">
+                        <div className="flex items-center gap-1 text-emerald-700 font-semibold text-[11px]">
+                          <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
+                          現在の公開URL:
+                        </div>
+                        <div className="p-2 bg-white rounded border border-purple-100 font-mono text-[11px] break-all select-all text-slate-800">
+                          {editingMaterial.public_url}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* 外部URL直接指定（Storageを使わない場合） */}
+                  <label className={labelClass}>
+                    外部URL（Supabase Storage以外のURLを直接指定する場合）
+                    <input
+                      value={editingMaterial.external_url || ''}
+                      onChange={(e) => {
+                        const ext = e.target.value;
+                        setEditingMaterial({
+                          ...editingMaterial,
+                          external_url: ext,
+                          public_url: ext.trim() || editingMaterial.public_url,
+                        });
+                      }}
+                      className={inputClass}
+                      placeholder="https://corp.mstcorp.info/materials/..."
+                    />
+                  </label>
+
+                  <div className="grid gap-3 sm:grid-cols-2 pt-1">
+                    <label className={labelClass}>
+                      表示順（小さい順）
+                      <input
+                        type="number"
+                        value={editingMaterial.sort_order ?? 0}
+                        onChange={(e) => setEditingMaterial({ ...editingMaterial, sort_order: Number(e.target.value) })}
+                        className={inputClass}
+                      />
+                    </label>
+
+                    <label className="flex items-center gap-2 pt-6 cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={editingMaterial.is_active !== false}
+                        onChange={(e) => setEditingMaterial({ ...editingMaterial, is_active: e.target.checked })}
+                        className="rounded text-purple-600 focus:ring-purple-500 w-4 h-4 cursor-pointer"
+                      />
+                      <span className="text-xs font-bold text-slate-800">公開（HPやフォームに表示）</span>
+                    </label>
+                  </div>
+
+                  <div className="flex items-center justify-end gap-2 pt-3 border-t border-slate-100">
+                    <button
+                      type="button"
+                      onClick={() => { setMaterialFormOpen(false); setEditingMaterial(null); }}
+                      className="px-4 py-2 rounded-lg border border-slate-200 text-slate-600 text-xs font-semibold hover:bg-slate-50 transition"
+                    >
+                      キャンセル
+                    </button>
+                    <button
+                      type="submit"
+                      disabled={loading || uploadingPdf}
+                      className="px-5 py-2 rounded-lg bg-purple-600 hover:bg-purple-700 text-white text-xs font-bold shadow transition disabled:opacity-50 flex items-center gap-1.5 cursor-pointer"
+                    >
+                      <Save className="w-3.5 h-3.5" />
+                      資料情報を保存
+                    </button>
+                  </div>
+                </form>
+              </div>
+            </div>
+          )}
+
+          {/* 資料一覧カード */}
+          <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm space-y-3">
+            <div className="flex items-center justify-between">
+              <h4 className="font-bold text-slate-900 text-sm">登録済み配布資料 ({materials.length}件)</h4>
+              <span className="text-xs text-slate-500">HPの資料請求フォームに自動反映</span>
+            </div>
+
+            {materials.length === 0 ? (
+              <div className="rounded-xl border border-dashed border-slate-200 p-8 text-center text-sm text-slate-500">
+                登録された配布資料はありません。「新規資料を追加」からPDFを登録してください。
+              </div>
+            ) : (
+              <div className="divide-y divide-slate-100">
+                {materials.map((m) => (
+                  <div key={m.id} className="py-3.5 flex flex-col md:flex-row items-start md:items-center justify-between gap-3 hover:bg-slate-50/50 p-2 rounded-lg transition">
+                    <div className="space-y-1 min-w-0 flex-1">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${
+                          m.is_active ? 'bg-emerald-100 text-emerald-800 border border-emerald-200' : 'bg-slate-100 text-slate-500 border border-slate-200'
+                        }`}>
+                          {m.is_active ? '公開中（有効）' : '非表示（無効）'}
+                        </span>
+                        <span className="px-2 py-0.5 rounded bg-purple-50 text-purple-700 text-[10px] font-medium border border-purple-100">
+                          {m.category || '一般'}
+                        </span>
+                        <span className="text-xs font-mono font-bold text-slate-700">
+                          key: {m.key}
+                        </span>
+                        <span className="text-[11px] text-slate-400">
+                          (順序: {m.sort_order})
+                        </span>
+                      </div>
+
+                      <h5 className="font-bold text-sm text-slate-900">{m.label}</h5>
+                      {m.description && <p className="text-xs text-slate-600 line-clamp-2">{m.description}</p>}
+
+                      <div className="flex flex-wrap items-center gap-3 pt-1 text-[11px] text-slate-500 font-mono">
+                        <span className="truncate max-w-xs sm:max-w-md">URL: {m.public_url}</span>
+                        {m.size_bytes > 0 && <span>({(m.size_bytes / 1024 / 1024).toFixed(2)} MB)</span>}
+                      </div>
+                    </div>
+
+                    {/* 操作アクションボタングループ */}
+                    <div className="flex flex-wrap items-center gap-1.5 shrink-0 self-end md:self-center">
+                      {/* URLコピー */}
+                      <button
+                        type="button"
+                        onClick={() => void copyMaterialUrl(m.public_url)}
+                        className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded border border-slate-200 bg-white hover:bg-slate-50 text-slate-700 text-xs font-medium transition cursor-pointer"
+                        title="公開URLをコピー"
+                      >
+                        {copiedMaterialUrl === m.public_url ? (
+                          <>
+                            <ClipboardCheck className="w-3.5 h-3.5 text-emerald-600" />
+                            <span className="text-emerald-700 font-bold">コピー済</span>
+                          </>
+                        ) : (
+                          <>
+                            <Copy className="w-3.5 h-3.5 text-slate-400" />
+                            <span>URLコピー</span>
+                          </>
+                        )}
+                      </button>
+
+                      {/* プレビュー表示 */}
+                      <a
+                        href={m.public_url}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded border border-slate-200 bg-white hover:bg-slate-50 text-slate-700 text-xs font-medium transition cursor-pointer"
+                        title="PDFを新規タブで開く"
+                      >
+                        <Eye className="w-3.5 h-3.5 text-slate-400" />
+                        <span>開く</span>
+                      </a>
+
+                      {/* PDF直接上書き差し替えボタン */}
+                      <label className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded border border-purple-200 bg-purple-50 hover:bg-purple-100 text-purple-800 text-xs font-medium transition cursor-pointer" title="同じURLのまま新しいPDFファイルに差し替えます">
+                        <Upload className="w-3.5 h-3.5 text-purple-600" />
+                        <span>PDF差し替え</span>
+                        <input
+                          type="file"
+                          accept="application/pdf"
+                          onChange={(e) => {
+                            const file = e.target.files?.[0];
+                            if (file) void handleUploadPdfFile(file, m);
+                          }}
+                          className="hidden"
+                        />
+                      </label>
+
+                      {/* 有効/無効トグル */}
+                      <button
+                        type="button"
+                        onClick={() => void handleToggleMaterialActive(m)}
+                        className={`px-2.5 py-1.5 rounded text-xs font-medium transition border cursor-pointer ${
+                          m.is_active
+                            ? 'border-amber-200 bg-amber-50 text-amber-800 hover:bg-amber-100'
+                            : 'border-emerald-200 bg-emerald-50 text-emerald-800 hover:bg-emerald-100'
+                        }`}
+                        title={m.is_active ? 'HPの選択肢から非表示にします' : 'HPの選択肢に表示します'}
+                      >
+                        {m.is_active ? '非公開にする' : '公開する'}
+                      </button>
+
+                      {/* 編集 */}
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setEditingMaterial({ ...m });
+                          setMaterialFormOpen(true);
+                        }}
+                        className="p-1.5 rounded border border-slate-200 bg-white hover:bg-slate-50 text-slate-600 text-xs transition cursor-pointer"
+                        title="資料情報・表示順を編集"
+                      >
+                        編集
+                      </button>
+
+                      {/* 削除 */}
+                      <button
+                        type="button"
+                        onClick={() => void handleDeleteMaterial(m)}
+                        className="p-1.5 rounded border border-rose-200 bg-rose-50 hover:bg-rose-100 text-rose-600 text-xs transition cursor-pointer"
+                        title="資料を完全に削除"
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
         </section>
       )}
     </div>

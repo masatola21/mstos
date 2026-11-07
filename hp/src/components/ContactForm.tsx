@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { submitIntakeToCRM } from '../lib/supabase';
+import { submitIntakeToCRM, OFFICIAL_TIMEREX_BOOKING_URL } from '../lib/supabase';
 
 const SERVICE_MAP: Record<string, string> = {
   strategy: '経営戦略・業務効率化設計・伴走顧問',
@@ -65,7 +65,7 @@ export default function ContactForm() {
       });
 
       if (res.success) {
-        let targetBookingUrl = res.bookingUrl || 'https://lin.ee/qWsuD6f';
+        let targetBookingUrl = res.bookingUrl || OFFICIAL_TIMEREX_BOOKING_URL;
         if (targetBookingUrl.includes('timerex') || targetBookingUrl.includes('booking') || targetBookingUrl.includes('calendar')) {
           const delim = targetBookingUrl.includes('?') ? '&' : '?';
           targetBookingUrl += `${delim}name=${encodeURIComponent(formData.name)}&email=${encodeURIComponent(formData.email)}`;
@@ -116,22 +116,24 @@ export default function ContactForm() {
           </p>
 
           <div className="pt-2 flex flex-col sm:flex-row gap-3">
+            {/* 主ボタン: TimeRex 面談予約 */}
             <a
               href={bookingUrl}
               target="_blank"
               rel="noopener noreferrer"
-              className="inline-flex items-center justify-center gap-2 px-6 py-3.5 bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold rounded-xl text-sm transition shadow-md hover:shadow-lg"
+              className="flex-1 inline-flex items-center justify-center gap-2 px-6 py-3.5 bg-amber-500 hover:bg-amber-400 text-slate-950 font-black rounded-xl text-sm transition shadow-lg hover:shadow-xl hover:scale-[1.01]"
             >
               <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
               </svg>
-              今すぐ面談の日程を予約する（無料） →
+              無料面談の日程を予約する（TimeRex・30分） →
             </a>
+            {/* 補助ボタン: LINE 日程調整 */}
             <a
               href="https://lin.ee/qWsuD6f"
               target="_blank"
               rel="noopener noreferrer"
-              className="inline-flex items-center justify-center gap-2 px-6 py-3.5 bg-[#06C755] hover:bg-[#05b34c] text-white font-bold rounded-xl text-sm transition shadow-md"
+              className="inline-flex items-center justify-center gap-2 px-5 py-3.5 bg-white/10 hover:bg-white/20 text-white font-bold rounded-xl text-sm border border-white/20 transition shadow"
             >
               LINEで日程調整する
             </a>
