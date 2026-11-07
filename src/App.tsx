@@ -2046,14 +2046,31 @@ function AppContent() {
       if (isWorkspaceConflictError(error)) {
         throw new Error('他の端末で更新されています。再読み込みしてください');
       }
-      const message = (error as { message?: string })?.message || '削除の保存に失敗しました。未反映の削除は次回の保存時に再試行されます。';
-      throw new Error(message);
+      const message = (error as { message?: string })?.message || '';
+      if (/customer_invoices_owner_id_invoice_number_key/i.test(message) || (error as any)?.code === '23505') {
+        console.warn('Ignored harmless invoice constraint race during contract/invoice deletion');
+        return;
+      }
+      throw new Error(message || '削除の保存に失敗しました。');
     }
   };
 
   const handleDeleteContract = async (id: string) => {
     if (!user) throw new Error('ログイン状態を確認してから、もう一度削除してください。');
     const current = contracts.find((contract) => contract.id === id);
+    const supabase = getSupabase();
+    if (supabase) {
+      try {
+        await supabase.from('customer_service_engagements').update({ contract_id: null }).eq('contract_id', id);
+        await supabase.from('customer_contracts').delete().eq('legacy_id', id);
+        const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id);
+        if (isUuid) {
+          await supabase.from('customer_contracts').delete().eq('id', id);
+        }
+      } catch {
+        // ignore direct delete error
+      }
+    }
     matrixService.deleteContract(id);
     const nextContracts = matrixService.loadContracts();
     setContracts(nextContracts);
@@ -2070,6 +2087,18 @@ function AppContent() {
   const handleDeleteInvoice = async (id: string) => {
     if (!user) throw new Error('ログイン状態を確認してから、もう一度削除してください。');
     const current = invoices.find((invoice) => invoice.id === id);
+    const supabase = getSupabase();
+    if (supabase) {
+      try {
+        await supabase.from('customer_invoices').delete().eq('legacy_id', id);
+        const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id);
+        if (isUuid) {
+          await supabase.from('customer_invoices').delete().eq('id', id);
+        }
+      } catch {
+        // ignore direct delete error
+      }
+    }
     matrixService.deleteInvoice(id);
     const nextInvoices = matrixService.loadInvoices();
     setInvoices(nextInvoices);

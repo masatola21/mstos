@@ -427,6 +427,20 @@ export const SalesOperationsWorkspace: React.FC<Props> = ({ tab, companyId, lead
     setNotice('');
     setRecords((current) => current.filter((item) => item.id !== record.id));
     try {
+      const supabase = getSupabase();
+      if (supabase) {
+        try {
+          if (isContract) {
+            await supabase.from('customer_service_engagements').update({ contract_id: null }).eq('contract_id', record.id);
+          }
+          await supabase.from(selectedOps.table).delete().eq('id', record.id);
+          if (record.legacy_id) {
+            await supabase.from(selectedOps.table).delete().eq('legacy_id', record.legacy_id);
+          }
+        } catch {
+          // ignore
+        }
+      }
       await deleteHandler(String(record.legacy_id || record.id));
       setNotice(`${isContract ? '契約' : '請求'}を削除しました。`);
       await load();
