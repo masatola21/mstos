@@ -1478,6 +1478,37 @@ async function enqueueScenariosForContact(contactId: string, triggerName: string
 
         if (!bodyText && !linePayload) continue;
 
+        // 【重複防止 1】すでに queued または processing 状態の同一シナリオ・チャネルジョブがあればスキップ
+        const { data: existingActive } = await lineSupabase
+          .from('marketing_automation_jobs')
+          .select('id')
+          .eq('contact_id', contact.id)
+          .eq('scenario_id', s.scenario_id)
+          .eq('channel', ch)
+          .in('status', ['queued', 'processing'])
+          .limit(1)
+          .maybeSingle();
+
+        if (existingActive) {
+          continue;
+        }
+
+        // 【重複防止 2】直近2分以内に投入された同一コンタクト・シナリオ・チャネルのジョブがあればスキップ
+        const twoMinutesAgo = new Date(Date.now() - 2 * 60 * 1000).toISOString();
+        const { data: recentJob } = await lineSupabase
+          .from('marketing_automation_jobs')
+          .select('id')
+          .eq('contact_id', contact.id)
+          .eq('scenario_id', s.scenario_id)
+          .eq('channel', ch)
+          .gte('created_at', twoMinutesAgo)
+          .limit(1)
+          .maybeSingle();
+
+        if (recentJob) {
+          continue;
+        }
+
         const eventKey = `${triggerName}:${contact.id}:${s.scenario_id}:${ch}`;
         const consentBasis = cfg.consentBasis || (ch === 'line' ? 'LINE友だち登録時の配信同意に基づく' : '特定電子メール法に基づく業務改善情報の提供');
 

@@ -472,7 +472,7 @@ export const MarketingAutomationJobsPanel: React.FC<Props> = ({ health, onHealth
         <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-200 p-4 bg-slate-50/50">
           <div>
             <h2 className="font-bold text-slate-900">配信ジョブ</h2>
-            <p className="mt-0.5 text-xs text-slate-500">最新200件。状態とエラーを確認し、失敗ジョブを再実行できます。</p>
+            <p className="mt-0.5 text-xs text-slate-500">最新200件。状態とエラーを確認し、失敗ジョブを再実行・取消できます。※ シナリオの配信チャネルが「LINE & メール両方（both）」の場合、1回のトリガーでLINE用とメール用の2つのジョブが作成されます。</p>
           </div>
           <div className="flex items-center gap-2">
             <select
@@ -545,11 +545,20 @@ export const MarketingAutomationJobsPanel: React.FC<Props> = ({ health, onHealth
               <article key={job.id} className="grid gap-3 p-4 lg:grid-cols-[minmax(0,1fr)_auto] lg:items-center hover:bg-slate-50/70 transition">
                 <div className="min-w-0">
                   <div className="flex flex-wrap items-center gap-2">
-                    <span className="rounded-full border border-slate-200 bg-slate-100 px-2.5 py-0.5 text-[11px] font-semibold text-slate-700">
+                    <span className={`rounded-full px-2.5 py-0.5 text-[11px] font-bold border ${
+                      job.status === 'queued' ? 'bg-amber-50 text-amber-700 border-amber-200' :
+                      job.status === 'sent' ? 'bg-emerald-50 text-emerald-700 border-emerald-200' :
+                      job.status === 'failed' ? 'bg-rose-50 text-rose-700 border-rose-200' :
+                      'bg-slate-100 text-slate-700 border-slate-200'
+                    }`}>
                       {statusLabels[job.status] || job.status}
                     </span>
-                    <span className="text-xs text-slate-500 font-medium">
-                      {job.channel === 'email' ? 'メール' : 'LINE'}
+                    <span className={`inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-[11px] font-bold border ${
+                      job.channel === 'email'
+                        ? 'bg-purple-50 text-purple-700 border-purple-200'
+                        : 'bg-emerald-50 text-emerald-700 border-emerald-200'
+                    }`}>
+                      {job.channel === 'email' ? '✉️ メール' : '💬 LINE'}
                     </span>
                   </div>
                   <p className="mt-2 truncate text-sm font-bold text-slate-900">{job.scenarioName}</p>
