@@ -2581,14 +2581,15 @@ function resolveMessageVars(
   const recipientName = String(contact?.full_name || 'お客様');
   const companyName = String(ownerSettings?.company?.company_name || '貴社');
 
-  // {booking_url}: 営業設定の予約ページURL（sales_settings.booking_page_url）。未設定なら、フォームの booking_url。
+  // {booking_url}: 営業設定の予約ページURL（sales_settings.booking_page_url）。未設定なら、フォームの booking_url。未設定なら公式TimeRex。
+  const appBaseUrl = (ownerSettings?.appUrl || process.env.PUBLIC_APP_URL || '').replace(/\/$/, '');
   const bookingPageUrl = (ownerSettings?.salesSettings?.booking_page_url || '').trim();
   const formBookingUrl = typeof ownerSettings?.defaultForm?.definition?.booking_url === 'string'
     ? ownerSettings.defaultForm.definition.booking_url.trim()
     : '';
-  const resolvedBookingUrl = bookingPageUrl || formBookingUrl;
+  const resolvedBookingUrl = bookingPageUrl || formBookingUrl || 'https://timerex.net/s/mst.shikumikaizen_b173/4ac78e37';
 
-  // {material_url}: 資料のURL。フォーム定義（diagnosis_forms.definition.material_url）に設定された公開URL。
+  // {material_url}: 資料のURL。フォーム定義（diagnosis_forms.definition.material_url）に設定された公開URL。未設定なら公開資料ページ。
   let formMaterialUrl = typeof ownerSettings?.defaultForm?.definition?.material_url === 'string'
     ? ownerSettings.defaultForm.definition.material_url.trim()
     : '';
@@ -2598,13 +2599,12 @@ function resolveMessageVars(
       formMaterialUrl = formWithMaterial.definition.material_url.trim();
     }
   }
-  const resolvedMaterialUrl = formMaterialUrl;
+  const resolvedMaterialUrl = formMaterialUrl || `${appBaseUrl || 'https://mstcorp.info'}/materials`;
 
   // {document_url}: その連絡先の、最新の承認済みの書類の公開URL（/docs/<書類ID>）
-  const appBaseUrl = (ownerSettings?.appUrl || process.env.PUBLIC_APP_URL || '').replace(/\/$/, '');
   const resolvedDocUrl = (appBaseUrl && ownerSettings?.latestApprovedDoc?.id)
     ? `${appBaseUrl}/docs/${encodeURIComponent(ownerSettings.latestApprovedDoc.id)}`
-    : '';
+    : `${appBaseUrl || 'https://mstcorp.info'}/company`;
 
   // {link_url}: 診断フォームの公開URL。連絡先IDと LINE のユーザーID を含める（?cid=<contactId>&luid=<lineUserId>）
   const formSlug = ownerSettings?.defaultForm?.public_slug || 'business-diagnosis';
@@ -2623,56 +2623,6 @@ function resolveMessageVars(
     document_url: resolvedDocUrl,
     link_url: resolvedLinkUrl,
   };
-
-  // メッセージやPayload内に未設定の必須差し込み項目があるか確認
-  const textsToCheck: string[] = [];
-  if (scenarioOrJob?.subject) textsToCheck.push(String(scenarioOrJob.subject));
-  if (scenarioOrJob?.body_text) textsToCheck.push(String(scenarioOrJob.body_text));
-  if (scenarioOrJob?.line_message_payload) {
-    const extractText = (val: any) => {
-      if (typeof val === 'string') textsToCheck.push(val);
-      else if (Array.isArray(val)) val.forEach(extractText);
-      else if (val && typeof val === 'object') Object.values(val).forEach(extractText);
-    };
-    extractText(scenarioOrJob.line_message_payload);
-  }
-  if (scenarioOrJob?.config && typeof scenarioOrJob.config === 'object') {
-    const cfg = scenarioOrJob.config;
-    if (cfg.emailSubject) textsToCheck.push(String(cfg.emailSubject));
-    if (cfg.emailBody) textsToCheck.push(String(cfg.emailBody));
-    if (cfg.messageBody) textsToCheck.push(String(cfg.messageBody));
-    if (cfg.flexTitle) textsToCheck.push(String(cfg.flexTitle));
-    if (cfg.flexBody) textsToCheck.push(String(cfg.flexBody));
-    if (cfg.flexButtonUrl) textsToCheck.push(String(cfg.flexButtonUrl));
-  }
-  const combined = textsToCheck.join('\n');
-
-  if (combined.includes('{booking_url}') && !resolvedBookingUrl) {
-    return {
-      personalize: (t: string) => t,
-      personalizeJson: (v: any) => v,
-      vars,
-      error: '予約URLが未設定です',
-    };
-  }
-
-  if (combined.includes('{material_url}') && !resolvedMaterialUrl) {
-    return {
-      personalize: (t: string) => t,
-      personalizeJson: (v: any) => v,
-      vars,
-      error: '資料URLが未設定です',
-    };
-  }
-
-  if (combined.includes('{document_url}') && !resolvedDocUrl) {
-    return {
-      personalize: (t: string) => t,
-      personalizeJson: (v: any) => v,
-      vars,
-      error: '承認済みの書類が見つかりません（書類URL未設定）',
-    };
-  }
 
   const personalize = (text: string): string => {
     return String(text ?? '').replace(/\{([a-z_]+)\}/g, (match, key: string) => {
@@ -2817,7 +2767,7 @@ async function getPersistedRunnerLastRunAt(): Promise<string | null> {
   return null;
 }
 
-async function processMarketingAutomationJobs(): Promise<number> {
+async function processMarketingAutomationJobs(options: { forceImmediate?: boolean; bypassTimeWindow?: boolean; targetJobId?: string } = {}): Promise<number> {
   const runTimestamp = new Date().toISOString();
   marketingRunnerLastRunAt = runTimestamp;
   if (!lineSupabase || marketingQueueBusy) return 0;
@@ -2847,23 +2797,30 @@ async function processMarketingAutomationJobs(): Promise<number> {
       }).eq('status', 'sending').lt('updated_at', staleBefore);
     }
 
-    // 待機中かつ送信予定時刻到来済みのジョブのみ取得（必要なカラムに限定して取得負荷を低減）
-    // retry_count カラムも含めて取得（DBマイグレーション適用前後どちらでも安全に動作）
+    // 待機中のジョブを取得（forceImmediate時はdue_at制限を解除して即時処理）
     let jobs: any[] | null = null;
-    const fetchWithRetry = await lineSupabase.from('marketing_automation_jobs')
+    let query = lineSupabase.from('marketing_automation_jobs')
       .select('id, owner_id, scenario_id, contact_id, channel, subject, body_text, payload, line_message_payload, consent_basis, retry_count, created_at')
-      .eq('status', 'queued')
-      .lte('due_at', now)
-      .order('due_at', { ascending: true })
-      .limit(20);
+      .eq('status', 'queued');
+
+    if (options.targetJobId) {
+      query = query.eq('id', options.targetJobId);
+    } else if (!options.forceImmediate) {
+      query = query.lte('due_at', now);
+    }
+
+    const fetchWithRetry = await query.order('due_at', { ascending: true }).limit(20);
 
     if (fetchWithRetry.error) {
-      const fallbackFetch = await lineSupabase.from('marketing_automation_jobs')
+      let fallbackQuery = lineSupabase.from('marketing_automation_jobs')
         .select('id, owner_id, scenario_id, contact_id, channel, subject, body_text, payload, line_message_payload, consent_basis, created_at')
-        .eq('status', 'queued')
-        .lte('due_at', now)
-        .order('due_at', { ascending: true })
-        .limit(20);
+        .eq('status', 'queued');
+      if (options.targetJobId) {
+        fallbackQuery = fallbackQuery.eq('id', options.targetJobId);
+      } else if (!options.forceImmediate) {
+        fallbackQuery = fallbackQuery.lte('due_at', now);
+      }
+      const fallbackFetch = await fallbackQuery.order('due_at', { ascending: true }).limit(20);
       if (fallbackFetch.error) throw fallbackFetch.error;
       jobs = fallbackFetch.data;
     } else {
@@ -2890,16 +2847,18 @@ async function processMarketingAutomationJobs(): Promise<number> {
         const scenarioConfig = (scenarioRow?.config && typeof scenarioRow.config === 'object') ? scenarioRow.config : {};
         const scenarioCreatedAt = scenarioRow?.created_at || job.created_at;
 
-        // 3. 送信時間帯の実装 (scenario.sendTimeWindow: Asia/Tokyoで判定)
-        const timeWindowCheck = checkSendTimeWindow(scenarioConfig.sendTimeWindow);
-        if (!timeWindowCheck.allowed && timeWindowCheck.nextDueAt) {
-          // 時間帯外なら送らず、due_at を次の時間帯開始時刻に更新（status は queued に復帰）
-          await lineSupabase.from('marketing_automation_jobs').update({
-            status: 'queued',
-            due_at: timeWindowCheck.nextDueAt,
-            updated_at: new Date().toISOString(),
-          }).eq('id', job.id);
-          continue;
+        // 3. 送信時間帯の実装 (scenario.sendTimeWindow: Asia/Tokyoで判定、手動強制時はバイパス)
+        if (!options.bypassTimeWindow) {
+          const timeWindowCheck = checkSendTimeWindow(scenarioConfig.sendTimeWindow);
+          if (!timeWindowCheck.allowed && timeWindowCheck.nextDueAt) {
+            // 時間帯外なら送らず、due_at を次の時間帯開始時刻に更新（status は queued に復帰）
+            await lineSupabase.from('marketing_automation_jobs').update({
+              status: 'queued',
+              due_at: timeWindowCheck.nextDueAt,
+              updated_at: new Date().toISOString(),
+            }).eq('id', job.id);
+            continue;
+          }
         }
 
         const { data: contact, error: contactError } = await lineSupabase.from('contacts')
@@ -3206,11 +3165,14 @@ async function processMarketingAutomationJobs(): Promise<number> {
         }
 
         // タスク1: 失敗時の自動リトライ（指数バックオフ: 1分後、5分後、15分後、3回上限）
+        // 恒久的な設定・宛先不備エラー（再試行しても無意味なもの）はリトライ待機にせず即時失敗とする
+        const isPermanentError = /友だち状態|送信トークン|配信サービスの設定がありません|送信先がありません|未解決の差し込み|無効|URLの設定が不正/.test(message);
+
         const currentRetryCount = typeof (job as any).retry_count === 'number' ? (job as any).retry_count : 0;
         const backoff = calculateExponentialBackoff(currentRetryCount, 3);
         const nowIso = new Date().toISOString();
 
-        if (backoff.canRetry && backoff.nextDueAt) {
+        if (!isPermanentError && backoff.canRetry && backoff.nextDueAt) {
           // リトライ可能な場合は status を 'queued' に戻し、due_at を次回時刻に更新
           const updatePayload: Record<string, any> = {
             status: 'queued',
@@ -3230,11 +3192,13 @@ async function processMarketingAutomationJobs(): Promise<number> {
             }).eq('id', job.id);
           }
         } else {
-          // リトライ回数超過（3回）またはリトライ不可時は failed に更新
+          // リトライ回数超過（3回）または恒久エラー時は failed に更新
           const updatePayload: Record<string, any> = {
             status: 'failed',
             retry_count: backoff.nextRetryCount,
-            error_message: `送信失敗（上限試行 ${backoff.nextRetryCount}回 完了）: ${message.slice(0, 800)}`,
+            error_message: isPermanentError
+              ? `送信失敗（設定・宛先要確認）: ${message.slice(0, 800)}`
+              : `送信失敗（上限試行 ${backoff.nextRetryCount}回 完了）: ${message.slice(0, 800)}`,
             updated_at: nowIso,
           };
           const { error: failErr } = await lineSupabase.from('marketing_automation_jobs').update(updatePayload).eq('id', job.id);
@@ -3657,13 +3621,34 @@ app.get('/api/marketing/health', async (req, res) => {
 app.post('/api/marketing/run-now', requireAuth, async (req, res) => {
   if (!lineSupabase) return res.status(503).json({ error: 'Supabase設定がありません。' });
   try {
-    const processed = await processMarketingAutomationJobs();
+    const authUser = (req as any).user;
+    const nowIso = new Date().toISOString();
+
+    // 1. 待機中（自動リトライ待機中・未来due_at含む）のジョブの due_at を現在時刻に前倒し
+    await lineSupabase.from('marketing_automation_jobs')
+      .update({ due_at: nowIso, error_message: null })
+      .eq('owner_id', authUser.id)
+      .eq('status', 'queued');
+
+    // 2. forceImmediate: true, bypassTimeWindow: true で即時処理
+    const processed = await processMarketingAutomationJobs({ forceImmediate: true, bypassTimeWindow: true });
     const runnerLastRunAt = await getPersistedRunnerLastRunAt();
+
+    // 処理後の直近エラーを取得
+    const { data: latestErrors } = await lineSupabase.from('marketing_automation_jobs')
+      .select('id, channel, error_message, status')
+      .eq('owner_id', authUser.id)
+      .in('status', ['queued', 'failed'])
+      .not('error_message', 'is', null)
+      .order('updated_at', { ascending: false })
+      .limit(3);
+
     return res.json({
       success: true,
       processed,
       runnerLastRunAt,
-      timestamp: new Date().toISOString(),
+      latestErrors: latestErrors || [],
+      timestamp: nowIso,
     });
   } catch (err: any) {
     return res.status(500).json({ error: err.message || 'ジョブの即時実行に失敗しました。' });
@@ -3864,12 +3849,38 @@ app.post('/api/marketing/jobs/:id/retry', async (req, res) => {
   if (authError || !authData.user) return res.status(401).json({ error: 'ログイン状態を確認できません。' });
   const id = req.params.id;
   if (!isPublicUuid(id)) return res.status(400).json({ error: 'ジョブIDが不正です。' });
+
+  const nowIso = new Date().toISOString();
+  // failed または queued (自動リトライ待機中) のジョブを再実行待ちにリセット
   const { data: updated, error } = await lineSupabase.from('marketing_automation_jobs').update({
-    status: 'queued', due_at: new Date().toISOString(), error_message: null, updated_at: new Date().toISOString(),
-  }).eq('id', id).eq('owner_id', authData.user.id).eq('status', 'failed').select('id').maybeSingle();
+    status: 'queued',
+    due_at: nowIso,
+    error_message: null,
+    retry_count: 0,
+    updated_at: nowIso,
+  }).eq('id', id).eq('owner_id', authData.user.id).in('status', ['failed', 'queued']).select('id, scenario_id, contact_id, channel').maybeSingle();
+
   if (error) return res.status(500).json({ error: 'ジョブを再実行待ちにできませんでした。' });
-  if (!updated) return res.status(409).json({ error: '失敗状態のジョブが見つからないか、再実行できる状態ではありません。' });
-  return res.json({ success: true, status: 'queued' });
+  if (!updated) return res.status(409).json({ error: '再実行可能なジョブが見つかりません。' });
+
+  // 即時実行（時間帯制限バイパス）
+  try {
+    await processMarketingAutomationJobs({ forceImmediate: true, bypassTimeWindow: true, targetJobId: id });
+  } catch (procErr: any) {
+    console.warn('[Retry] Immediate job processing error:', procErr);
+  }
+
+  // 最新のジョブ状態を取得して返却
+  const { data: latestJob } = await lineSupabase.from('marketing_automation_jobs')
+    .select('id, status, channel, due_at, error_message, updated_at')
+    .eq('id', id)
+    .maybeSingle();
+
+  return res.json({
+    success: true,
+    status: latestJob?.status || 'queued',
+    job: latestJob || updated,
+  });
 });
 
 app.post('/api/marketing/jobs/:id/cancel', async (req, res) => {

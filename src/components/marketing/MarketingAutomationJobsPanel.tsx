@@ -238,11 +238,10 @@ export const MarketingAutomationJobsPanel: React.FC<Props> = ({ health, onHealth
   }, [refresh, refreshHealth, authBlocked]);
 
   const changeJob = async (job: JobView, action: 'retry' | 'cancel') => {
-    const label = action === 'retry' ? '再実行待ちに戻しますか？' : 'この配信ジョブを取り消しますか？';
-    if (!window.confirm(`${label}\n${job.scenarioName} / ${job.contactName}`)) return;
     if (!db) return;
     setBusyJobId(job.id);
     setError('');
+    setManualNotice('');
     try {
       const { data: { session } } = await db.auth.getSession();
       if (!session?.access_token) throw new Error('ログインしてください。');
@@ -251,6 +250,12 @@ export const MarketingAutomationJobsPanel: React.FC<Props> = ({ health, onHealth
       });
       const result = await response.json().catch(() => ({}));
       if (!response.ok) throw new Error(result.error || '操作に失敗しました。');
+      if (action === 'retry') {
+        const statusMsg = result.status === 'sent' ? '✅ 送信完了しました！' : result.job?.error_message ? `⚠️ 再試行結果: ${result.job.error_message}` : '✅ 再試行を実行しました。';
+        setManualNotice(statusMsg);
+      } else {
+        setManualNotice('ジョブを取り消しました。');
+      }
       await Promise.all([refresh(), refreshHealth()]);
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : '操作に失敗しました。');
