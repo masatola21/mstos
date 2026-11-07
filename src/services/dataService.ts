@@ -437,15 +437,35 @@ export async function deleteTableRecord(
   }
 }
 
+export interface BulkDeleteResult {
+  successCount: number;
+  deletedIds: string[];
+  failedCount: number;
+  failedDetails: Array<{ id: string; reason: string }>;
+  error?: DataFetchError;
+}
+
 // 複数レコードの一括削除
 export async function bulkDeleteTableRecords(
   tableKey: TableKey,
   ids: (string | number)[],
   options?: { force?: boolean }
-): Promise<{ successCount?: number; error?: DataFetchError }> {
+): Promise<BulkDeleteResult> {
   const supabase = getSupabase();
-  if (!supabase) return { error: { type: 'NOT_CONFIGURED', message: 'Supabaseが初期化されていません。' } };
-  if (!ids.length) return { successCount: 0 };
+  if (!supabase) {
+    return {
+      successCount: 0,
+      deletedIds: [],
+      failedCount: ids.length,
+      failedDetails: ids.map((id) => ({ id: String(id), reason: 'Supabaseが初期化されていません。' })),
+      error: { type: 'NOT_CONFIGURED', message: 'Supabaseが初期化されていません。' },
+    };
+  }
+  if (!ids.length) {
+    return { successCount: 0, deletedIds: [], failedCount: 0, failedDetails: [] };
+  }
+
+  const stringIds = ids.map(String);
 
   try {
     const { data: sessionData } = await supabase.auth.getSession();
@@ -459,25 +479,76 @@ export async function bulkDeleteTableRecords(
     const resp = await fetch(`/api/admin/tables/${encodeURIComponent(tableKey)}/bulk-delete`, {
       method: 'POST',
       headers,
-      body: JSON.stringify({ ids: ids.map(String), force: options?.force ?? false }),
+      body: JSON.stringify({ ids: stringIds, force: options?.force ?? false }),
     });
 
     if (resp.ok) {
-      const resJson = await resp.json().catch(() => ({ count: ids.length }));
-      if (tableKey === 'products') {
-        for (const id of ids) {
-          matrixService.deleteProduct(String(id));
+      const resJson = await resp.json().catch(() => null);
+      if (resJson && typeof resJson.count === 'number') {
+        const deletedIds: string[] = Array.isArray(resJson.deletedIds)
+          ? resJson.deletedIds.map(String)
+          : stringIds.slice(0, resJson.count);
+
+        if (tableKey === 'products') {
+          for (const id of deletedIds) {
+            matrixService.deleteProduct(String(id));
+          }
         }
+
+        return {
+          successCount: resJson.count,
+          deletedIds,
+          failedCount: resJson.failedCount ?? (stringIds.length - resJson.count),
+          failedDetails: resJson.failedDetails || [],
+        };
       }
-      return { successCount: resJson.count ?? ids.length };
+    } else {
+      const errJson = await resp.json().catch(() => null);
+      if (errJson?.error) {
+        return {
+          successCount: 0,
+          deletedIds: [],
+          failedCount: stringIds.length,
+          failedDetails: stringIds.map((id) => ({ id, reason: errJson.error })),
+          error: { type: 'UNKNOWN', message: errJson.error },
+        };
+      }
     }
 
     // クライアント側フォールバック
-    const { data, error } = await supabase.from(tableKey).delete().in('id', ids).select('id');
-    if (error) return { error: parseSupabaseError(error) };
-    return { successCount: data?.length || 0 };
+    const { data, error } = await supabase.from(tableKey).delete().in('id', stringIds).select('id');
+    if (error) {
+      return {
+        successCount: 0,
+        deletedIds: [],
+        failedCount: stringIds.length,
+        failedDetails: stringIds.map((id) => ({ id, reason: error.message })),
+        error: parseSupabaseError(error),
+      };
+    }
+    const deletedIds = (data || []).map((r: any) => String(r.id));
+    if (tableKey === 'products') {
+      for (const id of deletedIds) {
+        matrixService.deleteProduct(String(id));
+      }
+    }
+    const deletedSet = new Set(deletedIds);
+    return {
+      successCount: deletedIds.length,
+      deletedIds,
+      failedCount: stringIds.length - deletedIds.length,
+      failedDetails: stringIds
+        .filter((id) => !deletedSet.has(id))
+        .map((id) => ({ id, reason: '対象レコードが存在しないか削除権限がありません' })),
+    };
   } catch (err: any) {
-    return { error: parseSupabaseError(err) };
+    return {
+      successCount: 0,
+      deletedIds: [],
+      failedCount: stringIds.length,
+      failedDetails: stringIds.map((id) => ({ id, reason: err?.message || '削除処理中にエラーが発生しました' })),
+      error: parseSupabaseError(err),
+    };
   }
 }
 

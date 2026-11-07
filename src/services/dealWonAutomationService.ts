@@ -33,7 +33,7 @@ const inFlightDealLocks = new Set<string>();
  * を一括で自動生成・相互連携する
  * ※ 同一商談に対する二重実行・二重起票（契約・請求書の重複）を防ぐべき冪等性を保証
  */
-export async function executeDealWonAutomation(dealId: string): Promise<DealWonResult> {
+export async function executeDealWonAutomation(dealId: string, forceRecreate = false): Promise<DealWonResult> {
   const safeDealId = String(dealId || '').trim();
   if (!safeDealId) {
     return { success: false, message: '商談IDが指定されていません。' };
@@ -49,19 +49,39 @@ export async function executeDealWonAutomation(dealId: string): Promise<DealWonR
 
   inFlightDealLocks.add(safeDealId);
   try {
-    return await executeDealWonAutomationInternal(safeDealId);
+    return await executeDealWonAutomationInternal(safeDealId, forceRecreate);
   } finally {
     inFlightDealLocks.delete(safeDealId);
   }
 }
 
-async function executeDealWonAutomationInternal(dealId: string): Promise<DealWonResult> {
+async function executeDealWonAutomationInternal(dealId: string, forceRecreate = false): Promise<DealWonResult> {
   const supabase = getSupabase();
   if (!supabase) {
     return { success: false, message: 'Supabaseクライアントに接続できません。' };
   }
 
   try {
+    // 1. 商談データの取得（成約自動化完了済みフラグ won_automation_completed_at を確認）
+    const { data: deal, error: dealError } = await supabase
+      .from('deals')
+      .select('*, company:companies(*), product:products(*), lead:leads(*)')
+      .eq('id', dealId)
+      .maybeSingle();
+
+    if (dealError || !deal) {
+      return { success: false, message: '商談データが見つかりません。' };
+    }
+
+    // すでに成約自動化が完了しており、明示的な再作成フラグ(forceRecreate)がない場合は自動再生成を停止
+    // （これにより、ユーザーが契約・請求・書類を削除した後に再度復活する不具合を根本防止）
+    if (!forceRecreate && (deal as any).won_automation_completed_at) {
+      return {
+        success: true,
+        message: `商談（ID: ${dealId}）は成約自動化が完了済みです（削除後の自動再生成をスキップしました）。`,
+      };
+    }
+
     // 既存の契約レコードが既にこの商談で作成されているか確認（二重起票の完全防止）
     const { data: existingContracts } = await supabase
       .from('customer_contracts')
@@ -69,7 +89,7 @@ async function executeDealWonAutomationInternal(dealId: string): Promise<DealWon
       .eq('deal_id', dealId)
       .limit(1);
 
-    if (existingContracts && existingContracts.length > 0) {
+    if (existingContracts && existingContracts.length > 0 && !forceRecreate) {
       const existingContract = existingContracts[0];
       const { data: existingInvoices } = await supabase
         .from('customer_invoices')
@@ -82,6 +102,14 @@ async function executeDealWonAutomationInternal(dealId: string): Promise<DealWon
         .eq('contract_id', existingContract.id)
         .limit(1);
 
+      // won_automation_completed_at が未設定の場合は補完
+      if (!(deal as any).won_automation_completed_at) {
+        await supabase
+          .from('deals')
+          .update({ won_automation_completed_at: new Date().toISOString() })
+          .eq('id', dealId);
+      }
+
       return {
         success: true,
         contractId: existingContract.id,
@@ -89,17 +117,6 @@ async function executeDealWonAutomationInternal(dealId: string): Promise<DealWon
         engagementId: existingEngagement?.[0]?.id,
         message: `商談（ID: ${dealId}）に対する契約書・請求書は既に作成済みです（二重生成をスキップしました）。`,
       };
-    }
-
-    // 1. 商談データの取得
-    const { data: deal, error: dealError } = await supabase
-      .from('deals')
-      .select('*, company:companies(*), product:products(*), lead:leads(*)')
-      .eq('id', dealId)
-      .maybeSingle();
-
-    if (dealError || !deal) {
-      return { success: false, message: '商談データが見つかりません。' };
     }
 
     const companyId = deal.company_id;
@@ -243,9 +260,12 @@ async function executeDealWonAutomationInternal(dealId: string): Promise<DealWon
 
     // ③ 契約書レコード（customer_contracts）の自動起票（書類IDと定期請求スケジュールを保持）
     let contractId: string | undefined;
+    const generatedContractId = crypto.randomUUID();
     const { data: contract, error: contractError } = await supabase
       .from('customer_contracts')
       .insert({
+        id: generatedContractId,
+        legacy_id: generatedContractId,
         company_id: companyId,
         product_id: deal.product_id || null,
         deal_id: dealId,
@@ -263,13 +283,18 @@ async function executeDealWonAutomationInternal(dealId: string): Promise<DealWon
 
     if (!contractError && contract) {
       contractId = contract.id;
+    } else if (!contractError) {
+      contractId = generatedContractId;
     }
 
     // ④ 初回請求書レコード（customer_invoices）の自動起票（書類ID・契約IDと完全連結）
     let invoiceId: string | undefined;
+    const generatedInvoiceId = crypto.randomUUID();
     const { data: invoice, error: invoiceError } = await supabase
       .from('customer_invoices')
       .insert({
+        id: generatedInvoiceId,
+        legacy_id: generatedInvoiceId,
         company_id: companyId,
         product_id: deal.product_id || null,
         contract_id: contractId || null,
@@ -289,6 +314,8 @@ async function executeDealWonAutomationInternal(dealId: string): Promise<DealWon
 
     if (!invoiceError && invoice) {
       invoiceId = invoice.id;
+    } else if (!invoiceError) {
+      invoiceId = generatedInvoiceId;
     }
 
     // ⑤ 契約後サポート案件（customer_service_engagements）の自動起票（マイルストーン付き）
@@ -320,6 +347,12 @@ async function executeDealWonAutomationInternal(dealId: string): Promise<DealWon
     } catch (engErr) {
       console.warn('Engagement auto-generation warning:', engErr);
     }
+
+    // 商談側の自動化完了タイムスタンプを確実に記録
+    await supabase
+      .from('deals')
+      .update({ won_automation_completed_at: new Date().toISOString() })
+      .eq('id', dealId);
 
     return {
       success: true,

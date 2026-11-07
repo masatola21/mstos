@@ -569,12 +569,26 @@ export const ContactsLineHub: React.FC<Props> = ({
     setSaving(true);
     setError('');
     setNotice('');
+    let successCount = 0;
+    const failedList: string[] = [];
     try {
       for (const person of targets) {
-        await deletePerson(person);
+        try {
+          await deletePerson(person);
+          successCount++;
+        } catch (err: any) {
+          failedList.push(`${person.name || person.id}: ${err.message || '削除失敗'}`);
+        }
       }
       setSelectedPeople([]);
-      setNotice(`${targets.length} 件のデータを削除しました。`);
+      if (failedList.length > 0) {
+        if (successCount > 0) {
+          setNotice(`${successCount} 件のデータを削除しました。`);
+        }
+        setError(`削除できなかったデータ (${failedList.length}件): ${failedList.join('、')}`);
+      } else {
+        setNotice(`${successCount} 件のデータを完全に削除しました。`);
+      }
       await load();
     } catch (err: any) {
       setError('一括削除エラー: ' + (err.message || '処理に失敗しました'));

@@ -288,6 +288,7 @@ export const TableManager: React.FC<TableManagerProps> = ({
     setData((current) => current.filter((item) => String(item.id) !== String(record.id)));
     setSelectedIds((prev) => prev.filter((id) => id !== String(record.id)));
     setSuccessBanner(force ? `「${label}」を関連付け解除の上、完全削除しました。` : `「${label}」を削除しました。`);
+    await loadData();
     window.setTimeout(() => setSuccessBanner(null), 5000);
   };
 
@@ -301,16 +302,32 @@ export const TableManager: React.FC<TableManagerProps> = ({
     const result = await bulkDeleteTableRecords(currentTable, selectedIds, { force: true });
     setIsBulkDeleting(false);
 
-    if (result.error) {
+    if (result.error && result.successCount === 0) {
       setRowActionError(result.error.message);
       return;
     }
 
-    const count = result.successCount ?? selectedIds.length;
-    setData((current) => current.filter((item) => !selectedIds.includes(String(item.id))));
-    setSelectedIds([]);
-    setSuccessBanner(`${count} 件のレコードを一括削除しました。`);
-    window.setTimeout(() => setSuccessBanner(null), 5000);
+    const count = result.successCount ?? 0;
+    const failed = result.failedCount ?? 0;
+    const deletedIds = result.deletedIds ?? [];
+
+    setData((current) => current.filter((item) => !deletedIds.includes(String(item.id))));
+    setSelectedIds((prev) => prev.filter((id) => !deletedIds.includes(id)));
+
+    if (count > 0 && failed > 0) {
+      const reasonSummary = result.failedDetails?.[0]?.reason ? `（一部: ${result.failedDetails[0].reason}）` : '';
+      setSuccessBanner(`${count} 件削除しました。${failed} 件は関連データ存在または制約のため削除できませんでした。${reasonSummary}`);
+    } else if (count > 0) {
+      setSuccessBanner(`${count} 件のレコードを一括削除しました。`);
+    } else if (failed > 0) {
+      const reasonSummary = result.failedDetails?.[0]?.reason || '対象が存在しないか制約のため';
+      setRowActionError(`${failed} 件の削除に失敗しました（${reasonSummary}）。`);
+    }
+
+    // 必ず最新一覧をDBから再取得して整合性を担保
+    await loadData();
+
+    window.setTimeout(() => setSuccessBanner(null), 6000);
   };
 
   const handleExecuteCleanDummy = async () => {

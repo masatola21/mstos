@@ -3306,6 +3306,14 @@ app.all('/api/cron/billing-automation', async (req, res) => {
     const dealMap = new Map(deals.map((d: any) => [d.id, d]));
 
     for (const contract of contracts) {
+      // 終了・解約済みまたは請求停止の契約はスキップ（削除済み請求の再起票を防止）
+      if (['canceled', 'expired', 'terminated', 'ended'].includes(contract.status || '')) {
+        continue;
+      }
+      if (contract.notes?.includes('請求停止') || (contract.payload && (contract.payload.billing_paused || contract.payload.billing_stopped))) {
+        continue;
+      }
+
       const linkedDeal = contract.deal_id ? dealMap.get(contract.deal_id) : undefined;
       const monthlyFee = determineContractMonthlyFee(contract, linkedDeal);
 
@@ -3382,9 +3390,12 @@ app.all('/api/cron/billing-automation', async (req, res) => {
 
       if (docData?.id) documentId = docData.id;
 
+      const newInvId = crypto.randomUUID();
       const { data: invData, error: invError } = await lineSupabase
         .from('customer_invoices')
         .insert({
+          id: newInvId,
+          legacy_id: newInvId,
           company_id: contract.company_id,
           contract_id: contract.id,
           product_id: contract.product_id || null,
@@ -3402,7 +3413,7 @@ app.all('/api/cron/billing-automation', async (req, res) => {
         .select('id')
         .single();
 
-      if (!invError && invData?.id) {
+      if (!invError && (invData?.id || newInvId)) {
         summary.recurringInvoicesGenerated++;
       }
     }
@@ -4417,29 +4428,111 @@ app.post(
 });
 
 // ─── 管理者向け汎用レコード削除 API（サービスロールによる安全な実行・外部キー連動解除） ───
-app.delete('/api/admin/tables/:tableKey/records/:id', async (req, res) => {
-  if (!lineSupabase) return res.status(503).json({ error: 'DB接続が設定されていません。' });
-  const authorization = req.header('authorization') || '';
-  const token = authorization.startsWith('Bearer ') ? authorization.slice(7) : '';
+function checkIsAdminUser(user: any): boolean {
+  if (!user) return false;
+  return Boolean(
+    user.app_metadata?.role === 'admin' ||
+    user.user_metadata?.role === 'admin' ||
+    user.app_metadata?.is_admin === true ||
+    user.user_metadata?.is_admin === true ||
+    user.email === 'masatola21@gmail.com' ||
+    user.email === 'mst.shikumikaizen@gmail.com' ||
+    (user.email && (user.email.endsWith('@mst-management.jp') || user.email === process.env.ADMIN_EMAIL)) ||
+    Boolean(user.email) // 社内システム内の認証済みユーザーはレコード管理操作を許可
+  );
+}
 
-  if (token) {
-    const { data: authData, error: authError } = await lineSupabase.auth.getUser(token);
-    if (!authError && authData?.user) {
-      const user = authData.user;
-      const isAdmin = (
-        user.app_metadata?.role === 'admin' ||
-        user.user_metadata?.role === 'admin' ||
-        user.app_metadata?.is_admin === true ||
-        user.user_metadata?.is_admin === true ||
-        user.email === 'masatola21@gmail.com' ||
-        user.email === 'mst.shikumikaizen@gmail.com' ||
-        (user.email && (user.email.endsWith('@mst-management.jp') || user.email === process.env.ADMIN_EMAIL)) ||
-        Boolean(user.email) // 社内システム内の認証済みユーザーはレコード管理操作を許可
-      );
-      if (!isAdmin) {
-        return res.status(403).json({ error: '管理者権限（admin）が必要です。一般ユーザーはこの操作を実行できません。' });
-      }
+function formatForeignKeyError(tableKey: string, error: any): string {
+  const msg = (error?.message || '') + ' ' + (error?.details || '');
+  if (error?.code === '23503' || msg.includes('foreign key') || msg.includes('referenced from table')) {
+    const tableMatch = msg.match(/referenced from table "([^"]+)"/i) || msg.match(/table "([^"]+)"/i);
+    const refTable = tableMatch ? tableMatch[1] : '';
+    const tableLabels: Record<string, string> = {
+      deals: '商談',
+      customer_contracts: '契約',
+      customer_invoices: '請求',
+      customer_documents: '書類',
+      customer_service_engagements: '支援業務',
+      leads: 'リード',
+      contacts: '連絡先',
+      prospects: '見込み企業',
+      diagnoses: '診断',
+      communication_outbox: '送信キュー',
+    };
+    const label = tableLabels[refTable] || refTable || '関連';
+    return `${label}データから参照されているため削除できません。強制削除（参照解除）を選択してください。`;
+  }
+  return error?.message || '削除制約により削除できませんでした。';
+}
+
+async function unlinkReferencesForRecords(tableKey: string, ids: string[]) {
+  if (!lineSupabase || !ids.length) return;
+  const stringIds = ids.map(String);
+  if (tableKey === 'products') {
+    for (const prodId of stringIds) {
+      await Promise.allSettled([
+        lineSupabase.from('deals').update({ product_id: null }).eq('product_id', prodId),
+        lineSupabase.from('customer_contracts').update({ product_id: null }).eq('product_id', prodId),
+        lineSupabase.from('customer_invoices').update({ product_id: null }).eq('product_id', prodId),
+        lineSupabase.from('prospects').update({ recommended_product_id: null }).eq('recommended_product_id', prodId),
+        lineSupabase.from('leads').update({ interested_product_id: null }).eq('interested_product_id', prodId),
+        lineSupabase.from('ai_reports').update({ recommended_product_id: null }).eq('recommended_product_id', prodId),
+      ]);
+      await lineSupabase.from('mst_managed_products').delete().eq('id', prodId);
     }
+  } else if (tableKey === 'companies') {
+    await Promise.allSettled([
+      lineSupabase.from('contacts').update({ company_id: null }).in('company_id', stringIds),
+      lineSupabase.from('prospects').update({ company_id: null }).in('company_id', stringIds),
+      lineSupabase.from('leads').update({ company_id: null }).in('company_id', stringIds),
+      lineSupabase.from('deals').update({ company_id: null }).in('company_id', stringIds),
+      lineSupabase.from('customers').update({ company_id: null }).in('company_id', stringIds),
+      lineSupabase.from('diagnoses').update({ company_id: null }).in('company_id', stringIds),
+      lineSupabase.from('customer_contracts').update({ company_id: null }).in('company_id', stringIds),
+      lineSupabase.from('customer_invoices').update({ company_id: null }).in('company_id', stringIds),
+      lineSupabase.from('customer_documents').update({ company_id: null }).in('company_id', stringIds),
+      lineSupabase.from('customer_service_engagements').update({ company_id: null }).in('company_id', stringIds),
+    ]);
+  } else if (tableKey === 'leads') {
+    await Promise.allSettled([
+      lineSupabase.from('deals').update({ lead_id: null }).in('lead_id', stringIds),
+      lineSupabase.from('diagnoses').update({ lead_id: null }).in('lead_id', stringIds),
+    ]);
+  } else if (tableKey === 'deals') {
+    await Promise.allSettled([
+      lineSupabase.from('customer_contracts').update({ deal_id: null }).in('deal_id', stringIds),
+      lineSupabase.from('customer_documents').update({ deal_id: null }).in('deal_id', stringIds),
+      lineSupabase.from('communication_outbox').update({ deal_id: null }).in('deal_id', stringIds),
+    ]);
+  } else if (tableKey === 'customers') {
+    await Promise.allSettled([
+      lineSupabase.from('customer_contracts').update({ company_id: null }).in('company_id', stringIds),
+      lineSupabase.from('customer_invoices').update({ company_id: null }).in('company_id', stringIds),
+      lineSupabase.from('customer_documents').update({ company_id: null }).in('company_id', stringIds),
+      lineSupabase.from('customer_service_engagements').update({ company_id: null }).in('company_id', stringIds),
+    ]);
+  } else if (tableKey === 'customer_contracts') {
+    await Promise.allSettled([
+      lineSupabase.from('customer_invoices').update({ contract_id: null }).in('contract_id', stringIds),
+      lineSupabase.from('customer_service_engagements').update({ contract_id: null }).in('contract_id', stringIds),
+    ]);
+  } else if (tableKey === 'customer_documents') {
+    await Promise.allSettled([
+      lineSupabase.from('customer_contracts').update({ document_id: null }).in('document_id', stringIds),
+      lineSupabase.from('customer_invoices').update({ document_id: null }).in('document_id', stringIds),
+    ]);
+  } else if (tableKey === 'contacts') {
+    await Promise.allSettled([
+      lineSupabase.from('communication_outbox').update({ recipient_contact_id: null }).in('recipient_contact_id', stringIds),
+    ]);
+  }
+}
+
+app.delete('/api/admin/tables/:tableKey/records/:id', requireAuth, async (req, res) => {
+  if (!lineSupabase) return res.status(503).json({ error: 'DB接続が設定されていません。' });
+  const user = (req as any).user;
+  if (!checkIsAdminUser(user)) {
+    return res.status(403).json({ error: '管理者権限（admin）が必要です。一般ユーザーはこの操作を実行できません。' });
   }
 
   const { tableKey, id } = req.params;
@@ -4451,33 +4544,31 @@ app.delete('/api/admin/tables/:tableKey/records/:id', async (req, res) => {
   }
 
   try {
-    if (tableKey === 'products' && force) {
-      const prodId = String(id);
-      await Promise.allSettled([
-        lineSupabase.from('deals').update({ product_id: null }).eq('product_id', prodId),
-        lineSupabase.from('customer_contracts').update({ product_id: null }).eq('product_id', prodId),
-        lineSupabase.from('customer_invoices').update({ product_id: null }).eq('product_id', prodId),
-        lineSupabase.from('prospects').update({ recommended_product_id: null }).eq('recommended_product_id', prodId),
-        lineSupabase.from('leads').update({ interested_product_id: null }).eq('interested_product_id', prodId),
-        lineSupabase.from('ai_reports').update({ recommended_product_id: null }).eq('recommended_product_id', prodId),
-      ]);
-      await lineSupabase.from('mst_managed_products').delete().eq('id', prodId);
+    if (force) {
+      await unlinkReferencesForRecords(tableKey, [String(id)]);
     }
 
     const { data, error } = await lineSupabase.from(tableKey).delete().eq('id', id).select('id');
     if (error) {
       console.warn(`[AdminDelete] ${tableKey}/${id} error:`, error.message);
-      return res.status(500).json({ error: error.message });
+      const friendlyMsg = formatForeignKeyError(tableKey, error);
+      return res.status(400).json({ error: friendlyMsg, code: error.code });
     }
-    return res.json({ success: true, count: data?.length || 0 });
+    const count = data?.length || 0;
+    return res.json({ success: true, count, deletedIds: count > 0 ? [String(id)] : [] });
   } catch (err: any) {
     return res.status(500).json({ error: err.message || 'レコード削除中にエラーが発生しました。' });
   }
 });
 
 // ─── 管理者向け複数レコード一括削除 API ───
-app.post('/api/admin/tables/:tableKey/bulk-delete', async (req, res) => {
+app.post('/api/admin/tables/:tableKey/bulk-delete', requireAuth, async (req, res) => {
   if (!lineSupabase) return res.status(503).json({ error: 'DB接続が設定されていません。' });
+  const user = (req as any).user;
+  if (!checkIsAdminUser(user)) {
+    return res.status(403).json({ error: '管理者権限（admin）が必要です。一般ユーザーはこの操作を実行できません。' });
+  }
+
   const { tableKey } = req.params;
   const { ids, force } = req.body || {};
 
@@ -4490,35 +4581,68 @@ app.post('/api/admin/tables/:tableKey/bulk-delete', async (req, res) => {
     return res.status(400).json({ error: '削除が許可されていないテーブルです。' });
   }
 
+  const stringIds = ids.map(String);
+
   try {
-    if (tableKey === 'products' && force) {
-      for (const prodId of ids) {
-        await Promise.allSettled([
-          lineSupabase.from('deals').update({ product_id: null }).eq('product_id', String(prodId)),
-          lineSupabase.from('customer_contracts').update({ product_id: null }).eq('product_id', String(prodId)),
-          lineSupabase.from('customer_invoices').update({ product_id: null }).eq('product_id', String(prodId)),
-          lineSupabase.from('prospects').update({ recommended_product_id: null }).eq('recommended_product_id', String(prodId)),
-          lineSupabase.from('leads').update({ interested_product_id: null }).eq('interested_product_id', String(prodId)),
-          lineSupabase.from('ai_reports').update({ recommended_product_id: null }).eq('recommended_product_id', String(prodId)),
-        ]);
-        await lineSupabase.from('mst_managed_products').delete().eq('id', String(prodId));
+    if (force) {
+      await unlinkReferencesForRecords(tableKey, stringIds);
+    }
+
+    // First attempt batch delete
+    const { data, error } = await lineSupabase.from(tableKey).delete().in('id', stringIds).select('id');
+    if (!error && data) {
+      const deletedIds = data.map((r: any) => String(r.id));
+      const deletedSet = new Set(deletedIds);
+      const failedDetails: Array<{ id: string; reason: string }> = [];
+      for (const id of stringIds) {
+        if (!deletedSet.has(id)) {
+          failedDetails.push({ id, reason: '対象レコードが存在しないか既に削除されています' });
+        }
+      }
+      return res.json({
+        success: true,
+        count: deletedIds.length,
+        deletedIds,
+        failedCount: failedDetails.length,
+        failedDetails,
+      });
+    }
+
+    // If batch delete failed (e.g. FK constraint on some records), attempt item-by-item to delete as many as possible and isolate failures
+    console.warn(`[AdminBulkDelete] batch delete failed for ${tableKey}, falling back to per-record delete:`, error?.message);
+    const deletedIds: string[] = [];
+    const failedDetails: Array<{ id: string; reason: string }> = [];
+
+    for (const singleId of stringIds) {
+      const { data: singleData, error: singleError } = await lineSupabase.from(tableKey).delete().eq('id', singleId).select('id');
+      if (singleError) {
+        failedDetails.push({ id: singleId, reason: formatForeignKeyError(tableKey, singleError) });
+      } else if (singleData && singleData.length > 0) {
+        deletedIds.push(singleId);
+      } else {
+        failedDetails.push({ id: singleId, reason: '対象レコードが存在しないか既に削除されています' });
       }
     }
 
-    const { data, error } = await lineSupabase.from(tableKey).delete().in('id', ids).select('id');
-    if (error) {
-      console.warn(`[AdminBulkDelete] ${tableKey} error:`, error.message);
-      return res.status(500).json({ error: error.message });
-    }
-    return res.json({ success: true, count: data?.length || 0 });
+    return res.json({
+      success: deletedIds.length > 0 || stringIds.length === 0,
+      count: deletedIds.length,
+      deletedIds,
+      failedCount: failedDetails.length,
+      failedDetails,
+    });
   } catch (err: any) {
     return res.status(500).json({ error: err.message || '一括削除中にエラーが発生しました。' });
   }
 });
 
 // ─── ダミー・テストデータ一括リセット API（依存関係の深い順に安全に削除） ───
-app.post('/api/admin/clean-dummy-data', async (req, res) => {
+app.post('/api/admin/clean-dummy-data', requireAuth, async (req, res) => {
   if (!lineSupabase) return res.status(503).json({ error: 'DB接続が設定されていません。' });
+  const user = (req as any).user;
+  if (!checkIsAdminUser(user)) {
+    return res.status(403).json({ error: '管理者権限（admin）が必要です。一般ユーザーはこの操作を実行できません。' });
+  }
   const { targets = ['prospects', 'leads', 'deals', 'customers', 'companies'] } = req.body || {};
 
   const results: Record<string, number> = {};

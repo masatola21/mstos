@@ -186,19 +186,33 @@ export const LineFriendManager: React.FC = () => {
 
   const bulkDeleteSelectedFriends = async () => {
     if (!selectedFriends.length) return;
-    const count = selectedFriends.length;
+    const targets = [...selectedFriends];
     const supabase = getSupabase();
     if (!supabase) return;
     setSaving(true);
     setError('');
     setNotice('');
+    let successCount = 0;
+    const failedList: string[] = [];
     try {
-      for (const friendId of selectedFriends) {
+      for (const friendId of targets) {
         await supabase.from('line_friend_tags').delete().eq('line_friend_id', friendId);
-        await supabase.from('line_friends').delete().eq('id', friendId);
+        const { error: friendErr } = await supabase.from('line_friends').delete().eq('id', friendId);
+        if (friendErr) {
+          failedList.push(friendErr.message);
+        } else {
+          successCount++;
+        }
       }
-      setNotice(`選択した ${count} 人のLINE友だちを完全削除しました。`);
       setSelectedFriends([]);
+      if (failedList.length > 0) {
+        if (successCount > 0) {
+          setNotice(`${successCount} 人のLINE友だちを削除しました。`);
+        }
+        setError(`削除失敗 (${failedList.length}件): ${failedList[0]}`);
+      } else {
+        setNotice(`選択した ${successCount} 人のLINE友だちを完全削除しました。`);
+      }
       await load();
     } catch (err: any) {
       setError(err.message || '一括削除に失敗しました。');

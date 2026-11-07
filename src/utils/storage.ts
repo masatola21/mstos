@@ -291,6 +291,50 @@ export function saveTopGoal(goal: string): void {
   }
 }
 
+export const SAMPLES_SEEDED_KEY = 'mst_samples_seeded_v1';
+
+export function isSampleDataSeeded(): boolean {
+  try {
+    return localStorage.getItem(SAMPLES_SEEDED_KEY) === 'true';
+  } catch {
+    return false;
+  }
+}
+
+export function markSampleDataSeeded(seeded: boolean = true): void {
+  try {
+    if (seeded) {
+      localStorage.setItem(SAMPLES_SEEDED_KEY, 'true');
+    } else {
+      localStorage.removeItem(SAMPLES_SEEDED_KEY);
+    }
+  } catch (e) {
+    console.error(e);
+  }
+}
+
+/**
+ * 明示的にサンプルデータを投入するユーティリティ（初期フォールバックを廃止し、明示操作でのみ投入）
+ */
+export function seedSampleTasksAndProjects(): {
+  projects: Project[];
+  tasks: TaskItem[];
+  approvals: ApprovalItem[];
+  activityLogs: ActivityLog[];
+} {
+  saveProjects(INITIAL_SAMPLE_PROJECTS);
+  saveTasks(INITIAL_SAMPLE_TASKS);
+  saveApprovals(INITIAL_SAMPLE_APPROVALS);
+  saveActivityLogs(INITIAL_SAMPLE_LOGS);
+  markSampleDataSeeded(true);
+  return {
+    projects: INITIAL_SAMPLE_PROJECTS,
+    tasks: INITIAL_SAMPLE_TASKS,
+    approvals: INITIAL_SAMPLE_APPROVALS,
+    activityLogs: INITIAL_SAMPLE_LOGS,
+  };
+}
+
 // --- Projects Storage ---
 
 export function loadProjects(): Project[] {
@@ -305,7 +349,7 @@ export function loadProjects(): Project[] {
   } catch (e) {
     console.error('Failed to load projects from localStorage', e);
   }
-  return INITIAL_SAMPLE_PROJECTS;
+  return [];
 }
 
 export function saveProjects(projects: Project[]): void {
@@ -330,7 +374,7 @@ export function loadTasks(): TaskItem[] {
   } catch (e) {
     console.error('Failed to load tasks from localStorage', e);
   }
-  return INITIAL_SAMPLE_TASKS;
+  return [];
 }
 
 export function saveTasks(tasks: TaskItem[]): void {
@@ -355,7 +399,7 @@ export function loadApprovals(): ApprovalItem[] {
   } catch (e) {
     console.error('Failed to load approvals from localStorage', e);
   }
-  return INITIAL_SAMPLE_APPROVALS;
+  return [];
 }
 
 export function saveApprovals(approvals: ApprovalItem[]): void {
@@ -380,7 +424,7 @@ export function loadActivityLogs(): ActivityLog[] {
   } catch (e) {
     console.error('Failed to load activity logs from localStorage', e);
   }
-  return INITIAL_SAMPLE_LOGS;
+  return [];
 }
 
 export function saveActivityLogs(logs: ActivityLog[]): void {
