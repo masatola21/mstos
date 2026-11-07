@@ -30,7 +30,26 @@ function getSafeDirname(): string {
 }
 const appDir: string = getSafeDirname();
 const app = express();
-const port = process.env.PORT || 3000;
+
+function resolveServerPort(): number {
+  const portArgIndex = process.argv.indexOf('--port');
+  if (portArgIndex !== -1 && process.argv[portArgIndex + 1]) {
+    const parsed = parseInt(process.argv[portArgIndex + 1], 10);
+    if (!isNaN(parsed) && parsed > 0) return parsed;
+  }
+  if (process.env.DEFAULT_APP_PORT) {
+    const parsed = parseInt(process.env.DEFAULT_APP_PORT, 10);
+    if (!isNaN(parsed) && parsed > 0) return parsed;
+  }
+  const envPort = process.env.PORT ? parseInt(process.env.PORT, 10) : NaN;
+  // In AI Studio / Cloud Run, Nginx runs on port 8080 and proxies to 3000.
+  // Express must not attempt to listen on 8080 to prevent EADDRINUSE conflicts.
+  if (!isNaN(envPort) && envPort !== 8080 && envPort > 0) {
+    return envPort;
+  }
+  return 3000;
+}
+const port = resolveServerPort();
 const MAX_CHAT_CONTEXT_MESSAGES = 12;
 const MAX_CHAT_CONTEXT_CHARACTERS = 16000;
 
@@ -6091,7 +6110,11 @@ async function startStandaloneServer() {
     const vitePackageName = 'vite';
     const { createServer } = await import(/* @vite-ignore */ vitePackageName);
     const vite = await createServer({
-      server: { middlewareMode: true, host: '0.0.0.0' },
+      server: {
+        middlewareMode: true,
+        host: '0.0.0.0',
+        hmr: process.env.DISABLE_HMR === 'true' ? false : undefined,
+      },
       appType: 'spa',
     });
     app.use(vite.middlewares);
@@ -6135,8 +6158,11 @@ async function startStandaloneServer() {
   setTimeout(runMarketingAutomationLoop, MIN_MARKETING_POLL_INTERVAL_MS);
 
   void ensureDefaultCarePackageInquiryForm();
-  app.listen(Number(port), '0.0.0.0', () => {
+  const server = app.listen(Number(port), '0.0.0.0', () => {
     console.log(`Server listening on port ${port} (0.0.0.0)`);
+  });
+  server.on('error', (err: any) => {
+    console.error(`[Server] Error on port ${port}:`, err);
   });
 }
 

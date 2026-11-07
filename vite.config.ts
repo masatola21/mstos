@@ -8,6 +8,7 @@ export default defineConfig(() => {
     envPrefix: ['VITE_', 'NEXT_PUBLIC_', 'SUPABASE_'],
     plugins: [react(), tailwindcss()],
     resolve: {
+      extensions: ['.tsx', '.ts', '.jsx', '.js', '.mjs', '.json'],
       alias: {
         '@': path.resolve(import.meta.dirname, '.'),
       },

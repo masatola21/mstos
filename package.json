@@ -8,7 +8,7 @@
     "start": "node --import tsx server.ts",
     "build": "tsc --noEmit && vite build",
     "preview": "vite preview",
-    "clean": "rm -rf dist server.js",
+    "clean": "rm -rf dist server.js && find src -name '*.js' -delete",
     "lint": "tsc --noEmit",
     "test": "tsx tests/workspaceSaveReviewFixes.test.ts && tsx tests/workspaceSyncRaces.test.ts && tsx tests/billingAndAutomation.test.ts"
   },
