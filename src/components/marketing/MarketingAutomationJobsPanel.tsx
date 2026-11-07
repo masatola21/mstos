@@ -1,5 +1,18 @@
 import React, { useCallback, useEffect, useState } from 'react';
-import { Activity, RefreshCw, X } from 'lucide-react';
+import {
+  Activity,
+  AlertCircle,
+  AlertTriangle,
+  CheckCircle2,
+  Clock,
+  ExternalLink,
+  Info,
+  Play,
+  RefreshCw,
+  ShieldAlert,
+  ShieldCheck,
+  X,
+} from 'lucide-react';
 import { getSupabase } from '../../lib/supabaseClient';
 
 export interface MarketingAutomationHealth {
@@ -8,6 +21,22 @@ export interface MarketingAutomationHealth {
   runnerLastRunAt: string | null;
   queuedCount: number;
   failedCount: number;
+  killSwitch?: {
+    paused: boolean;
+    reason: string;
+    target: string;
+    updatedAt?: string;
+  };
+  statusCounts?: Record<JobStatus, number>;
+  nextDueAt?: string | null;
+  recentErrors?: Array<{
+    id: string;
+    scenario_id: string;
+    contact_id: string;
+    channel: string;
+    error_message: string;
+    updated_at: string;
+  }>;
 }
 
 type JobStatus = 'queued' | 'sending' | 'sent' | 'failed' | 'skipped' | 'canceled';
@@ -87,7 +116,37 @@ export const MarketingAutomationJobsPanel: React.FC<Props> = ({ health, onHealth
   const [authBlocked, setAuthBlocked] = useState(false);
   const authBlockedRef = React.useRef(false);
   const [busyJobId, setBusyJobId] = useState('');
+  const [manualRunning, setManualRunning] = useState(false);
+  const [manualNotice, setManualNotice] = useState('');
   const db = getSupabase();
+
+  const handleRunNow = async () => {
+    if (!db || manualRunning) return;
+    setManualRunning(true);
+    setManualNotice('');
+    setError('');
+    try {
+      const { data: { session } } = await db.auth.getSession();
+      if (!session?.access_token) throw new Error('ログインしてください。');
+
+      const res = await fetch('/api/marketing/run-now', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${session.access_token}`,
+        },
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.error || '手動ジョブ実行に失敗しました。');
+
+      setManualNotice(`✅ ジョブ実行完了: ${data.processed || 0}件を処理しました。`);
+      await Promise.all([refresh(), refreshHealth()]);
+    } catch (err: any) {
+      setError(err.message || 'ジョブの手動実行中にエラーが発生しました。');
+    } finally {
+      setManualRunning(false);
+    }
+  };
 
   const refresh = useCallback(async () => {
     if (authBlockedRef.current) return;
@@ -200,39 +259,212 @@ export const MarketingAutomationJobsPanel: React.FC<Props> = ({ health, onHealth
 
   const visibleJobs = filter === 'all' ? jobs : jobs.filter((job) => job.status === filter);
   const runnerIsStale = !health?.runnerLastRunAt || Date.now() - Date.parse(health.runnerLastRunAt) > 15 * 60 * 1000;
+  const killSwitch = health?.killSwitch;
 
   return (
-    <div className="space-y-4">
-      <section className="rounded-2xl border border-slate-200 bg-white p-6 shadow-xs">
-        <div className="mb-3 flex items-center gap-2 text-sm font-bold text-slate-900">
-          <Activity className="h-4 w-4 text-purple-600" />
-          <span>自動配信の稼働状況</span>
+    <div className="space-y-5">
+      {/* 診断パネル (System Health & Diagnostics Panel) */}
+      <section className="rounded-2xl border border-slate-200 bg-white p-6 shadow-xs space-y-5">
+        <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-100 pb-4">
+          <div className="flex items-center gap-2.5 text-base font-bold text-slate-900">
+            <span className="p-2 bg-purple-100 text-purple-700 rounded-xl">
+              <Activity className="h-5 w-5" />
+            </span>
+            <div>
+              <h2 className="text-base font-bold text-slate-900">自動配信 診断コンソール ＆ 稼働状況</h2>
+              <p className="text-xs text-slate-500 font-normal mt-0.5">
+                キルスイッチ状態、最終実行時刻、次回予定、エラー内容をリアルタイム診断します。
+              </p>
+            </div>
+          </div>
+
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={handleRunNow}
+              disabled={manualRunning || Boolean(killSwitch?.paused)}
+              className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 disabled:bg-slate-300 disabled:cursor-not-allowed text-white rounded-xl text-xs font-bold flex items-center gap-1.5 shadow-xs transition cursor-pointer"
+            >
+              <Play className={`w-3.5 h-3.5 fill-current ${manualRunning ? 'animate-pulse' : ''}`} />
+              <span>{manualRunning ? 'ジョブ処理実行中…' : '今すぐキューを実行（手動トリガー）'}</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => {
+                void refresh();
+                void refreshHealth();
+              }}
+              className="rounded-xl border border-slate-200 bg-white p-2 text-slate-600 hover:bg-slate-50 shadow-xs transition cursor-pointer"
+              aria-label="再読み込み"
+            >
+              <RefreshCw className="h-4 w-4" />
+            </button>
+          </div>
         </div>
-        <div className="flex flex-wrap gap-2">
-          {health && !health.emailConfigured && (
-            <span className="rounded-lg border border-amber-300 bg-amber-50 px-3 py-1.5 text-xs font-semibold text-amber-800">
-              メール未設定
-            </span>
-          )}
-          {health && !health.lineConfigured && (
-            <span className="rounded-lg border border-amber-300 bg-amber-50 px-3 py-1.5 text-xs font-semibold text-amber-800">
-              LINE未設定
-            </span>
-          )}
-          {health && runnerIsStale && (
-            <span className="rounded-lg border border-rose-300 bg-rose-50 px-3 py-1.5 text-xs font-semibold text-rose-800">
-              自動配信の実行が15分以上確認できません
-            </span>
-          )}
-          {health && (
-            <span className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-1.5 text-xs font-medium text-slate-700">
-              待機 {health.queuedCount}件 / 失敗 {health.failedCount}件
-            </span>
-          )}
-          {!health && <span className="text-xs text-slate-400">稼働状況を取得できません。ログイン状態とサーバー設定を確認してください。</span>}
+
+        {manualNotice && (
+          <div className="p-3 bg-emerald-50 border border-emerald-300 rounded-xl text-xs text-emerald-900 font-bold flex items-center gap-2 animate-fade-in">
+            <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
+            <span>{manualNotice}</span>
+          </div>
+        )}
+
+        {/* 4 Core Diagnostic Cards */}
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 text-xs">
+          {/* Card 1: キルスイッチ状態 */}
+          <div className={`p-4 rounded-xl border transition ${
+            killSwitch?.paused
+              ? 'bg-rose-50/70 border-rose-300 text-rose-950'
+              : 'bg-emerald-50/50 border-emerald-200 text-emerald-950'
+          }`}>
+            <div className="flex items-center justify-between mb-2">
+              <span className="font-bold flex items-center gap-1.5 text-xs">
+                {killSwitch?.paused ? <ShieldAlert className="w-4 h-4 text-rose-600" /> : <ShieldCheck className="w-4 h-4 text-emerald-600" />}
+                <span>キルスイッチ（緊急停止）</span>
+              </span>
+              <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${
+                killSwitch?.paused ? 'bg-rose-200 text-rose-900' : 'bg-emerald-200 text-emerald-900'
+              }`}>
+                {killSwitch?.paused ? '停止中' : '正常稼働中'}
+              </span>
+            </div>
+            <p className="text-[11px] leading-relaxed">
+              {killSwitch?.paused
+                ? `⚠️ 理由: ${killSwitch.reason || '配信機能は緊急停止中です。全ジョブの送信が保留されています。'}`
+                : '自動配信・メッセージ送信機能は安全に稼働可能です。'}
+            </p>
+          </div>
+
+          {/* Card 2: 最終実行時刻（永続化） */}
+          <div className="p-4 rounded-xl border border-slate-200 bg-slate-50/60 text-slate-900">
+            <div className="flex items-center justify-between mb-2">
+              <span className="font-bold flex items-center gap-1.5 text-xs text-slate-700">
+                <Clock className="w-4 h-4 text-purple-600" />
+                <span>最終実行時刻（永続記録）</span>
+              </span>
+              <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${
+                !health?.runnerLastRunAt
+                  ? 'bg-slate-200 text-slate-700'
+                  : runnerIsStale
+                    ? 'bg-amber-100 text-amber-800'
+                    : 'bg-emerald-100 text-emerald-800'
+              }`}>
+                {!health?.runnerLastRunAt ? '未実行' : runnerIsStale ? '15分以上経過' : '高頻度稼働中'}
+              </span>
+            </div>
+            <p className="text-xs font-mono font-bold text-slate-900">
+              {health?.runnerLastRunAt
+                ? new Date(health.runnerLastRunAt).toLocaleString('ja-JP')
+                : '実行ログなし'}
+            </p>
+            <p className="text-[10px] text-slate-500 mt-1">
+              サーバーレスのコールドスタートをまたいでDB上に保持されます。
+            </p>
+          </div>
+
+          {/* Card 3: 次回送信予定ジョブ */}
+          <div className="p-4 rounded-xl border border-slate-200 bg-slate-50/60 text-slate-900">
+            <div className="flex items-center justify-between mb-2">
+              <span className="font-bold flex items-center gap-1.5 text-xs text-slate-700">
+                <Clock className="w-4 h-4 text-indigo-600" />
+                <span>次回実行予定（待機キュー）</span>
+              </span>
+              <span className="px-2 py-0.5 rounded-full bg-indigo-100 text-indigo-800 text-[10px] font-bold">
+                待機 {jobCounts.queued} 件
+              </span>
+            </div>
+            <p className="text-xs font-mono font-bold text-slate-900">
+              {health?.nextDueAt
+                ? new Date(health.nextDueAt).toLocaleString('ja-JP')
+                : '直近の待機ジョブなし'}
+            </p>
+            <p className="text-[10px] text-slate-500 mt-1">
+              {health?.nextDueAt
+                ? Date.parse(health.nextDueAt) <= Date.now()
+                  ? '⚡ 予定時刻到来済み（次回cronまたは手動実行で送信）'
+                  : '⏳ スケジュール時刻待機中'
+                : '全キュー処理済み（正常完了）'}
+            </p>
+          </div>
+
+          {/* Card 4: 送信インフラ設定 */}
+          <div className="p-4 rounded-xl border border-slate-200 bg-slate-50/60 text-slate-900">
+            <div className="flex items-center justify-between mb-2">
+              <span className="font-bold text-xs text-slate-700">送信サービス接続状況</span>
+            </div>
+            <div className="flex flex-col gap-1.5 text-xs">
+              <div className="flex items-center justify-between">
+                <span>メール (Resend):</span>
+                <span className={`px-2 py-0.5 rounded text-[10px] font-bold ${health?.emailConfigured ? 'bg-emerald-100 text-emerald-800' : 'bg-amber-100 text-amber-800'}`}>
+                  {health?.emailConfigured ? '連携済' : '未設定'}
+                </span>
+              </div>
+              <div className="flex items-center justify-between">
+                <span>LINE (Messaging API):</span>
+                <span className={`px-2 py-0.5 rounded text-[10px] font-bold ${health?.lineConfigured ? 'bg-emerald-100 text-emerald-800' : 'bg-amber-100 text-amber-800'}`}>
+                  {health?.lineConfigured ? '連携済' : '未設定'}
+                </span>
+              </div>
+            </div>
+          </div>
         </div>
-        {health?.runnerLastRunAt && (
-          <p className="mt-2 text-[11px] text-slate-400">最終確認: {new Date(health.runnerLastRunAt).toLocaleString('ja-JP')}</p>
+
+        {/* 実行頻度 ＆ Vercel/GitHub Actions 運用ガイド (Requirement 3) */}
+        <div className="rounded-xl border border-indigo-100 bg-indigo-50/60 p-4 text-xs space-y-2">
+          <div className="flex items-center gap-2 font-bold text-indigo-950">
+            <Info className="w-4 h-4 text-indigo-600 shrink-0" />
+            <span>【重要】自動実行スケジュールの頻度とVercelプランについて</span>
+          </div>
+          <p className="text-slate-700 leading-relaxed text-[11px]">
+            • <strong>Vercel Hobby（無料プラン）:</strong> cronの最短間隔が「1日1回（0 0 * * *）」に制限されており、ステップ配信の遅延原因となります。<br />
+            • <strong>推奨解決策（GitHub Actions 5分毎実行 / 設定済み）:</strong> <code className="bg-white px-1.5 py-0.5 rounded border border-indigo-200 font-mono text-[10px]">.github/workflows/marketing-cron.yml</code> を追加済みです。GitHub Secretsに <code className="font-mono text-[10px]">CRON_SECRET</code> を登録することで、完全無料で5分ごとの高頻度ステップ配信が自律稼働します。<br />
+            • <strong>Vercel Pro（有料プラン）の場合:</strong> <code className="bg-white px-1.5 py-0.5 rounded border border-indigo-200 font-mono text-[10px]">vercel.json</code> の schedule を <code className="font-mono text-[10px]">*/5 * * * *</code> に書き換えるだけで直接5分間隔に短縮可能です。
+          </p>
+        </div>
+
+        {/* 直近のエラー内容 (Recent Errors) */}
+        {health?.recentErrors && health.recentErrors.length > 0 && (
+          <div className="rounded-xl border border-rose-200 bg-rose-50/40 p-4 text-xs space-y-2">
+            <div className="flex items-center justify-between">
+              <span className="font-bold text-rose-950 flex items-center gap-1.5">
+                <AlertTriangle className="w-4 h-4 text-rose-600" />
+                <span>直近の送信エラー ({health.recentErrors.length}件)</span>
+              </span>
+              <span className="text-[10px] text-rose-700">エラー原因を確認して各行の「再実行」ボタンを押せます</span>
+            </div>
+            <div className="space-y-1.5">
+              {health.recentErrors.map((errItem) => (
+                <div key={errItem.id} className="p-2.5 bg-white rounded-lg border border-rose-200 flex flex-wrap items-center justify-between gap-2 shadow-2xs">
+                  <div className="min-w-0 flex-1">
+                    <div className="flex items-center gap-2">
+                      <span className="text-[10px] font-bold px-1.5 py-0.2 rounded bg-rose-100 text-rose-800 uppercase">
+                        {errItem.channel}
+                      </span>
+                      <span className="text-[11px] font-mono text-slate-500">{new Date(errItem.updated_at).toLocaleString('ja-JP')}</span>
+                    </div>
+                    <p className="text-rose-900 font-medium text-[11px] mt-0.5 break-all">
+                      {errItem.error_message || '不明なエラー'}
+                    </p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const matchJob = jobs.find((j) => j.id === errItem.id);
+                      if (matchJob) {
+                        void changeJob(matchJob, 'retry');
+                      } else {
+                        void changeJob({ id: errItem.id, status: 'failed', scenario_id: errItem.scenario_id, contact_id: errItem.contact_id, channel: errItem.channel as any, due_at: '', error_message: errItem.error_message, scenarioName: 'シナリオ', contactName: '連絡先' }, 'retry');
+                      }
+                    }}
+                    className="px-2.5 py-1 bg-rose-600 hover:bg-rose-700 text-white rounded text-[11px] font-bold shrink-0 shadow-2xs transition cursor-pointer"
+                  >
+                    再実行
+                  </button>
+                </div>
+              ))}
+            </div>
+          </div>
         )}
       </section>
 

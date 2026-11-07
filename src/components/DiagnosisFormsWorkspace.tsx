@@ -410,15 +410,30 @@ export const DiagnosisFormsWorkspace: React.FC<DiagnosisFormsWorkspaceProps> = (
 
       // 即時差し替えモード（一覧の差し替えボタンから実行された場合）
       if (targetMaterial?.id) {
-        const { error: dbErr } = await supabase
+        const updatePayload: Record<string, any> = {
+          file_path: filePath,
+          public_url: publicUrl,
+          updated_at: new Date().toISOString(),
+        };
+        if (typeof file.size === 'number') {
+          updatePayload.size_bytes = file.size;
+        }
+
+        let { error: dbErr } = await supabase
           .from('public_materials')
-          .update({
-            file_path: filePath,
-            public_url: publicUrl,
-            size_bytes: file.size,
-            updated_at: new Date().toISOString(),
-          })
+          .update(updatePayload)
           .eq('id', targetMaterial.id);
+
+        // スキーマキャッシュに size_bytes が未反映の場合は除外して安全に再試行
+        if (dbErr && (dbErr.message?.includes('size_bytes') || String(dbErr.code || '').includes('PGRST'))) {
+          delete updatePayload.size_bytes;
+          const retry = await supabase
+            .from('public_materials')
+            .update(updatePayload)
+            .eq('id', targetMaterial.id);
+          dbErr = retry.error;
+        }
+
         if (dbErr) throw dbErr;
         setNotice(`資料「${targetMaterial.label}」のPDFファイルを上書き差し替えしました（公開URLは維持されます）。`);
         await load();
@@ -449,7 +464,7 @@ export const DiagnosisFormsWorkspace: React.FC<DiagnosisFormsWorkspaceProps> = (
     setLoading(true); setError(''); setNotice('');
 
     try {
-      const payload = {
+      const payload: Record<string, any> = {
         key: cleanKey,
         label: cleanLabel,
         description: (editingMaterial.description || '').trim(),
@@ -463,16 +478,35 @@ export const DiagnosisFormsWorkspace: React.FC<DiagnosisFormsWorkspaceProps> = (
       };
 
       if (editingMaterial.id) {
-        const { error: updateErr } = await supabase
+        let { error: updateErr } = await supabase
           .from('public_materials')
           .update(payload)
           .eq('id', editingMaterial.id);
+
+        if (updateErr && (updateErr.message?.includes('size_bytes') || String(updateErr.code || '').includes('PGRST'))) {
+          delete payload.size_bytes;
+          const retry = await supabase
+            .from('public_materials')
+            .update(payload)
+            .eq('id', editingMaterial.id);
+          updateErr = retry.error;
+        }
+
         if (updateErr) throw updateErr;
         setNotice(`資料「${cleanLabel}」を更新しました。`);
       } else {
-        const { error: insertErr } = await supabase
+        let { error: insertErr } = await supabase
           .from('public_materials')
           .insert(payload);
+
+        if (insertErr && (insertErr.message?.includes('size_bytes') || String(insertErr.code || '').includes('PGRST'))) {
+          delete payload.size_bytes;
+          const retry = await supabase
+            .from('public_materials')
+            .insert(payload);
+          insertErr = retry.error;
+        }
+
         if (insertErr) throw insertErr;
         setNotice(`新規資料「${cleanLabel}」を登録しました。HPに自動反映されます。`);
       }

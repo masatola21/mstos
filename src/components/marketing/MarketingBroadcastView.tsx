@@ -22,6 +22,15 @@ function summarizeBroadcastHistory(rows:OutboxHistoryRow[]):Run[]{
   return [...grouped.values()].map(run=>({...run,status:run.pending_count?'sending':run.failed_count===0?'sent':run.sent_count===0?'failed':'partial'})).sort((a,b)=>Date.parse(b.created_at)-Date.parse(a.created_at)).slice(0,30)
 }
 
+export const OPT_OUT_FOOTER = `
+
+--------------------------------------------------
+【特定電子メール法に基づく表示】
+送信者: 有限会社MST 営業推進部
+本メールはウェブサイト等の公開情報に基づき、貴社の事業成長に資するご提案としてお送りしております。
+今後のご案内・配信がご不要の場合は、大変お手数ですが本メール宛に「配信停止」とご返信いただくか、担当者までご連絡いただけますようお願い申し上げます。
+--------------------------------------------------`;
+
 export const MarketingBroadcastView: React.FC<{initialChannel?:Channel}> = ({initialChannel}) => {
   const [contacts,setContacts]=useState<Contact[]>([]);
   const [segments,setSegments]=useState<Segment[]>([]);
@@ -54,6 +63,10 @@ export const MarketingBroadcastView: React.FC<{initialChannel?:Channel}> = ({ini
   const [error,setError]=useState('');
   const [notice,setNotice]=useState('');
 
+  const [batches,setBatches]=useState<any[]>([]);
+  const [selectedBatchId,setSelectedBatchId]=useState<string>('all');
+  const [appendOptOutNotice,setAppendOptOutNotice]=useState(true);
+
   const db=getSupabase();
   useEffect(() => {
     if (initialChannel) {
@@ -63,6 +76,13 @@ export const MarketingBroadcastView: React.FC<{initialChannel?:Channel}> = ({ini
       }
     }
   }, [initialChannel]);
+
+  useEffect(() => {
+    if (audienceMode === 'prospect_outreach' && !consentBasis) {
+      setConsentBasis('ウェブサイト等の公開情報およびAI企業調査に基づく営業アプローチ（特定電子メール法・配信停止案内付き）');
+    }
+  }, [audienceMode, consentBasis]);
+
   const selectedLineTemplate=lineTemplates.find(item=>item.id===selectedLineTemplateId&&item.reply_type===lineContentType);
   const previewFallbackContact:Contact={id:'preview',full_name:null,email:null,line_user_id:null,company_id:null};
   const fillForContact=(value:string,contact?:Contact|null)=>{const recipient=contact||previewFallbackContact;const company=recipient.company_id?companies[recipient.company_id]:undefined;const values:Record<string,string>={recipient_name:recipient.full_name||'ご担当者',company_name:String(company?.company_name||company?.name||'貴社'),form_title:'',document_title:'',document_url:'',document_content:'',link_url:''};return renderPlaceholders(value,values)};
@@ -74,15 +94,16 @@ export const MarketingBroadcastView: React.FC<{initialChannel?:Channel}> = ({ini
       db.from('contacts').select('id,full_name,email,line_user_id,company_id').order('full_name').limit(5000),
       db.from('crm_segments').select('id,name,entity_type,conditions').order('name'),
       db.from('line_friends').select('line_user_id,status,consent_status'),
-      db.from('companies').select('id,company_name,industry').limit(100),
-      db.from('prospects').select('id,company_id,source,status').limit(100),
+      db.from('companies').select('id,company_name,industry').limit(500),
+      db.from('prospects').select('id,company_id,source,status,email,opted_out,import_batch_id,source_url').limit(2000),
       db.from('leads').select('id,contact_id,status').limit(100),
       db.from('deals').select('id,lead_id,proposal_status').limit(100),
       db.from('customers').select('id,company_id,contract_status').limit(100),
       db.from('communication_outbox').select('source_id,channel,status,subject,body_text,created_at').in('source_type',['marketing_broadcast','marketing_outreach','marketing_automation']).order('created_at',{ascending:false}).limit(1000),
       db.from('communication_templates').select('id,name,channel,category,template_key,subject,body_text,updated_at').order('updated_at',{ascending:false}).limit(100),
       db.from('line_auto_reply_templates').select('id,name,reply_type,payload,created_at').order('created_at',{ascending:false}).limit(100),
-    ]).then(([c,s,f,co,p,l,d,cu,h,et,lt])=>{
+      Promise.resolve(db.from('prospect_import_batches').select('id,batch_name,source_ai,total_records,imported_count,skipped_count,created_at').order('created_at',{ascending:false}).limit(100)).catch(()=>({data:[],error:null})),
+    ]).then(([c,s,f,co,p,l,d,cu,h,et,lt,b])=>{
       if(!active)return;
       const failed=[c,s,f,co,p,l,d,cu,h,et,lt].find(x=>x.error)?.error;
       if(failed){setError(failed.message);return}
@@ -97,13 +118,26 @@ export const MarketingBroadcastView: React.FC<{initialChannel?:Channel}> = ({ini
       setRuns(summarizeBroadcastHistory((h.data||[]) as OutboxHistoryRow[]));
       setEmailTemplates((et.data||[]) as any[]);
       setLineTemplates((lt.data||[]) as LineTemplate[]);
+      setBatches((b?.data||[]) as any[]);
     }).catch(e=>active&&setError(e.message||'一斉配信の読み込みに失敗しました。'));
     return()=>{active=false}
   },[]);
 
   const selectedSegment = segments.find(x=>x.id===segmentId);
-  const outreachProspects = prospects.filter(row=>Boolean(row.company_id&&companies[String(row.company_id)]&&String(row.source||'').includes('外部AI調査')));
-  const selectedOutreachCompanies = new Set(outreachProspects.filter(row=>selectedProspectIds.includes(String(row.id||''))).map(row=>String(row.company_id||'')));
+  const outreachProspects = useMemo(() => {
+    return prospects.filter(row => {
+      const isAi = String(row.source || '').includes('外部AI調査');
+      const notOptedOut = row.opted_out !== true;
+      const matchesBatch = selectedBatchId === 'all' || row.import_batch_id === selectedBatchId;
+      const hasCompany = Boolean(row.company_id && companies[String(row.company_id)]);
+      return isAi && notOptedOut && matchesBatch && hasCompany;
+    });
+  }, [prospects, companies, selectedBatchId]);
+
+  const selectedOutreachCompanies = useMemo(() => {
+    return new Set(outreachProspects.filter(row=>selectedProspectIds.includes(String(row.id||''))).map(row=>String(row.company_id||'')));
+  }, [outreachProspects, selectedProspectIds]);
+
   const eligible = useMemo(()=>{
     let rows=contacts;
     if(audienceMode==='prospect_outreach'){
@@ -142,7 +176,7 @@ export const MarketingBroadcastView: React.FC<{initialChannel?:Channel}> = ({ini
     return rows.filter(row=>channel==='email'
       ? Boolean(row.email)
       : Boolean(row.line_user_id&&friends[row.line_user_id]?.status==='active'&&friends[row.line_user_id]?.consent_status==='opted_in'));
-  },[contacts,selectedSegment,companies,prospects,leads,deals,customers,channel,friends,audienceMode,selectedProspectIds]);
+  },[contacts,selectedSegment,companies,prospects,leads,deals,customers,channel,friends,audienceMode,selectedOutreachCompanies]);
 
   const refreshRuns=async()=>{
     if(!db)return;
@@ -183,10 +217,11 @@ export const MarketingBroadcastView: React.FC<{initialChannel?:Channel}> = ({ini
       const session=sessionResult.session;
       if(!session?.access_token||!session.user){throw new Error('ログイン状態を確認できません。')}
       const broadcastId=crypto.randomUUID();
+      const optOutSuffix = (channel==='email' && audienceMode==='prospect_outreach' && appendOptOutNotice) ? OPT_OUT_FOOTER : '';
       const rows=recipients.map(contact=>({
         channel,recipient_contact_id:contact.id,recipient_address:channel==='email'?contact.email:contact.line_user_id,
         subject:channel==='email'?fillForContact(subject.trim(),contact):null,
-        body_text:channel==='line'&&lineContentType!=='text'?`[${lineContentType==='image'?'画像':lineContentType==='video'?'動画':'Flex'}メッセージ]`:fillForContact(body.trim(),contact),
+        body_text:channel==='line'&&lineContentType!=='text'?`[${lineContentType==='image'?'画像':lineContentType==='video'?'動画':'Flex'}メッセージ]`:fillForContact(body.trim() + optOutSuffix,contact),
         line_message_payload:channel==='line'&&lineContentType!=='text'?{type:lineContentType,...fillLinePayload(selectedLineTemplate?.payload||{},contact),...(lineContentType==='video'||lineContentType==='image'?{originalContentUrl:videoUrl,previewImageUrl:videoPreviewUrl}:{})}:null,
         company_id:contact.company_id||null,source_type:audienceMode==='prospect_outreach'?'marketing_outreach':'marketing_broadcast',source_id:broadcastId,status:'queued',
         consent_confirmed_at:new Date().toISOString(),consent_basis:consentBasis.trim(),
@@ -280,11 +315,112 @@ export const MarketingBroadcastView: React.FC<{initialChannel?:Channel}> = ({ini
         </label>}
       </div>
 
-      {audienceMode==='prospect_outreach'&&<section className="rounded-xl border border-amber-200 bg-amber-50/50 p-4 space-y-2">
-        <div className="font-bold text-amber-900 text-xs">営業対象の見込み企業を選択</div>
-        <p className="text-xs text-slate-600">外部AI調査からCRMへ登録した見込み企業だけを表示します。選択企業に紐づく連絡先のメールアドレスだけを宛先候補にします。</p>
-        <div className="max-h-48 space-y-1 overflow-auto rounded-lg border border-amber-200/80 bg-white p-2">{outreachProspects.length===0?<p className="text-xs text-slate-500 p-2">会社情報と関連付いた見込み企業がありません。</p>:outreachProspects.map(row=>{const company=companies[String(row.company_id||'')]||{};const id=String(row.id||'');return <label key={id} className="flex items-center gap-2 rounded px-2 py-1.5 text-xs text-slate-800 hover:bg-slate-50 cursor-pointer"><input type="checkbox" checked={selectedProspectIds.includes(id)} onChange={()=>{setSelectedProspectIds(current=>current.includes(id)?current.filter(x=>x!==id):[...current,id]);setSelected([]);setPreview(false)}}/><span className="min-w-0 flex-1 truncate font-medium">{String(company.company_name||company.name||'会社名未設定')}</span><span className="text-xs text-slate-400">{String(row.status||'未設定')}</span></label>})}</div>
-        <p className="text-[11px] text-amber-700">営業メールの送信根拠と、宛先情報を営業目的で利用できることを確認してください。</p>
+      {audienceMode==='prospect_outreach'&&<section className="rounded-xl border border-amber-200 bg-amber-50/50 p-4 space-y-3">
+        <div className="flex flex-wrap items-center justify-between gap-2 border-b border-amber-200/60 pb-2">
+          <div>
+            <div className="font-bold text-amber-900 text-xs">営業対象の見込み企業を選択（AI新規リスト）</div>
+            <p className="text-[11px] text-slate-600">外部AI調査から登録した見込み企業（配信停止済みを除く）を対象にします。</p>
+          </div>
+          {batches.length > 0 && (
+            <div className="flex items-center gap-1.5">
+              <span className="text-[11px] font-bold text-slate-600">取込バッチ:</span>
+              <select
+                value={selectedBatchId}
+                onChange={e => {
+                  setSelectedBatchId(e.target.value);
+                  setSelectedProspectIds([]);
+                  setSelected([]);
+                  setPreview(false);
+                }}
+                className="rounded-lg border border-amber-300 bg-white px-2 py-1 text-xs text-slate-800 shadow-2xs font-medium"
+              >
+                <option value="all">すべてのバッチ (対象{outreachProspects.length}社)</option>
+                {batches.map(b => (
+                  <option key={b.id} value={b.id}>
+                    {b.batch_name} ({b.source_ai || 'AI'} · {b.imported_count || 0}社)
+                  </option>
+                ))}
+              </select>
+            </div>
+          )}
+        </div>
+
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={() => {
+                const ids = outreachProspects.map(r => String(r.id || ''));
+                setSelectedProspectIds(ids);
+                const targetCompanyIds = new Set(outreachProspects.map(r => String(r.company_id || '')));
+                const targetContactIds = contacts.filter(c => c.company_id && targetCompanyIds.has(c.company_id) && Boolean(c.email)).map(c => c.id);
+                setSelected(targetContactIds);
+              }}
+              className="rounded-lg border border-amber-300 bg-amber-100/80 px-2.5 py-1 text-xs font-bold text-amber-900 hover:bg-amber-200 transition cursor-pointer"
+            >
+              表示中の全社を一括選択 ({outreachProspects.length}社)
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                setSelectedProspectIds([]);
+                setSelected([]);
+              }}
+              className="rounded-lg border border-slate-200 bg-white px-2.5 py-1 text-xs text-slate-600 hover:bg-slate-50 cursor-pointer"
+            >
+              選択解除
+            </button>
+          </div>
+          <span className="text-xs text-slate-500">
+            選択中: {selectedProspectIds.length}社 ({selectedContacts.length}件の連絡先)
+          </span>
+        </div>
+
+        <div className="max-h-48 space-y-1 overflow-auto rounded-lg border border-amber-200/80 bg-white p-2">
+          {outreachProspects.length===0?(
+            <p className="text-xs text-slate-500 p-2">
+              {selectedBatchId !== 'all' ? 'このバッチに該当する未送信の見込み企業がありません。' : '会社情報と関連付いた見込み企業がありません。'}
+            </p>
+          ):(
+            outreachProspects.map(row=>{
+              const company=companies[String(row.company_id||'')]||{};
+              const id=String(row.id||'');
+              return (
+                <label key={id} className="flex items-center gap-2 rounded px-2 py-1.5 text-xs text-slate-800 hover:bg-slate-50 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={selectedProspectIds.includes(id)}
+                    onChange={()=>{
+                      setSelectedProspectIds(current=>current.includes(id)?current.filter(x=>x!==id):[...current,id]);
+                      setSelected([]);
+                      setPreview(false);
+                    }}
+                  />
+                  <span className="min-w-0 flex-1 truncate font-medium">{String(company.company_name||company.name||'会社名未設定')}</span>
+                  {Boolean(row.email) && <span className="text-[11px] text-slate-500 font-mono">{String(row.email)}</span>}
+                  <span className="text-xs text-slate-400">{String(row.status||'未設定')}</span>
+                </label>
+              );
+            })
+          )}
+        </div>
+
+        <div className="rounded-lg border border-amber-300 bg-amber-100/40 p-2.5">
+          <label className="flex items-start gap-2 cursor-pointer">
+            <input
+              type="checkbox"
+              checked={appendOptOutNotice}
+              onChange={e => setAppendOptOutNotice(e.target.checked)}
+              className="mt-0.5 rounded text-purple-600 accent-purple-600"
+            />
+            <div className="text-xs">
+              <span className="font-bold text-slate-800">特定電子メール法に基づく送信者表記・配信停止（オプトアウト）案内を自動挿入</span>
+              <p className="text-[11px] text-slate-600 mt-0.5">
+                法律に従い、事業者名（有限会社MST）および「配信停止希望の返信受付案内」をメール本文末尾に付加します。配信停止済みの企業（opted_out = true）は自動的に除外されています。
+              </p>
+            </div>
+          </label>
+        </div>
       </section>}
 
       <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
@@ -327,7 +463,7 @@ export const MarketingBroadcastView: React.FC<{initialChannel?:Channel}> = ({ini
               <div className="bg-slate-50 p-3 border-b border-slate-200">
                 <p className="text-sm font-bold text-slate-900">件名: {fillForContact(subject,previewContact)}</p>
               </div>
-              <p className="whitespace-pre-wrap p-4 text-xs font-sans leading-relaxed text-slate-900">{fillForContact(body,previewContact)}</p>
+              <p className="whitespace-pre-wrap p-4 text-xs font-sans leading-relaxed text-slate-900">{fillForContact(body + (channel==='email' && audienceMode==='prospect_outreach' && appendOptOutNotice ? OPT_OUT_FOOTER : ''), previewContact)}</p>
             </div>
           )}
           {channel==='line' && (

@@ -1502,11 +1502,11 @@ async function enqueueScenariosForContact(contactId: string, triggerName: string
     }
 
     if (enqueued > 0) {
-      setTimeout(() => {
-        void processMarketingAutomationJobs().catch((err) => {
-          console.warn('[Automation] Immediate jobs processing error:', err);
-        });
-      }, 500);
+      try {
+        await processMarketingAutomationJobs();
+      } catch (err) {
+        console.warn('[Automation] Immediate jobs processing error:', err);
+      }
     }
 
     return enqueued;
@@ -2751,13 +2751,50 @@ let marketingQueueBusy = false;
 let marketingRunnerLastRunAt: string | null = null;
 let lastStaleJobsCheckAt = 0;
 
+async function persistRunnerExecution(statusText: string): Promise<void> {
+  if (!lineSupabase) return;
+  try {
+    const now = new Date().toISOString();
+    marketingRunnerLastRunAt = now;
+    await lineSupabase.from('automation_controls').upsert({
+      id: 'marketing_runner',
+      target: 'send',
+      paused: false,
+      reason: statusText,
+      updated_by: 'system_runner',
+      updated_at: now,
+    }, { onConflict: 'id' });
+  } catch (_) {
+    // 永続化エラーはジョブ実行自体をブロックしない
+  }
+}
+
+async function getPersistedRunnerLastRunAt(): Promise<string | null> {
+  if (marketingRunnerLastRunAt) return marketingRunnerLastRunAt;
+  if (!lineSupabase) return null;
+  try {
+    const { data } = await lineSupabase
+      .from('automation_controls')
+      .select('updated_at')
+      .eq('id', 'marketing_runner')
+      .maybeSingle();
+    if (data?.updated_at) {
+      marketingRunnerLastRunAt = data.updated_at;
+      return data.updated_at;
+    }
+  } catch (_) {}
+  return null;
+}
+
 async function processMarketingAutomationJobs(): Promise<number> {
-  marketingRunnerLastRunAt = new Date().toISOString();
+  const runTimestamp = new Date().toISOString();
+  marketingRunnerLastRunAt = runTimestamp;
   if (!lineSupabase || marketingQueueBusy) return 0;
 
   // キルスイッチ（緊急停止）確認: 全体または配信停止中の場合はジョブ処理をスキップ
   const killSwitch = await getKillSwitchStatus('send');
   if (killSwitch.paused) {
+    void persistRunnerExecution(`緊急停止スキップ: ${killSwitch.reason || '一時停止中'}`);
     return 0;
   }
 
@@ -3182,7 +3219,10 @@ async function processMarketingAutomationJobs(): Promise<number> {
     }
   } catch (error) {
     console.error('Marketing automation queue processing failed:',error instanceof Error?error.message:'unknown error');
-  } finally { marketingQueueBusy = false; }
+  } finally {
+    marketingQueueBusy = false;
+    void persistRunnerExecution(`完了: ${processedJobsCount}件のジョブ処理`);
+  }
   return processedJobsCount;
 }
 
@@ -3531,15 +3571,257 @@ app.get('/api/marketing/health', async (req, res) => {
   if (!token) return res.status(401).json({ error: 'ログインしてください。' });
   const { data: authData, error: authError } = await lineSupabase.auth.getUser(token);
   if (authError || !authData.user) return res.status(401).json({ error: 'ログイン状態を確認できません。' });
-  const [queued, failed] = await Promise.all([
-    lineSupabase.from('marketing_automation_jobs').select('id', { count: 'exact', head: true }).eq('owner_id', authData.user.id).eq('status', 'queued'),
-    lineSupabase.from('marketing_automation_jobs').select('id', { count: 'exact', head: true }).eq('owner_id', authData.user.id).eq('status', 'failed'),
-  ]);
-  if (queued.error || failed.error) return res.status(500).json({ error: '自動配信の状態を取得できません。' });
-  const emailConfigured = Boolean(process.env.RESEND_API_KEY?.trim() && process.env.RESEND_FROM_EMAIL?.trim()
-    && process.env.EMAIL_UNSUBSCRIBE_SECRET?.trim() && process.env.PUBLIC_APP_URL?.trim());
-  const lineConfigured = Boolean(lineChannelAccessToken.trim() && lineChannelSecret.trim());
-  return res.json({ emailConfigured, lineConfigured, runnerLastRunAt: marketingRunnerLastRunAt, queuedCount: queued.count || 0, failedCount: failed.count || 0 });
+
+  try {
+    const [killSwitch, runnerLastRunAt, countsResult, nextDueResult, recentErrorsResult] = await Promise.all([
+      getKillSwitchStatus('send'),
+      getPersistedRunnerLastRunAt(),
+      lineSupabase.from('marketing_automation_jobs')
+        .select('status')
+        .eq('owner_id', authData.user.id),
+      lineSupabase.from('marketing_automation_jobs')
+        .select('due_at')
+        .eq('owner_id', authData.user.id)
+        .eq('status', 'queued')
+        .order('due_at', { ascending: true })
+        .limit(1)
+        .maybeSingle(),
+      lineSupabase.from('marketing_automation_jobs')
+        .select('id, scenario_id, contact_id, channel, error_message, updated_at')
+        .eq('owner_id', authData.user.id)
+        .eq('status', 'failed')
+        .order('updated_at', { ascending: false })
+        .limit(5),
+    ]);
+
+    const statusCounts: Record<string, number> = {
+      queued: 0, sending: 0, sent: 0, failed: 0, skipped: 0, canceled: 0,
+    };
+    (countsResult.data || []).forEach((row: any) => {
+      const s = String(row.status || '');
+      if (statusCounts[s] !== undefined) statusCounts[s]++;
+    });
+
+    const emailConfigured = Boolean(process.env.RESEND_API_KEY?.trim() && process.env.RESEND_FROM_EMAIL?.trim()
+      && process.env.EMAIL_UNSUBSCRIBE_SECRET?.trim() && process.env.PUBLIC_APP_URL?.trim());
+    const lineConfigured = Boolean(lineChannelAccessToken.trim() && lineChannelSecret.trim());
+
+    return res.json({
+      emailConfigured,
+      lineConfigured,
+      runnerLastRunAt,
+      killSwitch,
+      statusCounts,
+      queuedCount: statusCounts.queued,
+      failedCount: statusCounts.failed,
+      nextDueAt: nextDueResult.data?.due_at || null,
+      recentErrors: recentErrorsResult.data || [],
+    });
+  } catch (err: any) {
+    return res.status(500).json({ error: err.message || '自動配信の状態を取得できませんでした。' });
+  }
+});
+
+// 手動トリガー: 今すぐジョブ処理を実行する
+app.post('/api/marketing/run-now', requireAuth, async (req, res) => {
+  if (!lineSupabase) return res.status(503).json({ error: 'Supabase設定がありません。' });
+  try {
+    const processed = await processMarketingAutomationJobs();
+    const runnerLastRunAt = await getPersistedRunnerLastRunAt();
+    return res.json({
+      success: true,
+      processed,
+      runnerLastRunAt,
+      timestamp: new Date().toISOString(),
+    });
+  } catch (err: any) {
+    return res.status(500).json({ error: err.message || 'ジョブの即時実行に失敗しました。' });
+  }
+});
+
+// シナリオ単位の「ドライラン（送信シミュレーション）」プレビュー
+app.post('/api/marketing/dry-run', requireAuth, async (req, res) => {
+  if (!lineSupabase) return res.status(503).json({ error: 'Supabase設定がありません。' });
+  const authUser = (req as any).user;
+  const { scenarioId, scenarioConfig, contactId } = req.body || {};
+
+  try {
+    let config = scenarioConfig || {};
+    if (scenarioId && (!config || Object.keys(config).length === 0)) {
+      const { data: scenRow } = await lineSupabase
+        .from('marketing_automation_scenarios')
+        .select('config')
+        .eq('owner_id', authUser.id)
+        .eq('scenario_id', scenarioId)
+        .maybeSingle();
+      if (scenRow?.config) {
+        config = scenRow.config;
+      }
+    }
+
+    let contact: any = null;
+    if (contactId && isPublicUuid(contactId)) {
+      const { data: c } = await lineSupabase
+        .from('contacts')
+        .select('id, full_name, email, line_user_id, company_id, email_consent_status')
+        .eq('id', contactId)
+        .maybeSingle();
+      contact = c;
+    }
+    if (!contact) {
+      contact = {
+        id: 'sample-contact-preview',
+        full_name: '山田 太郎',
+        email: authUser.email || 'preview-user@example.com',
+        line_user_id: 'U_SAMPLE_LINE_PREVIEW',
+        company_id: 'sample-company-preview',
+        email_consent_status: 'opted_in',
+      };
+    }
+
+    const [companyRes, salesSettingsRes, pubFormsRes, docRes, friendRes, killSwitch] = await Promise.all([
+      contact.company_id && !contact.company_id.startsWith('sample-')
+        ? lineSupabase.from('companies').select('id,company_name').eq('id', contact.company_id).maybeSingle()
+        : Promise.resolve({ data: { id: 'CID-PREVIEW', company_name: 'サンプル株式会社' } }),
+      lineSupabase.from('sales_workspace_settings').select('booking_page_url').eq('owner_id', authUser.id).maybeSingle(),
+      lineSupabase.from('diagnosis_forms').select('id,name,public_slug,definition,form_type,status').eq('status', 'published').limit(10),
+      lineSupabase.from('customer_documents').select('id,title,status').eq('owner_id', authUser.id).eq('status', 'approved').limit(1).maybeSingle(),
+      contact.line_user_id && !contact.line_user_id.startsWith('U_SAMPLE_')
+        ? lineSupabase.from('line_friends').select('status,consent_status,display_name').eq('line_user_id', contact.line_user_id).maybeSingle()
+        : Promise.resolve({ data: { status: 'active', consent_status: 'opted_in', display_name: contact.full_name } }),
+      getKillSwitchStatus('send'),
+    ]);
+
+    const company = companyRes.data || { company_name: 'サンプル株式会社' };
+    const salesSettings = salesSettingsRes.data;
+    const pubForms = pubFormsRes.data || [];
+    const defaultForm = pubForms.find((f: any) => f.form_type === 'diagnosis') || pubForms[0] || null;
+    const latestApprovedDoc = docRes.data;
+    const appUrl = (process.env.PUBLIC_APP_URL || '').replace(/\/$/, '');
+
+    const resolved = resolveMessageVars(
+      contact,
+      {
+        body_text: config.messageBody || config.emailBody || '',
+        line_message_payload: config.lineMessagePayload,
+        config,
+      },
+      {
+        salesSettings,
+        defaultForm,
+        allForms: pubForms,
+        latestApprovedDoc,
+        company,
+        appUrl,
+      }
+    );
+
+    const channelSetting = config.channel || 'both';
+    const waitMinutes = Number(config.waitMinutes || 0);
+    const scheduledTime = new Date(Date.now() + waitMinutes * 60 * 1000).toISOString();
+    const simulatedJobs: any[] = [];
+
+    // LINE ジョブ評価
+    if (channelSetting === 'both' || channelSetting === 'line') {
+      const friend = friendRes.data;
+      const skipReason = !contact.line_user_id
+        ? '連絡先にLINEユーザーIDが紐付いていません'
+        : (friend && (friend.status !== 'active' || friend.consent_status !== 'opted_in'))
+          ? 'LINE友だちがブロック中または配信同意（opted_in）がありません'
+          : null;
+
+      let linePayload: any = null;
+      const lType = config.lineMessageType || 'text';
+      if (lType === 'flex' && (config.flexTitle || config.flexBody)) {
+        linePayload = {
+          type: 'flex',
+          altText: resolved.personalize(config.flexAltText || config.flexTitle || 'ご案内'),
+          contents: {
+            type: 'bubble',
+            body: {
+              type: 'box', layout: 'vertical', spacing: 'md',
+              contents: [
+                { type: 'text', text: resolved.personalize(config.flexTitle || ''), weight: 'bold', size: 'lg', wrap: true },
+                { type: 'text', text: resolved.personalize(config.flexBody || ''), size: 'sm', wrap: true, color: '#475569' },
+              ].filter((c: any) => c.text),
+            },
+            ...(config.flexButtonLabel && config.flexButtonUrl ? {
+              footer: {
+                type: 'box', layout: 'vertical',
+                contents: [{
+                  type: 'button', style: 'primary', color: '#059669',
+                  action: { type: 'uri', label: config.flexButtonLabel.slice(0, 20), uri: resolved.personalize(config.flexButtonUrl) },
+                }],
+              },
+            } : {}),
+          },
+        };
+      }
+
+      simulatedJobs.push({
+        channel: 'line',
+        recipient: contact.line_user_id || '（LINE未連携）',
+        recipientName: contact.full_name,
+        dueAt: scheduledTime,
+        waitMinutes,
+        status: skipReason ? 'skipped' : 'eligible',
+        skipReason,
+        messageType: lType,
+        bodyText: resolved.personalize(config.messageBody || ''),
+        linePayload,
+        consentBasis: config.consentBasis || 'LINE公式アカウント友だち追加による配信同意',
+      });
+    }
+
+    // Email ジョブ評価
+    if (channelSetting === 'both' || channelSetting === 'email') {
+      const emailPattern = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+      const hasEmail = Boolean(contact.email && emailPattern.test(contact.email));
+      const isOptedOut = contact.email_consent_status === 'opted_out';
+      const skipReason = !contact.email
+        ? '連絡先にメールアドレスが登録されていません'
+        : !hasEmail
+          ? 'メールアドレスの形式が不正です'
+          : isOptedOut
+            ? '受信者が配信停止（オプトアウト）を設定しています'
+            : null;
+
+      simulatedJobs.push({
+        channel: 'email',
+        recipient: contact.email || '（アドレス未設定）',
+        recipientName: contact.full_name,
+        dueAt: scheduledTime,
+        waitMinutes,
+        status: skipReason ? 'skipped' : 'eligible',
+        skipReason,
+        subject: resolved.personalize(config.emailSubject || '(件名未入力)'),
+        bodyText: resolved.personalize(config.emailBody || ''),
+        consentBasis: config.consentBasis || 'Webフォーム・問い合わせ経由での特定電子メール法同意',
+      });
+    }
+
+    return res.json({
+      success: true,
+      scenarioName: config.name || scenarioId || 'シナリオ',
+      trigger: config.trigger || 'manual',
+      killSwitch,
+      contact: {
+        id: contact.id,
+        fullName: contact.full_name,
+        email: contact.email,
+        companyName: company.company_name,
+        lineUserId: contact.line_user_id,
+      },
+      simulatedJobs,
+      timing: {
+        waitMinutes,
+        scheduledTime,
+        sendTimeWindow: config.sendTimeWindow || '終日 (24時間)',
+      },
+    });
+  } catch (err: any) {
+    return res.status(500).json({ error: err.message || 'ドライランの実行に失敗しました。' });
+  }
 });
 
 app.post('/api/marketing/jobs/:id/retry', async (req, res) => {
@@ -3587,6 +3869,137 @@ app.post('/api/marketing/test-send', requireAuth, async (req, res) => {
     return res.status(503).json({ error: `自動配信・メッセージ送信は緊急停止中です: ${killSwitch.reason || '一時停止中'}` });
   }
 
+  const authUser = (req as any).user;
+  const targetChannel = req.body?.channel === 'email' ? 'email' : 'line';
+
+  // 画面上の編集中の文面データを抽出
+  const scenarioData = req.body?.scenario || req.body?.config || req.body || {};
+  const scenarioConfig = {
+    emailSubject: scenarioData.emailSubject,
+    emailBody: scenarioData.emailBody,
+    messageBody: scenarioData.messageBody,
+    lineMessageType: scenarioData.lineMessageType,
+    flexTitle: scenarioData.flexTitle,
+    flexBody: scenarioData.flexBody,
+    flexAltText: scenarioData.flexAltText,
+    flexButtonLabel: scenarioData.flexButtonLabel,
+    flexButtonUrl: scenarioData.flexButtonUrl,
+    ...scenarioData,
+  };
+
+  // ==========================================
+  // 1. メール実機テスト送信 (常にログイン中の管理者宛て)
+  // ==========================================
+  if (targetChannel === 'email') {
+    const adminEmail = typeof authUser.email === 'string' ? authUser.email.trim() : '';
+    if (!adminEmail) {
+      return res.status(400).json({ error: 'ログイン中アカウントにメールアドレスが存在しません。' });
+    }
+
+    const emailKey = process.env.RESEND_API_KEY || '';
+    const configuredFrom = process.env.RESEND_FROM_EMAIL || '';
+    if (!emailKey || !configuredFrom) {
+      return res.status(503).json({ error: 'メール送信サービスが未設定です。RESEND_API_KEY と RESEND_FROM_EMAIL を設定してください。' });
+    }
+
+    try {
+      const { data: sendSettings } = await lineSupabase.from('email_send_settings')
+        .select('sender_name,sender_email,reply_to_email').eq('owner_id', authUser.id).maybeSingle();
+
+      const configuredAddress = configuredFrom.match(/<([^<>]+)>/)?.[1] || configuredFrom.trim();
+      const fromEmail = String(sendSettings?.sender_email || configuredAddress).trim();
+      const replyTo = typeof sendSettings?.reply_to_email === 'string' ? sendSettings.reply_to_email.trim() : '';
+      const fromName = String(sendSettings?.sender_name || '有限会社MST｜経営・業務改善支援').trim();
+      const emailFrom = `${fromName.replace(/"/g, '')} <${fromEmail}>`;
+
+      // 差し込み変数の解決
+      const [salesSettingsRes, pubFormsRes, docRes] = await Promise.all([
+        lineSupabase.from('sales_workspace_settings').select('booking_page_url').eq('owner_id', authUser.id).maybeSingle(),
+        lineSupabase.from('diagnosis_forms').select('id,name,public_slug,definition,form_type,status').eq('status', 'published').limit(10),
+        lineSupabase.from('customer_documents').select('id,title,status').eq('owner_id', authUser.id).eq('status', 'approved').limit(1).maybeSingle(),
+      ]);
+
+      const salesSettings = salesSettingsRes.data;
+      const pubForms = pubFormsRes.data || [];
+      const defaultForm = pubForms.find((f: any) => f.form_type === 'diagnosis') || pubForms[0] || null;
+      const latestApprovedDoc = docRes.data;
+      const appUrl = (process.env.PUBLIC_APP_URL || '').replace(/\/$/, '');
+
+      const sampleContact = {
+        id: 'admin-test-contact',
+        full_name: authUser.user_metadata?.full_name || '管理者テスト受信者',
+        email: adminEmail,
+      };
+
+      const resolved = resolveMessageVars(
+        sampleContact,
+        {
+          body_text: scenarioConfig.emailBody || scenarioConfig.messageBody,
+          config: scenarioConfig,
+        },
+        {
+          salesSettings,
+          defaultForm,
+          allForms: pubForms,
+          latestApprovedDoc,
+          company: { company_name: 'MSTテスト環境' },
+          appUrl,
+        }
+      );
+
+      const emailSubject = `[管理者テスト送信] ` + resolved.personalize(scenarioConfig.emailSubject || 'ステップ配信テスト');
+      const resolvedBody = resolved.personalize(scenarioConfig.emailBody || scenarioConfig.messageBody || '');
+      const emailBodyText = `【※ 管理者向け実機テスト送信】\n宛先: ${adminEmail}\n差出人: ${emailFrom}\n--------------------------------------------------\n\n${resolvedBody}\n\n--------------------------------------------------\n※ 特定電子メール法 配信停止リンク確認:\n配信停止: ${appUrl || 'https://mstcorp.info'}/unsubscribe?demo=admin_preview`;
+
+      const response = await fetch('https://api.resend.com/emails', {
+        method: 'POST',
+        headers: { Authorization: 'Bearer ' + emailKey, 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          from: emailFrom,
+          to: [adminEmail],
+          subject: emailSubject,
+          text: emailBodyText,
+          ...(replyTo ? { reply_to: replyTo } : {}),
+        }),
+      });
+
+      const payload = await response.json().catch(() => ({})) as { id?: string; message?: string };
+      if (!response.ok || !payload.id) {
+        throw new Error(payload.message || 'メール配信サービスが送信を拒否しました。');
+      }
+
+      try {
+        await lineSupabase.from('communication_outbox').insert({
+          owner_id: authUser.id,
+          channel: 'email',
+          recipient_address: adminEmail,
+          subject: emailSubject,
+          body_text: emailBodyText,
+          source_type: 'marketing_test_send',
+          status: 'sent',
+          sent_at: new Date().toISOString(),
+          consent_confirmed_at: new Date().toISOString(),
+          consent_basis: '管理者による実機テスト送信',
+        });
+      } catch (_) {}
+
+      return res.json({
+        success: true,
+        channel: 'email',
+        message: `管理者メールアドレス（${adminEmail}）宛てにテストメールを送信しました。受信トレイをご確認ください。`,
+        recipient: {
+          email: adminEmail,
+          providerMessageId: payload.id,
+        },
+      });
+    } catch (err: any) {
+      return res.status(500).json({ error: err.message || 'メールテスト送信中にエラーが発生しました。' });
+    }
+  }
+
+  // ==========================================
+  // 2. LINE実機テスト送信 (LINE友だち宛て)
+  // ==========================================
   if (!lineChannelAccessToken) {
     return res.status(503).json({ error: 'LINE公式アカウント送信トークン（LINE_CHANNEL_ACCESS_TOKEN）が設定されていません。' });
   }
@@ -3595,8 +4008,6 @@ app.post('/api/marketing/test-send', requireAuth, async (req, res) => {
   if (!lineUserId) {
     return res.status(400).json({ error: '宛先のLINEユーザーID（line_user_id）が必要です。' });
   }
-
-  const authUser = (req as any).user;
 
   // 宛先友だちの確認: line_friends に存在することを確認（存在しない、または非アクティブなら403）
   const { data: friend, error: friendError } = await lineSupabase
@@ -3639,21 +4050,6 @@ app.post('/api/marketing/test-send', requireAuth, async (req, res) => {
       company_id: null,
     };
   }
-
-  // 画面上の編集中の文面データを抽出
-  const scenarioData = req.body?.scenario || req.body?.config || req.body || {};
-  const scenarioConfig = {
-    emailSubject: scenarioData.emailSubject,
-    emailBody: scenarioData.emailBody,
-    messageBody: scenarioData.messageBody,
-    lineMessageType: scenarioData.lineMessageType,
-    flexTitle: scenarioData.flexTitle,
-    flexBody: scenarioData.flexBody,
-    flexAltText: scenarioData.flexAltText,
-    flexButtonLabel: scenarioData.flexButtonLabel,
-    flexButtonUrl: scenarioData.flexButtonUrl,
-    ...scenarioData,
-  };
 
   try {
     // 差し込み変数の解決に必要な設定を収集
@@ -4698,9 +5094,9 @@ app.post(
 
     if (contact?.id) {
       if (form.form_type === 'diagnosis') {
-        void enqueueScenariosForContact(contact.id, 'diagnosis_completed');
+        await enqueueScenariosForContact(contact.id, 'diagnosis_completed');
       } else {
-        void enqueueScenariosForContact(contact.id, 'lead_created');
+        await enqueueScenariosForContact(contact.id, 'lead_created');
       }
     }
 

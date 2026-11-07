@@ -37,6 +37,8 @@ import { UNIFIED_TAG_MASTER, MasterTag, getTagByName } from '../../constants/tag
 import { QUESTIONNAIRE_V1 } from '../../constants/questionnaire';
 import { getSupabase } from '../../lib/supabaseClient';
 
+import { ScenarioDryRunModal } from './ScenarioDryRunModal';
+
 interface FlowStepInspectorModalProps {
   isOpen: boolean;
   onClose: () => void;
@@ -57,6 +59,7 @@ export const FlowStepInspectorModal: React.FC<FlowStepInspectorModalProps> = ({
 
   // Active Tab: 'edit' (基本設定・文面編集), 'preview_message' (メッセージプレビュー), 'inspect_form' (連動フォーム・リンク安全点検), 'test_send' (テスト送信)
   const [activeTab, setActiveTab] = useState<'edit' | 'preview_message' | 'inspect_form' | 'test_send'>('edit');
+  const [isDryRunOpen, setIsDryRunOpen] = useState(false);
 
   // Form State
   const [name, setName] = useState(scenario.name);
@@ -296,7 +299,48 @@ export const FlowStepInspectorModal: React.FC<FlowStepInspectorModalProps> = ({
         setIsSendingTest(false);
       }
     } else {
-      setTestSendNotice('※ メールテスト送信機能は準備中です（3-1Bにて提供予定）。');
+      // メール実機テスト送信（常にログイン中の管理者宛て）
+      setIsSendingTest(true);
+      try {
+        const supabase = getSupabase();
+        if (!supabase) throw new Error('Supabase接続が初期化されていません。');
+        const { data: sessionData } = await supabase.auth.getSession();
+        const token = sessionData?.session?.access_token;
+        if (!token) throw new Error('認証セッションが見つかりません。再度ログインしてください。');
+
+        const payload = {
+          channel: 'email',
+          scenario: {
+            id: scenario.id,
+            name,
+            trigger,
+            channel,
+            emailSubject,
+            emailBody,
+            messageBody,
+          },
+        };
+
+        const res = await fetch('/api/marketing/test-send', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${token}`,
+          },
+          body: JSON.stringify(payload),
+        });
+
+        const json = await res.json().catch(() => ({}));
+        if (!res.ok) {
+          throw new Error(json.error || `メール送信エラー (HTTP ${res.status})`);
+        }
+
+        setTestSendNotice(json.message || '✅ 管理者メールアドレス宛てに実機テストメールを送信しました。受信トレイをご確認ください。');
+      } catch (err: any) {
+        setTestSendError(err.message || 'メールテスト送信に失敗しました。');
+      } finally {
+        setIsSendingTest(false);
+      }
     }
   };
 
@@ -325,6 +369,15 @@ export const FlowStepInspectorModal: React.FC<FlowStepInspectorModalProps> = ({
           </div>
 
           <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={() => setIsDryRunOpen(true)}
+              className="px-3 py-1.5 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border border-indigo-200 rounded-xl text-xs font-bold flex items-center gap-1.5 transition cursor-pointer shadow-2xs"
+              title="本番送信せずに変数の置換やジョブ生成をシミュレーション"
+            >
+              <Sparkles className="w-3.5 h-3.5 text-indigo-600" />
+              <span>ドライラン実行（シミュレーション）</span>
+            </button>
             <button
               type="button"
               onClick={onClose}
@@ -1047,6 +1100,35 @@ export const FlowStepInspectorModal: React.FC<FlowStepInspectorModalProps> = ({
           </div>
         </div>
       </div>
+
+      {/* Scenario Dry-run Simulation Modal */}
+      {isDryRunOpen && (
+        <ScenarioDryRunModal
+          scenario={{
+            ...scenario,
+            name,
+            channel,
+            trigger,
+            waitMinutes,
+            emailSubject,
+            emailBody,
+            messageBody,
+            lineMessageType,
+            flexTitle,
+            flexBody,
+            flexAltText,
+            flexButtonLabel,
+            flexButtonUrl,
+            sendTimeWindow,
+            automationEnabled,
+            stopOnBooking,
+            stopOnDeal,
+            consentBasis,
+          }}
+          isOpen={isDryRunOpen}
+          onClose={() => setIsDryRunOpen(false)}
+        />
+      )}
     </div>
   );
 };

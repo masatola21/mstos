@@ -34,7 +34,8 @@ import {
   Send,
   GripVertical,
   LayoutGrid,
-  List
+  List,
+  Sparkles
 } from 'lucide-react';
 import { matrixService } from '../services/matrixService';
 
@@ -512,13 +513,23 @@ export const TableManager: React.FC<TableManagerProps> = ({
         </div>
 
         {/* Action Button: 新規登録 */}
+        {/* Action Button: リスト取り込み (見込み企業) または 新規登録 (その他) */}
         <div className="flex items-center gap-2">
-          {currentTable === 'prospects' && (
+          {currentTable === 'prospects' ? (
             <button
               onClick={() => setIsProspectImportOpen(true)}
-              className="px-3 py-1.5 rounded-md font-medium text-xs bg-purple-50 hover:bg-purple-100 text-purple-700 border border-purple-200 flex items-center gap-1.5 transition-colors cursor-pointer"
+              className="px-4 py-2 rounded-lg font-bold text-xs bg-indigo-600 hover:bg-indigo-700 text-white flex items-center gap-2 shadow-xs transition-colors cursor-pointer"
             >
-              <span>見込み企業調査</span>
+              <Sparkles className="w-4 h-4 text-indigo-200" />
+              <span>リストを取り込む（AI調査/CSV/JSON）</span>
+            </button>
+          ) : (
+            <button
+              onClick={handleOpenCreate}
+              className="px-3 py-1.5 rounded-md font-medium text-xs bg-purple-600 hover:bg-purple-700 text-white flex items-center gap-1.5 transition-colors cursor-pointer"
+            >
+              <Plus className="w-3.5 h-3.5" />
+              <span>新規登録</span>
             </button>
           )}
           <button
@@ -536,13 +547,6 @@ export const TableManager: React.FC<TableManagerProps> = ({
             title="再読み込み"
           >
             <RefreshCw className={`w-3.5 h-3.5 ${loading ? 'animate-spin' : ''}`} />
-          </button>
-          <button
-            onClick={handleOpenCreate}
-            className="px-3 py-1.5 rounded-md font-medium text-xs bg-purple-600 hover:bg-purple-700 text-white flex items-center gap-1.5 transition-colors cursor-pointer"
-          >
-            <Plus className="w-3.5 h-3.5" />
-            <span>新規登録</span>
           </button>
         </div>
       </div>
@@ -800,13 +804,23 @@ export const TableManager: React.FC<TableManagerProps> = ({
             </p>
           </div>
           {!searchQuery && (
-            <button
-              onClick={handleOpenCreate}
-              className="px-4 py-2 rounded-lg bg-purple-600 hover:bg-purple-700 text-white font-semibold text-xs inline-flex items-center gap-1.5 transition-colors shadow-xs cursor-pointer"
-            >
-              <Plus className="w-3.5 h-3.5" />
-              <span>{config.label}を新規登録する</span>
-            </button>
+            currentTable === 'prospects' ? (
+              <button
+                onClick={() => setIsProspectImportOpen(true)}
+                className="px-5 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs inline-flex items-center gap-2 transition-colors shadow-xs cursor-pointer"
+              >
+                <Sparkles className="w-4 h-4 text-indigo-200" />
+                <span>新規リストを取り込む（AI調査 / CSV / 表 / JSON）</span>
+              </button>
+            ) : (
+              <button
+                onClick={handleOpenCreate}
+                className="px-4 py-2 rounded-lg bg-purple-600 hover:bg-purple-700 text-white font-semibold text-xs inline-flex items-center gap-1.5 transition-colors shadow-xs cursor-pointer"
+              >
+                <Plus className="w-3.5 h-3.5" />
+                <span>{config.label}を新規登録する</span>
+              </button>
+            )
           )}
         </div>
       )}
