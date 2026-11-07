@@ -85,7 +85,7 @@ export const AppSidebar: React.FC<AppSidebarProps> = ({
         { id: 'ai_acquisition', label: '集客戦略・SNS・メディア' },
         { id: 'contacts', label: '見込み企業・友だちリスト（AI調査 & LINE）' },
         { id: 'marketing_automation', label: 'LINE・メール自動配信（営業メール5段階 & シナリオ）' },
-        { id: 'mst_diagnoses', label: '受付フォーム設計（反響獲得・設問管理）' },
+        { id: 'mst_diagnoses', label: '受付フォーム・公式配布資料PDF管理' },
       ],
     },
     {
@@ -388,6 +388,14 @@ export const AppSidebar: React.FC<AppSidebarProps> = ({
               >
                 <Sliders className="w-3.5 h-3.5 text-slate-500" />
                 <span>Supabase接続設定</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => handleItemClick('mst_diagnoses')}
+                className="w-full flex items-center gap-2 px-2 py-1.5 rounded text-left text-slate-600 hover:text-slate-900 hover:bg-white transition-colors"
+              >
+                <FileText className="w-3.5 h-3.5 text-purple-600" />
+                <span>診断・受付フォーム・PDFマスタ管理</span>
               </button>
               <button
                 type="button"

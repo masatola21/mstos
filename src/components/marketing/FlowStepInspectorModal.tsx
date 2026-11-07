@@ -21,7 +21,8 @@ import {
   Calendar,
   Layers,
   ArrowRight,
-  Info
+  Info,
+  Loader2,
 } from 'lucide-react';
 import {
   MarketingScenario,
@@ -34,6 +35,7 @@ import { LineMessagePreview } from '../LineMessagePreview';
 import { renderPlaceholders, PLACEHOLDER_SAMPLE_VALUES } from '../../utils/placeholders';
 import { UNIFIED_TAG_MASTER, MasterTag, getTagByName } from '../../constants/tagMaster';
 import { QUESTIONNAIRE_V1 } from '../../constants/questionnaire';
+import { getSupabase } from '../../lib/supabaseClient';
 
 interface FlowStepInspectorModalProps {
   isOpen: boolean;
@@ -88,8 +90,59 @@ export const FlowStepInspectorModal: React.FC<FlowStepInspectorModalProps> = ({
   ]);
   const [tagPickerCategory, setTagPickerCategory] = useState<'all' | 'inflow' | 'action' | 'crm_status'>('all');
 
-  // Test send simulation feedback
-  const [testSendResult, setTestSendResult] = useState<string | null>(null);
+  // LINE Test Send state
+  const [lineFriends, setLineFriends] = useState<Array<{ id: string; line_user_id: string; display_name: string | null; status?: string }>>([]);
+  const [selectedLineUserId, setSelectedLineUserId] = useState<string>('');
+  const [isSendingTest, setIsSendingTest] = useState(false);
+  const [testSendNotice, setTestSendNotice] = useState<string | null>(null);
+  const [testSendError, setTestSendError] = useState<string | null>(null);
+  const [loadingFriends, setLoadingFriends] = useState(false);
+
+  // Fetch active line_friends on open
+  useEffect(() => {
+    if (!isOpen) return;
+    let isMounted = true;
+    const fetchFriends = async () => {
+      const supabase = getSupabase();
+      if (!supabase) return;
+      setLoadingFriends(true);
+      try {
+        const { data } = await supabase
+          .from('line_friends')
+          .select('id, line_user_id, display_name, status')
+          .eq('status', 'active')
+          .order('display_name', { ascending: true });
+        if (!isMounted) return;
+        if (data && data.length > 0) {
+          setLineFriends(data);
+          const savedUserId = typeof window !== 'undefined' ? localStorage.getItem('mst_test_send_line_user_id') : null;
+          if (savedUserId && data.some(f => f.line_user_id === savedUserId)) {
+            setSelectedLineUserId(savedUserId);
+          } else {
+            setSelectedLineUserId(data[0].line_user_id);
+          }
+        } else {
+          setLineFriends([]);
+          setSelectedLineUserId('');
+        }
+      } catch (err) {
+        console.error('Failed to load line_friends for test send:', err);
+      } finally {
+        if (isMounted) setLoadingFriends(false);
+      }
+    };
+    void fetchFriends();
+    return () => { isMounted = false; };
+  }, [isOpen]);
+
+  const handleSelectLineUser = (userId: string) => {
+    setSelectedLineUserId(userId);
+    setTestSendError(null);
+    setTestSendNotice(null);
+    if (userId && typeof window !== 'undefined') {
+      localStorage.setItem('mst_test_send_line_user_id', userId);
+    }
+  };
 
   // Sync state on scenario change
   useEffect(() => {
@@ -112,7 +165,8 @@ export const FlowStepInspectorModal: React.FC<FlowStepInspectorModalProps> = ({
     setFlexAltText(scenario.flexAltText || '');
     setFlexButtonLabel(scenario.flexButtonLabel || '');
     setFlexButtonUrl(scenario.flexButtonUrl || '');
-    setTestSendResult(null);
+    setTestSendNotice(null);
+    setTestSendError(null);
 
     // Initial tags based on scenario type
     if (scenario.name.includes('診断')) {
@@ -186,12 +240,64 @@ export const FlowStepInspectorModal: React.FC<FlowStepInspectorModalProps> = ({
     onClose();
   };
 
-  const handleTestSend = (targetChannel: 'line' | 'email') => {
-    const sampleRecipient = PLACEHOLDER_SAMPLE_VALUES.recipient_name;
-    const sampleCompany = PLACEHOLDER_SAMPLE_VALUES.company_name;
-    setTestSendResult(
-      `✅ テスト送信成功: 管理者宛に【${targetChannel === 'line' ? 'LINEメッセージ' : 'メール'}】のテスト配信シミュレーションを実行しました。（宛名置換: ${sampleCompany} ${sampleRecipient} 様）`
-    );
+  const handleTestSend = async (targetChannel: 'line' | 'email') => {
+    if (targetChannel === 'line') {
+      if (!selectedLineUserId) {
+        setTestSendError('送信先のLINE友だちを選択してください。');
+        return;
+      }
+      setIsSendingTest(true);
+      setTestSendNotice(null);
+      setTestSendError(null);
+
+      try {
+        const supabase = getSupabase();
+        if (!supabase) throw new Error('Supabase接続が初期化されていません。');
+        const { data: sessionData } = await supabase.auth.getSession();
+        const token = sessionData?.session?.access_token;
+        if (!token) throw new Error('認証セッションが見つかりません。再度ログインしてください。');
+
+        const payload = {
+          line_user_id: selectedLineUserId,
+          scenario: {
+            name: name.trim() || scenario.name,
+            channel,
+            lineMessageType,
+            messageBody,
+            flexTitle,
+            flexBody,
+            flexAltText,
+            flexButtonLabel,
+            flexButtonUrl,
+            line_message_payload: (scenario as any).line_message_payload,
+          },
+        };
+
+        const res = await fetch('/api/marketing/test-send', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${token}`,
+          },
+          body: JSON.stringify(payload),
+        });
+
+        const json = await res.json().catch(() => ({}));
+        if (!res.ok) {
+          throw new Error(json.error || `LINE送信エラー (HTTP ${res.status}): ${JSON.stringify(json.lineDetails || json)}`);
+        }
+
+        const friend = lineFriends.find((f) => f.line_user_id === selectedLineUserId);
+        const friendLabel = friend?.display_name || selectedLineUserId;
+        setTestSendNotice(`✅ LINEテスト送信が完了しました。宛先「${friendLabel}」様のLINEトークをご確認ください。`);
+      } catch (err: any) {
+        setTestSendError(err.message || 'テスト送信に失敗しました。');
+      } finally {
+        setIsSendingTest(false);
+      }
+    } else {
+      setTestSendNotice('※ メールテスト送信機能は準備中です（3-1Bにて提供予定）。');
+    }
   };
 
   return (
@@ -784,45 +890,117 @@ export const FlowStepInspectorModal: React.FC<FlowStepInspectorModalProps> = ({
             </div>
           )}
 
-          {/* TAB 4: Test Send Simulation */}
+          {/* TAB 4: Test Send Live Transmission */}
           {activeTab === 'test_send' && (
             <div className="space-y-6 text-xs">
-              <div className="p-5 bg-purple-50/70 rounded-2xl border border-purple-200 space-y-3">
+              <div className="p-5 bg-purple-50/70 rounded-2xl border border-purple-200 space-y-4">
                 <div className="flex items-center gap-2 font-bold text-purple-950 text-sm">
                   <Send className="w-4 h-4 text-purple-700" />
-                  <span>管理者向けテスト配信（事前シミュレーション）</span>
+                  <span>実機テスト送信（LINE Messaging API直接配信）</span>
                 </div>
                 <p className="text-slate-700 leading-relaxed">
-                  顧客へ実際に自動配信される前に、管理者のLINE公式アカウントまたは管理メール宛に実機テスト送信を行い、改行やボタンの挙動を直接確認できます。
+                  顧客へ自動配信される前に、管理者の実機LINEアカウント宛てに編集中の文面・Flexカード・差し込み変数を実際にPush送信し、表示やボタンリンクを直接点検できます。
                 </p>
 
-                <div className="flex flex-wrap items-center gap-3 pt-2">
+                {/* LINE Recipient Selector */}
+                {(channel === 'line' || channel === 'both') && (
+                  <div className="p-4 bg-white rounded-xl border border-purple-200/80 shadow-2xs space-y-2">
+                    <label className="block text-slate-800 font-bold flex items-center justify-between">
+                      <span className="flex items-center gap-1.5">
+                        <MessageCircle className="w-4 h-4 text-emerald-600" />
+                        <span>テスト送信先のLINE友だち（管理者のアカウント等）</span>
+                      </span>
+                      {lineFriends.length > 0 && (
+                        <span className="text-[11px] font-normal text-slate-500">
+                          {lineFriends.length}名のアクティブ友だち
+                        </span>
+                      )}
+                    </label>
+
+                    {loadingFriends ? (
+                      <div className="flex items-center gap-2 text-slate-500 py-2">
+                        <Loader2 className="w-4 h-4 animate-spin text-purple-600" />
+                        <span>友だち一覧を読み込み中...</span>
+                      </div>
+                    ) : lineFriends.length > 0 ? (
+                      <div className="space-y-1.5">
+                        <select
+                          value={selectedLineUserId}
+                          onChange={(e) => handleSelectLineUser(e.target.value)}
+                          disabled={isSendingTest}
+                          className="w-full bg-white border border-slate-300 rounded-xl px-3 py-2 text-slate-900 font-medium shadow-xs focus:outline-none focus:border-purple-500"
+                        >
+                          <option value="">-- 送信先友だちを選択してください --</option>
+                          {lineFriends.map((friend) => (
+                            <option key={friend.line_user_id} value={friend.line_user_id}>
+                              {friend.display_name || '表示名なし'} (ID: {friend.line_user_id.slice(0, 10)}...)
+                            </option>
+                          ))}
+                        </select>
+                        <p className="text-[11px] text-slate-500">
+                          ※ 選択した友だちの登録情報（お名前・会社名等）に合わせて差し込み変数が実機値で展開されます。選択内容はブラウザに保存され次回も維持されます。
+                        </p>
+                      </div>
+                    ) : (
+                      <div className="p-3 bg-amber-50 border border-amber-200 rounded-lg text-amber-800 text-[11px] flex items-start gap-2">
+                        <AlertCircle className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
+                        <div>
+                          <span>有効なLINE友だちが登録されていません。</span>
+                          <p className="mt-0.5 text-slate-600">
+                            公式LINEアカウントをご自身のLINEで友だち追加すると、ここに表示されてテスト送信できるようになります。
+                          </p>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                <div className="flex flex-wrap items-center gap-3 pt-1">
                   {(channel === 'line' || channel === 'both') && (
                     <button
                       type="button"
+                      disabled={isSendingTest || !selectedLineUserId || lineFriends.length === 0}
                       onClick={() => handleTestSend('line')}
-                      className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl font-bold flex items-center gap-2 shadow-xs transition cursor-pointer"
+                      className="px-4 py-2.5 bg-emerald-600 hover:bg-emerald-700 disabled:bg-slate-300 disabled:cursor-not-allowed text-white rounded-xl font-bold flex items-center gap-2 shadow-xs transition cursor-pointer"
                     >
-                      <MessageCircle className="w-4 h-4" />
-                      <span>LINEテスト送信を実行</span>
+                      {isSendingTest ? (
+                        <>
+                          <Loader2 className="w-4 h-4 animate-spin" />
+                          <span>LINEに送信中...</span>
+                        </>
+                      ) : (
+                        <>
+                          <MessageCircle className="w-4 h-4" />
+                          <span>LINEテスト送信を実行（本送信）</span>
+                        </>
+                      )}
                     </button>
                   )}
 
                   {(channel === 'email' || channel === 'both') && (
                     <button
                       type="button"
+                      disabled={isSendingTest}
                       onClick={() => handleTestSend('email')}
-                      className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-xl font-bold flex items-center gap-2 shadow-xs transition cursor-pointer"
+                      className="px-4 py-2.5 bg-blue-600 hover:bg-blue-700 disabled:bg-slate-300 disabled:cursor-not-allowed text-white rounded-xl font-bold flex items-center gap-2 shadow-xs transition cursor-pointer"
                     >
                       <Mail className="w-4 h-4" />
-                      <span>メールテスト送信を実行</span>
+                      <span>メールテスト送信</span>
                     </button>
                   )}
                 </div>
 
-                {testSendResult && (
-                  <div className="p-3 bg-emerald-100 border border-emerald-300 rounded-xl text-emerald-800 font-bold mt-3 animate-fade-in">
-                    {testSendResult}
+                {testSendNotice && (
+                  <div className="p-3.5 bg-emerald-50 border border-emerald-300 rounded-xl text-emerald-900 font-bold mt-3 animate-fade-in flex items-start gap-2">
+                    <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0 mt-0.5" />
+                    <div>{testSendNotice}</div>
+                  </div>
+                )}
+
+                {testSendError && (
+                  <div className="p-3.5 bg-rose-50 border border-rose-300 rounded-xl text-rose-900 font-medium mt-3 animate-fade-in flex items-start gap-2">
+                    <AlertCircle className="w-4 h-4 text-rose-600 shrink-0 mt-0.5" />
+                    <div>{testSendError}</div>
                   </div>
                 )}
               </div>

@@ -259,7 +259,7 @@ export const UnifiedNavbar: React.FC<UnifiedNavbarProps> = ({
               if (tab === 'marketing_automation') return 'LINE・メール自動配信（シナリオ・ジョブ）';
               if (tab === 'leads') return '反響リード';
               if (tab === 'deals') return '商談一覧';
-              if (tab === 'mst_diagnoses') return 'フォーム・診断設計';
+              if (tab === 'mst_diagnoses') return 'フォーム・診断・PDF資料マスタ';
               if (tab === 'document_templates') return '重要書類（見積・契約・請求・レポート）';
               if (tab === 'customers') return '契約顧客台帳';
               if (tab === 'customer_operations') return '支援案件・タスク';

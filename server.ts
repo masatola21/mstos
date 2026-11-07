@@ -3576,6 +3576,271 @@ app.post('/api/marketing/jobs/:id/cancel', async (req, res) => {
   return res.json({ success: true, status: 'canceled' });
 });
 
+app.post('/api/marketing/test-send', requireAuth, async (req, res) => {
+  if (!lineSupabase) {
+    return res.status(503).json({ error: '自動配信サーバーのSupabase設定がありません。' });
+  }
+
+  // キルスイッチ確認（all または send が停止中ならテスト送信も停止）
+  const killSwitch = await getKillSwitchStatus('send');
+  if (killSwitch.paused) {
+    return res.status(503).json({ error: `自動配信・メッセージ送信は緊急停止中です: ${killSwitch.reason || '一時停止中'}` });
+  }
+
+  if (!lineChannelAccessToken) {
+    return res.status(503).json({ error: 'LINE公式アカウント送信トークン（LINE_CHANNEL_ACCESS_TOKEN）が設定されていません。' });
+  }
+
+  const lineUserId = typeof req.body?.line_user_id === 'string' ? req.body.line_user_id.trim() : '';
+  if (!lineUserId) {
+    return res.status(400).json({ error: '宛先のLINEユーザーID（line_user_id）が必要です。' });
+  }
+
+  const authUser = (req as any).user;
+
+  // 宛先友だちの確認: line_friends に存在することを確認（存在しない、または非アクティブなら403）
+  const { data: friend, error: friendError } = await lineSupabase
+    .from('line_friends')
+    .select('*')
+    .eq('line_user_id', lineUserId)
+    .maybeSingle();
+
+  if (friendError || !friend) {
+    return res.status(403).json({ error: '指定された宛先は友だち一覧に存在しないため送信できません（アクセス権限がありません）。' });
+  }
+  if (friend.status !== 'active') {
+    return res.status(403).json({ error: '指定されたLINE友だちはブロック中または非アクティブのため送信できません。' });
+  }
+
+  // 宛先友だちに対応する連絡先情報を取得（差し込み解決用）
+  let contact: any = null;
+  if (friend.contact_id) {
+    const { data: c } = await lineSupabase
+      .from('contacts')
+      .select('id,full_name,email,line_user_id,company_id')
+      .eq('id', friend.contact_id)
+      .maybeSingle();
+    contact = c;
+  }
+  if (!contact) {
+    const { data: c } = await lineSupabase
+      .from('contacts')
+      .select('id,full_name,email,line_user_id,company_id')
+      .eq('line_user_id', friend.line_user_id)
+      .maybeSingle();
+    contact = c;
+  }
+  if (!contact) {
+    contact = {
+      id: friend.id,
+      full_name: friend.display_name || 'テスト受信者',
+      email: null,
+      line_user_id: friend.line_user_id,
+      company_id: null,
+    };
+  }
+
+  // 画面上の編集中の文面データを抽出
+  const scenarioData = req.body?.scenario || req.body?.config || req.body || {};
+  const scenarioConfig = {
+    emailSubject: scenarioData.emailSubject,
+    emailBody: scenarioData.emailBody,
+    messageBody: scenarioData.messageBody,
+    lineMessageType: scenarioData.lineMessageType,
+    flexTitle: scenarioData.flexTitle,
+    flexBody: scenarioData.flexBody,
+    flexAltText: scenarioData.flexAltText,
+    flexButtonLabel: scenarioData.flexButtonLabel,
+    flexButtonUrl: scenarioData.flexButtonUrl,
+    ...scenarioData,
+  };
+
+  try {
+    // 差し込み変数の解決に必要な設定を収集
+    const companyResult = contact.company_id
+      ? await lineSupabase.from('companies').select('id,company_name').eq('id', contact.company_id).maybeSingle()
+      : { data: null };
+
+    const { data: salesSettings } = await lineSupabase.from('sales_workspace_settings')
+      .select('booking_page_url').eq('owner_id', authUser.id).maybeSingle();
+
+    const { data: pubForms } = await lineSupabase.from('diagnosis_forms')
+      .select('id,name,public_slug,definition,form_type,status')
+      .eq('status', 'published')
+      .order('created_at', { ascending: false })
+      .limit(10);
+    const defaultForm = (pubForms || []).find((f: any) => f.form_type === 'diagnosis') || pubForms?.[0] || null;
+
+    let latestApprovedDoc: any = null;
+    if (contact.company_id) {
+      const { data: docData } = await lineSupabase.from('customer_documents')
+        .select('id,title,status,created_at')
+        .eq('company_id', contact.company_id)
+        .eq('status', 'approved')
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .maybeSingle();
+      latestApprovedDoc = docData;
+    }
+    if (!latestApprovedDoc) {
+      const { data: fallbackDoc } = await lineSupabase.from('customer_documents')
+        .select('id,title,status,created_at')
+        .eq('owner_id', authUser.id)
+        .eq('status', 'approved')
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .maybeSingle();
+      latestApprovedDoc = fallbackDoc;
+    }
+
+    const appUrl = (process.env.PUBLIC_APP_URL || '').replace(/\/$/, '');
+
+    // 本番と共通の差し込み解決関数を実行
+    const resolved = resolveMessageVars(
+      contact,
+      {
+        body_text: scenarioData.messageBody,
+        line_message_payload: scenarioData.line_message_payload,
+        config: scenarioConfig,
+      },
+      {
+        salesSettings,
+        defaultForm,
+        allForms: pubForms,
+        latestApprovedDoc,
+        company: companyResult.data,
+        appUrl,
+      }
+    );
+
+    if (resolved.error) {
+      return res.status(400).json({ error: resolved.error });
+    }
+
+    const { personalize, personalizeJson } = resolved;
+
+    // 本番と共通のロジックでメッセージ構築とバリデーション
+    let lineMessage: Record<string, any>;
+    const requestedPayload = scenarioData.line_message_payload && typeof scenarioData.line_message_payload === 'object'
+      ? scenarioData.line_message_payload
+      : null;
+
+    if (requestedPayload?.type === 'video' || requestedPayload?.type === 'image') {
+      const originalUrl = personalize(String(requestedPayload.originalContentUrl || ''));
+      const previewUrl = personalize(String(requestedPayload.previewImageUrl || ''));
+      if (!/^https:\/\//i.test(originalUrl) || !/^https:\/\//i.test(previewUrl) || originalUrl.length > 2000 || previewUrl.length > 2000) {
+        return res.status(400).json({ error: 'LINE画像・動画URLの設定が不正です（HTTPS必須）。' });
+      }
+      const unres = checkUnresolvedPlaceholders([originalUrl, previewUrl]);
+      if (unres) {
+        return res.status(400).json({ error: `未解決の差し込み項目「${unres}」が残っているため送信できません。` });
+      }
+      lineMessage = requestedPayload.type === 'video'
+        ? { type: 'video', originalContentUrl: originalUrl, previewImageUrl: previewUrl }
+        : { type: 'image', originalContentUrl: originalUrl, previewImageUrl: previewUrl };
+    } else if (requestedPayload?.type === 'flex') {
+      const altText = personalize(requestedPayload.altText || scenarioConfig.flexAltText || scenarioConfig.flexTitle || 'ご案内').slice(0, 400);
+      const contents = personalizeJson(requestedPayload.contents);
+      if (!altText || !contents || typeof contents !== 'object' || !['bubble', 'carousel'].includes(contents.type)) {
+        return res.status(400).json({ error: 'LINE Flexテンプレートの内容を確認してください。' });
+      }
+      const urlValidation = checkUrlsInObject(contents);
+      if (!urlValidation.valid) {
+        return res.status(400).json({ error: `Flexメッセージ内のURLが無効です（http/https必須）: ${urlValidation.invalidUrl}` });
+      }
+      const unres = checkUnresolvedPlaceholders({ altText, contents });
+      if (unres) {
+        return res.status(400).json({ error: `未解決の差し込み項目「${unres}」が残っているため送信できません。` });
+      }
+      lineMessage = { type: 'flex', altText, contents };
+    } else if (scenarioConfig.lineMessageType === 'flex') {
+      const altText = personalize(scenarioConfig.flexAltText || scenarioConfig.flexTitle || 'ご案内').slice(0, 400);
+      const title = personalize(scenarioConfig.flexTitle || '');
+      const body = personalize(scenarioConfig.flexBody || scenarioConfig.messageBody || '');
+      const btnLabel = personalize(scenarioConfig.flexButtonLabel || '');
+      const btnUrl = personalize(scenarioConfig.flexButtonUrl || '');
+      const bubble = buildFlexBubblePayload(title, body, btnLabel, btnUrl);
+
+      const urlValidation = checkUrlsInObject(bubble);
+      if (!urlValidation.valid) {
+        return res.status(400).json({ error: `Flexメッセージ内のURLが無効です（http/https必須）: ${urlValidation.invalidUrl}` });
+      }
+
+      const unres = checkUnresolvedPlaceholders({ altText, bubble });
+      if (unres) {
+        return res.status(400).json({ error: `未解決の差し込み項目「${unres}」が残っているため送信できません。` });
+      }
+
+      lineMessage = { type: 'flex', altText, contents: bubble };
+    } else {
+      const text = personalize(scenarioConfig.messageBody || '');
+      if (!text || text.length > 5000) {
+        return res.status(400).json({ error: 'LINE本文は1〜5000文字で設定してください。' });
+      }
+      const unres = checkUnresolvedPlaceholders(text);
+      if (unres) {
+        return res.status(400).json({ error: `未解決の差し込み項目「${unres}」が残っているため送信できません。` });
+      }
+      lineMessage = { type: 'text', text };
+    }
+
+    // LINE Messaging API Push 送信（宛先1人のみ）
+    const lineResponse = await fetch('https://api.line.me/v2/bot/message/push', {
+      method: 'POST',
+      headers: {
+        Authorization: 'Bearer ' + lineChannelAccessToken,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        to: lineUserId,
+        messages: [lineMessage],
+      }),
+    });
+
+    if (!lineResponse.ok) {
+      const lineErrorText = await lineResponse.text().catch(() => '');
+      let lineJson: any = null;
+      try { lineJson = JSON.parse(lineErrorText); } catch {}
+      return res.status(lineResponse.status).json({
+        error: lineJson?.message || lineErrorText || 'LINE送信に失敗しました。',
+        lineStatus: lineResponse.status,
+        lineDetails: lineJson || lineErrorText,
+      });
+    }
+
+    // 送信監査用ログ（communication_outbox）
+    try {
+      await lineSupabase.from('communication_outbox').insert({
+        owner_id: authUser.id,
+        channel: 'line',
+        recipient_contact_id: contact.id,
+        recipient_address: lineUserId,
+        body_text: scenarioConfig.messageBody || '',
+        line_message_payload: lineMessage,
+        company_id: contact.company_id || null,
+        source_type: 'marketing_test_send',
+        status: 'sent',
+        sent_at: new Date().toISOString(),
+        consent_confirmed_at: new Date().toISOString(),
+        consent_basis: '管理者による実機テスト送信',
+      });
+    } catch {
+      // 監査ログ登録失敗はレスポンスに影響させない
+    }
+
+    return res.json({
+      success: true,
+      message: `LINEテスト送信が完了しました（宛先: ${friend.display_name || lineUserId}）。`,
+      recipient: {
+        line_user_id: lineUserId,
+        display_name: friend.display_name,
+      },
+    });
+  } catch (err: any) {
+    return res.status(500).json({ error: err.message || 'テスト送信処理中に予期しないエラーが発生しました。' });
+  }
+});
+
 app.post('/api/communications/send', async (req, res) => {
   if (!lineSupabase) return res.status(503).json({ error: '送信サーバーのSupabase設定がありません。' });
 

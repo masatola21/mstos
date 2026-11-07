@@ -133,13 +133,18 @@ interface DiagnosisFormsWorkspaceProps {
   initialCompanyId?: string;
   initialSection?: 'forms'|'answers'|'materials';
   activeSection?: 'forms'|'answers'|'materials';
+  onSectionChange?: (section: 'forms'|'answers'|'materials') => void;
   showHeader?: boolean;
   onOpenDiagnosis?: (diagnosisId: string) => void;
   onOpenSendCenter?: (formId: string, url: string, kind: 'form'|'diagnosis') => void;
 }
 
-export const DiagnosisFormsWorkspace: React.FC<DiagnosisFormsWorkspaceProps> = ({ initialLeadId, initialCompanyId, initialSection, activeSection, showHeader = true, onOpenDiagnosis, onOpenSendCenter }) => {
+export const DiagnosisFormsWorkspace: React.FC<DiagnosisFormsWorkspaceProps> = ({ initialLeadId, initialCompanyId, initialSection, activeSection, onSectionChange, showHeader = true, onOpenDiagnosis, onOpenSendCenter }) => {
   const [section, setSection] = useState<'forms'|'answers'|'materials'>(initialSection || (initialLeadId || initialCompanyId ? 'answers' : 'forms'));
+  const switchSection = (next: 'forms'|'answers'|'materials') => {
+    setSection(next);
+    onSectionChange?.(next);
+  };
   const [forms, setForms] = useState<DiagnosisForm[]>([]);
   const [answers, setAnswers] = useState<Submission[]>([]);
   const [materials, setMaterials] = useState<PublicMaterial[]>([]);
@@ -308,6 +313,45 @@ export const DiagnosisFormsWorkspace: React.FC<DiagnosisFormsWorkspaceProps> = (
       setNotice(`資料「${material.label}」を完全に削除しました。`);
     } catch (e: any) {
       setError('削除に失敗しました: ' + (e?.message || ''));
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleMoveMaterialOrder = async (material: PublicMaterial, direction: -1 | 1) => {
+    const currentIndex = materials.findIndex((m) => m.id === material.id);
+    if (currentIndex === -1) return;
+    const targetIndex = currentIndex + direction;
+    if (targetIndex < 0 || targetIndex >= materials.length) return;
+
+    const targetMaterial = materials[targetIndex];
+    const supabase = getSupabase();
+    if (!supabase) return;
+
+    setLoading(true);
+    setError('');
+    setNotice('');
+    try {
+      const currentOrder = material.sort_order ?? (currentIndex + 1) * 10;
+      const targetOrder = targetMaterial.sort_order ?? (targetIndex + 1) * 10;
+
+      let newCurrentOrder = targetOrder;
+      let newTargetOrder = currentOrder;
+      if (newCurrentOrder === newTargetOrder) {
+        newCurrentOrder = targetOrder + (direction > 0 ? 5 : -5);
+      }
+
+      const [res1, res2] = await Promise.all([
+        supabase.from('public_materials').update({ sort_order: newCurrentOrder }).eq('id', material.id),
+        supabase.from('public_materials').update({ sort_order: newTargetOrder }).eq('id', targetMaterial.id),
+      ]);
+      if (res1.error) throw res1.error;
+      if (res2.error) throw res2.error;
+
+      setNotice(`資料「${material.label}」の表示順を更新しました。`);
+      await load();
+    } catch (e: any) {
+      setError('並び替えに失敗しました: ' + (e?.message || ''));
     } finally {
       setLoading(false);
     }
@@ -589,9 +633,9 @@ export const DiagnosisFormsWorkspace: React.FC<DiagnosisFormsWorkspaceProps> = (
       {showHeader && <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
         <div><h2 className="font-bold text-slate-900">フォーム・診断の受付管理</h2><p className="mt-1 text-xs text-slate-500">フォーム名・設問・説明文を自由に作成・管理できます。</p></div>
         <div className="flex gap-2">
-          <button onClick={() => setSection('forms')} className={'rounded-lg px-3 py-2 text-sm font-medium transition-colors ' + (section === 'forms' ? 'bg-purple-600 text-white shadow-sm' : 'text-slate-600 hover:bg-slate-100')}>フォーム設定</button>
-          <button onClick={() => setSection('answers')} className={'rounded-lg px-3 py-2 text-sm font-medium transition-colors ' + (section === 'answers' ? 'bg-purple-600 text-white shadow-sm' : 'text-slate-600 hover:bg-slate-100')}>フォーム回答 ({visibleAnswers.length})</button>
-          <button onClick={() => setSection('materials')} className={'rounded-lg px-3 py-2 text-sm font-medium transition-colors ' + (section === 'materials' ? 'bg-purple-600 text-white shadow-sm' : 'text-slate-600 hover:bg-slate-100')}>配布資料・PDF管理 ({materials.length})</button>
+          <button onClick={() => switchSection('forms')} className={'rounded-lg px-3 py-2 text-sm font-medium transition-colors ' + (section === 'forms' ? 'bg-purple-600 text-white shadow-sm' : 'text-slate-600 hover:bg-slate-100')}>フォーム設定</button>
+          <button onClick={() => switchSection('answers')} className={'rounded-lg px-3 py-2 text-sm font-medium transition-colors ' + (section === 'answers' ? 'bg-purple-600 text-white shadow-sm' : 'text-slate-600 hover:bg-slate-100')}>フォーム回答 ({visibleAnswers.length})</button>
+          <button onClick={() => switchSection('materials')} className={'rounded-lg px-3 py-2 text-sm font-medium transition-colors ' + (section === 'materials' ? 'bg-purple-600 text-white shadow-sm' : 'text-slate-600 hover:bg-slate-100')}>配布資料・PDF管理 ({materials.length})</button>
           <button onClick={() => void load()} title="更新" className="rounded-lg border border-slate-200 px-3 py-2 text-slate-600 hover:bg-slate-50"><RefreshCw className="h-4 w-4" /></button>
         </div>
       </div>}
@@ -1137,8 +1181,50 @@ export const DiagnosisFormsWorkspace: React.FC<DiagnosisFormsWorkspaceProps> = (
             </div>
 
             {materials.length === 0 ? (
-              <div className="rounded-xl border border-dashed border-slate-200 p-8 text-center text-sm text-slate-500">
-                登録された配布資料はありません。「新規資料を追加」からPDFを登録してください。
+              <div className="rounded-xl border border-dashed border-slate-200 p-8 text-center text-sm text-slate-500 space-y-3">
+                <p>登録された配布資料はありません。「新規資料を追加」からPDFを登録するか、公式初期資料を投入してください。</p>
+                <button
+                  type="button"
+                  onClick={async () => {
+                    const supabase = getSupabase();
+                    if (!supabase) return;
+                    setLoading(true);
+                    try {
+                      await supabase.from('public_materials').upsert([
+                        {
+                          key: 'management-guide',
+                          label: '経営改善実務ガイドブック（要点解説スライド）',
+                          description: '中小企業が「手作業の山」「属人化」から脱却し、利益を残すための仕組み化実践論。',
+                          category: '経営実務・仕組み化',
+                          external_url: 'https://corp.mstcorp.info/materials/mst-management-guide.pdf',
+                          public_url: 'https://corp.mstcorp.info/materials/mst-management-guide.pdf',
+                          is_active: true,
+                          sort_order: 10,
+                        },
+                        {
+                          key: 'care-package-overview',
+                          label: '介護保険外サービス開業パッケージ概要資料',
+                          description: '介護事業所・法人が保険外の自費収益柱（月30万〜100万円超）を最短で立ち上げるための実務手順。',
+                          category: '開業パッケージ',
+                          external_url: 'https://corp.mstcorp.info/materials/care-package-overview.pdf',
+                          public_url: 'https://corp.mstcorp.info/materials/care-package-overview.pdf',
+                          is_active: true,
+                          sort_order: 20,
+                        },
+                      ], { onConflict: 'key' });
+                      setNotice('公式初期資料2件（経営改善ガイド・介護開業パッケージ）を登録しました。');
+                      await load();
+                    } catch (e: any) {
+                      setError('初期資料の登録に失敗しました: ' + (e?.message || ''));
+                    } finally {
+                      setLoading(false);
+                    }
+                  }}
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-purple-50 hover:bg-purple-100 text-purple-700 border border-purple-200 text-xs font-semibold cursor-pointer transition shadow-2xs"
+                >
+                  <Sparkles className="w-3.5 h-3.5 text-purple-600" />
+                  <span>公式初期資料（2件）を自動セットアップ</span>
+                </button>
               </div>
             ) : (
               <div className="divide-y divide-slate-100">
@@ -1173,6 +1259,29 @@ export const DiagnosisFormsWorkspace: React.FC<DiagnosisFormsWorkspaceProps> = (
 
                     {/* 操作アクションボタングループ */}
                     <div className="flex flex-wrap items-center gap-1.5 shrink-0 self-end md:self-center">
+                      {/* 並び替えボタン */}
+                      <div className="flex items-center border border-slate-200 rounded overflow-hidden bg-white shadow-2xs" title="表示順序の並び替え">
+                        <button
+                          type="button"
+                          onClick={() => void handleMoveMaterialOrder(m, -1)}
+                          disabled={materials.indexOf(m) === 0 || loading}
+                          className="p-1.5 text-slate-500 hover:text-slate-800 hover:bg-slate-50 disabled:opacity-30 disabled:hover:bg-transparent cursor-pointer transition"
+                          title="上へ（表示順を繰り上げ）"
+                        >
+                          <ArrowUp className="w-3.5 h-3.5" />
+                        </button>
+                        <div className="w-[1px] h-4 bg-slate-200" />
+                        <button
+                          type="button"
+                          onClick={() => void handleMoveMaterialOrder(m, 1)}
+                          disabled={materials.indexOf(m) === materials.length - 1 || loading}
+                          className="p-1.5 text-slate-500 hover:text-slate-800 hover:bg-slate-50 disabled:opacity-30 disabled:hover:bg-transparent cursor-pointer transition"
+                          title="下へ（表示順を繰り下げ）"
+                        >
+                          <ArrowDown className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
+
                       {/* URLコピー */}
                       <button
                         type="button"

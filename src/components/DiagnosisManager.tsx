@@ -46,7 +46,7 @@ interface DiagnosisManagerProps {
   onOpenRls?: () => void;
   initialLeadId?: string;
   initialCompanyId?: string;
-  initialSection?: 'forms' | 'diagnoses';
+  initialSection?: 'forms' | 'diagnoses' | 'answers' | 'materials';
   onOpenSendCenter?: (formId: string, url: string, kind: 'form'|'diagnosis') => void;
   initialDiagnosisId?: string;
   onNavigateTab?: (tab: string) => void;
@@ -1403,13 +1403,27 @@ ${reportDraft.text.replace(/</g, '&lt;').replace(/>/g, '&gt;')}
 
 
 export const DiagnosisManager: React.FC<DiagnosisManagerProps> = (props) => {
+  const [section, setSection] = useState<'forms' | 'answers' | 'materials'>(
+    props.initialSection === 'materials'
+      ? 'materials'
+      : props.initialSection === 'answers'
+      ? 'answers'
+      : 'forms'
+  );
+
+  useEffect(() => {
+    if (props.initialSection && (props.initialSection === 'forms' || props.initialSection === 'answers' || props.initialSection === 'materials')) {
+      setSection(props.initialSection);
+    }
+  }, [props.initialSection]);
+
   return (
     <div className="space-y-4">
       <div className="space-y-3 rounded-xl border border-slate-200 bg-white p-4 shadow-xs">
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
           <div>
-            <h1 className="text-[19px] font-bold text-slate-800 tracking-tight">受付フォーム設計</h1>
-            <p className="mt-0.5 text-xs text-slate-500">HP・LINE向けの反響受付フォームや診断設問をノーコードで設計・公開管理できます。（回答は統合受信トレイ・商談パイプラインへ自動反映）</p>
+            <h1 className="text-[19px] font-bold text-slate-800 tracking-tight">受付フォーム・公式配布資料管理</h1>
+            <p className="mt-0.5 text-xs text-slate-500">HP・LINE向けの反響受付フォームや診断設問の設計、公式配布PDF資料の並び替え・公開管理を行えます。</p>
           </div>
           <div className="flex items-center gap-2">
             {props.onNavigateTab && (
@@ -1435,13 +1449,55 @@ export const DiagnosisManager: React.FC<DiagnosisManagerProps> = (props) => {
             )}
           </div>
         </div>
+
+        {/* Section Tabs */}
+        <div className="flex border-b border-slate-200 pt-2 gap-2 overflow-x-auto scrollbar-none">
+          <button
+            type="button"
+            onClick={() => setSection('forms')}
+            className={`pb-2.5 px-3 text-xs font-bold transition-colors border-b-2 cursor-pointer flex items-center gap-1.5 whitespace-nowrap ${
+              section === 'forms'
+                ? 'border-purple-600 text-purple-700'
+                : 'border-transparent text-slate-500 hover:text-slate-800'
+            }`}
+          >
+            <Sliders className="w-3.5 h-3.5" />
+            <span>フォーム設問・公開管理</span>
+          </button>
+          <button
+            type="button"
+            onClick={() => setSection('answers')}
+            className={`pb-2.5 px-3 text-xs font-bold transition-colors border-b-2 cursor-pointer flex items-center gap-1.5 whitespace-nowrap ${
+              section === 'answers'
+                ? 'border-purple-600 text-purple-700'
+                : 'border-transparent text-slate-500 hover:text-slate-800'
+            }`}
+          >
+            <ClipboardList className="w-3.5 h-3.5" />
+            <span>フォーム回答一覧</span>
+          </button>
+          <button
+            type="button"
+            onClick={() => setSection('materials')}
+            className={`pb-2.5 px-3 text-xs font-bold transition-colors border-b-2 cursor-pointer flex items-center gap-1.5 whitespace-nowrap ${
+              section === 'materials'
+                ? 'border-purple-600 text-purple-700'
+                : 'border-transparent text-slate-500 hover:text-slate-800'
+            }`}
+          >
+            <FileText className="w-3.5 h-3.5" />
+            <span>公式配布資料・PDFマスタ管理</span>
+            <span className="px-1.5 py-0.5 rounded-full text-[10px] bg-sky-100 text-sky-800 border border-sky-200 font-medium">HP自動連動</span>
+          </button>
+        </div>
       </div>
       <DiagnosisFormsWorkspace
-        key="forms"
+        key={section}
         initialLeadId={props.initialLeadId}
         initialCompanyId={props.initialCompanyId}
-        initialSection="forms"
-        activeSection="forms"
+        initialSection={section}
+        activeSection={section}
+        onSectionChange={setSection}
         showHeader={false}
         onOpenDiagnosis={() => {}}
         onOpenSendCenter={props.onOpenSendCenter}
