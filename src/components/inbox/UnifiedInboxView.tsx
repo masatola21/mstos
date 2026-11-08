@@ -20,9 +20,11 @@ import {
   ChevronUp,
   Tag as TagIcon,
   Building2,
-  Users
+  Users,
+  ClipboardList
 } from 'lucide-react';
 import { getSupabase } from '../../lib/supabaseClient';
+import { DiagnosisDetailLoader } from '../DiagnosisManager';
 import { UnifiedNavTab } from '../UnifiedNavbar';
 import { MarketingLineInboxView } from '../marketing/MarketingLineInboxView';
 import { MarketingEmailInboxView } from '../marketing/MarketingEmailInboxView';
@@ -113,6 +115,7 @@ export const UnifiedInboxView: React.FC<UnifiedInboxViewProps> = ({
   const [formFilterStatus, setFormFilterStatus] = useState<string>('all');
   const [formSearchQuery, setFormSearchQuery] = useState('');
   const [expandedSubmissionId, setExpandedSubmissionId] = useState<string | null>(null);
+  const [openDiagnosisId, setOpenDiagnosisId] = useState<string | null>(null);
   const [loadingSubmissions, setLoadingSubmissions] = useState(false);
   const [submissionNotice, setSubmissionNotice] = useState('');
   const [submissionError, setSubmissionError] = useState('');
@@ -779,6 +782,19 @@ export const UnifiedInboxView: React.FC<UnifiedInboxViewProps> = ({
                           <span>提案書・レポート作成</span>
                         </button>
 
+                        {/* 診断詳細（診断フォーム回答から自動作成された診断） */}
+                        {sub.diagnosis_id && (
+                          <button
+                            type="button"
+                            onClick={() => setOpenDiagnosisId(sub.diagnosis_id!)}
+                            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-white hover:bg-purple-50 text-xs font-semibold text-purple-700 border border-purple-300 shadow-xs transition cursor-pointer"
+                            title="この回答から作成された診断の詳細・確認・レポート作成を開きます"
+                          >
+                            <ClipboardList className="w-3.5 h-3.5 text-purple-600" />
+                            <span>診断詳細</span>
+                          </button>
+                        )}
+
                         {/* Expand Details Toggle */}
                         <button
                           onClick={() => setExpandedSubmissionId(isExpanded ? null : sub.id)}
@@ -883,6 +899,14 @@ export const UnifiedInboxView: React.FC<UnifiedInboxViewProps> = ({
       {activeChannel === 'email' && (
         <MarketingEmailInboxView
           onNavigateSendCenter={() => onNavigateTab('communication_send')}
+        />
+      )}
+
+      {openDiagnosisId && (
+        <DiagnosisDetailLoader
+          diagnosisId={openDiagnosisId}
+          onClose={() => setOpenDiagnosisId(null)}
+          onUpdated={() => void loadSubmissions()}
         />
       )}
     </div>
