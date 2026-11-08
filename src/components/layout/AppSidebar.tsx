@@ -74,7 +74,26 @@ export const AppSidebar: React.FC<AppSidebarProps> = ({
   onOpenProfile,
   onOpenModelSettings,
 }) => {
+  // "すべてのメニューを表示" toggle state stored in localStorage
+  const [showAllMenus, setShowAllMenus] = useState<boolean>(() => {
+    try {
+      return localStorage.getItem('mst_show_all_menus') === 'true';
+    } catch {
+      return false;
+    }
+  });
+
+  const handleToggleShowAllMenus = (enabled: boolean) => {
+    setShowAllMenus(enabled);
+    try {
+      localStorage.setItem('mst_show_all_menus', String(enabled));
+      window.dispatchEvent(new Event('mst_menu_visibility_change'));
+    } catch {}
+  };
+
   // Navigation groups definition reflecting the confirmed business workflow
+  // 日常業務（上位）: 3グループ計9項目
+  // 管理・その他（折りたたみ・既定で閉じる）: 4項目
   const navGroups: NavGroupConfig[] = [
     {
       id: 'marketing',
@@ -83,9 +102,9 @@ export const AppSidebar: React.FC<AppSidebarProps> = ({
       defaultOpen: true,
       items: [
         { id: 'ai_acquisition', label: '集客戦略・SNS・メディア' },
-        { id: 'contacts', label: '見込み企業・友だちリスト（AI調査 & LINE）' },
-        { id: 'marketing_automation', label: 'LINE・メール自動配信（営業メール5段階 & シナリオ）' },
-        { id: 'mst_diagnoses', label: '受付フォーム・公式配布資料PDF管理' },
+        { id: 'contacts', label: '見込み企業・友だちリスト' },
+        { id: 'marketing_automation', label: 'LINE・メール自動配信' },
+        { id: 'mst_diagnoses', label: '受付フォーム設計' },
       ],
     },
     {
@@ -94,10 +113,9 @@ export const AppSidebar: React.FC<AppSidebarProps> = ({
       icon: Briefcase,
       defaultOpen: true,
       items: [
-        { id: 'leads', label: '商談パイプライン（反響リード・商談・顧客）' },
+        { id: 'leads', label: '商談パイプライン' },
         { id: 'document_templates', label: '重要書類・見積・契約' },
-        { id: 'customer_operations', label: '契約・請求・顧問支援（月次請求・支援進捗）' },
-        { id: 'companies', label: '会社・商品台帳（マスタ管理）' },
+        { id: 'customer_operations', label: '契約・請求・顧問支援' },
       ],
     },
     {
@@ -107,25 +125,35 @@ export const AppSidebar: React.FC<AppSidebarProps> = ({
       defaultOpen: true,
       items: [
         { id: 'ai_chat', label: 'AI社長室・対話' },
-        { id: 'product_hub', label: '新規商品企画・プロジェクト開発（AI共創）' },
         { id: 'ai_knowledge', label: 'ナレッジ・成果物保管庫' },
-        { id: 'ai_presets', label: '専門AI・自動化ルール設定' },
       ],
     },
     {
-      id: 'management',
-      label: '管理・配信設定',
+      id: 'management_other',
+      label: '管理・その他',
       icon: Settings,
-      defaultOpen: true,
+      defaultOpen: false, // 既定で閉じる（showAllMenus時は開く）
       items: [
         { id: 'communication_send', label: '送信履歴・一括配信・テンプレート' },
-        { id: 'custom_lists', label: '配信対象セグメント' },
+        { id: 'companies', label: '会社・商品台帳' },
+        { id: 'product_hub', label: '新規商品企画・プロジェクト開発' },
+        { id: 'ai_presets', label: '専門AI・自動化ルール' },
+        ...(showAllMenus ? [
+          { id: 'custom_lists', label: '配信対象セグメント' },
+          { id: 'category_hub', label: '事業マトリクス（旧表示）' },
+        ] : []),
       ],
     },
   ];
 
   // Collapsible groups state
-  const [collapsedGroups, setCollapsedGroups] = useState<Record<string, boolean>>({});
+  const [collapsedGroups, setCollapsedGroups] = useState<Record<string, boolean>>(() => {
+    // management_other is closed by default unless showAllMenus is true
+    const saved = localStorage.getItem('mst_show_all_menus') === 'true';
+    return {
+      management_other: !saved,
+    };
+  });
 
   const toggleGroup = (groupId: string) => {
     setCollapsedGroups((prev) => ({
@@ -141,7 +169,7 @@ export const AppSidebar: React.FC<AppSidebarProps> = ({
     if ((tabId === 'leads' || tabId === 'deals') && (currentTab === 'leads' || currentTab === 'deals' || currentTab === 'customers')) return true;
     if (tabId === 'product_hub' && currentTab === 'ai_projects') return true;
     if (tabId === 'ai_presets' && currentTab === 'automations') return true;
-    if (tabId === 'mst_dashboard' && currentTab === 'inflow_dashboard') return true;
+    if ((tabId === 'mst_dashboard' || tabId === 'ai_dashboard') && (currentTab === 'mst_dashboard' || currentTab === 'ai_dashboard' || currentTab === 'inflow_dashboard')) return true;
     if (tabId === 'communication_send' && (currentTab === 'deal_invitations' || currentTab === 'customer_meeting_invitations')) return true;
     return false;
   };
@@ -173,7 +201,7 @@ export const AppSidebar: React.FC<AppSidebarProps> = ({
         <div className="h-16 flex items-center justify-between px-5 border-b border-slate-200 bg-white">
           <div
             className="flex items-center gap-3 cursor-pointer group"
-            onClick={() => handleItemClick('mst_dashboard')}
+            onClick={() => handleItemClick('ai_dashboard')}
           >
             <div className="w-9 h-9 rounded-xl bg-gradient-to-tr from-purple-700 to-indigo-600 flex items-center justify-center text-white font-black text-sm tracking-wider shadow-sm group-hover:scale-105 transition-transform">
               MST
@@ -208,14 +236,14 @@ export const AppSidebar: React.FC<AppSidebarProps> = ({
             </div>
             <button
               type="button"
-              onClick={() => handleItemClick('mst_dashboard')}
+              onClick={() => handleItemClick('ai_dashboard')}
               className={`w-full flex items-center gap-3 px-3 py-2 rounded-lg text-xs sm:text-sm font-semibold transition-colors cursor-pointer ${
-                isTabActive('mst_dashboard')
+                isTabActive('ai_dashboard')
                   ? 'bg-purple-50 text-purple-700 font-bold border border-purple-200/80 shadow-xs'
                   : 'text-slate-700 hover:bg-slate-100/80 hover:text-slate-900'
               }`}
             >
-              <LayoutDashboard className={`w-4 h-4 ${isTabActive('mst_dashboard') ? 'text-purple-600' : 'text-slate-400'}`} />
+              <LayoutDashboard className={`w-4 h-4 ${isTabActive('ai_dashboard') ? 'text-purple-600' : 'text-slate-400'}`} />
               <span>📊 経営ダッシュボード</span>
             </button>
 
@@ -346,6 +374,23 @@ export const AppSidebar: React.FC<AppSidebarProps> = ({
 
           {settingsOpen && (
             <div className="mt-2 space-y-1 pl-2 border-l-2 border-purple-300 ml-2 animate-in fade-in duration-150">
+              <div className="pt-1 pb-1.5 border-b border-slate-200/80 mb-1.5">
+                <label className="flex items-center justify-between px-2 py-1.5 rounded-lg bg-white border border-slate-200 text-[11px] font-semibold text-slate-700 cursor-pointer shadow-2xs hover:bg-slate-50">
+                  <div className="flex items-center gap-1.5">
+                    <Sliders className="w-3.5 h-3.5 text-purple-600" />
+                    <span>すべてのメニューを表示</span>
+                  </div>
+                  <input
+                    type="checkbox"
+                    checked={showAllMenus}
+                    onChange={(e) => handleToggleShowAllMenus(e.target.checked)}
+                    className="w-3.5 h-3.5 rounded text-purple-600 focus:ring-purple-500 cursor-pointer"
+                  />
+                </label>
+                <p className="text-[10px] text-slate-400 px-1 mt-0.5 leading-tight">
+                  管理メニューや旧導線を常時フル展開します
+                </p>
+              </div>
               <button
                 type="button"
                 onClick={onOpenProfile}

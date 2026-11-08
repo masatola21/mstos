@@ -142,9 +142,14 @@ export const KnowledgeHubView: React.FC<KnowledgeHubViewProps> = ({ items, onSav
 
   return (
     <div className="max-w-6xl mx-auto px-4 py-6 space-y-5">
-      <div className="flex items-center justify-between gap-3 mb-2">
-        <h1 className="text-[19px] font-bold text-slate-800 tracking-tight">事業ナレッジ・成果物</h1>
-        <button onClick={startNew} className="shrink-0 rounded-md bg-purple-600 px-3 py-1.5 text-xs font-medium text-white flex items-center gap-1.5 hover:bg-purple-700 transition cursor-pointer"><FilePlus2 className="w-3.5 h-3.5" />資料を追加</button>
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-2">
+        <div>
+          <h1 className="text-[19px] font-bold text-slate-800 tracking-tight">ナレッジ・成果物保管庫</h1>
+          <p className="mt-1 text-xs text-slate-500">
+            AIが意思決定・対話・文面作成で参照する社内ナレッジ・事業情報・規程等を蓄積します（※営業資料・投稿案・配布PDFは「集客戦略 ＞ 資料・成果物保管庫」で管理されます）。
+          </p>
+        </div>
+        <button onClick={startNew} className="shrink-0 rounded-md bg-purple-600 px-3 py-1.5 text-xs font-medium text-white flex items-center gap-1.5 hover:bg-purple-700 transition cursor-pointer self-start sm:self-center"><FilePlus2 className="w-3.5 h-3.5" />資料を追加</button>
       </div>
 
       {editing && (

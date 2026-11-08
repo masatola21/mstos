@@ -126,6 +126,40 @@ export const TasksView: React.FC<TasksViewProps> = ({
     setActiveSection(section);
     onSectionChange?.(section);
   };
+
+  const pendingApprovalsCount = approvals.filter((item) => item.status === 'pending').length;
+  const [showAllMenus, setShowAllMenus] = useState<boolean>(() => {
+    try {
+      return localStorage.getItem('mst_show_all_menus') === 'true';
+    } catch {
+      return false;
+    }
+  });
+
+  useEffect(() => {
+    const handleVisibilityChange = () => {
+      try {
+        setShowAllMenus(localStorage.getItem('mst_show_all_menus') === 'true');
+      } catch {}
+    };
+    window.addEventListener('mst_menu_visibility_change', handleVisibilityChange);
+    return () => window.removeEventListener('mst_menu_visibility_change', handleVisibilityChange);
+  }, []);
+
+  const showApprovalsTab = showAllMenus || pendingApprovalsCount > 0;
+  const showLogsTab = showAllMenus;
+
+  const visibleSections = [
+    { id: 'tasks' as const, label: `タスク (${tasks.length})` },
+    ...(showApprovalsTab ? [{ id: 'approvals' as const, label: `承認待ち・判断 (${pendingApprovalsCount})` }] : []),
+    ...(showLogsTab ? [{ id: 'logs' as const, label: `活動履歴 (${activityLogs.length})` }] : []),
+  ];
+
+  useEffect(() => {
+    if (!visibleSections.some((s) => s.id === activeSection)) {
+      setActiveSection('tasks');
+    }
+  }, [showApprovalsTab, showLogsTab, activeSection]);
   const [filterProject, setFilterProject] = useState<string>(selectedProjectId || 'all');
   const [filterStatus, setFilterStatus] = useState<string>('all');
   const [filterAssignee, setFilterAssignee] = useState<string>('all');
@@ -579,11 +613,7 @@ export const TasksView: React.FC<TasksViewProps> = ({
 
       {/* Tabs */}
       <div className="flex flex-wrap gap-2 border-b border-slate-200 pb-3">
-        {([
-          { id: 'tasks', label: `タスク (${tasks.length})` },
-          { id: 'approvals', label: `承認待ち・判断 (${approvals.filter((item) => item.status === 'pending').length})` },
-          { id: 'logs', label: `活動履歴 (${activityLogs.length})` },
-        ] as const).map((section) => (
+        {visibleSections.map((section) => (
           <button
             key={section.id}
             type="button"

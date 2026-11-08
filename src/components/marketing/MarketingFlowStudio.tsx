@@ -528,8 +528,23 @@ export const MarketingFlowStudio: React.FC<MarketingFlowStudioProps> = ({
   };
 
   // ビューモード切り替え: 'flow' (ビジュアル導線マップ) または 'table' (全ステップ一覧テーブル)
-  const [viewMode, setViewMode] = useState<'flow' | 'table'>('flow');
+  const [viewMode, setViewModeState] = useState<'flow' | 'table'>(() => {
+    try {
+      const saved = localStorage.getItem('marketing_flow_view_mode') as 'flow' | 'table' | null;
+      if (saved === 'flow' || saved === 'table') return saved;
+    } catch {}
+    return 'table';
+  });
+
+  const setViewMode = (mode: 'flow' | 'table') => {
+    setViewModeState(mode);
+    try {
+      localStorage.setItem('marketing_flow_view_mode', mode);
+    } catch {}
+  };
+
   const [tableSearch, setTableSearch] = useState('');
+  const [isStarterOpen, setIsStarterOpen] = useState(false);
 
   // ステップインスペクター / 編集モーダル状態
   const [inspectorScenario, setInspectorScenario] = useState<MarketingScenario | null>(null);
@@ -714,27 +729,70 @@ export const MarketingFlowStudio: React.FC<MarketingFlowStudioProps> = ({
           </div>
 
           <div className="flex flex-wrap items-center gap-2 shrink-0">
-            {duplicateCount > 0 && onDeduplicateScenarios && (
-              <button
-                type="button"
-                onClick={onDeduplicateScenarios}
-                className="inline-flex items-center gap-1.5 rounded-xl bg-amber-600 hover:bg-amber-700 px-3 py-2 text-xs font-bold text-white shadow-xs transition cursor-pointer"
-              >
-                <Trash2 className="h-3.5 w-3.5" />
-                <span>重複整理（{duplicateCount}件）</span>
-              </button>
-            )}
+            {scenarios.length > 0 && (
+              <div className="relative">
+                <button
+                  type="button"
+                  onClick={() => setIsStarterOpen(!isStarterOpen)}
+                  className="inline-flex items-center gap-1.5 rounded-xl bg-slate-50 hover:bg-slate-100 border border-slate-200 px-3 py-2 text-xs font-bold text-slate-700 hover:text-slate-900 shadow-xs transition cursor-pointer"
+                >
+                  <Zap className="h-3.5 w-3.5 text-purple-600" />
+                  <span>詳細・初期セット</span>
+                  {duplicateCount > 0 && (
+                    <span className="w-2 h-2 rounded-full bg-amber-500" />
+                  )}
+                  {isStarterOpen ? <ChevronUp className="w-3.5 h-3.5 text-slate-400" /> : <ChevronDown className="w-3.5 h-3.5 text-slate-400" />}
+                </button>
 
-            {onApplyAllStarterSets && (
-              <button
-                type="button"
-                onClick={onApplyAllStarterSets}
-                className="inline-flex items-center gap-1.5 rounded-xl bg-slate-50 hover:bg-slate-100 border border-slate-200 px-3.5 py-2 text-xs font-bold text-slate-700 hover:text-slate-900 shadow-xs transition cursor-pointer"
-                title="全18本の公式プリセットシナリオを一括最新化します"
-              >
-                <Zap className="h-3.5 w-3.5 text-purple-600" />
-                <span>全18本を一括最新化</span>
-              </button>
+                {isStarterOpen && (
+                  <div className="absolute right-0 top-full mt-1.5 w-72 rounded-xl bg-white border border-slate-200 shadow-lg p-2.5 z-30 space-y-1.5 animate-in fade-in duration-150">
+                    <div className="text-[11px] font-bold text-slate-400 px-2 py-0.5 uppercase tracking-wider">プリセット・補助操作</div>
+                    {duplicateCount > 0 && onDeduplicateScenarios && (
+                      <button
+                        type="button"
+                        onClick={() => { onDeduplicateScenarios(); setIsStarterOpen(false); }}
+                        className="w-full flex items-center justify-between px-2.5 py-1.5 rounded-lg text-xs font-bold text-amber-700 bg-amber-50 hover:bg-amber-100 transition cursor-pointer"
+                      >
+                        <span className="flex items-center gap-1.5">
+                          <Trash2 className="h-3.5 w-3.5" />
+                          <span>重複シナリオを整理</span>
+                        </span>
+                        <span className="text-[10px] px-1.5 py-0.5 rounded bg-amber-200 text-amber-900">{duplicateCount}件</span>
+                      </button>
+                    )}
+                    {onApplyAllStarterSets && (
+                      <button
+                        type="button"
+                        onClick={() => { onApplyAllStarterSets(); setIsStarterOpen(false); }}
+                        className="w-full flex items-center gap-2 px-2.5 py-1.5 rounded-lg text-xs font-semibold text-slate-700 hover:bg-purple-50 hover:text-purple-700 transition cursor-pointer text-left"
+                      >
+                        <Zap className="h-3.5 w-3.5 text-purple-600 shrink-0" />
+                        <span>全18本の公式プリセットを最新化</span>
+                      </button>
+                    )}
+                    {onApplyDiagnosisStarterSet && (
+                      <button
+                        type="button"
+                        onClick={() => { onApplyDiagnosisStarterSet(); setIsStarterOpen(false); }}
+                        className="w-full flex items-center gap-2 px-2.5 py-1.5 rounded-lg text-xs font-semibold text-slate-700 hover:bg-emerald-50 hover:text-emerald-700 transition cursor-pointer text-left"
+                      >
+                        <MessageCircle className="h-3.5 w-3.5 text-emerald-600 shrink-0" />
+                        <span>診断フォロー5本を適用</span>
+                      </button>
+                    )}
+                    {onApplyOutreachStarterSet && (
+                      <button
+                        type="button"
+                        onClick={() => { onApplyOutreachStarterSet(); setIsStarterOpen(false); }}
+                        className="w-full flex items-center gap-2 px-2.5 py-1.5 rounded-lg text-xs font-semibold text-slate-700 hover:bg-blue-50 hover:text-blue-700 transition cursor-pointer text-left"
+                      >
+                        <Mail className="h-3.5 w-3.5 text-blue-600 shrink-0" />
+                        <span>営業メール5段階を適用</span>
+                      </button>
+                    )}
+                  </div>
+                )}
+              </div>
             )}
 
             <button
@@ -747,6 +805,53 @@ export const MarketingFlowStudio: React.FC<MarketingFlowStudioProps> = ({
             </button>
           </div>
         </div>
+
+        {/* シナリオ0件時の目立つ初期セット適用バナー（折りたたまず表示） */}
+        {scenarios.length === 0 && (
+          <div className="rounded-2xl border-2 border-dashed border-purple-300 bg-gradient-to-r from-purple-50 via-indigo-50 to-emerald-50 p-6 text-slate-800 space-y-4">
+            <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+              <div>
+                <div className="flex items-center gap-2">
+                  <Sparkles className="w-5 h-5 text-purple-600" />
+                  <h3 className="text-sm font-bold text-slate-900">配信シナリオの初期セットアップ</h3>
+                </div>
+                <p className="text-xs text-slate-600 mt-1 max-w-xl">
+                  現在シナリオが登録されていません。公式スターターセット（3分無料診断フォロー、営業メール5段階、ストーリー型育成など）を適用して初期設定を完了するか、新規ステップを作成してください。
+                </p>
+              </div>
+              <div className="flex flex-wrap items-center gap-2">
+                {onApplyAllStarterSets && (
+                  <button
+                    type="button"
+                    onClick={onApplyAllStarterSets}
+                    className="inline-flex items-center gap-1.5 rounded-xl bg-purple-600 hover:bg-purple-700 px-4 py-2.5 text-xs font-bold text-white shadow-sm transition cursor-pointer"
+                  >
+                    <Zap className="h-4 w-4 text-purple-200" />
+                    <span>全18本公式プリセットを一括適用</span>
+                  </button>
+                )}
+                {onApplyDiagnosisStarterSet && (
+                  <button
+                    type="button"
+                    onClick={onApplyDiagnosisStarterSet}
+                    className="inline-flex items-center gap-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 px-3.5 py-2.5 text-xs font-bold text-white shadow-sm transition cursor-pointer"
+                  >
+                    <MessageCircle className="h-4 w-4 text-emerald-200" />
+                    <span>診断リマインド5本</span>
+                  </button>
+                )}
+                <button
+                  type="button"
+                  onClick={handleCreateNewStep}
+                  className="inline-flex items-center gap-1.5 rounded-xl bg-white hover:bg-slate-50 border border-slate-300 px-4 py-2.5 text-xs font-bold text-slate-700 shadow-2xs transition cursor-pointer"
+                >
+                  <Plus className="h-4 w-4" />
+                  <span>＋ 新規作成</span>
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
 
         {/* 下段: 目的別 導線トラック切り替えリッチタブ */}
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-2.5">

@@ -52,53 +52,52 @@ export const AppHeader: React.FC<AppHeaderProps> = ({
       case 'ai_acquisition':
         return { category: '集客・営業開拓', page: '集客戦略・SNS・メディア' };
       case 'marketing_automation':
-        return { category: '集客・営業開拓', page: 'LINE・メール自動配信（営業メール5段階 & シナリオ）' };
+        return { category: '集客・営業開拓', page: 'LINE・メール自動配信' };
       case 'mst_diagnoses':
-        return { category: '集客・営業開拓', page: '受付フォーム・診断設計（反響獲得・フック）' };
+        return { category: '集客・営業開拓', page: '受付フォーム設計' };
       case 'prospects':
-        return { category: '集客・営業開拓', page: '見込み企業（AI検索・開拓）' };
+        return { category: '集客・営業開拓', page: '見込み企業（AI検索）' };
       case 'contacts':
-        return { category: '集客・営業開拓', page: '見込み企業・友だちリスト（AI調査 & LINE）' };
+        return { category: '集客・営業開拓', page: '見込み企業・友だちリスト' };
       case 'leads':
-        return { category: '営業・顧客管理', page: '反響リード管理' };
       case 'deals':
         return { category: '営業・顧客管理', page: '商談パイプライン' };
       case 'companies':
-        return { category: '営業・顧客管理', page: '会社台帳（法人マスタ）' };
+        return { category: '営業・顧客管理', page: '会社・商品台帳' };
       case 'customers':
         return { category: '営業・顧客管理', page: '契約顧客台帳' };
       case 'custom_lists':
         return { category: '営業・顧客管理', page: '配信対象セグメント' };
       case 'document_templates':
-        return { category: '営業・顧客管理', page: '重要書類・見積・契約（見積書・契約書作成）' };
+        return { category: '営業・顧客管理', page: '重要書類・見積・契約' };
       case 'customer_operations':
-        return { category: '営業・顧客管理', page: '契約・請求・顧問支援（月次請求・支援進捗）' };
+        return { category: '営業・顧客管理', page: '契約・請求・顧問支援' };
       case 'products':
-        return { category: '営業・顧客管理', page: '販売商品・料金台帳（見積・請求用）' };
+        return { category: '営業・顧客管理', page: '商品台帳' };
       case 'inbox_hub':
         return { category: 'デイリー業務', page: '統合受信トレイ' };
       case 'communication_send':
       case 'deal_invitations':
       case 'customer_meeting_invitations':
-        return { category: '管理・配信設定', page: '送信履歴・一括配信・テンプレート' };
+        return { category: '管理・その他', page: '送信履歴・一括配信・テンプレート' };
       case 'unified_calendar':
         return { category: 'デイリー業務', page: '予定カレンダー（Google同期・全社日程）' };
       case 'product_hub':
-        return { category: 'AI経営室', page: '新規商品企画・プロジェクト開発（AI共創）' };
+        return { category: '管理・その他', page: '新規商品企画・プロジェクト開発' };
       case 'category_hub':
-        return { category: 'AI経営室', page: '事業マトリクス' };
+        return { category: '管理・その他', page: '事業マトリクス' };
       case 'ai_chat':
         return { category: 'AI経営室', page: 'AI社長室・対話' };
       case 'ai_tasks':
-        return { category: 'AI経営室', page: '共通タスク・承認' };
+        return { category: 'AI経営室', page: '全社タスク' };
       case 'ai_projects':
         return { category: 'AI経営室', page: 'プロジェクト管理' };
       case 'ai_knowledge':
         return { category: 'AI経営室', page: 'ナレッジ・成果物保管庫' };
       case 'ai_presets':
-        return { category: 'AI経営室', page: '専門AI・役割一覧' };
+        return { category: '管理・その他', page: '専門AI・自動化ルール' };
       case 'automations':
-        return { category: 'AI経営室', page: 'AI自動化・承認ルール' };
+        return { category: '管理・その他', page: 'AI自動化・承認ルール' };
       default:
         return { category: 'MST AI経営OS', page: String(currentTab) };
     }

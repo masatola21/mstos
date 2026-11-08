@@ -319,10 +319,10 @@ export const MarketingAssetLibrary: React.FC<{
           <div>
             <div className="flex items-center gap-2">
               <Briefcase className="h-5 w-5 text-purple-700" />
-              <h2 className="text-[19px] font-bold text-slate-800 tracking-tight">営業資料・成果物保管庫</h2>
+              <h2 className="text-[19px] font-bold text-slate-800 tracking-tight">資料・成果物保管庫</h2>
             </div>
             <p className="mt-1 text-xs text-slate-500">
-              営業提案書・診断レポート・契約書・各種素材を一元管理し、ワンクリックで共有・送信できます。
+              投稿案・営業資料・広告コピー・配布PDFなどの外部発信・営業成果物を一元管理します（※AIが参照する社内ナレッジ・規程等は「AI経営室 ＞ ナレッジ・成果物保管庫」で管理されます）。
             </p>
           </div>
           <div className="flex items-center gap-2">

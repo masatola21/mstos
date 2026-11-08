@@ -347,7 +347,7 @@ interface AppHistoryState {
 function AppContent() {
   const { user, isLoading } = useAuth();
   const { openSendDrawer, showToast } = useSendDrawer();
-  const [currentTab, setCurrentTab] = useState<UnifiedNavTab>('mst_dashboard');
+  const [currentTab, setCurrentTab] = useState<UnifiedNavTab>('ai_dashboard');
   const [sendOriginContext, setSendOriginContext] = useState<{
     tab: UnifiedNavTab;
     tabLabel: string;

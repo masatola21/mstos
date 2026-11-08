@@ -24,8 +24,16 @@ import {
   Layers,
   ExternalLink,
   Trash2,
-  AlertCircle
+  AlertCircle,
+  Calendar,
+  Inbox,
+  User,
+  Users,
+  ChevronRight
 } from 'lucide-react';
+import { getSupabase } from '../../lib/supabaseClient';
+import { todayJst } from '../../utils/date';
+import { getStoredGoogleEvents, loadCustomCalendarEvents } from '../../services/calendarService';
 import {
   Project,
   TaskItem,
@@ -106,6 +114,166 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
   useEffect(() => {
     void refreshMasterProducts();
   }, []);
+
+  // 運用直結: 「今日やること」3領域（今日の予定・未対応の反響・フォロー期限）
+  const [todayAgenda, setTodayAgenda] = useState<{
+    todayEvents: Array<{ id: string; time?: string; title: string; companyName?: string; source: string; meetUrl?: string }>;
+    unhandledLeads: Array<{ id: string; companyName: string; contactName: string; source: string; createdAt: string; email?: string }>;
+    dueFollowups: Array<{ id: string; type: 'task' | 'deal' | 'customer'; title: string; targetDate: string; isOverdue: boolean; companyName?: string; detail?: string; rawItem?: any }>;
+    loading: boolean;
+  }>({
+    todayEvents: [],
+    unhandledLeads: [],
+    dueFollowups: [],
+    loading: true,
+  });
+
+  useEffect(() => {
+    let isCancelled = false;
+    const loadTodayActionItems = async () => {
+      const todayStr = todayJst();
+      const supabase = getSupabase();
+
+      const events: Array<{ id: string; time?: string; title: string; companyName?: string; source: string; meetUrl?: string }> = [];
+      const leadsList: Array<{ id: string; companyName: string; contactName: string; source: string; createdAt: string; email?: string }> = [];
+      const followupsList: Array<{ id: string; type: 'task' | 'deal' | 'customer'; title: string; targetDate: string; isOverdue: boolean; companyName?: string; detail?: string; rawItem?: any }> = [];
+
+      // 1. Google同期予定 & カスタム予定 (カレンダー同期データ)
+      try {
+        const googleEvents = getStoredGoogleEvents();
+        googleEvents.forEach((ge) => {
+          if (ge.date === todayStr) {
+            events.push({
+              id: `google-${ge.id}`,
+              time: ge.startTime,
+              title: ge.title || 'Google予定',
+              companyName: ge.location || 'Googleカレンダー同期',
+              source: 'google',
+              meetUrl: ge.meetUrl,
+            });
+          }
+        });
+
+        const customEvts = loadCustomCalendarEvents();
+        customEvts.forEach((ce) => {
+          if (ce.date === todayStr) {
+            events.push({
+              id: `custom-${ce.id}`,
+              time: ce.startTime,
+              title: ce.title,
+              companyName: ce.companyName,
+              source: 'custom',
+              meetUrl: ce.meetUrl,
+            });
+          }
+        });
+      } catch (err) {
+        console.warn('Error reading calendar cache:', err);
+      }
+
+      // 2. Supabaseクエリ: 商談面談、フォロー期日、新規反響リード、未確認診断受付
+      if (supabase) {
+        try {
+          const [dealsRes, leadsRes, subRes, compRes] = await Promise.all([
+            supabase.from('deals').select('id,proposal_plan_name,meeting_date,next_followup_at,proposal_status,company_id,memo,companies(company_name)').limit(150),
+            supabase.from('leads').select('id,company_id,status,inflow_source,created_at,contacts(full_name,email),companies(company_name)').in('status', ['new', 'uncontacted']).order('created_at', { ascending: false }).limit(25),
+            supabase.from('diagnosis_submissions').select('id,respondent_company_name,respondent_name,respondent_email,submitted_at,status').eq('status', 'received').order('submitted_at', { ascending: false }).limit(25),
+            supabase.from('companies').select('id,company_name').limit(200),
+          ]);
+
+          const companyMap = new Map<string, string>();
+          (compRes.data || []).forEach((c: any) => companyMap.set(c.id, c.company_name));
+
+          // 商談関連 (本日の面談・次回フォロー期日)
+          (dealsRes.data || []).forEach((d: any) => {
+            const compName = (d.companies && d.companies.company_name) || companyMap.get(d.company_id) || '企業名未設定';
+            if (d.meeting_date && d.meeting_date.slice(0, 10) === todayStr) {
+              const timePart = d.meeting_date.includes('T') ? d.meeting_date.slice(11, 16) : undefined;
+              events.push({
+                id: `deal-meeting-${d.id}`,
+                time: timePart,
+                title: `【商談面談】${d.proposal_plan_name || '提案商談'}`,
+                companyName: compName,
+                source: 'deal',
+              });
+            }
+
+            if (d.next_followup_at && d.next_followup_at.slice(0, 10) <= todayStr && d.proposal_status !== '成約' && d.proposal_status !== '失注') {
+              const datePart = d.next_followup_at.slice(0, 10);
+              followupsList.push({
+                id: `deal-followup-${d.id}`,
+                type: 'deal',
+                title: `商談フォロー: ${d.proposal_plan_name || '商談検討'}`,
+                targetDate: datePart,
+                isOverdue: datePart < todayStr,
+                companyName: compName,
+                detail: d.memo || undefined,
+                rawItem: d,
+              });
+            }
+          });
+
+          // 未対応のリード
+          (leadsRes.data || []).forEach((l: any) => {
+            const compName = (l.companies && l.companies.company_name) || companyMap.get(l.company_id) || '反響企業';
+            const contactName = (l.contacts && l.contacts.full_name) || '担当者未設定';
+            leadsList.push({
+              id: l.id,
+              companyName: compName,
+              contactName,
+              source: l.inflow_source || 'Webフォーム',
+              createdAt: (l.created_at || '').slice(0, 10),
+              email: l.contacts?.email,
+            });
+          });
+
+          // 未対応のフォーム・診断受付
+          (subRes.data || []).forEach((s: any) => {
+            if (!leadsList.some((lead) => lead.companyName === s.respondent_company_name)) {
+              leadsList.push({
+                id: s.id,
+                companyName: s.respondent_company_name || '診断・資料請求',
+                contactName: s.respondent_name || '回答者',
+                source: '診断受付',
+                createdAt: (s.submitted_at || '').slice(0, 10),
+                email: s.respondent_email,
+              });
+            }
+          });
+        } catch (dbErr) {
+          console.warn('Failed to load today agenda items from db:', dbErr);
+        }
+      }
+
+      // 3. 今日の期限タスク (propsのtasks)
+      tasks.forEach((t) => {
+        if (t.status !== 'completed' && t.dueDate && t.dueDate <= todayStr) {
+          followupsList.push({
+            id: `task-${t.id}`,
+            type: 'task',
+            title: t.title,
+            targetDate: t.dueDate,
+            isOverdue: t.dueDate < todayStr,
+            companyName: t.assignee?.name ? `担当: ${t.assignee.name}` : undefined,
+            detail: t.completionCriteria || undefined,
+            rawItem: t,
+          });
+        }
+      });
+
+      if (!isCancelled) {
+        setTodayAgenda({
+          todayEvents: events.sort((a, b) => (a.time || '99:99').localeCompare(b.time || '99:99')),
+          unhandledLeads: leadsList,
+          dueFollowups: followupsList.sort((a, b) => a.targetDate.localeCompare(b.targetDate)),
+          loading: false,
+        });
+      }
+    };
+
+    void loadTodayActionItems();
+    return () => { isCancelled = true; };
+  }, [tasks]);
 
   const handleSaveGoal = () => {
     if (goalInput.trim()) {
@@ -594,122 +762,284 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
       </div>
 
       {/* 5. 今日やること・優先ToDo（AI Action OS） */}
-      <div className="bg-white border border-slate-200 rounded-2xl p-6 shadow-xs space-y-4">
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-slate-100 pb-3">
-          <div className="flex items-center gap-2">
+      <div className="bg-white border border-slate-200 rounded-2xl p-6 shadow-xs space-y-5">
+        {/* Header */}
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-100 pb-3">
+          <div className="flex items-center gap-2 flex-wrap">
             <CheckCircle2 className="w-5 h-5 text-purple-600" />
-            <h2 className="text-base font-bold text-slate-900">今日やること・優先ToDo（AI Action OS）</h2>
-            <span className="text-[10px] px-2 py-0.5 rounded-full bg-purple-50 text-purple-700 font-semibold border border-purple-200">
-              直近・重要アクション
-            </span>
+            <h2 className="text-base font-bold text-slate-900">今日やること・優先アクション（AI Action OS）</h2>
+            {(() => {
+              const totalItems = todayAgenda.todayEvents.length + todayAgenda.unhandledLeads.length + todayAgenda.dueFollowups.length;
+              return (
+                <span
+                  className={`text-[10px] px-2.5 py-0.5 rounded-full font-bold border ${
+                    totalItems > 0
+                      ? 'bg-purple-50 text-purple-700 border-purple-200'
+                      : 'bg-emerald-50 text-emerald-700 border-emerald-200'
+                  }`}
+                >
+                  {todayAgenda.loading
+                    ? '読み込み中…'
+                    : totalItems > 0
+                    ? `要対応 ${totalItems} 件`
+                    : 'すべて完了（0件）'}
+                </span>
+              );
+            })()}
           </div>
-          <button
-            type="button"
-            onClick={() => onNavigateTab('tasks')}
-            className="text-xs text-purple-600 hover:text-purple-700 flex items-center gap-1 font-semibold cursor-pointer self-start sm:self-center"
-          >
-            <span>全タスク一覧を見る ({tasks.filter((t) => t.status !== 'completed').length}件)</span>
-            <ArrowRight className="w-3.5 h-3.5" />
-          </button>
+          <div className="flex items-center gap-2 flex-wrap text-xs font-semibold">
+            <button
+              type="button"
+              onClick={() => onNavigateToTab?.('unified_calendar')}
+              className="text-slate-600 hover:text-indigo-600 flex items-center gap-1 cursor-pointer transition-colors"
+            >
+              <Calendar className="w-3.5 h-3.5 text-indigo-500" />
+              <span>予定カレンダー</span>
+            </button>
+            <span className="text-slate-300">|</span>
+            <button
+              type="button"
+              onClick={() => onNavigateToTab?.('leads')}
+              className="text-slate-600 hover:text-emerald-600 flex items-center gap-1 cursor-pointer transition-colors"
+            >
+              <Inbox className="w-3.5 h-3.5 text-emerald-600" />
+              <span>反響リード</span>
+            </button>
+            <span className="text-slate-300">|</span>
+            <button
+              type="button"
+              onClick={() => onNavigateTab('tasks')}
+              className="text-purple-600 hover:text-purple-700 flex items-center gap-1 cursor-pointer transition-colors"
+            >
+              <span>タスク一覧 ({tasks.filter((t) => t.status !== 'completed').length}件)</span>
+              <ArrowRight className="w-3.5 h-3.5" />
+            </button>
+          </div>
         </div>
 
         {(() => {
-          const todayStr = new Date().toISOString().slice(0, 10);
-          const priorityTasks = tasks
-            .filter((t) => t.status !== 'completed')
-            .sort((a, b) => {
-              const aDue = a.dueDate || '9999-99-99';
-              const bDue = b.dueDate || '9999-99-99';
-              if (aDue <= todayStr && bDue > todayStr) return -1;
-              if (bDue <= todayStr && aDue > todayStr) return 1;
-              const priorityOrder = { high: 0, medium: 1, low: 2 };
-              const aP = priorityOrder[a.priority] ?? 1;
-              const bP = priorityOrder[b.priority] ?? 1;
-              if (aP !== bP) return aP - bP;
-              return aDue.localeCompare(bDue);
-            })
-            .slice(0, 6);
+          const totalItems = todayAgenda.todayEvents.length + todayAgenda.unhandledLeads.length + todayAgenda.dueFollowups.length;
 
-          if (priorityTasks.length === 0) {
+          if (!todayAgenda.loading && totalItems === 0) {
             return (
-              <div className="p-6 rounded-xl bg-slate-50 border border-slate-200 text-center space-y-1">
-                <CheckCircle2 className="w-6 h-6 text-emerald-600 mx-auto" />
-                <p className="text-xs text-slate-700 font-semibold">現在、急ぎの未完了ToDoはありません！</p>
-                <p className="text-[11px] text-slate-500">
-                  AI社長に新しい目標のタスク分解を依頼するか、共通タスクで新規タスクを作成してください。
+              <div className="p-8 rounded-xl bg-emerald-50/50 border border-emerald-200 text-center space-y-2">
+                <CheckCircle2 className="w-8 h-8 text-emerald-600 mx-auto" />
+                <h3 className="text-sm font-bold text-slate-800">今日やることはありません</h3>
+                <p className="text-xs text-slate-500 max-w-md mx-auto">
+                  本日の予定・面談、未対応の新規反響リード、本日以前のフォロー期日タスクはすべて完了しています。
                 </p>
               </div>
             );
           }
 
           return (
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-              {priorityTasks.map((t) => {
-                const isOverdue = t.dueDate && t.dueDate < todayStr;
-                const isToday = t.dueDate && t.dueDate === todayStr;
-                const proj = projects.find((p) => p.id === t.projectId);
-
-                return (
-                  <div
-                    key={t.id}
-                    onClick={() => onNavigateTab('tasks')}
-                    className="p-3.5 rounded-xl bg-slate-50/70 border border-slate-200 hover:border-purple-300 transition-all cursor-pointer flex items-start justify-between gap-3 group shadow-2xs"
-                  >
-                    <div className="flex items-start gap-2.5 min-w-0">
-                      <button
-                        type="button"
-                        title="完了にする"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          if (onUpdateTask) {
-                            onUpdateTask({
-                              ...t,
-                              status: 'completed',
-                              completedAt: Date.now(),
-                              updatedAt: Date.now(),
-                            });
-                          }
-                        }}
-                        className="mt-0.5 text-slate-400 hover:text-emerald-600 transition-colors shrink-0 cursor-pointer"
+            <div className="space-y-5">
+              {/* 領域 1: 今日の予定（カレンダーの当日の予定・面談） */}
+              {todayAgenda.todayEvents.length > 0 && (
+                <div className="space-y-2.5">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <span className="w-2 h-2 rounded-full bg-indigo-500" />
+                      <h3 className="text-xs font-bold text-slate-800 uppercase tracking-wider">
+                        📅 本日の予定・面談 ({todayAgenda.todayEvents.length}件)
+                      </h3>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => onNavigateToTab?.('unified_calendar')}
+                      className="text-[11px] text-indigo-600 hover:text-indigo-700 font-semibold flex items-center gap-1 cursor-pointer"
+                    >
+                      <span>カレンダーで確認</span>
+                      <ChevronRight className="w-3 h-3" />
+                    </button>
+                  </div>
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-2.5">
+                    {todayAgenda.todayEvents.map((ev) => (
+                      <div
+                        key={ev.id}
+                        onClick={() => onNavigateToTab?.('unified_calendar')}
+                        className="p-3 rounded-xl bg-indigo-50/40 border border-indigo-100 hover:border-indigo-300 hover:bg-indigo-50/70 transition-all cursor-pointer shadow-2xs group flex items-start justify-between gap-2"
                       >
-                        <Square className="w-4 h-4" />
-                      </button>
-                      <div className="min-w-0 space-y-1">
-                        <div className="text-xs font-bold text-slate-900 group-hover:text-purple-700 transition-colors truncate">
-                          {t.title}
+                        <div className="min-w-0 space-y-1">
+                          <div className="flex items-center gap-1.5">
+                            <span className="px-1.5 py-0.5 rounded bg-indigo-100 text-indigo-800 font-mono text-[10px] font-bold">
+                              {ev.time || '終日'}
+                            </span>
+                            <span className="text-[10px] text-indigo-600 font-medium truncate">
+                              {ev.source === 'deal' ? '商談' : ev.source === 'customer_meeting' ? '顧客支援' : 'Google同期'}
+                            </span>
+                          </div>
+                          <div className="text-xs font-bold text-slate-900 group-hover:text-indigo-700 truncate">
+                            {ev.title}
+                          </div>
+                          {ev.companyName && (
+                            <div className="text-[11px] text-slate-500 truncate">
+                              🏢 {ev.companyName}
+                            </div>
+                          )}
                         </div>
-                        {proj && (
-                          <div className="text-[10px] text-purple-700 truncate font-medium">
-                            📁 {proj.name}
-                          </div>
-                        )}
-                        {t.completionCriteria && (
-                          <div className="text-[10px] text-slate-500 line-clamp-1">
-                            完了条件: {t.completionCriteria}
-                          </div>
+                        {ev.meetUrl && (
+                          <a
+                            href={ev.meetUrl}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            onClick={(e) => e.stopPropagation()}
+                            className="p-1.5 rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white shrink-0 shadow-2xs"
+                            title="Google Meet / 予定を開く"
+                          >
+                            <ExternalLink className="w-3 h-3" />
+                          </a>
                         )}
                       </div>
-                    </div>
-
-                    <div className="flex flex-col items-end gap-1 shrink-0 text-right">
-                      <span
-                        className={`text-[10px] px-2 py-0.5 rounded-full font-semibold ${
-                          isOverdue
-                            ? 'bg-rose-50 text-rose-700 border border-rose-200'
-                            : isToday
-                            ? 'bg-amber-50 text-amber-700 border border-amber-200'
-                            : 'bg-white text-slate-600 border border-slate-200'
-                        }`}
-                      >
-                        {isOverdue ? '期限超過' : isToday ? '本日締切' : t.dueDate ? `期日: ${t.dueDate}` : '期限未定'}
-                      </span>
-                      <span className="text-[10px] text-slate-500">
-                        担当: <strong className="text-slate-700 font-medium">{t.assignee?.name || '未定'}</strong>
-                      </span>
-                    </div>
+                    ))}
                   </div>
-                );
-              })}
+                </div>
+              )}
+
+              {/* 領域 2: 未対応の反響（新規で、まだ対応していないリード） */}
+              {todayAgenda.unhandledLeads.length > 0 && (
+                <div className="space-y-2.5">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <span className="w-2 h-2 rounded-full bg-emerald-500" />
+                      <h3 className="text-xs font-bold text-slate-800 uppercase tracking-wider">
+                        📥 未対応の新規反響リード ({todayAgenda.unhandledLeads.length}件)
+                      </h3>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => onNavigateToTab?.('leads')}
+                      className="text-[11px] text-emerald-600 hover:text-emerald-700 font-semibold flex items-center gap-1 cursor-pointer"
+                    >
+                      <span>パイプラインへ移動</span>
+                      <ChevronRight className="w-3 h-3" />
+                    </button>
+                  </div>
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-2.5">
+                    {todayAgenda.unhandledLeads.map((l) => (
+                      <div
+                        key={l.id}
+                        onClick={() => onNavigateToTab?.('leads')}
+                        className="p-3 rounded-xl bg-emerald-50/40 border border-emerald-100 hover:border-emerald-300 hover:bg-emerald-50/70 transition-all cursor-pointer shadow-2xs group flex items-start justify-between gap-2"
+                      >
+                        <div className="min-w-0 space-y-1">
+                          <div className="flex items-center gap-1.5 flex-wrap">
+                            <span className="px-1.5 py-0.5 rounded bg-emerald-100 text-emerald-800 text-[10px] font-bold">
+                              {l.source}
+                            </span>
+                            <span className="text-[10px] text-slate-400 font-mono">
+                              {l.createdAt}
+                            </span>
+                          </div>
+                          <div className="text-xs font-bold text-slate-900 group-hover:text-emerald-700 truncate">
+                            {l.companyName}
+                          </div>
+                          <div className="text-[11px] text-slate-600 truncate flex items-center gap-1">
+                            <User className="w-3 h-3 text-slate-400" />
+                            <span>{l.contactName}</span>
+                            {l.email && <span className="text-slate-400 text-[10px]">({l.email})</span>}
+                          </div>
+                        </div>
+                        <span className="px-2 py-1 rounded-lg bg-emerald-600 text-white text-[10px] font-bold shrink-0 shadow-2xs">
+                          対応する
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* 領域 3: フォロー期限（期限が今日以前のタスク、商談のフォロー、顧客TODO） */}
+              {todayAgenda.dueFollowups.length > 0 && (
+                <div className="space-y-2.5">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <span className="w-2 h-2 rounded-full bg-rose-500" />
+                      <h3 className="text-xs font-bold text-slate-800 uppercase tracking-wider">
+                        ⏰ 本日以前のフォロー期日・ToDo ({todayAgenda.dueFollowups.length}件)
+                      </h3>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => onNavigateTab('tasks')}
+                      className="text-[11px] text-purple-600 hover:text-purple-700 font-semibold flex items-center gap-1 cursor-pointer"
+                    >
+                      <span>全タスクで確認</span>
+                      <ChevronRight className="w-3 h-3" />
+                    </button>
+                  </div>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-2.5">
+                    {todayAgenda.dueFollowups.slice(0, 8).map((f) => {
+                      const isTask = f.type === 'task';
+                      return (
+                        <div
+                          key={f.id}
+                          onClick={() => {
+                            if (isTask) onNavigateTab('tasks');
+                            else onNavigateToTab?.('deals');
+                          }}
+                          className="p-3.5 rounded-xl bg-slate-50/70 border border-slate-200 hover:border-purple-300 transition-all cursor-pointer shadow-2xs group flex items-start justify-between gap-3"
+                        >
+                          <div className="flex items-start gap-2.5 min-w-0">
+                            {isTask ? (
+                              <button
+                                type="button"
+                                title="完了にする"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  if (onUpdateTask && f.rawItem) {
+                                    onUpdateTask({
+                                      ...f.rawItem,
+                                      status: 'completed',
+                                      completedAt: Date.now(),
+                                      updatedAt: Date.now(),
+                                    });
+                                  }
+                                }}
+                                className="mt-0.5 text-slate-400 hover:text-emerald-600 transition-colors shrink-0 cursor-pointer"
+                              >
+                                <Square className="w-4 h-4" />
+                              </button>
+                            ) : (
+                              <Clock className="w-4 h-4 text-amber-500 shrink-0 mt-0.5" />
+                            )}
+                            <div className="min-w-0 space-y-1">
+                              <div className="text-xs font-bold text-slate-900 group-hover:text-purple-700 transition-colors truncate">
+                                {f.title}
+                              </div>
+                              {f.companyName && (
+                                <div className="text-[10px] text-purple-700 font-medium truncate">
+                                  {f.companyName}
+                                </div>
+                              )}
+                              {f.detail && (
+                                <div className="text-[10px] text-slate-500 line-clamp-1">
+                                  {f.detail}
+                                </div>
+                              )}
+                            </div>
+                          </div>
+
+                          <div className="flex flex-col items-end gap-1 shrink-0 text-right">
+                            <span
+                              className={`text-[10px] px-2 py-0.5 rounded-full font-bold border ${
+                                f.isOverdue
+                                  ? 'bg-rose-50 text-rose-700 border-rose-200'
+                                  : 'bg-amber-50 text-amber-700 border-amber-200'
+                              }`}
+                            >
+                              {f.isOverdue ? `超過 (${f.targetDate})` : '本日締切'}
+                            </span>
+                            <span className="text-[10px] text-slate-500 font-medium">
+                              {isTask ? 'タスク' : '商談フォロー'}
+                            </span>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
             </div>
           );
         })()}

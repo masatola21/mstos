@@ -170,7 +170,7 @@ export const DealInvitationPanel: React.FC = () => {
     })));
     if (insertError) { setError(insertError.message); setSubmitting(false); return; }
     setConfirmed(false);
-    setNotice('商談案内を送信承認待ちに登録しました。実際のメール・LINE送信は、送信サービス接続後に有効になります。');
+    setNotice('商談案内を送信承認待ちに登録しました。「送信ドロワー」または「送信履歴・一括配信」から承認・即時送信できます。');
     setSubmitting(false);
     await load();
   };
@@ -183,7 +183,7 @@ export const DealInvitationPanel: React.FC = () => {
   return <section className='rounded-xl border border-slate-800 bg-slate-900 p-4'>
     <div className='flex flex-wrap items-start justify-between gap-3'>
       <div><h2 className='flex items-center gap-2 font-semibold text-white'><CalendarDays className='h-4 w-4 text-indigo-300'/>商談案内</h2><p className='mt-1 text-xs text-slate-400'>予約ページを案内し、予約日時とMeetはGoogleカレンダーで管理します。</p></div>
-      <span className='rounded-full border border-amber-500/30 bg-amber-950/20 px-2 py-1 text-[10px] text-amber-200'>送信サービス未接続</span>
+      <span className='rounded-full border border-purple-500/30 bg-purple-950/20 px-2 py-1 text-[10px] text-purple-200 font-semibold'>承認制・送信ドロワー連携</span>
     </div>
     {error && <div role='alert' className='mt-3 rounded-lg border border-rose-700/50 bg-rose-950/30 p-3 text-xs text-rose-200'>{error}</div>}
     {notice && <div role='status' className='mt-3 rounded-lg border border-emerald-700/50 bg-emerald-950/30 p-3 text-xs text-emerald-200'>{notice}</div>}

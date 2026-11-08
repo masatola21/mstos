@@ -247,26 +247,26 @@ export const UnifiedNavbar: React.FC<UnifiedNavbarProps> = ({
             ];
             const activeGroup = groups.find((group) => group.items.includes(currentTab)) || groups[0];
             const labelFor = (tab: UnifiedNavTab) => {
-              if (tab === 'inbox_hub') return '📥 統合受信トレイ（反響・契約後顧客・全チャネル）';
+              if (tab === 'inbox_hub') return '📥 統合受信トレイ';
               if (tab === 'communication_send') return '📤 送信履歴・一括配信・テンプレート';
               if (tab === 'mst_dashboard') return '営業・反響 統合ダッシュボード';
               if (tab === 'inflow_dashboard') return '営業・反響 統合ダッシュボード';
-              if (tab === 'unified_calendar') return '統合予定カレンダー（Google同期・全社日程）';
+              if (tab === 'unified_calendar') return '予定カレンダー（Google同期・全社日程）';
               if (tab === 'deal_invitations') return '商談予約案内';
               if (tab === 'customer_meeting_invitations') return '顧客面談案内';
-              if (tab === 'ai_acquisition') return 'AI集客運用（HP/SNS/メディア）';
+              if (tab === 'ai_acquisition') return '集客戦略・SNS・メディア';
               if (tab === 'prospects') return '見込み企業（AI検索）';
-              if (tab === 'contacts') return '連絡先・LINE友だち（タグ管理）';
-              if (tab === 'marketing_automation') return 'LINE・メール自動配信（シナリオ・ジョブ）';
-              if (tab === 'leads') return '反響リード';
+              if (tab === 'contacts') return '見込み企業・友だちリスト';
+              if (tab === 'marketing_automation') return 'LINE・メール自動配信';
+              if (tab === 'leads') return '商談パイプライン';
               if (tab === 'deals') return '商談一覧';
-              if (tab === 'mst_diagnoses') return 'フォーム・診断・PDF資料マスタ';
-              if (tab === 'document_templates') return '重要書類（見積・契約・請求・レポート）';
+              if (tab === 'mst_diagnoses') return '受付フォーム設計';
+              if (tab === 'document_templates') return '重要書類・見積・契約';
               if (tab === 'customers') return '契約顧客台帳';
-              if (tab === 'customer_operations') return '支援案件・タスク';
-              if (tab === 'products') return '商品マスタ（デジタル含む）';
-              if (tab === 'companies') return '会社台帳（法人マスタ）';
-              if (tab === 'custom_lists') return '配信対象リスト';
+              if (tab === 'customer_operations') return '契約・請求・顧問支援';
+              if (tab === 'products') return '商品台帳';
+              if (tab === 'companies') return '会社・商品台帳';
+              if (tab === 'custom_lists') return '配信対象セグメント';
               return TABLE_CONFIGS[tab as TableKey]?.label || String(tab);
             };
             return <div className="space-y-2">

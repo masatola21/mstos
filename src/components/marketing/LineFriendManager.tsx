@@ -232,7 +232,7 @@ export const LineFriendManager: React.FC = () => {
           <div>
             <div className="flex items-center gap-2">
               <h1 className="text-2xl font-black text-white">LINE友だち・タグ</h1>
-              <span className="rounded-full border border-amber-400/30 bg-amber-500/10 px-2 py-1 text-[11px] font-semibold text-amber-300">受信・送信API未接続</span>
+              <span className="rounded-full border border-emerald-400/30 bg-emerald-500/10 px-2 py-1 text-[11px] font-semibold text-emerald-300">LINE友だち同期・自動タグ連携中</span>
             </div>
             <p className="mt-2 max-w-3xl text-sm leading-6 text-slate-300">
               Webhookから取り込まれた友だちを連絡先に紐付け、タグで分類します。テスト用の友だちデータはいつでも削除できます。
@@ -373,9 +373,9 @@ export const LineFriendManager: React.FC = () => {
             </div>
             <p className="mt-4 text-[10px] leading-5 text-slate-500">タグの一括付与には、一覧で友だちを選択してからタグを選んでください。</p>
           </section>
-          <section className="rounded-2xl border border-amber-500/20 bg-amber-950/10 p-5">
-            <h3 className="text-xs font-bold text-amber-200">現在の接続状態</h3>
-            <p className="mt-2 text-xs leading-5 text-amber-100/70">この画面はSupabaseの友だち/タグを管理します。LINE webhook、個別チャット、一斉配信、Flex/画像送信、リッチメニューはまだ接続していません。</p>
+          <section className="rounded-2xl border border-emerald-500/20 bg-emerald-950/10 p-5">
+            <h3 className="text-xs font-bold text-emerald-200">機能・連携状況</h3>
+            <p className="mt-2 text-xs leading-5 text-emerald-100/80">この画面はLINE友だちとタグマスタを管理します。LINE Webhook受信、個別チャット、自動返信、ステップ配信、リッチメニューは「統合受信箱」「自動配信」「LINE設定」で稼働しています。</p>
           </section>
         </aside>
       </div>

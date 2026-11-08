@@ -228,6 +228,27 @@ NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
                 </div>
               )}
 
+              {/* Menu Display Preference */}
+              <div className="p-3.5 rounded-xl bg-slate-50 border border-slate-200">
+                <label className="flex items-center justify-between cursor-pointer">
+                  <div>
+                    <span className="text-xs font-bold text-slate-800">すべてのメニューを表示</span>
+                    <p className="text-[11px] text-slate-500 mt-0.5">
+                      サイドバーの「管理・その他」メニューや旧導線（事業マトリクス・セグメント等）を常時展開します。
+                    </p>
+                  </div>
+                  <input
+                    type="checkbox"
+                    defaultChecked={typeof window !== 'undefined' && localStorage.getItem('mst_show_all_menus') === 'true'}
+                    onChange={(e) => {
+                      localStorage.setItem('mst_show_all_menus', String(e.target.checked));
+                      window.dispatchEvent(new Event('mst_menu_visibility_change'));
+                    }}
+                    className="w-4 h-4 rounded text-purple-600 focus:ring-purple-500 cursor-pointer ml-3 shrink-0"
+                  />
+                </label>
+              </div>
+
               <div className="flex items-center justify-between pt-2">
                 <button
                   type="button"
