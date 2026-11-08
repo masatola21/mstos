@@ -1432,7 +1432,7 @@ ${reportDraft.text.replace(/</g, '&lt;').replace(/>/g, '&gt;')}
               閉じる
             </button>
 
-            <button type="button" disabled={saving || isLockedForDirectEdit} onClick={() => handleSaveAnswers()} className="px-4 py-2 rounded-xl text-xs sm:text-sm font-medium bg-purple-600 hover:bg-purple-700 text-white transition-colors flex items-center gap-1.5 disabled:opacity-50 cursor-pointer shadow-sm"><Save className="w-3.5 h-3.5 text-purple-200" /><span>回答を保存</span></button>
+            <button type="button" disabled={saving || changingStatus || isLockedForDirectEdit} onClick={() => handleSaveAnswers()} className="px-4 py-2 rounded-xl text-xs sm:text-sm font-medium bg-purple-600 hover:bg-purple-700 text-white transition-colors flex items-center gap-1.5 disabled:opacity-50 cursor-pointer shadow-sm"><Save className="w-3.5 h-3.5 text-purple-200" /><span>回答を保存</span></button>
 
                        {/* 診断完了ボタン: 未確認 → 回答完了 / 回答完了 → 未確認（必須設問の確認はDB関数が行います） */}
             {diagnosis.status === 'received' && (
