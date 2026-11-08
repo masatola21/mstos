@@ -10,6 +10,7 @@ import {
   fetchCompaniesList, 
   fetchLeadsList, 
   fetchAiReportsByDiagnosisId,
+  updateDiagnosisStatus,
   DataFetchError 
 } from '../services/dataService';
 import { QUESTIONNAIRE_V1, calculateScores, QuestionCategory } from '../constants/questionnaire';
