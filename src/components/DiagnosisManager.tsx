@@ -1434,21 +1434,31 @@ ${reportDraft.text.replace(/</g, '&lt;').replace(/>/g, '&gt;')}
 
             <button type="button" disabled={saving || isLockedForDirectEdit} onClick={() => handleSaveAnswers()} className="px-4 py-2 rounded-xl text-xs sm:text-sm font-medium bg-purple-600 hover:bg-purple-700 text-white transition-colors flex items-center gap-1.5 disabled:opacity-50 cursor-pointer shadow-sm"><Save className="w-3.5 h-3.5 text-purple-200" /><span>回答を保存</span></button>
 
-            {/* 診断完了ボタン（安全ガードによりロック・ツールチップ案内） */}
-            <div className="relative group">
+                       {/* 診断完了ボタン: 未確認 → 回答完了 / 回答完了 → 未確認（必須設問の確認はDB関数が行います） */}
+            {diagnosis.status === 'received' && (
               <button
                 type="button"
-                disabled={true}
-                className="px-4 py-2 rounded-xl text-xs sm:text-sm font-medium bg-slate-100 text-slate-400 border border-slate-200 cursor-not-allowed flex items-center gap-1.5"
-                title="設問仕様の必須キー一覧が確定するまで完了化は安全にロックされています"
+                disabled={saving || changingStatus}
+                onClick={() => handleCompleteDiagnosis()}
+                className="px-4 py-2 rounded-xl text-xs sm:text-sm font-medium bg-emerald-600 hover:bg-emerald-700 text-white transition-colors flex items-center gap-1.5 disabled:opacity-50 cursor-pointer shadow-sm"
+                title="内容を確認済みとして回答完了にします（必須設問が未回答の場合は完了できません）"
               >
-                <Lock className="w-3.5 h-3.5 text-amber-500" />
-                <span>診断完了（ロック中）</span>
+                <CheckCircle2 className="w-3.5 h-3.5" />
+                <span>{changingStatus ? '処理中...' : '確認して回答完了にする'}</span>
               </button>
-              <div className="absolute bottom-full right-0 mb-2 w-64 p-2 bg-slate-800 border border-slate-700 rounded-xl text-[11px] text-amber-200 shadow-xl opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none z-50">
-                ⚠️ 設問バージョン {diagnosis.questionnaire_version} の必須設問IDが未確定のため、completed への完了確定は安全のため現在ロックされています。
-              </div>
-            </div>
+            )}
+            {diagnosis.status === 'completed' && (
+              <button
+                type="button"
+                disabled={changingStatus}
+                onClick={() => handleReopenDiagnosis()}
+                className="px-4 py-2 rounded-xl text-xs sm:text-sm font-medium bg-white hover:bg-slate-50 text-slate-700 border border-slate-300 transition-colors flex items-center gap-1.5 disabled:opacity-50 cursor-pointer shadow-sm"
+                title="未確認に戻して、回答を編集できるようにします"
+              >
+                <RefreshCw className="w-3.5 h-3.5" />
+                <span>{changingStatus ? '処理中...' : '未確認に戻す'}</span>
+              </button>
+            )}
           </div>
         </div>
       </div>
