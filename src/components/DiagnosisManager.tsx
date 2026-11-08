@@ -768,6 +768,59 @@ const DiagnosisDetailModal: React.FC<DiagnosisDetailModalProps> = ({
     }
   };
 
+    // 内容を確認して「回答完了」にする（未保存の修正は先に保存します）
+  const handleCompleteDiagnosis = async () => {
+    if (!diagnosis) return;
+    if (!window.confirm('内容を確認済みとして「回答完了」にします。完了後は回答を直接編集できません（「未確認に戻す」で編集に戻せます）。よろしいですか？')) return;
+    setChangingStatus(true);
+    setErrorMsg(null);
+    setSaveSuccessMsg(null);
+    try {
+      const isFormType = diagnosis.questionnaire_version.startsWith('form-');
+      const saveRes = await saveDiagnosisAnswers(diagnosis.id, answers, {
+        memo,
+        diagnosis_type: diagnosisType,
+        ...(isFormType ? {} : { score: currentScores.totalScore, category_scores: currentScores.categoryScores }),
+      });
+      if (saveRes.error) {
+        setErrorMsg(saveRes.error.message);
+        return;
+      }
+      const res = await updateDiagnosisStatus(diagnosis.id, 'completed');
+      if (!res.success) {
+        setErrorMsg(res.error?.message || '回答完了にできませんでした。');
+        return;
+      }
+      setSaveSuccessMsg('診断を「回答完了」にしました。');
+      onUpdated();
+    } catch (err: any) {
+      setErrorMsg(err.message || '回答完了への変更中にエラーが発生しました。');
+    } finally {
+      setChangingStatus(false);
+    }
+  };
+
+  // 「回答完了」を「未確認」に戻して、回答を編集できる状態にする
+  const handleReopenDiagnosis = async () => {
+    if (!diagnosis) return;
+    if (!window.confirm('「未確認」に戻します。診断スコアはいったんクリアされ、回答を編集できるようになります。よろしいですか？')) return;
+    setChangingStatus(true);
+    setErrorMsg(null);
+    setSaveSuccessMsg(null);
+    try {
+      const res = await updateDiagnosisStatus(diagnosis.id, 'received');
+      if (!res.success) {
+        setErrorMsg(res.error?.message || '未確認に戻せませんでした。');
+        return;
+      }
+      setSaveSuccessMsg('診断を「未確認」に戻しました。');
+      onUpdated();
+    } catch (err: any) {
+      setErrorMsg(err.message || '未確認への変更中にエラーが発生しました。');
+    } finally {
+      setChangingStatus(false);
+    }
+  };
   const handleGenerateReportDraft = async () => {
     if (!diagnosis) return;
     const supabase = getSupabase();
