@@ -66,14 +66,14 @@ export const UNIFIED_TAG_MASTER: MasterTag[] = [
     color: '#3b82f6',
     description: '自社ホームページやフォームから問い合わせた顧客',
   },
-  // ラウンド6: 動的流入計測タグ（UTMパラメータ・認知経路からの自動付与）
+  // ラウンド6: 動的流入計測タグ（正規化UTMパラメータおよび「どこで知りましたか？」回答からの自動付与）
   {
     id: 'tag_inflow_sns',
     name: '流入:SNS',
     category: 'inflow',
     categoryLabel: '流入・選択',
     color: '#6366f1',
-    description: 'SNSプロフィールや投稿リンク（utm_source=sns）経由での流入',
+    description: 'SNSプロフィールや投稿リンク（utm_source=sns）経由、または認知経路でSNSを選択時に自動付与',
   },
   {
     id: 'tag_inflow_hp_blog',
@@ -81,7 +81,7 @@ export const UNIFIED_TAG_MASTER: MasterTag[] = [
     category: 'inflow',
     categoryLabel: '流入・選択',
     color: '#10b981',
-    description: '公式HPコラムや解説記事（utm_source=hp_blog）経由での流入',
+    description: '公式HPコラムや解説記事（utm_source=hp_blog）経由、または認知経路でブログ選択時に自動付与',
   },
   {
     id: 'tag_inflow_line',
@@ -89,7 +89,7 @@ export const UNIFIED_TAG_MASTER: MasterTag[] = [
     category: 'inflow',
     categoryLabel: '流入・選択',
     color: '#059669',
-    description: 'LINE公式配信やリッチメニュー（utm_source=line）経由での流入',
+    description: 'LINE公式配信やリッチメニュー（utm_source=line）経由でのアクセス時に自動付与',
   },
   {
     id: 'tag_inflow_email',
@@ -97,7 +97,7 @@ export const UNIFIED_TAG_MASTER: MasterTag[] = [
     category: 'inflow',
     categoryLabel: '流入・選択',
     color: '#0284c7',
-    description: 'メルマガ・営業個別メール（utm_source=email）経由での流入',
+    description: 'メルマガ・営業個別メール（utm_source=email）経由、または認知経路でメール選択時に自動付与',
   },
   {
     id: 'tag_inflow_material',
@@ -105,7 +105,7 @@ export const UNIFIED_TAG_MASTER: MasterTag[] = [
     category: 'inflow',
     categoryLabel: '流入・選択',
     color: '#d97706',
-    description: '配布PDF資料や印刷物QRコード（utm_source=material）経由での流入',
+    description: '配布PDF資料や印刷物QRコード（utm_source=material）経由でのアクセス時に自動付与',
   },
   {
     id: 'tag_inflow_threads',
@@ -113,7 +113,7 @@ export const UNIFIED_TAG_MASTER: MasterTag[] = [
     category: 'inflow',
     categoryLabel: '流入・選択',
     color: '#0f172a',
-    description: 'Threads投稿・プロフィール（utm_source=threads）経由での流入',
+    description: 'Threads投稿・プロフィール（utm_source=threads）経由、または認知経路でThreads選択時に自動付与',
   },
   {
     id: 'tag_inflow_facebook',
@@ -121,7 +121,7 @@ export const UNIFIED_TAG_MASTER: MasterTag[] = [
     category: 'inflow',
     categoryLabel: '流入・選択',
     color: '#1d4ed8',
-    description: 'Facebook投稿・グループ（utm_source=facebook）経由での流入',
+    description: 'Facebook投稿・グループ（utm_source=facebook）経由、または認知経路でFacebook選択時に自動付与',
   },
   {
     id: 'tag_inflow_linkedin',
@@ -129,7 +129,7 @@ export const UNIFIED_TAG_MASTER: MasterTag[] = [
     category: 'inflow',
     categoryLabel: '流入・選択',
     color: '#0284c7',
-    description: 'LinkedIn投稿・プロフィール（utm_source=linkedin）経由での流入',
+    description: 'LinkedIn投稿・プロフィール（utm_source=linkedin）経由、または認知経路でLinkedIn選択時に自動付与',
   },
   {
     id: 'tag_inflow_instagram',
@@ -137,7 +137,7 @@ export const UNIFIED_TAG_MASTER: MasterTag[] = [
     category: 'inflow',
     categoryLabel: '流入・選択',
     color: '#db2777',
-    description: 'Instagramプロフ・ストーリーズ（utm_source=instagram）経由での流入',
+    description: 'Instagramプロフ・ストーリーズ（utm_source=instagram）経由、または認知経路でInstagram選択時に自動付与',
   },
   {
     id: 'tag_inflow_x',
@@ -145,7 +145,7 @@ export const UNIFIED_TAG_MASTER: MasterTag[] = [
     category: 'inflow',
     categoryLabel: '流入・選択',
     color: '#0f172a',
-    description: 'X（旧Twitter）投稿・固定ポスト（utm_source=x）経由での流入',
+    description: 'X（旧Twitter）投稿・固定ポスト（utm_source=x）経由でのアクセス時に自動付与',
   },
 
   // 行動・進捗ステータス (フォーム回答・面談予約・進捗)

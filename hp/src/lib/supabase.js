@@ -173,6 +173,11 @@ export async function submitIntakeToCRM(payload) {
             browserUtm.landing_page = window.location.href.slice(0, 300);
         } catch {}
     }
+    const materialKeys = Array.isArray(payload.customFields?.material_keys)
+        ? payload.customFields?.material_keys
+        : Array.isArray(payload.answers?.material_keys)
+            ? payload.answers.material_keys
+            : [];
     const requestBody = {
         name: cleanName,
         companyName: cleanCompany,
@@ -180,6 +185,7 @@ export async function submitIntakeToCRM(payload) {
         phone: cleanPhone,
         requestId,
         privacyAgreed: true,
+        materialKeys,
         answers: payload.answers || {},
         notes: payload.notes || '',
         customFields: payload.customFields || {},

@@ -21,7 +21,7 @@ const FALLBACK_MATERIALS = [
 
 export default function MaterialForm() {
     const [availableMaterials, setAvailableMaterials] = useState(FALLBACK_MATERIALS);
-    const [selectedKeys, setSelectedKeys] = useState(['management-guide']);
+    const [selectedKeys, setSelectedKeys] = useState(['management-guide', 'care-package-overview']);
     const [formData, setFormData] = useState({
         company_name: '',
         name: '',
@@ -52,10 +52,10 @@ export default function MaterialForm() {
                     const typeParam = params.get('type') || params.get('material') || '';
                     if (typeParam === 'care' || typeParam === 'care-package' || typeParam === 'care-package-overview') {
                         setSelectedKeys(['care-package-overview']);
-                    } else if (typeParam === 'both') {
-                        setSelectedKeys(data.materials.map((m) => m.key));
                     } else if (typeParam === 'management' || typeParam === 'guide' || typeParam === 'management-guide') {
                         setSelectedKeys(['management-guide']);
+                    } else if (typeParam === 'both' || !typeParam) {
+                        setSelectedKeys(data.materials.map((m) => m.key));
                     } else if (typeParam) {
                         const matched = data.materials.find((m) => m.key === typeParam);
                         if (matched) setSelectedKeys([matched.key]);
@@ -68,9 +68,11 @@ export default function MaterialForm() {
         if (typeof window !== 'undefined') {
             const params = new URLSearchParams(window.location.search);
             const typeParam = params.get('type') || params.get('material') || '';
-            if (typeParam === 'care' || typeParam === 'care-package') {
+            if (typeParam === 'care' || typeParam === 'care-package' || typeParam === 'care-package-overview') {
                 setSelectedKeys(['care-package-overview']);
-            } else if (typeParam === 'both') {
+            } else if (typeParam === 'management' || typeParam === 'guide' || typeParam === 'management-guide') {
+                setSelectedKeys(['management-guide']);
+            } else {
                 setSelectedKeys(['management-guide', 'care-package-overview']);
             }
             const sourceParam = params.get('source');

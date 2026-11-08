@@ -1093,48 +1093,62 @@ export const ContactsLineHub: React.FC<Props> = ({
                         {friend.line_user_id}
                       </p>
 
-                      {/* タグ一覧バッジ（⚡自動 vs 👤手動の表示） */}
+                      {/* タグ一覧バッジ（流入／進捗／ステータス別にまとまり、⚡自動 vs 👤手動を一目で識別） */}
                       <div className="mt-2.5 flex flex-wrap items-center gap-1.5">
-                        {friend.tags.map((tag) => {
-                          const isAuto =
-                            tag.assigned_by === 'automation' ||
-                            tag.assigned_by === 'welcome_choice';
-                          return (
-                            <span
-                              key={tag.id}
-                              style={{ borderColor: tag.color ? `${tag.color}40` : undefined }}
-                              className="inline-flex items-center gap-1.5 rounded-full border bg-white px-2.5 py-0.5 text-[11px] text-slate-800 transition shadow-2xs"
-                              title={`${tag.name} (${
-                                isAuto ? '⚡ 自動配信・ルールにより自動付与' : '👤 手動付与'
-                              }) ${tag.description ? '— ' + tag.description : ''}`}
-                            >
-                              <span
-                                className="w-1.5 h-1.5 rounded-full shrink-0"
-                                style={{ backgroundColor: tag.color || '#6b46c1' }}
-                              />
-                              <span className="font-semibold text-slate-800">{tag.name}</span>
-                              <span
-                                className={`text-[9px] font-mono px-1 rounded ${
-                                  isAuto
-                                    ? 'bg-amber-50 text-amber-800 border border-amber-200'
-                                    : 'bg-slate-100 text-slate-600'
-                                }`}
-                              >
-                                {isAuto ? '⚡自動' : '👤手動'}
-                              </span>
-                              <button
-                                type="button"
-                                title={'タグ「' + tag.name + '」を外す'}
-                                onClick={() => void removeTag(friend.id, tag.id)}
-                                className="text-slate-400 hover:text-rose-600 ml-0.5 cursor-pointer transition text-xs font-bold"
-                              >
-                                ×
-                              </button>
-                            </span>
-                          );
-                        })}
+                        {(() => {
+                          const orderMap = { inflow: 1, action: 2, crm_status: 3, custom: 4 };
+                          const getCat = (t: { name: string; category?: string }) => {
+                            if (t.name.startsWith('流入:') || ['LINE友だち追加', '選択:診断', '選択:個別相談', 'care:開業相談', '資料請求', 'Web問い合わせ'].includes(t.name) || t.category === 'inflow') return 'inflow';
+                            if (['診断受検済み', '診断レポート送付済', '個別相談予約済み', '相談実施済み', '提案書提示済み'].includes(t.name) || t.category === 'action') return 'action';
+                            if (['成約・顧問契約', '既存クライアント', '見込み客(Hot)', '配信停止・オプトアウト'].includes(t.name) || t.category === 'crm_status') return 'crm_status';
+                            return 'custom';
+                          };
+                          const sortedTags = [...friend.tags].sort((a, b) => orderMap[getCat(a)] - orderMap[getCat(b)]);
 
-                        {/* ＋タグ追加 ドロップダウンピッカー（辞書連動） */}
+                          return sortedTags.map((tag) => {
+                            const isAuto =
+                              tag.assigned_by === 'automation' ||
+                              tag.assigned_by === 'welcome_choice';
+                            const cat = getCat(tag);
+                            const catLabel = cat === 'inflow' ? '流入' : cat === 'action' ? '進捗' : cat === 'crm_status' ? '顧客' : '独自';
+
+                            return (
+                              <span
+                                key={tag.id}
+                                style={{ borderColor: tag.color ? `${tag.color}40` : undefined }}
+                                className="inline-flex items-center gap-1.5 rounded-full border bg-white px-2 py-0.5 text-[11px] text-slate-800 transition shadow-2xs"
+                                title={`${tag.name} [${catLabel}] (${
+                                  isAuto ? '⚡ 自動配信・フォーム・ルールにより自動付与' : '👤 手動付与'
+                                }) ${tag.description ? '— ' + tag.description : ''}`}
+                              >
+                                <span
+                                  className="w-1.5 h-1.5 rounded-full shrink-0"
+                                  style={{ backgroundColor: tag.color || '#6b46c1' }}
+                                />
+                                <span className="font-semibold text-slate-800">{tag.name}</span>
+                                <span
+                                  className={`text-[9px] font-mono px-1 rounded ${
+                                    isAuto
+                                      ? 'bg-amber-50 text-amber-800 border border-amber-200'
+                                      : 'bg-slate-100 text-slate-600'
+                                  }`}
+                                >
+                                  {isAuto ? '⚡自動' : '👤手動'}
+                                </span>
+                                <button
+                                  type="button"
+                                  title={'タグ「' + tag.name + '」を外す'}
+                                  onClick={() => void removeTag(friend.id, tag.id)}
+                                  className="text-slate-400 hover:text-rose-600 ml-0.5 cursor-pointer transition text-xs font-bold"
+                                >
+                                  ×
+                                </button>
+                              </span>
+                            );
+                          });
+                        })()}
+
+                        {/* 手動タグ追加（主役にせず、例外対応用とわかる控えめな表現） */}
                         <div className={`relative ${activeTagPickerFriendId === friend.id ? 'z-30' : ''}`}>
                           <button
                             type="button"
@@ -1143,10 +1157,11 @@ export const ContactsLineHub: React.FC<Props> = ({
                                 activeTagPickerFriendId === friend.id ? null : friend.id
                               )
                             }
-                            className="inline-flex items-center gap-1 rounded-full border border-dashed border-purple-300 bg-purple-50/70 px-2.5 py-0.5 text-[10px] font-bold text-purple-700 hover:bg-purple-100 transition cursor-pointer"
+                            className="inline-flex items-center gap-1 rounded-full border border-slate-200 bg-slate-100/90 hover:bg-purple-50 hover:border-purple-300 px-2 py-0.5 text-[10px] text-slate-500 hover:text-purple-700 transition cursor-pointer"
+                            title="例外対応用：手動でタグを付与"
                           >
                             <Tag className="h-2.5 w-2.5" />
-                            <span>＋タグ追加</span>
+                            <span>＋手動付与（例外用）</span>
                           </button>
 
                           {activeTagPickerFriendId === friend.id && (
@@ -1391,18 +1406,18 @@ export const ContactsLineHub: React.FC<Props> = ({
             {[
               {
                 category: 'inflow',
-                label: '📌 流入・選択タグ（友だち追加・選択肢）',
-                desc: '友だち登録やFlex選択肢タップで自動付与',
+                label: '📌 流入・選択タグ（友だち追加・選択肢・UTM）',
+                desc: '友だち登録、Flex選択肢タップ、フォーム送信（正規化UTM・認知経路回答）で自動付与',
               },
               {
                 category: 'action',
                 label: '🚀 行動・進捗タグ（診断・面談予約）',
-                desc: 'フォーム回答や面談完了で自動付与（リマインド停止条件と連動）',
+                desc: '診断・資料請求フォーム回答完了時に自動付与。個別相談予約（TimeRex等）や面談実施はスタッフが手動付与（リマインド停止条件と連動）',
               },
               {
                 category: 'crm_status',
                 label: '💼 CRMステータス・停止条件タグ',
-                desc: '成約・契約済・Hot見込み客など、スタッフ手動付与が主で全追客停止と連動',
+                desc: '成約・顧問契約・Hot見込み客など、スタッフが商談状況に応じて手動で付与（全追客停止と連動）',
               },
             ].map((section) => {
               const sectionTags = tags.filter((t) => t.category === section.category);
@@ -1473,20 +1488,20 @@ export const ContactsLineHub: React.FC<Props> = ({
           <div className="space-y-3 text-xs text-slate-600 leading-relaxed">
             <div className="rounded-xl border border-slate-200 bg-white p-3 space-y-1 shadow-2xs">
               <div className="font-bold text-amber-700 flex items-center gap-1">
-                <span>⚡</span> 自動配信の役割
+                <span>⚡</span> 自動付与の役割
               </div>
               <p className="text-[11px] text-slate-500">
-                LINE登録時や診断回答完了時、選択肢クリック時にタグを自動付与。
-                「成約」「予約済」タグが付いた場合は、ステップ配信やリマインドを自動で終了（Exit）させます。
+                LINE登録時、診断フォーム・資料請求フォーム送信時、Flex選択肢クリック時にタグを自動付与。
+                「診断受検済み」等の条件タグが付いた場合は、ステップ配信や未受検リマインドを自動で終了（Exit）させます。
               </p>
             </div>
             <div className="rounded-xl border border-slate-200 bg-white p-3 space-y-1 shadow-2xs">
               <div className="font-bold text-emerald-700 flex items-center gap-1">
-                <span>👤</span> 友だち台帳の役割
+                <span>👤</span> 手動付与の役割（例外・商談進捗）
               </div>
               <p className="text-[11px] text-slate-500">
-                オペレーターが顧客との個別商談やヒアリング結果を見て手動でタグ付け。
-                手動で付与したタグも自動配信の停止条件に即座に反映されます。
+                外部カレンダー（TimeRex等）での面談確定時（個別相談予約済み）、面談実施完了、成約・契約締結時はスタッフが手動でタグ付け。
+                手動付与したタグも自動配信の停止条件に即座に反映されます。
               </p>
             </div>
             <div className="rounded-xl border border-slate-200 bg-white p-3 space-y-1 shadow-2xs">

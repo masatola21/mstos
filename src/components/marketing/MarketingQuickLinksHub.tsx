@@ -34,7 +34,8 @@ import {
   clearStoredOfficialLinks,
   loadStoredTrackingMedia,
   saveStoredTrackingMedia,
-  clearStoredTrackingMedia
+  clearStoredTrackingMedia,
+  migrateTrackingMediaList
 } from '../../utils/marketingStorage';
 import { getSupabase } from '../../lib/supabaseClient';
 
@@ -51,16 +52,56 @@ export interface MediumPreset {
 }
 
 export const TRACKING_MEDIA_PRESETS: MediumPreset[] = [
-  { id: 'note', name: 'note（ブログ・解説記事）', category: 'Owned / Blog', badge: '記事', badgeColor: 'bg-emerald-50 text-emerald-700 border-emerald-200', description: 'note記事の文末CTAやマガジンに埋め込み', utmSource: 'note', utmMedium: 'article' },
-  { id: 'x_twitter', name: 'X / Twitter（SNS投稿・プロフ）', category: 'Social', badge: 'SNS', badgeColor: 'bg-sky-50 text-sky-700 border-sky-200', description: '固定ポスト・日々の投稿・プロフィールリンク用', utmSource: 'x_twitter', utmMedium: 'social' },
-  { id: 'instagram', name: 'Instagram（プロフ・ストーリーズ）', category: 'Social', badge: 'SNS', badgeColor: 'bg-pink-50 text-pink-700 border-pink-200', description: 'プロフのリンクツリーやストーリーズスタンプ用', utmSource: 'instagram', utmMedium: 'social' },
-  { id: 'line_broadcast', name: 'LINE公式（一斉配信・リッチメニュー）', category: 'Chat / CRM', badge: 'LINE', badgeColor: 'bg-emerald-50 text-emerald-700 border-emerald-200', description: 'LINE配信メッセージやリッチメニューのタップ先', utmSource: 'line_broadcast', utmMedium: 'chat' },
-  { id: 'flyer_qr', name: 'チラシ・名刺・POP（QRコード用）', category: 'Offline', badge: '紙/QR', badgeColor: 'bg-amber-50 text-amber-700 border-amber-200', description: '印刷物・展示会・店舗POP等のQRコード生成用URL', utmSource: 'flyer_qr', utmMedium: 'offline_qr' },
-  { id: 'meta_ads', name: 'Meta広告（FB / IG広告）', category: 'Paid Ads', badge: '広告', badgeColor: 'bg-purple-50 text-purple-700 border-purple-200', description: 'Meta広告マネージャのリンク先URL設定用', utmSource: 'meta_ads', utmMedium: 'cpc' },
-  { id: 'google_ads', name: 'Google広告（検索・PMax）', category: 'Paid Ads', badge: '広告', badgeColor: 'bg-blue-50 text-blue-700 border-blue-200', description: 'リスティング・ディスプレイ広告の最終ページURL', utmSource: 'google_ads', utmMedium: 'cpc' },
-  { id: 'youtube', name: 'YouTube（概要欄・固定コメント）', category: 'Video', badge: '動画', badgeColor: 'bg-rose-50 text-rose-700 border-rose-200', description: '動画の概要欄や固定コメントの導線リンク', utmSource: 'youtube', utmMedium: 'video' },
-  { id: 'newsletter', name: 'メルマガ配信（Eメール）', category: 'Direct', badge: 'メール', badgeColor: 'bg-cyan-50 text-cyan-700 border-cyan-200', description: '定期メルマガやステップメール本文内のリンク', utmSource: 'newsletter', utmMedium: 'email' },
-  { id: 'partner', name: '提携パートナー・外部メディア紹介', category: 'Partner', badge: '外部', badgeColor: 'bg-purple-50 text-purple-700 border-purple-200', description: 'アライアンス先や紹介記事からの送客リンク', utmSource: 'partner', utmMedium: 'referral' },
+  {
+    id: 'hp_blog',
+    name: 'HP・ブログ記事',
+    category: 'Owned / Blog',
+    badge: '記事',
+    badgeColor: 'bg-emerald-50 text-emerald-700 border-emerald-200',
+    description: '公式HPコラムや解説記事からの誘導用',
+    utmSource: 'hp_blog',
+    utmMedium: 'article',
+  },
+  {
+    id: 'sns',
+    name: 'SNS（Instagram・Threads・Facebook・LinkedIn等のプロフィール）',
+    category: 'Social',
+    badge: 'SNS',
+    badgeColor: 'bg-sky-50 text-sky-700 border-sky-200',
+    description: '各SNSのプロフィールリンクや通常投稿用',
+    utmSource: 'sns',
+    utmMedium: 'social',
+  },
+  {
+    id: 'line',
+    name: 'LINE（配信・リッチメニュー）',
+    category: 'Chat / CRM',
+    badge: 'LINE',
+    badgeColor: 'bg-emerald-50 text-emerald-700 border-emerald-200',
+    description: 'LINE公式アカウント配信やリッチメニュー用',
+    utmSource: 'line',
+    utmMedium: 'chat',
+  },
+  {
+    id: 'email',
+    name: 'メール（営業・教育ステップ）',
+    category: 'Direct',
+    badge: 'メール',
+    badgeColor: 'bg-cyan-50 text-cyan-700 border-cyan-200',
+    description: '個別営業メールやメルマガ・案内文面用',
+    utmSource: 'email',
+    utmMedium: 'email',
+  },
+  {
+    id: 'material',
+    name: '資料（資料請求・商談資料内のリンク／QR）',
+    category: 'Document',
+    badge: '資料',
+    badgeColor: 'bg-amber-50 text-amber-700 border-amber-200',
+    description: '提案書・ダウンロード資料・名刺QR等用',
+    utmSource: 'material',
+    utmMedium: 'document',
+  },
 ];
 
 const COMMON_MEDIUM_TYPES = [
@@ -101,7 +142,7 @@ const BADGE_COLOR_OPTIONS = [
 export const MarketingQuickLinksHub: React.FC = () => {
   const origin = typeof window !== 'undefined' ? window.location.origin : 'https://mstos.app';
 
-  // 初期デフォルトリンク定義
+  // 初期デフォルトリンク定義（診断・個別相談・作戦会議を先頭に配置）
   const defaultLinks: OfficialLinkItem[] = useMemo(() => [
     {
       id: 'diagnosis',
@@ -116,23 +157,14 @@ export const MarketingQuickLinksHub: React.FC = () => {
       id: 'care_consult',
       title: '介護保険外サービス開業・個別相談',
       description: '診断不要で直接30分面談を申し込める専用受付フォーム',
-      url: `${origin}/f/care-consultation`,
+      url: `${origin}/f/care-package-inquiry`,
       badge: '高額パッケージ直結',
       badgeColor: 'bg-emerald-50 text-emerald-700 border-emerald-200',
       iconName: 'file-text',
     },
     {
-      id: 'line_add',
-      title: '公式LINE 友だち追加リンク',
-      description: 'ステップ配信（実話ストーリー7話）や無料ツール配布の入口',
-      url: 'https://line.me/R/ti/p/@mst_management',
-      badge: 'リスト獲得',
-      badgeColor: 'bg-emerald-50 text-emerald-700 border-emerald-200',
-      iconName: 'message-circle',
-    },
-    {
       id: 'booking',
-      title: '30分無料作戦会議（面談日程調整）',
+      title: '30分無料作戦会議（面談日程予約）',
       description: '対面営業や相談後に案内するオンライン面談カレンダー',
       url: `${origin}/apply/booking`,
       badge: '商談直行',
@@ -140,11 +172,29 @@ export const MarketingQuickLinksHub: React.FC = () => {
       iconName: 'calendar',
     },
     {
+      id: 'material_download',
+      title: '経営改善実務ガイド 資料請求',
+      description: '実務改善ガイド・会社概要PDFダウンロード受付フォーム',
+      url: `${origin}/f/material-download`,
+      badge: '資料請求',
+      badgeColor: 'bg-amber-50 text-amber-700 border-amber-200',
+      iconName: 'file-text',
+    },
+    {
+      id: 'line_add',
+      title: '公式LINE 友だち追加リンク',
+      description: 'LINE公式アカウント友だち追加（※流入元計測不可）',
+      url: 'https://line.me/R/ti/p/@mst_management',
+      badge: '友だち追加',
+      badgeColor: 'bg-emerald-50 text-emerald-700 border-emerald-200',
+      iconName: 'message-circle',
+    },
+    {
       id: 'media_top',
       title: '自社オウンドメディア / コーポレートHP',
       description: '会社概要・専門コラム・デジタル商品の本拠地',
       url: `${origin}/`,
-      badge: '信頼・資産',
+      badge: 'HP直接',
       badgeColor: 'bg-purple-50 text-purple-700 border-purple-200',
       iconName: 'globe',
     },
@@ -152,19 +202,21 @@ export const MarketingQuickLinksHub: React.FC = () => {
 
   const [links, setLinks] = useState<OfficialLinkItem[]>(defaultLinks);
   const [mediaList, setMediaList] = useState<MediumPreset[]>(() => {
-    const stored = loadStoredTrackingMedia<MediumPreset>();
+    const stored = loadStoredTrackingMedia<MediumPreset>(TRACKING_MEDIA_PRESETS);
     return stored && stored.length > 0 ? stored : TRACKING_MEDIA_PRESETS;
   });
 
   const [copiedKey, setCopiedKey] = useState<string | null>(null);
   
-  // 施策・企画名（任意設定、空欄の場合は不要なタグをURLに付けない）
+  // 施策・企画名（任意設定、初期は折りたたみ）
   const [campaignName, setCampaignName] = useState<string>('');
   const [showCampaignOption, setShowCampaignOption] = useState<boolean>(false);
+  const [showMediaManagement, setShowMediaManagement] = useState<boolean>(false);
+  const [showUtmGuide, setShowUtmGuide] = useState<boolean>(false);
+  const [expandedCardId, setExpandedCardId] = useState<string | null>(null);
 
   const [feedbackMessage, setFeedbackMessage] = useState<string | null>(null);
   const [selectedMatrixLinkId, setSelectedMatrixLinkId] = useState<string>('diagnosis');
-  const [showUtmGuide, setShowUtmGuide] = useState<boolean>(false);
 
   // 1. 公式リンク編集用モーダル状態
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
@@ -215,8 +267,8 @@ export const MarketingQuickLinksHub: React.FC = () => {
         }
       }
 
-      // 媒体プリセットの読み込み
-      const localStoredMedia = loadStoredTrackingMedia<MediumPreset>();
+      // 媒体プリセットの読み込み（新5媒体への自動マイグレーション対応）
+      const localStoredMedia = loadStoredTrackingMedia<MediumPreset>(TRACKING_MEDIA_PRESETS);
       if (localStoredMedia && localStoredMedia.length > 0 && isMounted) {
         setMediaList(localStoredMedia);
       }
@@ -244,7 +296,7 @@ export const MarketingQuickLinksHub: React.FC = () => {
               }
             }
 
-            // 媒体設定の読み込み
+            // 媒体設定の読み込み（リモートの旧設定も新5媒体＋カスタムに自動マイグレーション）
             const { data: mediaData } = await supabase
               .from('mst_ai_acquisition_records')
               .select('payload')
@@ -254,8 +306,9 @@ export const MarketingQuickLinksHub: React.FC = () => {
               .maybeSingle();
 
             if (mediaData?.payload?.media && Array.isArray(mediaData.payload.media) && isMounted) {
-              setMediaList(mediaData.payload.media);
-              saveStoredTrackingMedia(mediaData.payload.media);
+              const migrated = migrateTrackingMediaList(mediaData.payload.media, TRACKING_MEDIA_PRESETS);
+              setMediaList(migrated);
+              saveStoredTrackingMedia(migrated);
             }
           }
         }
@@ -750,102 +803,35 @@ export const MarketingQuickLinksHub: React.FC = () => {
         </div>
       </section>
 
-      {/* ── 2. 媒体別 流入追跡リンク発行（媒体の編集・追加・削除対応） ── */}
+      {/* ── 2. 媒体別 流入追跡リンク発行（2ステップ操作 ＆ 5媒体初期表示） ── */}
       <section className="rounded-2xl border border-slate-200 bg-white p-5 sm:p-6 space-y-5 shadow-xs">
-        {/* セクション上部：タイトル ＆ コンパクトアクション */}
-        <div className="flex flex-wrap items-center justify-between gap-3">
-          <div>
-            <h3 className="text-base font-bold text-slate-900 flex items-center gap-2">
-              <Share2 className="h-5 w-5 text-purple-700" />
-              媒体別 流入追跡リンク（ワンクリック発行＆媒体編集）
-            </h3>
-            <p className="mt-0.5 text-xs text-slate-500">
-              各媒体専用の計測URLを発行できます。各カードの「編集」から媒体名や用途、計測タグを自由に変更・追加できます。
-            </p>
-          </div>
-
-          <div className="flex items-center gap-2 flex-wrap">
-            <button
-              type="button"
-              onClick={handleOpenCreateMedia}
-              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-purple-700 hover:bg-purple-800 text-white text-xs font-semibold transition shadow-xs"
-              title="新しい媒体（TikTokや独自提携先など）を追加"
-            >
-              <Plus className="h-3.5 w-3.5" /> 新規媒体を追加
-            </button>
-            <button
-              type="button"
-              onClick={() => handleCopyAllMatrixUrls(activeMatrixLink)}
-              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-semibold transition shadow-xs"
-              title="全媒体のURLを改行区切りでまとめてコピー"
-            >
-              {copiedKey === 'matrix_all' ? (
-                <>
-                  <Check className="h-3.5 w-3.5" /> 全媒体コピー完了！
-                </>
-              ) : (
-                <>
-                  <FileSpreadsheet className="h-3.5 w-3.5" /> 全媒体まとめてコピー
-                </>
-              )}
-            </button>
-            <button
-              type="button"
-              onClick={handleResetMediaToDefaults}
-              className="inline-flex items-center gap-1 text-xs text-slate-600 hover:text-slate-900 border border-slate-200 bg-white hover:bg-slate-50 px-2.5 py-1.5 rounded-lg transition shadow-xs"
-              title="媒体一覧を初期設定に戻す"
-            >
-              <RotateCcw className="h-3 w-3" />
-              <span className="hidden sm:inline">初期媒体に戻す</span>
-            </button>
-            <button
-              type="button"
-              onClick={() => setShowUtmGuide((prev) => !prev)}
-              className="inline-flex items-center gap-1 text-xs text-slate-600 hover:text-slate-900 border border-slate-200 bg-white hover:bg-slate-50 px-2.5 py-1.5 rounded-lg transition shadow-xs"
-              title="流入分析の解説を表示"
-            >
-              <HelpCircle className="h-3.5 w-3.5 text-slate-500" />
-              <span className="hidden sm:inline">仕組み</span>
-              {showUtmGuide ? <ChevronUp className="h-3 w-3" /> : <ChevronDown className="h-3 w-3" />}
-            </button>
-          </div>
+        {/* 注意喚起バナー（1行表示） */}
+        <div className="flex items-center gap-2 rounded-xl border border-amber-200 bg-amber-50/90 px-4 py-3 text-xs text-amber-900 shadow-2xs">
+          <AlertCircle className="h-4 w-4 shrink-0 text-amber-600" />
+          <span className="font-medium">
+            友だち追加（line.me）のURLは流入元を計測できません。診断フォームを入口にすると流入元が残ります。
+          </span>
         </div>
 
-        {/* 開閉式解説ガイド（デフォルト非表示で画面をクリーンに保つ） */}
-        {showUtmGuide && (
-          <div className="rounded-xl border border-purple-200 bg-purple-50/60 p-4 text-xs text-slate-700 space-y-3 animate-in fade-in duration-200">
-            <div className="flex items-center gap-2 text-purple-900 font-bold text-xs border-b border-purple-200 pb-2">
-              <Info className="h-4 w-4 shrink-0 text-purple-700" />
-              <span>流入追跡と媒体編集のポイント</span>
-            </div>
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-3 text-[11px] leading-relaxed">
-              <div className="rounded-lg bg-white p-3 border border-purple-100 shadow-xs">
-                <span className="font-bold text-slate-900 block mb-1">1. 自動計測</span>
-                <p className="text-slate-600">
-                  URL末尾の <code className="bg-slate-100 px-1 py-0.5 rounded text-purple-700 font-mono">?utm_source=note</code> を検知し、顧客カルテへ「noteからの流入」と自動記録します。
-                </p>
-              </div>
-              <div className="rounded-lg bg-white p-3 border border-purple-100 shadow-xs">
-                <span className="font-bold text-slate-900 block mb-1">2. 媒体名・タグの自由編集</span>
-                <p className="text-slate-600">
-                  各カードの「編集」から、表示名や用途メモ、utm_sourceの英字タグを自社の運用に合わせて自由に変更できます。
-                </p>
-              </div>
-              <div className="rounded-lg bg-white p-3 border border-purple-100 shadow-xs">
-                <span className="font-bold text-slate-900 block mb-1">3. 新規媒体の追加・削除</span>
-                <p className="text-slate-600">
-                  TikTokやThreads、外部提携先などを「＋新規媒体を追加」から何件でも追加可能。使わない広告枠等は削除できます。
-                </p>
-              </div>
-            </div>
-          </div>
-        )}
+        {/* セクション見出し */}
+        <div>
+          <h3 className="text-base font-bold text-slate-900 flex items-center gap-2">
+            <Share2 className="h-5 w-5 text-purple-700" />
+            媒体別 流入追跡リンク発行
+          </h3>
+          <p className="mt-0.5 text-xs text-slate-500">
+            ページを選んで媒体カードの「コピー」を押すだけで、各流入元を自動計測する追跡リンクを取得できます。
+          </p>
+        </div>
 
-        {/* 対象URL切り替えタブ */}
+        {/* 【ステップ 1】リンクを作るページを選ぶ */}
         <div className="space-y-2">
-          <label className="text-xs font-semibold text-slate-700 block">
-            計測リンクを発行する公式URLを選択:
-          </label>
+          <div className="flex items-center gap-2">
+            <span className="inline-flex h-5 w-5 items-center justify-center rounded-full bg-purple-700 text-[11px] font-bold text-white shadow-2xs">
+              1
+            </span>
+            <span className="text-xs font-bold text-slate-800">リンクを作るページを選ぶ:</span>
+          </div>
           <div className="flex flex-wrap gap-2">
             {links.map((link) => {
               const isSelected = link.id === activeMatrixLink?.id;
@@ -854,169 +840,303 @@ export const MarketingQuickLinksHub: React.FC = () => {
                   key={link.id}
                   type="button"
                   onClick={() => setSelectedMatrixLinkId(link.id)}
-                  className={`px-3 py-1.5 rounded-lg text-xs font-medium transition flex items-center gap-1.5 ${
+                  className={`px-3 py-2 rounded-xl text-xs transition flex items-center gap-1.5 cursor-pointer ${
                     isSelected
-                      ? 'bg-purple-700 text-white font-semibold shadow-xs ring-1 ring-purple-600'
-                      : 'bg-slate-100 text-slate-600 hover:bg-slate-200/80 border border-slate-200'
+                      ? 'bg-purple-700 text-white font-bold shadow-xs ring-2 ring-purple-600/30'
+                      : 'bg-white hover:bg-slate-50 text-slate-700 border border-slate-200'
                   }`}
                 >
-                  <span className="truncate max-w-[180px]">{link.title}</span>
+                  <span className="truncate max-w-[220px]">{link.title}</span>
                 </button>
               );
             })}
           </div>
         </div>
 
-        {/* 企画名タグ（任意・開閉式アコーディオンで通常時は完全非表示） */}
-        <div className="pt-1">
-          <div className="flex items-center justify-between">
-            <button
-              type="button"
-              onClick={() => setShowCampaignOption((prev) => !prev)}
-              className="inline-flex items-center gap-1 text-[11px] text-slate-500 hover:text-purple-700 transition font-medium"
-            >
-              <Tag className="h-3 w-3" />
-              <span>特定の企画・イベント名タグを付与する（任意）</span>
-              {campaignName.trim() && (
-                <span className="ml-1 text-[10px] font-mono bg-purple-50 text-purple-700 border border-purple-200 px-1.5 py-0.5 rounded">
-                  適用中: {campaignName.trim()}
-                </span>
-              )}
-              {showCampaignOption ? <ChevronUp className="h-3 w-3 ml-0.5" /> : <ChevronDown className="h-3 w-3 ml-0.5" />}
-            </button>
-            {campaignName.trim() && (
-              <button
-                type="button"
-                onClick={() => setCampaignName('')}
-                className="text-[10px] text-slate-500 hover:text-rose-600 underline font-medium"
-              >
-                企画タグを解除
-              </button>
-            )}
-          </div>
-
-          {showCampaignOption && (
-            <div className="mt-2 p-3.5 rounded-xl border border-slate-200 bg-slate-50 space-y-2 animate-in fade-in duration-150">
-              <div className="flex items-center justify-between">
-                <span className="text-[11px] text-slate-700 font-semibold">企画タグ（utm_campaign）:</span>
-                <span className="text-[10px] text-slate-500">空欄の場合はスッキリした基本URLが発行されます</span>
-              </div>
-              <div className="flex items-center gap-2">
-                <input
-                  type="text"
-                  value={campaignName}
-                  onChange={(e) => setCampaignName(e.target.value)}
-                  placeholder="例: spring2026, opening_fair （空欄でOK）"
-                  className="flex-1 rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-xs text-slate-800 font-mono focus:border-purple-500 focus:ring-1 focus:ring-purple-500 focus:outline-none"
-                />
-                {campaignName && (
-                  <button
-                    type="button"
-                    onClick={() => setCampaignName('')}
-                    className="px-2.5 py-1.5 rounded-lg border border-slate-300 bg-white text-xs text-slate-600 hover:text-slate-900 shadow-xs"
-                  >
-                    クリア
-                  </button>
-                )}
-              </div>
+        {/* 【ステップ 2】媒体カードの「コピー」を押す */}
+        <div className="space-y-3 pt-1">
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <div className="flex items-center gap-2">
+              <span className="inline-flex h-5 w-5 items-center justify-center rounded-full bg-purple-700 text-[11px] font-bold text-white shadow-2xs">
+                2
+              </span>
+              <span className="text-xs font-bold text-slate-800">媒体カードの「コピー」を押す:</span>
             </div>
-          )}
-        </div>
-
-        {/* 全媒体の追跡URL一覧グリッド */}
-        <div className="space-y-2.5 pt-3 border-t border-slate-100">
-          <div className="flex items-center justify-between text-xs text-slate-600">
-            <span className="font-semibold text-slate-800">
-              「{activeMatrixLink?.title}」の媒体別URL（全 {mediaList.length} 媒体）:
+            <span className="text-[11px] text-slate-500">
+              発行対象: <strong className="text-purple-700">{activeMatrixLink?.title}</strong>
             </span>
-            <span className="text-[11px] text-slate-500">ワンクリックでコピー / 「編集」から媒体設定を変更可能</span>
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+          {/* 媒体カード一覧（初期5媒体・各カードは媒体名、用途の一言、コピーボタンのみ） */}
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
             {mediaList.map((preset) => {
               const utmUrl = buildUtmUrl(activeMatrixLink.url, preset.utmSource, campaignName, preset.utmMedium);
               const isCopied = copiedKey === `preset_${preset.id}`;
+              const isExpanded = expandedCardId === preset.id;
 
               return (
                 <div
                   key={preset.id}
-                  className="rounded-xl border border-slate-200 bg-slate-50/50 p-3.5 flex flex-col justify-between gap-2.5 hover:bg-white hover:border-purple-300 hover:shadow-xs transition-all group shadow-xs"
+                  className="rounded-xl border border-slate-200 bg-white p-4 flex flex-col justify-between gap-3 shadow-xs hover:border-purple-300 transition"
                 >
-                  <div className="flex items-start justify-between gap-2">
-                    <div className="min-w-0 flex-1">
-                      <div className="flex items-center gap-1.5 flex-wrap">
-                        <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded border ${preset.badgeColor}`}>
-                          {preset.badge}
+                  <div>
+                    <div className="flex items-center justify-between gap-1 mb-1.5">
+                      <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded border ${preset.badgeColor}`}>
+                        {preset.badge}
+                      </span>
+                      {preset.isCustom && (
+                        <span className="text-[9px] px-1 py-0.5 rounded bg-purple-50 text-purple-700 border border-purple-200 font-medium">
+                          追加媒体
                         </span>
-                        <span className="font-bold text-xs text-slate-900 truncate">{preset.name}</span>
-                        {preset.isCustom && (
-                          <span className="text-[9px] px-1 py-0.5 rounded bg-purple-50 text-purple-700 border border-purple-200">
-                            追加媒体
-                          </span>
-                        )}
-                      </div>
-                      <p className="mt-1 text-[11px] text-slate-500 leading-tight line-clamp-1">
-                        {preset.description || '用途メモなし'}
-                      </p>
+                      )}
                     </div>
-
-                    <div className="flex items-center gap-1 shrink-0">
-                      <button
-                        type="button"
-                        onClick={() => handleOpenEditMedia(preset)}
-                        className="p-1 rounded text-slate-500 hover:text-purple-700 hover:bg-purple-50 transition"
-                        title="この媒体の名称・用途・タグを編集"
-                      >
-                        <Pencil className="h-3.5 w-3.5" />
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => handleDeleteMedia(preset.id, preset.name)}
-                        className="p-1 rounded text-slate-400 hover:text-rose-600 hover:bg-rose-50 transition"
-                        title="この媒体を一覧から削除"
-                      >
-                        <Trash2 className="h-3.5 w-3.5" />
-                      </button>
-                      <a
-                        href={utmUrl}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="p-1 rounded text-slate-400 hover:text-slate-700 hover:bg-slate-100 transition"
-                        title="ブラウザでテスト表示"
-                      >
-                        <ExternalLink className="h-3.5 w-3.5" />
-                      </a>
-                    </div>
+                    <h4 className="font-bold text-sm text-slate-900">{preset.name}</h4>
+                    <p className="mt-1 text-xs text-slate-500 leading-snug line-clamp-1">
+                      {preset.description || '用途メモなし'}
+                    </p>
                   </div>
 
-                  {/* URLプレビュー枠 & コピー */}
-                  <div className="flex items-center gap-2 pt-1 border-t border-slate-200/60">
-                    <div className="flex-1 p-2 rounded-lg bg-white border border-slate-200 text-[10px] font-mono text-purple-900 truncate select-all">
-                      {utmUrl}
+                  <div className="space-y-2 pt-2 border-t border-slate-100">
+                    <div className="flex items-center justify-between gap-2">
+                      <button
+                        type="button"
+                        onClick={() => setExpandedCardId(isExpanded ? null : preset.id)}
+                        className="text-[11px] text-slate-500 hover:text-purple-700 inline-flex items-center gap-0.5 cursor-pointer font-medium"
+                      >
+                        <span>{isExpanded ? 'URLを隠す' : 'URL全文を確認'}</span>
+                        {isExpanded ? <ChevronUp className="h-3 w-3" /> : <ChevronDown className="h-3 w-3" />}
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => copyToClipboard(utmUrl, `preset_${preset.id}`)}
+                        className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition cursor-pointer ${
+                          isCopied
+                            ? 'bg-emerald-600 text-white'
+                            : 'bg-purple-700 hover:bg-purple-800 text-white shadow-xs'
+                        }`}
+                      >
+                        {isCopied ? (
+                          <>
+                            <Check className="h-3.5 w-3.5" /> コピー完了
+                          </>
+                        ) : (
+                          <>
+                            <Copy className="h-3.5 w-3.5" /> コピー
+                          </>
+                        )}
+                      </button>
                     </div>
-                    <button
-                      type="button"
-                      onClick={() => copyToClipboard(utmUrl, `preset_${preset.id}`)}
-                      className={`inline-flex items-center gap-1 px-3 py-1.5 rounded-lg text-xs font-semibold transition shrink-0 ${
-                        isCopied
-                          ? 'bg-emerald-600 text-white'
-                          : 'bg-purple-700 hover:bg-purple-800 text-white shadow-xs'
-                      }`}
-                    >
-                      {isCopied ? (
-                        <>
-                          <Check className="h-3 w-3" /> コピー済
-                        </>
-                      ) : (
-                        <>
-                          <Copy className="h-3 w-3" /> コピー
-                        </>
-                      )}
-                    </button>
+
+                    {isExpanded && (
+                      <div className="p-2.5 rounded-lg bg-slate-50 border border-slate-200 space-y-1.5 text-[10px] font-mono text-purple-900 break-all select-all animate-in fade-in duration-150">
+                        <div className="break-all">{utmUrl}</div>
+                        <div className="flex items-center justify-end pt-1">
+                          <a
+                            href={utmUrl}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="inline-flex items-center gap-1 text-[10px] text-slate-500 hover:text-slate-800 font-sans"
+                          >
+                            ブラウザでテスト表示 <ExternalLink className="h-3 w-3" />
+                          </a>
+                        </div>
+                      </div>
+                    )}
                   </div>
                 </div>
               );
             })}
+          </div>
+        </div>
+
+        {/* ── 初期状態では折りたたむ詳細設定群 ── */}
+        <div className="space-y-2 pt-3 border-t border-slate-100">
+          {/* 1. 企画タグ（utm_campaign） */}
+          <div className="rounded-xl border border-slate-200 bg-slate-50/70 p-3">
+            <div className="flex items-center justify-between">
+              <button
+                type="button"
+                onClick={() => setShowCampaignOption((prev) => !prev)}
+                className="inline-flex items-center gap-1.5 text-xs text-slate-700 hover:text-purple-700 transition font-medium cursor-pointer"
+              >
+                <Tag className="h-3.5 w-3.5 text-slate-500" />
+                <span>企画タグ（utm_campaign）を設定する（任意）</span>
+                {campaignName.trim() && (
+                  <span className="ml-1 text-[10px] font-mono bg-purple-100 text-purple-800 border border-purple-200 px-1.5 py-0.5 rounded">
+                    適用中: {campaignName.trim()}
+                  </span>
+                )}
+                {showCampaignOption ? <ChevronUp className="h-3.5 w-3.5 ml-1" /> : <ChevronDown className="h-3.5 w-3.5 ml-1" />}
+              </button>
+              {campaignName.trim() && (
+                <button
+                  type="button"
+                  onClick={() => setCampaignName('')}
+                  className="text-[11px] text-slate-500 hover:text-rose-600 underline font-medium cursor-pointer"
+                >
+                  企画タグを解除
+                </button>
+              )}
+            </div>
+
+            {showCampaignOption && (
+              <div className="mt-3 p-3 rounded-lg border border-slate-200 bg-white space-y-2 animate-in fade-in duration-150">
+                <div className="flex items-center justify-between">
+                  <span className="text-[11px] text-slate-700 font-semibold">企画タグ（utm_campaign）:</span>
+                  <span className="text-[10px] text-slate-500">空欄の場合はスッキリした基本URLが発行されます</span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <input
+                    type="text"
+                    value={campaignName}
+                    onChange={(e) => setCampaignName(e.target.value)}
+                    placeholder="例: spring2026, opening_fair （空欄でOK）"
+                    className="flex-1 rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-xs text-slate-800 font-mono focus:border-purple-500 focus:ring-1 focus:ring-purple-500 focus:outline-none"
+                  />
+                  {campaignName && (
+                    <button
+                      type="button"
+                      onClick={() => setCampaignName('')}
+                      className="px-2.5 py-1.5 rounded-lg border border-slate-300 bg-white text-xs text-slate-600 hover:text-slate-900 shadow-xs cursor-pointer"
+                    >
+                      クリア
+                    </button>
+                  )}
+                </div>
+              </div>
+            )}
+          </div>
+
+          {/* 2. 媒体の追加・編集・削除、「初期媒体に戻す」 */}
+          <div className="rounded-xl border border-slate-200 bg-slate-50/70 p-3">
+            <button
+              type="button"
+              onClick={() => setShowMediaManagement((prev) => !prev)}
+              className="w-full flex items-center justify-between text-xs text-slate-700 hover:text-purple-700 transition font-medium cursor-pointer"
+            >
+              <div className="flex items-center gap-1.5">
+                <SlidersHorizontal className="h-3.5 w-3.5 text-slate-500" />
+                <span>媒体のカスタマイズ（追加・編集・削除・初期値リセット）</span>
+              </div>
+              {showMediaManagement ? <ChevronUp className="h-3.5 w-3.5" /> : <ChevronDown className="h-3.5 w-3.5" />}
+            </button>
+
+            {showMediaManagement && (
+              <div className="mt-3 p-3.5 rounded-lg border border-slate-200 bg-white space-y-3 animate-in fade-in duration-150">
+                <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-100 pb-2.5">
+                  <span className="text-xs font-bold text-slate-800">
+                    登録済み媒体一覧（全 {mediaList.length} 件）
+                  </span>
+                  <div className="flex items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={handleOpenCreateMedia}
+                      className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-purple-700 hover:bg-purple-800 text-white text-xs font-semibold transition shadow-xs cursor-pointer"
+                    >
+                      <Plus className="h-3.5 w-3.5" /> 新規媒体を追加
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => handleCopyAllMatrixUrls(activeMatrixLink)}
+                      className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-semibold transition shadow-xs cursor-pointer"
+                      title="全媒体のURLを改行区切りでまとめてコピー"
+                    >
+                      {copiedKey === 'matrix_all' ? <Check className="h-3.5 w-3.5" /> : <FileSpreadsheet className="h-3.5 w-3.5" />}
+                      <span>全媒体まとめてコピー</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={handleResetMediaToDefaults}
+                      className="inline-flex items-center gap-1 text-xs text-slate-600 hover:text-slate-900 border border-slate-200 bg-white hover:bg-slate-50 px-2 py-1.5 rounded-lg transition shadow-xs cursor-pointer"
+                      title="基本5媒体にリセット"
+                    >
+                      <RotateCcw className="h-3 w-3" />
+                      <span>初期媒体に戻す</span>
+                    </button>
+                  </div>
+                </div>
+
+                <div className="space-y-1.5 max-h-60 overflow-y-auto pr-1">
+                  {mediaList.map((m) => (
+                    <div
+                      key={m.id}
+                      className="flex items-center justify-between gap-2 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-xs"
+                    >
+                      <div className="min-w-0 flex-1 flex items-center gap-2">
+                        <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded border shrink-0 ${m.badgeColor}`}>
+                          {m.badge}
+                        </span>
+                        <span className="font-semibold text-slate-900 truncate">{m.name}</span>
+                        <span className="font-mono text-[10px] text-slate-400">utm_source={m.utmSource}</span>
+                      </div>
+                      <div className="flex items-center gap-1 shrink-0">
+                        <button
+                          type="button"
+                          onClick={() => handleOpenEditMedia(m)}
+                          className="p-1 rounded text-slate-500 hover:text-purple-700 hover:bg-purple-50 transition cursor-pointer"
+                          title="編集"
+                        >
+                          <Pencil className="h-3.5 w-3.5" />
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => handleDeleteMedia(m.id, m.name)}
+                          className="p-1 rounded text-slate-400 hover:text-rose-600 hover:bg-rose-50 transition cursor-pointer"
+                          title="削除"
+                        >
+                          <Trash2 className="h-3.5 w-3.5" />
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+
+          {/* 3. 仕組みの解説 */}
+          <div className="rounded-xl border border-slate-200 bg-slate-50/70 p-3">
+            <button
+              type="button"
+              onClick={() => setShowUtmGuide((prev) => !prev)}
+              className="w-full flex items-center justify-between text-xs text-slate-700 hover:text-purple-700 transition font-medium cursor-pointer"
+            >
+              <div className="flex items-center gap-1.5">
+                <HelpCircle className="h-3.5 w-3.5 text-slate-500" />
+                <span>仕組みと流入計測の解説</span>
+              </div>
+              {showUtmGuide ? <ChevronUp className="h-3.5 w-3.5" /> : <ChevronDown className="h-3.5 w-3.5" />}
+            </button>
+
+            {showUtmGuide && (
+              <div className="mt-3 p-4 rounded-lg border border-purple-200 bg-purple-50/60 text-xs text-slate-700 space-y-3 animate-in fade-in duration-200">
+                <div className="flex items-center gap-2 text-purple-900 font-bold text-xs border-b border-purple-200 pb-2">
+                  <Info className="h-4 w-4 shrink-0 text-purple-700" />
+                  <span>流入追跡と自動タグ付与の仕組み</span>
+                </div>
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-3 text-[11px] leading-relaxed">
+                  <div className="rounded-lg bg-white p-3 border border-purple-100 shadow-xs">
+                    <span className="font-bold text-slate-900 block mb-1">1. URL自動正規化</span>
+                    <p className="text-slate-600">
+                      URL末尾の <code className="bg-slate-100 px-1 py-0.5 rounded text-purple-700 font-mono">?utm_source=sns</code> などを小文字英数字へ自動正規化。リードメモに「流入: SNS」と明記されます。
+                    </p>
+                  </div>
+                  <div className="rounded-lg bg-white p-3 border border-purple-100 shadow-xs">
+                    <span className="font-bold text-slate-900 block mb-1">2. LINEタグ自動付与</span>
+                    <p className="text-slate-600">
+                      LINE連携済みの顧客がフォームを送信すると、「診断受検済み」と「流入:SNS」タグが重複なく自動で付与されます。
+                    </p>
+                  </div>
+                  <div className="rounded-lg bg-white p-3 border border-purple-100 shadow-xs">
+                    <span className="font-bold text-slate-900 block mb-1">3. 初期5媒体と拡張性</span>
+                    <p className="text-slate-600">
+                      日常運用はHPブログ・SNS・LINE・メール・資料の5媒体に集約。広告や外部紹介などは「新規媒体を追加」からいつでも拡張できます。
+                    </p>
+                  </div>
+                </div>
+              </div>
+            )}
           </div>
         </div>
       </section>

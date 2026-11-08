@@ -287,6 +287,23 @@ export const INFLOW_SOURCE_LABELS: Record<string, string> = {
   youtube: 'YouTube',
 };
 
+export const INFLOW_TAG_COLORS: Record<string, string> = {
+  '診断受検済み': '#10B981',
+  '資料請求': '#8B5CF6',
+  '個別相談予約済み': '#6366F1',
+  '相談実施済み': '#A855F7',
+  '流入:SNS': '#6366F1',
+  '流入:HPブログ': '#10B981',
+  '流入:LINE': '#059669',
+  '流入:メール': '#0284C7',
+  '流入:資料': '#D97706',
+  '流入:Threads': '#0F172A',
+  '流入:Facebook': '#1D4ED8',
+  '流入:LinkedIn': '#0284C7',
+  '流入:Instagram': '#DB2777',
+  '流入:X': '#0F172A',
+};
+
 export function getInflowLabel(sourceKey: string): string {
   const clean = (sourceKey || '').toLowerCase().trim();
   return INFLOW_SOURCE_LABELS[clean] || sourceKey || '';
@@ -301,18 +318,18 @@ export function normalizeUtmParams(raw: any): NormalizedUtm {
 
   // utm_source を優先し、無ければ source を採用。ただし source = 'corporate_website' は「HP直接（流入元なし）」として扱う
   let chosen = rawUtmSource;
-  if (!chosen && rawSource && rawSource !== 'corporate_website') {
+  if (!chosen && rawSource && rawSource.toLowerCase() !== 'corporate_website') {
     chosen = rawSource;
   }
 
-  let source = chosen.toLowerCase().replace(/[^a-z0-9_\-]/g, '_').slice(0, 40);
+  let source = chosen.toLowerCase().replace(/[^a-z0-9_\-]/g, '').slice(0, 40);
   if (source === 'line_broadcast') {
     source = 'line';
   } else if (source === 'corporate_website') {
     source = '';
   }
 
-  const medium = typeof raw.utm_medium === 'string' ? raw.utm_medium.trim().toLowerCase().slice(0, 40) : '';
+  const medium = typeof raw.utm_medium === 'string' ? raw.utm_medium.trim().toLowerCase().replace(/[^a-z0-9_\-]/g, '').slice(0, 40) : '';
   const campaign = typeof raw.utm_campaign === 'string' ? raw.utm_campaign.trim().slice(0, 80) : '';
   const referrer = typeof raw.referrer === 'string' ? raw.referrer.trim().slice(0, 300) : '';
   const landing_page = typeof raw.landing_page === 'string' ? raw.landing_page.trim().slice(0, 300) : '';
@@ -1004,11 +1021,12 @@ async function getOrCreateLineTag(ownerId: string, tagName: string): Promise<str
     .maybeSingle();
   if (existingTag?.id) return existingTag.id;
 
+  const color = INFLOW_TAG_COLORS[trimmed] || '#0284C7';
   const { data: newTag, error: insertError } = await lineSupabase
     .from('contact_tags')
     .insert({
       name: trimmed,
-      color: '#0284C7',
+      color,
     })
     .select('id')
     .maybeSingle();
@@ -4646,7 +4664,11 @@ app.post(
     : rawCompanyFromAnswers.slice(0, 200);
   const email = typeof body.email === 'string' ? body.email.trim().toLowerCase().slice(0, 254) : '';
   const phone = typeof body.phone === 'string' ? body.phone.trim().slice(0, 40) : '';
-  let lineUserId = typeof body.lineUserId === 'string' && /^U[0-9a-f]{32}$/i.test(body.lineUserId.trim()) ? body.lineUserId.trim() : '';
+  let lineUserId = typeof body.lineUserId === 'string' && /^U[0-9a-zA-Z]{10,64}$/.test(body.lineUserId.trim()) ? body.lineUserId.trim() : '';
+  const queryLuid = typeof req.query?.luid === 'string' ? (req.query.luid as string).trim() : typeof req.query?.line_user_id === 'string' ? (req.query.line_user_id as string).trim() : '';
+  if (!lineUserId && queryLuid && /^U[0-9a-zA-Z]{10,64}$/.test(queryLuid)) {
+    lineUserId = queryLuid;
+  }
   let contactId = typeof body.contactId === 'string' && isPublicUuid(body.contactId.trim()) ? body.contactId.trim() : '';
   const rawToken = typeof body.token === 'string' ? body.token.trim() : '';
   let tokenData: CarePackageFormTokenPayload | null = null;
@@ -4656,7 +4678,7 @@ app.post(
       if (!contactId && tokenData.cid && isPublicUuid(tokenData.cid)) {
         contactId = tokenData.cid;
       }
-      if (!lineUserId && tokenData.luid && /^U[0-9a-f]{32}$/i.test(tokenData.luid)) {
+      if (!lineUserId && tokenData.luid && /^U[0-9a-zA-Z]{10,64}$/.test(tokenData.luid)) {
         lineUserId = tokenData.luid;
       }
     }
@@ -4717,12 +4739,24 @@ app.post(
     const questionIds = configuredQuestions
       .filter((question: any) => question && typeof question.id === 'string')
       .map((question: any) => question.id as string);
+    const SYSTEM_META_ANSWER_KEYS = new Set([
+      'material_keys',
+      'choice_label',
+      'material_choice',
+      'q_hear_about',
+      'hear_about',
+      'hearAbout',
+      'companyName',
+      'company',
+      'company_name',
+      'service_interest',
+    ]);
     const allowedQuestionIds = new Set(questionIds);
-    if (configuredQuestions.length > 0 && Object.keys(answers).some((key) => !allowedQuestionIds.has(key))) {
+    if (configuredQuestions.length > 0 && Object.keys(answers).some((key) => !allowedQuestionIds.has(key) && !SYSTEM_META_ANSWER_KEYS.has(key))) {
       return res.status(400).json({ error: 'フォームの設問が更新されています。ページを再読み込みして再入力してください。' });
     }
     const cleanAnswers = configuredQuestions.length > 0
-      ? Object.fromEntries(Object.entries(answers).filter(([key]) => allowedQuestionIds.has(key)))
+      ? Object.fromEntries(Object.entries(answers).filter(([key]) => allowedQuestionIds.has(key) || SYSTEM_META_ANSWER_KEYS.has(key)))
       : answers;
     const requiredQuestionIds = (configuredQuestions as any[])
       .filter((question) => question?.required && typeof question.id === 'string')
@@ -4918,14 +4952,20 @@ app.post(
     const answerSummary = JSON.stringify(cleanAnswers).slice(0, 6_000);
     const sourceLabel = publicFormSourceLabels[form.form_type] || 'Webフォーム';
     const originLabel = utm.source ? `（流入: ${utm.source.slice(0, 80)}）` : '';
-    // ラウンド2-2: 請求資料キーの抽出
+    // ラウンド2-2 & ラウンド6: 請求資料キーの抽出
     let requestedMaterialKeys: string[] = [];
     if (Array.isArray(body.materialKeys)) {
       requestedMaterialKeys = body.materialKeys.filter((k: any) => typeof k === 'string' && k.trim());
+    } else if (Array.isArray(body.material_keys)) {
+      requestedMaterialKeys = body.material_keys.filter((k: any) => typeof k === 'string' && k.trim());
+    } else if (Array.isArray(body.answers?.material_keys)) {
+      requestedMaterialKeys = (body.answers.material_keys as string[]).filter((k) => typeof k === 'string' && k.trim());
+    } else if (Array.isArray(body.customFields?.material_keys)) {
+      requestedMaterialKeys = (body.customFields.material_keys as string[]).filter((k) => typeof k === 'string' && k.trim());
     } else if (Array.isArray(cleanAnswers.material_keys)) {
       requestedMaterialKeys = (cleanAnswers.material_keys as string[]).filter((k) => typeof k === 'string' && k.trim());
-    } else if (typeof cleanAnswers.material_choice === 'string') {
-      const choice = cleanAnswers.material_choice.trim();
+    } else if (typeof cleanAnswers.material_choice === 'string' || typeof body.answers?.material_choice === 'string') {
+      const choice = String(cleanAnswers.material_choice || body.answers?.material_choice || '').trim();
       if (choice === 'care') requestedMaterialKeys = ['care-package-overview'];
       else if (choice === 'management') requestedMaterialKeys = ['management-guide'];
       else if (choice === 'both') requestedMaterialKeys = ['management-guide', 'care-package-overview'];
@@ -4979,13 +5019,35 @@ app.post(
             .filter((m) => requestedMaterialKeys.includes(m.key))
             .map((m) => ({ key: m.key, label: m.label, url: m.public_url }));
         }
-        // 資料キー未指定だが資料請求の場合、先頭の有効資料を採用
+        // 資料キー未指定だが資料請求の場合、全有効資料を採用
         if (resolvedMaterials.length === 0 && (slug === 'material-download' || rawInquiry.includes('資料'))) {
-          resolvedMaterials = [activeMaterials[0]].map((m) => ({ key: m.key, label: m.label, url: m.public_url }));
+          resolvedMaterials = activeMaterials.map((m) => ({ key: m.key, label: m.label, url: m.public_url }));
         }
       }
     } catch (matLookupErr) {
       console.warn('[PublicForm] Materials lookup exception:', matLookupErr);
+    }
+
+    // DB未初期化または未検索時のフォールバック（2資料を確実に返却）
+    if (resolvedMaterials.length === 0 && (slug === 'material-download' || rawInquiry.includes('資料') || requestedMaterialKeys.length > 0)) {
+      const defaultMaterialsList = [
+        {
+          key: 'management-guide',
+          label: '① 経営改善実務ガイドブック（要点解説スライド）',
+          url: 'https://corp.mstcorp.info/materials/mst-management-guide.pdf',
+        },
+        {
+          key: 'care-package-overview',
+          label: '② 介護保険外サービス開業・収益化パッケージ資料',
+          url: 'https://corp.mstcorp.info/materials/care-package-overview.pdf',
+        },
+      ];
+      if (requestedMaterialKeys.length > 0) {
+        resolvedMaterials = defaultMaterialsList.filter((m) => requestedMaterialKeys.includes(m.key));
+      }
+      if (resolvedMaterials.length === 0) {
+        resolvedMaterials = defaultMaterialsList;
+      }
     }
 
     // ラウンド2-3: 介護保険外パッケージの判定を slug === 'care-package-inquiry' に限定（material-downloadを誤判定させない）
@@ -5055,7 +5117,7 @@ app.post(
     const requestMarker = `[申込 ${requestId}]`;
     const inflowLabel = normalizedUtm.source ? getInflowLabel(normalizedUtm.source) : '';
     const utmDetails = [
-      inflowLabel ? `流入: ${inflowLabel} (${normalizedUtm.source})` : '',
+      inflowLabel ? `流入: ${inflowLabel}` : '',
       normalizedUtm.medium ? `utm_medium: ${normalizedUtm.medium}` : '',
       normalizedUtm.campaign ? `utm_campaign: ${normalizedUtm.campaign}` : '',
       normalizedUtm.referrer ? `referrer: ${normalizedUtm.referrer}` : '',
@@ -6985,7 +7047,10 @@ async function startStandaloneServer() {
   });
 }
 
-void startStandaloneServer();
+const isRunningAsScript = Boolean(process.argv[1] && /server\.(ts|js)$/.test(process.argv[1]));
+if (isRunningAsScript) {
+  void startStandaloneServer();
+}
 
 export default app;
 export { app };

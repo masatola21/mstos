@@ -243,6 +243,12 @@ export async function submitIntakeToCRM(payload: IntakeSubmissionPayload): Promi
     } catch {}
   }
 
+  const materialKeys = Array.isArray(payload.customFields?.material_keys)
+    ? payload.customFields?.material_keys
+    : Array.isArray((payload.answers as any)?.material_keys)
+      ? (payload.answers as any).material_keys
+      : [];
+
   const requestBody = {
     name: cleanName,
     companyName: cleanCompany,
@@ -250,6 +256,7 @@ export async function submitIntakeToCRM(payload: IntakeSubmissionPayload): Promi
     phone: cleanPhone,
     requestId,
     privacyAgreed: true,
+    materialKeys,
     answers: payload.answers || {},
     notes: payload.notes || '',
     customFields: payload.customFields || {},

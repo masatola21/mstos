@@ -395,6 +395,21 @@ export const PublicIntakeForm: React.FC<{ slug: string }> = ({ slug }) => {
               <label className="block text-sm font-medium text-slate-700">会社名・屋号（任意）<input type="text" autoComplete="organization" maxLength={200} value={companyName} onChange={(event) => setCompanyName(event.target.value)} className={inputClass}/><span className="mt-1 block text-xs font-normal text-slate-500">準備中・未定の場合は空欄で進められます。</span></label>
               <label className="block text-sm font-medium text-slate-700">メールアドレス <span className="text-rose-600">*</span><input required type="email" autoComplete="email" maxLength={254} value={email} onChange={(event) => setEmail(event.target.value)} className={inputClass}/><span className="mt-1 block text-xs font-normal text-slate-500">既にご登録がある場合、同じメールアドレスで情報を紐付けます。</span></label>
               <label className="block text-sm font-medium text-slate-700">電話番号<input type="tel" autoComplete="tel" maxLength={40} value={phone} onChange={(event) => setPhone(event.target.value)} className={inputClass}/></label>
+              {!questions.some((q) => q.id === 'q_hear_about') && (
+                <label className="block text-sm font-medium text-slate-700">
+                  どこで知りましたか？（認知経路・任意）
+                  <select
+                    value={String(answers.q_hear_about || '')}
+                    onChange={(event) => updateAnswer('q_hear_about', event.target.value)}
+                    className={inputClass}
+                  >
+                    <option value="">選択してください（任意）</option>
+                    {['Instagram', 'Threads', 'Facebook', 'LinkedIn', 'ブログ', '検索', '紹介', 'メール', 'その他'].map((option) => (
+                      <option key={option} value={option}>{option}</option>
+                    ))}
+                  </select>
+                </label>
+              )}
             </section>
 
             {questions.map((question) => (
