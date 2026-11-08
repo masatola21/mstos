@@ -17,6 +17,7 @@ export default function ContactForm() {
         phone: '',
         service_interest: '経営戦略・業務効率化設計・伴走顧問',
         message: '',
+        hear_about: '',
     });
     const [source, setSource] = useState('corporate_website');
     useEffect(() => {
@@ -52,9 +53,16 @@ export default function ContactForm() {
                 phone: formData.phone,
                 inquiryType: 'consultation',
                 source: source,
-                notes: `【ご関心のあるテーマ】${formData.service_interest}\n【ご相談内容】${formData.message}`,
+                notes: `【ご関心のあるテーマ】${formData.service_interest}\n【ご相談内容】${formData.message}${formData.hear_about ? `\n【認知経路】${formData.hear_about}` : ''}`,
+                answers: {
+                    service_interest: formData.service_interest,
+                    message: formData.message,
+                    q_hear_about: formData.hear_about,
+                    hear_about: formData.hear_about,
+                },
                 customFields: {
                     service_interest: formData.service_interest,
+                    hear_about: formData.hear_about,
                 },
             });
             if (res.success) {

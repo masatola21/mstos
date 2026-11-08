@@ -15,6 +15,7 @@ export default function DiagnosisForm() {
         name: '',
         email: '',
         phone: '',
+        hear_about: '',
     });
     const [source, setSource] = useState('corporate_website');
     const [loading, setLoading] = useState(false);
@@ -57,10 +58,15 @@ export default function DiagnosisForm() {
                 phone: lead.phone,
                 inquiryType: 'diagnosis',
                 source: source,
-                answers: answers,
-                notes: `【経営ボトルネック診断】判定: ${analysis.typeTitle}（${analysis.badge}）\n【手作業】${answers.q_ops_bottleneck}\n【売上・利益】${answers.q_profit_bottleneck}\n【停滞原因】${answers.q_delay_reason}\n【希望】${answers.q_ideal_future}\n【自由記入】${answers.q_free_notes || 'なし'}`,
+                answers: {
+                    ...answers,
+                    q_hear_about: lead.hear_about,
+                    hear_about: lead.hear_about,
+                },
+                notes: `【経営ボトルネック診断】判定: ${analysis.typeTitle}（${analysis.badge}）\n【手作業】${answers.q_ops_bottleneck}\n【売上・利益】${answers.q_profit_bottleneck}\n【停滞原因】${answers.q_delay_reason}\n【希望】${answers.q_ideal_future}\n【自由記入】${answers.q_free_notes || 'なし'}${lead.hear_about ? `\n【認知経路】${lead.hear_about}` : ''}`,
                 customFields: {
                     diagnosis_result: analysis,
+                    hear_about: lead.hear_about,
                 },
             });
             if (res.success) {

@@ -18,6 +18,7 @@ export default function ContactForm() {
     phone: '',
     service_interest: '経営戦略・業務効率化設計・伴走顧問',
     message: '',
+    hear_about: '',
   });
 
   const [source, setSource] = useState('corporate_website');
@@ -58,9 +59,16 @@ export default function ContactForm() {
         phone: formData.phone,
         inquiryType: 'consultation',
         source: source,
-        notes: `【ご関心のあるテーマ】${formData.service_interest}\n【ご相談内容】${formData.message}`,
+        notes: `【ご関心のあるテーマ】${formData.service_interest}\n【ご相談内容】${formData.message}${formData.hear_about ? `\n【認知経路】${formData.hear_about}` : ''}`,
+        answers: {
+          service_interest: formData.service_interest,
+          message: formData.message,
+          q_hear_about: formData.hear_about,
+          hear_about: formData.hear_about,
+        },
         customFields: {
           service_interest: formData.service_interest,
+          hear_about: formData.hear_about,
         },
       });
 
@@ -262,6 +270,29 @@ export default function ContactForm() {
           onChange={(e) => setFormData({ ...formData, message: e.target.value })}
           className="w-full px-4 py-3 rounded-xl border border-sand-300 focus:border-brand-600 focus:ring-2 focus:ring-brand-100 text-sm outline-none transition leading-relaxed"
         />
+      </div>
+
+      {/* どこで知りましたか？（認知経路・任意） */}
+      <div>
+        <label className="block text-xs font-bold text-slate-800 mb-2">
+          どこで知りましたか？ <span className="text-gray-400 font-normal">（任意）</span>
+        </label>
+        <select
+          value={formData.hear_about}
+          onChange={(e) => setFormData({ ...formData, hear_about: e.target.value })}
+          className="w-full px-4 py-3 rounded-xl border border-sand-300 focus:border-brand-600 focus:ring-2 focus:ring-brand-100 text-sm outline-none transition bg-white text-slate-800 cursor-pointer"
+        >
+          <option value="">選択してください（任意）</option>
+          <option value="Instagram">Instagram</option>
+          <option value="Threads">Threads</option>
+          <option value="Facebook">Facebook</option>
+          <option value="LinkedIn">LinkedIn</option>
+          <option value="ブログ">ブログ・HPコラム</option>
+          <option value="検索">検索（Google/Yahoo等）</option>
+          <option value="紹介">知人・提携先からの紹介</option>
+          <option value="メール">メールマガジン・案内</option>
+          <option value="その他">その他</option>
+        </select>
       </div>
 
       {/* 個人情報取り扱い */}

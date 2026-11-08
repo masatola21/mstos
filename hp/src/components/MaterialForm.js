@@ -27,6 +27,7 @@ export default function MaterialForm() {
         name: '',
         email: '',
         phone: '',
+        hear_about: '',
     });
     const [source, setSource] = useState('corporate_website');
     const [loading, setLoading] = useState(false);
@@ -112,14 +113,17 @@ export default function MaterialForm() {
                 phone: formData.phone,
                 inquiryType: isCareOnly ? 'care_package' : 'material',
                 source: source,
-                notes: `【資料請求】ご希望資料: ${choiceLabel}`,
+                notes: `【資料請求】ご希望資料: ${choiceLabel}${formData.hear_about ? `\n【認知経路】${formData.hear_about}` : ''}`,
                 answers: {
                     material_keys: selectedKeys,
                     choice_label: choiceLabel,
+                    q_hear_about: formData.hear_about,
+                    hear_about: formData.hear_about,
                 },
                 customFields: {
                     material_keys: selectedKeys,
                     choice_label: choiceLabel,
+                    hear_about: formData.hear_about,
                 },
             });
 

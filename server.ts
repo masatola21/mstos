@@ -256,6 +256,77 @@ async function assignCarePackageTag(contactId: string | null, lineUserId: string
   }
 }
 
+// ─────────────────────────────────────────────────────────────────────────────
+// ラウンド6: UTM正規化と流入ラベルマッピング（server共通）
+// ─────────────────────────────────────────────────────────────────────────────
+export interface NormalizedUtm {
+  source: string;
+  medium: string;
+  campaign: string;
+  referrer: string;
+  landing_page: string;
+  rawSource: string;
+}
+
+export const INFLOW_SOURCE_LABELS: Record<string, string> = {
+  sns: 'SNS',
+  hp_blog: 'HPブログ',
+  line: 'LINE',
+  email: 'メール',
+  material: '資料',
+  instagram: 'Instagram',
+  threads: 'Threads',
+  facebook: 'Facebook',
+  linkedin: 'LinkedIn',
+  x: 'X',
+  twitter: 'X',
+  note: 'note',
+  flyer_qr: '紙/QR',
+  google_ads: 'Google広告',
+  meta_ads: 'Meta広告',
+  youtube: 'YouTube',
+};
+
+export function getInflowLabel(sourceKey: string): string {
+  const clean = (sourceKey || '').toLowerCase().trim();
+  return INFLOW_SOURCE_LABELS[clean] || sourceKey || '';
+}
+
+export function normalizeUtmParams(raw: any): NormalizedUtm {
+  if (!raw || typeof raw !== 'object') {
+    return { source: '', medium: '', campaign: '', referrer: '', landing_page: '', rawSource: '' };
+  }
+  const rawUtmSource = typeof raw.utm_source === 'string' ? raw.utm_source.trim() : '';
+  const rawSource = typeof raw.source === 'string' ? raw.source.trim() : '';
+
+  // utm_source を優先し、無ければ source を採用。ただし source = 'corporate_website' は「HP直接（流入元なし）」として扱う
+  let chosen = rawUtmSource;
+  if (!chosen && rawSource && rawSource !== 'corporate_website') {
+    chosen = rawSource;
+  }
+
+  let source = chosen.toLowerCase().replace(/[^a-z0-9_\-]/g, '_').slice(0, 40);
+  if (source === 'line_broadcast') {
+    source = 'line';
+  } else if (source === 'corporate_website') {
+    source = '';
+  }
+
+  const medium = typeof raw.utm_medium === 'string' ? raw.utm_medium.trim().toLowerCase().slice(0, 40) : '';
+  const campaign = typeof raw.utm_campaign === 'string' ? raw.utm_campaign.trim().slice(0, 80) : '';
+  const referrer = typeof raw.referrer === 'string' ? raw.referrer.trim().slice(0, 300) : '';
+  const landing_page = typeof raw.landing_page === 'string' ? raw.landing_page.trim().slice(0, 300) : '';
+
+  return {
+    source,
+    medium,
+    campaign,
+    referrer,
+    landing_page,
+    rawSource: rawUtmSource || rawSource || '',
+  };
+}
+
 /**
  * SSRF対策：プライベートIP、ループバック、メタデータエンドポイント等の遮断
  */
@@ -335,6 +406,7 @@ async function ensureStandardPublicForms(): Promise<void> {
           { id: 'q_inquiry_type', label: 'ご希望の内容', type: 'radio', required: true, options: ['資料請求', '開業相談', '両方希望'] },
           { id: 'q_current_status', label: '現在の状況', type: 'select', required: false, options: ['これから開業を検討している', '開業準備を進めている', 'すでに介護保険外サービスを運営している', '既存事業の新規事業として検討している', 'その他'] },
           { id: 'q_interests_challenges', label: '開業・新規事業について知りたいこと・ご相談内容', type: 'textarea', required: false },
+          { id: 'q_hear_about', label: 'どこで知りましたか？（認知経路）', type: 'select', required: false, options: ['Instagram', 'Threads', 'Facebook', 'LinkedIn', 'ブログ', '検索', '紹介', 'メール', 'その他'] },
         ],
       },
       privacy_notice: 'ご入力いただいた個人情報および相談内容は、お問い合わせへの対応、資料送付、および開業支援に関するご案内にのみ利用いたします。',
@@ -351,7 +423,9 @@ async function ensureStandardPublicForms(): Promise<void> {
         description: '経営相談や業務自動化に関するお問い合わせを承っております。',
         booking_url: 'https://timerex.net/s/mst.shikumikaizen_b173/4ac78e37',
         material_url: null,
-        questions: [],
+        questions: [
+          { id: 'q_hear_about', label: 'どこで知りましたか？（認知経路）', type: 'select', required: false, options: ['Instagram', 'Threads', 'Facebook', 'LinkedIn', 'ブログ', '検索', '紹介', 'メール', 'その他'] },
+        ],
       },
       privacy_notice: 'ご入力いただいた個人情報は、お問い合わせへの回答およびご案内にのみ利用いたします。',
     },
@@ -389,6 +463,7 @@ async function ensureStandardPublicForms(): Promise<void> {
           { id: 'q_delay_reason', label: '改善停滞の原因', type: 'radio', required: true },
           { id: 'q_ideal_future', label: '目指したい未来', type: 'radio', required: true },
           { id: 'q_free_notes', label: '自由相談メモ', type: 'textarea', required: false },
+          { id: 'q_hear_about', label: 'どこで知りましたか？（認知経路）', type: 'select', required: false, options: ['Instagram', 'Threads', 'Facebook', 'LinkedIn', 'ブログ', '検索', '紹介', 'メール', 'その他'] },
         ],
       },
       privacy_notice: 'ご入力いただいた個人情報は、診断結果の作成およびご連絡にのみ利用いたします。',
@@ -399,15 +474,39 @@ async function ensureStandardPublicForms(): Promise<void> {
     try {
       const { data: existing } = await lineSupabase
         .from('diagnosis_forms')
-        .select('id, status')
+        .select('id, status, definition')
         .eq('public_slug', item.public_slug)
         .maybeSingle();
 
       if (!existing) {
         await lineSupabase.from('diagnosis_forms').insert(item);
         console.log(`[Setup] Standard form created: ${item.public_slug} (status: published)`);
-      } else if (existing.status !== 'published') {
-        await lineSupabase.from('diagnosis_forms').update({ status: 'published' }).eq('id', existing.id);
+      } else {
+        const existingDef = existing.definition && typeof existing.definition === 'object' ? existing.definition : {};
+        const questions = Array.isArray(existingDef.questions) ? existingDef.questions : [];
+        const hasHearAbout = questions.some((q: any) => q.id === 'q_hear_about');
+        const updatePayload: Record<string, any> = {};
+        if (existing.status !== 'published') {
+          updatePayload.status = 'published';
+        }
+        if (!hasHearAbout && item.public_slug !== 'material-download') {
+          updatePayload.definition = {
+            ...existingDef,
+            questions: [
+              ...questions,
+              {
+                id: 'q_hear_about',
+                label: 'どこで知りましたか？（認知経路）',
+                type: 'select',
+                required: false,
+                options: ['Instagram', 'Threads', 'Facebook', 'LinkedIn', 'ブログ', '検索', '紹介', 'メール', 'その他'],
+              },
+            ],
+          };
+        }
+        if (Object.keys(updatePayload).length > 0) {
+          await lineSupabase.from('diagnosis_forms').update(updatePayload).eq('id', existing.id);
+        }
       }
     } catch (e: any) {
       console.warn(`[Setup] ensureStandardPublicForms ${item.public_slug} warning:`, e?.message);
@@ -4892,7 +4991,7 @@ app.post(
     // ラウンド2-3: 介護保険外パッケージの判定を slug === 'care-package-inquiry' に限定（material-downloadを誤判定させない）
     const isCarePackage = slug === 'care-package-inquiry' || (slug !== 'material-download' && slug !== 'contact-inquiry' && slug !== 'business-diagnosis' && (cleanAnswers.service_interest === '介護保険外サービス開業パッケージ' || rawInquiry.includes('介護')));
 
-    // ラウンド2-3: leads.source をフォームslugで一意に決定
+    // ラウンド2-3 & 補足A: leads.source はフォームslug別のラベルを一意に保持（流入元の詳細は別項目へ）
     let leadSource = 'HP：Web受付';
     if (slug === 'material-download') {
       leadSource = 'HP：資料請求';
@@ -4910,21 +5009,14 @@ app.post(
       leadSource = `HP：${form.name || 'Webフォーム'}`;
     }
 
-    // ラウンド5: SNS経由の流入（utm_source: threads, facebook, linkedin, instagram, x, twitter, note または utm_medium: social）をリード流入元に反映
-    const snsNameMap: Record<string, string> = {
-      threads: 'Threads',
-      facebook: 'Facebook',
-      linkedin: 'LinkedIn',
-      instagram: 'Instagram',
-      x: 'X',
-      twitter: 'X',
-      note: 'note',
-    };
-    const utmSourceKey = (utm.utm_source || '').toLowerCase().trim();
-    if (utmSourceKey && (utm.utm_medium === 'social' || snsNameMap[utmSourceKey])) {
-      const snsLabel = snsNameMap[utmSourceKey] || utm.utm_source;
-      leadSource = `SNS：${snsLabel}`;
-    }
+    // ラウンド6: UTM正規化と認知経路の取得
+    const normalizedUtm = normalizeUtmParams(utm);
+    const hearAboutAnswer = String(
+      cleanAnswers.q_hear_about ||
+      cleanAnswers.hear_about ||
+      cleanAnswers.hearAbout ||
+      ''
+    ).trim();
 
     // ラウンド2-3: leads.status を slug / 種別別に一意に決定
     let leadStatus = '相談申込';
@@ -4961,13 +5053,13 @@ app.post(
 
     // 流入元詳細（utm, referrer, landing page）と請求資料の構造化メモ
     const requestMarker = `[申込 ${requestId}]`;
+    const inflowLabel = normalizedUtm.source ? getInflowLabel(normalizedUtm.source) : '';
     const utmDetails = [
-      utm.utm_source ? `utm_source: ${utm.utm_source}` : '',
-      utm.utm_medium ? `utm_medium: ${utm.utm_medium}` : '',
-      utm.utm_campaign ? `utm_campaign: ${utm.utm_campaign}` : '',
-      utm.source && utm.source !== 'corporate_website' ? `source: ${utm.source}` : '',
-      utm.referrer ? `referrer: ${utm.referrer}` : '',
-      utm.landing_page ? `LP: ${utm.landing_page}` : '',
+      inflowLabel ? `流入: ${inflowLabel} (${normalizedUtm.source})` : '',
+      normalizedUtm.medium ? `utm_medium: ${normalizedUtm.medium}` : '',
+      normalizedUtm.campaign ? `utm_campaign: ${normalizedUtm.campaign}` : '',
+      normalizedUtm.referrer ? `referrer: ${normalizedUtm.referrer}` : '',
+      normalizedUtm.landing_page ? `LP: ${normalizedUtm.landing_page}` : '',
     ].filter(Boolean).join(' | ');
 
     const requestedMaterialText = resolvedMaterials.length > 0
@@ -4979,6 +5071,7 @@ app.post(
     const noteEntry = [
       `${requestMarker} ${leadSource} / ${new Date().toISOString()}`,
       utmDetails ? `【流入詳細】${utmDetails}` : '',
+      hearAboutAnswer ? `【認知経路（どこで知りましたか）】${hearAboutAnswer}` : '',
       companyName ? `【会社名】${companyName}` : '',
       contactNameNote,
       requestedMaterialText,
@@ -5055,7 +5148,7 @@ app.post(
         company_id: resolvedCompanyId,
         source: leadSource,
         service_type: formServiceType,
-        priority_channel: utm.source === 'line' || utm.utm_source === 'line' ? 'LINE' : 'メール',
+        priority_channel: normalizedUtm.source === 'line' ? 'LINE' : 'メール',
         status: leadStatus,
         first_registered_at: new Date().toISOString(),
         last_contacted_at: new Date().toISOString(),
@@ -5096,6 +5189,65 @@ app.post(
       const { data, error } = await lineSupabase.rpc('create_diagnosis_from_form_submission', { p_submission_id: submission.id });
       if (error) console.error('Diagnosis handoff failed:', error.message);
       else diagnosisId = data || null;
+    }
+
+    // ラウンド6-2: LINE友だちへの自動タグ付与（診断受検済み、資料請求、流入:<流入ラベル>）
+    try {
+      const targetFriendLineUserId = lineUserId || contact?.line_user_id || null;
+      let targetFriendId: string | null = null;
+      if (targetFriendLineUserId) {
+        const { data: lf } = await lineSupabase
+          .from('line_friends')
+          .select('id')
+          .eq('line_user_id', targetFriendLineUserId)
+          .maybeSingle();
+        targetFriendId = lf?.id || null;
+      } else if (contact?.id) {
+        const { data: lf } = await lineSupabase
+          .from('line_friends')
+          .select('id')
+          .eq('contact_id', contact.id)
+          .maybeSingle();
+        targetFriendId = lf?.id || null;
+      }
+
+      if (targetFriendId) {
+        const tagsToAssign: string[] = [];
+
+        // 1. 診断フォーム送信時
+        if (form.form_type === 'diagnosis' || slug === 'business-diagnosis') {
+          tagsToAssign.push('診断受検済み');
+        }
+        // 2. 資料請求時
+        if (slug === 'material-download' || inquiryType === '資料請求') {
+          tagsToAssign.push('資料請求');
+        }
+        // 3. 正規化済みの utm_source がある場合（HP直接除外）
+        if (normalizedUtm.source) {
+          const label = getInflowLabel(normalizedUtm.source);
+          tagsToAssign.push(`流入:${label}`);
+        } else if (hearAboutAnswer) {
+          // 4. UTMがない場合のみ「どこで知りましたか？」の回答からタグ付与
+          tagsToAssign.push(`流入:${hearAboutAnswer}`);
+        }
+
+        for (const tagName of tagsToAssign) {
+          try {
+            const tagId = await getOrCreateLineTag('system', tagName);
+            if (tagId) {
+              await lineSupabase.from('line_friend_tags').upsert({
+                line_friend_id: targetFriendId,
+                tag_id: tagId,
+                assigned_by: 'automation',
+              }, { onConflict: 'line_friend_id,tag_id', ignoreDuplicates: true });
+            }
+          } catch (tErr: any) {
+            console.warn(`[AutoTag] Could not assign tag '${tagName}':`, tErr?.message);
+          }
+        }
+      }
+    } catch (tagErr: any) {
+      console.warn('[AutoTag] Tag automation exception (non-fatal):', tagErr?.message);
     }
 
     if (contact?.id) {

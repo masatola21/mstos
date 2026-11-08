@@ -64,14 +64,36 @@ export function clearStoredOfficialLinks(): void {
   }
 }
 
-const TRACKING_MEDIA_KEY = 'mst_marketing_tracking_media_v1';
+const TRACKING_MEDIA_KEY_V1 = 'mst_marketing_tracking_media_v1';
+const TRACKING_MEDIA_KEY = 'mst_marketing_tracking_media_v2';
 
-export function loadStoredTrackingMedia<T>(): T[] | null {
+export function loadStoredTrackingMedia<T extends { isCustom?: boolean }>(defaultPresets?: T[]): T[] | null {
   try {
-    const raw = localStorage.getItem(TRACKING_MEDIA_KEY);
-    if (!raw) return null;
-    const parsed = JSON.parse(raw);
-    return Array.isArray(parsed) && parsed.length > 0 ? (parsed as T[]) : null;
+    const rawV2 = localStorage.getItem(TRACKING_MEDIA_KEY);
+    if (rawV2) {
+      const parsed = JSON.parse(rawV2);
+      if (Array.isArray(parsed) && parsed.length > 0) {
+        return parsed as T[];
+      }
+    }
+
+    // v1 からの自動マイグレーション: ユーザー追加の独自媒体 (isCustom: true) を保持し、新初期プリセットとマージ
+    const rawV1 = localStorage.getItem(TRACKING_MEDIA_KEY_V1);
+    if (rawV1) {
+      try {
+        const parsedV1 = JSON.parse(rawV1);
+        if (Array.isArray(parsedV1)) {
+          const customItems = parsedV1.filter((item: any) => item && item.isCustom === true) as T[];
+          const merged = defaultPresets ? [...defaultPresets, ...customItems] : customItems;
+          if (merged.length > 0) {
+            saveStoredTrackingMedia(merged);
+            return merged;
+          }
+        }
+      } catch {}
+    }
+
+    return null;
   } catch {
     return null;
   }
@@ -88,7 +110,9 @@ export function saveStoredTrackingMedia<T>(media: T[]): void {
 export function clearStoredTrackingMedia(): void {
   try {
     localStorage.removeItem(TRACKING_MEDIA_KEY);
+    localStorage.removeItem(TRACKING_MEDIA_KEY_V1);
   } catch (error) {
     console.warn('Could not clear tracking media locally:', error);
   }
 }
+

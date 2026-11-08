@@ -22,6 +22,7 @@ export default function DiagnosisForm() {
     name: '',
     email: '',
     phone: '',
+    hear_about: '',
   });
 
   const [source, setSource] = useState('corporate_website');
@@ -70,10 +71,15 @@ export default function DiagnosisForm() {
         phone: lead.phone,
         inquiryType: 'diagnosis',
         source: source,
-        answers: answers,
-        notes: `【経営ボトルネック診断】判定: ${analysis.typeTitle}（${analysis.badge}）\n【手作業】${answers.q_ops_bottleneck}\n【売上・利益】${answers.q_profit_bottleneck}\n【停滞原因】${answers.q_delay_reason}\n【希望】${answers.q_ideal_future}\n【自由記入】${answers.q_free_notes || 'なし'}`,
+        answers: {
+          ...answers,
+          q_hear_about: lead.hear_about,
+          hear_about: lead.hear_about,
+        },
+        notes: `【経営ボトルネック診断】判定: ${analysis.typeTitle}（${analysis.badge}）\n【手作業】${answers.q_ops_bottleneck}\n【売上・利益】${answers.q_profit_bottleneck}\n【停滞原因】${answers.q_delay_reason}\n【希望】${answers.q_ideal_future}\n【自由記入】${answers.q_free_notes || 'なし'}${lead.hear_about ? `\n【認知経路】${lead.hear_about}` : ''}`,
         customFields: {
           diagnosis_result: analysis,
+          hear_about: lead.hear_about,
         },
       });
 
@@ -403,6 +409,28 @@ export default function DiagnosisForm() {
                 className="w-full px-4 py-3 rounded-xl border border-sand-300 focus:border-brand-600 focus:ring-2 focus:ring-brand-100 text-sm outline-none transition"
               />
             </div>
+          </div>
+
+          <div>
+            <label className="block text-xs font-bold text-slate-800 mb-2">
+              どこで知りましたか？ <span className="text-gray-400 font-normal">（任意）</span>
+            </label>
+            <select
+              value={lead.hear_about}
+              onChange={(e) => setLead({ ...lead, hear_about: e.target.value })}
+              className="w-full px-4 py-3 rounded-xl border border-sand-300 focus:border-brand-600 focus:ring-2 focus:ring-brand-100 text-sm outline-none transition bg-white text-slate-800 cursor-pointer"
+            >
+              <option value="">選択してください（任意）</option>
+              <option value="Instagram">Instagram</option>
+              <option value="Threads">Threads</option>
+              <option value="Facebook">Facebook</option>
+              <option value="LinkedIn">LinkedIn</option>
+              <option value="ブログ">ブログ・HPコラム</option>
+              <option value="検索">検索（Google/Yahoo等）</option>
+              <option value="紹介">知人・提携先からの紹介</option>
+              <option value="メール">メールマガジン・案内</option>
+              <option value="その他">その他</option>
+            </select>
           </div>
 
           <div className="text-xs text-gray-500 leading-relaxed bg-sand-50/70 p-3.5 rounded-xl border border-sand-200">

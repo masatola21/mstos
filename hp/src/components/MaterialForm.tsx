@@ -35,6 +35,7 @@ export default function MaterialForm() {
     name: '',
     email: '',
     phone: '',
+    hear_about: '',
   });
 
   const [source, setSource] = useState('corporate_website');
@@ -130,14 +131,17 @@ export default function MaterialForm() {
         phone: formData.phone,
         inquiryType: isCareOnly ? 'care_package' : 'material',
         source: source,
-        notes: `【資料請求】ご希望資料: ${choiceLabel}`,
+        notes: `【資料請求】ご希望資料: ${choiceLabel}${formData.hear_about ? `\n【認知経路】${formData.hear_about}` : ''}`,
         answers: {
           material_keys: selectedKeys,
           choice_label: choiceLabel,
+          q_hear_about: formData.hear_about,
+          hear_about: formData.hear_about,
         },
         customFields: {
           material_keys: selectedKeys,
           choice_label: choiceLabel,
+          hear_about: formData.hear_about,
         },
       });
 
@@ -393,6 +397,28 @@ export default function MaterialForm() {
             placeholder="例: 090-1234-5678"
             className="w-full px-4 py-3 rounded-xl border border-sand-300 focus:outline-none focus:ring-2 focus:ring-brand-500 text-xs sm:text-sm"
           />
+        </div>
+
+        <div>
+          <label className="block text-xs font-bold text-slate-800 mb-1">
+            どこで知りましたか？ <span className="text-gray-400 font-normal">（任意）</span>
+          </label>
+          <select
+            value={formData.hear_about}
+            onChange={(e) => setFormData({ ...formData, hear_about: e.target.value })}
+            className="w-full px-4 py-3 rounded-xl border border-sand-300 focus:outline-none focus:ring-2 focus:ring-brand-500 text-xs sm:text-sm bg-white text-slate-800 cursor-pointer"
+          >
+            <option value="">選択してください（任意）</option>
+            <option value="Instagram">Instagram</option>
+            <option value="Threads">Threads</option>
+            <option value="Facebook">Facebook</option>
+            <option value="LinkedIn">LinkedIn</option>
+            <option value="ブログ">ブログ・HPコラム</option>
+            <option value="検索">検索（Google/Yahoo等）</option>
+            <option value="紹介">知人・提携先からの紹介</option>
+            <option value="メール">メールマガジン・案内</option>
+            <option value="その他">その他</option>
+          </select>
         </div>
       </div>
 
