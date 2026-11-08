@@ -30,7 +30,8 @@ import {
   Inbox,
   SendHorizontal,
   Link2,
-  ChevronDown
+  ChevronDown,
+  AlertTriangle
 } from 'lucide-react';
 import { getSupabase, getAuthHeaders } from '../../lib/supabaseClient';
 import { OfficialLinkItem } from '../../types/marketing';
@@ -560,9 +561,14 @@ export const SocialDmSalesStudio: React.FC<SocialDmSalesStudioProps> = ({ mode =
             id: taskId,
             title: `【DM次回アクション】${targetName}様（${platformName}）`,
             description: `DM営業メモのアクション期日到来:\n${item.nextActionNote || '相手への返信・フォローアップ確認'}\n\n対象: ${targetName}\nSNS: ${platformName}\nURL: ${item.accountUrl || ''}`,
+            projectId: '',
+            priority: 'medium',
             status: 'waiting',
             dueDate: item.nextActionDate,
             assignee: { type: 'human', name: '人間 (あなた)' },
+            completionCriteria: '相手への返信またはフォロー記録の完了',
+            workArea: 'sales_customer',
+            sourceCategory: 'sales_customer',
             createdAt: Date.now(),
             updatedAt: Date.now(),
           });
@@ -837,14 +843,13 @@ ${linkInfo}
     }
 
     const now = new Date().toISOString();
-    let updatedList: DmItem[];
-
-    let savedItem: DmItem;
+    let updatedList: DmItem[] = [];
+    let savedItem: DmItem | null = null;
 
     if (selectedDmId) {
       updatedList = dmList.map((item) => {
         if (item.id === selectedDmId) {
-          savedItem = {
+          const updated: DmItem = {
             ...item,
             direction,
             platform,
@@ -860,7 +865,8 @@ ${linkInfo}
             nextActionNote,
             updated_at: now,
           };
-          return savedItem;
+          savedItem = updated;
+          return updated;
         }
         return item;
       });
@@ -892,9 +898,11 @@ ${linkInfo}
       setFeedback({ type: 'success', message: '新規DMを登録しました！' });
     }
 
-    await persistDmList(updatedList, savedItem);
-    if (savedItem.nextActionDate) {
-      syncDueActionsToTasks([savedItem]);
+    if (savedItem) {
+      await persistDmList(updatedList, savedItem);
+      if (savedItem.nextActionDate) {
+        syncDueActionsToTasks([savedItem]);
+      }
     }
     setTimeout(() => setFeedback(null), 2500);
   };

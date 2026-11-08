@@ -3,7 +3,6 @@ import {
   Inbox, 
   MessageSquare, 
   Mail, 
-  Share2, 
   FileText, 
   CheckCircle2, 
   Clock, 
@@ -63,8 +62,6 @@ interface UnifiedInboxViewProps {
   onOpenSendCenter?: (params: { companyId?: string; contactId?: string; formId?: string; sendKind?: 'announcement' | 'customer_meeting' | 'deal' | 'diagnosis' | 'form' }) => void;
   onOpenCustomerWorkspace?: (companyId: string, destination?: string) => void;
 }
-
-const STORAGE_DM_KEY = 'ai_social_dm_sales_items_v1';
 
 export const UnifiedInboxView: React.FC<UnifiedInboxViewProps> = ({
   initialChannel = 'forms',

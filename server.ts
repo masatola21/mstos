@@ -2105,7 +2105,64 @@ app.post('/api/email/webhook', express.raw({ type: 'application/json', limit: '2
 app.use(express.json({ limit: '80mb' }));
 app.use(express.urlencoded({ extended: false, limit: '20kb' }));
 
-// SNS一括配信（Facebook, Threads, LinkedIn, Instagram, Webhook）エンドポイント（画像・動画対応）
+// SSRF対策: Webhook URLの検証ヘルパー（HTTPSのみ、ローカル・プライベートIP拒否）
+function isSafePublicHttpsUrl(urlStr: string): { safe: boolean; reason?: string } {
+  try {
+    const parsed = new URL(urlStr);
+    if (parsed.protocol !== 'https:') {
+      return { safe: false, reason: 'プロトコルは https: のみ許可されています。' };
+    }
+    const hostname = parsed.hostname.toLowerCase();
+
+    // ローカル／内部ホスト／クラウドメタデータホストの拒否
+    if (
+      hostname === 'localhost' ||
+      hostname.endsWith('.localhost') ||
+      hostname.endsWith('.local') ||
+      hostname.endsWith('.internal') ||
+      hostname.endsWith('.arpa') ||
+      hostname === '169.254.169.254' ||
+      hostname === 'metadata.google.internal'
+    ) {
+      return { safe: false, reason: 'ローカルおよび内部ホスト宛ての送信は拒否されます。' };
+    }
+
+    // IPv4 プライベート／ループバック／リンクローカルの拒否
+    const ipv4Match = hostname.match(/^(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})$/);
+    if (ipv4Match) {
+      const a = parseInt(ipv4Match[1], 10);
+      const b = parseInt(ipv4Match[2], 10);
+      const c = parseInt(ipv4Match[3], 10);
+      const d = parseInt(ipv4Match[4], 10);
+      if (a > 255 || b > 255 || c > 255 || d > 255) {
+        return { safe: false, reason: '無効なIPアドレスです。' };
+      }
+      if (a === 127) return { safe: false, reason: 'Loopback IP(127.x.x.x)は指定できません。' };
+      if (a === 10) return { safe: false, reason: 'プライベートIP(10.x.x.x)は指定できません。' };
+      if (a === 172 && b >= 16 && b <= 31) return { safe: false, reason: 'プライベートIP(172.16-31.x.x)は指定できません。' };
+      if (a === 192 && b === 168) return { safe: false, reason: 'プライベートIP(192.168.x.x)は指定できません。' };
+      if (a === 169 && b === 254) return { safe: false, reason: 'リンクローカルIP(169.254.x.x)は指定できません。' };
+      if (a === 0) return { safe: false, reason: '0.0.0.0アドレスは指定できません。' };
+    }
+
+    // IPv6 ローカル／プライベートの拒否
+    if (
+      hostname === '[::1]' ||
+      hostname === '::1' ||
+      hostname.startsWith('[fc') ||
+      hostname.startsWith('[fd') ||
+      hostname.startsWith('[fe80')
+    ) {
+      return { safe: false, reason: 'IPv6ローカル/プライベートアドレスは指定できません。' };
+    }
+
+    return { safe: true };
+  } catch {
+    return { safe: false, reason: '無効なURL形式です。' };
+  }
+}
+
+// SNS投稿（Webhook連携・予約ツール連携）エンドポイント（ラウンド5：API直接投稿を撤去しWebhookに集約）
 app.post('/api/marketing/social-broadcast', requireAuth, async (req, res) => {
   const {
     text,
@@ -2114,15 +2171,26 @@ app.post('/api/marketing/social-broadcast', requireAuth, async (req, res) => {
     mediaType: inputMediaType,
     platforms = [],
     webhookUrl,
-    metaPageToken,
-    metaPageId,
-    threadsToken,
-    threadsUserId,
-    linkedInToken,
   } = req.body || {};
 
   if (!text || typeof text !== 'string' || !text.trim()) {
     return res.status(400).json({ success: false, error: '投稿文（テキスト）を入力してください。' });
+  }
+
+  if (!webhookUrl || typeof webhookUrl !== 'string' || !webhookUrl.trim()) {
+    return res.status(400).json({
+      success: false,
+      error: 'Webhook URLを指定してください（Make / Zapier / Buffer 等の予約投稿ツール連携用）。各SNSへの個別投稿は画面の「ワンクリック投稿画面を開く」をご利用ください。',
+    });
+  }
+
+  // SSRF検証
+  const safeCheck = isSafePublicHttpsUrl(webhookUrl.trim());
+  if (!safeCheck.safe) {
+    return res.status(400).json({
+      success: false,
+      error: `Webhook URLが安全ではありません: ${safeCheck.reason || '公開HTTPS URLのみ指定可能です。'}`,
+    });
   }
 
   const mediaUrl = inputMediaUrl || imageUrl || null;
@@ -2131,200 +2199,49 @@ app.post('/api/marketing/social-broadcast', requireAuth, async (req, res) => {
     (typeof mediaUrl === 'string' && /\.(mp4|mov|webm|m4v)(\?.*)?$/i.test(mediaUrl));
   const resolvedMediaType = isVideo ? 'video' : (mediaUrl ? 'image' : null);
 
-  const results: Record<string, any> = {};
-  let anyBroadcastExecuted = false;
+  try {
+    const webhookPayload = {
+      event: 'social_multicast_broadcast',
+      text: text.trim(),
+      mediaType: resolvedMediaType,
+      mediaUrl: mediaUrl ? String(mediaUrl).trim() : null,
+      imageUrl: !isVideo && mediaUrl ? String(mediaUrl).trim() : null,
+      videoUrl: isVideo && mediaUrl ? String(mediaUrl).trim() : null,
+      platforms: Array.isArray(platforms) ? platforms : ['facebook', 'threads', 'linkedin'],
+      timestamp: new Date().toISOString(),
+      author: '有限会社MST / 大橋真人',
+    };
 
-  // 1. Webhook連携（Make / Zapier / n8n）への転送（画像・動画メタデータ包含）
-  if (webhookUrl && typeof webhookUrl === 'string' && webhookUrl.startsWith('http')) {
-    try {
-      const webhookPayload = {
-        event: 'social_multicast_broadcast',
-        text: text.trim(),
-        mediaType: resolvedMediaType,
-        mediaUrl: mediaUrl ? String(mediaUrl).trim() : null,
-        imageUrl: !isVideo && mediaUrl ? String(mediaUrl).trim() : null,
-        videoUrl: isVideo && mediaUrl ? String(mediaUrl).trim() : null,
-        platforms: Array.isArray(platforms) ? platforms : ['facebook', 'threads', 'linkedin'],
-        timestamp: new Date().toISOString(),
-        author: '有限会社MST / 大橋真人',
-      };
+    const webhookResponse = await fetch(webhookUrl.trim(), {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(webhookPayload),
+    });
 
-      const webhookResponse = await fetch(webhookUrl.trim(), {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(webhookPayload),
-      });
-
-      if (!webhookResponse.ok) {
-        throw new Error(`WebhookサーバーがHTTP ${webhookResponse.status} を返しました。`);
-      }
-
-      results.webhook = { status: 'sent', code: webhookResponse.status };
-      anyBroadcastExecuted = true;
-    } catch (whErr: any) {
-      console.warn('Social broadcast webhook error:', whErr);
-      return res.status(502).json({
-        success: false,
-        error: `Webhook送信に失敗しました: ${whErr.message || '接続エラー'}`,
-      });
+    if (!webhookResponse.ok) {
+      throw new Error(`WebhookサーバーがHTTP ${webhookResponse.status} を返しました。`);
     }
-  }
 
-  // 2. Facebook Page 直接投稿（Meta Graph API: 画像 or 動画 or テキスト）
-  if (platforms.includes('facebook') && metaPageToken && metaPageId) {
-    try {
-      let endpoint: string;
-      let fbBody: Record<string, any>;
-
-      if (isVideo && mediaUrl) {
-        // Facebook Video API
-        endpoint = `https://graph.facebook.com/v20.0/${encodeURIComponent(metaPageId)}/videos`;
-        fbBody = {
-          file_url: mediaUrl,
-          description: text.trim(),
-          access_token: metaPageToken,
-        };
-      } else if (mediaUrl) {
-        // Facebook Photo API
-        endpoint = `https://graph.facebook.com/v20.0/${encodeURIComponent(metaPageId)}/photos`;
-        fbBody = {
-          url: mediaUrl,
-          caption: text.trim(),
-          access_token: metaPageToken,
-        };
-      } else {
-        // Facebook Feed API (Text only)
-        endpoint = `https://graph.facebook.com/v20.0/${encodeURIComponent(metaPageId)}/feed`;
-        fbBody = {
-          message: text.trim(),
-          access_token: metaPageToken,
-        };
-      }
-
-      const fbRes = await fetch(endpoint, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(fbBody),
-      });
-
-      const fbJson = await fbRes.json().catch(() => ({}));
-      if (!fbRes.ok) throw new Error(fbJson.error?.message || 'Facebook API error');
-      results.facebook = { status: 'sent', id: fbJson.id };
-      anyBroadcastExecuted = true;
-    } catch (fbErr: any) {
-      results.facebook = { status: 'error', error: fbErr.message };
-    }
-  }
-
-  // 3. Threads 直接投稿（Meta Threads API: TEXT / IMAGE / VIDEO 対応）
-  if (platforms.includes('threads') && threadsToken && threadsUserId) {
-    try {
-      // Step A: メディアコンテナ作成
-      const containerUrl = `https://graph.threads.net/v1.0/${encodeURIComponent(threadsUserId)}/threads`;
-      let mediaTypeStr = 'TEXT';
-      const containerBody: any = {
-        text: text.trim(),
-        access_token: threadsToken,
-      };
-
-      if (isVideo && mediaUrl) {
-        mediaTypeStr = 'VIDEO';
-        containerBody.media_type = 'VIDEO';
-        containerBody.video_url = mediaUrl;
-      } else if (mediaUrl) {
-        mediaTypeStr = 'IMAGE';
-        containerBody.media_type = 'IMAGE';
-        containerBody.image_url = mediaUrl;
-      } else {
-        containerBody.media_type = 'TEXT';
-      }
-
-      const cRes = await fetch(containerUrl, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(containerBody),
-      });
-      const cJson = await cRes.json().catch(() => ({}));
-      if (!cRes.ok || !cJson.id) throw new Error(cJson.error?.message || 'Threads container error');
-
-      // Step B: 公開
-      const publishUrl = `https://graph.threads.net/v1.0/${encodeURIComponent(threadsUserId)}/threads_publish`;
-      const pRes = await fetch(publishUrl, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ creation_id: cJson.id, access_token: threadsToken }),
-      });
-      const pJson = await pRes.json().catch(() => ({}));
-      if (!pRes.ok) throw new Error(pJson.error?.message || 'Threads publish error');
-
-      results.threads = { status: 'sent', id: pJson.id, mediaType: mediaTypeStr };
-      anyBroadcastExecuted = true;
-    } catch (thErr: any) {
-      results.threads = { status: 'error', error: thErr.message };
-    }
-  }
-
-  // 4. LinkedIn 直接投稿（Share API）
-  if (platforms.includes('linkedin') && linkedInToken) {
-    try {
-      const meRes = await fetch('https://api.linkedin.com/v2/userinfo', {
-        headers: { Authorization: `Bearer ${linkedInToken}` },
-      });
-      const meData = await meRes.json().catch(() => ({}));
-      const authorUrn = meData.sub ? `urn:li:person:${meData.sub}` : '';
-
-      if (authorUrn) {
-        const liRes = await fetch('https://api.linkedin.com/v2/ugcPosts', {
-          method: 'POST',
-          headers: {
-            Authorization: `Bearer ${linkedInToken}`,
-            'Content-Type': 'application/json',
-            'X-Restli-Protocol-Version': '2.0.0',
-          },
-          body: JSON.stringify({
-            author: authorUrn,
-            lifecycleState: 'PUBLISHED',
-            specificContent: {
-              'com.linkedin.ugc.ShareContent': {
-                shareCommentary: { text: text.trim() },
-                shareMediaCategory: 'NONE',
-              },
-            },
-            visibility: { 'com.linkedin.ugc.MemberNetworkVisibility': 'PUBLIC' },
-          }),
-        });
-        const liJson = await liRes.json().catch(() => ({}));
-        if (!liRes.ok) throw new Error(liJson.message || 'LinkedIn publish error');
-        results.linkedin = { status: 'sent', id: liJson.id };
-        anyBroadcastExecuted = true;
-      }
-    } catch (liErr: any) {
-      results.linkedin = { status: 'error', error: liErr.message };
-    }
-  }
-
-  // APIキーもWebhookも設定されていない場合
-  if (!anyBroadcastExecuted && !webhookUrl && !metaPageToken && !threadsToken && !linkedInToken) {
     return res.json({
+      success: true,
+      results: {
+        webhook: { status: 'sent', code: webhookResponse.status },
+      },
+      isVideo,
+      message: '予約投稿ツール（Webhook）への送信が完了しました。',
+    });
+  } catch (whErr: any) {
+    console.warn('Social broadcast webhook error:', whErr);
+    return res.status(502).json({
       success: false,
-      requiresConfig: true,
-      message: 'WebhookまたはAPIキーが未設定です。設定するか、ワンクリックWeb共有をご利用ください。',
+      error: `Webhook送信に失敗しました: ${whErr.message || '接続エラー'}`,
     });
   }
-
-  return res.json({
-    success: true,
-    results,
-    isVideo,
-    message: isVideo
-      ? '動画付きSNS一括配信リクエストが正常に処理されました。'
-      : 'SNS一括配信リクエストが正常に処理されました。',
-  });
 });
 
 app.use('/uploads', express.static(path.resolve(appDir, 'public', 'uploads')));
 
-// SNSメディア（画像・動画）アップロード用エンドポイント (Base64 -> public/uploads)
+// SNSメディア（画像・動画）アップロード用エンドポイント (Supabase Storage優先 / ローカルフォールバック)
 const handleMediaUpload = async (req: express.Request, res: express.Response) => {
   try {
     const { dataUrl, filename } = req.body || {};
@@ -2372,17 +2289,48 @@ const handleMediaUpload = async (req: express.Request, res: express.Response) =>
     }
 
     const safeFilename = `sns_${isVideo ? 'video' : 'img'}_${Date.now()}_${Math.random().toString(36).slice(2, 8)}.${ext}`;
-    const uploadsDir = path.resolve(appDir, 'public', 'uploads');
-    if (!fs.existsSync(uploadsDir)) {
-      fs.mkdirSync(uploadsDir, { recursive: true });
+    const storagePath = `social/${safeFilename}`;
+    let publicUrl = '';
+
+    // 1. Supabase Storage (mst-marketing-assets バケット) へのアップロードを優先
+    if (lineSupabase) {
+      try {
+        const { error: uploadErr } = await lineSupabase.storage
+          .from('mst-marketing-assets')
+          .upload(storagePath, buffer, {
+            contentType: mimeType,
+            upsert: true,
+          });
+
+        if (!uploadErr) {
+          const { data: pubData } = lineSupabase.storage
+            .from('mst-marketing-assets')
+            .getPublicUrl(storagePath);
+
+          if (pubData && pubData.publicUrl) {
+            publicUrl = pubData.publicUrl;
+          }
+        } else {
+          console.warn('[Storage] Supabase storage upload warning:', uploadErr.message);
+        }
+      } catch (storageErr: any) {
+        console.warn('[Storage] Supabase storage exception:', storageErr?.message);
+      }
     }
 
-    const filePath = path.join(uploadsDir, safeFilename);
-    fs.writeFileSync(filePath, buffer);
+    // 2. Supabase Storage が未設定または失敗した場合のローカルフォールバック
+    if (!publicUrl) {
+      const uploadsDir = path.resolve(appDir, 'public', 'uploads');
+      if (!fs.existsSync(uploadsDir)) {
+        fs.mkdirSync(uploadsDir, { recursive: true });
+      }
+      const filePath = path.join(uploadsDir, safeFilename);
+      fs.writeFileSync(filePath, buffer);
 
-    const protocol = req.headers['x-forwarded-proto'] || req.protocol || 'https';
-    const host = req.headers['x-forwarded-host'] || req.headers.host;
-    const publicUrl = `${protocol}://${host}/uploads/${safeFilename}`;
+      const protocol = req.headers['x-forwarded-proto'] || req.protocol || 'https';
+      const host = req.headers['x-forwarded-host'] || req.headers.host;
+      publicUrl = `${protocol}://${host}/uploads/${safeFilename}`;
+    }
 
     return res.json({
       success: true,
@@ -4960,6 +4908,22 @@ app.post(
       leadSource = 'HP：相談・問い合わせ';
     } else {
       leadSource = `HP：${form.name || 'Webフォーム'}`;
+    }
+
+    // ラウンド5: SNS経由の流入（utm_source: threads, facebook, linkedin, instagram, x, twitter, note または utm_medium: social）をリード流入元に反映
+    const snsNameMap: Record<string, string> = {
+      threads: 'Threads',
+      facebook: 'Facebook',
+      linkedin: 'LinkedIn',
+      instagram: 'Instagram',
+      x: 'X',
+      twitter: 'X',
+      note: 'note',
+    };
+    const utmSourceKey = (utm.utm_source || '').toLowerCase().trim();
+    if (utmSourceKey && (utm.utm_medium === 'social' || snsNameMap[utmSourceKey])) {
+      const snsLabel = snsNameMap[utmSourceKey] || utm.utm_source;
+      leadSource = `SNS：${snsLabel}`;
     }
 
     // ラウンド2-3: leads.status を slug / 種別別に一意に決定

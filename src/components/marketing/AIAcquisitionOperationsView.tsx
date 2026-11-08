@@ -18,7 +18,7 @@ type AudienceSegment = { id: string; name: string; entity_type: string; conditio
 const tabs: Array<{ id: ViewTab; label: string }> = [
   { id: 'strategy', label: '集客戦略・施策一覧' },
   { id: 'funnel', label: '集客導線・公式URL' },
-  { id: 'social_studio', label: 'SNS一括投稿・DM営業' },
+  { id: 'social_studio', label: 'コンテンツ作成・SNS運用' },
   { id: 'assets', label: '資料・成果物保管庫' },
   { id: 'media', label: '自社メディア・HP設定' },
 ];
@@ -31,11 +31,22 @@ const fields: Record<RecordType, Field[]> = {
     { key: 'purpose', label: '運用目的', kind: 'textarea' }, { key: 'strategyContext', label: '集客戦略からの運用方針', kind: 'textarea' }, { key: 'connection', label: '連携状態', kind: 'select', options: ['未連携', '手動運用', '連携検討中'] }, { key: 'notes', label: '備考', kind: 'textarea' },
   ],
   strategy: [
-    { key: 'target', label: 'ターゲット顧客', kind: 'textarea' }, { key: 'needs', label: '顧客の課題・ニーズ', kind: 'textarea' },
-    { key: 'strengths', label: '強み・訴求ポイント', kind: 'textarea' }, { key: 'goal', label: '集客目標', kind: 'textarea' },
-    { key: 'channels', label: '使う運用ツール', kind: 'multiselect', options: expandableToolTypes }, { key: 'contentPolicy', label: 'コンテンツ方針', kind: 'textarea' },
-    { key: 'destination', label: '誘導先（LP・診断・相談など）' }, { key: 'audienceSegmentId', label: '連携する配信対象リスト' }, { key: 'kpi', label: 'KPI' },
-    { key: 'budget', label: '予算（円）', kind: 'number' }, { key: 'period', label: '実施期間', placeholder: '例：2026-10〜2026-12' },
+    { key: 'strategyType', label: '戦略の種別', kind: 'select', options: ['通常集客戦略', 'SNS運用方針（1枚）'] },
+    { key: 'target', label: 'ターゲット顧客・読者', kind: 'textarea' },
+    { key: 'goal', label: '集客目標・目的（LINE友だち追加／診断／資料請求／問い合わせ など）', kind: 'textarea' },
+    { key: 'needs', label: '顧客の課題・ニーズ', kind: 'textarea' },
+    { key: 'strengths', label: '強み・訴求ポイント', kind: 'textarea' },
+    { key: 'snsPlatforms', label: '使うSNS（1〜2つ推奨、最大3）', kind: 'multiselect', options: ['Threads', 'Facebook', 'LinkedIn', 'Instagram', 'X'] },
+    { key: 'postingFrequency', label: '投稿頻度', kind: 'select', options: ['週2〜3回（推奨）', '平日毎日', '週1回', '月数回'] },
+    { key: 'contentPillars', label: '投稿の柱（複数選択可）', kind: 'multiselect', options: ['記事の要約・ノウハウ', '改善事例・実績', 'よくある質問（FAQ）', 'お知らせ・最新情報', '日々の気づき・経営コラム'] },
+    { key: 'channels', label: '使う運用ツール（通常戦略）', kind: 'multiselect', options: expandableToolTypes },
+    { key: 'contentPolicy', label: 'コンテンツ方針', kind: 'textarea' },
+    { key: 'destination', label: '誘導先（HP・LINE友だち追加・診断・資料など）' },
+    { key: 'audienceSegmentId', label: '連携する配信対象リスト' },
+    { key: 'kpi', label: 'KPI（目標数値）' },
+    { key: 'reviewDate', label: '見直し日（または実施期限）', kind: 'date' },
+    { key: 'budget', label: '予算（円）', kind: 'number' },
+    { key: 'period', label: '実施期間メモ', placeholder: '例：2026-10〜2026-12' },
     { key: 'status', label: '戦略の状態', kind: 'select', options: ['下書き', '確認待ち', '承認済み', '実施中', '完了'] },
   ],
   content: [
@@ -96,18 +107,35 @@ const emptyPayload = (): Record<string, string> => ({});
 const yen = (value: number) => `¥${value.toLocaleString('ja-JP')}`;
 const num = (payload: Record<string, string>, key: string) => Math.max(0, Number(payload[key] || 0) || 0);
 
-const strategyContextText = (payload: Record<string, string>) => [
-  ['ターゲット顧客', payload.target], ['顧客の課題・ニーズ', payload.needs],
-  ['強み・訴求ポイント', payload.strengths], ['集客目標', payload.goal],
-  ['コンテンツ方針', payload.contentPolicy], ['誘導先', payload.destination],
-  ['KPI', payload.kpi], ['実施期間', payload.period], ['予算（円）', payload.budget],
-].filter(([, value]) => Boolean(value?.trim())).map(([label, value]) => label + ': ' + value).join('\\n')
-  || '戦略の方針は未入力です。集客戦略を確認してください。';
+const strategyContextText = (payload: Record<string, string>) => {
+  if (payload.strategyType === 'SNS運用方針（1枚）' || payload.snsPlatforms || payload.contentPillars) {
+    return [
+      ['運用種別', 'SNS運用方針（1枚）'],
+      ['運用目的', payload.goal || 'LINE友だち追加／無料診断／資料請求'],
+      ['ターゲット', payload.target],
+      ['使うSNS', payload.snsPlatforms || payload.channels],
+      ['投稿頻度', payload.postingFrequency],
+      ['投稿の柱', payload.contentPillars || payload.contentPolicy],
+      ['誘導先', payload.destination],
+      ['KPI', payload.kpi],
+      ['見直し日', payload.reviewDate || payload.period],
+    ].filter(([, value]) => Boolean(value?.trim())).map(([label, value]) => label + ': ' + value).join('\n')
+      || 'SNS運用方針は未入力です。';
+  }
+  return [
+    ['ターゲット顧客', payload.target], ['顧客の課題・ニーズ', payload.needs],
+    ['強み・訴求ポイント', payload.strengths], ['集客目標', payload.goal],
+    ['コンテンツ方針', payload.contentPolicy], ['誘導先', payload.destination],
+    ['KPI', payload.kpi], ['実施期間', payload.period], ['予算（円）', payload.budget],
+  ].filter(([, value]) => Boolean(value?.trim())).map(([label, value]) => label + ': ' + value).join('\n')
+    || '戦略の方針は未入力です。集客戦略を確認してください。';
+};
 
 const strategyFieldsForTool = (toolType: RecordType, strategy: Record<string, string>): Record<string, string> => {
   const sourceKeys: Partial<Record<RecordType, Record<string, string>>> = {
-    content: { target: 'target', pain: 'needs', appeal: 'strengths', message: 'contentPolicy', destination: 'destination' },
-    social: { target: 'target' }, video: { target: 'target' },
+    content: { target: 'target', pain: 'needs', appeal: 'strengths', message: strategy.strategyType === 'SNS運用方針（1枚）' ? 'contentPillars' : 'contentPolicy', destination: 'destination' },
+    social: { target: 'target', platform: 'snsPlatforms', content: 'contentPillars' },
+    video: { target: 'target' },
     ad: { target: 'target', purpose: 'goal', destination: 'destination', budget: 'budget' },
     media: { target: 'target', purpose: 'goal' }, funnel: { goal: 'goal' },
   };
@@ -998,7 +1026,7 @@ export const AIAcquisitionOperationsView: React.FC<{
                                 })
                               }
                             />
-                            {typeLabels[option as RecordType]}
+                            {typeLabels[option as RecordType] || option}
                           </label>
                         ))}
                       </div>
