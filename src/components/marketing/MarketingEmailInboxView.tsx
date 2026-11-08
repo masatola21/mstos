@@ -1,5 +1,7 @@
 import React, { useEffect, useState } from 'react';
+import { Mail, Reply, Send, RefreshCw, Settings } from 'lucide-react';
 import { getSupabase } from '../../lib/supabaseClient';
+import { useSendDrawer } from '../../context/SendDrawerContext';
 
 type InboxMessage = { id:string; from_email:string; to_emails:string[]; subject:string; text_body:string; html_body:string; received_at:string };
 export interface MarketingEmailInboxViewProps {
@@ -8,6 +10,7 @@ export interface MarketingEmailInboxViewProps {
 
 export const MarketingEmailInboxView: React.FC<MarketingEmailInboxViewProps> = ({ onNavigateSendCenter }) => {
   const db=getSupabase();
+  const { openSendDrawer } = useSendDrawer();
   const [ownerId,setOwnerId]=useState('');
   const [address,setAddress]=useState('');
   const [messages,setMessages]=useState<InboxMessage[]>([]);
@@ -16,6 +19,20 @@ export const MarketingEmailInboxView: React.FC<MarketingEmailInboxViewProps> = (
   const [error,setError]=useState('');
   const [notice,setNotice]=useState('');
   const [showConfig,setShowConfig]=useState(false);
+
+  const handleReplySelected = () => {
+    if (!selected) return;
+    const cleanBody = selected.text_body || selected.html_body.replace(/<[^>]*>/g, ' ');
+    const quote = `\n\n\n--- ${selected.from_email} からの引用メッセージ ---\n${cleanBody.trim()}`;
+    const replySubject = selected.subject?.startsWith('Re:') ? selected.subject : `Re: ${selected.subject || ''}`;
+    openSendDrawer({
+      channel: 'email',
+      kind: 'announcement',
+      subject: replySubject,
+      body: quote,
+      initialRecipientEmail: selected.from_email,
+    });
+  };
   const load=async()=>{
     if(!db)return;
     const {data:auth}=await db.auth.getUser();
@@ -89,15 +106,21 @@ export const MarketingEmailInboxView: React.FC<MarketingEmailInboxViewProps> = (
           >
             更新
           </button>
-          {onNavigateSendCenter && (
-            <button
-              type="button"
-              onClick={onNavigateSendCenter}
-              className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-purple-50 hover:bg-purple-100 border border-purple-200 text-purple-700 text-xs font-semibold shadow-xs transition cursor-pointer"
-            >
-              <span>送信センター（返信作成）</span>
-            </button>
-          )}
+          <button
+            type="button"
+            onClick={() => {
+              if (selected) {
+                handleReplySelected();
+              } else {
+                openSendDrawer({ channel: 'email', kind: 'announcement' });
+              }
+            }}
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-purple-600 hover:bg-purple-700 text-white text-xs font-semibold shadow-xs transition cursor-pointer"
+            title="送信ドロワーを開いてメールを送信します"
+          >
+            <Send className="h-3.5 w-3.5" />
+            <span>{selected ? 'このメールに返信（ドロワー）' : 'メール作成（ドロワー）'}</span>
+          </button>
         </div>
       </div>
 
@@ -139,10 +162,21 @@ export const MarketingEmailInboxView: React.FC<MarketingEmailInboxViewProps> = (
         <article className="min-h-64 rounded-2xl border border-slate-200 bg-white p-6 shadow-xs flex flex-col">
           {selected ? (
             <>
-              <div className="border-b border-slate-200 pb-4">
-                <h3 className="font-bold text-lg text-slate-900">{selected.subject || '(件名なし)'}</h3>
-                <p className="mt-1.5 text-xs text-slate-600">From: <span className="font-medium text-slate-800">{selected.from_email}</span></p>
-                <p className="mt-1 text-xs text-slate-400">宛先: {selected.to_emails.join(', ')} · {new Date(selected.received_at).toLocaleString()}</p>
+              <div className="border-b border-slate-200 pb-4 flex flex-wrap items-start justify-between gap-3">
+                <div>
+                  <h3 className="font-bold text-lg text-slate-900">{selected.subject || '(件名なし)'}</h3>
+                  <p className="mt-1.5 text-xs text-slate-600">From: <span className="font-medium text-slate-800">{selected.from_email}</span></p>
+                  <p className="mt-1 text-xs text-slate-400">宛先: {selected.to_emails.join(', ')} · {new Date(selected.received_at).toLocaleString()}</p>
+                </div>
+                <button
+                  type="button"
+                  onClick={handleReplySelected}
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-purple-600 hover:bg-purple-700 text-white text-xs font-bold shadow-xs cursor-pointer transition"
+                  title="左のメール本文を見ながら右側のドロワーで返信を作成します"
+                >
+                  <Reply className="h-4 w-4" />
+                  <span>返信する（ドロワー）</span>
+                </button>
               </div>
               <pre className="mt-4 flex-1 whitespace-pre-wrap break-words font-sans text-sm leading-relaxed text-slate-800 bg-slate-50 p-4 rounded-xl border border-slate-200">
                 {selected.text_body || selected.html_body.replace(/<[^>]*>/g, ' ') || '(本文なし)'}

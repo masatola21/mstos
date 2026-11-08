@@ -1,6 +1,6 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useRef } from 'react';
 import { getSalesEmailTemplate, getNurturingStepTemplate } from '../utils/salesOutreachTemplates';
-import { Eye, Save, Send, Users, SendHorizonal, FileText, Library, Mail, MessageSquare, Paperclip, CheckCircle2, X, Inbox } from 'lucide-react';
+import { Eye, Save, Send, Users, SendHorizonal, FileText, Library, Mail, MessageSquare, Paperclip, CheckCircle2, X, Inbox, ArrowLeft } from 'lucide-react';
 import { getSupabase } from '../lib/supabaseClient';
 import { LineMessagePreview } from './LineMessagePreview';
 import { renderPlaceholders } from '../utils/placeholders';
@@ -23,6 +23,16 @@ type Props = {
   initialContactId?: string;
   initialMode?: 'send' | 'broadcast' | 'templates';
   initialBroadcastChannel?: 'email' | 'line';
+  initialChannel?: Channel;
+  initialSubject?: string;
+  initialBody?: string;
+  variant?: 'page' | 'drawer';
+  onClose?: () => void;
+  onSent?: (result: { ok: boolean; summary: string }) => void;
+  onDraftChange?: (isDirty: boolean) => void;
+  originTab?: string;
+  originTabLabel?: string;
+  onReturnToOrigin?: () => void;
   onNavigateTab?: (tab: string) => void;
 };
 
@@ -185,12 +195,22 @@ export const CommunicationSendCenter: React.FC<Props> = ({
   initialContactId,
   initialMode = 'send',
   initialBroadcastChannel = 'email',
+  initialChannel,
+  initialSubject,
+  initialBody,
+  variant = 'page',
+  onClose,
+  onSent,
+  onDraftChange,
+  originTab,
+  originTabLabel,
+  onReturnToOrigin,
   onNavigateTab,
 }) => {
-  const [screen, setScreen] = useState<'send' | 'broadcast' | 'templates'>(initialMode);
+  const [screen, setScreen] = useState<'send' | 'broadcast' | 'templates'>(variant === 'drawer' ? 'send' : initialMode);
   const [kind, setKind] = useState<Kind>(initialKind);
-  const [channel, setChannel] = useState<Channel>('email');
-  const [templateChannel, setTemplateChannel] = useState<DeliveryChannel>('email');
+  const [channel, setChannel] = useState<Channel>(initialChannel || 'email');
+  const [templateChannel, setTemplateChannel] = useState<DeliveryChannel>(initialChannel === 'line' ? 'line' : 'email');
   const [documentType, setDocumentType] = useState<DocumentType>('all');
   const [contacts, setContacts] = useState<Contact[]>([]);
   const [docs, setDocs] = useState<any[]>([]);
@@ -204,8 +224,9 @@ export const CommunicationSendCenter: React.FC<Props> = ({
   const [docId, setDocId] = useState(initialDocumentId || '');
   const [formId, setFormId] = useState(initialFormId || '');
   const [url, setUrl] = useState('');
-  const [subject, setSubject] = useState('');
-  const [body, setBody] = useState('');
+  const [subject, setSubject] = useState(initialSubject || '');
+  const [body, setBody] = useState(initialBody || '');
+  const hasCustomInitialContentRef = useRef(Boolean(initialSubject || initialBody));
   const [templates, setTemplates] = useState<any[]>(seed);
   const [emailTemplates, setEmailTemplates] = useState<any[]>([]);
   const [lineTemplates, setLineTemplates] = useState<any[]>([]);
@@ -395,6 +416,17 @@ export const CommunicationSendCenter: React.FC<Props> = ({
   }, [initialCompanyId, initialFormId, initialContactId, initialDocumentId]);
 
   useEffect(() => {
+    if (variant === 'drawer') {
+      const isDirty = Boolean(subject.trim() || body.trim() || (contactId && contactId !== initialContactId) || (docId && docId !== initialDocumentId));
+      onDraftChange?.(isDirty);
+    }
+  }, [subject, body, contactId, docId, variant, onDraftChange, initialContactId, initialDocumentId]);
+
+  useEffect(() => {
+    if (hasCustomInitialContentRef.current) {
+      hasCustomInitialContentRef.current = false;
+      return;
+    }
     if (tmpl) {
       setSubject(tmpl.subject || '');
       const templateBody = tmpl.body_text || '';
@@ -591,6 +623,14 @@ export const CommunicationSendCenter: React.FC<Props> = ({
         .join(' / ');
       setNotice(summary);
       setPreview(false);
+      const allOk = outcomes.length > 0 && outcomes.every((x) => x.ok);
+      if (allOk) {
+        onDraftChange?.(false);
+        onSent?.({ ok: true, summary });
+      } else {
+        const failedOutcomes = outcomes.filter((x) => !x.ok);
+        setError(failedOutcomes.map((x) => `${x.channel === 'email' ? 'メール' : 'LINE'}送信エラー: ${x.message || '配信先の設定をご確認ください'}`).join(' / '));
+      }
     } catch (e: any) {
       setError(e.message || '送信に失敗しました。');
     } finally {
@@ -600,91 +640,144 @@ export const CommunicationSendCenter: React.FC<Props> = ({
 
   return (
     <div className="space-y-4">
-      {/* ── Top Header ── */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-2">
-        <h1 className="text-[19px] font-bold text-slate-800 tracking-tight">送信センター</h1>
+      {/* ── Return to origin button (when opened as full page from another screen) ── */}
+      {variant === 'page' && originTab && onReturnToOrigin && (
+        <div className="flex items-center justify-between bg-purple-50/70 border border-purple-200/80 rounded-xl px-4 py-2.5">
+          <div className="flex items-center gap-2 text-xs text-purple-900">
+            <span className="font-semibold">遷移元の画面:</span>
+            <span className="font-bold">{originTabLabel || originTab}</span>
+          </div>
+          <button
+            type="button"
+            onClick={onReturnToOrigin}
+            className="inline-flex items-center gap-1.5 rounded-lg border border-purple-300 bg-white px-3 py-1.5 text-xs font-bold text-purple-700 hover:bg-purple-100 transition cursor-pointer shadow-2xs"
+          >
+            <ArrowLeft className="h-3.5 w-3.5" />
+            <span>元の画面に戻る</span>
+          </button>
+        </div>
+      )}
 
-        {/* 画面切り替えタブ */}
-        <div className="flex flex-wrap items-center gap-1.5">
-          <button
-            type="button"
-            onClick={() => {
-              setScreen('send');
-              setPreview(false);
-              setError('');
-            }}
-            aria-pressed={screen === 'send'}
-            className={`flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-medium transition cursor-pointer ${
-              screen === 'send'
-                ? 'bg-purple-600 text-white'
-                : 'border border-slate-200 bg-white text-slate-700 hover:bg-slate-50'
-            }`}
-          >
-            <SendHorizonal className="h-3.5 w-3.5" />
-            <span>個別送信（1対1）</span>
-          </button>
-          <button
-            type="button"
-            onClick={() => {
-              setScreen('broadcast');
-              setPreview(false);
-              setError('');
-            }}
-            aria-pressed={screen === 'broadcast'}
-            className={`flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-medium transition cursor-pointer ${
-              screen === 'broadcast'
-                ? 'bg-purple-600 text-white'
-                : 'border border-slate-200 bg-white text-slate-700 hover:bg-slate-50'
-            }`}
-          >
-            <Users className="h-3.5 w-3.5" />
-            <span>一斉配信（1対N）</span>
-          </button>
-          <button
-            type="button"
-            onClick={() => {
-              setScreen('templates');
-              setPreview(false);
-              setError('');
-            }}
-            aria-pressed={screen === 'templates'}
-            className={`flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-medium transition cursor-pointer ${
-              screen === 'templates'
-                ? 'bg-purple-600 text-white'
-                : 'border border-slate-200 bg-white text-slate-700 hover:bg-slate-50'
-            }`}
-          >
-            <Library className="h-3.5 w-3.5" />
-            <span>定型文テンプレート</span>
-          </button>
+      {/* ── Top Header (Only on standalone page) ── */}
+      {variant === 'page' && (
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-2">
+          <h1 className="text-[19px] font-bold text-slate-800 tracking-tight">送信履歴・一括配信・テンプレート</h1>
 
-          {onNavigateTab && (
-            <div className="flex items-center gap-1.5 sm:ml-2 sm:pl-2 sm:border-l border-slate-200">
-              <button
-                type="button"
-                onClick={() => onNavigateTab('inbox_hub')}
-                className="flex items-center gap-1.5 rounded-md border border-slate-200 bg-white px-2.5 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-50 transition cursor-pointer"
-                title="受信トレイを開く"
-              >
-                <Inbox className="h-3.5 w-3.5 text-purple-600" />
-                <span>受信トレイ</span>
-              </button>
-              <button
-                type="button"
-                onClick={() => onNavigateTab('document_templates')}
-                className="flex items-center gap-1.5 rounded-md border border-slate-200 bg-white px-2.5 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-50 transition cursor-pointer"
-                title="提案書・診断レポート・見積書作成を開く"
-              >
-                <FileText className="h-3.5 w-3.5 text-purple-600" />
-                <span>書類作成</span>
-              </button>
-            </div>
+          {/* 画面切り替えタブ */}
+          <div className="flex flex-wrap items-center gap-1.5">
+            <button
+              type="button"
+              onClick={() => {
+                setScreen('send');
+                setPreview(false);
+                setError('');
+              }}
+              aria-pressed={screen === 'send'}
+              className={`flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-medium transition cursor-pointer ${
+                screen === 'send'
+                  ? 'bg-purple-600 text-white'
+                  : 'border border-slate-200 bg-white text-slate-700 hover:bg-slate-50'
+              }`}
+            >
+              <SendHorizonal className="h-3.5 w-3.5" />
+              <span>個別送信（1対1）</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                setScreen('broadcast');
+                setPreview(false);
+                setError('');
+              }}
+              aria-pressed={screen === 'broadcast'}
+              className={`flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-medium transition cursor-pointer ${
+                screen === 'broadcast'
+                  ? 'bg-purple-600 text-white'
+                  : 'border border-slate-200 bg-white text-slate-700 hover:bg-slate-50'
+              }`}
+            >
+              <Users className="h-3.5 w-3.5" />
+              <span>一斉配信（1対N）</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                setScreen('templates');
+                setPreview(false);
+                setError('');
+              }}
+              aria-pressed={screen === 'templates'}
+              className={`flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-medium transition cursor-pointer ${
+                screen === 'templates'
+                  ? 'bg-purple-600 text-white'
+                  : 'border border-slate-200 bg-white text-slate-700 hover:bg-slate-50'
+              }`}
+            >
+              <Library className="h-3.5 w-3.5" />
+              <span>定型文テンプレート</span>
+            </button>
+
+            {onNavigateTab && (
+              <div className="flex items-center gap-1.5 sm:ml-2 sm:pl-2 sm:border-l border-slate-200">
+                <button
+                  type="button"
+                  onClick={() => onNavigateTab('inbox_hub')}
+                  className="flex items-center gap-1.5 rounded-md border border-slate-200 bg-white px-2.5 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-50 transition cursor-pointer"
+                  title="受信トレイを開く"
+                >
+                  <Inbox className="h-3.5 w-3.5 text-purple-600" />
+                  <span>受信トレイ</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => onNavigateTab('document_templates')}
+                  className="flex items-center gap-1.5 rounded-md border border-slate-200 bg-white px-2.5 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-50 transition cursor-pointer"
+                  title="提案書・診断レポート・見積書作成を開く"
+                >
+                  <FileText className="h-3.5 w-3.5 text-purple-600" />
+                  <span>書類作成</span>
+                </button>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* Drawer Mode Top Summary Badge */}
+      {variant === 'drawer' && (
+        <div className="flex flex-wrap items-center gap-2 pb-1 text-xs">
+          <span className="rounded-md bg-purple-100 text-purple-800 font-bold px-2.5 py-1 border border-purple-200">
+            {labels[kind] || kind}
+          </span>
+          {contact && (
+            <span className="text-slate-600 bg-white border border-slate-200 px-2 py-1 rounded-md font-medium">
+              宛先: <strong className="text-slate-900">{contact.full_name} 様</strong> {companies[contact.company_id || ''] && `(${companies[contact.company_id || '']})`}
+            </span>
+          )}
+          {doc && (
+            <span className="text-slate-600 bg-white border border-slate-200 px-2 py-1 rounded-md font-medium">
+              書類: <strong className="text-purple-700">{doc.title}</strong>
+            </span>
           )}
         </div>
-      </div>
+      )}
 
-      {error && <p role="alert" className="rounded-xl border border-rose-200 bg-rose-50 p-3 text-xs text-rose-800 shadow-2xs">{error}</p>}
-      {notice && <p role="status" className="rounded-xl border border-purple-200 bg-purple-50 p-3 text-xs text-purple-800 shadow-2xs">{notice}</p>}
+      {error && <p role="alert" className="rounded-xl border border-rose-200 bg-rose-50 p-3 text-xs text-rose-800 shadow-2xs font-medium">{error}</p>}
+      {notice && (
+        <div role="status" className="rounded-xl border border-purple-200 bg-purple-50 p-3 text-xs text-purple-900 shadow-2xs flex flex-wrap items-center justify-between gap-2">
+          <span className="font-semibold">{notice}</span>
+          {variant === 'page' && originTab && onReturnToOrigin && (
+            <button
+              type="button"
+              onClick={onReturnToOrigin}
+              className="inline-flex items-center gap-1.5 rounded-lg bg-purple-600 hover:bg-purple-700 px-3 py-1 text-xs font-bold text-white shadow-2xs cursor-pointer"
+            >
+              <ArrowLeft className="h-3.5 w-3.5" />
+              <span>元の画面に戻る（{originTabLabel || originTab}）</span>
+            </button>
+          )}
+        </div>
+      )}
 
       {/* 画面1: 一斉配信（1対N） */}
       {screen === 'broadcast' && (

@@ -27,9 +27,9 @@ import { getSupabase } from '../../lib/supabaseClient';
 import { UnifiedNavTab } from '../UnifiedNavbar';
 import { MarketingLineInboxView } from '../marketing/MarketingLineInboxView';
 import { MarketingEmailInboxView } from '../marketing/MarketingEmailInboxView';
-import { SocialDmSalesStudio, DmItem } from '../marketing/SocialDmSalesStudio';
+import { useSendDrawer } from '../../context/SendDrawerContext';
 
-export type InboxChannel = 'line' | 'email' | 'social_dm' | 'forms';
+export type InboxChannel = 'line' | 'email' | 'forms';
 
 interface SubmissionItem {
   id: string;
@@ -74,11 +74,12 @@ export const UnifiedInboxView: React.FC<UnifiedInboxViewProps> = ({
   onOpenCustomerWorkspace
 }) => {
   const db = getSupabase();
+  const { openSendDrawer } = useSendDrawer();
   const [activeChannel, setActiveChannel] = useState<InboxChannel>(() => {
     if (initialChannel && initialChannel !== 'forms') return initialChannel;
     try {
       const saved = localStorage.getItem('unified_inbox_active_channel') as InboxChannel | null;
-      if (saved && ['line', 'email', 'social_dm', 'forms'].includes(saved)) {
+      if (saved && ['line', 'email', 'forms'].includes(saved)) {
         return saved;
       }
     } catch {}
@@ -103,7 +104,6 @@ export const UnifiedInboxView: React.FC<UnifiedInboxViewProps> = ({
     lineTotal: 0,
     lineInbound: 0,
     emailTotal: 0,
-    dmInboundWaiting: 0,
     formsTotal: 0,
     formsReceived: 0,
   });
@@ -120,7 +120,7 @@ export const UnifiedInboxView: React.FC<UnifiedInboxViewProps> = ({
   const [submissionNotice, setSubmissionNotice] = useState('');
   const [submissionError, setSubmissionError] = useState('');
 
-  // Fetch summary counts for the 4 touchpoints
+  // Fetch summary counts for the touchpoints (LINE, Email, Forms)
   const loadCounts = async () => {
     if (!db) return;
     try {
@@ -137,23 +137,10 @@ export const UnifiedInboxView: React.FC<UnifiedInboxViewProps> = ({
       const subList = (subRes.data || []) as { id: string; status: string }[];
       const formsReceived = subList.filter((s) => s.status === 'received').length;
 
-      // DM count from localStorage
-      let dmInbound = 0;
-      try {
-        const rawDm = localStorage.getItem(STORAGE_DM_KEY);
-        if (rawDm) {
-          const dmList = JSON.parse(rawDm) as DmItem[];
-          dmInbound = dmList.filter((d) => d.status === 'inbound_waiting').length;
-        }
-      } catch {
-        // ignore
-      }
-
       setCounts({
         lineTotal: lineList.length,
         lineInbound,
         emailTotal,
-        dmInboundWaiting: dmInbound,
         formsTotal: subList.length,
         formsReceived,
       });
@@ -381,7 +368,7 @@ export const UnifiedInboxView: React.FC<UnifiedInboxViewProps> = ({
   }, [submissions, formFilterStatus, customerStageFilter, formSearchQuery, formsMeta, customerCompanyIds]);
 
   const totalInboundNeedsAttention =
-    counts.lineInbound + counts.dmInboundWaiting + counts.formsReceived;
+    counts.lineInbound + counts.formsReceived;
 
   return (
     <div className="space-y-6">
@@ -426,12 +413,12 @@ export const UnifiedInboxView: React.FC<UnifiedInboxViewProps> = ({
             <ArrowRight className="w-3.5 h-3.5 text-slate-400" />
           </button>
           <button
-            onClick={() => onNavigateTab('communication_send')}
+            onClick={() => openSendDrawer({ kind: 'announcement' })}
             className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md bg-purple-600 hover:bg-purple-700 text-xs font-medium text-white transition cursor-pointer"
+            title="受信トレイを離れずに右側の送信ドロワーで個別連絡を作成します"
           >
             <Send className="w-3.5 h-3.5" />
-            <span>送信センター</span>
-            <ArrowRight className="w-3.5 h-3.5" />
+            <span>個別送信（ドロワー）</span>
           </button>
         </div>
       </div>
@@ -501,31 +488,6 @@ export const UnifiedInboxView: React.FC<UnifiedInboxViewProps> = ({
           }`}>
             {counts.emailTotal}通
           </span>
-        </button>
-
-        <button
-          onClick={() => handleSelectChannel('social_dm')}
-          className={`flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs sm:text-sm font-semibold transition cursor-pointer ${
-            activeChannel === 'social_dm'
-              ? 'bg-purple-600 text-white shadow-xs'
-              : 'bg-white border border-slate-200 text-slate-700 hover:text-slate-900 hover:bg-slate-50'
-          }`}
-        >
-          <Share2 className={`w-4 h-4 ${activeChannel === 'social_dm' ? 'text-white' : 'text-purple-600'}`} />
-          <span>SNS DM営業・受信</span>
-          {counts.dmInboundWaiting > 0 ? (
-            <span className={`px-2 py-0.5 rounded-full text-[11px] font-bold ${
-              activeChannel === 'social_dm' ? 'bg-purple-300 text-purple-950' : 'bg-purple-100 text-purple-800 border border-purple-300 animate-pulse'
-            }`}>
-              返信待ち {counts.dmInboundWaiting}
-            </span>
-          ) : (
-            <span className={`px-2 py-0.5 rounded-full text-xs font-bold ${
-              activeChannel === 'social_dm' ? 'bg-purple-700 text-purple-100' : 'bg-slate-100 text-slate-700'
-            }`}>
-              0件
-            </span>
-          )}
         </button>
       </div>
 
@@ -779,7 +741,7 @@ export const UnifiedInboxView: React.FC<UnifiedInboxViewProps> = ({
                           </button>
                         )}
 
-                        {/* Meeting Schedule / Communication Send */}
+                        {/* Meeting Schedule / Communication Send (Drawer) */}
                         <button
                           onClick={() => {
                             if (onOpenSendCenter) {
@@ -789,13 +751,19 @@ export const UnifiedInboxView: React.FC<UnifiedInboxViewProps> = ({
                                 formId: sub.form_id,
                                 sendKind: isContracted ? 'customer_meeting' : 'deal',
                               });
+                            } else {
+                              openSendDrawer({
+                                kind: isContracted ? 'customer_meeting' : 'deal',
+                                companyId: sub.company_id || undefined,
+                                contactId: sub.contact_id || undefined,
+                                formId: sub.form_id,
+                              });
                             }
-                            onNavigateTab(isContracted ? 'customer_meeting_invitations' : 'deal_invitations');
                           }}
                           className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-white hover:bg-slate-50 text-xs font-medium text-slate-700 border border-slate-200 shadow-xs transition cursor-pointer"
                         >
                           <Calendar className="w-3.5 h-3.5 text-purple-600" />
-                          <span>{isContracted ? '面談案内' : '商談案内'}</span>
+                          <span>{isContracted ? '面談案内（ドロワー）' : '商談案内（ドロワー）'}</span>
                         </button>
 
                         {/* Direct Proposal & Report Creation */}
@@ -919,11 +887,6 @@ export const UnifiedInboxView: React.FC<UnifiedInboxViewProps> = ({
         <MarketingEmailInboxView
           onNavigateSendCenter={() => onNavigateTab('communication_send')}
         />
-      )}
-
-      {/* 4. SOCIAL DM STUDIO */}
-      {activeChannel === 'social_dm' && (
-        <SocialDmSalesStudio mode="inbound" onNavigateTab={onNavigateTab} />
       )}
     </div>
   );

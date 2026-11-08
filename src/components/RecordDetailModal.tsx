@@ -363,10 +363,11 @@ export const RecordDetailModal: React.FC<RecordDetailModalProps> = ({
                 </button>
                 <button
                   onClick={() => { onClose(); onOpenCustomerWorkspace(String(record.company_id), 'send', { tableKey, recordId: String(record.id), leadId: record.lead_id ? String(record.lead_id) : undefined, contactId: record.contact_id ? String(record.contact_id) : undefined }); }}
-                  className="px-3 py-1.5 rounded-lg text-xs font-semibold text-emerald-700 bg-emerald-50 hover:bg-emerald-100 border border-emerald-200 transition-colors flex items-center gap-1.5"
+                  className="px-3 py-1.5 rounded-lg text-xs font-semibold text-emerald-700 bg-emerald-50 hover:bg-emerald-100 border border-emerald-200 transition-colors flex items-center gap-1.5 cursor-pointer shadow-2xs"
+                  title="詳細モーダルを閉じて右側の送信ドロワーを開きます"
                 >
                   <Mail className="w-3.5 h-3.5" />
-                  <span>送信センター</span>
+                  <span>送信ドロワー</span>
                 </button>
                 {tableKey === 'deals' && <button
                   onClick={() => { onClose(); onOpenCustomerWorkspace(String(record.company_id), 'documents', { tableKey, recordId: String(record.id), leadId: record.lead_id ? String(record.lead_id) : undefined }); }}

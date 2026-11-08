@@ -35,6 +35,7 @@ import { CategoryHubView } from './components/matrix/CategoryHubView';
 import { CustomListManager } from './components/matrix/CustomListManager';
 import { SalesOperationsWorkspace } from './components/SalesOperationsWorkspace';
 import { CommunicationSendCenter } from './components/CommunicationSendCenter';
+import { SendDrawerProvider, useSendDrawer } from './context/SendDrawerContext';
 import { AutomationView } from './components/matrix/AutomationView';
 import { DocumentTemplateView } from './components/matrix/DocumentTemplateView';
 import { MarketingAutomationPrototypeView } from './components/marketing/MarketingAutomationPrototypeView';
@@ -326,13 +327,14 @@ type AppModalKey =
   | 'plan'
   | 'pricing'
   | 'backup'
-  | 'quick_drawer';
+  | 'quick_drawer'
+  | 'send_drawer';
 
 interface AppHistoryState {
   mst: true;
   tab: UnifiedNavTab;
   acquisitionTargetTab?: string;
-  inboxTargetChannel?: 'line' | 'email' | 'social_dm' | 'forms';
+  inboxTargetChannel?: 'line' | 'email' | 'forms';
   customerWorkspaceContext?: any;
   modal?: AppModalKey | null;
 }
@@ -344,10 +346,39 @@ interface AppHistoryState {
  */
 function AppContent() {
   const { user, isLoading } = useAuth();
+  const { openSendDrawer, showToast } = useSendDrawer();
   const [currentTab, setCurrentTab] = useState<UnifiedNavTab>('mst_dashboard');
+  const [sendOriginContext, setSendOriginContext] = useState<{
+    tab: UnifiedNavTab;
+    tabLabel: string;
+    scrollY?: number;
+    customerWorkspaceContext?: any;
+  } | null>(null);
+
+  const getTabFriendlyLabel = (tab: UnifiedNavTab): string => {
+    switch (tab) {
+      case 'mst_dashboard': return '経営ダッシュボード';
+      case 'unified_calendar': return '予定カレンダー';
+      case 'inbox_hub': return '統合受信トレイ';
+      case 'leads': return '反響リード';
+      case 'deals': return '商談一覧';
+      case 'customers': return '顧客台帳';
+      case 'document_templates': return '重要書類・見積・契約';
+      case 'customer_operations': return '支援案件・契約・請求';
+      case 'mst_diagnoses': return '診断・受付フォーム';
+      case 'contacts': return '連絡先・LINE友だち';
+      case 'prospects': return '見込み企業';
+      case 'ai_acquisition': return '集客戦略・SNS';
+      case 'marketing_automation': return '自動配信・シナリオ';
+      case 'companies': return '会社台帳';
+      case 'products': return '商品マスタ';
+      default: return String(tab);
+    }
+  };
+
   const [customerWorkspaceContext, setCustomerWorkspaceContext] = useState<{ companyId: string; leadId?: string; dealId?: string; section?: 'forms' | 'diagnoses'; documentType?: 'invoice'; documentId?: string; sendKind?: 'document'|'form'|'diagnosis'|'deal'|'customer_meeting'|'announcement'; formId?: string; contactId?: string } | undefined>();
   const [lineInboxContact, setLineInboxContact] = useState<{ contactId: string; lineUserId: string } | undefined>();
-  const [inboxTargetChannel, setInboxTargetChannel] = useState<'line' | 'email' | 'social_dm' | 'forms' | undefined>(undefined);
+  const [inboxTargetChannel, setInboxTargetChannel] = useState<'line' | 'email' | 'forms' | undefined>(undefined);
   const [acquisitionTargetTab, setAcquisitionTargetTab] = useState<string | undefined>(undefined);
 
   const isPopStateRef = useRef(false);
@@ -355,13 +386,21 @@ function AppContent() {
   const handleNavigateWorkspaceTab = (
     tab: UnifiedNavTab | string,
     options?: {
-      inboxChannel?: 'line' | 'email' | 'social_dm' | 'forms';
+      inboxChannel?: 'line' | 'email' | 'forms';
       acquisitionTab?: string;
       studioMode?: 'broadcast' | 'dm_sales';
       context?: any;
     }
   ) => {
     const targetTab = tab as UnifiedNavTab;
+    if (targetTab === 'communication_send' && currentTab !== 'communication_send') {
+      setSendOriginContext({
+        tab: currentTab,
+        tabLabel: getTabFriendlyLabel(currentTab),
+        scrollY: typeof window !== 'undefined' ? window.scrollY : 0,
+        customerWorkspaceContext,
+      });
+    }
     if (options?.inboxChannel) {
       setInboxTargetChannel(options.inboxChannel);
       try {
@@ -2507,14 +2546,12 @@ function AppContent() {
             initialLineUserId={lineInboxContact?.lineUserId}
             onNavigateTab={(tab, options) => handleNavigateWorkspaceTab(tab, options)}
             onOpenSendCenter={(params) => {
-              setCustomerWorkspaceContext((current) => ({
-                ...current,
-                companyId: params.companyId || current?.companyId || '',
+              openSendDrawer({
+                kind: params.sendKind || 'form',
+                companyId: params.companyId || customerWorkspaceCompanyId || '',
                 contactId: params.contactId,
                 formId: params.formId,
-                sendKind: params.sendKind,
-              }));
-              setCurrentTab('communication_send');
+              });
             }}
             onOpenCustomerWorkspace={(companyId, destination) => {
               setCustomerWorkspaceContext({ companyId });
@@ -2530,11 +2567,18 @@ function AppContent() {
             tasks={tasks}
             onNavigateTab={(tab) => setCurrentTab(tab as UnifiedNavTab)}
             onOpenCustomerWorkspace={(companyId, destination, recordContext) => {
+              if (destination === 'send') {
+                openSendDrawer({
+                  kind: 'deal',
+                  companyId,
+                  dealId: recordContext?.dealId,
+                });
+                return;
+              }
               setCustomerWorkspaceContext({
                 companyId,
                 leadId: recordContext?.leadId,
                 dealId: recordContext?.dealId,
-                sendKind: destination === 'send' ? 'deal' : undefined,
               });
               setCurrentTab(
                 destination === 'deals'
@@ -2556,21 +2600,44 @@ function AppContent() {
             initialCompanyId={customerWorkspaceContext?.companyId}
             initialSection={customerWorkspaceContext?.section}
             onOpenSendCenter={(formId, _url, kind) => {
-              setCustomerWorkspaceContext((current) => ({
-                ...current,
+              openSendDrawer({
+                kind,
                 companyId: customerWorkspaceCompanyId || '',
                 formId,
-                sendKind: kind,
-              }));
-              setCurrentTab('communication_send');
+              });
             }}
             onNavigateTab={(tab) => setCurrentTab(tab as UnifiedNavTab)}
           />
         )}
 
-        {currentTab === 'deal_invitations' && <CommunicationSendCenter initialKind="deal" onNavigateTab={(tab) => setCurrentTab(tab as UnifiedNavTab)} />}
-        {currentTab === 'customer_meeting_invitations' && <CommunicationSendCenter initialKind="customer_meeting" onNavigateTab={(tab) => setCurrentTab(tab as UnifiedNavTab)} />}
-        {currentTab === 'communication_send' && <CommunicationSendCenter initialKind={customerWorkspaceContext?.documentId ? "document" : customerWorkspaceContext?.sendKind || "form"} initialCompanyId={customerWorkspaceContext?.companyId} initialDocumentId={customerWorkspaceContext?.documentId} initialFormId={customerWorkspaceContext?.formId} initialDealId={customerWorkspaceContext?.dealId} initialContactId={customerWorkspaceContext?.contactId} onNavigateTab={(tab) => setCurrentTab(tab as UnifiedNavTab)} />}
+        {currentTab === 'deal_invitations' && <CommunicationSendCenter variant="page" initialKind="deal" onNavigateTab={(tab) => setCurrentTab(tab as UnifiedNavTab)} />}
+        {currentTab === 'customer_meeting_invitations' && <CommunicationSendCenter variant="page" initialKind="customer_meeting" onNavigateTab={(tab) => setCurrentTab(tab as UnifiedNavTab)} />}
+        {currentTab === 'communication_send' && (
+          <CommunicationSendCenter
+            variant="page"
+            initialKind={customerWorkspaceContext?.documentId ? "document" : customerWorkspaceContext?.sendKind || "form"}
+            initialCompanyId={customerWorkspaceContext?.companyId}
+            initialDocumentId={customerWorkspaceContext?.documentId}
+            initialFormId={customerWorkspaceContext?.formId}
+            initialDealId={customerWorkspaceContext?.dealId}
+            initialContactId={customerWorkspaceContext?.contactId}
+            originTab={sendOriginContext?.tab}
+            originTabLabel={sendOriginContext?.tabLabel}
+            onReturnToOrigin={() => {
+              if (sendOriginContext) {
+                setCurrentTab(sendOriginContext.tab);
+                if (sendOriginContext.customerWorkspaceContext) {
+                  setCustomerWorkspaceContext(sendOriginContext.customerWorkspaceContext);
+                }
+                if (typeof window !== 'undefined') {
+                  window.scrollTo({ top: sendOriginContext.scrollY || 0, behavior: 'smooth' });
+                }
+                setSendOriginContext(null);
+              }
+            }}
+            onNavigateTab={(tab) => setCurrentTab(tab as UnifiedNavTab)}
+          />
+        )}
 
         {['companies', 'products'].includes(currentTab) && (
           <TableManager
@@ -2578,16 +2645,24 @@ function AppContent() {
             onTableChange={(tab) => setCurrentTab(tab as UnifiedNavTab)}
             onOpenRls={() => setIsRlsOpen(true)}
             onOpenCustomerWorkspace={(companyId, destination, recordContext) => {
+              if (destination === 'send') {
+                openSendDrawer({
+                  kind: recordContext?.tableKey === 'deals' ? 'deal' : recordContext?.tableKey === 'customers' ? 'customer_meeting' : recordContext?.tableKey === 'prospects' || recordContext?.tableKey === 'leads' ? 'announcement' : 'form',
+                  companyId,
+                  dealId: recordContext?.tableKey === 'deals' ? recordContext.recordId : undefined,
+                  contactId: recordContext?.contactId,
+                });
+                return;
+              }
               setCustomerWorkspaceContext({
                 companyId,
                 leadId: recordContext?.tableKey === 'leads' ? recordContext.recordId : recordContext?.leadId,
                 dealId: recordContext?.tableKey === 'deals' ? recordContext.recordId : undefined,
                 section: destination === 'forms' ? 'forms' : destination === 'diagnoses' ? 'diagnoses' : undefined,
-                sendKind: destination === 'send' ? (recordContext?.tableKey === 'deals' ? 'deal' : recordContext?.tableKey === 'customers' ? 'customer_meeting' : recordContext?.tableKey === 'prospects' || recordContext?.tableKey === 'leads' ? 'announcement' : 'form') : undefined,
                 formId: undefined,
                 contactId: recordContext?.contactId,
               });
-              setCurrentTab(destination === 'send' ? 'communication_send' : destination === 'documents' ? 'document_templates' : destination === 'diagnoses' || destination === 'forms' ? 'mst_diagnoses' : 'customer_operations');
+              setCurrentTab(destination === 'documents' ? 'document_templates' : destination === 'diagnoses' || destination === 'forms' ? 'mst_diagnoses' : 'customer_operations');
             }}
           />
         )}
@@ -2598,16 +2673,24 @@ function AppContent() {
             onTabChange={(tab) => setCurrentTab(tab as UnifiedNavTab)}
             onOpenRls={() => setIsRlsOpen(true)}
             onOpenCustomerWorkspace={(companyId, destination, recordContext) => {
+              if (destination === 'send') {
+                openSendDrawer({
+                  kind: recordContext?.tableKey === 'deals' ? 'deal' : recordContext?.tableKey === 'customers' ? 'customer_meeting' : recordContext?.tableKey === 'prospects' || recordContext?.tableKey === 'leads' ? 'announcement' : 'form',
+                  companyId,
+                  dealId: recordContext?.tableKey === 'deals' ? recordContext.recordId : undefined,
+                  contactId: recordContext?.contactId,
+                });
+                return;
+              }
               setCustomerWorkspaceContext({
                 companyId,
                 leadId: recordContext?.tableKey === 'leads' ? recordContext.recordId : recordContext?.leadId,
                 dealId: recordContext?.tableKey === 'deals' ? recordContext.recordId : undefined,
                 section: destination === 'forms' ? 'forms' : destination === 'diagnoses' ? 'diagnoses' : undefined,
-                sendKind: destination === 'send' ? (recordContext?.tableKey === 'deals' ? 'deal' : recordContext?.tableKey === 'customers' ? 'customer_meeting' : recordContext?.tableKey === 'prospects' || recordContext?.tableKey === 'leads' ? 'announcement' : 'form') : undefined,
                 formId: undefined,
                 contactId: recordContext?.contactId,
               });
-              setCurrentTab(destination === 'send' ? 'communication_send' : destination === 'documents' ? 'document_templates' : destination === 'diagnoses' || destination === 'forms' ? 'mst_diagnoses' : 'customer_operations');
+              setCurrentTab(destination === 'documents' ? 'document_templates' : destination === 'diagnoses' || destination === 'forms' ? 'mst_diagnoses' : 'customer_operations');
             }}
             onNavigateTab={(tab) => setCurrentTab(tab as UnifiedNavTab)}
           />
@@ -2688,8 +2771,11 @@ function AppContent() {
             onContractSigned={handleOperationalContractSigned}
             onInvoiceOverdue={handleOperationalInvoiceOverdue}
             onOpenInvoiceDocuments={(companyId, documentId) => {
-              setCustomerWorkspaceContext({ companyId, documentId });
-              setCurrentTab('communication_send');
+              openSendDrawer({
+                kind: 'document',
+                companyId,
+                documentId,
+              });
             }}
           />
         )}
@@ -2705,18 +2791,16 @@ function AppContent() {
               initialDocumentType={customerWorkspaceContext?.documentType} 
               onNavigateTab={(tab) => setCurrentTab(tab as UnifiedNavTab)}
               onOpenSendCenter={(params) => {
-                setCustomerWorkspaceContext((current) => ({
-                  ...current,
-                  companyId: params.companyId || current?.companyId || customerWorkspaceCompanyId || '',
+                openSendDrawer({
+                  kind: 'document',
+                  companyId: params.companyId || customerWorkspaceCompanyId || '',
                   documentId: params.documentId,
-                  dealId: params.dealId || current?.dealId,
-                  contactId: params.contactId || current?.contactId,
-                  sendKind: 'document',
-                }));
-                setCurrentTab('communication_send');
+                  dealId: params.dealId || customerWorkspaceContext?.dealId,
+                  contactId: params.contactId || customerWorkspaceContext?.contactId,
+                });
               }}
             />
-            <SalesOperationsWorkspace tab="documents" companyId={customerWorkspaceCompanyId} leadId={customerWorkspaceContext?.leadId} dealId={customerWorkspaceContext?.dealId} onClearCompanyFilter={() => setCustomerWorkspaceContext(undefined)} onOpenInvoiceDocuments={(companyId, documentId) => { setCustomerWorkspaceContext({ companyId, documentId, sendKind: 'document' }); setCurrentTab("communication_send"); }} />
+            <SalesOperationsWorkspace tab="documents" companyId={customerWorkspaceCompanyId} leadId={customerWorkspaceContext?.leadId} dealId={customerWorkspaceContext?.dealId} onClearCompanyFilter={() => setCustomerWorkspaceContext(undefined)} onOpenInvoiceDocuments={(companyId, documentId) => { openSendDrawer({ kind: 'document', companyId, documentId }); }} />
           </>
         )}
 
@@ -2729,24 +2813,32 @@ function AppContent() {
               setCurrentTab('inbox_hub');
             }}
             onOpenEmailSend={(contactId, companyId) => {
-              setCustomerWorkspaceContext({
+              openSendDrawer({
+                kind: 'announcement',
                 companyId: companyId || '',
                 contactId,
-                sendKind: 'announcement',
+                channel: 'email',
               });
-              setCurrentTab('communication_send');
             }}
             onOpenCustomerWorkspace={(companyId, destination, recordContext) => {
+              if (destination === 'send') {
+                openSendDrawer({
+                  kind: recordContext?.tableKey === 'deals' ? 'deal' : recordContext?.tableKey === 'customers' ? 'customer_meeting' : recordContext?.tableKey === 'prospects' || recordContext?.tableKey === 'leads' ? 'announcement' : 'form',
+                  companyId,
+                  dealId: recordContext?.tableKey === 'deals' ? recordContext.recordId : undefined,
+                  contactId: recordContext?.contactId,
+                });
+                return;
+              }
               setCustomerWorkspaceContext({
                 companyId,
                 leadId: recordContext?.tableKey === 'leads' ? recordContext.recordId : recordContext?.leadId,
                 dealId: recordContext?.tableKey === 'deals' ? recordContext.recordId : undefined,
                 section: destination === 'forms' ? 'forms' : destination === 'diagnoses' ? 'diagnoses' : undefined,
-                sendKind: destination === 'send' ? (recordContext?.tableKey === 'deals' ? 'deal' : recordContext?.tableKey === 'customers' ? 'customer_meeting' : recordContext?.tableKey === 'prospects' || recordContext?.tableKey === 'leads' ? 'announcement' : 'form') : undefined,
                 formId: undefined,
                 contactId: recordContext?.contactId,
               });
-              setCurrentTab(destination === 'send' ? 'communication_send' : destination === 'documents' ? 'document_templates' : destination === 'diagnoses' || destination === 'forms' ? 'mst_diagnoses' : 'customer_operations');
+              setCurrentTab(destination === 'documents' ? 'document_templates' : destination === 'diagnoses' || destination === 'forms' ? 'mst_diagnoses' : 'customer_operations');
             }}
             onOpenRls={() => setIsRlsOpen(true)}
             onNavigateTab={(tab) => setCurrentTab(tab as UnifiedNavTab)}
@@ -3142,7 +3234,9 @@ export default function App() {
 
   return (
     <AuthProvider>
-      <AppContent />
+      <SendDrawerProvider>
+        <AppContent />
+      </SendDrawerProvider>
     </AuthProvider>
   );
 }

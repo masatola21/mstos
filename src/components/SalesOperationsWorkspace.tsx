@@ -600,7 +600,7 @@ export const SalesOperationsWorkspace: React.FC<Props> = ({ tab, companyId, lead
       <div className="grid gap-5 xl:grid-cols-2">
       <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-xs">
         <h2 className="mb-2 font-bold text-slate-900 text-sm">生成済み書類</h2>
-        <p className="mb-3.5 text-xs text-slate-500">書類を選んで送信センターを開き、宛先・テンプレート・プレビューを確認してから送信できます。</p>
+        <p className="mb-3.5 text-xs text-slate-500">書類を選んで送信ドロワーを開き、宛先・テンプレート・プレビューを確認してから送信できます。</p>
         {loading ? (
           <p className="text-xs text-slate-400">読み込み中…</p>
         ) : documents.length === 0 ? (
@@ -714,14 +714,14 @@ export const SalesOperationsWorkspace: React.FC<Props> = ({ tab, companyId, lead
                       }}
                       disabled={!onOpenInvoiceDocuments}
                       className="inline-flex items-center gap-1.5 rounded-lg bg-purple-600 hover:bg-purple-700 px-3.5 py-1.5 text-xs font-semibold text-white shadow-xs shadow-purple-600/20 transition-all cursor-pointer disabled:opacity-50"
-                      title="送信センターで宛先・テンプレート・プレビューを確認して送付します"
+                      title="右側の送信ドロワーで宛先・テンプレート・プレビューを確認して送付します"
                     >
                       <Send className="h-3.5 w-3.5" />
-                      <span>送信センターで送る</span>
+                      <span>送信ドロワーで送る</span>
                     </button>
                     {doc.status !== 'approved' && (
                       <span className="text-[11px] text-amber-700 font-medium">
-                        ※ クリックすると承認状態に更新して送信センターを開きます
+                        ※ クリックすると承認状態に更新して送信ドロワーを開きます
                       </span>
                     )}
                   </div>

@@ -80,7 +80,7 @@ export const AppHeader: React.FC<AppHeaderProps> = ({
       case 'communication_send':
       case 'deal_invitations':
       case 'customer_meeting_invitations':
-        return { category: 'デイリー業務', page: '送信センター' };
+        return { category: '管理・配信設定', page: '送信履歴・一括配信・テンプレート' };
       case 'unified_calendar':
         return { category: 'デイリー業務', page: '予定カレンダー（Google同期・全社日程）' };
       case 'product_hub':

@@ -238,16 +238,17 @@ export const UnifiedNavbar: React.FC<UnifiedNavbarProps> = ({
           {activeSection === 'mst' && (() => {
             const groups = [
               { id: 'dashboard', label: '経営・日程', items: (['mst_dashboard', 'unified_calendar'] as UnifiedNavTab[]) },
-              { id: 'communications', label: '対話・送受信', items: (['inbox_hub', 'communication_send', 'deal_invitations', 'customer_meeting_invitations'] as UnifiedNavTab[]) },
+              { id: 'communications', label: '対話・受信', items: (['inbox_hub'] as UnifiedNavTab[]) },
               { id: 'acquisition', label: '集客・開拓', items: (['ai_acquisition', 'marketing_automation', 'prospects', 'contacts'] as UnifiedNavTab[]) },
               { id: 'pipeline', label: '反響・商談', items: (['leads', 'deals', 'mst_diagnoses'] as UnifiedNavTab[]) },
               { id: 'contracts', label: '書類・契約', items: (['document_templates'] as UnifiedNavTab[]) },
               { id: 'customers', label: '顧客・支援', items: (['customers', 'customer_operations', 'products', 'companies'] as UnifiedNavTab[]) },
+              { id: 'management', label: '管理・配信設定', items: (['communication_send', 'deal_invitations', 'customer_meeting_invitations', 'custom_lists'] as UnifiedNavTab[]) },
             ];
             const activeGroup = groups.find((group) => group.items.includes(currentTab)) || groups[0];
             const labelFor = (tab: UnifiedNavTab) => {
               if (tab === 'inbox_hub') return '📥 統合受信トレイ（反響・契約後顧客・全チャネル）';
-              if (tab === 'communication_send') return '📤 送信センター（個別・一斉・書類送付・テンプレート保管庫）';
+              if (tab === 'communication_send') return '📤 送信履歴・一括配信・テンプレート';
               if (tab === 'mst_dashboard') return '営業・反響 統合ダッシュボード';
               if (tab === 'inflow_dashboard') return '営業・反響 統合ダッシュボード';
               if (tab === 'unified_calendar') return '統合予定カレンダー（Google同期・全社日程）';

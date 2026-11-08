@@ -1171,10 +1171,10 @@ export const DocumentTemplateView: React.FC<DocumentTemplateViewProps> = ({
             onClick={handleSendViaSendCenter}
             disabled={isSavingDocument}
             className="px-3 py-1.5 rounded-md bg-purple-600 hover:bg-purple-700 text-white font-medium text-xs flex items-center gap-1.5 transition-all cursor-pointer"
-            title="仕上げた書類を送信センター（LINE・メール送信）へ連携して送付します"
+            title="書類プレビューを見ながら右側の送信ドロワーを開いて送付します"
           >
             <Send className="w-3.5 h-3.5" />
-            <span>送信センターで送る</span>
+            <span>送信ドロワーで送る</span>
           </button>
 
           <button
@@ -1444,10 +1444,10 @@ export const DocumentTemplateView: React.FC<DocumentTemplateViewProps> = ({
                 type="button"
                 onClick={handleSendViaSendCenter}
                 className="px-3 py-1.5 rounded-lg bg-purple-600 hover:bg-purple-700 text-white text-xs font-semibold flex items-center gap-1.5 transition-all shadow-xs cursor-pointer"
-                title="仕上げた書類を送信センター（LINE・メール送信）へ連携して送付します"
+                title="プレビューを確認しながら右側の送信ドロワーを開いて送付します"
               >
                 <Send className="w-3.5 h-3.5" />
-                <span>送信センターで送る</span>
+                <span>送信ドロワーで送る</span>
               </button>
               <button
                 onClick={handleCopyHtml}

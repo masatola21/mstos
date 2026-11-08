@@ -112,6 +112,16 @@ export const AppSidebar: React.FC<AppSidebarProps> = ({
         { id: 'ai_presets', label: '専門AI・自動化ルール設定' },
       ],
     },
+    {
+      id: 'management',
+      label: '管理・配信設定',
+      icon: Settings,
+      defaultOpen: true,
+      items: [
+        { id: 'communication_send', label: '送信履歴・一括配信・テンプレート' },
+        { id: 'custom_lists', label: '配信対象セグメント' },
+      ],
+    },
   ];
 
   // Collapsible groups state
@@ -233,19 +243,6 @@ export const AppSidebar: React.FC<AppSidebarProps> = ({
             >
               <Inbox className={`w-4 h-4 ${isTabActive('inbox_hub') ? 'text-purple-600' : 'text-slate-400'}`} />
               <span>📥 統合受信トレイ</span>
-            </button>
-
-            <button
-              type="button"
-              onClick={() => handleItemClick('communication_send')}
-              className={`w-full flex items-center gap-3 px-3 py-2 rounded-lg text-xs sm:text-sm font-semibold transition-colors cursor-pointer ${
-                isTabActive('communication_send')
-                  ? 'bg-purple-50 text-purple-700 font-bold border border-purple-200/80 shadow-xs'
-                  : 'text-slate-700 hover:bg-slate-100/80 hover:text-slate-900'
-              }`}
-            >
-              <Send className={`w-4 h-4 ${isTabActive('communication_send') ? 'text-purple-600' : 'text-slate-400'}`} />
-              <span>📤 送信センター</span>
             </button>
 
             <button
@@ -396,6 +393,14 @@ export const AppSidebar: React.FC<AppSidebarProps> = ({
               >
                 <FileText className="w-3.5 h-3.5 text-purple-600" />
                 <span>診断・受付フォーム・PDFマスタ管理</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => handleItemClick('communication_send')}
+                className="w-full flex items-center gap-2 px-2 py-1.5 rounded text-left text-slate-600 hover:text-slate-900 hover:bg-white transition-colors"
+              >
+                <Send className="w-3.5 h-3.5 text-purple-600" />
+                <span>送信履歴・一括配信・テンプレート</span>
               </button>
               <button
                 type="button"

@@ -1335,8 +1335,8 @@ export const TableManager: React.FC<TableManagerProps> = ({
                       <td className="py-3 px-4 text-right whitespace-nowrap" onClick={(e) => e.stopPropagation()}>
                         <div className="flex items-center justify-end gap-1.5">
                           {['prospects', 'leads', 'deals', 'customers'].includes(currentTable) && item.company_id && onOpenCustomerWorkspace && (
-                            <button onClick={() => handleOpenRecordSend(item)} className="px-2.5 py-1 rounded-lg text-xs font-semibold bg-purple-50 text-purple-700 hover:bg-purple-600 hover:text-white border border-purple-200 flex items-center gap-1 transition-colors" title="この会社の連絡先を選んで送信センターを開く">
-                              <Send className="w-3.5 h-3.5" /><span>連絡・配信</span>
+                            <button onClick={() => handleOpenRecordSend(item)} className="px-2.5 py-1 rounded-lg text-xs font-semibold bg-purple-50 text-purple-700 hover:bg-purple-600 hover:text-white border border-purple-200 flex items-center gap-1 transition-colors cursor-pointer" title="この会社の連絡先を選んで右側の送信ドロワーを開く">
+                              <Send className="w-3.5 h-3.5" /><span>連絡・送信</span>
                             </button>
                           )}
                           {currentTable === 'prospects' && (
@@ -1518,8 +1518,8 @@ export const TableManager: React.FC<TableManagerProps> = ({
                   <span className="text-slate-400 text-[11px]">タップして詳細確認</span>
                   <div className="flex flex-wrap items-center gap-1.5">
                     {['prospects', 'leads', 'deals', 'customers'].includes(currentTable) && item.company_id && onOpenCustomerWorkspace && (
-                      <button onClick={() => handleOpenRecordSend(item)} className="px-2 py-1 rounded-lg bg-purple-50 text-purple-700 hover:bg-purple-600 hover:text-white border border-purple-200 flex items-center gap-1 text-[11px] font-semibold">
-                        <Send className="w-3 h-3" /><span>連絡・配信</span>
+                      <button onClick={() => handleOpenRecordSend(item)} className="px-2 py-1 rounded-lg bg-purple-50 text-purple-700 hover:bg-purple-600 hover:text-white border border-purple-200 flex items-center gap-1 text-[11px] font-semibold cursor-pointer" title="この会社の連絡先を選んで右側の送信ドロワーを開く">
+                        <Send className="w-3 h-3" /><span>連絡・送信</span>
                       </button>
                     )}
                     {currentTable === 'prospects' && (

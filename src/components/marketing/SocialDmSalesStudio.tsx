@@ -36,6 +36,8 @@ import { getSupabase, getAuthHeaders } from '../../lib/supabaseClient';
 import { OfficialLinkItem } from '../../types/marketing';
 import { loadStoredOfficialLinks } from '../../utils/marketingStorage';
 import { InlineDeleteButton } from '../InlineDeleteButton';
+import { loadTasks, saveTasks } from '../../utils/storage';
+import { TaskItem } from '../../types/ai-president';
 
 export type DmDirection = 'outbound' | 'inbound';
 export type DmPlatform = 'x' | 'instagram' | 'linkedin' | 'facebook' | 'threads' | 'other';
@@ -128,6 +130,44 @@ const DEFAULT_TEMPLATES: DmTemplatePreset[] = [
 {{公式案内リンク}}
 
 お忙しいところ恐縮ですが、何卒よろしくお願いいたします。`
+  },
+  {
+    id: 'out_follow_1',
+    category: 'フォロー1（3日後目安）',
+    title: 'フォロー1（近況伺い・補足情報）',
+    icon: '📩',
+    direction: 'outbound',
+    description: '初回DM送信から3日〜5日経過後、返信を催促せず、お役に立つワンポイント情報を添えて近況を伺う',
+    defaultGoal: '近況伺い・返信ハードル低下',
+    templateText: `{{相手のお名前}}様
+
+先日メッセージをお送りいたしました、{{自分の会社/屋号}}の{{自分の名前}}です。
+お忙しい中でのご連絡となり恐縮です。
+
+先日の{{相手の投稿・関心事}}の件につきまして、もし何かご不明な点や追加で気になることなどがございましたら、いつでもお気軽に本DMにてご返信ください。
+
+ご多忙の折、返信のお気遣いは不要でございます。
+{{相手のお名前}}様の事業の発展を心より応援しております！`
+  },
+  {
+    id: 'out_follow_2',
+    category: 'フォロー2（1〜2週間後）',
+    title: 'フォロー2（新事例・診断プレゼント）',
+    icon: '🎁',
+    direction: 'outbound',
+    description: '1〜2週間経過後、新しい事例や診断ツールを純粋なギフトとして提供し、再接点をつくる',
+    defaultGoal: '事例・診断ツールのギフト提供',
+    templateText: `{{相手のお名前}}様
+
+いつもお世話になっております。{{自分の会社/屋号}}の{{自分の名前}}です。
+
+先日のテーマに関連して、ちょうど今週、同業種での改善事例をまとめた最新シート（無料診断）が完成いたしましたので、{{相手のお名前}}様のお役に立てばと思いご連絡いたしました。
+
+押し売り等は一切ございませんので、お時間の許す際にご覧いただけますと幸いです。
+▼ 解決事例・診断シートはこちら:
+{{公式案内リンク}}
+
+引き続きどうぞよろしくお願いいたします。`
   },
   {
     id: 'out_diagnosis_offer',
@@ -414,7 +454,7 @@ export const SocialDmSalesStudio: React.FC<SocialDmSalesStudioProps> = ({ mode =
       console.warn('Failed to load local DM items:', e);
     }
 
-    // 3. Supabaseリモート同期
+    // 3. Supabaseリモート同期 & 一度限りのlocalStorage移行 (record_type = 'dm_log')
     const loadRemote = async () => {
       try {
         const supabase = getSupabase();
@@ -422,25 +462,73 @@ export const SocialDmSalesStudio: React.FC<SocialDmSalesStudioProps> = ({ mode =
         const { data: auth } = await supabase.auth.getUser();
         if (!auth.user) return;
 
-        const { data } = await supabase
+        // 3-1. 個別 dm_log レコードを取得
+        const { data: remoteRows, error } = await supabase
           .from('mst_ai_acquisition_records')
-          .select('payload')
+          .select('*')
           .eq('user_id', auth.user.id)
-          .eq('id', 'mst_social_dm_sales_records')
-          .maybeSingle();
+          .eq('record_type', 'dm_log')
+          .order('updated_at', { ascending: false });
 
-        if (data?.payload?.items && Array.isArray(data.payload.items)) {
-          setDmList(data.payload.items);
-          localStorage.setItem(STORAGE_KEY, JSON.stringify(data.payload.items));
-          if (!selectedDmId && data.payload.items.length > 0) {
-            const relevant = isOutboundOnly
-              ? data.payload.items.filter((item: DmItem) => item.direction === 'outbound')
-              : isInboundOnly
-              ? data.payload.items.filter((item: DmItem) => item.direction === 'inbound')
-              : data.payload.items;
-            if (relevant.length > 0) {
-              loadDmToForm(relevant[0]);
+        if (!error && remoteRows && remoteRows.length > 0) {
+          const loaded: DmItem[] = remoteRows.map((r: any) => ({
+            id: r.id,
+            direction: r.payload?.direction || 'outbound',
+            platform: r.payload?.platform || 'x',
+            companyName: r.payload?.companyName || '',
+            contactName: r.payload?.contactName || r.title || '',
+            accountHandle: r.payload?.accountHandle || '',
+            accountUrl: r.payload?.accountUrl || '',
+            templateCategory: r.payload?.templateCategory || '',
+            contextInfo: r.payload?.contextInfo || '',
+            approachGoal: r.payload?.approachGoal || '',
+            messageText: r.payload?.messageText || '',
+            status: r.status || r.payload?.status || 'draft',
+            sentAt: r.payload?.sentAt,
+            receivedAt: r.payload?.receivedAt,
+            nextActionDate: r.payload?.nextActionDate,
+            nextActionNote: r.payload?.nextActionNote,
+            crmLeadId: r.payload?.crmLeadId,
+            crmCompanyId: r.payload?.crmCompanyId,
+            crmRegisteredAt: r.payload?.crmRegisteredAt,
+            created_at: r.created_at,
+            updated_at: r.updated_at,
+          }));
+          setDmList(loaded);
+          try { localStorage.setItem(STORAGE_KEY, JSON.stringify(loaded)); } catch {}
+          syncDueActionsToTasks(loaded);
+          if (!selectedDmId && loaded.length > 0) {
+            loadDmToForm(loaded[0]);
+          }
+          return;
+        }
+
+        // 3-2. 初回移行: localStorage に既存データがある場合、Supabaseへ一度だけ移行
+        const isMigrated = localStorage.getItem('ai_social_dm_migrated_v2');
+        const rawLocal = localStorage.getItem(STORAGE_KEY);
+        if (!isMigrated && rawLocal) {
+          try {
+            const localItems = JSON.parse(rawLocal) as DmItem[];
+            if (Array.isArray(localItems) && localItems.length > 0) {
+              const rowsToInsert = localItems.map((item) => ({
+                user_id: auth.user!.id,
+                id: item.id || `dm_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`,
+                record_type: 'dm_log',
+                title: item.contactName || item.companyName || 'DM相手',
+                status: item.status || 'draft',
+                payload: item,
+                updated_at: new Date().toISOString(),
+              }));
+              await supabase.from('mst_ai_acquisition_records').upsert(rowsToInsert, { onConflict: 'user_id,id' });
+              localStorage.setItem('ai_social_dm_migrated_v2', 'true');
+              setDmList(localItems);
+              syncDueActionsToTasks(localItems);
+              if (!selectedDmId && localItems.length > 0) {
+                loadDmToForm(localItems[0]);
+              }
             }
+          } catch (migrateErr) {
+            console.warn('One-time DM migration error:', migrateErr);
           }
         }
       } catch (err) {
@@ -451,8 +539,49 @@ export const SocialDmSalesStudio: React.FC<SocialDmSalesStudioProps> = ({ mode =
     void loadRemote();
   }, [isOutboundOnly, isInboundOnly]);
 
-  // 永続化ヘルパー
-  const persistDmList = async (updated: DmItem[]) => {
+  // 次回アクション期日到来時のタスク自動同期
+  const syncDueActionsToTasks = (items: DmItem[]): number => {
+    try {
+      const today = new Date().toISOString().slice(0, 10);
+      const dueItems = items.filter((d) => d.nextActionDate && d.nextActionDate <= today && d.status !== 'closed' && d.status !== 'converted');
+      if (dueItems.length === 0) return 0;
+
+      const currentTasks = loadTasks();
+      let addedCount = 0;
+      const newTasks: TaskItem[] = [];
+
+      for (const item of dueItems) {
+        const taskId = `task-dm-${item.id}`;
+        const exists = currentTasks.some((t) => t.id === taskId || (t.title.includes(item.contactName || item.accountHandle || '') && t.dueDate === item.nextActionDate));
+        if (!exists) {
+          const platformName = PLATFORM_INFOS[item.platform]?.name || item.platform;
+          const targetName = item.contactName || item.companyName || item.accountHandle || 'DM相手';
+          newTasks.push({
+            id: taskId,
+            title: `【DM次回アクション】${targetName}様（${platformName}）`,
+            description: `DM営業メモのアクション期日到来:\n${item.nextActionNote || '相手への返信・フォローアップ確認'}\n\n対象: ${targetName}\nSNS: ${platformName}\nURL: ${item.accountUrl || ''}`,
+            status: 'waiting',
+            dueDate: item.nextActionDate,
+            assignee: { type: 'human', name: '人間 (あなた)' },
+            createdAt: Date.now(),
+            updatedAt: Date.now(),
+          });
+          addedCount++;
+        }
+      }
+
+      if (newTasks.length > 0) {
+        saveTasks([...newTasks, ...currentTasks]);
+      }
+      return addedCount;
+    } catch (err) {
+      console.warn('Failed to sync DM actions to tasks:', err);
+      return 0;
+    }
+  };
+
+  // 永続化ヘルパー (Supabase: record_type = 'dm_log')
+  const persistDmList = async (updated: DmItem[], targetItem?: DmItem) => {
     setDmList(updated);
     try {
       localStorage.setItem(STORAGE_KEY, JSON.stringify(updated));
@@ -465,14 +594,30 @@ export const SocialDmSalesStudio: React.FC<SocialDmSalesStudioProps> = ({ mode =
       if (supabase) {
         const { data: auth } = await supabase.auth.getUser();
         if (auth.user) {
-          await supabase.from('mst_ai_acquisition_records').upsert({
-            user_id: auth.user.id,
-            id: 'mst_social_dm_sales_records',
-            record_type: 'social',
-            title: 'SNS営業・DM個別管理データ',
-            payload: { items: updated },
-            updated_at: new Date().toISOString(),
-          }, { onConflict: 'user_id,id' });
+          if (targetItem) {
+            await supabase.from('mst_ai_acquisition_records').upsert({
+              user_id: auth.user.id,
+              id: targetItem.id,
+              record_type: 'dm_log',
+              title: targetItem.contactName || targetItem.companyName || 'DM相手',
+              status: targetItem.status,
+              payload: targetItem,
+              updated_at: new Date().toISOString(),
+            }, { onConflict: 'user_id,id' });
+          } else {
+            const rows = updated.map((item) => ({
+              user_id: auth.user!.id,
+              id: item.id,
+              record_type: 'dm_log',
+              title: item.contactName || item.companyName || 'DM相手',
+              status: item.status,
+              payload: item,
+              updated_at: new Date().toISOString(),
+            }));
+            if (rows.length > 0) {
+              await supabase.from('mst_ai_acquisition_records').upsert(rows, { onConflict: 'user_id,id' });
+            }
+          }
         }
       }
     } catch (err) {
@@ -694,10 +839,12 @@ ${linkInfo}
     const now = new Date().toISOString();
     let updatedList: DmItem[];
 
+    let savedItem: DmItem;
+
     if (selectedDmId) {
       updatedList = dmList.map((item) => {
         if (item.id === selectedDmId) {
-          return {
+          savedItem = {
             ...item,
             direction,
             platform,
@@ -713,6 +860,7 @@ ${linkInfo}
             nextActionNote,
             updated_at: now,
           };
+          return savedItem;
         }
         return item;
       });
@@ -738,19 +886,44 @@ ${linkInfo}
         created_at: now,
         updated_at: now,
       };
+      savedItem = newItem;
       updatedList = [newItem, ...dmList];
       setSelectedDmId(newItem.id);
       setFeedback({ type: 'success', message: '新規DMを登録しました！' });
     }
 
-    await persistDmList(updatedList);
+    await persistDmList(updatedList, savedItem);
+    if (savedItem.nextActionDate) {
+      syncDueActionsToTasks([savedItem]);
+    }
     setTimeout(() => setFeedback(null), 2500);
   };
 
   // 削除処理
   const handleDeleteDm = async (id: string) => {
     const updated = dmList.filter((item) => item.id !== id);
-    await persistDmList(updated);
+    setDmList(updated);
+    try {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(updated));
+    } catch {}
+
+    try {
+      const supabase = getSupabase();
+      if (supabase) {
+        const { data: auth } = await supabase.auth.getUser();
+        if (auth.user) {
+          await supabase
+            .from('mst_ai_acquisition_records')
+            .delete()
+            .eq('user_id', auth.user.id)
+            .eq('record_type', 'dm_log')
+            .eq('id', id);
+        }
+      }
+    } catch (err) {
+      console.warn('Supabase delete error:', err);
+    }
+
     if (selectedDmId === id) {
       if (updated.length > 0) {
         loadDmToForm(updated[0]);
@@ -959,126 +1132,79 @@ ${messageText.slice(0, 500)}`;
 
   const activeItem = dmList.find((i) => i.id === selectedDmId);
 
+  const dueActionCount = useMemo(() => {
+    const today = new Date().toISOString().slice(0, 10);
+    return dmList.filter((d) => d.nextActionDate && d.nextActionDate <= today && d.status !== 'closed' && d.status !== 'converted').length;
+  }, [dmList]);
+
   return (
     <div className="space-y-4 text-slate-800">
-      {/* ── 最上部ヘッダー & 相互ナビゲーション ── */}
+      {/* ── 規約遵守・個別手動送信のお願いバナー ── */}
+      <div className="rounded-xl border border-amber-300 bg-amber-50 p-3.5 text-xs text-amber-900 flex items-start gap-2.5 shadow-xs">
+        <AlertTriangle className="h-4 w-4 text-amber-600 shrink-0 mt-0.5" />
+        <div className="leading-relaxed">
+          <span className="font-bold text-amber-950">見知らぬ相手への一斉DMは、各SNSの規約で禁止・制限されている場合があります。</span>
+          <span className="ml-1 text-amber-900">DMの自動送信・一括送信は行わず、テンプレートを活用しながら個別に手動で送ってください。</span>
+        </div>
+      </div>
+
+      {/* ── 次回アクション期日到来タスク通知 ── */}
+      {dueActionCount > 0 && (
+        <div className="rounded-xl border border-purple-200 bg-purple-50 p-3 text-xs text-purple-900 flex items-center justify-between shadow-xs">
+          <div className="flex items-center gap-2">
+            <Clock className="h-4 w-4 text-purple-600 shrink-0" />
+            <span>本日・期限到来の次回アクションが <strong>{dueActionCount}件</strong> あります。期日が来たらタスクとして通知されます。</span>
+          </div>
+          {onNavigateTab && (
+            <button
+              type="button"
+              onClick={() => onNavigateTab('ai_tasks')}
+              className="px-2.5 py-1 rounded-lg bg-purple-600 hover:bg-purple-700 text-white font-semibold transition cursor-pointer"
+            >
+              タスク一覧を開く
+            </button>
+          )}
+        </div>
+      )}
+
+      {/* ── 最上部ヘッダー & ナビゲーション ── */}
       <div className="rounded-xl border border-slate-200 bg-white p-3 sm:px-4 shadow-xs">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
           <div className="flex flex-wrap items-center gap-2.5 text-xs">
-            {isOutboundOnly ? (
-              <>
-                <span className="font-semibold text-slate-800 flex items-center gap-1.5">
-                  <SendHorizontal className="h-4 w-4 text-purple-700" />
-                  <span>SNS DM新規開拓</span>
-                </span>
-                <span className="text-slate-300">·</span>
-                <span className="text-slate-500 font-medium">
-                  開拓件数 <span className="font-semibold text-slate-800">{dmList.filter((i) => i.direction === 'outbound').length}件</span>
-                </span>
-              </>
-            ) : isInboundOnly ? (
-              <>
-                <span className="font-semibold text-slate-800 flex items-center gap-1.5">
-                  <Inbox className="h-4 w-4 text-purple-600" />
-                  <span>SNS DM受信管理</span>
-                </span>
-                <span className="text-slate-300">·</span>
-                <span className="text-slate-500 font-medium">
-                  全 <span className="font-semibold text-slate-800">{dmList.filter((i) => i.direction === 'inbound').length}件</span>
-                </span>
-                {dmList.filter((i) => i.direction === 'inbound' && i.status === 'inbound_waiting').length > 0 && (
-                  <span className="text-purple-700 font-bold bg-purple-50 px-2 py-0.5 rounded-full border border-purple-200">
-                    返信待ち {dmList.filter((i) => i.direction === 'inbound' && i.status === 'inbound_waiting').length}件
-                  </span>
-                )}
-              </>
-            ) : (
-              <>
-                <span className="font-semibold text-slate-800 flex items-center gap-1.5">
-                  <MessageSquare className="h-4 w-4 text-purple-700" />
-                  <span>SNS営業・DM個別管理</span>
-                </span>
-                <span className="text-slate-300">·</span>
-                <span className="text-slate-500 font-medium">
-                  合計 <span className="font-semibold text-slate-800">{dmList.length}件</span>
-                </span>
-              </>
+            <span className="font-semibold text-slate-800 flex items-center gap-1.5">
+              <MessageSquare className="h-4 w-4 text-purple-700" />
+              <span>DM営業メモ（テンプレート＋手動記録）</span>
+            </span>
+            <span className="text-slate-300">·</span>
+            <span className="text-slate-500 font-medium">
+              記録件数 <span className="font-semibold text-slate-800">{dmList.length}件</span>
+            </span>
+            {dueActionCount > 0 && (
+              <span className="text-purple-700 font-bold bg-purple-50 px-2 py-0.5 rounded-full border border-purple-200">
+                要アクション {dueActionCount}件
+              </span>
             )}
           </div>
 
           <div className="flex items-center gap-2">
-            {isOutboundOnly ? (
-              <>
-                <button
-                  type="button"
-                  onClick={() => handleCreateNew('outbound')}
-                  className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-purple-700 hover:bg-purple-800 text-white text-xs font-semibold transition shadow-xs cursor-pointer"
-                >
-                  <Plus className="h-3.5 w-3.5" />
-                  <span>新規アプローチ</span>
-                </button>
-                {onNavigateTab && (
-                  <button
-                    type="button"
-                    onClick={() => {
-                      try { localStorage.setItem('unified_inbox_active_channel', 'social_dm'); } catch {}
-                      onNavigateTab('inbox_hub', { inboxChannel: 'social_dm' });
-                    }}
-                    className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg border border-slate-200 bg-white hover:bg-slate-50 text-slate-700 text-xs font-medium transition cursor-pointer"
-                    title="届いたDMの返信対応は統合受信トレイで行います"
-                  >
-                    <Inbox className="h-3.5 w-3.5 text-slate-500" />
-                    <span>受信トレイへ</span>
-                  </button>
-                )}
-              </>
-            ) : isInboundOnly ? (
-              <>
-                <button
-                  type="button"
-                  onClick={() => handleCreateNew('inbound')}
-                  className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-purple-600 hover:bg-purple-700 text-white text-xs font-semibold transition shadow-xs cursor-pointer"
-                >
-                  <Plus className="h-3.5 w-3.5" />
-                  <span>受信DMを登録</span>
-                </button>
-                {onNavigateTab && (
-                  <button
-                    type="button"
-                    onClick={() => {
-                      try {
-                        localStorage.setItem('ai_acquisition_active_tab', 'social_studio');
-                        localStorage.setItem('social_studio_mode', 'dm_sales');
-                      } catch {}
-                      onNavigateTab('ai_acquisition', { acquisitionTab: 'social_studio', studioMode: 'dm_sales' });
-                    }}
-                    className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg border border-purple-200 bg-purple-50 hover:bg-purple-100 text-purple-700 text-xs font-semibold transition cursor-pointer"
-                    title="DM営業（開拓）へ切り替え"
-                  >
-                    <SendHorizontal className="h-3.5 w-3.5 text-purple-600" />
-                    <span>DM開拓へ</span>
-                  </button>
-                )}
-              </>
-            ) : (
-              <>
-                <button
-                  type="button"
-                  onClick={() => handleCreateNew('outbound')}
-                  className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-purple-700 hover:bg-purple-800 text-white text-xs font-semibold transition shadow-xs cursor-pointer"
-                >
-                  <Plus className="h-3.5 w-3.5" />
-                  <span>新規アプローチ</span>
-                </button>
-                <button
-                  type="button"
-                  onClick={() => handleCreateNew('inbound')}
-                  className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-sky-600 hover:bg-sky-700 text-white text-xs font-semibold transition shadow-xs cursor-pointer"
-                >
-                  <Plus className="h-3.5 w-3.5" />
-                  <span>DM登録</span>
-                </button>
-              </>
+            <button
+              type="button"
+              onClick={() => handleCreateNew('outbound')}
+              className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-purple-700 hover:bg-purple-800 text-white text-xs font-semibold transition shadow-xs cursor-pointer"
+            >
+              <Plus className="h-3.5 w-3.5" />
+              <span>新規メモ追加</span>
+            </button>
+            {onNavigateTab && (
+              <button
+                type="button"
+                onClick={() => onNavigateTab('ai_tasks')}
+                className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg border border-slate-200 bg-white hover:bg-slate-50 text-slate-700 text-xs font-medium transition cursor-pointer"
+                title="タスク一覧を確認"
+              >
+                <Clock className="h-3.5 w-3.5 text-slate-500" />
+                <span>タスク一覧へ</span>
+              </button>
             )}
           </div>
         </div>

@@ -718,7 +718,7 @@ export const DiagnosisFormsWorkspace: React.FC<DiagnosisFormsWorkspaceProps> = (
                           {copiedId === form.id ? <ClipboardCheck className="h-3 w-3 text-emerald-600" /> : <Clipboard className="h-3 w-3" />}
                           {copiedId === form.id ? 'コピー済み' : 'URLをコピー'}
                         </button>
-                        <button type="button" onClick={() => onOpenSendCenter?.(form.id, publicUrl(form), form.form_type === 'diagnosis' ? 'diagnosis' : 'form')} className="rounded bg-indigo-600 px-2 py-1 text-xs font-medium text-white hover:bg-indigo-700">送信センターで案内</button>
+                        <button type="button" onClick={() => onOpenSendCenter?.(form.id, publicUrl(form), form.form_type === 'diagnosis' ? 'diagnosis' : 'form')} className="rounded bg-indigo-600 px-2 py-1 text-xs font-medium text-white hover:bg-indigo-700 cursor-pointer shadow-2xs" title="フォーム一覧を見ながら右側の送信ドロワーで案内を送信します">送信ドロワーで案内</button>
                       </div>
                     )}
                   </li>
