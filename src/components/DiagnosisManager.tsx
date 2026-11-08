@@ -693,6 +693,7 @@ const DiagnosisDetailModal: React.FC<DiagnosisDetailModalProps> = ({
   const [memo, setMemo] = useState('');
   const [diagnosisType, setDiagnosisType] = useState('standard');
   const [saving, setSaving] = useState(false);
+    const [changingStatus, setChangingStatus] = useState(false);
   const [saveSuccessMsg, setSaveSuccessMsg] = useState<string | null>(null);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
