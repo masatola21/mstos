@@ -1467,7 +1467,64 @@ ${reportDraft.text.replace(/</g, '&lt;').replace(/>/g, '&gt;')}
 };
 
 
+// 診断IDから診断を取得して詳細モーダルを開く（フォーム回答一覧・統合受信トレイ共通）
+export const DiagnosisDetailLoader: React.FC<{
+  diagnosisId: string;
+  onClose: () => void;
+  onUpdated?: () => void;
+}> = ({ diagnosisId, onClose, onUpdated }) => {
+  const [diagnosis, setDiagnosis] = useState<Diagnosis | null>(null);
+  const [loading, setLoading] = useState(true);
+
+  const load = async () => {
+    setLoading(true);
+    try {
+      const res = await fetchDiagnosisById(diagnosisId);
+      if (res.data) setDiagnosis(res.data);
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    void load();
+  }, [diagnosisId]);
+
+  if (!loading && !diagnosis) {
+    return (
+      <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 p-4" onClick={onClose}>
+        <div className="rounded-xl bg-white p-6 text-sm text-slate-700 shadow-xl" onClick={(e) => e.stopPropagation()}>
+          <p>診断データを取得できませんでした。</p>
+          <button
+            type="button"
+            onClick={onClose}
+            className="mt-3 rounded-lg border border-slate-200 px-3 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-50 cursor-pointer"
+          >
+            閉じる
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <DiagnosisDetailModal
+      diagnosisId={diagnosisId}
+      initialDiagnosis={diagnosis}
+      isLoading={loading}
+      onClose={onClose}
+      onUpdated={() => {
+        onUpdated?.();
+        void load();
+      }}
+    />
+  );
+};
+
 export const DiagnosisManager: React.FC<DiagnosisManagerProps> = (props) => {
+  const [openDiagnosisId, setOpenDiagnosisId] = useState<string | null>(props.initialDiagnosisId || null);
   const [section, setSection] = useState<'forms' | 'answers' | 'materials'>(
     props.initialSection === 'materials'
       ? 'materials'
@@ -1564,9 +1621,15 @@ export const DiagnosisManager: React.FC<DiagnosisManagerProps> = (props) => {
         activeSection={section}
         onSectionChange={setSection}
         showHeader={false}
-        onOpenDiagnosis={() => {}}
+        onOpenDiagnosis={setOpenDiagnosisId}
         onOpenSendCenter={props.onOpenSendCenter}
       />
+      {openDiagnosisId && (
+        <DiagnosisDetailLoader
+          diagnosisId={openDiagnosisId}
+          onClose={() => setOpenDiagnosisId(null)}
+        />
+      )}
     </div>
   );
 };
