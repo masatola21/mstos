@@ -7,6 +7,7 @@ import { renderPlaceholders } from '../utils/placeholders';
 import { PlaceholderAssist } from './common/PlaceholderAssist';
 import { MarketingBroadcastView } from './marketing/MarketingBroadcastView';
 import { CommunicationTemplateLibraryView } from './marketing/CommunicationTemplateLibraryView';
+import { CommunicationOutboxHistoryView } from './marketing/CommunicationOutboxHistoryView';
 
 type Kind = 'document' | 'form' | 'diagnosis' | 'deal' | 'customer_meeting' | 'announcement' | 'sales_outreach' | 'nurturing_story';
 type Channel = 'email' | 'line' | 'both';
@@ -21,7 +22,7 @@ type Props = {
   initialFormId?: string;
   initialDealId?: string;
   initialContactId?: string;
-  initialMode?: 'send' | 'broadcast' | 'templates';
+  initialMode?: 'send' | 'broadcast' | 'templates' | 'history';
   initialBroadcastChannel?: 'email' | 'line';
   initialChannel?: Channel;
   initialSubject?: string;
@@ -207,7 +208,7 @@ export const CommunicationSendCenter: React.FC<Props> = ({
   onReturnToOrigin,
   onNavigateTab,
 }) => {
-  const [screen, setScreen] = useState<'send' | 'broadcast' | 'templates'>(variant === 'drawer' ? 'send' : initialMode);
+  const [screen, setScreen] = useState<'send' | 'broadcast' | 'templates' | 'history'>(variant === 'drawer' ? 'send' : initialMode);
   const [kind, setKind] = useState<Kind>(initialKind);
   const [channel, setChannel] = useState<Channel>(initialChannel || 'email');
   const [templateChannel, setTemplateChannel] = useState<DeliveryChannel>(initialChannel === 'line' ? 'line' : 'email');
@@ -698,6 +699,23 @@ export const CommunicationSendCenter: React.FC<Props> = ({
             >
               <Users className="h-3.5 w-3.5" />
               <span>一斉配信（1対N）</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                setScreen('history');
+                setPreview(false);
+                setError('');
+              }}
+              aria-pressed={screen === 'history'}
+              className={`flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-medium transition cursor-pointer ${
+                screen === 'history'
+                  ? 'bg-purple-600 text-white'
+                  : 'border border-slate-200 bg-white text-slate-700 hover:bg-slate-50'
+              }`}
+            >
+              <Inbox className="h-3.5 w-3.5" />
+              <span>送信履歴・送信待ち</span>
             </button>
             <button
               type="button"
@@ -1338,6 +1356,15 @@ export const CommunicationSendCenter: React.FC<Props> = ({
       {/* 画面3: テンプレート保管庫（全社マスター） */}
       {screen === 'templates' && (
         <CommunicationTemplateLibraryView />
+      )}
+
+      {/* 画面4: 全社送信履歴・送信待ち（アウトボックス） */}
+      {screen === 'history' && (
+        <CommunicationOutboxHistoryView
+          onNavigateToSend={() => setScreen('send')}
+          onNavigateToBroadcast={() => setScreen('broadcast')}
+          onNavigateToDocuments={() => onNavigateTab?.('document_templates')}
+        />
       )}
     </div>
   );

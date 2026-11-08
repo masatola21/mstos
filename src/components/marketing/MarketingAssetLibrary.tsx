@@ -322,7 +322,7 @@ export const MarketingAssetLibrary: React.FC<{
               <h2 className="text-[19px] font-bold text-slate-800 tracking-tight">資料・成果物保管庫</h2>
             </div>
             <p className="mt-1 text-xs text-slate-500">
-              投稿案・営業資料・広告コピー・配布PDFなどの外部発信・営業成果物を一元管理します（※AIが参照する社内ナレッジ・規程等は「AI経営室 ＞ ナレッジ・成果物保管庫」で管理されます）。
+              投稿案・営業資料・広告コピー・配布PDFなどの外部発信・営業成果物を一元管理します（※AIが参照する社内ナレッジ・規程等は「管理・その他 ＞ 社内ナレッジ保管庫（AI参照情報）」で管理されます）。
             </p>
           </div>
           <div className="flex items-center gap-2">

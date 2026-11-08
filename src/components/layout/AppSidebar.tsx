@@ -125,7 +125,6 @@ export const AppSidebar: React.FC<AppSidebarProps> = ({
       defaultOpen: true,
       items: [
         { id: 'ai_chat', label: 'AI社長室・対話' },
-        { id: 'ai_knowledge', label: 'ナレッジ・成果物保管庫' },
       ],
     },
     {
@@ -135,6 +134,7 @@ export const AppSidebar: React.FC<AppSidebarProps> = ({
       defaultOpen: false, // 既定で閉じる（showAllMenus時は開く）
       items: [
         { id: 'communication_send', label: '送信履歴・一括配信・テンプレート' },
+        { id: 'ai_knowledge', label: '社内ナレッジ保管庫（AI参照情報）' },
         { id: 'companies', label: '会社・商品台帳' },
         { id: 'product_hub', label: '新規商品企画・プロジェクト開発' },
         { id: 'ai_presets', label: '専門AI・自動化ルール' },

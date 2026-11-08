@@ -2800,7 +2800,7 @@ function AppContent() {
                 });
               }}
             />
-            <SalesOperationsWorkspace tab="documents" companyId={customerWorkspaceCompanyId} leadId={customerWorkspaceContext?.leadId} dealId={customerWorkspaceContext?.dealId} onClearCompanyFilter={() => setCustomerWorkspaceContext(undefined)} onOpenInvoiceDocuments={(companyId, documentId) => { openSendDrawer({ kind: 'document', companyId, documentId }); }} />
+            <SalesOperationsWorkspace tab="documents" companyId={customerWorkspaceCompanyId} leadId={customerWorkspaceContext?.leadId} dealId={customerWorkspaceContext?.dealId} onClearCompanyFilter={() => setCustomerWorkspaceContext(undefined)} onOpenInvoiceDocuments={(companyId, documentId) => { openSendDrawer({ kind: 'document', companyId, documentId }); }} onNavigateTab={(tab) => setCurrentTab(tab as UnifiedNavTab)} />
           </>
         )}
 

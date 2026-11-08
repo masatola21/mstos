@@ -8,7 +8,7 @@ describe('Round 7: Menu Reorganization & Dashboard Acceptance Tests', () => {
     const dailyBusinessGroupIds = ['marketing', 'sales', 'ai_president'];
     const collapsibleManagementGroupIds = ['management_other'];
 
-    // Expected daily business top-level navigation items (8~9 items)
+    // Expected daily business top-level navigation items (8 items)
     const expectedDailyItems = [
       // 集客・営業開拓 (4)
       'ai_acquisition',
@@ -19,22 +19,22 @@ describe('Round 7: Menu Reorganization & Dashboard Acceptance Tests', () => {
       'leads',
       'document_templates',
       'customer_operations',
-      // AI経営室 (2)
+      // AI経営室 (1)
       'ai_chat',
-      'ai_knowledge',
     ];
 
-    assert.equal(expectedDailyItems.length, 9, 'Daily business should contain 9 items');
+    assert.equal(expectedDailyItems.length, 8, 'Daily business should contain 8 items');
 
-    // Expected management/collapsible items
+    // Expected management/collapsible items (5 items)
     const expectedManagementItems = [
       'communication_send',
+      'ai_knowledge',
       'companies',
       'product_hub',
       'ai_presets',
     ];
 
-    assert.equal(expectedManagementItems.length, 4, 'Management section should contain 4 core items');
+    assert.equal(expectedManagementItems.length, 5, 'Management section should contain 5 core items');
     assert.ok(dailyBusinessGroupIds.length === 3);
     assert.ok(collapsibleManagementGroupIds.length === 1);
   });

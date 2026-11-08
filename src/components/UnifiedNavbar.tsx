@@ -243,12 +243,13 @@ export const UnifiedNavbar: React.FC<UnifiedNavbarProps> = ({
               { id: 'pipeline', label: '反響・商談', items: (['leads', 'deals', 'mst_diagnoses'] as UnifiedNavTab[]) },
               { id: 'contracts', label: '書類・契約', items: (['document_templates'] as UnifiedNavTab[]) },
               { id: 'customers', label: '顧客・支援', items: (['customers', 'customer_operations', 'products', 'companies'] as UnifiedNavTab[]) },
-              { id: 'management', label: '管理・配信設定', items: (['communication_send', 'deal_invitations', 'customer_meeting_invitations', 'custom_lists'] as UnifiedNavTab[]) },
+              { id: 'management', label: '管理・配信設定', items: (['communication_send', 'ai_knowledge', 'deal_invitations', 'customer_meeting_invitations', 'custom_lists'] as UnifiedNavTab[]) },
             ];
             const activeGroup = groups.find((group) => group.items.includes(currentTab)) || groups[0];
             const labelFor = (tab: UnifiedNavTab) => {
               if (tab === 'inbox_hub') return '📥 統合受信トレイ';
               if (tab === 'communication_send') return '📤 送信履歴・一括配信・テンプレート';
+              if (tab === 'ai_knowledge') return '📚 社内ナレッジ保管庫（AI参照情報）';
               if (tab === 'mst_dashboard') return '営業・反響 統合ダッシュボード';
               if (tab === 'inflow_dashboard') return '営業・反響 統合ダッシュボード';
               if (tab === 'unified_calendar') return '予定カレンダー（Google同期・全社日程）';
@@ -328,7 +329,7 @@ export const UnifiedNavbar: React.FC<UnifiedNavbarProps> = ({
                     : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800'
                 }`}
               >
-                📚 ナレッジ・成果物
+                📚 社内ナレッジ（AI参照）
               </button>
 
               <button

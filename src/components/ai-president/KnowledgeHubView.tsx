@@ -144,7 +144,7 @@ export const KnowledgeHubView: React.FC<KnowledgeHubViewProps> = ({ items, onSav
     <div className="max-w-6xl mx-auto px-4 py-6 space-y-5">
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-2">
         <div>
-          <h1 className="text-[19px] font-bold text-slate-800 tracking-tight">ナレッジ・成果物保管庫</h1>
+          <h1 className="text-[19px] font-bold text-slate-800 tracking-tight">社内ナレッジ保管庫（AI参照情報）</h1>
           <p className="mt-1 text-xs text-slate-500">
             AIが意思決定・対話・文面作成で参照する社内ナレッジ・事業情報・規程等を蓄積します（※営業資料・投稿案・配布PDFは「集客戦略 ＞ 資料・成果物保管庫」で管理されます）。
           </p>

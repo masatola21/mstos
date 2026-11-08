@@ -1123,6 +1123,18 @@ export const DocumentTemplateView: React.FC<DocumentTemplateViewProps> = ({
             </button>
           )}
 
+          {onNavigateTab && (
+            <button
+              type="button"
+              onClick={() => onNavigateTab('communication_send')}
+              className="px-3 py-1.5 rounded-md border border-slate-200 bg-white hover:bg-slate-50 text-slate-700 font-medium text-xs flex items-center gap-1.5 transition-all cursor-pointer shadow-2xs"
+              title="管理・その他の送信履歴・送信待ちキューを開きます"
+            >
+              <Send className="w-3.5 h-3.5 text-purple-600" />
+              <span>送信履歴・アウトボックス</span>
+            </button>
+          )}
+
           {(savedDocIds[currentTemplate.id] || autosavedDocumentIds.current[currentTemplate.id]) && (
             <>
               <button

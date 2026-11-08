@@ -93,7 +93,7 @@ export const AppHeader: React.FC<AppHeaderProps> = ({
       case 'ai_projects':
         return { category: 'AI経営室', page: 'プロジェクト管理' };
       case 'ai_knowledge':
-        return { category: 'AI経営室', page: 'ナレッジ・成果物保管庫' };
+        return { category: '管理・その他', page: '社内ナレッジ保管庫（AI参照情報）' };
       case 'ai_presets':
         return { category: '管理・その他', page: '専門AI・自動化ルール' };
       case 'automations':
