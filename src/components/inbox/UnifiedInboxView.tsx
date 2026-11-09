@@ -28,6 +28,7 @@ import { UnifiedNavTab } from '../UnifiedNavbar';
 import { MarketingLineInboxView } from '../marketing/MarketingLineInboxView';
 import { MarketingEmailInboxView } from '../marketing/MarketingEmailInboxView';
 import { useSendDrawer } from '../../context/SendDrawerContext';
+import { useVisiblePolling } from '../../hooks/useInboxRealtime';
 
 export type InboxChannel = 'line' | 'email' | 'forms';
 
@@ -124,41 +125,55 @@ export const UnifiedInboxView: React.FC<UnifiedInboxViewProps> = ({
   const [submissionError, setSubmissionError] = useState('');
 
   // Fetch summary counts for the touchpoints (LINE, Email, Forms)
+  // 件数だけを取得する（head: true）。以前は全行を取得して数えていたため、件数が増えるほど重くなっていた。
   const loadCounts = async () => {
     if (!db) return;
     try {
-      const [lineRes, emailRes, subRes] = await Promise.all([
-        db.from('line_inbox_messages').select('id,direction', { count: 'exact' }),
-        db.from('email_inbox_messages').select('id', { count: 'exact' }),
-        db.from('diagnosis_submissions').select('id,status'),
+      const countOf = (table: string, filter?: (query: any) => any) => {
+        let query: any = db.from(table).select('id', { count: 'exact', head: true });
+        if (filter) query = filter(query);
+        return query;
+      };
+      const [lineTotalRes, lineInboundRes, emailRes, subTotalRes, subReceivedRes] = await Promise.all([
+        countOf('line_inbox_messages'),
+        countOf('line_inbox_messages', (query) => query.eq('direction', 'inbound')),
+        countOf('email_inbox_messages'),
+        countOf('diagnosis_submissions'),
+        countOf('diagnosis_submissions', (query) => query.eq('status', 'received')),
       ]);
 
-      const lineList = (lineRes.data || []) as { id: string; direction: string }[];
-      const lineInbound = lineList.filter((m) => m.direction === 'inbound').length;
-      let emailTotal = emailRes.count || 0;
+      let emailTotal: number = emailRes.count || 0;
       if (!emailTotal) {
+        // 画面側から直接見えない場合は、サーバー経由で件数だけ取得する（メール本文は取得しない）
         try {
           const authHeaders = await getAuthHeaders();
-          const emailApiRes = await fetch('/api/inbox/email/messages', { headers: authHeaders });
+          const emailApiRes = await fetch('/api/inbox/email/messages?countOnly=1', { headers: authHeaders });
           if (emailApiRes.ok) {
             const emailData = await emailApiRes.json();
-            if (Array.isArray(emailData.messages)) {
-              emailTotal = emailData.messages.length;
+            if (typeof emailData.count === 'number') {
+              emailTotal = emailData.count;
             }
           }
         } catch {}
       }
 
-      const subList = (subRes.data || []) as { id: string; status: string }[];
-      const formsReceived = subList.filter((s) => s.status === 'received').length;
-
-      setCounts({
-        lineTotal: lineList.length,
-        lineInbound,
+      const next = {
+        lineTotal: (lineTotalRes.count as number | null) || 0,
+        lineInbound: (lineInboundRes.count as number | null) || 0,
         emailTotal,
-        formsTotal: subList.length,
-        formsReceived,
-      });
+        formsTotal: (subTotalRes.count as number | null) || 0,
+        formsReceived: (subReceivedRes.count as number | null) || 0,
+      };
+      // 数字が変わっていなければ再描画しない
+      setCounts((prev) =>
+        prev.lineTotal === next.lineTotal &&
+        prev.lineInbound === next.lineInbound &&
+        prev.emailTotal === next.emailTotal &&
+        prev.formsTotal === next.formsTotal &&
+        prev.formsReceived === next.formsReceived
+          ? prev
+          : next
+      );
     } catch {
       // quiet fallback
     }
@@ -223,14 +238,10 @@ export const UnifiedInboxView: React.FC<UnifiedInboxViewProps> = ({
   useEffect(() => {
     void loadCounts();
     void loadSubmissions();
-
-    // 15秒ごとのバッジ集計自動更新
-    const timer = setInterval(() => {
-      void loadCounts();
-    }, 15000);
-
-    return () => clearInterval(timer);
   }, []);
+
+  // バッジ集計の自動更新: 60秒ごと。タブが非表示の間は止まり、表示に戻ったときに更新する。
+  useVisiblePolling(loadCounts, 60_000);
 
   // 診断フォームの回答から、AIが診断レポートと提案書の下書きを自動作成する
   const handleGenerateReport = async (sub: SubmissionItem, force = false): Promise<void> => {
