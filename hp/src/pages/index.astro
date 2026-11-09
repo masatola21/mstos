@@ -29,7 +29,7 @@ const heroSlides = [
   },
 ];
 
-// 6大支援メニュー（トップページ要約用）
+// 4大主力支援メニュー（顧問 ＆ 実装構築）
 const allServices = [
   {
     num: '01',
@@ -38,7 +38,7 @@ const allServices = [
     badge: '経営・粗利改善',
     image: '/images/service-strategy.jpg',
     imageAlt: '経営戦略・利益構造分析と意思決定支援の顧問セッション風景',
-    desc: '社長の右腕として、案件別・現場別の粗利管理や採算構造の可視化を支援。感覚経営・どんぶり勘定から脱却し、利益が残る意思決定体制をつくります。',
+    desc: '社長の右腕として、案件別・現場別の粗利管理や採算構造の可視化を支援。どんぶり勘定から脱却し、利益が確実に残る意思決定体制をつくります。',
     target: '建設・工事・清掃・請負など、「忙しいのに手元にお金が残らない」「案件ごとの原価が正確に掴めない」企業様',
     href: '/services/strategy',
   },
@@ -74,28 +74,6 @@ const allServices = [
     desc: 'ポータルサイトや紹介頼みから脱却し、LINE公式・Web集客・成約ファネルを設計。見込み客獲得からリピート・LTV向上までを仕組み化します。',
     target: 'エステ・美容・整体・ジムなど、「広告費が高止まりしている」「リピート率を高めたい」店舗型サービス企業様',
     href: '/services/marketing',
-  },
-  {
-    num: '05',
-    category: '新規事業・多角化',
-    title: '介護保険外サービス開業パッケージ',
-    badge: '小規模・スモールスタート',
-    image: '/images/hero-consulting.jpg',
-    imageAlt: '新規事業企画・収益モデル設計セッション風景',
-    desc: '自社事業を立ち上げてきた実業ノウハウをもとに、第2の収益の柱となるシニア生活支援事業を支援。FC加盟金不要で、小規模・少人数から自社ブランドで開業可能。',
-    target: '既存事業の顧客や隙間時間を活かして多角化したい企業様、または個人で堅実に新規開業したい方',
-    href: '/services/new-business',
-  },
-  {
-    num: '06',
-    category: '現場定着伴走',
-    title: '定額サポート・継続改善（ケアパッケージ）',
-    badge: '形骸化防止・自走定着',
-    image: '/images/digital-marketing-funnel-workstation.jpg',
-    imageAlt: 'システム保守・業務運用サポート風景',
-    desc: '構築したフローやシステムの形骸化を防ぎ、新任スタッフへの操作フォローや業務改善のPDCAを月額定額で継続伴走。現場に仕組みが根付くまで支えます。',
-    target: '「過去にシステムを導入したが現場で使われなくなった経験がある」「運用の見直しを継続的に相談したい」企業様',
-    href: '/services/care-package',
   },
 ];
 
@@ -232,7 +210,7 @@ const steps = [
           <!-- ターゲット明示バッジ -->
           <div class="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-brand-900/90 border border-brand-400/40 text-brand-200 text-xs sm:text-sm font-medium backdrop-blur-md shadow-sm">
             <span class="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
-            <span>現場・人材活用型 ＆ 店舗サービス業専門｜経営の仕組み化・利益改善パートナー</span>
+            <span>現場・店舗サービス業専門｜経営の仕組み化 × 利益改善パートナー</span>
           </div>
 
           <!-- メインキャッチコピー -->
@@ -243,15 +221,14 @@ const steps = [
             </span>へ。
           </h1>
 
-          <!-- リードコピー（顧客の真のインサイトを直接突く） -->
-          <div class="space-y-2">
-            <p class="text-lg sm:text-xl font-bold text-amber-200 font-serif">
-              仕事も売上もある。なのに、なぜか利益と時間が残らない経営者様へ。
+          <!-- サブコピー（過度な圧迫感を排し、共感と安心感のある問いかけへ） -->
+          <div class="space-y-2.5">
+            <p class="text-base sm:text-lg font-bold text-amber-200 font-serif">
+              業務の属人化や、利益・管理体制の仕組み化に悩む経営者様へ。
             </p>
-            <p class="text-sm sm:text-base text-slate-200 font-normal leading-relaxed max-w-2xl">
-              社長ひとりの頑張りや属人化、分断されたExcel・手作業管理から脱却。<br class="hidden sm:inline" />
-              粗利の可視化・業務プロセスの標準化・自動化により、<br class="hidden sm:inline" />
-              人が育ち、現場が自走し、「利益が手元に残る仕組み経営」をつくります。
+            <p class="text-xs sm:text-sm text-slate-200 font-light leading-relaxed max-w-xl">
+              社長依存やExcel・手作業の分散管理から脱却。<br class="hidden sm:inline" />
+              粗利の見える化と業務プロセスの標準化で、現場が自走し「利益が手元に残る組織」をつくります。
             </p>
           </div>
 
@@ -278,26 +255,11 @@ const steps = [
               </a>
             </div>
 
-            <!-- 安心の注記 -->
-            <div class="flex flex-wrap items-center gap-x-4 gap-y-1 text-[11px] sm:text-xs text-slate-300 pt-1">
-              <span class="flex items-center gap-1">✓ 面倒な登録なし・その場で判定</span>
-              <span class="flex items-center gap-1">✓ 強引な営業・電話勧誘は一切行いません</span>
-              <span class="flex items-center gap-1">✓ 全国オンライン（Zoom）対応</span>
-            </div>
-
-            <!-- FV内：主な対応業界ピルタグ（3秒で該当性を認識） -->
-            <div class="pt-3 border-t border-white/10 mt-3 space-y-2">
-              <div class="text-[11px] font-bold text-amber-300 tracking-wider uppercase flex items-center gap-1.5">
-                <span>主な対応業界</span>
-                <span class="text-[10px] text-slate-400 font-normal">（現場・人材活用型 ＆ 店舗サービス）</span>
-              </div>
-              <div class="flex flex-wrap gap-1.5 text-xs text-slate-200">
-                <span class="px-2.5 py-1 rounded-lg bg-white/10 border border-white/15 text-[11px]">🏗️ 建設・設備・リフォーム工事業</span>
-                <span class="px-2.5 py-1 rounded-lg bg-white/10 border border-white/15 text-[11px]">💆 エステ・美容・整体等の店舗サービス</span>
-                <span class="px-2.5 py-1 rounded-lg bg-white/10 border border-white/15 text-[11px]">🧹 清掃・メンテナンス業</span>
-                <span class="px-2.5 py-1 rounded-lg bg-white/10 border border-white/15 text-[11px]">🤝 介護・福祉・生活支援業</span>
-                <span class="px-2.5 py-1 rounded-lg bg-white/10 border border-white/15 text-[11px]">🛠️ 専門サービス・作業請負業</span>
-              </div>
+            <!-- 安心の注記（シンプルに1行で安心感を提示） -->
+            <div class="flex flex-wrap items-center gap-x-4 gap-y-1 text-[11px] sm:text-xs text-slate-300 pt-1 font-light">
+              <span class="flex items-center gap-1">✓ 登録不要・その場で結果判定</span>
+              <span class="flex items-center gap-1">✓ 強引な営業は一切行いません</span>
+              <span class="flex items-center gap-1">✓ 全国オンライン対応</span>
             </div>
           </div>
 
@@ -355,7 +317,7 @@ const steps = [
     <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
       <div class="grid grid-cols-1 md:grid-cols-3 gap-6 sm:gap-8">
         
-        <div class="bg-brand-950/70 p-6 sm:p-7 rounded-2xl border border-brand-700/60 shadow-md space-y-2">
+        <div class="bg-brand-950/70 p-6 sm:p-7 rounded-2xl border border-brand-700/60 shadow-md space-y-3">
           <div class="flex items-center justify-between">
             <span class="text-xs font-bold text-amber-400 tracking-wider">STRENGTH 01</span>
             <span class="text-lg">🏢</span>
@@ -364,6 +326,19 @@ const steps = [
           <p class="text-xs sm:text-sm text-slate-300 leading-relaxed font-light">
             自社でも事業を創業・経営しているからこそ、机上の空論ではない「現場の生々しい実態」に即した実現可能な解決策を提示します。
           </p>
+          <div class="flex items-center gap-3 pt-2.5 border-t border-brand-800/80">
+            <img
+              src="/images/representative.webp"
+              alt="有限会社MST 代表取締役 大橋真人"
+              class="w-9 h-9 rounded-full object-cover border border-amber-400/60 shadow shrink-0"
+              width="36"
+              height="36"
+            />
+            <div class="text-[11px] leading-tight text-slate-300">
+              <span class="font-bold text-white block">代表 大橋 真人</span>
+              <span class="text-brand-300">自身での複数事業創業・事業再生の経験から伴走</span>
+            </div>
+          </div>
         </div>
 
         <div class="bg-brand-950/70 p-6 sm:p-7 rounded-2xl border border-brand-700/60 shadow-md space-y-2">
@@ -843,8 +818,8 @@ const steps = [
         </p>
       </div>
 
-      <!-- 6大サービス グリッドカード -->
-      <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 sm:gap-8">
+      <!-- 4大主力支援サービス グリッドカード -->
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-6 sm:gap-8 max-w-5xl mx-auto">
         {allServices.map((s) => (
           <div class="bg-slate-900/90 rounded-2xl border border-slate-800 p-6 sm:p-7 flex flex-col justify-between hover:border-brand-400 hover:shadow-xl transition-all duration-300 group relative">
             <div class="space-y-4">
@@ -902,8 +877,45 @@ const steps = [
         ))}
       </div>
 
+      <!-- 専門商品：介護保険外サービス開業パッケージ（専用LP導線） -->
+      <div class="mt-10 bg-gradient-to-br from-brand-900 via-slate-900 to-brand-950 text-white rounded-3xl p-7 sm:p-9 border border-brand-700 shadow-2xl max-w-5xl mx-auto">
+        <div class="flex flex-col lg:flex-row items-start lg:items-center justify-between gap-6">
+          <div class="space-y-3 max-w-2xl">
+            <div class="flex flex-wrap items-center gap-2">
+              <span class="text-xs font-bold text-amber-300 bg-amber-400/20 px-3 py-1 rounded-full border border-amber-400/30">
+                新規事業・多角化パッケージ
+              </span>
+              <span class="text-xs text-brand-300 font-bold">新しい事業を、ゼロから作らない。</span>
+            </div>
+            <h3 class="text-xl sm:text-2xl font-bold font-serif text-white">
+              介護保険外サービス開業パッケージ
+            </h3>
+            <p class="text-xs sm:text-sm text-slate-300 leading-relaxed font-light">
+              自社直営「アシスタ大垣」の実践基盤をそのまま提供。FC加盟金不要で、シニア生活支援事業の立ち上げに必要な「事業設計」「集客導線」「業務基盤」「全10回の開業・運営サポート」をオールインワンで提供します。
+            </p>
+          </div>
+          <div class="flex flex-col sm:flex-row gap-3 shrink-0 w-full lg:w-auto">
+            <a
+              href="https://business.mstcorp.info/"
+              target="_blank"
+              rel="noopener noreferrer"
+              class="py-4 px-6 bg-gradient-to-r from-amber-400 to-amber-500 hover:from-amber-300 hover:to-amber-400 text-slate-950 font-black text-xs sm:text-sm rounded-xl text-center transition shadow-lg flex items-center justify-center gap-2 group"
+            >
+              <span>専用LPを見る（料金・詳細）</span>
+              <svg class="w-4 h-4 group-hover:translate-x-1 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"/></svg>
+            </a>
+            <a
+              href="/care-package"
+              class="py-4 px-5 bg-white/10 hover:bg-white/20 text-white text-xs font-semibold rounded-xl text-center transition border border-white/20 flex items-center justify-center"
+            >
+              サイト内概要
+            </a>
+          </div>
+        </div>
+      </div>
+
       <!-- 柔軟な実装アプローチの案内バナー -->
-      <div class="mt-12 p-6 rounded-2xl bg-brand-950/80 border border-brand-800 text-center max-w-4xl mx-auto space-y-2">
+      <div class="mt-8 p-6 rounded-2xl bg-brand-950/80 border border-brand-800 text-center max-w-5xl mx-auto space-y-2">
         <div class="text-xs font-bold text-brand-300">💡 特定ツールに依存しない柔軟な開発設計</div>
         <p class="text-xs sm:text-sm text-slate-300 font-light">
           Google Workspace / GAS を活用した低コスト自動化から、現場専用Webアプリ構築まで、貴社の規模・IT成熟度に応じた最適な技術構成をご提案します。
@@ -1133,9 +1145,11 @@ const steps = [
         <div class="flex flex-col md:flex-row items-center gap-8 bg-sand-50 p-8 sm:p-10 rounded-3xl border border-sand-300">
           <div class="w-36 h-36 sm:w-44 sm:h-44 rounded-2xl overflow-hidden bg-sand-200 shrink-0 shadow-md border-2 border-white">
             <img
-              src="/images/profile-ohashi.jpg"
+              src="/images/representative.webp"
               alt="有限会社MST 代表取締役 大橋真人"
               class="w-full h-full object-cover object-top"
+              width="176"
+              height="176"
             />
           </div>
           <div class="space-y-3 text-center md:text-left">
@@ -1144,9 +1158,14 @@ const steps = [
               <h3 class="text-2xl font-bold font-serif text-slate-900 mt-1">大橋 真人</h3>
               <p class="text-xs text-gray-500">有限会社MST 代表取締役</p>
             </div>
-            <p class="text-xs sm:text-sm text-gray-600 leading-relaxed font-light">
-              自身でも複数の事業を立ち上げ・経営してきた実業家コンサルタント。建設・清掃・介護・店舗サービスなど現場・人材活用型ビジネスの現場に入り込み、粗利の改善から業務プロセスの標準化、GASや専用Webアプリによる自動化まで一貫して支援。机上の空論ではない、現場が自走する仕組みづくりに定評がある。
-            </p>
+            <div class="text-xs sm:text-sm text-gray-600 space-y-2 leading-relaxed font-light">
+              <p>
+                25歳でWeb・IT事業を創業後、清掃・ビルメンテナンス業の起業、M&Aによる企業の事業再生、シニア生活支援事業の立ち上げなど、異業種での実業を自ら経営・実践。
+              </p>
+              <p>
+                「現場の実態を知らないコンサルの助言は定着しない」という信念のもと、建設・清掃・介護・店舗サービスなど現場・人材活用型ビジネスの現場に入り込み、粗利の改善から業務プロセスの標準化、GASや専用Webアプリによる自動化まで一貫して支援している。
+              </p>
+            </div>
           </div>
         </div>
 
