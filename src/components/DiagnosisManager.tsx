@@ -679,6 +679,7 @@ interface DiagnosisDetailModalProps {
   isLoading: boolean;
   onClose: () => void;
   onUpdated: () => void;
+  questionLabels?: Record<string, string>;
 }
 
 const DiagnosisDetailModal: React.FC<DiagnosisDetailModalProps> = ({
@@ -687,6 +688,7 @@ const DiagnosisDetailModal: React.FC<DiagnosisDetailModalProps> = ({
   isLoading,
   onClose,
   onUpdated,
+  questionLabels,
 }) => {
   const [diagnosis, setDiagnosis] = useState<Diagnosis | null>(initialDiagnosis);
   const [answers, setAnswers] = useState<Record<string, unknown>>({});
@@ -921,69 +923,31 @@ ${JSON.stringify(context, null, 2)}`;
 
   const handleSaveGeneratedReport = async () => {
     if (!diagnosis || !reportDraft) return;
-    const supabase = getSupabase();
-    if (!supabase) {
-      setErrorMsg('データベースに接続できません。設定を確認してください。');
-      return;
-    }
     setSavingReport(true);
     setErrorMsg(null);
     try {
-      const previousLatest = reports.find((report) => report.is_latest);
-      if (previousLatest) {
-        const { error: supersedeError } = await supabase.from('ai_reports')
-          .update({ is_latest: false, status: 'superseded' }).eq('id', previousLatest.id);
-        if (supersedeError) throw supersedeError;
+      const authHeaders = await getAuthHeaders();
+      const response = await fetch(`/api/diagnoses/${encodeURIComponent(diagnosis.id)}/report`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', ...authHeaders },
+        body: JSON.stringify({
+          text: reportDraft.text,
+          modelName: reportDraft.modelName,
+          recommendedProductId: reportDraft.recommendedProductId,
+        }),
+      });
+      const result = await response.json().catch(() => ({}));
+      if (!response.ok || !result.report) {
+        throw new Error(result.error || '診断レポートを保存できませんでした。');
       }
-
-      const reportVersion = Math.max(0, ...reports.map((report) => report.version)) + 1;
-      const { data, error } = await supabase.from('ai_reports').insert([{
-        diagnosis_id: diagnosis.id,
-        version: reportVersion,
-        is_latest: true,
-        status: 'generated',
-        title: `${diagnosis.company?.company_name || diagnosis.company_id} 経営診断レポート`,
-        model_name: reportDraft.modelName,
-        prompt_version: 'diagnosis-report-v1',
-        summary: reportDraft.text.slice(0, 1200),
-        recommendations: [reportDraft.text],
-        recommended_product_id: reportDraft.recommendedProductId,
-        full_report_text: reportDraft.text,
-        generated_at: new Date().toISOString(),
-      }]).select('*').single();
-
-      if (error) {
-        if (previousLatest) {
-          await supabase.from('ai_reports').update({ is_latest: true, status: previousLatest.status }).eq('id', previousLatest.id);
-        }
-        throw error;
-      }
-
-      // customer_documents（全社書類台帳）へ自動登録・一元同期
-      try {
-        const docHtml = `<div style="font-family: sans-serif; line-height: 1.8; color: #1e293b; max-width: 800px; margin: 0 auto; padding: 24px;">
-  <h1 style="font-size: 22px; color: #0f172a; border-bottom: 2px solid #2563eb; padding-bottom: 8px; margin-bottom: 20px;">
-    ${diagnosis.company?.company_name || '御社'} 経営診断・ボトルネック改善レポート
-  </h1>
-  <div style="white-space: pre-wrap; font-size: 14px; color: #334155;">
-${reportDraft.text.replace(/</g, '&lt;').replace(/>/g, '&gt;')}
-  </div>
-</div>`;
-        await supabase.from('customer_documents').insert({
-          company_id: diagnosis.company_id,
-          lead_id: diagnosis.lead_id || null,
-          document_type: 'diagnosis_report',
-          title: `${diagnosis.company?.company_name || '顧客'} 経営診断レポート (v${reportVersion})`,
-          body_html: docHtml,
-          status: 'draft',
-        });
-      } catch (docErr) {
-        console.warn('Failed to sync to customer_documents:', docErr);
-      }
-
-      setReports((current) => [data as AiReport, ...current.filter((report) => report.id !== previousLatest?.id)]);
+      const refreshed = await fetchAiReportsByDiagnosisId(diagnosis.id);
+      setReports(refreshed.data);
       setReportDraft(null);
-      setSaveSuccessMsg('診断レポートを保存しました。全社書類台帳（契約・書類）にも同期登録されました。');
+      setSaveSuccessMsg(
+        result.documentSynced
+          ? '診断レポートを保存しました。顧客書類（承認待ち）にも登録しました。'
+          : '診断レポートを保存しました。（顧客書類への登録だけ失敗しました）'
+      );
       onUpdated();
     } catch (error: any) {
       setErrorMsg(error.message || '診断レポートを保存できませんでした。');
@@ -1008,17 +972,18 @@ ${reportDraft.text.replace(/</g, '&lt;').replace(/>/g, '&gt;')}
     setErrorMsg(null);
 
     try {
-      // 1. レポートステータスを承認済（approved）に更新
-      await supabase.from('ai_reports').update({ status: 'approved' }).eq('id', targetReport.id);
-
-      // 2. 診断ステータスを reported に更新
-      await supabase.from('diagnoses').update({ status: 'reported' }).eq('id', diagnosis.id);
-
-      // 3. 全社書類台帳（customer_documents）の該当レポートも approved に同期
-      await supabase.from('customer_documents')
-        .update({ status: 'approved' })
-        .eq('company_id', diagnosis.company_id)
-        .eq('document_type', 'diagnosis_report');
+      // 1. サーバーでレポートを承認済みにする（診断・顧客書類の状態も同期）
+      const approveHeaders = await getAuthHeaders();
+      const approveResponse = await fetch(`/api/ai-reports/${encodeURIComponent(targetReport.id)}/approve`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', ...approveHeaders },
+      });
+      const approveResult = await approveResponse.json().catch(() => ({}));
+      if (!approveResponse.ok) {
+        throw new Error(approveResult.error || 'レポートを承認できませんでした。');
+      }
+      const refreshedReports = await fetchAiReportsByDiagnosisId(diagnosis.id);
+      setReports(refreshedReports.data);
 
       // 3. 会社紐づきの連絡先を取得
       let contact: any = null;
@@ -1170,35 +1135,6 @@ ${reportDraft.text.replace(/</g, '&lt;').replace(/>/g, '&gt;')}
             </div>
           )}
 
-          {/* 安全ガード説明バナー */}
-          <div className="bg-amber-50 border border-amber-200 rounded-2xl p-4 text-amber-800 space-y-1">
-            <div className="flex items-center gap-2 text-amber-900 font-semibold text-xs sm:text-sm">
-              <ShieldCheck className="w-4 h-4 text-amber-600" />
-              <span>必須設問に回答すると診断を完了できます</span>
-            </div>
-            <p className="text-xs text-amber-800/90 leading-relaxed pl-6">
-              送信済みのフォーム回答を「未確認」として引き継ぎます。内容を確認して必要な修正を保存してください。
-            </p>
-          </div>
-
-          {/* 編集ロック通知（completed / reported の場合） */}
-          {isLockedForDirectEdit && (
-            <div className="bg-slate-50 border border-slate-200 rounded-2xl p-4 flex items-center justify-between gap-4">
-              <div className="flex items-center gap-3">
-                <Lock className="w-5 h-5 text-amber-600 shrink-0" />
-                <div className="text-xs space-y-0.5">
-                  <p className="font-semibold text-slate-800">
-                    回答内容は現在ロックされています（ステータス: {statusInfo.label}）
-                  </p>
-                  <p className="text-slate-500">
-                    完了済み・レポート発行済みの回答の直接編集はDBトリガーにより安全に遮断されています。
-                  </p>
-                </div>
-              </div>
-
-            </div>
-          )}
-
           {isFormDiagnosis ? (
             <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4 text-sm text-slate-700">
               送信済みのフォーム回答を受け付けました。内容を確認してから、診断結果やレポートを作成できます。
@@ -1259,7 +1195,7 @@ ${reportDraft.text.replace(/</g, '&lt;').replace(/>/g, '&gt;')}
             <div className="flex flex-wrap items-center justify-between gap-3">
               <div>
                 <h3 className="text-sm font-bold text-slate-900">診断レポート</h3>
-                <p className="mt-1 text-xs text-slate-500">フォーム回答と社内CRM情報から草案を生成します。内容を確認・修正して保存すると、顧客書類にレポートと提案書の草案を作成します。</p>
+                <p className="mt-1 text-xs text-slate-500">フォーム回答と社内CRM情報から草案を生成します。内容を確認・修正して保存すると、顧客書類にレポート（承認待ち）が登録されます。提案書は「提案書・レポート作成」から作れます。</p>
               </div>
               <p className="text-xs text-slate-500">診断回答と会社名・業種などをAIサービスに送信します。個人の連絡先と社内メモは送信しません。</p>
               <button type="button" onClick={handleGenerateReportDraft} disabled={generatingReport || savingReport} className="inline-flex items-center gap-2 rounded-xl bg-purple-600 px-4 py-2 text-xs font-semibold text-white hover:bg-purple-700 disabled:cursor-not-allowed disabled:opacity-50 transition-colors shadow-sm">
@@ -1325,8 +1261,10 @@ ${reportDraft.text.replace(/</g, '&lt;').replace(/>/g, '&gt;')}
               <dl className="space-y-2">
                 {Object.entries(answers).filter(([key]) => key !== '_intake').map(([key, value]) => (
                   <div key={key} className="grid gap-1 rounded-xl border border-slate-200 bg-white p-3 sm:grid-cols-[minmax(180px,0.8fr)_minmax(0,1.2fr)] shadow-sm">
-                    <dt className="text-xs font-medium text-slate-600">{key}</dt>
-                    <dd><textarea value={typeof value === 'string' ? value : Array.isArray(value) ? value.join('、') : JSON.stringify(value)} onChange={(event) => handleAnswerChange(key, event.target.value)} disabled={isLockedForDirectEdit} rows={Math.min(6, Math.max(2, String(value ?? '').split('\n').length))} className="w-full resize-y rounded-lg border border-slate-200 bg-slate-50 p-2 text-sm text-slate-800 focus:bg-white focus:border-purple-400 disabled:opacity-60" /></dd>
+                    <dt className="text-xs font-medium text-slate-600 break-words">{questionLabels?.[key] || key}</dt>
+                    <dd className="whitespace-pre-wrap break-words text-sm text-slate-800">
+                      {typeof value === 'string' ? value : Array.isArray(value) ? value.join('、') : typeof value === 'boolean' ? (value ? 'はい' : 'いいえ') : JSON.stringify(value)}
+                    </dd>
                   </div>
                 ))}
               </dl>
@@ -1400,107 +1338,107 @@ ${reportDraft.text.replace(/</g, '&lt;').replace(/>/g, '&gt;')}
           </div>
           )}
 
-          {/* 社内メモの編集 */}
-          <div className="space-y-2 pt-2 border-t border-slate-200">
-            <label className="text-xs font-semibold text-slate-700 flex items-center justify-between">
-              <span>社内メモ・診断総括（memo）</span>
-              <span className="text-[10px] text-slate-400">※完了後も随時追記可能</span>
-            </label>
-            <textarea
-              value={memo}
-              onChange={(e) => setMemo(e.target.value)}
-              placeholder="経営課題や商談でのやり取り、提案方針など"
-              rows={3}
-              className="w-full px-3.5 py-2.5 bg-white border border-slate-200 rounded-xl text-xs sm:text-sm text-slate-800 focus:outline-none focus:border-purple-500 focus:ring-1 focus:ring-purple-500 transition-colors shadow-xs"
-            />
-          </div>
         </div>
 
         {/* Modal Footer Actions */}
-        <div className="px-6 py-4 border-t border-slate-200 bg-slate-50 flex flex-col sm:flex-row items-center justify-between gap-3 shrink-0">
-          <div className="text-xs text-slate-500 flex items-center gap-1.5">
-            <Info className="w-4 h-4 text-slate-400" />
-            <span>回答内容や社内メモを変更した後は「回答を保存」を押してください</span>
-          </div>
-
-          <div className="flex items-center gap-2.5 w-full sm:w-auto justify-end">
-            <button
-              type="button"
-              onClick={onClose}
-              className="px-4 py-2 rounded-xl text-xs sm:text-sm font-medium text-slate-600 hover:text-slate-900 hover:bg-slate-200/60 transition-colors"
-            >
-              閉じる
-            </button>
-
-            <button type="button" disabled={saving || changingStatus || isLockedForDirectEdit} onClick={() => handleSaveAnswers()} className="px-4 py-2 rounded-xl text-xs sm:text-sm font-medium bg-purple-600 hover:bg-purple-700 text-white transition-colors flex items-center gap-1.5 disabled:opacity-50 cursor-pointer shadow-sm"><Save className="w-3.5 h-3.5 text-purple-200" /><span>回答を保存</span></button>
-
-                       {/* 診断完了ボタン: 未確認 → 回答完了 / 回答完了 → 未確認（必須設問の確認はDB関数が行います） */}
-            {diagnosis.status === 'received' && (
-              <button
-                type="button"
-                disabled={saving || changingStatus}
-                onClick={() => handleCompleteDiagnosis()}
-                className="px-4 py-2 rounded-xl text-xs sm:text-sm font-medium bg-emerald-600 hover:bg-emerald-700 text-white transition-colors flex items-center gap-1.5 disabled:opacity-50 cursor-pointer shadow-sm"
-                title="内容を確認済みとして回答完了にします（必須設問が未回答の場合は完了できません）"
-              >
-                <CheckCircle2 className="w-3.5 h-3.5" />
-                <span>{changingStatus ? '処理中...' : '確認して回答完了にする'}</span>
-              </button>
-            )}
-            {diagnosis.status === 'completed' && (
-              <button
-                type="button"
-                disabled={changingStatus}
-                onClick={() => handleReopenDiagnosis()}
-                className="px-4 py-2 rounded-xl text-xs sm:text-sm font-medium bg-white hover:bg-slate-50 text-slate-700 border border-slate-300 transition-colors flex items-center gap-1.5 disabled:opacity-50 cursor-pointer shadow-sm"
-                title="未確認に戻して、回答を編集できるようにします"
-              >
-                <RefreshCw className="w-3.5 h-3.5" />
-                <span>{changingStatus ? '処理中...' : '未確認に戻す'}</span>
-              </button>
-            )}
-          </div>
+        <div className="px-6 py-4 border-t border-slate-200 bg-slate-50 flex items-center justify-end shrink-0">
+          <button
+            type="button"
+            onClick={onClose}
+            className="px-4 py-2 rounded-xl text-xs sm:text-sm font-medium text-slate-600 hover:text-slate-900 hover:bg-slate-200/60 transition-colors cursor-pointer"
+          >
+            閉じる
+          </button>
         </div>
       </div>
     </div>
   );
 };
 
-
-// 診断IDから診断を取得して詳細モーダルを開く（フォーム回答一覧・統合受信トレイ共通）
+// 診断レポートの作成画面を開く。診断IDか、フォーム回答IDのどちらかを渡す。
+// 回答IDの場合は、診断が未作成ならサーバーで作成してから開く。
 export const DiagnosisDetailLoader: React.FC<{
-  diagnosisId: string;
+  diagnosisId?: string;
+  submissionId?: string;
+  questionLabels?: Record<string, string>;
   onClose: () => void;
   onUpdated?: () => void;
-}> = ({ diagnosisId, onClose, onUpdated }) => {
+}> = ({ diagnosisId: diagnosisIdProp, submissionId, questionLabels, onClose, onUpdated }) => {
+  const [diagnosisId, setDiagnosisId] = useState<string | null>(diagnosisIdProp || null);
   const [diagnosis, setDiagnosis] = useState<Diagnosis | null>(null);
   const [loading, setLoading] = useState(true);
+  const [failure, setFailure] = useState<string | null>(null);
 
-  const load = async () => {
-    setLoading(true);
+  const loadDiagnosis = async (id: string, silent = false) => {
+    if (!silent) setLoading(true);
     try {
-      const res = await fetchDiagnosisById(diagnosisId);
-      if (res.data) setDiagnosis(res.data);
-    } catch (err) {
-      console.error(err);
+      const res = await fetchDiagnosisById(id);
+      if (res.data) {
+        setDiagnosis(res.data);
+      } else if (!silent) {
+        setFailure(res.error?.message || '診断データを取得できませんでした。');
+      }
+    } catch (err: any) {
+      if (!silent) setFailure(err?.message || '診断データを取得できませんでした。');
     } finally {
-      setLoading(false);
+      if (!silent) setLoading(false);
     }
   };
 
   useEffect(() => {
-    void load();
-  }, [diagnosisId]);
+    let cancelled = false;
+    const start = async () => {
+      setFailure(null);
+      if (diagnosisIdProp) {
+        setDiagnosisId(diagnosisIdProp);
+        await loadDiagnosis(diagnosisIdProp);
+        return;
+      }
+      if (!submissionId) {
+        setFailure('対象の回答が指定されていません。');
+        setLoading(false);
+        return;
+      }
+      setLoading(true);
+      try {
+        const headers = await getAuthHeaders();
+        const response = await fetch(`/api/diagnosis-submissions/${encodeURIComponent(submissionId)}/diagnosis`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', ...headers },
+        });
+        const result = await response.json().catch(() => ({}));
+        if (cancelled) return;
+        if (!response.ok || !result.diagnosisId) {
+          setFailure(result.error || '診断を準備できませんでした。');
+          setLoading(false);
+          return;
+        }
+        setDiagnosisId(String(result.diagnosisId));
+        await loadDiagnosis(String(result.diagnosisId));
+        if (result.created) onUpdated?.();
+      } catch (err: any) {
+        if (!cancelled) {
+          setFailure(err?.message || '診断を準備できませんでした。');
+          setLoading(false);
+        }
+      }
+    };
+    void start();
+    return () => {
+      cancelled = true;
+    };
+  }, [diagnosisIdProp, submissionId]);
 
-  if (!loading && !diagnosis) {
+  if (failure) {
     return (
       <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 p-4" onClick={onClose}>
-        <div className="rounded-xl bg-white p-6 text-sm text-slate-700 shadow-xl" onClick={(e) => e.stopPropagation()}>
-          <p>診断データを取得できませんでした。</p>
+        <div className="max-w-md rounded-xl bg-white p-6 text-sm text-slate-700 shadow-xl" onClick={(e) => e.stopPropagation()}>
+          <p className="font-semibold text-slate-900">診断レポートを開けませんでした</p>
+          <p className="mt-2 text-rose-700">{failure}</p>
           <button
             type="button"
             onClick={onClose}
-            className="mt-3 rounded-lg border border-slate-200 px-3 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-50 cursor-pointer"
+            className="mt-4 rounded-lg border border-slate-200 px-3 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-50 cursor-pointer"
           >
             閉じる
           </button>
@@ -1511,13 +1449,14 @@ export const DiagnosisDetailLoader: React.FC<{
 
   return (
     <DiagnosisDetailModal
-      diagnosisId={diagnosisId}
+      diagnosisId={diagnosisId || ''}
       initialDiagnosis={diagnosis}
-      isLoading={loading}
+      isLoading={loading || !diagnosisId}
+      questionLabels={questionLabels}
       onClose={onClose}
       onUpdated={() => {
         onUpdated?.();
-        void load();
+        if (diagnosisId) void loadDiagnosis(diagnosisId, true);
       }}
     />
   );
@@ -1525,17 +1464,15 @@ export const DiagnosisDetailLoader: React.FC<{
 
 export const DiagnosisManager: React.FC<DiagnosisManagerProps> = (props) => {
   const [openDiagnosisId, setOpenDiagnosisId] = useState<string | null>(props.initialDiagnosisId || null);
-  const [section, setSection] = useState<'forms' | 'answers' | 'materials'>(
-    props.initialSection === 'materials'
-      ? 'materials'
-      : props.initialSection === 'answers'
-      ? 'answers'
-      : 'forms'
+  const [section, setSection] = useState<'forms' | 'materials'>(
+    props.initialSection === 'materials' ? 'materials' : 'forms'
   );
 
   useEffect(() => {
-    if (props.initialSection && (props.initialSection === 'forms' || props.initialSection === 'answers' || props.initialSection === 'materials')) {
+    if (props.initialSection === 'forms' || props.initialSection === 'materials') {
       setSection(props.initialSection);
+    } else if (props.initialSection === 'answers') {
+      setSection('forms');
     }
   }, [props.initialSection]);
 
@@ -1588,18 +1525,6 @@ export const DiagnosisManager: React.FC<DiagnosisManagerProps> = (props) => {
           </button>
           <button
             type="button"
-            onClick={() => setSection('answers')}
-            className={`pb-2.5 px-3 text-xs font-bold transition-colors border-b-2 cursor-pointer flex items-center gap-1.5 whitespace-nowrap ${
-              section === 'answers'
-                ? 'border-purple-600 text-purple-700'
-                : 'border-transparent text-slate-500 hover:text-slate-800'
-            }`}
-          >
-            <ClipboardList className="w-3.5 h-3.5" />
-            <span>フォーム回答一覧</span>
-          </button>
-          <button
-            type="button"
             onClick={() => setSection('materials')}
             className={`pb-2.5 px-3 text-xs font-bold transition-colors border-b-2 cursor-pointer flex items-center gap-1.5 whitespace-nowrap ${
               section === 'materials'
@@ -1619,7 +1544,7 @@ export const DiagnosisManager: React.FC<DiagnosisManagerProps> = (props) => {
         initialCompanyId={props.initialCompanyId}
         initialSection={section}
         activeSection={section}
-        onSectionChange={setSection}
+        onSectionChange={(next) => setSection(next === 'materials' ? 'materials' : 'forms')}
         showHeader={false}
         onOpenDiagnosis={setOpenDiagnosisId}
         onOpenSendCenter={props.onOpenSendCenter}

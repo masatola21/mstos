@@ -115,7 +115,7 @@ export const UnifiedInboxView: React.FC<UnifiedInboxViewProps> = ({
   const [formFilterStatus, setFormFilterStatus] = useState<string>('all');
   const [formSearchQuery, setFormSearchQuery] = useState('');
   const [expandedSubmissionId, setExpandedSubmissionId] = useState<string | null>(null);
-  const [openDiagnosisId, setOpenDiagnosisId] = useState<string | null>(null);
+  const [reportSubmissionId, setReportSubmissionId] = useState<string | null>(null);
   const [loadingSubmissions, setLoadingSubmissions] = useState(false);
   const [submissionNotice, setSubmissionNotice] = useState('');
   const [submissionError, setSubmissionError] = useState('');
@@ -782,16 +782,21 @@ export const UnifiedInboxView: React.FC<UnifiedInboxViewProps> = ({
                           <span>提案書・レポート作成</span>
                         </button>
 
-                        {/* 診断詳細（診断フォーム回答から自動作成された診断） */}
-                        {sub.diagnosis_id && (
+                        {/* 診断レポート作成（診断フォームの回答のみ。診断が未作成なら自動で作成します） */}
+                        {form?.form_type === 'diagnosis' && (
                           <button
                             type="button"
-                            onClick={() => setOpenDiagnosisId(sub.diagnosis_id!)}
-                            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-white hover:bg-purple-50 text-xs font-semibold text-purple-700 border border-purple-300 shadow-xs transition cursor-pointer"
-                            title="この回答から作成された診断の詳細・確認・レポート作成を開きます"
+                            disabled={!sub.company_id}
+                            onClick={() => setReportSubmissionId(sub.id)}
+                            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-white hover:bg-purple-50 text-xs font-semibold text-purple-700 border border-purple-300 shadow-xs transition cursor-pointer disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:bg-white"
+                            title={
+                              sub.company_id
+                                ? 'この回答をもとに診断レポートを作成・確認・送信します'
+                                : '会社が紐付いていません。先に「反響リードに登録」を押してください'
+                            }
                           >
                             <ClipboardList className="w-3.5 h-3.5 text-purple-600" />
-                            <span>診断詳細</span>
+                            <span>{sub.diagnosis_id ? 'レポート作成・確認' : 'レポート作成'}</span>
                           </button>
                         )}
 
@@ -902,13 +907,22 @@ export const UnifiedInboxView: React.FC<UnifiedInboxViewProps> = ({
         />
       )}
 
-      {openDiagnosisId && (
-        <DiagnosisDetailLoader
-          diagnosisId={openDiagnosisId}
-          onClose={() => setOpenDiagnosisId(null)}
-          onUpdated={() => void loadSubmissions()}
-        />
-      )}
+      {reportSubmissionId && (() => {
+        const target = submissions.find((item) => item.id === reportSubmissionId);
+        const questions: any[] = (formsMeta.get(target?.form_id || '')?.definition as any)?.questions || [];
+        const questionLabels: Record<string, string> = {};
+        questions.forEach((q) => {
+          if (q && q.id) questionLabels[q.id] = q.label || q.id;
+        });
+        return (
+          <DiagnosisDetailLoader
+            submissionId={reportSubmissionId}
+            questionLabels={questionLabels}
+            onClose={() => setReportSubmissionId(null)}
+            onUpdated={() => void loadSubmissions()}
+          />
+        );
+      })()}
     </div>
   );
 };

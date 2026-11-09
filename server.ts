@@ -5508,6 +5508,212 @@ app.post(
   }
 });
 
+// ─── 診断フォーム回答 → 診断・レポート（画面の権限では書けないため、サーバー権限で実行） ───
+const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+function escapeHtmlText(value: string): string {
+  return value.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+}
+
+// 回答に対応する診断を確保する（未作成なら作成）。レポート作成画面を開くときに呼ばれる。
+app.post('/api/diagnosis-submissions/:id/diagnosis', requireAuth, async (req, res) => {
+  if (!lineSupabase) return res.status(503).json({ error: 'DB接続が設定されていません。' });
+  const submissionId = String(req.params.id || '');
+  if (!UUID_PATTERN.test(submissionId)) return res.status(400).json({ error: '回答IDが正しくありません。' });
+
+  try {
+    const { data: submission, error: submissionError } = await lineSupabase
+      .from('diagnosis_submissions')
+      .select('id, form_id, company_id, diagnosis_id')
+      .eq('id', submissionId)
+      .maybeSingle();
+    if (submissionError) throw submissionError;
+    if (!submission) return res.status(404).json({ error: '回答が見つかりません（削除された可能性があります）。' });
+    if (submission.diagnosis_id) return res.json({ diagnosisId: String(submission.diagnosis_id), created: false });
+
+    const { data: form } = await lineSupabase
+      .from('diagnosis_forms')
+      .select('form_type')
+      .eq('id', submission.form_id)
+      .maybeSingle();
+    if (form?.form_type !== 'diagnosis') {
+      return res.status(422).json({ error: '診断フォームの回答ではないため、診断レポートは作成できません。' });
+    }
+    if (!submission.company_id) {
+      return res.status(422).json({ error: '会社が紐付いていない回答です。先に「反響リードに登録」で会社を紐付けてください。' });
+    }
+
+    const { data, error } = await lineSupabase.rpc('create_diagnosis_from_form_submission', { p_submission_id: submissionId });
+    if (error) {
+      console.error('Diagnosis ensure failed:', error.message);
+      return res.status(500).json({ error: `診断を作成できませんでした: ${error.message}` });
+    }
+    if (!data) return res.status(422).json({ error: '診断を作成できませんでした。会社の紐付けを確認してください。' });
+    return res.json({ diagnosisId: String(data), created: true });
+  } catch (err: any) {
+    return res.status(500).json({ error: err?.message || '診断の確認中にエラーが発生しました。' });
+  }
+});
+
+// 生成したレポート本文を保存する（ai_reports と顧客書類）。
+app.post('/api/diagnoses/:id/report', requireAuth, async (req, res) => {
+  if (!lineSupabase) return res.status(503).json({ error: 'DB接続が設定されていません。' });
+  const user = (req as any).user;
+  const diagnosisId = String(req.params.id || '');
+  if (!UUID_PATTERN.test(diagnosisId)) return res.status(400).json({ error: '診断IDが正しくありません。' });
+
+  const text = typeof req.body?.text === 'string' ? req.body.text.trim() : '';
+  if (!text) return res.status(400).json({ error: 'レポート本文が空です。' });
+  if (text.length > 60_000) return res.status(400).json({ error: 'レポート本文が長すぎます（6万文字まで）。' });
+  const modelName = typeof req.body?.modelName === 'string' && req.body.modelName.trim()
+    ? req.body.modelName.trim().slice(0, 120)
+    : 'configured-model';
+  const requestedProductId = typeof req.body?.recommendedProductId === 'string' && req.body.recommendedProductId.trim()
+    ? req.body.recommendedProductId.trim()
+    : null;
+
+  try {
+    const { data: diagnosis, error: diagnosisError } = await lineSupabase
+      .from('diagnoses')
+      .select('id, company_id, lead_id')
+      .eq('id', diagnosisId)
+      .maybeSingle();
+    if (diagnosisError) throw diagnosisError;
+    if (!diagnosis) return res.status(404).json({ error: '診断が見つかりません。' });
+
+    const { data: company } = await lineSupabase
+      .from('companies')
+      .select('company_name')
+      .eq('id', diagnosis.company_id)
+      .maybeSingle();
+    const companyName = company?.company_name || '御社';
+
+    // 存在しない商品IDで外部キーエラーにならないよう確認する
+    let recommendedProductId: string | null = null;
+    if (requestedProductId) {
+      const { data: product } = await lineSupabase.from('products').select('id').eq('id', requestedProductId).maybeSingle();
+      recommendedProductId = product?.id ? String(product.id) : null;
+    }
+
+    const { data: existing, error: existingError } = await lineSupabase
+      .from('ai_reports')
+      .select('id, version, is_latest, status')
+      .eq('diagnosis_id', diagnosisId);
+    if (existingError) throw existingError;
+
+    const nextVersion = Math.max(0, ...(existing || []).map((row: any) => Number(row.version) || 0)) + 1;
+    const previousLatest = (existing || []).filter((row: any) => row.is_latest);
+    const demoted: Array<{ id: string; status: string }> = [];
+    for (const previous of previousLatest) {
+      const { error: demoteError } = await lineSupabase
+        .from('ai_reports')
+        .update({ is_latest: false, status: previous.status === 'reviewed' ? 'reviewed' : 'superseded' })
+        .eq('id', previous.id);
+      if (demoteError) throw demoteError;
+      demoted.push({ id: String(previous.id), status: String(previous.status) });
+    }
+
+    const { data: report, error: insertError } = await lineSupabase
+      .from('ai_reports')
+      .insert({
+        diagnosis_id: diagnosisId,
+        version: nextVersion,
+        is_latest: true,
+        status: 'generated',
+        title: `${companyName} 経営診断レポート`,
+        model_name: modelName,
+        prompt_version: 'diagnosis-report-v1',
+        summary: text.slice(0, 1200),
+        recommendations: [text],
+        recommended_product_id: recommendedProductId,
+        full_report_text: text,
+        generated_at: new Date().toISOString(),
+      })
+      .select('*')
+      .single();
+    if (insertError) {
+      for (const previous of demoted) {
+        await lineSupabase.from('ai_reports').update({ is_latest: true, status: previous.status }).eq('id', previous.id);
+      }
+      throw insertError;
+    }
+
+    // 顧客書類（承認待ち）にも登録する。失敗してもレポート自体は保存済み。
+    const bodyHtml = `<div style="font-family: sans-serif; line-height: 1.8; color: #1e293b; max-width: 800px; margin: 0 auto; padding: 24px;">
+  <h1 style="font-size: 22px; color: #0f172a; border-bottom: 2px solid #2563eb; padding-bottom: 8px; margin-bottom: 20px;">${escapeHtmlText(companyName)} 経営診断・ボトルネック改善レポート</h1>
+  <div style="white-space: pre-wrap; font-size: 14px; color: #334155;">${escapeHtmlText(text)}</div>
+</div>`;
+    const { data: documentRow, error: documentError } = await lineSupabase
+      .from('customer_documents')
+      .insert({
+        owner_id: user.id,
+        document_type: 'diagnosis_report',
+        title: `${companyName} 経営診断レポート (v${nextVersion})`,
+        status: 'awaiting_approval',
+        body_html: bodyHtml,
+        company_id: diagnosis.company_id,
+        lead_id: diagnosis.lead_id || null,
+        diagnosis_id: diagnosisId,
+        ai_report_id: report.id,
+      })
+      .select('id')
+      .maybeSingle();
+    if (documentError) console.warn('Diagnosis report document sync failed:', documentError.message);
+
+    return res.json({ report, documentId: documentRow?.id || null, documentSynced: !documentError });
+  } catch (err: any) {
+    console.error('Diagnosis report save failed:', err?.message || err);
+    return res.status(500).json({ error: err?.message || 'レポートを保存できませんでした。' });
+  }
+});
+
+// レポートを承認済みにする（送信は画面側で行う）。
+app.post('/api/ai-reports/:id/approve', requireAuth, async (req, res) => {
+  if (!lineSupabase) return res.status(503).json({ error: 'DB接続が設定されていません。' });
+  const user = (req as any).user;
+  const reportId = String(req.params.id || '');
+  if (!UUID_PATTERN.test(reportId)) return res.status(400).json({ error: 'レポートIDが正しくありません。' });
+
+  try {
+    const { data: report, error: reportError } = await lineSupabase
+      .from('ai_reports')
+      .select('id, diagnosis_id, status')
+      .eq('id', reportId)
+      .maybeSingle();
+    if (reportError) throw reportError;
+    if (!report) return res.status(404).json({ error: 'レポートが見つかりません。' });
+    if (!['generated', 'reviewed'].includes(String(report.status))) {
+      return res.status(409).json({ error: 'このレポートは承認できる状態ではありません（新しい版に置き換わっている可能性があります）。' });
+    }
+
+    if (report.status !== 'reviewed') {
+      const { error: reviewError } = await lineSupabase
+        .from('ai_reports')
+        .update({ status: 'reviewed', reviewed_at: new Date().toISOString(), reviewed_by: String(user.id) })
+        .eq('id', reportId);
+      if (reviewError) throw reviewError;
+    }
+
+    const { error: diagnosisError } = await lineSupabase
+      .from('diagnoses')
+      .update({ status: 'reported' })
+      .eq('id', report.diagnosis_id);
+    if (diagnosisError) console.warn('Diagnosis status update failed:', diagnosisError.message);
+
+    const { error: documentError } = await lineSupabase
+      .from('customer_documents')
+      .update({ status: 'approved' })
+      .eq('ai_report_id', reportId)
+      .eq('document_type', 'diagnosis_report');
+    if (documentError) console.warn('Diagnosis report document approve failed:', documentError.message);
+
+    return res.json({ success: true });
+  } catch (err: any) {
+    console.error('Diagnosis report approve failed:', err?.message || err);
+    return res.status(500).json({ error: err?.message || 'レポートを承認できませんでした。' });
+  }
+});
+
 // ─── 管理者向け汎用レコード削除 API（サービスロールによる安全な実行・外部キー連動解除） ───
 function checkIsAdminUser(user: any): boolean {
   if (!user) return false;
