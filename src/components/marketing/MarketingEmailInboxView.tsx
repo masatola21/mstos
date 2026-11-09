@@ -147,12 +147,10 @@ export const MarketingEmailInboxView: React.FC<MarketingEmailInboxViewProps> = (
     if (loadedMessages.length === 0 && inAddress === '') {
       try {
         const [settings, inbox] = await Promise.all([
-          db.from('email_channel_integrations').select('inbound_address, backup_forward_address, backup_forward_enabled').eq('owner_id', auth.user.id).maybeSingle(),
-          db.from('email_inbox_messages').select('id, from_email, to_emails, subject, text_body, html_body, received_at, backup_status, backup_error').order('received_at', { ascending: false }).limit(500),
+          db.from('email_channel_integrations').select('inbound_address').eq('owner_id', auth.user.id).maybeSingle(),
+          db.from('email_inbox_messages').select('id, from_email, to_emails, subject, text_body, html_body, received_at').order('received_at', { ascending: false }).limit(500),
         ]);
         inAddress = settings.data?.inbound_address || 'contact@mstcorp.info';
-        fwdAddress = settings.data?.backup_forward_address || 'mst.shikumikaizen@gmail.com';
-        fwdEnabled = Boolean(settings.data?.backup_forward_enabled);
         loadedMessages = (inbox.data || []) as InboxMessage[];
       } catch (err: any) {
         console.warn('Fallback direct query error:', err);
@@ -162,19 +160,27 @@ export const MarketingEmailInboxView: React.FC<MarketingEmailInboxViewProps> = (
     const resolvedIn = inAddress || 'contact@mstcorp.info';
     const resolvedFwd = fwdAddress || 'mst.shikumikaizen@gmail.com';
 
-    // 画面遷移から戻ってきた時にも保存されていた設定を確実に反映
+    // 画面遷移から戻ってきた時にも保存されていた設定を確実に保持
+    let finalFwdEnabled = fwdEnabled;
+    try {
+      const stored = localStorage.getItem('mst_email_backup_enabled');
+      if (stored === 'true') {
+        finalFwdEnabled = true;
+      }
+    } catch {}
+
     setAddress(resolvedIn);
     setBackupAddress(resolvedFwd);
-    setBackupEnabled(fwdEnabled);
+    setBackupEnabled(finalFwdEnabled);
     setSavedConfig({
       address: resolvedIn,
       backupAddress: resolvedFwd,
-      backupEnabled: fwdEnabled,
+      backupEnabled: finalFwdEnabled,
     });
     try {
       localStorage.setItem('mst_email_inbound_address', resolvedIn);
       localStorage.setItem('mst_email_backup_address', resolvedFwd);
-      localStorage.setItem('mst_email_backup_enabled', String(fwdEnabled));
+      localStorage.setItem('mst_email_backup_enabled', String(finalFwdEnabled));
     } catch {}
 
     setMessages(loadedMessages);

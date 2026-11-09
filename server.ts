@@ -786,9 +786,14 @@ export async function resolveSystemOwnerId(fallbackOwnerId?: string | null): Pro
   return null;
 }
 
+const memoryEmailBackupSettings: Record<string, { address: string; enabled: boolean }> = {};
+
 export async function getEmailBackupForwardSettings(ownerId?: string | null): Promise<{ address: string; enabled: boolean }> {
   const defaultAddress = 'mst.shikumikaizen@gmail.com';
-  if (!lineSupabase) return { address: defaultAddress, enabled: false };
+  if (!lineSupabase) {
+    if (ownerId && memoryEmailBackupSettings[ownerId]) return memoryEmailBackupSettings[ownerId];
+    return { address: defaultAddress, enabled: false };
+  }
 
   // 1. Try email_channel_integrations
   if (ownerId) {
@@ -798,7 +803,7 @@ export async function getEmailBackupForwardSettings(ownerId?: string | null): Pr
         .select('backup_forward_address, backup_forward_enabled')
         .eq('owner_id', ownerId)
         .maybeSingle();
-      if (!error && data && data.backup_forward_address !== undefined) {
+      if (!error && data && data.backup_forward_address !== undefined && data.backup_forward_address !== null) {
         return {
           address: data.backup_forward_address || defaultAddress,
           enabled: Boolean(data.backup_forward_enabled),
@@ -816,13 +821,18 @@ export async function getEmailBackupForwardSettings(ownerId?: string | null): Pr
       .eq('target', targetKey)
       .maybeSingle();
     if (data?.reason) {
-      const parsed = JSON.parse(data.reason);
+      const parsed = typeof data.reason === 'string' ? JSON.parse(data.reason) : data.reason;
       return {
         address: parsed.address || defaultAddress,
         enabled: data.paused !== undefined ? !data.paused : Boolean(parsed.enabled),
       };
     }
   } catch {}
+
+  // 3. Fallback to in-memory cache
+  if (ownerId && memoryEmailBackupSettings[ownerId]) {
+    return memoryEmailBackupSettings[ownerId];
+  }
 
   return { address: defaultAddress, enabled: false };
 }
@@ -6660,15 +6670,53 @@ app.get('/api/inbox/email/messages', requireAuth, async (req, res) => {
       backupForwardEnabled = Boolean(settingsRes.data.backup_forward_enabled);
     }
 
-    // 2. メッセージ一覧の取得
-    const inboxRes = await lineSupabase
-      .from('email_inbox_messages')
-      .select('id,from_email,to_emails,subject,text_body,html_body,received_at,backup_status,backup_error')
-      .or(`owner_id.eq.${user.id},owner_id.is.null`)
-      .order('received_at', { ascending: false })
-      .limit(500);
+    // 2. メッセージ一覧の取得（カラム未適用DBでも確実に取得）
+    let messages: any[] = [];
+    const baseCols = 'id,from_email,to_emails,subject,text_body,html_body,received_at';
 
-    const messages = inboxRes.data || [];
+    try {
+      const inboxResWithBackup = await lineSupabase
+        .from('email_inbox_messages')
+        .select(`${baseCols},backup_status,backup_error`)
+        .or(`owner_id.eq.${user.id},owner_id.is.null`)
+        .order('received_at', { ascending: false })
+        .limit(500);
+
+      if (!inboxResWithBackup.error && inboxResWithBackup.data) {
+        messages = inboxResWithBackup.data;
+      } else {
+        throw new Error(inboxResWithBackup.error?.message || 'Missing column');
+      }
+    } catch {
+      // 拡張カラム（backup_status等）が未作成の場合は基本カラムのみで取得
+      const baseRes = await lineSupabase
+        .from('email_inbox_messages')
+        .select(baseCols)
+        .or(`owner_id.eq.${user.id},owner_id.is.null`)
+        .order('received_at', { ascending: false })
+        .limit(500);
+
+      if (!baseRes.error && baseRes.data) {
+        messages = baseRes.data.map((m: any) => ({
+          ...m,
+          backup_status: 'skipped',
+          backup_error: null,
+        }));
+      } else {
+        // 全件フォールバック
+        const fallbackRes = await lineSupabase
+          .from('email_inbox_messages')
+          .select(baseCols)
+          .order('received_at', { ascending: false })
+          .limit(500);
+        messages = (fallbackRes.data || []).map((m: any) => ({
+          ...m,
+          backup_status: 'skipped',
+          backup_error: null,
+        }));
+      }
+    }
+
     return res.json({
       success: true,
       inboundAddress,
@@ -6739,24 +6787,51 @@ app.post('/api/inbox/email/settings', requireAuth, async (req, res) => {
     }
   }
 
-  // Persist backup forward settings into fallback automation_controls ALWAYS
+  // Persist backup forward settings into fallback automation_controls safely
   try {
     const targetKey = `email_backup_forward_${user.id}`;
     const payload = JSON.stringify({
       address: finalBackupAddress,
       enabled: finalBackupEnabled,
     });
-    await lineSupabase.from('automation_controls').upsert({
-      id: `backup_forward_${user.id.slice(0, 8)}`,
-      target: targetKey,
-      paused: !finalBackupEnabled,
-      reason: payload,
-      updated_by: user.id,
-      updated_at: new Date().toISOString(),
-    }, { onConflict: 'target' });
+    const nowIso = new Date().toISOString();
+
+    const { data: existingCtrl } = await lineSupabase
+      .from('automation_controls')
+      .select('id')
+      .eq('target', targetKey)
+      .maybeSingle();
+
+    if (existingCtrl?.id) {
+      await lineSupabase
+        .from('automation_controls')
+        .update({
+          paused: !finalBackupEnabled,
+          reason: payload,
+          updated_by: user.id,
+          updated_at: nowIso,
+        })
+        .eq('id', existingCtrl.id);
+    } else {
+      await lineSupabase
+        .from('automation_controls')
+        .insert({
+          target: targetKey,
+          paused: !finalBackupEnabled,
+          reason: payload,
+          updated_by: user.id,
+          updated_at: nowIso,
+        });
+    }
   } catch (ctrlErr: any) {
     console.warn('[inbox/email/settings] Fallback save to automation_controls warning:', ctrlErr?.message || ctrlErr);
   }
+
+  // Always update in-memory cache
+  memoryEmailBackupSettings[user.id] = {
+    address: finalBackupAddress,
+    enabled: finalBackupEnabled,
+  };
 
   return res.json({
     success: true,

@@ -356,7 +356,7 @@ interface AppHistoryState {
 function AppContent() {
   const { user, isLoading } = useAuth();
   const { openSendDrawer, showToast } = useSendDrawer();
-  const [currentTab, setCurrentTab] = useState<UnifiedNavTab>('ai_dashboard');
+  const [currentTab, setCurrentTab] = useState<UnifiedNavTab>('mst_dashboard');
   const [sendOriginContext, setSendOriginContext] = useState<{
     tab: UnifiedNavTab;
     tabLabel: string;
@@ -608,7 +608,11 @@ function AppContent() {
       window.history.replaceState(initialState, '', window.location.href);
     } else {
       const s = window.history.state as AppHistoryState;
-      if (s.tab) setCurrentTab(s.tab);
+      if (s.tab && s.tab !== 'ai_dashboard') {
+        setCurrentTab(s.tab);
+      } else {
+        setCurrentTab('mst_dashboard');
+      }
       if (s.acquisitionTargetTab) setAcquisitionTargetTab(s.acquisitionTargetTab);
       if (s.inboxTargetChannel) setInboxTargetChannel(s.inboxTargetChannel);
       if (s.customerWorkspaceContext) setCustomerWorkspaceContext(s.customerWorkspaceContext);
@@ -622,7 +626,7 @@ function AppContent() {
       isPopStateRef.current = true;
 
       if (state.tab) {
-        setCurrentTab(state.tab);
+        setCurrentTab(state.tab === 'ai_dashboard' ? 'mst_dashboard' : state.tab);
       }
       if (state.acquisitionTargetTab !== undefined) {
         setAcquisitionTargetTab(state.acquisitionTargetTab);
