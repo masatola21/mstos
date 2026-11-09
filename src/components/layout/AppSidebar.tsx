@@ -169,7 +169,7 @@ export const AppSidebar: React.FC<AppSidebarProps> = ({
     if ((tabId === 'leads' || tabId === 'deals') && (currentTab === 'leads' || currentTab === 'deals' || currentTab === 'customers')) return true;
     if (tabId === 'product_hub' && currentTab === 'ai_projects') return true;
     if (tabId === 'ai_presets' && currentTab === 'automations') return true;
-    if ((tabId === 'mst_dashboard' || tabId === 'ai_dashboard') && (currentTab === 'mst_dashboard' || currentTab === 'ai_dashboard' || currentTab === 'inflow_dashboard')) return true;
+    if (tabId === 'mst_dashboard' && (currentTab === 'mst_dashboard' || currentTab === 'inflow_dashboard')) return true;
     if (tabId === 'communication_send' && (currentTab === 'deal_invitations' || currentTab === 'customer_meeting_invitations')) return true;
     return false;
   };
@@ -201,7 +201,7 @@ export const AppSidebar: React.FC<AppSidebarProps> = ({
         <div className="h-16 flex items-center justify-between px-5 border-b border-slate-200 bg-white">
           <div
             className="flex items-center gap-3 cursor-pointer group"
-            onClick={() => handleItemClick('ai_dashboard')}
+            onClick={() => handleItemClick('mst_dashboard')}
           >
             <div className="w-9 h-9 rounded-xl bg-gradient-to-tr from-purple-700 to-indigo-600 flex items-center justify-center text-white font-black text-sm tracking-wider shadow-sm group-hover:scale-105 transition-transform">
               MST
@@ -236,15 +236,15 @@ export const AppSidebar: React.FC<AppSidebarProps> = ({
             </div>
             <button
               type="button"
-              onClick={() => handleItemClick('ai_dashboard')}
+              onClick={() => handleItemClick('mst_dashboard')}
               className={`w-full flex items-center gap-3 px-3 py-2 rounded-lg text-xs sm:text-sm font-semibold transition-colors cursor-pointer ${
-                isTabActive('ai_dashboard')
-                  ? 'bg-purple-50 text-purple-700 font-bold border border-purple-200/80 shadow-xs'
+                isTabActive('mst_dashboard')
+                  ? 'bg-blue-50 text-blue-700 font-bold border border-blue-200/80 shadow-xs'
                   : 'text-slate-700 hover:bg-slate-100/80 hover:text-slate-900'
               }`}
             >
-              <LayoutDashboard className={`w-4 h-4 ${isTabActive('ai_dashboard') ? 'text-purple-600' : 'text-slate-400'}`} />
-              <span>📊 経営ダッシュボード</span>
+              <LayoutDashboard className={`w-4 h-4 ${isTabActive('mst_dashboard') ? 'text-blue-600' : 'text-slate-400'}`} />
+              <span>📊 営業Dashboard</span>
             </button>
 
             <button

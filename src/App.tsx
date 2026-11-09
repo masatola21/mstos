@@ -17,7 +17,6 @@ import { deleteTableRecord } from './services/dataService';
 import { Loader2 } from 'lucide-react';
 
 // AI President Views and Modals
-import { DashboardView } from './components/ai-president/DashboardView';
 import { ChatView } from './components/ai-president/ChatView';
 import { KnowledgeHubView } from './components/ai-president/KnowledgeHubView';
 import { ProjectsView } from './components/ai-president/ProjectsView';
@@ -347,7 +346,7 @@ interface AppHistoryState {
 function AppContent() {
   const { user, isLoading } = useAuth();
   const { openSendDrawer, showToast } = useSendDrawer();
-  const [currentTab, setCurrentTab] = useState<UnifiedNavTab>('ai_dashboard');
+  const [currentTab, setCurrentTab] = useState<UnifiedNavTab>('mst_dashboard');
   const [sendOriginContext, setSendOriginContext] = useState<{
     tab: UnifiedNavTab;
     tabLabel: string;
@@ -357,7 +356,7 @@ function AppContent() {
 
   const getTabFriendlyLabel = (tab: UnifiedNavTab): string => {
     switch (tab) {
-      case 'mst_dashboard': return '経営ダッシュボード';
+      case 'mst_dashboard': return '営業Dashboard';
       case 'unified_calendar': return '予定カレンダー';
       case 'inbox_hub': return '統合受信トレイ';
       case 'leads': return '反響リード';
@@ -392,7 +391,7 @@ function AppContent() {
       context?: any;
     }
   ) => {
-    const targetTab = tab as UnifiedNavTab;
+    const targetTab = (tab === 'ai_dashboard' ? 'mst_dashboard' : tab) as UnifiedNavTab;
     if (targetTab === 'communication_send' && currentTab !== 'communication_send') {
       setSendOriginContext({
         tab: currentTab,
@@ -599,7 +598,7 @@ function AppContent() {
       window.history.replaceState(initialState, '', window.location.href);
     } else {
       const s = window.history.state as AppHistoryState;
-      if (s.tab) setCurrentTab(s.tab);
+      if (s.tab) setCurrentTab(s.tab === 'ai_dashboard' ? 'mst_dashboard' : s.tab);
       if (s.acquisitionTargetTab) setAcquisitionTargetTab(s.acquisitionTargetTab);
       if (s.inboxTargetChannel) setInboxTargetChannel(s.inboxTargetChannel);
       if (s.customerWorkspaceContext) setCustomerWorkspaceContext(s.customerWorkspaceContext);
@@ -613,7 +612,7 @@ function AppContent() {
       isPopStateRef.current = true;
 
       if (state.tab) {
-        setCurrentTab(state.tab);
+        setCurrentTab(state.tab === 'ai_dashboard' ? 'mst_dashboard' : state.tab);
       }
       if (state.acquisitionTargetTab !== undefined) {
         setAcquisitionTargetTab(state.acquisitionTargetTab);
@@ -2527,13 +2526,44 @@ function AppContent() {
         {/* ================= SECTION 1: MST AI経営OS ================= */}
         {(currentTab === 'mst_dashboard' || currentTab === 'inflow_dashboard') && (
           <Dashboard
-            onNavigateTab={(tab) => {
+            onNavigateTab={(tab, options) => {
               if (tab === 'diagnoses') setCurrentTab('mst_diagnoses');
-              else setCurrentTab(tab as UnifiedNavTab);
+              else handleNavigateWorkspaceTab(tab, options);
             }}
             onOpenCreate={handleOpenCreate}
             onOpenRls={() => setIsRlsOpen(true)}
             onStageTransitionTask={handleCrmStageTransition}
+            tasks={tasks}
+            onCreateTask={handleCreateTask}
+            onUpdateTask={handleUpdateTask}
+            contracts={contracts}
+            invoices={invoices}
+            onOpenCustomerWorkspace={(companyId, destination, recordContext) => {
+              setCustomerWorkspaceContext({
+                companyId,
+                dealId: recordContext?.tableKey === 'deals' ? recordContext.recordId : undefined,
+                leadId: recordContext?.tableKey === 'leads' ? recordContext.recordId : undefined,
+              });
+              if (destination === 'deals') setCurrentTab('deals');
+              else if (destination === 'documents') setCurrentTab('document_templates');
+              else if (destination === 'send') {
+                openSendDrawer({
+                  kind: 'form',
+                  companyId,
+                  contactId: recordContext?.contactId,
+                });
+              } else {
+                setCurrentTab('customer_operations');
+              }
+            }}
+            onOpenSendCenter={(params) => {
+              openSendDrawer({
+                kind: params.kind || 'form',
+                companyId: params.companyId || '',
+                contactId: params.contactId,
+                formId: params.formId,
+              });
+            }}
           />
         )}
 
@@ -2867,46 +2897,6 @@ function AppContent() {
         )}
 
         {/* ================= SECTION 3: AI PRESIDENT & STRATEGY ================= */}
-        {currentTab === 'ai_dashboard' && (
-          <DashboardView
-            topGoal={topGoal}
-            onUpdateTopGoal={handleUpdateTopGoal}
-            projects={projects}
-            tasks={tasks}
-            approvals={approvals}
-            activityLogs={activityLogs}
-            tokenUsageRecords={tokenUsageRecords}
-            pricingRates={pricingRates}
-            products={products}
-            contracts={contracts}
-            invoices={invoices}
-            onNavigateToTab={(tab) => setCurrentTab(tab as UnifiedNavTab)}
-            onNavigateTab={(tab) => {
-              if (tab === 'chat') setCurrentTab('ai_chat');
-              else if (tab === 'projects') setCurrentTab('ai_projects');
-              else if (tab === 'tasks') {
-                setSelectedTaskWorkspaceSection('tasks');
-                setCurrentTab('ai_tasks');
-              } else if (tab === 'approvals') {
-                setSelectedTaskWorkspaceSection('approvals');
-                setCurrentTab('ai_tasks');
-              }
-              else if (tab === 'presets') setCurrentTab('ai_presets');
-              else setCurrentTab(tab as any);
-            }}
-            onOpenPricingSettings={() => setIsPricingModalOpen(true)}
-            onResolveApproval={handleResolveApproval}
-            onDeleteApproval={handleDeleteApproval}
-            onUpdateTask={handleUpdateTask}
-            onStartGoalBreakdown={(goal) => {
-              setCurrentTab('ai_chat');
-              void handleSendMessage(
-                `次の経営目標を達成するためのプロジェクト概要と具体的タスク一覧（目的、優先度、完了条件、担当案）を計画立案してください：\n「${goal}」`,
-                'president'
-              );
-            }}
-          />
-        )}
 
         {currentTab === 'ai_chat' && (
           <ChatView
@@ -3229,23 +3219,6 @@ export default function App() {
   if (publicFormMatch) {
     let slug = publicFormMatch[1];
     try { slug = decodeURIComponent(slug); } catch { /* Keep the raw path segment for the server's validation. */ }
-    const search = window.location.search || '';
-    if (slug === 'contact-inquiry') {
-      window.location.replace('https://corp.mstcorp.info/contact' + search);
-      return null;
-    }
-    if (slug === 'business-diagnosis') {
-      window.location.replace('https://corp.mstcorp.info/diagnosis' + search);
-      return null;
-    }
-    if (slug === 'material-download') {
-      window.location.replace('https://corp.mstcorp.info/materials' + search);
-      return null;
-    }
-    if (slug === 'care-package-inquiry') {
-      window.location.replace('https://business.mstcorp.info/' + search);
-      return null;
-    }
     return <PublicIntakeForm slug={slug} />;
   }
 

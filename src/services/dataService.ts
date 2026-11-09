@@ -160,7 +160,7 @@ const TABLE_SELECT_COLUMNS: Record<TableKey, string> = {
   prospects: 'id, company_id, source, approach_method, recommended_product_id, status, reply_flag, last_reply_at, registered_at, email_step, memo, ai_score, ai_reason, target_flag, created_at, updated_at',
   leads: 'id, company_id, contact_id, line_user_id, source, service_type, inquiry_type, interested_product_id, status, priority_channel, first_registered_at, last_contacted_at, next_action_at, meeting_date, meeting_start_time, report_url, email_step, notes, created_at, updated_at',
   products: 'id, product_name, product_type, phase, pricing_model, price_range_max, price_note, initial_fee, monthly_fee, description, status, created_at, updated_at',
-  deals: 'id, company_id, lead_id, product_id, deal_name, amount, stage, status, probability, close_date, memo, created_at, updated_at',
+  deals: 'id, company_id, lead_id, product_id, deal_name, proposal_plan_name, total_amount, amount, proposal_status, stage, status, probability, close_date, meeting_date, next_followup_at, memo, created_at, updated_at',
   customers: 'id, company_id, contract_status, monthly_revenue, ltv, started_at, renewal_date, status, memo, created_at, updated_at',
 };
 

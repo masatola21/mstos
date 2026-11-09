@@ -48,7 +48,7 @@ export const AppHeader: React.FC<AppHeaderProps> = ({
     switch (currentTab) {
       case 'mst_dashboard':
       case 'inflow_dashboard':
-        return { category: '経営全般', page: 'ダッシュボード' };
+        return { category: '営業・顧客管理', page: '営業Dashboard' };
       case 'ai_acquisition':
         return { category: '集客・営業開拓', page: '集客戦略・SNS・メディア' };
       case 'marketing_automation':

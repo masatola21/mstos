@@ -157,7 +157,7 @@ export const UnifiedNavbar: React.FC<UnifiedNavbarProps> = ({
               </button>
 
               <button
-                onClick={() => onTabChange('ai_dashboard')}
+                onClick={() => onTabChange('ai_chat')}
                 className={`px-3 py-1.5 rounded-lg font-medium transition-all cursor-pointer flex items-center gap-1.5 ${
                   activeSection === 'ai_president'
                     ? 'bg-purple-600 text-white font-bold shadow-md shadow-purple-600/30'
@@ -237,7 +237,7 @@ export const UnifiedNavbar: React.FC<UnifiedNavbarProps> = ({
         <nav className="border-t border-slate-800/70 py-2 text-xs font-medium">
           {activeSection === 'mst' && (() => {
             const groups = [
-              { id: 'dashboard', label: '経営・日程', items: (['mst_dashboard', 'unified_calendar'] as UnifiedNavTab[]) },
+              { id: 'dashboard', label: '営業・日程', items: (['mst_dashboard', 'unified_calendar'] as UnifiedNavTab[]) },
               { id: 'communications', label: '対話・受信', items: (['inbox_hub'] as UnifiedNavTab[]) },
               { id: 'acquisition', label: '集客・開拓', items: (['ai_acquisition', 'marketing_automation', 'prospects', 'contacts'] as UnifiedNavTab[]) },
               { id: 'pipeline', label: '反響・商談', items: (['leads', 'deals', 'mst_diagnoses'] as UnifiedNavTab[]) },
@@ -250,8 +250,8 @@ export const UnifiedNavbar: React.FC<UnifiedNavbarProps> = ({
               if (tab === 'inbox_hub') return '📥 統合受信トレイ';
               if (tab === 'communication_send') return '📤 送信履歴・一括配信・テンプレート';
               if (tab === 'ai_knowledge') return '📚 社内ナレッジ保管庫（AI参照情報）';
-              if (tab === 'mst_dashboard') return '営業・反響 統合ダッシュボード';
-              if (tab === 'inflow_dashboard') return '営業・反響 統合ダッシュボード';
+              if (tab === 'mst_dashboard') return '営業Dashboard';
+              if (tab === 'inflow_dashboard') return '営業Dashboard';
               if (tab === 'unified_calendar') return '予定カレンダー（Google同期・全社日程）';
               if (tab === 'deal_invitations') return '商談予約案内';
               if (tab === 'customer_meeting_invitations') return '顧客面談案内';
@@ -295,17 +295,6 @@ export const UnifiedNavbar: React.FC<UnifiedNavbarProps> = ({
           {/* 3. AI President Section Subtabs */}
           {activeSection === 'ai_president' && (
             <div className="flex min-w-0 items-center gap-1.5 overflow-x-auto pb-1">
-              <button
-                onClick={() => onTabChange('ai_dashboard')}
-                className={`px-3 py-1.5 rounded-lg whitespace-nowrap transition-colors flex items-center gap-1.5 ${
-                  currentTab === 'ai_dashboard'
-                    ? 'bg-purple-600 text-white font-semibold shadow-sm'
-                    : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800'
-                }`}
-              >
-                📊 AI社長ダッシュボード
-              </button>
-
               <button
                 onClick={() => onTabChange('ai_chat')}
                 className={`px-3 py-1.5 rounded-lg whitespace-nowrap transition-colors flex items-center gap-1.5 ${
