@@ -176,11 +176,13 @@ export async function fetchTableData(
   try {
     // 基本クエリ（画面で必要なカラムのみ指定し、リミット100件を付与してパフォーマンスを最適化）
     const columns = TABLE_SELECT_COLUMNS[tableKey] || '*';
-    let { data, error } = (await supabase.from(tableKey).select(columns).limit(100)) as { data: any[] | null; error: any };
+    let query = supabase.from(tableKey).select(columns);
+    query = query.order('created_at', { ascending: false });
+    let { data, error } = (await query.limit(200)) as { data: any[] | null; error: any };
     
     // リモートDBに未マイグレーションの列がある場合は select('*') で安全にフォールバック取得
     if (error && (error.code === '42703' || error.message?.includes('column') || error.message?.includes('schema cache'))) {
-      const fallback = (await supabase.from(tableKey).select('*').limit(100)) as { data: any[] | null; error: any };
+      const fallback = (await supabase.from(tableKey).select('*').order('created_at', { ascending: false }).limit(200)) as { data: any[] | null; error: any };
       if (!fallback.error) {
         data = fallback.data;
         error = null;
@@ -249,12 +251,43 @@ export async function fetchTableData(
         const email = contact?.email || (emailMatch ? emailMatch[0] : '');
         const phone = contact?.phone || (phoneMatch ? phoneMatch[0] : '');
 
+        // 希望内容（問い合わせ種別）の自動判定・自動反映
+        let deducedInquiryType = String(item.inquiry_type || '').trim();
+        if (!deducedInquiryType || deducedInquiryType === '開業相談') {
+          const notesText = notes;
+          const sourceText = String(item.source || '');
+          if (notesText.includes('経営ボトルネック診断') || notesText.includes('診断判定') || sourceText.includes('診断')) {
+            deducedInquiryType = 'ボトルネック診断';
+          } else if (notesText.includes('請求資料') || notesText.includes('資料') || sourceText.includes('資料')) {
+            if (notesText.includes('介護') || sourceText.includes('介護')) {
+              deducedInquiryType = '資料請求: 介護開業提案書';
+            } else if (notesText.includes('実務ガイド') || notesText.includes('経営改善')) {
+              deducedInquiryType = '資料請求: 実務ガイド';
+            } else {
+              deducedInquiryType = '資料請求';
+            }
+          } else if (notesText.includes('経営全体') || notesText.includes('利益改善')) {
+            deducedInquiryType = '経営全体・利益改善';
+          } else if (notesText.includes('業務効率化') || notesText.includes('自動化') || notesText.includes('IT')) {
+            deducedInquiryType = '業務効率化・IT/自動化';
+          } else if (notesText.includes('集客') || notesText.includes('マーケティング')) {
+            deducedInquiryType = '集客・マーケティング';
+          } else if (notesText.includes('介護保険外') || notesText.includes('開業')) {
+            deducedInquiryType = '介護保険外開業';
+          } else if (sourceText.includes('お問い合わせ') || sourceText.includes('HP')) {
+            deducedInquiryType = 'お問い合わせ';
+          } else {
+            deducedInquiryType = sourceText || 'Web反響';
+          }
+        }
+
         return {
           ...item,
           contact,
           contact_name: contactName,
           email,
           phone,
+          inquiry_type: deducedInquiryType,
         };
       });
     }

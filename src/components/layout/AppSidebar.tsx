@@ -114,6 +114,7 @@ export const AppSidebar: React.FC<AppSidebarProps> = ({
       defaultOpen: true,
       items: [
         { id: 'leads', label: '商談パイプライン' },
+        { id: 'communication_send', label: '送信履歴・配信ログ' },
         { id: 'document_templates', label: '重要書類・見積・契約' },
         { id: 'customer_operations', label: '契約・請求・顧問支援' },
       ],
@@ -133,8 +134,7 @@ export const AppSidebar: React.FC<AppSidebarProps> = ({
       icon: Settings,
       defaultOpen: false, // 既定で閉じる（showAllMenus時は開く）
       items: [
-        { id: 'communication_send', label: '送信履歴・一括配信・テンプレート' },
-        { id: 'ai_knowledge', label: '社内ナレッジ保管庫（AI参照情報）' },
+                { id: 'ai_knowledge', label: '社内ナレッジ保管庫（AI参照情報）' },
         { id: 'companies', label: '会社・商品台帳' },
         { id: 'product_hub', label: '新規商品企画・プロジェクト開発' },
         { id: 'ai_presets', label: '専門AI・自動化ルール' },
