@@ -26,6 +26,8 @@ interface PublicDocument {
   leadId?: string;
   contact_id?: string;
   contactId?: string;
+  consentRecordedAt?: string | null;
+  consentMethod?: string | null;
   createdAt?: string;
   updatedAt?: string;
 }
@@ -71,7 +73,7 @@ export const PublicDocumentApplyView: React.FC<PublicDocumentApplyViewProps> = (
           if (supabase) {
             const { data: dbDoc, error: dbErr } = await supabase
               .from('customer_documents')
-              .select('id, title, document_type, status, body_html, company_id, lead_id, contact_id, deal_id, created_at, updated_at')
+              .select('id, title, document_type, status, body_html, company_id, lead_id, contact_id, deal_id, consent_recorded_at, consent_method, created_at, updated_at')
               .eq('id', documentId)
               .maybeSingle();
 
@@ -102,6 +104,8 @@ export const PublicDocumentApplyView: React.FC<PublicDocumentApplyViewProps> = (
                 dealStatus,
                 dealAmount,
                 leadId: dbDoc.lead_id,
+                consentRecordedAt: dbDoc.consent_recorded_at,
+                consentMethod: dbDoc.consent_method,
                 createdAt: dbDoc.created_at,
                 updatedAt: dbDoc.updated_at,
               };
@@ -116,9 +120,14 @@ export const PublicDocumentApplyView: React.FC<PublicDocumentApplyViewProps> = (
         }
 
         setDoc(fetchedDoc);
-        if (fetchedDoc.status === 'approved' || fetchedDoc.dealStatus === '成約' || fetchedDoc.dealStatus === '受注') {
+        // 社内承認 status === 'approved' ではなく、顧客が実際に「この内容で申し込む」を完了した証跡 (consentRecordedAt) がある場合のみ成約済み状態にする
+        const hasCustomerApplied = Boolean(fetchedDoc.consentRecordedAt);
+        if (hasCustomerApplied) {
           setApplied(true);
           setResultDealId(fetchedDoc.dealId || null);
+          setConsentInfo({ recordedAt: fetchedDoc.consentRecordedAt || undefined });
+        } else {
+          setApplied(false);
         }
       } catch (err: any) {
         if (!cancelled) setError(err.message || '書類の読み込みに失敗しました。');

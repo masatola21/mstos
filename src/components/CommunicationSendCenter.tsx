@@ -8,11 +8,12 @@ import { PlaceholderAssist } from './common/PlaceholderAssist';
 import { MarketingBroadcastView } from './marketing/MarketingBroadcastView';
 import { CommunicationTemplateLibraryView } from './marketing/CommunicationTemplateLibraryView';
 import { CommunicationOutboxHistoryView } from './marketing/CommunicationOutboxHistoryView';
+import { DocumentPreviewModal } from './common/DocumentPreviewModal';
 
 type Kind = 'document' | 'form' | 'diagnosis' | 'deal' | 'customer_meeting' | 'announcement' | 'sales_outreach' | 'nurturing_story';
 type Channel = 'email' | 'line' | 'both';
 type DeliveryChannel = 'email' | 'line';
-type DocumentType = 'all' | 'diagnosis_report' | 'proposal' | 'estimate' | 'contract' | 'invoice' | 'monthly_report' | 'other';
+type DocumentType = 'estimate' | 'invoice' | 'contract' | 'proposal' | 'diagnosis_report' | 'monthly_report' | 'other';
 type Contact = { id: string; full_name: string; email?: string | null; line_user_id?: string | null; company_id?: string | null };
 
 type Props = {
@@ -70,7 +71,7 @@ const seed = [
     category: 'document',
     channel: 'email',
     subject: '【書類送付】{書類名}｜{会社名} 様',
-    body_text: '{お名前} 様\n\nお世話になっております。有限会社MSTです。\n\n下記の書類をご確認ください。\n書類名：{書類名}\n{書類URL}\n\n{書類本文}\n\nご不明点は本メールにご返信ください。\n有限会社MST',
+    body_text: '{お名前} 様\n\nお世話になっております。有限会社MSTです。\n\n下記の書類（PDF）を添付いたしましたので、ご確認のほどよろしくお願い申し上げます。\nまた、下記URLよりWeb上でも内容をご確認・お手続きいただけます。\n\n書類名：{書類名}\n確認URL：{書類URL}\n\nご不明点やご質問がございましたら、本メールにご返信ください。\n有限会社MST',
   },
   {
     category: 'document',
@@ -143,37 +144,37 @@ const seed = [
 const documentMessage = (type: string | undefined, channel: DeliveryChannel) => {
   const hi = '{お名前} 様';
   const intro = 'お世話になっております。有限会社MSTです。';
-  const details = '書類名：{書類名}\n{書類URL}\n{書類本文}';
+  const details = '書類名：{書類名}\n確認URL：{書類URL}';
   const messages: Record<string, { subject: string; body: string; line: string }> = {
     proposal: {
       subject: '【ご提案書の送付】{書類名}｜{会社名} 様',
-      body: hi + '\n\n' + intro + '\n\nご提案書をお送りします。内容をご確認いただき、ご不明点やご希望がございましたらお知らせください。\n\n' + details + '\n\n有限会社MST',
+      body: hi + '\n\n' + intro + '\n\nご提案書（PDF）を添付いたしましたので、ご確認のほどよろしくお願い申し上げます。\nまた、下記リンクよりWeb上でも内容をご確認いただけます。ご不明点やご希望がございましたらお知らせください。\n\n' + details + '\n\n有限会社MST',
       line: hi + '\nご提案書をお送りします。内容をご確認ください。\n{書類名}\n{書類URL}',
     },
     diagnosis_report: {
       subject: '【診断レポートのご送付】{書類名}｜{会社名} 様',
-      body: hi + '\n\n' + intro + '\n\n診断結果をまとめたレポートをお送りします。内容をご確認いただき、結果や今後の進め方についてご不明点があればお知らせください。\n\n' + details + '\n\n有限会社MST',
+      body: hi + '\n\n' + intro + '\n\n診断結果をまとめたレポート（PDF）を添付いたしましたので、ご確認のほどよろしくお願い申し上げます。\nまた、下記リンクよりWeb上でも結果と今後の進め方をご確認いただけます。\n\n' + details + '\n\n有限会社MST',
       line: hi + '\n診断レポートをお送りします。結果と今後の進め方をご確認ください。\n{書類名}\n{書類URL}',
     },
     contract: {
       subject: '【契約内容のご確認・同意のお願い】{書類名}｜{会社名} 様',
-      body: hi + '\n\n' + intro + '\n\n契約書をお送りします。内容をご確認ください。契約内容に同意いただける場合は、契約締結の権限をお持ちの方から、このメールへの返信で次の文面をお送りください。\n\n「{会社名}を代表して、契約書『{書類名}』の内容を確認し、有限会社MSTとの契約締結に同意します。氏名：［氏名］　役職：［役職］」\n\n内容に修正希望がある場合は、同意文ではなく修正箇所をご返信ください。返信を確認後、契約状態を締結済みに更新します。ご返信いただいたメールと契約書は契約記録として保存します。\n\n' + details + '\n\n有限会社MST',
+      body: hi + '\n\n' + intro + '\n\n契約書（PDF）を添付いたしましたので、ご確認のほどよろしくお願い申し上げます。\nまた、下記リンクよりWeb上でも契約内容をご確認いただけます。\n\n契約内容に同意いただける場合は、契約締結の権限をお持ちの方から、このメールへの返信で次の文面をお送りください。\n\n「{会社名}を代表して、契約書『{書類名}』の内容を確認し、有限会社MSTとの契約締結に同意します。氏名：［氏名］　役職：［役職］」\n\n内容に修正希望がある場合は、同意文ではなく修正箇所をご返信ください。返信を確認後、契約状態を締結済みに更新します。ご返信いただいたメールと契約書は契約記録として保存します。\n\n' + details + '\n\n有限会社MST',
       line: hi + '\n契約書をお送りします。内容をご確認ください。同意いただける場合は、契約締結の権限をお持ちの方からメールで明示的にご返信ください。\n{書類名}\n{書類URL}',
     },
     estimate: {
       subject: '【お見積書の送付】{書類名}｜{会社名} 様',
-      body: hi + '\n\n' + intro + '\n\nお見積書をお送りします。お見積金額・有効期限・ご提案内容をご確認ください。内容の調整やご不明点がございましたらお知らせください。\n\n' + details + '\n\n有限会社MST',
+      body: hi + '\n\n' + intro + '\n\nお見積書（PDF）を添付いたしましたので、ご確認のほどよろしくお願い申し上げます。\nまた、下記リンクよりWeb上でもお見積金額・有効期限・ご提案内容をご確認いただけます。内容の調整やご不明点がございましたらお知らせください。\n\n' + details + '\n\n有限会社MST',
       line: hi + '\nお見積書をお送りします。金額・有効期限・内容をご確認ください。\n{書類名}\n{書類URL}',
     },
     invoice: {
       subject: '【請求書のご送付】{書類名}｜{会社名} 様',
-      body: hi + '\n\n' + intro + '\n\n請求書をお送りします。請求金額・お支払期日・振込先などの記載をご確認のうえ、お手続きをお願いいたします。すでにお手続き済みの場合はご容赦ください。\n\n' + details + '\n\n有限会社MST',
+      body: hi + '\n\n' + intro + '\n\n請求書（PDF）を添付いたしましたので、ご確認のほどよろしくお願い申し上げます。\nまた、下記リンクよりWeb上でも請求金額・お支払期日・振込先などの記載をご確認いただけます。お手続きのほどよろしくお願いいたします。\n\n' + details + '\n\n有限会社MST',
       line: hi + '\n請求書をお送りします。金額・お支払期日・振込先をご確認ください。\n{書類名}\n{書類URL}',
     },
   };
   const message = messages[type || ''] || {
     subject: '【書類のご送付】{書類名}｜{会社名} 様',
-    body: hi + '\n\n' + intro + '\n\n書類をお送りします。内容をご確認ください。ご不明点がございましたらお知らせください。\n\n' + details + '\n\n有限会社MST',
+    body: hi + '\n\n' + intro + '\n\n書類（PDF）を添付いたしましたので、ご確認のほどよろしくお願い申し上げます。\nまた、下記リンクよりWeb上でも内容をご確認いただけます。ご不明点がございましたらお知らせください。\n\n' + details + '\n\n有限会社MST',
     line: hi + '\n書類をお送りします。内容をご確認ください。\n{書類名}\n{書類URL}',
   };
   return channel === 'email' ? { category: 'document', channel, subject: message.subject, body_text: message.body } : { category: 'document', channel, subject: '', body_text: message.line };
@@ -213,7 +214,8 @@ export const CommunicationSendCenter: React.FC<Props> = ({
   const [kind, setKind] = useState<Kind>(initialKind);
   const [channel, setChannel] = useState<Channel>(initialChannel || 'email');
   const [templateChannel, setTemplateChannel] = useState<DeliveryChannel>(initialChannel === 'line' ? 'line' : 'email');
-  const [documentType, setDocumentType] = useState<DocumentType>('all');
+  const [documentType, setDocumentType] = useState<DocumentType>('estimate');
+  const [previewDocModal, setPreviewDocModal] = useState<any | null>(null);
   const [contacts, setContacts] = useState<Contact[]>([]);
   const [docs, setDocs] = useState<any[]>([]);
   const [forms, setForms] = useState<any[]>([]);
@@ -323,7 +325,7 @@ export const CommunicationSendCenter: React.FC<Props> = ({
     フォーム名: form?.name || 'フォーム',
     書類名: doc?.title || '書類',
     書類URL: url.trim() || (doc ? window.location.origin + '/docs/' + encodeURIComponent(doc.id) : ''),
-    書類本文: doc ? htmlToText(doc.body_html || '') : '',
+    書類本文: '',
     面談予約URL: bookingUrl || '',
     案内URL: currentLinkUrl,
 
@@ -334,15 +336,31 @@ export const CommunicationSendCenter: React.FC<Props> = ({
     form_title: form?.name || 'フォーム',
     document_title: doc?.title || '書類',
     document_url: url.trim() || (doc ? window.location.origin + '/docs/' + encodeURIComponent(doc.id) : ''),
-    document_content: doc ? htmlToText(doc.body_html || '') : '',
+    document_content: '',
     booking_url: bookingUrl || '',
     link_url: currentLinkUrl,
   };
 
   const selectedCompanyId = contact?.company_id || initialCompanyId;
   const availableDocs = docs
-    .filter((x) => (!selectedCompanyId || x.company_id === selectedCompanyId || x.id === docId || x.id === initialDocumentId) && (documentType === 'all' || documentCategory(x) === documentType || x.id === docId || x.id === initialDocumentId))
+    .filter((x) => (!selectedCompanyId || x.company_id === selectedCompanyId || x.id === docId || x.id === initialDocumentId) && (documentCategory(x) === documentType || x.id === docId || x.id === initialDocumentId))
     .sort((a, b) => documentOrder[documentCategory(a)] - documentOrder[documentCategory(b)]);
+
+  const handleDocumentTypeChange = (newType: DocumentType) => {
+    setDocumentType(newType);
+    const matchingDocs = docs.filter(
+      (x) =>
+        (!selectedCompanyId || x.company_id === selectedCompanyId) &&
+        documentCategory(x) === newType
+    );
+    if (matchingDocs.length > 0) {
+      if (!doc || documentCategory(doc) !== newType) {
+        setDocId(matchingDocs[0].id);
+      }
+    } else {
+      setDocId('');
+    }
+  };
 
   useEffect(() => {
     if (docId && docs.length > 0 && !availableDocs.some((x) => x.id === docId)) {
@@ -360,8 +378,12 @@ export const CommunicationSendCenter: React.FC<Props> = ({
     if (initialDocumentId) {
       setDocId(initialDocumentId);
       setKind('document');
+      const targetDoc = docs.find((x) => x.id === initialDocumentId);
+      if (targetDoc) {
+        setDocumentType(documentCategory(targetDoc));
+      }
     }
-  }, [initialDocumentId]);
+  }, [initialDocumentId, docs]);
 
   useEffect(() => {
     let ok = true;
@@ -403,6 +425,7 @@ export const CommunicationSendCenter: React.FC<Props> = ({
           setKind('document');
           const targetDoc = (d.data || []).find((x: any) => x.id === initialDocumentId);
           if (targetDoc) {
+            setDocumentType(documentCategory(targetDoc));
             if (targetDoc.contact_id && !initialContactId) {
               setContactId(targetDoc.contact_id);
             } else if (targetDoc.company_id && !initialContactId) {
@@ -944,34 +967,98 @@ export const CommunicationSendCenter: React.FC<Props> = ({
                   書類の種類
                   <select
                     value={documentType}
-                    onChange={(e) => setDocumentType(e.target.value as DocumentType)}
+                    onChange={(e) => handleDocumentTypeChange(e.target.value as DocumentType)}
                     className="mt-1 block w-full rounded-xl border border-slate-200 bg-slate-50 p-2.5 text-xs text-slate-900 focus:bg-white focus:border-purple-600 focus:outline-none shadow-2xs"
                   >
-                    <option value="all">すべての書類（診断レポート→提案書→見積書→契約書→請求書）</option>
-                    <option value="diagnosis_report">診断レポート</option>
-                    <option value="proposal">提案書</option>
                     <option value="estimate">見積書</option>
-                    <option value="contract">契約書</option>
                     <option value="invoice">請求書</option>
+                    <option value="contract">契約書</option>
+                    <option value="proposal">提案書</option>
+                    <option value="diagnosis_report">診断レポート</option>
                     <option value="monthly_report">月次報告書</option>
                     <option value="other">その他</option>
                   </select>
                 </label>
-                <label className="md:col-span-2 text-xs font-semibold text-slate-700">
-                  書類（{contact?.company_id ? (companies[contact.company_id] || '選択した会社') + 'の書類' : initialCompanyId ? (companies[initialCompanyId] || 'この会社') + 'の書類' : '送信先を選ぶと会社の書類で絞り込み'}・承認済みのみ送信可能）
-                  <select
-                    value={docId}
-                    onChange={(e) => setDocId(e.target.value)}
-                    className="mt-1 block w-full rounded-xl border border-slate-200 bg-slate-50 p-2.5 text-xs text-slate-900 focus:bg-white focus:border-purple-600 focus:outline-none shadow-2xs"
-                  >
-                    <option value="">書類を選択してください</option>
-                    {availableDocs.map((x) => (
-                      <option key={x.id} value={x.id}>
-                        {x.title} · {({ draft: '下書き', awaiting_approval: '確認待ち', approved: '承認済み', queued: '送信待ち', sent: '送信済み', failed: '送信失敗', archived: 'アーカイブ' } as Record<string, string>)[x.status] || x.status}
-                      </option>
-                    ))}
-                  </select>
-                </label>
+                <div className="md:col-span-2 space-y-2">
+                  <label className="block text-xs font-semibold text-slate-700">
+                    書類（{contact?.company_id ? (companies[contact.company_id] || '選択した会社') + 'の書類' : initialCompanyId ? (companies[initialCompanyId] || 'この会社') + 'の書類' : '送信先を選ぶと会社の書類で絞り込み'}・承認済みのみ送信可能）
+                    <select
+                      value={docId}
+                      onChange={(e) => setDocId(e.target.value)}
+                      className="mt-1 block w-full rounded-xl border border-slate-200 bg-slate-50 p-2.5 text-xs text-slate-900 focus:bg-white focus:border-purple-600 focus:outline-none shadow-2xs"
+                    >
+                      <option value="">書類を選択してください</option>
+                      {availableDocs.map((x) => (
+                        <option key={x.id} value={x.id}>
+                          {x.title} · {({ draft: '下書き', awaiting_approval: '確認待ち', approved: '承認済み', queued: '送信待ち', sent: '送信済み', failed: '送信失敗', archived: 'アーカイブ' } as Record<string, string>)[x.status] || x.status}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+
+                  {/* 添付書類プレビューカード & アクション */}
+                  {doc ? (
+                    <div className="space-y-2">
+                      <div className="rounded-xl border border-purple-200 bg-purple-50/70 p-3 flex flex-wrap items-center justify-between gap-2.5">
+                        <div className="flex items-center gap-2 min-w-0">
+                          <Paperclip className="w-4 h-4 text-purple-600 shrink-0" />
+                          <div className="min-w-0">
+                            <div className="flex items-center gap-2">
+                              <span className="font-bold text-xs text-purple-950 truncate">{doc.title}</span>
+                              <span className="text-[10px] px-1.5 py-0.5 rounded font-semibold bg-white border border-purple-200 text-purple-700">
+                                {({ draft: '下書き', awaiting_approval: '確認待ち', approved: '承認済み', queued: '送信待ち', sent: '送信済み' } as Record<string, string>)[doc.status] || doc.status}
+                              </span>
+                            </div>
+                            <span className="text-[11px] text-slate-500 block truncate">
+                              {contact?.company_id && companies[contact.company_id] ? `${companies[contact.company_id]} 宛` : ''} · PDF自動添付 &amp; Web確認URL自動挿入
+                            </span>
+                          </div>
+                        </div>
+                        <div className="flex items-center gap-2 shrink-0">
+                          <a
+                            href={`/api/documents/${encodeURIComponent(doc.id)}/pdf`}
+                            target="_blank"
+                            rel="noreferrer"
+                            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-white border border-slate-300 text-slate-700 hover:bg-slate-50 text-xs font-bold transition-colors cursor-pointer shadow-2xs"
+                            title="メールに添付されるPDFファイルをダウンロード確認"
+                          >
+                            <FileText className="w-3.5 h-3.5 text-slate-500" />
+                            <span>PDF確認</span>
+                          </a>
+                          <button
+                            type="button"
+                            onClick={() => setPreviewDocModal(doc)}
+                            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-white border border-purple-300 text-purple-800 hover:bg-purple-100/80 text-xs font-bold transition-colors cursor-pointer shadow-2xs"
+                          >
+                            <Eye className="w-3.5 h-3.5 text-purple-600" />
+                            <span>書類をプレビュー</span>
+                          </button>
+                        </div>
+                      </div>
+                      <div className="rounded-lg bg-purple-100/70 px-3 py-1.5 text-[11px] text-purple-950 flex items-center gap-1.5">
+                        <span className="font-bold">📎 自動PDF添付:</span>
+                        <span>メール送信時、この書類のA4 PDFが自動生成されて添付ファイルとして送信されます（Web確認URLも本文に記載）。</span>
+                      </div>
+                    </div>
+                  ) : availableDocs.length === 0 ? (
+                    <div className="text-[11px] text-amber-700 bg-amber-50 border border-amber-200 rounded-lg p-2.5 flex items-center justify-between gap-2">
+                      <span>選択した会社には、この種類の書類がまだありません。</span>
+                      {onNavigateTab && (
+                        <button
+                          type="button"
+                          onClick={() => onNavigateTab('document_templates')}
+                          className="font-bold text-purple-700 hover:underline shrink-0 cursor-pointer"
+                        >
+                          書類作成へ
+                        </button>
+                      )}
+                    </div>
+                  ) : (
+                    <div className="text-[11px] text-slate-400">
+                      ※ 上記で書類を選択すると、内容のプレビュー確認ができます。
+                    </div>
+                  )}
+                </div>
               </>
             )}
 
@@ -1004,7 +1091,19 @@ export const CommunicationSendCenter: React.FC<Props> = ({
                   <span className="mt-1 block text-[11px] text-slate-500">RESEND_FROM_EMAILで認証済みのドメインを指定してください。</span>
                 </label>
                 <label className="text-xs font-semibold text-slate-700">
-                  返信先メールアドレス（Reply-To）
+                  <div className="flex items-center justify-between">
+                    <span>返信先メールアドレス（Reply-To）</span>
+                    {senderSettings.fromEmail && senderSettings.replyTo !== senderSettings.fromEmail && (
+                      <button
+                        type="button"
+                        onClick={() => setSenderSettings((x) => ({ ...x, replyTo: x.fromEmail }))}
+                        className="text-[10px] text-purple-700 hover:underline font-semibold cursor-pointer"
+                        title="差出人メールアドレスと同じ値に設定します"
+                      >
+                        差出人と同一にする
+                      </button>
+                    )}
+                  </div>
                   <input
                     type="email"
                     value={senderSettings.replyTo}
@@ -1012,6 +1111,9 @@ export const CommunicationSendCenter: React.FC<Props> = ({
                     className="mt-1 block w-full rounded-xl border border-slate-200 bg-slate-50 p-2.5 text-xs text-slate-900 focus:bg-white focus:border-purple-600 focus:outline-none shadow-2xs"
                     placeholder="返信先を変更する場合に入力（任意）"
                   />
+                  <span className="mt-1 block text-[11px] text-slate-500">
+                    ※ 顧客が返信した際の宛先です。差出人と同一（{senderSettings.fromEmail || 'contact@mstcorp.info'}）に統一すると企業としての信頼性が高まります。個人Gmail（mst.shikumikaizen@gmail.com）を指定すると、スマホ等で直接確認できます。
+                  </span>
                 </label>
               </>
             )}
@@ -1286,11 +1388,35 @@ export const CommunicationSendCenter: React.FC<Props> = ({
 
                     {/* 添付書類表示 */}
                     {kind === 'document' && doc && (
-                      <div className="mt-2 flex items-center gap-2 rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-xs text-slate-800">
-                        <Paperclip className="h-3.5 w-3.5 text-purple-600 shrink-0" />
-                        <span className="font-bold text-slate-900">添付・送付書類:</span>
-                        <span className="font-semibold text-purple-900">{doc.title}</span>
-                        <span className="ml-auto text-[11px] text-slate-500 font-mono">（書類閲覧URLが本文に自動差込されます）</span>
+                      <div className="mt-2 flex items-center justify-between gap-2 rounded-lg border border-purple-200 bg-purple-50/70 px-3 py-2 text-xs text-slate-800">
+                        <div className="flex items-center gap-2 min-w-0">
+                          <Paperclip className="h-3.5 w-3.5 text-purple-600 shrink-0" />
+                          <span className="font-bold text-slate-900 shrink-0">添付書類:</span>
+                          <span className="font-semibold text-purple-900 truncate">{doc.title}</span>
+                          <span className="inline-block px-1.5 py-0.5 rounded bg-purple-200 text-purple-900 font-bold text-[10px]">
+                            PDF自動添付
+                          </span>
+                        </div>
+                        <div className="flex items-center gap-1.5 shrink-0">
+                          <a
+                            href={`/api/documents/${encodeURIComponent(doc.id)}/pdf`}
+                            target="_blank"
+                            rel="noreferrer"
+                            className="inline-flex items-center gap-1 px-2.5 py-1 rounded-md bg-white border border-slate-300 text-slate-700 hover:bg-slate-50 text-xs font-semibold cursor-pointer shadow-2xs transition-colors"
+                            title="添付PDFの事前確認"
+                          >
+                            <FileText className="w-3.5 h-3.5 text-slate-500" />
+                            <span>PDF確認</span>
+                          </a>
+                          <button
+                            type="button"
+                            onClick={() => setPreviewDocModal(doc)}
+                            className="inline-flex items-center gap-1 px-2.5 py-1 rounded-md bg-white border border-purple-300 text-purple-700 hover:bg-purple-100 text-xs font-bold cursor-pointer shadow-2xs transition-colors"
+                          >
+                            <Eye className="w-3.5 h-3.5" />
+                            <span>書類プレビュー</span>
+                          </button>
+                        </div>
                       </div>
                     )}
                   </div>
@@ -1371,6 +1497,15 @@ export const CommunicationSendCenter: React.FC<Props> = ({
           onNavigateToSend={() => setScreen('send')}
           onNavigateToBroadcast={() => setScreen('broadcast')}
           onNavigateToDocuments={() => onNavigateTab?.('document_templates')}
+        />
+      )}
+
+      {/* 添付書類プレビューモーダル */}
+      {previewDocModal && (
+        <DocumentPreviewModal
+          document={previewDocModal}
+          companyName={previewDocModal.company_id ? companies[previewDocModal.company_id] : undefined}
+          onClose={() => setPreviewDocModal(null)}
         />
       )}
     </div>

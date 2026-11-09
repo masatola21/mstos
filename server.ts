@@ -13,6 +13,7 @@ import { parseIcalendar } from './server/icalParser.js';
 import { isTimeRexEmail, parseTimeRexEmail, parseTimeRexCalendarEvent, syncTimeRexBookingToCrm } from './server/timerexSyncService.js';
 import { calculateBillingAmount, determineContractMonthlyFee, isContractAlreadyBilled } from './src/utils/billingUtils.js';
 import { calculateExponentialBackoff, shouldSkipAutomationDelivery, checkSendTimeWindow, type SendTimeWindowCheck } from './src/utils/automationRuleUtils.js';
+import { generateDocumentPdf } from './server/pdfService.js';
 
 dotenv.config();
 
@@ -4881,9 +4882,52 @@ app.post('/api/communications/send', async (req, res) => {
       const isTransactional = isTransactionalOutboxEmail(row);
       const unsubscribeUrl = isTransactional ? '' : createEmailUnsubscribeUrl(contact.id);
       const emailText = String(row.body_text || '') + (unsubscribeUrl ? `\n\n配信停止はこちら: ${unsubscribeUrl}` : '');
+
+      let attachments: Array<{ filename: string; content: string }> | undefined = undefined;
+      if (row.document_id) {
+        try {
+          const { data: docData } = await lineSupabase
+            .from('customer_documents')
+            .select('id, title, document_type, body_html, company_id, created_at')
+            .eq('id', row.document_id)
+            .maybeSingle();
+
+          if (docData) {
+            let docCompanyName = '';
+            if (docData.company_id) {
+              const { data: comp } = await lineSupabase
+                .from('companies')
+                .select('company_name')
+                .eq('id', docData.company_id)
+                .maybeSingle();
+              docCompanyName = comp?.company_name || '';
+            }
+            const pdfBuffer = await generateDocumentPdf(docData, docCompanyName);
+            const safeTitle = (docData.title || 'document').replace(/[\r\n/\\:*?"<>|]/g, '_').trim();
+            attachments = [
+              {
+                filename: `${safeTitle}.pdf`,
+                content: pdfBuffer.toString('base64'),
+              },
+            ];
+          }
+        } catch (pdfErr) {
+          console.error('[SendEmail] Document PDF generation warning:', pdfErr);
+        }
+      }
+
       const response = await fetch('https://api.resend.com/emails', {
-        method: 'POST', headers: { Authorization: 'Bearer ' + emailKey, 'Content-Type': 'application/json' },
-        body: JSON.stringify({ from: emailFrom, to: [contact.email], subject: row.subject || '', text: emailText, ...(unsubscribeUrl ? { headers: { 'List-Unsubscribe': `<${unsubscribeUrl}>`, 'List-Unsubscribe-Post': 'List-Unsubscribe=One-Click' } } : {}), ...(replyTo ? { reply_to: replyTo } : {}) }),
+        method: 'POST',
+        headers: { Authorization: 'Bearer ' + emailKey, 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          from: emailFrom,
+          to: [contact.email],
+          subject: row.subject || '',
+          text: emailText,
+          ...(attachments && attachments.length > 0 ? { attachments } : {}),
+          ...(unsubscribeUrl ? { headers: { 'List-Unsubscribe': `<${unsubscribeUrl}>`, 'List-Unsubscribe-Post': 'List-Unsubscribe=One-Click' } } : {}),
+          ...(replyTo ? { reply_to: replyTo } : {}),
+        }),
       });
       const payload = await response.json().catch(() => ({})) as { id?: string; message?: string };
       if (!response.ok || !payload.id) throw new Error(payload.message || 'メール配信サービスが送信を拒否しました。');
@@ -7712,7 +7756,7 @@ app.get('/api/public/documents/:id', async (req, res) => {
   try {
     const { data: doc, error } = await lineSupabase
       .from('customer_documents')
-      .select('id, title, document_type, status, body_html, company_id, lead_id, contact_id, deal_id, created_at, updated_at')
+      .select('id, title, document_type, status, body_html, company_id, lead_id, contact_id, deal_id, consent_recorded_at, consent_method, created_at, updated_at')
       .eq('id', id)
       .maybeSingle();
 
@@ -7743,6 +7787,8 @@ app.get('/api/public/documents/:id', async (req, res) => {
         dealId: doc.deal_id,
         dealStatus: dealInfo?.proposal_status,
         dealAmount: dealInfo?.total_amount,
+        consentRecordedAt: doc.consent_recorded_at || null,
+        consentMethod: doc.consent_method || null,
         createdAt: doc.created_at,
         updatedAt: doc.updated_at,
       },
@@ -7750,6 +7796,38 @@ app.get('/api/public/documents/:id', async (req, res) => {
   } catch (error) {
     console.error('Public document lookup failed:', error instanceof Error ? error.message : 'unknown error');
     return res.status(500).json({ error: '書類を読み込めませんでした。' });
+  }
+});
+
+app.get(['/api/public/documents/:id/pdf', '/api/documents/:id/pdf'], async (req, res) => {
+  if (!lineSupabase) return res.status(503).json({ error: '書類配信サーバーが設定されていません。' });
+  const id = req.params.id;
+  if (!isPublicUuid(id)) return res.status(400).json({ error: '書類IDが無効です。' });
+
+  try {
+    const { data: doc, error } = await lineSupabase
+      .from('customer_documents')
+      .select('id, title, document_type, status, body_html, company_id, created_at')
+      .eq('id', id)
+      .maybeSingle();
+
+    if (error) throw error;
+    if (!doc) return res.status(404).json({ error: '書類が見つかりません。' });
+
+    let companyName = '';
+    if (doc.company_id) {
+      const { data: company } = await lineSupabase.from('companies').select('company_name').eq('id', doc.company_id).maybeSingle();
+      if (company?.company_name) companyName = company.company_name;
+    }
+
+    const pdfBuffer = await generateDocumentPdf(doc, companyName);
+    const safeTitle = (doc.title || 'document').replace(/[\r\n/\\:*?"<>|]/g, '_').trim();
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader('Content-Disposition', `inline; filename*=UTF-8''${encodeURIComponent(safeTitle)}.pdf`);
+    return res.send(pdfBuffer);
+  } catch (error) {
+    console.error('Document PDF generation failed:', error instanceof Error ? error.message : 'unknown error');
+    return res.status(500).json({ error: '書類PDFを生成できませんでした。' });
   }
 });
 

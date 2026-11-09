@@ -16,9 +16,12 @@ import {
   Filter,
   ArrowRight,
   ShieldCheck,
-  RotateCcw
+  RotateCcw,
+  Paperclip,
+  FileText
 } from 'lucide-react';
 import { getSupabase } from '../../lib/supabaseClient';
+import { DocumentPreviewModal } from '../common/DocumentPreviewModal';
 
 export interface OutboxMessage {
   id: string;
@@ -92,6 +95,7 @@ export const CommunicationOutboxHistoryView: React.FC<Props> = ({
   const [statusFilter, setStatusFilter] = useState<'all' | OutboxMessage['status']>('all');
   const [channelFilter, setChannelFilter] = useState<'all' | 'email' | 'line'>('all');
   const [selectedMessage, setSelectedMessage] = useState<OutboxMessage | null>(null);
+  const [previewDocumentId, setPreviewDocumentId] = useState<string | null>(null);
 
   const loadData = async () => {
     setLoading(true);
@@ -547,6 +551,11 @@ export const CommunicationOutboxHistoryView: React.FC<Props> = ({
                               {sourceTypeLabels[msg.source_type] || msg.source_type}
                             </span>
                           )}
+                          {msg.document_id && (
+                            <span className="inline-flex items-center text-purple-600 shrink-0" title="書類添付あり">
+                              <Paperclip className="w-3 h-3" />
+                            </span>
+                          )}
                           <span className="font-semibold text-slate-900 truncate block">
                             {msg.subject || (msg.body_text ? msg.body_text.slice(0, 30) : '件名なし')}
                           </span>
@@ -706,6 +715,46 @@ export const CommunicationOutboxHistoryView: React.FC<Props> = ({
                 </div>
               )}
 
+              {/* Attached document if any */}
+              {selectedMessage.document_id && (
+                <div>
+                  <span className="text-slate-500 block font-semibold mb-1 text-xs">添付・関連書類</span>
+                  <div className="p-3 rounded-xl border border-purple-200 bg-purple-50/70 flex items-center justify-between gap-3">
+                    <div className="flex items-center gap-2 min-w-0">
+                      <Paperclip className="w-4 h-4 text-purple-600 shrink-0" />
+                      <div className="min-w-0">
+                        <span className="text-xs font-bold text-purple-950 block truncate">
+                          送信用添付書類 (ID: {selectedMessage.document_id})
+                        </span>
+                        <span className="text-[11px] text-slate-500">
+                          本文内の閲覧用URLで顧客に提示された重要書類です
+                        </span>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-1.5 shrink-0">
+                      <a
+                        href={`/api/documents/${encodeURIComponent(selectedMessage.document_id!)}/pdf`}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-white border border-slate-300 text-slate-700 hover:bg-slate-50 text-xs font-semibold cursor-pointer shadow-2xs transition-colors"
+                        title="添付されたPDFファイルをダウンロード確認"
+                      >
+                        <FileText className="w-3.5 h-3.5 text-slate-500" />
+                        <span>PDF確認</span>
+                      </a>
+                      <button
+                        type="button"
+                        onClick={() => setPreviewDocumentId(selectedMessage.document_id!)}
+                        className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-white border border-purple-300 text-purple-800 hover:bg-purple-100 text-xs font-bold shrink-0 cursor-pointer shadow-2xs transition-colors"
+                      >
+                        <Eye className="w-3.5 h-3.5 text-purple-600" />
+                        <span>書類プレビュー</span>
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              )}
+
               {/* Subject */}
               {selectedMessage.subject && (
                 <div>
@@ -775,6 +824,14 @@ export const CommunicationOutboxHistoryView: React.FC<Props> = ({
             </div>
           </div>
         </div>
+      )}
+
+      {/* 添付書類プレビューモーダル */}
+      {previewDocumentId && (
+        <DocumentPreviewModal
+          documentId={previewDocumentId}
+          onClose={() => setPreviewDocumentId(null)}
+        />
       )}
     </div>
   );
