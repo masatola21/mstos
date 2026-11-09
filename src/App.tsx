@@ -1,52 +1,53 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, Suspense } from 'react';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import { UnifiedNavbar, UnifiedNavTab } from './components/UnifiedNavbar';
 import { AppShell } from './components/layout/AppShell';
 import { Dashboard } from './components/Dashboard';
-import { TableManager } from './components/TableManager';
-import { DiagnosisManager } from './components/DiagnosisManager';
-import { PublicIntakeForm } from './components/PublicIntakeForm';
-import { PublicDocumentApplyView } from './components/PublicDocumentApplyView';
+const TableManager = React.lazy(() => import('./components/TableManager').then((m) => ({ default: m.TableManager })));
+const DiagnosisManager = React.lazy(() => import('./components/DiagnosisManager').then((m) => ({ default: m.DiagnosisManager })));
+const PublicIntakeForm = React.lazy(() => import('./components/PublicIntakeForm').then((m) => ({ default: m.PublicIntakeForm })));
+const PublicDocumentApplyView = React.lazy(() => import('./components/PublicDocumentApplyView').then((m) => ({ default: m.PublicDocumentApplyView })));
 import { AuthScreen } from './components/AuthScreen';
-import { ConfigGuideModal } from './components/ConfigGuideModal';
-import { RlsGuideModal } from './components/RlsGuideModal';
-import { RecordFormModal } from './components/RecordFormModal';
+const ConfigGuideModal = React.lazy(() => import('./components/ConfigGuideModal').then((m) => ({ default: m.ConfigGuideModal })));
+const RlsGuideModal = React.lazy(() => import('./components/RlsGuideModal').then((m) => ({ default: m.RlsGuideModal })));
+const RecordFormModal = React.lazy(() => import('./components/RecordFormModal').then((m) => ({ default: m.RecordFormModal })));
 import { TableKey } from './types/database';
 import { getSupabase, getAuthHeaders } from './lib/supabaseClient';
 import { deleteTableRecord } from './services/dataService';
 import { Loader2 } from 'lucide-react';
 
 // AI President Views and Modals
-import { ChatView } from './components/ai-president/ChatView';
-import { KnowledgeHubView } from './components/ai-president/KnowledgeHubView';
-import { ProjectsView } from './components/ai-president/ProjectsView';
-import { TasksView } from './components/ai-president/TasksView';
-import { PresetsView } from './components/ai-president/PresetsView';
-import { CharacterEditor } from './components/ai-president/CharacterEditor';
-import { UserProfileEditor } from './components/ai-president/UserProfileEditor';
-import { PlanRegistrationModal } from './components/ai-president/PlanRegistrationModal';
-import { BackupModal } from './components/ai-president/BackupModal';
-import { PricingSettingsModal } from './components/ai-president/PricingSettingsModal';
+const DashboardView = React.lazy(() => import('./components/ai-president/DashboardView').then((m) => ({ default: m.DashboardView })));
+const ChatView = React.lazy(() => import('./components/ai-president/ChatView').then((m) => ({ default: m.ChatView })));
+const KnowledgeHubView = React.lazy(() => import('./components/ai-president/KnowledgeHubView').then((m) => ({ default: m.KnowledgeHubView })));
+const ProjectsView = React.lazy(() => import('./components/ai-president/ProjectsView').then((m) => ({ default: m.ProjectsView })));
+const TasksView = React.lazy(() => import('./components/ai-president/TasksView').then((m) => ({ default: m.TasksView })));
+const PresetsView = React.lazy(() => import('./components/ai-president/PresetsView').then((m) => ({ default: m.PresetsView })));
+const CharacterEditor = React.lazy(() => import('./components/ai-president/CharacterEditor').then((m) => ({ default: m.CharacterEditor })));
+const UserProfileEditor = React.lazy(() => import('./components/ai-president/UserProfileEditor').then((m) => ({ default: m.UserProfileEditor })));
+const PlanRegistrationModal = React.lazy(() => import('./components/ai-president/PlanRegistrationModal').then((m) => ({ default: m.PlanRegistrationModal })));
+const BackupModal = React.lazy(() => import('./components/ai-president/BackupModal').then((m) => ({ default: m.BackupModal })));
+const PricingSettingsModal = React.lazy(() => import('./components/ai-president/PricingSettingsModal').then((m) => ({ default: m.PricingSettingsModal })));
 
 // Matrix & Universal Product Views
-import { ProductHubView } from './components/matrix/ProductHubView';
-import { CategoryHubView } from './components/matrix/CategoryHubView';
-import { CustomListManager } from './components/matrix/CustomListManager';
-import { SalesOperationsWorkspace } from './components/SalesOperationsWorkspace';
-import { CommunicationSendCenter } from './components/CommunicationSendCenter';
+const ProductHubView = React.lazy(() => import('./components/matrix/ProductHubView').then((m) => ({ default: m.ProductHubView })));
+const CategoryHubView = React.lazy(() => import('./components/matrix/CategoryHubView').then((m) => ({ default: m.CategoryHubView })));
+const CustomListManager = React.lazy(() => import('./components/matrix/CustomListManager').then((m) => ({ default: m.CustomListManager })));
+const SalesOperationsWorkspace = React.lazy(() => import('./components/SalesOperationsWorkspace').then((m) => ({ default: m.SalesOperationsWorkspace })));
+const CommunicationSendCenter = React.lazy(() => import('./components/CommunicationSendCenter').then((m) => ({ default: m.CommunicationSendCenter })));
+const AutomationView = React.lazy(() => import('./components/matrix/AutomationView').then((m) => ({ default: m.AutomationView })));
+const DocumentTemplateView = React.lazy(() => import('./components/matrix/DocumentTemplateView').then((m) => ({ default: m.DocumentTemplateView })));
+const MarketingAutomationPrototypeView = React.lazy(() => import('./components/marketing/MarketingAutomationPrototypeView').then((m) => ({ default: m.MarketingAutomationPrototypeView })));
+const AIAcquisitionOperationsView = React.lazy(() => import('./components/marketing/AIAcquisitionOperationsView').then((m) => ({ default: m.AIAcquisitionOperationsView })));
+const MarketingLeadListHub = React.lazy(() => import('./components/marketing/MarketingLeadListHub').then((m) => ({ default: m.MarketingLeadListHub })));
+const SalesPipelineHub = React.lazy(() => import('./components/sales/SalesPipelineHub').then((m) => ({ default: m.SalesPipelineHub })));
+const ProductProjectHub = React.lazy(() => import('./components/matrix/ProductProjectHub').then((m) => ({ default: m.ProductProjectHub })));
+const AiPresetsAutomationsHub = React.lazy(() => import('./components/matrix/AiPresetsAutomationsHub').then((m) => ({ default: m.AiPresetsAutomationsHub })));
+const ContactsLineHub = React.lazy(() => import('./components/ContactsLineHub').then((m) => ({ default: m.ContactsLineHub })));
+const IntegratedCalendarWorkspace = React.lazy(() => import('./components/calendar/IntegratedCalendarWorkspace').then((m) => ({ default: m.IntegratedCalendarWorkspace })));
+const UnifiedInboxView = React.lazy(() => import('./components/inbox/UnifiedInboxView').then((m) => ({ default: m.UnifiedInboxView })));
 import { SendDrawerProvider, useSendDrawer } from './context/SendDrawerContext';
-import { AutomationView } from './components/matrix/AutomationView';
-import { DocumentTemplateView } from './components/matrix/DocumentTemplateView';
-import { MarketingAutomationPrototypeView } from './components/marketing/MarketingAutomationPrototypeView';
-import { AIAcquisitionOperationsView } from './components/marketing/AIAcquisitionOperationsView';
-import { MarketingLeadListHub } from './components/marketing/MarketingLeadListHub';
-import { SalesPipelineHub } from './components/sales/SalesPipelineHub';
-import { ProductProjectHub } from './components/matrix/ProductProjectHub';
-import { AiPresetsAutomationsHub } from './components/matrix/AiPresetsAutomationsHub';
-import { ContactsLineHub } from './components/ContactsLineHub';
 import { QuickPresidentDrawer, getPageAssistantProfile } from './components/matrix/QuickPresidentDrawer';
-import { IntegratedCalendarWorkspace } from './components/calendar/IntegratedCalendarWorkspace';
-import { UnifiedInboxView } from './components/inbox/UnifiedInboxView';
 
 // Storage and Types
 import {
@@ -107,8 +108,8 @@ import { AI_WORK_MODES, getAIWorkMode, resolveWorkMode, AIWorkModeId, RoleAIOver
 import { AIModelSetting, AIProviderId, AI_PROVIDERS, isProviderId } from './data/aiModels';
 import { loadAIModelSettings, saveAIModelSettings, AIModelSettings } from './utils/aiSettingsStorage';
 import { ModalShell } from './components/ModalShell';
-import { RoleAIEditor } from './components/ai-president/RoleAIEditor';
-import { ModelSettingsModal } from './components/ai-president/ModelSettingsModal';
+const RoleAIEditor = React.lazy(() => import('./components/ai-president/RoleAIEditor').then((m) => ({ default: m.RoleAIEditor })));
+const ModelSettingsModal = React.lazy(() => import('./components/ai-president/ModelSettingsModal').then((m) => ({ default: m.ModelSettingsModal })));
 import { useProviderStatus } from './components/ai-president/ModelSettingEditor';
 import { matrixService } from './services/matrixService';
 import { todayJst } from './utils/date';
@@ -134,6 +135,16 @@ import {
 } from './types/matrix';
 
 import { generateBusinessSummaryContext } from './services/businessSummaryService';
+
+
+const ViewLoadingFallback: React.FC = () => (
+  <div className="flex flex-col items-center justify-center py-20 px-4 space-y-3 min-h-[400px]">
+    <div className="relative flex items-center justify-center">
+      <div className="w-9 h-9 rounded-full border-2 border-purple-200 border-t-purple-600 animate-spin" />
+    </div>
+    <span className="text-xs font-medium text-slate-500">画面を読み込んでいます…</span>
+  </div>
+);
 
 type DiagnosisSubmissionAutomationEvent = { id: string; form_id: string; lead_id: string | null; company_id: string | null; diagnosis_id?: string | null };
 
@@ -346,7 +357,7 @@ interface AppHistoryState {
 function AppContent() {
   const { user, isLoading } = useAuth();
   const { openSendDrawer, showToast } = useSendDrawer();
-  const [currentTab, setCurrentTab] = useState<UnifiedNavTab>('mst_dashboard');
+  const [currentTab, setCurrentTab] = useState<UnifiedNavTab>('ai_dashboard');
   const [sendOriginContext, setSendOriginContext] = useState<{
     tab: UnifiedNavTab;
     tabLabel: string;
@@ -356,7 +367,7 @@ function AppContent() {
 
   const getTabFriendlyLabel = (tab: UnifiedNavTab): string => {
     switch (tab) {
-      case 'mst_dashboard': return '営業Dashboard';
+      case 'mst_dashboard': return '経営ダッシュボード';
       case 'unified_calendar': return '予定カレンダー';
       case 'inbox_hub': return '統合受信トレイ';
       case 'leads': return '反響リード';
@@ -391,7 +402,7 @@ function AppContent() {
       context?: any;
     }
   ) => {
-    const targetTab = (tab === 'ai_dashboard' ? 'mst_dashboard' : tab) as UnifiedNavTab;
+    const targetTab = tab as UnifiedNavTab;
     if (targetTab === 'communication_send' && currentTab !== 'communication_send') {
       setSendOriginContext({
         tab: currentTab,
@@ -598,7 +609,7 @@ function AppContent() {
       window.history.replaceState(initialState, '', window.location.href);
     } else {
       const s = window.history.state as AppHistoryState;
-      if (s.tab) setCurrentTab(s.tab === 'ai_dashboard' ? 'mst_dashboard' : s.tab);
+      if (s.tab) setCurrentTab(s.tab);
       if (s.acquisitionTargetTab) setAcquisitionTargetTab(s.acquisitionTargetTab);
       if (s.inboxTargetChannel) setInboxTargetChannel(s.inboxTargetChannel);
       if (s.customerWorkspaceContext) setCustomerWorkspaceContext(s.customerWorkspaceContext);
@@ -612,7 +623,7 @@ function AppContent() {
       isPopStateRef.current = true;
 
       if (state.tab) {
-        setCurrentTab(state.tab === 'ai_dashboard' ? 'mst_dashboard' : state.tab);
+        setCurrentTab(state.tab);
       }
       if (state.acquisitionTargetTab !== undefined) {
         setAcquisitionTargetTab(state.acquisitionTargetTab);
@@ -2492,6 +2503,7 @@ function AppContent() {
           onOpenConfig={() => openModalWithHistory('config')} 
           onOpenRls={() => openModalWithHistory('rls')} 
         />
+        <Suspense fallback={null}>
         <ConfigGuideModal
           isOpen={isConfigOpen}
           onClose={() => closeModalWithHistory('config')}
@@ -2500,6 +2512,7 @@ function AppContent() {
           isOpen={isRlsOpen}
           onClose={() => closeModalWithHistory('rls')}
         />
+      </Suspense>
       </>
     );
   }
@@ -2523,47 +2536,17 @@ function AppContent() {
       onOpenModelSettings={() => openModalWithHistory('model_settings')}
       onRetrySync={handleRetrySync}
     >
+      <Suspense fallback={<ViewLoadingFallback />}>
         {/* ================= SECTION 1: MST AI経営OS ================= */}
         {(currentTab === 'mst_dashboard' || currentTab === 'inflow_dashboard') && (
           <Dashboard
-            onNavigateTab={(tab, options) => {
+            onNavigateTab={(tab) => {
               if (tab === 'diagnoses') setCurrentTab('mst_diagnoses');
-              else handleNavigateWorkspaceTab(tab, options);
+              else setCurrentTab(tab as UnifiedNavTab);
             }}
             onOpenCreate={handleOpenCreate}
             onOpenRls={() => setIsRlsOpen(true)}
             onStageTransitionTask={handleCrmStageTransition}
-            tasks={tasks}
-            onCreateTask={handleCreateTask}
-            onUpdateTask={handleUpdateTask}
-            contracts={contracts}
-            invoices={invoices}
-            onOpenCustomerWorkspace={(companyId, destination, recordContext) => {
-              setCustomerWorkspaceContext({
-                companyId,
-                dealId: recordContext?.tableKey === 'deals' ? recordContext.recordId : undefined,
-                leadId: recordContext?.tableKey === 'leads' ? recordContext.recordId : undefined,
-              });
-              if (destination === 'deals') setCurrentTab('deals');
-              else if (destination === 'documents') setCurrentTab('document_templates');
-              else if (destination === 'send') {
-                openSendDrawer({
-                  kind: 'form',
-                  companyId,
-                  contactId: recordContext?.contactId,
-                });
-              } else {
-                setCurrentTab('customer_operations');
-              }
-            }}
-            onOpenSendCenter={(params) => {
-              openSendDrawer({
-                kind: params.kind || 'form',
-                companyId: params.companyId || '',
-                contactId: params.contactId,
-                formId: params.formId,
-              });
-            }}
           />
         )}
 
@@ -2640,11 +2623,12 @@ function AppContent() {
           />
         )}
 
-        {currentTab === 'deal_invitations' && <CommunicationSendCenter variant="page" initialKind="deal" onNavigateTab={(tab) => setCurrentTab(tab as UnifiedNavTab)} />}
-        {currentTab === 'customer_meeting_invitations' && <CommunicationSendCenter variant="page" initialKind="customer_meeting" onNavigateTab={(tab) => setCurrentTab(tab as UnifiedNavTab)} />}
+        {currentTab === 'deal_invitations' && <CommunicationSendCenter variant="page" initialKind="deal" initialMode="send" onNavigateTab={(tab) => setCurrentTab(tab as UnifiedNavTab)} />}
+        {currentTab === 'customer_meeting_invitations' && <CommunicationSendCenter variant="page" initialKind="customer_meeting" initialMode="send" onNavigateTab={(tab) => setCurrentTab(tab as UnifiedNavTab)} />}
         {currentTab === 'communication_send' && (
           <CommunicationSendCenter
             variant="page"
+            initialMode={customerWorkspaceContext ? 'send' : 'history'}
             initialKind={customerWorkspaceContext?.documentId ? "document" : customerWorkspaceContext?.sendKind || "form"}
             initialCompanyId={customerWorkspaceContext?.companyId}
             initialDocumentId={customerWorkspaceContext?.documentId}
@@ -2897,6 +2881,46 @@ function AppContent() {
         )}
 
         {/* ================= SECTION 3: AI PRESIDENT & STRATEGY ================= */}
+        {currentTab === 'ai_dashboard' && (
+          <DashboardView
+            topGoal={topGoal}
+            onUpdateTopGoal={handleUpdateTopGoal}
+            projects={projects}
+            tasks={tasks}
+            approvals={approvals}
+            activityLogs={activityLogs}
+            tokenUsageRecords={tokenUsageRecords}
+            pricingRates={pricingRates}
+            products={products}
+            contracts={contracts}
+            invoices={invoices}
+            onNavigateToTab={(tab) => setCurrentTab(tab as UnifiedNavTab)}
+            onNavigateTab={(tab) => {
+              if (tab === 'chat') setCurrentTab('ai_chat');
+              else if (tab === 'projects') setCurrentTab('ai_projects');
+              else if (tab === 'tasks') {
+                setSelectedTaskWorkspaceSection('tasks');
+                setCurrentTab('ai_tasks');
+              } else if (tab === 'approvals') {
+                setSelectedTaskWorkspaceSection('approvals');
+                setCurrentTab('ai_tasks');
+              }
+              else if (tab === 'presets') setCurrentTab('ai_presets');
+              else setCurrentTab(tab as any);
+            }}
+            onOpenPricingSettings={() => setIsPricingModalOpen(true)}
+            onResolveApproval={handleResolveApproval}
+            onDeleteApproval={handleDeleteApproval}
+            onUpdateTask={handleUpdateTask}
+            onStartGoalBreakdown={(goal) => {
+              setCurrentTab('ai_chat');
+              void handleSendMessage(
+                `次の経営目標を達成するためのプロジェクト概要と具体的タスク一覧（目的、優先度、完了条件、担当案）を計画立案してください：\n「${goal}」`,
+                'president'
+              );
+            }}
+          />
+        )}
 
         {currentTab === 'ai_chat' && (
           <ChatView
@@ -3198,13 +3222,14 @@ function AppContent() {
         onClose={() => closeModalWithHistory('quick_drawer')}
         character={presidentCharacter}
         userProfile={userProfile}
-        onOpenPlanProposal={(plan) => {
+        onOpenPlanProposal={(plan: ProposedPlan) => {
           setActivePlanForModal(plan);
           openModalWithHistory('plan');
         }}
         onRecordUsage={handleRecordUsage}
       />
 
+          </Suspense>
     </AppShell>
   );
 }
@@ -3212,14 +3237,31 @@ function AppContent() {
 export default function App() {
   const publicDocMatch = window.location.pathname.match(/^\/(?:apply|docs)\/([^/]+)\/?$/i);
   if (publicDocMatch) {
-    return <PublicDocumentApplyView documentId={publicDocMatch[1]} />;
+    return <Suspense fallback={<ViewLoadingFallback />}><PublicDocumentApplyView documentId={publicDocMatch[1]} /></Suspense>;
   }
 
   const publicFormMatch = window.location.pathname.match(/^\/f\/([^/]+)\/?$/);
   if (publicFormMatch) {
     let slug = publicFormMatch[1];
     try { slug = decodeURIComponent(slug); } catch { /* Keep the raw path segment for the server's validation. */ }
-    return <PublicIntakeForm slug={slug} />;
+    const search = window.location.search || '';
+    if (slug === 'contact-inquiry') {
+      window.location.replace('https://corp.mstcorp.info/contact' + search);
+      return null;
+    }
+    if (slug === 'business-diagnosis') {
+      window.location.replace('https://corp.mstcorp.info/diagnosis' + search);
+      return null;
+    }
+    if (slug === 'material-download') {
+      window.location.replace('https://corp.mstcorp.info/materials' + search);
+      return null;
+    }
+    if (slug === 'care-package-inquiry') {
+      window.location.replace('https://business.mstcorp.info/' + search);
+      return null;
+    }
+    return <Suspense fallback={<ViewLoadingFallback />}><PublicIntakeForm slug={slug} /></Suspense>;
   }
 
   return (

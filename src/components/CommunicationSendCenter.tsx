@@ -194,7 +194,7 @@ export const CommunicationSendCenter: React.FC<Props> = ({
   initialFormId,
   initialDealId,
   initialContactId,
-  initialMode = 'send',
+  initialMode,
   initialBroadcastChannel = 'email',
   initialChannel,
   initialSubject,
@@ -208,7 +208,8 @@ export const CommunicationSendCenter: React.FC<Props> = ({
   onReturnToOrigin,
   onNavigateTab,
 }) => {
-  const [screen, setScreen] = useState<'send' | 'broadcast' | 'templates' | 'history'>(variant === 'drawer' ? 'send' : initialMode);
+  const defaultMode = initialMode ?? (variant === 'page' ? 'history' : 'send');
+  const [screen, setScreen] = useState<'send' | 'broadcast' | 'templates' | 'history'>(defaultMode);
   const [kind, setKind] = useState<Kind>(initialKind);
   const [channel, setChannel] = useState<Channel>(initialChannel || 'email');
   const [templateChannel, setTemplateChannel] = useState<DeliveryChannel>(initialChannel === 'line' ? 'line' : 'email');
@@ -669,6 +670,23 @@ export const CommunicationSendCenter: React.FC<Props> = ({
             <button
               type="button"
               onClick={() => {
+                setScreen('history');
+                setPreview(false);
+                setError('');
+              }}
+              aria-pressed={screen === 'history'}
+              className={`flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-medium transition cursor-pointer ${
+                screen === 'history'
+                  ? 'bg-purple-600 text-white shadow-xs'
+                  : 'border border-slate-200 bg-white text-slate-700 hover:bg-slate-50'
+              }`}
+            >
+              <Inbox className="h-3.5 w-3.5" />
+              <span>送信履歴・送信待ち</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => {
                 setScreen('send');
                 setPreview(false);
                 setError('');
@@ -676,7 +694,7 @@ export const CommunicationSendCenter: React.FC<Props> = ({
               aria-pressed={screen === 'send'}
               className={`flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-medium transition cursor-pointer ${
                 screen === 'send'
-                  ? 'bg-purple-600 text-white'
+                  ? 'bg-purple-600 text-white shadow-xs'
                   : 'border border-slate-200 bg-white text-slate-700 hover:bg-slate-50'
               }`}
             >
@@ -693,29 +711,12 @@ export const CommunicationSendCenter: React.FC<Props> = ({
               aria-pressed={screen === 'broadcast'}
               className={`flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-medium transition cursor-pointer ${
                 screen === 'broadcast'
-                  ? 'bg-purple-600 text-white'
+                  ? 'bg-purple-600 text-white shadow-xs'
                   : 'border border-slate-200 bg-white text-slate-700 hover:bg-slate-50'
               }`}
             >
               <Users className="h-3.5 w-3.5" />
               <span>一斉配信（1対N）</span>
-            </button>
-            <button
-              type="button"
-              onClick={() => {
-                setScreen('history');
-                setPreview(false);
-                setError('');
-              }}
-              aria-pressed={screen === 'history'}
-              className={`flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-medium transition cursor-pointer ${
-                screen === 'history'
-                  ? 'bg-purple-600 text-white'
-                  : 'border border-slate-200 bg-white text-slate-700 hover:bg-slate-50'
-              }`}
-            >
-              <Inbox className="h-3.5 w-3.5" />
-              <span>送信履歴・送信待ち</span>
             </button>
             <button
               type="button"
@@ -727,7 +728,7 @@ export const CommunicationSendCenter: React.FC<Props> = ({
               aria-pressed={screen === 'templates'}
               className={`flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-medium transition cursor-pointer ${
                 screen === 'templates'
-                  ? 'bg-purple-600 text-white'
+                  ? 'bg-purple-600 text-white shadow-xs'
                   : 'border border-slate-200 bg-white text-slate-700 hover:bg-slate-50'
               }`}
             >

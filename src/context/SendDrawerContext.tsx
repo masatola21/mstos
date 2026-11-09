@@ -1,6 +1,9 @@
-import React, { createContext, useContext, useState, useEffect, useRef, useCallback } from 'react';
+import React, { createContext, useContext, useState, useEffect, useRef, useCallback, Suspense } from 'react';
 import { X, Send, AlertTriangle, CheckCircle2, Info, AlertCircle } from 'lucide-react';
-import { CommunicationSendCenter } from '../components/CommunicationSendCenter';
+
+const CommunicationSendCenter = React.lazy(() =>
+  import('../components/CommunicationSendCenter').then((m) => ({ default: m.CommunicationSendCenter }))
+);
 
 export type SendDrawerKind =
   | 'document'
@@ -278,22 +281,29 @@ export const SendDrawerProvider: React.FC<{ children: React.ReactNode }> = ({ ch
               {/* Drawer Body: Embedded CommunicationSendCenter with variant="drawer" */}
               <div className="flex-1 overflow-y-auto p-5 sm:p-6 bg-slate-50/40">
                 {options && (
-                  <CommunicationSendCenter
-                    key={`${options.companyId || ''}:${options.contactId || ''}:${options.documentId || ''}:${options.formId || ''}:${options.dealId || ''}`}
-                    variant="drawer"
-                    initialKind={options.kind || (options.documentId ? 'document' : 'form')}
-                    initialCompanyId={options.companyId}
-                    initialDocumentId={options.documentId}
-                    initialFormId={options.formId}
-                    initialDealId={options.dealId}
-                    initialContactId={options.contactId}
-                    initialChannel={options.channel}
-                    initialSubject={options.subject}
-                    initialBody={options.body}
-                    onClose={() => closeSendDrawer()}
-                    onSent={handleSendSuccess}
-                    onDraftChange={setDraftDirty}
-                  />
+                  <Suspense fallback={
+                    <div className="flex flex-col items-center justify-center p-12 text-slate-400 space-y-2">
+                      <div className="w-6 h-6 border-2 border-purple-500 border-t-transparent rounded-full animate-spin" />
+                      <span className="text-xs">送信センターを読み込み中…</span>
+                    </div>
+                  }>
+                    <CommunicationSendCenter
+                      key={`${options.companyId || ''}:${options.contactId || ''}:${options.documentId || ''}:${options.formId || ''}:${options.dealId || ''}`}
+                      variant="drawer"
+                      initialKind={options.kind || (options.documentId ? 'document' : 'form')}
+                      initialCompanyId={options.companyId}
+                      initialDocumentId={options.documentId}
+                      initialFormId={options.formId}
+                      initialDealId={options.dealId}
+                      initialContactId={options.contactId}
+                      initialChannel={options.channel}
+                      initialSubject={options.subject}
+                      initialBody={options.body}
+                      onClose={() => closeSendDrawer()}
+                      onSent={handleSendSuccess}
+                      onDraftChange={setDraftDirty}
+                    />
+                  </Suspense>
                 )}
               </div>
             </aside>

@@ -67,6 +67,12 @@ const sourceTypeLabels: Record<string, string> = {
   announcement: '個別案内',
   form: '受付フォーム案内',
   diagnosis: '診断案内',
+  diagnosis_submission: 'サンクス自動返信',
+  intake_thanks: 'サンクス自動返信',
+  marketing_test_send: 'テスト送信',
+  manual_send: '手動個別送信',
+  scenario_step: 'シナリオ自動配信',
+  line_auto_reply: 'LINE自動応答',
 };
 
 export const CommunicationOutboxHistoryView: React.FC<Props> = ({
@@ -76,6 +82,7 @@ export const CommunicationOutboxHistoryView: React.FC<Props> = ({
 }) => {
   const [messages, setMessages] = useState<OutboxMessage[]>([]);
   const [contacts, setContacts] = useState<Record<string, { full_name: string; company_name?: string }>>({});
+  const [emailContacts, setEmailContacts] = useState<Record<string, { full_name: string; company_name?: string }>>({});
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [notice, setNotice] = useState('');
@@ -94,14 +101,15 @@ export const CommunicationOutboxHistoryView: React.FC<Props> = ({
     }
 
     try {
-      const [outboxRes, contactsRes, companiesRes] = await Promise.all([
+      const [outboxRes, contactsRes, companiesRes, leadsRes] = await Promise.all([
         supabase
           .from('communication_outbox')
           .select('*')
           .order('created_at', { ascending: false })
-          .limit(200),
-        supabase.from('contacts').select('id, full_name, company_id'),
+          .limit(500),
+        supabase.from('contacts').select('id, full_name, email, company_id'),
         supabase.from('companies').select('id, company_name'),
+        supabase.from('leads').select('id, name, company_name, email'),
       ]);
 
       if (outboxRes.error) throw outboxRes.error;
@@ -112,14 +120,31 @@ export const CommunicationOutboxHistoryView: React.FC<Props> = ({
       });
 
       const contactMap: Record<string, { full_name: string; company_name?: string }> = {};
+      const emailMap: Record<string, { full_name: string; company_name?: string }> = {};
+
+      (leadsRes.data || []).forEach((ld: any) => {
+        if (ld.email) {
+          const cleanEmail = String(ld.email).trim().toLowerCase();
+          emailMap[cleanEmail] = {
+            full_name: ld.name,
+            company_name: ld.company_name,
+          };
+        }
+      });
+
       (contactsRes.data || []).forEach((ct: any) => {
-        contactMap[ct.id] = {
+        const info = {
           full_name: ct.full_name,
           company_name: ct.company_id ? compMap[ct.company_id] : undefined,
         };
+        contactMap[ct.id] = info;
+        if (ct.email) {
+          emailMap[String(ct.email).trim().toLowerCase()] = info;
+        }
       });
 
       setContacts(contactMap);
+      setEmailContacts(emailMap);
       setMessages((outboxRes.data || []) as OutboxMessage[]);
     } catch (err: any) {
       setError(err?.message || '送信履歴の読み込みに失敗しました。');
@@ -220,7 +245,7 @@ export const CommunicationOutboxHistoryView: React.FC<Props> = ({
       }
       if (searchQuery.trim()) {
         const q = searchQuery.toLowerCase();
-        const contactInfo = m.recipient_contact_id ? contacts[m.recipient_contact_id] : null;
+        const contactInfo = (m.recipient_contact_id ? contacts[m.recipient_contact_id] : null) || (m.recipient_address ? emailContacts[m.recipient_address.trim().toLowerCase()] : null);
         const recipientText = (m.recipient_address || '').toLowerCase();
         const contactName = (contactInfo?.full_name || '').toLowerCase();
         const compName = (contactInfo?.company_name || '').toLowerCase();
@@ -465,7 +490,7 @@ export const CommunicationOutboxHistoryView: React.FC<Props> = ({
                     bg: 'bg-slate-100',
                     border: 'border-slate-200',
                   };
-                  const contactInfo = msg.recipient_contact_id ? contacts[msg.recipient_contact_id] : null;
+                  const contactInfo = (msg.recipient_contact_id ? contacts[msg.recipient_contact_id] : null) || (msg.recipient_address ? emailContacts[msg.recipient_address.trim().toLowerCase()] : null);
 
                   return (
                     <tr
@@ -643,10 +668,21 @@ export const CommunicationOutboxHistoryView: React.FC<Props> = ({
                   </span>
                 </div>
                 <div>
-                  <span className="text-slate-500 block text-[11px]">送信先アドレス / ID</span>
-                  <span className="font-mono text-slate-800 break-all">
-                    {selectedMessage.recipient_address || '未指定'}
-                  </span>
+                  <span className="text-slate-500 block text-[11px]">送信先 / 企業・担当者</span>
+                  <div className="font-semibold text-slate-800">
+                    {(() => {
+                      const c = (selectedMessage.recipient_contact_id ? contacts[selectedMessage.recipient_contact_id] : null) || (selectedMessage.recipient_address ? emailContacts[selectedMessage.recipient_address.trim().toLowerCase()] : null);
+                      if (c) {
+                        return (
+                          <span>
+                            {c.full_name} {c.company_name ? `(${c.company_name})` : ''}
+                            <span className="block font-mono text-[11px] text-slate-500 break-all">{selectedMessage.recipient_address}</span>
+                          </span>
+                        );
+                      }
+                      return <span className="font-mono text-slate-800 break-all">{selectedMessage.recipient_address || '未指定'}</span>;
+                    })()}
+                  </div>
                 </div>
                 <div>
                   <span className="text-slate-500 block text-[11px]">同意根拠（オプトイン）</span>
