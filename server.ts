@@ -405,29 +405,13 @@ function isDisallowedSsrfUrl(urlString: string): boolean {
 
 async function ensureStandardPublicForms(): Promise<void> {
   if (!lineSupabase) return;
+  try {
+    // 不要となった古いフォーム（care-package-inquiry等）を確実に削除
+    await lineSupabase.from('diagnosis_forms').delete().eq('public_slug', 'care-package-inquiry');
+  } catch (e: any) {
+    console.warn('[Setup] Deleting obsolete care-package-inquiry form:', e?.message);
+  }
   const standardForms: Array<Record<string, any>> = [
-    {
-      public_slug: 'care-package-inquiry',
-      name: '介護保険外サービス開業パッケージ お問い合わせ・相談フォーム',
-      form_type: 'consultation',
-      status: 'published',
-      questionnaire_version: 'v1.0',
-      definition: {
-        category: '介護保険外サービス開業パッケージ',
-        service_category: '介護保険外サービス開業パッケージ',
-        description: '介護保険外サービスの開業・事業化に関するお問い合わせ・ご相談・資料請求を承っております。',
-        booking_url: 'https://timerex.net/s/mst.shikumikaizen_b173/4ac78e37',
-        material_url: null,
-        care_flex_template_id: null,
-        questions: [
-          { id: 'q_inquiry_type', label: 'ご希望の内容', type: 'radio', required: true, options: ['資料請求', '開業相談', '両方希望'] },
-          { id: 'q_current_status', label: '現在の状況', type: 'select', required: false, options: ['これから開業を検討している', '開業準備を進めている', 'すでに介護保険外サービスを運営している', '既存事業の新規事業として検討している', 'その他'] },
-          { id: 'q_interests_challenges', label: '開業・新規事業について知りたいこと・ご相談内容', type: 'textarea', required: false },
-          { id: 'q_hear_about', label: 'どこで知りましたか？（認知経路）', type: 'select', required: false, options: ['Instagram', 'Threads', 'Facebook', 'LinkedIn', 'ブログ', '検索', '紹介', 'メール', 'その他'] },
-        ],
-      },
-      privacy_notice: 'ご入力いただいた個人情報および相談内容は、お問い合わせへの対応、資料送付、および開業支援に関するご案内にのみ利用いたします。',
-    },
     {
       public_slug: 'contact-inquiry',
       name: 'MST 総合お問い合わせ・経営相談フォーム',
@@ -4991,9 +4975,7 @@ app.post(
       else if (choice) requestedMaterialKeys = [choice];
     }
 
-    const validInquiryTypes = ['資料請求', '開業相談', '両方希望'] as const;
-    type ValidInquiryType = typeof validInquiryTypes[number];
-    let inquiryType: ValidInquiryType | null = null;
+    let inquiryType: string = 'その他お問い合わせ';
     const rawInquiry = String(
       cleanAnswers.q_inquiry_type ||
       cleanAnswers.inquiry_type ||
@@ -5007,20 +4989,27 @@ app.post(
       ''
     ).trim();
 
-    if ((validInquiryTypes as readonly string[]).includes(rawInquiry)) {
-      inquiryType = rawInquiry as ValidInquiryType;
-    } else if (rawInquiry.includes('両方') || (rawInquiry.includes('資料') && rawInquiry.includes('相談'))) {
-      inquiryType = '両方希望';
-    } else if (rawInquiry.includes('資料') || rawInquiry.includes('ダウンロード')) {
-      inquiryType = '資料請求';
-    } else if (rawInquiry.includes('相談') || rawInquiry.includes('面談') || rawInquiry.includes('診断')) {
-      inquiryType = '開業相談';
+    if (slug === 'business-diagnosis' || form.form_type === 'diagnosis') {
+      inquiryType = 'ボトルネック診断';
     } else if (slug === 'material-download' || form.name.includes('資料')) {
       inquiryType = '資料請求';
-    } else if (slug === 'business-diagnosis' || form.form_type === 'diagnosis') {
-      inquiryType = '開業相談';
+    } else if (slug === 'contact-inquiry') {
+      const rawInterest = String(cleanAnswers.service_interest || (body.customFields as any)?.service_interest || '').trim();
+      if (rawInterest.includes('全体') || rawInterest.includes('利益改善')) {
+        inquiryType = '経営全体・利益改善';
+      } else if (rawInterest.includes('業務効率化') || rawInterest.includes('自動化') || rawInterest.includes('IT')) {
+        inquiryType = '業務効率化・IT/自動化';
+      } else if (rawInterest.includes('集客') || rawInterest.includes('マーケティング')) {
+        inquiryType = '集客・マーケティング';
+      } else if (rawInterest.includes('介護保険外') || rawInterest.includes('開業')) {
+        inquiryType = '介護保険外開業';
+      } else {
+        inquiryType = rawInterest || '経営相談';
+      }
     } else if (slug === 'care-package-inquiry') {
-      inquiryType = '資料請求';
+      inquiryType = '介護保険外開業';
+    } else {
+      inquiryType = form.name || 'Webフォーム反響';
     }
 
     // public_materials から該当資料を検索
@@ -5113,23 +5102,11 @@ app.post(
       leadStatus = '資料請求';
     }
 
-    let formServiceType = '経営の仕組み化・利益改善';
-    if (isCarePackage) {
-      formServiceType = '介護保険外サービス開業パッケージ';
-    } else if (slug === 'material-download') {
-      formServiceType = requestedMaterialKeys.includes('care-package-overview') && requestedMaterialKeys.length === 1
-        ? '介護保険外サービス開業パッケージ'
-        : '経営改善実務ガイド・資料請求';
-    } else if (slug === 'contact-inquiry') {
-      formServiceType = (typeof cleanAnswers.service_interest === 'string' && cleanAnswers.service_interest.trim())
-        || '経営戦略・業務効率化設計・伴走顧問';
-    } else if (slug === 'business-diagnosis') {
-      formServiceType = '経営ボトルネック診断（仕組み化・利益改善）';
-    } else {
-      formServiceType = (typeof definition.category === 'string' && definition.category.trim())
-        || (typeof definition.service_category === 'string' && definition.service_category.trim())
-        || form.name
-        || 'Webフォーム受付';
+    // リード獲得段階では検討サービス種別は未確定（商談時に判断）。お問い合わせで選択されたテーマのみ参考保持。
+    let formServiceType: string | null = null;
+    if (slug === 'contact-inquiry') {
+      const rawInterest = String(cleanAnswers.service_interest || (body.customFields as any)?.service_interest || '').trim();
+      if (rawInterest) formServiceType = rawInterest;
     }
 
     // 流入元詳細（utm, referrer, landing page）と請求資料の構造化メモ
@@ -5216,7 +5193,7 @@ app.post(
           notes,
           last_contacted_at: new Date().toISOString(),
           ...(resolvedCompanyId && !lead.company_id ? { company_id: resolvedCompanyId } : {}),
-          ...(lead.service_type ? {} : { service_type: formServiceType }),
+          ...(formServiceType && !lead.service_type ? { service_type: formServiceType } : {}),
           ...(meetingDate ? { meeting_date: meetingDate } : {}),
           ...(inquiryType ? { inquiry_type: inquiryType } : {}),
           ...(isCarePackage && ['新規', 'ヒアリング済'].includes(lead.status) ? { status: leadStatus } : {}),
@@ -5228,7 +5205,7 @@ app.post(
         contact_id: contact.id,
         company_id: resolvedCompanyId,
         source: leadSource,
-        service_type: formServiceType,
+        ...(formServiceType ? { service_type: formServiceType } : {}),
         priority_channel: normalizedUtm.source === 'line' ? 'LINE' : 'メール',
         status: leadStatus,
         first_registered_at: new Date().toISOString(),

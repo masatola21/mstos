@@ -244,7 +244,7 @@ export const DiagnosisFormsWorkspace: React.FC<DiagnosisFormsWorkspaceProps> = (
     setLoading(true); setError('');
     try {
       const [formResult, answerResult, materialResult] = await Promise.all([
-        supabase.from('diagnosis_forms').select('*').order('created_at', { ascending: false }),
+        supabase.from('diagnosis_forms').select('*').neq('status', 'archived').neq('public_slug', 'care-package-inquiry').order('created_at', { ascending: false }),
         supabase.from('diagnosis_submissions').select('*').order('submitted_at', { ascending: false }).limit(200),
         supabase.from('public_materials').select('*').order('sort_order', { ascending: true }),
       ]);
