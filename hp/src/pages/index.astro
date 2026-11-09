@@ -96,12 +96,13 @@ const targetIndustries = [
     title: 'エステ・美容・整体などの店舗型サービス業',
     sub: 'エステ・脱毛 / 美容室・理容室 / 整体・接骨院 / パーソナルジム等（※複数店舗・スタッフ雇用企業）',
     icon: '💆',
+    badge: '代表自らもエステサロンを直営・現役経営中',
     issues: [
       '大手集客ポータルに依存し、高い広告掲載料・手数料が重い',
       '問い合わせから来店までの導線やLINEフォローが仕組み化されていない',
       'スタッフ別・店舗別の売上や稼働率、利益管理が属人化している',
     ],
-    solution: '自社集客導線（Web・LINE自動化）の構築 ＆ リピート率・LTV改善',
+    solution: '自社集客導線（Web・LINE自動化）の構築 ＆ リピート率・LTV改善（自社サロンでの検証済みノウハウ）',
   },
   {
     category: '清掃・保守業',
@@ -336,7 +337,7 @@ const steps = [
             />
             <div class="text-[11px] leading-tight text-slate-300">
               <span class="font-bold text-white block">代表 大橋 真人</span>
-              <span class="text-brand-300">自身での複数事業創業・事業再生の経験から伴走</span>
+              <span class="text-amber-300">自らもエステサロンや生活支援事業を現役経営・伴走</span>
             </div>
           </div>
         </div>
@@ -391,9 +392,16 @@ const steps = [
             <div class="space-y-4">
               <div class="flex items-center justify-between">
                 <span class="text-2xl">{ind.icon}</span>
-                <span class="text-[11px] font-bold text-brand-700 bg-brand-50 border border-brand-200 px-2.5 py-0.5 rounded-full">
-                  {ind.category}
-                </span>
+                <div class="flex flex-col items-end gap-1">
+                  <span class="text-[11px] font-bold text-brand-700 bg-brand-50 border border-brand-200 px-2.5 py-0.5 rounded-full">
+                    {ind.category}
+                  </span>
+                  {ind.badge && (
+                    <span class="text-[10px] font-bold text-amber-900 bg-amber-100 border border-amber-300 px-2 py-0.5 rounded-md shadow-xs">
+                      ✨ {ind.badge}
+                    </span>
+                  )}
+                </div>
               </div>
 
               <div>
@@ -1160,10 +1168,10 @@ const steps = [
             </div>
             <div class="text-xs sm:text-sm text-gray-600 space-y-2 leading-relaxed font-light">
               <p>
-                25歳でWeb・IT事業を創業後、清掃・ビルメンテナンス業の起業、M&Aによる企業の事業再生、シニア生活支援事業の立ち上げなど、異業種での実業を自ら経営・実践。
+                25歳でWeb・IT事業を創業後、清掃・ビルメンテナンス業の起業、M&Aによる企業の事業再生、シニア生活支援事業の立ち上げに加え、<strong>現在も自らエステサロンを現役で直営・経営</strong>。異業種での生々しい実業の現場に身を置き続ける。
               </p>
               <p>
-                「現場の実態を知らないコンサルの助言は定着しない」という信念のもと、建設・清掃・介護・店舗サービスなど現場・人材活用型ビジネスの現場に入り込み、粗利の改善から業務プロセスの標準化、GASや専用Webアプリによる自動化まで一貫して支援している。
+                「現場の実態を知らないコンサルの助言は定着しない」という信念のもと、工事業・清掃・介護・店舗サービスなど現場・人材活用型ビジネスの現場に入り込み、粗利の改善から業務プロセスの標準化、GASや専用Webアプリによる自動化まで一貫して支援している。
               </p>
             </div>
           </div>
