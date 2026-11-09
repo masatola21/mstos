@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState, useRef } from 'react';
 import { getSupabase } from '../../lib/supabaseClient';
 import { InlineDeleteButton } from '../InlineDeleteButton';
 import { LineMessagePreview } from '../LineMessagePreview';
@@ -93,7 +93,63 @@ export const MarketingLineInboxView: React.FC<MarketingLineInboxViewProps> = ({
       setFriends(map);
     }
   };
-  useEffect(()=>{void load()},[]);
+
+  const refreshMessagesOnly = async () => {
+    if (!db) return;
+    try {
+      const m = await db.from('line_inbox_messages').select('*').order('received_at', { ascending: false }).limit(500);
+      if (m.data) {
+        setMessages(m.data as InboxMessage[]);
+      }
+    } catch {
+      // quiet
+    }
+  };
+
+  const chatBottomRef = useRef<HTMLDivElement>(null);
+
+  // リアルタイム購読 & 5秒定期ポーリング（手動更新不要でLINEチャットを自動受信）
+  useEffect(() => {
+    void load();
+    if (!db) return;
+
+    // 1. Supabase Realtime channel
+    const channel = db
+      .channel('line_inbox_realtime_sync')
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'line_inbox_messages' },
+        (payload) => {
+          if (payload.eventType === 'INSERT') {
+            const newMsg = payload.new as InboxMessage;
+            setMessages((prev) => {
+              if (prev.some((m) => m.id === newMsg.id)) return prev;
+              return [newMsg, ...prev];
+            });
+          } else {
+            void refreshMessagesOnly();
+          }
+        }
+      )
+      .subscribe();
+
+    // 2. 定期自動更新（5秒間隔）: WebSocket未接続時でも確実に自動反映
+    const interval = setInterval(() => {
+      void refreshMessagesOnly();
+    }, 5000);
+
+    return () => {
+      clearInterval(interval);
+      void db.removeChannel(channel);
+    };
+  }, [db]);
+
+  // 新規メッセージまたは友だち選択時にチャット末尾へ自動スクロール
+  useEffect(() => {
+    if (selectedLineUserId && chatBottomRef.current) {
+      chatBottomRef.current.scrollIntoView({ behavior: 'smooth' });
+    }
+  }, [selectedLineUserId, messages.length]);
 
   useEffect(()=>{
     if(!selectedLineUserId||!db)return;
@@ -330,6 +386,11 @@ export const MarketingLineInboxView: React.FC<MarketingLineInboxViewProps> = ({
             <span className="text-slate-500 font-medium">
               チャット履歴 <span className="font-semibold text-slate-800">{conversations.length}名</span>
             </span>
+            <span className="text-slate-300">·</span>
+            <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-emerald-50 border border-emerald-200 text-[11px] font-semibold text-emerald-700">
+              <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+              <span>リアルタイム受信中（自動更新）</span>
+            </span>
           </div>
 
           <div className="flex items-center gap-2">
@@ -507,6 +568,7 @@ export const MarketingLineInboxView: React.FC<MarketingLineInboxViewProps> = ({
                       </div>
                     );
                   })}
+                  <div ref={chatBottomRef} />
                 </div>
 
                 <div className="mt-3 flex items-end gap-2 pt-2 border-t border-slate-200">

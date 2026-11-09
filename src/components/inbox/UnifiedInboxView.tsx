@@ -223,6 +223,13 @@ export const UnifiedInboxView: React.FC<UnifiedInboxViewProps> = ({
   useEffect(() => {
     void loadCounts();
     void loadSubmissions();
+
+    // 15秒ごとのバッジ集計自動更新
+    const timer = setInterval(() => {
+      void loadCounts();
+    }, 15000);
+
+    return () => clearInterval(timer);
   }, []);
 
   // 診断フォームの回答から、AIが診断レポートと提案書の下書きを自動作成する

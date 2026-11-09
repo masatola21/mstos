@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { Mail, Reply, Send, RefreshCw, Settings, Trash2, CheckCircle2, AlertTriangle, AlertCircle, Copy, ShieldCheck } from 'lucide-react';
+import { Mail, Reply, Send, RefreshCw, Settings, Trash2, CheckCircle2, AlertTriangle, AlertCircle, Copy, ShieldCheck, Activity, Sparkles, Globe, HelpCircle, Info, X } from 'lucide-react';
 import { getSupabase, getAuthHeaders } from '../../lib/supabaseClient';
 import { useSendDrawer } from '../../context/SendDrawerContext';
 
@@ -31,13 +31,39 @@ export const MarketingEmailInboxView: React.FC<MarketingEmailInboxViewProps> = (
   const db = getSupabase();
   const { openSendDrawer } = useSendDrawer();
   const [ownerId, setOwnerId] = useState('');
-  const [address, setAddress] = useState('');
-  const [backupAddress, setBackupAddress] = useState('mst.shikumikaizen@gmail.com');
-  const [backupEnabled, setBackupEnabled] = useState(false);
-  const [savedConfig, setSavedConfig] = useState({
-    address: '',
-    backupAddress: 'mst.shikumikaizen@gmail.com',
-    backupEnabled: false,
+
+  // 画面遷移から戻ってきても設定が消えないよう localStorage を初期値として使用
+  const [address, setAddress] = useState<string>(() => {
+    try {
+      return localStorage.getItem('mst_email_inbound_address') || 'contact@mstcorp.info';
+    } catch {
+      return 'contact@mstcorp.info';
+    }
+  });
+  const [backupAddress, setBackupAddress] = useState<string>(() => {
+    try {
+      return localStorage.getItem('mst_email_backup_address') || 'mst.shikumikaizen@gmail.com';
+    } catch {
+      return 'mst.shikumikaizen@gmail.com';
+    }
+  });
+  const [backupEnabled, setBackupEnabled] = useState<boolean>(() => {
+    try {
+      return localStorage.getItem('mst_email_backup_enabled') === 'true';
+    } catch {
+      return false;
+    }
+  });
+  const [savedConfig, setSavedConfig] = useState(() => {
+    let savedIn = 'contact@mstcorp.info';
+    let savedFwd = 'mst.shikumikaizen@gmail.com';
+    let savedEn = false;
+    try {
+      savedIn = localStorage.getItem('mst_email_inbound_address') || 'contact@mstcorp.info';
+      savedFwd = localStorage.getItem('mst_email_backup_address') || 'mst.shikumikaizen@gmail.com';
+      savedEn = localStorage.getItem('mst_email_backup_enabled') === 'true';
+    } catch {}
+    return { address: savedIn, backupAddress: savedFwd, backupEnabled: savedEn };
   });
 
   const [messages, setMessages] = useState<InboxMessage[]>([]);
@@ -51,6 +77,17 @@ export const MarketingEmailInboxView: React.FC<MarketingEmailInboxViewProps> = (
   const [contactNames, setContactNames] = useState<Record<string, string>>({});
   const [checkedIds, setCheckedIds] = useState<string[]>([]);
   const [deleting, setDeleting] = useState(false);
+
+  // メール受信診断・MXレコード判定状態
+  const [diagnostics, setDiagnostics] = useState<any | null>(null);
+  const [loadingDiagnostics, setLoadingDiagnostics] = useState(false);
+
+  // テスト用受信シミュレータモーダル
+  const [showSimulateModal, setShowSimulateModal] = useState(false);
+  const [simSender, setSimSender] = useState('client.test@example.com');
+  const [simSubject, setSimSubject] = useState('【業務改善の相談】システム導入と業務自動化について');
+  const [simBody, setSimBody] = useState('有限会社MST 大橋様\n\nお世話になっております。業務改善について相談させていただけますでしょうか。\n\n株式会社テストクライアント\n担当: 田中 太郎');
+  const [simulating, setSimulating] = useState(false);
 
   // 未保存の変更があるかどうか判定
   const isDirty =
@@ -99,7 +136,7 @@ export const MarketingEmailInboxView: React.FC<MarketingEmailInboxViewProps> = (
       if (res.ok) {
         const apiData = await res.json();
         if (apiData.success) {
-          inAddress = apiData.inboundAddress || '';
+          inAddress = apiData.inboundAddress || 'contact@mstcorp.info';
           fwdAddress = apiData.backupForwardAddress || 'mst.shikumikaizen@gmail.com';
           fwdEnabled = Boolean(apiData.backupForwardEnabled);
           loadedMessages = (apiData.messages || []) as InboxMessage[];
@@ -113,7 +150,7 @@ export const MarketingEmailInboxView: React.FC<MarketingEmailInboxViewProps> = (
           db.from('email_channel_integrations').select('inbound_address, backup_forward_address, backup_forward_enabled').eq('owner_id', auth.user.id).maybeSingle(),
           db.from('email_inbox_messages').select('id, from_email, to_emails, subject, text_body, html_body, received_at, backup_status, backup_error').order('received_at', { ascending: false }).limit(500),
         ]);
-        inAddress = settings.data?.inbound_address || '';
+        inAddress = settings.data?.inbound_address || 'contact@mstcorp.info';
         fwdAddress = settings.data?.backup_forward_address || 'mst.shikumikaizen@gmail.com';
         fwdEnabled = Boolean(settings.data?.backup_forward_enabled);
         loadedMessages = (inbox.data || []) as InboxMessage[];
@@ -121,6 +158,25 @@ export const MarketingEmailInboxView: React.FC<MarketingEmailInboxViewProps> = (
         console.warn('Fallback direct query error:', err);
       }
     }
+
+    const resolvedIn = inAddress || 'contact@mstcorp.info';
+    const resolvedFwd = fwdAddress || 'mst.shikumikaizen@gmail.com';
+
+    // 画面遷移から戻ってきた時にも保存されていた設定を確実に反映
+    setAddress(resolvedIn);
+    setBackupAddress(resolvedFwd);
+    setBackupEnabled(fwdEnabled);
+    setSavedConfig({
+      address: resolvedIn,
+      backupAddress: resolvedFwd,
+      backupEnabled: fwdEnabled,
+    });
+    try {
+      localStorage.setItem('mst_email_inbound_address', resolvedIn);
+      localStorage.setItem('mst_email_backup_address', resolvedFwd);
+      localStorage.setItem('mst_email_backup_enabled', String(fwdEnabled));
+    } catch {}
+
     setMessages(loadedMessages);
     setCheckedIds([]);
 
@@ -137,6 +193,106 @@ export const MarketingEmailInboxView: React.FC<MarketingEmailInboxViewProps> = (
       if (c.email && c.full_name) names[String(c.email).trim().toLowerCase()] = String(c.full_name);
     });
     setContactNames(names);
+  };
+
+  // メッセージのみの自動同期（入力中の設定を崩さずに新着メッセージを取得）
+  const refreshMessagesOnly = async () => {
+    try {
+      const headers = await getAuthHeaders();
+      const res = await fetch('/api/inbox/email/messages', { headers });
+      if (res.ok) {
+        const apiData = await res.json();
+        if (apiData.success && Array.isArray(apiData.messages)) {
+          setMessages(apiData.messages as InboxMessage[]);
+          setSelected((prev) => {
+            if (!prev) return null;
+            return (apiData.messages as InboxMessage[]).find((m) => m.id === prev.id) || prev;
+          });
+        }
+      }
+    } catch {}
+  };
+
+  // リアルタイム購読 & 定期バックグラウンド自動同期
+  useEffect(() => {
+    void load();
+    if (!db) return;
+
+    // 1. Supabase Realtime channel
+    const channel = db
+      .channel('email_inbox_realtime_sync')
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'email_inbox_messages' },
+        () => {
+          void refreshMessagesOnly();
+        }
+      )
+      .subscribe();
+
+    // 2. 8秒ごとの定期バックグラウンド自動同期（WebSocket切断や制限環境でも確実に取得）
+    const timer = setInterval(() => {
+      void refreshMessagesOnly();
+    }, 8000);
+
+    return () => {
+      clearInterval(timer);
+      void db.removeChannel(channel);
+    };
+  }, [db]);
+
+  // 受信診断を実行
+  const runDiagnostics = async () => {
+    setLoadingDiagnostics(true);
+    try {
+      const headers = await getAuthHeaders();
+      const domain = (address.split('@')[1] || 'mstcorp.info').trim();
+      const res = await fetch(`/api/inbox/email/diagnostics?domain=${encodeURIComponent(domain)}`, { headers });
+      if (res.ok) {
+        const data = await res.json();
+        setDiagnostics(data);
+      }
+    } catch (err: any) {
+      console.warn('Diagnostics error:', err);
+    } finally {
+      setLoadingDiagnostics(false);
+    }
+  };
+
+  // テスト用受信シミュレーション実行
+  const handleSimulateInbound = async () => {
+    if (!simSender.trim() || !simSubject.trim()) return;
+    setSimulating(true);
+    setError('');
+    setNotice('');
+    try {
+      const headers = await getAuthHeaders();
+      const res = await fetch('/api/inbox/email/simulate-inbound', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', ...headers },
+        body: JSON.stringify({
+          fromEmail: simSender.trim(),
+          toEmail: address.trim() || 'contact@mstcorp.info',
+          subject: simSubject.trim(),
+          bodyText: simBody.trim(),
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'テスト受信に失敗しました。');
+
+      setNotice(
+        `テストメールを受信トレイに登録しました！` +
+        (data.forwardDecision?.shouldForward
+          ? ` Gmail控え（${backupAddress}）へのコピー送信を実行しました。`
+          : `（Gmail控え転送: ${data.forwardDecision?.reason || '無効'}）`)
+      );
+      setShowSimulateModal(false);
+      await refreshMessagesOnly();
+    } catch (err: any) {
+      setError(err?.message || 'テスト受信シミュレーション中にエラーが発生しました。');
+    } finally {
+      setSimulating(false);
+    }
   };
 
   const deleteMessages = async (ids: string[]) => {
@@ -166,9 +322,6 @@ export const MarketingEmailInboxView: React.FC<MarketingEmailInboxViewProps> = (
       setDeleting(false);
     }
   };
-  useEffect(() => {
-    void load();
-  }, []);
 
   const save = async () => {
     if (!ownerId) return;
@@ -204,6 +357,11 @@ export const MarketingEmailInboxView: React.FC<MarketingEmailInboxViewProps> = (
         backupAddress: fwdVal,
         backupEnabled,
       });
+      try {
+        localStorage.setItem('mst_email_inbound_address', inVal);
+        localStorage.setItem('mst_email_backup_address', fwdVal);
+        localStorage.setItem('mst_email_backup_enabled', String(backupEnabled));
+      } catch {}
       setNotice('受信および控え自動転送の設定を保存しました。');
     } catch (e: any) {
       if (db) {
@@ -247,6 +405,11 @@ export const MarketingEmailInboxView: React.FC<MarketingEmailInboxViewProps> = (
             backupAddress: fwdVal,
             backupEnabled,
           });
+          try {
+            localStorage.setItem('mst_email_inbound_address', inVal);
+            localStorage.setItem('mst_email_backup_address', fwdVal);
+            localStorage.setItem('mst_email_backup_enabled', String(backupEnabled));
+          } catch {}
           setNotice('受信および控え自動転送の設定を保存しました。');
         }
       } else {
@@ -387,11 +550,16 @@ export const MarketingEmailInboxView: React.FC<MarketingEmailInboxViewProps> = (
             </button>
             <button
               type="button"
-              onClick={() => setShowConfig(!showConfig)}
-              className="text-[11px] text-slate-400 hover:text-slate-600 underline ml-1 cursor-pointer"
-              title="Webhook設定の詳細を表示/非表示"
+              onClick={() => {
+                const nextState = !showConfig;
+                setShowConfig(nextState);
+                if (nextState && !diagnostics) void runDiagnostics();
+              }}
+              className="inline-flex items-center gap-1 text-[11px] text-purple-700 bg-purple-50 hover:bg-purple-100 border border-purple-200 px-2.5 py-1 rounded-lg font-medium transition cursor-pointer"
+              title="Webhook設定とMXレコードの受信診断"
             >
-              {showConfig ? '閉じる' : '連携ヘルプ'}
+              <Activity className="w-3 h-3 text-purple-600" />
+              <span>{showConfig ? '診断・設定を閉じる' : '受信診断・ヘルプ'}</span>
             </button>
           </div>
         </div>
@@ -411,8 +579,22 @@ export const MarketingEmailInboxView: React.FC<MarketingEmailInboxViewProps> = (
                 <span className="text-slate-500">OFF（控え転送なし）</span>
               )}
             </span>
+            <span>·</span>
+            <span className="inline-flex items-center gap-1 text-[11px] text-emerald-700 bg-emerald-50 border border-emerald-200 px-2 py-0.5 rounded-full font-medium">
+              <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+              <span>リアルタイム受信中（自動更新）</span>
+            </span>
           </div>
           <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={() => setShowSimulateModal(true)}
+              className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg border border-purple-300 bg-purple-50 hover:bg-purple-100 text-purple-800 text-xs font-semibold shadow-xs transition cursor-pointer"
+              title="画面からテストメールを受信トレイに流し込み、Gmail控え転送をテストします"
+            >
+              <Sparkles className="h-3 w-3 text-purple-600" />
+              <span>テスト受信シミュレート</span>
+            </button>
             <button
               type="button"
               onClick={() => void load()}
@@ -441,22 +623,174 @@ export const MarketingEmailInboxView: React.FC<MarketingEmailInboxViewProps> = (
       </div>
 
       {showConfig && (
-        <div className="p-3 rounded-xl border border-slate-200 bg-slate-50 text-xs text-slate-600 space-y-1.5">
-          <p className="font-semibold text-slate-800">【2-8-6】受信メール＆Gmail自動バックアップ転送の仕組み:</p>
-          <ul className="list-disc list-inside space-y-1 text-slate-600 pl-1">
-            <li>
-              Resend Inbound Webhook (<code className="bg-white px-1 py-0.5 rounded border border-slate-200 font-mono text-purple-700">/api/email/webhook</code>) により、OSの受信トレイにメールが保存されます。
-            </li>
-            <li>
-              新規メール保存時に、指定したバックアップ先アドレス（個人のGmailなど）へ即座に控えコピーを自動転送します。
-            </li>
-            <li>
-              転送メールには <code className="bg-white px-1 py-0.5 rounded border border-slate-200 font-mono">X-MST-Backup-Copy: 1</code> ヘッダーを付与し、ループや再転送を完全に防止します。
-            </li>
-            <li>
-              届いた控えメールにそのまま返信しても、返信先（Reply-To）は元の送信者宛てになるため業務に支障がありません。
-            </li>
-          </ul>
+        <div className="p-4 rounded-xl border border-slate-200 bg-slate-50 text-xs text-slate-700 space-y-3">
+          <div className="flex items-center justify-between border-b border-slate-200 pb-2">
+            <h4 className="font-bold text-slate-900 flex items-center gap-1.5">
+              <Globe className="w-4 h-4 text-purple-600" />
+              <span>受信メール連携診断・MXレコード確認</span>
+            </h4>
+            <button
+              type="button"
+              onClick={() => void runDiagnostics()}
+              disabled={loadingDiagnostics}
+              className="text-[11px] text-purple-700 hover:text-purple-800 font-semibold flex items-center gap-1 cursor-pointer"
+            >
+              <RefreshCw className={`w-3 h-3 ${loadingDiagnostics ? 'animate-spin' : ''}`} />
+              <span>再診断</span>
+            </button>
+          </div>
+
+          {/* MXレコード診断結果アラート */}
+          <div className="p-3 rounded-lg border bg-white space-y-2">
+            <p className="font-semibold text-slate-800 flex items-center gap-1.5">
+              <Info className="w-4 h-4 text-blue-600 shrink-0" />
+              <span>【重要】個人のメールアドレスから contact@mstcorp.info に送信したメールが届かない理由:</span>
+            </p>
+            <div className="text-xs text-slate-600 space-y-1.5 pl-5">
+              <p>
+                ドメイン <code className="bg-slate-100 px-1 py-0.5 rounded font-mono font-semibold text-slate-800">mstcorp.info</code> のメール配送先（MXレコード）を調査したところ、現在は <strong>WebLife（BiNDupメール: bs-mail-mta01.weblife.me）</strong> に設定されています。
+              </p>
+              <p>
+                そのため、外部のメールアドレスから <code className="bg-slate-100 px-1 py-0.5 rounded font-mono text-purple-700">contact@mstcorp.info</code> へ送信されたメールは、インターネットの仕組み上、<strong>直接WebLifeのメールサーバー（BiNDupメールボックス）へ届き、本システムには届きません。</strong>
+              </p>
+            </div>
+
+            <div className="mt-2 pt-2 border-t border-slate-100 pl-5 space-y-1.5">
+              <p className="font-semibold text-slate-800">本システムの受信トレイでメールを受け取るための設定手順（2通り）:</p>
+              <ol className="list-decimal list-inside space-y-1 text-slate-600">
+                <li>
+                  <strong className="text-slate-800">方法1（推奨・最も簡単）: WebLifeのメール自動転送設定</strong>
+                  <div className="pl-4 text-[11px] text-slate-500">
+                    WebLife（BiNDup）のメール管理画面にログインし、<code className="font-mono">contact@mstcorp.info</code> 宛てに届いたメールを、個人のGmail（<code className="font-mono">mst.shikumikaizen@gmail.com</code>）または受信用アドレスへ自動転送する設定を行います。
+                  </div>
+                </li>
+                <li>
+                  <strong className="text-slate-800">方法2: Resend Inbound の設定</strong>
+                  <div className="pl-4 text-[11px] text-slate-500">
+                    Resendの管理画面で受信ドメイン（例: <code className="font-mono">inbound.mstcorp.info</code>）のMXレコードを設定し、Webhook URL: <code className="font-mono bg-slate-100 px-1 rounded">{diagnostics?.webhookUrl || 'https://os.mstcorp.info/api/email/webhook'}</code> （イベント: <code className="font-mono">email.received</code>）を登録します。
+                  </div>
+                </li>
+              </ol>
+            </div>
+          </div>
+
+          <div className="flex flex-wrap items-center justify-between gap-2 pt-1 text-[11px] text-slate-500">
+            <span>
+              ※ 実際のメール受信からGmail控え転送までのシステム動作は、右の「テスト受信シミュレート」ボタンから今すぐご確認いただけます。
+            </span>
+            <button
+              type="button"
+              onClick={() => setShowSimulateModal(true)}
+              className="px-2.5 py-1 rounded bg-purple-600 hover:bg-purple-700 text-white font-semibold transition cursor-pointer"
+            >
+              テスト受信シミュレータを開く
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* テスト受信シミュレータ モーダル */}
+      {showSimulateModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-xs p-4">
+          <div className="bg-white rounded-2xl border border-slate-200 shadow-xl max-w-lg w-full p-5 space-y-4">
+            <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+              <div className="flex items-center gap-2">
+                <div className="w-8 h-8 rounded-lg bg-purple-100 text-purple-700 flex items-center justify-center">
+                  <Sparkles className="w-4 h-4" />
+                </div>
+                <div>
+                  <h3 className="text-sm font-bold text-slate-900">メール受信シミュレータ（動作テスト）</h3>
+                  <p className="text-[11px] text-slate-500">受信トレイへの登録とGmail自動控え転送を即座に検証できます</p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowSimulateModal(false)}
+                className="p-1 rounded-lg text-slate-400 hover:text-slate-600 hover:bg-slate-100 transition cursor-pointer"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <div className="space-y-3 text-xs">
+              <div>
+                <label className="block font-semibold text-slate-700 mb-1">
+                  差出人メールアドレス（テスト送信元）:
+                </label>
+                <input
+                  type="email"
+                  value={simSender}
+                  onChange={(e) => setSimSender(e.target.value)}
+                  placeholder="client.tanaka@example.com"
+                  className="w-full px-3 py-2 rounded-lg border border-slate-200 bg-white text-slate-900 placeholder-slate-400 focus:outline-none focus:border-purple-500"
+                />
+              </div>
+
+              <div>
+                <label className="block font-semibold text-slate-700 mb-1">
+                  受信先アドレス（To）:
+                </label>
+                <input
+                  type="text"
+                  disabled
+                  value={address || 'contact@mstcorp.info'}
+                  className="w-full px-3 py-2 rounded-lg border border-slate-200 bg-slate-50 text-slate-600 font-mono text-[11px]"
+                />
+              </div>
+
+              <div>
+                <label className="block font-semibold text-slate-700 mb-1">
+                  メール件名:
+                </label>
+                <input
+                  type="text"
+                  value={simSubject}
+                  onChange={(e) => setSimSubject(e.target.value)}
+                  placeholder="【ご相談】業務効率化とシステム導入について"
+                  className="w-full px-3 py-2 rounded-lg border border-slate-200 bg-white text-slate-900 placeholder-slate-400 focus:outline-none focus:border-purple-500"
+                />
+              </div>
+
+              <div>
+                <label className="block font-semibold text-slate-700 mb-1">
+                  メール本文:
+                </label>
+                <textarea
+                  rows={4}
+                  value={simBody}
+                  onChange={(e) => setSimBody(e.target.value)}
+                  className="w-full px-3 py-2 rounded-lg border border-slate-200 bg-white text-slate-900 placeholder-slate-400 focus:outline-none focus:border-purple-500 font-sans"
+                />
+              </div>
+
+              <div className="p-3 rounded-lg bg-purple-50 border border-purple-100 text-[11px] text-purple-900 space-y-1">
+                <p className="font-semibold flex items-center gap-1">
+                  <ShieldCheck className="w-3.5 h-3.5 text-purple-600" />
+                  <span>連動する動作:</span>
+                </p>
+                <p>1. 受信トレイに新規メールとして即座に保存されます。</p>
+                <p>2. Gmail控え自動転送が有効な場合、控えメールが <strong>{backupAddress}</strong> 宛てへコピー送信されます。</p>
+              </div>
+            </div>
+
+            <div className="flex items-center justify-end gap-2 pt-2 border-t border-slate-100">
+              <button
+                type="button"
+                onClick={() => setShowSimulateModal(false)}
+                className="px-3 py-1.5 rounded-lg border border-slate-200 bg-white hover:bg-slate-50 text-xs font-semibold text-slate-700 transition cursor-pointer"
+              >
+                キャンセル
+              </button>
+              <button
+                type="button"
+                disabled={simulating}
+                onClick={() => void handleSimulateInbound()}
+                className="px-4 py-1.5 rounded-lg bg-purple-600 hover:bg-purple-700 text-white font-semibold text-xs shadow-xs transition cursor-pointer disabled:opacity-50"
+              >
+                {simulating ? 'シミュレーション実行中...' : 'テストメールを受信させる'}
+              </button>
+            </div>
+          </div>
         </div>
       )}
 
