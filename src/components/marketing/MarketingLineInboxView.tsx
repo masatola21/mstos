@@ -169,10 +169,16 @@ export const MarketingLineInboxView: React.FC<MarketingLineInboxViewProps> = ({
     }
   }, [selectedLineUserId, messages.length]);
 
+  const friendsRef = useRef(friends);
+  friendsRef.current = friends;
+  const profileFetchedRef = useRef<Set<string>>(new Set());
+
   useEffect(()=>{
     if(!selectedLineUserId||!db)return;
-    const current=friends[selectedLineUserId];
+    const current=friendsRef.current[selectedLineUserId];
     if(current&&current.display_name&&current.picture_url)return;
+    if (profileFetchedRef.current.has(selectedLineUserId)) return;
+    profileFetchedRef.current.add(selectedLineUserId);
     (async()=>{
       try{
         const {data:authSession}=await db.auth.getSession();
@@ -196,7 +202,7 @@ export const MarketingLineInboxView: React.FC<MarketingLineInboxViewProps> = ({
         // Non-blocking background fetch
       }
     })();
-  },[selectedLineUserId,db,friends]);
+  },[selectedLineUserId,db]);
 
   const conversations=useMemo(()=>{
     const grouped=new Map<string,InboxMessage[]>();
