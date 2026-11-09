@@ -5555,10 +5555,121 @@ app.post('/api/diagnosis-submissions/:id/diagnosis', requireAuth, async (req, re
   }
 });
 
-// 生成したレポート本文を保存する（ai_reports と顧客書類）。
+// 生成したレポート本文を保存する（ai_reports と顧客書類）。画面からの保存と、自動作成の両方で使う。
+class HttpError extends Error {
+  constructor(public statusCode: number, message: string) {
+    super(message);
+  }
+}
+
+async function saveDiagnosisReport(
+  user: any,
+  diagnosisId: string,
+  text: string,
+  modelName: string,
+  requestedProductId: string | null,
+) {
+  if (!lineSupabase) throw new HttpError(503, 'DB接続が設定されていません。');
+
+  const { data: diagnosis, error: diagnosisError } = await lineSupabase
+    .from('diagnoses')
+    .select('id, company_id, lead_id')
+    .eq('id', diagnosisId)
+    .maybeSingle();
+  if (diagnosisError) throw diagnosisError;
+  if (!diagnosis) throw new HttpError(404, '診断が見つかりません。');
+
+  const { data: company } = await lineSupabase
+    .from('companies')
+    .select('company_name')
+    .eq('id', diagnosis.company_id)
+    .maybeSingle();
+  const companyName = company?.company_name || '御社';
+
+  // 存在しない商品IDで外部キーエラーにならないよう確認する
+  let recommendedProductId: string | null = null;
+  if (requestedProductId) {
+    const { data: product } = await lineSupabase.from('products').select('id').eq('id', requestedProductId).maybeSingle();
+    recommendedProductId = product?.id ? String(product.id) : null;
+  }
+
+  const { data: existing, error: existingError } = await lineSupabase
+    .from('ai_reports')
+    .select('id, version, is_latest, status')
+    .eq('diagnosis_id', diagnosisId);
+  if (existingError) throw existingError;
+
+  const nextVersion = Math.max(0, ...(existing || []).map((row: any) => Number(row.version) || 0)) + 1;
+  const previousLatest = (existing || []).filter((row: any) => row.is_latest);
+  const demoted: Array<{ id: string; status: string }> = [];
+  for (const previous of previousLatest) {
+    const { error: demoteError } = await lineSupabase
+      .from('ai_reports')
+      .update({ is_latest: false, status: previous.status === 'reviewed' ? 'reviewed' : 'superseded' })
+      .eq('id', previous.id);
+    if (demoteError) throw demoteError;
+    demoted.push({ id: String(previous.id), status: String(previous.status) });
+  }
+
+  const { data: report, error: insertError } = await lineSupabase
+    .from('ai_reports')
+    .insert({
+      diagnosis_id: diagnosisId,
+      version: nextVersion,
+      is_latest: true,
+      status: 'generated',
+      title: `${companyName} 経営診断レポート`,
+      model_name: modelName,
+      prompt_version: 'diagnosis-report-v1',
+      summary: text.slice(0, 1200),
+      recommendations: [text],
+      recommended_product_id: recommendedProductId,
+      full_report_text: text,
+      generated_at: new Date().toISOString(),
+    })
+    .select('*')
+    .single();
+  if (insertError) {
+    for (const previous of demoted) {
+      await lineSupabase.from('ai_reports').update({ is_latest: true, status: previous.status }).eq('id', previous.id);
+    }
+    throw insertError;
+  }
+
+  // 顧客書類（承認待ち）にも登録する。失敗してもレポート自体は保存済み。
+  const bodyHtml = `<div style="font-family: sans-serif; line-height: 1.8; color: #1e293b; max-width: 800px; margin: 0 auto; padding: 24px;">
+  <h1 style="font-size: 22px; color: #0f172a; border-bottom: 2px solid #2563eb; padding-bottom: 8px; margin-bottom: 20px;">${escapeHtmlText(companyName)} 経営診断・ボトルネック改善レポート</h1>
+  <div style="white-space: pre-wrap; font-size: 14px; color: #334155;">${escapeHtmlText(text)}</div>
+</div>`;
+  const { data: documentRow, error: documentError } = await lineSupabase
+    .from('customer_documents')
+    .insert({
+      owner_id: user.id,
+      document_type: 'diagnosis_report',
+      title: `${companyName} 経営診断レポート (v${nextVersion})`,
+      status: 'awaiting_approval',
+      body_html: bodyHtml,
+      company_id: diagnosis.company_id,
+      lead_id: diagnosis.lead_id || null,
+      diagnosis_id: diagnosisId,
+      ai_report_id: report.id,
+    })
+    .select('id')
+    .maybeSingle();
+  if (documentError) console.warn('Diagnosis report document sync failed:', documentError.message);
+
+  return {
+    report,
+    companyId: String(diagnosis.company_id),
+    companyName,
+    leadId: diagnosis.lead_id ? String(diagnosis.lead_id) : null,
+    documentId: documentRow?.id || null,
+    documentSynced: !documentError,
+  };
+}
+
 app.post('/api/diagnoses/:id/report', requireAuth, async (req, res) => {
   if (!lineSupabase) return res.status(503).json({ error: 'DB接続が設定されていません。' });
-  const user = (req as any).user;
   const diagnosisId = String(req.params.id || '');
   if (!UUID_PATTERN.test(diagnosisId)) return res.status(400).json({ error: '診断IDが正しくありません。' });
 
@@ -5573,97 +5684,202 @@ app.post('/api/diagnoses/:id/report', requireAuth, async (req, res) => {
     : null;
 
   try {
-    const { data: diagnosis, error: diagnosisError } = await lineSupabase
-      .from('diagnoses')
-      .select('id, company_id, lead_id')
-      .eq('id', diagnosisId)
-      .maybeSingle();
-    if (diagnosisError) throw diagnosisError;
-    if (!diagnosis) return res.status(404).json({ error: '診断が見つかりません。' });
-
-    const { data: company } = await lineSupabase
-      .from('companies')
-      .select('company_name')
-      .eq('id', diagnosis.company_id)
-      .maybeSingle();
-    const companyName = company?.company_name || '御社';
-
-    // 存在しない商品IDで外部キーエラーにならないよう確認する
-    let recommendedProductId: string | null = null;
-    if (requestedProductId) {
-      const { data: product } = await lineSupabase.from('products').select('id').eq('id', requestedProductId).maybeSingle();
-      recommendedProductId = product?.id ? String(product.id) : null;
-    }
-
-    const { data: existing, error: existingError } = await lineSupabase
-      .from('ai_reports')
-      .select('id, version, is_latest, status')
-      .eq('diagnosis_id', diagnosisId);
-    if (existingError) throw existingError;
-
-    const nextVersion = Math.max(0, ...(existing || []).map((row: any) => Number(row.version) || 0)) + 1;
-    const previousLatest = (existing || []).filter((row: any) => row.is_latest);
-    const demoted: Array<{ id: string; status: string }> = [];
-    for (const previous of previousLatest) {
-      const { error: demoteError } = await lineSupabase
-        .from('ai_reports')
-        .update({ is_latest: false, status: previous.status === 'reviewed' ? 'reviewed' : 'superseded' })
-        .eq('id', previous.id);
-      if (demoteError) throw demoteError;
-      demoted.push({ id: String(previous.id), status: String(previous.status) });
-    }
-
-    const { data: report, error: insertError } = await lineSupabase
-      .from('ai_reports')
-      .insert({
-        diagnosis_id: diagnosisId,
-        version: nextVersion,
-        is_latest: true,
-        status: 'generated',
-        title: `${companyName} 経営診断レポート`,
-        model_name: modelName,
-        prompt_version: 'diagnosis-report-v1',
-        summary: text.slice(0, 1200),
-        recommendations: [text],
-        recommended_product_id: recommendedProductId,
-        full_report_text: text,
-        generated_at: new Date().toISOString(),
-      })
-      .select('*')
-      .single();
-    if (insertError) {
-      for (const previous of demoted) {
-        await lineSupabase.from('ai_reports').update({ is_latest: true, status: previous.status }).eq('id', previous.id);
-      }
-      throw insertError;
-    }
-
-    // 顧客書類（承認待ち）にも登録する。失敗してもレポート自体は保存済み。
-    const bodyHtml = `<div style="font-family: sans-serif; line-height: 1.8; color: #1e293b; max-width: 800px; margin: 0 auto; padding: 24px;">
-  <h1 style="font-size: 22px; color: #0f172a; border-bottom: 2px solid #2563eb; padding-bottom: 8px; margin-bottom: 20px;">${escapeHtmlText(companyName)} 経営診断・ボトルネック改善レポート</h1>
-  <div style="white-space: pre-wrap; font-size: 14px; color: #334155;">${escapeHtmlText(text)}</div>
-</div>`;
-    const { data: documentRow, error: documentError } = await lineSupabase
-      .from('customer_documents')
-      .insert({
-        owner_id: user.id,
-        document_type: 'diagnosis_report',
-        title: `${companyName} 経営診断レポート (v${nextVersion})`,
-        status: 'awaiting_approval',
-        body_html: bodyHtml,
-        company_id: diagnosis.company_id,
-        lead_id: diagnosis.lead_id || null,
-        diagnosis_id: diagnosisId,
-        ai_report_id: report.id,
-      })
-      .select('id')
-      .maybeSingle();
-    if (documentError) console.warn('Diagnosis report document sync failed:', documentError.message);
-
-    return res.json({ report, documentId: documentRow?.id || null, documentSynced: !documentError });
+    const saved = await saveDiagnosisReport((req as any).user, diagnosisId, text, modelName, requestedProductId);
+    return res.json({ report: saved.report, documentId: saved.documentId, documentSynced: saved.documentSynced });
   } catch (err: any) {
+    if (err instanceof HttpError) return res.status(err.statusCode).json({ error: err.message });
     console.error('Diagnosis report save failed:', err?.message || err);
     return res.status(500).json({ error: err?.message || 'レポートを保存できませんでした。' });
+  }
+});
+
+// 診断フォームの回答から、AIが診断レポートと提案書の下書きまで自動で作る（受信トレイの「提案書・レポート作成」）。
+const DIAGNOSIS_REPORT_PROMPT = `あなたは有限会社MSTの「経営の仕組み化 × 利益改善」専門の経営診断レポート作成パートナーです。
+以下の社内CRM情報と診断回答をもとに、経営者の心に響く「最優先ボトルネックの特定」「会社と経営者の未来像（Before/After）」「ボトルネック連鎖ロードマップ（継続改善サイクル）」を提示するレポート草案を作成してください。
+
+【MSTのコアメッセージ】
+・会社の可能性を広げ、経営者が次の一手を打てる経営へ。
+・単なる業務効率化ではなく、会社の利益と経営者の選択肢を増やすこと。
+・日々の業務に追われる経営から、次の一手を選べる経営へ。
+
+【レポート構成（必須）】
+1. ■ 診断サマリーと最優先ボトルネックの特定
+   - 回答から読み取れる、現在会社の成長と利益を最も止めている「最大の急所（ボトルネック）」をズバリ明示。
+   - そのボトルネックがもたらしている経営上の損失（時間、機会損失、経営者の負担）。
+
+2. ■ 会社と経営者が手に入れる「未来」（Before & After）
+   - 【会社の未来】: 現状の手作業・属人化・利益が残らない状態から、仕組みで業務が回り利益が残る会社へ。
+   - 【経営者の未来】: 現場の火消しや業務処理から解放され、本来向き合うべき「経営判断・成長戦略・次の一手」に時間を使える状態へ。
+
+3. ■ ボトルネック連鎖の解消ロードマップ（継続改善サイクル）
+   ※「1つのボトルネックを解消すると、次はここが詰まるので、継続して改善を回していく必然性」を提示。
+   - Phase 1（まず着手）: 最優先ボトルネックの解消（手作業の二重入力削減・即座の時間創出）
+   - Phase 2（次の展開）: 集客〜商談〜顧客フォローがつながる売上の流れの構築
+   - Phase 3（完成形）: 経営顧問による自走組織と新規事業への展開
+
+4. ■ 推奨される最初の一歩（MSTサービス体系からの処方箋）
+   - 経営戦略・利益改善顧問、業務改善・IT・DX顧問、システム構築・業務自動化、マーケティング集客導線から、貴社に最も適した組み合わせをご提案。
+
+Markdown見出しを使い、前置きは付けず本文だけ出力してください。
+
+【社内データ】
+`;
+
+app.post('/api/diagnosis-submissions/:id/generate-report', requireAuth, async (req, res) => {
+  if (!lineSupabase) return res.status(503).json({ error: 'DB接続が設定されていません。' });
+  const user = (req as any).user;
+  const submissionId = String(req.params.id || '');
+  if (!UUID_PATTERN.test(submissionId)) return res.status(400).json({ error: '回答IDが正しくありません。' });
+  const force = req.body?.force === true;
+
+  try {
+    const killSwitch = await getKillSwitchStatus('ai');
+    if (killSwitch.paused) {
+      return res.status(503).json({ error: `AI呼び出し機能は緊急停止中です: ${killSwitch.reason || '一時停止中'}` });
+    }
+
+    const { data: submission, error: submissionError } = await lineSupabase
+      .from('diagnosis_submissions')
+      .select('id, form_id, company_id, lead_id, diagnosis_id, status, answers')
+      .eq('id', submissionId)
+      .maybeSingle();
+    if (submissionError) throw submissionError;
+    if (!submission) return res.status(404).json({ error: '回答が見つかりません（削除された可能性があります）。' });
+
+    const { data: form } = await lineSupabase
+      .from('diagnosis_forms')
+      .select('form_type, definition')
+      .eq('id', submission.form_id)
+      .maybeSingle();
+    if (form?.form_type !== 'diagnosis') {
+      return res.status(422).json({ error: '診断フォームの回答ではないため、診断レポートは作成できません。' });
+    }
+    if (!submission.company_id) {
+      return res.status(422).json({ error: '会社が紐付いていない回答です。先に「反響リードに登録」で会社を紐付けてください。' });
+    }
+
+    // 診断が未作成なら作る
+    let diagnosisId: string | null = submission.diagnosis_id ? String(submission.diagnosis_id) : null;
+    if (!diagnosisId) {
+      const { data, error } = await lineSupabase.rpc('create_diagnosis_from_form_submission', { p_submission_id: submissionId });
+      if (error) {
+        console.error('Diagnosis ensure failed:', error.message);
+        return res.status(500).json({ error: `診断を作成できませんでした: ${error.message}` });
+      }
+      if (!data) return res.status(422).json({ error: '診断を作成できませんでした。会社の紐付けを確認してください。' });
+      diagnosisId = String(data);
+    }
+
+    // すでにレポートがある場合は、作り直すか画面で確認する
+    if (!force) {
+      const { data: latest } = await lineSupabase
+        .from('ai_reports')
+        .select('id, version')
+        .eq('diagnosis_id', diagnosisId)
+        .eq('is_latest', true)
+        .maybeSingle();
+      if (latest) return res.json({ alreadyExists: true, diagnosisId, reportVersion: latest.version });
+    }
+
+    // AIに渡す情報（個人の連絡先・社内メモは含めない）
+    const [{ data: company }, { data: lead }, { data: deal }] = await Promise.all([
+      lineSupabase.from('companies').select('company_name, industry, website').eq('id', submission.company_id).maybeSingle(),
+      submission.lead_id
+        ? lineSupabase.from('leads').select('source, service_type, status, interested_product_id').eq('id', submission.lead_id).maybeSingle()
+        : Promise.resolve({ data: null as any }),
+      lineSupabase.from('deals').select('proposal_plan_name, proposal_status, proposal_type, total_amount, initial_fee, monthly_fee, product_id').eq('company_id', submission.company_id).order('created_at', { ascending: false }).limit(1).maybeSingle(),
+    ]);
+
+    const questions: any[] = Array.isArray((form as any)?.definition?.questions) ? (form as any).definition.questions : [];
+    const labelById = new Map<string, string>();
+    questions.forEach((q) => { if (q?.id) labelById.set(String(q.id), String(q.label || q.id)); });
+    const answerEntries = Object.entries((submission.answers || {}) as Record<string, unknown>)
+      .filter(([key, value]) => key !== '_intake' && value !== null && value !== undefined && String(value).trim() !== '')
+      .map(([key, value]) => [labelById.get(key) || key, value] as [string, unknown]);
+    if (answerEntries.length === 0) {
+      return res.status(422).json({ error: '回答の内容が空のため、レポートを作成できません。' });
+    }
+
+    const context = {
+      company: { company_name: company?.company_name, industry: company?.industry, website: company?.website },
+      lead,
+      latestDeal: deal,
+      diagnosis: { type: 'standard', answers: Object.fromEntries(answerEntries) },
+    };
+
+    const abortController = new AbortController();
+    res.on('close', () => {
+      if (!res.writableEnded) abortController.abort();
+    });
+    const result = await runWithFallback(resolveModelSetting(undefined), {
+      systemInstruction: 'あなたは事実に忠実で慎重な、経営診断レポート作成の専門AIです。回答に書かれていない事実は作らず、明確で丁寧な日本語で書きます。',
+      messages: [{ role: 'user', content: DIAGNOSIS_REPORT_PROMPT + JSON.stringify(context, null, 2) }],
+      temperature: 0.4,
+      signal: abortController.signal,
+    });
+    const text = result.text.trim();
+    if (!text) throw new Error('AIがレポート本文を返しませんでした。');
+
+    const saved = await saveDiagnosisReport(
+      user,
+      diagnosisId,
+      text,
+      [result.provider, result.model].filter(Boolean).join('/') || 'configured-model',
+      lead?.interested_product_id || deal?.product_id || null,
+    );
+
+    // 提案書の下書き（診断結果・推奨事項＋直近の商談情報）
+    let proposalCreated = false;
+    try {
+      const productId = deal?.product_id || lead?.interested_product_id || null;
+      let productName = '要選定';
+      if (productId) {
+        const { data: product } = await lineSupabase.from('products').select('product_name').eq('id', productId).maybeSingle();
+        if (product?.product_name) productName = String(product.product_name);
+      }
+      const money = (value: unknown) => (value === null || value === undefined ? '要設定' : String(value));
+      const proposalHtml = `<article><h1>${escapeHtmlText(String(deal?.proposal_plan_name || '診断結果に基づくご提案'))}</h1>
+<p>宛先：${escapeHtmlText(saved.companyName)}</p>
+<h2>診断結果・推奨事項</h2><pre style="white-space:pre-wrap">${escapeHtmlText(text)}</pre>
+<h2>ご提案内容</h2><p>推奨サービス：${escapeHtmlText(productName)}</p>
+<p>提案プラン：${escapeHtmlText(String(deal?.proposal_plan_name || '要設定'))}</p>
+<p>初期費用：${money(deal?.initial_fee)} 円</p><p>月額費用：${money(deal?.monthly_fee)} 円</p><p>合計金額：${money(deal?.total_amount)} 円</p></article>`;
+      const { error: proposalError } = await lineSupabase.from('customer_documents').insert({
+        owner_id: user.id,
+        document_type: 'proposal',
+        title: `${saved.companyName} 診断結果に基づくご提案（下書き）`,
+        status: 'draft',
+        body_html: proposalHtml,
+        company_id: saved.companyId,
+        lead_id: saved.leadId,
+        deal_id: null,
+        diagnosis_id: diagnosisId,
+        ai_report_id: saved.report.id,
+      });
+      if (proposalError) console.warn('Proposal draft creation failed:', proposalError.message);
+      else proposalCreated = true;
+    } catch (proposalErr: any) {
+      console.warn('Proposal draft creation failed:', proposalErr?.message || proposalErr);
+    }
+
+    // 回答の状態を「未対応」から「対応中」へ
+    if (submission.status === 'received') {
+      await lineSupabase.from('diagnosis_submissions').update({ status: 'reviewing' }).eq('id', submissionId);
+    }
+
+    return res.json({
+      success: true,
+      diagnosisId,
+      reportId: saved.report.id,
+      version: saved.report.version,
+      companyId: saved.companyId,
+      proposalCreated,
+      documentSynced: saved.documentSynced,
+    });
+  } catch (err: any) {
+    if (err instanceof HttpError) return res.status(err.statusCode).json({ error: err.message });
+    console.error('Diagnosis report auto-generation failed:', err?.message || err);
+    return res.status(500).json({ error: err?.message || 'レポートを作成できませんでした。' });
   }
 });
 
