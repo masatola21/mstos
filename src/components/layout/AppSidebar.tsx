@@ -433,22 +433,6 @@ export const AppSidebar: React.FC<AppSidebarProps> = ({
               </button>
               <button
                 type="button"
-                onClick={() => handleItemClick('mst_diagnoses')}
-                className="w-full flex items-center gap-2 px-2 py-1.5 rounded text-left text-slate-600 hover:text-slate-900 hover:bg-white transition-colors"
-              >
-                <FileText className="w-3.5 h-3.5 text-purple-600" />
-                <span>診断・受付フォーム・PDFマスタ管理</span>
-              </button>
-              <button
-                type="button"
-                onClick={() => handleItemClick('communication_send')}
-                className="w-full flex items-center gap-2 px-2 py-1.5 rounded text-left text-slate-600 hover:text-slate-900 hover:bg-white transition-colors"
-              >
-                <Send className="w-3.5 h-3.5 text-purple-600" />
-                <span>送信履歴・一括配信・テンプレート</span>
-              </button>
-              <button
-                type="button"
                 onClick={onOpenRls}
                 className="w-full flex items-center gap-2 px-2 py-1.5 rounded text-left text-slate-600 hover:text-slate-900 hover:bg-white transition-colors"
               >

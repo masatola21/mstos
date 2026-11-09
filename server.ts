@@ -406,10 +406,11 @@ function isDisallowedSsrfUrl(urlString: string): boolean {
 async function ensureStandardPublicForms(): Promise<void> {
   if (!lineSupabase) return;
   try {
-    // 不要となった古いフォーム（care-package-inquiry等）を確実に削除
+    // 不要となった古いフォーム（care-package-inquiry）および重複した「経営課題・業務診断フォーム」を確実に削除
     await lineSupabase.from('diagnosis_forms').delete().eq('public_slug', 'care-package-inquiry');
+    await lineSupabase.from('diagnosis_forms').delete().neq('public_slug', 'business-diagnosis').ilike('name', '%経営課題%');
   } catch (e: any) {
-    console.warn('[Setup] Deleting obsolete care-package-inquiry form:', e?.message);
+    console.warn('[Setup] Deleting obsolete or duplicate forms warning:', e?.message);
   }
   const standardForms: Array<Record<string, any>> = [
     {
