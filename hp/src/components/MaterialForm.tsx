@@ -290,56 +290,29 @@ export default function MaterialForm() {
         </div>
       )}
 
-      {/* ご希望の資料（動的複数選択チェックボックスUI） */}
-      <div>
-        <div className="flex items-center justify-between mb-2">
-          <label className="block text-xs font-bold text-slate-800">
-            ご希望の資料を選択してください（複数選択可） <span className="text-rose-500">*</span>
-          </label>
-          {availableMaterials.length > 1 && (
-            <button
-              type="button"
-              onClick={selectAll}
-              className="text-[11px] font-bold text-brand-700 hover:text-brand-900 underline"
-            >
-              すべて選択
-            </button>
-          )}
+      {/* お届けする資料セット（2点一括送付・チェック不要） */}
+      <div className="p-4 bg-brand-50/60 rounded-2xl border border-brand-200/80 space-y-3">
+        <div className="flex items-center gap-2">
+          <span className="text-[11px] font-bold text-brand-800 bg-brand-100 px-2.5 py-0.5 rounded-full border border-brand-300">
+            一括送付
+          </span>
+          <span className="text-xs font-bold text-slate-800">お届けする実務資料セット（2点まとめてダウンロード可能）</span>
         </div>
 
-        <div className="space-y-2.5">
-          {availableMaterials.map((mat) => {
-            const isChecked = selectedKeys.includes(mat.key);
-            return (
-              <label
-                key={mat.key}
-                className={`flex items-start gap-3 p-3.5 rounded-xl border cursor-pointer transition ${
-                  isChecked
-                    ? 'border-brand-700 bg-brand-50/60 shadow-sm'
-                    : 'border-sand-300 bg-white hover:bg-sand-50/50'
-                }`}
-              >
-                <input
-                  type="checkbox"
-                  name="material_keys"
-                  value={mat.key}
-                  checked={isChecked}
-                  onChange={() => toggleMaterial(mat.key)}
-                  className="mt-1 text-brand-700 rounded focus:ring-brand-500"
-                />
-                <div>
-                  <div className="text-xs sm:text-sm font-bold text-slate-900">
-                    {mat.label}
-                  </div>
-                  {mat.description && (
-                    <div className="text-[11px] text-gray-600 mt-0.5">
-                      {mat.description}
-                    </div>
-                  )}
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+          {availableMaterials.map((mat) => (
+            <div key={mat.key} className="p-3.5 bg-white rounded-xl border border-sand-300 shadow-xs space-y-1">
+              <div className="text-xs font-bold text-slate-900 flex items-start gap-1.5">
+                <span className="text-emerald-600 font-black shrink-0">✓</span>
+                <span>{mat.label}</span>
+              </div>
+              {mat.description && (
+                <div className="text-[11px] text-gray-500 font-light leading-snug pl-4">
+                  {mat.description}
                 </div>
-              </label>
-            );
-          })}
+              )}
+            </div>
+          ))}
         </div>
       </div>
 
