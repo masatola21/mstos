@@ -20,7 +20,8 @@ import {
   ChevronUp,
   Tag as TagIcon,
   Building2,
-  Users
+  Users,
+  Trash2
 } from 'lucide-react';
 import { getSupabase, getAuthHeaders } from '../../lib/supabaseClient';
 import { UnifiedNavTab } from '../UnifiedNavbar';
@@ -115,6 +116,8 @@ export const UnifiedInboxView: React.FC<UnifiedInboxViewProps> = ({
   const [expandedSubmissionId, setExpandedSubmissionId] = useState<string | null>(null);
   const [reportingIds, setReportingIds] = useState<string[]>([]);
   const [reportVersions, setReportVersions] = useState<Record<string, number>>({});
+  const [selectedSubmissionIds, setSelectedSubmissionIds] = useState<string[]>([]);
+  const [deletingSubmissions, setDeletingSubmissions] = useState(false);
   const [noticeAction, setNoticeAction] = useState<{ label: string; run: () => void } | null>(null);
   const [loadingSubmissions, setLoadingSubmissions] = useState(false);
   const [submissionNotice, setSubmissionNotice] = useState('');
@@ -257,6 +260,48 @@ export const UnifiedInboxView: React.FC<UnifiedInboxViewProps> = ({
       setSubmissionError(err?.message || 'レポートを作成できませんでした。');
     } finally {
       setReportingIds((prev) => prev.filter((id) => id !== sub.id));
+    }
+  };
+
+  // 選択した回答を削除する（テスト回答の整理用）
+  const handleDeleteSelectedSubmissions = async () => {
+    const ids = selectedSubmissionIds.filter((id) => submissions.some((item) => item.id === id));
+    if (ids.length === 0) return;
+    const withReport = submissions.filter(
+      (item) => ids.includes(item.id) && item.diagnosis_id && reportVersions[item.diagnosis_id]
+    ).length;
+    const message =
+      `選択した${ids.length}件の回答を削除します。元に戻せません。` +
+      (withReport > 0
+        ? `\n\nレポート作成済みの${withReport}件は、回答だけが消え、診断・レポート・書類は残ります。`
+        : '') +
+      '\n\nよろしいですか？';
+    if (!window.confirm(message)) return;
+
+    setDeletingSubmissions(true);
+    setSubmissionNotice('');
+    setSubmissionError('');
+    setNoticeAction(null);
+    try {
+      const headers = await getAuthHeaders();
+      const response = await fetch('/api/inbox/form-submissions/delete', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', ...headers },
+        body: JSON.stringify({ ids }),
+      });
+      const result = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(result.error || '回答を削除できませんでした。');
+      const deleted = new Set<string>((result.deletedIds || []).map(String));
+      setSubmissions((prev) => prev.filter((item) => !deleted.has(item.id)));
+      setSelectedSubmissionIds((prev) => prev.filter((id) => !deleted.has(id)));
+      setExpandedSubmissionId((current) => (current && deleted.has(current) ? null : current));
+      const failed = ids.length - deleted.size;
+      setSubmissionNotice(`${deleted.size}件の回答を削除しました。` + (failed > 0 ? `（${failed}件は削除できませんでした）` : ''));
+      void loadCounts();
+    } catch (err: any) {
+      setSubmissionError(err?.message || '回答を削除できませんでした。');
+    } finally {
+      setDeletingSubmissions(false);
     }
   };
 
@@ -683,6 +728,46 @@ export const UnifiedInboxView: React.FC<UnifiedInboxViewProps> = ({
             </div>
           </div>
 
+          {/* 選択・削除バー */}
+          {!loadingSubmissions && visibleSubmissions.length > 0 && (
+            <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-slate-200 bg-white px-4 py-2.5 shadow-xs">
+              <label className="inline-flex items-center gap-2 text-xs font-medium text-slate-700 cursor-pointer select-none">
+                <input
+                  type="checkbox"
+                  className="h-4 w-4 rounded border-slate-300 accent-purple-600"
+                  checked={visibleSubmissions.length > 0 && visibleSubmissions.every((item) => selectedSubmissionIds.includes(item.id))}
+                  onChange={(e) => {
+                    const visibleIds = visibleSubmissions.map((item) => item.id);
+                    setSelectedSubmissionIds((prev) =>
+                      e.target.checked ? Array.from(new Set([...prev, ...visibleIds])) : prev.filter((id) => !visibleIds.includes(id))
+                    );
+                  }}
+                />
+                <span>表示中の{visibleSubmissions.length}件をすべて選択</span>
+              </label>
+              <div className="flex items-center gap-3">
+                {selectedSubmissionIds.length > 0 && (
+                  <button
+                    type="button"
+                    onClick={() => setSelectedSubmissionIds([])}
+                    className="text-[11px] text-slate-500 hover:text-slate-800 underline cursor-pointer"
+                  >
+                    選択を解除
+                  </button>
+                )}
+                <button
+                  type="button"
+                  disabled={selectedSubmissionIds.length === 0 || deletingSubmissions}
+                  onClick={() => void handleDeleteSelectedSubmissions()}
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-rose-600 hover:bg-rose-700 text-white text-xs font-semibold shadow-xs transition cursor-pointer disabled:cursor-not-allowed disabled:opacity-40"
+                >
+                  {deletingSubmissions ? <RefreshCw className="w-3.5 h-3.5 animate-spin" /> : <Trash2 className="w-3.5 h-3.5" />}
+                  <span>{selectedSubmissionIds.length > 0 ? `選択した${selectedSubmissionIds.length}件を削除` : '削除する回答を選択'}</span>
+                </button>
+              </div>
+            </div>
+          )}
+
           {/* Submissions List */}
           {loadingSubmissions ? (
             <div className="p-12 text-center text-sm text-slate-500 rounded-2xl border border-slate-200 bg-white shadow-xs">
@@ -721,12 +806,23 @@ export const UnifiedInboxView: React.FC<UnifiedInboxViewProps> = ({
                 return (
                   <div
                     key={sub.id}
-                    className="rounded-2xl border border-slate-200 bg-white p-5 hover:border-purple-300 transition-all shadow-xs"
+                    className={`rounded-2xl border bg-white p-5 transition-all shadow-xs ${selectedSubmissionIds.includes(sub.id) ? 'border-purple-400 ring-1 ring-purple-200' : 'border-slate-200 hover:border-purple-300'}`}
                   >
                     {/* Upper row: Respondent info & status */}
                     <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-3">
                       <div>
                         <div className="flex flex-wrap items-center gap-2">
+                          <input
+                            type="checkbox"
+                            aria-label="この回答を選択"
+                            className="h-4 w-4 rounded border-slate-300 accent-purple-600 cursor-pointer"
+                            checked={selectedSubmissionIds.includes(sub.id)}
+                            onChange={(e) =>
+                              setSelectedSubmissionIds((prev) =>
+                                e.target.checked ? [...prev, sub.id] : prev.filter((id) => id !== sub.id)
+                              )
+                            }
+                          />
                           <span className={`px-2 py-0.5 rounded text-[11px] font-semibold border ${statusBadge.color}`}>
                             {statusBadge.label}
                           </span>

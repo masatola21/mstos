@@ -1,9 +1,17 @@
 import React, { useEffect, useState } from 'react';
-import { Mail, Reply, Send, RefreshCw, Settings } from 'lucide-react';
-import { getSupabase } from '../../lib/supabaseClient';
+import { Mail, Reply, Send, RefreshCw, Settings, Trash2 } from 'lucide-react';
+import { getSupabase, getAuthHeaders } from '../../lib/supabaseClient';
 import { useSendDrawer } from '../../context/SendDrawerContext';
 
 type InboxMessage = { id:string; from_email:string; to_emails:string[]; subject:string; text_body:string; html_body:string; received_at:string };
+// 送信元は「名前 <アドレス>」の形で届くことがあるため、名前とアドレスに分ける
+function parseSender(raw: string): { name: string; address: string } {
+  const text = (raw || '').trim();
+  const match = text.match(/^\s*"?([^"<]*?)"?\s*<([^>]+)>\s*$/);
+  if (match) return { name: match[1].trim(), address: match[2].trim() };
+  return { name: '', address: text };
+}
+
 export interface MarketingEmailInboxViewProps {
   onNavigateSendCenter?: () => void;
 }
@@ -19,6 +27,16 @@ export const MarketingEmailInboxView: React.FC<MarketingEmailInboxViewProps> = (
   const [error,setError]=useState('');
   const [notice,setNotice]=useState('');
   const [showConfig,setShowConfig]=useState(false);
+  const [contactNames,setContactNames]=useState<Record<string,string>>({});
+  const [checkedIds,setCheckedIds]=useState<string[]>([]);
+  const [deleting,setDeleting]=useState(false);
+
+  // 連絡先に登録されている名前を優先し、なければメールの送信者名を使う
+  const senderOf = (raw: string) => {
+    const parsed = parseSender(raw);
+    const name = contactNames[parsed.address.toLowerCase()] || parsed.name;
+    return { name: name && name.toLowerCase() !== parsed.address.toLowerCase() ? name : '', address: parsed.address };
+  };
 
   const handleReplySelected = () => {
     if (!selected) return;
@@ -30,7 +48,7 @@ export const MarketingEmailInboxView: React.FC<MarketingEmailInboxViewProps> = (
       kind: 'announcement',
       subject: replySubject,
       body: quote,
-      initialRecipientEmail: selected.from_email,
+      initialRecipientEmail: parseSender(selected.from_email).address,
     });
   };
   const load=async()=>{
@@ -46,6 +64,34 @@ export const MarketingEmailInboxView: React.FC<MarketingEmailInboxViewProps> = (
     if(failed){setError(failed.code==='PGRST205'?'メール受信箱のDBマイグレーションが未適用です。':'メール受信箱を読み込めません: '+failed.message);return}
     setAddress(settings.data?.inbound_address||'');
     setMessages((inbox.data||[]) as InboxMessage[]);
+    setCheckedIds([]);
+    // 送信者の名前を連絡先から引く（失敗してもメール一覧は表示する）
+    const {data:contacts}=await db.from('contacts').select('full_name,email').not('email','is',null).limit(5000);
+    const names:Record<string,string>={};
+    (contacts||[]).forEach((c:any)=>{if(c.email&&c.full_name)names[String(c.email).trim().toLowerCase()]=String(c.full_name)});
+    setContactNames(names);
+  };
+
+  const deleteMessages=async(ids:string[])=>{
+    if(ids.length===0)return;
+    if(!window.confirm(ids.length+'件のメールを受信箱から削除します。元に戻せません。よろしいですか？'))return;
+    setDeleting(true);setError('');setNotice('');
+    try{
+      const headers=await getAuthHeaders();
+      const response=await fetch('/api/inbox/email/delete',{method:'POST',headers:{'Content-Type':'application/json',...headers},body:JSON.stringify({ids})});
+      const result=await response.json().catch(()=>({}));
+      if(!response.ok)throw new Error(result.error||'メールを削除できませんでした。');
+      const deleted=new Set<string>((result.deletedIds||[]).map(String));
+      setMessages((prev)=>prev.filter((m)=>!deleted.has(m.id)));
+      setCheckedIds((prev)=>prev.filter((id)=>!deleted.has(id)));
+      setSelected((current)=>current&&deleted.has(current.id)?null:current);
+      const failed=ids.length-deleted.size;
+      setNotice(deleted.size+'件のメールを削除しました。'+(failed>0?'（'+failed+'件は削除できませんでした）':''));
+    }catch(e:any){
+      setError(e?.message||'メールを削除できませんでした。');
+    }finally{
+      setDeleting(false);
+    }
   };
   useEffect(()=>{void load()},[]);
   const save=async()=>{
@@ -138,23 +184,61 @@ export const MarketingEmailInboxView: React.FC<MarketingEmailInboxViewProps> = (
 
       <section className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.3fr)]">
         <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-xs">
-          <div className="border-b border-slate-200 px-4 py-3 text-sm font-bold text-slate-900 bg-slate-50/50">
-            受信メッセージ（{messages.length}）
+          <div className="border-b border-slate-200 px-4 py-3 bg-slate-50/50 flex flex-wrap items-center justify-between gap-2">
+            <label className="inline-flex items-center gap-2 text-sm font-bold text-slate-900 cursor-pointer select-none">
+              <input
+                type="checkbox"
+                aria-label="すべて選択"
+                className="h-4 w-4 rounded border-slate-300 accent-purple-600"
+                checked={messages.length>0&&checkedIds.length===messages.length}
+                onChange={(e)=>setCheckedIds(e.target.checked?messages.map((m)=>m.id):[])}
+              />
+              <span>受信メッセージ（{messages.length}）</span>
+            </label>
+            <button
+              type="button"
+              disabled={checkedIds.length===0||deleting}
+              onClick={()=>void deleteMessages(checkedIds)}
+              className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-rose-600 hover:bg-rose-700 text-white text-xs font-semibold shadow-xs transition cursor-pointer disabled:cursor-not-allowed disabled:opacity-40"
+            >
+              {deleting?<RefreshCw className="h-3.5 w-3.5 animate-spin"/>:<Trash2 className="h-3.5 w-3.5"/>}
+              <span>{checkedIds.length>0?'選択した'+checkedIds.length+'件を削除':'削除'}</span>
+            </button>
           </div>
           <div className="max-h-[65vh] overflow-auto divide-y divide-slate-100">
-            {messages.map((m) => (
-              <button
-                key={m.id}
-                onClick={() => setSelected(m)}
-                className={`block w-full px-4 py-3 text-left transition cursor-pointer ${
-                  selected?.id === m.id ? 'bg-purple-50/80 ring-1 ring-inset ring-purple-300' : 'hover:bg-slate-50'
-                }`}
-              >
-                <div className="truncate text-sm font-semibold text-slate-900">{m.subject || '(件名なし)'}</div>
-                <div className="mt-1 truncate text-xs text-slate-500">{m.from_email}</div>
-                <div className="mt-1 text-[11px] text-slate-400">{new Date(m.received_at).toLocaleString()}</div>
-              </button>
-            ))}
+            {messages.map((m) => {
+              const sender = senderOf(m.from_email);
+              return (
+                <div
+                  key={m.id}
+                  className={`flex items-start gap-3 px-4 py-3 transition ${
+                    selected?.id === m.id ? 'bg-purple-50/80 ring-1 ring-inset ring-purple-300' : 'hover:bg-slate-50'
+                  }`}
+                >
+                  <input
+                    type="checkbox"
+                    aria-label="このメールを選択"
+                    className="mt-1 h-4 w-4 shrink-0 rounded border-slate-300 accent-purple-600 cursor-pointer"
+                    checked={checkedIds.includes(m.id)}
+                    onChange={(e)=>setCheckedIds((prev)=>e.target.checked?[...prev,m.id]:prev.filter((id)=>id!==m.id))}
+                  />
+                  <button onClick={() => setSelected(m)} className="block min-w-0 flex-1 text-left cursor-pointer">
+                    <div className="truncate text-sm font-semibold text-slate-900">{m.subject || '(件名なし)'}</div>
+                    <div className="mt-1 truncate text-xs text-slate-500">
+                      {sender.name ? (
+                        <>
+                          <span className="font-medium text-slate-700">{sender.name}</span>
+                          <span className="text-slate-400"> · {sender.address}</span>
+                        </>
+                      ) : (
+                        sender.address
+                      )}
+                    </div>
+                    <div className="mt-1 text-[11px] text-slate-400">{new Date(m.received_at).toLocaleString()}</div>
+                  </button>
+                </div>
+              );
+            })}
             {messages.length === 0 && <p className="p-8 text-center text-sm text-slate-400">受信メールはまだありません。</p>}
           </div>
         </div>
@@ -165,9 +249,30 @@ export const MarketingEmailInboxView: React.FC<MarketingEmailInboxViewProps> = (
               <div className="border-b border-slate-200 pb-4 flex flex-wrap items-start justify-between gap-3">
                 <div>
                   <h3 className="font-bold text-lg text-slate-900">{selected.subject || '(件名なし)'}</h3>
-                  <p className="mt-1.5 text-xs text-slate-600">From: <span className="font-medium text-slate-800">{selected.from_email}</span></p>
+                  <p className="mt-1.5 text-xs text-slate-600">
+                    From:{' '}
+                    {senderOf(selected.from_email).name ? (
+                      <>
+                        <span className="font-medium text-slate-800">{senderOf(selected.from_email).name}</span>
+                        <span className="text-slate-500"> &lt;{senderOf(selected.from_email).address}&gt;</span>
+                      </>
+                    ) : (
+                      <span className="font-medium text-slate-800">{senderOf(selected.from_email).address}</span>
+                    )}
+                  </p>
                   <p className="mt-1 text-xs text-slate-400">宛先: {selected.to_emails.join(', ')} · {new Date(selected.received_at).toLocaleString()}</p>
                 </div>
+                <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  disabled={deleting}
+                  onClick={() => void deleteMessages([selected.id])}
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-white hover:bg-rose-50 text-rose-700 text-xs font-bold border border-rose-300 shadow-xs cursor-pointer transition disabled:opacity-50"
+                  title="このメールを受信箱から削除します"
+                >
+                  <Trash2 className="h-4 w-4" />
+                  <span>削除</span>
+                </button>
                 <button
                   type="button"
                   onClick={handleReplySelected}
@@ -177,6 +282,7 @@ export const MarketingEmailInboxView: React.FC<MarketingEmailInboxViewProps> = (
                   <Reply className="h-4 w-4" />
                   <span>返信する（ドロワー）</span>
                 </button>
+                </div>
               </div>
               <pre className="mt-4 flex-1 whitespace-pre-wrap break-words font-sans text-sm leading-relaxed text-slate-800 bg-slate-50 p-4 rounded-xl border border-slate-200">
                 {selected.text_body || selected.html_body.replace(/<[^>]*>/g, ' ') || '(本文なし)'}

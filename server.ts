@@ -5883,6 +5883,87 @@ app.post('/api/diagnosis-submissions/:id/generate-report', requireAuth, async (r
   }
 });
 
+// ─── 受信トレイの削除（テスト回答・受信メールの整理用） ───
+function parseDeleteIds(body: any): string[] | null {
+  const ids = Array.isArray(body?.ids) ? body.ids.map((value: unknown) => String(value)) : [];
+  const unique = Array.from(new Set<string>(ids));
+  if (unique.length === 0 || unique.length > 200) return null;
+  if (!unique.every((id) => UUID_PATTERN.test(id))) return null;
+  return unique;
+}
+
+// 診断フォームの回答を削除する。回答だけが使っていて、レポートが無い診断は一緒に削除する。
+app.post('/api/inbox/form-submissions/delete', requireAuth, async (req, res) => {
+  if (!lineSupabase) return res.status(503).json({ error: 'DB接続が設定されていません。' });
+  const ids = parseDeleteIds(req.body);
+  if (!ids) return res.status(400).json({ error: '削除する回答を1〜200件で指定してください。' });
+
+  try {
+    const { data: targets, error: targetsError } = await lineSupabase
+      .from('diagnosis_submissions')
+      .select('id, diagnosis_id')
+      .in('id', ids);
+    if (targetsError) throw targetsError;
+    const diagnosisIds = Array.from(new Set((targets || []).map((row: any) => row.diagnosis_id).filter(Boolean).map(String)));
+
+    const { data: deleted, error: deleteError } = await lineSupabase
+      .from('diagnosis_submissions')
+      .delete()
+      .in('id', ids)
+      .select('id');
+    if (deleteError) throw deleteError;
+
+    let removedDiagnoses = 0;
+    let keptDiagnoses = 0;
+    if (diagnosisIds.length > 0) {
+      const [stillUsed, withReports] = await Promise.all([
+        lineSupabase.from('diagnosis_submissions').select('diagnosis_id').in('diagnosis_id', diagnosisIds),
+        lineSupabase.from('ai_reports').select('diagnosis_id').in('diagnosis_id', diagnosisIds),
+      ]);
+      const keep = new Set<string>([
+        ...(stillUsed.data || []).map((row: any) => String(row.diagnosis_id)),
+        ...(withReports.data || []).map((row: any) => String(row.diagnosis_id)),
+      ]);
+      const removable = diagnosisIds.filter((id) => !keep.has(id));
+      keptDiagnoses = diagnosisIds.length - removable.length;
+      if (removable.length > 0) {
+        const { data: removed, error: removeError } = await lineSupabase.from('diagnoses').delete().in('id', removable).select('id');
+        if (removeError) console.warn('Diagnosis cleanup after submission delete failed:', removeError.message);
+        else removedDiagnoses = removed?.length || 0;
+      }
+    }
+
+    const deletedIds = (deleted || []).map((row: any) => String(row.id));
+    return res.json({ success: true, count: deletedIds.length, deletedIds, removedDiagnoses, keptDiagnoses });
+  } catch (err: any) {
+    console.error('Form submission delete failed:', err?.message || err);
+    return res.status(500).json({ error: err?.message || '回答を削除できませんでした。' });
+  }
+});
+
+// 自分の受信箱のメールを削除する（他人の受信メールには触れない）。
+app.post('/api/inbox/email/delete', requireAuth, async (req, res) => {
+  if (!lineSupabase) return res.status(503).json({ error: 'DB接続が設定されていません。' });
+  const user = (req as any).user;
+  const ids = parseDeleteIds(req.body);
+  if (!ids) return res.status(400).json({ error: '削除するメールを1〜200件で指定してください。' });
+
+  try {
+    const { data: deleted, error } = await lineSupabase
+      .from('email_inbox_messages')
+      .delete()
+      .in('id', ids)
+      .eq('owner_id', user.id)
+      .select('id');
+    if (error) throw error;
+    const deletedIds = (deleted || []).map((row: any) => String(row.id));
+    return res.json({ success: true, count: deletedIds.length, deletedIds });
+  } catch (err: any) {
+    console.error('Inbox email delete failed:', err?.message || err);
+    return res.status(500).json({ error: err?.message || 'メールを削除できませんでした。' });
+  }
+});
+
 // レポートを承認済みにする（送信は画面側で行う）。
 app.post('/api/ai-reports/:id/approve', requireAuth, async (req, res) => {
   if (!lineSupabase) return res.status(503).json({ error: 'DB接続が設定されていません。' });
