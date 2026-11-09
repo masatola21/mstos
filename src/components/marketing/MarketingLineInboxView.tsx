@@ -2,8 +2,18 @@ import React, { useEffect, useMemo, useState, useRef } from 'react';
 import { getSupabase } from '../../lib/supabaseClient';
 import { InlineDeleteButton } from '../InlineDeleteButton';
 import { LineMessagePreview } from '../LineMessagePreview';
+import { useInboxRealtime } from '../../hooks/useInboxRealtime';
+import {
+  newestReceivedAt,
+  removeMessages,
+  replaceMessagesIfChanged,
+  sortByReceivedAtDesc,
+  upsertMessages,
+} from '../../utils/inboxSync';
 
 type InboxMessage={id:string;line_event_id:string;direction:'inbound'|'outbound';contact_id:string|null;line_user_id:string;body:string;status:string;received_at:string};
+// 画面表示に影響しうる項目。これらが変わらなければ一覧を再描画しない。
+const LINE_LIST_KEYS = ['body', 'status', 'direction', 'line_user_id'] as const satisfies readonly (keyof InboxMessage)[];
 type ReplyRule={id:string;name:string;match_mode:'exact'|'contains';match_text:string;reply_text:string;reply_type?:'text'|'image'|'flex'|'video';reply_payload?:Record<string,unknown>;tag_id:string|null;priority:number;enabled:boolean};
 type Tag={id:string;name:string};
 type ReplyTemplate={id:string;name:string;reply_type:'text'|'image'|'flex'|'video';payload:Record<string,unknown>};
@@ -80,7 +90,7 @@ export const MarketingLineInboxView: React.FC<MarketingLineInboxViewProps> = ({
     if(missing){setError('受信箱・自動返信用のDBマイグレーションが未適用です。supabase/migrations/20261019130000_line_inbox_autoreply.sql、20261020140000_line_auto_reply_rich_messages.sql、20261020150000_line_auto_reply_templates.sql を適用してください。');return}
     const failed=[m,r,t,i,templateResult].find(x=>x.error)?.error;
     if(failed){setError(failed.message);return}
-    setMessages((m.data||[]) as InboxMessage[]);
+    setMessages(prev=>replaceMessagesIfChanged(prev,(m.data||[]) as InboxMessage[],LINE_LIST_KEYS));
     setRules((r.data||[]) as ReplyRule[]);
     setTemplates((templateResult.data||[]) as ReplyTemplate[]);
     setTags((t.data||[]) as Tag[]);
@@ -94,13 +104,30 @@ export const MarketingLineInboxView: React.FC<MarketingLineInboxViewProps> = ({
     }
   };
 
-  const refreshMessagesOnly = async () => {
+  // 差分取得の起点（最新の受信日時）を求めるため、最新の一覧を ref でも保持
+  const messagesRef = useRef<InboxMessage[]>([]);
+  useEffect(() => {
+    messagesRef.current = messages;
+  }, [messages]);
+
+  // メッセージのみの同期。
+  //   full=false: 最新の受信日時より新しいものだけ取得（差分）
+  //   full=true : 最新500件を取得し直す（削除・ステータス変化も反映）
+  // 内容が変わらなければ画面は再描画しない。
+  const syncMessages = async (full: boolean) => {
     if (!db) return;
     try {
-      const m = await db.from('line_inbox_messages').select('*').order('received_at', { ascending: false }).limit(500);
-      if (m.data) {
-        setMessages(m.data as InboxMessage[]);
-      }
+      const since = full ? null : newestReceivedAt(messagesRef.current);
+      let query = db.from('line_inbox_messages').select('*');
+      if (since) query = query.gte('received_at', since);
+      const m = await query.order('received_at', { ascending: false }).limit(500);
+      if (!m.data) return;
+      const incoming = m.data as InboxMessage[];
+      setMessages((prev) =>
+        since
+          ? upsertMessages(prev, incoming, LINE_LIST_KEYS)
+          : replaceMessagesIfChanged(prev, sortByReceivedAtDesc(incoming), LINE_LIST_KEYS)
+      );
     } catch {
       // quiet
     }
@@ -108,41 +135,32 @@ export const MarketingLineInboxView: React.FC<MarketingLineInboxViewProps> = ({
 
   const chatBottomRef = useRef<HTMLDivElement>(null);
 
-  // リアルタイム購読 & 5秒定期ポーリング（手動更新不要でLINEチャットを自動受信）
   useEffect(() => {
     void load();
-    if (!db) return;
-
-    // 1. Supabase Realtime channel
-    const channel = db
-      .channel('line_inbox_realtime_sync')
-      .on(
-        'postgres_changes',
-        { event: '*', schema: 'public', table: 'line_inbox_messages' },
-        (payload) => {
-          if (payload.eventType === 'INSERT') {
-            const newMsg = payload.new as InboxMessage;
-            setMessages((prev) => {
-              if (prev.some((m) => m.id === newMsg.id)) return prev;
-              return [newMsg, ...prev];
-            });
-          } else {
-            void refreshMessagesOnly();
-          }
-        }
-      )
-      .subscribe();
-
-    // 2. 定期自動更新（5秒間隔）: WebSocket未接続時でも確実に自動反映
-    const interval = setInterval(() => {
-      void refreshMessagesOnly();
-    }, 5000);
-
-    return () => {
-      clearInterval(interval);
-      void db.removeChannel(channel);
-    };
   }, [db]);
+
+  // 自動更新: Supabase Realtime を主役にし、接続できないときだけ30秒間隔の差分ポーリングに切り替える。
+  // タブが非表示の間は止まり、表示に戻ったときに1回だけ同期する。
+  useInboxRealtime({
+    db,
+    channelName: 'line_inbox_realtime_sync',
+    table: 'line_inbox_messages',
+    onInsert: (row) => {
+      setMessages((prev) => upsertMessages(prev, [row as InboxMessage], LINE_LIST_KEYS));
+    },
+    onUpdate: (row) => {
+      setMessages((prev) => upsertMessages(prev, [row as InboxMessage], LINE_LIST_KEYS));
+    },
+    onDelete: (row) => {
+      const id = row?.id ? String(row.id) : '';
+      if (!id) {
+        void syncMessages(true);
+        return;
+      }
+      setMessages((prev) => removeMessages(prev, [id]));
+    },
+    onSync: syncMessages,
+  });
 
   // 新規メッセージまたは友だち選択時にチャット末尾へ自動スクロール
   useEffect(() => {
@@ -182,7 +200,10 @@ export const MarketingLineInboxView: React.FC<MarketingLineInboxViewProps> = ({
 
   const conversations=useMemo(()=>{
     const grouped=new Map<string,InboxMessage[]>();
-    messages.forEach(message=>grouped.set(message.line_user_id,[...(grouped.get(message.line_user_id)||[]),message]));
+    messages.forEach(message=>{
+      const list=grouped.get(message.line_user_id);
+      if(list)list.push(message);else grouped.set(message.line_user_id,[message]);
+    });
     return [...grouped.entries()].map(([lineUserId,items])=>({lineUserId,items:items.sort((a,b)=>Date.parse(a.received_at)-Date.parse(b.received_at))}))
       .sort((a,b)=>Date.parse(b.items[b.items.length-1]?.received_at||'')-Date.parse(a.items[a.items.length-1]?.received_at||''));
   },[messages]);

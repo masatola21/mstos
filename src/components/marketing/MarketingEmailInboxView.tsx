@@ -1,19 +1,49 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { Mail, Reply, Send, RefreshCw, Settings, Trash2, CheckCircle2, AlertTriangle, AlertCircle, Copy, ShieldCheck, Activity, Sparkles, Globe, HelpCircle, Info, X } from 'lucide-react';
 import { getSupabase, getAuthHeaders } from '../../lib/supabaseClient';
 import { useSendDrawer } from '../../context/SendDrawerContext';
+import { useInboxRealtime } from '../../hooks/useInboxRealtime';
+import {
+  newestReceivedAt,
+  removeMessages,
+  replaceMessagesIfChanged,
+  sortByReceivedAtDesc,
+  upsertMessages,
+} from '../../utils/inboxSync';
 
+// 一覧の状態は本文なし（軽量）。本文は text_body / html_body が入っているときだけ読み込み済み。
 type InboxMessage = {
   id: string;
   from_email: string;
   to_emails: string[];
   subject: string;
-  text_body: string;
-  html_body: string;
+  text_body?: string;
+  html_body?: string;
   received_at: string;
   backup_status?: 'sent' | 'failed' | 'skipped';
   backup_error?: string | null;
 };
+
+// 画面表示に影響しうる項目。これらが変わらなければ一覧を再描画しない。
+const EMAIL_LIST_KEYS = ['subject', 'from_email', 'backup_status', 'backup_error'] as const satisfies readonly (keyof InboxMessage)[];
+
+const hasBody = (m: InboxMessage) => m.text_body !== undefined || m.html_body !== undefined;
+const bodyTextOf = (m: InboxMessage) => m.text_body || (m.html_body || '').replace(/<[^>]*>/g, ' ');
+
+// 一覧には本文を持たせない（Realtime通知などで本文付きの行が届いても取り除く）
+function toLightMessage(row: any): InboxMessage {
+  const { text_body: _text, html_body: _html, ...rest } = row || {};
+  return rest as InboxMessage;
+}
+
+// 選択中メッセージに最新の一覧情報を反映する（本文は保持し、変化がなければ同じ参照を返す）
+function mergeSelected(prev: InboxMessage | null, incoming: readonly InboxMessage[]): InboxMessage | null {
+  if (!prev) return prev;
+  const fresh = incoming.find((m) => m.id === prev.id);
+  if (!fresh) return prev;
+  const unchanged = EMAIL_LIST_KEYS.every((key) => prev[key] === fresh[key]);
+  return unchanged ? prev : { ...prev, ...fresh };
+}
 
 // 送信元は「名前 <アドレス>」の形で届くことがあるため、名前とアドレスに分ける
 function parseSender(raw: string): { name: string; address: string } {
@@ -77,6 +107,14 @@ export const MarketingEmailInboxView: React.FC<MarketingEmailInboxViewProps> = (
   const [contactNames, setContactNames] = useState<Record<string, string>>({});
   const [checkedIds, setCheckedIds] = useState<string[]>([]);
   const [deleting, setDeleting] = useState(false);
+  // 選択したメールの本文を読み込み中／失敗したときの状態
+  const [bodyStatus, setBodyStatus] = useState<{ id: string; state: 'loading' | 'error' } | null>(null);
+
+  // 差分取得の起点にするため、最新の一覧を ref でも保持
+  const messagesRef = useRef<InboxMessage[]>([]);
+  useEffect(() => {
+    messagesRef.current = messages;
+  }, [messages]);
 
   // メール受信診断・MXレコード判定状態
   const [diagnostics, setDiagnostics] = useState<any | null>(null);
@@ -102,9 +140,49 @@ export const MarketingEmailInboxView: React.FC<MarketingEmailInboxViewProps> = (
     return { name: name && name.toLowerCase() !== parsed.address.toLowerCase() ? name : '', address: parsed.address };
   };
 
-  const handleReplySelected = () => {
+  // 1件ぶんの本文を取得する（一覧は軽量化のため本文を含まない）
+  const fetchMessageBody = async (id: string): Promise<{ text_body?: string; html_body?: string } | null> => {
+    try {
+      const headers = await getAuthHeaders();
+      const res = await fetch(`/api/inbox/email/messages/${encodeURIComponent(id)}`, { headers });
+      if (!res.ok) return null;
+      const data = await res.json();
+      if (!data?.success || !data.message) return null;
+      return {
+        text_body: data.message.text_body ?? '',
+        html_body: data.message.html_body ?? '',
+      };
+    } catch {
+      return null;
+    }
+  };
+
+  // メールを選択し、本文が未取得なら読み込む
+  const selectMessage = async (m: InboxMessage) => {
+    setSelected(m);
+    if (hasBody(m)) {
+      setBodyStatus(null);
+      return;
+    }
+    setBodyStatus({ id: m.id, state: 'loading' });
+    const detail = await fetchMessageBody(m.id);
+    if (detail) {
+      setSelected((prev) => (prev && prev.id === m.id ? { ...prev, ...detail } : prev));
+      setBodyStatus((prev) => (prev && prev.id === m.id ? null : prev));
+    } else {
+      setBodyStatus((prev) => (prev && prev.id === m.id ? { id: m.id, state: 'error' } : prev));
+    }
+  };
+
+  const handleReplySelected = async () => {
     if (!selected) return;
-    const cleanBody = selected.text_body || selected.html_body.replace(/<[^>]*>/g, ' ');
+    let target = selected;
+    if (!hasBody(target)) {
+      // 本文の読み込みが終わる前に返信が押された場合は、ここで取得してから引用する
+      const detail = await fetchMessageBody(target.id);
+      if (detail) target = { ...target, ...detail };
+    }
+    const cleanBody = bodyTextOf(target);
     const quote = `\n\n\n--- ${selected.from_email} からの引用メッセージ ---\n${cleanBody.trim()}`;
     const replySubject = selected.subject?.startsWith('Re:') ? selected.subject : `Re: ${selected.subject || ''}`;
     openSendDrawer({
@@ -132,14 +210,14 @@ export const MarketingEmailInboxView: React.FC<MarketingEmailInboxViewProps> = (
 
     try {
       const headers = await getAuthHeaders();
-      const res = await fetch('/api/inbox/email/messages', { headers });
+      const res = await fetch('/api/inbox/email/messages?light=1', { headers });
       if (res.ok) {
         const apiData = await res.json();
         if (apiData.success) {
           inAddress = apiData.inboundAddress || 'contact@mstcorp.info';
           fwdAddress = apiData.backupForwardAddress || 'mst.shikumikaizen@gmail.com';
           fwdEnabled = Boolean(apiData.backupForwardEnabled);
-          loadedMessages = (apiData.messages || []) as InboxMessage[];
+          loadedMessages = ((apiData.messages || []) as any[]).map(toLightMessage);
         }
       }
     } catch {}
@@ -148,7 +226,7 @@ export const MarketingEmailInboxView: React.FC<MarketingEmailInboxViewProps> = (
       try {
         const [settings, inbox] = await Promise.all([
           db.from('email_channel_integrations').select('inbound_address').eq('owner_id', auth.user.id).maybeSingle(),
-          db.from('email_inbox_messages').select('id, from_email, to_emails, subject, text_body, html_body, received_at').order('received_at', { ascending: false }).limit(500),
+          db.from('email_inbox_messages').select('id, from_email, to_emails, subject, received_at').order('received_at', { ascending: false }).limit(500),
         ]);
         inAddress = settings.data?.inbound_address || 'contact@mstcorp.info';
         loadedMessages = (inbox.data || []) as InboxMessage[];
@@ -183,14 +261,11 @@ export const MarketingEmailInboxView: React.FC<MarketingEmailInboxViewProps> = (
       localStorage.setItem('mst_email_backup_enabled', String(finalFwdEnabled));
     } catch {}
 
-    setMessages(loadedMessages);
+    setMessages((prev) => replaceMessagesIfChanged(prev, loadedMessages, EMAIL_LIST_KEYS));
     setCheckedIds([]);
 
-    // 選択中メッセージのステータス同期
-    if (selected) {
-      const refreshed = loadedMessages.find((m) => m.id === selected.id);
-      if (refreshed) setSelected(refreshed);
-    }
+    // 選択中メッセージのステータス同期（読み込み済みの本文は保持する）
+    setSelected((prev) => mergeSelected(prev, loadedMessages));
 
     // 送信者の名前を連絡先から引く
     const { data: contacts } = await db.from('contacts').select('full_name,email').not('email', 'is', null).limit(5000);
@@ -201,51 +276,61 @@ export const MarketingEmailInboxView: React.FC<MarketingEmailInboxViewProps> = (
     setContactNames(names);
   };
 
-  // メッセージのみの自動同期（入力中の設定を崩さずに新着メッセージを取得）
-  const refreshMessagesOnly = async () => {
+  // メッセージのみの同期（入力中の設定を崩さずに新着を取得）。
+  //   full=false: 最新の受信日時より新しいメールだけ取得（差分）
+  //   full=true : 一覧を全件取得し直す（削除や控え転送の状態変化も反映）
+  // どちらも本文は取得せず、内容が変わらなければ画面は再描画しない。
+  const syncMessages = async (full: boolean) => {
     try {
       const headers = await getAuthHeaders();
-      const res = await fetch('/api/inbox/email/messages', { headers });
-      if (res.ok) {
-        const apiData = await res.json();
-        if (apiData.success && Array.isArray(apiData.messages)) {
-          setMessages(apiData.messages as InboxMessage[]);
-          setSelected((prev) => {
-            if (!prev) return null;
-            return (apiData.messages as InboxMessage[]).find((m) => m.id === prev.id) || prev;
-          });
-        }
-      }
+      const params = new URLSearchParams({ light: '1', messagesOnly: '1' });
+      const since = full ? null : newestReceivedAt(messagesRef.current);
+      if (since) params.set('since', since);
+      const res = await fetch(`/api/inbox/email/messages?${params.toString()}`, { headers });
+      if (!res.ok) return;
+      const apiData = await res.json();
+      if (!apiData.success || !Array.isArray(apiData.messages)) return;
+
+      const incoming = (apiData.messages as any[]).map(toLightMessage);
+      setMessages((prev) =>
+        since
+          ? upsertMessages(prev, incoming, EMAIL_LIST_KEYS)
+          : replaceMessagesIfChanged(prev, sortByReceivedAtDesc(incoming), EMAIL_LIST_KEYS)
+      );
+      setSelected((prev) => mergeSelected(prev, incoming));
     } catch {}
   };
 
-  // リアルタイム購読 & 定期バックグラウンド自動同期
   useEffect(() => {
     void load();
-    if (!db) return;
-
-    // 1. Supabase Realtime channel
-    const channel = db
-      .channel('email_inbox_realtime_sync')
-      .on(
-        'postgres_changes',
-        { event: '*', schema: 'public', table: 'email_inbox_messages' },
-        () => {
-          void refreshMessagesOnly();
-        }
-      )
-      .subscribe();
-
-    // 2. 8秒ごとの定期バックグラウンド自動同期（WebSocket切断や制限環境でも確実に取得）
-    const timer = setInterval(() => {
-      void refreshMessagesOnly();
-    }, 8000);
-
-    return () => {
-      clearInterval(timer);
-      void db.removeChannel(channel);
-    };
   }, [db]);
+
+  // 自動更新: Supabase Realtime を主役にし、接続できないときだけ30秒間隔の差分ポーリングに切り替える。
+  // タブが非表示の間は止まり、表示に戻ったときに1回だけ同期する。
+  useInboxRealtime({
+    db,
+    channelName: 'email_inbox_realtime_sync',
+    table: 'email_inbox_messages',
+    onInsert: (row) => {
+      setMessages((prev) => upsertMessages(prev, [toLightMessage(row)], EMAIL_LIST_KEYS));
+    },
+    onUpdate: (row) => {
+      const updated = toLightMessage(row);
+      setMessages((prev) => upsertMessages(prev, [updated], EMAIL_LIST_KEYS));
+      setSelected((prev) => mergeSelected(prev, [updated]));
+    },
+    onDelete: (row) => {
+      const id = row?.id ? String(row.id) : '';
+      if (!id) {
+        void syncMessages(true);
+        return;
+      }
+      setMessages((prev) => removeMessages(prev, [id]));
+      setCheckedIds((prev) => (prev.includes(id) ? prev.filter((x) => x !== id) : prev));
+      setSelected((prev) => (prev && prev.id === id ? null : prev));
+    },
+    onSync: syncMessages,
+  });
 
   // 受信診断を実行
   const runDiagnostics = async () => {
@@ -293,7 +378,7 @@ export const MarketingEmailInboxView: React.FC<MarketingEmailInboxViewProps> = (
           : `（Gmail控え転送: ${data.forwardDecision?.reason || '無効'}）`)
       );
       setShowSimulateModal(false);
-      await refreshMessagesOnly();
+      await syncMessages(true);
     } catch (err: any) {
       setError(err?.message || 'テスト受信シミュレーション中にエラーが発生しました。');
     } finally {
@@ -614,7 +699,7 @@ export const MarketingEmailInboxView: React.FC<MarketingEmailInboxViewProps> = (
               type="button"
               onClick={() => {
                 if (selected) {
-                  handleReplySelected();
+                  void handleReplySelected();
                 } else {
                   openSendDrawer({ channel: 'email', kind: 'announcement' });
                 }
@@ -855,7 +940,7 @@ export const MarketingEmailInboxView: React.FC<MarketingEmailInboxViewProps> = (
                       setCheckedIds((prev) => (e.target.checked ? [...prev, m.id] : prev.filter((id) => id !== m.id)))
                     }
                   />
-                  <button onClick={() => setSelected(m)} className="block min-w-0 flex-1 text-left cursor-pointer">
+                  <button onClick={() => void selectMessage(m)} className="block min-w-0 flex-1 text-left cursor-pointer">
                     <div className="flex items-center justify-between gap-2">
                       <div className="truncate text-sm font-semibold text-slate-900">{m.subject || '(件名なし)'}</div>
                       {/* バックアップ転送バッジ */}
@@ -980,7 +1065,11 @@ export const MarketingEmailInboxView: React.FC<MarketingEmailInboxViewProps> = (
                 </div>
               </div>
               <pre className="mt-4 flex-1 whitespace-pre-wrap break-words font-sans text-sm leading-relaxed text-slate-800 bg-slate-50 p-4 rounded-xl border border-slate-200">
-                {selected.text_body || selected.html_body.replace(/<[^>]*>/g, ' ') || '(本文なし)'}
+                {!hasBody(selected) && bodyStatus?.id === selected.id && bodyStatus.state === 'loading'
+                  ? '本文を読み込み中...'
+                  : !hasBody(selected) && bodyStatus?.id === selected.id && bodyStatus.state === 'error'
+                    ? '本文を読み込めませんでした。もう一度メールを選択してください。'
+                    : bodyTextOf(selected) || '(本文なし)'}
               </pre>
             </>
           ) : (
