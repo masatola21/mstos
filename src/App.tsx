@@ -17,7 +17,6 @@ import { deleteTableRecord } from './services/dataService';
 import { Loader2 } from 'lucide-react';
 
 // AI President Views and Modals
-const DashboardView = React.lazy(() => import('./components/ai-president/DashboardView').then((m) => ({ default: m.DashboardView })));
 const ChatView = React.lazy(() => import('./components/ai-president/ChatView').then((m) => ({ default: m.ChatView })));
 const KnowledgeHubView = React.lazy(() => import('./components/ai-president/KnowledgeHubView').then((m) => ({ default: m.KnowledgeHubView })));
 const ProjectsView = React.lazy(() => import('./components/ai-president/ProjectsView').then((m) => ({ default: m.ProjectsView })));
@@ -2881,46 +2880,7 @@ function AppContent() {
         )}
 
         {/* ================= SECTION 3: AI PRESIDENT & STRATEGY ================= */}
-        {currentTab === 'ai_dashboard' && (
-          <DashboardView
-            topGoal={topGoal}
-            onUpdateTopGoal={handleUpdateTopGoal}
-            projects={projects}
-            tasks={tasks}
-            approvals={approvals}
-            activityLogs={activityLogs}
-            tokenUsageRecords={tokenUsageRecords}
-            pricingRates={pricingRates}
-            products={products}
-            contracts={contracts}
-            invoices={invoices}
-            onNavigateToTab={(tab) => setCurrentTab(tab as UnifiedNavTab)}
-            onNavigateTab={(tab) => {
-              if (tab === 'chat') setCurrentTab('ai_chat');
-              else if (tab === 'projects') setCurrentTab('ai_projects');
-              else if (tab === 'tasks') {
-                setSelectedTaskWorkspaceSection('tasks');
-                setCurrentTab('ai_tasks');
-              } else if (tab === 'approvals') {
-                setSelectedTaskWorkspaceSection('approvals');
-                setCurrentTab('ai_tasks');
-              }
-              else if (tab === 'presets') setCurrentTab('ai_presets');
-              else setCurrentTab(tab as any);
-            }}
-            onOpenPricingSettings={() => setIsPricingModalOpen(true)}
-            onResolveApproval={handleResolveApproval}
-            onDeleteApproval={handleDeleteApproval}
-            onUpdateTask={handleUpdateTask}
-            onStartGoalBreakdown={(goal) => {
-              setCurrentTab('ai_chat');
-              void handleSendMessage(
-                `次の経営目標を達成するためのプロジェクト概要と具体的タスク一覧（目的、優先度、完了条件、担当案）を計画立案してください：\n「${goal}」`,
-                'president'
-              );
-            }}
-          />
-        )}
+        
 
         {currentTab === 'ai_chat' && (
           <ChatView
