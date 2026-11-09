@@ -635,7 +635,13 @@ export const DiagnosisFormsWorkspace: React.FC<DiagnosisFormsWorkspaceProps> = (
     await load();
   };
 
-  const publicUrl = (form: DiagnosisForm) => window.location.origin + '/f/' + encodeURIComponent(form.public_slug);
+  const publicUrl = (form: DiagnosisForm) => {
+    if (form.public_slug === 'contact-inquiry') return 'https://corp.mstcorp.info/contact';
+    if (form.public_slug === 'business-diagnosis') return 'https://corp.mstcorp.info/diagnosis';
+    if (form.public_slug === 'material-download') return 'https://corp.mstcorp.info/materials';
+    if (form.public_slug === 'care-package-inquiry') return 'https://business.mstcorp.info/';
+    return window.location.origin + '/f/' + encodeURIComponent(form.public_slug);
+  };
   const copyUrl = async (form: DiagnosisForm) => {
     try {
       await navigator.clipboard.writeText(publicUrl(form));

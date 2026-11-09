@@ -2677,7 +2677,18 @@ function resolveMessageVars(
   if (contact?.id) queryParams.set('cid', String(contact.id));
   if (contact?.line_user_id) queryParams.set('luid', String(contact.line_user_id));
   const queryString = queryParams.toString() ? `?${queryParams.toString()}` : '';
-  const resolvedLinkUrl = appBaseUrl ? `${appBaseUrl}/f/${encodeURIComponent(formSlug)}${queryString}` : '';
+  let resolvedLinkUrl = '';
+  if (formSlug === 'business-diagnosis') {
+    resolvedLinkUrl = `https://corp.mstcorp.info/diagnosis${queryString}`;
+  } else if (formSlug === 'contact-inquiry') {
+    resolvedLinkUrl = `https://corp.mstcorp.info/contact${queryString}`;
+  } else if (formSlug === 'material-download') {
+    resolvedLinkUrl = `https://corp.mstcorp.info/materials${queryString}`;
+  } else if (formSlug === 'care-package-inquiry') {
+    resolvedLinkUrl = `https://business.mstcorp.info/${queryString}`;
+  } else {
+    resolvedLinkUrl = appBaseUrl ? `${appBaseUrl}/f/${encodeURIComponent(formSlug)}${queryString}` : '';
+  }
 
   const vars: Record<string, string> = {
     name: recipientName,
@@ -4750,9 +4761,17 @@ app.post(
       'company',
       'company_name',
       'service_interest',
+      'serviceInterest',
+      'message',
+      'notes',
+      'inquiry',
+      'consultation_message',
+      'q_message',
+      'content',
+      'details',
     ]);
     const allowedQuestionIds = new Set(questionIds);
-    if (configuredQuestions.length > 0 && Object.keys(answers).some((key) => !allowedQuestionIds.has(key) && !SYSTEM_META_ANSWER_KEYS.has(key))) {
+    if (form.form_type !== 'consultation' && configuredQuestions.length > 0 && Object.keys(answers).some((key) => !allowedQuestionIds.has(key) && !SYSTEM_META_ANSWER_KEYS.has(key))) {
       return res.status(400).json({ error: 'フォームの設問が更新されています。ページを再読み込みして再入力してください。' });
     }
     const cleanAnswers = configuredQuestions.length > 0

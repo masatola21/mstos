@@ -1,3 +1,11 @@
+function getPublicFormCanonicalUrl(slug: string, tracking: string = ''): string {
+  if (slug === 'contact-inquiry') return 'https://corp.mstcorp.info/contact' + tracking;
+  if (slug === 'business-diagnosis') return 'https://corp.mstcorp.info/diagnosis' + tracking;
+  if (slug === 'material-download') return 'https://corp.mstcorp.info/materials' + tracking;
+  if (slug === 'care-package-inquiry') return 'https://business.mstcorp.info/' + tracking;
+  return window.location.origin + '/f/' + encodeURIComponent(slug) + tracking;
+}
+
 import React, { useEffect, useState, useRef } from 'react';
 import { getSalesEmailTemplate, getNurturingStepTemplate } from '../utils/salesOutreachTemplates';
 import { Eye, Save, Send, Users, SendHorizonal, FileText, Library, Mail, MessageSquare, Paperclip, CheckCircle2, X, Inbox, ArrowLeft } from 'lucide-react';
@@ -311,7 +319,7 @@ export const CommunicationSendCenter: React.FC<Props> = ({
 
   const currentLinkUrl =
     (kind === 'form' || kind === 'diagnosis') && form
-      ? window.location.origin + '/f/' + encodeURIComponent(form.public_slug) + (contact ? `?cid=${encodeURIComponent(contact.id)}` + (contact.line_user_id ? `&luid=${encodeURIComponent(contact.line_user_id)}` : '') : '')
+      ? getPublicFormCanonicalUrl(form.public_slug, contact ? `?cid=${encodeURIComponent(contact.id)}` + (contact.line_user_id ? `&luid=${encodeURIComponent(contact.line_user_id)}` : '') : '')
       : kind === 'deal' || kind === 'customer_meeting'
       ? url.trim() || bookingUrl
       : url.trim();
@@ -449,7 +457,7 @@ export const CommunicationSendCenter: React.FC<Props> = ({
     const compName = c?.company_id ? companies[c.company_id] || '貴社' : '貴社';
     const compInd = c?.company_id ? companyIndustries[c.company_id] || '' : '';
     const diagForm = forms.find((f: any) => f.form_type === 'diagnosis') || forms[0];
-    const diagUrl = diagForm ? `${window.location.origin}/f/${encodeURIComponent(diagForm.public_slug)}${c ? `?cid=${encodeURIComponent(c.id)}` : ''}` : bookingUrl || url.trim();
+    const diagUrl = diagForm ? `${getPublicFormCanonicalUrl(diagForm.public_slug, c ? `?cid=${encodeURIComponent(c.id)}` : '')}` : bookingUrl || url.trim();
     const outreach = getSalesEmailTemplate(stepNum, compName, c?.full_name, compInd, diagUrl);
     setSubject(outreach.subject);
     setBody(outreach.body);
@@ -465,7 +473,7 @@ export const CommunicationSendCenter: React.FC<Props> = ({
   const applyNurturingStep = (stepNum: number, c = contact, ch = channel) => {
     const compName = c?.company_id ? companies[c.company_id] || '貴社' : '貴社';
     const diagForm = forms.find((f: any) => f.form_type === 'diagnosis') || forms[0];
-    const diagUrl = diagForm ? `${window.location.origin}/f/${encodeURIComponent(diagForm.public_slug)}${c ? `?cid=${encodeURIComponent(c.id)}` : ''}` : bookingUrl || url.trim();
+    const diagUrl = diagForm ? `${getPublicFormCanonicalUrl(diagForm.public_slug, c ? `?cid=${encodeURIComponent(c.id)}` : '')}` : bookingUrl || url.trim();
     const tpl = getNurturingStepTemplate(stepNum, c?.full_name || '様', compName, diagUrl);
     setSubject(tpl.emailSubject);
     setBody(ch === 'line' ? tpl.lineBody : tpl.emailBody);
@@ -481,7 +489,7 @@ export const CommunicationSendCenter: React.FC<Props> = ({
   useEffect(() => {
     if ((kind === 'form' || kind === 'diagnosis') && form) {
       const tracking = contact ? `?cid=${encodeURIComponent(contact.id)}` + (contact.line_user_id ? `&luid=${encodeURIComponent(contact.line_user_id)}` : '') : '';
-      setUrl(window.location.origin + '/f/' + encodeURIComponent(form.public_slug) + tracking);
+      setUrl(getPublicFormCanonicalUrl(form.public_slug, tracking));
     } else if (kind === 'document' && doc) {
       setUrl(window.location.origin + '/docs/' + encodeURIComponent(doc.id));
     }
@@ -917,7 +925,7 @@ export const CommunicationSendCenter: React.FC<Props> = ({
                   onChange={(e) => {
                     setFormId(e.target.value);
                     const f = forms.find((x: any) => x.id === e.target.value);
-                    if (f) setUrl(window.location.origin + '/f/' + encodeURIComponent(f.public_slug));
+                    if (f) setUrl(getPublicFormCanonicalUrl(f.public_slug));
                   }}
                   className="mt-1 block w-full rounded-xl border border-slate-200 bg-slate-50 p-2.5 text-xs text-slate-900 focus:bg-white focus:border-purple-600 focus:outline-none shadow-2xs"
                 >

@@ -3229,6 +3229,23 @@ export default function App() {
   if (publicFormMatch) {
     let slug = publicFormMatch[1];
     try { slug = decodeURIComponent(slug); } catch { /* Keep the raw path segment for the server's validation. */ }
+    const search = window.location.search || '';
+    if (slug === 'contact-inquiry') {
+      window.location.replace('https://corp.mstcorp.info/contact' + search);
+      return null;
+    }
+    if (slug === 'business-diagnosis') {
+      window.location.replace('https://corp.mstcorp.info/diagnosis' + search);
+      return null;
+    }
+    if (slug === 'material-download') {
+      window.location.replace('https://corp.mstcorp.info/materials' + search);
+      return null;
+    }
+    if (slug === 'care-package-inquiry') {
+      window.location.replace('https://business.mstcorp.info/' + search);
+      return null;
+    }
     return <PublicIntakeForm slug={slug} />;
   }
 
