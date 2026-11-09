@@ -111,6 +111,7 @@ export async function fetchGoogleCalendarFromIcal(icalUrl: string): Promise<{
   success: boolean;
   calendarName: string;
   events: GoogleSyncedEvent[];
+  syncedTimeRexCount?: number;
   error?: string;
 }> {
   try {
@@ -145,6 +146,7 @@ export async function fetchGoogleCalendarFromIcal(icalUrl: string): Promise<{
       success: true,
       calendarName,
       events,
+      syncedTimeRexCount: Number(data.syncedTimeRexCount || 0),
     };
   } catch (err: any) {
     return {
@@ -153,6 +155,33 @@ export async function fetchGoogleCalendarFromIcal(icalUrl: string): Promise<{
       events: [],
       error: err.message || '通信エラーによりカレンダーを取得できませんでした。',
     };
+  }
+}
+
+export async function syncTimeRexFromInboxHistory(): Promise<{
+  success: boolean;
+  syncedCount: number;
+  detectedTimeRexEmails: number;
+  error?: string;
+}> {
+  try {
+    const authHeaders = await getAuthHeaders();
+    const res = await fetch('/api/timerex/sync-inbox-history', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        ...authHeaders,
+      },
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) return { success: false, syncedCount: 0, detectedTimeRexEmails: 0, error: data.error };
+    return {
+      success: true,
+      syncedCount: data.syncedCount || 0,
+      detectedTimeRexEmails: data.detectedTimeRexEmails || 0,
+    };
+  } catch (err: any) {
+    return { success: false, syncedCount: 0, detectedTimeRexEmails: 0, error: err?.message };
   }
 }
 

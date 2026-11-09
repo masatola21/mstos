@@ -189,6 +189,7 @@ export const IntegratedCalendarWorkspace: React.FC<Props> = ({
         if (res.success) {
           setGoogleEvents(res.events);
           setGoogleSyncInfo(getGoogleCalendarSyncInfo());
+          if (res.syncedTimeRexCount && res.syncedTimeRexCount > 0) void fetchData();
         }
       })();
     }
@@ -211,7 +212,7 @@ export const IntegratedCalendarWorkspace: React.FC<Props> = ({
         setGoogleSyncInfo(getGoogleCalendarSyncInfo());
         setSyncStatusMsg({
           type: 'success',
-          text: `同期成功: ${res.calendarName} から ${res.events.length} 件の予定を反映しました！`,
+          text: `同期成功: ${res.calendarName} から ${res.events.length} 件の予定を反映しました！${res.syncedTimeRexCount && res.syncedTimeRexCount > 0 ? `（TimeRex面談 ${res.syncedTimeRexCount} 件をリード・商談パイプラインへ自動反映）` : ''}`,
         });
       } else {
         setSyncStatusMsg({

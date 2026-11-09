@@ -9,6 +9,7 @@ import { createHmac, timingSafeEqual, createHash } from 'node:crypto';
 import fs from 'node:fs';
 import { createClient } from '@supabase/supabase-js';
 import { parseIcalendar } from './server/icalParser.js';
+import { isTimeRexEmail, parseTimeRexEmail, parseTimeRexCalendarEvent, syncTimeRexBookingToCrm } from './server/timerexSyncService.js';
 import { calculateBillingAmount, determineContractMonthlyFee, isContractAlreadyBilled } from './src/utils/billingUtils.js';
 import { calculateExponentialBackoff, shouldSkipAutomationDelivery, checkSendTimeWindow, type SendTimeWindowCheck } from './src/utils/automationRuleUtils.js';
 
@@ -2560,6 +2561,25 @@ app.post('/api/email/webhook', express.raw({ type: 'application/json', limit: '2
             backup_error: fwdErr?.message || 'バックアップ転送処理中にエラーが発生しました',
           })
           .eq('id', savedMessageId);
+      }
+    }
+
+    // TimeRex 予約通知メールの自動検知とリード・商談パイプライン自動同期 (Pattern A)
+    if (isNew) {
+      try {
+        const rawFrom = String(message.from || event.data.from || '');
+        const rawSubj = String(message.subject || event.data.subject || '');
+        const rawBody = String(message.text || '');
+        if (isTimeRexEmail(rawFrom, rawSubj, rawBody)) {
+          const booking = parseTimeRexEmail(rawSubj, rawBody, String(message.html || ''));
+          if (booking) {
+            console.log('[ResendWebhook] TimeRex booking notification detected:', booking.guestName, booking.meetingDate);
+            const syncResult = await syncTimeRexBookingToCrm(booking, lineSupabase, integration.owner_id);
+            console.log('[ResendWebhook] TimeRex sync completed:', syncResult);
+          }
+        }
+      } catch (timerexErr: any) {
+        console.warn('[ResendWebhook] TimeRex auto-sync warning:', timerexErr?.message || timerexErr);
       }
     }
   }
@@ -8189,10 +8209,25 @@ app.post('/api/calendar/fetch-ical', async (req, res) => {
 
     const { calendarName, events } = parseIcalendar(icsText);
 
+    // TimeRex カレンダー予定の自動検知とリード・商談自動同期 (Pattern A)
+    let syncedTimeRexCount = 0;
+    try {
+      for (const ev of events) {
+        const booking = parseTimeRexCalendarEvent(ev);
+        if (booking) {
+          const res = await syncTimeRexBookingToCrm(booking, lineSupabase, authData.user.id);
+          if (res.success) syncedTimeRexCount++;
+        }
+      }
+    } catch (calSyncErr) {
+      console.warn('[fetch-ical] TimeRex calendar sync warning:', calSyncErr);
+    }
+
     return res.json({
       success: true,
       calendarName,
       count: events.length,
+      syncedTimeRexCount,
       events,
     });
   } catch (err: any) {
@@ -8201,6 +8236,89 @@ app.post('/api/calendar/fetch-ical', async (req, res) => {
       return res.status(504).json({ error: 'カレンダーの読み込みがタイムアウトしました。通信環境をご確認ください。' });
     }
     return res.status(500).json({ error: err.message || 'カレンダー予定の同期に失敗しました。' });
+  }
+});
+
+// TimeRex 過去受信メールの一括スキャン・同期エンドポイント
+app.post('/api/timerex/sync-inbox-history', requireAuth, async (req, res) => {
+  if (!lineSupabase) return res.status(503).json({ error: 'DB接続が設定されていません。' });
+  const user = (req as any).user;
+
+  try {
+    const { data: messages, error: msgError } = await lineSupabase
+      .from('email_inbox_messages')
+      .select('id, from_email, subject, text_body, html_body, received_at')
+      .or(`owner_id.eq.${user.id},owner_id.is.null`)
+      .order('received_at', { ascending: false })
+      .limit(200);
+
+    if (msgError) throw msgError;
+
+    let detectedCount = 0;
+    let syncedCount = 0;
+    const syncedList: any[] = [];
+
+    for (const msg of (messages || [])) {
+      if (isTimeRexEmail(msg.from_email || '', msg.subject || '', msg.text_body || '')) {
+        detectedCount++;
+        const booking = parseTimeRexEmail(msg.subject || '', msg.text_body || '', msg.html_body || '');
+        if (booking) {
+          const syncRes = await syncTimeRexBookingToCrm(booking, lineSupabase, user.id);
+          if (syncRes.success) {
+            syncedCount++;
+            syncedList.push({
+              guestName: booking.guestName,
+              meetingDate: booking.meetingDate,
+              action: syncRes.action,
+              leadId: syncRes.leadId,
+              dealId: syncRes.dealId,
+            });
+          }
+        }
+      }
+    }
+
+    return res.json({
+      success: true,
+      scannedMessages: messages?.length || 0,
+      detectedTimeRexEmails: detectedCount,
+      syncedCount,
+      syncedBookings: syncedList,
+    });
+  } catch (err: any) {
+    console.error('[TimeRexInboxSync] Exception:', err);
+    return res.status(500).json({ error: err?.message || 'TimeRex受信メールの同期処理に失敗しました。' });
+  }
+});
+
+// TimeRex Webhook 受信エンドポイント (任意・外部Webhook連携用)
+app.post('/api/timerex/webhook', async (req, res) => {
+  if (!lineSupabase) return res.status(503).json({ error: 'DB接続が設定されていません。' });
+  try {
+    const payload = req.body || {};
+    const booking: any = {
+      guestName: payload.guest_name || payload.name || payload.guestName || '予約ゲスト',
+      guestEmail: (payload.guest_email || payload.email || payload.guestEmail || '').trim().toLowerCase(),
+      meetingDate: payload.meeting_date || payload.date || payload.start_time?.slice(0, 10),
+      meetingStartTime: payload.start_time ? payload.start_time.slice(11, 16) : payload.startTime,
+      meetingEndTime: payload.end_time ? payload.end_time.slice(11, 16) : payload.endTime,
+      companyName: payload.company_name || payload.companyName,
+      meetUrl: payload.meet_url || payload.meeting_url || payload.meetUrl,
+      eventName: payload.event_name || payload.eventName || 'TimeRex面談',
+      memo: payload.memo || payload.comment,
+      sourceType: 'webhook',
+    };
+
+    if (!booking.guestEmail || !booking.meetingDate) {
+      return res.status(400).json({ error: 'guestEmail and meetingDate are required.' });
+    }
+
+    const sysOwnerId = await resolveSystemOwnerId();
+    const result = await syncTimeRexBookingToCrm(booking, lineSupabase, sysOwnerId);
+    return res.json({ success: true, result });
+  } catch (err: any) {
+    console.error('[TimeRexWebhook] Exception:', err);
+    return res.status(500).json({ error: err?.message || 'Webhook同期に失敗しました。' });
   }
 });
 
