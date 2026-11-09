@@ -290,29 +290,60 @@ export default function MaterialForm() {
         </div>
       )}
 
-      {/* お届けする資料セット（2点一括送付・チェック不要） */}
+      {/* ご希望の資料選択（選択可能・一括選択可） */}
       <div className="p-4 bg-brand-50/60 rounded-2xl border border-brand-200/80 space-y-3">
-        <div className="flex items-center gap-2">
-          <span className="text-[11px] font-bold text-brand-800 bg-brand-100 px-2.5 py-0.5 rounded-full border border-brand-300">
-            一括送付
-          </span>
-          <span className="text-xs font-bold text-slate-800">お届けする実務資料セット（2点まとめてダウンロード可能）</span>
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+          <div className="flex items-center gap-2">
+            <span className="text-[11px] font-bold text-brand-800 bg-brand-100 px-2.5 py-0.5 rounded-full border border-brand-300">
+              資料選択
+            </span>
+            <span className="text-xs font-bold text-slate-800">
+              ご希望の資料を選択してください（複数選択可） <span className="text-rose-500">*</span>
+            </span>
+          </div>
+          <button
+            type="button"
+            onClick={selectAll}
+            className="text-[11px] text-brand-700 hover:text-brand-900 font-bold underline text-left cursor-pointer"
+          >
+            全資料を一括選択する
+          </button>
         </div>
 
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
-          {availableMaterials.map((mat) => (
-            <div key={mat.key} className="p-3.5 bg-white rounded-xl border border-sand-300 shadow-xs space-y-1">
-              <div className="text-xs font-bold text-slate-900 flex items-start gap-1.5">
-                <span className="text-emerald-600 font-black shrink-0">✓</span>
-                <span>{mat.label}</span>
-              </div>
-              {mat.description && (
-                <div className="text-[11px] text-gray-500 font-light leading-snug pl-4">
-                  {mat.description}
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          {availableMaterials.map((mat) => {
+            const isSelected = selectedKeys.includes(mat.key);
+            return (
+              <label
+                key={mat.key}
+                onClick={() => toggleMaterial(mat.key)}
+                className={`p-4 rounded-xl border transition-all cursor-pointer block select-none ${
+                  isSelected
+                    ? 'bg-white border-brand-600 shadow-md ring-2 ring-brand-500/20'
+                    : 'bg-sand-50/70 border-sand-300 hover:border-sand-400 opacity-75'
+                }`}
+              >
+                <div className="flex items-start gap-3">
+                  <input
+                    type="checkbox"
+                    checked={isSelected}
+                    onChange={() => {}} // handled by parent onClick
+                    className="mt-0.5 h-4 w-4 rounded text-brand-600 focus:ring-brand-500 border-sand-300 cursor-pointer"
+                  />
+                  <div className="space-y-1">
+                    <div className="text-xs font-bold text-slate-900 leading-snug">
+                      {mat.label}
+                    </div>
+                    {mat.description && (
+                      <div className="text-[11px] text-gray-500 font-light leading-relaxed">
+                        {mat.description}
+                      </div>
+                    )}
+                  </div>
                 </div>
-              )}
-            </div>
-          ))}
+              </label>
+            );
+          })}
         </div>
       </div>
 

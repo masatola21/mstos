@@ -2,12 +2,19 @@ import React, { useState, useEffect } from 'react';
 import { submitIntakeToCRM, OFFICIAL_TIMEREX_BOOKING_URL } from '../lib/supabase';
 
 const SERVICE_MAP: Record<string, string> = {
-  strategy: '経営戦略・業務効率化設計・伴走顧問',
-  'it-dx': '業務自動化・IT・DX・AI活用',
-  system: 'システム構築・社内ツール・導線実装',
-  marketing: '集客導線・成約Web基盤・LINE連携',
-  'new-business': '新規事業立ち上げ・収益化支援',
-  'care-package': '介護保険外サービス開業パッケージ',
+  strategy: '経営全体・利益改善について',
+  '01': '経営全体・利益改善について',
+  management: '経営全体・利益改善について',
+  'it-dx': '業務効率化・IT/自動化について',
+  system: '業務効率化・IT/自動化について',
+  '02': '業務効率化・IT/自動化について',
+  '03': '業務効率化・IT/自動化について',
+  automation: '業務効率化・IT/自動化について',
+  marketing: '集客・マーケティングについて',
+  '04': '集客・マーケティングについて',
+  'new-business': '介護保険外サービス開業パッケージについて',
+  'care-package': '介護保険外サービス開業パッケージについて',
+  '05': '介護保険外サービス開業パッケージについて',
 };
 
 export default function ContactForm() {
@@ -16,7 +23,7 @@ export default function ContactForm() {
     name: '',
     email: '',
     phone: '',
-    service_interest: '経営戦略・業務効率化設計・伴走顧問',
+    service_interest: '経営全体・利益改善について',
     message: '',
     hear_about: '',
   });
@@ -187,13 +194,10 @@ export default function ContactForm() {
           onChange={(e) => setFormData({ ...formData, service_interest: e.target.value })}
           className="w-full px-4 py-3 rounded-xl border border-sand-300 focus:border-brand-600 focus:ring-2 focus:ring-brand-100 text-sm bg-sand-50/50 outline-none transition"
         >
-          <option value="経営戦略・業務効率化設計・伴走顧問">経営戦略・業務効率化設計・伴走顧問</option>
-          <option value="業務自動化・IT・DX・AI活用">業務自動化・IT・DX・AI活用</option>
-          <option value="システム構築・社内ツール・導線実装">システム構築・社内ツール・導線実装</option>
-          <option value="集客導線・成約Web基盤・LINE連携">集客導線・成約Web基盤・LINE連携</option>
-          <option value="新規事業立ち上げ・収益化支援">新規事業立ち上げ・収益化支援</option>
-          <option value="介護保険外サービス開業パッケージ">介護保険外サービス開業パッケージ</option>
-          <option value="まずは全体的な相談・ヒアリング希望">まずは全体的な相談・ヒアリング希望</option>
+          <option value="経営全体・利益改善について">経営全体・利益改善について</option>
+          <option value="業務効率化・IT/自動化について">業務効率化・IT/自動化について</option>
+          <option value="集客・マーケティングについて">集客・マーケティングについて</option>
+          <option value="介護保険外サービス開業パッケージについて">介護保険外サービス開業パッケージについて</option>
         </select>
       </div>
 

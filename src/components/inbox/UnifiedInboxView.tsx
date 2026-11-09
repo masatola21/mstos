@@ -135,7 +135,19 @@ export const UnifiedInboxView: React.FC<UnifiedInboxViewProps> = ({
 
       const lineList = (lineRes.data || []) as { id: string; direction: string }[];
       const lineInbound = lineList.filter((m) => m.direction === 'inbound').length;
-      const emailTotal = emailRes.count || 0;
+      let emailTotal = emailRes.count || 0;
+      if (!emailTotal) {
+        try {
+          const authHeaders = await getAuthHeaders();
+          const emailApiRes = await fetch('/api/inbox/email/messages', { headers: authHeaders });
+          if (emailApiRes.ok) {
+            const emailData = await emailApiRes.json();
+            if (Array.isArray(emailData.messages)) {
+              emailTotal = emailData.messages.length;
+            }
+          }
+        } catch {}
+      }
 
       const subList = (subRes.data || []) as { id: string; status: string }[];
       const formsReceived = subList.filter((s) => s.status === 'received').length;

@@ -2982,7 +2982,18 @@ function resolveMessageVars(
   if (contact?.id) queryParams.set('cid', String(contact.id));
   if (contact?.line_user_id) queryParams.set('luid', String(contact.line_user_id));
   const queryString = queryParams.toString() ? `?${queryParams.toString()}` : '';
-  const resolvedLinkUrl = appBaseUrl ? `${appBaseUrl}/f/${encodeURIComponent(formSlug)}${queryString}` : '';
+  let resolvedLinkUrl = '';
+  if (formSlug === 'business-diagnosis') {
+    resolvedLinkUrl = `https://corp.mstcorp.info/diagnosis${queryString}`;
+  } else if (formSlug === 'contact-inquiry') {
+    resolvedLinkUrl = `https://corp.mstcorp.info/contact${queryString}`;
+  } else if (formSlug === 'material-download') {
+    resolvedLinkUrl = `https://corp.mstcorp.info/materials${queryString}`;
+  } else if (formSlug === 'care-package-inquiry') {
+    resolvedLinkUrl = `https://business.mstcorp.info/${queryString}`;
+  } else {
+    resolvedLinkUrl = appBaseUrl ? `${appBaseUrl}/f/${encodeURIComponent(formSlug)}${queryString}` : '';
+  }
 
   const vars: Record<string, string> = {
     name: recipientName,
@@ -5055,9 +5066,19 @@ app.post(
       'company',
       'company_name',
       'service_interest',
+      'serviceInterest',
+      'message',
+      'notes',
+      'inquiry',
+      'consultation_message',
+      'q_message',
+      'content',
+      'details',
+      'preferred_date',
+      'preferred_time',
     ]);
     const allowedQuestionIds = new Set(questionIds);
-    if (configuredQuestions.length > 0 && Object.keys(answers).some((key) => !allowedQuestionIds.has(key) && !SYSTEM_META_ANSWER_KEYS.has(key))) {
+    if (form.form_type !== 'consultation' && configuredQuestions.length > 0 && Object.keys(answers).some((key) => !allowedQuestionIds.has(key) && !SYSTEM_META_ANSWER_KEYS.has(key))) {
       return res.status(400).json({ error: 'フォームの設問が更新されています。ページを再読み込みして再入力してください。' });
     }
     const cleanAnswers = configuredQuestions.length > 0
@@ -6262,130 +6283,1976 @@ app.post('/api/inbox/email/delete', requireAuth, async (req, res) => {
   }
 });
 
-// 2-8-6: 受信メール控え転送の失敗分再送エンドポイント
-app.post('/api/email/inbox/:id/retry-backup', requireAuth, async (req, res) => {
-  if (!lineSupabase) return res.status(503).json({ error: 'DB接続が設定されていません。' });
-  const user = (req as any).user;
-  const messageId = String(req.params.id || '').trim();
-  if (!messageId) return res.status(400).json({ error: 'メッセージIDが指定されていません。' });
-
-  try {
-    const { data: msg, error: msgError } = await lineSupabase
-      .from('email_inbox_messages')
-      .select('*')
-      .eq('id', messageId)
-      .eq('owner_id', user.id)
-      .maybeSingle();
-
-    if (msgError) throw msgError;
-    if (!msg) return res.status(404).json({ error: '対象の受信メールが見つかりません。' });
-
-    const { data: integ, error: integError } = await lineSupabase
-      .from('email_channel_integrations')
-      .select('backup_forward_address, backup_forward_enabled')
-      .eq('owner_id', user.id)
-      .maybeSingle();
-
-    if (integError) throw integError;
-    const forwardAddress = integ?.backup_forward_address?.trim();
-    if (!forwardAddress) {
-      return res.status(400).json({ error: 'バックアップ転送先メールアドレスが設定されていません。' });
+==========================================
+  // 1. メール実機テスト送信 (常にログイン中の管理者宛て)
+  // ==========================================
+  if (targetChannel === 'email') {
+    const adminEmail = typeof authUser.email === 'string' ? authUser.email.trim() : '';
+    if (!adminEmail) {
+      return res.status(400).json({ error: 'ログイン中アカウントにメールアドレスが存在しません。' });
     }
 
-    const result = await executeEmailBackupForward({
-      ownerId: user.id,
-      messageId: msg.id,
-      fromEmail: msg.from_email,
-      toEmails: Array.isArray(msg.to_emails) ? msg.to_emails : [msg.to_emails].filter(Boolean),
-      subject: msg.subject || '',
-      textBody: msg.text_body,
-      htmlBody: msg.html_body,
-      receivedAt: msg.received_at,
-      backupForwardAddress: forwardAddress,
-    });
-
-    if (!result.success) {
-      return res.status(500).json({ error: result.error || '控え転送の再送に失敗しました。' });
+    const emailKey = process.env.RESEND_API_KEY || '';
+    const configuredFrom = process.env.RESEND_FROM_EMAIL || '';
+    if (!emailKey || !configuredFrom) {
+      return res.status(503).json({ error: 'メール送信サービスが未設定です。RESEND_API_KEY と RESEND_FROM_EMAIL を設定してください。' });
     }
 
-    return res.json({ success: true, resendMessageId: result.resendMessageId });
-  } catch (err: any) {
-    console.error('[RetryBackup] Failed to retry backup forward:', err);
-    return res.status(500).json({ error: err?.message || '控え転送の再送処理中にエラーが発生しました。' });
+    try {
+      const { data: sendSettings } = await lineSupabase.from('email_send_settings')
+        .select('sender_name,sender_email,reply_to_email').eq('owner_id', authUser.id).maybeSingle();
+
+      const configuredAddress = configuredFrom.match(/<([^<>]+)>/)?.[1] || configuredFrom.trim();
+      const fromEmail = String(sendSettings?.sender_email || configuredAddress).trim();
+      const replyTo = typeof sendSettings?.reply_to_email === 'string' ? sendSettings.reply_to_email.trim() : '';
+      const fromName = String(sendSettings?.sender_name || '有限会社MST｜経営・業務改善支援').trim();
+      const emailFrom = `${fromName.replace(/"/g, '')} <${fromEmail}>`;
+
+      // 差し込み変数の解決
+      const [salesSettingsRes, pubFormsRes, docRes] = await Promise.all([
+        lineSupabase.from('sales_workspace_settings').select('booking_page_url').eq('owner_id', authUser.id).maybeSingle(),
+        lineSupabase.from('diagnosis_forms').select('id,name,public_slug,definition,form_type,status').eq('status', 'published').limit(10),
+        lineSupabase.from('customer_documents').select('id,title,status').eq('owner_id', authUser.id).eq('status', 'approved').limit(1).maybeSingle(),
+      ]);
+
+      const salesSettings = salesSettingsRes.data;
+      const pubForms = pubFormsRes.data || [];
+      const defaultForm = pubForms.find((f: any) => f.form_type === 'diagnosis') || pubForms[0] || null;
+      const latestApprovedDoc = docRes.data;
+      const appUrl = (process.env.PUBLIC_APP_URL || '').replace(/\/$/, '');
+
+      const sampleContact = {
+        id: 'admin-test-contact',
+        full_name: authUser.user_metadata?.full_name || '管理者テスト受信者',
+        email: adminEmail,
+      };
+
+      const resolved = resolveMessageVars(
+        sampleContact,
+        {
+          body_text: scenarioConfig.emailBody || scenarioConfig.messageBody,
+          config: scenarioConfig,
+        },
+        {
+          salesSettings,
+          defaultForm,
+          allForms: pubForms,
+          latestApprovedDoc,
+          company: { company_name: 'MSTテスト環境' },
+          appUrl,
+        }
+      );
+
+      const emailSubject = `[管理者テスト送信] ` + resolved.personalize(scenarioConfig.emailSubject || 'ステップ配信テスト');
+      const resolvedBody = resolved.personalize(scenarioConfig.emailBody || scenarioConfig.messageBody || '');
+      const emailBodyText = `【※ 管理者向け実機テスト送信】\n宛先: ${adminEmail}\n差出人: ${emailFrom}\n--------------------------------------------------\n\n${resolvedBody}\n\n--------------------------------------------------\n※ 特定電子メール法 配信停止リンク確認:\n配信停止: ${appUrl || 'https://mstcorp.info'}/unsubscribe?demo=admin_preview`;
+
+      const response = await fetch('https://api.resend.com/emails', {
+        method: 'POST',
+        headers: { Authorization: 'Bearer ' + emailKey, 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          from: emailFrom,
+          to: [adminEmail],
+          subject: emailSubject,
+          text: emailBodyText,
+          ...(replyTo ? { reply_to: replyTo } : {}),
+        }),
+      });
+
+      const payload = await response.json().catch(() => ({})) as { id?: string; message?: string };
+      if (!response.ok || !payload.id) {
+        throw new Error(payload.message || 'メール配信サービスが送信を拒否しました。');
+      }
+
+      try {
+        await lineSupabase.from('communication_outbox').insert({
+          owner_id: authUser.id,
+          channel: 'email',
+          recipient_address: adminEmail,
+          subject: emailSubject,
+          body_text: emailBodyText,
+          source_type: 'marketing_test_send',
+          status: 'sent',
+          sent_at: new Date().toISOString(),
+          consent_confirmed_at: new Date().toISOString(),
+          consent_basis: '管理者による実機テスト送信',
+        });
+      } catch (_) {}
+
+      return res.json({
+        success: true,
+        channel: 'email',
+        message: `管理者メールアドレス（${adminEmail}）宛てにテストメールを送信しました。受信トレイをご確認ください。`,
+        recipient: {
+          email: adminEmail,
+          providerMessageId: payload.id,
+        },
+      });
+    } catch (err: any) {
+      return res.status(500).json({ error: err.message || 'メールテスト送信中にエラーが発生しました。' });
+    }
   }
-});
 
-// 2-8-6: 受信メール控え転送のテスト送信エンドポイント
-app.post('/api/email/test-backup-forward', requireAuth, async (req, res) => {
-  if (!lineSupabase) return res.status(503).json({ error: 'DB接続が設定されていません。' });
-  const user = (req as any).user;
-  const emailKey = process.env.RESEND_API_KEY || '';
-  if (!emailKey) return res.status(503).json({ error: 'RESEND_API_KEY が未設定です。' });
+  // ==========================================
+  // 2. LINE実機テスト送信 (LINE友だち宛て)
+  // ==========================================
+  if (!lineChannelAccessToken) {
+    return res.status(503).json({ error: 'LINE公式アカウント送信トークン（LINE_CHANNEL_ACCESS_TOKEN）が設定されていません。' });
+  }
+
+  const lineUserId = typeof req.body?.line_user_id === 'string' ? req.body.line_user_id.trim() : '';
+  if (!lineUserId) {
+    return res.status(400).json({ error: '宛先のLINEユーザーID（line_user_id）が必要です。' });
+  }
+
+  // 宛先友だちの確認: line_friends に存在することを確認（存在しない、または非アクティブなら403）
+  const { data: friend, error: friendError } = await lineSupabase
+    .from('line_friends')
+    .select('*')
+    .eq('line_user_id', lineUserId)
+    .maybeSingle();
+
+  if (friendError || !friend) {
+    return res.status(403).json({ error: '指定された宛先は友だち一覧に存在しないため送信できません（アクセス権限がありません）。' });
+  }
+  if (friend.status !== 'active') {
+    return res.status(403).json({ error: '指定されたLINE友だちはブロック中または非アクティブのため送信できません。' });
+  }
+
+  // 宛先友だちに対応する連絡先情報を取得（差し込み解決用）
+  let contact: any = null;
+  if (friend.contact_id) {
+    const { data: c } = await lineSupabase
+      .from('contacts')
+      .select('id,full_name,email,line_user_id,company_id')
+      .eq('id', friend.contact_id)
+      .maybeSingle();
+    contact = c;
+  }
+  if (!contact) {
+    const { data: c } = await lineSupabase
+      .from('contacts')
+      .select('id,full_name,email,line_user_id,company_id')
+      .eq('line_user_id', friend.line_user_id)
+      .maybeSingle();
+    contact = c;
+  }
+  if (!contact) {
+    contact = {
+      id: friend.id,
+      full_name: friend.display_name || 'テスト受信者',
+      email: null,
+      line_user_id: friend.line_user_id,
+      company_id: null,
+    };
+  }
 
   try {
-    let targetAddress = typeof req.body?.backup_forward_address === 'string'
-      ? req.body.backup_forward_address.trim().toLowerCase()
-      : '';
+    // 差し込み変数の解決に必要な設定を収集
+    const companyResult = contact.company_id
+      ? await lineSupabase.from('companies').select('id,company_name').eq('id', contact.company_id).maybeSingle()
+      : { data: null };
 
-    if (!targetAddress) {
-      const { data: integ } = await lineSupabase
-        .from('email_channel_integrations')
-        .select('backup_forward_address')
-        .eq('owner_id', user.id)
+    const { data: salesSettings } = await lineSupabase.from('sales_workspace_settings')
+      .select('booking_page_url').eq('owner_id', authUser.id).maybeSingle();
+
+    const { data: pubForms } = await lineSupabase.from('diagnosis_forms')
+      .select('id,name,public_slug,definition,form_type,status')
+      .eq('status', 'published')
+      .order('created_at', { ascending: false })
+      .limit(10);
+    const defaultForm = (pubForms || []).find((f: any) => f.form_type === 'diagnosis') || pubForms?.[0] || null;
+
+    let latestApprovedDoc: any = null;
+    if (contact.company_id) {
+      const { data: docData } = await lineSupabase.from('customer_documents')
+        .select('id,title,status,created_at')
+        .eq('company_id', contact.company_id)
+        .eq('status', 'approved')
+        .order('created_at', { ascending: false })
+        .limit(1)
         .maybeSingle();
-      targetAddress = integ?.backup_forward_address?.trim().toLowerCase() || '';
+      latestApprovedDoc = docData;
+    }
+    if (!latestApprovedDoc) {
+      const { data: fallbackDoc } = await lineSupabase.from('customer_documents')
+        .select('id,title,status,created_at')
+        .eq('owner_id', authUser.id)
+        .eq('status', 'approved')
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .maybeSingle();
+      latestApprovedDoc = fallbackDoc;
     }
 
-    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-    if (!targetAddress || !emailRegex.test(targetAddress)) {
-      return res.status(400).json({ error: '有効なバックアップ転送先メールアドレスを指定してください。' });
+    const appUrl = (process.env.PUBLIC_APP_URL || '').replace(/\/$/, '');
+
+    // 本番と共通の差し込み解決関数を実行
+    const resolved = resolveMessageVars(
+      contact,
+      {
+        body_text: scenarioData.messageBody,
+        line_message_payload: scenarioData.line_message_payload,
+        config: scenarioConfig,
+      },
+      {
+        salesSettings,
+        defaultForm,
+        allForms: pubForms,
+        latestApprovedDoc,
+        company: companyResult.data,
+        appUrl,
+      }
+    );
+
+    if (resolved.error) {
+      return res.status(400).json({ error: resolved.error });
     }
 
-    const sender = await resolveEmailSender(user.id);
-    const dateStr = new Date().toLocaleString('ja-JP', { timeZone: 'Asia/Tokyo' });
-    const testBody = [
-      '【受信メール控え・テスト送信】',
-      `転送先アドレス: ${targetAddress}`,
-      `送信日時: ${dateStr}`,
-      '--------------------------------------------------',
-      '',
-      'これは受信メールバックアップ転送（Gmail等への自動コピー）の動作確認テストメールです。',
-      '',
-      'OSの受信トレイにメールが保存された際、このアドレスへ「【控え】+ 元の件名」で自動コピーが転送されます。',
-      'コピーされたメールに「返信」すると、元の差出人（reply_to）宛てに返信されます。',
-      '',
-      '--------------------------------------------------',
-      '有限会社MST｜経営・業務改善支援',
-      'https://corp.mstcorp.info',
-    ].join('\n');
+    const { personalize, personalizeJson } = resolved;
 
-    const response = await fetch('https://api.resend.com/emails', {
+    // 本番と共通のロジックでメッセージ構築とバリデーション
+    let lineMessage: Record<string, any>;
+    const requestedPayload = scenarioData.line_message_payload && typeof scenarioData.line_message_payload === 'object'
+      ? scenarioData.line_message_payload
+      : null;
+
+    if (requestedPayload?.type === 'video' || requestedPayload?.type === 'image') {
+      const originalUrl = personalize(String(requestedPayload.originalContentUrl || ''));
+      const previewUrl = personalize(String(requestedPayload.previewImageUrl || ''));
+      if (!/^https:\/\//i.test(originalUrl) || !/^https:\/\//i.test(previewUrl) || originalUrl.length > 2000 || previewUrl.length > 2000) {
+        return res.status(400).json({ error: 'LINE画像・動画URLの設定が不正です（HTTPS必須）。' });
+      }
+      const unres = checkUnresolvedPlaceholders([originalUrl, previewUrl]);
+      if (unres) {
+        return res.status(400).json({ error: `未解決の差し込み項目「${unres}」が残っているため送信できません。` });
+      }
+      lineMessage = requestedPayload.type === 'video'
+        ? { type: 'video', originalContentUrl: originalUrl, previewImageUrl: previewUrl }
+        : { type: 'image', originalContentUrl: originalUrl, previewImageUrl: previewUrl };
+    } else if (requestedPayload?.type === 'flex') {
+      const altText = personalize(requestedPayload.altText || scenarioConfig.flexAltText || scenarioConfig.flexTitle || 'ご案内').slice(0, 400);
+      const contents = personalizeJson(requestedPayload.contents);
+      if (!altText || !contents || typeof contents !== 'object' || !['bubble', 'carousel'].includes(contents.type)) {
+        return res.status(400).json({ error: 'LINE Flexテンプレートの内容を確認してください。' });
+      }
+      const urlValidation = checkUrlsInObject(contents);
+      if (!urlValidation.valid) {
+        return res.status(400).json({ error: `Flexメッセージ内のURLが無効です（http/https必須）: ${urlValidation.invalidUrl}` });
+      }
+      const unres = checkUnresolvedPlaceholders({ altText, contents });
+      if (unres) {
+        return res.status(400).json({ error: `未解決の差し込み項目「${unres}」が残っているため送信できません。` });
+      }
+      lineMessage = { type: 'flex', altText, contents };
+    } else if (scenarioConfig.lineMessageType === 'flex') {
+      const altText = personalize(scenarioConfig.flexAltText || scenarioConfig.flexTitle || 'ご案内').slice(0, 400);
+      const title = personalize(scenarioConfig.flexTitle || '');
+      const body = personalize(scenarioConfig.flexBody || scenarioConfig.messageBody || '');
+      const btnLabel = personalize(scenarioConfig.flexButtonLabel || '');
+      const btnUrl = personalize(scenarioConfig.flexButtonUrl || '');
+      const bubble = buildFlexBubblePayload(title, body, btnLabel, btnUrl);
+
+      const urlValidation = checkUrlsInObject(bubble);
+      if (!urlValidation.valid) {
+        return res.status(400).json({ error: `Flexメッセージ内のURLが無効です（http/https必須）: ${urlValidation.invalidUrl}` });
+      }
+
+      const unres = checkUnresolvedPlaceholders({ altText, bubble });
+      if (unres) {
+        return res.status(400).json({ error: `未解決の差し込み項目「${unres}」が残っているため送信できません。` });
+      }
+
+      lineMessage = { type: 'flex', altText, contents: bubble };
+    } else {
+      const text = personalize(scenarioConfig.messageBody || '');
+      if (!text || text.length > 5000) {
+        return res.status(400).json({ error: 'LINE本文は1〜5000文字で設定してください。' });
+      }
+      const unres = checkUnresolvedPlaceholders(text);
+      if (unres) {
+        return res.status(400).json({ error: `未解決の差し込み項目「${unres}」が残っているため送信できません。` });
+      }
+      lineMessage = { type: 'text', text };
+    }
+
+    // LINE Messaging API Push 送信（宛先1人のみ）
+    const lineResponse = await fetch('https://api.line.me/v2/bot/message/push', {
       method: 'POST',
       headers: {
-        Authorization: `Bearer ${emailKey}`,
+        Authorization: 'Bearer ' + lineChannelAccessToken,
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({
-        from: sender.fromString,
-        to: [targetAddress],
-        subject: '【控え・テスト送信】受信メールバックアップ転送の動作確認',
-        text: testBody,
-        reply_to: sender.replyToEmail || sender.senderEmail,
-        headers: {
-          'X-MST-Backup-Copy': '1',
-        },
+        to: lineUserId,
+        messages: [lineMessage],
       }),
     });
 
-    const result = await response.json().catch(() => ({})) as { id?: string; message?: string };
-    if (!response.ok || !result.id) {
-      return res.status(500).json({ error: result.message || 'テストメールの送信に失敗しました。' });
+    if (!lineResponse.ok) {
+      const lineErrorText = await lineResponse.text().catch(() => '');
+      let lineJson: any = null;
+      try { lineJson = JSON.parse(lineErrorText); } catch {}
+      return res.status(lineResponse.status).json({
+        error: lineJson?.message || lineErrorText || 'LINE送信に失敗しました。',
+        lineStatus: lineResponse.status,
+        lineDetails: lineJson || lineErrorText,
+      });
     }
 
-    return res.json({ success: true, resendMessageId: result.id });
+    // 送信監査用ログ（communication_outbox）
+    try {
+      await lineSupabase.from('communication_outbox').insert({
+        owner_id: authUser.id,
+        channel: 'line',
+        recipient_contact_id: contact.id,
+        recipient_address: lineUserId,
+        body_text: scenarioConfig.messageBody || '',
+        line_message_payload: lineMessage,
+        company_id: contact.company_id || null,
+        source_type: 'marketing_test_send',
+        status: 'sent',
+        sent_at: new Date().toISOString(),
+        consent_confirmed_at: new Date().toISOString(),
+        consent_basis: '管理者による実機テスト送信',
+      });
+    } catch {
+      // 監査ログ登録失敗はレスポンスに影響させない
+    }
+
+    return res.json({
+      success: true,
+      message: `LINEテスト送信が完了しました（宛先: ${friend.display_name || lineUserId}）。`,
+      recipient: {
+        line_user_id: lineUserId,
+        display_name: friend.display_name,
+      },
+    });
   } catch (err: any) {
-    console.error('[TestBackupForward] Failed to send test forward:', err);
-    return res.status(500).json({ error: err?.message || 'テスト送信中にエラーが発生しました。' });
+    return res.status(500).json({ error: err.message || 'テスト送信処理中に予期しないエラーが発生しました。' });
+  }
+});
+
+app.post('/api/communications/send', async (req, res) => {
+  if (!lineSupabase) return res.status(503).json({ error: '送信サーバーのSupabase設定がありません。' });
+
+  // キルスイッチ確認（all または send が停止中なら送信を拒否）
+  const killSwitch = await getKillSwitchStatus('send');
+  if (killSwitch.paused) {
+    return res.status(503).json({ error: `自動配信・メッセージ送信は緊急停止中です: ${killSwitch.reason || '一時停止中'}` });
+  }
+
+  const authorization = req.header('authorization') || '';
+  const token = authorization.startsWith('Bearer ') ? authorization.slice(7) : '';
+  if (!token) return res.status(401).json({ error: '認証が必要です。' });
+  const { data: authData, error: authError } = await lineSupabase.auth.getUser(token);
+  if (authError || !authData.user) return res.status(401).json({ error: 'ログイン状態を確認できません。' });
+  const outboxId = typeof req.body?.outboxId === 'string' ? req.body.outboxId : '';
+  if (!isPublicUuid(outboxId)) return res.status(400).json({ error: '送信記録を確認できません。' });
+  const { data: row, error: rowError } = await lineSupabase.from('communication_outbox').select('*')
+    .eq('id', outboxId).eq('owner_id', authData.user.id).maybeSingle();
+  if (rowError || !row) return res.status(404).json({ error: '送信記録が見つかりません。' });
+  if (row.status !== 'queued') return res.status(409).json({ error: 'この送信記録は送信可能な状態ではありません。' });
+  const { data: claimed, error: claimError } = await lineSupabase.from('communication_outbox')
+    .update({ status: 'sending', updated_at: new Date().toISOString() }).eq('id', outboxId).eq('owner_id', authData.user.id).eq('status', 'queued').select('id').maybeSingle();
+  if (claimError || !claimed) return res.status(409).json({ error: '送信処理がすでに開始されています。' });
+  try {
+    if (!row.recipient_contact_id || !row.recipient_address || !row.consent_confirmed_at || !row.consent_basis) {
+      throw new Error('送信先または送信根拠が不足しています。');
+    }
+    const { data: contact, error: contactError } = await lineSupabase.from('contacts')
+      .select('id,email,line_user_id,company_id,email_consent_status').eq('id', row.recipient_contact_id).maybeSingle();
+    if (contactError || !contact) throw new Error('連絡先が見つかりません。');
+    if (row.company_id && contact.company_id !== row.company_id) throw new Error('会社と送信先の関連が一致しません。');
+    if (row.channel === 'email' && contact.email_consent_status === 'opted_out' && !isTransactionalOutboxEmail(row)) {
+      const reason = '配信停止済みのため送信できません。';
+      const { error: cancelError } = await lineSupabase.from('communication_outbox').update({
+        status: 'canceled', error_message: reason, updated_at: new Date().toISOString(),
+      }).eq('id', outboxId).eq('owner_id', authData.user.id);
+      if (cancelError) throw cancelError;
+      return res.status(409).json({ status: 'canceled', error: reason });
+    }
+    let providerMessageId = '';
+    if (row.channel === 'email') {
+      const emailKey = process.env.RESEND_API_KEY || '';
+      const configuredFrom = process.env.RESEND_FROM_EMAIL || '';
+      if (!emailKey || !configuredFrom) throw new Error('メール送信サービスが未設定です。RESEND_API_KEY と RESEND_FROM_EMAIL を設定してください。');
+      if (!contact.email || contact.email.toLowerCase() !== String(row.recipient_address).toLowerCase()) throw new Error('送信先メールアドレスが連絡先と一致しません。');
+      const { data: sendSettings, error: sendSettingsError } = await lineSupabase.from('email_send_settings')
+        .select('sender_name,sender_email,reply_to_email').eq('owner_id', authData.user.id).maybeSingle();
+      if (sendSettingsError) throw new Error('メール送信設定を読み込めません。メール送信設定のマイグレーション適用を確認してください。');
+      
+      const configuredAddress = configuredFrom.match(/<([^<>]+)>/)?.[1] || configuredFrom.trim();
+      const configuredDomain = configuredAddress.split('@').pop()?.toLowerCase() || '';
+      const emailPattern = /^[^\s<>@]+@[^\s<>@]+\.[^\s<>@]+$/;
+      const fromEmail = String(sendSettings?.sender_email || 'contact@mstcorp.info').trim();
+      const replyTo = typeof sendSettings?.reply_to_email === 'string' ? sendSettings.reply_to_email.trim() : 'mst.shikumikaizen@gmail.com';
+      const fromName = String(sendSettings?.sender_name || '有限会社MST｜経営・業務改善支援').trim();
+      if (!fromName || fromName.length > 100 || /[\r\n<>]/.test(fromName)) throw new Error('差出人名の設定が不正です。');
+      if (!emailPattern.test(fromEmail) || !configuredDomain || fromEmail.split('@').pop()?.toLowerCase() !== configuredDomain) throw new Error('差出人アドレスにはRESEND_FROM_EMAILと同じ認証済みドメインを指定してください。');
+      if (replyTo && !emailPattern.test(replyTo)) throw new Error('返信先メールアドレスの設定が不正です。');
+      const emailFrom = `${fromName.replace(/"/g, '')} <${fromEmail}>`;
+      const isTransactional = isTransactionalOutboxEmail(row);
+      const unsubscribeUrl = isTransactional ? '' : createEmailUnsubscribeUrl(contact.id);
+      const emailText = String(row.body_text || '') + (unsubscribeUrl ? `\n\n配信停止はこちら: ${unsubscribeUrl}` : '');
+      const response = await fetch('https://api.resend.com/emails', {
+        method: 'POST', headers: { Authorization: 'Bearer ' + emailKey, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ from: emailFrom, to: [contact.email], subject: row.subject || '', text: emailText, ...(unsubscribeUrl ? { headers: { 'List-Unsubscribe': `<${unsubscribeUrl}>`, 'List-Unsubscribe-Post': 'List-Unsubscribe=One-Click' } } : {}), ...(replyTo ? { reply_to: replyTo } : {}) }),
+      });
+      const payload = await response.json().catch(() => ({})) as { id?: string; message?: string };
+      if (!response.ok || !payload.id) throw new Error(payload.message || 'メール配信サービスが送信を拒否しました。');
+      providerMessageId = payload.id;
+    } else if (row.channel === 'line') {
+      if (!lineChannelAccessToken) throw new Error('LINE送信トークンが未設定です。');
+      if (!contact.line_user_id || contact.line_user_id !== row.recipient_address) throw new Error('LINE送信先が連絡先と一致しません。');
+      const { data: friend, error: friendError } = await lineSupabase.from('line_friends').select('status,consent_status').eq('line_user_id', contact.line_user_id).maybeSingle();
+      if (friendError || !friend || friend.status !== 'active' || friend.consent_status !== 'opted_in') throw new Error('有効なLINE友だち状態と配信同意を確認できません。');
+      if (String(row.body_text || '').length > 5000) throw new Error('LINEメッセージは5000文字以内にしてください。');
+      let lineMessage: Record<string, any>;
+      const requestedPayload = row.line_message_payload && typeof row.line_message_payload === 'object'
+        ? row.line_message_payload as { type?: unknown; originalContentUrl?: unknown; previewImageUrl?: unknown; altText?: unknown; contents?: unknown }
+        : null;
+      const isHttpsUrl = (value: string) => { try { return new URL(value).protocol === 'https:'; } catch { return false; } };
+      if (requestedPayload?.type === 'video' || requestedPayload?.type === 'image') {
+        const originalContentUrl = typeof requestedPayload.originalContentUrl === 'string' ? requestedPayload.originalContentUrl : '';
+        const previewImageUrl = typeof requestedPayload.previewImageUrl === 'string' ? requestedPayload.previewImageUrl : '';
+        if (originalContentUrl.length > 2000 || previewImageUrl.length > 2000 || !isHttpsUrl(originalContentUrl) || !isHttpsUrl(previewImageUrl)) {
+          throw new Error('LINE画像・動画には2000文字以内の公開HTTPS URLが必要です。');
+        }
+        lineMessage = requestedPayload.type === 'video'
+          ? { type: 'video', originalContentUrl, previewImageUrl }
+          : { type: 'image', originalContentUrl, previewImageUrl };
+      } else if (requestedPayload?.type === 'flex') {
+        const altText = typeof requestedPayload.altText === 'string' ? requestedPayload.altText.trim().slice(0, 400) : '';
+        const contents = requestedPayload.contents;
+        if (!altText || !contents || typeof contents !== 'object' || !['bubble', 'carousel'].includes((contents as { type?: string }).type || '')) {
+          throw new Error('LINE Flexメッセージの内容を確認してください。');
+        }
+        lineMessage = { type: 'flex', altText, contents };
+      } else {
+        if (String(row.body_text || '').length > 5000) throw new Error('LINEメッセージは5000文字以内にしてください。');
+        lineMessage = { type: 'text', text: row.body_text || '' };
+      }
+      const response = await fetch('https://api.line.me/v2/bot/message/push', {
+        method: 'POST', headers: { Authorization: 'Bearer ' + lineChannelAccessToken, 'Content-Type': 'application/json', 'X-Line-Retry-Key': outboxId },
+        body: JSON.stringify({ to: contact.line_user_id, messages: [lineMessage] }),
+      });
+      if (!response.ok) {
+        const detail = await response.text().catch(() => '');
+        throw new Error(detail || 'LINE配信サービスが送信を拒否しました。');
+      }
+      providerMessageId = outboxId;
+    } else {
+      throw new Error('未対応の送信方法です。');
+    }
+    const sentAt = new Date().toISOString();
+    const { error: updateError } = await lineSupabase.from('communication_outbox').update({
+      status: 'sent', sent_at: sentAt, provider_message_id: providerMessageId, error_message: null, updated_at: sentAt,
+    }).eq('id', outboxId).eq('owner_id', authData.user.id);
+    if (updateError) throw updateError;
+    return res.json({ status: 'sent', providerMessageId });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : '送信に失敗しました。';
+    await lineSupabase.from('communication_outbox').update({
+      status: 'failed', error_message: message.slice(0, 1000), updated_at: new Date().toISOString(),
+    }).eq('id', outboxId).eq('owner_id', authData.user.id);
+    return res.status(502).json({ status: 'failed', error: message });
+  }
+});
+
+
+
+const publicFormRateLimits = new Map<string, { count: number; resetAt: number }>();
+const publicFormSourceLabels: Record<string, string> = {
+  diagnosis: '診断フォーム',
+  consultation: '相談申込フォーム',
+  meeting: '面談申込フォーム',
+};
+
+function normalizePublicCompanyName(value: unknown): string {
+  return String(value || '')
+    .normalize('NFKC')
+    .trim()
+    .replace(/株式会社|有限会社|合同会社|\(株\)|\(有\)/g, '')
+    .toLowerCase()
+    .replace(/\s+/g, '');
+}
+const validPublicFormTypes = new Set(['diagnosis', 'consultation', 'meeting']);
+
+function isPublicUuid(value: unknown): value is string {
+  return typeof value === 'string' && /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value);
+}
+
+function publicFormRateLimited(ip: string): boolean {
+  const now = Date.now();
+  const current = publicFormRateLimits.get(ip);
+  if (!current || current.resetAt <= now) {
+    publicFormRateLimits.set(ip, { count: 1, resetAt: now + 60_000 });
+    if (publicFormRateLimits.size > 5_000) {
+      for (const [key, value] of publicFormRateLimits) if (value.resetAt <= now) publicFormRateLimits.delete(key);
+    }
+    return false;
+  }
+  current.count += 1;
+  return current.count > 10;
+}
+
+app.get(['/api/public/forms/:slug', '/public/forms/:slug'], async (req, res) => {
+  if (!lineSupabase) return res.status(503).json({ error: 'フォーム受付サーバーが設定されていません。' });
+  const slug = String(req.params.slug || '');
+  if (!/^[a-z0-9ぁ-んァ-ヶ一-龠-]{1,120}$/i.test(slug)) return res.status(404).json({ error: 'フォームが見つかりません。' });
+  try {
+    const { data: form, error } = await lineSupabase
+      .from('diagnosis_forms')
+      .select('name, form_type, definition, privacy_notice')
+      .eq('public_slug', slug)
+      .eq('status', 'published')
+      .maybeSingle();
+    if (error) throw error;
+    if (!form || !validPublicFormTypes.has(form.form_type)) return res.status(404).json({ error: 'このフォームは公開されていないか、受付を終了しています。' });
+    const def = form.definition && typeof form.definition === 'object' ? form.definition : {};
+    let bookingPageUrl = typeof (def as any).booking_url === 'string' ? (def as any).booking_url.trim() : '';
+    if (!bookingPageUrl) {
+      const { data: salesSettings } = await lineSupabase
+        .from('sales_workspace_settings')
+        .select('booking_page_url')
+        .maybeSingle();
+      bookingPageUrl = salesSettings?.booking_page_url || '';
+    }
+
+    let initialRequestType: string | null = null;
+    let tokenContactId: string | null = null;
+    let tokenLineUserId: string | null = null;
+    const rawToken = typeof req.query.t === 'string' ? req.query.t.trim() : typeof req.query.token === 'string' ? req.query.token.trim() : '';
+    if (rawToken) {
+      const verified = verifyCarePackageFormToken(rawToken);
+      if (verified) {
+        initialRequestType = verified.rt || null;
+        tokenContactId = verified.cid || null;
+        tokenLineUserId = verified.luid || null;
+      }
+    }
+
+    return res.json({
+      form: {
+        name: form.name,
+        formType: form.form_type,
+        definition: def,
+        privacyNotice: form.privacy_notice || '',
+        bookingPageUrl,
+      },
+      initialRequestType,
+      tokenContactId,
+      tokenLineUserId,
+    });
+  } catch (error) {
+    console.error('Public form lookup failed:', error instanceof Error ? error.message : 'unknown error');
+    return res.status(500).json({ error: 'フォームを読み込めませんでした。' });
+  }
+});
+
+// ラウンド2-2: 公式配布資料（PDF）の公開API（HP自動連動・CORS対応）
+app.options('/api/public/materials', (req, res) => {
+  res.setHeader('Access-Control-Allow-Origin', '*');
+  res.setHeader('Access-Control-Allow-Methods', 'GET, OPTIONS');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Accept');
+  return res.sendStatus(204);
+});
+
+app.get('/api/public/materials', async (req, res) => {
+  res.setHeader('Access-Control-Allow-Origin', '*');
+  res.setHeader('Access-Control-Allow-Methods', 'GET, OPTIONS');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Accept');
+
+  try {
+    if (lineSupabase) {
+      const { data, error } = await lineSupabase
+        .from('public_materials')
+        .select('key, label, description, public_url, category, sort_order')
+        .eq('is_active', true)
+        .order('sort_order', { ascending: true });
+
+      if (!error && data && data.length > 0) {
+        return res.json({
+          success: true,
+          materials: data.map((item) => ({
+            key: item.key,
+            label: item.label,
+            description: item.description || '',
+            category: item.category || '経営実務',
+            url: item.public_url,
+            sort_order: item.sort_order,
+          })),
+        });
+      }
+    }
+
+    // DB未初期化時の安全なフォールバック（公式HPの初期2資料）
+    return res.json({
+      success: true,
+      materials: [
+        {
+          key: 'management-guide',
+          label: '経営改善実務ガイドブック（要点解説スライド）',
+          description: '中小企業が「手作業の山」「属人化」から脱却し、利益を残すための仕組み化実践論。',
+          category: '経営実務・仕組み化',
+          url: 'https://corp.mstcorp.info/materials/mst-management-guide.pdf',
+          sort_order: 10,
+        },
+        {
+          key: 'care-package-overview',
+          label: '介護保険外サービス開業パッケージ概要資料',
+          description: '介護事業所・法人が保険外の自費収益柱（月30万〜100万円超）を最短で立ち上げるための実務手順。',
+          category: '開業パッケージ',
+          url: 'https://corp.mstcorp.info/materials/care-package-proposal.pdf',
+          sort_order: 20,
+        },
+      ],
+    });
+  } catch (err) {
+    console.error('Public materials lookup failed:', err);
+    return res.status(500).json({ error: '資料一覧を取得できませんでした。' });
+  }
+});
+
+app.post(
+  ['/api/public/forms/:slug/submissions', '/public/forms/:slug/submissions'],
+  express.json({ limit: '50kb' }),
+  async (req, res) => {
+  if (!lineSupabase) return res.status(503).json({ error: 'フォーム受付サーバーが設定されていません。' });
+  const ip = req.ip || req.socket.remoteAddress || 'unknown';
+  if (publicFormRateLimited(ip)) return res.status(429).json({ error: '送信回数が上限に達しました。少し時間をおいて再度お試しください。' });
+
+  const slug = String(req.params.slug || '');
+  const body = req.body && typeof req.body === 'object' && !Array.isArray(req.body) ? req.body : {};
+  const serializedBody = JSON.stringify(body);
+  if (serializedBody.length > 50_000) return res.status(413).json({ error: '入力内容が大きすぎます。' });
+  if (!/^[a-z0-9ぁ-んァ-ヶ一-龠-]{1,120}$/i.test(slug)) return res.status(404).json({ error: 'フォームが見つかりません。' });
+
+  const name = typeof body.name === 'string' ? body.name.trim().slice(0, 120) : '';
+  const answers = body.answers && typeof body.answers === 'object' && !Array.isArray(body.answers) ? body.answers as Record<string, unknown> : {};
+  if (Object.values(answers).some((value) => 
+        typeof value !== 'string' && 
+        typeof value !== 'boolean' && 
+        !(Array.isArray(value) && value.every((v) => typeof v === 'string' && v.length < 200))
+      ) ||
+      Object.values(answers).some((value) => typeof value === 'string' && value.length > 4_000)) {
+    return res.status(400).json({ error: '回答内容を確認してください。' });
+  }
+
+  const rawCompanyFromAnswers =
+    (typeof answers.companyName === 'string' && answers.companyName.trim()) ||
+    (typeof answers.company === 'string' && answers.company.trim()) ||
+    (typeof answers.company_name === 'string' && answers.company_name.trim()) ||
+    (typeof answers.organization === 'string' && answers.organization.trim()) ||
+    (typeof answers.target_company === 'string' && answers.target_company.trim()) ||
+    (typeof answers.q_company === 'string' && answers.q_company.trim()) ||
+    '';
+  const companyName = typeof body.companyName === 'string' && body.companyName.trim()
+    ? body.companyName.trim().slice(0, 200)
+    : rawCompanyFromAnswers.slice(0, 200);
+  const email = typeof body.email === 'string' ? body.email.trim().toLowerCase().slice(0, 254) : '';
+  const phone = typeof body.phone === 'string' ? body.phone.trim().slice(0, 40) : '';
+  let lineUserId = typeof body.lineUserId === 'string' && /^U[0-9a-zA-Z]{10,64}$/.test(body.lineUserId.trim()) ? body.lineUserId.trim() : '';
+  const queryLuid = typeof req.query?.luid === 'string' ? (req.query.luid as string).trim() : typeof req.query?.line_user_id === 'string' ? (req.query.line_user_id as string).trim() : '';
+  if (!lineUserId && queryLuid && /^U[0-9a-zA-Z]{10,64}$/.test(queryLuid)) {
+    lineUserId = queryLuid;
+  }
+  let contactId = typeof body.contactId === 'string' && isPublicUuid(body.contactId.trim()) ? body.contactId.trim() : '';
+  const rawToken = typeof body.token === 'string' ? body.token.trim() : '';
+  let tokenData: CarePackageFormTokenPayload | null = null;
+  if (rawToken) {
+    tokenData = verifyCarePackageFormToken(rawToken);
+    if (tokenData) {
+      if (!contactId && tokenData.cid && isPublicUuid(tokenData.cid)) {
+        contactId = tokenData.cid;
+      }
+      if (!lineUserId && tokenData.luid && /^U[0-9a-zA-Z]{10,64}$/.test(tokenData.luid)) {
+        lineUserId = tokenData.luid;
+      }
+    }
+  }
+  const requestId = body.requestId;
+  if (!name || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email) || !isPublicUuid(requestId) || body.privacyAgreed !== true) {
+    return res.status(400).json({ error: 'お名前・有効なメールアドレス・個人情報の同意をご確認ください。' });
+  }
+  const userNotes = typeof body.notes === 'string' ? body.notes.trim().slice(0, 4_000) : '';
+  const utmInput = body.utm && typeof body.utm === 'object' && !Array.isArray(body.utm) ? body.utm as Record<string, unknown> : {};
+  const utm: Record<string, string> = {};
+  for (const key of ['source', 'utm_source', 'utm_medium', 'utm_campaign', 'inquiryType', 'referrer', 'landing_page', 'page_url']) {
+    const value = utmInput[key];
+    if (typeof value === 'string' && value.trim()) utm[key] = value.trim().slice(0, 300);
+  }
+
+  try {
+    let { data: form, error: formError } = await lineSupabase
+      .from('diagnosis_forms')
+      .select('id, name, form_type, definition, status')
+      .eq('public_slug', slug)
+      .eq('status', 'published')
+      .maybeSingle();
+    if (formError) throw formError;
+
+    // 標準HPフォーム（contact-inquiry, material-download, business-diagnosis等）が未作成の場合は自動初期化して再試行
+    if (!form && ['care-package-inquiry', 'contact-inquiry', 'material-download', 'business-diagnosis'].includes(slug)) {
+      await ensureStandardPublicForms();
+      const retryRes = await lineSupabase
+        .from('diagnosis_forms')
+        .select('id, name, form_type, definition, status')
+        .eq('public_slug', slug)
+        .eq('status', 'published')
+        .maybeSingle();
+      form = retryRes.data;
+    }
+
+    if (!form || !validPublicFormTypes.has(form.form_type)) return res.status(404).json({ error: 'このフォームは公開されていないか、受付を終了しています。' });
+
+    const { data: priorSubmission, error: priorError } = await lineSupabase
+      .from('diagnosis_submissions')
+      .select('id, lead_id')
+      .eq('idempotency_key', requestId)
+      .maybeSingle();
+    if (priorError) throw priorError;
+    if (priorSubmission) {
+      let diagnosisId: string | null = null;
+      if (form.form_type === 'diagnosis' || slug === 'business-diagnosis' || form.name.includes('診断')) {
+        const { data, error } = await lineSupabase.rpc('create_diagnosis_from_form_submission', { p_submission_id: priorSubmission.id });
+        if (error) console.error('Diagnosis handoff retry failed:', error.message);
+        else diagnosisId = data || null;
+      }
+      return res.json({ success: true, duplicate: true, leadId: priorSubmission.lead_id, diagnosisId });
+    }
+
+    const definition = form.definition && typeof form.definition === 'object' ? form.definition as Record<string, unknown> : {};
+    const configuredQuestions = Array.isArray(definition.questions) ? definition.questions : [];
+    const questionIds = configuredQuestions
+      .filter((question: any) => question && typeof question.id === 'string')
+      .map((question: any) => question.id as string);
+    const SYSTEM_META_ANSWER_KEYS = new Set([
+      'material_keys',
+      'choice_label',
+      'material_choice',
+      'q_hear_about',
+      'hear_about',
+      'hearAbout',
+      'companyName',
+      'company',
+      'company_name',
+      'service_interest',
+      'serviceInterest',
+      'message',
+      'notes',
+      'inquiry',
+      'consultation_message',
+      'q_message',
+      'content',
+      'details',
+      'preferred_date',
+      'preferred_time',
+    ]);
+    const allowedQuestionIds = new Set(questionIds);
+    if (form.form_type !== 'consultation' && configuredQuestions.length > 0 && Object.keys(answers).some((key) => !allowedQuestionIds.has(key) && !SYSTEM_META_ANSWER_KEYS.has(key))) {
+      return res.status(400).json({ error: 'フォームの設問が更新されています。ページを再読み込みして再入力してください。' });
+    }
+    const cleanAnswers = configuredQuestions.length > 0
+      ? Object.fromEntries(Object.entries(answers).filter(([key]) => allowedQuestionIds.has(key) || SYSTEM_META_ANSWER_KEYS.has(key)))
+      : answers;
+    const requiredQuestionIds = (configuredQuestions as any[])
+      .filter((question) => question?.required && typeof question.id === 'string')
+      .map((question) => question.id as string);
+    for (const questionId of requiredQuestionIds) {
+      const answer = cleanAnswers[questionId];
+      if (answer === undefined || answer === '' || answer === false) return res.status(400).json({ error: '必須の設問に回答してください。' });
+    }
+
+    const effectiveCompanyName = companyName || (name ? `${name}様（個人）` : '新規反響企業（フォーム経由）');
+    let matchedCompanyId: string | null = null;
+    let matchingCompanyNames: string[] = [];
+    if (effectiveCompanyName) {
+      const normalizedCompanyName = normalizePublicCompanyName(effectiveCompanyName);
+      const allCompanies: Array<{ id: string; company_name: string | null }> = [];
+      if (normalizedCompanyName) {
+        const pageSize = 1000;
+        for (let offset = 0; ; offset += pageSize) {
+          const { data: companyPage, error: companyLookupError } = await lineSupabase
+            .from('companies')
+            .select('id, company_name')
+            .range(offset, offset + pageSize - 1);
+          if (companyLookupError) throw companyLookupError;
+          allCompanies.push(...(companyPage || []));
+          if (!companyPage || companyPage.length < pageSize) break;
+        }
+      }
+      const matchingCompanies = allCompanies.filter((company) => normalizePublicCompanyName(company.company_name) === normalizedCompanyName);
+      matchingCompanyNames = matchingCompanies.map((company) => String(company.company_name || '')).filter(Boolean);
+      if (matchingCompanies.length >= 1) {
+        matchedCompanyId = matchingCompanies[0].id;
+      } else {
+        // 会社が未登録の場合はCIDを自動採番してcompaniesテーブルへ確実に追加
+        try {
+          const { data: existingCids } = await lineSupabase
+            .from('companies')
+            .select('id')
+            .like('id', 'CID-%')
+            .limit(2000);
+          const maxNum = Math.max(0, ...(existingCids || []).map((row: any) => Number(String(row.id).match(/^CID-(\d+)$/)?.[1] || 0)));
+          const nextCid = `CID-${String(maxNum + 1).padStart(3, '0')}`;
+          const { data: newCompany, error: createCompanyErr } = await lineSupabase
+            .from('companies')
+            .insert({
+              id: nextCid,
+              company_name: effectiveCompanyName,
+              contact_name: name || null,
+              email: email || null,
+              phone: phone || null,
+            })
+            .select('id, company_name')
+            .maybeSingle();
+
+          if (!createCompanyErr && newCompany) {
+            matchedCompanyId = newCompany.id;
+          } else if (createCompanyErr) {
+            console.warn('[PublicForm] Company insert retry with unique timestamp:', createCompanyErr.message);
+            const fallbackCid = `CID-${Date.now().toString().slice(-6)}`;
+            const { data: fallbackCompany } = await lineSupabase
+              .from('companies')
+              .insert({
+                id: fallbackCid,
+                company_name: effectiveCompanyName,
+                contact_name: name || null,
+                email: email || null,
+                phone: phone || null,
+              })
+              .select('id, company_name')
+              .maybeSingle();
+            if (fallbackCompany) matchedCompanyId = fallbackCompany.id;
+          }
+        } catch (e) {
+          console.warn('[PublicForm] Company auto-creation exception:', e);
+        }
+      }
+    }
+    // 1. LINE User ID または Contact ID が渡されていれば最優先で該当連絡先を特定
+    let contact: any = null;
+    if (contactId) {
+      const { data: cById } = await lineSupabase
+        .from('contacts')
+        .select('id, full_name, email, phone, company_id, line_user_id')
+        .eq('id', contactId)
+        .maybeSingle();
+      if (cById) contact = cById;
+    }
+    if (!contact && lineUserId) {
+      const { data: cByLine } = await lineSupabase
+        .from('contacts')
+        .select('id, full_name, email, phone, company_id, line_user_id')
+        .eq('line_user_id', lineUserId)
+        .maybeSingle();
+      if (cByLine) contact = cByLine;
+    }
+
+    // 2. まだ見つからなければ従来の email で検索
+    if (!contact) {
+      const escapedEmail = email.replace(/\\/g, '\\\\').replace(/%/g, '\\%').replace(/_/g, '\\_');
+      const { data: matchingContacts, error: contactLookupError } = await lineSupabase
+          .from('contacts')
+          .select('id, full_name, email, phone, company_id, line_user_id')
+          .ilike('email', escapedEmail)
+          .order('created_at', { ascending: true })
+          .limit(1);
+      if (contactLookupError) throw contactLookupError;
+      contact = matchingContacts?.[0];
+    }
+
+    let contactNameNote = '';
+    if (contact) {
+      const existingName = typeof contact.full_name === 'string' ? contact.full_name.trim() : '';
+      const existingPhone = typeof contact.phone === 'string' ? contact.phone.trim() : '';
+      const existingEmail = typeof contact.email === 'string' ? contact.email.trim() : '';
+      const isPlaceholderName = !existingName || existingName === 'LINE登録者' || existingName === 'LINE友だち';
+      if (existingName && !isPlaceholderName && existingName !== name) contactNameNote = `申込時の氏名: ${name}`;
+
+      const targetLineUserId = lineUserId || contact.line_user_id || null;
+      try {
+        const { data: updatedContact, error: updateContactError } = await lineSupabase
+          .from('contacts')
+          .update({
+            ...(isPlaceholderName || !existingName ? { full_name: name } : {}),
+            ...(!existingPhone && phone ? { phone } : {}),
+            ...(!existingEmail || isPlaceholderName ? { email } : {}),
+            ...(targetLineUserId && !contact.line_user_id ? { line_user_id: targetLineUserId } : {}),
+            ...(matchedCompanyId && !contact.company_id ? { company_id: matchedCompanyId } : {}),
+          })
+          .eq('id', contact.id)
+          .select('id, full_name, email, phone, company_id, line_user_id')
+          .maybeSingle();
+
+        if (updateContactError) {
+          console.warn('[PublicForm] Contact update warning (non-fatal):', updateContactError);
+        } else if (updatedContact) {
+          contact = updatedContact;
+        }
+
+        // LINE友だち情報が関連付いている場合は名前を同期
+        if (contact?.line_user_id) {
+          await lineSupabase.from('line_friends')
+            .update({ display_name: name, contact_id: contact.id })
+            .eq('line_user_id', contact.line_user_id);
+        }
+      } catch (cUpdateErr) {
+        console.warn('[PublicForm] Contact update exception (non-fatal):', cUpdateErr);
+      }
+    } else {
+      try {
+        const { data: insertedContact, error: insertContactError } = await lineSupabase
+          .from('contacts')
+          .insert({
+            full_name: name,
+            email,
+            phone: phone || null,
+            company_id: matchedCompanyId,
+            source: lineUserId ? 'line_form' : 'public_form',
+            ...(lineUserId ? { line_user_id: lineUserId } : {}),
+          })
+          .select('id, full_name, email, phone, company_id, line_user_id')
+          .maybeSingle();
+
+        if (insertContactError) {
+          console.warn('[PublicForm] Contact insert error, attempting lookup fallback:', insertContactError);
+          const { data: fallbackContact } = await lineSupabase
+            .from('contacts')
+            .select('id, full_name, email, phone, company_id, line_user_id')
+            .ilike('email', email)
+            .maybeSingle();
+          if (fallbackContact) contact = fallbackContact;
+        } else if (insertedContact) {
+          contact = insertedContact;
+        }
+
+        if (contact && lineUserId) {
+          await lineSupabase.from('line_friends').upsert({
+            contact_id: contact.id,
+            line_user_id: lineUserId,
+            display_name: name,
+            status: 'active',
+            source: 'public_form',
+          }, { onConflict: 'line_user_id' });
+        }
+      } catch (cInsertErr) {
+        console.warn('[PublicForm] Contact insert exception (non-fatal):', cInsertErr);
+      }
+    }
+
+    if (!contact) {
+      contact = { id: null, full_name: name, email, phone, company_id: matchedCompanyId };
+    }
+
+    const resolvedCompanyId = matchedCompanyId || contact.company_id || null;
+    const answerSummary = JSON.stringify(cleanAnswers).slice(0, 6_000);
+    const sourceLabel = publicFormSourceLabels[form.form_type] || 'Webフォーム';
+    const originLabel = utm.source ? `（流入: ${utm.source.slice(0, 80)}）` : '';
+    // ラウンド2-2 & ラウンド6: 請求資料キーの抽出
+    let requestedMaterialKeys: string[] = [];
+    if (Array.isArray(body.materialKeys)) {
+      requestedMaterialKeys = body.materialKeys.filter((k: any) => typeof k === 'string' && k.trim());
+    } else if (Array.isArray(body.material_keys)) {
+      requestedMaterialKeys = body.material_keys.filter((k: any) => typeof k === 'string' && k.trim());
+    } else if (Array.isArray(body.answers?.material_keys)) {
+      requestedMaterialKeys = (body.answers.material_keys as string[]).filter((k) => typeof k === 'string' && k.trim());
+    } else if (Array.isArray(body.customFields?.material_keys)) {
+      requestedMaterialKeys = (body.customFields.material_keys as string[]).filter((k) => typeof k === 'string' && k.trim());
+    } else if (Array.isArray(cleanAnswers.material_keys)) {
+      requestedMaterialKeys = (cleanAnswers.material_keys as string[]).filter((k) => typeof k === 'string' && k.trim());
+    } else if (typeof cleanAnswers.material_choice === 'string' || typeof body.answers?.material_choice === 'string') {
+      const choice = String(cleanAnswers.material_choice || body.answers?.material_choice || '').trim();
+      if (choice === 'care') requestedMaterialKeys = ['care-package-overview'];
+      else if (choice === 'management') requestedMaterialKeys = ['management-guide'];
+      else if (choice === 'both') requestedMaterialKeys = ['management-guide', 'care-package-overview'];
+      else if (choice) requestedMaterialKeys = [choice];
+    }
+
+    let inquiryType: string = 'その他お問い合わせ';
+    const rawInquiry = String(
+      cleanAnswers.q_inquiry_type ||
+      cleanAnswers.inquiry_type ||
+      cleanAnswers.inquiryType ||
+      cleanAnswers.type ||
+      cleanAnswers.subject ||
+      cleanAnswers.category ||
+      (utmInput as any).inquiryType ||
+      (body as any).inquiryType ||
+      tokenData?.rt ||
+      ''
+    ).trim();
+
+    if (slug === 'business-diagnosis' || form.form_type === 'diagnosis') {
+      inquiryType = 'ボトルネック診断';
+    } else if (slug === 'material-download' || form.name.includes('資料')) {
+      inquiryType = '資料請求';
+    } else if (slug === 'contact-inquiry') {
+      const rawInterest = String(cleanAnswers.service_interest || (body.customFields as any)?.service_interest || '').trim();
+      if (rawInterest.includes('全体') || rawInterest.includes('利益改善')) {
+        inquiryType = '経営全体・利益改善';
+      } else if (rawInterest.includes('業務効率化') || rawInterest.includes('自動化') || rawInterest.includes('IT')) {
+        inquiryType = '業務効率化・IT/自動化';
+      } else if (rawInterest.includes('集客') || rawInterest.includes('マーケティング')) {
+        inquiryType = '集客・マーケティング';
+      } else if (rawInterest.includes('介護保険外') || rawInterest.includes('開業')) {
+        inquiryType = '介護保険外開業';
+      } else {
+        inquiryType = rawInterest || '経営相談';
+      }
+    } else if (slug === 'care-package-inquiry') {
+      inquiryType = '介護保険外開業';
+    } else {
+      inquiryType = form.name || 'Webフォーム反響';
+    }
+
+    // public_materials から該当資料を検索
+    let resolvedMaterials: Array<{ key: string; label: string; url: string }> = [];
+    try {
+      const { data: activeMaterials } = await lineSupabase
+        .from('public_materials')
+        .select('key, label, public_url, sort_order')
+        .eq('is_active', true)
+        .order('sort_order', { ascending: true });
+
+      if (activeMaterials && activeMaterials.length > 0) {
+        if (requestedMaterialKeys.length > 0) {
+          resolvedMaterials = activeMaterials
+            .filter((m) => requestedMaterialKeys.includes(m.key))
+            .map((m) => ({ key: m.key, label: m.label, url: m.public_url }));
+        }
+        // 資料キー未指定だが資料請求の場合、全有効資料を採用
+        if (resolvedMaterials.length === 0 && (slug === 'material-download' || rawInquiry.includes('資料'))) {
+          resolvedMaterials = activeMaterials.map((m) => ({ key: m.key, label: m.label, url: m.public_url }));
+        }
+      }
+    } catch (matLookupErr) {
+      console.warn('[PublicForm] Materials lookup exception:', matLookupErr);
+    }
+
+    // DB未初期化または未検索時のフォールバック（2資料を確実に返却）
+    if (resolvedMaterials.length === 0 && (slug === 'material-download' || rawInquiry.includes('資料') || requestedMaterialKeys.length > 0)) {
+      const defaultMaterialsList = [
+        {
+          key: 'management-guide',
+          label: '① 経営改善実務ガイドブック（要点解説スライド）',
+          url: 'https://corp.mstcorp.info/materials/mst-management-guide.pdf',
+        },
+        {
+          key: 'care-package-overview',
+          label: '② 介護保険外サービス開業・収益化パッケージ資料',
+          url: 'https://corp.mstcorp.info/materials/care-package-proposal.pdf',
+        },
+      ];
+      if (requestedMaterialKeys.length > 0) {
+        resolvedMaterials = defaultMaterialsList.filter((m) => requestedMaterialKeys.includes(m.key));
+      }
+      if (resolvedMaterials.length === 0) {
+        resolvedMaterials = defaultMaterialsList;
+      }
+    }
+
+    // ラウンド2-3: 介護保険外パッケージの判定を slug === 'care-package-inquiry' に限定（material-downloadを誤判定させない）
+    const isCarePackage = slug === 'care-package-inquiry' || (slug !== 'material-download' && slug !== 'contact-inquiry' && slug !== 'business-diagnosis' && (cleanAnswers.service_interest === '介護保険外サービス開業パッケージ' || rawInquiry.includes('介護')));
+
+    // ラウンド2-3 & 補足A: leads.source はフォームslug別のラベルを一意に保持（流入元の詳細は別項目へ）
+    let leadSource = 'HP：Web受付';
+    if (slug === 'material-download') {
+      leadSource = 'HP：資料請求';
+    } else if (slug === 'contact-inquiry') {
+      leadSource = 'HP：お問い合わせ';
+    } else if (slug === 'business-diagnosis') {
+      leadSource = 'HP：経営診断';
+    } else if (slug === 'care-package-inquiry') {
+      leadSource = 'HP：開業パッケージ';
+    } else if (form.form_type === 'diagnosis') {
+      leadSource = 'HP：経営診断';
+    } else if (form.form_type === 'consultation') {
+      leadSource = 'HP：相談・問い合わせ';
+    } else {
+      leadSource = `HP：${form.name || 'Webフォーム'}`;
+    }
+
+    // ラウンド6: UTM正規化と認知経路の取得
+    const normalizedUtm = normalizeUtmParams(utm);
+    const hearAboutAnswer = String(
+      cleanAnswers.q_hear_about ||
+      cleanAnswers.hear_about ||
+      cleanAnswers.hearAbout ||
+      ''
+    ).trim();
+
+    // ラウンド2-3: leads.status を slug / 種別別に一意に決定
+    let leadStatus = '相談申込';
+    if (slug === 'material-download') {
+      leadStatus = '資料請求';
+    } else if (slug === 'business-diagnosis' || form.form_type === 'diagnosis') {
+      leadStatus = '診断申込';
+    } else if (slug === 'contact-inquiry') {
+      leadStatus = '相談申込';
+    } else if (slug === 'care-package-inquiry') {
+      leadStatus = (inquiryType === '資料請求' || rawInquiry.includes('資料')) ? '資料請求' : '相談申込';
+    } else if (inquiryType === '資料請求') {
+      leadStatus = '資料請求';
+    }
+
+    // リード獲得段階では検討サービス種別は未確定（商談時に判断）。お問い合わせで選択されたテーマのみ参考保持。
+    let formServiceType: string | null = null;
+    if (slug === 'contact-inquiry') {
+      const rawInterest = String(cleanAnswers.service_interest || (body.customFields as any)?.service_interest || '').trim();
+      if (rawInterest) formServiceType = rawInterest;
+    }
+
+    // 流入元詳細（utm, referrer, landing page）と請求資料の構造化メモ
+    const requestMarker = `[申込 ${requestId}]`;
+    const inflowLabel = normalizedUtm.source ? getInflowLabel(normalizedUtm.source) : '';
+    const utmDetails = [
+      inflowLabel ? `流入: ${inflowLabel}` : '',
+      normalizedUtm.medium ? `utm_medium: ${normalizedUtm.medium}` : '',
+      normalizedUtm.campaign ? `utm_campaign: ${normalizedUtm.campaign}` : '',
+      normalizedUtm.referrer ? `referrer: ${normalizedUtm.referrer}` : '',
+      normalizedUtm.landing_page ? `LP: ${normalizedUtm.landing_page}` : '',
+    ].filter(Boolean).join(' | ');
+
+    const requestedMaterialText = resolvedMaterials.length > 0
+      ? `【請求資料】${resolvedMaterials.map((m) => m.label).join('、')}`
+      : (typeof cleanAnswers.choice_label === 'string' && cleanAnswers.choice_label.trim())
+        ? `【請求資料】${cleanAnswers.choice_label.trim()}`
+        : '';
+
+    const noteEntry = [
+      `${requestMarker} ${leadSource} / ${new Date().toISOString()}`,
+      utmDetails ? `【流入詳細】${utmDetails}` : '',
+      hearAboutAnswer ? `【認知経路（どこで知りましたか）】${hearAboutAnswer}` : '',
+      companyName ? `【会社名】${companyName}` : '',
+      contactNameNote,
+      requestedMaterialText,
+      userNotes ? `【自由記入メモ】${userNotes}` : '',
+      answerSummary,
+    ].filter(Boolean).join('\n');
+
+    const { data: existingLeads, error: leadLookupError } = await lineSupabase
+      .from('leads')
+      .select('id, notes, source, status, service_type, meeting_date, company_id')
+      .eq('contact_id', contact.id)
+      .order('created_at', { ascending: false })
+      .limit(1);
+    if (leadLookupError) throw leadLookupError;
+
+    // スキーマ互換性担保: leads テーブルのカラム不一致時に安全に再試行
+    const safeUpsertLead = async (isUpdate: boolean, payload: Record<string, any>, targetId?: string): Promise<string> => {
+      let currentPayload = { ...payload };
+      for (let attempt = 0; attempt < 5; attempt++) {
+        let res: any;
+        if (isUpdate && targetId) {
+          res = await lineSupabase
+            .from('leads')
+            .update(currentPayload)
+            .eq('id', targetId)
+            .select('id')
+            .single();
+        } else {
+          res = await lineSupabase
+            .from('leads')
+            .insert(currentPayload)
+            .select('id')
+            .single();
+        }
+        if (!res.error && res.data?.id) {
+          return String(res.data.id);
+        }
+        const errMsg = res.error?.message || '';
+        const match = errMsg.match(/Could not find the '([^']+)' column/i) || errMsg.match(/column "([^"]+)" of relation/i);
+        if (match && match[1] && match[1] in currentPayload) {
+          console.warn(`[PublicForm] Removing missing column '${match[1]}' from leads payload and retrying`);
+          delete currentPayload[match[1]];
+          continue;
+        }
+        throw res.error;
+      }
+      throw new Error('リードの保存に失敗しました');
+    };
+
+    let lead: any = existingLeads?.[0];
+    if (lead && !['新規', 'ヒアリング済'].includes(lead.status)) lead = undefined;
+    let leadId = '';
+    const meetingDate = typeof cleanAnswers.meeting_date === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(cleanAnswers.meeting_date)
+      ? cleanAnswers.meeting_date
+      : null;
+    if (lead) {
+      leadId = lead.id;
+      if (typeof lead.notes !== 'string' || !lead.notes.includes(requestMarker)) {
+        const notes = [lead.notes, noteEntry].filter(Boolean).join('\n\n').slice(-12_000);
+        leadId = await safeUpsertLead(true, {
+          notes,
+          last_contacted_at: new Date().toISOString(),
+          ...(resolvedCompanyId && !lead.company_id ? { company_id: resolvedCompanyId } : {}),
+
+          ...(meetingDate ? { meeting_date: meetingDate } : {}),
+          ...(inquiryType ? { inquiry_type: inquiryType } : {}),
+          ...(isCarePackage && ['新規', 'ヒアリング済'].includes(lead.status) ? { status: leadStatus } : {}),
+          ...(!isCarePackage && inquiryType === '資料請求' && lead.status === '新規' ? { status: '資料請求' } : {}),
+        }, lead.id);
+      }
+    } else {
+      leadId = await safeUpsertLead(false, {
+        contact_id: contact.id,
+        company_id: resolvedCompanyId,
+        source: leadSource,
+
+        priority_channel: normalizedUtm.source === 'line' ? 'LINE' : 'メール',
+        status: leadStatus,
+        first_registered_at: new Date().toISOString(),
+        last_contacted_at: new Date().toISOString(),
+        ...(meetingDate ? { meeting_date: meetingDate } : {}),
+        notes: noteEntry,
+        ...(inquiryType ? { inquiry_type: inquiryType } : {}),
+      });
+    }
+
+    const { data: submission, error: submissionError } = await lineSupabase
+      .from('diagnosis_submissions')
+      .insert({
+        form_id: form.id,
+        contact_id: contact.id,
+        company_id: resolvedCompanyId,
+        respondent_company_name: companyName || null,
+        lead_id: leadId,
+        respondent_name: name,
+        respondent_email: email,
+        answers: cleanAnswers,
+        privacy_agreed_at: new Date().toISOString(),
+        source: 'public_form',
+        utm,
+        idempotency_key: requestId,
+      })
+      .select('id')
+      .single();
+    if (submissionError) {
+      if (submissionError.code === '23505') {
+        const { data: duplicate } = await lineSupabase.from('diagnosis_submissions')
+          .select('id, lead_id').eq('idempotency_key', requestId).maybeSingle();
+        if (duplicate) return res.json({ success: true, duplicate: true, leadId: duplicate.lead_id });
+      }
+      throw submissionError;
+    }
+    let diagnosisId: string | null = null;
+    if (form.form_type === 'diagnosis') {
+      const { data, error } = await lineSupabase.rpc('create_diagnosis_from_form_submission', { p_submission_id: submission.id });
+      if (error) console.error('Diagnosis handoff failed:', error.message);
+      else diagnosisId = data || null;
+    }
+
+    // ラウンド6-2: LINE友だちへの自動タグ付与（診断受検済み、資料請求、流入:<流入ラベル>）
+    try {
+      const targetFriendLineUserId = lineUserId || contact?.line_user_id || null;
+      let targetFriendId: string | null = null;
+      if (targetFriendLineUserId) {
+        const { data: lf } = await lineSupabase
+          .from('line_friends')
+          .select('id')
+          .eq('line_user_id', targetFriendLineUserId)
+          .maybeSingle();
+        targetFriendId = lf?.id || null;
+      } else if (contact?.id) {
+        const { data: lf } = await lineSupabase
+          .from('line_friends')
+          .select('id')
+          .eq('contact_id', contact.id)
+          .maybeSingle();
+        targetFriendId = lf?.id || null;
+      }
+
+      if (targetFriendId) {
+        const tagsToAssign: string[] = [];
+
+        // 1. 診断フォーム送信時
+        if (form.form_type === 'diagnosis' || slug === 'business-diagnosis') {
+          tagsToAssign.push('診断受検済み');
+        }
+        // 2. 資料請求時
+        if (slug === 'material-download' || inquiryType === '資料請求') {
+          tagsToAssign.push('資料請求');
+        }
+        // 3. 正規化済みの utm_source がある場合（HP直接除外）
+        if (normalizedUtm.source) {
+          const label = getInflowLabel(normalizedUtm.source);
+          tagsToAssign.push(`流入:${label}`);
+        } else if (hearAboutAnswer) {
+          // 4. UTMがない場合のみ「どこで知りましたか？」の回答からタグ付与
+          tagsToAssign.push(`流入:${hearAboutAnswer}`);
+        }
+
+        for (const tagName of tagsToAssign) {
+          try {
+            const tagId = await getOrCreateLineTag('system', tagName);
+            if (tagId) {
+              await lineSupabase.from('line_friend_tags').upsert({
+                line_friend_id: targetFriendId,
+                tag_id: tagId,
+                assigned_by: 'automation',
+              }, { onConflict: 'line_friend_id,tag_id', ignoreDuplicates: true });
+            }
+          } catch (tErr: any) {
+            console.warn(`[AutoTag] Could not assign tag '${tagName}':`, tErr?.message);
+          }
+        }
+      }
+    } catch (tagErr: any) {
+      console.warn('[AutoTag] Tag automation exception (non-fatal):', tagErr?.message);
+    }
+
+    if (contact?.id) {
+      if (form.form_type === 'diagnosis') {
+        await enqueueScenariosForContact(contact.id, 'diagnosis_completed');
+      } else {
+        await enqueueScenariosForContact(contact.id, 'lead_created');
+      }
+    }
+
+    // 診断・相談・資料請求回答時の自動通知（LINE / Email）
+    const formDef = form.definition && typeof form.definition === 'object' ? form.definition : {};
+    let bookingUrl = typeof (formDef as any).booking_url === 'string' ? (formDef as any).booking_url.trim() : '';
+    if (!bookingUrl) {
+      const { data: salesSettings } = await lineSupabase
+        .from('sales_workspace_settings')
+        .select('booking_page_url')
+        .maybeSingle();
+      bookingUrl = salesSettings?.booking_page_url || '';
+    }
+    // ラウンド2-6: sales_workspace_settings が未設定でも TimeRex 公式URLにフォールバック
+    if (!bookingUrl) {
+      bookingUrl = 'https://timerex.net/s/mst.shikumikaizen_b173/4ac78e37';
+    }
+
+    const rawMaterialUrl = typeof (formDef as any).material_url === 'string' ? (formDef as any).material_url.trim() : '';
+    const fallbackMaterialUrl = Boolean(rawMaterialUrl && /^https?:\/\//i.test(rawMaterialUrl)) ? rawMaterialUrl : null;
+    
+    // ラウンド2-2: public_materials から引いた資料URLを最優先（複数なら改行区切りで展開）
+    const effectiveMaterialUrls = resolvedMaterials.length > 0
+      ? resolvedMaterials.map((m) => `▼ ${m.label}\n${m.url}`).join('\n\n')
+      : fallbackMaterialUrl || '';
+    const singleMaterialUrl = resolvedMaterials[0]?.url || fallbackMaterialUrl || null;
+    const materialReady = resolvedMaterials.length > 0 || Boolean(fallbackMaterialUrl);
+    const bookingReady = Boolean(bookingUrl && /^https?:\/\//i.test(bookingUrl));
+
+    const bookingPrompt = bookingReady
+      ? `\n\n▼ 30分無料・個別フィードバック面談の日程予約はこちら\n${bookingUrl}\n\n※面談当日、画面共有にて診断レポートを詳しく解説し、終了後にPDFを進呈いたします。`
+      : '\n\n担当者より面談日程のご案内をお届けいたします。';
+
+    let customNotificationText = '';
+    if (isCarePackage) {
+      if (inquiryType === '資料請求') {
+        customNotificationText = `【MST】「介護保険外サービス開業パッケージ」資料請求を承りました。\n\n${name} 様\n資料請求いただき誠にありがとうございます！\n\n` +
+          (materialReady
+            ? `以下のURLより開業パッケージの概要資料をご確認いただけます。\n${effectiveMaterialUrls}\n\nご不明点や具体的な相談をご希望の場合は、いつでも本LINE／メールまでお気軽に返信してください。`
+            : `現在、最新版資料の送付準備中となっております。専任担当者より折り返しご案内をお送りいたしますので、恐れ入りますが少々お待ちくださいませ。`);
+      } else if (inquiryType === '開業相談') {
+        customNotificationText = `【MST】「介護保険外サービス開業パッケージ」開業相談のお申し込みを承りました。\n\n${name} 様\nご相談のお申し込み誠にありがとうございます！\n\n専任コンサルタントによる30分のオンライン個別面談（Zoom・無料）にて、貴社の構想に合わせた開業ステップや収益設計をご案内いたします。` +
+          (bookingReady ? `\n\n▼ 面談日程のWeb予約はこちら\n${bookingUrl}\n\n※上記リンクよりご都合のよい日時をお選びください。` : '\n\n担当者より面談日程のご案内を折り返しお届けいたします。');
+      } else {
+        const parts = [`【MST】「介護保険外サービス開業パッケージ」資料請求・個別相談を承りました。\n\n${name} 様\nお申し込み誠にありがとうございます！`];
+        if (materialReady) {
+          parts.push(`▼ 開業パッケージ資料URL\n${effectiveMaterialUrls}`);
+        } else {
+          parts.push(`※最新版資料はただいま送付準備中となっております。準備が整い次第ご案内いたします。`);
+        }
+        if (bookingReady) {
+          parts.push(`▼ 個別相談（30分・無料）の面談日程Web予約はこちら\n${bookingUrl}\n\n※上記リンクよりご都合のよい日時をお選びください。`);
+        } else {
+          parts.push(`担当者より面談日程のご案内を折り返しお届けいたします。`);
+        }
+        customNotificationText = parts.join('\n\n');
+      }
+    } else if (slug === 'material-download' || inquiryType === '資料請求') {
+      // 一般資料請求のメール・LINE通知
+      const materialListText = effectiveMaterialUrls
+        ? `ご請求いただいた資料は、以下のURLより今すぐご確認・ダウンロードいただけます。\n\n${effectiveMaterialUrls}\n\n※ダウンロード期限はございませんので、いつでもお見返しいただけます。`
+        : '現在、最新版資料の送付準備中となっております。担当者より折り返しご案内をお送りいたします。';
+
+      customNotificationText = `【MST】資料請求を受け付けました。\n\n${name} 様\nこの度は資料をご請求いただき誠にありがとうございます！\n\n${materialListText}${bookingPrompt}\n\n--------------------------------------------------\n有限会社MST\n代表取締役: 大橋真人\n〒503-0981 岐阜県大垣市桧町127番地\n--------------------------------------------------`;
+    }
+
+    if (contact.line_user_id && lineChannelAccessToken) {
+      try {
+        const lineMsg = {
+          type: 'text',
+          text: customNotificationText || `【MST】「${form.name || '無料診断'}」の回答を受け付けました。\nご多忙の中、ご回答いただき誠にありがとうございます！\n\n現在、有限会社MST代表の大橋真人と専任チームにて、回答内容を基にした個別診断レポート（業務・売上・経営者の時間の急所特定）を作成しております。\n机上の空論ではなく「御社がどこから手を付ければ一番利益が残るか」を明確にするため、30分のオンライン個別面談にて解説と質疑応答を行わせていただきます。${bookingPrompt}\n\n※急ぎのご相談やご質問がございましたら、このLINEにそのまま返信いただけます。`,
+        };
+        await fetch('https://api.line.me/v2/bot/message/push', {
+          method: 'POST',
+          headers: { Authorization: `Bearer ${lineChannelAccessToken}`, 'Content-Type': 'application/json' },
+          body: JSON.stringify({ to: contact.line_user_id, messages: [lineMsg] }),
+        });
+        if (lineSupabase) {
+          await lineSupabase.from('line_inbox_messages').insert({
+            owner_id: (form as any).owner_id || null,
+            line_event_id: `sub-${submission.id}`,
+            direction: 'outbound',
+            contact_id: contact.id,
+            line_user_id: contact.line_user_id,
+            message_type: 'text',
+            body: lineMsg.text,
+            status: 'sent',
+            received_at: new Date().toISOString(),
+          });
+        }
+      } catch (linePushErr) {
+        console.warn('LINE auto confirmation push warning:', linePushErr);
+      }
+    } else if (contact.email) {
+      try {
+        const emailKey = process.env.RESEND_API_KEY || '';
+        const emailFrom = process.env.RESEND_FROM_EMAIL || '';
+        const subject = isCarePackage
+          ? `【MST】「介護保険外サービス開業パッケージ」${inquiryType || 'お問い合わせ'}の受付完了`
+          : slug === 'material-download' || inquiryType === '資料請求'
+            ? `【MST】資料請求の受付完了（ダウンロードリンクのご案内）`
+            : `【MST】「${form.name || '無料診断'}」の受付と個別面談のご案内`;
+        const bodyText = customNotificationText || `${name} 様\n\n有限会社MST代表の大橋真人です。\nこの度は「${form.name || '無料診断'}」にご回答いただき誠にありがとうございます。\n\n現在、ご入力いただいた内容を精査し、御社の業務・売上・時間の急所を特定した個別診断レポートを作成しております。\n机上の空論ではなく「御社がどこから手を付ければ一番利益が残るか」を明確にするため、30分のオンライン面談にて解説と質疑応答を行わせていただきます。${bookingPrompt}\n\n--------------------------------------------------\n有限会社MST\n代表取締役: 大橋真人\n〒503-0981 岐阜県大垣市桧町127番地\n--------------------------------------------------`;
+        if (emailKey && emailFrom) {
+          await fetch('https://api.resend.com/emails', {
+            method: 'POST',
+            headers: { Authorization: `Bearer ${emailKey}`, 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              from: emailFrom,
+              to: [contact.email],
+              subject,
+              text: bodyText,
+            }),
+          });
+        }
+        if (lineSupabase) {
+          await lineSupabase.from('communication_outbox').insert({
+            channel: 'email',
+            recipient_contact_id: contact.id,
+            recipient_address: contact.email,
+            subject,
+            body_text: bodyText,
+            status: emailKey && emailFrom ? 'sent' : 'queued',
+            consent_confirmed_at: new Date().toISOString(),
+            consent_basis: 'transactional_intake',
+            source_type: 'diagnosis_submission',
+            source_id: submission.id,
+            company_id: resolvedCompanyId,
+          });
+        }
+      } catch (emailErr) {
+        console.warn('Email auto confirmation warning:', emailErr);
+      }
+    }
+
+    // 管理者向けタスク起票（レポート承認通知 / 資料URL未設定警告）
+    if (lineSupabase) {
+      try {
+        if ((isCarePackage || slug === 'material-download' || inquiryType === '資料請求') && !materialReady) {
+          await lineSupabase.from('tasks').insert({
+            title: `【未設定警告】資料URLが未登録です（${name} 様の資料請求）`,
+            description: `資料請求（${requestedMaterialText || slug}）を受領しましたが、公開資料マスタ（public_materials）およびフォーム定義に有効な資料URLが未設定です。至急URLを設定し、申込者（${name}様 / ${email}）へ資料を送付してください。`,
+            status: 'todo',
+            priority: 'urgent',
+            due_date: new Date().toISOString().slice(0, 10),
+          });
+        }
+        await lineSupabase.from('tasks').insert({
+          title: `【要対応・${isCarePackage ? '開業パッケージ申込' : slug === 'material-download' ? '資料請求' : 'レポート承認'}】${name} 様（${companyName || '個人'}）の回答`,
+          description: `フォーム「${form.name}」の回答（希望: ${inquiryType || '未指定'}${requestedMaterialText ? ` / ${requestedMaterialText}` : ''}）が届きました。内容を確認し、案内または面談日程の調整を行ってください。`,
+          status: 'todo',
+          priority: 'high',
+          due_date: new Date().toISOString().slice(0, 10),
+        });
+      } catch (taskErr) {
+        console.warn('Task auto-creation warning:', taskErr);
+      }
+    }
+
+    return res.status(201).json({
+      success: true,
+      submissionId: submission.id,
+      leadId,
+      diagnosisId,
+      diagnosisPending: form.form_type === 'diagnosis' && !diagnosisId,
+      inquiryType: inquiryType || null,
+      materialReady,
+      materialUrl: singleMaterialUrl,
+      materialUrls: resolvedMaterials,
+      bookingUrl: bookingReady ? bookingUrl : null,
+    });
+  } catch (error: any) {
+    console.error('=== Public intake submission failed ===');
+    console.error('Time:', new Date().toISOString());
+    console.error('Slug:', slug);
+    console.error('Name:', name, 'Email:', email);
+    console.error('Message:', error?.message || 'unknown error');
+    console.error('Code:', error?.code, 'Details:', error?.details, 'Hint:', error?.hint);
+    console.error('Stack:', error?.stack);
+    try {
+      console.error('Raw Error:', JSON.stringify(error, Object.getOwnPropertyNames(error), 2));
+    } catch {
+      console.error('Raw Error (non-stringifiable):', error);
+    }
+    return res.status(500).json({
+      error: '申込を保存できませんでした。時間をおいて再度お試しください。',
+      details: error?.message || 'unknown error',
+    });
+  }
+});
+
+// ─── 診断フォーム回答 → 診断・レポート（画面の権限では書けないため、サーバー権限で実行） ───
+const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+function escapeHtmlText(value: string): string {
+  return value.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+}
+
+// 回答に対応する診断を確保する（未作成なら作成）。レポート作成画面を開くときに呼ばれる。
+app.post('/api/diagnosis-submissions/:id/diagnosis', requireAuth, async (req, res) => {
+  if (!lineSupabase) return res.status(503).json({ error: 'DB接続が設定されていません。' });
+  const submissionId = String(req.params.id || '');
+  if (!UUID_PATTERN.test(submissionId)) return res.status(400).json({ error: '回答IDが正しくありません。' });
+
+  try {
+    const { data: submission, error: submissionError } = await lineSupabase
+      .from('diagnosis_submissions')
+      .select('id, form_id, company_id, diagnosis_id')
+      .eq('id', submissionId)
+      .maybeSingle();
+    if (submissionError) throw submissionError;
+    if (!submission) return res.status(404).json({ error: '回答が見つかりません（削除された可能性があります）。' });
+    if (submission.diagnosis_id) return res.json({ diagnosisId: String(submission.diagnosis_id), created: false });
+
+    const { data: form } = await lineSupabase
+      .from('diagnosis_forms')
+      .select('form_type')
+      .eq('id', submission.form_id)
+      .maybeSingle();
+    if (form?.form_type !== 'diagnosis') {
+      return res.status(422).json({ error: '診断フォームの回答ではないため、診断レポートは作成できません。' });
+    }
+    if (!submission.company_id) {
+      return res.status(422).json({ error: '会社が紐付いていない回答です。先に「反響リードに登録」で会社を紐付けてください。' });
+    }
+
+    const { data, error } = await lineSupabase.rpc('create_diagnosis_from_form_submission', { p_submission_id: submissionId });
+    if (error) {
+      console.error('Diagnosis ensure failed:', error.message);
+      return res.status(500).json({ error: `診断を作成できませんでした: ${error.message}` });
+    }
+    if (!data) return res.status(422).json({ error: '診断を作成できませんでした。会社の紐付けを確認してください。' });
+    return res.json({ diagnosisId: String(data), created: true });
+  } catch (err: any) {
+    return res.status(500).json({ error: err?.message || '診断の確認中にエラーが発生しました。' });
+  }
+});
+
+// 生成したレポート本文を保存する（ai_reports と顧客書類）。画面からの保存と、自動作成の両方で使う。
+class HttpError extends Error {
+  constructor(public statusCode: number, message: string) {
+    super(message);
+  }
+}
+
+async function saveDiagnosisReport(
+  user: any,
+  diagnosisId: string,
+  text: string,
+  modelName: string,
+  requestedProductId: string | null,
+) {
+  if (!lineSupabase) throw new HttpError(503, 'DB接続が設定されていません。');
+
+  const { data: diagnosis, error: diagnosisError } = await lineSupabase
+    .from('diagnoses')
+    .select('id, company_id, lead_id')
+    .eq('id', diagnosisId)
+    .maybeSingle();
+  if (diagnosisError) throw diagnosisError;
+  if (!diagnosis) throw new HttpError(404, '診断が見つかりません。');
+
+  const { data: company } = await lineSupabase
+    .from('companies')
+    .select('company_name')
+    .eq('id', diagnosis.company_id)
+    .maybeSingle();
+  const companyName = company?.company_name || '御社';
+
+  // 存在しない商品IDで外部キーエラーにならないよう確認する
+  let recommendedProductId: string | null = null;
+  if (requestedProductId) {
+    const { data: product } = await lineSupabase.from('products').select('id').eq('id', requestedProductId).maybeSingle();
+    recommendedProductId = product?.id ? String(product.id) : null;
+  }
+
+  const { data: existing, error: existingError } = await lineSupabase
+    .from('ai_reports')
+    .select('id, version, is_latest, status')
+    .eq('diagnosis_id', diagnosisId);
+  if (existingError) throw existingError;
+
+  const nextVersion = Math.max(0, ...(existing || []).map((row: any) => Number(row.version) || 0)) + 1;
+  const previousLatest = (existing || []).filter((row: any) => row.is_latest);
+  const demoted: Array<{ id: string; status: string }> = [];
+  for (const previous of previousLatest) {
+    const { error: demoteError } = await lineSupabase
+      .from('ai_reports')
+      .update({ is_latest: false, status: previous.status === 'reviewed' ? 'reviewed' : 'superseded' })
+      .eq('id', previous.id);
+    if (demoteError) throw demoteError;
+    demoted.push({ id: String(previous.id), status: String(previous.status) });
+  }
+
+  const { data: report, error: insertError } = await lineSupabase
+    .from('ai_reports')
+    .insert({
+      diagnosis_id: diagnosisId,
+      version: nextVersion,
+      is_latest: true,
+      status: 'generated',
+      title: `${companyName} 経営診断レポート`,
+      model_name: modelName,
+      prompt_version: 'diagnosis-report-v1',
+      summary: text.slice(0, 1200),
+      recommendations: [text],
+      recommended_product_id: recommendedProductId,
+      full_report_text: text,
+      generated_at: new Date().toISOString(),
+    })
+    .select('*')
+    .single();
+  if (insertError) {
+    for (const previous of demoted) {
+      await lineSupabase.from('ai_reports').update({ is_latest: true, status: previous.status }).eq('id', previous.id);
+    }
+    throw insertError;
+  }
+
+  // 顧客書類（承認待ち）にも登録する。失敗してもレポート自体は保存済み。
+  const bodyHtml = `<div style="font-family: sans-serif; line-height: 1.8; color: #1e293b; max-width: 800px; margin: 0 auto; padding: 24px;">
+  <h1 style="font-size: 22px; color: #0f172a; border-bottom: 2px solid #2563eb; padding-bottom: 8px; margin-bottom: 20px;">${escapeHtmlText(companyName)} 経営診断・ボトルネック改善レポート</h1>
+  <div style="white-space: pre-wrap; font-size: 14px; color: #334155;">${escapeHtmlText(text)}</div>
+</div>`;
+  const { data: documentRow, error: documentError } = await lineSupabase
+    .from('customer_documents')
+    .insert({
+      owner_id: user.id,
+      document_type: 'diagnosis_report',
+      title: `${companyName} 経営診断レポート (v${nextVersion})`,
+      status: 'awaiting_approval',
+      body_html: bodyHtml,
+      company_id: diagnosis.company_id,
+      lead_id: diagnosis.lead_id || null,
+      diagnosis_id: diagnosisId,
+      ai_report_id: report.id,
+    })
+    .select('id')
+    .maybeSingle();
+  if (documentError) console.warn('Diagnosis report document sync failed:', documentError.message);
+
+  return {
+    report,
+    companyId: String(diagnosis.company_id),
+    companyName,
+    leadId: diagnosis.lead_id ? String(diagnosis.lead_id) : null,
+    documentId: documentRow?.id || null,
+    documentSynced: !documentError,
+  };
+}
+
+app.post('/api/diagnoses/:id/report', requireAuth, async (req, res) => {
+  if (!lineSupabase) return res.status(503).json({ error: 'DB接続が設定されていません。' });
+  const diagnosisId = String(req.params.id || '');
+  if (!UUID_PATTERN.test(diagnosisId)) return res.status(400).json({ error: '診断IDが正しくありません。' });
+
+  const text = typeof req.body?.text === 'string' ? req.body.text.trim() : '';
+  if (!text) return res.status(400).json({ error: 'レポート本文が空です。' });
+  if (text.length > 60_000) return res.status(400).json({ error: 'レポート本文が長すぎます（6万文字まで）。' });
+  const modelName = typeof req.body?.modelName === 'string' && req.body.modelName.trim()
+    ? req.body.modelName.trim().slice(0, 120)
+    : 'configured-model';
+  const requestedProductId = typeof req.body?.recommendedProductId === 'string' && req.body.recommendedProductId.trim()
+    ? req.body.recommendedProductId.trim()
+    : null;
+
+  try {
+    const saved = await saveDiagnosisReport((req as any).user, diagnosisId, text, modelName, requestedProductId);
+    return res.json({ report: saved.report, documentId: saved.documentId, documentSynced: saved.documentSynced });
+  } catch (err: any) {
+    if (err instanceof HttpError) return res.status(err.statusCode).json({ error: err.message });
+    console.error('Diagnosis report save failed:', err?.message || err);
+    return res.status(500).json({ error: err?.message || 'レポートを保存できませんでした。' });
+  }
+});
+
+// 診断フォームの回答から、AIが診断レポートと提案書の下書きまで自動で作る（受信トレイの「提案書・レポート作成」）。
+const DIAGNOSIS_REPORT_PROMPT = `あなたは有限会社MSTの「経営の仕組み化 × 利益改善」専門の経営診断レポート作成パートナーです。
+以下の社内CRM情報と診断回答をもとに、経営者の心に響く「最優先ボトルネックの特定」「会社と経営者の未来像（Before/After）」「ボトルネック連鎖ロードマップ（継続改善サイクル）」を提示するレポート草案を作成してください。
+
+【MSTのコアメッセージ】
+・会社の可能性を広げ、経営者が次の一手を打てる経営へ。
+・単なる業務効率化ではなく、会社の利益と経営者の選択肢を増やすこと。
+・日々の業務に追われる経営から、次の一手を選べる経営へ。
+
+【レポート構成（必須）】
+1. ■ 診断サマリーと最優先ボトルネックの特定
+   - 回答から読み取れる、現在会社の成長と利益を最も止めている「最大の急所（ボトルネック）」をズバリ明示。
+   - そのボトルネックがもたらしている経営上の損失（時間、機会損失、経営者の負担）。
+
+2. ■ 会社と経営者が手に入れる「未来」（Before & After）
+   - 【会社の未来】: 現状の手作業・属人化・利益が残らない状態から、仕組みで業務が回り利益が残る会社へ。
+   - 【経営者の未来】: 現場の火消しや業務処理から解放され、本来向き合うべき「経営判断・成長戦略・次の一手」に時間を使える状態へ。
+
+3. ■ ボトルネック連鎖の解消ロードマップ（継続改善サイクル）
+   ※「1つのボトルネックを解消すると、次はここが詰まるので、継続して改善を回していく必然性」を提示。
+   - Phase 1（まず着手）: 最優先ボトルネックの解消（手作業の二重入力削減・即座の時間創出）
+   - Phase 2（次の展開）: 集客〜商談〜顧客フォローがつながる売上の流れの構築
+   - Phase 3（完成形）: 経営顧問による自走組織と新規事業への展開
+
+4. ■ 推奨される最初の一歩（MSTサービス体系からの処方箋）
+   - 経営戦略・利益改善顧問、業務改善・IT・DX顧問、システム構築・業務自動化、マーケティング集客導線から、貴社に最も適した組み合わせをご提案。
+
+Markdown見出しを使い、前置きは付けず本文だけ出力してください。
+
+【社内データ】
+`;
+
+app.post('/api/diagnosis-submissions/:id/generate-report', requireAuth, async (req, res) => {
+  if (!lineSupabase) return res.status(503).json({ error: 'DB接続が設定されていません。' });
+  const user = (req as any).user;
+  const submissionId = String(req.params.id || '');
+  if (!UUID_PATTERN.test(submissionId)) return res.status(400).json({ error: '回答IDが正しくありません。' });
+  const force = req.body?.force === true;
+
+  try {
+    const killSwitch = await getKillSwitchStatus('ai');
+    if (killSwitch.paused) {
+      return res.status(503).json({ error: `AI呼び出し機能は緊急停止中です: ${killSwitch.reason || '一時停止中'}` });
+    }
+
+    const { data: submission, error: submissionError } = await lineSupabase
+      .from('diagnosis_submissions')
+      .select('id, form_id, company_id, lead_id, diagnosis_id, status, answers')
+      .eq('id', submissionId)
+      .maybeSingle();
+    if (submissionError) throw submissionError;
+    if (!submission) return res.status(404).json({ error: '回答が見つかりません（削除された可能性があります）。' });
+
+    const { data: form } = await lineSupabase
+      .from('diagnosis_forms')
+      .select('form_type, definition')
+      .eq('id', submission.form_id)
+      .maybeSingle();
+    if (form?.form_type !== 'diagnosis') {
+      return res.status(422).json({ error: '診断フォームの回答ではないため、診断レポートは作成できません。' });
+    }
+    if (!submission.company_id) {
+      return res.status(422).json({ error: '会社が紐付いていない回答です。先に「反響リードに登録」で会社を紐付けてください。' });
+    }
+
+    // 診断が未作成なら作る
+    let diagnosisId: string | null = submission.diagnosis_id ? String(submission.diagnosis_id) : null;
+    if (!diagnosisId) {
+      const { data, error } = await lineSupabase.rpc('create_diagnosis_from_form_submission', { p_submission_id: submissionId });
+      if (error) {
+        console.error('Diagnosis ensure failed:', error.message);
+        return res.status(500).json({ error: `診断を作成できませんでした: ${error.message}` });
+      }
+      if (!data) return res.status(422).json({ error: '診断を作成できませんでした。会社の紐付けを確認してください。' });
+      diagnosisId = String(data);
+    }
+
+    // すでにレポートがある場合は、作り直すか画面で確認する
+    if (!force) {
+      const { data: latest } = await lineSupabase
+        .from('ai_reports')
+        .select('id, version')
+        .eq('diagnosis_id', diagnosisId)
+        .eq('is_latest', true)
+        .maybeSingle();
+      if (latest) return res.json({ alreadyExists: true, diagnosisId, reportVersion: latest.version });
+    }
+
+    // AIに渡す情報（個人の連絡先・社内メモは含めない）
+    const [{ data: company }, { data: lead }, { data: deal }] = await Promise.all([
+      lineSupabase.from('companies').select('company_name, industry, website').eq('id', submission.company_id).maybeSingle(),
+      submission.lead_id
+        ? lineSupabase.from('leads').select('source, service_type, status, interested_product_id').eq('id', submission.lead_id).maybeSingle()
+        : Promise.resolve({ data: null as any }),
+      lineSupabase.from('deals').select('proposal_plan_name, proposal_status, proposal_type, total_amount, initial_fee, monthly_fee, product_id').eq('company_id', submission.company_id).order('created_at', { ascending: false }).limit(1).maybeSingle(),
+    ]);
+
+    const questions: any[] = Array.isArray((form as any)?.definition?.questions) ? (form as any).definition.questions : [];
+    const labelById = new Map<string, string>();
+    questions.forEach((q) => { if (q?.id) labelById.set(String(q.id), String(q.label || q.id)); });
+    const answerEntries = Object.entries((submission.answers || {}) as Record<string, unknown>)
+      .filter(([key, value]) => key !== '_intake' && value !== null && value !== undefined && String(value).trim() !== '')
+      .map(([key, value]) => [labelById.get(key) || key, value] as [string, unknown]);
+    if (answerEntries.length === 0) {
+      return res.status(422).json({ error: '回答の内容が空のため、レポートを作成できません。' });
+    }
+
+    const context = {
+      company: { company_name: company?.company_name, industry: company?.industry, website: company?.website },
+      lead,
+      latestDeal: deal,
+      diagnosis: { type: 'standard', answers: Object.fromEntries(answerEntries) },
+    };
+
+    const abortController = new AbortController();
+    res.on('close', () => {
+      if (!res.writableEnded) abortController.abort();
+    });
+    const result = await runWithFallback(resolveModelSetting(undefined), {
+      systemInstruction: 'あなたは事実に忠実で慎重な、経営診断レポート作成の専門AIです。回答に書かれていない事実は作らず、明確で丁寧な日本語で書きます。',
+      messages: [{ role: 'user', content: DIAGNOSIS_REPORT_PROMPT + JSON.stringify(context, null, 2) }],
+      temperature: 0.4,
+      signal: abortController.signal,
+    });
+    const text = result.text.trim();
+    if (!text) throw new Error('AIがレポート本文を返しませんでした。');
+
+    const saved = await saveDiagnosisReport(
+      user,
+      diagnosisId,
+      text,
+      [result.provider, result.model].filter(Boolean).join('/') || 'configured-model',
+      lead?.interested_product_id || deal?.product_id || null,
+    );
+
+    // 提案書の下書き（診断結果・推奨事項＋直近の商談情報）
+    let proposalCreated = false;
+    try {
+      const productId = deal?.product_id || lead?.interested_product_id || null;
+      let productName = '要選定';
+      if (productId) {
+        const { data: product } = await lineSupabase.from('products').select('product_name').eq('id', productId).maybeSingle();
+        if (product?.product_name) productName = String(product.product_name);
+      }
+      const money = (value: unknown) => (value === null || value === undefined ? '要設定' : String(value));
+      const proposalHtml = `<article><h1>${escapeHtmlText(String(deal?.proposal_plan_name || '診断結果に基づくご提案'))}</h1>
+<p>宛先：${escapeHtmlText(saved.companyName)}</p>
+<h2>診断結果・推奨事項</h2><pre style="white-space:pre-wrap">${escapeHtmlText(text)}</pre>
+<h2>ご提案内容</h2><p>推奨サービス：${escapeHtmlText(productName)}</p>
+<p>提案プラン：${escapeHtmlText(String(deal?.proposal_plan_name || '要設定'))}</p>
+<p>初期費用：${money(deal?.initial_fee)} 円</p><p>月額費用：${money(deal?.monthly_fee)} 円</p><p>合計金額：${money(deal?.total_amount)} 円</p></article>`;
+      const { error: proposalError } = await lineSupabase.from('customer_documents').insert({
+        owner_id: user.id,
+        document_type: 'proposal',
+        title: `${saved.companyName} 診断結果に基づくご提案（下書き）`,
+        status: 'draft',
+        body_html: proposalHtml,
+        company_id: saved.companyId,
+        lead_id: saved.leadId,
+        deal_id: null,
+        diagnosis_id: diagnosisId,
+        ai_report_id: saved.report.id,
+      });
+      if (proposalError) console.warn('Proposal draft creation failed:', proposalError.message);
+      else proposalCreated = true;
+    } catch (proposalErr: any) {
+      console.warn('Proposal draft creation failed:', proposalErr?.message || proposalErr);
+    }
+
+    // 回答の状態を「未対応」から「対応中」へ
+    if (submission.status === 'received') {
+      await lineSupabase.from('diagnosis_submissions').update({ status: 'reviewing' }).eq('id', submissionId);
+    }
+
+    return res.json({
+      success: true,
+      diagnosisId,
+      reportId: saved.report.id,
+      version: saved.report.version,
+      companyId: saved.companyId,
+      proposalCreated,
+      documentSynced: saved.documentSynced,
+    });
+  } catch (err: any) {
+    if (err instanceof HttpError) return res.status(err.statusCode).json({ error: err.message });
+    console.error('Diagnosis report auto-generation failed:', err?.message || err);
+    return res.status(500).json({ error: err?.message || 'レポートを作成できませんでした。' });
+  }
+});
+
+// ─── 受信トレイの削除（テスト回答・受信メールの整理用） ───
+function parseDeleteIds(body: any): string[] | null {
+  const ids = Array.isArray(body?.ids) ? body.ids.map((value: unknown) => String(value)) : [];
+  const unique = Array.from(new Set<string>(ids));
+  if (unique.length === 0 || unique.length > 200) return null;
+  if (!unique.every((id) => UUID_PATTERN.test(id))) return null;
+  return unique;
+}
+
+// 診断フォームの回答を削除する。回答だけが使っていて、レポートが無い診断は一緒に削除する。
+app.post('/api/inbox/form-submissions/delete', requireAuth, async (req, res) => {
+  if (!lineSupabase) return res.status(503).json({ error: 'DB接続が設定されていません。' });
+  const ids = parseDeleteIds(req.body);
+  if (!ids) return res.status(400).json({ error: '削除する回答を1〜200件で指定してください。' });
+
+  try {
+    const { data: targets, error: targetsError } = await lineSupabase
+      .from('diagnosis_submissions')
+      .select('id, diagnosis_id')
+      .in('id', ids);
+    if (targetsError) throw targetsError;
+    const diagnosisIds = Array.from(new Set((targets || []).map((row: any) => row.diagnosis_id).filter(Boolean).map(String)));
+
+    const { data: deleted, error: deleteError } = await lineSupabase
+      .from('diagnosis_submissions')
+      .delete()
+      .in('id', ids)
+      .select('id');
+    if (deleteError) throw deleteError;
+
+    let removedDiagnoses = 0;
+    let keptDiagnoses = 0;
+    if (diagnosisIds.length > 0) {
+      const [stillUsed, withReports] = await Promise.all([
+        lineSupabase.from('diagnosis_submissions').select('diagnosis_id').in('diagnosis_id', diagnosisIds),
+        lineSupabase.from('ai_reports').select('diagnosis_id').in('diagnosis_id', diagnosisIds),
+      ]);
+      const keep = new Set<string>([
+        ...(stillUsed.data || []).map((row: any) => String(row.diagnosis_id)),
+        ...(withReports.data || []).map((row: any) => String(row.diagnosis_id)),
+      ]);
+      const removable = diagnosisIds.filter((id) => !keep.has(id));
+      keptDiagnoses = diagnosisIds.length - removable.length;
+      if (removable.length > 0) {
+        const { data: removed, error: removeError } = await lineSupabase.from('diagnoses').delete().in('id', removable).select('id');
+        if (removeError) console.warn('Diagnosis cleanup after submission delete failed:', removeError.message);
+        else removedDiagnoses = removed?.length || 0;
+      }
+    }
+
+    const deletedIds = (deleted || []).map((row: any) => String(row.id));
+    return res.json({ success: true, count: deletedIds.length, deletedIds, removedDiagnoses, keptDiagnoses });
+  } catch (err: any) {
+    console.error('Form submission delete failed:', err?.message || err);
+    return res.status(500).json({ error: err?.message || '回答を削除できませんでした。' });
+  }
+});
+
+// 自分の受信箱のメールを削除する（他人の受信メールには触れない）。
+app.post('/api/inbox/email/delete', requireAuth, async (req, res) => {
+  if (!lineSupabase) return res.status(503).json({ error: 'DB接続が設定されていません。' });
+  const user = (req as any).user;
+  const ids = parseDeleteIds(req.body);
+  if (!ids) return res.status(400).json({ error: '削除するメールを1〜200件で指定してください。' });
+
+  try {
+    const { data: deleted, error } = await lineSupabase
+      .from('email_inbox_messages')
+      .delete()
+      .in('id', ids)
+      .eq('owner_id', user.id)
+      .select('id');
+    if (error) throw error;
+    const deletedIds = (deleted || []).map((row: any) => String(row.id));
+    return res.json({ success: true, count: deletedIds.length, deletedIds });
+  } catch (err: any) {
+    console.error('Inbox email delete failed:', err?.message || err);
+    return res.status(500).json({ error: err?.message || 'メールを削除できませんでした。' });
   }
 });
 

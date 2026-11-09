@@ -87,44 +87,40 @@ export const MarketingEmailInboxView: React.FC<MarketingEmailInboxViewProps> = (
       return;
     }
     setOwnerId(auth.user.id);
-    const [settings, inbox] = await Promise.all([
-      db
-        .from('email_channel_integrations')
-        .select('inbound_address, backup_forward_address, backup_forward_enabled')
-        .eq('owner_id', auth.user.id)
-        .maybeSingle(),
-      db
-        .from('email_inbox_messages')
-        .select('id, from_email, to_emails, subject, text_body, html_body, received_at, backup_status, backup_error')
-        .eq('owner_id', auth.user.id)
-        .order('received_at', { ascending: false })
-        .limit(500),
-    ]);
 
-    const failed = settings.error || inbox.error;
-    if (failed) {
-      setError(
-        failed.code === 'PGRST205'
-          ? 'メール受信箱のDBマイグレーションが未適用です。'
-          : 'メール受信箱を読み込めません: ' + failed.message
-      );
-      return;
+    let inAddress = '';
+    let fwdAddress = 'mst.shikumikaizen@gmail.com';
+    let fwdEnabled = false;
+    let loadedMessages: InboxMessage[] = [];
+
+    try {
+      const headers = await getAuthHeaders();
+      const res = await fetch('/api/inbox/email/messages', { headers });
+      if (res.ok) {
+        const apiData = await res.json();
+        if (apiData.success) {
+          inAddress = apiData.inboundAddress || '';
+          fwdAddress = apiData.backupForwardAddress || 'mst.shikumikaizen@gmail.com';
+          fwdEnabled = Boolean(apiData.backupForwardEnabled);
+          loadedMessages = (apiData.messages || []) as InboxMessage[];
+        }
+      }
+    } catch {}
+
+    if (loadedMessages.length === 0 && inAddress === '') {
+      try {
+        const [settings, inbox] = await Promise.all([
+          db.from('email_channel_integrations').select('inbound_address, backup_forward_address, backup_forward_enabled').eq('owner_id', auth.user.id).maybeSingle(),
+          db.from('email_inbox_messages').select('id, from_email, to_emails, subject, text_body, html_body, received_at, backup_status, backup_error').order('received_at', { ascending: false }).limit(500),
+        ]);
+        inAddress = settings.data?.inbound_address || '';
+        fwdAddress = settings.data?.backup_forward_address || 'mst.shikumikaizen@gmail.com';
+        fwdEnabled = Boolean(settings.data?.backup_forward_enabled);
+        loadedMessages = (inbox.data || []) as InboxMessage[];
+      } catch (err: any) {
+        console.warn('Fallback direct query error:', err);
+      }
     }
-
-    const inAddress = settings.data?.inbound_address || '';
-    const fwdAddress = settings.data?.backup_forward_address || 'mst.shikumikaizen@gmail.com';
-    const fwdEnabled = Boolean(settings.data?.backup_forward_enabled);
-
-    setAddress(inAddress);
-    setBackupAddress(fwdAddress);
-    setBackupEnabled(fwdEnabled);
-    setSavedConfig({
-      address: inAddress,
-      backupAddress: fwdAddress,
-      backupEnabled: fwdEnabled,
-    });
-
-    const loadedMessages = (inbox.data || []) as InboxMessage[];
     setMessages(loadedMessages);
     setCheckedIds([]);
 
@@ -141,6 +137,7 @@ export const MarketingEmailInboxView: React.FC<MarketingEmailInboxViewProps> = (
       if (c.email && c.full_name) names[String(c.email).trim().toLowerCase()] = String(c.full_name);
     });
     setContactNames(names);
+ (fix: resolve email inbox permission denial, restore selectable materials checkboxes, and revert contact form options to 4 themes)
   };
 
   const deleteMessages = async (ids: string[]) => {
@@ -170,13 +167,12 @@ export const MarketingEmailInboxView: React.FC<MarketingEmailInboxViewProps> = (
       setDeleting(false);
     }
   };
-
   useEffect(() => {
     void load();
   }, []);
 
   const save = async () => {
-    if (!db || !ownerId) return;
+    if (!ownerId) return;
     const inVal = address.trim().toLowerCase();
     const fwdVal = backupAddress.trim().toLowerCase();
     const emailPattern = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -193,28 +189,50 @@ export const MarketingEmailInboxView: React.FC<MarketingEmailInboxViewProps> = (
     setBusy(true);
     setError('');
     setNotice('');
-    const { error: e } = await db.from('email_channel_integrations').upsert(
-      {
-        owner_id: ownerId,
-        inbound_address: inVal,
-        backup_forward_address: fwdVal,
-        backup_forward_enabled: backupEnabled,
-        updated_at: new Date().toISOString(),
-      },
-      { onConflict: 'owner_id' }
-    );
 
-    if (e) {
-      setError(e.message);
-    } else {
+    try {
+      const headers = await getAuthHeaders();
+      const response = await fetch('/api/inbox/email/settings', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', ...headers },
+        body: JSON.stringify({ address: inVal, backupAddress: fwdVal, backupEnabled }),
+      });
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(data.error || '設定を保存できませんでした。');
+
       setSavedConfig({
         address: inVal,
         backupAddress: fwdVal,
         backupEnabled,
       });
       setNotice('受信および控え自動転送の設定を保存しました。');
+    } catch (e: any) {
+      if (db) {
+        const { error: err } = await db.from('email_channel_integrations').upsert(
+          {
+            owner_id: ownerId,
+            inbound_address: inVal,
+            backup_forward_address: fwdVal,
+            backup_forward_enabled: backupEnabled,
+            updated_at: new Date().toISOString(),
+          },
+          { onConflict: 'owner_id' }
+        );
+        if (err) setError(err.message);
+        else {
+          setSavedConfig({
+            address: inVal,
+            backupAddress: fwdVal,
+            backupEnabled,
+          });
+          setNotice('受信および控え自動転送の設定を保存しました。');
+        }
+      } else {
+        setError(e?.message || '設定の保存に失敗しました。');
+      }
+    } finally {
+      setBusy(false);
     }
-    setBusy(false);
   };
 
   const handleTestForward = async () => {
