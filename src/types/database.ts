@@ -444,7 +444,6 @@ export const TABLE_CONFIGS: Record<TableKey, TableConfig> = {
         { value: '介護保険外開業', label: '介護保険外開業' },
         { value: 'その他お問い合わせ', label: 'その他お問い合わせ' },
       ] },
-      { key: 'service_type', label: '検討サービス種別', type: 'text', placeholder: '例: AI経営OS, DXコンサル' },
       { key: 'priority_channel', label: '優先連絡チャネル', type: 'select', allowCustom: true, options: [
         { value: 'メール', label: 'メール' }, { value: '電話', label: '電話' },
         { value: 'LINE', label: 'LINE' }, { value: 'その他', label: 'その他' },

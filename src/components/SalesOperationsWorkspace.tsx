@@ -26,7 +26,7 @@ const segmentConditionFields: Record<string, string[]> = {
   contacts: ['source', 'preferred_channel', 'role_title'],
   companies: ['industry'],
   prospects: ['status', 'source', 'approach_method', 'target_flag'],
-  leads: ['status', 'inquiry_type', 'source', 'service_type', 'priority_channel'],
+  leads: ['status', 'inquiry_type', 'source', 'priority_channel'],
   deals: ['proposal_status', 'proposal_type'],
   customers: ['contract_status'],
 };

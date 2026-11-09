@@ -365,7 +365,7 @@ export const StageTransitionModal: React.FC<StageTransitionModalProps> = ({
 
                 {type === 'lead_to_deal' && (
                   <div className="grid grid-cols-2 gap-2 text-slate-400 text-[11px] bg-slate-900/60 p-2.5 rounded-xl border border-slate-800/80">
-                    <div>検討サービス: <span className="text-white font-medium">{sourceRecord?.service_type || '未設定'}</span></div>
+                    <div>希望内容: <span className="text-white font-medium">{sourceRecord?.inquiry_type || '未設定'}</span></div>
                     <div>ステータス: <span className="text-white font-medium">{sourceRecord?.status || '未設定'}</span></div>
                     <div>連絡チャネル: <span className="text-white font-medium">{sourceRecord?.priority_channel || '未設定'}</span></div>
                     <div>面談日: <span className="text-white font-mono">{sourceRecord?.meeting_date || '未定'}</span></div>

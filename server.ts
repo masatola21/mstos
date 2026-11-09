@@ -5193,7 +5193,7 @@ app.post(
           notes,
           last_contacted_at: new Date().toISOString(),
           ...(resolvedCompanyId && !lead.company_id ? { company_id: resolvedCompanyId } : {}),
-          ...(formServiceType && !lead.service_type ? { service_type: formServiceType } : {}),
+
           ...(meetingDate ? { meeting_date: meetingDate } : {}),
           ...(inquiryType ? { inquiry_type: inquiryType } : {}),
           ...(isCarePackage && ['新規', 'ヒアリング済'].includes(lead.status) ? { status: leadStatus } : {}),
@@ -5205,7 +5205,7 @@ app.post(
         contact_id: contact.id,
         company_id: resolvedCompanyId,
         source: leadSource,
-        ...(formServiceType ? { service_type: formServiceType } : {}),
+
         priority_channel: normalizedUtm.source === 'line' ? 'LINE' : 'メール',
         status: leadStatus,
         first_registered_at: new Date().toISOString(),

@@ -15,7 +15,7 @@ const CORE_FORM_FIELDS: Record<TableKey, string[]> = {
   companies: ['company_name', 'industry', 'contact_name', 'email', 'phone', 'website'],
   contacts: ['full_name', 'company_id', 'email', 'phone', 'preferred_channel'],
   prospects: ['company_id', 'status', 'source', 'approach_method', 'recommended_product_id', 'target_flag'],
-  leads: ['company_id', 'status', 'source', 'service_type', 'priority_channel', 'meeting_date', 'notes'],
+  leads: ['company_id', 'status', 'source', 'inquiry_type', 'priority_channel', 'meeting_date', 'notes'],
   products: [
     'product_name',
     'product_type',
