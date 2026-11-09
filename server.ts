@@ -538,6 +538,234 @@ function isTransactionalOutboxEmail(row: any): boolean {
     .some((prefix) => sourceType === prefix || sourceType.startsWith(`${prefix}_`));
 }
 
+export interface ResolvedEmailSender {
+  senderName: string;
+  senderEmail: string;
+  fromString: string;
+  replyToEmail?: string;
+}
+
+export async function resolveEmailSender(ownerId?: string | null): Promise<ResolvedEmailSender> {
+  const configuredFrom = process.env.RESEND_FROM_EMAIL || '';
+  const configuredAddress = configuredFrom.match(/<([^<>]+)>/)?.[1] || configuredFrom.trim();
+
+  let senderName = '有限会社MST｜経営・業務改善支援';
+  let senderEmail = (configuredAddress || 'contact@mstcorp.info').trim().toLowerCase();
+  let replyToEmail = 'mst.shikumikaizen@gmail.com';
+
+  if (ownerId && lineSupabase) {
+    try {
+      const { data: sendSettings } = await lineSupabase
+        .from('email_send_settings')
+        .select('sender_name,sender_email,reply_to_email')
+        .eq('owner_id', ownerId)
+        .maybeSingle();
+
+      if (sendSettings) {
+        if (sendSettings.sender_name && String(sendSettings.sender_name).trim()) {
+          senderName = String(sendSettings.sender_name).trim().replace(/"/g, '');
+        }
+        if (sendSettings.sender_email && String(sendSettings.sender_email).trim()) {
+          senderEmail = String(sendSettings.sender_email).trim().toLowerCase();
+        }
+        if (sendSettings.reply_to_email && String(sendSettings.reply_to_email).trim()) {
+          replyToEmail = String(sendSettings.reply_to_email).trim();
+        }
+      }
+    } catch (err) {
+      console.warn('[resolveEmailSender] Error fetching email_send_settings:', err);
+    }
+  }
+
+  const fromString = `${senderName} <${senderEmail}>`;
+  return { senderName, senderEmail, fromString, replyToEmail };
+}
+
+export function extractEmailAddress(raw: string): string {
+  if (!raw) return '';
+  const match = raw.match(/<([^>]+)>/) || raw.match(/([^\s<]+@[^\s>]+)/);
+  return (match ? match[1] : raw).trim().toLowerCase();
+}
+
+export function shouldForwardInboundEmail(options: {
+  senderEmail: string;
+  backupForwardAddress?: string | null;
+  backupForwardEnabled?: boolean;
+  osSenderEmail?: string;
+  subject?: string;
+  headers?: Record<string, any> | Array<{ name: string; value: string }>;
+  textBody?: string;
+}): { shouldForward: boolean; reason?: string } {
+  const {
+    senderEmail,
+    backupForwardAddress,
+    backupForwardEnabled,
+    osSenderEmail,
+    subject = '',
+    headers,
+  } = options;
+
+  if (!backupForwardEnabled) {
+    return { shouldForward: false, reason: 'バックアップ転送が無効に設定されています' };
+  }
+
+  const cleanForward = String(backupForwardAddress || '').trim().toLowerCase();
+  const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+  if (!cleanForward || !emailRegex.test(cleanForward)) {
+    return { shouldForward: false, reason: '転送先メールアドレスが未設定または無効です' };
+  }
+
+  const cleanSender = extractEmailAddress(senderEmail);
+  if (!cleanSender || !emailRegex.test(cleanSender)) {
+    return { shouldForward: false, reason: '差出人アドレスが不明または不正です' };
+  }
+
+  // ループ防止 1: 差出人がバックアップ先アドレスと一致
+  if (cleanSender === cleanForward) {
+    return { shouldForward: false, reason: '差出人がバックアップ先アドレスと一致するためループ防止によりスキップ' };
+  }
+
+  // ループ防止 2: 差出人がOS差出人アドレスと一致
+  const cleanOsSender = extractEmailAddress(osSenderEmail || '');
+  if (cleanOsSender && cleanSender === cleanOsSender) {
+    return { shouldForward: false, reason: '差出人がOS差出人アドレスと一致するためループ防止によりスキップ' };
+  }
+
+  // ループ防止 3: noreply系アドレスの除外
+  if (/^(no-?reply|mailer-daemon|postmaster|daemon|notifications?|bounce|auto-reply)@/i.test(cleanSender) || /noreply/i.test(cleanSender)) {
+    return { shouldForward: false, reason: '差出人がシステム/配信専用アドレス（noreply等）のためスキップ' };
+  }
+
+  // ループ防止 4: X-MST-Backup-Copy ヘッダーチェック
+  if (headers) {
+    let hasBackupHeader = false;
+    if (Array.isArray(headers)) {
+      hasBackupHeader = headers.some(
+        (h) => typeof h?.name === 'string' && h.name.toLowerCase() === 'x-mst-backup-copy'
+      );
+    } else if (typeof headers === 'object') {
+      hasBackupHeader = Object.keys(headers).some(
+        (k) => k.toLowerCase() === 'x-mst-backup-copy'
+      );
+    }
+    if (hasBackupHeader) {
+      return { shouldForward: false, reason: 'X-MST-Backup-Copy ヘッダーを検出したためループ防止によりスキップ' };
+    }
+  }
+
+  // 配信停止・不達バウンスの除外
+  const lowerSubject = subject.toLowerCase();
+  if (
+    /delivery status notification|undelivered mail|failure notice|returned mail|mail delivery subsystem|mail failure|delivery failure/i.test(lowerSubject) ||
+    /配信停止完了|オプトアウト完了|登録解除完了|unsubscribe confirmation|unsubscribe successful/i.test(lowerSubject)
+  ) {
+    return { shouldForward: false, reason: '不達または配信停止の通知メールのためスキップ' };
+  }
+
+  return { shouldForward: true };
+}
+
+export async function executeEmailBackupForward(params: {
+  ownerId?: string | null;
+  messageId: string;
+  fromEmail: string;
+  toEmails: string[];
+  subject: string;
+  textBody?: string;
+  htmlBody?: string;
+  receivedAt: string;
+  attachments?: Array<{ filename?: string; name?: string; content_type?: string; size?: number }>;
+  backupForwardAddress: string;
+}): Promise<{ success: boolean; resendMessageId?: string; error?: string }> {
+  const emailKey = process.env.RESEND_API_KEY || '';
+  if (!emailKey) {
+    const errorMsg = 'RESEND_API_KEY が未設定です。';
+    if (lineSupabase && params.messageId) {
+      await lineSupabase
+        .from('email_inbox_messages')
+        .update({ backup_status: 'failed', backup_error: errorMsg })
+        .eq('id', params.messageId);
+    }
+    return { success: false, error: errorMsg };
+  }
+
+  const sender = await resolveEmailSender(params.ownerId);
+  const cleanReplyTo = extractEmailAddress(params.fromEmail) || params.fromEmail;
+
+  // 添付ファイル名の一覧
+  const attachmentNames = (params.attachments && params.attachments.length > 0)
+    ? params.attachments.map((a) => a.filename || a.name || '名称不明ファイル').join(', ')
+    : 'なし';
+
+  const dateStr = params.receivedAt
+    ? new Date(params.receivedAt).toLocaleString('ja-JP', { timeZone: 'Asia/Tokyo' })
+    : new Date().toLocaleString('ja-JP', { timeZone: 'Asia/Tokyo' });
+
+  const headerBlock = [
+    '【受信メール控え】',
+    `差出人: ${params.fromEmail}`,
+    `宛先: ${params.toEmails.join(', ')}`,
+    `受信日時: ${dateStr}`,
+    `添付ファイル: ${attachmentNames}`,
+    '--------------------------------------------------',
+    '',
+  ].join('\n');
+
+  const rawBody = params.textBody || (params.htmlBody ? params.htmlBody.replace(/<[^>]*>/g, ' ') : '(本文なし)');
+  const fullText = headerBlock + rawBody;
+  const forwardSubject = `【控え】${params.subject || '(件名なし)'}`;
+
+  try {
+    const response = await fetch('https://api.resend.com/emails', {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${emailKey}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        from: sender.fromString,
+        to: [params.backupForwardAddress.trim()],
+        subject: forwardSubject,
+        text: fullText,
+        reply_to: cleanReplyTo,
+        headers: {
+          'X-MST-Backup-Copy': '1',
+        },
+      }),
+    });
+
+    const result = await response.json().catch(() => ({})) as { id?: string; message?: string };
+    if (!response.ok || !result.id) {
+      const errorMsg = result.message || `Resend送信エラー (HTTP ${response.status})`;
+      if (lineSupabase && params.messageId) {
+        await lineSupabase
+          .from('email_inbox_messages')
+          .update({ backup_status: 'failed', backup_error: errorMsg })
+          .eq('id', params.messageId);
+      }
+      return { success: false, error: errorMsg };
+    }
+
+    if (lineSupabase && params.messageId) {
+      await lineSupabase
+        .from('email_inbox_messages')
+        .update({ backup_status: 'sent', backup_error: null })
+        .eq('id', params.messageId);
+    }
+
+    return { success: true, resendMessageId: result.id };
+  } catch (err: any) {
+    const errorMsg = err?.message || 'バックアップ転送中にネットワークエラーが発生しました。';
+    if (lineSupabase && params.messageId) {
+      await lineSupabase
+        .from('email_inbox_messages')
+        .update({ backup_status: 'failed', backup_error: errorMsg })
+        .eq('id', params.messageId);
+    }
+    return { success: false, error: errorMsg };
+  }
+}
+
 interface LineUserProfile {
   displayName?: string;
   pictureUrl?: string;
@@ -2130,7 +2358,9 @@ app.post('/api/email/webhook', express.raw({ type: 'application/json', limit: '2
   const emailId = typeof event.data?.email_id === 'string' ? event.data.email_id : '';
   const recipients = Array.isArray(event.data?.to) ? event.data.to.filter((value: unknown) => typeof value === 'string').map((value: string) => value.toLowerCase()) : [];
   if (!emailId || recipients.length === 0) return res.status(400).json({ error: '受信メールの識別情報がありません。' });
-  const { data: integrations, error: integrationError } = await lineSupabase.from('email_channel_integrations').select('owner_id,inbound_address');
+  const { data: integrations, error: integrationError } = await lineSupabase
+    .from('email_channel_integrations')
+    .select('owner_id,inbound_address,backup_forward_address,backup_forward_enabled');
   if (integrationError) console.warn('[ResendWebhook] email_channel_integrations query warning:', integrationError);
 
   let matched = (integrations || []).filter((entry: any) => recipients.includes(String(entry.inbound_address || '').toLowerCase()));
@@ -2141,7 +2371,12 @@ app.post('/api/email/webhook', express.raw({ type: 'application/json', limit: '2
       // ユーザーが未登録の場合、Supabaseの最初のユーザーまたはデフォルト所有者を探索
       const { data: userData } = await lineSupabase.auth.admin.listUsers({ perPage: 1 }).catch(() => ({ data: null }));
       if (userData?.users?.[0]?.id) {
-        matched = [{ owner_id: userData.users[0].id, inbound_address: recipients[0] || 'default' }];
+        matched = [{
+          owner_id: userData.users[0].id,
+          inbound_address: recipients[0] || 'default',
+          backup_forward_address: null,
+          backup_forward_enabled: false,
+        }];
       }
     }
   }
@@ -2157,17 +2392,102 @@ app.post('/api/email/webhook', express.raw({ type: 'application/json', limit: '2
   const emailResult = await emailResponse.json().catch(() => ({})) as any;
   if (!emailResponse.ok) return res.status(502).json({ error: emailResult.message || '受信本文を取得できません。' });
   const message = emailResult.data && typeof emailResult.data === 'object' ? emailResult.data : emailResult;
+
   for (const integration of matched) {
-    const { error } = await lineSupabase.from('email_inbox_messages').upsert({
-      owner_id: integration.owner_id, provider_email_id: emailId,
-      from_email: String(message.from || event.data.from || '').slice(0, 320),
-      to_emails: recipients, subject: String(message.subject || event.data.subject || '').slice(0, 998),
-      text_body: String(message.text || '').slice(0, 100000), html_body: String(message.html || '').slice(0, 100000),
-      received_at: message.created_at || event.data.created_at || new Date().toISOString(),
-    }, { onConflict: 'owner_id,provider_email_id', ignoreDuplicates: true });
-    if (error) {
-      console.error('[ResendWebhook] Failed to save email to email_inbox_messages:', error);
-      return res.status(500).json({ error: '受信メールを保存できませんでした。' });
+    // 2-8-6: 重複受信チェック（新規行の場合のみバックアップ転送を行う）
+    const { data: existingMessage } = await lineSupabase
+      .from('email_inbox_messages')
+      .select('id, backup_status')
+      .eq('owner_id', integration.owner_id)
+      .eq('provider_email_id', emailId)
+      .maybeSingle();
+
+    const isNew = !existingMessage;
+    let savedMessageId = existingMessage?.id;
+
+    if (isNew) {
+      const { data: inserted, error: insertError } = await lineSupabase
+        .from('email_inbox_messages')
+        .insert({
+          owner_id: integration.owner_id,
+          provider_email_id: emailId,
+          from_email: String(message.from || event.data.from || '').slice(0, 320),
+          to_emails: recipients,
+          subject: String(message.subject || event.data.subject || '').slice(0, 998),
+          text_body: String(message.text || '').slice(0, 100000),
+          html_body: String(message.html || '').slice(0, 100000),
+          received_at: message.created_at || event.data.created_at || new Date().toISOString(),
+          backup_status: 'skipped',
+        })
+        .select('id')
+        .single();
+
+      if (insertError) {
+        console.error('[ResendWebhook] Failed to save email to email_inbox_messages:', insertError);
+        return res.status(500).json({ error: '受信メールを保存できませんでした。' });
+      }
+      savedMessageId = inserted?.id;
+    } else {
+      // 既存メッセージの場合は内容を安全に更新
+      await lineSupabase.from('email_inbox_messages').upsert({
+        owner_id: integration.owner_id,
+        provider_email_id: emailId,
+        from_email: String(message.from || event.data.from || '').slice(0, 320),
+        to_emails: recipients,
+        subject: String(message.subject || event.data.subject || '').slice(0, 998),
+        text_body: String(message.text || '').slice(0, 100000),
+        html_body: String(message.html || '').slice(0, 100000),
+        received_at: message.created_at || event.data.created_at || new Date().toISOString(),
+      }, { onConflict: 'owner_id,provider_email_id', ignoreDuplicates: true });
+    }
+
+    // 2-8-6: 新規行の場合のみバックアップ転送判定と実行（Webhookは常に200を返すよう非致命的に実行）
+    if (isNew && savedMessageId) {
+      try {
+        const rawFrom = String(message.from || event.data.from || '');
+        const osSender = await resolveEmailSender(integration.owner_id);
+        const forwardDecision = shouldForwardInboundEmail({
+          senderEmail: rawFrom,
+          backupForwardAddress: integration.backup_forward_address,
+          backupForwardEnabled: integration.backup_forward_enabled,
+          osSenderEmail: osSender.senderEmail,
+          subject: String(message.subject || event.data.subject || ''),
+          headers: message.headers || event.data.headers,
+          textBody: String(message.text || ''),
+        });
+
+        if (forwardDecision.shouldForward && integration.backup_forward_address) {
+          await executeEmailBackupForward({
+            ownerId: integration.owner_id,
+            messageId: savedMessageId,
+            fromEmail: rawFrom,
+            toEmails: recipients,
+            subject: String(message.subject || event.data.subject || ''),
+            textBody: String(message.text || ''),
+            htmlBody: String(message.html || ''),
+            receivedAt: message.created_at || event.data.created_at || new Date().toISOString(),
+            attachments: message.attachments || event.data.attachments,
+            backupForwardAddress: integration.backup_forward_address,
+          });
+        } else {
+          await lineSupabase
+            .from('email_inbox_messages')
+            .update({
+              backup_status: 'skipped',
+              backup_error: forwardDecision.reason || null,
+            })
+            .eq('id', savedMessageId);
+        }
+      } catch (fwdErr: any) {
+        console.warn('[ResendWebhook] Non-fatal backup forward exception:', fwdErr?.message);
+        await lineSupabase
+          .from('email_inbox_messages')
+          .update({
+            backup_status: 'failed',
+            backup_error: fwdErr?.message || 'バックアップ転送処理中にエラーが発生しました',
+          })
+          .eq('id', savedMessageId);
+      }
     }
   }
 
@@ -4600,7 +4920,7 @@ app.get('/api/public/materials', async (req, res) => {
           label: '介護保険外サービス開業パッケージ概要資料',
           description: '介護事業所・法人が保険外の自費収益柱（月30万〜100万円超）を最短で立ち上げるための実務手順。',
           category: '開業パッケージ',
-          url: 'https://corp.mstcorp.info/materials/care-package-overview.pdf',
+          url: 'https://corp.mstcorp.info/materials/care-package-proposal.pdf',
           sort_order: 20,
         },
       ],
@@ -5029,7 +5349,7 @@ app.post(
         {
           key: 'care-package-overview',
           label: '② 介護保険外サービス開業・収益化パッケージ資料',
-          url: 'https://corp.mstcorp.info/materials/care-package-overview.pdf',
+          url: 'https://corp.mstcorp.info/materials/care-package-proposal.pdf',
         },
       ];
       if (requestedMaterialKeys.length > 0) {
@@ -5939,6 +6259,133 @@ app.post('/api/inbox/email/delete', requireAuth, async (req, res) => {
   } catch (err: any) {
     console.error('Inbox email delete failed:', err?.message || err);
     return res.status(500).json({ error: err?.message || 'メールを削除できませんでした。' });
+  }
+});
+
+// 2-8-6: 受信メール控え転送の失敗分再送エンドポイント
+app.post('/api/email/inbox/:id/retry-backup', requireAuth, async (req, res) => {
+  if (!lineSupabase) return res.status(503).json({ error: 'DB接続が設定されていません。' });
+  const user = (req as any).user;
+  const messageId = String(req.params.id || '').trim();
+  if (!messageId) return res.status(400).json({ error: 'メッセージIDが指定されていません。' });
+
+  try {
+    const { data: msg, error: msgError } = await lineSupabase
+      .from('email_inbox_messages')
+      .select('*')
+      .eq('id', messageId)
+      .eq('owner_id', user.id)
+      .maybeSingle();
+
+    if (msgError) throw msgError;
+    if (!msg) return res.status(404).json({ error: '対象の受信メールが見つかりません。' });
+
+    const { data: integ, error: integError } = await lineSupabase
+      .from('email_channel_integrations')
+      .select('backup_forward_address, backup_forward_enabled')
+      .eq('owner_id', user.id)
+      .maybeSingle();
+
+    if (integError) throw integError;
+    const forwardAddress = integ?.backup_forward_address?.trim();
+    if (!forwardAddress) {
+      return res.status(400).json({ error: 'バックアップ転送先メールアドレスが設定されていません。' });
+    }
+
+    const result = await executeEmailBackupForward({
+      ownerId: user.id,
+      messageId: msg.id,
+      fromEmail: msg.from_email,
+      toEmails: Array.isArray(msg.to_emails) ? msg.to_emails : [msg.to_emails].filter(Boolean),
+      subject: msg.subject || '',
+      textBody: msg.text_body,
+      htmlBody: msg.html_body,
+      receivedAt: msg.received_at,
+      backupForwardAddress: forwardAddress,
+    });
+
+    if (!result.success) {
+      return res.status(500).json({ error: result.error || '控え転送の再送に失敗しました。' });
+    }
+
+    return res.json({ success: true, resendMessageId: result.resendMessageId });
+  } catch (err: any) {
+    console.error('[RetryBackup] Failed to retry backup forward:', err);
+    return res.status(500).json({ error: err?.message || '控え転送の再送処理中にエラーが発生しました。' });
+  }
+});
+
+// 2-8-6: 受信メール控え転送のテスト送信エンドポイント
+app.post('/api/email/test-backup-forward', requireAuth, async (req, res) => {
+  if (!lineSupabase) return res.status(503).json({ error: 'DB接続が設定されていません。' });
+  const user = (req as any).user;
+  const emailKey = process.env.RESEND_API_KEY || '';
+  if (!emailKey) return res.status(503).json({ error: 'RESEND_API_KEY が未設定です。' });
+
+  try {
+    let targetAddress = typeof req.body?.backup_forward_address === 'string'
+      ? req.body.backup_forward_address.trim().toLowerCase()
+      : '';
+
+    if (!targetAddress) {
+      const { data: integ } = await lineSupabase
+        .from('email_channel_integrations')
+        .select('backup_forward_address')
+        .eq('owner_id', user.id)
+        .maybeSingle();
+      targetAddress = integ?.backup_forward_address?.trim().toLowerCase() || '';
+    }
+
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!targetAddress || !emailRegex.test(targetAddress)) {
+      return res.status(400).json({ error: '有効なバックアップ転送先メールアドレスを指定してください。' });
+    }
+
+    const sender = await resolveEmailSender(user.id);
+    const dateStr = new Date().toLocaleString('ja-JP', { timeZone: 'Asia/Tokyo' });
+    const testBody = [
+      '【受信メール控え・テスト送信】',
+      `転送先アドレス: ${targetAddress}`,
+      `送信日時: ${dateStr}`,
+      '--------------------------------------------------',
+      '',
+      'これは受信メールバックアップ転送（Gmail等への自動コピー）の動作確認テストメールです。',
+      '',
+      'OSの受信トレイにメールが保存された際、このアドレスへ「【控え】+ 元の件名」で自動コピーが転送されます。',
+      'コピーされたメールに「返信」すると、元の差出人（reply_to）宛てに返信されます。',
+      '',
+      '--------------------------------------------------',
+      '有限会社MST｜経営・業務改善支援',
+      'https://corp.mstcorp.info',
+    ].join('\n');
+
+    const response = await fetch('https://api.resend.com/emails', {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${emailKey}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        from: sender.fromString,
+        to: [targetAddress],
+        subject: '【控え・テスト送信】受信メールバックアップ転送の動作確認',
+        text: testBody,
+        reply_to: sender.replyToEmail || sender.senderEmail,
+        headers: {
+          'X-MST-Backup-Copy': '1',
+        },
+      }),
+    });
+
+    const result = await response.json().catch(() => ({})) as { id?: string; message?: string };
+    if (!response.ok || !result.id) {
+      return res.status(500).json({ error: result.message || 'テストメールの送信に失敗しました。' });
+    }
+
+    return res.json({ success: true, resendMessageId: result.id });
+  } catch (err: any) {
+    console.error('[TestBackupForward] Failed to send test forward:', err);
+    return res.status(500).json({ error: err?.message || 'テスト送信中にエラーが発生しました。' });
   }
 });
 

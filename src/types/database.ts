@@ -580,3 +580,28 @@ export const TABLE_CONFIGS: Record<TableKey, TableConfig> = {
     ]
   }
 };
+
+export interface EmailChannelIntegration {
+  owner_id: string;
+  inbound_address: string;
+  backup_forward_address?: string | null;
+  backup_forward_enabled?: boolean;
+  created_at?: string;
+  updated_at?: string;
+}
+
+export interface EmailInboxMessage {
+  id: string;
+  owner_id: string;
+  provider_email_id: string;
+  from_email: string;
+  to_emails: string[];
+  subject: string;
+  text_body: string;
+  html_body: string;
+  received_at: string;
+  created_at?: string;
+  backup_status?: 'sent' | 'failed' | 'skipped';
+  backup_error?: string | null;
+}
+

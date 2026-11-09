@@ -1209,9 +1209,56 @@ export const DiagnosisFormsWorkspace: React.FC<DiagnosisFormsWorkspaceProps> = (
 
           {/* 資料一覧カード */}
           <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm space-y-3">
-            <div className="flex items-center justify-between">
-              <h4 className="font-bold text-slate-900 text-sm">登録済み配布資料 ({materials.length}件)</h4>
-              <span className="text-xs text-slate-500">HPの資料請求フォームに自動反映</span>
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <div className="flex items-center gap-2">
+                <h4 className="font-bold text-slate-900 text-sm">登録済み配布資料 ({materials.length}件)</h4>
+                <span className="text-xs text-slate-500">HPの資料請求フォームに自動反映</span>
+              </div>
+              {materials.length > 0 && (
+                <button
+                  type="button"
+                  onClick={async () => {
+                    const supabase = getSupabase();
+                    if (!supabase) return;
+                    setLoading(true);
+                    try {
+                      await supabase.from('public_materials').upsert([
+                        {
+                          key: 'management-guide',
+                          label: '経営改善実務ガイドブック（要点解説スライド）',
+                          description: '中小企業が「手作業の山」「属人化」から脱却し、利益を残すための仕組み化実践論。',
+                          category: '経営実務・仕組み化',
+                          external_url: 'https://corp.mstcorp.info/materials/mst-management-guide.pdf',
+                          public_url: 'https://corp.mstcorp.info/materials/mst-management-guide.pdf',
+                          is_active: true,
+                          sort_order: 10,
+                        },
+                        {
+                          key: 'care-package-overview',
+                          label: '介護保険外サービス開業パッケージ概要資料',
+                          description: '介護事業所・法人が保険外の自費収益柱（月30万〜100万円超）を最短で立ち上げるための実務手順。',
+                          category: '開業パッケージ',
+                          external_url: 'https://corp.mstcorp.info/materials/care-package-proposal.pdf',
+                          public_url: 'https://corp.mstcorp.info/materials/care-package-proposal.pdf',
+                          is_active: true,
+                          sort_order: 20,
+                        },
+                      ], { onConflict: 'key' });
+                      setNotice('公式最新資料URL（介護開業提案書PDF等）に再同期しました。');
+                      await load();
+                    } catch (e: any) {
+                      setError('最新URLへの同期に失敗しました: ' + (e?.message || ''));
+                    } finally {
+                      setLoading(false);
+                    }
+                  }}
+                  className="inline-flex items-center gap-1 px-2.5 py-1 rounded bg-purple-50 hover:bg-purple-100 text-purple-700 text-xs font-medium border border-purple-200 cursor-pointer transition"
+                  title="公式の最新PDF公開URL（介護提案書等）に登録内容を再同期します"
+                >
+                  <RefreshCw className="w-3.5 h-3.5 text-purple-600" />
+                  <span>公式最新URLに再同期</span>
+                </button>
+              )}
             </div>
 
             {materials.length === 0 ? (
@@ -1240,8 +1287,8 @@ export const DiagnosisFormsWorkspace: React.FC<DiagnosisFormsWorkspaceProps> = (
                           label: '介護保険外サービス開業パッケージ概要資料',
                           description: '介護事業所・法人が保険外の自費収益柱（月30万〜100万円超）を最短で立ち上げるための実務手順。',
                           category: '開業パッケージ',
-                          external_url: 'https://corp.mstcorp.info/materials/care-package-overview.pdf',
-                          public_url: 'https://corp.mstcorp.info/materials/care-package-overview.pdf',
+                          external_url: 'https://corp.mstcorp.info/materials/care-package-proposal.pdf',
+                          public_url: 'https://corp.mstcorp.info/materials/care-package-proposal.pdf',
                           is_active: true,
                           sort_order: 20,
                         },
@@ -1338,7 +1385,11 @@ export const DiagnosisFormsWorkspace: React.FC<DiagnosisFormsWorkspaceProps> = (
 
                       {/* プレビュー表示 */}
                       <a
-                        href={m.public_url}
+                        href={
+                          m.key === 'care-package-overview' && m.public_url?.includes('care-package-overview.pdf')
+                            ? 'https://corp.mstcorp.info/materials/care-package-proposal.pdf'
+                            : m.public_url
+                        }
                         target="_blank"
                         rel="noopener noreferrer"
                         className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded border border-slate-200 bg-white hover:bg-slate-50 text-slate-700 text-xs font-medium transition cursor-pointer"
