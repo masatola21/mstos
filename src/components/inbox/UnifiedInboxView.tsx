@@ -114,6 +114,7 @@ export const UnifiedInboxView: React.FC<UnifiedInboxViewProps> = ({
   const [formSearchQuery, setFormSearchQuery] = useState('');
   const [expandedSubmissionId, setExpandedSubmissionId] = useState<string | null>(null);
   const [reportingIds, setReportingIds] = useState<string[]>([]);
+  const [reportVersions, setReportVersions] = useState<Record<string, number>>({});
   const [noticeAction, setNoticeAction] = useState<{ label: string; run: () => void } | null>(null);
   const [loadingSubmissions, setLoadingSubmissions] = useState(false);
   const [submissionNotice, setSubmissionNotice] = useState('');
@@ -163,7 +164,27 @@ export const UnifiedInboxView: React.FC<UnifiedInboxViewProps> = ({
       if (subRes.error) {
         setSubmissionError(`回答一覧を取得できませんでした: ${subRes.error.message}`);
       } else {
-        setSubmissions((subRes.data || []) as SubmissionItem[]);
+        const loaded = (subRes.data || []) as SubmissionItem[];
+        setSubmissions(loaded);
+
+        // 診断レポートが作成済みの回答を調べる（ボタンを「作成済み」に切り替えるため）
+        const diagnosisIds = Array.from(new Set(loaded.map((item) => item.diagnosis_id).filter(Boolean))) as string[];
+        if (diagnosisIds.length) {
+          const reportRes = await db
+            .from('ai_reports')
+            .select('diagnosis_id,version')
+            .in('diagnosis_id', diagnosisIds)
+            .eq('is_latest', true);
+          if (!reportRes.error) {
+            const versions: Record<string, number> = {};
+            (reportRes.data || []).forEach((row: any) => {
+              versions[String(row.diagnosis_id)] = Number(row.version) || 1;
+            });
+            setReportVersions(versions);
+          }
+        } else {
+          setReportVersions({});
+        }
       }
 
       if (formRes.data) {
@@ -206,9 +227,9 @@ export const UnifiedInboxView: React.FC<UnifiedInboxViewProps> = ({
       if (!response.ok) throw new Error(result.error || 'レポートを作成できませんでした。');
 
       if (result.alreadyExists) {
-        if (window.confirm(`この回答には、すでにレポート（v${result.reportVersion}）があります。新しい版を作り直しますか？`)) {
-          await handleGenerateReport(sub, true);
-        }
+        // 画面の表示が古かった場合。作り直さず、作成済みの表示に切り替える
+        setReportVersions((prev) => ({ ...prev, [String(result.diagnosisId)]: Number(result.reportVersion) || 1 }));
+        setSubmissions((prev) => prev.map((item) => (item.id === sub.id ? { ...item, diagnosis_id: result.diagnosisId } : item)));
         return;
       }
 
@@ -226,9 +247,10 @@ export const UnifiedInboxView: React.FC<UnifiedInboxViewProps> = ({
           'を作成しました。書類で内容を確認し、承認してから送信してください。' +
           (result.documentSynced ? '' : '（書類台帳への登録だけ失敗しました）')
       );
+      setReportVersions((prev) => ({ ...prev, [String(result.diagnosisId)]: Number(result.version) || 1 }));
       const companyId = result.companyId || sub.company_id;
       setNoticeAction({
-        label: '書類を開く',
+        label: '書類を確認する',
         run: () => onNavigateTab('document_templates', { context: companyId ? { companyId } : undefined }),
       });
     } catch (err: any) {
@@ -829,6 +851,39 @@ export const UnifiedInboxView: React.FC<UnifiedInboxViewProps> = ({
                           const isDiagnosisForm = form?.form_type === 'diagnosis';
                           const busy = reportingIds.includes(sub.id);
                           const needsCompany = isDiagnosisForm && !sub.company_id;
+                          const reportVersion = sub.diagnosis_id ? reportVersions[sub.diagnosis_id] : undefined;
+                          const alreadyCreated = isDiagnosisForm && Boolean(reportVersion);
+                          const openDocuments = () =>
+                            onNavigateTab('document_templates', { context: sub.company_id ? { companyId: sub.company_id } : undefined });
+
+                          if (alreadyCreated && !busy) {
+                            return (
+                              <>
+                                <button
+                                  type="button"
+                                  onClick={openDocuments}
+                                  className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-xs font-semibold text-white shadow-xs transition cursor-pointer"
+                                  title="作成済みの診断レポートと提案書の下書きを、書類の画面で確認します"
+                                >
+                                  <CheckCircle2 className="w-3.5 h-3.5 text-emerald-100" />
+                                  <span>作成済み（v{reportVersion}）・書類を確認する</span>
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    if (window.confirm('新しい版のレポートと提案書の下書きを作り直します。今の版は書類に残ります。よろしいですか？')) {
+                                      void handleGenerateReport(sub, true);
+                                    }
+                                  }}
+                                  className="text-[11px] text-slate-500 hover:text-slate-800 underline cursor-pointer"
+                                  title="AIでレポートを作り直します"
+                                >
+                                  作り直す
+                                </button>
+                              </>
+                            );
+                          }
+
                           return (
                             <button
                               type="button"
