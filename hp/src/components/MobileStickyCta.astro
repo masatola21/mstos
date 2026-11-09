@@ -1,0 +1,30 @@
+---
+/**
+ * スマートフォン用 固定CTAフッターバー
+ * モバイル閲覧時に画面最下部に常時追従し、迷わずメインアクション（無料診断）へ誘導します。
+ */
+---
+
+<div class="fixed bottom-0 left-0 right-0 z-50 bg-slate-950/95 backdrop-blur-lg border-t border-slate-800 p-2 sm:hidden shadow-[0_-8px_20px_rgba(0,0,0,0.35)] flex items-center gap-2">
+  <!-- メインCTA: 3分無料経営診断 -->
+  <a
+    href="/diagnosis"
+    class="flex-1 py-3 px-3 bg-gradient-to-r from-amber-400 via-amber-500 to-amber-600 active:from-amber-500 active:to-amber-700 text-slate-950 font-black text-xs text-center rounded-xl shadow-md flex items-center justify-center gap-1.5 active:scale-[0.98] transition-transform"
+  >
+    <span class="text-sm">📊</span>
+    <span class="tracking-tight">無料経営診断（3分・全5問）</span>
+  </a>
+
+  <!-- サブCTA: LINE無料相談 -->
+  <a
+    href="https://lin.ee/qWsuD6f"
+    target="_blank"
+    rel="noopener noreferrer"
+    class="py-3 px-3 bg-[#06C755] active:bg-[#05b34c] text-white font-bold text-xs text-center rounded-xl shadow-md flex items-center justify-center gap-1 shrink-0 active:scale-[0.98] transition-transform"
+  >
+    <svg class="w-4 h-4 fill-current shrink-0" viewBox="0 0 24 24">
+      <path d="M12 2C6.477 2 2 5.918 2 10.751c0 3.332 2.131 6.223 5.309 7.643-.233.784-.848 2.855-.972 3.29-.153.535.195.526.411.383.17-.113 2.709-1.841 3.806-2.587.47.07 1.05.108 1.646.108 5.523 0 10-3.918 10-8.751C22 5.918 17.523 2 12 2z"/>
+    </svg>
+    <span>LINE相談</span>
+  </a>
+</div>
