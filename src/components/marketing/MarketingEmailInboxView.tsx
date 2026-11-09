@@ -137,7 +137,6 @@ export const MarketingEmailInboxView: React.FC<MarketingEmailInboxViewProps> = (
       if (c.email && c.full_name) names[String(c.email).trim().toLowerCase()] = String(c.full_name);
     });
     setContactNames(names);
- (fix: resolve email inbox permission denial, restore selectable materials checkboxes, and revert contact form options to 4 themes)
   };
 
   const deleteMessages = async (ids: string[]) => {
