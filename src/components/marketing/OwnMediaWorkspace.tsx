@@ -1,7 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { getSupabase, getAuthHeaders } from '../../lib/supabaseClient';
 import { Plus, Save, Trash2, Sparkles, RefreshCw, Globe, ExternalLink, Send, CheckCircle2, AlertCircle, Wrench, FileText, ArrowRight, Code2, Zap, Layers, Pencil } from 'lucide-react';
-import { TabMarketingAssetManager } from './TabMarketingAssetManager';
 
 type Kind = 'media' | 'article' | 'seo' | 'rewrite' | 'attribution';
 type Row = {
@@ -266,8 +265,14 @@ export const OwnMediaWorkspace: React.FC<{
 
   // ユーザー指示に基づき、他のメディアは全統合・排除し、メインの公式自社メディア1本に集約
   const media = useMemo(() => {
-    return [DEFAULT_OFFICIAL_MEDIA];
-  }, [DEFAULT_OFFICIAL_MEDIA]);
+    const saved = rows.find((r) => r.id === DEFAULT_OFFICIAL_MEDIA.id);
+    if (!saved) return [DEFAULT_OFFICIAL_MEDIA];
+    return [{
+      ...DEFAULT_OFFICIAL_MEDIA,
+      title: saved.title || DEFAULT_OFFICIAL_MEDIA.title,
+      payload: { ...DEFAULT_OFFICIAL_MEDIA.payload, ...saved.payload, url: customSiteUrl, mediaUrl: customMediaUrl },
+    }];
+  }, [DEFAULT_OFFICIAL_MEDIA, rows, customSiteUrl, customMediaUrl]);
 
   const articles = useMemo(() => rows.filter((r) => r.record_type === 'article'), [rows]);
   const seoList = useMemo(() => rows.filter((r) => r.record_type === 'seo'), [rows]);
@@ -1063,15 +1068,6 @@ export const OwnMediaWorkspace: React.FC<{
                     Google Antigravityで構築された自社HP（Astro）とネイティブ連動しています。面倒なAPIキー設定は不要で、記事の自動同期とリード集約がリアルタイムに連携されます。
                   </p>
                 </div>
-                {!form && (
-                  <button
-                    onClick={reset}
-                    className="inline-flex items-center gap-2 rounded-xl bg-purple-600 hover:bg-purple-700 px-4 py-2 text-xs font-bold text-white shadow-xs cursor-pointer"
-                  >
-                    <Plus className="h-4 w-4" />
-                    連携設定を追加・編集
-                  </button>
-                )}
               </div>
 
               {/* メイン連携ステータスカード */}
@@ -1108,6 +1104,14 @@ export const OwnMediaWorkspace: React.FC<{
                       <Pencil className="h-3.5 w-3.5 text-purple-600" />
                       <span>URL設定・変更</span>
                     </button>
+                    <button
+                      type="button"
+                      onClick={() => edit(media[0])}
+                      className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-white hover:bg-slate-50 border border-slate-300 text-xs font-bold text-slate-700 transition cursor-pointer shadow-2xs"
+                    >
+                      <Wrench className="h-3.5 w-3.5 text-purple-600" />
+                      <span>詳細を編集</span>
+                    </button>
                     <a
                       href={customMediaUrl}
                       target="_blank"
@@ -1119,6 +1123,13 @@ export const OwnMediaWorkspace: React.FC<{
                     </a>
                   </div>
                 </div>
+
+                {(media[0]?.payload?.target || media[0]?.payload?.purpose) && (
+                  <div className="space-y-1 text-xs text-slate-600">
+                    {media[0]?.payload?.target && <p>ターゲット: {media[0].payload.target}</p>}
+                    {media[0]?.payload?.purpose && <p className="text-slate-500">目的: {media[0].payload.purpose}</p>}
+                  </div>
+                )}
 
                 {/* システム構成スペック */}
                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 text-xs">
@@ -1195,12 +1206,13 @@ export const OwnMediaWorkspace: React.FC<{
                         value={media[0]?.payload?.vercelDeployHook || ''}
                         onChange={(e) => {
                           const val = e.target.value;
+                          const officialId = media[0]?.id || DEFAULT_OFFICIAL_MEDIA.id;
                           setRows((prev) =>
-                            prev.map((r) =>
-                              r.id === (media[0]?.id || DEFAULT_OFFICIAL_MEDIA.id)
-                                ? { ...r, payload: { ...r.payload, vercelDeployHook: val } }
-                                : r
-                            )
+                            prev.some((r) => r.id === officialId)
+                              ? prev.map((r) =>
+                                  r.id === officialId ? { ...r, payload: { ...r.payload, vercelDeployHook: val } } : r
+                                )
+                              : [{ ...media[0], payload: { ...media[0].payload, vercelDeployHook: val } } as Row, ...prev]
                           );
                         }}
                         placeholder="例: https://api.vercel.com/v1/integrations/deploy/prj_.../..."
@@ -1342,92 +1354,6 @@ export const OwnMediaWorkspace: React.FC<{
                   </div>
                 </form>
               )}
-
-              {/* 登録済みメディア一覧 */}
-              {!form && (
-                <div className="space-y-3">
-                  {media.map((m) => {
-                    const isAstro = (m.payload?.cms || '').includes('Astro') || (m.payload?.url || '').includes('mstcorp.info');
-
-                    return (
-                      <article key={m.id} className="rounded-2xl border border-slate-200 bg-white p-5 shadow-xs">
-                        <div className="flex flex-wrap items-start justify-between gap-3">
-                          <div>
-                            <div className="flex items-center gap-2">
-                              <h4 className="font-bold text-base text-slate-900">{m.title}</h4>
-                              <span className={`text-[10px] font-bold px-2 py-0.5 rounded border ${
-                                isAstro
-                                  ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
-                                  : 'bg-purple-50 text-purple-700 border border-purple-200'
-                              }`}>
-                                {m.payload?.cms || 'Astro + Supabase'}
-                              </span>
-                            </div>
-                            <p className="text-xs text-purple-700 mt-1 flex items-center gap-1.5 font-mono">
-                              <Globe className="h-3.5 w-3.5" />
-                              <a href={m.payload?.url || 'https://mstcorp.info'} target="_blank" rel="noopener noreferrer" className="underline hover:text-purple-900">
-                                {m.payload?.url || 'https://mstcorp.info'}
-                              </a>
-                              {m.payload?.mediaUrl && (
-                                <span className="text-slate-500 font-normal">
-                                  （メディア: <a href={m.payload.mediaUrl} target="_blank" rel="noreferrer" className="text-purple-700 underline">{m.payload.mediaUrl}</a>）
-                                </span>
-                              )}
-                            </p>
-                          </div>
-
-                          <div className="flex items-center gap-2">
-                            <span className="inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-[11px] font-semibold bg-emerald-50 border border-emerald-200 text-emerald-700">
-                              <CheckCircle2 className="h-3 w-3" />
-                              {isAstro ? 'Supabase直結同期中' : 'CMS設定済'}
-                            </span>
-                            <button
-                              onClick={() => edit(m)}
-                              className="rounded-lg border border-slate-200 bg-white hover:bg-slate-50 px-3 py-1.5 text-xs font-semibold text-slate-700 shadow-2xs cursor-pointer"
-                            >
-                              編集
-                            </button>
-                            {m.id !== 'mst_official_corporate_hp' && (
-                              <button
-                                onClick={() => void remove(m)}
-                                aria-label={`${m.title}を削除`}
-                                className="rounded-lg border border-slate-200 p-1.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 cursor-pointer"
-                              >
-                                <Trash2 className="h-3.5 w-3.5" />
-                              </button>
-                            )}
-                          </div>
-                        </div>
-
-                        {m.payload?.target && (
-                          <p className="mt-2 text-xs text-slate-600">
-                            ターゲット: {m.payload.target}
-                          </p>
-                        )}
-                        {m.payload?.purpose && (
-                          <p className="mt-1 text-xs text-slate-500">
-                            目的: {m.payload.purpose}
-                          </p>
-                        )}
-                      </article>
-                    );
-                  })}
-                </div>
-              )}
-
-              {/* 自社メディア用の素材・成果物管理セクション */}
-              <div className="pt-6 border-t border-slate-200">
-                <TabMarketingAssetManager
-                  toolType="media"
-                  title="自社メディアのHP URL・素材・成果物"
-                  description="HPのURL、オウンドメディアのURL、サイト用ロゴ・画像、元HTMLファイル、仕様書をこのタブで管理します。"
-                  currentRecordId={editing?.id}
-                  currentRecordTitle={editing?.title}
-                  records={rows.map((r) => ({ id: r.id, title: r.title, record_type: r.record_type }))}
-                  products={products}
-                  userId={userId}
-                />
-              </div>
             </div>
           )}
 
