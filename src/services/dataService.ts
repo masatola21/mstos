@@ -253,16 +253,24 @@ export async function fetchTableData(
 
         // 希望内容（問い合わせ種別）の自動判定・自動反映
         let deducedInquiryType = String(item.inquiry_type || '').trim();
-        if (!deducedInquiryType || deducedInquiryType === '開業相談') {
+        // 提案書表記の混入や曖昧な資料請求は適切な資料名に再判定
+        if (deducedInquiryType.includes('提案書') || deducedInquiryType === '資料請求: 介護開業提案書') {
+          deducedInquiryType = '';
+        }
+        if (!deducedInquiryType || deducedInquiryType === '開業相談' || deducedInquiryType === '資料請求') {
           const notesText = notes;
           const sourceText = String(item.source || '');
           if (notesText.includes('経営ボトルネック診断') || notesText.includes('診断判定') || sourceText.includes('診断')) {
             deducedInquiryType = 'ボトルネック診断';
           } else if (notesText.includes('請求資料') || notesText.includes('資料') || sourceText.includes('資料')) {
-            if (notesText.includes('介護') || sourceText.includes('介護')) {
-              deducedInquiryType = '資料請求: 介護開業提案書';
-            } else if (notesText.includes('実務ガイド') || notesText.includes('経営改善')) {
-              deducedInquiryType = '資料請求: 実務ガイド';
+            const hasCare = notesText.includes('介護') || sourceText.includes('介護');
+            const hasGuide = notesText.includes('実務ガイド') || notesText.includes('経営改善') || notesText.includes('ガイドブック');
+            if (hasCare && hasGuide) {
+              deducedInquiryType = '資料請求: 実務ガイド・介護開業パッケージ';
+            } else if (hasCare) {
+              deducedInquiryType = '資料請求: 介護保険外開業パッケージ';
+            } else if (hasGuide) {
+              deducedInquiryType = '資料請求: 経営改善実務ガイド';
             } else {
               deducedInquiryType = '資料請求';
             }

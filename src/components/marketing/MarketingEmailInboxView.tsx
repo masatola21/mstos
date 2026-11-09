@@ -207,18 +207,41 @@ export const MarketingEmailInboxView: React.FC<MarketingEmailInboxViewProps> = (
       setNotice('受信および控え自動転送の設定を保存しました。');
     } catch (e: any) {
       if (db) {
-        const { error: err } = await db.from('email_channel_integrations').upsert(
-          {
-            owner_id: ownerId,
-            inbound_address: inVal,
-            backup_forward_address: fwdVal,
-            backup_forward_enabled: backupEnabled,
-            updated_at: new Date().toISOString(),
-          },
-          { onConflict: 'owner_id' }
-        );
-        if (err) setError(err.message);
-        else {
+        let errResult: any = null;
+        try {
+          const { error: err } = await db.from('email_channel_integrations').upsert(
+            {
+              owner_id: ownerId,
+              inbound_address: inVal,
+              backup_forward_address: fwdVal,
+              backup_forward_enabled: backupEnabled,
+              updated_at: new Date().toISOString(),
+            },
+            { onConflict: 'owner_id' }
+          );
+          if (err) errResult = err;
+        } catch (dbErr: any) {
+          errResult = dbErr;
+        }
+
+        // スキーマキャッシュ未反映によるカラム欠落エラーの場合は基本情報のみ再保存
+        if (errResult && /backup_forward_address/i.test(errResult?.message || '')) {
+          try {
+            await db.from('email_channel_integrations').upsert(
+              {
+                owner_id: ownerId,
+                inbound_address: inVal,
+                updated_at: new Date().toISOString(),
+              },
+              { onConflict: 'owner_id' }
+            );
+            errResult = null;
+          } catch {}
+        }
+
+        if (errResult) {
+          setError(errResult?.message || '設定の保存に失敗しました。');
+        } else {
           setSavedConfig({
             address: inVal,
             backupAddress: fwdVal,

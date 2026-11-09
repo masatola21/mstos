@@ -67,6 +67,8 @@ const sourceTypeLabels: Record<string, string> = {
   announcement: '個別案内',
   form: '受付フォーム案内',
   diagnosis: '診断案内',
+  material_download: '資料送付（自動）',
+  care_package_inquiry: '開業パッケージ受付',
   diagnosis_submission: 'サンクス自動返信',
   intake_thanks: 'サンクス自動返信',
   marketing_test_send: 'テスト送信',

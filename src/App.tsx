@@ -2627,7 +2627,7 @@ function AppContent() {
         {currentTab === 'communication_send' && (
           <CommunicationSendCenter
             variant="page"
-            initialMode={customerWorkspaceContext ? 'send' : 'history'}
+            initialMode="history"
             initialKind={customerWorkspaceContext?.documentId ? "document" : customerWorkspaceContext?.sendKind || "form"}
             initialCompanyId={customerWorkspaceContext?.companyId}
             initialDocumentId={customerWorkspaceContext?.documentId}

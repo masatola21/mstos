@@ -29,7 +29,7 @@ const FALLBACK_MATERIALS: MaterialItem[] = [
 
 export default function MaterialForm() {
   const [availableMaterials, setAvailableMaterials] = useState<MaterialItem[]>(FALLBACK_MATERIALS);
-  const [selectedKeys, setSelectedKeys] = useState<string[]>(['management-guide', 'care-package-overview']);
+  const [selectedKeys, setSelectedKeys] = useState<string[]>([]);
   const [formData, setFormData] = useState({
     company_name: '',
     name: '',
@@ -67,7 +67,7 @@ export default function MaterialForm() {
             setSelectedKeys(['care-package-overview']);
           } else if (typeParam === 'management' || typeParam === 'guide' || typeParam === 'management-guide') {
             setSelectedKeys(['management-guide']);
-          } else if (typeParam === 'both' || !typeParam) {
+          } else if (typeParam === 'both') {
             setSelectedKeys(data.materials.map((m: MaterialItem) => m.key));
           } else if (typeParam) {
             const matched = data.materials.find((m: MaterialItem) => m.key === typeParam);
@@ -86,7 +86,7 @@ export default function MaterialForm() {
         setSelectedKeys(['care-package-overview']);
       } else if (typeParam === 'management' || typeParam === 'guide' || typeParam === 'management-guide') {
         setSelectedKeys(['management-guide']);
-      } else {
+      } else if (typeParam === 'both') {
         setSelectedKeys(['management-guide', 'care-package-overview']);
       }
       const sourceParam = params.get('source');

@@ -1244,7 +1244,7 @@ export const DiagnosisFormsWorkspace: React.FC<DiagnosisFormsWorkspaceProps> = (
                           sort_order: 20,
                         },
                       ], { onConflict: 'key' });
-                      setNotice('公式最新資料URL（介護開業提案書PDF等）に再同期しました。');
+                      setNotice('公式最新資料URL（介護保険外開業パッケージPDF等）に再同期しました。');
                       await load();
                     } catch (e: any) {
                       setError('最新URLへの同期に失敗しました: ' + (e?.message || ''));
@@ -1253,7 +1253,7 @@ export const DiagnosisFormsWorkspace: React.FC<DiagnosisFormsWorkspaceProps> = (
                     }
                   }}
                   className="inline-flex items-center gap-1 px-2.5 py-1 rounded bg-purple-50 hover:bg-purple-100 text-purple-700 text-xs font-medium border border-purple-200 cursor-pointer transition"
-                  title="公式の最新PDF公開URL（介護提案書等）に登録内容を再同期します"
+                  title="公式の最新PDF公開URL（介護保険外パッケージ等）に登録内容を再同期します"
                 >
                   <RefreshCw className="w-3.5 h-3.5 text-purple-600" />
                   <span>公式最新URLに再同期</span>

@@ -766,6 +766,65 @@ export async function executeEmailBackupForward(params: {
   }
 }
 
+export async function resolveSystemOwnerId(fallbackOwnerId?: string | null): Promise<string | null> {
+  if (fallbackOwnerId) return fallbackOwnerId;
+  if (!lineSupabase) return null;
+  try {
+    const { data: integ } = await lineSupabase.from('email_channel_integrations').select('owner_id').limit(1).maybeSingle();
+    if (integ?.owner_id) return integ.owner_id;
+  } catch {}
+  try {
+    const { data: firstContact } = await lineSupabase.from('contacts').select('owner_id').not('owner_id', 'is', null).limit(1).maybeSingle();
+    if (firstContact?.owner_id) return firstContact.owner_id;
+  } catch {}
+  try {
+    const { data: userData } = await lineSupabase.auth.admin.listUsers({ perPage: 1 }).catch(() => ({ data: null }));
+    if (userData?.users?.[0]?.id) return userData.users[0].id;
+  } catch {}
+  return null;
+}
+
+export async function getEmailBackupForwardSettings(ownerId?: string | null): Promise<{ address: string; enabled: boolean }> {
+  const defaultAddress = 'mst.shikumikaizen@gmail.com';
+  if (!lineSupabase) return { address: defaultAddress, enabled: false };
+
+  // 1. Try email_channel_integrations
+  if (ownerId) {
+    try {
+      const { data, error } = await lineSupabase
+        .from('email_channel_integrations')
+        .select('backup_forward_address, backup_forward_enabled')
+        .eq('owner_id', ownerId)
+        .maybeSingle();
+      if (!error && data && data.backup_forward_address !== undefined) {
+        return {
+          address: data.backup_forward_address || defaultAddress,
+          enabled: Boolean(data.backup_forward_enabled),
+        };
+      }
+    } catch {}
+  }
+
+  // 2. Fallback to automation_controls
+  try {
+    const targetKey = ownerId ? `email_backup_forward_${ownerId}` : 'email_backup_forward_default';
+    const { data } = await lineSupabase
+      .from('automation_controls')
+      .select('reason, paused')
+      .eq('target', targetKey)
+      .maybeSingle();
+    if (data?.reason) {
+      const parsed = JSON.parse(data.reason);
+      return {
+        address: parsed.address || defaultAddress,
+        enabled: data.paused !== undefined ? !data.paused : Boolean(parsed.enabled),
+      };
+    }
+  } catch {}
+
+  return { address: defaultAddress, enabled: false };
+}
+
 interface LineUserProfile {
   displayName?: string;
   pictureUrl?: string;
@@ -2358,10 +2417,24 @@ app.post('/api/email/webhook', express.raw({ type: 'application/json', limit: '2
   const emailId = typeof event.data?.email_id === 'string' ? event.data.email_id : '';
   const recipients = Array.isArray(event.data?.to) ? event.data.to.filter((value: unknown) => typeof value === 'string').map((value: string) => value.toLowerCase()) : [];
   if (!emailId || recipients.length === 0) return res.status(400).json({ error: '受信メールの識別情報がありません。' });
-  const { data: integrations, error: integrationError } = await lineSupabase
+  let integrations: any[] | null = null;
+  const fullIntegRes = await lineSupabase
     .from('email_channel_integrations')
     .select('owner_id,inbound_address,backup_forward_address,backup_forward_enabled');
-  if (integrationError) console.warn('[ResendWebhook] email_channel_integrations query warning:', integrationError);
+  if (fullIntegRes.error) {
+    console.warn('[ResendWebhook] email_channel_integrations column query warning, using fallback:', fullIntegRes.error.message);
+    const simpleIntegRes = await lineSupabase
+      .from('email_channel_integrations')
+      .select('owner_id,inbound_address');
+    integrations = simpleIntegRes.data || [];
+    for (const item of integrations) {
+      const fb = await getEmailBackupForwardSettings(item.owner_id);
+      item.backup_forward_address = fb.address;
+      item.backup_forward_enabled = fb.enabled;
+    }
+  } else {
+    integrations = fullIntegRes.data || [];
+  }
 
   let matched = (integrations || []).filter((entry: any) => recipients.includes(String(entry.inbound_address || '').toLowerCase()));
   if (!matched.length) {
@@ -5315,7 +5388,18 @@ app.post(
     if (slug === 'business-diagnosis' || form.form_type === 'diagnosis') {
       inquiryType = 'ボトルネック診断';
     } else if (slug === 'material-download' || form.name.includes('資料')) {
-      inquiryType = '資料請求';
+      const hasCare = requestedMaterialKeys.includes('care-package-overview') || rawInquiry.includes('介護') || String(cleanAnswers.choice_label || '').includes('介護');
+      const hasGuide = requestedMaterialKeys.includes('management-guide') || rawInquiry.includes('実務ガイド') || rawInquiry.includes('経営改善') || String(cleanAnswers.choice_label || '').includes('実務ガイド') || String(cleanAnswers.choice_label || '').includes('経営改善');
+
+      if (hasCare && hasGuide) {
+        inquiryType = '資料請求: 実務ガイド・介護開業パッケージ';
+      } else if (hasCare) {
+        inquiryType = '資料請求: 介護保険外開業パッケージ';
+      } else if (hasGuide) {
+        inquiryType = '資料請求: 経営改善実務ガイド';
+      } else {
+        inquiryType = '資料請求';
+      }
     } else if (slug === 'contact-inquiry') {
       const rawInterest = String(cleanAnswers.service_interest || (body.customFields as any)?.service_interest || '').trim();
       if (rawInterest.includes('全体') || rawInterest.includes('利益改善')) {
@@ -5714,17 +5798,44 @@ app.post(
           body: JSON.stringify({ to: contact.line_user_id, messages: [lineMsg] }),
         });
         if (lineSupabase) {
-          await lineSupabase.from('line_inbox_messages').insert({
-            owner_id: (form as any).owner_id || null,
-            line_event_id: `sub-${submission.id}`,
-            direction: 'outbound',
-            contact_id: contact.id,
-            line_user_id: contact.line_user_id,
-            message_type: 'text',
-            body: lineMsg.text,
+          const sysOwnerId = await resolveSystemOwnerId((form as any)?.owner_id);
+          if (sysOwnerId) {
+            await lineSupabase.from('line_inbox_messages').insert({
+              owner_id: sysOwnerId,
+              line_event_id: `sub-${submission.id}`,
+              direction: 'outbound',
+              contact_id: contact.id,
+              line_user_id: contact.line_user_id,
+              message_type: 'text',
+              body: lineMsg.text,
+              status: 'sent',
+              received_at: new Date().toISOString(),
+            });
+          }
+          const outboxSourceType = slug === 'material-download' || inquiryType?.includes('資料請求')
+            ? 'material_download'
+            : isCarePackage
+              ? 'care_package_inquiry'
+              : 'diagnosis_submission';
+          const outboxPayload: any = {
+            channel: 'line',
+            recipient_contact_id: contact.id,
+            recipient_address: contact.line_user_id,
+            subject: '【LINE自動返信】' + (form.name || '資料・受付案内'),
+            body_text: lineMsg.text,
             status: 'sent',
-            received_at: new Date().toISOString(),
-          });
+            sent_at: new Date().toISOString(),
+            consent_confirmed_at: new Date().toISOString(),
+            consent_basis: '資料請求・フォーム受付（トランザクショナル配信）',
+            source_type: outboxSourceType,
+            source_id: submission.id,
+            company_id: resolvedCompanyId,
+          };
+          if (sysOwnerId) outboxPayload.owner_id = sysOwnerId;
+          const { error: outboxErr } = await lineSupabase.from('communication_outbox').insert(outboxPayload);
+          if (outboxErr) {
+            console.error('[PublicForm] Failed to insert LINE communication_outbox:', outboxErr);
+          }
         }
       } catch (linePushErr) {
         console.warn('LINE auto confirmation push warning:', linePushErr);
@@ -5735,7 +5846,7 @@ app.post(
         const emailFrom = process.env.RESEND_FROM_EMAIL || '';
         const subject = isCarePackage
           ? `【MST】「介護保険外サービス開業パッケージ」${inquiryType || 'お問い合わせ'}の受付完了`
-          : slug === 'material-download' || inquiryType === '資料請求'
+          : slug === 'material-download' || inquiryType?.includes('資料請求')
             ? `【MST】資料請求の受付完了（ダウンロードリンクのご案内）`
             : `【MST】「${form.name || '無料診断'}」の受付と個別面談のご案内`;
         const bodyText = customNotificationText || `${name} 様\n\n有限会社MST代表の大橋真人です。\nこの度は「${form.name || '無料診断'}」にご回答いただき誠にありがとうございます。\n\n現在、ご入力いただいた内容を精査し、御社の業務・売上・時間の急所を特定した個別診断レポートを作成しております。\n机上の空論ではなく「御社がどこから手を付ければ一番利益が残るか」を明確にするため、30分のオンライン面談にて解説と質疑応答を行わせていただきます。${bookingPrompt}\n\n--------------------------------------------------\n有限会社MST\n代表取締役: 大橋真人\n〒503-0981 岐阜県大垣市桧町127番地\n--------------------------------------------------`;
@@ -5752,19 +5863,31 @@ app.post(
           });
         }
         if (lineSupabase) {
-          await lineSupabase.from('communication_outbox').insert({
+          const sysOwnerId = await resolveSystemOwnerId((form as any)?.owner_id);
+          const outboxSourceType = slug === 'material-download' || inquiryType?.includes('資料請求')
+            ? 'material_download'
+            : isCarePackage
+              ? 'care_package_inquiry'
+              : 'diagnosis_submission';
+          const outboxPayload: any = {
             channel: 'email',
             recipient_contact_id: contact.id,
             recipient_address: contact.email,
             subject,
             body_text: bodyText,
             status: emailKey && emailFrom ? 'sent' : 'queued',
+            sent_at: emailKey && emailFrom ? new Date().toISOString() : null,
             consent_confirmed_at: new Date().toISOString(),
-            consent_basis: 'transactional_intake',
-            source_type: 'diagnosis_submission',
+            consent_basis: '資料請求・フォーム受付（トランザクショナル配信）',
+            source_type: outboxSourceType,
             source_id: submission.id,
             company_id: resolvedCompanyId,
-          });
+          };
+          if (sysOwnerId) outboxPayload.owner_id = sysOwnerId;
+          const { error: outboxErr } = await lineSupabase.from('communication_outbox').insert(outboxPayload);
+          if (outboxErr) {
+            console.error('[PublicForm] Failed to insert Email communication_outbox:', outboxErr);
+          }
         }
       } catch (emailErr) {
         console.warn('Email auto confirmation warning:', emailErr);
@@ -6301,14 +6424,23 @@ app.post('/api/email/inbox/:id/retry-backup', requireAuth, async (req, res) => {
     if (msgError) throw msgError;
     if (!msg) return res.status(404).json({ error: '対象の受信メールが見つかりません。' });
 
-    const { data: integ, error: integError } = await lineSupabase
-      .from('email_channel_integrations')
-      .select('backup_forward_address, backup_forward_enabled')
-      .eq('owner_id', user.id)
-      .maybeSingle();
+    let forwardAddress = '';
+    try {
+      const { data: integ } = await lineSupabase
+        .from('email_channel_integrations')
+        .select('backup_forward_address, backup_forward_enabled')
+        .eq('owner_id', user.id)
+        .maybeSingle();
+      if (integ?.backup_forward_address) {
+        forwardAddress = integ.backup_forward_address.trim();
+      }
+    } catch {}
 
-    if (integError) throw integError;
-    const forwardAddress = integ?.backup_forward_address?.trim();
+    if (!forwardAddress) {
+      const fb = await getEmailBackupForwardSettings(user.id);
+      forwardAddress = fb.address.trim();
+    }
+
     if (!forwardAddress) {
       return res.status(400).json({ error: 'バックアップ転送先メールアドレスが設定されていません。' });
     }
@@ -6349,12 +6481,18 @@ app.post('/api/email/test-backup-forward', requireAuth, async (req, res) => {
       : '';
 
     if (!targetAddress) {
-      const { data: integ } = await lineSupabase
-        .from('email_channel_integrations')
-        .select('backup_forward_address')
-        .eq('owner_id', user.id)
-        .maybeSingle();
-      targetAddress = integ?.backup_forward_address?.trim().toLowerCase() || '';
+      try {
+        const { data: integ } = await lineSupabase
+          .from('email_channel_integrations')
+          .select('backup_forward_address')
+          .eq('owner_id', user.id)
+          .maybeSingle();
+        targetAddress = integ?.backup_forward_address?.trim().toLowerCase() || '';
+      } catch {}
+      if (!targetAddress) {
+        const fb = await getEmailBackupForwardSettings(user.id);
+        targetAddress = fb.address.trim().toLowerCase();
+      }
     }
 
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -6416,23 +6554,42 @@ app.get('/api/inbox/email/messages', requireAuth, async (req, res) => {
   const user = (req as any).user;
 
   try {
-    const [settingsRes, inboxRes] = await Promise.all([
-      lineSupabase
-        .from('email_channel_integrations')
-        .select('inbound_address, backup_forward_address, backup_forward_enabled')
-        .eq('owner_id', user.id)
-        .maybeSingle(),
-      lineSupabase
-        .from('email_inbox_messages')
-        .select('id,from_email,to_emails,subject,text_body,html_body,received_at,backup_status,backup_error')
-        .or(`owner_id.eq.${user.id},owner_id.is.null`)
-        .order('received_at', { ascending: false })
-        .limit(500),
-    ]);
+    let inboundAddress = '';
+    let backupForwardAddress = 'mst.shikumikaizen@gmail.com';
+    let backupForwardEnabled = false;
 
-    const inboundAddress = settingsRes.data?.inbound_address || '';
-    const backupForwardAddress = settingsRes.data?.backup_forward_address || 'mst.shikumikaizen@gmail.com';
-    const backupForwardEnabled = Boolean(settingsRes.data?.backup_forward_enabled);
+    // 1. 設定情報の取得（カラム欠落時はフォールバック）
+    const settingsRes = await lineSupabase
+      .from('email_channel_integrations')
+      .select('inbound_address, backup_forward_address, backup_forward_enabled')
+      .eq('owner_id', user.id)
+      .maybeSingle();
+
+    if (settingsRes.error) {
+      console.warn('[inbox/email/messages] Schema column query warning, falling back:', settingsRes.error.message);
+      const simpleRes = await lineSupabase
+        .from('email_channel_integrations')
+        .select('inbound_address')
+        .eq('owner_id', user.id)
+        .maybeSingle();
+      inboundAddress = simpleRes.data?.inbound_address || '';
+      const fb = await getEmailBackupForwardSettings(user.id);
+      backupForwardAddress = fb.address;
+      backupForwardEnabled = fb.enabled;
+    } else {
+      inboundAddress = settingsRes.data?.inbound_address || '';
+      backupForwardAddress = settingsRes.data?.backup_forward_address || 'mst.shikumikaizen@gmail.com';
+      backupForwardEnabled = Boolean(settingsRes.data?.backup_forward_enabled);
+    }
+
+    // 2. メッセージ一覧の取得
+    const inboxRes = await lineSupabase
+      .from('email_inbox_messages')
+      .select('id,from_email,to_emails,subject,text_body,html_body,received_at,backup_status,backup_error')
+      .or(`owner_id.eq.${user.id},owner_id.is.null`)
+      .order('received_at', { ascending: false })
+      .limit(500);
+
     const messages = inboxRes.data || [];
     return res.json({
       success: true,
@@ -6470,16 +6627,63 @@ app.post('/api/inbox/email/settings', requireAuth, async (req, res) => {
   if (backupAddress !== undefined) updates.backup_forward_address = backupAddress;
   if (backupEnabled !== undefined) updates.backup_forward_enabled = backupEnabled;
 
+  let savedToDb = false;
   try {
     const { error } = await lineSupabase
       .from('email_channel_integrations')
       .upsert(updates, { onConflict: 'owner_id' });
-    if (error) throw error;
-    return res.json({ success: true, inboundAddress: address, backupForwardAddress: backupAddress, backupForwardEnabled: backupEnabled });
+    if (!error) {
+      savedToDb = true;
+    } else {
+      console.warn('[inbox/email/settings] Upsert with backup columns returned error, attempting fallback:', error.message);
+    }
   } catch (err: any) {
-    console.error('Inbox email settings save failed:', err?.message || err);
-    return res.status(500).json({ error: err?.message || '設定を保存できませんでした。' });
+    console.warn('[inbox/email/settings] Upsert exception:', err?.message || err);
   }
+
+  if (!savedToDb) {
+    // If schema lacks backup_forward_address column, save only owner_id and inbound_address
+    const baseUpdates: any = {
+      owner_id: user.id,
+      updated_at: new Date().toISOString(),
+    };
+    if (address) baseUpdates.inbound_address = address;
+    try {
+      await lineSupabase
+        .from('email_channel_integrations')
+        .upsert(baseUpdates, { onConflict: 'owner_id' });
+    } catch (baseErr: any) {
+      console.warn('[inbox/email/settings] Base upsert warning:', baseErr?.message || baseErr);
+    }
+  }
+
+  // Persist backup forward settings into fallback automation_controls
+  if (backupAddress !== undefined || backupEnabled !== undefined) {
+    try {
+      const targetKey = `email_backup_forward_${user.id}`;
+      const payload = JSON.stringify({
+        address: backupAddress || 'mst.shikumikaizen@gmail.com',
+        enabled: Boolean(backupEnabled),
+      });
+      await lineSupabase.from('automation_controls').upsert({
+        id: `backup_forward_${user.id.slice(0, 8)}`,
+        target: targetKey,
+        paused: !backupEnabled,
+        reason: payload,
+        updated_by: user.id,
+        updated_at: new Date().toISOString(),
+      }, { onConflict: 'target' });
+    } catch (ctrlErr: any) {
+      console.warn('[inbox/email/settings] Fallback save to automation_controls warning:', ctrlErr?.message || ctrlErr);
+    }
+  }
+
+  return res.json({
+    success: true,
+    inboundAddress: address,
+    backupForwardAddress: backupAddress || 'mst.shikumikaizen@gmail.com',
+    backupForwardEnabled: Boolean(backupEnabled),
+  });
 });
 
 // レポートを承認済みにする（送信は画面側で行う）。

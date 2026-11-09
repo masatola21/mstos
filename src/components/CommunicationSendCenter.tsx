@@ -351,6 +351,12 @@ export const CommunicationSendCenter: React.FC<Props> = ({
   }, [docId, contact?.company_id, initialCompanyId, docs, documentType]);
 
   useEffect(() => {
+    if (initialMode) {
+      setScreen(initialMode);
+    }
+  }, [initialMode]);
+
+  useEffect(() => {
     if (initialDocumentId) {
       setDocId(initialDocumentId);
       setKind('document');
