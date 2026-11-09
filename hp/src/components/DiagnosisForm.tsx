@@ -124,47 +124,163 @@ export default function DiagnosisForm() {
           </p>
         </div>
 
-        {/* チラ見せ速報カード */}
-        <div className="rounded-2xl border border-amber-200 bg-amber-50/40 p-6 sm:p-8 space-y-4">
-          <div className="flex flex-wrap items-center justify-between gap-2 border-b border-amber-200/80 pb-3">
-            <span className="text-xs font-bold text-slate-500 tracking-wider">【簡易診断結果速報】</span>
-            <span className="rounded-full bg-amber-200/80 text-amber-900 px-3 py-1 text-xs font-bold">
+        {/* 最優先ボトルネック速報概要 */}
+        <div className="rounded-2xl border border-amber-300/80 bg-amber-50/50 p-6 sm:p-7 space-y-3">
+          <div className="flex flex-wrap items-center justify-between gap-2 border-b border-amber-200 pb-2.5">
+            <span className="text-xs font-bold text-slate-500 tracking-wider">【診断速報判定】</span>
+            <span className="rounded-full bg-amber-200/90 text-amber-950 px-3 py-0.5 text-xs font-bold">
               {result.badge}
             </span>
           </div>
 
           <div>
             <p className="text-xs font-bold text-slate-500">貴社が最優先で着手すべきボトルネック傾向：</p>
-            <h3 className="mt-1 text-xl sm:text-2xl font-black text-rose-600 font-serif">
+            <h3 className="mt-1 text-lg sm:text-2xl font-black text-rose-600 font-serif">
               🚨 {result.typeTitle}
             </h3>
           </div>
 
-          <div className="p-4 bg-white rounded-xl border border-sand-300 text-xs sm:text-sm text-slate-700 leading-relaxed shadow-sm">
+          <div className="p-3.5 bg-white rounded-xl border border-sand-300 text-xs sm:text-sm text-slate-700 leading-relaxed shadow-xs">
             {result.summary}
           </div>
 
-          <div className="p-3.5 bg-brand-50 rounded-xl border border-brand-200 text-xs text-brand-900 leading-relaxed font-medium">
+          <div className="p-3 bg-brand-50/80 rounded-xl border border-brand-200 text-xs text-brand-900 leading-relaxed">
             <strong>💡 直近の改善指針:</strong> {result.urgentAction}
           </div>
         </div>
 
-        {/* 鍵マーク・完全版レポートの予告 ＆ 面談予約導線 */}
+        {/* 3大診断レポート（トップページの予告と100%一致するビジュアル判定） */}
+        <div className="space-y-4">
+          <div className="text-center space-y-1">
+            <span className="text-xs font-bold text-brand-700 bg-brand-50 border border-brand-200 px-3 py-1 rounded-full uppercase tracking-wider">
+              DIAGNOSIS 3-REPORTS
+            </span>
+            <h3 className="text-xl sm:text-2xl font-bold font-serif text-slate-900">
+              貴社の3大ボトルネック診断レポート
+            </h3>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4 pt-2">
+            
+            {/* REPORT 01: ボトルネック判定スコア */}
+            <div className="bg-sand-50 p-5 rounded-2xl border border-sand-300 space-y-3 flex flex-col justify-between">
+              <div className="space-y-2">
+                <div className="flex items-center justify-between text-xs font-bold text-brand-700">
+                  <span>REPORT 01</span>
+                  <span>📊</span>
+                </div>
+                <div className="font-bold font-serif text-slate-900 text-base">
+                  ボトルネック判定スコア
+                </div>
+                <div className="bg-white p-3 rounded-xl border border-sand-200 text-xs space-y-2 font-mono">
+                  <div>
+                    <div className="text-[10px] text-gray-500">{result.scores?.profit?.label || '案件別採算性・原価管理'}</div>
+                    <div className="flex justify-between items-center text-xs font-bold text-slate-900">
+                      <span className="text-amber-500">{result.scores?.profit?.stars || '★★☆☆☆'}</span>
+                      <span className="text-[11px] text-amber-700">{result.scores?.profit?.status || '要改善'}</span>
+                    </div>
+                  </div>
+                  <div className="border-t border-sand-100 pt-1.5">
+                    <div className="text-[10px] text-gray-500">{result.scores?.ops?.label || '業務フロー標準化・属人化'}</div>
+                    <div className="flex justify-between items-center text-xs font-bold text-slate-900">
+                      <span className="text-rose-500">{result.scores?.ops?.stars || '★☆☆☆☆'}</span>
+                      <span className="text-[11px] text-rose-700">{result.scores?.ops?.status || '深刻'}</span>
+                    </div>
+                  </div>
+                  <div className="border-t border-sand-100 pt-1.5">
+                    <div className="text-[10px] text-gray-500">{result.scores?.automation?.label || 'IT・自動化連携余地'}</div>
+                    <div className="flex justify-between items-center text-xs font-bold text-slate-900">
+                      <span className="text-cyan-600">{result.scores?.automation?.stars || '★★★★☆'}</span>
+                      <span className="text-[11px] text-cyan-800">{result.scores?.automation?.status || '余地大'}</span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+              <p className="text-[11px] text-gray-500 leading-snug font-light">
+                会社のどこに経営のブレーキがかかっているかを数値判定しました。
+              </p>
+            </div>
+
+            {/* REPORT 02: 余白創出ポテンシャル */}
+            <div className="bg-sand-50 p-5 rounded-2xl border border-sand-300 space-y-3 flex flex-col justify-between">
+              <div className="space-y-2">
+                <div className="flex items-center justify-between text-xs font-bold text-brand-700">
+                  <span>REPORT 02</span>
+                  <span>⏱️</span>
+                </div>
+                <div className="font-bold font-serif text-slate-900 text-base">
+                  余白創出ポテンシャル
+                </div>
+                <div className="bg-white p-3.5 rounded-xl border border-sand-200 text-center space-y-1">
+                  <div className="text-[11px] text-gray-500 font-bold">想定削減可能時間：</div>
+                  <div className="text-2xl font-black text-emerald-600 font-sans tracking-tight">
+                    {result.timeSavings?.hoursRange || '月 35〜55 時間'}
+                  </div>
+                  <div className="text-[10px] text-gray-400">
+                    二重入力・手作業の自動化試算
+                  </div>
+                </div>
+              </div>
+              <p className="text-[11px] text-gray-500 leading-snug font-light">
+                {result.timeSavings?.description || '手作業のコピペや二重入力をなくし、現場データがワンクリックで連携する仕組みを整えます。'}
+              </p>
+            </div>
+
+            {/* REPORT 03: 優先改善ロードマップ */}
+            <div className="bg-sand-50 p-5 rounded-2xl border border-sand-300 space-y-3 flex flex-col justify-between">
+              <div className="space-y-2">
+                <div className="flex items-center justify-between text-xs font-bold text-brand-700">
+                  <span>REPORT 03</span>
+                  <span>🗺️</span>
+                </div>
+                <div className="font-bold font-serif text-slate-900 text-base">
+                  優先改善ロードマップ
+                </div>
+                <div className="bg-white p-3 rounded-xl border border-sand-200 text-[11px] space-y-2">
+                  <div className="border-l-2 border-amber-500 pl-2">
+                    <div className="text-[10px] text-amber-700 font-bold">STEP 1（最初の1ヶ月目）</div>
+                    <div className="font-bold text-slate-900 text-[11px] leading-tight">
+                      {result.roadmap?.step1?.title || '「どこで利益が消えているか」をハッキリ突き止める'}
+                    </div>
+                  </div>
+                  <div className="border-l-2 border-brand-500 pl-2">
+                    <div className="text-[10px] text-brand-700 font-bold">STEP 2（2〜3ヶ月目）</div>
+                    <div className="font-bold text-slate-900 text-[11px] leading-tight">
+                      {result.roadmap?.step2?.title || '現場と事務所の「二重入力・コピペ手作業」をゼロにする'}
+                    </div>
+                  </div>
+                  <div className="border-l-2 border-emerald-500 pl-2">
+                    <div className="text-[10px] text-emerald-700 font-bold">STEP 3（半年後〜）</div>
+                    <div className="font-bold text-slate-900 text-[11px] leading-tight">
+                      {result.roadmap?.step3?.title || '社長が現場にいなくても、社員だけで仕事が回る体制へ'}
+                    </div>
+                  </div>
+                </div>
+              </div>
+              <p className="text-[11px] text-gray-500 leading-snug font-light">
+                最初の半年間で利益と時間を生み出す無理のない処方箋です。
+              </p>
+            </div>
+
+          </div>
+        </div>
+
+        {/* 診断結果を踏まえた面談予約導線 */}
         <div className="rounded-2xl border border-brand-800 bg-gradient-to-br from-brand-950 via-slate-900 to-brand-900 p-6 sm:p-8 text-white space-y-5 shadow-xl">
           <div className="flex items-center gap-2 text-xs font-bold text-amber-300 uppercase tracking-wider">
             <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
             </svg>
-            完全版レポート・数値シミュレーション（鍵付き）
+            自社専用の改善設計図・個別相談のご案内
           </div>
 
           <h4 className="text-lg sm:text-2xl font-bold font-serif leading-snug">
-            「具体的な削減時間」と「利益改善ロードマップ」は<br className="hidden sm:inline" />
-            30分のオンライン無料個別面談にて直接開示いたします
+            この診断結果をもとに、貴社に最適な<br className="hidden sm:inline" />
+            「具体的な改善設計図」を30分無料個別相談でお伝えします
           </h4>
 
           <p className="text-xs sm:text-sm text-slate-300 leading-relaxed font-light">
-            机上の空論ではなく「貴社の実際の業務フローにおいて、何をどのツールで自動化し、どこに仕組みを導入すれば最大利益が出るか」を、代表または専任コンサルタントが直接画面共有しながら解説します。終了後、貴社専用の診断カルテPDFを進呈いたします（強引な営業は一切行いません）。
+            机上の空論ではなく「貴社の実際の業務フローにおいて、何をどのツールでワンクリック化し、どこに仕組みを導入すれば最大利益が出るか」を、代表または専任コンサルタントが直接画面共有しながら解説します。終了後、貴社専用の診断カルテPDFを進呈いたします（強引な営業は一切行いません）。
           </p>
 
           <div className="pt-2 flex flex-col sm:flex-row gap-3">

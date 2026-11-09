@@ -5,6 +5,7 @@ import sitemap from '@astrojs/sitemap';
 
 export default defineConfig({
   site: 'https://corp.mstcorp.info',
+  trailingSlash: 'always',
   integrations: [
     tailwind({
       applyBaseStyles: false,
