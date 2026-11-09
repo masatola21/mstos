@@ -20,11 +20,9 @@ import {
   ChevronUp,
   Tag as TagIcon,
   Building2,
-  Users,
-  ClipboardList
+  Users
 } from 'lucide-react';
-import { getSupabase } from '../../lib/supabaseClient';
-import { DiagnosisDetailLoader } from '../DiagnosisManager';
+import { getSupabase, getAuthHeaders } from '../../lib/supabaseClient';
 import { UnifiedNavTab } from '../UnifiedNavbar';
 import { MarketingLineInboxView } from '../marketing/MarketingLineInboxView';
 import { MarketingEmailInboxView } from '../marketing/MarketingEmailInboxView';
@@ -115,7 +113,8 @@ export const UnifiedInboxView: React.FC<UnifiedInboxViewProps> = ({
   const [formFilterStatus, setFormFilterStatus] = useState<string>('all');
   const [formSearchQuery, setFormSearchQuery] = useState('');
   const [expandedSubmissionId, setExpandedSubmissionId] = useState<string | null>(null);
-  const [reportSubmissionId, setReportSubmissionId] = useState<string | null>(null);
+  const [reportingIds, setReportingIds] = useState<string[]>([]);
+  const [noticeAction, setNoticeAction] = useState<{ label: string; run: () => void } | null>(null);
   const [loadingSubmissions, setLoadingSubmissions] = useState(false);
   const [submissionNotice, setSubmissionNotice] = useState('');
   const [submissionError, setSubmissionError] = useState('');
@@ -189,6 +188,55 @@ export const UnifiedInboxView: React.FC<UnifiedInboxViewProps> = ({
     void loadCounts();
     void loadSubmissions();
   }, []);
+
+  // 診断フォームの回答から、AIが診断レポートと提案書の下書きを自動作成する
+  const handleGenerateReport = async (sub: SubmissionItem, force = false): Promise<void> => {
+    setReportingIds((prev) => (prev.includes(sub.id) ? prev : [...prev, sub.id]));
+    setSubmissionNotice('');
+    setSubmissionError('');
+    setNoticeAction(null);
+    try {
+      const headers = await getAuthHeaders();
+      const response = await fetch(`/api/diagnosis-submissions/${encodeURIComponent(sub.id)}/generate-report`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', ...headers },
+        body: JSON.stringify({ force }),
+      });
+      const result = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(result.error || 'レポートを作成できませんでした。');
+
+      if (result.alreadyExists) {
+        if (window.confirm(`この回答には、すでにレポート（v${result.reportVersion}）があります。新しい版を作り直しますか？`)) {
+          await handleGenerateReport(sub, true);
+        }
+        return;
+      }
+
+      const name = sub.respondent_company_name || sub.respondent_name || '回答者';
+      setSubmissions((prev) =>
+        prev.map((item) =>
+          item.id === sub.id
+            ? { ...item, diagnosis_id: result.diagnosisId, status: item.status === 'received' ? 'reviewing' : item.status }
+            : item
+        )
+      );
+      setSubmissionNotice(
+        `「${name}」の診断レポート（v${result.version}）` +
+          (result.proposalCreated ? 'と提案書の下書き' : '') +
+          'を作成しました。書類で内容を確認し、承認してから送信してください。' +
+          (result.documentSynced ? '' : '（書類台帳への登録だけ失敗しました）')
+      );
+      const companyId = result.companyId || sub.company_id;
+      setNoticeAction({
+        label: '書類を開く',
+        run: () => onNavigateTab('document_templates', { context: companyId ? { companyId } : undefined }),
+      });
+    } catch (err: any) {
+      setSubmissionError(err?.message || 'レポートを作成できませんでした。');
+    } finally {
+      setReportingIds((prev) => prev.filter((id) => id !== sub.id));
+    }
+  };
 
   // Update submission status
   const handleUpdateSubmissionStatus = async (sub: SubmissionItem, newStatus: SubmissionItem['status']) => {
@@ -495,9 +543,19 @@ export const UnifiedInboxView: React.FC<UnifiedInboxViewProps> = ({
       {submissionNotice && (
         <div className="p-3.5 rounded-xl border border-emerald-200 bg-emerald-50 text-emerald-800 text-xs flex items-center justify-between">
           <span>{submissionNotice}</span>
-          <button onClick={() => setSubmissionNotice('')} className="text-emerald-600 hover:text-emerald-800 font-bold">
-            ×
-          </button>
+          <div className="flex items-center gap-3 shrink-0 pl-3">
+            {noticeAction && (
+              <button
+                onClick={noticeAction.run}
+                className="px-3 py-1 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white font-semibold cursor-pointer"
+              >
+                {noticeAction.label}
+              </button>
+            )}
+            <button onClick={() => { setSubmissionNotice(''); setNoticeAction(null); }} className="text-emerald-600 hover:text-emerald-800 font-bold">
+              ×
+            </button>
+          </div>
         </div>
       )}
       {submissionError && (
@@ -766,39 +824,42 @@ export const UnifiedInboxView: React.FC<UnifiedInboxViewProps> = ({
                           <span>{isContracted ? '面談案内（ドロワー）' : '商談案内（ドロワー）'}</span>
                         </button>
 
-                        {/* Direct Proposal & Report Creation */}
-                        <button
-                          onClick={() => {
-                            if (onOpenCustomerWorkspace && sub.company_id) {
-                              onOpenCustomerWorkspace(sub.company_id, 'documents');
-                            } else {
-                              onNavigateTab('document_templates');
-                            }
-                          }}
-                          className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-emerald-50 hover:bg-emerald-100 text-xs font-semibold text-emerald-800 border border-emerald-200 transition cursor-pointer"
-                          title="フォーム回答を基に重要書類（診断レポート・提案書）を直接AI生成・作成します"
-                        >
-                          <Sparkles className="w-3.5 h-3.5 text-emerald-600" />
-                          <span>提案書・レポート作成</span>
-                        </button>
-
-                        {/* 診断レポート作成（診断フォームの回答のみ。診断が未作成なら自動で作成します） */}
-                        {form?.form_type === 'diagnosis' && (
-                          <button
-                            type="button"
-                            disabled={!sub.company_id}
-                            onClick={() => setReportSubmissionId(sub.id)}
-                            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-white hover:bg-purple-50 text-xs font-semibold text-purple-700 border border-purple-300 shadow-xs transition cursor-pointer disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:bg-white"
-                            title={
-                              sub.company_id
-                                ? 'この回答をもとに診断レポートを作成・確認・送信します'
-                                : '会社が紐付いていません。先に「反響リードに登録」を押してください'
-                            }
-                          >
-                            <ClipboardList className="w-3.5 h-3.5 text-purple-600" />
-                            <span>{sub.diagnosis_id ? 'レポート作成・確認' : 'レポート作成'}</span>
-                          </button>
-                        )}
+                        {/* 提案書・レポート作成（診断フォームの回答は、AIが診断レポートと提案書の下書きまで自動で作成） */}
+                        {(() => {
+                          const isDiagnosisForm = form?.form_type === 'diagnosis';
+                          const busy = reportingIds.includes(sub.id);
+                          const needsCompany = isDiagnosisForm && !sub.company_id;
+                          return (
+                            <button
+                              type="button"
+                              disabled={busy || needsCompany}
+                              onClick={() => {
+                                if (isDiagnosisForm) {
+                                  void handleGenerateReport(sub);
+                                } else if (onOpenCustomerWorkspace && sub.company_id) {
+                                  onOpenCustomerWorkspace(sub.company_id, 'documents');
+                                } else {
+                                  onNavigateTab('document_templates');
+                                }
+                              }}
+                              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-emerald-50 hover:bg-emerald-100 text-xs font-semibold text-emerald-800 border border-emerald-200 transition cursor-pointer disabled:cursor-not-allowed disabled:opacity-60 disabled:hover:bg-emerald-50"
+                              title={
+                                needsCompany
+                                  ? '会社が紐付いていません。先に「反響リードに登録」を押してください'
+                                  : isDiagnosisForm
+                                  ? 'この回答をもとに、AIが診断レポートと提案書の下書きを自動で作成します'
+                                  : '重要書類の画面を開きます'
+                              }
+                            >
+                              {busy ? (
+                                <RefreshCw className="w-3.5 h-3.5 text-emerald-600 animate-spin" />
+                              ) : (
+                                <Sparkles className="w-3.5 h-3.5 text-emerald-600" />
+                              )}
+                              <span>{busy ? 'AIが作成中…' : '提案書・レポート作成'}</span>
+                            </button>
+                          );
+                        })()}
 
                         {/* Expand Details Toggle */}
                         <button
@@ -907,22 +968,6 @@ export const UnifiedInboxView: React.FC<UnifiedInboxViewProps> = ({
         />
       )}
 
-      {reportSubmissionId && (() => {
-        const target = submissions.find((item) => item.id === reportSubmissionId);
-        const questions: any[] = (formsMeta.get(target?.form_id || '')?.definition as any)?.questions || [];
-        const questionLabels: Record<string, string> = {};
-        questions.forEach((q) => {
-          if (q && q.id) questionLabels[q.id] = q.label || q.id;
-        });
-        return (
-          <DiagnosisDetailLoader
-            submissionId={reportSubmissionId}
-            questionLabels={questionLabels}
-            onClose={() => setReportSubmissionId(null)}
-            onUpdated={() => void loadSubmissions()}
-          />
-        );
-      })()}
     </div>
   );
 };
