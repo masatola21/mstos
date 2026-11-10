@@ -1,6 +1,6 @@
 import React, { useEffect, useState, useRef } from 'react';
 import { getSalesEmailTemplate, getNurturingStepTemplate } from '../utils/salesOutreachTemplates';
-import { Eye, Save, Send, Users, SendHorizonal, FileText, Library, Mail, MessageSquare, Paperclip, CheckCircle2, X, Inbox, ArrowLeft } from 'lucide-react';
+import { Eye, Save, Send, Users, SendHorizonal, FileText, Library, Mail, MessageSquare, Paperclip, CheckCircle2, X, Inbox, ArrowLeft, AlertTriangle } from 'lucide-react';
 import { getSupabase } from '../lib/supabaseClient';
 import { LineMessagePreview } from './LineMessagePreview';
 import { renderPlaceholders } from '../utils/placeholders';
@@ -23,6 +23,7 @@ type Props = {
   initialFormId?: string;
   initialDealId?: string;
   initialContactId?: string;
+  initialRecipientEmail?: string;
   initialMode?: 'send' | 'broadcast' | 'templates' | 'history';
   initialBroadcastChannel?: 'email' | 'line';
   initialChannel?: Channel;
@@ -195,6 +196,7 @@ export const CommunicationSendCenter: React.FC<Props> = ({
   initialFormId,
   initialDealId,
   initialContactId,
+  initialRecipientEmail,
   initialMode,
   initialBroadcastChannel = 'email',
   initialChannel,
@@ -225,6 +227,8 @@ export const CommunicationSendCenter: React.FC<Props> = ({
   const [salesStep, setSalesStep] = useState<number>(1);
   const [nurturingStep, setNurturingStep] = useState<number>(1);
   const [contactId, setContactId] = useState(initialContactId || '');
+  const [unregisteredEmailWarning, setUnregisteredEmailWarning] = useState<string | null>(null);
+  const userInteractedContactRef = useRef(false);
   const [docId, setDocId] = useState(initialDocumentId || '');
   const [formId, setFormId] = useState(initialFormId || '');
   const [url, setUrl] = useState('');
@@ -416,19 +420,31 @@ export const CommunicationSendCenter: React.FC<Props> = ({
           setCompanies(Object.fromEntries((co.data || []).map((x: any) => [x.id, x.company_name])));
           setCompanyIndustries(Object.fromEntries((co.data || []).map((x: any) => [x.id, x.industry || ''])));
         }
-        setContacts((c.data || []).filter((x: Contact) => !initialCompanyId || x.company_id === initialCompanyId));
+        const fetchedContacts = (c.data || []).filter((x: Contact) => !initialCompanyId || x.company_id === initialCompanyId);
+        setContacts(fetchedContacts);
         setDocs((d.data || []).filter((x: any) => !initialCompanyId || x.company_id === initialCompanyId || x.id === initialDocumentId));
         if (initialFormId) setFormId(initialFormId);
-        if (initialContactId) setContactId(initialContactId);
+        if (initialContactId) {
+          setContactId(initialContactId);
+        } else if (initialRecipientEmail && !userInteractedContactRef.current) {
+          const cleanEmail = initialRecipientEmail.trim().toLowerCase();
+          const matched = fetchedContacts.find((ct: Contact) => (ct.email || '').trim().toLowerCase() === cleanEmail);
+          if (matched) {
+            setContactId(matched.id);
+            setUnregisteredEmailWarning(null);
+          } else {
+            setUnregisteredEmailWarning(initialRecipientEmail);
+          }
+        }
         if (initialDocumentId) {
           setDocId(initialDocumentId);
           setKind('document');
           const targetDoc = (d.data || []).find((x: any) => x.id === initialDocumentId);
           if (targetDoc) {
             setDocumentType(documentCategory(targetDoc));
-            if (targetDoc.contact_id && !initialContactId) {
+            if (targetDoc.contact_id && !initialContactId && !initialRecipientEmail && !userInteractedContactRef.current) {
               setContactId(targetDoc.contact_id);
-            } else if (targetDoc.company_id && !initialContactId) {
+            } else if (targetDoc.company_id && !initialContactId && !initialRecipientEmail && !userInteractedContactRef.current) {
               const matchingContact = (c.data || []).find((ct: any) => ct.company_id === targetDoc.company_id);
               if (matchingContact) setContactId(matchingContact.id);
             }
@@ -444,7 +460,7 @@ export const CommunicationSendCenter: React.FC<Props> = ({
     return () => {
       ok = false;
     };
-  }, [initialCompanyId, initialFormId, initialContactId, initialDocumentId]);
+  }, [initialCompanyId, initialFormId, initialContactId, initialDocumentId, initialRecipientEmail]);
 
   useEffect(() => {
     if (variant === 'drawer') {
@@ -870,7 +886,10 @@ export const CommunicationSendCenter: React.FC<Props> = ({
               送信先
               <select
                 value={contactId}
-                onChange={(e) => setContactId(e.target.value)}
+                onChange={(e) => {
+                  userInteractedContactRef.current = true;
+                  setContactId(e.target.value);
+                }}
                 className="mt-1 block w-full rounded-xl border border-slate-200 bg-slate-50 p-2.5 text-xs text-slate-900 focus:bg-white focus:border-purple-600 focus:outline-none shadow-2xs"
               >
                 <option value="">連絡先を選択してください</option>
@@ -887,6 +906,12 @@ export const CommunicationSendCenter: React.FC<Props> = ({
                   </option>
                 ))}
               </select>
+              {unregisteredEmailWarning && !contactId && (
+                <div className="mt-2 flex items-center gap-2 rounded-xl border border-amber-300 bg-amber-50 p-2.5 text-xs font-semibold text-amber-900 shadow-2xs">
+                  <AlertTriangle className="h-4 w-4 shrink-0 text-amber-600" />
+                  <span>このメールアドレスは連絡先に未登録です。先に連絡先を登録してください</span>
+                </div>
+              )}
             </label>
 
             {kind === 'nurturing_story' && (

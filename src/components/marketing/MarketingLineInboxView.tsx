@@ -1,8 +1,10 @@
 import React, { useEffect, useMemo, useState, useRef } from 'react';
+import { FileText } from 'lucide-react';
 import { getSupabase } from '../../lib/supabaseClient';
 import { InlineDeleteButton } from '../InlineDeleteButton';
 import { LineMessagePreview } from '../LineMessagePreview';
 import { useInboxRealtime } from '../../hooks/useInboxRealtime';
+import { useSendDrawer } from '../../context/SendDrawerContext';
 import {
   newestReceivedAt,
   removeMessages,
@@ -36,8 +38,10 @@ export const MarketingLineInboxView: React.FC<MarketingLineInboxViewProps> = ({
   onNavigateContacts,
 }) => {
   const db=getSupabase();
+  const { openSendDrawer } = useSendDrawer();
   const [messages,setMessages]=useState<InboxMessage[]>([]);
   const [friends,setFriends]=useState<Record<string,LineFriend>>({});
+  const [contactsByLineUser,setContactsByLineUser]=useState<Record<string,string>>({});
   const [rules,setRules]=useState<ReplyRule[]>([]);
   const [templates,setTemplates]=useState<ReplyTemplate[]>([]);
   const [activeView,setActiveView]=useState<'inbox'|'templates'>('inbox');
@@ -78,13 +82,14 @@ export const MarketingLineInboxView: React.FC<MarketingLineInboxViewProps> = ({
     const {data:auth}=await db.auth.getUser();
     if(!auth.user){setError('ログインしてください。');return}
     setOwnerId(auth.user.id);
-    const [m,r,t,i,templateResult,fResult]=await Promise.all([
+    const [m,r,t,i,templateResult,fResult,contactsRes]=await Promise.all([
       db.from('line_inbox_messages').select('*').order('received_at',{ascending:false}).limit(500),
       db.from('line_auto_reply_rules').select('*').order('priority',{ascending:true}),
       db.from('contact_tags').select('id,name').order('name'),
       db.from('line_channel_integrations').select('owner_id,bot_user_id,auto_reply_enabled').maybeSingle(),
       db.from('line_auto_reply_templates').select('*').order('created_at',{ascending:false}),
       db.from('line_friends').select('line_user_id,display_name,picture_url'),
+      db.from('contacts').select('id,line_user_id').not('line_user_id','is',null),
     ]);
     const missing=[m,r,i,templateResult].find(x=>x.error&&x.error.code==='PGRST205');
     if(missing){setError('受信箱・自動返信用のDBマイグレーションが未適用です。supabase/migrations/20261019130000_line_inbox_autoreply.sql、20261020140000_line_auto_reply_rich_messages.sql、20261020150000_line_auto_reply_templates.sql を適用してください。');return}
@@ -101,6 +106,13 @@ export const MarketingLineInboxView: React.FC<MarketingLineInboxViewProps> = ({
         if(item.line_user_id) map[item.line_user_id]=item;
       }
       setFriends(map);
+    }
+    if(contactsRes?.data){
+      const cMap:Record<string,string>={};
+      for(const c of contactsRes.data as {id:string;line_user_id:string}[]){
+        if(c.line_user_id) cMap[c.line_user_id]=c.id;
+      }
+      setContactsByLineUser(cMap);
     }
   };
 
@@ -385,6 +397,10 @@ export const MarketingLineInboxView: React.FC<MarketingLineInboxViewProps> = ({
   };
 
   const activeConversation=conversations.find(x=>x.lineUserId===selectedLineUserId);
+  const conversationContactId =
+    activeConversation?.items.find((m) => Boolean(m.contact_id))?.contact_id ||
+    (selectedLineUserId ? contactsByLineUser[selectedLineUserId] : undefined) ||
+    undefined;
 
   if (chatOnly) {
     return (
@@ -525,26 +541,42 @@ export const MarketingLineInboxView: React.FC<MarketingLineInboxViewProps> = ({
                 const activeFriend = friends[selectedLineUserId];
                 const activeName = activeFriend?.display_name || selectedLineUserId;
                 return (
-                  <div className="flex items-center gap-2 max-w-[280px]">
-                    {activeFriend?.picture_url ? (
-                      <img
-                        src={activeFriend.picture_url}
-                        alt={activeName}
-                        className="w-6 h-6 rounded-full object-cover border border-slate-200 shrink-0"
-                      />
-                    ) : (
-                      <div className="w-6 h-6 rounded-full bg-emerald-100 text-emerald-700 text-[10px] font-bold flex items-center justify-center shrink-0">
-                        {(activeName[0] || 'L').toUpperCase()}
-                      </div>
-                    )}
-                    <span className="text-xs font-bold text-slate-900 truncate">
-                      {activeName}
-                    </span>
-                    {activeFriend?.display_name && (
-                      <span className="text-[10px] font-mono text-slate-400 truncate">
-                        ({selectedLineUserId.slice(0, 8)}...)
+                  <div className="flex items-center gap-2">
+                    <div className="flex items-center gap-2 max-w-[240px]">
+                      {activeFriend?.picture_url ? (
+                        <img
+                          src={activeFriend.picture_url}
+                          alt={activeName}
+                          className="w-6 h-6 rounded-full object-cover border border-slate-200 shrink-0"
+                        />
+                      ) : (
+                        <div className="w-6 h-6 rounded-full bg-emerald-100 text-emerald-700 text-[10px] font-bold flex items-center justify-center shrink-0">
+                          {(activeName[0] || 'L').toUpperCase()}
+                        </div>
+                      )}
+                      <span className="text-xs font-bold text-slate-900 truncate">
+                        {activeName}
                       </span>
-                    )}
+                      {activeFriend?.display_name && (
+                        <span className="text-[10px] font-mono text-slate-400 truncate">
+                          ({selectedLineUserId.slice(0, 8)}...)
+                        </span>
+                      )}
+                    </div>
+                    <button
+                      type="button"
+                      disabled={!conversationContactId}
+                      title={!conversationContactId ? '連絡先に紐づいていないため送れません' : 'このLINE友だちにフォーム案内を送信します'}
+                      onClick={() => {
+                        if (conversationContactId) {
+                          openSendDrawer({ channel: 'line', kind: 'form', contactId: conversationContactId });
+                        }
+                      }}
+                      className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg border border-emerald-300 bg-emerald-50 hover:bg-emerald-100 text-emerald-800 text-xs font-bold shadow-2xs transition disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer"
+                    >
+                      <FileText className="h-3.5 w-3.5 text-emerald-600" />
+                      <span>フォームを送る</span>
+                    </button>
                   </div>
                 );
               })()}
@@ -693,7 +725,25 @@ export const MarketingLineInboxView: React.FC<MarketingLineInboxViewProps> = ({
               </div>
             </section>
             <section className="rounded-2xl border border-slate-200 bg-white p-4 shadow-xs">
-              <h3 className="font-bold text-slate-900">会話</h3>
+              <div className="flex items-center justify-between border-b border-slate-200 pb-2.5">
+                <h3 className="font-bold text-slate-900">会話</h3>
+                {activeConversation && (
+                  <button
+                    type="button"
+                    disabled={!conversationContactId}
+                    title={!conversationContactId ? '連絡先に紐づいていないため送れません' : 'このLINE友だちにフォーム案内を送信します'}
+                    onClick={() => {
+                      if (conversationContactId) {
+                        openSendDrawer({ channel: 'line', kind: 'form', contactId: conversationContactId });
+                      }
+                    }}
+                    className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg border border-emerald-300 bg-emerald-50 hover:bg-emerald-100 text-emerald-800 text-xs font-semibold shadow-2xs transition disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer"
+                  >
+                    <FileText className="h-3.5 w-3.5 text-emerald-600" />
+                    <span>フォームを送る</span>
+                  </button>
+                )}
+              </div>
               {!activeConversation ? (
                 <p className="mt-4 text-sm text-slate-400">左から相手を選択してください。</p>
               ) : (

@@ -288,7 +288,7 @@ export const SendDrawerProvider: React.FC<{ children: React.ReactNode }> = ({ ch
                     </div>
                   }>
                     <CommunicationSendCenter
-                      key={`${options.companyId || ''}:${options.contactId || ''}:${options.documentId || ''}:${options.formId || ''}:${options.dealId || ''}`}
+                      key={`${options.companyId || ''}:${options.contactId || ''}:${options.documentId || ''}:${options.formId || ''}:${options.dealId || ''}:${options.initialRecipientEmail || ''}`}
                       variant="drawer"
                       initialKind={options.kind || (options.documentId ? 'document' : 'form')}
                       initialCompanyId={options.companyId}
@@ -296,6 +296,7 @@ export const SendDrawerProvider: React.FC<{ children: React.ReactNode }> = ({ ch
                       initialFormId={options.formId}
                       initialDealId={options.dealId}
                       initialContactId={options.contactId}
+                      initialRecipientEmail={options.initialRecipientEmail}
                       initialChannel={options.channel}
                       initialSubject={options.subject}
                       initialBody={options.body}

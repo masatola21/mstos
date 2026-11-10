@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { Mail, Reply, Send, RefreshCw, Settings, Trash2, CheckCircle2, AlertTriangle, AlertCircle, Copy, ShieldCheck, Activity, Sparkles, Globe, HelpCircle, Info, X } from 'lucide-react';
+import { Mail, Reply, Send, RefreshCw, Settings, Trash2, CheckCircle2, AlertTriangle, AlertCircle, Copy, ShieldCheck, Activity, Sparkles, Globe, HelpCircle, Info, X, FileText } from 'lucide-react';
 import { getSupabase, getAuthHeaders } from '../../lib/supabaseClient';
 import { useSendDrawer } from '../../context/SendDrawerContext';
 import { useInboxRealtime } from '../../hooks/useInboxRealtime';
@@ -1014,6 +1014,21 @@ export const MarketingEmailInboxView: React.FC<MarketingEmailInboxViewProps> = (
                     >
                       <Trash2 className="h-4 w-4" />
                       <span>削除</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        openSendDrawer({
+                          channel: 'email',
+                          kind: 'form',
+                          initialRecipientEmail: parseSender(selected.from_email).address,
+                        });
+                      }}
+                      className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-white hover:bg-purple-50 text-purple-700 text-xs font-bold border border-purple-300 shadow-xs cursor-pointer transition"
+                      title="この送信者宛てにフォーム案内ドロワーを開きます"
+                    >
+                      <FileText className="h-4 w-4 text-purple-600" />
+                      <span>フォームを送る</span>
                     </button>
                     <button
                       type="button"
