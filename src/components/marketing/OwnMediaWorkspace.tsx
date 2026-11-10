@@ -2,8 +2,9 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { getSupabase, getAuthHeaders } from '../../lib/supabaseClient';
 import { Plus, Save, Trash2, Sparkles, RefreshCw, Globe, ExternalLink, Send, CheckCircle2, AlertCircle, Wrench, FileText, ArrowRight, Code2, Zap, Layers, Pencil } from 'lucide-react';
 import { MEDIA_TEMPLATE_ARTICLES } from '../../data/mediaTemplateArticles';
+import { HpProductListingManager } from './HpProductListingManager';
 
-type Kind = 'media' | 'article' | 'seo' | 'rewrite' | 'attribution';
+type Kind = 'media' | 'article' | 'product' | 'seo' | 'rewrite' | 'attribution';
 type Row = {
   id: string;
   record_type: Kind;
@@ -17,7 +18,7 @@ type Product = { id: string; product_name: string };
 type Lead = { id: string; source?: string | null; report_url?: string | null };
 type Deal = { id: string; lead_id?: string | null; proposal_status?: string | null };
 
-const kinds: Kind[] = ['media', 'article', 'seo', 'rewrite', 'attribution'];
+const kinds: Kind[] = ['media', 'article', 'product', 'seo', 'rewrite', 'attribution'];
 
 const sections = [
   ['articles', '記事作成・HP公開'],
@@ -1415,6 +1416,14 @@ export const OwnMediaWorkspace: React.FC<{
                   </div>
                 </form>
               )}
+
+              {/* 公式HP「商品・ツール」ページの掲載管理（自社HP連携設定の下） */}
+              <HpProductListingManager
+                rows={rows}
+                userId={userId}
+                onRowsChange={(updater) => setRows((prev) => updater(prev as any) as Row[])}
+                kickDeploy={async () => (await kickDeployHook()).triggered}
+              />
             </div>
           )}
 
