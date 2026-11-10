@@ -28,6 +28,18 @@ export const CATEGORY_MAP: Record<string, { name: Article['category']; slug: Art
   'new-business': { name: '新規事業・事業づくり', slug: 'new-business' },
 };
 
+// カテゴリごとのサムネイル配色。
+// Tailwindは「コード内にそのまま書かれたクラス名」しか出力しないため、
+// DBに保存された色指定は使わず、ここにリテラルで定義する（白抜けの防止）。
+export const CATEGORY_THEME: Record<string, { bgGradient: string; accentColor: string }> = {
+  management: { bgGradient: 'from-blue-900 to-slate-900', accentColor: 'text-brand-300' },
+  operations: { bgGradient: 'from-slate-800 to-slate-950', accentColor: 'text-slate-300' },
+  marketing: { bgGradient: 'from-emerald-950 to-slate-900', accentColor: 'text-emerald-300' },
+  'it-dx': { bgGradient: 'from-brand-900 to-slate-900', accentColor: 'text-brand-300' },
+  'new-business': { bgGradient: 'from-amber-950 to-slate-900', accentColor: 'text-amber-300' },
+};
+const DEFAULT_THEME = { bgGradient: 'from-brand-900 to-slate-900', accentColor: 'text-brand-300' };
+
 // 直書き記事（空配列。Supabase直接連携）
 export const ARTICLES: Article[] = [];
 
@@ -86,9 +98,9 @@ export async function getLiveArticles(): Promise<Article[]> {
         summary: p.metaDescription || p.excerpt || p.summary || '',
         content: contentLines.length > 0 ? contentLines : [p.body || ''],
         thumbnailTheme: {
-          bgGradient: p.bgGradient || 'from-brand-900 to-slate-900',
+          bgGradient: (CATEGORY_THEME[categorySlug] || DEFAULT_THEME).bgGradient,
           icon: p.icon || 'file-text',
-          accentColor: 'text-brand-300',
+          accentColor: (CATEGORY_THEME[categorySlug] || DEFAULT_THEME).accentColor,
         },
         relatedService: p.relatedServiceName
           ? {
