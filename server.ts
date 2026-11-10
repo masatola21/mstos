@@ -3864,17 +3864,25 @@ app.all('/api/cron/billing-automation', async (req, res) => {
 
         if (!existingTasks || existingTasks.length === 0) {
           const invAmt = (inv.amount || 0) + (inv.tax_amount || 0);
-          const taskInsert = await lineSupabase.from('tasks').insert({
-            title: `【支払督促・要確認】${inv.recipient_name || '取引先'} 請求書未払い（期限: ${inv.due_date}）`,
-            description: `請求番号: ${inv.invoice_number || inv.id}、金額: ¥${invAmt.toLocaleString('ja-JP')}のお支払期日（${inv.due_date}）が経過しています。入金状況を確認の上、必要に応じて督促の連絡を行ってください。`,
-            status: 'todo',
-            priority: 'urgent',
-            due_date: todayStr,
-            company_id: inv.company_id || null,
-          });
+          const taskOwnerId = await resolveSystemOwnerId(inv.owner_id);
+          if (!taskOwnerId) {
+            console.error('[BillingOverdue] 督促タスク起票スキップ: owner_id が解決できませんでした (invoiceId: ' + inv.id + ')');
+          } else {
+            const taskInsert = await lineSupabase.from('tasks').insert({
+              owner_id: taskOwnerId,
+              title: `【支払督促・要確認】${inv.recipient_name || '取引先'} 請求書未払い（期限: ${inv.due_date}）`,
+              description: `請求番号: ${inv.invoice_number || inv.id}、金額: ¥${invAmt.toLocaleString('ja-JP')}のお支払期日（${inv.due_date}）が経過しています。入金状況を確認の上、必要に応じて督促の連絡を行ってください。`,
+              status: 'todo',
+              priority: 'urgent',
+              due_date: todayStr,
+              company_id: inv.company_id || null,
+            });
 
-          if (!taskInsert.error) {
-            summary.reminderTasksCreated++;
+            if (taskInsert.error) {
+              console.error('[BillingOverdue] 督促タスク起票エラー:', taskInsert.error.message, taskInsert.error.code);
+            } else {
+              summary.reminderTasksCreated++;
+            }
           }
         }
       }
@@ -6068,22 +6076,35 @@ app.post(
     // 管理者向けタスク起票（レポート承認通知 / 資料URL未設定警告）
     if (lineSupabase) {
       try {
-        if ((isCarePackage || slug === 'material-download' || inquiryType === '資料請求') && !materialReady) {
-          await lineSupabase.from('tasks').insert({
-            title: `【未設定警告】資料URLが未登録です（${name} 様の資料請求）`,
-            description: `資料請求（${requestedMaterialText || slug}）を受領しましたが、公開資料マスタ（public_materials）およびフォーム定義に有効な資料URLが未設定です。至急URLを設定し、申込者（${name}様 / ${email}）へ資料を送付してください。`,
+        const formTaskOwnerId = await resolveSystemOwnerId((form as any)?.owner_id);
+        if (!formTaskOwnerId) {
+          console.error('[PublicForm] タスク起票スキップ: owner_id が解決できませんでした (form:', form?.name, slug, ')');
+        } else {
+          if ((isCarePackage || slug === 'material-download' || inquiryType === '資料請求') && !materialReady) {
+            const { error: warningTaskErr } = await lineSupabase.from('tasks').insert({
+              owner_id: formTaskOwnerId,
+              title: `【未設定警告】資料URLが未登録です（${name} 様の資料請求）`,
+              description: `資料請求（${requestedMaterialText || slug}）を受領しましたが、公開資料マスタ（public_materials）およびフォーム定義に有効な資料URLが未設定です。至急URLを設定し、申込者（${name}様 / ${email}）へ資料を送付してください。`,
+              status: 'todo',
+              priority: 'urgent',
+              due_date: new Date().toISOString().slice(0, 10),
+            });
+            if (warningTaskErr) {
+              console.error('[PublicForm] 資料URL未設定警告タスク起票エラー:', warningTaskErr.message, warningTaskErr.code);
+            }
+          }
+          const { error: responseTaskErr } = await lineSupabase.from('tasks').insert({
+            owner_id: formTaskOwnerId,
+            title: `【要対応・${isCarePackage ? '開業パッケージ申込' : slug === 'material-download' ? '資料請求' : 'レポート承認'}】${name} 様（${companyName || '個人'}）の回答`,
+            description: `フォーム「${form.name}」の回答（希望: ${inquiryType || '未指定'}${requestedMaterialText ? ` / ${requestedMaterialText}` : ''}）が届きました。内容を確認し、案内または面談日程の調整を行ってください。`,
             status: 'todo',
-            priority: 'urgent',
+            priority: 'high',
             due_date: new Date().toISOString().slice(0, 10),
           });
+          if (responseTaskErr) {
+            console.error('[PublicForm] フォーム回答対応タスク起票エラー:', responseTaskErr.message, responseTaskErr.code);
+          }
         }
-        await lineSupabase.from('tasks').insert({
-          title: `【要対応・${isCarePackage ? '開業パッケージ申込' : slug === 'material-download' ? '資料請求' : 'レポート承認'}】${name} 様（${companyName || '個人'}）の回答`,
-          description: `フォーム「${form.name}」の回答（希望: ${inquiryType || '未指定'}${requestedMaterialText ? ` / ${requestedMaterialText}` : ''}）が届きました。内容を確認し、案内または面談日程の調整を行ってください。`,
-          status: 'todo',
-          priority: 'high',
-          due_date: new Date().toISOString().slice(0, 10),
-        });
       } catch (taskErr) {
         console.warn('Task auto-creation warning:', taskErr);
       }
@@ -8071,16 +8092,25 @@ app.post('/api/public/documents/:id/apply', async (req, res) => {
 
     // 社内向け通知タスクの起票
     try {
-      const { data: compData } = await lineSupabase.from('companies').select('company_name').eq('id', resolvedCompanyId).maybeSingle();
-      const compLabel = compData?.company_name || '顧客企業';
-      await lineSupabase.from('tasks').insert({
-        title: '【🎉即時成約】' + compLabel + ' 様よりWeb申込・発注を受領しました',
-        description: '書類「' + doc.title + '」のWeb申込ボタンより発注が確定し、商談（' + finalDealId + '）が即座に「成約」となりました。金額: ' + (totalAmount > 0 ? totalAmount.toLocaleString('ja-JP') + '円' : '未定') + '。初回キックオフや契約締結手続きを進めてください。',
-        status: 'todo',
-        priority: 'high',
-        due_date: todayStr,
-        created_at: nowIso,
-      });
+      const docOwnerId = await resolveSystemOwnerId(doc.owner_id);
+      if (!docOwnerId) {
+        console.error('[DocumentApply] 成約タスク起票スキップ: owner_id が解決できませんでした (docId: ' + doc.id + ')');
+      } else {
+        const { data: compData } = await lineSupabase.from('companies').select('company_name').eq('id', resolvedCompanyId).maybeSingle();
+        const compLabel = compData?.company_name || '顧客企業';
+        const { error: applyTaskErr } = await lineSupabase.from('tasks').insert({
+          owner_id: docOwnerId,
+          title: '【🎉即時成約】' + compLabel + ' 様よりWeb申込・発注を受領しました',
+          description: '書類「' + doc.title + '」のWeb申込ボタンより発注が確定し、商談（' + finalDealId + '）が即座に「成約」となりました。金額: ' + (totalAmount > 0 ? totalAmount.toLocaleString('ja-JP') + '円' : '未定') + '。初回キックオフや契約締結手続きを進めてください。',
+          status: 'todo',
+          priority: 'high',
+          due_date: todayStr,
+          created_at: nowIso,
+        });
+        if (applyTaskErr) {
+          console.error('[DocumentApply] 即時成約タスク起票エラー:', applyTaskErr.message, applyTaskErr.code);
+        }
+      }
     } catch (taskErr) {
       console.warn('Auto task insertion warning:', taskErr);
     }

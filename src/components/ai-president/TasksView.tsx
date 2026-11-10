@@ -20,7 +20,9 @@ import {
   Download,
   ChevronDown,
   Search,
+  RefreshCw,
 } from 'lucide-react';
+import { getSupabase } from '../../lib/supabaseClient';
 import {
   TaskItem,
   Project,
@@ -62,6 +64,17 @@ const RELATED_RECORD_TYPES: { value: TaskRelatedRecordType | 'none'; label: stri
   { value: 'lead', label: 'リード' }, { value: 'deal', label: '商談' },
   { value: 'customer', label: '顧客' }, { value: 'product', label: '商品・サービス' },
 ];
+
+export interface SystemTask {
+  id: string;
+  title: string;
+  description?: string | null;
+  status: string;
+  priority?: string | null;
+  due_date?: string | null;
+  company_id?: string | null;
+  created_at?: string | null;
+}
 
 interface TasksViewProps {
   tasks: TaskItem[];
@@ -207,6 +220,107 @@ export const TasksView: React.FC<TasksViewProps> = ({
   const [taskToDelete, setTaskToDelete] = useState<TaskItem | null>(null);
   const [isDeletingTask, setIsDeletingTask] = useState(false);
   const [deleteTaskError, setDeleteTaskError] = useState('');
+
+  // System Auto-Created Tasks State
+  const [systemTasks, setSystemTasks] = useState<SystemTask[]>([]);
+  const [systemTasksLoading, setSystemTasksLoading] = useState(false);
+  const [systemTasksError, setSystemTasksError] = useState<string | null>(null);
+  const [completingSystemTaskId, setCompletingSystemTaskId] = useState<string | null>(null);
+  const [systemTaskActionError, setSystemTaskActionError] = useState<string | null>(null);
+  const [expandedSystemTaskIds, setExpandedSystemTaskIds] = useState<Set<string>>(() => new Set());
+
+  const loadSystemTasks = async () => {
+    setSystemTasksLoading(true);
+    setSystemTasksError(null);
+    setSystemTaskActionError(null);
+    try {
+      const supabase = getSupabase();
+      if (!supabase) {
+        throw new Error('Supabaseクライアントを初期化できませんでした。');
+      }
+      const { data, error } = await supabase
+        .from('tasks')
+        .select('id,title,description,status,priority,due_date,company_id,created_at')
+        .order('created_at', { ascending: false })
+        .limit(100);
+
+      if (error) {
+        throw error;
+      }
+      setSystemTasks((data || []) as SystemTask[]);
+    } catch (err: any) {
+      setSystemTasksError(err?.message || '不明なエラー');
+    } finally {
+      setSystemTasksLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    void loadSystemTasks();
+  }, []);
+
+  const handleCompleteSystemTask = async (taskId: string) => {
+    setCompletingSystemTaskId(taskId);
+    setSystemTaskActionError(null);
+    try {
+      const supabase = getSupabase();
+      if (!supabase) {
+        throw new Error('Supabaseクライアントを初期化できませんでした。');
+      }
+      const { error } = await supabase
+        .from('tasks')
+        .update({ status: 'done' })
+        .eq('id', taskId);
+
+      if (error) {
+        throw error;
+      }
+      setSystemTasks((prev) =>
+        prev.map((t) => (t.id === taskId ? { ...t, status: 'done' } : t))
+      );
+    } catch (err: any) {
+      setSystemTaskActionError(`タスクの完了更新に失敗しました: ${err?.message || '不明なエラー'}`);
+    } finally {
+      setCompletingSystemTaskId(null);
+    }
+  };
+
+  const activeSystemTasks = systemTasks.filter((t) => t.status !== 'done' && t.status !== 'completed');
+
+  const getSystemPriorityBadge = (p?: string | null) => {
+    switch (p) {
+      case 'urgent':
+        return (
+          <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-rose-100 text-rose-800 border border-rose-200">
+            至急
+          </span>
+        );
+      case 'high':
+        return (
+          <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-amber-100 text-amber-800 border border-amber-200">
+            高
+          </span>
+        );
+      case 'medium':
+        return (
+          <span className="px-2 py-0.5 rounded text-[10px] font-medium bg-blue-50 text-blue-700 border border-blue-200">
+            中
+          </span>
+        );
+      case 'low':
+        return (
+          <span className="px-2 py-0.5 rounded text-[10px] font-medium bg-slate-100 text-slate-600 border border-slate-200">
+            低
+          </span>
+        );
+      default:
+        return p ? (
+          <span className="px-2 py-0.5 rounded text-[10px] font-medium bg-slate-100 text-slate-600 border border-slate-200">
+            {p}
+          </span>
+        ) : null;
+    }
+  };
 
   const confirmBatchDelete = async () => {
     if (!batchDeleteState) return;
@@ -584,6 +698,16 @@ export const TasksView: React.FC<TasksViewProps> = ({
 
         {activeSection === 'tasks' && (
           <div className="flex items-center gap-2 flex-wrap">
+            <button
+              type="button"
+              onClick={() => void loadSystemTasks()}
+              disabled={systemTasksLoading}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-md bg-white hover:bg-slate-50 text-slate-600 border border-slate-200 text-xs font-medium transition-all cursor-pointer"
+              title="自動起票タスクを再読み込み"
+            >
+              <RefreshCw className={`w-3.5 h-3.5 text-slate-500 ${systemTasksLoading ? 'animate-spin' : ''}`} />
+              <span>更新</span>
+            </button>
             {tasks.some((t) => t.status === 'completed') && (
               <button
                 type="button"
@@ -631,6 +755,151 @@ export const TasksView: React.FC<TasksViewProps> = ({
 
       {activeSection === 'tasks' && (
         <>
+          {/* システム自動起票枠 */}
+          <section className="rounded-2xl border border-purple-200/90 bg-linear-to-r from-purple-50/40 via-white to-indigo-50/30 p-4 sm:p-5 shadow-xs space-y-3">
+            <div className="flex items-center justify-between gap-3">
+              <div className="flex items-center gap-2">
+                <span className="flex items-center justify-center w-6 h-6 rounded-lg bg-purple-600 text-white shadow-2xs">
+                  <Bot className="w-3.5 h-3.5" />
+                </span>
+                <h2 className="text-sm font-bold text-slate-900 flex items-center gap-2">
+                  <span>システム自動起票</span>
+                  <span className={`px-2 py-0.5 rounded-full text-[11px] font-bold ${
+                    activeSystemTasks.length > 0
+                      ? 'bg-purple-600 text-white'
+                      : 'bg-slate-100 text-slate-600 border border-slate-200'
+                  }`}>
+                    {activeSystemTasks.length}件
+                  </span>
+                </h2>
+                <span className="text-[11px] text-slate-500 hidden sm:inline">
+                  （支払督促・資料URL未設定警告・フォーム申込要対応など）
+                </span>
+              </div>
+
+              <button
+                type="button"
+                onClick={() => void loadSystemTasks()}
+                disabled={systemTasksLoading}
+                className="flex items-center gap-1.5 rounded-xl border border-slate-200 bg-white px-2.5 py-1 text-xs font-medium text-slate-700 hover:bg-slate-50 transition cursor-pointer shadow-2xs"
+                title="自動起票タスクを再読み込み"
+              >
+                <RefreshCw className={`w-3.5 h-3.5 ${systemTasksLoading ? 'animate-spin text-purple-600' : 'text-slate-500'}`} />
+                <span>更新</span>
+              </button>
+            </div>
+
+            {/* 読み込み失敗エラー */}
+            {systemTasksError && (
+              <div role="alert" className="rounded-xl border border-rose-200 bg-rose-50 p-3 text-xs text-rose-800 shadow-2xs font-medium flex items-center justify-between">
+                <span>自動起票タスクを読み込めませんでした: {systemTasksError}</span>
+                <button
+                  type="button"
+                  onClick={() => void loadSystemTasks()}
+                  className="text-xs text-rose-700 underline font-semibold hover:text-rose-900 cursor-pointer ml-2 shrink-0"
+                >
+                  再読み込み
+                </button>
+              </div>
+            )}
+
+            {/* アクション更新エラー */}
+            {systemTaskActionError && (
+              <div role="alert" className="rounded-xl border border-rose-200 bg-rose-50 p-3 text-xs text-rose-800 shadow-2xs font-medium flex items-center justify-between">
+                <span>{systemTaskActionError}</span>
+                <button
+                  type="button"
+                  onClick={() => setSystemTaskActionError(null)}
+                  className="p-1 text-rose-500 hover:text-rose-700 cursor-pointer"
+                >
+                  <X className="w-3.5 h-3.5" />
+                </button>
+              </div>
+            )}
+
+            {/* 一覧 */}
+            {systemTasksLoading && systemTasks.length === 0 ? (
+              <div className="py-6 text-center text-xs text-slate-400 flex items-center justify-center gap-2">
+                <Loader2 className="w-4 h-4 animate-spin text-purple-600" />
+                <span>自動起票タスクを確認中…</span>
+              </div>
+            ) : activeSystemTasks.length === 0 ? (
+              <div className="py-3 px-3.5 rounded-xl bg-white/80 border border-slate-200/60 text-xs text-slate-500 text-center">
+                現在、対応が必要な未完了のシステム自動起票タスクはありません。
+              </div>
+            ) : (
+              <div className="space-y-2.5">
+                {activeSystemTasks.map((st) => (
+                  <div
+                    key={st.id}
+                    className="p-3 sm:p-4 rounded-xl bg-white border border-slate-200/90 shadow-2xs hover:border-purple-300 transition-all space-y-2"
+                  >
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        {getSystemPriorityBadge(st.priority)}
+                        {st.due_date && (
+                          <span className="rounded bg-slate-100 px-2 py-0.5 text-[10px] text-slate-600 border border-slate-200 font-medium">
+                            期限: {st.due_date}
+                          </span>
+                        )}
+                        {st.created_at && (
+                          <span className="text-[10px] text-slate-400">
+                            作成: {new Date(st.created_at).toLocaleString('ja-JP', { year: 'numeric', month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' })}
+                          </span>
+                        )}
+                      </div>
+
+                      <button
+                        type="button"
+                        onClick={() => void handleCompleteSystemTask(st.id)}
+                        disabled={completingSystemTaskId === st.id}
+                        className="inline-flex items-center gap-1.5 px-3 py-1 rounded-lg bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-200 text-xs font-semibold cursor-pointer shadow-2xs transition-colors self-end sm:self-auto disabled:opacity-50"
+                        title="このタスクを完了状態に更新します"
+                      >
+                        {completingSystemTaskId === st.id ? (
+                          <Loader2 className="w-3.5 h-3.5 animate-spin text-emerald-700" />
+                        ) : (
+                          <CheckCircle2 className="w-3.5 h-3.5 text-emerald-700" />
+                        )}
+                        <span>完了にする</span>
+                      </button>
+                    </div>
+
+                    <div>
+                      <h3 className="text-xs sm:text-sm font-bold text-slate-900 leading-snug">
+                        {st.title}
+                      </h3>
+                      {st.description && (
+                        <div className="mt-1.5">
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setExpandedSystemTaskIds((prev) => {
+                                const next = new Set(prev);
+                                if (next.has(st.id)) next.delete(st.id);
+                                else next.add(st.id);
+                                return next;
+                              });
+                            }}
+                            className="inline-flex items-center gap-1 text-[11px] font-semibold text-purple-700 hover:text-purple-900 cursor-pointer"
+                          >
+                            <span>{expandedSystemTaskIds.has(st.id) ? '説明を閉じる' : '説明を表示'}</span>
+                            <ChevronDown className={`w-3.5 h-3.5 transition-transform ${expandedSystemTaskIds.has(st.id) ? 'rotate-180' : ''}`} />
+                          </button>
+
+                          {expandedSystemTaskIds.has(st.id) && (
+                            <div className="mt-2 p-3 rounded-lg bg-slate-50 border border-slate-200 text-xs text-slate-700 font-mono whitespace-pre-wrap leading-relaxed">
+                              {st.description}
+                            </div>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </section>
           {/* Search & Filter Bar */}
           <div className="p-4 rounded-2xl bg-white border border-slate-200 shadow-2xs flex flex-wrap items-center gap-3 text-xs">
             {/* Search input */}
