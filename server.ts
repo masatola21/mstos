@@ -4552,7 +4552,7 @@ app.post('/api/marketing/test-send', requireAuth, async (req, res) => {
       }
 
       try {
-        await lineSupabase.from('communication_outbox').insert({
+        const { error } = await lineSupabase.from('communication_outbox').insert({
           owner_id: authUser.id,
           channel: 'email',
           recipient_address: adminEmail,
@@ -4561,10 +4561,16 @@ app.post('/api/marketing/test-send', requireAuth, async (req, res) => {
           source_type: 'marketing_test_send',
           status: 'sent',
           sent_at: new Date().toISOString(),
+          provider_message_id: payload.id,
           consent_confirmed_at: new Date().toISOString(),
           consent_basis: '管理者による実機テスト送信',
         });
-      } catch (_) {}
+        if (error) {
+          console.error('[test-send] 送信履歴の保存に失敗:', error.message, error.code);
+        }
+      } catch (err: any) {
+        console.error('[test-send] 送信履歴の保存に失敗:', err?.message);
+      }
 
       return res.json({
         success: true,
@@ -5922,11 +5928,18 @@ app.post(
           type: 'text',
           text: customNotificationText || `【MST】「${form.name || '無料診断'}」の回答を受け付けました。\nご多忙の中、ご回答いただき誠にありがとうございます！\n\n現在、有限会社MST代表の大橋真人と専任チームにて、回答内容を基にした個別診断レポート（業務・売上・経営者の時間の急所特定）を作成しております。\n机上の空論ではなく「御社がどこから手を付ければ一番利益が残るか」を明確にするため、30分のオンライン個別面談にて解説と質疑応答を行わせていただきます。${bookingPrompt}\n\n※急ぎのご相談やご質問がございましたら、このLINEにそのまま返信いただけます。`,
         };
-        await fetch('https://api.line.me/v2/bot/message/push', {
+        const lineResponse = await fetch('https://api.line.me/v2/bot/message/push', {
           method: 'POST',
           headers: { Authorization: `Bearer ${lineChannelAccessToken}`, 'Content-Type': 'application/json' },
           body: JSON.stringify({ to: contact.line_user_id, messages: [lineMsg] }),
         });
+        const lineOk = lineResponse.ok;
+        let lineErrorMessage: string | null = null;
+        if (!lineOk) {
+          const lineErrPayload = await lineResponse.json().catch(() => ({})) as { message?: string };
+          lineErrorMessage = lineErrPayload.message || `LINE送信エラー (HTTP ${lineResponse.status})`;
+          console.error('[PublicForm] LINE auto confirmation push failed:', lineErrorMessage);
+        }
         if (lineSupabase) {
           const sysOwnerId = await resolveSystemOwnerId((form as any)?.owner_id);
           if (sysOwnerId) {
@@ -5938,7 +5951,7 @@ app.post(
               line_user_id: contact.line_user_id,
               message_type: 'text',
               body: lineMsg.text,
-              status: 'sent',
+              status: lineOk ? 'sent' : 'failed',
               received_at: new Date().toISOString(),
             });
           }
@@ -5953,8 +5966,9 @@ app.post(
             recipient_address: contact.line_user_id,
             subject: '【LINE自動返信】' + (form.name || '資料・受付案内'),
             body_text: lineMsg.text,
-            status: 'sent',
-            sent_at: new Date().toISOString(),
+            status: lineOk ? 'sent' : 'failed',
+            sent_at: lineOk ? new Date().toISOString() : null,
+            ...(lineErrorMessage ? { error_message: lineErrorMessage } : {}),
             consent_confirmed_at: new Date().toISOString(),
             consent_basis: '資料請求・フォーム受付（トランザクショナル配信）',
             source_type: outboxSourceType,
@@ -5980,18 +5994,43 @@ app.post(
             ? `【MST】資料請求の受付完了（ダウンロードリンクのご案内）`
             : `【MST】「${form.name || '無料診断'}」の受付と個別面談のご案内`;
         const bodyText = customNotificationText || `${name} 様\n\n有限会社MST代表の大橋真人です。\nこの度は「${form.name || '無料診断'}」にご回答いただき誠にありがとうございます。\n\n現在、ご入力いただいた内容を精査し、御社の業務・売上・時間の急所を特定した個別診断レポートを作成しております。\n机上の空論ではなく「御社がどこから手を付ければ一番利益が残るか」を明確にするため、30分のオンライン面談にて解説と質疑応答を行わせていただきます。${bookingPrompt}\n\n--------------------------------------------------\n有限会社MST\n代表取締役: 大橋真人\n〒503-0981 岐阜県大垣市桧町127番地\n--------------------------------------------------`;
+
+        let emailStatus: 'sent' | 'queued' | 'failed' = 'queued';
+        let sentAt: string | null = null;
+        let providerMessageId: string | null = null;
+        let emailErrorMessage: string | null = null;
+
         if (emailKey && emailFrom) {
-          await fetch('https://api.resend.com/emails', {
-            method: 'POST',
-            headers: { Authorization: `Bearer ${emailKey}`, 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              from: emailFrom,
-              to: [contact.email],
-              subject,
-              text: bodyText,
-            }),
-          });
+          try {
+            const emailResponse = await fetch('https://api.resend.com/emails', {
+              method: 'POST',
+              headers: { Authorization: `Bearer ${emailKey}`, 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                from: emailFrom,
+                to: [contact.email],
+                subject,
+                text: bodyText,
+              }),
+            });
+            const payload = await emailResponse.json().catch(() => ({})) as { id?: string; message?: string };
+            if (emailResponse.ok && payload.id) {
+              emailStatus = 'sent';
+              sentAt = new Date().toISOString();
+              providerMessageId = payload.id;
+            } else {
+              emailStatus = 'failed';
+              emailErrorMessage = payload.message || `メール送信エラー (HTTP ${emailResponse.status})`;
+              console.error('[PublicForm] Email auto confirmation failed:', emailErrorMessage);
+            }
+          } catch (fetchErr: any) {
+            emailStatus = 'failed';
+            emailErrorMessage = fetchErr?.message || 'メール送信ネットワークエラー';
+            console.error('[PublicForm] Email auto confirmation network error:', fetchErr);
+          }
+        } else {
+          emailStatus = 'queued';
         }
+
         if (lineSupabase) {
           const sysOwnerId = await resolveSystemOwnerId((form as any)?.owner_id);
           const outboxSourceType = slug === 'material-download' || inquiryType?.includes('資料請求')
@@ -6005,8 +6044,10 @@ app.post(
             recipient_address: contact.email,
             subject,
             body_text: bodyText,
-            status: emailKey && emailFrom ? 'sent' : 'queued',
-            sent_at: emailKey && emailFrom ? new Date().toISOString() : null,
+            status: emailStatus,
+            sent_at: sentAt,
+            ...(providerMessageId ? { provider_message_id: providerMessageId } : {}),
+            ...(emailErrorMessage ? { error_message: emailErrorMessage } : {}),
             consent_confirmed_at: new Date().toISOString(),
             consent_basis: '資料請求・フォーム受付（トランザクショナル配信）',
             source_type: outboxSourceType,
