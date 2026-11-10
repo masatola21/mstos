@@ -75,7 +75,7 @@ export default function MaterialForm() {
           }
         }
       } catch (e) {
-        console.warn('[MaterialForm] Failed to fetch dynamic materials, falling back to static:', e);
+        console.warn('[MaterialForm] 資料マスタ未取得のため既定URL（静的フォールバック）を使用しています:', e);
       }
     }
 

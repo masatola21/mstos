@@ -96,6 +96,7 @@ export const CommunicationOutboxHistoryView: React.FC<Props> = ({
   const [channelFilter, setChannelFilter] = useState<'all' | 'email' | 'line'>('all');
   const [selectedMessage, setSelectedMessage] = useState<OutboxMessage | null>(null);
   const [previewDocumentId, setPreviewDocumentId] = useState<string | null>(null);
+  const [lastUpdatedAt, setLastUpdatedAt] = useState<Date | null>(null);
 
   const loadData = async () => {
     setLoading(true);
@@ -152,6 +153,7 @@ export const CommunicationOutboxHistoryView: React.FC<Props> = ({
       setContacts(contactMap);
       setEmailContacts(emailMap);
       setMessages((outboxRes.data || []) as OutboxMessage[]);
+      setLastUpdatedAt(new Date());
     } catch (err: any) {
       setError(err?.message || '送信履歴の読み込みに失敗しました。');
     } finally {
@@ -414,6 +416,15 @@ export const CommunicationOutboxHistoryView: React.FC<Props> = ({
                 <span>LINE</span>
               </button>
             </div>
+
+            {lastUpdatedAt && (
+              <span
+                className="text-[11px] text-slate-500 whitespace-nowrap"
+                title="この画面は自動更新されません。最新の状態は「更新」を押して確認してください。"
+              >
+                最終更新 {lastUpdatedAt.toLocaleTimeString('ja-JP', { hour: '2-digit', minute: '2-digit', second: '2-digit' })}
+              </span>
+            )}
 
             <button
               type="button"

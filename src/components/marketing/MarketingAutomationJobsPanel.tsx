@@ -3,6 +3,7 @@ import {
   Activity,
   AlertCircle,
   AlertTriangle,
+  Archive,
   CheckCircle2,
   Clock,
   ExternalLink,
@@ -55,6 +56,7 @@ const statusLabels: Record<JobStatus, string> = {
   queued: '待機中', sending: '送信中', sent: '送信済み', failed: '失敗', skipped: 'スキップ', canceled: '取消済み',
 };
 const statuses: JobStatus[] = ['queued', 'sending', 'sent', 'failed', 'skipped', 'canceled'];
+const activeStatuses: JobStatus[] = ['queued', 'sending', 'sent', 'failed', 'skipped'];
 
 export class MarketingApiAuthError extends Error {
   status: number;
@@ -118,6 +120,8 @@ export const MarketingAutomationJobsPanel: React.FC<Props> = ({ health, onHealth
   const [busyJobId, setBusyJobId] = useState('');
   const [manualRunning, setManualRunning] = useState(false);
   const [manualNotice, setManualNotice] = useState('');
+  const [showHidden, setShowHidden] = useState(false);
+  const [hidingCanceled, setHidingCanceled] = useState(false);
   const db = getSupabase();
 
   const handleRunNow = async () => {
@@ -148,15 +152,71 @@ export const MarketingAutomationJobsPanel: React.FC<Props> = ({ health, onHealth
     }
   };
 
+  const handleHideCanceled = async () => {
+    if (!db || hidingCanceled) return;
+    const count = jobCounts.canceled || 0;
+    if (count === 0) {
+      alert('非表示にする取消済みジョブはありません。');
+      return;
+    }
+    if (!window.confirm(`取消済みのジョブ（${count}件）を非表示にして整理しますか？\n※ 過去の配信履歴データはDBに保持され、同一トリガーの誤った再作成を防ぎます。`)) {
+      return;
+    }
+    setHidingCanceled(true);
+    setError('');
+    setManualNotice('');
+    try {
+      const { data: { session } } = await db.auth.getSession();
+      if (!session?.access_token) throw new Error('ログインしてください。');
+
+      const res = await fetch('/api/marketing/jobs/hide-canceled', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${session.access_token}`,
+        },
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.error || '整理に失敗しました。');
+
+      setManualNotice(`✅ 取消済みジョブ ${data.hiddenCount || count}件を非表示に整理しました。`);
+      await Promise.all([refresh(), refreshHealth()]);
+    } catch (err: any) {
+      setError(err?.message || '取消済みジョブの整理中にエラーが発生しました。');
+    } finally {
+      setHidingCanceled(false);
+    }
+  };
+
   const refresh = useCallback(async () => {
     if (authBlockedRef.current) return;
     if (!db) { setError('データベースに接続できません。'); setLoading(false); return; }
     setLoading(true);
 
     try {
-      const { data, error: queryError } = await db.from('marketing_automation_jobs')
-        .select('id,status,scenario_id,contact_id,channel,due_at,error_message')
-        .order('created_at', { ascending: false }).limit(200);
+      let query = db.from('marketing_automation_jobs')
+        .select('id,status,scenario_id,contact_id,channel,due_at,error_message,hidden_at')
+        .order('created_at', { ascending: false });
+
+      if (!showHidden) {
+        query = query.is('hidden_at', null);
+      }
+
+      let jobRows: any[] | null = null;
+      let queryError: any = null;
+
+      const res = await query.limit(200);
+      if (res.error && res.error.message && res.error.message.includes('hidden_at')) {
+        const fallback = await db.from('marketing_automation_jobs')
+          .select('id,status,scenario_id,contact_id,channel,due_at,error_message')
+          .order('created_at', { ascending: false })
+          .limit(200);
+        jobRows = fallback.data;
+        queryError = fallback.error;
+      } else {
+        jobRows = res.data;
+        queryError = res.error;
+      }
 
       if (queryError) {
         if (isMarketingAuthError(queryError)) {
@@ -171,13 +231,23 @@ export const MarketingAutomationJobsPanel: React.FC<Props> = ({ health, onHealth
         return;
       }
 
-      const rows = (data || []) as unknown as JobRow[];
+      const rows = (jobRows || []) as unknown as JobRow[];
       const contactIds = [...new Set(rows.map((row) => row.contact_id).filter(Boolean))];
       const scenarioIds = [...new Set(rows.map((row) => row.scenario_id).filter(Boolean))];
       const [contactsResult, scenariosResult, ...countResults] = await Promise.all([
         contactIds.length ? db.from('contacts').select('id,full_name').in('id', contactIds) : Promise.resolve({ data: [], error: null }),
         scenarioIds.length ? db.from('marketing_automation_scenarios').select('scenario_id,config').in('scenario_id', scenarioIds) : Promise.resolve({ data: [], error: null }),
-        ...statuses.map((status) => db.from('marketing_automation_jobs').select('id', { count: 'exact', head: true }).eq('status', status)),
+        ...statuses.map(async (status) => {
+          let q = db.from('marketing_automation_jobs').select('id', { count: 'exact', head: true }).eq('status', status);
+          if (!showHidden) {
+            q = q.is('hidden_at', null);
+          }
+          const res = await q;
+          if (res.error && res.error.message && res.error.message.includes('hidden_at')) {
+            return db.from('marketing_automation_jobs').select('id', { count: 'exact', head: true }).eq('status', status);
+          }
+          return res;
+        }),
       ]);
 
       const countAuthErr = countResults.find((r) => r.error && isMarketingAuthError(r.error));
@@ -205,7 +275,7 @@ export const MarketingAutomationJobsPanel: React.FC<Props> = ({ health, onHealth
     } finally {
       setLoading(false);
     }
-  }, [db]);
+  }, [db, showHidden]);
 
   const refreshHealth = useCallback(async () => {
     if (authBlockedRef.current) return;
@@ -262,7 +332,12 @@ export const MarketingAutomationJobsPanel: React.FC<Props> = ({ health, onHealth
     } finally { setBusyJobId(''); }
   };
 
-  const visibleJobs = filter === 'all' ? jobs : jobs.filter((job) => job.status === filter);
+  const visibleJobs = jobs.filter((job) => {
+    if (filter === 'all') {
+      return showHidden || job.status !== 'canceled';
+    }
+    return job.status === filter;
+  });
   const runnerIsStale = !health?.runnerLastRunAt || Date.now() - Date.parse(health.runnerLastRunAt) > 15 * 60 * 1000;
   const killSwitch = health?.killSwitch;
 
@@ -486,7 +561,7 @@ export const MarketingAutomationJobsPanel: React.FC<Props> = ({ health, onHealth
               onChange={(event) => setFilter(event.target.value as JobStatus | 'all')}
               className="rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs text-slate-700 shadow-xs focus:outline-none focus:border-purple-500"
             >
-              <option value="all">すべて</option>
+              <option value="all">すべて（有効）</option>
               {statuses.map((status) => (
                 <option key={status} value={status}>
                   {statusLabels[status]}
@@ -505,20 +580,71 @@ export const MarketingAutomationJobsPanel: React.FC<Props> = ({ health, onHealth
             </button>
           </div>
         </div>
-        <div className="flex flex-wrap gap-2 border-b border-slate-100 px-4 py-3 bg-white">
-          {statuses.map((status) => (
+        <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-100 px-4 py-3 bg-white">
+          <div className="flex flex-wrap items-center gap-2">
             <button
-              key={status}
-              onClick={() => setFilter(filter === status ? 'all' : status)}
+              onClick={() => setFilter('all')}
               className={`rounded-full border px-3 py-1 text-xs font-medium transition cursor-pointer ${
-                filter === status
+                filter === 'all'
                   ? 'border-purple-400 bg-purple-50 text-purple-700 font-semibold'
                   : 'border-slate-200 text-slate-600 hover:bg-slate-50'
               }`}
             >
-              {statusLabels[status]} {jobCounts[status] ?? 0}
+              すべて（有効）
             </button>
-          ))}
+            {activeStatuses.map((status) => (
+              <button
+                key={status}
+                onClick={() => setFilter(filter === status ? 'all' : status)}
+                className={`rounded-full border px-3 py-1 text-xs font-medium transition cursor-pointer ${
+                  filter === status
+                    ? 'border-purple-400 bg-purple-50 text-purple-700 font-semibold'
+                    : 'border-slate-200 text-slate-600 hover:bg-slate-50'
+                }`}
+              >
+                {statusLabels[status]} {jobCounts[status] ?? 0}
+              </button>
+            ))}
+          </div>
+
+          <div className="flex flex-wrap items-center gap-2.5">
+            <button
+              type="button"
+              onClick={() => setFilter(filter === 'canceled' ? 'all' : 'canceled')}
+              className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-medium border transition cursor-pointer ${
+                filter === 'canceled'
+                  ? 'border-slate-400 bg-slate-200 text-slate-800 font-semibold'
+                  : 'border-slate-200 bg-slate-50 text-slate-500 hover:bg-slate-100 hover:text-slate-700'
+              }`}
+              title="取消済みジョブを表示"
+            >
+              <span>取消済み</span>
+              <span className="px-1.5 py-0.2 rounded-full text-[10px] bg-slate-200 text-slate-600 font-bold">
+                {jobCounts.canceled ?? 0}
+              </span>
+            </button>
+
+            <button
+              type="button"
+              disabled={hidingCanceled || (jobCounts.canceled ?? 0) === 0}
+              onClick={() => void handleHideCanceled()}
+              className="inline-flex items-center gap-1 px-3 py-1 text-xs font-medium text-slate-700 hover:text-slate-900 bg-slate-100 hover:bg-slate-200 border border-slate-200 rounded-lg cursor-pointer transition disabled:opacity-40 disabled:cursor-not-allowed shadow-2xs"
+              title="取消済みのジョブを一括で非表示に整理します（DB履歴は保持され、同一トリガーの意図しない再作成を防ぎます）"
+            >
+              <Archive className="h-3.5 w-3.5 text-slate-500" />
+              <span>{hidingCanceled ? '整理中…' : '取消済みを整理'}</span>
+            </button>
+
+            <label className="inline-flex items-center gap-1 text-[11px] text-slate-500 select-none cursor-pointer ml-1">
+              <input
+                type="checkbox"
+                checked={showHidden}
+                onChange={(e) => setShowHidden(e.target.checked)}
+                className="h-3.5 w-3.5 rounded border-slate-300 accent-purple-600 cursor-pointer"
+              />
+              <span>整理済みも含める</span>
+            </label>
+          </div>
         </div>
         {error && (
           <div role="alert" className="border-b border-amber-200 bg-amber-50 px-4 py-3 text-xs text-amber-800 flex items-center justify-between gap-3">

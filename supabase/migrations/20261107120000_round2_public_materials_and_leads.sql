@@ -104,14 +104,7 @@ VALUES
     true,
     20
   )
-ON CONFLICT (key) DO UPDATE SET
-  label = EXCLUDED.label,
-  description = EXCLUDED.description,
-  category = EXCLUDED.category,
-  external_url = EXCLUDED.external_url,
-  public_url = EXCLUDED.public_url,
-  is_active = EXCLUDED.is_active,
-  sort_order = EXCLUDED.sort_order;
+ON CONFLICT (key) DO NOTHING;
 
 -- 4. 既存リードの source 表記ゆれ正規化
 -- 過去の「Web相談・問い合わせ（流入: corporate_website）」などの旧表記を整理
