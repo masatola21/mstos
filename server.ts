@@ -3875,7 +3875,6 @@ app.all('/api/cron/billing-automation', async (req, res) => {
               status: 'todo',
               priority: 'urgent',
               due_date: todayStr,
-              company_id: inv.company_id || null,
             });
 
             if (taskInsert.error) {

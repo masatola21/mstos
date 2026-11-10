@@ -1,8 +1,41 @@
 ---
 import Layout from '../layouts/Layout.astro';
-import { getLiveProducts } from '../data/products';
 
-const products = await getLiveProducts();
+const products = [
+  {
+    title: '介護保険外サービス開業 実務運営規約・同意書一式',
+    category: '法務・運営ドキュメント',
+    status: '現在提供中',
+    statusType: 'available',
+    desc: '生活支援・介護保険外サービスを提供する際に必要な利用規約、免責事項、重要事項説明書、事故対応マニュアルの実務テンプレート一式。',
+    price: '開業パッケージにて提供中',
+    href: '/services/care-package',
+  },
+  {
+    title: '中小企業向け 業務棚卸し・属人化解消チェックリスト',
+    category: 'テンプレート / ガイド',
+    status: '開発中',
+    statusType: 'developing',
+    desc: '社内のどの業務が誰に依存しているかを1枚で可視化し、標準化の優先度を判定できるエクセル＆スプレッドシート形式のチェックシート。',
+    price: '無償配布予定（一部有料版あり）',
+  },
+  {
+    title: '案件別 採算・粗利管理スプレッドシート（自動計算GAS付き）',
+    category: 'GAS / 業務ツール',
+    status: '開発中',
+    statusType: 'developing',
+    desc: '工数と直接原価を入力するだけで、案件別・取引先別の限界利益と営業利益率を自動集計・グラフ化する管理テンプレート。',
+    price: '販売予定',
+  },
+  {
+    title: 'ChatGPT・生成AI 実務導入プロンプトテンプレート集',
+    category: 'AI活用テンプレート',
+    status: '将来提供予定',
+    statusType: 'planned',
+    desc: '議事録要約、問い合わせメール一次返信、営業提案書ドラフト、社内マニュアル作成など、中小企業実務で即使える厳選プロンプト集。',
+    price: '販売予定',
+  },
+];
 ---
 
 <Layout

@@ -27,7 +27,6 @@ import {
 import { ManagedProduct, PRODUCT_ARCHETYPES, ProductArchetype, PricingModel, ManagedContract, ManagedInvoice, ManagedToolAsset } from '../../types/matrix';
 import { ApiUsageData, Project, TaskItem, CharacterConfig, UserProfile } from '../../types/ai-president';
 import { ProductCoCreationWizard } from './ProductCoCreationWizard';
-import { HpProductPublishPanel } from './HpProductPublishPanel';
 import { generateNextProductCode, formatProductPrice } from '../../services/productCatalogService';
 import { calculateProductKPIs } from '../../services/businessSummaryService';
 import { matrixService } from '../../services/matrixService';
@@ -640,9 +639,6 @@ export const ProductHubView: React.FC<ProductHubViewProps> = ({
                   <p role="status" aria-live="polite" className={`mt-2 text-xs ${productActionIsError ? 'text-rose-300' : 'text-emerald-300'}`}>{productActionMessage}</p>
                 )}
               </div>
-
-              {/* 公式HP「商品・ツール」への掲載／取り下げ */}
-              <HpProductPublishPanel product={selectedProduct} />
 
               {/* KPI Badges (契約書・請求書の実データから自動集計) */}
               <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">

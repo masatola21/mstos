@@ -240,7 +240,7 @@ export const TasksView: React.FC<TasksViewProps> = ({
       }
       const { data, error } = await supabase
         .from('tasks')
-        .select('id,title,description,status,priority,due_date,company_id,created_at')
+        .select('id,title,description,status,priority,due_date,created_at')
         .order('created_at', { ascending: false })
         .limit(100);
 
