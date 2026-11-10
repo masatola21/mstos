@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { getSupabase, getAuthHeaders } from '../../lib/supabaseClient';
 import { Plus, Save, Trash2, Sparkles, RefreshCw, Globe, ExternalLink, Send, CheckCircle2, AlertCircle, Wrench, FileText, ArrowRight, Code2, Zap, Layers, Pencil } from 'lucide-react';
+import { MEDIA_TEMPLATE_ARTICLES } from '../../data/mediaTemplateArticles';
 
 type Kind = 'media' | 'article' | 'seo' | 'rewrite' | 'attribution';
 type Row = {
@@ -380,6 +381,54 @@ export const OwnMediaWorkspace: React.FC<{
     setNotice('保存しました。');
   };
 
+  // HPのお役立ち情報に最初から入っていたテンプレート記事5本を、OSの記事として公開状態で復元する。
+  // 登録後は通常の記事と同じく、ゴミ箱ボタンでOSから削除できる（削除時はHPも再デプロイされる）。
+  const [restoringTemplates, setRestoringTemplates] = useState(false);
+  const restoreTemplateArticles = async () => {
+    const db = getSupabase();
+    if (!db || !userId) {
+      setError('Supabaseに接続してログインしてください。');
+      return;
+    }
+    const existingIds = new Set(rows.map((r) => r.id));
+    const targets = MEDIA_TEMPLATE_ARTICLES.filter((t) => !existingIds.has(t.id));
+    if (targets.length === 0) {
+      setNotice('テンプレート記事はすべて登録済みです。');
+      return;
+    }
+    if (!window.confirm(`テンプレート記事 ${targets.length} 件を「公開」状態で復元します。HPにも反映されます。よろしいですか？`)) return;
+
+    setRestoringTemplates(true);
+    setError('');
+    setNotice('');
+    const mediaId = media[0]?.id ?? DEFAULT_OFFICIAL_MEDIA.id;
+    const now = new Date().toISOString();
+    const newRows = targets.map((t) => ({
+      user_id: userId,
+      id: t.id,
+      record_type: 'article' as const,
+      title: t.title,
+      product_id: null,
+      status: '公開',
+      payload: { ...t.payload, mediaId, publishStatus: '公開' },
+      updated_at: now,
+    }));
+
+    const { error: upsertErr } = await db.from('mst_ai_acquisition_records').upsert(newRows, { onConflict: 'user_id,id' });
+    setRestoringTemplates(false);
+    if (upsertErr) {
+      setError('テンプレート記事を復元できませんでした: ' + upsertErr.message);
+      return;
+    }
+    setRows((p) => [...(newRows as Row[]), ...p.filter((r) => !targets.some((t) => t.id === r.id))]);
+
+    const deployRes = await kickDeployHook(mediaId);
+    setNotice(
+      `テンプレート記事を ${targets.length} 件復元しました。` +
+        (deployRes.triggered ? '（HPの再デプロイを開始しました）' : '（※HPに反映するには再デプロイが必要です）')
+    );
+  };
+
   const remove = async (r: Row) => {
     if (!window.confirm(`「${r.title}」を削除しますか？`)) return;
     const db = getSupabase();
@@ -709,13 +758,25 @@ export const OwnMediaWorkspace: React.FC<{
                   </div>
                 </div>
                 {!form && (
-                  <button
-                    onClick={reset}
-                    className="inline-flex items-center gap-2 rounded-xl bg-purple-600 hover:bg-purple-700 px-4 py-2.5 text-xs font-bold text-white shadow-xs transition cursor-pointer"
-                  >
-                    <Plus className="h-4 w-4" />
-                    新しい記事を作成
-                  </button>
+                  <div className="flex flex-wrap items-center gap-2">
+                    <button
+                      type="button"
+                      disabled={restoringTemplates}
+                      onClick={() => void restoreTemplateArticles()}
+                      className="inline-flex items-center gap-2 rounded-xl border border-slate-300 bg-white hover:bg-slate-50 px-4 py-2.5 text-xs font-bold text-slate-700 shadow-xs transition disabled:opacity-50 cursor-pointer"
+                      title="HPに最初から入っていたテンプレート記事5本を復元します（復元後はOSから削除できます）"
+                    >
+                      <RefreshCw className={`h-4 w-4 ${restoringTemplates ? 'animate-spin' : ''}`} />
+                      {restoringTemplates ? '復元中…' : 'テンプレート記事を復元'}
+                    </button>
+                    <button
+                      onClick={reset}
+                      className="inline-flex items-center gap-2 rounded-xl bg-purple-600 hover:bg-purple-700 px-4 py-2.5 text-xs font-bold text-white shadow-xs transition cursor-pointer"
+                    >
+                      <Plus className="h-4 w-4" />
+                      新しい記事を作成
+                    </button>
+                  </div>
                 )}
               </div>
 
