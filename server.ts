@@ -5366,7 +5366,8 @@ app.post(
     ? body.companyName.trim().slice(0, 200)
     : rawCompanyFromAnswers.slice(0, 200);
   const email = typeof body.email === 'string' ? body.email.trim().toLowerCase().slice(0, 254) : '';
-  const phone = typeof body.phone === 'string' ? body.phone.trim().slice(0, 40) : '';
+  const rawPhone = typeof body.phone === 'string' ? body.phone.trim().slice(0, 40) : '';
+  const phone = rawPhone && rawPhone.replace(/\D/g, '').length >= 7 ? rawPhone : '';
   let lineUserId = typeof body.lineUserId === 'string' && /^U[0-9a-zA-Z]{10,64}$/.test(body.lineUserId.trim()) ? body.lineUserId.trim() : '';
   const queryLuid = typeof req.query?.luid === 'string' ? (req.query.luid as string).trim() : typeof req.query?.line_user_id === 'string' ? (req.query.line_user_id as string).trim() : '';
   if (!lineUserId && queryLuid && /^U[0-9a-zA-Z]{10,64}$/.test(queryLuid)) {

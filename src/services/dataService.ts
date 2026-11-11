@@ -249,7 +249,9 @@ export async function fetchTableData(
 
         const contactName = contact?.full_name || (nameMatch ? nameMatch[1] : '');
         const email = contact?.email || (emailMatch ? emailMatch[0] : '');
-        const phone = contact?.phone || (phoneMatch ? phoneMatch[0] : '');
+        const rawPhone = contact?.phone || (phoneMatch ? phoneMatch[0] : '');
+        // 電話番号バリデーション：数字が7桁以上含まれている場合のみ有効とする（名前等の混入を完全防止）
+        const phone = rawPhone && rawPhone.replace(/\D/g, '').length >= 7 ? rawPhone : '';
 
         // 希望内容（問い合わせ種別）の自動判定・自動反映
         let deducedInquiryType = String(item.inquiry_type || '').trim();

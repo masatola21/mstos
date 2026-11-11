@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Company, Product, Lead, Customer } from '../types/database';
 import { ProposalPlanTemplatePicker } from './ProposalPlanTemplatePicker';
-import { todayJst } from '../utils/date';
+import { todayJst, formatJapaneseDate, formatJapaneseDateTime } from '../utils/date';
 import type { ProposalPlanTemplate } from './ProposalPlanTemplatePicker';
 import { 
   fetchProductsList, 
@@ -107,7 +107,30 @@ export const StageTransitionModal: React.FC<StageTransitionModalProps> = ({
         if (matched) setServiceType(matched.product_name);
       });
     } else if (type === 'lead_to_deal') {
-      setProposalPlanName(sourceRecord.service_type ? `${sourceRecord.service_type} 導入提案` : '新規導入提案');
+      // リードの希望内容（inquiry_type / service_type / 相談メモ）から最適な提案プラン名を自動判定
+      const inquiry = (sourceRecord.inquiry_type || sourceRecord.service_type || '').trim();
+      let initialPlanName = '';
+      if (inquiry === 'ボトルネック診断' || inquiry.includes('診断')) {
+        initialPlanName = '経営ボトルネック診断 改善提案';
+      } else if (inquiry === '業務効率化・IT/自動化' || inquiry.includes('効率化') || inquiry.includes('自動化')) {
+        initialPlanName = '業務効率化・IT自動化システム 導入提案';
+      } else if (inquiry === '経営全体・利益改善' || inquiry.includes('利益改善')) {
+        initialPlanName = '経営全体・利益改善コンサルティング 導入提案';
+      } else if (inquiry === '集客・マーケティング' || inquiry.includes('マーケティング') || inquiry.includes('集客')) {
+        initialPlanName = '集客・マーケティング自動化支援 導入提案';
+      } else if (inquiry === '介護保険外開業' || inquiry.includes('介護')) {
+        initialPlanName = '介護保険外サービス開業支援 導入提案';
+      } else if (inquiry === '資料請求' || inquiry.includes('資料')) {
+        initialPlanName = '資料請求フォロー・業務改善 導入提案';
+      } else if (inquiry) {
+        initialPlanName = `${inquiry} 導入提案`;
+      } else if (sourceRecord.notes && (sourceRecord.notes.includes('診断') || sourceRecord.notes.includes('ボトルネック'))) {
+        initialPlanName = '経営ボトルネック診断 改善提案';
+      } else {
+        initialPlanName = '新規業務改善システム 導入提案';
+      }
+
+      setProposalPlanName(initialPlanName);
       setProposalPlanTemplateId('');
       setProposalStatus('初回面談');
       setDealMemo(sourceRecord.notes ? `【リード相談引継ぎ】\n${sourceRecord.notes}` : '');
@@ -116,10 +139,35 @@ export const StageTransitionModal: React.FC<StageTransitionModalProps> = ({
       void fetchProductsList().then((prods) => {
         setProducts(prods);
         const suggestedId = sourceRecord.interested_product_id || sourceRecord.product_id || '';
-        const selected = prods.find((product) => product.id === suggestedId)
-          || prods.find((product) => product.product_name === sourceRecord.service_type);
+        const inq = (sourceRecord.inquiry_type || sourceRecord.service_type || '').toLowerCase();
+        
+        // 1. 指定IDマッチ
+        let selected = prods.find((product) => product.id === suggestedId);
+        // 2. サービス名完全マッチ
+        if (!selected && sourceRecord.service_type) {
+          selected = prods.find((product) => product.product_name === sourceRecord.service_type);
+        }
+        // 3. 希望内容（inquiry_type）からのファジィマッチ
+        if (!selected && inq) {
+          selected = prods.find((p) => {
+            const pName = p.product_name.toLowerCase();
+            if (inq.includes('診断') && pName.includes('診断')) return true;
+            if (inq.includes('業務') && pName.includes('業務')) return true;
+            if (inq.includes('集客') && pName.includes('集客')) return true;
+            if (inq.includes('介護') && pName.includes('介護')) return true;
+            return false;
+          });
+        }
+
         if (selected) {
           setProductId(selected.id);
+          // 商品が特定された場合、より具体的な「商品名 導入提案」にプラン名を更新（未編集時のみ）
+          setProposalPlanName((prev) => {
+            if (prev === '新規業務改善システム 導入提案' || prev === '新規導入提案') {
+              return `${selected.product_name} 導入提案`;
+            }
+            return prev;
+          });
           setInitialFee(selected.initial_fee ?? 0);
           setMonthlyFee(selected.monthly_fee ?? 0);
           setTotalAmount(Number(selected.initial_fee || 0) + Number(selected.monthly_fee || 0));
@@ -365,13 +413,14 @@ export const StageTransitionModal: React.FC<StageTransitionModalProps> = ({
 
                 {type === 'lead_to_deal' && (
                   <div className="grid grid-cols-2 gap-2 text-slate-400 text-[11px] bg-slate-900/60 p-2.5 rounded-xl border border-slate-800/80">
-                    <div>希望内容: <span className="text-white font-medium">{sourceRecord?.inquiry_type || '未設定'}</span></div>
+                    <div>希望内容: <span className="text-amber-300 font-semibold">{sourceRecord?.inquiry_type || sourceRecord?.service_type || '未設定'}</span></div>
                     <div>ステータス: <span className="text-white font-medium">{sourceRecord?.status || '未設定'}</span></div>
                     <div>連絡チャネル: <span className="text-white font-medium">{sourceRecord?.priority_channel || '未設定'}</span></div>
-                    <div>面談日: <span className="text-white font-mono">{sourceRecord?.meeting_date || '未定'}</span></div>
+                    <div>面談日時: <span className="text-emerald-300 font-semibold">{formatJapaneseDateTime(sourceRecord?.meeting_date, { fallbackTime: sourceRecord?.meeting_start_time }) || '未定'}</span></div>
                     {sourceRecord?.notes && (
-                      <div className="col-span-2 text-slate-300 pt-1 border-t border-slate-800/60 line-clamp-2">
-                        相談メモ: {sourceRecord.notes}
+                      <div className="col-span-2 text-slate-300 pt-1 border-t border-slate-800/60 whitespace-pre-wrap text-[11px] bg-slate-950/60 p-2 rounded-lg">
+                        <span className="text-slate-400 font-semibold">【相談メモ・ヒアリング引継ぎ】:</span>
+                        <div className="mt-0.5">{sourceRecord.notes}</div>
                       </div>
                     )}
                   </div>
@@ -521,7 +570,7 @@ export const StageTransitionModal: React.FC<StageTransitionModalProps> = ({
                 </div>
 
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
-                  <div>
+                  <div className="sm:col-span-2">
                     <label className="block text-xs font-semibold text-slate-300 mb-1">
                       提案プラン名・商談名 <span className="text-rose-400">*</span>
                     </label>
@@ -530,9 +579,45 @@ export const StageTransitionModal: React.FC<StageTransitionModalProps> = ({
                       required
                       value={proposalPlanName}
                       onChange={(e) => setProposalPlanName(e.target.value)}
-                      placeholder="例: AI経営OS Standard導入提案"
+                      placeholder="例: 経営ボトルネック診断 改善提案"
                       className="w-full px-3 py-2 rounded-xl bg-slate-950 border border-slate-700 text-slate-200 text-xs outline-none focus:border-blue-500"
                     />
+                    {/* 希望内容からのワンタップ候補 */}
+                    <div className="mt-1.5 flex items-center gap-1.5 flex-wrap text-[11px]">
+                      <span className="text-slate-400 font-semibold flex items-center gap-1">
+                        <Sparkles className="w-3 h-3 text-amber-400" />
+                        <span>希望内容からの候補:</span>
+                      </span>
+                      {(() => {
+                        const inq = (sourceRecord.inquiry_type || sourceRecord.service_type || '').trim();
+                        const suggestions = Array.from(new Set([
+                          inq ? (inq.endsWith('提案') ? inq : `${inq} 導入提案`) : null,
+                          inq.includes('診断') ? '経営ボトルネック診断 改善提案' : null,
+                          inq.includes('効率化') || inq.includes('自動化') ? '業務効率化・IT自動化システム 導入提案' : null,
+                          inq.includes('利益') || inq.includes('経営全体') ? '経営全体・利益改善コンサルティング 導入提案' : null,
+                          inq.includes('集客') ? '集客・マーケティング自動化支援 導入提案' : null,
+                          inq.includes('介護') ? '介護保険外サービス開業支援 導入提案' : null,
+                          inq.includes('資料') ? '資料請求フォロー・業務改善 導入提案' : null,
+                          productId ? `${products.find(p => p.id === productId)?.product_name || ''} 導入提案` : null,
+                          '新規業務改善システム 導入提案'
+                        ])).filter((s): s is string => Boolean(s && s.trim() && s !== '導入提案'));
+
+                        return suggestions.map((sug) => (
+                          <button
+                            key={sug}
+                            type="button"
+                            onClick={() => setProposalPlanName(sug)}
+                            className={`px-2 py-0.5 rounded-md border text-[10px] transition-all cursor-pointer ${
+                              proposalPlanName === sug
+                                ? 'bg-amber-500/20 text-amber-300 border-amber-500/50 font-bold'
+                                : 'bg-slate-900 text-slate-300 border-slate-700 hover:bg-slate-800 hover:text-white'
+                            }`}
+                          >
+                            {sug}
+                          </button>
+                        ));
+                      })()}
+                    </div>
                   </div>
 
                   <div>
