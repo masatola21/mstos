@@ -409,8 +409,33 @@ async function loadRelationalAIOperations(userId: string): Promise<RelationalAIO
   };
 }
 
-async function saveRelationalAIOperations(userId: string, data: WorkspaceData): Promise<void> {
+let lastSyncWarnKey = '';
+let lastSyncWarnTime = 0;
+let suppressedSyncWarnCount = 0;
+
+function logDeduplicatedSyncWarn(message: string): void {
+  const now = Date.now();
+  if (message === lastSyncWarnKey && now - lastSyncWarnTime < 30000) {
+    suppressedSyncWarnCount++;
+    return;
+  }
+  if (suppressedSyncWarnCount > 0) {
+    console.warn(`[WorkspaceSync] Suppressed ${suppressedSyncWarnCount} duplicate warnings.`);
+  }
+  lastSyncWarnKey = message;
+  lastSyncWarnTime = now;
+  suppressedSyncWarnCount = 0;
+  console.warn(message);
+}
+
+async function saveRelationalAIOperations(
+  userId: string,
+  data: WorkspaceData,
+  options?: { maxRetries?: number }
+): Promise<void> {
   const supabase = getSupabaseClient();
+  const maxRetries = options?.maxRetries ?? 3;
+  let retryCount = 0;
 
   // 安全性向上: タスクの期限・ステータス・プロジェクト紐付けの正規化
   const sanitizedTasks = (data.tasks || []).map((t) => {
@@ -442,24 +467,40 @@ async function saveRelationalAIOperations(userId: string, data: WorkspaceData): 
     };
   });
 
-  const { error } = await supabase.rpc('mst_save_ai_operations', {
-    p_user_id: userId,
-    p_projects: sanitizedProjects,
-    p_tasks: sanitizedTasks,
-    p_approvals: data.approvals,
-    p_automation_rules: data.automations,
-    p_activity_logs: data.activityLogs,
-    p_user_profile: data.userProfile,
-    p_characters: data.characters,
-    p_active_character_id: data.activeCharacterId,
-    p_ai_model_settings: data.aiModelSettings,
-    p_top_goal: data.topGoal,
-    p_token_usage_records: data.tokenUsage,
-    p_model_pricing: data.pricingRates,
-    p_chat_histories: data.workModeHistories,
-    p_knowledge_items: data.knowledgeItems,
-  });
-  if (error) throw error;
+  while (true) {
+    const { error } = await supabase.rpc('mst_save_ai_operations', {
+      p_user_id: userId,
+      p_projects: sanitizedProjects,
+      p_tasks: sanitizedTasks,
+      p_approvals: data.approvals,
+      p_automation_rules: data.automations,
+      p_activity_logs: data.activityLogs,
+      p_user_profile: data.userProfile,
+      p_characters: data.characters,
+      p_active_character_id: data.activeCharacterId,
+      p_ai_model_settings: data.aiModelSettings,
+      p_top_goal: data.topGoal,
+      p_token_usage_records: data.tokenUsage,
+      p_model_pricing: data.pricingRates,
+      p_chat_histories: data.workModeHistories,
+      p_knowledge_items: data.knowledgeItems,
+    });
+
+    if (!error) break;
+
+    if (retryCount < maxRetries) {
+      retryCount++;
+      const baseDelayMs = 1000;
+      const backoffMs = Math.round(baseDelayMs * Math.pow(2, retryCount - 1) + Math.random() * 200);
+      logDeduplicatedSyncWarn(
+        `[AIOperationsSync] mst_save_ai_operations failed (${error.message || (error as any).code || 'unknown'}). Backing off for ${backoffMs}ms before retry (attempt ${retryCount}/${maxRetries})...`
+      );
+      await new Promise((resolve) => setTimeout(resolve, backoffMs));
+      continue;
+    }
+
+    throw error;
+  }
 }
 
 export function mergeRecordsByKey<T>(
@@ -834,10 +875,14 @@ export async function resolveMatrixConflictAndMerge(
   userId: string,
   localData: WorkspaceData
 ): Promise<{ mergedData: WorkspaceData; newUpdatedAt: string }> {
+  // 1. 最新の updated_at をサーバーから明示的に再取得してメモリマップを更新
+  const latestUpdatedAt = await fetchLatestMatrixWorkspaceSyncState(userId);
+
+  // 2. 最新のリレーショナルデータを取得（loadRelationalMatrixWorkspace 内でも updated_at が設定される）
   const relationalMatrix = await loadRelationalMatrixWorkspace(userId);
   const relationalSales = await loadRelationalSalesOperations();
   const baseline = loadLastSyncedData(userId);
-  const newUpdatedAt = matrixWorkspaceUpdatedAtByUser.get(userId) || '';
+  const newUpdatedAt = matrixWorkspaceUpdatedAtByUser.get(userId) || latestUpdatedAt || '';
 
   const merged = { ...localData };
 
@@ -879,7 +924,7 @@ export async function saveWorkspaceData(
 ): Promise<SaveWorkspaceResult> {
   matrixService.setActiveUserId(userId);
   const supabase = getSupabaseClient();
-  const maxRetries = options?.maxConflictRetries ?? 2;
+  const maxRetries = options?.maxConflictRetries ?? 3;
   let currentData = data;
   let wasMerged = false;
   let retryCount = 0;
@@ -893,12 +938,12 @@ export async function saveWorkspaceData(
     } catch (err) {
       if (isWorkspaceConflictError(err) && retryCount < maxRetries) {
         retryCount++;
-        // 指数バックオフ（数秒待機: 1回目 約2.5秒, 2回目 約5.0秒 + ランダムジッター）
+        // 指数バックオフ（1回目 約1秒, 2回目 約2秒, 3回目 約4秒 + ランダムジッター）
         // 即座の再試行によるDB CPU 100%負荷を完全に防止
-        const baseDelayMs = 2500;
-        const backoffMs = Math.round(baseDelayMs * Math.pow(2, retryCount - 1) + Math.random() * 800);
-        console.warn(
-          `[WorkspaceSync] WORKSPACE_CONFLICT (40001) detected. Backing off for ${backoffMs}ms before 3-way auto-merge (attempt ${retryCount}/${maxRetries})...`
+        const baseDelayMs = 1000;
+        const backoffMs = Math.round(baseDelayMs * Math.pow(2, retryCount - 1) + Math.random() * 200);
+        logDeduplicatedSyncWarn(
+          `[WorkspaceSync] WORKSPACE_CONFLICT (40001) detected. Backing off for ${backoffMs}ms before refetching latest data and 3-way auto-merge (attempt ${retryCount}/${maxRetries})...`
         );
         await new Promise((resolve) => setTimeout(resolve, backoffMs));
         const result = await resolveMatrixConflictAndMerge(userId, currentData);
@@ -910,8 +955,8 @@ export async function saveWorkspaceData(
     }
   }
 
-  // 2. Matrix保存成功後に AI Operations を保存
-  await saveRelationalAIOperations(userId, currentData);
+  // 2. Matrix保存成功後に AI Operations を保存（最大3回リトライ・指数バックオフ保護付き）
+  await saveRelationalAIOperations(userId, currentData, { maxRetries: 3 });
 
   // 3. 互換用スナップショットを更新
   const snapshotData = { ...currentData } as Partial<WorkspaceData>;
