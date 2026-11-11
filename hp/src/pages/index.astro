@@ -1000,14 +1000,17 @@ const steps = [
             href={`/media/${art.slug}`}
             class="bg-sand-50 rounded-2xl border border-sand-300 overflow-hidden hover:shadow-lg transition-all group flex flex-col justify-between"
           >
-            <div class="relative h-44 overflow-hidden border-b border-sand-200 bg-sand-200">
+            <div class="relative h-48 overflow-hidden border-b border-sand-200 bg-sand-200">
               <img
-                src={art.heroImage}
+                src={art.heroImage || '/images/hero-consulting.jpg'}
                 alt={art.title}
                 class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
+                loading="lazy"
+                onerror="this.onerror=null; this.src='/images/hero-consulting.jpg';"
               />
+              <div class="absolute inset-0 bg-gradient-to-t from-slate-950/40 via-transparent to-transparent pointer-events-none"></div>
               <div class="absolute top-3 left-3">
-                <span class="text-[11px] font-bold text-brand-900 bg-white/95 px-2.5 py-0.5 rounded-full shadow-sm">
+                <span class="text-[11px] font-bold text-brand-900 bg-white/95 backdrop-blur-sm px-2.5 py-0.5 rounded-full shadow-sm">
                   {art.category}
                 </span>
               </div>
@@ -1018,10 +1021,10 @@ const steps = [
                 {art.title}
               </h3>
               <p class="text-xs text-gray-600 line-clamp-2 font-light">
-                {art.description}
+                {art.summary || art.description}
               </p>
               <div class="pt-2 text-[11px] text-gray-400">
-                {art.date}
+                {art.publishedAt || art.date}
               </div>
             </div>
           </a>
