@@ -99,3 +99,154 @@ export function isContractAlreadyBilled(
     return false;
   });
 }
+
+/**
+ * 支払期日（基準日の翌月末日）を算出（例: 2026-11-10 発行 → 2026-12-31 支払期日）
+ */
+export function getEndOfNextMonthDate(baseDateInput?: string | Date): string {
+  let date: Date;
+  if (!baseDateInput) {
+    date = new Date();
+  } else if (typeof baseDateInput === 'string') {
+    const parts = baseDateInput.split('-').map(Number);
+    if (parts.length >= 3 && !isNaN(parts[0]) && !isNaN(parts[1]) && !isNaN(parts[2])) {
+      date = new Date(parts[0], parts[1] - 1, parts[2]);
+    } else {
+      date = new Date(baseDateInput);
+    }
+  } else {
+    date = baseDateInput;
+  }
+  const year = date.getFullYear();
+  const month = date.getMonth(); // 0-based
+  // Day 0 of month + 2 gives the last day of month + 1 (the next month)
+  const endOfNextMonth = new Date(year, month + 2, 0);
+  const y = endOfNextMonth.getFullYear();
+  const m = String(endOfNextMonth.getMonth() + 1).padStart(2, '0');
+  const d = String(endOfNextMonth.getDate()).padStart(2, '0');
+  return `${y}-${m}-${d}`;
+}
+
+/**
+ * 見積有効期限（基準日から丸1ヶ月後）を算出（例: 2026-11-10 発行 → 2026-12-10 有効期限）
+ */
+export function getOneMonthLaterDate(baseDateInput?: string | Date): string {
+  let date: Date;
+  if (!baseDateInput) {
+    date = new Date();
+  } else if (typeof baseDateInput === 'string') {
+    const parts = baseDateInput.split('-').map(Number);
+    if (parts.length >= 3 && !isNaN(parts[0]) && !isNaN(parts[1]) && !isNaN(parts[2])) {
+      date = new Date(parts[0], parts[1] - 1, parts[2]);
+    } else {
+      date = new Date(baseDateInput);
+    }
+  } else {
+    date = baseDateInput;
+  }
+  const year = date.getFullYear();
+  const month = date.getMonth();
+  const day = date.getDate();
+  const targetLastDay = new Date(year, month + 2, 0).getDate();
+  const targetDate = new Date(year, month + 1, Math.min(day, targetLastDay));
+  const y = targetDate.getFullYear();
+  const m = String(targetDate.getMonth() + 1).padStart(2, '0');
+  const d = String(targetDate.getDate()).padStart(2, '0');
+  return `${y}-${m}-${d}`;
+}
+
+export type PaymentPlanType = 'lump_sum' | 'retainer' | 'milestone' | 'installments';
+
+export interface MilestoneBreakdown {
+  depositRatio: number; // e.g. 0.5 (50%)
+  completionRatio: number; // e.g. 0.5 (50%)
+  depositSubtotal: number;
+  depositTax: number;
+  depositTotalWithTax: number;
+  completionSubtotal: number;
+  completionTax: number;
+  completionTotalWithTax: number;
+  totalSubtotal: number;
+  totalWithTax: number;
+}
+
+/**
+ * 手付金（着手金）＋導入後（残金）の2段階マイルストーン計算
+ * 端数が出た場合は1円単位で着手金側に寄せて合計が正確に一致するように調整
+ */
+export function calculateMilestoneAmounts(totalSubtotal: number, depositRatio = 0.5): MilestoneBreakdown {
+  const safeTotal = Math.max(0, Math.round(Number(totalSubtotal) || 0));
+  const safeRatio = Math.max(0.1, Math.min(0.9, depositRatio));
+  const depositSubtotal = Math.floor(safeTotal * safeRatio);
+  const completionSubtotal = safeTotal - depositSubtotal;
+
+  const depositTax = Math.floor(depositSubtotal * 0.1);
+  const depositTotalWithTax = depositSubtotal + depositTax;
+
+  const completionTax = Math.floor(completionSubtotal * 0.1);
+  const completionTotalWithTax = completionSubtotal + completionTax;
+
+  return {
+    depositRatio: safeRatio,
+    completionRatio: Math.round((1 - safeRatio) * 100) / 100,
+    depositSubtotal,
+    depositTax,
+    depositTotalWithTax,
+    completionSubtotal,
+    completionTax,
+    completionTotalWithTax,
+    totalSubtotal: safeTotal,
+    totalWithTax: depositTotalWithTax + completionTotalWithTax,
+  };
+}
+
+export interface InstallmentItem {
+  installmentNumber: number;
+  totalInstallments: number;
+  subtotal: number;
+  tax: number;
+  totalWithTax: number;
+  label: string;
+}
+
+/**
+ * 分割払いの各回金額計算（2〜12回）
+ * 端数は初回に合算して合計金額と完全に一致させる
+ */
+export function calculateInstallmentAmounts(totalSubtotal: number, installmentCount = 3): {
+  installments: InstallmentItem[];
+  totalSubtotal: number;
+  totalWithTax: number;
+} {
+  const safeTotal = Math.max(0, Math.round(Number(totalSubtotal) || 0));
+  const count = Math.max(2, Math.min(24, Math.round(Number(installmentCount) || 3)));
+  
+  const baseSubtotal = Math.floor(safeTotal / count);
+  const remainder = safeTotal - baseSubtotal * count;
+
+  const installments: InstallmentItem[] = [];
+  let sumTotalWithTax = 0;
+
+  for (let i = 1; i <= count; i++) {
+    const subtotal = i === 1 ? baseSubtotal + remainder : baseSubtotal;
+    const tax = Math.floor(subtotal * 0.1);
+    const totalWithTax = subtotal + tax;
+    sumTotalWithTax += totalWithTax;
+
+    installments.push({
+      installmentNumber: i,
+      totalInstallments: count,
+      subtotal,
+      tax,
+      totalWithTax,
+      label: `第${i}回（全${count}回）`,
+    });
+  }
+
+  return {
+    installments,
+    totalSubtotal: safeTotal,
+    totalWithTax: sumTotalWithTax,
+  };
+}
+
