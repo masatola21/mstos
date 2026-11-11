@@ -288,10 +288,14 @@ export const DocumentTemplateView: React.FC<DocumentTemplateViewProps> = ({
         total_amount: total > 0 ? total.toLocaleString('ja-JP') : '',
         subtotal_amount: subtotal > 0 ? subtotal.toLocaleString('ja-JP') : '',
         tax_amount: tax > 0 ? tax.toLocaleString('ja-JP') : '',
-        initial_fee: initialFee > 0 ? initialFee.toLocaleString('ja-JP') : '',
-        monthly_fee: monthlyFee > 0 ? monthlyFee.toLocaleString('ja-JP') : '',
-        monthly_amount: monthlyFee > 0 ? monthlyFee.toLocaleString('ja-JP') : '',
-        tax_included_amount: monthlyFee > 0 ? Math.floor(monthlyFee * 1.1).toLocaleString('ja-JP') : '',
+        initial_fee: initialFee > 0 ? initialFee.toLocaleString('ja-JP') : '300,000',
+        initial_fee_tax: initialFee > 0 ? Math.floor(initialFee * 0.1).toLocaleString('ja-JP') : '30,000',
+        initial_fee_tax_included: initialFee > 0 ? Math.floor(initialFee * 1.1).toLocaleString('ja-JP') : '330,000',
+        monthly_fee: monthlyFee > 0 ? monthlyFee.toLocaleString('ja-JP') : '100,000',
+        monthly_fee_tax: monthlyFee > 0 ? Math.floor(monthlyFee * 0.1).toLocaleString('ja-JP') : '10,000',
+        monthly_fee_tax_included: monthlyFee > 0 ? Math.floor(monthlyFee * 1.1).toLocaleString('ja-JP') : '110,000',
+        monthly_amount: monthlyFee > 0 ? monthlyFee.toLocaleString('ja-JP') : '100,000',
+        tax_included_amount: monthlyFee > 0 ? Math.floor(monthlyFee * 1.1).toLocaleString('ja-JP') : '110,000',
         deposit_rate: '50',
         deposit_subtotal: mb.depositSubtotal > 0 ? mb.depositSubtotal.toLocaleString('ja-JP') : '',
         deposit_tax: mb.depositTax > 0 ? mb.depositTax.toLocaleString('ja-JP') : '',
@@ -433,6 +437,29 @@ export const DocumentTemplateView: React.FC<DocumentTemplateViewProps> = ({
         payment_terms: '毎月末日締め翌月末日振込（全3回均等分割払い・期限の利益喪失条項あり）',
         due_date: formatDocumentDate(selectedTemplateId.includes('estimate') ? oneMonthLater : nextMonthEnd),
       }));
+    } else if (mode === 'hybrid_setup_retainer') {
+      const initial = parseNum(variableValues.initial_fee) || 300000;
+      const monthly = parseNum(variableValues.monthly_fee) || 100000;
+      const initialTax = Math.floor(initial * 0.1);
+      const monthlyTax = Math.floor(monthly * 0.1);
+      const sub = initial + monthly;
+      const tax = initialTax + monthlyTax;
+      const total = sub + tax;
+      setVariableValues((prev) => ({
+        ...prev,
+        initial_fee: initial.toLocaleString('ja-JP'),
+        initial_fee_tax: initialTax.toLocaleString('ja-JP'),
+        initial_fee_tax_included: (initial + initialTax).toLocaleString('ja-JP'),
+        monthly_fee: monthly.toLocaleString('ja-JP'),
+        monthly_fee_tax: monthlyTax.toLocaleString('ja-JP'),
+        monthly_fee_tax_included: (monthly + monthlyTax).toLocaleString('ja-JP'),
+        subtotal_amount: sub.toLocaleString('ja-JP'),
+        tax_amount: tax.toLocaleString('ja-JP'),
+        total_amount: total.toLocaleString('ja-JP'),
+        payment_terms: '初期構築費：契約締結月の翌月末日振込 ／ 月額顧問料：毎月末日締め翌月末日振込（最低6ヶ月契約）',
+        due_date: formatDocumentDate(selectedTemplateId.includes('estimate') ? oneMonthLater : nextMonthEnd),
+        cost_breakdown: `初期構築費 ${initial.toLocaleString('ja-JP')}円 ＋ 月額顧問料 ${monthly.toLocaleString('ja-JP')}円/月`,
+      }));
     } else if (mode === 'installments_6') {
       const inst = calculateInstallmentAmounts(rawSubtotal, 6);
       setVariableValues((prev) => ({
@@ -461,7 +488,37 @@ export const DocumentTemplateView: React.FC<DocumentTemplateViewProps> = ({
     const today = todayJst();
     const nextMonthEnd = invoiceDueDate(today);
 
-    if (subtype === 'deposit') {
+    if (subtype === 'hybrid_setup_retainer') {
+      const initial = parseNum(variableValues.initial_fee) || 300000;
+      const monthly = parseNum(variableValues.monthly_fee) || 100000;
+      const initialTax = Math.floor(initial * 0.1);
+      const monthlyTax = Math.floor(monthly * 0.1);
+      const sub = initial + monthly;
+      const tax = initialTax + monthlyTax;
+      const total = sub + tax;
+      setVariableValues((prev) => ({
+        ...prev,
+        initial_fee: initial.toLocaleString('ja-JP'),
+        initial_fee_tax: initialTax.toLocaleString('ja-JP'),
+        initial_fee_tax_included: (initial + initialTax).toLocaleString('ja-JP'),
+        monthly_fee: monthly.toLocaleString('ja-JP'),
+        monthly_fee_tax: monthlyTax.toLocaleString('ja-JP'),
+        monthly_fee_tax_included: (monthly + monthlyTax).toLocaleString('ja-JP'),
+        item_name_1: '初期システム構築・導入設定費（一時金）',
+        item_qty_1: '1',
+        item_price_1: initial.toLocaleString('ja-JP'),
+        item_amount_1: initial.toLocaleString('ja-JP'),
+        item_name_2: `月額経営改善・DX顧問支援料（${prev.billing_month || '当月度分'}）`,
+        item_qty_2: '1',
+        item_price_2: monthly.toLocaleString('ja-JP'),
+        item_amount_2: monthly.toLocaleString('ja-JP'),
+        subtotal_amount: sub.toLocaleString('ja-JP'),
+        tax_amount: tax.toLocaleString('ja-JP'),
+        total_amount: total.toLocaleString('ja-JP'),
+        due_date: formatDocumentDate(nextMonthEnd),
+        payment_terms: '翌月末日振込（初期構築費および初月度顧問支援料の合算）',
+      }));
+    } else if (subtype === 'deposit') {
       const mb = calculateMilestoneAmounts(baseSubtotal, 0.5);
       setVariableValues((prev) => ({
         ...prev,
@@ -1102,9 +1159,10 @@ export const DocumentTemplateView: React.FC<DocumentTemplateViewProps> = ({
                       {[
                         { id: 'lump_sum' as PaymentMode, label: '① 一括払い', sub: '翌月末日振込' },
                         { id: 'retainer' as PaymentMode, label: '② 月額顧問', sub: '毎月締め翌月末' },
-                        { id: 'milestone' as PaymentMode, label: '③ 手付50%＋残金50%', sub: '着手時 & 導入検収時' },
-                        { id: 'installments_3' as PaymentMode, label: '④ 3回均等分割', sub: '翌月末×3回' },
-                        { id: 'installments_6' as PaymentMode, label: '⑤ 6回均等分割', sub: '翌月末×6回' },
+                        { id: 'hybrid_setup_retainer' as PaymentMode, label: '③ 初期構築＋月額顧問', sub: '構築費＋月々顧問' },
+                        { id: 'milestone' as PaymentMode, label: '④ 手付50%＋残金50%', sub: '着手時 & 導入検収時' },
+                        { id: 'installments_3' as PaymentMode, label: '⑤ 3回均等分割', sub: '翌月末×3回' },
+                        { id: 'installments_6' as PaymentMode, label: '⑥ 6回均等分割', sub: '翌月末×6回' },
                       ].map((item) => {
                         const active = paymentMode === item.id;
                         return (
@@ -1146,6 +1204,7 @@ export const DocumentTemplateView: React.FC<DocumentTemplateViewProps> = ({
                       {[
                         { id: 'lump_sum' as InvoiceSubtype, label: '通常一括', sub: '全額翌月末払い' },
                         { id: 'retainer' as InvoiceSubtype, label: '月額顧問料', sub: '定期伴走支援費' },
+                        { id: 'hybrid_setup_retainer' as InvoiceSubtype, label: '初期構築＋初月顧問', sub: '合算一括請求' },
                         { id: 'deposit' as InvoiceSubtype, label: '着手金 (50%)', sub: 'プロジェクト開始時' },
                         { id: 'completion' as InvoiceSubtype, label: '導入残金 (50%)', sub: '検収完了時' },
                         { id: 'installment' as InvoiceSubtype, label: '分割請求', sub: '第1回目など' },

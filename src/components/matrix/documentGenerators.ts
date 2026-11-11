@@ -9,8 +9,8 @@ import {
 } from '../../utils/billingUtils';
 
 export type DocTemplateType = 'contract' | 'proposal' | 'invoice' | 'report' | 'estimate' | 'monthly_report';
-export type PaymentMode = 'lump_sum' | 'retainer' | 'milestone' | 'installments_3' | 'installments_6';
-export type InvoiceSubtype = 'lump_sum' | 'retainer' | 'deposit' | 'completion' | 'installment';
+export type PaymentMode = 'lump_sum' | 'retainer' | 'milestone' | 'installments_3' | 'installments_6' | 'hybrid_setup_retainer';
+export type InvoiceSubtype = 'lump_sum' | 'retainer' | 'deposit' | 'completion' | 'installment' | 'hybrid_setup_retainer';
 
 export interface DocTemplate {
   id: string;
@@ -132,11 +132,40 @@ export function getEstimateHtml(mode: PaymentMode): string {
   const isRetainer = mode === 'retainer';
   const isMilestone = mode === 'milestone';
   const isInstallments = mode === 'installments_3' || mode === 'installments_6';
+  const isHybrid = mode === 'hybrid_setup_retainer';
 
   let tableContent = '';
   let highlightBanner = '';
 
-  if (isRetainer) {
+  if (isHybrid) {
+    highlightBanner = `<div style="display:flex; justify-content:space-between; align-items:flex-start; width:100%; gap:20px;">
+      <div style="flex:1; border-right:1px solid #cbd5e1; padding-right:16px;">
+        <span style="font-size:12px; color:#475569; font-weight:bold;">① 初期システム構築費用（一時金）</span><br>
+        <span style="font-size:24px; font-weight:800; color:#1e3a8a;">￥{{initial_fee}} 円</span> <span style="font-size:11px; color:#64748b;">(税込 ¥{{initial_fee_tax_included}} 円)</span>
+      </div>
+      <div style="flex:1; text-align:right;">
+        <span style="font-size:12px; color:#475569; font-weight:bold;">② 月額経営顧問・伴走支援（継続月額）</span><br>
+        <span style="font-size:24px; font-weight:800; color:#059669;">月々 ￥{{monthly_fee}} 円</span> <span style="font-size:11px; color:#64748b;">(税込 ¥{{monthly_fee_tax_included}} 円/月)</span>
+      </div>
+    </div>`;
+
+    tableContent = `<tr style="border-bottom:1px solid #e2e8f0;">
+      <td style="padding:12px 10px;">
+        <strong>{{project_name}} 初期システム構築・仕組み化導入費</strong><br>
+        <span style="color:#64748b; font-size:11px;">要件定義・設計・開発構築・初期設定一式（一時金）</span>
+      </td>
+      <td style="padding:12px 10px; text-align:center; color:#2563eb; font-weight:bold;">契約締結月の翌月末日</td>
+      <td style="padding:12px 10px; text-align:right; font-weight:bold;">¥{{initial_fee}} 円</td>
+    </tr>
+    <tr style="border-bottom:1px solid #e2e8f0;">
+      <td style="padding:12px 10px;">
+        <strong>{{project_name}} 月額経営改善・DX顧問支援（継続伴走）</strong><br>
+        <span style="color:#64748b; font-size:11px;">月次定例・改善指導・保守運用サポート（最低6ヶ月契約・自動更新）</span>
+      </td>
+      <td style="padding:12px 10px; text-align:center; color:#2563eb; font-weight:bold;">毎月末日締め翌月末日</td>
+      <td style="padding:12px 10px; text-align:right; font-weight:bold; color:#059669;">月額 ¥{{monthly_fee}} 円</td>
+    </tr>`;
+  } else if (isRetainer) {
     highlightBanner = `<div>
       <span style="font-size:14px; color:#475569; font-weight:bold;">月額顧問料（税込）</span><br>
       <span style="font-size:26px; font-weight:800; color:#1e3a8a;">月々 ￥{{monthly_fee}} 円</span>
@@ -207,6 +236,44 @@ export function getEstimateHtml(mode: PaymentMode): string {
     </tr>`;
   }
 
+  const totalsBox = isHybrid ? `
+    <div style="width:340px; font-size:13px;">
+      <div style="display:flex; justify-content:space-between; padding:3px 0;">
+        <span style="color:#64748b;">初期構築費用（税抜）:</span>
+        <span style="font-weight:bold;">¥{{initial_fee}} 円</span>
+      </div>
+      <div style="display:flex; justify-content:space-between; padding:3px 0;">
+        <span style="color:#64748b;">初月顧問料（税抜）:</span>
+        <span style="font-weight:bold;">¥{{monthly_fee}} 円</span>
+      </div>
+      <div style="display:flex; justify-content:space-between; padding:4px 0; border-top:1px solid #cbd5e1;">
+        <span style="color:#64748b;">消費税（10%）:</span>
+        <span style="font-weight:bold;">¥{{tax_amount}} 円</span>
+      </div>
+      <div style="display:flex; justify-content:space-between; padding:6px 0; font-size:14px; font-weight:bold; color:#0f172a; border-bottom:1px solid #cbd5e1;">
+        <span>初回お支払い合計（税込）:</span>
+        <span style="color:#1e3a8a;">¥{{total_amount}} 円</span>
+      </div>
+      <div style="display:flex; justify-content:space-between; padding:6px 0; font-size:12px; color:#059669; font-weight:bold;">
+        <span>2ヶ月目以降の月額費用:</span>
+        <span>月々 ¥{{monthly_fee_tax_included}} 円（税込）</span>
+      </div>
+    </div>` : `
+    <div style="width:280px; font-size:13px;">
+      <div style="display:flex; justify-content:space-between; padding:4px 0;">
+        <span style="color:#64748b;">小計（税抜）:</span>
+        <span style="font-weight:bold;">¥{{subtotal_amount}} 円</span>
+      </div>
+      <div style="display:flex; justify-content:space-between; padding:4px 0; border-bottom:1px solid #cbd5e1;">
+        <span style="color:#64748b;">消費税（10%）:</span>
+        <span style="font-weight:bold;">¥{{tax_amount}} 円</span>
+      </div>
+      <div style="display:flex; justify-content:space-between; padding:8px 0; font-size:15px; font-weight:bold; color:#0f172a;">
+        <span>税込合計:</span>
+        <span style="color:#1e3a8a;">¥{{total_amount}} 円</span>
+      </div>
+    </div>`;
+
   return `<div style="font-family: Arial, sans-serif; max-width: 760px; margin: 0 auto; padding: 40px; color: #1e293b; line-height: 1.8">
   <div style="display:flex; justify-content:space-between; align-items:baseline; border-bottom:2px solid #0f172a; padding-bottom:12px; margin-bottom:24px;">
     <h1 style="margin:0; font-size:24px; color:#0f172a;">御 見 積 書</h1>
@@ -235,20 +302,7 @@ export function getEstimateHtml(mode: PaymentMode): string {
   </table>
 
   <div style="display:flex; justify-content:flex-end; margin-bottom:30px;">
-    <div style="width:280px; font-size:13px;">
-      <div style="display:flex; justify-content:space-between; padding:4px 0;">
-        <span style="color:#64748b;">小計（税抜）:</span>
-        <span style="font-weight:bold;">¥{{subtotal_amount}} 円</span>
-      </div>
-      <div style="display:flex; justify-content:space-between; padding:4px 0; border-bottom:1px solid #cbd5e1;">
-        <span style="color:#64748b;">消費税（10%）:</span>
-        <span style="font-weight:bold;">¥{{tax_amount}} 円</span>
-      </div>
-      <div style="display:flex; justify-content:space-between; padding:8px 0; font-size:15px; font-weight:bold; color:#0f172a;">
-        <span>税込合計:</span>
-        <span style="color:#1e3a8a;">¥{{total_amount}} 円</span>
-      </div>
-    </div>
+    ${totalsBox}
   </div>
 
   <div style="background:#eff6ff; border:1px solid #bfdbfe; border-radius:8px; padding:12px 16px; margin-bottom:20px; font-size:12px; color:#1e40af;">
@@ -268,10 +322,22 @@ export function getContractHtml(mode: PaymentMode): string {
   const isRetainer = mode === 'retainer';
   const isMilestone = mode === 'milestone';
   const isInstallments = mode === 'installments_3' || mode === 'installments_6';
+  const isHybrid = mode === 'hybrid_setup_retainer';
 
   let article2Clause = '';
 
-  if (isRetainer) {
+  if (isHybrid) {
+    article2Clause = `<h3 style="margin-top: 20px; font-size: 16px; border-left: 4px solid #2563eb; padding-left: 8px;">第2条（委託料および支払方法・初期構築および月額顧問）</h3>
+  <p>甲は乙に対し、本件業務の対価として、以下の初期構築費用および月額顧問料を、乙の指定する銀行口座に振込送金して支払うものとする（振込手数料は甲の負担とする）。<br>
+  <strong>1. 初期構築費用（スポット一時金）：</strong><br>
+  金 <strong>{{initial_fee}}</strong> 円（税抜 / 消費税10% 金 {{initial_fee_tax}} 円 / 税込合計 金 {{initial_fee_tax_included}} 円）<br>
+  支払期日：本契約締結月の<strong>翌月末日振込</strong><br>
+  <strong>2. 月額顧問料（継続伴走支援）：</strong><br>
+  月額 金 <strong>{{monthly_fee}}</strong> 円（税抜 / 消費税10% 金 {{monthly_fee_tax}} 円 / 税込月額 金 {{monthly_fee_tax_included}} 円）<br>
+  支払期日：毎月末日締め、<strong>翌月末日振込</strong><br>
+  <strong>3. 契約期間および自動更新：</strong><br>
+  本契約の有効期間は、<strong>契約締結日より最低6ヶ月間</strong>とする。期間満了の1ヶ月前までに甲または乙から書面による別段の申し出がない限り、本契約は同一条件にて1ヶ月間自動更新され、以後も同様とする。</p>`;
+  } else if (isRetainer) {
     article2Clause = `<h3 style="margin-top: 20px; font-size: 16px; border-left: 4px solid #2563eb; padding-left: 8px;">第2条（顧問料および支払方法）</h3>
   <p>1. 本件業務の月額顧問料は、金 <strong>{{monthly_fee}}</strong> 円（税抜 / 消費税10% 金 {{tax_amount}} 円 / 税込合計 金 {{total_amount}} 円）とする。<br>
   2. 甲は乙に対し、毎月末日締めの翌月末日までに、乙の指定する銀行口座へ振込送金して支払うものとする。振込手数料は甲の負担とする。<br>
@@ -343,8 +409,18 @@ export function getInvoiceHtml(subtype: InvoiceSubtype): string {
   let taxAmount = '{{tax_amount}}';
   let totalAmount = '{{total_amount}}';
   let noteExtra = '';
+  const isHybrid = subtype === 'hybrid_setup_retainer';
 
-  if (subtype === 'retainer') {
+  if (isHybrid) {
+    badgeText = '初期構築 ＋ 初月顧問料 合算';
+    badgeColor = '#4f46e5';
+    highlightTitle = '合算ご請求金額合計（税込）';
+    highlightAmount = '{{total_amount}}';
+    subtotalAmount = '{{subtotal_amount}}';
+    taxAmount = '{{tax_amount}}';
+    totalAmount = '{{total_amount}}';
+    noteExtra = '<p>※初期システム構築費用および初月度顧問支援料の合算請求となります。<br>※2ヶ月目以降は月額顧問料（月々 ¥{{monthly_fee_tax_included}} 円 税込）のみの定期請求となります。</p>';
+  } else if (subtype === 'retainer') {
     badgeText = '月額顧問料分';
     badgeColor = '#0284c7';
     itemDescription = '{{project_name}} 月額顧問料（{{billing_month}}分）';
@@ -381,6 +457,64 @@ export function getInvoiceHtml(subtype: InvoiceSubtype): string {
     noteExtra = '<p>※全{{installment_count}}回中、第{{installment_number}}回目のお支払い分となります。</p>';
   }
 
+  const tableRowsHtml = isHybrid ? `
+    <tr style="border-bottom: 1px solid #e2e8f0;">
+      <td style="padding: 12px 10px;">
+        <strong>{{project_name}} 初期システム構築・導入設定費（一時金）</strong><br>
+        <span style="color:#64748b; font-size:12px;">要件定義・自動化ワークフロー開発・初期設定導入分</span>
+      </td>
+      <td style="padding: 12px 10px; text-align: right; font-weight: bold;">¥{{initial_fee}}</td>
+    </tr>
+    <tr style="border-bottom: 1px solid #e2e8f0;">
+      <td style="padding: 12px 10px;">
+        <strong>{{project_name}} 月額経営改善・DX顧問支援料（{{billing_month}}分）</strong><br>
+        <span style="color:#64748b; font-size:12px;">定期月次定例・業務改善伴走・運用保守サポート分</span>
+      </td>
+      <td style="padding: 12px 10px; text-align: right; font-weight: bold; color: #059669;">¥{{monthly_fee}}</td>
+    </tr>` : `
+    <tr style="border-bottom: 1px solid #e2e8f0;">
+      <td style="padding: 12px 10px;">${itemDescription}</td>
+      <td style="padding: 12px 10px; text-align: right; font-weight: bold;">¥${subtotalAmount}</td>
+    </tr>`;
+
+  const breakdownBox = isHybrid ? `
+    <div style="width: 320px; font-size: 13px;">
+      <div style="display: flex; justify-content: space-between; padding: 4px 0;">
+        <span style="color: #64748b;">初期構築費用（税抜）:</span>
+        <span style="font-weight: bold;">￥{{initial_fee}}</span>
+      </div>
+      <div style="display: flex; justify-content: space-between; padding: 4px 0;">
+        <span style="color: #64748b;">当月度顧問料（税抜）:</span>
+        <span style="font-weight: bold;">￥{{monthly_fee}}</span>
+      </div>
+      <div style="display: flex; justify-content: space-between; padding: 4px 0; border-top: 1px solid #e2e8f0;">
+        <span>税抜小計:</span>
+        <span>￥${subtotalAmount}</span>
+      </div>
+      <div style="display: flex; justify-content: space-between; padding: 4px 0; border-bottom: 1px solid #e2e8f0;">
+        <span>消費税（10%）:</span>
+        <span>￥${taxAmount}</span>
+      </div>
+      <div style="display: flex; justify-content: space-between; padding: 8px 0; font-weight: bold; font-size: 16px;">
+        <span>合算ご請求金額合計:</span>
+        <span style="color: #1e3a8a;">￥${totalAmount}</span>
+      </div>
+    </div>` : `
+    <div style="width: 300px; font-size: 14px;">
+      <div style="display: flex; justify-content: space-between; padding: 5px 0;">
+        <span>小計（税抜）:</span>
+        <span>￥${subtotalAmount}</span>
+      </div>
+      <div style="display: flex; justify-content: space-between; padding: 5px 0; border-bottom: 1px solid #e2e8f0;">
+        <span>消費税（10%）:</span>
+        <span>￥${taxAmount}</span>
+      </div>
+      <div style="display: flex; justify-content: space-between; padding: 8px 0; font-weight: bold; font-size: 16px;">
+        <span>ご請求金額合計:</span>
+        <span style="color: #1e3a8a;">￥${totalAmount}</span>
+      </div>
+    </div>`;
+
   return `<div style="font-family: 'Helvetica Neue', Arial, sans-serif; padding: 40px; color: #1e293b; max-width: 800px; margin: 0 auto; line-height: 1.6;">
   <div style="display: flex; justify-content: space-between; border-bottom: 2px solid #0f172a; padding-bottom: 20px; margin-bottom: 30px;">
     <div>
@@ -411,28 +545,12 @@ export function getInvoiceHtml(subtype: InvoiceSubtype): string {
       </tr>
     </thead>
     <tbody>
-      <tr style="border-bottom: 1px solid #e2e8f0;">
-        <td style="padding: 12px 10px;">${itemDescription}</td>
-        <td style="padding: 12px 10px; text-align: right; font-weight: bold;">¥${subtotalAmount}</td>
-      </tr>
+      ${tableRowsHtml}
     </tbody>
   </table>
 
   <div style="display: flex; justify-content: flex-end; margin-bottom: 40px;">
-    <div style="width: 300px; font-size: 14px;">
-      <div style="display: flex; justify-content: space-between; padding: 5px 0;">
-        <span>小計（税抜）:</span>
-        <span>￥${subtotalAmount}</span>
-      </div>
-      <div style="display: flex; justify-content: space-between; padding: 5px 0; border-bottom: 1px solid #e2e8f0;">
-        <span>消費税（10%）:</span>
-        <span>￥${taxAmount}</span>
-      </div>
-      <div style="display: flex; justify-content: space-between; padding: 8px 0; font-weight: bold; font-size: 16px;">
-        <span>ご請求金額合計:</span>
-        <span style="color: #1e3a8a;">￥${totalAmount}</span>
-      </div>
-    </div>
+    ${breakdownBox}
   </div>
 
   <div style="border-top: 1px solid #e2e8f0; padding-top: 20px; font-size: 13px; color: #64748b;">
@@ -700,11 +818,27 @@ export const getTemplateDefaultValues = (
     installment_subtotal: '100,000',
     installment_tax: '10,000',
     installment_total: '110,000',
-    installment_amount: '110,000',
-    initial_fee: '0',
+    initial_fee: '300,000',
+    initial_fee_tax: '30,000',
+    initial_fee_tax_included: '330,000',
     monthly_fee: '100,000',
+    monthly_fee_tax: '10,000',
+    monthly_fee_tax_included: '110,000',
     billing_month: `${today.slice(0, 4)}年${today.slice(5, 7)}月分`,
   };
+
+  if (paymentMode === 'hybrid_setup_retainer' || invoiceSubtype === 'hybrid_setup_retainer') {
+    common.initial_fee = '300,000';
+    common.initial_fee_tax = '30,000';
+    common.initial_fee_tax_included = '330,000';
+    common.monthly_fee = '100,000';
+    common.monthly_fee_tax = '10,000';
+    common.monthly_fee_tax_included = '110,000';
+    common.subtotal_amount = '400,000';
+    common.tax_amount = '40,000';
+    common.total_amount = '440,000';
+    common.payment_terms = '初期構築費：契約締結月の翌月末日振込 ／ 月額顧問料：毎月末日締め翌月末日振込（最低6ヶ月契約）';
+  }
 
   if (normId === 'tpl-proposal-report') {
     return {
