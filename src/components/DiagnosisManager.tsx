@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { DiagnosisFormsWorkspace } from './DiagnosisFormsWorkspace';
 import { getSupabase, getAuthHeaders } from '../lib/supabaseClient';
 import { Diagnosis, DiagnosisStatus, Company, Lead, AiReport } from '../types/database';
@@ -39,7 +39,8 @@ Sparkles,
   ExternalLink,
   Sliders,
   Inbox,
-  ArrowRight
+  ArrowRight,
+  Square
 } from 'lucide-react';
 
 interface DiagnosisManagerProps {
@@ -701,6 +702,15 @@ const DiagnosisDetailModal: React.FC<DiagnosisDetailModalProps> = ({
 
   // ステータス差し戻し状態
   const [generatingReport, setGeneratingReport] = useState(false);
+  const reportAbortControllerRef = useRef<AbortController | null>(null);
+
+  const handleCancelGenerateReportDraft = () => {
+    if (reportAbortControllerRef.current) {
+      reportAbortControllerRef.current.abort();
+      reportAbortControllerRef.current = null;
+    }
+    setGeneratingReport(false);
+  };
 
   const [reportDraft, setReportDraft] = useState<{ text: string; modelName: string; recommendedProductId: string | null } | null>(null);
   const [savingReport, setSavingReport] = useState(false);
@@ -839,6 +849,8 @@ const DiagnosisDetailModal: React.FC<DiagnosisDetailModalProps> = ({
     setGeneratingReport(true);
     setErrorMsg(null);
     setReportDraft(null);
+    const controller = new AbortController();
+    reportAbortControllerRef.current = controller;
     try {
       const [{ data: company }, { data: lead }, { data: deal }] = await Promise.all([
         supabase.from('companies').select('company_name, industry, website').eq('id', diagnosis.company_id).maybeSingle(),
@@ -899,6 +911,7 @@ ${JSON.stringify(context, null, 2)}`;
       const response = await fetch('/api/chat', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', ...authHeaders },
+        signal: controller.signal,
         body: JSON.stringify({
           messages: [{ role: 'user', content: prompt }],
           character: { name: '経営診断レポート作成AI', role: '診断レポート作成専門AI', personality: '事実に忠実で慎重', tone: '明確で丁寧' },
@@ -915,9 +928,13 @@ ${JSON.stringify(context, null, 2)}`;
         recommendedProductId: lead?.interested_product_id || deal?.product_id || null,
       });
     } catch (error: any) {
+      if (error?.name === 'AbortError' || controller.signal.aborted) {
+        return;
+      }
       setErrorMsg(error.message || '診断レポートの生成に失敗しました。');
     } finally {
       setGeneratingReport(false);
+      reportAbortControllerRef.current = null;
     }
   };
 
@@ -1198,10 +1215,39 @@ ${JSON.stringify(context, null, 2)}`;
                 <p className="mt-1 text-xs text-slate-500">フォーム回答と社内CRM情報から草案を生成します。内容を確認・修正して保存すると、顧客書類にレポート（承認待ち）が登録されます。提案書は「提案書・レポート作成」から作れます。</p>
               </div>
               <p className="text-xs text-slate-500">診断回答と会社名・業種などをAIサービスに送信します。個人の連絡先と社内メモは送信しません。</p>
-              <button type="button" onClick={handleGenerateReportDraft} disabled={generatingReport || savingReport} className="inline-flex items-center gap-2 rounded-xl bg-purple-600 px-4 py-2 text-xs font-semibold text-white hover:bg-purple-700 disabled:cursor-not-allowed disabled:opacity-50 transition-colors shadow-sm">
-                {generatingReport ? <RefreshCw className="h-4 w-4 animate-spin" /> : <Sparkles className="h-4 w-4" />}
-                {generatingReport ? '草案を生成中…' : 'AIで草案を生成'}
-              </button>
+              <div className="flex items-center gap-2">
+                {generatingReport ? (
+                  <>
+                    <button
+                      type="button"
+                      disabled
+                      className="inline-flex items-center gap-2 rounded-xl bg-purple-600/70 px-4 py-2 text-xs font-semibold text-white cursor-not-allowed shadow-sm"
+                    >
+                      <RefreshCw className="h-4 w-4 animate-spin" />
+                      草案を生成中…
+                    </button>
+                    <button
+                      type="button"
+                      onClick={handleCancelGenerateReportDraft}
+                      className="inline-flex items-center gap-1.5 rounded-xl border border-rose-300 bg-rose-50 px-3 py-2 text-xs font-semibold text-rose-700 hover:bg-rose-100 transition-colors shadow-2xs cursor-pointer"
+                      title="生成を中断して元の状態に戻します"
+                    >
+                      <Square className="h-3.5 w-3.5 fill-current" />
+                      中断
+                    </button>
+                  </>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={handleGenerateReportDraft}
+                    disabled={savingReport}
+                    className="inline-flex items-center gap-2 rounded-xl bg-purple-600 px-4 py-2 text-xs font-semibold text-white hover:bg-purple-700 disabled:cursor-not-allowed disabled:opacity-50 transition-colors shadow-sm cursor-pointer"
+                  >
+                    <Sparkles className="h-4 w-4" />
+                    AIで草案を生成
+                  </button>
+                )}
+              </div>
             </div>
             {reportDraft && (
               <div className="space-y-3 rounded-xl border border-slate-200 bg-white p-3 shadow-sm">

@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo, Fragment } from 'react';
+import React, { useState, useEffect, useMemo, Fragment, useRef } from 'react';
 import { 
   Inbox, 
   MessageSquare, 
@@ -21,7 +21,8 @@ import {
   Tag as TagIcon,
   Building2,
   Users,
-  Trash2
+  Trash2,
+  Square
 } from 'lucide-react';
 import { getSupabase, getAuthHeaders } from '../../lib/supabaseClient';
 import { UnifiedNavTab } from '../UnifiedNavbar';
@@ -116,6 +117,16 @@ export const UnifiedInboxView: React.FC<UnifiedInboxViewProps> = ({
   const [formSearchQuery, setFormSearchQuery] = useState('');
   const [expandedSubmissionId, setExpandedSubmissionId] = useState<string | null>(null);
   const [reportingIds, setReportingIds] = useState<string[]>([]);
+  const reportControllersRef = useRef<Map<string, AbortController>>(new Map());
+
+  const handleCancelReport = (subId: string) => {
+    const ctrl = reportControllersRef.current.get(subId);
+    if (ctrl) {
+      ctrl.abort();
+      reportControllersRef.current.delete(subId);
+    }
+    setReportingIds((prev) => prev.filter((id) => id !== subId));
+  };
   const [reportVersions, setReportVersions] = useState<Record<string, number>>({});
   const [selectedSubmissionIds, setSelectedSubmissionIds] = useState<string[]>([]);
   const [deletingSubmissions, setDeletingSubmissions] = useState(false);
@@ -249,11 +260,14 @@ export const UnifiedInboxView: React.FC<UnifiedInboxViewProps> = ({
     setSubmissionNotice('');
     setSubmissionError('');
     setNoticeAction(null);
+    const controller = new AbortController();
+    reportControllersRef.current.set(sub.id, controller);
     try {
       const headers = await getAuthHeaders();
       const response = await fetch(`/api/diagnosis-submissions/${encodeURIComponent(sub.id)}/generate-report`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', ...headers },
+        signal: controller.signal,
         body: JSON.stringify({ force }),
       });
       const result = await response.json().catch(() => ({}));
@@ -287,8 +301,14 @@ export const UnifiedInboxView: React.FC<UnifiedInboxViewProps> = ({
         run: () => onNavigateTab('document_templates', { context: companyId ? { companyId } : undefined }),
       });
     } catch (err: any) {
+      if (err?.name === 'AbortError' || controller.signal.aborted) {
+        const name = sub.respondent_company_name || sub.respondent_name || '回答者';
+        setSubmissionNotice(`「${name}」のレポート生成を中断しました。`);
+        return;
+      }
       setSubmissionError(err?.message || 'レポートを作成できませんでした。');
     } finally {
+      reportControllersRef.current.delete(sub.id);
       setReportingIds((prev) => prev.filter((id) => id !== sub.id));
     }
   };
@@ -1010,10 +1030,30 @@ export const UnifiedInboxView: React.FC<UnifiedInboxViewProps> = ({
                             );
                           }
 
+                          if (busy) {
+                            return (
+                              <div className="inline-flex items-center gap-1.5">
+                                <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-emerald-50 text-xs font-semibold text-emerald-800 border border-emerald-200 shadow-2xs">
+                                  <RefreshCw className="w-3.5 h-3.5 text-emerald-600 animate-spin" />
+                                  <span>AIが作成中…</span>
+                                </span>
+                                <button
+                                  type="button"
+                                  onClick={() => handleCancelReport(sub.id)}
+                                  className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-rose-50 hover:bg-rose-100 text-xs font-semibold text-rose-700 border border-rose-200 transition cursor-pointer shadow-2xs"
+                                  title="レポート作成を中断します"
+                                >
+                                  <Square className="w-3 h-3 fill-current" />
+                                  <span>停止</span>
+                                </button>
+                              </div>
+                            );
+                          }
+
                           return (
                             <button
                               type="button"
-                              disabled={busy || needsCompany}
+                              disabled={needsCompany}
                               onClick={() => {
                                 if (isDiagnosisForm) {
                                   void handleGenerateReport(sub);
@@ -1023,7 +1063,7 @@ export const UnifiedInboxView: React.FC<UnifiedInboxViewProps> = ({
                                   onNavigateTab('document_templates');
                                 }
                               }}
-                              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-emerald-50 hover:bg-emerald-100 text-xs font-semibold text-emerald-800 border border-emerald-200 transition cursor-pointer disabled:cursor-not-allowed disabled:opacity-60 disabled:hover:bg-emerald-50"
+                              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-emerald-50 hover:bg-emerald-100 text-xs font-semibold text-emerald-800 border border-emerald-200 transition cursor-pointer disabled:cursor-not-allowed disabled:opacity-60 disabled:hover:bg-emerald-50 shadow-2xs"
                               title={
                                 needsCompany
                                   ? '会社が紐付いていません。先に「反響リードに登録」を押してください'
@@ -1032,12 +1072,8 @@ export const UnifiedInboxView: React.FC<UnifiedInboxViewProps> = ({
                                   : '重要書類の画面を開きます'
                               }
                             >
-                              {busy ? (
-                                <RefreshCw className="w-3.5 h-3.5 text-emerald-600 animate-spin" />
-                              ) : (
-                                <Sparkles className="w-3.5 h-3.5 text-emerald-600" />
-                              )}
-                              <span>{busy ? 'AIが作成中…' : '提案書・レポート作成'}</span>
+                              <Sparkles className="w-3.5 h-3.5 text-emerald-600" />
+                              <span>提案書・レポート作成</span>
                             </button>
                           );
                         })()}

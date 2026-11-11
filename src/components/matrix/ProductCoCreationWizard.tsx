@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useRef } from 'react';
 import { 
   Sparkles, 
   X, 
@@ -14,7 +14,8 @@ import {
   Send,
   Zap,
   Target,
-  DollarSign
+  DollarSign,
+  Square
 } from 'lucide-react';
 import { ProductArchetype, PRODUCT_ARCHETYPES, ManagedProduct } from '../../types/matrix';
 import { ApiUsageData, Project, TaskItem, CharacterConfig, UserProfile } from '../../types/ai-president';
@@ -63,16 +64,37 @@ export const ProductCoCreationWizard: React.FC<ProductCoCreationWizardProps> = (
     marketingPlan: string;
     contractType: string;
   } | null>(null);
+  const abortControllerRef = useRef<AbortController | null>(null);
+
+  const handleCancelGeneration = () => {
+    if (abortControllerRef.current) {
+      abortControllerRef.current.abort();
+      abortControllerRef.current = null;
+    }
+    setIsGenerating(false);
+  };
+
+  const handleClose = () => {
+    if (abortControllerRef.current) {
+      abortControllerRef.current.abort();
+      abortControllerRef.current = null;
+    }
+    setIsGenerating(false);
+    onClose();
+  };
 
   if (!isOpen) return null;
 
   const handleGenerateProposal = async () => {
     setIsGenerating(true);
+    const controller = new AbortController();
+    abortControllerRef.current = controller;
     try {
       const authHeaders = await getAuthHeaders();
       const response = await fetch('/api/chat', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', ...authHeaders },
+        signal: controller.signal,
         body: JSON.stringify({
           message: `新商品開発の要件定義とWBSタスクの策定を行ってください。
 【商品タイプ】: ${PRODUCT_ARCHETYPES[archetype].label}
@@ -141,7 +163,11 @@ export const ProductCoCreationWizard: React.FC<ProductCoCreationWizardProps> = (
         setCustomTargetRevenue(String(fallbackPrice * (archetype === 'retainer' ? 60 : 10)));
       }
       setStep(4);
-    } catch {
+    } catch (err: any) {
+      if (err?.name === 'AbortError' || controller.signal.aborted) {
+        setIsGenerating(false);
+        return;
+      }
       // Fallback proposal on network/API failure
       const fallbackPrice = Number(priceExpectation) || 300000;
       setAiProposal({
@@ -162,6 +188,7 @@ export const ProductCoCreationWizard: React.FC<ProductCoCreationWizardProps> = (
       setStep(4);
     } finally {
       setIsGenerating(false);
+      abortControllerRef.current = null;
     }
   };
 
@@ -262,8 +289,8 @@ export const ProductCoCreationWizard: React.FC<ProductCoCreationWizardProps> = (
             </div>
           </div>
           <button
-            onClick={onClose}
-            className="text-slate-400 hover:text-slate-700 p-1.5 rounded-lg hover:bg-slate-100 transition-colors"
+            onClick={handleClose}
+            className="text-slate-400 hover:text-slate-700 p-1.5 rounded-lg hover:bg-slate-100 transition-colors cursor-pointer"
           >
             <X className="w-5 h-5" />
           </button>
@@ -456,23 +483,31 @@ export const ProductCoCreationWizard: React.FC<ProductCoCreationWizardProps> = (
               </div>
 
               <div className="pt-2">
-                <button
-                  onClick={handleGenerateProposal}
-                  disabled={isGenerating}
-                  className="px-6 py-3 rounded-xl bg-purple-600 hover:bg-purple-700 text-white font-semibold text-sm shadow-sm flex items-center gap-2 mx-auto disabled:opacity-50 transition-all cursor-pointer"
-                >
-                  {isGenerating ? (
-                    <>
-                      <Loader2 className="w-4 h-4 animate-spin" />
+                {isGenerating ? (
+                  <div className="flex flex-col items-center gap-3">
+                    <div className="px-6 py-3 rounded-xl bg-purple-50 border border-purple-200 text-purple-800 font-semibold text-sm shadow-xs flex items-center gap-2">
+                      <Loader2 className="w-4 h-4 animate-spin text-purple-600" />
                       <span>AIがプロダクト仕様・開発タスクを作成中...</span>
-                    </>
-                  ) : (
-                    <>
-                      <Zap className="w-4 h-4" />
-                      <span>AIと一緒に仕様・タスクを設計する</span>
-                    </>
-                  )}
-                </button>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={handleCancelGeneration}
+                      className="px-4 py-2 rounded-lg bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200 text-xs font-semibold flex items-center gap-1.5 transition cursor-pointer shadow-2xs"
+                      title="AI生成を中断して編集に戻る"
+                    >
+                      <Square className="w-3.5 h-3.5 fill-current" />
+                      <span>生成を停止して入力に戻る</span>
+                    </button>
+                  </div>
+                ) : (
+                  <button
+                    onClick={handleGenerateProposal}
+                    className="px-6 py-3 rounded-xl bg-purple-600 hover:bg-purple-700 text-white font-semibold text-sm shadow-sm flex items-center gap-2 mx-auto transition-all cursor-pointer"
+                  >
+                    <Zap className="w-4 h-4" />
+                    <span>AIと一緒に仕様・タスクを設計する</span>
+                  </button>
+                )}
               </div>
             </div>
           )}
