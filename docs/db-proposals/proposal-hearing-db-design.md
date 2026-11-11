@@ -144,6 +144,15 @@ drafting ──(必須項目OK)→ awaiting_approval ──(承認者)→ approv
 - `proposal_drafts.deal_id` は、承認済みの記録が崩れないよう `ON DELETE RESTRICT`。商談を削除する管理APIは、提案書が紐づく商談で外部キーエラーになる(既存の `formatForeignKeyError` が扱う種類のエラー)。
 - 送付済み(`sent`)の版は、DBのトリガーで編集不可にした(`status→superseded` と `is_current→false` だけ許可)。
 
+### 仕様書との突き合わせで追加した点(2026-11-12)
+
+- **型ごとの金額の必須**: 承認待ち以降では、`spot_build` は初期費用>0、`retainer` は月額>0、`hybrid` は両方>0(CHECK `chk_proposal_drafts_fees_by_kind`)。
+- **お申し込み・同意記録(仕様書 段階6・P7)**: 提案書側には持たない。既存の `customer_documents` の `consent_method` / `consent_recorded_at` / `consent_user_agent` / `consent_evidence_text` に、公開の申込画面(`PublicDocumentApplyView.tsx`)が既に書いている。`proposal_drafts.document_id` から辿る。
+  - 注意1: 申込画面は同意時に書類の `status` を `approved` にする。社内承認の `approved` と同じ語で、意味が違う。提案書の状態は `proposal_drafts.status` を正とし、書類の `status` は参照しない。
+  - 注意2: 申込画面は商談(`deals`)を自動起票・成約にする。提案書は承認待ちの時点で `deal_id` が必須なので、申込画面側の起票との重複・不整合が出ないか、実装時に確認する。
+  - 注意3: `consent_ip` 列はあるが、申込画面は書いていない(User-Agent のみ)。電子同意の証跡として足りるかは、仕様書 §9-6 の専門家確認の対象。
+- **お客様の意向の転記**: 商談中(段階2)の意向は `hearing_sheets.core_answers.t01` に入る。提案書を作る時点(段階3)で、API が `customer_intent` へ転記する。DBの変更はなし。
+
 ### 実装状況
 
 SQL案: `20261111100000_proposal_hearing_tables.sql`(同じフォルダ)。使い捨てのPostgreSQL 16で、2回適用しても通ること、各CHECK・一意制約・送付済みの編集禁止・取り消し手順が設計どおり動くことを確認済み。**Supabase本体と既存の全マイグレーションを通した検証は未実施**(スタブの親テーブルで検証)。
