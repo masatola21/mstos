@@ -140,7 +140,16 @@ interface DiagnosisFormsWorkspaceProps {
 }
 
 export const DiagnosisFormsWorkspace: React.FC<DiagnosisFormsWorkspaceProps> = ({ initialLeadId, initialCompanyId, initialSection, activeSection, onSectionChange, showHeader = true, onOpenDiagnosis, onOpenSendCenter }) => {
-  const [section, setSection] = useState<'forms'|'answers'|'materials'>(initialSection || (initialLeadId || initialCompanyId ? 'answers' : 'forms'));
+  const [section, setSection] = useState<'forms'|'answers'|'materials'>(activeSection || initialSection || (initialLeadId || initialCompanyId ? 'answers' : 'forms'));
+
+  useEffect(() => {
+    if (activeSection) {
+      setSection(activeSection);
+    } else if (initialSection) {
+      setSection(initialSection);
+    }
+  }, [activeSection, initialSection]);
+
   const switchSection = (next: 'forms'|'answers'|'materials') => {
     setSection(next);
     onSectionChange?.(next);

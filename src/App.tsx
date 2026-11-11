@@ -385,7 +385,7 @@ function AppContent() {
     }
   };
 
-  const [customerWorkspaceContext, setCustomerWorkspaceContext] = useState<{ companyId: string; leadId?: string; dealId?: string; section?: 'forms' | 'diagnoses'; documentType?: 'invoice'; documentId?: string; sendKind?: 'document'|'form'|'diagnosis'|'deal'|'customer_meeting'|'announcement'; formId?: string; contactId?: string } | undefined>();
+  const [customerWorkspaceContext, setCustomerWorkspaceContext] = useState<{ companyId: string; leadId?: string; dealId?: string; section?: 'forms' | 'diagnoses' | 'answers' | 'materials'; documentType?: 'invoice' | 'proposal' | 'estimate' | 'contract' | 'monthly_report'; documentId?: string; sendKind?: 'document'|'form'|'diagnosis'|'deal'|'customer_meeting'|'announcement'; formId?: string; contactId?: string } | undefined>();
   const [lineInboxContact, setLineInboxContact] = useState<{ contactId: string; lineUserId: string } | undefined>();
   const [inboxTargetChannel, setInboxTargetChannel] = useState<'line' | 'email' | 'forms' | undefined>(undefined);
   const [acquisitionTargetTab, setAcquisitionTargetTab] = useState<string | undefined>(undefined);
@@ -2611,6 +2611,7 @@ function AppContent() {
 
         {currentTab === 'mst_diagnoses' && (
           <DiagnosisManager
+            key={`${customerWorkspaceCompanyId || 'all'}:${customerWorkspaceContext?.leadId || ''}:${customerWorkspaceContext?.section || ''}`}
             onOpenRls={() => setIsRlsOpen(true)}
             initialLeadId={customerWorkspaceContext?.leadId}
             initialCompanyId={customerWorkspaceContext?.companyId}
@@ -2671,15 +2672,33 @@ function AppContent() {
                 });
                 return;
               }
+              const resolvedLeadId = recordContext?.tableKey === 'leads' ? recordContext.recordId : recordContext?.leadId;
+              const resolvedDealId = recordContext?.tableKey === 'deals' ? recordContext.recordId : undefined;
+              const docType: 'invoice' | 'proposal' | 'estimate' | 'contract' | 'monthly_report' | undefined =
+                destination === 'diagnoses'
+                  ? 'proposal'
+                  : destination === 'documents' && recordContext?.tableKey === 'deals'
+                  ? 'estimate'
+                  : destination === 'documents' && recordContext?.tableKey === 'customers'
+                  ? 'invoice'
+                  : undefined;
+
               setCustomerWorkspaceContext({
                 companyId,
-                leadId: recordContext?.tableKey === 'leads' ? recordContext.recordId : recordContext?.leadId,
-                dealId: recordContext?.tableKey === 'deals' ? recordContext.recordId : undefined,
-                section: destination === 'forms' ? 'forms' : destination === 'diagnoses' ? 'diagnoses' : undefined,
+                leadId: resolvedLeadId,
+                dealId: resolvedDealId,
+                documentType: docType,
+                section: destination === 'forms' ? 'answers' : undefined,
                 formId: undefined,
                 contactId: recordContext?.contactId,
               });
-              setCurrentTab(destination === 'documents' ? 'document_templates' : destination === 'diagnoses' || destination === 'forms' ? 'mst_diagnoses' : 'customer_operations');
+              setCurrentTab(
+                destination === 'documents' || destination === 'diagnoses'
+                  ? 'document_templates'
+                  : destination === 'forms'
+                  ? 'mst_diagnoses'
+                  : 'customer_operations'
+              );
             }}
           />
         )}
@@ -2699,15 +2718,33 @@ function AppContent() {
                 });
                 return;
               }
+              const resolvedLeadId = recordContext?.tableKey === 'leads' ? recordContext.recordId : recordContext?.leadId;
+              const resolvedDealId = recordContext?.tableKey === 'deals' ? recordContext.recordId : undefined;
+              const docType: 'invoice' | 'proposal' | 'estimate' | 'contract' | 'monthly_report' | undefined =
+                destination === 'diagnoses'
+                  ? 'proposal'
+                  : destination === 'documents' && recordContext?.tableKey === 'deals'
+                  ? 'estimate'
+                  : destination === 'documents' && recordContext?.tableKey === 'customers'
+                  ? 'invoice'
+                  : undefined;
+
               setCustomerWorkspaceContext({
                 companyId,
-                leadId: recordContext?.tableKey === 'leads' ? recordContext.recordId : recordContext?.leadId,
-                dealId: recordContext?.tableKey === 'deals' ? recordContext.recordId : undefined,
-                section: destination === 'forms' ? 'forms' : destination === 'diagnoses' ? 'diagnoses' : undefined,
+                leadId: resolvedLeadId,
+                dealId: resolvedDealId,
+                documentType: docType,
+                section: destination === 'forms' ? 'answers' : undefined,
                 formId: undefined,
                 contactId: recordContext?.contactId,
               });
-              setCurrentTab(destination === 'documents' ? 'document_templates' : destination === 'diagnoses' || destination === 'forms' ? 'mst_diagnoses' : 'customer_operations');
+              setCurrentTab(
+                destination === 'documents' || destination === 'diagnoses'
+                  ? 'document_templates'
+                  : destination === 'forms'
+                  ? 'mst_diagnoses'
+                  : 'customer_operations'
+              );
             }}
             onNavigateTab={(tab) => setCurrentTab(tab as UnifiedNavTab)}
           />
@@ -2847,15 +2884,33 @@ function AppContent() {
                 });
                 return;
               }
+              const resolvedLeadId = recordContext?.tableKey === 'leads' ? recordContext.recordId : recordContext?.leadId;
+              const resolvedDealId = recordContext?.tableKey === 'deals' ? recordContext.recordId : undefined;
+              const docType: 'invoice' | 'proposal' | 'estimate' | 'contract' | 'monthly_report' | undefined =
+                destination === 'diagnoses'
+                  ? 'proposal'
+                  : destination === 'documents' && recordContext?.tableKey === 'deals'
+                  ? 'estimate'
+                  : destination === 'documents' && recordContext?.tableKey === 'customers'
+                  ? 'invoice'
+                  : undefined;
+
               setCustomerWorkspaceContext({
                 companyId,
-                leadId: recordContext?.tableKey === 'leads' ? recordContext.recordId : recordContext?.leadId,
-                dealId: recordContext?.tableKey === 'deals' ? recordContext.recordId : undefined,
-                section: destination === 'forms' ? 'forms' : destination === 'diagnoses' ? 'diagnoses' : undefined,
+                leadId: resolvedLeadId,
+                dealId: resolvedDealId,
+                documentType: docType,
+                section: destination === 'forms' ? 'answers' : undefined,
                 formId: undefined,
                 contactId: recordContext?.contactId,
               });
-              setCurrentTab(destination === 'documents' ? 'document_templates' : destination === 'diagnoses' || destination === 'forms' ? 'mst_diagnoses' : 'customer_operations');
+              setCurrentTab(
+                destination === 'documents' || destination === 'diagnoses'
+                  ? 'document_templates'
+                  : destination === 'forms'
+                  ? 'mst_diagnoses'
+                  : 'customer_operations'
+              );
             }}
             onOpenRls={() => setIsRlsOpen(true)}
             onNavigateTab={(tab) => setCurrentTab(tab as UnifiedNavTab)}

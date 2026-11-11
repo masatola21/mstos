@@ -84,10 +84,12 @@ export const DocumentTemplateView: React.FC<DocumentTemplateViewProps> = ({
   
   // 5 unified templates state
   const [selectedTemplateId, setSelectedTemplateId] = useState<string>(() => {
+    if (initialDocumentType === 'proposal') return 'tpl-proposal-report';
     if (initialDocumentType === 'invoice') return 'tpl-unified-invoice';
-    if (initialDealId || initialDocumentType === 'estimate') return 'tpl-unified-estimate';
+    if (initialDocumentType === 'estimate') return 'tpl-unified-estimate';
     if (initialDocumentType === 'contract') return 'tpl-unified-contract';
     if (initialDocumentType === 'monthly_report') return 'tpl-monthly-report-01';
+    if (initialDealId) return 'tpl-unified-estimate';
     return 'tpl-proposal-report';
   });
 

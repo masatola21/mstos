@@ -1510,15 +1510,19 @@ export const DiagnosisDetailLoader: React.FC<{
 
 export const DiagnosisManager: React.FC<DiagnosisManagerProps> = (props) => {
   const [openDiagnosisId, setOpenDiagnosisId] = useState<string | null>(props.initialDiagnosisId || null);
-  const [section, setSection] = useState<'forms' | 'materials'>(
-    props.initialSection === 'materials' ? 'materials' : 'forms'
+  const [section, setSection] = useState<'forms' | 'answers' | 'materials'>(
+    props.initialSection === 'materials'
+      ? 'materials'
+      : props.initialSection === 'answers' || props.initialSection === 'diagnoses' || props.initialLeadId || props.initialCompanyId
+      ? 'answers'
+      : 'forms'
   );
 
   useEffect(() => {
-    if (props.initialSection === 'forms' || props.initialSection === 'materials') {
+    if (props.initialSection === 'forms' || props.initialSection === 'materials' || props.initialSection === 'answers') {
       setSection(props.initialSection);
-    } else if (props.initialSection === 'answers') {
-      setSection('forms');
+    } else if (props.initialSection === 'diagnoses') {
+      setSection('answers');
     }
   }, [props.initialSection]);
 
@@ -1528,7 +1532,7 @@ export const DiagnosisManager: React.FC<DiagnosisManagerProps> = (props) => {
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
           <div>
             <h1 className="text-[19px] font-bold text-slate-800 tracking-tight">受付フォーム・公式配布資料管理</h1>
-            <p className="mt-0.5 text-xs text-slate-500">HP・LINE向けの反響受付フォームや診断設問の設計、公式配布PDF資料の並び替え・公開管理を行えます。</p>
+            <p className="mt-0.5 text-xs text-slate-500">HP・LINE向けの反響受付フォームや診断設問の設計、フォーム回答一覧、公式配布PDF資料の並び替え・公開管理を行えます。</p>
           </div>
           <div className="flex items-center gap-2">
             {props.onNavigateTab && (
@@ -1559,6 +1563,21 @@ export const DiagnosisManager: React.FC<DiagnosisManagerProps> = (props) => {
         <div className="flex border-b border-slate-200 pt-2 gap-2 overflow-x-auto scrollbar-none">
           <button
             type="button"
+            onClick={() => setSection('answers')}
+            className={`pb-2.5 px-3 text-xs font-bold transition-colors border-b-2 cursor-pointer flex items-center gap-1.5 whitespace-nowrap ${
+              section === 'answers'
+                ? 'border-purple-600 text-purple-700'
+                : 'border-transparent text-slate-500 hover:text-slate-800'
+            }`}
+          >
+            <Inbox className="w-3.5 h-3.5" />
+            <span>フォーム回答一覧</span>
+            {(props.initialLeadId || props.initialCompanyId) && (
+              <span className="px-1.5 py-0.5 rounded-full text-[10px] bg-purple-100 text-purple-700 font-semibold">絞り込み中</span>
+            )}
+          </button>
+          <button
+            type="button"
             onClick={() => setSection('forms')}
             className={`pb-2.5 px-3 text-xs font-bold transition-colors border-b-2 cursor-pointer flex items-center gap-1.5 whitespace-nowrap ${
               section === 'forms'
@@ -1585,12 +1604,12 @@ export const DiagnosisManager: React.FC<DiagnosisManagerProps> = (props) => {
         </div>
       </div>
       <DiagnosisFormsWorkspace
-        key={section}
+        key={`${section}:${props.initialLeadId || ''}:${props.initialCompanyId || ''}`}
         initialLeadId={props.initialLeadId}
         initialCompanyId={props.initialCompanyId}
         initialSection={section}
         activeSection={section}
-        onSectionChange={(next) => setSection(next === 'materials' ? 'materials' : 'forms')}
+        onSectionChange={(next) => setSection(next)}
         showHeader={false}
         onOpenDiagnosis={setOpenDiagnosisId}
         onOpenSendCenter={props.onOpenSendCenter}
