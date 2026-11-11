@@ -45,9 +45,11 @@ export function getProposalReportHtml(): string {
       <h1 style="margin:8px 0 0 0; font-size:24px; color:#0f172a; font-weight:800;">経営改善・業務自動化 提案書（診断レポート）</h1>
       <p style="margin:4px 0 0 0; font-size:13px; color:#64748b;">案件名: {{proposal_title}}</p>
     </div>
-    <div style="text-align:right; font-size:12px; color:#64748b;">
-      <p style="margin:0; font-weight:bold; color:#0f172a;">発行日: {{issue_date}}</p>
-      <p style="margin:2px 0 0 0;">有効期限: {{due_date}}（発行日より1ヶ月間）</p>
+    <div style="text-align:right; font-size:12px; color:#475569; white-space:nowrap; line-height:1.6;">
+      <p style="margin:0;"><span style="color:#64748b;">発行日:</span> <strong style="color:#0f172a;">{{issue_date}}</strong></p>
+      <p style="margin:3px 0 0 0; color:#1e40af; font-weight:bold;">
+        <span style="color:#64748b; font-weight:normal;">有効期限:</span> {{due_date}} <span style="font-size:11px; color:#2563eb; background:#eff6ff; border:1px solid #bfdbfe; border-radius:3px; padding:1px 6px; margin-left:4px; font-weight:normal; display:inline-block;">発行日より1ヶ月間</span>
+      </p>
     </div>
   </div>
 
@@ -154,16 +156,16 @@ export function getEstimateHtml(mode: PaymentMode): string {
         <strong>{{project_name}} 初期システム構築・仕組み化導入費</strong><br>
         <span style="color:#64748b; font-size:11px;">要件定義・設計・開発構築・初期設定一式（一時金）</span>
       </td>
-      <td style="padding:12px 10px; text-align:center; color:#2563eb; font-weight:bold;">契約締結月の翌月末日</td>
-      <td style="padding:12px 10px; text-align:right; font-weight:bold;">¥{{initial_fee}} 円</td>
+      <td style="padding:12px 10px; text-align:center; color:#2563eb; font-weight:bold; white-space:nowrap;">契約締結月の翌月末日</td>
+      <td style="padding:12px 10px; text-align:right; font-weight:bold; white-space:nowrap;">¥{{initial_fee}} 円</td>
     </tr>
     <tr style="border-bottom:1px solid #e2e8f0;">
       <td style="padding:12px 10px;">
         <strong>{{project_name}} 月額経営改善・DX顧問支援（継続伴走）</strong><br>
         <span style="color:#64748b; font-size:11px;">月次定例・改善指導・保守運用サポート（最低6ヶ月契約・自動更新）</span>
       </td>
-      <td style="padding:12px 10px; text-align:center; color:#2563eb; font-weight:bold;">毎月末日締め翌月末日</td>
-      <td style="padding:12px 10px; text-align:right; font-weight:bold; color:#059669;">月額 ¥{{monthly_fee}} 円</td>
+      <td style="padding:12px 10px; text-align:center; color:#2563eb; font-weight:bold; white-space:nowrap;">毎月末日締め翌月末日</td>
+      <td style="padding:12px 10px; text-align:right; font-weight:bold; color:#059669; white-space:nowrap;">月額 ¥{{monthly_fee}} 円</td>
     </tr>`;
   } else if (isRetainer) {
     highlightBanner = `<div>
@@ -177,13 +179,13 @@ export function getEstimateHtml(mode: PaymentMode): string {
 
     tableContent = `<tr style="border-bottom:1px solid #e2e8f0;">
       <td style="padding:12px 10px;">{{project_name}} 初期導入・仕組み化構築費</td>
-      <td style="padding:12px 10px; text-align:center; color:#2563eb; font-weight:bold;">契約締結翌月末日</td>
-      <td style="padding:12px 10px; text-align:right; font-weight:bold;">¥{{initial_fee}} 円</td>
+      <td style="padding:12px 10px; text-align:center; color:#2563eb; font-weight:bold; white-space:nowrap;">契約締結翌月末日</td>
+      <td style="padding:12px 10px; text-align:right; font-weight:bold; white-space:nowrap;">¥{{initial_fee}} 円</td>
     </tr>
     <tr style="border-bottom:1px solid #e2e8f0;">
       <td style="padding:12px 10px;">{{project_name}} 月額経営顧問・業務改善伴走支援</td>
-      <td style="padding:12px 10px; text-align:center; color:#2563eb; font-weight:bold;">毎月末日締め翌月末日</td>
-      <td style="padding:12px 10px; text-align:right; font-weight:bold;">月額 ¥{{monthly_fee}} 円</td>
+      <td style="padding:12px 10px; text-align:center; color:#2563eb; font-weight:bold; white-space:nowrap;">毎月末日締め翌月末日</td>
+      <td style="padding:12px 10px; text-align:right; font-weight:bold; white-space:nowrap;">月額 ¥{{monthly_fee}} 円</td>
     </tr>`;
   } else if (isMilestone) {
     highlightBanner = `<div style="display:flex; justify-content:space-between; align-items:baseline; width:100%;">
@@ -196,16 +198,16 @@ export function getEstimateHtml(mode: PaymentMode): string {
         <strong>① 着手金（手付金 {{deposit_rate}}%）</strong><br>
         <span style="color:#64748b; font-size:11px;">{{project_name}} 構築着手時お支払い分</span>
       </td>
-      <td style="padding:12px 10px; text-align:center; color:#2563eb; font-weight:bold;">契約締結月の翌月末日</td>
-      <td style="padding:12px 10px; text-align:right; font-weight:bold;">¥{{deposit_subtotal}} 円</td>
+      <td style="padding:12px 10px; text-align:center; color:#2563eb; font-weight:bold; white-space:nowrap;">契約締結月の翌月末日</td>
+      <td style="padding:12px 10px; text-align:right; font-weight:bold; white-space:nowrap;">¥{{deposit_subtotal}} 円</td>
     </tr>
     <tr style="border-bottom:1px solid #e2e8f0;">
       <td style="padding:12px 10px;">
         <strong>② 導入後残金（検収完了時 {{completion_rate}}%）</strong><br>
         <span style="color:#64748b; font-size:11px;">システム本番稼働・納品検収後お支払い分</span>
       </td>
-      <td style="padding:12px 10px; text-align:center; color:#2563eb; font-weight:bold;">導入検収月の翌月末日</td>
-      <td style="padding:12px 10px; text-align:right; font-weight:bold;">¥{{completion_subtotal}} 円</td>
+      <td style="padding:12px 10px; text-align:center; color:#2563eb; font-weight:bold; white-space:nowrap;">導入検収月の翌月末日</td>
+      <td style="padding:12px 10px; text-align:right; font-weight:bold; white-space:nowrap;">¥{{completion_subtotal}} 円</td>
     </tr>`;
   } else if (isInstallments) {
     highlightBanner = `<div>
@@ -219,8 +221,8 @@ export function getEstimateHtml(mode: PaymentMode): string {
 
     tableContent = `<tr style="border-bottom:1px solid #e2e8f0;">
       <td style="padding:12px 10px;">{{project_name}} 分割業務委託費（全{{installment_count}}回均等）</td>
-      <td style="padding:12px 10px; text-align:center; color:#2563eb; font-weight:bold;">毎月末日締め翌月末日</td>
-      <td style="padding:12px 10px; text-align:right; font-weight:bold; color:#059669;">¥{{installment_amount}} 円 / 回</td>
+      <td style="padding:12px 10px; text-align:center; color:#2563eb; font-weight:bold; white-space:nowrap;">毎月末日締め翌月末日</td>
+      <td style="padding:12px 10px; text-align:right; font-weight:bold; color:#059669; white-space:nowrap;">¥{{installment_amount}} 円 / 回</td>
     </tr>`;
   } else {
     // lump_sum
@@ -231,8 +233,8 @@ export function getEstimateHtml(mode: PaymentMode): string {
 
     tableContent = `<tr style="border-bottom:1px solid #e2e8f0;">
       <td style="padding:12px 10px;">{{project_name}} 一括業務委託費</td>
-      <td style="padding:12px 10px; text-align:center; color:#2563eb; font-weight:bold;">契約締結月の翌月末日</td>
-      <td style="padding:12px 10px; text-align:right; font-weight:bold;">¥{{subtotal_amount}} 円</td>
+      <td style="padding:12px 10px; text-align:center; color:#2563eb; font-weight:bold; white-space:nowrap;">契約締結月の翌月末日</td>
+      <td style="padding:12px 10px; text-align:right; font-weight:bold; white-space:nowrap;">¥{{subtotal_amount}} 円</td>
     </tr>`;
   }
 
@@ -275,9 +277,16 @@ export function getEstimateHtml(mode: PaymentMode): string {
     </div>`;
 
   return `<div style="font-family: Arial, sans-serif; max-width: 760px; margin: 0 auto; padding: 40px; color: #1e293b; line-height: 1.8">
-  <div style="display:flex; justify-content:space-between; align-items:baseline; border-bottom:2px solid #0f172a; padding-bottom:12px; margin-bottom:24px;">
-    <h1 style="margin:0; font-size:24px; color:#0f172a;">御 見 積 書</h1>
-    <p style="margin:0; font-size:13px; color:#64748b;">発行日: {{issue_date}} ｜ 有効期限: {{due_date}}（発行日より1ヶ月間）</p>
+  <div style="display:flex; justify-content:space-between; align-items:flex-end; border-bottom:2px solid #0f172a; padding-bottom:14px; margin-bottom:24px; gap:16px;">
+    <div>
+      <h1 style="margin:0; font-size:26px; color:#0f172a; font-weight:800; letter-spacing:2px;">御 見 積 書</h1>
+    </div>
+    <div style="text-align:right; font-size:12px; color:#475569; white-space:nowrap; line-height:1.6;">
+      <p style="margin:0;"><span style="color:#64748b;">発行日:</span> <strong style="color:#0f172a;">{{issue_date}}</strong></p>
+      <p style="margin:3px 0 0 0; color:#1e40af; font-weight:bold;">
+        <span style="color:#64748b; font-weight:normal;">有効期限:</span> {{due_date}} <span style="font-size:11px; color:#2563eb; background:#eff6ff; border:1px solid #bfdbfe; border-radius:3px; padding:1px 6px; margin-left:4px; font-weight:normal; display:inline-block;">発行日より1ヶ月間</span>
+      </p>
+    </div>
   </div>
   <p style="font-size:16px; margin:0 0 16px 0;"><strong>{{client_company}}</strong> 御中</p>
   <p style="font-size:13px; color:#475569; margin:0 0 20px 0;">下記のとおりお見積り申し上げます。</p>
@@ -292,8 +301,8 @@ export function getEstimateHtml(mode: PaymentMode): string {
     <thead>
       <tr style="background:#0f172a; color:white;">
         <th style="padding:10px; text-align:left;">項目 / 内容</th>
-        <th style="padding:10px; text-align:center;">お支払い期日</th>
-        <th style="padding:10px; text-align:right;">金額（税抜）</th>
+        <th style="padding:10px; text-align:center; width:200px; white-space:nowrap;">お支払い期日</th>
+        <th style="padding:10px; text-align:right; width:160px; white-space:nowrap;">金額（税抜）</th>
       </tr>
     </thead>
     <tbody>
@@ -522,9 +531,11 @@ export function getInvoiceHtml(subtype: InvoiceSubtype): string {
       <h1 style="font-size: 26px; margin: 6px 0 0 0; color: #0f172a;">御 請 求 書</h1>
       <p style="margin: 5px 0 0 0; color: #64748b; font-size: 14px;">請求書番号: {{invoice_number}}</p>
     </div>
-    <div style="text-align: right;">
-      <p style="margin: 0; font-weight: bold;">発行日: {{issue_date}}</p>
-      <p style="margin: 5px 0 0 0; color: #dc2626; font-weight: bold;">お支払い期限: {{due_date}}（翌月末日）</p>
+    <div style="text-align: right; white-space: nowrap; line-height: 1.6; font-size: 12px; color: #475569;">
+      <p style="margin: 0;"><span style="color: #64748b;">発行日:</span> <strong style="color: #0f172a;">{{issue_date}}</strong></p>
+      <p style="margin: 3px 0 0 0; color: #dc2626; font-weight: bold;">
+        <span style="color: #64748b; font-weight: normal;">お支払い期限:</span> {{due_date}} <span style="font-size: 11px; color: #dc2626; background: #fef2f2; border: 1px solid #fecaca; border-radius: 3px; padding: 1px 6px; margin-left: 4px; font-weight: 600; display: inline-block;">翌月末日</span>
+      </p>
     </div>
   </div>
 
@@ -670,7 +681,7 @@ export const CORE_TEMPLATES: DocTemplate[] = [
       { key: 'total_amount', label: '税込合計金額 (円)', defaultValue: '330,000' },
       { key: 'payment_terms', label: '支払条件', defaultValue: '契約締結月の翌月末日振込' },
       { key: 'issue_date', label: '発行日', defaultValue: '' },
-      { key: 'due_date', label: '有効期限', defaultValue: '' },
+      { key: 'due_date', label: '有効期限（発行日より1ヶ月間）', defaultValue: '' },
       { key: 'initial_fee', label: '初期費用 (税抜・円)', defaultValue: '0' },
       { key: 'monthly_fee', label: '月額費用 (税抜・円)', defaultValue: '0' },
       { key: 'deposit_rate', label: '手付金比率 (%)', defaultValue: '50' },

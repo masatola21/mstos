@@ -1148,8 +1148,8 @@ export const DocumentTemplateView: React.FC<DocumentTemplateViewProps> = ({
                         <Coins className="w-3.5 h-3.5 text-purple-600" />
                         <span>お支払い条件・条項の即時切替</span>
                       </div>
-                      <span className="text-[10px] font-medium text-purple-700 bg-white/90 px-2 py-0.5 rounded border border-purple-200">
-                        {selectedTemplateId.includes('estimate') ? '見積有効期限: 発行日より1ヶ月' : '支払期日: 翌月末日統一'}
+                      <span className="text-[10px] font-medium text-purple-700 bg-white/90 px-2 py-0.5 rounded border border-purple-200 whitespace-nowrap">
+                        {selectedTemplateId.includes('estimate') ? '有効期限: 発行日より1ヶ月間' : '支払期日: 翌月末日統一'}
                       </span>
                     </div>
                     <p className="text-[11px] text-slate-600 leading-snug">
@@ -1193,7 +1193,7 @@ export const DocumentTemplateView: React.FC<DocumentTemplateViewProps> = ({
                         <Receipt className="w-3.5 h-3.5 text-amber-600" />
                         <span>ご請求種別の即時切替</span>
                       </div>
-                      <span className="text-[10px] font-medium text-amber-800 bg-white/90 px-2 py-0.5 rounded border border-amber-200">
+                      <span className="text-[10px] font-medium text-amber-800 bg-white/90 px-2 py-0.5 rounded border border-amber-200 whitespace-nowrap">
                         支払期日: 翌月末日
                       </span>
                     </div>
