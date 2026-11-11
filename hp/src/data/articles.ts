@@ -7,8 +7,11 @@ export interface Article {
   category: '経営改善・利益改善' | '業務改善・業務効率化' | 'マーケティング・集客' | 'IT・DX・AI活用' | '新規事業・事業づくり' | string;
   categorySlug: 'management' | 'operations' | 'marketing' | 'it-dx' | 'new-business' | string;
   publishedAt: string;
+  date?: string;
   summary: string;
+  description?: string;
   content: string[];
+  heroImage: string;
   thumbnailTheme?: {
     bgGradient: string;
     icon: string;
@@ -19,6 +22,15 @@ export interface Article {
     href: string;
   };
 }
+
+export const CATEGORY_IMAGE_MAP: Record<string, string> = {
+  management: '/images/service-strategy.jpg',
+  operations: '/images/service-it-dx.jpg',
+  marketing: '/images/service-marketing.jpg',
+  'it-dx': '/images/service-system.jpg',
+  'new-business': '/images/consulting-meeting.jpg',
+};
+export const DEFAULT_HERO_IMAGE = '/images/hero-consulting.jpg';
 
 export const CATEGORY_MAP: Record<string, { name: Article['category']; slug: Article['categorySlug'] }> = {
   management: { name: '経営改善・利益改善', slug: 'management' },
@@ -88,14 +100,21 @@ export async function getLiveArticles(): Promise<Article[]> {
         .map((s: string) => s.trim())
         .filter(Boolean);
 
+      const publishedAt = p.publishedDate || row.created_at?.slice(0, 10)?.replace(/-/g, '.') || '2026.10.29';
+      const summary = p.metaDescription || p.excerpt || p.summary || '';
+      const heroImage = p.heroImage || p.thumbnail || p.image || CATEGORY_IMAGE_MAP[categorySlug] || DEFAULT_HERO_IMAGE;
+
       return {
         id: row.id,
         slug,
         title: row.title || p.metaTitle || '無題の記事',
         category,
         categorySlug,
-        publishedAt: p.publishedDate || row.created_at?.slice(0, 10)?.replace(/-/g, '.') || '2026.10.29',
-        summary: p.metaDescription || p.excerpt || p.summary || '',
+        publishedAt,
+        date: publishedAt,
+        summary,
+        description: summary,
+        heroImage,
         content: contentLines.length > 0 ? contentLines : [p.body || ''],
         thumbnailTheme: {
           bgGradient: (CATEGORY_THEME[categorySlug] || DEFAULT_THEME).bgGradient,

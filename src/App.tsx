@@ -374,7 +374,7 @@ function AppContent() {
       case 'customers': return '顧客台帳';
       case 'document_templates': return '重要書類・見積・契約';
       case 'customer_operations': return '支援案件・契約・請求';
-      case 'mst_diagnoses': return '診断・受付フォーム';
+      case 'mst_diagnoses': return 'フォーム作成・配布資料';
       case 'contacts': return '連絡先・LINE友だち';
       case 'prospects': return '見込み企業';
       case 'ai_acquisition': return '集客戦略・SNS';
@@ -385,7 +385,7 @@ function AppContent() {
     }
   };
 
-  const [customerWorkspaceContext, setCustomerWorkspaceContext] = useState<{ companyId: string; leadId?: string; dealId?: string; section?: 'forms' | 'diagnoses'; documentType?: 'invoice'; documentId?: string; sendKind?: 'document'|'form'|'diagnosis'|'deal'|'customer_meeting'|'announcement'; formId?: string; contactId?: string } | undefined>();
+  const [customerWorkspaceContext, setCustomerWorkspaceContext] = useState<{ companyId: string; leadId?: string; dealId?: string; section?: 'forms' | 'diagnoses' | 'answers' | 'materials'; documentType?: 'invoice' | 'proposal' | 'estimate' | 'contract' | 'monthly_report'; documentId?: string; sendKind?: 'document'|'form'|'diagnosis'|'deal'|'customer_meeting'|'announcement'; formId?: string; contactId?: string } | undefined>();
   const [lineInboxContact, setLineInboxContact] = useState<{ contactId: string; lineUserId: string } | undefined>();
   const [inboxTargetChannel, setInboxTargetChannel] = useState<'line' | 'email' | 'forms' | undefined>(undefined);
   const [acquisitionTargetTab, setAcquisitionTargetTab] = useState<string | undefined>(undefined);
@@ -2560,6 +2560,9 @@ function AppContent() {
               (lineInboxContact ? 'line' : (localStorage.getItem('unified_inbox_active_channel') as any) || 'forms')
             }
             initialLineUserId={lineInboxContact?.lineUserId}
+            initialCompanyId={customerWorkspaceCompanyId}
+            initialLeadId={customerWorkspaceContext?.leadId}
+            onClearCompanyFilter={() => setCustomerWorkspaceContext(undefined)}
             onNavigateTab={(tab, options) => handleNavigateWorkspaceTab(tab, options)}
             onOpenSendCenter={(params) => {
               openSendDrawer({
@@ -2611,6 +2614,7 @@ function AppContent() {
 
         {currentTab === 'mst_diagnoses' && (
           <DiagnosisManager
+            key={`${customerWorkspaceCompanyId || 'all'}:${customerWorkspaceContext?.leadId || ''}:${customerWorkspaceContext?.section || ''}`}
             onOpenRls={() => setIsRlsOpen(true)}
             initialLeadId={customerWorkspaceContext?.leadId}
             initialCompanyId={customerWorkspaceContext?.companyId}
@@ -2671,15 +2675,36 @@ function AppContent() {
                 });
                 return;
               }
+              const resolvedLeadId = recordContext?.tableKey === 'leads' ? recordContext.recordId : recordContext?.leadId;
+              const resolvedDealId = recordContext?.tableKey === 'deals' ? recordContext.recordId : undefined;
+              const docType: 'invoice' | 'proposal' | 'estimate' | 'contract' | 'monthly_report' | undefined =
+                destination === 'diagnoses'
+                  ? 'proposal'
+                  : destination === 'documents' && recordContext?.tableKey === 'deals'
+                  ? 'estimate'
+                  : destination === 'documents' && recordContext?.tableKey === 'customers'
+                  ? 'invoice'
+                  : undefined;
+
               setCustomerWorkspaceContext({
                 companyId,
-                leadId: recordContext?.tableKey === 'leads' ? recordContext.recordId : recordContext?.leadId,
-                dealId: recordContext?.tableKey === 'deals' ? recordContext.recordId : undefined,
-                section: destination === 'forms' ? 'forms' : destination === 'diagnoses' ? 'diagnoses' : undefined,
+                leadId: resolvedLeadId,
+                dealId: resolvedDealId,
+                documentType: docType,
+                section: undefined,
                 formId: undefined,
                 contactId: recordContext?.contactId,
               });
-              setCurrentTab(destination === 'documents' ? 'document_templates' : destination === 'diagnoses' || destination === 'forms' ? 'mst_diagnoses' : 'customer_operations');
+              if (destination === 'forms') {
+                setInboxTargetChannel('forms');
+                setCurrentTab('inbox_hub');
+              } else {
+                setCurrentTab(
+                  destination === 'documents' || destination === 'diagnoses'
+                    ? 'document_templates'
+                    : 'customer_operations'
+                );
+              }
             }}
           />
         )}
@@ -2699,15 +2724,36 @@ function AppContent() {
                 });
                 return;
               }
+              const resolvedLeadId = recordContext?.tableKey === 'leads' ? recordContext.recordId : recordContext?.leadId;
+              const resolvedDealId = recordContext?.tableKey === 'deals' ? recordContext.recordId : undefined;
+              const docType: 'invoice' | 'proposal' | 'estimate' | 'contract' | 'monthly_report' | undefined =
+                destination === 'diagnoses'
+                  ? 'proposal'
+                  : destination === 'documents' && recordContext?.tableKey === 'deals'
+                  ? 'estimate'
+                  : destination === 'documents' && recordContext?.tableKey === 'customers'
+                  ? 'invoice'
+                  : undefined;
+
               setCustomerWorkspaceContext({
                 companyId,
-                leadId: recordContext?.tableKey === 'leads' ? recordContext.recordId : recordContext?.leadId,
-                dealId: recordContext?.tableKey === 'deals' ? recordContext.recordId : undefined,
-                section: destination === 'forms' ? 'forms' : destination === 'diagnoses' ? 'diagnoses' : undefined,
+                leadId: resolvedLeadId,
+                dealId: resolvedDealId,
+                documentType: docType,
+                section: undefined,
                 formId: undefined,
                 contactId: recordContext?.contactId,
               });
-              setCurrentTab(destination === 'documents' ? 'document_templates' : destination === 'diagnoses' || destination === 'forms' ? 'mst_diagnoses' : 'customer_operations');
+              if (destination === 'forms') {
+                setInboxTargetChannel('forms');
+                setCurrentTab('inbox_hub');
+              } else {
+                setCurrentTab(
+                  destination === 'documents' || destination === 'diagnoses'
+                    ? 'document_templates'
+                    : 'customer_operations'
+                );
+              }
             }}
             onNavigateTab={(tab) => setCurrentTab(tab as UnifiedNavTab)}
           />
@@ -2847,15 +2893,36 @@ function AppContent() {
                 });
                 return;
               }
+              const resolvedLeadId = recordContext?.tableKey === 'leads' ? recordContext.recordId : recordContext?.leadId;
+              const resolvedDealId = recordContext?.tableKey === 'deals' ? recordContext.recordId : undefined;
+              const docType: 'invoice' | 'proposal' | 'estimate' | 'contract' | 'monthly_report' | undefined =
+                destination === 'diagnoses'
+                  ? 'proposal'
+                  : destination === 'documents' && recordContext?.tableKey === 'deals'
+                  ? 'estimate'
+                  : destination === 'documents' && recordContext?.tableKey === 'customers'
+                  ? 'invoice'
+                  : undefined;
+
               setCustomerWorkspaceContext({
                 companyId,
-                leadId: recordContext?.tableKey === 'leads' ? recordContext.recordId : recordContext?.leadId,
-                dealId: recordContext?.tableKey === 'deals' ? recordContext.recordId : undefined,
-                section: destination === 'forms' ? 'forms' : destination === 'diagnoses' ? 'diagnoses' : undefined,
+                leadId: resolvedLeadId,
+                dealId: resolvedDealId,
+                documentType: docType,
+                section: undefined,
                 formId: undefined,
                 contactId: recordContext?.contactId,
               });
-              setCurrentTab(destination === 'documents' ? 'document_templates' : destination === 'diagnoses' || destination === 'forms' ? 'mst_diagnoses' : 'customer_operations');
+              if (destination === 'forms') {
+                setInboxTargetChannel('forms');
+                setCurrentTab('inbox_hub');
+              } else {
+                setCurrentTab(
+                  destination === 'documents' || destination === 'diagnoses'
+                    ? 'document_templates'
+                    : 'customer_operations'
+                );
+              }
             }}
             onOpenRls={() => setIsRlsOpen(true)}
             onNavigateTab={(tab) => setCurrentTab(tab as UnifiedNavTab)}

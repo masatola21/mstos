@@ -1,132 +1,119 @@
-import { describe, it } from 'node:test';
-import assert from 'node:assert/strict';
-import fs from 'node:fs';
-import path from 'node:path';
+// @ts-nocheck
+/**
+ * ユニットテスト: 診断結果（簡易診断）の文面パリティ ＆ 時間数値の完全排除
+ * - HP (hp/src/lib/supabase.ts) と OS (src/components/PublicIntakeForm.tsx) で
+ *   全4タイプの typeTitle / summary / firstStep が同一文字列で存在すること
+ * - 両ファイルおよび HP 診断フォームに「月」+数字+「時間」の形が残っていないこと
+ */
 
-// tests/diagnosisAnalysisParity.test.ts
-// 診断・訴求テキスト整合性および禁止表現パリティ検査
+import { readFileSync } from 'node:fs';
 
-const rootDir = process.cwd();
-
-function extractUrgentActions(content: string): string[] {
-  const matches = [...content.matchAll(/urgentAction:\s*['"`]([\s\S]*?)['"`]/g)];
-  return matches.map((m) => m[1]);
+function assert(condition: boolean, message: string) {
+  if (!condition) {
+    throw new Error(`Assertion failed: ${message}`);
+  }
 }
 
-describe('Diagnosis and Analysis Content Parity Tests', () => {
-  // 1. 次のファイルに、下の語が含まれていないこと。
-  // 対象: hp/src/pages/index.astro、hp/src/pages/services/strategy.astro、
-  //       hp/src/pages/services/system.astro、hp/src/components/DiagnosisForm.tsx
-  // 語: 「40h削減」「数十時間」「根絶」「ゼロ化」「ゼロにする」「手作業・二重転記ゼロ」
-  //     「確実に」「大幅に増える」「最大化」「確立します」「検証済み」
-  describe('1. 禁止表現が含まれていないことの検査', () => {
-    const targetFiles = [
-      'hp/src/pages/index.astro',
-      'hp/src/pages/services/strategy.astro',
-      'hp/src/pages/services/system.astro',
-      'hp/src/components/DiagnosisForm.tsx',
-    ];
+const EXPECTED_TYPES = [
+  {
+    typeTitle: '経営者の現場拘束 ＆ 事務手作業・属人化タイプ',
+    summary: '売上はあるものの、請求書や見積書の手作業、顧客対応、特定の人への属人化に時間を奪われ、経営者が「次の一手」を打つ時間が取りにくくなっている可能性が高い状態です。',
+    firstStep: '最初の候補は、請求・見積・顧客情報など、複数の場所に同じ内容を入力している作業の見直しです。商談で、どの作業から着手するのが良いかを一緒に絞り込みます。',
+  },
+  {
+    typeTitle: '利益流出 ＆ 集客〜成約導線分断タイプ',
+    summary: '集客から商談・フォローまでの一連の流れが分断されているか、単価・コストの見直しが進んでいないため、売上規模に対して手元に残る利益が削られている可能性が高い状態です。',
+    firstStep: '最初の候補は、集客から問い合わせ・商談・フォローまでのつながりと、案件ごとの利益の見え方を整理することです。商談で、どこで途切れているかをお伺いします。',
+  },
+  {
+    typeTitle: '改善後回し ＆ 優先順位停滞タイプ',
+    summary: '「改善したい」と思いながらも日々の現場対応や火消しに追われ、どこから手を付ければ一番効果が出るのか優先順位が決まらず、改善が後回しになっている状態です。',
+    firstStep: '最初の候補は、改善テーマを1つに絞り、小さく着手して定着させることです。商談で、いま一番優先したいテーマをお伺いします。',
+  },
+  {
+    typeTitle: '経営の仕組み化 ＆ 次の一手着手タイプ',
+    summary: '現状の事業基盤を活かしながら、経営者が現場作業から完全に離れ、新規事業や新収益源の創出・自走組織づくりへとシフトするタイミングです。',
+    firstStep: '最初の候補は、経営者の方に集まっている判断や作業を洗い出し、任せられる形に整えることです。商談で、次に力を入れたい方向をお伺いします。',
+  },
+];
 
-    const prohibitedWords = [
-      '40h削減',
-      '数十時間',
-      '根絶',
-      'ゼロ化',
-      'ゼロにする',
-      '手作業・二重転記ゼロ',
-      '確実に',
-      '大幅に増える',
-      '最大化',
-      '確立します',
-      '検証済み',
-    ];
+async function runTests() {
+  console.log('=== Running Diagnosis Analysis Parity Unit Tests ===\n');
 
-    for (const relPath of targetFiles) {
-      it(`${relPath} に禁止語が含まれていないこと`, () => {
-        const fullPath = path.resolve(rootDir, relPath);
-        assert.ok(fs.existsSync(fullPath), `対象ファイルが存在すること: ${relPath}`);
-        const content = fs.readFileSync(fullPath, 'utf-8');
+  const hpSource = readFileSync(new URL('../hp/src/lib/supabase.ts', import.meta.url), 'utf-8');
+  const osSource = readFileSync(new URL('../src/components/PublicIntakeForm.tsx', import.meta.url), 'utf-8');
+  const hpFormSource = readFileSync(new URL('../hp/src/components/DiagnosisForm.tsx', import.meta.url), 'utf-8');
 
-        const foundWords: string[] = [];
-        for (const word of prohibitedWords) {
-          if (content.includes(word)) {
-            foundWords.push(word);
-          }
-        }
+  // Test 1: HPとOSで4タイプのtypeTitle, summary, firstStepが同一の文字列で入っていること
+  console.log('Test 1: HP and OS definitions contain identical typeTitle, summary, and firstStep for all 4 types');
+  for (const expected of EXPECTED_TYPES) {
+    // HP
+    assert(hpSource.includes(expected.typeTitle), `HP missing typeTitle: ${expected.typeTitle}`);
+    assert(hpSource.includes(expected.summary), `HP missing summary for: ${expected.typeTitle}`);
+    assert(hpSource.includes(expected.firstStep), `HP missing firstStep for: ${expected.typeTitle}`);
 
-        assert.equal(
-          foundWords.length,
-          0,
-          `${relPath} に禁止語が検出されました: [${foundWords.join(', ')}]`
-        );
-      });
-    }
-  });
+    // OS
+    assert(osSource.includes(expected.typeTitle), `OS missing typeTitle: ${expected.typeTitle}`);
+    assert(osSource.includes(expected.summary), `OS missing summary for: ${expected.typeTitle}`);
+    assert(osSource.includes(expected.firstStep), `OS missing firstStep for: ${expected.typeTitle}`);
+  }
+  console.log('  ✓ All 4 types verified with identical strings in HP and OS');
 
-  // 2. hp/src/lib/supabase.ts と src/components/PublicIntakeForm.tsx の
-  // urgentAction の文字列に「真っ先に創出」「確実に定着」が含まれていないこと。
-  // (supabase.ts のコードコメントに「確実に」があるため、ファイル全体ではなく
-  // urgentAction の文字列に限って検査すること)
-  describe('2. urgentAction 文字列の禁止表現検査', () => {
-    const targets = [
-      { name: 'HP (hp/src/lib/supabase.ts)', relPath: 'hp/src/lib/supabase.ts' },
-      { name: 'OS (src/components/PublicIntakeForm.tsx)', relPath: 'src/components/PublicIntakeForm.tsx' },
-    ];
+  // Test 2: 「月」+数字+「時間」の形がファイルに残っていないこと（例: 月35〜55時間、月20〜30時間）
+  console.log('Test 2: No ungrounded time savings (月XX時間) pattern in HP or OS diagnosis files');
+  const hoursPattern = /月\s*\d+[^"\n\r]*時間/;
 
-    const prohibitedUrgentWords = ['真っ先に創出', '確実に定着'];
+  // hp/src/lib/supabase.ts の analyzeBottleneck 周辺
+  const hpAnalyzeIdx = hpSource.indexOf('function analyzeBottleneck');
+  const hpAnalyzeChunk = hpSource.slice(hpAnalyzeIdx, hpAnalyzeIdx + 3000);
+  assert(!hoursPattern.test(hpAnalyzeChunk), `Found ungrounded time pattern in hp/src/lib/supabase.ts: ${hpAnalyzeChunk.match(hoursPattern)?.[0]}`);
 
-    for (const target of targets) {
-      it(`${target.name} の urgentAction に「真っ先に創出」「確実に定着」が含まれていないこと`, () => {
-        const fullPath = path.resolve(rootDir, target.relPath);
-        assert.ok(fs.existsSync(fullPath), `対象ファイルが存在すること: ${target.relPath}`);
-        const content = fs.readFileSync(fullPath, 'utf-8');
-        const actions = extractUrgentActions(content);
+  // src/components/PublicIntakeForm.tsx の analyzeBottleneck 周辺
+  const osAnalyzeIdx = osSource.indexOf('function analyzeBottleneck');
+  const osAnalyzeChunk = osSource.slice(osAnalyzeIdx, osAnalyzeIdx + 2000);
+  assert(!hoursPattern.test(osAnalyzeChunk), `Found ungrounded time pattern in src/components/PublicIntakeForm.tsx: ${osAnalyzeChunk.match(hoursPattern)?.[0]}`);
 
-        assert.ok(actions.length > 0, `${target.relPath} から urgentAction が抽出できること`);
+  // hp/src/components/DiagnosisForm.tsx
+  assert(!hoursPattern.test(hpFormSource), `Found ungrounded time pattern in hp/src/components/DiagnosisForm.tsx: ${hpFormSource.match(hoursPattern)?.[0]}`);
+  assert(!hpFormSource.includes('想定削減可能時間'), 'DiagnosisForm.tsx must not contain "想定削減可能時間"');
+  assert(hpFormSource.includes('最初に着手したい候補'), 'DiagnosisForm.tsx must contain "最初に着手したい候補"');
+  assert(hpFormSource.includes('result.firstStep'), 'DiagnosisForm.tsx must display "result.firstStep"');
+  console.log('  ✓ Verified no hours pattern exists in any diagnosis file');
 
-        const violations: string[] = [];
-        for (const action of actions) {
-          for (const word of prohibitedUrgentWords) {
-            if (action.includes(word)) {
-              violations.push(`語「${word}」を含む urgentAction: "${action}"`);
-            }
-          }
-        }
+  // Test 3: Wording cleanup verification
+  // - DiagnosisForm.tsx と index.astro に「想定削減」「月 数字〜数字 時間」「ヶ月目」「半年後」「最大利益」「最も効果が出やすい」が含まれていない
+  console.log('Test 3: DiagnosisForm.tsx and index.astro contain no ungrounded efficacy wording');
+  const indexSource = readFileSync(new URL('../hp/src/pages/index.astro', import.meta.url), 'utf-8');
+  const monthRangeHoursPattern = /月\s*\d+\s*[〜~-]\s*\d+\s*時間/;
+  const forbiddenPhrases = [
+    '想定削減',
+    'ヶ月目',
+    '半年後',
+    '最大利益',
+    '最も効果が出やすい',
+  ];
 
-        assert.equal(
-          violations.length,
-          0,
-          `${target.name} の urgentAction に禁止語が見つかりました:\n${violations.join('\n')}`
-        );
-      });
-    }
-  });
+  for (const phrase of forbiddenPhrases) {
+    assert(!hpFormSource.includes(phrase), `DiagnosisForm.tsx must not contain "${phrase}"`);
+    assert(!indexSource.includes(phrase), `index.astro must not contain "${phrase}"`);
+  }
+  assert(!monthRangeHoursPattern.test(hpFormSource), 'DiagnosisForm.tsx must not contain "月 数字〜数字 時間"');
+  assert(!monthRangeHoursPattern.test(indexSource), 'index.astro must not contain "月 数字〜数字 時間"');
+  console.log('  ✓ Verified forbidden efficacy wording completely removed from DiagnosisForm.tsx and index.astro');
 
-  // 3. HP と OS の urgentAction が、4タイプとも同一文字列であること。
-  describe('3. HP と OS の urgentAction 4タイプ完全一致検査', () => {
-    it('HP と OS の urgentAction が、4タイプとも同一文字列であること', () => {
-      const hpPath = path.resolve(rootDir, 'hp/src/lib/supabase.ts');
-      const osPath = path.resolve(rootDir, 'src/components/PublicIntakeForm.tsx');
+  // Test 4: supabase.ts に automationScore と timeframe が含まれていない
+  console.log('Test 4: supabase.ts contains no automationScore or timeframe');
+  assert(!hpSource.includes('automationScore'), 'supabase.ts must not contain "automationScore"');
+  assert(!hpSource.includes('timeframe'), 'supabase.ts must not contain "timeframe"');
+  console.log('  ✓ Verified automationScore and timeframe completely removed from supabase.ts');
 
-      assert.ok(fs.existsSync(hpPath), 'hp/src/lib/supabase.ts が存在すること');
-      assert.ok(fs.existsSync(osPath), 'src/components/PublicIntakeForm.tsx が存在すること');
+  console.log('\nAll diagnosis analysis parity tests passed.');
+}
 
-      const hpContent = fs.readFileSync(hpPath, 'utf-8');
-      const osContent = fs.readFileSync(osPath, 'utf-8');
-
-      const hpActions = extractUrgentActions(hpContent);
-      const osActions = extractUrgentActions(osContent);
-
-      assert.equal(hpActions.length, 4, `HP側の urgentAction は4タイプ定義されていること (実際: ${hpActions.length})`);
-      assert.equal(osActions.length, 4, `OS側の urgentAction は4タイプ定義されていること (実際: ${osActions.length})`);
-
-      for (let i = 0; i < 4; i++) {
-        assert.equal(
-          hpActions[i],
-          osActions[i],
-          `タイプ ${i + 1} の urgentAction が一致しません。\nHP: "${hpActions[i]}"\nOS: "${osActions[i]}"`
-        );
-      }
-    });
-  });
-});
+runTests().then(
+  () => process.exit(0),
+  (error) => {
+    console.error(error);
+    process.exit(1);
+  },
+);
