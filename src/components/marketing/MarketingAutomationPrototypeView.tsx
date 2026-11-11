@@ -4,11 +4,14 @@ import { getSalesEmailTemplate, getNurturingStepTemplate } from '../../utils/sal
 export const MST_OUTREACH_STARTER_SCENARIOS: Omit<MarketingScenario, 'id' | 'updatedAt'>[] = [1, 2, 3, 4, 5].map((step) => {
   const tpl = getSalesEmailTemplate(step);
   const waitMinutes = step === 1 ? 0 : (step - 1) * 3 * 24 * 60; // 0, 3日後, 6日後, 9日後, 12日後
+  // 第1通は手動で送る（宛先・文面を目で確認してから送信）。第2〜5通は、第1通を送った時に
+  // 送信センターの「2通目以降も自動で送る」を入れた相手にだけ、日数をあけて自動送信する。
+  const isFirst = step === 1;
   return {
     name: tpl.name,
-    trigger: 'lead_created' as MarketingTrigger,
+    trigger: (isFirst ? 'manual' : 'outreach_first_sent') as MarketingTrigger,
     channel: 'email' as MarketingChannel,
-    audience: '未接触の見込み企業',
+    audience: isFirst ? '見込み企業（手動で送信）' : '第1通を送った見込み企業',
     waitMinutes,
     emailSubject: tpl.subject.replace('貴社 様の', '{company_name} 様の').replace('貴社 様', '{company_name} 様'),
     emailBody: tpl.body.replace(/\{\{diagnostic_url\}\}/g, '{link_url}').replace(/貴社/g, '{company_name}'),
@@ -21,8 +24,10 @@ export const MST_OUTREACH_STARTER_SCENARIOS: Omit<MarketingScenario, 'id' | 'upd
     flexBody: '',
     flexButtonLabel: '',
     flexButtonUrl: '',
-    status: 'draft',
-    automationEnabled: false,
+    // 第2〜5通は「第1通を送った時」にしか動かないため、有効にしておいても勝手に送られることはない
+    status: (isFirst ? 'draft' : 'prepared') as MarketingScenario['status'],
+    automationEnabled: !isFirst,
+    sendTimeWindow: '09:00-18:00',
     stopOnBooking: true,
     stopOnDeal: true,
     consentBasis: '特定電子メール法に基づく業務改善情報の提供（オプトアウト明記）',
@@ -229,6 +234,7 @@ interface Props {
 const triggerOptions: Array<{ value: MarketingTrigger; label: string }> = [
   { value: 'prospect_selected', label: '営業対象に選ばれた時' },
   { value: 'lead_created', label: '見込み客が登録された時' },
+  { value: 'outreach_first_sent', label: '営業メール第1通を送った時（2通目以降を自動送信）' },
   { value: 'line_registered', label: 'LINE登録された時' },
   { value: 'diagnosis_invited', label: '診断案内を送った時' },
   { value: 'diagnosis_completed', label: '診断が完了した時' },
@@ -498,7 +504,7 @@ export const MarketingAutomationPrototypeView: React.FC<Props> = ({ scenarios, o
     [scenarios]
   );
   const triggerLabel = useMemo(() => Object.fromEntries(triggerOptions.map((option) => [option.value, option.label])) as Record<MarketingTrigger, string>, []);
-  const supportedAutomationTriggers = new Set<MarketingTrigger>(['prospect_selected','lead_created','line_registered','diagnosis_invited','diagnosis_completed','meeting_completed','tag_added','booking_created','retainer_period','deal_stage_changed','deal_won','report_approved','report_sent','proposal_approved','proposal_sent','contract_sent','contract_signed','invoice_due','invoice_overdue','project_milestone']);
+  const supportedAutomationTriggers = new Set<MarketingTrigger>(['prospect_selected','lead_created','outreach_first_sent','line_registered','diagnosis_invited','diagnosis_completed','meeting_completed','tag_added','booking_created','retainer_period','deal_stage_changed','deal_won','report_approved','report_sent','proposal_approved','proposal_sent','contract_sent','contract_signed','invoice_due','invoice_overdue','project_milestone']);
 
   const duplicateCount = useMemo(() => {
     const names = new Set<string>();

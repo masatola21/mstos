@@ -225,6 +225,8 @@ export const CommunicationSendCenter: React.FC<Props> = ({
   const [companies, setCompanies] = useState<Record<string, string>>({});
   const [companyIndustries, setCompanyIndustries] = useState<Record<string, string>>({});
   const [salesStep, setSalesStep] = useState<number>(1);
+  // 第1通を手動で送ったあと、第2〜5通を自動で予約するか（初期はOFF。送るたびにOFFへ戻す）
+  const [autoFollowups, setAutoFollowups] = useState(false);
   const [nurturingStep, setNurturingStep] = useState<number>(1);
   const [contactId, setContactId] = useState(initialContactId || '');
   const [unregisteredEmailWarning, setUnregisteredEmailWarning] = useState<string | null>(null);
@@ -671,6 +673,24 @@ export const CommunicationSendCenter: React.FC<Props> = ({
       setNotice(summary);
       setPreview(false);
       const allOk = outcomes.length > 0 && outcomes.every((x) => x.ok);
+      if (allOk && kind === 'sales_outreach' && salesStep === 1 && autoFollowups && targets.includes('email')) {
+        try {
+          const followRes = await fetch('/api/marketing/outreach-followups', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + sessionData.session!.access_token },
+            body: JSON.stringify({ contactId: contact.id }),
+          });
+          const followBody = await followRes.json().catch(() => ({}));
+          if (followRes.ok && followBody.scheduled > 0) {
+            setNotice(`${summary} / 第2〜5通の自動送信を予約しました（${followBody.scheduled}件）`);
+          } else {
+            setNotice(`${summary} / 2通目以降の予約: ${followBody.error || followBody.message || '予約できませんでした'}`);
+          }
+        } catch {
+          setNotice(`${summary} / 2通目以降の予約に失敗しました。もう一度お試しください。`);
+        }
+      }
+      if (allOk && kind === 'sales_outreach') setAutoFollowups(false);
       if (allOk) {
         onDraftChange?.(false);
         onSent?.({ ok: true, summary });
@@ -960,7 +980,24 @@ export const CommunicationSendCenter: React.FC<Props> = ({
                     <option value={5}>第5通：【最終案内】現場の火消しから解放され利益が残る会社へ</option>
                   </select>
                 </label>
-                <p className="text-[11px] text-purple-800">※ 選択した会社の業種に応じた課題・メリットを自動挿入します。</p>
+                <p className="text-[11px] text-purple-800">※ 選択した会社の業種に応じた課題・メリットを自動挿入します。送信時に、署名（社名・住所・HP・Mail）と配信停止リンクが自動で付きます。</p>
+                {salesStep === 1 && channel !== 'line' && (
+                  <label className="flex items-start gap-2 rounded-lg border border-purple-200 bg-white p-2.5 text-xs text-slate-800 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={autoFollowups}
+                      onChange={(e) => setAutoFollowups(e.target.checked)}
+                      className="mt-0.5 h-4 w-4 accent-purple-600"
+                    />
+                    <span>
+                      <strong className="text-purple-900">2通目以降も自動で送る</strong>
+                      （第1通の3日・6日・9日・12日後、9〜18時に送信）
+                      <span className="block text-[11px] text-slate-500">
+                        返信・診断の回答・面談の予約・配信停止・不達があれば、残りは自動で止まります。1通だけ送る場合はチェックしないでください。
+                      </span>
+                    </span>
+                  </label>
+                )}
               </div>
             )}
 

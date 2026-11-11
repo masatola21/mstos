@@ -8,6 +8,7 @@ export type MarketingTrigger =
   | 'report_sent'
   | 'meeting_completed'
   | 'tag_added'
+  | 'outreach_first_sent'
   | 'booking_created'
   | 'deal_stage_changed'
   | 'deal_won'

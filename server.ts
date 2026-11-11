@@ -14,6 +14,7 @@ import { isTimeRexEmail, parseTimeRexEmail, parseTimeRexCalendarEvent, syncTimeR
 import { calculateBillingAmount, determineContractMonthlyFee, isContractAlreadyBilled } from './src/utils/billingUtils.js';
 import { calculateExponentialBackoff, shouldSkipAutomationDelivery, checkSendTimeWindow, type SendTimeWindowCheck } from './src/utils/automationRuleUtils.js';
 import { generateDocumentPdf } from './server/pdfService.js';
+import { appendEmailFooter } from './server/emailFooter.js';
 
 dotenv.config();
 
@@ -1783,7 +1784,7 @@ async function processLinePostback(event: any, contact: any, eventId: string, bo
   }
 }
 
-async function enqueueScenariosForContact(contactId: string, triggerName: string): Promise<number> {
+async function enqueueScenariosForContact(contactId: string, triggerName: string, onlyOwnerId?: string): Promise<number> {
   if (!lineSupabase || !contactId || !triggerName) return 0;
   try {
     const { data: contact, error: contactErr } = await lineSupabase
@@ -1801,7 +1802,7 @@ async function enqueueScenariosForContact(contactId: string, triggerName: string
     const matchedScenarios = scenarios.filter((s: any) => {
       const cfg = s.config || {};
       const isEnabled = cfg.automationEnabled === true || cfg.status === 'prepared' || cfg.status === 'active';
-      return isEnabled && cfg.trigger === triggerName;
+      return isEnabled && cfg.trigger === triggerName && (!onlyOwnerId || s.owner_id === onlyOwnerId);
     });
 
     if (matchedScenarios.length === 0) return 0;
@@ -3433,6 +3434,21 @@ async function processMarketingAutomationJobs(options: { forceImmediate?: boolea
           }
         }
 
+        // 2-1b. 営業メールの自動ステップ：診断に回答済みなら、残りの営業メールは止める
+        //       （診断を受けた相手へ「まだ診断を試されていない場合は…」と送らない）
+        if (scenarioConfig.trigger === 'outreach_first_sent') {
+          const { data: diagDone } = await lineSupabase.from('diagnosis_submissions')
+            .select('id').eq('contact_id', contact.id).gte('submitted_at', scenarioCreatedAt).limit(1);
+          if (diagDone && diagDone.length > 0) {
+            await lineSupabase.from('marketing_automation_jobs').update({
+              status: 'skipped',
+              error_message: '診断に回答済みのため営業メールを停止（診断フォローへ移行）',
+              updated_at: new Date().toISOString(),
+            }).eq('id', job.id);
+            continue;
+          }
+        }
+
         // 2-2. LINE返信があれば停止（line_inbox_messages の受信確認）
         if (job.channel === 'line' && contact.line_user_id) {
           const { data: lineReplies } = await lineSupabase.from('line_inbox_messages')
@@ -3629,7 +3645,7 @@ async function processMarketingAutomationJobs(options: { forceImmediate?: boolea
           }
 
           const unsubscribeUrl = createEmailUnsubscribeUrl(contact.id);
-          const response = await fetch('https://api.resend.com/emails',{method:'POST',headers:{Authorization:'Bearer '+emailKey,'Content-Type':'application/json'},body:JSON.stringify({from:emailFrom,to:[recipientAddress],subject:emailSubject,text:`${body}\n\n配信停止はこちら: ${unsubscribeUrl}`,headers:{'List-Unsubscribe':`<${unsubscribeUrl}>`,'List-Unsubscribe-Post':'List-Unsubscribe=One-Click'}})});
+          const response = await fetch('https://api.resend.com/emails',{method:'POST',headers:{Authorization:'Bearer '+emailKey,'Content-Type':'application/json'},body:JSON.stringify({from:emailFrom,to:[recipientAddress],subject:emailSubject,text:appendEmailFooter(body,{senderEmail:(emailFrom.match(/<([^<>]+)>/)?.[1]||emailFrom).trim(),unsubscribeUrl}),headers:{'List-Unsubscribe':`<${unsubscribeUrl}>`,'List-Unsubscribe-Post':'List-Unsubscribe=One-Click'}})});
           const result = await response.json().catch(()=>({})) as {id?:string;message?:string};
           if (!response.ok || !result.id) throw new Error(result.message||'メール送信に失敗しました。');
           providerMessageId=result.id;
@@ -4448,6 +4464,32 @@ app.post('/api/marketing/jobs/:id/cancel', async (req, res) => {
   return res.json({ success: true, status: 'canceled' });
 });
 
+// 営業メール：第1通を手動送信した後、第2〜5通（trigger = outreach_first_sent）の自動送信を予約する。
+// 第1通が実際に送信済みであることを確認してから予約し、同じ相手に二重で予約されないようにする。
+app.post('/api/marketing/outreach-followups', requireAuth, async (req, res) => {
+  if (!lineSupabase) return res.status(503).json({ error: '自動配信サーバーのSupabase設定がありません。' });
+  const authUser = (req as any).user;
+  const contactId = req.body?.contactId;
+  if (!isPublicUuid(contactId)) return res.status(400).json({ error: '連絡先が不正です。' });
+
+  const { data: contact } = await lineSupabase.from('contacts')
+    .select('id,email,email_consent_status').eq('id', contactId).maybeSingle();
+  if (!contact || !contact.email) return res.status(400).json({ error: 'メールアドレスが登録された連絡先ではありません。' });
+  if (contact.email_consent_status === 'opted_out') return res.status(409).json({ error: '配信停止済みのため、2通目以降は予約できません。' });
+
+  const since = new Date(Date.now() - 30 * 60 * 1000).toISOString();
+  const { data: firstSent } = await lineSupabase.from('communication_outbox')
+    .select('id').eq('owner_id', authUser.id).eq('recipient_contact_id', contactId).eq('channel', 'email')
+    .eq('source_type', 'sales_outreach_announcement').eq('status', 'sent').gte('created_at', since).limit(1).maybeSingle();
+  if (!firstSent) return res.status(409).json({ error: '第1通の送信済みを確認できないため、2通目以降は予約できません。' });
+
+  const enqueued = await enqueueScenariosForContact(contactId, 'outreach_first_sent', authUser.id);
+  if (enqueued === 0) {
+    return res.status(200).json({ scheduled: 0, message: '予約できるステップがありません（すでに予約済み、またはマーケティング自動化で「営業メール」の初期セットを反映していません）。' });
+  }
+  return res.json({ scheduled: enqueued });
+});
+
 app.post('/api/marketing/test-send', requireAuth, async (req, res) => {
   if (!lineSupabase) {
     return res.status(503).json({ error: '自動配信サーバーのSupabase設定がありません。' });
@@ -4548,7 +4590,8 @@ app.post('/api/marketing/test-send', requireAuth, async (req, res) => {
           from: emailFrom,
           to: [adminEmail],
           subject: emailSubject,
-          text: emailBodyText,
+          // 本番送信と同じ署名が付いた状態を確認できるよう、テスト送信にも共通署名を付ける
+          text: appendEmailFooter(emailBodyText, { senderEmail: (String(emailFrom).match(/<([^<>]+)>/)?.[1] || String(emailFrom)).trim() }),
           ...(replyTo ? { reply_to: replyTo } : {}),
         }),
       });
@@ -4894,7 +4937,7 @@ app.post('/api/communications/send', async (req, res) => {
       const emailFrom = `${fromName.replace(/"/g, '')} <${fromEmail}>`;
       const isTransactional = isTransactionalOutboxEmail(row);
       const unsubscribeUrl = isTransactional ? '' : createEmailUnsubscribeUrl(contact.id);
-      const emailText = String(row.body_text || '') + (unsubscribeUrl ? `\n\n配信停止はこちら: ${unsubscribeUrl}` : '');
+      const emailText = appendEmailFooter(String(row.body_text || ''), { senderEmail: fromEmail, unsubscribeUrl });
 
       let attachments: Array<{ filename: string; content: string }> | undefined = undefined;
       if (row.document_id) {

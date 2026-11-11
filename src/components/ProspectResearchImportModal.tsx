@@ -422,8 +422,10 @@ ${rawResearch.slice(0, 30000)}`;
               company_id: companyId,
               full_name: candidate.contact_person || `${candidate.company_name} ご担当者`,
               email: candidate.email,
-              email_consent_status: 'opted_in',
-              email_consent_source: `外部AI調査新規開拓 [${sourceAi}]`,
+              // 公開情報から調べた宛先なので、本人の同意は取得していない。実態どおり「未確認」で記録する
+              // （送信を止めるのは opted_out のみ。営業メールには署名と配信停止リンクが自動で付く）
+              email_consent_status: 'unknown',
+              email_consent_source: `外部AI調査新規開拓 [${sourceAi}]（公開情報より取得・本人同意は未確認）`,
             });
           } catch (_) {
             // contacts 重複時は安全に無視
