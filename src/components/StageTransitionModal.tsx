@@ -107,36 +107,18 @@ export const StageTransitionModal: React.FC<StageTransitionModalProps> = ({
         if (matched) setServiceType(matched.product_name);
       });
     } else if (type === 'lead_to_deal') {
-      // リードの希望内容（inquiry_type / service_type / 相談メモ）から最適な提案プラン名を自動判定
+      // リードの希望内容から提案プラン名を自動判定（厳格に5プランのみを使用）
       const inquiry = (sourceRecord.inquiry_type || sourceRecord.service_type || '').trim();
-      const notes = (sourceRecord.notes || '').toLowerCase();
-      let initialPlanName = '';
+      let initialPlanName = '経営顧問・伴走支援 導入提案';
 
-      // 基本は「顧問導入提案」。診断系は廃止し、複数の改善・経営課題・相談は顧問提案を最優先
-      if (
-        inquiry === 'ボトルネック診断' ||
-        inquiry.includes('診断') ||
-        inquiry === '経営全体・利益改善' ||
-        inquiry.includes('利益改善') ||
-        inquiry.includes('顧問') ||
-        inquiry.includes('経営') ||
-        notes.includes('顧問') ||
-        notes.includes('改善') ||
-        notes.includes('診断')
-      ) {
-        initialPlanName = '顧問導入提案';
-      } else if (inquiry === '業務効率化・IT/自動化' || inquiry.includes('効率化') || inquiry.includes('自動化')) {
+      if (inquiry === '業務効率化・IT/自動化' || inquiry.includes('効率化') || inquiry.includes('自動化')) {
         initialPlanName = '業務効率化・IT自動化システム 導入提案';
       } else if (inquiry === '集客・マーケティング' || inquiry.includes('マーケティング') || inquiry.includes('集客')) {
         initialPlanName = '集客・マーケティング支援 導入提案';
       } else if (inquiry === '介護保険外開業' || inquiry.includes('介護')) {
         initialPlanName = '介護保険外サービス開業支援 導入提案';
-      } else if (inquiry === '資料請求' || inquiry.includes('資料')) {
-        initialPlanName = '顧問導入提案';
-      } else if (inquiry) {
-        initialPlanName = inquiry.endsWith('提案') ? inquiry : `${inquiry} 導入提案`;
       } else {
-        initialPlanName = '顧問導入提案';
+        initialPlanName = '経営顧問・伴走支援 導入提案';
       }
 
       setProposalPlanName(initialPlanName);
@@ -170,13 +152,6 @@ export const StageTransitionModal: React.FC<StageTransitionModalProps> = ({
 
         if (selected) {
           setProductId(selected.id);
-          // 商品が特定された場合、より具体的な「商品名 導入提案」にプラン名を更新（未編集時のみ）
-          setProposalPlanName((prev) => {
-            if (!prev || prev === '顧問導入提案' || prev === '新規導入提案') {
-              return `${selected.product_name} 導入提案`;
-            }
-            return prev;
-          });
           setInitialFee(selected.initial_fee ?? 0);
           setMonthlyFee(selected.monthly_fee ?? 0);
           setTotalAmount(Number(selected.initial_fee || 0) + Number(selected.monthly_fee || 0));
@@ -184,7 +159,6 @@ export const StageTransitionModal: React.FC<StageTransitionModalProps> = ({
           setProductId('');
           setInitialFee('');
           setMonthlyFee('');
-          setTotalAmount('');
         }
       });
     } else if (type === 'deal_to_customer') {
@@ -588,43 +562,35 @@ export const StageTransitionModal: React.FC<StageTransitionModalProps> = ({
                       required
                       value={proposalPlanName}
                       onChange={(e) => setProposalPlanName(e.target.value)}
-                      placeholder="例: 顧問導入提案"
+                      placeholder="例: 経営顧問・伴走支援 導入提案"
                       className="w-full px-3 py-2 rounded-xl bg-white border border-slate-300 text-slate-800 text-xs outline-none focus:border-purple-600 focus:ring-1 focus:ring-purple-600 shadow-2xs font-medium"
                     />
-                    {/* 希望内容からのワンタップ候補 */}
+                    {/* 指定の5プラン候補（他はすべて削除） */}
                     <div className="mt-2 flex items-center gap-1.5 flex-wrap text-[11px]">
                       <span className="text-slate-500 font-semibold flex items-center gap-1">
                         <Sparkles className="w-3 h-3 text-purple-600" />
                         <span>候補プランから選ぶ:</span>
                       </span>
-                      {(() => {
-                        const inq = (sourceRecord.inquiry_type || sourceRecord.service_type || '').trim();
-                        const suggestions = Array.from(new Set([
-                          '顧問導入提案',
-                          '経営顧問・伴走支援 導入提案',
-                          inq && !inq.includes('診断') ? (inq.endsWith('提案') ? inq : `${inq} 導入提案`) : null,
-                          '業務効率化・IT自動化システム 導入提案',
-                          '集客・マーケティング支援 導入提案',
-                          '介護保険外サービス開業支援 導入提案',
-                          productId ? `${products.find(p => p.id === productId)?.product_name || ''} 導入提案` : null,
-                          '個別カスタマイズ提案'
-                        ])).filter((s): s is string => Boolean(s && s.trim() && s !== '導入提案'));
-
-                        return suggestions.map((sug) => (
-                          <button
-                            key={sug}
-                            type="button"
-                            onClick={() => setProposalPlanName(sug)}
-                            className={`px-2.5 py-1 rounded-lg border text-[11px] transition-all cursor-pointer ${
-                              proposalPlanName === sug
-                                ? 'bg-purple-100 text-purple-800 border-purple-300 font-bold shadow-2xs'
-                                : 'bg-white text-slate-700 border-slate-200 hover:bg-slate-100 hover:text-slate-900 shadow-2xs'
-                            }`}
-                          >
-                            {sug}
-                          </button>
-                        ));
-                      })()}
+                      {[
+                        '経営顧問・伴走支援 導入提案',
+                        '業務効率化・IT自動化システム 導入提案',
+                        '集客・マーケティング支援 導入提案',
+                        '介護保険外サービス開業支援 導入提案',
+                        '個別カスタマイズ提案'
+                      ].map((sug) => (
+                        <button
+                          key={sug}
+                          type="button"
+                          onClick={() => setProposalPlanName(sug)}
+                          className={`px-2.5 py-1 rounded-lg border text-[11px] transition-all cursor-pointer ${
+                            proposalPlanName === sug
+                              ? 'bg-purple-100 text-purple-800 border-purple-300 font-bold shadow-2xs'
+                              : 'bg-white text-slate-700 border-slate-200 hover:bg-slate-100 hover:text-slate-900 shadow-2xs'
+                          }`}
+                        >
+                          {sug}
+                        </button>
+                      ))}
                     </div>
                   </div>
 
