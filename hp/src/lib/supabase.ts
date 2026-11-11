@@ -141,11 +141,8 @@ export interface DiagnosisAnalysisResult {
     ops: DiagnosisScoreItem;
     automation: DiagnosisScoreItem;
   };
-  // レポート②：余白創出ポテンシャル
-  timeSavings: {
-    hoursRange: string;
-    description: string;
-  };
+  // レポート②：最初に着手したい候補
+  firstStep: string;
   // レポート③：優先改善ロードマップ（社長視点の分かりやすい言葉）
   roadmap: {
     step1: { timeframe: string; phase: string; title: string; desc: string };
@@ -194,18 +191,7 @@ export function analyzeBottleneck(answers: Record<string, string | boolean>): Di
     level: 'great',
   };
 
-  // 2. 余白時間試算
-  let hoursRange = '月 35〜55 時間';
-  let hoursDesc = '二重入力・転記作業・連絡漏れ対応の自動連携による余白創出試算';
-  if (ops.includes('属人化') || delay.includes('火消し')) {
-    hoursRange = '月 40〜65 時間';
-    hoursDesc = '社長への指示確認・転記作業・火消し対応の解消による余白創出試算';
-  } else if (ops.includes('自走')) {
-    hoursRange = '月 20〜30 時間';
-    hoursDesc = '日常ルーティン業務の自動化とダッシュボード化による余白創出試算';
-  }
-
-  // 3. ロードマップ設計（分かりやすい表現）
+  // 2. ロードマップ設計（分かりやすい表現）
   const step3Title = ideal.includes('新規事業')
     ? '第2の収益の柱（生活支援・新規事業）の立ち上げと多角化'
     : '社長が現場にいなくても、社員だけで仕事が回る体制へ';
@@ -236,10 +222,10 @@ export function analyzeBottleneck(answers: Record<string, string | boolean>): Di
     return {
       typeTitle: '経営者の現場拘束 ＆ 事務手作業・属人化タイプ',
       badge: '業務・手作業の急所',
-      summary: '売上はあるものの、請求書や見積書の手作業、顧客対応、特定の人への属人化に時間を奪われ、経営者が「次の一手」を打つ時間が月30時間以上流出している状態です。',
+      summary: '売上はあるものの、請求書や見積書の手作業、顧客対応、特定の人への属人化に時間を奪われ、経営者が「次の一手」を打つ時間が取りにくくなっている可能性が高い状態です。',
       urgentAction: 'まずは請求・転記・顧客連絡の重複入力を自動化し、経営者ご自身の「改善を考える時間」を真っ先に創出することが最優先課題です。',
+      firstStep: '最初の候補は、請求・見積・顧客情報など、複数の場所に同じ内容を入力している作業の見直しです。商談で、どの作業から着手するのが良いかを一緒に絞り込みます。',
       scores: { profit: profitScore, ops: opsScore, automation: automationScore },
-      timeSavings: { hoursRange, description: hoursDesc },
       roadmap,
     };
   }
@@ -249,8 +235,8 @@ export function analyzeBottleneck(answers: Record<string, string | boolean>): Di
       badge: '売上・利益の急所',
       summary: '集客から商談・フォローまでの一連の流れが分断されているか、単価・コストの見直しが進んでいないため、売上規模に対して手元に残る利益が削られている可能性が高い状態です。',
       urgentAction: '集客・商談・顧客フォローを自動でつなぐ導線構築と、利益率を高める経営戦略の見直しが急所となります。',
+      firstStep: '最初の候補は、集客から問い合わせ・商談・フォローまでのつながりと、案件ごとの利益の見え方を整理することです。商談で、どこで途切れているかをお伺いします。',
       scores: { profit: profitScore, ops: opsScore, automation: automationScore },
-      timeSavings: { hoursRange, description: hoursDesc },
       roadmap,
     };
   }
@@ -259,9 +245,9 @@ export function analyzeBottleneck(answers: Record<string, string | boolean>): Di
       typeTitle: '改善後回し ＆ 優先順位停滞タイプ',
       badge: '改善実行の急所',
       summary: '「改善したい」と思いながらも日々の現場対応や火消しに追われ、どこから手を付ければ一番効果が出るのか優先順位が決まらず、改善が後回しになっている状態です。',
-      urgentAction: 'あれこれ手を広げず、一番利益インパクトの大きい急所から小さく着手し、確実に定着させる伴走パートナーが必要です。',
+      urgentAction: 'あれこれ手を広げず、一番利益インパクトの大きい急所から小さく着手し、確実に定着させることが鍵となります。',
+      firstStep: '最初の候補は、改善テーマを1つに絞り、小さく着手して定着させることです。商談で、いま一番優先したいテーマをお伺いします。',
       scores: { profit: profitScore, ops: opsScore, automation: automationScore },
-      timeSavings: { hoursRange, description: hoursDesc },
       roadmap,
     };
   }
@@ -270,8 +256,8 @@ export function analyzeBottleneck(answers: Record<string, string | boolean>): Di
     badge: '事業成長ステージ',
     summary: '現状の事業基盤を活かしながら、経営者が現場作業から完全に離れ、新規事業や新収益源の創出・自走組織づくりへとシフトするタイミングです。',
     urgentAction: '属人化を排した仕組み化と、継続的な利益改善ロードマップの策定が次のステージへの鍵となります。',
+    firstStep: '最初の候補は、経営者の方に集まっている判断や作業を洗い出し、任せられる形に整えることです。商談で、次に力を入れたい方向をお伺いします。',
     scores: { profit: profitScore, ops: opsScore, automation: automationScore },
-    timeSavings: { hoursRange, description: hoursDesc },
     roadmap,
   };
 }

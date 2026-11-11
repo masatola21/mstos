@@ -208,28 +208,24 @@ export default function DiagnosisForm() {
               </p>
             </div>
 
-            {/* REPORT 02: 余白創出ポテンシャル */}
+            {/* REPORT 02: 最初に着手したい候補 */}
             <div className="bg-sand-50 p-5 rounded-2xl border border-sand-300 space-y-3 flex flex-col justify-between">
               <div className="space-y-2">
                 <div className="flex items-center justify-between text-xs font-bold text-brand-700">
                   <span>REPORT 02</span>
-                  <span>⏱️</span>
+                  <span>🎯</span>
                 </div>
                 <div className="font-bold font-serif text-slate-900 text-base">
-                  余白創出ポテンシャル
+                  最初に着手したい候補
                 </div>
-                <div className="bg-white p-3.5 rounded-xl border border-sand-200 text-center space-y-1">
-                  <div className="text-[11px] text-gray-500 font-bold">想定削減可能時間：</div>
-                  <div className="text-2xl font-black text-emerald-600 font-sans tracking-tight">
-                    {result.timeSavings?.hoursRange || '月 35〜55 時間'}
-                  </div>
-                  <div className="text-[10px] text-gray-400">
-                    二重入力・手作業の自動化試算
-                  </div>
+                <div className="bg-white p-3.5 rounded-xl border border-sand-200">
+                  <p className="text-xs sm:text-sm text-slate-800 leading-relaxed font-medium">
+                    {result.firstStep}
+                  </p>
                 </div>
               </div>
               <p className="text-[11px] text-gray-500 leading-snug font-light">
-                {result.timeSavings?.description || '手作業のコピペや二重入力をなくし、現場データがワンクリックで連携する仕組みを整えます。'}
+                貴社の診断回答に基づき、最も効果が出やすい改善の着手候補を提示しています。
               </p>
             </div>
 
