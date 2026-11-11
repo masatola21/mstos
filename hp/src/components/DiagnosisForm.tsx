@@ -194,17 +194,10 @@ export default function DiagnosisForm() {
                       <span className="text-[11px] text-rose-700">{result.scores?.ops?.status || '深刻'}</span>
                     </div>
                   </div>
-                  <div className="border-t border-sand-100 pt-1.5">
-                    <div className="text-[10px] text-gray-500">{result.scores?.automation?.label || 'IT・自動化連携余地'}</div>
-                    <div className="flex justify-between items-center text-xs font-bold text-slate-900">
-                      <span className="text-cyan-600">{result.scores?.automation?.stars || '★★★★☆'}</span>
-                      <span className="text-[11px] text-cyan-800">{result.scores?.automation?.status || '余地大'}</span>
-                    </div>
-                  </div>
                 </div>
               </div>
               <p className="text-[11px] text-gray-500 leading-snug font-light">
-                会社のどこに経営のブレーキがかかっているかを数値判定しました。
+                ご回答から目安を表示しました。詳細は商談でお伺いします。
               </p>
             </div>
 
@@ -225,7 +218,7 @@ export default function DiagnosisForm() {
                 </div>
               </div>
               <p className="text-[11px] text-gray-500 leading-snug font-light">
-                貴社の診断回答に基づき、最も効果が出やすい改善の着手候補を提示しています。
+                回答内容から、商談で最初にお伺いしたいテーマの候補を表示しています。
               </p>
             </div>
 
@@ -237,31 +230,31 @@ export default function DiagnosisForm() {
                   <span>🗺️</span>
                 </div>
                 <div className="font-bold font-serif text-slate-900 text-base">
-                  優先改善ロードマップ
+                  進め方のイメージ(詳細は商談で決定)
                 </div>
                 <div className="bg-white p-3 rounded-xl border border-sand-200 text-[11px] space-y-2">
                   <div className="border-l-2 border-amber-500 pl-2">
-                    <div className="text-[10px] text-amber-700 font-bold">STEP 1（最初の1ヶ月目）</div>
+                    <div className="text-[10px] text-amber-700 font-bold">STEP 1</div>
                     <div className="font-bold text-slate-900 text-[11px] leading-tight">
-                      {result.roadmap?.step1?.title || '「どこで利益が消えているか」をハッキリ突き止める'}
+                      {result.roadmap?.step1?.title || '現状の整理'}
                     </div>
                   </div>
                   <div className="border-l-2 border-brand-500 pl-2">
-                    <div className="text-[10px] text-brand-700 font-bold">STEP 2（2〜3ヶ月目）</div>
+                    <div className="text-[10px] text-brand-700 font-bold">STEP 2</div>
                     <div className="font-bold text-slate-900 text-[11px] leading-tight">
-                      {result.roadmap?.step2?.title || '現場と事務所の「二重入力・コピペ手作業」をゼロにする'}
+                      {result.roadmap?.step2?.title || '仕組みづくり'}
                     </div>
                   </div>
                   <div className="border-l-2 border-emerald-500 pl-2">
-                    <div className="text-[10px] text-emerald-700 font-bold">STEP 3（半年後〜）</div>
+                    <div className="text-[10px] text-emerald-700 font-bold">STEP 3</div>
                     <div className="font-bold text-slate-900 text-[11px] leading-tight">
-                      {result.roadmap?.step3?.title || '社長が現場にいなくても、社員だけで仕事が回る体制へ'}
+                      {result.roadmap?.step3?.title || '定着と自走'}
                     </div>
                   </div>
                 </div>
               </div>
               <p className="text-[11px] text-gray-500 leading-snug font-light">
-                最初の半年間で利益と時間を生み出す無理のない処方箋です。
+                期間や進め方は、商談で貴社の状況をお伺いしたうえで決めます。
               </p>
             </div>
 
@@ -283,7 +276,7 @@ export default function DiagnosisForm() {
           </h4>
 
           <p className="text-xs sm:text-sm text-slate-300 leading-relaxed font-light">
-            机上の空論ではなく「貴社の実際の業務フローにおいて、何をどのツールでワンクリック化し、どこに仕組みを導入すれば最大利益が出るか」を、代表または専任コンサルタントが直接画面共有しながら解説します。終了後、貴社専用の診断カルテPDFを進呈いたします（強引な営業は一切行いません）。
+            机上の空論ではなく「貴社の実際の業務フローにおいて、どこから仕組みを整えるのが良いか」を、代表または専任コンサルタントが直接画面共有しながら解説します。終了後、貴社専用の診断カルテPDFを進呈いたします（強引な営業は一切行いません）。
           </p>
 
           <div className="pt-2 flex flex-col sm:flex-row gap-3">

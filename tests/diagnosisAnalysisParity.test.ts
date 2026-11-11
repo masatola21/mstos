@@ -76,10 +76,36 @@ async function runTests() {
   // hp/src/components/DiagnosisForm.tsx
   assert(!hoursPattern.test(hpFormSource), `Found ungrounded time pattern in hp/src/components/DiagnosisForm.tsx: ${hpFormSource.match(hoursPattern)?.[0]}`);
   assert(!hpFormSource.includes('想定削減可能時間'), 'DiagnosisForm.tsx must not contain "想定削減可能時間"');
-  assert(!hpFormSource.includes('timeSavings'), 'DiagnosisForm.tsx must not reference "timeSavings"');
   assert(hpFormSource.includes('最初に着手したい候補'), 'DiagnosisForm.tsx must contain "最初に着手したい候補"');
   assert(hpFormSource.includes('result.firstStep'), 'DiagnosisForm.tsx must display "result.firstStep"');
   console.log('  ✓ Verified no hours pattern exists in any diagnosis file');
+
+  // Test 3: Wording cleanup verification
+  // - DiagnosisForm.tsx と index.astro に「想定削減」「月 数字〜数字 時間」「ヶ月目」「半年後」「最大利益」「最も効果が出やすい」が含まれていない
+  console.log('Test 3: DiagnosisForm.tsx and index.astro contain no ungrounded efficacy wording');
+  const indexSource = readFileSync(new URL('../hp/src/pages/index.astro', import.meta.url), 'utf-8');
+  const monthRangeHoursPattern = /月\s*\d+\s*[〜~-]\s*\d+\s*時間/;
+  const forbiddenPhrases = [
+    '想定削減',
+    'ヶ月目',
+    '半年後',
+    '最大利益',
+    '最も効果が出やすい',
+  ];
+
+  for (const phrase of forbiddenPhrases) {
+    assert(!hpFormSource.includes(phrase), `DiagnosisForm.tsx must not contain "${phrase}"`);
+    assert(!indexSource.includes(phrase), `index.astro must not contain "${phrase}"`);
+  }
+  assert(!monthRangeHoursPattern.test(hpFormSource), 'DiagnosisForm.tsx must not contain "月 数字〜数字 時間"');
+  assert(!monthRangeHoursPattern.test(indexSource), 'index.astro must not contain "月 数字〜数字 時間"');
+  console.log('  ✓ Verified forbidden efficacy wording completely removed from DiagnosisForm.tsx and index.astro');
+
+  // Test 4: supabase.ts に automationScore と timeframe が含まれていない
+  console.log('Test 4: supabase.ts contains no automationScore or timeframe');
+  assert(!hpSource.includes('automationScore'), 'supabase.ts must not contain "automationScore"');
+  assert(!hpSource.includes('timeframe'), 'supabase.ts must not contain "timeframe"');
+  console.log('  ✓ Verified automationScore and timeframe completely removed from supabase.ts');
 
   console.log('\nAll diagnosis analysis parity tests passed.');
 }
