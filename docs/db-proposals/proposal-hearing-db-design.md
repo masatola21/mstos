@@ -123,7 +123,11 @@ drafting ──(必須項目OK)→ awaiting_approval ──(承認者)→ approv
 - `checkIsAdminUser`(7384行付近)は、管理者ロール・特定メール・社内ドメインを見たあと、最後の行が `Boolean(user.email)`(メールがあれば誰でも許可)で、実質ログイン済み全員を通す。
 - `/api/ai-reports/:id/approve`(7337行)は `requireAuth` のみ。
 - したがって、`checkIsAdminUser` の最終行を消すだけでは足りない可能性がある(同関数は汎用レコード削除APIにも使われており、影響範囲の確認が要る)。承認専用の判定関数を別に作る案が安全。
-承認者の限定は、本設計のマイグレーションとは分け、先に実データで使い始める前に直す。
+承認者の限定は、本設計のマイグレーションとは分ける。
+
+**決定(2026-11-12): 現在は利用者が1人のため、承認者の限定は今は実装しない。** 新テーブルは RLS(`owner_id = auth.uid()`)で自分の行しか見えない。**利用者を2人目に増やす前に**、次の対応を必ず行う。
+- 承認・送付待ちへの状態変更は、現状 `CommunicationSendCenter.tsx` や送信履歴画面が Supabase を直接更新している(サーバーを通らない)。サーバー側の判定だけでは止まらないため、限定するならDBのトリガー(承認者テーブル、または `app_metadata` のロール)で行う。
+- 既存の `checkIsAdminUser` は `user_metadata.role` も信用しているが、`user_metadata` は本人が書き換えられる。承認の判定には使わない。
 
 ## 6. 確認が必要な点(実装前)
 
@@ -139,6 +143,15 @@ drafting ──(必須項目OK)→ awaiting_approval ──(承認者)→ approv
 - `deals` の金額列は `int4`。`proposal_drafts` は `numeric(14,0)` なので、承認時の書き戻しで桁あふれは起きない(21億円超は想定外)。
 - `proposal_drafts.deal_id` は、承認済みの記録が崩れないよう `ON DELETE RESTRICT`。商談を削除する管理APIは、提案書が紐づく商談で外部キーエラーになる(既存の `formatForeignKeyError` が扱う種類のエラー)。
 - 送付済み(`sent`)の版は、DBのトリガーで編集不可にした(`status→superseded` と `is_current→false` だけ許可)。
+
+### 仕様書との突き合わせで追加した点(2026-11-12)
+
+- **型ごとの金額の必須**: 承認待ち以降では、`spot_build` は初期費用>0、`retainer` は月額>0、`hybrid` は両方>0(CHECK `chk_proposal_drafts_fees_by_kind`)。
+- **お申し込み・同意記録(仕様書 段階6・P7)**: 提案書側には持たない。既存の `customer_documents` の `consent_method` / `consent_recorded_at` / `consent_user_agent` / `consent_evidence_text` に、公開の申込画面(`PublicDocumentApplyView.tsx`)が既に書いている。`proposal_drafts.document_id` から辿る。
+  - 注意1: 申込画面は同意時に書類の `status` を `approved` にする。社内承認の `approved` と同じ語で、意味が違う。提案書の状態は `proposal_drafts.status` を正とし、書類の `status` は参照しない。
+  - 注意2: 申込画面は商談(`deals`)を自動起票・成約にする。提案書は承認待ちの時点で `deal_id` が必須なので、申込画面側の起票との重複・不整合が出ないか、実装時に確認する。
+  - 注意3: `consent_ip` 列はあるが、申込画面は書いていない(User-Agent のみ)。電子同意の証跡として足りるかは、仕様書 §9-6 の専門家確認の対象。
+- **お客様の意向の転記**: 商談中(段階2)の意向は `hearing_sheets.core_answers.t01` に入る。提案書を作る時点(段階3)で、API が `customer_intent` へ転記する。DBの変更はなし。
 
 ### 実装状況
 

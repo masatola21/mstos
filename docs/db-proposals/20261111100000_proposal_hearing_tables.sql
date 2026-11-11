@@ -124,6 +124,13 @@ CREATE TABLE IF NOT EXISTS public.proposal_drafts (
       AND roadmap_confirmed_at IS NOT NULL
     )
   ),
+  -- 型ごとの必須の金額(仕様書 §5: 構築=初期費用、伴走=月額、両方=初期費用+月額)
+  CONSTRAINT chk_proposal_drafts_fees_by_kind CHECK (
+    status NOT IN ('awaiting_approval', 'approved', 'sent')
+    OR (final_kind = 'spot_build' AND COALESCE(initial_fee, 0) > 0)
+    OR (final_kind = 'retainer' AND COALESCE(monthly_fee, 0) > 0)
+    OR (final_kind = 'hybrid' AND COALESCE(initial_fee, 0) > 0 AND COALESCE(monthly_fee, 0) > 0)
+  ),
   CONSTRAINT chk_proposal_drafts_approved_fields CHECK (
     status NOT IN ('approved', 'sent') OR (approved_by IS NOT NULL AND approved_at IS NOT NULL)
   ),
