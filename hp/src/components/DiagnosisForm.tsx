@@ -177,19 +177,19 @@ export default function DiagnosisForm() {
                   <span>📊</span>
                 </div>
                 <div className="font-bold font-serif text-slate-900 text-base">
-                  ボトルネック判定スコア
+                  ボトルネックの目安
                 </div>
                 <div className="bg-white p-3 rounded-xl border border-sand-200 text-xs space-y-2 font-mono">
                   <div>
                     <div className="text-[10px] text-gray-500">{result.scores?.profit?.label || '案件別採算性・原価管理'}</div>
-                    <div className="flex justify-between items-center text-xs font-bold text-slate-900">
+                    <div className="flex flex-col items-start gap-0.5 text-xs font-bold text-slate-900">
                       <span className="text-amber-500">{result.scores?.profit?.stars || '★★☆☆☆'}</span>
                       <span className="text-[11px] text-amber-700">{result.scores?.profit?.status || '要改善'}</span>
                     </div>
                   </div>
                   <div className="border-t border-sand-100 pt-1.5">
                     <div className="text-[10px] text-gray-500">{result.scores?.ops?.label || '業務フロー標準化・属人化'}</div>
-                    <div className="flex justify-between items-center text-xs font-bold text-slate-900">
+                    <div className="flex flex-col items-start gap-0.5 text-xs font-bold text-slate-900">
                       <span className="text-rose-500">{result.scores?.ops?.stars || '★☆☆☆☆'}</span>
                       <span className="text-[11px] text-rose-700">{result.scores?.ops?.status || '深刻'}</span>
                     </div>

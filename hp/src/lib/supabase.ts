@@ -163,7 +163,7 @@ export function analyzeBottleneck(answers: Record<string, string | boolean>): Di
     level: 'warning',
   };
   if (profit.includes('順調')) {
-    profitScore = { label: '案件別採算性・原価管理', stars: '★★★★☆', status: '良好（さらなる収益最大化へ）', level: 'good' };
+    profitScore = { label: '案件別採算性・原価管理', stars: '★★★★☆', status: '良好（さらなる改善の余地を確認）', level: 'good' };
   } else if (profit.includes('残りにくい') || profit.includes('単価')) {
     profitScore = { label: '案件別採算性・原価管理', stars: '★☆☆☆☆', status: '深刻（利益流出の懸念大）', level: 'danger' };
   }
@@ -204,7 +204,7 @@ export function analyzeBottleneck(answers: Record<string, string | boolean>): Di
       typeTitle: '経営者の現場拘束 ＆ 事務手作業・属人化タイプ',
       badge: '業務・手作業の急所',
       summary: '売上はあるものの、請求書や見積書の手作業、顧客対応、特定の人への属人化に時間を奪われ、経営者が「次の一手」を打つ時間が取りにくくなっている可能性が高い状態です。',
-      urgentAction: 'まずは請求・転記・顧客連絡の重複入力を自動化し、経営者ご自身の「改善を考える時間」を真っ先に創出することが最優先課題です。',
+      urgentAction: 'まずは請求・転記・顧客連絡の重複入力を見直し、経営者ご自身が「改善を考える時間」を確保できる状態をめざすことが、最初のテーマと考えられます。',
       firstStep: '最初の候補は、請求・見積・顧客情報など、複数の場所に同じ内容を入力している作業の見直しです。商談で、どの作業から着手するのが良いかを一緒に絞り込みます。',
       scores: { profit: profitScore, ops: opsScore },
       roadmap,
@@ -226,7 +226,7 @@ export function analyzeBottleneck(answers: Record<string, string | boolean>): Di
       typeTitle: '改善後回し ＆ 優先順位停滞タイプ',
       badge: '改善実行の急所',
       summary: '「改善したい」と思いながらも日々の現場対応や火消しに追われ、どこから手を付ければ一番効果が出るのか優先順位が決まらず、改善が後回しになっている状態です。',
-      urgentAction: 'あれこれ手を広げず、一番利益インパクトの大きい急所から小さく着手し、確実に定着させることが鍵となります。',
+      urgentAction: 'あれこれ手を広げず、一番利益インパクトの大きい急所から小さく着手し、定着させることが鍵となります。',
       firstStep: '最初の候補は、改善テーマを1つに絞り、小さく着手して定着させることです。商談で、いま一番優先したいテーマをお伺いします。',
       scores: { profit: profitScore, ops: opsScore },
       roadmap,
