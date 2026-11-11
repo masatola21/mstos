@@ -1339,7 +1339,7 @@ export const OwnMediaWorkspace: React.FC<{
                         required
                         value={payload.url || ''}
                         onChange={(e) => setPayload((p) => ({ ...p, url: e.target.value }))}
-                        placeholder="https://mstcorp.info"
+                        placeholder="https://corp.mstcorp.info"
                         className={cls}
                       />
                     </div>

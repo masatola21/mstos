@@ -7,7 +7,7 @@ export const SENDER_PROFILE = {
   companyLine: '有限会社MST　代表取締役 大橋真人',
   postalCode: '〒503-0981',
   address: '岐阜県大垣市桧町127番地',
-  website: 'https://mstcorp.info',
+  website: 'https://corp.mstcorp.info',
   // 本文に既にこの文字列が含まれていれば、署名は二重に付けない
   addressMarker: '桧町127番地',
 } as const;

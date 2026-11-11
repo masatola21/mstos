@@ -9,7 +9,7 @@ console.log('Test 1: signature has labelled HP / Mail and required legal items')
 const sig = buildSenderSignature('contact@mstcorp.info');
 assert.ok(sig.includes('有限会社MST'));
 assert.ok(sig.includes('〒503-0981 岐阜県大垣市桧町127番地'));
-assert.ok(sig.includes('HP: https://mstcorp.info'));
+assert.ok(sig.includes('HP: https://corp.mstcorp.info'));
 assert.ok(sig.includes('Mail: contact@mstcorp.info'));
 console.log('  ✓ passed');
 
@@ -29,7 +29,7 @@ console.log('Test 4: legacy trailing signature is replaced by the standard one (
 const legacyBody = '山田 様\n\n有限会社MST代表の大橋真人です。\nご回答ありがとうございます。\n\n--------------------------------------------------\n有限会社MST\n代表取締役: 大橋真人\n〒503-0981 岐阜県大垣市桧町127番地\n--------------------------------------------------';
 const unified = appendEmailFooter(legacyBody, { senderEmail: 'contact@mstcorp.info' });
 assert.equal(unified.split('桧町127番地').length - 1, 1, 'address appears once');
-assert.ok(unified.includes('HP: https://mstcorp.info') && unified.includes('Mail: contact@mstcorp.info'));
+assert.ok(unified.includes('HP: https://corp.mstcorp.info') && unified.includes('Mail: contact@mstcorp.info'));
 assert.ok(unified.includes('ご回答ありがとうございます。'));
 assert.ok(!unified.includes('配信停止'));
 console.log('  ✓ passed');

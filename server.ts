@@ -3259,12 +3259,12 @@ function resolveMessageVars(
       formMaterialUrl = formWithMaterial.definition.material_url.trim();
     }
   }
-  const resolvedMaterialUrl = formMaterialUrl || `${appBaseUrl || 'https://mstcorp.info'}/materials`;
+  const resolvedMaterialUrl = formMaterialUrl || `${appBaseUrl || 'https://corp.mstcorp.info'}/materials`;
 
   // {document_url}: その連絡先の、最新の承認済みの書類の公開URL（/docs/<書類ID>）
   const resolvedDocUrl = (appBaseUrl && ownerSettings?.latestApprovedDoc?.id)
     ? `${appBaseUrl}/docs/${encodeURIComponent(ownerSettings.latestApprovedDoc.id)}`
-    : `${appBaseUrl || 'https://mstcorp.info'}/company`;
+    : `${appBaseUrl || 'https://corp.mstcorp.info'}/company`;
 
   // {link_url}: 診断フォームの公開URL。連絡先IDと LINE のユーザーID を含める（?cid=<contactId>&luid=<lineUserId>）
   const formSlug = ownerSettings?.defaultForm?.public_slug || 'business-diagnosis';

@@ -133,7 +133,7 @@ const DEFAULT_KEYWORD_RULES: KeywordAutoReply[] = [
     name: '「資料」「パンフレット」送信時',
     matchText: '資料',
     matchMode: 'contains',
-    replyText: 'MSTの会社案内・サービス概要資料のご請求ありがとうございます。\n下記リンクより最新の会社概要PDFを閲覧いただけます。\n\n▼ 会社案内・サービス資料\nhttps://mstcorp.info/materials',
+    replyText: 'MSTの会社案内・サービス概要資料のご請求ありがとうございます。\n下記リンクより最新の会社概要PDFを閲覧いただけます。\n\n▼ 会社案内・サービス資料\nhttps://corp.mstcorp.info/materials',
     tag: '資料請求',
     targetBranch: 'general',
     enabled: true,
@@ -203,7 +203,7 @@ export const MarketingFlowStudio: React.FC<MarketingFlowStudioProps> = ({
         ? {
             type: 'uri',
             label: (c.label || `選択肢 ${i + 1}`).slice(0, 20),
-            uri: c.uri || 'https://mstcorp.info',
+            uri: c.uri || 'https://corp.mstcorp.info',
           }
         : {
             type: 'postback',
@@ -1390,7 +1390,7 @@ export const MarketingFlowStudio: React.FC<MarketingFlowStudioProps> = ({
                                       setWelcomeChoices(next);
                                     }}
                                     className="w-full bg-slate-50 border border-slate-200 rounded-lg px-2.5 py-1.5 text-slate-900 text-xs focus:bg-white focus:outline-none focus:border-purple-500"
-                                    placeholder="https://mstcorp.info/..."
+                                    placeholder="https://corp.mstcorp.info/..."
                                   />
                                 ) : (
                                   <input
@@ -2245,7 +2245,7 @@ export const MarketingFlowStudio: React.FC<MarketingFlowStudioProps> = ({
           {/* 5ステップのタイムラインカード */}
           <div className="space-y-4">
             {[1, 2, 3, 4, 5].map((stepNum) => {
-              const draft = getSalesEmailTemplate(stepNum, 'サンプル株式会社', '山田 太郎', selectedIndustry, 'https://mstcorp.info/diagnosis');
+              const draft = getSalesEmailTemplate(stepNum, 'サンプル株式会社', '山田 太郎', selectedIndustry, 'https://corp.mstcorp.info/diagnosis');
               const waitDays = stepNum === 1 ? '0日目（即時 / 待機: 0分）' : `${(stepNum - 1) * 3}日後（待機: ${(stepNum - 1) * 3 * 1440}分）`;
               const matchedScenario = outreachScenarios.find(s => s.name.includes(String(stepNum)));
 
