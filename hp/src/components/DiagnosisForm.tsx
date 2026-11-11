@@ -4,6 +4,8 @@ import {
   analyzeBottleneck,
   submitIntakeToCRM,
   OFFICIAL_TIMEREX_BOOKING_URL,
+  MST_INDUSTRY_OPTIONS,
+  MST_EMPLOYEE_COUNT_OPTIONS,
   type DiagnosisAnalysisResult
 } from '../lib/supabase';
 
@@ -23,6 +25,8 @@ export default function DiagnosisForm() {
     email: '',
     phone: '',
     hear_about: '',
+    industry: '',
+    employee_count: '',
   });
 
   const [source, setSource] = useState('corporate_website');
@@ -73,10 +77,13 @@ export default function DiagnosisForm() {
         source: source,
         answers: {
           ...answers,
+          // 会社の基本情報（任意）。未入力なら送らない
+          ...(lead.industry ? { q_industry: lead.industry } : {}),
+          ...(lead.employee_count ? { q_employee_count: lead.employee_count } : {}),
           q_hear_about: lead.hear_about,
           hear_about: lead.hear_about,
         },
-        notes: `【経営ボトルネック診断】判定: ${analysis.typeTitle}（${analysis.badge}）\n【手作業】${answers.q_ops_bottleneck}\n【売上・利益】${answers.q_profit_bottleneck}\n【停滞原因】${answers.q_delay_reason}\n【希望】${answers.q_ideal_future}\n【自由記入】${answers.q_free_notes || 'なし'}${lead.hear_about ? `\n【認知経路】${lead.hear_about}` : ''}`,
+        notes: `【経営ボトルネック診断】判定: ${analysis.typeTitle}（${analysis.badge}）\n【手作業】${answers.q_ops_bottleneck}\n【売上・利益】${answers.q_profit_bottleneck}\n【停滞原因】${answers.q_delay_reason}\n【希望】${answers.q_ideal_future}\n【今一番のお悩み】${answers.q_free_notes || 'なし'}${lead.industry ? `\n【業種】${lead.industry}` : ''}${lead.employee_count ? `\n【従業員数】${lead.employee_count}` : ''}${lead.hear_about ? `\n【認知経路】${lead.hear_about}` : ''}`,
         customFields: {
           diagnosis_result: analysis,
           hear_about: lead.hear_about,
@@ -170,59 +177,48 @@ export default function DiagnosisForm() {
                   <span>📊</span>
                 </div>
                 <div className="font-bold font-serif text-slate-900 text-base">
-                  ボトルネック判定スコア
+                  ボトルネックの目安
                 </div>
                 <div className="bg-white p-3 rounded-xl border border-sand-200 text-xs space-y-2 font-mono">
                   <div>
                     <div className="text-[10px] text-gray-500">{result.scores?.profit?.label || '案件別採算性・原価管理'}</div>
-                    <div className="flex justify-between items-center text-xs font-bold text-slate-900">
+                    <div className="flex flex-col items-start gap-0.5 text-xs font-bold text-slate-900">
                       <span className="text-amber-500">{result.scores?.profit?.stars || '★★☆☆☆'}</span>
                       <span className="text-[11px] text-amber-700">{result.scores?.profit?.status || '要改善'}</span>
                     </div>
                   </div>
                   <div className="border-t border-sand-100 pt-1.5">
                     <div className="text-[10px] text-gray-500">{result.scores?.ops?.label || '業務フロー標準化・属人化'}</div>
-                    <div className="flex justify-between items-center text-xs font-bold text-slate-900">
+                    <div className="flex flex-col items-start gap-0.5 text-xs font-bold text-slate-900">
                       <span className="text-rose-500">{result.scores?.ops?.stars || '★☆☆☆☆'}</span>
                       <span className="text-[11px] text-rose-700">{result.scores?.ops?.status || '深刻'}</span>
                     </div>
                   </div>
-                  <div className="border-t border-sand-100 pt-1.5">
-                    <div className="text-[10px] text-gray-500">{result.scores?.automation?.label || 'IT・自動化連携余地'}</div>
-                    <div className="flex justify-between items-center text-xs font-bold text-slate-900">
-                      <span className="text-cyan-600">{result.scores?.automation?.stars || '★★★★☆'}</span>
-                      <span className="text-[11px] text-cyan-800">{result.scores?.automation?.status || '余地大'}</span>
-                    </div>
-                  </div>
                 </div>
               </div>
               <p className="text-[11px] text-gray-500 leading-snug font-light">
-                会社のどこに経営のブレーキがかかっているかを数値判定しました。
+                ご回答から目安を表示しました。詳細は商談でお伺いします。
               </p>
             </div>
 
-            {/* REPORT 02: 余白創出ポテンシャル */}
+            {/* REPORT 02: 最初に着手したい候補 */}
             <div className="bg-sand-50 p-5 rounded-2xl border border-sand-300 space-y-3 flex flex-col justify-between">
               <div className="space-y-2">
                 <div className="flex items-center justify-between text-xs font-bold text-brand-700">
                   <span>REPORT 02</span>
-                  <span>⏱️</span>
+                  <span>🎯</span>
                 </div>
                 <div className="font-bold font-serif text-slate-900 text-base">
-                  余白創出ポテンシャル
+                  最初に着手したい候補
                 </div>
-                <div className="bg-white p-3.5 rounded-xl border border-sand-200 text-center space-y-1">
-                  <div className="text-[11px] text-gray-500 font-bold">想定削減可能時間：</div>
-                  <div className="text-2xl font-black text-emerald-600 font-sans tracking-tight">
-                    {result.timeSavings?.hoursRange || '月 35〜55 時間'}
-                  </div>
-                  <div className="text-[10px] text-gray-400">
-                    二重入力・手作業の自動化試算
-                  </div>
+                <div className="bg-white p-3.5 rounded-xl border border-sand-200">
+                  <p className="text-xs sm:text-sm text-slate-800 leading-relaxed font-medium">
+                    {result.firstStep}
+                  </p>
                 </div>
               </div>
               <p className="text-[11px] text-gray-500 leading-snug font-light">
-                {result.timeSavings?.description || '手作業のコピペや二重入力をなくし、現場データがワンクリックで連携する仕組みを整えます。'}
+                回答内容から、商談で最初にお伺いしたいテーマの候補を表示しています。
               </p>
             </div>
 
@@ -234,31 +230,31 @@ export default function DiagnosisForm() {
                   <span>🗺️</span>
                 </div>
                 <div className="font-bold font-serif text-slate-900 text-base">
-                  優先改善ロードマップ
+                  進め方のイメージ(詳細は商談で決定)
                 </div>
                 <div className="bg-white p-3 rounded-xl border border-sand-200 text-[11px] space-y-2">
                   <div className="border-l-2 border-amber-500 pl-2">
-                    <div className="text-[10px] text-amber-700 font-bold">STEP 1（最初の1ヶ月目）</div>
+                    <div className="text-[10px] text-amber-700 font-bold">STEP 1</div>
                     <div className="font-bold text-slate-900 text-[11px] leading-tight">
-                      {result.roadmap?.step1?.title || '「どこで利益が消えているか」をハッキリ突き止める'}
+                      {result.roadmap?.step1?.title || '現状の整理'}
                     </div>
                   </div>
                   <div className="border-l-2 border-brand-500 pl-2">
-                    <div className="text-[10px] text-brand-700 font-bold">STEP 2（2〜3ヶ月目）</div>
+                    <div className="text-[10px] text-brand-700 font-bold">STEP 2</div>
                     <div className="font-bold text-slate-900 text-[11px] leading-tight">
-                      {result.roadmap?.step2?.title || '現場と事務所の「二重入力・コピペ手作業」をゼロにする'}
+                      {result.roadmap?.step2?.title || '仕組みづくり'}
                     </div>
                   </div>
                   <div className="border-l-2 border-emerald-500 pl-2">
-                    <div className="text-[10px] text-emerald-700 font-bold">STEP 3（半年後〜）</div>
+                    <div className="text-[10px] text-emerald-700 font-bold">STEP 3</div>
                     <div className="font-bold text-slate-900 text-[11px] leading-tight">
-                      {result.roadmap?.step3?.title || '社長が現場にいなくても、社員だけで仕事が回る体制へ'}
+                      {result.roadmap?.step3?.title || '定着と自走'}
                     </div>
                   </div>
                 </div>
               </div>
               <p className="text-[11px] text-gray-500 leading-snug font-light">
-                最初の半年間で利益と時間を生み出す無理のない処方箋です。
+                期間や進め方は、商談で貴社の状況をお伺いしたうえで決めます。
               </p>
             </div>
 
@@ -280,7 +276,7 @@ export default function DiagnosisForm() {
           </h4>
 
           <p className="text-xs sm:text-sm text-slate-300 leading-relaxed font-light">
-            机上の空論ではなく「貴社の実際の業務フローにおいて、何をどのツールでワンクリック化し、どこに仕組みを導入すれば最大利益が出るか」を、代表または専任コンサルタントが直接画面共有しながら解説します。終了後、貴社専用の診断カルテPDFを進呈いたします（強引な営業は一切行いません）。
+            机上の空論ではなく「貴社の実際の業務フローにおいて、どこから仕組みを整えるのが良いか」を、代表または専任コンサルタントが直接画面共有しながら解説します。終了後、貴社専用の診断カルテPDFを進呈いたします（強引な営業は一切行いません）。
           </p>
 
           <div className="pt-2 flex flex-col sm:flex-row gap-3">
@@ -524,6 +520,40 @@ export default function DiagnosisForm() {
                 onChange={(e) => setLead({ ...lead, phone: e.target.value })}
                 className="w-full px-4 py-3 rounded-xl border border-sand-300 focus:border-brand-600 focus:ring-2 focus:ring-brand-100 text-sm outline-none transition"
               />
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div>
+              <label className="block text-xs font-bold text-slate-800 mb-2">
+                業種 <span className="text-gray-400 font-normal">（任意）</span>
+              </label>
+              <select
+                value={lead.industry}
+                onChange={(e) => setLead({ ...lead, industry: e.target.value })}
+                className="w-full px-4 py-3 rounded-xl border border-sand-300 focus:border-brand-600 focus:ring-2 focus:ring-brand-100 text-sm outline-none transition bg-white text-slate-800 cursor-pointer"
+              >
+                <option value="">選択してください（任意）</option>
+                {MST_INDUSTRY_OPTIONS.map((option) => (
+                  <option key={option} value={option}>{option}</option>
+                ))}
+              </select>
+            </div>
+
+            <div>
+              <label className="block text-xs font-bold text-slate-800 mb-2">
+                従業員数 <span className="text-gray-400 font-normal">（任意・役員やパートを含む）</span>
+              </label>
+              <select
+                value={lead.employee_count}
+                onChange={(e) => setLead({ ...lead, employee_count: e.target.value })}
+                className="w-full px-4 py-3 rounded-xl border border-sand-300 focus:border-brand-600 focus:ring-2 focus:ring-brand-100 text-sm outline-none transition bg-white text-slate-800 cursor-pointer"
+              >
+                <option value="">選択してください（任意）</option>
+                {MST_EMPLOYEE_COUNT_OPTIONS.map((option) => (
+                  <option key={option} value={option}>{option}</option>
+                ))}
+              </select>
             </div>
           </div>
 
