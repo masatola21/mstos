@@ -1099,22 +1099,8 @@ export const TableManager: React.FC<TableManagerProps> = ({
                             <td key={colKey} className="py-3 px-4">
                               {compName ? (
                                 <div className="space-y-0.5">
-                                  <div className="font-semibold text-slate-900 group-hover:text-purple-700 flex items-center gap-1.5 flex-wrap">
-                                    <span>{compName}</span>
-                                    {currentTable === 'leads' && (
-                                      <button
-                                        type="button"
-                                        onClick={(e) => {
-                                          e.stopPropagation();
-                                          handleOpenTransition('lead_to_deal', item);
-                                        }}
-                                        className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-bold bg-emerald-50 text-emerald-700 hover:bg-emerald-600 hover:text-white border border-emerald-200 transition-colors shadow-2xs cursor-pointer"
-                                        title="スライド不要：このリードから直接商談を作成"
-                                      >
-                                        <Briefcase className="w-3 h-3" />
-                                        <span>商談化</span>
-                                      </button>
-                                    )}
+                                  <div className="font-semibold text-slate-900 group-hover:text-purple-700">
+                                    {compName}
                                   </div>
                                   <div className="text-[10px] font-mono text-slate-400">
                                     {item.company_id}
