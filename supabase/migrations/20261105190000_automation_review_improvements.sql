@@ -130,7 +130,7 @@ SECURITY DEFINER
 SET search_path = public, net, cron
 AS $$
 DECLARE
-  v_url text := 'https://mstcorp.info/api/cron/billing-automation';
+  v_url text := 'https://os.mstcorp.info/api/cron/billing-automation';
   v_secret text := '';
   v_vault_url text;
   v_vault_secret text;

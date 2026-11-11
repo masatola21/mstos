@@ -4710,7 +4710,7 @@ app.post('/api/marketing/test-send', requireAuth, async (req, res) => {
 
       const emailSubject = `[管理者テスト送信] ` + resolved.personalize(scenarioConfig.emailSubject || 'ステップ配信テスト');
       const resolvedBody = resolved.personalize(scenarioConfig.emailBody || scenarioConfig.messageBody || '');
-      const emailBodyText = `【※ 管理者向け実機テスト送信】\n宛先: ${adminEmail}\n差出人: ${emailFrom}\n--------------------------------------------------\n\n${resolvedBody}\n\n--------------------------------------------------\n※ 特定電子メール法 配信停止リンク確認:\n配信停止: ${appUrl || 'https://mstcorp.info'}/unsubscribe?demo=admin_preview`;
+      const emailBodyText = `【※ 管理者向け実機テスト送信】\n宛先: ${adminEmail}\n差出人: ${emailFrom}\n--------------------------------------------------\n\n${resolvedBody}\n\n--------------------------------------------------\n※ 特定電子メール法 配信停止リンク確認:\n配信停止: ${appUrl || 'https://os.mstcorp.info'}/unsubscribe?demo=admin_preview`;
 
       const response = await fetch('https://api.resend.com/emails', {
         method: 'POST',

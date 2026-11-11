@@ -14,7 +14,7 @@ jobs:
     steps:
       - name: Trigger Marketing Automation Cron Endpoint
         env:
-          APP_URL: ${{ secrets.PUBLIC_APP_URL || secrets.VERCEL_URL || 'https://mstcorp.info' }}
+          APP_URL: ${{ secrets.PUBLIC_APP_URL || secrets.VERCEL_URL || 'https://os.mstcorp.info' }}
           CRON_SECRET: ${{ secrets.CRON_SECRET }}
         run: |
           # URLの末尾スラッシュを削除
