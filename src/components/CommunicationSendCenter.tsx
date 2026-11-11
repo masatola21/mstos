@@ -251,7 +251,7 @@ export const CommunicationSendCenter: React.FC<Props> = ({
   const [senderSettings, setSenderSettings] = useState<{ fromName: string; fromEmail: string; replyTo: string }>({
     fromName: '有限会社MST｜経営・業務改善支援',
     fromEmail: 'contact@mstcorp.info',
-    replyTo: 'mst.shikumikaizen@gmail.com',
+    replyTo: 'contact@mstcorp.info',
   });
   const [savingSenderSettings, setSavingSenderSettings] = useState(false);
 
@@ -416,7 +416,7 @@ export const CommunicationSendCenter: React.FC<Props> = ({
         setSenderSettings({
           fromName: emailSettings.data?.sender_name || '有限会社MST｜経営・業務改善支援',
           fromEmail: emailSettings.data?.sender_email || 'contact@mstcorp.info',
-          replyTo: emailSettings.data?.reply_to_email || 'mst.shikumikaizen@gmail.com',
+          replyTo: emailSettings.data?.reply_to_email || emailSettings.data?.sender_email || 'contact@mstcorp.info',
         });
         if (!co.error) {
           setCompanies(Object.fromEntries((co.data || []).map((x: any) => [x.id, x.company_name])));
@@ -1153,18 +1153,41 @@ export const CommunicationSendCenter: React.FC<Props> = ({
                   <span className="mt-1 block text-[11px] text-slate-500">RESEND_FROM_EMAILで認証済みのドメインを指定してください。</span>
                 </label>
                 <label className="text-xs font-semibold text-slate-700">
-                  <div className="flex items-center justify-between">
-                    <span>返信先メールアドレス（Reply-To）</span>
-                    {senderSettings.fromEmail && senderSettings.replyTo !== senderSettings.fromEmail && (
-                      <button
-                        type="button"
-                        onClick={() => setSenderSettings((x) => ({ ...x, replyTo: x.fromEmail }))}
-                        className="text-[10px] text-purple-700 hover:underline font-semibold cursor-pointer"
-                        title="差出人メールアドレスと同じ値に設定します"
-                      >
-                        差出人と同一にする
-                      </button>
-                    )}
+                  <div className="flex flex-wrap items-center justify-between gap-1">
+                    <span className="flex items-center gap-1.5">
+                      返信先メールアドレス（Reply-To）
+                      {senderSettings.replyTo.trim() === (senderSettings.fromEmail || 'contact@mstcorp.info').trim() ? (
+                        <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-medium bg-emerald-50 text-emerald-700 border border-emerald-200">
+                          企業ドメイン（推奨）
+                        </span>
+                      ) : (
+                        <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-medium bg-amber-50 text-amber-700 border border-amber-200">
+                          個別・緊急用
+                        </span>
+                      )}
+                    </span>
+                    <div className="flex items-center gap-1.5">
+                      {senderSettings.fromEmail && senderSettings.replyTo !== senderSettings.fromEmail && (
+                        <button
+                          type="button"
+                          onClick={() => setSenderSettings((x) => ({ ...x, replyTo: x.fromEmail }))}
+                          className="text-[10px] bg-purple-50 text-purple-700 hover:bg-purple-100 px-2 py-0.5 rounded font-semibold cursor-pointer border border-purple-200 transition-colors"
+                          title="差出人メールアドレス（公式企業ドメイン）に戻します"
+                        >
+                          公式ドメイン（推奨）に戻す
+                        </button>
+                      )}
+                      {senderSettings.replyTo !== 'mst.shikumikaizen@gmail.com' && (
+                        <button
+                          type="button"
+                          onClick={() => setSenderSettings((x) => ({ ...x, replyTo: 'mst.shikumikaizen@gmail.com' }))}
+                          className="text-[10px] bg-slate-100 text-slate-700 hover:bg-slate-200 px-2 py-0.5 rounded font-medium cursor-pointer border border-slate-300 transition-colors"
+                          title="緊急時・直接個別対応用の個人Gmail宛てに切り替えます"
+                        >
+                          緊急用：個人Gmailに切替
+                        </button>
+                      )}
+                    </div>
                   </div>
                   <input
                     type="email"
@@ -1174,7 +1197,7 @@ export const CommunicationSendCenter: React.FC<Props> = ({
                     placeholder="返信先を変更する場合に入力（任意）"
                   />
                   <span className="mt-1 block text-[11px] text-slate-500">
-                    ※ 顧客が返信した際の宛先です。差出人と同一（{senderSettings.fromEmail || 'contact@mstcorp.info'}）に統一すると企業としての信頼性が高まります。個人Gmail（mst.shikumikaizen@gmail.com）を指定すると、スマホ等で直接確認できます。
+                    ※ 顧客が返信した際の宛先です。デフォルトは同一企業ドメイン（{senderSettings.fromEmail || 'contact@mstcorp.info'}）で信頼性と到達率を担保します。緊急時や直接対応が必要な場合のみ「個人Gmailに切替」ボタンで切り替えが可能です。
                   </span>
                 </label>
               </>

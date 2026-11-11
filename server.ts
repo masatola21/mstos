@@ -555,7 +555,7 @@ export async function resolveEmailSender(ownerId?: string | null): Promise<Resol
 
   let senderName = '有限会社MST｜経営・業務改善支援';
   let senderEmail = (configuredAddress || 'contact@mstcorp.info').trim().toLowerCase();
-  let replyToEmail = 'mst.shikumikaizen@gmail.com';
+  let replyToEmail = senderEmail;
 
   if (ownerId && lineSupabase) {
     try {
@@ -574,6 +574,8 @@ export async function resolveEmailSender(ownerId?: string | null): Promise<Resol
         }
         if (sendSettings.reply_to_email && String(sendSettings.reply_to_email).trim()) {
           replyToEmail = String(sendSettings.reply_to_email).trim();
+        } else {
+          replyToEmail = senderEmail;
         }
       }
     } catch (err) {
@@ -4540,7 +4542,7 @@ app.post('/api/marketing/test-send', requireAuth, async (req, res) => {
 
       const configuredAddress = configuredFrom.match(/<([^<>]+)>/)?.[1] || configuredFrom.trim();
       const fromEmail = String(sendSettings?.sender_email || configuredAddress).trim();
-      const replyTo = typeof sendSettings?.reply_to_email === 'string' ? sendSettings.reply_to_email.trim() : '';
+      const replyTo = typeof sendSettings?.reply_to_email === 'string' && sendSettings.reply_to_email.trim() ? sendSettings.reply_to_email.trim() : fromEmail;
       const fromName = String(sendSettings?.sender_name || '有限会社MST｜経営・業務改善支援').trim();
       const emailFrom = `${fromName.replace(/"/g, '')} <${fromEmail}>`;
 
@@ -4929,7 +4931,7 @@ app.post('/api/communications/send', async (req, res) => {
       const configuredDomain = configuredAddress.split('@').pop()?.toLowerCase() || '';
       const emailPattern = /^[^\s<>@]+@[^\s<>@]+\.[^\s<>@]+$/;
       const fromEmail = String(sendSettings?.sender_email || 'contact@mstcorp.info').trim();
-      const replyTo = typeof sendSettings?.reply_to_email === 'string' ? sendSettings.reply_to_email.trim() : 'mst.shikumikaizen@gmail.com';
+      const replyTo = typeof sendSettings?.reply_to_email === 'string' && sendSettings.reply_to_email.trim() ? sendSettings.reply_to_email.trim() : fromEmail;
       const fromName = String(sendSettings?.sender_name || '有限会社MST｜経営・業務改善支援').trim();
       if (!fromName || fromName.length > 100 || /[\r\n<>]/.test(fromName)) throw new Error('差出人名の設定が不正です。');
       if (!emailPattern.test(fromEmail) || !configuredDomain || fromEmail.split('@').pop()?.toLowerCase() !== configuredDomain) throw new Error('差出人アドレスにはRESEND_FROM_EMAILと同じ認証済みドメインを指定してください。');
