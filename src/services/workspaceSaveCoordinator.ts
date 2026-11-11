@@ -1,4 +1,4 @@
-import { WorkspaceData, saveWorkspaceData, isWorkspaceConflictError, isNonRetryableFatalError, SaveWorkspaceResult } from './workspaceStateService';
+import { WorkspaceData, saveWorkspaceData, isWorkspaceConflictError, isNonRetryableFatalError, isJwtExpiredError, SaveWorkspaceResult } from './workspaceStateService';
 import { matrixService } from './matrixService';
 import { mergeCollectionPreservingUserEdits } from '../utils/workspaceMergeUtils';
 
@@ -313,10 +313,11 @@ export class WorkspaceSaveCoordinator {
       const errorMessage = (error as { message?: string })?.message || '';
       const isConflict = isWorkspaceConflictError(error);
       const isFatal = isNonRetryableFatalError(error);
-      const shouldHalt = isConflict || isFatal || this.consecutiveErrorCount >= 3;
+      const isExpired = isJwtExpiredError(error);
+      const shouldHalt = isConflict || isFatal || isExpired || this.consecutiveErrorCount >= 3;
 
       if (shouldHalt) {
-        // 競合エラー、直らない致命的エラー（認証/形式）、または連続エラー上限（3回）に達した場合は自動保存を完全停止し再読み込みを促す
+        // 競合エラー、直らない致命的エラー（認証/形式）、JWT期限切れ、または連続エラー上限（3回）に達した場合は自動保存を完全停止し再読み込みを促す
         this.cancelDebounce();
         this.isConflictStopped = true;
         this.pendingData = null; // 保留中のリクエストを破棄
@@ -331,10 +332,20 @@ export class WorkspaceSaveCoordinator {
         this.inFlightWaiters = [];
         conflictWaiters.forEach((d) => d.reject(error));
 
-        if (isFatal) {
-          const isAuth = /401|403|42501|permission|権限|User mismatch/i.test(`${errorMessage} ${errorCode}`);
+        if (isFatal || isExpired) {
+          const rawStatus = (error as any)?.status ?? (error as any)?.code;
+          const isAuth =
+            isExpired ||
+            rawStatus === 401 ||
+            rawStatus === '401' ||
+            rawStatus === 403 ||
+            rawStatus === '403' ||
+            errorCode === '42501' ||
+            /permission denied|not authorized|権限がありません|User mismatch/i.test(`${errorMessage}`);
           const fatalMsg = isAuth
-            ? 'ユーザーの業務データを更新する権限がありません。再ログインまたは再読み込みしてください。'
+            ? (isExpired
+                ? 'セッションの有効期限が切れました。再ログインまたは再読み込みしてください。'
+                : 'ユーザーの業務データを更新する権限がありません。再ログインまたは再読み込みしてください。')
             : '保存データの形式エラーが発生しました。再読み込みしてください。';
           this.setStatus('conflict', fatalMsg);
         } else {

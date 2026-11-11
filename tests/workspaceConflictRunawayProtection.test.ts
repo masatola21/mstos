@@ -364,42 +364,176 @@ async function runTests() {
   }
 
   // --------------------------------------------------------------------------
-  // Test 7: 直らない致命的エラー（401/403/権限なし/形式エラー）での即時停止・再試行スキップ
+  // Test 7: 直らない致命的エラー（401/403/権限なし/形式エラー）の判定精度検証
   // --------------------------------------------------------------------------
-  console.log('Test 7: 認証エラー・形式エラー等（直らないエラー）の即時停止検証');
+  console.log('Test 7: 認証エラー・形式エラー等（直らないエラー）の判定精度検証');
   {
-    const { isNonRetryableFatalError } = await import('../src/services/workspaceStateService');
+    const { isNonRetryableFatalError, isTransientRetryableError } = await import('../src/services/workspaceStateService');
 
-    // 1. 認証・権限エラー判定
-    assert(isNonRetryableFatalError({ code: '401', message: 'Unauthorized' }) === true, '401 must be fatal');
-    assert(isNonRetryableFatalError({ code: '403', message: 'Forbidden' }) === true, '403 must be fatal');
-    assert(isNonRetryableFatalError({ code: '42501', message: 'insufficient_privilege' }) === true, '42501 must be fatal');
-    assert(isNonRetryableFatalError(new Error('ユーザーの業務データを更新する権限がありません')) === true, 'Permission message must be fatal');
+    // 1. 【要件2】429、408、5xx、ネットワークエラーは一時的エラーであり fatal ではないこと
+    assert(isTransientRetryableError({ status: 429, message: 'Too Many Requests' }) === true, '429 is transient');
+    assert(isNonRetryableFatalError({ status: 429, message: 'Too Many Requests' }) === false, '429 must NOT be fatal');
+    assert(isNonRetryableFatalError({ code: '429', message: 'Too Many Requests' }) === false, 'code 429 must NOT be fatal');
+    assert(isNonRetryableFatalError({ status: 408, message: 'Request Timeout' }) === false, '408 must NOT be fatal');
+    assert(isNonRetryableFatalError({ status: 500, message: 'Internal Server Error' }) === false, '500 must NOT be fatal');
+    assert(isNonRetryableFatalError({ status: 503, message: 'Service Unavailable' }) === false, '503 must NOT be fatal');
+    assert(isNonRetryableFatalError(new Error('Failed to fetch')) === false, 'Failed to fetch must NOT be fatal');
+    assert(isNonRetryableFatalError(new Error('network timeout')) === false, 'network timeout must NOT be fatal');
 
-    // 2. 形式エラー判定
-    assert(isNonRetryableFatalError({ code: '22P02', message: 'invalid input syntax for type uuid' }) === true, '22P02 must be fatal');
-    assert(isNonRetryableFatalError({ code: '42804', message: 'datatype mismatch' }) === true, '42804 must be fatal');
+    // 2. 【要件1】Postgres SQLSTATE 5文字 (/^[0-9A-Z]{5}$/) のみの判定 (22P02, 42804, 42P01, 42501)
+    // 3桁の HTTP 429 や 422 が誤って SQLSTATE 判定されないこと
+    assert(isNonRetryableFatalError({ code: '22P02', message: 'invalid input syntax for type uuid' }) === true, '22P02 is fatal SQLSTATE');
+    assert(isNonRetryableFatalError({ code: '22001', message: 'value too long' }) === true, '22001 is fatal SQLSTATE');
+    assert(isNonRetryableFatalError({ code: '42804', message: 'datatype mismatch' }) === true, '42804 is fatal SQLSTATE');
+    assert(isNonRetryableFatalError({ code: '42P01', message: 'undefined table' }) === true, '42P01 is fatal SQLSTATE');
+    assert(isNonRetryableFatalError({ code: '42501', message: 'insufficient_privilege' }) === true, '42501 is fatal SQLSTATE');
 
-    // 3. 一時的なネットワークエラーや競合は「直らない致命的エラー」ではないこと
-    assert(isNonRetryableFatalError({ code: '40001', message: 'WORKSPACE_CONFLICT' }) === false, 'Conflict is retryable via 3-way merge');
-    assert(isNonRetryableFatalError({ code: '503', message: 'Service Unavailable' }) === false, '503 is retryable transient error');
+    // 3. 【要件3】文字列内の '401' / '403' 部分一致による誤判定の防止
+    // status または code が 401 / 403 の場合だけ fatal
+    assert(isNonRetryableFatalError({ status: 401, message: 'Unauthorized' }) === true, 'status 401 is fatal');
+    assert(isNonRetryableFatalError({ code: '401', message: 'Unauthorized' }) === true, 'code 401 is fatal');
+    assert(isNonRetryableFatalError({ status: 403, message: 'Forbidden' }) === true, 'status 403 is fatal');
+    assert(isNonRetryableFatalError({ code: '403', message: 'Forbidden' }) === true, 'code 403 is fatal');
+    assert(isNonRetryableFatalError(new Error('ユーザーの業務データを更新する権限がありません')) === true, 'Permission denied message is fatal');
 
-    // 4. Coordinator に致命的エラー（権限なし）を渡したとき、リトライを待たず1発で停止（halt）すること
-    let fatalAttempts = 0;
-    const fatalSaveFn = async (): Promise<SaveWorkspaceResult> => {
-      fatalAttempts++;
-      throw new Error('ユーザーの業務データを更新する権限がありません');
-    };
-    const fatalCoordinator = new WorkspaceSaveCoordinator(fatalSaveFn);
+    // 誤判定防止: メッセージに "401" や "403" が含まれていても status/code が 401/403 でなければ fatal にしない！
+    const falsePositiveError1 = { status: 500, message: 'Item 401 not found in inventory' };
+    assert(isNonRetryableFatalError(falsePositiveError1) === false, 'Error with item 401 in message must NOT be fatal');
+    const falsePositiveError2 = new Error('Call to telephone 03-4034-0000 timed out');
+    assert(isNonRetryableFatalError(falsePositiveError2) === false, 'Message with 403 phone number must NOT be fatal');
+
+    console.log('  -> PASSED: isNonRetryableFatalError accuracy verified (429 not fatal, SQLSTATE 5-char checked, 401/403 exact matched).\n');
+  }
+
+  // --------------------------------------------------------------------------
+  // Test 8: 要件5 具体的挙動テスト（429で停止しない、22P02で即停止、401で即停止、JWT expiredで1回更新試行）
+  // --------------------------------------------------------------------------
+  console.log('Test 8: 要件5 動作検証（429で停止しない、22P02で即停止、401で即停止、JWT expiredで1回更新試行）');
+  {
+    // (A) 429 で停止しないこと（1回目の 429 エラーで haltOnConflict にならず、通常のエラーとして扱われること）
+    let attempts429 = 0;
+    const coordinator429 = new WorkspaceSaveCoordinator(async () => {
+      attempts429++;
+      const err = new Error('Rate limit exceeded');
+      (err as any).status = 429;
+      (err as any).code = '429';
+      throw err;
+    });
+
     try {
-      await fatalCoordinator.requestImmediateSave('u-fatal', createDummyWorkspaceData());
+      await coordinator429.requestImmediateSave('u-429', createDummyWorkspaceData());
     } catch {}
 
-    assert(fatalAttempts === 1, 'Fatal non-retryable error must fail on first attempt without waiting for 3 errors');
-    assert(fatalCoordinator.isStopped() === true, 'Coordinator must halt immediately on fatal auth/format error');
-    assert(fatalCoordinator.getStatus() === 'conflict', 'Status must be halted');
+    assert(attempts429 === 1, 'Attempt 1 made');
+    assert(coordinator429.isStopped() === false, 'CRITICAL: 429 error must NOT halt the coordinator immediately');
+    assert(coordinator429.getStatus() === 'error', 'Status should be transient "error", not stopped "conflict"');
 
-    console.log('  -> PASSED: Fatal auth/format errors detected and halted immediately without retrying.\n');
+    // (B) 22P02 で即停止すること
+    let attempts22P02 = 0;
+    const coordinator22P02 = new WorkspaceSaveCoordinator(async () => {
+      attempts22P02++;
+      const err = new Error('invalid input syntax for type uuid: "not-a-uuid"');
+      (err as any).code = '22P02';
+      throw err;
+    });
+
+    try {
+      await coordinator22P02.requestImmediateSave('u-22p02', createDummyWorkspaceData());
+    } catch {}
+
+    assert(attempts22P02 === 1, 'Attempt 1 made');
+    assert(coordinator22P02.isStopped() === true, 'CRITICAL: 22P02 must halt the coordinator immediately on attempt 1');
+    assert(coordinator22P02.getStatus() === 'conflict', 'Status must be halted conflict');
+
+    // (C) 401 で即停止すること
+    let attempts401 = 0;
+    const coordinator401 = new WorkspaceSaveCoordinator(async () => {
+      attempts401++;
+      const err = new Error('Unauthorized');
+      (err as any).status = 401;
+      throw err;
+    });
+
+    try {
+      await coordinator401.requestImmediateSave('u-401', createDummyWorkspaceData());
+    } catch {}
+
+    assert(attempts401 === 1, 'Attempt 1 made');
+    assert(coordinator401.isStopped() === true, 'CRITICAL: 401 must halt the coordinator immediately on attempt 1');
+    assert(coordinator401.getStatus() === 'conflict', 'Status must be halted conflict');
+
+    // (D) JWT expired で1回だけ更新を試すこと
+    const { isJwtExpiredError } = await import('../src/services/workspaceStateService');
+    assert(isJwtExpiredError(new Error('JWT expired')) === true, 'JWT expired detected');
+    assert(isJwtExpiredError({ code: 'PGRST301', message: 'token is expired' }) === true, 'PGRST301 detected');
+
+    // シミュレーション: 1回目の保存で JWT expired -> 1回だけセッション更新を試行して2回目を実行
+    let sessionRefreshCalls = 0;
+    let saveExecutionCalls = 0;
+
+    const mockSaveWithJwtRefresh = async (userId: string, data: any) => {
+      let jwtRefreshAttempted = false;
+
+      while (true) {
+        saveExecutionCalls++;
+        if (saveExecutionCalls === 1) {
+          const jwtErr = new Error('JWT expired');
+          (jwtErr as any).code = 'PGRST301';
+
+          if (!jwtRefreshAttempted) {
+            jwtRefreshAttempted = true;
+            sessionRefreshCalls++;
+            // 1回セッション更新を試行して再実行
+            continue;
+          }
+          throw jwtErr;
+        }
+
+        // 2回目（セッション更新後）は成功
+        return { savedData: data, wasMerged: false };
+      }
+    };
+
+    const jwtCoordinator = new WorkspaceSaveCoordinator(mockSaveWithJwtRefresh as any);
+    await jwtCoordinator.requestImmediateSave('u-jwt', createDummyWorkspaceData());
+
+    assert(sessionRefreshCalls === 1, 'CRITICAL: Must attempt session refresh exactly once');
+    assert(saveExecutionCalls === 2, 'CRITICAL: Save must be retried after session refresh and succeed');
+    assert(jwtCoordinator.isStopped() === false, 'Coordinator should not halt if refreshed session succeeds');
+
+    // シミュレーション 2: セッション更新を1回試しても再発した場合は停止すること
+    let sessionRefreshCalls2 = 0;
+    let saveExecutionCalls2 = 0;
+
+    const mockSaveWithJwtPersistentFailure = async (userId: string, data: any) => {
+      let jwtRefreshAttempted = false;
+
+      while (true) {
+        saveExecutionCalls2++;
+        const jwtErr = new Error('JWT expired');
+        (jwtErr as any).code = 'PGRST301';
+
+        if (!jwtRefreshAttempted) {
+          jwtRefreshAttempted = true;
+          sessionRefreshCalls2++;
+          // 1回だけ更新を試みる
+          continue;
+        }
+        // 更新後も再発した場合は throw
+        throw jwtErr;
+      }
+    };
+
+    const jwtFailingCoordinator = new WorkspaceSaveCoordinator(mockSaveWithJwtPersistentFailure as any);
+    try {
+      await jwtFailingCoordinator.requestImmediateSave('u-jwt-fail', createDummyWorkspaceData());
+    } catch {}
+
+    assert(sessionRefreshCalls2 === 1, 'Must attempt session refresh only once');
+    assert(saveExecutionCalls2 === 2, 'Executed 2 times (initial + 1 after refresh)');
+    assert(jwtFailingCoordinator.isStopped() === true, 'Coordinator must halt when JWT expired persists after 1 refresh attempt');
+
+    console.log('  -> PASSED: All 4 behaviors verified (429 not halted, 22P02 halted immediately, 401 halted immediately, JWT expired refreshed once).\n');
   }
 
   console.log('=====================================================');

@@ -436,6 +436,7 @@ async function saveRelationalAIOperations(
   const supabase = getSupabaseClient();
   const maxRetries = options?.maxRetries ?? 3;
   let retryCount = 0;
+  let jwtRefreshAttempted = false;
 
   // 安全性向上: タスクの期限・ステータス・プロジェクト紐付けの正規化
   const sanitizedTasks = (data.tasks || []).map((t) => {
@@ -488,6 +489,14 @@ async function saveRelationalAIOperations(
 
     if (!error) break;
 
+    // 【要件4】JWT expired は supabase のセッション更新で直る可能性があるため、1回だけ試してから再保存
+    if (isJwtExpiredError(error) && !jwtRefreshAttempted) {
+      jwtRefreshAttempted = true;
+      logDeduplicatedSyncWarn('[AIOperationsSync] JWT expired detected. Attempting session refresh (attempt 1/1)...');
+      await tryRefreshSupabaseSession();
+      continue;
+    }
+
     // 認証エラー（401/403/権限なし）や形式エラー等の直らない致命的エラーは再試行せず即座にthrow
     if (isNonRetryableFatalError(error)) {
       logDeduplicatedSyncWarn(
@@ -496,12 +505,19 @@ async function saveRelationalAIOperations(
       throw error;
     }
 
+    // JWT expired がリフレッシュ後も再発した場合は直らない認証エラーとして throw
+    if (isJwtExpiredError(error)) {
+      logDeduplicatedSyncWarn('[AIOperationsSync] JWT expired persisted after refresh attempt. Aborting retries.');
+      throw error;
+    }
+
+    // 429, 408, 5xx, 一時的エラーの場合は指数バックオフで再試行
     if (retryCount < maxRetries) {
       retryCount++;
       const baseDelayMs = 1000;
       const backoffMs = Math.round(baseDelayMs * Math.pow(2, retryCount - 1) + Math.random() * 200);
       logDeduplicatedSyncWarn(
-        `[AIOperationsSync] mst_save_ai_operations failed (${error.message || (error as any).code || 'unknown'}). Backing off for ${backoffMs}ms before retry (attempt ${retryCount}/${maxRetries})...`
+        `[AIOperationsSync] Transient error encountered (${error.message || (error as any).code || 'unknown'}). Backing off for ${backoffMs}ms before retry (attempt ${retryCount}/${maxRetries})...`
       );
       await new Promise((resolve) => setTimeout(resolve, backoffMs));
       continue;
@@ -837,45 +853,158 @@ export async function loadOrMigrateWorkspaceData(userId: string): Promise<Worksp
 }
 
 
-export function isNonRetryableFatalError(error: unknown): boolean {
+/**
+ * 一時的エラー（ネットワーク障害、レート制限429、タイムアウト408、サーバー5xx）の判定
+ * これらは致命的エラーとせず、指数バックオフによる再試行の対象とする。
+ */
+export function isTransientRetryableError(error: unknown): boolean {
   if (!error) return false;
   if (typeof error === 'string') {
-    return (
-      /permission denied|not authorized|権限がありません|User mismatch|JWT expired|invalid token|401|403/i.test(error) ||
-      /invalid input syntax|invalid text representation|datatype mismatch|22P02|42804|42P01/i.test(error)
-    );
+    return /429|408|500|502|503|504|timeout|timed out|fetch failed|failed to fetch|network error|econnreset|etimedout/i.test(error);
   }
   if (typeof error !== 'object') return false;
 
   const err = error as Record<string, unknown>;
-  const code = String(err.code ?? err.status ?? (err.error as any)?.code ?? (err.cause as any)?.code ?? '');
+  const rawStatus = err.status ?? (err.error as any)?.status ?? (err.cause as any)?.status;
+  const statusStr = String(rawStatus ?? '').trim();
+  const statusNum = Number(rawStatus);
+  const code = String(err.code ?? (err.error as any)?.code ?? (err.cause as any)?.code ?? '').trim();
   const message = String(err.message ?? (err.error as any)?.message ?? (err.cause as any)?.message ?? '');
   const details = String(err.details ?? (err.error as any)?.details ?? (err.cause as any)?.details ?? '');
-  const hint = String(err.hint ?? (err.error as any)?.hint ?? (err.cause as any)?.hint ?? '');
-  const allText = `${code} ${message} ${details} ${hint}`;
 
-  // 1. 認証・認可エラー (401, 403, 42501, 権限エラー)
-  if (
-    code === '401' ||
-    code === '403' ||
-    code === '42501' ||
+  // HTTP 429 (Too Many Requests / Rate limit)
+  if (code === '429' || statusStr === '429' || statusNum === 429) return true;
+
+  // HTTP 408 (Request Timeout)
+  if (code === '408' || statusStr === '408' || statusNum === 408) return true;
+
+  // HTTP 5xx (500, 502, 503, 504 etc.)
+  if ((statusNum >= 500 && statusNum < 600) || /^(500|502|503|504)$/.test(code) || /^(500|502|503|504)$/.test(statusStr)) {
+    return true;
+  }
+
+  // ネットワークエラー
+  const networkPattern = /failed to fetch|fetch failed|network error|networkerror|timeout|timed out|econnreset|econnrefused|etimedout|connection aborted/i;
+  if (networkPattern.test(message) || networkPattern.test(details)) return true;
+
+  try {
+    const str = String(error);
+    if (networkPattern.test(str)) return true;
+  } catch {}
+
+  return false;
+}
+
+/**
+ * JWT expired エラーの判定
+ */
+export function isJwtExpiredError(error: unknown): boolean {
+  if (!error) return false;
+  const err = error as Record<string, unknown>;
+  const code = String(err.code ?? (err.error as any)?.code ?? (err.cause as any)?.code ?? '');
+  const message = String(err.message ?? (err.error as any)?.message ?? (err.cause as any)?.message ?? '');
+  const details = String(err.details ?? (err.error as any)?.details ?? (err.cause as any)?.details ?? '');
+  const allText = `${code} ${message} ${details}`;
+  return (
     code === 'PGRST301' ||
-    /permission denied|not authorized|権限がありません|User mismatch|JWT expired|invalid token/i.test(allText)
-  ) {
+    /jwt expired|token is expired/i.test(allText)
+  );
+}
+
+/**
+ * Supabase セッションの更新（refreshSession または getSession）
+ */
+export async function tryRefreshSupabaseSession(): Promise<boolean> {
+  try {
+    const supabase = getSupabaseClient();
+    if (supabase && 'auth' in (supabase as any)) {
+      const { data: refreshData, error: refreshError } = await (supabase as any).auth.refreshSession();
+      if (!refreshError && refreshData?.session) {
+        return true;
+      }
+      const { data: sessionData, error: sessionError } = await (supabase as any).auth.getSession();
+      if (!sessionError && sessionData?.session) {
+        return true;
+      }
+    }
+  } catch (err) {
+    console.warn('[SessionRefresh] Failed to refresh session:', err);
+  }
+  return false;
+}
+
+export function isNonRetryableFatalError(error: unknown): boolean {
+  if (!error) return false;
+
+  // 1. 一時的エラー（429, 408, 5xx, ネットワークエラー）は絶対に致命的エラーにしない（再試行対象）
+  if (isTransientRetryableError(error)) {
+    return false;
+  }
+
+  // 2. 競合（40001, WORKSPACE_CONFLICT）はマージ再試行の対象なので fatal ではない
+  if (isWorkspaceConflictError(error)) {
+    return false;
+  }
+
+  if (typeof error !== 'object') {
+    return false;
+  }
+
+  const err = error as Record<string, unknown>;
+  const codeRaw = String(err.code ?? (err.error as any)?.code ?? (err.cause as any)?.code ?? '').trim();
+  const statusRaw = String(err.status ?? (err.error as any)?.status ?? (err.cause as any)?.status ?? '').trim();
+  const message = String(err.message ?? (err.error as any)?.message ?? (err.cause as any)?.message ?? '');
+  const details = String(err.details ?? (err.error as any)?.details ?? (err.cause as any)?.details ?? '');
+
+  // 【要件3】文字列全体から '401' / '403' を正規表現で検索するのをやめ、
+  // code または status が 401 / 403 と完全一致する場合だけ認証エラーとする。
+  if (codeRaw === '401' || statusRaw === '401' || codeRaw === '403' || statusRaw === '403') {
     return true;
   }
 
-  // 2. 形式エラー・型不一致・スキーマ構文エラー (再試行しても直らないエラー)
+  // 明確な権限拒否メッセージ（'401'/'403'の数字検索は禁止）
   if (
-    code === '400' ||
-    code === '422' ||
-    code.startsWith('22') ||
-    code.startsWith('42') ||
-    /invalid input syntax|invalid text representation|datatype mismatch|malformed|syntax error|undefined table|undefined column/i.test(allText)
+    /permission denied|not authorized|権限がありません|User mismatch/i.test(message) ||
+    /permission denied|not authorized|権限がありません|User mismatch/i.test(details)
   ) {
     return true;
   }
 
+  // 【要件1】Postgres の SQLSTATE（5文字の英数字、例: 22P02, 42P01, 42501）だけを対象にするため、
+  // /^[0-9A-Z]{5}$/i に一致する code に限定して判定すること。
+  if (/^[0-9A-Z]{5}$/i.test(codeRaw)) {
+    const upperCode = codeRaw.toUpperCase();
+
+    // 42501: insufficient_privilege（Postgres 権限エラー）
+    if (upperCode === '42501') {
+      return true;
+    }
+
+    // Class 22: Data Exception（22P02 invalid_text_representation, 22001, 22007等）
+    if (upperCode.startsWith('22')) {
+      return true;
+    }
+
+    // Class 42: Syntax Error or Access Rule Violation（42804 datatype mismatch, 42P01 undefined table等）
+    if (upperCode.startsWith('42')) {
+      return true;
+    }
+  }
+
+  // 400 Bad Request, 422 Unprocessable Entity（形式エラー）
+  if (codeRaw === '400' || statusRaw === '400' || codeRaw === '422' || statusRaw === '422') {
+    return true;
+  }
+
+  // 明確な形式エラーメッセージ（invalid input syntax 等）
+  if (
+    /invalid input syntax|invalid text representation|datatype mismatch/i.test(message) ||
+    /invalid input syntax|invalid text representation|datatype mismatch/i.test(details)
+  ) {
+    return true;
+  }
+
+  // ラップされたエラーの再帰判定
   if (err.cause && typeof err.cause === 'object' && isNonRetryableFatalError(err.cause)) {
     return true;
   }
@@ -1010,6 +1139,7 @@ export async function saveWorkspaceData(
   let currentData = data;
   let wasMerged = false;
   let retryCount = 0;
+  let jwtRefreshAttempted = false;
 
   // 1. Matrix Workspace 保存（楽観的ロック・競合検知）を先に実行
   // これにより、Matrix競合時に AI Operations だけが先行保存される不整合を防ぐ
@@ -1018,6 +1148,15 @@ export async function saveWorkspaceData(
       await saveRelationalMatrixWorkspace(userId, currentData);
       break; // 成功
     } catch (err) {
+      // 【要件4】JWT expired は supabase のセッション更新で直る可能性があるため、1回だけ試してから再保存
+      if (isJwtExpiredError(err) && !jwtRefreshAttempted) {
+        jwtRefreshAttempted = true;
+        logDeduplicatedSyncWarn('[WorkspaceSync] JWT expired detected. Attempting session refresh (attempt 1/1)...');
+        await tryRefreshSupabaseSession();
+        continue;
+      }
+
+      // 競合エラー（40001 / WORKSPACE_CONFLICT）はマージして再試行
       if (isWorkspaceConflictError(err) && retryCount < maxRetries) {
         retryCount++;
         // 指数バックオフ（1回目 約1秒, 2回目 約2秒, 3回目 約4秒 + ランダムジッター）
@@ -1033,6 +1172,24 @@ export async function saveWorkspaceData(
         wasMerged = true;
         continue;
       }
+
+      // 直らない致命的エラー（401, 403, 22P02, 42804等）またはリフレッシュ済みのJWT expiredは即座にthrow
+      if (isNonRetryableFatalError(err) || isJwtExpiredError(err)) {
+        throw err;
+      }
+
+      // 一時的エラー（429, 408, 5xx, ネットワーク）は再試行
+      if (isTransientRetryableError(err) && retryCount < maxRetries) {
+        retryCount++;
+        const baseDelayMs = 1000;
+        const backoffMs = Math.round(baseDelayMs * Math.pow(2, retryCount - 1) + Math.random() * 200);
+        logDeduplicatedSyncWarn(
+          `[WorkspaceSync] Transient error encountered. Backing off for ${backoffMs}ms before retry (attempt ${retryCount}/${maxRetries})...`
+        );
+        await new Promise((resolve) => setTimeout(resolve, backoffMs));
+        continue;
+      }
+
       throw err;
     }
   }
