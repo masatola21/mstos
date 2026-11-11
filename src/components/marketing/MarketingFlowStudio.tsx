@@ -39,6 +39,7 @@ import {
 import { MarketingScenario, MarketingTrigger, MarketingChannel } from '../../types/marketing';
 import {
   INDUSTRY_MESSAGES,
+  PRIORITY_INDUSTRY_KEYS,
   getSalesEmailTemplate,
   getIndustryMessage,
   getNurturingStepTemplate
@@ -156,7 +157,7 @@ export const MarketingFlowStudio: React.FC<MarketingFlowStudioProps> = ({
 }) => {
   const db = getSupabase();
   const [activeTrack, setActiveTrack] = useState<FlowTrack>('line_welcome');
-  const [selectedIndustry, setSelectedIndustry] = useState<string>('製造（BtoB）');
+  const [selectedIndustry, setSelectedIndustry] = useState<string>(PRIORITY_INDUSTRY_KEYS[0]);
   const [expandedBranch, setExpandedBranch] = useState<'diagnosis' | 'consult' | 'care' | 'all'>('all');
   const [previewModalScenario, setPreviewModalScenario] = useState<ScenarioPreviewInfo | null>(null);
 
@@ -2197,7 +2198,7 @@ export const MarketingFlowStudio: React.FC<MarketingFlowStudioProps> = ({
                 <div className="flex items-center gap-2">
                   <Building className="w-4 h-4 text-blue-600" />
                   <span className="text-xs font-bold text-slate-800">
-                    業種別メッセージ自動差し替えシミュレーター（18業種対応）:
+                    業種別メッセージ自動差し替えシミュレーター（重点5業種＋その他）:
                   </span>
                 </div>
                 <select
@@ -2205,9 +2206,18 @@ export const MarketingFlowStudio: React.FC<MarketingFlowStudioProps> = ({
                   onChange={(e) => setSelectedIndustry(e.target.value)}
                   className="bg-white border border-slate-200 rounded-lg px-3 py-1.5 text-xs text-slate-800 font-medium focus:border-blue-500 cursor-pointer shadow-2xs"
                 >
-                  {Object.keys(INDUSTRY_MESSAGES).map((ind) => (
-                    <option key={ind} value={ind}>{ind}</option>
-                  ))}
+                  <optgroup label="★ 重点5業種（公式HPの主な支援対象）">
+                    {PRIORITY_INDUSTRY_KEYS.map((ind) => (
+                      <option key={ind} value={ind}>{ind}</option>
+                    ))}
+                  </optgroup>
+                  <optgroup label="その他の業種">
+                    {Object.keys(INDUSTRY_MESSAGES)
+                      .filter((ind) => !(PRIORITY_INDUSTRY_KEYS as readonly string[]).includes(ind))
+                      .map((ind) => (
+                        <option key={ind} value={ind}>{ind}</option>
+                      ))}
+                  </optgroup>
                 </select>
               </div>
 
