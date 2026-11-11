@@ -1375,31 +1375,20 @@ export const Dashboard: React.FC<DashboardProps> = ({
             {/* 診断・受付フォーム受付ミニサマリー */}
             <div className="pt-3 border-t border-slate-100 flex items-center justify-between bg-slate-50 p-3 rounded-xl">
               <div>
-                <span className="text-[10px] text-slate-500 block">フォーム総回答</span>
+                <span className="text-[10px] text-slate-500 block">診断フォーム総回答</span>
                 <span className="text-sm font-bold text-slate-900 font-mono">{diagnosisStats.total} 件</span>
               </div>
               <div>
-                <span className="text-[10px] text-amber-700 block">未対応回答</span>
+                <span className="text-[10px] text-amber-700 block">未確認回答</span>
                 <span className="text-sm font-bold text-amber-700 font-mono">{diagnosisStats.byStatus.received} 件</span>
               </div>
-              <div className="flex items-center gap-1.5">
-                <button
-                  type="button"
-                  onClick={() => onNavigateTab('inbox_hub')}
-                  className="px-2.5 py-1 rounded-lg bg-purple-600 hover:bg-purple-700 text-xs text-white font-semibold shadow-2xs transition-colors cursor-pointer"
-                  title="統合受信トレイでフォーム・無料診断回答を確認・返信"
-                >
-                  受信トレイ
-                </button>
-                <button
-                  type="button"
-                  onClick={() => onNavigateTab('mst_diagnoses')}
-                  className="px-2.5 py-1 rounded-lg bg-white border border-slate-200 text-xs text-slate-700 font-semibold hover:bg-slate-100 transition-colors cursor-pointer"
-                  title="フォーム設問の作成・公開設定、配布PDF資料管理"
-                >
-                  フォーム作成・配布資料
-                </button>
-              </div>
+              <button
+                type="button"
+                onClick={() => onNavigateTab('mst_diagnoses')}
+                className="px-2.5 py-1 rounded-lg bg-white border border-slate-200 text-xs text-slate-700 font-semibold hover:bg-slate-100 transition-colors cursor-pointer"
+              >
+                フォーム設計
+              </button>
             </div>
           </div>
         </div>

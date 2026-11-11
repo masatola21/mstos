@@ -5,45 +5,37 @@ import {
   FileText, 
   FileCheck2, 
   Receipt, 
+  ClipboardCheck, 
   Printer, 
   Copy, 
   Check, 
   Sliders, 
+  Edit3, 
+  Save, 
+  RefreshCw,
   FileCode,
   ExternalLink,
   Link2,
   Calculator,
   BarChart3,
   Send,
-  Inbox,
-  Coins,
-  RefreshCw,
-  Save,
-  CheckCircle2,
-  Sparkles
+  Inbox
 } from 'lucide-react';
-import {
-  getEndOfNextMonthDate,
-  getOneMonthLaterDate,
-  calculateMilestoneAmounts,
-  calculateInstallmentAmounts,
-} from '../../utils/billingUtils';
 
-import {
-  DocTemplateType,
-  DocTemplate,
-  PaymentMode,
-  InvoiceSubtype,
-  CORE_TEMPLATES,
-  getDynamicTemplateHtml,
-  normalizeTemplateId,
-  getTemplateDefaultValues,
-} from './documentGenerators';
+export type DocTemplateType = 'contract' | 'proposal' | 'invoice' | 'report' | 'estimate' | 'monthly_report';
 
-export type { DocTemplateType, DocTemplate, PaymentMode, InvoiceSubtype };
-
-const addOneMonthDate = (date = todayJst()) => getOneMonthLaterDate(date);
-const invoiceDueDate = (date = todayJst()) => getEndOfNextMonthDate(date);
+const addOneMonthDate = (date = todayJst()) => {
+  const [year, month, day] = date.split('-').map(Number);
+  const lastDay = new Date(Date.UTC(year, month + 1, 0)).getUTCDate();
+  return new Date(Date.UTC(year, month, Math.min(day, lastDay))).toISOString().slice(0, 10);
+};
+const invoiceDueDate = (date = todayJst()) => {
+  const [year, month, day] = date.split('-').map(Number);
+  const due = new Date(Date.UTC(year, month - 1, day >= 25 ? 1 : 25));
+  if (day >= 25) due.setUTCMonth(due.getUTCMonth() + 1);
+  if (day >= 25) due.setUTCDate(25);
+  return due.toISOString().slice(0, 10);
+};
 const formatDocumentDate = (value: string) => value ? value.replace(/^(\d{4})-(\d{2})-(\d{2})$/, '$1年$2月$3日') : '';
 const formatDocumentValue = (value: unknown): string => {
   if (typeof value === 'string') return value;
@@ -55,12 +47,575 @@ const formatDocumentValue = (value: unknown): string => {
   }
   return '';
 };
-const escapeHtml = (value: string) => value.replace(/[&<>"']/g, (char) => {
-  const replacements: Record<string, string> = { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' };
-  return replacements[char] || char;
-});
+const escapeHtml = (value: string) => value.replace(/[&<>"']/g, (char) => { const replacements: Record<string, string> = { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }; return replacements[char] || char; });
 
-const DEFAULT_TEMPLATES: DocTemplate[] = CORE_TEMPLATES;
+interface DocTemplate {
+  id: string;
+  type: DocTemplateType;
+  title: string;
+  description: string;
+  htmlContent: string;
+  variables: { key: string; label: string; defaultValue: string }[];
+}
+
+const DEFAULT_TEMPLATES: DocTemplate[] = [
+  {
+    id: 'tpl-contract-01',
+    type: 'contract',
+    title: '業務委託基本契約書 (標準ひな形)',
+    description: 'システム開発およびコンサルティング業務に関する標準契約書ひな形',
+    htmlContent: `<div style="font-family: 'Helvetica Neue', Arial, sans-serif; padding: 40px; color: #1e293b; max-width: 800px; margin: 0 auto; line-height: 1.8;">
+  <h1 style="text-align: center; font-size: 22px; margin-bottom: 30px; border-bottom: 2px solid #0f172a; padding-bottom: 10px;">業務委託基本契約書</h1>
+  
+  <p>発注者である <strong>{{client_company}}</strong>（以下「甲」という。）と、受注者である <strong>{{my_company}}</strong>（以下「乙」という。）は、以下の通り業務委託基本契約（以下「本契約」という。）を締結する。</p>
+
+  <h3 style="margin-top: 20px; font-size: 16px; border-left: 4px solid #2563eb; padding-left: 8px;">第1条（目的および委託業務）</h3>
+  <p>甲は、乙に対し、<strong>{{project_name}}</strong>に関する業務（以下「本件業務」という。）を委託し、乙はこれを受託する。</p>
+
+  <h3 style="margin-top: 20px; font-size: 16px; border-left: 4px solid #2563eb; padding-left: 8px;">第2条（委託料および支払方法）</h3>
+  <p>本件業務の委託料は、金 <strong>{{subtotal_amount}}</strong> 円（税抜 / 消費税10% 金 {{tax_amount}} 円 / 税込合計 金 {{total_amount}} 円）とする。<br>
+  支払条件：{{payment_terms}}</p>
+
+  <h3 style="margin-top: 20px; font-size: 16px; border-left: 4px solid #2563eb; padding-left: 8px;">第3条（契約期間）</h3>
+  <p>本契約の有効期間は <strong>{{start_date}}</strong> からとする。終了日を定める場合は <strong>{{end_date}}</strong> とし、定めない場合は個別業務の実施期間・納期を発注書等で定める。</p>
+
+  <div style="margin-top: 50px; display: flex; justify-content: space-between;">
+    <div style="width: 45%;">
+      <p><strong>発注者（甲）</strong></p>
+      <p>住所: {{client_address}}</p>
+      <p>会社名: {{client_company}}</p>
+      <p>代表者: {{client_rep}} 印</p>
+    </div>
+    <div style="width: 45%;">
+      <p><strong>受注者（乙）</strong></p>
+      <p>住所: {{my_address}}</p>
+      <p>会社名: {{my_company}}</p>
+      <p>代表者: {{my_rep}} 印</p>
+    </div>
+  </div>
+</div>`,
+    variables: [
+      { key: 'client_company', label: '顧客会社名 (甲)', defaultValue: '' },
+      { key: 'my_company', label: '自社会社名 (乙)', defaultValue: '' },
+      { key: 'project_name', label: 'プロジェクト名', defaultValue: '' },
+      { key: 'subtotal_amount', label: '委託料 (税抜・円)', defaultValue: '' },
+      { key: 'tax_amount', label: '消費税額 (10%・円)', defaultValue: '' },
+      { key: 'total_amount', label: '税込合計 (円)', defaultValue: '' },
+      { key: 'payment_terms', label: '支払条件', defaultValue: '' },
+      { key: 'start_date', label: '契約開始日', defaultValue: '' },
+      { key: 'end_date', label: '契約終了日（任意・期間を定める場合のみ）', defaultValue: '' },
+      { key: 'client_address', label: '甲 住所', defaultValue: '' },
+      { key: 'client_rep', label: '甲 代表者名', defaultValue: '' },
+      { key: 'my_address', label: '乙 住所', defaultValue: '' },
+      { key: 'my_rep', label: '乙 代表者名', defaultValue: '' },
+    ],
+  },
+  {
+    id: 'tpl-contract-retainer',
+    type: 'contract',
+    title: '経営・業務顧問 委託契約書 (最低6ヶ月契約)',
+    description: '月額顧問・DX伴走支援用。最低6ヶ月間の契約期間および自動更新条項を定めた標準ひな形',
+    htmlContent: `<div style="font-family: 'Helvetica Neue', Arial, sans-serif; padding: 40px; color: #1e293b; max-width: 800px; margin: 0 auto; line-height: 1.8;">
+  <h1 style="text-align: center; font-size: 22px; margin-bottom: 30px; border-bottom: 2px solid #0f172a; padding-bottom: 10px;">経営・業務顧問 委託契約書</h1>
+  
+  <p>発注者である <strong>{{client_company}}</strong>（以下「甲」という。）と、受注者である <strong>{{my_company}}</strong>（以下「乙」という。）は、以下の通り顧問および業務支援に関する委託契約（以下「本契約」という。）を締結する。</p>
+
+  <h3 style="margin-top: 20px; font-size: 16px; border-left: 4px solid #2563eb; padding-left: 8px;">第1条（目的および顧問業務）</h3>
+  <p>甲は、乙に対し、<strong>{{project_name}}</strong>（経営戦略の策定支援・業務改善・IT/DX活用支援・組織自走化等）に関する顧問業務（以下「本件業務」という。）を委託し、乙はこれを受託する。</p>
+
+  <h3 style="margin-top: 20px; font-size: 16px; border-left: 4px solid #2563eb; padding-left: 8px;">第2条（顧問料および支払方法）</h3>
+  <p>本件業務の月額顧問料は、金 <strong>{{monthly_amount}}</strong> 円（税抜 / 消費税10%込 金 {{tax_included_amount}} 円）とする。<br>
+  支払期日・条件：{{payment_terms}}</p>
+
+  <h3 style="margin-top: 20px; font-size: 16px; border-left: 4px solid #2563eb; padding-left: 8px;">第3条（契約期間および最低契約期間）</h3>
+  <p>1. 本契約の有効期間は <strong>{{start_date}}</strong> からとし、継続的な改善および自走組織化の観点より、<strong>契約締結日より最低6ヶ月間</strong>を最低契約期間とする。<br>
+  2. 最低契約期間満了の1ヶ月前までに、甲または乙のいずれからも書面または電磁的記録（電子メール・チャット等）による別段の申し出がない場合、本契約は同一条件にてさらに6ヶ月間自動的に更新されるものとし、以後も同様とする。<br>
+  3. 最低契約期間内の中途解約は原則として行えないものとし、やむを得ない事情により解約する場合であっても、甲は最低契約期間残余期間分の月額顧問料相当額を一括して乙に支払うものとする。</p>
+
+  <h3 style="margin-top: 20px; font-size: 16px; border-left: 4px solid #2563eb; padding-left: 8px;">第4条（秘密保持および信義誠実）</h3>
+  <p>甲および乙は、本契約の履行に関して知り得た相手方の営業上・技術上の一切の秘密情報を、相手方の事前の書面による承諾なしに第三者に開示または漏洩してはならない。</p>
+
+  <div style="margin-top: 50px; display: flex; justify-content: space-between;">
+    <div style="width: 45%;">
+      <p><strong>発注者（甲）</strong></p>
+      <p>住所: {{client_address}}</p>
+      <p>会社名: {{client_company}}</p>
+      <p>代表者: {{client_rep}} 印</p>
+    </div>
+    <div style="width: 45%;">
+      <p><strong>受注者（乙）</strong></p>
+      <p>住所: {{my_address}}</p>
+      <p>会社名: {{my_company}}</p>
+      <p>代表者: {{my_rep}} 印</p>
+    </div>
+  </div>
+</div>`,
+    variables: [
+      { key: 'client_company', label: '顧客会社名 (甲)', defaultValue: '' },
+      { key: 'my_company', label: '自社会社名 (乙)', defaultValue: '有限会社MST' },
+      { key: 'project_name', label: '顧問業務名', defaultValue: '経営戦略・利益改善およびDX伴走支援' },
+      { key: 'monthly_amount', label: '月額顧問料 (税抜・円)', defaultValue: '120,000' },
+      { key: 'tax_included_amount', label: '税込月額 (円)', defaultValue: '132,000' },
+      { key: 'payment_terms', label: '支払条件', defaultValue: '毎月末日締め翌月末日振込' },
+      { key: 'start_date', label: '契約開始日', defaultValue: '' },
+      { key: 'client_address', label: '甲 住所', defaultValue: '' },
+      { key: 'client_rep', label: '甲 代表者名', defaultValue: '' },
+      { key: 'my_address', label: '乙 住所', defaultValue: '北海道函館市' },
+      { key: 'my_rep', label: '乙 代表者名', defaultValue: '大橋真人' },
+    ],
+  },
+  {
+    id: 'tpl-proposal-01',
+    type: 'proposal',
+    title: '経営の仕組み化 × 利益改善 伴走ご提案書',
+    description: '戦略と実行の両面から会社の可能性を広げ、次の一手を打てる経営へ導く伴走提案書',
+    htmlContent: `<div style="font-family: 'Helvetica Neue', Arial, 'Hiragino Sans', sans-serif; padding: 40px; color: #1e293b; max-width: 820px; margin: 0 auto; line-height: 1.8;">
+  <div style="background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%); color: white; padding: 36px; border-radius: 14px; margin-bottom: 35px; box-shadow: 0 10px 25px -5px rgba(0,0,0,0.1);">
+    <p style="font-size: 13px; color: #38bdf8; text-transform: uppercase; letter-spacing: 1.5px; margin: 0 0 8px 0; font-weight: bold;">Business Improvement Proposal</p>
+    <h1 style="font-size: 26px; margin: 0 0 10px 0; font-weight: 800; line-height: 1.4;">{{proposal_title}}</h1>
+    <p style="font-size: 14px; color: #cbd5e1; margin: 0 0 16px 0;">会社の可能性を広げ、経営者が次の一手を打てる経営へ</p>
+    <div style="border-top: 1px solid #334155; padding-top: 14px; display: flex; justify-content: space-between; font-size: 13px; color: #94a3b8;">
+      <span>宛先: <strong style="color: white;">{{client_company}}</strong> 御中</span>
+      <span>提案日: {{issue_date}}</span>
+    </div>
+  </div>
+
+  <h3 style="font-size: 18px; border-left: 4px solid #2563eb; padding-left: 10px; margin: 30px 0 12px 0; color: #0f172a; font-weight: bold;">
+    1. 診断結果に基づく貴社の現状課題・ボトルネック
+  </h3>
+  <div style="background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 10px; padding: 20px; margin-bottom: 25px;">
+    <p style="margin: 0; font-size: 14px; color: #334155; line-height: 1.8;">{{current_challenge}}</p>
+  </div>
+
+  <h3 style="font-size: 18px; border-left: 4px solid #2563eb; padding-left: 10px; margin: 30px 0 12px 0; color: #0f172a; font-weight: bold;">
+    2. 本プランで実現する「未来」（期待される成果）
+  </h3>
+  <div style="background: #f0fdf4; border: 1px solid #bbf7d0; border-radius: 10px; padding: 20px; margin-bottom: 25px;">
+    <p style="margin: 0; font-size: 14px; color: #166534; line-height: 1.8;">{{expected_outcome}}</p>
+  </div>
+
+  <h3 style="font-size: 18px; border-left: 4px solid #2563eb; padding-left: 10px; margin: 30px 0 12px 0; color: #0f172a; font-weight: bold;">
+    3. 具体的な支援内容と進め方（MSTアプローチ）
+  </h3>
+  <div style="background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 10px; padding: 20px; margin-bottom: 25px;">
+    <p style="margin: 0 0 12px 0; font-size: 14px; font-weight: bold; color: #1e3a8a;">【支援プラン概要】</p>
+    <p style="margin: 0 0 16px 0; font-size: 14px; color: #334155; line-height: 1.8;">{{solution_overview}}</p>
+    <div style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; font-size: 12px; text-align: center; border-top: 1px solid #e2e8f0; padding-top: 16px;">
+      <div style="background: white; border: 1px solid #cbd5e1; border-radius: 8px; padding: 10px;">
+        <strong style="color: #2563eb;">01 課題を把握</strong><br><span style="color: #64748b; font-size: 11px;">時間ロス・原因整理</span>
+      </div>
+      <div style="background: white; border: 1px solid #cbd5e1; border-radius: 8px; padding: 10px;">
+        <strong style="color: #2563eb;">02 改善策設計</strong><br><span style="color: #64748b; font-size: 11px;">優先順位・手段選定</span>
+      </div>
+      <div style="background: white; border: 1px solid #cbd5e1; border-radius: 8px; padding: 10px;">
+        <strong style="color: #2563eb;">03 実行・構築</strong><br><span style="color: #64748b; font-size: 11px;">自動化・仕組み実装</span>
+      </div>
+      <div style="background: white; border: 1px solid #cbd5e1; border-radius: 8px; padding: 10px;">
+        <strong style="color: #2563eb;">04 効果確認と次へ</strong><br><span style="color: #64748b; font-size: 11px;">次の改善へ継続伴走</span>
+      </div>
+    </div>
+  </div>
+
+  <h3 style="font-size: 18px; border-left: 4px solid #2563eb; padding-left: 10px; margin: 30px 0 12px 0; color: #0f172a; font-weight: bold;">
+    4. 費用お見積もり
+  </h3>
+  <div style="background: #f8fafc; border: 1px solid #cbd5e1; border-radius: 12px; padding: 22px; margin-bottom: 25px;">
+    <div style="display: flex; justify-content: space-between; align-items: baseline; border-bottom: 1px solid #e2e8f0; padding-bottom: 12px; margin-bottom: 12px;">
+      <span style="font-size: 16px; font-weight: bold; color: #0f172a;">総額（税別）</span>
+      <span style="font-size: 26px; font-weight: 800; color: #1e3a8a;">￥{{total_amount}} 円</span>
+    </div>
+    <p style="margin: 0; font-size: 13px; color: #475569;"><strong>内訳:</strong> {{cost_breakdown}}</p>
+    <p style="margin: 6px 0 0 0; font-size: 12px; color: #64748b;">※お支払い条件: {{payment_terms}}</p>
+  </div>
+
+  <div style="margin-top: 35px; text-align: right; border-top: 1px solid #e2e8f0; padding-top: 20px; font-size: 13px; color: #475569;">
+    <p style="margin: 0 0 4px 0; font-weight: bold; color: #0f172a;">提案責任者: {{sender_name}}</p>
+    <p style="margin: 0 0 2px 0;">{{sender_company}}</p>
+    <p style="margin: 0 0 2px 0;">{{sender_address}}</p>
+    <p style="margin: 0;">代表取締役 {{sender_rep}}</p>
+  </div>
+</div>`,
+    variables: [
+      { key: 'proposal_title', label: '提案書タイトル', defaultValue: '' },
+      { key: 'client_company', label: '宛先企業名', defaultValue: '' },
+      { key: 'issue_date', label: '提案日付', defaultValue: '' },
+      { key: 'current_challenge', label: '現状の課題・ボトルネック', defaultValue: '' },
+      { key: 'solution_overview', label: '提案ソリューション・進め方', defaultValue: '' },
+      { key: 'expected_outcome', label: '期待される未来の成果', defaultValue: '' },
+      { key: 'total_amount', label: 'お見積もり総額 (円)', defaultValue: '' },
+      { key: 'cost_breakdown', label: '費用内訳', defaultValue: '' },
+      { key: 'payment_terms', label: '支払条件', defaultValue: '' },
+      { key: 'sender_name', label: '提案責任者名', defaultValue: '' },
+      { key: 'sender_company', label: '提案者組織名', defaultValue: '' },
+      { key: 'sender_address', label: '提案者住所', defaultValue: '' },
+      { key: 'sender_rep', label: '代表取締役', defaultValue: '' },
+    ],
+  },
+  {
+    id: 'tpl-invoice-01',
+    type: 'invoice',
+    title: 'ご請求書 (標準ひな形)',
+    description: '企業間取引・お仕事の請求書ひな形',
+    htmlContent: `<div style="font-family: 'Helvetica Neue', Arial, sans-serif; padding: 40px; color: #1e293b; max-width: 800px; margin: 0 auto; line-height: 1.6;">
+  <div style="display: flex; justify-content: space-between; border-bottom: 2px solid #0f172a; padding-bottom: 20px; margin-bottom: 30px;">
+    <div>
+      <h1 style="font-size: 26px; margin: 0; color: #0f172a;">御 請求 書</h1>
+      <p style="margin: 5px 0 0 0; color: #64748b; font-size: 14px;">請求書番号: {{invoice_number}}</p>
+    </div>
+    <div style="text-align: right;">
+      <p style="margin: 0; font-weight: bold;">発行日: {{issue_date}}</p>
+      <p style="margin: 5px 0 0 0; color: #dc2626; font-weight: bold;">お支払い期限: {{due_date}}</p>
+    </div>
+  </div>
+
+  <div style="margin-bottom: 30px;">
+    <h2 style="font-size: 18px; border-bottom: 1px solid #e2e8f0; padding-bottom: 5px; margin-bottom: 10px;">{{client_company}} 御中</h2>
+    <p>平素は格別のお引き立てを賜り、厚く御礼申し上げます。<br>下記の通りご請求申し上げます。</p>
+    <div style="background: #f1f5f9; padding: 15px; border-radius: 8px; margin-top: 15px;">
+      <p style="margin: 0; font-size: 14px; color: #64748b;">ご請求金額合計（税込）</p>
+      <p style="margin: 5px 0 0 0; font-size: 28px; font-weight: bold; color: #0f172a;">￥{{total_amount}}</p>
+    </div>
+  </div>
+
+  <table style="width: 100%; border-collapse: collapse; margin-bottom: 30px; font-size: 14px;">
+    <thead>
+      <tr style="background: #0f172a; color: white;">
+        <th style="padding: 10px; text-align: left;">摘要 / 品名</th>
+        <th style="padding: 10px; text-align: center;">数量</th>
+        <th style="padding: 10px; text-align: right;">単価 (円)</th>
+        <th style="padding: 10px; text-align: right;">金額 (円)</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr style="border-bottom: 1px solid #e2e8f0;">
+        <td style="padding: 12px 10px;">{{item_name_1}}</td>
+        <td style="padding: 12px 10px; text-align: center;">{{item_qty_1}}</td>
+        <td style="padding: 12px 10px; text-align: right;">{{item_price_1}}</td>
+        <td style="padding: 12px 10px; text-align: right;">{{item_amount_1}}</td>
+      </tr>
+      <tr style="border-bottom: 1px solid #e2e8f0;">
+        <td style="padding: 12px 10px;">{{item_name_2}}</td>
+        <td style="padding: 12px 10px; text-align: center;">{{item_qty_2}}</td>
+        <td style="padding: 12px 10px; text-align: right;">{{item_price_2}}</td>
+        <td style="padding: 12px 10px; text-align: right;">{{item_amount_2}}</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <div style="display: flex; justify-content: flex-end; margin-bottom: 40px;">
+    <div style="width: 300px; font-size: 14px;">
+      <div style="display: flex; justify-content: space-between; padding: 5px 0;">
+        <span>小計:</span>
+        <span>￥{{subtotal_amount}}</span>
+      </div>
+      <div style="display: flex; justify-content: space-between; padding: 5px 0; border-bottom: 1px solid #e2e8f0;">
+        <span>消費税 (10%):</span>
+        <span>￥{{tax_amount}}</span>
+      </div>
+      <div style="display: flex; justify-content: space-between; padding: 8px 0; font-weight: bold; font-size: 16px;">
+        <span>合計金額:</span>
+        <span>￥{{total_amount}}</span>
+      </div>
+    </div>
+  </div>
+
+  <div style="border-top: 1px solid #e2e8f0; padding-top: 20px; font-size: 13px; color: #64748b;">
+    <p><strong>【お振込先】</strong> {{bank_account_info}}</p>
+    <p>※誠に恐れ入りますが、振込手数料は貴社ご負担にてお願い申し上げます。</p>
+  </div>
+</div>`,
+    variables: [
+      { key: 'invoice_number', label: '請求書番号', defaultValue: '' },
+      { key: 'issue_date', label: '発行日', defaultValue: '' },
+      { key: 'due_date', label: 'お支払い期限', defaultValue: '' },
+      { key: 'client_company', label: '宛先企業名', defaultValue: '' },
+      { key: 'total_amount', label: '合計金額 (税込)', defaultValue: '' },
+      { key: 'subtotal_amount', label: '小計 (税抜)', defaultValue: '' },
+      { key: 'tax_amount', label: '消費税額 (10%)', defaultValue: '' },
+      { key: 'item_name_1', label: '品名 1', defaultValue: '' },
+      { key: 'item_qty_1', label: '数量 1', defaultValue: '' },
+      { key: 'item_price_1', label: '単価 1', defaultValue: '' },
+      { key: 'item_amount_1', label: '金額 1', defaultValue: '' },
+      { key: 'item_name_2', label: '品名 2', defaultValue: '' },
+      { key: 'item_qty_2', label: '数量 2', defaultValue: '' },
+      { key: 'item_price_2', label: '単価 2', defaultValue: '' },
+      { key: 'item_amount_2', label: '金額 2', defaultValue: '' },
+      { key: 'bank_account_info', label: '振込先口座情報', defaultValue: '' },
+    ],
+  },
+  {
+    id: 'tpl-report-01',
+    type: 'report',
+    title: '経営の仕組み化 × 利益改善 診断レポート',
+    description: 'ボトルネックを特定し、会社と経営者の未来像および継続改善ロードマップを提示するレポート',
+    htmlContent: `<div style="font-family: 'Helvetica Neue', Arial, 'Hiragino Sans', sans-serif; padding: 40px; color: #1e293b; max-width: 820px; margin: 0 auto; line-height: 1.8;">
+  <div style="border-bottom: 3px solid #1e3a8a; padding-bottom: 20px; margin-bottom: 30px; display: flex; justify-content: space-between; align-items: flex-end;">
+    <div>
+      <p style="color: #2563eb; font-weight: bold; font-size: 13px; margin: 0; text-transform: uppercase; letter-spacing: 1px;">Management Diagnostic Report</p>
+      <h1 style="font-size: 26px; margin: 6px 0 0 0; color: #0f172a; font-weight: 800;">経営の仕組み化 × 利益改善 診断レポート</h1>
+      <p style="margin: 4px 0 0 0; font-size: 13px; color: #64748b;">会社の可能性を広げ、経営者が次の一手を打てる経営へ</p>
+    </div>
+    <div style="text-align: right; font-size: 13px; color: #64748b;">
+      <p style="margin: 0;">診断対象: <strong style="color: #0f172a; font-size: 15px;">{{client_company}}</strong> 御中</p>
+      <p style="margin: 3px 0 0 0;">診断実施日: {{conducted_date}}</p>
+      <p style="margin: 3px 0 0 0; font-size: 11px;">診断パートナー: 有限会社MST</p>
+    </div>
+  </div>
+
+  <div style="background: linear-gradient(135deg, #fef2f2 0%, #fff1f2 100%); border: 2px solid #fecdd3; border-radius: 12px; padding: 24px; margin-bottom: 30px;">
+    <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 8px;">
+      <span style="background: #e11d48; color: white; font-size: 11px; font-weight: bold; padding: 2px 8px; border-radius: 4px;">KEY BOTTLENECK</span>
+      <span style="font-size: 13px; font-weight: bold; color: #9f1239;">現在、貴社の成長・利益を止めている最優先ボトルネック</span>
+    </div>
+    <h2 style="font-size: 20px; font-weight: 800; color: #881337; margin: 0 0 10px 0;">{{primary_bottleneck}}</h2>
+    <p style="font-size: 13px; color: #4c0519; margin: 0; line-height: 1.7;">{{bottleneck_impact}}</p>
+  </div>
+
+  <h3 style="font-size: 17px; font-weight: 700; border-left: 4px solid #2563eb; padding-left: 10px; margin: 30px 0 15px 0; color: #0f172a;">
+    1. ボトルネック解消後に手に入る「未来」（Before & After）
+  </h3>
+  <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: 25px;">
+    <div style="background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 10px; padding: 18px;">
+      <p style="font-weight: bold; font-size: 14px; color: #1e3a8a; margin: 0 0 8px 0;">🏢 【会社の未来】</p>
+      <div style="font-size: 12px; margin-bottom: 6px; color: #dc2626;"><strong>現状（Before）:</strong> {{company_before}}</div>
+      <div style="font-size: 12px; color: #059669; font-weight: bold;"><strong>改善後（After）:</strong> {{company_after}}</div>
+    </div>
+    <div style="background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 10px; padding: 18px;">
+      <p style="font-weight: bold; font-size: 14px; color: #1e3a8a; margin: 0 0 8px 0;">👤 【経営者の未来】</p>
+      <div style="font-size: 12px; margin-bottom: 6px; color: #dc2626;"><strong>現状（Before）:</strong> {{ceo_before}}</div>
+      <div style="font-size: 12px; color: #059669; font-weight: bold;"><strong>改善後（After）:</strong> {{ceo_after}}</div>
+    </div>
+  </div>
+
+  <h3 style="font-size: 17px; font-weight: 700; border-left: 4px solid #2563eb; padding-left: 10px; margin: 30px 0 15px 0; color: #0f172a;">
+    2. 継続的な改善ロードマップ（ボトルネック連鎖の解消）
+  </h3>
+  <p style="font-size: 12px; color: #64748b; margin: 0 0 12px 0;">※経営改善は単発で終わらせず、1つのボトルネックが解消すると現れる「次の急所」を先回りして解決し続けることで利益が最大化します。</p>
+  <div style="background: #f1f5f9; border-radius: 10px; padding: 16px; margin-bottom: 25px; font-size: 13px; line-height: 1.8;">
+    <div style="margin-bottom: 10px; padding-bottom: 10px; border-bottom: 1px dashed #cbd5e1;">
+      <strong style="color: #2563eb;">Phase 1（まず着手）:</strong> {{phase1_action}}
+    </div>
+    <div style="margin-bottom: 10px; padding-bottom: 10px; border-bottom: 1px dashed #cbd5e1;">
+      <strong style="color: #0d9488;">Phase 2（次への展開）:</strong> {{phase2_action}}
+    </div>
+    <div>
+      <strong style="color: #7c3aed;">Phase 3（完成形・次の一手）:</strong> {{phase3_action}}
+    </div>
+  </div>
+
+  <div style="background: #eff6ff; border: 1px solid #bfdbfe; border-radius: 12px; padding: 22px; margin-top: 30px;">
+    <p style="font-size: 12px; font-weight: bold; color: #1e40af; text-transform: uppercase; margin: 0 0 4px 0;">RECOMMENDED SOLUTION</p>
+    <h4 style="font-size: 16px; font-weight: 800; color: #1e3a8a; margin: 0 0 8px 0;">推奨伴走プラン: {{recommended_product}}</h4>
+    <p style="font-size: 13px; color: #1e40af; margin: 0; line-height: 1.7;">{{action_recommendation}}</p>
+  </div>
+</div>`,
+    variables: [
+      { key: 'client_company', label: '診断対象企業名', defaultValue: '' },
+      { key: 'conducted_date', label: '診断実施日', defaultValue: '' },
+      { key: 'primary_bottleneck', label: '最優先ボトルネック', defaultValue: '' },
+      { key: 'bottleneck_impact', label: 'ボトルネックによる経営損失・影響', defaultValue: '' },
+      { key: 'company_before', label: '会社の現状 (Before)', defaultValue: '' },
+      { key: 'company_after', label: '会社の改善後 (After)', defaultValue: '' },
+      { key: 'ceo_before', label: '経営者の現状 (Before)', defaultValue: '' },
+      { key: 'ceo_after', label: '経営者の改善後 (After)', defaultValue: '' },
+      { key: 'phase1_action', label: 'Phase 1 施策', defaultValue: '' },
+      { key: 'phase2_action', label: 'Phase 2 施策', defaultValue: '' },
+      { key: 'phase3_action', label: 'Phase 3 施策', defaultValue: '' },
+      { key: 'recommended_product', label: '推奨伴走サービス', defaultValue: '' },
+      { key: 'action_recommendation', label: '推奨アクション詳細', defaultValue: '' },
+    ],
+  },
+  {
+    id: 'tpl-estimate-01',
+    type: 'estimate',
+    title: '見積書（商談情報から作成）',
+    description: '商談のプラン・金額から作成する御見積書（税抜・消費税10%・税込合計を明記）',
+    htmlContent: `<div style="font-family: Arial, sans-serif; max-width: 760px; margin: 0 auto; padding: 40px; color: #1e293b; line-height: 1.8">
+  <div style="display:flex; justify-content:space-between; align-items:baseline; border-bottom:2px solid #0f172a; padding-bottom:12px; margin-bottom:24px;">
+    <h1 style="margin:0; font-size:24px; color:#0f172a;">御 見 積 書</h1>
+    <p style="margin:0; font-size:13px; color:#64748b;">発行日: {{issue_date}} ｜ 有効期限: {{due_date}}</p>
+  </div>
+  <p style="font-size:16px; margin:0 0 16px 0;"><strong>{{client_company}}</strong> 御中</p>
+  <p style="font-size:13px; color:#475569; margin:0 0 20px 0;">下記のとおりお見積り申し上げます。</p>
+  
+  <div style="background:#f8fafc; border:1px solid #cbd5e1; border-radius:10px; padding:16px 20px; margin-bottom:24px; display:flex; justify-content:space-between; align-items:baseline;">
+    <span style="font-size:14px; color:#475569; font-weight:bold;">御見積合計金額（税込）</span>
+    <span style="font-size:28px; font-weight:800; color:#1e3a8a;">￥{{total_amount}} 円</span>
+  </div>
+
+  <h3 style="font-size:15px; border-left:4px solid #2563eb; padding-left:8px; margin:0 0 12px 0; color:#0f172a;">件名: {{proposal_title}}</h3>
+  
+  <table style="width:100%; border-collapse:collapse; margin-bottom:20px; font-size:13px;">
+    <thead>
+      <tr style="background:#0f172a; color:white;">
+        <th style="padding:10px; text-align:left;">項目 / 内容</th>
+        <th style="padding:10px; text-align:right;">金額（税抜）</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr style="border-bottom:1px solid #e2e8f0;">
+        <td style="padding:12px 10px;">{{project_name}}（初期構築・導入費用）</td>
+        <td style="padding:12px 10px; text-align:right; font-weight:bold;">¥{{initial_fee}} 円</td>
+      </tr>
+      <tr style="border-bottom:1px solid #e2e8f0;">
+        <td style="padding:12px 10px;">月額伴走・顧問支援（継続）</td>
+        <td style="padding:12px 10px; text-align:right; font-weight:bold;">¥{{monthly_fee}} 円 / 月</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <div style="display:flex; justify-content:flex-end; margin-bottom:30px;">
+    <div style="width:280px; font-size:13px;">
+      <div style="display:flex; justify-content:space-between; padding:4px 0;">
+        <span style="color:#64748b;">小計（税抜）:</span>
+        <span style="font-weight:bold;">¥{{subtotal_amount}} 円</span>
+      </div>
+      <div style="display:flex; justify-content:space-between; padding:4px 0; border-bottom:1px solid #cbd5e1;">
+        <span style="color:#64748b;">消費税（10%）:</span>
+        <span style="font-weight:bold;">¥{{tax_amount}} 円</span>
+      </div>
+      <div style="display:flex; justify-content:space-between; padding:8px 0; font-size:15px; font-weight:bold; color:#0f172a;">
+        <span>税込合計:</span>
+        <span style="color:#1e3a8a;">¥{{total_amount}} 円</span>
+      </div>
+    </div>
+  </div>
+
+  <div style="border-top:1px solid #e2e8f0; padding-top:16px; font-size:12px; color:#64748b;">
+    <p style="margin:0 0 4px 0;"><strong>発行元:</strong> 有限会社MST（代表: 大橋真人）</p>
+    <p style="margin:0 0 4px 0;">所在地: 〒503-0981 岐阜県大垣市桧町127番地</p>
+    <p style="margin:0;">※記載内容をご確認のうえ、Webまたは返信にてお申し込みいただけます。</p>
+  </div>
+</div>`,
+    variables: [
+      { key: 'client_company', label: '宛先企業名', defaultValue: '' },
+      { key: 'proposal_title', label: '見積件名', defaultValue: '' },
+      { key: 'project_name', label: '提案プラン・商談名', defaultValue: '' },
+      { key: 'initial_fee', label: '初期費用 (税抜・円)', defaultValue: '' },
+      { key: 'monthly_fee', label: '月額費用 (税抜・円)', defaultValue: '' },
+      { key: 'subtotal_amount', label: '小計 (税抜・円)', defaultValue: '' },
+      { key: 'tax_amount', label: '消費税額 (10%・円)', defaultValue: '' },
+      { key: 'total_amount', label: '税込合計金額 (円)', defaultValue: '' },
+      { key: 'issue_date', label: '発行日', defaultValue: '' },
+      { key: 'due_date', label: '有効期限', defaultValue: '' },
+    ],
+  },
+  {
+    id: 'tpl-monthly-report-01',
+    type: 'monthly_report',
+    title: '月次業務報告書（伴走支援レポート）',
+    description: '月次の業務改善実績・成果指標・稼働削減・次月方針をまとめた報告書ひな形',
+    htmlContent: `<div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; max-width: 800px; margin: 0 auto; padding: 40px; color: #1e293b; line-height: 1.8;">
+  <div style="background: linear-gradient(135deg, #1e1b4b 0%, #312e81 100%); color: white; padding: 32px; border-radius: 12px; margin-bottom: 30px;">
+    <p style="font-size: 12px; color: #a5b4fc; text-transform: uppercase; letter-spacing: 1.5px; margin: 0 0 6px 0; font-weight: bold;">Monthly Advisory & Implementation Report</p>
+    <h1 style="font-size: 24px; margin: 0 0 10px 0; font-weight: 800;">{{report_title}}</h1>
+    <p style="font-size: 13px; color: #c7d2fe; margin: 0;">対象期間: {{target_month}} ｜ 宛先: {{client_company}} 御中</p>
+  </div>
+
+  <div style="margin-bottom: 24px; padding: 20px; background: #f8fafc; border-left: 4px solid #6366f1; border-radius: 6px;">
+    <h3 style="margin: 0 0 8px 0; font-size: 15px; color: #1e293b;">📌 今月の支援サマリー</h3>
+    <p style="margin: 0; font-size: 13px; color: #475569;">{{monthly_summary}}</p>
+  </div>
+
+  <h3 style="font-size: 16px; border-bottom: 2px solid #e2e8f0; padding-bottom: 8px; margin-top: 28px; color: #0f172a;">1. 主な実施実績・自動化実装</h3>
+  <div style="padding: 12px 0; font-size: 13px; color: #334155; white-space: pre-wrap;">{{accomplishments}}</div>
+
+  <h3 style="font-size: 16px; border-bottom: 2px solid #e2e8f0; padding-bottom: 8px; margin-top: 28px; color: #0f172a;">2. 成果指標・創出時間（KPI）</h3>
+  <table style="width: 100%; border-collapse: collapse; margin-top: 12px; font-size: 13px;">
+    <tr style="background: #f1f5f9;"><th style="padding: 10px; border: 1px solid #cbd5e1; text-align: left;">指標項目</th><th style="padding: 10px; border: 1px solid #cbd5e1; text-align: right;">当月実績 / 創出効果</th></tr>
+    <tr><td style="padding: 10px; border: 1px solid #cbd5e1;">月間手作業削減時間</td><td style="padding: 10px; border: 1px solid #cbd5e1; text-align: right; font-weight: bold; color: #4338ca;">{{hours_saved}} 時間</td></tr>
+    <tr><td style="padding: 10px; border: 1px solid #cbd5e1;">自動化・導線KPI進捗</td><td style="padding: 10px; border: 1px solid #cbd5e1; text-align: right;">{{metrics_kpi}}</td></tr>
+  </table>
+
+  <h3 style="font-size: 16px; border-bottom: 2px solid #e2e8f0; padding-bottom: 8px; margin-top: 28px; color: #0f172a;">3. 次月のアクションプラン</h3>
+  <div style="padding: 12px 0; font-size: 13px; color: #334155; white-space: pre-wrap;">{{next_actions}}</div>
+
+  <div style="margin-top: 40px; padding-top: 20px; border-top: 1px solid #e2e8f0; font-size: 12px; color: #64748b; display: flex; justify-content: space-between;">
+    <div>発行日: {{issue_date}}</div>
+    <div>{{sender_company}}　担当: {{sender_name}}</div>
+  </div>
+</div>`,
+    variables: [
+      { key: 'client_company', label: '宛先企業名', defaultValue: '' },
+      { key: 'report_title', label: '報告書タイトル', defaultValue: '' },
+      { key: 'target_month', label: '対象年月', defaultValue: '' },
+      { key: 'monthly_summary', label: '当月サマリー', defaultValue: '' },
+      { key: 'accomplishments', label: '主な実施実績', defaultValue: '' },
+      { key: 'hours_saved', label: '月間創出時間（h）', defaultValue: '' },
+      { key: 'metrics_kpi', label: 'KPI実績・成果', defaultValue: '' },
+      { key: 'next_actions', label: '次月アクション', defaultValue: '' },
+      { key: 'issue_date', label: '発行日', defaultValue: '' },
+    ],
+  },
+];
+
+const getTemplateDefaultValues = (templateId: string, today: string = todayJst()): Record<string, string> => {
+  const common: Record<string, string> = {
+    client_company: '株式会社サンプル',
+    client_name: '山田 太郎',
+    client_address: '東京都千代田区丸の内1-1-1',
+    client_rep: '代表取締役 山田 太郎',
+    my_company: '有限会社MST',
+    my_address: '〒503-0981　岐阜県大垣市桧町127番地',
+    my_rep: '大橋真人',
+    sender_name: '大橋真人',
+    sender_company: '有限会社MST',
+    sender_address: '〒503-0981　岐阜県大垣市桧町127番地',
+    sender_rep: '大橋真人',
+    bank_account_info: 'ドコモSMTBネット銀行　法人第一支店　普通預金　2223730（口座名義：有限会社MST）',
+    issue_date: formatDocumentDate(today),
+    conducted_date: formatDocumentDate(today),
+    due_date: formatDocumentDate(addOneMonthDate(today)),
+  };
+
+  if (templateId === 'tpl-report-01') {
+    return {
+      ...common,
+      primary_bottleneck: '経営者自身の現場拘束と事務手作業の二重入力',
+      bottleneck_impact: '請求・見積の手作業や顧客対応の遅れにより、月間約25時間の経営リソースが現場に奪われ、売上につながる次の一手が後回しになっています。',
+      company_before: '手作業や属人化により、売上はあるのに手元に利益が残らず、仕事が特定の人に集中している',
+      company_after: '業務が仕組みで回り、限られた人員でもミスなく自動連携し、売上だけでなく利益がしっかり残る会社へ',
+      ceo_before: '日々の火消しや業務処理に追われ、会社の改善や戦略を考える時間が奪われている',
+      ceo_after: '現場から解放され、本来向き合うべき「経営判断」「人材育成」「次の一手（新規事業）」に集中できる',
+      phase1_action: '【業務・時間の急所解消】毎月の請求・見積・顧客情報の重複入力を自動化し、月20時間以上の経営時間を即座に創出',
+      phase2_action: '【売上・集客の導線構築】LINE・メール・CRMを連携し、集客から問い合わせ・商談・顧客フォローが自動でつながる流れを構築',
+      phase3_action: '【経営の自走化・新規事業】経営戦略・利益改善顧問の定期伴走により、新たな収益源の創出と自走組織を実現',
+      recommended_product: '業務改善・IT・DX顧問 ＋ 業務自動化パッケージ',
+      action_recommendation: 'まずはPhase 1の業務改善・自動化から小さく着手し、成果を確認しながら主軸の経営顧問へと展開することを推奨いたします。',
+    };
+  }
+
+  if (templateId === 'tpl-proposal-01') {
+    return {
+      ...common,
+      proposal_title: '経営の仕組み化 × 利益改善 伴走ご提案書',
+      current_challenge: '売上はあるものの手元に利益が残りにくく、手作業や二重入力に時間を奪われ、改善を進めたいが日々の業務に追われて優先順位が決まらない状態です。',
+      solution_overview: '経営戦略・利益改善顧問を主軸に、業務自動化（GAS・ツール連携）と集客導線（LINE・CRM連携）を組み合わせ、戦略と現場実装の両面から利益体質へ変革します。',
+      expected_outcome: '現場の手作業を月20時間以上削減して利益が残る体制をつくり、経営者が現場作業から解放されて「次の一手」を選べる経営へ導きます。',
+      total_amount: '350,000',
+      cost_breakdown: '初期費用 150,000円（仕組み構築） / 月額費用 200,000円（継続伴走顧問）',
+      payment_terms: '月末締め・翌月末日払い（銀行振込）',
+    };
+  }
+
+  if (templateId === 'tpl-monthly-report-01') {
+    return {
+      ...common,
+      report_title: '月次業務改善・伴走支援レポート',
+      target_month: `${today.slice(0, 4)}年${today.slice(5, 7)}月度`,
+      monthly_summary: '今月は請求書発行および顧客面談調整の自動化ラインを本番稼働させ、二重入力作業の削減を達成しました。',
+      accomplishments: '・LINE友だち登録後の自動アンケート配信およびCRM連携稼働\n・請求書発行および送付ステータス自動更新の実装\n・定期経営ミーティング（月2回）の実施とボトルネックの優先順位付け',
+      hours_saved: '24',
+      metrics_kpi: '商談化率 18%向上 / 問い合わせ対応リードタイム 65%短縮',
+      next_actions: '・次月は見直し後の業務フローにおける関係者定着状況の確認\n・定期請求の自動集計レポートの構築',
+    };
+  }
+
+  return common;
+};
+
+const templateWorkflowOrder: Record<DocTemplateType, number> = { report: 0, proposal: 1, estimate: 2, contract: 3, invoice: 4, monthly_report: 5 };
+const orderTemplatesByWorkflow = (items: DocTemplate[]) => [...items].sort((a, b) => templateWorkflowOrder[a.type] - templateWorkflowOrder[b.type]);
 
 interface DocumentTemplateViewProps { 
   initialCompanyId?: string; 
@@ -81,23 +636,7 @@ export const DocumentTemplateView: React.FC<DocumentTemplateViewProps> = ({
 }) => {
   const [templates, setTemplates] = useState<DocTemplate[]>(DEFAULT_TEMPLATES);
   const [templateStatus, setTemplateStatus] = useState('');
-  
-  // 5 unified templates state
-  const [selectedTemplateId, setSelectedTemplateId] = useState<string>(() => {
-    if (initialDocumentType === 'proposal') return 'tpl-proposal-report';
-    if (initialDocumentType === 'invoice') return 'tpl-unified-invoice';
-    if (initialDocumentType === 'estimate') return 'tpl-unified-estimate';
-    if (initialDocumentType === 'contract') return 'tpl-unified-contract';
-    if (initialDocumentType === 'monthly_report') return 'tpl-monthly-report-01';
-    if (initialDealId) return 'tpl-unified-estimate';
-    return 'tpl-proposal-report';
-  });
-
-  // Dynamic inside-template modes
-  const [paymentMode, setPaymentMode] = useState<PaymentMode>('lump_sum');
-  const [invoiceSubtype, setInvoiceSubtype] = useState<InvoiceSubtype>('lump_sum');
-  const [customHtmlOverride, setCustomHtmlOverride] = useState<string | null>(null);
-
+  const [selectedTemplateId, setSelectedTemplateId] = useState<string>(initialDocumentType === 'invoice' ? 'tpl-invoice-01' : initialDealId ? 'tpl-estimate-01' : 'tpl-report-01');
   const [isEditingTemplate, setIsEditingTemplate] = useState<boolean>(false);
   const [copied, setCopied] = useState<boolean>(false);
   const [copiedApplyUrl, setCopiedApplyUrl] = useState<boolean>(false);
@@ -115,20 +654,6 @@ export const DocumentTemplateView: React.FC<DocumentTemplateViewProps> = ({
   const [savedDocIds, setSavedDocIds] = useState<Record<string, string>>({});
   const autosavedDocumentIds = useRef<Record<string, string>>({});
   const autosaveQueues = useRef<Record<string, Promise<void>>>({});
-
-  // Active template resolution
-  const currentTemplate = templates.find((t) => t.id === selectedTemplateId) || templates[0];
-
-  // Variable inputs state
-  const [variableValues, setVariableValues] = useState<Record<string, string>>(() => {
-    const today = todayJst();
-    const activeId = initialDocumentType === 'invoice' 
-      ? 'tpl-unified-invoice' 
-      : initialDealId 
-      ? 'tpl-unified-estimate' 
-      : 'tpl-proposal-report';
-    return getTemplateDefaultValues(activeId, today, 'lump_sum', 'lump_sum');
-  });
 
   useEffect(() => {
     const supabase = getSupabase();
@@ -156,40 +681,57 @@ export const DocumentTemplateView: React.FC<DocumentTemplateViewProps> = ({
         if (sourceLead?.company_id) setCompanyId(sourceLead.company_id);
       }
     });
-  }, [initialCompanyId, initialDealId, initialLeadId]);
+  }, []);
 
-  // Sync templates on mount
   useEffect(() => {
     const loadTemplates = async () => {
       const supabase = getSupabase();
       if (!supabase) return;
-      try {
-        const { data, error } = await supabase.from('customer_document_templates').select('*').order('created_at');
-        if (error) { 
-          setTemplateStatus('最新の統合テンプレート（5種）を読み込みました。'); 
-          return; 
-        }
-        // Always prioritize the 5 unified templates
-        setTemplates(DEFAULT_TEMPLATES);
-        if (data?.length === 0) {
-          const defaults = DEFAULT_TEMPLATES.map((template) => ({
-            template_key: template.id,
-            document_type: template.type === 'report' ? 'diagnosis_report' : template.type,
-            title: template.title,
-            description: template.description,
-            body_html: template.htmlContent,
-            variables: template.variables,
-          }));
-          await supabase.from('customer_document_templates').insert(defaults);
-        }
-      } catch {
-        setTemplates(DEFAULT_TEMPLATES);
+      const { data, error } = await supabase.from('customer_document_templates').select('*').order('created_at');
+      if (error) { setTemplateStatus('テンプレート共有には最新のSupabase SQL適用が必要です。'); return; }
+      if (data?.length) {
+        // 最新コードの DEFAULT_TEMPLATES (新レポート・提案書) を常に最優先し、DB側の未更新レコードで先祖返りしないようにする
+        const defaultMap = new Map(DEFAULT_TEMPLATES.map((t) => [t.id, t]));
+        const loadedTemplates = data.map((row:any)=> {
+          const def = defaultMap.get(row.template_key);
+          if (def) return def; // 最新の雛形を優先
+          return {
+            id:row.template_key,
+            type:row.document_type==='diagnosis_report'?'report':row.document_type,
+            title:row.title,description:row.description||'',htmlContent:row.body_html||'',
+            variables:Array.isArray(row.variables)?row.variables:[],
+          };
+        }) as DocTemplate[];
+        const loadedKeys = new Set(loadedTemplates.map((template)=>template.id));
+        setTemplates(orderTemplatesByWorkflow([...loadedTemplates, ...DEFAULT_TEMPLATES.filter((template)=>!loadedKeys.has(template.id))]));
+        setSelectedTemplateId(initialDocumentType ? (data.find((row:any)=>row.document_type===initialDocumentType)?.template_key || (initialDocumentType === 'invoice' ? 'tpl-invoice-01' : data[0].template_key)) : initialDealId ? 'tpl-estimate-01' : (data.find((row:any)=>row.document_type==='diagnosis_report')?.template_key || data[0].template_key));
+        setTemplateStatus('テンプレートをSupabaseから読み込みました。');
+        return;
       }
+      const defaults=DEFAULT_TEMPLATES.map((template)=>({
+        template_key:template.id,
+        document_type:template.type==='report'?'diagnosis_report':template.type,
+        title:template.title,description:template.description,
+        body_html:template.htmlContent,variables:template.variables,
+      }));
+      const {data:seeded,error:seedError}=await supabase.from('customer_document_templates').insert(defaults).select('*');
+      if (seedError) { setTemplateStatus('標準テンプレートを共有できませんでした。SQL・権限を確認してください。'); return; }
+      if (seeded?.length) {
+        const seededTemplates = seeded.map((row:any)=>({
+          id:row.template_key,type:row.document_type==='diagnosis_report'?'report':row.document_type,
+          title:row.title,description:row.description,htmlContent:row.body_html,
+          variables:Array.isArray(row.variables)?row.variables:[],
+        })) as DocTemplate[];
+        setTemplates(seededTemplates);
+        if (initialDocumentType) setSelectedTemplateId(seededTemplates.find((template)=>template.type===initialDocumentType)?.id || (initialDocumentType==='invoice'?'tpl-invoice-01':seededTemplates[0]?.id || ''));
+      }
+      setTemplateStatus('標準テンプレートをワークスペースに登録しました。');
     };
     void loadTemplates();
   }, []);
 
-  // Pull CRM, deal, and diagnosis data into matching template variables.
+
+  // Pull CRM, deal, and latest diagnosis data into matching template variables.
   useEffect(() => {
     const supabase = getSupabase();
     if (!supabase || (!companyId && !leadId && !dealId && !contactId)) return;
@@ -209,7 +751,6 @@ export const DocumentTemplateView: React.FC<DocumentTemplateViewProps> = ({
         ? (await supabase.from('companies').select('*').eq('id', resolvedCompanyId).maybeSingle()).data
         : null);
       const customerResult = resolvedCompanyId ? await supabase.from('customers').select('contract_start_date').eq('company_id', resolvedCompanyId).maybeSingle() : { data: null };
-      
       let diagnosis: any = null;
       let formSubmission: any = null;
       if (leadId || resolvedCompanyId) {
@@ -237,6 +778,7 @@ export const DocumentTemplateView: React.FC<DocumentTemplateViewProps> = ({
       }
       if (cancelled) return;
       const score = diagnosis?.score;
+      const categoryScores = diagnosis?.category_scores || {};
       const recommendations = report?.recommendations;
       const recommendationText = formatDocumentValue(recommendations);
       const submissionAnswers = (formSubmission?.answers || diagnosis?.answers || {}) as Record<string, unknown>;
@@ -252,21 +794,6 @@ export const DocumentTemplateView: React.FC<DocumentTemplateViewProps> = ({
       const tax = Math.floor(subtotal * 0.1);
       const total = subtotal + tax;
       const invoiceNumber = `INV-${today.replaceAll('-', '')}-${(deal?.id || crypto.randomUUID()).slice(0, 6).toUpperCase()}`;
-
-      // Milestone calculations (50% / 50%)
-      const mb = calculateMilestoneAmounts(subtotal, 0.5);
-
-      // Installment calculations (3 installments)
-      const inst = calculateInstallmentAmounts(subtotal, 3);
-
-      const defaultTerms = paymentMode === 'milestone'
-        ? '着手金（50%）：契約締結後翌月末日振込 ／ 残金（50%）：導入検収月翌月末日振込'
-        : paymentMode.startsWith('installments')
-        ? `毎月末日締め翌月末日振込（全${paymentMode === 'installments_6' ? '6' : '3'}回均等分割・期限の利益喪失条項あり）`
-        : paymentMode === 'retainer'
-        ? '毎月末日締め翌月末日振込（最低6ヶ月契約・自動更新条項あり）'
-        : deal?.memo || '月末締め翌月末日振込（翌月末日一括払い）';
-
       const values: Record<string, string> = {
         client_company: company?.company_name || '',
         client_name: contact?.full_name || company?.contact_name || '',
@@ -274,56 +801,29 @@ export const DocumentTemplateView: React.FC<DocumentTemplateViewProps> = ({
         client_rep: contact?.role_title?.includes('代表') ? contact.full_name : '',
         start_date: customerResult.data?.contract_start_date ? formatDocumentDate(String(customerResult.data.contract_start_date).slice(0,10)) : '',
         end_date: '',
-        my_company: '有限会社MST', 
-        my_address: '〒503-0981　岐阜県大垣市桧町127番地', 
-        my_rep: '大橋真人', 
-        sender_name: '大橋真人', 
-        sender_company: '有限会社MST',
+        my_company: '有限会社MST', my_address: '〒503-0981　岐阜県大垣市桧町127番地', my_rep: '大橋真人', sender_name: '大橋真人', sender_company: '有限会社MST',
         bank_account_info: 'ドコモSMTBネット銀行　法人第一支店　普通預金　2223730（口座名義：有限会社MST）',
-        sender_address: '〒503-0981　岐阜県大垣市桧町127番地', 
-        sender_rep: '大橋真人',
-        payment_terms: defaultTerms,
-        cost_breakdown: [initialFee > 0 ? `初期構築費 ${initialFee.toLocaleString('ja-JP')}円` : '', monthlyFee > 0 ? `月額顧問料 ${monthlyFee.toLocaleString('ja-JP')}円` : ''].filter(Boolean).join(' / '),
-        proposal_title: deal?.proposal_plan_name || deal?.deal_name || '経営の仕組み化 × 利益改善 伴走ご提案書',
-        project_name: deal?.proposal_plan_name || deal?.deal_name || productName || '業務改善・自動化システム構築',
-        total_project_amount: subtotal > 0 ? subtotal.toLocaleString('ja-JP') : '',
+          sender_address: '〒503-0981　岐阜県大垣市桧町127番地', sender_rep: '大橋真人',
+        payment_terms: deal?.memo || '',
+        cost_breakdown: [initialFee > 0 ? `初期費用 ${initialFee.toLocaleString('ja-JP')}円` : '', monthlyFee > 0 ? `月額費用 ${monthlyFee.toLocaleString('ja-JP')}円` : ''].filter(Boolean).join(' / '),
+        proposal_title: deal?.proposal_plan_name || deal?.deal_name || 'お見積り',
+        project_name: deal?.proposal_plan_name || deal?.deal_name || productName || 'サービス',
         total_amount: total > 0 ? total.toLocaleString('ja-JP') : '',
         subtotal_amount: subtotal > 0 ? subtotal.toLocaleString('ja-JP') : '',
         tax_amount: tax > 0 ? tax.toLocaleString('ja-JP') : '',
-        initial_fee: initialFee > 0 ? initialFee.toLocaleString('ja-JP') : '300,000',
-        initial_fee_tax: initialFee > 0 ? Math.floor(initialFee * 0.1).toLocaleString('ja-JP') : '30,000',
-        initial_fee_tax_included: initialFee > 0 ? Math.floor(initialFee * 1.1).toLocaleString('ja-JP') : '330,000',
-        monthly_fee: monthlyFee > 0 ? monthlyFee.toLocaleString('ja-JP') : '100,000',
-        monthly_fee_tax: monthlyFee > 0 ? Math.floor(monthlyFee * 0.1).toLocaleString('ja-JP') : '10,000',
-        monthly_fee_tax_included: monthlyFee > 0 ? Math.floor(monthlyFee * 1.1).toLocaleString('ja-JP') : '110,000',
-        monthly_amount: monthlyFee > 0 ? monthlyFee.toLocaleString('ja-JP') : '100,000',
-        tax_included_amount: monthlyFee > 0 ? Math.floor(monthlyFee * 1.1).toLocaleString('ja-JP') : '110,000',
-        deposit_rate: '50',
-        deposit_subtotal: mb.depositSubtotal > 0 ? mb.depositSubtotal.toLocaleString('ja-JP') : '',
-        deposit_tax: mb.depositTax > 0 ? mb.depositTax.toLocaleString('ja-JP') : '',
-        deposit_total: mb.depositTotalWithTax > 0 ? mb.depositTotalWithTax.toLocaleString('ja-JP') : '',
-        completion_rate: '50',
-        completion_subtotal: mb.completionSubtotal > 0 ? mb.completionSubtotal.toLocaleString('ja-JP') : '',
-        completion_tax: mb.completionTax > 0 ? mb.completionTax.toLocaleString('ja-JP') : '',
-        completion_total: mb.completionTotalWithTax > 0 ? mb.completionTotalWithTax.toLocaleString('ja-JP') : '',
-        installment_number: '1',
-        installment_count: '3',
-        installment_subtotal: inst.installments[0]?.subtotal ? inst.installments[0].subtotal.toLocaleString('ja-JP') : '',
-        installment_tax: inst.installments[0]?.tax ? inst.installments[0].tax.toLocaleString('ja-JP') : '',
-        installment_amount: inst.installments[0]?.totalWithTax ? inst.installments[0].totalWithTax.toLocaleString('ja-JP') : '',
+        initial_fee: initialFee > 0 ? initialFee.toLocaleString('ja-JP') : '',
+        monthly_fee: monthlyFee > 0 ? monthlyFee.toLocaleString('ja-JP') : '',
+        monthly_amount: monthlyFee > 0 ? monthlyFee.toLocaleString('ja-JP') : '',
+        tax_included_amount: monthlyFee > 0 ? Math.floor(monthlyFee * 1.1).toLocaleString('ja-JP') : '',
         invoice_number: invoiceNumber,
         item_name_1: deal?.proposal_plan_name || deal?.deal_name || productName || 'サービス提供費',
-        item_qty_1: '1', 
-        item_price_1: subtotal > 0 ? subtotal.toLocaleString('ja-JP') : '', 
-        item_amount_1: subtotal > 0 ? subtotal.toLocaleString('ja-JP') : '',
-        item_name_2: 'なし', 
-        item_qty_2: '0', 
-        item_price_2: '', 
-        item_amount_2: '',
+        item_qty_1: '1', item_price_1: subtotal > 0 ? subtotal.toLocaleString('ja-JP') : '', item_amount_1: subtotal > 0 ? subtotal.toLocaleString('ja-JP') : '',
+        item_name_2: 'なし', item_qty_2: '0', item_price_2: '', item_amount_2: '',
         issue_date: formatDocumentDate(today),
-        due_date: formatDocumentDate(selectedTemplateId.includes('estimate') ? quoteExpiry : invoiceDue),
-        overall_score: score == null ? '72' : String(score),
-        primary_bottleneck: challengeText || '現場拘束と手作業の二重入力による経営時間の圧迫',
+        conducted_date: formatDocumentDate(diagnosis?.conducted_at ? String(diagnosis.conducted_at).slice(0,10) : today),
+        due_date: formatDocumentDate(selectedTemplateId === 'tpl-estimate-01' ? quoteExpiry : invoiceDue),
+        overall_score: score == null ? '' : String(score),
+        primary_bottleneck: challengeText || '経営者自身の現場拘束と事務手作業の二重入力',
         bottleneck_impact: report?.summary || '請求・見積の手作業や顧客対応の遅れにより、月間約25時間の経営リソースが現場に奪われ、売上につながる次の一手が後回しになっています。',
         company_before: '手作業や属人化により、売上はあるのに手元に利益が残らず、仕事が特定の人に集中している',
         company_after: '業務が仕組みで回り、限られた人員でもミスなく自動連携し、売上だけでなく利益がしっかり残る会社へ',
@@ -335,28 +835,49 @@ export const DocumentTemplateView: React.FC<DocumentTemplateViewProps> = ({
         current_challenge: challengeText || '手作業や二重入力に時間を奪われ、改善を着手したいが日々の業務に追われて優先順位が決まらない状態です。',
         solution_overview: product?.description || '経営戦略・利益改善顧問および業務自動化パッケージにより、手作業の撲滅と利益の残る仕組み化を同時に進めます。',
         expected_outcome: recommendationText || '現場の手作業が自動化され、月20時間以上の余白を創出。経営者が次の一手を選べる経営体質へ変革します。',
+        action_recommendation: recommendationText || 'まずはPhase 1の業務改善・自動化から小さく着手し、成果を確認しながら主軸の経営顧問へと展開することを推奨いたします。',
         recommended_product: productName || '業務改善・IT・DX顧問 ＋ 業務自動化パッケージ',
       };
       setVariableValues((prev) => ({...prev, ...values}));
     };
     void populate();
     return () => { cancelled = true; };
-  }, [companyId, leadId, dealId, contactId, selectedTemplateId, paymentMode]);
+  }, [companyId, leadId, dealId, contactId, selectedTemplateId]);
 
-  // When switching unified template, load its default variables and reset custom override
-  const handleSelectTemplate = (rawId: string) => {
-    const id = normalizeTemplateId(rawId);
-    setSelectedTemplateId(id);
-    setCustomHtmlOverride(null);
+  // Active template
+  const currentTemplate = templates.find((t) => t.id === selectedTemplateId) || templates[0];
+
+  // Variable inputs state
+  const [variableValues, setVariableValues] = useState<Record<string, string>>(() => {
     const today = todayJst();
-    const defaults = getTemplateDefaultValues(id, today, paymentMode, invoiceSubtype);
+    const activeId = initialDocumentType === 'invoice' ? 'tpl-invoice-01' : initialDealId ? 'tpl-estimate-01' : 'tpl-report-01';
+    return getTemplateDefaultValues(activeId, today);
+  });
+
+  // Apply the saved organization profile even before the user selects a customer or deal.
+  useEffect(() => {
+    setVariableValues((prev) => ({
+      ...prev,
+      my_company: prev.my_company || '有限会社MST',
+      my_address: prev.my_address || '〒503-0981　岐阜県大垣市桧町127番地',
+      my_rep: prev.my_rep || '大橋真人',
+      sender_name: prev.sender_name || '大橋真人',
+      sender_company: prev.sender_company || '有限会社MST',
+      bank_account_info: prev.bank_account_info || 'ドコモSMTBネット銀行　法人第一支店　普通預金　2223730（口座名義：有限会社MST）',
+    }));
+  }, [selectedTemplateId]);
+
+  // When switching template, load its default variables
+  const handleSelectTemplate = (id: string) => {
+    setSelectedTemplateId(id);
+    const today = todayJst();
+    const defaults = getTemplateDefaultValues(id, today);
     setVariableValues((prev) => ({
       ...defaults,
       ...prev,
       ...defaults,
       client_company: prev.client_company || defaults.client_company || '',
       issue_date: formatDocumentDate(today),
-      due_date: formatDocumentDate(id.includes('estimate') ? addOneMonthDate(today) : invoiceDueDate(today)),
     }));
     setIsEditingTemplate(false);
   };
@@ -366,260 +887,17 @@ export const DocumentTemplateView: React.FC<DocumentTemplateViewProps> = ({
     setVariableValues((prev) => ({ ...prev, [key]: value }));
   };
 
-  // Switch Payment Mode (for Estimate and Contract)
-  const switchPaymentMode = (mode: PaymentMode) => {
-    setPaymentMode(mode);
-    setHasStartedDocument(true);
-    setCustomHtmlOverride(null); // allow dynamic generator to re-render table/clauses
-    const parseNum = (v?: string) => Number((v || '').replace(/[^\d]/g, '')) || 0;
-    const rawSubtotal = parseNum(variableValues.subtotal_amount) || parseNum(variableValues.total_project_amount) || 300000;
-    const today = todayJst();
-    const nextMonthEnd = invoiceDueDate(today);
-    const oneMonthLater = addOneMonthDate(today);
+  // Perform deterministic template auto-population
+  const missingVariables = currentTemplate.variables.filter((variable) => variable.key !== 'end_date' && !(variableValues[variable.key] || '').trim());
 
-    if (mode === 'lump_sum') {
-      const tax = Math.floor(rawSubtotal * 0.1);
-      const total = rawSubtotal + tax;
-      setVariableValues((prev) => ({
-        ...prev,
-        payment_terms: '契約締結月の翌月末日振込（一括払い）',
-        due_date: formatDocumentDate(selectedTemplateId.includes('estimate') ? oneMonthLater : nextMonthEnd),
-        subtotal_amount: rawSubtotal.toLocaleString('ja-JP'),
-        tax_amount: tax.toLocaleString('ja-JP'),
-        total_amount: total.toLocaleString('ja-JP'),
-      }));
-    } else if (mode === 'retainer') {
-      const monthly = parseNum(variableValues.monthly_fee) || 100000;
-      const initial = parseNum(variableValues.initial_fee) || 0;
-      const sub = monthly + initial;
-      const tax = Math.floor(sub * 0.1);
-      const total = sub + tax;
-      setVariableValues((prev) => ({
-        ...prev,
-        monthly_fee: monthly.toLocaleString('ja-JP'),
-        initial_fee: initial > 0 ? initial.toLocaleString('ja-JP') : '0',
-        payment_terms: '毎月末日締め翌月末日振込（月額顧問契約・最低契約期間6ヶ月・自動更新条項あり）',
-        due_date: formatDocumentDate(selectedTemplateId.includes('estimate') ? oneMonthLater : nextMonthEnd),
-        cost_breakdown: initial > 0 ? `初期費用 ${initial.toLocaleString('ja-JP')}円 / 月額顧問料 ${monthly.toLocaleString('ja-JP')}円` : `月額顧問料 ${monthly.toLocaleString('ja-JP')}円`,
-        subtotal_amount: sub.toLocaleString('ja-JP'),
-        tax_amount: tax.toLocaleString('ja-JP'),
-        total_amount: total.toLocaleString('ja-JP'),
-      }));
-    } else if (mode === 'milestone') {
-      const mb = calculateMilestoneAmounts(rawSubtotal, 0.5);
-      setVariableValues((prev) => ({
-        ...prev,
-        deposit_rate: '50',
-        completion_rate: '50',
-        total_project_amount: rawSubtotal.toLocaleString('ja-JP'),
-        deposit_subtotal: mb.depositSubtotal.toLocaleString('ja-JP'),
-        deposit_tax: mb.depositTax.toLocaleString('ja-JP'),
-        deposit_total: mb.depositTotalWithTax.toLocaleString('ja-JP'),
-        completion_subtotal: mb.completionSubtotal.toLocaleString('ja-JP'),
-        completion_tax: mb.completionTax.toLocaleString('ja-JP'),
-        completion_total: mb.completionTotalWithTax.toLocaleString('ja-JP'),
-        subtotal_amount: rawSubtotal.toLocaleString('ja-JP'),
-        tax_amount: (mb.depositTax + mb.completionTax).toLocaleString('ja-JP'),
-        total_amount: mb.totalWithTax.toLocaleString('ja-JP'),
-        payment_terms: '着手金（50%）：契約締結後翌月末日振込 ／ 残金（50%）：導入検収月翌月末日振込',
-        due_date: formatDocumentDate(selectedTemplateId.includes('estimate') ? oneMonthLater : nextMonthEnd),
-      }));
-    } else if (mode === 'installments_3') {
-      const inst = calculateInstallmentAmounts(rawSubtotal, 3);
-      setVariableValues((prev) => ({
-        ...prev,
-        installment_count: '3',
-        installment_number: '1',
-        installment_subtotal: (inst.installments[0]?.subtotal ?? 0).toLocaleString('ja-JP'),
-        installment_tax: (inst.installments[0]?.tax ?? 0).toLocaleString('ja-JP'),
-        installment_amount: (inst.installments[0]?.totalWithTax ?? 0).toLocaleString('ja-JP'),
-        subtotal_amount: rawSubtotal.toLocaleString('ja-JP'),
-        tax_amount: (inst.totalWithTax - inst.totalSubtotal).toLocaleString('ja-JP'),
-        total_amount: inst.totalWithTax.toLocaleString('ja-JP'),
-        payment_terms: '毎月末日締め翌月末日振込（全3回均等分割払い・期限の利益喪失条項あり）',
-        due_date: formatDocumentDate(selectedTemplateId.includes('estimate') ? oneMonthLater : nextMonthEnd),
-      }));
-    } else if (mode === 'hybrid_setup_retainer') {
-      const initial = parseNum(variableValues.initial_fee) || 300000;
-      const monthly = parseNum(variableValues.monthly_fee) || 100000;
-      const initialTax = Math.floor(initial * 0.1);
-      const monthlyTax = Math.floor(monthly * 0.1);
-      const sub = initial + monthly;
-      const tax = initialTax + monthlyTax;
-      const total = sub + tax;
-      setVariableValues((prev) => ({
-        ...prev,
-        initial_fee: initial.toLocaleString('ja-JP'),
-        initial_fee_tax: initialTax.toLocaleString('ja-JP'),
-        initial_fee_tax_included: (initial + initialTax).toLocaleString('ja-JP'),
-        monthly_fee: monthly.toLocaleString('ja-JP'),
-        monthly_fee_tax: monthlyTax.toLocaleString('ja-JP'),
-        monthly_fee_tax_included: (monthly + monthlyTax).toLocaleString('ja-JP'),
-        subtotal_amount: sub.toLocaleString('ja-JP'),
-        tax_amount: tax.toLocaleString('ja-JP'),
-        total_amount: total.toLocaleString('ja-JP'),
-        payment_terms: '初期構築費：契約締結月の翌月末日振込 ／ 月額顧問料：毎月末日締め翌月末日振込（最低6ヶ月契約）',
-        due_date: formatDocumentDate(selectedTemplateId.includes('estimate') ? oneMonthLater : nextMonthEnd),
-        cost_breakdown: `初期構築費 ${initial.toLocaleString('ja-JP')}円 ＋ 月額顧問料 ${monthly.toLocaleString('ja-JP')}円/月`,
-      }));
-    } else if (mode === 'installments_6') {
-      const inst = calculateInstallmentAmounts(rawSubtotal, 6);
-      setVariableValues((prev) => ({
-        ...prev,
-        installment_count: '6',
-        installment_number: '1',
-        installment_subtotal: (inst.installments[0]?.subtotal ?? 0).toLocaleString('ja-JP'),
-        installment_tax: (inst.installments[0]?.tax ?? 0).toLocaleString('ja-JP'),
-        installment_amount: (inst.installments[0]?.totalWithTax ?? 0).toLocaleString('ja-JP'),
-        subtotal_amount: rawSubtotal.toLocaleString('ja-JP'),
-        tax_amount: (inst.totalWithTax - inst.totalSubtotal).toLocaleString('ja-JP'),
-        total_amount: inst.totalWithTax.toLocaleString('ja-JP'),
-        payment_terms: '毎月末日締め翌月末日振込（全6回均等分割払い・期限の利益喪失条項あり）',
-        due_date: formatDocumentDate(selectedTemplateId.includes('estimate') ? oneMonthLater : nextMonthEnd),
-      }));
-    }
-  };
-
-  // Switch Invoice Subtype (for Invoice)
-  const switchInvoiceSubtype = (subtype: InvoiceSubtype) => {
-    setInvoiceSubtype(subtype);
-    setHasStartedDocument(true);
-    setCustomHtmlOverride(null);
-    const parseNum = (v?: string) => Number((v || '').replace(/[^\d]/g, '')) || 0;
-    const baseSubtotal = parseNum(variableValues.total_project_amount) || parseNum(variableValues.subtotal_amount) || 300000;
-    const today = todayJst();
-    const nextMonthEnd = invoiceDueDate(today);
-
-    if (subtype === 'hybrid_setup_retainer') {
-      const initial = parseNum(variableValues.initial_fee) || 300000;
-      const monthly = parseNum(variableValues.monthly_fee) || 100000;
-      const initialTax = Math.floor(initial * 0.1);
-      const monthlyTax = Math.floor(monthly * 0.1);
-      const sub = initial + monthly;
-      const tax = initialTax + monthlyTax;
-      const total = sub + tax;
-      setVariableValues((prev) => ({
-        ...prev,
-        initial_fee: initial.toLocaleString('ja-JP'),
-        initial_fee_tax: initialTax.toLocaleString('ja-JP'),
-        initial_fee_tax_included: (initial + initialTax).toLocaleString('ja-JP'),
-        monthly_fee: monthly.toLocaleString('ja-JP'),
-        monthly_fee_tax: monthlyTax.toLocaleString('ja-JP'),
-        monthly_fee_tax_included: (monthly + monthlyTax).toLocaleString('ja-JP'),
-        item_name_1: '初期システム構築・導入設定費（一時金）',
-        item_qty_1: '1',
-        item_price_1: initial.toLocaleString('ja-JP'),
-        item_amount_1: initial.toLocaleString('ja-JP'),
-        item_name_2: `月額経営改善・DX顧問支援料（${prev.billing_month || '当月度分'}）`,
-        item_qty_2: '1',
-        item_price_2: monthly.toLocaleString('ja-JP'),
-        item_amount_2: monthly.toLocaleString('ja-JP'),
-        subtotal_amount: sub.toLocaleString('ja-JP'),
-        tax_amount: tax.toLocaleString('ja-JP'),
-        total_amount: total.toLocaleString('ja-JP'),
-        due_date: formatDocumentDate(nextMonthEnd),
-        payment_terms: '翌月末日振込（初期構築費および初月度顧問支援料の合算）',
-      }));
-    } else if (subtype === 'deposit') {
-      const mb = calculateMilestoneAmounts(baseSubtotal, 0.5);
-      setVariableValues((prev) => ({
-        ...prev,
-        item_name_1: '着手金（プロジェクト着手金 50%）',
-        item_qty_1: '1',
-        item_price_1: mb.depositSubtotal.toLocaleString('ja-JP'),
-        item_amount_1: mb.depositSubtotal.toLocaleString('ja-JP'),
-        item_name_2: 'なし',
-        item_qty_2: '0',
-        item_price_2: '',
-        item_amount_2: '',
-        subtotal_amount: mb.depositSubtotal.toLocaleString('ja-JP'),
-        tax_amount: mb.depositTax.toLocaleString('ja-JP'),
-        total_amount: mb.depositTotalWithTax.toLocaleString('ja-JP'),
-        due_date: formatDocumentDate(nextMonthEnd),
-        payment_terms: '契約締結月の翌月末日振込（着手金50%）',
-      }));
-    } else if (subtype === 'completion') {
-      const mb = calculateMilestoneAmounts(baseSubtotal, 0.5);
-      setVariableValues((prev) => ({
-        ...prev,
-        item_name_1: '導入後残金（プロジェクト検収残金 50%）',
-        item_qty_1: '1',
-        item_price_1: mb.completionSubtotal.toLocaleString('ja-JP'),
-        item_amount_1: mb.completionSubtotal.toLocaleString('ja-JP'),
-        item_name_2: 'なし',
-        item_qty_2: '0',
-        item_price_2: '',
-        item_amount_2: '',
-        subtotal_amount: mb.completionSubtotal.toLocaleString('ja-JP'),
-        tax_amount: mb.completionTax.toLocaleString('ja-JP'),
-        total_amount: mb.completionTotalWithTax.toLocaleString('ja-JP'),
-        due_date: formatDocumentDate(nextMonthEnd),
-        payment_terms: 'システム検収月の翌月末日振込（導入残金50%）',
-      }));
-    } else if (subtype === 'retainer') {
-      const monthly = parseNum(variableValues.monthly_fee) || 100000;
-      const tax = Math.floor(monthly * 0.1);
-      setVariableValues((prev) => ({
-        ...prev,
-        item_name_1: `業務改善・DX顧問支援料（${variableValues.billing_month || '当月度分'}）`,
-        item_qty_1: '1',
-        item_price_1: monthly.toLocaleString('ja-JP'),
-        item_amount_1: monthly.toLocaleString('ja-JP'),
-        item_name_2: 'なし',
-        item_qty_2: '0',
-        item_price_2: '',
-        item_amount_2: '',
-        subtotal_amount: monthly.toLocaleString('ja-JP'),
-        tax_amount: tax.toLocaleString('ja-JP'),
-        total_amount: (monthly + tax).toLocaleString('ja-JP'),
-        due_date: formatDocumentDate(nextMonthEnd),
-        payment_terms: '毎月末日締め翌月末日振込（月額顧問料）',
-      }));
-    } else if (subtype === 'installment') {
-      const inst = calculateInstallmentAmounts(baseSubtotal, 3);
-      const first = inst.installments[0];
-      setVariableValues((prev) => ({
-        ...prev,
-        item_name_1: `業務改善システム構築料（第1回 / 全3回分割払い）`,
-        item_qty_1: '1',
-        item_price_1: first.subtotal.toLocaleString('ja-JP'),
-        item_amount_1: first.subtotal.toLocaleString('ja-JP'),
-        item_name_2: 'なし',
-        item_qty_2: '0',
-        item_price_2: '',
-        item_amount_2: '',
-        subtotal_amount: first.subtotal.toLocaleString('ja-JP'),
-        tax_amount: first.tax.toLocaleString('ja-JP'),
-        total_amount: first.totalWithTax.toLocaleString('ja-JP'),
-        due_date: formatDocumentDate(nextMonthEnd),
-        payment_terms: '毎月末日締め翌月末日振込（全3回分割払い・第1回目）',
-      }));
-    } else {
-      // lump_sum
-      const tax = Math.floor(baseSubtotal * 0.1);
-      setVariableValues((prev) => ({
-        ...prev,
-        item_name_1: '業務改善システム構築・伴走支援一式',
-        item_qty_1: '1',
-        item_price_1: baseSubtotal.toLocaleString('ja-JP'),
-        item_amount_1: baseSubtotal.toLocaleString('ja-JP'),
-        item_name_2: 'なし',
-        item_qty_2: '0',
-        item_price_2: '',
-        item_amount_2: '',
-        subtotal_amount: baseSubtotal.toLocaleString('ja-JP'),
-        tax_amount: tax.toLocaleString('ja-JP'),
-        total_amount: (baseSubtotal + tax).toLocaleString('ja-JP'),
-        due_date: formatDocumentDate(nextMonthEnd),
-        payment_terms: '毎月末日締め翌月末日振込（一括払い）',
-      }));
-    }
-  };
-
-  // Deterministic HTML renderer with variable hydration
   const getPopulatedHtml = (): string => {
-    let result = customHtmlOverride || getDynamicTemplateHtml(currentTemplate.id, paymentMode, invoiceSubtype);
-    
+    let result = currentTemplate.htmlContent;
+    if (currentTemplate.id === 'tpl-proposal-01') {
+      result = result.replace('<p style="color: #64748b; font-size: 13px;">{{sender_company}}</p>', '<p style="color: #64748b; font-size: 13px;">{{sender_company}}</p><p style="color: #64748b; font-size: 13px;">{{sender_address}}</p><p style="color: #64748b; font-size: 13px;">代表取締役 {{sender_rep}}</p>');
+    }
+    if (currentTemplate.id === 'tpl-contract-01') {
+      result = result.replace('本契約の有効期間は、<strong>{{start_date}}</strong> から <strong>{{end_date}}</strong> までとする。', '本契約の有効期間は <strong>{{start_date}}</strong> からとする。終了日を定める場合は <strong>{{end_date}}</strong> とし、定めない場合は個別業務の実施期間・納期を発注書等で定める。');
+    }
     Object.entries(variableValues).forEach(([key, val]) => {
       const regex = new RegExp(`{{${key}}}`, 'g');
       result = result.replace(regex, escapeHtml(val || ''));
@@ -628,15 +906,15 @@ export const DocumentTemplateView: React.FC<DocumentTemplateViewProps> = ({
     const currentDocId = savedDocIds[currentTemplate.id] || autosavedDocumentIds.current[currentTemplate.id];
     const applyUrl = currentDocId
       ? `${window.location.origin}/apply/${currentDocId}`
-      : 'javascript:alert("書類の申込URLを発行中です。右上の「確認待ち保存」をクリックしてください。");';
+      : 'javascript:alert("書類の申込URLを発行中です。数秒お待ちください。");';
     result = result.replace(/{{apply_url}}/g, applyUrl);
 
-    // If proposal/estimate, guarantee Web Application CTA box
-    if (['proposal', 'report', 'estimate'].includes(currentTemplate.type) || currentTemplate.id === 'tpl-unified-estimate' || currentTemplate.id === 'tpl-proposal-report') {
+    // 提案書または見積書の場合、末尾にWeb申込ボタンを確実に付与
+    if (['proposal', 'report', 'estimate'].includes(currentTemplate.type) || currentTemplate.id === 'tpl-estimate-01') {
       if (!result.includes('web-apply-box')) {
         const ctaHtml = `<div class="web-apply-box" style="margin-top: 40px; padding: 24px; border: 2px solid #10b981; border-radius: 12px; background: #f0fdf4; text-align: center;">
   <p style="font-weight: bold; font-size: 16px; color: #065f46; margin: 0 0 6px 0;">【Web申込・オンライン即時成約】</p>
-  <p style="font-size: 13px; color: #047857; margin: 0 0 16px 0;">上記のお見積・ご提案内容にご承諾いただける場合は、Web上でワンタップで申し込み・ご成約いただけます。</p>
+  <p style="font-size: 13px; color: #047857; margin: 0 0 16px 0;">上記のお見積・提案内容にご承諾いただける場合は、Web上でワンタップで申し込み・ご成約いただけます。</p>
   <a href="${applyUrl}" ${currentDocId ? 'target="_blank" rel="noopener noreferrer"' : ''} style="display: inline-block; background: #059669; color: #ffffff; padding: 12px 32px; border-radius: 8px; font-weight: bold; font-size: 15px; text-decoration: none; box-shadow: 0 4px 6px -1px rgba(16,185,129,0.3);">👉 この内容で申し込む</a>
 </div>`;
         const lastDivIndex = result.lastIndexOf('</div>');
@@ -651,10 +929,10 @@ export const DocumentTemplateView: React.FC<DocumentTemplateViewProps> = ({
 
   const populatedHtml = getPopulatedHtml();
 
-  // Auto-save changes to Supabase when user has started editing
   useEffect(() => {
     const templateId = currentTemplate.id;
     const existingId = autosavedDocumentIds.current[templateId];
+    // 手動で保存したことがある書類のみ、入力内容の変更を自動更新（勝手に新規作成しない）
     if (!hasStartedDocument || !existingId) return;
 
     setSaveMessage('変更内容を更新中…');
@@ -762,10 +1040,20 @@ export const DocumentTemplateView: React.FC<DocumentTemplateViewProps> = ({
         setSaveMessage('確認待ち書類として保存しました。');
       }
     } catch (e: any) {
-      setSaveMessage(`保存エラー: ${e.message}`);
+      setSaveMessage(`保存できませんでした: ${e?.message || 'エラーが発生しました'}`);
     } finally {
       setIsSavingDocument(false);
     }
+  };
+
+  const handleSaveTemplateChanges = async (newHtml: string) => {
+    const supabase=getSupabase();
+    if(!supabase){setTemplateStatus('Supabase接続後にテンプレートを共有できます。');return;}
+    const {error}=await supabase.from('customer_document_templates').update({body_html:newHtml}).eq('template_key',currentTemplate.id);
+    if(error){setTemplateStatus(`テンプレートを保存できませんでした: ${error.message}`);return;}
+    setTemplates((prev) => prev.map((t) => (t.id === currentTemplate.id ? { ...t, htmlContent: newHtml } : t)));
+    setTemplateStatus('テンプレートを保存しました。');
+    setIsEditingTemplate(false);
   };
 
   const handleSendViaSendCenter = async () => {
@@ -776,6 +1064,7 @@ export const DocumentTemplateView: React.FC<DocumentTemplateViewProps> = ({
       const supabase = getSupabase();
       if (supabase) {
         setIsSavingDocument(true);
+        setSaveMessage('書類を保存して送信センターへ連携中…');
         try {
           const documentType = currentTemplate.type === 'report' ? 'diagnosis_report' : currentTemplate.type;
           const payload = {
@@ -815,23 +1104,11 @@ export const DocumentTemplateView: React.FC<DocumentTemplateViewProps> = ({
     }
   };
 
-  const missingVariables = currentTemplate.variables.filter((v) => v.key !== 'end_date' && !(variableValues[v.key] || '').trim());
-
   return (
     <div className="space-y-6">
-      {/* Top Header */}
+      {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-2">
-        <div>
-          <div className="flex items-center gap-2">
-            <h1 className="text-xl font-bold text-slate-800 tracking-tight">重要書類・見積・契約</h1>
-            <span className="px-2 py-0.5 rounded-full text-[11px] font-semibold bg-purple-100 text-purple-700">
-              5大統合ワークフロー
-            </span>
-          </div>
-          <p className="text-xs text-slate-500 mt-0.5">
-            1つの書類内で支払条件（一括・月額・手付残金・分割）を即時切り替えできます。
-          </p>
-        </div>
+        <h1 className="text-[19px] font-bold text-slate-800 tracking-tight">重要書類・見積・契約</h1>
 
         <div className="flex flex-wrap items-center gap-2">
           {onNavigateTab && (
@@ -839,6 +1116,7 @@ export const DocumentTemplateView: React.FC<DocumentTemplateViewProps> = ({
               type="button"
               onClick={() => onNavigateTab('inbox_hub')}
               className="px-3 py-1.5 rounded-md border border-slate-200 bg-white hover:bg-slate-50 text-slate-700 font-medium text-xs flex items-center gap-1.5 transition-all cursor-pointer"
+              title="受信トレイを開いて届いたフォーム回答やLINE返信を確認します"
             >
               <Inbox className="w-3.5 h-3.5 text-purple-600" />
               <span>受信トレイ</span>
@@ -849,10 +1127,11 @@ export const DocumentTemplateView: React.FC<DocumentTemplateViewProps> = ({
             <button
               type="button"
               onClick={() => onNavigateTab('communication_send')}
-              className="px-3 py-1.5 rounded-md border border-slate-200 bg-white hover:bg-slate-50 text-slate-700 font-medium text-xs flex items-center gap-1.5 transition-all cursor-pointer"
+              className="px-3 py-1.5 rounded-md border border-slate-200 bg-white hover:bg-slate-50 text-slate-700 font-medium text-xs flex items-center gap-1.5 transition-all cursor-pointer shadow-2xs"
+              title="管理・その他の送信履歴・送信待ちキューを開きます"
             >
               <Send className="w-3.5 h-3.5 text-purple-600" />
-              <span>送信履歴</span>
+              <span>送信履歴・アウトボックス</span>
             </button>
           )}
 
@@ -880,6 +1159,7 @@ export const DocumentTemplateView: React.FC<DocumentTemplateViewProps> = ({
                 target="_blank"
                 rel="noopener noreferrer"
                 className="px-3 py-1.5 rounded-md border border-slate-200 bg-white hover:bg-slate-50 text-slate-700 font-medium text-xs flex items-center gap-1.5 transition-all"
+                title="顧客向けWeb申込画面を別タブでプレビュー確認します"
               >
                 <ExternalLink className="w-3.5 h-3.5 text-slate-500" />
                 <span className="hidden sm:inline">申込プレビュー</span>
@@ -892,6 +1172,7 @@ export const DocumentTemplateView: React.FC<DocumentTemplateViewProps> = ({
             onClick={handleManualSave}
             disabled={isSavingDocument}
             className="px-3 py-1.5 rounded-md bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white font-medium text-xs flex items-center gap-1.5 transition-all cursor-pointer"
+            title="現在の内容で確認待ち書類として保存します"
           >
             <Save className="w-3.5 h-3.5" />
             <span>{isSavingDocument ? '保存中…' : (savedDocIds[currentTemplate.id] || autosavedDocumentIds.current[currentTemplate.id]) ? '上書き保存' : '確認待ち保存'}</span>
@@ -901,7 +1182,8 @@ export const DocumentTemplateView: React.FC<DocumentTemplateViewProps> = ({
             type="button"
             onClick={handleSendViaSendCenter}
             disabled={isSavingDocument}
-            className="px-3 py-1.5 rounded-md bg-purple-600 hover:bg-purple-700 text-white font-medium text-xs flex items-center gap-1.5 transition-all cursor-pointer shadow-xs"
+            className="px-3 py-1.5 rounded-md bg-purple-600 hover:bg-purple-700 text-white font-medium text-xs flex items-center gap-1.5 transition-all cursor-pointer"
+            title="書類プレビューを見ながら右側の送信ドロワーを開いて送付します"
           >
             <Send className="w-3.5 h-3.5" />
             <span>送信ドロワーで送る</span>
@@ -917,34 +1199,31 @@ export const DocumentTemplateView: React.FC<DocumentTemplateViewProps> = ({
         </div>
       </div>
 
-      {/* Customer / Deal Relationship Bar */}
-      <section className="rounded-2xl border border-slate-200 bg-white p-4 shadow-xs">
-        <div className="flex items-center justify-between mb-2.5">
-          <h2 className="font-bold text-slate-800 text-xs flex items-center gap-1.5">
-            <span className="w-2 h-2 rounded-full bg-purple-600"></span>
-            書類の紐付け（会社・担当者・商談を選ぶと自動流し込み）
-          </h2>
-          {saveMessage && <p role="status" className="text-xs text-purple-700 font-medium">{saveMessage}</p>}
+      {/* Relation Section */}
+      <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-xs">
+        <div className="mb-3.5">
+          <h2 className="font-bold text-slate-900 text-sm">書類の関連先（任意）</h2>
+          <p className="mt-1 text-xs text-slate-500">会社を起点に選ぶと、担当者・リード・商談の候補が自動で絞り込まれます。</p>
         </div>
-        <div className="grid gap-3 grid-cols-1 sm:grid-cols-2 md:grid-cols-4">
+        <div className="grid gap-3.5 md:grid-cols-4">
           <label className="text-xs font-semibold text-slate-700">
             会社（顧客企業）
             <select
               value={companyId}
               disabled={Boolean(initialCompanyId || initialLeadId || initialDealId)}
               onChange={(e) => {
-                const nextId = e.target.value;
-                if (nextId) setHasStartedDocument(true);
-                setCompanyId(nextId);
+                const nextCompanyId = e.target.value;
+                if (nextCompanyId) setHasStartedDocument(true);
+                setCompanyId(nextCompanyId);
                 setContactId('');
                 setLeadId('');
                 setDealId('');
               }}
-              className="mt-1 w-full rounded-xl border border-slate-200 bg-slate-50 p-2 text-xs text-slate-900 focus:bg-white focus:border-purple-600 focus:outline-none disabled:opacity-60"
+              className="mt-1 w-full rounded-xl border border-slate-200 bg-slate-50 p-2.5 text-xs text-slate-900 focus:bg-white focus:border-purple-600 focus:outline-none disabled:opacity-60 shadow-2xs"
             >
               <option value="">未選択</option>
-              {companies.map((c) => (
-                <option key={c.id} value={c.id}>{c.company_name}</option>
+              {companies.map((company) => (
+                <option key={company.id} value={company.id}>{company.company_name}</option>
               ))}
             </select>
           </label>
@@ -954,20 +1233,20 @@ export const DocumentTemplateView: React.FC<DocumentTemplateViewProps> = ({
               value={contactId}
               onChange={(e) => {
                 const id = e.target.value;
-                const c = contacts.find((item) => item.id === id);
+                const contact = contacts.find((item) => item.id === id);
                 if (id) setHasStartedDocument(true);
                 setContactId(id);
-                if (c?.company_id && c.company_id !== companyId) {
-                  setCompanyId(c.company_id);
+                if (contact?.company_id && contact.company_id !== companyId) {
+                  setCompanyId(contact.company_id);
                   setLeadId('');
                   setDealId('');
                 }
               }}
-              className="mt-1 w-full rounded-xl border border-slate-200 bg-slate-50 p-2 text-xs text-slate-900 focus:bg-white focus:border-purple-600 focus:outline-none"
+              className="mt-1 w-full rounded-xl border border-slate-200 bg-slate-50 p-2.5 text-xs text-slate-900 focus:bg-white focus:border-purple-600 focus:outline-none shadow-2xs"
             >
               <option value="">未選択</option>
-              {contacts.filter((c) => !companyId || c.company_id === companyId || !c.company_id).map((c) => (
-                <option key={c.id} value={c.id}>{c.full_name}</option>
+              {contacts.filter((contact) => !companyId || contact.company_id === companyId || !contact.company_id).map((contact) => (
+                <option key={contact.id} value={contact.id}>{contact.full_name}</option>
               ))}
             </select>
           </label>
@@ -983,10 +1262,14 @@ export const DocumentTemplateView: React.FC<DocumentTemplateViewProps> = ({
                 setLeadId(id);
                 if (lead?.company_id && lead.company_id !== companyId) {
                   setCompanyId(lead.company_id);
-                  setContactId((cur) => contacts.find((item) => item.id === cur)?.company_id === lead.company_id ? cur : '');
+                  setContactId((current) => contacts.find((item) => item.id === current)?.company_id === lead.company_id ? current : '');
                 }
+                setDealId((current) => {
+                  const deal = deals.find((item) => item.id === current);
+                  return id && deal?.lead_id === id ? current : '';
+                });
               }}
-              className="mt-1 w-full rounded-xl border border-slate-200 bg-slate-50 p-2 text-xs text-slate-900 focus:bg-white focus:border-purple-600 focus:outline-none disabled:opacity-60"
+              className="mt-1 w-full rounded-xl border border-slate-200 bg-slate-50 p-2.5 text-xs text-slate-900 focus:bg-white focus:border-purple-600 focus:outline-none disabled:opacity-60 shadow-2xs"
             >
               <option value="">未選択</option>
               {leads.filter((lead) => !companyId || lead.company_id === companyId || !lead.company_id).map((lead) => (
@@ -995,91 +1278,81 @@ export const DocumentTemplateView: React.FC<DocumentTemplateViewProps> = ({
             </select>
           </label>
           <label className="text-xs font-semibold text-slate-700">
-            商談案件
+            商談
             <select
               value={dealId}
               disabled={Boolean(initialDealId)}
               onChange={(e) => {
                 const id = e.target.value;
                 const deal = deals.find((item) => item.id === id);
+                const linkedLead = leads.find((item) => item.id === deal?.lead_id);
                 if (id) setHasStartedDocument(true);
                 setDealId(id);
-                if (deal?.lead_id && deal.lead_id !== leadId) setLeadId(deal.lead_id);
-                if (deal?.company_id && deal.company_id !== companyId) {
-                  setCompanyId(deal.company_id);
+                if (deal?.lead_id !== leadId) setLeadId(deal?.lead_id || '');
+                const linkedCompanyId = deal?.company_id || linkedLead?.company_id;
+                if (linkedCompanyId && linkedCompanyId !== companyId) {
+                  setCompanyId(linkedCompanyId);
+                  setContactId((current) => contacts.find((item) => item.id === current)?.company_id === linkedCompanyId ? current : '');
                 }
               }}
-              className="mt-1 w-full rounded-xl border border-slate-200 bg-slate-50 p-2 text-xs text-slate-900 focus:bg-white focus:border-purple-600 focus:outline-none disabled:opacity-60"
+              className="mt-1 w-full rounded-xl border border-slate-200 bg-slate-50 p-2.5 text-xs text-slate-900 focus:bg-white focus:border-purple-600 focus:outline-none disabled:opacity-60 shadow-2xs"
             >
               <option value="">未選択</option>
-              {deals.filter((d) => (!companyId || d.company_id === companyId || !d.company_id) && (!leadId || d.lead_id === leadId)).map((d) => (
-                <option key={d.id} value={d.id}>{d.proposal_plan_name}</option>
+              {deals.filter((deal) => (!companyId || deal.company_id === companyId || !deal.company_id) && (!leadId || deal.lead_id === leadId)).map((deal) => (
+                <option key={deal.id} value={deal.id}>{deal.proposal_plan_name}</option>
               ))}
             </select>
           </label>
         </div>
+        <div className="mt-3.5 flex flex-wrap items-center gap-3">
+          <p className="text-xs text-emerald-700 font-medium">✓ 内容変更は自動で確認待ちとして保存されます</p>
+          {saveMessage && <p role="status" className="text-xs text-slate-500">{saveMessage}</p>}
+        </div>
       </section>
 
-      {/* 5 Core Unified Document Cards (1 Single Row) */}
-      <div>
-        <div className="flex items-center justify-between mb-2">
-          <span className="text-xs font-bold text-slate-700 uppercase tracking-wider">
-            営業〜契約・請求 5大コア書類（1クリック切替）
-          </span>
-          <span className="text-[11px] text-slate-600">
-            書類種別を選び、内部で条件（一括／月額／手付／分割）を切り替えます
-          </span>
-        </div>
+      {templateStatus && (
+        <p role="status" className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-2.5 text-xs text-slate-600 font-medium">
+          {templateStatus}
+        </p>
+      )}
 
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3">
-          {CORE_TEMPLATES.map((tpl) => {
-            const isSelected = tpl.id === selectedTemplateId;
-            const icons: Record<DocTemplateType, React.ReactNode> = {
-              proposal: <Sparkles className="w-4 h-4 text-blue-600" />,
-              estimate: <Calculator className="w-4 h-4 text-emerald-600" />,
-              contract: <FileCheck2 className="w-4 h-4 text-purple-600" />,
-              invoice: <Receipt className="w-4 h-4 text-amber-600" />,
-              monthly_report: <BarChart3 className="w-4 h-4 text-cyan-600" />,
-              report: <FileText className="w-4 h-4 text-indigo-600" />,
-            };
-
-            return (
-              <button
-                key={tpl.id}
-                onClick={() => handleSelectTemplate(tpl.id)}
-                className={`p-3.5 rounded-xl border text-left transition-all cursor-pointer flex flex-col justify-between ${
-                  isSelected
-                    ? 'bg-purple-50/90 border-purple-600 shadow-sm ring-2 ring-purple-600'
-                    : 'bg-white border-slate-200 hover:border-purple-300 text-slate-600 hover:text-slate-900 shadow-2xs hover:shadow-xs'
-                }`}
-              >
-                <div>
-                  <div className="flex items-center justify-between mb-2">
-                    <span className="text-[10px] font-bold text-purple-700 bg-purple-100/80 px-2 py-0.5 rounded font-mono">
-                      {tpl.stepNum}
-                    </span>
-                    <span className={`p-1.5 rounded-lg ${isSelected ? 'bg-purple-200/60' : 'bg-slate-100'}`}>
-                      {icons[tpl.type]}
-                    </span>
-                  </div>
-                  <h3 className={`font-bold text-xs sm:text-sm line-clamp-1 ${isSelected ? 'text-purple-950 font-extrabold' : 'text-slate-800'}`}>
-                    {tpl.title}
-                  </h3>
-                  <p className="text-[11px] font-semibold text-purple-700/80 mt-0.5">{tpl.subtitle}</p>
-                  <p className="text-[11px] text-slate-500 line-clamp-2 mt-1 leading-snug">{tpl.description}</p>
-                </div>
-                <div className="mt-3 pt-2 border-t border-slate-100 flex items-center justify-between text-[10px]">
-                  <span className="px-1.5 py-0.5 rounded bg-slate-100 text-slate-600 font-medium">
-                    {tpl.badge}
-                  </span>
-                  <span className={isSelected ? 'text-purple-700 font-bold flex items-center gap-1' : 'text-slate-600'}>
-                    {isSelected ? <>選択中 <CheckCircle2 className="w-3 h-3 inline" /></> : '選択'}
-                  </span>
-                </div>
-              </button>
-            );
-          })}
-        </div>
+      {/* Template Selector Tabs */}
+      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
+        {orderTemplatesByWorkflow(templates).map((tpl) => {
+          const isSelected = tpl.id === selectedTemplateId;
+          const icons: Record<DocTemplateType, React.ReactNode> = {
+            contract: <FileCheck2 className="w-4 h-4 text-purple-600" />,
+            proposal: <FileText className="w-4 h-4 text-blue-600" />,
+            estimate: <Calculator className="w-4 h-4 text-emerald-600" />,
+            invoice: <Receipt className="w-4 h-4 text-amber-600" />,
+            report: <ClipboardCheck className="w-4 h-4 text-indigo-600" />,
+            monthly_report: <BarChart3 className="w-4 h-4 text-cyan-600" />,
+          };
+          return (
+            <button
+              key={tpl.id}
+              onClick={() => handleSelectTemplate(tpl.id)}
+              className={`p-4 rounded-xl border text-left transition-all cursor-pointer flex flex-col justify-between ${
+                isSelected
+                  ? 'bg-purple-50/70 border-purple-600 shadow-sm ring-1 ring-purple-600'
+                  : 'bg-white border-slate-200 hover:border-purple-300 text-slate-600 hover:text-slate-900 shadow-2xs'
+              }`}
+            >
+              <div className="flex items-center justify-between mb-2">
+                <span className={`p-2 rounded-lg ${isSelected ? 'bg-purple-100' : 'bg-slate-100'}`}>{icons[tpl.type]}</span>
+                <span className="text-[10px] px-2 py-0.5 rounded-full bg-slate-100 text-slate-600 font-mono uppercase font-semibold">
+                  {tpl.type}
+                </span>
+              </div>
+              <div>
+                <h3 className={`font-bold text-sm ${isSelected ? 'text-purple-900' : 'text-slate-800'}`}>
+                  {tpl.title}
+                </h3>
+                <p className="text-xs text-slate-500 line-clamp-1 mt-0.5">{tpl.description}</p>
+              </div>
+            </button>
+          );
+        })}
       </div>
 
       {/* Main Workspace Split: Left Form Inputs / Right Preview */}
@@ -1090,9 +1363,7 @@ export const DocumentTemplateView: React.FC<DocumentTemplateViewProps> = ({
             <div className="flex items-center justify-between pb-3 border-b border-slate-100 mb-4">
               <div className="flex items-center gap-2">
                 <Sliders className="w-4 h-4 text-purple-600" />
-                <h2 className="font-bold text-sm text-slate-900">
-                  {currentTemplate.title} の設定・入力
-                </h2>
+                <h2 className="font-bold text-sm text-slate-900">データ流し込み変数</h2>
               </div>
               <button
                 onClick={() => setIsEditingTemplate(!isEditingTemplate)}
@@ -1103,146 +1374,46 @@ export const DocumentTemplateView: React.FC<DocumentTemplateViewProps> = ({
                 }`}
               >
                 <FileCode className="w-3.5 h-3.5" />
-                <span>{isEditingTemplate ? 'フォームに戻る' : 'HTML直接編集'}</span>
+                <span>{isEditingTemplate ? 'フォームに戻る' : 'HTMLひな形編集'}</span>
               </button>
             </div>
 
             {isEditingTemplate ? (
               <div className="space-y-3">
                 <p className="text-xs text-slate-500">
-                  HTMLと変数タグ（例: <code className="text-purple-700 font-semibold">{'{{client_company}}'}</code>）を直接編集できます。
+                  HTMLソースと変数タグ（例: <code className="text-purple-700 font-semibold">{'{{variable_name}}'}</code>）を直接編集できます。
                 </p>
                 <textarea
-                  value={customHtmlOverride || getDynamicTemplateHtml(currentTemplate.id, paymentMode, invoiceSubtype)}
-                  onChange={(e) => setCustomHtmlOverride(e.target.value)}
-                  rows={20}
+                  defaultValue={currentTemplate.htmlContent}
+                  id="raw-html-editor"
+                  rows={18}
                   className="w-full bg-slate-50 border border-slate-200 rounded-xl p-3 text-xs font-mono text-slate-900 focus:outline-none focus:border-purple-600 focus:bg-white"
                 />
                 <button
-                  type="button"
-                  onClick={() => setCustomHtmlOverride(null)}
-                  className="w-full py-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 font-semibold text-xs flex items-center justify-center gap-2 transition-all cursor-pointer"
+                  onClick={() => {
+                    const el = document.getElementById('raw-html-editor') as HTMLTextAreaElement;
+                    if (el) handleSaveTemplateChanges(el.value);
+                  }}
+                  className="w-full py-2.5 rounded-xl bg-purple-600 hover:bg-purple-700 text-white font-semibold text-xs flex items-center justify-center gap-2 transition-all cursor-pointer shadow-xs"
                 >
-                  <RefreshCw className="w-3.5 h-3.5" />
-                  <span>自動生成HTMLに戻す</span>
+                  <Save className="w-4 h-4" />
+                  <span>ひな形HTMLを保存</span>
                 </button>
               </div>
             ) : (
-              <div className="space-y-3.5 max-h-[560px] overflow-y-auto pr-1">
-                {/* 1. If Proposal/Report: Highlight Unified Nature */}
-                {selectedTemplateId === 'tpl-proposal-report' && (
-                  <div className="rounded-xl border border-blue-200 bg-gradient-to-r from-blue-50 to-indigo-50/60 p-3.5 space-y-1.5 shadow-2xs">
-                    <div className="flex items-center gap-1.5 text-xs font-bold text-blue-900">
-                      <Sparkles className="w-4 h-4 text-blue-600" />
-                      <span>診断レポート ＋ 業務改善提案書の統合版</span>
-                    </div>
-                    <p className="text-[11px] text-blue-800 leading-relaxed">
-                      診断結果（急所分析・改善前後の姿）から3段階ロードマップ、概算費用、Web申込CTAまで1枚のストーリーとしてスムーズにつながります。
-                    </p>
-                  </div>
-                )}
-
-                {/* 2. If Estimate or Contract: Segmented Payment Switcher */}
-                {(selectedTemplateId === 'tpl-unified-estimate' || selectedTemplateId === 'tpl-unified-contract') && (
-                  <div className="rounded-xl border border-purple-200 bg-gradient-to-br from-purple-50/80 via-indigo-50/40 to-white p-3.5 space-y-2.5 shadow-2xs">
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center gap-1.5 text-xs font-bold text-purple-900">
-                        <Coins className="w-3.5 h-3.5 text-purple-600" />
-                        <span>お支払い条件・条項の即時切替</span>
-                      </div>
-                      <span className="text-[10px] font-medium text-purple-700 bg-white/90 px-2 py-0.5 rounded border border-purple-200 whitespace-nowrap">
-                        {selectedTemplateId.includes('estimate') ? '有効期限: 発行日より1ヶ月間' : '支払期日: 翌月末日統一'}
-                      </span>
-                    </div>
-                    <p className="text-[11px] text-slate-600 leading-snug">
-                      ワンタップで金額・消費税・条項文（期限の利益喪失条項・手付残金・顧問自動更新）が自動切替されます。
-                    </p>
-                    <div className="grid grid-cols-2 sm:grid-cols-3 gap-1.5 pt-1">
-                      {[
-                        { id: 'lump_sum' as PaymentMode, label: '① 一括払い', sub: '翌月末日振込' },
-                        { id: 'retainer' as PaymentMode, label: '② 月額顧問', sub: '毎月締め翌月末' },
-                        { id: 'hybrid_setup_retainer' as PaymentMode, label: '③ 初期構築＋月額顧問', sub: '構築費＋月々顧問' },
-                        { id: 'milestone' as PaymentMode, label: '④ 手付50%＋残金50%', sub: '着手時 & 導入検収時' },
-                        { id: 'installments_3' as PaymentMode, label: '⑤ 3回均等分割', sub: '翌月末×3回' },
-                        { id: 'installments_6' as PaymentMode, label: '⑥ 6回均等分割', sub: '翌月末×6回' },
-                      ].map((item) => {
-                        const active = paymentMode === item.id;
-                        return (
-                          <button
-                            key={item.id}
-                            type="button"
-                            onClick={() => switchPaymentMode(item.id)}
-                            className={`p-2 rounded-lg border text-left transition-all cursor-pointer ${
-                              active
-                                ? 'bg-purple-600 border-purple-600 text-white shadow-xs font-bold'
-                                : 'bg-white border-slate-200 hover:border-purple-300 text-slate-700 hover:bg-purple-50/50'
-                            }`}
-                          >
-                            <p className="text-[11px] leading-tight">{item.label}</p>
-                            <p className={`text-[10px] mt-0.5 ${active ? 'text-purple-100' : 'text-slate-600'}`}>{item.sub}</p>
-                          </button>
-                        );
-                      })}
-                    </div>
-                  </div>
-                )}
-
-                {/* 3. If Invoice: Segmented Invoice Subtype Switcher */}
-                {selectedTemplateId === 'tpl-unified-invoice' && (
-                  <div className="rounded-xl border border-amber-200 bg-gradient-to-br from-amber-50/80 via-yellow-50/40 to-white p-3.5 space-y-2.5 shadow-2xs">
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center gap-1.5 text-xs font-bold text-amber-900">
-                        <Receipt className="w-3.5 h-3.5 text-amber-600" />
-                        <span>ご請求種別の即時切替</span>
-                      </div>
-                      <span className="text-[10px] font-medium text-amber-800 bg-white/90 px-2 py-0.5 rounded border border-amber-200 whitespace-nowrap">
-                        支払期日: 翌月末日
-                      </span>
-                    </div>
-                    <p className="text-[11px] text-slate-600 leading-snug">
-                      内訳明細・件名・備考が請求種別に応じて自動セットされます。
-                    </p>
-                    <div className="grid grid-cols-2 sm:grid-cols-3 gap-1.5 pt-1">
-                      {[
-                        { id: 'lump_sum' as InvoiceSubtype, label: '通常一括', sub: '全額翌月末払い' },
-                        { id: 'retainer' as InvoiceSubtype, label: '月額顧問料', sub: '定期伴走支援費' },
-                        { id: 'hybrid_setup_retainer' as InvoiceSubtype, label: '初期構築＋初月顧問', sub: '合算一括請求' },
-                        { id: 'deposit' as InvoiceSubtype, label: '着手金 (50%)', sub: 'プロジェクト開始時' },
-                        { id: 'completion' as InvoiceSubtype, label: '導入残金 (50%)', sub: '検収完了時' },
-                        { id: 'installment' as InvoiceSubtype, label: '分割請求', sub: '第1回目など' },
-                      ].map((item) => {
-                        const active = invoiceSubtype === item.id;
-                        return (
-                          <button
-                            key={item.id}
-                            type="button"
-                            onClick={() => switchInvoiceSubtype(item.id)}
-                            className={`p-2 rounded-lg border text-left transition-all cursor-pointer ${
-                              active
-                                ? 'bg-amber-600 border-amber-600 text-white shadow-xs font-bold'
-                                : 'bg-white border-slate-200 hover:border-amber-300 text-slate-700 hover:bg-amber-50/50'
-                            }`}
-                          >
-                            <p className="text-[11px] leading-tight">{item.label}</p>
-                            <p className={`text-[10px] mt-0.5 ${active ? 'text-amber-100' : 'text-slate-600'}`}>{item.sub}</p>
-                          </button>
-                        );
-                      })}
-                    </div>
-                  </div>
-                )}
-
+              <div className="space-y-3.5 max-h-[550px] overflow-y-auto pr-1">
+                <p className="text-xs text-slate-500">
+                  顧客・商談情報と日付ルールを初期反映しています。内容を確認し、必要な箇所だけ修正してください。
+                </p>
                 {missingVariables.length > 0 && (
                   <div role="status" className="rounded-xl border border-amber-200 bg-amber-50 px-3.5 py-2.5 text-xs text-amber-900 shadow-2xs">
-                    自動入力できなかった項目が {missingVariables.length} 件あります。
-                    <span className="mt-1 block font-medium text-amber-800">{missingVariables.map((v) => v.label).join('、')}</span>
+                    自動入力できなかった項目が {missingVariables.length} 件あります。自社情報・口座情報などを確認してください。
+                    <span className="mt-1 block font-medium text-amber-800">{missingVariables.map((variable) => variable.label).join('、')}</span>
                   </div>
                 )}
-
-                {/* Form fields for template variables */}
                 {currentTemplate.variables.map((v) => (
                   <div key={v.key} className="space-y-1">
-                    <label className="text-xs font-semibold text-slate-700 flex items-center justify-between">
+                    <label className="block text-xs font-semibold text-slate-700 flex items-center justify-between">
                       <span>{v.label}</span>
                       <span className="text-[10px] font-mono text-purple-700 bg-purple-50 px-1.5 py-0.5 rounded border border-purple-200">
                         {`{{${v.key}}}`}
@@ -1262,10 +1433,7 @@ export const DocumentTemplateView: React.FC<DocumentTemplateViewProps> = ({
           </div>
 
           <div className="mt-6 pt-4 border-t border-slate-100 flex items-center justify-between text-xs text-slate-500">
-            <span className="font-medium text-emerald-700 flex items-center gap-1">
-              <Check className="w-3.5 h-3.5" />
-              変数・計算式 反映中
-            </span>
+            <span className="font-medium text-emerald-700">✓ 変数流し込み完了</span>
             <button
               onClick={() => handleSelectTemplate(currentTemplate.id)}
               className="text-purple-600 hover:text-purple-700 font-semibold flex items-center gap-1 cursor-pointer"
@@ -1282,15 +1450,13 @@ export const DocumentTemplateView: React.FC<DocumentTemplateViewProps> = ({
             <div className="flex items-center gap-2">
               <FileCheck2 className="w-4 h-4 text-purple-600" />
               <h2 className="font-bold text-sm text-slate-900">リアルタイムプレビュー</h2>
-              <span className="text-[10px] bg-slate-100 text-slate-600 font-medium px-2 py-0.5 rounded">
-                A4縦レイアウト
-              </span>
             </div>
             <div className="flex items-center gap-2">
               <button
                 type="button"
                 onClick={handleSendViaSendCenter}
                 className="px-3 py-1.5 rounded-lg bg-purple-600 hover:bg-purple-700 text-white text-xs font-semibold flex items-center gap-1.5 transition-all shadow-xs cursor-pointer"
+                title="プレビューを確認しながら右側の送信ドロワーを開いて送付します"
               >
                 <Send className="w-3.5 h-3.5" />
                 <span>送信ドロワーで送る</span>
@@ -1313,7 +1479,7 @@ export const DocumentTemplateView: React.FC<DocumentTemplateViewProps> = ({
           </div>
 
           {/* Rendered HTML Container */}
-          <div className="flex-1 bg-white rounded-xl shadow-xs overflow-hidden min-h-[620px] max-h-[750px] overflow-y-auto border border-slate-200">
+          <div className="flex-1 bg-white rounded-xl shadow-xs overflow-hidden min-h-[600px] max-h-[700px] overflow-y-auto border border-slate-200">
             <div dangerouslySetInnerHTML={{ __html: populatedHtml }} />
           </div>
         </div>

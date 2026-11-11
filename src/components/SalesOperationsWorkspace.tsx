@@ -13,7 +13,6 @@ import {
   RecurringCandidate,
   RecurringSummary,
 } from '../services/recurringInvoiceService';
-import { getEndOfNextMonthDate } from '../utils/billingUtils';
 
 type WorkspaceTab = 'segments' | 'documents' | 'operations';
 type Segment = { id: string; name: string; entity_type: string; conditions: { field?: string; value?: string } | null; created_at: string };
@@ -89,7 +88,11 @@ const localDateString = (date = new Date()) => {
   const day = String(date.getDate()).padStart(2, '0');
   return `${year}-${month}-${day}`;
 };
-const defaultInvoiceDueDate = (date = new Date()) => getEndOfNextMonthDate(date);
+const defaultInvoiceDueDate = (date = new Date()) => {
+  const due = new Date(date.getFullYear(), date.getMonth(), 25);
+  if (date.getDate() >= 25) due.setMonth(due.getMonth() + 1);
+  return localDateString(due);
+};
 
 interface Props { tab: WorkspaceTab; companyId?: string; leadId?: string; dealId?: string; onClearCompanyFilter?: () => void; onOperationalRecordsChange?: (contracts: ManagedContract[], invoices: ManagedInvoice[]) => void; onMilestoneReached?: (event: { engagementId: string; milestoneId: string; milestoneTitle: string; companyId?: string; companyName?: string }) => void; onContractSigned?: (event: { id: string; title: string; companyId?: string; companyName?: string; amount?: number }) => void; onInvoiceOverdue?: (event: { id: string; title: string; invoiceNumber?: string; companyId?: string; companyName?: string; amount?: number; dueDate?: string }) => void; onDeleteContract?: (id: string) => Promise<void>; onDeleteInvoice?: (id: string) => Promise<void>; invoices?: ManagedInvoice[]; tasks?: TaskItem[]; onCreateTask?: (task: Omit<TaskItem, 'id' | 'createdAt' | 'updatedAt'>) => void; onUpdateTask?: (task: TaskItem) => void; onOpenInvoiceDocuments?: (companyId: string, documentId?: string) => void; onNavigateTab?: (tab: string) => void; }
 

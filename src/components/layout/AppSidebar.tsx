@@ -104,7 +104,7 @@ export const AppSidebar: React.FC<AppSidebarProps> = ({
         { id: 'ai_acquisition', label: '集客戦略・SNS・メディア' },
         { id: 'contacts', label: '見込み企業・友だちリスト' },
         { id: 'marketing_automation', label: 'LINE・メール自動配信' },
-        { id: 'mst_diagnoses', label: 'フォーム作成・配布資料' },
+        { id: 'mst_diagnoses', label: '受付フォーム設計' },
       ],
     },
     {

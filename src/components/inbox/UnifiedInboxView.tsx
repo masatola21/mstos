@@ -22,8 +22,7 @@ import {
   Building2,
   Users,
   Trash2,
-  Square,
-  X
+  Square
 } from 'lucide-react';
 import { getSupabase, getAuthHeaders } from '../../lib/supabaseClient';
 import { UnifiedNavTab } from '../UnifiedNavbar';
@@ -62,25 +61,17 @@ interface FormMeta {
 interface UnifiedInboxViewProps {
   initialChannel?: InboxChannel;
   initialLineUserId?: string;
-  initialCompanyId?: string;
-  initialLeadId?: string;
-  initialFormTypeFilter?: 'all' | 'diagnosis' | 'inquiry';
   onNavigateTab: (tab: any, options?: any) => void;
   onOpenSendCenter?: (params: { companyId?: string; contactId?: string; formId?: string; sendKind?: 'announcement' | 'customer_meeting' | 'deal' | 'diagnosis' | 'form' }) => void;
   onOpenCustomerWorkspace?: (companyId: string, destination?: string) => void;
-  onClearCompanyFilter?: () => void;
 }
 
 export const UnifiedInboxView: React.FC<UnifiedInboxViewProps> = ({
   initialChannel = 'forms',
   initialLineUserId,
-  initialCompanyId,
-  initialLeadId,
-  initialFormTypeFilter = 'all',
   onNavigateTab,
   onOpenSendCenter,
-  onOpenCustomerWorkspace,
-  onClearCompanyFilter,
+  onOpenCustomerWorkspace
 }) => {
   const db = getSupabase();
   const { openSendDrawer } = useSendDrawer();
@@ -123,37 +114,10 @@ export const UnifiedInboxView: React.FC<UnifiedInboxViewProps> = ({
   const [customerCompanyIds, setCustomerCompanyIds] = useState<Set<string>>(new Set());
   const [customerStageFilter, setCustomerStageFilter] = useState<'all' | 'leads' | 'customers'>('all');
   const [formFilterStatus, setFormFilterStatus] = useState<string>('all');
-  const [formTypeCategory, setFormTypeCategory] = useState<'all' | 'diagnosis' | 'inquiry'>(initialFormTypeFilter || 'all');
-  const [filterCompanyId, setFilterCompanyId] = useState<string | undefined>(initialCompanyId);
-  const [filterLeadId, setFilterLeadId] = useState<string | undefined>(initialLeadId);
   const [formSearchQuery, setFormSearchQuery] = useState('');
   const [expandedSubmissionId, setExpandedSubmissionId] = useState<string | null>(null);
   const [reportingIds, setReportingIds] = useState<string[]>([]);
   const reportControllersRef = useRef<Map<string, AbortController>>(new Map());
-
-  useEffect(() => {
-    if (initialCompanyId !== undefined) {
-      setFilterCompanyId(initialCompanyId);
-      // 顧客指定で遷移した際はステージやステータスの絞り込みを全対象に初期化し、見落としを防止
-      setCustomerStageFilter('all');
-      setFormFilterStatus('all');
-      setFormTypeCategory('all');
-    }
-  }, [initialCompanyId]);
-
-  useEffect(() => {
-    if (initialLeadId !== undefined) {
-      setFilterLeadId(initialLeadId);
-      setCustomerStageFilter('all');
-      setFormFilterStatus('all');
-    }
-  }, [initialLeadId]);
-
-  useEffect(() => {
-    if (initialFormTypeFilter !== undefined) {
-      setFormTypeCategory(initialFormTypeFilter);
-    }
-  }, [initialFormTypeFilter]);
 
   const handleCancelReport = (subId: string) => {
     const ctrl = reportControllersRef.current.get(subId);
@@ -551,60 +515,13 @@ export const UnifiedInboxView: React.FC<UnifiedInboxViewProps> = ({
     setSubmissions((prev) => prev.map((s) => (s.id === subId ? { ...s, reviewer_memo: memo } : s)));
   };
 
-  // Check if a submission is a diagnosis submission (設問配点・診断ロジック・診断フォーム)
-  const isDiagnosisSubmission = (sub: SubmissionItem): boolean => {
-    const form = formsMeta.get(sub.form_id);
-    if (form?.form_type === 'diagnosis') return true;
-    if (form?.name && (form.name.includes('診断') || form.name.toLowerCase().includes('diagnosis'))) return true;
-    if (sub.diagnosis_id) return true;
-    if (sub.score !== null && sub.score !== undefined) return true;
-    if (sub.answers && typeof sub.answers === 'object') {
-      const keys = Object.keys(sub.answers);
-      if (keys.some((k) => k.startsWith('q_') || k.includes('bottleneck') || k.includes('score'))) return true;
-    }
-    return false;
-  };
-
-  const diagnosisCount = useMemo(() => {
-    return submissions.filter(isDiagnosisSubmission).length;
-  }, [submissions, formsMeta]);
-
-  const inquiryCount = useMemo(() => {
-    return submissions.filter((s) => !isDiagnosisSubmission(s)).length;
-  }, [submissions, formsMeta]);
-
-  const matchedCompanyName = useMemo(() => {
-    if (!filterCompanyId) return undefined;
-    const fromSub = submissions.find((s) => s.company_id === filterCompanyId && s.respondent_company_name)?.respondent_company_name;
-    return fromSub || undefined;
-  }, [filterCompanyId, submissions]);
-
   // Filtered submissions
   const visibleSubmissions = useMemo(() => {
-    const list = submissions.filter((sub) => {
-      // 特定顧客（会社）絞り込み: リード・商談・契約のどこから遷移しても、
-      // 同一顧客（会社ID一致）の全回答、または該当リードIDの回答を漏れなく一覧抽出する
-      if (filterCompanyId) {
-        const matchesCompany = sub.company_id === filterCompanyId;
-        const matchesLead = filterLeadId ? sub.lead_id === filterLeadId : false;
-        if (!matchesCompany && !matchesLead) return false;
-      } else if (filterLeadId) {
-        if (sub.lead_id !== filterLeadId) return false;
-      }
-
-      // フォーム種別フィルター (全種別 / 診断のみ / お問い合わせ・相談のみ)
-      if (formTypeCategory === 'diagnosis' && !isDiagnosisSubmission(sub)) return false;
-      if (formTypeCategory === 'inquiry' && isDiagnosisSubmission(sub)) return false;
-
-      // ステータスフィルター
+    return submissions.filter((sub) => {
       if (formFilterStatus !== 'all' && sub.status !== formFilterStatus) return false;
-
-      // 顧客ステージフィルター
       const isContracted = sub.company_id ? customerCompanyIds.has(sub.company_id) : false;
       if (customerStageFilter === 'customers' && !isContracted) return false;
       if (customerStageFilter === 'leads' && isContracted) return false;
-
-      // 検索フィルター
       if (!formSearchQuery.trim()) return true;
       const q = formSearchQuery.toLowerCase();
       const name = (sub.respondent_name || '').toLowerCase();
@@ -613,19 +530,7 @@ export const UnifiedInboxView: React.FC<UnifiedInboxViewProps> = ({
       const formName = (formsMeta.get(sub.form_id)?.name || '').toLowerCase();
       return name.includes(q) || email.includes(q) || company.includes(q) || formName.includes(q);
     });
-
-    // もし特定リードからの遷移の場合、そのリードに該当する回答を最上位に並べ替える
-    if (filterLeadId) {
-      return [...list].sort((a, b) => {
-        const aIsLead = a.lead_id === filterLeadId ? 1 : 0;
-        const bIsLead = b.lead_id === filterLeadId ? 1 : 0;
-        if (aIsLead !== bIsLead) return bIsLead - aIsLead;
-        return new Date(b.submitted_at).getTime() - new Date(a.submitted_at).getTime();
-      });
-    }
-
-    return list;
-  }, [submissions, formFilterStatus, customerStageFilter, formTypeCategory, formSearchQuery, formsMeta, customerCompanyIds, filterCompanyId, filterLeadId]);
+  }, [submissions, formFilterStatus, customerStageFilter, formSearchQuery, formsMeta, customerCompanyIds]);
 
   const totalInboundNeedsAttention =
     counts.lineInbound + counts.formsReceived;
@@ -783,101 +688,9 @@ export const UnifiedInboxView: React.FC<UnifiedInboxViewProps> = ({
       {/* 1. FORMS & DIAGNOSIS SUBMISSIONS */}
       {activeChannel === 'forms' && (
         <div className="space-y-4">
-          {/* 特定顧客（会社/リード）絞り込み中バナー */}
-          {(filterCompanyId || filterLeadId) && (
-            <div className="flex flex-wrap items-center justify-between gap-3 p-3.5 rounded-xl bg-purple-50 border border-purple-200 text-xs text-purple-900 shadow-2xs">
-              <div className="flex items-center gap-2.5">
-                <Building2 className="w-4 h-4 text-purple-600 shrink-0" />
-                <div>
-                  <span className="font-bold text-slate-900">
-                    {matchedCompanyName ? `「${matchedCompanyName}」` : '特定顧客'} のフォーム回答履歴
-                  </span>
-                  <span className="ml-1 text-purple-800 font-semibold">
-                    ({visibleSubmissions.length} 件)
-                  </span>
-                  <span className="ml-2 text-slate-500 font-normal hidden sm:inline">
-                    ※ リード・商談・契約のどこから遷移しても、同一顧客（会社）の全回答履歴を一貫して表示しています
-                  </span>
-                </div>
-              </div>
-              <button
-                type="button"
-                onClick={() => {
-                  setFilterCompanyId(undefined);
-                  setFilterLeadId(undefined);
-                  onClearCompanyFilter?.();
-                }}
-                className="inline-flex items-center gap-1 px-2.5 py-1 rounded-md bg-white hover:bg-purple-100 text-purple-700 font-semibold border border-purple-200 cursor-pointer shadow-2xs transition"
-              >
-                <X className="w-3.5 h-3.5" />
-                <span>すべての回答を表示（絞り込み解除）</span>
-              </button>
-            </div>
-          )}
-
           {/* Filter Bar */}
-          <div className="flex flex-col gap-3 p-4 rounded-xl border border-slate-200 bg-white shadow-xs">
-            {/* Top row: フォーム種別フィルター & 検索窓 */}
-            <div className="flex flex-col md:flex-row md:items-center justify-between gap-3">
-              <div className="flex flex-wrap items-center gap-2">
-                <span className="text-xs font-semibold text-slate-700 mr-0.5 flex items-center gap-1">
-                  種別:
-                </span>
-                <div className="flex items-center bg-purple-50/70 p-1 rounded-lg border border-purple-200 text-xs">
-                  <button
-                    type="button"
-                    onClick={() => setFormTypeCategory('all')}
-                    className={`px-2.5 py-1 rounded font-medium transition cursor-pointer ${
-                      formTypeCategory === 'all'
-                        ? 'bg-purple-700 text-white font-semibold shadow-xs'
-                        : 'text-purple-900 hover:text-purple-950 hover:bg-purple-100/60'
-                    }`}
-                  >
-                    全種別 ({submissions.length})
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setFormTypeCategory('diagnosis')}
-                    className={`px-2.5 py-1 rounded font-medium transition cursor-pointer flex items-center gap-1 ${
-                      formTypeCategory === 'diagnosis'
-                        ? 'bg-purple-700 text-white font-semibold shadow-xs'
-                        : 'text-purple-900 hover:text-purple-950 hover:bg-purple-100/60'
-                    }`}
-                    title="設問・スコアリングを伴う無料診断フォームの回答のみを抽出"
-                  >
-                    <Sparkles className="w-3.5 h-3.5 text-purple-200" />
-                    <span>無料診断のみ ({diagnosisCount})</span>
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setFormTypeCategory('inquiry')}
-                    className={`px-2.5 py-1 rounded font-medium transition cursor-pointer flex items-center gap-1 ${
-                      formTypeCategory === 'inquiry'
-                        ? 'bg-sky-600 text-white font-semibold shadow-xs'
-                        : 'text-slate-700 hover:text-slate-900 hover:bg-slate-200/50'
-                    }`}
-                    title="お問い合わせ・資料請求・面談相談フォームの回答のみを抽出"
-                  >
-                    <FileText className="w-3.5 h-3.5 text-sky-200" />
-                    <span>お問い合わせ・相談のみ ({inquiryCount})</span>
-                  </button>
-                </div>
-              </div>
-
-              <div className="relative min-w-[260px]">
-                <Search className="w-3.5 h-3.5 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
-                <input
-                  type="text"
-                  value={formSearchQuery}
-                  onChange={(e) => setFormSearchQuery(e.target.value)}
-                  placeholder="回答者名・会社名・メール検索..."
-                  className="w-full pl-8 pr-3 py-1.5 rounded-lg border border-slate-200 bg-white text-xs text-slate-900 placeholder-slate-400 focus:outline-none focus:border-purple-500"
-                />
-              </div>
-            </div>
-
-            {/* Bottom row: 顧客ステージ & ステータスフィルター */}
-            <div className="flex flex-wrap items-center gap-2.5 pt-2 border-t border-slate-100">
+          <div className="flex flex-col xl:flex-row items-stretch xl:items-center justify-between gap-3 p-4 rounded-xl border border-slate-200 bg-white shadow-xs">
+            <div className="flex flex-wrap items-center gap-2.5">
               {/* Lifecycle Stage Filter */}
               <div className="flex items-center bg-slate-100 p-1 rounded-lg border border-slate-200 text-xs">
                 <button
@@ -952,6 +765,17 @@ export const UnifiedInboxView: React.FC<UnifiedInboxViewProps> = ({
                 ))}
               </div>
             </div>
+
+            <div className="relative min-w-[240px]">
+              <Search className="w-3.5 h-3.5 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
+              <input
+                type="text"
+                value={formSearchQuery}
+                onChange={(e) => setFormSearchQuery(e.target.value)}
+                placeholder="回答者名・会社名・メール検索..."
+                className="w-full pl-8 pr-3 py-1.5 rounded-lg border border-slate-200 bg-white text-xs text-slate-900 placeholder-slate-400 focus:outline-none focus:border-purple-500"
+              />
+            </div>
           </div>
 
           {/* 選択・削除バー */}
@@ -1011,7 +835,7 @@ export const UnifiedInboxView: React.FC<UnifiedInboxViewProps> = ({
                 onClick={() => onNavigateTab('mst_diagnoses')}
                 className="mt-4 px-3 py-1.5 rounded-lg bg-purple-50 hover:bg-purple-100 text-xs text-purple-700 font-semibold border border-purple-200 transition cursor-pointer"
               >
-                フォーム作成・配布資料の設定を確認する
+                フォーム・診断の公開設定を確認する
               </button>
             </div>
           ) : (
@@ -1020,7 +844,6 @@ export const UnifiedInboxView: React.FC<UnifiedInboxViewProps> = ({
                 const form = formsMeta.get(sub.form_id);
                 const isExpanded = expandedSubmissionId === sub.id;
                 const isContracted = sub.company_id ? customerCompanyIds.has(sub.company_id) : false;
-                const isDiag = isDiagnosisSubmission(sub);
                 const statusBadge =
                   sub.status === 'received'
                     ? { label: '未対応（新規受付）', color: 'bg-amber-50 text-amber-800 border-amber-300' }
@@ -1053,17 +876,6 @@ export const UnifiedInboxView: React.FC<UnifiedInboxViewProps> = ({
                           <span className={`px-2 py-0.5 rounded text-[11px] font-semibold border ${statusBadge.color}`}>
                             {statusBadge.label}
                           </span>
-                          {isDiag ? (
-                            <span className="text-[11px] px-2 py-0.5 rounded-full bg-purple-100 text-purple-800 font-semibold flex items-center gap-1 border border-purple-200">
-                              <Sparkles className="w-3 h-3 text-purple-600" />
-                              無料診断
-                            </span>
-                          ) : (
-                            <span className="text-[11px] px-2 py-0.5 rounded-full bg-sky-50 text-sky-800 font-medium flex items-center gap-1 border border-sky-200">
-                              <FileText className="w-3 h-3 text-sky-600" />
-                              お問い合わせ・相談
-                            </span>
-                          )}
                           {isContracted ? (
                             <span className="text-[11px] px-2.5 py-0.5 rounded-full bg-emerald-50 text-emerald-800 border border-emerald-300 font-semibold flex items-center gap-1">
                               <CheckCircle2 className="w-3 h-3 text-emerald-600" />
@@ -1072,11 +884,6 @@ export const UnifiedInboxView: React.FC<UnifiedInboxViewProps> = ({
                           ) : (
                             <span className="text-[11px] px-2 py-0.5 rounded-full bg-purple-50 text-purple-700 border border-purple-200 font-medium">
                               反響リード
-                            </span>
-                          )}
-                          {filterLeadId && sub.lead_id === filterLeadId && (
-                            <span className="text-[11px] px-2 py-0.5 rounded-full bg-indigo-600 text-white font-semibold flex items-center gap-1 shadow-2xs">
-                              ★ 選択中リードの回答
                             </span>
                           )}
                           <span className="text-sm font-bold text-slate-900">
@@ -1187,7 +994,7 @@ export const UnifiedInboxView: React.FC<UnifiedInboxViewProps> = ({
 
                         {/* 提案書・レポート作成（診断フォームの回答は、AIが診断レポートと提案書の下書きまで自動で作成） */}
                         {(() => {
-                          const isDiagnosisForm = isDiag;
+                          const isDiagnosisForm = form?.form_type === 'diagnosis';
                           const busy = reportingIds.includes(sub.id);
                           const needsCompany = isDiagnosisForm && !sub.company_id;
                           const reportVersion = sub.diagnosis_id ? reportVersions[sub.diagnosis_id] : undefined;
@@ -1210,12 +1017,14 @@ export const UnifiedInboxView: React.FC<UnifiedInboxViewProps> = ({
                                 <button
                                   type="button"
                                   onClick={() => {
-                                    void handleGenerateReport(sub, true);
+                                    if (window.confirm('新しい版のレポートと提案書の下書きを作り直します。今の版は書類に残ります。よろしいですか？')) {
+                                      void handleGenerateReport(sub, true);
+                                    }
                                   }}
                                   className="text-[11px] text-slate-500 hover:text-slate-800 underline cursor-pointer"
-                                  title="AIでレポートを最新版として再生成します"
+                                  title="AIでレポートを作り直します"
                                 >
-                                  最新版を再生成
+                                  作り直す
                                 </button>
                               </>
                             );

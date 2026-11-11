@@ -529,102 +529,53 @@ export const RecordDetailModal: React.FC<RecordDetailModalProps> = ({
             ※ 社内ポリシーによりデータの削除機能は提供されていません。
           </span>
           <div className="flex items-center gap-2 flex-wrap">
-            {['leads', 'deals', 'customers'].includes(tableKey) && onOpenCustomerWorkspace && record.company_id && (() => {
-              const resolvedLeadId = tableKey === 'leads' ? String(record.id) : record.lead_id ? String(record.lead_id) : undefined;
-              const resolvedContactId = record.contact_id ? String(record.contact_id) : undefined;
-              return (
-                <>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      onClose();
-                      onOpenCustomerWorkspace(String(record.company_id), 'documents', {
-                        tableKey,
-                        recordId: String(record.id),
-                        leadId: resolvedLeadId,
-                        contactId: resolvedContactId,
-                      });
-                    }}
-                    className="px-3 py-1.5 rounded-lg text-xs font-semibold text-purple-700 bg-purple-50 hover:bg-purple-100 border border-purple-200 transition-colors flex items-center gap-1.5 cursor-pointer shadow-2xs"
-                    title={tableKey === 'deals' ? 'この商談の見積・契約書を作成・確認' : tableKey === 'customers' ? '顧客台帳に紐づく請求書・契約書を確認' : '見積書・提案書を作成・確認'}
-                  >
-                    <FileText className="w-3.5 h-3.5" />
-                    <span>{tableKey === 'customers' ? '顧客書類' : tableKey === 'deals' ? '見積・契約書' : '見積・書類作成'}</span>
-                  </button>
-
-                  <button
-                    type="button"
-                    onClick={() => {
-                      onClose();
-                      onOpenCustomerWorkspace(String(record.company_id), 'diagnoses', {
-                        tableKey,
-                        recordId: String(record.id),
-                        leadId: resolvedLeadId,
-                        contactId: resolvedContactId,
-                      });
-                    }}
-                    className="px-3 py-1.5 rounded-lg text-xs font-semibold text-indigo-700 bg-indigo-50 hover:bg-indigo-100 border border-indigo-200 transition-colors flex items-center gap-1.5 cursor-pointer shadow-2xs"
-                    title="この企業の提案書（経営改善・業務自動化 診断レポート）を作成・確認"
-                  >
-                    <FileText className="w-3.5 h-3.5" />
-                    <span>診断レポート</span>
-                  </button>
-
-                  <button
-                    type="button"
-                    onClick={() => {
-                      onClose();
-                      onOpenCustomerWorkspace(String(record.company_id), 'forms', {
-                        tableKey,
-                        recordId: String(record.id),
-                        leadId: resolvedLeadId,
-                        contactId: resolvedContactId,
-                      });
-                    }}
-                    className="px-3 py-1.5 rounded-lg text-xs font-semibold text-sky-700 bg-sky-50 hover:bg-sky-100 border border-sky-200 transition-colors flex items-center gap-1.5 cursor-pointer shadow-2xs"
-                    title="このリード・企業のWebフォーム回答内容一覧を確認"
-                  >
-                    <FileText className="w-3.5 h-3.5" />
-                    <span>フォーム回答</span>
-                  </button>
-
-                  {tableKey === 'customers' && (
-                    <button
-                      type="button"
-                      onClick={() => {
-                        onClose();
-                        onOpenCustomerWorkspace(String(record.company_id), 'operations', {
-                          tableKey,
-                          recordId: String(record.id),
-                        });
-                      }}
-                      className="px-3 py-1.5 rounded-lg text-xs font-semibold text-emerald-700 bg-emerald-50 hover:bg-emerald-100 border border-emerald-200 transition-colors flex items-center gap-1.5 cursor-pointer shadow-2xs"
-                    >
-                      <Briefcase className="w-3.5 h-3.5" />
-                      <span>契約・請求・支援</span>
-                    </button>
-                  )}
-
-                  <button
-                    type="button"
-                    onClick={() => {
-                      onClose();
-                      onOpenCustomerWorkspace(String(record.company_id), 'send', {
-                        tableKey,
-                        recordId: String(record.id),
-                        leadId: resolvedLeadId,
-                        contactId: resolvedContactId,
-                      });
-                    }}
-                    className="px-3 py-1.5 rounded-lg text-xs font-semibold text-emerald-700 bg-emerald-50 hover:bg-emerald-100 border border-emerald-200 transition-colors flex items-center gap-1.5 cursor-pointer shadow-2xs"
-                    title="詳細モーダルを閉じて右側の送信ドロワーを開きます"
-                  >
-                    <Mail className="w-3.5 h-3.5" />
-                    <span>送信ドロワー</span>
-                  </button>
-                </>
-              );
-            })()}
+            {['leads', 'deals', 'customers'].includes(tableKey) && onOpenCustomerWorkspace && record.company_id && (
+              <>
+                <button
+                  onClick={() => { onClose(); onOpenCustomerWorkspace(String(record.company_id), 'documents', { tableKey, recordId: String(record.id), leadId: record.lead_id ? String(record.lead_id) : undefined, contactId: record.contact_id ? String(record.contact_id) : undefined }); }}
+                  className="px-3 py-1.5 rounded-lg text-xs font-semibold text-purple-700 bg-purple-50 hover:bg-purple-100 border border-purple-200 transition-colors flex items-center gap-1.5"
+                >
+                  <FileText className="w-3.5 h-3.5" />
+                  <span>{tableKey === 'customers' ? '顧客書類' : '関連書類'}</span>
+                </button>
+                <button
+                  onClick={() => { onClose(); onOpenCustomerWorkspace(String(record.company_id), 'diagnoses', { tableKey, recordId: String(record.id), leadId: record.lead_id ? String(record.lead_id) : undefined }); }}
+                  className="px-3 py-1.5 rounded-lg text-xs font-semibold text-purple-700 bg-purple-50 hover:bg-purple-100 border border-purple-200 transition-colors flex items-center gap-1.5"
+                >
+                  <FileText className="w-3.5 h-3.5" />
+                  <span>診断レポート</span>
+                </button>
+                <button
+                  onClick={() => { onClose(); onOpenCustomerWorkspace(String(record.company_id), 'forms', { tableKey, recordId: String(record.id), leadId: record.lead_id ? String(record.lead_id) : undefined }); }}
+                  className="px-3 py-1.5 rounded-lg text-xs font-semibold text-purple-700 bg-purple-50 hover:bg-purple-100 border border-purple-200 transition-colors flex items-center gap-1.5"
+                >
+                  <FileText className="w-3.5 h-3.5" />
+                  <span>フォーム回答</span>
+                </button>
+                <button
+                  onClick={() => { onClose(); onOpenCustomerWorkspace(String(record.company_id), 'send', { tableKey, recordId: String(record.id), leadId: record.lead_id ? String(record.lead_id) : undefined, contactId: record.contact_id ? String(record.contact_id) : undefined }); }}
+                  className="px-3 py-1.5 rounded-lg text-xs font-semibold text-emerald-700 bg-emerald-50 hover:bg-emerald-100 border border-emerald-200 transition-colors flex items-center gap-1.5 cursor-pointer shadow-2xs"
+                  title="詳細モーダルを閉じて右側の送信ドロワーを開きます"
+                >
+                  <Mail className="w-3.5 h-3.5" />
+                  <span>送信ドロワー</span>
+                </button>
+                {tableKey === 'deals' && <button
+                  onClick={() => { onClose(); onOpenCustomerWorkspace(String(record.company_id), 'documents', { tableKey, recordId: String(record.id), leadId: record.lead_id ? String(record.lead_id) : undefined }); }}
+                  className="px-3 py-1.5 rounded-lg text-xs font-semibold text-purple-700 bg-purple-50 hover:bg-purple-100 border border-purple-200 transition-colors flex items-center gap-1.5"
+                >
+                  <FileText className="w-3.5 h-3.5" />
+                  <span>見積・契約書</span>
+                </button>}
+                {tableKey === 'customers' && <button
+                  onClick={() => { onClose(); onOpenCustomerWorkspace(String(record.company_id), 'operations', { tableKey, recordId: String(record.id) }); }}
+                  className="px-3 py-1.5 rounded-lg text-xs font-semibold text-emerald-700 bg-emerald-50 hover:bg-emerald-100 border border-emerald-200 transition-colors flex items-center gap-1.5"
+                >
+                  <Briefcase className="w-3.5 h-3.5" />
+                  <span>契約・請求・支援</span>
+                </button>}
+              </>
+            )}
             <button
               onClick={onClose}
               className="px-4 py-2 rounded-lg text-xs font-medium text-slate-600 hover:bg-slate-200/70 border border-slate-200 transition-colors"

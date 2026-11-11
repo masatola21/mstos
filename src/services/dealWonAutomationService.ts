@@ -1,6 +1,5 @@
 import { getSupabase } from '../lib/supabaseClient';
 import { todayJst } from '../utils/date';
-import { getEndOfNextMonthDate } from '../utils/billingUtils';
 
 export interface DealWonResult {
   success: boolean;
@@ -12,7 +11,14 @@ export interface DealWonResult {
   message: string;
 }
 
-const defaultInvoiceDueDate = (date = new Date()) => getEndOfNextMonthDate(date);
+const defaultInvoiceDueDate = (date = new Date()) => {
+  const due = new Date(date.getFullYear(), date.getMonth(), 25);
+  if (date.getDate() >= 25) due.setMonth(due.getMonth() + 1);
+  const year = due.getFullYear();
+  const month = String(due.getMonth() + 1).padStart(2, '0');
+  const day = String(due.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+};
 
 // 同時並行実行を防ぐインフライトMutexロック
 const inFlightDealLocks = new Set<string>();
@@ -163,8 +169,8 @@ async function executeDealWonAutomationInternal(dealId: string, forceRecreate = 
     const documentIds: string[] = [];
 
     const scheduleNote = monthlyFee > 0
-      ? `月額費用: ¥${monthlyFee.toLocaleString('ja-JP')}（税抜 / 税込 ¥${Math.floor(monthlyFee * 1.1).toLocaleString('ja-JP')}・毎月末日締め翌月末日振込）`
-      : `スポット契約（一括払い・支払期日: ${dueDate}）`;
+      ? `月額費用: ¥${monthlyFee.toLocaleString('ja-JP')}（税抜 / 税込 ¥${Math.floor(monthlyFee * 1.1).toLocaleString('ja-JP')}・毎月25日締め翌月末払い）`
+      : 'スポット契約（一括払い）';
 
     try {
       const isRetainer = monthlyFee > 0;
@@ -176,8 +182,8 @@ async function executeDealWonAutomationInternal(dealId: string, forceRecreate = 
           <h3>第1条（業務内容）</h3>
           <p>${dealTitle}に関する業務支援および仕組み化伴走</p>
           <h3>第2条（委託料および請求スケジュール）</h3>
-          <p>初期費用: 金 <strong>¥${initialFeeVal.toLocaleString('ja-JP')}</strong> 円（税抜 / 消費税10%込 金 ¥${Math.floor(initialFeeVal * 1.1).toLocaleString('ja-JP')} 円 / 支払期日: <strong>${dueDate}</strong> 翌月末日振込）</p>
-          ${isRetainer ? `<p>継続顧問料: 月額 <strong>¥${monthlyFee.toLocaleString('ja-JP')}</strong> 円（税抜 / 消費税10%込 金 ¥${Math.floor(monthlyFee * 1.1).toLocaleString('ja-JP')} 円 / 毎月末日締め翌月末日振込）</p>` : ''}
+          <p>初期費用: 金 <strong>¥${initialFeeVal.toLocaleString('ja-JP')}</strong> 円（税抜 / 消費税10%込 金 ¥${Math.floor(initialFeeVal * 1.1).toLocaleString('ja-JP')} 円）</p>
+          ${isRetainer ? `<p>継続顧問料: 月額 <strong>¥${monthlyFee.toLocaleString('ja-JP')}</strong> 円（税抜 / 消費税10%込 金 ¥${Math.floor(monthlyFee * 1.1).toLocaleString('ja-JP')} 円 / 毎月25日締め翌月末払い）</p>` : ''}
           <h3>第3条（契約期間および最低契約期間）</h3>
           ${isRetainer
             ? `<p>1. 本契約の有効期間は <strong>${today}</strong> からとし、<strong>契約締結日より最低6ヶ月間</strong>を最低契約期間とする。<br>
@@ -209,7 +215,7 @@ async function executeDealWonAutomationInternal(dealId: string, forceRecreate = 
               </tr>
             </table>
           </div>
-          <p style="margin-top: 20px;">お支払期日: <strong>${dueDate}（翌月末日）</strong></p>
+          <p style="margin-top: 20px;">支払期日: <strong>${dueDate}</strong></p>
           <p>振込先口座: ドコモSMTBネット銀行 法人第一支店 普通 2223730（口座名義：有限会社MST）</p>
         </div>
       `;
