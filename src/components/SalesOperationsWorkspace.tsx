@@ -368,7 +368,6 @@ export const SalesOperationsWorkspace: React.FC<Props> = ({ tab, companyId, lead
   };
 
   const deleteDocumentDraft = async (doc: RecordRow) => {
-    if (!['draft', 'awaiting_approval'].includes(doc.status)) return;
     const supabase = getSupabase();
     if (!supabase) { setError('Supabaseに接続できません。'); return; }
     setError(''); setNotice('');
@@ -380,10 +379,10 @@ export const SalesOperationsWorkspace: React.FC<Props> = ({ tab, companyId, lead
       ]);
       const referenceError = outboxResult.error || contractResult.error || invoiceResult.error;
       if (referenceError) { setError(`関連データを確認できず削除を中止しました: ${referenceError.message}`); return; }
-      if (outboxResult.data?.length) { setError('送信履歴がある書類は削除できません。保管に変更してください。'); return; }
-      if (contractResult.data?.length || invoiceResult.data?.length) { setError('契約または請求に紐づく書類は削除できません。関連記録を保護するため保管にしてください。'); return; }
+      if (outboxResult.data?.length) { setError('送信履歴がある書類は削除できません。'); return; }
+      if (contractResult.data?.length || invoiceResult.data?.length) { setError('契約または請求に紐づく書類は削除できません。'); return; }
       const { data: deleted, error: deleteError } = await supabase.from('customer_documents')
-        .delete().eq('id', doc.id).in('status', ['draft', 'awaiting_approval']).select('id').maybeSingle();
+        .delete().eq('id', doc.id).select('id').maybeSingle();
       if (deleteError) { setError(`削除できませんでした: ${deleteError.message}`); return; }
       if (!deleted) { setError('削除対象が見つからないか、削除権限がありません。画面を再読み込みしてください。'); return; }
       setPendingDeleteDocumentId('');
@@ -613,17 +612,15 @@ export const SalesOperationsWorkspace: React.FC<Props> = ({ tab, companyId, lead
                     <div className="flex items-center gap-2">
                       <select
                         aria-label={`${doc.title}の状態`}
-                        value={doc.status}
+                        value={doc.status === 'awaiting_approval' ? 'draft' : doc.status}
                         onChange={(e) => void updateDocumentStatus(doc.id, e.target.value)}
                         className="rounded-lg border border-slate-200 bg-slate-50 px-2 py-1 text-xs text-slate-800 focus:bg-white focus:border-purple-600 focus:outline-none"
                       >
-                        <option value="draft">下書き</option>
-                        <option value="awaiting_approval">確認待ち</option>
-                        <option value="approved">承認済み</option>
-                        <option value="archived">保管</option>
+                        <option value="draft">作成中（下書き）</option>
+                        <option value="approved">確定（送付可能）</option>
+                        {doc.status === 'archived' && <option value="archived">保管</option>}
                       </select>
-                      {['draft', 'awaiting_approval', 'archived'].includes(doc.status) && (
-                        pendingDeleteDocumentId === doc.id ? (
+                      {pendingDeleteDocumentId === doc.id ? (
                           <span className="inline-flex items-center gap-2">
                             <span className="text-xs text-amber-700 font-semibold">削除しますか？</span>
                             <button
@@ -650,8 +647,7 @@ export const SalesOperationsWorkspace: React.FC<Props> = ({ tab, companyId, lead
                             <Trash2 className="h-3.5 w-3.5" />
                             <span>削除</span>
                           </button>
-                        )
-                      )}
+                        )}
                     </div>
                   </div>
 

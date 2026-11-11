@@ -18,7 +18,8 @@ import {
   ShieldCheck,
   RotateCcw,
   Paperclip,
-  FileText
+  FileText,
+  Trash2
 } from 'lucide-react';
 import { getSupabase } from '../../lib/supabaseClient';
 import { DocumentPreviewModal } from '../common/DocumentPreviewModal';
@@ -97,6 +98,7 @@ export const CommunicationOutboxHistoryView: React.FC<Props> = ({
   const [selectedMessage, setSelectedMessage] = useState<OutboxMessage | null>(null);
   const [previewDocumentId, setPreviewDocumentId] = useState<string | null>(null);
   const [lastUpdatedAt, setLastUpdatedAt] = useState<Date | null>(null);
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
 
   const loadData = async () => {
     setLoading(true);
@@ -215,6 +217,49 @@ export const CommunicationOutboxHistoryView: React.FC<Props> = ({
       await loadData();
     } catch (err: any) {
       setError(err?.message || '再試行処理に失敗しました。');
+    }
+  };
+
+  const deleteMessage = async (messageId: string) => {
+    if (!window.confirm('この送信履歴を削除しますか？\n（送信記録がデータベースから削除されます）')) return;
+    const supabase = getSupabase();
+    if (!supabase) return;
+    try {
+      const { error: deleteError } = await supabase
+        .from('communication_outbox')
+        .delete()
+        .eq('id', messageId);
+
+      if (deleteError) throw deleteError;
+      setNotice('送信履歴を削除しました。');
+      setSelectedIds((prev) => {
+        const next = new Set(prev);
+        next.delete(messageId);
+        return next;
+      });
+      await loadData();
+    } catch (err: any) {
+      setError(err?.message || '送信履歴の削除に失敗しました。');
+    }
+  };
+
+  const deleteSelectedMessages = async () => {
+    if (selectedIds.size === 0) return;
+    if (!window.confirm(`選択した ${selectedIds.size} 件の送信履歴を削除しますか？`)) return;
+    const supabase = getSupabase();
+    if (!supabase) return;
+    try {
+      const { error: deleteError } = await supabase
+        .from('communication_outbox')
+        .delete()
+        .in('id', Array.from(selectedIds));
+
+      if (deleteError) throw deleteError;
+      setNotice(`${selectedIds.size} 件の送信履歴を削除しました。`);
+      setSelectedIds(new Set());
+      await loadData();
+    } catch (err: any) {
+      setError(err?.message || '選択した送信履歴の削除に失敗しました。');
     }
   };
 
@@ -426,6 +471,17 @@ export const CommunicationOutboxHistoryView: React.FC<Props> = ({
               </span>
             )}
 
+            {selectedIds.size > 0 && (
+              <button
+                type="button"
+                onClick={() => void deleteSelectedMessages()}
+                className="flex items-center gap-1.5 rounded-xl border border-rose-200 bg-rose-50 hover:bg-rose-100 px-3 py-1.5 text-xs font-semibold text-rose-700 transition cursor-pointer shadow-2xs"
+              >
+                <Trash2 className="w-3.5 h-3.5 text-rose-600" />
+                <span>選択した {selectedIds.size} 件を削除</span>
+              </button>
+            )}
+
             <button
               type="button"
               onClick={() => void loadData()}
@@ -491,6 +547,22 @@ export const CommunicationOutboxHistoryView: React.FC<Props> = ({
             <table className="w-full text-left border-collapse">
               <thead>
                 <tr className="border-b border-slate-100 bg-slate-50/80 text-[11px] font-semibold text-slate-500">
+                  <th className="py-2.5 px-3 w-10 text-center" onClick={(e) => e.stopPropagation()}>
+                    <input
+                      type="checkbox"
+                      aria-label="すべて選択"
+                      checked={filteredMessages.length > 0 && selectedIds.size === filteredMessages.length}
+                      onChange={(e) => {
+                        if (e.target.checked) {
+                          setSelectedIds(new Set(filteredMessages.map((m) => m.id)));
+                        } else {
+                          setSelectedIds(new Set());
+                        }
+                      }}
+                      className="rounded border-slate-300 text-purple-600 focus:ring-purple-500 cursor-pointer"
+                      title="全選択 / 全解除"
+                    />
+                  </th>
                   <th className="py-2.5 px-4">状態</th>
                   <th className="py-2.5 px-4">チャンネル</th>
                   <th className="py-2.5 px-4">宛先・相手企業</th>
@@ -508,13 +580,32 @@ export const CommunicationOutboxHistoryView: React.FC<Props> = ({
                     border: 'border-slate-200',
                   };
                   const contactInfo = (msg.recipient_contact_id ? contacts[msg.recipient_contact_id] : null) || (msg.recipient_address ? emailContacts[msg.recipient_address.trim().toLowerCase()] : null);
+                  const isSelected = selectedIds.has(msg.id);
 
                   return (
                     <tr
                       key={msg.id}
-                      className="hover:bg-purple-50/20 transition-colors cursor-pointer group"
+                      className={`hover:bg-purple-50/20 transition-colors cursor-pointer group ${isSelected ? 'bg-purple-50/30' : ''}`}
                       onClick={() => setSelectedMessage(msg)}
                     >
+                      {/* チェックボックス */}
+                      <td className="py-3 px-3 text-center" onClick={(e) => e.stopPropagation()}>
+                        <input
+                          type="checkbox"
+                          aria-label={`${msg.subject || '送信履歴'}を選択`}
+                          checked={isSelected}
+                          onChange={(e) => {
+                            setSelectedIds((prev) => {
+                              const next = new Set(prev);
+                              if (e.target.checked) next.add(msg.id);
+                              else next.delete(msg.id);
+                              return next;
+                            });
+                          }}
+                          className="rounded border-slate-300 text-purple-600 focus:ring-purple-500 cursor-pointer"
+                        />
+                      </td>
+
                       {/* 状態 */}
                       <td className="py-3 px-4 whitespace-nowrap">
                         <span className={`inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[10px] font-bold ${statusMeta.bg} ${statusMeta.color} ${statusMeta.border}`}>
@@ -623,6 +714,14 @@ export const CommunicationOutboxHistoryView: React.FC<Props> = ({
                             title="詳細と本文を確認"
                           >
                             <Eye className="w-3.5 h-3.5" />
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => void deleteMessage(msg.id)}
+                            className="rounded-lg border border-slate-200 bg-white hover:bg-rose-50 p-1 text-slate-400 hover:text-rose-600 transition cursor-pointer"
+                            title="この送信履歴を削除"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
                           </button>
                         </div>
                       </td>
@@ -825,13 +924,28 @@ export const CommunicationOutboxHistoryView: React.FC<Props> = ({
                   </button>
                 )}
               </div>
-              <button
-                type="button"
-                onClick={() => setSelectedMessage(null)}
-                className="rounded-xl border border-slate-200 bg-white hover:bg-slate-100 px-4 py-2 text-xs font-semibold text-slate-700 cursor-pointer"
-              >
-                閉じる
-              </button>
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={async () => {
+                    const id = selectedMessage.id;
+                    setSelectedMessage(null);
+                    await deleteMessage(id);
+                  }}
+                  className="rounded-xl border border-rose-200 bg-white hover:bg-rose-50 px-3 py-2 text-xs font-semibold text-rose-600 flex items-center gap-1 cursor-pointer transition"
+                  title="この送信履歴を削除"
+                >
+                  <Trash2 className="w-3.5 h-3.5" />
+                  <span>削除</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setSelectedMessage(null)}
+                  className="rounded-xl border border-slate-200 bg-white hover:bg-slate-100 px-4 py-2 text-xs font-semibold text-slate-700 cursor-pointer"
+                >
+                  閉じる
+                </button>
+              </div>
             </div>
           </div>
         </div>

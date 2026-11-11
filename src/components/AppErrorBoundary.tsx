@@ -17,6 +17,19 @@ export class AppErrorBoundary extends React.Component<AppErrorBoundaryProps, App
 
   componentDidCatch(error: Error, info: React.ErrorInfo) {
     console.error('Application render error', error, info.componentStack);
+
+    // デプロイ後や回線瞬断による Vite 動的チャンク取得失敗を検知した場合、自動リロードで最新スクリプトを取得
+    const isChunkError = /Failed to fetch dynamically imported module|error loading dynamically imported module|Loading chunk|Importing a module script failed/i.test(
+      error?.message || ''
+    );
+    if (isChunkError && typeof window !== 'undefined') {
+      const now = Date.now();
+      const lastReload = parseInt(sessionStorage.getItem('mst_last_chunk_reload') || '0', 10);
+      if (now - lastReload > 12000) {
+        sessionStorage.setItem('mst_last_chunk_reload', String(now));
+        window.location.reload();
+      }
+    }
   }
 
   render() {

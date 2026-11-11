@@ -749,17 +749,17 @@ export const DocumentTemplateView: React.FC<DocumentTemplateViewProps> = ({
           .eq('id', existingId);
         if (error) throw error;
         setSavedDocIds((prev) => ({ ...prev, [templateId]: existingId }));
-        setSaveMessage('確認待ち書類を更新しました。');
+        setSaveMessage('書類を更新しました。');
       } else {
         const { data, error } = await supabase.from('customer_documents')
-          .insert({ ...payload, status: 'awaiting_approval' })
+          .insert({ ...payload, status: 'approved' })
           .select('id')
           .single();
         if (error || !data?.id) throw error || new Error('書類IDを取得できませんでした。');
         autosavedDocumentIds.current[templateId] = data.id;
         setSavedDocIds((prev) => ({ ...prev, [templateId]: data.id }));
         setHasStartedDocument(true);
-        setSaveMessage('確認待ち書類として保存しました。');
+        setSaveMessage('確定書類（送付可能）として保存しました。');
       }
     } catch (e: any) {
       setSaveMessage(`保存エラー: ${e.message}`);
@@ -788,7 +788,7 @@ export const DocumentTemplateView: React.FC<DocumentTemplateViewProps> = ({
             deal_id: dealId || null,
           };
           const { data, error } = await supabase.from('customer_documents')
-            .insert({ ...payload, status: 'awaiting_approval' })
+            .insert({ ...payload, status: 'approved' })
             .select('id')
             .single();
           if (!error && data?.id) {
@@ -894,7 +894,7 @@ export const DocumentTemplateView: React.FC<DocumentTemplateViewProps> = ({
             className="px-3 py-1.5 rounded-md bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white font-medium text-xs flex items-center gap-1.5 transition-all cursor-pointer"
           >
             <Save className="w-3.5 h-3.5" />
-            <span>{isSavingDocument ? '保存中…' : (savedDocIds[currentTemplate.id] || autosavedDocumentIds.current[currentTemplate.id]) ? '上書き保存' : '確認待ち保存'}</span>
+            <span>{isSavingDocument ? '保存中…' : (savedDocIds[currentTemplate.id] || autosavedDocumentIds.current[currentTemplate.id]) ? '上書き保存' : '確定保存'}</span>
           </button>
 
           <button

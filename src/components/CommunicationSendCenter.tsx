@@ -1043,7 +1043,7 @@ export const CommunicationSendCenter: React.FC<Props> = ({
                 </label>
                 <div className="md:col-span-2 space-y-2">
                   <label className="block text-xs font-semibold text-slate-700">
-                    書類（{contact?.company_id ? (companies[contact.company_id] || '選択した会社') + 'の書類' : initialCompanyId ? (companies[initialCompanyId] || 'この会社') + 'の書類' : '送信先を選ぶと会社の書類で絞り込み'}・承認済みのみ送信可能）
+                    書類（{contact?.company_id ? (companies[contact.company_id] || '選択した会社') + 'の書類' : initialCompanyId ? (companies[initialCompanyId] || 'この会社') + 'の書類' : '送信先を選ぶと会社の書類で絞り込み'}・確定書類のみ送信可能）
                     <select
                       value={docId}
                       onChange={(e) => setDocId(e.target.value)}
@@ -1052,7 +1052,7 @@ export const CommunicationSendCenter: React.FC<Props> = ({
                       <option value="">書類を選択してください</option>
                       {availableDocs.map((x) => (
                         <option key={x.id} value={x.id}>
-                          {x.title} · {({ draft: '下書き', awaiting_approval: '確認待ち', approved: '承認済み', queued: '送信待ち', sent: '送信済み', failed: '送信失敗', archived: 'アーカイブ' } as Record<string, string>)[x.status] || x.status}
+                          {x.title} · {({ draft: '作成中', awaiting_approval: '作成中', approved: '確定（送付可能）', queued: '送信待ち', sent: '送信済み', failed: '送信失敗', archived: '保管' } as Record<string, string>)[x.status] || x.status}
                         </option>
                       ))}
                     </select>
@@ -1068,7 +1068,7 @@ export const CommunicationSendCenter: React.FC<Props> = ({
                             <div className="flex items-center gap-2">
                               <span className="font-bold text-xs text-purple-950 truncate">{doc.title}</span>
                               <span className="text-[10px] px-1.5 py-0.5 rounded font-semibold bg-white border border-purple-200 text-purple-700">
-                                {({ draft: '下書き', awaiting_approval: '確認待ち', approved: '承認済み', queued: '送信待ち', sent: '送信済み' } as Record<string, string>)[doc.status] || doc.status}
+                                {({ draft: '作成中', awaiting_approval: '作成中', approved: '確定（送付可能）', queued: '送信待ち', sent: '送信済み' } as Record<string, string>)[doc.status] || doc.status}
                               </span>
                             </div>
                             <span className="text-[11px] text-slate-500 block truncate">
