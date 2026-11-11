@@ -1510,49 +1510,52 @@ export const DiagnosisDetailLoader: React.FC<{
 
 export const DiagnosisManager: React.FC<DiagnosisManagerProps> = (props) => {
   const [openDiagnosisId, setOpenDiagnosisId] = useState<string | null>(props.initialDiagnosisId || null);
-  const [section, setSection] = useState<'forms' | 'answers' | 'materials'>(
-    props.initialSection === 'materials'
-      ? 'materials'
-      : props.initialSection === 'answers' || props.initialSection === 'diagnoses' || props.initialLeadId || props.initialCompanyId
-      ? 'answers'
-      : 'forms'
+  const [section, setSection] = useState<'forms' | 'materials'>(
+    props.initialSection === 'materials' ? 'materials' : 'forms'
   );
 
   useEffect(() => {
-    if (props.initialSection === 'forms' || props.initialSection === 'materials' || props.initialSection === 'answers') {
-      setSection(props.initialSection);
-    } else if (props.initialSection === 'diagnoses') {
-      setSection('answers');
+    if (props.initialSection === 'materials') {
+      setSection('materials');
+    } else if (props.initialSection === 'forms') {
+      setSection('forms');
+    } else if (props.initialSection === 'answers' || props.initialSection === 'diagnoses') {
+      // If answers was requested directly, route or guide to inbox
+      if (props.onNavigateTab) {
+        props.onNavigateTab('inbox_hub');
+      } else {
+        setSection('forms');
+      }
     }
-  }, [props.initialSection]);
+  }, [props.initialSection, props.onNavigateTab]);
 
   return (
     <div className="space-y-4">
       <div className="space-y-3 rounded-xl border border-slate-200 bg-white p-4 shadow-xs">
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
           <div>
-            <h1 className="text-[19px] font-bold text-slate-800 tracking-tight">受付フォーム・公式配布資料管理</h1>
-            <p className="mt-0.5 text-xs text-slate-500">HP・LINE向けの反響受付フォームや診断設問の設計、フォーム回答一覧、公式配布PDF資料の並び替え・公開管理を行えます。</p>
+            <h1 className="text-[19px] font-bold text-slate-800 tracking-tight">フォーム作成・配布資料</h1>
+            <p className="mt-0.5 text-xs text-slate-500">HP・LINE向けの反響受付フォームや診断設問の作成・公開設定、公式配布PDF資料の並び替え・公開管理を行えます。お客様からの回答確認や返信対応は「統合受信トレイ」に集約されています。</p>
           </div>
           <div className="flex items-center gap-2">
             {props.onNavigateTab && (
               <>
+                <button
+                  onClick={() => props.onNavigateTab?.('inbox_hub')}
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold text-white bg-purple-600 hover:bg-purple-700 shadow-xs transition cursor-pointer"
+                  title="日常の受付回答の確認、未対応ステータス管理、メール/LINE返信は統合受信トレイで行えます"
+                >
+                  <Inbox className="w-3.5 h-3.5" />
+                  <span>回答一覧・返信対応（統合受信トレイへ）</span>
+                  <ArrowRight className="w-3.5 h-3.5 text-purple-200" />
+                </button>
                 <button
                   onClick={() => props.onNavigateTab?.('document_templates')}
                   className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold text-purple-700 hover:text-purple-900 bg-purple-50 hover:bg-purple-100 border border-purple-200 transition cursor-pointer"
                   title="重要書類・見積・契約でレポートや提案書を直接AI作成"
                 >
                   <FileText className="w-3.5 h-3.5 text-purple-600" />
-                  <span>重要書類・見積・契約を開く</span>
-                  <ArrowRight className="w-3.5 h-3.5 text-purple-400" />
-                </button>
-                <button
-                  onClick={() => props.onNavigateTab?.('inbox_hub')}
-                  className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium text-slate-700 hover:text-slate-900 bg-slate-50 hover:bg-slate-100 border border-slate-200 transition cursor-pointer"
-                >
-                  <Inbox className="w-3.5 h-3.5 text-slate-500" />
-                  <span>受信トレイで回答確認</span>
-                  <ArrowRight className="w-3.5 h-3.5 text-slate-400" />
+                  <span>重要書類・見積・契約</span>
                 </button>
               </>
             )}
@@ -1560,22 +1563,7 @@ export const DiagnosisManager: React.FC<DiagnosisManagerProps> = (props) => {
         </div>
 
         {/* Section Tabs */}
-        <div className="flex border-b border-slate-200 pt-2 gap-2 overflow-x-auto scrollbar-none">
-          <button
-            type="button"
-            onClick={() => setSection('answers')}
-            className={`pb-2.5 px-3 text-xs font-bold transition-colors border-b-2 cursor-pointer flex items-center gap-1.5 whitespace-nowrap ${
-              section === 'answers'
-                ? 'border-purple-600 text-purple-700'
-                : 'border-transparent text-slate-500 hover:text-slate-800'
-            }`}
-          >
-            <Inbox className="w-3.5 h-3.5" />
-            <span>フォーム回答一覧</span>
-            {(props.initialLeadId || props.initialCompanyId) && (
-              <span className="px-1.5 py-0.5 rounded-full text-[10px] bg-purple-100 text-purple-700 font-semibold">絞り込み中</span>
-            )}
-          </button>
+        <div className="flex items-center border-b border-slate-200 pt-2 gap-2 overflow-x-auto scrollbar-none">
           <button
             type="button"
             onClick={() => setSection('forms')}
@@ -1601,6 +1589,18 @@ export const DiagnosisManager: React.FC<DiagnosisManagerProps> = (props) => {
             <span>公式配布資料・PDFマスタ管理</span>
             <span className="px-1.5 py-0.5 rounded-full text-[10px] bg-sky-100 text-sky-800 border border-sky-200 font-medium">HP自動連動</span>
           </button>
+          {props.onNavigateTab && (
+            <button
+              type="button"
+              onClick={() => props.onNavigateTab?.('inbox_hub')}
+              className="pb-2.5 px-3 text-xs font-medium text-slate-500 hover:text-purple-700 transition-colors border-b-2 border-transparent cursor-pointer flex items-center gap-1.5 whitespace-nowrap ml-auto"
+              title="受信したフォーム回答の確認・ステータス更新・返信対応"
+            >
+              <Inbox className="w-3.5 h-3.5 text-purple-600" />
+              <span>統合受信トレイで回答を確認・返信する</span>
+              <ArrowRight className="w-3 h-3 text-purple-400" />
+            </button>
+          )}
         </div>
       </div>
       <DiagnosisFormsWorkspace
@@ -1609,10 +1609,17 @@ export const DiagnosisManager: React.FC<DiagnosisManagerProps> = (props) => {
         initialCompanyId={props.initialCompanyId}
         initialSection={section}
         activeSection={section}
-        onSectionChange={(next) => setSection(next)}
+        onSectionChange={(next) => {
+          if (next === 'answers') {
+            if (props.onNavigateTab) props.onNavigateTab('inbox_hub');
+          } else {
+            setSection(next as 'forms' | 'materials');
+          }
+        }}
         showHeader={false}
         onOpenDiagnosis={setOpenDiagnosisId}
         onOpenSendCenter={props.onOpenSendCenter}
+        onNavigateTab={props.onNavigateTab}
       />
       {openDiagnosisId && (
         <DiagnosisDetailLoader

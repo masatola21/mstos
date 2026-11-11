@@ -54,7 +54,7 @@ export const AppHeader: React.FC<AppHeaderProps> = ({
       case 'marketing_automation':
         return { category: '集客・営業開拓', page: 'LINE・メール自動配信' };
       case 'mst_diagnoses':
-        return { category: '集客・営業開拓', page: '受付フォーム設計' };
+        return { category: '集客・営業開拓', page: 'フォーム作成・配布資料' };
       case 'prospects':
         return { category: '集客・営業開拓', page: '見込み企業（AI検索）' };
       case 'contacts':

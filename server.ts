@@ -407,12 +407,129 @@ function isDisallowedSsrfUrl(urlString: string): boolean {
   }
 }
 
-async function ensureStandardPublicForms(): Promise<void> {
-  if (!lineSupabase) return;
+export type FormQuestion = {
+  id: string;
+  label: string;
+  type?: string;
+  required?: boolean;
+  options?: string[];
+  [key: string]: any;
+};
+
+// 経営ボトルネック診断フォーム用の会社属性設問（業種・従業員数）
+export const DIAGNOSIS_INDUSTRY_OPTIONS: string[] = [
+  'IT・通信・Webサービス',
+  '製造業・ものづくり',
+  '卸売・小売・EC',
+  '建設・不動産・住宅',
+  '飲食・宿泊・観光',
+  '医療・福祉・ヘルスケア',
+  '士業・コンサルティング・専門サービス',
+  '人材・教育・研修',
+  '物流・運輸',
+  '金融・保険',
+  'その他',
+];
+
+export const DIAGNOSIS_EMPLOYEE_COUNT_OPTIONS: string[] = [
+  '1〜5名',
+  '6〜20名',
+  '21〜50名',
+  '51〜100名',
+  '101〜300名',
+  '301名以上',
+];
+
+export const DIAGNOSIS_FREE_NOTES_LABEL =
+  '今、経営や業務で一番お悩みのことは何ですか？具体的に書いていただくほど、診断結果が貴社向けになります（任意）';
+
+export const DIAGNOSIS_COMPANY_PROFILE_QUESTIONS: FormQuestion[] = [
+  {
+    id: 'q_industry',
+    label: '業種',
+    type: 'select',
+    required: false,
+    options: [...DIAGNOSIS_INDUSTRY_OPTIONS],
+  },
+  {
+    id: 'q_employee_count',
+    label: '従業員数',
+    type: 'select',
+    required: false,
+    options: [...DIAGNOSIS_EMPLOYEE_COUNT_OPTIONS],
+  },
+];
+
+/**
+ * 既存の診断フォーム定義に業種・従業員数がない場合、認知経路の手前に安全に追加する。
+ * 自由記述メモの文言も、初期値のままなら「今一番のお悩み」に変更する。
+ */
+export function ensureDiagnosisProfileQuestions(questions: FormQuestion[]): {
+  questions: FormQuestion[];
+  changed: boolean;
+} {
+  if (!Array.isArray(questions)) {
+    return { questions: [], changed: false };
+  }
+  let changed = false;
+  let updated = questions.map((q) => {
+    if (
+      q.id === 'q_free_notes' &&
+      (!q.label ||
+        q.label === '自由相談メモ' ||
+        q.label.startsWith('自由相談メモ') ||
+        q.label === '自由記述メモ（任意）')
+    ) {
+      changed = true;
+      return { ...q, label: DIAGNOSIS_FREE_NOTES_LABEL };
+    }
+    return { ...q };
+  });
+
+  const hasIndustry = updated.some((q) => q.id === 'q_industry');
+  const hasEmployee = updated.some((q) => q.id === 'q_employee_count');
+  if (!hasIndustry || !hasEmployee) {
+    changed = true;
+    const toAdd: FormQuestion[] = [];
+    if (!hasIndustry) {
+      toAdd.push({
+        id: 'q_industry',
+        label: '業種',
+        type: 'select',
+        required: false,
+        options: [...DIAGNOSIS_INDUSTRY_OPTIONS],
+      });
+    }
+    if (!hasEmployee) {
+      toAdd.push({
+        id: 'q_employee_count',
+        label: '従業員数',
+        type: 'select',
+        required: false,
+        options: [...DIAGNOSIS_EMPLOYEE_COUNT_OPTIONS],
+      });
+    }
+    const hearAboutIndex = updated.findIndex((q) => q.id === 'q_hear_about');
+    if (hearAboutIndex >= 0) {
+      updated = [
+        ...updated.slice(0, hearAboutIndex),
+        ...toAdd,
+        ...updated.slice(hearAboutIndex),
+      ];
+    } else {
+      updated = [...updated, ...toAdd];
+    }
+  }
+  return { questions: updated, changed };
+}
+
+export async function ensureStandardPublicForms(supabaseClient?: any): Promise<void> {
+  const dbClient = supabaseClient || lineSupabase;
+  if (!dbClient) return;
   try {
     // 不要となった古いフォーム（care-package-inquiry）および重複した「経営課題・業務診断フォーム」を確実に削除
-    await lineSupabase.from('diagnosis_forms').delete().eq('public_slug', 'care-package-inquiry');
-    await lineSupabase.from('diagnosis_forms').delete().neq('public_slug', 'business-diagnosis').ilike('name', '%経営課題%');
+    await dbClient.from('diagnosis_forms').delete().eq('public_slug', 'care-package-inquiry');
+    await dbClient.from('diagnosis_forms').delete().neq('public_slug', 'business-diagnosis').ilike('name', '%経営課題%');
   } catch (e: any) {
     console.warn('[Setup] Deleting obsolete or duplicate forms warning:', e?.message);
   }
@@ -468,7 +585,8 @@ async function ensureStandardPublicForms(): Promise<void> {
           { id: 'q_profit_bottleneck', label: '売上・利益の急所', type: 'radio', required: true },
           { id: 'q_delay_reason', label: '改善停滞の原因', type: 'radio', required: true },
           { id: 'q_ideal_future', label: '目指したい未来', type: 'radio', required: true },
-          { id: 'q_free_notes', label: '自由相談メモ', type: 'textarea', required: false },
+          { id: 'q_free_notes', label: DIAGNOSIS_FREE_NOTES_LABEL, type: 'textarea', required: false },
+          ...DIAGNOSIS_COMPANY_PROFILE_QUESTIONS,
           { id: 'q_hear_about', label: 'どこで知りましたか？（認知経路）', type: 'select', required: false, options: ['Instagram', 'Threads', 'Facebook', 'LinkedIn', 'ブログ', '検索', '紹介', 'メール', 'その他'] },
         ],
       },
@@ -478,14 +596,14 @@ async function ensureStandardPublicForms(): Promise<void> {
 
   for (const item of standardForms) {
     try {
-      const { data: existing } = await lineSupabase
+      const { data: existing } = await dbClient
         .from('diagnosis_forms')
         .select('id, status, definition')
         .eq('public_slug', item.public_slug)
         .maybeSingle();
 
       if (!existing) {
-        await lineSupabase.from('diagnosis_forms').insert(item);
+        await dbClient.from('diagnosis_forms').insert(item);
         console.log(`[Setup] Standard form created: ${item.public_slug} (status: published)`);
       } else {
         const existingDef = existing.definition && typeof existing.definition === 'object' ? existing.definition : {};
@@ -495,7 +613,16 @@ async function ensureStandardPublicForms(): Promise<void> {
         if (existing.status !== 'published') {
           updatePayload.status = 'published';
         }
-        if (!hasHearAbout && item.public_slug !== 'material-download') {
+        if (item.public_slug === 'business-diagnosis') {
+          const migration = ensureDiagnosisProfileQuestions(questions);
+          if (migration.changed) {
+            updatePayload.definition = {
+              ...existingDef,
+              questions: migration.questions,
+            };
+            console.log(`[Form Migration] Upgraded 'business-diagnosis' form questions with company profile fields`);
+          }
+        } else if (!hasHearAbout && item.public_slug !== 'material-download') {
           updatePayload.definition = {
             ...existingDef,
             questions: [
@@ -511,7 +638,7 @@ async function ensureStandardPublicForms(): Promise<void> {
           };
         }
         if (Object.keys(updatePayload).length > 0) {
-          await lineSupabase.from('diagnosis_forms').update(updatePayload).eq('id', existing.id);
+          await dbClient.from('diagnosis_forms').update(updatePayload).eq('id', existing.id);
         }
       }
     } catch (e: any) {
@@ -5323,6 +5450,10 @@ app.post(
       'q_hear_about',
       'hear_about',
       'hearAbout',
+      'q_industry',
+      'industry',
+      'q_employee_count',
+      'employee_count',
       'companyName',
       'company',
       'company_name',
@@ -5352,6 +5483,11 @@ app.post(
       const answer = cleanAnswers[questionId];
       if (answer === undefined || answer === '' || answer === false) return res.status(400).json({ error: '必須の設問に回答してください。' });
     }
+
+    const industryAnswer = typeof cleanAnswers.q_industry === 'string' && cleanAnswers.q_industry.trim()
+      ? cleanAnswers.q_industry.trim()
+      : (typeof cleanAnswers.industry === 'string' && cleanAnswers.industry.trim() ? cleanAnswers.industry.trim() : null);
+    const industryColumn = industryAnswer ? { industry: industryAnswer } : {};
 
     const effectiveCompanyName = companyName || (name ? `${name}様（個人）` : '新規反響企業（フォーム経由）');
     let matchedCompanyId: string | null = null;
@@ -5393,6 +5529,7 @@ app.post(
               contact_name: name || null,
               email: email || null,
               phone: phone || null,
+              ...industryColumn,
             })
             .select('id, company_name')
             .maybeSingle();
@@ -5410,6 +5547,7 @@ app.post(
                 contact_name: name || null,
                 email: email || null,
                 phone: phone || null,
+                ...industryColumn,
               })
               .select('id, company_name')
               .maybeSingle();
@@ -6473,6 +6611,17 @@ app.post('/api/diagnosis-submissions/:id/generate-report', requireAuth, async (r
 
     const questions: any[] = Array.isArray((form as any)?.definition?.questions) ? (form as any).definition.questions : [];
     const labelById = new Map<string, string>();
+    const defaultQuestionLabels: Record<string, string> = {
+      q_ops_bottleneck: '手作業・業務プロセスのボトルネック',
+      q_profit_bottleneck: '売上・利益のボトルネック',
+      q_delay_reason: '停滞・遅延の原因',
+      q_ideal_future: '目指す理想状態',
+      q_free_notes: '今、経営や業務で一番お悩みのこと',
+      q_industry: '業種',
+      q_employee_count: '従業員数',
+      q_hear_about: '認知経路',
+    };
+    Object.entries(defaultQuestionLabels).forEach(([k, v]) => labelById.set(k, v));
     questions.forEach((q) => { if (q?.id) labelById.set(String(q.id), String(q.label || q.id)); });
     const answerEntries = Object.entries((submission.answers || {}) as Record<string, unknown>)
       .filter(([key, value]) => key !== '_intake' && value !== null && value !== undefined && String(value).trim() !== '')

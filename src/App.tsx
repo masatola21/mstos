@@ -374,7 +374,7 @@ function AppContent() {
       case 'customers': return '顧客台帳';
       case 'document_templates': return '重要書類・見積・契約';
       case 'customer_operations': return '支援案件・契約・請求';
-      case 'mst_diagnoses': return '診断・受付フォーム';
+      case 'mst_diagnoses': return 'フォーム作成・配布資料';
       case 'contacts': return '連絡先・LINE友だち';
       case 'prospects': return '見込み企業';
       case 'ai_acquisition': return '集客戦略・SNS';
@@ -2560,6 +2560,9 @@ function AppContent() {
               (lineInboxContact ? 'line' : (localStorage.getItem('unified_inbox_active_channel') as any) || 'forms')
             }
             initialLineUserId={lineInboxContact?.lineUserId}
+            initialCompanyId={customerWorkspaceCompanyId}
+            initialLeadId={customerWorkspaceContext?.leadId}
+            onClearCompanyFilter={() => setCustomerWorkspaceContext(undefined)}
             onNavigateTab={(tab, options) => handleNavigateWorkspaceTab(tab, options)}
             onOpenSendCenter={(params) => {
               openSendDrawer({
@@ -2688,17 +2691,20 @@ function AppContent() {
                 leadId: resolvedLeadId,
                 dealId: resolvedDealId,
                 documentType: docType,
-                section: destination === 'forms' ? 'answers' : undefined,
+                section: undefined,
                 formId: undefined,
                 contactId: recordContext?.contactId,
               });
-              setCurrentTab(
-                destination === 'documents' || destination === 'diagnoses'
-                  ? 'document_templates'
-                  : destination === 'forms'
-                  ? 'mst_diagnoses'
-                  : 'customer_operations'
-              );
+              if (destination === 'forms') {
+                setInboxTargetChannel('forms');
+                setCurrentTab('inbox_hub');
+              } else {
+                setCurrentTab(
+                  destination === 'documents' || destination === 'diagnoses'
+                    ? 'document_templates'
+                    : 'customer_operations'
+                );
+              }
             }}
           />
         )}
@@ -2734,17 +2740,20 @@ function AppContent() {
                 leadId: resolvedLeadId,
                 dealId: resolvedDealId,
                 documentType: docType,
-                section: destination === 'forms' ? 'answers' : undefined,
+                section: undefined,
                 formId: undefined,
                 contactId: recordContext?.contactId,
               });
-              setCurrentTab(
-                destination === 'documents' || destination === 'diagnoses'
-                  ? 'document_templates'
-                  : destination === 'forms'
-                  ? 'mst_diagnoses'
-                  : 'customer_operations'
-              );
+              if (destination === 'forms') {
+                setInboxTargetChannel('forms');
+                setCurrentTab('inbox_hub');
+              } else {
+                setCurrentTab(
+                  destination === 'documents' || destination === 'diagnoses'
+                    ? 'document_templates'
+                    : 'customer_operations'
+                );
+              }
             }}
             onNavigateTab={(tab) => setCurrentTab(tab as UnifiedNavTab)}
           />
@@ -2900,17 +2909,20 @@ function AppContent() {
                 leadId: resolvedLeadId,
                 dealId: resolvedDealId,
                 documentType: docType,
-                section: destination === 'forms' ? 'answers' : undefined,
+                section: undefined,
                 formId: undefined,
                 contactId: recordContext?.contactId,
               });
-              setCurrentTab(
-                destination === 'documents' || destination === 'diagnoses'
-                  ? 'document_templates'
-                  : destination === 'forms'
-                  ? 'mst_diagnoses'
-                  : 'customer_operations'
-              );
+              if (destination === 'forms') {
+                setInboxTargetChannel('forms');
+                setCurrentTab('inbox_hub');
+              } else {
+                setCurrentTab(
+                  destination === 'documents' || destination === 'diagnoses'
+                    ? 'document_templates'
+                    : 'customer_operations'
+                );
+              }
             }}
             onOpenRls={() => setIsRlsOpen(true)}
             onNavigateTab={(tab) => setCurrentTab(tab as UnifiedNavTab)}

@@ -4,6 +4,8 @@ import {
   analyzeBottleneck,
   submitIntakeToCRM,
   OFFICIAL_TIMEREX_BOOKING_URL,
+  MST_INDUSTRY_OPTIONS,
+  MST_EMPLOYEE_COUNT_OPTIONS,
   type DiagnosisAnalysisResult
 } from '../lib/supabase';
 
@@ -23,6 +25,8 @@ export default function DiagnosisForm() {
     email: '',
     phone: '',
     hear_about: '',
+    industry: '',
+    employee_count: '',
   });
 
   const [source, setSource] = useState('corporate_website');
@@ -73,10 +77,13 @@ export default function DiagnosisForm() {
         source: source,
         answers: {
           ...answers,
+          // 会社の基本情報（任意）。未入力なら送らない
+          ...(lead.industry ? { q_industry: lead.industry } : {}),
+          ...(lead.employee_count ? { q_employee_count: lead.employee_count } : {}),
           q_hear_about: lead.hear_about,
           hear_about: lead.hear_about,
         },
-        notes: `【経営ボトルネック診断】判定: ${analysis.typeTitle}（${analysis.badge}）\n【手作業】${answers.q_ops_bottleneck}\n【売上・利益】${answers.q_profit_bottleneck}\n【停滞原因】${answers.q_delay_reason}\n【希望】${answers.q_ideal_future}\n【自由記入】${answers.q_free_notes || 'なし'}${lead.hear_about ? `\n【認知経路】${lead.hear_about}` : ''}`,
+        notes: `【経営ボトルネック診断】判定: ${analysis.typeTitle}（${analysis.badge}）\n【手作業】${answers.q_ops_bottleneck}\n【売上・利益】${answers.q_profit_bottleneck}\n【停滞原因】${answers.q_delay_reason}\n【希望】${answers.q_ideal_future}\n【今一番のお悩み】${answers.q_free_notes || 'なし'}${lead.industry ? `\n【業種】${lead.industry}` : ''}${lead.employee_count ? `\n【従業員数】${lead.employee_count}` : ''}${lead.hear_about ? `\n【認知経路】${lead.hear_about}` : ''}`,
         customFields: {
           diagnosis_result: analysis,
           hear_about: lead.hear_about,
@@ -524,6 +531,40 @@ export default function DiagnosisForm() {
                 onChange={(e) => setLead({ ...lead, phone: e.target.value })}
                 className="w-full px-4 py-3 rounded-xl border border-sand-300 focus:border-brand-600 focus:ring-2 focus:ring-brand-100 text-sm outline-none transition"
               />
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div>
+              <label className="block text-xs font-bold text-slate-800 mb-2">
+                業種 <span className="text-gray-400 font-normal">（任意）</span>
+              </label>
+              <select
+                value={lead.industry}
+                onChange={(e) => setLead({ ...lead, industry: e.target.value })}
+                className="w-full px-4 py-3 rounded-xl border border-sand-300 focus:border-brand-600 focus:ring-2 focus:ring-brand-100 text-sm outline-none transition bg-white text-slate-800 cursor-pointer"
+              >
+                <option value="">選択してください（任意）</option>
+                {MST_INDUSTRY_OPTIONS.map((option) => (
+                  <option key={option} value={option}>{option}</option>
+                ))}
+              </select>
+            </div>
+
+            <div>
+              <label className="block text-xs font-bold text-slate-800 mb-2">
+                従業員数 <span className="text-gray-400 font-normal">（任意・役員やパートを含む）</span>
+              </label>
+              <select
+                value={lead.employee_count}
+                onChange={(e) => setLead({ ...lead, employee_count: e.target.value })}
+                className="w-full px-4 py-3 rounded-xl border border-sand-300 focus:border-brand-600 focus:ring-2 focus:ring-brand-100 text-sm outline-none transition bg-white text-slate-800 cursor-pointer"
+              >
+                <option value="">選択してください（任意）</option>
+                {MST_EMPLOYEE_COUNT_OPTIONS.map((option) => (
+                  <option key={option} value={option}>{option}</option>
+                ))}
+              </select>
             </div>
           </div>
 

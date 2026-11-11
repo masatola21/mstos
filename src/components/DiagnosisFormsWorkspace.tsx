@@ -1,7 +1,7 @@
 import React, { Fragment, useEffect, useState } from 'react';
 import { getSupabase } from '../lib/supabaseClient';
 import { InlineDeleteButton } from './InlineDeleteButton';
-import { ArrowDown, ArrowUp, Clipboard, ClipboardCheck, ExternalLink, Plus, RefreshCw, Save, Trash2, Sparkles, AlertCircle, FileText, Upload, CheckCircle2, Eye, Copy, Link as LinkIcon } from 'lucide-react';
+import { ArrowDown, ArrowUp, Clipboard, ClipboardCheck, ExternalLink, Plus, RefreshCw, Save, Trash2, Sparkles, AlertCircle, FileText, Upload, CheckCircle2, Eye, Copy, Link as LinkIcon, Inbox, ArrowRight } from 'lucide-react';
 
 export interface PublicMaterial {
   id: string;
@@ -81,10 +81,43 @@ export const MST_OFFICIAL_BOTTLENECK_QUESTIONS: FormQuestion[] = [
   },
   {
     id: 'q_free_notes',
-    label: '現在最も気になっていることや、相談したい課題があればご自由にご記入ください（任意）',
+    label: '今、経営や業務で一番お悩みのことは何ですか？具体的に書いていただくほど、診断結果が貴社向けになります（任意）',
     type: 'textarea',
     required: false,
     options: [],
+  },
+  {
+    id: 'q_industry',
+    label: '業種',
+    type: 'select',
+    required: false,
+    options: [
+      'IT・通信・Webサービス',
+      '製造業・ものづくり',
+      '卸売・小売・EC',
+      '建設・不動産・住宅',
+      '飲食・宿泊・観光',
+      '医療・福祉・ヘルスケア',
+      '士業・コンサルティング・専門サービス',
+      '人材・教育・研修',
+      '物流・運輸',
+      '金融・保険',
+      'その他',
+    ],
+  },
+  {
+    id: 'q_employee_count',
+    label: '従業員数',
+    type: 'select',
+    required: false,
+    options: [
+      '1〜5名',
+      '6〜20名',
+      '21〜50名',
+      '51〜100名',
+      '101〜300名',
+      '301名以上',
+    ],
   },
 ];
 
@@ -137,10 +170,11 @@ interface DiagnosisFormsWorkspaceProps {
   showHeader?: boolean;
   onOpenDiagnosis?: (diagnosisId: string) => void;
   onOpenSendCenter?: (formId: string, url: string, kind: 'form'|'diagnosis') => void;
+  onNavigateTab?: (tab: string, options?: any) => void;
 }
 
-export const DiagnosisFormsWorkspace: React.FC<DiagnosisFormsWorkspaceProps> = ({ initialLeadId, initialCompanyId, initialSection, activeSection, onSectionChange, showHeader = true, onOpenDiagnosis, onOpenSendCenter }) => {
-  const [section, setSection] = useState<'forms'|'answers'|'materials'>(activeSection || initialSection || (initialLeadId || initialCompanyId ? 'answers' : 'forms'));
+export const DiagnosisFormsWorkspace: React.FC<DiagnosisFormsWorkspaceProps> = ({ initialLeadId, initialCompanyId, initialSection, activeSection, onSectionChange, showHeader = true, onOpenDiagnosis, onOpenSendCenter, onNavigateTab }) => {
+  const [section, setSection] = useState<'forms'|'answers'|'materials'>(activeSection || initialSection || 'forms');
 
   useEffect(() => {
     if (activeSection) {
@@ -231,7 +265,7 @@ export const DiagnosisFormsWorkspace: React.FC<DiagnosisFormsWorkspaceProps> = (
         setLoading(false);
       }
     } else {
-      setNotice('営業資料準拠の最新設問（4大ボトルネック＋自由記述）を編集欄に反映しました。「変更を保存」ボタンを押して確定してください。');
+      setNotice('営業資料準拠の最新設問（4大ボトルネック＋今一番のお悩み＋業種・従業員数）を編集欄に反映しました。「変更を保存」ボタンを押して確定してください。');
     }
   };
 
@@ -674,11 +708,20 @@ export const DiagnosisFormsWorkspace: React.FC<DiagnosisFormsWorkspaceProps> = (
   return (
     <div className="space-y-4">
       {showHeader && <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
-        <div><h2 className="font-bold text-slate-900">フォーム・診断の受付管理</h2><p className="mt-1 text-xs text-slate-500">フォーム名・設問・説明文を自由に作成・管理できます。</p></div>
-        <div className="flex gap-2">
+        <div><h2 className="font-bold text-slate-900">フォーム作成・配布資料</h2><p className="mt-1 text-xs text-slate-500">HP・LINE向けの反響受付フォームや診断設問の設計、公式配布PDF資料の並び替え・公開管理を行えます。</p></div>
+        <div className="flex flex-wrap items-center gap-2">
           <button onClick={() => switchSection('forms')} className={'rounded-lg px-3 py-2 text-sm font-medium transition-colors ' + (section === 'forms' ? 'bg-purple-600 text-white shadow-sm' : 'text-slate-600 hover:bg-slate-100')}>フォーム設定</button>
-          <button onClick={() => switchSection('answers')} className={'rounded-lg px-3 py-2 text-sm font-medium transition-colors ' + (section === 'answers' ? 'bg-purple-600 text-white shadow-sm' : 'text-slate-600 hover:bg-slate-100')}>フォーム回答 ({visibleAnswers.length})</button>
           <button onClick={() => switchSection('materials')} className={'rounded-lg px-3 py-2 text-sm font-medium transition-colors ' + (section === 'materials' ? 'bg-purple-600 text-white shadow-sm' : 'text-slate-600 hover:bg-slate-100')}>配布資料・PDF管理 ({materials.length})</button>
+          {onNavigateTab && (
+            <button
+              type="button"
+              onClick={() => onNavigateTab('inbox_hub')}
+              className="rounded-lg border border-purple-200 bg-purple-50 px-3 py-2 text-sm font-semibold text-purple-700 hover:bg-purple-100 flex items-center gap-1.5 transition-colors cursor-pointer shadow-2xs"
+            >
+              <Inbox className="h-4 w-4 text-purple-600" />
+              <span>回答確認・返信（受信トレイへ）</span>
+            </button>
+          )}
           <button onClick={() => void load()} title="更新" className="rounded-lg border border-slate-200 px-3 py-2 text-slate-600 hover:bg-slate-50"><RefreshCw className="h-4 w-4" /></button>
         </div>
       </div>}
@@ -797,7 +840,7 @@ export const DiagnosisFormsWorkspace: React.FC<DiagnosisFormsWorkspaceProps> = (
               <div className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-xs text-amber-800 flex flex-wrap items-center justify-between gap-2">
                 <div className="flex items-center gap-2">
                   <AlertCircle className="h-4 w-4 shrink-0 text-amber-600" />
-                  <span>現在の設問は旧構成です。「反映して即時保存」を押すと、営業資料に合わせた最新ボトルネック設問（4問＋自由記述）に一括更新されます。</span>
+                  <span>現在の設問は旧構成です。「反映して即時保存」を押すと、営業資料に合わせた最新ボトルネック設問（4問＋今一番のお悩み＋業種・従業員数）に一括更新されます。</span>
                 </div>
                 <button
                   type="button"
@@ -927,7 +970,42 @@ export const DiagnosisFormsWorkspace: React.FC<DiagnosisFormsWorkspaceProps> = (
       )}
 
       {section === 'answers' && (
-        <section className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
+        <section className="space-y-4">
+          <div className="rounded-xl border border-purple-200 bg-purple-50/70 p-5 shadow-xs flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+            <div className="flex items-start gap-3">
+              <div className="p-2 rounded-lg bg-purple-100 text-purple-700 shrink-0">
+                <Inbox className="w-5 h-5" />
+              </div>
+              <div>
+                <h3 className="text-sm font-bold text-slate-900">フォーム・診断回答の確認と対応は「統合受信トレイ」に一本化されました</h3>
+                <p className="mt-1 text-xs text-slate-600 max-w-xl">
+                  日常の反響確認、未対応バッジ管理、ステータス変更、メール/LINE返信（送信ドロワー連動）、反響リード登録、AI診断レポート・提案書の自動生成は、すべて「統合受信トレイ」で行えます。
+                </p>
+              </div>
+            </div>
+            <div className="flex items-center gap-2 shrink-0">
+              {onNavigateTab && (
+                <button
+                  type="button"
+                  onClick={() => onNavigateTab('inbox_hub')}
+                  className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-lg bg-purple-600 hover:bg-purple-700 text-white text-xs font-semibold shadow-xs cursor-pointer transition"
+                >
+                  <Inbox className="w-3.5 h-3.5" />
+                  <span>統合受信トレイで開く</span>
+                  <ArrowRight className="w-3.5 h-3.5" />
+                </button>
+              )}
+              <button
+                type="button"
+                onClick={() => switchSection('forms')}
+                className="inline-flex items-center gap-1 px-3 py-2 rounded-lg bg-white border border-slate-200 hover:bg-slate-50 text-slate-700 text-xs font-semibold shadow-2xs cursor-pointer transition"
+              >
+                <span>フォーム設定へ</span>
+              </button>
+            </div>
+          </div>
+
+          <div className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
           {loading ? (
             <p className="p-4 text-sm text-slate-500">読み込み中…</p>
           ) : visibleAnswers.length === 0 ? (
@@ -1012,6 +1090,7 @@ export const DiagnosisFormsWorkspace: React.FC<DiagnosisFormsWorkspaceProps> = (
             </div>
           )}
           <p className="border-t border-slate-100 p-3 text-xs text-slate-500">診断フォームの回答は、対象会社が紐付いている場合に「未確認」の診断として自動作成されます。回答行の「診断を開く」から内容を確認できます。会社を特定できない回答は受付記録に保持します。</p>
+          </div>
         </section>
       )}
 

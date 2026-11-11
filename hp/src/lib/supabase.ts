@@ -29,6 +29,30 @@ export interface BottleneckQuestion {
   options: string[];
 }
 
+// 会社の基本情報（診断の前提）。OSの設問定義（q_industry / q_employee_count）と値を同一に保つこと。
+export const MST_INDUSTRY_OPTIONS: string[] = [
+  'IT・通信・Webサービス',
+  '製造業・ものづくり',
+  '卸売・小売・EC',
+  '建設・不動産・住宅',
+  '飲食・宿泊・観光',
+  '医療・福祉・ヘルスケア',
+  '士業・コンサルティング・専門サービス',
+  '人材・教育・研修',
+  '物流・運輸',
+  '金融・保険',
+  'その他',
+];
+
+export const MST_EMPLOYEE_COUNT_OPTIONS: string[] = [
+  '1〜5名',
+  '6〜20名',
+  '21〜50名',
+  '51〜100名',
+  '101〜300名',
+  '301名以上',
+];
+
 export const MST_OFFICIAL_BOTTLENECK_QUESTIONS: BottleneckQuestion[] = [
   {
     id: 'q_ops_bottleneck',
@@ -88,8 +112,8 @@ export const MST_OFFICIAL_BOTTLENECK_QUESTIONS: BottleneckQuestion[] = [
   },
   {
     id: 'q_free_notes',
-    categoryName: '自由相談メモ',
-    label: '現在最も気になっていることや、相談したい課題があればご自由にご記入ください（任意）',
+    categoryName: '今一番のお悩み',
+    label: '今、経営や業務で一番お悩みのことは何ですか？具体的に書いていただくほど、診断結果が貴社向けになります（任意）',
     type: 'textarea',
     required: false,
     options: [],
