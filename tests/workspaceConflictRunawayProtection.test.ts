@@ -299,9 +299,12 @@ async function runTests() {
         message: 'WORKSPACE_CONFLICT',
       },
     };
-    assert(isWorkspaceConflictError(deepWrapped) === true, 'Deeply nested object error must match');
+    // 6. 409単独判定の除外、および 23505（一意制約違反）の非競合判定
+    assert(isWorkspaceConflictError({ status: 409, message: 'Conflict' }) === false, 'status 409 alone must NOT match');
+    assert(isWorkspaceConflictError({ code: '409', message: 'Conflict' }) === false, 'code 409 alone must NOT match');
+    assert(isWorkspaceConflictError({ code: '23505', message: 'duplicate key value violates unique constraint' }) === false, 'code 23505 must NOT match as conflict');
 
-    console.log('  -> PASSED: All conflict representations (code, message, wrapped, nested) matched correctly.\n');
+    console.log('  -> PASSED: All conflict representations (code, message, wrapped, nested) matched correctly, 409 and 23505 properly excluded.\n');
   }
 
   // --------------------------------------------------------------------------

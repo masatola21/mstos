@@ -1023,15 +1023,20 @@ export function isWorkspaceConflictError(error: unknown): boolean {
   if (typeof error !== 'object') return false;
 
   const err = error as Record<string, unknown>;
-  const code = String(err.code ?? err.status ?? (err.error as any)?.code ?? (err.cause as any)?.code ?? '');
+  const code = String(err.code ?? (err.error as any)?.code ?? (err.cause as any)?.code ?? '').trim();
   const message = String(err.message ?? (err.error as any)?.message ?? (err.cause as any)?.message ?? '');
   const details = String(err.details ?? (err.error as any)?.details ?? (err.cause as any)?.details ?? '');
   const hint = String(err.hint ?? (err.error as any)?.hint ?? (err.cause as any)?.hint ?? '');
 
-  // 40001, 409, または WORKSPACE_CONFLICT のいずれかを検出
+  // 23505（一意制約違反）は競合ではないため除外（既存の自動リカバリ経路で処理）
+  if (code === '23505') {
+    return false;
+  }
+
+  // SQLSTATE 40001 または 'WORKSPACE_CONFLICT' の文字列だけを競合とする
+  // （code === '409' などの単独判定は含めない）
   if (
     code === '40001' ||
-    code === '409' ||
     code.includes('40001') ||
     message.includes('WORKSPACE_CONFLICT') ||
     message.includes('40001') ||
