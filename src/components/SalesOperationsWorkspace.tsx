@@ -148,11 +148,10 @@ export const SalesOperationsWorkspace: React.FC<Props> = ({ tab, companyId, lead
       // 未請求のものを初期選択
       const unbilledIds = res.candidates.filter((c) => !c.alreadyBilled).map((c) => c.contractId);
       setSelectedContractIds(unbilledIds);
-      // 日付の初期化
-      const [y, m] = month.split('-');
-      setRecurringIssueDate(`${month}-01`);
-      const lastDay = new Date(parseInt(y, 10), parseInt(m, 10), 0).getDate();
-      setRecurringDueDate(`${month}-${String(Math.min(25, lastDay)).padStart(2, '0')}`);
+      // 日付の初期化（発行日は当月1日、支払期日は翌月末日）
+      const issueDateStr = `${month}-01`;
+      setRecurringIssueDate(issueDateStr);
+      setRecurringDueDate(getEndOfNextMonthDate(issueDateStr));
     } catch (err: any) {
       console.warn('loadRecurringCandidates error:', err);
     } finally {
