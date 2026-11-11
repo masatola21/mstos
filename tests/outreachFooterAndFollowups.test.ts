@@ -25,10 +25,20 @@ assert.ok(transactional.includes('Mail: contact@mstcorp.info'));
 assert.ok(!transactional.includes('配信停止'));
 console.log('  ✓ passed');
 
-console.log('Test 4: body that already has the address is not given a second signature');
-const legacy = appendEmailFooter('本文\n〒503-0981 岐阜県大垣市桧町127番地', { senderEmail: 'contact@mstcorp.info', unsubscribeUrl: 'https://app/u' });
-assert.equal(legacy.split('桧町127番地').length - 1, 1);
-assert.ok(legacy.includes('配信停止はこちら'));
+console.log('Test 4: legacy trailing signature is replaced by the standard one (thank-you mail)');
+const legacyBody = '山田 様\n\n有限会社MST代表の大橋真人です。\nご回答ありがとうございます。\n\n--------------------------------------------------\n有限会社MST\n代表取締役: 大橋真人\n〒503-0981 岐阜県大垣市桧町127番地\n--------------------------------------------------';
+const unified = appendEmailFooter(legacyBody, { senderEmail: 'contact@mstcorp.info' });
+assert.equal(unified.split('桧町127番地').length - 1, 1, 'address appears once');
+assert.ok(unified.includes('HP: https://mstcorp.info') && unified.includes('Mail: contact@mstcorp.info'));
+assert.ok(unified.includes('ご回答ありがとうございます。'));
+assert.ok(!unified.includes('配信停止'));
+console.log('  ✓ passed');
+
+console.log('Test 4b: an address mentioned mid-body is not stripped or duplicated');
+const midBody = 'お振込先のご案内です。弊社所在地は岐阜県大垣市桧町127番地です。\n\nよろしくお願いいたします。';
+const midOut = appendEmailFooter(midBody, { senderEmail: 'contact@mstcorp.info' });
+assert.ok(midOut.includes('弊社所在地は岐阜県大垣市桧町127番地です。'));
+assert.equal(midOut.split('桧町127番地').length - 1, 1);
 console.log('  ✓ passed');
 
 console.log('Test 5: the 5 sales email steps carry no hardcoded signature');

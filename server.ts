@@ -5969,7 +5969,7 @@ app.post(
         ? `ご請求いただいた資料は、以下のURLより今すぐご確認・ダウンロードいただけます。\n\n${effectiveMaterialUrls}\n\n※ダウンロード期限はございませんので、いつでもお見返しいただけます。`
         : '現在、最新版資料の送付準備中となっております。担当者より折り返しご案内をお送りいたします。';
 
-      customNotificationText = `【MST】資料請求を受け付けました。\n\n${name} 様\nこの度は資料をご請求いただき誠にありがとうございます！\n\n${materialListText}${bookingPrompt}\n\n--------------------------------------------------\n有限会社MST\n代表取締役: 大橋真人\n〒503-0981 岐阜県大垣市桧町127番地\n--------------------------------------------------`;
+      customNotificationText = `【MST】資料請求を受け付けました。\n\n${name} 様\nこの度は資料をご請求いただき誠にありがとうございます！\n\n${materialListText}${bookingPrompt}`;
     }
 
     if (contact.line_user_id && lineChannelAccessToken) {
@@ -6043,7 +6043,10 @@ app.post(
           : slug === 'material-download' || inquiryType?.includes('資料請求')
             ? `【MST】資料請求の受付完了（ダウンロードリンクのご案内）`
             : `【MST】「${form.name || '無料診断'}」の受付と個別面談のご案内`;
-        const bodyText = customNotificationText || `${name} 様\n\n有限会社MST代表の大橋真人です。\nこの度は「${form.name || '無料診断'}」にご回答いただき誠にありがとうございます。\n\n現在、ご入力いただいた内容を精査し、御社の業務・売上・時間の急所を特定した個別診断レポートを作成しております。\n机上の空論ではなく「御社がどこから手を付ければ一番利益が残るか」を明確にするため、30分のオンライン面談にて解説と質疑応答を行わせていただきます。${bookingPrompt}\n\n--------------------------------------------------\n有限会社MST\n代表取締役: 大橋真人\n〒503-0981 岐阜県大垣市桧町127番地\n--------------------------------------------------`;
+        // 署名は送信直前に共通処理で付ける（他のメールと同じ形式。受付完了は取引メールなので配信停止リンクなし）
+        const rawBodyText = customNotificationText || `${name} 様\n\n有限会社MST代表の大橋真人です。\nこの度は「${form.name || '無料診断'}」にご回答いただき誠にありがとうございます。\n\n現在、ご入力いただいた内容を精査し、御社の業務・売上・時間の急所を特定した個別診断レポートを作成しております。\n机上の空論ではなく「御社がどこから手を付ければ一番利益が残るか」を明確にするため、30分のオンライン面談にて解説と質疑応答を行わせていただきます。${bookingPrompt}\n\n--------------------------------------------------\n有限会社MST\n代表取締役: 大橋真人\n〒503-0981 岐阜県大垣市桧町127番地\n--------------------------------------------------`;
+
+        const bodyText = appendEmailFooter(rawBodyText, { senderEmail: (emailFrom.match(/<([^<>]+)>/)?.[1] || emailFrom).trim() });
 
         let emailStatus: 'sent' | 'queued' | 'failed' = 'queued';
         let sentAt: string | null = null;
