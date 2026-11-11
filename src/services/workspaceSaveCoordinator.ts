@@ -1,4 +1,4 @@
-import { WorkspaceData, saveWorkspaceData, isWorkspaceConflictError, SaveWorkspaceResult } from './workspaceStateService';
+import { WorkspaceData, saveWorkspaceData, isWorkspaceConflictError, isNonRetryableFatalError, SaveWorkspaceResult } from './workspaceStateService';
 import { matrixService } from './matrixService';
 import { mergeCollectionPreservingUserEdits } from '../utils/workspaceMergeUtils';
 
@@ -312,10 +312,11 @@ export class WorkspaceSaveCoordinator {
       const errorCode = (error as { code?: string })?.code;
       const errorMessage = (error as { message?: string })?.message || '';
       const isConflict = isWorkspaceConflictError(error);
-      const shouldHalt = isConflict || this.consecutiveErrorCount >= 3;
+      const isFatal = isNonRetryableFatalError(error);
+      const shouldHalt = isConflict || isFatal || this.consecutiveErrorCount >= 3;
 
       if (shouldHalt) {
-        // 競合エラーまたは連続エラー上限（3回）に達した場合は自動保存を完全停止し再読み込みを促す
+        // 競合エラー、直らない致命的エラー（認証/形式）、または連続エラー上限（3回）に達した場合は自動保存を完全停止し再読み込みを促す
         this.cancelDebounce();
         this.isConflictStopped = true;
         this.pendingData = null; // 保留中のリクエストを破棄
@@ -330,7 +331,15 @@ export class WorkspaceSaveCoordinator {
         this.inFlightWaiters = [];
         conflictWaiters.forEach((d) => d.reject(error));
 
-        this.setStatus('conflict', '他の端末で更新されました。再読み込みしてください');
+        if (isFatal) {
+          const isAuth = /401|403|42501|permission|権限|User mismatch/i.test(`${errorMessage} ${errorCode}`);
+          const fatalMsg = isAuth
+            ? 'ユーザーの業務データを更新する権限がありません。再ログインまたは再読み込みしてください。'
+            : '保存データの形式エラーが発生しました。再読み込みしてください。';
+          this.setStatus('conflict', fatalMsg);
+        } else {
+          this.setStatus('conflict', '他の端末で更新されました。再読み込みしてください');
+        }
       } else {
         const errorDetails = `${errorMessage} ${(error as { details?: string })?.details || ''} ${(error as { hint?: string })?.hint || ''}`;
         if (errorCode === '23505' && /invoice_number|invoice number|customer_invoices/i.test(errorDetails)) {

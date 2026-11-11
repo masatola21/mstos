@@ -265,6 +265,143 @@ async function runTests() {
     console.log('  -> PASSED: Concurrency strictly bounded to 1, pending saves coalesced.\n');
   }
 
+  // --------------------------------------------------------------------------
+  // Test 5: isWorkspaceConflictError の判定網羅性（40001, WORKSPACE_CONFLICT, ラップされたエラー）
+  // --------------------------------------------------------------------------
+  console.log('Test 5: isWorkspaceConflictError の判定網羅性検証');
+  {
+    const { isWorkspaceConflictError } = await import('../src/services/workspaceStateService');
+
+    // 1. 文字列単体
+    assert(isWorkspaceConflictError('40001') === true, 'Plain 40001 string must match');
+    assert(isWorkspaceConflictError('WORKSPACE_CONFLICT') === true, 'Plain WORKSPACE_CONFLICT string must match');
+
+    // 2. PostgREST / Supabase RPC エラー形式
+    assert(isWorkspaceConflictError({ code: '40001', message: 'error' }) === true, 'code 40001 must match');
+    assert(isWorkspaceConflictError({ code: 'P0001', message: 'WORKSPACE_CONFLICT' }) === true, 'message WORKSPACE_CONFLICT must match');
+    assert(isWorkspaceConflictError({ code: 'P0001', details: 'WORKSPACE_CONFLICT' }) === true, 'details WORKSPACE_CONFLICT must match');
+    assert(isWorkspaceConflictError({ code: 'P0001', hint: 'WORKSPACE_CONFLICT' }) === true, 'hint WORKSPACE_CONFLICT must match');
+
+    // 3. new Error でラップされた形式
+    const wrappedInError = new Error('Database operation failed: WORKSPACE_CONFLICT');
+    assert(isWorkspaceConflictError(wrappedInError) === true, 'Error message containing WORKSPACE_CONFLICT must match');
+
+    // 4. cause でネストされた形式
+    const innerConflict = { code: '40001', message: 'Optimistic lock mismatch' };
+    const causeWrapped = new Error('Save failed', { cause: innerConflict });
+    assert(isWorkspaceConflictError(causeWrapped) === true, 'Nested error via Error.cause must match');
+
+    // 5. response / error プロパティで多重ラップされた形式
+    const deepWrapped = {
+      status: 400,
+      error: {
+        code: '40001',
+        message: 'WORKSPACE_CONFLICT',
+      },
+    };
+    assert(isWorkspaceConflictError(deepWrapped) === true, 'Deeply nested object error must match');
+
+    console.log('  -> PASSED: All conflict representations (code, message, wrapped, nested) matched correctly.\n');
+  }
+
+  // --------------------------------------------------------------------------
+  // Test 6: consecutiveErrorCount の成功時リセット & 停止後の全経路遮断検証
+  // --------------------------------------------------------------------------
+  console.log('Test 6: 成功時の連続エラー数リセット ＆ 停止時の全経路遮断');
+  {
+    let shouldFail = true;
+    const testCoordinator = new WorkspaceSaveCoordinator(async (uId, d) => {
+      if (shouldFail) {
+        throw new Error('Transient error');
+      }
+      return { savedData: d, wasMerged: false };
+    });
+
+    const userId = 'user-reset-test';
+    // 1回失敗 -> consecutiveErrorCount === 1
+    try {
+      await testCoordinator.requestImmediateSave(userId, createDummyWorkspaceData({ topGoal: 'T1' }));
+    } catch {}
+    assert(testCoordinator.getConsecutiveErrorCount() === 1, 'Error count must be 1 after failure');
+
+    // 次に成功 -> consecutiveErrorCount === 0 に戻ること
+    shouldFail = false;
+    await testCoordinator.requestImmediateSave(userId, createDummyWorkspaceData({ topGoal: 'T2' }));
+    assert(testCoordinator.getConsecutiveErrorCount() === 0, 'CRITICAL: Error count must reset to 0 upon success');
+
+    // 停止（halt）状態を発動
+    testCoordinator.haltOnConflict('他の端末で更新されました。再読み込みしてください');
+    assert(testCoordinator.isStopped() === true, 'Coordinator is halted');
+
+    // 経路 1: debounce 保存
+    let debounceExecuted = false;
+    testCoordinator.requestDebouncedSave(userId, () => {
+      debounceExecuted = true;
+      return createDummyWorkspaceData();
+    }, 5);
+    await new Promise((r) => setTimeout(r, 20));
+    assert(!debounceExecuted, 'CRITICAL: Debounced save must not execute when stopped');
+
+    // 経路 2: 即時保存（requestImmediateSave）
+    let immediateRejected = false;
+    try {
+      await testCoordinator.requestImmediateSave(userId, createDummyWorkspaceData());
+    } catch {
+      immediateRejected = true;
+    }
+    assert(immediateRejected, 'CRITICAL: Immediate save must be rejected when stopped');
+
+    // 経路 3: 手動削除後の保存（App.tsx の saveWorkspaceAfterRecordDeletion 経路）
+    let deletionSaveRejected = false;
+    try {
+      await testCoordinator.requestImmediateSave(userId, createDummyWorkspaceData({ contracts: [] }));
+    } catch {
+      deletionSaveRejected = true;
+    }
+    assert(deletionSaveRejected, 'CRITICAL: Record deletion save must be rejected when stopped');
+
+    console.log('  -> PASSED: consecutiveErrorCount reset verified, all 3 save pathways blocked when stopped.\n');
+  }
+
+  // --------------------------------------------------------------------------
+  // Test 7: 直らない致命的エラー（401/403/権限なし/形式エラー）での即時停止・再試行スキップ
+  // --------------------------------------------------------------------------
+  console.log('Test 7: 認証エラー・形式エラー等（直らないエラー）の即時停止検証');
+  {
+    const { isNonRetryableFatalError } = await import('../src/services/workspaceStateService');
+
+    // 1. 認証・権限エラー判定
+    assert(isNonRetryableFatalError({ code: '401', message: 'Unauthorized' }) === true, '401 must be fatal');
+    assert(isNonRetryableFatalError({ code: '403', message: 'Forbidden' }) === true, '403 must be fatal');
+    assert(isNonRetryableFatalError({ code: '42501', message: 'insufficient_privilege' }) === true, '42501 must be fatal');
+    assert(isNonRetryableFatalError(new Error('ユーザーの業務データを更新する権限がありません')) === true, 'Permission message must be fatal');
+
+    // 2. 形式エラー判定
+    assert(isNonRetryableFatalError({ code: '22P02', message: 'invalid input syntax for type uuid' }) === true, '22P02 must be fatal');
+    assert(isNonRetryableFatalError({ code: '42804', message: 'datatype mismatch' }) === true, '42804 must be fatal');
+
+    // 3. 一時的なネットワークエラーや競合は「直らない致命的エラー」ではないこと
+    assert(isNonRetryableFatalError({ code: '40001', message: 'WORKSPACE_CONFLICT' }) === false, 'Conflict is retryable via 3-way merge');
+    assert(isNonRetryableFatalError({ code: '503', message: 'Service Unavailable' }) === false, '503 is retryable transient error');
+
+    // 4. Coordinator に致命的エラー（権限なし）を渡したとき、リトライを待たず1発で停止（halt）すること
+    let fatalAttempts = 0;
+    const fatalSaveFn = async (): Promise<SaveWorkspaceResult> => {
+      fatalAttempts++;
+      throw new Error('ユーザーの業務データを更新する権限がありません');
+    };
+    const fatalCoordinator = new WorkspaceSaveCoordinator(fatalSaveFn);
+    try {
+      await fatalCoordinator.requestImmediateSave('u-fatal', createDummyWorkspaceData());
+    } catch {}
+
+    assert(fatalAttempts === 1, 'Fatal non-retryable error must fail on first attempt without waiting for 3 errors');
+    assert(fatalCoordinator.isStopped() === true, 'Coordinator must halt immediately on fatal auth/format error');
+    assert(fatalCoordinator.getStatus() === 'conflict', 'Status must be halted');
+
+    console.log('  -> PASSED: Fatal auth/format errors detected and halted immediately without retrying.\n');
+  }
+
   console.log('=====================================================');
   console.log('ALL WORKSPACE CONFLICT & RUNAWAY TESTS PASSED!');
   console.log('=====================================================\n');

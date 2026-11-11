@@ -488,6 +488,14 @@ async function saveRelationalAIOperations(
 
     if (!error) break;
 
+    // 認証エラー（401/403/権限なし）や形式エラー等の直らない致命的エラーは再試行せず即座にthrow
+    if (isNonRetryableFatalError(error)) {
+      logDeduplicatedSyncWarn(
+        `[AIOperationsSync] Non-retryable fatal error encountered (${error.message || (error as any).code || 'unknown'}). Aborting retries immediately.`
+      );
+      throw error;
+    }
+
     if (retryCount < maxRetries) {
       retryCount++;
       const baseDelayMs = 1000;
@@ -829,28 +837,102 @@ export async function loadOrMigrateWorkspaceData(userId: string): Promise<Worksp
 }
 
 
+export function isNonRetryableFatalError(error: unknown): boolean {
+  if (!error) return false;
+  if (typeof error === 'string') {
+    return (
+      /permission denied|not authorized|権限がありません|User mismatch|JWT expired|invalid token|401|403/i.test(error) ||
+      /invalid input syntax|invalid text representation|datatype mismatch|22P02|42804|42P01/i.test(error)
+    );
+  }
+  if (typeof error !== 'object') return false;
+
+  const err = error as Record<string, unknown>;
+  const code = String(err.code ?? err.status ?? (err.error as any)?.code ?? (err.cause as any)?.code ?? '');
+  const message = String(err.message ?? (err.error as any)?.message ?? (err.cause as any)?.message ?? '');
+  const details = String(err.details ?? (err.error as any)?.details ?? (err.cause as any)?.details ?? '');
+  const hint = String(err.hint ?? (err.error as any)?.hint ?? (err.cause as any)?.hint ?? '');
+  const allText = `${code} ${message} ${details} ${hint}`;
+
+  // 1. 認証・認可エラー (401, 403, 42501, 権限エラー)
+  if (
+    code === '401' ||
+    code === '403' ||
+    code === '42501' ||
+    code === 'PGRST301' ||
+    /permission denied|not authorized|権限がありません|User mismatch|JWT expired|invalid token/i.test(allText)
+  ) {
+    return true;
+  }
+
+  // 2. 形式エラー・型不一致・スキーマ構文エラー (再試行しても直らないエラー)
+  if (
+    code === '400' ||
+    code === '422' ||
+    code.startsWith('22') ||
+    code.startsWith('42') ||
+    /invalid input syntax|invalid text representation|datatype mismatch|malformed|syntax error|undefined table|undefined column/i.test(allText)
+  ) {
+    return true;
+  }
+
+  if (err.cause && typeof err.cause === 'object' && isNonRetryableFatalError(err.cause)) {
+    return true;
+  }
+  if (err.error && typeof err.error === 'object' && isNonRetryableFatalError(err.error)) {
+    return true;
+  }
+
+  return false;
+}
+
 export function isWorkspaceConflictError(error: unknown): boolean {
   if (!error) return false;
   if (typeof error === 'string') {
     return error.includes('WORKSPACE_CONFLICT') || error.includes('40001');
   }
   if (typeof error !== 'object') return false;
-  const err = error as Record<string, unknown>;
-  const code = String(err.code ?? err.status ?? (err.error as any)?.code ?? '');
-  const message = String(err.message ?? (err.error as any)?.message ?? '');
-  const details = String(err.details ?? (err.error as any)?.details ?? '');
-  const hint = String(err.hint ?? (err.error as any)?.hint ?? '');
 
-  return (
+  const err = error as Record<string, unknown>;
+  const code = String(err.code ?? err.status ?? (err.error as any)?.code ?? (err.cause as any)?.code ?? '');
+  const message = String(err.message ?? (err.error as any)?.message ?? (err.cause as any)?.message ?? '');
+  const details = String(err.details ?? (err.error as any)?.details ?? (err.cause as any)?.details ?? '');
+  const hint = String(err.hint ?? (err.error as any)?.hint ?? (err.cause as any)?.hint ?? '');
+
+  // 40001, 409, または WORKSPACE_CONFLICT のいずれかを検出
+  if (
     code === '40001' ||
     code === '409' ||
-    (code === 'P0001' && (message.includes('WORKSPACE_CONFLICT') || details.includes('WORKSPACE_CONFLICT'))) ||
+    code.includes('40001') ||
     message.includes('WORKSPACE_CONFLICT') ||
-    details.includes('WORKSPACE_CONFLICT') ||
-    hint.includes('WORKSPACE_CONFLICT') ||
     message.includes('40001') ||
-    details.includes('40001')
-  );
+    details.includes('WORKSPACE_CONFLICT') ||
+    details.includes('40001') ||
+    hint.includes('WORKSPACE_CONFLICT') ||
+    hint.includes('40001')
+  ) {
+    return true;
+  }
+
+  // ラップされたエラー（cause / error / originalError）を再帰チェック
+  if (err.cause && typeof err.cause === 'object' && isWorkspaceConflictError(err.cause)) {
+    return true;
+  }
+  if (err.error && typeof err.error === 'object' && isWorkspaceConflictError(err.error)) {
+    return true;
+  }
+  if (err.originalError && typeof err.originalError === 'object' && isWorkspaceConflictError(err.originalError)) {
+    return true;
+  }
+
+  try {
+    const str = String(error);
+    if (str.includes('WORKSPACE_CONFLICT') || str.includes('40001')) {
+      return true;
+    }
+  } catch {}
+
+  return false;
 }
 
 export async function fetchLatestMatrixWorkspaceSyncState(userId: string): Promise<string | null> {
