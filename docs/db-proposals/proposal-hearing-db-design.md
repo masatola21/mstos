@@ -153,6 +153,10 @@ drafting ──(必須項目OK)→ awaiting_approval ──(承認者)→ approv
   - 注意3: `consent_ip` 列はあるが、申込画面は書いていない(User-Agent のみ)。電子同意の証跡として足りるかは、仕様書 §9-6 の専門家確認の対象。
 - **お客様の意向の転記**: 商談中(段階2)の意向は `hearing_sheets.core_answers.t01` に入る。提案書を作る時点(段階3)で、API が `customer_intent` へ転記する。DBの変更はなし。
 
+### 呼び名(2026-11-12 決定)
+
+画面の表示名は **構築 / 伴走 / 構築+伴走**(旧: ポイント構築 / 伴走 / 両方)。DBの値は `spot_build` / `retainer` / `hybrid` のまま変えない。表示名は `src/constants/proposalChapters.ts` の `PROPOSAL_KIND_LABELS` の1か所で持つ。同ファイルに、章の定義(D0〜D6、P1〜P7)、型→支払い方式の対応、診断レポートの章分割も置いた。D6 は社内用でお客様版に載せない(決定)。
+
 ### 実装状況
 
 SQL案: `20261111100000_proposal_hearing_tables.sql`(同じフォルダ)。使い捨てのPostgreSQL 16で、2回適用しても通ること、各CHECK・一意制約・送付済みの編集禁止・取り消し手順が設計どおり動くことを確認済み。**Supabase本体と既存の全マイグレーションを通した検証は未実施**(スタブの親テーブルで検証)。
