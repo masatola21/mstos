@@ -70,7 +70,16 @@ export interface DashboardProps {
 // 優先アクションのデータ型
 export interface PriorityActionItem {
   id: string;
-  type: 'meeting' | 'urgent_lead' | 'deal_followup' | 'invoice_due' | 'sales_task';
+  type:
+    | 'meeting'
+    | 'urgent_lead'
+    | 'deal_followup'
+    | 'invoice_due'
+    | 'sales_task'
+    | 'acquisition_outreach'
+    | 'acquisition_sns'
+    | 'acquisition_hp'
+    | 'acquisition_offline';
   title: string;
   subtitle: string;
   urgency: 'critical' | 'high' | 'normal';
@@ -112,6 +121,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
 
   const [dealsList, setDealsList] = useState<any[]>([]);
   const [leadsList, setLeadsList] = useState<any[]>([]);
+  const [prospectsList, setProspectsList] = useState<any[]>([]);
   const [companiesMap, setCompaniesMap] = useState<Map<string, string>>(new Map());
 
   const [pipelineSummary, setPipelineSummary] = useState({ 
@@ -142,7 +152,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
   });
 
   // 優先アクションのカテゴリフィルタ
-  const [actionCategoryFilter, setActionCategoryFilter] = useState<'all' | 'meeting' | 'lead' | 'deal' | 'invoice' | 'task' | 'completed'>('all');
+  const [actionCategoryFilter, setActionCategoryFilter] = useState<'all' | 'meeting' | 'lead' | 'deal' | 'acquisition' | 'invoice' | 'task' | 'completed'>('all');
 
   // インライン・クイックタスク追加用の入力
   const [quickTaskTitle, setQuickTaskTitle] = useState('');
@@ -348,6 +358,21 @@ export const Dashboard: React.FC<DashboardProps> = ({
             .sort((a, b) => b.count - a.count);
           setInflowBreakdown(sorted);
         }
+
+        // 見込み企業（prospects）データの取得
+        const { data: prospectsData } = await supabase
+          .from('prospects')
+          .select('id, company_id, approach_method, status, email, contact_person, target_flag, last_contacted_at, created_at')
+          .order('created_at', { ascending: false })
+          .limit(100);
+
+        if (prospectsData) {
+          const enrichedProspects = prospectsData.map((p: any) => ({
+            ...p,
+            companyName: compMap.get(String(p.company_id)) || '見込み企業（会社未設定）',
+          }));
+          setProspectsList(enrichedProspects);
+        }
       }
     } catch (err: any) {
       setFetchError({
@@ -530,8 +555,102 @@ export const Dashboard: React.FC<DashboardProps> = ({
       }
     });
 
+    // ─────────────────────────────────────────────────────────────
+    // 攻めの集客・開拓アクション（人間が起動・実行する日次アクション）
+    // ─────────────────────────────────────────────────────────────
+
+    // 7. 見込み企業へのメール・個別アプローチ (Prospects Outreach)
+    const uncontactedProspects = prospectsList.filter(
+      (p) => !p.last_contacted_at || p.status === '未アプローチ' || p.status === '新規' || !p.status
+    );
+
+    if (uncontactedProspects.length > 0) {
+      const topProspect = uncontactedProspects[0];
+      const isDoneTop = completedItemIds.has(`prospect_outreach_${topProspect.id}`);
+      items.push({
+        id: `prospect_outreach_${topProspect.id}`,
+        type: 'acquisition_outreach',
+        title: `見込み企業アプローチ: ${topProspect.companyName}`,
+        subtitle: `対象: ${topProspect.contact_person || 'ご担当者様'} | 方法: ${topProspect.approach_method || 'メール/個別アプローチ'} (未接触 ${uncontactedProspects.length} 社)`,
+        urgency: 'high',
+        timeLabel: '本日アプローチ',
+        targetCompany: topProspect.companyName,
+        companyId: topProspect.company_id,
+        recordId: topProspect.id,
+        completed: isDoneTop,
+        actionButtonLabel: '個別メール・連絡',
+        onAction: () => {
+          if (topProspect.company_id && onOpenCustomerWorkspace) {
+            onOpenCustomerWorkspace(topProspect.company_id, 'operations');
+          } else {
+            onNavigateTab('prospects');
+          }
+        },
+        onToggleComplete: () => toggleActionComplete(`prospect_outreach_${topProspect.id}`),
+      });
+    } else {
+      const isDoneOutreach = completedItemIds.has(`acquisition_daily_outreach_${todayStr}`);
+      items.push({
+        id: `acquisition_daily_outreach_${todayStr}`,
+        type: 'acquisition_outreach',
+        title: '見込み企業開拓: 新規アプローチ・メール送信',
+        subtitle: 'ターゲット企業への新規開拓メール・コンタクトの実施',
+        urgency: 'normal',
+        timeLabel: '本日実施',
+        completed: isDoneOutreach,
+        actionButtonLabel: '見込み企業一覧へ',
+        onAction: () => onNavigateTab('prospects'),
+        onToggleComplete: () => toggleActionComplete(`acquisition_daily_outreach_${todayStr}`),
+      });
+    }
+
+    // 8. SNS発信ペースメーカー (Daily SNS Post)
+    const isDoneSns = completedItemIds.has(`acquisition_sns_post_${todayStr}`);
+    items.push({
+      id: `acquisition_sns_post_${todayStr}`,
+      type: 'acquisition_sns',
+      title: 'SNS発信・ノウハウ投稿（note / X / Threads）',
+      subtitle: '集客戦略に沿った本日の発信ネタを作成・投稿（AI下書き即時起動）',
+      urgency: 'high',
+      timeLabel: '本日投稿',
+      completed: isDoneSns,
+      actionButtonLabel: 'SNSスタジオ起動',
+      onAction: () => onNavigateTab('ai_acquisition', { acquisitionTab: 'social_studio' }),
+      onToggleComplete: () => toggleActionComplete(`acquisition_sns_post_${todayStr}`),
+    });
+
+    // 9. HP・オウンドメディア記事作成 (Weekly Media Post)
+    const isDoneHp = completedItemIds.has(`acquisition_hp_article_${todayStr}`);
+    items.push({
+      id: `acquisition_hp_article_${todayStr}`,
+      type: 'acquisition_hp',
+      title: 'HP・オウンドメディア記事作成（事例・コラム）',
+      subtitle: '導入事例・業務改善ノウハウ記事の執筆・更新（AI構成案作成）',
+      urgency: 'normal',
+      timeLabel: '今週の更新枠',
+      completed: isDoneHp,
+      actionButtonLabel: '記事作成・メディアへ',
+      onAction: () => onNavigateTab('ai_acquisition', { acquisitionTab: 'media' }),
+      onToggleComplete: () => toggleActionComplete(`acquisition_hp_article_${todayStr}`),
+    });
+
+    // 10. オフライン営業 (Offline Outreach & Activities)
+    const isDoneOffline = completedItemIds.has(`acquisition_offline_follow_${todayStr}`);
+    items.push({
+      id: `acquisition_offline_follow_${todayStr}`,
+      type: 'acquisition_offline',
+      title: 'オフライン営業（訪問・モニター打診・対面活動）',
+      subtitle: '訪問先へのモニター打診・対面フォロー・紹介挨拶・現場ヒアリング等の実施',
+      urgency: 'normal',
+      timeLabel: '本日実施',
+      completed: isDoneOffline,
+      actionButtonLabel: '活動先・台帳へ',
+      onAction: () => onNavigateTab('contacts'),
+      onToggleComplete: () => toggleActionComplete(`acquisition_offline_follow_${todayStr}`),
+    });
+
     return items;
-  }, [dealsList, leadsList, completedItemIds, todayStr, invoices, tasks, onOpenCustomerWorkspace, onNavigateTab, onOpenSendCenter, onUpdateTask]);
+  }, [dealsList, leadsList, prospectsList, completedItemIds, todayStr, invoices, tasks, onOpenCustomerWorkspace, onNavigateTab, onOpenSendCenter, onUpdateTask]);
 
   // フィルタ後のアクション一覧
   const filteredPriorityActions = useMemo(() => {
@@ -543,6 +662,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
       if (actionCategoryFilter === 'meeting') return item.type === 'meeting';
       if (actionCategoryFilter === 'lead') return item.type === 'urgent_lead';
       if (actionCategoryFilter === 'deal') return item.type === 'deal_followup';
+      if (actionCategoryFilter === 'acquisition') return item.type.startsWith('acquisition_');
       if (actionCategoryFilter === 'invoice') return item.type === 'invoice_due';
       if (actionCategoryFilter === 'task') return item.type === 'sales_task';
       return true;
@@ -594,6 +714,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
     const meetingCount = priorityActionItems.filter((i) => i.type === 'meeting' && !i.completed).length;
     const urgentLeadCount = priorityActionItems.filter((i) => i.type === 'urgent_lead' && !i.completed).length;
     const dealFollowupCount = priorityActionItems.filter((i) => i.type === 'deal_followup' && !i.completed).length;
+    const acquisitionCount = priorityActionItems.filter((i) => i.type.startsWith('acquisition_') && !i.completed).length;
 
     if (uncompletedActionsCount === 0) {
       return '本日対応すべき最優先アクションはすべて完了しています。新規アプローチや明日の商談準備、ナレッジの更新を進めましょう。';
@@ -608,6 +729,9 @@ export const Dashboard: React.FC<DashboardProps> = ({
     }
     if (dealFollowupCount > 0) {
       points.push(`次回フォロー期日を迎えた商談が ${dealFollowupCount} 件あります。検討状況の確認連絡を入れて成約確度を高めましょう。`);
+    }
+    if (acquisitionCount > 0) {
+      points.push(`攻めの集客・開拓アクション（見込み先アプローチ・SNS/HP発信）が ${acquisitionCount} 件あります。新たな反響を生むための種まきを実施しましょう。`);
     }
     return points.join(' ') || '本日予定されているアクションを上から順に対応し、営業パイプラインを前進させましょう。';
   }, [priorityActionItems, uncompletedActionsCount]);
@@ -754,7 +878,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
                 )}
               </div>
               <p className="text-xs text-slate-600 mt-0.5">
-                本日面談・反響即応・商談フォロー・請求期日・営業タスクを自動集約
+                本日面談・反響即応・商談フォロー・攻めの集客開拓・請求期日・営業タスクを自動集約
               </p>
             </div>
           </div>
@@ -806,6 +930,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
               { key: 'meeting', label: `📅 本日の面談 (${priorityActionItems.filter((i) => i.type === 'meeting').length})` },
               { key: 'lead', label: `⚡ 反響即応 (${priorityActionItems.filter((i) => i.type === 'urgent_lead').length})` },
               { key: 'deal', label: `💼 提案フォロー (${priorityActionItems.filter((i) => i.type === 'deal_followup').length})` },
+              { key: 'acquisition', label: `📢 集客・開拓 (${priorityActionItems.filter((i) => i.type.startsWith('acquisition_')).length})` },
               { key: 'invoice', label: `🧾 請求期日 (${priorityActionItems.filter((i) => i.type === 'invoice_due').length})` },
               { key: 'task', label: `✅ 営業タスク (${priorityActionItems.filter((i) => i.type === 'sales_task').length})` },
               { key: 'completed', label: `🎉 完了済み (${completedActionsCount})` },
@@ -826,10 +951,10 @@ export const Dashboard: React.FC<DashboardProps> = ({
           </div>
         </div>
 
-        {/* Priority Actions List */}
-        <div className="space-y-2.5">
+        {/* Priority Actions List (1行に2つずつの2列グリッド表示でコンパクト化) */}
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
           {filteredPriorityActions.length === 0 ? (
-            <div className="p-8 text-center bg-white rounded-2xl border border-dashed border-slate-200 text-slate-500">
+            <div className="col-span-full p-8 text-center bg-white rounded-2xl border border-dashed border-slate-200 text-slate-500">
               <CheckCircle2 className="w-8 h-8 text-emerald-500 mx-auto mb-2" />
               <p className="text-xs font-bold text-slate-700">このカテゴリの優先アクションはありません</p>
               <p className="text-[11px] text-slate-400 mt-1">
@@ -848,11 +973,11 @@ export const Dashboard: React.FC<DashboardProps> = ({
               return (
                 <div
                   key={item.id}
-                  className={`p-3.5 sm:p-4 rounded-2xl border border-slate-200/90 shadow-2xs transition-all hover:shadow-xs flex flex-col sm:flex-row sm:items-center justify-between gap-3 ${urgencyColor} ${
+                  className={`p-3 sm:p-3.5 rounded-2xl border border-slate-200/90 shadow-2xs transition-all hover:shadow-xs flex flex-col justify-between gap-2.5 ${urgencyColor} ${
                     item.completed ? 'opacity-60 bg-slate-50' : ''
                   }`}
                 >
-                  <div className="flex items-start gap-3 flex-1 min-w-0">
+                  <div className="flex items-start gap-2.5 min-w-0">
                     <button
                       type="button"
                       onClick={item.onToggleComplete}
@@ -867,7 +992,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
                     </button>
 
                     <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-2 flex-wrap">
+                      <div className="flex items-center gap-1.5 flex-wrap">
                         <span className={`text-[10px] font-bold px-2 py-0.5 rounded-md ${
                           item.urgency === 'critical' ? 'bg-rose-100 text-rose-800 border border-rose-200' :
                           item.urgency === 'high' ? 'bg-amber-100 text-amber-800 border border-amber-200' :
@@ -880,11 +1005,15 @@ export const Dashboard: React.FC<DashboardProps> = ({
                           {item.type === 'meeting' ? '📅 商談面談' :
                            item.type === 'urgent_lead' ? '⚡ 反響即応' :
                            item.type === 'deal_followup' ? '💼 提案フォロー' :
-                           item.type === 'invoice_due' ? '🧾 請求期日' : '📝 タスク'}
+                           item.type === 'invoice_due' ? '🧾 請求期日' :
+                           item.type === 'acquisition_outreach' ? '📨 見込み開拓' :
+                           item.type === 'acquisition_sns' ? '📱 SNS発信' :
+                           item.type === 'acquisition_hp' ? '✍️ HP記事作成' :
+                           item.type === 'acquisition_offline' ? '🤝 オフライン営業' : '📝 タスク'}
                         </span>
 
                         {item.targetCompany && (
-                          <span className="text-xs font-bold text-slate-800 truncate">
+                          <span className="text-xs font-bold text-slate-800 truncate max-w-[140px]" title={item.targetCompany}>
                             {item.targetCompany}
                           </span>
                         )}
@@ -892,22 +1021,25 @@ export const Dashboard: React.FC<DashboardProps> = ({
 
                       <h3 className={`text-xs sm:text-sm font-bold text-slate-900 mt-1 truncate ${
                         item.completed ? 'line-through text-slate-400' : ''
-                      }`}>
+                      }`} title={item.title}>
                         {item.title}
                       </h3>
 
-                      <p className="text-[11px] text-slate-500 mt-0.5 truncate">
+                      <p className="text-[11px] text-slate-500 mt-0.5 truncate" title={item.subtitle}>
                         {item.subtitle}
                       </p>
                     </div>
                   </div>
 
-                  {/* Action Button */}
-                  <div className="flex items-center gap-2 shrink-0 self-end sm:self-center">
+                  {/* Action Button & Status Footer */}
+                  <div className="flex items-center justify-between gap-2 pt-2 border-t border-slate-100">
+                    <div className="text-[10px] text-slate-400 truncate">
+                      {item.completed ? '✅ 本日完了済み' : '四角でチェックして完了'}
+                    </div>
                     <button
                       type="button"
                       onClick={item.onAction}
-                      className="px-3 py-1.5 rounded-xl bg-slate-900 hover:bg-blue-600 text-white font-bold text-xs flex items-center gap-1 transition-colors cursor-pointer shadow-2xs"
+                      className="px-2.5 py-1 rounded-xl bg-slate-900 hover:bg-blue-600 text-white font-bold text-xs flex items-center gap-1 transition-colors cursor-pointer shadow-2xs shrink-0"
                     >
                       <span>{item.actionButtonLabel}</span>
                       <ChevronRight className="w-3.5 h-3.5" />
