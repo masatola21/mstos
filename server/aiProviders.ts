@@ -90,9 +90,55 @@ function openAiUsage(usage: any): ProviderUsage {
   };
 }
 
+function cleanErrorMessage(raw: string): string {
+  try {
+    let current = raw.trim();
+    for (let depth = 0; depth < 3; depth++) {
+      if (current.startsWith('{') && current.endsWith('}')) {
+        const parsed = JSON.parse(current);
+        if (parsed.error?.message) {
+          const innerMsg = cleanErrorMessage(String(parsed.error.message).trim());
+          const code = parsed.error.code ? `HTTP ${parsed.error.code}` : '';
+          const status = parsed.error.status || '';
+          const tag = [code, status].filter(Boolean).join(' ');
+          return tag ? `[${tag}] ${innerMsg.replace(/^\[[^\]]+\]\s*/, '')}` : innerMsg;
+        }
+        if (parsed.message) {
+          current = String(parsed.message).trim();
+          continue;
+        }
+      }
+      break;
+    }
+    return current;
+  } catch {
+    return raw;
+  }
+}
+
 function shortError(error: unknown): string {
   const message = error instanceof Error ? error.message : String(error);
-  return message.replace(/\s+/g, ' ').slice(0, 200);
+  const cleaned = cleanErrorMessage(message);
+  return cleaned.replace(/\s+/g, ' ').slice(0, 300);
+}
+
+function isTransientError(error: unknown): boolean {
+  const msg = (error instanceof Error ? error.message : String(error)).toLowerCase();
+  return (
+    msg.includes('503') ||
+    msg.includes('unavailable') ||
+    msg.includes('high demand') ||
+    msg.includes('spikes in demand') ||
+    msg.includes('429') ||
+    msg.includes('resource_exhausted') ||
+    msg.includes('rate limit') ||
+    msg.includes('504') ||
+    msg.includes('gateway') ||
+    msg.includes('overloaded') ||
+    msg.includes('try again later') ||
+    msg.includes('econnreset') ||
+    msg.includes('etimedout')
+  );
 }
 
 function withTimeout(parent?: AbortSignal): { signal: AbortSignal; clear: () => void } {
@@ -119,18 +165,51 @@ async function callGemini(
   request: ProviderRequest,
   onText: (chunk: string) => void
 ): Promise<ProviderUsage> {
-  const stream = await getGemini().models.generateContentStream({
-    model: target.model,
-    contents: request.messages.map((m) => ({ role: m.role, parts: [{ text: m.content }] })),
-    config: { systemInstruction: request.systemInstruction, temperature: request.temperature },
-  });
-  let usageMetadata: any = null;
-  for await (const chunk of stream) {
-    if (request.signal?.aborted) break;
-    if (chunk.usageMetadata) usageMetadata = chunk.usageMetadata;
-    if (chunk.text) onText(chunk.text);
+  const isGemini3or4 = /^gemini-[34]/.test(target.model);
+  const config: Record<string, any> = {};
+  if (request.systemInstruction) config.systemInstruction = request.systemInstruction;
+  // Gemini 3.8 / 4 は sampling parameters (temperature, topP, topK) が非推奨
+  if (!isGemini3or4 && typeof request.temperature === 'number') {
+    config.temperature = request.temperature;
   }
-  return geminiUsage(usageMetadata);
+
+  const maxAttempts = 3;
+  let lastError: unknown = null;
+
+  for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+    let emitted = false;
+    try {
+      const stream = await getGemini().models.generateContentStream({
+        model: target.model,
+        contents: request.messages.map((m) => ({ role: m.role, parts: [{ text: m.content }] })),
+        config,
+      });
+      let usageMetadata: any = null;
+      for await (const chunk of stream) {
+        if (request.signal?.aborted) break;
+        if (chunk.usageMetadata) usageMetadata = chunk.usageMetadata;
+        if (chunk.text) {
+          emitted = true;
+          onText(chunk.text);
+        }
+      }
+      return geminiUsage(usageMetadata);
+    } catch (err) {
+      lastError = err;
+      if (request.signal?.aborted || emitted) {
+        throw err;
+      }
+      if (attempt < maxAttempts && isTransientError(err)) {
+        const backoffMs = attempt * 1200 + Math.floor(Math.random() * 400);
+        console.warn(`[AI Gemini] 一時的高負荷・エラーのため再試行 (${target.model} attempt ${attempt}/${maxAttempts}, ${backoffMs}ms待機):`, shortError(err));
+        await new Promise((resolve) => setTimeout(resolve, backoffMs));
+        continue;
+      }
+      throw err;
+    }
+  }
+
+  throw lastError;
 }
 
 async function callOpenAiCompatible(
@@ -225,9 +304,19 @@ export async function runWithFallback(
   onText: (chunk: string) => void = () => {}
 ): Promise<ProviderResult> {
   const chain = buildModelChain(setting);
+
+  // Gemini を利用しており、かつ gemini-3.1-flash-lite がチェーンに含まれていない場合、
+  // 503 高負荷スパイク時の自律復旧用として軽量モデルをフォールバック候補に追加
+  const hasGemini = chain.some((t) => t.provider === 'gemini');
+  const hasFlashLite = chain.some((t) => t.provider === 'gemini' && t.model === 'gemini-3.1-flash-lite');
+  const effectiveChain = [...chain];
+  if (hasGemini && !hasFlashLite && isProviderConfigured('gemini')) {
+    effectiveChain.push({ provider: 'gemini', model: 'gemini-3.1-flash-lite' });
+  }
+
   const failures: Array<{ target: AIModelTarget; reason: string }> = [];
 
-  for (const target of chain) {
+  for (const target of effectiveChain) {
     let emitted = false;
     let text = '';
     try {

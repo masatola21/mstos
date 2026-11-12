@@ -551,24 +551,78 @@ export const UnifiedInboxView: React.FC<UnifiedInboxViewProps> = ({
     setSubmissions((prev) => prev.map((s) => (s.id === subId ? { ...s, reviewer_memo: memo } : s)));
   };
 
-  // Check if a submission is a diagnosis submission (設問配点・診断ロジック・診断フォーム)
-  const isDiagnosisSubmission = (sub: SubmissionItem): boolean => {
+  // フォーム回答の明確な種別判定（無料診断 vs 資料請求 vs お問い合わせ・相談）
+  const getSubmissionCategory = (sub: SubmissionItem): 'diagnosis' | 'material' | 'inquiry' => {
     const form = formsMeta.get(sub.form_id);
-    if (form?.form_type === 'diagnosis') return true;
-    if (form?.name && (form.name.includes('診断') || form.name.toLowerCase().includes('diagnosis'))) return true;
-    if (sub.diagnosis_id) return true;
-    if (sub.score !== null && sub.score !== undefined) return true;
-    if (sub.answers && typeof sub.answers === 'object') {
-      const keys = Object.keys(sub.answers);
-      if (keys.some((k) => k.startsWith('q_') || k.includes('bottleneck') || k.includes('score'))) return true;
+    const answers = (sub.answers || {}) as Record<string, unknown>;
+
+    // 1. 資料請求（material）の明示的判定:
+    // - public_slug が material-download
+    // - フォーム名に「資料」を含む
+    // - answers に material_keys / material_choice / choice_label がある
+    // - inquiryType が material または care_package
+    if (
+      form?.public_slug === 'material-download' ||
+      (form?.name && form.name.includes('資料')) ||
+      (form?.definition as any)?.category === '資料請求' ||
+      Boolean(answers.material_keys) ||
+      Boolean(answers.material_choice) ||
+      answers.inquiryType === 'material' ||
+      answers.inquiryType === 'care_package'
+    ) {
+      return 'material';
     }
-    return false;
+
+    // 2. お問い合わせ・経営相談（inquiry）の明示的判定:
+    // - public_slug が contact-inquiry
+    // - form_type が consultation または meeting
+    // - フォーム名に「お問い合わせ」または「相談」を含み、「診断」を含まない
+    // - answers に service_interest や message がある
+    if (
+      form?.public_slug === 'contact-inquiry' ||
+      form?.form_type === 'consultation' ||
+      form?.form_type === 'meeting' ||
+      (form?.name && (form.name.includes('お問い合わせ') || form.name.includes('相談')) && !form.name.includes('診断')) ||
+      Boolean(answers.service_interest) ||
+      answers.inquiryType === 'consultation'
+    ) {
+      return 'inquiry';
+    }
+
+    // 3. 無料診断（diagnosis）の判定:
+    // 経営診断特有の急所設問（q_ops_bottleneck, q_profit_bottleneck, q_delay_reason, q_ideal_future など）があるか、
+    // または form_type が diagnosis / 診断専用フォームの場合のみ
+    const hasCoreDiagnosisQuestions = Boolean(
+      answers.q_ops_bottleneck ||
+      answers.q_profit_bottleneck ||
+      answers.q_delay_reason ||
+      answers.q_ideal_future ||
+      Object.keys(answers).some((k) => k.includes('bottleneck') || k === 'q_bottleneck')
+    );
+
+    if (
+      form?.form_type === 'diagnosis' ||
+      form?.public_slug === 'business-diagnosis' ||
+      (form?.name && (form.name.includes('診断') || form.name.toLowerCase().includes('diagnosis'))) ||
+      hasCoreDiagnosisQuestions
+    ) {
+      return 'diagnosis';
+    }
+
+    // 4. それ以外（一般的なフォーム回答）はすべて「お問い合わせ・相談」として扱う
+    return 'inquiry';
+  };
+
+  // 無料診断のみを抽出する判定
+  const isDiagnosisSubmission = (sub: SubmissionItem): boolean => {
+    return getSubmissionCategory(sub) === 'diagnosis';
   };
 
   const diagnosisCount = useMemo(() => {
     return submissions.filter(isDiagnosisSubmission).length;
   }, [submissions, formsMeta]);
 
+  // 資料請求およびお問い合わせ相談を「お問い合わせ・相談のみ」として集約カウント
   const inquiryCount = useMemo(() => {
     return submissions.filter((s) => !isDiagnosisSubmission(s)).length;
   }, [submissions, formsMeta]);
@@ -1053,17 +1107,31 @@ export const UnifiedInboxView: React.FC<UnifiedInboxViewProps> = ({
                           <span className={`px-2 py-0.5 rounded text-[11px] font-semibold border ${statusBadge.color}`}>
                             {statusBadge.label}
                           </span>
-                          {isDiag ? (
-                            <span className="text-[11px] px-2 py-0.5 rounded-full bg-purple-100 text-purple-800 font-semibold flex items-center gap-1 border border-purple-200">
-                              <Sparkles className="w-3 h-3 text-purple-600" />
-                              無料診断
-                            </span>
-                          ) : (
-                            <span className="text-[11px] px-2 py-0.5 rounded-full bg-sky-50 text-sky-800 font-medium flex items-center gap-1 border border-sky-200">
-                              <FileText className="w-3 h-3 text-sky-600" />
-                              お問い合わせ・相談
-                            </span>
-                          )}
+                          {(() => {
+                            const cat = getSubmissionCategory(sub);
+                            if (cat === 'diagnosis') {
+                              return (
+                                <span className="text-[11px] px-2 py-0.5 rounded-full bg-purple-100 text-purple-800 font-semibold flex items-center gap-1 border border-purple-200">
+                                  <Sparkles className="w-3 h-3 text-purple-600" />
+                                  無料診断
+                                </span>
+                              );
+                            }
+                            if (cat === 'material') {
+                              return (
+                                <span className="text-[11px] px-2 py-0.5 rounded-full bg-amber-50 text-amber-800 font-semibold flex items-center gap-1 border border-amber-300">
+                                  <FileText className="w-3 h-3 text-amber-600" />
+                                  資料請求
+                                </span>
+                              );
+                            }
+                            return (
+                              <span className="text-[11px] px-2 py-0.5 rounded-full bg-sky-50 text-sky-800 font-medium flex items-center gap-1 border border-sky-200">
+                                <FileText className="w-3 h-3 text-sky-600" />
+                                お問い合わせ・相談
+                              </span>
+                            );
+                          })()}
                           {isContracted ? (
                             <span className="text-[11px] px-2.5 py-0.5 rounded-full bg-emerald-50 text-emerald-800 border border-emerald-300 font-semibold flex items-center gap-1">
                               <CheckCircle2 className="w-3 h-3 text-emerald-600" />
@@ -1185,7 +1253,7 @@ export const UnifiedInboxView: React.FC<UnifiedInboxViewProps> = ({
                           <span>{isContracted ? '面談案内（ドロワー）' : '商談案内（ドロワー）'}</span>
                         </button>
 
-                        {/* 提案書・レポート作成（診断フォームの回答は、AIが診断レポートと提案書の下書きまで自動で作成） */}
+                        {/* 診断レポート作成（無料診断のみ） / 書類台帳（資料請求・お問い合わせ相談） */}
                         {(() => {
                           const isDiagnosisForm = isDiag;
                           const busy = reportingIds.includes(sub.id);
@@ -1194,6 +1262,27 @@ export const UnifiedInboxView: React.FC<UnifiedInboxViewProps> = ({
                           const alreadyCreated = isDiagnosisForm && Boolean(reportVersion);
                           const openDocuments = () =>
                             onNavigateTab('document_templates', { context: sub.company_id ? { companyId: sub.company_id } : undefined });
+
+                          // 資料請求・お問い合わせ相談の場合：診断レポートではなく書類台帳／提案書ひな型への導線を表示
+                          if (!isDiagnosisForm) {
+                            return (
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  if (onOpenCustomerWorkspace && sub.company_id) {
+                                    onOpenCustomerWorkspace(sub.company_id, 'documents');
+                                  } else {
+                                    onNavigateTab('document_templates', { context: sub.company_id ? { companyId: sub.company_id } : undefined });
+                                  }
+                                }}
+                                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-white hover:bg-slate-50 text-xs font-medium text-slate-700 border border-slate-200 shadow-xs transition cursor-pointer"
+                                title="重要書類・提案書ひな型を開く"
+                              >
+                                <FileText className="w-3.5 h-3.5 text-purple-600" />
+                                <span>書類台帳を開く</span>
+                              </button>
+                            );
+                          }
 
                           if (alreadyCreated && !busy) {
                             return (
@@ -1205,7 +1294,7 @@ export const UnifiedInboxView: React.FC<UnifiedInboxViewProps> = ({
                                   title="作成済みの診断レポートと提案書の下書きを、書類の画面で確認します"
                                 >
                                   <CheckCircle2 className="w-3.5 h-3.5 text-emerald-100" />
-                                  <span>作成済み（v{reportVersion}）・書類を確認する</span>
+                                  <span>作成済み（v{reportVersion}）・確認</span>
                                 </button>
                                 <button
                                   type="button"
@@ -1213,9 +1302,9 @@ export const UnifiedInboxView: React.FC<UnifiedInboxViewProps> = ({
                                     void handleGenerateReport(sub, true);
                                   }}
                                   className="text-[11px] text-slate-500 hover:text-slate-800 underline cursor-pointer"
-                                  title="AIでレポートを最新版として再生成します"
+                                  title="AIで診断レポートを最新版として再生成します"
                                 >
-                                  最新版を再生成
+                                  再生成
                                 </button>
                               </>
                             );
@@ -1245,26 +1334,16 @@ export const UnifiedInboxView: React.FC<UnifiedInboxViewProps> = ({
                             <button
                               type="button"
                               disabled={needsCompany}
-                              onClick={() => {
-                                if (isDiagnosisForm) {
-                                  void handleGenerateReport(sub);
-                                } else if (onOpenCustomerWorkspace && sub.company_id) {
-                                  onOpenCustomerWorkspace(sub.company_id, 'documents');
-                                } else {
-                                  onNavigateTab('document_templates');
-                                }
-                              }}
+                              onClick={() => void handleGenerateReport(sub)}
                               className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-emerald-50 hover:bg-emerald-100 text-xs font-semibold text-emerald-800 border border-emerald-200 transition cursor-pointer disabled:cursor-not-allowed disabled:opacity-60 disabled:hover:bg-emerald-50 shadow-2xs"
                               title={
                                 needsCompany
                                   ? '会社が紐付いていません。先に「反響リードに登録」を押してください'
-                                  : isDiagnosisForm
-                                  ? 'この回答をもとに、AIが診断レポートと提案書の下書きを自動で作成します'
-                                  : '重要書類の画面を開きます'
+                                  : 'この回答をもとに、AIが診断レポートを自動で作成します'
                               }
                             >
                               <Sparkles className="w-3.5 h-3.5 text-emerald-600" />
-                              <span>提案書・レポート作成</span>
+                              <span>AI診断レポート作成</span>
                             </button>
                           );
                         })()}

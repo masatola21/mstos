@@ -6,6 +6,7 @@ interface FormMeta {
   id: string;
   name: string;
   form_type: string;
+  public_slug?: string;
 }
 
 interface SubmissionItem {
@@ -18,17 +19,59 @@ interface SubmissionItem {
   answers: Record<string, unknown>;
 }
 
-const isDiagnosisSubmission = (sub: SubmissionItem, formsMeta: Map<string, FormMeta>): boolean => {
+export type SubmissionCategory = 'diagnosis' | 'material' | 'inquiry';
+
+export function getSubmissionCategory(sub: SubmissionItem, formsMeta: Map<string, FormMeta>): SubmissionCategory {
   const form = formsMeta.get(sub.form_id);
-  if (form?.form_type === 'diagnosis') return true;
-  if (form?.name && (form.name.includes('診断') || form.name.toLowerCase().includes('diagnosis'))) return true;
-  if (sub.diagnosis_id) return true;
-  if (sub.score !== null && sub.score !== undefined) return true;
-  if (sub.answers && typeof sub.answers === 'object') {
-    const keys = Object.keys(sub.answers);
-    if (keys.some((k) => k.startsWith('q_') || k.includes('bottleneck') || k.includes('score'))) return true;
+  const answers = (sub.answers || {}) as Record<string, unknown>;
+
+  // 1. 資料請求（material）の判定
+  if (
+    form?.public_slug === 'material-download' ||
+    form?.name?.includes('資料') ||
+    Boolean(answers.material_keys) ||
+    Boolean(answers.material_choice) ||
+    answers.inquiryType === 'material' ||
+    answers.inquiryType === 'care_package'
+  ) {
+    return 'material';
   }
-  return false;
+
+  // 2. お問い合わせ・相談（inquiry）の明示的判定
+  if (
+    form?.public_slug === 'contact-inquiry' ||
+    form?.form_type === 'consultation' ||
+    form?.form_type === 'meeting' ||
+    (form?.name && (form.name.includes('お問い合わせ') || form.name.includes('相談')) && !form.name.includes('診断')) ||
+    Boolean(answers.service_interest) ||
+    answers.inquiryType === 'consultation'
+  ) {
+    return 'inquiry';
+  }
+
+  // 3. 無料診断（diagnosis）の判定
+  const hasCoreDiagnosisQuestions = Boolean(
+    answers.q_ops_bottleneck ||
+    answers.q_profit_bottleneck ||
+    answers.q_delay_reason ||
+    answers.q_ideal_future ||
+    Object.keys(answers).some((k) => k.includes('bottleneck') || k === 'q_bottleneck')
+  );
+
+  if (
+    form?.form_type === 'diagnosis' ||
+    form?.public_slug === 'business-diagnosis' ||
+    (form?.name && (form.name.includes('診断') || form.name.toLowerCase().includes('diagnosis'))) ||
+    hasCoreDiagnosisQuestions
+  ) {
+    return 'diagnosis';
+  }
+
+  return 'inquiry';
+}
+
+const isDiagnosisSubmission = (sub: SubmissionItem, formsMeta: Map<string, FormMeta>): boolean => {
+  return getSubmissionCategory(sub, formsMeta) === 'diagnosis';
 };
 
 describe('Form & Diagnosis Inbox Consolidation Tests', () => {
@@ -47,7 +90,7 @@ describe('Form & Diagnosis Inbox Consolidation Tests', () => {
       lead_id: 'lead-201',
       diagnosis_id: 'diag-001',
       score: 75,
-      answers: { q_ops_bottleneck: '請求書・見積書等の作成や転記作業' },
+      answers: { q_ops_bottleneck: '請求書・見積書等の作成や転記作業', q_hear_about: '検索' },
     },
     {
       id: 'sub-2',
@@ -56,7 +99,7 @@ describe('Form & Diagnosis Inbox Consolidation Tests', () => {
       lead_id: 'lead-201',
       diagnosis_id: null,
       score: null,
-      answers: { message: '費用感について相談したい' },
+      answers: { message: '費用感について相談したい', q_hear_about: '紹介' },
     },
     {
       id: 'sub-3',
@@ -65,7 +108,7 @@ describe('Form & Diagnosis Inbox Consolidation Tests', () => {
       lead_id: null,
       diagnosis_id: null,
       score: null,
-      answers: { reason: '社内業務効率化の情報収集' },
+      answers: { reason: '社内業務効率化の情報収集', q_hear_about: 'Instagram', material_keys: ['management-guide'] },
     },
     {
       id: 'sub-4',
@@ -74,15 +117,18 @@ describe('Form & Diagnosis Inbox Consolidation Tests', () => {
       lead_id: 'lead-203',
       diagnosis_id: null,
       score: null,
-      answers: { budget: '月額20万円〜' },
+      answers: { budget: '月額20万円〜', q_hear_about: 'ブログ' },
     },
   ];
 
-  it('Test 1: isDiagnosisSubmission accurately classifies diagnosis vs inquiry forms', () => {
+  it('Test 1: isDiagnosisSubmission accurately classifies diagnosis vs inquiry forms, even when q_hear_about is present', () => {
     assert.equal(isDiagnosisSubmission(mockSubmissions[0], formsMeta), true, 'sub-1 is a diagnosis form');
-    assert.equal(isDiagnosisSubmission(mockSubmissions[1], formsMeta), false, 'sub-2 is an inquiry form');
-    assert.equal(isDiagnosisSubmission(mockSubmissions[2], formsMeta), false, 'sub-3 is a material download form');
-    assert.equal(isDiagnosisSubmission(mockSubmissions[3], formsMeta), false, 'sub-4 is a package inquiry form');
+    assert.equal(isDiagnosisSubmission(mockSubmissions[1], formsMeta), false, 'sub-2 is an inquiry form even with q_hear_about');
+    assert.equal(isDiagnosisSubmission(mockSubmissions[2], formsMeta), false, 'sub-3 is a material download form even with q_hear_about');
+    assert.equal(isDiagnosisSubmission(mockSubmissions[3], formsMeta), false, 'sub-4 is a package inquiry form even with q_hear_about');
+    assert.equal(getSubmissionCategory(mockSubmissions[2], formsMeta), 'material', 'sub-3 category is material');
+    assert.equal(getSubmissionCategory(mockSubmissions[1], formsMeta), 'inquiry', 'sub-2 category is inquiry');
+    assert.equal(getSubmissionCategory(mockSubmissions[0], formsMeta), 'diagnosis', 'sub-0 category is diagnosis');
   });
 
   it('Test 2: Form type category filtering (all / diagnosis / inquiry)', () => {

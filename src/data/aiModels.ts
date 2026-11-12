@@ -27,7 +27,7 @@ export const AI_PROVIDERS: Record<AIProviderId, AIProviderInfo> = {
     id: 'gemini',
     label: 'Google Gemini',
     envKey: 'GEMINI_API_KEY',
-    suggestedModels: ['gemini-3.8-flash'],
+    suggestedModels: ['gemini-3.8-flash', 'gemini-3.1-flash-lite', 'gemini-flash-latest'],
     pricingUrl: 'https://ai.google.dev/gemini-api/docs/pricing',
   },
   groq: {
@@ -51,7 +51,7 @@ export const MAX_FALLBACKS = 2;
 
 export const DEFAULT_MODEL_SETTING: AIModelSetting = {
   primary: { provider: 'gemini', model: 'gemini-3.8-flash' },
-  fallbacks: [],
+  fallbacks: [{ provider: 'gemini', model: 'gemini-3.1-flash-lite' }],
 };
 
 const MODEL_NAME_PATTERN = /^[A-Za-z0-9._:/\-]{1,120}$/;
