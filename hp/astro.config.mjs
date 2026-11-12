@@ -11,12 +11,6 @@ export default defineConfig({
       applyBaseStyles: false,
     }),
     react(),
-    sitemap({
-      filter: (page) =>
-        // noindex推奨ページをサイトマップから除外
-        !page.includes('/diagnosis') &&
-        !page.includes('/privacy') &&
-        !page.includes('/materials'),
-    }),
+    sitemap(),
   ],
 });
