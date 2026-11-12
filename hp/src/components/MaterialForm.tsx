@@ -56,9 +56,21 @@ export default function MaterialForm() {
           headers: { Accept: 'application/json' },
         });
         if (!res.ok) throw new Error(`HTTP ${res.status}`);
-        const data = await res.json();
         if (!cancelled && data.success && Array.isArray(data.materials) && data.materials.length > 0) {
-          setAvailableMaterials(data.materials);
+          const sanitizedMaterials = data.materials.map((m: MaterialItem) => ({
+            ...m,
+            label: (m.label || '')
+              .replace(/[・\s]*収益シミュレーション[資料]*/g, '')
+              .replace(/収益シミュレーション[・\s]*/g, '')
+              .replace(/[・\s]*シミュレーション[資料]*/g, '')
+              .trim(),
+            description: (m.description || '')
+              .replace(/[・\s]*収益シミュレーション[資料]*/g, '')
+              .replace(/収益シミュレーション[・\s]*/g, '')
+              .replace(/[・\s]*シミュレーション[資料]*/g, '')
+              .trim(),
+          }));
+          setAvailableMaterials(sanitizedMaterials);
 
           // URLパラメータに応じた事前選択
           const params = new URLSearchParams(window.location.search);

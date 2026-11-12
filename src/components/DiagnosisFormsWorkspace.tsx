@@ -304,7 +304,24 @@ export const DiagnosisFormsWorkspace: React.FC<DiagnosisFormsWorkspaceProps> = (
       }
       setAnswers((answerResult.data || []) as Submission[]);
       if (!materialResult.error && materialResult.data) {
-        setMaterials(materialResult.data as PublicMaterial[]);
+        const loadedMats = (materialResult.data as PublicMaterial[]).map((m) => {
+          if (/収益シミュレーション|シミュレーション/.test(m.label) || /収益シミュレーション/.test(m.description || '')) {
+            const cleanLabel = (m.label || '')
+              .replace(/[・\s]*収益シミュレーション[資料]*/g, '')
+              .replace(/収益シミュレーション[・\s]*/g, '')
+              .replace(/[・\s]*シミュレーション[資料]*/g, '')
+              .trim() || '介護保険外サービス開業パッケージ サービス概要資料';
+            const cleanDesc = (m.description || '')
+              .replace(/[・\s]*収益シミュレーション[資料]*/g, '')
+              .replace(/収益シミュレーション[・\s]*/g, '')
+              .replace(/[・\s]*シミュレーション[資料]*/g, '')
+              .trim();
+            void supabase.from('public_materials').update({ label: cleanLabel, description: cleanDesc }).eq('id', m.id);
+            return { ...m, label: cleanLabel, description: cleanDesc };
+          }
+          return m;
+        });
+        setMaterials(loadedMats);
       }
     } catch (e: any) {
       setError(e?.message || 'フォーム・回答・資料データを読み込めませんでした。');

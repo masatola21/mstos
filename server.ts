@@ -649,8 +649,67 @@ export async function ensureStandardPublicForms(supabaseClient?: any): Promise<v
   }
 }
 
+function cleanMaterialLabel(rawLabel: string, key?: string): string {
+  let label = (rawLabel || '')
+    .replace(/[・\s]*収益シミュレーション[資料]*/g, '')
+    .replace(/収益シミュレーション[・\s]*/g, '')
+    .replace(/[・\s]*シミュレーション[資料]*/g, '')
+    .trim();
+  if (key === 'care-package-overview' || label.includes('介護保険外')) {
+    if (label.endsWith('サービス概要')) label = `${label}資料`;
+    else if (!label || label === '介護保険外サービス開業パッケージ') label = '介護保険外サービス開業パッケージ概要資料';
+  }
+  return label;
+}
+
+async function ensureStandardPublicMaterials(supabaseClient?: any): Promise<void> {
+  const dbClient = supabaseClient || lineSupabase;
+  if (!dbClient) return;
+  try {
+    const { data: allMaterials } = await dbClient
+      .from('public_materials')
+      .select('id, key, label, description');
+
+    if (allMaterials && allMaterials.length > 0) {
+      for (const m of allMaterials) {
+        let changed = false;
+        let newLabel = m.label || '';
+        let newDesc = m.description || '';
+
+        if (/収益シミュレーション|シミュレーション/.test(newLabel) || (m.key === 'care-package-overview' && newLabel.endsWith('サービス概要'))) {
+          newLabel = cleanMaterialLabel(newLabel, m.key);
+          changed = true;
+        }
+
+        if (/収益シミュレーション|シミュレーション/.test(newDesc)) {
+          newDesc = newDesc
+            .replace(/[・\s]*収益シミュレーション[資料]*/g, '')
+            .replace(/収益シミュレーション[・\s]*/g, '')
+            .replace(/[・\s]*シミュレーション[資料]*/g, '')
+            .trim();
+          if (m.key === 'care-package-overview' && (!newDesc || newDesc.includes('採算計画'))) {
+            newDesc = '自社直営「アシスタ大垣」の実践データに基づく、シニア生活支援・介護保険外サービスの立ち上げ・実務手順資料';
+          }
+          changed = true;
+        }
+
+        if (changed) {
+          await dbClient
+            .from('public_materials')
+            .update({ label: newLabel, description: newDesc })
+            .eq('id', m.id);
+          console.log(`[Setup] Sanitized public_material ${m.key}: label="${newLabel}"`);
+        }
+      }
+    }
+  } catch (e: any) {
+    console.warn('[Setup] ensureStandardPublicMaterials warning:', e?.message);
+  }
+}
+
 async function ensureDefaultCarePackageInquiryForm(): Promise<void> {
   await ensureStandardPublicForms();
+  await ensureStandardPublicMaterials();
 }
 
 
@@ -5293,8 +5352,16 @@ app.get('/api/public/materials', async (req, res) => {
           success: true,
           materials: data.map((item) => ({
             key: item.key,
-            label: item.label,
-            description: item.description || '',
+            label: (item.label || '')
+              .replace(/[・\s]*収益シミュレーション[資料]*/g, '')
+              .replace(/収益シミュレーション[・\s]*/g, '')
+              .replace(/[・\s]*シミュレーション[資料]*/g, '')
+              .trim(),
+            description: (item.description || '')
+              .replace(/[・\s]*収益シミュレーション[資料]*/g, '')
+              .replace(/収益シミュレーション[・\s]*/g, '')
+              .replace(/[・\s]*シミュレーション[資料]*/g, '')
+              .trim(),
             category: item.category || '経営実務',
             url: item.public_url,
             sort_order: item.sort_order,
@@ -5760,11 +5827,27 @@ app.post(
         if (requestedMaterialKeys.length > 0) {
           resolvedMaterials = activeMaterials
             .filter((m) => requestedMaterialKeys.includes(m.key))
-            .map((m) => ({ key: m.key, label: m.label, url: m.public_url }));
+            .map((m) => ({
+              key: m.key,
+              label: (m.label || '')
+                .replace(/[・\s]*収益シミュレーション[資料]*/g, '')
+                .replace(/収益シミュレーション[・\s]*/g, '')
+                .replace(/[・\s]*シミュレーション[資料]*/g, '')
+                .trim(),
+              url: m.public_url,
+            }));
         }
         // 資料キー未指定だが資料請求の場合、全有効資料を採用
         if (resolvedMaterials.length === 0 && (slug === 'material-download' || rawInquiry.includes('資料'))) {
-          resolvedMaterials = activeMaterials.map((m) => ({ key: m.key, label: m.label, url: m.public_url }));
+          resolvedMaterials = activeMaterials.map((m) => ({
+            key: m.key,
+            label: (m.label || '')
+              .replace(/[・\s]*収益シミュレーション[資料]*/g, '')
+              .replace(/収益シミュレーション[・\s]*/g, '')
+              .replace(/[・\s]*シミュレーション[資料]*/g, '')
+              .trim(),
+            url: m.public_url,
+          }));
         }
       }
     } catch (matLookupErr) {
