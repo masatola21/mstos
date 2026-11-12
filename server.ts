@@ -6646,39 +6646,9 @@ app.post('/api/diagnosis-submissions/:id/generate-report', requireAuth, async (r
       lead?.interested_product_id || deal?.product_id || null,
     );
 
-    // 提案書の下書き（診断結果・推奨事項＋直近の商談情報）
-    let proposalCreated = false;
-    try {
-      const productId = deal?.product_id || lead?.interested_product_id || null;
-      let productName = '要選定';
-      if (productId) {
-        const { data: product } = await lineSupabase.from('products').select('product_name').eq('id', productId).maybeSingle();
-        if (product?.product_name) productName = String(product.product_name);
-      }
-      const money = (value: unknown) => (value === null || value === undefined ? '要設定' : String(value));
-      const proposalHtml = `<article><h1>${escapeHtmlText(String(deal?.proposal_plan_name || '診断結果に基づくご提案'))}</h1>
-<p>宛先：${escapeHtmlText(saved.companyName)}</p>
-<h2>診断結果・推奨事項</h2><pre style="white-space:pre-wrap">${escapeHtmlText(text)}</pre>
-<h2>ご提案内容</h2><p>推奨サービス：${escapeHtmlText(productName)}</p>
-<p>提案プラン：${escapeHtmlText(String(deal?.proposal_plan_name || '要設定'))}</p>
-<p>初期費用：${money(deal?.initial_fee)} 円</p><p>月額費用：${money(deal?.monthly_fee)} 円</p><p>合計金額：${money(deal?.total_amount)} 円</p></article>`;
-      const { error: proposalError } = await lineSupabase.from('customer_documents').insert({
-        owner_id: user.id,
-        document_type: 'proposal',
-        title: `${saved.companyName} 診断結果に基づくご提案（下書き）`,
-        status: 'draft',
-        body_html: proposalHtml,
-        company_id: saved.companyId,
-        lead_id: saved.leadId,
-        deal_id: null,
-        diagnosis_id: diagnosisId,
-        ai_report_id: saved.report.id,
-      });
-      if (proposalError) console.warn('Proposal draft creation failed:', proposalError.message);
-      else proposalCreated = true;
-    } catch (proposalErr: any) {
-      console.warn('Proposal draft creation failed:', proposalErr?.message || proposalErr);
-    }
+    // 提案書の下書きは、ここでは作らない(診断パートだけで提案書は完成しない)。
+    // 提案書は、商談後に「書類」画面の提案書ひな型(診断の章を自動で取り込む)から別の操作で作る。
+    const proposalCreated = false;
 
     // 回答の状態を「未対応」から「対応中」へ
     if (submission.status === 'received') {

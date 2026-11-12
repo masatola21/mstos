@@ -39,6 +39,16 @@ import {
   normalizeTemplateId,
   getTemplateDefaultValues,
 } from './documentGenerators';
+import {
+  parseDiagnosisReport,
+  kindFromPaymentMode,
+  markdownToPlainText,
+  addDaysToIsoDate,
+  PROPOSAL_KIND_LABELS,
+  PROPOSAL_VALID_DAYS,
+} from '../../constants/proposalChapters';
+import { proposalEmptyText, defaultPaymentTermsFor } from './proposalTemplate';
+import { calcProposalFees, parseYen, formatYen } from '../../utils/proposalFees';
 
 export type { DocTemplateType, DocTemplate, PaymentMode, InvoiceSubtype };
 
@@ -329,15 +339,36 @@ export const DocumentTemplateView: React.FC<DocumentTemplateViewProps> = ({
         company_after: '業務が仕組みで回り、限られた人員でもミスなく自動連携し、売上だけでなく利益がしっかり残る会社へ',
         ceo_before: '日々の火消しや業務処理に追われ、会社の改善や戦略を考える時間が奪われている',
         ceo_after: '現場から解放され、本来向き合うべき「経営判断」「人材育成」「次の一手（新規事業）」に集中できる',
-        phase1_action: '【業務・時間の急所解消】毎月の請求・見積・顧客情報の重複入力を自動化し、月20時間以上の経営時間を即座に創出',
-        phase2_action: '【売上・集客の導線構築】LINE・メール・CRMを連携し、集客から問い合わせ・商談・顧客フォローが自動でつながる流れを構築',
-        phase3_action: '【経営の自走化・新規事業】経営戦略・利益改善顧問の定期伴走により、新たな収益源の創出と自走組織を実現',
-        current_challenge: challengeText || '手作業や二重入力に時間を奪われ、改善を着手したいが日々の業務に追われて優先順位が決まらない状態です。',
-        solution_overview: product?.description || '経営戦略・利益改善顧問および業務自動化パッケージにより、手作業の撲滅と利益の残る仕組み化を同時に進めます。',
-        expected_outcome: recommendationText || '現場の手作業が自動化され、月20時間以上の余白を創出。経営者が次の一手を選べる経営体質へ変革します。',
-        recommended_product: productName || '業務改善・IT・DX顧問 ＋ 業務自動化パッケージ',
       };
-      setVariableValues((prev) => ({...prev, ...values}));
+      // 提案書: 診断の章(D0〜D5)・サービス名・商談の金額は、空の欄にだけ入れる(担当者の入力を上書きしない)
+      const proposalSeed: Record<string, string> = {};
+      if (selectedTemplateId === 'tpl-proposal-report') {
+        if (deal?.proposal_plan_name) proposalSeed.proposal_title = String(deal.proposal_plan_name);
+        if (productName) proposalSeed.p2_service_name = productName;
+        const parsedReport = parseDiagnosisReport(report?.full_report_text || '');
+        if (!parsedReport.legacy) {
+          const byId = (id: string) => markdownToPlainText(parsedReport.chapters.find((c) => c.id === id)?.body || '');
+          Object.assign(proposalSeed, {
+            d0_summary: byId('D0'), d1_premise: byId('D1'), d2_current: byId('D2'),
+            d3_bottleneck: byId('D3'), d4_impact: byId('D4'), d5_direction: byId('D5'),
+          });
+        }
+        const discount = Number(deal?.discount_amount ?? 0);
+        if (initialFee > 0 || monthlyFee > 0) {
+          const fees = calcProposalFees({ initialFee, monthlyFee, discount });
+          Object.assign(proposalSeed, {
+            p4_initial_fee: initialFee > 0 ? formatYen(initialFee) : '',
+            p4_monthly_fee: monthlyFee > 0 ? formatYen(monthlyFee) : '',
+            p4_discount: discount > 0 ? formatYen(discount) : '',
+            p4_subtotal: formatYen(fees.subtotal), p4_tax: formatYen(fees.tax), p4_total: formatYen(fees.total),
+          });
+        }
+      }
+      setVariableValues((prev) => {
+        const next = { ...prev, ...values };
+        for (const [k, v] of Object.entries(proposalSeed)) if (v && !String(prev[k] || '').trim()) next[k] = v;
+        return next;
+      });
     };
     void populate();
     return () => { cancelled = true; };
@@ -356,14 +387,38 @@ export const DocumentTemplateView: React.FC<DocumentTemplateViewProps> = ({
       ...defaults,
       client_company: prev.client_company || defaults.client_company || '',
       issue_date: formatDocumentDate(today),
-      due_date: formatDocumentDate(id.includes('estimate') ? addOneMonthDate(today) : invoiceDueDate(today)),
+      due_date: id === 'tpl-proposal-report'
+        ? defaults.due_date
+        : formatDocumentDate(id.includes('estimate') ? addOneMonthDate(today) : invoiceDueDate(today)),
     }));
     setIsEditingTemplate(false);
   };
 
   const handleVariableChange = (key: string, value: string) => {
     setHasStartedDocument(true);
-    setVariableValues((prev) => ({ ...prev, [key]: value }));
+    setVariableValues((prev) => {
+      const next = { ...prev, [key]: value };
+      if (selectedTemplateId === 'tpl-proposal-report') {
+        // 費用: 初期費用・月額・値引きから、小計・消費税(切り捨て)・合計を自動計算する
+        if (['p4_initial_fee', 'p4_monthly_fee', 'p4_discount'].includes(key)) {
+          const fees = calcProposalFees({
+            initialFee: parseYen(next.p4_initial_fee), monthlyFee: parseYen(next.p4_monthly_fee), discount: parseYen(next.p4_discount),
+          });
+          next.p4_subtotal = fees.subtotal > 0 ? formatYen(fees.subtotal) : '';
+          next.p4_tax = fees.subtotal > 0 ? formatYen(fees.tax) : '';
+          next.p4_total = fees.subtotal > 0 ? formatYen(fees.total) : '';
+        }
+        // 有効期限: 発行日から自動計算する
+        if (key === 'issue_date') {
+          const m = /(\d{4})年(\d{1,2})月(\d{1,2})日/.exec(value);
+          if (m) {
+            const iso = `${m[1]}-${m[2].padStart(2, '0')}-${m[3].padStart(2, '0')}`;
+            next.due_date = formatDocumentDate(addDaysToIsoDate(iso, PROPOSAL_VALID_DAYS));
+          }
+        }
+      }
+      return next;
+    });
   };
 
   // Switch Payment Mode (for Estimate and Contract)
@@ -371,6 +426,11 @@ export const DocumentTemplateView: React.FC<DocumentTemplateViewProps> = ({
     setPaymentMode(mode);
     setHasStartedDocument(true);
     setCustomHtmlOverride(null); // allow dynamic generator to re-render table/clauses
+    if (selectedTemplateId === 'tpl-proposal-report') {
+      // 提案書: 型は支払い方式から決まる。金額は商談で決めた値だけを使うので、ここでは書き換えない。
+      setVariableValues((prev) => ({ ...prev, p6_payment_terms: defaultPaymentTermsFor(mode) }));
+      return;
+    }
     const parseNum = (v?: string) => Number((v || '').replace(/[^\d]/g, '')) || 0;
     const rawSubtotal = parseNum(variableValues.subtotal_amount) || parseNum(variableValues.total_project_amount) || 300000;
     const today = todayJst();
@@ -620,10 +680,16 @@ export const DocumentTemplateView: React.FC<DocumentTemplateViewProps> = ({
   const getPopulatedHtml = (): string => {
     let result = customHtmlOverride || getDynamicTemplateHtml(currentTemplate.id, paymentMode, invoiceSubtype);
     
+    const isProposal = currentTemplate.id === 'tpl-proposal-report';
+    const proposalKind = kindFromPaymentMode(paymentMode);
     Object.entries(variableValues).forEach(([key, val]) => {
       const regex = new RegExp(`{{${key}}}`, 'g');
-      result = result.replace(regex, escapeHtml(val || ''));
+      // 提案書: 空の項目は、必須なら「【未入力】」、それ以外は決めた代替文を出す
+      result = result.replace(regex, escapeHtml(val || (isProposal ? proposalEmptyText(key, proposalKind) : '')));
     });
+    if (isProposal) {
+      result = result.replace(/{{(\w+)}}/g, (whole, key) => (key === 'apply_url' ? whole : escapeHtml(proposalEmptyText(key, proposalKind))));
+    }
 
     const currentDocId = savedDocIds[currentTemplate.id] || autosavedDocumentIds.current[currentTemplate.id];
     const applyUrl = currentDocId
@@ -1134,16 +1200,16 @@ export const DocumentTemplateView: React.FC<DocumentTemplateViewProps> = ({
                   <div className="rounded-xl border border-blue-200 bg-gradient-to-r from-blue-50 to-indigo-50/60 p-3.5 space-y-1.5 shadow-2xs">
                     <div className="flex items-center gap-1.5 text-xs font-bold text-blue-900">
                       <Sparkles className="w-4 h-4 text-blue-600" />
-                      <span>診断レポート ＋ 業務改善提案書の統合版</span>
+                      <span>診断の結果（D0〜D5）＋ ご提案（P1〜P7）</span>
                     </div>
                     <p className="text-[11px] text-blue-800 leading-relaxed">
-                      診断結果（急所分析・改善前後の姿）から3段階ロードマップ、概算費用、Web申込CTAまで1枚のストーリーとしてスムーズにつながります。
+                      下の「お支払い方式」を選ぶと、提案の型（現在: {PROPOSAL_KIND_LABELS[kindFromPaymentMode(paymentMode)]}）に合わせて項目が切り替わります。金額・サービス名・期間は、商談で決めた値だけを入力してください。未入力の必須項目は、書類に「【未入力】」と表示されます。
                     </p>
                   </div>
                 )}
 
                 {/* 2. If Estimate or Contract: Segmented Payment Switcher */}
-                {(selectedTemplateId === 'tpl-unified-estimate' || selectedTemplateId === 'tpl-unified-contract') && (
+                {(selectedTemplateId === 'tpl-unified-estimate' || selectedTemplateId === 'tpl-unified-contract' || selectedTemplateId === 'tpl-proposal-report') && (
                   <div className="rounded-xl border border-purple-200 bg-gradient-to-br from-purple-50/80 via-indigo-50/40 to-white p-3.5 space-y-2.5 shadow-2xs">
                     <div className="flex items-center justify-between">
                       <div className="flex items-center gap-1.5 text-xs font-bold text-purple-900">
@@ -1151,11 +1217,13 @@ export const DocumentTemplateView: React.FC<DocumentTemplateViewProps> = ({
                         <span>お支払い条件・条項の即時切替</span>
                       </div>
                       <span className="text-[10px] font-medium text-purple-700 bg-white/90 px-2 py-0.5 rounded border border-purple-200 whitespace-nowrap">
-                        {selectedTemplateId.includes('estimate') ? '有効期限: 発行日より1ヶ月間' : '支払期日: 翌月末日統一'}
+                        {selectedTemplateId === 'tpl-proposal-report' ? `有効期限: 発行日から${PROPOSAL_VALID_DAYS}日間` : selectedTemplateId.includes('estimate') ? '有効期限: 発行日より1ヶ月間' : '支払期日: 翌月末日統一'}
                       </span>
                     </div>
                     <p className="text-[11px] text-slate-600 leading-snug">
-                      ワンタップで金額・消費税・条項文（期限の利益喪失条項・手付残金・顧問自動更新）が自動切替されます。
+                      {selectedTemplateId === 'tpl-proposal-report'
+                        ? `選んだ方式で提案の型（${PROPOSAL_KIND_LABELS[kindFromPaymentMode(paymentMode)]}）とお支払い条件の初期文が切り替わります。金額は書き換わりません。`
+                        : 'ワンタップで金額・消費税・条項文（期限の利益喪失条項・手付残金・顧問自動更新）が自動切替されます。'}
                     </p>
                     <div className="grid grid-cols-2 sm:grid-cols-3 gap-1.5 pt-1">
                       {[
