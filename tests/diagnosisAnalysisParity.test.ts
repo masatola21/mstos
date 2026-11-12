@@ -42,6 +42,7 @@ async function runTests() {
 
   const hpSource = readFileSync(new URL('../hp/src/lib/supabase.ts', import.meta.url), 'utf-8');
   const osSource = readFileSync(new URL('../src/components/PublicIntakeForm.tsx', import.meta.url), 'utf-8');
+  const serverSource = readFileSync(new URL('../server/diagnosisAnalysis.ts', import.meta.url), 'utf-8');
   const hpFormSource = readFileSync(new URL('../hp/src/components/DiagnosisForm.tsx', import.meta.url), 'utf-8');
 
   // Test 1: HPとOSで4タイプのtypeTitle, summary, firstStepが同一の文字列で入っていること
@@ -56,6 +57,11 @@ async function runTests() {
     assert(osSource.includes(expected.typeTitle), `OS missing typeTitle: ${expected.typeTitle}`);
     assert(osSource.includes(expected.summary), `OS missing summary for: ${expected.typeTitle}`);
     assert(osSource.includes(expected.firstStep), `OS missing firstStep for: ${expected.typeTitle}`);
+
+    // サーバー(AIに渡す急所の判定)
+    assert(serverSource.includes(expected.typeTitle), `Server missing typeTitle: ${expected.typeTitle}`);
+    assert(serverSource.includes(expected.summary), `Server missing summary for: ${expected.typeTitle}`);
+    assert(serverSource.includes(expected.firstStep), `Server missing firstStep for: ${expected.typeTitle}`);
   }
   console.log('  ✓ All 4 types verified with identical strings in HP and OS');
 

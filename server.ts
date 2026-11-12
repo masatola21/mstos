@@ -15,6 +15,8 @@ import { calculateBillingAmount, determineContractMonthlyFee, isContractAlreadyB
 import { calculateExponentialBackoff, shouldSkipAutomationDelivery, checkSendTimeWindow, type SendTimeWindowCheck } from './src/utils/automationRuleUtils.js';
 import { generateDocumentPdf } from './server/pdfService.js';
 import { appendEmailFooter } from './server/emailFooter.js';
+import { classifyBottleneck } from './server/diagnosisAnalysis.js';
+import { buildDiagnosisReportMarkdown, DiagnosisReportFormatError, DIAGNOSIS_REPORT_PROMPT_V2, type DiagnosisPremise } from './server/diagnosisReportBuilder.js';
 
 dotenv.config();
 
@@ -6513,37 +6515,7 @@ app.post('/api/diagnoses/:id/report', requireAuth, async (req, res) => {
 });
 
 // 診断フォームの回答から、AIが診断レポートと提案書の下書きまで自動で作る（受信トレイの「提案書・レポート作成」）。
-const DIAGNOSIS_REPORT_PROMPT = `あなたは有限会社MSTの「経営の仕組み化 × 利益改善」専門の経営診断レポート作成パートナーです。
-以下の社内CRM情報と診断回答をもとに、経営者の心に響く「最優先ボトルネックの特定」「会社と経営者の未来像（Before/After）」「ボトルネック連鎖ロードマップ（継続改善サイクル）」を提示するレポート草案を作成してください。
-
-【MSTのコアメッセージ】
-・会社の可能性を広げ、経営者が次の一手を打てる経営へ。
-・単なる業務効率化ではなく、会社の利益と経営者の選択肢を増やすこと。
-・日々の業務に追われる経営から、次の一手を選べる経営へ。
-
-【レポート構成（必須）】
-1. ■ 診断サマリーと最優先ボトルネックの特定
-   - 回答から読み取れる、現在会社の成長と利益を最も止めている「最大の急所（ボトルネック）」をズバリ明示。
-   - そのボトルネックがもたらしている経営上の損失（時間、機会損失、経営者の負担）。
-
-2. ■ 会社と経営者が手に入れる「未来」（Before & After）
-   - 【会社の未来】: 現状の手作業・属人化・利益が残らない状態から、仕組みで業務が回り利益が残る会社へ。
-   - 【経営者の未来】: 現場の火消しや業務処理から解放され、本来向き合うべき「経営判断・成長戦略・次の一手」に時間を使える状態へ。
-
-3. ■ ボトルネック連鎖の解消ロードマップ（継続改善サイクル）
-   ※「1つのボトルネックを解消すると、次はここが詰まるので、継続して改善を回していく必然性」を提示。
-   - Phase 1（まず着手）: 最優先ボトルネックの解消（手作業の二重入力削減・即座の時間創出）
-   - Phase 2（次の展開）: 集客〜商談〜顧客フォローがつながる売上の流れの構築
-   - Phase 3（完成形）: 経営顧問による自走組織と新規事業への展開
-
-4. ■ 推奨される最初の一歩（MSTサービス体系からの処方箋）
-   - 経営戦略・利益改善顧問、業務改善・IT・DX顧問、システム構築・業務自動化、マーケティング集客導線から、貴社に最も適した組み合わせをご提案。
-
-Markdown見出しを使い、前置きは付けず本文だけ出力してください。
-
-【社内データ】
-`;
-
+// 診断レポートのプロンプトは server/diagnosisReportBuilder.ts(DIAGNOSIS_REPORT_PROMPT_V2)。
 app.post('/api/diagnosis-submissions/:id/generate-report', requireAuth, async (req, res) => {
   if (!lineSupabase) return res.status(503).json({ error: 'DB接続が設定されていません。' });
   const user = (req as any).user;
@@ -6630,11 +6602,19 @@ app.post('/api/diagnosis-submissions/:id/generate-report', requireAuth, async (r
       return res.status(422).json({ error: '回答の内容が空のため、レポートを作成できません。' });
     }
 
+    // 急所はコードで判定する(AIは説明と根拠の引用だけ)。商談前の診断では金額・サービスを渡さない。
+    const rawAnswers = (submission.answers || {}) as Record<string, unknown>;
+    const bottleneck = classifyBottleneck(rawAnswers);
+    const premise: DiagnosisPremise = {
+      conductedOn: new Date().toLocaleDateString('ja-JP', { timeZone: 'Asia/Tokyo', year: 'numeric', month: 'long', day: 'numeric' }),
+      answeredLabels: answerEntries.map(([label]) => label),
+      industry: String(rawAnswers.q_industry ?? company?.industry ?? '').trim() || null,
+      employeeCount: String(rawAnswers.q_employee_count ?? '').trim() || null,
+    };
     const context = {
-      company: { company_name: company?.company_name, industry: company?.industry, website: company?.website },
-      lead,
-      latestDeal: deal,
-      diagnosis: { type: 'standard', answers: Object.fromEntries(answerEntries) },
+      company: { company_name: company?.company_name, industry: premise.industry },
+      confirmedBottleneck: { typeTitle: bottleneck.typeTitle, summary: bottleneck.summary },
+      diagnosis: { answers: Object.fromEntries(answerEntries) },
     };
 
     const abortController = new AbortController();
@@ -6643,12 +6623,20 @@ app.post('/api/diagnosis-submissions/:id/generate-report', requireAuth, async (r
     });
     const result = await runWithFallback(resolveModelSetting(undefined), {
       systemInstruction: 'あなたは事実に忠実で慎重な、経営診断レポート作成の専門AIです。回答に書かれていない事実は作らず、明確で丁寧な日本語で書きます。',
-      messages: [{ role: 'user', content: DIAGNOSIS_REPORT_PROMPT + JSON.stringify(context, null, 2) }],
+      messages: [{ role: 'user', content: DIAGNOSIS_REPORT_PROMPT_V2 + JSON.stringify(context, null, 2) }],
       temperature: 0.4,
       signal: abortController.signal,
     });
-    const text = result.text.trim();
-    if (!text) throw new Error('AIがレポート本文を返しませんでした。');
+    const aiText = result.text.trim();
+    if (!aiText) throw new Error('AIがレポート本文を返しませんでした。');
+    // 保存するのはお客様に出してよい章(D0〜D5)だけ。D1と急所はコードで差し込む。
+    let text: string;
+    try {
+      text = buildDiagnosisReportMarkdown(aiText, bottleneck, premise);
+    } catch (formatErr: any) {
+      if (formatErr instanceof DiagnosisReportFormatError) return res.status(502).json({ error: formatErr.message });
+      throw formatErr;
+    }
 
     const saved = await saveDiagnosisReport(
       user,
