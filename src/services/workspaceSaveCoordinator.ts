@@ -1,4 +1,4 @@
-import { WorkspaceData, saveWorkspaceData, isWorkspaceConflictError, SaveWorkspaceResult } from './workspaceStateService';
+import { WorkspaceData, saveWorkspaceData, isWorkspaceConflictError, isNonRetryableFatalError, isJwtExpiredError, SaveWorkspaceResult } from './workspaceStateService';
 import { matrixService } from './matrixService';
 import { mergeCollectionPreservingUserEdits } from '../utils/workspaceMergeUtils';
 
@@ -33,6 +33,10 @@ export class WorkspaceSaveCoordinator {
   private syncStatus: WorkspaceSyncStatus = 'loading';
   private syncError: string = '';
   private isConflictStopped = false;
+  private consecutiveErrorCount = 0;
+  private lastLoggedErrorKey = '';
+  private lastLoggedErrorTime = 0;
+  private suppressedErrorCount = 0;
   private listeners = new Set<CoordinatorListener>();
 
   constructor(saveFn: WorkspaceSaveFn = saveWorkspaceData) {
@@ -46,6 +50,7 @@ export class WorkspaceSaveCoordinator {
       this.lastSavedSnapshot = '';
     }
     this.isConflictStopped = false;
+    this.consecutiveErrorCount = 0;
     this.setStatus('saved');
   }
 
@@ -59,6 +64,10 @@ export class WorkspaceSaveCoordinator {
 
   public isStopped(): boolean {
     return this.isConflictStopped;
+  }
+
+  public getConsecutiveErrorCount(): number {
+    return this.consecutiveErrorCount;
   }
 
   /**
@@ -77,6 +86,7 @@ export class WorkspaceSaveCoordinator {
     this.syncStatus = 'loading';
     this.syncError = '';
     this.isConflictStopped = false;
+    this.consecutiveErrorCount = 0;
   }
 
   /**
@@ -84,20 +94,39 @@ export class WorkspaceSaveCoordinator {
    */
   public resetConflict(): void {
     this.isConflictStopped = false;
+    this.consecutiveErrorCount = 0;
     this.syncStatus = 'saved';
     this.syncError = '';
     this.listeners.forEach((l) => l.onStatusChange?.('saved', ''));
   }
 
   /**
-   * 競合エラー検知時に自動保存を強制停止し、手動リロードを促す状態にする
+   * 競合エラー検知時または連続エラー時に自動保存を強制停止し、手動リロードを促す状態にする
    */
-  public haltOnConflict(message = '他の端末で更新されています。再読み込みしてください'): void {
+  public haltOnConflict(message = '他の端末で更新されました。再読み込みしてください'): void {
     this.cancelDebounce();
     this.isConflictStopped = true;
     this.pendingData = null;
     this.pendingUserId = null;
     this.setStatus('conflict', message);
+  }
+
+  private logCloudSaveError(error: unknown): void {
+    const errCode = (error as { code?: string })?.code;
+    const errMsg = (error as { message?: string })?.message || String(error);
+    const key = `${errCode || ''}:${errMsg}`;
+    const now = Date.now();
+    if (this.lastLoggedErrorKey === key && now - this.lastLoggedErrorTime < 30000) {
+      this.suppressedErrorCount++;
+      return;
+    }
+    if (this.suppressedErrorCount > 0) {
+      console.warn(`[WorkspaceSaveCoordinator] Suppressed ${this.suppressedErrorCount} duplicate consecutive save errors.`);
+    }
+    this.lastLoggedErrorKey = key;
+    this.lastLoggedErrorTime = now;
+    this.suppressedErrorCount = 0;
+    console.error('[WorkspaceSaveCoordinator] Cloud save failed:', error);
   }
 
   public addListener(listener: CoordinatorListener): () => void {
@@ -236,9 +265,12 @@ export class WorkspaceSaveCoordinator {
 
     const currentDeferreds = [...this.pendingDeferreds];
     this.pendingDeferreds = [];
+    let saveHadError = false;
 
     try {
-      const result = await this.saveFn(userId, data, { maxConflictRetries: 2 });
+      const result = await this.saveFn(userId, data, { maxConflictRetries: 3 });
+
+      this.consecutiveErrorCount = 0;
 
       // 保存成功時のみ lastSavedSnapshot を更新
       try {
@@ -253,7 +285,7 @@ export class WorkspaceSaveCoordinator {
       if (result.wasMerged) {
         this.notifyMergedData(result.savedData, data);
 
-        // 指摘修正2: S1実行中にキューイングされた pendingData をマージ結果へ再基底化
+        // S1実行中にキューイングされた pendingData をマージ結果へ再基底化
         // これにより他端末の新規追加レコード等がS2によって上書き消失するのを防止
         if (this.pendingData) {
           this.pendingData = {
@@ -273,19 +305,25 @@ export class WorkspaceSaveCoordinator {
       this.inFlightWaiters = [];
       currentWaiters.forEach((d) => d.resolve(result));
     } catch (error) {
-      console.error('[WorkspaceSaveCoordinator] Cloud save failed:', error);
+      saveHadError = true;
+      this.consecutiveErrorCount++;
+      this.logCloudSaveError(error);
 
       const errorCode = (error as { code?: string })?.code;
       const errorMessage = (error as { message?: string })?.message || '';
+      const isConflict = isWorkspaceConflictError(error);
+      const isFatal = isNonRetryableFatalError(error);
+      const isExpired = isJwtExpiredError(error);
+      const shouldHalt = isConflict || isFatal || isExpired || this.consecutiveErrorCount >= 3;
 
-      if (isWorkspaceConflictError(error)) {
-        // 指摘2対応: 自動マージ上限を超えて競合が解消しなかった場合は自動保存を停止（有界化）
+      if (shouldHalt) {
+        // 競合エラー、直らない致命的エラー（認証/形式）、JWT期限切れ、または連続エラー上限（3回）に達した場合は自動保存を完全停止し再読み込みを促す
         this.cancelDebounce();
         this.isConflictStopped = true;
         this.pendingData = null; // 保留中のリクエストを破棄
         this.pendingUserId = null;
 
-        // 【最重要】実行中に入ってきた pendingDeferreds（手動削除のawait等）もすべて reject して固まりを防止
+        // 待機中のすべての deferred を即座に reject して固まりを防止
         const remainingDeferreds = [...this.pendingDeferreds];
         this.pendingDeferreds = [];
         remainingDeferreds.forEach((d) => d.reject(error));
@@ -294,7 +332,25 @@ export class WorkspaceSaveCoordinator {
         this.inFlightWaiters = [];
         conflictWaiters.forEach((d) => d.reject(error));
 
-        this.setStatus('conflict', '他の端末で更新されています。再読み込みしてください');
+        if (isFatal || isExpired) {
+          const rawStatus = (error as any)?.status ?? (error as any)?.code;
+          const isAuth =
+            isExpired ||
+            rawStatus === 401 ||
+            rawStatus === '401' ||
+            rawStatus === 403 ||
+            rawStatus === '403' ||
+            errorCode === '42501' ||
+            /permission denied|not authorized|権限がありません|User mismatch/i.test(`${errorMessage}`);
+          const fatalMsg = isAuth
+            ? (isExpired
+                ? 'セッションの有効期限が切れました。再ログインまたは再読み込みしてください。'
+                : 'ユーザーの業務データを更新する権限がありません。再ログインまたは再読み込みしてください。')
+            : '保存データの形式エラーが発生しました。再読み込みしてください。';
+          this.setStatus('conflict', fatalMsg);
+        } else {
+          this.setStatus('conflict', '他の端末で更新されました。再読み込みしてください');
+        }
       } else {
         const errorDetails = `${errorMessage} ${(error as { details?: string })?.details || ''} ${(error as { hint?: string })?.hint || ''}`;
         if (errorCode === '23505' && /invoice_number|invoice number|customer_invoices/i.test(errorDetails)) {
@@ -314,8 +370,11 @@ export class WorkspaceSaveCoordinator {
       this.isSaving = false;
       this.inFlightSnapshot = '';
 
-      // 競合停止されていない場合で、実行中に新たな変更がペンディングされていたら次を実行
-      if (!this.isConflictStopped && this.pendingData && this.pendingUserId) {
+      // 競合停止中または保存失敗時は、finally から即座に再保存を実行しない（無限ループ・CPU高騰の防止）
+      if (this.isConflictStopped) {
+        this.pendingData = null;
+        this.pendingUserId = null;
+      } else if (!saveHadError && this.consecutiveErrorCount === 0 && this.pendingData && this.pendingUserId) {
         const nextUserId = this.pendingUserId;
         const nextData = this.pendingData;
         this.pendingUserId = null;

@@ -199,7 +199,7 @@ export const AppHeader: React.FC<AppHeaderProps> = ({
               type="button"
               onClick={() => window.location.reload()}
               className="flex items-center gap-1 text-rose-700 font-bold bg-rose-50 hover:bg-rose-100 border border-rose-200 px-2 py-0.5 rounded transition cursor-pointer"
-              title="他の端末でデータが更新されています。クリックして再読み込みしてください。"
+              title="他の端末で更新されました。再読み込みしてください。"
             >
               <AlertCircle className="w-3 h-3 text-rose-600" />
               <span>競合停止（要再読込）</span>

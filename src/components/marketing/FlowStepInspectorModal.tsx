@@ -196,7 +196,7 @@ export const FlowStepInspectorModal: React.FC<FlowStepInspectorModalProps> = ({
       urls.push({
         type: 'diagnosis',
         label: '📊 3分無料経営ボトルネック診断フォーム',
-        url: 'https://mstcorp.info/diagnosis（またはアプリ内 /diagnosis）',
+        url: 'https://corp.mstcorp.info/diagnosis（またはアプリ内 /diagnosis）',
       });
     }
     if (textToCheck.includes('{booking_url}') || textToCheck.includes('calendar') || textToCheck.includes('面談')) {
@@ -210,7 +210,7 @@ export const FlowStepInspectorModal: React.FC<FlowStepInspectorModalProps> = ({
       urls.push({
         type: 'care',
         label: '🌿 介護保険外サービス開業パッケージ申込・資料フォーム',
-        url: 'https://mstcorp.info/care-package（7日間有効トークン付与）',
+        url: 'https://corp.mstcorp.info/care-package（7日間有効トークン付与）',
       });
     }
     return urls;

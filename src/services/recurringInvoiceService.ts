@@ -1,4 +1,5 @@
 import { getSupabase } from '../lib/supabaseClient';
+import { getEndOfNextMonthDate } from '../utils/billingUtils';
 
 export interface RecurringCandidate {
   contractId: string;
@@ -157,10 +158,9 @@ async function fallbackFetchCandidates(targetMonth: string): Promise<RecurringCa
   const monthLabel = `${year}年${month}月分`;
   const compactMonthTag = `INV-${yearStr}${monthStr}-`;
 
-  // Find default dates
+  // Find default dates（発行日: 当月1日、支払期日: 翌月末日）
   const defaultIssueDate = `${targetMonth}-01`;
-  const lastDay = new Date(year, month, 0).getDate();
-  const defaultDueDate = `${targetMonth}-${String(Math.min(25, lastDay)).padStart(2, '0')}`;
+  const defaultDueDate = getEndOfNextMonthDate(defaultIssueDate);
 
   const candidates: RecurringCandidate[] = [];
 
@@ -266,8 +266,7 @@ async function fallbackGenerateInvoices(params: GenerateRecurringParams): Promis
   const monthLabel = `${year}年${month}月分`;
 
   const finalIssueDate = issueDate || `${targetMonth}-01`;
-  const lastDay = new Date(year, month, 0).getDate();
-  const finalDueDate = dueDate || `${targetMonth}-${String(Math.min(25, lastDay)).padStart(2, '0')}`;
+  const finalDueDate = dueDate || getEndOfNextMonthDate(finalIssueDate);
 
   const generatedInvoices: GenerateRecurringResult['generatedInvoices'] = [];
 

@@ -11,7 +11,7 @@ import fs from 'node:fs';
 import { createClient } from '@supabase/supabase-js';
 import { parseIcalendar } from './server/icalParser.js';
 import { isTimeRexEmail, parseTimeRexEmail, parseTimeRexCalendarEvent, syncTimeRexBookingToCrm } from './server/timerexSyncService.js';
-import { calculateBillingAmount, determineContractMonthlyFee, isContractAlreadyBilled } from './src/utils/billingUtils.js';
+import { calculateBillingAmount, determineContractMonthlyFee, isContractAlreadyBilled, getEndOfNextMonthDate } from './src/utils/billingUtils.js';
 import { calculateExponentialBackoff, shouldSkipAutomationDelivery, checkSendTimeWindow, type SendTimeWindowCheck } from './src/utils/automationRuleUtils.js';
 import { generateDocumentPdf } from './server/pdfService.js';
 import { appendEmailFooter } from './server/emailFooter.js';
@@ -3261,12 +3261,12 @@ function resolveMessageVars(
       formMaterialUrl = formWithMaterial.definition.material_url.trim();
     }
   }
-  const resolvedMaterialUrl = formMaterialUrl || `${appBaseUrl || 'https://mstcorp.info'}/materials`;
+  const resolvedMaterialUrl = formMaterialUrl || `${appBaseUrl || 'https://corp.mstcorp.info'}/materials`;
 
   // {document_url}: その連絡先の、最新の承認済みの書類の公開URL（/docs/<書類ID>）
   const resolvedDocUrl = (appBaseUrl && ownerSettings?.latestApprovedDoc?.id)
     ? `${appBaseUrl}/docs/${encodeURIComponent(ownerSettings.latestApprovedDoc.id)}`
-    : `${appBaseUrl || 'https://mstcorp.info'}/company`;
+    : `${appBaseUrl || 'https://corp.mstcorp.info'}/company`;
 
   // {link_url}: 診断フォームの公開URL。連絡先IDと LINE のユーザーID を含める（?cid=<contactId>&luid=<lineUserId>）
   const formSlug = ownerSettings?.defaultForm?.public_slug || 'business-diagnosis';
@@ -4034,10 +4034,9 @@ app.all('/api/cron/billing-automation', async (req, res) => {
       }
     }
 
-    // 2. 当月分の定期請求の下書き（customer_invoices と customer_documents）を自動生成
+    // 2. 当月分の定期請求の下書き（customer_invoices と customer_documents）を自動生成（発行日は1日、支払期日は翌月末日）
     const finalIssueDate = `${targetMonth}-01`;
-    const lastDay = new Date(year, month, 0).getDate();
-    const finalDueDate = `${targetMonth}-${String(Math.min(25, lastDay)).padStart(2, '0')}`;
+    const finalDueDate = getEndOfNextMonthDate(finalIssueDate);
 
     const [contractsRes, companiesRes, invoicesRes, dealsRes] = await Promise.all([
       lineSupabase.from('customer_contracts').select('*'),
@@ -4712,7 +4711,7 @@ app.post('/api/marketing/test-send', requireAuth, async (req, res) => {
 
       const emailSubject = `[管理者テスト送信] ` + resolved.personalize(scenarioConfig.emailSubject || 'ステップ配信テスト');
       const resolvedBody = resolved.personalize(scenarioConfig.emailBody || scenarioConfig.messageBody || '');
-      const emailBodyText = `【※ 管理者向け実機テスト送信】\n宛先: ${adminEmail}\n差出人: ${emailFrom}\n--------------------------------------------------\n\n${resolvedBody}\n\n--------------------------------------------------\n※ 特定電子メール法 配信停止リンク確認:\n配信停止: ${appUrl || 'https://mstcorp.info'}/unsubscribe?demo=admin_preview`;
+      const emailBodyText = `【※ 管理者向け実機テスト送信】\n宛先: ${adminEmail}\n差出人: ${emailFrom}\n--------------------------------------------------\n\n${resolvedBody}\n\n--------------------------------------------------\n※ 特定電子メール法 配信停止リンク確認:\n配信停止: ${appUrl || 'https://os.mstcorp.info'}/unsubscribe?demo=admin_preview`;
 
       const response = await fetch('https://api.resend.com/emails', {
         method: 'POST',
@@ -5369,7 +5368,8 @@ app.post(
     ? body.companyName.trim().slice(0, 200)
     : rawCompanyFromAnswers.slice(0, 200);
   const email = typeof body.email === 'string' ? body.email.trim().toLowerCase().slice(0, 254) : '';
-  const phone = typeof body.phone === 'string' ? body.phone.trim().slice(0, 40) : '';
+  const rawPhone = typeof body.phone === 'string' ? body.phone.trim().slice(0, 40) : '';
+  const phone = rawPhone && rawPhone.replace(/\D/g, '').length >= 7 ? rawPhone : '';
   let lineUserId = typeof body.lineUserId === 'string' && /^U[0-9a-zA-Z]{10,64}$/.test(body.lineUserId.trim()) ? body.lineUserId.trim() : '';
   const queryLuid = typeof req.query?.luid === 'string' ? (req.query.luid as string).trim() : typeof req.query?.line_user_id === 'string' ? (req.query.line_user_id as string).trim() : '';
   if (!lineUserId && queryLuid && /^U[0-9a-zA-Z]{10,64}$/.test(queryLuid)) {
@@ -7694,8 +7694,7 @@ app.get('/api/billing/recurring-candidates', async (req, res) => {
     const dealMap = new Map(deals.map((d: any) => [d.id, d]));
 
     const defaultIssueDate = `${targetMonth}-01`;
-    const lastDay = new Date(year, month, 0).getDate();
-    const defaultDueDate = `${targetMonth}-${String(Math.min(25, lastDay)).padStart(2, '0')}`;
+    const defaultDueDate = getEndOfNextMonthDate(defaultIssueDate);
 
     const candidates: any[] = [];
 
@@ -7808,8 +7807,7 @@ app.post('/api/billing/recurring-generate', async (req, res) => {
     const compactMonthTag = `INV-${yearStr}${monthStr}-`;
 
     const finalIssueDate = issueDate || `${targetMonth}-01`;
-    const lastDay = new Date(year, month, 0).getDate();
-    const finalDueDate = dueDate || `${targetMonth}-${String(Math.min(25, lastDay)).padStart(2, '0')}`;
+    const finalDueDate = dueDate || getEndOfNextMonthDate(finalIssueDate);
 
     const [contractsRes, companiesRes, invoicesRes, dealsRes] = await Promise.all([
       lineSupabase.from('customer_contracts').select('*'),

@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { getSupabase } from '../lib/supabaseClient';
 import { TableKey, TABLE_CONFIGS } from '../types/database';
+import { formatJapaneseDate, formatJapaneseDateTime } from '../utils/date';
 import { 
   X, 
   Edit3, 
@@ -23,7 +24,8 @@ import {
   AlertTriangle,
   Send,
   Loader2,
-  RefreshCw
+  RefreshCw,
+  Sparkles
 } from 'lucide-react';
 import { TransitionType } from './StageTransitionModal';
 
@@ -102,17 +104,43 @@ export const RecordDetailModal: React.FC<RecordDetailModalProps> = ({
   // 未定義の追加カラムを抽出
   const extraFields = Object.keys(record).filter(k => !knownFieldKeys.has(k));
 
-  const formatFieldValue = (val: any) => {
+  const formatFieldValue = (val: any, fieldKey?: string) => {
     if (val === null || val === undefined || val === '') {
-      return <span className="text-slate-500 italic">未設定</span>;
+      return <span className="text-slate-400 italic">未設定</span>;
     }
     if (typeof val === 'boolean') {
-      return val ? '有効' : '無効';
+      return (
+        <span className={`inline-flex px-2 py-0.5 rounded text-[11px] font-semibold ${val ? 'bg-emerald-50 text-emerald-700 border border-emerald-200' : 'bg-slate-100 text-slate-600'}`}>
+          {val ? '有効' : '無効'}
+        </span>
+      );
     }
     if (typeof val === 'object') {
-      return <pre className="text-[11px] font-mono bg-slate-950 p-2 rounded">{JSON.stringify(val, null, 2)}</pre>;
+      return <pre className="text-[11px] font-mono bg-slate-900 text-slate-200 p-2.5 rounded-lg overflow-x-auto">{JSON.stringify(val, null, 2)}</pre>;
     }
-    return String(val);
+
+    const strVal = String(val);
+    // 日付・日時の自動判定
+    if (fieldKey && (fieldKey.endsWith('_at') || fieldKey.endsWith('_date') || fieldKey.includes('date') || fieldKey.includes('time'))) {
+      if (strVal.includes('T') || (strVal.includes(' ') && strVal.includes(':'))) {
+        return (
+          <span className="inline-flex items-center gap-1.5 font-mono text-slate-800">
+            <Calendar className="w-3.5 h-3.5 text-purple-600 shrink-0" />
+            <span className="font-semibold">{formatJapaneseDateTime(strVal)}</span>
+          </span>
+        );
+      }
+      if (/^\d{4}[-/]\d{1,2}[-/]\d{1,2}$/.test(strVal)) {
+        return (
+          <span className="inline-flex items-center gap-1.5 font-mono text-slate-800">
+            <Calendar className="w-3.5 h-3.5 text-purple-600 shrink-0" />
+            <span className="font-semibold">{formatJapaneseDate(strVal)}</span>
+          </span>
+        );
+      }
+    }
+
+    return strVal;
   };
 
   return (
@@ -226,9 +254,75 @@ export const RecordDetailModal: React.FC<RecordDetailModalProps> = ({
             </div>
           )}
 
+          {/* 面談予定日時のハイライトカード（面談日がある場合） */}
+          {record.meeting_date && (
+            <div className="p-4 rounded-xl bg-gradient-to-r from-purple-50 to-indigo-50 border border-purple-200 shadow-2xs flex items-center justify-between gap-3">
+              <div className="flex items-center gap-3">
+                <div className="p-2.5 rounded-xl bg-purple-600 text-white shadow-xs">
+                  <Calendar className="w-5 h-5" />
+                </div>
+                <div>
+                  <div className="text-xs font-semibold text-purple-900">📅 面談予定日時</div>
+                  <div className="text-base font-bold text-slate-900">
+                    {formatJapaneseDateTime(record.meeting_date, { fallbackTime: record.meeting_start_time })}
+                  </div>
+                </div>
+              </div>
+              <span className="text-xs font-semibold px-2.5 py-1 rounded-full bg-white text-purple-700 border border-purple-200">
+                面談確定
+              </span>
+            </div>
+          )}
+
+          {/* 希望内容のハイライトカード（リード等の場合） */}
+          {(record.inquiry_type || record.service_type) && (
+            <div className="p-3.5 rounded-xl bg-amber-50/70 border border-amber-200/90 shadow-2xs flex items-center justify-between gap-2">
+              <div className="flex items-center gap-2">
+                <div className="p-1.5 rounded-lg bg-amber-500 text-white">
+                  <Sparkles className="w-4 h-4" />
+                </div>
+                <div>
+                  <div className="text-[11px] font-semibold text-amber-800">希望内容（反響・問合せ種別）</div>
+                  <div className="text-sm font-bold text-slate-900">
+                    {record.inquiry_type || record.service_type}
+                  </div>
+                </div>
+              </div>
+              <span className="text-xs px-2.5 py-0.5 rounded-full bg-white text-amber-900 border border-amber-300 font-semibold">
+                顧客希望
+              </span>
+            </div>
+          )}
+
+          {/* 専用：相談メモ・ヒアリング詳細カード（リード・商談・見込みのメモを分かりやすく大きく表示） */}
+          {(record.notes || record.memo) && (
+            <div className="rounded-xl border border-purple-200 bg-slate-50/70 p-4 shadow-2xs space-y-2">
+              <div className="flex items-center justify-between border-b border-purple-100 pb-2">
+                <div className="flex items-center gap-2 text-xs font-bold text-purple-950">
+                  <MessageSquare className="w-4 h-4 text-purple-600" />
+                  <span>
+                    {tableKey === 'leads' && '📝 相談メモ・ヒアリング詳細'}
+                    {tableKey === 'deals' && '📝 商談メモ・ヒアリング記録'}
+                    {tableKey === 'prospects' && '📝 アプローチメモ・ヒアリング記録'}
+                    {tableKey === 'customers' && '📝 顧客契約・支援メモ'}
+                    {!['leads', 'deals', 'prospects', 'customers'].includes(tableKey) && '📝 メモ・特記事項'}
+                  </span>
+                </div>
+                <span className="text-[10px] text-slate-400 font-mono">
+                  {record.notes ? 'notes' : 'memo'}
+                </span>
+              </div>
+              <div className="text-xs leading-relaxed text-slate-800 whitespace-pre-wrap font-sans bg-white p-3 rounded-lg border border-slate-200 shadow-2xs">
+                {record.notes || record.memo}
+              </div>
+            </div>
+          )}
+
           {/* Main Attributes */}
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            {config.fields.map((field) => {
+            {config.fields
+              .filter((field) => field.key !== 'notes' && field.key !== 'memo') // メモは上で独立表示
+              .map((field) => {
               const rawValue = record[field.key];
 
               // 会社リレーション表示の特別扱い
@@ -338,7 +432,7 @@ export const RecordDetailModal: React.FC<RecordDetailModalProps> = ({
                         <ExternalLink className="w-3 h-3" />
                       </a>
                     ) : (
-                      formatFieldValue(rawValue)
+                      formatFieldValue(rawValue, field.key)
                     )}
                   </div>
                 </div>
@@ -515,7 +609,7 @@ export const RecordDetailModal: React.FC<RecordDetailModalProps> = ({
                 {extraFields.map((key) => (
                   <div key={key} className="bg-slate-50 p-2.5 rounded-xl border border-slate-200 text-xs space-y-1">
                     <div className="font-mono text-slate-400 text-[10px]">{key}</div>
-                    <div className="text-slate-800">{formatFieldValue(record[key])}</div>
+                    <div className="text-slate-800">{formatFieldValue(record[key], key)}</div>
                   </div>
                 ))}
               </div>

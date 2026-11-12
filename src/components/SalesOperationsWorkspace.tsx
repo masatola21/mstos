@@ -14,6 +14,7 @@ import {
   RecurringSummary,
 } from '../services/recurringInvoiceService';
 import { getEndOfNextMonthDate } from '../utils/billingUtils';
+import { formatJapaneseDate } from '../utils/date';
 
 type WorkspaceTab = 'segments' | 'documents' | 'operations';
 type Segment = { id: string; name: string; entity_type: string; conditions: { field?: string; value?: string } | null; created_at: string };
@@ -148,11 +149,10 @@ export const SalesOperationsWorkspace: React.FC<Props> = ({ tab, companyId, lead
       // 未請求のものを初期選択
       const unbilledIds = res.candidates.filter((c) => !c.alreadyBilled).map((c) => c.contractId);
       setSelectedContractIds(unbilledIds);
-      // 日付の初期化
-      const [y, m] = month.split('-');
-      setRecurringIssueDate(`${month}-01`);
-      const lastDay = new Date(parseInt(y, 10), parseInt(m, 10), 0).getDate();
-      setRecurringDueDate(`${month}-${String(Math.min(25, lastDay)).padStart(2, '0')}`);
+      // 日付の初期化（発行日は当月1日、支払期日は翌月末日）
+      const issueDateStr = `${month}-01`;
+      setRecurringIssueDate(issueDateStr);
+      setRecurringDueDate(getEndOfNextMonthDate(issueDateStr));
     } catch (err: any) {
       console.warn('loadRecurringCandidates error:', err);
     } finally {
@@ -368,7 +368,6 @@ export const SalesOperationsWorkspace: React.FC<Props> = ({ tab, companyId, lead
   };
 
   const deleteDocumentDraft = async (doc: RecordRow) => {
-    if (!['draft', 'awaiting_approval'].includes(doc.status)) return;
     const supabase = getSupabase();
     if (!supabase) { setError('Supabaseに接続できません。'); return; }
     setError(''); setNotice('');
@@ -380,10 +379,10 @@ export const SalesOperationsWorkspace: React.FC<Props> = ({ tab, companyId, lead
       ]);
       const referenceError = outboxResult.error || contractResult.error || invoiceResult.error;
       if (referenceError) { setError(`関連データを確認できず削除を中止しました: ${referenceError.message}`); return; }
-      if (outboxResult.data?.length) { setError('送信履歴がある書類は削除できません。保管に変更してください。'); return; }
-      if (contractResult.data?.length || invoiceResult.data?.length) { setError('契約または請求に紐づく書類は削除できません。関連記録を保護するため保管にしてください。'); return; }
+      if (outboxResult.data?.length) { setError('送信履歴がある書類は削除できません。'); return; }
+      if (contractResult.data?.length || invoiceResult.data?.length) { setError('契約または請求に紐づく書類は削除できません。'); return; }
       const { data: deleted, error: deleteError } = await supabase.from('customer_documents')
-        .delete().eq('id', doc.id).in('status', ['draft', 'awaiting_approval']).select('id').maybeSingle();
+        .delete().eq('id', doc.id).select('id').maybeSingle();
       if (deleteError) { setError(`削除できませんでした: ${deleteError.message}`); return; }
       if (!deleted) { setError('削除対象が見つからないか、削除権限がありません。画面を再読み込みしてください。'); return; }
       setPendingDeleteDocumentId('');
@@ -613,17 +612,15 @@ export const SalesOperationsWorkspace: React.FC<Props> = ({ tab, companyId, lead
                     <div className="flex items-center gap-2">
                       <select
                         aria-label={`${doc.title}の状態`}
-                        value={doc.status}
+                        value={doc.status === 'awaiting_approval' ? 'draft' : doc.status}
                         onChange={(e) => void updateDocumentStatus(doc.id, e.target.value)}
                         className="rounded-lg border border-slate-200 bg-slate-50 px-2 py-1 text-xs text-slate-800 focus:bg-white focus:border-purple-600 focus:outline-none"
                       >
-                        <option value="draft">下書き</option>
-                        <option value="awaiting_approval">確認待ち</option>
-                        <option value="approved">承認済み</option>
-                        <option value="archived">保管</option>
+                        <option value="draft">作成中（下書き）</option>
+                        <option value="approved">確定（送付可能）</option>
+                        {doc.status === 'archived' && <option value="archived">保管</option>}
                       </select>
-                      {['draft', 'awaiting_approval', 'archived'].includes(doc.status) && (
-                        pendingDeleteDocumentId === doc.id ? (
+                      {pendingDeleteDocumentId === doc.id ? (
                           <span className="inline-flex items-center gap-2">
                             <span className="text-xs text-amber-700 font-semibold">削除しますか？</span>
                             <button
@@ -650,8 +647,7 @@ export const SalesOperationsWorkspace: React.FC<Props> = ({ tab, companyId, lead
                             <Trash2 className="h-3.5 w-3.5" />
                             <span>削除</span>
                           </button>
-                        )
-                      )}
+                        )}
                     </div>
                   </div>
 
@@ -1077,7 +1073,7 @@ export const SalesOperationsWorkspace: React.FC<Props> = ({ tab, companyId, lead
         </div>
       )}
 
-      {activeOpsTab==='contracts' ? <p className="text-xs text-slate-500">状態の流れ：下書き → 社内確認中 → メール送付済み（同意返信待ち）→ 締結済み（相手の合意を確認）。相手の明示的な同意返信を確認した後に「締結済み」へ更新し、返信メールと契約書PDFを契約記録として保存してください。期限切れ・取消は終了状態です。</p> : <p className="text-xs text-slate-500">状態の流れ：下書き（未発行）→ 承認待ち → 発行済み（入金待ち）→ 入金済み。支払期限を過ぎると「支払期限超過」、取消は終了状態です。</p>}{loading ? <p className="text-xs text-slate-400">読み込み中…</p> : records.length === 0 ? <p className="py-8 text-center text-xs text-slate-400">登録データはありません。</p> : <div className="overflow-x-auto"><table className="w-full text-left text-xs"><thead><tr className="border-b border-slate-200 text-xs font-semibold text-slate-600"><th className="p-2.5">名称</th><th className="p-2.5">会社</th><th className="p-2.5">関連</th><th className="p-2.5">状態</th><th className="p-2.5">金額（税抜 / 税込）</th><th className="p-2.5">日付</th>{activeOpsTab==='invoices'&&<th className="p-2.5">書類</th>}<th className="p-2.5">操作</th></tr></thead><tbody className="divide-y divide-slate-100">{records.map((record)=><tr key={record.id} className="text-slate-800 hover:bg-slate-50/50"><td className="p-2.5 font-semibold">{record.title || record.invoice_number}</td><td className="p-2.5">{companies.find((item)=>item.id===record.company_id)?.company_name || record.company_id || '—'}</td><td className="p-2.5 text-xs text-slate-500">{activeOpsTab==='contracts' ? <>{catalogProducts.find((product)=>product.id===record.product_id)?.product_name || record.product_id || '商品未設定'}{record.deal_id && <div>商談: {deals.find((deal)=>deal.id===record.deal_id)?.proposal_plan_name || record.deal_id}</div>}</> : <>{catalogProducts.find((product)=>product.id===record.product_id)?.product_name || record.product_id || '商品未設定'}{record.contract_id && <div>契約: {savedContracts.find((contract)=>contract.id===record.contract_id)?.title || record.contract_id}</div>}</>}</td><td className="p-2.5"><select aria-label={`${record.title||record.invoice_number}の状態`} value={record.status} onChange={(e)=>void updateOperationStatus(record,e.target.value)} className="rounded-lg border border-slate-200 bg-white px-2 py-1 text-xs text-slate-800 focus:outline-none focus:border-purple-600 shadow-2xs">{(activeOpsTab==='contracts'?['draft','under_review','sent','signed','expired','canceled']:['draft','awaiting_approval','issued','paid','overdue','canceled']).map(status=><option key={status} value={status}>{(activeOpsTab==='contracts'?contractStatusLabels:invoiceStatusLabels)[status]||status}</option>)}</select></td><td className="p-2.5">{record.amount == null?'—':<div><div className="font-medium text-slate-900">¥{Number(record.amount).toLocaleString('ja-JP')} <span className="text-[10px] text-slate-500 font-sans">(税抜)</span></div><div className="text-[11px] text-purple-700 font-semibold">¥{Math.floor(Number(record.amount) * 1.1).toLocaleString('ja-JP')} <span className="text-[10px] text-slate-500 font-sans">(税込)</span></div></div>}</td><td className="p-2.5 text-slate-600">{record.due_date || record.start_date || '—'}</td><td className="p-2.5">{activeOpsTab==='invoices'&&<button type="button" onClick={()=>record.company_id&&onOpenInvoiceDocuments?.(record.company_id, record.document_id || undefined)} disabled={!record.company_id||!onOpenInvoiceDocuments} className="whitespace-nowrap rounded-lg border border-purple-200 bg-purple-50 px-2 py-1 text-xs font-semibold text-purple-700 hover:bg-purple-100 disabled:opacity-40 cursor-pointer shadow-2xs">請求書類を開く</button>}</td><td className="p-2.5"><button type="button" onClick={()=>void deleteOperationRecord(record)} className="rounded-lg border border-rose-200 px-2 py-1 text-xs font-semibold text-rose-700 hover:bg-rose-50 cursor-pointer shadow-2xs">削除</button></td></tr>)}</tbody></table></div>}
+      {activeOpsTab==='contracts' ? <p className="text-xs text-slate-500">状態の流れ：下書き → 社内確認中 → メール送付済み（同意返信待ち）→ 締結済み（相手の合意を確認）。相手の明示的な同意返信を確認した後に「締結済み」へ更新し、返信メールと契約書PDFを契約記録として保存してください。期限切れ・取消は終了状態です。</p> : <p className="text-xs text-slate-500">状態の流れ：下書き（未発行）→ 承認待ち → 発行済み（入金待ち）→ 入金済み。支払期限を過ぎると「支払期限超過」、取消は終了状態です。</p>}{loading ? <p className="text-xs text-slate-400">読み込み中…</p> : records.length === 0 ? <p className="py-8 text-center text-xs text-slate-400">登録データはありません。</p> : <div className="overflow-x-auto"><table className="w-full text-left text-xs"><thead><tr className="border-b border-slate-200 text-xs font-semibold text-slate-600"><th className="p-2.5">名称</th><th className="p-2.5">会社</th><th className="p-2.5">関連</th><th className="p-2.5">状態</th><th className="p-2.5">金額（税抜 / 税込）</th><th className="p-2.5">日付</th>{activeOpsTab==='invoices'&&<th className="p-2.5">書類</th>}<th className="p-2.5">操作</th></tr></thead><tbody className="divide-y divide-slate-100">{records.map((record)=><tr key={record.id} className="text-slate-800 hover:bg-slate-50/50"><td className="p-2.5 font-semibold">{record.title || record.invoice_number}</td><td className="p-2.5">{companies.find((item)=>item.id===record.company_id)?.company_name || record.company_id || '—'}</td><td className="p-2.5 text-xs text-slate-500">{activeOpsTab==='contracts' ? <>{catalogProducts.find((product)=>product.id===record.product_id)?.product_name || record.product_id || '商品未設定'}{record.deal_id && <div>商談: {deals.find((deal)=>deal.id===record.deal_id)?.proposal_plan_name || record.deal_id}</div>}</> : <>{catalogProducts.find((product)=>product.id===record.product_id)?.product_name || record.product_id || '商品未設定'}{record.contract_id && <div>契約: {savedContracts.find((contract)=>contract.id===record.contract_id)?.title || record.contract_id}</div>}</>}</td><td className="p-2.5"><select aria-label={`${record.title||record.invoice_number}の状態`} value={record.status} onChange={(e)=>void updateOperationStatus(record,e.target.value)} className="rounded-lg border border-slate-200 bg-white px-2 py-1 text-xs text-slate-800 focus:outline-none focus:border-purple-600 shadow-2xs">{(activeOpsTab==='contracts'?['draft','under_review','sent','signed','expired','canceled']:['draft','awaiting_approval','issued','paid','overdue','canceled']).map(status=><option key={status} value={status}>{(activeOpsTab==='contracts'?contractStatusLabels:invoiceStatusLabels)[status]||status}</option>)}</select></td><td className="p-2.5">{record.amount == null?'—':<div><div className="font-medium text-slate-900">¥{Number(record.amount).toLocaleString('ja-JP')} <span className="text-[10px] text-slate-500 font-sans">(税抜)</span></div><div className="text-[11px] text-purple-700 font-semibold">¥{Math.floor(Number(record.amount) * 1.1).toLocaleString('ja-JP')} <span className="text-[10px] text-slate-500 font-sans">(税込)</span></div></div>}</td><td className="p-2.5 text-slate-700 font-mono whitespace-nowrap">{(record.due_date || record.start_date) ? formatJapaneseDate(record.due_date || record.start_date) : '—'}</td><td className="p-2.5">{activeOpsTab==='invoices'&&<button type="button" onClick={()=>record.company_id&&onOpenInvoiceDocuments?.(record.company_id, record.document_id || undefined)} disabled={!record.company_id||!onOpenInvoiceDocuments} className="whitespace-nowrap rounded-lg border border-purple-200 bg-purple-50 px-2 py-1 text-xs font-semibold text-purple-700 hover:bg-purple-100 disabled:opacity-40 cursor-pointer shadow-2xs">請求書類を開く</button>}</td><td className="p-2.5"><button type="button" onClick={()=>void deleteOperationRecord(record)} className="rounded-lg border border-rose-200 px-2 py-1 text-xs font-semibold text-rose-700 hover:bg-rose-50 cursor-pointer shadow-2xs">削除</button></td></tr>)}</tbody></table></div>}
       </>}
     </section>}
   </div>;

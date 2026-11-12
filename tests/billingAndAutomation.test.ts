@@ -5,6 +5,7 @@ import {
   calculateBillingAmount,
   determineContractMonthlyFee,
   isContractAlreadyBilled,
+  getEndOfNextMonthDate,
 } from '../src/utils/billingUtils';
 import {
   checkSendTimeWindow,
@@ -176,6 +177,24 @@ async function runTests() {
     const retryOver = calculateExponentialBackoff(3, 3);
     assert(retryOver.canRetry === false, 'Retry count >= 3 must NOT be allowed to retry');
     console.log('  ✓ calculateExponentialBackoff passed');
+  }
+
+  // --------------------------------------------------------------------------
+  // Test 7: 支払期日の算出（翌月末日 - getEndOfNextMonthDate）
+  // --------------------------------------------------------------------------
+  console.log('Test 7: getEndOfNextMonthDate');
+  {
+    // 2026年11月1日発行 ➔ 翌月末日: 2026年12月31日
+    assert(getEndOfNextMonthDate('2026-11-01') === '2026-12-31', '2026-11-01 must yield 2026-12-31');
+    // 2026年11月25日発行 ➔ 翌月末日: 2026年12月31日
+    assert(getEndOfNextMonthDate('2026-11-25') === '2026-12-31', '2026-11-25 must yield 2026-12-31');
+    // 2026年12月1日発行 ➔ 翌月末日: 2027年1月31日（年跨ぎ）
+    assert(getEndOfNextMonthDate('2026-12-01') === '2027-01-31', '2026-12-01 must yield 2027-01-31');
+    // 2027年1月15日発行 ➔ 翌月末日: 2027年2月28日（平年）
+    assert(getEndOfNextMonthDate('2027-01-15') === '2027-02-28', '2027-01-15 must yield 2027-02-28');
+    // 2028年1月15日発行 ➔ 翌月末日: 2028年2月29日（うるう年）
+    assert(getEndOfNextMonthDate('2028-01-15') === '2028-02-29', '2028-01-15 must yield 2028-02-29 (leap year)');
+    console.log('  ✓ getEndOfNextMonthDate passed');
   }
 
   console.log('\n=== All Tests Passed Successfully! ===');

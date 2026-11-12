@@ -388,7 +388,7 @@ export const getNurturingStepTemplate = (
 有限会社MST
 代表取締役: 大橋真人
 〒503-0981 岐阜県大垣市桧町127番地
-URL: https://mstcorp.info
+URL: https://corp.mstcorp.info
 --------------------------------------------------
 ※配信停止をご希望の場合は、大変お手数ですが本メールにご返信いただくか、下記よりお手続きをお願いいたします。`,
         lineBody: `${recName} 様
@@ -759,7 +759,7 @@ ${targetUrl}
 有限会社MST
 代表取締役: 大橋真人
 〒503-0981 岐阜県大垣市桧町127番地
-URL: https://mstcorp.info
+URL: https://corp.mstcorp.info
 --------------------------------------------------`,
         lineBody: `${recName} 様
 

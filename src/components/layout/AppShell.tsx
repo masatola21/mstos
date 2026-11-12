@@ -80,7 +80,7 @@ export const AppShell: React.FC<AppShellProps> = ({
               <span className="text-base">⚠️</span>
               <div>
                 <span className="font-bold">同期停止中（未保存）:</span>{' '}
-                他の端末でデータが更新されたため自動保存を停止しています。現在の画面の入力・編集内容はまだクラウドに保存されていません。
+                他の端末で更新されました。再読み込みしてください。現在の画面の編集内容はクラウドに保存されていません。
               </div>
             </div>
             <div className="flex items-center gap-2">
@@ -91,7 +91,7 @@ export const AppShell: React.FC<AppShellProps> = ({
                 }}
                 className="px-3 py-1.5 bg-rose-600 hover:bg-rose-700 text-white rounded-md font-bold text-xs transition cursor-pointer shadow-sm"
               >
-                最新データを再読み込み
+                再読み込み
               </button>
             </div>
           </div>

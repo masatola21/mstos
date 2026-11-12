@@ -249,7 +249,9 @@ export async function fetchTableData(
 
         const contactName = contact?.full_name || (nameMatch ? nameMatch[1] : '');
         const email = contact?.email || (emailMatch ? emailMatch[0] : '');
-        const phone = contact?.phone || (phoneMatch ? phoneMatch[0] : '');
+        const rawPhone = contact?.phone || (phoneMatch ? phoneMatch[0] : '');
+        // 電話番号バリデーション：数字が7桁以上含まれている場合のみ有効とする（名前等の混入を完全防止）
+        const phone = rawPhone && rawPhone.replace(/\D/g, '').length >= 7 ? rawPhone : '';
 
         // 希望内容（問い合わせ種別）の自動判定・自動反映
         let deducedInquiryType = String(item.inquiry_type || '').trim();
@@ -667,6 +669,17 @@ export async function insertRecord(
       payload.id = `CID-${String(maxNum + 1).padStart(3, '0')}`;
     }
 
+    // 商談テーブルでidが未指定の場合はDEAL-xxxを自動採番
+    if (tableKey === 'deals' && (!payload.id || !String(payload.id).trim())) {
+      const { data: existingDeals } = await supabase
+        .from('deals')
+        .select('id')
+        .like('id', 'DEAL-%')
+        .limit(2000);
+      const maxNum = Math.max(0, ...(existingDeals || []).map((row: any) => Number(String(row.id).match(/^DEAL-(\d+)$/)?.[1] || 0)));
+      payload.id = `DEAL-${String(maxNum + 1).padStart(3, '0')}`;
+    }
+
     // 商品テーブルの場合、柔軟価格設定をローカル/matrixServiceに退避保存
     if (tableKey === 'products' && (payload.id || payload.product_name)) {
       const prodId = String(payload.id || payload.code || '');
@@ -701,6 +714,29 @@ export async function insertRecord(
       }
 
       lastError = result.error;
+
+      // 主キー重複（deals_pkey, companies_pkey, 23505）が発生した場合は自動で番号を繰り上げて再試行
+      if (
+        (tableKey === 'deals' || tableKey === 'companies') &&
+        (lastError.code === '23505' ||
+         lastError.message?.includes('duplicate key') ||
+         lastError.message?.includes('unique constraint') ||
+         lastError.message?.includes('pkey'))
+      ) {
+        const prefix = tableKey === 'deals' ? 'DEAL' : 'CID';
+        const regex = tableKey === 'deals' ? /^DEAL-(\d+)$/ : /^CID-(\d+)$/;
+        const { data: latestRows } = await supabase
+          .from(tableKey)
+          .select('id')
+          .like('id', `${prefix}-%`)
+          .limit(2000);
+        const highestNum = Math.max(0, ...(latestRows || []).map((row: any) => Number(String(row.id).match(regex)?.[1] || 0)));
+        const currentNum = Number(String(currentPayload.id).match(regex)?.[1] || 0);
+        const nextNum = Math.max(highestNum, currentNum) + 1 + attempt;
+        currentPayload.id = `${prefix}-${String(nextNum).padStart(3, '0')}`;
+        continue;
+      }
+
       const missingCol = extractMissingColumn(lastError);
       if (missingCol && missingCol in currentPayload) {
         delete currentPayload[missingCol];

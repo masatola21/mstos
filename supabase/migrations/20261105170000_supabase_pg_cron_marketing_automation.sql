@@ -23,7 +23,7 @@ SECURITY DEFINER
 SET search_path = public, net, cron
 AS $$
 DECLARE
-  v_url text := 'https://mstcorp.info/api/cron/marketing-automation'; -- ★ デフォルトURL（必要に応じて実際のVercelドメインに変更）
+  v_url text := 'https://os.mstcorp.info/api/cron/marketing-automation'; -- ★ デフォルトURL（必要に応じて実際のVercelドメインに変更）
   v_secret text := '';                                                -- ★ デフォルトCRON_SECRET（直接指定する場合）
   v_vault_url text;
   v_vault_secret text;
@@ -115,7 +115,7 @@ SELECT cron.schedule(
 --    SELECT vault.create_secret('YOUR_VERCEL_CRON_SECRET', 'cron_secret');
 -- 
 --    -- 本番URLの登録 (例: https://your-project.vercel.app/api/cron/marketing-automation)
---    SELECT vault.create_secret('https://mstcorp.info/api/cron/marketing-automation', 'app_cron_url');
+--    SELECT vault.create_secret('https://os.mstcorp.info/api/cron/marketing-automation', 'app_cron_url');
 -- 
 -- 2. 手動テスト方法:
 --    SELECT public.invoke_marketing_automation_cron();

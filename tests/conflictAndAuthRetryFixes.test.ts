@@ -14,8 +14,9 @@ async function runTests() {
   // Test 1: isWorkspaceConflictError detects all conflict variants
   console.log('Test 1: isWorkspaceConflictError detection');
   {
-    assert(isWorkspaceConflictError({ code: '40001', message: 'WORKSPACE_CONFLICT' }), 'Must detect code 40001');
-    assert(isWorkspaceConflictError({ status: 409, message: 'Conflict' }), 'Must detect status 409');
+    assert(isWorkspaceConflictError({ code: '40001', message: 'error' }), 'Must detect code 40001');
+    assert(!isWorkspaceConflictError({ status: 409, message: 'Conflict' }), 'Must NOT detect status 409 alone');
+    assert(!isWorkspaceConflictError({ code: '409', message: 'Conflict' }), 'Must NOT detect code 409 alone');
     assert(isWorkspaceConflictError({ code: 'P0001', message: 'ERROR: WORKSPACE_CONFLICT' }), 'Must detect P0001 + WORKSPACE_CONFLICT');
     assert(isWorkspaceConflictError({ details: 'WORKSPACE_CONFLICT' }), 'Must detect details WORKSPACE_CONFLICT');
     assert(isWorkspaceConflictError('WORKSPACE_CONFLICT (40001)'), 'Must detect string WORKSPACE_CONFLICT');

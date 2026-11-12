@@ -31,9 +31,9 @@ const typeLabels: Record<string, { label: string; color: string }> = {
 };
 
 const statusLabels: Record<string, { label: string; color: string }> = {
-  draft: { label: '下書き', color: 'bg-slate-100 text-slate-600 border-slate-200' },
-  awaiting_approval: { label: '承認待ち', color: 'bg-amber-50 text-amber-700 border-amber-200' },
-  approved: { label: '承認済み', color: 'bg-emerald-50 text-emerald-700 border-emerald-200' },
+  draft: { label: '作成中（下書き）', color: 'bg-slate-100 text-slate-600 border-slate-200' },
+  awaiting_approval: { label: '作成中', color: 'bg-slate-100 text-slate-600 border-slate-200' },
+  approved: { label: '確定（送付可能）', color: 'bg-emerald-50 text-emerald-700 border-emerald-200' },
   queued: { label: '送信待ち', color: 'bg-blue-50 text-blue-700 border-blue-200' },
   sent: { label: '送信済み', color: 'bg-purple-50 text-purple-700 border-purple-200' },
   archived: { label: '保管済み', color: 'bg-slate-100 text-slate-500 border-slate-200' },

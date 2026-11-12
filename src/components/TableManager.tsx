@@ -8,6 +8,7 @@ import { StageTransitionModal, TransitionType } from './StageTransitionModal';
 import { ProspectResearchImportModal } from './ProspectResearchImportModal';
 import { getStatusBadgeClass } from '../utils/statusBadges';
 import { Customer } from '../types/database';
+import { formatJapaneseDate, formatJapaneseDateTime } from '../utils/date';
 import { 
   Search, 
   Plus, 
@@ -902,9 +903,9 @@ export const TableManager: React.FC<TableManagerProps> = ({
                             )}
 
                             {dateField && (
-                              <div className="flex items-center gap-1 text-[11px] text-slate-400 font-mono">
-                                <Calendar className="w-3 h-3" />
-                                <span>{String(dateField).split('T')[0]}</span>
+                              <div className="flex items-center gap-1 text-[11px] text-slate-500 font-mono">
+                                <Calendar className="w-3 h-3 text-purple-600" />
+                                <span>{formatJapaneseDate(String(dateField))}</span>
                               </div>
                             )}
                           </div>
@@ -1020,7 +1021,7 @@ export const TableManager: React.FC<TableManagerProps> = ({
                         </th>
                       );
                     })}
-                    <th className="py-3 px-4 text-right text-slate-600">操作</th>
+                    <th className="py-3 px-4 text-right text-slate-700 whitespace-nowrap sticky right-0 bg-slate-100/95 backdrop-blur-xs z-10 shadow-[-6px_0_12px_rgba(0,0,0,0.06)]">操作</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100 text-slate-700">
@@ -1097,7 +1098,7 @@ export const TableManager: React.FC<TableManagerProps> = ({
                           return (
                             <td key={colKey} className="py-3 px-4">
                               {compName ? (
-                                <div>
+                                <div className="space-y-0.5">
                                   <div className="font-semibold text-slate-900 group-hover:text-purple-700">
                                     {compName}
                                   </div>
@@ -1314,12 +1315,36 @@ export const TableManager: React.FC<TableManagerProps> = ({
                           );
                         }
 
+                        // 希望内容（問合せ・反響種別）のレンダリング
+                        if (colKey === 'inquiry_type' || colKey === 'service_type') {
+                          const inquiryVal = String(val || item.inquiry_type || item.service_type || '');
+                          return (
+                            <td key={colKey} className="py-3 px-4 whitespace-nowrap">
+                              {inquiryVal ? (
+                                <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-semibold bg-amber-50 text-amber-900 border border-amber-200/90 shadow-2xs">
+                                  <Sparkles className="w-3 h-3 text-amber-600 shrink-0" />
+                                  <span>{inquiryVal}</span>
+                                </span>
+                              ) : (
+                                <span className="text-slate-400 font-mono text-xs">-</span>
+                              )}
+                            </td>
+                          );
+                        }
+
                         // 日付・日時表示
                         if (['last_contacted_at', 'registered_at', 'contract_start_date', 'last_updated_at', 'meeting_date', 'proposal_date', 'next_followup_at', 'last_reply_at', 'first_registered_at', 'next_action_at', 'email_step_started_at', 'created_at'].includes(colKey) && val) {
-                          const formattedDate = String(val).includes('T') ? String(val).split('T')[0] : String(val);
+                          const isMeeting = colKey === 'meeting_date';
+                          const timeStr = isMeeting ? item.meeting_start_time : undefined;
+                          const formattedDisplay = timeStr 
+                            ? formatJapaneseDateTime(String(val), { fallbackTime: String(timeStr) })
+                            : formatJapaneseDate(String(val));
                           return (
-                            <td key={colKey} className="py-3 px-4 font-mono text-slate-500 whitespace-nowrap">
-                              {formattedDate}
+                            <td key={colKey} className="py-3 px-4 font-mono text-slate-700 whitespace-nowrap">
+                              <div className="flex items-center gap-1.5">
+                                <Calendar className="w-3.5 h-3.5 text-purple-600 shrink-0" />
+                                <span className="text-xs font-semibold">{formattedDisplay}</span>
+                              </div>
                             </td>
                           );
                         }
@@ -1331,8 +1356,8 @@ export const TableManager: React.FC<TableManagerProps> = ({
                         );
                       })}
 
-                      {/* Row Actions (View, Stage Progression, Edit & Safe Delete) */}
-                      <td className="py-3 px-4 text-right whitespace-nowrap" onClick={(e) => e.stopPropagation()}>
+                      {/* Row Actions (View, Stage Progression, Edit & Safe Delete) - STICKY RIGHT */}
+                      <td className="py-3 px-4 text-right whitespace-nowrap sticky right-0 bg-white/95 group-hover:bg-purple-50/95 backdrop-blur-xs z-10 shadow-[-6px_0_12px_rgba(0,0,0,0.06)]" onClick={(e) => e.stopPropagation()}>
                         <div className="flex items-center justify-end gap-1.5">
                           {['prospects', 'leads', 'deals', 'customers'].includes(currentTable) && item.company_id && onOpenCustomerWorkspace && (
                             <button onClick={() => handleOpenRecordSend(item)} className="px-2.5 py-1 rounded-lg text-xs font-semibold bg-purple-50 text-purple-700 hover:bg-purple-600 hover:text-white border border-purple-200 flex items-center gap-1 transition-colors cursor-pointer" title="この会社の連絡先を選んで右側の送信ドロワーを開く">

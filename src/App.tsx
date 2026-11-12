@@ -740,9 +740,9 @@ function AppContent() {
         console.error('Workspace cloud load failed:', error);
         workspaceSyncEnabledRef.current = false;
         if (isWorkspaceConflictError(error)) {
-          workspaceSaveCoordinator.haltOnConflict('他の端末で更新されています。最新データを再読み込みしてください');
+          workspaceSaveCoordinator.haltOnConflict('他の端末で更新されました。再読み込みしてください');
           setWorkspaceSyncStatus('conflict');
-          setWorkspaceSaveError('他の端末で更新されています。最新データを再読み込みしてください');
+          setWorkspaceSaveError('他の端末で更新されました。再読み込みしてください');
         } else {
           const errorMessage = (error as { message?: string })?.message || '';
           setWorkspaceSyncStatus('error');
@@ -797,9 +797,9 @@ function AppContent() {
         console.error('Retry workspace cloud load failed:', error);
         workspaceSyncEnabledRef.current = false;
         if (isWorkspaceConflictError(error)) {
-          workspaceSaveCoordinator.haltOnConflict('他の端末で更新されています。最新データを再読み込みしてください');
+          workspaceSaveCoordinator.haltOnConflict('他の端末で更新されました。再読み込みしてください');
           setWorkspaceSyncStatus('conflict');
-          setWorkspaceSaveError('他の端末で更新されています。最新データを再読み込みしてください');
+          setWorkspaceSaveError('他の端末で更新されました。再読み込みしてください');
         } else {
           const errorMessage = (error as { message?: string })?.message || '';
           setWorkspaceSyncStatus('error');
@@ -2326,7 +2326,7 @@ function AppContent() {
       await workspaceSaveCoordinator.requestImmediateSave(user.id, workspaceData);
     } catch (error) {
       if (isWorkspaceConflictError(error)) {
-        throw new Error('他の端末で更新されています。再読み込みしてください');
+        throw new Error('他の端末で更新されました。再読み込みしてください');
       }
       const message = (error as { message?: string })?.message || '';
       if (/customer_invoices_owner_id_invoice_number_key/i.test(message) || (error as any)?.code === '23505') {
