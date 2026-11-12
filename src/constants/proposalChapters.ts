@@ -45,6 +45,25 @@ export function isPaymentModeAllowed(kind: FinalProposalKind, mode: ProposalPaym
   return kind !== 'undecided' && PAYMENT_MODES_BY_KIND[kind].includes(mode);
 }
 
+/** 既存の PaymentMode から型を求める(画面は支払い方式を選び、型はそこから決まる) */
+export function kindFromPaymentMode(mode: ProposalPaymentMode): ProposalKind {
+  if (mode === 'retainer') return 'retainer';
+  if (mode === 'hybrid_setup_retainer') return 'hybrid';
+  return 'spot_build';
+}
+
+/** 有効期限は発行日からこの日数(2026-11-12 決定: 仕様書の例に合わせて30日) */
+export const PROPOSAL_VALID_DAYS = 30;
+
+/** "YYYY-MM-DD" に日数を足す(タイムゾーンに左右されないよう UTC で計算) */
+export function addDaysToIsoDate(iso: string, days: number): string {
+  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(iso);
+  if (!m) return '';
+  const d = new Date(Date.UTC(Number(m[1]), Number(m[2]) - 1, Number(m[3])));
+  d.setUTCDate(d.getUTCDate() + days);
+  return d.toISOString().slice(0, 10);
+}
+
 // ─── 章 ─────────────────────────────────────────────────────
 
 export type ChapterPart = 'cover' | 'diagnosis' | 'proposal' | 'footer';
@@ -159,4 +178,14 @@ export function diagnosisChaptersForDisplay(
     const body = parsed.chapters.find((c) => c.id === def.id)?.body ?? '';
     return { def, body, missing: body === '' };
   });
+}
+
+/** 書類(プレーンテキスト欄)に入れるため、Markdown の記号を取り除く。 */
+export function markdownToPlainText(md: string): string {
+  return String(md ?? '')
+    .split(/\r?\n/)
+    .map((line) => line.replace(/^\s{0,3}#{1,6}\s*/, '').replace(/^(\s*)[-*]\s+/, '$1・').replace(/\*\*(.+?)\*\*/g, '$1').replace(/__(.+?)__/g, '$1'))
+    .join('\n')
+    .replace(/\n{3,}/g, '\n\n')
+    .trim();
 }

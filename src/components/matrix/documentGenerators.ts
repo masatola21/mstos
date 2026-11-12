@@ -8,6 +8,14 @@ import {
   calculateInstallmentAmounts,
 } from '../../utils/billingUtils';
 
+import {
+  getProposalReportHtml,
+  PROPOSAL_VARIABLES,
+  PROPOSAL_DOCUMENT_TITLE,
+  defaultPaymentTermsFor,
+} from './proposalTemplate';
+import { kindFromPaymentMode, addDaysToIsoDate, PROPOSAL_VALID_DAYS } from '../../constants/proposalChapters';
+
 export type DocTemplateType = 'contract' | 'proposal' | 'invoice' | 'report' | 'estimate' | 'monthly_report';
 export type PaymentMode = 'lump_sum' | 'retainer' | 'milestone' | 'installments_3' | 'installments_6' | 'hybrid_setup_retainer';
 export type InvoiceSubtype = 'lump_sum' | 'retainer' | 'deposit' | 'completion' | 'installment' | 'hybrid_setup_retainer';
@@ -36,98 +44,8 @@ export function normalizeTemplateId(id?: string): string {
   return id;
 }
 
-// 1. 提案・診断レポート統合版 HTML
-export function getProposalReportHtml(): string {
-  return `<div style="font-family: Arial, sans-serif; max-width: 800px; margin: 0 auto; padding: 40px; color: #1e293b; line-height: 1.8;">
-  <div style="display:flex; justify-content:space-between; align-items:flex-start; border-bottom:3px solid #2563eb; padding-bottom:16px; margin-bottom:28px;">
-    <div>
-      <span style="background:#2563eb; color:white; font-size:11px; font-weight:bold; padding:3px 10px; border-radius:4px; letter-spacing:0.5px;">経営診断 & 業務改善ソリューション提案</span>
-      <h1 style="margin:8px 0 0 0; font-size:24px; color:#0f172a; font-weight:800;">経営改善・業務自動化 提案書（診断レポート）</h1>
-      <p style="margin:4px 0 0 0; font-size:13px; color:#64748b;">案件名: {{proposal_title}}</p>
-    </div>
-    <div style="text-align:right; font-size:12px; color:#475569; white-space:nowrap; line-height:1.6;">
-      <p style="margin:0;"><span style="color:#64748b;">発行日:</span> <strong style="color:#0f172a;">{{issue_date}}</strong></p>
-      <p style="margin:3px 0 0 0; color:#1e40af; font-weight:bold;">
-        <span style="color:#64748b; font-weight:normal;">有効期限:</span> {{due_date}} <span style="font-size:11px; color:#2563eb; background:#eff6ff; border:1px solid #bfdbfe; border-radius:3px; padding:1px 6px; margin-left:4px; font-weight:normal; display:inline-block;">発行日より1ヶ月間</span>
-      </p>
-    </div>
-  </div>
-
-  <div style="display:flex; justify-content:space-between; margin-bottom:28px;">
-    <div>
-      <p style="font-size:18px; margin:0; font-weight:bold; color:#0f172a;">{{client_company}}</p>
-      <p style="font-size:14px; margin:4px 0 0 0; color:#475569;">ご担当: {{client_name}} 様</p>
-    </div>
-    <div style="text-align:right; font-size:12px; color:#475569; line-height:1.6;">
-      <p style="margin:0; font-weight:bold; color:#0f172a;">{{sender_company}}</p>
-      <p style="margin:2px 0 0 0;">代表取締役 {{sender_rep}}</p>
-      <p style="margin:2px 0 0 0;">{{sender_address}}</p>
-    </div>
-  </div>
-
-  <div style="background:#f8fafc; border:1px solid #e2e8f0; border-radius:10px; padding:18px; margin-bottom:28px;">
-    <h3 style="margin:0 0 10px 0; font-size:14px; color:#1e3a8a; font-weight:bold; display:flex; align-items:center; gap:6px;">
-      1. 現状の経営・業務診断結果（抽出されたボトルネック）
-    </h3>
-    <div style="background:white; border-left:4px solid #ef4444; padding:12px 16px; border-radius:4px; margin-bottom:12px;">
-      <p style="margin:0; font-size:12px; font-weight:bold; color:#991b1b;">【特定された主要課題】</p>
-      <p style="margin:4px 0 0 0; font-size:13px; color:#334155;">{{current_challenge}}</p>
-    </div>
-    <p style="margin:0; font-size:13px; color:#475569;">
-      手作業やツール間の二重入力、属人化した顧客フォローが経営者・中核メンバーの時間を圧迫しており、売上・利益を伸ばすための戦略的な意思決定時間が削られている状態です。
-    </p>
-  </div>
-
-  <div style="margin-bottom:28px;">
-    <h3 style="margin:0 0 12px 0; font-size:14px; color:#1e3a8a; font-weight:bold; border-left:4px solid #2563eb; padding-left:8px;">
-      2. 改善ソリューション方針（仕組み化と自走化）
-    </h3>
-    <p style="margin:0 0 12px 0; font-size:13px; color:#334155; line-height:1.7;">
-      {{solution_overview}}
-    </p>
-    <div style="background:#eff6ff; border:1px solid #bfdbfe; border-radius:8px; padding:14px 18px;">
-      <p style="margin:0; font-size:12px; font-weight:bold; color:#1e40af;">【推奨パッケージ】</p>
-      <p style="margin:4px 0 0 0; font-size:15px; font-weight:bold; color:#1e3a8a;">{{recommended_product}}</p>
-    </div>
-  </div>
-
-  <div style="margin-bottom:28px;">
-    <h3 style="margin:0 0 14px 0; font-size:14px; color:#1e3a8a; font-weight:bold; border-left:4px solid #2563eb; padding-left:8px;">
-      3. 3段階 実行ロードマップ
-    </h3>
-    <div style="display:flex; flex-direction:column; gap:10px;">
-      <div style="background:#f0fdf4; border:1px solid #bbf7d0; border-radius:8px; padding:12px 16px;">
-        <span style="background:#16a34a; color:white; font-size:10px; font-weight:bold; padding:2px 6px; border-radius:3px;">Phase 1: 即効改善</span>
-        <p style="margin:6px 0 0 0; font-size:13px; font-weight:bold; color:#166534;">{{phase1_action}}</p>
-      </div>
-      <div style="background:#f8fafc; border:1px solid #e2e8f0; border-radius:8px; padding:12px 16px;">
-        <span style="background:#475569; color:white; font-size:10px; font-weight:bold; padding:2px 6px; border-radius:3px;">Phase 2: 自動導線構築</span>
-        <p style="margin:6px 0 0 0; font-size:13px; font-weight:bold; color:#334155;">{{phase2_action}}</p>
-      </div>
-      <div style="background:#fdf4ff; border:1px solid #f5d0fe; border-radius:8px; padding:12px 16px;">
-        <span style="background:#9333ea; color:white; font-size:10px; font-weight:bold; padding:2px 6px; border-radius:3px;">Phase 3: 経営自走化</span>
-        <p style="margin:6px 0 0 0; font-size:13px; font-weight:bold; color:#86198f;">{{phase3_action}}</p>
-      </div>
-    </div>
-  </div>
-
-  <div style="background:#f8fafc; border:1px solid #cbd5e1; border-radius:10px; padding:16px 20px; margin-bottom:28px;">
-    <div style="display:flex; justify-content:space-between; align-items:baseline; margin-bottom:8px;">
-      <span style="font-size:14px; font-weight:bold; color:#0f172a;">4. 概算費用お見積り</span>
-      <span style="font-size:22px; font-weight:800; color:#1e3a8a;">総額 ￥{{total_amount}} 円（税込）</span>
-    </div>
-    <div style="font-size:12px; color:#64748b; line-height:1.6;">
-      <p style="margin:0;">内訳: {{cost_breakdown}}（税抜小計 ¥{{subtotal_amount}} 円 ＋ 消費税10% ¥{{tax_amount}} 円）</p>
-      <p style="margin:4px 0 0 0;">お支払い条件: 毎月末日締め翌月末日振込（一括・分割・手付相談可）</p>
-    </div>
-  </div>
-
-  <div style="background:#f0fdf4; border:1px solid #bbf7d0; border-radius:10px; padding:16px; margin-bottom:24px;">
-    <p style="margin:0; font-size:12px; font-weight:bold; color:#166534;">【期待される定量的成果】</p>
-    <p style="margin:4px 0 0 0; font-size:13px; color:#14532d; font-weight:500;">{{expected_outcome}}</p>
-  </div>
-</div>`;
-}
+// 1. 提案書(章の構成は ./proposalTemplate.ts)
+export { getProposalReportHtml };
 
 // 2. 御見積書（支払条件可変） HTML
 export function getEstimateHtml(mode: PaymentMode): string {
@@ -623,7 +541,7 @@ export function getMonthlyReportHtml(): string {
 
 export function getDynamicTemplateHtml(templateId: string, paymentMode: PaymentMode, invoiceSubtype: InvoiceSubtype): string {
   const normId = normalizeTemplateId(templateId);
-  if (normId === 'tpl-proposal-report') return getProposalReportHtml();
+  if (normId === 'tpl-proposal-report') return getProposalReportHtml(kindFromPaymentMode(paymentMode));
   if (normId === 'tpl-unified-estimate') return getEstimateHtml(paymentMode);
   if (normId === 'tpl-unified-contract') return getContractHtml(paymentMode);
   if (normId === 'tpl-unified-invoice') return getInvoiceHtml(invoiceSubtype);
@@ -636,32 +554,12 @@ export const CORE_TEMPLATES: DocTemplate[] = [
     id: 'tpl-proposal-report',
     type: 'proposal',
     stepNum: 'STEP 1',
-    title: '提案・診断レポート',
-    subtitle: '現状診断・課題分析・解決策・3段階ロードマップを1枚に統合',
-    description: '経営診断結果と業務自動化ソリューション、費用見積、Web申込を凝縮した総合提案書',
-    badge: 'レポート＋提案統合',
-    htmlContent: getProposalReportHtml(),
-    variables: [
-      { key: 'proposal_title', label: '提案件名', defaultValue: '経営の仕組み化 × 利益改善 伴走ご提案書' },
-      { key: 'client_company', label: '宛先企業名', defaultValue: '' },
-      { key: 'client_name', label: '宛先担当者名', defaultValue: '' },
-      { key: 'current_challenge', label: '現状課題・診断結果', defaultValue: '' },
-      { key: 'solution_overview', label: '改善ソリューション方針', defaultValue: '' },
-      { key: 'recommended_product', label: '推奨パッケージ名', defaultValue: '業務改善・IT・DX顧問 ＋ 業務自動化パッケージ' },
-      { key: 'phase1_action', label: 'Phase 1 実行内容', defaultValue: '【急所解消】請求・見積・顧客情報の重複入力を自動化し月20時間創出' },
-      { key: 'phase2_action', label: 'Phase 2 実行内容', defaultValue: '【自動導線】LINE・メール・CRM連携で反響から商談まで自動化' },
-      { key: 'phase3_action', label: 'Phase 3 実行内容', defaultValue: '【自走化】経営戦略・利益改善顧問の定期伴走で自走組織を実現' },
-      { key: 'cost_breakdown', label: '費用内訳サマリー', defaultValue: '初期費用 150,000円 / 月額費用 200,000円' },
-      { key: 'subtotal_amount', label: '小計 (税抜・円)', defaultValue: '350,000' },
-      { key: 'tax_amount', label: '消費税額 (10%・円)', defaultValue: '35,000' },
-      { key: 'total_amount', label: '概算総額 (税込・円)', defaultValue: '385,000' },
-      { key: 'expected_outcome', label: '期待される定量的成果', defaultValue: '現場の手作業を月20時間以上削減し、経営者が「次の一手」に集中できる経営体質へ変革' },
-      { key: 'issue_date', label: '発行日', defaultValue: '' },
-      { key: 'due_date', label: '有効期限', defaultValue: '' },
-      { key: 'sender_company', label: '自社会社名', defaultValue: '有限会社MST' },
-      { key: 'sender_rep', label: '代表者名', defaultValue: '大橋真人' },
-      { key: 'sender_address', label: '所在地', defaultValue: '〒503-0981 岐阜県大垣市桧町127番地' },
-    ],
+    title: PROPOSAL_DOCUMENT_TITLE,
+    subtitle: '診断の結果と、構築・伴走のご提案を1つにまとめた提案書',
+    description: '診断パート(D0〜D5)と提案パート(P1〜P7)。型(構築 / 伴走 / 構築+伴走)で項目が切り替わります',
+    badge: '診断＋提案',
+    htmlContent: getProposalReportHtml('spot_build'),
+    variables: PROPOSAL_VARIABLES,
   },
   {
     id: 'tpl-unified-estimate',
@@ -852,20 +750,14 @@ export const getTemplateDefaultValues = (
   }
 
   if (normId === 'tpl-proposal-report') {
+    // 金額・期間・サービス名・支払い条件は商談で決めた値だけを使う。初期値は空(サンプルの会社名・金額も入れない)。
+    const fromVariables = Object.fromEntries(PROPOSAL_VARIABLES.map((v) => [v.key, v.defaultValue]));
     return {
       ...common,
-      proposal_title: '経営の仕組み化 × 利益改善 伴走ご提案書',
-      current_challenge: '売上はあるものの手元に利益が残りにくく、手作業や二重入力に時間を奪われ、改善を進めたいが日々の業務に追われて優先順位が決まらない状態です。',
-      solution_overview: '経営戦略・利益改善顧問を主軸に、業務自動化（GAS・ツール連携）と集客導線（LINE・CRM連携）を組み合わせ、戦略と現場実装の両面から利益体質へ変革します。',
-      recommended_product: '業務改善・IT・DX顧問 ＋ 業務自動化パッケージ',
-      phase1_action: '【急所解消】請求・見積・顧客情報の重複入力を自動化し、月20時間以上の経営時間を即座に創出',
-      phase2_action: '【自動導線】LINE・メール・CRMを連携し、集客から商談・顧客フォローが自動でつながる流れを構築',
-      phase3_action: '【自走化】経営戦略・利益改善顧問の定期伴走により、新たな収益源の創出と自走組織を実現',
-      cost_breakdown: '初期構築費 150,000円 / 月額顧問料 200,000円',
-      subtotal_amount: '350,000',
-      tax_amount: '35,000',
-      total_amount: '385,000',
-      expected_outcome: '現場の手作業を月20時間以上削減して利益が残る体制をつくり、経営者が「次の一手」に集中できる経営体質へ導きます。',
+      ...fromVariables,
+      issue_date: formatDocumentDate(today),
+      due_date: formatDocumentDate(addDaysToIsoDate(today, PROPOSAL_VALID_DAYS)),
+      p6_payment_terms: defaultPaymentTermsFor(paymentMode),
     };
   }
 
