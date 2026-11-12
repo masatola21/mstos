@@ -20,8 +20,8 @@ const FALLBACK_MATERIALS: MaterialItem[] = [
   },
   {
     key: 'care-package-overview',
-    label: '② 介護保険外サービス開業・収益化パッケージ資料',
-    description: '直営店舗の実践データ、初期収支モデル、集客・カルテ自動化の開業手順を網羅。',
+    label: '② 介護保険外サービス開業パッケージ資料',
+    description: '直営店舗の実践データ、集客・カルテ自動化、トラブルを防ぐ開業手順を網羅。',
     url: '/materials/care-package-proposal.pdf',
     category: '開業パッケージ',
   },

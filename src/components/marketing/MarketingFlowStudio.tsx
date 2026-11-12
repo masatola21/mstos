@@ -113,7 +113,7 @@ const DEFAULT_KEYWORD_RULES: KeywordAutoReply[] = [
     name: '「介護」「保険外」「開業」送信時',
     matchText: '介護',
     matchMode: 'contains',
-    replyText: '介護保険外サービスの開業・事業展開についてのご相談ありがとうございます！\n自費リハビリ・自費看護等の立ち上げでは、収益モデルの設計と地域集客が成功の鍵となります。\n\n専任チームより最適な開業パッケージ案内をお届けします。',
+    replyText: '介護保険外サービスの開業・事業展開についてのご相談ありがとうございます！\n自費リハビリ・自費看護等の立ち上げでは、提供メニューの設計と地域集客が成功の鍵となります。\n\n専任チームより最適な開業パッケージ案内をお届けします。',
     tag: 'care:開業相談',
     targetBranch: 'care',
     enabled: true,
@@ -2003,7 +2003,7 @@ export const MarketingFlowStudio: React.FC<MarketingFlowStudioProps> = ({
                       </span>
                     </h4>
                     <p className="text-xs text-slate-500">
-                      自費リハビリ・自費看護の収益モデル案内 ──→ 開業パッケージ概要 ──→ 専任相談日程調整
+                      自費リハビリ・自費看護の実務モデル案内 ──→ 開業パッケージ概要 ──→ 専任相談日程調整
                     </p>
                   </div>
                 </div>

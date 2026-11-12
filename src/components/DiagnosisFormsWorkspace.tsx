@@ -1324,7 +1324,7 @@ export const DiagnosisFormsWorkspace: React.FC<DiagnosisFormsWorkspaceProps> = (
                         {
                           key: 'care-package-overview',
                           label: '介護保険外サービス開業パッケージ概要資料',
-                          description: '介護事業所・法人が保険外の自費収益柱（月30万〜100万円超）を最短で立ち上げるための実務手順。',
+                          description: '介護事業所・法人が保険外の生活支援サービスを最短で立ち上げるための実務・開業手順。',
                           category: '開業パッケージ',
                           external_url: 'https://corp.mstcorp.info/materials/care-package-proposal.pdf',
                           public_url: 'https://corp.mstcorp.info/materials/care-package-proposal.pdf',
@@ -1373,7 +1373,7 @@ export const DiagnosisFormsWorkspace: React.FC<DiagnosisFormsWorkspaceProps> = (
                         {
                           key: 'care-package-overview',
                           label: '介護保険外サービス開業パッケージ概要資料',
-                          description: '介護事業所・法人が保険外の自費収益柱（月30万〜100万円超）を最短で立ち上げるための実務手順。',
+                          description: '介護事業所・法人が保険外の生活支援サービスを最短で立ち上げるための実務・開業手順。',
                           category: '開業パッケージ',
                           external_url: 'https://corp.mstcorp.info/materials/care-package-proposal.pdf',
                           public_url: 'https://corp.mstcorp.info/materials/care-package-proposal.pdf',

@@ -192,7 +192,7 @@ export const SocialMediaBroadcastStudio: React.FC<{
     {
       key: 'care-package-overview',
       title: '介護保険外サービス開業パッケージ 概要資料',
-      description: '自費リハビリ・保険外看護など介護保険外サービスの立ち上げ・集客・収益化モデル',
+      description: '自費リハビリ・保険外看護など介護保険外サービスの立ち上げ・集客・実務モデル',
       url: 'https://os.mstcorp.info/materials/care-package-overview.pdf',
     },
     {

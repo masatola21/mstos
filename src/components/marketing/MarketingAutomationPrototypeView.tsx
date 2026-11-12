@@ -69,7 +69,7 @@ export const MST_DIRECT_CONSULT_STARTER_SCENARIO: Omit<MarketingScenario, 'id' |
   audience: 'すべての見込み客',
   waitMinutes: 0,
   emailSubject: '【MST】介護保険外サービス開業・個別相談を承りました（日程調整のご案内）',
-  emailBody: '{recipient_name} 様\n\n有限会社MSTの大橋真人です。\nこの度は介護保険外サービス開業・個別相談のお申し込みをいただき、誠にありがとうございます。\n\n貴社の事業構想や地域ニーズを踏まえ、失敗しない開業ステップと収益モデルについて、30分のオンライン相談にて直接アドバイスさせていただきます。\n\n▼ 面談日程の選択はこちら\n{booking_url}\n\n当日お話しできますことを楽しみにしております。\n\n有限会社MST\n大橋真人',
+  emailBody: '{recipient_name} 様\n\n有限会社MSTの大橋真人です。\nこの度は介護保険外サービス開業・個別相談のお申し込みをいただき、誠にありがとうございます。\n\n貴社の事業構想や地域ニーズを踏まえ、失敗しない開業ステップとサービス設計について、30分のオンライン相談にて直接アドバイスさせていただきます。\n\n▼ 面談日程の選択はこちら\n{booking_url}\n\n当日お話しできますことを楽しみにしております。\n\n有限会社MST\n大橋真人',
   messageBody: '{recipient_name} 様\n介護保険外サービス開業・個別相談のお申し込みありがとうございます！有限会社MST代表の大橋真人です。\n\n貴社の構想や開業課題を伺い、最初の実行ステップを具体化する【30分無料オンライン相談】枠をご用意いたしました。\n\n▼ 日程調整はこちら\n{booking_url}',
   lineMessageType: 'flex',
   lineImageUrl: '',

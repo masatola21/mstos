@@ -5318,7 +5318,7 @@ app.get('/api/public/materials', async (req, res) => {
         {
           key: 'care-package-overview',
           label: '介護保険外サービス開業パッケージ概要資料',
-          description: '介護事業所・法人が保険外の自費収益柱（月30万〜100万円超）を最短で立ち上げるための実務手順。',
+          description: '介護事業所・法人が保険外の生活支援サービスを最短で立ち上げるための実務・開業手順。',
           category: '開業パッケージ',
           url: 'https://corp.mstcorp.info/materials/care-package-proposal.pdf',
           sort_order: 20,
@@ -5781,7 +5781,7 @@ app.post(
         },
         {
           key: 'care-package-overview',
-          label: '② 介護保険外サービス開業・収益化パッケージ資料',
+          label: '② 介護保険外サービス開業パッケージ資料',
           url: 'https://corp.mstcorp.info/materials/care-package-proposal.pdf',
         },
       ];
@@ -6089,7 +6089,7 @@ app.post(
             ? `以下のURLより開業パッケージの概要資料をご確認いただけます。\n${effectiveMaterialUrls}\n\nご不明点や具体的な相談をご希望の場合は、いつでも本LINE／メールまでお気軽に返信してください。`
             : `現在、最新版資料の送付準備中となっております。専任担当者より折り返しご案内をお送りいたしますので、恐れ入りますが少々お待ちくださいませ。`);
       } else if (inquiryType === '開業相談') {
-        customNotificationText = `【MST】「介護保険外サービス開業パッケージ」開業相談のお申し込みを承りました。\n\n${name} 様\nご相談のお申し込み誠にありがとうございます！\n\n専任コンサルタントによる30分のオンライン個別面談（Zoom・無料）にて、貴社の構想に合わせた開業ステップや収益設計をご案内いたします。` +
+        customNotificationText = `【MST】「介護保険外サービス開業パッケージ」開業相談のお申し込みを承りました。\n\n${name} 様\nご相談のお申し込み誠にありがとうございます！\n\n専任コンサルタントによる30分のオンライン個別面談（Zoom・無料）にて、貴社の構想に合わせた開業ステップやサービス設計をご案内いたします。` +
           (bookingReady ? `\n\n▼ 面談日程のWeb予約はこちら\n${bookingUrl}\n\n※上記リンクよりご都合のよい日時をお選びください。` : '\n\n担当者より面談日程のご案内を折り返しお届けいたします。');
       } else {
         const parts = [`【MST】「介護保険外サービス開業パッケージ」資料請求・個別相談を承りました。\n\n${name} 様\nお申し込み誠にありがとうございます！`];
