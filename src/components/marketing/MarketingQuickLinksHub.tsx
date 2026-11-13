@@ -29,6 +29,8 @@ import {
 } from 'lucide-react';
 import { OfficialLinkItem } from '../../types/marketing';
 import { 
+  OFFICIAL_VERCEL_URLS,
+  migrateOfficialLinks,
   loadStoredOfficialLinks, 
   saveStoredOfficialLinks, 
   clearStoredOfficialLinks,
@@ -142,13 +144,13 @@ const BADGE_COLOR_OPTIONS = [
 export const MarketingQuickLinksHub: React.FC = () => {
   const origin = typeof window !== 'undefined' ? window.location.origin : 'https://mstos.app';
 
-  // 初期デフォルトリンク定義（診断・個別相談・作戦会議を先頭に配置）
+  // 初期デフォルトリンク定義（Vercel公式HP・診断・個別相談・作戦会議を先頭に配置）
   const defaultLinks: OfficialLinkItem[] = useMemo(() => [
     {
       id: 'diagnosis',
       title: '3分無料ボトルネック診断',
-      description: '経営・業務の急所と改善処方箋を特定する自動診断フォーム',
-      url: `${origin}/f/business-diagnosis`,
+      description: '公式HP上の自動診断フォーム（経営・業務の急所と改善処方箋を特定）',
+      url: OFFICIAL_VERCEL_URLS.diagnosis,
       badge: '高成約率',
       badgeColor: 'bg-purple-50 text-purple-700 border-purple-200',
       iconName: 'sparkles',
@@ -156,8 +158,8 @@ export const MarketingQuickLinksHub: React.FC = () => {
     {
       id: 'care_consult',
       title: '介護保険外サービス開業・個別相談',
-      description: '診断不要で直接30分面談を申し込める専用受付フォーム',
-      url: `${origin}/f/care-package-inquiry`,
+      description: '介護保険外開業パッケージ専用LP・お申し込みページ',
+      url: OFFICIAL_VERCEL_URLS.care_consult,
       badge: '高額パッケージ直結',
       badgeColor: 'bg-emerald-50 text-emerald-700 border-emerald-200',
       iconName: 'file-text',
@@ -166,7 +168,7 @@ export const MarketingQuickLinksHub: React.FC = () => {
       id: 'booking',
       title: '30分無料作戦会議（面談日程予約）',
       description: '対面営業や相談後に案内するオンライン面談カレンダー',
-      url: `${origin}/apply/booking`,
+      url: 'https://timerex.net/s/mst.shikumikaizen_b173/4ac78e37',
       badge: '商談直行',
       badgeColor: 'bg-cyan-50 text-cyan-700 border-cyan-200',
       iconName: 'calendar',
@@ -174,8 +176,8 @@ export const MarketingQuickLinksHub: React.FC = () => {
     {
       id: 'material_download',
       title: '経営改善実務ガイド 資料請求',
-      description: '実務改善ガイド・会社概要PDFダウンロード受付フォーム',
-      url: `${origin}/f/material-download`,
+      description: '公式HPの資料ダウンロード・会社概要請求ページ',
+      url: OFFICIAL_VERCEL_URLS.material_download,
       badge: '資料請求',
       badgeColor: 'bg-amber-50 text-amber-700 border-amber-200',
       iconName: 'file-text',
@@ -193,12 +195,12 @@ export const MarketingQuickLinksHub: React.FC = () => {
       id: 'media_top',
       title: '自社オウンドメディア / コーポレートHP',
       description: '会社概要・専門コラム・デジタル商品の本拠地',
-      url: `${origin}/`,
+      url: OFFICIAL_VERCEL_URLS.media_top,
       badge: 'HP直接',
       badgeColor: 'bg-purple-50 text-purple-700 border-purple-200',
       iconName: 'globe',
     },
-  ], [origin]);
+  ], []);
 
   const [links, setLinks] = useState<OfficialLinkItem[]>(defaultLinks);
   const [mediaList, setMediaList] = useState<MediumPreset[]>(() => {
@@ -289,10 +291,21 @@ export const MarketingQuickLinksHub: React.FC = () => {
               .maybeSingle();
 
             if (linkData?.payload?.links && Array.isArray(linkData.payload.links) && isMounted) {
-              setLinks(linkData.payload.links);
-              saveStoredOfficialLinks(linkData.payload.links);
-              if (!selectedMatrixLinkId && linkData.payload.links.length > 0) {
-                setSelectedMatrixLinkId(linkData.payload.links[0].id);
+              const { links: migratedLinks, changed } = migrateOfficialLinks(linkData.payload.links);
+              setLinks(migratedLinks);
+              saveStoredOfficialLinks(migratedLinks);
+              if (changed) {
+                await supabase.from('mst_ai_acquisition_records').upsert({
+                  user_id: auth.user.id,
+                  id: 'mst_official_hub_links',
+                  record_type: 'funnel_hub_config',
+                  title: '集客動線公式URLハブ設定',
+                  payload: { links: migratedLinks },
+                  updated_at: new Date().toISOString(),
+                }, { onConflict: 'user_id,id' });
+              }
+              if (!selectedMatrixLinkId && migratedLinks.length > 0) {
+                setSelectedMatrixLinkId(migratedLinks[0].id);
               }
             }
 

@@ -115,6 +115,58 @@ export function selectWelcomeRule(
 }
 
 /**
+ * Detects Supabase PostgREST / PostgreSQL missing-column errors (e.g. reply_payload / reply_type not yet migrated).
+ */
+export function isMissingColumnError(error: any): boolean {
+  if (!error) return false;
+  const code = String(error.code || '');
+  const msg = String(error.message || '');
+  return (
+    code === 'PGRST204' ||
+    code === '42703' ||
+    /Could not find the ['"].+['"] column/i.test(msg) ||
+    /column ['"]?.+['"]? of relation .+ does not exist/i.test(msg) ||
+    /column .+ does not exist/i.test(msg)
+  );
+}
+
+/**
+ * Resolves effective reply_type and parsed payload even when reply_payload / reply_type columns
+ * do not exist in DB and JSON payload was stored in reply_text.
+ */
+export function inferWelcomeReplyTypeAndPayload(
+  rule: WelcomeRuleCandidate | null | undefined
+): { replyType: 'text' | 'flex' | 'image' | 'video'; payload: any } {
+  if (!rule) return { replyType: 'text', payload: null };
+
+  let payload = rule.reply_payload;
+  const rawText = typeof rule.reply_text === 'string' ? rule.reply_text.trim() : '';
+  if ((!payload || (typeof payload === 'object' && Object.keys(payload).length === 0)) && rawText.startsWith('{')) {
+    try {
+      payload = JSON.parse(rawText);
+    } catch {
+      // ignore non-JSON text
+    }
+  }
+
+  const explicitType = String(rule.reply_type || '').trim().toLowerCase();
+  if (explicitType === 'flex' || explicitType === 'image' || explicitType === 'video') {
+    return { replyType: explicitType, payload };
+  }
+
+  if (payload && typeof payload === 'object') {
+    if (payload.contents || payload.type === 'bubble' || payload.type === 'carousel' || payload.type === 'flex') {
+      return { replyType: 'flex', payload };
+    }
+    if (payload.originalContentUrl && payload.previewImageUrl) {
+      return { replyType: payload.type === 'video' ? 'video' : 'image', payload };
+    }
+  }
+
+  return { replyType: 'text', payload };
+}
+
+/**
  * Extracts only the Flex message fields sent to LINE Messaging API (altText + contents),
  * ignoring editor/postback metadata like choices, patternA, patternB, editMode so their
  * placeholders (e.g. {q1_label}) or empty optional URLs don't trigger fallback.
@@ -135,6 +187,7 @@ export function extractWelcomeFlexTarget(payload: any): { altText: string; conte
 /**
  * Sanitizes a Flex Message tree for LINE Messaging API compatibility:
  * - Normalizes button height to 'sm' | 'md'
+ * - Clamps button action.label to LINE's 20-character limit
  * - Removes empty text nodes inside 'contents' arrays (LINE rejects text: "")
  */
 export function sanitizeWelcomeFlexNode(node: any): any {
@@ -156,13 +209,20 @@ export function sanitizeWelcomeFlexNode(node: any): any {
     if (out.type === 'button' && out.height !== undefined && !['sm', 'md'].includes(out.height)) {
       out.height = 'md';
     }
+    if (out.action && typeof out.action === 'object' && typeof out.action.label === 'string') {
+      const trimmedLabel = out.action.label.trim();
+      out.action = {
+        ...out.action,
+        label: (trimmedLabel || '開く').slice(0, 20),
+      };
+    }
     return out;
   }
   return node;
 }
 
 /**
- * Expands canonical message variables with Japanese placeholder aliases used across UI editors.
+ * Expands canonical message variables with Japanese & common URL aliases used across UI editors.
  */
 export function expandMessageVarAliases(baseVars: Record<string, string>): Record<string, string> {
   const vars: Record<string, string> = { ...baseVars };
@@ -170,7 +230,7 @@ export function expandMessageVarAliases(baseVars: Record<string, string>): Recor
     ['recipient_name', ['お名前', '氏名', '宛名', 'name']],
     ['company_name', ['会社名', '企業名', '法人名']],
     ['booking_url', ['面談予約URL', '予約URL', '日程調整URL']],
-    ['link_url', ['案内URL', 'リンクURL', '診断URL', 'フォームURL']],
+    ['link_url', ['案内URL', 'リンクURL', '診断URL', 'フォームURL', 'diagnosis_url']],
     ['material_url', ['資料URL', '配布資料URL']],
     ['document_url', ['書類URL', 'レポートURL', '共有URL']],
   ];

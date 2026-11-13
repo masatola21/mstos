@@ -12,6 +12,7 @@ import {
   getRichMenuCellStylePercent,
   createMstRecommendedRichMenuPreset,
 } from '../src/utils/lineRichMenuLayouts';
+import { migrateOfficialLinks, upgradeLegacyMstUrl } from '../src/utils/marketingStorage';
 
 console.log('=== Running LINE Rich Menu Layouts & MST Preset Tests ===');
 
@@ -73,6 +74,9 @@ assert.equal(heroPercent.left, '0%');
 assert.equal(heroPercent.top, '0%');
 assert.equal(heroPercent.height, '50%');
 
+assert.ok(DEFAULT_MST_DIAGNOSIS_URL.startsWith('https://corp.mstcorp.info/diagnosis'), 'Diagnosis default URL must point to Vercel HP');
+assert.ok(!DEFAULT_MST_DIAGNOSIS_URL.includes('ais-dev'), 'Diagnosis URL must not reference ais-dev');
+
 const preset = createMstRecommendedRichMenuPreset();
 assert.equal(preset.layout, 'split-2-1-3');
 assert.equal(preset.actions.length, 5);
@@ -90,4 +94,33 @@ for (const action of preset.actions) {
   assert.ok(action.label.length > 0 && action.label.length <= 20, `Label length invalid: ${action.label}`);
 }
 console.log('  ✓ MST recommended 5-split preset URLs, message trigger, and labels verified');
+
+// Test 5: Legacy AI Studio / internal official hub URL migration
+assert.equal(
+  upgradeLegacyMstUrl('https://ais-dev-cadlpgsrctfv3ddojzsli3-203567468120.asia-northeast1.run.app/f/business-diagnosis?utm_source=line', 'diagnosis'),
+  'https://corp.mstcorp.info/diagnosis?utm_source=line'
+);
+const { links: migrated, changed } = migrateOfficialLinks([
+  {
+    id: 'diagnosis',
+    title: '3分無料ボトルネック診断',
+    description: '',
+    url: 'https://ais-dev-test.asia-northeast1.run.app/f/business-diagnosis',
+    badge: '高成約率',
+    badgeColor: '',
+  },
+  {
+    id: 'custom_1',
+    title: '独自LP',
+    description: '',
+    url: 'https://custom.example.com/lp',
+    badge: '独自',
+    badgeColor: '',
+    isCustom: true,
+  },
+]);
+assert.equal(changed, true);
+assert.equal(migrated[0].url, 'https://corp.mstcorp.info/diagnosis');
+assert.equal(migrated[1].url, 'https://custom.example.com/lp');
+console.log('  ✓ Official hub URL migration upgrades legacy AI Studio links cleanly');
 console.log('=== All LINE Rich Menu Layouts & MST Preset Tests Passed! ===');

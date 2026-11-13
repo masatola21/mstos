@@ -2,7 +2,7 @@ export const RICH_MENU_WIDTH = 2500;
 export const RICH_MENU_HEIGHT = 1686;
 export const DEFAULT_MST_HP_URL = 'https://corp.mstcorp.info/?utm_source=line&utm_medium=chat';
 export const DEFAULT_MST_DIAGNOSIS_URL =
-  'https://ais-dev-cadlpgsrctfv3ddojzsli3-203567468120.asia-northeast1.run.app/f/business-diagnosis?utm_source=line&utm_medium=chat';
+  'https://corp.mstcorp.info/diagnosis?utm_source=line&utm_medium=chat';
 export const DEFAULT_MST_BOOKING_URL =
   'https://timerex.net/s/mst.shikumikaizen_b173/4ac78e37?utm_source=line&utm_medium=chat';
 export const DEFAULT_MST_CARE_LP_URL = 'https://business.mstcorp.info/?utm_source=line&utm_medium=chat';

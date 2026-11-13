@@ -31,6 +31,8 @@ import {
   sanitizeWelcomeFlexNode,
   expandMessageVarAliases,
   replaceMessagePlaceholders,
+  isMissingColumnError,
+  inferWelcomeReplyTypeAndPayload,
 } from './server/lineWelcomeResolver.js';
 import {
   RICH_MENU_WIDTH,
@@ -1145,7 +1147,49 @@ async function resolveLineContact(userId: string) {
 }
 
 function isOptionalLineAutomationSchemaMissing(error: any): boolean {
-  return error?.code === 'PGRST205' || /line_channel_integrations|line_inbox_messages|line_auto_reply_rules/.test(String(error?.message || ''));
+  if (!error) return false;
+  if (isMissingColumnError(error)) return false;
+  const msg = String(error?.message || '');
+  return (
+    error?.code === 'PGRST205' ||
+    error?.code === '42P01' ||
+    /Could not find the table/i.test(msg) ||
+    /relation ['"]?public\.(line_channel_integrations|line_inbox_messages|line_auto_reply_rules)['"]? does not exist/i.test(msg)
+  );
+}
+
+async function fetchWelcomeRuleCandidates(): Promise<{ rows: any[]; schemaMissing: boolean; columnFallbackUsed: boolean }> {
+  if (!lineSupabase) return { rows: [], schemaMissing: false, columnFallbackUsed: false };
+  const fullSelect = 'id,owner_id,name,match_mode,match_text,reply_text,reply_type,reply_payload,tag_id,priority,enabled,updated_at,created_at';
+  const baseSelect = 'id,owner_id,name,match_mode,match_text,reply_text,tag_id,priority,enabled,updated_at,created_at';
+
+  const { data, error } = await lineSupabase
+    .from('line_auto_reply_rules')
+    .select(fullSelect)
+    .in('match_text', [...ALL_WELCOME_MATCH_TEXTS]);
+
+  if (!error) {
+    return { rows: Array.isArray(data) ? data : [], schemaMissing: false, columnFallbackUsed: false };
+  }
+
+  if (isMissingColumnError(error)) {
+    const { data: fallbackData, error: fallbackError } = await lineSupabase
+      .from('line_auto_reply_rules')
+      .select(baseSelect)
+      .in('match_text', [...ALL_WELCOME_MATCH_TEXTS]);
+    if (!fallbackError) {
+      return { rows: Array.isArray(fallbackData) ? fallbackData : [], schemaMissing: false, columnFallbackUsed: true };
+    }
+    if (isOptionalLineAutomationSchemaMissing(fallbackError)) {
+      return { rows: [], schemaMissing: true, columnFallbackUsed: true };
+    }
+    throw fallbackError;
+  }
+
+  if (isOptionalLineAutomationSchemaMissing(error)) {
+    return { rows: [], schemaMissing: true, columnFallbackUsed: false };
+  }
+  throw error;
 }
 
 function sanitizeFlexNode(node: any): any {
@@ -1361,27 +1405,35 @@ async function processLineInboxAndAutoReply(event: any, contact: any, eventId: s
   // LINE送信トークン未設定ならここで終了
   if (!lineChannelAccessToken) return;
 
-  // 4. 自動返信ルール（line_auto_reply_rules）の検索
+  // 4. 自動返信ルール（line_auto_reply_rules）の検索（reply_payload未マイグレーション環境にもフォールバック対応）
   let rules: any[] = [];
+  const fetchAutoReplyRules = async (targetOwnerId: string | null): Promise<any[]> => {
+    const fullCols = 'id,owner_id,match_mode,match_text,reply_text,reply_type,reply_payload,tag_id';
+    const baseCols = 'id,owner_id,match_mode,match_text,reply_text,tag_id';
+    const buildQuery = (cols: string) => {
+      let q = lineSupabase!
+        .from('line_auto_reply_rules')
+        .select(cols)
+        .eq('enabled', true)
+        .neq('match_text', '__welcome__')
+        .order('priority', { ascending: true });
+      if (targetOwnerId) q = q.eq('owner_id', targetOwnerId);
+      return q;
+    };
+    const { data, error } = await buildQuery(fullCols);
+    if (!error) return Array.isArray(data) ? data : [];
+    if (isMissingColumnError(error)) {
+      const { data: fbData } = await buildQuery(baseCols);
+      return Array.isArray(fbData) ? fbData : [];
+    }
+    return [];
+  };
   try {
     if (ownerId) {
-      const { data: ownerRules } = await lineSupabase
-        .from('line_auto_reply_rules')
-        .select('id,owner_id,match_mode,match_text,reply_text,reply_type,reply_payload,tag_id')
-        .eq('owner_id', ownerId)
-        .eq('enabled', true)
-        .neq('match_text', '__welcome__')
-        .order('priority', { ascending: true });
-      if (ownerRules && ownerRules.length > 0) rules = ownerRules;
+      rules = await fetchAutoReplyRules(ownerId);
     }
     if (rules.length === 0) {
-      const { data: allRules } = await lineSupabase
-        .from('line_auto_reply_rules')
-        .select('id,owner_id,match_mode,match_text,reply_text,reply_type,reply_payload,tag_id')
-        .eq('enabled', true)
-        .neq('match_text', '__welcome__')
-        .order('priority', { ascending: true });
-      if (allRules && allRules.length > 0) rules = allRules;
+      rules = await fetchAutoReplyRules(null);
     }
   } catch (ruleErr) {
     console.warn('[LineAutoReply] Rules lookup warning:', ruleErr);
@@ -1403,9 +1455,10 @@ async function processLineInboxAndAutoReply(event: any, contact: any, eventId: s
   let inboxBody = '';
 
   if (matchedRule) {
-    const replyType = String(matchedRule.reply_type || 'text');
-    const replyPayload = matchedRule.reply_payload && typeof matchedRule.reply_payload === 'object'
-      ? matchedRule.reply_payload as Record<string, any>
+    const inferred = inferWelcomeReplyTypeAndPayload(matchedRule);
+    const replyType = inferred.replyType;
+    const replyPayload = inferred.payload && typeof inferred.payload === 'object'
+      ? inferred.payload as Record<string, any>
       : {};
 
     const effectiveOwnerId = matchedRule.owner_id || ownerId || null;
@@ -1413,7 +1466,7 @@ async function processLineInboxAndAutoReply(event: any, contact: any, eventId: s
     const { personalize, personalizeJson } = await loadMessageVarContext(effectiveOwnerId, contactForVars);
 
     if (replyType === 'text') {
-      const replyText = personalize(String(matchedRule.reply_text || '')).slice(0, 5000);
+      const replyText = personalize(String(matchedRule.reply_text || replyPayload.text || '')).slice(0, 5000);
       if (replyText) {
         lineMessage = { type: 'text', text: replyText };
         inboxBody = replyText;
@@ -1426,12 +1479,12 @@ async function processLineInboxAndAutoReply(event: any, contact: any, eventId: s
         inboxBody = '[画像メッセージ]';
       }
     } else if (replyType === 'flex') {
-      const altText = personalize(String(replyPayload.altText || '')).slice(0, 1500);
+      const altText = personalize(String(replyPayload.altText || 'ご案内')).slice(0, 400);
       const rawContents = normalizeFlexContents(replyPayload);
       const contents = rawContents ? personalizeJson(rawContents) : null;
       if (altText && contents) {
-        lineMessage = { type: 'flex', altText, contents };
-        inboxBody = '[Flexメッセージ]';
+        lineMessage = { type: 'flex', altText, contents: sanitizeWelcomeFlexNode(contents) };
+        inboxBody = `[Flexメッセージ: ${altText}]`;
       }
     } else if (replyType === 'video') {
       const originalContentUrl = personalize(String(replyPayload.originalContentUrl || ''));
@@ -1469,20 +1522,20 @@ async function processLineInboxAndAutoReply(event: any, contact: any, eventId: s
   // ルール未一致時の組み込み自動返信（自動返信が明示的に無効の場合は送信をスキップ）
   if (!lineMessage) {
     if (!isAutoReplyEnabled) return;
-    const appUrl = (process.env.PUBLIC_APP_URL || 'https://os.mstcorp.info').replace(/\/$/, '');
+    const corpHpBase = 'https://corp.mstcorp.info';
     let defaultReplyText = '';
 
     if (normalizedMessage.includes('経営改善') || normalizedMessage.includes('相談') || normalizedMessage.includes('業務効率')) {
-      const diagUrl = `${appUrl}/forms/business-diagnosis?source=line&topic=management&cid=${encodeURIComponent(contact?.id || '')}&luid=${encodeURIComponent(userId)}`;
+      const diagUrl = `${corpHpBase}/diagnosis?source=line&topic=management&cid=${encodeURIComponent(contact?.id || '')}&luid=${encodeURIComponent(userId)}`;
       defaultReplyText = `経営改善についてのご相談ありがとうございます！\n有限会社MST代表の大橋真人です。\n\n貴社の現状の経営課題（集客・営業・業務フロー・利益率）を明確にするため、まずは【3分無料経営診断】へのご回答をおすすめしております。\n\n回答内容を元に、専任コンサルタントによる改善アドバイスレポートを個別にお届けいたします。\n\n▼ 3分無料経営診断はこちら\n${diagUrl}\n\nまた、個別面談や直接のご相談も受け付けております。お気軽にご希望日程やご質問をそのまま返信してください。`;
     } else if (normalizedMessage.includes('介護') || normalizedMessage.includes('保険外') || normalizedMessage.includes('開業')) {
-      const diagUrl = `${appUrl}/forms/business-diagnosis?source=line&topic=care&cid=${encodeURIComponent(contact?.id || '')}&luid=${encodeURIComponent(userId)}`;
+      const diagUrl = `${corpHpBase}/diagnosis?source=line&topic=care&cid=${encodeURIComponent(contact?.id || '')}&luid=${encodeURIComponent(userId)}`;
       defaultReplyText = `介護保険外サービスの開業・事業展開についてのご相談ありがとうございます！\n有限会社MST代表の大橋真人です。\n\n介護保険外サービス（自費リハビリ・自費看護・生活支援等）の立ち上げでは、収益モデルの設計と地域集客が成功の鍵となります。\n\nまずは貴社の構想や適性を把握するため、無料診断フォームよりお聞かせください。\n\n▼ 開業・経営診断フォームはこちら\n${diagUrl}\n\n回答を確認後、大橋より専門レポートを作成してお届けします。`;
     } else if (normalizedMessage.includes('診断')) {
-      const diagUrl = `${appUrl}/forms/business-diagnosis?source=line&cid=${encodeURIComponent(contact?.id || '')}&luid=${encodeURIComponent(userId)}`;
+      const diagUrl = `${corpHpBase}/diagnosis?source=line&cid=${encodeURIComponent(contact?.id || '')}&luid=${encodeURIComponent(userId)}`;
       defaultReplyText = `無料経営診断のご案内です。\n以下のURLより約3分でご回答いただけます。回答受領後、大橋真人より専任レポートをお届けします。\n\n▼ 3分無料経営診断\n${diagUrl}`;
     } else {
-      defaultReplyText = `メッセージありがとうございます！\n有限会社MST代表の大橋真人です。\n\n現在メッセージを確認しております。\nご相談・お問い合わせの内容に合わせて担当より順次ご返信いたしますので、今しばらくお待ちくださいませ。\n\n▼ 無料診断やサービス概要はこちら\n${appUrl}`;
+      defaultReplyText = `メッセージありがとうございます！\n有限会社MST代表の大橋真人です。\n\n現在メッセージを確認しております。\nご相談・お問い合わせの内容に合わせて担当より順次ご返信いたしますので、今しばらくお待ちくださいませ。\n\n▼ 無料診断やサービス概要はこちら\n${corpHpBase}/`;
     }
 
     lineMessage = { type: 'text', text: defaultReplyText };
@@ -1792,21 +1845,12 @@ async function processLinePostback(event: any, contact: any, eventId: string, bo
       },
     };
 
-    const { data: welcomeCandidates } = await lineSupabase
-      .from('line_auto_reply_rules')
-      .select('id, owner_id, match_text, reply_payload, reply_text, priority, enabled, updated_at, created_at')
-      .in('match_text', [...ALL_WELCOME_MATCH_TEXTS]);
+    const { rows: welcomeCandidates } = await fetchWelcomeRuleCandidates();
     const selection = selectWelcomeRule(welcomeCandidates, integration.owner_id);
     const welcomeRule = selection.rule;
 
-    let payloadObj: any = {};
-    if (welcomeRule?.reply_payload && typeof welcomeRule.reply_payload === 'object') {
-      payloadObj = welcomeRule.reply_payload;
-    } else if (typeof welcomeRule?.reply_text === 'string' && welcomeRule.reply_text.startsWith('{')) {
-      try {
-        payloadObj = JSON.parse(welcomeRule.reply_text);
-      } catch {}
-    }
+    const { payload: inferredPayload } = inferWelcomeReplyTypeAndPayload(welcomeRule);
+    const payloadObj: any = inferredPayload && typeof inferredPayload === 'object' ? inferredPayload : {};
 
     const patternA = { ...defaultPatternA, ...(payloadObj?.patternA || {}) };
     const savedB = payloadObj?.patternB || {};
@@ -2176,17 +2220,28 @@ async function processLinePostback(event: any, contact: any, eventId: string, bo
     let inboxBody = '';
 
     if (choice.route === 'form') {
-      if (!appUrl) {
-        console.warn('[LINE Postback] PUBLIC_APP_URL is not configured. Cannot send form URL.');
+      const formSlug = choice.formSlug || 'business-diagnosis';
+      const contactParam = contact?.id ? `&cid=${encodeURIComponent(contact.id)}` : '';
+      let formUrl = '';
+      if (formSlug === 'business-diagnosis') {
+        formUrl = `https://corp.mstcorp.info/diagnosis?source=line&luid=${encodeURIComponent(userId)}${contactParam}`;
+      } else if (formSlug === 'care-package-inquiry') {
+        formUrl = `https://business.mstcorp.info/?source=line&luid=${encodeURIComponent(userId)}${contactParam}`;
+      } else if (formSlug === 'material-download') {
+        formUrl = `https://corp.mstcorp.info/materials?source=line&luid=${encodeURIComponent(userId)}${contactParam}`;
+      } else if (formSlug === 'contact-inquiry') {
+        formUrl = `https://corp.mstcorp.info/contact?source=line&luid=${encodeURIComponent(userId)}${contactParam}`;
+      } else if (appUrl) {
+        formUrl = `${appUrl}/f/${encodeURIComponent(formSlug)}?source=line&luid=${encodeURIComponent(userId)}${contactParam}`;
+      }
+      if (!formUrl) {
+        console.warn('[LINE Postback] PUBLIC_APP_URL is not configured. Cannot send custom form URL.');
         replyMessage = {
           type: 'text',
           text: '無料経営診断をお選びいただきありがとうございます！\n現在診断フォームのURL設定を確認中のため、担当者より直接ご案内メッセージをお送りいたします。\nそのままご相談内容をメッセージでご返信いただくことも可能です。',
         };
         inboxBody = '[無料診断案内: PUBLIC_APP_URL未設定のため案内文のみ送信]';
       } else {
-        const formSlug = choice.formSlug || 'business-diagnosis';
-        const contactParam = contact?.id ? `&cid=${encodeURIComponent(contact.id)}` : '';
-        const formUrl = `${appUrl}/forms/${encodeURIComponent(formSlug)}?source=line&luid=${encodeURIComponent(userId)}${contactParam}`;
         const cardTitle = '📊 3分無料経営診断';
         const cardBody = `${contact?.full_name || 'お客様'} 様\n無料経営診断をお選びいただきありがとうございます！\n約3分のチェックにご回答いただくと、送信直後にホームページ上で【簡易診断結果】をすぐにご確認いただけます。\n（※詳細な診断レポート・改善提案書は30分商談後に進呈）`;
         replyMessage = {
@@ -2756,10 +2811,11 @@ async function processLineFollowWelcome(event: any, contact: any, eventId: strin
   // 2. ウェルカムルールを取得（__welcome__ を最優先し、明示停止時はフォールバック送信しない）
   let candidateRules: any[] = [];
   try {
-    const { data: allCandidates } = await lineSupabase.from('line_auto_reply_rules')
-      .select('id,owner_id,name,match_text,reply_text,reply_type,reply_payload,tag_id,priority,enabled,updated_at,created_at')
-      .in('match_text', [...ALL_WELCOME_MATCH_TEXTS]);
-    if (Array.isArray(allCandidates)) candidateRules = allCandidates;
+    const fetched = await fetchWelcomeRuleCandidates();
+    candidateRules = fetched.rows;
+    if (fetched.columnFallbackUsed) {
+      console.warn('[LineWelcome] reply_payload/reply_type column missing in line_auto_reply_rules; using reply_text JSON fallback.');
+    }
   } catch (rulesErr) {
     console.warn('[LineWelcome] Welcome rules lookup error:', rulesErr);
   }
@@ -2779,11 +2835,9 @@ async function processLineFollowWelcome(event: any, contact: any, eventId: strin
   let usedFallback = false;
 
   if (matchedRule) {
-    const replyType = matchedRule.reply_type || 'text';
-    let payload = matchedRule.reply_payload;
-    if (!payload && typeof matchedRule.reply_text === 'string' && matchedRule.reply_text.trim().startsWith('{')) {
-      try { payload = JSON.parse(matchedRule.reply_text); } catch {}
-    }
+    const inferred = inferWelcomeReplyTypeAndPayload(matchedRule);
+    const replyType = inferred.replyType;
+    const payload = inferred.payload;
 
     try {
       const { data: salesSettings } = ownerId
@@ -2801,49 +2855,44 @@ async function processLineFollowWelcome(event: any, contact: any, eventId: strin
         allForms: pubForms,
         appUrl,
       };
+      const contactForVars = { ...(contact || {}), line_user_id: contact?.line_user_id || userId };
 
       if (replyType === 'flex' && payload && typeof payload === 'object') {
         const flexTarget = extractWelcomeFlexTarget(payload);
         if (!flexTarget) {
+          console.warn('[LineWelcome] Matched rule missing bubble/carousel contents, rule id:', matchedRule.id);
           usedFallback = true;
         } else {
-          const resolved = resolveMessageVars(contact, { line_message_payload: flexTarget }, ownerSettings);
+          const resolved = resolveMessageVars(contactForVars, { line_message_payload: flexTarget }, ownerSettings);
           if (resolved.error) {
-            console.warn('Welcome Flex resolveMessageVars error, falling back to default Flex:', resolved.error);
+            console.warn('[LineWelcome] Welcome Flex resolveMessageVars warning:', resolved.error);
+          }
+          const personalizedFlex = resolved.personalizeJson(flexTarget);
+          const urlCheck = checkUrlsInObject(personalizedFlex);
+          if (!urlCheck.valid) {
+            console.warn('[LineWelcome] Invalid URL found in welcome Flex:', urlCheck.invalidUrl);
             usedFallback = true;
           } else {
-            const personalizedFlex = resolved.personalizeJson(flexTarget);
-            const unresolved = checkUnresolvedPlaceholders(personalizedFlex);
-            const urlCheck = checkUrlsInObject(personalizedFlex);
-            if (unresolved || !urlCheck.valid) {
-              console.warn('Welcome Flex has unresolved placeholders or invalid URL:', unresolved || urlCheck.invalidUrl);
-              usedFallback = true;
+            const altText = String(personalizedFlex.altText || '友だち追加ありがとうございます').slice(0, 400);
+            const contents = normalizeFlexContents(personalizedFlex);
+            if (contents) {
+              lineMessage = { type: 'flex', altText, contents: sanitizeWelcomeFlexNode(contents) };
+              inboxBody = `[ウェルカムFlexメッセージ: ${altText}]`;
             } else {
-              const altText = String(personalizedFlex.altText || '友だち追加ありがとうございます').slice(0, 400);
-              const contents = normalizeFlexContents(personalizedFlex);
-              if (contents) {
-                lineMessage = { type: 'flex', altText, contents };
-                inboxBody = `[ウェルカムFlexメッセージ: ${altText}]`;
-              } else {
-                usedFallback = true;
-              }
+              console.warn('[LineWelcome] normalizeFlexContents returned null, rule id:', matchedRule.id);
+              usedFallback = true;
             }
           }
         }
       } else if (replyType === 'text') {
         const textContent = String(matchedRule.reply_text || (payload as any)?.text || '');
-        const resolved = resolveMessageVars(contact, { body_text: textContent }, ownerSettings);
-        if (resolved.error) {
-          console.warn('Welcome text resolveMessageVars error, falling back:', resolved.error);
+        if (!textContent.trim()) {
           usedFallback = true;
         } else {
-          const personalizedText = resolved.personalize(textContent);
-          if (checkUnresolvedPlaceholders(personalizedText)) {
-            usedFallback = true;
-          } else {
-            lineMessage = { type: 'text', text: personalizedText };
-            inboxBody = personalizedText;
-          }
+          const resolved = resolveMessageVars(contactForVars, { body_text: textContent }, ownerSettings);
+          const personalizedText = resolved.personalize(textContent).slice(0, 5000);
+          lineMessage = { type: 'text', text: personalizedText };
+          inboxBody = personalizedText;
         }
       } else if (replyType === 'image' && payload && typeof payload === 'object') {
         const originalContentUrl = String((payload as any).originalContentUrl || '');
@@ -2858,20 +2907,21 @@ async function processLineFollowWelcome(event: any, contact: any, eventId: strin
         usedFallback = true;
       }
     } catch (resolveErr) {
-      console.warn('Welcome message resolve exception:', resolveErr);
+      console.warn('[LineWelcome] Welcome message resolve exception:', resolveErr);
       usedFallback = true;
     }
   }
 
-  // ルールが無いか、未解決プレースホルダー等でフォールバックが必要な場合は固定Flexを使用
+  // ルールが無いか、不正な形式のためフォールバックが必要な場合のみ固定Flexを使用
   if (!matchedRule || usedFallback || !lineMessage) {
+    console.warn('[LineWelcome] Falling back to default welcome Flex. source:', selection.source, 'matchedRuleId:', matchedRule?.id || null, 'usedFallback:', usedFallback);
     const defaultFlex = buildDefaultWelcomeFlexMessage();
     lineMessage = {
       type: 'flex',
       altText: defaultFlex.altText,
       contents: defaultFlex.contents,
     };
-    inboxBody = '[友だち追加ウェルカムメッセージ: 大橋真人よりご挨拶・選択肢Flex]';
+    inboxBody = '[友だち追加ウェルカムメッセージ: 標準メニューFlex]';
   }
   // 送信前の最終検証: Flexの contents が bubble/carousel でなければ固定版に差し替える
   if (lineMessage?.type === 'flex') {
@@ -2880,28 +2930,40 @@ async function processLineFollowWelcome(event: any, contact: any, eventId: strin
       console.warn('[LineWelcome] Invalid flex contents.type =', t, '- falling back to default welcome flex');
       const d = buildDefaultWelcomeFlexMessage();
       lineMessage = { type: 'flex', altText: d.altText, contents: d.contents };
-      inboxBody = '[友だち追加ウェルカムメッセージ: 不正なFlexのため固定版を送信]';
+      inboxBody = '[友だち追加ウェルカムメッセージ: 不正なFlexのため標準版を送信]';
     }
   }
-  // 送信 (replyToken があれば reply、無ければ push)
-  try {
-    let sentOk = false;
+  // 送信 (replyToken があれば reply、無ければ push。カスタムFlexをLINE APIが拒否した場合のみ標準版で再送)
+  const sendLineMessage = async (msg: Record<string, any>): Promise<{ ok: boolean; status?: number; errText?: string }> => {
     if (typeof event.replyToken === 'string' && event.replyToken) {
       const response = await fetch('https://api.line.me/v2/bot/message/reply', {
         method: 'POST',
         headers: { Authorization: 'Bearer ' + lineChannelAccessToken, 'Content-Type': 'application/json' },
-        body: JSON.stringify({ replyToken: event.replyToken, messages: [lineMessage] }),
+        body: JSON.stringify({ replyToken: event.replyToken, messages: [msg] }),
       });
-      if (response.ok) sentOk = true;
-      else console.warn('LINE welcome reply error:', await response.text().catch(() => ''));
+      if (response.ok) return { ok: true };
+      const errText = await response.text().catch(() => '');
+      console.warn('[LineWelcome] reply error:', response.status, errText);
     }
-    if (!sentOk) {
-      const pushRes = await fetch('https://api.line.me/v2/bot/message/push', {
-        method: 'POST',
-        headers: { Authorization: 'Bearer ' + lineChannelAccessToken, 'Content-Type': 'application/json' },
-        body: JSON.stringify({ to: userId, messages: [lineMessage] }),
-      });
-      if (!pushRes.ok) console.warn('LINE welcome push error:', await pushRes.text().catch(() => ''));
+    const pushRes = await fetch('https://api.line.me/v2/bot/message/push', {
+      method: 'POST',
+      headers: { Authorization: 'Bearer ' + lineChannelAccessToken, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ to: userId, messages: [msg] }),
+    });
+    if (pushRes.ok) return { ok: true };
+    const pushErr = await pushRes.text().catch(() => '');
+    console.warn('[LineWelcome] push error:', pushRes.status, pushErr);
+    return { ok: false, status: pushRes.status, errText: pushErr };
+  };
+
+  try {
+    let sendResult = await sendLineMessage(lineMessage);
+    if (!sendResult.ok && !usedFallback && matchedRule) {
+      console.warn('[LineWelcome] Custom welcome message was rejected by LINE API; retrying with default welcome Flex. Detail:', sendResult.status, sendResult.errText);
+      const d = buildDefaultWelcomeFlexMessage();
+      lineMessage = { type: 'flex', altText: d.altText, contents: d.contents };
+      inboxBody = `[友だち追加ウェルカム送信フォールバック] 設定済みメッセージ送信失敗(${sendResult.status || 'err'})のため標準版を送信`;
+      sendResult = await sendLineMessage(lineMessage);
     }
 
     if (ownerId) {
@@ -3865,26 +3927,46 @@ app.get('/api/line/welcome-config', requireAuth, async (req, res) => {
   try {
     const integration = await resolveLineIntegration();
     const preferredOwnerId = integration?.owner_id || authUserId;
-    const { data: candidates, error } = await lineSupabase
-      .from('line_auto_reply_rules')
-      .select('id, owner_id, name, match_mode, match_text, reply_type, reply_text, reply_payload, tag_id, priority, enabled, updated_at, created_at')
-      .in('match_text', [...ALL_WELCOME_MATCH_TEXTS]);
-    if (error) {
-      if (isOptionalLineAutomationSchemaMissing(error)) {
-        return res.json({ rule: null, conflictingLegacyRules: [], effectiveOwnerId: preferredOwnerId });
-      }
-      throw error;
+    const fetched = await fetchWelcomeRuleCandidates();
+    if (fetched.schemaMissing) {
+      return res.json({ rule: null, activeSource: 'default_fallback', conflictingLegacyRules: [], effectiveOwnerId: preferredOwnerId });
     }
-
+    const candidates = fetched.rows;
     const selection = selectWelcomeRule(candidates, authUserId || preferredOwnerId);
-    const welcomeRule = (candidates || []).find((r: any) => r.match_text === WELCOME_MATCH_TEXT && r.owner_id === authUserId)
+    const rawWelcomeRule = (candidates || []).find((r: any) => r.match_text === WELCOME_MATCH_TEXT && r.owner_id === authUserId)
       || (candidates || []).find((r: any) => r.match_text === WELCOME_MATCH_TEXT && r.owner_id === preferredOwnerId)
       || (candidates || []).find((r: any) => r.match_text === WELCOME_MATCH_TEXT)
       || null;
 
+    const welcomeRule = rawWelcomeRule
+      ? (() => {
+          const inferred = inferWelcomeReplyTypeAndPayload(rawWelcomeRule);
+          return {
+            ...rawWelcomeRule,
+            reply_type: rawWelcomeRule.reply_type || inferred.replyType,
+            reply_payload: rawWelcomeRule.reply_payload ?? inferred.payload,
+          };
+        })()
+      : null;
+
+    let lastWelcomeLog: { body?: string; received_at?: string; status?: string } | null = null;
+    try {
+      const { data: logRow } = await lineSupabase
+        .from('line_inbox_messages')
+        .select('body, received_at, status')
+        .like('line_event_id', 'welcome-%')
+        .eq('direction', 'outbound')
+        .order('received_at', { ascending: false })
+        .limit(1)
+        .maybeSingle();
+      if (logRow) lastWelcomeLog = logRow as any;
+    } catch {}
+
     return res.json({
       rule: welcomeRule,
       activeSource: selection.source,
+      columnFallbackUsed: fetched.columnFallbackUsed,
+      lastWelcomeLog,
       conflictingLegacyRules: selection.conflictingLegacyRules.map((r) => ({
         id: r.id,
         name: r.name,
@@ -3932,8 +4014,10 @@ app.put('/api/line/welcome-config', requireAuth, async (req, res) => {
 
     const matchingOwnerRows = (existingRows || []).filter((r: any) => r.owner_id === targetOwnerId);
     const targetRow = matchingOwnerRows[0] || (existingRows || [])[0] || null;
+    const resolvedOwnerId = targetRow?.owner_id || targetOwnerId;
+    const nowIso = new Date().toISOString();
     const rowData = {
-      owner_id: targetRow?.owner_id || targetOwnerId,
+      owner_id: resolvedOwnerId,
       name: '友だち追加ウェルカムFlexメッセージ',
       match_mode: 'exact',
       match_text: WELCOME_MATCH_TEXT,
@@ -3942,32 +4026,61 @@ app.put('/api/line/welcome-config', requireAuth, async (req, res) => {
       reply_payload: sanitizedPayload,
       enabled,
       priority: 0,
-      updated_at: new Date().toISOString(),
+      updated_at: nowIso,
+    };
+    const baseRowData = {
+      owner_id: resolvedOwnerId,
+      name: '友だち追加ウェルカムFlexメッセージ',
+      match_mode: 'exact',
+      match_text: WELCOME_MATCH_TEXT,
+      reply_text: JSON.stringify(sanitizedPayload),
+      enabled,
+      priority: 0,
+      updated_at: nowIso,
     };
 
     let savedRule: any = null;
     if (targetRow?.id) {
-      const { data: updated, error: updateError } = await lineSupabase
+      let { data: updated, error: updateError } = await lineSupabase
         .from('line_auto_reply_rules')
         .update(rowData)
         .eq('id', targetRow.id)
         .select('id, owner_id, enabled, updated_at')
         .single();
+      if (updateError && isMissingColumnError(updateError)) {
+        const fb = await lineSupabase
+          .from('line_auto_reply_rules')
+          .update(baseRowData)
+          .eq('id', targetRow.id)
+          .select('id, owner_id, enabled, updated_at')
+          .single();
+        updated = fb.data;
+        updateError = fb.error;
+      }
       if (updateError) throw updateError;
       savedRule = updated;
       // 重複する __welcome__ 行が残っていれば整理
       const duplicateIds = (existingRows || [])
-        .filter((r: any) => r.id !== targetRow.id && r.owner_id === rowData.owner_id)
+        .filter((r: any) => r.id !== targetRow.id && r.owner_id === resolvedOwnerId)
         .map((r: any) => r.id);
       if (duplicateIds.length > 0) {
         await lineSupabase.from('line_auto_reply_rules').delete().in('id', duplicateIds);
       }
     } else {
-      const { data: inserted, error: insertError } = await lineSupabase
+      let { data: inserted, error: insertError } = await lineSupabase
         .from('line_auto_reply_rules')
         .insert(rowData)
         .select('id, owner_id, enabled, updated_at')
         .single();
+      if (insertError && isMissingColumnError(insertError)) {
+        const fb = await lineSupabase
+          .from('line_auto_reply_rules')
+          .insert(baseRowData)
+          .select('id, owner_id, enabled, updated_at')
+          .single();
+        inserted = fb.data;
+        insertError = fb.error;
+      }
       if (insertError) throw insertError;
       savedRule = inserted;
     }

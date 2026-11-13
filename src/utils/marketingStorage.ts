@@ -37,12 +37,71 @@ export function saveMarketingScenarios(scenarios: MarketingScenario[]): void {
   }
 }
 
+export const OFFICIAL_VERCEL_URLS = {
+  diagnosis: 'https://corp.mstcorp.info/diagnosis',
+  care_consult: 'https://business.mstcorp.info/',
+  material_download: 'https://corp.mstcorp.info/materials',
+  media_top: 'https://corp.mstcorp.info/',
+} as const;
+
+export function upgradeLegacyMstUrl(rawUrl: string, linkId?: string): string {
+  const trimmed = (rawUrl || '').trim();
+  if (!trimmed) return trimmed;
+
+  const isLegacyInternalHost =
+    /\.run\.app\b/i.test(trimmed) ||
+    /mstos\.app\b/i.test(trimmed) ||
+    /^https?:\/\/localhost(?::\d+)?\//i.test(trimmed) ||
+    trimmed.startsWith('/');
+
+  // Preserve query parameters (such as utm_* or cid) when upgrading path-known legacy URLs
+  const extractQuery = (u: string): string => {
+    const qIndex = u.indexOf('?');
+    return qIndex >= 0 ? u.slice(qIndex) : '';
+  };
+
+  if (/\/(?:f|forms)\/business-diagnosis(?:\/|$|\?)/i.test(trimmed) || (linkId === 'diagnosis' && isLegacyInternalHost)) {
+    return `${OFFICIAL_VERCEL_URLS.diagnosis}${extractQuery(trimmed)}`;
+  }
+  if (/\/(?:f|forms)\/care-package-inquiry(?:\/|$|\?)/i.test(trimmed) || (linkId === 'care_consult' && isLegacyInternalHost)) {
+    return `${OFFICIAL_VERCEL_URLS.care_consult}${extractQuery(trimmed)}`;
+  }
+  if (/\/(?:f|forms)\/material-download(?:\/|$|\?)/i.test(trimmed) || (linkId === 'material_download' && isLegacyInternalHost)) {
+    return `${OFFICIAL_VERCEL_URLS.material_download}${extractQuery(trimmed)}`;
+  }
+  if (linkId === 'media_top' && isLegacyInternalHost) {
+    return `${OFFICIAL_VERCEL_URLS.media_top}${extractQuery(trimmed)}`;
+  }
+  return trimmed;
+}
+
+export function migrateOfficialLinks(links: OfficialLinkItem[]): { links: OfficialLinkItem[]; changed: boolean } {
+  if (!Array.isArray(links) || links.length === 0) {
+    return { links: [], changed: false };
+  }
+  let changed = false;
+  const migrated = links.map((item) => {
+    const upgradedUrl = upgradeLegacyMstUrl(item.url, item.id);
+    if (upgradedUrl && upgradedUrl !== item.url) {
+      changed = true;
+      return { ...item, url: upgradedUrl };
+    }
+    return item;
+  });
+  return { links: migrated, changed };
+}
+
 export function loadStoredOfficialLinks(): OfficialLinkItem[] | null {
   try {
     const raw = localStorage.getItem(OFFICIAL_LINKS_KEY);
     if (!raw) return null;
     const parsed = JSON.parse(raw);
-    return Array.isArray(parsed) && parsed.length > 0 ? (parsed as OfficialLinkItem[]) : null;
+    if (!Array.isArray(parsed) || parsed.length === 0) return null;
+    const { links, changed } = migrateOfficialLinks(parsed as OfficialLinkItem[]);
+    if (changed) {
+      saveStoredOfficialLinks(links);
+    }
+    return links;
   } catch {
     return null;
   }

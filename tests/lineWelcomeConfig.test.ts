@@ -6,6 +6,8 @@ import {
   sanitizeWelcomeFlexNode,
   expandMessageVarAliases,
   replaceMessagePlaceholders,
+  isMissingColumnError,
+  inferWelcomeReplyTypeAndPayload,
 } from '../server/lineWelcomeResolver';
 
 console.log('=== Running LINE Welcome Config & Resolver Tests ===\n');
@@ -88,7 +90,7 @@ console.log('=== Running LINE Welcome Config & Resolver Tests ===\n');
   console.log('  ✓ Legacy fallback and default fallback behave correctly');
 }
 
-// Test 4: extractWelcomeFlexTarget strips patternA/patternB/choices metadata from validation target
+// Test 4: extractWelcomeFlexTarget strips patternA/patternB/choices metadata and sanitizeWelcomeFlexNode clamps labels
 {
   const storedPayload = {
     altText: 'カスタムウェルカム',
@@ -100,7 +102,7 @@ console.log('=== Running LINE Welcome Config & Resolver Tests ===\n');
         contents: [
           { type: 'text', text: '{お名前} 様、ようこそ！' },
           { type: 'text', text: '' },
-          { type: 'button', height: 'lg', action: { type: 'uri', label: '診断へ', uri: '{案内URL}' } },
+          { type: 'button', height: 'lg', action: { type: 'uri', label: 'これは20文字を確実に超える長いボタンラベルテストです', uri: '{案内URL}' } },
         ],
       },
     },
@@ -121,6 +123,7 @@ console.log('=== Running LINE Welcome Config & Resolver Tests ===\n');
   const sanitized = sanitizeWelcomeFlexNode(target.contents);
   assert.strictEqual(sanitized.body.contents.length, 2, 'Empty text node must be removed');
   assert.strictEqual(sanitized.body.contents[1].height, 'md', 'Invalid button height must normalize to md');
+  assert.strictEqual(sanitized.body.contents[1].action.label.length, 20, 'Button label must be clamped to 20 chars');
   console.log('  ✓ extractWelcomeFlexTarget & sanitizeWelcomeFlexNode passed');
 }
 
@@ -143,6 +146,31 @@ console.log('=== Running LINE Welcome Config & Resolver Tests ===\n');
   assert(rendered.includes('https://timerex.net/s/test'));
   assert(!rendered.includes('{お名前}') && !rendered.includes('{案内URL}') && !rendered.includes('{recipient_name}'));
   console.log('  ✓ Japanese and English placeholder alias expansion passed');
+}
+
+// Test 6: Missing column detection & reply_text JSON Flex inference when reply_payload/reply_type absent
+{
+  assert.strictEqual(
+    isMissingColumnError({ code: 'PGRST204', message: "Could not find the 'reply_payload' column of 'line_auto_reply_rules' in the schema cache" }),
+    true
+  );
+  assert.strictEqual(
+    isMissingColumnError({ code: 'PGRST205', message: "Could not find the table 'public.line_auto_reply_rules'" }),
+    false
+  );
+
+  const fallbackRow = {
+    id: 'r-1',
+    match_text: WELCOME_MATCH_TEXT,
+    reply_text: JSON.stringify({
+      altText: '新ウェルカムメッセージ',
+      contents: { type: 'bubble', body: { type: 'box', layout: 'vertical', contents: [{ type: 'text', text: '新しい挨拶です' }] } },
+    }),
+  };
+  const inferred = inferWelcomeReplyTypeAndPayload(fallbackRow);
+  assert.strictEqual(inferred.replyType, 'flex', 'Should infer flex when reply_type/reply_payload are omitted and reply_text has Flex JSON');
+  assert.strictEqual(inferred.payload?.altText, '新ウェルカムメッセージ');
+  console.log('  ✓ Schema-drift fallback & JSON reply_text inference passed');
 }
 
 console.log('\n=== All LINE Welcome Config & Resolver Tests Passed! ===\n');

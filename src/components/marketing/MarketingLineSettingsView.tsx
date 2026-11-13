@@ -229,7 +229,7 @@ export const MarketingLineSettingsView: React.FC<MarketingLineSettingsViewProps>
               .eq('owner_id', uid)
               .maybeSingle(),
             db
-              .from('sales_settings')
+              .from('sales_workspace_settings')
               .select('booking_page_url')
               .eq('owner_id', uid)
               .maybeSingle(),
@@ -277,6 +277,25 @@ export const MarketingLineSettingsView: React.FC<MarketingLineSettingsViewProps>
       active = false;
     };
   }, []);
+
+  // ラベルやアクション変更時、MST自動生成画像を使っている場合はリアルタイムに画像プレビューを最新化
+  useEffect(() => {
+    if (!image?.isGenerated) return;
+    let active = true;
+    const timer = window.setTimeout(() => {
+      void renderMstRichMenuImage({ layout, actions })
+        .then((rendered) => {
+          if (active) {
+            setImage({ ...rendered, isGenerated: true });
+          }
+        })
+        .catch(() => {});
+    }, 220);
+    return () => {
+      active = false;
+      window.clearTimeout(timer);
+    };
+  }, [actions, layout, image?.isGenerated]);
 
   const applyMstRecommendedPreset = async () => {
     const preset = createMstRecommendedRichMenuPreset(bookingUrlDefault);
