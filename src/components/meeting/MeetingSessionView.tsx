@@ -3,7 +3,9 @@ import { X, Monitor, Sparkles, Loader2, CheckCircle2 } from 'lucide-react';
 import { getSupabase, getAuthHeaders } from '../../lib/supabaseClient';
 import {
   HEARING_QUESTIONS, HEARING_TYPE_QUESTIONS, HEARING_CORE_VERSION, MEMO_KEY, SUMMARY_KEY, DECISIONS_KEY,
-  MAX_EXTRA_QUESTIONS, sanitizeCoreAnswers, sanitizeExtraQuestions, answeredCount, type CoreAnswers, type ExtraQuestion,
+  MAX_EXTRA_QUESTIONS, sanitizeCoreAnswers, sanitizeExtraQuestions, answeredCount,
+  REQUIRED_QUESTIONS, FLOW_NOTE_QUESTIONS,
+  type CoreAnswers, type ExtraQuestion,
 } from '../../constants/hearingSheet';
 import { renderMeetingShareHtml } from '../../utils/meetingShare';
 
@@ -158,14 +160,32 @@ export const MeetingSessionView: React.FC<Props> = ({ diagnosisId, companyId, co
         {!loaded && <p className="text-sm text-slate-500">読み込み中…</p>}
 
         <section className="space-y-3">
-          <h3 className="font-bold text-sm">ヒアリング({answeredCount(answers)}/{HEARING_QUESTIONS.length})</h3>
-          {HEARING_QUESTIONS.map((q) => (
+          <h3 className="font-bold text-sm">ヒアリング({answeredCount(answers)}/{REQUIRED_QUESTIONS.length})</h3>
+
+          {/* 必ず聞く質問（個別入力欄） */}
+          {REQUIRED_QUESTIONS.map((q) => (
             <label key={q.id} className="block">
               <span className="text-sm font-medium">{q.label}</span>
               <span className="ml-2 text-[11px] text-slate-500">{q.why}</span>
               <textarea className={area} rows={2} value={answers[q.id] || ''} onChange={(e) => setAnswer(q.id, e.target.value)} />
             </label>
           ))}
+
+          {/* 流れの中で確認する内容（まとめてメモ欄） */}
+          <div className="rounded-xl border border-slate-200 bg-slate-50 p-3 space-y-2">
+            <p className="text-sm font-medium text-slate-700">流れの中で確認する内容</p>
+            <ul className="text-xs text-slate-500 space-y-0.5 list-disc list-inside">
+              {FLOW_NOTE_QUESTIONS.map((q) => (
+                <li key={q.id}>{q.label}<span className="ml-1 text-slate-400">（{q.why}）</span></li>
+              ))}
+            </ul>
+            {FLOW_NOTE_QUESTIONS.map((q) => (
+              <label key={q.id} className="block">
+                <span className="text-xs font-semibold text-slate-600">{q.label}</span>
+                <textarea className={area} rows={2} value={answers[q.id] || ''} onChange={(e) => setAnswer(q.id, e.target.value)} />
+              </label>
+            ))}
+          </div>
         </section>
 
         <section className="space-y-3">
