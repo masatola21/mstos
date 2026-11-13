@@ -863,11 +863,11 @@ export const DocumentTemplateView: React.FC<DocumentTemplateViewProps> = ({
     setTimeout(() => setCopied(false), 2000);
   };
 
-  const handleManualSave = async () => {
+  const handleManualSave = async (opts?: { status?: 'draft' | 'approved' }): Promise<string | null> => {
     const supabase = getSupabase();
     if (!supabase) {
       setSaveMessage('Supabase接続後に確認待ち書類として保存できます。');
-      return;
+      return null;
     }
     const templateId = currentTemplate.id;
     const documentType = currentTemplate.type === 'report' ? 'diagnosis_report' : currentTemplate.type;
@@ -886,27 +886,30 @@ export const DocumentTemplateView: React.FC<DocumentTemplateViewProps> = ({
       const existingId = autosavedDocumentIds.current[templateId];
       if (existingId) {
         const { error } = await supabase.from('customer_documents')
-          .update(payload)
+          .update(opts?.status ? { ...payload, status: opts.status } : payload)
           .eq('id', existingId);
         if (error) throw error;
         setSavedDocIds((prev) => ({ ...prev, [templateId]: existingId }));
         setSaveMessage('書類を更新しました。');
+        return existingId;
       } else {
         const { data, error } = await supabase.from('customer_documents')
-          .insert({ ...payload, status: 'approved' })
+          .insert({ ...payload, status: opts?.status ?? 'approved' })
           .select('id')
           .single();
         if (error || !data?.id) throw error || new Error('書類IDを取得できませんでした。');
         autosavedDocumentIds.current[templateId] = data.id;
         setSavedDocIds((prev) => ({ ...prev, [templateId]: data.id }));
         setHasStartedDocument(true);
-        setSaveMessage('確定書類（送付可能）として保存しました。');
+        setSaveMessage(opts?.status === 'draft' ? '作成中の書類として保存しました。' : '確定書類（送付可能）として保存しました。');
+        return data.id;
       }
     } catch (e: any) {
       setSaveMessage(`保存エラー: ${e.message}`);
     } finally {
       setIsSavingDocument(false);
     }
+    return null;
   };
 
   const handleSendViaSendCenter = async () => {
@@ -967,10 +970,10 @@ export const DocumentTemplateView: React.FC<DocumentTemplateViewProps> = ({
     return String(data?.user?.email || '');
   };
 
-  const saveProposalDraft = async (target: 'drafting' | 'awaiting_approval' | 'approved') => {
+  const saveProposalDraft = async (target: 'drafting' | 'approved') => {
     const supabase = getSupabase();
     if (!supabase || !draftCtx || draftBusy) return;
-    if (target !== 'drafting' && blockers.length > 0) { setDraftMsg('承認待ちにできない項目があります。'); return; }
+    if (target === 'approved' && blockers.length > 0) { setDraftMsg('確定できない項目があります。'); return; }
     setDraftBusy(true); setDraftMsg('');
     try {
       const who = await currentUserLabel();
@@ -980,8 +983,10 @@ export const DocumentTemplateView: React.FC<DocumentTemplateViewProps> = ({
       });
       // 内容を保存し直したら、承認の記録はいったん外す(直した内容を承認していない状態を作らない)
       const fields: any = { ...base, status: target, roadmap_confirmed_by: null, roadmap_confirmed_at: null, approved_by: null, approved_at: null };
-      if (target !== 'drafting') { fields.roadmap_confirmed_by = who || '担当者'; fields.roadmap_confirmed_at = now; }
-      if (target === 'approved') { fields.approved_by = who || '担当者'; fields.approved_at = now; }
+      if (target === 'approved') { fields.roadmap_confirmed_by = who || '担当者'; fields.roadmap_confirmed_at = now; fields.approved_by = who || '担当者'; fields.approved_at = now; }
+      // 書類台帳の「作成中/確定」と同じ状態にそろえる(同じ書類を指す)
+      const docId = await handleManualSave({ status: target === 'approved' ? 'approved' : 'draft' });
+      if (docId) fields.document_id = docId;
 
       let result: any;
       if (draftRec && draftRec.status === 'sent') {
@@ -996,14 +1001,14 @@ export const DocumentTemplateView: React.FC<DocumentTemplateViewProps> = ({
       }
       if (result.error) throw result.error;
       setDraftRec(result.data);
-      setDraftMsg(target === 'drafting' ? '下書きを保存しました。' : target === 'awaiting_approval' ? '承認待ちにしました。内容を確認して「承認する」を押してください。' : '承認しました。');
+      setDraftMsg(target === 'drafting' ? '作成中として保存しました。' : '確定しました。送付できます。');
     } catch (err: any) {
       if (['PGRST205', '42P01'].includes(String(err?.code))) setDraftTableMissing(true);
       setDraftMsg(`保存できませんでした: ${err?.message || err}`);
     } finally { setDraftBusy(false); }
   };
 
-  const draftStatusLabel: Record<string, string> = { drafting: '下書き', awaiting_approval: '承認待ち', approved: '承認済み', sent: '送付済み', superseded: '置き換え済み' };
+  const draftStatusLabel: Record<string, string> = { drafting: '作成中', awaiting_approval: '作成中', approved: '確定', sent: '送付済み', superseded: '置き換え済み' };
 
   const proposalRequired = currentTemplate.id === 'tpl-proposal-report' ? requiredKeysFor(kindFromPaymentMode(paymentMode)) : null;
   const missingVariables = currentTemplate.variables.filter((v) =>
@@ -1083,8 +1088,8 @@ export const DocumentTemplateView: React.FC<DocumentTemplateViewProps> = ({
 
           <button
             type="button"
-            onClick={handleManualSave}
-            disabled={isSavingDocument}
+            onClick={() => (isProposalDoc && draftCtx && !draftTableMissing ? void saveProposalDraft('approved') : void handleManualSave())}
+            disabled={isSavingDocument || draftBusy}
             className="px-3 py-1.5 rounded-md bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white font-medium text-xs flex items-center gap-1.5 transition-all cursor-pointer"
           >
             <Save className="w-3.5 h-3.5" />
@@ -1431,20 +1436,17 @@ export const DocumentTemplateView: React.FC<DocumentTemplateViewProps> = ({
                 {isProposalDoc && draftCtx && (
                   <div className="rounded-xl border border-slate-200 bg-white px-3.5 py-3 text-xs shadow-2xs space-y-2">
                     <div className="flex items-center justify-between gap-2">
-                      <span className="font-bold text-slate-800">提案書の状態: {draftRec ? `${draftStatusLabel[draftRec.status] || draftRec.status}(v${draftRec.version})` : '未保存'}</span>
+                      <span className="font-bold text-slate-800">状態: {draftRec ? `${draftStatusLabel[draftRec.status] || draftRec.status}(v${draftRec.version})` : '未保存'}</span>
                       <div className="flex gap-2">
-                        <button type="button" disabled={draftBusy || draftTableMissing} onClick={() => void saveProposalDraft('drafting')} className="px-2.5 py-1 rounded-lg border border-slate-300 font-semibold disabled:opacity-50">下書きを保存</button>
-                        <button type="button" disabled={draftBusy || draftTableMissing || blockers.length > 0} onClick={() => void saveProposalDraft('awaiting_approval')} className="px-2.5 py-1 rounded-lg bg-slate-700 text-white font-semibold disabled:opacity-50">承認待ちにする</button>
-                        {draftRec?.status === 'awaiting_approval' && (
-                          <button type="button" disabled={draftBusy || draftTableMissing || blockers.length > 0} onClick={() => void saveProposalDraft('approved')} className="px-2.5 py-1 rounded-lg bg-emerald-600 text-white font-semibold disabled:opacity-50">承認する</button>
-                        )}
+                        <button type="button" disabled={draftBusy || draftTableMissing} onClick={() => void saveProposalDraft('drafting')} className="px-2.5 py-1 rounded-lg border border-slate-300 font-semibold disabled:opacity-50">作成中として保存</button>
+                        <button type="button" disabled={draftBusy || draftTableMissing || blockers.length > 0} onClick={() => void saveProposalDraft('approved')} className="px-2.5 py-1 rounded-lg bg-emerald-600 text-white font-semibold disabled:opacity-50">確定する</button>
                       </div>
                     </div>
                     <label className="flex items-center gap-2"><input type="checkbox" checked={roadmapOk} onChange={(e) => setRoadmapOk(e.target.checked)} />ロードマップ(P3)の内容を確認した</label>
-                    {blockers.length > 0 && <p className="text-amber-800">承認待ちにするには: {blockers.join(' / ')}</p>}
+                    {blockers.length > 0 && <p className="text-amber-800">確定するには: {blockers.join(' / ')}</p>}
                     {draftTableMissing && <p className="text-amber-800">保存先のテーブルが未作成のため、保存できません(docs/db-proposals の SQL を実行してください)。</p>}
                     {draftMsg && <p className="text-slate-700">{draftMsg}</p>}
-                    <p className="text-slate-500">内容を直して保存し直すと、承認はいったん外れます。送付済みの版を直して保存すると、新しい版になります。</p>
+                    <p className="text-slate-500">内容を直して保存し直すと「作成中」に戻ります。書類台帳の「作成中/確定」と同じ状態です。</p>
                   </div>
                 )}
 
