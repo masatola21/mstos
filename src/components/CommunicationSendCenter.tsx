@@ -7,7 +7,7 @@ import {
   type CustomOneShotConfig,
 } from '../utils/salesOutreachTemplates';
 import { appendEmailFooter } from '../../server/emailFooter';
-import { Eye, Save, Send, Users, SendHorizonal, FileText, Library, Mail, MessageSquare, Paperclip, CheckCircle2, X, Inbox, ArrowLeft, AlertTriangle, Maximize2, Minimize2, Eraser } from 'lucide-react';
+import { Eye, Save, Send, Users, SendHorizonal, FileText, Library, Mail, MessageSquare, Paperclip, CheckCircle2, X, Inbox, ArrowLeft, AlertTriangle, Maximize2, Minimize2, Eraser, ChevronDown, ChevronUp, Settings2 } from 'lucide-react';
 import { getSupabase } from '../lib/supabaseClient';
 import { LineMessagePreview } from './LineMessagePreview';
 import { renderPlaceholders } from '../utils/placeholders';
@@ -294,6 +294,7 @@ export const CommunicationSendCenter: React.FC<Props> = ({
   const [savingSenderSettings, setSavingSenderSettings] = useState(false);
   const [customOneShotConfig, setCustomOneShotConfig] = useState<CustomOneShotConfig | null>(null);
   const [isComposerExpanded, setIsComposerExpanded] = useState(false);
+  const [showDrawerSettings, setShowDrawerSettings] = useState(false);
 
   useEffect(() => {
     if (!isComposerExpanded) return;
@@ -902,20 +903,32 @@ export const CommunicationSendCenter: React.FC<Props> = ({
 
       {/* Drawer Mode Top Summary Badge */}
       {variant === 'drawer' && (
-        <div className="flex flex-wrap items-center gap-2 pb-1 text-xs">
-          <span className="rounded-md bg-purple-100 text-purple-800 font-bold px-2.5 py-1 border border-purple-200">
-            {labels[kind] || kind}
-          </span>
-          {contact && (
-            <span className="text-slate-600 bg-white border border-slate-200 px-2 py-1 rounded-md font-medium">
-              宛先: <strong className="text-slate-900">{contact.full_name} 様</strong> {companies[contact.company_id || ''] && `(${companies[contact.company_id || '']})`}
+        <div className="flex flex-wrap items-center justify-between gap-2 pb-2 border-b border-slate-200/80">
+          <div className="flex flex-wrap items-center gap-1.5 text-xs">
+            <span className="rounded-md bg-purple-100 text-purple-800 font-bold px-2 py-0.5 border border-purple-200">
+              {labels[kind] || kind}
             </span>
-          )}
-          {doc && (
-            <span className="text-slate-600 bg-white border border-slate-200 px-2 py-1 rounded-md font-medium">
-              書類: <strong className="text-purple-700">{doc.title}</strong>
-            </span>
-          )}
+            {contact && (
+              <span className="text-slate-700 bg-white border border-slate-200 px-2 py-0.5 rounded-md font-medium">
+                宛先: <strong className="text-slate-900">{contact.full_name} 様</strong> {companies[contact.company_id || ''] && `(${companies[contact.company_id || '']})`}
+              </span>
+            )}
+            {doc && (
+              <span className="text-slate-700 bg-white border border-slate-200 px-2 py-0.5 rounded-md font-medium">
+                書類: <strong className="text-purple-700">{doc.title}</strong>
+              </span>
+            )}
+          </div>
+          <button
+            type="button"
+            onClick={() => setShowDrawerSettings((prev) => !prev)}
+            className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg border border-slate-200 bg-white hover:bg-slate-50 text-slate-700 text-xs font-semibold cursor-pointer shadow-2xs transition-colors shrink-0"
+            title="宛先・書類・差出人・文例などの詳細設定を表示/非表示"
+          >
+            <Settings2 className="h-3.5 w-3.5 text-purple-600" />
+            <span>{showDrawerSettings ? '詳細設定を閉じる' : '宛先・詳細設定'}</span>
+            {showDrawerSettings ? <ChevronUp className="h-3.5 w-3.5 text-slate-400" /> : <ChevronDown className="h-3.5 w-3.5 text-slate-400" />}
+          </button>
         </div>
       )}
 
@@ -944,537 +957,743 @@ export const CommunicationSendCenter: React.FC<Props> = ({
       {/* 画面2: 個別送信（1対1） */}
       {screen === 'send' && (
         <>
-          <div className="grid gap-4 md:grid-cols-2">
-            <label className="text-xs font-semibold text-slate-700">
-              送信内容
-              <select
-                value={kind}
-                onChange={(e) => setKind(e.target.value as Kind)}
-                className="mt-1 block w-full rounded-xl border border-slate-200 bg-slate-50 p-2.5 text-xs text-slate-900 focus:bg-white focus:border-purple-600 focus:outline-none shadow-2xs"
-              >
-                {Object.entries(labels).map(([k, v]) => (
-                  <option key={k} value={k}>
-                    {v}
-                  </option>
-                ))}
-              </select>
-            </label>
-            <label className="text-xs font-semibold text-slate-700">
-              送信方法
-              <select
-                value={channel}
-                onChange={(e) => {
-                  const next = e.target.value as Channel;
-                  setChannel(next);
-                  if (next !== 'both') setTemplateChannel(next);
-                }}
-                className="mt-1 block w-full rounded-xl border border-slate-200 bg-slate-50 p-2.5 text-xs text-slate-900 focus:bg-white focus:border-purple-600 focus:outline-none shadow-2xs"
-              >
-                <option value="email">メール</option>
-                <option value="line">LINE</option>
-                <option value="both">メール ＋ LINE（同時送信）</option>
-              </select>
-            </label>
-            <label className="md:col-span-2 text-xs font-semibold text-slate-700">
-              送信先
-              <select
-                value={contactId}
-                onChange={(e) => {
-                  userInteractedContactRef.current = true;
-                  setContactId(e.target.value);
-                }}
-                className="mt-1 block w-full rounded-xl border border-slate-200 bg-slate-50 p-2.5 text-xs text-slate-900 focus:bg-white focus:border-purple-600 focus:outline-none shadow-2xs"
-              >
-                <option value="">連絡先を選択してください</option>
-                {contacts.map((x) => (
-                  <option key={x.id} value={x.id}>
-                    {x.full_name} · {companies[x.company_id || ''] || '未設定'} ·{' '}
-                    {channel === 'both'
-                      ? `${x.email ? 'メールあり' : 'メール未登録'} · ${x.line_user_id ? 'LINE連携' : 'LINE未連携'}`
-                      : channel === 'email'
-                      ? x.email || 'メール未登録'
-                      : x.line_user_id
-                      ? 'LINE連携'
-                      : 'LINE未連携'}
-                  </option>
-                ))}
-              </select>
-              {unregisteredEmailWarning && !contactId && (
-                <div className="mt-2 flex items-center gap-2 rounded-xl border border-amber-300 bg-amber-50 p-2.5 text-xs font-semibold text-amber-900 shadow-2xs">
-                  <AlertTriangle className="h-4 w-4 shrink-0 text-amber-600" />
-                  <span>このメールアドレスは連絡先に未登録です。先に連絡先を登録してください</span>
+          {/* ドロワー表示時（variant === 'drawer'）: 最上部に件名・本文・送信アクションを配置して直感的に編集できるように改善 */}
+          {variant === 'drawer' && (
+            <div className="space-y-4">
+              {/* 件名入力 (メールの場合) */}
+              {templateChannel === 'email' && (
+                <div>
+                  <label className="text-xs font-bold text-slate-800">件名</label>
+                  <input
+                    value={subject}
+                    onChange={(e) => setSubject(e.target.value)}
+                    className="mt-1 block w-full rounded-xl border border-slate-300 bg-white p-2.5 text-xs text-slate-900 focus:border-purple-600 focus:outline-none shadow-2xs font-medium"
+                    placeholder="件名を入力..."
+                  />
+                  <PlaceholderAssist text={subject} onInsert={(token) => setSubject((curr) => curr + token)} />
                 </div>
               )}
-            </label>
 
-            {kind === 'sales_outreach' && (
-              <div className="md:col-span-2 space-y-2 rounded-xl border border-purple-200 bg-purple-50/50 p-3.5">
-                <label className="block text-xs font-bold text-purple-900">
-                  営業メール種別（{contact?.company_id ? (companies[contact.company_id] || '選択中') + (' · 業種: ' + (companyIndustries[contact.company_id] || '一般・未設定')) : '送信先を選ぶと業種・社名を自動反映'}）
-                  <select
-                    value={salesStep}
-                    onChange={(e) => {
-                      const s = Number(e.target.value);
-                      setSalesStep(Number.isFinite(s) ? s : 0);
-                      applySalesStep(Number.isFinite(s) ? s : 0);
-                    }}
-                    className="mt-1 block w-full bg-white p-2.5 text-xs text-slate-900 rounded-lg border border-purple-200 focus:outline-none focus:border-purple-600"
+              {/* メール+LINE同時送信時の切替タブ */}
+              {channel === 'both' && (
+                <div className="flex items-center gap-2 rounded-xl bg-purple-50/50 p-2 text-xs text-slate-700 border border-purple-200">
+                  <span className="font-semibold text-purple-900 text-[11px]">編集対象:</span>
+                  <button
+                    type="button"
+                    onClick={() => setTemplateChannel('email')}
+                    className={`rounded-lg px-2.5 py-1 font-semibold transition cursor-pointer text-xs ${templateChannel === 'email' ? 'bg-purple-600 text-white' : 'bg-white border border-slate-200 text-slate-700'}`}
                   >
-                    <option value={0}>【一発直球提案】IT担当＋経営サポート「社外右腕」のご提案（単発メール）</option>
-                    <option value={1}>【5ステップ初回】業界急所提起 ＆ 3分無料診断ギフト（送信後2〜5通目の自動追客可）</option>
-                  </select>
-                </label>
-                <p className="text-[11px] text-purple-800">
-                  ※ 送信時に署名（社名・住所・HP・Mail）と配信停止リンクが自動で付きます。見込み企業リストから一括・予約トリガー発火することもできます。
-                </p>
-                {salesStep === 1 && channel !== 'line' && (
-                  <label className="flex items-start gap-2 rounded-lg border border-purple-200 bg-white p-2.5 text-xs text-slate-800 cursor-pointer">
-                    <input
-                      type="checkbox"
-                      checked={autoFollowups}
-                      onChange={(e) => setAutoFollowups(e.target.checked)}
-                      className="mt-0.5 h-4 w-4 accent-purple-600"
-                    />
-                    <span>
-                      <strong className="text-purple-900">2通目以降も自動で送る</strong>
-                      （第1通の3日・6日・9日・12日後、9〜18時に送信）
-                      <span className="block text-[11px] text-slate-500">
-                        返信・診断の回答・面談の予約・配信停止・不達があれば、残りは自動で止まります。1通だけ送る場合はチェックしないでください。
-                      </span>
-                    </span>
-                  </label>
-                )}
-              </div>
-            )}
+                    メール文面
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setTemplateChannel('line')}
+                    className={`rounded-lg px-2.5 py-1 font-semibold transition cursor-pointer text-xs ${templateChannel === 'line' ? 'bg-purple-600 text-white' : 'bg-white border border-slate-200 text-slate-700'}`}
+                  >
+                    LINE文面
+                  </button>
+                </div>
+              )}
 
-            {(kind === 'form' || kind === 'diagnosis') && (
-              <label className="md:col-span-2 text-xs font-semibold text-slate-700">
-                公開フォーム
-                <select
-                  value={formId}
-                  onChange={(e) => {
-                    setFormId(e.target.value);
-                    const f = forms.find((x: any) => x.id === e.target.value);
-                    if (f) setUrl(window.location.origin + '/f/' + encodeURIComponent(f.public_slug));
-                  }}
-                  className="mt-1 block w-full rounded-xl border border-slate-200 bg-slate-50 p-2.5 text-xs text-slate-900 focus:bg-white focus:border-purple-600 focus:outline-none shadow-2xs"
+              {/* 本文入力エリア */}
+              {(templateChannel !== 'line' || !selectedLineTemplate || selectedLineTemplate.reply_type === 'text') && (
+                <div>
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <div className="flex items-center gap-2">
+                      <label className="text-xs font-bold text-slate-800">本文</label>
+                      {(kind === 'document' || kind === 'form' || kind === 'diagnosis') && (
+                        <span className="text-[11px] font-medium text-purple-700">
+                          {kind === 'document' ? doc?.title || '書類テンプレート' : form?.name || 'フォーム'}
+                        </span>
+                      )}
+                    </div>
+                    <div className="flex items-center gap-1.5">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setSelectedEmailTemplateId('');
+                          setSelectedLineTemplateId('');
+                          if (templateChannel === 'email') setSubject('');
+                          setBody('');
+                        }}
+                        className="inline-flex items-center gap-1 px-2 py-0.5 rounded-lg border border-slate-200 bg-white hover:bg-slate-50 text-slate-600 text-[11px] font-semibold transition cursor-pointer whitespace-nowrap shrink-0"
+                        title="現在の件名・本文を白紙状態にクリア"
+                      >
+                        <Eraser className="h-3 w-3 text-slate-500" />
+                        <span>白紙化</span>
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setIsComposerExpanded(true)}
+                        className="inline-flex items-center gap-1 px-2 py-0.5 rounded-lg border border-purple-200 bg-purple-50 hover:bg-purple-100 text-purple-800 text-[11px] font-semibold transition cursor-pointer whitespace-nowrap shrink-0"
+                        title="文面作成エリアを全画面表示"
+                      >
+                        <Maximize2 className="h-3 w-3 text-purple-600" />
+                        <span>全画面</span>
+                      </button>
+                    </div>
+                  </div>
+                  <textarea
+                    value={body}
+                    onChange={(e) => setBody(e.target.value)}
+                    rows={10}
+                    className="mt-1 block w-full min-h-[200px] resize-y rounded-xl border border-slate-300 bg-white p-3 text-sm text-slate-900 font-sans leading-relaxed focus:border-purple-600 focus:outline-none shadow-2xs"
+                    placeholder="本文を入力してください..."
+                  />
+                  {templateChannel === 'email' && (
+                    <p className="mt-1 text-[11px] text-slate-500">
+                      ※ メール送信時は末尾に統一署名（有限会社MST・住所・HP・Mail）が自動付与されます。
+                    </p>
+                  )}
+                  <PlaceholderAssist text={body} onInsert={(token) => setBody((curr) => curr + token)} />
+                </div>
+              )}
+
+              {/* 添付書類サマリー（ドロワー表示用） */}
+              {kind === 'document' && doc && (
+                <div className="rounded-xl border border-purple-200 bg-purple-50/70 p-2.5 flex flex-wrap items-center justify-between gap-2 text-xs">
+                  <div className="flex items-center gap-2 min-w-0">
+                    <Paperclip className="w-4 h-4 text-purple-600 shrink-0" />
+                    <span className="font-bold text-purple-950 truncate">{doc.title}</span>
+                    <span className="text-[10px] px-1.5 py-0.2 rounded font-semibold bg-white border border-purple-200 text-purple-700 shrink-0">
+                      PDF自動添付
+                    </span>
+                  </div>
+                  <div className="flex items-center gap-1.5 shrink-0">
+                    <a
+                      href={`/api/documents/${encodeURIComponent(doc.id)}/pdf`}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-white border border-slate-300 text-slate-700 hover:bg-slate-50 text-xs font-semibold cursor-pointer shadow-2xs"
+                    >
+                      <FileText className="w-3.5 h-3.5 text-slate-500" />
+                      <span>PDF確認</span>
+                    </a>
+                    <button
+                      type="button"
+                      onClick={() => setPreviewDocModal(doc)}
+                      className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-white border border-purple-300 text-purple-800 hover:bg-purple-100/80 text-xs font-bold cursor-pointer shadow-2xs"
+                    >
+                      <Eye className="w-3.5 h-3.5 text-purple-600" />
+                      <span>書類プレビュー</span>
+                    </button>
+                  </div>
+                </div>
+              )}
+
+              {/* プレビュー・送信ボタン（上部で即送信可能） */}
+              <div className="flex flex-wrap items-center gap-2.5 pt-1">
+                {!preview ? (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setError('');
+                      if (!contact) {
+                        setError('送信先を選択してください。下の「宛先・詳細設定」から選択できます。');
+                        setShowDrawerSettings(true);
+                        return;
+                      }
+                      if (kind === 'document' && !doc) {
+                        setError('送信する書類を選択してください。下の「宛先・詳細設定」から選択できます。');
+                        setShowDrawerSettings(true);
+                        return;
+                      }
+                      if ((kind === 'form' || kind === 'diagnosis') && !form) {
+                        setError('フォームを選択してください。下の「宛先・詳細設定」から選択できます。');
+                        setShowDrawerSettings(true);
+                        return;
+                      }
+                      setPreview(true);
+                    }}
+                    className="inline-flex items-center gap-2 rounded-xl bg-purple-600 px-5 py-2.5 text-xs font-bold text-white hover:bg-purple-700 shadow-xs shadow-purple-600/20 cursor-pointer"
+                  >
+                    <Eye className="h-4 w-4" />
+                    送信プレビューを確認
+                  </button>
+                ) : (
+                  <button
+                    type="button"
+                    disabled={busy}
+                    onClick={() => void send()}
+                    className="inline-flex items-center gap-2 rounded-xl bg-emerald-600 px-6 py-2.5 text-xs font-bold text-white hover:bg-emerald-700 shadow-xs shadow-emerald-600/20 cursor-pointer"
+                  >
+                    <Send className="h-4 w-4" />
+                    {busy ? '送信中…' : '確定して送信する'}
+                  </button>
+                )}
+                <button
+                  type="button"
+                  onClick={() => void save()}
+                  className="inline-flex items-center gap-1.5 rounded-xl border border-slate-200 bg-white px-3.5 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-50 cursor-pointer shadow-2xs"
+                  title="文面をテンプレートとして保存"
                 >
-                  <option value="">公開フォームを選択してください</option>
-                  {forms.map((f: any) => (
-                    <option key={f.id} value={f.id}>
-                      {f.name} · {f.form_type}
+                  <Save className="h-3.5 w-3.5" />
+                  <span>テンプレート保存</span>
+                </button>
+              </div>
+
+              {/* 詳細設定トグルボタン & アコーディオンエリア */}
+              <div className="pt-2 border-t border-slate-200">
+                <button
+                  type="button"
+                  onClick={() => setShowDrawerSettings((prev) => !prev)}
+                  className="w-full flex items-center justify-between p-2.5 rounded-xl bg-slate-100 hover:bg-slate-200/80 text-xs font-bold text-slate-700 transition cursor-pointer"
+                >
+                  <span className="flex items-center gap-1.5">
+                    <Settings2 className="h-4 w-4 text-purple-600" />
+                    <span>宛先・書類・送信方法・差出人の変更（詳細設定）</span>
+                  </span>
+                  {showDrawerSettings ? <ChevronUp className="h-4 w-4 text-slate-500" /> : <ChevronDown className="h-4 w-4 text-slate-500" />}
+                </button>
+              </div>
+            </div>
+          )}
+
+          {/* フォーム設定欄: ページ表示時は常時表示、ドロワー表示時は「詳細設定」が開いている時のみ展開 */}
+          {(variant === 'page' || showDrawerSettings) && (
+            <div className={`grid gap-4 md:grid-cols-2 ${variant === 'drawer' ? 'rounded-2xl border border-slate-200 bg-slate-50/80 p-4 mt-2' : ''}`}>
+              <label className="text-xs font-semibold text-slate-700">
+                送信内容
+                <select
+                  value={kind}
+                  onChange={(e) => setKind(e.target.value as Kind)}
+                  className="mt-1 block w-full rounded-xl border border-slate-200 bg-white p-2.5 text-xs text-slate-900 focus:border-purple-600 focus:outline-none shadow-2xs"
+                >
+                  {Object.entries(labels).map(([k, v]) => (
+                    <option key={k} value={k}>
+                      {v}
                     </option>
                   ))}
                 </select>
               </label>
-            )}
-
-            {kind === 'document' && (
-              <>
-                <label className="md:col-span-2 text-xs font-semibold text-slate-700">
-                  書類の種類
-                  <select
-                    value={documentType}
-                    onChange={(e) => handleDocumentTypeChange(e.target.value as DocumentType)}
-                    className="mt-1 block w-full rounded-xl border border-slate-200 bg-slate-50 p-2.5 text-xs text-slate-900 focus:bg-white focus:border-purple-600 focus:outline-none shadow-2xs"
-                  >
-                    <option value="estimate">見積書</option>
-                    <option value="invoice">請求書</option>
-                    <option value="contract">契約書</option>
-                    <option value="proposal">提案書</option>
-                    <option value="diagnosis_report">診断レポート</option>
-                    <option value="monthly_report">月次報告書</option>
-                    <option value="other">その他</option>
-                  </select>
-                </label>
-                <div className="md:col-span-2 space-y-2">
-                  <label className="block text-xs font-semibold text-slate-700">
-                    書類（{contact?.company_id ? (companies[contact.company_id] || '選択した会社') + 'の書類' : initialCompanyId ? (companies[initialCompanyId] || 'この会社') + 'の書類' : '送信先を選ぶと会社の書類で絞り込み'}・確定書類のみ送信可能）
-                    <select
-                      value={docId}
-                      onChange={(e) => setDocId(e.target.value)}
-                      className="mt-1 block w-full rounded-xl border border-slate-200 bg-slate-50 p-2.5 text-xs text-slate-900 focus:bg-white focus:border-purple-600 focus:outline-none shadow-2xs"
-                    >
-                      <option value="">書類を選択してください</option>
-                      {availableDocs.map((x) => (
-                        <option key={x.id} value={x.id}>
-                          {x.title} · {({ draft: '作成中', awaiting_approval: '作成中', approved: '確定（送付可能）', queued: '送信待ち', sent: '送信済み', failed: '送信失敗', archived: '保管' } as Record<string, string>)[x.status] || x.status}
-                        </option>
-                      ))}
-                    </select>
-                  </label>
-
-                  {/* 添付書類プレビューカード & アクション */}
-                  {doc ? (
-                    <div className="space-y-2">
-                      <div className="rounded-xl border border-purple-200 bg-purple-50/70 p-3 flex flex-wrap items-center justify-between gap-2.5">
-                        <div className="flex items-center gap-2 min-w-0">
-                          <Paperclip className="w-4 h-4 text-purple-600 shrink-0" />
-                          <div className="min-w-0">
-                            <div className="flex items-center gap-2">
-                              <span className="font-bold text-xs text-purple-950 truncate">{doc.title}</span>
-                              <span className="text-[10px] px-1.5 py-0.5 rounded font-semibold bg-white border border-purple-200 text-purple-700">
-                                {({ draft: '作成中', awaiting_approval: '作成中', approved: '確定（送付可能）', queued: '送信待ち', sent: '送信済み' } as Record<string, string>)[doc.status] || doc.status}
-                              </span>
-                            </div>
-                            <span className="text-[11px] text-slate-500 block truncate">
-                              {contact?.company_id && companies[contact.company_id] ? `${companies[contact.company_id]} 宛` : ''} · PDF自動添付 &amp; Web確認URL自動挿入
-                            </span>
-                          </div>
-                        </div>
-                        <div className="flex items-center gap-2 shrink-0">
-                          <a
-                            href={`/api/documents/${encodeURIComponent(doc.id)}/pdf`}
-                            target="_blank"
-                            rel="noreferrer"
-                            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-white border border-slate-300 text-slate-700 hover:bg-slate-50 text-xs font-bold transition-colors cursor-pointer shadow-2xs"
-                            title="メールに添付されるPDFファイルをダウンロード確認"
-                          >
-                            <FileText className="w-3.5 h-3.5 text-slate-500" />
-                            <span>PDF確認</span>
-                          </a>
-                          <button
-                            type="button"
-                            onClick={() => setPreviewDocModal(doc)}
-                            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-white border border-purple-300 text-purple-800 hover:bg-purple-100/80 text-xs font-bold transition-colors cursor-pointer shadow-2xs"
-                          >
-                            <Eye className="w-3.5 h-3.5 text-purple-600" />
-                            <span>書類をプレビュー</span>
-                          </button>
-                        </div>
-                      </div>
-                      <div className="rounded-lg bg-purple-100/70 px-3 py-1.5 text-[11px] text-purple-950 flex items-center gap-1.5">
-                        <span className="font-bold">📎 自動PDF添付:</span>
-                        <span>メール送信時、この書類のA4 PDFが自動生成されて添付ファイルとして送信されます（Web確認URLも本文に記載）。</span>
-                      </div>
-                    </div>
-                  ) : availableDocs.length === 0 ? (
-                    <div className="text-[11px] text-amber-700 bg-amber-50 border border-amber-200 rounded-lg p-2.5 flex items-center justify-between gap-2">
-                      <span>選択した会社には、この種類の書類がまだありません。</span>
-                      {onNavigateTab && (
-                        <button
-                          type="button"
-                          onClick={() => onNavigateTab('document_templates')}
-                          className="font-bold text-purple-700 hover:underline shrink-0 cursor-pointer"
-                        >
-                          書類作成へ
-                        </button>
-                      )}
-                    </div>
-                  ) : (
-                    <div className="text-[11px] text-slate-400">
-                      ※ 上記で書類を選択すると、内容のプレビュー確認ができます。
-                    </div>
-                  )}
-                </div>
-              </>
-            )}
-
-            <label className="md:col-span-2 text-xs font-semibold text-slate-700">
-              {kind === 'document' ? '共有可能な書類URL' : kind === 'deal' || kind === 'customer_meeting' ? 'この案内専用URL（空欄なら共通予約URL）' : 'フォーム・案内URL'}
-              <input value={url} onChange={(e) => setUrl(e.target.value)} className="mt-1 block w-full rounded-xl border border-slate-200 bg-slate-50 p-2.5 text-xs text-slate-900 focus:bg-white focus:border-purple-600 focus:outline-none shadow-2xs" placeholder="https://..." />
-            </label>
-
-            {(channel === 'email' || channel === 'both') && (
-              <>
-                <label className="md:col-span-2 text-xs font-semibold text-slate-700">
-                  差出人名
-                  <input
-                    value={senderSettings.fromName}
-                    onChange={(e) => setSenderSettings((x) => ({ ...x, fromName: e.target.value }))}
-                    maxLength={100}
-                    className="mt-1 block w-full rounded-xl border border-slate-200 bg-slate-50 p-2.5 text-xs text-slate-900 focus:bg-white focus:border-purple-600 focus:outline-none shadow-2xs"
-                    placeholder="有限会社MST"
-                  />
-                </label>
-                <label className="text-xs font-semibold text-slate-700">
-                  差出人メールアドレス
-                  <input
-                    type="email"
-                    value={senderSettings.fromEmail}
-                    onChange={(e) => setSenderSettings((x) => ({ ...x, fromEmail: e.target.value }))}
-                    className="mt-1 block w-full rounded-xl border border-slate-200 bg-slate-50 p-2.5 text-xs text-slate-900 focus:bg-white focus:border-purple-600 focus:outline-none shadow-2xs"
-                    placeholder="info@example.co.jp"
-                  />
-                  <span className="mt-1 block text-[11px] text-slate-500">RESEND_FROM_EMAILで認証済みのドメインを指定してください。</span>
-                </label>
-                <label className="text-xs font-semibold text-slate-700">
-                  <div className="flex flex-wrap items-center justify-between gap-1">
-                    <span className="flex items-center gap-1.5">
-                      返信先メールアドレス（Reply-To）
-                      {senderSettings.replyTo.trim() === (senderSettings.fromEmail || 'contact@mstcorp.info').trim() ? (
-                        <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-medium bg-emerald-50 text-emerald-700 border border-emerald-200">
-                          企業ドメイン（推奨）
-                        </span>
-                      ) : (
-                        <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-medium bg-amber-50 text-amber-700 border border-amber-200">
-                          個別・緊急用
-                        </span>
-                      )}
-                    </span>
-                    <div className="flex items-center gap-1.5">
-                      {senderSettings.fromEmail && senderSettings.replyTo !== senderSettings.fromEmail && (
-                        <button
-                          type="button"
-                          onClick={() => setSenderSettings((x) => ({ ...x, replyTo: x.fromEmail }))}
-                          className="text-[10px] bg-purple-50 text-purple-700 hover:bg-purple-100 px-2 py-0.5 rounded font-semibold cursor-pointer border border-purple-200 transition-colors"
-                          title="差出人メールアドレス（公式企業ドメイン）に戻します"
-                        >
-                          公式ドメイン（推奨）に戻す
-                        </button>
-                      )}
-                      {senderSettings.replyTo !== 'mst.shikumikaizen@gmail.com' && (
-                        <button
-                          type="button"
-                          onClick={() => setSenderSettings((x) => ({ ...x, replyTo: 'mst.shikumikaizen@gmail.com' }))}
-                          className="text-[10px] bg-slate-100 text-slate-700 hover:bg-slate-200 px-2 py-0.5 rounded font-medium cursor-pointer border border-slate-300 transition-colors"
-                          title="緊急時・直接個別対応用の個人Gmail宛てに切り替えます"
-                        >
-                          緊急用：個人Gmailに切替
-                        </button>
-                      )}
-                    </div>
-                  </div>
-                  <input
-                    type="email"
-                    value={senderSettings.replyTo}
-                    onChange={(e) => setSenderSettings((x) => ({ ...x, replyTo: e.target.value }))}
-                    className="mt-1 block w-full rounded-xl border border-slate-200 bg-slate-50 p-2.5 text-xs text-slate-900 focus:bg-white focus:border-purple-600 focus:outline-none shadow-2xs"
-                    placeholder="返信先を変更する場合に入力（任意）"
-                  />
-                  <span className="mt-1 block text-[11px] text-slate-500">
-                    ※ 顧客が返信した際の宛先です。デフォルトは同一企業ドメイン（{senderSettings.fromEmail || 'contact@mstcorp.info'}）で信頼性と到達率を担保します。緊急時や直接対応が必要な場合のみ「個人Gmailに切替」ボタンで切り替えが可能です。
-                  </span>
-                </label>
-              </>
-            )}
-
-            {templateChannel === 'email' && (
-              <div className="md:col-span-2 space-y-1.5">
-                <div className="flex items-center justify-between">
-                  <label className="text-xs font-semibold text-slate-700">
-                    メール文例ストック（任意引用）
-                  </label>
-                  <button
-                    type="button"
-                    onClick={() => setScreen('templates')}
-                    className="inline-flex items-center gap-1 text-[11px] font-bold text-purple-700 hover:text-purple-800 cursor-pointer"
-                  >
-                    <Library className="h-3.5 w-3.5" />
-                    <span>文例・LINE素材ストックを開く</span>
-                  </button>
-                </div>
+              <label className="text-xs font-semibold text-slate-700">
+                送信方法
                 <select
-                  value={selectedEmailTemplateId}
-                  onChange={(e) => chooseEmailTemplate(e.target.value)}
-                  className="block w-full rounded-xl border border-slate-200 bg-slate-50 p-2.5 text-xs text-slate-900 focus:bg-white focus:border-purple-600 focus:outline-none shadow-2xs"
+                  value={channel}
+                  onChange={(e) => {
+                    const next = e.target.value as Channel;
+                    setChannel(next);
+                    if (next !== 'both') setTemplateChannel(next);
+                  }}
+                  className="mt-1 block w-full rounded-xl border border-slate-200 bg-white p-2.5 text-xs text-slate-900 focus:border-purple-600 focus:outline-none shadow-2xs"
                 >
-                  <option value="">現在の送信種別（{labels[kind]}）の標準初期文面</option>
-                  {emailTemplates
-                    .filter((x) => {
-                      if (x.channel !== 'email') return false;
-                      const key = String(x.template_key || '').trim();
-                      const trimmedName = String(x.name || '').trim();
-                      return key.startsWith('tpl_') || Boolean(trimmedName && trimmedName !== key);
-                    })
-                    .map((x: any) => (
-                      <option key={x.id} value={x.id}>
-                        {x.name?.trim() || x.template_key}
-                      </option>
-                    ))}
+                  <option value="email">メール</option>
+                  <option value="line">LINE</option>
+                  <option value="both">メール ＋ LINE（同時送信）</option>
                 </select>
-              </div>
-            )}
-
-            {templateChannel === 'line' && (
-              <div className="md:col-span-2 space-y-1.5">
-                <div className="flex items-center justify-between">
-                  <label className="text-xs font-semibold text-slate-700">
-                    LINE文例・素材ストック（任意引用）
-                  </label>
-                  <button
-                    type="button"
-                    onClick={() => setScreen('templates')}
-                    className="inline-flex items-center gap-1 text-[11px] font-bold text-purple-700 hover:text-purple-800 cursor-pointer"
-                  >
-                    <Library className="h-3.5 w-3.5" />
-                    <span>文例・LINE素材ストックを開く</span>
-                  </button>
-                </div>
+              </label>
+              <label className="md:col-span-2 text-xs font-semibold text-slate-700">
+                送信先
                 <select
-                  value={selectedLineTemplateId}
-                  onChange={(e) => chooseLineTemplate(e.target.value)}
-                  className="block w-full rounded-xl border border-slate-200 bg-slate-50 p-2.5 text-xs text-slate-900 focus:bg-white focus:border-purple-600 focus:outline-none shadow-2xs"
+                  value={contactId}
+                  onChange={(e) => {
+                    userInteractedContactRef.current = true;
+                    setContactId(e.target.value);
+                  }}
+                  className="mt-1 block w-full rounded-xl border border-slate-200 bg-white p-2.5 text-xs text-slate-900 focus:border-purple-600 focus:outline-none shadow-2xs"
                 >
-                  <option value="">現在の送信種別（{labels[kind]}）の標準テキスト</option>
-                  {lineTemplates.map((x: any) => (
+                  <option value="">連絡先を選択してください</option>
+                  {contacts.map((x) => (
                     <option key={x.id} value={x.id}>
-                      {x.name}（{x.reply_type === 'text' ? 'テキスト' : x.reply_type === 'image' ? '画像' : x.reply_type === 'video' ? '動画' : 'Flex'}）
+                      {x.full_name} · {companies[x.company_id || ''] || '未設定'} ·{' '}
+                      {channel === 'both'
+                        ? `${x.email ? 'メールあり' : 'メール未登録'} · ${x.line_user_id ? 'LINE連携' : 'LINE未連携'}`
+                        : channel === 'email'
+                        ? x.email || 'メール未登録'
+                        : x.line_user_id
+                        ? 'LINE連携'
+                        : 'LINE未連携'}
                     </option>
                   ))}
                 </select>
-              </div>
-            )}
+                {unregisteredEmailWarning && !contactId && (
+                  <div className="mt-2 flex items-center gap-2 rounded-xl border border-amber-300 bg-amber-50 p-2.5 text-xs font-semibold text-amber-900 shadow-2xs">
+                    <AlertTriangle className="h-4 w-4 shrink-0 text-amber-600" />
+                    <span>このメールアドレスは連絡先に未登録です。先に連絡先を登録してください</span>
+                  </div>
+                )}
+              </label>
 
-            {templateChannel === 'email' && (
-              <div className="md:col-span-2">
-                <label className="text-xs font-semibold text-slate-700">件名</label>
-                <input
-                  value={subject}
-                  onChange={(e) => setSubject(e.target.value)}
-                  className="mt-1 block w-full rounded-xl border border-slate-200 bg-slate-50 p-2.5 text-xs text-slate-900 focus:bg-white focus:border-purple-600 focus:outline-none shadow-2xs"
-                  placeholder="件名を入力..."
-                />
-                <PlaceholderAssist text={subject} onInsert={(token) => setSubject((curr) => curr + token)} />
-              </div>
-            )}
-
-            {(kind === 'deal' || kind === 'customer_meeting') && (
-              <p className="md:col-span-2 text-xs text-slate-500">
-                共通Google予約ページ: <span className="text-purple-700 font-mono font-medium">{bookingUrl || '未設定'}</span>
-              </p>
-            )}
-
-            {channel === 'both' && (
-              <div className="md:col-span-2 flex items-center gap-2 rounded-xl bg-purple-50/50 p-2.5 text-xs text-slate-700 border border-purple-200">
-                <span className="font-semibold text-purple-900">編集対象:</span>
-                <button
-                  type="button"
-                  onClick={() => setTemplateChannel('email')}
-                  className={`rounded-lg px-3 py-1 font-semibold transition cursor-pointer text-xs ${templateChannel === 'email' ? 'bg-purple-600 text-white' : 'bg-white border border-slate-200 text-slate-700'}`}
-                >
-                  メール文面
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setTemplateChannel('line')}
-                  className={`rounded-lg px-3 py-1 font-semibold transition cursor-pointer text-xs ${templateChannel === 'line' ? 'bg-purple-600 text-white' : 'bg-white border border-slate-200 text-slate-700'}`}
-                >
-                  LINE文面
-                </button>
-                <span className="text-slate-500 text-[11px]">※メールとLINEで別々の文面を設定・送信できます</span>
-              </div>
-            )}
-
-            {(templateChannel !== 'line' || !selectedLineTemplate || selectedLineTemplate.reply_type === 'text') && (
-              <div className="md:col-span-2">
-                <div className="flex flex-wrap items-center justify-between gap-2">
-                  <div className="flex items-center gap-2">
-                    <label className="text-xs font-semibold text-slate-700">本文</label>
-                    {(kind === 'document' || kind === 'form' || kind === 'diagnosis') && (
-                      <span className="text-xs font-medium text-purple-700">
-                        保存対象: {kind === 'document' ? doc?.title || '共通書類テンプレート' : form?.name || '共通テンプレート'}
+              {kind === 'sales_outreach' && (
+                <div className="md:col-span-2 space-y-2 rounded-xl border border-purple-200 bg-purple-50/50 p-3.5">
+                  <label className="block text-xs font-bold text-purple-900">
+                    営業メール種別（{contact?.company_id ? (companies[contact.company_id] || '選択中') + (' · 業種: ' + (companyIndustries[contact.company_id] || '一般・未設定')) : '送信先を選ぶと業種・社名を自動反映'}）
+                    <select
+                      value={salesStep}
+                      onChange={(e) => {
+                        const s = Number(e.target.value);
+                        setSalesStep(Number.isFinite(s) ? s : 0);
+                        applySalesStep(Number.isFinite(s) ? s : 0);
+                      }}
+                      className="mt-1 block w-full bg-white p-2.5 text-xs text-slate-900 rounded-lg border border-purple-200 focus:outline-none focus:border-purple-600"
+                    >
+                      <option value={0}>【一発直球提案】IT担当＋経営サポート「社外右腕」のご提案（単発メール）</option>
+                      <option value={1}>【5ステップ初回】業界急所提起 ＆ 3分無料診断ギフト（送信後2〜5通目の自動追客可）</option>
+                    </select>
+                  </label>
+                  <p className="text-[11px] text-purple-800">
+                    ※ 送信時に署名（社名・住所・HP・Mail）と配信停止リンクが自動で付きます。見込み企業リストから一括・予約トリガー発火することもできます。
+                  </p>
+                  {salesStep === 1 && channel !== 'line' && (
+                    <label className="flex items-start gap-2 rounded-lg border border-purple-200 bg-white p-2.5 text-xs text-slate-800 cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={autoFollowups}
+                        onChange={(e) => setAutoFollowups(e.target.checked)}
+                        className="mt-0.5 h-4 w-4 accent-purple-600"
+                      />
+                      <span>
+                        <strong className="text-purple-900">2通目以降も自動で送る</strong>
+                        （第1通の3日・6日・9日・12日後、9〜18時に送信）
+                        <span className="block text-[11px] text-slate-500">
+                          返信・診断の回答・面談の予約・配信停止・不達があれば、残りは自動で止まります。1通だけ送る場合はチェックしないでください。
+                        </span>
                       </span>
+                    </label>
+                  )}
+                </div>
+              )}
+
+              {(kind === 'form' || kind === 'diagnosis') && (
+                <label className="md:col-span-2 text-xs font-semibold text-slate-700">
+                  公開フォーム
+                  <select
+                    value={formId}
+                    onChange={(e) => {
+                      setFormId(e.target.value);
+                      const f = forms.find((x: any) => x.id === e.target.value);
+                      if (f) setUrl(window.location.origin + '/f/' + encodeURIComponent(f.public_slug));
+                    }}
+                    className="mt-1 block w-full rounded-xl border border-slate-200 bg-white p-2.5 text-xs text-slate-900 focus:border-purple-600 focus:outline-none shadow-2xs"
+                  >
+                    <option value="">公開フォームを選択してください</option>
+                    {forms.map((f: any) => (
+                      <option key={f.id} value={f.id}>
+                        {f.name} · {f.form_type}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+              )}
+
+              {kind === 'document' && (
+                <>
+                  <label className="md:col-span-2 text-xs font-semibold text-slate-700">
+                    書類の種類
+                    <select
+                      value={documentType}
+                      onChange={(e) => handleDocumentTypeChange(e.target.value as DocumentType)}
+                      className="mt-1 block w-full rounded-xl border border-slate-200 bg-white p-2.5 text-xs text-slate-900 focus:border-purple-600 focus:outline-none shadow-2xs"
+                    >
+                      <option value="estimate">見積書</option>
+                      <option value="invoice">請求書</option>
+                      <option value="contract">契約書</option>
+                      <option value="proposal">提案書</option>
+                      <option value="diagnosis_report">診断レポート</option>
+                      <option value="monthly_report">月次報告書</option>
+                      <option value="other">その他</option>
+                    </select>
+                  </label>
+                  <div className="md:col-span-2 space-y-2">
+                    <label className="block text-xs font-semibold text-slate-700">
+                      書類（{contact?.company_id ? (companies[contact.company_id] || '選択した会社') + 'の書類' : initialCompanyId ? (companies[initialCompanyId] || 'この会社') + 'の書類' : '送信先を選ぶと会社の書類で絞り込み'}・確定書類のみ送信可能）
+                      <select
+                        value={docId}
+                        onChange={(e) => setDocId(e.target.value)}
+                        className="mt-1 block w-full rounded-xl border border-slate-200 bg-white p-2.5 text-xs text-slate-900 focus:border-purple-600 focus:outline-none shadow-2xs"
+                      >
+                        <option value="">書類を選択してください</option>
+                        {availableDocs.map((x) => (
+                          <option key={x.id} value={x.id}>
+                            {x.title} · {({ draft: '作成中', awaiting_approval: '作成中', approved: '確定（送付可能）', queued: '送信待ち', sent: '送信済み', failed: '送信失敗', archived: '保管' } as Record<string, string>)[x.status] || x.status}
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+
+                    {/* 添付書類プレビューカード & アクション */}
+                    {doc ? (
+                      <div className="space-y-2">
+                        <div className="rounded-xl border border-purple-200 bg-purple-50/70 p-3 flex flex-wrap items-center justify-between gap-2.5">
+                          <div className="flex items-center gap-2 min-w-0">
+                            <Paperclip className="w-4 h-4 text-purple-600 shrink-0" />
+                            <div className="min-w-0">
+                              <div className="flex items-center gap-2">
+                                <span className="font-bold text-xs text-purple-950 truncate">{doc.title}</span>
+                                <span className="text-[10px] px-1.5 py-0.5 rounded font-semibold bg-white border border-purple-200 text-purple-700">
+                                  {({ draft: '作成中', awaiting_approval: '作成中', approved: '確定（送付可能）', queued: '送信待ち', sent: '送信済み' } as Record<string, string>)[doc.status] || doc.status}
+                                </span>
+                              </div>
+                              <span className="text-[11px] text-slate-500 block truncate">
+                                {contact?.company_id && companies[contact.company_id] ? `${companies[contact.company_id]} 宛` : ''} · PDF自動添付 &amp; Web確認URL自動挿入
+                              </span>
+                            </div>
+                          </div>
+                          <div className="flex items-center gap-2 shrink-0">
+                            <a
+                              href={`/api/documents/${encodeURIComponent(doc.id)}/pdf`}
+                              target="_blank"
+                              rel="noreferrer"
+                              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-white border border-slate-300 text-slate-700 hover:bg-slate-50 text-xs font-bold transition-colors cursor-pointer shadow-2xs"
+                              title="メールに添付されるPDFファイルをダウンロード確認"
+                            >
+                              <FileText className="w-3.5 h-3.5 text-slate-500" />
+                              <span>PDF確認</span>
+                            </a>
+                            <button
+                              type="button"
+                              onClick={() => setPreviewDocModal(doc)}
+                              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-white border border-purple-300 text-purple-800 hover:bg-purple-100/80 text-xs font-bold transition-colors cursor-pointer shadow-2xs"
+                            >
+                              <Eye className="w-3.5 h-3.5 text-purple-600" />
+                              <span>書類をプレビュー</span>
+                            </button>
+                          </div>
+                        </div>
+                        <div className="rounded-lg bg-purple-100/70 px-3 py-1.5 text-[11px] text-purple-950 flex items-center gap-1.5">
+                          <span className="font-bold">📎 自動PDF添付:</span>
+                          <span>メール送信時、この書類のA4 PDFが自動生成されて添付ファイルとして送信されます（Web確認URLも本文に記載）。</span>
+                        </div>
+                      </div>
+                    ) : availableDocs.length === 0 ? (
+                      <div className="text-[11px] text-amber-700 bg-amber-50 border border-amber-200 rounded-lg p-2.5 flex items-center justify-between gap-2">
+                        <span>選択した会社には、この種類の書類がまだありません。</span>
+                        {onNavigateTab && (
+                          <button
+                            type="button"
+                            onClick={() => onNavigateTab('document_templates')}
+                            className="font-bold text-purple-700 hover:underline shrink-0 cursor-pointer"
+                          >
+                            書類作成へ
+                          </button>
+                        )}
+                      </div>
+                    ) : (
+                      <div className="text-[11px] text-slate-400">
+                        ※ 上記で書類を選択すると、内容のプレビュー確認ができます。
+                      </div>
                     )}
                   </div>
-                  <div className="flex items-center gap-1.5">
+                </>
+              )}
+
+              <label className="md:col-span-2 text-xs font-semibold text-slate-700">
+                {kind === 'document' ? '共有可能な書類URL' : kind === 'deal' || kind === 'customer_meeting' ? 'この案内専用URL（空欄なら共通予約URL）' : 'フォーム・案内URL'}
+                <input value={url} onChange={(e) => setUrl(e.target.value)} className="mt-1 block w-full rounded-xl border border-slate-200 bg-white p-2.5 text-xs text-slate-900 focus:border-purple-600 focus:outline-none shadow-2xs" placeholder="https://..." />
+              </label>
+
+              {(channel === 'email' || channel === 'both') && (
+                <>
+                  <label className="md:col-span-2 text-xs font-semibold text-slate-700">
+                    差出人名
+                    <input
+                      value={senderSettings.fromName}
+                      onChange={(e) => setSenderSettings((x) => ({ ...x, fromName: e.target.value }))}
+                      maxLength={100}
+                      className="mt-1 block w-full rounded-xl border border-slate-200 bg-white p-2.5 text-xs text-slate-900 focus:border-purple-600 focus:outline-none shadow-2xs"
+                      placeholder="有限会社MST"
+                    />
+                  </label>
+                  <label className="text-xs font-semibold text-slate-700">
+                    差出人メールアドレス
+                    <input
+                      type="email"
+                      value={senderSettings.fromEmail}
+                      onChange={(e) => setSenderSettings((x) => ({ ...x, fromEmail: e.target.value }))}
+                      className="mt-1 block w-full rounded-xl border border-slate-200 bg-white p-2.5 text-xs text-slate-900 focus:border-purple-600 focus:outline-none shadow-2xs"
+                      placeholder="info@example.co.jp"
+                    />
+                    <span className="mt-1 block text-[11px] text-slate-500">RESEND_FROM_EMAILで認証済みのドメインを指定してください。</span>
+                  </label>
+                  <label className="text-xs font-semibold text-slate-700">
+                    <div className="flex flex-wrap items-center justify-between gap-1">
+                      <span className="flex items-center gap-1.5">
+                        返信先メールアドレス（Reply-To）
+                        {senderSettings.replyTo.trim() === (senderSettings.fromEmail || 'contact@mstcorp.info').trim() ? (
+                          <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-medium bg-emerald-50 text-emerald-700 border border-emerald-200">
+                            企業ドメイン（推奨）
+                          </span>
+                        ) : (
+                          <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-medium bg-amber-50 text-amber-700 border border-amber-200">
+                            個別・緊急用
+                          </span>
+                        )}
+                      </span>
+                      <div className="flex items-center gap-1.5">
+                        {senderSettings.fromEmail && senderSettings.replyTo !== senderSettings.fromEmail && (
+                          <button
+                            type="button"
+                            onClick={() => setSenderSettings((x) => ({ ...x, replyTo: x.fromEmail }))}
+                            className="text-[10px] bg-purple-50 text-purple-700 hover:bg-purple-100 px-2 py-0.5 rounded font-semibold cursor-pointer border border-purple-200 transition-colors"
+                            title="差出人メールアドレス（公式企業ドメイン）に戻します"
+                          >
+                            公式ドメイン（推奨）に戻す
+                          </button>
+                        )}
+                        {senderSettings.replyTo !== 'mst.shikumikaizen@gmail.com' && (
+                          <button
+                            type="button"
+                            onClick={() => setSenderSettings((x) => ({ ...x, replyTo: 'mst.shikumikaizen@gmail.com' }))}
+                            className="text-[10px] bg-slate-100 text-slate-700 hover:bg-slate-200 px-2 py-0.5 rounded font-medium cursor-pointer border border-slate-300 transition-colors"
+                            title="緊急時・直接個別対応用の個人Gmail宛てに切り替えます"
+                          >
+                            緊急用：個人Gmailに切替
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                    <input
+                      type="email"
+                      value={senderSettings.replyTo}
+                      onChange={(e) => setSenderSettings((x) => ({ ...x, replyTo: e.target.value }))}
+                      className="mt-1 block w-full rounded-xl border border-slate-200 bg-white p-2.5 text-xs text-slate-900 focus:border-purple-600 focus:outline-none shadow-2xs"
+                      placeholder="返信先を変更する場合に入力（任意）"
+                    />
+                    <span className="mt-1 block text-[11px] text-slate-500">
+                      ※ 顧客が返信した際の宛先です。デフォルトは同一企業ドメイン（{senderSettings.fromEmail || 'contact@mstcorp.info'}）で信頼性と到達率を担保します。緊急時や直接対応が必要な場合のみ「個人Gmailに切替」ボタンで切り替えが可能です。
+                    </span>
+                  </label>
+                </>
+              )}
+
+              {templateChannel === 'email' && (
+                <div className="md:col-span-2 space-y-1.5">
+                  <div className="flex items-center justify-between">
+                    <label className="text-xs font-semibold text-slate-700">
+                      メール文例ストック（任意引用）
+                    </label>
                     <button
                       type="button"
-                      onClick={() => {
-                        setSelectedEmailTemplateId('');
-                        setSelectedLineTemplateId('');
-                        if (templateChannel === 'email') setSubject('');
-                        setBody('');
-                      }}
-                      className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg border border-slate-200 bg-white hover:bg-slate-50 text-slate-600 text-[11px] font-semibold transition cursor-pointer whitespace-nowrap shrink-0"
-                      title="現在の件名・本文を真っさらな白紙状態にクリアします"
+                      onClick={() => setScreen('templates')}
+                      className="inline-flex items-center gap-1 text-[11px] font-bold text-purple-700 hover:text-purple-800 cursor-pointer"
                     >
-                      <Eraser className="h-3.5 w-3.5 text-slate-500" />
-                      <span>白紙に戻す</span>
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setIsComposerExpanded(true)}
-                      className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg border border-purple-200 bg-purple-50 hover:bg-purple-100 text-purple-800 text-[11px] font-semibold transition cursor-pointer whitespace-nowrap shrink-0"
-                      title="文面作成エリアを画面全体へ大きく広げて入力します"
-                    >
-                      <Maximize2 className="h-3.5 w-3.5 text-purple-600" />
-                      <span>全画面で入力</span>
+                      <Library className="h-3.5 w-3.5" />
+                      <span>文例・LINE素材ストックを開く</span>
                     </button>
                   </div>
+                  <select
+                    value={selectedEmailTemplateId}
+                    onChange={(e) => chooseEmailTemplate(e.target.value)}
+                    className="block w-full rounded-xl border border-slate-200 bg-white p-2.5 text-xs text-slate-900 focus:border-purple-600 focus:outline-none shadow-2xs"
+                  >
+                    <option value="">現在の送信種別（{labels[kind]}）の標準初期文面</option>
+                    {emailTemplates
+                      .filter((x) => {
+                        if (x.channel !== 'email') return false;
+                        const key = String(x.template_key || '').trim();
+                        const trimmedName = String(x.name || '').trim();
+                        return key.startsWith('tpl_') || Boolean(trimmedName && trimmedName !== key);
+                      })
+                      .map((x: any) => (
+                        <option key={x.id} value={x.id}>
+                          {x.name?.trim() || x.template_key}
+                        </option>
+                      ))}
+                  </select>
                 </div>
-                <textarea
-                  value={body}
-                  onChange={(e) => setBody(e.target.value)}
-                  rows={12}
-                  className="mt-1 block w-full min-h-[260px] resize-y rounded-xl border border-slate-200 bg-slate-50 p-3.5 text-sm text-slate-900 font-sans leading-relaxed focus:bg-white focus:border-purple-600 focus:outline-none shadow-2xs"
-                  placeholder="本文を入力してください（白紙から入力する場合は「自由作成」または上の「白紙に戻す」をご利用ください）..."
+              )}
+
+              {templateChannel === 'line' && (
+                <div className="md:col-span-2 space-y-1.5">
+                  <div className="flex items-center justify-between">
+                    <label className="text-xs font-semibold text-slate-700">
+                      LINE文例・素材ストック（任意引用）
+                    </label>
+                    <button
+                      type="button"
+                      onClick={() => setScreen('templates')}
+                      className="inline-flex items-center gap-1 text-[11px] font-bold text-purple-700 hover:text-purple-800 cursor-pointer"
+                    >
+                      <Library className="h-3.5 w-3.5" />
+                      <span>文例・LINE素材ストックを開く</span>
+                    </button>
+                  </div>
+                  <select
+                    value={selectedLineTemplateId}
+                    onChange={(e) => chooseLineTemplate(e.target.value)}
+                    className="block w-full rounded-xl border border-slate-200 bg-white p-2.5 text-xs text-slate-900 focus:border-purple-600 focus:outline-none shadow-2xs"
+                  >
+                    <option value="">現在の送信種別（{labels[kind]}）の標準テキスト</option>
+                    {lineTemplates.map((x: any) => (
+                      <option key={x.id} value={x.id}>
+                        {x.name}（{x.reply_type === 'text' ? 'テキスト' : x.reply_type === 'image' ? '画像' : x.reply_type === 'video' ? '動画' : 'Flex'}）
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              )}
+
+              {/* ページ表示時の件名・本文欄（ドロワー表示時は上部に既に配置されているため非表示） */}
+              {variant === 'page' && (
+                <>
+                  {templateChannel === 'email' && (
+                    <div className="md:col-span-2">
+                      <label className="text-xs font-semibold text-slate-700">件名</label>
+                      <input
+                        value={subject}
+                        onChange={(e) => setSubject(e.target.value)}
+                        className="mt-1 block w-full rounded-xl border border-slate-200 bg-slate-50 p-2.5 text-xs text-slate-900 focus:bg-white focus:border-purple-600 focus:outline-none shadow-2xs"
+                        placeholder="件名を入力..."
+                      />
+                      <PlaceholderAssist text={subject} onInsert={(token) => setSubject((curr) => curr + token)} />
+                    </div>
+                  )}
+
+                  {(kind === 'deal' || kind === 'customer_meeting') && (
+                    <p className="md:col-span-2 text-xs text-slate-500">
+                      共通Google予約ページ: <span className="text-purple-700 font-mono font-medium">{bookingUrl || '未設定'}</span>
+                    </p>
+                  )}
+
+                  {channel === 'both' && (
+                    <div className="md:col-span-2 flex items-center gap-2 rounded-xl bg-purple-50/50 p-2.5 text-xs text-slate-700 border border-purple-200">
+                      <span className="font-semibold text-purple-900">編集対象:</span>
+                      <button
+                        type="button"
+                        onClick={() => setTemplateChannel('email')}
+                        className={`rounded-lg px-3 py-1 font-semibold transition cursor-pointer text-xs ${templateChannel === 'email' ? 'bg-purple-600 text-white' : 'bg-white border border-slate-200 text-slate-700'}`}
+                      >
+                        メール文面
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setTemplateChannel('line')}
+                        className={`rounded-lg px-3 py-1 font-semibold transition cursor-pointer text-xs ${templateChannel === 'line' ? 'bg-purple-600 text-white' : 'bg-white border border-slate-200 text-slate-700'}`}
+                      >
+                        LINE文面
+                      </button>
+                      <span className="text-slate-500 text-[11px]">※メールとLINEで別々の文面を設定・送信できます</span>
+                    </div>
+                  )}
+
+                  {(templateChannel !== 'line' || !selectedLineTemplate || selectedLineTemplate.reply_type === 'text') && (
+                    <div className="md:col-span-2">
+                      <div className="flex flex-wrap items-center justify-between gap-2">
+                        <div className="flex items-center gap-2">
+                          <label className="text-xs font-semibold text-slate-700">本文</label>
+                          {(kind === 'document' || kind === 'form' || kind === 'diagnosis') && (
+                            <span className="text-xs font-medium text-purple-700">
+                              保存対象: {kind === 'document' ? doc?.title || '共通書類テンプレート' : form?.name || '共通テンプレート'}
+                            </span>
+                          )}
+                        </div>
+                        <div className="flex items-center gap-1.5">
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setSelectedEmailTemplateId('');
+                              setSelectedLineTemplateId('');
+                              if (templateChannel === 'email') setSubject('');
+                              setBody('');
+                            }}
+                            className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg border border-slate-200 bg-white hover:bg-slate-50 text-slate-600 text-[11px] font-semibold transition cursor-pointer whitespace-nowrap shrink-0"
+                            title="現在の件名・本文を真っさらな白紙状態にクリアします"
+                          >
+                            <Eraser className="h-3.5 w-3.5 text-slate-500" />
+                            <span>白紙に戻す</span>
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => setIsComposerExpanded(true)}
+                            className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg border border-purple-200 bg-purple-50 hover:bg-purple-100 text-purple-800 text-[11px] font-semibold transition cursor-pointer whitespace-nowrap shrink-0"
+                            title="文面作成エリアを画面全体へ大きく広げて入力します"
+                          >
+                            <Maximize2 className="h-3.5 w-3.5 text-purple-600" />
+                            <span>全画面で入力</span>
+                          </button>
+                        </div>
+                      </div>
+                      <textarea
+                        value={body}
+                        onChange={(e) => setBody(e.target.value)}
+                        rows={12}
+                        className="mt-1 block w-full min-h-[260px] resize-y rounded-xl border border-slate-200 bg-slate-50 p-3.5 text-sm text-slate-900 font-sans leading-relaxed focus:bg-white focus:border-purple-600 focus:outline-none shadow-2xs"
+                        placeholder="本文を入力してください（白紙から入力する場合は「自由作成」または上の「白紙に戻す」をご利用ください）..."
+                      />
+                      {templateChannel === 'email' && (
+                        <p className="mt-1.5 text-[11px] text-slate-500">
+                          ※ メール送信時はどの種別（自由作成を含む）でも末尾に統一署名（有限会社MST・住所・HP・Mail）が自動付与されます（営業・案内メールには配信停止リンクも自動付与）。
+                        </p>
+                      )}
+                      <PlaceholderAssist text={body} onInsert={(token) => setBody((curr) => curr + token)} />
+                    </div>
+                  )}
+                </>
+              )}
+
+              <label className="md:col-span-2 text-xs font-semibold text-slate-700">
+                送信根拠（法規・同意記録）
+                <input
+                  value={basis}
+                  onChange={(e) => setBasis(e.target.value)}
+                  className="mt-1 block w-full rounded-xl border border-slate-200 bg-white p-2.5 text-xs text-slate-900 focus:border-purple-600 focus:outline-none shadow-2xs"
                 />
-                {templateChannel === 'email' && (
-                  <p className="mt-1.5 text-[11px] text-slate-500">
-                    ※ メール送信時はどの種別（自由作成を含む）でも末尾に統一署名（有限会社MST・住所・HP・Mail）が自動付与されます（営業・案内メールには配信停止リンクも自動付与）。
-                  </p>
-                )}
-                <PlaceholderAssist text={body} onInsert={(token) => setBody((curr) => curr + token)} />
-              </div>
-            )}
+              </label>
 
-            <label className="md:col-span-2 text-xs font-semibold text-slate-700">
-              送信根拠（法規・同意記録）
-              <input
-                value={basis}
-                onChange={(e) => setBasis(e.target.value)}
-                className="mt-1 block w-full rounded-xl border border-slate-200 bg-slate-50 p-2.5 text-xs text-slate-900 focus:bg-white focus:border-purple-600 focus:outline-none shadow-2xs"
-              />
-            </label>
-          </div>
+              {(channel === 'email' || channel === 'both') && (
+                <div className="md:col-span-2">
+                  <button
+                    type="button"
+                    disabled={savingSenderSettings}
+                    onClick={() => void saveSenderSettings()}
+                    className="inline-flex items-center gap-1.5 rounded-xl border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-50 cursor-pointer shadow-2xs"
+                  >
+                    <Save className="h-3.5 w-3.5" />
+                    {savingSenderSettings ? '保存中…' : '差出人既定値を保存'}
+                  </button>
+                </div>
+              )}
+            </div>
+          )}
 
-          <div className="flex flex-wrap gap-2.5 pt-2">
-            {(channel === 'email' || channel === 'both') && (
+          {/* ページ表示時の下部アクションボタン（ドロワー表示時は上部に既に配置されているため非表示） */}
+          {variant === 'page' && (
+            <div className="flex flex-wrap gap-2.5 pt-2">
               <button
                 type="button"
-                disabled={savingSenderSettings}
-                onClick={() => void saveSenderSettings()}
+                onClick={() => void save()}
                 className="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-slate-50 px-4 py-2.5 text-xs font-semibold text-slate-700 hover:bg-slate-100 cursor-pointer shadow-2xs"
               >
                 <Save className="h-4 w-4" />
-                {savingSenderSettings ? '保存中…' : '差出人既定値を保存'}
+                テンプレート保存（{templateChannel === 'email' ? 'メール' : 'LINE'}）
               </button>
-            )}
-            <button
-              type="button"
-              onClick={() => void save()}
-              className="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-slate-50 px-4 py-2.5 text-xs font-semibold text-slate-700 hover:bg-slate-100 cursor-pointer shadow-2xs"
-            >
-              <Save className="h-4 w-4" />
-              テンプレート保存（{templateChannel === 'email' ? 'メール' : 'LINE'}）
-            </button>
-            {!preview ? (
-              <button
-                type="button"
-                onClick={() => {
-                  setError('');
-                  if (!contact) {
-                    setError('送信先を選択してください。');
-                    return;
-                  }
-                  if (kind === 'document' && !doc) {
-                    setError('送信する書類を選択してください。');
-                    return;
-                  }
-                  if ((kind === 'form' || kind === 'diagnosis') && !form) {
-                    setError('フォームを選択してください。');
-                    return;
-                  }
-                  setPreview(true);
-                }}
-                className="inline-flex items-center gap-2 rounded-xl bg-purple-600 px-5 py-2.5 text-xs font-bold text-white hover:bg-purple-700 shadow-xs shadow-purple-600/20 cursor-pointer"
-              >
-                <Eye className="h-4 w-4" />
-                送信プレビューを確認
-              </button>
-            ) : (
-              <button
-                type="button"
-                disabled={busy}
-                onClick={() => void send()}
-                className="inline-flex items-center gap-2 rounded-xl bg-emerald-600 px-6 py-2.5 text-xs font-bold text-white hover:bg-emerald-700 shadow-xs shadow-emerald-600/20 cursor-pointer"
-              >
-                <Send className="h-4 w-4" />
-                {busy ? '送信中…' : '確定して送信する'}
-              </button>
-            )}
-          </div>
+              {!preview ? (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setError('');
+                    if (!contact) {
+                      setError('送信先を選択してください。');
+                      return;
+                    }
+                    if (kind === 'document' && !doc) {
+                      setError('送信する書類を選択してください。');
+                      return;
+                    }
+                    if ((kind === 'form' || kind === 'diagnosis') && !form) {
+                      setError('フォームを選択してください。');
+                      return;
+                    }
+                    setPreview(true);
+                  }}
+                  className="inline-flex items-center gap-2 rounded-xl bg-purple-600 px-5 py-2.5 text-xs font-bold text-white hover:bg-purple-700 shadow-xs shadow-purple-600/20 cursor-pointer"
+                >
+                  <Eye className="h-4 w-4" />
+                  送信プレビューを確認
+                </button>
+              ) : (
+                <button
+                  type="button"
+                  disabled={busy}
+                  onClick={() => void send()}
+                  className="inline-flex items-center gap-2 rounded-xl bg-emerald-600 px-6 py-2.5 text-xs font-bold text-white hover:bg-emerald-700 shadow-xs shadow-emerald-600/20 cursor-pointer"
+                >
+                  <Send className="h-4 w-4" />
+                  {busy ? '送信中…' : '確定して送信する'}
+                </button>
+              )}
+            </div>
+          )}
 
           {preview && (
             <div className="rounded-2xl border-2 border-slate-300 bg-white p-5 space-y-4 shadow-md">
