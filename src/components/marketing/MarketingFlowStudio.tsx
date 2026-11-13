@@ -190,9 +190,13 @@ export const MarketingFlowStudio: React.FC<MarketingFlowStudioProps> = ({
   const [patternBEditTab, setPatternBEditTab] = useState<'q1' | 'q2' | 'completion'>('q1');
   const [welcomeEnabled, setWelcomeEnabled] = useState(true);
   const [welcomeRuleId, setWelcomeRuleId] = useState<string | null>(null);
+  const [welcomeLoadedFromDb, setWelcomeLoadedFromDb] = useState(false);
+  const [conflictingLegacyRules, setConflictingLegacyRules] = useState<Array<{ id?: string; name?: string; match_text?: string; reply_type?: string }>>([]);
+  const [disablingLegacy, setDisablingLegacy] = useState(false);
   const [isEditingWelcome, setIsEditingWelcome] = useState(false);
   const [welcomeSaving, setWelcomeSaving] = useState(false);
   const [welcomeNotice, setWelcomeNotice] = useState('');
+  const [welcomeError, setWelcomeError] = useState('');
   
   // Flex編集モード: 'visual' (各項目＆ボタン設定) | 'json' (Flex Bubble/Carousel JSON直接編集)
   const [flexEditMode, setFlexEditMode] = useState<'visual' | 'json'>('visual');
@@ -215,7 +219,7 @@ export const MarketingFlowStudio: React.FC<MarketingFlowStudioProps> = ({
         ? {
             type: 'uri',
             label: (c.label || `選択肢 ${i + 1}`).slice(0, 20),
-            uri: c.uri || 'https://corp.mstcorp.info',
+            uri: (c.uri || 'https://corp.mstcorp.info').trim(),
           }
         : {
             type: 'postback',
@@ -234,6 +238,18 @@ export const MarketingFlowStudio: React.FC<MarketingFlowStudioProps> = ({
       };
     });
 
+    const textItems: Record<string, any>[] = [];
+    if (heading.trim()) textItems.push({ type: 'text', text: heading, size: 'xl', weight: 'bold', align: 'center', color: '#1E293B', wrap: true });
+    if (subheading.trim()) textItems.push({ type: 'text', text: subheading, size: 'md', align: 'center', color: '#334155', margin: 'sm', wrap: true });
+    if (intro.trim() || question.trim()) textItems.push({ type: 'separator', margin: 'lg' });
+    if (intro.trim()) textItems.push({ type: 'text', text: intro, size: 'sm', align: 'center', color: '#475569', margin: 'lg', wrap: true });
+    if (question.trim()) textItems.push({ type: 'text', text: question, size: 'lg', weight: 'bold', align: 'center', color: '#1E293B', margin: 'xl', wrap: true });
+    if (instruction.trim()) textItems.push({ type: 'text', text: instruction, size: 'sm', align: 'center', color: '#64748B', margin: 'sm', wrap: true });
+
+    if (textItems.length === 0 && buttons.length === 0) {
+      textItems.push({ type: 'text', text: '友だち追加ありがとうございます。', size: 'md', align: 'center', color: '#1E293B', wrap: true });
+    }
+
     return {
       type: 'bubble',
       body: {
@@ -241,12 +257,7 @@ export const MarketingFlowStudio: React.FC<MarketingFlowStudioProps> = ({
         layout: 'vertical',
         spacing: 'lg',
         contents: [
-          { type: 'text', text: heading, size: 'xl', weight: 'bold', align: 'center', color: '#1E293B', wrap: true },
-          { type: 'text', text: subheading, size: 'md', align: 'center', color: '#334155', margin: 'sm', wrap: true },
-          { type: 'separator', margin: 'lg' },
-          { type: 'text', text: intro, size: 'sm', align: 'center', color: '#475569', margin: 'lg', wrap: true },
-          { type: 'text', text: question, size: 'lg', weight: 'bold', align: 'center', color: '#1E293B', margin: 'xl', wrap: true },
-          { type: 'text', text: instruction, size: 'sm', align: 'center', color: '#64748B', margin: 'sm', wrap: true },
+          ...textItems,
           ...buttons,
         ],
       },
@@ -452,93 +463,144 @@ export const MarketingFlowStudio: React.FC<MarketingFlowStudioProps> = ({
     }
   }, [customFlexJson]);
 
-  // Supabase line_auto_reply_rules からウェルカム設定をロード
+  // Supabase / API からウェルカム設定をロード（単一正本: __welcome__）
   useEffect(() => {
     if (!db) return;
+    const applyLoadedWelcomeRule = (data: any) => {
+      if (!data) return;
+      setWelcomeRuleId(data.id || null);
+      setWelcomeLoadedFromDb(true);
+      setWelcomeEnabled(data.enabled ?? true);
+      let payload = data.reply_payload as any;
+      if (!payload && data.reply_text) {
+        try {
+          payload = JSON.parse(data.reply_text);
+        } catch {
+          // ignore
+        }
+      }
+      if (payload) {
+        if (payload.editMode === 'json') {
+          setFlexEditMode('json');
+        }
+        if (payload.contents) {
+          setCustomFlexJson(JSON.stringify(payload.contents, null, 2));
+        }
+        const bodyContents = payload?.contents?.body?.contents;
+        if (Array.isArray(bodyContents)) {
+          const textNodes = bodyContents.filter((item: any) => item?.type === 'text' && typeof item.text === 'string');
+          const hasSeparator = bodyContents.some((item: any) => item?.type === 'separator');
+          if (hasSeparator && bodyContents[0]?.type === 'text' && bodyContents[1]?.type === 'text') {
+            if (bodyContents[0]?.text) setWelcomeHeading(bodyContents[0].text);
+            if (bodyContents[1]?.text) setWelcomeSubheading(bodyContents[1].text);
+            if (bodyContents[3]?.type === 'text' && bodyContents[3]?.text) setWelcomeIntro(bodyContents[3].text);
+            if (bodyContents[4]?.type === 'text' && bodyContents[4]?.text) setWelcomeQuestion(bodyContents[4].text);
+            if (bodyContents[5]?.type === 'text' && bodyContents[5]?.text) setWelcomeInstruction(bodyContents[5].text);
+          } else if (textNodes.length > 0) {
+            if (textNodes[0]?.text) setWelcomeHeading(textNodes[0].text);
+            if (textNodes[1]?.text) setWelcomeSubheading(textNodes[1].text);
+            if (textNodes[2]?.text) setWelcomeIntro(textNodes[2].text);
+            if (textNodes[3]?.text) setWelcomeQuestion(textNodes[3].text);
+            if (textNodes[4]?.text) setWelcomeInstruction(textNodes[4].text);
+          }
+        }
+        if (Array.isArray(payload.choices) && payload.choices.length > 0) {
+          const migratedChoices = payload.choices.map((c: any) => {
+            if (c?.id === 'consult' && c?.route === 'booking') {
+              return { ...c, route: 'chat' };
+            }
+            if (c?.id === 'care') {
+              const legacyLabels = ['🌿 介護保険外サービス開業を知る', '🌿 介護保険外サービス開業パッケージについて知る', '介護保険外サービス開業パッケージについて知る'];
+              const legacyTags = ['care:開業相談', '選択:開業パッケージ'];
+              return {
+                ...c,
+                label: legacyLabels.includes(c.label) ? '🌿 介護保険外サービスの開業相談' : c.label,
+                tag: legacyTags.includes(c.tag) || !c.tag ? '介護保険外開業' : c.tag,
+                route: c.route === 'template' ? 'care_interactive' : c.route,
+              };
+            }
+            return c;
+          });
+          setWelcomeChoices(migratedChoices);
+        }
+        if (payload.patternA && typeof payload.patternA === 'object') {
+          setPatternAConfig({
+            ...DEFAULT_WELCOME_PATTERN_A,
+            ...payload.patternA,
+          });
+        }
+        if (payload.patternB && typeof payload.patternB === 'object') {
+          setPatternBConfig({
+            q1: {
+              ...DEFAULT_WELCOME_PATTERN_B.q1,
+              ...(payload.patternB.q1 || {}),
+              choices: Array.isArray(payload.patternB.q1?.choices) && payload.patternB.q1.choices.length > 0
+                ? payload.patternB.q1.choices
+                : DEFAULT_WELCOME_PATTERN_B.q1.choices,
+            },
+            q2: {
+              ...DEFAULT_WELCOME_PATTERN_B.q2,
+              ...(payload.patternB.q2 || {}),
+              choices: Array.isArray(payload.patternB.q2?.choices) && payload.patternB.q2.choices.length > 0
+                ? payload.patternB.q2.choices
+                : DEFAULT_WELCOME_PATTERN_B.q2.choices,
+            },
+            completion: {
+              ...DEFAULT_WELCOME_PATTERN_B.completion,
+              ...(payload.patternB.completion || {}),
+            },
+          });
+        }
+      }
+    };
+
     const loadWelcome = async () => {
       try {
         const { data: sessionData } = await db.auth.getSession();
         const ownerId = sessionData.session?.user?.id;
+        const token = sessionData.session?.access_token;
         if (!ownerId) return;
 
-        const { data, error } = await db
+        if (token) {
+          try {
+            const resp = await fetch('/api/line/welcome-config', {
+              headers: { Authorization: `Bearer ${token}` },
+            });
+            if (resp.ok) {
+              const json = await resp.json();
+              if (Array.isArray(json.conflictingLegacyRules)) {
+                setConflictingLegacyRules(json.conflictingLegacyRules);
+              }
+              if (json.rule) {
+                applyLoadedWelcomeRule(json.rule);
+                return;
+              }
+            }
+          } catch {
+            // API未接続時は直接Supabaseクエリにフォールバック
+          }
+        }
+
+        const { data: rows, error } = await db
           .from('line_auto_reply_rules')
-          .select('id, reply_type, reply_payload, reply_text, enabled')
+          .select('id, reply_type, reply_payload, reply_text, enabled, updated_at')
           .eq('owner_id', ownerId)
           .eq('match_text', '__welcome__')
-          .maybeSingle();
+          .order('updated_at', { ascending: false })
+          .limit(1);
 
-        if (!error && data) {
-          setWelcomeRuleId(data.id);
-          setWelcomeEnabled(data.enabled ?? true);
-          let payload = data.reply_payload as any;
-          if (!payload && data.reply_text) {
-            try {
-              payload = JSON.parse(data.reply_text);
-            } catch {
-              // ignore
-            }
-          }
-          if (payload) {
-            if (payload.contents) {
-              setCustomFlexJson(JSON.stringify(payload.contents, null, 2));
-            }
-            const bodyContents = payload?.contents?.body?.contents;
-            if (Array.isArray(bodyContents)) {
-              if (bodyContents[0]?.text) setWelcomeHeading(bodyContents[0].text);
-              if (bodyContents[1]?.text) setWelcomeSubheading(bodyContents[1].text);
-              if (bodyContents[3]?.text) setWelcomeIntro(bodyContents[3].text);
-              if (bodyContents[4]?.text) setWelcomeQuestion(bodyContents[4].text);
-              if (bodyContents[5]?.text) setWelcomeInstruction(bodyContents[5].text);
-            }
-            if (Array.isArray(payload.choices) && payload.choices.length > 0) {
-              const migratedChoices = payload.choices.map((c: any) => {
-                if (c?.id === 'consult' && c?.route === 'booking') {
-                  return { ...c, route: 'chat' };
-                }
-                if (c?.id === 'care') {
-                  const legacyLabels = ['🌿 介護保険外サービス開業を知る', '🌿 介護保険外サービス開業パッケージについて知る', '介護保険外サービス開業パッケージについて知る'];
-                  const legacyTags = ['care:開業相談', '選択:開業パッケージ'];
-                  return {
-                    ...c,
-                    label: legacyLabels.includes(c.label) ? '🌿 介護保険外サービスの開業相談' : c.label,
-                    tag: legacyTags.includes(c.tag) || !c.tag ? '介護保険外開業' : c.tag,
-                    route: c.route === 'template' ? 'care_interactive' : c.route,
-                  };
-                }
-                return c;
-              });
-              setWelcomeChoices(migratedChoices);
-            }
-            if (payload.patternA && typeof payload.patternA === 'object') {
-              setPatternAConfig({
-                ...DEFAULT_WELCOME_PATTERN_A,
-                ...payload.patternA,
-              });
-            }
-            if (payload.patternB && typeof payload.patternB === 'object') {
-              setPatternBConfig({
-                q1: {
-                  ...DEFAULT_WELCOME_PATTERN_B.q1,
-                  ...(payload.patternB.q1 || {}),
-                  choices: Array.isArray(payload.patternB.q1?.choices) && payload.patternB.q1.choices.length > 0
-                    ? payload.patternB.q1.choices
-                    : DEFAULT_WELCOME_PATTERN_B.q1.choices,
-                },
-                q2: {
-                  ...DEFAULT_WELCOME_PATTERN_B.q2,
-                  ...(payload.patternB.q2 || {}),
-                  choices: Array.isArray(payload.patternB.q2?.choices) && payload.patternB.q2.choices.length > 0
-                    ? payload.patternB.q2.choices
-                    : DEFAULT_WELCOME_PATTERN_B.q2.choices,
-                },
-                completion: {
-                  ...DEFAULT_WELCOME_PATTERN_B.completion,
-                  ...(payload.patternB.completion || {}),
-                },
-              });
-            }
-          }
+        if (!error && Array.isArray(rows) && rows[0]) {
+          applyLoadedWelcomeRule(rows[0]);
+        }
+
+        const { data: legacyRows } = await db
+          .from('line_auto_reply_rules')
+          .select('id, name, match_text, reply_type')
+          .eq('owner_id', ownerId)
+          .eq('enabled', true)
+          .in('match_text', ['友だち追加', 'ウェルカム', 'あいさつ', '挨拶']);
+        if (Array.isArray(legacyRows)) {
+          setConflictingLegacyRules(legacyRows);
         }
       } catch (e) {
         console.warn('Welcome load error in FlowStudio:', e);
@@ -548,14 +610,18 @@ export const MarketingFlowStudio: React.FC<MarketingFlowStudioProps> = ({
   }, [db]);
 
   // ウェルカム＆分岐パターンA/B設定の一括保存（単一の正本に統合保存）
-  const handleSaveWelcome = async (successMessage?: string) => {
+  const handleSaveWelcome = async (successMessage?: string, overrideEnabled?: boolean) => {
     if (!db) return;
     setWelcomeSaving(true);
     setWelcomeNotice('');
+    setWelcomeError('');
     try {
       const { data: sessionData } = await db.auth.getSession();
       const ownerId = sessionData.session?.user?.id;
+      const token = sessionData.session?.access_token;
       if (!ownerId) throw new Error('ログインセッションが見つかりません');
+
+      const effectiveEnabled = overrideEnabled !== undefined ? overrideEnabled : welcomeEnabled;
 
       let finalContents: any;
       if (flexEditMode === 'json' && customFlexJson.trim()) {
@@ -563,6 +629,9 @@ export const MarketingFlowStudio: React.FC<MarketingFlowStudioProps> = ({
           finalContents = JSON.parse(customFlexJson);
         } catch (jsonErr: any) {
           throw new Error('Flex JSONの構文エラーです。正しいJSONを入力してください: ' + (jsonErr?.message || ''));
+        }
+        if (!finalContents || typeof finalContents !== 'object' || !['bubble', 'carousel'].includes(finalContents.type)) {
+          throw new Error('Flex JSONのルート要素は "type": "bubble" または "carousel" である必要があります。');
         }
       } else {
         finalContents = buildFlexBubbleFromVisual(
@@ -576,49 +645,148 @@ export const MarketingFlowStudio: React.FC<MarketingFlowStudioProps> = ({
         setCustomFlexJson(JSON.stringify(finalContents, null, 2));
       }
 
+      const altText = [welcomeHeading, welcomeSubheading].filter((s) => s && s.trim()).join(' ') || '友だち追加ありがとうございます';
       const payload = {
-        altText: `${welcomeHeading} ${welcomeSubheading}`,
+        altText,
         contents: finalContents,
         choices: welcomeChoices,
         patternA: patternAConfig,
         patternB: patternBConfig,
+        editMode: flexEditMode,
       };
 
-      const rowData = {
-        owner_id: ownerId,
-        name: '友だち追加ウェルカムFlexメッセージ',
-        match_mode: 'exact',
-        match_text: '__welcome__',
-        reply_type: 'flex',
-        reply_text: `${welcomeHeading} ${welcomeSubheading}`,
-        reply_payload: payload,
-        enabled: welcomeEnabled,
-        priority: 0,
-        updated_at: new Date().toISOString(),
-      };
+      const replyTextSummary = altText;
+      let savedViaApi = false;
 
-      const { data: upserted, error } = await db
-        .from('line_auto_reply_rules')
-        .upsert(
-          (welcomeRuleId ? { id: welcomeRuleId, ...rowData } : rowData) as any,
-          { onConflict: 'owner_id,match_text' }
-        )
-        .select('id')
-        .single();
-
-      if (!error && upserted) {
-        setWelcomeRuleId(upserted.id);
+      if (token) {
+        const apiResp = await fetch('/api/line/welcome-config', {
+          method: 'PUT',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${token}`,
+          },
+          body: JSON.stringify({
+            enabled: effectiveEnabled,
+            replyText: replyTextSummary,
+            payload,
+          }),
+        });
+        if (apiResp.ok) {
+          const apiJson = await apiResp.json().catch(() => ({}));
+          if (apiJson?.rule?.id) {
+            setWelcomeRuleId(apiJson.rule.id);
+          }
+          savedViaApi = true;
+        } else if (apiResp.status !== 404 && apiResp.status !== 503) {
+          const errJson = await apiResp.json().catch(() => ({}));
+          throw new Error(errJson?.error || `サーバー保存エラー (${apiResp.status})`);
+        }
       }
 
+      if (!savedViaApi) {
+        const rowData = {
+          owner_id: ownerId,
+          name: '友だち追加ウェルカムFlexメッセージ',
+          match_mode: 'exact',
+          match_text: '__welcome__',
+          reply_type: 'flex',
+          reply_text: replyTextSummary,
+          reply_payload: payload,
+          enabled: effectiveEnabled,
+          priority: 0,
+          updated_at: new Date().toISOString(),
+        };
+
+        let targetId = welcomeRuleId;
+        if (!targetId) {
+          const { data: existingRows, error: findError } = await db
+            .from('line_auto_reply_rules')
+            .select('id')
+            .eq('owner_id', ownerId)
+            .eq('match_text', '__welcome__')
+            .order('updated_at', { ascending: false })
+            .limit(1);
+          if (findError) throw findError;
+          targetId = existingRows?.[0]?.id || null;
+        }
+
+        if (targetId) {
+          const { data: updated, error: updateError } = await db
+            .from('line_auto_reply_rules')
+            .update(rowData as any)
+            .eq('id', targetId)
+            .select('id')
+            .single();
+          if (updateError) throw updateError;
+          if (updated?.id) setWelcomeRuleId(updated.id);
+        } else {
+          const { data: inserted, error: insertError } = await db
+            .from('line_auto_reply_rules')
+            .insert(rowData as any)
+            .select('id')
+            .single();
+          if (insertError) throw insertError;
+          if (inserted?.id) setWelcomeRuleId(inserted.id);
+        }
+      }
+
+      setWelcomeLoadedFromDb(true);
       setWelcomeNotice(successMessage || 'LINEウェルカム・分岐返信設定を保存しました！LINE公式アカウントへ即時反映されます。');
       setIsEditingWelcome(false);
       setIsEditingPatternA(false);
       setIsEditingPatternB(false);
       setTimeout(() => setWelcomeNotice(''), 5000);
     } catch (err: any) {
-      setWelcomeNotice(`保存エラー: ${err?.message || '不明なエラー'}`);
+      setWelcomeError(`保存エラー: ${err?.message || '不明なエラー'}`);
     } finally {
       setWelcomeSaving(false);
+    }
+  };
+
+  const handleToggleWelcomeEnabled = async (nextEnabled: boolean) => {
+    setWelcomeEnabled(nextEnabled);
+    await handleSaveWelcome(
+      nextEnabled
+        ? '友だち追加ウェルカムメッセージの自動送信を有効にして保存しました。'
+        : '友だち追加ウェルカムメッセージの自動送信を停止しました。',
+      nextEnabled
+    );
+  };
+
+  const handleDisableLegacyWelcomeRules = async () => {
+    if (!db) return;
+    setDisablingLegacy(true);
+    setWelcomeError('');
+    try {
+      const { data: sessionData } = await db.auth.getSession();
+      const token = sessionData.session?.access_token;
+      const ownerId = sessionData.session?.user?.id;
+      let done = false;
+      if (token) {
+        const resp = await fetch('/api/line/welcome-config/disable-legacy', {
+          method: 'POST',
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        if (resp.ok) {
+          done = true;
+        }
+      }
+      if (!done && ownerId) {
+        const { error } = await db
+          .from('line_auto_reply_rules')
+          .update({ enabled: false, updated_at: new Date().toISOString() })
+          .eq('owner_id', ownerId)
+          .in('match_text', ['友だち追加', 'ウェルカム', 'あいさつ', '挨拶'])
+          .eq('enabled', true);
+        if (error) throw error;
+      }
+      setConflictingLegacyRules([]);
+      setWelcomeNotice('旧ウェルカム関連ルールを停止しました。今後はLINE・メール自動配信の設定のみが送信されます。');
+      setTimeout(() => setWelcomeNotice(''), 5000);
+    } catch (err: any) {
+      setWelcomeError(`旧ルール停止エラー: ${err?.message || '不明なエラー'}`);
+    } finally {
+      setDisablingLegacy(false);
     }
   };
 
@@ -692,8 +860,8 @@ export const MarketingFlowStudio: React.FC<MarketingFlowStudioProps> = ({
         const { data: auth } = await db.auth.getUser();
         const ownerId = auth.user?.id;
         if (ownerId) {
-          await db.from('line_auto_reply_rules').upsert({
-            id: newRule.id.startsWith('kw-') ? undefined : newRule.id,
+          const isExistingDbRow = !newRule.id.startsWith('kw-');
+          const rowPayload = {
             owner_id: ownerId,
             name: newRule.name,
             match_mode: newRule.matchMode,
@@ -703,10 +871,22 @@ export const MarketingFlowStudio: React.FC<MarketingFlowStudioProps> = ({
             enabled: newRule.enabled,
             priority: 100,
             updated_at: new Date().toISOString(),
-          });
+          };
+          const res = isExistingDbRow
+            ? await db.from('line_auto_reply_rules').update(rowPayload).eq('id', newRule.id).select('id').single()
+            : await db.from('line_auto_reply_rules').insert(rowPayload).select('id').single();
+          if (res.error) {
+            setWelcomeError(`キーワードルール保存エラー: ${res.error.message}`);
+            return;
+          }
+          if (res.data?.id && res.data.id !== newRule.id) {
+            setKeywordRules((prev) => prev.map((r) => (r.id === newRule.id ? { ...r, id: res.data.id } : r)));
+          }
         }
-      } catch (err) {
+      } catch (err: any) {
         console.warn('Supabase rule save warning:', err);
+        setWelcomeError(`キーワードルール保存エラー: ${err?.message || '不明なエラー'}`);
+        return;
       }
     }
 
@@ -956,17 +1136,24 @@ export const MarketingFlowStudio: React.FC<MarketingFlowStudioProps> = ({
 
   return (
     <div className="space-y-6">
+      {welcomeError && (
+        <div role="alert" className="rounded-xl border border-rose-200 bg-rose-50 p-3 text-xs font-medium text-rose-800 flex items-center justify-between">
+          <span>{welcomeError}</span>
+          <button type="button" onClick={() => setWelcomeError('')} className="text-rose-600 font-bold px-1 cursor-pointer">✕</button>
+        </div>
+      )}
+
       {welcomeNotice && (
-        <div className="rounded-xl border border-emerald-500/30 bg-emerald-500/10 p-3 text-xs text-emerald-200 flex items-center justify-between animate-fade-in">
+        <div role="status" className="rounded-xl border border-emerald-200 bg-emerald-50 p-3 text-xs font-medium text-emerald-800 flex items-center justify-between">
           <span>{welcomeNotice}</span>
-          <button type="button" onClick={() => setWelcomeNotice('')} className="text-emerald-400 font-bold px-1">✕</button>
+          <button type="button" onClick={() => setWelcomeNotice('')} className="text-emerald-600 font-bold px-1 cursor-pointer">✕</button>
         </div>
       )}
 
       {keywordNotice && (
-        <div className="rounded-xl border border-emerald-500/30 bg-emerald-500/10 p-3 text-xs text-emerald-200 flex items-center justify-between animate-fade-in">
+        <div role="status" className="rounded-xl border border-emerald-200 bg-emerald-50 p-3 text-xs font-medium text-emerald-800 flex items-center justify-between">
           <span>{keywordNotice}</span>
-          <button type="button" onClick={() => setKeywordNotice('')} className="text-emerald-400 font-bold px-1">✕</button>
+          <button type="button" onClick={() => setKeywordNotice('')} className="text-emerald-600 font-bold px-1 cursor-pointer">✕</button>
         </div>
       )}
 
@@ -1366,10 +1553,23 @@ export const MarketingFlowStudio: React.FC<MarketingFlowStudioProps> = ({
                   1
                 </span>
                 <div>
-                  <div className="flex items-center gap-2">
+                  <div className="flex items-center gap-2 flex-wrap">
                     <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-emerald-100 text-emerald-800 border border-emerald-300">
                       【入口①・統一正本】LINE友だち追加直後（即時送信）
                     </span>
+                    {welcomeLoadedFromDb && welcomeRuleId ? (
+                      <span className={`text-[10px] font-bold px-2 py-0.5 rounded border ${
+                        welcomeEnabled
+                          ? 'bg-emerald-600 text-white border-emerald-700'
+                          : 'bg-slate-200 text-slate-700 border-slate-300'
+                      }`}>
+                        {welcomeEnabled ? '✓ 保存済み・自動配信設定を反映中' : '停止中（自動送信OFF）'}
+                      </span>
+                    ) : (
+                      <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-amber-100 text-amber-800 border border-amber-300">
+                        未保存（初期プレビュー表示中）
+                      </span>
+                    )}
                     <span className="text-xs text-slate-500">Flexカード（3大相談メニュー分岐）</span>
                   </div>
                   <h3 className="text-base font-bold text-slate-900 mt-0.5">
@@ -1382,8 +1582,9 @@ export const MarketingFlowStudio: React.FC<MarketingFlowStudioProps> = ({
                 <label className="flex items-center gap-1.5 text-xs text-slate-700 font-bold cursor-pointer">
                   <input
                     type="checkbox"
+                    disabled={welcomeSaving}
                     checked={welcomeEnabled}
-                    onChange={(e) => setWelcomeEnabled(e.target.checked)}
+                    onChange={(e) => void handleToggleWelcomeEnabled(e.target.checked)}
                     className="rounded accent-emerald-600"
                   />
                   <span>自動送信有効</span>
@@ -1398,6 +1599,38 @@ export const MarketingFlowStudio: React.FC<MarketingFlowStudioProps> = ({
                 </button>
               </div>
             </div>
+
+            {!welcomeRuleId && (
+              <div className="px-5 py-3 bg-amber-50 border-b border-amber-200 flex flex-col sm:flex-row sm:items-center justify-between gap-2 text-xs text-amber-900">
+                <span>
+                  現在この画面の設定はまだDBへ確定保存されていません（保存するまではシステム標準のウェルカムカードまたは既存の自動返信ルールが送信されます）。
+                </span>
+                <button
+                  type="button"
+                  disabled={welcomeSaving}
+                  onClick={() => void handleSaveWelcome('現在のLINE・メール自動配信ウェルカム設定をDBに確定保存しました！')}
+                  className="shrink-0 px-3 py-1.5 rounded-lg bg-amber-600 hover:bg-amber-700 text-white font-bold text-xs transition cursor-pointer disabled:opacity-50"
+                >
+                  {welcomeSaving ? '反映中…' : 'この設定を保存してLINEに反映'}
+                </button>
+              </div>
+            )}
+
+            {conflictingLegacyRules.length > 0 && (
+              <div className="px-5 py-3 bg-sky-50 border-b border-sky-200 flex flex-col sm:flex-row sm:items-center justify-between gap-2 text-xs text-sky-900">
+                <span>
+                  別の自動返信ルール（{conflictingLegacyRules.map((r) => `「${r.match_text}」`).join('・')}）が有効になっています。上記の「LINE・メール自動配信」設定が最優先されますが、不要な旧ルールを停止できます。
+                </span>
+                <button
+                  type="button"
+                  disabled={disablingLegacy}
+                  onClick={() => void handleDisableLegacyWelcomeRules()}
+                  className="shrink-0 px-3 py-1.5 rounded-lg border border-sky-300 bg-white hover:bg-sky-100 text-sky-800 font-bold text-xs transition cursor-pointer disabled:opacity-50"
+                >
+                  {disablingLegacy ? '停止中…' : '旧ルールを停止する'}
+                </button>
+              </div>
+            )}
 
             {/* ウェルカム編集フォーム */}
             {isEditingWelcome && (

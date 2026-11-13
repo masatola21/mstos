@@ -22,6 +22,16 @@ import {
   buildExtraQuestionsPrompt, parseExtraQuestions, sanitizeExtraQuestionsContext, type MeetingKind,
 } from './server/meetingNotes.js';
 import { buildDiagnosisReportMarkdown, renderDiagnosisReportHtml, DiagnosisReportFormatError, DIAGNOSIS_REPORT_PROMPT_V2, type DiagnosisPremise } from './server/diagnosisReportBuilder.js';
+import {
+  WELCOME_MATCH_TEXT,
+  LEGACY_WELCOME_MATCH_TEXTS,
+  ALL_WELCOME_MATCH_TEXTS,
+  selectWelcomeRule,
+  extractWelcomeFlexTarget,
+  sanitizeWelcomeFlexNode,
+  expandMessageVarAliases,
+  replaceMessagePlaceholders,
+} from './server/lineWelcomeResolver.js';
 
 dotenv.config();
 
@@ -1133,15 +1143,27 @@ function isOptionalLineAutomationSchemaMissing(error: any): boolean {
 }
 
 function sanitizeFlexNode(node: any): any {
-  if (Array.isArray(node)) return node.map(sanitizeFlexNode);
-  if (node && typeof node === 'object') {
-    const out: Record<string, any> = {};
-    for (const [k, v] of Object.entries(node)) out[k] = sanitizeFlexNode(v);
-    // ボタンの height は sm / md のみ有効（lg 等はLINEに拒否される）
-    if (out.type === 'button' && out.height !== undefined && !['sm', 'md'].includes(out.height)) out.height = 'md';
-    return out;
+  return sanitizeWelcomeFlexNode(node);
+}
+
+async function resolveLineIntegration(botUserId?: string): Promise<{ owner_id: string; auto_reply_enabled?: boolean; bot_user_id?: string } | null> {
+  if (!lineSupabase) return null;
+  if (botUserId) {
+    const { data: byBot, error: byBotErr } = await lineSupabase
+      .from('line_channel_integrations')
+      .select('owner_id,auto_reply_enabled,bot_user_id')
+      .eq('bot_user_id', botUserId)
+      .maybeSingle();
+    if (byBotErr && isOptionalLineAutomationSchemaMissing(byBotErr)) return null;
+    if (byBot) return byBot as any;
   }
-  return node;
+  const { data: firstInt, error: firstErr } = await lineSupabase
+    .from('line_channel_integrations')
+    .select('owner_id,auto_reply_enabled,bot_user_id')
+    .limit(1)
+    .maybeSingle();
+  if (firstErr && isOptionalLineAutomationSchemaMissing(firstErr)) return null;
+  return (firstInt as any) || null;
 }
 
 function normalizeFlexContents(input: any): Record<string, any> | null {
@@ -1538,13 +1560,8 @@ async function getOrCreateLineTag(ownerId: string, tagName: string): Promise<str
 
 
 async function processLinePostback(event: any, contact: any, eventId: string, botUserId: string): Promise<void> {
-  if (!lineSupabase || !lineChannelAccessToken || !botUserId) return;
-  const { data: integration, error: integrationError } = await lineSupabase
-    .from('line_channel_integrations').select('owner_id,auto_reply_enabled').eq('bot_user_id', botUserId).maybeSingle();
-  if (integrationError) {
-    if (isOptionalLineAutomationSchemaMissing(integrationError)) return;
-    throw integrationError;
-  }
+  if (!lineSupabase || !lineChannelAccessToken) return;
+  const integration = await resolveLineIntegration(botUserId);
   if (!integration) return;
 
   const userId = typeof event.source?.userId === 'string' ? event.source.userId : '';
@@ -1764,15 +1781,12 @@ async function processLinePostback(event: any, contact: any, eventId: string, bo
       },
     };
 
-    const { data: welcomeRule } = await lineSupabase
+    const { data: welcomeCandidates } = await lineSupabase
       .from('line_auto_reply_rules')
-      .select('reply_payload, reply_text')
-      .eq('owner_id', integration.owner_id)
-      .eq('enabled', true)
-      .in('match_text', ['__welcome__', '友だち追加', 'ウェルカム'])
-      .order('priority', { ascending: true })
-      .limit(1)
-      .maybeSingle();
+      .select('id, owner_id, match_text, reply_payload, reply_text, priority, enabled, updated_at, created_at')
+      .in('match_text', [...ALL_WELCOME_MATCH_TEXTS]);
+    const selection = selectWelcomeRule(welcomeCandidates, integration.owner_id);
+    const welcomeRule = selection.rule;
 
     let payloadObj: any = {};
     if (welcomeRule?.reply_payload && typeof welcomeRule.reply_payload === 'object') {
@@ -2715,16 +2729,7 @@ async function processLineFollowWelcome(event: any, contact: any, eventId: strin
   // 1. 連携設定の解決（botUserId優先、無ければ1件目を採用）
   let integration: any = null;
   try {
-    if (botUserId) {
-      const { data: byBot } = await lineSupabase
-        .from('line_channel_integrations').select('owner_id,auto_reply_enabled,bot_user_id').eq('bot_user_id', botUserId).maybeSingle();
-      if (byBot) integration = byBot;
-    }
-    if (!integration) {
-      const { data: firstInt } = await lineSupabase
-        .from('line_channel_integrations').select('owner_id,auto_reply_enabled,bot_user_id').limit(1).maybeSingle();
-      if (firstInt) integration = firstInt;
-    }
+    integration = await resolveLineIntegration(botUserId);
   } catch (lookupErr) {
     console.warn('[LineWelcome] Integration lookup warning:', lookupErr);
   }
@@ -2737,31 +2742,26 @@ async function processLineFollowWelcome(event: any, contact: any, eventId: strin
     } catch {}
   }
 
-  // 2. 有効な __welcome__ ルールを取得（owner_id優先、なければ全ルールから検索）
-  let welcomeRules: any[] = [];
+  // 2. ウェルカムルールを取得（__welcome__ を最優先し、明示停止時はフォールバック送信しない）
+  let candidateRules: any[] = [];
   try {
-    if (ownerId) {
-      const { data: ownerRules } = await lineSupabase.from('line_auto_reply_rules')
-        .select('id,name,reply_text,reply_type,reply_payload,tag_id,enabled')
-        .eq('owner_id', ownerId)
-        .eq('enabled', true)
-        .in('match_text', ['__welcome__', '友だち追加', 'ウェルカム', 'あいさつ', '挨拶'])
-        .order('priority', { ascending: true });
-      if (ownerRules && ownerRules.length > 0) welcomeRules = ownerRules;
-    }
-    if (welcomeRules.length === 0) {
-      const { data: anyRules } = await lineSupabase.from('line_auto_reply_rules')
-        .select('id,name,reply_text,reply_type,reply_payload,tag_id,enabled')
-        .eq('enabled', true)
-        .in('match_text', ['__welcome__', '友だち追加', 'ウェルカム', 'あいさつ', '挨拶'])
-        .order('priority', { ascending: true });
-      if (anyRules && anyRules.length > 0) welcomeRules = anyRules;
-    }
+    const { data: allCandidates } = await lineSupabase.from('line_auto_reply_rules')
+      .select('id,owner_id,name,match_text,reply_text,reply_type,reply_payload,tag_id,priority,enabled,updated_at,created_at')
+      .in('match_text', [...ALL_WELCOME_MATCH_TEXTS]);
+    if (Array.isArray(allCandidates)) candidateRules = allCandidates;
   } catch (rulesErr) {
     console.warn('[LineWelcome] Welcome rules lookup error:', rulesErr);
   }
 
-  const matchedRule = welcomeRules && welcomeRules.length > 0 ? welcomeRules[0] : null;
+  const selection = selectWelcomeRule(candidateRules, ownerId);
+  if (selection.disabled) {
+    if (contact?.id) {
+      await enqueueScenariosForContact(contact.id, 'line_registered');
+    }
+    return;
+  }
+
+  const matchedRule = selection.rule;
 
   let lineMessage: Record<string, any> | null = null;
   let inboxBody = '';
@@ -2775,8 +2775,9 @@ async function processLineFollowWelcome(event: any, contact: any, eventId: strin
     }
 
     try {
-      const { data: salesSettings } = await lineSupabase.from('sales_workspace_settings')
-        .select('booking_page_url').eq('owner_id', ownerId).maybeSingle();
+      const { data: salesSettings } = ownerId
+        ? await lineSupabase.from('sales_workspace_settings').select('booking_page_url').eq('owner_id', ownerId).maybeSingle()
+        : { data: null };
       const { data: pubForms } = await lineSupabase.from('diagnosis_forms')
         .select('id,name,public_slug,definition,form_type,status')
         .eq('status', 'published').order('created_at', { ascending: false }).limit(5);
@@ -2791,25 +2792,30 @@ async function processLineFollowWelcome(event: any, contact: any, eventId: strin
       };
 
       if (replyType === 'flex' && payload && typeof payload === 'object') {
-        const resolved = resolveMessageVars(contact, { line_message_payload: payload }, ownerSettings);
-        if (resolved.error) {
-          console.warn('Welcome Flex resolveMessageVars error, falling back to default Flex:', resolved.error);
+        const flexTarget = extractWelcomeFlexTarget(payload);
+        if (!flexTarget) {
           usedFallback = true;
         } else {
-          const personalizedPayload = resolved.personalizeJson(payload);
-          const unresolved = checkUnresolvedPlaceholders(personalizedPayload);
-          const urlCheck = checkUrlsInObject(personalizedPayload);
-          if (unresolved || !urlCheck.valid) {
-            console.warn('Welcome Flex has unresolved placeholders or invalid URL:', unresolved || urlCheck.invalidUrl);
+          const resolved = resolveMessageVars(contact, { line_message_payload: flexTarget }, ownerSettings);
+          if (resolved.error) {
+            console.warn('Welcome Flex resolveMessageVars error, falling back to default Flex:', resolved.error);
             usedFallback = true;
           } else {
-            const altText = String(personalizedPayload.altText || '友だち追加ありがとうございます').slice(0, 400);
-                        const contents = normalizeFlexContents(personalizedPayload);
-            if (contents) {
-              lineMessage = { type: 'flex', altText, contents };
-              inboxBody = `[ウェルカムFlexメッセージ: ${altText}]`;
-            } else {
+            const personalizedFlex = resolved.personalizeJson(flexTarget);
+            const unresolved = checkUnresolvedPlaceholders(personalizedFlex);
+            const urlCheck = checkUrlsInObject(personalizedFlex);
+            if (unresolved || !urlCheck.valid) {
+              console.warn('Welcome Flex has unresolved placeholders or invalid URL:', unresolved || urlCheck.invalidUrl);
               usedFallback = true;
+            } else {
+              const altText = String(personalizedFlex.altText || '友だち追加ありがとうございます').slice(0, 400);
+              const contents = normalizeFlexContents(personalizedFlex);
+              if (contents) {
+                lineMessage = { type: 'flex', altText, contents };
+                inboxBody = `[ウェルカムFlexメッセージ: ${altText}]`;
+              } else {
+                usedFallback = true;
+              }
             }
           }
         }
@@ -3846,6 +3852,142 @@ app.post('/api/line/rich-menu', async (req, res) => {
   }
 });
 
+// LINE・メール自動配信のウェルカム設定取得・保存API（__welcome__ を単一正本として管理）
+app.get('/api/line/welcome-config', requireAuth, async (req, res) => {
+  if (!lineSupabase) return res.status(503).json({ error: 'LINE連携サーバーのSupabase設定がありません。' });
+  const authUserId = String((req as any).user?.id || '');
+  try {
+    const integration = await resolveLineIntegration();
+    const preferredOwnerId = integration?.owner_id || authUserId;
+    const { data: candidates, error } = await lineSupabase
+      .from('line_auto_reply_rules')
+      .select('id, owner_id, name, match_mode, match_text, reply_type, reply_text, reply_payload, tag_id, priority, enabled, updated_at, created_at')
+      .in('match_text', [...ALL_WELCOME_MATCH_TEXTS]);
+    if (error) {
+      if (isOptionalLineAutomationSchemaMissing(error)) {
+        return res.json({ rule: null, conflictingLegacyRules: [], effectiveOwnerId: preferredOwnerId });
+      }
+      throw error;
+    }
+
+    const selection = selectWelcomeRule(candidates, authUserId || preferredOwnerId);
+    const welcomeRule = (candidates || []).find((r: any) => r.match_text === WELCOME_MATCH_TEXT && r.owner_id === authUserId)
+      || (candidates || []).find((r: any) => r.match_text === WELCOME_MATCH_TEXT && r.owner_id === preferredOwnerId)
+      || (candidates || []).find((r: any) => r.match_text === WELCOME_MATCH_TEXT)
+      || null;
+
+    return res.json({
+      rule: welcomeRule,
+      activeSource: selection.source,
+      conflictingLegacyRules: selection.conflictingLegacyRules.map((r) => ({
+        id: r.id,
+        name: r.name,
+        match_text: r.match_text,
+        reply_type: r.reply_type,
+        owner_id: r.owner_id,
+      })),
+      effectiveOwnerId: welcomeRule?.owner_id || preferredOwnerId,
+    });
+  } catch (err: any) {
+    return res.status(500).json({ error: err?.message || 'ウェルカム設定を読み込めませんでした。' });
+  }
+});
+
+app.put('/api/line/welcome-config', requireAuth, async (req, res) => {
+  if (!lineSupabase) return res.status(503).json({ error: 'LINE連携サーバーのSupabase設定がありません。' });
+  const authUserId = String((req as any).user?.id || '');
+  try {
+    const integration = await resolveLineIntegration();
+    const targetOwnerId = integration?.owner_id || authUserId;
+    const enabled = req.body?.enabled !== false;
+    const replyText = typeof req.body?.replyText === 'string' ? req.body.replyText.slice(0, 1000) : '友だち追加ありがとうございます。';
+    const payload = req.body?.payload;
+    if (!payload || typeof payload !== 'object') {
+      return res.status(400).json({ error: 'ウェルカム設定ペイロードが不正です。' });
+    }
+    const flexTarget = extractWelcomeFlexTarget(payload);
+    const normalizedContents = flexTarget ? normalizeFlexContents(flexTarget) : null;
+    if (!normalizedContents) {
+      return res.status(400).json({ error: 'Flexメッセージ形式（bubble または carousel）が正しくありません。' });
+    }
+
+    const sanitizedPayload = {
+      ...payload,
+      altText: flexTarget!.altText,
+      contents: normalizedContents,
+    };
+
+    const { data: existingRows, error: findError } = await lineSupabase
+      .from('line_auto_reply_rules')
+      .select('id, owner_id, updated_at, created_at')
+      .eq('match_text', WELCOME_MATCH_TEXT)
+      .order('updated_at', { ascending: false });
+    if (findError) throw findError;
+
+    const matchingOwnerRows = (existingRows || []).filter((r: any) => r.owner_id === targetOwnerId);
+    const targetRow = matchingOwnerRows[0] || (existingRows || [])[0] || null;
+    const rowData = {
+      owner_id: targetRow?.owner_id || targetOwnerId,
+      name: '友だち追加ウェルカムFlexメッセージ',
+      match_mode: 'exact',
+      match_text: WELCOME_MATCH_TEXT,
+      reply_type: 'flex',
+      reply_text: replyText,
+      reply_payload: sanitizedPayload,
+      enabled,
+      priority: 0,
+      updated_at: new Date().toISOString(),
+    };
+
+    let savedRule: any = null;
+    if (targetRow?.id) {
+      const { data: updated, error: updateError } = await lineSupabase
+        .from('line_auto_reply_rules')
+        .update(rowData)
+        .eq('id', targetRow.id)
+        .select('id, owner_id, enabled, updated_at')
+        .single();
+      if (updateError) throw updateError;
+      savedRule = updated;
+      // 重複する __welcome__ 行が残っていれば整理
+      const duplicateIds = (existingRows || [])
+        .filter((r: any) => r.id !== targetRow.id && r.owner_id === rowData.owner_id)
+        .map((r: any) => r.id);
+      if (duplicateIds.length > 0) {
+        await lineSupabase.from('line_auto_reply_rules').delete().in('id', duplicateIds);
+      }
+    } else {
+      const { data: inserted, error: insertError } = await lineSupabase
+        .from('line_auto_reply_rules')
+        .insert(rowData)
+        .select('id, owner_id, enabled, updated_at')
+        .single();
+      if (insertError) throw insertError;
+      savedRule = inserted;
+    }
+
+    return res.json({ ok: true, rule: savedRule });
+  } catch (err: any) {
+    return res.status(500).json({ error: err?.message || 'ウェルカム設定を保存できませんでした。' });
+  }
+});
+
+app.post('/api/line/welcome-config/disable-legacy', requireAuth, async (_req, res) => {
+  if (!lineSupabase) return res.status(503).json({ error: 'LINE連携サーバーのSupabase設定がありません。' });
+  try {
+    const { data, error } = await lineSupabase
+      .from('line_auto_reply_rules')
+      .update({ enabled: false, updated_at: new Date().toISOString() })
+      .in('match_text', [...LEGACY_WELCOME_MATCH_TEXTS])
+      .eq('enabled', true)
+      .select('id');
+    if (error) throw error;
+    return res.json({ ok: true, disabledCount: Array.isArray(data) ? data.length : 0 });
+  } catch (err: any) {
+    return res.status(500).json({ error: err?.message || '旧ウェルカムルールの停止に失敗しました。' });
+  }
+});
+
 // --- マーケティング自動配信（差し込み解決・送信時間帯・停止条件） ---
 interface ResolveMessageVarsResult {
   personalize: (text: string) => string;
@@ -3913,7 +4055,7 @@ function resolveMessageVars(
     resolvedLinkUrl = appBaseUrl ? `${appBaseUrl}/f/${encodeURIComponent(formSlug)}${queryString}` : '';
   }
 
-  const vars: Record<string, string> = {
+  const vars: Record<string, string> = expandMessageVarAliases({
     name: recipientName,
     recipient_name: recipientName,
     company_name: companyName,
@@ -3921,13 +4063,9 @@ function resolveMessageVars(
     material_url: resolvedMaterialUrl,
     document_url: resolvedDocUrl,
     link_url: resolvedLinkUrl,
-  };
+  });
 
-  const personalize = (text: string): string => {
-    return String(text ?? '').replace(/\{([a-z_]+)\}/g, (match, key: string) => {
-      return Object.prototype.hasOwnProperty.call(vars, key) ? vars[key] : match;
-    });
-  };
+  const personalize = (text: string): string => replaceMessagePlaceholders(text, vars);
 
   const personalizeJson = (value: any): any => {
     if (typeof value === 'string') return personalize(value);
