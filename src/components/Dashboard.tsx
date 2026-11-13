@@ -1318,13 +1318,6 @@ export const Dashboard: React.FC<DashboardProps> = ({
               <div className="flex items-center gap-2">
                 <button
                   type="button"
-                  onClick={() => onOpenCreate('deals')}
-                  className="text-xs px-2.5 py-1 rounded-lg bg-blue-50 text-blue-700 hover:bg-blue-100 font-bold transition-colors cursor-pointer"
-                >
-                  + 新規商談
-                </button>
-                <button
-                  type="button"
                   onClick={() => onNavigateTab('deals')}
                   className="text-xs text-purple-600 hover:text-purple-700 font-semibold flex items-center gap-0.5 cursor-pointer"
                 >
@@ -1522,14 +1515,6 @@ export const Dashboard: React.FC<DashboardProps> = ({
                   title="統合受信トレイでフォーム・無料診断回答を確認・返信"
                 >
                   受信トレイ
-                </button>
-                <button
-                  type="button"
-                  onClick={() => onNavigateTab('mst_diagnoses')}
-                  className="px-2.5 py-1 rounded-lg bg-white border border-slate-200 text-xs text-slate-700 font-semibold hover:bg-slate-100 transition-colors cursor-pointer"
-                  title="フォーム設問の作成・公開設定、配布PDF資料管理"
-                >
-                  フォーム作成・配布資料
                 </button>
               </div>
             </div>
