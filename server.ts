@@ -1382,10 +1382,15 @@ async function processLineInboxAndAutoReply(event: any, contact: any, eventId: s
   }
 
   const normalizedMessage = messageText.trim().toLowerCase();
-  const matchedRule = (rules || []).find((rule: any) => {
-    const expected = String(rule.match_text || '').trim().toLowerCase();
-    return expected && (rule.match_mode === 'exact' ? normalizedMessage === expected : normalizedMessage.includes(expected));
-  });
+  const matchedRule =
+    (rules || []).find((rule: any) => {
+      const expected = String(rule.match_text || '').trim().toLowerCase();
+      return expected && rule.match_mode === 'exact' && normalizedMessage === expected;
+    }) ||
+    (rules || []).find((rule: any) => {
+      const expected = String(rule.match_text || '').trim().toLowerCase();
+      return expected && rule.match_mode !== 'exact' && normalizedMessage.includes(expected);
+    });
 
   // 5. 返信メッセージの組み立て
   let lineMessage: Record<string, any> | null = null;
@@ -4317,7 +4322,7 @@ async function processMarketingAutomationJobs(options: { forceImmediate?: boolea
     // 待機中のジョブを取得（forceImmediate時はdue_at制限を解除して即時処理）
     let jobs: any[] | null = null;
     let query = lineSupabase.from('marketing_automation_jobs')
-      .select('id, owner_id, scenario_id, contact_id, channel, subject, body_text, payload, line_message_payload, consent_basis, retry_count, created_at')
+      .select('id, owner_id, scenario_id, contact_id, channel, subject, body_text, line_message_payload, consent_basis, retry_count, created_at')
       .eq('status', 'queued');
 
     if (options.targetJobId) {
@@ -4330,7 +4335,7 @@ async function processMarketingAutomationJobs(options: { forceImmediate?: boolea
 
     if (fetchWithRetry.error) {
       let fallbackQuery = lineSupabase.from('marketing_automation_jobs')
-        .select('id, owner_id, scenario_id, contact_id, channel, subject, body_text, payload, line_message_payload, consent_basis, created_at')
+        .select('id, owner_id, scenario_id, contact_id, channel, subject, body_text, line_message_payload, consent_basis, created_at')
         .eq('status', 'queued');
       if (options.targetJobId) {
         fallbackQuery = fallbackQuery.eq('id', options.targetJobId);
@@ -4338,7 +4343,13 @@ async function processMarketingAutomationJobs(options: { forceImmediate?: boolea
         fallbackQuery = fallbackQuery.lte('due_at', now);
       }
       const fallbackFetch = await fallbackQuery.order('due_at', { ascending: true }).limit(20);
-      if (fallbackFetch.error) throw fallbackFetch.error;
+      if (fallbackFetch.error) {
+        const errCode = String((fallbackFetch.error as any)?.code || '');
+        if (errCode === 'PGRST205' || errCode === '42P01') {
+          return 0;
+        }
+        throw fallbackFetch.error;
+      }
       jobs = fallbackFetch.data;
     } else {
       jobs = fetchWithRetry.data;
@@ -4704,8 +4715,13 @@ async function processMarketingAutomationJobs(options: { forceImmediate?: boolea
         }
       }
     }
-  } catch (error) {
-    console.error('Marketing automation queue processing failed:',error instanceof Error?error.message:'unknown error');
+  } catch (error: any) {
+    const errMsg = error instanceof Error
+      ? error.message
+      : (error && typeof error === 'object' && typeof error.message === 'string')
+        ? error.message
+        : String(error || 'unknown error');
+    console.error('Marketing automation queue processing failed:', errMsg);
   } finally {
     marketingQueueBusy = false;
     void persistRunnerExecution(`完了: ${processedJobsCount}件のジョブ処理`);

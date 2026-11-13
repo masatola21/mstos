@@ -94,7 +94,20 @@ export interface KeywordAutoReply {
   enabled: boolean;
 }
 
+const RICHMENU_LINE_CONSULT_RULE: KeywordAutoReply = {
+  id: 'kw-richmenu-line-consult',
+  name: '【リッチメニュー】LINE相談タップ時',
+  matchText: '【LINEで相談したい】',
+  matchMode: 'exact',
+  replyText:
+    '{recipient_name} 様\nありがとうございます！有限会社MSTの大橋真人です。\n\nご相談内容をそのままこのLINEにお送りください（一言や箇条書きでも大丈夫です）。確認次第、原則24時間以内に担当より直接ご返信いたします。\n\n▼ 迷われたら番号だけでもどうぞ\n① 経営全般・利益を残す仕組みづくり\n② 業務の効率化・手作業の削減\n③ 介護保険外サービスの開業・収益化\n④ その他（いま気になっていること）\n\n※お急ぎで直接お話されたい方は、30分無料オンライン面談もご予約いただけます。\n{booking_url}',
+  tag: '選択:個別相談',
+  targetBranch: 'consult',
+  enabled: true,
+};
+
 const DEFAULT_KEYWORD_RULES: KeywordAutoReply[] = [
+  RICHMENU_LINE_CONSULT_RULE,
   {
     id: 'kw-diagnosis',
     name: '「診断」「経営診断」送信時',
@@ -869,7 +882,7 @@ export const MarketingFlowStudio: React.FC<MarketingFlowStudioProps> = ({
             reply_text: newRule.replyText,
             tag_id: newRule.tag || null,
             enabled: newRule.enabled,
-            priority: 100,
+            priority: newRule.matchMode === 'exact' ? 10 : 100,
             updated_at: new Date().toISOString(),
           };
           const res = isExistingDbRow
@@ -896,6 +909,60 @@ export const MarketingFlowStudio: React.FC<MarketingFlowStudioProps> = ({
     setEditingRule(null);
   };
 
+  const handleAddRichMenuConsultRule = async () => {
+    const existingSaved = keywordRules.find(
+      (r) => r.matchText.trim() === RICHMENU_LINE_CONSULT_RULE.matchText && !r.id.startsWith('kw-')
+    );
+    if (existingSaved) {
+      openEditKeywordModal(existingSaved);
+      return;
+    }
+
+    let createdRule: KeywordAutoReply = {
+      ...RICHMENU_LINE_CONSULT_RULE,
+      id: `kw-richmenu-${Date.now()}`,
+    };
+
+    if (db) {
+      try {
+        const { data: auth } = await db.auth.getUser();
+        const ownerId = auth.user?.id;
+        if (ownerId) {
+          const rowPayload = {
+            owner_id: ownerId,
+            name: createdRule.name,
+            match_mode: createdRule.matchMode,
+            match_text: createdRule.matchText,
+            reply_text: createdRule.replyText,
+            tag_id: createdRule.tag || null,
+            enabled: createdRule.enabled,
+            priority: 10,
+            updated_at: new Date().toISOString(),
+          };
+          const res = await db.from('line_auto_reply_rules').insert(rowPayload).select('id').single();
+          if (res.error) {
+            setWelcomeError(`リッチメニュー用ルールの登録エラー: ${res.error.message}`);
+            return;
+          }
+          if (res.data?.id) {
+            createdRule = { ...createdRule, id: res.data.id };
+          }
+        }
+      } catch (err: any) {
+        console.warn('Rich menu consult rule insert warning:', err);
+        setWelcomeError(`リッチメニュー用ルールの登録エラー: ${err?.message || '不明なエラー'}`);
+        return;
+      }
+    }
+
+    setKeywordRules((prev) => {
+      const filtered = prev.filter((r) => r.matchText.trim() !== RICHMENU_LINE_CONSULT_RULE.matchText);
+      return [createdRule, ...filtered];
+    });
+    setKeywordNotice(`リッチメニュー「LINE相談」用ルール（${RICHMENU_LINE_CONSULT_RULE.matchText}）を登録しました。`);
+    setTimeout(() => setKeywordNotice(''), 4000);
+  };
+
   const handleDeleteKeywordRule = async (ruleId: string) => {
     const target = keywordRules.find(r => r.id === ruleId);
     setKeywordRules(keywordRules.filter(r => r.id !== ruleId));
@@ -912,17 +979,58 @@ export const MarketingFlowStudio: React.FC<MarketingFlowStudioProps> = ({
   };
 
   const handleToggleKeywordRule = async (ruleId: string) => {
-    const nextRules = keywordRules.map(r => {
-      if (r.id === ruleId) {
-        const toggled = !r.enabled;
-        if (db && !ruleId.startsWith('kw-')) {
-          void db.from('line_auto_reply_rules').update({ enabled: toggled }).eq('id', ruleId);
-        }
-        return { ...r, enabled: toggled };
+    const target = keywordRules.find(r => r.id === ruleId);
+    if (!target) return;
+    const toggled = !target.enabled;
+
+    setKeywordRules((prev) =>
+      prev.map((r) => (r.id === ruleId ? { ...r, enabled: toggled } : r))
+    );
+
+    if (!db) return;
+
+    if (!ruleId.startsWith('kw-')) {
+      const { error } = await db
+        .from('line_auto_reply_rules')
+        .update({ enabled: toggled, updated_at: new Date().toISOString() })
+        .eq('id', ruleId);
+      if (error) {
+        setWelcomeError(`ルール切替エラー: ${error.message}`);
       }
-      return r;
-    });
-    setKeywordRules(nextRules);
+      return;
+    }
+
+    try {
+      const { data: auth } = await db.auth.getUser();
+      const ownerId = auth.user?.id;
+      if (!ownerId) return;
+      const res = await db
+        .from('line_auto_reply_rules')
+        .insert({
+          owner_id: ownerId,
+          name: target.name,
+          match_mode: target.matchMode,
+          match_text: target.matchText,
+          reply_text: target.replyText,
+          tag_id: target.tag || null,
+          enabled: toggled,
+          priority: target.matchMode === 'exact' ? 10 : 100,
+          updated_at: new Date().toISOString(),
+        })
+        .select('id')
+        .single();
+      if (res.error) {
+        setWelcomeError(`ルール保存エラー: ${res.error.message}`);
+        return;
+      }
+      if (res.data?.id) {
+        setKeywordRules((prev) =>
+          prev.map((r) => (r.id === ruleId ? { ...r, id: res.data.id } : r))
+        );
+      }
+    } catch (err: any) {
+      setWelcomeError(`ルール保存エラー: ${err?.message || '不明なエラー'}`);
+    }
   };
 
   const openCreateKeywordModal = () => {
@@ -2197,7 +2305,19 @@ export const MarketingFlowStudio: React.FC<MarketingFlowStudioProps> = ({
                 </div>
               </div>
 
-              <div className="flex items-center gap-2">
+              <div className="flex flex-wrap items-center gap-2">
+                {keywordRules.every(
+                  (r) => r.matchText.trim() !== RICHMENU_LINE_CONSULT_RULE.matchText || r.id.startsWith('kw-')
+                ) && (
+                  <button
+                    type="button"
+                    onClick={handleAddRichMenuConsultRule}
+                    className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold transition shadow-xs cursor-pointer"
+                  >
+                    <Zap className="w-3.5 h-3.5" />
+                    <span>リッチメニュー「LINE相談」用を登録</span>
+                  </button>
+                )}
                 <button
                   type="button"
                   onClick={openCreateKeywordModal}
@@ -2216,24 +2336,37 @@ export const MarketingFlowStudio: React.FC<MarketingFlowStudioProps> = ({
                   className="bg-amber-50/40 border border-amber-200/80 rounded-xl p-4 flex flex-col justify-between space-y-3 hover:border-amber-400 transition shadow-2xs"
                 >
                   <div className="space-y-1.5">
-                    <div className="flex items-center justify-between gap-2">
+                    <div className="flex items-center justify-between gap-2 flex-wrap">
                       <span className="font-bold text-slate-900 text-xs flex items-center gap-1.5">
                         <Zap className="w-3.5 h-3.5 text-amber-600" />
                         {rule.name}
                       </span>
-                      <span className="text-[10px] px-2 py-0.5 rounded bg-amber-100 text-amber-800 border border-amber-200 font-mono font-medium">
-                        「{rule.matchText}」を含む
+                      <span
+                        className={`text-[10px] px-2 py-0.5 rounded font-mono font-medium border ${
+                          rule.matchMode === 'exact'
+                            ? 'bg-emerald-50 text-emerald-800 border-emerald-200'
+                            : 'bg-amber-100 text-amber-800 border-amber-200'
+                        }`}
+                      >
+                        {rule.matchMode === 'exact' ? `「${rule.matchText}」と完全一致` : `「${rule.matchText}」を含む`}
                       </span>
                     </div>
-                    <p className="text-xs text-slate-700 line-clamp-2 whitespace-pre-line bg-white p-2.5 rounded-lg border border-amber-100 shadow-2xs">
+                    <p className="text-xs text-slate-700 line-clamp-3 whitespace-pre-line bg-white p-2.5 rounded-lg border border-amber-100 shadow-2xs">
                       {rule.replyText}
                     </p>
                   </div>
 
                   <div className="flex items-center justify-between pt-2 border-t border-amber-100 text-xs">
-                    <span className="text-[11px] text-emerald-700 font-mono font-medium">
-                      {rule.tag ? `タグ: ${rule.tag}` : 'タグなし'}
-                    </span>
+                    <div className="flex items-center gap-1.5">
+                      <span className="text-[11px] text-emerald-700 font-mono font-medium">
+                        {rule.tag ? `タグ: ${rule.tag}` : 'タグなし'}
+                      </span>
+                      {rule.id.startsWith('kw-') && (
+                        <span className="text-[10px] px-1.5 py-0.5 rounded bg-slate-100 text-slate-500 border border-slate-200">
+                          未保存
+                        </span>
+                      )}
+                    </div>
                     <div className="flex items-center gap-1.5">
                       <button
                         type="button"
