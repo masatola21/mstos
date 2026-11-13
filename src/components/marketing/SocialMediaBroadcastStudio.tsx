@@ -496,8 +496,7 @@ ${strategyDirectionText ? `\n【集客戦略・施策方針（方向性）】\n$
     {
       "platform": "threads",
       "text": "投稿本文",
-      "hashtags": "#業務改善 #仕組み化",
-      "imagePrompt": "添える画像案（1行）"
+      "hashtags": "#業務改善 #仕組み化"
     }
   ]
 }`;
@@ -1643,22 +1642,6 @@ ${activeVideoDraft.scriptBody}
                   </div>
                 </div>
 
-                {activeDraft.imagePrompt && (
-                  <div className="rounded-xl border border-blue-100 bg-blue-50/50 px-3 py-2 space-y-1">
-                    <div className="flex items-center justify-between">
-                      <span className="text-[11px] font-bold text-blue-800">画像AI指示文（ChatGPT / Midjourneyへ貼り付け）</span>
-                      <button
-                        type="button"
-                        onClick={() => { navigator.clipboard.writeText(activeDraft.imagePrompt); setCopiedKey(`imgprompt_${previewTab}`); setTimeout(() => setCopiedKey(null), 2000); }}
-                        className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-white border border-slate-200 hover:bg-slate-100 text-[11px] text-slate-600 font-semibold transition"
-                      >
-                        {copiedKey === `imgprompt_${previewTab}` ? <Check className="h-3 w-3 text-emerald-600" /> : <Copy className="h-3 w-3" />}
-                        コピー
-                      </button>
-                    </div>
-                    <p className="text-xs text-slate-700">{activeDraft.imagePrompt}</p>
-                  </div>
-                )}
 
                 {/* AIワンクリックブラッシュアップバー */}
                 <div className="rounded-xl border border-purple-200 bg-purple-50/40 p-3 space-y-2">
