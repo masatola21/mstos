@@ -408,7 +408,14 @@ export const SalesOperationsWorkspace: React.FC<Props> = ({ tab, initialOpsTab, 
     await load();
   };
 
-  const readMilestones = (record: RecordRow): RecordRow[] => Array.isArray(record.milestone_data) ? record.milestone_data : [];
+  const readMilestones = (record: RecordRow): RecordRow[] => {
+    if (!Array.isArray(record.milestone_data)) return [];
+    return record.milestone_data.map((item, idx) => ({
+      ...item,
+      id: item.id || `ms_${String(record.id).slice(0, 8)}_${idx}`,
+      status: item.status || 'pending',
+    }));
+  };
 
   const addServiceMilestone = async (record: RecordRow, titleOverride?: string, dueDate?: string) => {
     const title = (titleOverride || milestoneDrafts[record.id] || '').trim();
@@ -420,25 +427,48 @@ export const SalesOperationsWorkspace: React.FC<Props> = ({ tab, initialOpsTab, 
       .update({ milestone_data: [...milestones, milestone], updated_at: new Date().toISOString() }).eq('id', record.id);
     if (updateError) { setError(updateError.message); return; }
     setMilestoneDrafts((current) => ({ ...current, [record.id]: '' }));
-    setNotice('支援マイルストーンを登録しました。到達時に自動化タスクを作成できます。');
+    setNotice('支援マイルストーンを登録しました。');
     await load();
   };
 
-  const reachServiceMilestone = async (record: RecordRow, milestoneId: string) => {
+  const toggleServiceMilestone = async (record: RecordRow, milestoneId: string, nextStatus?: 'pending' | 'completed') => {
     const supabase = getSupabase();
     if (!supabase) return;
     const milestones = readMilestones(record);
     const target = milestones.find((item) => item.id === milestoneId);
-    if (!target || target.status === 'completed') return;
-    const completedAt = new Date().toISOString();
-    const updatedMilestones = milestones.map((item) => item.id === milestoneId ? { ...item, status: 'completed', completed_at: completedAt } : item);
+    if (!target) return;
+    const targetStatus = nextStatus || (target.status === 'completed' ? 'pending' : 'completed');
+    const completedAt = targetStatus === 'completed' ? new Date().toISOString() : null;
+    const updatedMilestones = milestones.map((item) =>
+      item.id === milestoneId ? { ...item, status: targetStatus, completed_at: completedAt } : item
+    );
     const { error: updateError } = await supabase.from('customer_service_engagements')
-      .update({ milestone_data: updatedMilestones, updated_at: completedAt }).eq('id', record.id);
+      .update({ milestone_data: updatedMilestones, updated_at: new Date().toISOString() }).eq('id', record.id);
     if (updateError) { setError(updateError.message); return; }
-    const companyName = companies.find((item) => item.id === record.company_id)?.company_name;
-    onMilestoneReached?.({ engagementId: record.id, milestoneId, milestoneTitle: target.title, companyId: record.company_id || undefined, companyName });
-    setNotice('到達を記録し、設定が有効な場合は自動化タスクを作成しました。');
+    if (targetStatus === 'completed') {
+      const companyName = companies.find((item) => item.id === record.company_id)?.company_name;
+      onMilestoneReached?.({ engagementId: record.id, milestoneId, milestoneTitle: target.title, companyId: record.company_id || undefined, companyName });
+      setNotice('マイルストーンの完了を記録しました。');
+    } else {
+      setNotice('マイルストーンを未完了に戻しました。');
+    }
     await load();
+  };
+
+  const deleteServiceMilestone = async (record: RecordRow, milestoneId: string) => {
+    const supabase = getSupabase();
+    if (!supabase) return;
+    const milestones = readMilestones(record);
+    const updatedMilestones = milestones.filter((item) => item.id !== milestoneId);
+    const { error: updateError } = await supabase.from('customer_service_engagements')
+      .update({ milestone_data: updatedMilestones, updated_at: new Date().toISOString() }).eq('id', record.id);
+    if (updateError) { setError(updateError.message); return; }
+    setNotice('マイルストーンを削除しました。');
+    await load();
+  };
+
+  const reachServiceMilestone = async (record: RecordRow, milestoneId: string) => {
+    await toggleServiceMilestone(record, milestoneId, 'completed');
   };
 
   const previewSegment = async (segment: Segment) => {
@@ -731,6 +761,8 @@ export const SalesOperationsWorkspace: React.FC<Props> = ({ tab, initialOpsTab, 
         onRefresh={load}
         onAddMilestone={addServiceMilestone}
         onCompleteMilestone={reachServiceMilestone}
+        onDeleteMilestone={deleteServiceMilestone}
+        onToggleMilestone={toggleServiceMilestone}
       /> : <>
       {formOpen && <form onSubmit={createOperation} className="grid gap-3.5 rounded-xl border border-slate-200 bg-slate-50 p-4 md:grid-cols-2">
         <label className="text-xs font-semibold text-slate-700">名称（初期入力済み・必要な場合のみ修正）<input required value={recordTitle} onChange={(e)=>setRecordTitle(e.target.value)} className="mt-1 w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs text-slate-900 focus:border-purple-600 focus:outline-none shadow-2xs" /></label>

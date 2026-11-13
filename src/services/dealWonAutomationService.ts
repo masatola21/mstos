@@ -316,9 +316,9 @@ async function executeDealWonAutomationInternal(dealId: string, forceRecreate = 
     let engagementId: string | undefined;
     try {
       const milestones = [
-        { phase: 1, title: '初回キックオフ・現状詳細ヒアリング', target_period: '第1週〜第2週', status: 'not_started' },
-        { phase: 2, title: '急所業務の自動化・仕組み化の構築', target_period: '第1ヶ月〜第2ヶ月', status: 'not_started' },
-        { phase: 3, title: '運用定着支援・定期顧問レビュー', target_period: '第3ヶ月以降', status: 'not_started' },
+        { id: crypto.randomUUID(), phase: 1, title: '初回キックオフ・現状詳細ヒアリング', target_period: '第1週〜第2週', status: 'not_started' },
+        { id: crypto.randomUUID(), phase: 2, title: '急所業務の自動化・仕組み化の構築', target_period: '第1ヶ月〜第2ヶ月', status: 'not_started' },
+        { id: crypto.randomUUID(), phase: 3, title: '運用定着支援・定期顧問レビュー', target_period: '第3ヶ月以降', status: 'not_started' },
       ];
 
       const { data: engagement, error: engagementError } = await supabase

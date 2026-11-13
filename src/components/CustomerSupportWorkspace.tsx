@@ -95,11 +95,14 @@ interface Props {
   onRefresh: () => Promise<void>;
   onAddMilestone: (engagement: Row, title: string, dueDate?: string) => Promise<void>;
   onCompleteMilestone: (engagement: Row, milestoneId: string) => Promise<void>;
+  onDeleteMilestone?: (engagement: Row, milestoneId: string) => Promise<void>;
+  onToggleMilestone?: (engagement: Row, milestoneId: string, nextStatus: 'pending' | 'completed') => Promise<void>;
 }
 
 export const CustomerSupportWorkspace: React.FC<Props> = ({
   companyId, initialSection, companies, engagements, invoices, tasks,
   onCreateTask, onUpdateTask, onRefresh, onAddMilestone, onCompleteMilestone,
+  onDeleteMilestone, onToggleMilestone,
 }) => {
   const [selectedId, setSelectedId] = useState('');
   const [activeSection, setActiveSection] = useState<'overview' | 'meetings' | 'tasks' | 'delivery'>(initialSection || 'overview');
@@ -146,6 +149,50 @@ export const CustomerSupportWorkspace: React.FC<Props> = ({
   const companyName = (id?: string) => companies.find((item) => item.id === id)?.company_name || id || '会社未設定';
   const phaseOptions = [...PHASES, ...(Array.isArray(detail.phases) ? detail.phases : []), ...(detail.phase ? [detail.phase] : [])]
     .filter((value, index, all) => all.indexOf(value) === index);
+
+  const rawMilestones = Array.isArray(selected?.milestone_data) ? selected.milestone_data : [];
+  const normalizedMilestones = useMemo(() => {
+    return rawMilestones.map((item: Row, index: number) => ({
+      ...item,
+      id: item.id || `ms_${String(selected?.id || '').slice(0, 8)}_${index}`,
+      title: item.title || `マイルストーン ${index + 1}`,
+      status: item.status || 'pending',
+      due_date: item.due_date || item.target_period || '',
+    }));
+  }, [rawMilestones, selected?.id]);
+
+  const handleToggleMilestone = async (engagement: Row, milestoneId: string, nextStatus: 'pending' | 'completed') => {
+    if (onToggleMilestone) {
+      await onToggleMilestone(engagement, milestoneId, nextStatus);
+      return;
+    }
+    const supabase = getSupabase();
+    if (!supabase) return;
+    const completedAt = nextStatus === 'completed' ? new Date().toISOString() : null;
+    const updated = normalizedMilestones.map((m: Row) =>
+      m.id === milestoneId ? { ...m, status: nextStatus, completed_at: completedAt } : m
+    );
+    const { error: err } = await supabase.from('customer_service_engagements')
+      .update({ milestone_data: updated, updated_at: new Date().toISOString() })
+      .eq('id', engagement.id);
+    if (err) setError(err.message);
+    else await onRefresh();
+  };
+
+  const handleDeleteMilestone = async (engagement: Row, milestoneId: string) => {
+    if (onDeleteMilestone) {
+      await onDeleteMilestone(engagement, milestoneId);
+      return;
+    }
+    const supabase = getSupabase();
+    if (!supabase) return;
+    const updated = normalizedMilestones.filter((m: Row) => m.id !== milestoneId);
+    const { error: err } = await supabase.from('customer_service_engagements')
+      .update({ milestone_data: updated, updated_at: new Date().toISOString() })
+      .eq('id', engagement.id);
+    if (err) setError(err.message);
+    else await onRefresh();
+  };
 
   useEffect(() => {
     if (initialSection) setActiveSection(initialSection);
@@ -360,27 +407,27 @@ export const CustomerSupportWorkspace: React.FC<Props> = ({
       const data = await response.json().catch(() => ({}));
       if (!response.ok) throw new Error(data.error || '文字起こしを整理できませんでした。');
       const notes = (data.supportNotes || {}) as Record<string, string>;
+      let organizedDiscussion = notes.discussion || '';
+      if (notes.decisions) organizedDiscussion += (organizedDiscussion ? '\n\n【決定事項】\n' : '【決定事項】\n') + notes.decisions;
+      if (notes.unresolved_items) organizedDiscussion += (organizedDiscussion ? '\n\n【保留・未解決課題】\n' : '【保留・未解決課題】\n') + notes.unresolved_items;
+      if (notes.client_homework) organizedDiscussion += (organizedDiscussion ? '\n\n【顧客側宿題】\n' : '【顧客側宿題】\n') + notes.client_homework;
+      if (notes.mst_homework) organizedDiscussion += (organizedDiscussion ? '\n\n【MST側宿題】\n' : '【MST側宿題】\n') + notes.mst_homework;
+
       setMeetingDraft((prev) => {
-        const pick = (key: keyof MeetingDraft, aiVal?: string) => {
+        const pick = (currentVal: string, aiVal?: string) => {
           const val = String(aiVal || '').trim();
-          if (!val) return prev[key];
-          if (overwriteWithAi || !String(prev[key] || '').trim()) return val;
-          return prev[key];
+          if (!val) return currentVal;
+          if (overwriteWithAi || !String(currentVal || '').trim()) return val;
+          return currentVal;
         };
         return {
           ...prev,
           occurred_at: prev.occurred_at || asDateTimeLocal(new Date().toISOString()),
-          purpose: pick('purpose', notes.purpose),
-          topic: pick('topic', notes.topic),
-          discussion: pick('discussion', notes.discussion),
-          decisions: pick('decisions', notes.decisions),
-          unresolved_items: pick('unresolved_items', notes.unresolved_items),
-          client_homework: pick('client_homework', notes.client_homework),
-          mst_homework: pick('mst_homework', notes.mst_homework),
-          next_topic: pick('next_topic', notes.next_topic),
+          topic: pick(prev.topic, notes.topic || '定例打ち合わせ'),
+          discussion: pick(prev.discussion, organizedDiscussion),
         };
       });
-      setNotice('AIが文字起こしを整理して下書きへ反映しました。内容を確認・修正してから「記録を保存」を押してください。');
+      setNotice('AIが文字起こしを整理して議事ノートへ反映しました。内容を確認・修正してから「記録を保存」を押してください。');
     } catch (e: any) {
       setError(e?.message || '文字起こしを整理できませんでした。');
     } finally {
@@ -390,12 +437,28 @@ export const CustomerSupportWorkspace: React.FC<Props> = ({
 
   const editMeeting = (meeting: Row) => {
     setEditingMeetingId(meeting.id);
+    let combinedNote = meeting.discussion || '';
+    if (meeting.decisions && !combinedNote.includes(meeting.decisions)) {
+      combinedNote += (combinedNote ? '\n\n【決定事項】\n' : '【決定事項】\n') + meeting.decisions;
+    }
+    if (meeting.unresolved_items && !combinedNote.includes(meeting.unresolved_items)) {
+      combinedNote += (combinedNote ? '\n\n【保留・未解決課題】\n' : '【保留・未解決課題】\n') + meeting.unresolved_items;
+    }
+    if (meeting.client_homework && !combinedNote.includes(meeting.client_homework)) {
+      combinedNote += (combinedNote ? '\n\n【顧客側宿題】\n' : '【顧客側宿題】\n') + meeting.client_homework;
+    }
+    if (meeting.mst_homework && !combinedNote.includes(meeting.mst_homework)) {
+      combinedNote += (combinedNote ? '\n\n【MST側宿題】\n' : '【MST側宿題】\n') + meeting.mst_homework;
+    }
     setMeetingDraft({
       occurred_at: asDateTimeLocal(meeting.occurred_at),
-      purpose: meeting.purpose || '', topic: meeting.topic || '',
-      discussion: meeting.discussion || '', decisions: meeting.decisions || '',
-      unresolved_items: meeting.unresolved_items || '',
-      client_homework: meeting.client_homework || '', mst_homework: meeting.mst_homework || '',
+      purpose: meeting.purpose || '',
+      topic: meeting.topic || '',
+      discussion: combinedNote,
+      decisions: '',
+      unresolved_items: '',
+      client_homework: '',
+      mst_homework: '',
       next_topic: meeting.next_topic || '',
       next_meeting_at: asDateTimeLocal(meeting.next_meeting_at),
     });
@@ -495,8 +558,8 @@ export const CustomerSupportWorkspace: React.FC<Props> = ({
   };
 
   const sections = [
-    ['overview', '支援状況'], ['meetings', '打ち合わせ履歴'],
-    ['tasks', '宿題・TODO'], ['delivery', '構築・納品・契約'],
+    ['overview', '支援状況'], ['meetings', '打ち合わせ・ノート'],
+    ['tasks', 'タスク・TODO'], ['delivery', '構築スケジュール・契約'],
   ] as const;
 
   return <div className="space-y-5">
@@ -620,28 +683,35 @@ export const CustomerSupportWorkspace: React.FC<Props> = ({
                 <span>すでに入力済みの項目もAIの整理結果で上書きする</span>
               </label>
             </div>
-            <label className="block text-xs font-semibold text-slate-700">日時<input required type="datetime-local" value={meetingDraft.occurred_at} onChange={(event) => setMeetingDraft({ ...meetingDraft, occurred_at: event.target.value })} className="mt-1 w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs text-slate-900 focus:outline-none focus:border-purple-600 shadow-2xs" /></label>
-            <label className="block text-xs font-semibold text-slate-700">目的<input value={meetingDraft.purpose} onChange={(event) => setMeetingDraft({ ...meetingDraft, purpose: event.target.value })} className="mt-1 w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs text-slate-900 focus:outline-none focus:border-purple-600 shadow-2xs" /></label>
-            <label className="block text-xs font-semibold text-slate-700">今回のテーマ<input required value={meetingDraft.topic} onChange={(event) => setMeetingDraft({ ...meetingDraft, topic: event.target.value })} className="mt-1 w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs text-slate-900 focus:outline-none focus:border-purple-600 shadow-2xs" /></label>
-            <label className="block text-xs font-semibold text-slate-700">話し合った内容<textarea rows={3} value={meetingDraft.discussion} onChange={(event) => setMeetingDraft({ ...meetingDraft, discussion: event.target.value })} className="mt-1 w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs text-slate-900 focus:outline-none focus:border-purple-600 shadow-2xs" /></label>
-            <label className="block text-xs font-semibold text-slate-700">決定事項<textarea rows={2} value={meetingDraft.decisions} onChange={(event) => setMeetingDraft({ ...meetingDraft, decisions: event.target.value })} className="mt-1 w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs text-slate-900 focus:outline-none focus:border-purple-600 shadow-2xs" /></label>
-            <label className="block text-xs font-semibold text-slate-700">保留事項・未解決課題<textarea rows={2} value={meetingDraft.unresolved_items} onChange={(event) => setMeetingDraft({ ...meetingDraft, unresolved_items: event.target.value })} className="mt-1 w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs text-slate-900 focus:outline-none focus:border-purple-600 shadow-2xs" /></label>
-            <label className="block text-xs font-semibold text-slate-700">顧客側の宿題<textarea rows={2} value={meetingDraft.client_homework} onChange={(event) => setMeetingDraft({ ...meetingDraft, client_homework: event.target.value })} className="mt-1 w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs text-slate-900 focus:outline-none focus:border-purple-600 shadow-2xs" /></label>
-            <label className="block text-xs font-semibold text-slate-700">MST側の宿題<textarea rows={2} value={meetingDraft.mst_homework} onChange={(event) => setMeetingDraft({ ...meetingDraft, mst_homework: event.target.value })} className="mt-1 w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs text-slate-900 focus:outline-none focus:border-purple-600 shadow-2xs" /></label>
-            <label className="block text-xs font-semibold text-slate-700">次回テーマ<input value={meetingDraft.next_topic} onChange={(event) => setMeetingDraft({ ...meetingDraft, next_topic: event.target.value })} className="mt-1 w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs text-slate-900 focus:outline-none focus:border-purple-600 shadow-2xs" /></label>
-            <label className="block text-xs font-semibold text-slate-700">次回日時<input type="datetime-local" value={meetingDraft.next_meeting_at} onChange={(event) => setMeetingDraft({ ...meetingDraft, next_meeting_at: event.target.value })} className="mt-1 w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs text-slate-900 focus:outline-none focus:border-purple-600 shadow-2xs" /></label>
+            <div className="grid gap-3 sm:grid-cols-2">
+              <label className="block text-xs font-semibold text-slate-700">
+                日時 <span className="text-rose-500">*</span>
+                <input required type="datetime-local" value={meetingDraft.occurred_at} onChange={(event) => setMeetingDraft({ ...meetingDraft, occurred_at: event.target.value })} className="mt-1 w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs text-slate-900 focus:outline-none focus:border-purple-600 shadow-2xs" />
+              </label>
+              <label className="block text-xs font-semibold text-slate-700">
+                次回の打ち合わせ日時
+                <input type="datetime-local" value={meetingDraft.next_meeting_at} onChange={(event) => setMeetingDraft({ ...meetingDraft, next_meeting_at: event.target.value })} className="mt-1 w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs text-slate-900 focus:outline-none focus:border-purple-600 shadow-2xs" />
+              </label>
+            </div>
+            <label className="block text-xs font-semibold text-slate-700">
+              今回のテーマ <span className="text-rose-500">*</span>
+              <input required value={meetingDraft.topic} onChange={(event) => setMeetingDraft({ ...meetingDraft, topic: event.target.value })} placeholder="例: 定例ミーティング・進捗確認" className="mt-1 w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs text-slate-900 focus:outline-none focus:border-purple-600 shadow-2xs" />
+            </label>
+            <label className="block text-xs font-semibold text-slate-700">
+              議事メモ・決定事項・ノート
+              <span className="ml-1 text-[11px] font-normal text-slate-500">（決定事項・保留課題・宿題などもここにまとめて記録できます）</span>
+              <textarea rows={6} value={meetingDraft.discussion} onChange={(event) => setMeetingDraft({ ...meetingDraft, discussion: event.target.value })} placeholder="・話し合った内容&#10;・決定したこと&#10;・次回までの確認点など" className="mt-1 w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs text-slate-900 focus:outline-none focus:border-purple-600 shadow-2xs" />
+            </label>
             <div className="flex gap-2"><button className="rounded-xl bg-purple-600 hover:bg-purple-700 px-4 py-2 text-xs font-bold text-white shadow-xs shadow-purple-600/20 cursor-pointer">{editingMeetingId ? '変更を保存' : '記録を保存'}</button>{editingMeetingId && <button type="button" onClick={() => { setEditingMeetingId(''); setMeetingDraft(EMPTY_MEETING); }} className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-semibold text-slate-600 hover:bg-slate-50 cursor-pointer">編集を取り消す</button>}</div>
           </form>
           <div className="space-y-3">
             <h4 className="font-bold text-slate-900 text-sm">これまでの打ち合わせ（新しい順）</h4>
             {loading ? <p className="text-xs text-slate-400">読み込み中…</p> : meetings.length === 0 ? <p className="text-xs text-slate-400 py-6 text-center">履歴はまだありません。</p> : meetings.map((meeting) => <article key={meeting.id} className="rounded-xl border border-slate-200 bg-white p-3.5 shadow-2xs">
-              <div className="flex items-start justify-between gap-2"><div><div className="font-bold text-xs text-slate-900">{meeting.topic}</div><div className="mt-0.5 text-[11px] text-slate-500">{displayDate(meeting.occurred_at)} · {meeting.purpose || '目的未設定'}</div></div><button type="button" onClick={() => editMeeting(meeting)} className="rounded-lg border border-purple-200 bg-purple-50 px-2.5 py-1 text-xs font-semibold text-purple-700 hover:bg-purple-100 cursor-pointer shadow-2xs">編集</button></div>
+              <div className="flex items-start justify-between gap-2"><div><div className="font-bold text-xs text-slate-900">{meeting.topic}</div><div className="mt-0.5 text-[11px] text-slate-500">{displayDate(meeting.occurred_at)}</div></div><button type="button" onClick={() => editMeeting(meeting)} className="rounded-lg border border-purple-200 bg-purple-50 px-2.5 py-1 text-xs font-semibold text-purple-700 hover:bg-purple-100 cursor-pointer shadow-2xs">編集</button></div>
               {meeting.discussion && <p className="mt-2 whitespace-pre-wrap text-xs leading-5 text-slate-700">{meeting.discussion}</p>}
-              {meeting.decisions && <p className="mt-2 whitespace-pre-wrap text-xs text-emerald-800 font-medium">決定: {meeting.decisions}</p>}
-              {meeting.unresolved_items && <p className="mt-2 whitespace-pre-wrap text-xs text-amber-800 font-medium">保留: {meeting.unresolved_items}</p>}
-              {meeting.client_homework && <p className="mt-2 whitespace-pre-wrap text-xs text-purple-800 font-medium">顧客側TODO: {meeting.client_homework}</p>}
-              {meeting.mst_homework && <p className="mt-2 whitespace-pre-wrap text-xs text-indigo-800 font-medium">MST側TODO: {meeting.mst_homework}</p>}
-              {meeting.next_topic && <p className="mt-2 text-[11px] text-slate-500">次回: {meeting.next_topic} · {displayDate(meeting.next_meeting_at)}</p>}
+              {meeting.decisions && !meeting.discussion?.includes(meeting.decisions) && <p className="mt-2 whitespace-pre-wrap text-xs text-emerald-800 font-medium">決定: {meeting.decisions}</p>}
+              {meeting.unresolved_items && !meeting.discussion?.includes(meeting.unresolved_items) && <p className="mt-2 whitespace-pre-wrap text-xs text-amber-800 font-medium">保留: {meeting.unresolved_items}</p>}
+              {meeting.next_meeting_at && <p className="mt-2 text-[11px] text-slate-500">次回予定: {displayDate(meeting.next_meeting_at)}</p>}
             </article>)}
           </div>
         </div>}
@@ -675,13 +745,66 @@ export const CustomerSupportWorkspace: React.FC<Props> = ({
 
         {activeSection === 'delivery' && <div className="space-y-4 p-4">
           <section className="rounded-2xl border border-slate-200 bg-slate-50 p-4 shadow-2xs">
-            <h4 className="mb-3 font-bold text-slate-900 text-sm">構築タスク・マイルストーン</h4>
-            <form onSubmit={addMilestone} className="mb-3 flex flex-wrap items-end gap-2"><input value={milestoneDraft} onChange={(event) => setMilestoneDraft(event.target.value)} placeholder="節目を追加" className="min-w-0 flex-1 rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs text-slate-900 focus:outline-none focus:border-purple-600 shadow-2xs" /><label className="text-xs font-semibold text-slate-600">完了予定日<input type="date" value={milestoneDueDate} onChange={(event) => setMilestoneDueDate(event.target.value)} className="mt-1 block rounded-xl border border-slate-200 bg-white px-2 py-1.5 text-xs text-slate-900 focus:outline-none focus:border-purple-600 shadow-2xs" /></label><button className="rounded-xl bg-purple-600 hover:bg-purple-700 px-3 py-2 text-xs font-bold text-white shadow-2xs cursor-pointer">追加</button></form>
-            {Array.isArray(selected.milestone_data) && selected.milestone_data.length > 0 ? <ul className="space-y-2">{selected.milestone_data.map((milestone: Row) => {
-              const overdue = milestone.due_date && milestone.due_date < new Date().toISOString().slice(0, 10) && milestone.status !== 'completed';
-              return <li key={milestone.id} className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-slate-200 bg-white px-3.5 py-2.5 shadow-2xs"><div><span className="text-xs font-bold text-slate-800">{milestone.status === 'completed' ? '✓' : '○'} {milestone.title}</span><div className={'mt-1 text-[11px] ' + (overdue ? 'text-amber-700 font-semibold' : 'text-slate-500')}>{milestone.due_date ? '完了予定 ' + milestone.due_date : '完了予定日未設定'}{overdue ? ' · 期限超過' : ''}</div></div>{milestone.status === 'completed' ? <span className="text-xs font-semibold text-emerald-700">完了 {milestone.completed_at ? displayDate(milestone.completed_at) : ''}</span> : <button type="button" onClick={() => void onCompleteMilestone(selected, milestone.id)} className="rounded-lg border border-purple-200 bg-purple-50 px-2.5 py-1 text-xs font-semibold text-purple-700 hover:bg-purple-100 cursor-pointer shadow-2xs">完了を記録</button>}</li>;
-            })}</ul> : <p className="text-xs text-slate-400">マイルストーンはまだありません。</p>}
-            <p className="mt-3 text-[11px] text-slate-500">完了時は既存のマイルストーン連携から、設定済みの場合にAI社長タスクが作成されます。</p>
+            <h4 className="mb-3 font-bold text-slate-900 text-sm">構築タスク・スケジュール管理</h4>
+            <form onSubmit={addMilestone} className="mb-3 flex flex-wrap items-end gap-2">
+              <input value={milestoneDraft} onChange={(event) => setMilestoneDraft(event.target.value)} placeholder="タスク・工程名を入力（例: システム要件定義、初期設定）" className="min-w-0 flex-1 rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs text-slate-900 focus:outline-none focus:border-purple-600 shadow-2xs" />
+              <label className="text-xs font-semibold text-slate-600">完了予定日<input type="date" value={milestoneDueDate} onChange={(event) => setMilestoneDueDate(event.target.value)} className="mt-1 block rounded-xl border border-slate-200 bg-white px-2 py-1.5 text-xs text-slate-900 focus:outline-none focus:border-purple-600 shadow-2xs" /></label>
+              <button className="rounded-xl bg-purple-600 hover:bg-purple-700 px-3 py-2 text-xs font-bold text-white shadow-2xs cursor-pointer">追加</button>
+            </form>
+            {normalizedMilestones.length > 0 ? <ul className="space-y-2">{normalizedMilestones.map((milestone: Row) => {
+              const isCompleted = milestone.status === 'completed';
+              const overdue = milestone.due_date && milestone.due_date < new Date().toISOString().slice(0, 10) && !isCompleted;
+              return <li key={milestone.id} className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-slate-200 bg-white px-3.5 py-2.5 shadow-2xs">
+                <div className="flex items-center gap-2.5 min-w-0">
+                  <button
+                    type="button"
+                    onClick={() => void handleToggleMilestone(selected, milestone.id, isCompleted ? 'pending' : 'completed')}
+                    title={isCompleted ? '未完了に戻す' : '完了にする'}
+                    className={`h-5 w-5 rounded border flex items-center justify-center transition cursor-pointer shrink-0 ${isCompleted ? 'border-emerald-600 bg-emerald-600 text-white' : 'border-slate-300 hover:border-purple-600 bg-white'}`}
+                  >
+                    {isCompleted && <Check className="h-3.5 w-3.5" />}
+                  </button>
+                  <div className="min-w-0">
+                    <span className={`text-xs font-bold ${isCompleted ? 'text-slate-400 line-through' : 'text-slate-800'}`}>
+                      {milestone.title}
+                    </span>
+                    <div className={`mt-0.5 text-[11px] ${overdue ? 'text-amber-700 font-semibold' : 'text-slate-500'}`}>
+                      {milestone.due_date ? `完了予定: ${milestone.due_date}` : '期日未設定'}
+                      {overdue && ' · 期限超過'}
+                      {isCompleted && milestone.completed_at && ` (完了: ${displayDate(milestone.completed_at)})`}
+                    </div>
+                  </div>
+                </div>
+                <div className="flex items-center gap-2 shrink-0">
+                  {isCompleted ? (
+                    <button
+                      type="button"
+                      onClick={() => void handleToggleMilestone(selected, milestone.id, 'pending')}
+                      className="rounded-lg border border-slate-200 bg-slate-50 px-2.5 py-1 text-xs font-semibold text-slate-600 hover:bg-slate-100 cursor-pointer shadow-2xs"
+                    >
+                      未完了に戻す
+                    </button>
+                  ) : (
+                    <button
+                      type="button"
+                      onClick={() => void handleToggleMilestone(selected, milestone.id, 'completed')}
+                      className="rounded-lg border border-purple-200 bg-purple-50 px-2.5 py-1 text-xs font-semibold text-purple-700 hover:bg-purple-100 cursor-pointer shadow-2xs"
+                    >
+                      完了を記録
+                    </button>
+                  )}
+                  <button
+                    type="button"
+                    onClick={() => void handleDeleteMilestone(selected, milestone.id)}
+                    title={`「${milestone.title}」を削除`}
+                    className="p-1.5 rounded-lg text-slate-400 hover:text-rose-600 hover:bg-rose-50 transition cursor-pointer"
+                  >
+                    <Trash2 className="h-4 w-4" />
+                  </button>
+                </div>
+              </li>;
+            })}</ul> : <p className="text-xs text-slate-400">マイルストーン・タスクはまだありません。</p>}
+            <p className="mt-3 text-[11px] text-slate-500">※ タスクごとに個別に完了・未完了の切り替えや削除が可能です。</p>
           </section>
           <section className="rounded-2xl border border-slate-200 bg-white p-4 shadow-2xs">
             <h4 className="mb-3 flex items-center gap-2 font-bold text-slate-900 text-sm"><FileText className="h-4 w-4 text-purple-600" />顧客への納品物・提出物</h4>
