@@ -53,6 +53,7 @@ export interface MarketingScenario {
   stopOnBooking?: boolean;
   stopOnDeal?: boolean;
   sendTimeWindow?: string;
+  preferredSendTime?: string;
   consentBasis?: string;
   updatedAt: number;
 }

@@ -36,8 +36,12 @@ import {
   GripVertical,
   LayoutGrid,
   List,
-  Sparkles
+  Sparkles,
+  Zap,
+  Clock,
+  X
 } from 'lucide-react';
+import { getSupabase } from '../lib/supabaseClient';
 import { matrixService } from '../services/matrixService';
 
 interface TableManagerProps {
@@ -89,6 +93,76 @@ export const TableManager: React.FC<TableManagerProps> = ({
   const [transitionOpen, setTransitionOpen] = useState(false);
   const [transitionType, setTransitionType] = useState<TransitionType>('prospect_to_lead');
   const [transitionSourceRecord, setTransitionSourceRecord] = useState<any>(null);
+
+  // 見込み企業リスト：営業メールトリガー発火モーダル
+  const [outreachModalProspects, setOutreachModalProspects] = useState<any[]>([]);
+  const [outreachMode, setOutreachMode] = useState<'one_shot' | 'sequence'>('one_shot');
+  const [outreachSendTiming, setOutreachSendTiming] = useState<'immediate' | 'preferred'>('immediate');
+  const [outreachPreferredTime, setOutreachPreferredTime] = useState<string>('10:00');
+  const [isTriggeringOutreach, setIsTriggeringOutreach] = useState(false);
+  const [outreachModalError, setOutreachModalError] = useState<string | null>(null);
+
+  const handleOpenProspectOutreach = (records: any[]) => {
+    setOutreachModalError(null);
+    setOutreachModalProspects(records);
+  };
+
+  const handleExecuteProspectOutreach = async () => {
+    if (outreachModalProspects.length === 0) return;
+    setIsTriggeringOutreach(true);
+    setOutreachModalError(null);
+    try {
+      const supabase = getSupabase();
+      const { data: sessionData } = supabase ? await supabase.auth.getSession() : { data: { session: null } };
+      const token = sessionData.session?.access_token;
+      if (!token) {
+        throw new Error('ログイン状態を確認できません。再ログインしてください。');
+      }
+      const res = await fetch('/api/marketing/prospects/trigger-outreach', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          prospectIds: outreachModalProspects.map((p) => String(p.id)),
+          mode: outreachMode,
+          sendTiming: outreachSendTiming,
+          preferredSendTime: outreachSendTiming === 'preferred' ? outreachPreferredTime : undefined,
+        }),
+      });
+      const json = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        throw new Error(json.error || `配信予約に失敗しました (HTTP ${res.status})`);
+      }
+
+      const modeLabel = outreachMode === 'one_shot' ? '一発直球提案（社外右腕）' : '5ステップ自動追客';
+      const timingLabel = outreachSendTiming === 'preferred'
+        ? `希望時刻 ${outreachPreferredTime}頃（JST）に配信予約`
+        : '即時配信キューへ投入';
+      const skippedText = json.skippedCount > 0
+        ? `（メール未登録/停止でスキップ: ${json.skippedCount}社）`
+        : '';
+
+      if (json.targetedCount === 0 && json.skippedCount > 0) {
+        const firstReason = json.skippedDetails?.[0]?.reason || '有効なメールアドレスが未登録です';
+        setOutreachModalError(`対象企業を送信できませんでした: ${firstReason}`);
+        return;
+      }
+
+      setOutreachModalProspects([]);
+      setSelectedIds([]);
+      setSuccessBanner(
+        `✅ ${json.targetedCount}社に対して【${modeLabel}】を${timingLabel}しました（ジョブ登録: ${json.enqueuedJobs}件）${skippedText}`
+      );
+      window.setTimeout(() => setSuccessBanner(null), 8000);
+      await loadData();
+    } catch (err: any) {
+      setOutreachModalError(err?.message || '営業メールの配信予約中にエラーが発生しました。');
+    } finally {
+      setIsTriggeringOutreach(false);
+    }
+  };
 
   const handleOpenTransition = (type: TransitionType, record: any) => {
     setTransitionType(type);
@@ -673,14 +747,14 @@ export const TableManager: React.FC<TableManagerProps> = ({
 
       {/* Success Notification Banner */}
       {successBanner && (
-        <div className="p-4 rounded-2xl bg-emerald-500/10 border border-emerald-500/30 text-emerald-200 flex items-center justify-between gap-3 animate-fade-in shadow-lg">
+        <div className="p-4 rounded-2xl bg-emerald-50 border border-emerald-300 text-emerald-900 flex items-center justify-between gap-3 animate-fade-in shadow-sm">
           <div className="flex items-center gap-2.5 text-xs">
-            <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
+            <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
             <span className="font-semibold">{successBanner}</span>
           </div>
           <button
             onClick={() => setSuccessBanner(null)}
-            className="text-xs text-emerald-400 hover:text-emerald-200"
+            className="text-xs font-semibold text-emerald-700 hover:text-emerald-900 cursor-pointer"
           >
             閉じる
           </button>
@@ -925,14 +999,24 @@ export const TableManager: React.FC<TableManagerProps> = ({
 
                             <div className="flex items-center gap-1">
                               {currentTable === 'prospects' && (
-                                <button
-                                  type="button"
-                                  onClick={() => handleOpenTransition('prospect_to_lead', item)}
-                                  className="p-1 rounded bg-cyan-50 text-cyan-700 hover:bg-cyan-100 border border-cyan-200 text-[10px] font-semibold cursor-pointer"
-                                  title="リードへ進める"
-                                >
-                                  リード化
-                                </button>
+                                <>
+                                  <button
+                                    type="button"
+                                    onClick={() => handleOpenProspectOutreach([item])}
+                                    className="p-1 rounded bg-indigo-50 text-indigo-700 hover:bg-indigo-100 border border-indigo-200 text-[10px] font-semibold cursor-pointer"
+                                    title="営業メール配信・ステップ自動追客を開始"
+                                  >
+                                    営業メール
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={() => handleOpenTransition('prospect_to_lead', item)}
+                                    className="p-1 rounded bg-cyan-50 text-cyan-700 hover:bg-cyan-100 border border-cyan-200 text-[10px] font-semibold cursor-pointer"
+                                    title="リードへ進める"
+                                  >
+                                    リード化
+                                  </button>
+                                </>
                               )}
                               {currentTable === 'leads' && (
                                 <button
@@ -1365,14 +1449,25 @@ export const TableManager: React.FC<TableManagerProps> = ({
                             </button>
                           )}
                           {currentTable === 'prospects' && (
-                            <button
-                              onClick={() => handleOpenTransition('prospect_to_lead', item)}
-                              className="px-2.5 py-1 rounded-lg text-xs font-semibold bg-cyan-50 text-cyan-700 hover:bg-cyan-600 hover:text-white border border-cyan-200 flex items-center gap-1 transition-colors"
-                              title="見込み企業からリードへ進める"
-                            >
-                              <Layers className="w-3.5 h-3.5" />
-                              <span>リードへ進める</span>
-                            </button>
+                            <>
+                              <button
+                                type="button"
+                                onClick={() => handleOpenProspectOutreach([item])}
+                                className="px-2.5 py-1 rounded-lg text-xs font-semibold bg-indigo-50 text-indigo-700 hover:bg-indigo-600 hover:text-white border border-indigo-200 flex items-center gap-1 transition-colors cursor-pointer"
+                                title="この見込み企業へ一発提案または5ステップ営業メール配信を発火"
+                              >
+                                <Zap className="w-3.5 h-3.5" />
+                                <span>営業メール配信</span>
+                              </button>
+                              <button
+                                onClick={() => handleOpenTransition('prospect_to_lead', item)}
+                                className="px-2.5 py-1 rounded-lg text-xs font-semibold bg-cyan-50 text-cyan-700 hover:bg-cyan-600 hover:text-white border border-cyan-200 flex items-center gap-1 transition-colors cursor-pointer"
+                                title="見込み企業からリードへ進める"
+                              >
+                                <Layers className="w-3.5 h-3.5" />
+                                <span>リードへ進める</span>
+                              </button>
+                            </>
                           )}
                           {currentTable === 'leads' && (
                             <button
@@ -1548,13 +1643,23 @@ export const TableManager: React.FC<TableManagerProps> = ({
                       </button>
                     )}
                     {currentTable === 'prospects' && (
-                      <button
-                        onClick={() => handleOpenTransition('prospect_to_lead', item)}
-                        className="px-2 py-1 rounded-lg bg-cyan-50 text-cyan-700 hover:bg-cyan-600 hover:text-white border border-cyan-200 flex items-center gap-1 text-[11px] font-semibold"
-                      >
-                        <Layers className="w-3 h-3" />
-                        <span>リードへ進める</span>
-                      </button>
+                      <>
+                        <button
+                          type="button"
+                          onClick={() => handleOpenProspectOutreach([item])}
+                          className="px-2 py-1 rounded-lg bg-indigo-50 text-indigo-700 hover:bg-indigo-600 hover:text-white border border-indigo-200 flex items-center gap-1 text-[11px] font-semibold cursor-pointer"
+                        >
+                          <Zap className="w-3 h-3" />
+                          <span>営業メール配信</span>
+                        </button>
+                        <button
+                          onClick={() => handleOpenTransition('prospect_to_lead', item)}
+                          className="px-2 py-1 rounded-lg bg-cyan-50 text-cyan-700 hover:bg-cyan-600 hover:text-white border border-cyan-200 flex items-center gap-1 text-[11px] font-semibold"
+                        >
+                          <Layers className="w-3 h-3" />
+                          <span>リードへ進める</span>
+                        </button>
+                      </>
                     )}
                     {currentTable === 'leads' && (
                       <button
@@ -1638,11 +1743,24 @@ export const TableManager: React.FC<TableManagerProps> = ({
 
       {/* Floating Bulk Actions Bar */}
       {selectedIds.length > 0 && (
-        <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-40 bg-slate-900 text-white px-5 py-3 rounded-2xl shadow-2xl flex items-center gap-4 animate-fade-in border border-slate-700">
+        <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-40 bg-slate-900 text-white px-5 py-3 rounded-2xl shadow-2xl flex flex-wrap items-center gap-3 animate-fade-in border border-slate-700">
           <div className="text-xs font-semibold">
             <span className="text-purple-400 font-bold">{selectedIds.length}</span> 件を選択中
           </div>
           <div className="flex items-center gap-2">
+            {currentTable === 'prospects' && (
+              <button
+                type="button"
+                onClick={() => {
+                  const targets = filteredData.filter((d) => selectedIds.includes(String(d.id)));
+                  handleOpenProspectOutreach(targets);
+                }}
+                className="px-3 py-1.5 bg-indigo-600 hover:bg-indigo-500 text-white rounded-lg text-xs font-bold transition flex items-center gap-1.5 cursor-pointer"
+              >
+                <Zap className="w-3.5 h-3.5" />
+                <span>営業メール配信開始（{selectedIds.length}社）</span>
+              </button>
+            )}
             <button
               onClick={handleBulkDelete}
               disabled={isBulkDeleting}
@@ -1657,6 +1775,171 @@ export const TableManager: React.FC<TableManagerProps> = ({
             >
               選択解除
             </button>
+          </div>
+        </div>
+      )}
+
+      {/* Prospect Outreach Trigger Modal */}
+      {outreachModalProspects.length > 0 && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/70 p-4 backdrop-blur-xs animate-fade-in">
+          <div className="bg-white rounded-2xl max-w-lg w-full p-6 shadow-2xl border border-slate-200 space-y-4">
+            <div className="flex items-center justify-between pb-3 border-b border-slate-100">
+              <div className="flex items-center gap-2.5">
+                <div className="w-9 h-9 rounded-xl bg-indigo-100 text-indigo-700 flex items-center justify-center shrink-0">
+                  <Mail className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="font-bold text-slate-900 text-base">見込み企業へ営業メール配信・自動トリガー</h3>
+                  <p className="text-xs text-slate-500">
+                    対象:{' '}
+                    {outreachModalProspects.length === 1
+                      ? (outreachModalProspects[0].company?.company_name || outreachModalProspects[0].company_name || '選択企業')
+                      : `${outreachModalProspects.length}社を一括選択`}
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setOutreachModalProspects([])}
+                className="p-1.5 rounded-lg text-slate-400 hover:text-slate-700 hover:bg-slate-100 cursor-pointer"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            {outreachModalError && (
+              <div className="p-3 rounded-xl bg-rose-50 border border-rose-200 text-xs text-rose-800 font-medium">
+                {outreachModalError}
+              </div>
+            )}
+
+            <div className="space-y-3">
+              <div>
+                <span className="block text-xs font-bold text-slate-800 mb-1.5">1. 配信パターンの選択</span>
+                <div className="space-y-2">
+                  <label
+                    className={`flex items-start gap-2.5 p-3 rounded-xl border text-xs cursor-pointer transition ${
+                      outreachMode === 'one_shot'
+                        ? 'bg-indigo-50/70 border-indigo-400 text-indigo-950'
+                        : 'bg-white border-slate-200 text-slate-700 hover:bg-slate-50'
+                    }`}
+                  >
+                    <input
+                      type="radio"
+                      name="outreachMode"
+                      checked={outreachMode === 'one_shot'}
+                      onChange={() => setOutreachMode('one_shot')}
+                      className="mt-0.5 accent-indigo-600"
+                    />
+                    <div>
+                      <div className="font-bold">【一発直球提案】IT担当＋経営サポート「社外右腕」のご提案（単発）</div>
+                      <p className="text-[11px] text-slate-500 mt-0.5">
+                        正社員1人未満のコストでIT・経営右腕を丸ごと代行する直球提案＋無料お見立て・3分診断を1通で送ります。
+                      </p>
+                    </div>
+                  </label>
+
+                  <label
+                    className={`flex items-start gap-2.5 p-3 rounded-xl border text-xs cursor-pointer transition ${
+                      outreachMode === 'sequence'
+                        ? 'bg-indigo-50/70 border-indigo-400 text-indigo-950'
+                        : 'bg-white border-slate-200 text-slate-700 hover:bg-slate-50'
+                    }`}
+                  >
+                    <input
+                      type="radio"
+                      name="outreachMode"
+                      checked={outreachMode === 'sequence'}
+                      onChange={() => setOutreachMode('sequence')}
+                      className="mt-0.5 accent-indigo-600"
+                    />
+                    <div>
+                      <div className="font-bold">【5ステップ自動営業】急所提起 → 事例 → 3分診断（全5通・3日おき）</div>
+                      <p className="text-[11px] text-slate-500 mt-0.5">
+                        第1通を送信し、第2〜5通（3日・6日・9日・12日後）を自動予約します。返信・診断回答・予約で自動停止します。
+                      </p>
+                    </div>
+                  </label>
+                </div>
+              </div>
+
+              <div>
+                <span className="block text-xs font-bold text-slate-800 mb-1.5">2. 配信タイミング（JST）</span>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                  <label
+                    className={`flex items-center gap-2 p-2.5 rounded-xl border text-xs cursor-pointer transition ${
+                      outreachSendTiming === 'immediate'
+                        ? 'bg-emerald-50 border-emerald-400 text-emerald-950 font-bold'
+                        : 'bg-white border-slate-200 text-slate-700'
+                    }`}
+                  >
+                    <input
+                      type="radio"
+                      name="outreachTiming"
+                      checked={outreachSendTiming === 'immediate'}
+                      onChange={() => setOutreachSendTiming('immediate')}
+                      className="accent-emerald-600"
+                    />
+                    <span>今すぐ配信（時間帯ガード遵守）</span>
+                  </label>
+
+                  <label
+                    className={`flex items-center gap-2 p-2.5 rounded-xl border text-xs cursor-pointer transition ${
+                      outreachSendTiming === 'preferred'
+                        ? 'bg-indigo-50 border-indigo-400 text-indigo-950 font-bold'
+                        : 'bg-white border-slate-200 text-slate-700'
+                    }`}
+                  >
+                    <input
+                      type="radio"
+                      name="outreachTiming"
+                      checked={outreachSendTiming === 'preferred'}
+                      onChange={() => setOutreachSendTiming('preferred')}
+                      className="accent-indigo-600"
+                    />
+                    <span className="flex items-center gap-1">
+                      <Clock className="w-3.5 h-3.5 text-indigo-600" />
+                      <span>希望時刻に予約</span>
+                    </span>
+                  </label>
+                </div>
+
+                {outreachSendTiming === 'preferred' && (
+                  <div className="mt-2 p-3 rounded-xl bg-slate-50 border border-slate-200 flex items-center justify-between gap-3">
+                    <div className="text-[11px] text-slate-600">
+                      <span className="font-bold text-slate-800 block">配信希望時刻（日本時間）</span>
+                      <span>※実際の送信はCron間隔により +0〜15分前後 になります。</span>
+                    </div>
+                    <input
+                      type="time"
+                      value={outreachPreferredTime}
+                      onChange={(e) => setOutreachPreferredTime(e.target.value)}
+                      className="px-2.5 py-1.5 rounded-lg border border-slate-300 bg-white text-xs font-mono font-bold text-slate-900"
+                    />
+                  </div>
+                )}
+              </div>
+            </div>
+
+            <div className="pt-2 flex items-center justify-end gap-2 border-t border-slate-100">
+              <button
+                type="button"
+                onClick={() => setOutreachModalProspects([])}
+                disabled={isTriggeringOutreach}
+                className="px-4 py-2 rounded-xl border border-slate-200 bg-white hover:bg-slate-50 text-slate-700 text-xs font-semibold cursor-pointer"
+              >
+                キャンセル
+              </button>
+              <button
+                type="button"
+                onClick={() => void handleExecuteProspectOutreach()}
+                disabled={isTriggeringOutreach}
+                className="px-4 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 text-white text-xs font-bold flex items-center gap-1.5 shadow-xs cursor-pointer"
+              >
+                <Send className="w-3.5 h-3.5" />
+                <span>{isTriggeringOutreach ? '登録中...' : '配信トリガーを実行'}</span>
+              </button>
+            </div>
           </div>
         </div>
       )}

@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useRef } from 'react';
-import { getSalesEmailTemplate, getNurturingStepTemplate } from '../utils/salesOutreachTemplates';
+import { getSalesEmailTemplate, getOneShotOutreachTemplate } from '../utils/salesOutreachTemplates';
 import { Eye, Save, Send, Users, SendHorizonal, FileText, Library, Mail, MessageSquare, Paperclip, CheckCircle2, X, Inbox, ArrowLeft, AlertTriangle } from 'lucide-react';
 import { getSupabase } from '../lib/supabaseClient';
 import { LineMessagePreview } from './LineMessagePreview';
@@ -10,7 +10,7 @@ import { CommunicationTemplateLibraryView } from './marketing/CommunicationTempl
 import { CommunicationOutboxHistoryView } from './marketing/CommunicationOutboxHistoryView';
 import { DocumentPreviewModal } from './common/DocumentPreviewModal';
 
-type Kind = 'document' | 'form' | 'diagnosis' | 'deal' | 'customer_meeting' | 'announcement' | 'sales_outreach' | 'nurturing_story';
+type Kind = 'document' | 'form' | 'diagnosis' | 'deal' | 'customer_meeting' | 'announcement' | 'sales_outreach';
 type Channel = 'email' | 'line' | 'both';
 type DeliveryChannel = 'email' | 'line';
 type DocumentType = 'estimate' | 'invoice' | 'contract' | 'proposal' | 'diagnosis_report' | 'monthly_report' | 'other';
@@ -45,8 +45,7 @@ const labels: Record<Kind, string> = {
   diagnosis: '診断案内',
   deal: '商談日程案内',
   customer_meeting: '顧客面談日程案内',
-  sales_outreach: '見込み企業営業メール（ステップ1〜5）',
-  nurturing_story: '大橋ストーリー型ナーチャリング（全7話・LINE/メール）',
+  sales_outreach: '新規営業メール（一発提案／ステップ初回）',
   announcement: 'その他の案内',
 };
 
@@ -224,10 +223,9 @@ export const CommunicationSendCenter: React.FC<Props> = ({
   const [bookingUrl, setBookingUrl] = useState('');
   const [companies, setCompanies] = useState<Record<string, string>>({});
   const [companyIndustries, setCompanyIndustries] = useState<Record<string, string>>({});
-  const [salesStep, setSalesStep] = useState<number>(1);
+  const [salesStep, setSalesStep] = useState<number>(0);
   // 第1通を手動で送ったあと、第2〜5通を自動で予約するか（初期はOFF。送るたびにOFFへ戻す）
   const [autoFollowups, setAutoFollowups] = useState(false);
-  const [nurturingStep, setNurturingStep] = useState<number>(1);
   const [contactId, setContactId] = useState(initialContactId || '');
   const [unregisteredEmailWarning, setUnregisteredEmailWarning] = useState<string | null>(null);
   const userInteractedContactRef = useRef(false);
@@ -498,9 +496,12 @@ export const CommunicationSendCenter: React.FC<Props> = ({
     const compInd = c?.company_id ? companyIndustries[c.company_id] || '' : '';
     const diagForm = forms.find((f: any) => f.form_type === 'diagnosis') || forms[0];
     const diagUrl = diagForm ? `${window.location.origin}/f/${encodeURIComponent(diagForm.public_slug)}${c ? `?cid=${encodeURIComponent(c.id)}` : ''}` : bookingUrl || url.trim();
-    const outreach = getSalesEmailTemplate(stepNum, compName, c?.full_name, compInd, diagUrl);
+    const outreach = stepNum === 0
+      ? getOneShotOutreachTemplate(compName, c?.full_name, compInd, diagUrl)
+      : getSalesEmailTemplate(stepNum, compName, c?.full_name, compInd, diagUrl);
     setSubject(outreach.subject);
     setBody(outreach.body);
+    if (diagUrl && diagUrl !== '{{diagnostic_url}}') setUrl(diagUrl);
     setBasis('特定電子メール法に基づく業務改善情報の提供（オプトアウト明記）');
   };
 
@@ -509,22 +510,6 @@ export const CommunicationSendCenter: React.FC<Props> = ({
       applySalesStep(salesStep, contact);
     }
   }, [kind, salesStep, contact?.id, contact?.company_id]);
-
-  const applyNurturingStep = (stepNum: number, c = contact, ch = channel) => {
-    const compName = c?.company_id ? companies[c.company_id] || '貴社' : '貴社';
-    const diagForm = forms.find((f: any) => f.form_type === 'diagnosis') || forms[0];
-    const diagUrl = diagForm ? `${window.location.origin}/f/${encodeURIComponent(diagForm.public_slug)}${c ? `?cid=${encodeURIComponent(c.id)}` : ''}` : bookingUrl || url.trim();
-    const tpl = getNurturingStepTemplate(stepNum, c?.full_name || '様', compName, diagUrl);
-    setSubject(tpl.emailSubject);
-    setBody(ch === 'line' ? tpl.lineBody : tpl.emailBody);
-    setBasis('配信同意に基づくストーリー型教育メッセージ');
-  };
-
-  useEffect(() => {
-    if (kind === 'nurturing_story') {
-      applyNurturingStep(nurturingStep, contact, channel);
-    }
-  }, [kind, nurturingStep, channel, contact?.id, contact?.company_id]);
 
   useEffect(() => {
     if ((kind === 'form' || kind === 'diagnosis') && form) {
@@ -602,7 +587,7 @@ export const CommunicationSendCenter: React.FC<Props> = ({
     if (
       !basis.trim() ||
       (kind === 'document' && (!doc || !hasDocUrl)) ||
-      (kind !== 'document' && kind !== 'announcement' && !vals.link_url.trim()) ||
+      (kind !== 'document' && kind !== 'announcement' && kind !== 'sales_outreach' && !vals.link_url.trim()) ||
       (targets.includes('email') && !contact.email) ||
       (targets.includes('line') && !contact.line_user_id)
     ) {
@@ -934,53 +919,26 @@ export const CommunicationSendCenter: React.FC<Props> = ({
               )}
             </label>
 
-            {kind === 'nurturing_story' && (
-              <div className="md:col-span-2 space-y-2 rounded-xl border border-purple-200 bg-purple-50/50 p-3.5">
-                <label className="block text-xs font-bold text-purple-900">
-                  ストーリー型ナーチャリング話数（{channel === 'line' ? 'LINE形式' : 'メルマガ/メール形式'}）
-                  <select
-                    value={nurturingStep}
-                    onChange={(e) => {
-                      const s = Number(e.target.value) || 1;
-                      setNurturingStep(s);
-                      applyNurturingStep(s, contact, channel);
-                    }}
-                    className="mt-1 block w-full bg-white p-2.5 text-xs text-slate-900 rounded-lg border border-purple-200 focus:outline-none focus:border-purple-600"
-                  >
-                    <option value={1}>第1話：大橋の原体験・FC本部突然倒産の危機</option>
-                    <option value={2}>第2話：最初に徹底して仕組み化した2大業務（管理＆集客）</option>
-                    <option value={3}>第3話：「何から手をつければいいかわからない」経営者様へ</option>
-                    <option value={4}>第4話：流行りのツールを入れても失敗する会社、業務が激変する会社</option>
-                    <option value={5}>第5話：「人を無理に増やさず、利益がしっかり残る会社」の共通点</option>
-                    <option value={6}>第6話：私は「システム屋」でも「コンサルタント」でもありません</option>
-                    <option value={7}>第7話：【最終話】自分がいないと現場が回らない状態から、脱却するチャンス</option>
-                  </select>
-                </label>
-                <p className="text-[11px] text-purple-800">※ 送信方法（メール／LINE）に応じて、最適なレイアウト（メルマガ件名・本文 または LINE向けテキスト）が自動展開されます。</p>
-              </div>
-            )}
-
             {kind === 'sales_outreach' && (
               <div className="md:col-span-2 space-y-2 rounded-xl border border-purple-200 bg-purple-50/50 p-3.5">
                 <label className="block text-xs font-bold text-purple-900">
-                  営業メールステップ（{contact?.company_id ? (companies[contact.company_id] || '選択中') + (' · 業種: ' + (companyIndustries[contact.company_id] || '一般・未設定')) : '送信先を選ぶと業種別メッセージが自動挿入'}）
+                  営業メール種別（{contact?.company_id ? (companies[contact.company_id] || '選択中') + (' · 業種: ' + (companyIndustries[contact.company_id] || '一般・未設定')) : '送信先を選ぶと業種・社名を自動反映'}）
                   <select
                     value={salesStep}
                     onChange={(e) => {
-                      const s = Number(e.target.value) || 1;
-                      setSalesStep(s);
-                      applySalesStep(s);
+                      const s = Number(e.target.value);
+                      setSalesStep(Number.isFinite(s) ? s : 0);
+                      applySalesStep(Number.isFinite(s) ? s : 0);
                     }}
                     className="mt-1 block w-full bg-white p-2.5 text-xs text-slate-900 rounded-lg border border-purple-200 focus:outline-none focus:border-purple-600"
                   >
-                    <option value={1}>第1通：業界急所の提起 ＆ 3分無料診断ギフト（返信不要）</option>
-                    <option value={2}>第2通：人手不足ではなく「仕組み不足」の真実</option>
-                    <option value={3}>第3通：具体的ビフォーアフター（月25時間削減の軌跡）</option>
-                    <option value={4}>第4通：診断速報判定（チラ見せ）の強い動機づけ</option>
-                    <option value={5}>第5通：【最終案内】現場の火消しから解放され利益が残る会社へ</option>
+                    <option value={0}>【一発直球提案】IT担当＋経営サポート「社外右腕」のご提案（単発メール）</option>
+                    <option value={1}>【5ステップ初回】業界急所提起 ＆ 3分無料診断ギフト（送信後2〜5通目の自動追客可）</option>
                   </select>
                 </label>
-                <p className="text-[11px] text-purple-800">※ 選択した会社の業種に応じた課題・メリットを自動挿入します。送信時に、署名（社名・住所・HP・Mail）と配信停止リンクが自動で付きます。</p>
+                <p className="text-[11px] text-purple-800">
+                  ※ 送信時に署名（社名・住所・HP・Mail）と配信停止リンクが自動で付きます。見込み企業リストから一括・予約トリガー発火することもできます。
+                </p>
                 {salesStep === 1 && channel !== 'line' && (
                   <label className="flex items-start gap-2 rounded-lg border border-purple-200 bg-white p-2.5 text-xs text-slate-800 cursor-pointer">
                     <input

@@ -51,6 +51,7 @@ interface DryRunResult {
     waitMinutes: number;
     scheduledTime: string;
     sendTimeWindow: string;
+    preferredSendTime?: string;
   };
 }
 
@@ -336,7 +337,7 @@ export const ScenarioDryRunModal: React.FC<Props> = ({ scenario, isOpen, onClose
                     <span>
                       {result.timing.waitMinutes === 0
                         ? '即時配信（0分）'
-                        : `${result.timing.waitMinutes}分後 (${new Date(result.timing.scheduledTime).toLocaleTimeString('ja-JP', { hour: '2-digit', minute: '2-digit' })})`}
+                        : `${Math.round(result.timing.waitMinutes / 1440) || result.timing.waitMinutes + '分'}後 (${new Date(result.timing.scheduledTime).toLocaleTimeString('ja-JP', { hour: '2-digit', minute: '2-digit' })}${result.timing.preferredSendTime ? ` · 希望 ${result.timing.preferredSendTime}` : ''})`}
                     </span>
                   </div>
                 </div>

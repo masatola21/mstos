@@ -99,6 +99,76 @@ export function checkSendTimeWindow(
 }
 
 /**
+ * 待機分数（waitMinutes）と任意の配信希望時刻（JST "HH:mm"）から、配信予定時刻（ISO形式）を計算する。
+ * - 待機日数（1日単位）が1日以上のステップは、N日後の希望時刻（JST）に予約する。
+ * - 待機分数が0分（即時）で applyPreferredOnZeroWait=true の場合は、当日の希望時刻（過ぎていれば翌日の希望時刻）に予約する。
+ */
+export function calculateDueAt(
+  waitMinutes: number,
+  preferredSendTime?: string | null,
+  now: Date = new Date(),
+  options: { applyPreferredOnZeroWait?: boolean } = {}
+): string {
+  const safeWait = Math.max(0, Number(waitMinutes) || 0);
+  const fallbackIso = () => new Date(now.getTime() + safeWait * 60 * 1000).toISOString();
+
+  if (typeof preferredSendTime !== 'string' || !preferredSendTime.trim()) {
+    return fallbackIso();
+  }
+  const match = preferredSendTime.trim().match(/^(\d{1,2}):(\d{2})$/);
+  if (!match) {
+    return fallbackIso();
+  }
+
+  const prefHour = parseInt(match[1], 10);
+  const prefMinute = parseInt(match[2], 10);
+  if (prefHour < 0 || prefHour > 23 || prefMinute < 0 || prefMinute > 59) {
+    return fallbackIso();
+  }
+
+  if (safeWait === 0 && !options.applyPreferredOnZeroWait) {
+    return fallbackIso();
+  }
+  if (safeWait > 0 && safeWait % 1440 !== 0) {
+    return fallbackIso();
+  }
+
+  const formatter = new Intl.DateTimeFormat('en-US', {
+    timeZone: 'Asia/Tokyo',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit',
+    hour12: false,
+  });
+  const parts = formatter.formatToParts(now);
+  const get = (type: string) => parts.find((p) => p.type === type)?.value || '0';
+  const year = parseInt(get('year'), 10);
+  const month = parseInt(get('month'), 10);
+  const day = parseInt(get('day'), 10);
+  let hour = parseInt(get('hour'), 10);
+  if (hour === 24) hour = 0;
+  const minute = parseInt(get('minute'), 10);
+
+  let dayOffset = Math.round(safeWait / 1440);
+  if (safeWait === 0 && options.applyPreferredOnZeroWait) {
+    const currentMins = hour * 60 + minute;
+    const prefMins = prefHour * 60 + prefMinute;
+    dayOffset = currentMins <= prefMins ? 0 : 1;
+  }
+
+  const pad = (n: number) => String(n).padStart(2, '0');
+  const targetDate = new Date(Date.UTC(year, month - 1, day + dayOffset));
+  const tYear = targetDate.getUTCFullYear();
+  const tMonth = pad(targetDate.getUTCMonth() + 1);
+  const tDay = pad(targetDate.getUTCDate());
+  const jstIso = `${tYear}-${tMonth}-${tDay}T${pad(prefHour)}:${pad(prefMinute)}:00+09:00`;
+  return new Date(jstIso).toISOString();
+}
+
+/**
  * 配信停止（opted_out）などの送信除外条件を判定
  */
 export function shouldSkipAutomationDelivery(

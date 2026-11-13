@@ -12,8 +12,7 @@ export type SendDrawerKind =
   | 'deal'
   | 'customer_meeting'
   | 'announcement'
-  | 'sales_outreach'
-  | 'nurturing_story';
+  | 'sales_outreach';
 
 export interface SendDrawerOptions {
   kind?: SendDrawerKind;

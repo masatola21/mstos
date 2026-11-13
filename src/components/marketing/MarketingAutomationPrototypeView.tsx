@@ -28,6 +28,7 @@ export const MST_OUTREACH_STARTER_SCENARIOS: Omit<MarketingScenario, 'id' | 'upd
     status: (isFirst ? 'draft' : 'prepared') as MarketingScenario['status'],
     automationEnabled: !isFirst,
     sendTimeWindow: '09:00-18:00',
+    preferredSendTime: !isFirst ? '10:00' : '',
     stopOnBooking: true,
     stopOnDeal: true,
     consentBasis: '特定電子メール法に基づく業務改善情報の提供（オプトアウト明記）',
@@ -57,6 +58,8 @@ export const MST_LINE_NURTURING_STARTER_SCENARIOS: Omit<MarketingScenario, 'id' 
     flexButtonUrl: '',
     status: 'draft',
     automationEnabled: false,
+    sendTimeWindow: '09:00-20:00',
+    preferredSendTime: '10:00',
     stopOnBooking: true,
     stopOnDeal: true,
     consentBasis: '配信同意に基づく（LINEおよびメルマガ配信対応）',
@@ -399,6 +402,7 @@ const emptyScenario = (): Omit<MarketingScenario, 'id' | 'updatedAt'> => ({
   stopOnBooking: true,
   stopOnDeal: true,
   sendTimeWindow: '09:00-20:00',
+  preferredSendTime: '',
   consentBasis: '',
 });
 

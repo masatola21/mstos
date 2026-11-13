@@ -12,7 +12,8 @@ import { createClient } from '@supabase/supabase-js';
 import { parseIcalendar } from './server/icalParser.js';
 import { isTimeRexEmail, parseTimeRexEmail, parseTimeRexCalendarEvent, syncTimeRexBookingToCrm } from './server/timerexSyncService.js';
 import { calculateBillingAmount, determineContractMonthlyFee, isContractAlreadyBilled, getEndOfNextMonthDate } from './src/utils/billingUtils.js';
-import { calculateExponentialBackoff, shouldSkipAutomationDelivery, checkSendTimeWindow, type SendTimeWindowCheck } from './src/utils/automationRuleUtils.js';
+import { calculateExponentialBackoff, shouldSkipAutomationDelivery, checkSendTimeWindow, calculateDueAt, type SendTimeWindowCheck } from './src/utils/automationRuleUtils.js';
+import { getOneShotOutreachTemplate, getSalesEmailTemplate } from './src/utils/salesOutreachTemplates.js';
 import { generateDocumentPdf } from './server/pdfService.js';
 import { appendEmailFooter } from './server/emailFooter.js';
 import { classifyBottleneck } from './server/diagnosisAnalysis.js';
@@ -2690,7 +2691,7 @@ async function enqueueScenariosForContact(
   contactId: string,
   triggerName: string,
   onlyOwnerId?: string,
-  options?: { tagName?: string }
+  options?: { tagName?: string; preferredSendTimeOverride?: string; applyPreferredOnZeroWait?: boolean }
 ): Promise<number> {
   if (!lineSupabase || !contactId || !triggerName) return 0;
   try {
@@ -2735,7 +2736,12 @@ async function enqueueScenariosForContact(
       }
 
       const waitMinutes = Number(cfg.waitMinutes || 0);
-      const dueAt = new Date(nowMs + (waitMinutes * 60 * 1000)).toISOString();
+      const effectivePreferredTime = options?.preferredSendTimeOverride !== undefined
+        ? options.preferredSendTimeOverride
+        : (typeof cfg.preferredSendTime === 'string' ? cfg.preferredSendTime : '');
+      const dueAt = calculateDueAt(waitMinutes, effectivePreferredTime, new Date(nowMs), {
+        applyPreferredOnZeroWait: options?.applyPreferredOnZeroWait,
+      });
 
       for (const ch of targetChannels) {
         let bodyText = ch === 'email' ? String(cfg.emailBody || '') : String(cfg.messageBody || '');
@@ -5469,7 +5475,8 @@ app.post('/api/marketing/dry-run', requireAuth, async (req, res) => {
 
     const channelSetting = config.channel || 'both';
     const waitMinutes = Number(config.waitMinutes || 0);
-    const scheduledTime = new Date(Date.now() + waitMinutes * 60 * 1000).toISOString();
+    const preferredSendTime = typeof config.preferredSendTime === 'string' ? config.preferredSendTime.trim() : '';
+    const scheduledTime = calculateDueAt(waitMinutes, preferredSendTime, new Date());
     const simulatedJobs: any[] = [];
 
     // LINE ジョブ評価
@@ -5568,6 +5575,7 @@ app.post('/api/marketing/dry-run', requireAuth, async (req, res) => {
         waitMinutes,
         scheduledTime,
         sendTimeWindow: config.sendTimeWindow || '終日 (24時間)',
+        preferredSendTime: preferredSendTime || undefined,
       },
     });
   } catch (err: any) {
@@ -5659,6 +5667,254 @@ app.post('/api/marketing/outreach-followups', requireAuth, async (req, res) => {
     return res.status(200).json({ scheduled: 0, message: '予約できるステップがありません（すでに予約済み、またはマーケティング自動化で「営業メール」の初期セットを反映していません）。' });
   }
   return res.json({ scheduled: enqueued });
+});
+
+// 見込み企業リスト（prospects）から「一発提案（社外右腕）」または「5ステップ自動営業」のトリガーを発火
+app.post('/api/marketing/prospects/trigger-outreach', requireAuth, async (req, res) => {
+  if (!lineSupabase) return res.status(503).json({ error: '自動配信サーバーのSupabase設定がありません。' });
+  const killSwitch = await getKillSwitchStatus('send');
+  if (killSwitch.paused) {
+    return res.status(503).json({ error: `自動配信・メッセージ送信は緊急停止中です: ${killSwitch.reason || '一時停止中'}` });
+  }
+
+  const authUser = (req as any).user;
+  const rawIds: any[] = Array.isArray(req.body?.prospectIds) ? req.body.prospectIds : [];
+  const prospectIds: string[] = Array.from(
+    new Set<string>(
+      rawIds
+        .map((id: any) => String(id || '').trim())
+        .filter((id: string): id is string => Boolean(id))
+    )
+  ).slice(0, 100);
+
+  if (prospectIds.length === 0) {
+    return res.status(400).json({ error: '対象の見込み企業が選択されていません。' });
+  }
+
+  const mode: 'one_shot' | 'sequence' = req.body?.mode === 'sequence' ? 'sequence' : 'one_shot';
+  const sendTiming: 'immediate' | 'preferred' = req.body?.sendTiming === 'preferred' ? 'preferred' : 'immediate';
+  const rawPreferredTime = typeof req.body?.preferredSendTime === 'string' ? req.body.preferredSendTime.trim() : '';
+  const validPreferredTime = /^(\d{1,2}):(\d{2})$/.test(rawPreferredTime) ? rawPreferredTime : '';
+
+  if (sendTiming === 'preferred' && !validPreferredTime) {
+    return res.status(400).json({ error: '配信希望時刻（HH:mm形式）を指定してください。' });
+  }
+
+  try {
+    const { data: prospects, error: prospErr } = await lineSupabase
+      .from('prospects')
+      .select('id, company_id, contact_id, status')
+      .in('id', prospectIds);
+    if (prospErr) throw prospErr;
+    if (!prospects || prospects.length === 0) {
+      return res.status(404).json({ error: '選択された見込み企業が見つかりませんでした。' });
+    }
+
+    const companyIds = Array.from(new Set(prospects.map((p: any) => p.company_id).filter(Boolean)));
+    const [companiesRes, contactsRes, diagFormRes] = await Promise.all([
+      companyIds.length > 0
+        ? lineSupabase.from('companies').select('id, company_name, industry, email').in('id', companyIds)
+        : Promise.resolve({ data: [] as any[] }),
+      companyIds.length > 0
+        ? lineSupabase.from('contacts').select('id, company_id, full_name, email, email_consent_status').in('company_id', companyIds)
+        : Promise.resolve({ data: [] as any[] }),
+      lineSupabase.from('diagnosis_forms').select('public_slug, form_type, status').eq('status', 'published').order('created_at', { ascending: true }).limit(10),
+    ]);
+
+    const companyMap = new Map<string, any>((companiesRes.data || []).map((c: any) => [String(c.id), c]));
+    const contactsByCompany = new Map<string, any[]>();
+    for (const c of contactsRes.data || []) {
+      const key = String(c.company_id || '');
+      if (!contactsByCompany.has(key)) contactsByCompany.set(key, []);
+      contactsByCompany.get(key)!.push(c);
+    }
+
+    const pubForms = diagFormRes.data || [];
+    const diagForm = pubForms.find((f: any) => f.form_type === 'diagnosis') || pubForms[0];
+    const appUrl = (process.env.PUBLIC_APP_URL || 'https://os.mstcorp.info').replace(/\/$/, '');
+    const emailPattern = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    const now = new Date();
+    const nowIso = now.toISOString();
+    const dateKey = nowIso.slice(0, 10);
+    const step1DueAt = sendTiming === 'preferred'
+      ? calculateDueAt(0, validPreferredTime, now, { applyPreferredOnZeroWait: true })
+      : nowIso;
+    const followupPreferredTime = validPreferredTime || '10:00';
+
+    let targetedCount = 0;
+    let enqueuedJobs = 0;
+    const skippedDetails: Array<{ prospectId: string; companyName: string; reason: string }> = [];
+    const updatedProspectIds: string[] = [];
+
+    // DB上に有効な outreach_first_sent シナリオが登録済みか確認
+    const { data: ownerScenarios } = await lineSupabase
+      .from('marketing_automation_scenarios')
+      .select('scenario_id, config')
+      .eq('owner_id', authUser.id);
+    const hasConfiguredOutreachFollowups = (ownerScenarios || []).some((s: any) => {
+      const cfg = s.config || {};
+      const enabled = cfg.automationEnabled === true || cfg.status === 'prepared' || cfg.status === 'active';
+      return enabled && cfg.trigger === 'outreach_first_sent';
+    });
+
+    for (const prospect of prospects) {
+      const company = prospect.company_id ? companyMap.get(String(prospect.company_id)) : null;
+      const companyName = company?.company_name || '貴社';
+      const companyIndustry = company?.industry || '';
+      const companyContacts = prospect.company_id ? (contactsByCompany.get(String(prospect.company_id)) || []) : [];
+
+      let targetContact = prospect.contact_id
+        ? companyContacts.find((c: any) => String(c.id) === String(prospect.contact_id))
+        : null;
+      if (!targetContact || !targetContact.email) {
+        targetContact = companyContacts.find((c: any) => c.email && emailPattern.test(String(c.email).trim())) || companyContacts[0] || null;
+      }
+
+      if (!targetContact || !targetContact.email || !emailPattern.test(String(targetContact.email).trim())) {
+        skippedDetails.push({
+          prospectId: String(prospect.id),
+          companyName,
+          reason: '連絡先に有効なメールアドレスが登録されていません',
+        });
+        continue;
+      }
+      if (targetContact.email_consent_status === 'opted_out') {
+        skippedDetails.push({
+          prospectId: String(prospect.id),
+          companyName,
+          reason: '配信停止（オプトアウト）済みのため除外',
+        });
+        continue;
+      }
+
+      const diagUrl = diagForm?.public_slug
+        ? `${appUrl}/f/${encodeURIComponent(diagForm.public_slug)}?cid=${encodeURIComponent(targetContact.id)}`
+        : `${appUrl}/diagnosis`;
+      const consentBasis = '特定電子メール法に基づく業務改善情報の提供（オプトアウト明記）';
+
+      if (mode === 'one_shot') {
+        const draft = getOneShotOutreachTemplate(companyName, targetContact.full_name, companyIndustry, diagUrl);
+        const eventKey = `prospect_one_shot:${prospect.id}:${targetContact.id}:${dateKey}`;
+        const { error: insErr } = await lineSupabase
+          .from('marketing_automation_jobs')
+          .upsert({
+            owner_id: authUser.id,
+            event_key: eventKey,
+            scenario_id: 'prospect-one-shot',
+            contact_id: targetContact.id,
+            channel: 'email',
+            subject: draft.subject,
+            body_text: draft.body,
+            line_message_payload: null,
+            consent_basis: consentBasis,
+            due_at: step1DueAt,
+            status: 'queued',
+          }, { onConflict: 'owner_id,event_key', ignoreDuplicates: true });
+        if (!insErr) {
+          enqueuedJobs++;
+          targetedCount++;
+          updatedProspectIds.push(String(prospect.id));
+        }
+      } else {
+        // 5ステップ営業シーケンス：第1通
+        const firstDraft = getSalesEmailTemplate(1, companyName, targetContact.full_name, companyIndustry, diagUrl);
+        const step1Key = `prospect_outreach_step1:${prospect.id}:${targetContact.id}:${dateKey}`;
+        const { error: step1Err } = await lineSupabase
+          .from('marketing_automation_jobs')
+          .upsert({
+            owner_id: authUser.id,
+            event_key: step1Key,
+            scenario_id: 'prospect-outreach-step-1',
+            contact_id: targetContact.id,
+            channel: 'email',
+            subject: firstDraft.subject,
+            body_text: firstDraft.body,
+            line_message_payload: null,
+            consent_basis: consentBasis,
+            due_at: step1DueAt,
+            status: 'queued',
+          }, { onConflict: 'owner_id,event_key', ignoreDuplicates: true });
+
+        if (!step1Err) {
+          enqueuedJobs++;
+        }
+
+        // 第2〜5通（DBのカスタムシナリオがあればそれを、未初期化なら標準5ステップを使用）
+        if (hasConfiguredOutreachFollowups) {
+          const addedFollowups = await enqueueScenariosForContact(targetContact.id, 'outreach_first_sent', authUser.id, {
+            preferredSendTimeOverride: validPreferredTime || undefined,
+          });
+          enqueuedJobs += addedFollowups;
+        } else {
+          for (const stepNum of [2, 3, 4, 5]) {
+            const stepDraft = getSalesEmailTemplate(stepNum, companyName, targetContact.full_name, companyIndustry, diagUrl);
+            const waitMins = (stepNum - 1) * 3 * 1440;
+            const stepDueAt = calculateDueAt(waitMins, followupPreferredTime, now);
+            const stepKey = `outreach_first_sent:${targetContact.id}:prospect-outreach-step-${stepNum}:email`;
+            const { error: fErr } = await lineSupabase
+              .from('marketing_automation_jobs')
+              .upsert({
+                owner_id: authUser.id,
+                event_key: stepKey,
+                scenario_id: `prospect-outreach-step-${stepNum}`,
+                contact_id: targetContact.id,
+                channel: 'email',
+                subject: stepDraft.subject,
+                body_text: stepDraft.body,
+                line_message_payload: null,
+                consent_basis: consentBasis,
+                due_at: stepDueAt,
+                status: 'queued',
+              }, { onConflict: 'owner_id,event_key', ignoreDuplicates: true });
+            if (!fErr) enqueuedJobs++;
+          }
+        }
+
+        targetedCount++;
+        updatedProspectIds.push(String(prospect.id));
+      }
+
+      // もしユーザーが「営業対象に選ばれた時 (prospect_selected)」の追加自動化シナリオを有効化していれば連動実行
+      await enqueueScenariosForContact(targetContact.id, 'prospect_selected', authUser.id, {
+        preferredSendTimeOverride: validPreferredTime || undefined,
+        applyPreferredOnZeroWait: sendTiming === 'preferred',
+      });
+    }
+
+    if (updatedProspectIds.length > 0) {
+      await lineSupabase
+        .from('prospects')
+        .update({
+          status: 'アプローチ中',
+          approach_method: mode === 'one_shot' ? 'メール（一発提案）' : 'メール（ステップ1〜5）',
+          last_contacted_at: nowIso,
+          updated_at: nowIso,
+        })
+        .in('id', updatedProspectIds);
+    }
+
+    if (sendTiming === 'immediate' && enqueuedJobs > 0) {
+      try {
+        await processMarketingAutomationJobs();
+      } catch (runErr) {
+        console.warn('[ProspectOutreach] Immediate runner warning:', runErr);
+      }
+    }
+
+    return res.json({
+      success: true,
+      mode,
+      sendTiming,
+      scheduledFor: step1DueAt,
+      targetedCount,
+      enqueuedJobs,
+      skippedCount: skippedDetails.length,
+      skippedDetails,
+    });
+  } catch (err: any) {
+    console.error('[ProspectOutreach] Trigger failed:', err);
+    return res.status(500).json({ error: err?.message || '見込み企業への配信予約に失敗しました。' });
+  }
 });
 
 app.post('/api/marketing/test-send', requireAuth, async (req, res) => {

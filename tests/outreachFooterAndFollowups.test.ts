@@ -1,6 +1,12 @@
 import assert from 'node:assert/strict';
 import { appendEmailFooter, buildSenderSignature } from '../server/emailFooter';
-import { getSalesEmailTemplate, PRIORITY_INDUSTRY_KEYS, INDUSTRY_MESSAGES } from '../src/utils/salesOutreachTemplates';
+import {
+  getOneShotOutreachTemplate,
+  getSalesEmailTemplate,
+  PRIORITY_INDUSTRY_KEYS,
+  INDUSTRY_MESSAGES,
+} from '../src/utils/salesOutreachTemplates';
+import { calculateDueAt } from '../src/utils/automationRuleUtils';
 import { MST_OUTREACH_STARTER_SCENARIOS } from '../src/components/marketing/MarketingAutomationPrototypeView';
 
 console.log('=== Running Outreach Footer & Follow-up Tests ===');
@@ -60,11 +66,57 @@ for (const s of rest) {
   assert.equal(s.automationEnabled, true);
   assert.equal(s.stopOnBooking, true);
   assert.equal(s.sendTimeWindow, '09:00-18:00');
+  assert.equal(s.preferredSendTime, '10:00');
 }
 console.log('  ✓ passed');
 
 console.log('Test 7: priority industries exist and render into the email');
 for (const k of PRIORITY_INDUSTRY_KEYS) assert.ok(INDUSTRY_MESSAGES[k], k);
+console.log('  ✓ passed');
+
+console.log('Test 8: one-shot outreach template renders key points without hardcoded signature');
+const oneShot = getOneShotOutreachTemplate('テスト建設株式会社', '佐藤', '工事業', 'https://example.com/diag');
+assert.equal(oneShot.step, 0);
+assert.ok(oneShot.subject.includes('社外右腕'));
+assert.ok(oneShot.body.includes('佐藤 様'));
+assert.ok(oneShot.body.includes('IT専任担当'));
+assert.ok(oneShot.body.includes('月25万〜30万円'));
+assert.ok(oneShot.body.includes('https://example.com/diag'));
+assert.ok(!oneShot.body.includes('桧町127番地') && !oneShot.body.includes('代表取締役'));
+const oneShotFallback = getOneShotOutreachTemplate('テスト株式会社', '', '', '');
+assert.ok(oneShotFallback.body.includes('テスト株式会社 ご担当者 様'));
+assert.ok(oneShotFallback.body.includes('{{diagnostic_url}}'));
+console.log('  ✓ passed');
+
+console.log('Test 9: calculateDueAt honors JST preferredSendTime for multi-day & 0-day waits');
+// Base time: 2026-11-10 08:30:00 JST (2026-11-09T23:30:00.000Z)
+const morningJst = new Date('2026-11-10T08:30:00+09:00');
+// +3 days at 10:00 JST => 2026-11-13T10:00:00+09:00
+assert.equal(
+  calculateDueAt(4320, '10:00', morningJst),
+  new Date('2026-11-13T10:00:00+09:00').toISOString()
+);
+// waitMinutes=0 with applyPreferredOnZeroWait=true before 10:00 JST => same day 10:00 JST
+assert.equal(
+  calculateDueAt(0, '10:00', morningJst, { applyPreferredOnZeroWait: true }),
+  new Date('2026-11-10T10:00:00+09:00').toISOString()
+);
+// Base time: 2026-11-10 14:15:00 JST -> after 10:00 JST => next day 10:00 JST
+const afternoonJst = new Date('2026-11-10T14:15:00+09:00');
+assert.equal(
+  calculateDueAt(0, '10:00', afternoonJst, { applyPreferredOnZeroWait: true }),
+  new Date('2026-11-11T10:00:00+09:00').toISOString()
+);
+// waitMinutes=0 without applyPreferredOnZeroWait => immediate (morningJst)
+assert.equal(
+  calculateDueAt(0, '10:00', morningJst),
+  morningJst.toISOString()
+);
+// Sub-day wait (e.g. 120 minutes) falls back to exact offset even if preferredSendTime is set
+assert.equal(
+  calculateDueAt(120, '10:00', morningJst),
+  new Date(morningJst.getTime() + 120 * 60 * 1000).toISOString()
+);
 console.log('  ✓ passed');
 
 console.log('=== All Outreach Footer & Follow-up Tests Passed! ===');

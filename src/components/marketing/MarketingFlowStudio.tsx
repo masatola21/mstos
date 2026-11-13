@@ -3945,7 +3945,7 @@ export const MarketingFlowStudio: React.FC<MarketingFlowStudioProps> = ({
                           <div>
                             <div className="flex items-center gap-2 flex-wrap">
                               <span className="text-[11px] px-2 py-0.5 rounded bg-indigo-50 text-indigo-700 border border-indigo-200 font-bold font-mono">
-                                第{stepNum}話 ({waitDays})
+                                第{stepNum}話 ({waitDays}{(matchedScenario?.preferredSendTime ?? '10:00') ? ` · ${matchedScenario?.preferredSendTime || '10:00'}頃` : ''})
                               </span>
                               <span className="font-bold text-slate-900 text-sm">
                                 {matchedScenario?.name || tpl.name}
@@ -4183,7 +4183,7 @@ export const MarketingFlowStudio: React.FC<MarketingFlowStudioProps> = ({
                       <div>
                         <div className="flex items-center gap-2 flex-wrap">
                           <span className="text-xs px-2.5 py-0.5 rounded bg-blue-50 text-blue-700 border border-blue-200 font-bold">
-                            第{stepNum}通 ({waitDays})
+                            第{stepNum}通 ({waitDays}{stepNum > 1 && (matchedScenario?.preferredSendTime ?? '10:00') ? ` · ${matchedScenario?.preferredSendTime || '10:00'}頃` : ''})
                           </span>
                           <span className="text-xs text-slate-600 font-medium">
                             件名: {draft.subject}

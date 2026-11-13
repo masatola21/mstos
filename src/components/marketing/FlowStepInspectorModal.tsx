@@ -69,6 +69,7 @@ export const FlowStepInspectorModal: React.FC<FlowStepInspectorModalProps> = ({
   const [waitMinutes, setWaitMinutes] = useState(scenario.waitMinutes || 0);
   const [waitDaysInput, setWaitDaysInput] = useState(Math.round((scenario.waitMinutes || 0) / 1440));
   const [sendTimeWindow, setSendTimeWindow] = useState(scenario.sendTimeWindow || '09:00-20:00');
+  const [preferredSendTime, setPreferredSendTime] = useState(scenario.preferredSendTime || '');
   const [automationEnabled, setAutomationEnabled] = useState(scenario.automationEnabled || false);
   const [stopOnBooking, setStopOnBooking] = useState(scenario.stopOnBooking ?? true);
   const [stopOnDeal, setStopOnDeal] = useState(scenario.stopOnDeal ?? true);
@@ -157,6 +158,7 @@ export const FlowStepInspectorModal: React.FC<FlowStepInspectorModalProps> = ({
     setWaitMinutes(scenario.waitMinutes || 0);
     setWaitDaysInput(Math.round((scenario.waitMinutes || 0) / 1440));
     setSendTimeWindow(scenario.sendTimeWindow || '09:00-20:00');
+    setPreferredSendTime(scenario.preferredSendTime || '');
     setAutomationEnabled(scenario.automationEnabled || false);
     setStopOnBooking(scenario.stopOnBooking ?? true);
     setStopOnDeal(scenario.stopOnDeal ?? true);
@@ -227,6 +229,7 @@ export const FlowStepInspectorModal: React.FC<FlowStepInspectorModalProps> = ({
       targetTag: trigger === 'tag_added' ? (targetTag.trim() || undefined) : undefined,
       waitMinutes: waitDaysInput * 1440,
       sendTimeWindow,
+      preferredSendTime: preferredSendTime.trim() || '',
       automationEnabled,
       stopOnBooking,
       stopOnDeal,
@@ -488,7 +491,7 @@ export const FlowStepInspectorModal: React.FC<FlowStepInspectorModalProps> = ({
                   </div>
                 </div>
 
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-3 pt-3 border-t border-slate-100">
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3 pt-3 border-t border-slate-100">
                   <div>
                     <label className="text-slate-700 font-bold block mb-1">配信タイミング</label>
                     <div className="flex items-center gap-2">
@@ -501,9 +504,36 @@ export const FlowStepInspectorModal: React.FC<FlowStepInspectorModalProps> = ({
                         className="w-20 bg-white border border-slate-200 rounded-xl px-3 py-2 text-slate-900 font-mono text-center font-bold shadow-xs focus:outline-none focus:border-purple-500"
                       />
                       <span className="text-slate-600 font-medium">
-                        日後 {waitDaysInput === 0 ? '（即時配信）' : ''}
+                        日後 {waitDaysInput === 0 ? '（即時）' : ''}
                       </span>
                     </div>
+                  </div>
+
+                  <div>
+                    <label className="text-slate-700 font-bold block mb-1">配信希望時刻（任意・JST）</label>
+                    <div className="flex items-center gap-1.5">
+                      <input
+                        type="time"
+                        value={preferredSendTime}
+                        onChange={(e) => setPreferredSendTime(e.target.value)}
+                        className="flex-1 bg-white border border-slate-200 rounded-xl px-2.5 py-2 text-slate-900 font-mono shadow-xs focus:outline-none focus:border-purple-500"
+                      />
+                      {preferredSendTime && (
+                        <button
+                          type="button"
+                          onClick={() => setPreferredSendTime('')}
+                          className="px-2 py-2 text-[11px] rounded-lg border border-slate-200 bg-slate-50 text-slate-600 hover:bg-slate-100 cursor-pointer"
+                          title="時刻指定を解除"
+                        >
+                          解除
+                        </button>
+                      )}
+                    </div>
+                    <span className="text-[10px] text-slate-400 mt-0.5 block">
+                      {waitDaysInput > 0
+                        ? '※指定時刻の+0〜15分前後に配信'
+                        : '※1日以上のステップで有効（0日は即時）'}
+                    </span>
                   </div>
 
                   <div>
@@ -530,7 +560,7 @@ export const FlowStepInspectorModal: React.FC<FlowStepInspectorModalProps> = ({
                       }`}
                     >
                       <CheckCircle2 className="w-4 h-4" />
-                      <span>{automationEnabled ? '自動実行中（稼働中）' : '一時停止中（安全待機）'}</span>
+                      <span>{automationEnabled ? '自動実行中' : '一時停止中'}</span>
                     </button>
                   </div>
                 </div>
@@ -1162,6 +1192,7 @@ export const FlowStepInspectorModal: React.FC<FlowStepInspectorModalProps> = ({
             flexButtonLabel,
             flexButtonUrl,
             sendTimeWindow,
+            preferredSendTime: preferredSendTime.trim() || '',
             automationEnabled,
             stopOnBooking,
             stopOnDeal,
