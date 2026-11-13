@@ -127,6 +127,7 @@ export const DocumentTemplateView: React.FC<DocumentTemplateViewProps> = ({
   const [draftTableMissing, setDraftTableMissing] = useState(false);
   const [draftMsg, setDraftMsg] = useState('');
   const [draftBusy, setDraftBusy] = useState(false);
+  const restoredPaymentFor = useRef<string | null>(null);
   const [roadmapOk, setRoadmapOk] = useState(false);
   const [saveMessage, setSaveMessage] = useState('');
   const [hasStartedDocument, setHasStartedDocument] = useState<boolean>(false);
@@ -260,12 +261,17 @@ export const DocumentTemplateView: React.FC<DocumentTemplateViewProps> = ({
           hearingSheetId = hs.data.id;
           hearingIntent = customerIntentFrom(core);
         }
-        const pd = await supabase.from('proposal_drafts').select('id,status,version,chapters').eq('diagnosis_id', diagnosis.id).eq('is_current', true).maybeSingle();
+        const pd = await supabase.from('proposal_drafts').select('id,status,version,chapters,payment_mode').eq('diagnosis_id', diagnosis.id).eq('is_current', true).maybeSingle();
         if (pd.error) {
           if (['PGRST205', '42P01'].includes(String(pd.error.code))) setDraftTableMissing(true);
         } else if (pd.data) {
           savedDraft = pd.data;
         }
+      }
+      // 保存した支払い方式に戻す(開き直しても選択が初期値に戻らない)。1つの診断につき最初の1回だけ
+      if (!cancelled && selectedTemplateId === 'tpl-proposal-report' && savedDraft?.payment_mode && diagnosis?.id && restoredPaymentFor.current !== diagnosis.id) {
+        restoredPaymentFor.current = diagnosis.id;
+        if (savedDraft.payment_mode !== paymentMode) setPaymentMode(savedDraft.payment_mode);
       }
       if (!cancelled) {
         setDraftCtx(diagnosis?.id ? { diagnosisId: diagnosis.id, hearingSheetId, intent: hearingIntent } : null);
