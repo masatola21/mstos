@@ -36,6 +36,13 @@ export interface WelcomeChoice {
   replyText?: string;
 }
 
+export interface WelcomePatternDiagnosisConfig {
+  title: string;
+  body: string;
+  buttonLabel: string;
+  diagnosisUrl: string;
+}
+
 export interface WelcomePatternAConfig {
   title: string;
   greetingBody: string;
@@ -79,6 +86,14 @@ export interface WelcomePatternBConfig {
     bookingButtonLabel: string;
   };
 }
+
+export const DEFAULT_WELCOME_PATTERN_DIAGNOSIS: WelcomePatternDiagnosisConfig = {
+  title: '📊 3分無料経営診断',
+  body:
+    '{recipient_name} 様\n無料経営診断をお選びいただきありがとうございます！\n約3分のチェックにご回答いただくと、送信直後にホームページ上で【簡易診断結果】をすぐにご確認いただけます。\n（※詳細な診断レポート・改善提案書は30分商談後に進呈）',
+  buttonLabel: '診断を始める（約3分）',
+  diagnosisUrl: 'https://corp.mstcorp.info/diagnosis',
+};
 
 export const DEFAULT_WELCOME_PATTERN_A: WelcomePatternAConfig = {
   title: '🗓️ 経営改善の個別相談',

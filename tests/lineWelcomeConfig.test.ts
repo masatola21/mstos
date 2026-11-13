@@ -8,6 +8,9 @@ import {
   replaceMessagePlaceholders,
   isMissingColumnError,
   inferWelcomeReplyTypeAndPayload,
+  CANONICAL_DIAGNOSIS_URL,
+  upgradeLegacyDiagnosisUrl,
+  buildDiagnosisReplyUrl,
 } from '../server/lineWelcomeResolver';
 
 console.log('=== Running LINE Welcome Config & Resolver Tests ===\n');
@@ -171,6 +174,34 @@ console.log('=== Running LINE Welcome Config & Resolver Tests ===\n');
   assert.strictEqual(inferred.replyType, 'flex', 'Should infer flex when reply_type/reply_payload are omitted and reply_text has Flex JSON');
   assert.strictEqual(inferred.payload?.altText, '新ウェルカムメッセージ');
   console.log('  ✓ Schema-drift fallback & JSON reply_text inference passed');
+}
+
+// Test 7: Legacy OS diagnosis URLs upgrade cleanly to canonical HP diagnosis URL and preserve custom corporate URLs
+{
+  assert.strictEqual(
+    upgradeLegacyDiagnosisUrl('https://ais-dev-test.asia-northeast1.run.app/f/business-diagnosis?utm_source=line'),
+    `${CANONICAL_DIAGNOSIS_URL}?utm_source=line`
+  );
+  assert.strictEqual(
+    upgradeLegacyDiagnosisUrl('/forms/business-diagnosis'),
+    CANONICAL_DIAGNOSIS_URL
+  );
+  assert.strictEqual(
+    upgradeLegacyDiagnosisUrl('https://corp.mstcorp.info/diagnosis?custom=1'),
+    'https://corp.mstcorp.info/diagnosis?custom=1'
+  );
+
+  const built = buildDiagnosisReplyUrl(
+    'https://ais-pre-test.asia-northeast1.run.app/f/business-diagnosis',
+    'U123456',
+    'contact-99'
+  );
+  const parsed = new URL(built);
+  assert.strictEqual(parsed.origin + parsed.pathname, CANONICAL_DIAGNOSIS_URL);
+  assert.strictEqual(parsed.searchParams.get('source'), 'line');
+  assert.strictEqual(parsed.searchParams.get('luid'), 'U123456');
+  assert.strictEqual(parsed.searchParams.get('cid'), 'contact-99');
+  console.log('  ✓ Diagnosis URL normalization & tracking param builder passed');
 }
 
 console.log('\n=== All LINE Welcome Config & Resolver Tests Passed! ===\n');

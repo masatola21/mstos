@@ -48,12 +48,15 @@ import { LineMessagePreview } from '../LineMessagePreview';
 import { renderPlaceholders, PLACEHOLDER_SAMPLE_VALUES } from '../../utils/placeholders';
 import {
   DEFAULT_WELCOME_CHOICES,
+  DEFAULT_WELCOME_PATTERN_DIAGNOSIS,
   DEFAULT_WELCOME_PATTERN_A,
   DEFAULT_WELCOME_PATTERN_B,
   WelcomeChoice,
+  WelcomePatternDiagnosisConfig,
   WelcomePatternAConfig,
   WelcomePatternBConfig,
 } from './MarketingLineSettingsView';
+import { upgradeLegacyMstUrl, OFFICIAL_VERCEL_URLS } from '../../utils/marketingStorage';
 import { getSupabase } from '../../lib/supabaseClient';
 import { FlowStepInspectorModal } from './FlowStepInspectorModal';
 import { UNIFIED_TAG_MASTER, MasterTag } from '../../constants/tagMaster';
@@ -196,8 +199,10 @@ export const MarketingFlowStudio: React.FC<MarketingFlowStudioProps> = ({
     { id: 'consult', label: '🗓️ 経営改善について個別相談する', tag: '選択:個別相談', route: 'chat', actionType: 'postback', color: '#1E3A5F' },
     { id: 'care', label: '🌿 介護保険外サービスの開業相談', tag: '介護保険外開業', route: 'care_interactive', actionType: 'postback', color: '#0284C7' },
   ]);
+  const [patternDiagnosisConfig, setPatternDiagnosisConfig] = useState<WelcomePatternDiagnosisConfig>(DEFAULT_WELCOME_PATTERN_DIAGNOSIS);
   const [patternAConfig, setPatternAConfig] = useState<WelcomePatternAConfig>(DEFAULT_WELCOME_PATTERN_A);
   const [patternBConfig, setPatternBConfig] = useState<WelcomePatternBConfig>(DEFAULT_WELCOME_PATTERN_B);
+  const [isEditingPatternDiagnosis, setIsEditingPatternDiagnosis] = useState(false);
   const [isEditingPatternA, setIsEditingPatternA] = useState(false);
   const [isEditingPatternB, setIsEditingPatternB] = useState(false);
   const [patternBEditTab, setPatternBEditTab] = useState<'q1' | 'q2' | 'completion'>('q1');
@@ -274,6 +279,42 @@ export const MarketingFlowStudio: React.FC<MarketingFlowStudioProps> = ({
         contents: [
           ...textItems,
           ...buttons,
+        ],
+      },
+    };
+  };
+
+  // 分岐A（診断案内カード）プレビュー用Flex生成
+  const buildPatternDiagnosisFlexBubble = (cfg: WelcomePatternDiagnosisConfig) => {
+    const sampleName = PLACEHOLDER_SAMPLE_VALUES.recipient_name || '株式会社サンプル 担当者';
+    const bodyText = renderPlaceholders(cfg.body, { ...PLACEHOLDER_SAMPLE_VALUES, recipient_name: sampleName });
+    const btnLabel = (cfg.buttonLabel || '診断を始める（約3分）').trim().slice(0, 20);
+    const targetUri = upgradeLegacyMstUrl(cfg.diagnosisUrl || OFFICIAL_VERCEL_URLS.diagnosis, 'diagnosis') || OFFICIAL_VERCEL_URLS.diagnosis;
+    return {
+      type: 'bubble',
+      body: {
+        type: 'box',
+        layout: 'vertical',
+        spacing: 'md',
+        contents: [
+          { type: 'text', text: cfg.title || '📊 3分無料経営診断', weight: 'bold', size: 'lg', color: '#1E293B', wrap: true },
+          { type: 'text', text: bodyText, size: 'sm', color: '#475569', wrap: true },
+        ],
+      },
+      footer: {
+        type: 'box',
+        layout: 'vertical',
+        contents: [
+          {
+            type: 'button',
+            style: 'primary',
+            color: '#10B981',
+            action: {
+              type: 'uri',
+              label: btnLabel,
+              uri: targetUri,
+            },
+          },
         ],
       },
     };
@@ -542,6 +583,14 @@ export const MarketingFlowStudio: React.FC<MarketingFlowStudioProps> = ({
 
         if (Array.isArray(payload.choices) && payload.choices.length > 0) {
           const migratedChoices = payload.choices.map((c: any) => {
+            if (c?.id === 'diagnosis') {
+              return {
+                ...c,
+                route: c.route || 'form',
+                formSlug: 'business-diagnosis',
+                ...(c.uri ? { uri: upgradeLegacyMstUrl(c.uri, 'diagnosis') } : {}),
+              };
+            }
             if (c?.id === 'consult' && c?.route === 'booking') {
               return { ...c, route: 'chat' };
             }
@@ -558,6 +607,14 @@ export const MarketingFlowStudio: React.FC<MarketingFlowStudioProps> = ({
             return c;
           });
           setWelcomeChoices(migratedChoices);
+        }
+        if (payload.patternDiagnosis && typeof payload.patternDiagnosis === 'object') {
+          const rawUrl = String(payload.patternDiagnosis.diagnosisUrl || DEFAULT_WELCOME_PATTERN_DIAGNOSIS.diagnosisUrl);
+          setPatternDiagnosisConfig({
+            ...DEFAULT_WELCOME_PATTERN_DIAGNOSIS,
+            ...payload.patternDiagnosis,
+            diagnosisUrl: upgradeLegacyMstUrl(rawUrl, 'diagnosis') || OFFICIAL_VERCEL_URLS.diagnosis,
+          });
         }
         if (payload.patternA && typeof payload.patternA === 'object') {
           setPatternAConfig({
@@ -734,6 +791,25 @@ export const MarketingFlowStudio: React.FC<MarketingFlowStudioProps> = ({
         ? (parsedCustomEnvelopeAltText || extractFirstTextFromFlex(finalContents) || '友だち追加ありがとうございます').slice(0, 400)
         : ([welcomeHeading, welcomeSubheading].filter((s) => s && s.trim()).join(' ') || '友だち追加ありがとうございます').slice(0, 400);
 
+      const normalizedPatternDiagnosis: WelcomePatternDiagnosisConfig = {
+        ...patternDiagnosisConfig,
+        diagnosisUrl:
+          upgradeLegacyMstUrl(patternDiagnosisConfig.diagnosisUrl, 'diagnosis') ||
+          OFFICIAL_VERCEL_URLS.diagnosis,
+      };
+      setPatternDiagnosisConfig(normalizedPatternDiagnosis);
+
+      const normalizedChoices = welcomeChoices.map((c) => {
+        if (c.id === 'diagnosis') {
+          return {
+            ...c,
+            formSlug: 'business-diagnosis',
+            ...(c.uri ? { uri: upgradeLegacyMstUrl(c.uri, 'diagnosis') } : {}),
+          };
+        }
+        return c;
+      });
+
       const payload = {
         altText,
         contents: finalContents,
@@ -744,7 +820,8 @@ export const MarketingFlowStudio: React.FC<MarketingFlowStudioProps> = ({
           question: welcomeQuestion,
           instruction: welcomeInstruction,
         },
-        choices: welcomeChoices,
+        choices: normalizedChoices,
+        patternDiagnosis: normalizedPatternDiagnosis,
         patternA: patternAConfig,
         patternB: patternBConfig,
         editMode: flexEditMode,
@@ -863,6 +940,7 @@ export const MarketingFlowStudio: React.FC<MarketingFlowStudioProps> = ({
       setActiveWelcomeSource(effectiveEnabled ? 'welcome_rule' : 'welcome_disabled');
       setWelcomeNotice(successMessage || 'LINEウェルカム・分岐返信設定を保存しました！LINE公式アカウントへ即時反映されます。');
       setIsEditingWelcome(false);
+      setIsEditingPatternDiagnosis(false);
       setIsEditingPatternA(false);
       setIsEditingPatternB(false);
       setTimeout(() => setWelcomeNotice(''), 5000);
@@ -2613,6 +2691,182 @@ export const MarketingFlowStudio: React.FC<MarketingFlowStudioProps> = ({
                     </p>
                   </div>
                 </div>
+              </div>
+
+              {/* 分岐A タップ直後の即時返信（診断案内カード）インライン設定 & プレビュー */}
+              <div className="rounded-xl border border-emerald-200 bg-emerald-50/40 p-4 space-y-4">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                  <div className="space-y-0.5">
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-emerald-600 text-white">
+                        タップ直後の即時返信（最初の1発目）
+                      </span>
+                      <span className="text-xs font-bold text-slate-900">
+                        3分無料経営診断 案内カード（ホームページ診断リンク）
+                      </span>
+                    </div>
+                    <p className="text-[11px] text-slate-600">
+                      「📊 3分無料経営診断を受ける」ボタンが押された瞬間に返信され、ボタンを押すとコーポレートHPの診断ページへ遷移します。
+                    </p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setIsEditingPatternDiagnosis(!isEditingPatternDiagnosis)}
+                    className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition cursor-pointer shrink-0 ${
+                      isEditingPatternDiagnosis
+                        ? 'bg-slate-200 text-slate-800 hover:bg-slate-300'
+                        : 'bg-emerald-600 hover:bg-emerald-700 text-white shadow-xs'
+                    }`}
+                  >
+                    <Edit3 className="w-3.5 h-3.5" />
+                    <span>{isEditingPatternDiagnosis ? '診断カード編集を閉じる' : '✍️ 診断案内カードを編集'}</span>
+                  </button>
+                </div>
+
+                {isEditingPatternDiagnosis ? (
+                  <div className="grid grid-cols-1 lg:grid-cols-12 gap-5 pt-2 border-t border-emerald-200/70">
+                    <div className="lg:col-span-7 space-y-3 text-xs">
+                      <div>
+                        <label className="font-bold text-slate-700 block mb-1">カード見出し</label>
+                        <input
+                          type="text"
+                          value={patternDiagnosisConfig.title}
+                          onChange={(e) => setPatternDiagnosisConfig((prev) => ({ ...prev, title: e.target.value }))}
+                          className="w-full bg-white border border-slate-200 rounded-lg px-3 py-2 text-slate-900 focus:outline-none focus:border-emerald-500"
+                        />
+                      </div>
+                      <div>
+                        <label className="font-bold text-slate-700 block mb-1">
+                          案内メッセージ（<code className="text-emerald-700">{'{recipient_name}'}</code> 差し込み可）
+                        </label>
+                        <textarea
+                          rows={4}
+                          value={patternDiagnosisConfig.body}
+                          onChange={(e) => setPatternDiagnosisConfig((prev) => ({ ...prev, body: e.target.value }))}
+                          className="w-full bg-white border border-slate-200 rounded-lg px-3 py-2 text-slate-900 leading-relaxed focus:outline-none focus:border-emerald-500"
+                        />
+                      </div>
+                      <div>
+                        <div className="flex items-center justify-between mb-1">
+                          <label className="font-bold text-slate-700">CTAボタンラベル（20文字以内）</label>
+                          <span className={`text-[10px] font-mono ${patternDiagnosisConfig.buttonLabel.length > 20 ? 'text-rose-600 font-bold' : 'text-slate-400'}`}>
+                            {patternDiagnosisConfig.buttonLabel.length} / 20文字
+                          </span>
+                        </div>
+                        <input
+                          type="text"
+                          maxLength={20}
+                          value={patternDiagnosisConfig.buttonLabel}
+                          onChange={(e) => setPatternDiagnosisConfig((prev) => ({ ...prev, buttonLabel: e.target.value }))}
+                          placeholder="例: 診断を始める（約3分）"
+                          className="w-full bg-white border border-slate-200 rounded-lg px-3 py-2 text-slate-900 focus:outline-none focus:border-emerald-500"
+                        />
+                      </div>
+                      <div>
+                        <div className="flex items-center justify-between mb-1">
+                          <label className="font-bold text-slate-700">遷移先URL（本番ホームページ診断）</label>
+                          <button
+                            type="button"
+                            onClick={() =>
+                              setPatternDiagnosisConfig((prev) => ({
+                                ...prev,
+                                diagnosisUrl: OFFICIAL_VERCEL_URLS.diagnosis,
+                              }))
+                            }
+                            className="text-[11px] text-emerald-700 hover:text-emerald-800 underline cursor-pointer font-medium"
+                          >
+                            公式HP診断URLを設定
+                          </button>
+                        </div>
+                        <input
+                          type="url"
+                          value={patternDiagnosisConfig.diagnosisUrl}
+                          onChange={(e) => setPatternDiagnosisConfig((prev) => ({ ...prev, diagnosisUrl: e.target.value }))}
+                          placeholder={OFFICIAL_VERCEL_URLS.diagnosis}
+                          className="w-full bg-white border border-slate-200 rounded-lg px-3 py-2 text-slate-900 font-mono text-xs focus:outline-none focus:border-emerald-500"
+                        />
+                        <p className="text-[11px] text-slate-500 mt-1">
+                          ※ 送信時には自動で <code className="bg-white px-1 rounded border border-slate-200">?source=line&amp;luid=...&amp;cid=...</code> が付与され、回答者のCRM・LINEと紐付きます。
+                        </p>
+                        {/\.run\.app|\/f\/business-diagnosis|\/forms\/business-diagnosis/i.test(patternDiagnosisConfig.diagnosisUrl || '') && (
+                          <p className="text-[11px] text-amber-700 bg-amber-50 border border-amber-200 rounded px-2 py-1 mt-1">
+                            旧OS用URLが入力されています。保存時に自動的に公式ホームページ（{OFFICIAL_VERCEL_URLS.diagnosis}）へ変換されます。
+                          </p>
+                        )}
+                      </div>
+                      <div className="flex items-center justify-between pt-2">
+                        <button
+                          type="button"
+                          onClick={() => setPatternDiagnosisConfig(DEFAULT_WELCOME_PATTERN_DIAGNOSIS)}
+                          className="text-slate-500 hover:text-slate-800 underline cursor-pointer text-[11px]"
+                        >
+                          初期テンプレートに戻す
+                        </button>
+                        <div className="flex items-center gap-2">
+                          <button
+                            type="button"
+                            onClick={() => setIsEditingPatternDiagnosis(false)}
+                            className="px-3.5 py-1.5 bg-white hover:bg-slate-100 text-slate-700 border border-slate-200 rounded-lg text-xs font-medium cursor-pointer"
+                          >
+                            キャンセル
+                          </button>
+                          <button
+                            type="button"
+                            disabled={welcomeSaving}
+                            onClick={() => void handleSaveWelcome('分岐A（3分無料経営診断案内カード）の設定を保存しました！')}
+                            className="px-4 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-lg text-xs transition cursor-pointer inline-flex items-center gap-1.5 shadow-xs disabled:opacity-50"
+                          >
+                            <Save className="w-3.5 h-3.5" />
+                            <span>{welcomeSaving ? '保存中…' : '保存してLINEに反映'}</span>
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="lg:col-span-5 flex flex-col items-center">
+                      <div className="w-full max-w-sm">
+                        <LineMessagePreview
+                          type="flex"
+                          payload={{
+                            altText: `【3分無料経営診断】${patternDiagnosisConfig.title}`,
+                            contents: buildPatternDiagnosisFlexBubble(patternDiagnosisConfig),
+                          }}
+                          title="分岐A 診断案内プレビュー"
+                        />
+                      </div>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="grid grid-cols-1 lg:grid-cols-12 gap-4 items-center pt-1">
+                    <div className="lg:col-span-7 bg-white border border-slate-200 rounded-lg p-3.5 space-y-2 text-xs">
+                      <div className="flex items-center justify-between gap-2">
+                        <span className="font-bold text-slate-900">{patternDiagnosisConfig.title}</span>
+                        <span className="text-[10px] px-2 py-0.5 rounded bg-emerald-50 text-emerald-700 border border-emerald-200 font-bold">
+                          タグ「選択:診断」付与
+                        </span>
+                      </div>
+                      <p className="text-slate-600 whitespace-pre-line line-clamp-3 leading-relaxed">
+                        {patternDiagnosisConfig.body}
+                      </p>
+                      <div className="p-2 rounded bg-emerald-50/70 border border-emerald-100 text-[11px] text-emerald-900 space-y-0.5">
+                        <div className="font-bold">ボタン: 「{patternDiagnosisConfig.buttonLabel}」</div>
+                        <div className="font-mono text-[10px] text-emerald-700 break-all">
+                          遷移先: {patternDiagnosisConfig.diagnosisUrl}
+                        </div>
+                      </div>
+                    </div>
+                    <div className="lg:col-span-5">
+                      <LineMessagePreview
+                        type="flex"
+                        payload={{
+                          altText: `【3分無料経営診断】${patternDiagnosisConfig.title}`,
+                          contents: buildPatternDiagnosisFlexBubble(patternDiagnosisConfig),
+                        }}
+                        title="分岐A 実機イメージ"
+                      />
+                    </div>
+                  </div>
+                )}
               </div>
 
               {diagnosisScenarios.length === 0 ? (

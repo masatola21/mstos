@@ -33,6 +33,9 @@ import {
   replaceMessagePlaceholders,
   isMissingColumnError,
   inferWelcomeReplyTypeAndPayload,
+  CANONICAL_DIAGNOSIS_URL,
+  upgradeLegacyDiagnosisUrl,
+  buildDiagnosisReplyUrl,
 } from './server/lineWelcomeResolver.js';
 import {
   RICH_MENU_WIDTH,
@@ -1081,27 +1084,63 @@ async function getLineDisplayName(userId: string): Promise<string | undefined> {
   return profile?.displayName;
 }
 
+const LINE_PROFILE_SYNC_COOLDOWN_MS = 6 * 60 * 60 * 1000;
+const lineProfileSyncedAt = new Map<string, number>();
+
+const LINE_INTEGRATION_CACHE_TTL_MS = 60 * 1000;
+const lineIntegrationCache = new Map<string, { value: { owner_id: string; auto_reply_enabled?: boolean; bot_user_id?: string } | null; expiresAt: number }>();
+
+const WELCOME_RULES_CACHE_TTL_MS = 20 * 1000;
+let welcomeRulesCache: { value: { rows: any[]; schemaMissing: boolean; columnFallbackUsed: boolean }; expiresAt: number } | null = null;
+
+function invalidateLineWelcomeCache() {
+  welcomeRulesCache = null;
+}
+
+function invalidateLineIntegrationCache() {
+  lineIntegrationCache.clear();
+}
+
 async function resolveLineContact(userId: string) {
   if (!lineSupabase) throw new Error('Supabase server credentials are missing.');
   const { data: existing, error: lookupError } = await lineSupabase
     .from('contacts').select('id, full_name, line_user_id').eq('line_user_id', userId).maybeSingle();
   if (lookupError) throw lookupError;
 
-  // LINE公式APIからアカウント表示名・プロフィールアイコンを取得
-  const profile = await getLineUserProfile(userId);
-  const displayName = profile?.displayName?.trim();
-  const pictureUrl = profile?.pictureUrl?.trim();
-
   if (existing) {
-    // 既存連絡先の名前が未設定またはプレースホルダーの場合、LINEアカウント表示名に同期
     const currentName = String(existing.full_name || '').trim();
     const isPlaceholder = !currentName || currentName === 'LINE友だち' || currentName === 'LINE登録者' || currentName === userId;
-    if (displayName && isPlaceholder) {
+
+    if (!isPlaceholder) {
+      // 既知の連絡先はLINE Profile APIの同期待機をスキップして即座に返信へ進む（裏側で低頻度同期）
+      const lastSynced = lineProfileSyncedAt.get(userId) || 0;
+      if (Date.now() - lastSynced > LINE_PROFILE_SYNC_COOLDOWN_MS) {
+        lineProfileSyncedAt.set(userId, Date.now());
+        void getLineUserProfile(userId).then(async (profile) => {
+          const displayName = profile?.displayName?.trim();
+          const pictureUrl = profile?.pictureUrl?.trim();
+          if ((displayName || pictureUrl) && lineSupabase) {
+            await lineSupabase.from('line_friends').upsert({
+              contact_id: existing.id,
+              line_user_id: userId,
+              ...(displayName ? { display_name: displayName } : {}),
+              ...(pictureUrl ? { picture_url: pictureUrl } : {}),
+              status: 'active',
+            }, { onConflict: 'line_user_id' }).then(() => {}, () => {});
+          }
+        }).catch(() => {});
+      }
+      return existing;
+    }
+
+    // 名前が仮値の場合のみプロフィール取得を待つ
+    const profile = await getLineUserProfile(userId);
+    const displayName = profile?.displayName?.trim();
+    const pictureUrl = profile?.pictureUrl?.trim();
+    if (displayName) {
       await lineSupabase.from('contacts').update({ full_name: displayName }).eq('id', existing.id);
       existing.full_name = displayName;
     }
-
-    // line_friends テーブルに表示名・プロフィール画像を同期保存
     if (displayName || pictureUrl) {
       await lineSupabase.from('line_friends').upsert({
         contact_id: existing.id,
@@ -1111,11 +1150,14 @@ async function resolveLineContact(userId: string) {
         status: 'active',
       }, { onConflict: 'line_user_id' });
     }
-
+    lineProfileSyncedAt.set(userId, Date.now());
     return existing;
   }
 
   // 新規連絡先作成
+  const profile = await getLineUserProfile(userId);
+  const displayName = profile?.displayName?.trim();
+  const pictureUrl = profile?.pictureUrl?.trim();
   const contactName = displayName || 'LINE友だち';
   const { data: inserted, error: insertError } = await lineSupabase
     .from('contacts')
@@ -1142,6 +1184,7 @@ async function resolveLineContact(userId: string) {
     ...(pictureUrl ? { picture_url: pictureUrl } : {}),
     status: 'active',
   }, { onConflict: 'line_user_id' });
+  lineProfileSyncedAt.set(userId, Date.now());
 
   return resolvedContact;
 }
@@ -1158,10 +1201,18 @@ function isOptionalLineAutomationSchemaMissing(error: any): boolean {
   );
 }
 
-async function fetchWelcomeRuleCandidates(): Promise<{ rows: any[]; schemaMissing: boolean; columnFallbackUsed: boolean }> {
+async function fetchWelcomeRuleCandidates(options?: { bypassCache?: boolean }): Promise<{ rows: any[]; schemaMissing: boolean; columnFallbackUsed: boolean }> {
   if (!lineSupabase) return { rows: [], schemaMissing: false, columnFallbackUsed: false };
+  if (!options?.bypassCache && welcomeRulesCache && welcomeRulesCache.expiresAt > Date.now()) {
+    return welcomeRulesCache.value;
+  }
   const fullSelect = 'id,owner_id,name,match_mode,match_text,reply_text,reply_type,reply_payload,tag_id,priority,enabled,updated_at,created_at';
   const baseSelect = 'id,owner_id,name,match_mode,match_text,reply_text,tag_id,priority,enabled,updated_at,created_at';
+
+  const cacheResult = (res: { rows: any[]; schemaMissing: boolean; columnFallbackUsed: boolean }) => {
+    welcomeRulesCache = { value: res, expiresAt: Date.now() + WELCOME_RULES_CACHE_TTL_MS };
+    return res;
+  };
 
   const { data, error } = await lineSupabase
     .from('line_auto_reply_rules')
@@ -1169,7 +1220,7 @@ async function fetchWelcomeRuleCandidates(): Promise<{ rows: any[]; schemaMissin
     .in('match_text', [...ALL_WELCOME_MATCH_TEXTS]);
 
   if (!error) {
-    return { rows: Array.isArray(data) ? data : [], schemaMissing: false, columnFallbackUsed: false };
+    return cacheResult({ rows: Array.isArray(data) ? data : [], schemaMissing: false, columnFallbackUsed: false });
   }
 
   if (isMissingColumnError(error)) {
@@ -1178,16 +1229,16 @@ async function fetchWelcomeRuleCandidates(): Promise<{ rows: any[]; schemaMissin
       .select(baseSelect)
       .in('match_text', [...ALL_WELCOME_MATCH_TEXTS]);
     if (!fallbackError) {
-      return { rows: Array.isArray(fallbackData) ? fallbackData : [], schemaMissing: false, columnFallbackUsed: true };
+      return cacheResult({ rows: Array.isArray(fallbackData) ? fallbackData : [], schemaMissing: false, columnFallbackUsed: true });
     }
     if (isOptionalLineAutomationSchemaMissing(fallbackError)) {
-      return { rows: [], schemaMissing: true, columnFallbackUsed: true };
+      return cacheResult({ rows: [], schemaMissing: true, columnFallbackUsed: true });
     }
     throw fallbackError;
   }
 
   if (isOptionalLineAutomationSchemaMissing(error)) {
-    return { rows: [], schemaMissing: true, columnFallbackUsed: false };
+    return cacheResult({ rows: [], schemaMissing: true, columnFallbackUsed: false });
   }
   throw error;
 }
@@ -1198,6 +1249,11 @@ function sanitizeFlexNode(node: any): any {
 
 async function resolveLineIntegration(botUserId?: string): Promise<{ owner_id: string; auto_reply_enabled?: boolean; bot_user_id?: string } | null> {
   if (!lineSupabase) return null;
+  const cacheKey = botUserId || '__default__';
+  const cached = lineIntegrationCache.get(cacheKey);
+  if (cached && cached.expiresAt > Date.now()) {
+    return cached.value;
+  }
   if (botUserId) {
     const { data: byBot, error: byBotErr } = await lineSupabase
       .from('line_channel_integrations')
@@ -1205,7 +1261,10 @@ async function resolveLineIntegration(botUserId?: string): Promise<{ owner_id: s
       .eq('bot_user_id', botUserId)
       .maybeSingle();
     if (byBotErr && isOptionalLineAutomationSchemaMissing(byBotErr)) return null;
-    if (byBot) return byBot as any;
+    if (byBot) {
+      lineIntegrationCache.set(cacheKey, { value: byBot as any, expiresAt: Date.now() + LINE_INTEGRATION_CACHE_TTL_MS });
+      return byBot as any;
+    }
   }
   const { data: firstInt, error: firstErr } = await lineSupabase
     .from('line_channel_integrations')
@@ -1213,7 +1272,9 @@ async function resolveLineIntegration(botUserId?: string): Promise<{ owner_id: s
     .limit(1)
     .maybeSingle();
   if (firstErr && isOptionalLineAutomationSchemaMissing(firstErr)) return null;
-  return (firstInt as any) || null;
+  const result = (firstInt as any) || null;
+  lineIntegrationCache.set(cacheKey, { value: result, expiresAt: Date.now() + LINE_INTEGRATION_CACHE_TTL_MS });
+  return result;
 }
 
 function normalizeFlexContents(input: any): Record<string, any> | null {
@@ -1338,75 +1399,9 @@ async function processLineInboxAndAutoReply(event: any, contact: any, eventId: s
   const messageText = String(event.message.text || '').slice(0, 5000);
   if (!userId || !messageText) return;
 
-  // 1. 連携設定（line_channel_integrations）の解決（botUserId完全一致優先、なければ1件目の設定を採用）
-  let integration: any = null;
-  try {
-    if (botUserId) {
-      const { data: byBot } = await lineSupabase
-        .from('line_channel_integrations')
-        .select('owner_id,auto_reply_enabled,bot_user_id')
-        .eq('bot_user_id', botUserId)
-        .maybeSingle();
-      if (byBot) integration = byBot;
-    }
-    if (!integration) {
-      const { data: firstIntegration } = await lineSupabase
-        .from('line_channel_integrations')
-        .select('owner_id,auto_reply_enabled,bot_user_id')
-        .limit(1)
-        .maybeSingle();
-      if (firstIntegration) integration = firstIntegration;
-    }
-  } catch (lookupErr) {
-    console.warn('[LineAutoReply] Integration lookup warning:', lookupErr);
-  }
-
-  const ownerId = integration?.owner_id || null;
-  const isAutoReplyEnabled = integration ? integration.auto_reply_enabled !== false : true;
-
-  // 2. 受信メッセージを line_inbox_messages に保存
   const receivedAt = typeof event.timestamp === 'number' ? new Date(event.timestamp).toISOString() : new Date().toISOString();
-  if (ownerId) {
-    try {
-      await lineSupabase.from('line_inbox_messages').upsert({
-        owner_id: ownerId,
-        line_event_id: eventId,
-        direction: 'inbound',
-        contact_id: contact?.id || null,
-        line_user_id: userId,
-        message_type: 'text',
-        body: messageText,
-        status: 'received',
-        received_at: receivedAt,
-      }, { onConflict: 'owner_id,line_event_id,direction', ignoreDuplicates: true });
-    } catch (inboxErr) {
-      console.warn('[LineAutoReply] Inbound message record warning:', inboxErr);
-    }
-  }
 
-  // 3. 顧客からの返信メッセージ受領時、進行中のステップ配信（自動シナリオ）を停止
-  if (contact?.id) {
-    try {
-      await lineSupabase
-        .from('marketing_automation_jobs')
-        .update({
-          status: 'skipped',
-          error_message: '顧客側からのLINE返信アクションがあったため自動ステップシナリオを停止（個別チャット対応へ移行）',
-          updated_at: receivedAt,
-        })
-        .eq('contact_id', contact.id)
-        .eq('channel', 'line')
-        .eq('status', 'queued');
-    } catch (jobCancelErr) {
-      console.warn('[LineAutoReply] Scenario auto-pause warning:', jobCancelErr);
-    }
-  }
-
-  // LINE送信トークン未設定ならここで終了
-  if (!lineChannelAccessToken) return;
-
-  // 4. 自動返信ルール（line_auto_reply_rules）の検索（reply_payload未マイグレーション環境にもフォールバック対応）
-  let rules: any[] = [];
+  // 1. 連携設定取得・ジョブ停止・ルール検索を並列実行して応答待機時間を短縮
   const fetchAutoReplyRules = async (targetOwnerId: string | null): Promise<any[]> => {
     const fullCols = 'id,owner_id,match_mode,match_text,reply_text,reply_type,reply_payload,tag_id';
     const baseCols = 'id,owner_id,match_mode,match_text,reply_text,tag_id';
@@ -1428,16 +1423,35 @@ async function processLineInboxAndAutoReply(event: any, contact: any, eventId: s
     }
     return [];
   };
-  try {
-    if (ownerId) {
-      rules = await fetchAutoReplyRules(ownerId);
-    }
-    if (rules.length === 0) {
-      rules = await fetchAutoReplyRules(null);
-    }
-  } catch (ruleErr) {
-    console.warn('[LineAutoReply] Rules lookup warning:', ruleErr);
-  }
+
+  const [integration, allEnabledRules] = await Promise.all([
+    resolveLineIntegration(botUserId).catch((err) => {
+      console.warn('[LineAutoReply] Integration lookup warning:', err);
+      return null;
+    }),
+    fetchAutoReplyRules(null).catch((err) => {
+      console.warn('[LineAutoReply] Rules lookup warning:', err);
+      return [] as any[];
+    }),
+    contact?.id
+      ? lineSupabase
+          .from('marketing_automation_jobs')
+          .update({
+            status: 'skipped',
+            error_message: '顧客側からのLINE返信アクションがあったため自動ステップシナリオを停止（個別チャット対応へ移行）',
+            updated_at: receivedAt,
+          })
+          .eq('contact_id', contact.id)
+          .eq('channel', 'line')
+          .eq('status', 'queued')
+          .then(() => {}, (err) => console.warn('[LineAutoReply] Scenario auto-pause warning:', err))
+      : Promise.resolve(),
+  ]);
+
+  const ownerId = integration?.owner_id || null;
+  const isAutoReplyEnabled = integration ? integration.auto_reply_enabled !== false : true;
+  const ownerScopedRules = ownerId ? allEnabledRules.filter((r: any) => r.owner_id === ownerId) : allEnabledRules;
+  const rules = ownerScopedRules.length > 0 ? ownerScopedRules : allEnabledRules;
 
   const normalizedMessage = messageText.trim().toLowerCase();
   const matchedRule =
@@ -1450,20 +1464,21 @@ async function processLineInboxAndAutoReply(event: any, contact: any, eventId: s
       return expected && rule.match_mode !== 'exact' && normalizedMessage.includes(expected);
     });
 
-  // 5. 返信メッセージの組み立て
+  // 2. 返信メッセージの組み立て（LINEトークンがある場合のみ）
   let lineMessage: Record<string, any> | null = null;
   let inboxBody = '';
+  let effectiveOwnerIdForTag: string | null = ownerId;
 
-  if (matchedRule) {
+  if (lineChannelAccessToken && matchedRule) {
     const inferred = inferWelcomeReplyTypeAndPayload(matchedRule);
     const replyType = inferred.replyType;
     const replyPayload = inferred.payload && typeof inferred.payload === 'object'
       ? inferred.payload as Record<string, any>
       : {};
 
-    const effectiveOwnerId = matchedRule.owner_id || ownerId || null;
+    effectiveOwnerIdForTag = matchedRule.owner_id || ownerId || null;
     const contactForVars = { ...(contact || {}), line_user_id: contact?.line_user_id || userId };
-    const { personalize, personalizeJson } = await loadMessageVarContext(effectiveOwnerId, contactForVars);
+    const { personalize, personalizeJson } = await loadMessageVarContext(effectiveOwnerIdForTag, contactForVars);
 
     if (replyType === 'text') {
       const replyText = personalize(String(matchedRule.reply_text || replyPayload.text || '')).slice(0, 5000);
@@ -1495,33 +1510,10 @@ async function processLineInboxAndAutoReply(event: any, contact: any, eventId: s
         inboxBody = '[動画メッセージ]';
       }
     }
-
-    // タグ付与処理（UUIDでもタグ名文字列でも付与できるように解決）
-    if (matchedRule.tag_id && userId) {
-      try {
-        const rawTag = String(matchedRule.tag_id).trim();
-        const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(rawTag);
-        const resolvedTagId = isUuid
-          ? rawTag
-          : await getOrCreateLineTag(effectiveOwnerId || 'system', rawTag);
-        if (resolvedTagId) {
-          const { data: friend } = await lineSupabase.from('line_friends')
-            .select('id').eq('line_user_id', userId).maybeSingle();
-          if (friend?.id) {
-            await lineSupabase.from('line_friend_tags').upsert({
-              line_friend_id: friend.id, tag_id: resolvedTagId, assigned_by: 'automation',
-            }, { onConflict: 'line_friend_id,tag_id', ignoreDuplicates: true });
-          }
-        }
-      } catch (tagErr) {
-        console.warn('[LineAutoReply] Tagging error:', tagErr);
-      }
-    }
   }
 
   // ルール未一致時の組み込み自動返信（自動返信が明示的に無効の場合は送信をスキップ）
-  if (!lineMessage) {
-    if (!isAutoReplyEnabled) return;
+  if (lineChannelAccessToken && !lineMessage && isAutoReplyEnabled) {
     const corpHpBase = 'https://corp.mstcorp.info';
     let defaultReplyText = '';
 
@@ -1542,52 +1534,101 @@ async function processLineInboxAndAutoReply(event: any, contact: any, eventId: s
     inboxBody = defaultReplyText;
   }
 
-  // 6. 返信メッセージの送信（replyToken優先、失効時はpushフォールバック）
-  try {
-    let sentOk = false;
-    if (typeof event.replyToken === 'string' && event.replyToken) {
-      const replyRes = await fetch('https://api.line.me/v2/bot/message/reply', {
-        method: 'POST',
-        headers: { Authorization: `Bearer ${lineChannelAccessToken}`, 'Content-Type': 'application/json' },
-        body: JSON.stringify({ replyToken: event.replyToken, messages: [lineMessage] }),
-      });
-      if (replyRes.ok) {
-        sentOk = true;
-      } else {
-        const errText = await replyRes.text().catch(() => '');
-        console.warn('[LineAutoReply] Reply token attempt failed:', replyRes.status, errText);
+  // 3. 返信メッセージの即時送信（DB履歴保存より先に実行）
+  let sentOk = false;
+  if (lineChannelAccessToken && lineMessage) {
+    try {
+      if (typeof event.replyToken === 'string' && event.replyToken) {
+        const replyRes = await fetch('https://api.line.me/v2/bot/message/reply', {
+          method: 'POST',
+          headers: { Authorization: `Bearer ${lineChannelAccessToken}`, 'Content-Type': 'application/json' },
+          body: JSON.stringify({ replyToken: event.replyToken, messages: [lineMessage] }),
+        });
+        if (replyRes.ok) {
+          sentOk = true;
+        } else {
+          const errText = await replyRes.text().catch(() => '');
+          console.warn('[LineAutoReply] Reply token attempt failed:', replyRes.status, errText);
+        }
       }
-    }
 
-    if (!sentOk && userId) {
-      const pushRes = await fetch('https://api.line.me/v2/bot/message/push', {
-        method: 'POST',
-        headers: { Authorization: `Bearer ${lineChannelAccessToken}`, 'Content-Type': 'application/json' },
-        body: JSON.stringify({ to: userId, messages: [lineMessage] }),
-      });
-      if (pushRes.ok) {
-        sentOk = true;
-      } else {
-        const pushErr = await pushRes.text().catch(() => '');
-        console.error('[LineAutoReply] Push fallback attempt failed:', pushRes.status, pushErr);
+      if (!sentOk && userId) {
+        const pushRes = await fetch('https://api.line.me/v2/bot/message/push', {
+          method: 'POST',
+          headers: { Authorization: `Bearer ${lineChannelAccessToken}`, 'Content-Type': 'application/json' },
+          body: JSON.stringify({ to: userId, messages: [lineMessage] }),
+        });
+        if (pushRes.ok) {
+          sentOk = true;
+        } else {
+          const pushErr = await pushRes.text().catch(() => '');
+          console.error('[LineAutoReply] Push fallback attempt failed:', pushRes.status, pushErr);
+        }
       }
+    } catch (sendErr) {
+      console.error('[LineAutoReply] Sending reply failed:', sendErr);
     }
+  }
 
-    if (sentOk && ownerId) {
-      await lineSupabase.from('line_inbox_messages').upsert({
-        owner_id: ownerId,
-        line_event_id: `reply-${eventId}`,
-        direction: 'outbound',
-        contact_id: contact?.id || null,
-        line_user_id: userId,
-        message_type: lineMessage.type,
-        body: inboxBody,
-        status: 'sent',
-        received_at: new Date().toISOString(),
-      }, { onConflict: 'owner_id,line_event_id,direction', ignoreDuplicates: true });
-    }
-  } catch (sendErr) {
-    console.error('[LineAutoReply] Sending reply failed:', sendErr);
+  // 4. 受信/送信履歴保存とタグ付与を並列で記録
+  const postReplyTasks: Promise<any>[] = [];
+  if (ownerId) {
+    postReplyTasks.push(
+      Promise.resolve(
+        lineSupabase.from('line_inbox_messages').upsert({
+          owner_id: ownerId,
+          line_event_id: eventId,
+          direction: 'inbound',
+          contact_id: contact?.id || null,
+          line_user_id: userId,
+          message_type: 'text',
+          body: messageText,
+          status: 'received',
+          received_at: receivedAt,
+        }, { onConflict: 'owner_id,line_event_id,direction', ignoreDuplicates: true })
+      ).catch((err) => console.warn('[LineAutoReply] Inbound message record warning:', err))
+    );
+  }
+  if (sentOk && ownerId && lineMessage) {
+    postReplyTasks.push(
+      Promise.resolve(
+        lineSupabase.from('line_inbox_messages').upsert({
+          owner_id: ownerId,
+          line_event_id: `reply-${eventId}`,
+          direction: 'outbound',
+          contact_id: contact?.id || null,
+          line_user_id: userId,
+          message_type: lineMessage.type,
+          body: inboxBody,
+          status: 'sent',
+          received_at: new Date().toISOString(),
+        }, { onConflict: 'owner_id,line_event_id,direction', ignoreDuplicates: true })
+      ).catch((err) => console.warn('[LineAutoReply] Outbound message record warning:', err))
+    );
+  }
+  if (matchedRule?.tag_id && userId) {
+    postReplyTasks.push(
+      (async () => {
+        try {
+          const rawTag = String(matchedRule.tag_id).trim();
+          const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(rawTag);
+          const [resolvedTagId, friendRes] = await Promise.all([
+            isUuid ? Promise.resolve(rawTag) : getOrCreateLineTag(effectiveOwnerIdForTag || 'system', rawTag),
+            lineSupabase!.from('line_friends').select('id').eq('line_user_id', userId).maybeSingle(),
+          ]);
+          if (resolvedTagId && friendRes.data?.id) {
+            await lineSupabase!.from('line_friend_tags').upsert({
+              line_friend_id: friendRes.data.id, tag_id: resolvedTagId, assigned_by: 'automation',
+            }, { onConflict: 'line_friend_id,tag_id', ignoreDuplicates: true });
+          }
+        } catch (tagErr) {
+          console.warn('[LineAutoReply] Tagging error:', tagErr);
+        }
+      })()
+    );
+  }
+  if (postReplyTasks.length > 0) {
+    await Promise.allSettled(postReplyTasks);
   }
 }
 
@@ -1804,8 +1845,14 @@ async function processLinePostback(event: any, contact: any, eventId: string, bo
     return;
   }
 
-  // パターンA / B 動的設定 ＆ bookingUrl 解決ヘルパー
+  // パターンA / B / 診断カード 動的設定 ＆ bookingUrl 解決ヘルパー
   const loadWelcomeConfigPayload = async () => {
+    const defaultPatternDiagnosis = {
+      title: '📊 3分無料経営診断',
+      body: '{recipient_name} 様\n無料経営診断をお選びいただきありがとうございます！\n約3分のチェックにご回答いただくと、送信直後にホームページ上で【簡易診断結果】をすぐにご確認いただけます。\n（※詳細な診断レポート・改善提案書は30分商談後に進呈）',
+      buttonLabel: '診断を始める（約3分）',
+      diagnosisUrl: CANONICAL_DIAGNOSIS_URL,
+    };
     const defaultPatternA = {
       title: '🗓️ 経営改善の個別相談',
       greetingBody: '{recipient_name} 様\n\n個別相談をお選びいただきありがとうございます！\n有限会社MST代表の大橋真人です。\n\n親身にお応えするため、このトーク画面で直接お話を伺わせていただきます。',
@@ -1852,6 +1899,12 @@ async function processLinePostback(event: any, contact: any, eventId: string, bo
     const { payload: inferredPayload } = inferWelcomeReplyTypeAndPayload(welcomeRule);
     const payloadObj: any = inferredPayload && typeof inferredPayload === 'object' ? inferredPayload : {};
 
+    const savedDiag = payloadObj?.patternDiagnosis || {};
+    const patternDiagnosis = {
+      ...defaultPatternDiagnosis,
+      ...savedDiag,
+      diagnosisUrl: upgradeLegacyDiagnosisUrl(savedDiag.diagnosisUrl, CANONICAL_DIAGNOSIS_URL),
+    };
     const patternA = { ...defaultPatternA, ...(payloadObj?.patternA || {}) };
     const savedB = payloadObj?.patternB || {};
     const patternB = {
@@ -1871,7 +1924,7 @@ async function processLinePostback(event: any, contact: any, eventId: string, bo
       },
     };
 
-    return { payloadObj, patternA, patternB };
+    return { payloadObj, patternDiagnosis, patternA, patternB };
   };
 
   const resolveOwnerBookingUrl = async (): Promise<string> => {
@@ -2170,8 +2223,8 @@ async function processLinePostback(event: any, contact: any, eventId: string, bo
     const choiceId = wcParam || (postbackData.startsWith('wc=') ? postbackData.slice(3).trim() : '');
     if (!choiceId) return;
 
-    // 1. 許可リスト検証 + パターンA/B設定読込
-    const { payloadObj, patternA, patternB } = await loadWelcomeConfigPayload();
+    // 1. 許可リスト検証 + パターン設定読込（まずは返信構築に必要な最小限のみ読込）
+    const { payloadObj, patternDiagnosis, patternA, patternB } = await loadWelcomeConfigPayload();
     const configuredChoices: any[] = Array.isArray(payloadObj?.choices) ? payloadObj.choices : [];
 
     const defaultChoices = [
@@ -2184,47 +2237,22 @@ async function processLinePostback(event: any, contact: any, eventId: string, bo
     const choice = allowedChoices.find((c: any) => c.id === choiceId);
     if (!choice) return; // 許可リスト外は無視
 
-    // 2. タグ付与 ＆ タグ連動後続シナリオをキュー投入
     const resolvedChoiceTag =
       choice.id === 'care' && (!choice.tag || choice.tag === 'care:開業相談' || choice.tag === '選択:開業パッケージ')
         ? '介護保険外開業'
         : String(choice.tag || '').trim();
-    if (resolvedChoiceTag) {
-      try {
-        const tagId = await getOrCreateLineTag(integration.owner_id, resolvedChoiceTag);
-        if (tagId) {
-          const { data: friend } = await lineSupabase
-            .from('line_friends')
-            .select('id')
-            .eq('line_user_id', userId)
-            .maybeSingle();
-          if (friend?.id) {
-            await lineSupabase.from('line_friend_tags').upsert({
-              line_friend_id: friend.id,
-              tag_id: tagId,
-              assigned_by: 'welcome_choice',
-            }, { onConflict: 'line_friend_id,tag_id', ignoreDuplicates: true });
-          }
-        }
-        if (contact?.id) {
-          await enqueueScenariosForContact(contact.id, 'tag_added', integration.owner_id, { tagName: resolvedChoiceTag });
-        }
-      } catch (tagErr) {
-        console.warn('[LINE Postback] Failed to assign tag on welcome choice:', tagErr);
-      }
-    }
 
-    // 3. route 返信
+    // 2. route 返信メッセージを最優先で組み立て（タグ付与・シナリオ投入は返信後に実行）
     const appUrl = (process.env.PUBLIC_APP_URL || '').replace(/\/$/, '');
     let replyMessage: Record<string, any> | null = null;
     let inboxBody = '';
 
-    if (choice.route === 'form') {
-      const formSlug = choice.formSlug || 'business-diagnosis';
+    if (choice.route === 'form' || choice.id === 'diagnosis') {
+      const formSlug = choice.id === 'diagnosis' ? 'business-diagnosis' : (choice.formSlug || 'business-diagnosis');
       const contactParam = contact?.id ? `&cid=${encodeURIComponent(contact.id)}` : '';
       let formUrl = '';
-      if (formSlug === 'business-diagnosis') {
-        formUrl = `https://corp.mstcorp.info/diagnosis?source=line&luid=${encodeURIComponent(userId)}${contactParam}`;
+      if (formSlug === 'business-diagnosis' || choice.id === 'diagnosis') {
+        formUrl = buildDiagnosisReplyUrl(patternDiagnosis.diagnosisUrl, userId, contact?.id || null);
       } else if (formSlug === 'care-package-inquiry') {
         formUrl = `https://business.mstcorp.info/?source=line&luid=${encodeURIComponent(userId)}${contactParam}`;
       } else if (formSlug === 'material-download') {
@@ -2235,18 +2263,20 @@ async function processLinePostback(event: any, contact: any, eventId: string, bo
         formUrl = `${appUrl}/f/${encodeURIComponent(formSlug)}?source=line&luid=${encodeURIComponent(userId)}${contactParam}`;
       }
       if (!formUrl) {
-        console.warn('[LINE Postback] PUBLIC_APP_URL is not configured. Cannot send custom form URL.');
+        console.warn('[LINE Postback] Form URL is not configured.');
         replyMessage = {
           type: 'text',
           text: '無料経営診断をお選びいただきありがとうございます！\n現在診断フォームのURL設定を確認中のため、担当者より直接ご案内メッセージをお送りいたします。\nそのままご相談内容をメッセージでご返信いただくことも可能です。',
         };
-        inboxBody = '[無料診断案内: PUBLIC_APP_URL未設定のため案内文のみ送信]';
+        inboxBody = '[無料診断案内: URL未設定のため案内文のみ送信]';
       } else {
-        const cardTitle = '📊 3分無料経営診断';
-        const cardBody = `${contact?.full_name || 'お客様'} 様\n無料経営診断をお選びいただきありがとうございます！\n約3分のチェックにご回答いただくと、送信直後にホームページ上で【簡易診断結果】をすぐにご確認いただけます。\n（※詳細な診断レポート・改善提案書は30分商談後に進呈）`;
+        const recipientName = contact?.full_name || 'お客様';
+        const cardTitle = String(patternDiagnosis.title || '📊 3分無料経営診断').trim();
+        const cardBody = String(patternDiagnosis.body || '').replace(/\{recipient_name\}/g, recipientName);
+        const buttonLabel = String(patternDiagnosis.buttonLabel || '診断を始める（約3分）').trim().slice(0, 20) || '診断を始める';
         replyMessage = {
           type: 'flex',
-          altText: '【3分無料経営診断】回答直後に簡易診断結果をご確認いただけます',
+          altText: `【3分無料経営診断】${cardTitle}`,
           contents: {
             type: 'bubble',
             body: {
@@ -2254,7 +2284,7 @@ async function processLinePostback(event: any, contact: any, eventId: string, bo
               layout: 'vertical',
               spacing: 'md',
               contents: [
-                { type: 'text', text: cardTitle, weight: 'bold', size: 'lg', color: '#1E293B' },
+                { type: 'text', text: cardTitle, weight: 'bold', size: 'lg', color: '#1E293B', wrap: true },
                 { type: 'text', text: cardBody, size: 'sm', color: '#475569', wrap: true },
               ],
             },
@@ -2266,7 +2296,7 @@ async function processLinePostback(event: any, contact: any, eventId: string, bo
                   type: 'button',
                   style: 'primary',
                   color: '#10B981',
-                  action: { type: 'uri', label: '診断を始める（約3分）', uri: formUrl },
+                  action: { type: 'uri', label: buttonLabel, uri: formUrl },
                 },
               ],
             },
@@ -2275,44 +2305,6 @@ async function processLinePostback(event: any, contact: any, eventId: string, bo
         inboxBody = `[無料経営診断案内Flex送信: ${formUrl}]`;
       }
     } else if (choice.id === 'consult' || choice.route === 'chat') {
-      // パターンA: 経営改善について個別相談する（LINE直通チャット型）
-      try {
-        const { data: existingLead } = await lineSupabase
-          .from('leads')
-          .select('id, notes')
-          .eq('line_user_id', userId)
-          .order('created_at', { ascending: false })
-          .limit(1)
-          .maybeSingle();
-
-        const leadNote = '【LINE個別相談希望】大橋代表からのLINE直通チャット相談を案内済み。返信待ち。';
-        if (existingLead) {
-          await lineSupabase.from('leads').update({
-            service_type: '経営改善・個別相談',
-            inquiry_type: '経営改善・個別相談',
-            status: '未対応',
-            priority_channel: 'LINE',
-            notes: (existingLead.notes ? existingLead.notes + '\n\n' : '') + leadNote,
-            updated_at: new Date().toISOString(),
-          }).eq('id', existingLead.id);
-        } else {
-          await lineSupabase.from('leads').insert({
-            company_id: contact?.company_id || null,
-            contact_id: contact?.id || null,
-            line_user_id: userId,
-            source: 'LINE公式',
-            service_type: '経営改善・個別相談',
-            inquiry_type: '経営改善・個別相談',
-            status: '未対応',
-            priority_channel: 'LINE',
-            notes: leadNote,
-            created_at: new Date().toISOString(),
-          });
-        }
-      } catch (leadErr) {
-        console.warn('[LINE Postback] Failed to ensure lead on consult choice:', leadErr);
-      }
-
       const recipientName = contact?.full_name || 'お客様';
       const greetingText = String(patternA.greetingBody || '').replace(/\{recipient_name\}/g, recipientName);
       const bookingUrl = await resolveOwnerBookingUrl();
@@ -2571,10 +2563,11 @@ async function processLinePostback(event: any, contact: any, eventId: string, bo
       }
     }
 
+    // 3. まずLINE APIへ即時返信（体感速度の最大化）
     if (replyMessage) {
       try {
         let sentOk = false;
-        if (typeof event.replyToken === 'string') {
+        if (typeof event.replyToken === 'string' && event.replyToken) {
           const replyRes = await fetch('https://api.line.me/v2/bot/message/reply', {
             method: 'POST',
             headers: { Authorization: 'Bearer ' + lineChannelAccessToken, 'Content-Type': 'application/json' },
@@ -2589,21 +2582,105 @@ async function processLinePostback(event: any, contact: any, eventId: string, bo
             body: JSON.stringify({ to: userId, messages: [replyMessage] }),
           });
         }
-
-        await lineSupabase.from('line_inbox_messages').upsert({
-          owner_id: integration.owner_id,
-          line_event_id: `postback-${eventId}`,
-          direction: 'outbound',
-          contact_id: contact?.id || null,
-          line_user_id: userId,
-          message_type: replyMessage.type,
-          body: inboxBody,
-          status: 'sent',
-          received_at: new Date().toISOString(),
-        }, { onConflict: 'owner_id,line_event_id,direction', ignoreDuplicates: true });
       } catch (sendErr) {
         console.warn('[LINE Postback] Failed to reply to postback event:', sendErr);
       }
+    }
+
+    // 4. タグ付与・シナリオ投入・リード起票・送信履歴保存は返信後に並列実行
+    const postReplyTasks: Promise<any>[] = [];
+
+    if (replyMessage) {
+      postReplyTasks.push(
+        Promise.resolve(
+          lineSupabase.from('line_inbox_messages').upsert({
+            owner_id: integration.owner_id,
+            line_event_id: `postback-${eventId}`,
+            direction: 'outbound',
+            contact_id: contact?.id || null,
+            line_user_id: userId,
+            message_type: replyMessage.type,
+            body: inboxBody,
+            status: 'sent',
+            received_at: new Date().toISOString(),
+          }, { onConflict: 'owner_id,line_event_id,direction', ignoreDuplicates: true })
+        ).catch((err) => console.warn('[LINE Postback] Inbox log warning:', err))
+      );
+    }
+
+    if (resolvedChoiceTag) {
+      postReplyTasks.push(
+        (async () => {
+          try {
+            const [tagId, friendRes] = await Promise.all([
+              getOrCreateLineTag(integration.owner_id, resolvedChoiceTag),
+              lineSupabase!.from('line_friends').select('id').eq('line_user_id', userId).maybeSingle(),
+            ]);
+            if (tagId && friendRes.data?.id) {
+              await lineSupabase!.from('line_friend_tags').upsert({
+                line_friend_id: friendRes.data.id,
+                tag_id: tagId,
+                assigned_by: 'welcome_choice',
+              }, { onConflict: 'line_friend_id,tag_id', ignoreDuplicates: true });
+            }
+          } catch (tagErr) {
+            console.warn('[LINE Postback] Failed to assign tag on welcome choice:', tagErr);
+          }
+        })()
+      );
+      if (contact?.id) {
+        postReplyTasks.push(
+          enqueueScenariosForContact(contact.id, 'tag_added', integration.owner_id, { tagName: resolvedChoiceTag })
+            .catch((err) => console.warn('[LINE Postback] Scenario enqueue warning:', err))
+        );
+      }
+    }
+
+    if (choice.id === 'consult' || choice.route === 'chat') {
+      postReplyTasks.push(
+        (async () => {
+          try {
+            const { data: existingLead } = await lineSupabase!
+              .from('leads')
+              .select('id, notes')
+              .eq('line_user_id', userId)
+              .order('created_at', { ascending: false })
+              .limit(1)
+              .maybeSingle();
+
+            const leadNote = '【LINE個別相談希望】大橋代表からのLINE直通チャット相談を案内済み。返信待ち。';
+            if (existingLead) {
+              await lineSupabase!.from('leads').update({
+                service_type: '経営改善・個別相談',
+                inquiry_type: '経営改善・個別相談',
+                status: '未対応',
+                priority_channel: 'LINE',
+                notes: (existingLead.notes ? existingLead.notes + '\n\n' : '') + leadNote,
+                updated_at: new Date().toISOString(),
+              }).eq('id', existingLead.id);
+            } else {
+              await lineSupabase!.from('leads').insert({
+                company_id: contact?.company_id || null,
+                contact_id: contact?.id || null,
+                line_user_id: userId,
+                source: 'LINE公式',
+                service_type: '経営改善・個別相談',
+                inquiry_type: '経営改善・個別相談',
+                status: '未対応',
+                priority_channel: 'LINE',
+                notes: leadNote,
+                created_at: new Date().toISOString(),
+              });
+            }
+          } catch (leadErr) {
+            console.warn('[LINE Postback] Failed to ensure lead on consult choice:', leadErr);
+          }
+        })()
+      );
+    }
+
+    if (postReplyTasks.length > 0) {
+      await Promise.allSettled(postReplyTasks);
     }
     return;
   }
@@ -2792,13 +2869,17 @@ async function processLineFollowWelcome(event: any, contact: any, eventId: strin
   const userId = typeof event.source?.userId === 'string' ? event.source.userId : '';
   if (!userId) return;
 
-  // 1. 連携設定の解決（botUserId優先、無ければ1件目を採用）
-  let integration: any = null;
-  try {
-    integration = await resolveLineIntegration(botUserId);
-  } catch (lookupErr) {
-    console.warn('[LineWelcome] Integration lookup warning:', lookupErr);
-  }
+  // 1. 連携設定とウェルカムルールを並列取得
+  const [integration, fetchedRules] = await Promise.all([
+    resolveLineIntegration(botUserId).catch((lookupErr) => {
+      console.warn('[LineWelcome] Integration lookup warning:', lookupErr);
+      return null;
+    }),
+    fetchWelcomeRuleCandidates().catch((rulesErr) => {
+      console.warn('[LineWelcome] Welcome rules lookup error:', rulesErr);
+      return { rows: [] as any[], schemaMissing: false, columnFallbackUsed: false };
+    }),
+  ]);
 
   let ownerId = integration?.owner_id || null;
   if (!ownerId) {
@@ -2808,16 +2889,9 @@ async function processLineFollowWelcome(event: any, contact: any, eventId: strin
     } catch {}
   }
 
-  // 2. ウェルカムルールを取得（__welcome__ を最優先し、明示停止時はフォールバック送信しない）
-  let candidateRules: any[] = [];
-  try {
-    const fetched = await fetchWelcomeRuleCandidates();
-    candidateRules = fetched.rows;
-    if (fetched.columnFallbackUsed) {
-      console.warn('[LineWelcome] reply_payload/reply_type column missing in line_auto_reply_rules; using reply_text JSON fallback.');
-    }
-  } catch (rulesErr) {
-    console.warn('[LineWelcome] Welcome rules lookup error:', rulesErr);
+  const candidateRules = fetchedRules.rows;
+  if (fetchedRules.columnFallbackUsed) {
+    console.warn('[LineWelcome] reply_payload/reply_type column missing in line_auto_reply_rules; using reply_text JSON fallback.');
   }
 
   const selection = selectWelcomeRule(candidateRules, ownerId);
@@ -2840,12 +2914,23 @@ async function processLineFollowWelcome(event: any, contact: any, eventId: strin
     const payload = inferred.payload;
 
     try {
-      const { data: salesSettings } = ownerId
-        ? await lineSupabase.from('sales_workspace_settings').select('booking_page_url').eq('owner_id', ownerId).maybeSingle()
-        : { data: null };
-      const { data: pubForms } = await lineSupabase.from('diagnosis_forms')
-        .select('id,name,public_slug,definition,form_type,status')
-        .eq('status', 'published').order('created_at', { ascending: false }).limit(5);
+      const serializedRule = JSON.stringify({ text: matchedRule.reply_text || '', payload: payload || null });
+      const needsUrlVars = /\{(?:booking_url|link_url|diagnosis_url|material_url|document_url|面談予約URL|予約URL|日程調整URL|案内URL|リンクURL|診断URL|フォームURL|資料URL|配布資料URL|書類URL|レポートURL|共有URL)\}/i.test(serializedRule);
+
+      let salesSettings: any = null;
+      let pubForms: any[] = [];
+      if (needsUrlVars) {
+        const [salesRes, formsRes] = await Promise.all([
+          ownerId
+            ? lineSupabase.from('sales_workspace_settings').select('booking_page_url').eq('owner_id', ownerId).maybeSingle()
+            : Promise.resolve({ data: null }),
+          lineSupabase.from('diagnosis_forms')
+            .select('id,name,public_slug,definition,form_type,status')
+            .eq('status', 'published').order('created_at', { ascending: false }).limit(5),
+        ]);
+        salesSettings = salesRes.data;
+        pubForms = formsRes.data || [];
+      }
       const defaultForm = (pubForms || []).find((f: any) => f.form_type === 'diagnosis') || pubForms?.[0] || null;
 
       const appUrl = (process.env.PUBLIC_APP_URL || '').replace(/\/$/, '');
@@ -2966,33 +3051,45 @@ async function processLineFollowWelcome(event: any, contact: any, eventId: strin
       sendResult = await sendLineMessage(lineMessage);
     }
 
+    const postFollowTasks: Promise<any>[] = [];
     if (ownerId) {
-      await lineSupabase.from('line_inbox_messages').upsert({
-        owner_id: ownerId,
-        line_event_id: `welcome-${eventId}`,
-        direction: 'outbound',
-        contact_id: contact?.id || null,
-        line_user_id: userId,
-        message_type: lineMessage.type,
-        body: inboxBody,
-        status: 'sent',
-        received_at: new Date().toISOString(),
-      }, { onConflict: 'owner_id,line_event_id,direction', ignoreDuplicates: true });
+      postFollowTasks.push(
+        Promise.resolve(
+          lineSupabase.from('line_inbox_messages').upsert({
+            owner_id: ownerId,
+            line_event_id: `welcome-${eventId}`,
+            direction: 'outbound',
+            contact_id: contact?.id || null,
+            line_user_id: userId,
+            message_type: lineMessage.type,
+            body: inboxBody,
+            status: 'sent',
+            received_at: new Date().toISOString(),
+          }, { onConflict: 'owner_id,line_event_id,direction', ignoreDuplicates: true })
+        )
+      );
     }
 
     if (matchedRule?.tag_id) {
-      const { data: friend } = await lineSupabase.from('line_friends')
-        .select('id').eq('line_user_id', userId).maybeSingle();
-      if (friend?.id) {
-        await lineSupabase.from('line_friend_tags').upsert({
-          line_friend_id: friend.id, tag_id: matchedRule.tag_id, assigned_by: 'automation',
-        }, { onConflict: 'line_friend_id,tag_id', ignoreDuplicates: true });
-      }
+      postFollowTasks.push(
+        (async () => {
+          const { data: friend } = await lineSupabase!.from('line_friends')
+            .select('id').eq('line_user_id', userId).maybeSingle();
+          if (friend?.id) {
+            await lineSupabase!.from('line_friend_tags').upsert({
+              line_friend_id: friend.id, tag_id: matchedRule.tag_id, assigned_by: 'automation',
+            }, { onConflict: 'line_friend_id,tag_id', ignoreDuplicates: true });
+          }
+        })()
+      );
     }
 
-    // シナリオ自動配信（line_registered）のジョブ登録と即時キック
     if (contact?.id) {
-      await enqueueScenariosForContact(contact.id, 'line_registered');
+      postFollowTasks.push(enqueueScenariosForContact(contact.id, 'line_registered'));
+    }
+
+    if (postFollowTasks.length > 0) {
+      await Promise.allSettled(postFollowTasks);
     }
   } catch (err) {
     console.warn('processLineFollowWelcome failed:', err);
@@ -3061,21 +3158,28 @@ async function processLineWebhookEvent(event: any, botUserId = '') {
         update.consent_status = 'opted_in';
       }
       if (contact.full_name) update.display_name = contact.full_name;
-      const { error: friendError } = await lineSupabase
-        .from('line_friends').upsert(update, { onConflict: 'line_user_id' });
-      if (friendError) throw friendError;
 
-      // Link an existing lead for the same LINE ID without creating a lead for follows.
-      if (event.type === 'follow' || event.type === 'message') {
-        const { error: leadError } = await lineSupabase.from('leads')
-          .update({ contact_id: contact.id, line_user_id: userId })
-          .eq('line_user_id', userId)
-          .is('contact_id', null);
-        if (leadError) throw leadError;
-      }
-      if (event.type === 'follow') await processLineFollowWelcome(event, contact, stableEventId, botUserId);
-      if (event.type === 'message') await processLineInboxAndAutoReply(event, contact, stableEventId, botUserId);
-      if (event.type === 'postback') await processLinePostback(event, contact, stableEventId, botUserId);
+      // 返信処理を優先しつつ、line_friends / leads の更新を並列実行
+      const syncFriendAndLeads = async () => {
+        const { error: friendError } = await lineSupabase!
+          .from('line_friends').upsert(update, { onConflict: 'line_user_id' });
+        if (friendError) throw friendError;
+        if (event.type === 'follow' || event.type === 'message') {
+          const { error: leadError } = await lineSupabase!.from('leads')
+            .update({ contact_id: contact.id, line_user_id: userId })
+            .eq('line_user_id', userId)
+            .is('contact_id', null);
+          if (leadError) throw leadError;
+        }
+      };
+
+      const dispatchEvent = async () => {
+        if (event.type === 'follow') await processLineFollowWelcome(event, contact, stableEventId, botUserId);
+        if (event.type === 'message') await processLineInboxAndAutoReply(event, contact, stableEventId, botUserId);
+        if (event.type === 'postback') await processLinePostback(event, contact, stableEventId, botUserId);
+      };
+
+      await Promise.all([syncFriendAndLeads(), dispatchEvent()]);
     }
 
     if (eventRowId) {
@@ -3126,7 +3230,7 @@ app.post('/api/line/webhook', express.raw({ type: 'application/json', limit: '1m
 
   try {
     const botUserId = typeof webhook.destination === 'string' ? webhook.destination : '';
-    for (const event of webhook.events) await processLineWebhookEvent(event, botUserId);
+    await Promise.all(webhook.events.map((event) => processLineWebhookEvent(event, botUserId)));
     return res.sendStatus(200);
   } catch (error) {
     console.error('LINE webhook event processing failed:', error instanceof Error ? error.message : 'unknown error');
@@ -3908,6 +4012,7 @@ app.post('/api/line/rich-menu', async (req, res) => {
       auto_reply_enabled: Boolean(existingIntegration?.auto_reply_enabled), rich_menu_id: richMenuId,
     }, { onConflict: 'owner_id' });
     if (dbError) throw dbError;
+    invalidateLineIntegrationCache();
     const setDefault = await fetch('https://api.line.me/v2/bot/user/all/richmenu/' + encodeURIComponent(richMenuId), { method: 'POST', headers: { Authorization: 'Bearer ' + lineChannelAccessToken } });
     if (!setDefault.ok) {
       await lineSupabase.from('line_channel_integrations').update({ rich_menu_id: existingIntegration?.rich_menu_id || null }).eq('owner_id', authData.user.id);
@@ -3927,7 +4032,7 @@ app.get('/api/line/welcome-config', requireAuth, async (req, res) => {
   try {
     const integration = await resolveLineIntegration();
     const preferredOwnerId = integration?.owner_id || authUserId;
-    const fetched = await fetchWelcomeRuleCandidates();
+    const fetched = await fetchWelcomeRuleCandidates({ bypassCache: true });
     if (fetched.schemaMissing) {
       return res.json({ rule: null, activeSource: 'default_fallback', conflictingLegacyRules: [], effectiveOwnerId: preferredOwnerId });
     }
@@ -4085,6 +4190,7 @@ app.put('/api/line/welcome-config', requireAuth, async (req, res) => {
       savedRule = inserted;
     }
 
+    invalidateLineWelcomeCache();
     return res.json({ ok: true, rule: savedRule });
   } catch (err: any) {
     return res.status(500).json({ error: err?.message || 'ウェルカム設定を保存できませんでした。' });
@@ -4101,6 +4207,7 @@ app.post('/api/line/welcome-config/disable-legacy', requireAuth, async (_req, re
       .eq('enabled', true)
       .select('id');
     if (error) throw error;
+    invalidateLineWelcomeCache();
     return res.json({ ok: true, disabledCount: Array.isArray(data) ? data.length : 0 });
   } catch (err: any) {
     return res.status(500).json({ error: err?.message || '旧ウェルカムルールの停止に失敗しました。' });

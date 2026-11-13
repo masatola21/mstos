@@ -253,3 +253,48 @@ export function replaceMessagePlaceholders(text: string, vars: Record<string, st
     return Object.prototype.hasOwnProperty.call(vars, key) ? vars[key] : match;
   });
 }
+
+export const CANONICAL_DIAGNOSIS_URL = 'https://corp.mstcorp.info/diagnosis';
+
+export function upgradeLegacyDiagnosisUrl(
+  rawUrl: string | null | undefined,
+  fallbackUrl: string = CANONICAL_DIAGNOSIS_URL
+): string {
+  const trimmed = String(rawUrl || '').trim();
+  if (!trimmed) return fallbackUrl;
+
+  const isLegacyHostOrPath =
+    /\.run\.app\b/i.test(trimmed) ||
+    /mstos\.app\b/i.test(trimmed) ||
+    /^https?:\/\/localhost(?::\d+)?\//i.test(trimmed) ||
+    trimmed.startsWith('/') ||
+    /\/(?:f|forms)\/business-diagnosis(?:\/|$|\?)/i.test(trimmed);
+
+  if (isLegacyHostOrPath) {
+    const qIdx = trimmed.indexOf('?');
+    const query = qIdx >= 0 ? trimmed.slice(qIdx) : '';
+    return `${fallbackUrl}${query}`;
+  }
+
+  return /^https?:\/\//i.test(trimmed) ? trimmed : fallbackUrl;
+}
+
+export function buildDiagnosisReplyUrl(
+  configuredUrl: string | null | undefined,
+  lineUserId: string,
+  contactId?: string | null
+): string {
+  const normalizedBase = upgradeLegacyDiagnosisUrl(configuredUrl, CANONICAL_DIAGNOSIS_URL);
+  try {
+    const url = new URL(normalizedBase);
+    if (!url.searchParams.has('source')) url.searchParams.set('source', 'line');
+    if (lineUserId) url.searchParams.set('luid', lineUserId);
+    if (contactId) url.searchParams.set('cid', contactId);
+    return url.toString();
+  } catch {
+    const sep = normalizedBase.includes('?') ? '&' : '?';
+    const contactParam = contactId ? `&cid=${encodeURIComponent(contactId)}` : '';
+    return `${normalizedBase}${sep}source=line&luid=${encodeURIComponent(lineUserId)}${contactParam}`;
+  }
+}
+
