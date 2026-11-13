@@ -328,8 +328,10 @@ export async function submitIntakeToCRM(payload: IntakeSubmissionPayload): Promi
 
   const endpoint = resolveApiEndpoint(`/api/public/forms/${encodeURIComponent(payload.slug)}/submissions`);
 
-  // ブラウザ環境から詳細UTMパラメータを自動収集
+  // ブラウザ環境から詳細UTMパラメータ・LINE識別子(cid/luid)を自動収集
   let browserUtm: Record<string, string> = {};
+  let urlContactId = '';
+  let urlLineUserId = '';
   if (typeof window !== 'undefined') {
     try {
       const searchParams = new URLSearchParams(window.location.search);
@@ -338,6 +340,8 @@ export async function submitIntakeToCRM(payload: IntakeSubmissionPayload): Promi
           browserUtm[k] = v;
         }
       }
+      urlContactId = (searchParams.get('cid') || searchParams.get('contact_id') || '').trim();
+      urlLineUserId = (searchParams.get('luid') || searchParams.get('line_user_id') || '').trim();
       if (document.referrer) browserUtm.referrer = document.referrer.slice(0, 300);
       browserUtm.landing_page = window.location.href.slice(0, 300);
     } catch {}
@@ -357,6 +361,8 @@ export async function submitIntakeToCRM(payload: IntakeSubmissionPayload): Promi
     requestId,
     privacyAgreed: true,
     materialKeys,
+    ...(urlContactId ? { contactId: urlContactId } : {}),
+    ...(urlLineUserId ? { lineUserId: urlLineUserId } : {}),
     answers: payload.answers || {},
     notes: payload.notes || '',
     customFields: payload.customFields || {},

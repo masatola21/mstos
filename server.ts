@@ -1339,17 +1339,19 @@ async function processLineInboxAndAutoReply(event: any, contact: any, eventId: s
     if (ownerId) {
       const { data: ownerRules } = await lineSupabase
         .from('line_auto_reply_rules')
-        .select('id,match_mode,match_text,reply_text,reply_type,reply_payload,tag_id')
+        .select('id,owner_id,match_mode,match_text,reply_text,reply_type,reply_payload,tag_id')
         .eq('owner_id', ownerId)
         .eq('enabled', true)
+        .neq('match_text', '__welcome__')
         .order('priority', { ascending: true });
       if (ownerRules && ownerRules.length > 0) rules = ownerRules;
     }
     if (rules.length === 0) {
       const { data: allRules } = await lineSupabase
         .from('line_auto_reply_rules')
-        .select('id,match_mode,match_text,reply_text,reply_type,reply_payload,tag_id')
+        .select('id,owner_id,match_mode,match_text,reply_text,reply_type,reply_payload,tag_id')
         .eq('enabled', true)
+        .neq('match_text', '__welcome__')
         .order('priority', { ascending: true });
       if (allRules && allRules.length > 0) rules = allRules;
     }
@@ -1373,45 +1375,57 @@ async function processLineInboxAndAutoReply(event: any, contact: any, eventId: s
       ? matchedRule.reply_payload as Record<string, any>
       : {};
 
+    const effectiveOwnerId = matchedRule.owner_id || ownerId || null;
+    const contactForVars = { ...(contact || {}), line_user_id: contact?.line_user_id || userId };
+    const { personalize, personalizeJson } = await loadMessageVarContext(effectiveOwnerId, contactForVars);
+
     if (replyType === 'text') {
-      const replyText = String(matchedRule.reply_text || '').slice(0, 5000);
+      const replyText = personalize(String(matchedRule.reply_text || '')).slice(0, 5000);
       if (replyText) {
         lineMessage = { type: 'text', text: replyText };
         inboxBody = replyText;
       }
     } else if (replyType === 'image') {
-      const originalContentUrl = String(replyPayload.originalContentUrl || '');
-      const previewImageUrl = String(replyPayload.previewImageUrl || '');
+      const originalContentUrl = personalize(String(replyPayload.originalContentUrl || ''));
+      const previewImageUrl = personalize(String(replyPayload.previewImageUrl || ''));
       if (originalContentUrl.startsWith('https://') && previewImageUrl.startsWith('https://')) {
         lineMessage = { type: 'image', originalContentUrl, previewImageUrl };
         inboxBody = '[画像メッセージ]';
       }
     } else if (replyType === 'flex') {
-      const altText = String(replyPayload.altText || '').slice(0, 1500);
-            const contents = normalizeFlexContents(replyPayload);
+      const altText = personalize(String(replyPayload.altText || '')).slice(0, 1500);
+      const rawContents = normalizeFlexContents(replyPayload);
+      const contents = rawContents ? personalizeJson(rawContents) : null;
       if (altText && contents) {
         lineMessage = { type: 'flex', altText, contents };
         inboxBody = '[Flexメッセージ]';
       }
     } else if (replyType === 'video') {
-      const originalContentUrl = String(replyPayload.originalContentUrl || '');
-      const previewImageUrl = String(replyPayload.previewImageUrl || '');
-      const altText = String(replyPayload.altText || '').slice(0, 1500);
+      const originalContentUrl = personalize(String(replyPayload.originalContentUrl || ''));
+      const previewImageUrl = personalize(String(replyPayload.previewImageUrl || ''));
+      const altText = personalize(String(replyPayload.altText || '')).slice(0, 1500);
       if (originalContentUrl.startsWith('https://') && previewImageUrl.startsWith('https://') && altText) {
         lineMessage = { type: 'video', originalContentUrl, previewImageUrl };
         inboxBody = '[動画メッセージ]';
       }
     }
 
-    // タグ付与処理
+    // タグ付与処理（UUIDでもタグ名文字列でも付与できるように解決）
     if (matchedRule.tag_id && userId) {
       try {
-        const { data: friend } = await lineSupabase.from('line_friends')
-          .select('id').eq('line_user_id', userId).maybeSingle();
-        if (friend?.id) {
-          await lineSupabase.from('line_friend_tags').upsert({
-            line_friend_id: friend.id, tag_id: matchedRule.tag_id, assigned_by: 'automation',
-          }, { onConflict: 'line_friend_id,tag_id', ignoreDuplicates: true });
+        const rawTag = String(matchedRule.tag_id).trim();
+        const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(rawTag);
+        const resolvedTagId = isUuid
+          ? rawTag
+          : await getOrCreateLineTag(effectiveOwnerId || 'system', rawTag);
+        if (resolvedTagId) {
+          const { data: friend } = await lineSupabase.from('line_friends')
+            .select('id').eq('line_user_id', userId).maybeSingle();
+          if (friend?.id) {
+            await lineSupabase.from('line_friend_tags').upsert({
+              line_friend_id: friend.id, tag_id: resolvedTagId, assigned_by: 'automation',
+            }, { onConflict: 'line_friend_id,tag_id', ignoreDuplicates: true });
+          }
         }
       } catch (tagErr) {
         console.warn('[LineAutoReply] Tagging error:', tagErr);
@@ -3931,6 +3945,86 @@ function resolveMessageVars(
   return { personalize, personalizeJson, vars };
 }
 
+async function loadMessageVarContext(
+  ownerId: string | null | undefined,
+  contact: any,
+  scenarioOrJob: any = {}
+): Promise<ResolveMessageVarsResult> {
+  const appUrl = (process.env.PUBLIC_APP_URL || '').replace(/\/$/, '');
+  if (!lineSupabase) {
+    return resolveMessageVars(contact, scenarioOrJob, { appUrl });
+  }
+
+  let companyData: { company_name?: string | null } | null = null;
+  if (contact?.company_id) {
+    const companyRes = await lineSupabase
+      .from('companies')
+      .select('id,company_name')
+      .eq('id', contact.company_id)
+      .maybeSingle();
+    companyData = companyRes.data || null;
+  }
+
+  let salesSettings: { booking_page_url?: string | null } | null = null;
+  if (ownerId) {
+    const { data } = await lineSupabase
+      .from('sales_workspace_settings')
+      .select('booking_page_url')
+      .eq('owner_id', ownerId)
+      .maybeSingle();
+    salesSettings = data || null;
+  }
+  if (!salesSettings) {
+    const { data } = await lineSupabase
+      .from('sales_workspace_settings')
+      .select('booking_page_url')
+      .limit(1)
+      .maybeSingle();
+    salesSettings = data || null;
+  }
+
+  const { data: pubForms } = await lineSupabase
+    .from('diagnosis_forms')
+    .select('id,name,public_slug,definition,form_type,status')
+    .eq('status', 'published')
+    .order('created_at', { ascending: false })
+    .limit(10);
+  const defaultForm = (pubForms || []).find((f: any) => f.form_type === 'diagnosis') || pubForms?.[0] || null;
+
+  let latestApprovedDoc: any = null;
+  if (contact?.company_id) {
+    const { data: docData } = await lineSupabase
+      .from('customer_documents')
+      .select('id,title,status,created_at')
+      .eq('company_id', contact.company_id)
+      .eq('status', 'approved')
+      .order('created_at', { ascending: false })
+      .limit(1)
+      .maybeSingle();
+    latestApprovedDoc = docData;
+  }
+  if (!latestApprovedDoc && ownerId) {
+    const { data: fallbackDoc } = await lineSupabase
+      .from('customer_documents')
+      .select('id,title,status,created_at')
+      .eq('owner_id', ownerId)
+      .eq('status', 'approved')
+      .order('created_at', { ascending: false })
+      .limit(1)
+      .maybeSingle();
+    latestApprovedDoc = fallbackDoc;
+  }
+
+  return resolveMessageVars(contact, scenarioOrJob, {
+    salesSettings,
+    defaultForm,
+    allForms: pubForms,
+    latestApprovedDoc,
+    company: companyData,
+    appUrl,
+  });
+}
+
 function checkUrlsInObject(obj: any): { valid: boolean; invalidUrl?: string } {
   if (!obj) return { valid: true };
   if (Array.isArray(obj)) {
@@ -4312,52 +4406,7 @@ async function processMarketingAutomationJobs(options: { forceImmediate?: boolea
         }
 
         // 1. 差し込みの解決（共通の仕組み resolveMessageVars）
-        const companyResult = contact.company_id
-          ? await lineSupabase.from('companies').select('id,company_name').eq('id',contact.company_id).maybeSingle()
-          : { data: null };
-
-        const { data: salesSettings } = await lineSupabase.from('sales_workspace_settings')
-          .select('booking_page_url').eq('owner_id', job.owner_id).maybeSingle();
-
-        const { data: pubForms } = await lineSupabase.from('diagnosis_forms')
-          .select('id,name,public_slug,definition,form_type,status')
-          .eq('status', 'published')
-          .order('created_at', { ascending: false })
-          .limit(10);
-        const defaultForm = (pubForms || []).find((f: any) => f.form_type === 'diagnosis') || pubForms?.[0] || null;
-
-        let latestApprovedDoc: any = null;
-        if (contact.company_id) {
-          const { data: docData } = await lineSupabase.from('customer_documents')
-            .select('id,title,status,created_at')
-            .eq('company_id', contact.company_id)
-            .eq('status', 'approved')
-            .order('created_at', { ascending: false })
-            .limit(1)
-            .maybeSingle();
-          latestApprovedDoc = docData;
-        }
-        if (!latestApprovedDoc) {
-          const { data: fallbackDoc } = await lineSupabase.from('customer_documents')
-            .select('id,title,status,created_at')
-            .eq('owner_id', job.owner_id)
-            .eq('status', 'approved')
-            .order('created_at', { ascending: false })
-            .limit(1)
-            .maybeSingle();
-          latestApprovedDoc = fallbackDoc;
-        }
-
-        const appUrl = (process.env.PUBLIC_APP_URL || '').replace(/\/$/, '');
-
-        const resolved = resolveMessageVars(contact, { ...job, config: scenarioConfig }, {
-          salesSettings,
-          defaultForm,
-          allForms: pubForms,
-          latestApprovedDoc,
-          company: companyResult.data,
-          appUrl,
-        });
+        const resolved = await loadMessageVarContext(job.owner_id, contact, { ...job, config: scenarioConfig });
 
         if (resolved.error) {
           throw new Error(resolved.error);
