@@ -15,17 +15,13 @@ type Row = {
   updated_at: string;
 };
 type Product = { id: string; product_name: string };
-type Lead = { id: string; source?: string | null; report_url?: string | null };
-type Deal = { id: string; lead_id?: string | null; proposal_status?: string | null };
-
 const kinds: Kind[] = ['media', 'article', 'product', 'seo', 'rewrite', 'attribution'];
 
-// SEO・リライト統合タブを含む新タブ構成
+// タブ構成（3つにスリム化）
 const sections = [
   ['articles', '記事作成・HP公開'],
   ['settings', '自社HP・連携設定'],
   ['seo', 'SEO分析＆リライト管理'],
-  ['attribution', 'リード・成果記録'],
 ] as const;
 type Tab = typeof sections[number][0];
 
@@ -49,8 +45,6 @@ export const OwnMediaWorkspace: React.FC<{
   const [payload, setPayload] = useState<Record<string, string>>({});
   const [form, setForm] = useState(false);
   const [saving, setSaving] = useState(false);
-  const [crmLeads, setCrmLeads] = useState<Lead[]>([]);
-  const [crmDeals, setCrmDeals] = useState<Deal[]>([]);
 
   // SEO分析＆リライト統合タブ用: サブモード ('seo' | 'rewrite')
   const [seoSubMode, setSeoSubMode] = useState<'seo' | 'rewrite'>('seo');
@@ -142,14 +136,10 @@ export const OwnMediaWorkspace: React.FC<{
       return;
     }
     setUserId(auth.user.id);
-    const [saved, leadsResult, dealsResult] = await Promise.all([
+    const [saved] = await Promise.all([
       db.from('mst_ai_acquisition_records').select('*').eq('user_id', auth.user.id).in('record_type', kinds).order('updated_at', { ascending: false }),
-      db.from('leads').select('id,source,report_url'),
-      db.from('deals').select('id,lead_id,proposal_status'),
     ]);
     const { data, error: e } = saved;
-    if (!leadsResult.error) setCrmLeads((leadsResult.data || []) as Lead[]);
-    if (!dealsResult.error) setCrmDeals((dealsResult.data || []) as Deal[]);
     if (e) {
       setError('自社メディアデータを読み込めませんでした: ' + e.message);
       setLoading(false);
@@ -1758,51 +1748,6 @@ export const OwnMediaWorkspace: React.FC<{
             </div>
           )}
 
-          {/* ========================================================
-              TAB 4: リード・売上成果連携
-             ======================================================== */}
-          {tab === 'attribution' && (
-            <div className="space-y-4">
-              <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-xs">
-                <h3 className="font-bold text-base text-slate-900">リード・売上成果連携（CRM自動紐付け）</h3>
-                <p className="text-xs text-slate-500 mt-0.5">
-                  記事のURLとCRM内のリード獲得元・診断URLを自動照合し、流入成果を把握できます。
-                </p>
-              </div>
-
-              <div className="space-y-3">
-                {articles.map((art) => {
-                  const url = art.payload.publishedUrl?.trim();
-                  const slug = art.payload.slug || art.id;
-                  const matched = crmLeads.filter((l) => {
-                    const s = l.source?.trim() || '';
-                    const r = l.report_url?.trim() || '';
-                    return (
-                      (url && (s === url || r === url)) ||
-                      (slug && (s === `media_${slug}` || s.includes(slug) || r.includes(slug)))
-                    );
-                  });
-                  const ids = new Set(matched.map((l) => l.id));
-                  const matchingDeals = crmDeals.filter((d) => d.lead_id && ids.has(d.lead_id));
-
-                  return (
-                    <div key={art.id} className="rounded-2xl border border-slate-200 bg-white p-5 shadow-xs">
-                      <h4 className="font-bold text-slate-900 text-sm">{art.title}</h4>
-                      <p className="text-xs text-slate-500 mt-0.5">URL: {url || '公開URL未設定'}</p>
-                      <div className="mt-3 flex gap-3 text-xs">
-                        <span className="rounded-lg bg-purple-50 border border-purple-200 px-3 py-1 text-purple-700 font-semibold">
-                          獲得リード: <strong>{url ? matched.length : 0}</strong> 件
-                        </span>
-                        <span className="rounded-lg bg-emerald-50 border border-emerald-200 px-3 py-1 text-emerald-700 font-semibold">
-                          商談創出: <strong>{url ? matchingDeals.length : 0}</strong> 件
-                        </span>
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            </div>
-          )}
         </>
       )}
 
