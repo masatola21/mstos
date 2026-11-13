@@ -9,7 +9,7 @@
  * - AI が書くのは D0 / D2 / D3の説明 / D4 / D5。
  */
 
-import { CHAPTERS, parseDiagnosisReport } from '../src/constants/proposalChapters.js';
+import { CHAPTERS, parseDiagnosisReport, markdownToPlainText } from '../src/constants/proposalChapters.js';
 import type { BottleneckSummary } from './diagnosisAnalysis.js';
 
 export const DIAGNOSIS_REPORT_HEADINGS = [
@@ -113,3 +113,37 @@ export const DIAGNOSIS_REPORT_PROMPT_V2 = `あなたは有限会社MSTの経営�
 
 【診断回答と確定した急所(JSON)】
 `;
+
+// ─── 顧客書類(customer_documents.body_html)への変換 ─────────────
+
+const escapeHtml = (value: string) =>
+  String(value ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+
+/**
+ * 診断レポートの書類(承認待ち)の本文HTML。D0〜D5 を章の見出しつきで並べる。
+ * 章の見出しが無い旧形式・自由な文章は、全文を1つの塊で出す(内容は落とさない)。
+ */
+export function renderDiagnosisReportHtml(companyName: string, markdown: string): string {
+  const parsed = parseDiagnosisReport(markdown);
+  const wrap = (inner: string) =>
+    `<div style="font-family: sans-serif; line-height: 1.8; color: #1e293b; max-width: 800px; margin: 0 auto; padding: 24px;">
+  <h1 style="font-size: 22px; line-height: 1.4; color: #0f172a; border-bottom: 2px solid #2563eb; padding-bottom: 8px; margin: 0 0 20px 0;">${escapeHtml(companyName)} 経営診断レポート</h1>
+${inner}
+</div>`;
+  const textBlock = (text: string) =>
+    `<div style="white-space: pre-wrap; font-size: 14px; color: #334155;">${escapeHtml(markdownToPlainText(text))}</div>`;
+
+  if (parsed.legacy) return wrap(textBlock(markdown));
+
+  const sections = parsed.chapters
+    // D6(社内用)は、お客様に出る書類には載せない
+    .filter((c) => CHAPTERS.find((d) => d.id === c.id)?.customerVisible)
+    .map((c) => {
+      const title = CHAPTERS.find((d) => d.id === c.id)!.title;
+      return `  <div style="margin-bottom: 22px;">
+    <h2 style="margin: 0 0 8px 0; font-size: 16px; color: #1e3a8a; border-left: 4px solid #2563eb; padding-left: 8px;">${escapeHtml(title)}</h2>
+    ${textBlock(c.body)}
+  </div>`;
+    });
+  return wrap(sections.join('\n'));
+}

@@ -16,7 +16,7 @@ import { calculateExponentialBackoff, shouldSkipAutomationDelivery, checkSendTim
 import { generateDocumentPdf } from './server/pdfService.js';
 import { appendEmailFooter } from './server/emailFooter.js';
 import { classifyBottleneck } from './server/diagnosisAnalysis.js';
-import { buildDiagnosisReportMarkdown, DiagnosisReportFormatError, DIAGNOSIS_REPORT_PROMPT_V2, type DiagnosisPremise } from './server/diagnosisReportBuilder.js';
+import { buildDiagnosisReportMarkdown, renderDiagnosisReportHtml, DiagnosisReportFormatError, DIAGNOSIS_REPORT_PROMPT_V2, type DiagnosisPremise } from './server/diagnosisReportBuilder.js';
 
 dotenv.config();
 
@@ -6541,10 +6541,7 @@ async function saveDiagnosisReport(
   }
 
   // 顧客書類（承認待ち）にも登録する。失敗してもレポート自体は保存済み。
-  const bodyHtml = `<div style="font-family: sans-serif; line-height: 1.8; color: #1e293b; max-width: 800px; margin: 0 auto; padding: 24px;">
-  <h1 style="font-size: 22px; color: #0f172a; border-bottom: 2px solid #2563eb; padding-bottom: 8px; margin-bottom: 20px;">${escapeHtmlText(companyName)} 経営診断・ボトルネック改善レポート</h1>
-  <div style="white-space: pre-wrap; font-size: 14px; color: #334155;">${escapeHtmlText(text)}</div>
-</div>`;
+  const bodyHtml = renderDiagnosisReportHtml(companyName, text);
   const { data: documentRow, error: documentError } = await lineSupabase
     .from('customer_documents')
     .insert({
@@ -6560,15 +6557,33 @@ async function saveDiagnosisReport(
     })
     .select('id')
     .maybeSingle();
-  if (documentError) console.warn('Diagnosis report document sync failed:', documentError.message);
+  let documentSynced = !documentError;
+  let documentId: string | null = documentRow?.id || null;
+  if (documentError) {
+    // DBのトリガー(ai_reports の保存時に書類を自動作成)が先に作っていた場合は、重複エラーになる。
+    // その書類の本文を、章立てのHTMLに更新する。
+    const { data: existingDoc, error: updateError } = await lineSupabase
+      .from('customer_documents')
+      .update({ body_html: bodyHtml, title: `${companyName} 経営診断レポート (v${nextVersion})` })
+      .eq('ai_report_id', report.id)
+      .eq('document_type', 'diagnosis_report')
+      .select('id')
+      .maybeSingle();
+    if (existingDoc?.id) {
+      documentId = String(existingDoc.id);
+      documentSynced = true;
+    } else {
+      console.warn('Diagnosis report document sync failed:', documentError.message, updateError?.message || '');
+    }
+  }
 
   return {
     report,
     companyId: String(diagnosis.company_id),
     companyName,
     leadId: diagnosis.lead_id ? String(diagnosis.lead_id) : null,
-    documentId: documentRow?.id || null,
-    documentSynced: !documentError,
+    documentId,
+    documentSynced,
   };
 }
 
