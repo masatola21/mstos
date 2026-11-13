@@ -31,6 +31,7 @@ import { MarketingLineInboxView } from '../marketing/MarketingLineInboxView';
 import { MarketingEmailInboxView } from '../marketing/MarketingEmailInboxView';
 import { useSendDrawer } from '../../context/SendDrawerContext';
 import { useVisiblePolling } from '../../hooks/useInboxRealtime';
+import { MeetingSessionView } from '../meeting/MeetingSessionView';
 
 export type InboxChannel = 'line' | 'email' | 'forms';
 
@@ -164,6 +165,7 @@ export const UnifiedInboxView: React.FC<UnifiedInboxViewProps> = ({
     setReportingIds((prev) => prev.filter((id) => id !== subId));
   };
   const [reportVersions, setReportVersions] = useState<Record<string, number>>({});
+  const [meetingSub, setMeetingSub] = useState<SubmissionItem | null>(null);
   const [selectedSubmissionIds, setSelectedSubmissionIds] = useState<string[]>([]);
   const [deletingSubmissions, setDeletingSubmissions] = useState(false);
   const [noticeAction, setNoticeAction] = useState<{ label: string; run: () => void } | null>(null);
@@ -1297,6 +1299,14 @@ export const UnifiedInboxView: React.FC<UnifiedInboxViewProps> = ({
                                 </button>
                                 <button
                                   type="button"
+                                  onClick={() => setMeetingSub(sub)}
+                                  className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-900 text-xs font-semibold text-white shadow-xs transition cursor-pointer"
+                                  title="ヒアリングシートと面談メモを開き、画面共有用の表示も開けます"
+                                >
+                                  <span>商談を始める</span>
+                                </button>
+                                <button
+                                  type="button"
                                   onClick={() => {
                                     void handleGenerateReport(sub, true);
                                   }}
@@ -1454,6 +1464,15 @@ export const UnifiedInboxView: React.FC<UnifiedInboxViewProps> = ({
         />
       )}
 
+      {meetingSub && meetingSub.diagnosis_id && (
+        <MeetingSessionView
+          diagnosisId={meetingSub.diagnosis_id}
+          companyId={meetingSub.company_id}
+          companyName={meetingSub.respondent_company_name || ''}
+          formAnswers={meetingSub.answers}
+          onClose={() => setMeetingSub(null)}
+        />
+      )}
     </div>
   );
 };
