@@ -49,7 +49,8 @@ import {
 } from '../../constants/proposalChapters';
 import { proposalEmptyText, defaultPaymentTermsFor, requiredKeysFor, MULTILINE_KEYS, DRAFTABLE_KEYS } from './proposalTemplate';
 import { calcProposalFees, parseYen, formatYen } from '../../utils/proposalFees';
-import { composeMeetingMemo, sanitizeCoreAnswers, sanitizeExtraQuestions } from '../../constants/hearingSheet';
+import { composeMeetingMemo, sanitizeCoreAnswers, sanitizeExtraQuestions, customerIntentFrom } from '../../constants/hearingSheet';
+import { buildProposalDraftRow, approvalBlockers } from '../../utils/proposalDraftRecord';
 
 export type { DocTemplateType, DocTemplate, PaymentMode, InvoiceSubtype };
 
@@ -120,6 +121,13 @@ export const DocumentTemplateView: React.FC<DocumentTemplateViewProps> = ({
   const [leadId, setLeadId] = useState(initialLeadId || '');
   const [contactId, setContactId] = useState('');
   const [dealId, setDealId] = useState(initialDealId || '');
+  // 提案書の下書き(proposal_drafts)。テーブル未作成なら、保存せず従来どおり画面だけで使える。
+  const [draftCtx, setDraftCtx] = useState<{ diagnosisId: string; hearingSheetId: string | null; intent: any } | null>(null);
+  const [draftRec, setDraftRec] = useState<{ id: string; status: string; version: number } | null>(null);
+  const [draftTableMissing, setDraftTableMissing] = useState(false);
+  const [draftMsg, setDraftMsg] = useState('');
+  const [draftBusy, setDraftBusy] = useState(false);
+  const [roadmapOk, setRoadmapOk] = useState(false);
   const [saveMessage, setSaveMessage] = useState('');
   const [hasStartedDocument, setHasStartedDocument] = useState<boolean>(false);
   const [isSavingDocument, setIsSavingDocument] = useState<boolean>(false);
@@ -241,9 +249,27 @@ export const DocumentTemplateView: React.FC<DocumentTemplateViewProps> = ({
       }
       // ヒアリングシートがあれば、その内容を商談メモの材料にする(テーブル未作成・未入力なら何もしない)
       let hearingMemo = '';
+      let hearingSheetId: string | null = null;
+      let hearingIntent: any = null;
+      let savedDraft: any = null;
       if (diagnosis?.id) {
-        const hs = await supabase.from('hearing_sheets').select('core_answers,extra_questions').eq('diagnosis_id', diagnosis.id).order('created_at', { ascending: false }).limit(1).maybeSingle();
-        if (!hs.error && hs.data) hearingMemo = composeMeetingMemo(sanitizeCoreAnswers(hs.data.core_answers), sanitizeExtraQuestions(hs.data.extra_questions));
+        const hs = await supabase.from('hearing_sheets').select('id,core_answers,extra_questions').eq('diagnosis_id', diagnosis.id).order('created_at', { ascending: false }).limit(1).maybeSingle();
+        if (!hs.error && hs.data) {
+          const core = sanitizeCoreAnswers(hs.data.core_answers);
+          hearingMemo = composeMeetingMemo(core, sanitizeExtraQuestions(hs.data.extra_questions));
+          hearingSheetId = hs.data.id;
+          hearingIntent = customerIntentFrom(core);
+        }
+        const pd = await supabase.from('proposal_drafts').select('id,status,version,chapters').eq('diagnosis_id', diagnosis.id).eq('is_current', true).maybeSingle();
+        if (pd.error) {
+          if (['PGRST205', '42P01'].includes(String(pd.error.code))) setDraftTableMissing(true);
+        } else if (pd.data) {
+          savedDraft = pd.data;
+        }
+      }
+      if (!cancelled) {
+        setDraftCtx(diagnosis?.id ? { diagnosisId: diagnosis.id, hearingSheetId, intent: hearingIntent } : null);
+        setDraftRec(savedDraft ? { id: savedDraft.id, status: savedDraft.status, version: savedDraft.version } : null);
       }
       let productName = '';
       let product: any = null;
@@ -372,6 +398,7 @@ export const DocumentTemplateView: React.FC<DocumentTemplateViewProps> = ({
           });
         }
       }
+      if (selectedTemplateId === 'tpl-proposal-report' && savedDraft?.chapters && typeof savedDraft.chapters === 'object') Object.assign(proposalSeed, savedDraft.chapters);
       setVariableValues((prev) => {
         const next = { ...prev, ...values };
         for (const [k, v] of Object.entries(proposalSeed)) if (v && !String(prev[k] || '').trim()) next[k] = v;
@@ -929,6 +956,55 @@ export const DocumentTemplateView: React.FC<DocumentTemplateViewProps> = ({
     }
   };
 
+
+  // ── 提案書の下書きの保存・承認 ──
+  const isProposalDoc = currentTemplate.id === 'tpl-proposal-report';
+  const blockers = isProposalDoc ? approvalBlockers(variableValues, paymentMode, { dealId, roadmapConfirmed: roadmapOk }) : [];
+
+  const currentUserLabel = async (): Promise<string> => {
+    const supabase = getSupabase();
+    const { data } = supabase ? await supabase.auth.getUser() : { data: { user: null } as any };
+    return String(data?.user?.email || '');
+  };
+
+  const saveProposalDraft = async (target: 'drafting' | 'awaiting_approval' | 'approved') => {
+    const supabase = getSupabase();
+    if (!supabase || !draftCtx || draftBusy) return;
+    if (target !== 'drafting' && blockers.length > 0) { setDraftMsg('承認待ちにできない項目があります。'); return; }
+    setDraftBusy(true); setDraftMsg('');
+    try {
+      const who = await currentUserLabel();
+      const now = new Date().toISOString();
+      const base: any = buildProposalDraftRow(variableValues, paymentMode, {
+        diagnosisId: draftCtx.diagnosisId, dealId: dealId || null, hearingSheetId: draftCtx.hearingSheetId, customerIntent: draftCtx.intent,
+      });
+      // 内容を保存し直したら、承認の記録はいったん外す(直した内容を承認していない状態を作らない)
+      const fields: any = { ...base, status: target, roadmap_confirmed_by: null, roadmap_confirmed_at: null, approved_by: null, approved_at: null };
+      if (target !== 'drafting') { fields.roadmap_confirmed_by = who || '担当者'; fields.roadmap_confirmed_at = now; }
+      if (target === 'approved') { fields.approved_by = who || '担当者'; fields.approved_at = now; }
+
+      let result: any;
+      if (draftRec && draftRec.status === 'sent') {
+        // 送付済みは編集できない。新しい版を作る
+        const sup = await supabase.from('proposal_drafts').update({ status: 'superseded', is_current: false }).eq('id', draftRec.id);
+        if (sup.error) throw sup.error;
+        result = await supabase.from('proposal_drafts').insert({ ...fields, version: draftRec.version + 1, is_current: true, supersedes_id: draftRec.id }).select('id,status,version').maybeSingle();
+      } else if (draftRec) {
+        result = await supabase.from('proposal_drafts').update(fields).eq('id', draftRec.id).select('id,status,version').maybeSingle();
+      } else {
+        result = await supabase.from('proposal_drafts').insert({ ...fields, version: 1, is_current: true }).select('id,status,version').maybeSingle();
+      }
+      if (result.error) throw result.error;
+      setDraftRec(result.data);
+      setDraftMsg(target === 'drafting' ? '下書きを保存しました。' : target === 'awaiting_approval' ? '承認待ちにしました。内容を確認して「承認する」を押してください。' : '承認しました。');
+    } catch (err: any) {
+      if (['PGRST205', '42P01'].includes(String(err?.code))) setDraftTableMissing(true);
+      setDraftMsg(`保存できませんでした: ${err?.message || err}`);
+    } finally { setDraftBusy(false); }
+  };
+
+  const draftStatusLabel: Record<string, string> = { drafting: '下書き', awaiting_approval: '承認待ち', approved: '承認済み', sent: '送付済み', superseded: '置き換え済み' };
+
   const proposalRequired = currentTemplate.id === 'tpl-proposal-report' ? requiredKeysFor(kindFromPaymentMode(paymentMode)) : null;
   const missingVariables = currentTemplate.variables.filter((v) =>
     proposalRequired
@@ -1349,6 +1425,26 @@ export const DocumentTemplateView: React.FC<DocumentTemplateViewProps> = ({
                         );
                       })}
                     </div>
+                  </div>
+                )}
+
+                {isProposalDoc && draftCtx && (
+                  <div className="rounded-xl border border-slate-200 bg-white px-3.5 py-3 text-xs shadow-2xs space-y-2">
+                    <div className="flex items-center justify-between gap-2">
+                      <span className="font-bold text-slate-800">提案書の状態: {draftRec ? `${draftStatusLabel[draftRec.status] || draftRec.status}(v${draftRec.version})` : '未保存'}</span>
+                      <div className="flex gap-2">
+                        <button type="button" disabled={draftBusy || draftTableMissing} onClick={() => void saveProposalDraft('drafting')} className="px-2.5 py-1 rounded-lg border border-slate-300 font-semibold disabled:opacity-50">下書きを保存</button>
+                        <button type="button" disabled={draftBusy || draftTableMissing || blockers.length > 0} onClick={() => void saveProposalDraft('awaiting_approval')} className="px-2.5 py-1 rounded-lg bg-slate-700 text-white font-semibold disabled:opacity-50">承認待ちにする</button>
+                        {draftRec?.status === 'awaiting_approval' && (
+                          <button type="button" disabled={draftBusy || draftTableMissing || blockers.length > 0} onClick={() => void saveProposalDraft('approved')} className="px-2.5 py-1 rounded-lg bg-emerald-600 text-white font-semibold disabled:opacity-50">承認する</button>
+                        )}
+                      </div>
+                    </div>
+                    <label className="flex items-center gap-2"><input type="checkbox" checked={roadmapOk} onChange={(e) => setRoadmapOk(e.target.checked)} />ロードマップ(P3)の内容を確認した</label>
+                    {blockers.length > 0 && <p className="text-amber-800">承認待ちにするには: {blockers.join(' / ')}</p>}
+                    {draftTableMissing && <p className="text-amber-800">保存先のテーブルが未作成のため、保存できません(docs/db-proposals の SQL を実行してください)。</p>}
+                    {draftMsg && <p className="text-slate-700">{draftMsg}</p>}
+                    <p className="text-slate-500">内容を直して保存し直すと、承認はいったん外れます。送付済みの版を直して保存すると、新しい版になります。</p>
                   </div>
                 )}
 
