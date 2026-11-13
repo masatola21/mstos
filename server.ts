@@ -16,6 +16,7 @@ import { calculateExponentialBackoff, shouldSkipAutomationDelivery, checkSendTim
 import { generateDocumentPdf } from './server/pdfService.js';
 import { appendEmailFooter } from './server/emailFooter.js';
 import { classifyBottleneck } from './server/diagnosisAnalysis.js';
+import { DRAFT_CHAPTERS, DRAFT_SYSTEM_INSTRUCTION, buildProposalDraftPrompt, sanitizeDraftContext, cleanDraftOutput, type DraftChapter } from './server/proposalDraftBuilder.js';
 import { buildDiagnosisReportMarkdown, renderDiagnosisReportHtml, DiagnosisReportFormatError, DIAGNOSIS_REPORT_PROMPT_V2, type DiagnosisPremise } from './server/diagnosisReportBuilder.js';
 
 dotenv.config();
@@ -6766,6 +6767,39 @@ app.post('/api/diagnosis-submissions/:id/generate-report', requireAuth, async (r
     if (err instanceof HttpError) return res.status(err.statusCode).json({ error: err.message });
     console.error('Diagnosis report auto-generation failed:', err?.message || err);
     return res.status(500).json({ error: err?.message || 'レポートを作成できませんでした。' });
+  }
+});
+
+// 提案書の章(P1 方針 / P3 ロードマップ)のAI下書き。サービス名・金額・期間はAIに決めさせない。
+app.post('/api/proposals/draft-chapter', requireAuth, async (req, res) => {
+  const chapter = String(req.body?.chapter || '') as DraftChapter;
+  const kind = String(req.body?.kind || '');
+  if (!DRAFT_CHAPTERS.includes(chapter)) return res.status(400).json({ error: '下書きを作れるのは、P1(方針)とP3(ロードマップ)です。' });
+  if (!['spot_build', 'retainer', 'hybrid'].includes(kind)) return res.status(400).json({ error: '提案の型が正しくありません。' });
+
+  try {
+    const killSwitch = await getKillSwitchStatus('ai');
+    if (killSwitch.paused) {
+      return res.status(503).json({ error: `AI呼び出し機能は緊急停止中です: ${killSwitch.reason || '一時停止中'}` });
+    }
+    const context = sanitizeDraftContext(req.body?.context);
+    const abortController = new AbortController();
+    res.on('close', () => {
+      if (!res.writableEnded) abortController.abort();
+    });
+    const result = await runWithFallback(resolveModelSetting(undefined), {
+      systemInstruction: DRAFT_SYSTEM_INSTRUCTION,
+      messages: [{ role: 'user', content: buildProposalDraftPrompt(chapter, kind as any, context) }],
+      temperature: 0.4,
+      signal: abortController.signal,
+    });
+    const cleaned = cleanDraftOutput(result.text);
+    if (!cleaned.text) return res.status(502).json({ error: 'AIが下書きを返しませんでした。もう一度お試しください。' });
+    return res.json({ text: cleaned.text, warnings: cleaned.warnings, placeholders: cleaned.placeholders });
+  } catch (err: any) {
+    if (err?.name === 'AbortError') return;
+    console.error('Proposal draft failed:', err?.message || err);
+    return res.status(500).json({ error: err?.message || '下書きを作成できませんでした。' });
   }
 });
 
