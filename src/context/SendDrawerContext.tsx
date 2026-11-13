@@ -12,7 +12,8 @@ export type SendDrawerKind =
   | 'deal'
   | 'customer_meeting'
   | 'announcement'
-  | 'sales_outreach';
+  | 'sales_outreach'
+  | 'freeform';
 
 export interface SendDrawerOptions {
   kind?: SendDrawerKind;

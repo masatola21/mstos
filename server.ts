@@ -13,7 +13,12 @@ import { parseIcalendar } from './server/icalParser.js';
 import { isTimeRexEmail, parseTimeRexEmail, parseTimeRexCalendarEvent, syncTimeRexBookingToCrm } from './server/timerexSyncService.js';
 import { calculateBillingAmount, determineContractMonthlyFee, isContractAlreadyBilled, getEndOfNextMonthDate } from './src/utils/billingUtils.js';
 import { calculateExponentialBackoff, shouldSkipAutomationDelivery, checkSendTimeWindow, calculateDueAt, type SendTimeWindowCheck } from './src/utils/automationRuleUtils.js';
-import { getOneShotOutreachTemplate, getSalesEmailTemplate } from './src/utils/salesOutreachTemplates.js';
+import {
+  ONE_SHOT_SCENARIO_ID,
+  getOneShotOutreachTemplate,
+  getSalesEmailTemplate,
+  resolveOneShotOutreachDraft,
+} from './src/utils/salesOutreachTemplates.js';
 import { generateDocumentPdf } from './server/pdfService.js';
 import { appendEmailFooter } from './server/emailFooter.js';
 import { classifyBottleneck } from './server/diagnosisAnalysis.js';
@@ -5756,6 +5761,9 @@ app.post('/api/marketing/prospects/trigger-outreach', requireAuth, async (req, r
       const enabled = cfg.automationEnabled === true || cfg.status === 'prepared' || cfg.status === 'active';
       return enabled && cfg.trigger === 'outreach_first_sent';
     });
+    const oneShotScenarioRow = (ownerScenarios || []).find(
+      (s: any) => s.scenario_id === ONE_SHOT_SCENARIO_ID || String(s?.config?.name || '').includes('一発直球')
+    );
 
     for (const prospect of prospects) {
       const company = prospect.company_id ? companyMap.get(String(prospect.company_id)) : null;
@@ -5793,7 +5801,13 @@ app.post('/api/marketing/prospects/trigger-outreach', requireAuth, async (req, r
       const consentBasis = '特定電子メール法に基づく業務改善情報の提供（オプトアウト明記）';
 
       if (mode === 'one_shot') {
-        const draft = getOneShotOutreachTemplate(companyName, targetContact.full_name, companyIndustry, diagUrl);
+        const draft = resolveOneShotOutreachDraft(
+          oneShotScenarioRow?.config,
+          companyName,
+          targetContact.full_name,
+          companyIndustry,
+          diagUrl
+        );
         const eventKey = `prospect_one_shot:${prospect.id}:${targetContact.id}:${dateKey}`;
         const { error: insErr } = await lineSupabase
           .from('marketing_automation_jobs')

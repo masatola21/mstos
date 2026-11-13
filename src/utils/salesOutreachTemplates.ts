@@ -186,6 +186,50 @@ ${targetUrl}
   };
 };
 
+export const ONE_SHOT_SCENARIO_ID = 'prospect-one-shot';
+export const ONE_SHOT_SCENARIO_NAME = '【一発直球】IT担当＋経営サポート「社外右腕」のご提案';
+
+export interface CustomOneShotConfig {
+  emailSubject?: string | null;
+  emailBody?: string | null;
+}
+
+export const resolveOneShotOutreachDraft = (
+  customConfig: CustomOneShotConfig | null | undefined,
+  companyName: string = '貴社',
+  personName?: string,
+  industry?: string,
+  diagnosticUrl?: string
+): SalesEmailDraft => {
+  const fallback = getOneShotOutreachTemplate(companyName, personName, industry, diagnosticUrl);
+  const customSubject = typeof customConfig?.emailSubject === 'string' ? customConfig.emailSubject.trim() : '';
+  const customBody = typeof customConfig?.emailBody === 'string' ? customConfig.emailBody.trim() : '';
+  if (!customSubject && !customBody) {
+    return fallback;
+  }
+
+  const resolvedCompany = (companyName || '').trim() || '貴社';
+  const resolvedRecipient = personName && personName.trim() ? personName.trim() : `${resolvedCompany} ご担当者`;
+  const targetUrl = (diagnosticUrl || '').trim() || '{{diagnostic_url}}';
+  const resolvedIndustry = (industry || '').trim() || '中小・小規模法人';
+
+  const applyVars = (text: string) =>
+    text
+      .replace(/\{\{diagnostic_url\}\}/g, targetUrl)
+      .replace(/\{(company_name|会社名|企業名|法人名)\}/g, resolvedCompany)
+      .replace(/\{(recipient_name|name|お名前|氏名|宛名)\}/g, resolvedRecipient)
+      .replace(/\{(link_url|案内URL|診断URL|リンクURL)\}/g, targetUrl)
+      .replace(/\{(booking_url|面談予約URL|予約URL)\}/g, targetUrl)
+      .replace(/\{(industry|業種)\}/g, resolvedIndustry);
+
+  return {
+    step: 0,
+    name: ONE_SHOT_SCENARIO_NAME,
+    subject: customSubject ? applyVars(customSubject) : fallback.subject,
+    body: customBody ? applyVars(customBody) : fallback.body,
+  };
+};
+
 // ============================================================
 // 【営業メール】ブラッシュアップ版 全5ステップ（アウトバウンド）
 // ============================================================

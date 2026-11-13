@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useState, useRef } from 'react';
-import { FileText } from 'lucide-react';
+import { createPortal } from 'react-dom';
+import { FileText, Maximize2, Minimize2 } from 'lucide-react';
 import { getSupabase } from '../../lib/supabaseClient';
 import { InlineDeleteButton } from '../InlineDeleteButton';
 import { LineMessagePreview } from '../LineMessagePreview';
@@ -78,6 +79,16 @@ export const MarketingLineInboxView: React.FC<MarketingLineInboxViewProps> = ({
   const [tagId,setTagId]=useState('');
   const [selectedLineUserId,setSelectedLineUserId]=useState('');
   const [replyDraft,setReplyDraft]=useState('');
+  const [isChatExpanded,setIsChatExpanded]=useState(false);
+
+  useEffect(() => {
+    if (!isChatExpanded) return;
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setIsChatExpanded(false);
+    };
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
+  }, [isChatExpanded]);
   useEffect(()=>{if(initialLineUserId)setSelectedLineUserId(initialLineUserId)},[initialLineUserId]);
   const [busy,setBusy]=useState(false);
   const [error,setError]=useState('');
@@ -476,6 +487,131 @@ export const MarketingLineInboxView: React.FC<MarketingLineInboxViewProps> = ({
     (selectedLineUserId ? contactsByLineUser[selectedLineUserId] : undefined) ||
     undefined;
 
+  const expandedChatPortal =
+    isChatExpanded &&
+    activeConversation &&
+    typeof document !== 'undefined'
+      ? createPortal(
+          <div
+            role="dialog"
+            aria-modal="true"
+            aria-label="LINEチャット全画面表示"
+            className="fixed inset-0 z-[75] bg-slate-900/60 backdrop-blur-xs p-3 sm:p-6 flex flex-col"
+          >
+            <div className="bg-white border border-slate-200 rounded-2xl shadow-2xl w-full h-full flex flex-col overflow-hidden">
+              <div className="px-5 py-3.5 border-b border-slate-200 bg-slate-50 flex flex-wrap items-center justify-between gap-3 shrink-0">
+                <div className="flex items-center gap-2.5 min-w-0">
+                  {friends[selectedLineUserId]?.picture_url ? (
+                    <img
+                      src={friends[selectedLineUserId].picture_url!}
+                      alt={friends[selectedLineUserId]?.display_name || selectedLineUserId}
+                      className="w-8 h-8 rounded-full object-cover border border-slate-200 shrink-0"
+                    />
+                  ) : (
+                    <div className="w-8 h-8 rounded-full bg-emerald-100 text-emerald-700 text-xs font-bold flex items-center justify-center shrink-0">
+                      {((friends[selectedLineUserId]?.display_name || selectedLineUserId)[0] || 'L').toUpperCase()}
+                    </div>
+                  )}
+                  <div className="min-w-0">
+                    <div className="text-sm font-bold text-slate-900 truncate">
+                      {friends[selectedLineUserId]?.display_name || selectedLineUserId}
+                    </div>
+                    <div className="text-[11px] font-mono text-slate-500 truncate">
+                      {selectedLineUserId}
+                    </div>
+                  </div>
+                </div>
+                <div className="flex items-center gap-2 shrink-0">
+                  <button
+                    type="button"
+                    disabled={!conversationContactId}
+                    onClick={() => {
+                      if (conversationContactId) {
+                        setIsChatExpanded(false);
+                        openSendDrawer({ channel: 'line', kind: 'form', contactId: conversationContactId });
+                      }
+                    }}
+                    className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-emerald-300 bg-emerald-50 hover:bg-emerald-100 text-emerald-800 text-xs font-bold transition disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer whitespace-nowrap shrink-0"
+                  >
+                    <FileText className="h-3.5 w-3.5 text-emerald-600" />
+                    <span>フォームを送る</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setIsChatExpanded(false)}
+                    className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-slate-300 bg-white hover:bg-slate-100 text-slate-800 text-xs font-bold transition cursor-pointer whitespace-nowrap shrink-0"
+                  >
+                    <Minimize2 className="h-3.5 w-3.5" />
+                    <span>元に戻す（Esc）</span>
+                  </button>
+                </div>
+              </div>
+
+              <div className="flex-1 min-h-0 overflow-y-auto bg-slate-50 p-4 sm:p-6 space-y-3">
+                {activeConversation.items.map((message) => {
+                  const activeFriend = friends[selectedLineUserId];
+                  const isOutbound = message.direction === 'outbound';
+                  return (
+                    <div
+                      key={message.id}
+                      className={`flex items-start gap-2.5 ${isOutbound ? 'justify-end' : 'justify-start'}`}
+                    >
+                      {!isOutbound && (
+                        <div className="shrink-0 mt-0.5">
+                          {activeFriend?.picture_url ? (
+                            <img
+                              src={activeFriend.picture_url}
+                              alt="LINE Friend"
+                              className="w-7 h-7 rounded-full object-cover border border-slate-200"
+                            />
+                          ) : (
+                            <div className="w-7 h-7 rounded-full bg-emerald-100 text-emerald-700 text-xs font-bold flex items-center justify-center">
+                              L
+                            </div>
+                          )}
+                        </div>
+                      )}
+                      <div
+                        className={`max-w-[75%] rounded-2xl px-4 py-3 text-sm shadow-xs ${
+                          isOutbound
+                            ? 'bg-emerald-600 text-white rounded-br-none'
+                            : 'bg-white text-slate-900 rounded-tl-none border border-slate-200'
+                        }`}
+                      >
+                        <div className="whitespace-pre-wrap leading-relaxed">{message.body}</div>
+                        <div className={`mt-1 text-[11px] text-right ${isOutbound ? 'text-emerald-100' : 'text-slate-400'}`}>
+                          {new Date(message.received_at).toLocaleString('ja-JP', { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' })}
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+
+              <div className="p-4 border-t border-slate-200 bg-white flex items-end gap-2.5 shrink-0">
+                <textarea
+                  value={replyDraft}
+                  onChange={(e) => setReplyDraft(e.target.value)}
+                  rows={3}
+                  maxLength={5000}
+                  placeholder="LINE返信メッセージを入力…"
+                  className="min-w-0 flex-1 rounded-xl border border-slate-200 bg-slate-50 p-3 text-sm text-slate-900 placeholder-slate-400 focus:bg-white focus:outline-none focus:border-emerald-500"
+                />
+                <button
+                  disabled={busy || !replyDraft.trim()}
+                  type="button"
+                  onClick={() => void sendReply()}
+                  className="rounded-xl bg-emerald-600 hover:bg-emerald-700 px-5 py-3 text-sm font-bold text-white shadow-xs transition disabled:opacity-40 cursor-pointer whitespace-nowrap shrink-0"
+                >
+                  {busy ? '送信中…' : '返信'}
+                </button>
+              </div>
+            </div>
+          </div>,
+          document.body
+        )
+      : null;
+
   if (chatOnly) {
     return (
       <div className="space-y-4">
@@ -687,10 +823,19 @@ export const MarketingLineInboxView: React.FC<MarketingLineInboxViewProps> = ({
                           openSendDrawer({ channel: 'line', kind: 'form', contactId: conversationContactId });
                         }
                       }}
-                      className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg border border-emerald-300 bg-emerald-50 hover:bg-emerald-100 text-emerald-800 text-xs font-bold shadow-2xs transition disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer"
+                      className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg border border-emerald-300 bg-emerald-50 hover:bg-emerald-100 text-emerald-800 text-xs font-bold shadow-2xs transition disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer whitespace-nowrap shrink-0"
                     >
                       <FileText className="h-3.5 w-3.5 text-emerald-600" />
                       <span>フォームを送る</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setIsChatExpanded(true)}
+                      title="LINEチャットを全画面で大きく表示します"
+                      className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg border border-slate-200 bg-white hover:bg-slate-50 text-slate-700 text-xs font-semibold shadow-2xs transition cursor-pointer whitespace-nowrap shrink-0"
+                    >
+                      <Maximize2 className="h-3.5 w-3.5 text-emerald-600" />
+                      <span>全画面表示</span>
                     </button>
                   </div>
                 );
@@ -767,6 +912,8 @@ export const MarketingLineInboxView: React.FC<MarketingLineInboxViewProps> = ({
             )}
           </section>
         </div>
+
+        {expandedChatPortal}
       </div>
     );
   }
@@ -879,20 +1026,31 @@ export const MarketingLineInboxView: React.FC<MarketingLineInboxViewProps> = ({
               <div className="flex items-center justify-between border-b border-slate-200 pb-2.5">
                 <h3 className="font-bold text-slate-900">会話</h3>
                 {activeConversation && (
-                  <button
-                    type="button"
-                    disabled={!conversationContactId}
-                    title={!conversationContactId ? '連絡先に紐づいていないため送れません' : 'このLINE友だちにフォーム案内を送信します'}
-                    onClick={() => {
-                      if (conversationContactId) {
-                        openSendDrawer({ channel: 'line', kind: 'form', contactId: conversationContactId });
-                      }
-                    }}
-                    className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg border border-emerald-300 bg-emerald-50 hover:bg-emerald-100 text-emerald-800 text-xs font-semibold shadow-2xs transition disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer"
-                  >
-                    <FileText className="h-3.5 w-3.5 text-emerald-600" />
-                    <span>フォームを送る</span>
-                  </button>
+                  <div className="flex items-center gap-2">
+                    <button
+                      type="button"
+                      disabled={!conversationContactId}
+                      title={!conversationContactId ? '連絡先に紐づいていないため送れません' : 'このLINE友だちにフォーム案内を送信します'}
+                      onClick={() => {
+                        if (conversationContactId) {
+                          openSendDrawer({ channel: 'line', kind: 'form', contactId: conversationContactId });
+                        }
+                      }}
+                      className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg border border-emerald-300 bg-emerald-50 hover:bg-emerald-100 text-emerald-800 text-xs font-semibold shadow-2xs transition disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer whitespace-nowrap shrink-0"
+                    >
+                      <FileText className="h-3.5 w-3.5 text-emerald-600" />
+                      <span>フォームを送る</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setIsChatExpanded(true)}
+                      title="LINEチャットを全画面で大きく表示します"
+                      className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg border border-slate-200 bg-white hover:bg-slate-50 text-slate-700 text-xs font-semibold shadow-2xs transition cursor-pointer whitespace-nowrap shrink-0"
+                    >
+                      <Maximize2 className="h-3.5 w-3.5 text-emerald-600" />
+                      <span>全画面表示</span>
+                    </button>
+                  </div>
                 )}
               </div>
               {!activeConversation ? (
@@ -1079,6 +1237,7 @@ export const MarketingLineInboxView: React.FC<MarketingLineInboxViewProps> = ({
           </div>
         </section>
       )}
+      {expandedChatPortal}
     </div>
   );
 };

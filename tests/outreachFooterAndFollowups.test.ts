@@ -1,8 +1,10 @@
 import assert from 'node:assert/strict';
 import { appendEmailFooter, buildSenderSignature } from '../server/emailFooter';
 import {
+  ONE_SHOT_SCENARIO_NAME,
   getOneShotOutreachTemplate,
   getSalesEmailTemplate,
+  resolveOneShotOutreachDraft,
   PRIORITY_INDUSTRY_KEYS,
   INDUSTRY_MESSAGES,
 } from '../src/utils/salesOutreachTemplates';
@@ -117,6 +119,30 @@ assert.equal(
   calculateDueAt(120, '10:00', morningJst),
   new Date(morningJst.getTime() + 120 * 60 * 1000).toISOString()
 );
+console.log('  ✓ passed');
+
+console.log('Test 10: custom one-shot outreach resolution and non-collision with step numbers 1-5');
+for (const d of ['1', '2', '3', '4', '5']) {
+  assert.ok(!ONE_SHOT_SCENARIO_NAME.includes(d), `ONE_SHOT_SCENARIO_NAME must not include digit ${d}`);
+}
+const customDraft = resolveOneShotOutreachDraft(
+  {
+    emailSubject: '【{company_name}様】{industry}向け 社外右腕のご提案',
+    emailBody: '{recipient_name} 様\n{company_name}（{industry}）向けのご案内です。\n{link_url}',
+  },
+  '東海建装株式会社',
+  '高橋',
+  '工事業',
+  'https://example.com/diag/1'
+);
+assert.equal(customDraft.subject, '【東海建装株式会社様】工事業向け 社外右腕のご提案');
+assert.ok(customDraft.body.includes('高橋 様'));
+assert.ok(customDraft.body.includes('東海建装株式会社（工事業）向けのご案内です。'));
+assert.ok(customDraft.body.includes('https://example.com/diag/1'));
+
+const fallbackDraft = resolveOneShotOutreachDraft(null, 'サンプル株式会社', '', '', '');
+assert.ok(fallbackDraft.subject.includes('社外右腕'));
+assert.ok(fallbackDraft.body.includes('サンプル株式会社 ご担当者 様'));
 console.log('  ✓ passed');
 
 console.log('=== All Outreach Footer & Follow-up Tests Passed! ===');

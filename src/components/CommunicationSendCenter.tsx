@@ -1,6 +1,13 @@
 import React, { useEffect, useState, useRef } from 'react';
-import { getSalesEmailTemplate, getOneShotOutreachTemplate } from '../utils/salesOutreachTemplates';
-import { Eye, Save, Send, Users, SendHorizonal, FileText, Library, Mail, MessageSquare, Paperclip, CheckCircle2, X, Inbox, ArrowLeft, AlertTriangle } from 'lucide-react';
+import { createPortal } from 'react-dom';
+import {
+  getSalesEmailTemplate,
+  resolveOneShotOutreachDraft,
+  ONE_SHOT_SCENARIO_ID,
+  type CustomOneShotConfig,
+} from '../utils/salesOutreachTemplates';
+import { appendEmailFooter } from '../../server/emailFooter';
+import { Eye, Save, Send, Users, SendHorizonal, FileText, Library, Mail, MessageSquare, Paperclip, CheckCircle2, X, Inbox, ArrowLeft, AlertTriangle, Maximize2, Minimize2, Eraser } from 'lucide-react';
 import { getSupabase } from '../lib/supabaseClient';
 import { LineMessagePreview } from './LineMessagePreview';
 import { renderPlaceholders } from '../utils/placeholders';
@@ -10,7 +17,7 @@ import { CommunicationTemplateLibraryView } from './marketing/CommunicationTempl
 import { CommunicationOutboxHistoryView } from './marketing/CommunicationOutboxHistoryView';
 import { DocumentPreviewModal } from './common/DocumentPreviewModal';
 
-type Kind = 'document' | 'form' | 'diagnosis' | 'deal' | 'customer_meeting' | 'announcement' | 'sales_outreach';
+type Kind = 'document' | 'form' | 'diagnosis' | 'deal' | 'customer_meeting' | 'announcement' | 'sales_outreach' | 'freeform';
 type Channel = 'email' | 'line' | 'both';
 type DeliveryChannel = 'email' | 'line';
 type DocumentType = 'estimate' | 'invoice' | 'contract' | 'proposal' | 'diagnosis_report' | 'monthly_report' | 'other';
@@ -47,6 +54,7 @@ const labels: Record<Kind, string> = {
   customer_meeting: '顧客面談日程案内',
   sales_outreach: '新規営業メール（一発提案／ステップ初回）',
   announcement: 'その他の案内',
+  freeform: '自由作成（白紙から入力）',
 };
 
 const documentCategory = (doc: any): DocumentType => {
@@ -71,7 +79,7 @@ const seed = [
     category: 'document',
     channel: 'email',
     subject: '【書類送付】{書類名}｜{会社名} 様',
-    body_text: '{お名前} 様\n\nお世話になっております。有限会社MSTです。\n\n下記の書類（PDF）を添付いたしましたので、ご確認のほどよろしくお願い申し上げます。\nまた、下記URLよりWeb上でも内容をご確認・お手続きいただけます。\n\n書類名：{書類名}\n確認URL：{書類URL}\n\nご不明点やご質問がございましたら、本メールにご返信ください。\n有限会社MST',
+    body_text: '{お名前} 様\n\nお世話になっております。有限会社MSTです。\n\n下記の書類（PDF）を添付いたしましたので、ご確認のほどよろしくお願い申し上げます。\nまた、下記URLよりWeb上でも内容をご確認・お手続きいただけます。\n\n書類名：{書類名}\n確認URL：{書類URL}\n\nご不明点やご質問がございましたら、本メールにご返信ください。',
   },
   {
     category: 'document',
@@ -83,7 +91,7 @@ const seed = [
     category: 'form',
     channel: 'email',
     subject: '【ご回答のお願い】{フォーム名}｜{会社名} 様',
-    body_text: '{お名前} 様\n\nお世話になっております。有限会社MSTです。\n\n「{フォーム名}」へのご回答をお願いいたします。下記URLからご利用いただけます。\n{案内URL}\n\nご不明点は本メールにご返信ください。\n有限会社MST',
+    body_text: '{お名前} 様\n\nお世話になっております。有限会社MSTです。\n\n「{フォーム名}」へのご回答をお願いいたします。下記URLからご利用いただけます。\n{案内URL}\n\nご不明点は本メールにご返信ください。',
   },
   {
     category: 'form',
@@ -95,7 +103,7 @@ const seed = [
     category: 'diagnosis',
     channel: 'email',
     subject: '【診断のご案内】{フォーム名}｜{会社名} 様',
-    body_text: '{お名前} 様\n\nお世話になっております。有限会社MSTです。\n\n「{フォーム名}」をご案内いたします。下記URLから診断を開始してください。\n{案内URL}\n\nご不明点は本メールにご返信ください。\n有限会社MST',
+    body_text: '{お名前} 様\n\nお世話になっております。有限会社MSTです。\n\n「{フォーム名}」をご案内いたします。下記URLから診断を開始してください。\n{案内URL}\n\nご不明点は本メールにご返信ください。',
   },
   {
     category: 'diagnosis',
@@ -107,7 +115,7 @@ const seed = [
     category: 'deal',
     channel: 'email',
     subject: '【商談日程のご案内】{会社名} 様',
-    body_text: '{お名前} 様\n\nお世話になっております。有限会社MSTです。\n\n商談の日程調整についてご案内いたします。下記予約ページから、ご都合のよい日時をお選びください。\n{案内URL}\n\n予約確定後、Googleカレンダーに予定が登録され、Google Meetの情報が案内されます。\nご不明点は本メールにご返信ください。\n有限会社MST',
+    body_text: '{お名前} 様\n\nお世話になっております。有限会社MSTです。\n\n商談の日程調整についてご案内いたします。下記予約ページから、ご都合のよい日時をお選びください。\n{案内URL}\n\n予約確定後、Googleカレンダーに予定が登録され、Google Meetの情報が案内されます。\nご不明点は本メールにご返信ください。',
   },
   {
     category: 'deal',
@@ -119,7 +127,7 @@ const seed = [
     category: 'customer_meeting',
     channel: 'email',
     subject: '【顧客面談の日程調整】{会社名} 様',
-    body_text: '{お名前} 様\n\nお世話になっております。有限会社MSTです。\n\n次回のお打ち合わせ日程をご案内いたします。下記予約ページから、ご都合のよい日時をお選びください。\n{案内URL}\n\n予約確定後、Googleカレンダーに予定が登録され、Google Meetの情報が案内されます。\nご不明点は本メールにご返信ください。\n有限会社MST',
+    body_text: '{お名前} 様\n\nお世話になっております。有限会社MSTです。\n\n次回のお打ち合わせ日程をご案内いたします。下記予約ページから、ご都合のよい日時をお選びください。\n{案内URL}\n\n予約確定後、Googleカレンダーに予定が登録され、Google Meetの情報が案内されます。\nご不明点は本メールにご返信ください。',
   },
   {
     category: 'customer_meeting',
@@ -131,13 +139,25 @@ const seed = [
     category: 'announcement',
     channel: 'email',
     subject: '【ご案内】{会社名} 様',
-    body_text: '{お名前} 様\n\nお世話になっております。有限会社MSTです。\n\n{案内URL}\n\nご不明点は本メールにご返信ください。\n有限会社MST',
+    body_text: '{お名前} 様\n\nお世話になっております。有限会社MSTです。\n\n{案内URL}\n\nご不明点は本メールにご返信ください。',
   },
   {
     category: 'announcement',
     channel: 'line',
     subject: '',
     body_text: '{お名前} 様\n{案内URL}',
+  },
+  {
+    category: 'freeform',
+    channel: 'email',
+    subject: '',
+    body_text: '',
+  },
+  {
+    category: 'freeform',
+    channel: 'line',
+    subject: '',
+    body_text: '',
   },
 ];
 
@@ -148,33 +168,33 @@ const documentMessage = (type: string | undefined, channel: DeliveryChannel) => 
   const messages: Record<string, { subject: string; body: string; line: string }> = {
     proposal: {
       subject: '【ご提案書の送付】{書類名}｜{会社名} 様',
-      body: hi + '\n\n' + intro + '\n\nご提案書（PDF）を添付いたしましたので、ご確認のほどよろしくお願い申し上げます。\nまた、下記リンクよりWeb上でも内容をご確認いただけます。ご不明点やご希望がございましたらお知らせください。\n\n' + details + '\n\n有限会社MST',
+      body: hi + '\n\n' + intro + '\n\nご提案書（PDF）を添付いたしましたので、ご確認のほどよろしくお願い申し上げます。\nまた、下記リンクよりWeb上でも内容をご確認いただけます。ご不明点やご希望がございましたらお知らせください。\n\n' + details,
       line: hi + '\nご提案書をお送りします。内容をご確認ください。\n{書類名}\n{書類URL}',
     },
     diagnosis_report: {
       subject: '【診断レポートのご送付】{書類名}｜{会社名} 様',
-      body: hi + '\n\n' + intro + '\n\n診断結果をまとめたレポート（PDF）を添付いたしましたので、ご確認のほどよろしくお願い申し上げます。\nまた、下記リンクよりWeb上でも結果と今後の進め方をご確認いただけます。\n\n' + details + '\n\n有限会社MST',
+      body: hi + '\n\n' + intro + '\n\n診断結果をまとめたレポート（PDF）を添付いたしましたので、ご確認のほどよろしくお願い申し上げます。\nまた、下記リンクよりWeb上でも結果と今後の進め方をご確認いただけます。\n\n' + details,
       line: hi + '\n診断レポートをお送りします。結果と今後の進め方をご確認ください。\n{書類名}\n{書類URL}',
     },
     contract: {
       subject: '【契約内容のご確認・同意のお願い】{書類名}｜{会社名} 様',
-      body: hi + '\n\n' + intro + '\n\n契約書（PDF）を添付いたしましたので、ご確認のほどよろしくお願い申し上げます。\nまた、下記リンクよりWeb上でも契約内容をご確認いただけます。\n\n契約内容に同意いただける場合は、契約締結の権限をお持ちの方から、このメールへの返信で次の文面をお送りください。\n\n「{会社名}を代表して、契約書『{書類名}』の内容を確認し、有限会社MSTとの契約締結に同意します。氏名：［氏名］　役職：［役職］」\n\n内容に修正希望がある場合は、同意文ではなく修正箇所をご返信ください。返信を確認後、契約状態を締結済みに更新します。ご返信いただいたメールと契約書は契約記録として保存します。\n\n' + details + '\n\n有限会社MST',
+      body: hi + '\n\n' + intro + '\n\n契約書（PDF）を添付いたしましたので、ご確認のほどよろしくお願い申し上げます。\nまた、下記リンクよりWeb上でも契約内容をご確認いただけます。\n\n契約内容に同意いただける場合は、契約締結の権限をお持ちの方から、このメールへの返信で次の文面をお送りください。\n\n「{会社名}を代表して、契約書『{書類名}』の内容を確認し、有限会社MSTとの契約締結に同意します。氏名：［氏名］　役職：［役職］」\n\n内容に修正希望がある場合は、同意文ではなく修正箇所をご返信ください。返信を確認後、契約状態を締結済みに更新します。ご返信いただいたメールと契約書は契約記録として保存します。\n\n' + details,
       line: hi + '\n契約書をお送りします。内容をご確認ください。同意いただける場合は、契約締結の権限をお持ちの方からメールで明示的にご返信ください。\n{書類名}\n{書類URL}',
     },
     estimate: {
       subject: '【お見積書の送付】{書類名}｜{会社名} 様',
-      body: hi + '\n\n' + intro + '\n\nお見積書（PDF）を添付いたしましたので、ご確認のほどよろしくお願い申し上げます。\nまた、下記リンクよりWeb上でもお見積金額・有効期限・ご提案内容をご確認いただけます。内容の調整やご不明点がございましたらお知らせください。\n\n' + details + '\n\n有限会社MST',
+      body: hi + '\n\n' + intro + '\n\nお見積書（PDF）を添付いたしましたので、ご確認のほどよろしくお願い申し上げます。\nまた、下記リンクよりWeb上でもお見積金額・有効期限・ご提案内容をご確認いただけます。内容の調整やご不明点がございましたらお知らせください。\n\n' + details,
       line: hi + '\nお見積書をお送りします。金額・有効期限・内容をご確認ください。\n{書類名}\n{書類URL}',
     },
     invoice: {
       subject: '【請求書のご送付】{書類名}｜{会社名} 様',
-      body: hi + '\n\n' + intro + '\n\n請求書（PDF）を添付いたしましたので、ご確認のほどよろしくお願い申し上げます。\nまた、下記リンクよりWeb上でも請求金額・お支払期日・振込先などの記載をご確認いただけます。お手続きのほどよろしくお願いいたします。\n\n' + details + '\n\n有限会社MST',
+      body: hi + '\n\n' + intro + '\n\n請求書（PDF）を添付いたしましたので、ご確認のほどよろしくお願い申し上げます。\nまた、下記リンクよりWeb上でも請求金額・お支払期日・振込先などの記載をご確認いただけます。お手続きのほどよろしくお願いいたします。\n\n' + details,
       line: hi + '\n請求書をお送りします。金額・お支払期日・振込先をご確認ください。\n{書類名}\n{書類URL}',
     },
   };
   const message = messages[type || ''] || {
     subject: '【書類のご送付】{書類名}｜{会社名} 様',
-    body: hi + '\n\n' + intro + '\n\n書類（PDF）を添付いたしましたので、ご確認のほどよろしくお願い申し上げます。\nまた、下記リンクよりWeb上でも内容をご確認いただけます。ご不明点がございましたらお知らせください。\n\n' + details + '\n\n有限会社MST',
+    body: hi + '\n\n' + intro + '\n\n書類（PDF）を添付いたしましたので、ご確認のほどよろしくお願い申し上げます。\nまた、下記リンクよりWeb上でも内容をご確認いただけます。ご不明点がございましたらお知らせください。\n\n' + details,
     line: hi + '\n書類をお送りします。内容をご確認ください。\n{書類名}\n{書類URL}',
   };
   return channel === 'email' ? { category: 'document', channel, subject: message.subject, body_text: message.body } : { category: 'document', channel, subject: '', body_text: message.line };
@@ -252,6 +272,24 @@ export const CommunicationSendCenter: React.FC<Props> = ({
     replyTo: 'contact@mstcorp.info',
   });
   const [savingSenderSettings, setSavingSenderSettings] = useState(false);
+  const [customOneShotConfig, setCustomOneShotConfig] = useState<CustomOneShotConfig | null>(null);
+  const [isComposerExpanded, setIsComposerExpanded] = useState(false);
+
+  useEffect(() => {
+    if (!isComposerExpanded) return;
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        e.preventDefault();
+        e.stopPropagation();
+        if (typeof e.stopImmediatePropagation === 'function') {
+          e.stopImmediatePropagation();
+        }
+        setIsComposerExpanded(false);
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown, { capture: true });
+    return () => window.removeEventListener('keydown', handleKeyDown, { capture: true });
+  }, [isComposerExpanded]);
 
   const db = getSupabase();
   const contact = contacts.find((x) => x.id === contactId);
@@ -401,8 +439,9 @@ export const CommunicationSendCenter: React.FC<Props> = ({
       db.from('sales_workspace_settings').select('booking_page_url').maybeSingle(),
       db.from('email_send_settings').select('sender_name,sender_email,reply_to_email').maybeSingle(),
       db.from('line_auto_reply_templates').select('*').order('created_at', { ascending: false }),
+      db.from('marketing_automation_scenarios').select('scenario_id,config'),
     ])
-      .then(([c, d, t, co, f, settings, emailSettings, lineTemplateResult]) => {
+      .then(([c, d, t, co, f, settings, emailSettings, lineTemplateResult, scenarioResult]) => {
         if (!ok) return;
         if (c.error) throw c.error;
         if (d.error) throw d.error;
@@ -455,6 +494,17 @@ export const CommunicationSendCenter: React.FC<Props> = ({
           if (t.data?.length) setTemplates([...seed.filter((x) => !t.data.some((row: any) => row.template_key === x.category + '_' + x.channel)), ...t.data]);
         }
         if (!lineTemplateResult.error) setLineTemplates((lineTemplateResult.data || []) as any[]);
+        if (!scenarioResult.error && Array.isArray(scenarioResult.data)) {
+          const matchedOneShot = scenarioResult.data.find(
+            (row: any) => row.scenario_id === ONE_SHOT_SCENARIO_ID || String(row?.config?.name || '').includes('一発直球')
+          );
+          if (matchedOneShot?.config) {
+            setCustomOneShotConfig({
+              emailSubject: matchedOneShot.config.emailSubject || '',
+              emailBody: matchedOneShot.config.emailBody || '',
+            });
+          }
+        }
       })
       .catch((e) => ok && setError(e.message || '読み込みに失敗しました。'));
     return () => {
@@ -491,13 +541,13 @@ export const CommunicationSendCenter: React.FC<Props> = ({
     }
   }, [kind, channel, templateKey, templates, doc?.id, templateChannel]);
 
-  const applySalesStep = (stepNum: number, c = contact) => {
+  const applySalesStep = (stepNum: number, c = contact, oneShotOverride = customOneShotConfig) => {
     const compName = c?.company_id ? companies[c.company_id] || '貴社' : '貴社';
     const compInd = c?.company_id ? companyIndustries[c.company_id] || '' : '';
     const diagForm = forms.find((f: any) => f.form_type === 'diagnosis') || forms[0];
     const diagUrl = diagForm ? `${window.location.origin}/f/${encodeURIComponent(diagForm.public_slug)}${c ? `?cid=${encodeURIComponent(c.id)}` : ''}` : bookingUrl || url.trim();
     const outreach = stepNum === 0
-      ? getOneShotOutreachTemplate(compName, c?.full_name, compInd, diagUrl)
+      ? resolveOneShotOutreachDraft(oneShotOverride, compName, c?.full_name, compInd, diagUrl)
       : getSalesEmailTemplate(stepNum, compName, c?.full_name, compInd, diagUrl);
     setSubject(outreach.subject);
     setBody(outreach.body);
@@ -507,9 +557,9 @@ export const CommunicationSendCenter: React.FC<Props> = ({
 
   useEffect(() => {
     if (kind === 'sales_outreach') {
-      applySalesStep(salesStep, contact);
+      applySalesStep(salesStep, contact, customOneShotConfig);
     }
-  }, [kind, salesStep, contact?.id, contact?.company_id]);
+  }, [kind, salesStep, contact?.id, contact?.company_id, customOneShotConfig]);
 
   useEffect(() => {
     if ((kind === 'form' || kind === 'diagnosis') && form) {
@@ -587,11 +637,15 @@ export const CommunicationSendCenter: React.FC<Props> = ({
     if (
       !basis.trim() ||
       (kind === 'document' && (!doc || !hasDocUrl)) ||
-      (kind !== 'document' && kind !== 'announcement' && kind !== 'sales_outreach' && !vals.link_url.trim()) ||
+      (kind !== 'document' && kind !== 'announcement' && kind !== 'sales_outreach' && kind !== 'freeform' && !vals.link_url.trim()) ||
       (targets.includes('email') && !contact.email) ||
       (targets.includes('line') && !contact.line_user_id)
     ) {
       setError('送信先、メール・LINEの登録状況、必要な書類またはURLを確認してください。');
+      return;
+    }
+    if (kind === 'freeform' && !body.trim() && !(targets.includes('line') && selectedLineTemplate)) {
+      setError('自由作成モードでは本文を入力してください。');
       return;
     }
     if (initialCompanyId && contact.company_id && contact.company_id !== initialCompanyId) {
@@ -1265,21 +1319,53 @@ export const CommunicationSendCenter: React.FC<Props> = ({
 
             {(templateChannel !== 'line' || !selectedLineTemplate || selectedLineTemplate.reply_type === 'text') && (
               <div className="md:col-span-2">
-                <div className="flex items-center justify-between">
-                  <label className="text-xs font-semibold text-slate-700">テンプレート本文</label>
-                  {(kind === 'document' || kind === 'form' || kind === 'diagnosis') && (
-                    <span className="text-xs font-medium text-purple-700">
-                      保存対象: {kind === 'document' ? doc?.title || '共通書類テンプレート' : form?.name || '共通テンプレート'}
-                    </span>
-                  )}
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <div className="flex items-center gap-2">
+                    <label className="text-xs font-semibold text-slate-700">本文</label>
+                    {(kind === 'document' || kind === 'form' || kind === 'diagnosis') && (
+                      <span className="text-xs font-medium text-purple-700">
+                        保存対象: {kind === 'document' ? doc?.title || '共通書類テンプレート' : form?.name || '共通テンプレート'}
+                      </span>
+                    )}
+                  </div>
+                  <div className="flex items-center gap-1.5">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setSelectedEmailTemplateId('');
+                        setSelectedLineTemplateId('');
+                        if (templateChannel === 'email') setSubject('');
+                        setBody('');
+                      }}
+                      className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg border border-slate-200 bg-white hover:bg-slate-50 text-slate-600 text-[11px] font-semibold transition cursor-pointer whitespace-nowrap shrink-0"
+                      title="現在の件名・本文を真っさらな白紙状態にクリアします"
+                    >
+                      <Eraser className="h-3.5 w-3.5 text-slate-500" />
+                      <span>白紙に戻す</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setIsComposerExpanded(true)}
+                      className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg border border-purple-200 bg-purple-50 hover:bg-purple-100 text-purple-800 text-[11px] font-semibold transition cursor-pointer whitespace-nowrap shrink-0"
+                      title="文面作成エリアを画面全体へ大きく広げて入力します"
+                    >
+                      <Maximize2 className="h-3.5 w-3.5 text-purple-600" />
+                      <span>全画面で入力</span>
+                    </button>
+                  </div>
                 </div>
                 <textarea
                   value={body}
                   onChange={(e) => setBody(e.target.value)}
                   rows={8}
                   className="mt-1 block w-full rounded-xl border border-slate-200 bg-slate-50 p-3 text-xs text-slate-900 font-sans leading-relaxed focus:bg-white focus:border-purple-600 focus:outline-none shadow-2xs"
-                  placeholder="本文を入力してください..."
+                  placeholder="本文を入力してください（白紙から入力する場合は「自由作成」または上の「白紙に戻す」をご利用ください）..."
                 />
+                {templateChannel === 'email' && (
+                  <p className="mt-1.5 text-[11px] text-slate-500">
+                    ※ メール送信時はどの種別（自由作成を含む）でも末尾に統一署名（有限会社MST・住所・HP・Mail）が自動付与されます（営業・案内メールには配信停止リンクも自動付与）。
+                  </p>
+                )}
                 <PlaceholderAssist text={body} onInsert={(token) => setBody((curr) => curr + token)} />
               </div>
             )}
@@ -1464,15 +1550,22 @@ export const CommunicationSendCenter: React.FC<Props> = ({
                     )}
                   </div>
 
-                  {/* メール本文プレビュー */}
+                  {/* メール本文プレビュー（サーバーと同一の統一署名プレビューを含む） */}
                   <div className="p-6 bg-white">
                     <div className="whitespace-pre-wrap font-sans text-sm leading-relaxed text-slate-900 selection:bg-purple-100">
-                      {fill(
-                        kind === 'document' && documentCategory(doc) === 'contract'
-                          ? ensureContractReplySection(selectedEmailTemplate?.body_text || (templateChannel === 'email' ? body : resolveTemplate('email')?.body_text || ''))
-                          : selectedEmailTemplate?.body_text || (templateChannel === 'email' ? body : resolveTemplate('email')?.body_text || ''),
-                        vals,
-                      )}
+                      {(() => {
+                        const rawPreview = fill(
+                          kind === 'document' && documentCategory(doc) === 'contract'
+                            ? ensureContractReplySection(selectedEmailTemplate?.body_text || (templateChannel === 'email' ? body : resolveTemplate('email')?.body_text || ''))
+                            : selectedEmailTemplate?.body_text || (templateChannel === 'email' ? body : resolveTemplate('email')?.body_text || ''),
+                          vals,
+                        );
+                        const isTransactionalPreview = ['document', 'diagnosis', 'form', 'deal'].includes(kind);
+                        return appendEmailFooter(rawPreview, {
+                          senderEmail: senderSettings.fromEmail || 'contact@mstcorp.info',
+                          unsubscribeUrl: isTransactionalPreview ? undefined : '（送信時に連絡先専用の配信停止URLを自動付与）',
+                        });
+                      })()}
                     </div>
                   </div>
                 </div>
@@ -1551,6 +1644,94 @@ export const CommunicationSendCenter: React.FC<Props> = ({
           onClose={() => setPreviewDocModal(null)}
         />
       )}
+
+      {/* 全画面コンポーザー（Portal経由でドロワー幅に制約されず展開） */}
+      {isComposerExpanded &&
+        typeof document !== 'undefined' &&
+        createPortal(
+          <div
+            role="dialog"
+            aria-modal="true"
+            aria-label="メッセージ全画面入力"
+            className="fixed inset-0 z-[80] bg-slate-900/60 backdrop-blur-xs p-3 sm:p-6 flex flex-col"
+          >
+            <div className="bg-white border border-slate-200 rounded-2xl shadow-2xl w-full h-full flex flex-col overflow-hidden">
+              <div className="px-5 py-3.5 border-b border-slate-200 bg-slate-50 flex flex-wrap items-center justify-between gap-3 shrink-0">
+                <div className="min-w-0">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <span className="text-sm font-bold text-slate-900">
+                      メッセージ全画面エディタ（{templateChannel === 'email' ? 'メール' : 'LINE'}）
+                    </span>
+                    {contact && (
+                      <span className="text-xs text-slate-600">
+                        宛先: <strong className="text-slate-900">{contact.full_name} 様</strong>
+                        {companies[contact.company_id || ''] ? `（${companies[contact.company_id || '']}）` : ''}
+                      </span>
+                    )}
+                  </div>
+                </div>
+                <div className="flex items-center gap-2 shrink-0">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setSelectedEmailTemplateId('');
+                      setSelectedLineTemplateId('');
+                      if (templateChannel === 'email') setSubject('');
+                      setBody('');
+                    }}
+                    className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-slate-200 bg-white hover:bg-slate-50 text-xs font-semibold text-slate-700 transition cursor-pointer whitespace-nowrap shrink-0"
+                  >
+                    <Eraser className="h-3.5 w-3.5 text-slate-500" />
+                    <span>白紙に戻す</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setIsComposerExpanded(false)}
+                    className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg bg-purple-600 hover:bg-purple-700 text-white text-xs font-bold transition cursor-pointer whitespace-nowrap shrink-0"
+                    title="元の入力画面に戻ります（Esc）"
+                  >
+                    <Minimize2 className="h-3.5 w-3.5" />
+                    <span>元に戻す（Esc）</span>
+                  </button>
+                </div>
+              </div>
+
+              <div className="flex-1 min-h-0 flex flex-col gap-3 p-5 overflow-hidden">
+                {templateChannel === 'email' && (
+                  <div className="shrink-0">
+                    <label className="text-xs font-semibold text-slate-700 block mb-1">件名</label>
+                    <input
+                      value={subject}
+                      onChange={(e) => setSubject(e.target.value)}
+                      className="w-full rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-900 focus:bg-white focus:border-purple-600 focus:outline-none"
+                      placeholder="件名を入力..."
+                    />
+                  </div>
+                )}
+
+                <div className="flex-1 min-h-0 flex flex-col">
+                  <label className="text-xs font-semibold text-slate-700 block mb-1 shrink-0">本文</label>
+                  <textarea
+                    value={body}
+                    onChange={(e) => setBody(e.target.value)}
+                    className="flex-1 min-h-0 w-full resize-none rounded-xl border border-slate-200 bg-slate-50 p-4 text-sm text-slate-900 font-sans leading-relaxed focus:bg-white focus:border-purple-600 focus:outline-none"
+                    placeholder="本文を入力してください..."
+                  />
+                </div>
+
+                <div className="shrink-0 space-y-1.5">
+                  <PlaceholderAssist text={body} onInsert={(token) => setBody((curr) => curr + token)} />
+                  {templateChannel === 'email' && (
+                    <p className="text-[11px] text-slate-500">
+                      ※ メール送信時は末尾に統一署名（有限会社MST・住所・HP・Mail）が自動付与されます。
+                    </p>
+                  )}
+                </div>
+              </div>
+            </div>
+          </div>,
+          document.body
+        )}
     </div>
   );
 };

@@ -34,13 +34,18 @@ import {
   BookOpen,
   Inbox,
   Code,
-  LayoutTemplate
+  LayoutTemplate,
+  RotateCcw
 } from 'lucide-react';
 import { MarketingScenario, MarketingTrigger, MarketingChannel } from '../../types/marketing';
 import {
   INDUSTRY_MESSAGES,
   PRIORITY_INDUSTRY_KEYS,
+  ONE_SHOT_SCENARIO_ID,
+  ONE_SHOT_SCENARIO_NAME,
   getSalesEmailTemplate,
+  getOneShotOutreachTemplate,
+  resolveOneShotOutreachDraft,
   getIndustryMessage,
   getNurturingStepTemplate
 } from '../../utils/salesOutreachTemplates';
@@ -1315,12 +1320,22 @@ export const MarketingFlowStudio: React.FC<MarketingFlowStudioProps> = ({
     );
   }, [scenarios]);
 
+  const oneShotScenario = useMemo(() => {
+    return scenarios.find(
+      (s) => s.id === ONE_SHOT_SCENARIO_ID || s.name.includes('一発直球')
+    ) || null;
+  }, [scenarios]);
+
   const outreachScenarios = useMemo(() => {
     return scenarios.filter(s =>
-      s.name.includes('営業メール') ||
-      s.name.includes('【営業') ||
-      (s.channel === 'email' && s.trigger === 'lead_created') ||
-      s.trigger === 'outreach_first_sent'
+      s.id !== ONE_SHOT_SCENARIO_ID &&
+      !s.name.includes('一発直球') &&
+      (
+        s.name.includes('営業メール') ||
+        s.name.includes('【営業') ||
+        (s.channel === 'email' && s.trigger === 'lead_created') ||
+        s.trigger === 'outreach_first_sent'
+      )
     );
   }, [scenarios]);
 
@@ -4163,12 +4178,125 @@ export const MarketingFlowStudio: React.FC<MarketingFlowStudioProps> = ({
             </div>
           </div>
 
+          {/* 別枠: 一発直球提案（社外右腕）テンプレート編集スロット */}
+          {(() => {
+            const sampleDraft = resolveOneShotOutreachDraft(
+              oneShotScenario,
+              'サンプル株式会社',
+              '山田 太郎',
+              selectedIndustry,
+              'https://corp.mstcorp.info/diagnosis'
+            );
+            const rawDefault = getOneShotOutreachTemplate('{company_name}', '{recipient_name}', undefined, '{link_url}');
+            const isCustomized = Boolean(oneShotScenario);
+            return (
+              <div className="bg-white border border-purple-200 rounded-2xl p-5 shadow-xs space-y-3">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-100 pb-3">
+                  <div className="flex items-start gap-3">
+                    <span className="w-8 h-8 rounded-lg bg-purple-100 text-purple-800 border border-purple-200 font-bold text-xs flex items-center justify-center shrink-0">
+                      単発
+                    </span>
+                    <div>
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <span className="text-xs px-2 py-0.5 rounded bg-purple-50 text-purple-800 border border-purple-200 font-bold">
+                          別枠 · 一発直球提案メール
+                        </span>
+                        <span className="text-[11px] font-semibold text-slate-500">
+                          {isCustomized ? 'カスタム文面を保存済み' : '標準テンプレート使用中'}
+                        </span>
+                        <span className="text-xs text-slate-600 font-medium">
+                          件名: {sampleDraft.subject}
+                        </span>
+                      </div>
+                      <h4 className="text-sm font-bold text-slate-900 mt-1">
+                        {ONE_SHOT_SCENARIO_NAME}
+                      </h4>
+                      <p className="text-[11px] text-slate-500 mt-0.5">
+                        見込み企業リストからの「一発提案（社外右腕）」一括・個別発火および送信ドロワーで使用されます（署名・配信停止リンクは送信時に自動付与）。
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="flex items-center gap-2 self-end sm:self-auto shrink-0 flex-wrap">
+                    {isCustomized && (
+                      <button
+                        type="button"
+                        onClick={() => handleDeleteInspectorScenario(oneShotScenario!.id)}
+                        className="px-3 py-1.5 bg-white hover:bg-slate-50 text-slate-600 rounded-lg text-xs font-semibold border border-slate-200 transition flex items-center gap-1.5 cursor-pointer whitespace-nowrap shrink-0"
+                        title="カスタム編集を解除して初期の標準テンプレートに戻します"
+                      >
+                        <RotateCcw className="w-3.5 h-3.5 text-slate-500" />
+                        <span>標準に戻す</span>
+                      </button>
+                    )}
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setPreviewModalScenario({
+                          name: ONE_SHOT_SCENARIO_NAME,
+                          emailSubject: sampleDraft.subject,
+                          emailBody: sampleDraft.body,
+                        });
+                      }}
+                      className="px-3 py-1.5 bg-white hover:bg-slate-100 text-slate-700 rounded-lg text-xs font-bold border border-slate-200 transition flex items-center gap-1.5 cursor-pointer whitespace-nowrap shrink-0"
+                    >
+                      <Eye className="w-3.5 h-3.5 text-purple-600" />
+                      <span>全文プレビュー</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const target: MarketingScenario = oneShotScenario || {
+                          id: ONE_SHOT_SCENARIO_ID,
+                          name: ONE_SHOT_SCENARIO_NAME,
+                          trigger: 'manual',
+                          channel: 'email',
+                          audience: '未接触の見込み企業（一発直球提案）',
+                          waitMinutes: 0,
+                          emailSubject: rawDefault.subject,
+                          emailBody: rawDefault.body,
+                          messageBody: '',
+                          lineMessageType: 'text',
+                          lineImageUrl: '',
+                          linePreviewImageUrl: '',
+                          flexAltText: '',
+                          flexTitle: '',
+                          flexBody: '',
+                          flexButtonLabel: '',
+                          flexButtonUrl: '',
+                          status: 'prepared',
+                          automationEnabled: false,
+                          sendTimeWindow: '09:00-18:00',
+                          preferredSendTime: '',
+                          stopOnBooking: true,
+                          stopOnDeal: true,
+                          consentBasis: '特定電子メール法に基づく業務改善情報の提供（オプトアウト明記）',
+                          updatedAt: Date.now(),
+                        };
+                        handleOpenInspector(target);
+                      }}
+                      className="px-3 py-1.5 bg-purple-600 hover:bg-purple-700 text-white rounded-lg text-xs font-bold transition flex items-center gap-1.5 cursor-pointer shadow-xs whitespace-nowrap shrink-0"
+                    >
+                      <Edit3 className="w-3.5 h-3.5 text-purple-100" />
+                      <span>テンプレート編集</span>
+                    </button>
+                  </div>
+                </div>
+
+                <div className="p-3 bg-slate-50 rounded-xl border border-slate-200 font-mono text-xs text-slate-700 max-h-24 overflow-hidden relative">
+                  <pre className="whitespace-pre-wrap">{sampleDraft.body}</pre>
+                  <div className="absolute inset-x-0 bottom-0 h-10 bg-gradient-to-t from-slate-50 to-transparent pointer-events-none" />
+                </div>
+              </div>
+            );
+          })()}
+
           {/* 5ステップのタイムラインカード */}
           <div className="space-y-4">
             {[1, 2, 3, 4, 5].map((stepNum) => {
               const draft = getSalesEmailTemplate(stepNum, 'サンプル株式会社', '山田 太郎', selectedIndustry, 'https://corp.mstcorp.info/diagnosis');
               const waitDays = stepNum === 1 ? '0日目（即時 / 待機: 0分）' : `${(stepNum - 1) * 3}日後（待機: ${(stepNum - 1) * 3 * 1440}分）`;
-              const matchedScenario = outreachScenarios.find(s => s.name.includes(String(stepNum)));
+              const matchedScenario = outreachScenarios.find(s => s.id !== ONE_SHOT_SCENARIO_ID && !s.name.includes('一発直球') && s.name.includes(String(stepNum)));
 
               return (
                 <div
