@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { getSupabase, getAuthHeaders } from '../../lib/supabaseClient';
-import { Plus, Save, Trash2, Sparkles, RefreshCw, Globe, ExternalLink, Send, CheckCircle2, AlertCircle, Wrench, FileText, ArrowRight, Code2, Zap, Layers, Pencil } from 'lucide-react';
+import { Plus, Save, Trash2, Sparkles, RefreshCw, Globe, ExternalLink, Send, CheckCircle2, AlertCircle, Wrench, FileText, ArrowRight, Code2, Zap, Layers, Pencil, TrendingUp, BarChart2, Edit3, ChevronRight } from 'lucide-react';
 import { MEDIA_TEMPLATE_ARTICLES } from '../../data/mediaTemplateArticles';
 import { HpProductListingManager } from './HpProductListingManager';
 
@@ -20,11 +20,11 @@ type Deal = { id: string; lead_id?: string | null; proposal_status?: string | nu
 
 const kinds: Kind[] = ['media', 'article', 'product', 'seo', 'rewrite', 'attribution'];
 
+// SEO・リライト統合タブを含む新タブ構成
 const sections = [
   ['articles', '記事作成・HP公開'],
   ['settings', '自社HP・連携設定'],
-  ['seo', 'SEO・アクセス分析'],
-  ['rewrite', 'リライト・記事改善'],
+  ['seo', 'SEO分析＆リライト管理'],
   ['attribution', 'リード・成果記録'],
 ] as const;
 type Tab = typeof sections[number][0];
@@ -51,6 +51,9 @@ export const OwnMediaWorkspace: React.FC<{
   const [saving, setSaving] = useState(false);
   const [crmLeads, setCrmLeads] = useState<Lead[]>([]);
   const [crmDeals, setCrmDeals] = useState<Deal[]>([]);
+
+  // SEO分析＆リライト統合タブ用: サブモード ('seo' | 'rewrite')
+  const [seoSubMode, setSeoSubMode] = useState<'seo' | 'rewrite'>('seo');
 
   // AI自動生成状態
   const [aiGenerating, setAiGenerating] = useState(false);
@@ -356,7 +359,7 @@ export const OwnMediaWorkspace: React.FC<{
     setSaving(true);
     setError('');
     const id = editing?.id || `${tab === 'settings' ? 'media' : tab === 'articles' ? 'article' : tab}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
-    const currentRecordType: Kind = tab === 'settings' ? 'media' : tab === 'articles' ? 'article' : (tab as Kind);
+    const currentRecordType: Kind = tab === 'settings' ? 'media' : tab === 'articles' ? 'article' : tab === 'seo' ? seoSubMode : (tab as Kind);
     const status = currentRecordType === 'article' ? payloadToSave.publishStatus || '下書き' : payloadToSave.status || null;
 
     const row = {
@@ -1428,181 +1431,335 @@ export const OwnMediaWorkspace: React.FC<{
           )}
 
           {/* ========================================================
-              TAB 3: SEO・アクセス分析
+              TAB 3: SEO分析＆リライト管理（統合）
              ======================================================== */}
           {tab === 'seo' && (
             <div className="space-y-4">
-              <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-slate-200 bg-white p-5 shadow-xs">
-                <div>
-                  <h3 className="font-bold text-base text-slate-900">SEO・検索アクセス分析</h3>
-                  <p className="text-xs text-slate-500 mt-0.5">
-                    各記事の表示回数・クリック数・平均掲載順位を記録し、CTRを自動計算します。
-                  </p>
+
+              {/* ヘッダー＆連携状況バナー */}
+              <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-xs space-y-3">
+                <div className="flex flex-wrap items-center justify-between gap-3">
+                  <div>
+                    <div className="flex items-center gap-2">
+                      <TrendingUp className="h-5 w-5 text-purple-600" />
+                      <h3 className="font-bold text-base text-slate-900">SEO分析＆リライト管理</h3>
+                    </div>
+                    <p className="text-xs text-slate-500 mt-0.5">
+                      検索パフォーマンスを記録し、リライト改善タスクと一元管理します。
+                    </p>
+                  </div>
+                  {/* Google連携ステータス（将来自動連携時に切り替え） */}
+                  <div className="flex items-center gap-2 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800">
+                    <span className="font-bold">Google Search Console</span>
+                    <span className="rounded-full bg-amber-100 border border-amber-300 px-2 py-0.5 text-[10px] font-bold text-amber-700">手動入力モード</span>
+                    <span className="text-[11px] text-amber-600">→ 自動連携は設定後に切替</span>
+                  </div>
                 </div>
-                {!form && (
-                  <button
-                    onClick={reset}
-                    className="inline-flex items-center gap-2 rounded-xl bg-purple-600 hover:bg-purple-700 px-4 py-2 text-xs font-bold text-white shadow-xs cursor-pointer"
-                  >
-                    <Plus className="h-4 w-4" />
-                    検索実績を記録
-                  </button>
-                )}
+
+                {/* 使い方ガイド（コンパクト） */}
+                <div className="rounded-xl bg-slate-50 border border-slate-200 p-3 text-xs text-slate-600 leading-relaxed">
+                  <span className="font-bold text-slate-800">📋 使い方：</span>
+                  月1回 <a href="https://search.google.com/search-console" target="_blank" rel="noreferrer" className="text-purple-700 underline font-semibold">Google Search Console</a> で記事別のデータを確認
+                  → 「SEO実績を記録」で数値を入力 → 順位・CTRが低い記事を「リライトタスク」に登録して改善管理。
+                </div>
               </div>
 
-              {form && (
-                <form onSubmit={(e) => void save(e)} className="space-y-4 rounded-2xl border border-slate-200 bg-white p-5 shadow-xs">
-                  <h4 className="font-bold text-slate-900 text-base">SEO実績を記録</h4>
-                  <div className="grid gap-3 md:grid-cols-2">
-                    <div>
-                      <label className="block text-xs font-semibold text-slate-700">記録タイトル</label>
-                      <input required value={title} onChange={(e) => setTitle(e.target.value)} placeholder="例: 2026年10月度 検索順位レポート" className={cls} />
-                    </div>
-                    <div>
-                      <label className="block text-xs font-semibold text-slate-700">対象記事</label>
-                      <select value={payload.articleId || ''} onChange={(e) => setPayload((p) => ({ ...p, articleId: e.target.value }))} className={cls}>
-                        <option value="">記事を選択してください</option>
-                        {articles.map((a) => <option key={a.id} value={a.id}>{a.title}</option>)}
-                      </select>
-                    </div>
-                    <div>
-                      <label className="block text-xs font-semibold text-slate-700">検索表示回数</label>
-                      <input type="number" min="0" value={payload.impressions || ''} onChange={(e) => setPayload((p) => ({ ...p, impressions: e.target.value }))} className={cls} />
-                    </div>
-                    <div>
-                      <label className="block text-xs font-semibold text-slate-700">クリック数</label>
-                      <input type="number" min="0" value={payload.clicks || ''} onChange={(e) => setPayload((p) => ({ ...p, clicks: e.target.value }))} className={cls} />
-                    </div>
-                    <div>
-                      <label className="block text-xs font-semibold text-slate-700">平均掲載順位</label>
-                      <input type="number" step="0.1" min="1" value={payload.avgPosition || ''} onChange={(e) => setPayload((p) => ({ ...p, avgPosition: e.target.value }))} className={cls} />
-                    </div>
-                    <div>
-                      <label className="block text-xs font-semibold text-slate-700">問い合わせ数 / リード数</label>
-                      <input type="number" min="0" value={payload.leads || ''} onChange={(e) => setPayload((p) => ({ ...p, leads: e.target.value }))} className={cls} />
-                    </div>
-                  </div>
-                  <div className="flex justify-end gap-2 pt-2">
-                    <button type="button" onClick={() => setForm(false)} className="rounded-xl border border-slate-200 px-4 py-2 text-xs text-slate-600 hover:text-slate-900 cursor-pointer">キャンセル</button>
-                    <button type="submit" disabled={saving} className="rounded-xl bg-purple-600 hover:bg-purple-700 px-4 py-2 text-xs font-bold text-white shadow-xs cursor-pointer">保存</button>
-                  </div>
-                </form>
-              )}
+              {/* サブタブ切替: SEO実績 ↔ リライトタスク */}
+              <div className="flex items-center gap-1 rounded-xl border border-slate-200 bg-slate-100 p-1 w-fit">
+                <button
+                  type="button"
+                  onClick={() => { setSeoSubMode('seo'); setForm(false); }}
+                  className={`flex items-center gap-1.5 rounded-lg px-4 py-1.5 text-xs font-semibold transition cursor-pointer ${seoSubMode === 'seo' ? 'bg-white text-purple-700 shadow-2xs border border-purple-200' : 'text-slate-600 hover:text-slate-900'}`}
+                >
+                  <BarChart2 className="h-3.5 w-3.5" />
+                  SEO実績データ
+                  {seoList.length > 0 && <span className="rounded-full bg-purple-100 text-purple-700 px-1.5 py-0.5 text-[10px] font-bold">{seoList.length}</span>}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => { setSeoSubMode('rewrite'); setForm(false); }}
+                  className={`flex items-center gap-1.5 rounded-lg px-4 py-1.5 text-xs font-semibold transition cursor-pointer ${seoSubMode === 'rewrite' ? 'bg-white text-purple-700 shadow-2xs border border-purple-200' : 'text-slate-600 hover:text-slate-900'}`}
+                >
+                  <Edit3 className="h-3.5 w-3.5" />
+                  リライトタスク
+                  {rewriteList.length > 0 && <span className="rounded-full bg-orange-100 text-orange-700 px-1.5 py-0.5 text-[10px] font-bold">{rewriteList.length}</span>}
+                </button>
+              </div>
 
-              {!form && (
+              {/* ===== SEO実績サブパネル ===== */}
+              {seoSubMode === 'seo' && (
                 <div className="space-y-3">
-                  {seoList.length === 0 ? (
-                    <div className="rounded-2xl border border-slate-200 bg-white p-6 text-center text-xs text-slate-500 shadow-xs">
-                      SEO実績データはまだ登録されていません。
+                  {!form && (
+                    <div className="flex justify-end">
+                      <button
+                        onClick={reset}
+                        className="inline-flex items-center gap-2 rounded-xl bg-purple-600 hover:bg-purple-700 px-4 py-2 text-xs font-bold text-white shadow-xs cursor-pointer"
+                      >
+                        <Plus className="h-4 w-4" />
+                        SEO実績を記録
+                      </button>
                     </div>
-                  ) : (
-                    seoList.map((r) => {
-                      const linkedArticle = articles.find((a) => a.id === r.payload.articleId);
-                      const ctr = Number(r.payload.impressions) > 0
-                        ? ((Number(r.payload.clicks || 0) / Number(r.payload.impressions)) * 100).toFixed(2) + '%'
-                        : '-';
-                      return (
-                        <article key={r.id} className="rounded-2xl border border-slate-200 bg-white p-4 shadow-xs">
-                          <div className="flex justify-between items-start">
-                            <div>
-                              <h4 className="font-bold text-slate-900 text-sm">{r.title}</h4>
-                              <p className="text-xs text-slate-500">対象記事: {linkedArticle?.title || '未選択'}</p>
-                            </div>
-                            <div className="flex gap-2">
-                              <button onClick={() => edit(r)} className="rounded-lg border border-slate-200 px-2 py-1 text-xs text-slate-700 hover:bg-slate-50 cursor-pointer">編集</button>
-                              <button onClick={() => void remove(r)} className="rounded-lg border border-slate-200 p-1 text-slate-400 hover:text-rose-600 cursor-pointer"><Trash2 className="h-3.5 w-3.5" /></button>
-                            </div>
-                          </div>
-                          <div className="mt-2 flex gap-4 text-xs text-purple-700 font-semibold">
-                            <span>表示: {r.payload.impressions || 0}回</span>
-                            <span>クリック: {r.payload.clicks || 0}回</span>
-                            <span>CTR: {ctr}</span>
-                            <span>順位: {r.payload.avgPosition || '-'}位</span>
-                            <span>リード: {r.payload.leads || 0}件</span>
-                          </div>
-                        </article>
-                      );
-                    })
                   )}
-                </div>
-              )}
-            </div>
-          )}
 
-          {/* ========================================================
-              TAB 4: リライト・記事改善
-             ======================================================== */}
-          {tab === 'rewrite' && (
-            <div className="space-y-4">
-              <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-slate-200 bg-white p-5 shadow-xs">
-                <div>
-                  <h3 className="font-bold text-base text-slate-900">記事リライト・改善管理</h3>
-                  <p className="text-xs text-slate-500 mt-0.5">
-                    検索順位やCTRが低い記事の改善ポイントを記録・管理します。
-                  </p>
-                </div>
-                {!form && (
-                  <button onClick={reset} className="inline-flex items-center gap-2 rounded-xl bg-purple-600 hover:bg-purple-700 px-4 py-2 text-xs font-bold text-white shadow-xs cursor-pointer">
-                    <Plus className="h-4 w-4" />
-                    改善タスクを登録
-                  </button>
-                )}
-              </div>
-
-              {form && (
-                <form onSubmit={(e) => void save(e)} className="space-y-4 rounded-2xl border border-slate-200 bg-white p-5 shadow-xs">
-                  <h4 className="font-bold text-slate-900 text-base">リライト課題を登録</h4>
-                  <div className="grid gap-3 md:grid-cols-2">
-                    <div>
-                      <label className="block text-xs font-semibold text-slate-700">課題タイトル</label>
-                      <input required value={title} onChange={(e) => setTitle(e.target.value)} placeholder="例: CTR改善のための見出し・アイキャッチ見直し" className={cls} />
-                    </div>
-                    <div>
-                      <label className="block text-xs font-semibold text-slate-700">対象記事</label>
-                      <select value={payload.articleId || ''} onChange={(e) => setPayload((p) => ({ ...p, articleId: e.target.value }))} className={cls}>
-                        <option value="">記事を選択してください</option>
-                        {articles.map((a) => <option key={a.id} value={a.id}>{a.title}</option>)}
-                      </select>
-                    </div>
-                    <div className="md:col-span-2">
-                      <label className="block text-xs font-semibold text-slate-700">改善内容・指示</label>
-                      <textarea rows={3} value={payload.change || ''} onChange={(e) => setPayload((p) => ({ ...p, change: e.target.value }))} className={cls} />
-                    </div>
-                  </div>
-                  <div className="flex justify-end gap-2 pt-2">
-                    <button type="button" onClick={() => setForm(false)} className="rounded-xl border border-slate-200 px-4 py-2 text-xs text-slate-600 hover:text-slate-900 cursor-pointer">キャンセル</button>
-                    <button type="submit" disabled={saving} className="rounded-xl bg-purple-600 hover:bg-purple-700 px-4 py-2 text-xs font-bold text-white shadow-xs cursor-pointer">保存</button>
-                  </div>
-                </form>
-              )}
-
-              {!form && (
-                <div className="space-y-3">
-                  {rewriteList.length === 0 ? (
-                    <div className="rounded-2xl border border-slate-200 bg-white p-6 text-center text-xs text-slate-500 shadow-xs">
-                      リライト課題は登録されていません。
-                    </div>
-                  ) : (
-                    rewriteList.map((r) => (
-                      <article key={r.id} className="rounded-2xl border border-slate-200 bg-white p-4 shadow-xs">
-                        <div className="flex justify-between items-start">
-                          <h4 className="font-bold text-slate-900 text-sm">{r.title}</h4>
-                          <div className="flex gap-2">
-                            <button onClick={() => edit(r)} className="rounded-lg border border-slate-200 px-2 py-1 text-xs text-slate-700 hover:bg-slate-50 cursor-pointer">編集</button>
-                            <button onClick={() => void remove(r)} className="rounded-lg border border-slate-200 p-1 text-slate-400 hover:text-rose-600 cursor-pointer"><Trash2 className="h-3.5 w-3.5" /></button>
-                          </div>
+                  {form && (
+                    <form onSubmit={(e) => void save(e)} className="space-y-4 rounded-2xl border border-purple-200 bg-purple-50/40 p-5 shadow-xs">
+                      <div className="flex items-center justify-between">
+                        <h4 className="font-bold text-slate-900 text-sm flex items-center gap-2">
+                          <BarChart2 className="h-4 w-4 text-purple-600" />
+                          SEO実績を記録（Search Consoleの数値を入力）
+                        </h4>
+                        <button type="button" onClick={() => setForm(false)} className="text-xs text-slate-400 hover:text-slate-700 cursor-pointer">閉じる</button>
+                      </div>
+                      <div className="grid gap-3 md:grid-cols-2">
+                        <div>
+                          <label className="block text-xs font-semibold text-slate-700">記録タイトル <span className="text-rose-500">*</span></label>
+                          <input required value={title} onChange={(e) => setTitle(e.target.value)} placeholder="例: 2026年11月 検索パフォーマンスレポート" className={cls} />
                         </div>
-                        {r.payload.change && <p className="mt-2 text-xs text-slate-600">{r.payload.change}</p>}
-                      </article>
-                    ))
+                        <div>
+                          <label className="block text-xs font-semibold text-slate-700">対象記事</label>
+                          <select value={payload.articleId || ''} onChange={(e) => setPayload((p) => ({ ...p, articleId: e.target.value }))} className={cls}>
+                            <option value="">全体 / 記事を選択</option>
+                            {articles.map((a) => <option key={a.id} value={a.id}>{a.title}</option>)}
+                          </select>
+                        </div>
+                        <div>
+                          <label className="block text-xs font-semibold text-slate-700">検索表示回数（インプレッション）</label>
+                          <input type="number" min="0" value={payload.impressions || ''} onChange={(e) => setPayload((p) => ({ ...p, impressions: e.target.value }))} placeholder="例: 1200" className={cls} />
+                        </div>
+                        <div>
+                          <label className="block text-xs font-semibold text-slate-700">クリック数</label>
+                          <input type="number" min="0" value={payload.clicks || ''} onChange={(e) => setPayload((p) => ({ ...p, clicks: e.target.value }))} placeholder="例: 48" className={cls} />
+                        </div>
+                        <div>
+                          <label className="block text-xs font-semibold text-slate-700">平均掲載順位</label>
+                          <input type="number" step="0.1" min="1" value={payload.avgPosition || ''} onChange={(e) => setPayload((p) => ({ ...p, avgPosition: e.target.value }))} placeholder="例: 8.3" className={cls} />
+                        </div>
+                        <div>
+                          <label className="block text-xs font-semibold text-slate-700">問い合わせ数 / リード数</label>
+                          <input type="number" min="0" value={payload.leads || ''} onChange={(e) => setPayload((p) => ({ ...p, leads: e.target.value }))} placeholder="例: 3" className={cls} />
+                        </div>
+                        <div className="md:col-span-2">
+                          <label className="block text-xs font-semibold text-slate-700">メモ（気づき・課題など）</label>
+                          <input value={payload.memo || ''} onChange={(e) => setPayload((p) => ({ ...p, memo: e.target.value }))} placeholder="例: 順位8位なのにCTRが2%台。タイトル改善でクリック率上げられそう。" className={cls} />
+                        </div>
+                      </div>
+                      <div className="flex justify-end gap-2 pt-1">
+                        <button type="button" onClick={() => setForm(false)} className="rounded-xl border border-slate-200 px-4 py-2 text-xs text-slate-600 hover:text-slate-900 cursor-pointer">キャンセル</button>
+                        <button type="submit" disabled={saving} className="rounded-xl bg-purple-600 hover:bg-purple-700 px-4 py-2 text-xs font-bold text-white shadow-xs cursor-pointer">
+                          {saving ? '保存中…' : '実績を保存'}
+                        </button>
+                      </div>
+                    </form>
+                  )}
+
+                  {!form && (
+                    seoList.length === 0 ? (
+                      <div className="rounded-2xl border border-dashed border-slate-300 bg-white p-8 text-center shadow-xs">
+                        <BarChart2 className="mx-auto h-7 w-7 text-slate-300 mb-2" />
+                        <p className="text-sm font-semibold text-slate-600">SEO実績データがまだありません</p>
+                        <p className="text-xs text-slate-400 mt-1">
+                          月1回 Search Console で確認した数値を「SEO実績を記録」ボタンから入力してください。
+                        </p>
+                      </div>
+                    ) : (
+                      <div className="space-y-3">
+                        {seoList.map((r) => {
+                          const linkedArticle = articles.find((a) => a.id === r.payload.articleId);
+                          const imp = Number(r.payload.impressions || 0);
+                          const clicks = Number(r.payload.clicks || 0);
+                          const ctr = imp > 0 ? ((clicks / imp) * 100).toFixed(1) + '%' : '-';
+                          const pos = r.payload.avgPosition ? Number(r.payload.avgPosition).toFixed(1) : '-';
+                          const ctrNum = imp > 0 ? (clicks / imp) * 100 : 0;
+                          const needsRewrite = Number(pos) >= 3 && Number(pos) <= 15 && ctrNum < 3;
+                          return (
+                            <article key={r.id} className={`rounded-2xl border bg-white p-4 shadow-xs ${needsRewrite ? 'border-orange-200' : 'border-slate-200'}`}>
+                              <div className="flex justify-between items-start gap-2">
+                                <div className="min-w-0">
+                                  <div className="flex items-center gap-2 flex-wrap">
+                                    <h4 className="font-bold text-slate-900 text-sm">{r.title}</h4>
+                                    {needsRewrite && (
+                                      <span className="inline-flex items-center gap-1 rounded-full bg-orange-50 border border-orange-200 px-2 py-0.5 text-[10px] font-bold text-orange-700">
+                                        ⚠ リライト推奨
+                                      </span>
+                                    )}
+                                  </div>
+                                  {linkedArticle && <p className="text-[11px] text-slate-400 mt-0.5">記事: {linkedArticle.title}</p>}
+                                </div>
+                                <div className="flex gap-2 shrink-0">
+                                  {needsRewrite && !form && (
+                                    <button
+                                      type="button"
+                                      onClick={() => {
+                                        setSeoSubMode('rewrite');
+                                        setTitle(`【リライト】${linkedArticle?.title || r.title}`);
+                                        setPayload({ articleId: r.payload.articleId || '', change: `順位${pos}位・CTR${ctr}のため改善が必要。` });
+                                        setEditing(null);
+                                        setForm(true);
+                                      }}
+                                      className="inline-flex items-center gap-1 rounded-lg bg-orange-50 border border-orange-200 px-2 py-1 text-[11px] font-bold text-orange-700 hover:bg-orange-100 cursor-pointer"
+                                    >
+                                      <ChevronRight className="h-3 w-3" />
+                                      リライト登録
+                                    </button>
+                                  )}
+                                  <button onClick={() => edit(r)} className="rounded-lg border border-slate-200 px-2 py-1 text-xs text-slate-700 hover:bg-slate-50 cursor-pointer">編集</button>
+                                  <button onClick={() => void remove(r)} className="rounded-lg border border-slate-200 p-1 text-slate-400 hover:text-rose-600 cursor-pointer"><Trash2 className="h-3.5 w-3.5" /></button>
+                                </div>
+                              </div>
+                              <div className="mt-3 grid grid-cols-4 gap-2">
+                                {[
+                                  { label: '表示回数', value: `${imp.toLocaleString()}回` },
+                                  { label: 'クリック', value: `${clicks.toLocaleString()}回` },
+                                  { label: 'CTR', value: ctr, alert: ctrNum > 0 && ctrNum < 3 },
+                                  { label: '平均順位', value: `${pos}位`, alert: Number(pos) > 10 },
+                                ].map((stat) => (
+                                  <div key={stat.label} className={`rounded-lg p-2 text-center border ${stat.alert ? 'bg-orange-50 border-orange-200' : 'bg-slate-50 border-slate-200'}`}>
+                                    <p className="text-[10px] text-slate-500">{stat.label}</p>
+                                    <p className={`text-sm font-bold ${stat.alert ? 'text-orange-700' : 'text-slate-900'}`}>{stat.value}</p>
+                                  </div>
+                                ))}
+                              </div>
+                              {r.payload.leads && Number(r.payload.leads) > 0 && (
+                                <div className="mt-2 flex items-center gap-1.5 text-xs text-emerald-700 font-semibold">
+                                  <CheckCircle2 className="h-3.5 w-3.5" />
+                                  リード獲得: {r.payload.leads}件
+                                </div>
+                              )}
+                              {r.payload.memo && <p className="mt-2 text-xs text-slate-500 italic">💬 {r.payload.memo}</p>}
+                            </article>
+                          );
+                        })}
+                      </div>
+                    )
                   )}
                 </div>
               )}
+
+              {/* ===== リライトタスクサブパネル ===== */}
+              {seoSubMode === 'rewrite' && (
+                <div className="space-y-3">
+                  {!form && (
+                    <div className="flex justify-end">
+                      <button
+                        onClick={() => { reset(); setSeoSubMode('rewrite'); }}
+                        className="inline-flex items-center gap-2 rounded-xl bg-orange-500 hover:bg-orange-600 px-4 py-2 text-xs font-bold text-white shadow-xs cursor-pointer"
+                      >
+                        <Plus className="h-4 w-4" />
+                        リライトタスクを追加
+                      </button>
+                    </div>
+                  )}
+
+                  {form && (
+                    <form
+                      onSubmit={async (e) => {
+                        e.preventDefault();
+                        const db = getSupabase();
+                        if (!db || !userId) { setError('ログインしてください。'); return; }
+                        setSaving(true);
+                        const id = editing?.id || `rewrite-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+                        const row = { user_id: userId, id, record_type: 'rewrite' as Kind, title: title.trim(), product_id: null, status: payload.status || '未対応', payload, updated_at: new Date().toISOString() };
+                        const { error: saveError } = await db.from('mst_ai_acquisition_records').upsert(row, { onConflict: 'user_id,id' });
+                        setSaving(false);
+                        if (saveError) { setError('保存できませんでした: ' + saveError.message); return; }
+                        setRows((p) => [{ ...row } as Row, ...p.filter((r) => r.id !== id)]);
+                        setForm(false);
+                        setEditing(null);
+                        setNotice('リライトタスクを保存しました。');
+                      }}
+                      className="space-y-4 rounded-2xl border border-orange-200 bg-orange-50/40 p-5 shadow-xs"
+                    >
+                      <div className="flex items-center justify-between">
+                        <h4 className="font-bold text-slate-900 text-sm flex items-center gap-2">
+                          <Edit3 className="h-4 w-4 text-orange-500" />
+                          リライトタスクを登録
+                        </h4>
+                        <button type="button" onClick={() => setForm(false)} className="text-xs text-slate-400 hover:text-slate-700 cursor-pointer">閉じる</button>
+                      </div>
+                      <div className="grid gap-3 md:grid-cols-2">
+                        <div className="md:col-span-2">
+                          <label className="block text-xs font-semibold text-slate-700">タスクタイトル <span className="text-rose-500">*</span></label>
+                          <input required value={title} onChange={(e) => setTitle(e.target.value)} placeholder="例: CTR改善のための見出し・タイトル見直し" className={cls} />
+                        </div>
+                        <div>
+                          <label className="block text-xs font-semibold text-slate-700">対象記事</label>
+                          <select value={payload.articleId || ''} onChange={(e) => setPayload((p) => ({ ...p, articleId: e.target.value }))} className={cls}>
+                            <option value="">記事を選択してください</option>
+                            {articles.map((a) => <option key={a.id} value={a.id}>{a.title}</option>)}
+                          </select>
+                        </div>
+                        <div>
+                          <label className="block text-xs font-semibold text-slate-700">ステータス</label>
+                          <select value={payload.status || '未対応'} onChange={(e) => setPayload((p) => ({ ...p, status: e.target.value }))} className={cls}>
+                            <option value="未対応">未対応</option>
+                            <option value="対応中">対応中</option>
+                            <option value="完了">完了</option>
+                          </select>
+                        </div>
+                        <div className="md:col-span-2">
+                          <label className="block text-xs font-semibold text-slate-700">改善内容・具体的な指示</label>
+                          <textarea rows={3} value={payload.change || ''} onChange={(e) => setPayload((p) => ({ ...p, change: e.target.value }))} placeholder="例: H1タイトルに「2026年最新」を追加。メタディスクリプションにCTAを入れる。" className={cls} />
+                        </div>
+                      </div>
+                      <div className="flex justify-end gap-2 pt-1">
+                        <button type="button" onClick={() => setForm(false)} className="rounded-xl border border-slate-200 px-4 py-2 text-xs text-slate-600 hover:text-slate-900 cursor-pointer">キャンセル</button>
+                        <button type="submit" disabled={saving} className="rounded-xl bg-orange-500 hover:bg-orange-600 px-4 py-2 text-xs font-bold text-white shadow-xs cursor-pointer">
+                          {saving ? '保存中…' : 'タスクを保存'}
+                        </button>
+                      </div>
+                    </form>
+                  )}
+
+                  {!form && (
+                    rewriteList.length === 0 ? (
+                      <div className="rounded-2xl border border-dashed border-slate-300 bg-white p-8 text-center shadow-xs">
+                        <Edit3 className="mx-auto h-7 w-7 text-slate-300 mb-2" />
+                        <p className="text-sm font-semibold text-slate-600">リライトタスクはまだありません</p>
+                        <p className="text-xs text-slate-400 mt-1">
+                          SEO実績タブで「リライト推奨」と表示された記事から、ワンクリックでタスクを作成できます。
+                        </p>
+                      </div>
+                    ) : (
+                      <div className="space-y-3">
+                        {rewriteList.map((r) => {
+                          const linkedArticle = articles.find((a) => a.id === r.payload.articleId);
+                          const statusColor = r.payload.status === '完了'
+                            ? 'bg-emerald-50 border-emerald-200 text-emerald-700'
+                            : r.payload.status === '対応中'
+                            ? 'bg-blue-50 border-blue-200 text-blue-700'
+                            : 'bg-orange-50 border-orange-200 text-orange-700';
+                          return (
+                            <article key={r.id} className={`rounded-2xl border bg-white p-4 shadow-xs ${r.payload.status === '完了' ? 'border-slate-200 opacity-70' : 'border-orange-100'}`}>
+                              <div className="flex justify-between items-start gap-2">
+                                <div className="min-w-0">
+                                  <div className="flex items-center gap-2 flex-wrap">
+                                    <h4 className={`font-bold text-sm ${r.payload.status === '完了' ? 'line-through text-slate-400' : 'text-slate-900'}`}>{r.title}</h4>
+                                    <span className={`rounded-full border px-2 py-0.5 text-[10px] font-bold ${statusColor}`}>
+                                      {r.payload.status || '未対応'}
+                                    </span>
+                                  </div>
+                                  {linkedArticle && <p className="text-[11px] text-slate-400 mt-0.5">記事: {linkedArticle.title}</p>}
+                                </div>
+                                <div className="flex gap-2 shrink-0">
+                                  <button onClick={() => edit(r)} className="rounded-lg border border-slate-200 px-2 py-1 text-xs text-slate-700 hover:bg-slate-50 cursor-pointer">編集</button>
+                                  <button onClick={() => void remove(r)} className="rounded-lg border border-slate-200 p-1 text-slate-400 hover:text-rose-600 cursor-pointer"><Trash2 className="h-3.5 w-3.5" /></button>
+                                </div>
+                              </div>
+                              {r.payload.change && <p className="mt-2 text-xs text-slate-600 leading-relaxed">{r.payload.change}</p>}
+                            </article>
+                          );
+                        })}
+                      </div>
+                    )
+                  )}
+                </div>
+              )}
+
             </div>
           )}
 
           {/* ========================================================
-              TAB 5: リード・売上成果連携
+              TAB 4: リード・売上成果連携
              ======================================================== */}
           {tab === 'attribution' && (
             <div className="space-y-4">
