@@ -712,6 +712,16 @@ export const CommunicationSendCenter: React.FC<Props> = ({
       setNotice(summary);
       setPreview(false);
       const allOk = outcomes.length > 0 && outcomes.every((x) => x.ok);
+      // 書類を送れたら、書類の状態を「送信済み」にする(提案書は、対応する下書きの記録も「送付済み」にする)
+      if (allOk && doc) {
+        try {
+          await db.from('customer_documents').update({ status: 'sent' }).eq('id', doc.id);
+          doc.status = 'sent';
+          await db.from('proposal_drafts').update({ status: 'sent' }).eq('document_id', doc.id).eq('status', 'approved');
+        } catch {
+          // 状態の更新に失敗しても、送信そのものは成功しているため通知は変えない
+        }
+      }
       if (allOk && kind === 'sales_outreach' && salesStep === 1 && autoFollowups && targets.includes('email')) {
         try {
           const followRes = await fetch('/api/marketing/outreach-followups', {
