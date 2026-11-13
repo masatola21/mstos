@@ -1046,7 +1046,7 @@ export const MarketingFlowStudio: React.FC<MarketingFlowStudioProps> = ({
                         className="w-full flex items-center gap-2 px-2.5 py-1.5 rounded-lg text-xs font-semibold text-slate-700 hover:bg-emerald-50 hover:text-emerald-700 transition cursor-pointer text-left"
                       >
                         <MessageCircle className="h-3.5 w-3.5 text-emerald-600 shrink-0" />
-                        <span>分岐A: 診断×教育5本を適用</span>
+                        <span>分岐A: 簡易診断×教育4本を適用</span>
                       </button>
                     )}
                     {onApplyDirectConsultStarterSet && (
@@ -1126,7 +1126,7 @@ export const MarketingFlowStudio: React.FC<MarketingFlowStudioProps> = ({
                     className="inline-flex items-center gap-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 px-3.5 py-2.5 text-xs font-bold text-white shadow-sm transition cursor-pointer"
                   >
                     <MessageCircle className="h-4 w-4 text-emerald-200" />
-                    <span>分岐A: 診断×教育5本</span>
+                    <span>分岐A: 簡易診断×教育4本</span>
                   </button>
                 )}
                 <button
@@ -1859,8 +1859,8 @@ export const MarketingFlowStudio: React.FC<MarketingFlowStudioProps> = ({
                       className="p-2.5 rounded-lg bg-emerald-50 border border-emerald-200 text-emerald-900 text-left hover:border-emerald-400 transition cursor-pointer"
                     >
                       <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-emerald-200/70 text-emerald-900">教育ルート</span>
-                      <span className="font-bold block mt-1">A. 診断×教育（5本）</span>
-                      <span className="text-[11px] opacity-85 block">タグ: 選択:診断</span>
+                      <span className="font-bold block mt-1">A. 簡易診断×教育（4本）</span>
+                      <span className="text-[11px] opacity-85 block">レポートは商談後のみ</span>
                     </button>
                     <button
                       type="button"
@@ -2044,16 +2044,16 @@ export const MarketingFlowStudio: React.FC<MarketingFlowStudioProps> = ({
                   </span>
                   <div>
                     <h4 className="text-base font-bold text-slate-900 flex items-center gap-2 flex-wrap">
-                      分岐 A: 📊 3分無料経営診断 × 教育ルート → 商談案内
+                      分岐 A: 📊 3分無料経営診断（HP簡易結果即時 → 教育 → 商談案内）
                       <span className="text-[10px] px-2 py-0.5 rounded bg-emerald-100 text-emerald-800 border border-emerald-300 font-bold">
-                        教育・数値分析型
+                        教育・簡易診断ルート
                       </span>
                       <span className="text-xs px-2 py-0.5 rounded bg-emerald-50 text-emerald-700 border border-emerald-200">
                         {diagnosisScenarios.length} ステップ登録中
                       </span>
                     </h4>
                     <p className="text-xs text-slate-500">
-                      タグ「選択:診断」未回答教育 ──→ 診断完了・速報分析 ──→ レポート送付 ──→ 3日後事例教育 ──→ 7日後 商談案内
+                      未回答リマインド ──→ HP送信で【簡易診断結果】即時表示 ──→ 1〜7日後教育・商談案内 ──→ 商談後に詳細レポート＆提案書送付
                     </p>
                   </div>
                 </div>
@@ -2065,14 +2065,57 @@ export const MarketingFlowStudio: React.FC<MarketingFlowStudioProps> = ({
                     className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-xs font-bold transition cursor-pointer shadow-xs shrink-0"
                   >
                     <Zap className="w-3.5 h-3.5 text-emerald-200" />
-                    <span>診断×教育5本を最新化</span>
+                    <span>簡易診断×教育4本を最新化</span>
                   </button>
                 )}
               </div>
 
+              {/* 分岐A 全体フロー整理カード（HP簡易診断 〜 商談後限定レポート送付の境界） */}
+              <div className="rounded-xl border border-emerald-200 bg-emerald-50/40 p-4 space-y-3 text-xs">
+                <div className="flex items-center justify-between flex-wrap gap-2">
+                  <span className="font-bold text-emerald-950 flex items-center gap-1.5">
+                    <CheckCircle2 className="w-4 h-4 text-emerald-600" />
+                    分岐Aの実務フロー（簡易結果と詳細レポート・提案書の切り分け）
+                  </span>
+                  <span className="text-[10px] px-2 py-0.5 rounded bg-white text-emerald-800 border border-emerald-200 font-bold">
+                    未商談者へは詳細レポート自動送付なし
+                  </span>
+                </div>
+                <div className="grid grid-cols-1 md:grid-cols-4 gap-2.5">
+                  <div className="p-2.5 rounded-lg bg-white border border-emerald-100 space-y-1">
+                    <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-slate-100 text-slate-700">① 未回答時</span>
+                    <p className="font-bold text-slate-900">HP診断へ誘導</p>
+                    <p className="text-[11px] text-slate-500 leading-relaxed">
+                      タグ「選択:診断」で1日後に教育リマインド（回答済みの場合は自動停止）。
+                    </p>
+                  </div>
+                  <div className="p-2.5 rounded-lg bg-white border border-emerald-200 space-y-1">
+                    <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-emerald-100 text-emerald-800">② HP送信直後（自動）</span>
+                    <p className="font-bold text-emerald-900">簡易診断結果を即時表示</p>
+                    <p className="text-[11px] text-slate-600 leading-relaxed">
+                      HP画面にボトルネック傾向を即時表示。LINE/メールでも結果確認＋商談案内を送付。
+                    </p>
+                  </div>
+                  <div className="p-2.5 rounded-lg bg-white border border-emerald-100 space-y-1">
+                    <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-amber-100 text-amber-800">③ 1〜7日後（未予約のみ）</span>
+                    <p className="font-bold text-slate-900">簡易結果解説 → 商談案内</p>
+                    <p className="text-[11px] text-slate-500 leading-relaxed">
+                      簡易結果の見方・事例教育から30分商談へ誘導。商談予約・LINE返信で自動停止。
+                    </p>
+                  </div>
+                  <div className="p-2.5 rounded-lg bg-slate-900 text-white border border-slate-800 space-y-1">
+                    <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-amber-500 text-slate-950">④ 商談後（商談者のみ）</span>
+                    <p className="font-bold text-white">詳細レポート＆提案書送付</p>
+                    <p className="text-[11px] text-slate-300 leading-relaxed">
+                      商談を実施された方限定で、商談後に担当者が送信センター等から個別にお送りします。
+                    </p>
+                  </div>
+                </div>
+              </div>
+
               {diagnosisScenarios.length === 0 ? (
                 <div className="p-6 bg-slate-50 rounded-xl border border-dashed border-slate-200 text-center space-y-3">
-                  <p className="text-xs text-slate-500">分岐A（診断×教育）のシナリオがまだ登録されていません。</p>
+                  <p className="text-xs text-slate-500">分岐A（簡易診断×教育）のシナリオがまだ登録されていません。</p>
                   {onApplyDiagnosisStarterSet && (
                     <button
                       type="button"
@@ -2080,7 +2123,7 @@ export const MarketingFlowStudio: React.FC<MarketingFlowStudioProps> = ({
                       className="px-3.5 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-xs font-bold transition cursor-pointer inline-flex items-center gap-1.5 shadow-xs"
                     >
                       <Plus className="w-3.5 h-3.5" />
-                      <span>診断×教育5本の標準シナリオを反映する</span>
+                      <span>簡易診断×教育4本の標準シナリオを反映する</span>
                     </button>
                   )}
                 </div>

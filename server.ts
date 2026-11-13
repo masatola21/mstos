@@ -2145,10 +2145,10 @@ async function processLinePostback(event: any, contact: any, eventId: string, bo
         const contactParam = contact?.id ? `&cid=${encodeURIComponent(contact.id)}` : '';
         const formUrl = `${appUrl}/forms/${encodeURIComponent(formSlug)}?source=line&luid=${encodeURIComponent(userId)}${contactParam}`;
         const cardTitle = '📊 3分無料経営診断';
-        const cardBody = `${contact?.full_name || 'お客様'} 様\n無料経営診断をお選びいただきありがとうございます！\n貴社の業務・売上利益のボトルネックを特定し、改善処方箋を作成します。`;
+        const cardBody = `${contact?.full_name || 'お客様'} 様\n無料経営診断をお選びいただきありがとうございます！\n約3分のチェックにご回答いただくと、送信直後にホームページ上で【簡易診断結果】をすぐにご確認いただけます。\n（※詳細な診断レポート・改善提案書は30分商談後に進呈）`;
         replyMessage = {
           type: 'flex',
-          altText: '【無料経営診断】ご案内',
+          altText: '【3分無料経営診断】回答直後に簡易診断結果をご確認いただけます',
           contents: {
             type: 'bubble',
             body: {
@@ -6714,9 +6714,11 @@ app.post(
     const materialReady = resolvedMaterials.length > 0 || Boolean(fallbackMaterialUrl);
     const bookingReady = Boolean(bookingUrl && /^https?:\/\//i.test(bookingUrl));
 
+    const quickBottleneck = form.form_type === 'diagnosis' ? classifyBottleneck(cleanAnswers) : null;
+
     const bookingPrompt = bookingReady
-      ? `\n\n▼ 30分無料・個別フィードバック面談の日程予約はこちら\n${bookingUrl}\n\n※面談当日、画面共有にて診断レポートを詳しく解説し、終了後にPDFを進呈いたします。`
-      : '\n\n担当者より面談日程のご案内をお届けいたします。';
+      ? `\n\n▼ 30分無料オンライン商談（改善作戦会議）の日程予約はこちら\n${bookingUrl}\n\n※さらに踏み込んだ【詳細診断レポート・改善提案書】は、30分商談を実施いただいた方限定で商談後に作成・ご送付しております。`
+      : '\n\n※詳細な【個別診断レポート・改善提案書】は、商談を実施いただいた方限定で商談後に作成・ご送付しております。担当者より日程のご案内をお届けいたします。';
 
     let customNotificationText = '';
     if (isCarePackage) {
@@ -6755,7 +6757,7 @@ app.post(
       try {
         const lineMsg = {
           type: 'text',
-          text: customNotificationText || `【MST】「${form.name || '無料診断'}」の回答を受け付けました。\nご多忙の中、ご回答いただき誠にありがとうございます！\n\n現在、有限会社MST代表の大橋真人と専任チームにて、回答内容を基にした個別診断レポート（業務・売上・経営者の時間の急所特定）を作成しております。\n机上の空論ではなく「御社がどこから手を付ければ一番利益が残るか」を明確にするため、30分のオンライン個別面談にて解説と質疑応答を行わせていただきます。${bookingPrompt}\n\n※急ぎのご相談やご質問がございましたら、このLINEにそのまま返信いただけます。`,
+          text: customNotificationText || `【MST】「${form.name || '無料診断'}」をご回答いただきありがとうございました！\n\nホームページ画面に表示された【簡易診断結果】はご覧いただけましたでしょうか？\n■ 今回の簡易診断タイプ：${quickBottleneck?.typeTitle || '経営ボトルネック簡易診断'}\n\nなお、御社の現場に合わせた【詳細診断レポート・改善提案書】は、30分オンライン商談にて直接お話を伺った方限定で、商談後に作成・ご送付しております。${bookingPrompt}\n\n※簡易診断結果について気になる点やご質問がございましたら、このままLINEにご返信ください。`,
         };
         const lineResponse = await fetch('https://api.line.me/v2/bot/message/push', {
           method: 'POST',
@@ -6821,9 +6823,9 @@ app.post(
           ? `【MST】「介護保険外サービス開業パッケージ」${inquiryType || 'お問い合わせ'}の受付完了`
           : slug === 'material-download' || inquiryType?.includes('資料請求')
             ? `【MST】資料請求の受付完了（ダウンロードリンクのご案内）`
-            : `【MST】「${form.name || '無料診断'}」の受付と個別面談のご案内`;
+            : `【MST】「${form.name || '無料診断'}」簡易診断結果の確認 ＆ 個別商談のご案内`;
         // 署名は送信直前に共通処理で付ける（他のメールと同じ形式。受付完了は取引メールなので配信停止リンクなし）
-        const rawBodyText = customNotificationText || `${name} 様\n\n有限会社MST代表の大橋真人です。\nこの度は「${form.name || '無料診断'}」にご回答いただき誠にありがとうございます。\n\n現在、ご入力いただいた内容を精査し、御社の業務・売上・時間の急所を特定した個別診断レポートを作成しております。\n机上の空論ではなく「御社がどこから手を付ければ一番利益が残るか」を明確にするため、30分のオンライン面談にて解説と質疑応答を行わせていただきます。${bookingPrompt}\n\n--------------------------------------------------\n有限会社MST\n代表取締役: 大橋真人\n〒503-0981 岐阜県大垣市桧町127番地\n--------------------------------------------------`;
+        const rawBodyText = customNotificationText || `${name} 様\n\n有限会社MST代表の大橋真人です。\nこの度は「${form.name || '無料診断'}」にご回答いただき誠にありがとうございます。\n\n送信直後にホームページ画面へ表示いたしました【簡易診断結果】はご覧いただけましたでしょうか？\n■ 今回の簡易診断タイプ：${quickBottleneck?.typeTitle || '経営ボトルネック簡易診断'}\n${quickBottleneck?.firstStep ? `■ 最初に着手したい候補：${quickBottleneck.firstStep}\n` : ''}\nより詳細な【個別診断レポート】および【改善提案書】につきましては、机上の空論を避け御社の実情に合った内容でお届けするため、30分のオンライン商談を実施いただいた方限定で商談後に作成・ご送付しております。${bookingPrompt}\n\n--------------------------------------------------\n有限会社MST\n代表取締役: 大橋真人\n〒503-0981 岐阜県大垣市桧町127番地\n--------------------------------------------------`;
 
         const bodyText = appendEmailFooter(rawBodyText, { senderEmail: (emailFrom.match(/<([^<>]+)>/)?.[1] || emailFrom).trim() });
 

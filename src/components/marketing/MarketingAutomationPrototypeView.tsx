@@ -178,27 +178,27 @@ export const MST_CARE_STARTER_SCENARIOS: Omit<MarketingScenario, 'id' | 'updated
 export const MST_DIRECT_CONSULT_STARTER_SCENARIO: Omit<MarketingScenario, 'id' | 'updatedAt'> =
   MST_CONSULT_STARTER_SCENARIOS[1];
 
-// 分岐 A: 3分無料経営診断 × 教育 → 商談案内
+// 分岐 A: 3分無料経営診断（HP簡易診断結果即時表示 × 教育フォロー → 商談案内 ※詳細レポート・提案書は商談後のみ送付）
 export const MST_DIAGNOSIS_STARTER_SCENARIOS: Omit<MarketingScenario, 'id' | 'updatedAt'>[] = [
   {
-    name: '【A1・教育リマインド】診断未回答フォロー（人手不足ではなく仕組み不足）',
+    name: '【A1・未回答教育】1日後：まだお済みでない方へ（その場で簡易診断結果が出ます）',
     trigger: 'tag_added',
     targetTag: '選択:診断',
     channel: 'line',
-    audience: '「選択:診断」タグ（診断未回答者のみ）',
+    audience: '「選択:診断」タグ（HP診断未送信者のみ）',
     waitMinutes: 1440,
     emailSubject: '',
     emailBody: '',
     messageBody:
-      '{recipient_name} 様\n有限会社MSTの大橋です。\n\n昨日は無料経営診断をお選びいただきありがとうございました！\n多くの企業様で課題となる「人手不足・利益が残らない悩み」は、実は人ではなく【業務の配管（仕組み）の詰まり】が原因であることがほとんどです。\n\n3分ほどの選択式チェックで貴社のボトルネックを即判定できますので、お時間のある際にぜひお試しください。',
+      '{recipient_name} 様\n有限会社MSTの大橋です。\n\n昨日は無料経営診断をお選びいただきありがとうございました！\n多くの企業様で課題となる「人手不足・利益が残らない悩み」は、実は人ではなく【業務の配管（仕組み）の詰まり】が原因であることがほとんどです。\n\nホームページの選択式チェック（約3分）にご回答いただくと、送信直後にその場で【簡易診断結果（ボトルネック傾向・最初の一手）】をご確認いただけますので、お時間のある際にぜひお試しください。',
     lineMessageType: 'flex',
     lineImageUrl: '',
     linePreviewImageUrl: '',
-    flexAltText: '【3分無料診断】人手不足ではなく「仕組み不足」を特定する',
-    flexTitle: '📊 3分でわかる業務ボトルネック診断',
+    flexAltText: '【3分無料診断】回答直後に簡易診断結果をご確認いただけます',
+    flexTitle: '📊 3分で「簡易診断結果」を即時表示',
     flexBody:
-      '{recipient_name} 様\n日々の業務に追われて利益が残りにくい原因を、選択式の質問で即座に可視化します（所要約3分・無料）。',
-    flexButtonLabel: '3分診断を始める',
+      '{recipient_name} 様\n業務や利益のボトルネック傾向が約3分で分かり、回答直後にホームページ上で【簡易診断結果】をご確認いただけます（無料）。',
+    flexButtonLabel: '3分簡易診断を始める',
     flexButtonUrl: '{link_url}',
     status: 'draft',
     automationEnabled: false,
@@ -207,23 +207,23 @@ export const MST_DIAGNOSIS_STARTER_SCENARIOS: Omit<MarketingScenario, 'id' | 'up
     consentBasis: 'LINE診断ルート選択時の配信同意に基づく',
   },
   {
-    name: '【A2・診断直後】回答完了のお礼＆分析レポート作成開始',
+    name: '【A2・簡易結果の解説】1日後：簡易診断結果の見方と最初の急所',
     trigger: 'diagnosis_completed',
     channel: 'line',
-    audience: '診断完了者',
-    waitMinutes: 0,
+    audience: 'HP診断送信済み・商談未予約者',
+    waitMinutes: 1440,
     emailSubject: '',
     emailBody: '',
     messageBody:
-      '{recipient_name} 様\n【経営課題・業務ボトルネック診断】へのご回答ありがとうございました！\n\n現在、回答内容をもとに詳細な改善ロードマップ（診断レポート）を作成しております。\n\n※お急ぎで急所改善のご相談を希望される場合は、先行して無料の個別相談（30分）をご予約いただけます。\n{booking_url}',
+      '{recipient_name} 様\n有限会社MSTの大橋真人です。\n\n先日は「3分無料経営診断」へのご回答ありがとうございました！ホームページ上に表示された【簡易診断結果】はご覧いただけましたでしょうか？\n\n簡易診断では「いまどこに詰まりが出やすいか」の傾向を整理しています。\nなお、御社の実情に合わせた【詳細な診断レポート・改善提案書】は、直接お話を伺った上で「30分のオンライン商談を実施された方限定」で商談後に作成・お渡ししております。\n\n▼ 無料オンライン商談（30分）の日程を選ぶ\n{booking_url}',
     lineMessageType: 'flex',
     lineImageUrl: '',
     linePreviewImageUrl: '',
-    flexAltText: '【診断受付完了】急所分析レポート作成中',
-    flexTitle: '📊 診断受付完了・レポート作成中',
+    flexAltText: '【簡易診断結果の解説】最初の改善候補と詳細レポートのご案内',
+    flexTitle: '🔎 簡易診断結果の活かし方',
     flexBody:
-      '{recipient_name} 様、診断へのご回答ありがとうございました！\n現在AIと専門アナリストが詳細な改善レポートを作成中です。お急ぎの方は先行して30分の無料個別相談をご予約いただけます。',
-    flexButtonLabel: '無料相談の日程を選ぶ',
+      '{recipient_name} 様\nHP上の簡易診断結果で把握した傾向をもとに、どこから着手すべきかを30分の無料商談で一緒に整理しませんか？（詳細な診断レポート・提案書は商談後に作成・進呈しております）',
+    flexButtonLabel: '30分商談の日程を選ぶ',
     flexButtonUrl: '{booking_url}',
     status: 'draft',
     automationEnabled: false,
@@ -232,79 +232,54 @@ export const MST_DIAGNOSIS_STARTER_SCENARIOS: Omit<MarketingScenario, 'id' | 'up
     consentBasis: '診断フォーム回答時の同意に基づく',
   },
   {
-    name: '【A3・レポート送付】診断レポート完成＆個別作戦会議（商談）のご提案',
-    trigger: 'report_approved',
+    name: '【A3・事例教育×商談案内】3日後：仕組み化事例 ＆ 詳細レポート付き商談',
+    trigger: 'diagnosis_completed',
     channel: 'line',
-    audience: 'レポート承認済み見込み客',
-    waitMinutes: 0,
-    emailSubject: '',
-    emailBody: '',
-    messageBody:
-      '{recipient_name} 様\n大変お待たせいたしました！貴社の【経営改善・ボトルネック診断レポート】が完成いたしました。\n\n▼診断レポートの閲覧はこちら\n{document_url}\n\nこのレポートをもとに、最優先で着手すべき「最初の1手」を具体化する無料個別相談（30分）も承っております。\n{booking_url}',
-    lineMessageType: 'flex',
-    lineImageUrl: '',
-    linePreviewImageUrl: '',
-    flexAltText: '【診断レポート完成】貴社の急所分析・改善処方箋',
-    flexTitle: '📑 業務ボトルネック診断レポート完成',
-    flexBody:
-      '{recipient_name} 様\n大変お待たせいたしました！貴社の【改善ロードマップ付き診断レポート】が完成しました。最優先で着手すべき「最初の1手」をご確認ください。',
-    flexButtonLabel: 'レポートを閲覧する',
-    flexButtonUrl: '{document_url}',
-    status: 'draft',
-    automationEnabled: false,
-    stopOnBooking: true,
-    stopOnDeal: true,
-    consentBasis: '診断レポート完成通知への同意に基づく',
-  },
-  {
-    name: '【A4・3日後教育】レポートの活かし方＆個別作戦会議（商談）の打診',
-    trigger: 'report_sent',
-    channel: 'line',
-    audience: 'レポート送付済み・未予約者',
+    audience: 'HP診断送信済み・商談未予約者',
     waitMinutes: 4320,
     emailSubject: '',
     emailBody: '',
     messageBody:
-      '{recipient_name} 様\n先日お送りいたしました診断レポートはご確認いただけましたでしょうか？\n\n「どこから手をつければいいか分からない」「自社だけで実行するのが難しそう」といったお声に対して、他社事例を踏まえた30分の無料オンライン作戦会議を実施しております。\n\n▼面談の日程を選ぶ\n{booking_url}',
+      '{recipient_name} 様\n有限会社MSTの大橋真人です。\n\n先日の簡易診断に続き、同規模の企業様が「請求・見積・顧客情報の二重入力の解消」や「集客〜商談の導線接続」から小さく着手し、手元に利益が残る体制を整えた改善事例をご案内しております。\n\n30分のオンライン商談では、簡易診断の結果をベースに「御社が最初に直すべき1点」を絞り込み、商談後に御社専用の【詳細診断レポート・改善提案書】を進呈しております。\n\n▼ 個別商談の日程を選ぶ\n{booking_url}',
     lineMessageType: 'flex',
     lineImageUrl: '',
     linePreviewImageUrl: '',
-    flexAltText: '【個別作戦会議】診断レポート解消の具体策（30分・無料）',
-    flexTitle: '🎯 個別作戦会議のご案内（無料）',
+    flexAltText: '【改善事例】簡易診断から仕組み化に着手した事例＆詳細レポートのご案内',
+    flexTitle: '💡 仕組み化の事例 ＆ 個別商談',
     flexBody:
-      '{recipient_name} 様\n診断レポートの急所を最短で解消する具体的な手順について、他社実績を踏まえて30分で直接アドバイスいたします。ご都合の良い枠をお選びください。',
-    flexButtonLabel: '無料作戦会議を予約する',
+      '{recipient_name} 様\n簡易診断で見えたボトルネックを現場に負担なく解消した他社事例をご紹介。商談を実施された方限定で、商談後に「詳細診断レポート＆改善提案書」をお渡ししています。',
+    flexButtonLabel: '詳細レポート付き商談を予約',
     flexButtonUrl: '{booking_url}',
     status: 'draft',
     automationEnabled: false,
     stopOnBooking: true,
     stopOnDeal: true,
-    consentBasis: '診断フォロー配信への同意に基づく',
+    consentBasis: '診断フォーム回答時の同意に基づく',
   },
   {
-    name: '【A5・7日後商談案内】月20時間創出の仕組み化事例＆無料相談枠',
-    trigger: 'report_sent',
+    name: '【A4・最終商談案内】7日後：簡易診断後1週間・30分無料個別相談のご案内',
+    trigger: 'diagnosis_completed',
     channel: 'line',
-    audience: 'レポート送付済み・未予約者',
+    audience: 'HP診断送信済み・商談未予約者',
     waitMinutes: 10080,
     emailSubject: '',
     emailBody: '',
     messageBody:
-      '{recipient_name} 様\n診断レポートのご案内から1週間が経ちました。\n\n同様の課題（現場業務の属人化・請求や見積の手作業）を抱えていた企業様が、仕組み化により月20時間の経営時間を創出した事例をご紹介しております。\n\n今月の無料個別相談の枠も残り少なくなっておりますので、現状を打破したいとお考えの方はぜひお早めにご予約ください。\n{booking_url}',
+      '{recipient_name} 様\n有限会社MSTの大橋真人です。\n\n簡易診断をご回答いただいてから1週間が経ちました。もし「結果を見て気になっているが、日々の対応に追われて進められていない」という場合は、30分の無料オンライン相談をご活用ください。\n\n現状の優先順位を整理した上で、商談後に御社専用の【詳細診断レポート・改善提案書】をお届けいたします。\n\n▼ 相談枠の確認・ご予約はこちら\n{booking_url}',
     lineMessageType: 'flex',
     lineImageUrl: '',
     linePreviewImageUrl: '',
-    flexAltText: '【改善事例】月20時間の経営時間を創出した仕組み化手法',
-    flexTitle: '💡 仕組み化による業務改善事例',
+    flexAltText: '【最終案内】簡易診断後の30分無料個別相談（詳細レポート進呈）',
+    flexTitle: '🗓️ 30分無料・個別作戦会議のご案内',
     flexBody:
-      '{recipient_name} 様\n同様の急所（属人化・請求手作業）を仕組み化で解消した事例を公開中。今月の無料作戦会議の枠も残り少なくなっております。',
-    flexButtonLabel: '今すぐ面談枠を確保する',
+      '{recipient_name} 様\n簡易診断から1週間が経過しました。まずは30分のオンライン商談で改善の優先順位を整理しませんか？（詳細診断レポート・提案書は商談実施後に進呈）',
+    flexButtonLabel: '今月の相談枠を確認する',
     flexButtonUrl: '{booking_url}',
     status: 'draft',
     automationEnabled: false,
     stopOnBooking: true,
     stopOnDeal: true,
-    consentBasis: '診断フォロー配信への同意に基づく',
+    consentBasis: '診断フォーム回答時の同意に基づく',
   },
 ];
 import React, { useEffect, useMemo, useRef, useState } from 'react';
@@ -624,14 +599,34 @@ export const MarketingAutomationPrototypeView: React.FC<Props> = ({ scenarios, o
     return dupes;
   }, [scenarios]);
 
-  const mergeStarterScenarios = (presets: Omit<MarketingScenario, 'id' | 'updatedAt'>[]): { merged: MarketingScenario[]; addedCount: number; updatedCount: number } => {
+  const LEGACY_BRANCH_A_PREFIXES = [
+    '【1. 初回',
+    '【2. 診断',
+    '【3. レポート',
+    '【4. 3日',
+    '【5. 7日',
+    '【A1・教育リマインド】',
+    '【A2・診断直後】',
+    '【A3・レポート送付】',
+    '【A4・3日後教育】',
+    '【A5・7日後商談案内】',
+  ];
+
+  const mergeStarterScenarios = (
+    presets: Omit<MarketingScenario, 'id' | 'updatedAt'>[],
+    options?: { replaceLegacyBranchA?: boolean }
+  ): { merged: MarketingScenario[]; addedCount: number; updatedCount: number } => {
     const now = Date.now();
+    const baseList = options?.replaceLegacyBranchA
+      ? scenarios.filter((s) => !LEGACY_BRANCH_A_PREFIXES.some((prefix) => (s.name || '').startsWith(prefix)))
+      : [...scenarios];
+
     const existingByName = new Map<string, MarketingScenario>();
-    scenarios.forEach((s) => existingByName.set(s.name.trim(), s));
+    baseList.forEach((s) => existingByName.set(s.name.trim(), s));
 
     let addedCount = 0;
     let updatedCount = 0;
-    const updatedList = [...scenarios];
+    const updatedList = [...baseList];
 
     presets.forEach((preset, index) => {
       const pName = preset.name.trim();
@@ -689,9 +684,9 @@ export const MarketingAutomationPrototypeView: React.FC<Props> = ({ scenarios, o
   };
 
   const applyDiagnosisStarterSet = () => {
-    const { merged, addedCount, updatedCount } = mergeStarterScenarios(MST_DIAGNOSIS_STARTER_SCENARIOS);
+    const { merged, addedCount, updatedCount } = mergeStarterScenarios(MST_DIAGNOSIS_STARTER_SCENARIOS, { replaceLegacyBranchA: true });
     onScenariosChange(merged);
-    setNotice(`分岐A「診断×教育フォロー」（5本・Flex対応）を反映しました（新規導入: ${addedCount}件、最新更新: ${updatedCount}件）。`);
+    setNotice(`分岐A「簡易診断結果→教育→商談案内（全4本）」を反映しました（新規導入: ${addedCount}件、最新更新: ${updatedCount}件）。`);
   };
 
   const applyOutreachStarterSet = () => {
@@ -723,7 +718,7 @@ export const MarketingAutomationPrototypeView: React.FC<Props> = ({ scenarios, o
       ...MST_OUTREACH_STARTER_SCENARIOS,
       ...MST_LINE_NURTURING_STARTER_SCENARIOS,
     ];
-    const { merged, addedCount, updatedCount } = mergeStarterScenarios(allPresets);
+    const { merged, addedCount, updatedCount } = mergeStarterScenarios(allPresets, { replaceLegacyBranchA: true });
     onScenariosChange(merged);
     setNotice(`公式プリセット全${allPresets.length}本を反映しました（新規導入: ${addedCount}件、最新更新: ${updatedCount}件）。何回押しても重複しません。`);
   };
