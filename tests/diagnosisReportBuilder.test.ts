@@ -69,13 +69,16 @@ for (const bad of ['Phase 1', 'Phase 2', 'システム構築・業務自動化',
   assert(!DIAGNOSIS_REPORT_PROMPT_V2.includes(bad), `プロンプトに「${bad}」を直書きしない`);
 }
 assert(!/\d+\s*(円|万円|時間|か月|ヶ月)/.test(DIAGNOSIS_REPORT_PROMPT_V2), 'プロンプトに具体的な数値を例示しない');
+assert(DIAGNOSIS_REPORT_PROMPT_V2.includes('600〜900字') && DIAGNOSIS_REPORT_PROMPT_V2.includes('**〜**'), '分量目安と強調の指示が含まれる');
 assert(DIAGNOSIS_REPORT_PROMPT_V2.includes('要ヒアリング'), '要ヒアリングの指示');
 assert(DIAGNOSIS_REPORT_PROMPT_V2.includes('決め直したり'), '急所を決め直さない指示');
 for (const h of ['## D0', '## D2', '## D3', '## D4', '## D5']) assert(DIAGNOSIS_REPORT_PROMPT_V2.includes(h), `プロンプトに ${h}`);
 assert(!DIAGNOSIS_REPORT_PROMPT_V2.includes('## D1') && !DIAGNOSIS_REPORT_PROMPT_V2.includes('## D6'), 'AI に D1/D6 を書かせない');
 
 // 顧客書類のHTML(章見出しつき)
-const html = renderDiagnosisReportHtml('株式会社<テスト>', out);
+const aiHighlighted = ai.replace('要点', '**最優先の結論<x>** です');
+const outHighlighted = buildDiagnosisReportMarkdown(aiHighlighted, bottleneck, premise);
+const html = renderDiagnosisReportHtml('株式会社<テスト>', outHighlighted);
 const order = ['結論サマリー', '診断の前提', '現状整理', '特定された急所と根拠', '放置した場合の影響', '改善の方向性'];
 let last = -1;
 for (const t of order) {
@@ -84,6 +87,8 @@ for (const t of order) {
   last = i;
 }
 assert(html.includes('株式会社&lt;テスト&gt; 経営診断レポート'), '会社名はエスケープされる');
+assert(html.includes('<strong ') && html.includes('最優先の結論&lt;x&gt;</strong>'), '**...** がHTMLエスケープ付きで強調タグになる');
+assert(html.includes('#eff6ff') && html.includes('#f8fafc'), 'D0とD3に背景ハイライトカードが付く');
 assert(!html.includes('社内用の質問') && !html.includes('商談で確認すること'), '書類に D6 は載らない');
 assert(!html.includes('## ') && !html.includes('**'), 'Markdown の記号が残らない');
 // D6 が混ざった本文を渡しても、お客様向けの書類には出ない
@@ -94,3 +99,4 @@ const legacyHtml = renderDiagnosisReportHtml('A社', '1. ■ 診断サマリー\
 assert(legacyHtml.includes('1. ■ 診断サマリー') && legacyHtml.includes('本文&lt;b&gt;'), '旧形式は全文を出し、HTMLはエスケープ');
 
 console.log('diagnosisReportBuilder.test.ts: all assertions passed');
+

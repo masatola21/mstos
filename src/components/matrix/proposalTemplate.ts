@@ -119,6 +119,9 @@ export function defaultPaymentTermsFor(mode: ProposalPaymentMode): string {
 const text = (key: string) =>
   `<div style="white-space:pre-wrap; font-size:13px; color:#334155; line-height:1.8;">{{${key}}}</div>`;
 
+const highlightBox = (key: string, bg: string, border: string) =>
+  `<div style="background:${bg}; border:1px solid ${border}; border-radius:8px; padding:12px 14px;">${text(key)}</div>`;
+
 const heading = (label: string) =>
   `<h3 style="margin:0 0 10px 0; font-size:15px; color:#1e3a8a; font-weight:bold; border-left:4px solid #2563eb; padding-left:8px;">${label}</h3>`;
 
@@ -192,10 +195,10 @@ export function getProposalReportHtml(kind: ProposalKind = 'spot_build'): string
   </div>
 
   ${partTitle('診断の結果')}
-  ${section(t('D0'), text('d0_summary'))}
+  ${section(t('D0'), highlightBox('d0_summary', '#eff6ff', '#bfdbfe'))}
   ${section(t('D1'), text('d1_premise'))}
   ${section(t('D2'), text('d2_current'))}
-  ${section(t('D3'), text('d3_bottleneck'))}
+  ${section(t('D3'), highlightBox('d3_bottleneck', '#f8fafc', '#cbd5e1'))}
   ${section(t('D4'), text('d4_impact'))}
   ${section(t('D5'), text('d5_direction'))}
 

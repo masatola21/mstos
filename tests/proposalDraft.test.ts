@@ -42,6 +42,7 @@ for (const [name, p] of [['P1', p1], ['P3', p3]]) {
 }
 assert(p1.includes('「構築」') && p3.includes('「構築+伴走」'), '型の呼び名が入る');
 assert(p1.includes('提案の型と方針') && p3.includes('ロードマップ'), '章ごとの指示');
+assert(p1.includes('150〜220字') && p3.includes('250〜350字'), 'P1とP3に簡潔な分量目安が入る');
 assert(!p1.includes('決まった提案の方針'), 'P1 には方針を渡さない');
 assert(p3.includes('決まった提案の方針') && p3.includes('絞って構築します'), 'P3 には決まった方針を渡す');
 assert(p3.includes('構築の期間から、伴走への移行'), '構築+伴走のP3の指示');

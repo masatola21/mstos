@@ -95,21 +95,26 @@ export const DIAGNOSIS_REPORT_PROMPT_V2 = `あなたは有限会社MSTの経営�
 ・効果は断定せず、「〜の可能性があります」「〜と考えられます」と書く。
 ・経営者に寄り添う、丁寧で落ち着いた日本語で書く。前置きや結びの挨拶は付けない。
 
+【分量と読みやすさの目安】
+・全体でA4で1〜1.5枚（合計600〜900字程度）に収まるよう、要点を絞って簡潔に書く。
+・1文は40〜60字程度を目安に短くし、同じ内容の重複説明は避ける。
+・経営者が一目で要点を把握できるよう、各章で「結論の核心」「ボトルネックの要諦」「回答の重要な引用語句」を1〜3箇所だけ **〜** で強調する（多用せず、短いフレーズに絞る）。
+
 【出力する章(この見出しの通りに、Markdownの「## 」で書く。ほかの章は書かない)】
 ## D0 結論サマリー
-(1ページに収まる量。確定した急所を踏まえた、現状の要点と、商談で一緒に確認したいこと)
+(120〜160字目安・2〜3文。確定した急所を踏まえた現状の要点と、商談で一緒に確認したいこと1点)
 
 ## D2 現状整理
-(回答の内容を整理する。根拠となる回答は「」で引用する。引用できる回答がなければ「要ヒアリング」)
+(150〜200字目安・箇条書き3〜4点以内。回答の内容を端的に整理する。根拠となる回答は「」で引用する。引用できる回答がなければ「要ヒアリング」)
 
 ## D3 特定された急所と根拠
-(確定した急所について、なぜそう考えられるかを、回答の引用つきで説明する。根拠がなければ「要ヒアリング」。急所の名前や判定は繰り返さなくてよい)
+(150〜200字目安・2〜3文。確定した急所について、なぜそう考えられるかを回答の引用つきで説明する。根拠がなければ「要ヒアリング」。急所の名前や判定は繰り返さなくてよい)
 
 ## D4 放置した場合の影響
-(定性的に。数値は入れない。書けなければこの章ごと省略してよい)
+(100〜150字目安・箇条書き2〜3点以内。定性的に書く。数値は入れない。書けなければこの章ごと省略してよい)
 
 ## D5 改善の方向性
-(「ポイントで絞って構築する進め方」と「継続的に伴走して改善する進め方」の両方の可能性を並べる。どちらがよいかは断定しない。サービス名は書かない)
+(150〜200字目安。「ポイントで絞って構築する進め方」と「継続的に伴走して改善する進め方」の両方の可能性を簡潔に並べる。どちらがよいかは断定しない。サービス名は書かない)
 
 【診断回答と確定した急所(JSON)】
 `;
@@ -118,6 +123,27 @@ export const DIAGNOSIS_REPORT_PROMPT_V2 = `あなたは有限会社MSTの経営�
 
 const escapeHtml = (value: string) =>
   String(value ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+
+/**
+ * 強調(**...**)と箇条書き(- / *)を保ったまま安全なHTMLに変換する。
+ * HTMLエスケープを先に通し、**〜** は強調span、残った未対応の ** や見出し記号は取り除く。
+ */
+function formatDiagnosisBodyHtml(text: string): string {
+  const normalized = String(text ?? '')
+    .replace(/\r\n/g, '\n')
+    .replace(/^#{1,6}\s*/gm, '')
+    .replace(/^[ \t]*[-*]\s+/gm, '・')
+    .replace(/\n{3,}/g, '\n\n')
+    .trim();
+
+  const escaped = escapeHtml(normalized);
+  return escaped
+    .replace(
+      /\*\*([^*\n]+?)\*\*/g,
+      '<strong style="color: #1e3a8a; font-weight: 700; background: #fef9c3; padding: 0 3px; border-radius: 3px;">$1</strong>',
+    )
+    .replace(/\*\*/g, '');
+}
 
 /**
  * 診断レポートの書類(承認待ち)の本文HTML。D0〜D5 を章の見出しつきで並べる。
@@ -131,7 +157,7 @@ export function renderDiagnosisReportHtml(companyName: string, markdown: string)
 ${inner}
 </div>`;
   const textBlock = (text: string) =>
-    `<div style="white-space: pre-wrap; font-size: 14px; color: #334155;">${escapeHtml(markdownToPlainText(text))}</div>`;
+    `<div style="white-space: pre-wrap; font-size: 14px; color: #334155;">${formatDiagnosisBodyHtml(text)}</div>`;
 
   if (parsed.legacy) return wrap(textBlock(markdown));
 
@@ -140,10 +166,17 @@ ${inner}
     .filter((c) => CHAPTERS.find((d) => d.id === c.id)?.customerVisible)
     .map((c) => {
       const title = CHAPTERS.find((d) => d.id === c.id)!.title;
+      const bodyHtml =
+        c.id === 'D0'
+          ? `<div style="background: #eff6ff; border: 1px solid #bfdbfe; border-radius: 8px; padding: 12px 14px;">${textBlock(c.body)}</div>`
+          : c.id === 'D3'
+            ? `<div style="background: #f8fafc; border: 1px solid #cbd5e1; border-radius: 8px; padding: 12px 14px;">${textBlock(c.body)}</div>`
+            : textBlock(c.body);
       return `  <div style="margin-bottom: 22px;">
     <h2 style="margin: 0 0 8px 0; font-size: 16px; color: #1e3a8a; border-left: 4px solid #2563eb; padding-left: 8px;">${escapeHtml(title)}</h2>
-    ${textBlock(c.body)}
+    ${bodyHtml}
   </div>`;
     });
   return wrap(sections.join('\n'));
 }
+

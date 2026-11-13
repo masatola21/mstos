@@ -62,7 +62,7 @@ const docs = [
   {
     type: 'diagnosis_report',
     title: '経営診断レポート',
-    html: renderDiagnosisReportHtml('株式会社テスト', '## D0 結論サマリー\n要点整理\n\n## D5 改善の方向性\n進め方の整理'),
+    html: renderDiagnosisReportHtml('株式会社テスト', '## D0 結論サマリー\n**最重要の結論**を簡潔に整理しました。\n\n## D3 特定された急所と根拠\n**請求処理の二重入力**が主なボトルネックです。\n\n## D5 改善の方向性\n進め方の整理'),
   },
 ];
 

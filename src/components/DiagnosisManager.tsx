@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { DiagnosisFormsWorkspace } from './DiagnosisFormsWorkspace';
+import { FormattedReportView } from './common/FormattedReportView';
 import { getSupabase, getAuthHeaders } from '../lib/supabaseClient';
 import { Diagnosis, DiagnosisStatus, Company, Lead, AiReport } from '../types/database';
 import { 
@@ -1200,8 +1201,11 @@ ${JSON.stringify(context, null, 2)}`;
               <summary className="cursor-pointer text-sm font-semibold text-purple-900">
                 最新のAI診断レポートを確認（v{reports[0].version}）
               </summary>
-              <div className="mt-3 max-h-[32rem] overflow-y-auto whitespace-pre-wrap rounded-xl bg-white border border-purple-100 p-4 text-sm leading-7 text-slate-800">
-                {reports[0].full_report_text || reports[0].summary || 'レポート本文はまだ作成されていません。'}
+              <div className="mt-3 max-h-[32rem] overflow-y-auto rounded-xl bg-white border border-purple-100 p-4">
+                <FormattedReportView
+                  text={reports[0].full_report_text || reports[0].summary}
+                  fallback="レポート本文はまだ作成されていません。"
+                />
               </div>
             </details>
           )}
@@ -1292,8 +1296,12 @@ ${JSON.stringify(context, null, 2)}`;
                 </div>
                 <details className="rounded-lg border border-slate-200 bg-slate-50 p-3" open>
                   <summary className="cursor-pointer text-xs font-semibold text-slate-700">レポート本文を確認</summary>
-                  <div className="mt-3 max-h-96 overflow-y-auto whitespace-pre-wrap rounded-lg bg-white border border-slate-200 p-3 text-sm leading-6 text-slate-800">
-                    {reports[0].full_report_text || reports[0].summary || 'レポート本文がありません。'}
+                  <div className="mt-3 max-h-96 overflow-y-auto rounded-lg bg-white border border-slate-200 p-3">
+                    <FormattedReportView
+                      text={reports[0].full_report_text || reports[0].summary}
+                      fallback="レポート本文がありません。"
+                      compact
+                    />
                   </div>
                 </details>
               </div>

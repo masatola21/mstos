@@ -763,10 +763,20 @@ export const DocumentTemplateView: React.FC<DocumentTemplateViewProps> = ({
     
     const isProposal = currentTemplate.id === 'tpl-proposal-report';
     const proposalKind = kindFromPaymentMode(paymentMode);
+    const formatProposalVal = (key: string, rawVal: string) => {
+      const escaped = escapeHtml(rawVal);
+      if (!isProposal || !MULTILINE_KEYS.has(key)) return escaped;
+      return escaped
+        .replace(
+          /\*\*([^*\n]+?)\*\*/g,
+          '<strong style="color:#1e3a8a; font-weight:700; background:#fef9c3; padding:0 3px; border-radius:3px;">$1</strong>',
+        )
+        .replace(/\*\*/g, '');
+    };
     Object.entries(variableValues).forEach(([key, val]) => {
       const regex = new RegExp(`{{${key}}}`, 'g');
       // 提案書: 空の項目は、必須なら「【未入力】」、それ以外は決めた代替文を出す
-      result = result.replace(regex, escapeHtml(val || (isProposal ? proposalEmptyText(key, proposalKind) : '')));
+      result = result.replace(regex, formatProposalVal(key, val || (isProposal ? proposalEmptyText(key, proposalKind) : '')));
     });
     if (isProposal) {
       result = result.replace(/{{(\w+)}}/g, (whole, key) => (key === 'apply_url' ? whole : escapeHtml(proposalEmptyText(key, proposalKind))));
