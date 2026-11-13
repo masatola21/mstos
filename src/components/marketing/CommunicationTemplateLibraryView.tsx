@@ -1,10 +1,11 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { Library, Plus, Save, Trash2, X, Sparkles, Filter, CheckCircle2, ChevronDown, Copy } from 'lucide-react';
+import { Plus, Save, Trash2, X, Sparkles, Filter, Copy, Mail, Smartphone } from 'lucide-react';
 import { getSupabase } from '../../lib/supabaseClient';
 import { LineMessagePreview } from '../LineMessagePreview';
 import { InlineDeleteButton } from '../InlineDeleteButton';
-import { renderPlaceholders } from '../../utils/placeholders';
+import { renderPlaceholders, PLACEHOLDER_SAMPLE_VALUES } from '../../utils/placeholders';
 import { PlaceholderAssist } from '../common/PlaceholderAssist';
+import { appendEmailFooter } from '../../../server/emailFooter';
 
 export type Channel = 'email' | 'line';
 export type LineType = 'text' | 'image' | 'flex' | 'video';
@@ -126,6 +127,7 @@ export const CommunicationTemplateLibraryView: React.FC = () => {
 
   const [editing, setEditing] = useState<TemplateRow | null>(null);
   const [editorOpen, setEditorOpen] = useState(false);
+  const [showPresets, setShowPresets] = useState(false);
   const [name, setName] = useState('');
   const [category, setCategory] = useState<string>('diagnosis');
   const [channel, setChannel] = useState<Channel>('email');
@@ -173,6 +175,15 @@ export const CommunicationTemplateLibraryView: React.FC = () => {
   useEffect(() => {
     void load();
   }, []);
+
+  useEffect(() => {
+    if (!editorOpen) return;
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') resetEditor();
+    };
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
+  }, [editorOpen]);
 
   const rows = useMemo<TemplateRow[]>(() => [
     ...emailTemplates.map((item) => ({
@@ -512,17 +523,27 @@ export const CommunicationTemplateLibraryView: React.FC = () => {
         <div>
           <h2 className="text-[19px] font-bold text-slate-800 tracking-tight">定型テンプレート保管庫</h2>
           <p className="mt-0.5 text-xs text-slate-500">
-            診断案内・面談調整・書類送付・営業メール・LINE Flexなど全社共通の定型文テンプレートを管理します。
+            診断案内・面談調整・書類送付・営業メール・LINEの定型文を管理します。
           </p>
         </div>
-        <button
-          type="button"
-          onClick={startCreate}
-          className="inline-flex items-center gap-1.5 rounded-lg bg-purple-600 px-3.5 py-1.5 text-xs font-semibold text-white hover:bg-purple-700 transition cursor-pointer shadow-xs"
-        >
-          <Plus className="h-3.5 w-3.5" />
-          新規作成
-        </button>
+        <div className="flex items-center gap-2">
+          <button
+            type="button"
+            onClick={() => setShowPresets((v) => !v)}
+            className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-50 transition cursor-pointer whitespace-nowrap"
+          >
+            <Sparkles className="h-3.5 w-3.5 text-purple-600" />
+            <span>雛形から作成</span>
+          </button>
+          <button
+            type="button"
+            onClick={startCreate}
+            className="inline-flex items-center gap-1.5 rounded-lg bg-purple-600 px-3.5 py-1.5 text-xs font-semibold text-white hover:bg-purple-700 transition cursor-pointer shadow-xs whitespace-nowrap"
+          >
+            <Plus className="h-3.5 w-3.5" />
+            新規作成
+          </button>
+        </div>
       </div>
 
       {(error || notice) && (
@@ -534,34 +555,38 @@ export const CommunicationTemplateLibraryView: React.FC = () => {
         </div>
       )}
 
-      {/* Preset Fast Picker */}
-      <div className="rounded-xl border border-purple-200 bg-purple-50/50 p-3.5 space-y-2">
-        <div className="flex items-center gap-1.5 text-xs font-bold text-purple-900">
-          <Sparkles className="h-3.5 w-3.5 text-purple-600" />
-          <span>よく使う定型雛形（クリックで新規作成に反映）</span>
-        </div>
-        <div className="flex flex-wrap gap-1.5">
-          {PRESET_SNIPPETS.map((preset, idx) => (
-            <button
-              key={idx}
-              type="button"
-              onClick={() => {
-                resetEditor();
-                applyPreset(preset);
-                setEditorOpen(true);
-              }}
-              className="inline-flex items-center gap-1.5 rounded-lg border border-purple-200 bg-white hover:bg-purple-50 px-2.5 py-1 text-xs text-purple-800 transition cursor-pointer shadow-2xs font-medium"
-            >
-              <Copy className="h-3 w-3 text-purple-600" />
-              <span>{preset.label}</span>
+      {/* Collapsible Preset Fast Picker */}
+      {showPresets && (
+        <div className="rounded-xl border border-purple-200 bg-purple-50/40 p-3.5 space-y-2">
+          <div className="flex items-center justify-between text-xs font-bold text-purple-900">
+            <span>よく使う定型雛形（クリックして編集画面を開く）</span>
+            <button type="button" onClick={() => setShowPresets(false)} className="text-slate-400 hover:text-slate-700 cursor-pointer">
+              <X className="h-3.5 w-3.5" />
             </button>
-          ))}
+          </div>
+          <div className="flex flex-wrap gap-1.5">
+            {PRESET_SNIPPETS.map((preset, idx) => (
+              <button
+                key={idx}
+                type="button"
+                onClick={() => {
+                  resetEditor();
+                  applyPreset(preset);
+                  setShowPresets(false);
+                  setEditorOpen(true);
+                }}
+                className="inline-flex items-center gap-1.5 rounded-lg border border-purple-200 bg-white hover:bg-purple-50 px-2.5 py-1 text-xs text-purple-800 transition cursor-pointer font-medium"
+              >
+                <Copy className="h-3 w-3 text-purple-600" />
+                <span>{preset.label}</span>
+              </button>
+            ))}
+          </div>
         </div>
-      </div>
+      )}
 
       {/* Filters */}
-      <div className="space-y-2.5 pt-1">
-        {/* Category Filters */}
+      <div className="space-y-2 pt-1">
         <div className="flex flex-wrap items-center gap-1.5">
           <span className="text-xs font-bold text-slate-700 mr-1 flex items-center gap-1">
             <Filter className="h-3.5 w-3.5 text-purple-600" /> 用途:
@@ -593,7 +618,6 @@ export const CommunicationTemplateLibraryView: React.FC = () => {
           ))}
         </div>
 
-        {/* Channel & Type Filters */}
         <div className="flex flex-wrap items-center justify-between gap-3 pt-1">
           <div className="flex flex-wrap gap-1.5">
             <span className="text-xs font-bold text-slate-700 mr-1">媒体:</span>
@@ -625,228 +649,289 @@ export const CommunicationTemplateLibraryView: React.FC = () => {
         </div>
       </div>
 
-      {/* Editor Modal / Form */}
+      {/* Spacious 2-Column Editor Modal */}
       {editorOpen && (
-        <form onSubmit={(event) => void saveTemplate(event)} className="space-y-4 rounded-xl border border-purple-200 bg-purple-50/20 p-5 shadow-lg">
-          <div className="flex items-center justify-between border-b border-slate-200 pb-3">
-            <div>
-              <h3 className="text-sm font-bold text-slate-900 flex items-center gap-2">
-                <span>{editing ? 'テンプレートを編集' : '新規テンプレート作成'}</span>
-                <span className="text-xs font-normal text-slate-500">（全社共通マスター）</span>
-              </h3>
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-2 sm:p-4 bg-slate-900/60 backdrop-blur-xs animate-fade-in">
+          <form
+            onSubmit={(event) => void saveTemplate(event)}
+            className="bg-white border border-slate-200 rounded-2xl max-w-6xl w-[95vw] h-[90vh] shadow-2xl overflow-hidden flex flex-col"
+          >
+            {/* Modal Header */}
+            <div className="px-6 py-4 border-b border-slate-200 flex items-center justify-between bg-white shrink-0">
+              <div>
+                <h3 className="text-base font-bold text-slate-900">
+                  {editing ? 'テンプレートを編集' : '新規テンプレート作成'}
+                </h3>
+              </div>
+              <button
+                type="button"
+                onClick={resetEditor}
+                className="rounded-lg p-1.5 text-slate-400 hover:text-slate-700 hover:bg-slate-100 cursor-pointer"
+                aria-label="閉じる"
+              >
+                <X className="h-5 w-5" />
+              </button>
             </div>
-            <button type="button" onClick={resetEditor} className="rounded-lg p-1.5 text-slate-400 hover:bg-slate-100 cursor-pointer">
-              <X className="h-4 w-4" />
-            </button>
-          </div>
 
-          <div className="grid gap-3 md:grid-cols-3">
-            <label className="text-xs font-bold text-slate-700 md:col-span-2">
-              テンプレート名 <span className="text-rose-500">*</span>
-              <input
-                required
-                maxLength={120}
-                placeholder="例: 【診断】製造業向け3分無料診断案内（オンライン面談URL付き）"
-                value={name}
-                onChange={(event) => setName(event.target.value)}
-                className="mt-1 block w-full rounded-lg border border-slate-200 bg-white p-2.5 text-xs text-slate-900 focus:border-purple-500 shadow-2xs"
-              />
-            </label>
-
-            <label className="text-xs font-bold text-slate-700">
-              用途（カテゴリ） <span className="text-rose-500">*</span>
-              <select
-                value={category}
-                onChange={(event) => setCategory(event.target.value)}
-                className="mt-1 block w-full rounded-lg border border-slate-200 bg-white p-2.5 text-xs text-slate-900 focus:border-purple-500 shadow-2xs"
-              >
-                {Object.entries(CATEGORY_LABELS).map(([catKey, catLabel]) => (
-                  <option key={catKey} value={catKey}>
-                    {catLabel}
-                  </option>
-                ))}
-              </select>
-            </label>
-
-            <label className="text-xs font-bold text-slate-700">
-              配信チャネル
-              <select
-                disabled={!!editing}
-                value={channel}
-                onChange={(event) => {
-                  const value = event.target.value as Channel;
-                  setChannel(value);
-                  if (value === 'email') setLineType('text');
-                }}
-                className="mt-1 block w-full rounded-lg border border-slate-200 bg-white p-2.5 text-xs text-slate-900 focus:border-purple-500 shadow-2xs"
-              >
-                <option value="email">メール</option>
-                <option value="line">LINE</option>
-              </select>
-            </label>
-
-            {channel === 'line' && (
-              <label className="text-xs font-bold text-slate-700">
-                LINE形式
-                <select
-                  disabled={editing?.source === 'communication'}
-                  value={lineType}
-                  onChange={(event) => {
-                    setLineType(event.target.value as LineType);
-                    setBody('');
-                    setAltText('');
-                    setFlexJson('');
-                    setAssetUrl('');
-                    setAssetPath('');
-                    setPreviewUrl('');
-                    setPreviewPath('');
-                  }}
-                  className="mt-1 block w-full rounded-lg border border-slate-200 bg-white p-2.5 text-xs text-slate-900 focus:border-purple-500 shadow-2xs"
-                >
-                  {Object.entries(typeLabel).map(([key, label]) => (
-                    <option key={key} value={key}>
-                      {label}
-                    </option>
-                  ))}
-                </select>
-              </label>
-            )}
-
-            {channel === 'email' && (
-              <div className="md:col-span-2">
-                <label className="text-xs font-bold text-slate-700">
-                  件名 <span className="text-rose-500">*</span>
-                </label>
-                <input
-                  required
-                  maxLength={200}
-                  placeholder="例: 【3分無料診断】改善優先度レポートのご案内｜{会社名} 様"
-                  value={subject}
-                  onChange={(event) => setSubject(event.target.value)}
-                  className="mt-1 block w-full rounded-lg border border-slate-200 bg-white p-2.5 text-xs text-slate-900 focus:border-purple-500 shadow-2xs"
-                />
-                <PlaceholderAssist text={subject} onInsert={(token) => setSubject((curr) => curr + token)} />
-              </div>
-            )}
-
-            {(channel === 'email' || lineType === 'text') && (
-              <div className="md:col-span-3">
-                <label className="text-xs font-bold text-slate-700">
-                  本文 <span className="text-rose-500">*</span>
-                </label>
-                <textarea
-                  required
-                  rows={8}
-                  maxLength={10000}
-                  value={body}
-                  onChange={(event) => setBody(event.target.value)}
-                  className="mt-1 block w-full rounded-lg border border-slate-200 bg-white p-3 text-xs text-slate-900 font-sans leading-relaxed focus:border-purple-500 shadow-2xs"
-                  placeholder="お名前は {お名前}、会社名は {会社名}、診断URLは {案内URL}、面談カレンダーは {面談予約URL} のように埋め込めます。"
-                />
-                <PlaceholderAssist text={body} onInsert={(token) => setBody((curr) => curr + token)} />
-              </div>
-            )}
-
-            {channel === 'line' && (lineType === 'image' || lineType === 'video') && (
-              <div className="space-y-3 md:col-span-3">
-                <label className="block text-xs font-bold text-slate-700">
-                  {lineType === 'video' ? '動画ファイル（MP4）' : '画像ファイル（JPEG / PNG）'}
-                  <input
-                    type="file"
-                    accept={lineType === 'video' ? 'video/mp4' : 'image/jpeg,image/png'}
-                    onChange={(event) => void onUpload(event.target.files?.[0], 'asset')}
-                    className="mt-1 block w-full text-xs text-slate-700 file:mr-3 file:py-1.5 file:px-3 file:rounded-lg file:border file:border-slate-200 file:bg-slate-50 file:text-slate-700"
-                  />
-                  {assetUrl && <span className="mt-1 block break-all text-[11px] text-purple-700 font-mono">URL: {assetUrl}</span>}
-                </label>
-                <label className="block text-xs font-bold text-slate-700">
-                  プレビュー画像（JPEG / PNG）
-                  <input
-                    type="file"
-                    accept="image/jpeg,image/png"
-                    onChange={(event) => void onUpload(event.target.files?.[0], 'preview')}
-                    className="mt-1 block w-full text-xs text-slate-700 file:mr-3 file:py-1.5 file:px-3 file:rounded-lg file:border file:border-slate-200 file:bg-slate-50 file:text-slate-700"
-                  />
-                  {previewUrl && <span className="mt-1 block break-all text-[11px] text-purple-700 font-mono">URL: {previewUrl}</span>}
-                </label>
-                {lineType === 'video' && (
-                  <label className="block text-xs font-bold text-slate-700">
-                    代替テキスト
+            {/* Modal Body: 2 Columns */}
+            <div className="flex-1 min-h-0 grid grid-cols-1 lg:grid-cols-12 overflow-hidden">
+              {/* Left Column: Form Inputs & Large Body */}
+              <div className="lg:col-span-7 p-6 overflow-y-auto flex flex-col gap-4 border-b lg:border-b-0 lg:border-r border-slate-200">
+                <div className="grid gap-3 md:grid-cols-12">
+                  <label className="text-xs font-bold text-slate-700 md:col-span-6">
+                    テンプレート名 <span className="text-rose-500">*</span>
                     <input
                       required
-                      value={altText}
-                      onChange={(event) => setAltText(event.target.value)}
-                      className="mt-1 block w-full rounded-lg border border-slate-200 bg-white p-2 text-xs text-slate-900 focus:border-purple-500 shadow-2xs"
+                      maxLength={120}
+                      placeholder="例: 【診断】製造業向け3分無料診断案内"
+                      value={name}
+                      onChange={(event) => setName(event.target.value)}
+                      className="mt-1 block w-full rounded-xl border border-slate-300 bg-white px-3 py-2 text-xs text-slate-900 focus:border-purple-500 focus:outline-none"
                     />
                   </label>
+
+                  <label className="text-xs font-bold text-slate-700 md:col-span-3">
+                    用途 <span className="text-rose-500">*</span>
+                    <select
+                      value={category}
+                      onChange={(event) => setCategory(event.target.value)}
+                      className="mt-1 block w-full rounded-xl border border-slate-300 bg-white px-2.5 py-2 text-xs text-slate-900 focus:border-purple-500 focus:outline-none"
+                    >
+                      {Object.entries(CATEGORY_LABELS).map(([catKey, catLabel]) => (
+                        <option key={catKey} value={catKey}>
+                          {catLabel}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+
+                  <label className="text-xs font-bold text-slate-700 md:col-span-3">
+                    媒体
+                    <select
+                      disabled={!!editing}
+                      value={channel}
+                      onChange={(event) => {
+                        const value = event.target.value as Channel;
+                        setChannel(value);
+                        if (value === 'email') setLineType('text');
+                      }}
+                      className="mt-1 block w-full rounded-xl border border-slate-300 bg-white px-2.5 py-2 text-xs text-slate-900 focus:border-purple-500 focus:outline-none"
+                    >
+                      <option value="email">メール</option>
+                      <option value="line">LINE</option>
+                    </select>
+                  </label>
+                </div>
+
+                {channel === 'line' && (
+                  <label className="text-xs font-bold text-slate-700 max-w-xs">
+                    LINE形式
+                    <select
+                      disabled={editing?.source === 'communication'}
+                      value={lineType}
+                      onChange={(event) => {
+                        setLineType(event.target.value as LineType);
+                        setBody('');
+                        setAltText('');
+                        setFlexJson('');
+                        setAssetUrl('');
+                        setAssetPath('');
+                        setPreviewUrl('');
+                        setPreviewPath('');
+                      }}
+                      className="mt-1 block w-full rounded-xl border border-slate-300 bg-white px-2.5 py-2 text-xs text-slate-900 focus:border-purple-500 focus:outline-none"
+                    >
+                      {Object.entries(typeLabel).map(([key, label]) => (
+                        <option key={key} value={key}>
+                          {label}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                )}
+
+                {channel === 'email' && (
+                  <div>
+                    <label className="text-xs font-bold text-slate-700 block mb-1">
+                      件名 <span className="text-rose-500">*</span>
+                    </label>
+                    <input
+                      required
+                      maxLength={200}
+                      placeholder="例: 【3分無料診断】改善優先度レポートのご案内｜{会社名} 様"
+                      value={subject}
+                      onChange={(event) => setSubject(event.target.value)}
+                      className="block w-full rounded-xl border border-slate-300 bg-white px-3.5 py-2 text-sm font-bold text-slate-900 focus:border-purple-500 focus:outline-none"
+                    />
+                  </div>
+                )}
+
+                {(channel === 'email' || lineType === 'text') && (
+                  <div className="flex-1 min-h-0 flex flex-col">
+                    <label className="text-xs font-bold text-slate-700 block mb-1">
+                      本文 <span className="text-rose-500">*</span>
+                    </label>
+                    <textarea
+                      required
+                      rows={16}
+                      maxLength={10000}
+                      value={body}
+                      onChange={(event) => setBody(event.target.value)}
+                      className="flex-1 min-h-[340px] block w-full rounded-xl border border-slate-300 bg-white p-4 text-sm text-slate-900 font-sans leading-relaxed focus:border-purple-500 focus:outline-none resize-y"
+                      placeholder="お名前は {お名前}、会社名は {会社名}、診断URLは {案内URL}、面談カレンダーは {面談予約URL} のように埋め込めます。"
+                    />
+                    <PlaceholderAssist
+                      text={body}
+                      onInsert={(token) => setBody((curr) => curr + token)}
+                      showPreview={false}
+                      compact
+                    />
+                  </div>
+                )}
+
+                {channel === 'line' && (lineType === 'image' || lineType === 'video') && (
+                  <div className="space-y-3">
+                    <label className="block text-xs font-bold text-slate-700">
+                      {lineType === 'video' ? '動画ファイル（MP4）' : '画像ファイル（JPEG / PNG）'}
+                      <input
+                        type="file"
+                        accept={lineType === 'video' ? 'video/mp4' : 'image/jpeg,image/png'}
+                        onChange={(event) => void onUpload(event.target.files?.[0], 'asset')}
+                        className="mt-1 block w-full text-xs text-slate-700 file:mr-3 file:py-1.5 file:px-3 file:rounded-lg file:border file:border-slate-200 file:bg-slate-50 file:text-slate-700"
+                      />
+                      {assetUrl && <span className="mt-1 block break-all text-[11px] text-purple-700 font-mono">URL: {assetUrl}</span>}
+                    </label>
+                    <label className="block text-xs font-bold text-slate-700">
+                      プレビュー画像（JPEG / PNG）
+                      <input
+                        type="file"
+                        accept="image/jpeg,image/png"
+                        onChange={(event) => void onUpload(event.target.files?.[0], 'preview')}
+                        className="mt-1 block w-full text-xs text-slate-700 file:mr-3 file:py-1.5 file:px-3 file:rounded-lg file:border file:border-slate-200 file:bg-slate-50 file:text-slate-700"
+                      />
+                      {previewUrl && <span className="mt-1 block break-all text-[11px] text-purple-700 font-mono">URL: {previewUrl}</span>}
+                    </label>
+                    {lineType === 'video' && (
+                      <label className="block text-xs font-bold text-slate-700">
+                        代替テキスト
+                        <input
+                          required
+                          value={altText}
+                          onChange={(event) => setAltText(event.target.value)}
+                          className="mt-1 block w-full rounded-xl border border-slate-300 bg-white px-3 py-2 text-xs text-slate-900 focus:border-purple-500"
+                        />
+                      </label>
+                    )}
+                  </div>
+                )}
+
+                {channel === 'line' && lineType === 'flex' && (
+                  <div className="flex-1 min-h-0 flex flex-col gap-3">
+                    <label className="block text-xs font-bold text-slate-700">
+                      代替テキスト（通知に表示される文字） <span className="text-rose-500">*</span>
+                      <input
+                        required
+                        value={altText}
+                        onChange={(event) => setAltText(event.target.value)}
+                        className="mt-1 block w-full rounded-xl border border-slate-300 bg-white px-3 py-2 text-xs text-slate-900 focus:border-purple-500"
+                      />
+                    </label>
+                    <div className="flex-1 min-h-0 flex flex-col">
+                      <label className="block text-xs font-bold text-slate-700 mb-1">
+                        Flex JSON構造 <span className="text-rose-500">*</span>
+                      </label>
+                      <textarea
+                        required
+                        rows={14}
+                        value={flexJson}
+                        onChange={(event) => setFlexJson(event.target.value)}
+                        className="flex-1 min-h-[300px] block w-full rounded-xl border border-slate-300 bg-white p-3 font-mono text-xs text-slate-900 focus:border-purple-500 resize-y"
+                        placeholder='{"type":"bubble","body":{"type":"box","layout":"vertical","contents":[...]}}'
+                      />
+                      <PlaceholderAssist
+                        text={flexJson}
+                        onInsert={(token) => setFlexJson((curr) => curr + token)}
+                        showPreview={false}
+                        compact
+                      />
+                    </div>
+                  </div>
                 )}
               </div>
-            )}
 
-            {channel === 'line' && lineType === 'flex' && (
-              <div className="space-y-3 md:col-span-3">
-                <label className="block text-xs font-bold text-slate-700">
-                  代替テキスト（プッシュ通知や一覧に表示される文字） <span className="text-rose-500">*</span>
-                  <input
-                    required
-                    value={altText}
-                    onChange={(event) => setAltText(event.target.value)}
-                    className="mt-1 block w-full rounded-lg border border-slate-200 bg-white p-2 text-xs text-slate-900 focus:border-purple-500 shadow-2xs"
-                  />
-                </label>
-                <label className="block text-xs font-bold text-slate-700">
-                  Flex JSON構造 <span className="text-rose-500">*</span>
-                  <textarea
-                    required
-                    rows={9}
-                    value={flexJson}
-                    onChange={(event) => setFlexJson(event.target.value)}
-                    className="mt-1 block w-full rounded-lg border border-slate-200 bg-white p-3 font-mono text-xs text-slate-900 focus:border-purple-500 shadow-2xs"
-                    placeholder='{"type":"bubble","body":{"type":"box","layout":"vertical","contents":[...]}}'
-                  />
-                  <PlaceholderAssist text={flexJson} onInsert={(token) => setFlexJson((curr) => curr + token)} showPreview={false} />
-                </label>
+              {/* Right Column: Live Preview */}
+              <div className="lg:col-span-5 p-6 bg-slate-50/70 overflow-y-auto space-y-4">
+                <div className="flex items-center gap-2 text-xs font-bold text-slate-700">
+                  {channel === 'email' ? (
+                    <>
+                      <Mail className="w-4 h-4 text-blue-600" />
+                      <span>メール受信プレビュー（サンプル差込済み）</span>
+                    </>
+                  ) : (
+                    <>
+                      <Smartphone className="w-4 h-4 text-emerald-600" />
+                      <span>LINE表示プレビュー</span>
+                    </>
+                  )}
+                </div>
+
+                {channel === 'email' ? (
+                  <div className="bg-white rounded-xl border border-slate-200 overflow-hidden shadow-2xs">
+                    <div className="border-b border-slate-200 px-4 py-3 bg-slate-50/60 space-y-1">
+                      <div className="text-[11px] text-slate-500">
+                        宛先例: 株式会社サンプル 山田 太郎 様
+                      </div>
+                      <div className="font-bold text-slate-900 text-sm">
+                        {renderPlaceholders(subject || '（件名未設定）', PLACEHOLDER_SAMPLE_VALUES)}
+                      </div>
+                    </div>
+                    <div className="p-4 whitespace-pre-wrap leading-relaxed text-slate-800 text-xs font-sans max-h-[520px] overflow-y-auto">
+                      {appendEmailFooter(
+                        renderPlaceholders(body || '（本文未設定）', PLACEHOLDER_SAMPLE_VALUES),
+                        { senderEmail: 'contact@mstcorp.info' }
+                      )}
+                    </div>
+                  </div>
+                ) : (
+                  <div className="p-3.5 bg-[#7494c0] rounded-2xl">
+                    <LineMessagePreview
+                      type={lineType}
+                      title={name || 'LINEテンプレート'}
+                      payload={
+                        lineType === 'text'
+                          ? { text: renderPlaceholders(body || '（本文未設定）', PLACEHOLDER_SAMPLE_VALUES) }
+                          : lineType === 'image'
+                          ? { originalContentUrl: assetUrl, previewImageUrl: previewUrl }
+                          : lineType === 'video'
+                          ? { originalContentUrl: assetUrl, previewImageUrl: previewUrl, altText }
+                          : { altText, contents: flexJson }
+                      }
+                    />
+                  </div>
+                )}
               </div>
-            )}
-          </div>
-
-          {channel === 'line' && (
-            <div className="rounded-xl border border-slate-200 bg-white p-4">
-              <span className="text-xs font-bold text-slate-700 mb-2 block">LINE送信プレビュー:</span>
-              <LineMessagePreview
-                type={lineType}
-                title={name || 'LINEテンプレート'}
-                payload={
-                  lineType === 'text'
-                    ? { text: body }
-                    : lineType === 'image'
-                    ? { originalContentUrl: assetUrl, previewImageUrl: previewUrl }
-                    : lineType === 'video'
-                    ? { originalContentUrl: assetUrl, previewImageUrl: previewUrl, altText }
-                    : { altText, contents: flexJson }
-                }
-              />
             </div>
-          )}
 
-          <div className="flex items-center justify-end gap-2 pt-2 border-t border-slate-200">
-            <button
-              type="button"
-              onClick={resetEditor}
-              className="rounded-lg border border-slate-200 bg-white px-4 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-50 cursor-pointer shadow-2xs"
-            >
-              キャンセル
-            </button>
-            <button
-              disabled={busy}
-              type="submit"
-              className="inline-flex items-center gap-1.5 rounded-lg bg-purple-600 px-5 py-2 text-xs font-bold text-white hover:bg-purple-700 disabled:opacity-50 shadow-xs cursor-pointer"
-            >
-              <Save className="h-4 w-4" />
-              {busy ? '保存中…' : 'テンプレートを保存'}
-            </button>
-          </div>
-        </form>
+            {/* Modal Footer */}
+            <div className="px-6 py-3.5 border-t border-slate-200 bg-white flex items-center justify-end gap-2.5 shrink-0">
+              <button
+                type="button"
+                onClick={resetEditor}
+                className="rounded-xl border border-slate-200 bg-white px-4 py-2 text-xs font-bold text-slate-700 hover:bg-slate-50 cursor-pointer"
+              >
+                キャンセル
+              </button>
+              <button
+                disabled={busy}
+                type="submit"
+                className="inline-flex items-center gap-1.5 rounded-xl bg-purple-600 px-5 py-2 text-xs font-bold text-white hover:bg-purple-700 disabled:opacity-50 shadow-xs cursor-pointer"
+              >
+                <Save className="h-4 w-4" />
+                {busy ? '保存中…' : 'テンプレートを保存'}
+              </button>
+            </div>
+          </form>
+        </div>
       )}
 
       {/* Templates Table List */}

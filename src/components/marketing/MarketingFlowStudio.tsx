@@ -1272,7 +1272,9 @@ export const MarketingFlowStudio: React.FC<MarketingFlowStudioProps> = ({
   };
 
   const [tableSearch, setTableSearch] = useState('');
+  const [tableChannelFilter, setTableChannelFilter] = useState<'all' | 'line' | 'email' | 'both'>('all');
   const [isStarterOpen, setIsStarterOpen] = useState(false);
+  const [showOutreachSpec, setShowOutreachSpec] = useState(false);
 
   // ステップインスペクター / 編集モーダル状態
   const [inspectorScenario, setInspectorScenario] = useState<MarketingScenario | null>(null);
@@ -1352,6 +1354,38 @@ export const MarketingFlowStudio: React.FC<MarketingFlowStudioProps> = ({
   const handleOpenInspector = (scenario: MarketingScenario) => {
     setInspectorScenario(scenario);
     setIsInspectorOpen(true);
+  };
+
+  const handleOpenOneShotEditor = () => {
+    const rawDefault = getOneShotOutreachTemplate('{company_name}', '{recipient_name}', undefined, '{link_url}');
+    const target: MarketingScenario = oneShotScenario || {
+      id: ONE_SHOT_SCENARIO_ID,
+      name: ONE_SHOT_SCENARIO_NAME,
+      trigger: 'manual',
+      channel: 'email',
+      audience: '未接触の見込み企業（一発直球提案）',
+      waitMinutes: 0,
+      emailSubject: rawDefault.subject,
+      emailBody: rawDefault.body,
+      messageBody: '',
+      lineMessageType: 'text',
+      lineImageUrl: '',
+      linePreviewImageUrl: '',
+      flexAltText: '',
+      flexTitle: '',
+      flexBody: '',
+      flexButtonLabel: '',
+      flexButtonUrl: '',
+      status: 'prepared',
+      automationEnabled: false,
+      sendTimeWindow: '09:00-18:00',
+      preferredSendTime: '',
+      stopOnBooking: true,
+      stopOnDeal: true,
+      consentBasis: '特定電子メール法に基づく業務改善情報の提供（オプトアウト明記）',
+      updatedAt: Date.now(),
+    };
+    handleOpenInspector(target);
   };
 
   // 新規ステップ作成（現在開いているトラック・分岐に合わせて初期設定）
@@ -1475,31 +1509,17 @@ export const MarketingFlowStudio: React.FC<MarketingFlowStudioProps> = ({
         </div>
       )}
 
-      {/* ═══════════════════════════════════════════════════════════════ */}
-      {/* 統合: シナリオ別 配信設計 ＆ 公式プリセット連動コントロールセンター   */}
-      {/* ═══════════════════════════════════════════════════════════════ */}
-      {/* ═══════════════════════════════════════════════════════════════ */}
-      {/* 統合: シナリオ別 配信設計 ＆ 公式プリセット連動コントロールセンター   */}
-      {/* ═══════════════════════════════════════════════════════════════ */}
-      <div className="rounded-2xl border border-slate-200 bg-white p-4 sm:p-5 shadow-xs space-y-4">
-        {/* 上段: タイトル ＆ マスターアクション */}
-        <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 border-b border-slate-100 pb-4">
-          <div className="space-y-1">
-            <div className="flex items-center gap-2.5 flex-wrap">
-              <span className="p-2 bg-purple-50 text-purple-700 rounded-xl border border-purple-200">
-                <GitBranch className="w-5 h-5" />
-              </span>
-              <h2 className="text-base font-bold text-slate-900 flex items-center gap-2">
-                シナリオ別 配信設計 ＆ ビジュアル導線マップ
-              </h2>
-              <span className="text-[11px] font-bold px-2.5 py-0.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200 flex items-center gap-1">
-                <ShieldCheck className="w-3.5 h-3.5" />
-                安全ストッパー稼働・重複ゼロ
-              </span>
-            </div>
-            <p className="text-xs text-slate-500 leading-relaxed max-w-2xl">
-              LINE友だち導線（親身な相談・教育→商談案内）と営業メールを一元管理。返信・予約が入った瞬間に自動停止し、安全に個別商談へ移行します。
-            </p>
+      {/* コントロールヘッダー＆ビュー切り替え */}
+      <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-xs space-y-3.5">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div className="flex items-center gap-2.5">
+            <GitBranch className="w-4 h-4 text-purple-600 shrink-0" />
+            <h2 className="text-sm font-bold text-slate-900">
+              配信シナリオ ＆ 導線管理
+            </h2>
+            <span className="text-xs text-slate-500 hidden sm:inline">
+              （返信・予約が入ると自動配信は即時停止します）
+            </span>
           </div>
 
           <div className="flex flex-wrap items-center gap-2 shrink-0">
@@ -1508,10 +1528,10 @@ export const MarketingFlowStudio: React.FC<MarketingFlowStudioProps> = ({
                 <button
                   type="button"
                   onClick={() => setIsStarterOpen(!isStarterOpen)}
-                  className="inline-flex items-center gap-1.5 rounded-xl bg-slate-50 hover:bg-slate-100 border border-slate-200 px-3 py-2 text-xs font-bold text-slate-700 hover:text-slate-900 shadow-xs transition cursor-pointer"
+                  className="inline-flex items-center gap-1.5 rounded-lg bg-slate-50 hover:bg-slate-100 border border-slate-200 px-3 py-1.5 text-xs font-semibold text-slate-700 transition cursor-pointer whitespace-nowrap"
                 >
                   <Zap className="h-3.5 w-3.5 text-purple-600" />
-                  <span>詳細・初期セット</span>
+                  <span>初期セット・整理</span>
                   {duplicateCount > 0 && (
                     <span className="w-2 h-2 rounded-full bg-amber-500" />
                   )}
@@ -1519,8 +1539,8 @@ export const MarketingFlowStudio: React.FC<MarketingFlowStudioProps> = ({
                 </button>
 
                 {isStarterOpen && (
-                  <div className="absolute right-0 top-full mt-1.5 w-72 rounded-xl bg-white border border-slate-200 shadow-lg p-2.5 z-30 space-y-1.5 animate-in fade-in duration-150">
-                    <div className="text-[11px] font-bold text-slate-400 px-2 py-0.5 uppercase tracking-wider">プリセット・補助操作</div>
+                  <div className="absolute right-0 top-full mt-1.5 w-72 rounded-xl bg-white border border-slate-200 shadow-lg p-2.5 z-30 space-y-1.5">
+                    <div className="text-[11px] font-bold text-slate-400 px-2 py-0.5">プリセット・補助操作</div>
                     {duplicateCount > 0 && onDeduplicateScenarios && (
                       <button
                         type="button"
@@ -1588,29 +1608,17 @@ export const MarketingFlowStudio: React.FC<MarketingFlowStudioProps> = ({
                 )}
               </div>
             )}
-
-            <button
-              type="button"
-              onClick={handleCreateNewStep}
-              className="inline-flex items-center gap-1.5 rounded-xl bg-purple-600 hover:bg-purple-700 px-4 py-2 text-xs font-bold text-white shadow-xs transition cursor-pointer"
-            >
-              <Plus className="h-4 w-4" />
-              <span>＋ 新規ステップ作成</span>
-            </button>
           </div>
         </div>
 
-        {/* シナリオ0件時の目立つ初期セット適用バナー（折りたたまず表示） */}
+        {/* シナリオ0件時の初期セットアップ案内 */}
         {scenarios.length === 0 && (
-          <div className="rounded-2xl border-2 border-dashed border-purple-300 bg-gradient-to-r from-purple-50 via-indigo-50 to-emerald-50 p-6 text-slate-800 space-y-4">
+          <div className="rounded-xl border border-dashed border-purple-300 bg-purple-50/40 p-5 text-slate-800 space-y-3">
             <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
               <div>
-                <div className="flex items-center gap-2">
-                  <Sparkles className="w-5 h-5 text-purple-600" />
-                  <h3 className="text-sm font-bold text-slate-900">配信シナリオの初期セットアップ</h3>
-                </div>
-                <p className="text-xs text-slate-600 mt-1 max-w-xl">
-                  現在シナリオが登録されていません。公式スターターセット（LINE相談・教育フロー、営業メール5段階など）を適用して初期設定を完了するか、新規ステップを作成してください。
+                <h3 className="text-sm font-bold text-slate-900">配信シナリオの初期セットアップ</h3>
+                <p className="text-xs text-slate-600 mt-1">
+                  公式スターターセット（LINE相談・教育フロー、営業メール5段階など）を適用するか、新規ステップを作成してください。
                 </p>
               </div>
               <div className="flex flex-wrap items-center gap-2">
@@ -1618,219 +1626,269 @@ export const MarketingFlowStudio: React.FC<MarketingFlowStudioProps> = ({
                   <button
                     type="button"
                     onClick={onApplyAllStarterSets}
-                    className="inline-flex items-center gap-1.5 rounded-xl bg-purple-600 hover:bg-purple-700 px-4 py-2.5 text-xs font-bold text-white shadow-sm transition cursor-pointer"
+                    className="inline-flex items-center gap-1.5 rounded-lg bg-purple-600 hover:bg-purple-700 px-3.5 py-2 text-xs font-bold text-white transition cursor-pointer"
                   >
-                    <Zap className="h-4 w-4 text-purple-200" />
-                    <span>全公式プリセットを一括適用</span>
-                  </button>
-                )}
-                {onApplyDiagnosisStarterSet && (
-                  <button
-                    type="button"
-                    onClick={onApplyDiagnosisStarterSet}
-                    className="inline-flex items-center gap-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 px-3.5 py-2.5 text-xs font-bold text-white shadow-sm transition cursor-pointer"
-                  >
-                    <MessageCircle className="h-4 w-4 text-emerald-200" />
-                    <span>分岐A: 簡易診断×教育4本</span>
+                    <Zap className="h-3.5 w-3.5" />
+                    <span>公式プリセットを一括適用</span>
                   </button>
                 )}
                 <button
                   type="button"
                   onClick={handleCreateNewStep}
-                  className="inline-flex items-center gap-1.5 rounded-xl bg-white hover:bg-slate-50 border border-slate-300 px-4 py-2.5 text-xs font-bold text-slate-700 shadow-2xs transition cursor-pointer"
+                  className="inline-flex items-center gap-1.5 rounded-lg bg-white hover:bg-slate-50 border border-slate-300 px-3.5 py-2 text-xs font-bold text-slate-700 transition cursor-pointer"
                 >
-                  <Plus className="h-4 w-4" />
-                  <span>＋ 新規作成</span>
+                  <Plus className="h-3.5 w-3.5" />
+                  <span>新規作成</span>
                 </button>
               </div>
             </div>
           </div>
         )}
 
-        {/* 下段: 役割別 3つの統合ビュー切り替えタブ（重複を廃止し、LINE導線・営業メール・全一覧の3つに整理） */}
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
-          {/* ① LINE導線（相談・教育 → 商談） */}
-          <button
-            type="button"
-            onClick={() => { setActiveTrack('line_welcome'); setViewMode('flow'); }}
-            className={`group flex flex-col justify-between p-3 rounded-xl border text-left transition cursor-pointer ${
-              activeTrack === 'line_welcome' && viewMode === 'flow'
-                ? 'bg-emerald-50 border-emerald-500 shadow-xs ring-1 ring-emerald-400'
-                : 'bg-white border-slate-200 hover:border-emerald-300 hover:bg-slate-50/70'
-            }`}
-          >
-            <div className="flex items-center justify-between">
-              <span className={`flex items-center gap-1.5 font-bold text-xs ${activeTrack === 'line_welcome' && viewMode === 'flow' ? 'text-emerald-900' : 'text-slate-800'}`}>
-                <MessageCircle className={`w-3.5 h-3.5 ${activeTrack === 'line_welcome' && viewMode === 'flow' ? 'text-emerald-600' : 'text-slate-400 group-hover:text-emerald-600'}`} />
-                ① LINE導線（相談・教育 → 商談）
-              </span>
-              <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded ${activeTrack === 'line_welcome' && viewMode === 'flow' ? 'bg-emerald-100 text-emerald-800' : 'bg-slate-100 text-slate-600'}`}>
-                分岐A/B/C＋教育{nurturingScenarios.length}話
-              </span>
-            </div>
-            <div className="text-[11px] text-slate-500 group-hover:text-slate-700 mt-1.5 line-clamp-1">
-              ウェルカム3択・パターンA/B編集・相談/教育から30分商談へ統合案内
-            </div>
-          </button>
-
-          {/* ② 営業メール */}
-          <button
-            type="button"
-            onClick={() => { setActiveTrack('sales_outreach'); setViewMode('flow'); }}
-            className={`group flex flex-col justify-between p-3 rounded-xl border text-left transition cursor-pointer ${
-              activeTrack === 'sales_outreach' && viewMode === 'flow'
-                ? 'bg-blue-50 border-blue-500 shadow-xs ring-1 ring-blue-400'
-                : 'bg-white border-slate-200 hover:border-blue-300 hover:bg-slate-50/70'
-            }`}
-          >
-            <div className="flex items-center justify-between">
-              <span className={`flex items-center gap-1.5 font-bold text-xs ${activeTrack === 'sales_outreach' && viewMode === 'flow' ? 'text-blue-900' : 'text-slate-800'}`}>
-                <Mail className={`w-3.5 h-3.5 ${activeTrack === 'sales_outreach' && viewMode === 'flow' ? 'text-blue-600' : 'text-slate-400 group-hover:text-blue-600'}`} />
-                ② 営業メール（見込み企業開拓）
-              </span>
-              <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded ${activeTrack === 'sales_outreach' && viewMode === 'flow' ? 'bg-blue-100 text-blue-800' : 'bg-slate-100 text-slate-600'}`}>
-                {outreachScenarios.length}ステップ
-              </span>
-            </div>
-            <div className="text-[11px] text-slate-500 group-hover:text-slate-700 mt-1.5 line-clamp-1">
-              見込み企業へのメール5段階（急所提起→仕組み化事例→3分診断）
-            </div>
-          </button>
-
-          {/* 📋 全ステップ一覧 */}
+        {/* 3つの表示切り替えタブ */}
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
           <button
             type="button"
             onClick={() => setViewMode('table')}
-            className={`group flex flex-col justify-between p-3 rounded-xl border text-left transition cursor-pointer ${
+            className={`flex items-center justify-between p-3 rounded-xl border text-left transition cursor-pointer ${
               viewMode === 'table'
-                ? 'bg-purple-50 border-purple-500 shadow-xs ring-1 ring-purple-400'
+                ? 'bg-purple-50 border-purple-500 ring-1 ring-purple-400'
                 : 'bg-white border-slate-200 hover:border-purple-300 hover:bg-slate-50/70'
             }`}
           >
-            <div className="flex items-center justify-between">
-              <span className={`flex items-center gap-1.5 font-bold text-xs ${viewMode === 'table' ? 'text-purple-900' : 'text-slate-800'}`}>
-                <Table className={`w-3.5 h-3.5 ${viewMode === 'table' ? 'text-purple-600' : 'text-slate-400 group-hover:text-purple-600'}`} />
-                ③ 全ステップ一覧
-              </span>
-              <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded ${viewMode === 'table' ? 'bg-purple-100 text-purple-800' : 'bg-slate-100 text-slate-600'}`}>
-                {scenarios.length}件
-              </span>
+            <div className="min-w-0">
+              <div className={`flex items-center gap-1.5 font-bold text-xs ${viewMode === 'table' ? 'text-purple-900' : 'text-slate-800'}`}>
+                <Table className={`w-3.5 h-3.5 ${viewMode === 'table' ? 'text-purple-600' : 'text-slate-400'}`} />
+                <span>全ステップ一覧</span>
+              </div>
+              <div className="text-[11px] text-slate-500 mt-0.5 truncate">
+                検索・ON/OFF・単発メール編集
+              </div>
             </div>
-            <div className="text-[11px] text-slate-500 group-hover:text-slate-700 mt-1.5 line-clamp-1">
-              全シナリオの横断検索・ON/OFF一括管理
+            <span className={`text-[11px] font-bold px-2 py-0.5 rounded shrink-0 ${viewMode === 'table' ? 'bg-purple-100 text-purple-800' : 'bg-slate-100 text-slate-600'}`}>
+              {scenarios.length}件
+            </span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => { setActiveTrack('line_welcome'); setViewMode('flow'); }}
+            className={`flex items-center justify-between p-3 rounded-xl border text-left transition cursor-pointer ${
+              activeTrack === 'line_welcome' && viewMode === 'flow'
+                ? 'bg-emerald-50 border-emerald-500 ring-1 ring-emerald-400'
+                : 'bg-white border-slate-200 hover:border-emerald-300 hover:bg-slate-50/70'
+            }`}
+          >
+            <div className="min-w-0">
+              <div className={`flex items-center gap-1.5 font-bold text-xs ${activeTrack === 'line_welcome' && viewMode === 'flow' ? 'text-emerald-900' : 'text-slate-800'}`}>
+                <MessageCircle className={`w-3.5 h-3.5 ${activeTrack === 'line_welcome' && viewMode === 'flow' ? 'text-emerald-600' : 'text-slate-400'}`} />
+                <span>LINE導線・分岐フロー</span>
+              </div>
+              <div className="text-[11px] text-slate-500 mt-0.5 truncate">
+                ウェルカム3択・分岐A/B/C・教育7話
+              </div>
             </div>
+            <span className={`text-[11px] font-bold px-2 py-0.5 rounded shrink-0 ${activeTrack === 'line_welcome' && viewMode === 'flow' ? 'bg-emerald-100 text-emerald-800' : 'bg-slate-100 text-slate-600'}`}>
+              LINE
+            </span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => { setActiveTrack('sales_outreach'); setViewMode('flow'); }}
+            className={`flex items-center justify-between p-3 rounded-xl border text-left transition cursor-pointer ${
+              activeTrack === 'sales_outreach' && viewMode === 'flow'
+                ? 'bg-blue-50 border-blue-500 ring-1 ring-blue-400'
+                : 'bg-white border-slate-200 hover:border-blue-300 hover:bg-slate-50/70'
+            }`}
+          >
+            <div className="min-w-0">
+              <div className={`flex items-center gap-1.5 font-bold text-xs ${activeTrack === 'sales_outreach' && viewMode === 'flow' ? 'text-blue-900' : 'text-slate-800'}`}>
+                <Mail className={`w-3.5 h-3.5 ${activeTrack === 'sales_outreach' && viewMode === 'flow' ? 'text-blue-600' : 'text-slate-400'}`} />
+                <span>営業メール（単発・5段階）</span>
+              </div>
+              <div className="text-[11px] text-slate-500 mt-0.5 truncate">
+                一発直球メール・自動追客5ステップ
+              </div>
+            </div>
+            <span className={`text-[11px] font-bold px-2 py-0.5 rounded shrink-0 ${activeTrack === 'sales_outreach' && viewMode === 'flow' ? 'bg-blue-100 text-blue-800' : 'bg-slate-100 text-slate-600'}`}>
+              {outreachScenarios.length}件+単発
+            </span>
           </button>
         </div>
       </div>
 
-      {/* ═══════════════════════════════════════════════════════════════ */}
-      {/* テーブル表示モード: 全シナリオ一覧 ＆ 詳細インスペクター直結     */}
-      {/* ═══════════════════════════════════════════════════════════════ */}
+      {/* テーブル表示モード: 全シナリオ一覧 ＆ 単発営業メール */}
       {viewMode === 'table' && (
-        <div className="bg-white border border-slate-200 rounded-2xl p-5 shadow-xs space-y-4 animate-fade-in">
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-100 pb-3">
-            <div>
-              <h3 className="text-base font-bold text-slate-900 flex items-center gap-2">
-                <Table className="w-5 h-5 text-purple-600" />
-                全配信ステップ一覧・一括管理
-              </h3>
-              <p className="text-xs text-slate-500 mt-0.5">
-                各行の「点検・編集」を押すと、その場でメッセージ文面・URL・タグ・停止条件を確認・手入れできます。
-              </p>
+        <div className="space-y-4 animate-fade-in">
+          {/* 単発営業メール（一発直球提案）クイック編集バー */}
+          {(tableChannelFilter === 'all' || tableChannelFilter === 'email') && (
+            <div className="bg-white border border-purple-200 rounded-2xl p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+              <div className="min-w-0">
+                <div className="flex items-center gap-2 flex-wrap">
+                  <span className="text-xs font-bold text-purple-800">単発営業メール</span>
+                  <span className="text-xs text-slate-500">
+                    {oneShotScenario ? 'カスタム編集済み' : '標準テンプレート使用中'}
+                  </span>
+                </div>
+                <div className="text-sm font-bold text-slate-900 truncate mt-0.5">
+                  {ONE_SHOT_SCENARIO_NAME}
+                </div>
+              </div>
+              <div className="flex items-center gap-2 shrink-0">
+                {oneShotScenario && (
+                  <button
+                    type="button"
+                    onClick={() => handleDeleteInspectorScenario(oneShotScenario.id)}
+                    className="px-3 py-1.5 bg-white hover:bg-slate-50 text-slate-600 border border-slate-200 rounded-lg text-xs font-semibold flex items-center gap-1 cursor-pointer whitespace-nowrap"
+                  >
+                    <RotateCcw className="w-3.5 h-3.5" />
+                    <span>標準に戻す</span>
+                  </button>
+                )}
+                <button
+                  type="button"
+                  onClick={handleOpenOneShotEditor}
+                  className="px-3.5 py-1.5 bg-purple-600 hover:bg-purple-700 text-white rounded-lg text-xs font-bold flex items-center gap-1.5 cursor-pointer whitespace-nowrap"
+                >
+                  <Edit3 className="w-3.5 h-3.5" />
+                  <span>テンプレートを編集</span>
+                </button>
+              </div>
             </div>
-            <div className="relative w-full sm:w-64">
-              <Search className="w-4 h-4 absolute left-3 top-2.5 text-slate-400" />
-              <input
-                type="text"
-                value={tableSearch}
-                onChange={(e) => setTableSearch(e.target.value)}
-                placeholder="ステップ名や本文で検索..."
-                className="w-full bg-slate-50 border border-slate-200 rounded-xl pl-9 pr-3 py-1.5 text-xs text-slate-900 placeholder-slate-400 focus:outline-none focus:border-purple-500 focus:bg-white"
-              />
-            </div>
-          </div>
+          )}
 
-          <div className="overflow-x-auto">
-            <table className="w-full text-left text-xs">
-              <thead className="bg-slate-50 text-slate-600 font-bold border-b border-slate-200">
-                <tr>
-                  <th className="p-3">ステップ名</th>
-                  <th className="p-3">チャネル</th>
-                  <th className="p-3">タイミング</th>
-                  <th className="p-3">停止条件</th>
-                  <th className="p-3">自動実行</th>
-                  <th className="p-3 text-right">点検・操作</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-100 text-slate-700">
-                {scenarios
-                  .filter((s) => !tableSearch || s.name.toLowerCase().includes(tableSearch.toLowerCase()) || (s.messageBody || '').toLowerCase().includes(tableSearch.toLowerCase()) || (s.emailSubject || '').toLowerCase().includes(tableSearch.toLowerCase()))
-                  .map((s) => (
-                    <tr key={s.id} className="hover:bg-slate-50/70 transition">
-                      <td className="p-3">
-                        <div className="font-bold text-slate-900">{s.name}</div>
-                        <div className="text-[11px] text-slate-500 line-clamp-1 mt-0.5">
-                          {s.flexTitle || s.messageBody || s.emailSubject || '文面未設定'}
-                        </div>
-                      </td>
-                      <td className="p-3">
-                        <span className={`px-2 py-0.5 rounded text-[10px] font-bold ${
-                          s.channel === 'line'
-                            ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
-                            : s.channel === 'email'
-                            ? 'bg-blue-50 text-blue-700 border border-blue-200'
-                            : 'bg-purple-50 text-purple-700 border border-purple-200'
-                        }`}>
-                          {s.channel === 'line' ? '📱 LINE' : s.channel === 'email' ? '✉️ メール' : '📱+✉️ 両方'}
-                        </span>
-                      </td>
-                      <td className="p-3 font-mono text-[11px] text-slate-600">
-                        {s.waitMinutes === 0 ? '即時実行' : `${Math.round(s.waitMinutes / 1440)}日後`}
-                      </td>
-                      <td className="p-3 text-[11px]">
-                        <span className="text-slate-500">
-                          {s.stopOnBooking ? '面談予約' : ''} {s.stopOnDeal ? '/ 成約' : ''} で停止
-                        </span>
-                      </td>
-                      <td className="p-3">
-                        <button
-                          type="button"
-                          onClick={() => toggleScenarioAutomation(s.id, Boolean(s.automationEnabled))}
-                          className={`flex items-center gap-1 px-2.5 py-1 rounded text-[11px] font-bold cursor-pointer transition ${
-                            s.automationEnabled
-                              ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
-                              : 'bg-slate-100 text-slate-600 border border-slate-200 hover:bg-slate-200'
-                          }`}
-                        >
-                          {s.automationEnabled ? <Play className="w-3 h-3 fill-emerald-600 text-emerald-600" /> : <Pause className="w-3 h-3 text-slate-500" />}
-                          <span>{s.automationEnabled ? '稼働中' : '停止中'}</span>
-                        </button>
-                      </td>
-                      <td className="p-3 text-right">
-                        <div className="flex items-center justify-end gap-1.5">
-                          <button
-                            type="button"
-                            onClick={() => setPreviewModalScenario(s)}
-                            className="p-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg cursor-pointer transition"
-                            title="文面プレビュー"
-                          >
-                            <Eye className="w-3.5 h-3.5" />
-                          </button>
+          <div className="bg-white border border-slate-200 rounded-2xl p-5 shadow-xs space-y-4">
+            <div className="flex flex-col md:flex-row md:items-center justify-between gap-3 border-b border-slate-100 pb-3">
+              <div className="flex flex-wrap items-center gap-1.5">
+                {(
+                  [
+                    { id: 'all', label: 'すべて' },
+                    { id: 'line', label: 'LINE' },
+                    { id: 'email', label: 'メール' },
+                    { id: 'both', label: 'LINE+メール' },
+                  ] as const
+                ).map((item) => (
+                  <button
+                    key={item.id}
+                    type="button"
+                    onClick={() => setTableChannelFilter(item.id)}
+                    className={`px-3 py-1 rounded-lg text-xs font-semibold transition cursor-pointer whitespace-nowrap ${
+                      tableChannelFilter === item.id
+                        ? 'bg-purple-600 text-white'
+                        : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                    }`}
+                  >
+                    {item.label}
+                  </button>
+                ))}
+              </div>
+              <div className="relative w-full md:w-72">
+                <Search className="w-4 h-4 absolute left-3 top-2 text-slate-400" />
+                <input
+                  type="text"
+                  value={tableSearch}
+                  onChange={(e) => setTableSearch(e.target.value)}
+                  placeholder="ステップ名や本文で検索..."
+                  className="w-full bg-slate-50 border border-slate-200 rounded-xl pl-9 pr-3 py-1.5 text-xs text-slate-900 placeholder-slate-400 focus:outline-none focus:border-purple-500 focus:bg-white"
+                />
+              </div>
+            </div>
+
+            <div className="overflow-x-auto">
+              <table className="w-full text-left text-xs">
+                <thead className="bg-slate-50 text-slate-600 font-bold border-b border-slate-200">
+                  <tr>
+                    <th className="p-3">ステップ名</th>
+                    <th className="p-3">媒体</th>
+                    <th className="p-3">タイミング</th>
+                    <th className="p-3">自動停止</th>
+                    <th className="p-3">稼働</th>
+                    <th className="p-3 text-right">操作</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100 text-slate-700">
+                  {scenarios
+                    .filter((s) => tableChannelFilter === 'all' || s.channel === tableChannelFilter)
+                    .filter(
+                      (s) =>
+                        !tableSearch ||
+                        s.name.toLowerCase().includes(tableSearch.toLowerCase()) ||
+                        (s.messageBody || '').toLowerCase().includes(tableSearch.toLowerCase()) ||
+                        (s.emailSubject || '').toLowerCase().includes(tableSearch.toLowerCase())
+                    )
+                    .map((s) => (
+                      <tr key={s.id} className="hover:bg-slate-50/70 transition">
+                        <td className="p-3">
                           <button
                             type="button"
                             onClick={() => handleOpenInspector(s)}
-                            className="px-2.5 py-1.5 bg-purple-600 hover:bg-purple-700 text-white rounded-lg font-bold flex items-center gap-1 cursor-pointer shadow-xs transition"
-                            title="点検・編集"
+                            className="font-bold text-slate-900 hover:text-purple-700 text-left cursor-pointer"
                           >
-                            <ShieldCheck className="w-3.5 h-3.5 text-purple-200" />
-                            <span>点検・編集</span>
+                            {s.name}
                           </button>
-                        </div>
-                      </td>
-                    </tr>
-                  ))}
-              </tbody>
-            </table>
+                          <div className="text-[11px] text-slate-500 line-clamp-1 mt-0.5">
+                            {s.flexTitle || s.messageBody || s.emailSubject || '文面未設定'}
+                          </div>
+                        </td>
+                        <td className="p-3 whitespace-nowrap">
+                          <span
+                            className={`px-2 py-0.5 rounded text-[11px] font-semibold ${
+                              s.channel === 'line'
+                                ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
+                                : s.channel === 'email'
+                                ? 'bg-blue-50 text-blue-700 border border-blue-200'
+                                : 'bg-purple-50 text-purple-700 border border-purple-200'
+                            }`}
+                          >
+                            {s.channel === 'line' ? 'LINE' : s.channel === 'email' ? 'メール' : 'LINE+メール'}
+                          </span>
+                        </td>
+                        <td className="p-3 font-mono text-[11px] text-slate-600 whitespace-nowrap">
+                          {s.waitMinutes === 0 ? '即時' : `${Math.round(s.waitMinutes / 1440)}日後`}
+                        </td>
+                        <td className="p-3 text-[11px] text-slate-500 whitespace-nowrap">
+                          {s.stopOnBooking && s.stopOnDeal
+                            ? '予約・成約で停止'
+                            : s.stopOnBooking
+                            ? '予約で停止'
+                            : s.stopOnDeal
+                            ? '成約で停止'
+                            : '停止条件なし'}
+                        </td>
+                        <td className="p-3 whitespace-nowrap">
+                          <button
+                            type="button"
+                            onClick={() => toggleScenarioAutomation(s.id, Boolean(s.automationEnabled))}
+                            className={`inline-flex items-center gap-1 px-2.5 py-1 rounded text-[11px] font-bold cursor-pointer transition whitespace-nowrap ${
+                              s.automationEnabled
+                                ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
+                                : 'bg-slate-100 text-slate-600 border border-slate-200 hover:bg-slate-200'
+                            }`}
+                          >
+                            {s.automationEnabled ? (
+                              <Play className="w-3 h-3 fill-emerald-600 text-emerald-600" />
+                            ) : (
+                              <Pause className="w-3 h-3 text-slate-500" />
+                            )}
+                            <span>{s.automationEnabled ? '稼働中' : '停止中'}</span>
+                          </button>
+                        </td>
+                        <td className="p-3 text-right whitespace-nowrap">
+                          <button
+                            type="button"
+                            onClick={() => handleOpenInspector(s)}
+                            className="px-3 py-1.5 bg-purple-600 hover:bg-purple-700 text-white rounded-lg font-bold inline-flex items-center gap-1.5 cursor-pointer transition whitespace-nowrap"
+                          >
+                            <Edit3 className="w-3.5 h-3.5" />
+                            <span>編集・プレビュー</span>
+                          </button>
+                        </td>
+                      </tr>
+                    ))}
+                </tbody>
+              </table>
+            </div>
           </div>
         </div>
       )}
@@ -1840,25 +1898,22 @@ export const MarketingFlowStudio: React.FC<MarketingFlowStudioProps> = ({
       {/* ═══════════════════════════════════════════════════════════════ */}
       {viewMode === 'flow' && activeTrack === 'line_welcome' && (
         <div className="space-y-6">
-          {/* 安全ストッパー宣言バナー */}
-          <div className="bg-emerald-50 border border-emerald-200 rounded-2xl p-4 flex flex-col md:flex-row md:items-center justify-between gap-3 text-xs text-emerald-900">
-            <div className="flex items-center gap-2.5">
-              <ShieldCheck className="w-5 h-5 text-emerald-600 shrink-0" />
-              <div>
-                <span className="font-bold text-slate-900">安全ストッパー稼働中: </span>
-                LINE友だちから返信メッセージがあった場合、または予約が入った時点で
-                <strong className="underline decoration-emerald-500 mx-1">自動ステップ配信は即時停止（スキップ）</strong>
-                され、統合受信箱での個別有人対応に自動切り替わります。
-              </div>
+          {/* 安全ストッパー簡潔バナー */}
+          <div className="bg-emerald-50/70 border border-emerald-200 rounded-xl px-4 py-2.5 flex flex-wrap items-center justify-between gap-2 text-xs text-emerald-900">
+            <div className="flex items-center gap-2">
+              <ShieldCheck className="w-4 h-4 text-emerald-600 shrink-0" />
+              <span>
+                LINE友だちから返信・面談予約が入ると、以降の自動配信は即時停止します。
+              </span>
             </div>
             {onOpenInbox && (
               <button
                 type="button"
                 onClick={onOpenInbox}
-                className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-lg transition text-xs shrink-0 cursor-pointer shadow-xs"
+                className="inline-flex items-center gap-1 px-2.5 py-1 bg-white hover:bg-emerald-100 text-emerald-800 border border-emerald-300 font-bold rounded-lg transition text-xs shrink-0 cursor-pointer whitespace-nowrap"
               >
-                <span>📥 統合受信箱でチャットを確認</span>
-                <ArrowRight className="w-3.5 h-3.5" />
+                <span>統合受信箱を開く</span>
+                <ArrowRight className="w-3 h-3" />
               </button>
             )}
           </div>
@@ -2064,10 +2119,10 @@ export const MarketingFlowStudio: React.FC<MarketingFlowStudioProps> = ({
                     <div>
                       <label className="font-bold text-slate-700 block mb-1">自己紹介・事業紹介文</label>
                       <textarea
-                        rows={3}
+                        rows={6}
                         value={welcomeIntro}
                         onChange={(e) => setWelcomeIntro(e.target.value)}
-                        className="w-full bg-white border border-slate-200 rounded-lg p-3 text-slate-900 text-xs font-mono focus:outline-none focus:border-purple-500"
+                        className="w-full min-h-[130px] bg-white border border-slate-200 rounded-lg p-3 text-slate-900 text-sm leading-relaxed focus:outline-none focus:border-purple-500 resize-y"
                         placeholder="MSTでは、中小企業の「経営の仕組み化×利益改善」と介護保険外サービスの開業を支援しています。"
                       />
                     </div>
@@ -2755,10 +2810,10 @@ export const MarketingFlowStudio: React.FC<MarketingFlowStudioProps> = ({
                           案内メッセージ（<code className="text-emerald-700">{'{recipient_name}'}</code> 差し込み可）
                         </label>
                         <textarea
-                          rows={4}
+                          rows={7}
                           value={patternDiagnosisConfig.body}
                           onChange={(e) => setPatternDiagnosisConfig((prev) => ({ ...prev, body: e.target.value }))}
-                          className="w-full bg-white border border-slate-200 rounded-lg px-3 py-2 text-slate-900 leading-relaxed focus:outline-none focus:border-emerald-500"
+                          className="w-full min-h-[150px] bg-white border border-slate-200 rounded-lg p-3 text-slate-900 text-sm leading-relaxed focus:outline-none focus:border-emerald-500 resize-y"
                         />
                       </div>
                       <div>
@@ -3061,20 +3116,20 @@ export const MarketingFlowStudio: React.FC<MarketingFlowStudioProps> = ({
                           導入・挨拶文（<code className="text-purple-700">{'{recipient_name}'}</code> 差し込み可）
                         </label>
                         <textarea
-                          rows={4}
+                          rows={7}
                           value={patternAConfig.greetingBody}
                           onChange={(e) => setPatternAConfig((prev) => ({ ...prev, greetingBody: e.target.value }))}
-                          className="w-full bg-white border border-slate-200 rounded-lg px-3 py-2 text-slate-900 leading-relaxed focus:outline-none focus:border-purple-500"
+                          className="w-full min-h-[150px] bg-white border border-slate-200 rounded-lg p-3 text-slate-900 text-sm leading-relaxed focus:outline-none focus:border-purple-500 resize-y"
                         />
                       </div>
                       <div className="p-3 bg-white rounded-lg border border-slate-200 space-y-2.5">
                         <div>
                           <label className="font-bold text-slate-700 block mb-1">ヒアリング問いかけ（強調ボックス内）</label>
                           <textarea
-                            rows={2}
+                            rows={3}
                             value={patternAConfig.promptTitle}
                             onChange={(e) => setPatternAConfig((prev) => ({ ...prev, promptTitle: e.target.value }))}
-                            className="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-1.5 text-slate-900 focus:outline-none focus:border-purple-500"
+                            className="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-slate-900 text-xs focus:outline-none focus:border-purple-500 resize-y"
                           />
                         </div>
                         <div>
@@ -3090,10 +3145,10 @@ export const MarketingFlowStudio: React.FC<MarketingFlowStudioProps> = ({
                       <div>
                         <label className="font-bold text-slate-700 block mb-1">下部案内メッセージ</label>
                         <textarea
-                          rows={2}
+                          rows={3}
                           value={patternAConfig.footerNote}
                           onChange={(e) => setPatternAConfig((prev) => ({ ...prev, footerNote: e.target.value }))}
-                          className="w-full bg-white border border-slate-200 rounded-lg px-3 py-2 text-slate-900 leading-relaxed focus:outline-none focus:border-purple-500"
+                          className="w-full bg-white border border-slate-200 rounded-lg p-3 text-slate-900 text-xs leading-relaxed focus:outline-none focus:border-purple-500 resize-y"
                         />
                       </div>
                       <div>
@@ -3412,7 +3467,7 @@ export const MarketingFlowStudio: React.FC<MarketingFlowStudioProps> = ({
                               Q1 挨拶・導入文（<code className="text-sky-700">{'{recipient_name}'}</code> 差し込み可）
                             </label>
                             <textarea
-                              rows={3}
+                              rows={6}
                               value={patternBConfig.q1.greeting}
                               onChange={(e) =>
                                 setPatternBConfig((prev) => ({
@@ -3420,7 +3475,7 @@ export const MarketingFlowStudio: React.FC<MarketingFlowStudioProps> = ({
                                   q1: { ...prev.q1, greeting: e.target.value },
                                 }))
                               }
-                              className="w-full bg-white border border-slate-200 rounded-lg px-3 py-2 text-slate-900 leading-relaxed focus:outline-none focus:border-sky-500"
+                              className="w-full min-h-[130px] bg-white border border-slate-200 rounded-lg p-3 text-slate-900 text-sm leading-relaxed focus:outline-none focus:border-sky-500 resize-y"
                             />
                           </div>
                           <div>
@@ -3534,7 +3589,7 @@ export const MarketingFlowStudio: React.FC<MarketingFlowStudioProps> = ({
                               Q2 案内文（<code className="text-sky-700">{'{q1_label}'}</code> にQ1の回答が入ります）
                             </label>
                             <textarea
-                              rows={3}
+                              rows={6}
                               value={patternBConfig.q2.introTemplate}
                               onChange={(e) =>
                                 setPatternBConfig((prev) => ({
@@ -3542,7 +3597,7 @@ export const MarketingFlowStudio: React.FC<MarketingFlowStudioProps> = ({
                                   q2: { ...prev.q2, introTemplate: e.target.value },
                                 }))
                               }
-                              className="w-full bg-white border border-slate-200 rounded-lg px-3 py-2 text-slate-900 leading-relaxed focus:outline-none focus:border-sky-500"
+                              className="w-full min-h-[130px] bg-white border border-slate-200 rounded-lg p-3 text-slate-900 text-sm leading-relaxed focus:outline-none focus:border-sky-500 resize-y"
                             />
                           </div>
                           <div className="space-y-2">
@@ -3616,7 +3671,7 @@ export const MarketingFlowStudio: React.FC<MarketingFlowStudioProps> = ({
                           <div>
                             <label className="font-bold text-slate-700 block mb-1">完了時の挨拶文</label>
                             <textarea
-                              rows={2}
+                              rows={3}
                               value={patternBConfig.completion.greeting}
                               onChange={(e) =>
                                 setPatternBConfig((prev) => ({
@@ -3624,13 +3679,13 @@ export const MarketingFlowStudio: React.FC<MarketingFlowStudioProps> = ({
                                   completion: { ...prev.completion, greeting: e.target.value },
                                 }))
                               }
-                              className="w-full bg-white border border-slate-200 rounded-lg px-3 py-2 text-slate-900 focus:outline-none focus:border-sky-500"
+                              className="w-full bg-white border border-slate-200 rounded-lg p-3 text-slate-900 text-xs leading-relaxed focus:outline-none focus:border-sky-500 resize-y"
                             />
                           </div>
                           <div>
                             <label className="font-bold text-slate-700 block mb-1">アドバイス・今後の案内文</label>
                             <textarea
-                              rows={3}
+                              rows={6}
                               value={patternBConfig.completion.body}
                               onChange={(e) =>
                                 setPatternBConfig((prev) => ({
@@ -3638,7 +3693,7 @@ export const MarketingFlowStudio: React.FC<MarketingFlowStudioProps> = ({
                                   completion: { ...prev.completion, body: e.target.value },
                                 }))
                               }
-                              className="w-full bg-white border border-slate-200 rounded-lg px-3 py-2 text-slate-900 leading-relaxed focus:outline-none focus:border-sky-500"
+                              className="w-full min-h-[130px] bg-white border border-slate-200 rounded-lg p-3 text-slate-900 text-sm leading-relaxed focus:outline-none focus:border-sky-500 resize-y"
                             />
                           </div>
                           <div className="p-3 bg-white rounded-lg border border-slate-200 space-y-2.5">
@@ -4051,134 +4106,106 @@ export const MarketingFlowStudio: React.FC<MarketingFlowStudioProps> = ({
       )}
 
       {/* ═══════════════════════════════════════════════════════════════ */}
-      {/* トラック 2: ✉️ 営業メール（未接触見込み企業 5段階アウトバウンド）    */}
+      {/* トラック 2: ✉️ 営業メール（単発テンプレート ＆ 5段階ステップ）     */}
       {/* ═══════════════════════════════════════════════════════════════ */}
       {viewMode === 'flow' && activeTrack === 'sales_outreach' && (
-        <div className="space-y-6 animate-fade-in">
-          {/* トリガー仕様 ＆ 安全ストッパー詳細カード */}
-          <div className="bg-white border border-slate-200 rounded-2xl p-5 shadow-xs space-y-4">
-            <div className="flex flex-col md:flex-row md:items-start justify-between gap-4">
+        <div className="space-y-5 animate-fade-in">
+          {/* コンパクトなヘッダー ＆ ルール確認トグル */}
+          <div className="bg-white border border-slate-200 rounded-2xl p-4 space-y-3">
+            <div className="flex flex-wrap items-center justify-between gap-3">
               <div>
-                <div className="flex items-center gap-2">
-                  <span className="p-2 rounded-xl bg-blue-100 text-blue-800 border border-blue-300">
-                    <Mail className="w-5 h-5" />
-                  </span>
-                  <div>
-                    <h3 className="text-base font-bold text-slate-900 flex items-center gap-2">
-                      営業メール（全5段階アプローチ）トリガー仕様 ＆ タイムライン設計
-                    </h3>
-                    <p className="text-xs text-slate-500 mt-0.5">
-                      未接触の見込み企業リストに対して、業界別の課題と仕組み化事例を自動で差し込み順次配信します。
-                    </p>
+                <h3 className="text-sm font-bold text-slate-900">
+                  営業メールテンプレート（単発提案 ＆ 5段階追客）
+                </h3>
+                <p className="text-xs text-slate-500 mt-0.5">
+                  3日おき自動配信（09:00〜18:00）・返信や予約が入ると残りの自動送信は即時停止します。
+                </p>
+              </div>
+              <div className="flex flex-wrap items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => setShowOutreachSpec((v) => !v)}
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-slate-50 hover:bg-slate-100 text-slate-700 border border-slate-200 rounded-lg text-xs font-semibold transition cursor-pointer whitespace-nowrap"
+                >
+                  <span>配信仕様・業種別サンプル</span>
+                  {showOutreachSpec ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
+                </button>
+                {onApplyOutreachStarterSet && (
+                  <button
+                    type="button"
+                    onClick={onApplyOutreachStarterSet}
+                    className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-xs font-bold transition cursor-pointer whitespace-nowrap"
+                  >
+                    <Zap className="w-3.5 h-3.5" />
+                    <span>5段階を標準文面に更新</span>
+                  </button>
+                )}
+              </div>
+            </div>
+
+            {showOutreachSpec && (
+              <div className="pt-3 border-t border-slate-200 space-y-3">
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-3 text-xs">
+                  <div className="p-3 rounded-xl bg-slate-50 border border-slate-200 space-y-1">
+                    <div className="font-bold text-slate-900">開始タイミング</div>
+                    <div className="text-slate-600">
+                      見込み企業リストから送信した時（2〜5通目は第1通送信後のみ起動）
+                    </div>
+                  </div>
+                  <div className="p-3 rounded-xl bg-slate-50 border border-slate-200 space-y-1">
+                    <div className="font-bold text-slate-900">配信スケジュール</div>
+                    <div className="text-slate-600">
+                      0日目 → 3日後 → 6日後 → 9日後 → 12日後（10:00頃・09:00〜18:00）
+                    </div>
+                  </div>
+                  <div className="p-3 rounded-xl bg-slate-50 border border-slate-200 space-y-1">
+                    <div className="font-bold text-slate-900">自動停止条件</div>
+                    <div className="text-slate-600">
+                      返信・診断回答・面談予約・配信停止・不達を検知した瞬間に停止
+                    </div>
+                  </div>
+                </div>
+
+                <div className="p-3.5 bg-slate-50 border border-slate-200 rounded-xl space-y-2.5">
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                    <span className="text-xs font-bold text-slate-800">
+                      業種別の自動差し込み文例を確認:
+                    </span>
+                    <select
+                      value={selectedIndustry}
+                      onChange={(e) => setSelectedIndustry(e.target.value)}
+                      className="bg-white border border-slate-200 rounded-lg px-3 py-1.5 text-xs text-slate-800 font-medium focus:border-blue-500 cursor-pointer"
+                    >
+                      <optgroup label="重点5業種">
+                        {PRIORITY_INDUSTRY_KEYS.map((ind) => (
+                          <option key={ind} value={ind}>{ind}</option>
+                        ))}
+                      </optgroup>
+                      <optgroup label="その他の業種">
+                        {Object.keys(INDUSTRY_MESSAGES)
+                          .filter((ind) => !(PRIORITY_INDUSTRY_KEYS as readonly string[]).includes(ind))
+                          .map((ind) => (
+                            <option key={ind} value={ind}>{ind}</option>
+                          ))}
+                      </optgroup>
+                    </select>
+                  </div>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-xs">
+                    <div className="p-3 rounded-lg bg-white border border-slate-200 space-y-1">
+                      <span className="text-rose-700 font-bold block">第1通の課題メッセージ（{selectedIndustry}）</span>
+                      <p className="text-slate-600 leading-relaxed text-[11px]">{getIndustryMessage(selectedIndustry, 'problem')}</p>
+                    </div>
+                    <div className="p-3 rounded-lg bg-white border border-slate-200 space-y-1">
+                      <span className="text-emerald-700 font-bold block">第3通のメリットメッセージ（{selectedIndustry}）</span>
+                      <p className="text-slate-600 leading-relaxed text-[11px]">{getIndustryMessage(selectedIndustry, 'benefit')}</p>
+                    </div>
                   </div>
                 </div>
               </div>
-
-              {onApplyOutreachStarterSet && (
-                <button
-                  type="button"
-                  onClick={onApplyOutreachStarterSet}
-                  className="inline-flex items-center gap-1.5 px-3.5 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-bold transition shadow-xs cursor-pointer shrink-0"
-                >
-                  <Zap className="w-3.5 h-3.5" />
-                  <span>営業メール5段階を最新化</span>
-                </button>
-              )}
-            </div>
-
-            {/* トリガー ＆ 停止条件の3大要素 */}
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-3 pt-2 text-xs">
-              <div className="p-3.5 rounded-xl bg-blue-50/70 border border-blue-200 space-y-1.5">
-                <div className="font-bold text-blue-900 flex items-center gap-1.5">
-                  <Play className="w-3.5 h-3.5 text-blue-600" />
-                  <span>① 開始トリガー（Trigger）</span>
-                </div>
-                <div className="text-slate-900 font-bold">
-                  見込み客登録時（lead_created）
-                </div>
-                <p className="text-slate-600 text-[11px] leading-relaxed">
-                  CRMに新しい見込み企業が登録された時点、または営業対象リストに追加された時点で第1通の配信ジョブが自動作成されます。
-                </p>
-              </div>
-
-              <div className="p-3.5 rounded-xl bg-emerald-50/70 border border-emerald-200 space-y-1.5">
-                <div className="font-bold text-emerald-900 flex items-center gap-1.5">
-                  <Clock className="w-3.5 h-3.5 text-emerald-600" />
-                  <span>② 配信スケジュール（3日おき）</span>
-                </div>
-                <div className="text-slate-900 font-bold">
-                  0日後 ➜ 3日後 ➜ 6日後 ➜ 9日後 ➜ 12日後
-                </div>
-                <p className="text-slate-600 text-[11px] leading-relaxed">
-                  送信可能時間帯（09:00〜20:00）を厳守し、相手が負担に感じない間隔で自然に信頼と診断動機を高めます。
-                </p>
-              </div>
-
-              <div className="p-3.5 rounded-xl bg-rose-50/70 border border-rose-200 space-y-1.5">
-                <div className="font-bold text-rose-900 flex items-center gap-1.5">
-                  <ShieldCheck className="w-3.5 h-3.5 text-rose-600" />
-                  <span>③ 自動停止ストッパー（Stop Condition）</span>
-                </div>
-                <div className="text-slate-900 font-bold">
-                  面談予約・商談化・返信で即停止
-                </div>
-                <p className="text-slate-600 text-[11px] leading-relaxed">
-                  相手が30分相談を予約した瞬間、または返信した瞬間に後続メールは自動キャンセルされ、重複連絡を完全に防ぎます。
-                </p>
-              </div>
-            </div>
-
-            {/* 18業種別シミュレーション */}
-            <div className="p-4 bg-slate-50 border border-slate-200 rounded-xl space-y-3">
-              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-                <div className="flex items-center gap-2">
-                  <Building className="w-4 h-4 text-blue-600" />
-                  <span className="text-xs font-bold text-slate-800">
-                    業種別メッセージ自動差し替えシミュレーター（重点5業種＋その他）:
-                  </span>
-                </div>
-                <select
-                  value={selectedIndustry}
-                  onChange={(e) => setSelectedIndustry(e.target.value)}
-                  className="bg-white border border-slate-200 rounded-lg px-3 py-1.5 text-xs text-slate-800 font-medium focus:border-blue-500 cursor-pointer shadow-2xs"
-                >
-                  <optgroup label="★ 重点5業種（公式HPの主な支援対象）">
-                    {PRIORITY_INDUSTRY_KEYS.map((ind) => (
-                      <option key={ind} value={ind}>{ind}</option>
-                    ))}
-                  </optgroup>
-                  <optgroup label="その他の業種">
-                    {Object.keys(INDUSTRY_MESSAGES)
-                      .filter((ind) => !(PRIORITY_INDUSTRY_KEYS as readonly string[]).includes(ind))
-                      .map((ind) => (
-                        <option key={ind} value={ind}>{ind}</option>
-                      ))}
-                  </optgroup>
-                </select>
-              </div>
-
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-xs">
-                <div className="p-3 rounded-lg bg-white border border-slate-200 space-y-1 shadow-2xs">
-                  <span className="text-rose-700 font-bold block">
-                    【第1通に自動挿入】{selectedIndustry} の急所・課題
-                  </span>
-                  <p className="text-slate-600 leading-relaxed text-[11px]">
-                    {getIndustryMessage(selectedIndustry, 'problem')}
-                  </p>
-                </div>
-                <div className="p-3 rounded-lg bg-white border border-slate-200 space-y-1 shadow-2xs">
-                  <span className="text-emerald-700 font-bold block">
-                    【第3通に自動挿入】{selectedIndustry} の導入変革メリット
-                  </span>
-                  <p className="text-slate-600 leading-relaxed text-[11px]">
-                    {getIndustryMessage(selectedIndustry, 'benefit')}
-                  </p>
-                </div>
-              </div>
-            </div>
+            )}
           </div>
 
-          {/* 別枠: 一発直球提案（社外右腕）テンプレート編集スロット */}
+          {/* 単発: 一発直球提案（社外右腕）テンプレート編集スロット */}
           {(() => {
             const sampleDraft = resolveOneShotOutreachDraft(
               oneShotScenario,
@@ -4187,42 +4214,33 @@ export const MarketingFlowStudio: React.FC<MarketingFlowStudioProps> = ({
               selectedIndustry,
               'https://corp.mstcorp.info/diagnosis'
             );
-            const rawDefault = getOneShotOutreachTemplate('{company_name}', '{recipient_name}', undefined, '{link_url}');
             const isCustomized = Boolean(oneShotScenario);
             return (
               <div className="bg-white border border-purple-200 rounded-2xl p-5 shadow-xs space-y-3">
                 <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-100 pb-3">
-                  <div className="flex items-start gap-3">
-                    <span className="w-8 h-8 rounded-lg bg-purple-100 text-purple-800 border border-purple-200 font-bold text-xs flex items-center justify-center shrink-0">
-                      単発
-                    </span>
-                    <div>
-                      <div className="flex items-center gap-2 flex-wrap">
-                        <span className="text-xs px-2 py-0.5 rounded bg-purple-50 text-purple-800 border border-purple-200 font-bold">
-                          別枠 · 一発直球提案メール
-                        </span>
-                        <span className="text-[11px] font-semibold text-slate-500">
-                          {isCustomized ? 'カスタム文面を保存済み' : '標準テンプレート使用中'}
-                        </span>
-                        <span className="text-xs text-slate-600 font-medium">
-                          件名: {sampleDraft.subject}
-                        </span>
-                      </div>
-                      <h4 className="text-sm font-bold text-slate-900 mt-1">
-                        {ONE_SHOT_SCENARIO_NAME}
-                      </h4>
-                      <p className="text-[11px] text-slate-500 mt-0.5">
-                        見込み企業リストからの「一発提案（社外右腕）」一括・個別発火および送信ドロワーで使用されます（署名・配信停止リンクは送信時に自動付与）。
-                      </p>
+                  <div className="min-w-0">
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <span className="text-xs font-bold text-purple-800">
+                        単発営業メール（一発直球提案）
+                      </span>
+                      <span className="text-[11px] text-slate-500">
+                        · {isCustomized ? 'カスタム編集済み' : '標準テンプレート使用中'}
+                      </span>
+                    </div>
+                    <h4 className="text-sm font-bold text-slate-900 mt-0.5">
+                      {ONE_SHOT_SCENARIO_NAME}
+                    </h4>
+                    <div className="text-xs text-slate-600 mt-0.5 truncate">
+                      件名: {sampleDraft.subject}
                     </div>
                   </div>
 
-                  <div className="flex items-center gap-2 self-end sm:self-auto shrink-0 flex-wrap">
+                  <div className="flex items-center gap-2 self-end sm:self-auto shrink-0">
                     {isCustomized && (
                       <button
                         type="button"
                         onClick={() => handleDeleteInspectorScenario(oneShotScenario!.id)}
-                        className="px-3 py-1.5 bg-white hover:bg-slate-50 text-slate-600 rounded-lg text-xs font-semibold border border-slate-200 transition flex items-center gap-1.5 cursor-pointer whitespace-nowrap shrink-0"
+                        className="px-3 py-1.5 bg-white hover:bg-slate-50 text-slate-600 rounded-lg text-xs font-semibold border border-slate-200 transition flex items-center gap-1.5 cursor-pointer whitespace-nowrap"
                         title="カスタム編集を解除して初期の標準テンプレートに戻します"
                       >
                         <RotateCcw className="w-3.5 h-3.5 text-slate-500" />
@@ -4231,95 +4249,54 @@ export const MarketingFlowStudio: React.FC<MarketingFlowStudioProps> = ({
                     )}
                     <button
                       type="button"
-                      onClick={() => {
-                        setPreviewModalScenario({
-                          name: ONE_SHOT_SCENARIO_NAME,
-                          emailSubject: sampleDraft.subject,
-                          emailBody: sampleDraft.body,
-                        });
-                      }}
-                      className="px-3 py-1.5 bg-white hover:bg-slate-100 text-slate-700 rounded-lg text-xs font-bold border border-slate-200 transition flex items-center gap-1.5 cursor-pointer whitespace-nowrap shrink-0"
+                      onClick={handleOpenOneShotEditor}
+                      className="px-3.5 py-1.5 bg-purple-600 hover:bg-purple-700 text-white rounded-lg text-xs font-bold transition flex items-center gap-1.5 cursor-pointer shadow-xs whitespace-nowrap"
                     >
-                      <Eye className="w-3.5 h-3.5 text-purple-600" />
-                      <span>全文プレビュー</span>
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        const target: MarketingScenario = oneShotScenario || {
-                          id: ONE_SHOT_SCENARIO_ID,
-                          name: ONE_SHOT_SCENARIO_NAME,
-                          trigger: 'manual',
-                          channel: 'email',
-                          audience: '未接触の見込み企業（一発直球提案）',
-                          waitMinutes: 0,
-                          emailSubject: rawDefault.subject,
-                          emailBody: rawDefault.body,
-                          messageBody: '',
-                          lineMessageType: 'text',
-                          lineImageUrl: '',
-                          linePreviewImageUrl: '',
-                          flexAltText: '',
-                          flexTitle: '',
-                          flexBody: '',
-                          flexButtonLabel: '',
-                          flexButtonUrl: '',
-                          status: 'prepared',
-                          automationEnabled: false,
-                          sendTimeWindow: '09:00-18:00',
-                          preferredSendTime: '',
-                          stopOnBooking: true,
-                          stopOnDeal: true,
-                          consentBasis: '特定電子メール法に基づく業務改善情報の提供（オプトアウト明記）',
-                          updatedAt: Date.now(),
-                        };
-                        handleOpenInspector(target);
-                      }}
-                      className="px-3 py-1.5 bg-purple-600 hover:bg-purple-700 text-white rounded-lg text-xs font-bold transition flex items-center gap-1.5 cursor-pointer shadow-xs whitespace-nowrap shrink-0"
-                    >
-                      <Edit3 className="w-3.5 h-3.5 text-purple-100" />
+                      <Edit3 className="w-3.5 h-3.5" />
                       <span>テンプレート編集</span>
                     </button>
                   </div>
                 </div>
 
-                <div className="p-3 bg-slate-50 rounded-xl border border-slate-200 font-mono text-xs text-slate-700 max-h-24 overflow-hidden relative">
-                  <pre className="whitespace-pre-wrap">{sampleDraft.body}</pre>
-                  <div className="absolute inset-x-0 bottom-0 h-10 bg-gradient-to-t from-slate-50 to-transparent pointer-events-none" />
+                <div className="p-3 bg-slate-50 rounded-xl border border-slate-200 font-sans text-xs text-slate-700 max-h-24 overflow-hidden relative">
+                  <pre className="whitespace-pre-wrap font-sans leading-relaxed">{sampleDraft.body}</pre>
+                  <div className="absolute inset-x-0 bottom-0 h-8 bg-gradient-to-t from-slate-50 to-transparent pointer-events-none" />
                 </div>
               </div>
             );
           })()}
 
           {/* 5ステップのタイムラインカード */}
-          <div className="space-y-4">
+          <div className="space-y-3">
             {[1, 2, 3, 4, 5].map((stepNum) => {
               const draft = getSalesEmailTemplate(stepNum, 'サンプル株式会社', '山田 太郎', selectedIndustry, 'https://corp.mstcorp.info/diagnosis');
-              const waitDays = stepNum === 1 ? '0日目（即時 / 待機: 0分）' : `${(stepNum - 1) * 3}日後（待機: ${(stepNum - 1) * 3 * 1440}分）`;
+              const waitDays = stepNum === 1 ? '0日目（初回）' : `${(stepNum - 1) * 3}日後`;
               const matchedScenario = outreachScenarios.find(s => s.id !== ONE_SHOT_SCENARIO_ID && !s.name.includes('一発直球') && s.name.includes(String(stepNum)));
+              const displaySubject = matchedScenario?.emailSubject || draft.subject;
+              const displayBody = matchedScenario?.emailBody || draft.body;
 
               return (
                 <div
                   key={stepNum}
-                  className="bg-white border border-slate-200 hover:border-blue-300 rounded-2xl p-5 shadow-xs space-y-3 transition"
+                  className="bg-white border border-slate-200 hover:border-blue-300 rounded-2xl p-4 shadow-xs space-y-2.5 transition"
                 >
-                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-100 pb-3">
-                    <div className="flex items-center gap-3">
-                      <span className="w-8 h-8 rounded-full bg-blue-100 text-blue-800 border border-blue-300 font-bold text-sm flex items-center justify-center shrink-0">
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                    <div className="flex items-start gap-3 min-w-0">
+                      <span className="w-7 h-7 rounded-full bg-blue-50 text-blue-800 border border-blue-200 font-bold text-xs flex items-center justify-center shrink-0 mt-0.5">
                         {stepNum}
                       </span>
-                      <div>
+                      <div className="min-w-0">
                         <div className="flex items-center gap-2 flex-wrap">
-                          <span className="text-xs px-2.5 py-0.5 rounded bg-blue-50 text-blue-700 border border-blue-200 font-bold">
-                            第{stepNum}通 ({waitDays}{stepNum > 1 && (matchedScenario?.preferredSendTime ?? '10:00') ? ` · ${matchedScenario?.preferredSendTime || '10:00'}頃` : ''})
+                          <span className="text-xs font-bold text-blue-700">
+                            第{stepNum}通 · {waitDays}{stepNum > 1 && (matchedScenario?.preferredSendTime ?? '10:00') ? ` (${matchedScenario?.preferredSendTime || '10:00'}頃)` : ''}
                           </span>
-                          <span className="text-xs text-slate-600 font-medium">
-                            件名: {draft.subject}
+                          <span className="text-sm font-bold text-slate-900 truncate">
+                            {matchedScenario?.name || draft.name}
                           </span>
                         </div>
-                        <h4 className="text-sm font-bold text-slate-900 mt-1">
-                          {draft.name}
-                        </h4>
+                        <div className="text-xs text-slate-600 mt-0.5 truncate">
+                          件名: {displaySubject}
+                        </div>
                       </div>
                     </div>
 
@@ -4328,7 +4305,7 @@ export const MarketingFlowStudio: React.FC<MarketingFlowStudioProps> = ({
                         <button
                           type="button"
                           onClick={() => toggleScenarioAutomation(matchedScenario.id, Boolean(matchedScenario.automationEnabled))}
-                          className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition cursor-pointer ${
+                          className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition cursor-pointer whitespace-nowrap ${
                             matchedScenario.automationEnabled
                               ? 'bg-emerald-50 text-emerald-700 border border-emerald-300'
                               : 'bg-white text-slate-600 border border-slate-200 hover:bg-slate-100'
@@ -4338,21 +4315,6 @@ export const MarketingFlowStudio: React.FC<MarketingFlowStudioProps> = ({
                           <span>{matchedScenario.automationEnabled ? '稼働中' : '停止中'}</span>
                         </button>
                       )}
-
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setPreviewModalScenario({
-                            name: draft.name,
-                            emailSubject: draft.subject,
-                            emailBody: draft.body,
-                          });
-                        }}
-                        className="px-3 py-1.5 bg-white hover:bg-slate-100 text-slate-700 rounded-lg text-xs font-bold border border-slate-200 transition flex items-center gap-1.5 cursor-pointer shadow-2xs"
-                      >
-                        <Eye className="w-3.5 h-3.5 text-blue-600" />
-                        <span>全文プレビュー</span>
-                      </button>
 
                       <button
                         type="button"
@@ -4384,17 +4346,17 @@ export const MarketingFlowStudio: React.FC<MarketingFlowStudioProps> = ({
                           };
                           handleOpenInspector(target);
                         }}
-                        className="px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-xs font-bold transition flex items-center gap-1.5 cursor-pointer shadow-xs"
+                        className="px-3.5 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-xs font-bold transition flex items-center gap-1.5 cursor-pointer whitespace-nowrap"
                       >
-                        <ShieldCheck className="w-3.5 h-3.5 text-blue-200" />
-                        <span>点検・編集</span>
+                        <Edit3 className="w-3.5 h-3.5" />
+                        <span>編集・プレビュー</span>
                       </button>
                     </div>
                   </div>
 
-                  <div className="p-3 bg-slate-50 rounded-xl border border-slate-200 font-mono text-xs text-slate-700 max-h-24 overflow-hidden relative">
-                    <pre className="whitespace-pre-wrap">{draft.body}</pre>
-                    <div className="absolute inset-x-0 bottom-0 h-10 bg-gradient-to-t from-slate-50 to-transparent pointer-events-none" />
+                  <div className="p-2.5 bg-slate-50 rounded-xl border border-slate-200 font-sans text-xs text-slate-600 max-h-16 overflow-hidden relative">
+                    <pre className="whitespace-pre-wrap font-sans leading-relaxed">{displayBody}</pre>
+                    <div className="absolute inset-x-0 bottom-0 h-6 bg-gradient-to-t from-slate-50 to-transparent pointer-events-none" />
                   </div>
                 </div>
               );
@@ -4408,7 +4370,7 @@ export const MarketingFlowStudio: React.FC<MarketingFlowStudioProps> = ({
       {/* キーワード追加・編集モーダル */}
       {isEditingKeywordModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs animate-fade-in">
-          <div className="bg-white border border-slate-200 rounded-2xl max-w-lg w-full shadow-2xl overflow-hidden flex flex-col">
+          <div className="bg-white border border-slate-200 rounded-2xl max-w-2xl w-full shadow-2xl overflow-hidden flex flex-col">
             <div className="px-6 py-4 border-b border-slate-100 flex items-center justify-between bg-slate-50/80">
               <div className="flex items-center gap-2">
                 <Zap className="w-5 h-5 text-amber-600" />
@@ -4465,12 +4427,12 @@ export const MarketingFlowStudio: React.FC<MarketingFlowStudioProps> = ({
               <div>
                 <label className="font-bold text-slate-700 block mb-1">自動返信するメッセージ文面 *</label>
                 <textarea
-                  rows={4}
+                  rows={8}
                   required
                   value={ruleReply}
                   onChange={(e) => setRuleReply(e.target.value)}
                   placeholder="返信する文章を入力してください。{link_url} や {booking_url} が利用できます。"
-                  className="w-full bg-slate-50 border border-slate-200 rounded-xl p-3 text-slate-900 font-mono leading-relaxed focus:bg-white focus:outline-none focus:border-amber-500"
+                  className="w-full min-h-[180px] bg-slate-50 border border-slate-200 rounded-xl p-3.5 text-sm text-slate-900 font-sans leading-relaxed focus:bg-white focus:outline-none focus:border-amber-500 resize-y"
                 />
               </div>
 

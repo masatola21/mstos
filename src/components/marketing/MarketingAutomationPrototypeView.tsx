@@ -888,61 +888,50 @@ export const MarketingAutomationPrototypeView: React.FC<Props> = ({ scenarios, o
   };
 
   const tabs = [
-    { id: 'flows' as const, label: '🗺️ 導線フロー ＆ シナリオ配信管理', icon: GitBranch },
-    { id: 'jobs' as const, label: '⚡ 配信ジョブ監視', icon: Activity },
-    { id: 'line_settings' as const, label: '⚙️ LINE設定＆リッチメニュー', icon: MessageCircle },
+    { id: 'flows' as const, label: '配信シナリオ・導線管理', icon: GitBranch },
+    { id: 'jobs' as const, label: '配信ジョブ監視', icon: Activity },
+    { id: 'line_settings' as const, label: 'LINE設定＆リッチメニュー', icon: MessageCircle },
   ];
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-5">
       {/* Top Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-2">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
         <h1 className="text-[19px] font-bold text-slate-800 tracking-tight">
           LINE・メール自動配信
         </h1>
 
         <div className="flex flex-wrap items-center gap-2">
           {onNavigateTab && (
-            <>
-              <button
-                type="button"
-                onClick={() => onNavigateTab('communication_send')}
-                className="flex items-center gap-1.5 rounded-md border border-slate-200 bg-white px-3 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-50 transition cursor-pointer"
-                title="全社共通の一斉配信を実行します"
-              >
-                <Send className="h-3.5 w-3.5 text-purple-600" />
-                <span>一斉配信</span>
-              </button>
-              <button
-                type="button"
-                onClick={() => onNavigateTab('communication_send')}
-                className="flex items-center gap-1.5 rounded-md border border-slate-200 bg-white px-3 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-50 transition cursor-pointer"
-                title="全社共通の定型テンプレート保管庫を開きます"
-              >
-                <Library className="h-3.5 w-3.5 text-emerald-600" />
-                <span>定型文テンプレート</span>
-              </button>
-            </>
+            <button
+              type="button"
+              onClick={() => onNavigateTab('communication_send')}
+              className="flex items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-50 transition cursor-pointer whitespace-nowrap"
+              title="一斉配信・個別送信・定型テンプレート保管庫を開きます"
+            >
+              <Send className="h-3.5 w-3.5 text-purple-600" />
+              <span>一斉配信・定型テンプレート</span>
+            </button>
           )}
           <button
             onClick={startNew}
-            className="flex shrink-0 items-center justify-center gap-1.5 rounded-md bg-purple-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-purple-700 cursor-pointer transition-colors"
+            className="flex shrink-0 items-center justify-center gap-1.5 rounded-lg bg-purple-600 px-3.5 py-1.5 text-xs font-semibold text-white hover:bg-purple-700 cursor-pointer transition-colors whitespace-nowrap"
           >
             <Plus className="h-3.5 w-3.5" />
-            <span>シナリオ作成</span>
+            <span>新規ステップ作成</span>
           </button>
         </div>
       </div>
 
-      <nav className="flex gap-1.5 overflow-x-auto rounded-xl border border-slate-200 bg-slate-100 p-1.5" aria-label="自動配信メニュー">
+      <nav className="flex gap-1.5 overflow-x-auto rounded-xl border border-slate-200 bg-slate-100 p-1" aria-label="自動配信メニュー">
         {tabs.map(({ id, label, icon: Icon }) => (
           <button
             key={id}
             onClick={() => { setActiveTab(id); setNotice(''); }}
-            className={`flex shrink-0 items-center gap-2 rounded-lg px-3 py-1.5 text-xs font-medium transition cursor-pointer ${
+            className={`flex shrink-0 items-center gap-2 rounded-lg px-3 py-1.5 text-xs font-medium transition cursor-pointer whitespace-nowrap ${
               activeTab === id
-                ? 'bg-purple-600 text-white font-bold shadow-2xs'
-                : 'text-slate-600 hover:bg-white hover:text-slate-900'
+                ? 'bg-white text-slate-900 font-bold shadow-2xs'
+                : 'text-slate-600 hover:text-slate-900'
             }`}
           >
             <Icon className="h-3.5 w-3.5" />

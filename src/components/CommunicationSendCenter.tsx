@@ -1371,8 +1371,8 @@ export const CommunicationSendCenter: React.FC<Props> = ({
                 <textarea
                   value={body}
                   onChange={(e) => setBody(e.target.value)}
-                  rows={8}
-                  className="mt-1 block w-full rounded-xl border border-slate-200 bg-slate-50 p-3 text-xs text-slate-900 font-sans leading-relaxed focus:bg-white focus:border-purple-600 focus:outline-none shadow-2xs"
+                  rows={12}
+                  className="mt-1 block w-full min-h-[260px] resize-y rounded-xl border border-slate-200 bg-slate-50 p-3.5 text-sm text-slate-900 font-sans leading-relaxed focus:bg-white focus:border-purple-600 focus:outline-none shadow-2xs"
                   placeholder="本文を入力してください（白紙から入力する場合は「自由作成」または上の「白紙に戻す」をご利用ください）..."
                 />
                 {templateChannel === 'email' && (
