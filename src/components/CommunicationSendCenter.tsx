@@ -178,7 +178,24 @@ const documentMessage = (type: string | undefined, channel: DeliveryChannel) => 
     },
     contract: {
       subject: '【契約内容のご確認・同意のお願い】{書類名}｜{会社名} 様',
-      body: hi + '\n\n' + intro + '\n\n契約書（PDF）を添付いたしましたので、ご確認のほどよろしくお願い申し上げます。\nまた、下記リンクよりWeb上でも契約内容をご確認いただけます。\n\n契約内容に同意いただける場合は、契約締結の権限をお持ちの方から、このメールへの返信で次の文面をお送りください。\n\n「{会社名}を代表して、契約書『{書類名}』の内容を確認し、有限会社MSTとの契約締結に同意します。氏名：［氏名］　役職：［役職］」\n\n内容に修正希望がある場合は、同意文ではなく修正箇所をご返信ください。返信を確認後、契約状態を締結済みに更新します。ご返信いただいたメールと契約書は契約記録として保存します。\n\n' + details,
+      body:
+        hi +
+        '\n\n' +
+        intro +
+        '\n\n業務委託基本契約書（PDF）を添付いたしましたので、ご確認のほどよろしくお願い申し上げます。\nまた、下記リンクよりWeb上でも契約内容をご確認いただけます。\n\n' +
+        details +
+        '\n\n' +
+        '━━━━━━━━━━━━━━━━━━━━━━━━━━\n' +
+        '■ メール返信による契約合意のお願い\n' +
+        '━━━━━━━━━━━━━━━━━━━━━━━━━━\n' +
+        '契約内容をご確認いただき、問題がございませんでしたら、契約締結の権限をお持ちの方より本メールへそのままご返信をお願いいたします。\n\n' +
+        '【ご返信いただく文面】\n' +
+        '「{会社名}を代表して、契約書『{書類名}』の内容を確認し、有限会社MSTとの契約締結に同意します。\n' +
+        '氏名：［氏名］\n' +
+        '役職：［役職］」\n\n' +
+        '※内容に修正希望がある場合は、同意文ではなく修正箇所をご返信ください。\n' +
+        '※返信を確認後、契約状態を締結済みに更新します。ご返信いただいたメールと契約書は契約記録として保存します。\n\n' +
+        'ご確認のほど、何卒よろしくお願い申し上げます。',
       line: hi + '\n契約書をお送りします。内容をご確認ください。同意いただける場合は、契約締結の権限をお持ちの方からメールで明示的にご返信ください。\n{書類名}\n{書類URL}',
     },
     estimate: {
@@ -201,7 +218,10 @@ const documentMessage = (type: string | undefined, channel: DeliveryChannel) => 
 };
 
 const contractReplySection = '【メール返信による契約合意】\n契約内容に同意いただける場合は、契約締結の権限をお持ちの方から、このメールへの返信で次の文面をお送りください。\n\n「{会社名}を代表して、契約書『{書類名}』の内容を確認し、有限会社MSTとの契約締結に同意します。氏名：［氏名］　役職：［役職］」\n\n内容に修正希望がある場合は、同意文ではなく修正箇所をご返信ください。返信を確認後、契約状態を締結済みに更新します。ご返信いただいたメールと契約書は契約記録として保存してください。';
-const ensureContractReplySection = (body: string) => body.includes('【メール返信による契約合意】') ? body : body.trimEnd() + '\n\n' + contractReplySection;
+const ensureContractReplySection = (body: string) =>
+  body.includes('契約締結に同意します') || body.includes('メール返信による契約合意')
+    ? body
+    : body.trimEnd() + '\n\n' + contractReplySection;
 const fill = (s: string, v: Record<string, string>) => renderPlaceholders(s, v);
 const htmlToText = (html: string) => {
   const withBreaks = html.replace(/<\s*br\s*\/?>/gi, '\n').replace(/<\/(p|div|h[1-6]|li|tr)>/gi, '\n').replace(/<\/td>/gi, '  ');

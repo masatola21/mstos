@@ -128,6 +128,7 @@ export const CustomerSupportWorkspace: React.FC<Props> = ({
   const [editingTaskId, setEditingTaskId] = useState('');
   const [milestoneDraft, setMilestoneDraft] = useState('');
   const [milestoneDueDate, setMilestoneDueDate] = useState('');
+  const [deletingEngagement, setDeletingEngagement] = useState<Row | null>(null);
   const [showNewSupport, setShowNewSupport] = useState(false);
   const [newSupport, setNewSupport] = useState({
     title: '', company_id: '', contract_id: '', service_type: 'implementation_support',
@@ -598,7 +599,20 @@ export const CustomerSupportWorkspace: React.FC<Props> = ({
               <div className="mt-1 text-xs font-medium text-slate-700">{item.title}</div>
               <div className="mt-2 flex flex-wrap gap-x-3 gap-y-1 text-[11px] text-slate-500"><span>{SERVICE_TYPE_LABELS[item.service_type] || '支援'}</span><span>{itemDetail.currentTheme || 'テーマ未設定'}</span><span>次回 {displayDate(item.next_meeting_at)}</span><span>未完了 {open.length}件</span><span>{PROGRESS_LABELS[itemDetail.progressStatus || 'not_started']}</span></div>
               {warning && <div className="mt-2 text-[11px] text-amber-700 font-semibold">{overdue ? '期限超過タスクあり' : lateMilestone ? '期限超過マイルストーンあり' : lateMeeting ? '次回予定日を過ぎています' : itemDetail.progressStatus === 'delayed' ? '進捗遅延' : itemDetail.progressStatus === 'at_risk' ? '支援上の確認が必要です' : '支援が保留中です'}</div>}
-            </button><InlineDeleteButton onConfirm={()=>void deleteEngagement(item)} warning={`「${item.title}」を削除しますか？`} className="self-start rounded-lg border border-slate-200 bg-white p-2 text-slate-400 hover:text-rose-600 hover:bg-rose-50 hover:border-rose-200 transition cursor-pointer shadow-2xs" ariaLabel={`顧客支援「${item.title}」を削除`}><Trash2 className="h-4 w-4"/></InlineDeleteButton></li>;
+            </button>
+            <button
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation();
+                setDeletingEngagement(item);
+              }}
+              title={`「${item.title}」を削除`}
+              className="self-start rounded-lg border border-slate-200 bg-white p-2 text-slate-400 hover:text-rose-600 hover:bg-rose-50 hover:border-rose-200 transition cursor-pointer shadow-2xs shrink-0"
+              aria-label={`顧客支援「${item.title}」を削除`}
+            >
+              <Trash2 className="h-4 w-4" />
+            </button>
+          </li>;
           })}</ul>}
       </section>
 
@@ -817,5 +831,40 @@ export const CustomerSupportWorkspace: React.FC<Props> = ({
         </div>}
       </section> : <section className="rounded-2xl border border-slate-200 bg-white p-8 text-center text-xs text-slate-400">顧客支援を登録すると、ここに現在の状況と次の対応を表示します。</section>}
     </div>
+
+    {deletingEngagement && (
+      <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" role="dialog" aria-modal="true">
+        <div className="w-full max-w-sm rounded-2xl bg-white p-5 shadow-xl space-y-4 animate-in fade-in zoom-in-95 duration-150">
+          <div className="flex items-center gap-2 text-rose-600 font-bold text-sm">
+            <AlertTriangle className="h-5 w-5 shrink-0" />
+            <span>支援案件の削除</span>
+          </div>
+          <div className="text-xs text-slate-700 leading-relaxed space-y-1">
+            <p>「<strong className="text-slate-900 font-semibold">{deletingEngagement.title}</strong>」を削除しますか？</p>
+            <p className="text-[11px] text-slate-500">※ この操作は取り消せません。関連する打ち合わせ履歴も削除されます。</p>
+          </div>
+          <div className="flex justify-end gap-2 pt-2 border-t border-slate-100">
+            <button
+              type="button"
+              onClick={() => setDeletingEngagement(null)}
+              className="rounded-xl border border-slate-200 bg-white px-3.5 py-1.5 text-xs font-semibold text-slate-600 hover:bg-slate-50 cursor-pointer shadow-2xs"
+            >
+              キャンセル
+            </button>
+            <button
+              type="button"
+              onClick={async () => {
+                const target = deletingEngagement;
+                setDeletingEngagement(null);
+                await deleteEngagement(target);
+              }}
+              className="rounded-xl bg-rose-600 hover:bg-rose-700 px-4 py-1.5 text-xs font-bold text-white transition cursor-pointer shadow-xs shadow-rose-600/20"
+            >
+              削除を確定
+            </button>
+          </div>
+        </div>
+      </div>
+    )}
   </div>;
 };
