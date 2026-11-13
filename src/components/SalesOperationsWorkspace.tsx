@@ -359,7 +359,7 @@ export const SalesOperationsWorkspace: React.FC<Props> = ({ tab, companyId, lead
                     source_type: 'document_approval',
                     status: 'awaiting_approval',
                   });
-                  setNotice(`書類を承認し、送信キューに送付案（承認待ち）を自動作成しました。下部の送信キューで確認・送信できます。`);
+                  setNotice(`書類を確定（送付可能）にし、送信待機リスト（承認待ち）に送付案を作成しました。各書類の「送信ドロワーで送る」からすぐ送付できるほか、「送信履歴・アウトボックス」でも確認・送信できます。`);
                 }
               }
             }

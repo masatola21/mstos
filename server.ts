@@ -9557,6 +9557,7 @@ app.get(['/api/public/documents/:id/pdf', '/api/documents/:id/pdf'], async (req,
     const safeTitle = (doc.title || 'document').replace(/[\r\n/\\:*?"<>|]/g, '_').trim();
     res.setHeader('Content-Type', 'application/pdf');
     res.setHeader('Content-Disposition', `inline; filename*=UTF-8''${encodeURIComponent(safeTitle)}.pdf`);
+    res.setHeader('Cache-Control', 'no-store');
     return res.send(pdfBuffer);
   } catch (error) {
     console.error('Document PDF generation failed:', error instanceof Error ? error.message : 'unknown error');
