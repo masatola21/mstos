@@ -9,7 +9,7 @@ import {
   AlertCircle,
 } from 'lucide-react';
 
-export type WelcomeChoiceRoute = 'form' | 'booking' | 'template';
+export type WelcomeChoiceRoute = 'form' | 'booking' | 'template' | 'chat' | 'care_interactive';
 
 export interface WelcomeChoice {
   id: string;
@@ -23,8 +23,8 @@ export interface WelcomeChoice {
 
 export const DEFAULT_WELCOME_CHOICES: WelcomeChoice[] = [
   { id: 'diagnosis', label: '📊 3分無料経営診断を受ける', tag: '選択:診断', route: 'form', formSlug: 'business-diagnosis' },
-  { id: 'consult', label: '🗓️ 経営改善について個別相談する', tag: '選択:個別相談', route: 'booking' },
-  { id: 'care', label: '🌿 介護保険外サービス開業パッケージについて知る', tag: '選択:開業パッケージ', route: 'template', templateId: '' },
+  { id: 'consult', label: '🗓️ 経営改善について個別相談する', tag: '選択:個別相談', route: 'chat' },
+  { id: 'care', label: '🌿 介護保険外サービスの開業相談', tag: '介護保険外開業', route: 'care_interactive' },
 ];
 
 type Action = { type: 'uri' | 'message'; label: string; value: string };

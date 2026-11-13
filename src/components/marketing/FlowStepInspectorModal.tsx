@@ -179,7 +179,7 @@ export const FlowStepInspectorModal: React.FC<FlowStepInspectorModalProps> = ({
       setSelectedTagNames(['選択:個別相談']);
       setSelectedExitTagNames(['個別相談予約済み', '相談実施済み', '成約・顧問契約', '配信停止・オプトアウト']);
     } else if (scenario.name.includes('介護') || scenario.name.includes('保険外')) {
-      setSelectedTagNames(['care:開業相談']);
+      setSelectedTagNames(['介護保険外開業']);
       setSelectedExitTagNames(['個別相談予約済み', '成約・顧問契約', '配信停止・オプトアウト']);
     } else {
       setSelectedTagNames(['LINE友だち追加']);

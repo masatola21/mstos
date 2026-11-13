@@ -36,7 +36,7 @@ export const UNIFIED_TAG_MASTER: MasterTag[] = [
   },
   {
     id: 'tag_choice_care',
-    name: 'care:開業相談',
+    name: '介護保険外開業',
     category: 'inflow',
     categoryLabel: '流入・選択',
     color: '#0284c7',

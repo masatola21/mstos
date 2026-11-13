@@ -114,7 +114,7 @@ const DEFAULT_KEYWORD_RULES: KeywordAutoReply[] = [
     matchText: '介護',
     matchMode: 'contains',
     replyText: '介護保険外サービスの開業・事業展開についてのご相談ありがとうございます！\n自費リハビリ・自費看護等の立ち上げでは、提供メニューの設計と地域集客が成功の鍵となります。\n\n専任チームより最適な開業パッケージ案内をお届けします。',
-    tag: 'care:開業相談',
+    tag: '介護保険外開業',
     targetBranch: 'care',
     enabled: true,
   },
@@ -173,8 +173,8 @@ export const MarketingFlowStudio: React.FC<MarketingFlowStudioProps> = ({
   // 選択肢（ボタン文面・アクション・色）
   const [welcomeChoices, setWelcomeChoices] = useState<Array<WelcomeChoice & { actionType?: 'postback' | 'uri'; uri?: string; color?: string }>>([
     { id: 'diagnosis', label: '📊 3分無料経営診断を受ける', tag: '選択:診断', route: 'form', formSlug: 'business-diagnosis', actionType: 'postback', color: '#10B981' },
-    { id: 'consult', label: '🗓️ 経営改善について個別相談する', tag: '選択:個別相談', route: 'booking', actionType: 'postback', color: '#1E3A5F' },
-    { id: 'care', label: '🌿 介護保険外サービス開業を知る', tag: 'care:開業相談', route: 'template', actionType: 'postback', color: '#0284C7' },
+    { id: 'consult', label: '🗓️ 経営改善について個別相談する', tag: '選択:個別相談', route: 'chat', actionType: 'postback', color: '#1E3A5F' },
+    { id: 'care', label: '🌿 介護保険外サービスの開業相談', tag: '介護保険外開業', route: 'care_interactive', actionType: 'postback', color: '#0284C7' },
   ]);
   const [welcomeEnabled, setWelcomeEnabled] = useState(true);
   const [welcomeRuleId, setWelcomeRuleId] = useState<string | null>(null);
@@ -301,7 +301,23 @@ export const MarketingFlowStudio: React.FC<MarketingFlowStudioProps> = ({
               if (bodyContents[5]?.text) setWelcomeInstruction(bodyContents[5].text);
             }
             if (Array.isArray(payload.choices) && payload.choices.length > 0) {
-              setWelcomeChoices(payload.choices);
+              const migratedChoices = payload.choices.map((c: any) => {
+                if (c?.id === 'consult' && c?.route === 'booking') {
+                  return { ...c, route: 'chat' };
+                }
+                if (c?.id === 'care') {
+                  const legacyLabels = ['🌿 介護保険外サービス開業を知る', '🌿 介護保険外サービス開業パッケージについて知る', '介護保険外サービス開業パッケージについて知る'];
+                  const legacyTags = ['care:開業相談', '選択:開業パッケージ'];
+                  return {
+                    ...c,
+                    label: legacyLabels.includes(c.label) ? '🌿 介護保険外サービスの開業相談' : c.label,
+                    tag: legacyTags.includes(c.tag) || !c.tag ? '介護保険外開業' : c.tag,
+                    route: c.route === 'template' ? 'care_interactive' : c.route,
+                  };
+                }
+                return c;
+              });
+              setWelcomeChoices(migratedChoices);
             }
           }
         }
@@ -1618,7 +1634,7 @@ export const MarketingFlowStudio: React.FC<MarketingFlowStudioProps> = ({
                     </div>
                     <div className="p-2.5 rounded-lg bg-sky-50 border border-sky-200 text-sky-800">
                       <span className="font-bold block">③ 介護開業ルート</span>
-                      <span className="text-[11px] opacity-90">タグ「care:開業相談」付与</span>
+                      <span className="text-[11px] opacity-90">タグ「介護保険外開業」付与</span>
                     </div>
                   </div>
                 </div>
@@ -2558,7 +2574,7 @@ export const MarketingFlowStudio: React.FC<MarketingFlowStudioProps> = ({
                   即時オンライン相談（30分）予約案内 Flexカード
                 </span>
                 <span className="text-[11px] px-2 py-0.5 rounded bg-sky-100 text-sky-800 border border-sky-300 font-bold">
-                  タグ「選択:個別相談 / care:開業相談」連動
+                  タグ「選択:個別相談 / 介護保険外開業」連動
                 </span>
               </div>
               <p className="text-xs text-slate-700">

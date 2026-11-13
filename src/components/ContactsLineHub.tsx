@@ -1098,7 +1098,7 @@ export const ContactsLineHub: React.FC<Props> = ({
                         {(() => {
                           const orderMap = { inflow: 1, action: 2, crm_status: 3, custom: 4 };
                           const getCat = (t: { name: string; category?: string }) => {
-                            if (t.name.startsWith('流入:') || ['LINE友だち追加', '選択:診断', '選択:個別相談', 'care:開業相談', '資料請求', 'Web問い合わせ'].includes(t.name) || t.category === 'inflow') return 'inflow';
+                            if (t.name.startsWith('流入:') || ['LINE友だち追加', '選択:診断', '選択:個別相談', 'care:開業相談', '介護保険外開業', '資料請求', 'Web問い合わせ'].includes(t.name) || t.category === 'inflow') return 'inflow';
                             if (['診断受検済み', '診断レポート送付済', '個別相談予約済み', '相談実施済み', '提案書提示済み'].includes(t.name) || t.category === 'action') return 'action';
                             if (['成約・顧問契約', '既存クライアント', '見込み客(Hot)', '配信停止・オプトアウト'].includes(t.name) || t.category === 'crm_status') return 'crm_status';
                             return 'custom';

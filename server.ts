@@ -233,7 +233,7 @@ function verifyCarePackageFormToken(token: unknown): CarePackageFormTokenPayload
 
 async function assignCarePackageTag(contactId: string | null, lineUserId: string, requestType: '資料請求' | '開業相談' | '両方希望'): Promise<void> {
   if (!lineSupabase) return;
-  const tagName = `care:${requestType}`;
+  const tagName = requestType === '開業相談' ? '介護保険外開業' : `care:${requestType}`;
   try {
     const { data: integrations } = await lineSupabase
       .from('line_channel_integrations')
@@ -1243,9 +1243,9 @@ function buildDefaultWelcomeFlexMessage(): { altText: string; contents: Record<s
             margin: 'sm',
             action: {
               type: 'postback',
-              label: '介護保険外サービス開業パッケージを知る',
+              label: '🌿 介護保険外サービスの開業相談',
               data: 'wc=care',
-              displayText: '介護保険外サービス開業パッケージについて知る',
+              displayText: '🌿 介護保険外サービスの開業相談',
             },
           },
         ],
@@ -1538,12 +1538,14 @@ async function processLinePostback(event: any, contact: any, eventId: string, bo
   const params = new URLSearchParams(postbackData);
   const action = params.get('action');
   const requestTypeRaw = params.get('request_type');
+  const wcParam = (params.get('wc') || '').trim();
   const isCarePackage = action === 'care_package_form' || postbackData.startsWith('care_package_form=');
-  const isWc = postbackData.startsWith('wc=');
+  const isWc = Boolean(wcParam) || postbackData.startsWith('wc=');
+  const isCareQ = postbackData.startsWith('care_q1=') || postbackData.startsWith('care_q2=');
 
   // 1. 待機中LINEマーケティングジョブの自動スキップ判定
-  // ※ wc= または care_package_form のときは実行しない（シナリオの誤停止防止）
-  if (!isWc && !isCarePackage) {
+  // ※ wc= または care_package_form または care_q のときは実行しない（シナリオの誤停止防止）
+  if (!isWc && !isCarePackage && !isCareQ) {
     try {
       await lineSupabase
         .from('marketing_automation_jobs')
@@ -1703,9 +1705,294 @@ async function processLinePostback(event: any, contact: any, eventId: string, bo
     return;
   }
 
+  // 2.5 介護保険外サービス パターンB (2問クイックヒアリング postback)
+  if (postbackData.startsWith('care_q1=') || postbackData.startsWith('care_q2=')) {
+    let replyMessage: Record<string, any> | null = null;
+    let inboxBody = '';
+
+    if (postbackData.startsWith('care_q1=')) {
+      const q1Val = postbackData.slice(8).trim();
+      const q1Map: Record<string, string> = {
+        existing: '既存の介護・福祉事業',
+        new_entry: '他業種からの新規参入',
+        individual: '個人での独立・開業',
+      };
+      const q1Label = q1Map[q1Val] || q1Val;
+
+      // タグ付与: 介護保険外開業
+      try {
+        const tagId = await getOrCreateLineTag(integration.owner_id, '介護保険外開業');
+        if (tagId) {
+          const { data: friend } = await lineSupabase
+            .from('line_friends')
+            .select('id')
+            .eq('line_user_id', userId)
+            .maybeSingle();
+          if (friend?.id) {
+            await lineSupabase.from('line_friend_tags').upsert({
+              line_friend_id: friend.id,
+              tag_id: tagId,
+              assigned_by: 'welcome_choice',
+            }, { onConflict: 'line_friend_id,tag_id', ignoreDuplicates: true });
+          }
+        }
+      } catch (tagErr) {
+        console.warn('[LINE Postback] Failed to assign care tag on q1:', tagErr);
+      }
+
+      replyMessage = {
+        type: 'flex',
+        altText: '【介護保険外開業】一番知りたいテーマを教えてください',
+        contents: {
+          type: 'bubble',
+          body: {
+            type: 'box',
+            layout: 'vertical',
+            spacing: 'md',
+            contents: [
+              { type: 'text', text: '🌿 介護保険外サービスの開業相談 (2/2)', weight: 'bold', size: 'lg', color: '#0284C7' },
+              {
+                type: 'text',
+                text: `ありがとうございます（状況: ${q1Label}）。\n\n【Q2】いま一番知りたいテーマはどれですか？`,
+                size: 'sm',
+                color: '#334155',
+                wrap: true,
+              },
+              { type: 'separator', margin: 'md' },
+              {
+                type: 'button',
+                style: 'secondary',
+                height: 'sm',
+                margin: 'md',
+                action: {
+                  type: 'postback',
+                  label: '💰 収益モデル・料金設定',
+                  data: `care_q2=${q1Val}:revenue`,
+                  displayText: '収益モデル・料金設定について知りたい',
+                },
+              },
+              {
+                type: 'button',
+                style: 'secondary',
+                height: 'sm',
+                margin: 'sm',
+                action: {
+                  type: 'postback',
+                  label: '📢 集客・営業・チラシ',
+                  data: `care_q2=${q1Val}:marketing`,
+                  displayText: '集客・営業・チラシのやり方を知りたい',
+                },
+              },
+              {
+                type: 'button',
+                style: 'secondary',
+                height: 'sm',
+                margin: 'sm',
+                action: {
+                  type: 'postback',
+                  label: '📄 必要書類・利用規約',
+                  data: `care_q2=${q1Val}:docs`,
+                  displayText: '必要な書類や利用規約について知りたい',
+                },
+              },
+              {
+                type: 'button',
+                style: 'secondary',
+                height: 'sm',
+                margin: 'sm',
+                action: {
+                  type: 'postback',
+                  label: '🗺️ 全体像・開業ステップ',
+                  data: `care_q2=${q1Val}:steps`,
+                  displayText: '全体の開業ステップについて知りたい',
+                },
+              },
+            ],
+          },
+        },
+      };
+      inboxBody = `[介護保険外開業相談: Q2テーマヒアリングFlexを送信 (Q1: ${q1Label})]`;
+    } else if (postbackData.startsWith('care_q2=')) {
+      const raw = postbackData.slice(8).trim();
+      const [q1Val, q2Val] = raw.split(':');
+      const q1Map: Record<string, string> = {
+        existing: '既存の介護・福祉事業',
+        new_entry: '他業種からの新規参入',
+        individual: '個人での独立・開業',
+      };
+      const q2Map: Record<string, string> = {
+        revenue: '収益モデル・料金設定',
+        marketing: '集客・営業・チラシ',
+        docs: '必要書類・利用規約',
+        steps: '全体像・開業ステップ',
+      };
+      const q1Label = q1Map[q1Val] || q1Val;
+      const q2Label = q2Map[q2Val] || q2Val;
+
+      // 1. タグ付与: 介護保険外開業
+      try {
+        const tagId = await getOrCreateLineTag(integration.owner_id, '介護保険外開業');
+        if (tagId) {
+          const { data: friend } = await lineSupabase
+            .from('line_friends')
+            .select('id')
+            .eq('line_user_id', userId)
+            .maybeSingle();
+          if (friend?.id) {
+            await lineSupabase.from('line_friend_tags').upsert({
+              line_friend_id: friend.id,
+              tag_id: tagId,
+              assigned_by: 'welcome_choice',
+            }, { onConflict: 'line_friend_id,tag_id', ignoreDuplicates: true });
+          }
+        }
+      } catch (tagErr) {
+        console.warn('[LINE Postback] Failed to assign care tag on q2:', tagErr);
+      }
+
+      // 2. leads テーブルに未対応リードとして登録（ダッシュボードの「反響即応」へ自動連動）
+      const noteContent = `【LINE介護保険外開業ヒアリング完了】\n・現在の状況: ${q1Label}\n・知りたいテーマ: ${q2Label}\n・希望連絡手段: LINEトーク`;
+      try {
+        const { data: existingLead } = await lineSupabase
+          .from('leads')
+          .select('id, notes')
+          .eq('line_user_id', userId)
+          .order('created_at', { ascending: false })
+          .limit(1)
+          .maybeSingle();
+
+        if (existingLead) {
+          await lineSupabase.from('leads').update({
+            service_type: '介護保険外サービス開業パッケージ',
+            inquiry_type: '介護保険外開業',
+            status: '未対応',
+            priority_channel: 'LINE',
+            notes: (existingLead.notes ? existingLead.notes + '\n\n' : '') + noteContent,
+            updated_at: new Date().toISOString(),
+          }).eq('id', existingLead.id);
+        } else {
+          await lineSupabase.from('leads').insert({
+            company_id: contact?.company_id || null,
+            contact_id: contact?.id || null,
+            line_user_id: userId,
+            source: 'LINE公式',
+            service_type: '介護保険外サービス開業パッケージ',
+            inquiry_type: '介護保険外開業',
+            status: '未対応',
+            priority_channel: 'LINE',
+            notes: noteContent,
+            created_at: new Date().toISOString(),
+          });
+        }
+      } catch (leadErr) {
+        console.warn('[LINE Postback] Failed to upsert lead on care_q2:', leadErr);
+      }
+
+      // 3. 完了Flexメッセージ
+      const appUrl = (process.env.PUBLIC_APP_URL || '').replace(/\/$/, '');
+      const overviewPdfUrl = appUrl ? `${appUrl}/materials/care-package-overview.pdf` : 'https://assist-care.jp';
+
+      replyMessage = {
+        type: 'flex',
+        altText: '【介護保険外開業】ヒアリング完了・大橋真人よりご案内',
+        contents: {
+          type: 'bubble',
+          body: {
+            type: 'box',
+            layout: 'vertical',
+            spacing: 'md',
+            contents: [
+              { type: 'text', text: '🌿 介護保険外サービスの開業相談', weight: 'bold', size: 'lg', color: '#0284C7' },
+              {
+                type: 'text',
+                text: `ご回答ありがとうございます！状況を把握いたしました。\n\n有限会社MST代表の大橋真人です。`,
+                size: 'sm',
+                color: '#334155',
+                wrap: true,
+              },
+              {
+                type: 'box',
+                layout: 'vertical',
+                backgroundColor: '#F0F9FF',
+                cornerRadius: 'md',
+                paddingAll: 'md',
+                margin: 'sm',
+                contents: [
+                  { type: 'text', text: `・現在の状況: ${q1Label}`, size: 'xs', color: '#0369A1', weight: 'bold' },
+                  { type: 'text', text: `・関心テーマ: ${q2Label}`, size: 'xs', color: '#0369A1', weight: 'bold', margin: 'xs' },
+                ],
+              },
+              {
+                type: 'text',
+                text: '直営事業「アシスタ大垣」の現場データと実績をもとに、貴社に最適な開業ステップと具体的なアドバイスを、このLINEトークにて直接お送りいたします。\n\n何か気になる点やお悩みがございましたら、このままメッセージを送信してください！',
+                size: 'xs',
+                color: '#475569',
+                wrap: true,
+                margin: 'sm',
+              },
+            ],
+          },
+          footer: {
+            type: 'box',
+            layout: 'vertical',
+            contents: [
+              {
+                type: 'button',
+                style: 'primary',
+                color: '#0284C7',
+                action: {
+                  type: 'uri',
+                  label: '📘 開業パッケージ概要資料を見る (PDF)',
+                  uri: overviewPdfUrl,
+                },
+              },
+            ],
+          },
+        },
+      };
+      inboxBody = `[介護保険外開業相談: ヒアリング完了案内Flexを送信 (状況: ${q1Label}, テーマ: ${q2Label})]`;
+    }
+
+    if (replyMessage) {
+      try {
+        let sentOk = false;
+        if (typeof event.replyToken === 'string') {
+          const replyRes = await fetch('https://api.line.me/v2/bot/message/reply', {
+            method: 'POST',
+            headers: { Authorization: 'Bearer ' + lineChannelAccessToken, 'Content-Type': 'application/json' },
+            body: JSON.stringify({ replyToken: event.replyToken, messages: [replyMessage] }),
+          });
+          if (replyRes.ok) sentOk = true;
+        }
+        if (!sentOk) {
+          await fetch('https://api.line.me/v2/bot/message/push', {
+            method: 'POST',
+            headers: { Authorization: 'Bearer ' + lineChannelAccessToken, 'Content-Type': 'application/json' },
+            body: JSON.stringify({ to: userId, messages: [replyMessage] }),
+          });
+        }
+
+        await lineSupabase.from('line_inbox_messages').upsert({
+          owner_id: integration.owner_id,
+          line_event_id: `care-q-${eventId}`,
+          direction: 'outbound',
+          contact_id: contact?.id || null,
+          line_user_id: userId,
+          message_type: replyMessage.type,
+          body: inboxBody,
+          status: 'sent',
+          received_at: new Date().toISOString(),
+        }, { onConflict: 'owner_id,line_event_id,direction', ignoreDuplicates: true });
+      } catch (sendErr) {
+        console.warn('[LINE Postback] Failed to send care_q reply:', sendErr);
+      }
+    }
+    return;
+  }
+
   // 3. wc=（ウェルカムメッセージ選択肢）postback
   if (isWc) {
-    const choiceId = postbackData.slice(3).trim();
+    const choiceId = wcParam || (postbackData.startsWith('wc=') ? postbackData.slice(3).trim() : '');
     if (!choiceId) return;
 
     // 1. 許可リスト検証
@@ -1733,8 +2020,8 @@ async function processLinePostback(event: any, contact: any, eventId: string, bo
 
     const defaultChoices = [
       { id: 'diagnosis', label: '📊 3分無料経営診断を受ける', tag: '選択:診断', route: 'form', formSlug: 'business-diagnosis' },
-      { id: 'consult', label: '経営改善について個別相談する', tag: '選択:個別相談', route: 'booking' },
-      { id: 'care', label: '介護保険外サービス開業パッケージについて知る', tag: '選択:開業パッケージ', route: 'template' },
+      { id: 'consult', label: '経営改善について個別相談する', tag: '選択:個別相談', route: 'chat' },
+      { id: 'care', label: '🌿 介護保険外サービスの開業相談', tag: '介護保険外開業', route: 'care_interactive' },
     ];
 
     const allowedChoices = configuredChoices.length > 0 ? configuredChoices : defaultChoices;
@@ -1742,9 +2029,13 @@ async function processLinePostback(event: any, contact: any, eventId: string, bo
     if (!choice) return; // 許可リスト外は無視
 
     // 2. タグ付与
-    if (choice.tag && choice.tag.trim()) {
+    const resolvedChoiceTag =
+      choice.id === 'care' && (!choice.tag || choice.tag === 'care:開業相談' || choice.tag === '選択:開業パッケージ')
+        ? '介護保険外開業'
+        : String(choice.tag || '').trim();
+    if (resolvedChoiceTag) {
       try {
-        const tagId = await getOrCreateLineTag(integration.owner_id, choice.tag.trim());
+        const tagId = await getOrCreateLineTag(integration.owner_id, resolvedChoiceTag);
         if (tagId) {
           const { data: friend } = await lineSupabase
             .from('line_friends')
@@ -1813,6 +2104,174 @@ async function processLinePostback(event: any, contact: any, eventId: string, bo
         };
         inboxBody = `[無料経営診断案内Flex送信: ${formUrl}]`;
       }
+    } else if (choice.id === 'consult' || choice.route === 'chat') {
+      // パターンA: 経営改善について個別相談する（LINE直通チャット型）
+      try {
+        const { data: existingLead } = await lineSupabase
+          .from('leads')
+          .select('id, notes')
+          .eq('line_user_id', userId)
+          .order('created_at', { ascending: false })
+          .limit(1)
+          .maybeSingle();
+
+        const leadNote = '【LINE個別相談希望】大橋代表からのLINE直通チャット相談を案内済み。返信待ち。';
+        if (existingLead) {
+          await lineSupabase.from('leads').update({
+            service_type: '経営改善・個別相談',
+            inquiry_type: '経営改善・個別相談',
+            status: '未対応',
+            priority_channel: 'LINE',
+            notes: (existingLead.notes ? existingLead.notes + '\n\n' : '') + leadNote,
+            updated_at: new Date().toISOString(),
+          }).eq('id', existingLead.id);
+        } else {
+          await lineSupabase.from('leads').insert({
+            company_id: contact?.company_id || null,
+            contact_id: contact?.id || null,
+            line_user_id: userId,
+            source: 'LINE公式',
+            service_type: '経営改善・個別相談',
+            inquiry_type: '経営改善・個別相談',
+            status: '未対応',
+            priority_channel: 'LINE',
+            notes: leadNote,
+            created_at: new Date().toISOString(),
+          });
+        }
+      } catch (leadErr) {
+        console.warn('[LINE Postback] Failed to ensure lead on consult choice:', leadErr);
+      }
+
+      replyMessage = {
+        type: 'flex',
+        altText: '【個別相談】大橋真人よりご挨拶・ご相談のご案内',
+        contents: {
+          type: 'bubble',
+          body: {
+            type: 'box',
+            layout: 'vertical',
+            spacing: 'md',
+            contents: [
+              { type: 'text', text: '🗓️ 経営改善の個別相談', weight: 'bold', size: 'lg', color: '#1E293B' },
+              {
+                type: 'text',
+                text: `${contact?.full_name || 'お客様'} 様\n\n個別相談をお選びいただきありがとうございます！\n有限会社MST代表の大橋真人です。\n\n親身にお応えするため、このトーク画面で直接お話を伺わせていただきます。`,
+                size: 'sm',
+                color: '#334155',
+                wrap: true,
+              },
+              {
+                type: 'box',
+                layout: 'vertical',
+                backgroundColor: '#F8FAFC',
+                cornerRadius: 'md',
+                paddingAll: 'md',
+                margin: 'md',
+                contents: [
+                  {
+                    type: 'text',
+                    text: '💬 まずは【いま一番困っていること】や【相談したいテーマ】を一言メッセージでそのままご返信いただけますでしょうか？',
+                    size: 'xs',
+                    weight: 'bold',
+                    color: '#1E3A5F',
+                    wrap: true,
+                  },
+                  {
+                    type: 'text',
+                    text: '（例：新規の反響が止まっている、売上は伸びたが利益が残らない、右腕が育たない、など何でも結構です）',
+                    size: 'xxs',
+                    color: '#64748B',
+                    margin: 'xs',
+                    wrap: true,
+                  },
+                ],
+              },
+              {
+                type: 'text',
+                text: 'メッセージを確認次第、私から直接アドバイス・ご返信を差し上げます！\n※もしZoom等での30分オンライン相談をご希望の場合は「面談希望」とお気軽にお知らせください。',
+                size: 'xs',
+                color: '#475569',
+                wrap: true,
+              },
+            ],
+          },
+        },
+      };
+      inboxBody = '[個別相談受付: 大橋真人よりLINE直通チャット相談案内を送信]';
+    } else if (choice.id === 'care' || choice.route === 'care_interactive') {
+      // パターンB: 介護保険外サービス開業相談 (Q1 Flex送信)
+      replyMessage = {
+        type: 'flex',
+        altText: '【介護保険外開業】現在の状況についてお聞かせください',
+        contents: {
+          type: 'bubble',
+          body: {
+            type: 'box',
+            layout: 'vertical',
+            spacing: 'md',
+            contents: [
+              { type: 'text', text: '🌿 介護保険外サービスの開業相談', weight: 'bold', size: 'lg', color: '#0284C7' },
+              {
+                type: 'text',
+                text: `${contact?.full_name || 'お客様'} 様\n\n開業相談をお選びいただきありがとうございます！有限会社MST代表の大橋真人です。\n\n貴社の状況に合わせたアドバイスをお送りするため、2問だけ教えてください。`,
+                size: 'sm',
+                color: '#334155',
+                wrap: true,
+              },
+              { type: 'separator', margin: 'md' },
+              {
+                type: 'text',
+                text: '【Q1】現在の状況に一番近いものはどれですか？',
+                size: 'xs',
+                weight: 'bold',
+                color: '#0F172A',
+                wrap: true,
+              },
+              {
+                type: 'button',
+                style: 'primary',
+                color: '#0284C7',
+                height: 'sm',
+                margin: 'md',
+                action: {
+                  type: 'postback',
+                  label: '🏢 既存の介護・福祉事業者',
+                  data: 'care_q1=existing',
+                  displayText: '既存の介護・福祉事業者です',
+                },
+              },
+              {
+                type: 'button',
+                style: 'primary',
+                color: '#1E3A5F',
+                height: 'sm',
+                margin: 'sm',
+                action: {
+                  type: 'postback',
+                  label: '🚀 他業種からの新規参入',
+                  data: 'care_q1=new_entry',
+                  displayText: '他業種からの新規参入を検討しています',
+                },
+              },
+              {
+                type: 'button',
+                style: 'primary',
+                color: '#10B981',
+                height: 'sm',
+                margin: 'sm',
+                action: {
+                  type: 'postback',
+                  label: '👤 個人での独立・開業',
+                  data: 'care_q1=individual',
+                  displayText: '個人での独立・開業を検討しています',
+                },
+              },
+            ],
+          },
+        },
+      };
+      inboxBody = '[介護保険外開業相談: Q1状況ヒアリングFlexを送信]';
     } else if (choice.route === 'booking') {
       const { data: salesSettings } = await lineSupabase
         .from('sales_workspace_settings')
