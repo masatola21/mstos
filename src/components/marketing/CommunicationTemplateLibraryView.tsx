@@ -11,14 +11,20 @@ export type Channel = 'email' | 'line';
 export type LineType = 'text' | 'image' | 'flex' | 'video';
 
 export const CATEGORY_LABELS: Record<string, string> = {
+  announcement: 'キャンペーン・お知らせ・汎用',
+  customer_meeting: '顧客フォロー・お礼',
+  deal: '商談・相談日程調整',
   diagnosis: '診断のご案内',
   form: 'フォーム・アンケート案内',
-  deal: '商談・相談日程調整',
-  customer_meeting: '顧客面談・定期フォロー',
   document: '重要書類送付（見積・契約・請求）',
-  sales_outreach: '営業アプローチ',
-  nurturing_story: 'ナーチャリング・ストーリー',
-  announcement: 'お知らせ・汎用連絡',
+};
+
+const VALID_CATEGORIES = new Set(Object.keys(CATEGORY_LABELS));
+const isNamedLibraryTemplate = (item: EmailTemplate) => {
+  const trimmedName = (item.name || '').trim();
+  const key = (item.template_key || '').trim();
+  if (key.startsWith('tpl_')) return true;
+  return Boolean(trimmedName && trimmedName !== key);
 };
 
 export type EmailTemplate = {
@@ -49,36 +55,36 @@ const typeLabel: Record<LineType, string> = { text: 'テキスト', image: '画�
 
 const PRESET_SNIPPETS = [
   {
-    label: '【診断】無料経営診断のご案内',
-    category: 'diagnosis',
+    label: '【一斉配信】キャンペーン・新企画のご案内',
+    category: 'announcement',
     channel: 'email' as Channel,
-    name: '【診断】無料経営診断のご案内（標準版）',
-    subject: '【3分無料診断のご案内】現状の仕組み化と改善ポイント｜{会社名} 様',
-    body: `{お名前} 様\n\nいつもお世話になっております。有限会社MSTの大橋です。\n\n貴社の現状の経営・業務課題を可視化し、改善優先度を診断できる「3分無料診断」をご用意いたしました。\n下記の診断フォームより、3分ほどでご回答いただけます。\n\n▼ 3分無料診断フォーム\n{案内URL}\n\n回答完了後、即座に簡易レポートが生成され、専任チームからの改善アドバイスも受け取ることができます。\nぜひ現状の整理にお役立てください。\n\n--------------------\n有限会社MST\n担当: 大橋真人\n返信先: {差出人メール}\n--------------------`,
+    name: '【一斉配信】キャンペーン・新企画のご案内',
+    subject: '【ご案内】期間限定サポート企画のお知らせ｜{会社名} 様',
+    body: `{お名前} 様\n\nいつも大変お世話になっております。有限会社MSTの大橋です。\n\nこの度、日頃のご愛顧・ご相談をいただいている企業様向けに、新しいサポート企画をご案内いたします。\n\n▼ 企画概要・お申込みページ\n{案内URL}\n\n■ おすすめの対象企業様\n・業務の属人化や管理コストを今期中に整理したい\n・補助金や既存リソースを活かして仕組み化を進めたい\n\nご関心をお持ちいただけましたら、上記ページまたは本メールへのご返信にてお気軽にお知らせください。\n今後ともよろしくお願いいたします。\n\n有限会社MST 大橋真人`,
   },
   {
-    label: '【日程調整】商談・個別相談（30分）',
+    label: '【返信文例】お打ち合わせのお礼・フォロー',
+    category: 'customer_meeting',
+    channel: 'email' as Channel,
+    name: '【返信文例】お打ち合わせのお礼・次回フォロー',
+    subject: '本日はお時間をいただきありがとうございました｜{会社名} 様',
+    body: `{お名前} 様\n\n本日は貴重なお時間をいただき、誠にありがとうございました。\n有限会社MSTの大橋です。\n\n本日お伺いいたしました内容をもとに、整理したご提案・次回アクションをお送りいたします。\nご確認のうえ、補足やご希望がございましたらお気軽にご返信ください。\n\n引き続き、何卒よろしくお願い申し上げます。\n\n有限会社MST 大橋真人`,
+  },
+  {
+    label: '【返信文例】30分オンライン個別相談の日程調整',
     category: 'deal',
     channel: 'email' as Channel,
-    name: '【日程調整】30分オンライン個別相談のご案内',
+    name: '【返信文例】30分オンライン個別相談のご案内',
     subject: '【オンライン個別相談】日程調整のお願い｜{会社名} 様',
-    body: `{お名前} 様\n\nお世話になっております。有限会社MSTの大橋です。\n\nこの度はご相談いただきありがとうございます。\nオンライン（Google Meet）にて、30分の個別相談を実施させていただければと存じます。\n\n下記の日程調整ページより、ご都合の良い日時を1つお選びください。\nカレンダーから選択いただくと、自動で予約が確定し接続URLが発行されます。\n\n▼ 面談日程の選択（カレンダー）\n{面談予約URL}\n\n※所要時間: 約30分\n※当日は現状の課題感やご希望をざっくばらんにお伺いできれば幸いです。\n\n何かご都合が合わない場合は、本メールに希望日時を2〜3候補ご返信ください。\n何卒よろしくお願い申し上げます。\n\n有限会社MST 大橋真人`,
+    body: `{お名前} 様\n\nお世話になっております。有限会社MSTの大橋です。\n\nオンライン（Google Meet）にて、30分の個別相談を実施させていただければと存じます。\n下記のカレンダーより、ご都合の良い日時を1つお選びください。\n\n▼ 面談日程の選択（カレンダー）\n{面談予約URL}\n\nご都合が合わない場合は、本メールにご希望日時を2〜3候補ご返信ください。\nよろしくお願いいたします。\n\n有限会社MST 大橋真人`,
   },
   {
-    label: '【フォーム】事前ヒアリングシート回答依頼',
-    category: 'form',
-    channel: 'email' as Channel,
-    name: '【フォーム】事前ヒアリングシートのご回答依頼',
-    subject: '【ご回答のお願い】事前ヒアリングシート｜{会社名} 様',
-    body: `{お名前} 様\n\nお世話になっております。有限会社MSTです。\n\n次回のお打ち合わせをより有意義な時間とするため、事前に貴社の現状について簡単なアンケートへのご回答をお願いしております。\n\n▼ 事前ヒアリングフォーム\n{案内URL}\n\n※所要時間: 約3〜5分\n事前に入力いただいた内容をもとに、具体的な改善案や資料を準備して面談に臨ませていただきます。\n\nご不明な点がございましたら本メールにご返信ください。\nよろしくお願いいたします。\n\n有限会社MST`,
-  },
-  {
-    label: '【書類】お見積書の送付',
-    category: 'document',
-    channel: 'email' as Channel,
-    name: '【書類】お見積書のご送付（標準）',
-    subject: '【お見積書の送付】{書類名}｜{会社名} 様',
-    body: `{お名前} 様\n\n平素より大変お世話になっております。有限会社MSTの大橋です。\n\n先般はお打ち合わせのお時間をいただき、誠にありがとうございました。\nご相談いただきました内容に基づき、お見積書を作成いたしましたのでお送り申し上げます。\n\n下記のURLより、お見積内容をご確認いただけます。\n▼ お見積書\n{書類URL}\n\n【書類名】: {書類名}\n\n内容にご不明な点や追加のご要望がございましたら、いつでもお気軽にお申し付けください。\nご検討のほど、何卒よろしくお願い申し上げます。\n\n有限会社MST 大橋真人`,
+    label: '【LINEテキスト】セミナー・個別相談のご案内',
+    category: 'announcement',
+    channel: 'line' as Channel,
+    lineType: 'text' as LineType,
+    name: '【LINEテキスト】無料診断・個別相談のご案内',
+    body: `{お名前} 様\nいつもご覧いただきありがとうございます。有限会社MSTです。\n\nただいま「現状の課題整理・仕組み化」に関する個別相談を受け付けております。\n下記よりご希望のメニューをご覧ください。\n\n▼ ご案内ページ\n{案内URL}\n\nご質問があればこのままLINEでお気軽にメッセージをお送りください。`,
   },
   {
     label: '【LINE Flex】診断・相談カード（選択肢付き）',
@@ -129,7 +135,7 @@ export const CommunicationTemplateLibraryView: React.FC = () => {
   const [editorOpen, setEditorOpen] = useState(false);
   const [showPresets, setShowPresets] = useState(false);
   const [name, setName] = useState('');
-  const [category, setCategory] = useState<string>('diagnosis');
+  const [category, setCategory] = useState<string>('announcement');
   const [channel, setChannel] = useState<Channel>('email');
   const [lineType, setLineType] = useState<LineType>('text');
   const [subject, setSubject] = useState('');
@@ -186,27 +192,27 @@ export const CommunicationTemplateLibraryView: React.FC = () => {
   }, [editorOpen]);
 
   const rows = useMemo<TemplateRow[]>(() => [
-    ...emailTemplates.map((item) => ({
-      source: 'communication' as const,
-      id: item.id,
-      name: item.name?.trim() || `${CATEGORY_LABELS[item.category] || item.category} · ${item.template_key}`,
-      channel: item.channel,
-      type: 'text' as const,
-      category: item.category || 'announcement',
-      updatedAt: item.updated_at,
-      subject: item.subject || '',
-      body: item.body_text || '',
-    })),
+    ...emailTemplates
+      .filter((item) => item.channel === 'email' && isNamedLibraryTemplate(item))
+      .map((item) => ({
+        source: 'communication' as const,
+        id: item.id,
+        name: item.name?.trim() || `${CATEGORY_LABELS[item.category] || item.category} · ${item.template_key}`,
+        channel: item.channel,
+        type: 'text' as const,
+        category: VALID_CATEGORIES.has(item.category) ? item.category : 'announcement',
+        updatedAt: item.updated_at,
+        subject: item.subject || '',
+        body: item.body_text || '',
+      })),
     ...lineTemplates.map((item) => {
-      // LINEテンプレートはタイトル等からカテゴリを類推、または汎用
       let inferredCat = 'announcement';
       const n = item.name.toLowerCase();
       if (n.includes('診断') || n.includes('カルテ')) inferredCat = 'diagnosis';
       else if (n.includes('面談') || n.includes('予約') || n.includes('日程') || n.includes('相談')) inferredCat = 'deal';
       else if (n.includes('フォーム') || n.includes('アンケート')) inferredCat = 'form';
       else if (n.includes('書類') || n.includes('請求') || n.includes('見積') || n.includes('契約')) inferredCat = 'document';
-      else if (n.includes('営業') || n.includes('アプローチ')) inferredCat = 'sales_outreach';
-      else if (n.includes('ストーリー') || n.includes('大橋')) inferredCat = 'nurturing_story';
+      else if (n.includes('お礼') || n.includes('フォロー')) inferredCat = 'customer_meeting';
 
       return {
         source: 'line' as const,
@@ -223,16 +229,13 @@ export const CommunicationTemplateLibraryView: React.FC = () => {
 
   const visibleRows = useMemo(() => {
     return rows.filter((item) => {
-      // チャンネル・形式フィルター
       if (channelFilter !== 'all') {
         if (channelFilter === 'email' && item.channel !== 'email') return false;
         if (channelFilter !== 'email' && (item.channel !== 'line' || item.type !== channelFilter)) return false;
       }
-      // カテゴリフィルター
       if (categoryFilter !== 'all' && item.category !== categoryFilter) {
         return false;
       }
-      // 検索クエリ
       if (searchQuery.trim()) {
         const q = searchQuery.toLowerCase().trim();
         const matchesName = item.name.toLowerCase().includes(q);
@@ -248,7 +251,7 @@ export const CommunicationTemplateLibraryView: React.FC = () => {
   const resetEditor = () => {
     setEditing(null);
     setName('');
-    setCategory('diagnosis');
+    setCategory('announcement');
     setChannel('email');
     setLineType('text');
     setSubject('');
@@ -291,7 +294,7 @@ export const CommunicationTemplateLibraryView: React.FC = () => {
   const startEdit = (item: TemplateRow) => {
     setEditing(item);
     setName(item.name);
-    setCategory(item.category || 'announcement');
+    setCategory(VALID_CATEGORIES.has(item.category) ? item.category : 'announcement');
     setChannel(item.channel);
     if (item.source === 'communication') {
       setLineType('text');
@@ -478,7 +481,7 @@ export const CommunicationTemplateLibraryView: React.FC = () => {
         const retainedPaths = Array.isArray(savedPayload.storagePaths) ? savedPayload.storagePaths : [];
         await removeStoredAssets(oldPaths.filter((path) => !retainedPaths.includes(path)));
       }
-      setNotice('テンプレートを保存しました。送信センター（個別送信・一斉配信）および自動配信シナリオで即座に選べます。');
+      setNotice('文例・LINE素材ストックに保存しました。一斉配信・個別送信の引用・LINE受信箱ですぐに呼び出せます。');
       resetEditor();
       await load();
     }
@@ -521,9 +524,9 @@ export const CommunicationTemplateLibraryView: React.FC = () => {
       {/* Header */}
       <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-200 pb-4">
         <div>
-          <h2 className="text-[19px] font-bold text-slate-800 tracking-tight">定型テンプレート保管庫</h2>
+          <h2 className="text-[19px] font-bold text-slate-800 tracking-tight">文例・LINE素材ストック</h2>
           <p className="mt-0.5 text-xs text-slate-500">
-            診断案内・面談調整・書類送付・営業メール・LINEの定型文を管理します。
+            一斉配信・個別送信での引用・LINE受信箱の返信で使い回す文例やLINE素材（Flex・画像・動画）を管理します。（※自動配信ステップや個別送信の標準初期文面とは独立しています）
           </p>
         </div>
         <div className="flex items-center gap-2">
@@ -1009,7 +1012,7 @@ export const CommunicationTemplateLibraryView: React.FC = () => {
       </div>
 
       <div className="flex flex-wrap items-center justify-between text-xs text-slate-400 pt-1">
-        <span>合計 {visibleRows.length} 件のテンプレートを表示中</span>
+        <span>合計 {visibleRows.length} 件の文例・素材を表示中</span>
         <span>※LINE画像・動画の素材ファイルはSupabase Storageでセキュアに管理されます。</span>
       </div>
     </section>

@@ -114,7 +114,7 @@ export const AppSidebar: React.FC<AppSidebarProps> = ({
       defaultOpen: true,
       items: [
         { id: 'leads', label: '商談パイプライン' },
-        { id: 'communication_send', label: '送信履歴・配信ログ' },
+        { id: 'communication_send', label: 'メール・LINE送信管理' },
         { id: 'document_templates', label: '重要書類・見積・契約' },
         { id: 'customer_operations', label: '契約・請求・顧問支援' },
       ],

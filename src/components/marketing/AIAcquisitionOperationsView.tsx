@@ -2,7 +2,7 @@ import React, { useEffect, useMemo, useRef, useState } from 'react';
 import type { TaskItem } from '../../types';
 import { getSupabase, getAuthHeaders } from '../../lib/supabaseClient';
 import { InlineDeleteButton } from '../InlineDeleteButton';
-import { AlertCircle, ArrowRight, BarChart3, Megaphone, Plus, RefreshCw, Save, Sparkles, Trash2 } from 'lucide-react';
+import { ArrowRight, BarChart3, Megaphone, Plus, RefreshCw, Save, Sparkles, Trash2 } from 'lucide-react';
 import { OwnMediaWorkspace } from './OwnMediaWorkspace';
 import { MarketingAssetLibrary } from './MarketingAssetLibrary';
 import { MarketingQuickLinksHub } from './MarketingQuickLinksHub';
@@ -221,44 +221,6 @@ export const AIAcquisitionOperationsView: React.FC<{
   const [externalDraft, setExternalDraft] = useState('');
   const [externalReview, setExternalReview] = useState('');
   const [pendingToolDrafts, setPendingToolDrafts] = useState<Array<{ record_type: RecordType; title: string; payload: Record<string, string> }>>([]);
-  const [crmMetrics, setCrmMetrics] = useState<{
-    totalLeads: number;
-    totalDeals: number;
-    wonDeals: number;
-    totalContracts: number;
-    totalContractRevenue: number;
-    totalInvoiced: number;
-    totalPaid: number;
-    utmBreakdown: Array<{ source: string; campaign: string; count: number }>;
-    carePackageMetrics: {
-      materialRequests: number;
-      consultationRequests: number;
-      bothRequests: number;
-      totalCareSubmissions: number;
-      schedulingPending: number;
-    };
-  }>({
-    totalLeads: 0,
-    totalDeals: 0,
-    wonDeals: 0,
-    totalContracts: 0,
-    totalContractRevenue: 0,
-    totalInvoiced: 0,
-    totalPaid: 0,
-    utmBreakdown: [],
-    carePackageMetrics: {
-      materialRequests: 0,
-      consultationRequests: 0,
-      bothRequests: 0,
-      totalCareSubmissions: 0,
-      schedulingPending: 0,
-    },
-  });
-
-  const [careMaterialConfig, setCareMaterialConfig] = useState<{ isConfigured: boolean; materialUrl: string | null }>({
-    isConfigured: false,
-    materialUrl: null,
-  });
 
   const load = async () => {
     const db = getSupabase();
@@ -267,12 +229,10 @@ export const AIAcquisitionOperationsView: React.FC<{
     const { data: auth, error: authError } = await db.auth.getUser();
     if (authError || !auth.user) { setError('ログイン状態を確認できません。'); setLoading(false); return; }
     setUserId(auth.user.id);
-    const [savedRecords, savedProducts, savedSegments, leadsResult, careFormResult] = await Promise.all([
+    const [savedRecords, savedProducts, savedSegments] = await Promise.all([
       db.from('mst_ai_acquisition_records').select('*').eq('user_id', auth.user.id).order('updated_at', { ascending: false }),
       db.from('products').select('id,product_name').order('product_name'),
       db.from('crm_segments').select('id,name,entity_type,conditions').order('name'),
-      db.from('leads').select('id, inquiry_type, service_type, source, meeting_date, status'),
-      db.from('diagnosis_forms').select('definition').eq('public_slug', 'care-package-inquiry').maybeSingle(),
     ]);
     if (savedRecords.error) {
       setError(savedRecords.error.message.includes('mst_ai_acquisition_records') ? '集客運用テーブルが未適用です。supabase/migrations/20261020100000_ai_acquisition_operations.sql を適用してください。' : `集客データを読み込めませんでした: ${savedRecords.error.message}`);
@@ -281,43 +241,6 @@ export const AIAcquisitionOperationsView: React.FC<{
     setRecords(((savedRecords.data || []) as AcquisitionRecord[]).filter((record) => !(['media', 'article', 'seo', 'rewrite', 'attribution', 'funnel_hub_config'] as string[]).includes(record.record_type)));
     if (!savedProducts.error) setProducts((savedProducts.data || []) as Product[]);
     if (!savedSegments.error) setSegments(((savedSegments.data || []) as AudienceSegment[]).filter((segment) => Boolean(segment.conditions?.field?.trim())));
-
-    if (!careFormResult.error && careFormResult.data?.definition) {
-      const def = careFormResult.data.definition as Record<string, any>;
-      const rawUrl = typeof def.material_url === 'string' ? def.material_url.trim() : '';
-      const isConfigured = Boolean(rawUrl && /^https?:\/\//i.test(rawUrl));
-      setCareMaterialConfig({
-        isConfigured,
-        materialUrl: isConfigured ? rawUrl : null,
-      });
-    }
-
-    if (!leadsResult.error && Array.isArray(leadsResult.data)) {
-      const allLeads = leadsResult.data as any[];
-      const careLeads = allLeads.filter((l) =>
-        Boolean(l.inquiry_type) ||
-        (typeof l.service_type === 'string' && l.service_type.includes('介護保険外')) ||
-        (typeof l.source === 'string' && l.source.includes('介護保険外'))
-      );
-      const materialRequests = careLeads.filter((l) => l.inquiry_type === '資料請求').length;
-      const consultationRequests = careLeads.filter((l) => l.inquiry_type === '開業相談').length;
-      const bothRequests = careLeads.filter((l) => l.inquiry_type === '両方希望').length;
-      const totalCareSubmissions = careLeads.length;
-      const schedulingPending = careLeads.filter((l) =>
-        ['開業相談', '両方希望'].includes(l.inquiry_type) && !l.meeting_date
-      ).length;
-
-      setCrmMetrics((prev) => ({
-        ...prev,
-        carePackageMetrics: {
-          materialRequests,
-          consultationRequests,
-          bothRequests,
-          totalCareSubmissions,
-          schedulingPending,
-        },
-      }));
-    }
 
     setLoading(false);
   };
@@ -1115,51 +1038,6 @@ export const AIAcquisitionOperationsView: React.FC<{
 
           {activeTab === 'funnel' && (
             <section className="space-y-4">
-              {/* 介護保険外サービス開業パッケージ 導線集計 */}
-              <div className="rounded-xl border border-sky-200 bg-sky-50/60 p-4 space-y-3 shadow-xs">
-                <div className="flex items-center justify-between">
-                  <span className="text-xs font-bold text-sky-900 flex items-center gap-1.5">
-                    <span>🏥</span> 介護保険外サービス開業パッケージ成果（LINE／専用フォーム）
-                  </span>
-                  <span className="text-xs text-sky-800 font-semibold bg-white/80 px-2.5 py-0.5 rounded-full border border-sky-200">
-                    専用フォーム送信: {crmMetrics.carePackageMetrics.totalCareSubmissions} 件
-                  </span>
-                </div>
-
-                {!careMaterialConfig.isConfigured && (
-                  <div className="flex items-start gap-2.5 rounded-lg bg-amber-50 border border-amber-200 p-2.5 text-xs text-amber-800">
-                    <AlertCircle className="h-4 w-4 text-amber-600 shrink-0 mt-0.5" />
-                    <div className="flex-1 space-y-0.5">
-                      <p className="font-semibold text-amber-900">【警告】概要資料URL（PDF/Web）が未設定です</p>
-                      <p className="text-[11px] text-amber-800 leading-relaxed">
-                        フォーム定義（diagnosis_forms）に資料URL（material_url）が設定されていません。LINEや専用フォームで「資料請求」を選んだユーザーには「準備中」の案内が返信され、スタッフに至急タスクが起票されます。速やかに資料URLをご設定ください。
-                      </p>
-                    </div>
-                  </div>
-                )}
-                <div className="grid gap-2 grid-cols-2 sm:grid-cols-5 pt-1">
-                  <div className="rounded-lg bg-white border border-slate-200 p-2.5 shadow-xs">
-                    <p className="text-[11px] text-slate-500">📄 資料請求数</p>
-                    <p className="mt-1 text-lg font-bold text-sky-600">{crmMetrics.carePackageMetrics.materialRequests} 件</p>
-                  </div>
-                  <div className="rounded-lg bg-white border border-slate-200 p-2.5 shadow-xs">
-                    <p className="text-[11px] text-slate-500">💬 開業相談希望数</p>
-                    <p className="mt-1 text-lg font-bold text-emerald-600">{crmMetrics.carePackageMetrics.consultationRequests} 件</p>
-                  </div>
-                  <div className="rounded-lg bg-white border border-slate-200 p-2.5 shadow-xs">
-                    <p className="text-[11px] text-slate-500">📄💬 両方希望数</p>
-                    <p className="mt-1 text-lg font-bold text-amber-600">{crmMetrics.carePackageMetrics.bothRequests} 件</p>
-                  </div>
-                  <div className="rounded-lg bg-white border border-slate-200 p-2.5 shadow-xs">
-                    <p className="text-[11px] text-slate-500">📝 フォーム送信総数</p>
-                    <p className="mt-1 text-lg font-bold text-purple-600">{crmMetrics.carePackageMetrics.totalCareSubmissions} 件</p>
-                  </div>
-                  <div className="rounded-lg bg-amber-50/70 border border-amber-200 p-2.5">
-                    <p className="text-[11px] text-amber-800 font-semibold">⏳ 相談日程調整中</p>
-                    <p className="mt-1 text-lg font-bold text-amber-600">{crmMetrics.carePackageMetrics.schedulingPending} 件</p>
-                  </div>
-                </div>
-              </div>
               <MarketingQuickLinksHub />
             </section>
           )}

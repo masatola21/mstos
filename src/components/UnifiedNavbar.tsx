@@ -248,7 +248,7 @@ export const UnifiedNavbar: React.FC<UnifiedNavbarProps> = ({
             const activeGroup = groups.find((group) => group.items.includes(currentTab)) || groups[0];
             const labelFor = (tab: UnifiedNavTab) => {
               if (tab === 'inbox_hub') return '📥 統合受信トレイ';
-              if (tab === 'communication_send') return '📤 送信履歴・一括配信・テンプレート';
+              if (tab === 'communication_send') return '📤 メール・LINE送信管理';
               if (tab === 'ai_knowledge') return '📚 社内ナレッジ保管庫（AI参照情報）';
               if (tab === 'mst_dashboard') return '営業Dashboard';
               if (tab === 'inflow_dashboard') return '営業Dashboard';

@@ -1,25 +1,19 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { 
-  Inbox, 
-  Send, 
-  Mail, 
-  MessageSquare, 
-  CheckCircle2, 
-  Clock, 
-  AlertCircle, 
-  XCircle, 
-  RefreshCw, 
-  Search, 
-  Check, 
-  X, 
-  Eye, 
-  Filter,
-  ArrowRight,
+import {
+  Inbox,
+  Mail,
+  MessageSquare,
+  CheckCircle2,
+  AlertCircle,
+  RefreshCw,
+  Search,
+  X,
+  Eye,
   ShieldCheck,
   RotateCcw,
   Paperclip,
   FileText,
-  Trash2
+  Trash2,
 } from 'lucide-react';
 import { getSupabase } from '../../lib/supabaseClient';
 import { DocumentPreviewModal } from '../common/DocumentPreviewModal';
@@ -44,14 +38,10 @@ export interface OutboxMessage {
   sent_at?: string | null;
 }
 
-interface Props {
-  onNavigateToSend?: () => void;
-  onNavigateToBroadcast?: () => void;
-  onNavigateToDocuments?: () => void;
-}
+interface Props {}
 
 const statusLabels: Record<OutboxMessage['status'], { label: string; color: string; bg: string; border: string }> = {
-  awaiting_approval: { label: '承認待ち', color: 'text-amber-800', bg: 'bg-amber-50', border: 'border-amber-200' },
+  awaiting_approval: { label: '送信前（旧）', color: 'text-slate-600', bg: 'bg-slate-100', border: 'border-slate-200' },
   queued: { label: '送信待ち', color: 'text-blue-800', bg: 'bg-blue-50', border: 'border-blue-200' },
   sending: { label: '送信中', color: 'text-indigo-800', bg: 'bg-indigo-50', border: 'border-indigo-200' },
   sent: { label: '送信完了', color: 'text-emerald-800', bg: 'bg-emerald-50', border: 'border-emerald-200' },
@@ -81,11 +71,7 @@ const sourceTypeLabels: Record<string, string> = {
   line_auto_reply: 'LINE自動応答',
 };
 
-export const CommunicationOutboxHistoryView: React.FC<Props> = ({
-  onNavigateToSend,
-  onNavigateToBroadcast,
-  onNavigateToDocuments,
-}) => {
+export const CommunicationOutboxHistoryView: React.FC<Props> = () => {
   const [messages, setMessages] = useState<OutboxMessage[]>([]);
   const [contacts, setContacts] = useState<Record<string, { full_name: string; company_name?: string }>>({});
   const [emailContacts, setEmailContacts] = useState<Record<string, { full_name: string; company_name?: string }>>({});
@@ -167,56 +153,37 @@ export const CommunicationOutboxHistoryView: React.FC<Props> = ({
     void loadData();
   }, []);
 
-  const approveMessage = async (messageId: string) => {
-    const supabase = getSupabase();
-    if (!supabase) return;
-    try {
-      const { error: updateError } = await supabase
-        .from('communication_outbox')
-        .update({ status: 'queued', updated_at: new Date().toISOString() })
-        .eq('id', messageId)
-        .eq('status', 'awaiting_approval');
-
-      if (updateError) throw updateError;
-      setNotice('承認を完了しました。送信待ちキューに登録しました。');
-      await loadData();
-    } catch (err: any) {
-      setError(err?.message || '承認処理に失敗しました。');
-    }
-  };
-
-  const cancelMessage = async (messageId: string) => {
-    const supabase = getSupabase();
-    if (!supabase) return;
-    try {
-      const { error: updateError } = await supabase
-        .from('communication_outbox')
-        .update({ status: 'canceled', updated_at: new Date().toISOString() })
-        .eq('id', messageId)
-        .in('status', ['awaiting_approval', 'queued']);
-
-      if (updateError) throw updateError;
-      setNotice('送信依頼を取り消しました。');
-      await loadData();
-    } catch (err: any) {
-      setError(err?.message || '送信取消処理に失敗しました。');
-    }
-  };
-
   const retryMessage = async (messageId: string) => {
     const supabase = getSupabase();
     if (!supabase) return;
+    setError('');
+    setNotice('');
     try {
+      const { data: sessionData } = await supabase.auth.getSession();
+      const token = sessionData.session?.access_token;
+      if (!token) throw new Error('ログイン状態を確認できません。');
+
       const { error: updateError } = await supabase
         .from('communication_outbox')
         .update({ status: 'queued', error_message: null, updated_at: new Date().toISOString() })
         .eq('id', messageId);
 
       if (updateError) throw updateError;
-      setNotice('再試行キューに再登録しました。');
+
+      const response = await fetch('/api/communications/send', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ outboxId: messageId }),
+      });
+      const result = await response.json().catch(() => ({}));
+      if (!response.ok || result.status !== 'sent') {
+        throw new Error(result.error || '再送信に失敗しました。');
+      }
+      setNotice('再送信を完了しました。');
       await loadData();
     } catch (err: any) {
-      setError(err?.message || '再試行処理に失敗しました。');
+      setError(err?.message || '再送信に失敗しました。');
+      await loadData();
     }
   };
 
@@ -267,18 +234,12 @@ export const CommunicationOutboxHistoryView: React.FC<Props> = ({
   const counts = useMemo(() => {
     const res = {
       all: messages.length,
-      awaiting_approval: 0,
-      queued: 0,
       sent: 0,
       failed: 0,
-      canceled: 0,
     };
     messages.forEach((m) => {
-      if (m.status === 'awaiting_approval') res.awaiting_approval++;
-      else if (m.status === 'queued' || m.status === 'sending') res.queued++;
-      else if (m.status === 'sent') res.sent++;
+      if (m.status === 'sent') res.sent++;
       else if (m.status === 'failed') res.failed++;
-      else if (m.status === 'canceled') res.canceled++;
     });
     return res;
   }, [messages]);
@@ -286,12 +247,8 @@ export const CommunicationOutboxHistoryView: React.FC<Props> = ({
   // Filtered Messages
   const filteredMessages = useMemo(() => {
     return messages.filter((m) => {
-      if (statusFilter !== 'all') {
-        if (statusFilter === 'queued') {
-          if (m.status !== 'queued' && m.status !== 'sending') return false;
-        } else if (m.status !== statusFilter) {
-          return false;
-        }
+      if (statusFilter !== 'all' && m.status !== statusFilter) {
+        return false;
       }
       if (channelFilter !== 'all' && m.channel !== channelFilter) {
         return false;
@@ -310,12 +267,12 @@ export const CommunicationOutboxHistoryView: React.FC<Props> = ({
       }
       return true;
     });
-  }, [messages, statusFilter, channelFilter, searchQuery, contacts]);
+  }, [messages, statusFilter, channelFilter, searchQuery, contacts, emailContacts]);
 
   return (
     <div className="space-y-5">
       {/* ── Status KPI Cards ── */}
-      <div className="grid grid-cols-2 sm:grid-cols-5 gap-3">
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
         <button
           type="button"
           onClick={() => setStatusFilter('all')}
@@ -325,43 +282,8 @@ export const CommunicationOutboxHistoryView: React.FC<Props> = ({
               : 'border-slate-200 bg-white hover:bg-slate-50'
           }`}
         >
-          <div className="text-[11px] font-semibold text-slate-500">全メッセージ</div>
+          <div className="text-[11px] font-semibold text-slate-500">全送信履歴</div>
           <div className="text-xl font-bold text-slate-900 mt-1">{counts.all}</div>
-        </button>
-
-        <button
-          type="button"
-          onClick={() => setStatusFilter('awaiting_approval')}
-          className={`p-3 rounded-2xl border text-left transition cursor-pointer ${
-            statusFilter === 'awaiting_approval'
-              ? 'border-amber-500 bg-amber-50 shadow-xs ring-1 ring-amber-400'
-              : counts.awaiting_approval > 0
-              ? 'border-amber-300 bg-amber-50/40 hover:bg-amber-50'
-              : 'border-slate-200 bg-white hover:bg-slate-50'
-          }`}
-        >
-          <div className="flex items-center justify-between text-[11px] font-semibold text-amber-800">
-            <span>承認待ち</span>
-            {counts.awaiting_approval > 0 && (
-              <span className="inline-block w-2 h-2 rounded-full bg-amber-500 animate-pulse" />
-            )}
-          </div>
-          <div className={`text-xl font-bold mt-1 ${counts.awaiting_approval > 0 ? 'text-amber-800' : 'text-slate-900'}`}>
-            {counts.awaiting_approval}
-          </div>
-        </button>
-
-        <button
-          type="button"
-          onClick={() => setStatusFilter('queued')}
-          className={`p-3 rounded-2xl border text-left transition cursor-pointer ${
-            statusFilter === 'queued'
-              ? 'border-blue-500 bg-blue-50/50 shadow-xs'
-              : 'border-slate-200 bg-white hover:bg-slate-50'
-          }`}
-        >
-          <div className="text-[11px] font-semibold text-blue-700">送信待ち・キュー</div>
-          <div className="text-xl font-bold text-slate-900 mt-1">{counts.queued}</div>
         </button>
 
         <button
@@ -501,34 +423,14 @@ export const CommunicationOutboxHistoryView: React.FC<Props> = ({
           <div className="flex items-center gap-2">
             <Inbox className="w-4 h-4 text-purple-600" />
             <span className="font-bold text-xs text-slate-900">
-              送信台帳一覧 ({filteredMessages.length}件)
+              送信履歴一覧 ({filteredMessages.length}件)
             </span>
-          </div>
-          <div className="flex items-center gap-2">
-            {onNavigateToSend && (
-              <button
-                type="button"
-                onClick={onNavigateToSend}
-                className="text-xs font-semibold text-purple-700 hover:text-purple-800 flex items-center gap-1 cursor-pointer"
-              >
-                <span>＋ 新規個別送信</span>
-              </button>
-            )}
-            {onNavigateToBroadcast && (
-              <button
-                type="button"
-                onClick={onNavigateToBroadcast}
-                className="text-xs font-semibold text-slate-600 hover:text-slate-800 flex items-center gap-1 cursor-pointer ml-3 pl-3 border-l border-slate-200"
-              >
-                <span>一斉配信へ</span>
-              </button>
-            )}
           </div>
         </div>
 
         {loading && messages.length === 0 ? (
           <div className="p-12 text-center text-xs text-slate-400">
-            送信履歴・送信待ちキューを読み込み中…
+            送信履歴を読み込み中…
           </div>
         ) : filteredMessages.length === 0 ? (
           <div className="p-12 text-center space-y-2">
@@ -609,7 +511,6 @@ export const CommunicationOutboxHistoryView: React.FC<Props> = ({
                       {/* 状態 */}
                       <td className="py-3 px-4 whitespace-nowrap">
                         <span className={`inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[10px] font-bold ${statusMeta.bg} ${statusMeta.color} ${statusMeta.border}`}>
-                          {msg.status === 'awaiting_approval' && <Clock className="w-2.5 h-2.5" />}
                           {msg.status === 'sent' && <CheckCircle2 className="w-2.5 h-2.5" />}
                           {msg.status === 'failed' && <AlertCircle className="w-2.5 h-2.5" />}
                           <span>{statusMeta.label}</span>
@@ -676,35 +577,15 @@ export const CommunicationOutboxHistoryView: React.FC<Props> = ({
                       {/* アクション */}
                       <td className="py-3 px-4 text-right whitespace-nowrap" onClick={(e) => e.stopPropagation()}>
                         <div className="flex items-center justify-end gap-1.5">
-                          {msg.status === 'awaiting_approval' && (
-                            <button
-                              type="button"
-                              onClick={() => void approveMessage(msg.id)}
-                              className="rounded-lg bg-purple-600 hover:bg-purple-700 px-2.5 py-1 text-xs font-semibold text-white shadow-2xs transition cursor-pointer"
-                              title="承認して送信待ちへ変更します"
-                            >
-                              承認する
-                            </button>
-                          )}
-                          {['awaiting_approval', 'queued'].includes(msg.status) && (
-                            <button
-                              type="button"
-                              onClick={() => void cancelMessage(msg.id)}
-                              className="rounded-lg border border-slate-200 bg-white hover:bg-slate-50 px-2 py-1 text-xs text-slate-600 transition cursor-pointer"
-                              title="送信依頼を取り消します"
-                            >
-                              取消
-                            </button>
-                          )}
                           {msg.status === 'failed' && (
                             <button
                               type="button"
                               onClick={() => void retryMessage(msg.id)}
                               className="rounded-lg border border-rose-300 bg-rose-50 hover:bg-rose-100 px-2.5 py-1 text-xs font-semibold text-rose-700 transition cursor-pointer flex items-center gap-1"
-                              title="再送信をキューに入れます"
+                              title="再送信を実行します"
                             >
                               <RotateCcw className="w-3 h-3" />
-                              <span>再試行</span>
+                              <span>再送信</span>
                             </button>
                           )}
                           <button
@@ -734,13 +615,12 @@ export const CommunicationOutboxHistoryView: React.FC<Props> = ({
         )}
       </div>
 
-      <div className="rounded-xl border border-amber-200 bg-amber-50/60 p-3 text-xs text-amber-800 flex items-start gap-2">
-        <ShieldCheck className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
+      <div className="rounded-xl border border-slate-200 bg-slate-50 p-3 text-xs text-slate-700 flex items-start gap-2">
+        <ShieldCheck className="w-4 h-4 text-purple-600 shrink-0 mt-0.5" />
         <div className="space-y-0.5">
-          <p className="font-semibold">送信台帳・アウトボックスの運用について</p>
-          <p className="text-[11px] text-amber-700 leading-relaxed">
-            個別送信・一斉配信・見積や契約書などの重要書類送付は、すべてこの全社共通送信台帳に記録されます。
-            実送信にはサーバー環境のLINE Messaging APIおよびメール接続設定が必要です。承認・送信待ちメッセージはキュー順に処理されます。
+          <p className="font-semibold text-slate-900">送信履歴の記録範囲について</p>
+          <p className="text-[11px] text-slate-600 leading-relaxed">
+            個別送信・一斉配信・重要書類送付・LINE応答・自動ステップ配信など、実際に送信されたメール・LINEの履歴がすべてこの台帳に記録されます。送信失敗時は「再送信」からやり直せます。
           </p>
         </div>
       </div>
@@ -887,30 +767,6 @@ export const CommunicationOutboxHistoryView: React.FC<Props> = ({
             {/* Modal Footer */}
             <div className="p-4 border-t border-slate-100 flex items-center justify-between bg-slate-50">
               <div className="flex items-center gap-2">
-                {selectedMessage.status === 'awaiting_approval' && (
-                  <button
-                    type="button"
-                    onClick={async () => {
-                      await approveMessage(selectedMessage.id);
-                      setSelectedMessage(null);
-                    }}
-                    className="rounded-xl bg-purple-600 hover:bg-purple-700 px-4 py-2 text-xs font-bold text-white shadow-xs cursor-pointer"
-                  >
-                    承認して送信待ちへ
-                  </button>
-                )}
-                {['awaiting_approval', 'queued'].includes(selectedMessage.status) && (
-                  <button
-                    type="button"
-                    onClick={async () => {
-                      await cancelMessage(selectedMessage.id);
-                      setSelectedMessage(null);
-                    }}
-                    className="rounded-xl border border-slate-200 bg-white hover:bg-slate-50 px-3 py-2 text-xs text-slate-700 cursor-pointer"
-                  >
-                    送信依頼を取り消す
-                  </button>
-                )}
                 {selectedMessage.status === 'failed' && (
                   <button
                     type="button"
@@ -920,7 +776,7 @@ export const CommunicationOutboxHistoryView: React.FC<Props> = ({
                     }}
                     className="rounded-xl border border-rose-300 bg-rose-50 hover:bg-rose-100 px-3.5 py-2 text-xs font-bold text-rose-700 cursor-pointer"
                   >
-                    再送信をキューに入れる
+                    再送信を実行
                   </button>
                 )}
               </div>

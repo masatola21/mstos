@@ -97,7 +97,6 @@ interface Props { tab: WorkspaceTab; initialOpsTab?: (typeof opsTabs)[number]['k
 export const SalesOperationsWorkspace: React.FC<Props> = ({ tab, initialOpsTab, initialSupportSection, companyId, leadId, dealId, onClearCompanyFilter, onOperationalRecordsChange, onMilestoneReached, onContractSigned, onInvoiceOverdue, onDeleteContract, onDeleteInvoice, invoices = [], tasks = [], onCreateTask, onUpdateTask, onOpenInvoiceDocuments, onNavigateTab }) => {
   const [segments, setSegments] = useState<Segment[]>([]);
   const [documents, setDocuments] = useState<RecordRow[]>([]);
-  const [outbox, setOutbox] = useState<RecordRow[]>([]);
   const [companies, setCompanies] = useState<RecordRow[]>([]);
   const [catalogProducts, setCatalogProducts] = useState<RecordRow[]>([]);
   const [deals, setDeals] = useState<RecordRow[]>([]);
@@ -229,15 +228,13 @@ export const SalesOperationsWorkspace: React.FC<Props> = ({ tab, initialOpsTab, 
         if (leadId) documentsQuery = documentsQuery.or(`lead_id.eq.${leadId},and(lead_id.is.null,deal_id.is.null,company_id.eq.${companyId})`);
         else if (dealId) documentsQuery = documentsQuery.or(`deal_id.eq.${dealId},and(deal_id.is.null,company_id.eq.${companyId})`);
         else if (companyId) documentsQuery = documentsQuery.eq('company_id', companyId);
-        const [docs, messages, companyResult] = await Promise.all([
+        const [docs, companyResult] = await Promise.all([
           documentsQuery,
-          supabase.from('communication_outbox').select('*').order('created_at', { ascending: false }).limit(100),
           supabase.from('companies').select('id,company_name').order('company_name'),
         ]);
         if (docs.error) throw docs.error;
-        if (messages.error) throw messages.error;
         if (!companyResult.error) setCompanies(companyResult.data || []);
-        setDocuments(docs.data || []); setOutbox(companyId ? (messages.data || []).filter((message:any) => (docs.data || []).some((doc:any) => doc.id === message.document_id)) : messages.data || []);
+        setDocuments(docs.data || []);
       } else {
         let recordsQuery = supabase.from(selectedOps.table).select('*').order('created_at', { ascending: false });
         if (companyId) recordsQuery = recordsQuery.eq('company_id', companyId);
@@ -290,24 +287,6 @@ export const SalesOperationsWorkspace: React.FC<Props> = ({ tab, initialOpsTab, 
     await load();
   };
 
-  const approveOutboxMessage = async (messageId: string) => {
-    const supabase = getSupabase();
-    if (!supabase) return;
-    const { error: updateError } = await supabase.from('communication_outbox')
-      .update({ status: 'queued' }).eq('id', messageId).eq('status', 'awaiting_approval');
-    if (updateError) setError(updateError.message);
-    else { setNotice('承認しました。送信待ちに登録しました。'); await load(); }
-  };
-
-  const cancelOutboxMessage = async (messageId: string) => {
-    const supabase = getSupabase();
-    if (!supabase) return;
-    const { error: updateError } = await supabase.from('communication_outbox')
-      .update({ status: 'canceled' }).eq('id', messageId).in('status', ['awaiting_approval', 'queued']);
-    if (updateError) setError(updateError.message);
-    else { setNotice('送信依頼を取り消しました。'); await load(); }
-  };
-
   const updateDocumentStatus = async (documentId: string, status: string) => {
     const supabase = getSupabase(); if (!supabase) return;
     setError(''); setNotice('');
@@ -316,64 +295,9 @@ export const SalesOperationsWorkspace: React.FC<Props> = ({ tab, initialOpsTab, 
       setError(updateError.message);
       return;
     }
-
-    // 承認された場合、自動で送信キュー（communication_outbox）に送付ドラフトを作成
     if (status === 'approved') {
-      try {
-        const { data: docData } = await supabase.from('customer_documents').select('*').eq('id', documentId).maybeSingle();
-        if (docData) {
-          // すでにキューに登録されていないかチェック
-          const { data: existingOutbox } = await supabase.from('communication_outbox')
-            .select('id')
-            .eq('document_id', documentId)
-            .in('status', ['awaiting_approval', 'queued', 'sent'])
-            .maybeSingle();
-
-          if (!existingOutbox) {
-            let targetContact: any = null;
-            if (docData.contact_id) {
-              const { data: c } = await supabase.from('contacts').select('*').eq('id', docData.contact_id).maybeSingle();
-              targetContact = c;
-            } else if (docData.company_id) {
-              const { data: c } = await supabase.from('contacts').select('*').eq('company_id', docData.company_id).limit(1).maybeSingle();
-              targetContact = c;
-            }
-
-            if (targetContact) {
-              const docUrl = `${window.location.origin}/docs/${encodeURIComponent(documentId)}`;
-              const docTypeName = docData.document_type === 'diagnosis_report' ? '診断レポート' : docData.document_type === 'proposal' ? '提案書' : docData.document_type === 'estimate' ? '見積書' : docData.document_type === 'contract' ? '契約書' : docData.document_type === 'invoice' ? '請求書' : docData.document_type === 'monthly_report' ? '月次報告書' : '書類';
-              const subject = `【${docTypeName}のご送付】${docData.title}｜${targetContact.full_name} 様`;
-              const body = `${targetContact.full_name} 様\n\nお世話になっております。有限会社MSTです。\n作成いたしました${docTypeName}「${docData.title}」をお送りいたします。\n\n以下のリンクよりWeb上でご確認・PDF保存いただけます。\n${docUrl}\n\n内容をご確認いただき、ご不明点やご要望がございましたらお気軽にご連絡ください。\nよろしくお願いいたします。\n\n有限会社MST`;
-
-              const channel = targetContact.line_user_id ? 'line' : 'email';
-              const address = channel === 'line' ? targetContact.line_user_id : targetContact.email;
-
-              if (address) {
-                const { data: authData } = await supabase.auth.getUser();
-                const ownerId = authData?.user?.id;
-                if (ownerId) {
-                  await supabase.from('communication_outbox').insert({
-                    owner_id: ownerId,
-                    channel,
-                    recipient_contact_id: targetContact.id,
-                    recipient_address: address,
-                    subject,
-                    body_text: body,
-                    document_id: documentId,
-                    source_type: 'document_approval',
-                    status: 'awaiting_approval',
-                  });
-                  setNotice(`書類を確定（送付可能）にし、送信待機リスト（承認待ち）に送付案を作成しました。各書類の「送信ドロワーで送る」からすぐ送付できるほか、「送信履歴・アウトボックス」でも確認・送信できます。`);
-                }
-              }
-            }
-          }
-        }
-      } catch (err: any) {
-        console.error('Failed to auto-create outbox draft:', err);
-      }
+      setNotice('書類を確定（送付可能）にしました。「送信ドロワーで送る」から顧客へ送付できます。');
     }
-
     await load();
   };
 
@@ -738,11 +662,11 @@ export const SalesOperationsWorkspace: React.FC<Props> = ({ tab, initialOpsTab, 
       <section className="rounded-2xl border border-purple-200 bg-gradient-to-br from-purple-50/50 to-white p-5 shadow-xs space-y-3">
         <div className="flex items-center gap-2">
           <Send className="h-4 w-4 text-purple-600" />
-          <h2 className="font-bold text-slate-900 text-sm">送信履歴・送信待ちの一元管理</h2>
+          <h2 className="font-bold text-slate-900 text-sm">メール・LINE送信管理</h2>
         </div>
         <p className="text-xs text-slate-600 leading-relaxed">
-          書類送付（見積・請求・契約）、一斉配信、個別営業メールなどの送信キュー・承認待ち・送信履歴は、
-          全社共通の「管理・その他 ＞ 送信履歴・一括配信・テンプレート」に一元集約されています。
+          書類送付（見積・請求・契約）、一斉配信、個別営業メールなどの送信履歴は、
+          全社共通の「営業・顧客管理 ＞ メール・LINE送信管理」に一元集約されています。
         </p>
         <div className="pt-1">
           <button
@@ -751,11 +675,11 @@ export const SalesOperationsWorkspace: React.FC<Props> = ({ tab, initialOpsTab, 
             className="inline-flex items-center gap-1.5 rounded-xl bg-purple-600 hover:bg-purple-700 px-3.5 py-2 text-xs font-bold text-white shadow-xs shadow-purple-600/20 transition cursor-pointer"
           >
             <Send className="h-3.5 w-3.5" />
-            <span>送信履歴・アウトボックスを開く</span>
+            <span>メール・LINE送信管理を開く</span>
           </button>
         </div>
         <p className="text-[11px] text-slate-400">
-          ※ 承認された書類を送信する際は、左側の「送信ドロワーで送る」ボタンから直接送付できます。
+          ※ 確定した書類を送信する際は、左側の「送信ドロワーで送る」ボタンから直接送付できます。
         </p>
       </section>
       </div>

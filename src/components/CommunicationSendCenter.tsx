@@ -781,7 +781,7 @@ export const CommunicationSendCenter: React.FC<Props> = ({
       {/* ── Top Header (Only on standalone page) ── */}
       {variant === 'page' && (
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-2">
-          <h1 className="text-[19px] font-bold text-slate-800 tracking-tight">送信履歴・一括配信・テンプレート</h1>
+          <h1 className="text-[19px] font-bold text-slate-800 tracking-tight">メール・LINE送信管理</h1>
 
           {/* 画面切り替えタブ */}
           <div className="flex flex-wrap items-center gap-1.5">
@@ -800,7 +800,7 @@ export const CommunicationSendCenter: React.FC<Props> = ({
               }`}
             >
               <Inbox className="h-3.5 w-3.5" />
-              <span>送信履歴・送信待ち</span>
+              <span>送信履歴</span>
             </button>
             <button
               type="button"
@@ -851,7 +851,7 @@ export const CommunicationSendCenter: React.FC<Props> = ({
               }`}
             >
               <Library className="h-3.5 w-3.5" />
-              <span>定型文テンプレート</span>
+              <span>文例・LINE素材ストック</span>
             </button>
 
             {onNavigateTab && (
@@ -1233,7 +1233,7 @@ export const CommunicationSendCenter: React.FC<Props> = ({
               <div className="md:col-span-2 space-y-1.5">
                 <div className="flex items-center justify-between">
                   <label className="text-xs font-semibold text-slate-700">
-                    メール定型テンプレート（保管庫から引用）
+                    メール文例ストック（任意引用）
                   </label>
                   <button
                     type="button"
@@ -1241,7 +1241,7 @@ export const CommunicationSendCenter: React.FC<Props> = ({
                     className="inline-flex items-center gap-1 text-[11px] font-bold text-purple-700 hover:text-purple-800 cursor-pointer"
                   >
                     <Library className="h-3.5 w-3.5" />
-                    <span>テンプレート保管庫で作成・編集</span>
+                    <span>文例・LINE素材ストックを開く</span>
                   </button>
                 </div>
                 <select
@@ -1251,10 +1251,15 @@ export const CommunicationSendCenter: React.FC<Props> = ({
                 >
                   <option value="">現在の送信種別（{labels[kind]}）の標準初期文面</option>
                   {emailTemplates
-                    .filter((x) => x.channel === 'email')
+                    .filter((x) => {
+                      if (x.channel !== 'email') return false;
+                      const key = String(x.template_key || '').trim();
+                      const trimmedName = String(x.name || '').trim();
+                      return key.startsWith('tpl_') || Boolean(trimmedName && trimmedName !== key);
+                    })
                     .map((x: any) => (
                       <option key={x.id} value={x.id}>
-                        【{labels[x.category as Kind] || x.category}】{x.name?.trim() || x.template_key}
+                        {x.name?.trim() || x.template_key}
                       </option>
                     ))}
                 </select>
@@ -1265,7 +1270,7 @@ export const CommunicationSendCenter: React.FC<Props> = ({
               <div className="md:col-span-2 space-y-1.5">
                 <div className="flex items-center justify-between">
                   <label className="text-xs font-semibold text-slate-700">
-                    LINE定型テンプレート（保管庫から引用）
+                    LINE文例・素材ストック（任意引用）
                   </label>
                   <button
                     type="button"
@@ -1273,7 +1278,7 @@ export const CommunicationSendCenter: React.FC<Props> = ({
                     className="inline-flex items-center gap-1 text-[11px] font-bold text-purple-700 hover:text-purple-800 cursor-pointer"
                   >
                     <Library className="h-3.5 w-3.5" />
-                    <span>テンプレート保管庫で作成・編集</span>
+                    <span>文例・LINE素材ストックを開く</span>
                   </button>
                 </div>
                 <select
@@ -1641,14 +1646,8 @@ export const CommunicationSendCenter: React.FC<Props> = ({
         <CommunicationTemplateLibraryView />
       )}
 
-      {/* 画面4: 全社送信履歴・送信待ち（アウトボックス） */}
-      {screen === 'history' && (
-        <CommunicationOutboxHistoryView
-          onNavigateToSend={() => setScreen('send')}
-          onNavigateToBroadcast={() => setScreen('broadcast')}
-          onNavigateToDocuments={() => onNavigateTab?.('document_templates')}
-        />
-      )}
+      {/* 画面4: 全社送信履歴 */}
+      {screen === 'history' && <CommunicationOutboxHistoryView />}
 
       {/* 添付書類プレビューモーダル */}
       {previewDocModal && (

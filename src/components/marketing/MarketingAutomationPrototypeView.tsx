@@ -907,10 +907,10 @@ export const MarketingAutomationPrototypeView: React.FC<Props> = ({ scenarios, o
               type="button"
               onClick={() => onNavigateTab('communication_send')}
               className="flex items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-50 transition cursor-pointer whitespace-nowrap"
-              title="一斉配信・個別送信・定型テンプレート保管庫を開きます"
+              title="一斉配信・個別送信・文例・LINE素材ストックを開きます"
             >
               <Send className="h-3.5 w-3.5 text-purple-600" />
-              <span>一斉配信・定型テンプレート</span>
+              <span>一斉配信・文例ストック</span>
             </button>
           )}
           <button

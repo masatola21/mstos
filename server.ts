@@ -3773,6 +3773,98 @@ app.post('/api/marketing/social-broadcast', requireAuth, async (req, res) => {
   }
 });
 
+// ホームページ・LPの内容を取得してSNS投稿作成の参考情報にするエンドポイント
+app.post('/api/marketing/fetch-url-context', requireAuth, async (req, res) => {
+  const { url } = req.body || {};
+  if (!url || typeof url !== 'string' || !url.trim()) {
+    return res.status(400).json({ success: false, error: '読み込むURLを入力してください。' });
+  }
+
+  const trimmedUrl = url.trim();
+  const safeCheck = isSafePublicHttpsUrl(trimmedUrl);
+  if (!safeCheck.safe) {
+    return res.status(400).json({
+      success: false,
+      error: `このURLは読み込めません: ${safeCheck.reason || '公開HTTPS URLのみ指定できます。'}`,
+    });
+  }
+
+  try {
+    const response = await fetch(trimmedUrl, {
+      method: 'GET',
+      headers: {
+        'User-Agent': 'MST-OS-ContentHelper/1.0 (+https://os.mstcorp.info)',
+        Accept: 'text/html,application/xhtml+xml,text/plain;q=0.9,*/*;q=0.8',
+      },
+      signal: AbortSignal.timeout(10000),
+    });
+
+    if (response.url) {
+      const redirectCheck = isSafePublicHttpsUrl(response.url);
+      if (!redirectCheck.safe) {
+        return res.status(400).json({
+          success: false,
+          error: `リダイレクト先のURLは許可されていません: ${redirectCheck.reason || '非公開URL'}`,
+        });
+      }
+    }
+
+    if (!response.ok) {
+      return res.status(400).json({
+        success: false,
+        error: `ページを取得できませんでした（HTTP ${response.status}）。`,
+      });
+    }
+
+    const html = await response.text();
+    const decodeEntities = (str: string) =>
+      str
+        .replace(/&nbsp;/gi, ' ')
+        .replace(/&amp;/gi, '&')
+        .replace(/&lt;/gi, '<')
+        .replace(/&gt;/gi, '>')
+        .replace(/&quot;/gi, '"')
+        .replace(/&#39;/gi, "'");
+
+    const titleMatch = html.match(/<title[^>]*>([\s\S]*?)<\/title>/i);
+    const title = titleMatch ? decodeEntities(titleMatch[1].replace(/\s+/g, ' ').trim()) : '';
+
+    const metaDescMatch =
+      html.match(/<meta[^>]+name=["']description["'][^>]+content=["']([\s\S]*?)["']/i) ||
+      html.match(/<meta[^>]+content=["']([\s\S]*?)["'][^>]+name=["']description["']/i);
+    const description = metaDescMatch ? decodeEntities(metaDescMatch[1].replace(/\s+/g, ' ').trim()) : '';
+
+    const bodyText = decodeEntities(
+      html
+        .replace(/<script[\s\S]*?<\/script>/gi, ' ')
+        .replace(/<style[\s\S]*?<\/style>/gi, ' ')
+        .replace(/<noscript[\s\S]*?<\/noscript>/gi, ' ')
+        .replace(/<svg[\s\S]*?<\/svg>/gi, ' ')
+        .replace(/<nav[\s\S]*?<\/nav>/gi, ' ')
+        .replace(/<footer[\s\S]*?<\/footer>/gi, ' ')
+        .replace(/<\/(p|div|h1|h2|h3|h4|li|tr|section|article|br)>/gi, '\n')
+        .replace(/<[^>]+>/g, ' ')
+        .replace(/[ \t]+/g, ' ')
+        .replace(/\n{3,}/g, '\n\n')
+        .trim()
+    ).slice(0, 3500);
+
+    return res.json({
+      success: true,
+      url: response.url || trimmedUrl,
+      title,
+      description,
+      text: bodyText,
+    });
+  } catch (err: any) {
+    console.warn('fetch-url-context error:', err);
+    return res.status(502).json({
+      success: false,
+      error: `ページの読み込みに失敗しました: ${err?.message || 'タイムアウトまたは接続エラー'}`,
+    });
+  }
+});
+
 app.use('/uploads', express.static(path.resolve(appDir, 'public', 'uploads')));
 
 // SNSメディア（画像・動画）アップロード用エンドポイント (Supabase Storage優先 / ローカルフォールバック)

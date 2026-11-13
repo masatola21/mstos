@@ -312,31 +312,25 @@ export const MarketingAssetLibrary: React.FC<{
   }, [assets, selectedTypeFilter, selectedProductFilter, searchQuery]);
 
   return (
-    <section className="space-y-5 text-slate-800">
-      {/* ── ヘッダー ── */}
-      <header className="rounded-xl border border-slate-200 bg-white p-4 shadow-xs">
-        <div className="flex flex-wrap items-center justify-between gap-3">
-          <div>
-            <div className="flex items-center gap-2">
-              <Briefcase className="h-5 w-5 text-purple-700" />
-              <h2 className="text-[19px] font-bold text-slate-800 tracking-tight">資料・成果物保管庫</h2>
-            </div>
-            <p className="mt-1 text-xs text-slate-500">
-              投稿案・営業資料・広告コピー・配布PDFなどの外部発信・営業成果物を一元管理します（※AIが参照する社内ナレッジ・規程等は「管理・その他 ＞ 社内ナレッジ保管庫（AI参照情報）」で管理されます）。
-            </p>
-          </div>
-          <div className="flex items-center gap-2">
-            <button
-              type="button"
-              onClick={() => void load()}
-              className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 bg-white hover:bg-slate-50 px-3 py-1.5 text-xs font-medium text-slate-700 transition cursor-pointer shadow-xs"
-            >
-              <RefreshCw className={`h-3.5 w-3.5 ${loading ? 'animate-spin text-purple-600' : 'text-slate-500'}`} />
-              <span>再読み込み</span>
-            </button>
-          </div>
+    <section className="space-y-3.5 text-slate-800">
+      {/* ── コンパクトヘッダー ── */}
+      <div className="flex flex-wrap items-center justify-between gap-2 px-1">
+        <div className="flex items-center gap-2 min-w-0">
+          <Briefcase className="h-4 w-4 text-purple-700 shrink-0" />
+          <h2 className="text-sm font-bold text-slate-900 shrink-0">資料・成果物保管庫</h2>
+          <span className="hidden sm:inline text-xs text-slate-500 truncate">
+            （営業資料・配布PDF・画像動画・投稿下書きの保管場所）
+          </span>
         </div>
-      </header>
+        <button
+          type="button"
+          onClick={() => void load()}
+          className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 bg-white hover:bg-slate-50 px-2.5 py-1.5 text-xs font-medium text-slate-700 transition cursor-pointer shadow-2xs shrink-0"
+        >
+          <RefreshCw className={`h-3.5 w-3.5 ${loading ? 'animate-spin text-purple-600' : 'text-slate-500'}`} />
+          <span>再読み込み</span>
+        </button>
+      </div>
 
       {/* メッセージ */}
       {(error || notice) && (
