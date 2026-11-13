@@ -290,7 +290,7 @@ export const UnifiedInboxView: React.FC<UnifiedInboxViewProps> = ({
   // バッジ集計の自動更新: 60秒ごと。タブが非表示の間は止まり、表示に戻ったときに更新する。
   useVisiblePolling(loadCounts, 60_000);
 
-  // 診断フォームの回答から、AIが診断レポートと提案書の下書きを自動作成する
+  // 診断フォームの回答から、AIが診断レポート(D0〜D5)を自動作成する。提案書は商談後に別の操作で作る
   const handleGenerateReport = async (sub: SubmissionItem, force = false): Promise<void> => {
     setReportingIds((prev) => (prev.includes(sub.id) ? prev : [...prev, sub.id]));
     setSubmissionNotice('');
@@ -326,8 +326,7 @@ export const UnifiedInboxView: React.FC<UnifiedInboxViewProps> = ({
       );
       setSubmissionNotice(
         `「${name}」の診断レポート（v${result.version}）` +
-          (result.proposalCreated ? 'と提案書の下書き' : '') +
-          'を作成しました。書類で内容を確認し、承認してから送信してください。' +
+          'を作成しました。書類で内容を確認し、承認してから送信してください。提案書は、商談後に書類の画面から作成します。' +
           (result.documentSynced ? '' : '（書類台帳への登録だけ失敗しました）')
       );
       setReportVersions((prev) => ({ ...prev, [String(result.diagnosisId)]: Number(result.version) || 1 }));
@@ -1291,7 +1290,7 @@ export const UnifiedInboxView: React.FC<UnifiedInboxViewProps> = ({
                                   type="button"
                                   onClick={openDocuments}
                                   className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-xs font-semibold text-white shadow-xs transition cursor-pointer"
-                                  title="作成済みの診断レポートと提案書の下書きを、書類の画面で確認します"
+                                  title="作成済みの診断レポートを、書類の画面で確認します"
                                 >
                                   <CheckCircle2 className="w-3.5 h-3.5 text-emerald-100" />
                                   <span>作成済み（v{reportVersion}）・確認</span>

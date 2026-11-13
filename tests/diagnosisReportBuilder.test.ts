@@ -14,6 +14,7 @@ import {
   buildPremiseChapter,
   DiagnosisReportFormatError,
   DIAGNOSIS_REPORT_PROMPT_V2,
+  renderDiagnosisReportHtml,
 } from '../server/diagnosisReportBuilder.js';
 import { parseDiagnosisReport } from '../src/constants/proposalChapters.js';
 
@@ -72,5 +73,24 @@ assert(DIAGNOSIS_REPORT_PROMPT_V2.includes('要ヒアリング'), '要ヒアリ�
 assert(DIAGNOSIS_REPORT_PROMPT_V2.includes('決め直したり'), '急所を決め直さない指示');
 for (const h of ['## D0', '## D2', '## D3', '## D4', '## D5']) assert(DIAGNOSIS_REPORT_PROMPT_V2.includes(h), `プロンプトに ${h}`);
 assert(!DIAGNOSIS_REPORT_PROMPT_V2.includes('## D1') && !DIAGNOSIS_REPORT_PROMPT_V2.includes('## D6'), 'AI に D1/D6 を書かせない');
+
+// 顧客書類のHTML(章見出しつき)
+const html = renderDiagnosisReportHtml('株式会社<テスト>', out);
+const order = ['結論サマリー', '診断の前提', '現状整理', '特定された急所と根拠', '放置した場合の影響', '改善の方向性'];
+let last = -1;
+for (const t of order) {
+  const i = html.indexOf(`>${t}</h2>`);
+  assert(i > last, `書類に「${t}」の見出しが順序どおりにある`);
+  last = i;
+}
+assert(html.includes('株式会社&lt;テスト&gt; 経営診断レポート'), '会社名はエスケープされる');
+assert(!html.includes('社内用の質問') && !html.includes('商談で確認すること'), '書類に D6 は載らない');
+assert(!html.includes('## ') && !html.includes('**'), 'Markdown の記号が残らない');
+// D6 が混ざった本文を渡しても、お客様向けの書類には出ない
+const withD6 = renderDiagnosisReportHtml('A社', ai);
+assert(!withD6.includes('社内用の質問'), 'D6 入りの本文でも書類に出さない');
+// 旧形式・自由な文章は全文を残す(内容を落とさない)
+const legacyHtml = renderDiagnosisReportHtml('A社', '1. ■ 診断サマリー\n本文<b>');
+assert(legacyHtml.includes('1. ■ 診断サマリー') && legacyHtml.includes('本文&lt;b&gt;'), '旧形式は全文を出し、HTMLはエスケープ');
 
 console.log('diagnosisReportBuilder.test.ts: all assertions passed');
