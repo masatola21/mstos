@@ -2,7 +2,7 @@ import React, { useEffect, useRef, useState } from 'react';
 import { X, Monitor, Sparkles, Loader2, CheckCircle2 } from 'lucide-react';
 import { getSupabase, getAuthHeaders } from '../../lib/supabaseClient';
 import {
-  HEARING_QUESTIONS, HEARING_TYPE_QUESTIONS, HEARING_CORE_VERSION, MEMO_KEY, SUMMARY_KEY, DECISIONS_KEY, TODOS_KEY,
+  HEARING_QUESTIONS, HEARING_TYPE_QUESTIONS, HEARING_CORE_VERSION, MEMO_KEY, SUMMARY_KEY, DECISIONS_KEY,
   MAX_EXTRA_QUESTIONS, sanitizeCoreAnswers, sanitizeExtraQuestions, answeredCount, type CoreAnswers, type ExtraQuestion,
 } from '../../constants/hearingSheet';
 import { renderMeetingShareHtml } from '../../utils/meetingShare';
@@ -27,7 +27,6 @@ export const MeetingSessionView: React.FC<Props> = ({ diagnosisId, companyId, co
   const [message, setMessage] = useState('');
   const [saveState, setSaveState] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle');
   const [busy, setBusy] = useState<'' | 'organize' | 'extra'>('');
-  const [kind, setKind] = useState<'sales' | 'support'>('sales');
   const sheetId = useRef<string | null>(null);
   const dirty = useRef(false);
 
@@ -98,15 +97,15 @@ export const MeetingSessionView: React.FC<Props> = ({ diagnosisId, companyId, co
   const organize = async () => {
     setBusy('organize'); setMessage('');
     try {
-      const { notes } = await callApi('/api/meetings/organize-notes', { kind, transcript: answers[MEMO_KEY] || '' });
+      const { notes } = await callApi('/api/meetings/organize-notes', { kind: 'sales', transcript: answers[MEMO_KEY] || '' });
       dirty.current = true;
       setAnswers((prev) => {
         const next = { ...prev };
         // 担当者が入力済みの欄は上書きしない。空の欄にだけ入れる
         if (notes.answers) for (const [k, v] of Object.entries(notes.answers as Record<string, string>)) if (v && !String(prev[k] || '').trim()) next[k] = v;
-        next[SUMMARY_KEY] = notes.summary || prev[SUMMARY_KEY] || '';
-        next[DECISIONS_KEY] = (notes.decisions || []).map((d: string) => `・${d}`).join('\n') || prev[DECISIONS_KEY] || '';
-        next[TODOS_KEY] = (notes.todos || []).map((d: string) => `・${d}`).join('\n') || prev[TODOS_KEY] || '';
+        if (notes.summary && !String(prev[SUMMARY_KEY] || '').trim()) next[SUMMARY_KEY] = notes.summary;
+        const formattedDecisions = (notes.decisions || []).map((d: string) => `・${d}`).join('\n');
+        if (formattedDecisions && !String(prev[DECISIONS_KEY] || '').trim()) next[DECISIONS_KEY] = formattedDecisions;
         return next;
       });
       setMessage('整理しました。内容を確認し、違うところは直してください(入力済みの欄は上書きしていません)。');
@@ -199,22 +198,28 @@ export const MeetingSessionView: React.FC<Props> = ({ diagnosisId, companyId, co
         </section>
 
         <section className="space-y-3 border-t pt-4">
-          <h3 className="font-bold text-sm">面談メモ(文字起こしを貼り付け)</h3>
-          <p className="text-xs text-slate-500">Zoom や Google Meet の文字起こしをそのまま貼り付けます。録画・文字起こしをする場合は、事前にお客様へ伝えて同意を得てください。</p>
-          <textarea className={area} rows={8} placeholder="ここに文字起こしを貼り付け" value={answers[MEMO_KEY] || ''} onChange={(e) => setAnswer(MEMO_KEY, e.target.value)} />
-          <div className="flex items-center gap-3">
-            <select value={kind} onChange={(e) => setKind(e.target.value as any)} className="rounded border border-slate-300 p-1 text-sm">
-              <option value="sales">商談(ヒアリングの回答も取り出す)</option>
-              <option value="support">サポート面談(要約・決定事項・ToDoのみ)</option>
-            </select>
-            <button type="button" onClick={organize} disabled={busy !== '' || (answers[MEMO_KEY] || '').trim().length < 20} className="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg bg-emerald-600 text-white text-xs font-semibold disabled:opacity-50">
-              {busy === 'organize' ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Sparkles className="w-3.5 h-3.5" />}AIで整理
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <div>
+              <h3 className="font-bold text-sm">文字起こしからAI整理（商談ヒアリング＋提案書メモ）</h3>
+              <p className="text-xs text-slate-500">Zoom や Google Meet の文字起こしをそのまま貼り付けます。録画・文字起こしをする場合は、事前にお客様へ伝えて同意を得てください。</p>
+            </div>
+            <button type="button" onClick={organize} disabled={busy !== '' || (answers[MEMO_KEY] || '').trim().length < 20} className="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg bg-emerald-600 text-white text-xs font-semibold disabled:opacity-50 shrink-0 cursor-pointer">
+              {busy === 'organize' ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Sparkles className="w-3.5 h-3.5" />}AIで整理して空欄へ反映
             </button>
           </div>
-          {[[SUMMARY_KEY, '要約'], [DECISIONS_KEY, '決まったこと'], [TODOS_KEY, 'ToDo']].map(([k, label]) => (
-            <label key={k} className="block"><span className="text-sm font-medium">{label}</span>
-              <textarea className={area} rows={3} value={answers[k] || ''} onChange={(e) => setAnswer(k, e.target.value)} /></label>
-          ))}
+          <textarea className={area} rows={7} placeholder="ここに文字起こしを貼り付け（20文字以上）" value={answers[MEMO_KEY] || ''} onChange={(e) => setAnswer(MEMO_KEY, e.target.value)} />
+          <div className="grid gap-3 md:grid-cols-2">
+            <label className="block">
+              <span className="text-sm font-medium">商談の要約（提案書へ自動転記）</span>
+              <span className="block text-[11px] text-slate-500 mb-1">ヒアリング10問に入りきらない背景・温度感など</span>
+              <textarea className={area} rows={3} value={answers[SUMMARY_KEY] || ''} onChange={(e) => setAnswer(SUMMARY_KEY, e.target.value)} />
+            </label>
+            <label className="block">
+              <span className="text-sm font-medium">商談での合意事項（提案書へ自動転記）</span>
+              <span className="block text-[11px] text-slate-500 mb-1">見積条件・対象範囲・希望時期など提案書の前提となる合意</span>
+              <textarea className={area} rows={3} value={answers[DECISIONS_KEY] || ''} onChange={(e) => setAnswer(DECISIONS_KEY, e.target.value)} />
+            </label>
+          </div>
         </section>
 
         <div className="flex items-center justify-between border-t pt-4">

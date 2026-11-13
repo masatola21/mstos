@@ -20,8 +20,10 @@ import {
   RefreshCw,
   Save,
   CheckCircle2,
-  Sparkles
+  Sparkles,
+  ClipboardList
 } from 'lucide-react';
+import { MeetingSessionView } from '../meeting/MeetingSessionView';
 import {
   getEndOfNextMonthDate,
   getOneMonthLaterDate,
@@ -123,6 +125,10 @@ export const DocumentTemplateView: React.FC<DocumentTemplateViewProps> = ({
   const [dealId, setDealId] = useState(initialDealId || '');
   // 提案書の下書き(proposal_drafts)。テーブル未作成なら、保存せず従来どおり画面だけで使える。
   const [draftCtx, setDraftCtx] = useState<{ diagnosisId: string; hearingSheetId: string | null; intent: any } | null>(null);
+  const [meetingCtx, setMeetingCtx] = useState<{ diagnosisId: string; companyId: string | null; companyName: string; formAnswers: Record<string, unknown> } | null>(null);
+  const [meetingModalOpen, setMeetingModalOpen] = useState(false);
+  const [populateSeq, setPopulateSeq] = useState(0);
+  const refreshMeetingMemoRef = useRef(false);
   const [draftRec, setDraftRec] = useState<{ id: string; status: string; version: number } | null>(null);
   const [draftTableMissing, setDraftTableMissing] = useState(false);
   const [draftMsg, setDraftMsg] = useState('');
@@ -212,7 +218,10 @@ export const DocumentTemplateView: React.FC<DocumentTemplateViewProps> = ({
   // Pull CRM, deal, and diagnosis data into matching template variables.
   useEffect(() => {
     const supabase = getSupabase();
-    if (!supabase || (!companyId && !leadId && !dealId && !contactId)) return;
+    if (!supabase || (!companyId && !leadId && !dealId && !contactId)) {
+      setMeetingCtx(null);
+      return;
+    }
     let cancelled = false;
     const populate = async () => {
       const [companyResult, leadResult, dealResult, contactResult] = await Promise.all([
@@ -275,6 +284,12 @@ export const DocumentTemplateView: React.FC<DocumentTemplateViewProps> = ({
       }
       if (!cancelled) {
         setDraftCtx(diagnosis?.id ? { diagnosisId: diagnosis.id, hearingSheetId, intent: hearingIntent } : null);
+        setMeetingCtx(diagnosis?.id ? {
+          diagnosisId: diagnosis.id,
+          companyId: resolvedCompanyId || diagnosis.company_id || null,
+          companyName: company?.company_name || '',
+          formAnswers: (formSubmission?.answers || diagnosis?.answers || {}) as Record<string, unknown>,
+        } : null);
         setDraftRec(savedDraft ? { id: savedDraft.id, status: savedDraft.status, version: savedDraft.version } : null);
       }
       let productName = '';
@@ -405,15 +420,22 @@ export const DocumentTemplateView: React.FC<DocumentTemplateViewProps> = ({
         }
       }
       if (selectedTemplateId === 'tpl-proposal-report' && savedDraft?.chapters && typeof savedDraft.chapters === 'object') Object.assign(proposalSeed, savedDraft.chapters);
+      const shouldForceRefreshMemo = refreshMeetingMemoRef.current;
+      refreshMeetingMemoRef.current = false;
       setVariableValues((prev) => {
         const next = { ...prev, ...values };
-        for (const [k, v] of Object.entries(proposalSeed)) if (v && !String(prev[k] || '').trim()) next[k] = v;
+        for (const [k, v] of Object.entries(proposalSeed)) {
+          if (!v) continue;
+          if ((k === 'p_meeting_notes' && shouldForceRefreshMemo) || !String(prev[k] || '').trim()) {
+            next[k] = v;
+          }
+        }
         return next;
       });
     };
     void populate();
     return () => { cancelled = true; };
-  }, [companyId, leadId, dealId, contactId, selectedTemplateId, paymentMode]);
+  }, [companyId, leadId, dealId, contactId, selectedTemplateId, paymentMode, populateSeq]);
 
   // When switching unified template, load its default variables and reset custom override
   const handleSelectTemplate = (rawId: string) => {
@@ -1346,10 +1368,22 @@ export const DocumentTemplateView: React.FC<DocumentTemplateViewProps> = ({
               <div className="space-y-3.5 max-h-[560px] overflow-y-auto pr-1">
                 {/* 1. If Proposal/Report: Highlight Unified Nature */}
                 {selectedTemplateId === 'tpl-proposal-report' && (
-                  <div className="rounded-xl border border-blue-200 bg-gradient-to-r from-blue-50 to-indigo-50/60 p-3.5 space-y-1.5 shadow-2xs">
-                    <div className="flex items-center gap-1.5 text-xs font-bold text-blue-900">
-                      <Sparkles className="w-4 h-4 text-blue-600" />
-                      <span>診断の結果（D0〜D5）＋ ご提案（P1〜P7）</span>
+                  <div className="rounded-xl border border-blue-200 bg-gradient-to-r from-blue-50 to-indigo-50/60 p-3.5 space-y-2 shadow-2xs">
+                    <div className="flex flex-wrap items-center justify-between gap-2">
+                      <div className="flex items-center gap-1.5 text-xs font-bold text-blue-900">
+                        <Sparkles className="w-4 h-4 text-blue-600" />
+                        <span>診断の結果（D0〜D5）＋ ご提案（P1〜P7）</span>
+                      </div>
+                      <button
+                        type="button"
+                        disabled={!meetingCtx}
+                        onClick={() => setMeetingModalOpen(true)}
+                        className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-slate-800 hover:bg-slate-900 text-white text-[11px] font-semibold disabled:opacity-45 disabled:cursor-not-allowed cursor-pointer transition whitespace-nowrap"
+                        title={meetingCtx ? 'ヒアリング回答・商談要約・合意事項を確認・編集して提案書へ反映します' : '紐付く診断レコードがある企業・リードを選択すると商談シートを開けます'}
+                      >
+                        <ClipboardList className="w-3.5 h-3.5" />
+                        <span>商談シートを開く</span>
+                      </button>
                     </div>
                     <p className="text-[11px] text-blue-800 leading-relaxed">
                       下の「お支払い方式」を選ぶと、提案の型（現在: {PROPOSAL_KIND_LABELS[kindFromPaymentMode(paymentMode)]}）に合わせて項目が切り替わります。金額・サービス名・期間は、商談で決めた値だけを入力してください。未入力の必須項目は、書類に「【未入力】」と表示されます。
@@ -1591,6 +1625,20 @@ export const DocumentTemplateView: React.FC<DocumentTemplateViewProps> = ({
           </div>
         </div>
       </div>
+
+      {meetingModalOpen && meetingCtx && (
+        <MeetingSessionView
+          diagnosisId={meetingCtx.diagnosisId}
+          companyId={meetingCtx.companyId}
+          companyName={meetingCtx.companyName}
+          formAnswers={meetingCtx.formAnswers}
+          onClose={() => {
+            setMeetingModalOpen(false);
+            refreshMeetingMemoRef.current = true;
+            setPopulateSeq((n) => n + 1);
+          }}
+        />
+      )}
     </div>
   );
 };

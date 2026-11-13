@@ -25,9 +25,11 @@ import {
   Send,
   Loader2,
   RefreshCw,
-  Sparkles
+  Sparkles,
+  ClipboardList
 } from 'lucide-react';
 import { TransitionType } from './StageTransitionModal';
+import { MeetingSessionView } from './meeting/MeetingSessionView';
 
 interface RecordDetailModalProps {
   tableKey: TableKey;
@@ -35,7 +37,7 @@ interface RecordDetailModalProps {
   onClose: () => void;
   onEdit: (record: any) => void;
   onTransitionStage?: (type: TransitionType, record: any) => void;
-  onOpenCustomerWorkspace?: (companyId: string, destination: 'documents' | 'operations' | 'diagnoses' | 'forms' | 'send', recordContext?: { tableKey: TableKey; recordId: string; leadId?: string; contactId?: string }) => void;
+  onOpenCustomerWorkspace?: (companyId: string, destination: 'documents' | 'operations' | 'support_meetings' | 'diagnoses' | 'forms' | 'send', recordContext?: { tableKey: TableKey; recordId: string; leadId?: string; contactId?: string }) => void;
 }
 
 export const RecordDetailModal: React.FC<RecordDetailModalProps> = ({
@@ -51,6 +53,13 @@ export const RecordDetailModal: React.FC<RecordDetailModalProps> = ({
 
   const [commHistory, setCommHistory] = useState<any[]>([]);
   const [loadingComm, setLoadingComm] = useState(false);
+  const [linkedMeetingCtx, setLinkedMeetingCtx] = useState<{
+    diagnosisId: string;
+    companyId: string | null;
+    companyName: string;
+    formAnswers: Record<string, unknown>;
+  } | null>(null);
+  const [meetingModalOpen, setMeetingModalOpen] = useState(false);
 
   const fetchCommunicationHistory = async () => {
     if (!record) return;
@@ -91,6 +100,47 @@ export const RecordDetailModal: React.FC<RecordDetailModalProps> = ({
       void fetchCommunicationHistory();
     }
   }, [record?.id, record?.contact_id, record?.email, tableKey]);
+
+  useEffect(() => {
+    let cancelled = false;
+    setLinkedMeetingCtx(null);
+    setMeetingModalOpen(false);
+    if (!['leads', 'deals', 'customers'].includes(tableKey)) return () => { cancelled = true; };
+    const supabase = getSupabase();
+    if (!supabase) return () => { cancelled = true; };
+    const resolvedLeadId = tableKey === 'leads' ? String(record.id) : record.lead_id ? String(record.lead_id) : undefined;
+    const resolvedCompanyId = record.company_id ? String(record.company_id) : undefined;
+    if (!resolvedLeadId && !resolvedCompanyId) return () => { cancelled = true; };
+
+    void (async () => {
+      try {
+        let diagQuery = supabase.from('diagnoses').select('id,company_id,lead_id,answers').order('created_at', { ascending: false }).limit(1);
+        diagQuery = resolvedLeadId ? diagQuery.eq('lead_id', resolvedLeadId) : diagQuery.eq('company_id', resolvedCompanyId!);
+        let { data: diag } = await diagQuery.maybeSingle();
+        if (!diag && resolvedLeadId && resolvedCompanyId) {
+          const fallback = await supabase.from('diagnoses').select('id,company_id,lead_id,answers').eq('company_id', resolvedCompanyId).order('created_at', { ascending: false }).limit(1).maybeSingle();
+          diag = fallback.data;
+        }
+        if (cancelled || !diag?.id) return;
+        let formAnswers = (diag.answers || {}) as Record<string, unknown>;
+        if (!Object.keys(formAnswers).length) {
+          const subRes = await supabase.from('diagnosis_submissions').select('answers').eq('diagnosis_id', diag.id).order('submitted_at', { ascending: false }).limit(1).maybeSingle();
+          if (subRes.data?.answers) formAnswers = subRes.data.answers as Record<string, unknown>;
+        }
+        if (cancelled) return;
+        const companyName = String(record.company?.company_name || record.company_name || '');
+        setLinkedMeetingCtx({
+          diagnosisId: String(diag.id),
+          companyId: (diag.company_id || resolvedCompanyId || null) as string | null,
+          companyName,
+          formAnswers,
+        });
+      } catch {
+        // non-blocking lookup
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [record?.id, record?.company_id, record?.lead_id, tableKey]);
 
   // 標準フィールド一覧のキー
   const knownFieldKeys = new Set(config.fields.map(f => f.key));
@@ -683,20 +733,38 @@ export const RecordDetailModal: React.FC<RecordDetailModalProps> = ({
                   </button>
 
                   {tableKey === 'customers' && (
-                    <button
-                      type="button"
-                      onClick={() => {
-                        onClose();
-                        onOpenCustomerWorkspace(String(record.company_id), 'operations', {
-                          tableKey,
-                          recordId: String(record.id),
-                        });
-                      }}
-                      className="px-3 py-1.5 rounded-lg text-xs font-semibold text-emerald-700 bg-emerald-50 hover:bg-emerald-100 border border-emerald-200 transition-colors flex items-center gap-1.5 cursor-pointer shadow-2xs"
-                    >
-                      <Briefcase className="w-3.5 h-3.5" />
-                      <span>契約・請求・支援</span>
-                    </button>
+                    <>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          onClose();
+                          onOpenCustomerWorkspace(String(record.company_id), 'operations', {
+                            tableKey,
+                            recordId: String(record.id),
+                          });
+                        }}
+                        className="px-3 py-1.5 rounded-lg text-xs font-semibold text-emerald-700 bg-emerald-50 hover:bg-emerald-100 border border-emerald-200 transition-colors flex items-center gap-1.5 cursor-pointer shadow-2xs"
+                      >
+                        <Briefcase className="w-3.5 h-3.5" />
+                        <span>契約・請求・支援</span>
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => {
+                          onClose();
+                          onOpenCustomerWorkspace(String(record.company_id), 'support_meetings', {
+                            tableKey,
+                            recordId: String(record.id),
+                          });
+                        }}
+                        className="px-3 py-1.5 rounded-lg text-xs font-semibold text-teal-700 bg-teal-50 hover:bg-teal-100 border border-teal-200 transition-colors flex items-center gap-1.5 cursor-pointer shadow-2xs"
+                        title="既存顧客との定例打ち合わせ履歴・AI議事整理を開く"
+                      >
+                        <MessageSquare className="w-3.5 h-3.5" />
+                        <span>定例打ち合わせ</span>
+                      </button>
+                    </>
                   )}
 
                   <button
@@ -719,6 +787,17 @@ export const RecordDetailModal: React.FC<RecordDetailModalProps> = ({
                 </>
               );
             })()}
+            {linkedMeetingCtx && (
+              <button
+                type="button"
+                onClick={() => setMeetingModalOpen(true)}
+                className="px-3 py-1.5 rounded-lg text-xs font-semibold bg-slate-800 hover:bg-slate-900 text-white transition-colors flex items-center gap-1.5 cursor-pointer shadow-2xs"
+                title="診断に紐づく商談ヒアリングシートと共有用画面を開きます"
+              >
+                <ClipboardList className="w-3.5 h-3.5" />
+                <span>商談シートを開く</span>
+              </button>
+            )}
             <button
               onClick={onClose}
               className="px-4 py-2 rounded-lg text-xs font-medium text-slate-600 hover:bg-slate-200/70 border border-slate-200 transition-colors"
@@ -738,6 +817,16 @@ export const RecordDetailModal: React.FC<RecordDetailModalProps> = ({
           </div>
         </div>
       </div>
+
+      {meetingModalOpen && linkedMeetingCtx && (
+        <MeetingSessionView
+          diagnosisId={linkedMeetingCtx.diagnosisId}
+          companyId={linkedMeetingCtx.companyId}
+          companyName={linkedMeetingCtx.companyName}
+          formAnswers={linkedMeetingCtx.formAnswers}
+          onClose={() => setMeetingModalOpen(false)}
+        />
+      )}
     </div>
   );
 };

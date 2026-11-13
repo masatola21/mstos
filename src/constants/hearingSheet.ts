@@ -134,7 +134,7 @@ export function composeMeetingMemo(answers: CoreAnswers, extra: ExtraQuestion[] 
   if (spread) lines.push(`${HEARING_TYPE_QUESTIONS.t02.label}\n→ ${spread.label}`);
   if ((answers.t03 || '').trim()) lines.push(`${HEARING_TYPE_QUESTIONS.t03.label}\n→ ${answers.t03.trim()}`);
   for (const e of extra) if (e.a) lines.push(`${e.q}\n→ ${e.a}`);
-  if ((answers[SUMMARY_KEY] || '').trim()) lines.push(`面談の要約\n→ ${answers[SUMMARY_KEY].trim()}`);
-  if ((answers[DECISIONS_KEY] || '').trim()) lines.push(`決まったこと\n→ ${answers[DECISIONS_KEY].trim()}`);
+  if ((answers[SUMMARY_KEY] || '').trim()) lines.push(`商談の要約\n→ ${answers[SUMMARY_KEY].trim()}`);
+  if ((answers[DECISIONS_KEY] || '').trim()) lines.push(`商談での合意事項\n→ ${answers[DECISIONS_KEY].trim()}`);
   return lines.join('\n\n');
 }

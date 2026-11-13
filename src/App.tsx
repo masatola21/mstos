@@ -385,7 +385,7 @@ function AppContent() {
     }
   };
 
-  const [customerWorkspaceContext, setCustomerWorkspaceContext] = useState<{ companyId: string; leadId?: string; dealId?: string; section?: 'forms' | 'diagnoses' | 'answers' | 'materials'; documentType?: 'invoice' | 'proposal' | 'estimate' | 'contract' | 'monthly_report'; documentId?: string; sendKind?: 'document'|'form'|'diagnosis'|'deal'|'customer_meeting'|'announcement'; formId?: string; contactId?: string } | undefined>();
+  const [customerWorkspaceContext, setCustomerWorkspaceContext] = useState<{ companyId: string; leadId?: string; dealId?: string; section?: 'forms' | 'diagnoses' | 'answers' | 'materials'; opsTab?: 'contracts' | 'invoices' | 'services'; supportSection?: 'overview' | 'meetings' | 'tasks' | 'delivery'; documentType?: 'invoice' | 'proposal' | 'estimate' | 'contract' | 'monthly_report'; documentId?: string; sendKind?: 'document'|'form'|'diagnosis'|'deal'|'customer_meeting'|'announcement'; formId?: string; contactId?: string } | undefined>();
   const [lineInboxContact, setLineInboxContact] = useState<{ contactId: string; lineUserId: string } | undefined>();
   const [inboxTargetChannel, setInboxTargetChannel] = useState<'line' | 'email' | 'forms' | undefined>(undefined);
   const [acquisitionTargetTab, setAcquisitionTargetTab] = useState<string | undefined>(undefined);
@@ -2573,8 +2573,18 @@ function AppContent() {
               });
             }}
             onOpenCustomerWorkspace={(companyId, destination) => {
-              setCustomerWorkspaceContext({ companyId });
-              setCurrentTab(destination === 'deals' ? 'deals' : 'customer_operations');
+              if (destination === 'deals') {
+                setCustomerWorkspaceContext({ companyId });
+                setCurrentTab('deals');
+                return;
+              }
+              if (destination === 'support_meetings') {
+                setCustomerWorkspaceContext({ companyId, opsTab: 'services', supportSection: 'meetings' });
+                setCurrentTab('customer_operations');
+                return;
+              }
+              setCustomerWorkspaceContext({ companyId, opsTab: destination === 'services' ? 'services' : undefined });
+              setCurrentTab('customer_operations');
             }}
           />
         )}
@@ -2691,6 +2701,8 @@ function AppContent() {
                 leadId: resolvedLeadId,
                 dealId: resolvedDealId,
                 documentType: docType,
+                opsTab: destination === 'support_meetings' ? 'services' : undefined,
+                supportSection: destination === 'support_meetings' ? 'meetings' : undefined,
                 section: undefined,
                 formId: undefined,
                 contactId: recordContext?.contactId,
@@ -2740,6 +2752,8 @@ function AppContent() {
                 leadId: resolvedLeadId,
                 dealId: resolvedDealId,
                 documentType: docType,
+                opsTab: destination === 'support_meetings' ? 'services' : undefined,
+                supportSection: destination === 'support_meetings' ? 'meetings' : undefined,
                 section: undefined,
                 formId: undefined,
                 contactId: recordContext?.contactId,
@@ -2818,6 +2832,8 @@ function AppContent() {
         {currentTab === 'customer_operations' && (
           <SalesOperationsWorkspace
             tab="operations"
+            initialOpsTab={customerWorkspaceContext?.opsTab}
+            initialSupportSection={customerWorkspaceContext?.supportSection}
             companyId={customerWorkspaceCompanyId}
             invoices={invoices}
             tasks={tasks}

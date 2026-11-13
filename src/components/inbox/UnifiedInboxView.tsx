@@ -125,9 +125,7 @@ export const UnifiedInboxView: React.FC<UnifiedInboxViewProps> = ({
   const [formsMeta, setFormsMeta] = useState<Map<string, FormMeta>>(new Map());
   const [customerCompanyIds, setCustomerCompanyIds] = useState<Set<string>>(new Set());
   const [customerStageFilter, setCustomerStageFilter] = useState<'all' | 'leads' | 'customers'>('all');
-  const [formFilterStatus, setFormFilterStatus] = useState<string>(() =>
-    initialCompanyId || initialLeadId ? 'all' : 'received',
-  );
+  const [formFilterStatus, setFormFilterStatus] = useState<string>('all');
   const [formTypeCategory, setFormTypeCategory] = useState<'all' | 'diagnosis' | 'inquiry'>(initialFormTypeFilter || 'all');
   const [filterCompanyId, setFilterCompanyId] = useState<string | undefined>(initialCompanyId);
   const [filterLeadId, setFilterLeadId] = useState<string | undefined>(initialLeadId);
@@ -269,7 +267,10 @@ export const UnifiedInboxView: React.FC<UnifiedInboxViewProps> = ({
             .select('diagnosis_id,version')
             .in('diagnosis_id', diagnosisIds)
             .eq('is_latest', true);
-          if (!reportRes.error) {
+          if (reportRes.error) {
+            console.warn('ai_reports load failed:', reportRes.error.message);
+            setSubmissionError(`診断レポートの作成状況を取得できませんでした: ${reportRes.error.message}`);
+          } else {
             const versions: Record<string, number> = {};
             (reportRes.data || []).forEach((row: any) => {
               versions[String(row.diagnosis_id)] = Number(row.version) || 1;
@@ -347,6 +348,7 @@ export const UnifiedInboxView: React.FC<UnifiedInboxViewProps> = ({
           (result.documentSynced ? '' : '（書類台帳への登録だけ失敗しました）')
       );
       setReportVersions((prev) => ({ ...prev, [String(result.diagnosisId)]: Number(result.version) || 1 }));
+      void loadCounts();
       const companyId = result.companyId || sub.company_id;
       setNoticeAction({
         label: '書類を確認する',
@@ -1273,12 +1275,12 @@ export const UnifiedInboxView: React.FC<UnifiedInboxViewProps> = ({
                         {isContracted && sub.company_id && (
                           <button
                             type="button"
-                            onClick={() => onOpenCustomerWorkspace?.(sub.company_id!)}
+                            onClick={() => onOpenCustomerWorkspace?.(sub.company_id!, 'support_meetings')}
                             className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-emerald-50 hover:bg-emerald-100 text-xs font-semibold text-emerald-800 border border-emerald-300 shadow-xs transition cursor-pointer"
-                            title="契約顧客カルテ・支援タスクを開く"
+                            title="契約顧客の支援状況・定例打ち合わせ履歴を開く"
                           >
                             <Building2 className="w-3.5 h-3.5 text-emerald-600" />
-                            <span>顧客カルテ</span>
+                            <span>顧客カルテ・定例</span>
                           </button>
                         )}
 

@@ -9,7 +9,7 @@ interface SalesPipelineHubProps {
   onOpenRls: () => void;
   onOpenCustomerWorkspace?: (
     companyId: string,
-    destination: 'documents' | 'operations' | 'diagnoses' | 'forms' | 'send',
+    destination: 'documents' | 'operations' | 'support_meetings' | 'diagnoses' | 'forms' | 'send',
     recordContext?: { tableKey: TableKey; recordId: string; leadId?: string; contactId?: string }
   ) => void;
   onNavigateTab?: (tab: string) => void;

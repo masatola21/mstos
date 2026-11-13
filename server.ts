@@ -24,7 +24,7 @@ import { appendEmailFooter } from './server/emailFooter.js';
 import { classifyBottleneck } from './server/diagnosisAnalysis.js';
 import { DRAFT_CHAPTERS, DRAFT_SYSTEM_INSTRUCTION, buildProposalDraftPrompt, sanitizeDraftContext, cleanDraftOutput, type DraftChapter } from './server/proposalDraftBuilder.js';
 import {
-  MEETING_KINDS, MEETING_SYSTEM_INSTRUCTION, MeetingNotesFormatError, buildOrganizePrompt, parseOrganizedNotes, sanitizeTranscript,
+  MEETING_KINDS, MEETING_SYSTEM_INSTRUCTION, MeetingNotesFormatError, buildOrganizePrompt, parseOrganizedNotes, parseSupportMeetingNotes, sanitizeTranscript,
   buildExtraQuestionsPrompt, parseExtraQuestions, sanitizeExtraQuestionsContext, type MeetingKind,
 } from './server/meetingNotes.js';
 import { buildDiagnosisReportMarkdown, renderDiagnosisReportHtml, DiagnosisReportFormatError, DIAGNOSIS_REPORT_PROMPT_V2, type DiagnosisPremise } from './server/diagnosisReportBuilder.js';
@@ -8078,6 +8078,9 @@ app.post('/api/meetings/organize-notes', requireAuth, async (req, res) => {
       temperature: 0.2,
       signal: abortController.signal,
     });
+    if (kind === 'support_meeting') {
+      return res.json({ supportNotes: parseSupportMeetingNotes(result.text) });
+    }
     return res.json({ notes: parseOrganizedNotes(result.text, kind) });
   } catch (err: any) {
     if (err?.name === 'AbortError') return;

@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { AlertTriangle, Calendar, Check, ClipboardList, FileText, Plus, RefreshCw, Save, Trash2 } from 'lucide-react';
-import { getSupabase } from '../lib/supabaseClient';
+import { AlertTriangle, Calendar, Check, ClipboardList, FileText, Loader2, Plus, RefreshCw, Save, Sparkles, Trash2 } from 'lucide-react';
+import { getSupabase, getAuthHeaders } from '../lib/supabaseClient';
 import { InlineDeleteButton } from './InlineDeleteButton';
 import type { ManagedInvoice } from '../types/matrix';
 import type { Priority, TaskItem } from '../types';
@@ -85,6 +85,7 @@ const displayDate = (value?: string | null) => value ? new Date(value).toLocaleS
 
 interface Props {
   companyId?: string;
+  initialSection?: 'overview' | 'meetings' | 'tasks' | 'delivery';
   companies: Row[];
   engagements: Row[];
   invoices: ManagedInvoice[];
@@ -97,11 +98,11 @@ interface Props {
 }
 
 export const CustomerSupportWorkspace: React.FC<Props> = ({
-  companyId, companies, engagements, invoices, tasks,
+  companyId, initialSection, companies, engagements, invoices, tasks,
   onCreateTask, onUpdateTask, onRefresh, onAddMilestone, onCompleteMilestone,
 }) => {
   const [selectedId, setSelectedId] = useState('');
-  const [activeSection, setActiveSection] = useState<'overview' | 'meetings' | 'tasks' | 'delivery'>('overview');
+  const [activeSection, setActiveSection] = useState<'overview' | 'meetings' | 'tasks' | 'delivery'>(initialSection || 'overview');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [notice, setNotice] = useState('');
@@ -110,6 +111,9 @@ export const CustomerSupportWorkspace: React.FC<Props> = ({
   const [serviceContracts, setServiceContracts] = useState<Row[]>([]);
   const [meetingDraft, setMeetingDraft] = useState<MeetingDraft>(EMPTY_MEETING);
   const [editingMeetingId, setEditingMeetingId] = useState('');
+  const [transcriptInput, setTranscriptInput] = useState('');
+  const [organizingTranscript, setOrganizingTranscript] = useState(false);
+  const [overwriteWithAi, setOverwriteWithAi] = useState(false);
   const [taskDraft, setTaskDraft] = useState<TaskDraft>(EMPTY_TASK);
   const [editingTaskId, setEditingTaskId] = useState('');
   const [milestoneDraft, setMilestoneDraft] = useState('');
@@ -144,9 +148,20 @@ export const CustomerSupportWorkspace: React.FC<Props> = ({
     .filter((value, index, all) => all.indexOf(value) === index);
 
   useEffect(() => {
+    if (initialSection) setActiveSection(initialSection);
+  }, [initialSection]);
+
+  useEffect(() => {
+    if (companyId) {
+      const matched = engagements.find((item) => item.company_id === companyId);
+      if (matched && (!selectedId || !engagements.some((item) => item.id === selectedId && item.company_id === companyId))) {
+        setSelectedId(matched.id);
+        return;
+      }
+    }
     if (!selectedId && engagements[0]) setSelectedId(engagements[0].id);
     if (selectedId && !engagements.some((item) => item.id === selectedId)) setSelectedId(engagements[0]?.id || '');
-  }, [engagements, selectedId]);
+  }, [engagements, selectedId, companyId]);
 
   useEffect(() => {
     const serviceType = selected?.service_type === 'retainer' ? 'retainer' : 'implementation_support';
@@ -320,11 +335,57 @@ export const CustomerSupportWorkspace: React.FC<Props> = ({
     }
     setMeetingDraft(EMPTY_MEETING);
     setEditingMeetingId('');
+    setTranscriptInput('');
     setNotice('打ち合わせ履歴を保存しました。宿題は一覧から担当と期限を設定できます。');
     const { data } = await supabase.from('customer_service_meetings').select('*')
       .eq('engagement_id', selected.id).order('occurred_at', { ascending: false });
     setMeetings(data || []);
     await onRefresh();
+  };
+
+  const organizeSupportTranscript = async () => {
+    if (transcriptInput.trim().length < 20) {
+      setError('文字起こし・議事メモを20文字以上貼り付けてください。');
+      return;
+    }
+    setOrganizingTranscript(true);
+    setError('');
+    setNotice('');
+    try {
+      const response = await fetch('/api/meetings/organize-notes', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', ...(await getAuthHeaders()) },
+        body: JSON.stringify({ kind: 'support_meeting', transcript: transcriptInput }),
+      });
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(data.error || '文字起こしを整理できませんでした。');
+      const notes = (data.supportNotes || {}) as Record<string, string>;
+      setMeetingDraft((prev) => {
+        const pick = (key: keyof MeetingDraft, aiVal?: string) => {
+          const val = String(aiVal || '').trim();
+          if (!val) return prev[key];
+          if (overwriteWithAi || !String(prev[key] || '').trim()) return val;
+          return prev[key];
+        };
+        return {
+          ...prev,
+          occurred_at: prev.occurred_at || asDateTimeLocal(new Date().toISOString()),
+          purpose: pick('purpose', notes.purpose),
+          topic: pick('topic', notes.topic),
+          discussion: pick('discussion', notes.discussion),
+          decisions: pick('decisions', notes.decisions),
+          unresolved_items: pick('unresolved_items', notes.unresolved_items),
+          client_homework: pick('client_homework', notes.client_homework),
+          mst_homework: pick('mst_homework', notes.mst_homework),
+          next_topic: pick('next_topic', notes.next_topic),
+        };
+      });
+      setNotice('AIが文字起こしを整理して下書きへ反映しました。内容を確認・修正してから「記録を保存」を押してください。');
+    } catch (e: any) {
+      setError(e?.message || '文字起こしを整理できませんでした。');
+    } finally {
+      setOrganizingTranscript(false);
+    }
   };
 
   const editMeeting = (meeting: Row) => {
@@ -538,6 +599,39 @@ export const CustomerSupportWorkspace: React.FC<Props> = ({
         {activeSection === 'meetings' && <div className="grid gap-4 p-4 xl:grid-cols-[minmax(0,1fr)_minmax(280px,0.8fr)]">
           <form onSubmit={saveMeeting} className="space-y-3 rounded-2xl border border-slate-200 bg-slate-50 p-4 shadow-xs">
             <h4 className="font-bold text-slate-900 text-sm">{editingMeetingId ? '打ち合わせ履歴を編集' : '打ち合わせを記録'}</h4>
+            <div className="rounded-xl border border-slate-200 bg-white p-3 space-y-2">
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <div>
+                  <span className="text-xs font-bold text-slate-900">文字起こし・メモからAI整理</span>
+                  <p className="text-[11px] text-slate-500">Zoom / Google Meet の文字起こしを貼り付けると、各項目へ自動整理します（事前同意を取得してください）。</p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => void organizeSupportTranscript()}
+                  disabled={organizingTranscript || transcriptInput.trim().length < 20}
+                  className="inline-flex items-center gap-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 px-3 py-1.5 text-xs font-semibold text-white transition cursor-pointer shrink-0 whitespace-nowrap"
+                >
+                  {organizingTranscript ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Sparkles className="h-3.5 w-3.5" />}
+                  <span>{organizingTranscript ? '整理中…' : 'AIで整理して反映'}</span>
+                </button>
+              </div>
+              <textarea
+                rows={4}
+                value={transcriptInput}
+                onChange={(event) => setTranscriptInput(event.target.value)}
+                placeholder="ここに定例面談の文字起こし・議事メモを貼り付け（20文字以上）"
+                className="w-full rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-xs text-slate-900 focus:bg-white focus:outline-none focus:border-purple-600"
+              />
+              <label className="inline-flex items-center gap-1.5 text-[11px] text-slate-600 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={overwriteWithAi}
+                  onChange={(event) => setOverwriteWithAi(event.target.checked)}
+                  className="rounded border-slate-300 accent-purple-600"
+                />
+                <span>すでに入力済みの項目もAIの整理結果で上書きする</span>
+              </label>
+            </div>
             <label className="block text-xs font-semibold text-slate-700">日時<input required type="datetime-local" value={meetingDraft.occurred_at} onChange={(event) => setMeetingDraft({ ...meetingDraft, occurred_at: event.target.value })} className="mt-1 w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs text-slate-900 focus:outline-none focus:border-purple-600 shadow-2xs" /></label>
             <label className="block text-xs font-semibold text-slate-700">目的<input value={meetingDraft.purpose} onChange={(event) => setMeetingDraft({ ...meetingDraft, purpose: event.target.value })} className="mt-1 w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs text-slate-900 focus:outline-none focus:border-purple-600 shadow-2xs" /></label>
             <label className="block text-xs font-semibold text-slate-700">今回のテーマ<input required value={meetingDraft.topic} onChange={(event) => setMeetingDraft({ ...meetingDraft, topic: event.target.value })} className="mt-1 w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs text-slate-900 focus:outline-none focus:border-purple-600 shadow-2xs" /></label>

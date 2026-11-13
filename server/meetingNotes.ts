@@ -17,8 +17,8 @@ import {
   type CoreAnswers,
 } from '../src/constants/hearingSheet.js';
 
-export type MeetingKind = 'sales' | 'support';
-export const MEETING_KINDS: readonly MeetingKind[] = ['sales', 'support'];
+export type MeetingKind = 'sales' | 'support' | 'support_meeting';
+export const MEETING_KINDS: readonly MeetingKind[] = ['sales', 'support', 'support_meeting'];
 
 export class MeetingNotesFormatError extends Error {}
 
@@ -45,9 +45,8 @@ function salesSchema(): string {
   const core = HEARING_QUESTIONS.map((q) => `    "${q.id}": "${q.label}への回答(話されていなければ空)"`).join(',\n');
   const t = HEARING_TYPE_QUESTIONS;
   return `{
-  "summary": "面談の要約(5文以内)",
-  "decisions": ["決まったこと(1件ずつ)"],
-  "todos": ["やること(担当・期限が話されていれば含める)"],
+  "summary": "商談の要約(ヒアリング10問に入りきらない背景・温度感など5文以内)",
+  "decisions": ["商談での合意事項(見積・範囲・時期など、提案書へ転記する前提条件を1件ずつ)"],
   "answers": {
 ${core},
     "t01": "${t.t01.label}。お客様がはっきり言った場合だけ spot_build(一点だけ直したい) / retainer(継続して見てほしい) / hybrid(両方)のどれか。それ以外は空",
@@ -63,9 +62,27 @@ const SUPPORT_SCHEMA = `{
   "todos": ["やること(担当・期限が話されていれば含める)"]
 }`;
 
+const SUPPORT_MEETING_SCHEMA = `{
+  "purpose": "今回の打ち合わせの目的(話されていなければ空)",
+  "topic": "今回のテーマ(1行で簡潔に。話されていなければ空)",
+  "discussion": "話し合った内容の要約(事実ベースで箇条書きまたは5文以内)",
+  "decisions": ["決定事項(1件ずつ)"],
+  "unresolved_items": ["保留事項・未解決課題(1件ずつ)"],
+  "client_homework": ["顧客側の宿題(担当・期限が話されていれば含める)"],
+  "mst_homework": ["MST側の宿題(担当・期限が話されていれば含める)"],
+  "next_topic": "次回テーマ(話されていれば1行、なければ空)"
+}`;
+
 export function buildOrganizePrompt(kind: MeetingKind, transcript: string): string {
+  if (kind === 'support_meeting') {
+    return buildSupportMeetingOrganizePrompt(transcript);
+  }
   const what = kind === 'sales' ? '商談' : 'お客様のサポート面談';
   return `次の${what}の文字起こし(または議事メモ)を整理してください。\n\n${ORGANIZE_RULES}\n\n【出力の形(JSON)】\n${kind === 'sales' ? salesSchema() : SUPPORT_SCHEMA}\n\n【文字起こし】\n${transcript}\n`;
+}
+
+export function buildSupportMeetingOrganizePrompt(transcript: string): string {
+  return `次の既存顧客との定例面談・サポート打ち合わせの文字起こし(または議事メモ)を整理してください。\n\n${ORGANIZE_RULES}\n・顧客側の宿題とMST側の宿題は、発言の主語を確認して明確に分けて書く。\n\n【出力の形(JSON)】\n${SUPPORT_MEETING_SCHEMA}\n\n【文字起こし】\n${transcript}\n`;
 }
 
 export interface OrganizedNotes {
@@ -74,6 +91,17 @@ export interface OrganizedNotes {
   todos: string[];
   /** sales のときだけ。話されていない項目は空文字 */
   answers: CoreAnswers | null;
+}
+
+export interface SupportMeetingNotes {
+  purpose: string;
+  topic: string;
+  discussion: string;
+  decisions: string;
+  unresolved_items: string;
+  client_homework: string;
+  mst_homework: string;
+  next_topic: string;
 }
 
 /** AI の出力から、最初の JSON オブジェクトを取り出す(コードブロックや前置きが付いても読む) */
@@ -91,6 +119,34 @@ export function extractJsonObject(text: string): unknown {
 
 const toStringList = (value: unknown, max = 20, each = 300): string[] =>
   Array.isArray(value) ? value.map((v) => clip(v, each)).filter(Boolean).slice(0, max) : [];
+
+const toBulletText = (value: unknown, maxItems = 20, each = 300): string => {
+  if (Array.isArray(value)) {
+    return toStringList(value, maxItems, each).map((item) => (item.startsWith('・') ? item : `・${item}`)).join('\n');
+  }
+  return clip(value, 2000);
+};
+
+export function parseSupportMeetingNotes(text: string): SupportMeetingNotes {
+  const obj = extractJsonObject(text) as any;
+  if (!obj || typeof obj !== 'object' || Array.isArray(obj)) {
+    throw new MeetingNotesFormatError('AIの出力の形が正しくありません。もう一度お試しください。');
+  }
+  const notes: SupportMeetingNotes = {
+    purpose: clip(obj.purpose, 200),
+    topic: clip(obj.topic, 200),
+    discussion: clip(obj.discussion, 3000),
+    decisions: toBulletText(obj.decisions),
+    unresolved_items: toBulletText(obj.unresolved_items),
+    client_homework: toBulletText(obj.client_homework),
+    mst_homework: toBulletText(obj.mst_homework),
+    next_topic: clip(obj.next_topic, 200),
+  };
+  if (!Object.values(notes).some((v) => Boolean(v.trim()))) {
+    throw new MeetingNotesFormatError('文字起こしから整理できる内容が見つかりませんでした。内容をご確認ください。');
+  }
+  return notes;
+}
 
 export function parseOrganizedNotes(text: string, kind: MeetingKind): OrganizedNotes {
   const obj = extractJsonObject(text) as any;

@@ -92,9 +92,9 @@ const localDateString = (date = new Date()) => {
 };
 const defaultInvoiceDueDate = (date = new Date()) => getEndOfNextMonthDate(date);
 
-interface Props { tab: WorkspaceTab; companyId?: string; leadId?: string; dealId?: string; onClearCompanyFilter?: () => void; onOperationalRecordsChange?: (contracts: ManagedContract[], invoices: ManagedInvoice[]) => void; onMilestoneReached?: (event: { engagementId: string; milestoneId: string; milestoneTitle: string; companyId?: string; companyName?: string }) => void; onContractSigned?: (event: { id: string; title: string; companyId?: string; companyName?: string; amount?: number }) => void; onInvoiceOverdue?: (event: { id: string; title: string; invoiceNumber?: string; companyId?: string; companyName?: string; amount?: number; dueDate?: string }) => void; onDeleteContract?: (id: string) => Promise<void>; onDeleteInvoice?: (id: string) => Promise<void>; invoices?: ManagedInvoice[]; tasks?: TaskItem[]; onCreateTask?: (task: Omit<TaskItem, 'id' | 'createdAt' | 'updatedAt'>) => void; onUpdateTask?: (task: TaskItem) => void; onOpenInvoiceDocuments?: (companyId: string, documentId?: string) => void; onNavigateTab?: (tab: string) => void; }
+interface Props { tab: WorkspaceTab; initialOpsTab?: (typeof opsTabs)[number]['key']; initialSupportSection?: 'overview' | 'meetings' | 'tasks' | 'delivery'; companyId?: string; leadId?: string; dealId?: string; onClearCompanyFilter?: () => void; onOperationalRecordsChange?: (contracts: ManagedContract[], invoices: ManagedInvoice[]) => void; onMilestoneReached?: (event: { engagementId: string; milestoneId: string; milestoneTitle: string; companyId?: string; companyName?: string }) => void; onContractSigned?: (event: { id: string; title: string; companyId?: string; companyName?: string; amount?: number }) => void; onInvoiceOverdue?: (event: { id: string; title: string; invoiceNumber?: string; companyId?: string; companyName?: string; amount?: number; dueDate?: string }) => void; onDeleteContract?: (id: string) => Promise<void>; onDeleteInvoice?: (id: string) => Promise<void>; invoices?: ManagedInvoice[]; tasks?: TaskItem[]; onCreateTask?: (task: Omit<TaskItem, 'id' | 'createdAt' | 'updatedAt'>) => void; onUpdateTask?: (task: TaskItem) => void; onOpenInvoiceDocuments?: (companyId: string, documentId?: string) => void; onNavigateTab?: (tab: string) => void; }
 
-export const SalesOperationsWorkspace: React.FC<Props> = ({ tab, companyId, leadId, dealId, onClearCompanyFilter, onOperationalRecordsChange, onMilestoneReached, onContractSigned, onInvoiceOverdue, onDeleteContract, onDeleteInvoice, invoices = [], tasks = [], onCreateTask, onUpdateTask, onOpenInvoiceDocuments, onNavigateTab }) => {
+export const SalesOperationsWorkspace: React.FC<Props> = ({ tab, initialOpsTab, initialSupportSection, companyId, leadId, dealId, onClearCompanyFilter, onOperationalRecordsChange, onMilestoneReached, onContractSigned, onInvoiceOverdue, onDeleteContract, onDeleteInvoice, invoices = [], tasks = [], onCreateTask, onUpdateTask, onOpenInvoiceDocuments, onNavigateTab }) => {
   const [segments, setSegments] = useState<Segment[]>([]);
   const [documents, setDocuments] = useState<RecordRow[]>([]);
   const [outbox, setOutbox] = useState<RecordRow[]>([]);
@@ -109,7 +109,11 @@ export const SalesOperationsWorkspace: React.FC<Props> = ({ tab, companyId, lead
   const [editingDocumentBody, setEditingDocumentBody] = useState('');
   const [pendingDeleteDocumentId, setPendingDeleteDocumentId] = useState('');
   const [records, setRecords] = useState<RecordRow[]>([]);
-  const [activeOpsTab, setActiveOpsTab] = useState<(typeof opsTabs)[number]['key']>('contracts');
+  const [activeOpsTab, setActiveOpsTab] = useState<(typeof opsTabs)[number]['key']>(initialOpsTab || 'contracts');
+
+  useEffect(() => {
+    if (initialOpsTab) setActiveOpsTab(initialOpsTab);
+  }, [initialOpsTab]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [notice, setNotice] = useState('');
@@ -793,6 +797,7 @@ export const SalesOperationsWorkspace: React.FC<Props> = ({ tab, companyId, lead
 
       {activeOpsTab === 'services' ? <CustomerSupportWorkspace
         companyId={companyId}
+        initialSection={initialSupportSection}
         companies={companies}
         engagements={records}
         invoices={invoices}
