@@ -1,13 +1,28 @@
-import React, { useRef, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { getSupabase } from '../../lib/supabaseClient';
 import {
   MessageSquare,
   ArrowRight,
-  ShieldCheck,
-  LayoutTemplate,
-  CheckCircle2,
-  AlertCircle,
+  Sparkles,
+  Download,
+  Upload,
+  RefreshCw,
+  Eye,
+  EyeOff,
 } from 'lucide-react';
+import {
+  RICH_MENU_LAYOUTS,
+  RICH_MENU_WIDTH,
+  RICH_MENU_HEIGHT,
+  DEFAULT_MST_BOOKING_URL,
+  type RichMenuActionItem,
+  type RichMenuLayoutId,
+  createMstRecommendedRichMenuPreset,
+  getRichMenuLayoutAreas,
+  getRichMenuLayoutConfig,
+  getRichMenuCellStylePercent,
+} from '../../utils/lineRichMenuLayouts';
+import { renderMstRichMenuImage } from '../../utils/mstRichMenuRenderer';
 
 export type WelcomeChoiceRoute = 'form' | 'booking' | 'template' | 'chat' | 'care_interactive';
 
@@ -117,22 +132,15 @@ export const DEFAULT_WELCOME_CHOICES: WelcomeChoice[] = [
   { id: 'care', label: '🌿 介護保険外サービスの開業相談', tag: '介護保険外開業', route: 'care_interactive' },
 ];
 
-type Action = { type: 'uri' | 'message'; label: string; value: string };
-type LayoutId = 'single' | 'columns-2' | 'rows-2' | 'columns-3' | 'rows-3' | 'grid-2x2' | 'grid-2x3' | 'grid-3x2';
+type Action = RichMenuActionItem;
+type LayoutId = RichMenuLayoutId;
 
-const layouts: { id: LayoutId; label: string; columns: number; rows: number }[] = [
-  { id: 'single', label: '1分割（全面）', columns: 1, rows: 1 },
-  { id: 'columns-2', label: '2分割（左右）', columns: 2, rows: 1 },
-  { id: 'rows-2', label: '2分割（上下）', columns: 1, rows: 2 },
-  { id: 'columns-3', label: '3分割（左右）', columns: 3, rows: 1 },
-  { id: 'rows-3', label: '3分割（上下）', columns: 1, rows: 3 },
-  { id: 'grid-2x2', label: '4分割（2×2）', columns: 2, rows: 2 },
-  { id: 'grid-2x3', label: '6分割（2×3）', columns: 2, rows: 3 },
-  { id: 'grid-3x2', label: '6分割（3×2）', columns: 3, rows: 2 },
-];
-
-const initial = (count = 6): Action[] =>
-  Array.from({ length: count }, (_, i) => ({ type: 'uri', label: 'メニュー ' + (i + 1), value: '' }));
+const buildActionsForCount = (count: number, current: Action[] = []): Action[] =>
+  Array.from({ length: count }, (_, i) =>
+    current[i]
+      ? { ...current[i] }
+      : { type: 'uri', label: `メニュー ${i + 1}`, value: '' }
+  );
 
 export interface MarketingLineSettingsViewProps {
   onNavigateToWelcomeFlow?: () => void;
@@ -142,17 +150,153 @@ export const MarketingLineSettingsView: React.FC<MarketingLineSettingsViewProps>
   const db = getSupabase();
   const fileRef = useRef<HTMLInputElement>(null);
 
+  const initialPreset = createMstRecommendedRichMenuPreset(DEFAULT_MST_BOOKING_URL);
+
   // ─── リッチメニュー用状態 ───
-  const [title, setTitle] = useState('メニュー');
-  const [chatBarText, setChatBarText] = useState('メニュー');
-  const [layout, setLayout] = useState<LayoutId>('grid-2x3');
-  const selectedLayout = layouts.find((item) => item.id === layout) || layouts[6];
-  const [actions, setActions] = useState<Action[]>(initial());
-  const [image, setImage] = useState<{ base64: string; mime: string; url: string } | null>(null);
+  const [title, setTitle] = useState(initialPreset.title);
+  const [chatBarText, setChatBarText] = useState(initialPreset.chatBarText);
+  const [layout, setLayout] = useState<LayoutId>(initialPreset.layout);
+  const selectedLayout = getRichMenuLayoutConfig(layout) || RICH_MENU_LAYOUTS[0];
+  const layoutBounds = getRichMenuLayoutAreas(selectedLayout.id);
+  const [actions, setActions] = useState<Action[]>(initialPreset.actions);
+  const [bookingUrlDefault, setBookingUrlDefault] = useState(DEFAULT_MST_BOOKING_URL);
+  const [image, setImage] = useState<{
+    base64: string;
+    mime: string;
+    url: string;
+    byteLength?: number;
+    isGenerated?: boolean;
+  } | null>(null);
+  const [showOverlayGuide, setShowOverlayGuide] = useState(true);
+  const [generatingImage, setGeneratingImage] = useState(false);
   const [currentId, setCurrentId] = useState('');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   const [notice, setNotice] = useState('');
+
+  const generateMstDesignImage = async (
+    targetLayout: LayoutId = layout,
+    targetActions: Action[] = actions,
+    quiet = false
+  ) => {
+    setGeneratingImage(true);
+    try {
+      const rendered = await renderMstRichMenuImage({
+        layout: targetLayout,
+        actions: targetActions,
+      });
+      setImage({ ...rendered, isGenerated: true });
+      if (!quiet) {
+        setError('');
+        setNotice(
+          `MSTデザイン画像（${RICH_MENU_WIDTH}×${RICH_MENU_HEIGHT} px / ${Math.round(rendered.byteLength / 1024)} KB）を生成しました。`
+        );
+      }
+    } catch (e: any) {
+      if (!quiet) {
+        setError(e?.message || 'リッチメニュー画像を生成できませんでした');
+      }
+    } finally {
+      setGeneratingImage(false);
+    }
+  };
+
+  // 初回マウント時にMSTデザイン画像を自動生成 ＋ DBから現在のメニューID・TimeRex予約URLを取得
+  useEffect(() => {
+    let active = true;
+    void renderMstRichMenuImage({
+      layout: initialPreset.layout,
+      actions: initialPreset.actions,
+    })
+      .then((rendered) => {
+        if (active) {
+          setImage({ ...rendered, isGenerated: true });
+        }
+      })
+      .catch(() => {});
+
+    if (db) {
+      void (async () => {
+        try {
+          const { data: auth } = await db.auth.getUser();
+          const uid = auth.user?.id;
+          if (!uid || !active) return;
+
+          const [{ data: integration }, { data: salesSettings }] = await Promise.all([
+            db
+              .from('line_channel_integrations')
+              .select('rich_menu_id')
+              .eq('owner_id', uid)
+              .maybeSingle(),
+            db
+              .from('sales_settings')
+              .select('booking_page_url')
+              .eq('owner_id', uid)
+              .maybeSingle(),
+          ]);
+
+          if (!active) return;
+          if (integration?.rich_menu_id) {
+            setCurrentId(integration.rich_menu_id);
+          }
+          const rawBookingUrl =
+            typeof salesSettings?.booking_page_url === 'string' &&
+            /^https:\/\//i.test(salesSettings.booking_page_url.trim())
+              ? salesSettings.booking_page_url.trim()
+              : '';
+          if (rawBookingUrl) {
+            let configuredBookingUrl = rawBookingUrl;
+            try {
+              const parsed = new URL(rawBookingUrl);
+              if (!parsed.searchParams.has('utm_source')) {
+                parsed.searchParams.set('utm_source', 'line');
+              }
+              if (!parsed.searchParams.has('utm_medium')) {
+                parsed.searchParams.set('utm_medium', 'chat');
+              }
+              configuredBookingUrl = parsed.toString();
+            } catch {
+              // keep rawBookingUrl
+            }
+            setBookingUrlDefault(configuredBookingUrl);
+            setActions((prev) =>
+              prev.map((item, idx) =>
+                idx === 1 && item.value === DEFAULT_MST_BOOKING_URL
+                  ? { ...item, value: configuredBookingUrl }
+                  : item
+              )
+            );
+          }
+        } catch {
+          // optional prefill
+        }
+      })();
+    }
+
+    return () => {
+      active = false;
+    };
+  }, []);
+
+  const applyMstRecommendedPreset = async () => {
+    const preset = createMstRecommendedRichMenuPreset(bookingUrlDefault);
+    setTitle(preset.title);
+    setChatBarText(preset.chatBarText);
+    setLayout(preset.layout);
+    setActions(preset.actions);
+    await generateMstDesignImage(preset.layout, preset.actions, false);
+    setNotice('MSTおすすめ5分割構成（上2:1・下3）とデザイン画像をセットしました。');
+  };
+
+  const downloadImage = () => {
+    if (!image) return;
+    const a = document.createElement('a');
+    a.href = image.url;
+    a.download = `mst-rich-menu-${layout}-${RICH_MENU_WIDTH}x${RICH_MENU_HEIGHT}.${
+      image.mime === 'image/jpeg' ? 'jpg' : 'png'
+    }`;
+    a.click();
+  };
 
   const chooseImage = (file?: File) => {
     if (!file) return;
@@ -162,16 +306,22 @@ export const MarketingLineSettingsView: React.FC<MarketingLineSettingsViewProps>
     }
     void createImageBitmap(file)
       .then((bitmap) => {
-        const validSize = bitmap.width === 2500 && bitmap.height === 1686;
+        const validSize = bitmap.width === RICH_MENU_WIDTH && bitmap.height === RICH_MENU_HEIGHT;
         bitmap.close();
         if (!validSize) {
-          setError('画像サイズは2500×1686 pxにしてください');
+          setError(`画像サイズは${RICH_MENU_WIDTH}×${RICH_MENU_HEIGHT} pxにしてください`);
           return;
         }
         const reader = new FileReader();
         reader.onload = () => {
           const data = String(reader.result || '');
-          setImage({ base64: data.split(',')[1] || '', mime: file.type, url: data });
+          setImage({
+            base64: data.split(',')[1] || '',
+            mime: file.type,
+            url: data,
+            byteLength: file.size,
+            isGenerated: false,
+          });
           setError('');
         };
         reader.onerror = () => setError('画像を読み込めませんでした');
@@ -183,7 +333,7 @@ export const MarketingLineSettingsView: React.FC<MarketingLineSettingsViewProps>
   const apply = async () => {
     if (!db) return;
     if (!image) {
-      setError('リッチメニュー画像を選択してください');
+      setError('リッチメニュー画像を選択または生成してください');
       return;
     }
     if (actions.some((a) => !a.label.trim() || !a.value.trim())) {
@@ -271,111 +421,215 @@ export const MarketingLineSettingsView: React.FC<MarketingLineSettingsViewProps>
       </section>
 
       {/* ─── LINEリッチメニュー ─── */}
-      <section className="space-y-4 rounded-2xl border border-slate-200 bg-white p-6 shadow-xs">
-        <div>
-          <h2 className="text-xl font-bold text-slate-900">LINEリッチメニュー</h2>
-          <p className="mt-1 text-sm text-slate-500">
-            画像とタッチ領域のレイアウトを選び、各領域の動作を設定します。「LINEに反映」で公式アカウント全体の既定メニューが切り替わります。
-          </p>
+      <section className="space-y-5 rounded-2xl border border-slate-200 bg-white p-6 shadow-xs">
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between border-b border-slate-100 pb-4">
+          <div>
+            <h2 className="text-xl font-bold text-slate-900">LINEリッチメニュー</h2>
+            <p className="mt-1 text-sm text-slate-500">
+              5分割（上2:1・下3 / 上2・下3均等）を含むレイアウトを選び、各領域の動作とMSTデザイン画像を設定します。「LINEに反映」で公式アカウント全体の既定メニューが切り替わります。
+            </p>
+          </div>
+          <button
+            type="button"
+            disabled={generatingImage}
+            onClick={() => void applyMstRecommendedPreset()}
+            className="inline-flex items-center gap-1.5 rounded-xl bg-[#0F2B6B] hover:bg-[#1B41AE] px-4 py-2.5 text-xs font-bold text-white shadow-xs transition disabled:opacity-50 cursor-pointer shrink-0 self-start"
+          >
+            <Sparkles className="h-3.5 w-3.5 text-[#E7D897]" />
+            <span>MSTおすすめ5分割構成をセット</span>
+          </button>
         </div>
+
         <div className="grid gap-6 lg:grid-cols-2">
-          <div className="space-y-3">
-            <label className="block text-xs font-semibold text-slate-700">
-              メニュー名
-              <input
-                maxLength={300}
-                value={title}
-                onChange={(e) => setTitle(e.target.value)}
-                className="mt-1 w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 shadow-xs focus:outline-none focus:border-emerald-500"
-              />
-            </label>
-            <label className="block text-xs font-semibold text-slate-700">
-              開閉バーの表示
-              <input
-                maxLength={14}
-                value={chatBarText}
-                onChange={(e) => setChatBarText(e.target.value)}
-                className="mt-1 w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 shadow-xs focus:outline-none focus:border-emerald-500"
-              />
-            </label>
+          <div className="space-y-3.5">
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+              <label className="block text-xs font-semibold text-slate-700">
+                メニュー名
+                <input
+                  maxLength={300}
+                  value={title}
+                  onChange={(e) => setTitle(e.target.value)}
+                  className="mt-1 w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 shadow-xs focus:outline-none focus:border-emerald-500"
+                />
+              </label>
+              <label className="block text-xs font-semibold text-slate-700">
+                開閉バーの表示
+                <input
+                  maxLength={14}
+                  value={chatBarText}
+                  onChange={(e) => setChatBarText(e.target.value)}
+                  className="mt-1 w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 shadow-xs focus:outline-none focus:border-emerald-500"
+                />
+              </label>
+            </div>
+
             <label className="block text-xs font-semibold text-slate-700">
               タッチ領域のレイアウト
               <select
                 value={layout}
                 onChange={(e) => {
                   const next = e.target.value as LayoutId;
-                  const config = layouts.find((item) => item.id === next);
+                  const config = getRichMenuLayoutConfig(next);
                   if (config) {
+                    const nextActions = buildActionsForCount(config.cellCount, actions);
                     setLayout(next);
-                    setActions(initial(config.columns * config.rows));
+                    setActions(nextActions);
+                    if (image?.isGenerated) {
+                      void generateMstDesignImage(next, nextActions, true);
+                    }
                   }
                 }}
                 className="mt-1 w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 shadow-xs focus:outline-none focus:border-emerald-500"
               >
-                {layouts.map((item) => (
+                {RICH_MENU_LAYOUTS.map((item) => (
                   <option key={item.id} value={item.id}>
                     {item.label}
+                    {item.recommended ? ' ★おすすめ' : ''}
                   </option>
                 ))}
               </select>
+              <span className="mt-1 block text-[11px] font-normal text-slate-500">
+                {selectedLayout.description}
+              </span>
             </label>
-            <input
-              ref={fileRef}
-              type="file"
-              accept="image/png,image/jpeg"
-              className="hidden"
-              onChange={(e) => chooseImage(e.target.files?.[0])}
-            />
-            <button
-              type="button"
-              onClick={() => fileRef.current?.click()}
-              className="w-full rounded-xl border border-dashed border-slate-300 bg-slate-50/50 px-4 py-5 text-sm text-slate-600 hover:bg-slate-100 transition cursor-pointer"
-            >
-              メニュー画像を選択（PNG/JPEG、1MB以下）
-            </button>
-            <div className="grid grid-cols-1 gap-2.5 sm:grid-cols-2">
-              {actions.map((a, i) => (
-                <div key={i} className="rounded-xl border border-slate-200 bg-slate-50/70 p-3 shadow-xs">
-                  <div className="mb-2 text-xs font-bold text-slate-800">タッチ領域 {i + 1}</div>
-                  <input
-                    value={a.label}
-                    maxLength={20}
-                    onChange={(e) =>
-                      setActions((v) => v.map((x, j) => (j === i ? { ...x, label: e.target.value } : x)))
-                    }
-                    placeholder="表示名"
-                    className="mb-2 w-full rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 text-xs text-slate-900 shadow-xs focus:outline-none focus:border-emerald-500"
-                  />
-                  <select
-                    value={a.type}
-                    onChange={(e) =>
-                      setActions((v) =>
-                        v.map((x, j) => (j === i ? { ...x, type: e.target.value as Action['type'] } : x))
-                      )
-                    }
-                    className="mb-2 w-full rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 text-xs text-slate-900 shadow-xs focus:outline-none focus:border-emerald-500"
+
+            {/* 画像生成・選択・ダウンロード操作 */}
+            <div className="rounded-xl border border-slate-200 bg-slate-50/70 p-3 space-y-2.5">
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <span className="text-xs font-bold text-slate-800">
+                  メニュー画像（{RICH_MENU_WIDTH}×{RICH_MENU_HEIGHT} px）
+                </span>
+                {image?.byteLength != null && (
+                  <span className="text-[11px] text-slate-500 font-mono">
+                    {image.isGenerated ? 'MST自動生成' : 'カスタム画像'} · {Math.round(image.byteLength / 1024)} KB
+                  </span>
+                )}
+              </div>
+              <div className="flex flex-wrap gap-2">
+                <button
+                  type="button"
+                  disabled={generatingImage}
+                  onClick={() => void generateMstDesignImage(layout, actions, false)}
+                  className="inline-flex items-center gap-1.5 rounded-lg bg-amber-600 hover:bg-amber-700 px-3 py-1.5 text-xs font-bold text-white shadow-xs transition disabled:opacity-50 cursor-pointer"
+                >
+                  <RefreshCw className={`h-3.5 w-3.5 ${generatingImage ? 'animate-spin' : ''}`} />
+                  <span>{generatingImage ? '生成中…' : 'MSTデザイン画像を再生成'}</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => fileRef.current?.click()}
+                  className="inline-flex items-center gap-1.5 rounded-lg border border-slate-300 bg-white hover:bg-slate-100 px-3 py-1.5 text-xs font-semibold text-slate-700 shadow-xs transition cursor-pointer"
+                >
+                  <Upload className="h-3.5 w-3.5" />
+                  <span>画像ファイルを選択（PNG/JPEG・1MB以下）</span>
+                </button>
+                {image && (
+                  <button
+                    type="button"
+                    onClick={downloadImage}
+                    className="inline-flex items-center gap-1.5 rounded-lg border border-slate-300 bg-white hover:bg-slate-100 px-3 py-1.5 text-xs font-semibold text-slate-700 shadow-xs transition cursor-pointer"
                   >
-                    <option value="uri">URLを開く</option>
-                    <option value="message">テキストを送る</option>
-                  </select>
-                  <input
-                    value={a.value}
-                    maxLength={1000}
-                    onChange={(e) =>
-                      setActions((v) => v.map((x, j) => (j === i ? { ...x, value: e.target.value } : x)))
-                    }
-                    placeholder={a.type === 'uri' ? 'https://example.com' : '送信するテキスト'}
-                    className="w-full rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 text-xs text-slate-900 shadow-xs focus:outline-none focus:border-emerald-500"
-                  />
-                </div>
-              ))}
+                    <Download className="h-3.5 w-3.5" />
+                    <span>画像をダウンロード</span>
+                  </button>
+                )}
+              </div>
+              <input
+                ref={fileRef}
+                type="file"
+                accept="image/png,image/jpeg"
+                className="hidden"
+                onChange={(e) => chooseImage(e.target.files?.[0])}
+              />
+            </div>
+
+            {/* タッチ領域設定カード */}
+            <div className="grid grid-cols-1 gap-2.5 sm:grid-cols-2">
+              {actions.map((a, i) => {
+                const bounds = layoutBounds[i];
+                const isWideHero = bounds && bounds.width >= 1400;
+                return (
+                  <div
+                    key={i}
+                    className={`rounded-xl border p-3 shadow-xs ${
+                      isWideHero
+                        ? 'sm:col-span-2 border-blue-200 bg-blue-50/40'
+                        : 'border-slate-200 bg-slate-50/70'
+                    }`}
+                  >
+                    <div className="mb-2 flex items-center justify-between gap-2">
+                      <span className="text-xs font-bold text-slate-800">
+                        領域 {i + 1}
+                        {isWideHero && (
+                          <span className="ml-1.5 rounded bg-blue-100 px-1.5 py-0.5 text-[10px] font-bold text-blue-800">
+                            特大枠
+                          </span>
+                        )}
+                      </span>
+                      {bounds && (
+                        <span className="text-[10px] font-mono text-slate-500">
+                          幅{bounds.width} × 高{bounds.height} px
+                        </span>
+                      )}
+                    </div>
+                    <input
+                      value={a.label}
+                      maxLength={20}
+                      onChange={(e) =>
+                        setActions((v) => v.map((x, j) => (j === i ? { ...x, label: e.target.value } : x)))
+                      }
+                      placeholder="表示名（20文字以内）"
+                      className="mb-2 w-full rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 text-xs text-slate-900 shadow-xs focus:outline-none focus:border-emerald-500"
+                    />
+                    <select
+                      value={a.type}
+                      onChange={(e) =>
+                        setActions((v) =>
+                          v.map((x, j) => (j === i ? { ...x, type: e.target.value as Action['type'] } : x))
+                        )
+                      }
+                      className="mb-2 w-full rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 text-xs text-slate-900 shadow-xs focus:outline-none focus:border-emerald-500"
+                    >
+                      <option value="uri">URLを開く</option>
+                      <option value="message">テキストを送る</option>
+                    </select>
+                    <input
+                      value={a.value}
+                      maxLength={1000}
+                      onChange={(e) =>
+                        setActions((v) => v.map((x, j) => (j === i ? { ...x, value: e.target.value } : x)))
+                      }
+                      placeholder={a.type === 'uri' ? 'https://example.com' : '送信するテキスト'}
+                      className="w-full rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 text-xs text-slate-900 font-mono shadow-xs focus:outline-none focus:border-emerald-500"
+                    />
+                    {a.type === 'message' && a.value.trim() === '【LINEで相談したい】' && (
+                      <p className="mt-1.5 text-[10px] font-medium text-emerald-700">
+                        ⚡ 導線フローのキーワード自動応答「【LINEで相談したい】」と完全一致で連動します
+                      </p>
+                    )}
+                  </div>
+                );
+              })}
             </div>
           </div>
-          <div>
-            <div className="mb-2 text-xs font-semibold text-slate-700">
-              プレビュー（{selectedLayout.label}）
+
+          {/* プレビュー ＆ ピクセル目安 */}
+          <div className="space-y-3">
+            <div className="flex items-center justify-between gap-2">
+              <div className="text-xs font-semibold text-slate-700">
+                プレビュー（{selectedLayout.label}）
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowOverlayGuide((v) => !v)}
+                className="inline-flex items-center gap-1 rounded-lg border border-slate-200 bg-slate-50 hover:bg-slate-100 px-2.5 py-1 text-[11px] font-semibold text-slate-600 transition cursor-pointer"
+              >
+                {showOverlayGuide ? <EyeOff className="h-3.5 w-3.5" /> : <Eye className="h-3.5 w-3.5" />}
+                <span>{showOverlayGuide ? '分割枠・px目安を隠す' : '分割枠・px目安を表示'}</span>
+              </button>
             </div>
-            <div className="relative aspect-[2500/1686] overflow-hidden rounded-xl bg-slate-100 border border-slate-200 shadow-inner">
+
+            <div className="relative aspect-[2500/1686] overflow-hidden rounded-xl bg-slate-900 border border-slate-200 shadow-inner">
               {image && (
                 <img
                   src={image.url}
@@ -383,31 +637,61 @@ export const MarketingLineSettingsView: React.FC<MarketingLineSettingsViewProps>
                   className="absolute inset-0 h-full w-full object-fill"
                 />
               )}
-              <div
-                className="absolute inset-0 grid"
-                style={{
-                  gridTemplateColumns: 'repeat(' + selectedLayout.columns + ',minmax(0,1fr))',
-                  gridTemplateRows: 'repeat(' + selectedLayout.rows + ',minmax(0,1fr))',
-                }}
-              >
-                {actions.map((a, i) => (
-                  <div
-                    key={i}
-                    className="flex items-center justify-center border border-white/60 bg-purple-900/20 text-center text-xs font-bold text-white [text-shadow:0_1px_3px_#000]"
-                  >
-                    {a.label}
-                  </div>
-                ))}
-              </div>
+              {showOverlayGuide && (
+                <div className="absolute inset-0">
+                  {actions.map((a, i) => {
+                    const bounds = layoutBounds[i];
+                    if (!bounds) return null;
+                    const posStyle = getRichMenuCellStylePercent(bounds);
+                    return (
+                      <div
+                        key={i}
+                        style={posStyle}
+                        className="absolute flex flex-col items-center justify-center border border-dashed border-amber-300/80 bg-slate-950/35 px-1.5 text-center backdrop-blur-[0.5px]"
+                      >
+                        <span className="rounded bg-amber-400/95 px-1.5 py-0.5 text-[10px] font-extrabold text-slate-950 shadow-xs">
+                          #{i + 1} {a.label}
+                        </span>
+                        <span className="mt-1 rounded bg-slate-950/75 px-1.5 py-0.5 text-[9px] font-mono font-medium text-white">
+                          幅{bounds.width} × 高{bounds.height} px
+                        </span>
+                        <span className="mt-0.5 text-[9px] font-medium text-emerald-200 [text-shadow:0_1px_2px_#000]">
+                          {a.type === 'uri' ? 'URLを開く' : 'テキスト送信'}
+                        </span>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
               {!image && (
                 <div className="absolute inset-0 flex items-center justify-center text-sm text-slate-400">
                   画像プレビュー
                 </div>
               )}
             </div>
-            <p className="mt-2 text-[11px] text-slate-400">
-              画像は2500×1686 pxです。選択したレイアウトに合わせて領域を配置します。
-            </p>
+
+            {/* 領域別サイズ＆座標一覧（デザイナー・画像差し替え用） */}
+            <div className="rounded-xl border border-slate-200 bg-slate-50/70 p-3 space-y-2">
+              <div className="text-[11px] font-bold text-slate-700">
+                画像作成・タップ座標の目安（全体 {RICH_MENU_WIDTH} × {RICH_MENU_HEIGHT} px）
+              </div>
+              <div className="grid grid-cols-1 gap-1.5 sm:grid-cols-2">
+                {layoutBounds.map((bounds, idx) => (
+                  <div
+                    key={idx}
+                    className="flex items-center justify-between rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 text-[11px]"
+                  >
+                    <span className="font-semibold text-slate-700 truncate pr-2">
+                      #{idx + 1} {actions[idx]?.label || `領域${idx + 1}`}
+                    </span>
+                    <span className="font-mono text-[10px] text-slate-500 shrink-0">
+                      {bounds.width}×{bounds.height} px
+                    </span>
+                  </div>
+                ))}
+              </div>
+            </div>
+
             {currentId && (
               <p className="mt-2 break-all text-xs text-emerald-700 font-medium">
                 現在のリッチメニューID: {currentId}
@@ -415,7 +699,11 @@ export const MarketingLineSettingsView: React.FC<MarketingLineSettingsViewProps>
             )}
           </div>
         </div>
-        <div className="pt-2 border-t border-slate-100">
+
+        <div className="pt-3 border-t border-slate-100 flex flex-wrap items-center justify-between gap-3">
+          <p className="text-xs text-slate-500">
+            ※ ラベルを変更した場合は「MSTデザイン画像を再生成」を押すと画像内のタイトル文字も更新されます。
+          </p>
           <button
             disabled={busy}
             onClick={() => void apply()}
