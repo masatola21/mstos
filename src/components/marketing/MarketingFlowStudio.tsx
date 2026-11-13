@@ -46,7 +46,14 @@ import {
 } from '../../utils/salesOutreachTemplates';
 import { LineMessagePreview } from '../LineMessagePreview';
 import { renderPlaceholders, PLACEHOLDER_SAMPLE_VALUES } from '../../utils/placeholders';
-import { DEFAULT_WELCOME_CHOICES, WelcomeChoice } from './MarketingLineSettingsView';
+import {
+  DEFAULT_WELCOME_CHOICES,
+  DEFAULT_WELCOME_PATTERN_A,
+  DEFAULT_WELCOME_PATTERN_B,
+  WelcomeChoice,
+  WelcomePatternAConfig,
+  WelcomePatternBConfig,
+} from './MarketingLineSettingsView';
 import { getSupabase } from '../../lib/supabaseClient';
 import { FlowStepInspectorModal } from './FlowStepInspectorModal';
 import { UNIFIED_TAG_MASTER, MasterTag } from '../../constants/tagMaster';
@@ -158,10 +165,10 @@ export const MarketingFlowStudio: React.FC<MarketingFlowStudioProps> = ({
   const db = getSupabase();
   const [activeTrack, setActiveTrack] = useState<FlowTrack>('line_welcome');
   const [selectedIndustry, setSelectedIndustry] = useState<string>(PRIORITY_INDUSTRY_KEYS[0]);
-  const [expandedBranch, setExpandedBranch] = useState<'diagnosis' | 'consult' | 'care' | 'all'>('all');
+  const [expandedBranch, setExpandedBranch] = useState<'diagnosis' | 'consult' | 'care' | 'nurturing' | 'all'>('all');
   const [previewModalScenario, setPreviewModalScenario] = useState<ScenarioPreviewInfo | null>(null);
 
-  // ─── LINEウェルカム設定用状態（単一の正本 / Single source of truth） ───
+  // ─── LINEウェルカム・分岐パターンA/B設定用状態（単一の正本 / Single source of truth） ───
   const [welcomeHeading, setWelcomeHeading] = useState('大橋真人です。');
   const [welcomeSubheading, setWelcomeSubheading] = useState('LINE登録ありがとうございます。');
   const [welcomeIntro, setWelcomeIntro] = useState(
@@ -169,13 +176,18 @@ export const MarketingFlowStudio: React.FC<MarketingFlowStudioProps> = ({
   );
   const [welcomeQuestion, setWelcomeQuestion] = useState('まず、どのようなご相談をご希望ですか？');
   const [welcomeInstruction, setWelcomeInstruction] = useState('ご希望に近いものをお選びください');
-  
+
   // 選択肢（ボタン文面・アクション・色）
   const [welcomeChoices, setWelcomeChoices] = useState<Array<WelcomeChoice & { actionType?: 'postback' | 'uri'; uri?: string; color?: string }>>([
     { id: 'diagnosis', label: '📊 3分無料経営診断を受ける', tag: '選択:診断', route: 'form', formSlug: 'business-diagnosis', actionType: 'postback', color: '#10B981' },
     { id: 'consult', label: '🗓️ 経営改善について個別相談する', tag: '選択:個別相談', route: 'chat', actionType: 'postback', color: '#1E3A5F' },
     { id: 'care', label: '🌿 介護保険外サービスの開業相談', tag: '介護保険外開業', route: 'care_interactive', actionType: 'postback', color: '#0284C7' },
   ]);
+  const [patternAConfig, setPatternAConfig] = useState<WelcomePatternAConfig>(DEFAULT_WELCOME_PATTERN_A);
+  const [patternBConfig, setPatternBConfig] = useState<WelcomePatternBConfig>(DEFAULT_WELCOME_PATTERN_B);
+  const [isEditingPatternA, setIsEditingPatternA] = useState(false);
+  const [isEditingPatternB, setIsEditingPatternB] = useState(false);
+  const [patternBEditTab, setPatternBEditTab] = useState<'q1' | 'q2' | 'completion'>('q1');
   const [welcomeEnabled, setWelcomeEnabled] = useState(true);
   const [welcomeRuleId, setWelcomeRuleId] = useState<string | null>(null);
   const [isEditingWelcome, setIsEditingWelcome] = useState(false);
@@ -238,6 +250,185 @@ export const MarketingFlowStudio: React.FC<MarketingFlowStudioProps> = ({
           ...buttons,
         ],
       },
+    };
+  };
+
+  // パターンAプレビュー用Flex生成
+  const buildPatternAFlexBubble = (cfg: WelcomePatternAConfig) => {
+    const sampleName = PLACEHOLDER_SAMPLE_VALUES.recipient_name || '株式会社サンプル 担当者';
+    const greetingText = renderPlaceholders(cfg.greetingBody, { ...PLACEHOLDER_SAMPLE_VALUES, recipient_name: sampleName });
+    const bookingLabel = (cfg.bookingButtonLabel || '').trim().slice(0, 20);
+    return {
+      type: 'bubble',
+      body: {
+        type: 'box',
+        layout: 'vertical',
+        spacing: 'md',
+        contents: [
+          { type: 'text', text: cfg.title || '🗓️ 経営改善の個別相談', weight: 'bold', size: 'lg', color: '#1E293B', wrap: true },
+          { type: 'text', text: greetingText, size: 'sm', color: '#334155', wrap: true },
+          {
+            type: 'box',
+            layout: 'vertical',
+            backgroundColor: '#F8FAFC',
+            cornerRadius: 'md',
+            paddingAll: 'md',
+            margin: 'md',
+            contents: [
+              { type: 'text', text: cfg.promptTitle, size: 'xs', weight: 'bold', color: '#1E3A5F', wrap: true },
+              ...(cfg.promptExamples ? [{ type: 'text', text: cfg.promptExamples, size: 'xxs', color: '#64748B', margin: 'xs', wrap: true }] : []),
+            ],
+          },
+          ...(cfg.footerNote ? [{ type: 'text', text: cfg.footerNote, size: 'xs', color: '#475569', wrap: true }] : []),
+        ],
+      },
+      ...(bookingLabel
+        ? {
+            footer: {
+              type: 'box',
+              layout: 'vertical',
+              contents: [
+                {
+                  type: 'button',
+                  style: 'primary',
+                  color: '#1E3A5F',
+                  action: {
+                    type: 'uri',
+                    label: bookingLabel,
+                    uri: PLACEHOLDER_SAMPLE_VALUES.booking_url || 'https://corp.mstcorp.info/booking',
+                  },
+                },
+              ],
+            },
+          }
+        : {}),
+    };
+  };
+
+  // パターンBプレビュー用Flex生成
+  const buildPatternBFlexBubble = (cfg: WelcomePatternBConfig, step: 'q1' | 'q2' | 'completion') => {
+    const sampleName = PLACEHOLDER_SAMPLE_VALUES.recipient_name || '株式会社サンプル 担当者';
+    if (step === 'q1') {
+      const greetingText = renderPlaceholders(cfg.q1.greeting, { ...PLACEHOLDER_SAMPLE_VALUES, recipient_name: sampleName });
+      return {
+        type: 'bubble',
+        body: {
+          type: 'box',
+          layout: 'vertical',
+          spacing: 'md',
+          contents: [
+            { type: 'text', text: cfg.q1.title, weight: 'bold', size: 'lg', color: '#0284C7', wrap: true },
+            { type: 'text', text: greetingText, size: 'sm', color: '#334155', wrap: true },
+            { type: 'separator', margin: 'md' },
+            { type: 'text', text: cfg.q1.question, size: 'xs', weight: 'bold', color: '#0F172A', wrap: true },
+            ...cfg.q1.choices.map((c, idx) => ({
+              type: 'button',
+              style: 'primary',
+              color: c.color || (idx === 0 ? '#0284C7' : idx === 1 ? '#1E3A5F' : '#10B981'),
+              height: 'sm',
+              margin: idx === 0 ? 'md' : 'sm',
+              action: {
+                type: 'postback',
+                label: (c.label || `選択肢${idx + 1}`).slice(0, 20),
+                data: `care_q1=${c.value}`,
+                displayText: c.displayText || c.label,
+              },
+            })),
+          ],
+        },
+      };
+    }
+    if (step === 'q2') {
+      const sampleQ1 = cfg.q1.choices[0]?.label || '既存の介護・福祉事業者';
+      const introText = (cfg.q2.introTemplate || '').replace(/\{q1_label\}/g, sampleQ1);
+      return {
+        type: 'bubble',
+        body: {
+          type: 'box',
+          layout: 'vertical',
+          spacing: 'md',
+          contents: [
+            { type: 'text', text: cfg.q2.title, weight: 'bold', size: 'lg', color: '#0284C7', wrap: true },
+            { type: 'text', text: introText, size: 'sm', color: '#334155', wrap: true },
+            { type: 'separator', margin: 'md' },
+            ...cfg.q2.choices.map((c, idx) => ({
+              type: 'button',
+              style: 'secondary',
+              height: 'sm',
+              margin: idx === 0 ? 'md' : 'sm',
+              action: {
+                type: 'postback',
+                label: (c.label || `テーマ${idx + 1}`).slice(0, 20),
+                data: `care_q2=existing:${c.value}`,
+                displayText: c.displayText || c.label,
+              },
+            })),
+          ],
+        },
+      };
+    }
+    const sampleQ1 = cfg.q1.choices[0]?.label || '既存の介護・福祉事業者';
+    const sampleQ2 = cfg.q2.choices[0]?.label || '収益モデル・料金設定';
+    const footerButtons: any[] = [];
+    if ((cfg.completion.pdfButtonLabel || '').trim()) {
+      footerButtons.push({
+        type: 'button',
+        style: 'secondary',
+        height: 'sm',
+        action: {
+          type: 'uri',
+          label: cfg.completion.pdfButtonLabel.trim().slice(0, 20),
+          uri: (cfg.completion.pdfButtonUrl || '').trim() || 'https://assist-care.jp',
+        },
+      });
+    }
+    if ((cfg.completion.bookingButtonLabel || '').trim()) {
+      footerButtons.push({
+        type: 'button',
+        style: 'primary',
+        color: '#0284C7',
+        margin: footerButtons.length > 0 ? 'sm' : undefined,
+        action: {
+          type: 'uri',
+          label: cfg.completion.bookingButtonLabel.trim().slice(0, 20),
+          uri: PLACEHOLDER_SAMPLE_VALUES.booking_url || 'https://corp.mstcorp.info/booking',
+        },
+      });
+    }
+    return {
+      type: 'bubble',
+      body: {
+        type: 'box',
+        layout: 'vertical',
+        spacing: 'md',
+        contents: [
+          { type: 'text', text: cfg.completion.title, weight: 'bold', size: 'lg', color: '#0284C7', wrap: true },
+          { type: 'text', text: cfg.completion.greeting, size: 'sm', color: '#334155', wrap: true },
+          {
+            type: 'box',
+            layout: 'vertical',
+            backgroundColor: '#F0F9FF',
+            cornerRadius: 'md',
+            paddingAll: 'md',
+            margin: 'sm',
+            contents: [
+              { type: 'text', text: `・現在の状況: ${sampleQ1}`, size: 'xs', color: '#0369A1', weight: 'bold', wrap: true },
+              { type: 'text', text: `・関心テーマ: ${sampleQ2}`, size: 'xs', color: '#0369A1', weight: 'bold', margin: 'xs', wrap: true },
+            ],
+          },
+          { type: 'text', text: cfg.completion.body, size: 'xs', color: '#475569', wrap: true, margin: 'sm' },
+        ],
+      },
+      ...(footerButtons.length > 0
+        ? {
+            footer: {
+              type: 'box',
+              layout: 'vertical',
+              spacing: 'sm',
+              contents: footerButtons,
+            },
+          }
+        : {}),
     };
   };
 
@@ -319,6 +510,34 @@ export const MarketingFlowStudio: React.FC<MarketingFlowStudioProps> = ({
               });
               setWelcomeChoices(migratedChoices);
             }
+            if (payload.patternA && typeof payload.patternA === 'object') {
+              setPatternAConfig({
+                ...DEFAULT_WELCOME_PATTERN_A,
+                ...payload.patternA,
+              });
+            }
+            if (payload.patternB && typeof payload.patternB === 'object') {
+              setPatternBConfig({
+                q1: {
+                  ...DEFAULT_WELCOME_PATTERN_B.q1,
+                  ...(payload.patternB.q1 || {}),
+                  choices: Array.isArray(payload.patternB.q1?.choices) && payload.patternB.q1.choices.length > 0
+                    ? payload.patternB.q1.choices
+                    : DEFAULT_WELCOME_PATTERN_B.q1.choices,
+                },
+                q2: {
+                  ...DEFAULT_WELCOME_PATTERN_B.q2,
+                  ...(payload.patternB.q2 || {}),
+                  choices: Array.isArray(payload.patternB.q2?.choices) && payload.patternB.q2.choices.length > 0
+                    ? payload.patternB.q2.choices
+                    : DEFAULT_WELCOME_PATTERN_B.q2.choices,
+                },
+                completion: {
+                  ...DEFAULT_WELCOME_PATTERN_B.completion,
+                  ...(payload.patternB.completion || {}),
+                },
+              });
+            }
           }
         }
       } catch (e) {
@@ -328,8 +547,8 @@ export const MarketingFlowStudio: React.FC<MarketingFlowStudioProps> = ({
     void loadWelcome();
   }, [db]);
 
-  // ウェルカムメッセージの保存
-  const handleSaveWelcome = async () => {
+  // ウェルカム＆分岐パターンA/B設定の一括保存（単一の正本に統合保存）
+  const handleSaveWelcome = async (successMessage?: string) => {
     if (!db) return;
     setWelcomeSaving(true);
     setWelcomeNotice('');
@@ -361,6 +580,8 @@ export const MarketingFlowStudio: React.FC<MarketingFlowStudioProps> = ({
         altText: `${welcomeHeading} ${welcomeSubheading}`,
         contents: finalContents,
         choices: welcomeChoices,
+        patternA: patternAConfig,
+        patternB: patternBConfig,
       };
 
       const rowData = {
@@ -389,8 +610,10 @@ export const MarketingFlowStudio: React.FC<MarketingFlowStudioProps> = ({
         setWelcomeRuleId(upserted.id);
       }
 
-      setWelcomeNotice('友だち追加ウェルカムFlexメッセージを保存しました！LINE公式アカウントへ即時反映されます。');
+      setWelcomeNotice(successMessage || 'LINEウェルカム・分岐返信設定を保存しました！LINE公式アカウントへ即時反映されます。');
       setIsEditingWelcome(false);
+      setIsEditingPatternA(false);
+      setIsEditingPatternB(false);
       setTimeout(() => setWelcomeNotice(''), 5000);
     } catch (err: any) {
       setWelcomeNotice(`保存エラー: ${err?.message || '不明なエラー'}`);
@@ -567,12 +790,14 @@ export const MarketingFlowStudio: React.FC<MarketingFlowStudioProps> = ({
   const [inspectorScenario, setInspectorScenario] = useState<MarketingScenario | null>(null);
   const [isInspectorOpen, setIsInspectorOpen] = useState(false);
 
-  // シナリオの分類
+  // シナリオの分類（重複なく分岐A / B / C / 共通教育 / 営業メールへ振り分け）
   const diagnosisScenarios = useMemo(() => {
     return scenarios.filter(s =>
+      s.name.includes('【A') ||
       s.name.includes('診断') ||
       s.trigger.startsWith('diagnosis_') ||
       s.trigger.startsWith('report_') ||
+      s.targetTag === '選択:診断' ||
       s.name.includes('【1. 初回') ||
       s.name.includes('【2. 診断') ||
       s.name.includes('【3. レポート') ||
@@ -583,19 +808,27 @@ export const MarketingFlowStudio: React.FC<MarketingFlowStudioProps> = ({
 
   const consultScenarios = useMemo(() => {
     return scenarios.filter(s =>
-      s.name.includes('直相談') ||
-      s.name.includes('個別相談') ||
-      s.name.includes('面談') ||
-      s.trigger.includes('booking') ||
-      s.trigger.includes('meeting')
+      (s.name.includes('【B') ||
+        s.name.includes('直相談') ||
+        s.name.includes('個別相談') ||
+        s.name.includes('面談') ||
+        s.targetTag === '選択:個別相談' ||
+        s.trigger.includes('booking') ||
+        s.trigger.includes('meeting')) &&
+      !s.name.includes('診断') &&
+      !s.name.includes('介護') &&
+      !s.name.includes('【A') &&
+      !s.name.includes('【C')
     );
   }, [scenarios]);
 
   const careScenarios = useMemo(() => {
     return scenarios.filter(s =>
+      s.name.includes('【C') ||
       s.name.includes('介護') ||
       s.name.includes('保険外') ||
-      s.name.includes('開業')
+      s.name.includes('開業') ||
+      s.targetTag === '介護保険外開業'
     );
   }, [scenarios]);
 
@@ -603,7 +836,8 @@ export const MarketingFlowStudio: React.FC<MarketingFlowStudioProps> = ({
     return scenarios.filter(s =>
       s.name.includes('営業メール') ||
       s.name.includes('【営業') ||
-      (s.channel === 'email' && s.trigger === 'lead_created')
+      (s.channel === 'email' && s.trigger === 'lead_created') ||
+      s.trigger === 'outreach_first_sent'
     );
   }, [scenarios]);
 
@@ -622,40 +856,58 @@ export const MarketingFlowStudio: React.FC<MarketingFlowStudioProps> = ({
     setIsInspectorOpen(true);
   };
 
-  // 新規ステップ作成（現在開いているトラックに合わせて初期設定）
+  // 新規ステップ作成（現在開いているトラック・分岐に合わせて初期設定）
   const handleCreateNewStep = () => {
     const isOutreach = activeTrack === 'sales_outreach';
-    const isStory = activeTrack === 'story_nurturing';
-    const isConsult = activeTrack === 'direct_consult';
+    const isNurturing = !isOutreach && expandedBranch === 'nurturing';
+    const isConsult = !isOutreach && expandedBranch === 'consult';
+    const isCare = !isOutreach && expandedBranch === 'care';
+    const isDiagnosis = !isOutreach && expandedBranch === 'diagnosis';
 
-    const defaultChannel: MarketingChannel = isOutreach ? 'email' : isStory ? 'both' : 'line';
-    const defaultTrigger: MarketingTrigger = isOutreach ? 'lead_created' : isConsult ? 'booking_created' : 'line_registered';
+    const defaultChannel: MarketingChannel = isOutreach ? 'email' : isNurturing ? 'both' : 'line';
+    const defaultTrigger: MarketingTrigger = isOutreach
+      ? 'lead_created'
+      : isConsult || isCare || isDiagnosis
+      ? 'tag_added'
+      : 'line_registered';
+    const defaultTargetTag = isConsult
+      ? '選択:個別相談'
+      : isCare
+      ? '介護保険外開業'
+      : isDiagnosis
+      ? '選択:診断'
+      : undefined;
     const defaultName = isOutreach
       ? '【営業メール】業務改善・仕組み化のご案内'
-      : isStory
-      ? '【ナーチャリング】ストーリー配信'
+      : isNurturing
+      ? '【共通教育・追加話】ストーリーフォロー配信'
       : isConsult
-      ? '【直相談】個別面談フォロー案内'
+      ? '【B・親身フォロー】個別相談のご案内'
+      : isCare
+      ? '【C・専門教育】介護保険外開業のご案内'
+      : isDiagnosis
+      ? '【A・教育】無料経営診断フォロー'
       : '【LINE】フォロー配信ステップ';
 
     const newStep: MarketingScenario = {
       id: `step-${Date.now()}`,
       name: defaultName,
       trigger: defaultTrigger,
+      targetTag: defaultTargetTag,
       channel: defaultChannel,
-      audience: isOutreach ? '未接触の見込み企業' : 'すべての見込み客',
-      waitMinutes: 0,
-      emailSubject: isOutreach || isStory ? '【有限会社MST】業務改善・仕組み化のご案内' : '',
-      emailBody: isOutreach || isStory ? '{recipient_name} 様\n\n有限会社MSTの大橋です。\n本メールでは業務改革と利益改善の最新事例をご案内いたします。' : '',
-      messageBody: !isOutreach ? '{recipient_name} 様\nご案内をお届けいたします。\n\n▼詳細はこちら\n{link_url}' : '',
+      audience: isOutreach ? '未接触の見込み企業' : 'LINE友だち見込み客',
+      waitMinutes: isOutreach ? 0 : 1440,
+      emailSubject: isOutreach || isNurturing ? '【有限会社MST】業務改善・仕組み化のご案内' : '',
+      emailBody: isOutreach || isNurturing ? '{recipient_name} 様\n\n有限会社MSTの大橋です。\n本メールでは業務改革と利益改善の最新事例をご案内いたします。' : '',
+      messageBody: !isOutreach ? '{recipient_name} 様\nご案内をお届けいたします。\n\n▼30分無料オンライン相談はこちら\n{booking_url}' : '',
       lineMessageType: 'flex',
       lineImageUrl: '',
       linePreviewImageUrl: '',
-      flexAltText: '【ご案内】業務改善ロードマップ',
+      flexAltText: '【ご案内】業務改善・個別相談',
       flexTitle: '新しいご案内',
       flexBody: '{recipient_name} 様\nご案内をお届けいたします。',
-      flexButtonLabel: '詳細を見る',
-      flexButtonUrl: '{link_url}',
+      flexButtonLabel: '30分相談を予約する',
+      flexButtonUrl: '{booking_url}',
       status: 'draft',
       automationEnabled: false,
       stopOnBooking: true,
@@ -741,7 +993,7 @@ export const MarketingFlowStudio: React.FC<MarketingFlowStudioProps> = ({
               </span>
             </div>
             <p className="text-xs text-slate-500 leading-relaxed max-w-2xl">
-              目的別シナリオ（LINE導線・営業メール・ストーリー型・直相談）を即時切り替え＆編集。面談予約や返信が入った瞬間に自動停止し、安全に個別有人チャットへ移行します。
+              LINE友だち導線（親身な相談・教育→商談案内）と営業メールを一元管理。返信・予約が入った瞬間に自動停止し、安全に個別商談へ移行します。
             </p>
           </div>
 
@@ -784,7 +1036,7 @@ export const MarketingFlowStudio: React.FC<MarketingFlowStudioProps> = ({
                         className="w-full flex items-center gap-2 px-2.5 py-1.5 rounded-lg text-xs font-semibold text-slate-700 hover:bg-purple-50 hover:text-purple-700 transition cursor-pointer text-left"
                       >
                         <Zap className="h-3.5 w-3.5 text-purple-600 shrink-0" />
-                        <span>全18本の公式プリセットを最新化</span>
+                        <span>全公式プリセットを最新化</span>
                       </button>
                     )}
                     {onApplyDiagnosisStarterSet && (
@@ -794,7 +1046,27 @@ export const MarketingFlowStudio: React.FC<MarketingFlowStudioProps> = ({
                         className="w-full flex items-center gap-2 px-2.5 py-1.5 rounded-lg text-xs font-semibold text-slate-700 hover:bg-emerald-50 hover:text-emerald-700 transition cursor-pointer text-left"
                       >
                         <MessageCircle className="h-3.5 w-3.5 text-emerald-600 shrink-0" />
-                        <span>診断フォロー5本を適用</span>
+                        <span>分岐A: 診断×教育5本を適用</span>
+                      </button>
+                    )}
+                    {onApplyDirectConsultStarterSet && (
+                      <button
+                        type="button"
+                        onClick={() => { onApplyDirectConsultStarterSet(); setIsStarterOpen(false); }}
+                        className="w-full flex items-center gap-2 px-2.5 py-1.5 rounded-lg text-xs font-semibold text-slate-700 hover:bg-sky-50 hover:text-sky-700 transition cursor-pointer text-left"
+                      >
+                        <Calendar className="h-3.5 w-3.5 text-sky-600 shrink-0" />
+                        <span>分岐B・C: 相談・介護フォロー適用</span>
+                      </button>
+                    )}
+                    {onApplyLineNurturingStarterSet && (
+                      <button
+                        type="button"
+                        onClick={() => { onApplyLineNurturingStarterSet(); setIsStarterOpen(false); }}
+                        className="w-full flex items-center gap-2 px-2.5 py-1.5 rounded-lg text-xs font-semibold text-slate-700 hover:bg-purple-50 hover:text-purple-700 transition cursor-pointer text-left"
+                      >
+                        <BookOpen className="h-3.5 w-3.5 text-purple-600 shrink-0" />
+                        <span>共通教育: ストーリー7話を適用</span>
                       </button>
                     )}
                     {onApplyOutreachStarterSet && (
@@ -833,7 +1105,7 @@ export const MarketingFlowStudio: React.FC<MarketingFlowStudioProps> = ({
                   <h3 className="text-sm font-bold text-slate-900">配信シナリオの初期セットアップ</h3>
                 </div>
                 <p className="text-xs text-slate-600 mt-1 max-w-xl">
-                  現在シナリオが登録されていません。公式スターターセット（3分無料診断フォロー、営業メール5段階、ストーリー型育成など）を適用して初期設定を完了するか、新規ステップを作成してください。
+                  現在シナリオが登録されていません。公式スターターセット（LINE相談・教育フロー、営業メール5段階など）を適用して初期設定を完了するか、新規ステップを作成してください。
                 </p>
               </div>
               <div className="flex flex-wrap items-center gap-2">
@@ -844,7 +1116,7 @@ export const MarketingFlowStudio: React.FC<MarketingFlowStudioProps> = ({
                     className="inline-flex items-center gap-1.5 rounded-xl bg-purple-600 hover:bg-purple-700 px-4 py-2.5 text-xs font-bold text-white shadow-sm transition cursor-pointer"
                   >
                     <Zap className="h-4 w-4 text-purple-200" />
-                    <span>全18本公式プリセットを一括適用</span>
+                    <span>全公式プリセットを一括適用</span>
                   </button>
                 )}
                 {onApplyDiagnosisStarterSet && (
@@ -854,7 +1126,7 @@ export const MarketingFlowStudio: React.FC<MarketingFlowStudioProps> = ({
                     className="inline-flex items-center gap-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 px-3.5 py-2.5 text-xs font-bold text-white shadow-sm transition cursor-pointer"
                   >
                     <MessageCircle className="h-4 w-4 text-emerald-200" />
-                    <span>診断リマインド5本</span>
+                    <span>分岐A: 診断×教育5本</span>
                   </button>
                 )}
                 <button
@@ -870,9 +1142,9 @@ export const MarketingFlowStudio: React.FC<MarketingFlowStudioProps> = ({
           </div>
         )}
 
-        {/* 下段: 目的別 導線トラック切り替えリッチタブ */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-2.5">
-          {/* ① 診断フォロー */}
+        {/* 下段: 役割別 3つの統合ビュー切り替えタブ（重複を廃止し、LINE導線・営業メール・全一覧の3つに整理） */}
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
+          {/* ① LINE導線（相談・教育 → 商談） */}
           <button
             type="button"
             onClick={() => { setActiveTrack('line_welcome'); setViewMode('flow'); }}
@@ -885,14 +1157,14 @@ export const MarketingFlowStudio: React.FC<MarketingFlowStudioProps> = ({
             <div className="flex items-center justify-between">
               <span className={`flex items-center gap-1.5 font-bold text-xs ${activeTrack === 'line_welcome' && viewMode === 'flow' ? 'text-emerald-900' : 'text-slate-800'}`}>
                 <MessageCircle className={`w-3.5 h-3.5 ${activeTrack === 'line_welcome' && viewMode === 'flow' ? 'text-emerald-600' : 'text-slate-400 group-hover:text-emerald-600'}`} />
-                ① 診断フォロー
+                ① LINE導線（相談・教育 → 商談）
               </span>
               <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded ${activeTrack === 'line_welcome' && viewMode === 'flow' ? 'bg-emerald-100 text-emerald-800' : 'bg-slate-100 text-slate-600'}`}>
-                {diagnosisScenarios.length}件・Flex
+                分岐A/B/C＋教育{nurturingScenarios.length}話
               </span>
             </div>
             <div className="text-[11px] text-slate-500 group-hover:text-slate-700 mt-1.5 line-clamp-1">
-              LINE登録→診断→レポート→面談誘導
+              ウェルカム3択・パターンA/B編集・相談/教育から30分商談へ統合案内
             </div>
           </button>
 
@@ -909,62 +1181,14 @@ export const MarketingFlowStudio: React.FC<MarketingFlowStudioProps> = ({
             <div className="flex items-center justify-between">
               <span className={`flex items-center gap-1.5 font-bold text-xs ${activeTrack === 'sales_outreach' && viewMode === 'flow' ? 'text-blue-900' : 'text-slate-800'}`}>
                 <Mail className={`w-3.5 h-3.5 ${activeTrack === 'sales_outreach' && viewMode === 'flow' ? 'text-blue-600' : 'text-slate-400 group-hover:text-blue-600'}`} />
-                ② 営業メール
+                ② 営業メール（見込み企業開拓）
               </span>
               <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded ${activeTrack === 'sales_outreach' && viewMode === 'flow' ? 'bg-blue-100 text-blue-800' : 'bg-slate-100 text-slate-600'}`}>
                 {outreachScenarios.length}ステップ
               </span>
             </div>
             <div className="text-[11px] text-slate-500 group-hover:text-slate-700 mt-1.5 line-clamp-1">
-              業界急所提起→仕組み化事例→3分診断
-            </div>
-          </button>
-
-          {/* ③ ストーリー型 */}
-          <button
-            type="button"
-            onClick={() => { setActiveTrack('story_nurturing'); setViewMode('flow'); }}
-            className={`group flex flex-col justify-between p-3 rounded-xl border text-left transition cursor-pointer ${
-              activeTrack === 'story_nurturing' && viewMode === 'flow'
-                ? 'bg-purple-50 border-purple-500 shadow-xs ring-1 ring-purple-400'
-                : 'bg-white border-slate-200 hover:border-purple-300 hover:bg-slate-50/70'
-            }`}
-          >
-            <div className="flex items-center justify-between">
-              <span className={`flex items-center gap-1.5 font-bold text-xs ${activeTrack === 'story_nurturing' && viewMode === 'flow' ? 'text-purple-900' : 'text-slate-800'}`}>
-                <BookOpen className={`w-3.5 h-3.5 ${activeTrack === 'story_nurturing' && viewMode === 'flow' ? 'text-purple-600' : 'text-slate-400 group-hover:text-purple-600'}`} />
-                ③ ストーリー型
-              </span>
-              <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded ${activeTrack === 'story_nurturing' && viewMode === 'flow' ? 'bg-purple-100 text-purple-800' : 'bg-slate-100 text-slate-600'}`}>
-                {nurturingScenarios.length}話
-              </span>
-            </div>
-            <div className="text-[11px] text-slate-500 group-hover:text-slate-700 mt-1.5 line-clamp-1">
-              大橋真人実話・LINE+メルマガ共感重視
-            </div>
-          </button>
-
-          {/* ④ 直相談 */}
-          <button
-            type="button"
-            onClick={() => { setActiveTrack('direct_consult'); setViewMode('flow'); }}
-            className={`group flex flex-col justify-between p-3 rounded-xl border text-left transition cursor-pointer ${
-              activeTrack === 'direct_consult' && viewMode === 'flow'
-                ? 'bg-sky-50 border-sky-500 shadow-xs ring-1 ring-sky-400'
-                : 'bg-white border-slate-200 hover:border-sky-300 hover:bg-slate-50/70'
-            }`}
-          >
-            <div className="flex items-center justify-between">
-              <span className={`flex items-center gap-1.5 font-bold text-xs ${activeTrack === 'direct_consult' && viewMode === 'flow' ? 'text-sky-900' : 'text-slate-800'}`}>
-                <Calendar className={`w-3.5 h-3.5 ${activeTrack === 'direct_consult' && viewMode === 'flow' ? 'text-sky-600' : 'text-slate-400 group-hover:text-sky-600'}`} />
-                ④ 直相談（面談・介護）
-              </span>
-              <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded ${activeTrack === 'direct_consult' && viewMode === 'flow' ? 'bg-sky-100 text-sky-800' : 'bg-slate-100 text-slate-600'}`}>
-                {consultScenarios.length}件
-              </span>
-            </div>
-            <div className="text-[11px] text-slate-500 group-hover:text-slate-700 mt-1.5 line-clamp-1">
-              診断不要・即時30分面談案内Flex
+              見込み企業へのメール5段階（急所提起→仕組み化事例→3分診断）
             </div>
           </button>
 
@@ -981,14 +1205,14 @@ export const MarketingFlowStudio: React.FC<MarketingFlowStudioProps> = ({
             <div className="flex items-center justify-between">
               <span className={`flex items-center gap-1.5 font-bold text-xs ${viewMode === 'table' ? 'text-purple-900' : 'text-slate-800'}`}>
                 <Table className={`w-3.5 h-3.5 ${viewMode === 'table' ? 'text-purple-600' : 'text-slate-400 group-hover:text-purple-600'}`} />
-                全ステップ一覧
+                ③ 全ステップ一覧
               </span>
               <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded ${viewMode === 'table' ? 'bg-purple-100 text-purple-800' : 'bg-slate-100 text-slate-600'}`}>
                 {scenarios.length}件
               </span>
             </div>
             <div className="text-[11px] text-slate-500 group-hover:text-slate-700 mt-1.5 line-clamp-1">
-              全シナリオの横断検索・一括管理
+              全シナリオの横断検索・ON/OFF一括管理
             </div>
           </button>
         </div>
@@ -1615,31 +1839,60 @@ export const MarketingFlowStudio: React.FC<MarketingFlowStudioProps> = ({
               </div>
 
               <div className="lg:col-span-7 flex flex-col justify-center space-y-3 text-xs">
-                <div className="bg-white border border-slate-200 rounded-xl p-4 space-y-2 shadow-2xs">
-                  <h4 className="font-bold text-slate-900 flex items-center gap-2 text-sm">
-                    <Sparkles className="w-4 h-4 text-emerald-600" />
-                    ボタンタップ時の自動分岐・タグ付与仕様
-                  </h4>
+                <div className="bg-white border border-slate-200 rounded-xl p-4 space-y-2.5 shadow-2xs">
+                  <div className="flex items-center justify-between gap-2 flex-wrap">
+                    <h4 className="font-bold text-slate-900 flex items-center gap-2 text-sm">
+                      <Sparkles className="w-4 h-4 text-emerald-600" />
+                      LINE導線の全体設計：親身な相談 × 教育 → 最終ゴール（商談案内）
+                    </h4>
+                    <span className="text-[11px] font-bold px-2.5 py-0.5 rounded-full bg-amber-50 text-amber-800 border border-amber-200">
+                      🎯 最終ゴール: 30分個別相談・商談予約
+                    </span>
+                  </div>
                   <p className="text-slate-500 leading-relaxed">
-                    友だちが各ボタンをタップした瞬間に自動でタグが付与され、それぞれの後続フォローシナリオへ即座に分岐します。
+                    初日のウェルカム3択で興味に合わせた分岐（A/B/C）へ振り分け、未選択の友だちや検討中の見込み客は「2日後からの共通ストーリー教育（7話）」で育成して商談へつなぎます。
                   </p>
-                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 pt-1">
-                    <div className="p-2.5 rounded-lg bg-emerald-50 border border-emerald-200 text-emerald-800">
-                      <span className="font-bold block">① 診断ルート</span>
-                      <span className="text-[11px] opacity-90">タグ「選択:診断」付与</span>
-                    </div>
-                    <div className="p-2.5 rounded-lg bg-purple-50 border border-purple-200 text-purple-800">
-                      <span className="font-bold block">② 個別相談ルート</span>
-                      <span className="text-[11px] opacity-90">タグ「選択:個別相談」付与</span>
-                    </div>
-                    <div className="p-2.5 rounded-lg bg-sky-50 border border-sky-200 text-sky-800">
-                      <span className="font-bold block">③ 介護開業ルート</span>
-                      <span className="text-[11px] opacity-90">タグ「介護保険外開業」付与</span>
-                    </div>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2 pt-1">
+                    <button
+                      type="button"
+                      onClick={() => setExpandedBranch('diagnosis')}
+                      className="p-2.5 rounded-lg bg-emerald-50 border border-emerald-200 text-emerald-900 text-left hover:border-emerald-400 transition cursor-pointer"
+                    >
+                      <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-emerald-200/70 text-emerald-900">教育ルート</span>
+                      <span className="font-bold block mt-1">A. 診断×教育（5本）</span>
+                      <span className="text-[11px] opacity-85 block">タグ: 選択:診断</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setExpandedBranch('consult')}
+                      className="p-2.5 rounded-lg bg-purple-50 border border-purple-200 text-purple-900 text-left hover:border-purple-400 transition cursor-pointer"
+                    >
+                      <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-purple-200/70 text-purple-900">親身な相談ルート</span>
+                      <span className="font-bold block mt-1">B. 個別相談（パターンA）</span>
+                      <span className="text-[11px] opacity-85 block">タグ: 選択:個別相談</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setExpandedBranch('care')}
+                      className="p-2.5 rounded-lg bg-sky-50 border border-sky-200 text-sky-900 text-left hover:border-sky-400 transition cursor-pointer"
+                    >
+                      <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-sky-200/70 text-sky-900">相談×専門教育</span>
+                      <span className="font-bold block mt-1">C. 介護開業（パターンB）</span>
+                      <span className="text-[11px] opacity-85 block">タグ: 介護保険外開業</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setExpandedBranch('nurturing')}
+                      className="p-2.5 rounded-lg bg-indigo-50 border border-indigo-200 text-indigo-900 text-left hover:border-indigo-400 transition cursor-pointer"
+                    >
+                      <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-indigo-200/70 text-indigo-900">教育ルート（2日後〜）</span>
+                      <span className="font-bold block mt-1">共通ストーリー（7話）</span>
+                      <span className="text-[11px] opacity-85 block">未返信・未予約者を育成</span>
+                    </button>
                   </div>
                 </div>
 
-                <div className="flex items-center gap-2 pt-1">
+                <div className="flex items-center gap-2 pt-1 flex-wrap">
                   <span className="text-slate-500 font-medium">表示フィルタ:</span>
                   <button
                     type="button"
@@ -1648,7 +1901,7 @@ export const MarketingFlowStudio: React.FC<MarketingFlowStudioProps> = ({
                       expandedBranch === 'all' ? 'bg-purple-600 text-white shadow-xs' : 'bg-white border border-slate-200 text-slate-700 hover:bg-slate-100'
                     }`}
                   >
-                    すべての分岐を表示
+                    すべて表示
                   </button>
                   <button
                     type="button"
@@ -1657,7 +1910,7 @@ export const MarketingFlowStudio: React.FC<MarketingFlowStudioProps> = ({
                       expandedBranch === 'diagnosis' ? 'bg-emerald-600 text-white shadow-xs' : 'bg-white border border-slate-200 text-slate-700 hover:bg-slate-100'
                     }`}
                   >
-                    ① 診断のみ
+                    A: 診断×教育
                   </button>
                   <button
                     type="button"
@@ -1666,7 +1919,7 @@ export const MarketingFlowStudio: React.FC<MarketingFlowStudioProps> = ({
                       expandedBranch === 'consult' ? 'bg-purple-600 text-white shadow-xs' : 'bg-white border border-slate-200 text-slate-700 hover:bg-slate-100'
                     }`}
                   >
-                    ② 個別相談のみ
+                    B: 個別相談(A)
                   </button>
                   <button
                     type="button"
@@ -1675,7 +1928,16 @@ export const MarketingFlowStudio: React.FC<MarketingFlowStudioProps> = ({
                       expandedBranch === 'care' ? 'bg-sky-600 text-white shadow-xs' : 'bg-white border border-slate-200 text-slate-700 hover:bg-slate-100'
                     }`}
                   >
-                    ③ 介護開業のみ
+                    C: 介護開業(B)
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setExpandedBranch('nurturing')}
+                    className={`px-3 py-1 rounded-lg text-xs font-semibold cursor-pointer transition ${
+                      expandedBranch === 'nurturing' ? 'bg-indigo-600 text-white shadow-xs' : 'bg-white border border-slate-200 text-slate-700 hover:bg-slate-100'
+                    }`}
+                  >
+                    📖 共通教育(7話)
                   </button>
                 </div>
               </div>
@@ -1772,7 +2034,7 @@ export const MarketingFlowStudio: React.FC<MarketingFlowStudioProps> = ({
             </div>
           </div>
 
-          {/* 分岐 A: 📊 3分無料経営診断 導線ツリー */}
+          {/* 分岐 A: 📊 3分無料経営診断 × 教育ルート → 商談案内 */}
           {(expandedBranch === 'all' || expandedBranch === 'diagnosis') && (
             <div className="bg-white border border-slate-200 rounded-2xl p-5 space-y-4 shadow-xs">
               <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-100 pb-3">
@@ -1781,14 +2043,17 @@ export const MarketingFlowStudio: React.FC<MarketingFlowStudioProps> = ({
                     A
                   </span>
                   <div>
-                    <h4 className="text-base font-bold text-slate-900 flex items-center gap-2">
-                      分岐 A: 📊 3分無料経営診断・個別面談フォロー（全5ステップ）
+                    <h4 className="text-base font-bold text-slate-900 flex items-center gap-2 flex-wrap">
+                      分岐 A: 📊 3分無料経営診断 × 教育ルート → 商談案内
+                      <span className="text-[10px] px-2 py-0.5 rounded bg-emerald-100 text-emerald-800 border border-emerald-300 font-bold">
+                        教育・数値分析型
+                      </span>
                       <span className="text-xs px-2 py-0.5 rounded bg-emerald-50 text-emerald-700 border border-emerald-200">
                         {diagnosisScenarios.length} ステップ登録中
                       </span>
                     </h4>
                     <p className="text-xs text-slate-500">
-                      診断回答 ──→ 速報分析 ──→ レポート完成送付 ──→ 3日後・7日後の個別作戦会議フォロー
+                      タグ「選択:診断」未回答教育 ──→ 診断完了・速報分析 ──→ レポート送付 ──→ 3日後事例教育 ──→ 7日後 商談案内
                     </p>
                   </div>
                 </div>
@@ -1797,143 +2062,37 @@ export const MarketingFlowStudio: React.FC<MarketingFlowStudioProps> = ({
                   <button
                     type="button"
                     onClick={onApplyDiagnosisStarterSet}
-                    className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-xs font-bold transition cursor-pointer shadow-xs"
+                    className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-xs font-bold transition cursor-pointer shadow-xs shrink-0"
                   >
                     <Zap className="w-3.5 h-3.5 text-emerald-200" />
-                    <span>診断フォロー5本を最新化</span>
+                    <span>診断×教育5本を最新化</span>
                   </button>
                 )}
               </div>
 
-              <div className="space-y-3">
-                {diagnosisScenarios.map((scenario, index) => (
-                  <div
-                    key={scenario.id}
-                    className="bg-slate-50/60 border border-slate-200 hover:border-emerald-300 rounded-xl p-4 flex flex-col md:flex-row md:items-center justify-between gap-3 transition shadow-2xs"
-                  >
-                    <div className="flex items-start gap-3">
-                      <span className="w-6 h-6 rounded-full bg-emerald-100 text-emerald-800 font-bold text-xs flex items-center justify-center shrink-0 mt-0.5 border border-emerald-300">
-                        {index + 1}
-                      </span>
-                      <div className="space-y-1">
-                        <div className="flex items-center gap-2 flex-wrap">
-                          <span className="font-bold text-slate-900 text-sm">{scenario.name}</span>
-                          <span className="text-[10px] px-2 py-0.5 rounded bg-slate-100 text-slate-600 border border-slate-200 font-mono">
-                            {scenario.waitMinutes === 0 ? '即時実行' : `${Math.round(scenario.waitMinutes / 1440)}日後`}
-                          </span>
-                          <span className="text-[10px] px-2 py-0.5 rounded bg-emerald-50 text-emerald-700 border border-emerald-200 font-medium">
-                            {scenario.lineMessageType === 'flex' ? 'Flexカード' : 'テキスト'}
-                          </span>
-                        </div>
-                        <p className="text-xs text-slate-500 line-clamp-1">
-                          {scenario.flexTitle || scenario.messageBody || scenario.emailSubject || '文面未設定'}
-                        </p>
-                      </div>
-                    </div>
-
-                    <div className="flex items-center gap-2 self-end md:self-auto shrink-0">
-                      <button
-                        type="button"
-                        onClick={() => toggleScenarioAutomation(scenario.id, Boolean(scenario.automationEnabled))}
-                        className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition cursor-pointer ${
-                          scenario.automationEnabled
-                            ? 'bg-emerald-50 text-emerald-700 border border-emerald-300 hover:bg-emerald-100'
-                            : 'bg-white text-slate-600 border border-slate-200 hover:bg-slate-100'
-                        }`}
-                      >
-                        {scenario.automationEnabled ? (
-                          <>
-                            <Play className="w-3.5 h-3.5 text-emerald-600 fill-emerald-600" />
-                            <span>自動実行中</span>
-                          </>
-                        ) : (
-                          <>
-                            <Pause className="w-3.5 h-3.5 text-slate-400" />
-                            <span>一時停止中</span>
-                          </>
-                        )}
-                      </button>
-
-                      <button
-                        type="button"
-                        onClick={() => setPreviewModalScenario(scenario)}
-                        className="p-2 bg-white hover:bg-slate-100 text-slate-700 rounded-lg text-xs border border-slate-200 transition cursor-pointer shadow-2xs"
-                        title="文面プレビュー"
-                      >
-                        <Eye className="w-3.5 h-3.5" />
-                      </button>
-
-                      <button
-                        type="button"
-                        onClick={() => handleOpenInspector(scenario)}
-                        className="px-3 py-1.5 bg-purple-600 hover:bg-purple-700 text-white rounded-lg text-xs font-bold transition cursor-pointer flex items-center gap-1 shadow-xs"
-                      >
-                        <ShieldCheck className="w-3.5 h-3.5 text-purple-200" />
-                        <span>点検・編集</span>
-                      </button>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
-
-          {/* 分岐 B: 🗓️ 直相談・個別面談フォロー */}
-          {(expandedBranch === 'all' || expandedBranch === 'consult') && (
-            <div className="bg-white border border-slate-200 rounded-2xl p-5 space-y-4 shadow-xs">
-              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-100 pb-3">
-                <div className="flex items-center gap-2.5">
-                  <span className="p-2 rounded-xl bg-purple-100 text-purple-800 font-bold border border-purple-300">
-                    B
-                  </span>
-                  <div>
-                    <h4 className="text-base font-bold text-slate-900 flex items-center gap-2">
-                      分岐 B: 🗓️ 直相談・個別面談フォロー（全{consultScenarios.length}ステップ）
-                      <span className="text-xs px-2 py-0.5 rounded bg-purple-50 text-purple-700 border border-purple-200">
-                        {consultScenarios.length} ステップ登録中
-                      </span>
-                    </h4>
-                    <p className="text-xs text-slate-500">
-                      直相談受付 ──→ 日程調整（Google Meet自動発行） ──→ 面談前日リマインド ──→ 面談後次回アクション提案
-                    </p>
-                  </div>
-                </div>
-
-                {onApplyDirectConsultStarterSet && (
-                  <button
-                    type="button"
-                    onClick={onApplyDirectConsultStarterSet}
-                    className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-purple-600 hover:bg-purple-700 text-white rounded-lg text-xs font-bold transition cursor-pointer shadow-xs"
-                  >
-                    <Zap className="w-3.5 h-3.5 text-purple-200" />
-                    <span>直相談フォローを最新化</span>
-                  </button>
-                )}
-              </div>
-
-              {consultScenarios.length === 0 ? (
+              {diagnosisScenarios.length === 0 ? (
                 <div className="p-6 bg-slate-50 rounded-xl border border-dashed border-slate-200 text-center space-y-3">
-                  <p className="text-xs text-slate-500">直相談・個別面談フォローのシナリオがまだ登録されていません。</p>
-                  {onApplyDirectConsultStarterSet && (
+                  <p className="text-xs text-slate-500">分岐A（診断×教育）のシナリオがまだ登録されていません。</p>
+                  {onApplyDiagnosisStarterSet && (
                     <button
                       type="button"
-                      onClick={onApplyDirectConsultStarterSet}
-                      className="px-3.5 py-2 bg-purple-600 hover:bg-purple-700 text-white rounded-lg text-xs font-bold transition cursor-pointer inline-flex items-center gap-1.5 shadow-xs"
+                      onClick={onApplyDiagnosisStarterSet}
+                      className="px-3.5 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-xs font-bold transition cursor-pointer inline-flex items-center gap-1.5 shadow-xs"
                     >
                       <Plus className="w-3.5 h-3.5" />
-                      <span>直相談（30分無料面談）の標準シナリオを反映する</span>
+                      <span>診断×教育5本の標準シナリオを反映する</span>
                     </button>
                   )}
                 </div>
               ) : (
                 <div className="space-y-3">
-                  {consultScenarios.map((scenario, index) => (
+                  {diagnosisScenarios.map((scenario, index) => (
                     <div
                       key={scenario.id}
-                      className="bg-slate-50/60 border border-slate-200 hover:border-purple-300 rounded-xl p-4 flex flex-col md:flex-row md:items-center justify-between gap-3 transition shadow-2xs"
+                      className="bg-slate-50/60 border border-slate-200 hover:border-emerald-300 rounded-xl p-4 flex flex-col md:flex-row md:items-center justify-between gap-3 transition shadow-2xs"
                     >
                       <div className="flex items-start gap-3">
-                        <span className="w-6 h-6 rounded-full bg-purple-100 text-purple-800 font-bold text-xs flex items-center justify-center shrink-0 mt-0.5 border border-purple-300">
+                        <span className="w-6 h-6 rounded-full bg-emerald-100 text-emerald-800 font-bold text-xs flex items-center justify-center shrink-0 mt-0.5 border border-emerald-300">
                           {index + 1}
                         </span>
                         <div className="space-y-1">
@@ -1942,10 +2101,12 @@ export const MarketingFlowStudio: React.FC<MarketingFlowStudioProps> = ({
                             <span className="text-[10px] px-2 py-0.5 rounded bg-slate-100 text-slate-600 border border-slate-200 font-mono">
                               {scenario.waitMinutes === 0 ? '即時実行' : `${Math.round(scenario.waitMinutes / 1440)}日後`}
                             </span>
-                            <span className="text-[10px] px-2 py-0.5 rounded bg-purple-50 text-purple-700 border border-purple-200 font-medium">
-                              {scenario.channel === 'line' ? 'LINE' : scenario.channel === 'email' ? 'メール' : 'LINE+メール'}
-                            </span>
-                            <span className="text-[10px] px-2 py-0.5 rounded bg-slate-100 text-slate-500 font-medium">
+                            {scenario.trigger === 'tag_added' && scenario.targetTag && (
+                              <span className="text-[10px] px-2 py-0.5 rounded bg-amber-50 text-amber-800 border border-amber-200 font-mono">
+                                タグ: {scenario.targetTag}
+                              </span>
+                            )}
+                            <span className="text-[10px] px-2 py-0.5 rounded bg-emerald-50 text-emerald-700 border border-emerald-200 font-medium">
                               {scenario.lineMessageType === 'flex' ? 'Flexカード' : 'テキスト'}
                             </span>
                           </div>
@@ -2003,23 +2164,26 @@ export const MarketingFlowStudio: React.FC<MarketingFlowStudioProps> = ({
             </div>
           )}
 
-          {/* 分岐 C: 🌿 介護保険外サービス開業フォロー */}
-          {(expandedBranch === 'all' || expandedBranch === 'care') && (
+          {/* 分岐 B: 💬 経営改善・個別相談【パターンA：親身な相談ルート → 商談案内】 */}
+          {(expandedBranch === 'all' || expandedBranch === 'consult') && (
             <div className="bg-white border border-slate-200 rounded-2xl p-5 space-y-4 shadow-xs">
               <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-100 pb-3">
                 <div className="flex items-center gap-2.5">
-                  <span className="p-2 rounded-xl bg-sky-100 text-sky-800 font-bold border border-sky-300">
-                    C
+                  <span className="p-2 rounded-xl bg-purple-100 text-purple-800 font-bold border border-purple-300">
+                    B
                   </span>
                   <div>
-                    <h4 className="text-base font-bold text-slate-900 flex items-center gap-2">
-                      分岐 C: 🌿 介護保険外サービス開業フォロー（全{careScenarios.length}ステップ）
-                      <span className="text-xs px-2 py-0.5 rounded bg-sky-50 text-sky-700 border border-sky-200">
-                        {careScenarios.length} ステップ登録中
+                    <h4 className="text-base font-bold text-slate-900 flex items-center gap-2 flex-wrap">
+                      分岐 B: 💬 経営改善・個別相談（パターンA：親身な相談 → 商談案内）
+                      <span className="text-[10px] px-2 py-0.5 rounded bg-purple-100 text-purple-800 border border-purple-300 font-bold">
+                        親身な相談ルート
+                      </span>
+                      <span className="text-xs px-2 py-0.5 rounded bg-purple-50 text-purple-700 border border-purple-200">
+                        後続 {consultScenarios.length} ステップ
                       </span>
                     </h4>
                     <p className="text-xs text-slate-500">
-                      自費リハビリ・自費看護の実務モデル案内 ──→ 開業パッケージ概要 ──→ 専任相談日程調整
+                      「個別相談する」タップ（タグ: 選択:個別相談） ──→ 即時【パターンA】直通あいさつ ──→ 1日後 親身フォロー ──→ 3日後 商談案内
                     </p>
                   </div>
                 </div>
@@ -2028,103 +2192,1045 @@ export const MarketingFlowStudio: React.FC<MarketingFlowStudioProps> = ({
                   <button
                     type="button"
                     onClick={onApplyDirectConsultStarterSet}
-                    className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-sky-600 hover:bg-sky-700 text-white rounded-lg text-xs font-bold transition cursor-pointer shadow-xs"
+                    className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-purple-600 hover:bg-purple-700 text-white rounded-lg text-xs font-bold transition cursor-pointer shadow-xs shrink-0"
                   >
-                    <Zap className="w-3.5 h-3.5 text-sky-200" />
-                    <span>介護開業フォローを最新化</span>
+                    <Zap className="w-3.5 h-3.5 text-purple-200" />
+                    <span>相談・介護フォローを最新化</span>
                   </button>
                 )}
               </div>
 
-              {careScenarios.length === 0 ? (
-                <div className="p-6 bg-slate-50 rounded-xl border border-dashed border-slate-200 text-center space-y-3">
-                  <p className="text-xs text-slate-500">介護保険外サービス開業フォローのシナリオがまだ登録されていません。</p>
-                  {onApplyDirectConsultStarterSet && (
-                    <button
-                      type="button"
-                      onClick={onApplyDirectConsultStarterSet}
-                      className="px-3.5 py-2 bg-sky-600 hover:bg-sky-700 text-white rounded-lg text-xs font-bold transition cursor-pointer inline-flex items-center gap-1.5 shadow-xs"
-                    >
-                      <Plus className="w-3.5 h-3.5" />
-                      <span>介護開業パッケージ案内のシナリオを反映する</span>
-                    </button>
-                  )}
+              {/* パターンA インライン設定 & プレビュー */}
+              <div className="rounded-xl border border-purple-200 bg-purple-50/40 p-4 space-y-4">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                  <div className="space-y-0.5">
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-purple-600 text-white">
+                        タップ直後の即時返信（パターンA）
+                      </span>
+                      <span className="text-xs font-bold text-slate-900">
+                        LINE直通チャット個別相談カード
+                      </span>
+                    </div>
+                    <p className="text-[11px] text-slate-600">
+                      「経営改善について個別相談する」ボタンが押された瞬間に返信され、CRMに未対応リードを自動起票します。
+                    </p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setIsEditingPatternA(!isEditingPatternA)}
+                    className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition cursor-pointer shrink-0 ${
+                      isEditingPatternA
+                        ? 'bg-slate-200 text-slate-800 hover:bg-slate-300'
+                        : 'bg-purple-600 hover:bg-purple-700 text-white shadow-xs'
+                    }`}
+                  >
+                    <Edit3 className="w-3.5 h-3.5" />
+                    <span>{isEditingPatternA ? 'パターンA編集を閉じる' : '✍️ パターンA文面を編集'}</span>
+                  </button>
                 </div>
-              ) : (
-                <div className="space-y-3">
-                  {careScenarios.map((scenario, index) => (
-                    <div
-                      key={scenario.id}
-                      className="bg-slate-50/60 border border-slate-200 hover:border-sky-300 rounded-xl p-4 flex flex-col md:flex-row md:items-center justify-between gap-3 transition shadow-2xs"
-                    >
-                      <div className="flex items-start gap-3">
-                        <span className="w-6 h-6 rounded-full bg-sky-100 text-sky-800 font-bold text-xs flex items-center justify-center shrink-0 mt-0.5 border border-sky-300">
-                          {index + 1}
-                        </span>
-                        <div className="space-y-1">
-                          <div className="flex items-center gap-2 flex-wrap">
-                            <span className="font-bold text-slate-900 text-sm">{scenario.name}</span>
-                            <span className="text-[10px] px-2 py-0.5 rounded bg-slate-100 text-slate-600 border border-slate-200 font-mono">
-                              {scenario.waitMinutes === 0 ? '即時実行' : `${Math.round(scenario.waitMinutes / 1440)}日後`}
-                            </span>
-                            <span className="text-[10px] px-2 py-0.5 rounded bg-sky-50 text-sky-700 border border-sky-200 font-medium">
-                              {scenario.channel === 'line' ? 'LINE' : scenario.channel === 'email' ? 'メール' : 'LINE+メール'}
-                            </span>
-                            <span className="text-[10px] px-2 py-0.5 rounded bg-slate-100 text-slate-500 font-medium">
-                              {scenario.lineMessageType === 'flex' ? 'Flexカード' : 'テキスト'}
-                            </span>
-                          </div>
-                          <p className="text-xs text-slate-500 line-clamp-1">
-                            {scenario.flexTitle || scenario.messageBody || scenario.emailSubject || '文面未設定'}
-                          </p>
+
+                {isEditingPatternA ? (
+                  <div className="grid grid-cols-1 lg:grid-cols-12 gap-5 pt-2 border-t border-purple-200/70">
+                    <div className="lg:col-span-7 space-y-3 text-xs">
+                      <div>
+                        <label className="font-bold text-slate-700 block mb-1">カード見出し</label>
+                        <input
+                          type="text"
+                          value={patternAConfig.title}
+                          onChange={(e) => setPatternAConfig((prev) => ({ ...prev, title: e.target.value }))}
+                          className="w-full bg-white border border-slate-200 rounded-lg px-3 py-2 text-slate-900 focus:outline-none focus:border-purple-500"
+                        />
+                      </div>
+                      <div>
+                        <label className="font-bold text-slate-700 block mb-1">
+                          導入・挨拶文（<code className="text-purple-700">{'{recipient_name}'}</code> 差し込み可）
+                        </label>
+                        <textarea
+                          rows={4}
+                          value={patternAConfig.greetingBody}
+                          onChange={(e) => setPatternAConfig((prev) => ({ ...prev, greetingBody: e.target.value }))}
+                          className="w-full bg-white border border-slate-200 rounded-lg px-3 py-2 text-slate-900 leading-relaxed focus:outline-none focus:border-purple-500"
+                        />
+                      </div>
+                      <div className="p-3 bg-white rounded-lg border border-slate-200 space-y-2.5">
+                        <div>
+                          <label className="font-bold text-slate-700 block mb-1">ヒアリング問いかけ（強調ボックス内）</label>
+                          <textarea
+                            rows={2}
+                            value={patternAConfig.promptTitle}
+                            onChange={(e) => setPatternAConfig((prev) => ({ ...prev, promptTitle: e.target.value }))}
+                            className="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-1.5 text-slate-900 focus:outline-none focus:border-purple-500"
+                          />
+                        </div>
+                        <div>
+                          <label className="font-bold text-slate-700 block mb-1">相談例テキスト（補足）</label>
+                          <input
+                            type="text"
+                            value={patternAConfig.promptExamples}
+                            onChange={(e) => setPatternAConfig((prev) => ({ ...prev, promptExamples: e.target.value }))}
+                            className="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-1.5 text-slate-900 focus:outline-none focus:border-purple-500"
+                          />
                         </div>
                       </div>
-
-                      <div className="flex items-center gap-2 self-end md:self-auto shrink-0">
+                      <div>
+                        <label className="font-bold text-slate-700 block mb-1">下部案内メッセージ</label>
+                        <textarea
+                          rows={2}
+                          value={patternAConfig.footerNote}
+                          onChange={(e) => setPatternAConfig((prev) => ({ ...prev, footerNote: e.target.value }))}
+                          className="w-full bg-white border border-slate-200 rounded-lg px-3 py-2 text-slate-900 leading-relaxed focus:outline-none focus:border-purple-500"
+                        />
+                      </div>
+                      <div>
+                        <div className="flex items-center justify-between mb-1">
+                          <label className="font-bold text-slate-700">商談予約ボタンラベル（{`{booking_url}`} へリンク・20文字以内）</label>
+                          <span className={`text-[10px] font-mono ${patternAConfig.bookingButtonLabel.length > 20 ? 'text-rose-600 font-bold' : 'text-slate-400'}`}>
+                            {patternAConfig.bookingButtonLabel.length} / 20文字
+                          </span>
+                        </div>
+                        <input
+                          type="text"
+                          maxLength={20}
+                          value={patternAConfig.bookingButtonLabel}
+                          onChange={(e) => setPatternAConfig((prev) => ({ ...prev, bookingButtonLabel: e.target.value }))}
+                          placeholder="空欄にするとボタンを表示しません（例: 🗓️ 30分オンライン相談予約）"
+                          className="w-full bg-white border border-slate-200 rounded-lg px-3 py-2 text-slate-900 focus:outline-none focus:border-purple-500"
+                        />
+                      </div>
+                      <div className="flex items-center justify-between pt-2">
                         <button
                           type="button"
-                          onClick={() => toggleScenarioAutomation(scenario.id, Boolean(scenario.automationEnabled))}
-                          className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition cursor-pointer ${
-                            scenario.automationEnabled
-                              ? 'bg-emerald-50 text-emerald-700 border border-emerald-300 hover:bg-emerald-100'
-                              : 'bg-white text-slate-600 border border-slate-200 hover:bg-slate-100'
-                          }`}
+                          onClick={() => setPatternAConfig(DEFAULT_WELCOME_PATTERN_A)}
+                          className="text-slate-500 hover:text-slate-800 underline cursor-pointer text-[11px]"
                         >
-                          {scenario.automationEnabled ? (
-                            <>
-                              <Play className="w-3.5 h-3.5 text-emerald-600 fill-emerald-600" />
-                              <span>自動実行中</span>
-                            </>
-                          ) : (
-                            <>
-                              <Pause className="w-3.5 h-3.5 text-slate-400" />
-                              <span>一時停止中</span>
-                            </>
-                          )}
+                          初期テンプレートに戻す
                         </button>
-
-                        <button
-                          type="button"
-                          onClick={() => setPreviewModalScenario(scenario)}
-                          className="p-2 bg-white hover:bg-slate-100 text-slate-700 rounded-lg text-xs border border-slate-200 transition cursor-pointer shadow-2xs"
-                          title="文面プレビュー"
-                        >
-                          <Eye className="w-3.5 h-3.5" />
-                        </button>
-
-                        <button
-                          type="button"
-                          onClick={() => handleOpenInspector(scenario)}
-                          className="px-3 py-1.5 bg-sky-600 hover:bg-sky-700 text-white rounded-lg text-xs font-bold transition cursor-pointer flex items-center gap-1 shadow-xs"
-                        >
-                          <ShieldCheck className="w-3.5 h-3.5 text-sky-200" />
-                          <span>点検・編集</span>
-                        </button>
+                        <div className="flex items-center gap-2">
+                          <button
+                            type="button"
+                            onClick={() => setIsEditingPatternA(false)}
+                            className="px-3.5 py-1.5 bg-white hover:bg-slate-100 text-slate-700 border border-slate-200 rounded-lg text-xs font-medium cursor-pointer"
+                          >
+                            キャンセル
+                          </button>
+                          <button
+                            type="button"
+                            disabled={welcomeSaving}
+                            onClick={() => void handleSaveWelcome('パターンA（経営改善・個別相談）の設定を保存しました！')}
+                            className="px-4 py-1.5 bg-purple-600 hover:bg-purple-700 text-white font-bold rounded-lg text-xs transition cursor-pointer inline-flex items-center gap-1.5 shadow-xs disabled:opacity-50"
+                          >
+                            <Save className="w-3.5 h-3.5" />
+                            <span>{welcomeSaving ? '保存中…' : '保存してLINEに反映'}</span>
+                          </button>
+                        </div>
                       </div>
                     </div>
-                  ))}
+
+                    <div className="lg:col-span-5 flex flex-col items-center">
+                      <div className="w-full max-w-sm">
+                        <LineMessagePreview
+                          type="flex"
+                          payload={{
+                            altText: `【個別相談】${patternAConfig.title}`,
+                            contents: buildPatternAFlexBubble(patternAConfig),
+                          }}
+                          title="パターンA LINEプレビュー"
+                        />
+                      </div>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="grid grid-cols-1 lg:grid-cols-12 gap-4 items-center pt-1">
+                    <div className="lg:col-span-7 bg-white border border-slate-200 rounded-lg p-3.5 space-y-2 text-xs">
+                      <div className="flex items-center justify-between gap-2">
+                        <span className="font-bold text-slate-900">{patternAConfig.title}</span>
+                        <span className="text-[10px] px-2 py-0.5 rounded bg-emerald-50 text-emerald-700 border border-emerald-200 font-bold">
+                          タグ「選択:個別相談」＆ リード起票
+                        </span>
+                      </div>
+                      <p className="text-slate-600 whitespace-pre-line line-clamp-3 leading-relaxed">
+                        {patternAConfig.greetingBody}
+                      </p>
+                      <div className="p-2 rounded bg-slate-50 border border-slate-100 text-[11px] text-slate-700">
+                        {patternAConfig.promptTitle}
+                      </div>
+                      {patternAConfig.bookingButtonLabel && (
+                        <div className="text-[11px] text-purple-700 font-medium">
+                          下部CTAボタン: 「{patternAConfig.bookingButtonLabel}」 → {'{booking_url}'}
+                        </div>
+                      )}
+                    </div>
+                    <div className="lg:col-span-5">
+                      <LineMessagePreview
+                        type="flex"
+                        payload={{
+                          altText: `【個別相談】${patternAConfig.title}`,
+                          contents: buildPatternAFlexBubble(patternAConfig),
+                        }}
+                        title="パターンA 実機イメージ"
+                      />
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              {/* パターンAの後の自動フォロー（未返信時のみ） */}
+              <div className="space-y-2">
+                <div className="flex items-center justify-between flex-wrap gap-2 text-xs">
+                  <span className="font-bold text-slate-800">
+                    後続の自動フォロー・商談案内（お客様から返信・予約があれば自動停止）
+                  </span>
                 </div>
-              )}
+                {consultScenarios.length === 0 ? (
+                  <div className="p-5 bg-slate-50 rounded-xl border border-dashed border-slate-200 text-center space-y-2">
+                    <p className="text-xs text-slate-500">分岐Bの後続フォローシナリオがまだ登録されていません。</p>
+                    {onApplyDirectConsultStarterSet && (
+                      <button
+                        type="button"
+                        onClick={onApplyDirectConsultStarterSet}
+                        className="px-3.5 py-2 bg-purple-600 hover:bg-purple-700 text-white rounded-lg text-xs font-bold transition cursor-pointer inline-flex items-center gap-1.5 shadow-xs"
+                      >
+                        <Plus className="w-3.5 h-3.5" />
+                        <span>親身フォロー・商談案内の標準シナリオを反映する</span>
+                      </button>
+                    )}
+                  </div>
+                ) : (
+                  <div className="space-y-3">
+                    {consultScenarios.map((scenario, index) => (
+                      <div
+                        key={scenario.id}
+                        className="bg-slate-50/60 border border-slate-200 hover:border-purple-300 rounded-xl p-4 flex flex-col md:flex-row md:items-center justify-between gap-3 transition shadow-2xs"
+                      >
+                        <div className="flex items-start gap-3">
+                          <span className="w-6 h-6 rounded-full bg-purple-100 text-purple-800 font-bold text-xs flex items-center justify-center shrink-0 mt-0.5 border border-purple-300">
+                            {index + 1}
+                          </span>
+                          <div className="space-y-1">
+                            <div className="flex items-center gap-2 flex-wrap">
+                              <span className="font-bold text-slate-900 text-sm">{scenario.name}</span>
+                              <span className="text-[10px] px-2 py-0.5 rounded bg-slate-100 text-slate-600 border border-slate-200 font-mono">
+                                {scenario.waitMinutes === 0 ? '即時実行' : `${Math.round(scenario.waitMinutes / 1440)}日後`}
+                              </span>
+                              {scenario.trigger === 'tag_added' && scenario.targetTag && (
+                                <span className="text-[10px] px-2 py-0.5 rounded bg-amber-50 text-amber-800 border border-amber-200 font-mono">
+                                  タグ: {scenario.targetTag}
+                                </span>
+                              )}
+                              <span className="text-[10px] px-2 py-0.5 rounded bg-purple-50 text-purple-700 border border-purple-200 font-medium">
+                                {scenario.channel === 'line' ? 'LINE' : scenario.channel === 'email' ? 'メール' : 'LINE+メール'}
+                              </span>
+                            </div>
+                            <p className="text-xs text-slate-500 line-clamp-1">
+                              {scenario.flexTitle || scenario.messageBody || scenario.emailSubject || '文面未設定'}
+                            </p>
+                          </div>
+                        </div>
+
+                        <div className="flex items-center gap-2 self-end md:self-auto shrink-0">
+                          <button
+                            type="button"
+                            onClick={() => toggleScenarioAutomation(scenario.id, Boolean(scenario.automationEnabled))}
+                            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition cursor-pointer ${
+                              scenario.automationEnabled
+                                ? 'bg-emerald-50 text-emerald-700 border border-emerald-300 hover:bg-emerald-100'
+                                : 'bg-white text-slate-600 border border-slate-200 hover:bg-slate-100'
+                            }`}
+                          >
+                            {scenario.automationEnabled ? (
+                              <>
+                                <Play className="w-3.5 h-3.5 text-emerald-600 fill-emerald-600" />
+                                <span>自動実行中</span>
+                              </>
+                            ) : (
+                              <>
+                                <Pause className="w-3.5 h-3.5 text-slate-400" />
+                                <span>一時停止中</span>
+                              </>
+                            )}
+                          </button>
+
+                          <button
+                            type="button"
+                            onClick={() => setPreviewModalScenario(scenario)}
+                            className="p-2 bg-white hover:bg-slate-100 text-slate-700 rounded-lg text-xs border border-slate-200 transition cursor-pointer shadow-2xs"
+                            title="文面プレビュー"
+                          >
+                            <Eye className="w-3.5 h-3.5" />
+                          </button>
+
+                          <button
+                            type="button"
+                            onClick={() => handleOpenInspector(scenario)}
+                            className="px-3 py-1.5 bg-purple-600 hover:bg-purple-700 text-white rounded-lg text-xs font-bold transition cursor-pointer flex items-center gap-1 shadow-xs"
+                          >
+                            <ShieldCheck className="w-3.5 h-3.5 text-purple-200" />
+                            <span>点検・編集</span>
+                          </button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+
+          {/* 分岐 C: 🌿 介護保険外サービス開業【パターンB：2問ヒアリング × 専門教育 → 商談案内】 */}
+          {(expandedBranch === 'all' || expandedBranch === 'care') && (
+            <div className="bg-white border border-slate-200 rounded-2xl p-5 space-y-4 shadow-xs">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-100 pb-3">
+                <div className="flex items-center gap-2.5">
+                  <span className="p-2 rounded-xl bg-sky-100 text-sky-800 font-bold border border-sky-300">
+                    C
+                  </span>
+                  <div>
+                    <h4 className="text-base font-bold text-slate-900 flex items-center gap-2 flex-wrap">
+                      分岐 C: 🌿 介護保険外サービス開業（パターンB：2問ヒアリング × 専門教育 → 商談案内）
+                      <span className="text-[10px] px-2 py-0.5 rounded bg-sky-100 text-sky-800 border border-sky-300 font-bold">
+                        相談×専門教育ルート
+                      </span>
+                      <span className="text-xs px-2 py-0.5 rounded bg-sky-50 text-sky-700 border border-sky-200">
+                        後続 {careScenarios.length} ステップ
+                      </span>
+                    </h4>
+                    <p className="text-xs text-slate-500">
+                      「開業相談」タップ（タグ: 介護保険外開業） ──→ 即時【パターンB】Q1状況→Q2テーマ→完了カード ──→ 1日後 事例教育 ──→ 3日後 商談案内
+                    </p>
+                  </div>
+                </div>
+
+                {onApplyDirectConsultStarterSet && (
+                  <button
+                    type="button"
+                    onClick={onApplyDirectConsultStarterSet}
+                    className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-sky-600 hover:bg-sky-700 text-white rounded-lg text-xs font-bold transition cursor-pointer shadow-xs shrink-0"
+                  >
+                    <Zap className="w-3.5 h-3.5 text-sky-200" />
+                    <span>相談・介護フォローを最新化</span>
+                  </button>
+                )}
+              </div>
+
+              {/* パターンB インライン設定 & プレビュー（Q1 / Q2 / 完了） */}
+              <div className="rounded-xl border border-sky-200 bg-sky-50/40 p-4 space-y-4">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                  <div className="space-y-0.5">
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-sky-600 text-white">
+                        タップ直後の2問クイックヒアリング（パターンB）
+                      </span>
+                      <span className="text-xs font-bold text-slate-900">
+                        Q1（現在の状況） → Q2（関心テーマ） → 完了カード＆商談導線
+                      </span>
+                    </div>
+                    <p className="text-[11px] text-slate-600">
+                      2タップで顧客の状況・関心をCRMへ記録しつつ、直営事業「アシスタ大垣」の実務ノウハウと商談・資料URLを案内します。
+                    </p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setIsEditingPatternB(!isEditingPatternB)}
+                    className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition cursor-pointer shrink-0 ${
+                      isEditingPatternB
+                        ? 'bg-slate-200 text-slate-800 hover:bg-slate-300'
+                        : 'bg-sky-600 hover:bg-sky-700 text-white shadow-xs'
+                    }`}
+                  >
+                    <Edit3 className="w-3.5 h-3.5" />
+                    <span>{isEditingPatternB ? 'パターンB編集を閉じる' : '✍️ パターンBを編集'}</span>
+                  </button>
+                </div>
+
+                {/* Q1 / Q2 / 完了タブ切り替え */}
+                <div className="flex items-center gap-1.5 bg-white p-1 rounded-lg border border-sky-200 w-fit text-xs">
+                  <button
+                    type="button"
+                    onClick={() => setPatternBEditTab('q1')}
+                    className={`px-3 py-1 rounded-md font-bold transition cursor-pointer ${
+                      patternBEditTab === 'q1' ? 'bg-sky-600 text-white shadow-2xs' : 'text-slate-600 hover:bg-slate-100'
+                    }`}
+                  >
+                    ① Q1 現在の状況
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setPatternBEditTab('q2')}
+                    className={`px-3 py-1 rounded-md font-bold transition cursor-pointer ${
+                      patternBEditTab === 'q2' ? 'bg-sky-600 text-white shadow-2xs' : 'text-slate-600 hover:bg-slate-100'
+                    }`}
+                  >
+                    ② Q2 関心テーマ
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setPatternBEditTab('completion')}
+                    className={`px-3 py-1 rounded-md font-bold transition cursor-pointer ${
+                      patternBEditTab === 'completion' ? 'bg-sky-600 text-white shadow-2xs' : 'text-slate-600 hover:bg-slate-100'
+                    }`}
+                  >
+                    ③ 完了カード＆商談導線
+                  </button>
+                </div>
+
+                {isEditingPatternB ? (
+                  <div className="grid grid-cols-1 lg:grid-cols-12 gap-5 pt-2 border-t border-sky-200/70">
+                    <div className="lg:col-span-7 space-y-3 text-xs">
+                      {patternBEditTab === 'q1' && (
+                        <>
+                          <div>
+                            <label className="font-bold text-slate-700 block mb-1">Q1 カード見出し</label>
+                            <input
+                              type="text"
+                              value={patternBConfig.q1.title}
+                              onChange={(e) =>
+                                setPatternBConfig((prev) => ({
+                                  ...prev,
+                                  q1: { ...prev.q1, title: e.target.value },
+                                }))
+                              }
+                              className="w-full bg-white border border-slate-200 rounded-lg px-3 py-2 text-slate-900 focus:outline-none focus:border-sky-500"
+                            />
+                          </div>
+                          <div>
+                            <label className="font-bold text-slate-700 block mb-1">
+                              Q1 挨拶・導入文（<code className="text-sky-700">{'{recipient_name}'}</code> 差し込み可）
+                            </label>
+                            <textarea
+                              rows={3}
+                              value={patternBConfig.q1.greeting}
+                              onChange={(e) =>
+                                setPatternBConfig((prev) => ({
+                                  ...prev,
+                                  q1: { ...prev.q1, greeting: e.target.value },
+                                }))
+                              }
+                              className="w-full bg-white border border-slate-200 rounded-lg px-3 py-2 text-slate-900 leading-relaxed focus:outline-none focus:border-sky-500"
+                            />
+                          </div>
+                          <div>
+                            <label className="font-bold text-slate-700 block mb-1">Q1 質問見出し</label>
+                            <input
+                              type="text"
+                              value={patternBConfig.q1.question}
+                              onChange={(e) =>
+                                setPatternBConfig((prev) => ({
+                                  ...prev,
+                                  q1: { ...prev.q1, question: e.target.value },
+                                }))
+                              }
+                              className="w-full bg-white border border-slate-200 rounded-lg px-3 py-2 text-slate-900 focus:outline-none focus:border-sky-500"
+                            />
+                          </div>
+                          <div className="space-y-2">
+                            <label className="font-bold text-slate-700 block">Q1 選択肢ボタン（各20文字以内）</label>
+                            {patternBConfig.q1.choices.map((c, idx) => (
+                              <div key={c.value} className="p-2.5 bg-white rounded-lg border border-slate-200 space-y-2">
+                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                                  <div>
+                                    <div className="flex items-center justify-between text-[11px] mb-0.5">
+                                      <span className="text-slate-500 font-medium">ボタン表示文字</span>
+                                      <span className={`font-mono ${c.label.length > 20 ? 'text-rose-600 font-bold' : 'text-slate-400'}`}>
+                                        {c.label.length}/20
+                                      </span>
+                                    </div>
+                                    <input
+                                      type="text"
+                                      maxLength={20}
+                                      value={c.label}
+                                      onChange={(e) => {
+                                        const val = e.target.value;
+                                        setPatternBConfig((prev) => ({
+                                          ...prev,
+                                          q1: {
+                                            ...prev.q1,
+                                            choices: prev.q1.choices.map((item, i) => (i === idx ? { ...item, label: val } : item)),
+                                          },
+                                        }));
+                                      }}
+                                      className="w-full bg-slate-50 border border-slate-200 rounded px-2.5 py-1.5 text-slate-900"
+                                    />
+                                  </div>
+                                  <div>
+                                    <span className="text-slate-500 font-medium text-[11px] block mb-0.5">顧客側送信テキスト</span>
+                                    <input
+                                      type="text"
+                                      value={c.displayText}
+                                      onChange={(e) => {
+                                        const val = e.target.value;
+                                        setPatternBConfig((prev) => ({
+                                          ...prev,
+                                          q1: {
+                                            ...prev.q1,
+                                            choices: prev.q1.choices.map((item, i) => (i === idx ? { ...item, displayText: val } : item)),
+                                          },
+                                        }));
+                                      }}
+                                      className="w-full bg-slate-50 border border-slate-200 rounded px-2.5 py-1.5 text-slate-900"
+                                    />
+                                  </div>
+                                </div>
+                                <div className="flex items-center gap-1.5">
+                                  <span className="text-[11px] text-slate-500">色:</span>
+                                  {['#0284C7', '#1E3A5F', '#10B981', '#8B5CF6'].map((col) => (
+                                    <button
+                                      key={col}
+                                      type="button"
+                                      onClick={() =>
+                                        setPatternBConfig((prev) => ({
+                                          ...prev,
+                                          q1: {
+                                            ...prev.q1,
+                                            choices: prev.q1.choices.map((item, i) => (i === idx ? { ...item, color: col } : item)),
+                                          },
+                                        }))
+                                      }
+                                      style={{ backgroundColor: col }}
+                                      className={`w-4 h-4 rounded-full border-2 cursor-pointer ${
+                                        c.color === col ? 'border-slate-900 scale-110' : 'border-transparent opacity-65'
+                                      }`}
+                                    />
+                                  ))}
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        </>
+                      )}
+
+                      {patternBEditTab === 'q2' && (
+                        <>
+                          <div>
+                            <label className="font-bold text-slate-700 block mb-1">Q2 カード見出し</label>
+                            <input
+                              type="text"
+                              value={patternBConfig.q2.title}
+                              onChange={(e) =>
+                                setPatternBConfig((prev) => ({
+                                  ...prev,
+                                  q2: { ...prev.q2, title: e.target.value },
+                                }))
+                              }
+                              className="w-full bg-white border border-slate-200 rounded-lg px-3 py-2 text-slate-900 focus:outline-none focus:border-sky-500"
+                            />
+                          </div>
+                          <div>
+                            <label className="font-bold text-slate-700 block mb-1">
+                              Q2 案内文（<code className="text-sky-700">{'{q1_label}'}</code> にQ1の回答が入ります）
+                            </label>
+                            <textarea
+                              rows={3}
+                              value={patternBConfig.q2.introTemplate}
+                              onChange={(e) =>
+                                setPatternBConfig((prev) => ({
+                                  ...prev,
+                                  q2: { ...prev.q2, introTemplate: e.target.value },
+                                }))
+                              }
+                              className="w-full bg-white border border-slate-200 rounded-lg px-3 py-2 text-slate-900 leading-relaxed focus:outline-none focus:border-sky-500"
+                            />
+                          </div>
+                          <div className="space-y-2">
+                            <label className="font-bold text-slate-700 block">Q2 テーマ選択肢（各20文字以内）</label>
+                            {patternBConfig.q2.choices.map((c, idx) => (
+                              <div key={c.value} className="p-2.5 bg-white rounded-lg border border-slate-200 grid grid-cols-1 sm:grid-cols-2 gap-2">
+                                <div>
+                                  <div className="flex items-center justify-between text-[11px] mb-0.5">
+                                    <span className="text-slate-500 font-medium">ボタン表示文字</span>
+                                    <span className={`font-mono ${c.label.length > 20 ? 'text-rose-600 font-bold' : 'text-slate-400'}`}>
+                                      {c.label.length}/20
+                                    </span>
+                                  </div>
+                                  <input
+                                    type="text"
+                                    maxLength={20}
+                                    value={c.label}
+                                    onChange={(e) => {
+                                      const val = e.target.value;
+                                      setPatternBConfig((prev) => ({
+                                        ...prev,
+                                        q2: {
+                                          ...prev.q2,
+                                          choices: prev.q2.choices.map((item, i) => (i === idx ? { ...item, label: val } : item)),
+                                        },
+                                      }));
+                                    }}
+                                    className="w-full bg-slate-50 border border-slate-200 rounded px-2.5 py-1.5 text-slate-900"
+                                  />
+                                </div>
+                                <div>
+                                  <span className="text-slate-500 font-medium text-[11px] block mb-0.5">顧客側送信テキスト</span>
+                                  <input
+                                    type="text"
+                                    value={c.displayText}
+                                    onChange={(e) => {
+                                      const val = e.target.value;
+                                      setPatternBConfig((prev) => ({
+                                        ...prev,
+                                        q2: {
+                                          ...prev.q2,
+                                          choices: prev.q2.choices.map((item, i) => (i === idx ? { ...item, displayText: val } : item)),
+                                        },
+                                      }));
+                                    }}
+                                    className="w-full bg-slate-50 border border-slate-200 rounded px-2.5 py-1.5 text-slate-900"
+                                  />
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        </>
+                      )}
+
+                      {patternBEditTab === 'completion' && (
+                        <>
+                          <div>
+                            <label className="font-bold text-slate-700 block mb-1">完了カード見出し</label>
+                            <input
+                              type="text"
+                              value={patternBConfig.completion.title}
+                              onChange={(e) =>
+                                setPatternBConfig((prev) => ({
+                                  ...prev,
+                                  completion: { ...prev.completion, title: e.target.value },
+                                }))
+                              }
+                              className="w-full bg-white border border-slate-200 rounded-lg px-3 py-2 text-slate-900 focus:outline-none focus:border-sky-500"
+                            />
+                          </div>
+                          <div>
+                            <label className="font-bold text-slate-700 block mb-1">完了時の挨拶文</label>
+                            <textarea
+                              rows={2}
+                              value={patternBConfig.completion.greeting}
+                              onChange={(e) =>
+                                setPatternBConfig((prev) => ({
+                                  ...prev,
+                                  completion: { ...prev.completion, greeting: e.target.value },
+                                }))
+                              }
+                              className="w-full bg-white border border-slate-200 rounded-lg px-3 py-2 text-slate-900 focus:outline-none focus:border-sky-500"
+                            />
+                          </div>
+                          <div>
+                            <label className="font-bold text-slate-700 block mb-1">アドバイス・今後の案内文</label>
+                            <textarea
+                              rows={3}
+                              value={patternBConfig.completion.body}
+                              onChange={(e) =>
+                                setPatternBConfig((prev) => ({
+                                  ...prev,
+                                  completion: { ...prev.completion, body: e.target.value },
+                                }))
+                              }
+                              className="w-full bg-white border border-slate-200 rounded-lg px-3 py-2 text-slate-900 leading-relaxed focus:outline-none focus:border-sky-500"
+                            />
+                          </div>
+                          <div className="p-3 bg-white rounded-lg border border-slate-200 space-y-2.5">
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                              <div>
+                                <div className="flex items-center justify-between text-[11px] mb-0.5">
+                                  <span className="font-bold text-slate-700">資料PDFボタン文言</span>
+                                  <span className={`font-mono ${patternBConfig.completion.pdfButtonLabel.length > 20 ? 'text-rose-600 font-bold' : 'text-slate-400'}`}>
+                                    {patternBConfig.completion.pdfButtonLabel.length}/20
+                                  </span>
+                                </div>
+                                <input
+                                  type="text"
+                                  maxLength={20}
+                                  value={patternBConfig.completion.pdfButtonLabel}
+                                  onChange={(e) =>
+                                    setPatternBConfig((prev) => ({
+                                      ...prev,
+                                      completion: { ...prev.completion, pdfButtonLabel: e.target.value },
+                                    }))
+                                  }
+                                  className="w-full bg-slate-50 border border-slate-200 rounded px-2.5 py-1.5 text-slate-900"
+                                />
+                              </div>
+                              <div>
+                                <span className="font-bold text-slate-700 text-[11px] block mb-0.5">資料PDF URL（空欄時は既定URL）</span>
+                                <input
+                                  type="url"
+                                  value={patternBConfig.completion.pdfButtonUrl}
+                                  onChange={(e) =>
+                                    setPatternBConfig((prev) => ({
+                                      ...prev,
+                                      completion: { ...prev.completion, pdfButtonUrl: e.target.value },
+                                    }))
+                                  }
+                                  placeholder="https://assist-care.jp"
+                                  className="w-full bg-slate-50 border border-slate-200 rounded px-2.5 py-1.5 text-slate-900"
+                                />
+                              </div>
+                            </div>
+                            <div>
+                              <div className="flex items-center justify-between text-[11px] mb-0.5">
+                                <span className="font-bold text-slate-700">商談予約ボタン文言（{`{booking_url}`} へリンク）</span>
+                                <span className={`font-mono ${patternBConfig.completion.bookingButtonLabel.length > 20 ? 'text-rose-600 font-bold' : 'text-slate-400'}`}>
+                                  {patternBConfig.completion.bookingButtonLabel.length}/20
+                                </span>
+                              </div>
+                              <input
+                                type="text"
+                                maxLength={20}
+                                value={patternBConfig.completion.bookingButtonLabel}
+                                onChange={(e) =>
+                                  setPatternBConfig((prev) => ({
+                                    ...prev,
+                                    completion: { ...prev.completion, bookingButtonLabel: e.target.value },
+                                  }))
+                                }
+                                placeholder="例: 🗓️ 30分無料開業相談を予約"
+                                className="w-full bg-slate-50 border border-slate-200 rounded px-2.5 py-1.5 text-slate-900"
+                              />
+                            </div>
+                          </div>
+                        </>
+                      )}
+
+                      <div className="flex items-center justify-between pt-2">
+                        <button
+                          type="button"
+                          onClick={() => setPatternBConfig(DEFAULT_WELCOME_PATTERN_B)}
+                          className="text-slate-500 hover:text-slate-800 underline cursor-pointer text-[11px]"
+                        >
+                          初期テンプレートに戻す
+                        </button>
+                        <div className="flex items-center gap-2">
+                          <button
+                            type="button"
+                            onClick={() => setIsEditingPatternB(false)}
+                            className="px-3.5 py-1.5 bg-white hover:bg-slate-100 text-slate-700 border border-slate-200 rounded-lg text-xs font-medium cursor-pointer"
+                          >
+                            キャンセル
+                          </button>
+                          <button
+                            type="button"
+                            disabled={welcomeSaving}
+                            onClick={() => void handleSaveWelcome('パターンB（介護保険外開業 2問ヒアリング）の設定を保存しました！')}
+                            className="px-4 py-1.5 bg-sky-600 hover:bg-sky-700 text-white font-bold rounded-lg text-xs transition cursor-pointer inline-flex items-center gap-1.5 shadow-xs disabled:opacity-50"
+                          >
+                            <Save className="w-3.5 h-3.5" />
+                            <span>{welcomeSaving ? '保存中…' : '保存してLINEに反映'}</span>
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="lg:col-span-5 flex flex-col items-center">
+                      <div className="w-full max-w-sm">
+                        <LineMessagePreview
+                          type="flex"
+                          payload={{
+                            altText: `【介護保険外開業】${patternBEditTab.toUpperCase()}`,
+                            contents: buildPatternBFlexBubble(patternBConfig, patternBEditTab),
+                          }}
+                          title={`パターンB (${patternBEditTab === 'q1' ? 'Q1' : patternBEditTab === 'q2' ? 'Q2' : '完了カード'}) プレビュー`}
+                        />
+                      </div>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="grid grid-cols-1 lg:grid-cols-12 gap-4 items-center pt-1">
+                    <div className="lg:col-span-7 bg-white border border-slate-200 rounded-lg p-3.5 space-y-2 text-xs">
+                      <div className="flex items-center justify-between gap-2 flex-wrap">
+                        <span className="font-bold text-slate-900">
+                          {patternBEditTab === 'q1' ? patternBConfig.q1.title : patternBEditTab === 'q2' ? patternBConfig.q2.title : patternBConfig.completion.title}
+                        </span>
+                        <span className="text-[10px] px-2 py-0.5 rounded bg-sky-50 text-sky-700 border border-sky-200 font-bold">
+                          タグ「介護保険外開業」＆ リード自動登録
+                        </span>
+                      </div>
+                      {patternBEditTab === 'q1' && (
+                        <div className="space-y-1.5 text-slate-600">
+                          <p className="font-medium text-slate-800">{patternBConfig.q1.question}</p>
+                          <div className="flex flex-wrap gap-1.5">
+                            {patternBConfig.q1.choices.map((c) => (
+                              <span key={c.value} className="text-[11px] px-2 py-0.5 rounded bg-slate-100 border border-slate-200">
+                                {c.label}
+                              </span>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+                      {patternBEditTab === 'q2' && (
+                        <div className="space-y-1.5 text-slate-600">
+                          <p className="whitespace-pre-line">{patternBConfig.q2.introTemplate}</p>
+                          <div className="flex flex-wrap gap-1.5">
+                            {patternBConfig.q2.choices.map((c) => (
+                              <span key={c.value} className="text-[11px] px-2 py-0.5 rounded bg-slate-100 border border-slate-200">
+                                {c.label}
+                              </span>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+                      {patternBEditTab === 'completion' && (
+                        <div className="space-y-1.5 text-slate-600">
+                          <p className="line-clamp-2">{patternBConfig.completion.body}</p>
+                          <div className="flex flex-wrap gap-2 text-[11px] text-sky-700 font-medium">
+                            {patternBConfig.completion.pdfButtonLabel && <span>資料: 「{patternBConfig.completion.pdfButtonLabel}」</span>}
+                            {patternBConfig.completion.bookingButtonLabel && <span>商談予約: 「{patternBConfig.completion.bookingButtonLabel}」</span>}
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                    <div className="lg:col-span-5">
+                      <LineMessagePreview
+                        type="flex"
+                        payload={{
+                          altText: `【介護保険外開業】${patternBEditTab.toUpperCase()}`,
+                          contents: buildPatternBFlexBubble(patternBConfig, patternBEditTab),
+                        }}
+                        title={`パターンB 実機イメージ (${patternBEditTab === 'q1' ? 'Q1' : patternBEditTab === 'q2' ? 'Q2' : '完了カード'})`}
+                      />
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              {/* パターンBの後の専門教育・商談案内 */}
+              <div className="space-y-2">
+                <div className="flex items-center justify-between flex-wrap gap-2 text-xs">
+                  <span className="font-bold text-slate-800">
+                    後続の専門教育・商談案内（お客様から返信・予約があれば自動停止）
+                  </span>
+                </div>
+                {careScenarios.length === 0 ? (
+                  <div className="p-5 bg-slate-50 rounded-xl border border-dashed border-slate-200 text-center space-y-2">
+                    <p className="text-xs text-slate-500">分岐C（介護開業）の後続シナリオがまだ登録されていません。</p>
+                    {onApplyDirectConsultStarterSet && (
+                      <button
+                        type="button"
+                        onClick={onApplyDirectConsultStarterSet}
+                        className="px-3.5 py-2 bg-sky-600 hover:bg-sky-700 text-white rounded-lg text-xs font-bold transition cursor-pointer inline-flex items-center gap-1.5 shadow-xs"
+                      >
+                        <Plus className="w-3.5 h-3.5" />
+                        <span>介護開業の専門教育・商談案内を反映する</span>
+                      </button>
+                    )}
+                  </div>
+                ) : (
+                  <div className="space-y-3">
+                    {careScenarios.map((scenario, index) => (
+                      <div
+                        key={scenario.id}
+                        className="bg-slate-50/60 border border-slate-200 hover:border-sky-300 rounded-xl p-4 flex flex-col md:flex-row md:items-center justify-between gap-3 transition shadow-2xs"
+                      >
+                        <div className="flex items-start gap-3">
+                          <span className="w-6 h-6 rounded-full bg-sky-100 text-sky-800 font-bold text-xs flex items-center justify-center shrink-0 mt-0.5 border border-sky-300">
+                            {index + 1}
+                          </span>
+                          <div className="space-y-1">
+                            <div className="flex items-center gap-2 flex-wrap">
+                              <span className="font-bold text-slate-900 text-sm">{scenario.name}</span>
+                              <span className="text-[10px] px-2 py-0.5 rounded bg-slate-100 text-slate-600 border border-slate-200 font-mono">
+                                {scenario.waitMinutes === 0 ? '即時実行' : `${Math.round(scenario.waitMinutes / 1440)}日後`}
+                              </span>
+                              {scenario.trigger === 'tag_added' && scenario.targetTag && (
+                                <span className="text-[10px] px-2 py-0.5 rounded bg-amber-50 text-amber-800 border border-amber-200 font-mono">
+                                  タグ: {scenario.targetTag}
+                                </span>
+                              )}
+                              <span className="text-[10px] px-2 py-0.5 rounded bg-sky-50 text-sky-700 border border-sky-200 font-medium">
+                                {scenario.channel === 'line' ? 'LINE' : scenario.channel === 'email' ? 'メール' : 'LINE+メール'}
+                              </span>
+                            </div>
+                            <p className="text-xs text-slate-500 line-clamp-1">
+                              {scenario.flexTitle || scenario.messageBody || scenario.emailSubject || '文面未設定'}
+                            </p>
+                          </div>
+                        </div>
+
+                        <div className="flex items-center gap-2 self-end md:self-auto shrink-0">
+                          <button
+                            type="button"
+                            onClick={() => toggleScenarioAutomation(scenario.id, Boolean(scenario.automationEnabled))}
+                            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition cursor-pointer ${
+                              scenario.automationEnabled
+                                ? 'bg-emerald-50 text-emerald-700 border border-emerald-300 hover:bg-emerald-100'
+                                : 'bg-white text-slate-600 border border-slate-200 hover:bg-slate-100'
+                            }`}
+                          >
+                            {scenario.automationEnabled ? (
+                              <>
+                                <Play className="w-3.5 h-3.5 text-emerald-600 fill-emerald-600" />
+                                <span>自動実行中</span>
+                              </>
+                            ) : (
+                              <>
+                                <Pause className="w-3.5 h-3.5 text-slate-400" />
+                                <span>一時停止中</span>
+                              </>
+                            )}
+                          </button>
+
+                          <button
+                            type="button"
+                            onClick={() => setPreviewModalScenario(scenario)}
+                            className="p-2 bg-white hover:bg-slate-100 text-slate-700 rounded-lg text-xs border border-slate-200 transition cursor-pointer shadow-2xs"
+                            title="文面プレビュー"
+                          >
+                            <Eye className="w-3.5 h-3.5" />
+                          </button>
+
+                          <button
+                            type="button"
+                            onClick={() => handleOpenInspector(scenario)}
+                            className="px-3 py-1.5 bg-sky-600 hover:bg-sky-700 text-white rounded-lg text-xs font-bold transition cursor-pointer flex items-center gap-1 shadow-xs"
+                          >
+                            <ShieldCheck className="w-3.5 h-3.5 text-sky-200" />
+                            <span>点検・編集</span>
+                          </button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+
+          {/* 共通教育トラック: 📖 大橋ストーリー型 7話ナーチャリング（2日後〜 → 商談案内） */}
+          {(expandedBranch === 'all' || expandedBranch === 'nurturing') && (
+            <div className="bg-white border border-indigo-200 rounded-2xl p-5 space-y-4 shadow-xs">
+              <div className="flex flex-col md:flex-row md:items-start justify-between gap-4 border-b border-indigo-100 pb-3">
+                <div className="flex items-center gap-3">
+                  <span className="p-2.5 rounded-xl bg-indigo-100 text-indigo-800 border border-indigo-300">
+                    <BookOpen className="w-5 h-5" />
+                  </span>
+                  <div>
+                    <h4 className="text-base font-bold text-slate-900 flex items-center gap-2 flex-wrap">
+                      共通教育: 📖 大橋ストーリー型 7話ナーチャリング → 最終ゴール（商談案内）
+                      <span className="text-[10px] px-2 py-0.5 rounded bg-indigo-100 text-indigo-800 border border-indigo-300 font-bold">
+                        2日後から自動教育・初日重複なし
+                      </span>
+                    </h4>
+                    <p className="text-xs text-slate-500 mt-0.5">
+                      友だち追加の【2日後】から3日おきに創業実話・改善事例を配信し、最終的に30分個別相談（{`{booking_url}`}）へつなげます。途中でLINE返信・診断回答・予約が入ると自動停止します。
+                    </p>
+                  </div>
+                </div>
+
+                {onApplyLineNurturingStarterSet && (
+                  <button
+                    type="button"
+                    onClick={onApplyLineNurturingStarterSet}
+                    className="inline-flex items-center gap-1.5 px-3.5 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-bold transition shadow-xs cursor-pointer shrink-0"
+                  >
+                    <Zap className="w-3.5 h-3.5" />
+                    <span>共通教育7話を最新化</span>
+                  </button>
+                )}
+              </div>
+
+              <div className="space-y-3">
+                {[1, 2, 3, 4, 5, 6, 7].map((stepNum) => {
+                  const tpl = getNurturingStepTemplate(stepNum);
+                  const waitDaysNum = (stepNum - 1) * 3 + 2;
+                  const waitDays = `${waitDaysNum}日後`;
+                  const matchedScenario = nurturingScenarios.find(s => s.name.includes(`第${stepNum}話`) || s.name.includes(String(stepNum)));
+
+                  return (
+                    <div
+                      key={stepNum}
+                      className="bg-slate-50/60 border border-slate-200 hover:border-indigo-300 rounded-xl p-4 space-y-2.5 transition shadow-2xs"
+                    >
+                      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                        <div className="flex items-center gap-3">
+                          <span className="w-7 h-7 rounded-full bg-indigo-100 text-indigo-800 border border-indigo-300 font-bold text-xs flex items-center justify-center shrink-0">
+                            {stepNum}
+                          </span>
+                          <div>
+                            <div className="flex items-center gap-2 flex-wrap">
+                              <span className="text-[11px] px-2 py-0.5 rounded bg-indigo-50 text-indigo-700 border border-indigo-200 font-bold font-mono">
+                                第{stepNum}話 ({waitDays})
+                              </span>
+                              <span className="font-bold text-slate-900 text-sm">
+                                {matchedScenario?.name || tpl.name}
+                              </span>
+                            </div>
+                            <p className="text-xs text-slate-500 mt-0.5 line-clamp-1">
+                              件名: {matchedScenario?.emailSubject || tpl.emailSubject}
+                            </p>
+                          </div>
+                        </div>
+
+                        <div className="flex items-center gap-2 self-end sm:self-auto shrink-0">
+                          {matchedScenario && (
+                            <button
+                              type="button"
+                              onClick={() => toggleScenarioAutomation(matchedScenario.id, Boolean(matchedScenario.automationEnabled))}
+                              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition cursor-pointer ${
+                                matchedScenario.automationEnabled
+                                  ? 'bg-emerald-50 text-emerald-700 border border-emerald-300'
+                                  : 'bg-white text-slate-600 border border-slate-200 hover:bg-slate-100'
+                              }`}
+                            >
+                              {matchedScenario.automationEnabled ? <Play className="w-3 h-3 fill-emerald-600 text-emerald-600" /> : <Pause className="w-3 h-3 text-slate-500" />}
+                              <span>{matchedScenario.automationEnabled ? '自動実行中' : '一時停止中'}</span>
+                            </button>
+                          )}
+
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setPreviewModalScenario({
+                                name: matchedScenario?.name || tpl.name,
+                                emailSubject: matchedScenario?.emailSubject || tpl.emailSubject,
+                                emailBody: matchedScenario?.emailBody || tpl.emailBody,
+                                messageBody: matchedScenario?.messageBody || tpl.lineBody,
+                              });
+                            }}
+                            className="p-2 bg-white hover:bg-slate-100 text-slate-700 rounded-lg text-xs border border-slate-200 transition cursor-pointer shadow-2xs"
+                            title="文面プレビュー"
+                          >
+                            <Eye className="w-3.5 h-3.5" />
+                          </button>
+
+                          <button
+                            type="button"
+                            onClick={() => {
+                              const target = matchedScenario || {
+                                id: `story-${stepNum}`,
+                                name: tpl.name,
+                                trigger: 'line_registered' as const,
+                                channel: 'both' as const,
+                                audience: 'すべての見込み客',
+                                waitMinutes: waitDaysNum * 1440,
+                                emailSubject: tpl.emailSubject,
+                                emailBody: tpl.emailBody,
+                                messageBody: tpl.lineBody,
+                                lineMessageType: 'text' as const,
+                                lineImageUrl: '',
+                                linePreviewImageUrl: '',
+                                flexAltText: '',
+                                flexTitle: '',
+                                flexBody: '',
+                                flexButtonLabel: '',
+                                flexButtonUrl: '',
+                                status: 'draft' as const,
+                                automationEnabled: false,
+                                stopOnBooking: true,
+                                stopOnDeal: true,
+                                consentBasis: 'LINE友だち登録時の同意に基づく',
+                                updatedAt: Date.now(),
+                              };
+                              handleOpenInspector(target);
+                            }}
+                            className="px-3 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-xs font-bold transition flex items-center gap-1 cursor-pointer shadow-xs"
+                          >
+                            <ShieldCheck className="w-3.5 h-3.5 text-indigo-200" />
+                            <span>点検・編集</span>
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
             </div>
           )}
         </div>
@@ -2370,389 +3476,7 @@ export const MarketingFlowStudio: React.FC<MarketingFlowStudioProps> = ({
         </div>
       )}
 
-      {/* ═══════════════════════════════════════════════════════════════ */}
-      {/* トラック 3: 📖 大橋ストーリー型 7話ナーチャリング（LINE+メルマガ） */}
-      {/* ═══════════════════════════════════════════════════════════════ */}
-      {viewMode === 'flow' && activeTrack === 'story_nurturing' && (
-        <div className="space-y-6 animate-fade-in">
-          <div className="bg-white border border-slate-200 rounded-2xl p-5 shadow-xs space-y-4">
-            <div className="flex flex-col md:flex-row md:items-start justify-between gap-4">
-              <div className="flex items-center gap-3">
-                <span className="p-2.5 rounded-xl bg-purple-100 text-purple-800 border border-purple-300">
-                  <BookOpen className="w-5 h-5" />
-                </span>
-                <div>
-                  <h3 className="text-base font-bold text-slate-900 flex items-center gap-2">
-                    大橋ストーリー型 7話ナーチャリング（LINE ＋ メール両対応）
-                  </h3>
-                  <p className="text-xs text-slate-500 mt-0.5">
-                    有限会社MST 代表・大橋真人の創業実話と業務改革の軌跡をベースに、共感と信頼を積み上げるストーリー型ステップ配信です。
-                  </p>
-                </div>
-              </div>
 
-              {onApplyLineNurturingStarterSet && (
-                <button
-                  type="button"
-                  onClick={onApplyLineNurturingStarterSet}
-                  className="inline-flex items-center gap-1.5 px-3.5 py-2 bg-purple-600 hover:bg-purple-700 text-white rounded-xl text-xs font-bold transition shadow-xs cursor-pointer shrink-0"
-                >
-                  <Zap className="w-3.5 h-3.5" />
-                  <span>ストーリー型7話を最新化</span>
-                </button>
-              )}
-            </div>
-
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-3 pt-2 text-xs">
-              <div className="p-3 rounded-xl bg-purple-50/70 border border-purple-200 space-y-1">
-                <span className="font-bold text-purple-900">① 開始トリガー</span>
-                <p className="text-slate-900 font-bold">LINE登録時（line_registered）</p>
-                <p className="text-slate-600 text-[11px]">LINE友だち追加、またはメルマガ登録時に即時スタート。</p>
-              </div>
-              <div className="p-3 rounded-xl bg-purple-50/70 border border-purple-200 space-y-1">
-                <span className="font-bold text-purple-900">② チャネル仕様</span>
-                <p className="text-slate-900 font-bold">LINE ＋ メール（両方対応）</p>
-                <p className="text-slate-600 text-[11px]">LINEでは読みやすい短文・メールでは詳細な事例長文を自動適応。</p>
-              </div>
-              <div className="p-3 rounded-xl bg-emerald-50/70 border border-emerald-200 space-y-1">
-                <span className="font-bold text-emerald-900">③ 停止条件</span>
-                <p className="text-slate-900 font-bold">面談予約・診断回答で停止</p>
-                <p className="text-slate-600 text-[11px]">途中で診断回答または無料相談予約が入ると自動停止します。</p>
-              </div>
-            </div>
-          </div>
-
-          {/* 7話のカード一覧 */}
-          <div className="space-y-4">
-            {[1, 2, 3, 4, 5, 6, 7].map((stepNum) => {
-              const tpl = getNurturingStepTemplate(stepNum);
-              const waitDays = stepNum === 1 ? '0日目（即時）' : `${(stepNum - 1) * 3}日後`;
-              const matchedScenario = nurturingScenarios.find(s => s.name.includes(String(stepNum)));
-
-              return (
-                <div
-                  key={stepNum}
-                  className="bg-white border border-slate-200 hover:border-purple-300 rounded-2xl p-5 shadow-xs space-y-3 transition"
-                >
-                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-100 pb-3">
-                    <div className="flex items-center gap-3">
-                      <span className="w-8 h-8 rounded-full bg-purple-100 text-purple-800 border border-purple-300 font-bold text-sm flex items-center justify-center shrink-0">
-                        {stepNum}
-                      </span>
-                      <div>
-                        <div className="flex items-center gap-2 flex-wrap">
-                          <span className="text-xs px-2.5 py-0.5 rounded bg-purple-50 text-purple-700 border border-purple-200 font-bold">
-                            第{stepNum}話 ({waitDays})
-                          </span>
-                          <span className="text-xs text-slate-600 font-medium">
-                            件名: {tpl.emailSubject}
-                          </span>
-                        </div>
-                        <h4 className="text-sm font-bold text-slate-900 mt-1">
-                          {tpl.name}
-                        </h4>
-                      </div>
-                    </div>
-
-                    <div className="flex items-center gap-2 self-end sm:self-auto shrink-0">
-                      {matchedScenario && (
-                        <button
-                          type="button"
-                          onClick={() => toggleScenarioAutomation(matchedScenario.id, Boolean(matchedScenario.automationEnabled))}
-                          className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition cursor-pointer ${
-                            matchedScenario.automationEnabled
-                              ? 'bg-emerald-50 text-emerald-700 border border-emerald-300'
-                              : 'bg-white text-slate-600 border border-slate-200 hover:bg-slate-100'
-                          }`}
-                        >
-                          {matchedScenario.automationEnabled ? <Play className="w-3 h-3 fill-emerald-600 text-emerald-600" /> : <Pause className="w-3 h-3 text-slate-500" />}
-                          <span>{matchedScenario.automationEnabled ? '稼働中' : '停止中'}</span>
-                        </button>
-                      )}
-
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setPreviewModalScenario({
-                            name: tpl.name,
-                            emailSubject: tpl.emailSubject,
-                            emailBody: tpl.emailBody,
-                            messageBody: tpl.lineBody,
-                          });
-                        }}
-                        className="px-3 py-1.5 bg-white hover:bg-slate-100 text-slate-700 rounded-lg text-xs font-bold border border-slate-200 transition flex items-center gap-1.5 cursor-pointer shadow-2xs"
-                      >
-                        <Eye className="w-3.5 h-3.5 text-purple-600" />
-                        <span>文面プレビュー</span>
-                      </button>
-
-                      <button
-                        type="button"
-                        onClick={() => {
-                          const target = matchedScenario || {
-                            id: `story-${stepNum}`,
-                            name: tpl.name,
-                            trigger: 'line_registered' as const,
-                            channel: 'both' as const,
-                            audience: 'すべての見込み客',
-                            waitMinutes: (stepNum - 1) * 3 * 1440,
-                            emailSubject: tpl.emailSubject,
-                            emailBody: tpl.emailBody,
-                            messageBody: tpl.lineBody,
-                            lineMessageType: 'text' as const,
-                            lineImageUrl: '',
-                            linePreviewImageUrl: '',
-                            flexAltText: '',
-                            flexTitle: '',
-                            flexBody: '',
-                            flexButtonLabel: '',
-                            flexButtonUrl: '',
-                            status: 'draft' as const,
-                            automationEnabled: false,
-                            stopOnBooking: true,
-                            stopOnDeal: true,
-                            consentBasis: 'LINE友だち登録時の同意に基づく',
-                            updatedAt: Date.now(),
-                          };
-                          handleOpenInspector(target);
-                        }}
-                        className="px-3 py-1.5 bg-purple-600 hover:bg-purple-700 text-white rounded-lg text-xs font-bold transition flex items-center gap-1.5 cursor-pointer shadow-xs"
-                      >
-                        <ShieldCheck className="w-3.5 h-3.5 text-purple-200" />
-                        <span>点検・編集</span>
-                      </button>
-                    </div>
-                  </div>
-
-                  <div className="p-3 bg-slate-50 rounded-xl border border-slate-200 font-mono text-xs text-slate-700 max-h-24 overflow-hidden relative">
-                    <pre className="whitespace-pre-wrap">{tpl.emailBody}</pre>
-                    <div className="absolute inset-x-0 bottom-0 h-10 bg-gradient-to-t from-slate-50 to-transparent pointer-events-none" />
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-        </div>
-      )}
-
-      {/* ═══════════════════════════════════════════════════════════════ */}
-      {/* トラック 4: 🌿 直相談（介護開業/経営）                           */}
-      {/* ═══════════════════════════════════════════════════════════════ */}
-      {viewMode === 'flow' && activeTrack === 'direct_consult' && (
-        <div className="space-y-6 animate-fade-in">
-          <div className="bg-white border border-slate-200 rounded-2xl p-5 shadow-xs space-y-4">
-            <div className="flex flex-col md:flex-row md:items-start justify-between gap-4">
-              <div className="flex items-center gap-3">
-                <span className="p-2.5 rounded-xl bg-sky-100 text-sky-800 border border-sky-300">
-                  <Calendar className="w-5 h-5" />
-                </span>
-                <div>
-                  <h3 className="text-base font-bold text-slate-900 flex items-center gap-2">
-                    【直相談】介護保険外サービス開業・個別経営相談 受付案内
-                  </h3>
-                  <p className="text-xs text-slate-500 mt-0.5">
-                    診断回答を挟まず、すぐに30分のオンライン個別相談（大橋真人との直接面談）を希望する見込み客向けの即時Flexカードです。
-                  </p>
-                </div>
-              </div>
-
-              {onApplyDirectConsultStarterSet && (
-                <button
-                  type="button"
-                  onClick={onApplyDirectConsultStarterSet}
-                  className="inline-flex items-center gap-1.5 px-3.5 py-2 bg-sky-600 hover:bg-sky-700 text-white rounded-xl text-xs font-bold transition shadow-xs cursor-pointer shrink-0"
-                >
-                  <Zap className="w-3.5 h-3.5" />
-                  <span>直相談プリセットを最新化</span>
-                </button>
-              )}
-            </div>
-
-            <div className="p-4 bg-sky-50/70 rounded-xl border border-sky-200 space-y-3">
-              <div className="flex items-center justify-between">
-                <span className="text-xs font-bold text-sky-900">
-                  即時オンライン相談（30分）予約案内 Flexカード
-                </span>
-                <span className="text-[11px] px-2 py-0.5 rounded bg-sky-100 text-sky-800 border border-sky-300 font-bold">
-                  タグ「選択:個別相談 / 介護保険外開業」連動
-                </span>
-              </div>
-              <p className="text-xs text-slate-700">
-                面談日程カレンダーURL（{`{booking_url}`}）が自動差し込みされ、相手が日時を選択すると自動でGoogle Meet発行・CRMカレンダーに即時反映されます。
-              </p>
-            </div>
-          </div>
-
-          {/* 直相談シナリオ一覧 & 点検・編集エリア */}
-          <div className="space-y-3">
-            <div className="flex items-center justify-between">
-              <h4 className="text-sm font-bold text-slate-900 flex items-center gap-2">
-                <span>直相談・個別相談 登録シナリオ（{consultScenarios.length}件）</span>
-              </h4>
-              {onApplyDirectConsultStarterSet && consultScenarios.length === 0 && (
-                <button
-                  type="button"
-                  onClick={onApplyDirectConsultStarterSet}
-                  className="px-3 py-1.5 bg-sky-600 hover:bg-sky-700 text-white rounded-lg text-xs font-bold transition cursor-pointer flex items-center gap-1.5 shadow-xs"
-                >
-                  <Plus className="w-3.5 h-3.5" />
-                  <span>公式直相談シナリオを追加</span>
-                </button>
-              )}
-            </div>
-
-            {consultScenarios.length === 0 ? (
-              <div className="p-8 bg-slate-50 rounded-2xl border border-dashed border-slate-200 text-center space-y-3">
-                <p className="text-sm text-slate-700 font-bold">直相談シナリオがまだ登録されていません</p>
-                <p className="text-xs text-slate-500 max-w-md mx-auto">
-                  「直相談プリセットを最新化」または「点検・編集」から、直相談用Flexカードや個別フォローメッセージを登録・編集できます。
-                </p>
-                {onApplyDirectConsultStarterSet && (
-                  <button
-                    type="button"
-                    onClick={onApplyDirectConsultStarterSet}
-                    className="px-4 py-2 bg-sky-600 hover:bg-sky-700 text-white rounded-xl text-xs font-bold transition cursor-pointer inline-flex items-center gap-2 shadow-xs"
-                  >
-                    <Plus className="w-4 h-4" />
-                    <span>直相談（30分無料面談）の標準シナリオを反映する</span>
-                  </button>
-                )}
-              </div>
-            ) : (
-              consultScenarios.map((scenario, index) => (
-                <div
-                  key={scenario.id}
-                  className="bg-white border border-slate-200 hover:border-sky-300 rounded-xl p-4 flex flex-col md:flex-row md:items-center justify-between gap-3 transition shadow-2xs"
-                >
-                  <div className="flex items-start gap-3">
-                    <span className="w-7 h-7 rounded-full bg-sky-100 text-sky-800 font-bold text-xs flex items-center justify-center shrink-0 mt-0.5 border border-sky-300">
-                      {index + 1}
-                    </span>
-                    <div className="space-y-1">
-                      <div className="flex items-center gap-2 flex-wrap">
-                        <span className="font-bold text-slate-900 text-sm">{scenario.name}</span>
-                        <span className="text-[10px] px-2 py-0.5 rounded bg-slate-100 text-slate-600 border border-slate-200 font-mono">
-                          {scenario.waitMinutes === 0 ? '即時実行' : `${Math.round(scenario.waitMinutes / 1440)}日後`}
-                        </span>
-                        <span className="text-[10px] px-2 py-0.5 rounded bg-sky-50 text-sky-700 border border-sky-200 font-medium">
-                          {scenario.channel === 'line' ? 'LINE' : scenario.channel === 'email' ? 'メール' : 'LINE+メール'}
-                        </span>
-                        <span className="text-[10px] px-2 py-0.5 rounded bg-slate-100 text-slate-500 font-medium">
-                          {scenario.lineMessageType === 'flex' ? 'Flexカード' : 'テキスト'}
-                        </span>
-                      </div>
-                      <p className="text-xs text-slate-500 line-clamp-1">
-                        {scenario.flexTitle || scenario.messageBody || scenario.emailSubject || '文面未設定'}
-                      </p>
-                    </div>
-                  </div>
-
-                  <div className="flex items-center gap-2 self-end md:self-auto shrink-0">
-                    <button
-                      type="button"
-                      onClick={() => toggleScenarioAutomation(scenario.id, Boolean(scenario.automationEnabled))}
-                      className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition cursor-pointer ${
-                        scenario.automationEnabled
-                          ? 'bg-emerald-50 text-emerald-700 border border-emerald-300 hover:bg-emerald-100'
-                          : 'bg-white text-slate-600 border border-slate-200 hover:bg-slate-100'
-                      }`}
-                    >
-                      {scenario.automationEnabled ? (
-                        <>
-                          <Play className="w-3.5 h-3.5 text-emerald-600 fill-emerald-600" />
-                          <span>自動実行中</span>
-                        </>
-                      ) : (
-                        <>
-                          <Pause className="w-3.5 h-3.5 text-slate-400" />
-                          <span>一時停止中</span>
-                        </>
-                      )}
-                    </button>
-
-                    <button
-                      type="button"
-                      onClick={() => setPreviewModalScenario(scenario)}
-                      className="p-2 bg-white hover:bg-slate-100 text-slate-700 rounded-lg text-xs border border-slate-200 transition cursor-pointer shadow-2xs"
-                      title="文面プレビュー"
-                    >
-                      <Eye className="w-3.5 h-3.5" />
-                    </button>
-
-                    <button
-                      type="button"
-                      onClick={() => handleOpenInspector(scenario)}
-                      className="px-3 py-1.5 bg-sky-600 hover:bg-sky-700 text-white rounded-lg text-xs font-bold transition cursor-pointer flex items-center gap-1 shadow-xs"
-                    >
-                      <ShieldCheck className="w-3.5 h-3.5 text-sky-200" />
-                      <span>点検・編集</span>
-                    </button>
-                  </div>
-                </div>
-              ))
-            )}
-          </div>
-        </div>
-      )}
-
-      {/* ═══════════════════════════════════════════════════════════════ */}
-      {/* トラック 5: 📥 Web資料請求・問い合わせフォロー                    */}
-      {/* ═══════════════════════════════════════════════════════════════ */}
-      {viewMode === 'flow' && activeTrack === 'inbound_material' && (
-        <div className="bg-white border border-slate-200 rounded-2xl p-6 shadow-xs space-y-6 animate-fade-in">
-          <div className="flex items-center gap-3 border-b border-slate-100 pb-4">
-            <span className="p-2.5 bg-purple-100 text-purple-800 border border-purple-200 rounded-xl">
-              <Sparkles className="w-5 h-5" />
-            </span>
-            <div>
-              <h3 className="text-base font-bold text-slate-900">
-                Web資料請求・お問い合わせ自動フォロー導線
-              </h3>
-              <p className="text-xs text-slate-500">
-                HPやLPから資料請求があった際、即時お礼メールからLINE誘導・個別面談へのステップアップを自動化します。
-              </p>
-            </div>
-          </div>
-
-          <div className="space-y-4">
-            <div className="p-4 bg-slate-50 rounded-xl border border-slate-200 flex items-start gap-4">
-              <span className="w-7 h-7 rounded-full bg-purple-100 text-purple-800 border border-purple-300 font-bold flex items-center justify-center shrink-0 mt-0.5 text-xs">
-                1
-              </span>
-              <div className="space-y-1">
-                <span className="font-bold text-slate-900 text-sm">【即時】資料ダウンロードURL送付 ＆ 御礼メール</span>
-                <p className="text-xs text-slate-500">
-                  お客様がフォームに入力したメールアドレス宛に、PDF閲覧URL（ダウンロード期限付き）を自動送信。
-                </p>
-              </div>
-            </div>
-
-            <div className="p-4 bg-slate-50 rounded-xl border border-slate-200 flex items-start gap-4">
-              <span className="w-7 h-7 rounded-full bg-purple-100 text-purple-800 border border-purple-300 font-bold flex items-center justify-center shrink-0 mt-0.5 text-xs">
-                2
-              </span>
-              <div className="space-y-1">
-                <span className="font-bold text-slate-900 text-sm">【2日後】資料の重要ポイント要約 ＆ LINE無料診断のご案内</span>
-                <p className="text-xs text-slate-500">
-                  「読む時間が取れない方へ」として、貴社のボトルネックが3分で分かるLINE無料診断へ誘導。
-                </p>
-              </div>
-            </div>
-
-            <div className="p-4 bg-slate-50 rounded-xl border border-slate-200 flex items-start gap-4">
-              <span className="w-7 h-7 rounded-full bg-purple-100 text-purple-800 border border-purple-300 font-bold flex items-center justify-center shrink-0 mt-0.5 text-xs">
-                3
-              </span>
-              <div className="space-y-1">
-                <span className="font-bold text-slate-900 text-sm">【5日後】同業種の改善事例紹介 ＆ 30分無料作戦会議</span>
-                <p className="text-xs text-slate-500">
-                  実際に手作業を削減して利益率を改善した事例を共有し、大橋様との個別面談予約（オンライン）をご案内。
-                </p>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
 
       {/* キーワード追加・編集モーダル */}
       {isEditingKeywordModal && (

@@ -65,6 +65,7 @@ export const FlowStepInspectorModal: React.FC<FlowStepInspectorModalProps> = ({
   const [name, setName] = useState(scenario.name);
   const [channel, setChannel] = useState<MarketingChannel>(scenario.channel);
   const [trigger, setTrigger] = useState<MarketingTrigger>(scenario.trigger);
+  const [targetTag, setTargetTag] = useState<string>(scenario.targetTag || '');
   const [waitMinutes, setWaitMinutes] = useState(scenario.waitMinutes || 0);
   const [waitDaysInput, setWaitDaysInput] = useState(Math.round((scenario.waitMinutes || 0) / 1440));
   const [sendTimeWindow, setSendTimeWindow] = useState(scenario.sendTimeWindow || '09:00-20:00');
@@ -152,6 +153,7 @@ export const FlowStepInspectorModal: React.FC<FlowStepInspectorModalProps> = ({
     setName(scenario.name);
     setChannel(scenario.channel);
     setTrigger(scenario.trigger);
+    setTargetTag(scenario.targetTag || '');
     setWaitMinutes(scenario.waitMinutes || 0);
     setWaitDaysInput(Math.round((scenario.waitMinutes || 0) / 1440));
     setSendTimeWindow(scenario.sendTimeWindow || '09:00-20:00');
@@ -222,6 +224,7 @@ export const FlowStepInspectorModal: React.FC<FlowStepInspectorModalProps> = ({
       name: name.trim() || scenario.name,
       channel,
       trigger,
+      targetTag: trigger === 'tag_added' ? (targetTag.trim() || undefined) : undefined,
       waitMinutes: waitDaysInput * 1440,
       sendTimeWindow,
       automationEnabled,
@@ -530,6 +533,45 @@ export const FlowStepInspectorModal: React.FC<FlowStepInspectorModalProps> = ({
                       <span>{automationEnabled ? '自動実行中（稼働中）' : '一時停止中（安全待機）'}</span>
                     </button>
                   </div>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3 pt-3 border-t border-slate-100">
+                  <div>
+                    <label className="text-slate-700 font-bold block mb-1">開始トリガー（いつ起動するか）</label>
+                    <select
+                      value={trigger}
+                      onChange={(e) => setTrigger(e.target.value as MarketingTrigger)}
+                      className="w-full bg-white border border-slate-200 rounded-xl px-3 py-2 text-slate-900 font-semibold cursor-pointer shadow-xs focus:outline-none focus:border-purple-500"
+                    >
+                      <option value="tag_added">指定タグが付いた時（ウェルカム分岐タップ等）</option>
+                      <option value="line_registered">LINE友だち追加された時</option>
+                      <option value="diagnosis_completed">無料診断に回答完了した時</option>
+                      <option value="report_approved">診断レポートが承認・完成した時</option>
+                      <option value="report_sent">診断レポートを送付した時</option>
+                      <option value="lead_created">見込み客が登録された時</option>
+                      <option value="outreach_first_sent">営業メール第1通を送った時</option>
+                      <option value="booking_created">個別相談の予約が入った時</option>
+                      <option value="manual">手動開始</option>
+                    </select>
+                  </div>
+
+                  {trigger === 'tag_added' && (
+                    <div>
+                      <label className="text-slate-700 font-bold block mb-1">対象タグ（どの選択肢で動かすか）</label>
+                      <select
+                        value={targetTag}
+                        onChange={(e) => setTargetTag(e.target.value)}
+                        className="w-full bg-white border border-slate-200 rounded-xl px-3 py-2 text-slate-900 font-semibold cursor-pointer shadow-xs focus:outline-none focus:border-purple-500"
+                      >
+                        <option value="">すべてのタグ</option>
+                        {UNIFIED_TAG_MASTER.map((t) => (
+                          <option key={t.id} value={t.name}>
+                            {t.name}（{t.categoryLabel}）
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                  )}
                 </div>
               </div>
 

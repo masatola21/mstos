@@ -21,6 +21,96 @@ export interface WelcomeChoice {
   replyText?: string;
 }
 
+export interface WelcomePatternAConfig {
+  title: string;
+  greetingBody: string;
+  promptTitle: string;
+  promptExamples: string;
+  footerNote: string;
+  bookingButtonLabel: string;
+}
+
+export interface WelcomePatternBQ1Choice {
+  value: string;
+  label: string;
+  displayText: string;
+  color: string;
+}
+
+export interface WelcomePatternBQ2Choice {
+  value: string;
+  label: string;
+  displayText: string;
+}
+
+export interface WelcomePatternBConfig {
+  q1: {
+    title: string;
+    greeting: string;
+    question: string;
+    choices: WelcomePatternBQ1Choice[];
+  };
+  q2: {
+    title: string;
+    introTemplate: string;
+    choices: WelcomePatternBQ2Choice[];
+  };
+  completion: {
+    title: string;
+    greeting: string;
+    body: string;
+    pdfButtonLabel: string;
+    pdfButtonUrl: string;
+    bookingButtonLabel: string;
+  };
+}
+
+export const DEFAULT_WELCOME_PATTERN_A: WelcomePatternAConfig = {
+  title: '🗓️ 経営改善の個別相談',
+  greetingBody:
+    '{recipient_name} 様\n\n個別相談をお選びいただきありがとうございます！\n有限会社MST代表の大橋真人です。\n\n親身にお応えするため、このトーク画面で直接お話を伺わせていただきます。',
+  promptTitle:
+    '💬 まずは【いま一番困っていること】や【相談したいテーマ】を一言メッセージでそのままご返信いただけますでしょうか？',
+  promptExamples:
+    '（例：新規の反響が止まっている、売上は伸びたが利益が残らない、右腕が育たない、など何でも結構です）',
+  footerNote:
+    'メッセージを確認次第、私から直接アドバイス・ご返信を差し上げます！\n※Zoom等での30分オンライン相談をご希望の場合は「面談希望」とお送りいただくか、下のボタンから直接ご予約いただけます。',
+  bookingButtonLabel: '🗓️ 30分オンライン相談予約',
+};
+
+export const DEFAULT_WELCOME_PATTERN_B: WelcomePatternBConfig = {
+  q1: {
+    title: '🌿 介護保険外サービスの開業相談',
+    greeting:
+      '{recipient_name} 様\n\n開業相談をお選びいただきありがとうございます！有限会社MST代表の大橋真人です。\n\n貴社の状況に合わせたアドバイスをお送りするため、2問だけ教えてください。',
+    question: '【Q1】現在の状況に一番近いものはどれですか？',
+    choices: [
+      { value: 'existing', label: '🏢 既存の介護・福祉事業者', displayText: '既存の介護・福祉事業者です', color: '#0284C7' },
+      { value: 'new_entry', label: '🚀 他業種からの新規参入', displayText: '他業種からの新規参入を検討しています', color: '#1E3A5F' },
+      { value: 'individual', label: '👤 個人での独立・開業', displayText: '個人での独立・開業を検討しています', color: '#10B981' },
+    ],
+  },
+  q2: {
+    title: '🌿 介護保険外サービスの開業相談 (2/2)',
+    introTemplate:
+      'ありがとうございます（状況: {q1_label}）。\n\n【Q2】いま一番知りたいテーマはどれですか？',
+    choices: [
+      { value: 'revenue', label: '💰 収益モデル・料金設定', displayText: '収益モデル・料金設定について知りたい' },
+      { value: 'marketing', label: '📢 集客・営業・チラシ', displayText: '集客・営業・チラシのやり方を知りたい' },
+      { value: 'docs', label: '📄 必要書類・利用規約', displayText: '必要な書類や利用規約について知りたい' },
+      { value: 'steps', label: '🗺️ 全体像・開業ステップ', displayText: '全体の開業ステップについて知りたい' },
+    ],
+  },
+  completion: {
+    title: '🌿 介護保険外サービスの開業相談',
+    greeting: 'ご回答ありがとうございます！状況を把握いたしました。\n\n有限会社MST代表の大橋真人です。',
+    body: '直営事業「アシスタ大垣」の現場データと実績をもとに、貴社に最適な開業ステップと具体的なアドバイスを、このLINEトークにて直接お送りいたします。\n\n何か気になる点やお悩みがございましたら、このままメッセージを送信してください！',
+    pdfButtonLabel: '📘 開業パッケージ概要PDF',
+    pdfButtonUrl: '',
+    bookingButtonLabel: '🗓️ 30分無料開業相談を予約',
+  },
+};
+
 export const DEFAULT_WELCOME_CHOICES: WelcomeChoice[] = [
   { id: 'diagnosis', label: '📊 3分無料経営診断を受ける', tag: '選択:診断', route: 'form', formSlug: 'business-diagnosis' },
   { id: 'consult', label: '🗓️ 経営改善について個別相談する', tag: '選択:個別相談', route: 'chat' },

@@ -1705,19 +1705,125 @@ async function processLinePostback(event: any, contact: any, eventId: string, bo
     return;
   }
 
+  // パターンA / B 動的設定 ＆ bookingUrl 解決ヘルパー
+  const loadWelcomeConfigPayload = async () => {
+    const defaultPatternA = {
+      title: '🗓️ 経営改善の個別相談',
+      greetingBody: '{recipient_name} 様\n\n個別相談をお選びいただきありがとうございます！\n有限会社MST代表の大橋真人です。\n\n親身にお応えするため、このトーク画面で直接お話を伺わせていただきます。',
+      promptTitle: '💬 まずは【いま一番困っていること】や【相談したいテーマ】を一言メッセージでそのままご返信いただけますでしょうか？',
+      promptExamples: '（例：新規の反響が止まっている、売上は伸びたが利益が残らない、右腕が育たない、など何でも結構です）',
+      footerNote: 'メッセージを確認次第、私から直接アドバイス・ご返信を差し上げます！\n※Zoom等での30分オンライン相談をご希望の場合は「面談希望」とお送りいただくか、下のボタンから直接ご予約いただけます。',
+      bookingButtonLabel: '🗓️ 30分オンライン相談予約',
+    };
+    const defaultPatternB = {
+      q1: {
+        title: '🌿 介護保険外サービスの開業相談',
+        greeting: '{recipient_name} 様\n\n開業相談をお選びいただきありがとうございます！有限会社MST代表の大橋真人です。\n\n貴社の状況に合わせたアドバイスをお送りするため、2問だけ教えてください。',
+        question: '【Q1】現在の状況に一番近いものはどれですか？',
+        choices: [
+          { value: 'existing', label: '🏢 既存の介護・福祉事業者', displayText: '既存の介護・福祉事業者です', color: '#0284C7' },
+          { value: 'new_entry', label: '🚀 他業種からの新規参入', displayText: '他業種からの新規参入を検討しています', color: '#1E3A5F' },
+          { value: 'individual', label: '👤 個人での独立・開業', displayText: '個人での独立・開業を検討しています', color: '#10B981' },
+        ],
+      },
+      q2: {
+        title: '🌿 介護保険外サービスの開業相談 (2/2)',
+        introTemplate: 'ありがとうございます（状況: {q1_label}）。\n\n【Q2】いま一番知りたいテーマはどれですか？',
+        choices: [
+          { value: 'revenue', label: '💰 収益モデル・料金設定', displayText: '収益モデル・料金設定について知りたい' },
+          { value: 'marketing', label: '📢 集客・営業・チラシ', displayText: '集客・営業・チラシのやり方を知りたい' },
+          { value: 'docs', label: '📄 必要書類・利用規約', displayText: '必要な書類や利用規約について知りたい' },
+          { value: 'steps', label: '🗺️ 全体像・開業ステップ', displayText: '全体の開業ステップについて知りたい' },
+        ],
+      },
+      completion: {
+        title: '🌿 介護保険外サービスの開業相談',
+        greeting: 'ご回答ありがとうございます！状況を把握いたしました。\n\n有限会社MST代表の大橋真人です。',
+        body: '直営事業「アシスタ大垣」の現場データと実績をもとに、貴社に最適な開業ステップと具体的なアドバイスを、このLINEトークにて直接お送りいたします。\n\n何か気になる点やお悩みがございましたら、このままメッセージを送信してください！',
+        pdfButtonLabel: '📘 開業パッケージ概要PDF',
+        pdfButtonUrl: '',
+        bookingButtonLabel: '🗓️ 30分無料開業相談を予約',
+      },
+    };
+
+    const { data: welcomeRule } = await lineSupabase
+      .from('line_auto_reply_rules')
+      .select('reply_payload, reply_text')
+      .eq('owner_id', integration.owner_id)
+      .eq('enabled', true)
+      .in('match_text', ['__welcome__', '友だち追加', 'ウェルカム'])
+      .order('priority', { ascending: true })
+      .limit(1)
+      .maybeSingle();
+
+    let payloadObj: any = {};
+    if (welcomeRule?.reply_payload && typeof welcomeRule.reply_payload === 'object') {
+      payloadObj = welcomeRule.reply_payload;
+    } else if (typeof welcomeRule?.reply_text === 'string' && welcomeRule.reply_text.startsWith('{')) {
+      try {
+        payloadObj = JSON.parse(welcomeRule.reply_text);
+      } catch {}
+    }
+
+    const patternA = { ...defaultPatternA, ...(payloadObj?.patternA || {}) };
+    const savedB = payloadObj?.patternB || {};
+    const patternB = {
+      q1: {
+        ...defaultPatternB.q1,
+        ...(savedB.q1 || {}),
+        choices: Array.isArray(savedB.q1?.choices) && savedB.q1.choices.length > 0 ? savedB.q1.choices : defaultPatternB.q1.choices,
+      },
+      q2: {
+        ...defaultPatternB.q2,
+        ...(savedB.q2 || {}),
+        choices: Array.isArray(savedB.q2?.choices) && savedB.q2.choices.length > 0 ? savedB.q2.choices : defaultPatternB.q2.choices,
+      },
+      completion: {
+        ...defaultPatternB.completion,
+        ...(savedB.completion || {}),
+      },
+    };
+
+    return { payloadObj, patternA, patternB };
+  };
+
+  const resolveOwnerBookingUrl = async (): Promise<string> => {
+    const { data: salesSettings } = await lineSupabase
+      .from('sales_workspace_settings')
+      .select('booking_page_url')
+      .eq('owner_id', integration.owner_id)
+      .maybeSingle();
+    let bookingUrl = (salesSettings?.booking_page_url || '').trim();
+    if (!bookingUrl) {
+      const { data: pubForms } = await lineSupabase
+        .from('diagnosis_forms')
+        .select('definition')
+        .eq('status', 'published')
+        .limit(5);
+      for (const f of pubForms || []) {
+        if (typeof f?.definition?.booking_url === 'string' && f.definition.booking_url.trim()) {
+          bookingUrl = f.definition.booking_url.trim();
+          break;
+        }
+      }
+    }
+    return bookingUrl && /^https?:\/\//i.test(bookingUrl) ? bookingUrl : '';
+  };
+
   // 2.5 介護保険外サービス パターンB (2問クイックヒアリング postback)
   if (postbackData.startsWith('care_q1=') || postbackData.startsWith('care_q2=')) {
+    const { patternB } = await loadWelcomeConfigPayload();
+    const q1LabelMap: Record<string, string> = {};
+    for (const c of patternB.q1.choices) q1LabelMap[c.value] = c.label;
+    const q2LabelMap: Record<string, string> = {};
+    for (const c of patternB.q2.choices) q2LabelMap[c.value] = c.label;
+
     let replyMessage: Record<string, any> | null = null;
     let inboxBody = '';
 
     if (postbackData.startsWith('care_q1=')) {
       const q1Val = postbackData.slice(8).trim();
-      const q1Map: Record<string, string> = {
-        existing: '既存の介護・福祉事業',
-        new_entry: '他業種からの新規参入',
-        individual: '個人での独立・開業',
-      };
-      const q1Label = q1Map[q1Val] || q1Val;
+      const q1Label = q1LabelMap[q1Val] || q1Val;
 
       // タグ付与: 介護保険外開業
       try {
@@ -1740,6 +1846,7 @@ async function processLinePostback(event: any, contact: any, eventId: string, bo
         console.warn('[LINE Postback] Failed to assign care tag on q1:', tagErr);
       }
 
+      const q2IntroText = String(patternB.q2.introTemplate || '').replace(/\{q1_label\}/g, q1Label);
       replyMessage = {
         type: 'flex',
         altText: '【介護保険外開業】一番知りたいテーマを教えてください',
@@ -1750,63 +1857,27 @@ async function processLinePostback(event: any, contact: any, eventId: string, bo
             layout: 'vertical',
             spacing: 'md',
             contents: [
-              { type: 'text', text: '🌿 介護保険外サービスの開業相談 (2/2)', weight: 'bold', size: 'lg', color: '#0284C7' },
+              { type: 'text', text: patternB.q2.title, weight: 'bold', size: 'lg', color: '#0284C7', wrap: true },
               {
                 type: 'text',
-                text: `ありがとうございます（状況: ${q1Label}）。\n\n【Q2】いま一番知りたいテーマはどれですか？`,
+                text: q2IntroText,
                 size: 'sm',
                 color: '#334155',
                 wrap: true,
               },
               { type: 'separator', margin: 'md' },
-              {
+              ...patternB.q2.choices.map((c: any, idx: number) => ({
                 type: 'button',
                 style: 'secondary',
                 height: 'sm',
-                margin: 'md',
+                margin: idx === 0 ? 'md' : 'sm',
                 action: {
                   type: 'postback',
-                  label: '💰 収益モデル・料金設定',
-                  data: `care_q2=${q1Val}:revenue`,
-                  displayText: '収益モデル・料金設定について知りたい',
+                  label: String(c.label || `テーマ${idx + 1}`).slice(0, 20),
+                  data: `care_q2=${q1Val}:${c.value}`,
+                  displayText: String(c.displayText || c.label || ''),
                 },
-              },
-              {
-                type: 'button',
-                style: 'secondary',
-                height: 'sm',
-                margin: 'sm',
-                action: {
-                  type: 'postback',
-                  label: '📢 集客・営業・チラシ',
-                  data: `care_q2=${q1Val}:marketing`,
-                  displayText: '集客・営業・チラシのやり方を知りたい',
-                },
-              },
-              {
-                type: 'button',
-                style: 'secondary',
-                height: 'sm',
-                margin: 'sm',
-                action: {
-                  type: 'postback',
-                  label: '📄 必要書類・利用規約',
-                  data: `care_q2=${q1Val}:docs`,
-                  displayText: '必要な書類や利用規約について知りたい',
-                },
-              },
-              {
-                type: 'button',
-                style: 'secondary',
-                height: 'sm',
-                margin: 'sm',
-                action: {
-                  type: 'postback',
-                  label: '🗺️ 全体像・開業ステップ',
-                  data: `care_q2=${q1Val}:steps`,
-                  displayText: '全体の開業ステップについて知りたい',
-                },
-              },
+              })),
             ],
           },
         },
@@ -1815,19 +1886,8 @@ async function processLinePostback(event: any, contact: any, eventId: string, bo
     } else if (postbackData.startsWith('care_q2=')) {
       const raw = postbackData.slice(8).trim();
       const [q1Val, q2Val] = raw.split(':');
-      const q1Map: Record<string, string> = {
-        existing: '既存の介護・福祉事業',
-        new_entry: '他業種からの新規参入',
-        individual: '個人での独立・開業',
-      };
-      const q2Map: Record<string, string> = {
-        revenue: '収益モデル・料金設定',
-        marketing: '集客・営業・チラシ',
-        docs: '必要書類・利用規約',
-        steps: '全体像・開業ステップ',
-      };
-      const q1Label = q1Map[q1Val] || q1Val;
-      const q2Label = q2Map[q2Val] || q2Val;
+      const q1Label = q1LabelMap[q1Val] || q1Val;
+      const q2Label = q2LabelMap[q2Val] || q2Val;
 
       // 1. タグ付与: 介護保険外開業
       try {
@@ -1888,9 +1948,43 @@ async function processLinePostback(event: any, contact: any, eventId: string, bo
         console.warn('[LINE Postback] Failed to upsert lead on care_q2:', leadErr);
       }
 
-      // 3. 完了Flexメッセージ
+      // 3. 完了Flexメッセージ（PDF資料 + 商談予約ボタン）
       const appUrl = (process.env.PUBLIC_APP_URL || '').replace(/\/$/, '');
-      const overviewPdfUrl = appUrl ? `${appUrl}/materials/care-package-overview.pdf` : 'https://assist-care.jp';
+      const configuredPdfUrl = String(patternB.completion.pdfButtonUrl || '').trim();
+      const overviewPdfUrl =
+        configuredPdfUrl && /^https?:\/\//i.test(configuredPdfUrl)
+          ? configuredPdfUrl
+          : appUrl
+          ? `${appUrl}/materials/care-package-overview.pdf`
+          : 'https://assist-care.jp';
+      const bookingUrl = await resolveOwnerBookingUrl();
+
+      const footerButtons: any[] = [];
+      if (String(patternB.completion.pdfButtonLabel || '').trim()) {
+        footerButtons.push({
+          type: 'button',
+          style: 'secondary',
+          height: 'sm',
+          action: {
+            type: 'uri',
+            label: String(patternB.completion.pdfButtonLabel).trim().slice(0, 20),
+            uri: overviewPdfUrl,
+          },
+        });
+      }
+      if (String(patternB.completion.bookingButtonLabel || '').trim() && bookingUrl) {
+        footerButtons.push({
+          type: 'button',
+          style: 'primary',
+          color: '#0284C7',
+          margin: footerButtons.length > 0 ? 'sm' : undefined,
+          action: {
+            type: 'uri',
+            label: String(patternB.completion.bookingButtonLabel).trim().slice(0, 20),
+            uri: bookingUrl,
+          },
+        });
+      }
 
       replyMessage = {
         type: 'flex',
@@ -1902,10 +1996,10 @@ async function processLinePostback(event: any, contact: any, eventId: string, bo
             layout: 'vertical',
             spacing: 'md',
             contents: [
-              { type: 'text', text: '🌿 介護保険外サービスの開業相談', weight: 'bold', size: 'lg', color: '#0284C7' },
+              { type: 'text', text: patternB.completion.title, weight: 'bold', size: 'lg', color: '#0284C7', wrap: true },
               {
                 type: 'text',
-                text: `ご回答ありがとうございます！状況を把握いたしました。\n\n有限会社MST代表の大橋真人です。`,
+                text: patternB.completion.greeting,
                 size: 'sm',
                 color: '#334155',
                 wrap: true,
@@ -1918,13 +2012,13 @@ async function processLinePostback(event: any, contact: any, eventId: string, bo
                 paddingAll: 'md',
                 margin: 'sm',
                 contents: [
-                  { type: 'text', text: `・現在の状況: ${q1Label}`, size: 'xs', color: '#0369A1', weight: 'bold' },
-                  { type: 'text', text: `・関心テーマ: ${q2Label}`, size: 'xs', color: '#0369A1', weight: 'bold', margin: 'xs' },
+                  { type: 'text', text: `・現在の状況: ${q1Label}`, size: 'xs', color: '#0369A1', weight: 'bold', wrap: true },
+                  { type: 'text', text: `・関心テーマ: ${q2Label}`, size: 'xs', color: '#0369A1', weight: 'bold', margin: 'xs', wrap: true },
                 ],
               },
               {
                 type: 'text',
-                text: '直営事業「アシスタ大垣」の現場データと実績をもとに、貴社に最適な開業ステップと具体的なアドバイスを、このLINEトークにて直接お送りいたします。\n\n何か気になる点やお悩みがございましたら、このままメッセージを送信してください！',
+                text: patternB.completion.body,
                 size: 'xs',
                 color: '#475569',
                 wrap: true,
@@ -1932,22 +2026,16 @@ async function processLinePostback(event: any, contact: any, eventId: string, bo
               },
             ],
           },
-          footer: {
-            type: 'box',
-            layout: 'vertical',
-            contents: [
-              {
-                type: 'button',
-                style: 'primary',
-                color: '#0284C7',
-                action: {
-                  type: 'uri',
-                  label: '📘 開業パッケージ概要資料を見る (PDF)',
-                  uri: overviewPdfUrl,
+          ...(footerButtons.length > 0
+            ? {
+                footer: {
+                  type: 'box',
+                  layout: 'vertical',
+                  spacing: 'sm',
+                  contents: footerButtons,
                 },
-              },
-            ],
-          },
+              }
+            : {}),
         },
       };
       inboxBody = `[介護保険外開業相談: ヒアリング完了案内Flexを送信 (状況: ${q1Label}, テーマ: ${q2Label})]`;
@@ -1995,28 +2083,9 @@ async function processLinePostback(event: any, contact: any, eventId: string, bo
     const choiceId = wcParam || (postbackData.startsWith('wc=') ? postbackData.slice(3).trim() : '');
     if (!choiceId) return;
 
-    // 1. 許可リスト検証
-    const { data: welcomeRule } = await lineSupabase
-      .from('line_auto_reply_rules')
-      .select('reply_payload, reply_text')
-      .eq('owner_id', integration.owner_id)
-      .eq('enabled', true)
-      .in('match_text', ['__welcome__', '友だち追加', 'ウェルカム'])
-      .order('priority', { ascending: true })
-      .limit(1)
-      .maybeSingle();
-
-    let configuredChoices: any[] = [];
-    if (welcomeRule?.reply_payload && typeof welcomeRule.reply_payload === 'object') {
-      const payload = welcomeRule.reply_payload as any;
-      if (Array.isArray(payload.choices)) configuredChoices = payload.choices;
-    }
-    if (configuredChoices.length === 0 && typeof welcomeRule?.reply_text === 'string' && welcomeRule.reply_text.startsWith('{')) {
-      try {
-        const parsed = JSON.parse(welcomeRule.reply_text);
-        if (Array.isArray(parsed?.choices)) configuredChoices = parsed.choices;
-      } catch {}
-    }
+    // 1. 許可リスト検証 + パターンA/B設定読込
+    const { payloadObj, patternA, patternB } = await loadWelcomeConfigPayload();
+    const configuredChoices: any[] = Array.isArray(payloadObj?.choices) ? payloadObj.choices : [];
 
     const defaultChoices = [
       { id: 'diagnosis', label: '📊 3分無料経営診断を受ける', tag: '選択:診断', route: 'form', formSlug: 'business-diagnosis' },
@@ -2028,7 +2097,7 @@ async function processLinePostback(event: any, contact: any, eventId: string, bo
     const choice = allowedChoices.find((c: any) => c.id === choiceId);
     if (!choice) return; // 許可リスト外は無視
 
-    // 2. タグ付与
+    // 2. タグ付与 ＆ タグ連動後続シナリオをキュー投入
     const resolvedChoiceTag =
       choice.id === 'care' && (!choice.tag || choice.tag === 'care:開業相談' || choice.tag === '選択:開業パッケージ')
         ? '介護保険外開業'
@@ -2049,6 +2118,9 @@ async function processLinePostback(event: any, contact: any, eventId: string, bo
               assigned_by: 'welcome_choice',
             }, { onConflict: 'line_friend_id,tag_id', ignoreDuplicates: true });
           }
+        }
+        if (contact?.id) {
+          await enqueueScenariosForContact(contact.id, 'tag_added', integration.owner_id, { tagName: resolvedChoiceTag });
         }
       } catch (tagErr) {
         console.warn('[LINE Postback] Failed to assign tag on welcome choice:', tagErr);
@@ -2143,9 +2215,14 @@ async function processLinePostback(event: any, contact: any, eventId: string, bo
         console.warn('[LINE Postback] Failed to ensure lead on consult choice:', leadErr);
       }
 
+      const recipientName = contact?.full_name || 'お客様';
+      const greetingText = String(patternA.greetingBody || '').replace(/\{recipient_name\}/g, recipientName);
+      const bookingUrl = await resolveOwnerBookingUrl();
+      const bookingButtonLabel = String(patternA.bookingButtonLabel || '').trim().slice(0, 20);
+
       replyMessage = {
         type: 'flex',
-        altText: '【個別相談】大橋真人よりご挨拶・ご相談のご案内',
+        altText: `【個別相談】${patternA.title || '大橋真人よりご挨拶・ご相談のご案内'}`,
         contents: {
           type: 'bubble',
           body: {
@@ -2153,10 +2230,10 @@ async function processLinePostback(event: any, contact: any, eventId: string, bo
             layout: 'vertical',
             spacing: 'md',
             contents: [
-              { type: 'text', text: '🗓️ 経営改善の個別相談', weight: 'bold', size: 'lg', color: '#1E293B' },
+              { type: 'text', text: patternA.title, weight: 'bold', size: 'lg', color: '#1E293B', wrap: true },
               {
                 type: 'text',
-                text: `${contact?.full_name || 'お客様'} 様\n\n個別相談をお選びいただきありがとうございます！\n有限会社MST代表の大橋真人です。\n\n親身にお応えするため、このトーク画面で直接お話を伺わせていただきます。`,
+                text: greetingText,
                 size: 'sm',
                 color: '#334155',
                 wrap: true,
@@ -2171,36 +2248,62 @@ async function processLinePostback(event: any, contact: any, eventId: string, bo
                 contents: [
                   {
                     type: 'text',
-                    text: '💬 まずは【いま一番困っていること】や【相談したいテーマ】を一言メッセージでそのままご返信いただけますでしょうか？',
+                    text: patternA.promptTitle,
                     size: 'xs',
                     weight: 'bold',
                     color: '#1E3A5F',
                     wrap: true,
                   },
-                  {
-                    type: 'text',
-                    text: '（例：新規の反響が止まっている、売上は伸びたが利益が残らない、右腕が育たない、など何でも結構です）',
-                    size: 'xxs',
-                    color: '#64748B',
-                    margin: 'xs',
-                    wrap: true,
-                  },
+                  ...(patternA.promptExamples
+                    ? [
+                        {
+                          type: 'text',
+                          text: patternA.promptExamples,
+                          size: 'xxs',
+                          color: '#64748B',
+                          margin: 'xs',
+                          wrap: true,
+                        },
+                      ]
+                    : []),
                 ],
               },
-              {
-                type: 'text',
-                text: 'メッセージを確認次第、私から直接アドバイス・ご返信を差し上げます！\n※もしZoom等での30分オンライン相談をご希望の場合は「面談希望」とお気軽にお知らせください。',
-                size: 'xs',
-                color: '#475569',
-                wrap: true,
-              },
+              ...(patternA.footerNote
+                ? [
+                    {
+                      type: 'text',
+                      text: patternA.footerNote,
+                      size: 'xs',
+                      color: '#475569',
+                      wrap: true,
+                    },
+                  ]
+                : []),
             ],
           },
+          ...(bookingButtonLabel && bookingUrl
+            ? {
+                footer: {
+                  type: 'box',
+                  layout: 'vertical',
+                  contents: [
+                    {
+                      type: 'button',
+                      style: 'primary',
+                      color: '#1E3A5F',
+                      action: { type: 'uri', label: bookingButtonLabel, uri: bookingUrl },
+                    },
+                  ],
+                },
+              }
+            : {}),
         },
       };
-      inboxBody = '[個別相談受付: 大橋真人よりLINE直通チャット相談案内を送信]';
+      inboxBody = '[個別相談受付: 大橋真人よりLINE直通チャット相談案内（パターンA）を送信]';
     } else if (choice.id === 'care' || choice.route === 'care_interactive') {
       // パターンB: 介護保険外サービス開業相談 (Q1 Flex送信)
+      const recipientName = contact?.full_name || 'お客様';
+      const q1GreetingText = String(patternB.q1.greeting || '').replace(/\{recipient_name\}/g, recipientName);
       replyMessage = {
         type: 'flex',
         altText: '【介護保険外開業】現在の状況についてお聞かせください',
@@ -2211,10 +2314,10 @@ async function processLinePostback(event: any, contact: any, eventId: string, bo
             layout: 'vertical',
             spacing: 'md',
             contents: [
-              { type: 'text', text: '🌿 介護保険外サービスの開業相談', weight: 'bold', size: 'lg', color: '#0284C7' },
+              { type: 'text', text: patternB.q1.title, weight: 'bold', size: 'lg', color: '#0284C7', wrap: true },
               {
                 type: 'text',
-                text: `${contact?.full_name || 'お客様'} 様\n\n開業相談をお選びいただきありがとうございます！有限会社MST代表の大橋真人です。\n\n貴社の状況に合わせたアドバイスをお送りするため、2問だけ教えてください。`,
+                text: q1GreetingText,
                 size: 'sm',
                 color: '#334155',
                 wrap: true,
@@ -2222,51 +2325,25 @@ async function processLinePostback(event: any, contact: any, eventId: string, bo
               { type: 'separator', margin: 'md' },
               {
                 type: 'text',
-                text: '【Q1】現在の状況に一番近いものはどれですか？',
+                text: patternB.q1.question,
                 size: 'xs',
                 weight: 'bold',
                 color: '#0F172A',
                 wrap: true,
               },
-              {
+              ...patternB.q1.choices.map((c: any, idx: number) => ({
                 type: 'button',
                 style: 'primary',
-                color: '#0284C7',
+                color: c.color || (idx === 0 ? '#0284C7' : idx === 1 ? '#1E3A5F' : '#10B981'),
                 height: 'sm',
-                margin: 'md',
+                margin: idx === 0 ? 'md' : 'sm',
                 action: {
                   type: 'postback',
-                  label: '🏢 既存の介護・福祉事業者',
-                  data: 'care_q1=existing',
-                  displayText: '既存の介護・福祉事業者です',
+                  label: String(c.label || `選択肢${idx + 1}`).slice(0, 20),
+                  data: `care_q1=${c.value}`,
+                  displayText: String(c.displayText || c.label || ''),
                 },
-              },
-              {
-                type: 'button',
-                style: 'primary',
-                color: '#1E3A5F',
-                height: 'sm',
-                margin: 'sm',
-                action: {
-                  type: 'postback',
-                  label: '🚀 他業種からの新規参入',
-                  data: 'care_q1=new_entry',
-                  displayText: '他業種からの新規参入を検討しています',
-                },
-              },
-              {
-                type: 'button',
-                style: 'primary',
-                color: '#10B981',
-                height: 'sm',
-                margin: 'sm',
-                action: {
-                  type: 'postback',
-                  label: '👤 個人での独立・開業',
-                  data: 'care_q1=individual',
-                  displayText: '個人での独立・開業を検討しています',
-                },
-              },
+              })),
             ],
           },
         },
@@ -2434,7 +2511,12 @@ async function processLinePostback(event: any, contact: any, eventId: string, bo
   }
 }
 
-async function enqueueScenariosForContact(contactId: string, triggerName: string, onlyOwnerId?: string): Promise<number> {
+async function enqueueScenariosForContact(
+  contactId: string,
+  triggerName: string,
+  onlyOwnerId?: string,
+  options?: { tagName?: string }
+): Promise<number> {
   if (!lineSupabase || !contactId || !triggerName) return 0;
   try {
     const { data: contact, error: contactErr } = await lineSupabase
@@ -2452,7 +2534,14 @@ async function enqueueScenariosForContact(contactId: string, triggerName: string
     const matchedScenarios = scenarios.filter((s: any) => {
       const cfg = s.config || {};
       const isEnabled = cfg.automationEnabled === true || cfg.status === 'prepared' || cfg.status === 'active';
-      return isEnabled && cfg.trigger === triggerName && (!onlyOwnerId || s.owner_id === onlyOwnerId);
+      if (!isEnabled || cfg.trigger !== triggerName || (onlyOwnerId && s.owner_id !== onlyOwnerId)) {
+        return false;
+      }
+      if (triggerName === 'tag_added' && cfg.targetTag) {
+        if (!options?.tagName) return false;
+        return String(cfg.targetTag).trim() === String(options.tagName).trim();
+      }
+      return true;
     });
 
     if (matchedScenarios.length === 0) return 0;
@@ -4084,28 +4173,33 @@ async function processMarketingAutomationJobs(options: { forceImmediate?: boolea
           }
         }
 
-        // 2-1b. 営業メールの自動ステップ：診断に回答済みなら、残りの営業メールは止める
+        // 2-1b. 営業メールの自動ステップ・診断未回答教育リマインド：診断に回答済みなら停止
         //       （診断を受けた相手へ「まだ診断を試されていない場合は…」と送らない）
-        if (scenarioConfig.trigger === 'outreach_first_sent') {
+        if (
+          scenarioConfig.trigger === 'outreach_first_sent' ||
+          (scenarioConfig.trigger === 'tag_added' && scenarioConfig.targetTag === '選択:診断')
+        ) {
+          const checkSince = job.created_at || scenarioCreatedAt;
           const { data: diagDone } = await lineSupabase.from('diagnosis_submissions')
-            .select('id').eq('contact_id', contact.id).gte('submitted_at', scenarioCreatedAt).limit(1);
+            .select('id').eq('contact_id', contact.id).gte('submitted_at', checkSince).limit(1);
           if (diagDone && diagDone.length > 0) {
             await lineSupabase.from('marketing_automation_jobs').update({
               status: 'skipped',
-              error_message: '診断に回答済みのため営業メールを停止（診断フォローへ移行）',
+              error_message: '診断に回答済みのため自動フォローを停止（診断後フォローへ移行）',
               updated_at: new Date().toISOString(),
             }).eq('id', job.id);
             continue;
           }
         }
 
-        // 2-2. LINE返信があれば停止（line_inbox_messages の受信確認）
+        // 2-2. LINE返信があれば停止（ジョブ作成日時以降の line_inbox_messages 受信確認）
         if (job.channel === 'line' && contact.line_user_id) {
+          const lineBaselineAt = job.created_at || scenarioCreatedAt;
           const { data: lineReplies } = await lineSupabase.from('line_inbox_messages')
             .select('id,received_at')
             .eq('line_user_id', contact.line_user_id)
             .eq('direction', 'inbound')
-            .gte('received_at', scenarioCreatedAt)
+            .gte('received_at', lineBaselineAt)
             .limit(1);
           if (lineReplies && lineReplies.length > 0) {
             await lineSupabase.from('marketing_automation_jobs').update({

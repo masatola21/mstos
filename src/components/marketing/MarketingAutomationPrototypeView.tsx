@@ -36,12 +36,13 @@ export const MST_OUTREACH_STARTER_SCENARIOS: Omit<MarketingScenario, 'id' | 'upd
 
 export const MST_LINE_NURTURING_STARTER_SCENARIOS: Omit<MarketingScenario, 'id' | 'updatedAt'>[] = [1, 2, 3, 4, 5, 6, 7].map((step) => {
   const tpl = getNurturingStepTemplate(step);
-  const waitMinutes = step === 1 ? 0 : (step - 1) * 3 * 24 * 60;
+  // 友だち追加直後はウェルカム3択Flexを送るため、ストーリー教育は2日後から3日おきに配信（面談予約・返信で自動停止）
+  const waitMinutes = ((step - 1) * 3 + 2) * 24 * 60;
   return {
     name: tpl.name,
     trigger: 'line_registered' as MarketingTrigger,
     channel: 'both' as MarketingChannel,
-    audience: 'すべての見込み客',
+    audience: 'すべての見込み客（相談予約・返信で停止）',
     waitMinutes,
     emailSubject: tpl.emailSubject,
     emailBody: tpl.emailBody.replace(/\{\{diagnostic_url\}\}/g, '{link_url}').replace(/\{recipient_name\}/g, '{recipient_name}').replace(/\{company_name\}/g, '{company_name}'),
@@ -62,69 +63,166 @@ export const MST_LINE_NURTURING_STARTER_SCENARIOS: Omit<MarketingScenario, 'id' 
   };
 });
 
-export const MST_DIRECT_CONSULT_STARTER_SCENARIO: Omit<MarketingScenario, 'id' | 'updatedAt'> = {
-  name: '【直相談】介護保険外サービス開業・個別経営相談 受付案内',
-  trigger: 'lead_created',
-  channel: 'both',
-  audience: 'すべての見込み客',
-  waitMinutes: 0,
-  emailSubject: '【MST】介護保険外サービス開業・個別相談を承りました（日程調整のご案内）',
-  emailBody: '{recipient_name} 様\n\n有限会社MSTの大橋真人です。\nこの度は介護保険外サービス開業・個別相談のお申し込みをいただき、誠にありがとうございます。\n\n貴社の事業構想や地域ニーズを踏まえ、失敗しない開業ステップとサービス設計について、30分のオンライン相談にて直接アドバイスさせていただきます。\n\n▼ 面談日程の選択はこちら\n{booking_url}\n\n当日お話しできますことを楽しみにしております。\n\n有限会社MST\n大橋真人',
-  messageBody: '{recipient_name} 様\n介護保険外サービス開業・個別相談のお申し込みありがとうございます！有限会社MST代表の大橋真人です。\n\n貴社の構想や開業課題を伺い、最初の実行ステップを具体化する【30分無料オンライン相談】枠をご用意いたしました。\n\n▼ 日程調整はこちら\n{booking_url}',
-  lineMessageType: 'flex',
-  lineImageUrl: '',
-  linePreviewImageUrl: '',
-  flexAltText: '【受付完了】介護保険外サービス開業・個別相談のご案内',
-  flexTitle: '🌿 介護保険外サービス開業・個別相談',
-  flexBody: '{recipient_name} 様\nご相談ありがとうございます！有限会社MST代表の大橋真人です。\n貴社の構想や開業課題を伺い、最初の実行ステップを具体化する【30分無料オンライン相談】枠を確保いたしました。下記よりご都合の良い枠をお選びください。',
-  flexButtonLabel: '無料相談の日程を選ぶ',
-  flexButtonUrl: '{booking_url}',
-  status: 'draft',
-  automationEnabled: false,
-  stopOnBooking: true,
-  stopOnDeal: true,
-  consentBasis: '個別相談フォーム・LINE相談受付時の同意に基づく',
-};
-
-export const MST_DIAGNOSIS_STARTER_SCENARIOS: Omit<MarketingScenario, 'id' | 'updatedAt'>[] = [
+// 分岐 B: 経営改善 個別相談（パターンA：親身な相談ルート → 商談案内）
+export const MST_CONSULT_STARTER_SCENARIOS: Omit<MarketingScenario, 'id' | 'updatedAt'>[] = [
   {
-    name: '【1. 初回登録】LINE友だち追加・ボトルネック診断ご案内',
-    trigger: 'line_registered',
+    name: '【B1・親身フォロー】1日後：一言メモでもOK！よくある経営相談3選',
+    trigger: 'tag_added',
+    targetTag: '選択:個別相談',
     channel: 'line',
-    audience: 'すべての見込み客',
-    waitMinutes: 0,
+    audience: '「選択:個別相談」タグ（LINE返信・予約未完了）',
+    waitMinutes: 1440,
     emailSubject: '',
     emailBody: '',
-    messageBody: '{recipient_name} 様\n友だち追加ありがとうございます！有限会社MSTです。\n\n貴社の業務・経営における「本当のボトルネック（手作業・売上利益・属人化）」を特定し、改善処方箋を作成する【無料ボトルネック診断】を実施中です。\n\n回答後すぐに速報分析をご確認いただけます。',
+    messageBody:
+      '{recipient_name} 様\n有限会社MSTの大橋真人です。\n\n昨日は「個別相談」をお選びいただきありがとうございました！\n「どう文章で相談を書けばいいか迷う…」というお声もよくいただきますので、箇条書きや一言だけでも構いません。\n\nたとえば最近は以下のようなご相談が多いです：\n・売上はあるが手元に利益が残らない\n・現場の手作業・二重入力を減らしたい\n・新規の問い合わせ導線を整えたい\n\n気になる項目がございましたら、番号だけでもお気軽にご返信ください！',
+    lineMessageType: 'text',
+    lineImageUrl: '',
+    linePreviewImageUrl: '',
+    flexAltText: '',
+    flexTitle: '',
+    flexBody: '',
+    flexButtonLabel: '',
+    flexButtonUrl: '',
+    status: 'draft',
+    automationEnabled: false,
+    stopOnBooking: true,
+    stopOnDeal: true,
+    consentBasis: 'LINE個別相談ボタン選択時の同意に基づく',
+  },
+  {
+    name: '【B2・商談案内】3日後：仕組み化事例（教育）＋ 30分無料オンライン相談',
+    trigger: 'tag_added',
+    targetTag: '選択:個別相談',
+    channel: 'both',
+    audience: '「選択:個別相談」タグ（予約未完了）',
+    waitMinutes: 4320,
+    emailSubject: '【MST】30分無料オンライン個別相談のご案内（日程調整）',
+    emailBody:
+      '{recipient_name} 様\n\n有限会社MSTの大橋真人です。\n\n文章で状況をまとめるのが大変な場合は、30分のオンライン相談にて画面を見ながら一緒に整理することも可能です。\n\n他社様では、最初の30分の壁打ちだけで「毎月25時間の手作業削減ポイント」が見つかった事例も多数ございます。\n\n▼ 30分無料オンライン相談の日程を選ぶ\n{booking_url}\n\nもちろんLINEトーク上でのやり取りのままでも大歓迎です。ご都合の良い方法をお選びください！',
+    messageBody:
+      '{recipient_name} 様\n有限会社MSTの大橋です。\n\n文字で打つのが大変な場合は、30分のオンライン相談でそのままお話を伺いながら「利益が残る仕組み化の一手」を一緒に整理いたします。\n\n▼ 30分無料オンライン相談の日程を選ぶ\n{booking_url}',
     lineMessageType: 'flex',
     lineImageUrl: '',
     linePreviewImageUrl: '',
-    flexAltText: '【MST経営OS】無料ボトルネック診断（約3分）のご案内',
-    flexTitle: '【無料】業務ボトルネック診断（約3分）',
-    flexBody: '{recipient_name} 様\n友だち追加ありがとうございます！\n貴社の業務における「本当の急所（属人化・人手不足・売上低迷）」を特定し、改善ロードマップを作成します。回答後すぐに速報分析をご確認いただけます。',
+    flexAltText: '【ご案内】30分無料オンライン個別相談（大橋真人）',
+    flexTitle: '🗓️ 30分無料オンライン相談のご案内',
+    flexBody:
+      '{recipient_name} 様\n文字でまとめるのが大変な場合は、30分のオンラインで一緒にお悩みを整理しませんか？他社事例を踏まえ、最初の改善ステップをご提案します。',
+    flexButtonLabel: '無料相談の日程を選ぶ',
+    flexButtonUrl: '{booking_url}',
+    status: 'draft',
+    automationEnabled: false,
+    stopOnBooking: true,
+    stopOnDeal: true,
+    consentBasis: 'LINE個別相談ボタン選択時の同意に基づく',
+  },
+];
+
+// 分岐 C: 介護保険外サービス開業（パターンB：2問ヒアリング × 専門教育 → 商談案内）
+export const MST_CARE_STARTER_SCENARIOS: Omit<MarketingScenario, 'id' | 'updatedAt'>[] = [
+  {
+    name: '【C1・専門教育】1日後：直営「アシスタ大垣」の実務モデル＆収益設計のコツ',
+    trigger: 'tag_added',
+    targetTag: '介護保険外開業',
+    channel: 'line',
+    audience: '「介護保険外開業」タグ（LINE返信・予約未完了）',
+    waitMinutes: 1440,
+    emailSubject: '',
+    emailBody: '',
+    messageBody:
+      '{recipient_name} 様\n有限会社MSTの大橋真人です。\n\n介護保険外サービスの開業では、制度に縛られない分「どの単価帯・メニューから始めるか」で初年度の黒字化スピードが大きく変わります。\n\n弊社の直営事業「アシスタ大垣」の現場では、最初の立ち上げで\n① 地域の困りごとに特化した基本プラン\n② 継続利用につながる回数・月額設計\nの2点をシンプルに絞ることで安定収益化を実現してきました。\n\n今お考えの事業形態やご不安な点があれば、このままLINEで一言お送りください！',
+    lineMessageType: 'text',
+    lineImageUrl: '',
+    linePreviewImageUrl: '',
+    flexAltText: '',
+    flexTitle: '',
+    flexBody: '',
+    flexButtonLabel: '',
+    flexButtonUrl: '',
+    status: 'draft',
+    automationEnabled: false,
+    stopOnBooking: true,
+    stopOnDeal: true,
+    consentBasis: 'LINE介護保険外開業相談選択時の同意に基づく',
+  },
+  {
+    name: '【C2・商談案内】3日後：30分無料・介護保険外開業 個別作戦会議のご案内',
+    trigger: 'tag_added',
+    targetTag: '介護保険外開業',
+    channel: 'both',
+    audience: '「介護保険外開業」タグ（予約未完了）',
+    waitMinutes: 4320,
+    emailSubject: '【MST】介護保険外サービス開業・30分無料個別作戦会議のご案内',
+    emailBody:
+      '{recipient_name} 様\n\n有限会社MSTの大橋真人です。\n\n貴社の事業状況や地域のニーズを踏まえ、失敗しない開業ステップと収益モデル設計について、30分のオンライン相談にて直接アドバイスさせていただきます。\n\n▼ 無料開業相談の日程を選ぶ\n{booking_url}\n\n当日お話しできますことを楽しみにしております。',
+    messageBody:
+      '{recipient_name} 様\n介護保険外サービスの立ち上げについて、貴社の地域・強みに合わせた収益モデルや必要書類を整理する【30分無料・開業作戦会議】をご案内しております。\n\n▼ 日程調整はこちら\n{booking_url}',
+    lineMessageType: 'flex',
+    lineImageUrl: '',
+    linePreviewImageUrl: '',
+    flexAltText: '【ご案内】30分無料・介護保険外開業 個別作戦会議',
+    flexTitle: '🌿 介護保険外開業・30分無料作戦会議',
+    flexBody:
+      '{recipient_name} 様\n直営「アシスタ大垣」の実務データをもとに、貴社に合わせたメニュー設計・集客導線を30分で一緒に具体化しませんか？',
+    flexButtonLabel: '無料開業相談を予約する',
+    flexButtonUrl: '{booking_url}',
+    status: 'draft',
+    automationEnabled: false,
+    stopOnBooking: true,
+    stopOnDeal: true,
+    consentBasis: 'LINE介護保険外開業相談選択時の同意に基づく',
+  },
+];
+
+export const MST_DIRECT_CONSULT_STARTER_SCENARIO: Omit<MarketingScenario, 'id' | 'updatedAt'> =
+  MST_CONSULT_STARTER_SCENARIOS[1];
+
+// 分岐 A: 3分無料経営診断 × 教育 → 商談案内
+export const MST_DIAGNOSIS_STARTER_SCENARIOS: Omit<MarketingScenario, 'id' | 'updatedAt'>[] = [
+  {
+    name: '【A1・教育リマインド】診断未回答フォロー（人手不足ではなく仕組み不足）',
+    trigger: 'tag_added',
+    targetTag: '選択:診断',
+    channel: 'line',
+    audience: '「選択:診断」タグ（診断未回答者のみ）',
+    waitMinutes: 1440,
+    emailSubject: '',
+    emailBody: '',
+    messageBody:
+      '{recipient_name} 様\n有限会社MSTの大橋です。\n\n昨日は無料経営診断をお選びいただきありがとうございました！\n多くの企業様で課題となる「人手不足・利益が残らない悩み」は、実は人ではなく【業務の配管（仕組み）の詰まり】が原因であることがほとんどです。\n\n3分ほどの選択式チェックで貴社のボトルネックを即判定できますので、お時間のある際にぜひお試しください。',
+    lineMessageType: 'flex',
+    lineImageUrl: '',
+    linePreviewImageUrl: '',
+    flexAltText: '【3分無料診断】人手不足ではなく「仕組み不足」を特定する',
+    flexTitle: '📊 3分でわかる業務ボトルネック診断',
+    flexBody:
+      '{recipient_name} 様\n日々の業務に追われて利益が残りにくい原因を、選択式の質問で即座に可視化します（所要約3分・無料）。',
     flexButtonLabel: '3分診断を始める',
     flexButtonUrl: '{link_url}',
     status: 'draft',
     automationEnabled: false,
     stopOnBooking: true,
     stopOnDeal: true,
-    consentBasis: 'LINE友だち追加時の配信同意に基づく',
+    consentBasis: 'LINE診断ルート選択時の配信同意に基づく',
   },
   {
-    name: '【2. 診断直後】回答完了のお礼＆分析レポート作成開始',
+    name: '【A2・診断直後】回答完了のお礼＆分析レポート作成開始',
     trigger: 'diagnosis_completed',
     channel: 'line',
-    audience: 'すべての見込み客',
+    audience: '診断完了者',
     waitMinutes: 0,
     emailSubject: '',
     emailBody: '',
-    messageBody: '{recipient_name} 様\n【経営課題・業務ボトルネック診断】へのご回答ありがとうございました！\n\n現在、回答内容をもとに詳細な改善ロードマップ（診断レポート）を作成しております。\n\n※お急ぎで急所改善のご相談を希望される場合は、先行して無料の個別相談（30分）をご予約いただけます。\n{booking_url}',
+    messageBody:
+      '{recipient_name} 様\n【経営課題・業務ボトルネック診断】へのご回答ありがとうございました！\n\n現在、回答内容をもとに詳細な改善ロードマップ（診断レポート）を作成しております。\n\n※お急ぎで急所改善のご相談を希望される場合は、先行して無料の個別相談（30分）をご予約いただけます。\n{booking_url}',
     lineMessageType: 'flex',
     lineImageUrl: '',
     linePreviewImageUrl: '',
     flexAltText: '【診断受付完了】急所分析レポート作成中',
     flexTitle: '📊 診断受付完了・レポート作成中',
-    flexBody: '{recipient_name} 様、診断へのご回答ありがとうございました！\n現在AIと専門アナリストが詳細な改善レポートを作成中です。お急ぎの方は先行して30分の無料個別相談をご予約いただけます。',
+    flexBody:
+      '{recipient_name} 様、診断へのご回答ありがとうございました！\n現在AIと専門アナリストが詳細な改善レポートを作成中です。お急ぎの方は先行して30分の無料個別相談をご予約いただけます。',
     flexButtonLabel: '無料相談の日程を選ぶ',
     flexButtonUrl: '{booking_url}',
     status: 'draft',
@@ -134,20 +232,22 @@ export const MST_DIAGNOSIS_STARTER_SCENARIOS: Omit<MarketingScenario, 'id' | 'up
     consentBasis: '診断フォーム回答時の同意に基づく',
   },
   {
-    name: '【3. レポート送付】診断レポート完成＆個別面談のご提案',
+    name: '【A3・レポート送付】診断レポート完成＆個別作戦会議（商談）のご提案',
     trigger: 'report_approved',
     channel: 'line',
-    audience: 'すべての見込み客',
+    audience: 'レポート承認済み見込み客',
     waitMinutes: 0,
     emailSubject: '',
     emailBody: '',
-    messageBody: '{recipient_name} 様\n大変お待たせいたしました！貴社の【経営改善・ボトルネック診断レポート】が完成いたしました。\n\n▼診断レポートの閲覧はこちら\n{document_url}\n\nこのレポートをもとに、最優先で着手すべき「最初の1手」を具体化する無料個別相談（30分）も承っております。\n{booking_url}',
+    messageBody:
+      '{recipient_name} 様\n大変お待たせいたしました！貴社の【経営改善・ボトルネック診断レポート】が完成いたしました。\n\n▼診断レポートの閲覧はこちら\n{document_url}\n\nこのレポートをもとに、最優先で着手すべき「最初の1手」を具体化する無料個別相談（30分）も承っております。\n{booking_url}',
     lineMessageType: 'flex',
     lineImageUrl: '',
     linePreviewImageUrl: '',
     flexAltText: '【診断レポート完成】貴社の急所分析・改善処方箋',
     flexTitle: '📑 業務ボトルネック診断レポート完成',
-    flexBody: '{recipient_name} 様\n大変お待たせいたしました！貴社の【改善ロードマップ付き診断レポート】が完成しました。最優先で着手すべき「最初の1手」をご確認ください。',
+    flexBody:
+      '{recipient_name} 様\n大変お待たせいたしました！貴社の【改善ロードマップ付き診断レポート】が完成しました。最優先で着手すべき「最初の1手」をご確認ください。',
     flexButtonLabel: 'レポートを閲覧する',
     flexButtonUrl: '{document_url}',
     status: 'draft',
@@ -157,20 +257,22 @@ export const MST_DIAGNOSIS_STARTER_SCENARIOS: Omit<MarketingScenario, 'id' | 'up
     consentBasis: '診断レポート完成通知への同意に基づく',
   },
   {
-    name: '【4. 3日後フォロー】診断レポートのご確認状況と個別相談の打診',
+    name: '【A4・3日後教育】レポートの活かし方＆個別作戦会議（商談）の打診',
     trigger: 'report_sent',
     channel: 'line',
-    audience: 'すべての見込み客',
+    audience: 'レポート送付済み・未予約者',
     waitMinutes: 4320,
     emailSubject: '',
     emailBody: '',
-    messageBody: '{recipient_name} 様\n先日お送りいたしました診断レポートはご確認いただけましたでしょうか？\n\n「どこから手をつければいいか分からない」「自社だけで実行するのが難しそう」といったお声に対して、他社事例を踏まえた30分の無料オンライン作戦会議を実施しております。\n\n▼面談の日程を選ぶ\n{booking_url}',
+    messageBody:
+      '{recipient_name} 様\n先日お送りいたしました診断レポートはご確認いただけましたでしょうか？\n\n「どこから手をつければいいか分からない」「自社だけで実行するのが難しそう」といったお声に対して、他社事例を踏まえた30分の無料オンライン作戦会議を実施しております。\n\n▼面談の日程を選ぶ\n{booking_url}',
     lineMessageType: 'flex',
     lineImageUrl: '',
     linePreviewImageUrl: '',
     flexAltText: '【個別作戦会議】診断レポート解消の具体策（30分・無料）',
     flexTitle: '🎯 個別作戦会議のご案内（無料）',
-    flexBody: '{recipient_name} 様\n診断レポートの急所を最短で解消する具体的な手順について、他社実績を踏まえて30分で直接アドバイスいたします。ご都合の良い枠をお選びください。',
+    flexBody:
+      '{recipient_name} 様\n診断レポートの急所を最短で解消する具体的な手順について、他社実績を踏まえて30分で直接アドバイスいたします。ご都合の良い枠をお選びください。',
     flexButtonLabel: '無料作戦会議を予約する',
     flexButtonUrl: '{booking_url}',
     status: 'draft',
@@ -180,20 +282,22 @@ export const MST_DIAGNOSIS_STARTER_SCENARIOS: Omit<MarketingScenario, 'id' | 'up
     consentBasis: '診断フォロー配信への同意に基づく',
   },
   {
-    name: '【5. 7日後フォロー】他社改善事例のご紹介＆個別相談の最終枠',
+    name: '【A5・7日後商談案内】月20時間創出の仕組み化事例＆無料相談枠',
     trigger: 'report_sent',
     channel: 'line',
-    audience: 'すべての見込み客',
+    audience: 'レポート送付済み・未予約者',
     waitMinutes: 10080,
     emailSubject: '',
     emailBody: '',
-    messageBody: '{recipient_name} 様\n診断レポートのご案内から1週間が経ちました。\n\n同様の課題（現場業務の属人化・請求や見積の手作業）を抱えていた企業様が、仕組み化により月20時間の経営時間を創出した事例をご紹介しております。\n\n今月の無料個別相談の枠も残り少なくなっておりますので、現状を打破したいとお考えの方はぜひお早めにご予約ください。\n{booking_url}',
+    messageBody:
+      '{recipient_name} 様\n診断レポートのご案内から1週間が経ちました。\n\n同様の課題（現場業務の属人化・請求や見積の手作業）を抱えていた企業様が、仕組み化により月20時間の経営時間を創出した事例をご紹介しております。\n\n今月の無料個別相談の枠も残り少なくなっておりますので、現状を打破したいとお考えの方はぜひお早めにご予約ください。\n{booking_url}',
     lineMessageType: 'flex',
     lineImageUrl: '',
     linePreviewImageUrl: '',
     flexAltText: '【改善事例】月20時間の経営時間を創出した仕組み化手法',
     flexTitle: '💡 仕組み化による業務改善事例',
-    flexBody: '{recipient_name} 様\n同様の急所（属人化・請求手作業）を仕組み化で解消した事例を公開中。今月の無料作戦会議の枠も残り少なくなっております。',
+    flexBody:
+      '{recipient_name} 様\n同様の急所（属人化・請求手作業）を仕組み化で解消した事例を公開中。今月の無料作戦会議の枠も残り少なくなっております。',
     flexButtonLabel: '今すぐ面談枠を確保する',
     flexButtonUrl: '{booking_url}',
     status: 'draft',
@@ -327,19 +431,23 @@ const emptyScenario = (): Omit<MarketingScenario, 'id' | 'updatedAt'> => ({
 export function getScenarioSortKey(scenario: MarketingScenario): { categoryOrder: number; stepNumber: number; waitMinutes: number; name: string } {
   const name = scenario.name || '';
   
-  // カテゴリ優先度: 1. 診断・面談フォロー, 2. 見込み営業メール, 3. ストーリーナーチャリング, 99. その他
+  // カテゴリ優先度: 1. 分岐A(診断), 2. 分岐B(個別相談), 3. 分岐C(介護開業), 4. 共通教育(ストーリー), 5. 営業メール, 99. その他
   let categoryOrder = 99;
-  if (name.includes('診断') || name.includes('【1. 初回') || name.includes('【2. 診断') || name.includes('【3. レポート') || name.includes('【4. 3日') || name.includes('【5. 7日') || scenario.trigger.startsWith('diagnosis_') || scenario.trigger.startsWith('report_')) {
+  if (name.includes('【A') || name.includes('診断') || name.includes('【1. 初回') || name.includes('【2. 診断') || name.includes('【3. レポート') || name.includes('【4. 3日') || name.includes('【5. 7日') || scenario.trigger.startsWith('diagnosis_') || scenario.trigger.startsWith('report_')) {
     categoryOrder = 1;
-  } else if (name.includes('営業メール') || name.includes('【営業') || (scenario.channel === 'email' && scenario.trigger === 'lead_created')) {
+  } else if (name.includes('【B') || (name.includes('個別相談') && !name.includes('介護'))) {
     categoryOrder = 2;
-  } else if (name.includes('ストーリー') || name.includes('大橋') || name.includes('ナーチャリング') || name.includes('話】') || name.includes('第')) {
+  } else if (name.includes('【C') || name.includes('介護') || name.includes('保険外')) {
     categoryOrder = 3;
+  } else if (name.includes('ストーリー') || name.includes('大橋') || name.includes('ナーチャリング') || name.includes('話】')) {
+    categoryOrder = 4;
+  } else if (name.includes('営業メール') || name.includes('【第') || (scenario.channel === 'email' && scenario.trigger === 'lead_created')) {
+    categoryOrder = 5;
   }
 
-  // ステップ番号の抽出（例: 【1. や 第1話、ステップ1、営業メール1 など）
+  // ステップ番号の抽出（例: 【A1 / 【B2 / 第1話 / ステップ1 など）
   let stepNumber = 999;
-  const numMatch = name.match(/[【［\[第ステップ]?\s*(\d+)\s*[.話ステップ\]］】]/) || name.match(/(\d+)/);
+  const numMatch = name.match(/[【［\[第ABCステップ]*\s*(\d+)/) || name.match(/(\d+)/);
   if (numMatch) {
     stepNumber = parseInt(numMatch[1], 10);
   }
@@ -583,7 +691,7 @@ export const MarketingAutomationPrototypeView: React.FC<Props> = ({ scenarios, o
   const applyDiagnosisStarterSet = () => {
     const { merged, addedCount, updatedCount } = mergeStarterScenarios(MST_DIAGNOSIS_STARTER_SCENARIOS);
     onScenariosChange(merged);
-    setNotice(`診断フォロー（5本・Flex対応）を反映しました（新規導入: ${addedCount}件、最新更新: ${updatedCount}件）。何回押しても重複しません。`);
+    setNotice(`分岐A「診断×教育フォロー」（5本・Flex対応）を反映しました（新規導入: ${addedCount}件、最新更新: ${updatedCount}件）。`);
   };
 
   const applyOutreachStarterSet = () => {
@@ -595,25 +703,29 @@ export const MarketingAutomationPrototypeView: React.FC<Props> = ({ scenarios, o
   const applyLineNurturingStarterSet = () => {
     const { merged, addedCount, updatedCount } = mergeStarterScenarios(MST_LINE_NURTURING_STARTER_SCENARIOS);
     onScenariosChange(merged);
-    setNotice(`大橋ストーリー型ナーチャリング（7話・テキスト共感重視）を反映しました（新規導入: ${addedCount}件、最新更新: ${updatedCount}件）。何回押しても重複しません。`);
+    setNotice(`共通教育「大橋ストーリー型（7話）」を反映しました（新規導入: ${addedCount}件、最新更新: ${updatedCount}件）。`);
   };
 
   const applyDirectConsultStarterSet = () => {
-    const { merged, addedCount, updatedCount } = mergeStarterScenarios([MST_DIRECT_CONSULT_STARTER_SCENARIO]);
+    const { merged, addedCount, updatedCount } = mergeStarterScenarios([
+      ...MST_CONSULT_STARTER_SCENARIOS,
+      ...MST_CARE_STARTER_SCENARIOS,
+    ]);
     onScenariosChange(merged);
-    setNotice(`介護開業・個別相談の直相談Flexシナリオを反映しました（新規導入: ${addedCount}件、最新更新: ${updatedCount}件）。`);
+    setNotice(`分岐B（親身な相談）・分岐C（介護開業）のフォロー＆商談案内シナリオを反映しました（新規導入: ${addedCount}件、最新更新: ${updatedCount}件）。`);
   };
 
   const applyAllStarterSets = () => {
     const allPresets = [
       ...MST_DIAGNOSIS_STARTER_SCENARIOS,
-      MST_DIRECT_CONSULT_STARTER_SCENARIO,
+      ...MST_CONSULT_STARTER_SCENARIOS,
+      ...MST_CARE_STARTER_SCENARIOS,
       ...MST_OUTREACH_STARTER_SCENARIOS,
       ...MST_LINE_NURTURING_STARTER_SCENARIOS,
     ];
     const { merged, addedCount, updatedCount } = mergeStarterScenarios(allPresets);
     onScenariosChange(merged);
-    setNotice(`公式プリセット全18本を反映しました（新規導入: ${addedCount}件、最新更新: ${updatedCount}件）。何回押しても重複しません。`);
+    setNotice(`公式プリセット全${allPresets.length}本を反映しました（新規導入: ${addedCount}件、最新更新: ${updatedCount}件）。何回押しても重複しません。`);
   };
   const startNew = () => {
     const newStep: MarketingScenario = {
