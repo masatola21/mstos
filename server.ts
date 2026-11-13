@@ -17,6 +17,10 @@ import { generateDocumentPdf } from './server/pdfService.js';
 import { appendEmailFooter } from './server/emailFooter.js';
 import { classifyBottleneck } from './server/diagnosisAnalysis.js';
 import { DRAFT_CHAPTERS, DRAFT_SYSTEM_INSTRUCTION, buildProposalDraftPrompt, sanitizeDraftContext, cleanDraftOutput, type DraftChapter } from './server/proposalDraftBuilder.js';
+import {
+  MEETING_KINDS, MEETING_SYSTEM_INSTRUCTION, MeetingNotesFormatError, buildOrganizePrompt, parseOrganizedNotes, sanitizeTranscript,
+  buildExtraQuestionsPrompt, parseExtraQuestions, sanitizeExtraQuestionsContext, type MeetingKind,
+} from './server/meetingNotes.js';
 import { buildDiagnosisReportMarkdown, renderDiagnosisReportHtml, DiagnosisReportFormatError, DIAGNOSIS_REPORT_PROMPT_V2, type DiagnosisPremise } from './server/diagnosisReportBuilder.js';
 
 dotenv.config();
@@ -7355,6 +7359,64 @@ app.post('/api/proposals/draft-chapter', requireAuth, async (req, res) => {
     if (err?.name === 'AbortError') return;
     console.error('Proposal draft failed:', err?.message || err);
     return res.status(500).json({ error: err?.message || '下書きを作成できませんでした。' });
+  }
+});
+
+// 面談メモ(貼り付けた文字起こし)のAI整理。商談はヒアリングの回答も取り出す。話されていない項目は空のまま。
+app.post('/api/meetings/organize-notes', requireAuth, async (req, res) => {
+  const kind = String(req.body?.kind || '') as MeetingKind;
+  if (!MEETING_KINDS.includes(kind)) return res.status(400).json({ error: '面談の種類が正しくありません。' });
+  const transcript = sanitizeTranscript(req.body?.transcript);
+  if (transcript.length < 20) return res.status(400).json({ error: '文字起こし(または議事メモ)を貼り付けてください。' });
+
+  try {
+    const killSwitch = await getKillSwitchStatus('ai');
+    if (killSwitch.paused) {
+      return res.status(503).json({ error: `AI呼び出し機能は緊急停止中です: ${killSwitch.reason || '一時停止中'}` });
+    }
+    const abortController = new AbortController();
+    res.on('close', () => {
+      if (!res.writableEnded) abortController.abort();
+    });
+    const result = await runWithFallback(resolveModelSetting(undefined), {
+      systemInstruction: MEETING_SYSTEM_INSTRUCTION,
+      messages: [{ role: 'user', content: buildOrganizePrompt(kind, transcript) }],
+      temperature: 0.2,
+      signal: abortController.signal,
+    });
+    return res.json({ notes: parseOrganizedNotes(result.text, kind) });
+  } catch (err: any) {
+    if (err?.name === 'AbortError') return;
+    if (err instanceof MeetingNotesFormatError) return res.status(502).json({ error: err.message });
+    console.error('Meeting notes organize failed:', err?.message || err);
+    return res.status(500).json({ error: err?.message || '面談メモを整理できませんでした。' });
+  }
+});
+
+// D6(商談で確認すること)の追加質問。診断の回答から読み取れなかった点を、最大5問。固定の質問だけでも商談は進められる。
+app.post('/api/meetings/extra-questions', requireAuth, async (req, res) => {
+  try {
+    const killSwitch = await getKillSwitchStatus('ai');
+    if (killSwitch.paused) {
+      return res.status(503).json({ error: `AI呼び出し機能は緊急停止中です: ${killSwitch.reason || '一時停止中'}` });
+    }
+    const context = sanitizeExtraQuestionsContext(req.body?.context);
+    const abortController = new AbortController();
+    res.on('close', () => {
+      if (!res.writableEnded) abortController.abort();
+    });
+    const result = await runWithFallback(resolveModelSetting(undefined), {
+      systemInstruction: MEETING_SYSTEM_INSTRUCTION,
+      messages: [{ role: 'user', content: buildExtraQuestionsPrompt(context) }],
+      temperature: 0.4,
+      signal: abortController.signal,
+    });
+    return res.json({ questions: parseExtraQuestions(result.text) });
+  } catch (err: any) {
+    if (err?.name === 'AbortError') return;
+    if (err instanceof MeetingNotesFormatError) return res.status(502).json({ error: err.message });
+    console.error('Extra questions failed:', err?.message || err);
+    return res.status(500).json({ error: err?.message || '追加質問を作成できませんでした。' });
   }
 });
 

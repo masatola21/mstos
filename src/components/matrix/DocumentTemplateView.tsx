@@ -49,6 +49,7 @@ import {
 } from '../../constants/proposalChapters';
 import { proposalEmptyText, defaultPaymentTermsFor, requiredKeysFor, MULTILINE_KEYS, DRAFTABLE_KEYS } from './proposalTemplate';
 import { calcProposalFees, parseYen, formatYen } from '../../utils/proposalFees';
+import { composeMeetingMemo, sanitizeCoreAnswers, sanitizeExtraQuestions } from '../../constants/hearingSheet';
 
 export type { DocTemplateType, DocTemplate, PaymentMode, InvoiceSubtype };
 
@@ -238,6 +239,12 @@ export const DocumentTemplateView: React.FC<DocumentTemplateViewProps> = ({
         const result = await supabase.from('ai_reports').select('*').eq('diagnosis_id', diagnosis.id).eq('is_latest', true).maybeSingle();
         report = result.data;
       }
+      // ヒアリングシートがあれば、その内容を商談メモの材料にする(テーブル未作成・未入力なら何もしない)
+      let hearingMemo = '';
+      if (diagnosis?.id) {
+        const hs = await supabase.from('hearing_sheets').select('core_answers,extra_questions').eq('diagnosis_id', diagnosis.id).order('created_at', { ascending: false }).limit(1).maybeSingle();
+        if (!hs.error && hs.data) hearingMemo = composeMeetingMemo(sanitizeCoreAnswers(hs.data.core_answers), sanitizeExtraQuestions(hs.data.extra_questions));
+      }
       let productName = '';
       let product: any = null;
       if (deal?.product_id) {
@@ -343,6 +350,7 @@ export const DocumentTemplateView: React.FC<DocumentTemplateViewProps> = ({
       // 提案書: 診断の章(D0〜D5)・サービス名・商談の金額は、空の欄にだけ入れる(担当者の入力を上書きしない)
       const proposalSeed: Record<string, string> = {};
       if (selectedTemplateId === 'tpl-proposal-report') {
+        if (hearingMemo) proposalSeed.p_meeting_notes = hearingMemo;
         if (deal?.proposal_plan_name) proposalSeed.proposal_title = String(deal.proposal_plan_name);
         if (productName) proposalSeed.p2_service_name = productName;
         const parsedReport = parseDiagnosisReport(report?.full_report_text || '');
