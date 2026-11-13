@@ -1,6 +1,7 @@
 import PDFDocument from 'pdfkit';
 import fs from 'fs';
 import path from 'path';
+import { fileURLToPath } from 'url';
 
 interface CustomerDoc {
   id: string;
@@ -10,16 +11,21 @@ interface CustomerDoc {
   created_at?: string | null;
 }
 
+// 日本語フォント(Noto Sans JP / SIL OFL)をリポジトリに同梱する。
+// サーバー(Vercel)にはシステムフォントがないため、同梱しないと日本語が文字化けする。
+// vercel.json の includeFiles で server/fonts/** をデプロイに含める。
 const FONT_CANDIDATES = [
+  path.join(process.cwd(), 'server', 'fonts', 'NotoSansJP-Regular.ttf'),
+  path.join(path.dirname(fileURLToPath(import.meta.url)), 'fonts', 'NotoSansJP-Regular.ttf'),
   '/usr/share/fonts/opentype/unifont/unifont_jp.otf',
-  '/usr/share/fonts/opentype/unifont/unifont.otf',
 ];
 
-function getJapaneseFont(): string | null {
+function getJapaneseFont(): string {
   for (const fontPath of FONT_CANDIDATES) {
     if (fs.existsSync(fontPath)) return fontPath;
   }
-  return null;
+  // フォントがないまま作ると文字化けしたPDFができる。作らずにエラーにする。
+  throw new Error('日本語フォントが見つからないため、PDFを作成できません。');
 }
 
 // Convert HTML text to structural blocks
@@ -135,9 +141,7 @@ export async function generateDocumentPdf(doc: CustomerDoc, companyName?: string
       });
 
       const fontPath = getJapaneseFont();
-      if (fontPath) {
-        pdf.font(fontPath);
-      }
+      pdf.font(fontPath);
 
       const buffers: Buffer[] = [];
       pdf.on('data', (chunk) => buffers.push(chunk));
@@ -185,7 +189,7 @@ export async function generateDocumentPdf(doc: CustomerDoc, companyName?: string
         // Check page break
         if (pdf.y > pdf.page.height - 80) {
           pdf.addPage();
-          if (fontPath) pdf.font(fontPath);
+          pdf.font(fontPath);
         }
 
         if (block.type === 'h1') {
@@ -215,7 +219,7 @@ export async function generateDocumentPdf(doc: CustomerDoc, companyName?: string
             block.rows.forEach((row, rowIdx) => {
               if (pdf.y > pdf.page.height - 70) {
                 pdf.addPage();
-                if (fontPath) pdf.font(fontPath);
+                pdf.font(fontPath);
               }
 
               const rowY = pdf.y;
@@ -250,7 +254,7 @@ export async function generateDocumentPdf(doc: CustomerDoc, companyName?: string
       // 4. Footer Note
       if (pdf.y > pdf.page.height - 60) {
         pdf.addPage();
-        if (fontPath) pdf.font(fontPath);
+        pdf.font(fontPath);
       }
       pdf.moveDown(1);
       pdf.fillColor('#64748b').fontSize(8).text('※ 本書は有限会社MSTより電子的に作成・発行された重要書類です。', 40, pdf.y, {

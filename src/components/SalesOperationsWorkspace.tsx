@@ -264,6 +264,12 @@ export const SalesOperationsWorkspace: React.FC<Props> = ({ tab, companyId, lead
   };
 
   useEffect(() => { void load(); }, [tab, activeOpsTab, companyId, leadId, dealId]);
+  // 送信センターで書類を送ったら、一覧の状態(送信済みなど)を読み直す
+  useEffect(() => {
+    const reload = () => { void load(); };
+    window.addEventListener('mst:documents-changed', reload);
+    return () => window.removeEventListener('mst:documents-changed', reload);
+  }, [tab, activeOpsTab, companyId, leadId, dealId]);
 
   const createSegment = async (event: React.FormEvent) => {
     event.preventDefault();
@@ -618,6 +624,7 @@ export const SalesOperationsWorkspace: React.FC<Props> = ({ tab, companyId, lead
                       >
                         <option value="draft">作成中（下書き）</option>
                         <option value="approved">確定（送付可能）</option>
+                        {doc.status === 'sent' && <option value="sent">送信済み</option>}
                         {doc.status === 'archived' && <option value="archived">保管</option>}
                       </select>
                       {pendingDeleteDocumentId === doc.id ? (

@@ -718,6 +718,10 @@ export const CommunicationSendCenter: React.FC<Props> = ({
           await db.from('customer_documents').update({ status: 'sent' }).eq('id', doc.id);
           doc.status = 'sent';
           await db.from('proposal_drafts').update({ status: 'sent' }).eq('document_id', doc.id).eq('status', 'approved');
+          // この書類に紐づく契約・請求の状態も進める(契約: メール送付済み / 請求: 発行済み)。取消・締結済み・入金済みなど先の状態は動かさない。
+          await db.from('customer_contracts').update({ status: 'sent' }).eq('document_id', doc.id).in('status', ['draft', 'under_review']);
+          await db.from('customer_invoices').update({ status: 'issued' }).eq('document_id', doc.id).in('status', ['draft', 'awaiting_approval']);
+          window.dispatchEvent(new CustomEvent('mst:documents-changed'));
         } catch {
           // 状態の更新に失敗しても、送信そのものは成功しているため通知は変えない
         }
