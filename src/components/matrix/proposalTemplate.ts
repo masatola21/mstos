@@ -36,6 +36,7 @@ export const PROPOSAL_VARIABLES: ProposalVariable[] = [
   { key: 'd4_impact', label: 'D4 放置した場合の影響', defaultValue: '' },
   { key: 'd5_direction', label: 'D5 改善の方向性', defaultValue: '' },
   // 提案パート
+  { key: 'p_meeting_notes', label: '商談メモ(AIの下書きの材料。書類には載りません)', defaultValue: '' },
   { key: 'p1_policy', label: 'P1 提案の方針', defaultValue: '' },
   { key: 'p2_service_name', label: 'P2 サービス名', defaultValue: '' },
   { key: 'p2_deliverables', label: 'P2 成果物の一覧(構築)', defaultValue: '' },
@@ -57,6 +58,19 @@ export const PROPOSAL_VARIABLES: ProposalVariable[] = [
   { key: 'sender_rep', label: '発行者 代表者名', defaultValue: '大橋真人' },
   { key: 'sender_address', label: '発行者 所在地', defaultValue: '〒503-0981 岐阜県大垣市桧町127番地' },
 ];
+
+/** 長い文章の欄(画面では複数行の入力欄にする) */
+export const MULTILINE_KEYS: ReadonlySet<string> = new Set([
+  'd0_summary', 'd1_premise', 'd2_current', 'd3_bottleneck', 'd4_impact', 'd5_direction',
+  'p_meeting_notes', 'p1_policy', 'p2_deliverables', 'p2_monthly_support', 'p3_roadmap', 'p3_metrics',
+  'p5_requests', 'p5_prerequisites', 'p5_exclusions', 'p6_payment_terms',
+]);
+
+/** AIで下書きを作れる欄 → 章(サーバーの /api/proposals/draft-chapter に渡す) */
+export const DRAFTABLE_KEYS: Readonly<Record<string, 'P1' | 'P3'>> = {
+  p1_policy: 'P1',
+  p3_roadmap: 'P3',
+};
 
 /** 型ごとに、空のままだと「【未入力】」と出す項目(仕様書 §3 の「承認不可」の章) */
 export function requiredKeysFor(kind: ProposalKind): string[] {

@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { getSupabase } from '../../lib/supabaseClient';
+import { getSupabase, getAuthHeaders } from '../../lib/supabaseClient';
 import { todayJst } from '../../utils/date';
 import { 
   FileText, 
@@ -47,7 +47,7 @@ import {
   PROPOSAL_KIND_LABELS,
   PROPOSAL_VALID_DAYS,
 } from '../../constants/proposalChapters';
-import { proposalEmptyText, defaultPaymentTermsFor } from './proposalTemplate';
+import { proposalEmptyText, defaultPaymentTermsFor, requiredKeysFor, MULTILINE_KEYS, DRAFTABLE_KEYS } from './proposalTemplate';
 import { calcProposalFees, parseYen, formatYen } from '../../utils/proposalFees';
 
 export type { DocTemplateType, DocTemplate, PaymentMode, InvoiceSubtype };
@@ -392,6 +392,46 @@ export const DocumentTemplateView: React.FC<DocumentTemplateViewProps> = ({
         : formatDocumentDate(id.includes('estimate') ? addOneMonthDate(today) : invoiceDueDate(today)),
     }));
     setIsEditingTemplate(false);
+  };
+
+  // 提案書: P1(方針)・P3(ロードマップ)のAI下書き
+  const [draftingKey, setDraftingKey] = useState<string | null>(null);
+  const [draftNotices, setDraftNotices] = useState<Record<string, { warnings: string[]; placeholders: number; error?: string }>>({});
+
+  const handleDraftWithAi = async (key: string) => {
+    const chapter = DRAFTABLE_KEYS[key];
+    if (!chapter || draftingKey) return;
+    if ((variableValues[key] || '').trim() && !window.confirm('すでに入力があります。AIの下書きで置き換えますか？')) return;
+    setDraftingKey(key);
+    setDraftNotices((prev) => ({ ...prev, [key]: { warnings: [], placeholders: 0 } }));
+    try {
+      const headers = await getAuthHeaders();
+      const response = await fetch('/api/proposals/draft-chapter', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', ...headers },
+        body: JSON.stringify({
+          chapter,
+          kind: kindFromPaymentMode(paymentMode),
+          context: {
+            companyName: variableValues.client_company,
+            diagnosis: { d0: variableValues.d0_summary, d2: variableValues.d2_current, d3: variableValues.d3_bottleneck, d5: variableValues.d5_direction },
+            serviceName: variableValues.p2_service_name,
+            deliverables: variableValues.p2_deliverables,
+            monthlySupport: variableValues.p2_monthly_support,
+            policy: variableValues.p1_policy,
+            meetingNotes: variableValues.p_meeting_notes,
+          },
+        }),
+      });
+      const result = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(result.error || '下書きを作成できませんでした。');
+      handleVariableChange(key, String(result.text || ''));
+      setDraftNotices((prev) => ({ ...prev, [key]: { warnings: result.warnings || [], placeholders: Number(result.placeholders) || 0 } }));
+    } catch (err: any) {
+      setDraftNotices((prev) => ({ ...prev, [key]: { warnings: [], placeholders: 0, error: err?.message || '下書きを作成できませんでした。' } }));
+    } finally {
+      setDraftingKey(null);
+    }
   };
 
   const handleVariableChange = (key: string, value: string) => {
@@ -881,7 +921,11 @@ export const DocumentTemplateView: React.FC<DocumentTemplateViewProps> = ({
     }
   };
 
-  const missingVariables = currentTemplate.variables.filter((v) => v.key !== 'end_date' && !(variableValues[v.key] || '').trim());
+  const proposalRequired = currentTemplate.id === 'tpl-proposal-report' ? requiredKeysFor(kindFromPaymentMode(paymentMode)) : null;
+  const missingVariables = currentTemplate.variables.filter((v) =>
+    proposalRequired
+      ? proposalRequired.includes(v.key) && !(variableValues[v.key] || '').trim()
+      : v.key !== 'end_date' && !(variableValues[v.key] || '').trim());
 
   return (
     <div className="space-y-6">
@@ -1308,23 +1352,62 @@ export const DocumentTemplateView: React.FC<DocumentTemplateViewProps> = ({
                 )}
 
                 {/* Form fields for template variables */}
-                {currentTemplate.variables.map((v) => (
-                  <div key={v.key} className="space-y-1">
-                    <label className="text-xs font-semibold text-slate-700 flex items-center justify-between">
-                      <span>{v.label}</span>
-                      <span className="text-[10px] font-mono text-purple-700 bg-purple-50 px-1.5 py-0.5 rounded border border-purple-200">
-                        {`{{${v.key}}}`}
-                      </span>
-                    </label>
-                    <input
-                      type="text"
-                      value={variableValues[v.key] ?? ''}
-                      onChange={(e) => handleVariableChange(v.key, e.target.value)}
-                      className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs text-slate-900 focus:outline-none focus:border-purple-600 focus:bg-white transition-colors shadow-2xs"
-                      placeholder={v.key === 'end_date' ? '任意（定める場合のみ入力）' : `${v.label}（未登録の場合は入力）`}
-                    />
-                  </div>
-                ))}
+                {currentTemplate.variables.map((v) => {
+                  const isProposal = currentTemplate.id === 'tpl-proposal-report';
+                  const multiline = isProposal && MULTILINE_KEYS.has(v.key);
+                  const canDraft = isProposal && Boolean(DRAFTABLE_KEYS[v.key]);
+                  const notice = draftNotices[v.key];
+                  const fieldClass = 'w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs text-slate-900 focus:outline-none focus:border-purple-600 focus:bg-white transition-colors shadow-2xs';
+                  const placeholder = v.key === 'end_date' ? '任意（定める場合のみ入力）' : `${v.label}（未登録の場合は入力）`;
+                  return (
+                    <div key={v.key} className="space-y-1">
+                      <label className="text-xs font-semibold text-slate-700 flex items-center justify-between gap-2">
+                        <span>{v.label}</span>
+                        <span className="flex items-center gap-1.5">
+                          {canDraft && (
+                            <button
+                              type="button"
+                              onClick={() => void handleDraftWithAi(v.key)}
+                              disabled={Boolean(draftingKey)}
+                              className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-emerald-50 hover:bg-emerald-100 text-[10px] font-semibold text-emerald-800 border border-emerald-200 cursor-pointer disabled:cursor-not-allowed disabled:opacity-60"
+                              title="診断の内容と商談メモをもとに、AIが下書きを作ります。サービス名・金額・期間は書きません"
+                            >
+                              <Sparkles className={`w-3 h-3 ${draftingKey === v.key ? 'animate-pulse' : ''}`} />
+                              <span>{draftingKey === v.key ? '作成中…' : 'AIで下書き'}</span>
+                            </button>
+                          )}
+                          <span className="text-[10px] font-mono text-purple-700 bg-purple-50 px-1.5 py-0.5 rounded border border-purple-200">
+                            {`{{${v.key}}}`}
+                          </span>
+                        </span>
+                      </label>
+                      {multiline ? (
+                        <textarea
+                          value={variableValues[v.key] ?? ''}
+                          onChange={(e) => handleVariableChange(v.key, e.target.value)}
+                          rows={v.key.startsWith('d') || v.key.startsWith('p_') || v.key === 'p1_policy' || v.key === 'p3_roadmap' ? 5 : 3}
+                          className={`${fieldClass} leading-relaxed resize-y`}
+                          placeholder={placeholder}
+                        />
+                      ) : (
+                        <input
+                          type="text"
+                          value={variableValues[v.key] ?? ''}
+                          onChange={(e) => handleVariableChange(v.key, e.target.value)}
+                          className={fieldClass}
+                          placeholder={placeholder}
+                        />
+                      )}
+                      {notice?.error && <p className="text-[11px] text-rose-700">{notice.error}</p>}
+                      {notice && !notice.error && notice.placeholders > 0 && (
+                        <p className="text-[11px] text-slate-600">下書きの「【○○: 要入力】」の {notice.placeholders} 箇所を、商談で決めた内容で埋めてください。</p>
+                      )}
+                      {notice?.warnings?.map((w) => (
+                        <p key={w} className="text-[11px] text-amber-800 bg-amber-50 border border-amber-200 rounded-md px-2 py-1">{w}</p>
+                      ))}
+                    </div>
+                  );
+                })}
               </div>
             )}
           </div>
