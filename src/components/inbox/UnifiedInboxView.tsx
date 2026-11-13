@@ -32,6 +32,7 @@ import { MarketingEmailInboxView } from '../marketing/MarketingEmailInboxView';
 import { useSendDrawer } from '../../context/SendDrawerContext';
 import { useVisiblePolling } from '../../hooks/useInboxRealtime';
 import { MeetingSessionView } from '../meeting/MeetingSessionView';
+import { countUnreadEmails, loadLocalReadEmailIds } from '../../utils/inboxReadState';
 
 export type InboxChannel = 'line' | 'email' | 'forms';
 
@@ -112,8 +113,9 @@ export const UnifiedInboxView: React.FC<UnifiedInboxViewProps> = ({
   // Badge counters
   const [counts, setCounts] = useState({
     lineTotal: 0,
-    lineInbound: 0,
+    lineUnread: 0,
     emailTotal: 0,
+    emailUnread: 0,
     formsTotal: 0,
     formsReceived: 0,
   });
@@ -123,7 +125,9 @@ export const UnifiedInboxView: React.FC<UnifiedInboxViewProps> = ({
   const [formsMeta, setFormsMeta] = useState<Map<string, FormMeta>>(new Map());
   const [customerCompanyIds, setCustomerCompanyIds] = useState<Set<string>>(new Set());
   const [customerStageFilter, setCustomerStageFilter] = useState<'all' | 'leads' | 'customers'>('all');
-  const [formFilterStatus, setFormFilterStatus] = useState<string>('all');
+  const [formFilterStatus, setFormFilterStatus] = useState<string>(() =>
+    initialCompanyId || initialLeadId ? 'all' : 'received',
+  );
   const [formTypeCategory, setFormTypeCategory] = useState<'all' | 'diagnosis' | 'inquiry'>(initialFormTypeFilter || 'all');
   const [filterCompanyId, setFilterCompanyId] = useState<string | undefined>(initialCompanyId);
   const [filterLeadId, setFilterLeadId] = useState<string | undefined>(initialLeadId);
@@ -183,41 +187,52 @@ export const UnifiedInboxView: React.FC<UnifiedInboxViewProps> = ({
         if (filter) query = filter(query);
         return query;
       };
-      const [lineTotalRes, lineInboundRes, emailRes, subTotalRes, subReceivedRes] = await Promise.all([
+      const [lineTotalRes, lineUnreadRes, emailRes, subTotalRes, subReceivedRes] = await Promise.all([
         countOf('line_inbox_messages'),
-        countOf('line_inbox_messages', (query) => query.eq('direction', 'inbound')),
+        countOf('line_inbox_messages', (query) => query.eq('direction', 'inbound').neq('status', 'read')),
         countOf('email_inbox_messages'),
         countOf('diagnosis_submissions'),
         countOf('diagnosis_submissions', (query) => query.eq('status', 'received')),
       ]);
 
       let emailTotal: number = emailRes.count || 0;
-      if (!emailTotal) {
-        // 画面側から直接見えない場合は、サーバー経由で件数だけ取得する（メール本文は取得しない）
-        try {
-          const authHeaders = await getAuthHeaders();
-          const emailApiRes = await fetch('/api/inbox/email/messages?countOnly=1', { headers: authHeaders });
-          if (emailApiRes.ok) {
-            const emailData = await emailApiRes.json();
-            if (typeof emailData.count === 'number') {
-              emailTotal = emailData.count;
+      let emailUnread = 0;
+      try {
+        const authHeaders = await getAuthHeaders();
+        const emailApiRes = await fetch('/api/inbox/email/messages?countOnly=1', { headers: authHeaders });
+        if (emailApiRes.ok) {
+          const emailData = await emailApiRes.json();
+          if (!emailTotal && typeof emailData.count === 'number') {
+            emailTotal = emailData.count;
+          }
+          if (typeof emailData.unreadCount === 'number') {
+            emailUnread = emailData.unreadCount;
+          } else if (emailTotal > 0) {
+            const listRes = await fetch('/api/inbox/email/messages?light=1&messagesOnly=1', { headers: authHeaders });
+            if (listRes.ok) {
+              const listData = await listRes.json();
+              if (Array.isArray(listData.messages)) {
+                emailUnread = countUnreadEmails(listData.messages, loadLocalReadEmailIds());
+              }
             }
           }
-        } catch {}
-      }
+        }
+      } catch {}
 
       const next = {
         lineTotal: (lineTotalRes.count as number | null) || 0,
-        lineInbound: (lineInboundRes.count as number | null) || 0,
+        lineUnread: (lineUnreadRes.count as number | null) || 0,
         emailTotal,
+        emailUnread,
         formsTotal: (subTotalRes.count as number | null) || 0,
         formsReceived: (subReceivedRes.count as number | null) || 0,
       };
       // 数字が変わっていなければ再描画しない
       setCounts((prev) =>
         prev.lineTotal === next.lineTotal &&
-        prev.lineInbound === next.lineInbound &&
+        prev.lineUnread === next.lineUnread &&
         prev.emailTotal === next.emailTotal &&
+        prev.emailUnread === next.emailUnread &&
         prev.formsTotal === next.formsTotal &&
         prev.formsReceived === next.formsReceived
           ? prev
@@ -634,11 +649,9 @@ export const UnifiedInboxView: React.FC<UnifiedInboxViewProps> = ({
     return fromSub || undefined;
   }, [filterCompanyId, submissions]);
 
-  // Filtered submissions
-  const visibleSubmissions = useMemo(() => {
-    const list = submissions.filter((sub) => {
-      // 特定顧客（会社）絞り込み: リード・商談・契約のどこから遷移しても、
-      // 同一顧客（会社ID一致）の全回答、または該当リードIDの回答を漏れなく一覧抽出する
+  // Base filtered submissions (before status filter, so status badge counts match active category/stage/search)
+  const statusBaseSubmissions = useMemo(() => {
+    return submissions.filter((sub) => {
       if (filterCompanyId) {
         const matchesCompany = sub.company_id === filterCompanyId;
         const matchesLead = filterLeadId ? sub.lead_id === filterLeadId : false;
@@ -647,19 +660,13 @@ export const UnifiedInboxView: React.FC<UnifiedInboxViewProps> = ({
         if (sub.lead_id !== filterLeadId) return false;
       }
 
-      // フォーム種別フィルター (全種別 / 診断のみ / お問い合わせ・相談のみ)
       if (formTypeCategory === 'diagnosis' && !isDiagnosisSubmission(sub)) return false;
       if (formTypeCategory === 'inquiry' && isDiagnosisSubmission(sub)) return false;
 
-      // ステータスフィルター
-      if (formFilterStatus !== 'all' && sub.status !== formFilterStatus) return false;
-
-      // 顧客ステージフィルター
       const isContracted = sub.company_id ? customerCompanyIds.has(sub.company_id) : false;
       if (customerStageFilter === 'customers' && !isContracted) return false;
       if (customerStageFilter === 'leads' && isContracted) return false;
 
-      // 検索フィルター
       if (!formSearchQuery.trim()) return true;
       const q = formSearchQuery.toLowerCase();
       const name = (sub.respondent_name || '').toLowerCase();
@@ -667,6 +674,14 @@ export const UnifiedInboxView: React.FC<UnifiedInboxViewProps> = ({
       const company = (sub.respondent_company_name || '').toLowerCase();
       const formName = (formsMeta.get(sub.form_id)?.name || '').toLowerCase();
       return name.includes(q) || email.includes(q) || company.includes(q) || formName.includes(q);
+    });
+  }, [submissions, customerStageFilter, formTypeCategory, formSearchQuery, formsMeta, customerCompanyIds, filterCompanyId, filterLeadId]);
+
+  // Filtered submissions
+  const visibleSubmissions = useMemo(() => {
+    const list = statusBaseSubmissions.filter((sub) => {
+      if (formFilterStatus !== 'all' && sub.status !== formFilterStatus) return false;
+      return true;
     });
 
     // もし特定リードからの遷移の場合、そのリードに該当する回答を最上位に並べ替える
@@ -680,10 +695,21 @@ export const UnifiedInboxView: React.FC<UnifiedInboxViewProps> = ({
     }
 
     return list;
-  }, [submissions, formFilterStatus, customerStageFilter, formTypeCategory, formSearchQuery, formsMeta, customerCompanyIds, filterCompanyId, filterLeadId]);
+  }, [statusBaseSubmissions, formFilterStatus, filterLeadId]);
 
-  const totalInboundNeedsAttention =
-    counts.lineInbound + counts.formsReceived;
+  const statusCountsInScope = useMemo(() => {
+    let received = 0;
+    let reviewing = 0;
+    let completed = 0;
+    let rejected = 0;
+    for (const s of statusBaseSubmissions) {
+      if (s.status === 'received') received += 1;
+      else if (s.status === 'reviewing') reviewing += 1;
+      else if (s.status === 'completed') completed += 1;
+      else if (s.status === 'rejected') rejected += 1;
+    }
+    return { total: statusBaseSubmissions.length, received, reviewing, completed, rejected };
+  }, [statusBaseSubmissions]);
 
   return (
     <div className="space-y-6">
@@ -759,7 +785,7 @@ export const UnifiedInboxView: React.FC<UnifiedInboxViewProps> = ({
             <span className={`px-2 py-0.5 rounded-full text-[11px] font-bold ${
               activeChannel === 'forms' ? 'bg-amber-300 text-amber-950' : 'bg-amber-100 text-amber-800 border border-amber-300 animate-pulse'
             }`}>
-              未対応 {counts.formsReceived}
+              未対応 {counts.formsReceived}件
             </span>
           )}
         </button>
@@ -779,13 +805,17 @@ export const UnifiedInboxView: React.FC<UnifiedInboxViewProps> = ({
           }`}>
             {counts.lineTotal}通
           </span>
-          {counts.lineInbound > 0 && (
-            <span className={`px-2 py-0.5 rounded-full text-[11px] font-bold ${
-              activeChannel === 'line' ? 'bg-emerald-300 text-emerald-950' : 'bg-emerald-100 text-emerald-800 border border-emerald-300'
-            }`}>
-              受信 {counts.lineInbound}
-            </span>
-          )}
+          <span className={`px-2 py-0.5 rounded-full text-[11px] font-bold ${
+            counts.lineUnread > 0
+              ? activeChannel === 'line'
+                ? 'bg-emerald-300 text-emerald-950'
+                : 'bg-emerald-100 text-emerald-800 border border-emerald-300'
+              : activeChannel === 'line'
+                ? 'bg-purple-700/70 text-purple-200'
+                : 'bg-slate-100 text-slate-500'
+          }`}>
+            未読 {counts.lineUnread}件
+          </span>
         </button>
 
         <button
@@ -802,6 +832,17 @@ export const UnifiedInboxView: React.FC<UnifiedInboxViewProps> = ({
             activeChannel === 'email' ? 'bg-purple-700 text-purple-100' : 'bg-slate-100 text-slate-700'
           }`}>
             {counts.emailTotal}通
+          </span>
+          <span className={`px-2 py-0.5 rounded-full text-[11px] font-bold ${
+            counts.emailUnread > 0
+              ? activeChannel === 'email'
+                ? 'bg-sky-300 text-sky-950'
+                : 'bg-sky-100 text-sky-800 border border-sky-300'
+              : activeChannel === 'email'
+                ? 'bg-purple-700/70 text-purple-200'
+                : 'bg-slate-100 text-slate-500'
+          }`}>
+            未読 {counts.emailUnread}件
           </span>
         </button>
       </div>
@@ -917,6 +958,21 @@ export const UnifiedInboxView: React.FC<UnifiedInboxViewProps> = ({
                     <span>お問い合わせ・相談のみ ({inquiryCount})</span>
                   </button>
                 </div>
+
+                <button
+                  type="button"
+                  onClick={() => setFormFilterStatus((prev) => (prev === 'received' ? 'all' : 'received'))}
+                  aria-pressed={formFilterStatus === 'received'}
+                  className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition cursor-pointer border ${
+                    formFilterStatus === 'received'
+                      ? 'bg-amber-500 text-white border-amber-600 shadow-xs'
+                      : 'bg-amber-50 text-amber-800 border-amber-200 hover:bg-amber-100'
+                  }`}
+                  title="「未対応」の回答だけを表示します"
+                >
+                  <Clock className="w-3.5 h-3.5" />
+                  <span>未対応のみ表示 ({statusCountsInScope.received})</span>
+                </button>
               </div>
 
               <div className="relative min-w-[260px]">
@@ -983,15 +1039,15 @@ export const UnifiedInboxView: React.FC<UnifiedInboxViewProps> = ({
                   <Filter className="w-3.5 h-3.5" /> 状態:
                 </span>
                 {[
-                  { key: 'all', label: `すべて` },
+                  { key: 'all', label: `すべて (${statusCountsInScope.total})` },
                   {
                     key: 'received',
-                    label: `未対応 (${submissions.filter((s) => s.status === 'received').length})`,
-                    color: 'text-amber-700 font-bold',
+                    label: `未対応 (${statusCountsInScope.received})`,
+                    color: formFilterStatus === 'received' ? 'text-white font-bold' : 'text-amber-700 font-bold',
                   },
-                  { key: 'reviewing', label: `対応中 (${submissions.filter((s) => s.status === 'reviewing').length})` },
-                  { key: 'completed', label: `完了 (${submissions.filter((s) => s.status === 'completed').length})` },
-                  { key: 'rejected', label: `対象外 (${submissions.filter((s) => s.status === 'rejected').length})` },
+                  { key: 'reviewing', label: `対応中 (${statusCountsInScope.reviewing})` },
+                  { key: 'completed', label: `完了 (${statusCountsInScope.completed})` },
+                  { key: 'rejected', label: `対象外 (${statusCountsInScope.rejected})` },
                 ].map((filter) => (
                   <button
                     key={filter.key}
@@ -1058,16 +1114,33 @@ export const UnifiedInboxView: React.FC<UnifiedInboxViewProps> = ({
           ) : visibleSubmissions.length === 0 ? (
             <div className="p-12 text-center rounded-2xl border border-slate-200 bg-white text-slate-500 shadow-xs">
               <FileText className="w-10 h-10 mx-auto text-slate-300 mb-2" />
-              <p className="text-sm font-semibold text-slate-800">該当する回答データはありません。</p>
-              <p className="text-xs text-slate-500 mt-1">
-                HPや公開診断フォームからの回答を受信すると、ここに即時蓄積されます。
+              <p className="text-sm font-semibold text-slate-800">
+                {formFilterStatus === 'received' && statusCountsInScope.total > 0
+                  ? '現在、未対応の回答はありません。'
+                  : '該当する回答データはありません。'}
               </p>
-              <button
-                onClick={() => onNavigateTab('mst_diagnoses')}
-                className="mt-4 px-3 py-1.5 rounded-lg bg-purple-50 hover:bg-purple-100 text-xs text-purple-700 font-semibold border border-purple-200 transition cursor-pointer"
-              >
-                フォーム作成・配布資料の設定を確認する
-              </button>
+              <p className="text-xs text-slate-500 mt-1">
+                {formFilterStatus === 'received' && statusCountsInScope.total > 0
+                  ? `対応中・完了を含む ${statusCountsInScope.total} 件の回答があります。`
+                  : 'HPや公開診断フォームからの回答を受信すると、ここに即時蓄積されます。'}
+              </p>
+              <div className="mt-4 flex flex-wrap items-center justify-center gap-2">
+                {formFilterStatus === 'received' && statusCountsInScope.total > 0 && (
+                  <button
+                    type="button"
+                    onClick={() => setFormFilterStatus('all')}
+                    className="px-3.5 py-1.5 rounded-lg bg-purple-600 hover:bg-purple-700 text-xs text-white font-semibold shadow-xs transition cursor-pointer"
+                  >
+                    すべて表示（{statusCountsInScope.total}件）
+                  </button>
+                )}
+                <button
+                  onClick={() => onNavigateTab('mst_diagnoses')}
+                  className="px-3 py-1.5 rounded-lg bg-purple-50 hover:bg-purple-100 text-xs text-purple-700 font-semibold border border-purple-200 transition cursor-pointer"
+                >
+                  フォーム作成・配布資料の設定を確認する
+                </button>
+              </div>
             </div>
           ) : (
             <div className="space-y-3">
@@ -1454,6 +1527,9 @@ export const UnifiedInboxView: React.FC<UnifiedInboxViewProps> = ({
           chatOnly={true}
           onNavigateSettings={() => onNavigateTab('marketing_automation')}
           onNavigateContacts={() => onNavigateTab('contacts')}
+          onUnreadCountChange={(unread) =>
+            setCounts((prev) => (prev.lineUnread === unread ? prev : { ...prev, lineUnread: unread }))
+          }
         />
       )}
 
@@ -1461,6 +1537,9 @@ export const UnifiedInboxView: React.FC<UnifiedInboxViewProps> = ({
       {activeChannel === 'email' && (
         <MarketingEmailInboxView
           onNavigateSendCenter={() => onNavigateTab('communication_send')}
+          onUnreadCountChange={(unread) =>
+            setCounts((prev) => (prev.emailUnread === unread ? prev : { ...prev, emailUnread: unread }))
+          }
         />
       )}
 

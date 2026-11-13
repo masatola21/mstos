@@ -1,5 +1,5 @@
-import React, { useEffect, useRef, useState } from 'react';
-import { Mail, Reply, Send, RefreshCw, Settings, Trash2, CheckCircle2, AlertTriangle, AlertCircle, Copy, ShieldCheck, Activity, Sparkles, Globe, HelpCircle, Info, X, FileText } from 'lucide-react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
+import { Mail, MailOpen, Reply, Send, RefreshCw, Settings, Trash2, CheckCircle2, AlertTriangle, AlertCircle, Copy, ShieldCheck, Activity, Sparkles, Globe, HelpCircle, Info, X, FileText } from 'lucide-react';
 import { getSupabase, getAuthHeaders } from '../../lib/supabaseClient';
 import { useSendDrawer } from '../../context/SendDrawerContext';
 import { useInboxRealtime } from '../../hooks/useInboxRealtime';
@@ -10,6 +10,12 @@ import {
   sortByReceivedAtDesc,
   upsertMessages,
 } from '../../utils/inboxSync';
+import {
+  countUnreadEmails,
+  isEmailMessageRead,
+  loadLocalReadEmailIds,
+  updateLocalEmailReadIds,
+} from '../../utils/inboxReadState';
 
 // 一覧の状態は本文なし（軽量）。本文は text_body / html_body が入っているときだけ読み込み済み。
 type InboxMessage = {
@@ -22,10 +28,12 @@ type InboxMessage = {
   received_at: string;
   backup_status?: 'sent' | 'failed' | 'skipped';
   backup_error?: string | null;
+  is_read?: boolean;
+  read_at?: string | null;
 };
 
 // 画面表示に影響しうる項目。これらが変わらなければ一覧を再描画しない。
-const EMAIL_LIST_KEYS = ['subject', 'from_email', 'backup_status', 'backup_error'] as const satisfies readonly (keyof InboxMessage)[];
+const EMAIL_LIST_KEYS = ['subject', 'from_email', 'backup_status', 'backup_error', 'is_read'] as const satisfies readonly (keyof InboxMessage)[];
 
 const hasBody = (m: InboxMessage) => m.text_body !== undefined || m.html_body !== undefined;
 const bodyTextOf = (m: InboxMessage) => m.text_body || (m.html_body || '').replace(/<[^>]*>/g, ' ');
@@ -55,9 +63,13 @@ function parseSender(raw: string): { name: string; address: string } {
 
 export interface MarketingEmailInboxViewProps {
   onNavigateSendCenter?: () => void;
+  onUnreadCountChange?: (unreadCount: number) => void;
 }
 
-export const MarketingEmailInboxView: React.FC<MarketingEmailInboxViewProps> = ({ onNavigateSendCenter }) => {
+export const MarketingEmailInboxView: React.FC<MarketingEmailInboxViewProps> = ({
+  onNavigateSendCenter,
+  onUnreadCountChange,
+}) => {
   const db = getSupabase();
   const { openSendDrawer } = useSendDrawer();
   const [ownerId, setOwnerId] = useState('');
@@ -107,11 +119,14 @@ export const MarketingEmailInboxView: React.FC<MarketingEmailInboxViewProps> = (
   const [contactNames, setContactNames] = useState<Record<string, string>>({});
   const [checkedIds, setCheckedIds] = useState<string[]>([]);
   const [deleting, setDeleting] = useState(false);
+  const [localReadIds, setLocalReadIds] = useState<Set<string>>(() => loadLocalReadEmailIds());
+  const [unreadOnlyFilter, setUnreadOnlyFilter] = useState(false);
   // 選択したメールの本文を読み込み中／失敗したときの状態
   const [bodyStatus, setBodyStatus] = useState<{ id: string; state: 'loading' | 'error' } | null>(null);
 
   // 差分取得の起点にするため、最新の一覧を ref でも保持
   const messagesRef = useRef<InboxMessage[]>([]);
+  const hasLoadedRef = useRef(false);
   useEffect(() => {
     messagesRef.current = messages;
   }, [messages]);
@@ -157,9 +172,87 @@ export const MarketingEmailInboxView: React.FC<MarketingEmailInboxViewProps> = (
     }
   };
 
-  // メールを選択し、本文が未取得なら読み込む
+  const unreadCount = useMemo(
+    () => countUnreadEmails(messages, localReadIds),
+    [messages, localReadIds],
+  );
+
+  const displayedMessages = useMemo(
+    () => (unreadOnlyFilter ? messages.filter((m) => !isEmailMessageRead(m, localReadIds)) : messages),
+    [messages, unreadOnlyFilter, localReadIds],
+  );
+
+  const onUnreadCountChangeRef = useRef(onUnreadCountChange);
+  onUnreadCountChangeRef.current = onUnreadCountChange;
+  useEffect(() => {
+    if (hasLoadedRef.current) {
+      onUnreadCountChangeRef.current?.(unreadCount);
+    }
+  }, [unreadCount]);
+
+  const updateReadState = async (ids: string[], isRead: boolean) => {
+    if (ids.length === 0) return;
+    const idSet = new Set(ids);
+    const nowIso = isRead ? new Date().toISOString() : null;
+
+    setLocalReadIds((prev) => updateLocalEmailReadIds(prev, ids, isRead));
+    setMessages((prev) =>
+      prev.map((m) => (idSet.has(m.id) ? { ...m, is_read: isRead, read_at: nowIso } : m)),
+    );
+    setSelected((prev) =>
+      prev && idSet.has(prev.id) ? { ...prev, is_read: isRead, read_at: nowIso } : prev,
+    );
+
+    try {
+      const headers = await getAuthHeaders();
+      await fetch('/api/inbox/email/read-state', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', ...headers },
+        body: JSON.stringify({ ids, isRead }),
+      });
+    } catch {
+      // non-blocking
+    }
+  };
+
+  const markAllAsRead = async () => {
+    const unreadIds = messages
+      .filter((m) => !isEmailMessageRead(m, localReadIds))
+      .map((m) => m.id);
+    if (unreadIds.length === 0) return;
+    const idSet = new Set(unreadIds);
+    const nowIso = new Date().toISOString();
+
+    setLocalReadIds((prev) => updateLocalEmailReadIds(prev, unreadIds, true));
+    setMessages((prev) =>
+      prev.map((m) => (idSet.has(m.id) ? { ...m, is_read: true, read_at: nowIso } : m)),
+    );
+    setSelected((prev) => (prev ? { ...prev, is_read: true, read_at: nowIso } : prev));
+
+    try {
+      const headers = await getAuthHeaders();
+      await fetch('/api/inbox/email/read-state', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', ...headers },
+        body: JSON.stringify({ markAll: true, ids: unreadIds, isRead: true }),
+      });
+    } catch {
+      // non-blocking
+    }
+  };
+
+  // メールを選択し、既読化＆本文が未取得なら読み込む
   const selectMessage = async (m: InboxMessage) => {
-    setSelected(m);
+    const alreadyRead = isEmailMessageRead(m, localReadIds);
+    const optimistic = alreadyRead
+      ? m
+      : { ...m, is_read: true, read_at: m.read_at || new Date().toISOString() };
+    setSelected(optimistic);
+
+    if (!alreadyRead) {
+      void updateReadState([m.id], true);
+    }
+
     if (hasBody(m)) {
       setBodyStatus(null);
       return;
@@ -262,6 +355,7 @@ export const MarketingEmailInboxView: React.FC<MarketingEmailInboxViewProps> = (
     } catch {}
 
     setMessages((prev) => replaceMessagesIfChanged(prev, loadedMessages, EMAIL_LIST_KEYS));
+    hasLoadedRef.current = true;
     setCheckedIds([]);
 
     // 選択中メッセージのステータス同期（読み込み済みの本文は保持する）
@@ -657,9 +751,17 @@ export const MarketingEmailInboxView: React.FC<MarketingEmailInboxViewProps> = (
 
         {/* 状態・件数バー */}
         <div className="pt-1 border-t border-slate-100 flex flex-wrap items-center justify-between text-[11px] text-slate-500 gap-2">
-          <div className="flex items-center gap-3">
+          <div className="flex flex-wrap items-center gap-3">
             <span>
               受信数: <strong className="text-slate-800">{messages.length}件</strong>
+            </span>
+            <span>·</span>
+            <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full font-bold ${
+              unreadCount > 0
+                ? 'bg-sky-100 text-sky-800 border border-sky-300'
+                : 'bg-slate-100 text-slate-500 border border-slate-200'
+            }`}>
+              未読 {unreadCount}件
             </span>
             <span>·</span>
             <span>
@@ -901,34 +1003,76 @@ export const MarketingEmailInboxView: React.FC<MarketingEmailInboxViewProps> = (
       <section className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.3fr)]">
         <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-xs">
           <div className="border-b border-slate-200 px-4 py-3 bg-slate-50/50 flex flex-wrap items-center justify-between gap-2">
-            <label className="inline-flex items-center gap-2 text-sm font-bold text-slate-900 cursor-pointer select-none">
-              <input
-                type="checkbox"
-                aria-label="すべて選択"
-                className="h-4 w-4 rounded border-slate-300 accent-purple-600"
-                checked={messages.length > 0 && checkedIds.length === messages.length}
-                onChange={(e) => setCheckedIds(e.target.checked ? messages.map((m) => m.id) : [])}
-              />
-              <span>受信メッセージ（{messages.length}）</span>
-            </label>
-            <button
-              type="button"
-              disabled={checkedIds.length === 0 || deleting}
-              onClick={() => void deleteMessages(checkedIds)}
-              className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-rose-600 hover:bg-rose-700 text-white text-xs font-semibold shadow-xs transition cursor-pointer disabled:cursor-not-allowed disabled:opacity-40"
-            >
-              {deleting ? <RefreshCw className="h-3.5 w-3.5 animate-spin" /> : <Trash2 className="h-3.5 w-3.5" />}
-              <span>{checkedIds.length > 0 ? '選択した' + checkedIds.length + '件を削除' : '削除'}</span>
-            </button>
+            <div className="flex flex-wrap items-center gap-2">
+              <label className="inline-flex items-center gap-2 text-sm font-bold text-slate-900 cursor-pointer select-none">
+                <input
+                  type="checkbox"
+                  aria-label="すべて選択"
+                  className="h-4 w-4 rounded border-slate-300 accent-purple-600"
+                  checked={displayedMessages.length > 0 && displayedMessages.every((m) => checkedIds.includes(m.id))}
+                  onChange={(e) =>
+                    setCheckedIds(e.target.checked ? displayedMessages.map((m) => m.id) : [])
+                  }
+                />
+                <span>受信メッセージ（{messages.length}）</span>
+              </label>
+              <span
+                className={`px-2 py-0.5 rounded-full text-[11px] font-bold ${
+                  unreadCount > 0
+                    ? 'bg-sky-100 text-sky-800 border border-sky-300'
+                    : 'bg-slate-100 text-slate-500 border border-slate-200'
+                }`}
+              >
+                未読 {unreadCount}件
+              </span>
+            </div>
+            <div className="flex flex-wrap items-center gap-2">
+              <button
+                type="button"
+                onClick={() => setUnreadOnlyFilter((prev) => !prev)}
+                className={`px-2.5 py-1 rounded-lg text-xs font-semibold transition cursor-pointer border ${
+                  unreadOnlyFilter
+                    ? 'bg-sky-600 text-white border-sky-600 shadow-xs'
+                    : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-50'
+                }`}
+              >
+                未読のみ
+              </button>
+              {unreadCount > 0 && (
+                <button
+                  type="button"
+                  onClick={() => void markAllAsRead()}
+                  className="px-2 py-1 rounded-lg text-[11px] font-semibold text-sky-700 hover:bg-sky-50 border border-sky-200 bg-white transition cursor-pointer"
+                  title="すべての未読メールを既読にします"
+                >
+                  すべて既読
+                </button>
+              )}
+              <button
+                type="button"
+                disabled={checkedIds.length === 0 || deleting}
+                onClick={() => void deleteMessages(checkedIds)}
+                className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-rose-600 hover:bg-rose-700 text-white text-xs font-semibold shadow-xs transition cursor-pointer disabled:cursor-not-allowed disabled:opacity-40"
+              >
+                {deleting ? <RefreshCw className="h-3.5 w-3.5 animate-spin" /> : <Trash2 className="h-3.5 w-3.5" />}
+                <span>{checkedIds.length > 0 ? '選択した' + checkedIds.length + '件を削除' : '削除'}</span>
+              </button>
+            </div>
           </div>
           <div className="max-h-[65vh] overflow-auto divide-y divide-slate-100">
-            {messages.map((m) => {
+            {displayedMessages.map((m) => {
               const sender = senderOf(m.from_email);
+              const isRead = isEmailMessageRead(m, localReadIds);
+              const isSelected = selected?.id === m.id;
               return (
                 <div
                   key={m.id}
                   className={`flex items-start gap-3 px-4 py-3 transition ${
-                    selected?.id === m.id ? 'bg-purple-50/80 ring-1 ring-inset ring-purple-300' : 'hover:bg-slate-50'
+                    isSelected
+                      ? 'bg-purple-50/80 ring-1 ring-inset ring-purple-300'
+                      : isRead
+                        ? 'bg-slate-100/70 hover:bg-slate-100'
+                        : 'bg-white hover:bg-purple-50/30'
                   }`}
                 >
                   <input
@@ -942,10 +1086,28 @@ export const MarketingEmailInboxView: React.FC<MarketingEmailInboxViewProps> = (
                   />
                   <button onClick={() => void selectMessage(m)} className="block min-w-0 flex-1 text-left cursor-pointer">
                     <div className="flex items-center justify-between gap-2">
-                      <div className="truncate text-sm font-semibold text-slate-900">{m.subject || '(件名なし)'}</div>
+                      <div className="flex items-center gap-2 min-w-0">
+                        {!isRead && (
+                          <span
+                            className="inline-block w-2 h-2 rounded-full bg-sky-500 shrink-0"
+                            title="未読"
+                          />
+                        )}
+                        <div
+                          className={`truncate text-sm ${
+                            isRead ? 'font-normal text-slate-500' : 'font-bold text-slate-950'
+                          }`}
+                        >
+                          {m.subject || '(件名なし)'}
+                        </div>
+                      </div>
                       {/* バックアップ転送バッジ */}
                       {m.backup_status === 'sent' && (
-                        <span className="shrink-0 px-1.5 py-0.2 rounded text-[10px] font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200">
+                        <span className={`shrink-0 px-1.5 py-0.2 rounded text-[10px] font-semibold border ${
+                          isRead
+                            ? 'bg-emerald-50/60 text-emerald-600/80 border-emerald-200/70'
+                            : 'bg-emerald-50 text-emerald-700 border-emerald-200'
+                        }`}>
                           控え済
                         </span>
                       )}
@@ -963,22 +1125,32 @@ export const MarketingEmailInboxView: React.FC<MarketingEmailInboxViewProps> = (
                         </span>
                       )}
                     </div>
-                    <div className="mt-1 truncate text-xs text-slate-500">
+                    <div className={`mt-1 truncate text-xs ${isRead ? 'text-slate-400' : 'text-slate-600'}`}>
                       {sender.name ? (
                         <>
-                          <span className="font-medium text-slate-700">{sender.name}</span>
+                          <span className={isRead ? 'font-normal text-slate-500' : 'font-semibold text-slate-800'}>
+                            {sender.name}
+                          </span>
                           <span className="text-slate-400"> · {sender.address}</span>
                         </>
                       ) : (
                         sender.address
                       )}
                     </div>
-                    <div className="mt-1 text-[11px] text-slate-400">{new Date(m.received_at).toLocaleString()}</div>
+                    <div className={`mt-1 text-[11px] ${isRead ? 'text-slate-400' : 'text-slate-500 font-medium'}`}>
+                      {new Date(m.received_at).toLocaleString()}
+                    </div>
                   </button>
                 </div>
               );
             })}
-            {messages.length === 0 && <p className="p-8 text-center text-sm text-slate-400">受信メールはまだありません。</p>}
+            {displayedMessages.length === 0 && (
+              <p className="p-8 text-center text-sm text-slate-400">
+                {unreadOnlyFilter && messages.length > 0
+                  ? '未読のメールはありません。'
+                  : '受信メールはまだありません。'}
+              </p>
+            )}
           </div>
         </div>
 
@@ -1004,7 +1176,16 @@ export const MarketingEmailInboxView: React.FC<MarketingEmailInboxViewProps> = (
                       宛先: {selected.to_emails.join(', ')} · {new Date(selected.received_at).toLocaleString()}
                     </p>
                   </div>
-                  <div className="flex items-center gap-2">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={() => void updateReadState([selected.id], !isEmailMessageRead(selected, localReadIds))}
+                      className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-white hover:bg-slate-50 text-slate-700 text-xs font-semibold border border-slate-200 shadow-xs cursor-pointer transition"
+                      title={isEmailMessageRead(selected, localReadIds) ? 'このメールを未読に戻します' : 'このメールを既読にします'}
+                    >
+                      <MailOpen className="h-4 w-4 text-sky-600" />
+                      <span>{isEmailMessageRead(selected, localReadIds) ? '未読に戻す' : '既読にする'}</span>
+                    </button>
                     <button
                       type="button"
                       disabled={deleting}

@@ -12,6 +12,11 @@ import {
   sortByReceivedAtDesc,
   upsertMessages,
 } from '../../utils/inboxSync';
+import {
+  countUnreadLineByUser,
+  countUnreadLineMessages,
+  isLineMessageUnread,
+} from '../../utils/inboxReadState';
 
 type InboxMessage={id:string;line_event_id:string;direction:'inbound'|'outbound';contact_id:string|null;line_user_id:string;body:string;status:string;received_at:string};
 // 画面表示に影響しうる項目。これらが変わらなければ一覧を再描画しない。
@@ -29,6 +34,7 @@ export interface MarketingLineInboxViewProps {
   chatOnly?: boolean;
   onNavigateSettings?: () => void;
   onNavigateContacts?: () => void;
+  onUnreadCountChange?: (unreadCount: number) => void;
 }
 
 export const MarketingLineInboxView: React.FC<MarketingLineInboxViewProps> = ({
@@ -36,6 +42,7 @@ export const MarketingLineInboxView: React.FC<MarketingLineInboxViewProps> = ({
   chatOnly = false,
   onNavigateSettings,
   onNavigateContacts,
+  onUnreadCountChange,
 }) => {
   const db=getSupabase();
   const { openSendDrawer } = useSendDrawer();
@@ -96,6 +103,7 @@ export const MarketingLineInboxView: React.FC<MarketingLineInboxViewProps> = ({
     const failed=[m,r,t,i,templateResult].find(x=>x.error)?.error;
     if(failed){setError(failed.message);return}
     setMessages(prev=>replaceMessagesIfChanged(prev,(m.data||[]) as InboxMessage[],LINE_LIST_KEYS));
+    hasLoadedRef.current = true;
     setRules((r.data||[]) as ReplyRule[]);
     setTemplates((templateResult.data||[]) as ReplyTemplate[]);
     setTags((t.data||[]) as Tag[]);
@@ -118,6 +126,7 @@ export const MarketingLineInboxView: React.FC<MarketingLineInboxViewProps> = ({
 
   // 差分取得の起点（最新の受信日時）を求めるため、最新の一覧を ref でも保持
   const messagesRef = useRef<InboxMessage[]>([]);
+  const hasLoadedRef = useRef(false);
   useEffect(() => {
     messagesRef.current = messages;
   }, [messages]);
@@ -216,15 +225,80 @@ export const MarketingLineInboxView: React.FC<MarketingLineInboxViewProps> = ({
     })();
   },[selectedLineUserId,db]);
 
+  const unreadByUser = useMemo(() => countUnreadLineByUser(messages), [messages]);
+  const totalUnread = useMemo(() => countUnreadLineMessages(messages), [messages]);
+
+  const onUnreadCountChangeRef = useRef(onUnreadCountChange);
+  onUnreadCountChangeRef.current = onUnreadCountChange;
+  useEffect(() => {
+    if (hasLoadedRef.current) {
+      onUnreadCountChangeRef.current?.(totalUnread);
+    }
+  }, [totalUnread]);
+
+  const markConversationRead = async (lineUserId: string) => {
+    if (!db || !lineUserId) return;
+    const hasUnread = messagesRef.current.some(
+      (m) => m.line_user_id === lineUserId && isLineMessageUnread(m),
+    );
+    if (!hasUnread) return;
+
+    setMessages((prev) =>
+      prev.map((m) =>
+        m.line_user_id === lineUserId && isLineMessageUnread(m)
+          ? { ...m, status: 'read' }
+          : m,
+      ),
+    );
+
+    try {
+      await db
+        .from('line_inbox_messages')
+        .update({ status: 'read' })
+        .eq('line_user_id', lineUserId)
+        .eq('direction', 'inbound')
+        .neq('status', 'read');
+    } catch {
+      // non-blocking
+    }
+  };
+
+  const markAllAsRead = async () => {
+    if (!db || totalUnread === 0) return;
+    setMessages((prev) =>
+      prev.map((m) => (isLineMessageUnread(m) ? { ...m, status: 'read' } : m)),
+    );
+    try {
+      await db
+        .from('line_inbox_messages')
+        .update({ status: 'read' })
+        .eq('direction', 'inbound')
+        .neq('status', 'read');
+    } catch {
+      // non-blocking
+    }
+  };
+
+  useEffect(() => {
+    if (!selectedLineUserId || document.hidden) return;
+    if ((unreadByUser.get(selectedLineUserId) || 0) > 0) {
+      void markConversationRead(selectedLineUserId);
+    }
+  }, [selectedLineUserId, unreadByUser]);
+
   const conversations=useMemo(()=>{
     const grouped=new Map<string,InboxMessage[]>();
     messages.forEach(message=>{
       const list=grouped.get(message.line_user_id);
       if(list)list.push(message);else grouped.set(message.line_user_id,[message]);
     });
-    return [...grouped.entries()].map(([lineUserId,items])=>({lineUserId,items:items.sort((a,b)=>Date.parse(a.received_at)-Date.parse(b.received_at))}))
+    return [...grouped.entries()].map(([lineUserId,items])=>({
+      lineUserId,
+      unreadCount: unreadByUser.get(lineUserId) || 0,
+      items:items.sort((a,b)=>Date.parse(a.received_at)-Date.parse(b.received_at)),
+    }))
       .sort((a,b)=>Date.parse(b.items[b.items.length-1]?.received_at||'')-Date.parse(a.items[a.items.length-1]?.received_at||''));
-  },[messages]);
+  },[messages, unreadByUser]);
 
   const connect=async()=>{
     if(!db)return;
@@ -430,6 +504,14 @@ export const MarketingLineInboxView: React.FC<MarketingLineInboxViewProps> = ({
               チャット履歴 <span className="font-semibold text-slate-800">{conversations.length}名</span>
             </span>
             <span className="text-slate-300">·</span>
+            <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-bold ${
+              totalUnread > 0
+                ? 'bg-emerald-100 text-emerald-800 border border-emerald-300'
+                : 'bg-slate-100 text-slate-500 border border-slate-200'
+            }`}>
+              <span>未読 {totalUnread}件</span>
+            </span>
+            <span className="text-slate-300">·</span>
             <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-emerald-50 border border-emerald-200 text-[11px] font-semibold text-emerald-700">
               <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
               <span>リアルタイム受信中（自動更新）</span>
@@ -471,9 +553,26 @@ export const MarketingLineInboxView: React.FC<MarketingLineInboxViewProps> = ({
 
         <div className="grid gap-4 xl:grid-cols-[280px_1fr]">
           <section className="rounded-2xl border border-slate-200 bg-white p-4 shadow-xs">
-            <h3 className="font-bold text-slate-900 text-xs flex items-center justify-between">
-              <span>受信した友だち ({conversations.length}名)</span>
-            </h3>
+            <div className="flex items-center justify-between gap-2">
+              <h3 className="font-bold text-slate-900 text-xs flex items-center gap-1.5">
+                <span>受信した友だち ({conversations.length}名)</span>
+                {totalUnread > 0 && (
+                  <span className="px-1.5 py-0.5 rounded-full bg-emerald-500 text-white text-[10px] font-bold">
+                    未読 {totalUnread}
+                  </span>
+                )}
+              </h3>
+              {totalUnread > 0 && (
+                <button
+                  type="button"
+                  onClick={() => void markAllAsRead()}
+                  className="text-[11px] font-semibold text-emerald-700 hover:text-emerald-900 hover:underline cursor-pointer shrink-0"
+                  title="すべての未読LINEメッセージを既読にします"
+                >
+                  すべて既読
+                </button>
+              )}
+            </div>
             <div className="mt-3 max-h-[560px] space-y-1.5 overflow-auto">
               {conversations.length === 0 ? (
                 <p className="text-xs text-slate-400 py-6 text-center">メッセージ履歴はありません。</p>
@@ -484,16 +583,22 @@ export const MarketingLineInboxView: React.FC<MarketingLineInboxViewProps> = ({
                   const friend = friends[conversation.lineUserId];
                   const displayName = friend?.display_name || conversation.lineUserId;
                   const hasCustomName = Boolean(friend?.display_name);
+                  const unreadCount = conversation.unreadCount;
 
                   return (
                     <button
                       key={conversation.lineUserId}
                       type="button"
-                      onClick={() => setSelectedLineUserId(conversation.lineUserId)}
+                      onClick={() => {
+                        setSelectedLineUserId(conversation.lineUserId);
+                        void markConversationRead(conversation.lineUserId);
+                      }}
                       className={`w-full rounded-xl p-3 text-left transition cursor-pointer border flex items-start gap-3 ${
                         isSelected
                           ? 'bg-emerald-50 border-emerald-300 shadow-xs ring-1 ring-emerald-300/40'
-                          : 'bg-slate-50/70 border-slate-200 hover:bg-slate-100/80 hover:border-slate-300'
+                          : unreadCount > 0
+                            ? 'bg-white border-emerald-200 hover:bg-emerald-50/40 shadow-2xs'
+                            : 'bg-slate-50/70 border-slate-200 hover:bg-slate-100/80 hover:border-slate-300'
                       }`}
                     >
                       <div className="shrink-0 mt-0.5">
@@ -511,10 +616,10 @@ export const MarketingLineInboxView: React.FC<MarketingLineInboxViewProps> = ({
                       </div>
                       <div className="min-w-0 flex-1">
                         <div className="flex items-center justify-between gap-1">
-                          <span className="truncate text-xs font-bold text-slate-900">
+                          <span className={`truncate text-xs ${unreadCount > 0 ? 'font-bold text-slate-950' : 'font-bold text-slate-800'}`}>
                             {displayName}
                           </span>
-                          <span className="text-[10px] text-slate-400 shrink-0">
+                          <span className={`text-[10px] shrink-0 ${unreadCount > 0 ? 'text-emerald-700 font-semibold' : 'text-slate-400'}`}>
                             {new Date(lastMsg?.received_at || '').toLocaleString('ja-JP', { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' })}
                           </span>
                         </div>
@@ -523,8 +628,18 @@ export const MarketingLineInboxView: React.FC<MarketingLineInboxViewProps> = ({
                             {conversation.lineUserId}
                           </div>
                         )}
-                        <div className="truncate text-xs text-slate-600 mt-1">
-                          {lastMsg?.body || '（本文なし）'}
+                        <div className="flex items-center justify-between gap-2 mt-1">
+                          <div className={`truncate text-xs ${unreadCount > 0 ? 'font-semibold text-slate-900' : 'text-slate-600'}`}>
+                            {lastMsg?.body || '（本文なし）'}
+                          </div>
+                          {unreadCount > 0 && (
+                            <span
+                              aria-label={`未読 ${unreadCount}件`}
+                              className="shrink-0 inline-flex items-center justify-center min-w-[20px] h-5 px-1.5 rounded-full bg-emerald-500 text-white text-[10px] font-bold shadow-2xs"
+                            >
+                              {unreadCount > 99 ? '99+' : unreadCount}
+                            </span>
+                          )}
                         </div>
                       </div>
                     </button>
@@ -705,22 +820,58 @@ export const MarketingLineInboxView: React.FC<MarketingLineInboxViewProps> = ({
         <>
           <div className="grid gap-5 xl:grid-cols-[280px_1fr]">
             <section className="rounded-2xl border border-slate-200 bg-white p-4 shadow-xs">
-              <h3 className="font-bold text-slate-900">受信した相手</h3>
+              <div className="flex items-center justify-between gap-2">
+                <h3 className="font-bold text-slate-900 flex items-center gap-2">
+                  <span>受信した相手</span>
+                  {totalUnread > 0 && (
+                    <span className="px-2 py-0.5 rounded-full bg-emerald-500 text-white text-[11px] font-bold">
+                      未読 {totalUnread}件
+                    </span>
+                  )}
+                </h3>
+                {totalUnread > 0 && (
+                  <button
+                    type="button"
+                    onClick={() => void markAllAsRead()}
+                    className="text-xs font-semibold text-emerald-700 hover:underline cursor-pointer"
+                  >
+                    すべて既読
+                  </button>
+                )}
+              </div>
               <div className="mt-3 max-h-[560px] space-y-1 overflow-auto">
                 {conversations.length === 0 ? (
                   <p className="text-sm text-slate-400 py-4 text-center">Webhookで受信したメッセージはここに表示されます。</p>
                 ) : (
-                  conversations.map((conversation) => (
-                    <button
-                      key={conversation.lineUserId}
-                      onClick={() => setSelectedLineUserId(conversation.lineUserId)}
-                      className={'w-full rounded-lg p-3 text-left transition cursor-pointer border ' + (selectedLineUserId === conversation.lineUserId ? 'bg-purple-50 border-purple-200 shadow-xs' : 'border-transparent hover:bg-slate-50')}
-                    >
-                      <div className="truncate text-xs text-slate-500">{conversation.lineUserId}</div>
-                      <div className="truncate text-sm font-semibold text-slate-900 mt-0.5">{conversation.items[conversation.items.length - 1]?.body || '（本文なし）'}</div>
-                      <div className="text-[10px] text-slate-400 mt-1">{new Date(conversation.items[conversation.items.length - 1]?.received_at || '').toLocaleString()}</div>
-                    </button>
-                  ))
+                  conversations.map((conversation) => {
+                    const friend = friends[conversation.lineUserId];
+                    const displayName = friend?.display_name || conversation.lineUserId;
+                    const unreadCount = conversation.unreadCount;
+                    return (
+                      <button
+                        key={conversation.lineUserId}
+                        onClick={() => {
+                          setSelectedLineUserId(conversation.lineUserId);
+                          void markConversationRead(conversation.lineUserId);
+                        }}
+                        className={'w-full rounded-lg p-3 text-left transition cursor-pointer border ' + (selectedLineUserId === conversation.lineUserId ? 'bg-purple-50 border-purple-200 shadow-xs' : 'border-transparent hover:bg-slate-50')}
+                      >
+                        <div className="flex items-center justify-between gap-2">
+                          <div className="truncate text-xs font-semibold text-slate-600">{displayName}</div>
+                          {unreadCount > 0 && (
+                            <span
+                              aria-label={`未読 ${unreadCount}件`}
+                              className="shrink-0 inline-flex items-center justify-center min-w-[20px] h-5 px-1.5 rounded-full bg-emerald-500 text-white text-[10px] font-bold"
+                            >
+                              {unreadCount > 99 ? '99+' : unreadCount}
+                            </span>
+                          )}
+                        </div>
+                        <div className={`truncate text-sm mt-0.5 ${unreadCount > 0 ? 'font-bold text-slate-950' : 'font-medium text-slate-800'}`}>{conversation.items[conversation.items.length - 1]?.body || '（本文なし）'}</div>
+                        <div className="text-[10px] text-slate-400 mt-1">{new Date(conversation.items[conversation.items.length - 1]?.received_at || '').toLocaleString()}</div>
+                      </button>
+                    );
+                  })
                 )}
               </div>
             </section>

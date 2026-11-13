@@ -7720,7 +7720,28 @@ app.get('/api/inbox/email/messages', requireAuth, async (req, res) => {
         countRes = await lineSupabase.from('email_inbox_messages').select('id', { count: 'exact', head: true });
       }
       if (countRes.error) throw new Error(countRes.error.message);
-      return res.json({ success: true, count: countRes.count || 0 });
+
+      let unreadCount: number | null = null;
+      try {
+        let unreadRes = await lineSupabase
+          .from('email_inbox_messages')
+          .select('id', { count: 'exact', head: true })
+          .eq('is_read', false)
+          .or(`owner_id.eq.${user.id},owner_id.is.null`);
+        if (unreadRes.error) {
+          unreadRes = await lineSupabase
+            .from('email_inbox_messages')
+            .select('id', { count: 'exact', head: true })
+            .eq('is_read', false);
+        }
+        if (!unreadRes.error && typeof unreadRes.count === 'number') {
+          unreadCount = unreadRes.count;
+        }
+      } catch {
+        // is_read カラム未適用環境では null のまま返し、フロント側のフォールバックに任せる
+      }
+
+      return res.json({ success: true, count: countRes.count || 0, unreadCount });
     }
 
     let inboundAddress = 'contact@mstcorp.info';
@@ -7761,48 +7782,48 @@ app.get('/api/inbox/email/messages', requireAuth, async (req, res) => {
       ? 'id,from_email,to_emails,subject,received_at'
       : 'id,from_email,to_emails,subject,text_body,html_body,received_at';
 
-    try {
-      const inboxResWithBackup = await withSince(
-        lineSupabase
-          .from('email_inbox_messages')
-          .select(`${baseCols},backup_status,backup_error`)
-          .or(`owner_id.eq.${user.id},owner_id.is.null`),
-      )
-        .order('received_at', { ascending: false })
-        .limit(500);
+    const queryMessagesWithCols = async (cols: string, filterOwner: boolean) => {
+      const base = lineSupabase!.from('email_inbox_messages').select(cols);
+      const scoped = filterOwner ? base.or(`owner_id.eq.${user.id},owner_id.is.null`) : base;
+      return await withSince(scoped).order('received_at', { ascending: false }).limit(500);
+    };
 
-      if (!inboxResWithBackup.error && inboxResWithBackup.data) {
-        messages = inboxResWithBackup.data;
-      } else {
-        throw new Error(inboxResWithBackup.error?.message || 'Missing column');
-      }
-    } catch {
-      // 拡張カラム（backup_status等）が未作成の場合は基本カラムのみで取得
-      const baseRes = await withSince(
-        lineSupabase
-          .from('email_inbox_messages')
-          .select(baseCols)
-          .or(`owner_id.eq.${user.id},owner_id.is.null`),
-      )
-        .order('received_at', { ascending: false })
-        .limit(500);
+    const fullCols = `${baseCols},backup_status,backup_error,is_read,read_at`;
+    const backupOnlyCols = `${baseCols},backup_status,backup_error`;
+    const readOnlyCols = `${baseCols},is_read,read_at`;
 
-      if (!baseRes.error && baseRes.data) {
-        messages = baseRes.data.map((m: any) => ({
-          ...m,
-          backup_status: 'skipped',
-          backup_error: null,
-        }));
+    const fullRes = await queryMessagesWithCols(fullCols, true);
+    if (!fullRes.error && fullRes.data) {
+      messages = fullRes.data;
+    } else {
+      const backupRes = await queryMessagesWithCols(backupOnlyCols, true);
+      if (!backupRes.error && backupRes.data) {
+        messages = backupRes.data;
       } else {
-        // 全件フォールバック
-        const fallbackRes = await withSince(lineSupabase.from('email_inbox_messages').select(baseCols))
-          .order('received_at', { ascending: false })
-          .limit(500);
-        messages = (fallbackRes.data || []).map((m: any) => ({
-          ...m,
-          backup_status: 'skipped',
-          backup_error: null,
-        }));
+        const readRes = await queryMessagesWithCols(readOnlyCols, true);
+        if (!readRes.error && readRes.data) {
+          messages = readRes.data.map((m: any) => ({
+            ...m,
+            backup_status: 'skipped',
+            backup_error: null,
+          }));
+        } else {
+          const baseRes = await queryMessagesWithCols(baseCols, true);
+          if (!baseRes.error && baseRes.data) {
+            messages = baseRes.data.map((m: any) => ({
+              ...m,
+              backup_status: 'skipped',
+              backup_error: null,
+            }));
+          } else {
+            const fallbackRes = await queryMessagesWithCols(baseCols, false);
+            messages = (fallbackRes.data || []).map((m: any) => ({
+              ...m,
+              backup_status: 'skipped',
+              backup_error: null,
+            }));
+          }
+        }
       }
     }
 
@@ -7823,7 +7844,7 @@ app.get('/api/inbox/email/messages', requireAuth, async (req, res) => {
   }
 });
 
-// メール1件の本文を取得する（一覧は軽量化のため本文を含めず、選択時にここで取得する）
+// メール1件の本文を取得する（一覧は軽量化のため本文を含めず、選択時にここで取得し既読化する）
 app.get('/api/inbox/email/messages/:id', requireAuth, async (req, res) => {
   if (!lineSupabase) return res.status(503).json({ error: 'DB接続が設定されていません。' });
   const user = (req as any).user;
@@ -7839,10 +7860,65 @@ app.get('/api/inbox/email/messages/:id', requireAuth, async (req, res) => {
       .maybeSingle();
     if (result.error) throw new Error(result.error.message);
     if (!result.data) return res.status(404).json({ error: 'メールが見つかりません。' });
+
+    if (req.query.markRead !== '0') {
+      try {
+        await lineSupabase
+          .from('email_inbox_messages')
+          .update({ is_read: true, read_at: new Date().toISOString() })
+          .eq('id', id)
+          .or(`owner_id.eq.${user.id},owner_id.is.null`);
+      } catch {
+        // is_read カラム未適用でも本文返却は継続する
+      }
+    }
+
     return res.json({ success: true, message: result.data });
   } catch (err: any) {
     console.error('Inbox email detail fetch failed:', err?.message || err);
     return res.status(500).json({ error: err?.message || 'メール本文を読み込めませんでした。' });
+  }
+});
+
+// メール受信箱の既読/未読状態を更新する
+app.post('/api/inbox/email/read-state', requireAuth, async (req, res) => {
+  if (!lineSupabase) return res.status(503).json({ error: 'DB接続が設定されていません。' });
+  const user = (req as any).user;
+  const isRead = Boolean(req.body?.isRead);
+  const markAll = Boolean(req.body?.markAll);
+  const rawIds = Array.isArray(req.body?.ids) ? req.body.ids : [];
+  const ids = rawIds.map((v: unknown) => String(v || '').trim()).filter(Boolean).slice(0, 500);
+
+  if (!markAll && ids.length === 0) {
+    return res.status(400).json({ error: '対象メールIDまたは全件指定が必要です。' });
+  }
+
+  try {
+    const patch = {
+      is_read: isRead,
+      read_at: isRead ? new Date().toISOString() : null,
+    };
+    let query = lineSupabase
+      .from('email_inbox_messages')
+      .update(patch)
+      .or(`owner_id.eq.${user.id},owner_id.is.null`);
+    if (!markAll) {
+      query = query.in('id', ids);
+    } else {
+      query = query.eq('is_read', !isRead);
+    }
+    const { error } = await query;
+    if (error) {
+      // is_read カラム未適用の場合はフロント側ローカル保持で継続できるよう成功扱いで返す
+      if (/is_read|read_at|column/i.test(error.message || '') || error.code === '42703' || error.code === 'PGRST204') {
+        return res.json({ success: true, persisted: false });
+      }
+      throw new Error(error.message);
+    }
+    return res.json({ success: true, persisted: true });
+  } catch (err: any) {
+    console.error('Inbox email read-state update failed:', err?.message || err);
+    return res.status(500).json({ error: err?.message || '既読状態を更新できませんでした。' });
   }
 });
 
