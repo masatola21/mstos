@@ -1642,6 +1642,12 @@ ${activeVideoDraft.scriptBody}
                   </div>
                 </div>
 
+                {activeDraft.imagePrompt && (
+                  <div className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-xs text-slate-600">
+                    <span className="font-semibold text-slate-700">添える画像イメージ案: </span>
+                    <span>{activeDraft.imagePrompt}</span>
+                  </div>
+                )}
 
                 {/* AIワンクリックブラッシュアップバー */}
                 <div className="rounded-xl border border-purple-200 bg-purple-50/40 p-3 space-y-2">
