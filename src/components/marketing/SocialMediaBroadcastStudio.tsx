@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+﻿import React, { useState, useEffect, useMemo } from 'react';
 import {
   Sparkles,
   Check,
@@ -128,6 +128,8 @@ export interface GeneratedVideoDraft {
   scriptBody: string;
   visualNotes: string;
   ctaLine: string;
+  captionText: string;   // 動画投稿時のSNSキャプション文
+  imagePrompt: string;   // サムネイル・添え画像のAI生成指示文
   savedAssetId?: string;
 }
 
@@ -600,7 +602,9 @@ ${formatDescriptions}
       "titleHook": "視聴者の手が止まるタイトル／冒頭1行フック案",
       "scriptBody": "構成案・台本（または5本の企画アイデア一覧）",
       "visualNotes": "映像・撮影・テロップ・サムネイルの工夫メモ",
-      "ctaLine": "最後の誘導フレーズ（例：プロフの無料診断へ）"
+      "ctaLine": "最後の誘導フレーズ（例：プロフの無料診断へ）",
+      "captionText": "この動画をSNS投稿する際のキャプション文（ハッシュタグ含む・150字前後）",
+      "imagePrompt": "サムネイル画像をAIで生成する指示文（構図・色・テキスト要素を含む具体的な1〜2文）"
     }
   ]
 }`;
@@ -642,6 +646,8 @@ ${formatDescriptions}
               scriptBody: item.scriptBody || '',
               visualNotes: item.visualNotes || '',
               ctaLine: item.ctaLine || '',
+              captionText: item.captionText || '',
+              imagePrompt: item.imagePrompt || '',
             };
           }
         }
@@ -654,6 +660,8 @@ ${formatDescriptions}
           scriptBody: data.text.trim(),
           visualNotes: '',
           ctaLine: '',
+          captionText: '',
+          imagePrompt: '',
         };
       }
 
@@ -801,6 +809,8 @@ ${activeDraft.text}
     scriptBody: '',
     visualNotes: '',
     ctaLine: '',
+    captionText: '',
+    imagePrompt: '',
   };
 
   const updateActiveVideoDraft = (patch: Partial<GeneratedVideoDraft>) => {
@@ -813,6 +823,8 @@ ${activeDraft.text}
           scriptBody: '',
           visualNotes: '',
           ctaLine: '',
+          captionText: '',
+          imagePrompt: '',
         }),
         ...patch,
       },
@@ -881,6 +893,8 @@ ${activeVideoDraft.scriptBody}
       draft.scriptBody.trim() ? `【構成案・台本・アイデア】\n${draft.scriptBody.trim()}` : '',
       draft.visualNotes.trim() ? `【映像・テロップ・サムネイルメモ】\n${draft.visualNotes.trim()}` : '',
       draft.ctaLine.trim() ? `【締めの誘導CTA】\n${draft.ctaLine.trim()}` : '',
+      draft.captionText?.trim() ? `【SNS投稿キャプション】\n${draft.captionText.trim()}` : '',
+      draft.imagePrompt?.trim() ? `【サムネイル画像AI指示文】\n${draft.imagePrompt.trim()}` : '',
     ]
       .filter(Boolean)
       .join('\n\n');
@@ -1630,9 +1644,19 @@ ${activeVideoDraft.scriptBody}
                 </div>
 
                 {activeDraft.imagePrompt && (
-                  <div className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-xs text-slate-600">
-                    <span className="font-semibold text-slate-700">添える画像イメージ案: </span>
-                    <span>{activeDraft.imagePrompt}</span>
+                  <div className="rounded-xl border border-blue-100 bg-blue-50/50 px-3 py-2 space-y-1">
+                    <div className="flex items-center justify-between">
+                      <span className="text-[11px] font-bold text-blue-800">画像AI指示文（ChatGPT / Midjourneyへ貼り付け）</span>
+                      <button
+                        type="button"
+                        onClick={() => { navigator.clipboard.writeText(activeDraft.imagePrompt); setCopiedKey(`imgprompt_${previewTab}`); setTimeout(() => setCopiedKey(null), 2000); }}
+                        className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-white border border-slate-200 hover:bg-slate-100 text-[11px] text-slate-600 font-semibold transition"
+                      >
+                        {copiedKey === `imgprompt_${previewTab}` ? <Check className="h-3 w-3 text-emerald-600" /> : <Copy className="h-3 w-3" />}
+                        コピー
+                      </button>
+                    </div>
+                    <p className="text-xs text-slate-700">{activeDraft.imagePrompt}</p>
                   </div>
                 )}
 
@@ -1820,6 +1844,53 @@ ${activeVideoDraft.scriptBody}
                         className="w-full rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-xs text-slate-800 focus:bg-white focus:border-purple-500 focus:outline-none"
                       />
                     </div>
+                  </div>
+                </div>
+
+                {/* SNS投稿キャプション & サムネイル画像AI指示文 */}
+                <div className="rounded-xl border border-blue-100 bg-blue-50/50 p-3 space-y-3">
+                  <p className="text-[11px] font-bold text-blue-800">投稿・画像セット</p>
+                  <div>
+                    <div className="flex items-center justify-between mb-1">
+                      <label className="text-[11px] font-semibold text-slate-600">SNS投稿キャプション（動画に添えるテキスト）</label>
+                      <button
+                        type="button"
+                        onClick={() => { navigator.clipboard.writeText(activeVideoDraft.captionText || ''); setCopiedKey('video_caption'); setTimeout(() => setCopiedKey(null), 2000); }}
+                        disabled={!activeVideoDraft.captionText?.trim()}
+                        className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-white border border-slate-200 hover:bg-slate-100 text-[11px] text-slate-600 font-semibold transition disabled:opacity-40"
+                      >
+                        {copiedKey === 'video_caption' ? <Check className="h-3 w-3 text-emerald-600" /> : <Copy className="h-3 w-3" />}
+                        コピー
+                      </button>
+                    </div>
+                    <textarea
+                      rows={3}
+                      value={activeVideoDraft.captionText || ''}
+                      onChange={(e) => updateActiveVideoDraft({ captionText: e.target.value })}
+                      placeholder="例: 社長が全部やる会社に共通する落とし穴3つ📌 仕組み化で残業ゼロになった事例を公開中。#業務改善 #中小企業経営"
+                      className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs text-slate-800 focus:border-blue-400 focus:outline-none"
+                    />
+                  </div>
+                  <div>
+                    <div className="flex items-center justify-between mb-1">
+                      <label className="text-[11px] font-semibold text-slate-600">サムネイル画像AI指示文（ChatGPT / Midjourneyへ貼り付け）</label>
+                      <button
+                        type="button"
+                        onClick={() => { navigator.clipboard.writeText(activeVideoDraft.imagePrompt || ''); setCopiedKey('video_imgprompt'); setTimeout(() => setCopiedKey(null), 2000); }}
+                        disabled={!activeVideoDraft.imagePrompt?.trim()}
+                        className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-white border border-slate-200 hover:bg-slate-100 text-[11px] text-slate-600 font-semibold transition disabled:opacity-40"
+                      >
+                        {copiedKey === 'video_imgprompt' ? <Check className="h-3 w-3 text-emerald-600" /> : <Copy className="h-3 w-3" />}
+                        コピー
+                      </button>
+                    </div>
+                    <textarea
+                      rows={2}
+                      value={activeVideoDraft.imagePrompt || ''}
+                      onChange={(e) => updateActiveVideoDraft({ imagePrompt: e.target.value })}
+                      placeholder="例: A clean professional thumbnail with bold red text saying '社長が知らない落とし穴3つ', blue gradient background, Japanese business style"
+                      className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs text-slate-800 focus:border-blue-400 focus:outline-none"
+                    />
                   </div>
                 </div>
 
