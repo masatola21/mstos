@@ -64,8 +64,17 @@ import {
 import { upgradeLegacyMstUrl, OFFICIAL_VERCEL_URLS } from '../../utils/marketingStorage';
 import {
   FUNNEL_ORCHESTRATION_RULES,
+  SCENARIO_TRACK_META,
+  SCENARIO_TRACK_ORDER,
+  ScenarioTrackCategory,
+  classifyScenarioTrack,
+  formatScenarioStopCondition,
+  formatScenarioTriggerLabel,
+  formatScenarioWaitMinutes,
   isLegacyBranchAScenarioName,
+  isLegacyPostMeetingScenarioName,
   isPostDealStageTrigger,
+  sortScenarios,
 } from '../../utils/followupStarterScenarios';
 import { getSupabase } from '../../lib/supabaseClient';
 import { FlowStepInspectorModal } from './FlowStepInspectorModal';
@@ -1282,6 +1291,9 @@ export const MarketingFlowStudio: React.FC<MarketingFlowStudioProps> = ({
 
   const [tableSearch, setTableSearch] = useState('');
   const [tableChannelFilter, setTableChannelFilter] = useState<'all' | 'line' | 'email' | 'both'>('all');
+  const [tableTrackFilter, setTableTrackFilter] = useState<'all' | ScenarioTrackCategory>('all');
+  const [tableStatusFilter, setTableStatusFilter] = useState<'all' | 'active' | 'paused'>('all');
+  const [tableGroupByTrack, setTableGroupByTrack] = useState<boolean>(true);
   const [isStarterOpen, setIsStarterOpen] = useState(false);
   const [showOutreachSpec, setShowOutreachSpec] = useState(false);
 
@@ -1289,12 +1301,83 @@ export const MarketingFlowStudio: React.FC<MarketingFlowStudioProps> = ({
   const [inspectorScenario, setInspectorScenario] = useState<MarketingScenario | null>(null);
   const [isInspectorOpen, setIsInspectorOpen] = useState(false);
 
+  const sortedAllScenarios = useMemo(() => sortScenarios(scenarios), [scenarios]);
+
+  const legacyPostMeetingScenarios = useMemo(
+    () => scenarios.filter((s) => isLegacyPostMeetingScenarioName(s.name || '')),
+    [scenarios]
+  );
+
+  const tableTrackCounts = useMemo(() => {
+    const counts: Record<ScenarioTrackCategory, number> = {
+      branch_diagnosis: 0,
+      branch_consult: 0,
+      branch_care: 0,
+      story_nurturing: 0,
+      material_followup: 0,
+      post_meeting: 0,
+      sales_outreach: 0,
+      other: 0,
+    };
+    for (const s of sortedAllScenarios) {
+      counts[classifyScenarioTrack(s)]++;
+    }
+    return counts;
+  }, [sortedAllScenarios]);
+
+  const filteredTableScenarios = useMemo(() => {
+    const q = tableSearch.trim().toLowerCase();
+    return sortedAllScenarios.filter((s) => {
+      if (tableTrackFilter !== 'all' && classifyScenarioTrack(s) !== tableTrackFilter) {
+        return false;
+      }
+      if (tableChannelFilter !== 'all' && s.channel !== tableChannelFilter) {
+        return false;
+      }
+      if (tableStatusFilter === 'active' && !s.automationEnabled) {
+        return false;
+      }
+      if (tableStatusFilter === 'paused' && s.automationEnabled) {
+        return false;
+      }
+      if (!q) return true;
+      const triggerText = formatScenarioTriggerLabel(s.trigger, s.targetTag).toLowerCase();
+      return (
+        s.name.toLowerCase().includes(q) ||
+        (s.messageBody || '').toLowerCase().includes(q) ||
+        (s.emailSubject || '').toLowerCase().includes(q) ||
+        (s.flexTitle || '').toLowerCase().includes(q) ||
+        (s.targetTag || '').toLowerCase().includes(q) ||
+        triggerText.includes(q)
+      );
+    });
+  }, [sortedAllScenarios, tableTrackFilter, tableChannelFilter, tableStatusFilter, tableSearch]);
+
+  const groupedTableSections = useMemo(() => {
+    const map = new Map<ScenarioTrackCategory, MarketingScenario[]>();
+    for (const trackId of SCENARIO_TRACK_ORDER) {
+      map.set(trackId, []);
+    }
+    for (const s of filteredTableScenarios) {
+      const track = classifyScenarioTrack(s);
+      map.get(track)?.push(s);
+    }
+    return SCENARIO_TRACK_ORDER
+      .map((trackId) => ({
+        meta: SCENARIO_TRACK_META[trackId],
+        items: map.get(trackId) || [],
+      }))
+      .filter((section) => section.items.length > 0);
+  }, [filteredTableScenarios]);
+
   const isMaterialFollowupScenario = (s: MarketingScenario) =>
     s.trigger === 'material_requested' || s.name.includes('【資料請求');
 
   const isPostMeetingFollowupScenario = (s: MarketingScenario) =>
     isPostDealStageTrigger(s.trigger) ||
     s.name.includes('【面談後') ||
+    s.name.includes('【提案書送付後') ||
+    s.name.includes('【レポート＆提案書') ||
     s.name.includes('【レポート後') ||
     s.name.includes('【提案後');
 
@@ -1381,10 +1464,11 @@ export const MarketingFlowStudio: React.FC<MarketingFlowStudioProps> = ({
   const postMeetingScenarios = useMemo(() => {
     const triggerOrder: Record<string, number> = {
       meeting_completed: 1,
-      report_approved: 2,
-      report_sent: 3,
-      proposal_approved: 4,
-      proposal_sent: 5,
+      report_or_proposal_sent: 2,
+      report_approved: 3,
+      report_sent: 4,
+      proposal_approved: 5,
+      proposal_sent: 6,
     };
     return scenarios
       .filter(isPostMeetingFollowupScenario)
@@ -1694,7 +1778,7 @@ export const MarketingFlowStudio: React.FC<MarketingFlowStudioProps> = ({
                         className="w-full flex items-center gap-2 px-2.5 py-1.5 rounded-lg text-xs font-semibold text-slate-700 hover:bg-amber-50 hover:text-amber-700 transition cursor-pointer text-left"
                       >
                         <UserCheck className="h-3.5 w-3.5 text-amber-600 shrink-0" />
-                        <span>面談・提案後: フォロー4本を適用</span>
+                        <span>面談・提案後: 統合フォロー3本を適用</span>
                       </button>
                     )}
                     {onApplyDirectConsultStarterSet && (
@@ -1831,7 +1915,7 @@ export const MarketingFlowStudio: React.FC<MarketingFlowStudioProps> = ({
                 <span className="truncate">資料・面談・提案後</span>
               </div>
               <div className="text-[11px] text-slate-500 mt-0.5 truncate">
-                自動追客7ステップ
+                自動追客6ステップ
               </div>
             </div>
             <span className={`text-[11px] font-bold px-2 py-0.5 rounded shrink-0 ml-2 ${activeTrack === 'inbound_material' && viewMode === 'flow' ? 'bg-teal-100 text-teal-800' : 'bg-slate-100 text-slate-600'}`}>
@@ -1887,177 +1971,428 @@ export const MarketingFlowStudio: React.FC<MarketingFlowStudioProps> = ({
         </div>
       </div>
 
-      {/* テーブル表示モード: 全シナリオ一覧 ＆ 単発営業メール */}
+      {/* テーブル表示モード: 全ステップ一覧 ＆ 導線グループ整理 */}
       {viewMode === 'table' && (
         <div className="space-y-4 animate-fade-in">
-          {/* 単発営業メール（一発直球提案）クイック編集バー */}
-          {(tableChannelFilter === 'all' || tableChannelFilter === 'email') && (
-            <div className="bg-white border border-purple-200 rounded-2xl p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-              <div className="min-w-0">
-                <div className="flex items-center gap-2 flex-wrap">
-                  <span className="text-xs font-bold text-purple-800">単発営業メール</span>
-                  <span className="text-xs text-slate-500">
-                    {oneShotScenario ? 'カスタム編集済み' : '標準テンプレート使用中'}
+          {/* 重複・旧シナリオ整理クイックバー */}
+          {(duplicateCount > 0 || legacyDiagnosisScenarios.length > 0 || legacyPostMeetingScenarios.length > 0) && (
+            <div className="bg-amber-50 border border-amber-200 rounded-2xl p-3.5 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+              <div className="flex items-start sm:items-center gap-2 text-xs text-amber-900">
+                <AlertCircle className="w-4 h-4 text-amber-600 shrink-0 mt-0.5 sm:mt-0" />
+                <div>
+                  <span className="font-bold">整理可能なシナリオが見つかりました：</span>
+                  <span className="text-amber-800">
+                    {[
+                      duplicateCount > 0 ? `重複 ${duplicateCount}件` : '',
+                      legacyDiagnosisScenarios.length > 0 ? `旧分岐A ${legacyDiagnosisScenarios.length}件` : '',
+                      legacyPostMeetingScenarios.length > 0 ? `旧面談/提案後 ${legacyPostMeetingScenarios.length}件` : '',
+                    ]
+                      .filter(Boolean)
+                      .join(' ／ ')}
                   </span>
                 </div>
-                <div className="text-sm font-bold text-slate-900 truncate mt-0.5">
-                  {ONE_SHOT_SCENARIO_NAME}
-                </div>
               </div>
-              <div className="flex items-center gap-2 shrink-0">
-                {oneShotScenario && (
+              <div className="flex flex-wrap items-center gap-2 shrink-0">
+                {duplicateCount > 0 && onDeduplicateScenarios && (
                   <button
                     type="button"
-                    onClick={() => handleDeleteInspectorScenario(oneShotScenario.id)}
-                    className="px-3 py-1.5 bg-white hover:bg-slate-50 text-slate-600 border border-slate-200 rounded-lg text-xs font-semibold flex items-center gap-1 cursor-pointer whitespace-nowrap"
+                    onClick={onDeduplicateScenarios}
+                    className="px-3 py-1.5 bg-amber-600 hover:bg-amber-700 text-white rounded-lg text-xs font-bold flex items-center gap-1.5 cursor-pointer whitespace-nowrap"
                   >
-                    <RotateCcw className="w-3.5 h-3.5" />
-                    <span>標準に戻す</span>
+                    <Trash2 className="w-3.5 h-3.5" />
+                    <span>重複を整理（{duplicateCount}件）</span>
                   </button>
                 )}
-                <button
-                  type="button"
-                  onClick={handleOpenOneShotEditor}
-                  className="px-3.5 py-1.5 bg-purple-600 hover:bg-purple-700 text-white rounded-lg text-xs font-bold flex items-center gap-1.5 cursor-pointer whitespace-nowrap"
-                >
-                  <Edit3 className="w-3.5 h-3.5" />
-                  <span>テンプレートを編集</span>
-                </button>
+                {legacyDiagnosisScenarios.length > 0 && (
+                  <button
+                    type="button"
+                    onClick={handleCleanupLegacyDiagnosisScenarios}
+                    className="px-3 py-1.5 bg-white hover:bg-amber-100 text-amber-900 border border-amber-300 rounded-lg text-xs font-bold cursor-pointer whitespace-nowrap"
+                  >
+                    分岐Aを最新4本へ整理
+                  </button>
+                )}
+                {legacyPostMeetingScenarios.length > 0 && onApplyPostMeetingStarterSet && (
+                  <button
+                    type="button"
+                    onClick={onApplyPostMeetingStarterSet}
+                    className="px-3 py-1.5 bg-white hover:bg-amber-100 text-amber-900 border border-amber-300 rounded-lg text-xs font-bold cursor-pointer whitespace-nowrap"
+                  >
+                    面談・提案後を3本へ統合
+                  </button>
+                )}
               </div>
             </div>
           )}
 
-          <div className="bg-white border border-slate-200 rounded-2xl p-5 shadow-xs space-y-4">
-            <div className="flex flex-col md:flex-row md:items-center justify-between gap-3 border-b border-slate-100 pb-3">
-              <div className="flex flex-wrap items-center gap-1.5">
-                {(
-                  [
-                    { id: 'all', label: 'すべて' },
-                    { id: 'line', label: 'LINE' },
-                    { id: 'email', label: 'メール' },
-                    { id: 'both', label: 'LINE優先（メール補完）' },
-                  ] as const
-                ).map((item) => (
+          {/* 単発営業メール（一発直球提案）クイック編集バー */}
+          {(tableTrackFilter === 'all' || tableTrackFilter === 'sales_outreach') &&
+            (tableChannelFilter === 'all' || tableChannelFilter === 'email') && (
+              <div className="bg-white border border-purple-200 rounded-2xl p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                <div className="min-w-0">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <span className="text-[11px] font-bold px-2 py-0.5 rounded bg-blue-50 text-blue-700 border border-blue-200">
+                      単発営業メール（手動一発提案）
+                    </span>
+                    <span className="text-xs text-slate-500">
+                      {oneShotScenario ? 'カスタム編集済み' : '標準テンプレート使用中'}
+                    </span>
+                  </div>
+                  <div className="text-sm font-bold text-slate-900 truncate mt-1">
+                    {ONE_SHOT_SCENARIO_NAME}
+                  </div>
+                </div>
+                <div className="flex items-center gap-2 shrink-0">
+                  {oneShotScenario && (
+                    <button
+                      type="button"
+                      onClick={() => handleDeleteInspectorScenario(oneShotScenario.id)}
+                      className="px-3 py-1.5 bg-white hover:bg-slate-50 text-slate-600 border border-slate-200 rounded-lg text-xs font-semibold flex items-center gap-1 cursor-pointer whitespace-nowrap"
+                    >
+                      <RotateCcw className="w-3.5 h-3.5" />
+                      <span>標準に戻す</span>
+                    </button>
+                  )}
                   <button
-                    key={item.id}
                     type="button"
-                    onClick={() => setTableChannelFilter(item.id)}
-                    className={`px-3 py-1 rounded-lg text-xs font-semibold transition cursor-pointer whitespace-nowrap ${
-                      tableChannelFilter === item.id
-                        ? 'bg-purple-600 text-white'
-                        : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                    onClick={handleOpenOneShotEditor}
+                    className="px-3.5 py-1.5 bg-purple-600 hover:bg-purple-700 text-white rounded-lg text-xs font-bold flex items-center gap-1.5 cursor-pointer whitespace-nowrap"
+                  >
+                    <Edit3 className="w-3.5 h-3.5" />
+                    <span>テンプレートを編集</span>
+                  </button>
+                </div>
+              </div>
+            )}
+
+          <div className="bg-white border border-slate-200 rounded-2xl p-5 shadow-xs space-y-4">
+            {/* 導線・カテゴリ別フィルター */}
+            <div className="flex flex-wrap items-center gap-1.5 border-b border-slate-100 pb-3">
+              <button
+                type="button"
+                onClick={() => setTableTrackFilter('all')}
+                className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition cursor-pointer whitespace-nowrap ${
+                  tableTrackFilter === 'all'
+                    ? 'bg-slate-900 text-white shadow-2xs'
+                    : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                }`}
+              >
+                <span>すべて</span>
+                <span className={`text-[10px] px-1.5 py-0.2 rounded ${tableTrackFilter === 'all' ? 'bg-white/20 text-white' : 'bg-white text-slate-600'}`}>
+                  {scenarios.length}
+                </span>
+              </button>
+              {SCENARIO_TRACK_ORDER.filter(
+                (trackId) => trackId !== 'other' || tableTrackCounts.other > 0
+              ).map((trackId) => {
+                const meta = SCENARIO_TRACK_META[trackId];
+                const count = tableTrackCounts[trackId];
+                const active = tableTrackFilter === trackId;
+                return (
+                  <button
+                    key={trackId}
+                    type="button"
+                    onClick={() => setTableTrackFilter(trackId)}
+                    className={`inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-semibold transition cursor-pointer whitespace-nowrap border ${
+                      active
+                        ? `${meta.badgeClass} ring-1 ring-current font-bold`
+                        : 'bg-white border-slate-200 text-slate-600 hover:bg-slate-50'
                     }`}
                   >
-                    {item.label}
+                    <span>{meta.shortLabel}</span>
+                    <span className={`text-[10px] px-1.5 rounded ${active ? 'bg-white/80 text-slate-900 font-bold' : 'bg-slate-100 text-slate-500'}`}>
+                      {count}
+                    </span>
                   </button>
-                ))}
+                );
+              })}
+            </div>
+
+            {/* 媒体・状態・表示形式・検索バー */}
+            <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-3 border-b border-slate-100 pb-3">
+              <div className="flex flex-wrap items-center gap-2">
+                <div className="flex flex-wrap items-center gap-1">
+                  {(
+                    [
+                      { id: 'all', label: '全媒体' },
+                      { id: 'line', label: 'LINE' },
+                      { id: 'email', label: 'メール' },
+                      { id: 'both', label: 'LINE優先（メール補完）' },
+                    ] as const
+                  ).map((item) => (
+                    <button
+                      key={item.id}
+                      type="button"
+                      onClick={() => setTableChannelFilter(item.id)}
+                      className={`px-2.5 py-1 rounded-lg text-xs font-semibold transition cursor-pointer whitespace-nowrap ${
+                        tableChannelFilter === item.id
+                          ? 'bg-purple-600 text-white'
+                          : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                      }`}
+                    >
+                      {item.label}
+                    </button>
+                  ))}
+                </div>
+
+                <span className="hidden sm:inline text-slate-300">|</span>
+
+                <div className="flex items-center gap-1">
+                  {(
+                    [
+                      { id: 'all', label: '全状態' },
+                      { id: 'active', label: '稼働中' },
+                      { id: 'paused', label: '停止中' },
+                    ] as const
+                  ).map((st) => (
+                    <button
+                      key={st.id}
+                      type="button"
+                      onClick={() => setTableStatusFilter(st.id)}
+                      className={`px-2.5 py-1 rounded-lg text-xs font-semibold transition cursor-pointer whitespace-nowrap ${
+                        tableStatusFilter === st.id
+                          ? 'bg-emerald-600 text-white'
+                          : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                      }`}
+                    >
+                      {st.label}
+                    </button>
+                  ))}
+                </div>
               </div>
-              <div className="relative w-full md:w-72">
-                <Search className="w-4 h-4 absolute left-3 top-2 text-slate-400" />
-                <input
-                  type="text"
-                  value={tableSearch}
-                  onChange={(e) => setTableSearch(e.target.value)}
-                  placeholder="ステップ名や本文で検索..."
-                  className="w-full bg-slate-50 border border-slate-200 rounded-xl pl-9 pr-3 py-1.5 text-xs text-slate-900 placeholder-slate-400 focus:outline-none focus:border-purple-500 focus:bg-white"
-                />
+
+              <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => setTableGroupByTrack((prev) => !prev)}
+                  className={`inline-flex items-center justify-center gap-1.5 px-3 py-1.5 rounded-xl border text-xs font-semibold transition cursor-pointer whitespace-nowrap ${
+                    tableGroupByTrack
+                      ? 'bg-purple-50 border-purple-200 text-purple-800'
+                      : 'bg-white border-slate-200 text-slate-600 hover:bg-slate-50'
+                  }`}
+                  title="導線ごとの見出しでまとめるか、通し一覧で表示するかを切り替えます"
+                >
+                  <ListFilter className="w-3.5 h-3.5" />
+                  <span>{tableGroupByTrack ? '導線グループ表示' : 'フラット表示'}</span>
+                </button>
+
+                <div className="relative w-full sm:w-64">
+                  <Search className="w-4 h-4 absolute left-3 top-2 text-slate-400" />
+                  <input
+                    type="text"
+                    value={tableSearch}
+                    onChange={(e) => setTableSearch(e.target.value)}
+                    placeholder="ステップ名・条件・本文で検索..."
+                    className="w-full bg-slate-50 border border-slate-200 rounded-xl pl-9 pr-8 py-1.5 text-xs text-slate-900 placeholder-slate-400 focus:outline-none focus:border-purple-500 focus:bg-white"
+                  />
+                  {tableSearch && (
+                    <button
+                      type="button"
+                      onClick={() => setTableSearch('')}
+                      aria-label="検索をクリア"
+                      className="absolute right-2.5 top-2 text-slate-400 hover:text-slate-600 cursor-pointer"
+                    >
+                      <X className="w-3.5 h-3.5" />
+                    </button>
+                  )}
+                </div>
               </div>
             </div>
 
-            <div className="overflow-x-auto">
-              <table className="w-full text-left text-xs">
-                <thead className="bg-slate-50 text-slate-600 font-bold border-b border-slate-200">
-                  <tr>
-                    <th className="p-3">ステップ名</th>
-                    <th className="p-3">媒体</th>
-                    <th className="p-3">タイミング</th>
-                    <th className="p-3">自動停止</th>
-                    <th className="p-3">稼働</th>
-                    <th className="p-3 text-right">操作</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-slate-100 text-slate-700">
-                  {scenarios
-                    .filter((s) => tableChannelFilter === 'all' || s.channel === tableChannelFilter)
-                    .filter(
-                      (s) =>
-                        !tableSearch ||
-                        s.name.toLowerCase().includes(tableSearch.toLowerCase()) ||
-                        (s.messageBody || '').toLowerCase().includes(tableSearch.toLowerCase()) ||
-                        (s.emailSubject || '').toLowerCase().includes(tableSearch.toLowerCase())
-                    )
-                    .map((s) => (
-                      <tr key={s.id} className="hover:bg-slate-50/70 transition">
-                        <td className="p-3">
-                          <button
-                            type="button"
-                            onClick={() => handleOpenInspector(s)}
-                            className="font-bold text-slate-900 hover:text-purple-700 text-left cursor-pointer"
-                          >
-                            {s.name}
-                          </button>
-                          <div className="text-[11px] text-slate-500 line-clamp-1 mt-0.5">
-                            {s.flexTitle || s.messageBody || s.emailSubject || '文面未設定'}
-                          </div>
-                        </td>
-                        <td className="p-3 whitespace-nowrap">
-                          <span
-                            className={`px-2 py-0.5 rounded text-[11px] font-semibold ${
-                              s.channel === 'line'
-                                ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
-                                : s.channel === 'email'
-                                ? 'bg-blue-50 text-blue-700 border border-blue-200'
-                                : 'bg-purple-50 text-purple-700 border border-purple-200'
-                            }`}
-                          >
-                            {s.channel === 'line' ? 'LINE' : s.channel === 'email' ? 'メール' : 'LINE優先'}
-                          </span>
-                        </td>
-                        <td className="p-3 font-mono text-[11px] text-slate-600 whitespace-nowrap">
-                          {s.waitMinutes === 0 ? '即時' : `${Math.round(s.waitMinutes / 1440)}日後`}
-                        </td>
-                        <td className="p-3 text-[11px] text-slate-500 whitespace-nowrap">
-                          {s.stopOnBooking && s.stopOnDeal
-                            ? '予約・成約で停止'
-                            : s.stopOnBooking
-                            ? '予約で停止'
-                            : s.stopOnDeal
-                            ? '成約で停止'
-                            : '停止条件なし'}
-                        </td>
-                        <td className="p-3 whitespace-nowrap">
-                          <button
-                            type="button"
-                            onClick={() => toggleScenarioAutomation(s.id, Boolean(s.automationEnabled))}
-                            className={`inline-flex items-center gap-1 px-2.5 py-1 rounded text-[11px] font-bold cursor-pointer transition whitespace-nowrap ${
-                              s.automationEnabled
-                                ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
-                                : 'bg-slate-100 text-slate-600 border border-slate-200 hover:bg-slate-200'
-                            }`}
-                          >
-                            {s.automationEnabled ? (
-                              <Play className="w-3 h-3 fill-emerald-600 text-emerald-600" />
-                            ) : (
-                              <Pause className="w-3 h-3 text-slate-500" />
-                            )}
-                            <span>{s.automationEnabled ? '稼働中' : '停止中'}</span>
-                          </button>
-                        </td>
-                        <td className="p-3 text-right whitespace-nowrap">
-                          <button
-                            type="button"
-                            onClick={() => handleOpenInspector(s)}
-                            className="px-3 py-1.5 bg-purple-600 hover:bg-purple-700 text-white rounded-lg font-bold inline-flex items-center gap-1.5 cursor-pointer transition whitespace-nowrap"
-                          >
-                            <Edit3 className="w-3.5 h-3.5" />
-                            <span>編集・プレビュー</span>
-                          </button>
-                        </td>
-                      </tr>
-                    ))}
-                </tbody>
-              </table>
-            </div>
+            {filteredTableScenarios.length === 0 ? (
+              <div className="py-10 text-center space-y-3">
+                <p className="text-xs text-slate-500">
+                  現在の条件に一致するステップは見つかりませんでした。
+                </p>
+                {(tableTrackFilter !== 'all' ||
+                  tableChannelFilter !== 'all' ||
+                  tableStatusFilter !== 'all' ||
+                  tableSearch) && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setTableTrackFilter('all');
+                      setTableChannelFilter('all');
+                      setTableStatusFilter('all');
+                      setTableSearch('');
+                    }}
+                    className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-slate-100 hover:bg-slate-200 text-xs font-semibold text-slate-700 cursor-pointer"
+                  >
+                    <RotateCcw className="w-3.5 h-3.5" />
+                    <span>絞り込みをリセット</span>
+                  </button>
+                )}
+              </div>
+            ) : (
+              <div className="overflow-x-auto">
+                <table className="w-full text-left text-xs">
+                  <thead className="bg-slate-50 text-slate-600 font-bold border-b border-slate-200">
+                    <tr>
+                      <th className="p-3">ステップ名</th>
+                      <th className="p-3 whitespace-nowrap">開始条件</th>
+                      <th className="p-3 whitespace-nowrap">媒体</th>
+                      <th className="p-3 whitespace-nowrap">タイミング</th>
+                      <th className="p-3 whitespace-nowrap">自動停止</th>
+                      <th className="p-3 whitespace-nowrap">稼働</th>
+                      <th className="p-3 text-right whitespace-nowrap">操作</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-100 text-slate-700">
+                    {(tableGroupByTrack
+                      ? groupedTableSections
+                      : [{ meta: null as null, items: filteredTableScenarios }]
+                    ).map((section, sectionIdx) => {
+                      const sectionAllActive =
+                        section.items.length > 0 && section.items.every((s) => s.automationEnabled);
+                      const sectionActiveCount = section.items.filter((s) => s.automationEnabled).length;
+                      return (
+                        <React.Fragment key={section.meta ? section.meta.id : `flat-${sectionIdx}`}>
+                          {section.meta && (
+                            <tr className={`border-y ${section.meta.headerBgClass}`}>
+                              <td colSpan={7} className="px-3 py-2.5">
+                                <div className="flex flex-wrap items-center justify-between gap-2">
+                                  <div className="flex flex-wrap items-center gap-2">
+                                    <span className={`px-2 py-0.5 rounded border text-[11px] font-bold ${section.meta.badgeClass}`}>
+                                      {section.meta.label}
+                                    </span>
+                                    <span className="text-[11px] text-slate-600">
+                                      {section.meta.description}
+                                    </span>
+                                  </div>
+                                  <div className="flex items-center gap-2">
+                                    <span className="text-[11px] font-semibold text-slate-700">
+                                      {sectionActiveCount} / {section.items.length}件 稼働中
+                                    </span>
+                                    <button
+                                      type="button"
+                                      onClick={() => toggleGroupAutomation(section.items, !sectionAllActive)}
+                                      className="inline-flex items-center gap-1 px-2.5 py-1 rounded-md bg-white hover:bg-slate-50 border border-slate-200 text-[11px] font-semibold text-slate-700 cursor-pointer whitespace-nowrap"
+                                    >
+                                      {sectionAllActive ? (
+                                        <>
+                                          <Pause className="w-3 h-3 text-slate-500" />
+                                          <span>一括停止</span>
+                                        </>
+                                      ) : (
+                                        <>
+                                          <Play className="w-3 h-3 text-emerald-600 fill-emerald-600" />
+                                          <span>一括ON</span>
+                                        </>
+                                      )}
+                                    </button>
+                                  </div>
+                                </div>
+                              </td>
+                            </tr>
+                          )}
+
+                          {section.items.map((s) => {
+                            const trackMeta = SCENARIO_TRACK_META[classifyScenarioTrack(s)];
+                            const isLegacyRow =
+                              isLegacyBranchAScenarioName(s.name || '') ||
+                              isLegacyPostMeetingScenarioName(s.name || '');
+                            const isPlanAStory = s.trigger === 'line_registered';
+                            const waitLabel = formatScenarioWaitMinutes(s.waitMinutes);
+                            const triggerLabel = formatScenarioTriggerLabel(s.trigger, s.targetTag);
+                            const stopLabel = formatScenarioStopCondition(s);
+
+                            return (
+                              <tr key={s.id} className="hover:bg-slate-50/70 transition">
+                                <td className="p-3 min-w-[240px]">
+                                  <div className="flex items-center gap-1.5 flex-wrap">
+                                    {!tableGroupByTrack && (
+                                      <span className={`px-1.5 py-0.5 rounded border text-[10px] font-bold shrink-0 ${trackMeta.badgeClass}`}>
+                                        {trackMeta.shortLabel}
+                                      </span>
+                                    )}
+                                    {isLegacyRow && (
+                                      <span className="px-1.5 py-0.5 rounded bg-amber-100 text-amber-800 border border-amber-300 text-[10px] font-bold shrink-0">
+                                        旧設定
+                                      </span>
+                                    )}
+                                    <button
+                                      type="button"
+                                      onClick={() => handleOpenInspector(s)}
+                                      className="font-bold text-slate-900 hover:text-purple-700 text-left cursor-pointer"
+                                    >
+                                      {s.name}
+                                    </button>
+                                  </div>
+                                  <div className="text-[11px] text-slate-500 line-clamp-1 mt-0.5">
+                                    {s.flexTitle || s.messageBody || s.emailSubject || '文面未設定'}
+                                  </div>
+                                </td>
+                                <td className="p-3 text-[11px] text-slate-600 whitespace-nowrap">
+                                  {triggerLabel}
+                                </td>
+                                <td className="p-3 whitespace-nowrap">
+                                  <span
+                                    className={`px-2 py-0.5 rounded text-[11px] font-semibold ${
+                                      s.channel === 'line'
+                                        ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
+                                        : s.channel === 'email'
+                                        ? 'bg-blue-50 text-blue-700 border border-blue-200'
+                                        : 'bg-purple-50 text-purple-700 border border-purple-200'
+                                    }`}
+                                  >
+                                    {s.channel === 'line'
+                                      ? 'LINE'
+                                      : s.channel === 'email'
+                                      ? 'メール'
+                                      : 'LINE優先（メール補完）'}
+                                  </span>
+                                </td>
+                                <td className="p-3 whitespace-nowrap">
+                                  <div className="font-mono text-[11px] font-semibold text-slate-700">
+                                    {waitLabel}
+                                  </div>
+                                  {isPlanAStory && (
+                                    <div className="text-[10px] text-indigo-600 mt-0.5">
+                                      分岐・Web後は+3〜9日
+                                    </div>
+                                  )}
+                                </td>
+                                <td className="p-3 text-[11px] text-slate-500 whitespace-nowrap">
+                                  {stopLabel}
+                                </td>
+                                <td className="p-3 whitespace-nowrap">
+                                  <button
+                                    type="button"
+                                    onClick={() => toggleScenarioAutomation(s.id, Boolean(s.automationEnabled))}
+                                    className={`inline-flex items-center gap-1 px-2.5 py-1 rounded text-[11px] font-bold cursor-pointer transition whitespace-nowrap ${
+                                      s.automationEnabled
+                                        ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
+                                        : 'bg-slate-100 text-slate-600 border border-slate-200 hover:bg-slate-200'
+                                    }`}
+                                  >
+                                    {s.automationEnabled ? (
+                                      <Play className="w-3 h-3 fill-emerald-600 text-emerald-600" />
+                                    ) : (
+                                      <Pause className="w-3 h-3 text-slate-500" />
+                                    )}
+                                    <span>{s.automationEnabled ? '稼働中' : '停止中'}</span>
+                                  </button>
+                                </td>
+                                <td className="p-3 text-right whitespace-nowrap">
+                                  <button
+                                    type="button"
+                                    onClick={() => handleOpenInspector(s)}
+                                    className="px-3 py-1.5 bg-purple-600 hover:bg-purple-700 text-white rounded-lg font-bold inline-flex items-center gap-1.5 cursor-pointer transition whitespace-nowrap"
+                                  >
+                                    <Edit3 className="w-3.5 h-3.5" />
+                                    <span>編集・点検</span>
+                                  </button>
+                                </td>
+                              </tr>
+                            );
+                          })}
+                        </React.Fragment>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            )}
           </div>
         </div>
       )}
@@ -2863,7 +3198,7 @@ export const MarketingFlowStudio: React.FC<MarketingFlowStudioProps> = ({
                       </span>
                     </h4>
                     <p className="text-xs text-slate-500">
-                      未回答リマインド ──→ HP送信で【簡易診断結果】即時表示 ──→ 1〜7日後教育・商談案内 ──→ 商談後に詳細レポート＆提案書送付
+                      未回答リマインド ──→ HP送信で【簡易診断結果】即時表示 ──→ 1〜7日後教育・商談案内 ──→ 商談後にご提案書（診断結果＋提案）送付
                     </p>
                   </div>
                 </div>
@@ -2880,15 +3215,15 @@ export const MarketingFlowStudio: React.FC<MarketingFlowStudioProps> = ({
                 )}
               </div>
 
-              {/* 分岐A 全体フロー整理カード（HP簡易診断 〜 商談後限定レポート送付の境界） */}
+              {/* 分岐A 全体フロー整理カード（HP簡易診断 〜 商談後限定ご提案書送付の境界） */}
               <div className="rounded-xl border border-emerald-200 bg-emerald-50/40 p-4 space-y-3 text-xs">
                 <div className="flex items-center justify-between flex-wrap gap-2">
                   <span className="font-bold text-emerald-950 flex items-center gap-1.5">
                     <CheckCircle2 className="w-4 h-4 text-emerald-600" />
-                    分岐Aの実務フロー（簡易結果と詳細レポート・提案書の切り分け）
+                    分岐Aの実務フロー（簡易結果と詳細診断入りご提案書の切り分け）
                   </span>
                   <span className="text-[10px] px-2 py-0.5 rounded bg-white text-emerald-800 border border-emerald-200 font-bold">
-                    未商談者へは詳細レポート自動送付なし
+                    未商談者へは詳細診断入りご提案書の自動送付なし
                   </span>
                 </div>
                 <div className="grid grid-cols-1 md:grid-cols-4 gap-2.5">
@@ -2915,7 +3250,7 @@ export const MarketingFlowStudio: React.FC<MarketingFlowStudioProps> = ({
                   </div>
                   <div className="p-2.5 rounded-lg bg-slate-900 text-white border border-slate-800 space-y-1">
                     <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-amber-500 text-slate-950">④ 商談後（商談者のみ）</span>
-                    <p className="font-bold text-white">詳細レポート＆提案書送付</p>
+                    <p className="font-bold text-white">ご提案書（診断結果＋提案）送付</p>
                     <p className="text-[11px] text-slate-300 leading-relaxed">
                       商談を実施された方限定で、商談後に担当者が送信センター等から個別にお送りします。
                     </p>
@@ -4194,16 +4529,16 @@ export const MarketingFlowStudio: React.FC<MarketingFlowStudioProps> = ({
                 </span>
                 <div>
                   <h3 className="text-base font-bold text-slate-900 flex items-center gap-2 flex-wrap">
-                    教育ステップ（共通ストーリー7話ナーチャリング）
+                    教育ステップ（共通ストーリー7話ナーチャリング・A案）
                     <span className="text-[10px] px-2 py-0.5 rounded bg-purple-100 text-purple-800 border border-purple-200 font-bold">
-                      LINE優先・未連携時のみメール（二重送信なし）
+                      LINE優先・未連携時はメール配信
                     </span>
                     <span className="text-[10px] px-2 py-0.5 rounded bg-indigo-100 text-indigo-800 border border-indigo-300 font-bold">
-                      2日〜20日後（3日おき・10:00頃）
+                      無反応2日〜 / 分岐7日〜 / 診断・資料11日〜
                     </span>
                   </h3>
                   <p className="text-xs text-slate-500 mt-1">
-                    友だち追加の【2日後】から3日おきに創業実話〜仕組み化の全体像をお届けし、3分経営診断（{`{link_url}`}）や30分個別相談（{`{booking_url}`}）へ繋げます。分岐フォロー・返信・診断回答・資料請求・面談予約・成約と連動して自動整理されます。
+                    ウェルカム無反応は【2日後】から、個別相談・介護・診断・資料請求・Web相談フォーム経由の方は各直後フォロー完了の【4日後】から3日おきに教育7話をお届けします（LINE未連携のWeb経由もメールで自動配信／予約・返信で停止）。
                   </p>
                 </div>
               </div>
@@ -4235,10 +4570,10 @@ export const MarketingFlowStudio: React.FC<MarketingFlowStudioProps> = ({
               <div className="flex flex-wrap items-center justify-between gap-2">
                 <div className="flex items-center gap-2 text-xs font-bold text-indigo-950">
                   <ShieldCheck className="w-4 h-4 text-indigo-600" />
-                  <span>教育ステップの配信ルール ＆ 全導線の自動連動設計</span>
+                  <span>教育ステップの配信ルール（A案：長期育成型）＆ 全導線連動</span>
                 </div>
                 <span className="text-[11px] font-mono text-indigo-700 bg-white px-2.5 py-0.5 rounded-md border border-indigo-200">
-                  第1話(2日) → 第2話(5日) → 第3話(8日) → 第4話(11日) → 第5話(14日) → 第6話(17日) → 第7話(20日)
+                  基準: 2日〜20日（分岐B/C: 7日〜25日 ／ 診断・資料: 11日〜29日）
                 </span>
               </div>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-2.5">
@@ -4882,14 +5217,14 @@ export const MarketingFlowStudio: React.FC<MarketingFlowStudioProps> = ({
                     商談・提案後
                   </span>
                   <h3 className="text-base font-bold text-slate-900">
-                    面談後・詳細レポート・提案書送付後の自動フォロー
+                    面談後・ご提案書送付後の自動フォロー
                   </h3>
                   <span className="text-xs px-2 py-0.5 rounded bg-slate-100 text-slate-700 font-semibold">
                     {postMeetingScenarios.filter((s) => s.automationEnabled).length}/{postMeetingScenarios.length}件 稼働中
                   </span>
                 </div>
                 <p className="text-xs text-slate-500">
-                  「商談完了」や「詳細レポート・提案書の送信」を起点に自動配信。相手からの返信または「成約・失注」で自動停止します（商談化や予約済みでは止まりません）。
+                  「商談完了」や「ご提案書（診断結果＋提案）の送信」を起点に自動配信。万一レポート・提案書の両方が送付されても3日後・7日後は1通のみ送信され、返信または成約・失注で自動停止します。
                 </p>
               </div>
 
@@ -4932,7 +5267,7 @@ export const MarketingFlowStudio: React.FC<MarketingFlowStudioProps> = ({
             {postMeetingScenarios.length === 0 ? (
               <div className="p-6 bg-amber-50/40 rounded-xl border border-dashed border-amber-200 text-center space-y-3">
                 <p className="text-xs text-slate-600">
-                  面談後（2時間後お礼）・詳細レポート送付後（3日後）・提案書送付後（3日後・7日後）のフォローがまだ登録されていません。
+                  面談後（2時間後お礼）・ご提案書送付後（3日後・7日後）の統合フォローがまだ登録されていません。
                 </p>
                 {onApplyPostMeetingStarterSet && (
                   <button
@@ -4941,7 +5276,7 @@ export const MarketingFlowStudio: React.FC<MarketingFlowStudioProps> = ({
                     className="inline-flex items-center gap-1.5 px-4 py-2 bg-amber-600 hover:bg-amber-700 text-white rounded-lg text-xs font-bold transition cursor-pointer shadow-xs"
                   >
                     <Zap className="w-3.5 h-3.5" />
-                    <span>面談・提案後フォロー4本を導入する</span>
+                    <span>面談・提案後フォロー3本を導入する</span>
                   </button>
                 )}
               </div>
@@ -4951,6 +5286,8 @@ export const MarketingFlowStudio: React.FC<MarketingFlowStudioProps> = ({
                   const triggerLabelText =
                     scenario.trigger === 'meeting_completed'
                       ? '面談完了時'
+                      : scenario.trigger === 'report_or_proposal_sent'
+                      ? '提案書・レポート送付時（統合）'
                       : scenario.trigger === 'report_sent'
                       ? 'レポート送付時'
                       : scenario.trigger === 'report_approved'

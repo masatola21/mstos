@@ -110,8 +110,10 @@ export async function getContactBranchTags(
 }
 
 /**
- * すでに診断回答済み・資料請求済み・面談予約済み・商談進行中/成約済みの連絡先に対して、
- * LINE登録時の汎用ナーチャリング（教育ステップ／A1）を後から誤って開始しないための判定。
+ * すでに「個別相談予約済み」「面談実施/予約日あり」「商談進行・成約・失注済み」の連絡先に対してのみ
+ * 教育ステップ（7話）および未回答リマインドを停止する。
+ * ※ A案（長期育成型）に基づき、診断完了・資料請求・相談フォーム送信のみでは停止せず、
+ *    各直後フォロー完了後（+4日後〜）から長期教育へ合流させる。
  */
 export async function hasContactAlreadyProgressedBeyondNurturing(
   db: SupabaseClient,
@@ -119,8 +121,7 @@ export async function hasContactAlreadyProgressedBeyondNurturing(
   companyId?: string | null
 ): Promise<{ progressed: boolean; reason: string }> {
   try {
-    const [diagRes, leadRes, tagRes] = await Promise.all([
-      db.from('diagnosis_submissions').select('id').eq('contact_id', contactId).limit(1),
+    const [leadRes, tagRes, branchTags] = await Promise.all([
       db
         .from('leads')
         .select('id, status, meeting_date')
@@ -133,32 +134,44 @@ export async function hasContactAlreadyProgressedBeyondNurturing(
         .eq('contact_id', contactId)
         .eq('tag_id', '個別相談予約済み')
         .limit(1),
+      getContactBranchTags(db, { id: contactId }),
     ]);
 
-    if (tagRes.data && tagRes.data.length > 0) {
-      return { progressed: true, reason: '既に個別相談予約済みのため汎用ナーチャリングをスキップ' };
+    if ((tagRes.data && tagRes.data.length > 0) || branchTags.includes('個別相談予約済み')) {
+      return { progressed: true, reason: '既に個別相談予約済みのため長期教育ステップをスキップ' };
     }
-    if (diagRes.data && diagRes.data.length > 0) {
-      return { progressed: true, reason: '既にフォーム（診断・資料・相談）送信済みのため汎用ナーチャリングをスキップ' };
-    }
+
     const progressedLead = (leadRes.data || []).find(
       (l: any) =>
         Boolean(l.meeting_date) ||
-        ['面談予約済', '商談化', '成約', '受注', '失注', '見送り', '資料請求', '診断申込'].includes(String(l.status || '').trim())
+        ['面談予約済', '商談化', '成約', '受注', '失注', '見送り'].includes(String(l.status || '').trim())
     );
     if (progressedLead) {
       return {
         progressed: true,
-        reason: `リードが進行済み（${progressedLead.status || progressedLead.meeting_date}）のため汎用ナーチャリングをスキップ`,
+        reason: `予約済み・商談進行中（${progressedLead.status || progressedLead.meeting_date}）のため教育ステップをスキップ`,
       };
     }
 
     if (companyId) {
-      const { data: deals } = await db
-        .from('deals')
-        .select('id, proposal_status, meeting_date')
-        .eq('company_id', companyId)
-        .limit(5);
+      const [{ data: deals }, { data: meetings }] = await Promise.all([
+        db
+          .from('deals')
+          .select('id, proposal_status, meeting_date')
+          .eq('company_id', companyId)
+          .limit(5),
+        db
+          .from('customer_service_meetings')
+          .select('id')
+          .eq('company_id', companyId)
+          .limit(1),
+      ]);
+      if (meetings && meetings.length > 0) {
+        return {
+          progressed: true,
+          reason: '既に面談記録があるため教育ステップをスキップ',
+        };
+      }
       const progressedDeal = (deals || []).find(
         (d: any) =>
           Boolean(d.meeting_date) ||
@@ -169,7 +182,7 @@ export async function hasContactAlreadyProgressedBeyondNurturing(
       if (progressedDeal) {
         return {
           progressed: true,
-          reason: `商談ステージ進行済み（${progressedDeal.proposal_status || progressedDeal.meeting_date}）のため汎用ナーチャリングをスキップ`,
+          reason: `商談ステージ進行済み（${progressedDeal.proposal_status || progressedDeal.meeting_date}）のため教育ステップをスキップ`,
         };
       }
     }
@@ -177,6 +190,64 @@ export async function hasContactAlreadyProgressedBeyondNurturing(
     console.warn('[FunnelOrchestration] hasContactAlreadyProgressedBeyondNurturing warning:', err);
   }
   return { progressed: false, reason: '' };
+}
+
+/**
+ * A案（長期育成型）に基づき、LINE登録または分岐到達時点で連絡先が既に入っているルートを判定し、
+ * 教育7話の開始シフト日数（基準2日後への加算日数）を返す。
+ * - ウェルカム無反応: +0日（2日後〜）
+ * - 分岐B/C（個別相談 / 介護保険外開業）: +5日（7日後〜）
+ * - 分岐A未回答 / Web相談フォーム: +3日（5日後〜）
+ * - 診断完了 / 資料請求完了: +9日（11日後〜）
+ */
+export async function computeContactEducationDelayShiftDays(
+  db: SupabaseClient,
+  contact: { id?: string | null; line_user_id?: string | null }
+): Promise<number> {
+  if (!contact?.id) return 0;
+  try {
+    const [branchTags, diagRes, leadRes] = await Promise.all([
+      getContactBranchTags(db, contact),
+      db.from('diagnosis_submissions').select('id, form_id').eq('contact_id', contact.id).limit(5),
+      db.from('leads').select('status, source').eq('contact_id', contact.id).order('created_at', { ascending: false }).limit(5),
+    ]);
+
+    let hasActualDiagnosis = branchTags.includes('診断受検済み');
+    let hasMaterialSubmission = branchTags.includes('資料請求');
+
+    if (diagRes.data && diagRes.data.length > 0) {
+      const formIds = Array.from(new Set(diagRes.data.map((r: any) => r.form_id).filter(Boolean)));
+      if (formIds.length > 0) {
+        const { data: forms } = await db
+          .from('diagnosis_forms')
+          .select('id, public_slug, form_type, name')
+          .in('id', formIds);
+        for (const f of forms || []) {
+          const slug = String(f.public_slug || '');
+          const fname = String(f.name || '');
+          if (slug === 'material-download' || (slug !== 'contact-inquiry' && slug !== 'business-diagnosis' && fname.includes('資料'))) {
+            hasMaterialSubmission = true;
+          } else if (
+            slug === 'business-diagnosis' ||
+            (f.form_type === 'diagnosis' && !['contact-inquiry', 'material-download', 'care-package-inquiry'].includes(slug))
+          ) {
+            hasActualDiagnosis = true;
+          }
+        }
+      }
+    }
+
+    const latestLeadStatus = String(leadRes.data?.[0]?.status || '').trim();
+    if (latestLeadStatus === '資料請求') hasMaterialSubmission = true;
+    if (latestLeadStatus === '診断申込') hasActualDiagnosis = true;
+
+    if (hasActualDiagnosis || hasMaterialSubmission) return 9;
+    if (branchTags.includes('選択:個別相談') || branchTags.includes('介護保険外開業')) return 5;
+    if (branchTags.includes('選択:診断') || latestLeadStatus === '相談申込') return 3;
+  } catch (err) {
+    console.warn('[FunnelOrchestration] computeContactEducationDelayShiftDays warning:', err);
+  }
+  return 0;
 }
 
 /**

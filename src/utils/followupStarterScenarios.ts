@@ -11,7 +11,22 @@ export const POST_MEETING_TRIGGERS: readonly MarketingTrigger[] = [
   'report_sent',
   'proposal_approved',
   'proposal_sent',
+  'report_or_proposal_sent',
 ] as const;
+
+export const BRANCH_EDUCATION_DELAY_DAYS = {
+  line_registered: 0,
+  '選択:個別相談': 5,
+  '介護保険外開業': 5,
+  '選択:診断': 3,
+  diagnosis_completed: 9,
+  material_requested: 9,
+  public_form_consultation: 3,
+} as const;
+
+export function getEducationStartDayForShift(shiftDays: number): number {
+  return 2 + Math.max(0, Math.round(shiftDays));
+}
 
 export function isPostDealStageTrigger(trigger: string): boolean {
   return (POST_MEETING_TRIGGERS as readonly string[]).includes(String(trigger || '').trim());
@@ -83,11 +98,18 @@ export const FUNNEL_ORCHESTRATION_RULES: readonly FunnelOrchestrationRuleSummary
       '「LINE＋メール」設定のシナリオは、有効なLINE友だち（ブロック解除なし・配信同意あり）にはLINEのみを配信し、LINE未連携・ブロック時は自動でメールへ切り替えます。同一ステップを同じ相手へLINE・メール同時に二重送信しません。',
   },
   {
-    id: 'day2_overlap_guard',
-    title: '分岐B/C・A1との2日目重複を自動回避',
-    badge: '教育7話 連動',
+    id: 'plan_a_long_term_nurturing',
+    title: 'A案（長期育成型）：分岐・Web経由は直後フォロー完了後に教育7話へ合流',
+    badge: '教育7話 長期育成',
     description:
-      'LINE登録で「選択:個別相談」「介護保険外開業」「選択:診断」ルートに入った相手には、1日後（B1/C1/A1）と3日後（B2/C2）の直後フォローが優先されるため、間の2日目の【第1話】を自動スキップして5日目の第2話から滑らかに接続します。',
+      'ウェルカム無反応は2日後から教育7話を開始。一方、分岐B/C（7日後〜）、診断・資料請求後（11日後〜）、Web相談フォーム（5日後〜）に入った未予約・未返信の方には直後フォロー完了の約4日後から教育7話を配信します（LINE未連携時はメール補完）。',
+  },
+  {
+    id: 'unified_post_meeting_followup',
+    title: 'レポート＆提案書 送付後フォロー（3日・7日）の統合・重複防止',
+    badge: '商談後フォロー統合',
+    description:
+      '「詳細診断レポート」と「ご提案書」を別々または一体で送付しても、送付後3日・7日のフォローは統合ステップ1系統のみを配信し、同じ相手へ2通重複して送らない設計に統一しています。',
   },
   {
     id: 'stage_handoff_cancellation',
@@ -202,23 +224,23 @@ export function getSupersededPhasesOnEvent(event: {
     return {
       cancelPhases: ['education_nurturing', 'sales_outreach'],
       cancelSpecificTargets: [{ trigger: 'tag_added', targetTag: '選択:診断' }],
-      reason: '無料経営診断の回答が完了したため、未回答リマインド・教育ステップ・営業追客を停止（診断後フォローA2〜A4へ切替）',
+      reason: '無料経営診断の回答が完了したため、未回答リマインド・従来の短期教育・営業追客を停止し、診断後フォロー（1〜7日目）＋長期教育（11日目〜）へ切替',
     };
   }
 
   if (trigger === 'material_requested') {
     return {
       cancelPhases: ['education_nurturing', 'sales_outreach'],
-      reason: '資料請求フォームを受信したため、一般教育・営業追客を停止（資料請求後フォローへ切替）',
+      reason: '資料請求フォームを受信したため、一般短期教育・営業追客を停止し、資料請求後フォロー（1〜7日目）＋長期教育（11日目〜）へ切替',
     };
   }
 
   if (trigger === 'tag_added' && ['選択:診断', '選択:個別相談', '介護保険外開業'].includes(tagName)) {
     const otherBranches = ['選択:診断', '選択:個別相談', '介護保険外開業'].filter((t) => t !== tagName);
     return {
-      cancelPhases: [],
+      cancelPhases: ['education_nurturing'],
       cancelSpecificTargets: otherBranches.map((t) => ({ trigger: 'tag_added', targetTag: t })),
-      reason: `LINE分岐「${tagName}」を選択したため、別分岐の未送信フォローを整理`,
+      reason: `LINE分岐「${tagName}」を選択したため、別分岐および分岐前スケジュールの未送信ジョブを整理`,
     };
   }
 
@@ -267,6 +289,314 @@ export function resolvePreferredDeliveryChannels(params: {
     return ['email'];
   }
   return [];
+}
+
+// ---------------------------------------------------------------------------
+// 全ステップ一覧・導線管理 共通分類・表示・ソートユーティリティ
+// ---------------------------------------------------------------------------
+export type ScenarioTrackCategory =
+  | 'branch_diagnosis'
+  | 'branch_consult'
+  | 'branch_care'
+  | 'story_nurturing'
+  | 'material_followup'
+  | 'post_meeting'
+  | 'sales_outreach'
+  | 'other';
+
+export interface ScenarioTrackMeta {
+  id: ScenarioTrackCategory;
+  order: number;
+  label: string;
+  shortLabel: string;
+  description: string;
+  badgeClass: string;
+  headerBgClass: string;
+}
+
+export const SCENARIO_TRACK_ORDER: readonly ScenarioTrackCategory[] = [
+  'branch_diagnosis',
+  'branch_consult',
+  'branch_care',
+  'story_nurturing',
+  'material_followup',
+  'post_meeting',
+  'sales_outreach',
+  'other',
+] as const;
+
+export const SCENARIO_TRACK_META: Record<ScenarioTrackCategory, ScenarioTrackMeta> = {
+  branch_diagnosis: {
+    id: 'branch_diagnosis',
+    order: 1,
+    label: '① 分岐A：3分無料経営診断',
+    shortLabel: '分岐A：診断',
+    description: '診断未回答リマインド・HP診断完了後の教育〜商談案内（1〜7日後）',
+    badgeClass: 'bg-emerald-50 text-emerald-700 border-emerald-200',
+    headerBgClass: 'bg-emerald-50/70 border-emerald-200',
+  },
+  branch_consult: {
+    id: 'branch_consult',
+    order: 2,
+    label: '② 分岐B：個別相談',
+    shortLabel: '分岐B：相談',
+    description: 'LINE「個別相談」選択後の親身フォロー・商談案内（1・3日後）',
+    badgeClass: 'bg-sky-50 text-sky-700 border-sky-200',
+    headerBgClass: 'bg-sky-50/70 border-sky-200',
+  },
+  branch_care: {
+    id: 'branch_care',
+    order: 3,
+    label: '③ 分岐C：介護保険外開業',
+    shortLabel: '分岐C：介護',
+    description: '「介護保険外開業」選択後の専門教育・作戦会議案内（1・3日後）',
+    badgeClass: 'bg-violet-50 text-violet-700 border-violet-200',
+    headerBgClass: 'bg-violet-50/70 border-violet-200',
+  },
+  story_nurturing: {
+    id: 'story_nurturing',
+    order: 4,
+    label: '④ 共通教育：大橋ストーリー（全7話）',
+    shortLabel: '教育7話',
+    description: 'A案：無反応は2日後〜／分岐・診断・資料・Web相談は直後フォロー完了後に合流',
+    badgeClass: 'bg-indigo-50 text-indigo-700 border-indigo-200',
+    headerBgClass: 'bg-indigo-50/70 border-indigo-200',
+  },
+  material_followup: {
+    id: 'material_followup',
+    order: 5,
+    label: '⑤ 資料請求後フォロー',
+    shortLabel: '資料請求後',
+    description: '資料ダウンロード後の自動追客（1・3・7日後／LINE優先・メール補完）',
+    badgeClass: 'bg-teal-50 text-teal-700 border-teal-200',
+    headerBgClass: 'bg-teal-50/70 border-teal-200',
+  },
+  post_meeting: {
+    id: 'post_meeting',
+    order: 6,
+    label: '⑥ 面談後・ご提案書送付後フォロー',
+    shortLabel: '面談・提案後',
+    description: '面談完了2時間後のお礼＋ご提案書送付後3日・7日後の統合フォロー（重複防止）',
+    badgeClass: 'bg-amber-50 text-amber-800 border-amber-200',
+    headerBgClass: 'bg-amber-50/70 border-amber-200',
+  },
+  sales_outreach: {
+    id: 'sales_outreach',
+    order: 7,
+    label: '⑦ 営業メール（新規開拓）',
+    shortLabel: '営業メール',
+    description: '一発直球（手動）＋第1〜5通フォロー（3日おき・返信/予約で自動停止）',
+    badgeClass: 'bg-blue-50 text-blue-700 border-blue-200',
+    headerBgClass: 'bg-blue-50/70 border-blue-200',
+  },
+  other: {
+    id: 'other',
+    order: 99,
+    label: '⑧ その他・カスタムシナリオ',
+    shortLabel: 'その他',
+    description: '個別に作成されたカスタム配信シナリオ',
+    badgeClass: 'bg-slate-100 text-slate-700 border-slate-200',
+    headerBgClass: 'bg-slate-50 border-slate-200',
+  },
+};
+
+export const SCENARIO_TRIGGER_LABELS: Record<string, string> = {
+  prospect_selected: '営業対象選定時',
+  lead_created: '見込み客登録時',
+  material_requested: '資料請求送信時',
+  outreach_first_sent: '営業第1通送信時',
+  line_registered: 'LINE友だち追加時',
+  diagnosis_invited: '診断案内送信時',
+  diagnosis_completed: '無料診断完了時',
+  report_or_proposal_sent: 'ご提案書・レポート送付時（統合）',
+  report_approved: '診断レポート承認時',
+  report_sent: '診断レポート送付時',
+  meeting_completed: '面談完了時',
+  tag_added: '指定タグ付与時',
+  booking_created: '面談予約時',
+  deal_stage_changed: '商談ステージ変更時',
+  deal_won: '商談成約時',
+  proposal_approved: '提案書承認時',
+  proposal_sent: '提案書送付時',
+  contract_sent: '契約書送付時',
+  contract_signed: '契約締結時',
+  invoice_due: '請求予定日到達時',
+  invoice_overdue: '請求期日超過時',
+  retainer_period: '顧問サポート時期',
+  project_milestone: '構築節目到達時',
+  manual: '手動送信',
+};
+
+export function formatScenarioTriggerLabel(trigger: string, targetTag?: string | null): string {
+  const key = String(trigger || '').trim();
+  if (key === 'tag_added' && targetTag && targetTag.trim()) {
+    return `タグ「${targetTag.trim()}」`;
+  }
+  return SCENARIO_TRIGGER_LABELS[key] || key || '未設定';
+}
+
+export function formatScenarioWaitMinutes(waitMinutes?: number | null): string {
+  const mins = Number(waitMinutes || 0);
+  if (!Number.isFinite(mins) || mins <= 0) return '即時';
+  if (mins < 60) return `${Math.round(mins)}分後`;
+  if (mins < 1440) return `${Math.round(mins / 60)}時間後`;
+  return `${Math.round(mins / 1440)}日後`;
+}
+
+export function formatScenarioStopCondition(cfg: {
+  trigger?: string | null;
+  stopOnBooking?: boolean;
+  stopOnDeal?: boolean;
+}): string {
+  const isPostMeeting = isPostDealStageTrigger(String(cfg.trigger || ''));
+  if (isPostMeeting) {
+    return cfg.stopOnDeal ? '返信・成約・終了で停止' : '返信で自動停止';
+  }
+  if (cfg.stopOnBooking && cfg.stopOnDeal) return '返信・予約・成約で停止';
+  if (cfg.stopOnBooking) return '返信・予約で停止';
+  if (cfg.stopOnDeal) return '返信・成約で停止';
+  return '返信で自動停止';
+}
+
+export function classifyScenarioTrack(
+  s: Pick<MarketingScenario, 'name' | 'trigger' | 'targetTag' | 'channel'> & { id?: string }
+): ScenarioTrackCategory {
+  const name = (s.name || '').trim();
+  const trigger = String(s.trigger || '').trim();
+  const targetTag = String(s.targetTag || '').trim();
+
+  if (
+    isPostDealStageTrigger(trigger) ||
+    name.includes('【面談後') ||
+    name.includes('【提案書送付後') ||
+    isLegacyPostMeetingScenarioName(name)
+  ) {
+    return 'post_meeting';
+  }
+  if (trigger === 'material_requested' || name.includes('【資料請求')) {
+    return 'material_followup';
+  }
+  if (
+    s.id === 'prospect-one-shot' ||
+    name.includes('一発直球') ||
+    trigger === 'outreach_first_sent' ||
+    name.includes('営業メール') ||
+    name.includes('【営業') ||
+    /^【第\d+通/.test(name) ||
+    (s.channel === 'email' && trigger === 'lead_created') ||
+    (trigger === 'manual' && /^【第\d+通/.test(name))
+  ) {
+    return 'sales_outreach';
+  }
+  if (
+    trigger === 'diagnosis_completed' ||
+    trigger === 'diagnosis_invited' ||
+    (trigger === 'tag_added' && targetTag === '選択:診断') ||
+    name.includes('【A') ||
+    isLegacyBranchAScenarioName(name) ||
+    (name.includes('診断') && !name.includes('【第'))
+  ) {
+    return 'branch_diagnosis';
+  }
+  if (
+    (trigger === 'tag_added' && targetTag === '選択:個別相談') ||
+    name.includes('【B') ||
+    (name.includes('個別相談') && !name.includes('介護') && !name.includes('【第')) ||
+    name.includes('直相談')
+  ) {
+    return 'branch_consult';
+  }
+  if (
+    (trigger === 'tag_added' && targetTag === '介護保険外開業') ||
+    name.includes('【C') ||
+    name.includes('介護') ||
+    name.includes('保険外')
+  ) {
+    return 'branch_care';
+  }
+  if (
+    trigger === 'line_registered' ||
+    name.includes('ストーリー') ||
+    name.includes('大橋') ||
+    name.includes('ナーチャリング') ||
+    name.includes('話】')
+  ) {
+    return 'story_nurturing';
+  }
+  return 'other';
+}
+
+const CIRCLED_DIGIT_MAP: Record<string, string> = {
+  '①': '1',
+  '②': '2',
+  '③': '3',
+  '④': '4',
+  '⑤': '5',
+  '⑥': '6',
+  '⑦': '7',
+  '⑧': '8',
+  '⑨': '9',
+};
+
+function normalizeCircledDigits(text: string): string {
+  return text.replace(/[①②③④⑤⑥⑦⑧⑨]/g, (ch) => CIRCLED_DIGIT_MAP[ch] || ch);
+}
+
+export function getScenarioSortKey(scenario: MarketingScenario): {
+  categoryOrder: number;
+  stepNumber: number;
+  waitMinutes: number;
+  name: string;
+} {
+  const name = scenario.name || '';
+  const track = classifyScenarioTrack(scenario);
+  const categoryOrder = SCENARIO_TRACK_META[track].order;
+
+  const normalized = normalizeCircledDigits(name);
+  const numMatch =
+    normalized.match(/[【［\[第ABCステップ]*\s*(\d+)/) || normalized.match(/(\d+)/);
+  let stepNumber = numMatch ? parseInt(numMatch[1], 10) : 999;
+
+  if (track === 'sales_outreach' && (scenario.id === 'prospect-one-shot' || name.includes('一発直球'))) {
+    stepNumber = 0;
+  } else if (track === 'post_meeting') {
+    const baseSubStep = numMatch ? parseInt(numMatch[1], 10) : 1;
+    if (scenario.trigger === 'meeting_completed') {
+      stepNumber = baseSubStep;
+    } else if (scenario.trigger === 'report_or_proposal_sent') {
+      stepNumber = 10 + baseSubStep;
+    } else {
+      stepNumber = 100 + baseSubStep;
+    }
+  } else if (track === 'branch_diagnosis' && isLegacyBranchAScenarioName(name)) {
+    // 旧数字パターン（1〜5）や旧A1〜A5は現行A1〜A4の後ろにまとめて表示し、交互混在を防ぐ
+    stepNumber += 100;
+  }
+
+  return {
+    categoryOrder,
+    stepNumber,
+    waitMinutes: scenario.waitMinutes ?? 0,
+    name,
+  };
+}
+
+export function sortScenarios(scenarios: MarketingScenario[]): MarketingScenario[] {
+  return [...scenarios].sort((a, b) => {
+    const keyA = getScenarioSortKey(a);
+    const keyB = getScenarioSortKey(b);
+
+    if (keyA.categoryOrder !== keyB.categoryOrder) {
+      return keyA.categoryOrder - keyB.categoryOrder;
+    }
+    if (keyA.stepNumber !== keyB.stepNumber) {
+      return keyA.stepNumber - keyB.stepNumber;
+    }
+    if (keyA.waitMinutes !== keyB.waitMinutes) {
+      return keyA.waitMinutes - keyB.waitMinutes;
+    }
+    return keyA.name.localeCompare(keyB.name, 'ja');
+  });
 }
 
 // ---------------------------------------------------------------------------
@@ -478,7 +808,7 @@ export const MST_MATERIAL_FOLLOWUP_STARTER_SCENARIOS: Omit<MarketingScenario, 'i
 ];
 
 // ---------------------------------------------------------------------------
-// 3. 面談後・レポート・提案書送付後の自動フォロー（stopOnBooking: false / stopOnDeal: true）
+// 3. 面談後・レポート＆提案書送付後の自動フォロー（stopOnBooking: false / stopOnDeal: true）
 // ---------------------------------------------------------------------------
 export const MST_POST_MEETING_STARTER_SCENARIOS: Omit<MarketingScenario, 'id' | 'updatedAt'>[] = [
   {
@@ -509,43 +839,16 @@ export const MST_POST_MEETING_STARTER_SCENARIOS: Omit<MarketingScenario, 'id' | 
     consentBasis: '商談・面談実施に伴う顧客フォロー（取引関連連絡）',
   },
   {
-    name: '【レポート後】3日後：詳細診断レポートのご確認状況のお伺い',
-    trigger: 'report_sent',
+    name: '【提案書送付後①】3日後：ご確認状況 ＆ ご質問のお伺い',
+    trigger: 'report_or_proposal_sent',
     channel: 'both',
-    audience: '詳細診断レポート送付済みのお客様（返信・成約で自動停止）',
-    waitMinutes: 4320,
-    emailSubject: '【ご確認のお伺い】先日の詳細診断レポートについて｜有限会社MST',
-    emailBody:
-      '{recipient_name} 様\n\n有限会社MSTの大橋真人です。\n先日は詳細診断レポートをお送りさせていただきましたが、内容をご確認いただけましたでしょうか。\n\nレポートの中で「ここはもう少し詳しく聞きたい」「自社の実情に合わせて優先順位を相談したい」という箇所がございましたら、どうぞお気軽にお知らせください。\n\nご希望に合わせて、具体的な改善ステップや体制案をご案内することも可能です。本メールへのご返信、または下記日程調整リンクよりご連絡をお待ちしております。\n\n▼ 追加のお打ち合わせ日程はこちら\n{booking_url}',
-    messageBody:
-      '{recipient_name} 様\n有限会社MSTの大橋です。\n\n先日お送りいたしました詳細診断レポートはご覧いただけましたでしょうか？\n気になる点や「具体的な改善ステップも相談したい」という箇所がございましたら、このままLINEまたは下記よりお気軽にご連絡ください。\n\n▼ 追加相談の日程はこちら\n{booking_url}',
-    lineMessageType: 'text',
-    lineImageUrl: '',
-    linePreviewImageUrl: '',
-    flexAltText: '',
-    flexTitle: '',
-    flexBody: '',
-    flexButtonLabel: '',
-    flexButtonUrl: '',
-    status: 'prepared',
-    automationEnabled: true,
-    sendTimeWindow: '09:00-19:00',
-    preferredSendTime: '10:00',
-    stopOnBooking: false,
-    stopOnDeal: true,
-    consentBasis: '詳細診断レポート送付後の顧客フォロー',
-  },
-  {
-    name: '【提案後①】3日後：ご提案書のご確認状況 ＆ ご質問のお伺い',
-    trigger: 'proposal_sent',
-    channel: 'both',
-    audience: '提案書送付済みのお客様（返信・成約で自動停止）',
+    audience: 'ご提案書（診断結果を含む）を送付済みのお客様（両方トリガー時も重複せず1通のみ配信）',
     waitMinutes: 4320,
     emailSubject: '【ご確認のお伺い】先日のご提案書について｜有限会社MST',
     emailBody:
-      '{recipient_name} 様\n\n有限会社MSTの大橋真人です。\n先日お送りいたしましたご提案書について、社内でのご確認状況はいかがでしょうか。\n\nご検討にあたり、\n・支援内容やスケジュール感をもう少し詳しく知りたい\n・一部の範囲に絞ってスモールスタートする案も検討したい\nといったご要望がございましたら、柔軟に調整いたしますのでご遠慮なくお申し付けください。\n\n本メールへのご返信にてご質問・ご要望をお聞かせいただければ幸いです。よろしくお願いいたします。',
+      '{recipient_name} 様\n\n有限会社MSTの大橋真人です。\n先日お送りいたしましたご提案書（診断結果および改善プラン）について、内容をご確認いただけましたでしょうか。\n\n内容をご確認いただく中で、\n・「ここをもう少し詳しく聞きたい」「自社の状況に合わせた優先順位を相談したい」\n・「支援内容やスケジュール・一部の範囲からスモールスタートする案を検討したい」\nといったご希望やご質問がございましたら、柔軟に調整いたしますのでご遠慮なくお申し付けください。\n\n本メールへのご返信、または下記の日程調整リンクよりお気軽にご連絡をお待ちしております。\n\n▼ 追加のお打ち合わせ・ご相談日程はこちら\n{booking_url}',
     messageBody:
-      '{recipient_name} 様\n有限会社MSTの大橋です。\n\n先日お送りいたしましたご提案書はご確認いただけましたでしょうか？\n「一部の範囲から始めたい」「詳細を質問したい」などございましたら、このままLINEで一言お送りいただければ調整いたします！',
+      '{recipient_name} 様\n有限会社MSTの大橋です。\n\n先日お送りいたしましたご提案書はご覧いただけましたでしょうか？\n「一部の範囲から始めたい」「詳しく質問・相談したい」などございましたら、このままLINEまたは下記日程よりお気軽にお知らせください！\n\n▼ 追加相談の日程はこちら\n{booking_url}',
     lineMessageType: 'text',
     lineImageUrl: '',
     linePreviewImageUrl: '',
@@ -560,17 +863,17 @@ export const MST_POST_MEETING_STARTER_SCENARIOS: Omit<MarketingScenario, 'id' | 
     preferredSendTime: '10:00',
     stopOnBooking: false,
     stopOnDeal: true,
-    consentBasis: '提案書送付後の顧客フォロー',
+    consentBasis: 'ご提案書送付後の顧客フォロー',
   },
   {
-    name: '【提案後②】7日後：ご検討状況のお伺い（導入範囲の調整・個別相談）',
-    trigger: 'proposal_sent',
+    name: '【提案書送付後②】7日後：ご検討状況のお伺い（導入範囲や時期のご相談）',
+    trigger: 'report_or_proposal_sent',
     channel: 'both',
-    audience: '提案書送付済みのお客様（返信・成約で自動停止）',
+    audience: 'ご提案書（診断結果を含む）を送付済みのお客様（返信・成約で自動停止）',
     waitMinutes: 10080,
     emailSubject: '【MST】ご提案内容のその後いかがでしょうか（導入範囲や時期のご相談）',
     emailBody:
-      '{recipient_name} 様\n\n有限会社MSTの大橋真人です。\nご提案書をお送りしてから1週間ほど経ちましたため、その後のご検討状況をお伺いしたくご連絡いたしました。\n\n社内でのご検討に際して、もし前提条件の見直しやご予算・開始時期に合わせたプラン再設計が必要でしたら、15〜30分ほどオンラインで整理し直すことも可能です。\n\n▼ 再調整のお打ち合わせ日程はこちら\n{booking_url}\n\n今回は時期を見送る場合も含め、現在のご状況を一言お知らせいただけますと大変助かります。どうぞよろしくお願いいたします。',
+      '{recipient_name} 様\n\n有限会社MSTの大橋真人です。\nご提案書（診断結果および改善プラン）をお送りしてから1週間ほど経ちましたため、その後のご検討状況をお伺いしたくご連絡いたしました。\n\n社内でのご検討に際して、もし前提条件の見直しやご予算・開始時期に合わせたプラン再設計が必要でしたら、15〜30分ほどオンラインで整理し直すことも可能です。\n\n▼ 再調整のお打ち合わせ日程はこちら\n{booking_url}\n\n今回は時期を見送る場合も含め、現在のご状況を一言お知らせいただけますと大変助かります。どうぞよろしくお願いいたします。',
     messageBody:
       '{recipient_name} 様\n有限会社MSTの大橋です。\n\nご提案書をお送りしてから1週間が経ちましたため、その後のご状況をお伺いいたしました。\n開始時期や範囲の調整をご希望の場合は、15〜30分のオンラインで再整理も可能ですので、下記またはご返信にてお知らせください。\n\n▼ 再打ち合わせ日程はこちら\n{booking_url}',
     lineMessageType: 'text',
@@ -587,7 +890,7 @@ export const MST_POST_MEETING_STARTER_SCENARIOS: Omit<MarketingScenario, 'id' | 
     preferredSendTime: '10:00',
     stopOnBooking: false,
     stopOnDeal: true,
-    consentBasis: '提案書送付後の顧客フォロー',
+    consentBasis: 'ご提案書送付後の顧客フォロー',
   },
 ];
 
@@ -604,6 +907,14 @@ export const LEGACY_BRANCH_A_PREFIXES = [
   '【A5・7日後商談案内】',
 ];
 
+export const LEGACY_POST_MEETING_PREFIXES = [
+  '【レポート後】',
+  '【提案後①】',
+  '【提案後②】',
+  '【レポート＆提案書送付後①】',
+  '【レポート＆提案書送付後②】',
+];
+
 export function isLegacyBranchAScenarioName(name: string): boolean {
   const trimmed = (name || '').trim();
   if (!trimmed) return false;
@@ -613,15 +924,40 @@ export function isLegacyBranchAScenarioName(name: string): boolean {
   );
 }
 
+export function isLegacyPostMeetingScenarioName(name: string): boolean {
+  const trimmed = (name || '').trim();
+  if (!trimmed) return false;
+  return LEGACY_POST_MEETING_PREFIXES.some((prefix) => trimmed.startsWith(prefix));
+}
+
 export function mergeStarterScenarioBatch(
   existingScenarios: MarketingScenario[],
   presets: Omit<MarketingScenario, 'id' | 'updatedAt'>[],
-  options?: { replaceLegacyBranchA?: boolean; nowMs?: number }
+  options?: { replaceLegacyBranchA?: boolean; replaceLegacyPostMeeting?: boolean; nowMs?: number }
 ): { merged: MarketingScenario[]; addedCount: number; updatedCount: number } {
   const now = options?.nowMs ?? Date.now();
-  const baseList = options?.replaceLegacyBranchA
-    ? existingScenarios.filter((s) => !isLegacyBranchAScenarioName(s.name || ''))
-    : [...existingScenarios];
+  const shouldReplacePostMeeting =
+    options?.replaceLegacyPostMeeting ??
+    presets.some((p) => p.trigger === 'report_or_proposal_sent');
+  const extractStoryEp = (s: { name?: string; trigger?: string }) => {
+    if (s.trigger !== 'line_registered') return null;
+    const m = /^【第([1-7])話(?:[・\s]*最終話)?】/.exec((s.name || '').trim());
+    return m ? parseInt(m[1], 10) : null;
+  };
+  const presetStoryEpisodes = new Set(
+    presets.map(extractStoryEp).filter((ep): ep is number => ep !== null)
+  );
+  const presetNames = new Set(presets.map((p) => p.name.trim()));
+  const baseList = existingScenarios.filter((s) => {
+    const nm = (s.name || '').trim();
+    if (options?.replaceLegacyBranchA && isLegacyBranchAScenarioName(nm)) return false;
+    if (shouldReplacePostMeeting && isLegacyPostMeetingScenarioName(nm)) return false;
+    const ep = extractStoryEp(s);
+    if (ep !== null && presetStoryEpisodes.has(ep) && !presetNames.has(nm)) {
+      return false;
+    }
+    return true;
+  });
 
   const existingByName = new Map<string, MarketingScenario>();
   baseList.forEach((s) => existingByName.set(s.name.trim(), s));

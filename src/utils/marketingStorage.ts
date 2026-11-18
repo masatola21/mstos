@@ -3,13 +3,51 @@ import { MarketingScenario, OfficialLinkItem } from '../types/marketing';
 const STORAGE_KEY = 'mst_marketing_scenarios_v1';
 const OFFICIAL_LINKS_KEY = 'mst_marketing_official_links_v2';
 
+const OFFICIAL_STORY_EPISODE_NAMES: Record<number, string> = {
+  1: '【第1話】大橋の原体験：FC本部突然倒産の危機',
+  2: '【第2話】最初に仕組み化した2大業務（管理＆集客）',
+  3: '【第3話】何から手をつければいいか？3つのステップ',
+  4: '【第4話】よくある失敗と4段階ロードマップ',
+  5: '【第5話】人を増やさず回る会社へ（仕組み化は始まり）',
+  6: '【第6話】システム屋でもコンサル屋でもない「経営の右腕」',
+  7: '【第7話・最終話】「自分がいなくても回る会社」への最初の一歩',
+};
+
+export function extractEducationEpisodeNumber(scenario: Pick<MarketingScenario, 'name' | 'trigger'>): number | null {
+  if (scenario.trigger !== 'line_registered') return null;
+  const trimmed = (scenario.name || '').trim();
+  const m = /^【第([1-7])話(?:[・\s]*最終話)?】/.exec(trimmed);
+  return m ? parseInt(m[1], 10) : null;
+}
+
+export function getScenarioDedupKey(scenario: Pick<MarketingScenario, 'name' | 'trigger'>): string {
+  const ep = extractEducationEpisodeNumber(scenario);
+  if (ep !== null) return `story_episode:${ep}`;
+  return `name:${(scenario.name || '').trim()}`;
+}
+
+function shouldPreferIncomingScenario(existing: MarketingScenario, incoming: MarketingScenario, ep: number | null): boolean {
+  if (ep !== null) {
+    const officialName = OFFICIAL_STORY_EPISODE_NAMES[ep];
+    const existingIsOfficial = (existing.name || '').trim() === officialName;
+    const incomingIsOfficial = (incoming.name || '').trim() === officialName;
+    if (incomingIsOfficial !== existingIsOfficial) return incomingIsOfficial;
+    if (Boolean(incoming.automationEnabled) !== Boolean(existing.automationEnabled)) {
+      return Boolean(incoming.automationEnabled);
+    }
+  }
+  return (incoming.updatedAt || 0) >= (existing.updatedAt || 0);
+}
+
 export function deduplicateMarketingScenarios(scenarios: MarketingScenario[]): MarketingScenario[] {
   const map = new Map<string, MarketingScenario>();
   for (const s of scenarios) {
-    const key = (s.name || '').trim();
-    if (!key) continue;
+    const trimmedName = (s.name || '').trim();
+    if (!trimmedName) continue;
+    const ep = extractEducationEpisodeNumber(s);
+    const key = ep !== null ? `story_episode:${ep}` : `name:${trimmedName}`;
     const existing = map.get(key);
-    if (!existing || (s.updatedAt || 0) >= (existing.updatedAt || 0)) {
+    if (!existing || shouldPreferIncomingScenario(existing, s, ep)) {
       map.set(key, s);
     }
   }

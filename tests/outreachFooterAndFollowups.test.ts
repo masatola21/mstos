@@ -7,8 +7,11 @@ import {
   SENDER_PROFILE,
 } from '../server/emailFooter';
 import {
+  buildCarePackageInstantReply,
   buildConsultationAdminAlertEmail,
   buildConsultationInstantReply,
+  buildDiagnosisInstantReply,
+  buildMaterialDownloadInstantReply,
   classifyPublicFormNotificationKind,
   extractConsultationDetailsText,
 } from '../server/publicFormReply';
@@ -31,17 +34,25 @@ import {
   sortScenarios,
 } from '../src/components/marketing/MarketingAutomationPrototypeView';
 import {
+  BRANCH_EDUCATION_DELAY_DAYS,
   MST_DIAGNOSIS_STARTER_SCENARIOS,
   MST_MATERIAL_FOLLOWUP_STARTER_SCENARIOS,
   MST_POST_MEETING_STARTER_SCENARIOS,
   classifyScenarioFunnelPhase,
+  classifyScenarioTrack,
+  formatScenarioStopCondition,
+  formatScenarioTriggerLabel,
+  formatScenarioWaitMinutes,
+  getEducationStartDayForShift,
   getSupersededPhasesOnEvent,
   isLegacyBranchAScenarioName,
+  isLegacyPostMeetingScenarioName,
   isOverlappingEducationStepForBranch,
   mergeStarterScenarioBatch,
   resolvePreferredDeliveryChannels,
   shouldStopScenarioForDeal,
 } from '../src/utils/followupStarterScenarios';
+import { deduplicateMarketingScenarios } from '../src/utils/marketingStorage';
 import {
   classifyConsultationTheme,
   deduceLeadInquiryType,
@@ -252,15 +263,14 @@ for (const s of diagPostForm) {
 }
 console.log('  ✓ passed');
 
-console.log('Test 16: post-meeting/report/proposal followups do NOT stop on existing booking');
-assert.equal(MST_POST_MEETING_STARTER_SCENARIOS.length, 4);
+console.log('Test 16: consolidated post-meeting / report_or_proposal_sent followups have 3 steps and do NOT stop on existing booking');
+assert.equal(MST_POST_MEETING_STARTER_SCENARIOS.length, 3);
 assert.deepEqual(
   MST_POST_MEETING_STARTER_SCENARIOS.map((s) => ({ trigger: s.trigger, wait: s.waitMinutes })),
   [
     { trigger: 'meeting_completed', wait: 120 },
-    { trigger: 'report_sent', wait: 4320 },
-    { trigger: 'proposal_sent', wait: 4320 },
-    { trigger: 'proposal_sent', wait: 10080 },
+    { trigger: 'report_or_proposal_sent', wait: 4320 },
+    { trigger: 'report_or_proposal_sent', wait: 10080 },
   ]
 );
 for (const s of MST_POST_MEETING_STARTER_SCENARIOS) {
@@ -279,31 +289,47 @@ console.log('Test 17: shouldStopScenarioForDeal differentiates pre-meeting vs po
 assert.equal(shouldStopScenarioForDeal({ trigger: 'material_requested', leadStatus: '商談化' }).stop, true);
 assert.equal(shouldStopScenarioForDeal({ trigger: 'diagnosis_completed', leadStatus: '商談化' }).stop, true);
 assert.equal(shouldStopScenarioForDeal({ trigger: 'outreach_first_sent', leadStatus: '商談化' }).stop, true);
-// 面談・レポート・提案書送付後は「商談化」では止まらず、「成約」「受注」「失注」「見送り」でのみ停止
+// 面談・レポート＆提案書送付後は「商談化」では止まらず、「成約」「受注」「失注」「見送り」でのみ停止
 assert.equal(shouldStopScenarioForDeal({ trigger: 'meeting_completed', leadStatus: '商談化' }).stop, false);
 assert.equal(shouldStopScenarioForDeal({ trigger: 'report_sent', leadStatus: '商談化' }).stop, false);
 assert.equal(shouldStopScenarioForDeal({ trigger: 'proposal_sent', leadStatus: '商談化' }).stop, false);
-assert.equal(shouldStopScenarioForDeal({ trigger: 'proposal_sent', leadStatus: '成約' }).stop, true);
+assert.equal(shouldStopScenarioForDeal({ trigger: 'report_or_proposal_sent', leadStatus: '商談化' }).stop, false);
+assert.equal(shouldStopScenarioForDeal({ trigger: 'report_or_proposal_sent', leadStatus: '成約' }).stop, true);
 assert.equal(shouldStopScenarioForDeal({ trigger: 'meeting_completed', dealProposalStatus: '成約' }).stop, true);
 assert.equal(shouldStopScenarioForDeal({ trigger: 'proposal_sent', dealProposalStatus: '失注' }).stop, true);
 console.log('  ✓ passed');
 
-console.log('Test 18: mergeStarterScenarioBatch is idempotent across repeated applications');
+console.log('Test 18: mergeStarterScenarioBatch is idempotent and auto-replaces legacy split report/proposal scenarios');
 const firstApply = mergeStarterScenarioBatch([], [
   ...MST_DIAGNOSIS_STARTER_SCENARIOS,
   ...MST_MATERIAL_FOLLOWUP_STARTER_SCENARIOS,
   ...MST_POST_MEETING_STARTER_SCENARIOS,
 ], { replaceLegacyBranchA: true, nowMs: 1000 });
-assert.equal(firstApply.addedCount, 11);
-assert.equal(firstApply.merged.length, 11);
+assert.equal(firstApply.addedCount, 10);
+assert.equal(firstApply.merged.length, 10);
 const secondApply = mergeStarterScenarioBatch(firstApply.merged, [
   ...MST_DIAGNOSIS_STARTER_SCENARIOS,
   ...MST_MATERIAL_FOLLOWUP_STARTER_SCENARIOS,
   ...MST_POST_MEETING_STARTER_SCENARIOS,
 ], { replaceLegacyBranchA: true, nowMs: 2000 });
 assert.equal(secondApply.addedCount, 0);
-assert.equal(secondApply.updatedCount, 11);
-assert.equal(secondApply.merged.length, 11);
+assert.equal(secondApply.updatedCount, 10);
+assert.equal(secondApply.merged.length, 10);
+
+assert.equal(isLegacyPostMeetingScenarioName('【レポート後】3日後：詳細診断レポートのご感想・ご不明点'), true);
+assert.equal(isLegacyPostMeetingScenarioName('【提案後①】3日後：ご提案書のご確認状況・ご質問のお伺い'), true);
+assert.equal(isLegacyPostMeetingScenarioName('【提案後②】7日後：ご検討状況のお伺い（導入範囲や時期の調整）'), true);
+assert.equal(isLegacyPostMeetingScenarioName('【レポート＆提案書送付後①】3日後：ご確認状況 ＆ ご質問のお伺い'), true);
+assert.equal(isLegacyPostMeetingScenarioName('【提案書送付後①】3日後：ご確認状況 ＆ ご質問のお伺い'), false);
+const legacyPostMix = [
+  { ...MST_POST_MEETING_STARTER_SCENARIOS[0], id: 'old-rep', trigger: 'report_sent' as const, name: '【レポート後】3日後：詳細診断レポートのご感想・ご不明点', updatedAt: 100 },
+  { ...MST_POST_MEETING_STARTER_SCENARIOS[0], id: 'old-prop1', trigger: 'proposal_sent' as const, name: '【提案後①】3日後：ご提案書のご確認状況・ご質問のお伺い', updatedAt: 100 },
+  { ...MST_POST_MEETING_STARTER_SCENARIOS[0], id: 'old-prop2', trigger: 'proposal_sent' as const, name: '【提案後②】7日後：ご検討状況のお伺い（導入範囲や時期の調整）', updatedAt: 100 },
+  { ...MST_POST_MEETING_STARTER_SCENARIOS[0], id: 'old-repprop1', trigger: 'report_or_proposal_sent' as const, name: '【レポート＆提案書送付後①】3日後：ご確認状況 ＆ ご質問のお伺い', updatedAt: 100 },
+];
+const cleanedPostMerge = mergeStarterScenarioBatch(legacyPostMix, MST_POST_MEETING_STARTER_SCENARIOS, { nowMs: 3000 });
+assert.equal(cleanedPostMerge.merged.length, 3);
+assert.ok(cleanedPostMerge.merged.every((s) => !isLegacyPostMeetingScenarioName(s.name)));
 console.log('  ✓ passed');
 
 console.log('Test 19: isLegacyBranchAScenarioName identifies legacy numeric & old A-pattern scenarios without false positives');
@@ -536,6 +562,175 @@ assert.ok(onDiag.cancelSpecificTargets?.some((t) => t.trigger === 'tag_added' &&
 assert.equal(isOverlappingEducationStepForBranch(MST_LINE_NURTURING_STARTER_SCENARIOS[0], ['選択:個別相談']), true);
 assert.equal(isOverlappingEducationStepForBranch(MST_LINE_NURTURING_STARTER_SCENARIOS[1], ['選択:個別相談']), false);
 assert.equal(isOverlappingEducationStepForBranch(MST_LINE_NURTURING_STARTER_SCENARIOS[0], []), false);
+console.log('  ✓ passed');
+
+console.log('Test 28: Plan A delayed education shifts start timing per branch completion');
+assert.equal(getEducationStartDayForShift(BRANCH_EDUCATION_DELAY_DAYS.line_registered), 2);
+assert.equal(getEducationStartDayForShift(BRANCH_EDUCATION_DELAY_DAYS['選択:個別相談']), 7);
+assert.equal(getEducationStartDayForShift(BRANCH_EDUCATION_DELAY_DAYS['介護保険外開業']), 7);
+assert.equal(getEducationStartDayForShift(BRANCH_EDUCATION_DELAY_DAYS['選択:診断']), 5);
+assert.equal(getEducationStartDayForShift(BRANCH_EDUCATION_DELAY_DAYS.public_form_consultation), 5);
+assert.equal(getEducationStartDayForShift(BRANCH_EDUCATION_DELAY_DAYS.diagnosis_completed), 11);
+assert.equal(getEducationStartDayForShift(BRANCH_EDUCATION_DELAY_DAYS.material_requested), 11);
+console.log('  ✓ passed');
+
+console.log('Test 29: deduplicateMarketingScenarios & mergeStarterScenarioBatch remove legacy renamed Episode 7');
+const legacyEp7 = {
+  ...MST_LINE_NURTURING_STARTER_SCENARIOS[6],
+  id: 'legacy-ep7',
+  name: '【第7話・最終話】自分がいないと現場が回らない状態から、脱却するチャンス',
+  emailSubject: '【最終話】自分がいないと現場が回らない状態から、脱却するチャンス',
+  automationEnabled: false,
+  updatedAt: 9999999999999,
+};
+const currentEp7 = {
+  ...MST_LINE_NURTURING_STARTER_SCENARIOS[6],
+  id: 'current-ep7',
+  automationEnabled: true,
+  updatedAt: 1000,
+};
+const dedupedEp7 = deduplicateMarketingScenarios([legacyEp7, currentEp7]);
+assert.equal(dedupedEp7.length, 1);
+assert.equal(dedupedEp7[0].name, '【第7話・最終話】「自分がいなくても回る会社」への最初の一歩');
+
+const mergedStory = mergeStarterScenarioBatch([legacyEp7], MST_LINE_NURTURING_STARTER_SCENARIOS, { nowMs: 5000 });
+assert.equal(mergedStory.merged.length, 7);
+assert.ok(!mergedStory.merged.some((s) => s.name.includes('脱却するチャンス')));
+console.log('  ✓ passed');
+
+console.log('Test 30: classifyScenarioTrack, formatting helpers, and funnel-order sorting across all 7 tracks');
+assert.equal(classifyScenarioTrack(MST_DIAGNOSIS_STARTER_SCENARIOS[0]), 'branch_diagnosis');
+assert.equal(classifyScenarioTrack(MST_CONSULT_STARTER_SCENARIOS[0]), 'branch_consult');
+assert.equal(classifyScenarioTrack(MST_CARE_STARTER_SCENARIOS[0]), 'branch_care');
+assert.equal(classifyScenarioTrack(MST_LINE_NURTURING_STARTER_SCENARIOS[0]), 'story_nurturing');
+assert.equal(classifyScenarioTrack(MST_MATERIAL_FOLLOWUP_STARTER_SCENARIOS[0]), 'material_followup');
+assert.equal(classifyScenarioTrack(MST_POST_MEETING_STARTER_SCENARIOS[0]), 'post_meeting');
+assert.equal(classifyScenarioTrack(MST_OUTREACH_STARTER_SCENARIOS[0]), 'sales_outreach');
+
+assert.equal(formatScenarioTriggerLabel('report_or_proposal_sent'), 'ご提案書・レポート送付時（統合）');
+assert.equal(formatScenarioTriggerLabel('tag_added', '選択:個別相談'), 'タグ「選択:個別相談」');
+assert.equal(formatScenarioWaitMinutes(0), '即時');
+assert.equal(formatScenarioWaitMinutes(45), '45分後');
+assert.equal(formatScenarioWaitMinutes(120), '2時間後');
+assert.equal(formatScenarioWaitMinutes(4320), '3日後');
+assert.equal(formatScenarioStopCondition({ trigger: 'report_or_proposal_sent', stopOnBooking: false, stopOnDeal: true }), '返信・成約・終了で停止');
+assert.equal(formatScenarioStopCondition({ trigger: 'material_requested', stopOnBooking: true, stopOnDeal: true }), '返信・予約・成約で停止');
+
+const mixedFunnelScenarios = [
+  { ...MST_OUTREACH_STARTER_SCENARIOS[4], id: 'out-5', updatedAt: 1 },
+  { ...MST_POST_MEETING_STARTER_SCENARIOS[2], id: 'post-2', updatedAt: 1 },
+  { ...MST_POST_MEETING_STARTER_SCENARIOS[0], id: 'post-0', updatedAt: 1 },
+  { ...MST_POST_MEETING_STARTER_SCENARIOS[1], id: 'post-1', updatedAt: 1 },
+  { ...MST_MATERIAL_FOLLOWUP_STARTER_SCENARIOS[2], id: 'mat-3', updatedAt: 1 },
+  { ...MST_MATERIAL_FOLLOWUP_STARTER_SCENARIOS[0], id: 'mat-1', updatedAt: 1 },
+  { ...MST_LINE_NURTURING_STARTER_SCENARIOS[6], id: 'edu-7', updatedAt: 1 },
+  { ...MST_LINE_NURTURING_STARTER_SCENARIOS[0], id: 'edu-1', updatedAt: 1 },
+  { ...MST_CARE_STARTER_SCENARIOS[1], id: 'care-2', updatedAt: 1 },
+  { ...MST_CONSULT_STARTER_SCENARIOS[0], id: 'consult-1', updatedAt: 1 },
+  { ...MST_DIAGNOSIS_STARTER_SCENARIOS[0], id: 'diag-1', updatedAt: 1 },
+  { ...MST_OUTREACH_STARTER_SCENARIOS[0], id: 'out-1', updatedAt: 1 },
+];
+const sortedFunnelIds = sortScenarios(mixedFunnelScenarios).map((s) => s.id);
+assert.deepEqual(sortedFunnelIds, [
+  'diag-1',
+  'consult-1',
+  'care-2',
+  'edu-1',
+  'edu-7',
+  'mat-1',
+  'mat-3',
+  'post-0',
+  'post-1',
+  'post-2',
+  'out-1',
+  'out-5',
+]);
+console.log('  ✓ passed');
+
+console.log('Test 31: ContactForm notes + answers.message deduplication prevents duplicate inquiry body and metadata leaks');
+const contactFormCombinedNotes = [
+  '【ご関心のあるテーマ】業務効率化・IT/自動化について',
+  '【認知経路】検索エンジン（Google / Yahoo!）',
+  '【ご相談内容】月末の請求書作成に丸2日かかっており自動化したいです。',
+].join('\n');
+const dedupedDetails = extractConsultationDetailsText({
+  userNotes: contactFormCombinedNotes,
+  answers: {
+    service_interest: '業務効率化・IT/自動化について',
+    hear_about: '検索エンジン（Google / Yahoo!）',
+    message: '月末の請求書作成に丸2日かかっており自動化したいです。',
+  },
+});
+assert.equal(dedupedDetails.consultationText, '月末の請求書作成に丸2日かかっており自動化したいです。');
+const contactReply = buildConsultationInstantReply({
+  name: '佐藤',
+  companyName: '株式会社サンプル',
+  inquiryType: '業務効率化・IT/自動化について',
+  consultationText: dedupedDetails.consultationText,
+  bookingUrl: 'https://timerex.net/s/mst/example',
+});
+assert.equal(contactReply.bodyText.split('月末の請求書作成に丸2日かかっており自動化したいです。').length - 1, 1);
+assert.ok(!contactReply.bodyText.includes('【認知経路】'));
+assert.ok(!contactReply.bodyText.includes('【ご関心のあるテーマ】'));
+
+const fallbackOnlyDetails = extractConsultationDetailsText({
+  userNotes: contactFormCombinedNotes,
+  answers: {},
+});
+assert.equal(fallbackOnlyDetails.consultationText, '月末の請求書作成に丸2日かかっており自動化したいです。');
+console.log('  ✓ passed');
+
+console.log('Test 32: material_download, diagnosis, and care_package instant replies align with submitted choices and unified footer');
+const matReply = buildMaterialDownloadInstantReply({
+  name: '高橋',
+  requestedMaterials: [
+    { label: '業務改善・DX推進ガイドブック', url: 'https://corp.mstcorp.info/materials/business-improvement-guide.pdf' },
+  ],
+  bookingUrl: 'https://timerex.net/s/mst/example',
+});
+assert.ok(matReply.bodyText.includes('業務改善・DX推進ガイドブック'));
+assert.ok(matReply.bodyText.includes('https://corp.mstcorp.info/materials/business-improvement-guide.pdf'));
+assert.ok(!matReply.bodyText.includes('詳細診断レポート'));
+
+const diagReply = buildDiagnosisInstantReply({
+  name: '鈴木',
+  formName: '3分無料経営診断',
+  typeTitle: '社長ボトルネック・現場過負荷型',
+  badge: '要緊急改善',
+  summary: '月末の請求処理や顧客対応が属人化し、経営判断の時間が圧迫されている状態です。',
+  firstStep: '属人作業の棚卸し',
+  freeNotes: '現場が回らず採用も難航しています。',
+  bookingUrl: 'https://timerex.net/s/mst/example',
+});
+assert.ok(diagReply.emailBodyText.includes('社長ボトルネック・現場過負荷型'));
+assert.ok(diagReply.emailBodyText.includes('要緊急改善'));
+assert.ok(diagReply.emailBodyText.includes('月末の請求処理や顧客対応が属人化し、経営判断の時間が圧迫されている状態です。'));
+assert.ok(diagReply.emailBodyText.includes('属人作業の棚卸し'));
+assert.ok(diagReply.emailBodyText.includes('現場が回らず採用も難航しています。'));
+assert.ok(diagReply.emailBodyText.includes('ご提案書（診断結果および改善プラン）'));
+assert.ok(!diagReply.emailBodyText.includes('桧町127番地'));
+assert.ok(diagReply.lineBodyText.includes('ご提案書（診断結果および改善プラン）'));
+
+const careConsultReply = buildCarePackageInstantReply({
+  name: '伊藤',
+  inquiryType: '開業相談',
+  bookingUrl: 'https://timerex.net/s/mst/care',
+  consultationText: '訪問介護に保険外自費サービスを追加したい',
+});
+assert.ok(careConsultReply.bodyText.includes('訪問介護に保険外自費サービスを追加したい'));
+assert.ok(careConsultReply.bodyText.includes('https://timerex.net/s/mst/care'));
+assert.ok(!careConsultReply.bodyText.includes('開業パッケージ資料URL'));
+
+const careBothReply = buildCarePackageInstantReply({
+  name: '渡辺',
+  inquiryType: '両方希望',
+  requestedMaterials: [{ label: '介護保険外サービス開業パッケージ資料', url: 'https://corp.mstcorp.info/materials/care-package-proposal.pdf' }],
+  bookingUrl: 'https://timerex.net/s/mst/care',
+  consultationText: '資料と相談両方お願いします',
+});
+assert.ok(careBothReply.bodyText.includes('https://corp.mstcorp.info/materials/care-package-proposal.pdf'));
+assert.ok(careBothReply.bodyText.includes('https://timerex.net/s/mst/care'));
+assert.ok(careBothReply.bodyText.includes('資料と相談両方お願いします'));
 console.log('  ✓ passed');
 
 console.log('=== All Outreach Footer & Follow-up Tests Passed! ===');

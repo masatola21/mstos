@@ -276,7 +276,7 @@ export default function DiagnosisForm() {
           </h4>
 
           <p className="text-xs sm:text-sm text-slate-300 leading-relaxed font-light">
-            机上の空論ではなく「貴社の実際の業務フローにおいて、どこから仕組みを整えるのが良いか」を、代表または専任コンサルタントが直接画面共有しながら解説します。終了後、貴社専用の診断カルテPDFを進呈いたします（強引な営業は一切行いません）。
+            机上の空論ではなく「貴社の実際の業務フローにおいて、どこから仕組みを整えるのが良いか」を、代表または専任コンサルタントが直接画面共有しながら解説します。終了後、貴社専用のご提案書（診断結果および改善プラン）をお渡しいたします（強引な営業は一切行いません）。
           </p>
 
           <div className="pt-2 flex flex-col sm:flex-row gap-3">

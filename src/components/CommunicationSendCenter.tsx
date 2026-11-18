@@ -47,7 +47,7 @@ type Props = {
 };
 
 const labels: Record<Kind, string> = {
-  document: '重要書類の送信（見積・契約・請求・レポート）',
+  document: '重要書類の送信（提案書・見積・契約・請求・月次報告）',
   form: 'フォーム案内',
   diagnosis: '診断案内',
   deal: '商談日程案内',
@@ -168,8 +168,8 @@ const documentMessage = (type: string | undefined, channel: DeliveryChannel) => 
   const messages: Record<string, { subject: string; body: string; line: string }> = {
     proposal: {
       subject: '【ご提案書の送付】{書類名}｜{会社名} 様',
-      body: hi + '\n\n' + intro + '\n\nご提案書（PDF）を添付いたしましたので、ご確認のほどよろしくお願い申し上げます。\nまた、下記リンクよりWeb上でも内容をご確認いただけます。ご不明点やご希望がございましたらお知らせください。\n\n' + details,
-      line: hi + '\nご提案書をお送りします。内容をご確認ください。\n{書類名}\n{書類URL}',
+      body: hi + '\n\n' + intro + '\n\n診断結果・ご提案書（PDF）を添付いたしましたので、ご確認のほどよろしくお願い申し上げます。\nまた、下記リンクよりWeb上でも内容をご確認いただけます。ご不明点やご希望がございましたらお知らせください。\n\n' + details,
+      line: hi + '\n診断結果・ご提案書をお送りします。内容をご確認ください。\n{書類名}\n{書類URL}',
     },
     diagnosis_report: {
       subject: '【診断レポートのご送付】{書類名}｜{会社名} 様',
@@ -269,6 +269,7 @@ export const CommunicationSendCenter: React.FC<Props> = ({
   const [contactId, setContactId] = useState(initialContactId || '');
   const [unregisteredEmailWarning, setUnregisteredEmailWarning] = useState<string | null>(null);
   const userInteractedContactRef = useRef(false);
+  const userInteractedDocumentRef = useRef(false);
   const [docId, setDocId] = useState(initialDocumentId || '');
   const [formId, setFormId] = useState(initialFormId || '');
   const [url, setUrl] = useState('');
@@ -482,14 +483,17 @@ export const CommunicationSendCenter: React.FC<Props> = ({
         }
         const fetchedContacts = (c.data || []).filter((x: Contact) => !initialCompanyId || x.company_id === initialCompanyId);
         setContacts(fetchedContacts);
-        setDocs((d.data || []).filter((x: any) => !initialCompanyId || x.company_id === initialCompanyId || x.id === initialDocumentId));
+        const fetchedDocs = (d.data || []).filter((x: any) => !initialCompanyId || x.company_id === initialCompanyId || x.id === initialDocumentId);
+        setDocs(fetchedDocs);
         if (initialFormId) setFormId(initialFormId);
+        let resolvedContactId = initialContactId || '';
         if (initialContactId) {
           setContactId(initialContactId);
         } else if (initialRecipientEmail && !userInteractedContactRef.current) {
           const cleanEmail = initialRecipientEmail.trim().toLowerCase();
           const matched = fetchedContacts.find((ct: Contact) => (ct.email || '').trim().toLowerCase() === cleanEmail);
           if (matched) {
+            resolvedContactId = matched.id;
             setContactId(matched.id);
             setUnregisteredEmailWarning(null);
           } else {
@@ -507,6 +511,19 @@ export const CommunicationSendCenter: React.FC<Props> = ({
             } else if (targetDoc.company_id && !initialContactId && !initialRecipientEmail && !userInteractedContactRef.current) {
               const matchingContact = (c.data || []).find((ct: any) => ct.company_id === targetDoc.company_id);
               if (matchingContact) setContactId(matchingContact.id);
+            }
+          }
+        } else if (!userInteractedDocumentRef.current) {
+          const resolvedContact = fetchedContacts.find((ct: Contact) => ct.id === resolvedContactId);
+          const targetCompanyId = resolvedContact?.company_id || initialCompanyId;
+          const companyDocs = targetCompanyId ? fetchedDocs.filter((x: any) => x.company_id === targetCompanyId) : fetchedDocs;
+          if (companyDocs.length > 0 && !companyDocs.some((x: any) => documentCategory(x) === documentType)) {
+            const priority: DocumentType[] = ['proposal', 'diagnosis_report', 'estimate', 'contract', 'invoice', 'monthly_report', 'other'];
+            const bestCat = priority.find((cat) => companyDocs.some((x: any) => documentCategory(x) === cat));
+            if (bestCat) {
+              const bestDoc = companyDocs.find((x: any) => documentCategory(x) === bestCat);
+              setDocumentType(bestCat);
+              if (bestDoc) setDocId(bestDoc.id);
             }
           }
         }
@@ -675,7 +692,7 @@ export const CommunicationSendCenter: React.FC<Props> = ({
     }
     setBusy(true);
     try {
-      if (doc && doc.status !== 'approved') {
+      if (doc && !['approved', 'sent'].includes(doc.status)) {
         await db.from('customer_documents').update({ status: 'approved' }).eq('id', doc.id);
         doc.status = 'approved';
       }
@@ -754,8 +771,10 @@ export const CommunicationSendCenter: React.FC<Props> = ({
       // 書類を送れたら、書類の状態を「送信済み」にする(提案書は、対応する下書きの記録も「送付済み」にする)
       if (allOk && doc) {
         try {
-          await db.from('customer_documents').update({ status: 'sent' }).eq('id', doc.id);
-          doc.status = 'sent';
+          if (doc.status !== 'sent') {
+            await db.from('customer_documents').update({ status: 'sent' }).eq('id', doc.id);
+            doc.status = 'sent';
+          }
           await db.from('proposal_drafts').update({ status: 'sent' }).eq('document_id', doc.id).eq('status', 'approved');
           // この書類に紐づく契約・請求の状態も進める(契約: メール送付済み / 請求: 発行済み)。取消・締結済み・入金済みなど先の状態は動かさない。
           await db.from('customer_contracts').update({ status: 'sent' }).eq('document_id', doc.id).in('status', ['draft', 'under_review']);
@@ -911,7 +930,7 @@ export const CommunicationSendCenter: React.FC<Props> = ({
                   type="button"
                   onClick={() => onNavigateTab('document_templates')}
                   className="flex items-center gap-1.5 rounded-md border border-slate-200 bg-white px-2.5 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-50 transition cursor-pointer"
-                  title="提案書・診断レポート・見積書作成を開く"
+                  title="提案書・見積書・契約書・請求書の作成を開く"
                 >
                   <FileText className="h-3.5 w-3.5 text-purple-600" />
                   <span>書類作成</span>
@@ -1095,6 +1114,39 @@ export const CommunicationSendCenter: React.FC<Props> = ({
                         </select>
                       </div>
                     )}
+                    {kind === 'sales_outreach' && (
+                      <div className="md:col-span-2 space-y-2 rounded-xl border border-purple-200 bg-purple-50/50 p-3.5">
+                        <label className="block text-xs font-bold text-purple-900">
+                          営業メール種別（{contact?.company_id ? (companies[contact.company_id] || '選択中') + (' · 業種: ' + (companyIndustries[contact.company_id] || '一般・未設定')) : '送信先を選ぶと業種・社名を自動反映'}）
+                          <select
+                            value={salesStep}
+                            onChange={(e) => {
+                              const s = Number(e.target.value);
+                              setSalesStep(Number.isFinite(s) ? s : 0);
+                              applySalesStep(Number.isFinite(s) ? s : 0);
+                            }}
+                            className="mt-1 block w-full bg-white p-2.5 text-xs text-slate-900 rounded-lg border border-purple-200 focus:outline-none focus:border-purple-600"
+                          >
+                            <option value={0}>【一発直球提案】IT担当＋経営サポート「社外右腕」のご提案（単発メール）</option>
+                            <option value={1}>【5ステップ初回】業界急所提起 ＆ 3分無料診断ギフト（送信後2〜5通目の自動追客可）</option>
+                          </select>
+                        </label>
+                        {salesStep === 1 && channel !== 'line' && (
+                          <label className="flex items-start gap-2 rounded-lg border border-purple-200 bg-white p-2.5 text-xs text-slate-800 cursor-pointer">
+                            <input
+                              type="checkbox"
+                              checked={autoFollowups}
+                              onChange={(e) => setAutoFollowups(e.target.checked)}
+                              className="mt-0.5 h-4 w-4 accent-purple-600"
+                            />
+                            <span>
+                              <strong className="text-purple-900">2通目以降も自動で送る</strong>
+                              （第1通の3日・6日・9日・12日後、9〜18時に送信）
+                            </span>
+                          </label>
+                        )}
+                      </div>
+                    )}
                     {/* 書類関連 */}
                     {kind === 'document' && (
                       <>
@@ -1102,33 +1154,57 @@ export const CommunicationSendCenter: React.FC<Props> = ({
                           書類の種類
                           <select
                             value={documentType}
-                            onChange={(e) => handleDocumentTypeChange(e.target.value as DocumentType)}
+                            onChange={(e) => {
+                              userInteractedDocumentRef.current = true;
+                              handleDocumentTypeChange(e.target.value as DocumentType);
+                            }}
                             className="mt-1 block w-full rounded-xl border border-slate-200 bg-white p-2.5 text-xs text-slate-900 focus:border-purple-600 focus:outline-none shadow-2xs"
                           >
+                            <option value="proposal">提案書（診断結果＋ご提案）</option>
                             <option value="estimate">見積書</option>
                             <option value="invoice">請求書</option>
                             <option value="contract">契約書</option>
-                            <option value="proposal">提案書</option>
-                            <option value="diagnosis_report">診断レポート</option>
                             <option value="monthly_report">月次報告書</option>
+                            {(documentType === 'diagnosis_report' || docs.some((x) => documentCategory(x) === 'diagnosis_report')) && (
+                              <option value="diagnosis_report">診断レポート（旧単体・互換）</option>
+                            )}
                             <option value="other">その他</option>
                           </select>
                         </label>
-                        <label className="md:col-span-2 text-xs font-semibold text-slate-700">
-                          書類（確定書類のみ送信可能）
-                          <select
-                            value={docId}
-                            onChange={(e) => setDocId(e.target.value)}
-                            className="mt-1 block w-full rounded-xl border border-slate-200 bg-white p-2.5 text-xs text-slate-900 focus:border-purple-600 focus:outline-none shadow-2xs"
-                          >
-                            <option value="">書類を選択してください</option>
-                            {availableDocs.map((x) => (
-                              <option key={x.id} value={x.id}>
-                                {x.title} · {({ draft: '作成中', awaiting_approval: '作成中', approved: '確定（送付可能）', queued: '送信待ち', sent: '送信済み', failed: '送信失敗', archived: '保管' } as Record<string, string>)[x.status] || x.status}
-                              </option>
-                            ))}
-                          </select>
-                        </label>
+                        <div className="md:col-span-2 space-y-2">
+                          <label className="block text-xs font-semibold text-slate-700">
+                            書類（確定書類のみ送信可能）
+                            <select
+                              value={docId}
+                              onChange={(e) => {
+                                userInteractedDocumentRef.current = true;
+                                setDocId(e.target.value);
+                              }}
+                              className="mt-1 block w-full rounded-xl border border-slate-200 bg-white p-2.5 text-xs text-slate-900 focus:border-purple-600 focus:outline-none shadow-2xs"
+                            >
+                              <option value="">書類を選択してください</option>
+                              {availableDocs.map((x) => (
+                                <option key={x.id} value={x.id}>
+                                  {x.title} · {({ draft: '作成中', awaiting_approval: '作成中', approved: '確定（送付可能）', queued: '送信待ち', sent: '送信済み', failed: '送信失敗', archived: '保管' } as Record<string, string>)[x.status] || x.status}
+                                </option>
+                              ))}
+                            </select>
+                          </label>
+                          {availableDocs.length === 0 && (
+                            <div className="text-[11px] text-amber-700 bg-amber-50 border border-amber-200 rounded-lg p-2.5 flex items-center justify-between gap-2">
+                              <span>選択した会社には、この種類の書類がまだありません。</span>
+                              {onNavigateTab && (
+                                <button
+                                  type="button"
+                                  onClick={() => onNavigateTab('document_templates')}
+                                  className="font-bold text-purple-700 hover:underline shrink-0 cursor-pointer"
+                                >
+                                  書類作成へ
+                                </button>
+                              )}
+                            </div>
+                          )}
+                        </div>
                       </>
                     )}
                     {(kind === 'form' || kind === 'diagnosis') && (
@@ -1150,6 +1226,10 @@ export const CommunicationSendCenter: React.FC<Props> = ({
                         </select>
                       </label>
                     )}
+                    <label className="md:col-span-2 text-xs font-semibold text-slate-700">
+                      {kind === 'document' ? '共有可能な書類URL' : kind === 'deal' || kind === 'customer_meeting' ? 'この案内専用URL（空欄なら共通予約URL）' : 'フォーム・案内URL'}
+                      <input value={url} onChange={(e) => setUrl(e.target.value)} className="mt-1 block w-full rounded-xl border border-slate-200 bg-white p-2.5 text-xs text-slate-900 focus:border-purple-600 focus:outline-none shadow-2xs" placeholder="https://..." />
+                    </label>
                     {/* 差出人設定 */}
                     {(channel === 'email' || channel === 'both') && (
                       <>
@@ -1527,15 +1607,20 @@ export const CommunicationSendCenter: React.FC<Props> = ({
                     書類の種類
                     <select
                       value={documentType}
-                      onChange={(e) => handleDocumentTypeChange(e.target.value as DocumentType)}
+                      onChange={(e) => {
+                        userInteractedDocumentRef.current = true;
+                        handleDocumentTypeChange(e.target.value as DocumentType);
+                      }}
                       className="mt-1 block w-full rounded-xl border border-slate-200 bg-white p-2.5 text-xs text-slate-900 focus:border-purple-600 focus:outline-none shadow-2xs"
                     >
+                      <option value="proposal">提案書（診断結果＋ご提案）</option>
                       <option value="estimate">見積書</option>
                       <option value="invoice">請求書</option>
                       <option value="contract">契約書</option>
-                      <option value="proposal">提案書</option>
-                      <option value="diagnosis_report">診断レポート</option>
                       <option value="monthly_report">月次報告書</option>
+                      {(documentType === 'diagnosis_report' || docs.some((x) => documentCategory(x) === 'diagnosis_report')) && (
+                        <option value="diagnosis_report">診断レポート（旧単体・互換）</option>
+                      )}
                       <option value="other">その他</option>
                     </select>
                   </label>
@@ -1544,7 +1629,10 @@ export const CommunicationSendCenter: React.FC<Props> = ({
                       書類（{contact?.company_id ? (companies[contact.company_id] || '選択した会社') + 'の書類' : initialCompanyId ? (companies[initialCompanyId] || 'この会社') + 'の書類' : '送信先を選ぶと会社の書類で絞り込み'}・確定書類のみ送信可能）
                       <select
                         value={docId}
-                        onChange={(e) => setDocId(e.target.value)}
+                        onChange={(e) => {
+                          userInteractedDocumentRef.current = true;
+                          setDocId(e.target.value);
+                        }}
                         className="mt-1 block w-full rounded-xl border border-slate-200 bg-white p-2.5 text-xs text-slate-900 focus:border-purple-600 focus:outline-none shadow-2xs"
                       >
                         <option value="">書類を選択してください</option>
@@ -2063,7 +2151,7 @@ export const CommunicationSendCenter: React.FC<Props> = ({
                             : selectedEmailTemplate?.body_text || (templateChannel === 'email' ? body : resolveTemplate('email')?.body_text || ''),
                           vals,
                         );
-                        const isTransactionalPreview = ['document', 'diagnosis', 'form', 'deal'].includes(kind);
+                        const isTransactionalPreview = ['document', 'diagnosis', 'form', 'deal', 'customer_meeting'].includes(kind);
                         return (
                           <EmailHtmlPreviewCard
                             body={rawPreview}

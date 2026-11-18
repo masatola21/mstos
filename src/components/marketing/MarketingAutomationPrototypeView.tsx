@@ -4,6 +4,8 @@ import {
   MST_DIAGNOSIS_STARTER_SCENARIOS,
   MST_MATERIAL_FOLLOWUP_STARTER_SCENARIOS,
   MST_POST_MEETING_STARTER_SCENARIOS,
+  getScenarioSortKey,
+  sortScenarios,
   isLegacyBranchAScenarioName,
   isPostDealStageTrigger,
   mergeStarterScenarioBatch,
@@ -12,6 +14,8 @@ export {
   MST_DIAGNOSIS_STARTER_SCENARIOS,
   MST_MATERIAL_FOLLOWUP_STARTER_SCENARIOS,
   MST_POST_MEETING_STARTER_SCENARIOS,
+  getScenarioSortKey,
+  sortScenarios,
 };
 
 export const MST_OUTREACH_STARTER_SCENARIOS: Omit<MarketingScenario, 'id' | 'updatedAt'>[] = [1, 2, 3, 4, 5].map((step) => {
@@ -50,13 +54,13 @@ export const MST_OUTREACH_STARTER_SCENARIOS: Omit<MarketingScenario, 'id' | 'upd
 
 export const MST_LINE_NURTURING_STARTER_SCENARIOS: Omit<MarketingScenario, 'id' | 'updatedAt'>[] = [1, 2, 3, 4, 5, 6, 7].map((step) => {
   const tpl = getNurturingStepTemplate(step);
-  // 友だち追加直後はウェルカム3択Flexを送るため、ストーリー教育は2日後から3日おきに配信（面談予約・返信・診断/資料完了で自動停止）
+  // A案（長期育成型）: ウェルカム無反応は2日後〜、分岐/診断/資料/Web相談は直後フォロー完了の約4日後〜（3日おき・予約/返信で停止）
   const waitMinutes = ((step - 1) * 3 + 2) * 24 * 60;
   return {
     name: tpl.name,
     trigger: 'line_registered' as MarketingTrigger,
     channel: 'both' as MarketingChannel,
-    audience: 'LINE登録済み・未予約の見込み客（LINE優先／未連携時はメール・二重送信なし）',
+    audience: '未予約・未返信の見込み客（A案：無反応は2日後〜／分岐・Web経由は直後フォロー完了後から自動配信）',
     waitMinutes,
     emailSubject: tpl.emailSubject,
     emailBody: tpl.emailBody,
@@ -240,6 +244,7 @@ const triggerOptions: Array<{ value: MarketingTrigger; label: string }> = [
   { value: 'diagnosis_completed', label: '診断が完了した時' },
   { value: 'report_approved', label: '診断レポートが承認された時' },
   { value: 'report_sent', label: '診断レポートを送付した時' },
+  { value: 'report_or_proposal_sent', label: 'ご提案書（診断結果含む）・レポート送付時（統合）' },
   { value: 'meeting_completed', label: '面談が完了した時' },
   { value: 'tag_added', label: '指定タグが付いた時' },
   { value: 'booking_created', label: '予約が登録された時' },
@@ -324,77 +329,6 @@ const emptyScenario = (): Omit<MarketingScenario, 'id' | 'updatedAt'> => ({
   consentBasis: '',
 });
 
-
-export function getScenarioSortKey(scenario: MarketingScenario): { categoryOrder: number; stepNumber: number; waitMinutes: number; name: string } {
-  const name = scenario.name || '';
-  
-  // カテゴリ優先度: 1. 分岐A(診断), 2. 分岐B(個別相談), 3. 分岐C(介護開業), 4. 共通教育(ストーリー), 5. 営業メール, 6. 資料請求フォロー, 7. 面談・提案後フォロー, 99. その他
-  let categoryOrder = 99;
-  if (scenario.trigger === 'material_requested' || name.includes('【資料請求')) {
-    categoryOrder = 6;
-  } else if (isPostDealStageTrigger(scenario.trigger) || name.includes('【面談後') || name.includes('【レポート後') || name.includes('【提案後')) {
-    categoryOrder = 7;
-  } else if (
-    scenario.id === 'one-shot-outreach' ||
-    name.includes('一発直球') ||
-    scenario.trigger === 'outreach_first_sent' ||
-    name.includes('営業メール') ||
-    /^【第\d+通/.test(name) ||
-    (scenario.channel === 'email' && scenario.trigger === 'lead_created')
-  ) {
-    categoryOrder = 5;
-  } else if (
-    name.includes('【A') ||
-    name.includes('診断') ||
-    isLegacyBranchAScenarioName(name) ||
-    scenario.trigger.startsWith('diagnosis_') ||
-    scenario.trigger.startsWith('report_')
-  ) {
-    categoryOrder = 1;
-  } else if (name.includes('【B') || (name.includes('個別相談') && !name.includes('介護'))) {
-    categoryOrder = 2;
-  } else if (name.includes('【C') || name.includes('介護') || name.includes('保険外')) {
-    categoryOrder = 3;
-  } else if (name.includes('ストーリー') || name.includes('大橋') || name.includes('ナーチャリング') || name.includes('話】')) {
-    categoryOrder = 4;
-  }
-
-  // ステップ番号の抽出（例: 【A1 / 【B2 / 第1話 / ステップ1 など）
-  let stepNumber = 999;
-  const numMatch = name.match(/[【［\[第ABCステップ]*\s*(\d+)/) || name.match(/(\d+)/);
-  if (numMatch) {
-    stepNumber = parseInt(numMatch[1], 10);
-  }
-  if (categoryOrder === 1 && isLegacyBranchAScenarioName(name)) {
-    // 旧数字パターン（1〜5）や旧A1〜A5は現行A1〜A4の後ろにまとめて表示し、交互混在を防ぐ
-    stepNumber += 100;
-  }
-
-  return {
-    categoryOrder,
-    stepNumber,
-    waitMinutes: scenario.waitMinutes ?? 0,
-    name,
-  };
-}
-
-export function sortScenarios(scenarios: MarketingScenario[]): MarketingScenario[] {
-  return [...scenarios].sort((a, b) => {
-    const keyA = getScenarioSortKey(a);
-    const keyB = getScenarioSortKey(b);
-
-    if (keyA.categoryOrder !== keyB.categoryOrder) {
-      return keyA.categoryOrder - keyB.categoryOrder;
-    }
-    if (keyA.stepNumber !== keyB.stepNumber) {
-      return keyA.stepNumber - keyB.stepNumber;
-    }
-    if (keyA.waitMinutes !== keyB.waitMinutes) {
-      return keyA.waitMinutes - keyB.waitMinutes;
-    }
-    return keyA.name.localeCompare(keyB.name, 'ja');
-  });
-}
 
 export const MarketingAutomationPrototypeView: React.FC<Props> = ({ scenarios, onScenariosChange, onNavigateTab, lineInboxContact }) => {
   const sortedScenarios = useMemo(() => sortScenarios(scenarios), [scenarios]);
@@ -530,16 +464,11 @@ export const MarketingAutomationPrototypeView: React.FC<Props> = ({ scenarios, o
     [scenarios]
   );
   const triggerLabel = useMemo(() => Object.fromEntries(triggerOptions.map((option) => [option.value, option.label])) as Record<MarketingTrigger, string>, []);
-  const supportedAutomationTriggers = new Set<MarketingTrigger>(['prospect_selected','lead_created','material_requested','outreach_first_sent','line_registered','diagnosis_invited','diagnosis_completed','meeting_completed','tag_added','booking_created','retainer_period','deal_stage_changed','deal_won','report_approved','report_sent','proposal_approved','proposal_sent','contract_sent','contract_signed','invoice_due','invoice_overdue','project_milestone']);
+  const supportedAutomationTriggers = new Set<MarketingTrigger>(['prospect_selected','lead_created','material_requested','outreach_first_sent','line_registered','diagnosis_invited','diagnosis_completed','meeting_completed','tag_added','booking_created','retainer_period','deal_stage_changed','deal_won','report_approved','report_sent','report_or_proposal_sent','proposal_approved','proposal_sent','contract_sent','contract_signed','invoice_due','invoice_overdue','project_milestone']);
 
   const duplicateCount = useMemo(() => {
-    const names = new Set<string>();
-    let dupes = 0;
-    scenarios.forEach((s) => {
-      if (names.has(s.name)) dupes++;
-      else names.add(s.name);
-    });
-    return dupes;
+    const deduped = deduplicateMarketingScenarios(scenarios);
+    return Math.max(0, scenarios.length - deduped.length);
   }, [scenarios]);
 
   const mergeStarterScenarios = (
@@ -551,18 +480,8 @@ export const MarketingAutomationPrototypeView: React.FC<Props> = ({ scenarios, o
   };
 
   const deduplicateScenarios = () => {
-    const seenNames = new Set<string>();
-    const deduplicated: MarketingScenario[] = [];
-    let removedCount = 0;
-
-    scenarios.forEach((scenario) => {
-      if (seenNames.has(scenario.name)) {
-        removedCount++;
-      } else {
-        seenNames.add(scenario.name);
-        deduplicated.push(scenario);
-      }
-    });
+    const deduplicated = deduplicateMarketingScenarios(scenarios);
+    const removedCount = Math.max(0, scenarios.length - deduplicated.length);
 
     if (removedCount === 0) {
       setNotice('重複しているシナリオはありません（すべて1本ずつ整理されています）。');
@@ -588,7 +507,7 @@ export const MarketingAutomationPrototypeView: React.FC<Props> = ({ scenarios, o
   const applyPostMeetingStarterSet = () => {
     const { merged, addedCount, updatedCount } = mergeStarterScenarios(MST_POST_MEETING_STARTER_SCENARIOS);
     onScenariosChange(merged);
-    setNotice(`面談後・レポート・提案書送付後フォロー（LINE+メール全4本）を反映しました（新規導入: ${addedCount}件、最新更新: ${updatedCount}件）。`);
+    setNotice(`面談後・ご提案書送付後フォロー（全3本・重複自動排除）を反映しました（新規導入: ${addedCount}件、最新更新: ${updatedCount}件）。`);
   };
 
   const applyOutreachStarterSet = () => {
@@ -844,7 +763,7 @@ export const MarketingAutomationPrototypeView: React.FC<Props> = ({ scenarios, o
 
       {activeTab === 'flows' && (
         <MarketingFlowStudio
-          scenarios={scenarios}
+          scenarios={sortedScenarios}
           onScenariosChange={onScenariosChange}
           onEditScenario={startEdit}
           onOpenInbox={() => onNavigateTab?.('inbox_hub')}

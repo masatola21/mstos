@@ -22,14 +22,18 @@ import {
 import { generateDocumentPdf } from './server/pdfService.js';
 import { prepareEmailPayloadContent } from './server/emailFooter.js';
 import {
+  buildCarePackageInstantReply,
   buildConsultationAdminAlertEmail,
   buildConsultationInstantReply,
+  buildDiagnosisInstantReply,
+  buildMaterialDownloadInstantReply,
   buildPublicFormAdminBackupEmail,
   classifyPublicFormNotificationKind,
   extractConsultationDetailsText,
   hasCoreDiagnosisAnswers,
 } from './server/publicFormReply.js';
 import {
+  BRANCH_EDUCATION_DELAY_DAYS,
   classifyScenarioFunnelPhase,
   isOverlappingEducationStepForBranch,
   shouldStopScenarioForDeal,
@@ -37,6 +41,7 @@ import {
 import { resolveConsultationInquiryType } from './src/utils/leadClassification.js';
 import {
   cancelSupersededQueuedJobs,
+  computeContactEducationDelayShiftDays,
   getContactBranchTags,
   hasContactAlreadyProgressedBeyondNurturing,
   isLineFriendDeliverable,
@@ -795,10 +800,17 @@ function createEmailUnsubscribeUrl(contactId: string): string {
 
 function isTransactionalOutboxEmail(row: any): boolean {
   const category = String(row.category || '').toLowerCase();
-  if (['document', 'diagnosis', 'form', 'deal'].includes(category)) return true;
+  if (['document', 'diagnosis', 'form', 'deal', 'customer_meeting'].includes(category)) return true;
   const sourceType = String(row.source_type || '').toLowerCase();
-  return ['customer_document', 'document_announcement', 'diagnosis_announcement', 'form_announcement', 'deal_invitation']
-    .some((prefix) => sourceType === prefix || sourceType.startsWith(`${prefix}_`));
+  return [
+    'customer_document',
+    'document_announcement',
+    'diagnosis_announcement',
+    'diagnosis_report',
+    'form_announcement',
+    'deal_invitation',
+    'customer_meeting_invitation',
+  ].some((prefix) => sourceType === prefix || sourceType.startsWith(`${prefix}_`));
 }
 
 export interface ResolvedEmailSender {
@@ -3038,7 +3050,14 @@ async function enqueueScenariosForContact(
   contactId: string,
   triggerName: string,
   onlyOwnerId?: string,
-  options?: { tagName?: string; preferredSendTimeOverride?: string; applyPreferredOnZeroWait?: boolean }
+  options?: {
+    tagName?: string;
+    preferredSendTimeOverride?: string;
+    applyPreferredOnZeroWait?: boolean;
+    scheduleDelayedEducationShiftDays?: number;
+    isPublicFormSubmission?: boolean;
+    skipDelayedEducationReschedule?: boolean;
+  }
 ): Promise<number> {
   if (!lineSupabase || !contactId || !triggerName) return 0;
   try {
@@ -3061,28 +3080,143 @@ async function enqueueScenariosForContact(
       .select('owner_id, scenario_id, config');
     if (scenErr || !scenarios || scenarios.length === 0) return 0;
 
-    const matchedScenarios = scenarios.filter((s: any) => {
+    // A案（長期育成型）: 分岐やWeb相談フォーム経由で教育7話をいつ開始するか（基準2日への加算日数）
+    let resolvedEducationShiftDays: number | null = null;
+    if (!options?.skipDelayedEducationReschedule) {
+      if (typeof options?.scheduleDelayedEducationShiftDays === 'number' && Number.isFinite(options.scheduleDelayedEducationShiftDays)) {
+        resolvedEducationShiftDays = Math.max(0, Math.round(options.scheduleDelayedEducationShiftDays));
+      } else if (triggerName === 'diagnosis_completed') {
+        resolvedEducationShiftDays = BRANCH_EDUCATION_DELAY_DAYS.diagnosis_completed;
+      } else if (triggerName === 'material_requested') {
+        resolvedEducationShiftDays = BRANCH_EDUCATION_DELAY_DAYS.material_requested;
+      } else if (triggerName === 'tag_added' && options?.tagName) {
+        if (options.tagName === '選択:個別相談') resolvedEducationShiftDays = BRANCH_EDUCATION_DELAY_DAYS['選択:個別相談'];
+        else if (options.tagName === '介護保険外開業') resolvedEducationShiftDays = BRANCH_EDUCATION_DELAY_DAYS['介護保険外開業'];
+        else if (options.tagName === '選択:診断') resolvedEducationShiftDays = BRANCH_EDUCATION_DELAY_DAYS['選択:診断'];
+      } else if (triggerName === 'line_registered') {
+        resolvedEducationShiftDays = await computeContactEducationDelayShiftDays(lineSupabase, contact);
+      }
+    }
+
+    const isDocSentTrigger = triggerName === 'report_sent' || triggerName === 'proposal_sent' || triggerName === 'report_or_proposal_sent';
+
+    const matchedScenarios: Array<{ row: any; isDelayedEducation: boolean; isUnifiedPostMeeting: boolean }> = [];
+    for (const s of scenarios as any[]) {
       const cfg = s.config || {};
       const isEnabled =
         cfg.automationEnabled === false
           ? false
           : (cfg.automationEnabled === true || cfg.status === 'prepared' || cfg.status === 'active');
-      if (!isEnabled || cfg.trigger !== triggerName || (onlyOwnerId && s.owner_id !== onlyOwnerId)) {
-        return false;
+      if (!isEnabled || (onlyOwnerId && s.owner_id !== onlyOwnerId)) {
+        continue;
       }
-      if (triggerName === 'tag_added' && cfg.targetTag) {
-        if (!options?.tagName) return false;
-        return String(cfg.targetTag).trim() === String(options.tagName).trim();
+
+      const phase = classifyScenarioFunnelPhase(cfg);
+      const directTriggerMatch =
+        cfg.trigger === triggerName ||
+        (isDocSentTrigger && cfg.trigger === 'report_or_proposal_sent');
+
+      if (directTriggerMatch) {
+        if (triggerName === 'tag_added' && cfg.targetTag) {
+          if (!options?.tagName || String(cfg.targetTag).trim() !== String(options.tagName).trim()) {
+            continue;
+          }
+        }
+        matchedScenarios.push({
+          row: s,
+          isDelayedEducation:
+            phase === 'education_nurturing' &&
+            resolvedEducationShiftDays !== null &&
+            resolvedEducationShiftDays > 0,
+          isUnifiedPostMeeting: cfg.trigger === 'report_or_proposal_sent',
+        });
+        continue;
       }
-      return true;
-    });
+
+      // 分岐完了・Web相談フォーム経由の連絡先には、未予約・未返信であれば教育ステップ（line_registered）を後ろ倒しで合流させる
+      if (
+        resolvedEducationShiftDays !== null &&
+        triggerName !== 'line_registered' &&
+        phase === 'education_nurturing' &&
+        cfg.trigger === 'line_registered'
+      ) {
+        matchedScenarios.push({
+          row: s,
+          isDelayedEducation: resolvedEducationShiftDays > 0,
+          isUnifiedPostMeeting: false,
+        });
+      }
+    }
 
     if (matchedScenarios.length === 0) return 0;
 
-    const needsProgressionCheck =
-      triggerName === 'line_registered' ||
-      (triggerName === 'tag_added' && options?.tagName === '選択:診断');
-    const progressionState = needsProgressionCheck
+    // Web相談フォーム経由などで手前の未送信教育ステップがあれば上書き整理してから新規投入する
+    if (
+      triggerName === 'lead_created' &&
+      options?.isPublicFormSubmission &&
+      resolvedEducationShiftDays !== null
+    ) {
+      const { data: oldEduJobs } = await lineSupabase
+        .from('marketing_automation_jobs')
+        .select('id, scenario_id')
+        .eq('contact_id', contact.id)
+        .eq('status', 'queued');
+      if (oldEduJobs && oldEduJobs.length > 0) {
+        const eduScenarioIds = new Set(
+          scenarios
+            .filter((s: any) => classifyScenarioFunnelPhase(s.config || {}) === 'education_nurturing')
+            .map((s: any) => s.scenario_id)
+        );
+        const idsToCancel = oldEduJobs.filter((j: any) => eduScenarioIds.has(j.scenario_id)).map((j: any) => j.id);
+        if (idsToCancel.length > 0) {
+          await lineSupabase
+            .from('marketing_automation_jobs')
+            .update({
+              status: 'skipped',
+              error_message: 'Webフォーム経路の長期育成スケジュールへ再配置するため旧教育予定を整理',
+              updated_at: new Date().toISOString(),
+            })
+            .in('id', idsToCancel)
+            .eq('status', 'queued');
+        }
+      }
+    }
+
+    // LINE友だち追加時に既に分岐・Webフォーム履歴がありシフトが必要な場合も、先にDBトリガーで入ったDay2予定を整理する
+    if (triggerName === 'line_registered' && resolvedEducationShiftDays && resolvedEducationShiftDays > 0) {
+      const { data: unshiftedEduJobs } = await lineSupabase
+        .from('marketing_automation_jobs')
+        .select('id, scenario_id, event_key')
+        .eq('contact_id', contact.id)
+        .eq('status', 'queued')
+        .like('event_key', 'line_registered:%');
+      if (unshiftedEduJobs && unshiftedEduJobs.length > 0) {
+        const eduScenarioIds = new Set(
+          scenarios
+            .filter((s: any) => classifyScenarioFunnelPhase(s.config || {}) === 'education_nurturing')
+            .map((s: any) => s.scenario_id)
+        );
+        const idsToCancel = unshiftedEduJobs.filter((j: any) => eduScenarioIds.has(j.scenario_id)).map((j: any) => j.id);
+        if (idsToCancel.length > 0) {
+          await lineSupabase
+            .from('marketing_automation_jobs')
+            .update({
+              status: 'skipped',
+              error_message: `既登録分岐（+${resolvedEducationShiftDays}日シフト）のため通常2日後開始を長期育成予定へ再配置`,
+              updated_at: new Date().toISOString(),
+            })
+            .in('id', idsToCancel)
+            .eq('status', 'queued');
+        }
+      }
+    }
+
+    const hasEducationCandidate = matchedScenarios.some(
+      ({ row }) =>
+        classifyScenarioFunnelPhase(row.config || {}) === 'education_nurturing' ||
+        (row.config?.trigger === 'tag_added' && row.config?.targetTag === '選択:診断')
+    );
+    const progressionState = hasEducationCandidate
       ? await hasContactAlreadyProgressedBeyondNurturing(lineSupabase, contact.id, contact.company_id)
       : { progressed: false, reason: '' };
     const activeBranchTags = await getContactBranchTags(lineSupabase, contact);
@@ -3090,11 +3224,11 @@ async function enqueueScenariosForContact(
 
     let enqueued = 0;
     const nowMs = Date.now();
-    for (const s of matchedScenarios) {
+    for (const { row: s, isDelayedEducation, isUnifiedPostMeeting } of matchedScenarios) {
       const cfg = s.config || {};
       const phase = classifyScenarioFunnelPhase(cfg);
 
-      // 既に診断済み・資料請求済み・予約済み・商談進行済みの相手には汎用教育/未回答リマインドを開始しない
+      // 既に面談予約済み・商談進行済み・成約済みの相手には汎用教育/未回答リマインドを開始しない
       if (
         progressionState.progressed &&
         (phase === 'education_nurturing' || (cfg.trigger === 'tag_added' && cfg.targetTag === '選択:診断'))
@@ -3102,9 +3236,53 @@ async function enqueueScenariosForContact(
         continue;
       }
 
-      // 分岐B/C・A1（1日後・3日後）と教育ステップ第1話（2日後）の重複を回避
-      if (isOverlappingEducationStepForBranch(cfg, activeBranchTags)) {
+      const shiftDays = phase === 'education_nurturing' ? Math.max(0, resolvedEducationShiftDays ?? 0) : 0;
+
+      // シフト無し（2日後開始）の場合のみ、既存の分岐タグ重複ガードを適用
+      if (shiftDays === 0 && isOverlappingEducationStepForBranch(cfg, activeBranchTags)) {
         continue;
+      }
+
+      // 教育ステップは既に配信済み・配信中・予約済みの話数を二重スケジュールしない
+      if (phase === 'education_nurturing') {
+        const { data: existingEdu } = await lineSupabase
+          .from('marketing_automation_jobs')
+          .select('id')
+          .eq('contact_id', contact.id)
+          .eq('scenario_id', s.scenario_id)
+          .in('status', ['queued', 'processing', 'sent'])
+          .limit(1)
+          .maybeSingle();
+        if (existingEdu) {
+          continue;
+        }
+      }
+
+      // レポート＆提案書 統合トリガーはチャネルを跨いでも14日以内の重複投入を行わない
+      if (isUnifiedPostMeeting) {
+        const fourteenDaysAgo = new Date(Date.now() - 14 * 24 * 60 * 60 * 1000).toISOString();
+        const [{ data: activePost }, { data: recentSentPost }] = await Promise.all([
+          lineSupabase
+            .from('marketing_automation_jobs')
+            .select('id')
+            .eq('contact_id', contact.id)
+            .eq('scenario_id', s.scenario_id)
+            .in('status', ['queued', 'processing'])
+            .limit(1)
+            .maybeSingle(),
+          lineSupabase
+            .from('marketing_automation_jobs')
+            .select('id')
+            .eq('contact_id', contact.id)
+            .eq('scenario_id', s.scenario_id)
+            .eq('status', 'sent')
+            .gte('created_at', fourteenDaysAgo)
+            .limit(1)
+            .maybeSingle(),
+        ]);
+        if (activePost || recentSentPost) {
+          continue;
+        }
       }
 
       // LINE優先・未連携時のみメール（二重送信しない）
@@ -3117,7 +3295,7 @@ async function enqueueScenariosForContact(
       }
       if (targetChannels.length === 0) continue;
 
-      const waitMinutes = Number(cfg.waitMinutes || 0);
+      const waitMinutes = Number(cfg.waitMinutes || 0) + shiftDays * 1440;
       const effectivePreferredTime = options?.preferredSendTimeOverride !== undefined
         ? options.preferredSendTimeOverride
         : (typeof cfg.preferredSendTime === 'string' ? cfg.preferredSendTime : '');
@@ -3214,7 +3392,11 @@ async function enqueueScenariosForContact(
           continue;
         }
 
-        const eventKey = `${triggerName}:${contact.id}:${s.scenario_id}:${ch}`;
+        const eventKey = isDelayedEducation
+          ? `education_delayed:${triggerName}:${contact.id}:${s.scenario_id}:${ch}`
+          : isUnifiedPostMeeting
+          ? `report_or_proposal_sent:${contact.id}:${s.scenario_id}:${ch}`
+          : `${triggerName}:${contact.id}:${s.scenario_id}:${ch}`;
         const consentBasis = cfg.consentBasis || (ch === 'line' ? 'LINE友だち登録時の配信同意に基づく' : '特定電子メール法に基づく業務改善情報の提供');
 
         const { error: insErr } = await lineSupabase
@@ -7058,16 +7240,20 @@ app.post('/api/communications/send', async (req, res) => {
     }
 
     // 書類送付（診断レポート・提案書・契約書）完了時に対応する自動フォローを起動
-    if (row.document_id && contact.id) {
+    const sourceTypeLower = String(row.source_type || '').toLowerCase();
+    if ((row.document_id || sourceTypeLower === 'diagnosis_report') && contact.id) {
       try {
         let resolvedDocType = sentDocumentType;
-        if (!resolvedDocType) {
+        if (!resolvedDocType && row.document_id) {
           const { data: sentDoc } = await lineSupabase
             .from('customer_documents')
             .select('document_type')
             .eq('id', row.document_id)
             .maybeSingle();
           resolvedDocType = sentDoc?.document_type || null;
+        }
+        if (!resolvedDocType && sourceTypeLower === 'diagnosis_report') {
+          resolvedDocType = 'diagnosis_report';
         }
         const docType = String(resolvedDocType || '').toLowerCase();
         if (docType === 'diagnosis_report' || docType.includes('report')) {
@@ -8110,9 +8296,15 @@ app.post(
         await enqueueScenariosForContact(contact.id, 'diagnosis_completed');
       } else if (isMaterialDownload) {
         await enqueueScenariosForContact(contact.id, 'material_requested');
-        await enqueueScenariosForContact(contact.id, 'lead_created');
+        await enqueueScenariosForContact(contact.id, 'lead_created', undefined, {
+          isPublicFormSubmission: true,
+          skipDelayedEducationReschedule: true,
+        });
       } else {
-        await enqueueScenariosForContact(contact.id, 'lead_created');
+        await enqueueScenariosForContact(contact.id, 'lead_created', undefined, {
+          isPublicFormSubmission: true,
+          scheduleDelayedEducationShiftDays: BRANCH_EDUCATION_DELAY_DAYS.public_form_consultation,
+        });
       }
     }
 
@@ -8144,10 +8336,6 @@ app.post(
 
     const quickBottleneck = isActualDiagnosis ? classifyBottleneck(cleanAnswers) : null;
 
-    const bookingPrompt = bookingReady
-      ? `\n\n▼ 30分無料オンライン商談（改善作戦会議）の日程予約はこちら\n${bookingUrl}\n\n※さらに踏み込んだ【詳細診断レポート・改善提案書】は、30分商談を実施いただいた方限定で商談後に作成・ご送付しております。`
-      : '\n\n※詳細な【個別診断レポート・改善提案書】は、商談を実施いただいた方限定で商談後に作成・ご送付しております。担当者より日程のご案内をお届けいたします。';
-
     const isConsultationInquiry = notificationKind === 'consultation_inquiry';
     const { consultationText, preferredDateText } = extractConsultationDetailsText({
       userNotes,
@@ -8163,37 +8351,34 @@ app.post(
             : 'diagnosis_submission';
 
     let customNotificationText = '';
-    let consultationReplySubject = '';
-    if (notificationKind === 'care_package') {
-      if (inquiryType === '資料請求' || inquiryType.startsWith('資料請求')) {
-        customNotificationText = `【MST】「介護保険外サービス開業パッケージ」資料請求を承りました。\n\n${name} 様\n資料請求いただき誠にありがとうございます！\n\n` +
-          (materialReady
-            ? `以下のURLより開業パッケージの概要資料をご確認いただけます。\n${effectiveMaterialUrls}\n\nご不明点や具体的な相談をご希望の場合は、いつでも本LINE／メールまでお気軽に返信してください。`
-            : `現在、最新版資料の送付準備中となっております。専任担当者より折り返しご案内をお送りいたしますので、恐れ入りますが少々お待ちくださいませ。`);
-      } else if (inquiryType === '開業相談' || inquiryType === '介護保険外開業') {
-        customNotificationText = `【MST】「介護保険外サービス開業パッケージ」開業相談のお申し込みを承りました。\n\n${name} 様\nご相談のお申し込み誠にありがとうございます！\n\n専任コンサルタントによる30分のオンライン個別面談（Zoom・無料）にて、貴社の構想に合わせた開業ステップやサービス設計をご案内いたします。` +
-          (bookingReady ? `\n\n▼ 面談日程のWeb予約はこちら\n${bookingUrl}\n\n※上記リンクよりご都合のよい日時をお選びください。` : '\n\n担当者より面談日程のご案内を折り返しお届けいたします。');
-      } else {
-        const parts = [`【MST】「介護保険外サービス開業パッケージ」資料請求・個別相談を承りました。\n\n${name} 様\nお申し込み誠にありがとうございます！`];
-        if (materialReady) {
-          parts.push(`▼ 開業パッケージ資料URL\n${effectiveMaterialUrls}`);
-        } else {
-          parts.push(`※最新版資料はただいま送付準備中となっております。準備が整い次第ご案内いたします。`);
-        }
-        if (bookingReady) {
-          parts.push(`▼ 個別相談（30分・無料）の面談日程Web予約はこちら\n${bookingUrl}\n\n※上記リンクよりご都合のよい日時をお選びください。`);
-        } else {
-          parts.push(`担当者より面談日程のご案内を折り返しお届けいたします。`);
-        }
-        customNotificationText = parts.join('\n\n');
-      }
-    } else if (notificationKind === 'material_download') {
-      // 一般資料請求のメール・LINE通知
-      const materialListText = effectiveMaterialUrls
-        ? `ご請求いただいた資料は、以下のURLより今すぐご確認・ダウンロードいただけます。\n\n${effectiveMaterialUrls}\n\n※ダウンロード期限はございませんので、いつでもお見返しいただけます。`
-        : '現在、最新版資料の送付準備中となっております。担当者より折り返しご案内をお送りいたします。';
+    let lineNotificationText = '';
+    let replyEmailSubject = '';
 
-      customNotificationText = `【MST】資料請求を受け付けました。\n\n${name} 様\nこの度は資料をご請求いただき誠にありがとうございます！\n\n${materialListText}${bookingPrompt}`;
+    if (notificationKind === 'care_package') {
+      const careReply = buildCarePackageInstantReply({
+        name,
+        inquiryType,
+        requestedMaterials: resolvedMaterials,
+        fallbackMaterialUrl,
+        bookingUrl: bookingReady ? bookingUrl : null,
+        consultationText,
+      });
+      replyEmailSubject = careReply.emailSubject;
+      customNotificationText = careReply.bodyText;
+      lineNotificationText = careReply.bodyText;
+    } else if (notificationKind === 'material_download') {
+      const fallbackChoiceLabel =
+        typeof cleanAnswers.choice_label === 'string' ? cleanAnswers.choice_label.trim() : '';
+      const materialReply = buildMaterialDownloadInstantReply({
+        name,
+        requestedMaterials: resolvedMaterials,
+        fallbackChoiceLabel,
+        fallbackMaterialUrl,
+        bookingUrl: bookingReady ? bookingUrl : null,
+      });
+      replyEmailSubject = materialReply.emailSubject;
+      customNotificationText = materialReply.bodyText;
+      lineNotificationText = materialReply.bodyText;
     } else if (notificationKind === 'consultation_inquiry') {
       const consultationReply = buildConsultationInstantReply({
         name,
@@ -8203,24 +8388,39 @@ app.post(
         preferredDateText,
         bookingUrl: bookingReady ? bookingUrl : null,
       });
-      consultationReplySubject = consultationReply.emailSubject;
+      replyEmailSubject = consultationReply.emailSubject;
       customNotificationText = consultationReply.bodyText;
+      lineNotificationText = consultationReply.bodyText;
     } else {
-      customNotificationText = `${name} 様\n\n有限会社MST代表の大橋真人です。\nこの度は「${form.name || '無料診断'}」にご回答いただき誠にありがとうございます。\n\n送信直後にホームページ画面へ表示いたしました【簡易診断結果】はご覧いただけましたでしょうか？\n■ 今回の簡易診断タイプ：${quickBottleneck?.typeTitle || '経営ボトルネック簡易診断'}\n${quickBottleneck?.firstStep ? `■ 最初に着手したい候補：${quickBottleneck.firstStep}\n` : ''}\nより詳細な【個別診断レポート】および【改善提案書】につきましては、机上の空論を避け御社の実情に合った内容でお届けするため、30分のオンライン商談を実施いただいた方限定で商談後に作成・ご送付しております。${bookingPrompt}\n\n--------------------------------------------------\n有限会社MST\n代表取締役: 大橋真人\n〒503-0981 岐阜県大垣市桧町127番地\n--------------------------------------------------`;
+      const freeNotesText =
+        typeof cleanAnswers.q_free_notes === 'string' && cleanAnswers.q_free_notes.trim()
+          ? cleanAnswers.q_free_notes.trim()
+          : '';
+      const diagnosisReply = buildDiagnosisInstantReply({
+        name,
+        formName: form.name,
+        typeTitle: quickBottleneck?.typeTitle,
+        badge: quickBottleneck?.badge,
+        summary: quickBottleneck?.summary,
+        firstStep: quickBottleneck?.firstStep,
+        freeNotes: freeNotesText,
+        bookingUrl: bookingReady ? bookingUrl : null,
+      });
+      replyEmailSubject = diagnosisReply.emailSubject;
+      customNotificationText = diagnosisReply.emailBodyText;
+      lineNotificationText = diagnosisReply.lineBodyText;
     }
 
     const sysOwnerId = lineSupabase ? await resolveSystemOwnerId((form as any)?.owner_id) : null;
     const recipientEmail = (email || contact.email || '').trim().toLowerCase();
     const shouldSendLineReply = Boolean(contact.line_user_id && lineChannelAccessToken);
-    // Web相談・お問い合わせはメール返信が必須のため、LINE連携済みの連絡先でもメール即時受付を省略しない
-    const shouldSendEmailReply = Boolean(recipientEmail) && (isConsultationInquiry || !shouldSendLineReply);
+    // Webフォーム完了画面では入力メールアドレス宛ての受付・資料・診断結果メール送信を案内しているため、メール入力時はLINE連携済みでも自動送信を省略しない
+    const shouldSendEmailReply = Boolean(recipientEmail);
     let lineAutoReplyOk = false;
 
     if (shouldSendLineReply) {
       try {
-        const lineText = isActualDiagnosis
-          ? `【MST】「${form.name || '無料診断'}」をご回答いただきありがとうございました！\n\nホームページ画面に表示された【簡易診断結果】はご覧いただけましたでしょうか？\n■ 今回の簡易診断タイプ：${quickBottleneck?.typeTitle || '経営ボトルネック簡易診断'}\n\nなお、御社の現場に合わせた【詳細診断レポート・改善提案書】は、30分オンライン商談にて直接お話を伺った方限定で、商談後に作成・ご送付しております。${bookingPrompt}\n\n※簡易診断結果について気になる点やご質問がございましたら、このままLINEにご返信ください。`
-          : customNotificationText;
+        const lineText = lineNotificationText || customNotificationText;
         const lineMsg = {
           type: 'text',
           text: lineText,
@@ -8290,14 +8490,7 @@ app.post(
         const resolvedSender = await resolveEmailSender(sysOwnerId);
         const emailFrom = (process.env.RESEND_FROM_EMAIL || resolvedSender.fromString || '').trim();
         const senderAddr = (emailFrom.match(/<([^<>]+)>/)?.[1] || resolvedSender.senderEmail || emailFrom).trim();
-        const subject =
-          notificationKind === 'care_package'
-            ? `【MST】「介護保険外サービス開業パッケージ」${inquiryType || 'お問い合わせ'}の受付完了`
-            : notificationKind === 'material_download'
-              ? '【MST】資料請求の受付完了（ダウンロードリンクのご案内）'
-              : notificationKind === 'consultation_inquiry'
-                ? consultationReplySubject
-                : `【MST】「${form.name || '無料診断'}」簡易診断結果の確認 ＆ 個別商談のご案内`;
+        const subject = replyEmailSubject;
         // 署名は送信直前に共通処理で付ける（他のメールと同じ形式。受付完了は取引メールなので配信停止リンクなし）
         const fallbackConsultationReply = !isActualDiagnosis
           ? buildConsultationInstantReply({

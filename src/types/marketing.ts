@@ -7,6 +7,7 @@ export type MarketingTrigger =
   | 'material_requested'
   | 'report_approved'
   | 'report_sent'
+  | 'report_or_proposal_sent'
   | 'meeting_completed'
   | 'tag_added'
   | 'outreach_first_sent'

@@ -56,6 +56,7 @@ export default function MaterialForm() {
           headers: { Accept: 'application/json' },
         });
         if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        const data = await res.json();
         if (!cancelled && data.success && Array.isArray(data.materials) && data.materials.length > 0) {
           const sanitizedMaterials = data.materials.map((m: MaterialItem) => ({
             ...m,

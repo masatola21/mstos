@@ -47,6 +47,7 @@ const TRIGGER_LABELS: Record<string, string> = {
   diagnosis_completed: '無料診断の回答完了時',
   material_requested: '資料請求フォーム送信時',
   meeting_completed: '面談完了時',
+  report_or_proposal_sent: 'ご提案書（診断結果含む）・レポート送付時（統合）',
   report_approved: '診断レポート承認時',
   report_sent: '診断レポート送付時',
   proposal_approved: '提案書承認時',
@@ -760,6 +761,7 @@ export const FlowStepInspectorModal: React.FC<FlowStepInspectorModalProps> = ({
                       <option value="diagnosis_completed">無料診断の回答完了時</option>
                       <option value="material_requested">資料請求フォーム送信時</option>
                       <option value="meeting_completed">面談完了時</option>
+                      <option value="report_or_proposal_sent">ご提案書（診断結果含む）・レポート送付時（統合）</option>
                       <option value="report_approved">診断レポート承認時</option>
                       <option value="report_sent">診断レポート送付時</option>
                       <option value="proposal_approved">提案書承認時</option>

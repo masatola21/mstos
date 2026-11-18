@@ -52,7 +52,9 @@ const statusLabels: Record<OutboxMessage['status'], { label: string; color: stri
 
 const sourceTypeLabels: Record<string, string> = {
   document: '重要書類送付',
+  document_announcement: '重要書類案内',
   customer_document: '重要書類送付',
+  diagnosis_report: '診断レポート送付',
   deal_invitation: '商談予約案内',
   customer_meeting_invitation: '顧客面談案内',
   marketing_broadcast: '一斉配信',

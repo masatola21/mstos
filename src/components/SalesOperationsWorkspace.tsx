@@ -618,7 +618,7 @@ export const SalesOperationsWorkspace: React.FC<Props> = ({ tab, initialOpsTab, 
 
                   <div className="flex flex-wrap items-center gap-2 text-xs text-slate-500">
                     <span className="rounded-md bg-purple-50 border border-purple-200 px-2 py-0.5 text-[10px] text-purple-700 font-semibold">
-                      {doc.document_type === 'diagnosis_report' ? '診断レポート' : doc.document_type === 'proposal' ? '提案書' : doc.document_type === 'estimate' ? '見積書' : doc.document_type === 'contract' ? '契約書' : doc.document_type === 'invoice' ? '請求書' : doc.document_type === 'monthly_report' ? '月次報告書' : doc.document_type}
+                      {doc.document_type === 'diagnosis_report' ? '診断レポート' : doc.document_type === 'proposal' ? '提案書（診断＋提案）' : doc.document_type === 'estimate' ? '見積書' : doc.document_type === 'contract' ? '契約書' : doc.document_type === 'invoice' ? '請求書' : doc.document_type === 'monthly_report' ? '月次報告書' : doc.document_type}
                     </span>
                     <span>{new Date(doc.created_at).toLocaleString('ja-JP')}</span>
                     <span>·</span>
@@ -665,7 +665,7 @@ export const SalesOperationsWorkspace: React.FC<Props> = ({ tab, initialOpsTab, 
                     <button
                       type="button"
                       onClick={async () => {
-                        if (doc.status !== 'approved') {
+                        if (!['approved', 'sent'].includes(doc.status)) {
                           await updateDocumentStatus(doc.id, 'approved');
                         }
                         onOpenInvoiceDocuments?.(doc.company_id || '', doc.id);
@@ -677,7 +677,7 @@ export const SalesOperationsWorkspace: React.FC<Props> = ({ tab, initialOpsTab, 
                       <Send className="h-3.5 w-3.5" />
                       <span>送信ドロワーで送る</span>
                     </button>
-                    {doc.status !== 'approved' && (
+                    {['draft', 'awaiting_approval'].includes(doc.status) && (
                       <span className="text-[11px] text-amber-700 font-medium">
                         ※ クリックすると承認状態に更新して送信ドロワーを開きます
                       </span>
