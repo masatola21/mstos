@@ -136,7 +136,7 @@ export function formatPlainBodyAsEmailHtml(text: string): string {
   return blocks
     .map((block) => {
       const lines = block.split('\n').map(formatPlainLineWithLinks).join('<br />');
-      return `<p style="margin:0 0 14px 0;line-height:1.75;color:#1e293b;">${lines}</p>`;
+      return `<p style="margin:0 0 14px 0;line-height:1.75;color:#1e293b;text-align:left;">${lines}</p>`;
     })
     .join('\n');
 }
@@ -224,12 +224,16 @@ export function prepareEmailPayloadContent(
     '  <meta charset="UTF-8" />',
     '  <meta name="viewport" content="width=device-width,initial-scale=1.0" />',
     '</head>',
-    '<body style="margin:0;padding:0;background-color:#ffffff;font-family:-apple-system,BlinkMacSystemFont,\'Hiragino Sans\',\'Hiragino Kaku Gothic ProN\',\'Yu Gothic\',Meiryo,sans-serif;color:#1e293b;font-size:14px;line-height:1.75;">',
-    '  <div style="max-width:680px;margin:0;padding:12px 0 20px 0;">',
+    '<body style="margin:0;padding:0;background-color:#ffffff;font-family:-apple-system,BlinkMacSystemFont,\'Hiragino Sans\',\'Hiragino Kaku Gothic ProN\',\'Yu Gothic\',Meiryo,sans-serif;color:#1e293b;font-size:14px;line-height:1.75;text-align:left;">',
+    '  <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" align="left" style="margin:0;padding:0;border-collapse:collapse;text-align:left;max-width:680px;">',
+    '    <tr>',
+    '      <td align="left" style="margin:0;padding:12px 0 20px 0;text-align:left;font-family:-apple-system,BlinkMacSystemFont,\'Hiragino Sans\',\'Hiragino Kaku Gothic ProN\',\'Yu Gothic\',Meiryo,sans-serif;color:#1e293b;font-size:14px;line-height:1.75;">',
     bodyHtml,
     signatureHtml,
     unsubscribeHtml,
-    '  </div>',
+    '      </td>',
+    '    </tr>',
+    '  </table>',
     '</body>',
     '</html>',
   ]

@@ -57,6 +57,8 @@ const labels: Record<Kind, string> = {
   freeform: '自由作成（白紙から入力）',
 };
 
+const DEFAULT_TIMEREX_URL = 'https://timerex.net/s/mst.shikumikaizen_b173/4ac78e37';
+
 const documentCategory = (doc: any): DocumentType => {
   if (!doc || typeof doc !== 'object') return 'other';
   if (doc.document_type === 'proposal' && /見積/.test(doc.title || '')) return 'estimate';
@@ -279,7 +281,7 @@ export const CommunicationSendCenter: React.FC<Props> = ({
   const userInteractedDocumentRef = useRef(false);
   const [docId, setDocId] = useState(initialDocumentId || '');
   const [formId, setFormId] = useState(initialFormId || '');
-  const [url, setUrl] = useState('');
+  const [url, setUrl] = useState(() => (initialKind === 'deal' || initialKind === 'customer_meeting' ? DEFAULT_TIMEREX_URL : ''));
   const [subject, setSubject] = useState(initialSubject || '');
   const [body, setBody] = useState(initialBody || '');
   const hasCustomInitialContentRef = useRef(Boolean(initialSubject || initialBody));
@@ -383,11 +385,22 @@ export const CommunicationSendCenter: React.FC<Props> = ({
     setBody(item.reply_type === 'text' ? String(payload.text || '') : '');
   };
 
+  const handleKindChange = (newKind: Kind) => {
+    setKind(newKind);
+    if (newKind === 'deal' || newKind === 'customer_meeting') {
+      if (!url || url === DEFAULT_TIMEREX_URL || (bookingUrl && url === bookingUrl)) {
+        setUrl(bookingUrl || DEFAULT_TIMEREX_URL);
+      }
+    } else if ((kind === 'deal' || kind === 'customer_meeting') && (url === DEFAULT_TIMEREX_URL || (bookingUrl && url === bookingUrl))) {
+      setUrl('');
+    }
+  };
+
   const currentLinkUrl =
     (kind === 'form' || kind === 'diagnosis') && form
       ? window.location.origin + '/f/' + encodeURIComponent(form.public_slug) + (contact ? `?cid=${encodeURIComponent(contact.id)}` + (contact.line_user_id ? `&luid=${encodeURIComponent(contact.line_user_id)}` : '') : '')
       : kind === 'deal' || kind === 'customer_meeting'
-      ? url.trim() || bookingUrl
+      ? url.trim() || bookingUrl || DEFAULT_TIMEREX_URL
       : url.trim();
 
   const vals: Record<string, string> = {
@@ -399,7 +412,7 @@ export const CommunicationSendCenter: React.FC<Props> = ({
     書類名: doc?.title || '書類',
     書類URL: url.trim() || (doc ? window.location.origin + '/docs/' + encodeURIComponent(doc.id) : ''),
     書類本文: '',
-    面談予約URL: bookingUrl || '',
+    面談予約URL: bookingUrl || DEFAULT_TIMEREX_URL,
     案内URL: currentLinkUrl,
 
     // 英語キー互換
@@ -410,7 +423,7 @@ export const CommunicationSendCenter: React.FC<Props> = ({
     document_title: doc?.title || '書類',
     document_url: url.trim() || (doc ? window.location.origin + '/docs/' + encodeURIComponent(doc.id) : ''),
     document_content: '',
-    booking_url: bookingUrl || '',
+    booking_url: bookingUrl || DEFAULT_TIMEREX_URL,
     link_url: currentLinkUrl,
   };
 
@@ -480,7 +493,11 @@ export const CommunicationSendCenter: React.FC<Props> = ({
         if (settings.error) throw settings.error;
         if (emailSettings.error) throw emailSettings.error;
         setForms(f.data || []);
+        const fetchedBookingUrl = settings.data?.booking_page_url || DEFAULT_TIMEREX_URL;
         setBookingUrl(settings.data?.booking_page_url || '');
+        if ((kind === 'deal' || kind === 'customer_meeting') && (!url || url === DEFAULT_TIMEREX_URL)) {
+          setUrl(fetchedBookingUrl);
+        }
         try {
           const savedVt = localStorage.getItem('mst_video_tool');
           if (savedVt === 'zoom' || savedVt === 'google_meet') {
@@ -1059,7 +1076,7 @@ export const CommunicationSendCenter: React.FC<Props> = ({
                       送信内容
                       <select
                         value={kind}
-                        onChange={(e) => setKind(e.target.value as Kind)}
+                        onChange={(e) => handleKindChange(e.target.value as Kind)}
                         className="mt-1 block w-full rounded-xl border border-slate-200 bg-white p-2.5 text-xs text-slate-900 focus:border-purple-600 focus:outline-none shadow-2xs"
                       >
                         {Object.entries(labels).map(([k, v]) => (
@@ -1265,7 +1282,7 @@ export const CommunicationSendCenter: React.FC<Props> = ({
                       </label>
                     )}
                     <label className="md:col-span-2 text-xs font-semibold text-slate-700">
-                      {kind === 'document' ? '共有可能な書類URL' : kind === 'deal' || kind === 'customer_meeting' ? 'この案内専用URL（空欄なら共通予約URL）' : 'フォーム・案内URL'}
+                      {kind === 'document' ? '共有可能な書類URL' : kind === 'deal' || kind === 'customer_meeting' ? '面談案内URL（TimeRex予約URL）' : 'フォーム・案内URL'}
                       <input value={url} onChange={(e) => setUrl(e.target.value)} className="mt-1 block w-full rounded-xl border border-slate-200 bg-white p-2.5 text-xs text-slate-900 focus:border-purple-600 focus:outline-none shadow-2xs" placeholder="https://..." />
                     </label>
 
@@ -1562,7 +1579,7 @@ export const CommunicationSendCenter: React.FC<Props> = ({
                 送信内容
                 <select
                   value={kind}
-                  onChange={(e) => setKind(e.target.value as Kind)}
+                  onChange={(e) => handleKindChange(e.target.value as Kind)}
                   className="mt-1 block w-full rounded-xl border border-slate-200 bg-white p-2.5 text-xs text-slate-900 focus:border-purple-600 focus:outline-none shadow-2xs"
                 >
                   {Object.entries(labels).map(([k, v]) => (
@@ -1792,7 +1809,7 @@ export const CommunicationSendCenter: React.FC<Props> = ({
               )}
 
               <label className="md:col-span-2 text-xs font-semibold text-slate-700">
-                {kind === 'document' ? '共有可能な書類URL' : kind === 'deal' || kind === 'customer_meeting' ? 'この案内専用URL（空欄なら共通予約URL）' : 'フォーム・案内URL'}
+                {kind === 'document' ? '共有可能な書類URL' : kind === 'deal' || kind === 'customer_meeting' ? '面談案内URL（TimeRex予約URL）' : 'フォーム・案内URL'}
                 <input value={url} onChange={(e) => setUrl(e.target.value)} className="mt-1 block w-full rounded-xl border border-slate-200 bg-white p-2.5 text-xs text-slate-900 focus:border-purple-600 focus:outline-none shadow-2xs" placeholder="https://..." />
               </label>
 
