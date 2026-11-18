@@ -78,6 +78,22 @@ const PROGRESS_LABELS: Record<NonNullable<SupportDetails['progressStatus']>, str
 const TASK_STATUS_LABELS: Record<TaskItem['status'], string> = {
   waiting: '未着手', in_progress: '進行中', pending_approval: '確認待ち', completed: '完了', blocked: '保留',
 };
+const INVOICE_STATUS_LABELS: Record<string, { label: string; badge: string }> = {
+  draft: { label: '下書き', badge: 'bg-slate-100 text-slate-700 border-slate-200' },
+  awaiting_approval: { label: '承認待ち', badge: 'bg-amber-50 text-amber-800 border-amber-200' },
+  issued: { label: '発行済（入金待ち）', badge: 'bg-blue-50 text-blue-800 border-blue-200' },
+  paid: { label: '入金完了', badge: 'bg-emerald-50 text-emerald-800 border-emerald-200' },
+  overdue: { label: '期限超過', badge: 'bg-rose-50 text-rose-800 border-rose-200' },
+  canceled: { label: '取消', badge: 'bg-slate-100 text-slate-500 border-slate-200' },
+};
+const CONTRACT_STATUS_LABELS: Record<string, { label: string; badge: string }> = {
+  draft: { label: '下書き', badge: 'bg-slate-100 text-slate-700 border-slate-200' },
+  under_review: { label: '社内確認中', badge: 'bg-amber-50 text-amber-800 border-amber-200' },
+  sent: { label: '送付済', badge: 'bg-blue-50 text-blue-800 border-blue-200' },
+  signed: { label: '締結済', badge: 'bg-emerald-50 text-emerald-800 border-emerald-200' },
+  expired: { label: '期限切れ', badge: 'bg-slate-100 text-slate-500 border-slate-200' },
+  canceled: { label: '取消', badge: 'bg-slate-100 text-slate-500 border-slate-200' },
+};
 const asDateTimeLocal = (value?: string | null) => {
   if (!value) return '';
   const date = new Date(value);
@@ -594,8 +610,39 @@ export const CustomerSupportWorkspace: React.FC<Props> = ({
             const lateMilestone = Array.isArray(item.milestone_data) && item.milestone_data.some((milestone: Row) => milestone.due_date && milestone.due_date < new Date().toISOString().slice(0, 10) && milestone.status !== 'completed');
             const lateMeeting = item.next_meeting_at && new Date(item.next_meeting_at).getTime() < Date.now();
             const warning = overdue || lateMilestone || lateMeeting || item.status === 'paused' || itemDetail.progressStatus === 'delayed' || itemDetail.progressStatus === 'at_risk';
+            const linkedContract = item.contract_id
+              ? serviceContracts.find((c) => c.id === item.contract_id)
+              : serviceContracts.find((c) => c.company_id === item.company_id);
+            const linkedInvs = invoices.filter((inv) => inv.companyId === item.company_id);
+            const hasOverdueInv = linkedInvs.some((inv) => inv.status === 'overdue');
+            const hasPendingInv = linkedInvs.some((inv) => inv.status === 'issued' || (inv.status as string) === 'awaiting_approval');
+            const isAllPaid = linkedInvs.length > 0 && linkedInvs.every((inv) => inv.status === 'paid');
+
             return <li key={item.id} className="flex items-stretch gap-2"><button type="button" onClick={() => { setSelectedId(item.id); setActiveSection('overview'); setNotice(''); setError(''); }} className={'min-w-0 flex-1 rounded-xl border p-3 text-left transition-all cursor-pointer ' + (selected?.id === item.id ? 'border-purple-600 bg-purple-50/70 shadow-2xs' : 'border-slate-200 bg-white hover:border-purple-200')}>
-              <div className="flex items-start justify-between gap-2"><span className="font-bold text-xs text-slate-900">{companyName(item.company_id)}</span>{warning && <AlertTriangle className="h-4 w-4 shrink-0 text-amber-500" />}</div>
+              <div className="flex items-start justify-between gap-2">
+                <span className="font-bold text-xs text-slate-900">{companyName(item.company_id)}</span>
+                <div className="flex items-center gap-1 shrink-0">
+                  {linkedContract && (
+                    <span className={`px-1.5 py-0.2 rounded text-[9px] font-bold border ${CONTRACT_STATUS_LABELS[linkedContract.status]?.badge || 'bg-slate-100 text-slate-700'}`}>
+                      契約: {CONTRACT_STATUS_LABELS[linkedContract.status]?.label || linkedContract.status}
+                    </span>
+                  )}
+                  {linkedInvs.length > 0 && (
+                    <span className={`px-1.5 py-0.2 rounded text-[9px] font-bold border ${
+                      hasOverdueInv
+                        ? 'bg-rose-50 text-rose-800 border-rose-200'
+                        : isAllPaid
+                          ? 'bg-emerald-50 text-emerald-800 border-emerald-200'
+                          : hasPendingInv
+                            ? 'bg-blue-50 text-blue-800 border-blue-200'
+                            : 'bg-slate-100 text-slate-700 border-slate-200'
+                    }`}>
+                      {hasOverdueInv ? '請求超過' : isAllPaid ? '入金完了' : hasPendingInv ? '請求中' : '請求下書き'}
+                    </span>
+                  )}
+                  {warning && <AlertTriangle className="h-4 w-4 shrink-0 text-amber-500" />}
+                </div>
+              </div>
               <div className="mt-1 text-xs font-medium text-slate-700">{item.title}</div>
               <div className="mt-2 flex flex-wrap gap-x-3 gap-y-1 text-[11px] text-slate-500"><span>{SERVICE_TYPE_LABELS[item.service_type] || '支援'}</span><span>{itemDetail.currentTheme || 'テーマ未設定'}</span><span>次回 {displayDate(item.next_meeting_at)}</span><span>未完了 {open.length}件</span><span>{PROGRESS_LABELS[itemDetail.progressStatus || 'not_started']}</span></div>
               {warning && <div className="mt-2 text-[11px] text-amber-700 font-semibold">{overdue ? '期限超過タスクあり' : lateMilestone ? '期限超過マイルストーンあり' : lateMeeting ? '次回予定日を過ぎています' : itemDetail.progressStatus === 'delayed' ? '進捗遅延' : itemDetail.progressStatus === 'at_risk' ? '支援上の確認が必要です' : '支援が保留中です'}</div>}
@@ -829,8 +876,85 @@ export const CustomerSupportWorkspace: React.FC<Props> = ({
             })}</ul>}
           </section>
           <div className="grid gap-4 md:grid-cols-2">
-            <section className="rounded-2xl border border-slate-200 bg-white p-4 shadow-2xs"><h4 className="mb-2 font-bold text-slate-900 text-sm">契約情報</h4>{activeContract ? <div className="space-y-1 text-xs text-slate-700"><div className="font-semibold text-slate-900">{activeContract.title} · {activeContract.status}</div><div>{activeContract.start_date || '開始日未設定'} ～ {activeContract.end_date || '終了日未設定'}</div><div>税抜 ¥{Number(activeContract.amount || 0).toLocaleString('ja-JP')} <span className="text-[11px] text-purple-700 font-semibold">（税込 ¥{Math.floor(Number(activeContract.amount || 0) * 1.1).toLocaleString('ja-JP')}）</span></div></div> : <p className="text-xs text-slate-400">関連契約はありません。</p>}</section>
-            <section className="rounded-2xl border border-slate-200 bg-white p-4 shadow-2xs"><h4 className="mb-2 font-bold text-slate-900 text-sm">請求情報 ({companyInvoices.length})</h4>{companyInvoices.length ? <ul className="space-y-1 text-xs text-slate-700">{companyInvoices.map((invoice) => <li key={invoice.id}>{invoice.title} · {invoice.status} · 税抜 ¥{Number(invoice.amount || 0).toLocaleString('ja-JP')} <span className="text-[11px] text-purple-700 font-semibold">（税込 ¥{Math.floor(Number(invoice.amount || 0) * 1.1).toLocaleString('ja-JP')}）</span> · 期限 {invoice.dueDate || '未設定'}</li>)}</ul> : <p className="text-xs text-slate-400">請求はありません。</p>}</section>
+            <section className="rounded-2xl border border-slate-200 bg-white p-4 shadow-2xs">
+              <h4 className="mb-2 font-bold text-slate-900 text-sm flex items-center justify-between">
+                <span>契約情報</span>
+                {activeContract && (
+                  <span className={`px-2 py-0.5 rounded text-[10px] font-bold border ${CONTRACT_STATUS_LABELS[activeContract.status]?.badge || 'bg-slate-100 text-slate-700'}`}>
+                    {CONTRACT_STATUS_LABELS[activeContract.status]?.label || activeContract.status}
+                  </span>
+                )}
+              </h4>
+              {activeContract ? (
+                <div className="space-y-1.5 text-xs text-slate-700">
+                  <div className="font-bold text-slate-900">{activeContract.title}</div>
+                  <div className="text-slate-500 text-[11px]">
+                    期間: {activeContract.start_date || '開始日未設定'} ～ {activeContract.end_date || '継続（自動更新）'}
+                  </div>
+                  <div>
+                    税抜 ¥{Number(activeContract.amount || 0).toLocaleString('ja-JP')}
+                    <span className="text-[11px] text-purple-700 font-semibold ml-1.5">
+                      （税込 ¥{Math.floor(Number(activeContract.amount || 0) * 1.1).toLocaleString('ja-JP')}）
+                    </span>
+                  </div>
+                </div>
+              ) : (
+                <p className="text-xs text-slate-400">関連契約はありません。</p>
+              )}
+            </section>
+
+            <section className="rounded-2xl border border-slate-200 bg-white p-4 shadow-2xs">
+              <h4 className="mb-2 font-bold text-slate-900 text-sm flex items-center justify-between">
+                <span>請求情報 ({companyInvoices.length}件)</span>
+                {companyInvoices.length > 0 && (
+                  <span className="text-[11px] text-slate-500 font-normal">
+                    {companyInvoices.filter((i) => i.status === 'paid').length}件 入金済
+                  </span>
+                )}
+              </h4>
+              {companyInvoices.length ? (
+                <ul className="divide-y divide-slate-100 text-xs">
+                  {companyInvoices.map((invoice) => {
+                    const statusInfo = INVOICE_STATUS_LABELS[invoice.status] || {
+                      label: invoice.status,
+                      badge: 'bg-slate-100 text-slate-700 border-slate-200',
+                    };
+                    const isRec = invoice.title?.includes('定期') || invoice.title?.includes('月分') || invoice.title?.includes('顧問');
+                    const isInit = invoice.title?.includes('初回') || invoice.title?.includes('着手金');
+                    const typeLabel = isInit ? '初回' : isRec ? '定期' : '単発';
+
+                    return (
+                      <li key={invoice.id} className="py-2 flex items-start justify-between gap-2">
+                        <div className="min-w-0 flex-1">
+                          <div className="flex items-center gap-1.5">
+                            <span className="rounded bg-slate-100 text-slate-600 px-1 py-0.2 text-[9px] font-bold border border-slate-200">
+                              {typeLabel}
+                            </span>
+                            <span className="font-semibold text-slate-900 truncate">
+                              {invoice.title}
+                            </span>
+                          </div>
+                          <div className="text-[11px] text-slate-500 mt-0.5">
+                            期日: {invoice.dueDate || '未設定'}
+                          </div>
+                        </div>
+                        <div className="text-right shrink-0">
+                          <span className={`inline-block px-1.5 py-0.2 rounded text-[9px] font-bold border mb-1 ${statusInfo.badge}`}>
+                            {statusInfo.label}
+                          </span>
+                          <div className="font-bold text-slate-900 text-xs">
+                            ¥{Math.floor(Number(invoice.amount || 0) * 1.1).toLocaleString('ja-JP')}
+                            <span className="text-[9px] text-slate-400 font-normal"> (税込)</span>
+                          </div>
+                        </div>
+                      </li>
+                    );
+                  })}
+                </ul>
+              ) : (
+                <p className="text-xs text-slate-400">請求はありません。</p>
+              )}
+            </section>
           </div>
         </div>}
       </section> : <section className="rounded-2xl border border-slate-200 bg-white p-8 text-center text-xs text-slate-400">顧客支援を登録すると、ここに現在の状況と次の対応を表示します。</section>}

@@ -126,6 +126,9 @@ export const SalesOperationsWorkspace: React.FC<Props> = ({ tab, initialOpsTab, 
   const [recordAmount, setRecordAmount] = useState('');
   const [recordDate, setRecordDate] = useState('');
   const [serviceType, setServiceType] = useState<'retainer'|'implementation_support'>('retainer');
+  const [recordBillingType, setRecordBillingType] = useState<'recurring'|'initial'|'one_time'>('recurring');
+  const [contractType, setContractType] = useState<'service_agreement'|'retainer'|'nda'|'other'>('service_agreement');
+  const [creatingDocumentId, setCreatingDocumentId] = useState<string | null>(null);
   const [milestoneDrafts, setMilestoneDrafts] = useState<Record<string, string>>({});
   const [previewSegmentId, setPreviewSegmentId] = useState('');
   const [previewRows, setPreviewRows] = useState<RecordRow[]>([]);
@@ -238,13 +241,14 @@ export const SalesOperationsWorkspace: React.FC<Props> = ({ tab, initialOpsTab, 
       } else {
         let recordsQuery = supabase.from(selectedOps.table).select('*').order('created_at', { ascending: false });
         if (companyId) recordsQuery = recordsQuery.eq('company_id', companyId);
-        const [recordsResult, companyResult, contractsResult, invoicesResult, productsResult, dealsResult] = await Promise.all([
+        const [recordsResult, companyResult, contractsResult, invoicesResult, productsResult, dealsResult, documentsResult] = await Promise.all([
           recordsQuery,
           supabase.from('companies').select('id,company_name').order('company_name'),
           supabase.from('customer_contracts').select('*').order('created_at', { ascending: false }),
           supabase.from('customer_invoices').select('*').order('created_at', { ascending: false }),
           supabase.from('products').select('id,product_name,product_type,status').order('product_name'),
-          supabase.from('deals').select('id,company_id,product_id,proposal_plan_name,total_amount,proposal_status').order('created_at', { ascending: false }),
+          supabase.from('deals').select('id,company_id,product_id,deal_name,proposal_plan_name,total_amount,proposal_status').order('created_at', { ascending: false }),
+          supabase.from('customer_documents').select('id,title,document_type,status,company_id,deal_id,lead_id,created_at,updated_at').order('created_at', { ascending: false }).limit(200),
         ]);
         if (recordsResult.error) throw recordsResult.error;
         if (companyResult.error) throw companyResult.error;
@@ -254,6 +258,7 @@ export const SalesOperationsWorkspace: React.FC<Props> = ({ tab, initialOpsTab, 
         if (dealsResult.error) throw dealsResult.error;
         setRecords(recordsResult.data || []); setCompanies(companyResult.data || []);
         setCatalogProducts(productsResult.data || []); setDeals(dealsResult.data || []); setSavedContracts(contractsResult.data || []);
+        setDocuments(documentsResult.data || []);
         const asTime = (value:string|null|undefined) => value ? (Date.parse(value)||Date.now()) : Date.now();
         onOperationalRecordsChange?.(
           (contractsResult.data||[]).map((row:any)=>({id:row.legacy_id||row.id,title:row.title,type:row.contract_type,productId:row.product_id||undefined,companyId:row.company_id||undefined,counterpartyName:row.counterparty_name||'',status:row.status,startDate:row.start_date||undefined,endDate:row.end_date||undefined,amount:Number(row.amount||0),notes:row.notes||undefined,createdAt:asTime(row.created_at),updatedAt:asTime(row.updated_at)})) as ManagedContract[],
@@ -482,6 +487,149 @@ export const SalesOperationsWorkspace: React.FC<Props> = ({ tab, initialOpsTab, 
     setPreviewRows((data||[]).filter((row:RecordRow)=>String(row[field]??'').toLowerCase().includes(value)));
   };
 
+  const generateInvoiceDocumentRecord = async (params: {
+    companyId: string;
+    recipientName: string;
+    title: string;
+    invoiceNumber: string;
+    amount: number;
+    issueDate?: string;
+    dueDate?: string;
+    dealId?: string;
+    billingType?: string;
+  }) => {
+    const supabase = getSupabase();
+    if (!supabase || !params.companyId) return null;
+    const taxAmount = Math.floor(params.amount * 0.1);
+    const totalAmount = params.amount + taxAmount;
+    const billingTypeLabel =
+      params.billingType === 'initial'
+        ? '初回着手金・初期導入費用'
+        : params.billingType === 'one_time'
+          ? '単発スポット・構築支援費用'
+          : '定期顧問料';
+
+    const invoiceHtml = `
+      <div style="font-family: sans-serif; max-width: 700px; margin: 0 auto; padding: 20px; color: #1e293b;">
+        <div style="text-align: right; font-size: 13px; color: #64748b; margin-bottom: 16px;">
+          請求番号: ${params.invoiceNumber}<br>
+          発行日: ${params.issueDate || localDateString()}
+        </div>
+        <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 24px;">
+          <div>
+            <h2 style="font-size: 18px; font-weight: bold; margin: 0 0 4px 0; border-bottom: 2px solid #334155; padding-bottom: 4px;">
+              ${params.recipientName || 'お客様'} 御中
+            </h2>
+            <p style="font-size: 13px; color: #64748b; margin: 4px 0 0 0;">下記の通りご請求申し上げます。</p>
+          </div>
+          <div style="text-align: right; font-size: 12px; line-height: 1.6;">
+            <strong>有限会社MST</strong><br>
+            〒238-0014 神奈川県横須賀市三春町3-8<br>
+            代表取締役 大橋真人
+          </div>
+        </div>
+        <div style="background-color: #f8fafc; border: 1px solid #cbd5e1; border-radius: 8px; padding: 16px; margin-bottom: 24px; text-align: center;">
+          <span style="font-size: 14px; color: #64748b;">ご請求金額（税込）</span>
+          <div style="font-size: 28px; font-weight: bold; color: #6b21a8; margin-top: 4px;">
+            ¥${totalAmount.toLocaleString('ja-JP')}
+          </div>
+          <div style="font-size: 12px; color: #64748b; margin-top: 4px;">
+            お支払期日: ${params.dueDate || '翌月末日'}
+          </div>
+        </div>
+        <table style="width: 100%; border-collapse: collapse; margin-bottom: 24px; font-size: 13px;">
+          <thead>
+            <tr style="border-bottom: 2px solid #cbd5e1; background-color: #f1f5f9;">
+              <th style="padding: 10px; text-align: left;">品名・項目</th>
+              <th style="padding: 10px; text-align: center; width: 60px;">数量</th>
+              <th style="padding: 10px; text-align: right; width: 100px;">単価（税抜）</th>
+              <th style="padding: 10px; text-align: right; width: 120px;">金額（税抜）</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr style="border-bottom: 1px solid #e2e8f0;">
+              <td style="padding: 12px 10px;">
+                <strong>${params.title}</strong>
+                <div style="font-size: 11px; color: #64748b; margin-top: 2px;">区分: ${billingTypeLabel}</div>
+              </td>
+              <td style="padding: 12px 10px; text-align: center;">1</td>
+              <td style="padding: 12px 10px; text-align: right;">¥${params.amount.toLocaleString('ja-JP')}</td>
+              <td style="padding: 12px 10px; text-align: right;">¥${params.amount.toLocaleString('ja-JP')}</td>
+            </tr>
+          </tbody>
+          <tfoot>
+            <tr style="border-top: 1px solid #cbd5e1;">
+              <td colspan="3" style="padding: 8px 10px; text-align: right; color: #64748b;">小計 (税抜):</td>
+              <td style="padding: 8px 10px; text-align: right; font-weight: bold;">¥${params.amount.toLocaleString('ja-JP')}</td>
+            </tr>
+            <tr>
+              <td colspan="3" style="padding: 8px 10px; text-align: right; color: #64748b;">消費税 (10%):</td>
+              <td style="padding: 8px 10px; text-align: right; font-weight: bold;">¥${taxAmount.toLocaleString('ja-JP')}</td>
+            </tr>
+            <tr style="font-size: 15px; background-color: #f8fafc;">
+              <td colspan="3" style="padding: 10px; text-align: right; font-weight: bold;">合計金額 (税込):</td>
+              <td style="padding: 10px; text-align: right; font-weight: bold; color: #6b21a8;">¥${totalAmount.toLocaleString('ja-JP')}</td>
+            </tr>
+          </tfoot>
+        </table>
+        <div style="background-color: #f5f3ff; border: 1px solid #ddd6fe; border-radius: 8px; padding: 14px; font-size: 12px; line-height: 1.7; color: #4c1d95;">
+          <strong>【お振込先口座】</strong><br>
+          ドコモSMTBネット銀行 法人第一支店 普通 2223730<br>
+          口座名義: 有限会社MST<br>
+          ※ お振込手数料は貴社にてご負担願います。
+        </div>
+      </div>
+    `;
+
+    const { data: docData, error: docError } = await supabase
+      .from('customer_documents')
+      .insert({
+        title: `${params.title} (${params.invoiceNumber})`,
+        document_type: 'invoice',
+        body_html: invoiceHtml,
+        company_id: params.companyId,
+        deal_id: params.dealId || null,
+        status: 'draft',
+      })
+      .select('id')
+      .single();
+
+    if (docError) throw docError;
+    return docData?.id || null;
+  };
+
+  const createInvoiceDocumentForRecord = async (record: RecordRow) => {
+    setCreatingDocumentId(record.id);
+    setError('');
+    setNotice('');
+    try {
+      const docId = await generateInvoiceDocumentRecord({
+        companyId: record.company_id,
+        recipientName: record.recipient_name || companies.find((c) => c.id === record.company_id)?.company_name || 'お客様',
+        title: record.title || 'ご請求書',
+        invoiceNumber: record.invoice_number || `INV-${localDateString().replaceAll('-', '')}`,
+        amount: Number(record.amount) || 0,
+        issueDate: record.issue_date,
+        dueDate: record.due_date,
+        dealId: record.deal_id,
+        billingType: record.payload?.billing_type,
+      });
+
+      if (docId) {
+        const supabase = getSupabase();
+        if (supabase) {
+          await supabase.from('customer_invoices').update({ document_id: docId }).eq('id', record.id);
+        }
+        setNotice(`請求書「${record.title}」の書類を作成しました。「送信ドロワーで送る」から送付可能です。`);
+        await load();
+      }
+    } catch (err: any) {
+      setError(err?.message || '請求書類の作成に失敗しました。');
+    } finally {
+      setCreatingDocumentId(null);
+    }
+  };
+
   const createOperation = async (event: React.FormEvent) => {
     event.preventDefault();
     const supabase = getSupabase();
@@ -490,22 +638,51 @@ export const SalesOperationsWorkspace: React.FC<Props> = ({ tab, initialOpsTab, 
     const selectedContract = savedContracts.find((contract) => contract.id === recordContractId);
     const operationCompanyId = companyId || recordCompany || selectedDeal?.company_id || selectedContract?.company_id;
     const operationProductId = activeOpsTab === 'invoices' ? (selectedContract?.product_id || recordProductId) : recordProductId;
+    const recipientName = companies.find((company) => company.id === operationCompanyId)?.company_name || null;
     const payload: RecordRow = { title: recordTitle.trim(), company_id: operationCompanyId || null, product_id: operationProductId || null };
+
     if (activeOpsTab === 'contracts') {
       payload.amount = Number(recordAmount) || 0;
-      payload.counterparty_name = companies.find((company)=>company.id===operationCompanyId)?.company_name || null;
+      payload.counterparty_name = recipientName;
       payload.start_date = recordDate || null;
       payload.status = 'draft';
-      payload.contract_type = 'service_agreement';
+      payload.contract_type = contractType || 'service_agreement';
       payload.deal_id = recordDealId || null;
     } else if (activeOpsTab === 'invoices') {
-      payload.invoice_number = `INV-${localDateString().replaceAll('-', '')}-${crypto.randomUUID().slice(0, 6).toUpperCase()}`;
+      const invNumber = `INV-${localDateString().replaceAll('-', '')}-${crypto.randomUUID().slice(0, 6).toUpperCase()}`;
+      payload.invoice_number = invNumber;
       payload.amount = Number(recordAmount) || 0;
-      payload.recipient_name = companies.find((company)=>company.id===operationCompanyId)?.company_name || null;
+      payload.recipient_name = recipientName;
       payload.due_date = recordDate || null;
       payload.issue_date = localDateString();
       payload.contract_id = recordContractId || null;
       payload.status = 'draft';
+      payload.payload = {
+        billing_type: recordBillingType,
+        deal_id: recordDealId || selectedContract?.deal_id || null,
+      };
+
+      // 自動で customer_documents に請求書ドラフトを起票して連携
+      if (operationCompanyId) {
+        try {
+          const docId = await generateInvoiceDocumentRecord({
+            companyId: operationCompanyId,
+            recipientName: recipientName || 'お客様',
+            title: recordTitle.trim(),
+            invoiceNumber: invNumber,
+            amount: Number(recordAmount) || 0,
+            issueDate: payload.issue_date,
+            dueDate: payload.due_date,
+            dealId: recordDealId || selectedContract?.deal_id || undefined,
+            billingType: recordBillingType,
+          });
+          if (docId) {
+            payload.document_id = docId;
+          }
+        } catch (docErr) {
+          console.warn('Document draft auto-generation skipped:', docErr);
+        }
+      }
     } else {
       payload.service_type = serviceType;
       payload.status = 'planned';
@@ -515,7 +692,7 @@ export const SalesOperationsWorkspace: React.FC<Props> = ({ tab, initialOpsTab, 
     if (insertError) { setError(insertError.message); return; }
     setRecordTitle(''); setRecordCompany(''); setRecordAmount(''); setRecordDate('');
     setRecordProductId(''); setRecordDealId(''); setRecordContractId('');
-    setFormOpen(false); setNotice('記録を追加しました。送信・外部連携は承認と接続設定後に行います。');
+    setFormOpen(false); setNotice('記録を追加しました。書類と商談の連携が完了しています。');
     await load();
   };
 
@@ -767,8 +944,53 @@ export const SalesOperationsWorkspace: React.FC<Props> = ({ tab, initialOpsTab, 
       {formOpen && <form onSubmit={createOperation} className="grid gap-3.5 rounded-xl border border-slate-200 bg-slate-50 p-4 md:grid-cols-2">
         <label className="text-xs font-semibold text-slate-700">名称（初期入力済み・必要な場合のみ修正）<input required value={recordTitle} onChange={(e)=>setRecordTitle(e.target.value)} className="mt-1 w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs text-slate-900 focus:border-purple-600 focus:outline-none shadow-2xs" /></label>
         <label className="text-xs font-semibold text-slate-700">会社<select value={companyId || recordCompany} disabled={Boolean(companyId)} onChange={(e)=>setRecordCompany(e.target.value)} className="mt-1 w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs text-slate-900 disabled:opacity-60 focus:border-purple-600 focus:outline-none shadow-2xs"><option value="">会社を選択</option>{companies.map(company=><option key={company.id} value={company.id}>{company.company_name}</option>)}</select></label>
-        {activeOpsTab === 'contracts' && <label className="text-xs font-semibold text-slate-700">関連商談（任意）<select value={recordDealId} onChange={(e)=>{ const id=e.target.value; setRecordDealId(id); const deal=deals.find((item)=>item.id===id); if (deal) { setRecordCompany(deal.company_id || ''); setRecordProductId(deal.product_id || ''); if (deal.proposal_plan_name) setRecordTitle(deal.proposal_plan_name); if (deal.total_amount != null) setRecordAmount(String(deal.total_amount)); } }} className="mt-1 w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs text-slate-900 focus:border-purple-600 focus:outline-none shadow-2xs"><option value="">商談を選択しない</option>{deals.filter((deal)=>!(companyId || recordCompany) || deal.company_id===(companyId || recordCompany)).map((deal)=><option key={deal.id} value={deal.id}>{deal.proposal_plan_name || deal.id}</option>)}</select></label>}
-        {activeOpsTab === 'invoices' && <label className="text-xs font-semibold text-slate-700">関連契約（任意）<select value={recordContractId} onChange={(e)=>{ const id=e.target.value; setRecordContractId(id); const contract=savedContracts.find((item)=>item.id===id); if(contract){ setRecordCompany(contract.company_id || ''); setRecordProductId(contract.product_id || ''); } }} className="mt-1 w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs text-slate-900 focus:border-purple-600 focus:outline-none shadow-2xs"><option value="">契約を選択しない</option>{savedContracts.filter((contract)=>!(companyId || recordCompany) || contract.company_id===(companyId || recordCompany)).map((contract)=><option key={contract.id} value={contract.id}>{contract.title}</option>)}</select></label>}
+
+        {activeOpsTab === 'contracts' && (
+          <>
+            <label className="text-xs font-semibold text-slate-700">
+              契約種別
+              <select
+                value={contractType}
+                onChange={(e) => setContractType(e.target.value as any)}
+                className="mt-1 w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs text-slate-900 focus:border-purple-600 focus:outline-none shadow-2xs cursor-pointer"
+              >
+                <option value="service_agreement">構築・業務支援契約（単発・期間）</option>
+                <option value="retainer">顧問契約（月次継続・MRR）</option>
+                <option value="nda">秘密保持契約（NDA）</option>
+                <option value="other">その他契約</option>
+              </select>
+            </label>
+            <label className="text-xs font-semibold text-slate-700">関連商談（任意）<select value={recordDealId} onChange={(e)=>{ const id=e.target.value; setRecordDealId(id); const deal=deals.find((item)=>item.id===id); if (deal) { setRecordCompany(deal.company_id || ''); setRecordProductId(deal.product_id || ''); if (deal.proposal_plan_name) setRecordTitle(deal.proposal_plan_name); if (deal.total_amount != null) setRecordAmount(String(deal.total_amount)); } }} className="mt-1 w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs text-slate-900 focus:border-purple-600 focus:outline-none shadow-2xs"><option value="">商談を選択しない</option>{deals.filter((deal)=>!(companyId || recordCompany) || deal.company_id===(companyId || recordCompany)).map((deal)=><option key={deal.id} value={deal.id}>{deal.proposal_plan_name || deal.deal_name || deal.id}</option>)}</select></label>
+          </>
+        )}
+
+        {activeOpsTab === 'invoices' && (
+          <>
+            <label className="text-xs font-semibold text-slate-700">
+              請求区分（初回 / 単発 / 定期）
+              <select
+                value={recordBillingType}
+                onChange={(e) => {
+                  const val = e.target.value as any;
+                  setRecordBillingType(val);
+                  if (val === 'recurring' && !recordTitle.includes('定期')) {
+                    setRecordTitle(recordTitle ? `${recordTitle} (月次定期)` : '月次定期顧問料');
+                  } else if (val === 'initial' && !recordTitle.includes('初回')) {
+                    setRecordTitle(recordTitle ? `${recordTitle} (初回着手金)` : '初期導入着手金');
+                  }
+                }}
+                className="mt-1 w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs text-slate-900 focus:border-purple-600 focus:outline-none shadow-2xs cursor-pointer"
+              >
+                <option value="recurring">定期請求（月次顧問料・継続）</option>
+                <option value="initial">初回請求（着手金・初期費用）</option>
+                <option value="one_time">単発請求（スポット開発・構築支援）</option>
+              </select>
+            </label>
+            <label className="text-xs font-semibold text-slate-700">関連商談（任意・初回/単発発行用）<select value={recordDealId} onChange={(e)=>{ const id=e.target.value; setRecordDealId(id); const deal=deals.find((item)=>item.id===id); if (deal) { setRecordCompany(deal.company_id || ''); setRecordProductId(deal.product_id || ''); if (deal.proposal_plan_name) setRecordTitle(deal.proposal_plan_name); if (deal.total_amount != null) setRecordAmount(String(deal.total_amount)); } }} className="mt-1 w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs text-slate-900 focus:border-purple-600 focus:outline-none shadow-2xs"><option value="">商談を選択しない</option>{deals.filter((deal)=>!(companyId || recordCompany) || deal.company_id===(companyId || recordCompany)).map((deal)=><option key={deal.id} value={deal.id}>{deal.proposal_plan_name || deal.deal_name || deal.id}</option>)}</select></label>
+            <label className="text-xs font-semibold text-slate-700">関連契約（任意）<select value={recordContractId} onChange={(e)=>{ const id=e.target.value; setRecordContractId(id); const contract=savedContracts.find((item)=>item.id===id); if(contract){ setRecordCompany(contract.company_id || ''); setRecordProductId(contract.product_id || ''); if (contract.amount != null) setRecordAmount(String(contract.amount)); } }} className="mt-1 w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs text-slate-900 focus:border-purple-600 focus:outline-none shadow-2xs"><option value="">契約を選択しない</option>{savedContracts.filter((contract)=>!(companyId || recordCompany) || contract.company_id===(companyId || recordCompany)).map((contract)=><option key={contract.id} value={contract.id}>{contract.title}</option>)}</select></label>
+          </>
+        )}
+
         <label className="text-xs font-semibold text-slate-700">関連商品（任意）<select value={recordProductId} onChange={(e)=>setRecordProductId(e.target.value)} className="mt-1 w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs text-slate-900 focus:border-purple-600 focus:outline-none shadow-2xs"><option value="">商品を選択しない</option>{catalogProducts.filter((product)=>product.status!=='inactive'||product.id===recordProductId).map((product)=><option key={product.id} value={product.id}>{product.product_name}{product.status==='inactive'?'（取扱停止・既存記録）':''}</option>)}</select></label>
         <label className="text-xs font-semibold text-slate-700">金額（税抜・円 / 商談から初期入力）
           <input type="number" min="0" value={recordAmount} onChange={(e)=>setRecordAmount(e.target.value)} placeholder="0" className="mt-1 w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs text-slate-900 focus:border-purple-600 focus:outline-none shadow-2xs" />
@@ -779,7 +1001,7 @@ export const SalesOperationsWorkspace: React.FC<Props> = ({ tab, initialOpsTab, 
           )}
         </label>
         <label className="text-xs font-semibold text-slate-700">{activeOpsTab==='contracts'?'開始日':'支払期限（当月25日／25日以降は翌月25日）'}<input type="date" value={recordDate} onChange={(e)=>setRecordDate(e.target.value)} className="mt-1 w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs text-slate-900 focus:border-purple-600 focus:outline-none shadow-2xs" /></label>
-        <div className="md:col-span-2"><button className="rounded-xl bg-purple-600 hover:bg-purple-700 px-4 py-2 text-xs font-bold text-white shadow-xs shadow-purple-600/20 cursor-pointer">保存する</button></div>
+        <div className="md:col-span-2"><button className="rounded-xl bg-purple-600 hover:bg-purple-700 px-4 py-2 text-xs font-bold text-white shadow-xs shadow-purple-600/20 cursor-pointer">保存する（書類ドラフトも自動連携）</button></div>
       </form>}
 
       {/* ─── 月次定期請求（MRR）コントロールパネル ─── */}
@@ -1041,7 +1263,251 @@ export const SalesOperationsWorkspace: React.FC<Props> = ({ tab, initialOpsTab, 
         </div>
       )}
 
-      {activeOpsTab==='contracts' ? <p className="text-xs text-slate-500">状態の流れ：下書き → 社内確認中 → メール送付済み（同意返信待ち）→ 締結済み（相手の合意を確認）。相手の明示的な同意返信を確認した後に「締結済み」へ更新し、返信メールと契約書PDFを契約記録として保存してください。期限切れ・取消は終了状態です。</p> : <p className="text-xs text-slate-500">状態の流れ：下書き（未発行）→ 承認待ち → 発行済み（入金待ち）→ 入金済み。支払期限を過ぎると「支払期限超過」、取消は終了状態です。</p>}{loading ? <p className="text-xs text-slate-400">読み込み中…</p> : records.length === 0 ? <p className="py-8 text-center text-xs text-slate-400">登録データはありません。</p> : <div className="overflow-x-auto"><table className="w-full text-left text-xs"><thead><tr className="border-b border-slate-200 text-xs font-semibold text-slate-600"><th className="p-2.5">名称</th><th className="p-2.5">会社</th><th className="p-2.5">関連</th><th className="p-2.5">状態</th><th className="p-2.5">金額（税抜 / 税込）</th><th className="p-2.5">日付</th>{activeOpsTab==='invoices'&&<th className="p-2.5">書類</th>}<th className="p-2.5">操作</th></tr></thead><tbody className="divide-y divide-slate-100">{records.map((record)=><tr key={record.id} className="text-slate-800 hover:bg-slate-50/50"><td className="p-2.5 font-semibold">{record.title || record.invoice_number}</td><td className="p-2.5">{companies.find((item)=>item.id===record.company_id)?.company_name || record.company_id || '—'}</td><td className="p-2.5 text-xs text-slate-500">{activeOpsTab==='contracts' ? <>{catalogProducts.find((product)=>product.id===record.product_id)?.product_name || record.product_id || '商品未設定'}{record.deal_id && <div>商談: {deals.find((deal)=>deal.id===record.deal_id)?.proposal_plan_name || record.deal_id}</div>}</> : <>{catalogProducts.find((product)=>product.id===record.product_id)?.product_name || record.product_id || '商品未設定'}{record.contract_id && <div>契約: {savedContracts.find((contract)=>contract.id===record.contract_id)?.title || record.contract_id}</div>}</>}</td><td className="p-2.5"><select aria-label={`${record.title||record.invoice_number}の状態`} value={record.status} onChange={(e)=>void updateOperationStatus(record,e.target.value)} className="rounded-lg border border-slate-200 bg-white px-2 py-1 text-xs text-slate-800 focus:outline-none focus:border-purple-600 shadow-2xs">{(activeOpsTab==='contracts'?['draft','under_review','sent','signed','expired','canceled']:['draft','awaiting_approval','issued','paid','overdue','canceled']).map(status=><option key={status} value={status}>{(activeOpsTab==='contracts'?contractStatusLabels:invoiceStatusLabels)[status]||status}</option>)}</select></td><td className="p-2.5">{record.amount == null?'—':<div><div className="font-medium text-slate-900">¥{Number(record.amount).toLocaleString('ja-JP')} <span className="text-[10px] text-slate-500 font-sans">(税抜)</span></div><div className="text-[11px] text-purple-700 font-semibold">¥{Math.floor(Number(record.amount) * 1.1).toLocaleString('ja-JP')} <span className="text-[10px] text-slate-500 font-sans">(税込)</span></div></div>}</td><td className="p-2.5 text-slate-700 font-mono whitespace-nowrap">{(record.due_date || record.start_date) ? formatJapaneseDate(record.due_date || record.start_date) : '—'}</td><td className="p-2.5">{activeOpsTab==='invoices'&&<button type="button" onClick={()=>record.company_id&&onOpenInvoiceDocuments?.(record.company_id, record.document_id || undefined)} disabled={!record.company_id||!onOpenInvoiceDocuments} className="whitespace-nowrap rounded-lg border border-purple-200 bg-purple-50 px-2 py-1 text-xs font-semibold text-purple-700 hover:bg-purple-100 disabled:opacity-40 cursor-pointer shadow-2xs">請求書類を開く</button>}</td><td className="p-2.5"><button type="button" onClick={()=>void deleteOperationRecord(record)} className="rounded-lg border border-rose-200 px-2 py-1 text-xs font-semibold text-rose-700 hover:bg-rose-50 cursor-pointer shadow-2xs">削除</button></td></tr>)}</tbody></table></div>}
+      {activeOpsTab==='contracts' ? (
+        <p className="text-xs text-slate-500">
+          状態の流れ：下書き → 社内確認中 → メール送付済み（同意返信待ち）→ 締結済み（相手の合意を確認）。
+          相手の明示的な同意返信を確認した後に「締結済み」へ更新すると、商談パイプラインのステータスも自動的に「成約」へ同期されます。
+        </p>
+      ) : (
+        <p className="text-xs text-slate-500">
+          状態の流れ：下書き（未発行）→ 承認待ち → 発行済み（入金待ち）→ 入金済み。
+          「入金済み」に更新すると商談パイプラインが自動的に「成約」へ同期されます。書類送付状況（未送付／送信済み）もリアルタイムに反映されます。
+        </p>
+      )}
+
+      {loading ? (
+        <p className="text-xs text-slate-400 py-8 text-center">読み込み中…</p>
+      ) : records.length === 0 ? (
+        <p className="py-8 text-center text-xs text-slate-400">登録データはありません。</p>
+      ) : (
+        <div className="overflow-x-auto rounded-xl border border-slate-200">
+          <table className="w-full text-left text-xs">
+            <thead>
+              <tr className="border-b border-slate-200 bg-slate-50 text-xs font-semibold text-slate-700">
+                <th className="p-3">名称 / 区分</th>
+                <th className="p-3">顧客会社</th>
+                <th className="p-3">関連商談・契約</th>
+                <th className="p-3">ステータス</th>
+                <th className="p-3">書類送付状況</th>
+                <th className="p-3">金額（税抜 / 税込）</th>
+                <th className="p-3">{activeOpsTab === 'contracts' ? '開始日' : '支払期日'}</th>
+                <th className="p-3">書類・操作</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-slate-100 bg-white">
+              {records.map((record) => {
+                const linkedCompany = companies.find((c) => c.id === record.company_id);
+                const linkedProduct = catalogProducts.find((p) => p.id === record.product_id);
+                const linkedDeal = deals.find((d) => d.id === record.deal_id) || (record.company_id ? deals.find((d) => d.company_id === record.company_id) : undefined);
+                const linkedContract = savedContracts.find((c) => c.id === record.contract_id);
+
+                // 紐づく書類レコードの検索（ID一致、または会社IDかつ種別一致）
+                const linkedDoc = documents.find((d) => d.id === record.document_id) ||
+                  documents.find((d) => d.company_id === record.company_id && (
+                    activeOpsTab === 'invoices' ? d.document_type === 'invoice' : d.document_type === 'contract'
+                  ));
+
+                // 請求種別の判定
+                const rawBillingType = record.payload?.billing_type;
+                const isRecurring = rawBillingType === 'recurring' || record.contract_id || record.title?.includes('定期') || record.title?.includes('月分') || record.title?.includes('顧問');
+                const isInitial = rawBillingType === 'initial' || record.title?.includes('初回') || record.title?.includes('着手金');
+                const billingLabel = isInitial ? '初回着手金' : isRecurring ? '定期顧問' : '単発スポット';
+                const billingBadgeClass = isInitial ? 'bg-amber-50 text-amber-800 border-amber-200' : isRecurring ? 'bg-purple-50 text-purple-800 border-purple-200' : 'bg-blue-50 text-blue-800 border-blue-200';
+
+                // 契約種別の判定
+                const contractTypeLabel = record.contract_type === 'retainer' ? '顧問契約' : record.contract_type === 'nda' ? '秘密保持' : '構築支援契約';
+                const contractBadgeClass = record.contract_type === 'retainer' ? 'bg-purple-50 text-purple-800 border-purple-200' : 'bg-slate-100 text-slate-700 border-slate-200';
+
+                return (
+                  <tr key={record.id} className="text-slate-800 hover:bg-slate-50/60 transition-colors">
+                    {/* 名称 / 区分 */}
+                    <td className="p-3">
+                      <div className="flex flex-wrap items-center gap-1.5">
+                        <span className="font-bold text-slate-900 text-xs">
+                          {record.title || record.invoice_number}
+                        </span>
+                        {activeOpsTab === 'invoices' ? (
+                          <span className={`rounded px-1.5 py-0.2 text-[9px] font-bold border ${billingBadgeClass}`}>
+                            {billingLabel}
+                          </span>
+                        ) : (
+                          <span className={`rounded px-1.5 py-0.2 text-[9px] font-bold border ${contractBadgeClass}`}>
+                            {contractTypeLabel}
+                          </span>
+                        )}
+                      </div>
+                      {record.invoice_number && record.title && record.title !== record.invoice_number && (
+                        <div className="font-mono text-[10px] text-slate-400 mt-0.5">
+                          {record.invoice_number}
+                        </div>
+                      )}
+                    </td>
+
+                    {/* 顧客会社 */}
+                    <td className="p-3">
+                      <div className="font-semibold text-slate-900">
+                        {linkedCompany?.company_name || record.counterparty_name || record.recipient_name || '会社未設定'}
+                      </div>
+                      {linkedProduct && (
+                        <div className="text-[10px] text-slate-500 mt-0.5 truncate max-w-[140px]">
+                          {linkedProduct.product_name}
+                        </div>
+                      )}
+                    </td>
+
+                    {/* 関連商談・契約 */}
+                    <td className="p-3 text-xs text-slate-500">
+                      <div className="space-y-1">
+                        {linkedDeal && (
+                          <div className="flex items-center gap-1">
+                            <span className="text-[10px] text-slate-600 font-medium">商談:</span>
+                            <span className="truncate max-w-[120px] font-semibold text-slate-800" title={linkedDeal.deal_name || linkedDeal.proposal_plan_name}>
+                              {linkedDeal.proposal_plan_name || linkedDeal.deal_name || '商談'}
+                            </span>
+                            <span className={`text-[9px] px-1 py-0.2 rounded font-bold ${
+                              linkedDeal.proposal_status === '成約'
+                                ? 'bg-emerald-100 text-emerald-800 border border-emerald-200'
+                                : 'bg-slate-100 text-slate-600'
+                            }`}>
+                              {linkedDeal.proposal_status || '進行中'}
+                            </span>
+                          </div>
+                        )}
+                        {activeOpsTab === 'invoices' && linkedContract && (
+                          <div className="flex items-center gap-1">
+                            <span className="text-[10px] text-slate-600 font-medium">契約:</span>
+                            <span className="truncate max-w-[120px] font-semibold text-slate-800" title={linkedContract.title}>
+                              {linkedContract.title}
+                            </span>
+                          </div>
+                        )}
+                        {!linkedDeal && !linkedContract && (
+                          <span className="text-[10px] text-slate-400">—</span>
+                        )}
+                      </div>
+                    </td>
+
+                    {/* ステータス */}
+                    <td className="p-3">
+                      <select
+                        aria-label={`${record.title || record.invoice_number}の状態`}
+                        value={record.status}
+                        onChange={(e) => void updateOperationStatus(record, e.target.value)}
+                        className={`rounded-lg border px-2 py-1 text-xs font-semibold focus:outline-none focus:border-purple-600 shadow-2xs cursor-pointer ${
+                          record.status === 'signed' || record.status === 'paid'
+                            ? 'border-emerald-300 bg-emerald-50 text-emerald-900'
+                            : record.status === 'overdue'
+                              ? 'border-rose-300 bg-rose-50 text-rose-900'
+                              : 'border-slate-200 bg-white text-slate-800'
+                        }`}
+                      >
+                        {(activeOpsTab === 'contracts'
+                          ? ['draft', 'under_review', 'sent', 'signed', 'expired', 'canceled']
+                          : ['draft', 'awaiting_approval', 'issued', 'paid', 'overdue', 'canceled']
+                        ).map((status) => (
+                          <option key={status} value={status}>
+                            {(activeOpsTab === 'contracts' ? contractStatusLabels : invoiceStatusLabels)[status] || status}
+                          </option>
+                        ))}
+                      </select>
+                    </td>
+
+                    {/* 書類送付状況 */}
+                    <td className="p-3">
+                      {linkedDoc ? (
+                        <div className="space-y-0.5">
+                          {linkedDoc.status === 'sent' ? (
+                            <span className="inline-flex items-center gap-1 rounded bg-emerald-50 border border-emerald-200 px-1.5 py-0.5 text-[10px] font-bold text-emerald-800">
+                              <CheckCircle2 className="h-3 w-3 text-emerald-600" />
+                              送付済み
+                            </span>
+                          ) : linkedDoc.status === 'approved' ? (
+                            <span className="inline-flex items-center gap-1 rounded bg-purple-50 border border-purple-200 px-1.5 py-0.5 text-[10px] font-bold text-purple-800">
+                              承認済・未送付
+                            </span>
+                          ) : (
+                            <span className="inline-flex items-center gap-1 rounded bg-slate-100 border border-slate-200 px-1.5 py-0.5 text-[10px] font-medium text-slate-700">
+                              下書き作成中
+                            </span>
+                          )}
+                          <div className="text-[9px] text-slate-400">
+                            {new Date(linkedDoc.updated_at || linkedDoc.created_at).toLocaleDateString('ja-JP')}
+                          </div>
+                        </div>
+                      ) : (
+                        <div className="space-y-1">
+                          <span className="inline-flex items-center gap-1 rounded bg-amber-50 border border-amber-200 px-1.5 py-0.5 text-[10px] font-bold text-amber-800">
+                            書類未起票
+                          </span>
+                          {activeOpsTab === 'invoices' && (
+                            <button
+                              type="button"
+                              disabled={creatingDocumentId === record.id}
+                              onClick={() => void createInvoiceDocumentForRecord(record)}
+                              className="block text-[10px] text-purple-700 hover:text-purple-900 font-bold hover:underline cursor-pointer disabled:opacity-50"
+                            >
+                              {creatingDocumentId === record.id ? '起票中…' : '＋書類を起票'}
+                            </button>
+                          )}
+                        </div>
+                      )}
+                    </td>
+
+                    {/* 金額 */}
+                    <td className="p-3 whitespace-nowrap">
+                      {record.amount == null ? (
+                        '—'
+                      ) : (
+                        <div>
+                          <div className="font-bold text-slate-900 text-xs">
+                            ¥{Number(record.amount).toLocaleString('ja-JP')}{' '}
+                            <span className="text-[10px] text-slate-500 font-sans">(税抜)</span>
+                          </div>
+                          <div className="text-[11px] text-purple-700 font-semibold">
+                            ¥{Math.floor(Number(record.amount) * 1.1).toLocaleString('ja-JP')}{' '}
+                            <span className="text-[10px] text-slate-500 font-sans">(税込)</span>
+                          </div>
+                        </div>
+                      )}
+                    </td>
+
+                    {/* 日付 */}
+                    <td className="p-3 text-slate-700 font-mono whitespace-nowrap text-xs">
+                      {record.due_date || record.start_date
+                        ? formatJapaneseDate(record.due_date || record.start_date)
+                        : '—'}
+                    </td>
+
+                    {/* 書類・操作 */}
+                    <td className="p-3 whitespace-nowrap">
+                      <div className="flex items-center gap-1.5">
+                        {record.company_id && onOpenInvoiceDocuments && (
+                          <button
+                            type="button"
+                            onClick={() => onOpenInvoiceDocuments(record.company_id, record.document_id || linkedDoc?.id)}
+                            className="flex items-center gap-1 rounded-lg border border-purple-200 bg-purple-50 px-2 py-1 text-xs font-semibold text-purple-700 hover:bg-purple-100 cursor-pointer shadow-2xs transition"
+                            title="書類の確認・プレビュー・送信ドロワーを開く"
+                          >
+                            <Send className="h-3 w-3" />
+                            <span>{linkedDoc?.status === 'sent' ? '書類確認' : '送る'}</span>
+                          </button>
+                        )}
+                        <button
+                          type="button"
+                          onClick={() => void deleteOperationRecord(record)}
+                          className="rounded-lg border border-rose-200 px-2 py-1 text-xs font-semibold text-rose-700 hover:bg-rose-50 cursor-pointer shadow-2xs transition"
+                        >
+                          削除
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+      )}
       </>}
     </section>}
   </div>;

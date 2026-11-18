@@ -1128,21 +1128,24 @@ export const ContactsLineHub: React.FC<Props> = ({
                   {person.lineFriends.map((friend) => (
                     <div
                       key={friend.id}
-                      className={`mt-3 rounded-xl border border-slate-200 bg-slate-50/80 p-3.5 transition shadow-2xs ${
+                      className={`mt-2 rounded-lg border border-slate-200 bg-slate-50/80 px-3 py-2 transition shadow-2xs ${
                         activeTagPickerFriendId === friend.id ? 'relative z-20 ring-2 ring-purple-500/20 bg-white' : ''
                       }`}
                     >
-                      <div className="flex flex-wrap items-center justify-between gap-2">
-                        <div className="flex flex-wrap items-center gap-2">
-                          <span className="inline-flex items-center gap-1 text-xs font-bold text-slate-700">
+                      <div className="flex items-center justify-between gap-2">
+                        <div className="flex flex-wrap items-center gap-1.5 min-w-0 flex-1">
+                          <span className="inline-flex items-center gap-1 text-xs font-bold text-slate-700 shrink-0">
                             <UserRound className="h-3.5 w-3.5 text-emerald-600" />
                             LINE {statusLabel[friend.status] || friend.status}
                           </span>
-                          <span className="text-xs text-slate-900 font-semibold">
+                          <span className="text-xs text-slate-900 font-semibold truncate max-w-[120px]" title={friend.line_user_id}>
                             {friend.display_name || '名前未取得'}
                           </span>
+                          <span className="font-mono text-[9px] text-slate-400 truncate max-w-[90px]" title={friend.line_user_id}>
+                            {friend.line_user_id.slice(0, 8)}…
+                          </span>
                           <span
-                            className={`rounded-full px-2 py-0.5 text-[10px] font-semibold border ${
+                            className={`shrink-0 rounded-full px-1.5 py-0.5 text-[9px] font-semibold border ${
                               friend.consent_status === 'opted_in'
                                 ? 'bg-emerald-50 border-emerald-200 text-emerald-700'
                                 : friend.consent_status === 'opted_out'
@@ -1151,10 +1154,10 @@ export const ContactsLineHub: React.FC<Props> = ({
                             }`}
                           >
                             {friend.consent_status === 'opted_in'
-                              ? '配信同意: あり'
+                              ? '配信可'
                               : friend.consent_status === 'opted_out'
-                                ? '配信同意: 停止'
-                                : '配信同意: 未確認'}
+                                ? '停止'
+                                : '未確認'}
                           </span>
                           {friend.consent_status !== 'opted_in' &&
                             friend.consent_status !== 'opted_out' &&
@@ -1164,9 +1167,9 @@ export const ContactsLineHub: React.FC<Props> = ({
                                 type="button"
                                 disabled={saving}
                                 onClick={() => void linkLineFriendToContact(friend.line_user_id)}
-                                className="rounded-md border border-amber-300 bg-white hover:bg-amber-50 px-2 py-0.5 text-[10px] font-semibold text-amber-800 transition cursor-pointer disabled:opacity-40"
+                                className="shrink-0 rounded border border-amber-300 bg-white hover:bg-amber-50 px-1.5 py-0.5 text-[9px] font-semibold text-amber-800 transition cursor-pointer disabled:opacity-40"
                               >
-                                状態を確認して送信可にする
+                                送信可にする
                               </button>
                             )}
                         </div>
@@ -1198,12 +1201,9 @@ export const ContactsLineHub: React.FC<Props> = ({
                           <span className="text-[10px]">LINE解除</span>
                         </InlineDeleteButton>
                       </div>
-                      <p className="mt-1 truncate font-mono text-[10px] text-slate-400">
-                        {friend.line_user_id}
-                      </p>
 
-                      {/* タグ一覧バッジ（流入／進捗／ステータス別にまとまり、⚡自動 vs 👤手動を一目で識別） */}
-                      <div className="mt-2.5 flex flex-wrap items-center gap-1.5">
+                      {/* タグ一覧バッジ（1行横スクロール・コンパクト表示） */}
+                      <div className="mt-2 flex items-center gap-1 overflow-x-auto pb-0.5 max-w-full scrollbar-thin scrollbar-thumb-slate-200">
                         {(() => {
                           const orderMap = { inflow: 1, action: 2, crm_status: 3, custom: 4 };
                           const getCat = (t: { name: string; category?: string }) => {
@@ -1224,8 +1224,8 @@ export const ContactsLineHub: React.FC<Props> = ({
                             return (
                               <span
                                 key={tag.id}
-                                style={{ borderColor: tag.color ? `${tag.color}40` : undefined }}
-                                className="inline-flex items-center gap-1.5 rounded-full border bg-white px-2 py-0.5 text-[11px] text-slate-800 transition shadow-2xs"
+                                style={{ borderColor: tag.color ? `${tag.color}60` : undefined, backgroundColor: tag.color ? `${tag.color}10` : undefined }}
+                                className="inline-flex shrink-0 items-center gap-1 rounded border px-1.5 py-0.5 text-[10px] text-slate-800 transition shadow-2xs whitespace-nowrap"
                                 title={`${tag.name} [${catLabel}] (${
                                   isAuto ? '⚡ 自動配信・フォーム・ルールにより自動付与' : '👤 手動付与'
                                 }) ${tag.description ? '— ' + tag.description : ''}`}
@@ -1234,21 +1234,15 @@ export const ContactsLineHub: React.FC<Props> = ({
                                   className="w-1.5 h-1.5 rounded-full shrink-0"
                                   style={{ backgroundColor: tag.color || '#6b46c1' }}
                                 />
-                                <span className="font-semibold text-slate-800">{tag.name}</span>
-                                <span
-                                  className={`text-[9px] font-mono px-1 rounded ${
-                                    isAuto
-                                      ? 'bg-amber-50 text-amber-800 border border-amber-200'
-                                      : 'bg-slate-100 text-slate-600'
-                                  }`}
-                                >
-                                  {isAuto ? '⚡自動' : '👤手動'}
+                                <span className="font-semibold">{tag.name}</span>
+                                <span className={`text-[8px] font-mono ${isAuto ? 'text-amber-700' : 'text-slate-400'}`}>
+                                  {isAuto ? '⚡' : '👤'}
                                 </span>
                                 <button
                                   type="button"
                                   title={'タグ「' + tag.name + '」を外す'}
                                   onClick={() => void removeTag(friend.id, tag.id)}
-                                  className="text-slate-400 hover:text-rose-600 ml-0.5 cursor-pointer transition text-xs font-bold"
+                                  className="text-slate-300 hover:text-rose-600 ml-0.5 cursor-pointer transition text-[10px] font-bold leading-none"
                                 >
                                   ×
                                 </button>
@@ -1258,7 +1252,7 @@ export const ContactsLineHub: React.FC<Props> = ({
                         })()}
 
                         {/* 手動タグ追加（主役にせず、例外対応用とわかる控えめな表現） */}
-                        <div className={`relative ${activeTagPickerFriendId === friend.id ? 'z-30' : ''}`}>
+                        <div className={`relative shrink-0 ${activeTagPickerFriendId === friend.id ? 'z-30' : ''}`}>
                           <button
                             type="button"
                             onClick={() =>
@@ -1266,7 +1260,7 @@ export const ContactsLineHub: React.FC<Props> = ({
                                 activeTagPickerFriendId === friend.id ? null : friend.id
                               )
                             }
-                            className="inline-flex items-center gap-1 rounded-full border border-slate-200 bg-slate-100/90 hover:bg-purple-50 hover:border-purple-300 px-2 py-0.5 text-[10px] text-slate-500 hover:text-purple-700 transition cursor-pointer"
+                            className="inline-flex shrink-0 items-center gap-1 rounded border border-slate-200 bg-slate-50 hover:bg-purple-50 hover:border-purple-300 px-1.5 py-0.5 text-[10px] text-slate-500 hover:text-purple-700 transition cursor-pointer whitespace-nowrap"
                             title="例外対応用：手動でタグを付与"
                           >
                             <Tag className="h-2.5 w-2.5" />
