@@ -12079,6 +12079,40 @@ app.post('/api/timerex/webhook', async (req, res) => {
   }
 });
 
+// ─── Search Console API 自動同期 ───────────────────────────────────────────────
+import('./server/googleSearchConsoleService.js').then(({ fetchSearchConsoleAnalytics }) => {
+  app.post('/api/seo/sync-gsc', requireAuth, async (req, res) => {
+    const keyJson = String(req.body?.serviceAccountKey || '');
+    const siteUrl = String(req.body?.siteUrl || 'https://corp.mstcorp.info');
+    const dimension = String(req.body?.dimension || 'page') as 'page' | 'query';
+    const days = Number(req.body?.days || 28);
+
+    if (!keyJson) {
+      return res.status(400).json({ error: 'Google サービスアカウントキーがありません。設定から登録してください。' });
+    }
+
+    let sa: { client_email: string; private_key: string };
+    try {
+      sa = JSON.parse(keyJson);
+      if (!sa.client_email || !sa.private_key) {
+        return res.status(400).json({ error: 'サービスアカウントキーの形式が正しくありません。' });
+      }
+    } catch {
+      return res.status(400).json({ error: 'サービスアカウントキーのJSONパースに失敗しました。' });
+    }
+
+    try {
+      const result = await fetchSearchConsoleAnalytics(sa, siteUrl, { days, dimension });
+      return res.json({ success: true, ...result });
+    } catch (err: any) {
+      console.error('[GSC sync] failed:', err?.message);
+      return res.status(502).json({ error: err?.message || 'Search Console APIの呼び出しに失敗しました。' });
+    }
+  });
+}).catch(err => {
+  console.error('[GSC] googleSearchConsoleService のロードに失敗:', err);
+});
+
 // Health check endpoints for Cloud Run
 app.get('/health', (_req, res) => res.status(200).send('OK'));
 app.get('/healthz', (_req, res) => res.status(200).send('OK'));

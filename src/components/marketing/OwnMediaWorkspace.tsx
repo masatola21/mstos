@@ -100,6 +100,10 @@ export const OwnMediaWorkspace: React.FC<{
     try { return Boolean(localStorage.getItem('mst_google_sa_key')); } catch { return false; }
   });
 
+  // Google Search Console 同期用ステート
+  const [gscSyncing, setGscSyncing] = useState(false);
+  const [lastSyncedAt, setLastSyncedAt] = useState<string | null>(null);
+
   // Vercel Deploy Hook テスト状態
   const [testingDeployHook, setTestingDeployHook] = useState(false);
   const [deployHookNotice, setDeployHookNotice] = useState<string | null>(null);
@@ -489,6 +493,72 @@ export const OwnMediaWorkspace: React.FC<{
       setShowGoogleModal(false);
     } catch (err: any) {
       alert('エラー: ' + (err?.message || 'JSONの解析に失敗しました。'));
+    }
+  };
+
+  // Google Search Console API から SEO実績を自動同期
+  const handleSyncGsc = async () => {
+    const keyJson = googleKeyJson || (() => { try { return localStorage.getItem('mst_google_sa_key') || ''; } catch { return ''; } })();
+    if (!keyJson) {
+      alert('Google API連携設定からサービスアカウントキーを登録してください。');
+      return;
+    }
+    setGscSyncing(true);
+    try {
+      const headers = await getAuthHeaders();
+      const res = await fetch('/api/seo/sync-gsc', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', ...headers },
+        body: JSON.stringify({
+          serviceAccountKey: keyJson,
+          siteUrl: customSiteUrl || 'https://corp.mstcorp.info',
+          dimension: 'page',
+          days: 28,
+        }),
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({ error: res.statusText }));
+        throw new Error((err as any)?.error || 'データ取得に失敗しました。');
+      }
+      const data = await res.json() as { rows: Array<{ keys: string[]; clicks: number; impressions: number; ctr: number; position: number }>; startDate: string; endDate: string };
+      const db = getSupabase();
+      if (!db || !userId) throw new Error('Supabaseに接続してください。');
+      const today = new Date().toISOString().slice(0, 10);
+      const newRows: Row[] = data.rows.map((r, idx) => {
+        const target = r.keys?.[0] || '';
+        const matched = rows.find((a) => a.record_type === 'article' && a.payload?.slug && target.includes(String(a.payload.slug)));
+        const id = `seo-gsc-${Date.now()}-${idx}-${Math.random().toString(36).slice(2, 6)}`;
+        return {
+          user_id: userId,
+          id,
+          record_type: 'seo' as Kind,
+          title: `${today} ${(matched?.title || target).slice(0, 36)}`,
+          product_id: null,
+          status: null,
+          payload: {
+            articleId: matched?.id || '',
+            impressions: String(r.impressions),
+            clicks: String(r.clicks),
+            avgPosition: String(r.position),
+            ctr: `${r.ctr}%`,
+            source: 'gsc_api',
+            pageUrl: target,
+            memo: `Search Console API自動同期（${data.startDate}〜${data.endDate}）`,
+          },
+          updated_at: new Date().toISOString(),
+        };
+      });
+      if (newRows.length > 0) {
+        await db.from('mst_ai_acquisition_records').upsert(newRows, { onConflict: 'user_id,id' });
+        setRows((prev) => [...newRows, ...prev.filter((r) => !newRows.find((n) => n.id === r.id))]);
+      }
+      const syncTime = new Date().toLocaleString('ja-JP');
+      setLastSyncedAt(syncTime);
+      setNotice(`✅ ${newRows.length} 件のSEO実績をSearch Consoleから自動取得しました！（${data.startDate}〜${data.endDate}）`);
+    } catch (err: any) {
+      alert('同期エラー: ' + (err?.message || String(err)));
+    } finally {
+      setGscSyncing(false);
     }
   };
 
@@ -1566,6 +1636,21 @@ export const OwnMediaWorkspace: React.FC<{
                       <Upload className="h-3.5 w-3.5 text-purple-600" />
                       <span>CSV一括取り込み</span>
                     </button>
+                    {isGoogleConnected && (
+                      <button
+                        type="button"
+                        onClick={() => void handleSyncGsc()}
+                        disabled={gscSyncing}
+                        className="inline-flex items-center gap-1.5 rounded-xl border border-emerald-200 bg-emerald-50 hover:bg-emerald-100 px-3 py-2 text-xs font-bold text-emerald-700 transition shadow-2xs cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+                        title="Google Search Console API からSEO実績を自動取得します（直近28日分）"
+                      >
+                        <RefreshCw className={`h-3.5 w-3.5 ${gscSyncing ? 'animate-spin' : ''}`} />
+                        <span>{gscSyncing ? '同期中…' : 'Googleと同期'}</span>
+                        {lastSyncedAt && (
+                          <span className="text-[10px] text-emerald-600 font-normal">最終: {lastSyncedAt}</span>
+                        )}
+                      </button>
+                    )}
                     <button
                       type="button"
                       onClick={() => setShowGoogleModal(true)}
