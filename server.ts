@@ -7166,7 +7166,7 @@ app.post('/api/communications/send', async (req, res) => {
             .maybeSingle();
 
           if (docData) {
-            sentDocumentType = docData.document_type || null;
+            sentDocumentType = resolveEffectiveCustomerDocumentType(docData.document_type, docData.title);
             const safeTitle = (docData.title || 'document').replace(/[\r\n/\\:*?"<>|]/g, '_').trim();
             if (documentDeliveryFormat === 'pdf_attachment') {
               let docCompanyName = '';
@@ -7317,10 +7317,12 @@ app.post('/api/communications/send', async (req, res) => {
         if (!resolvedDocType && row.document_id) {
           const { data: sentDoc } = await lineSupabase
             .from('customer_documents')
-            .select('document_type')
+            .select('document_type, title')
             .eq('id', row.document_id)
             .maybeSingle();
-          resolvedDocType = sentDoc?.document_type || null;
+          resolvedDocType = sentDoc?.document_type
+            ? resolveEffectiveCustomerDocumentType(sentDoc.document_type, sentDoc.title)
+            : null;
         }
         if (!resolvedDocType && sourceTypeLower === 'diagnosis_report') {
           resolvedDocType = 'diagnosis_report';
@@ -7328,7 +7330,7 @@ app.post('/api/communications/send', async (req, res) => {
         const docType = String(resolvedDocType || '').toLowerCase();
         if (docType === 'diagnosis_report' || docType.includes('report')) {
           await enqueueScenariosForContact(contact.id, 'report_sent', authData.user.id);
-        } else if (docType === 'proposal' || docType.includes('proposal')) {
+        } else if (docType === 'proposal') {
           await enqueueScenariosForContact(contact.id, 'proposal_sent', authData.user.id);
         } else if (docType === 'contract' || docType.includes('contract')) {
           await enqueueScenariosForContact(contact.id, 'contract_sent', authData.user.id);
@@ -11206,6 +11208,15 @@ app.post('/api/billing/recurring-generate', async (req, res) => {
 });
 
 // ─── 公開書類・Web申込・自動成約 API ───
+function resolveEffectiveCustomerDocumentType(rawType: unknown, title: unknown): string {
+  const docType = String(rawType || 'other');
+  const titleText = String(title || '');
+  if ((docType === 'proposal' || docType === 'other') && /見積/.test(titleText)) return 'estimate';
+  if ((docType === 'diagnosis_report' || docType === 'report' || docType === 'proposal' || docType === 'other') && /(月次|月報)/.test(titleText)) return 'monthly_report';
+  if (docType === 'report') return 'diagnosis_report';
+  return docType;
+}
+
 function escapePublicDocHtml(raw: unknown): string {
   return String(raw || '')
     .replace(/&/g, '&amp;')
@@ -11262,7 +11273,7 @@ function renderPublicDocumentHtmlPage(doc: any, companyName: string): string {
   const docId = String(doc.id || '');
   const encodedId = encodeURIComponent(docId);
   const title = String(doc.title || 'ご案内書類');
-  const docType = String(doc.document_type || 'other');
+  const docType = resolveEffectiveCustomerDocumentType(doc.document_type, title);
   const isReceiptOnly = docType === 'invoice' || docType === 'diagnosis_report' || docType === 'monthly_report';
   const hasConsented = Boolean(doc.consent_recorded_at) || (!isReceiptOnly && doc.status === 'approved' && Boolean(doc.deal_id));
   const consentDateLabel = doc.consent_recorded_at
@@ -11603,7 +11614,8 @@ app.post('/api/public/documents/:id/apply', async (req, res) => {
     if (docError) throw docError;
     if (!doc) return res.status(404).json({ error: '書類が見つかりません。' });
 
-    const isReceiptOnly = ['invoice', 'diagnosis_report', 'monthly_report'].includes(String(doc.document_type || ''));
+    const effectiveDocType = resolveEffectiveCustomerDocumentType(doc.document_type, doc.title);
+    const isReceiptOnly = ['invoice', 'diagnosis_report', 'monthly_report'].includes(effectiveDocType);
     const forwardedHeader = req.headers['x-forwarded-for'];
     const clientIp = (typeof forwardedHeader === 'string' ? forwardedHeader.split(',')[0].trim() : Array.isArray(forwardedHeader) ? forwardedHeader[0] : req.socket.remoteAddress) || '';
     const userAgent = (req.headers['user-agent'] as string) || '';

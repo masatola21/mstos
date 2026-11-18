@@ -208,6 +208,35 @@ export const PublicDocumentApplyView: React.FC<PublicDocumentApplyViewProps> = (
 
         const nowIso = new Date().toISOString();
         const todayStr = nowIso.slice(0, 10);
+        const rawDocType = String(doc?.documentType || '');
+        const docTitle = String(doc?.title || '');
+        const effectiveType =
+          (rawDocType === 'proposal' || rawDocType === 'other') && /見積/.test(docTitle)
+            ? 'estimate'
+            : (rawDocType === 'diagnosis_report' || rawDocType === 'report' || rawDocType === 'proposal' || rawDocType === 'other') && /(月次|月報)/.test(docTitle)
+              ? 'monthly_report'
+              : rawDocType === 'report'
+                ? 'diagnosis_report'
+                : rawDocType;
+        const isReceiptOnly = effectiveType === 'invoice' || effectiveType === 'diagnosis_report' || effectiveType === 'monthly_report';
+
+        if (isReceiptOnly) {
+          const { error: recErr } = await supabase.from('customer_documents').update({
+            status: 'approved',
+            consent_method: 'web_apply',
+            consent_recorded_at: nowIso,
+            consent_user_agent: typeof navigator !== 'undefined' ? navigator.userAgent : '',
+            consent_evidence_text: '上記書類の内容を確認し、受領したことを通知します。',
+            updated_at: nowIso,
+          }).eq('id', documentId);
+          if (recErr) {
+            await supabase.from('customer_documents').update({ status: 'approved' }).eq('id', documentId);
+          }
+          setConsentInfo({ recordedAt: nowIso });
+          setApplied(true);
+          setResultDealId(doc?.dealId || null);
+          return;
+        }
 
         // 金額の抽出
         let totalAmount = doc?.dealAmount || 0;
@@ -511,7 +540,19 @@ export const PublicDocumentApplyView: React.FC<PublicDocumentApplyViewProps> = (
         </div>
 
         {/* Web申込CTAセクション（未成約の場合に表示） */}
-        {!applied && (
+        {!applied && (() => {
+          const rawDocType = String(doc?.documentType || '');
+          const docTitle = String(doc?.title || '');
+          const effectiveType =
+            (rawDocType === 'proposal' || rawDocType === 'other') && /見積/.test(docTitle)
+              ? 'estimate'
+              : (rawDocType === 'diagnosis_report' || rawDocType === 'report' || rawDocType === 'proposal' || rawDocType === 'other') && /(月次|月報)/.test(docTitle)
+                ? 'monthly_report'
+                : rawDocType === 'report'
+                  ? 'diagnosis_report'
+                  : rawDocType;
+          const isReceiptDoc = effectiveType === 'invoice' || effectiveType === 'diagnosis_report' || effectiveType === 'monthly_report';
+          return (
           <div id="apply-cta-section" className="no-print rounded-2xl border-2 border-emerald-500/50 bg-gradient-to-b from-slate-900 to-slate-950 p-6 sm:p-8 shadow-2xl space-y-6">
             <div className="flex items-start gap-4">
               <div className="h-12 w-12 rounded-2xl bg-emerald-500/20 border border-emerald-500/30 flex items-center justify-center shrink-0 text-emerald-400 shadow-inner">
@@ -520,19 +561,19 @@ export const PublicDocumentApplyView: React.FC<PublicDocumentApplyViewProps> = (
               <div className="space-y-1">
                 <div className="flex items-center gap-2">
                   <span className="px-2.5 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 text-[11px] font-bold border border-emerald-500/40">
-                    ワンタップオンライン発注
+                    {isReceiptDoc ? '内容のご確認・受領手続き' : 'ワンタップオンライン発注'}
                   </span>
-                  <span className="text-xs text-slate-400">即時成約システム</span>
+                  <span className="text-xs text-slate-400">{isReceiptDoc ? '受領確認システム' : '即時成約システム'}</span>
                 </div>
                 <h2 className="text-xl font-bold text-white tracking-tight">
-                  {doc?.documentType === 'contract'
+                  {effectiveType === 'contract'
                     ? '契約内容に同意して申し込む（締結確定）'
-                    : doc?.documentType === 'invoice' || doc?.documentType === 'diagnosis_report' || doc?.documentType === 'monthly_report'
+                    : isReceiptDoc
                       ? '内容のご確認・受領を完了する'
                       : 'この内容で申し込む（発注を確定する）'}
                 </h2>
                 <p className="text-xs sm:text-sm text-slate-300 leading-relaxed">
-                  {doc?.documentType === 'invoice' || doc?.documentType === 'diagnosis_report' || doc?.documentType === 'monthly_report'
+                  {isReceiptDoc
                     ? '上記の内容をご確認いただき、必要に応じて上部の「PDFダウンロード」より保存のうえ、下記より受領確認をお送りください。'
                     : (
                       <>
@@ -561,7 +602,7 @@ export const PublicDocumentApplyView: React.FC<PublicDocumentApplyViewProps> = (
                   className="mt-0.5 h-4 w-4 rounded border-slate-700 bg-slate-950 text-emerald-500 focus:ring-emerald-400"
                 />
                 <span className="text-xs text-slate-300 leading-relaxed">
-                  {doc?.documentType === 'invoice' || doc?.documentType === 'diagnosis_report' || doc?.documentType === 'monthly_report'
+                  {isReceiptDoc
                     ? '上記書類の内容を確認し、受領したことを通知します。'
                     : '上記の内容（金額、委託範囲、支払条件等）を確認し、本内容での発注および申し込みに同意します。'}
                 </span>
@@ -599,7 +640,8 @@ export const PublicDocumentApplyView: React.FC<PublicDocumentApplyViewProps> = (
               </button>
             </div>
           </div>
-        )}
+          );
+        })()}
       </main>
 
       {/* 確認モーダル */}

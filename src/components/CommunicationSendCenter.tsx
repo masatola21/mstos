@@ -62,9 +62,12 @@ const DEFAULT_TIMEREX_URL = 'https://timerex.net/s/mst.shikumikaizen_b173/4ac78e
 
 const documentCategory = (doc: any): DocumentType => {
   if (!doc || typeof doc !== 'object') return 'other';
-  if (doc.document_type === 'proposal' && /見積/.test(doc.title || '')) return 'estimate';
-  if (doc.document_type === 'report') return 'diagnosis_report';
-  return (['diagnosis_report', 'proposal', 'estimate', 'contract', 'invoice', 'monthly_report'].includes(doc.document_type) ? doc.document_type : 'other') as DocumentType;
+  const docType = String(doc.document_type || '');
+  const title = String(doc.title || '');
+  if ((docType === 'proposal' || docType === 'other') && /見積/.test(title)) return 'estimate';
+  if ((docType === 'diagnosis_report' || docType === 'report' || docType === 'proposal' || docType === 'other') && /月次|月報/.test(title)) return 'monthly_report';
+  if (docType === 'report' || ((docType === 'proposal' || docType === 'other') && /診断レポート/.test(title))) return 'diagnosis_report';
+  return (['diagnosis_report', 'proposal', 'estimate', 'contract', 'invoice', 'monthly_report'].includes(docType) ? docType : 'other') as DocumentType;
 };
 
 const documentOrder: Record<string, number> = {

@@ -74,6 +74,27 @@ const escapeHtml = (value: string) => value.replace(/[&<>"']/g, (char) => {
   return replacements[char] || char;
 });
 
+function documentTypeFallbackCandidates(primary: string): string[] {
+  switch (primary) {
+    case 'estimate':
+      return ['estimate', 'proposal', 'other'];
+    case 'monthly_report':
+      return ['monthly_report', 'diagnosis_report', 'report', 'proposal', 'other'];
+    case 'diagnosis_report':
+      return ['diagnosis_report', 'report', 'proposal', 'other'];
+    case 'report':
+      return ['report', 'diagnosis_report', 'proposal', 'other'];
+    default:
+      return [primary, 'proposal', 'other'].filter((v, i, a) => a.indexOf(v) === i);
+  }
+}
+
+function isDocumentTypeCheckViolation(err: any): boolean {
+  const code = String(err?.code || '');
+  const msg = String(err?.message || '');
+  return code === '23514' || /customer_documents_document_type_check|document_type_check/i.test(msg);
+}
+
 const DEFAULT_TEMPLATES: DocTemplate[] = CORE_TEMPLATES;
 
 interface DocumentTemplateViewProps { 
@@ -902,14 +923,18 @@ export const DocumentTemplateView: React.FC<DocumentTemplateViewProps> = ({
       const save = previousQueue.catch(() => undefined).then(async () => {
         const supabase = getSupabase();
         if (!supabase) return;
-        const { data, error } = await supabase.from('customer_documents')
-          .update(payload)
-          .eq('id', existingId)
-          .in('status', ['draft', 'awaiting_approval', 'approved'])
-          .select('id')
-          .maybeSingle();
-        if (!error && data) {
-          setSaveMessage('保存済み書類の内容を自動更新しました。');
+        for (const candidateType of documentTypeFallbackCandidates(documentType)) {
+          const { data, error } = await supabase.from('customer_documents')
+            .update({ ...payload, document_type: candidateType })
+            .eq('id', existingId)
+            .in('status', ['draft', 'awaiting_approval', 'approved'])
+            .select('id')
+            .maybeSingle();
+          if (!error) {
+            if (data) setSaveMessage('保存済み書類の内容を自動更新しました。');
+            break;
+          }
+          if (!isDocumentTypeCheckViolation(error)) break;
         }
       });
       autosaveQueues.current[templateId] = save;
@@ -951,6 +976,50 @@ export const DocumentTemplateView: React.FC<DocumentTemplateViewProps> = ({
     setTimeout(() => setCopied(false), 2000);
   };
 
+  const persistCustomerDocument = async (
+    supabase: NonNullable<ReturnType<typeof getSupabase>>,
+    existingId: string | undefined,
+    payload: {
+      document_type: string;
+      title: string;
+      body_html: string;
+      company_id: string | null;
+      contact_id: string | null;
+      lead_id: string | null;
+      deal_id: string | null;
+    },
+    statusOverride?: 'draft' | 'approved',
+  ): Promise<{ id: string; inserted: boolean }> => {
+    const candidates = documentTypeFallbackCandidates(payload.document_type);
+    let lastError: any = null;
+    for (const candidateType of candidates) {
+      if (existingId) {
+        const updateBody = statusOverride
+          ? { ...payload, document_type: candidateType, status: statusOverride }
+          : { ...payload, document_type: candidateType };
+        const { error } = await supabase.from('customer_documents').update(updateBody).eq('id', existingId);
+        if (!error) return { id: existingId, inserted: false };
+        lastError = error;
+        if (!isDocumentTypeCheckViolation(error)) throw error;
+      } else {
+        const { data, error } = await supabase.from('customer_documents')
+          .insert({ ...payload, document_type: candidateType, status: statusOverride ?? 'approved' })
+          .select('id')
+          .single();
+        if (!error && data?.id) {
+          const resolvedHtml = payload.body_html.replace(/\/(?:apply|docs)\/preview/g, `/docs/${encodeURIComponent(data.id)}`);
+          if (resolvedHtml !== payload.body_html) {
+            await supabase.from('customer_documents').update({ body_html: resolvedHtml }).eq('id', data.id);
+          }
+          return { id: data.id, inserted: true };
+        }
+        lastError = error || new Error('書類IDを取得できませんでした。');
+        if (!isDocumentTypeCheckViolation(error)) throw lastError;
+      }
+    }
+    throw lastError || new Error('書類を保存できませんでした。');
+  };
+
   const handleManualSave = async (opts?: { status?: 'draft' | 'approved' }): Promise<string | null> => {
     const supabase = getSupabase();
     if (!supabase) {
@@ -972,30 +1041,16 @@ export const DocumentTemplateView: React.FC<DocumentTemplateViewProps> = ({
     setSaveMessage('書類を保存しています…');
     try {
       const existingId = autosavedDocumentIds.current[templateId];
-      if (existingId) {
-        const { error } = await supabase.from('customer_documents')
-          .update(opts?.status ? { ...payload, status: opts.status } : payload)
-          .eq('id', existingId);
-        if (error) throw error;
-        setSavedDocIds((prev) => ({ ...prev, [templateId]: existingId }));
-        setSaveMessage('書類を更新しました。');
-        return existingId;
-      } else {
-        const { data, error } = await supabase.from('customer_documents')
-          .insert({ ...payload, status: opts?.status ?? 'approved' })
-          .select('id')
-          .single();
-        if (error || !data?.id) throw error || new Error('書類IDを取得できませんでした。');
-        autosavedDocumentIds.current[templateId] = data.id;
-        setSavedDocIds((prev) => ({ ...prev, [templateId]: data.id }));
+      const saved = await persistCustomerDocument(supabase, existingId, payload, opts?.status);
+      autosavedDocumentIds.current[templateId] = saved.id;
+      setSavedDocIds((prev) => ({ ...prev, [templateId]: saved.id }));
+      if (saved.inserted) {
         setHasStartedDocument(true);
-        const resolvedHtml = payload.body_html.replace(/\/(?:apply|docs)\/preview/g, `/docs/${encodeURIComponent(data.id)}`);
-        if (resolvedHtml !== payload.body_html) {
-          await supabase.from('customer_documents').update({ body_html: resolvedHtml }).eq('id', data.id);
-        }
         setSaveMessage(opts?.status === 'draft' ? '作成中の書類として保存しました。' : '確定書類（送付可能）として保存しました。');
-        return data.id;
+      } else {
+        setSaveMessage('書類を更新しました。');
       }
+      return saved.id;
     } catch (e: any) {
       setSaveMessage(`保存エラー: ${e.message}`);
     } finally {
@@ -1042,22 +1097,14 @@ export const DocumentTemplateView: React.FC<DocumentTemplateViewProps> = ({
             lead_id: leadId || null,
             deal_id: dealId || null,
           };
-          const { data, error } = await supabase.from('customer_documents')
-            .insert({ ...payload, status: 'approved' })
-            .select('id')
-            .single();
-          if (!error && data?.id) {
-            docIdToUse = data.id;
-            autosavedDocumentIds.current[templateId] = data.id;
-            setSavedDocIds((prev) => ({ ...prev, [templateId]: data.id }));
-            setHasStartedDocument(true);
-            const resolvedHtml = payload.body_html.replace(/\/(?:apply|docs)\/preview/g, `/docs/${encodeURIComponent(data.id)}`);
-            if (resolvedHtml !== payload.body_html) {
-              await supabase.from('customer_documents').update({ body_html: resolvedHtml }).eq('id', data.id);
-            }
-          }
+          const saved = await persistCustomerDocument(supabase, undefined, payload, 'approved');
+          docIdToUse = saved.id;
+          autosavedDocumentIds.current[templateId] = saved.id;
+          setSavedDocIds((prev) => ({ ...prev, [templateId]: saved.id }));
+          setHasStartedDocument(true);
         } catch (e: any) {
           console.error('Error auto-saving before send center:', e);
+          setSaveMessage(`保存エラー: ${e?.message || '書類保存に失敗しました'}`);
         } finally {
           setIsSavingDocument(false);
         }

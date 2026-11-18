@@ -164,7 +164,17 @@ export const DocumentPreviewModal: React.FC<DocumentPreviewModalProps> = ({
     }
   };
 
-  const docTypeInfo = typeLabels[doc?.document_type || ''] || typeLabels.other;
+  const rawDocType = String(doc?.document_type || '');
+  const docTitleText = String(doc?.title || '');
+  const effectiveDocType =
+    (rawDocType === 'proposal' || rawDocType === 'other') && /見積/.test(docTitleText)
+      ? 'estimate'
+      : (rawDocType === 'diagnosis_report' || rawDocType === 'report' || rawDocType === 'proposal' || rawDocType === 'other') && /(月次|月報)/.test(docTitleText)
+        ? 'monthly_report'
+        : rawDocType === 'report'
+          ? 'diagnosis_report'
+          : rawDocType;
+  const docTypeInfo = typeLabels[effectiveDocType] || typeLabels.other;
   const statusInfo = statusLabels[doc?.status || ''] || statusLabels.draft;
 
   return (
