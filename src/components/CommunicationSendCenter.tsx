@@ -528,7 +528,7 @@ export const CommunicationSendCenter: React.FC<Props> = ({
               if (matchingContact) setContactId(matchingContact.id);
             }
           }
-        } else if (!userInteractedDocumentRef.current) {
+        } else if (initialKind === 'document' && !userInteractedDocumentRef.current) {
           const resolvedContact = fetchedContacts.find((ct: Contact) => ct.id === resolvedContactId);
           const targetCompanyId = resolvedContact?.company_id || initialCompanyId;
           const companyDocs = targetCompanyId ? fetchedDocs.filter((x: any) => x.company_id === targetCompanyId) : fetchedDocs;
@@ -687,14 +687,32 @@ export const CommunicationSendCenter: React.FC<Props> = ({
       return;
     }
     const hasDocUrl = Boolean(url.trim() || vals.document_url?.trim() || (doc ? window.location.origin + '/docs/' + encodeURIComponent(doc.id) : ''));
-    if (
-      !basis.trim() ||
-      (kind === 'document' && (!doc || !hasDocUrl)) ||
-      (kind !== 'document' && kind !== 'announcement' && kind !== 'sales_outreach' && kind !== 'freeform' && !vals.link_url.trim()) ||
-      (targets.includes('email') && !contact.email) ||
-      (targets.includes('line') && !contact.line_user_id)
-    ) {
-      setError('送信先、メール・LINEの登録状況、必要な書類またはURLを確認してください。');
+    if (!contact) {
+      setError('送信先の連絡先を選択してください。');
+      return;
+    }
+    if (targets.includes('email') && !contact.email) {
+      setError(`「${contact.full_name} 様」にはメールアドレスが登録されていません。連絡先設定でメールアドレスを登録するか、LINE送信を選択してください。`);
+      return;
+    }
+    if (targets.includes('line') && !contact.line_user_id) {
+      setError(`「${contact.full_name} 様」はLINE公式アカウントと連携されていません（LINE送信不可）。メール送信を選択してください。`);
+      return;
+    }
+    if (kind === 'document' && (!doc || !hasDocUrl)) {
+      setError('送信対象の書類を選択してください。上の詳細設定から書類を選択できます。');
+      return;
+    }
+    if ((kind === 'form' || kind === 'diagnosis') && !vals.link_url.trim()) {
+      setError('送信対象のフォーム・診断を選択してください（案内URLが未設定です）。上の詳細設定からフォームを選択できます。');
+      return;
+    }
+    if ((kind === 'deal' || kind === 'customer_meeting') && !vals.link_url.trim()) {
+      setError('予約ページURLが設定されていません。URLを入力してください。');
+      return;
+    }
+    if (!basis.trim()) {
+      setError('送信根拠（法規・同意記録）を入力してください。');
       return;
     }
     if (kind === 'freeform' && !body.trim() && !(targets.includes('line') && selectedLineTemplate)) {
@@ -751,7 +769,7 @@ export const CommunicationSendCenter: React.FC<Props> = ({
           subject: target === 'email' ? fill(targetSubject, vals) : null,
           body_text: fill(finalBody, vals),
           line_message_payload: linePayload,
-          document_id: doc?.id || null,
+          document_id: kind === 'document' ? (doc?.id || null) : null,
           company_id: contact.company_id || null,
           deal_id: initialDealId || null,
           source_type: kind === 'document' ? 'customer_document' : kind === 'deal' ? 'deal_invitation' : kind === 'customer_meeting' ? 'customer_meeting_invitation' : kind + '_announcement',
@@ -968,9 +986,14 @@ export const CommunicationSendCenter: React.FC<Props> = ({
                 宛先: <strong className="text-slate-900">{contact.full_name} 様</strong> {companies[contact.company_id || ''] && `(${companies[contact.company_id || '']})`}
               </span>
             )}
-            {doc && (
+            {kind === 'document' && doc && (
               <span className="text-slate-700 bg-white border border-slate-200 px-2 py-0.5 rounded-md font-medium">
                 書類: <strong className="text-purple-700">{doc.title}</strong>
+              </span>
+            )}
+            {(kind === 'form' || kind === 'diagnosis') && form && (
+              <span className="text-slate-700 bg-white border border-slate-200 px-2 py-0.5 rounded-md font-medium">
+                フォーム: <strong className="text-purple-700">{form.name}</strong>
               </span>
             )}
           </div>

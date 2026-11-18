@@ -7137,7 +7137,8 @@ app.post('/api/communications/send', async (req, res) => {
       });
 
       let attachments: Array<{ filename: string; content: string }> | undefined = undefined;
-      if (row.document_id) {
+      // 重要書類送信（source_type === 'customer_document'）の場合のみ、PDFを自動生成して添付する（診断フォームや面談案内に誤添付されるのを100%防止）
+      if (row.document_id && row.source_type === 'customer_document') {
         try {
           const { data: docData } = await lineSupabase
             .from('customer_documents')
