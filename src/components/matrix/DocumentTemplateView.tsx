@@ -954,6 +954,19 @@ export const DocumentTemplateView: React.FC<DocumentTemplateViewProps> = ({
     const templateId = currentTemplate.id;
     let docIdToUse = savedDocIds[templateId] || autosavedDocumentIds.current[templateId];
 
+    // 提案書の場合: 必須項目チェック & 確定保存
+    if (isProposalDoc && draftCtx && !draftTableMissing) {
+      if (blockers.length > 0) {
+        setDraftMsg(`送信ドロワーを開くには未入力の項目を入力してください: ${blockers.join('、')}`);
+        setSaveMessage(`未入力項目があるため送付できません: ${blockers[0]}`);
+        return;
+      }
+      const savedDocId = await saveProposalDraft('approved');
+      if (savedDocId) {
+        docIdToUse = savedDocId;
+      }
+    }
+
     if (!docIdToUse) {
       const supabase = getSupabase();
       if (supabase) {
@@ -1008,10 +1021,13 @@ export const DocumentTemplateView: React.FC<DocumentTemplateViewProps> = ({
     return String(data?.user?.email || '');
   };
 
-  const saveProposalDraft = async (target: 'drafting' | 'approved') => {
+  const saveProposalDraft = async (target: 'drafting' | 'approved'): Promise<string | null> => {
     const supabase = getSupabase();
-    if (!supabase || !draftCtx || draftBusy) return;
-    if (target === 'approved' && blockers.length > 0) { setDraftMsg('確定できない項目があります。'); return; }
+    if (!supabase || !draftCtx || draftBusy) return null;
+    if (target === 'approved' && blockers.length > 0) {
+      setDraftMsg(`未入力の項目があります: ${blockers.join('、')}`);
+      return null;
+    }
     setDraftBusy(true); setDraftMsg('');
     try {
       const who = await currentUserLabel();
@@ -1039,10 +1055,12 @@ export const DocumentTemplateView: React.FC<DocumentTemplateViewProps> = ({
       }
       if (result.error) throw result.error;
       setDraftRec(result.data);
-      setDraftMsg(target === 'drafting' ? '作成中として保存しました。' : '確定しました。送付できます。');
+      setDraftMsg(target === 'drafting' ? '作成中として保存しました。' : '確定しました。送信ドロワーで送付できます。');
+      return docId || null;
     } catch (err: any) {
       if (['PGRST205', '42P01'].includes(String(err?.code))) setDraftTableMissing(true);
       setDraftMsg(`保存できませんでした: ${err?.message || err}`);
+      return null;
     } finally { setDraftBusy(false); }
   };
 
