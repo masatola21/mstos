@@ -4,21 +4,67 @@ export type PublicFormNotificationKind =
   | 'consultation_inquiry'
   | 'diagnosis';
 
+export function hasCoreDiagnosisAnswers(answers?: Record<string, unknown> | null): boolean {
+  if (!answers || typeof answers !== 'object') return false;
+  return Boolean(
+    answers.q_ops_bottleneck ||
+    answers.q_profit_bottleneck ||
+    answers.q_delay_reason ||
+    answers.q_ideal_future
+  );
+}
+
 export function classifyPublicFormNotificationKind(params: {
   slug: string;
   formType: string;
   inquiryType?: string | null;
   isCarePackage?: boolean;
+  formName?: string | null;
+  answers?: Record<string, unknown> | null;
+  utmInquiryType?: string | null;
 }): PublicFormNotificationKind {
   const slug = String(params.slug || '').trim().toLowerCase();
   const formType = String(params.formType || '').trim().toLowerCase();
   const inquiryType = String(params.inquiryType || '').trim();
+  const formName = String(params.formName || '').trim();
+  const utmInquiryType = String(params.utmInquiryType || '').trim().toLowerCase();
+  const answers = params.answers && typeof params.answers === 'object' ? params.answers : null;
 
   if (params.isCarePackage) return 'care_package';
   if (slug === 'material-download' || inquiryType === '資料請求' || inquiryType.startsWith('資料請求')) {
     return 'material_download';
   }
-  if (formType === 'diagnosis' || slug === 'business-diagnosis') {
+
+  if (slug === 'business-diagnosis') {
+    return 'diagnosis';
+  }
+
+  if (
+    slug === 'contact-inquiry' ||
+    utmInquiryType === 'consultation' ||
+    formType === 'consultation' ||
+    formType === 'meeting'
+  ) {
+    return 'consultation_inquiry';
+  }
+
+  if (hasCoreDiagnosisAnswers(answers)) {
+    return 'diagnosis';
+  }
+
+  if (
+    formName &&
+    (formName.includes('お問い合わせ') || formName.includes('お問合せ') || formName.includes('相談')) &&
+    !formName.includes('診断')
+  ) {
+    return 'consultation_inquiry';
+  }
+
+  if (answers && (answers.service_interest || answers.consultation_message || answers.message)) {
+    return 'consultation_inquiry';
+  }
+
+  if (formType === 'diagnosis') {
     return 'diagnosis';
   }
   return 'consultation_inquiry';
@@ -153,6 +199,186 @@ export function buildConsultationAdminAlertEmail(params: {
 
   return {
     subject: `【${statusTag}】${cleanName} 様（${cleanCompany}）より新着お問い合わせ`,
+    text: lines.join('\n'),
+  };
+}
+
+export interface PublicFormAdminBackupParams {
+  notificationKind: PublicFormNotificationKind;
+  formName?: string | null;
+  slug?: string | null;
+  name: string;
+  companyName?: string | null;
+  email: string;
+  phone?: string | null;
+  inquiryType?: string | null;
+  consultationText?: string | null;
+  preferredDateText?: string | null;
+  answers?: Record<string, unknown> | null;
+  questionLabels?: Record<string, string>;
+  quickBottleneck?: { typeTitle?: string; badge?: string; summary?: string } | null;
+  requestedMaterials?: Array<{ label: string; url?: string }>;
+  hearAbout?: string | null;
+  utmDetails?: string | null;
+  lineAutoReplySent?: boolean;
+  emailAutoReplySent?: boolean;
+  emailAutoReplyStatus: 'sent' | 'queued' | 'failed';
+  emailAutoReplyError?: string | null;
+  appUrl?: string | null;
+}
+
+const DEFAULT_BACKUP_ANSWER_LABELS: Record<string, string> = {
+  q_ops_bottleneck: '手作業・業務プロセスの急所',
+  q_profit_bottleneck: '売上・利益の急所',
+  q_delay_reason: '改善停滞の原因',
+  q_ideal_future: '目指したい未来',
+  q_free_notes: '今一番のお悩み・ご相談内容',
+  q_industry: '業種',
+  industry: '業種',
+  q_employee_count: '従業員数',
+  employee_count: '従業員数',
+  service_interest: 'ご関心のあるテーマ',
+  q_inquiry_type: 'ご希望内容',
+  choice_label: '選択した資料',
+  q_hear_about: '認知経路',
+};
+
+const SKIP_BACKUP_ANSWER_KEYS = new Set([
+  'hear_about',
+  'hearAbout',
+  'companyName',
+  'company',
+  'company_name',
+  'material_keys',
+  'material_choice',
+  'preferred_date',
+  'preferred_time',
+]);
+
+function formatAutoReplyStatusSummary(params: {
+  lineAutoReplySent?: boolean;
+  emailAutoReplySent?: boolean;
+  emailAutoReplyStatus: 'sent' | 'queued' | 'failed';
+  emailAutoReplyError?: string | null;
+}): string {
+  const parts: string[] = [];
+  if (params.lineAutoReplySent) parts.push('LINE自動返信送信済み');
+  if (params.emailAutoReplySent && params.emailAutoReplyStatus === 'sent') {
+    parts.push('お客様メール自動返信送信済み');
+  } else if (params.emailAutoReplyStatus === 'failed') {
+    parts.push(`メール自動返信失敗（${params.emailAutoReplyError || '送信エラー'}）`);
+  } else if (!params.lineAutoReplySent) {
+    parts.push('メール未送信/キュー');
+  }
+  return parts.join(' ／ ') || '自動返信記録なし';
+}
+
+function formatAnswerLines(
+  answers?: Record<string, unknown> | null,
+  questionLabels?: Record<string, string>,
+): string[] {
+  if (!answers || typeof answers !== 'object') return [];
+  const lines: string[] = [];
+  for (const [key, val] of Object.entries(answers)) {
+    if (SKIP_BACKUP_ANSWER_KEYS.has(key)) continue;
+    if (val === null || val === undefined || val === '' || val === false) continue;
+    const label = questionLabels?.[key] || DEFAULT_BACKUP_ANSWER_LABELS[key] || key;
+    const formatted = Array.isArray(val) ? val.join('、') : val === true ? 'はい' : String(val).trim();
+    if (!formatted) continue;
+    lines.push(`・${label}：${formatted}`);
+  }
+  return lines;
+}
+
+export function buildPublicFormAdminBackupEmail(
+  params: PublicFormAdminBackupParams,
+): { subject: string; text: string } {
+  const cleanName = String(params.name || '').trim() || 'お客様';
+  const cleanCompany = String(params.companyName || '').trim() || '個人';
+
+  if (params.notificationKind === 'consultation_inquiry') {
+    const base = buildConsultationAdminAlertEmail({
+      name: cleanName,
+      companyName: cleanCompany,
+      email: params.email,
+      phone: params.phone,
+      inquiryType: params.inquiryType,
+      consultationText: params.consultationText,
+      preferredDateText: params.preferredDateText,
+      formName: params.formName,
+      emailAutoReplyStatus: params.emailAutoReplyStatus,
+      emailAutoReplyError: params.emailAutoReplyError,
+      appUrl: params.appUrl,
+    });
+    const extraLines = [
+      ...(params.hearAbout ? [`■ 認知経路：${params.hearAbout}`] : []),
+      ...(params.utmDetails ? [`■ 流入詳細：${params.utmDetails}`] : []),
+      ...(params.lineAutoReplySent ? ['■ LINE自動返信：送信済み'] : []),
+    ];
+    if (extraLines.length === 0) return base;
+    return {
+      subject: base.subject,
+      text: `${base.text}\n\n${extraLines.join('\n')}`,
+    };
+  }
+
+  const replySummary = formatAutoReplyStatusSummary(params);
+  const answerLines = formatAnswerLines(params.answers, params.questionLabels);
+  const materialLabels = (params.requestedMaterials || []).map((m) => m.label).filter(Boolean);
+
+  let kindTitle = 'Webフォーム';
+  let subjectPrefix = 'フォーム控え';
+  if (params.notificationKind === 'diagnosis') {
+    kindTitle = params.formName || '経営ボトルネック診断';
+    subjectPrefix = 'フォーム控え・経営診断';
+  } else if (params.notificationKind === 'material_download') {
+    kindTitle = params.formName || '資料請求フォーム';
+    subjectPrefix = 'フォーム控え・資料請求';
+  } else if (params.notificationKind === 'care_package') {
+    kindTitle = '介護保険外サービス開業パッケージ';
+    subjectPrefix = `フォーム控え・開業パッケージ（${params.inquiryType || 'お申し込み'}）`;
+  }
+
+  const lines: string[] = [
+    `公開フォーム（${kindTitle}）より新しい送信がありました（個人メール控え）。`,
+    '',
+    `■ お名前：${cleanName} 様`,
+    `■ 会社名：${cleanCompany}`,
+    `■ メールアドレス：${params.email}`,
+    ...(params.phone ? [`■ 電話番号：${params.phone}`] : []),
+    ...(params.inquiryType ? [`■ 種別・希望内容：${params.inquiryType}`] : []),
+    ...(params.preferredDateText ? [`■ ご希望日時等：${params.preferredDateText}`] : []),
+    ...(params.hearAbout ? [`■ 認知経路：${params.hearAbout}`] : []),
+    ...(params.utmDetails ? [`■ 流入詳細：${params.utmDetails}`] : []),
+    `■ お客様への自動返信状況：${replySummary}`,
+  ];
+
+  if (params.quickBottleneck?.typeTitle) {
+    lines.push('', `■ 簡易診断結果：${params.quickBottleneck.typeTitle}`);
+    if (params.quickBottleneck.badge) lines.push(`■ 判定カテゴリ：${params.quickBottleneck.badge}`);
+  }
+
+  if (materialLabels.length > 0) {
+    lines.push('', '■ 請求資料：');
+    materialLabels.forEach((label) => lines.push(`・${label}`));
+  }
+
+  if (params.consultationText?.trim()) {
+    lines.push('', '■ メモ・自由記入：', params.consultationText.trim());
+  }
+
+  if (answerLines.length > 0) {
+    lines.push('', '■ フォーム回答内容：', ...answerLines);
+  }
+
+  lines.push(
+    '',
+    '※ このバックアップメールに直接「返信」すると、お客様（申込者）のメールアドレス宛てに返信できます。',
+    ...(params.appUrl ? [`▼ OS管理画面で確認する\n${params.appUrl}`] : []),
+  );
+
+  return {
+    subject: `【${subjectPrefix}】${cleanName} 様（${cleanCompany}）`,
     text: lines.join('\n'),
   };
 }

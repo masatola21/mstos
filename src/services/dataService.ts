@@ -2,6 +2,7 @@ import { getSupabase } from '../lib/supabaseClient';
 import { TableKey, Company, Product, Lead, Prospect, Deal, Customer, Diagnosis, AiReport, DiagnosisStatus } from '../types/database';
 import { executeDealWonAutomation } from './dealWonAutomationService';
 import { matrixService } from './matrixService';
+import { deduceLeadInquiryType } from '../utils/leadClassification';
 
 export type ErrorType = 'PERMISSION_DENIED' | 'SCHEMA_MISMATCH' | 'CONNECTION_ERROR' | 'NOT_CONFIGURED' | 'UNKNOWN';
 
@@ -254,42 +255,7 @@ export async function fetchTableData(
         const phone = rawPhone && rawPhone.replace(/\D/g, '').length >= 7 ? rawPhone : '';
 
         // 希望内容（問い合わせ種別）の自動判定・自動反映
-        let deducedInquiryType = String(item.inquiry_type || '').trim();
-        // 提案書表記の混入や曖昧な資料請求は適切な資料名に再判定
-        if (deducedInquiryType.includes('提案書') || deducedInquiryType === '資料請求: 介護開業提案書') {
-          deducedInquiryType = '';
-        }
-        if (!deducedInquiryType || deducedInquiryType === '開業相談' || deducedInquiryType === '資料請求') {
-          const notesText = notes;
-          const sourceText = String(item.source || '');
-          if (notesText.includes('経営ボトルネック診断') || notesText.includes('診断判定') || sourceText.includes('診断')) {
-            deducedInquiryType = 'ボトルネック診断';
-          } else if (notesText.includes('請求資料') || notesText.includes('資料') || sourceText.includes('資料')) {
-            const hasCare = notesText.includes('介護') || sourceText.includes('介護');
-            const hasGuide = notesText.includes('実務ガイド') || notesText.includes('経営改善') || notesText.includes('ガイドブック');
-            if (hasCare && hasGuide) {
-              deducedInquiryType = '資料請求: 実務ガイド・介護開業パッケージ';
-            } else if (hasCare) {
-              deducedInquiryType = '資料請求: 介護保険外開業パッケージ';
-            } else if (hasGuide) {
-              deducedInquiryType = '資料請求: 経営改善実務ガイド';
-            } else {
-              deducedInquiryType = '資料請求';
-            }
-          } else if (notesText.includes('経営全体') || notesText.includes('利益改善')) {
-            deducedInquiryType = '経営全体・利益改善';
-          } else if (notesText.includes('業務効率化') || notesText.includes('自動化') || notesText.includes('IT')) {
-            deducedInquiryType = '業務効率化・IT/自動化';
-          } else if (notesText.includes('集客') || notesText.includes('マーケティング')) {
-            deducedInquiryType = '集客・マーケティング';
-          } else if (notesText.includes('介護保険外') || notesText.includes('開業')) {
-            deducedInquiryType = '介護保険外開業';
-          } else if (sourceText.includes('お問い合わせ') || sourceText.includes('HP')) {
-            deducedInquiryType = 'お問い合わせ';
-          } else {
-            deducedInquiryType = sourceText || 'Web反響';
-          }
-        }
+        const deducedInquiryType = deduceLeadInquiryType(item);
 
         return {
           ...item,

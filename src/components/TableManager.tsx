@@ -491,7 +491,7 @@ export const TableManager: React.FC<TableManagerProps> = ({
     const statusField = currentTable === 'deals' ? 'proposal_status' : currentTable === 'customers' ? 'contract_status' : 'status';
     const defaultCols: Record<string, string[]> = {
       deals: ['新規', '提案中', '見積提出', '成約', '失注', '保留'],
-      leads: ['新規', '資料請求', 'ヒアリング済', '商談化', '失注・対象外'],
+      leads: ['新規', '相談申込', '資料請求', '診断申込', 'ヒアリング済', '商談化', '失注・対象外'],
       prospects: ['未接触', 'アプローチ中', '検討中', '商談化', '保留'],
       customers: ['active', '契約中', '更新中', '解約'],
     };

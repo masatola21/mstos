@@ -292,8 +292,8 @@ export const PublicIntakeForm: React.FC<{ slug: string }> = ({ slug }) => {
                 </section>
               </div>
             );
-          })() : slug === 'care-package-inquiry' || submissionResult?.inquiryType ? (() => {
-            const inqType = submissionResult?.inquiryType || String(answers.q_inquiry_type || 'お問い合わせ');
+          })() : slug === 'care-package-inquiry' || submissionResult?.inquiryType === '資料請求' || submissionResult?.inquiryType === '開業相談' || submissionResult?.inquiryType === '両方希望' ? (() => {
+            const inqType = submissionResult?.inquiryType || String(answers.q_inquiry_type || '開業相談');
             const hasMaterial = inqType === '資料請求' || inqType === '両方希望';
             const hasConsult = inqType === '開業相談' || inqType === '両方希望';
             const matUrl = submissionResult?.materialUrl;

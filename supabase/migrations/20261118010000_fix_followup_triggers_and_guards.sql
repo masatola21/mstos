@@ -85,11 +85,20 @@ BEGIN
     ELSE RETURN NEW;
     END IF;
   ELSIF TG_TABLE_NAME = 'diagnosis_submissions' AND TG_OP = 'INSERT' THEN
-    SELECT form_type, slug, name INTO v_form_type, v_form_slug, v_form_name
-      FROM public.forms WHERE id = nullif(v_new->>'form_id','')::uuid;
-    IF coalesce(v_form_type,'') = 'diagnosis' OR coalesce(v_form_slug,'') = 'business-diagnosis' THEN
+    SELECT form_type, public_slug, name INTO v_form_type, v_form_slug, v_form_name
+      FROM public.diagnosis_forms WHERE id = nullif(v_new->>'form_id','')::uuid;
+    IF coalesce(v_form_slug,'') = 'business-diagnosis' OR (
+      coalesce(v_form_type,'') = 'diagnosis'
+      AND coalesce(v_form_slug,'') NOT IN ('contact-inquiry', 'material-download', 'care-package-inquiry')
+      AND coalesce(v_form_name,'') NOT LIKE '%相談%'
+      AND coalesce(v_form_name,'') NOT LIKE '%問い合わせ%'
+      AND coalesce(v_form_name,'') NOT LIKE '%お問合せ%'
+    ) THEN
       v_trigger := 'diagnosis_completed';
-    ELSIF coalesce(v_form_slug,'') = 'material-download' OR coalesce(v_form_name,'') LIKE '%資料%' THEN
+    ELSIF coalesce(v_form_slug,'') = 'material-download' OR (
+      coalesce(v_form_slug,'') NOT IN ('contact-inquiry', 'business-diagnosis')
+      AND coalesce(v_form_name,'') LIKE '%資料%'
+    ) THEN
       v_trigger := 'material_requested';
     ELSE
       RETURN NEW;

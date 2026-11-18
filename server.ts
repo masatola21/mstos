@@ -24,8 +24,10 @@ import { prepareEmailPayloadContent } from './server/emailFooter.js';
 import {
   buildConsultationAdminAlertEmail,
   buildConsultationInstantReply,
+  buildPublicFormAdminBackupEmail,
   classifyPublicFormNotificationKind,
   extractConsultationDetailsText,
+  hasCoreDiagnosisAnswers,
 } from './server/publicFormReply.js';
 import { shouldStopScenarioForDeal } from './src/utils/followupStarterScenarios.js';
 import { classifyBottleneck } from './server/diagnosisAnalysis.js';
@@ -654,7 +656,7 @@ export async function ensureStandardPublicForms(supabaseClient?: any): Promise<v
     try {
       const { data: existing } = await dbClient
         .from('diagnosis_forms')
-        .select('id, status, definition')
+        .select('id, status, form_type, definition')
         .eq('public_slug', item.public_slug)
         .maybeSingle();
 
@@ -668,6 +670,9 @@ export async function ensureStandardPublicForms(supabaseClient?: any): Promise<v
         const updatePayload: Record<string, any> = {};
         if (existing.status !== 'published') {
           updatePayload.status = 'published';
+        }
+        if (item.form_type && existing.form_type !== item.form_type) {
+          updatePayload.form_type = item.form_type;
         }
         if (item.public_slug === 'business-diagnosis') {
           const migration = ensureDiagnosisProfileQuestions(questions);
@@ -1100,6 +1105,58 @@ export async function resolveDefaultLineAlertEmail(ownerId?: string | null): Pro
     } catch {}
   }
   return DEFAULT_LINE_ALERT_EMAIL;
+}
+
+export async function resolvePublicFormBackupRecipients(
+  ownerId?: string | null,
+  excludeEmails: string[] = [],
+): Promise<string[]> {
+  const excluded = new Set(
+    ['contact@mstcorp.info', ...excludeEmails]
+      .map((e) => String(e || '').trim().toLowerCase())
+      .filter(Boolean),
+  );
+  const candidates = new Set<string>();
+
+  const envBackup = (process.env.FORM_BACKUP_EMAIL || process.env.ADMIN_BACKUP_EMAIL || '').trim().toLowerCase();
+  if (envBackup && isValidAlertEmail(envBackup) && !excluded.has(envBackup)) {
+    candidates.add(envBackup);
+  }
+
+  try {
+    const lineAlert = await getLineInboundAlertSettings(ownerId);
+    const lineAlertEmail = String(lineAlert?.email || '').trim().toLowerCase();
+    if (lineAlertEmail && isValidAlertEmail(lineAlertEmail) && !excluded.has(lineAlertEmail)) {
+      candidates.add(lineAlertEmail);
+    }
+  } catch {}
+
+  try {
+    const backup = await getEmailBackupForwardSettings(ownerId);
+    const backupAddr = String(backup?.address || '').trim().toLowerCase();
+    if (backupAddr && isValidAlertEmail(backupAddr) && !excluded.has(backupAddr)) {
+      candidates.add(backupAddr);
+    }
+  } catch {}
+
+  if (ownerId && lineSupabase) {
+    try {
+      const { data: userRes } = await lineSupabase.auth.admin.getUserById(ownerId);
+      const authEmail = userRes?.user?.email?.trim().toLowerCase();
+      if (authEmail && isValidAlertEmail(authEmail) && !excluded.has(authEmail)) {
+        candidates.add(authEmail);
+      }
+    } catch {}
+  }
+
+  if (candidates.size === 0) {
+    const fallback = DEFAULT_LINE_ALERT_EMAIL.trim().toLowerCase();
+    if (isValidAlertEmail(fallback)) {
+      candidates.add(fallback);
+    }
+  }
+
+  return Array.from(candidates);
 }
 
 export async function getLineInboundAlertSettings(ownerId?: string | null): Promise<LineInboundAlertSettings> {
@@ -7200,7 +7257,16 @@ app.post(
     if (priorError) throw priorError;
     if (priorSubmission) {
       let diagnosisId: string | null = null;
-      if (form.form_type === 'diagnosis' || slug === 'business-diagnosis' || form.name.includes('診断')) {
+      const isRetryDiagnosis =
+        slug === 'business-diagnosis' ||
+        (form.form_type === 'diagnosis' &&
+          slug !== 'contact-inquiry' &&
+          slug !== 'material-download' &&
+          slug !== 'care-package-inquiry' &&
+          !form.name.includes('相談') &&
+          !form.name.includes('問い合わせ') &&
+          !form.name.includes('お問合せ'));
+      if (isRetryDiagnosis) {
         const { data, error } = await lineSupabase.rpc('create_diagnosis_from_form_submission', { p_submission_id: priorSubmission.id });
         if (error) console.error('Diagnosis handoff retry failed:', error.message);
         else diagnosisId = data || null;
@@ -7503,9 +7569,32 @@ app.post(
       ''
     ).trim();
 
-    if (slug === 'business-diagnosis' || form.form_type === 'diagnosis') {
+    const isExplicitConsultationForm =
+      slug === 'contact-inquiry' ||
+      utm.inquiryType === 'consultation' ||
+      form.form_type === 'consultation' ||
+      form.form_type === 'meeting' ||
+      ((form.name.includes('相談') || form.name.includes('問い合わせ') || form.name.includes('お問合せ')) && !form.name.includes('診断'));
+
+    const isDiagnosisSubmission =
+      slug === 'business-diagnosis' ||
+      (!isExplicitConsultationForm && slug !== 'material-download' && slug !== 'care-package-inquiry' && (form.form_type === 'diagnosis' || hasCoreDiagnosisAnswers(cleanAnswers))) ||
+      (form.form_type === 'diagnosis' && hasCoreDiagnosisAnswers(cleanAnswers));
+
+    let carePackageChoice: '資料請求' | '開業相談' | '両方希望' | null = null;
+    if (slug === 'care-package-inquiry') {
+      if (rawInquiry === '両方希望') carePackageChoice = '両方希望';
+      else if (rawInquiry === '資料請求' || utm.inquiryType === 'material') carePackageChoice = '資料請求';
+      else carePackageChoice = '開業相談';
+    }
+
+    const isMaterialForm =
+      slug === 'material-download' ||
+      (slug !== 'contact-inquiry' && slug !== 'care-package-inquiry' && slug !== 'business-diagnosis' && utm.inquiryType !== 'consultation' && form.name.includes('資料'));
+
+    if (isDiagnosisSubmission) {
       inquiryType = 'ボトルネック診断';
-    } else if (slug === 'material-download' || form.name.includes('資料')) {
+    } else if (isMaterialForm) {
       const hasCare = requestedMaterialKeys.includes('care-package-overview') || rawInquiry.includes('介護') || String(cleanAnswers.choice_label || '').includes('介護');
       const hasGuide = requestedMaterialKeys.includes('management-guide') || rawInquiry.includes('実務ガイド') || rawInquiry.includes('経営改善') || String(cleanAnswers.choice_label || '').includes('実務ガイド') || String(cleanAnswers.choice_label || '').includes('経営改善');
 
@@ -7532,25 +7621,51 @@ app.post(
         inquiryType = rawInterest || '経営相談';
       }
     } else if (slug === 'care-package-inquiry') {
-      inquiryType = '介護保険外開業';
+      inquiryType = carePackageChoice || '開業相談';
+    } else if (utm.inquiryType === 'consultation' || form.form_type === 'consultation' || form.form_type === 'meeting') {
+      const rawInterest = String(cleanAnswers.service_interest || (body.customFields as any)?.service_interest || '').trim();
+      if (rawInterest.includes('介護保険外') || rawInterest.includes('開業')) {
+        inquiryType = '介護保険外開業';
+      } else {
+        inquiryType = rawInterest || form.name || '経営相談';
+      }
     } else {
       inquiryType = form.name || 'Webフォーム反響';
     }
 
-    // public_materials から該当資料を検索
-    let resolvedMaterials: Array<{ key: string; label: string; url: string }> = [];
-    try {
-      const { data: activeMaterials } = await lineSupabase
-        .from('public_materials')
-        .select('key, label, public_url, sort_order')
-        .eq('is_active', true)
-        .order('sort_order', { ascending: true });
+    const wantsMaterials =
+      slug === 'material-download' ||
+      isMaterialForm ||
+      (slug === 'care-package-inquiry' && (carePackageChoice === '資料請求' || carePackageChoice === '両方希望')) ||
+      (slug !== 'contact-inquiry' && slug !== 'business-diagnosis' && utm.inquiryType !== 'consultation' && requestedMaterialKeys.length > 0);
 
-      if (activeMaterials && activeMaterials.length > 0) {
-        if (requestedMaterialKeys.length > 0) {
-          resolvedMaterials = activeMaterials
-            .filter((m) => requestedMaterialKeys.includes(m.key))
-            .map((m) => ({
+    // public_materials から該当資料を検索（資料請求時のみ）
+    let resolvedMaterials: Array<{ key: string; label: string; url: string }> = [];
+    if (wantsMaterials) {
+      try {
+        const { data: activeMaterials } = await lineSupabase
+          .from('public_materials')
+          .select('key, label, public_url, sort_order')
+          .eq('is_active', true)
+          .order('sort_order', { ascending: true });
+
+        if (activeMaterials && activeMaterials.length > 0) {
+          if (requestedMaterialKeys.length > 0) {
+            resolvedMaterials = activeMaterials
+              .filter((m) => requestedMaterialKeys.includes(m.key))
+              .map((m) => ({
+                key: m.key,
+                label: (m.label || '')
+                  .replace(/[・\s]*収益シミュレーション[資料]*/g, '')
+                  .replace(/収益シミュレーション[・\s]*/g, '')
+                  .replace(/[・\s]*シミュレーション[資料]*/g, '')
+                  .trim(),
+                url: m.public_url,
+              }));
+          }
+          // 資料キー未指定だが資料請求の場合、全有効資料を採用
+          if (resolvedMaterials.length === 0) {
+            resolvedMaterials = activeMaterials.map((m) => ({
               key: m.key,
               label: (m.label || '')
                 .replace(/[・\s]*収益シミュレーション[資料]*/g, '')
@@ -7559,48 +7674,43 @@ app.post(
                 .trim(),
               url: m.public_url,
             }));
+          }
         }
-        // 資料キー未指定だが資料請求の場合、全有効資料を採用
-        if (resolvedMaterials.length === 0 && (slug === 'material-download' || rawInquiry.includes('資料'))) {
-          resolvedMaterials = activeMaterials.map((m) => ({
-            key: m.key,
-            label: (m.label || '')
-              .replace(/[・\s]*収益シミュレーション[資料]*/g, '')
-              .replace(/収益シミュレーション[・\s]*/g, '')
-              .replace(/[・\s]*シミュレーション[資料]*/g, '')
-              .trim(),
-            url: m.public_url,
-          }));
-        }
+      } catch (matLookupErr) {
+        console.warn('[PublicForm] Materials lookup exception:', matLookupErr);
       }
-    } catch (matLookupErr) {
-      console.warn('[PublicForm] Materials lookup exception:', matLookupErr);
-    }
 
-    // DB未初期化または未検索時のフォールバック（2資料を確実に返却）
-    if (resolvedMaterials.length === 0 && (slug === 'material-download' || rawInquiry.includes('資料') || requestedMaterialKeys.length > 0)) {
-      const defaultMaterialsList = [
-        {
-          key: 'management-guide',
-          label: '① 経営改善実務ガイドブック（要点解説スライド）',
-          url: 'https://corp.mstcorp.info/materials/mst-management-guide.pdf',
-        },
-        {
-          key: 'care-package-overview',
-          label: '② 介護保険外サービス開業パッケージ資料',
-          url: 'https://corp.mstcorp.info/materials/care-package-proposal.pdf',
-        },
-      ];
-      if (requestedMaterialKeys.length > 0) {
-        resolvedMaterials = defaultMaterialsList.filter((m) => requestedMaterialKeys.includes(m.key));
-      }
+      // DB未初期化または未検索時のフォールバック（2資料を確実に返却）
       if (resolvedMaterials.length === 0) {
-        resolvedMaterials = defaultMaterialsList;
+        const defaultMaterialsList = [
+          {
+            key: 'management-guide',
+            label: '① 経営改善実務ガイドブック（要点解説スライド）',
+            url: 'https://corp.mstcorp.info/materials/mst-management-guide.pdf',
+          },
+          {
+            key: 'care-package-overview',
+            label: '② 介護保険外サービス開業パッケージ資料',
+            url: 'https://corp.mstcorp.info/materials/care-package-proposal.pdf',
+          },
+        ];
+        if (requestedMaterialKeys.length > 0) {
+          resolvedMaterials = defaultMaterialsList.filter((m) => requestedMaterialKeys.includes(m.key));
+        }
+        if (resolvedMaterials.length === 0) {
+          resolvedMaterials = defaultMaterialsList;
+        }
       }
     }
 
-    // ラウンド2-3: 介護保険外パッケージの判定を slug === 'care-package-inquiry' に限定（material-downloadを誤判定させない）
-    const isCarePackage = slug === 'care-package-inquiry' || (slug !== 'material-download' && slug !== 'contact-inquiry' && slug !== 'business-diagnosis' && (cleanAnswers.service_interest === '介護保険外サービス開業パッケージ' || rawInquiry.includes('介護')));
+    // ラウンド2-3: 介護保険外パッケージの判定を slug === 'care-package-inquiry' に限定（material-download・contact-inquiryを誤判定させない）
+    const isCarePackage =
+      slug === 'care-package-inquiry' ||
+      (slug !== 'material-download' &&
+        slug !== 'contact-inquiry' &&
+        slug !== 'business-diagnosis' &&
+        utm.inquiryType !== 'consultation' &&
+        (cleanAnswers.service_interest === '介護保険外サービス開業パッケージ' || rawInquiry.includes('介護')));
 
     // ラウンド2-3 & 補足A: leads.source はフォームslug別のラベルを一意に保持（流入元の詳細は別項目へ）
     let leadSource = 'HP：Web受付';
@@ -7608,13 +7718,11 @@ app.post(
       leadSource = 'HP：資料請求';
     } else if (slug === 'contact-inquiry') {
       leadSource = 'HP：お問い合わせ';
-    } else if (slug === 'business-diagnosis') {
+    } else if (slug === 'business-diagnosis' || isDiagnosisSubmission) {
       leadSource = 'HP：経営診断';
     } else if (slug === 'care-package-inquiry') {
       leadSource = 'HP：開業パッケージ';
-    } else if (form.form_type === 'diagnosis') {
-      leadSource = 'HP：経営診断';
-    } else if (form.form_type === 'consultation') {
+    } else if (form.form_type === 'consultation' || utm.inquiryType === 'consultation') {
       leadSource = 'HP：相談・問い合わせ';
     } else {
       leadSource = `HP：${form.name || 'Webフォーム'}`;
@@ -7631,15 +7739,15 @@ app.post(
 
     // ラウンド2-3: leads.status を slug / 種別別に一意に決定
     let leadStatus = '相談申込';
-    if (slug === 'material-download') {
+    if (slug === 'material-download' || isMaterialForm) {
       leadStatus = '資料請求';
-    } else if (slug === 'business-diagnosis' || form.form_type === 'diagnosis') {
+    } else if (isDiagnosisSubmission) {
       leadStatus = '診断申込';
     } else if (slug === 'contact-inquiry') {
       leadStatus = '相談申込';
     } else if (slug === 'care-package-inquiry') {
-      leadStatus = (inquiryType === '資料請求' || rawInquiry.includes('資料')) ? '資料請求' : '相談申込';
-    } else if (inquiryType === '資料請求') {
+      leadStatus = carePackageChoice === '資料請求' ? '資料請求' : '相談申込';
+    } else if (inquiryType === '資料請求' || inquiryType.startsWith('資料請求')) {
       leadStatus = '資料請求';
     }
 
@@ -7661,14 +7769,17 @@ app.post(
       normalizedUtm.landing_page ? `LP: ${normalizedUtm.landing_page}` : '',
     ].filter(Boolean).join(' | ');
 
-    const requestedMaterialText = resolvedMaterials.length > 0
-      ? `【請求資料】${resolvedMaterials.map((m) => m.label).join('、')}`
-      : (typeof cleanAnswers.choice_label === 'string' && cleanAnswers.choice_label.trim())
-        ? `【請求資料】${cleanAnswers.choice_label.trim()}`
-        : '';
+    const requestedMaterialText = wantsMaterials
+      ? (resolvedMaterials.length > 0
+          ? `【請求資料】${resolvedMaterials.map((m) => m.label).join('、')}`
+          : (typeof cleanAnswers.choice_label === 'string' && cleanAnswers.choice_label.trim())
+            ? `【請求資料】${cleanAnswers.choice_label.trim()}`
+            : '')
+      : '';
 
     const noteEntry = [
       `${requestMarker} ${leadSource} / ${new Date().toISOString()}`,
+      inquiryType ? `【希望内容】${inquiryType}` : '',
       utmDetails ? `【流入詳細】${utmDetails}` : '',
       hearAboutAnswer ? `【認知経路（どこで知りましたか）】${hearAboutAnswer}` : '',
       companyName ? `【会社名】${companyName}` : '',
@@ -7709,6 +7820,19 @@ app.post(
           return String(res.data.id);
         }
         const errMsg = res.error?.message || '';
+        if (/leads_inquiry_type_check/i.test(errMsg) && 'inquiry_type' in currentPayload) {
+          const val = String(currentPayload.inquiry_type || '');
+          if (val === '両方希望') {
+            currentPayload.inquiry_type = '両方希望';
+          } else if (val === '資料請求' || val.startsWith('資料請求')) {
+            currentPayload.inquiry_type = '資料請求';
+          } else if (val === 'ボトルネック診断') {
+            currentPayload.inquiry_type = null;
+          } else {
+            currentPayload.inquiry_type = '開業相談';
+          }
+          continue;
+        }
         const match = errMsg.match(/Could not find the '([^']+)' column/i) || errMsg.match(/column "([^"]+)" of relation/i);
         if (match && match[1] && match[1] in currentPayload) {
           console.warn(`[PublicForm] Removing missing column '${match[1]}' from leads payload and retrying`);
@@ -7732,13 +7856,12 @@ app.post(
         const notes = [lead.notes, noteEntry].filter(Boolean).join('\n\n').slice(-12_000);
         leadId = await safeUpsertLead(true, {
           notes,
+          source: leadSource,
           last_contacted_at: new Date().toISOString(),
           ...(resolvedCompanyId && !lead.company_id ? { company_id: resolvedCompanyId } : {}),
-
           ...(meetingDate ? { meeting_date: meetingDate } : {}),
           ...(inquiryType ? { inquiry_type: inquiryType } : {}),
-          ...(isCarePackage && ['新規', 'ヒアリング済'].includes(lead.status) ? { status: leadStatus } : {}),
-          ...(!isCarePackage && inquiryType === '資料請求' && lead.status === '新規' ? { status: '資料請求' } : {}),
+          ...(['新規', 'ヒアリング済'].includes(lead.status) ? { status: leadStatus } : {}),
         }, lead.id);
       }
     } else {
@@ -7783,8 +7906,19 @@ app.post(
       }
       throw submissionError;
     }
+    const notificationKind = classifyPublicFormNotificationKind({
+      slug,
+      formType: form.form_type,
+      inquiryType,
+      isCarePackage,
+      formName: form.name,
+      answers: cleanAnswers,
+      utmInquiryType: utm.inquiryType,
+    });
+    const isActualDiagnosis = notificationKind === 'diagnosis';
+
     let diagnosisId: string | null = null;
-    if (form.form_type === 'diagnosis') {
+    if (isActualDiagnosis) {
       const { data, error } = await lineSupabase.rpc('create_diagnosis_from_form_submission', { p_submission_id: submission.id });
       if (error) console.error('Diagnosis handoff failed:', error.message);
       else diagnosisId = data || null;
@@ -7814,11 +7948,11 @@ app.post(
         const tagsToAssign: string[] = [];
 
         // 1. 診断フォーム送信時
-        if (form.form_type === 'diagnosis' || slug === 'business-diagnosis') {
+        if (isActualDiagnosis) {
           tagsToAssign.push('診断受検済み');
         }
         // 2. 資料請求時
-        const isMaterialRequestTag = slug === 'material-download' || inquiryType === '資料請求' || inquiryType.startsWith('資料請求');
+        const isMaterialRequestTag = notificationKind === 'material_download' || (notificationKind === 'care_package' && (inquiryType === '資料請求' || inquiryType === '両方希望'));
         if (isMaterialRequestTag) {
           tagsToAssign.push('資料請求');
         }
@@ -7850,9 +7984,9 @@ app.post(
       console.warn('[AutoTag] Tag automation exception (non-fatal):', tagErr?.message);
     }
 
-    const isMaterialDownload = slug === 'material-download' || inquiryType === '資料請求' || inquiryType.startsWith('資料請求');
+    const isMaterialDownload = notificationKind === 'material_download' || (notificationKind === 'care_package' && (inquiryType === '資料請求' || inquiryType === '両方希望'));
     if (contact?.id) {
-      if (form.form_type === 'diagnosis') {
+      if (isActualDiagnosis) {
         await enqueueScenariosForContact(contact.id, 'diagnosis_completed');
       } else if (isMaterialDownload) {
         await enqueueScenariosForContact(contact.id, 'material_requested');
@@ -7888,18 +8022,12 @@ app.post(
     const materialReady = resolvedMaterials.length > 0 || Boolean(fallbackMaterialUrl);
     const bookingReady = Boolean(bookingUrl && /^https?:\/\//i.test(bookingUrl));
 
-    const quickBottleneck = form.form_type === 'diagnosis' ? classifyBottleneck(cleanAnswers) : null;
+    const quickBottleneck = isActualDiagnosis ? classifyBottleneck(cleanAnswers) : null;
 
     const bookingPrompt = bookingReady
       ? `\n\n▼ 30分無料オンライン商談（改善作戦会議）の日程予約はこちら\n${bookingUrl}\n\n※さらに踏み込んだ【詳細診断レポート・改善提案書】は、30分商談を実施いただいた方限定で商談後に作成・ご送付しております。`
       : '\n\n※詳細な【個別診断レポート・改善提案書】は、商談を実施いただいた方限定で商談後に作成・ご送付しております。担当者より日程のご案内をお届けいたします。';
 
-    const notificationKind = classifyPublicFormNotificationKind({
-      slug,
-      formType: form.form_type,
-      inquiryType,
-      isCarePackage,
-    });
     const isConsultationInquiry = notificationKind === 'consultation_inquiry';
     const { consultationText, preferredDateText } = extractConsultationDetailsText({
       userNotes,
@@ -7917,12 +8045,12 @@ app.post(
     let customNotificationText = '';
     let consultationReplySubject = '';
     if (notificationKind === 'care_package') {
-      if (inquiryType === '資料請求') {
+      if (inquiryType === '資料請求' || inquiryType.startsWith('資料請求')) {
         customNotificationText = `【MST】「介護保険外サービス開業パッケージ」資料請求を承りました。\n\n${name} 様\n資料請求いただき誠にありがとうございます！\n\n` +
           (materialReady
             ? `以下のURLより開業パッケージの概要資料をご確認いただけます。\n${effectiveMaterialUrls}\n\nご不明点や具体的な相談をご希望の場合は、いつでも本LINE／メールまでお気軽に返信してください。`
             : `現在、最新版資料の送付準備中となっております。専任担当者より折り返しご案内をお送りいたしますので、恐れ入りますが少々お待ちくださいませ。`);
-      } else if (inquiryType === '開業相談') {
+      } else if (inquiryType === '開業相談' || inquiryType === '介護保険外開業') {
         customNotificationText = `【MST】「介護保険外サービス開業パッケージ」開業相談のお申し込みを承りました。\n\n${name} 様\nご相談のお申し込み誠にありがとうございます！\n\n専任コンサルタントによる30分のオンライン個別面談（Zoom・無料）にて、貴社の構想に合わせた開業ステップやサービス設計をご案内いたします。` +
           (bookingReady ? `\n\n▼ 面談日程のWeb予約はこちら\n${bookingUrl}\n\n※上記リンクよりご都合のよい日時をお選びください。` : '\n\n担当者より面談日程のご案内を折り返しお届けいたします。');
       } else {
@@ -7957,6 +8085,8 @@ app.post(
       });
       consultationReplySubject = consultationReply.emailSubject;
       customNotificationText = consultationReply.bodyText;
+    } else {
+      customNotificationText = `${name} 様\n\n有限会社MST代表の大橋真人です。\nこの度は「${form.name || '無料診断'}」にご回答いただき誠にありがとうございます。\n\n送信直後にホームページ画面へ表示いたしました【簡易診断結果】はご覧いただけましたでしょうか？\n■ 今回の簡易診断タイプ：${quickBottleneck?.typeTitle || '経営ボトルネック簡易診断'}\n${quickBottleneck?.firstStep ? `■ 最初に着手したい候補：${quickBottleneck.firstStep}\n` : ''}\nより詳細な【個別診断レポート】および【改善提案書】につきましては、机上の空論を避け御社の実情に合った内容でお届けするため、30分のオンライン商談を実施いただいた方限定で商談後に作成・ご送付しております。${bookingPrompt}\n\n--------------------------------------------------\n有限会社MST\n代表取締役: 大橋真人\n〒503-0981 岐阜県大垣市桧町127番地\n--------------------------------------------------`;
     }
 
     const sysOwnerId = lineSupabase ? await resolveSystemOwnerId((form as any)?.owner_id) : null;
@@ -7964,12 +8094,16 @@ app.post(
     const shouldSendLineReply = Boolean(contact.line_user_id && lineChannelAccessToken);
     // Web相談・お問い合わせはメール返信が必須のため、LINE連携済みの連絡先でもメール即時受付を省略しない
     const shouldSendEmailReply = Boolean(recipientEmail) && (isConsultationInquiry || !shouldSendLineReply);
+    let lineAutoReplyOk = false;
 
     if (shouldSendLineReply) {
       try {
+        const lineText = isActualDiagnosis
+          ? `【MST】「${form.name || '無料診断'}」をご回答いただきありがとうございました！\n\nホームページ画面に表示された【簡易診断結果】はご覧いただけましたでしょうか？\n■ 今回の簡易診断タイプ：${quickBottleneck?.typeTitle || '経営ボトルネック簡易診断'}\n\nなお、御社の現場に合わせた【詳細診断レポート・改善提案書】は、30分オンライン商談にて直接お話を伺った方限定で、商談後に作成・ご送付しております。${bookingPrompt}\n\n※簡易診断結果について気になる点やご質問がございましたら、このままLINEにご返信ください。`
+          : customNotificationText;
         const lineMsg = {
           type: 'text',
-          text: customNotificationText || `【MST】「${form.name || '無料診断'}」をご回答いただきありがとうございました！\n\nホームページ画面に表示された【簡易診断結果】はご覧いただけましたでしょうか？\n■ 今回の簡易診断タイプ：${quickBottleneck?.typeTitle || '経営ボトルネック簡易診断'}\n\nなお、御社の現場に合わせた【詳細診断レポート・改善提案書】は、30分オンライン商談にて直接お話を伺った方限定で、商談後に作成・ご送付しております。${bookingPrompt}\n\n※簡易診断結果について気になる点やご質問がございましたら、このままLINEにご返信ください。`,
+          text: lineText,
         };
         const lineResponse = await fetch('https://api.line.me/v2/bot/message/push', {
           method: 'POST',
@@ -7977,6 +8111,7 @@ app.post(
           body: JSON.stringify({ to: contact.line_user_id, messages: [lineMsg] }),
         });
         const lineOk = lineResponse.ok;
+        lineAutoReplyOk = lineOk;
         let lineErrorMessage: string | null = null;
         if (!lineOk) {
           const lineErrPayload = await lineResponse.json().catch(() => ({})) as { message?: string };
@@ -8044,7 +8179,17 @@ app.post(
                 ? consultationReplySubject
                 : `【MST】「${form.name || '無料診断'}」簡易診断結果の確認 ＆ 個別商談のご案内`;
         // 署名は送信直前に共通処理で付ける（他のメールと同じ形式。受付完了は取引メールなので配信停止リンクなし）
-        const rawBodyText = customNotificationText || `${name} 様\n\n有限会社MST代表の大橋真人です。\nこの度は「${form.name || '無料診断'}」にご回答いただき誠にありがとうございます。\n\n送信直後にホームページ画面へ表示いたしました【簡易診断結果】はご覧いただけましたでしょうか？\n■ 今回の簡易診断タイプ：${quickBottleneck?.typeTitle || '経営ボトルネック簡易診断'}\n${quickBottleneck?.firstStep ? `■ 最初に着手したい候補：${quickBottleneck.firstStep}\n` : ''}\nより詳細な【個別診断レポート】および【改善提案書】につきましては、机上の空論を避け御社の実情に合った内容でお届けするため、30分のオンライン商談を実施いただいた方限定で商談後に作成・ご送付しております。${bookingPrompt}\n\n--------------------------------------------------\n有限会社MST\n代表取締役: 大橋真人\n〒503-0981 岐阜県大垣市桧町127番地\n--------------------------------------------------`;
+        const fallbackConsultationReply = !isActualDiagnosis
+          ? buildConsultationInstantReply({
+              name,
+              companyName,
+              inquiryType,
+              consultationText,
+              preferredDateText,
+              bookingUrl: bookingReady ? bookingUrl : null,
+            }).bodyText
+          : '';
+        const rawBodyText = customNotificationText || fallbackConsultationReply;
 
         const emailPayload = prepareEmailPayloadContent(rawBodyText, {
           senderEmail: senderAddr,
@@ -8128,7 +8273,7 @@ app.post(
         if (!formTaskOwnerId) {
           console.error('[PublicForm] タスク起票スキップ: owner_id が解決できませんでした (form:', form?.name, slug, ')');
         } else {
-          if ((isCarePackage || slug === 'material-download' || inquiryType === '資料請求') && !materialReady) {
+          if (isMaterialDownload && !materialReady) {
             const { error: warningTaskErr } = await lineSupabase.from('tasks').insert({
               owner_id: formTaskOwnerId,
               title: `【未設定警告】資料URLが未登録です（${name} 様の資料請求）`,
@@ -8144,13 +8289,15 @@ app.post(
 
           const taskTitle = isConsultationInquiry
             ? `【要対応・Web相談（メール返信）】${name} 様（${companyName || '個人'}）`
-            : `【要対応・${isCarePackage ? '開業パッケージ申込' : slug === 'material-download' ? '資料請求' : 'レポート承認'}】${name} 様（${companyName || '個人'}）の回答`;
+            : `【要対応・${isCarePackage ? '開業パッケージ申込' : isMaterialDownload ? '資料請求' : 'レポート承認'}】${name} 様（${companyName || '個人'}）の回答`;
 
           const autoEmailStatusText = shouldSendEmailReply
             ? emailStatus === 'sent'
               ? '自動受付メール送信済み'
               : `自動受付メール未完了（${emailStatus}${emailErrorMessage ? `: ${emailErrorMessage}` : ''}）— 至急メール返信してください`
-            : '自動受付メール対象外';
+            : lineAutoReplyOk
+              ? 'LINE自動返信送信済み'
+              : '自動受付メール対象外';
 
           const taskDescription = isConsultationInquiry
             ? [
@@ -8176,15 +8323,23 @@ app.post(
             console.error('[PublicForm] フォーム回答対応タスク起票エラー:', responseTaskErr.message, responseTaskErr.code);
           }
 
-          // Web相談（contact-inquiry 等）は返信漏れ防止のため管理者宛てにも即時アラートメールを送信（reply_to にお客様メールを設定）
-          if (isConsultationInquiry && process.env.RESEND_API_KEY) {
+          // すべての公開フォーム（診断・お問い合わせ・資料請求・開業パッケージ等）送信を個人のメール宛てにもバックアップ送信
+          if (process.env.RESEND_API_KEY) {
             try {
-              const adminEmail = await resolveDefaultLineAlertEmail(formTaskOwnerId);
               const resolvedSender = await resolveEmailSender(formTaskOwnerId);
               const adminFrom = (process.env.RESEND_FROM_EMAIL || resolvedSender.fromString || '').trim();
-              if (adminEmail && adminFrom) {
+              const adminSenderAddr = (adminFrom.match(/<([^<>]+)>/)?.[1] || resolvedSender.senderEmail || adminFrom).trim().toLowerCase();
+              const backupRecipients = await resolvePublicFormBackupRecipients(formTaskOwnerId, [adminSenderAddr]);
+              if (backupRecipients.length > 0 && adminFrom) {
                 const appUrl = (process.env.PUBLIC_APP_URL || '').trim().replace(/\/$/, '');
-                const adminAlert = buildConsultationAdminAlertEmail({
+                const questionLabels: Record<string, string> = {};
+                for (const q of configuredQuestions as any[]) {
+                  if (q?.id && q?.label) questionLabels[String(q.id)] = String(q.label);
+                }
+                const adminBackup = buildPublicFormAdminBackupEmail({
+                  notificationKind,
+                  formName: form.name,
+                  slug,
                   name,
                   companyName,
                   email: recipientEmail,
@@ -8192,7 +8347,14 @@ app.post(
                   inquiryType,
                   consultationText,
                   preferredDateText,
-                  formName: form.name,
+                  answers: cleanAnswers,
+                  questionLabels,
+                  quickBottleneck,
+                  requestedMaterials: resolvedMaterials,
+                  hearAbout: hearAboutAnswer || null,
+                  utmDetails: utmDetails || null,
+                  lineAutoReplySent: lineAutoReplyOk,
+                  emailAutoReplySent: shouldSendEmailReply,
                   emailAutoReplyStatus: emailStatus,
                   emailAutoReplyError: emailErrorMessage,
                   appUrl: appUrl || null,
@@ -8202,19 +8364,20 @@ app.post(
                   headers: { Authorization: `Bearer ${process.env.RESEND_API_KEY}`, 'Content-Type': 'application/json' },
                   body: JSON.stringify({
                     from: adminFrom,
-                    to: [adminEmail],
+                    to: backupRecipients,
+                    headers: { 'X-MST-Backup-Copy': '1' },
                     ...(recipientEmail ? { reply_to: recipientEmail } : {}),
-                    subject: adminAlert.subject,
-                    text: adminAlert.text,
+                    subject: adminBackup.subject,
+                    text: adminBackup.text,
                   }),
                 });
                 if (!adminRes.ok) {
                   const errBody = await adminRes.text().catch(() => '');
-                  console.warn('[PublicForm] Consultation admin alert email warning:', adminRes.status, errBody);
+                  console.warn('[PublicForm] Form backup alert email warning:', adminRes.status, errBody);
                 }
               }
             } catch (adminMailErr: any) {
-              console.warn('[PublicForm] Consultation admin alert exception:', adminMailErr?.message || adminMailErr);
+              console.warn('[PublicForm] Form backup alert exception:', adminMailErr?.message || adminMailErr);
             }
           }
         }
@@ -8228,7 +8391,7 @@ app.post(
       submissionId: submission.id,
       leadId,
       diagnosisId,
-      diagnosisPending: form.form_type === 'diagnosis' && !diagnosisId,
+      diagnosisPending: isActualDiagnosis && !diagnosisId,
       inquiryType: inquiryType || null,
       materialReady,
       materialUrl: singleMaterialUrl,

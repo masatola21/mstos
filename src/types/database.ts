@@ -425,7 +425,9 @@ export const TABLE_CONFIGS: Record<TableKey, TableConfig> = {
         type: 'select',
         options: [
           { value: '新規', label: '新規' },
+          { value: '相談申込', label: '相談申込' },
           { value: '資料請求', label: '資料請求' },
+          { value: '診断申込', label: '診断申込' },
           { value: 'ヒアリング済', label: 'ヒアリング済' },
           { value: '商談化', label: '商談化' },
           { value: '失注・対象外', label: '失注・対象外' }
@@ -438,10 +440,13 @@ export const TABLE_CONFIGS: Record<TableKey, TableConfig> = {
       { key: 'inquiry_type', label: '希望内容（反響・問合せ種別）', type: 'select', allowCustom: true, options: [
         { value: 'ボトルネック診断', label: 'ボトルネック診断' },
         { value: '資料請求', label: '資料請求' },
+        { value: '経営相談', label: '経営相談' },
         { value: '経営全体・利益改善', label: '経営全体・利益改善' },
         { value: '業務効率化・IT/自動化', label: '業務効率化・IT/自動化' },
         { value: '集客・マーケティング', label: '集客・マーケティング' },
         { value: '介護保険外開業', label: '介護保険外開業' },
+        { value: '開業相談', label: '開業相談' },
+        { value: '両方希望', label: '両方希望' },
         { value: 'その他お問い合わせ', label: 'その他お問い合わせ' },
       ] },
       { key: 'priority_channel', label: '優先連絡チャネル', type: 'select', allowCustom: true, options: [
