@@ -4,8 +4,12 @@ import {
   countUnreadEmails,
   countUnreadLineByUser,
   countUnreadLineMessages,
+  getLatestLineInboundAt,
+  isAutomatedLineOutboundMessage,
   isEmailMessageRead,
+  isLineConversationAwaitingReply,
   isLineMessageUnread,
+  isManualLineOutboundMessage,
 } from '../src/utils/inboxReadState';
 
 describe('Inbox Read/Unread State Helpers', () => {
@@ -50,4 +54,47 @@ describe('Inbox Read/Unread State Helpers', () => {
     ];
     assert.equal(countUnreadEmails(emails, localReadIds), 2);
   });
+
+  it('detects LINE awaiting-reply conversations even when automated replies fired, and clears only on manual reply or matching dismiss timestamp', () => {
+    assert.equal(isAutomatedLineOutboundMessage({ direction: 'outbound', line_event_id: 'welcome-ev1' }), true);
+    assert.equal(isAutomatedLineOutboundMessage({ direction: 'outbound', line_event_id: 'reply-ev1' }), true);
+    assert.equal(isAutomatedLineOutboundMessage({ direction: 'outbound', line_event_id: 'postback-ev1' }), true);
+    assert.equal(isAutomatedLineOutboundMessage({ direction: 'outbound', line_event_id: 'manual-out1' }), false);
+    assert.equal(isManualLineOutboundMessage({ direction: 'outbound', line_event_id: 'manual-out1' }), true);
+
+    // Only welcome outbound -> NOT awaiting reply
+    assert.equal(
+      isLineConversationAwaitingReply([
+        { direction: 'outbound', line_event_id: 'welcome-1', received_at: '2026-11-18T01:00:00Z' },
+      ]),
+      false,
+    );
+
+    // Inbound followed by automated reply-... -> STILL awaiting human reply
+    const autoRepliedMsgs = [
+      { direction: 'outbound', line_event_id: 'welcome-1', received_at: '2026-11-18T01:00:00Z' },
+      { direction: 'inbound', line_event_id: 'ev-2', received_at: '2026-11-18T01:05:00Z' },
+      { direction: 'outbound', line_event_id: 'reply-ev-2', received_at: '2026-11-18T01:05:01Z' },
+    ];
+    assert.equal(isLineConversationAwaitingReply(autoRepliedMsgs), true);
+    assert.equal(getLatestLineInboundAt(autoRepliedMsgs), '2026-11-18T01:05:00Z');
+
+    // Dismissed for '2026-11-18T01:05:00Z' -> cleared
+    assert.equal(isLineConversationAwaitingReply(autoRepliedMsgs, '2026-11-18T01:05:00Z'), false);
+
+    // Newer inbound arrives after dismiss -> awaiting reply turns back ON
+    const newerInboundMsgs = [
+      ...autoRepliedMsgs,
+      { direction: 'inbound', line_event_id: 'ev-3', received_at: '2026-11-18T02:00:00Z' },
+    ];
+    assert.equal(isLineConversationAwaitingReply(newerInboundMsgs, '2026-11-18T01:05:00Z'), true);
+
+    // Manual reply sent after latest inbound -> cleared
+    const manuallyRepliedMsgs = [
+      ...newerInboundMsgs,
+      { direction: 'outbound', line_event_id: 'manual-outbox-99', received_at: '2026-11-18T02:10:00Z' },
+    ];
+    assert.equal(isLineConversationAwaitingReply(manuallyRepliedMsgs), false);
+  });
 });
+

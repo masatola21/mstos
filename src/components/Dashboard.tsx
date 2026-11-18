@@ -1,7 +1,7 @@
 import React, { useEffect, useState, useMemo } from 'react';
 import { TableKey, TABLE_CONFIGS, DiagnosisStatus } from '../types/database';
 import { fetchTableCounts, fetchDiagnosisCounts, DataFetchError, fetchCompaniesList } from '../services/dataService';
-import { getSupabase } from '../lib/supabaseClient';
+import { getAuthHeaders, getSupabase } from '../lib/supabaseClient';
 import { getStatusBadgeClass } from '../utils/statusBadges';
 import { todayJst } from '../utils/date';
 import type { TaskItem, Priority } from '../types';
@@ -123,6 +123,14 @@ export const Dashboard: React.FC<DashboardProps> = ({
   const [leadsList, setLeadsList] = useState<any[]>([]);
   const [prospectsList, setProspectsList] = useState<any[]>([]);
   const [companiesMap, setCompaniesMap] = useState<Map<string, string>>(new Map());
+  const [awaitingLineChats, setAwaitingLineChats] = useState<Array<{
+    lineUserId: string;
+    displayName: string;
+    lastInboundBody: string;
+    lastInboundAt: string;
+    unreadCount: number;
+  }>>([]);
+  const [inboxEmailUnread, setInboxEmailUnread] = useState(0);
 
   const [pipelineSummary, setPipelineSummary] = useState({ 
     amount: 0, 
@@ -373,6 +381,23 @@ export const Dashboard: React.FC<DashboardProps> = ({
           }));
           setProspectsList(enrichedProspects);
         }
+
+        // LINE要返信・メール未読サマリーの取得（「⚡ 反響即応」に集約表示）
+        try {
+          const authHeaders = await getAuthHeaders();
+          const summaryRes = await fetch('/api/inbox/summary', { headers: authHeaders });
+          if (summaryRes.ok) {
+            const summaryData = await summaryRes.json();
+            if (Array.isArray(summaryData.awaitingConversations)) {
+              setAwaitingLineChats(summaryData.awaitingConversations);
+            }
+            if (typeof summaryData.emailUnread === 'number') {
+              setInboxEmailUnread(summaryData.emailUnread);
+            }
+          }
+        } catch {
+          // non-blocking
+        }
       }
     } catch (err: any) {
       setFetchError({
@@ -475,6 +500,48 @@ export const Dashboard: React.FC<DashboardProps> = ({
         });
       }
     });
+
+    // 3-2. LINE要返信（ボールがこちらにある相手）
+    awaitingLineChats.slice(0, 5).forEach((conv) => {
+      const itemId = `line_awaiting_${conv.lineUserId}`;
+      const isDone = completedItemIds.has(itemId);
+      items.push({
+        id: itemId,
+        type: 'urgent_lead',
+        title: `LINE要返信: ${conv.displayName}`,
+        subtitle: conv.lastInboundBody
+          ? `最新メッセージ: 「${conv.lastInboundBody.replace(/\s+/g, ' ').slice(0, 60)}」`
+          : 'お客様からのメッセージに手動返信が必要です',
+        urgency: 'critical',
+        timeLabel: conv.unreadCount > 0 ? `未読 ${conv.unreadCount}件` : 'LINE要返信',
+        targetCompany: conv.displayName,
+        completed: isDone,
+        actionButtonLabel: 'LINEで返信',
+        onAction: () => {
+          onNavigateTab('inbox_hub', { inboxChannel: 'line', lineUserId: conv.lineUserId });
+        },
+        onToggleComplete: () => toggleActionComplete(itemId),
+      });
+    });
+
+    // 3-3. 未読受信メール
+    if (inboxEmailUnread > 0) {
+      const itemId = `email_unread_alert_${todayStr}`;
+      items.push({
+        id: itemId,
+        type: 'urgent_lead',
+        title: `メール未読: ${inboxEmailUnread}件の受信メールが未確認です`,
+        subtitle: '統合受信トレイのメール受信箱から内容を確認・返信してください',
+        urgency: 'high',
+        timeLabel: `未読 ${inboxEmailUnread}件`,
+        completed: completedItemIds.has(itemId),
+        actionButtonLabel: 'メール受信箱へ',
+        onAction: () => {
+          onNavigateTab('inbox_hub', { inboxChannel: 'email' });
+        },
+        onToggleComplete: () => toggleActionComplete(itemId),
+      });
+    }
 
     // 4. 次回フォロー期日が本日または期限超過の商談 (next_followup_at <= today)
     dealsList.forEach((deal) => {

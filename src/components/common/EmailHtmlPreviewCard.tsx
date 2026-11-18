@@ -1,0 +1,79 @@
+import React from 'react';
+import { SENDER_PROFILE, stripTrailingLegacySignature } from '../../../server/emailFooter';
+
+interface EmailHtmlPreviewCardProps {
+  body: string;
+  senderEmail?: string;
+  unsubscribeUrl?: string;
+  className?: string;
+}
+
+/**
+ * 実際の送信メール（Resend HTMLメール）と同一構成のビジュアルプレビュー。
+ * 末尾のMSTロゴ入りHTML署名・配信停止リンクを安全にJSXで描画する。
+ */
+export const EmailHtmlPreviewCard: React.FC<EmailHtmlPreviewCardProps> = ({
+  body,
+  senderEmail = 'contact@mstcorp.info',
+  unsubscribeUrl,
+  className = '',
+}) => {
+  const original = String(body || '').replace(/\s+$/, '');
+  const { text: cleanBody, stripped } = stripTrailingLegacySignature(original);
+  const shouldIncludeSignature = stripped || !cleanBody.includes(SENDER_PROFILE.addressMarker);
+  const mail = String(senderEmail || '').trim();
+  const cleanUnsub = String(unsubscribeUrl || '').trim();
+  const isHttpUnsub = /^https?:\/\/[^\s<>"']+$/i.test(cleanUnsub);
+
+  return (
+    <div className={`text-slate-800 ${className}`}>
+      <div className="whitespace-pre-wrap leading-relaxed">
+        {cleanBody}
+      </div>
+
+      {shouldIncludeSignature && (
+        <div className="mt-6 pt-4 border-t border-slate-300 flex items-center gap-3.5">
+          <div className="shrink-0 bg-white border border-slate-200 rounded-lg px-2.5 py-1.5 shadow-2xs">
+            <img
+              src="/images/mst-logo.png"
+              alt={SENDER_PROFILE.logoAlt}
+              width={100}
+              height={40}
+              className="block w-[100px] h-[40px] object-contain"
+            />
+          </div>
+          <div className="text-[11px] leading-relaxed text-slate-700 min-w-0">
+            <div className="text-xs font-bold text-slate-900">
+              {SENDER_PROFILE.companyLine}
+            </div>
+            <div>
+              {SENDER_PROFILE.postalCode} {SENDER_PROFILE.address}
+            </div>
+            <div className="truncate">
+              HP:{' '}
+              <span className="text-sky-700 underline">
+                {SENDER_PROFILE.website}
+              </span>
+            </div>
+            {mail && (
+              <div className="truncate">
+                Mail: <span className="text-sky-700 underline">{mail}</span>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {cleanUnsub && (
+        <div className="mt-3.5 pt-2.5 border-t border-dashed border-slate-200 text-[11px] text-slate-500 break-all">
+          配信停止はこちら:{' '}
+          {isHttpUnsub ? (
+            <span className="underline">{cleanUnsub}</span>
+          ) : (
+            <span>{cleanUnsub}</span>
+          )}
+        </div>
+      )}
+    </div>
+  );
+};

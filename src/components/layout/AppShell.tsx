@@ -1,12 +1,14 @@
 import React, { useState } from 'react';
 import { AppSidebar } from './AppSidebar';
-import { AppHeader } from './AppHeader';
+import { AppHeader, type InboxAlertSummary } from './AppHeader';
 import { UnifiedNavTab } from '../UnifiedNavbar';
 
 interface AppShellProps {
   currentTab: UnifiedNavTab;
   onSelectTab: (tab: UnifiedNavTab) => void;
   pendingApprovalsCount: number;
+  inboxAlertSummary?: InboxAlertSummary;
+  onOpenInboxChannel?: (channel: 'line' | 'email' | 'forms') => void;
   workspaceSyncStatus: 'loading' | 'saving' | 'saved' | 'error' | 'conflict';
   workspaceSaveError?: string;
   pageAssistantEmoji: string;
@@ -25,6 +27,8 @@ export const AppShell: React.FC<AppShellProps> = ({
   currentTab,
   onSelectTab,
   pendingApprovalsCount,
+  inboxAlertSummary,
+  onOpenInboxChannel,
   workspaceSyncStatus,
   workspaceSaveError,
   pageAssistantEmoji,
@@ -47,6 +51,7 @@ export const AppShell: React.FC<AppShellProps> = ({
         currentTab={currentTab}
         onSelectTab={onSelectTab}
         pendingApprovalsCount={pendingApprovalsCount}
+        inboxAttentionCount={inboxAlertSummary?.totalAttentionCount || 0}
         isOpenMobile={isOpenMobile}
         onCloseMobile={() => setIsOpenMobile(false)}
         onOpenConfig={onOpenConfig}
@@ -65,6 +70,8 @@ export const AppShell: React.FC<AppShellProps> = ({
           onSelectTab={onSelectTab}
           onOpenMobileSidebar={() => setIsOpenMobile(true)}
           pendingApprovalsCount={pendingApprovalsCount}
+          inboxAlertSummary={inboxAlertSummary}
+          onOpenInboxChannel={onOpenInboxChannel}
           workspaceSyncStatus={workspaceSyncStatus}
           workspaceSaveError={workspaceSaveError}
           onOpenQuickAiDrawer={onOpenQuickAiDrawer}

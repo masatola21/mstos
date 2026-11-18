@@ -62,6 +62,7 @@ import {
   WelcomePatternBConfig,
 } from './MarketingLineSettingsView';
 import { upgradeLegacyMstUrl, OFFICIAL_VERCEL_URLS } from '../../utils/marketingStorage';
+import { isPostDealStageTrigger } from '../../utils/followupStarterScenarios';
 import { getSupabase } from '../../lib/supabaseClient';
 import { FlowStepInspectorModal } from './FlowStepInspectorModal';
 import { UNIFIED_TAG_MASTER, MasterTag } from '../../constants/tagMaster';
@@ -76,6 +77,8 @@ export interface MarketingFlowStudioProps {
   onOpenJobs?: () => void;
   onApplyAllStarterSets?: () => void;
   onApplyDiagnosisStarterSet?: () => void;
+  onApplyMaterialStarterSet?: () => void;
+  onApplyPostMeetingStarterSet?: () => void;
   onApplyOutreachStarterSet?: () => void;
   onApplyLineNurturingStarterSet?: () => void;
   onApplyDirectConsultStarterSet?: () => void;
@@ -176,6 +179,8 @@ export const MarketingFlowStudio: React.FC<MarketingFlowStudioProps> = ({
   onOpenJobs,
   onApplyAllStarterSets,
   onApplyDiagnosisStarterSet,
+  onApplyMaterialStarterSet,
+  onApplyPostMeetingStarterSet,
   onApplyOutreachStarterSet,
   onApplyLineNurturingStarterSet,
   onApplyDirectConsultStarterSet,
@@ -1280,24 +1285,39 @@ export const MarketingFlowStudio: React.FC<MarketingFlowStudioProps> = ({
   const [inspectorScenario, setInspectorScenario] = useState<MarketingScenario | null>(null);
   const [isInspectorOpen, setIsInspectorOpen] = useState(false);
 
-  // シナリオの分類（重複なく分岐A / B / C / 共通教育 / 営業メールへ振り分け）
+  const isMaterialFollowupScenario = (s: MarketingScenario) =>
+    s.trigger === 'material_requested' || s.name.includes('【資料請求');
+
+  const isPostMeetingFollowupScenario = (s: MarketingScenario) =>
+    isPostDealStageTrigger(s.trigger) ||
+    s.name.includes('【面談後') ||
+    s.name.includes('【レポート後') ||
+    s.name.includes('【提案後');
+
+  // シナリオの分類（重複なく分岐A / B / C / 共通教育 / 営業メール / 資料請求後 / 面談・提案後へ振り分け）
   const diagnosisScenarios = useMemo(() => {
     return scenarios.filter(s =>
-      s.name.includes('【A') ||
-      s.name.includes('診断') ||
-      s.trigger.startsWith('diagnosis_') ||
-      s.trigger.startsWith('report_') ||
-      s.targetTag === '選択:診断' ||
-      s.name.includes('【1. 初回') ||
-      s.name.includes('【2. 診断') ||
-      s.name.includes('【3. レポート') ||
-      s.name.includes('【4. 3日') ||
-      s.name.includes('【5. 7日')
+      !isMaterialFollowupScenario(s) &&
+      !isPostMeetingFollowupScenario(s) &&
+      (
+        s.name.includes('【A') ||
+        s.name.includes('診断') ||
+        s.trigger.startsWith('diagnosis_') ||
+        s.trigger.startsWith('report_') ||
+        s.targetTag === '選択:診断' ||
+        s.name.includes('【1. 初回') ||
+        s.name.includes('【2. 診断') ||
+        s.name.includes('【3. レポート') ||
+        s.name.includes('【4. 3日') ||
+        s.name.includes('【5. 7日')
+      )
     );
   }, [scenarios]);
 
   const consultScenarios = useMemo(() => {
     return scenarios.filter(s =>
+      !isMaterialFollowupScenario(s) &&
+      !isPostMeetingFollowupScenario(s) &&
       (s.name.includes('【B') ||
         s.name.includes('直相談') ||
         s.name.includes('個別相談') ||
@@ -1310,6 +1330,30 @@ export const MarketingFlowStudio: React.FC<MarketingFlowStudioProps> = ({
       !s.name.includes('【A') &&
       !s.name.includes('【C')
     );
+  }, [scenarios]);
+
+  const materialFollowupScenarios = useMemo(() => {
+    return scenarios
+      .filter(isMaterialFollowupScenario)
+      .sort((a, b) => (a.waitMinutes || 0) - (b.waitMinutes || 0));
+  }, [scenarios]);
+
+  const postMeetingScenarios = useMemo(() => {
+    const triggerOrder: Record<string, number> = {
+      meeting_completed: 1,
+      report_approved: 2,
+      report_sent: 3,
+      proposal_approved: 4,
+      proposal_sent: 5,
+    };
+    return scenarios
+      .filter(isPostMeetingFollowupScenario)
+      .sort((a, b) => {
+        const orderA = triggerOrder[a.trigger] ?? 99;
+        const orderB = triggerOrder[b.trigger] ?? 99;
+        if (orderA !== orderB) return orderA - orderB;
+        return (a.waitMinutes || 0) - (b.waitMinutes || 0);
+      });
   }, [scenarios]);
 
   const careScenarios = useMemo(() => {
@@ -1392,13 +1436,16 @@ export const MarketingFlowStudio: React.FC<MarketingFlowStudioProps> = ({
   const handleCreateNewStep = () => {
     const isOutreach = activeTrack === 'sales_outreach';
     const isNurturing = activeTrack === 'story_nurturing';
+    const isInboundMaterial = activeTrack === 'inbound_material';
     const isConsult = activeTrack === 'line_welcome' && expandedBranch === 'consult';
     const isCare = activeTrack === 'line_welcome' && expandedBranch === 'care';
     const isDiagnosis = activeTrack === 'line_welcome' && expandedBranch === 'diagnosis';
 
-    const defaultChannel: MarketingChannel = isOutreach ? 'email' : isNurturing ? 'both' : 'line';
+    const defaultChannel: MarketingChannel = isOutreach ? 'email' : (isNurturing || isInboundMaterial) ? 'both' : 'line';
     const defaultTrigger: MarketingTrigger = isOutreach
       ? 'lead_created'
+      : isInboundMaterial
+      ? 'material_requested'
       : isConsult || isCare || isDiagnosis
       ? 'tag_added'
       : 'line_registered';
@@ -1411,6 +1458,8 @@ export const MarketingFlowStudio: React.FC<MarketingFlowStudioProps> = ({
       : undefined;
     const defaultName = isOutreach
       ? '【営業メール】業務改善・仕組み化のご案内'
+      : isInboundMaterial
+      ? '【資料請求】フォロー配信ステップ'
       : isNurturing
       ? '【共通教育・追加話】ストーリーフォロー配信'
       : isConsult
@@ -1427,12 +1476,12 @@ export const MarketingFlowStudio: React.FC<MarketingFlowStudioProps> = ({
       trigger: defaultTrigger,
       targetTag: defaultTargetTag,
       channel: defaultChannel,
-      audience: isOutreach ? '未接触の見込み企業' : 'LINE友だち見込み客',
+      audience: isOutreach ? '未接触の見込み企業' : isInboundMaterial ? '資料請求者（返信・予約で停止）' : 'LINE友だち見込み客',
       waitMinutes: isOutreach ? 0 : 1440,
-      emailSubject: isOutreach || isNurturing ? '【有限会社MST】業務改善・仕組み化のご案内' : '',
-      emailBody: isOutreach || isNurturing ? '{recipient_name} 様\n\n有限会社MSTの大橋です。\n本メールでは業務改革と利益改善の最新事例をご案内いたします。' : '',
+      emailSubject: isOutreach || isNurturing || isInboundMaterial ? '【有限会社MST】資料のご確認ありがとうございます' : '',
+      emailBody: isOutreach || isNurturing || isInboundMaterial ? '{recipient_name} 様\n\n有限会社MSTの大橋です。\nご請求いただいた資料はお手元でご覧いただけましたでしょうか。' : '',
       messageBody: !isOutreach ? '{recipient_name} 様\nご案内をお届けいたします。\n\n▼30分無料オンライン相談はこちら\n{booking_url}' : '',
-      lineMessageType: 'flex',
+      lineMessageType: isInboundMaterial ? 'text' : 'flex',
       lineImageUrl: '',
       linePreviewImageUrl: '',
       flexAltText: '【ご案内】業務改善・個別相談',
@@ -1444,7 +1493,7 @@ export const MarketingFlowStudio: React.FC<MarketingFlowStudioProps> = ({
       automationEnabled: false,
       stopOnBooking: true,
       stopOnDeal: true,
-      consentBasis: isOutreach ? '特定電子メール法に基づく業務改善情報の提供' : 'LINE友だち登録時の同意に基づく',
+      consentBasis: isOutreach ? '特定電子メール法に基づく業務改善情報の提供' : isInboundMaterial ? '資料請求フォーム送信時の同意に基づく' : 'LINE友だち登録時の同意に基づく',
       updatedAt: Date.now(),
     };
     setInspectorScenario(newStep);
@@ -1470,20 +1519,39 @@ export const MarketingFlowStudio: React.FC<MarketingFlowStudioProps> = ({
     setTimeout(() => setKeywordNotice(''), 3000);
   };
 
-  // トグル自動配信の有効化
+  // トグル自動配信の有効化（一時停止時は status も draft に戻してサーバーエンキューを確実に止める）
   const toggleScenarioAutomation = (scenarioId: string, currentStatus: boolean) => {
+    const nextEnabled = !currentStatus;
     const updated = scenarios.map(s => {
       if (s.id === scenarioId) {
         return {
           ...s,
-          automationEnabled: !currentStatus,
-          status: !currentStatus ? ('prepared' as const) : s.status,
+          automationEnabled: nextEnabled,
+          status: nextEnabled ? ('prepared' as const) : ('draft' as const),
           updatedAt: Date.now(),
         };
       }
       return s;
     });
     onScenariosChange(updated);
+  };
+
+  const toggleGroupAutomation = (targetScenarios: MarketingScenario[], nextEnabled: boolean) => {
+    if (targetScenarios.length === 0) return;
+    const targetIds = new Set(targetScenarios.map((s) => s.id));
+    const now = Date.now();
+    onScenariosChange(
+      scenarios.map((s) =>
+        targetIds.has(s.id)
+          ? {
+              ...s,
+              automationEnabled: nextEnabled,
+              status: nextEnabled ? ('prepared' as const) : ('draft' as const),
+              updatedAt: now,
+            }
+          : s
+      )
+    );
   };
 
   return (
@@ -1574,6 +1642,26 @@ export const MarketingFlowStudio: React.FC<MarketingFlowStudioProps> = ({
                         <span>分岐A: 簡易診断×教育4本を適用</span>
                       </button>
                     )}
+                    {onApplyMaterialStarterSet && (
+                      <button
+                        type="button"
+                        onClick={() => { onApplyMaterialStarterSet(); setIsStarterOpen(false); }}
+                        className="w-full flex items-center gap-2 px-2.5 py-1.5 rounded-lg text-xs font-semibold text-slate-700 hover:bg-teal-50 hover:text-teal-700 transition cursor-pointer text-left"
+                      >
+                        <BookOpen className="h-3.5 w-3.5 text-teal-600 shrink-0" />
+                        <span>資料請求後: 自動追客3本を適用</span>
+                      </button>
+                    )}
+                    {onApplyPostMeetingStarterSet && (
+                      <button
+                        type="button"
+                        onClick={() => { onApplyPostMeetingStarterSet(); setIsStarterOpen(false); }}
+                        className="w-full flex items-center gap-2 px-2.5 py-1.5 rounded-lg text-xs font-semibold text-slate-700 hover:bg-amber-50 hover:text-amber-700 transition cursor-pointer text-left"
+                      >
+                        <UserCheck className="h-3.5 w-3.5 text-amber-600 shrink-0" />
+                        <span>面談・提案後: フォロー4本を適用</span>
+                      </button>
+                    )}
                     {onApplyDirectConsultStarterSet && (
                       <button
                         type="button"
@@ -1645,8 +1733,8 @@ export const MarketingFlowStudio: React.FC<MarketingFlowStudioProps> = ({
           </div>
         )}
 
-        {/* 4つの表示切り替えタブ */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2">
+        {/* 5つの表示切り替えタブ */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-2">
           <button
             type="button"
             onClick={() => setViewMode('table')}
@@ -1662,7 +1750,7 @@ export const MarketingFlowStudio: React.FC<MarketingFlowStudioProps> = ({
                 <span className="truncate">全ステップ一覧</span>
               </div>
               <div className="text-[11px] text-slate-500 mt-0.5 truncate">
-                検索・ON/OFF・単発メール編集
+                検索・ON/OFF・単発編集
               </div>
             </div>
             <span className={`text-[11px] font-bold px-2 py-0.5 rounded shrink-0 ml-2 ${viewMode === 'table' ? 'bg-purple-100 text-purple-800' : 'bg-slate-100 text-slate-600'}`}>
@@ -1682,14 +1770,37 @@ export const MarketingFlowStudio: React.FC<MarketingFlowStudioProps> = ({
             <div className="min-w-0">
               <div className={`flex items-center gap-1.5 font-bold text-xs ${activeTrack === 'line_welcome' && viewMode === 'flow' ? 'text-emerald-900' : 'text-slate-800'}`}>
                 <MessageCircle className={`w-3.5 h-3.5 shrink-0 ${activeTrack === 'line_welcome' && viewMode === 'flow' ? 'text-emerald-600' : 'text-slate-400'}`} />
-                <span className="truncate">LINE導線・分岐フロー</span>
+                <span className="truncate">LINE導線・診断後</span>
               </div>
               <div className="text-[11px] text-slate-500 mt-0.5 truncate">
-                ウェルカム3択・分岐A/B/C
+                ウェルカム・分岐A/B/C
               </div>
             </div>
             <span className={`text-[11px] font-bold px-2 py-0.5 rounded shrink-0 ml-2 ${activeTrack === 'line_welcome' && viewMode === 'flow' ? 'bg-emerald-100 text-emerald-800' : 'bg-slate-100 text-slate-600'}`}>
               LINE
+            </span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => { setActiveTrack('inbound_material'); setViewMode('flow'); }}
+            className={`flex items-center justify-between p-3 rounded-xl border text-left transition cursor-pointer ${
+              activeTrack === 'inbound_material' && viewMode === 'flow'
+                ? 'bg-teal-50 border-teal-500 ring-1 ring-teal-400'
+                : 'bg-white border-slate-200 hover:border-teal-300 hover:bg-slate-50/70'
+            }`}
+          >
+            <div className="min-w-0">
+              <div className={`flex items-center gap-1.5 font-bold text-xs ${activeTrack === 'inbound_material' && viewMode === 'flow' ? 'text-teal-900' : 'text-slate-800'}`}>
+                <UserCheck className={`w-3.5 h-3.5 shrink-0 ${activeTrack === 'inbound_material' && viewMode === 'flow' ? 'text-teal-600' : 'text-slate-400'}`} />
+                <span className="truncate">資料・面談・提案後</span>
+              </div>
+              <div className="text-[11px] text-slate-500 mt-0.5 truncate">
+                自動追客7ステップ
+              </div>
+            </div>
+            <span className={`text-[11px] font-bold px-2 py-0.5 rounded shrink-0 ml-2 ${activeTrack === 'inbound_material' && viewMode === 'flow' ? 'bg-teal-100 text-teal-800' : 'bg-slate-100 text-slate-600'}`}>
+              {materialFollowupScenarios.length + postMeetingScenarios.length}本
             </span>
           </button>
 
@@ -1708,7 +1819,7 @@ export const MarketingFlowStudio: React.FC<MarketingFlowStudioProps> = ({
                 <span className="truncate">教育ステップ</span>
               </div>
               <div className="text-[11px] text-slate-500 mt-0.5 truncate">
-                共通ストーリー7話（LINE+メール）
+                共通ストーリー7話
               </div>
             </div>
             <span className={`text-[11px] font-bold px-2 py-0.5 rounded shrink-0 ml-2 ${activeTrack === 'story_nurturing' && viewMode === 'flow' ? 'bg-indigo-100 text-indigo-800' : 'bg-slate-100 text-slate-600'}`}>
@@ -1728,14 +1839,14 @@ export const MarketingFlowStudio: React.FC<MarketingFlowStudioProps> = ({
             <div className="min-w-0">
               <div className={`flex items-center gap-1.5 font-bold text-xs ${activeTrack === 'sales_outreach' && viewMode === 'flow' ? 'text-blue-900' : 'text-slate-800'}`}>
                 <Mail className={`w-3.5 h-3.5 shrink-0 ${activeTrack === 'sales_outreach' && viewMode === 'flow' ? 'text-blue-600' : 'text-slate-400'}`} />
-                <span className="truncate">営業メール（単発・5段階）</span>
+                <span className="truncate">営業メール（5段階）</span>
               </div>
               <div className="text-[11px] text-slate-500 mt-0.5 truncate">
-                一発直球メール・自動追客5ステップ
+                単発・自動追客
               </div>
             </div>
             <span className={`text-[11px] font-bold px-2 py-0.5 rounded shrink-0 ml-2 ${activeTrack === 'sales_outreach' && viewMode === 'flow' ? 'bg-blue-100 text-blue-800' : 'bg-slate-100 text-slate-600'}`}>
-              {outreachScenarios.length}件+単発
+              {outreachScenarios.length}件
             </span>
           </button>
         </div>
@@ -2990,7 +3101,13 @@ export const MarketingFlowStudio: React.FC<MarketingFlowStudioProps> = ({
                               </span>
                             )}
                             <span className="text-[10px] px-2 py-0.5 rounded bg-emerald-50 text-emerald-700 border border-emerald-200 font-medium">
-                              {scenario.lineMessageType === 'flex' ? 'Flexカード' : 'テキスト'}
+                              {scenario.channel === 'both'
+                                ? 'LINE＋メール'
+                                : scenario.channel === 'email'
+                                ? 'メールのみ'
+                                : scenario.lineMessageType === 'flex'
+                                ? 'LINE Flexカード'
+                                : 'LINEテキスト'}
                             </span>
                           </div>
                           <p className="text-xs text-slate-500 line-clamp-1">
@@ -4477,6 +4594,334 @@ export const MarketingFlowStudio: React.FC<MarketingFlowStudioProps> = ({
                 </div>
               );
             })}
+          </div>
+        </div>
+      )}
+
+      {/* ═══════════════════════════════════════════════════════════════ */}
+      {/* トラック 3: 📘 資料請求後 ＆ 🤝 面談・提案書送付後フォロー      */}
+      {/* ═══════════════════════════════════════════════════════════════ */}
+      {viewMode === 'flow' && activeTrack === 'inbound_material' && (
+        <div className="space-y-6 animate-fade-in">
+          {/* セクション 1: 資料請求後の自動追客（1日後・3日後・7日後） */}
+          <div className="bg-white border border-teal-200 rounded-2xl p-5 shadow-xs space-y-4">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-100 pb-3">
+              <div className="space-y-1">
+                <div className="flex items-center gap-2 flex-wrap">
+                  <span className="text-[11px] font-bold px-2 py-0.5 rounded bg-teal-100 text-teal-800 border border-teal-200">
+                    資料請求後
+                  </span>
+                  <h3 className="text-base font-bold text-slate-900">
+                    資料請求後の自動追客（1日後・3日後・7日後）
+                  </h3>
+                  <span className="text-xs px-2 py-0.5 rounded bg-slate-100 text-slate-700 font-semibold">
+                    {materialFollowupScenarios.filter((s) => s.automationEnabled).length}/{materialFollowupScenarios.length}件 稼働中
+                  </span>
+                </div>
+                <p className="text-xs text-slate-500">
+                  資料請求フォーム送信時に起動し、LINE＋メールの両方で自動フォローします（相手からの返信・商談予約・商談化で即停止）。
+                </p>
+              </div>
+
+              <div className="flex flex-wrap items-center gap-2 shrink-0">
+                {materialFollowupScenarios.length > 0 && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const allActive = materialFollowupScenarios.every((s) => s.automationEnabled);
+                      toggleGroupAutomation(materialFollowupScenarios, !allActive);
+                    }}
+                    className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-slate-50 hover:bg-slate-100 text-slate-700 border border-slate-200 rounded-lg text-xs font-semibold transition cursor-pointer whitespace-nowrap"
+                  >
+                    {materialFollowupScenarios.every((s) => s.automationEnabled) ? (
+                      <>
+                        <Pause className="w-3.5 h-3.5 text-slate-500" />
+                        <span>一括停止</span>
+                      </>
+                    ) : (
+                      <>
+                        <Play className="w-3.5 h-3.5 text-teal-600 fill-teal-600" />
+                        <span>一括ON</span>
+                      </>
+                    )}
+                  </button>
+                )}
+                <button
+                  type="button"
+                  onClick={handleCreateNewStep}
+                  className="inline-flex items-center gap-1 px-3 py-1.5 bg-white hover:bg-slate-50 text-slate-700 border border-slate-200 rounded-lg text-xs font-semibold transition cursor-pointer whitespace-nowrap"
+                >
+                  <Plus className="w-3.5 h-3.5" />
+                  <span>ステップ追加</span>
+                </button>
+                {onApplyMaterialStarterSet && (
+                  <button
+                    type="button"
+                    onClick={onApplyMaterialStarterSet}
+                    className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-teal-600 hover:bg-teal-700 text-white rounded-lg text-xs font-bold transition cursor-pointer shadow-xs whitespace-nowrap"
+                  >
+                    <Zap className="w-3.5 h-3.5 text-teal-200" />
+                    <span>導入 / 最新化</span>
+                  </button>
+                )}
+              </div>
+            </div>
+
+            {materialFollowupScenarios.length === 0 ? (
+              <div className="p-6 bg-teal-50/40 rounded-xl border border-dashed border-teal-200 text-center space-y-3">
+                <p className="text-xs text-slate-600">
+                  資料請求後の自動追客ステップ（1日後：資料確認 → 3日後：事例＆相談 → 7日後：最終お伺い）がまだ登録されていません。
+                </p>
+                {onApplyMaterialStarterSet && (
+                  <button
+                    type="button"
+                    onClick={onApplyMaterialStarterSet}
+                    className="inline-flex items-center gap-1.5 px-4 py-2 bg-teal-600 hover:bg-teal-700 text-white rounded-lg text-xs font-bold transition cursor-pointer shadow-xs"
+                  >
+                    <Zap className="w-3.5 h-3.5" />
+                    <span>資料請求フォロー3本を導入する</span>
+                  </button>
+                )}
+              </div>
+            ) : (
+              <div className="space-y-2.5">
+                {materialFollowupScenarios.map((scenario, idx) => (
+                  <div
+                    key={scenario.id}
+                    className="bg-slate-50/70 border border-slate-200 hover:border-teal-300 rounded-xl p-4 flex flex-col md:flex-row md:items-center justify-between gap-3 transition"
+                  >
+                    <div className="flex items-start gap-3 min-w-0">
+                      <span className="w-6 h-6 rounded-full bg-teal-100 text-teal-800 border border-teal-300 font-bold text-xs flex items-center justify-center shrink-0 mt-0.5">
+                        {idx + 1}
+                      </span>
+                      <div className="min-w-0 space-y-1">
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <span className="font-bold text-slate-900 text-sm">{scenario.name}</span>
+                          <span className="text-[10px] px-2 py-0.5 rounded bg-white text-slate-700 border border-slate-200 font-mono">
+                            {scenario.waitMinutes === 0 ? '即時' : `${Math.round(scenario.waitMinutes / 1440)}日後`}
+                            {scenario.preferredSendTime ? ` (${scenario.preferredSendTime}頃)` : ''}
+                          </span>
+                          <span className="text-[10px] px-2 py-0.5 rounded bg-teal-50 text-teal-800 border border-teal-200 font-medium">
+                            {scenario.channel === 'both' ? 'LINE＋メール' : scenario.channel === 'email' ? 'メールのみ' : 'LINEのみ'}
+                          </span>
+                        </div>
+                        <p className="text-xs text-slate-500 truncate">
+                          件名: {scenario.emailSubject || scenario.flexTitle || scenario.messageBody || '未設定'}
+                        </p>
+                      </div>
+                    </div>
+
+                    <div className="flex items-center gap-2 self-end md:self-auto shrink-0">
+                      <button
+                        type="button"
+                        onClick={() => toggleScenarioAutomation(scenario.id, Boolean(scenario.automationEnabled))}
+                        className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition cursor-pointer whitespace-nowrap ${
+                          scenario.automationEnabled
+                            ? 'bg-emerald-50 text-emerald-700 border border-emerald-300 hover:bg-emerald-100'
+                            : 'bg-white text-slate-600 border border-slate-200 hover:bg-slate-100'
+                        }`}
+                      >
+                        {scenario.automationEnabled ? (
+                          <>
+                            <Play className="w-3 h-3 text-emerald-600 fill-emerald-600" />
+                            <span>自動実行中</span>
+                          </>
+                        ) : (
+                          <>
+                            <Pause className="w-3 h-3 text-slate-400" />
+                            <span>一時停止中</span>
+                          </>
+                        )}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setPreviewModalScenario(scenario)}
+                        className="p-2 bg-white hover:bg-slate-100 text-slate-700 rounded-lg text-xs border border-slate-200 transition cursor-pointer"
+                        title="文面プレビュー"
+                      >
+                        <Eye className="w-3.5 h-3.5" />
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => handleOpenInspector(scenario)}
+                        className="px-3 py-1.5 bg-purple-600 hover:bg-purple-700 text-white rounded-lg text-xs font-bold transition cursor-pointer flex items-center gap-1 shadow-xs whitespace-nowrap"
+                      >
+                        <ShieldCheck className="w-3.5 h-3.5 text-purple-200" />
+                        <span>点検・編集</span>
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+
+          {/* セクション 2: 面談後・詳細レポート・提案書送付後の自動フォロー */}
+          <div className="bg-white border border-amber-200 rounded-2xl p-5 shadow-xs space-y-4">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-100 pb-3">
+              <div className="space-y-1">
+                <div className="flex items-center gap-2 flex-wrap">
+                  <span className="text-[11px] font-bold px-2 py-0.5 rounded bg-amber-100 text-amber-800 border border-amber-200">
+                    商談・提案後
+                  </span>
+                  <h3 className="text-base font-bold text-slate-900">
+                    面談後・詳細レポート・提案書送付後の自動フォロー
+                  </h3>
+                  <span className="text-xs px-2 py-0.5 rounded bg-slate-100 text-slate-700 font-semibold">
+                    {postMeetingScenarios.filter((s) => s.automationEnabled).length}/{postMeetingScenarios.length}件 稼働中
+                  </span>
+                </div>
+                <p className="text-xs text-slate-500">
+                  「商談完了」や「詳細レポート・提案書の送信」を起点に自動配信。相手からの返信または「成約・失注」で自動停止します（商談化や予約済みでは止まりません）。
+                </p>
+              </div>
+
+              <div className="flex flex-wrap items-center gap-2 shrink-0">
+                {postMeetingScenarios.length > 0 && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const allActive = postMeetingScenarios.every((s) => s.automationEnabled);
+                      toggleGroupAutomation(postMeetingScenarios, !allActive);
+                    }}
+                    className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-slate-50 hover:bg-slate-100 text-slate-700 border border-slate-200 rounded-lg text-xs font-semibold transition cursor-pointer whitespace-nowrap"
+                  >
+                    {postMeetingScenarios.every((s) => s.automationEnabled) ? (
+                      <>
+                        <Pause className="w-3.5 h-3.5 text-slate-500" />
+                        <span>一括停止</span>
+                      </>
+                    ) : (
+                      <>
+                        <Play className="w-3.5 h-3.5 text-amber-600 fill-amber-600" />
+                        <span>一括ON</span>
+                      </>
+                    )}
+                  </button>
+                )}
+                {onApplyPostMeetingStarterSet && (
+                  <button
+                    type="button"
+                    onClick={onApplyPostMeetingStarterSet}
+                    className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-amber-600 hover:bg-amber-700 text-white rounded-lg text-xs font-bold transition cursor-pointer shadow-xs whitespace-nowrap"
+                  >
+                    <Zap className="w-3.5 h-3.5 text-amber-100" />
+                    <span>導入 / 最新化</span>
+                  </button>
+                )}
+              </div>
+            </div>
+
+            {postMeetingScenarios.length === 0 ? (
+              <div className="p-6 bg-amber-50/40 rounded-xl border border-dashed border-amber-200 text-center space-y-3">
+                <p className="text-xs text-slate-600">
+                  面談後（2時間後お礼）・詳細レポート送付後（3日後）・提案書送付後（3日後・7日後）のフォローがまだ登録されていません。
+                </p>
+                {onApplyPostMeetingStarterSet && (
+                  <button
+                    type="button"
+                    onClick={onApplyPostMeetingStarterSet}
+                    className="inline-flex items-center gap-1.5 px-4 py-2 bg-amber-600 hover:bg-amber-700 text-white rounded-lg text-xs font-bold transition cursor-pointer shadow-xs"
+                  >
+                    <Zap className="w-3.5 h-3.5" />
+                    <span>面談・提案後フォロー4本を導入する</span>
+                  </button>
+                )}
+              </div>
+            ) : (
+              <div className="space-y-2.5">
+                {postMeetingScenarios.map((scenario, idx) => {
+                  const triggerLabelText =
+                    scenario.trigger === 'meeting_completed'
+                      ? '面談完了時'
+                      : scenario.trigger === 'report_sent'
+                      ? 'レポート送付時'
+                      : scenario.trigger === 'report_approved'
+                      ? 'レポート承認時'
+                      : scenario.trigger === 'proposal_sent'
+                      ? '提案書送付時'
+                      : scenario.trigger === 'proposal_approved'
+                      ? '提案書承認時'
+                      : '手動';
+                  const waitText =
+                    scenario.waitMinutes === 0
+                      ? '即時'
+                      : scenario.waitMinutes < 1440
+                      ? `${Math.max(1, Math.round(scenario.waitMinutes / 60))}時間後`
+                      : `${Math.round(scenario.waitMinutes / 1440)}日後`;
+                  return (
+                    <div
+                      key={scenario.id}
+                      className="bg-slate-50/70 border border-slate-200 hover:border-amber-300 rounded-xl p-4 flex flex-col md:flex-row md:items-center justify-between gap-3 transition"
+                    >
+                      <div className="flex items-start gap-3 min-w-0">
+                        <span className="w-6 h-6 rounded-full bg-amber-100 text-amber-800 border border-amber-300 font-bold text-xs flex items-center justify-center shrink-0 mt-0.5">
+                          {idx + 1}
+                        </span>
+                        <div className="min-w-0 space-y-1">
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <span className="font-bold text-slate-900 text-sm">{scenario.name}</span>
+                            <span className="text-[10px] px-2 py-0.5 rounded bg-amber-50 text-amber-800 border border-amber-200 font-semibold">
+                              {triggerLabelText}
+                            </span>
+                            <span className="text-[10px] px-2 py-0.5 rounded bg-white text-slate-700 border border-slate-200 font-mono">
+                              {waitText}
+                              {scenario.waitMinutes >= 1440 && scenario.preferredSendTime ? ` (${scenario.preferredSendTime}頃)` : ''}
+                            </span>
+                            <span className="text-[10px] px-2 py-0.5 rounded bg-slate-100 text-slate-700 border border-slate-200 font-medium">
+                              {scenario.channel === 'both' ? 'LINE＋メール' : scenario.channel === 'email' ? 'メールのみ' : 'LINEのみ'}
+                            </span>
+                          </div>
+                          <p className="text-xs text-slate-500 truncate">
+                            件名: {scenario.emailSubject || scenario.messageBody || '未設定'}
+                          </p>
+                        </div>
+                      </div>
+
+                      <div className="flex items-center gap-2 self-end md:self-auto shrink-0">
+                        <button
+                          type="button"
+                          onClick={() => toggleScenarioAutomation(scenario.id, Boolean(scenario.automationEnabled))}
+                          className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition cursor-pointer whitespace-nowrap ${
+                            scenario.automationEnabled
+                              ? 'bg-emerald-50 text-emerald-700 border border-emerald-300 hover:bg-emerald-100'
+                              : 'bg-white text-slate-600 border border-slate-200 hover:bg-slate-100'
+                          }`}
+                        >
+                          {scenario.automationEnabled ? (
+                            <>
+                              <Play className="w-3 h-3 text-emerald-600 fill-emerald-600" />
+                              <span>自動実行中</span>
+                            </>
+                          ) : (
+                            <>
+                              <Pause className="w-3 h-3 text-slate-400" />
+                              <span>一時停止中</span>
+                            </>
+                          )}
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setPreviewModalScenario(scenario)}
+                          className="p-2 bg-white hover:bg-slate-100 text-slate-700 rounded-lg text-xs border border-slate-200 transition cursor-pointer"
+                          title="文面プレビュー"
+                        >
+                          <Eye className="w-3.5 h-3.5" />
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => handleOpenInspector(scenario)}
+                          className="px-3 py-1.5 bg-purple-600 hover:bg-purple-700 text-white rounded-lg text-xs font-bold transition cursor-pointer flex items-center gap-1 shadow-xs whitespace-nowrap"
+                        >
+                          <ShieldCheck className="w-3.5 h-3.5 text-purple-200" />
+                          <span>点検・編集</span>
+                        </button>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
           </div>
         </div>
       )}

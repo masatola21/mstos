@@ -1,5 +1,11 @@
 import assert from 'node:assert/strict';
-import { appendEmailFooter, buildSenderSignature } from '../server/emailFooter';
+import {
+  appendEmailFooter,
+  appendHtmlEmailFooter,
+  buildSenderSignature,
+  prepareEmailPayloadContent,
+  SENDER_PROFILE,
+} from '../server/emailFooter';
 import {
   ONE_SHOT_SCENARIO_NAME,
   getOneShotOutreachTemplate,
@@ -10,6 +16,13 @@ import {
 } from '../src/utils/salesOutreachTemplates';
 import { calculateDueAt } from '../src/utils/automationRuleUtils';
 import { MST_OUTREACH_STARTER_SCENARIOS } from '../src/components/marketing/MarketingAutomationPrototypeView';
+import {
+  MST_DIAGNOSIS_STARTER_SCENARIOS,
+  MST_MATERIAL_FOLLOWUP_STARTER_SCENARIOS,
+  MST_POST_MEETING_STARTER_SCENARIOS,
+  mergeStarterScenarioBatch,
+  shouldStopScenarioForDeal,
+} from '../src/utils/followupStarterScenarios';
 
 console.log('=== Running Outreach Footer & Follow-up Tests ===');
 
@@ -143,6 +156,130 @@ assert.ok(customDraft.body.includes('https://example.com/diag/1'));
 const fallbackDraft = resolveOneShotOutreachDraft(null, 'サンプル株式会社', '', '', '');
 assert.ok(fallbackDraft.subject.includes('社外右腕'));
 assert.ok(fallbackDraft.body.includes('サンプル株式会社 ご担当者 様'));
+console.log('  ✓ passed');
+
+console.log('Test 11: HTML signature includes MST logo image, legal profile, clickable URLs, and safe HTML escaping');
+const htmlPayload = prepareEmailPayloadContent(
+  '山田 様\n\n詳細はこちら: https://corp.mstcorp.info/diagnosis?id=1。\n<script>alert(1)</script>',
+  {
+    senderEmail: 'contact@mstcorp.info',
+    unsubscribeUrl: 'https://app.example.com/unsub?t=xyz',
+  },
+);
+assert.ok(htmlPayload.text.includes('有限会社MST'));
+assert.ok(htmlPayload.html.includes(`<img src="${SENDER_PROFILE.logoUrl}" alt="${SENDER_PROFILE.logoAlt}"`));
+assert.ok(htmlPayload.html.includes('有限会社MST　代表取締役 大橋真人'));
+assert.ok(htmlPayload.html.includes('〒503-0981 岐阜県大垣市桧町127番地'));
+assert.ok(htmlPayload.html.includes('href="mailto:contact@mstcorp.info"'));
+assert.ok(htmlPayload.html.includes('href="https://corp.mstcorp.info/diagnosis?id=1"'));
+assert.ok(htmlPayload.html.includes('href="https://app.example.com/unsub?t=xyz"'));
+assert.ok(!htmlPayload.html.includes('<script>alert(1)</script>'));
+assert.ok(htmlPayload.html.includes('&lt;script&gt;alert(1)&lt;/script&gt;'));
+console.log('  ✓ passed');
+
+console.log('Test 12: HTML signature replaces legacy plain-text signature once and omits unsubscribe for transactional mail');
+const transactionalHtml = appendHtmlEmailFooter(legacyBody, {
+  senderEmail: 'contact@mstcorp.info',
+});
+assert.equal(transactionalHtml.split('桧町127番地').length - 1, 1);
+assert.ok(transactionalHtml.includes(SENDER_PROFILE.logoUrl));
+assert.ok(!transactionalHtml.includes('配信停止'));
+console.log('  ✓ passed');
+
+console.log('Test 13: custom logoUrl validation rejects javascript: and allows https:');
+const unsafeLogoHtml = appendHtmlEmailFooter('テスト本文', {
+  senderEmail: 'contact@mstcorp.info',
+  logoUrl: 'javascript:alert(1)',
+});
+assert.ok(unsafeLogoHtml.includes(SENDER_PROFILE.logoUrl));
+assert.ok(!unsafeLogoHtml.includes('javascript:alert(1)'));
+console.log('  ✓ passed');
+
+console.log('Test 14: material request followups have 3 dual-channel steps at 1d, 3d, 7d with booking/deal stops');
+assert.equal(MST_MATERIAL_FOLLOWUP_STARTER_SCENARIOS.length, 3);
+assert.deepEqual(
+  MST_MATERIAL_FOLLOWUP_STARTER_SCENARIOS.map((s) => s.waitMinutes),
+  [1440, 4320, 10080]
+);
+for (const s of MST_MATERIAL_FOLLOWUP_STARTER_SCENARIOS) {
+  assert.equal(s.trigger, 'material_requested');
+  assert.equal(s.channel, 'both');
+  assert.equal(s.stopOnBooking, true);
+  assert.equal(s.stopOnDeal, true);
+  assert.equal(s.automationEnabled, true);
+  assert.equal(s.status, 'prepared');
+  assert.ok(s.emailSubject.trim().length > 0 && s.emailBody.trim().length > 0);
+  assert.ok(s.messageBody.trim().length > 0);
+}
+console.log('  ✓ passed');
+
+console.log('Test 15: diagnosis starter scenarios A2-A4 are enabled and support both LINE and Email');
+assert.equal(MST_DIAGNOSIS_STARTER_SCENARIOS.length, 4);
+const [diagA1, ...diagPostForm] = MST_DIAGNOSIS_STARTER_SCENARIOS;
+assert.equal(diagA1.trigger, 'tag_added');
+assert.equal(diagA1.automationEnabled, true);
+for (const s of diagPostForm) {
+  assert.equal(s.trigger, 'diagnosis_completed');
+  assert.equal(s.channel, 'both');
+  assert.equal(s.automationEnabled, true);
+  assert.equal(s.status, 'prepared');
+  assert.ok(s.emailSubject.trim().length > 0, `${s.name} has emailSubject`);
+  assert.ok(s.emailBody.trim().length > 0, `${s.name} has emailBody`);
+}
+console.log('  ✓ passed');
+
+console.log('Test 16: post-meeting/report/proposal followups do NOT stop on existing booking');
+assert.equal(MST_POST_MEETING_STARTER_SCENARIOS.length, 4);
+assert.deepEqual(
+  MST_POST_MEETING_STARTER_SCENARIOS.map((s) => ({ trigger: s.trigger, wait: s.waitMinutes })),
+  [
+    { trigger: 'meeting_completed', wait: 120 },
+    { trigger: 'report_sent', wait: 4320 },
+    { trigger: 'proposal_sent', wait: 4320 },
+    { trigger: 'proposal_sent', wait: 10080 },
+  ]
+);
+for (const s of MST_POST_MEETING_STARTER_SCENARIOS) {
+  assert.equal(s.channel, 'both');
+  assert.equal(s.stopOnBooking, false);
+  assert.equal(s.stopOnDeal, true);
+  assert.equal(s.automationEnabled, true);
+  assert.equal(s.status, 'prepared');
+  assert.ok(s.emailSubject.trim().length > 0 && s.emailBody.trim().length > 0);
+  assert.ok(s.messageBody.trim().length > 0);
+}
+console.log('  ✓ passed');
+
+console.log('Test 17: shouldStopScenarioForDeal differentiates pre-meeting vs post-meeting deal stages');
+// 商談前（資料請求・診断・営業メール）は「商談化」で停止
+assert.equal(shouldStopScenarioForDeal({ trigger: 'material_requested', leadStatus: '商談化' }).stop, true);
+assert.equal(shouldStopScenarioForDeal({ trigger: 'diagnosis_completed', leadStatus: '商談化' }).stop, true);
+assert.equal(shouldStopScenarioForDeal({ trigger: 'outreach_first_sent', leadStatus: '商談化' }).stop, true);
+// 面談・レポート・提案書送付後は「商談化」では止まらず、「成約」「受注」「失注」「見送り」でのみ停止
+assert.equal(shouldStopScenarioForDeal({ trigger: 'meeting_completed', leadStatus: '商談化' }).stop, false);
+assert.equal(shouldStopScenarioForDeal({ trigger: 'report_sent', leadStatus: '商談化' }).stop, false);
+assert.equal(shouldStopScenarioForDeal({ trigger: 'proposal_sent', leadStatus: '商談化' }).stop, false);
+assert.equal(shouldStopScenarioForDeal({ trigger: 'proposal_sent', leadStatus: '成約' }).stop, true);
+assert.equal(shouldStopScenarioForDeal({ trigger: 'meeting_completed', dealProposalStatus: '成約' }).stop, true);
+assert.equal(shouldStopScenarioForDeal({ trigger: 'proposal_sent', dealProposalStatus: '失注' }).stop, true);
+console.log('  ✓ passed');
+
+console.log('Test 18: mergeStarterScenarioBatch is idempotent across repeated applications');
+const firstApply = mergeStarterScenarioBatch([], [
+  ...MST_DIAGNOSIS_STARTER_SCENARIOS,
+  ...MST_MATERIAL_FOLLOWUP_STARTER_SCENARIOS,
+  ...MST_POST_MEETING_STARTER_SCENARIOS,
+], { replaceLegacyBranchA: true, nowMs: 1000 });
+assert.equal(firstApply.addedCount, 11);
+assert.equal(firstApply.merged.length, 11);
+const secondApply = mergeStarterScenarioBatch(firstApply.merged, [
+  ...MST_DIAGNOSIS_STARTER_SCENARIOS,
+  ...MST_MATERIAL_FOLLOWUP_STARTER_SCENARIOS,
+  ...MST_POST_MEETING_STARTER_SCENARIOS,
+], { replaceLegacyBranchA: true, nowMs: 2000 });
+assert.equal(secondApply.addedCount, 0);
+assert.equal(secondApply.updatedCount, 11);
+assert.equal(secondApply.merged.length, 11);
 console.log('  ✓ passed');
 
 console.log('=== All Outreach Footer & Follow-up Tests Passed! ===');

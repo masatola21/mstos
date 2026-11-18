@@ -6,7 +6,7 @@ import {
   ONE_SHOT_SCENARIO_ID,
   type CustomOneShotConfig,
 } from '../utils/salesOutreachTemplates';
-import { appendEmailFooter } from '../../server/emailFooter';
+import { EmailHtmlPreviewCard } from './common/EmailHtmlPreviewCard';
 import { Eye, Save, Send, Users, SendHorizonal, FileText, Library, Mail, MessageSquare, Paperclip, CheckCircle2, X, Inbox, ArrowLeft, AlertTriangle, Maximize2, Minimize2, Eraser, ChevronDown, ChevronUp, Settings2 } from 'lucide-react';
 import { getSupabase } from '../lib/supabaseClient';
 import { LineMessagePreview } from './LineMessagePreview';
@@ -2032,9 +2032,9 @@ export const CommunicationSendCenter: React.FC<Props> = ({
                     )}
                   </div>
 
-                  {/* メール本文プレビュー（サーバーと同一の統一署名プレビューを含む） */}
+                  {/* メール本文プレビュー（サーバーと同一のロゴ入りHTML署名プレビューを含む） */}
                   <div className="p-6 bg-white">
-                    <div className="whitespace-pre-wrap font-sans text-sm leading-relaxed text-slate-900 selection:bg-purple-100">
+                    <div className="font-sans text-sm leading-relaxed text-slate-900 selection:bg-purple-100">
                       {(() => {
                         const rawPreview = fill(
                           kind === 'document' && documentCategory(doc) === 'contract'
@@ -2043,10 +2043,13 @@ export const CommunicationSendCenter: React.FC<Props> = ({
                           vals,
                         );
                         const isTransactionalPreview = ['document', 'diagnosis', 'form', 'deal'].includes(kind);
-                        return appendEmailFooter(rawPreview, {
-                          senderEmail: senderSettings.fromEmail || 'contact@mstcorp.info',
-                          unsubscribeUrl: isTransactionalPreview ? undefined : '（送信時に連絡先専用の配信停止URLを自動付与）',
-                        });
+                        return (
+                          <EmailHtmlPreviewCard
+                            body={rawPreview}
+                            senderEmail={senderSettings.fromEmail || 'contact@mstcorp.info'}
+                            unsubscribeUrl={isTransactionalPreview ? undefined : '（送信時に連絡先専用の配信停止URLを自動付与）'}
+                          />
+                        );
                       })()}
                     </div>
                   </div>

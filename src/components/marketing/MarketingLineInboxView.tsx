@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useState, useRef } from 'react';
 import { createPortal } from 'react-dom';
-import { FileText, Maximize2, Minimize2 } from 'lucide-react';
-import { getSupabase } from '../../lib/supabaseClient';
+import { Bell, CheckCircle2, FileText, Mail, Maximize2, Minimize2 } from 'lucide-react';
+import { getAuthHeaders, getSupabase } from '../../lib/supabaseClient';
 import { InlineDeleteButton } from '../InlineDeleteButton';
 import { LineMessagePreview } from '../LineMessagePreview';
 import { useInboxRealtime } from '../../hooks/useInboxRealtime';
@@ -16,7 +16,11 @@ import {
 import {
   countUnreadLineByUser,
   countUnreadLineMessages,
+  getLatestLineInboundAt,
+  isLineConversationAwaitingReply,
   isLineMessageUnread,
+  loadDismissedLineAwaitingMap,
+  saveDismissedLineAwaitingMap,
 } from '../../utils/inboxReadState';
 
 type InboxMessage={id:string;line_event_id:string;direction:'inbound'|'outbound';contact_id:string|null;line_user_id:string;body:string;status:string;received_at:string};
@@ -36,6 +40,7 @@ export interface MarketingLineInboxViewProps {
   onNavigateSettings?: () => void;
   onNavigateContacts?: () => void;
   onUnreadCountChange?: (unreadCount: number) => void;
+  onAwaitingReplyCountChange?: (awaitingReplyCount: number) => void;
 }
 
 export const MarketingLineInboxView: React.FC<MarketingLineInboxViewProps> = ({
@@ -44,6 +49,7 @@ export const MarketingLineInboxView: React.FC<MarketingLineInboxViewProps> = ({
   onNavigateSettings,
   onNavigateContacts,
   onUnreadCountChange,
+  onAwaitingReplyCountChange,
 }) => {
   const db=getSupabase();
   const { openSendDrawer } = useSendDrawer();
@@ -93,6 +99,96 @@ export const MarketingLineInboxView: React.FC<MarketingLineInboxViewProps> = ({
   const [busy,setBusy]=useState(false);
   const [error,setError]=useState('');
   const [notice,setNotice]=useState('');
+  const [conversationFilter, setConversationFilter] = useState<'all' | 'awaiting' | 'unread'>('all');
+  const [prioritizeAwaiting, setPrioritizeAwaiting] = useState(true);
+  const [dismissedAwaitingMap, setDismissedAwaitingMap] = useState<Record<string, string>>(() => loadDismissedLineAwaitingMap());
+  const [showAlertPanel, setShowAlertPanel] = useState(false);
+  const [alertEnabled, setAlertEnabled] = useState(true);
+  const [alertEmail, setAlertEmail] = useState('');
+  const [alertMode, setAlertMode] = useState<'all' | 'unmatched_only'>('all');
+  const [alertLoading, setAlertLoading] = useState(false);
+  const [alertTesting, setAlertTesting] = useState(false);
+  const [alertResendReady, setAlertResendReady] = useState(true);
+
+  const notifyGlobalInboxUpdated = () => {
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new CustomEvent('mst_inbox_counts_updated'));
+    }
+  };
+
+  const loadAlertSettings = async () => {
+    try {
+      const headers = await getAuthHeaders();
+      const res = await fetch('/api/line/alert-settings', { headers });
+      if (!res.ok) return;
+      const data = await res.json();
+      if (data?.settings) {
+        setAlertEnabled(Boolean(data.settings.enabled));
+        setAlertEmail(String(data.settings.email || data.resolvedDefaultEmail || ''));
+        setAlertMode(data.settings.mode === 'unmatched_only' ? 'unmatched_only' : 'all');
+      }
+      if (typeof data?.resendConfigured === 'boolean') {
+        setAlertResendReady(data.resendConfigured);
+      }
+    } catch {
+      // ignore non-blocking settings fetch errors
+    }
+  };
+
+  const saveAlertSettings = async () => {
+    setAlertLoading(true);
+    setError('');
+    setNotice('');
+    try {
+      const headers = await getAuthHeaders();
+      const res = await fetch('/api/line/alert-settings', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', ...headers },
+        body: JSON.stringify({
+          enabled: alertEnabled,
+          email: alertEmail.trim().toLowerCase(),
+          mode: alertMode,
+        }),
+      });
+      const payload = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(payload.error || '通知設定を保存できませんでした。');
+      if (payload.settings) {
+        setAlertEnabled(Boolean(payload.settings.enabled));
+        setAlertEmail(String(payload.settings.email || ''));
+        setAlertMode(payload.settings.mode === 'unmatched_only' ? 'unmatched_only' : 'all');
+      }
+      setNotice(
+        alertEnabled
+          ? `LINE受信時の即時メール通知を「${payload?.settings?.email || alertEmail}」宛てに保存しました。`
+          : 'LINE受信時の即時メール通知を停止しました。',
+      );
+    } catch (err: any) {
+      setError(err?.message || 'LINE通知設定の保存に失敗しました。');
+    } finally {
+      setAlertLoading(false);
+    }
+  };
+
+  const sendTestAlert = async () => {
+    setAlertTesting(true);
+    setError('');
+    setNotice('');
+    try {
+      const headers = await getAuthHeaders();
+      const res = await fetch('/api/line/test-alert', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', ...headers },
+        body: JSON.stringify({ email: alertEmail.trim().toLowerCase() }),
+      });
+      const payload = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(payload.error || 'テスト通知を送信できませんでした。');
+      setNotice(`LINE受信通知のテストメールを「${payload.targetEmail || alertEmail}」へ送信しました。`);
+    } catch (err: any) {
+      setError(err?.message || 'テスト通知の送信に失敗しました。');
+    } finally {
+      setAlertTesting(false);
+    }
+  };
 
   const load=async()=>{
     if(!db)return;
@@ -169,6 +265,7 @@ export const MarketingLineInboxView: React.FC<MarketingLineInboxViewProps> = ({
 
   useEffect(() => {
     void load();
+    void loadAlertSettings();
   }, [db]);
 
   // 自動更新: Supabase Realtime を主役にし、接続できないときだけ30秒間隔の差分ポーリングに切り替える。
@@ -269,6 +366,7 @@ export const MarketingLineInboxView: React.FC<MarketingLineInboxViewProps> = ({
         .eq('line_user_id', lineUserId)
         .eq('direction', 'inbound')
         .neq('status', 'read');
+      notifyGlobalInboxUpdated();
     } catch {
       // non-blocking
     }
@@ -285,6 +383,7 @@ export const MarketingLineInboxView: React.FC<MarketingLineInboxViewProps> = ({
         .update({ status: 'read' })
         .eq('direction', 'inbound')
         .neq('status', 'read');
+      notifyGlobalInboxUpdated();
     } catch {
       // non-blocking
     }
@@ -303,13 +402,67 @@ export const MarketingLineInboxView: React.FC<MarketingLineInboxViewProps> = ({
       const list=grouped.get(message.line_user_id);
       if(list)list.push(message);else grouped.set(message.line_user_id,[message]);
     });
-    return [...grouped.entries()].map(([lineUserId,items])=>({
-      lineUserId,
-      unreadCount: unreadByUser.get(lineUserId) || 0,
-      items:items.sort((a,b)=>Date.parse(a.received_at)-Date.parse(b.received_at)),
-    }))
-      .sort((a,b)=>Date.parse(b.items[b.items.length-1]?.received_at||'')-Date.parse(a.items[a.items.length-1]?.received_at||''));
-  },[messages, unreadByUser]);
+    return [...grouped.entries()].map(([lineUserId,items])=>{
+      const sortedItems = items.sort((a,b)=>Date.parse(a.received_at)-Date.parse(b.received_at));
+      const latestInboundAt = getLatestLineInboundAt(sortedItems);
+      const dismissedUntil = dismissedAwaitingMap[lineUserId];
+      const awaitingReply = isLineConversationAwaitingReply(sortedItems, dismissedUntil);
+      const awaitingRaw = isLineConversationAwaitingReply(sortedItems);
+      return {
+        lineUserId,
+        unreadCount: unreadByUser.get(lineUserId) || 0,
+        awaitingReply,
+        awaitingDismissed: awaitingRaw && !awaitingReply,
+        latestInboundAt,
+        items: sortedItems,
+      };
+    }).sort((a,b)=>{
+      if (prioritizeAwaiting && a.awaitingReply !== b.awaitingReply) {
+        return a.awaitingReply ? -1 : 1;
+      }
+      return Date.parse(b.items[b.items.length-1]?.received_at||'')-Date.parse(a.items[a.items.length-1]?.received_at||'');
+    });
+  },[messages, unreadByUser, dismissedAwaitingMap, prioritizeAwaiting]);
+
+  const awaitingReplyCount = useMemo(
+    () => conversations.filter((c) => c.awaitingReply).length,
+    [conversations],
+  );
+
+  const visibleConversations = useMemo(() => {
+    if (conversationFilter === 'awaiting') {
+      return conversations.filter((c) => c.awaitingReply);
+    }
+    if (conversationFilter === 'unread') {
+      return conversations.filter((c) => c.unreadCount > 0);
+    }
+    return conversations;
+  }, [conversations, conversationFilter]);
+
+  const onAwaitingReplyCountChangeRef = useRef(onAwaitingReplyCountChange);
+  onAwaitingReplyCountChangeRef.current = onAwaitingReplyCountChange;
+  useEffect(() => {
+    if (hasLoadedRef.current) {
+      onAwaitingReplyCountChangeRef.current?.(awaitingReplyCount);
+    }
+  }, [awaitingReplyCount]);
+
+  const dismissAwaitingReply = (lineUserId: string, latestInboundAt: string | null) => {
+    const stamp = latestInboundAt || new Date().toISOString();
+    const next = { ...dismissedAwaitingMap, [lineUserId]: stamp };
+    setDismissedAwaitingMap(next);
+    saveDismissedLineAwaitingMap(next);
+    notifyGlobalInboxUpdated();
+    setNotice('このトークを「対応済み（返信不要）」にしました。新しい受信があれば自動で要返信に戻ります。');
+  };
+
+  const restoreAwaitingReply = (lineUserId: string) => {
+    const next = { ...dismissedAwaitingMap };
+    delete next[lineUserId];
+    setDismissedAwaitingMap(next);
+    saveDismissedLineAwaitingMap(next);
+    notifyGlobalInboxUpdated();
+  };
 
   const connect=async()=>{
     if(!db)return;
@@ -476,7 +629,13 @@ export const MarketingLineInboxView: React.FC<MarketingLineInboxViewProps> = ({
         line_user_id:selectedLineUserId,message_type:'text',body:replyDraft.trim(),status:'sent',received_at:new Date().toISOString(),
       });
       if(saveError)throw saveError;
-      setReplyDraft('');setNotice('返信を送信しました。');await load();
+      if(dismissedAwaitingMap[selectedLineUserId]){
+        const nextMap={...dismissedAwaitingMap};
+        delete nextMap[selectedLineUserId];
+        setDismissedAwaitingMap(nextMap);
+        saveDismissedLineAwaitingMap(nextMap);
+      }
+      setReplyDraft('');setNotice('返信を送信しました。');await load();notifyGlobalInboxUpdated();
     }catch(e:any){setError(e.message||'返信に失敗しました。')}
     finally{setBusy(false)}
   };
@@ -648,13 +807,34 @@ export const MarketingLineInboxView: React.FC<MarketingLineInboxViewProps> = ({
               <span>未読 {totalUnread}件</span>
             </span>
             <span className="text-slate-300">·</span>
+            <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-bold ${
+              awaitingReplyCount > 0
+                ? 'bg-rose-100 text-rose-800 border border-rose-300'
+                : 'bg-slate-100 text-slate-500 border border-slate-200'
+            }`}>
+              <span>要返信 {awaitingReplyCount}名</span>
+            </span>
+            <span className="text-slate-300">·</span>
             <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-emerald-50 border border-emerald-200 text-[11px] font-semibold text-emerald-700">
               <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
               <span>リアルタイム受信中（自動更新）</span>
             </span>
           </div>
 
-          <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center gap-2">
+            <button
+              type="button"
+              onClick={() => setShowAlertPanel((prev) => !prev)}
+              className={`inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border text-xs font-semibold shadow-xs transition cursor-pointer ${
+                alertEnabled
+                  ? 'bg-amber-50 hover:bg-amber-100 border-amber-300 text-amber-900'
+                  : 'bg-white hover:bg-slate-50 border-slate-200 text-slate-600'
+              }`}
+              title={alertEmail ? `LINE受信時の通知メール先: ${alertEmail}` : 'LINE受信時のメール通知を設定'}
+            >
+              <Bell className={`w-3.5 h-3.5 ${alertEnabled ? 'text-amber-600' : 'text-slate-400'}`} />
+              <span>メール即時通知: {alertEnabled ? 'ON' : 'OFF'}</span>
+            </button>
             <button
               type="button"
               onClick={() => void load()}
@@ -684,14 +864,82 @@ export const MarketingLineInboxView: React.FC<MarketingLineInboxViewProps> = ({
           </div>
         </div>
 
+        {showAlertPanel && (
+          <div className="rounded-xl border border-amber-200 bg-amber-50/70 p-3.5 text-xs space-y-2.5">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <div className="flex items-center gap-2 font-bold text-slate-900">
+                <Mail className="w-4 h-4 text-amber-600" />
+                <span>LINE受信時の即時メール通知設定（Gmail等へアラート送信）</span>
+              </div>
+              {!alertResendReady && (
+                <span className="text-[11px] font-semibold text-rose-700 bg-rose-50 border border-rose-200 px-2 py-0.5 rounded">
+                  ※ RESEND_API_KEY が未設定のため送信できません
+                </span>
+              )}
+            </div>
+            <div className="flex flex-wrap items-center gap-3">
+              <label className="inline-flex items-center gap-1.5 font-semibold text-slate-800 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={alertEnabled}
+                  onChange={(e) => setAlertEnabled(e.target.checked)}
+                  className="h-3.5 w-3.5 rounded border-slate-300 accent-amber-600 cursor-pointer"
+                />
+                <span>受信時にすぐ通知メールを送る</span>
+              </label>
+              <input
+                type="email"
+                value={alertEmail}
+                onChange={(e) => setAlertEmail(e.target.value)}
+                disabled={!alertEnabled}
+                placeholder="mst.shikumikaizen@gmail.com"
+                className="px-2.5 py-1 rounded-lg border border-slate-200 bg-white text-xs text-slate-900 w-56 focus:outline-none focus:border-amber-500 disabled:opacity-50"
+              />
+              <select
+                value={alertMode}
+                onChange={(e) => setAlertMode(e.target.value as 'all' | 'unmatched_only')}
+                disabled={!alertEnabled}
+                className="px-2.5 py-1 rounded-lg border border-slate-200 bg-white text-xs text-slate-800 focus:outline-none focus:border-amber-500 disabled:opacity-50"
+              >
+                <option value="all">すべての受信メッセージを通知（推奨）</option>
+                <option value="unmatched_only">自動返信ルールに一致しない自由入力のみ通知</option>
+              </select>
+              <button
+                type="button"
+                disabled={alertTesting || !alertEmail.trim()}
+                onClick={() => void sendTestAlert()}
+                className="px-2.5 py-1 rounded-lg border border-slate-300 bg-white hover:bg-slate-50 text-slate-700 font-semibold transition cursor-pointer disabled:opacity-50"
+              >
+                {alertTesting ? 'テスト送信中…' : 'テスト通知を送る'}
+              </button>
+              <button
+                type="button"
+                disabled={alertLoading}
+                onClick={() => void saveAlertSettings()}
+                className="px-3 py-1 rounded-lg bg-amber-600 hover:bg-amber-700 text-white font-bold shadow-2xs transition cursor-pointer disabled:opacity-50"
+              >
+                {alertLoading ? '保存中…' : '通知設定を保存'}
+              </button>
+            </div>
+            <p className="text-[11px] text-slate-600">
+              お客様への自動返信を完了した後にバックグラウンドでメール通知を送るため、LINE上の返信速度には一切影響しません。
+            </p>
+          </div>
+        )}
+
         {error && <p role="alert" className="rounded-lg bg-rose-50 border border-rose-200 p-3 text-xs text-rose-800">{error}</p>}
         {notice && <p role="status" className="rounded-lg bg-emerald-50 border border-emerald-200 p-3 text-xs text-emerald-800">{notice}</p>}
 
-        <div className="grid gap-4 xl:grid-cols-[280px_1fr]">
-          <section className="rounded-2xl border border-slate-200 bg-white p-4 shadow-xs">
+        <div className="grid gap-4 xl:grid-cols-[310px_1fr]">
+          <section className="rounded-2xl border border-slate-200 bg-white p-4 shadow-xs flex flex-col">
             <div className="flex items-center justify-between gap-2">
-              <h3 className="font-bold text-slate-900 text-xs flex items-center gap-1.5">
-                <span>受信した友だち ({conversations.length}名)</span>
+              <h3 className="font-bold text-slate-900 text-xs flex items-center gap-1.5 flex-wrap">
+                <span>受信した友だち ({visibleConversations.length}/{conversations.length}名)</span>
+                {awaitingReplyCount > 0 && (
+                  <span className="px-1.5 py-0.5 rounded-full bg-rose-500 text-white text-[10px] font-bold">
+                    要返信 {awaitingReplyCount}
+                  </span>
+                )}
                 {totalUnread > 0 && (
                   <span className="px-1.5 py-0.5 rounded-full bg-emerald-500 text-white text-[10px] font-bold">
                     未読 {totalUnread}
@@ -709,11 +957,71 @@ export const MarketingLineInboxView: React.FC<MarketingLineInboxViewProps> = ({
                 </button>
               )}
             </div>
-            <div className="mt-3 max-h-[560px] space-y-1.5 overflow-auto">
-              {conversations.length === 0 ? (
-                <p className="text-xs text-slate-400 py-6 text-center">メッセージ履歴はありません。</p>
+
+            {/* 要返信・未読フィルタ＆並び替えバー */}
+            <div className="mt-2.5 flex flex-wrap items-center justify-between gap-1.5 pb-2 border-b border-slate-100">
+              <div className="flex items-center gap-1 flex-wrap">
+                <button
+                  type="button"
+                  onClick={() => setConversationFilter('all')}
+                  className={`px-2 py-1 rounded-md text-[11px] font-semibold transition cursor-pointer ${
+                    conversationFilter === 'all'
+                      ? 'bg-slate-800 text-white'
+                      : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                  }`}
+                >
+                  すべて ({conversations.length})
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setConversationFilter('awaiting')}
+                  className={`px-2 py-1 rounded-md text-[11px] font-semibold transition cursor-pointer ${
+                    conversationFilter === 'awaiting'
+                      ? 'bg-rose-600 text-white shadow-2xs'
+                      : awaitingReplyCount > 0
+                        ? 'bg-rose-50 text-rose-700 border border-rose-200 hover:bg-rose-100'
+                        : 'bg-slate-100 text-slate-500 hover:bg-slate-200'
+                  }`}
+                >
+                  要返信のみ ({awaitingReplyCount})
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setConversationFilter('unread')}
+                  className={`px-2 py-1 rounded-md text-[11px] font-semibold transition cursor-pointer ${
+                    conversationFilter === 'unread'
+                      ? 'bg-emerald-600 text-white'
+                      : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                  }`}
+                >
+                  未読 ({conversations.filter((c) => c.unreadCount > 0).length})
+                </button>
+              </div>
+              <button
+                type="button"
+                onClick={() => setPrioritizeAwaiting((v) => !v)}
+                className={`px-2 py-0.5 rounded text-[10px] font-semibold border transition cursor-pointer ${
+                  prioritizeAwaiting
+                    ? 'bg-amber-50 border-amber-300 text-amber-800'
+                    : 'bg-white border-slate-200 text-slate-500'
+                }`}
+                title="要返信の相手を一覧の最上部に優先表示します"
+              >
+                {prioritizeAwaiting ? '↑ 要返信優先' : '新着順'}
+              </button>
+            </div>
+
+            <div className="mt-2.5 max-h-[540px] space-y-1.5 overflow-auto">
+              {visibleConversations.length === 0 ? (
+                <p className="text-xs text-slate-400 py-6 text-center">
+                  {conversationFilter === 'awaiting'
+                    ? '現在「要返信」の相手はいません。すべて対応済みです！'
+                    : conversationFilter === 'unread'
+                      ? '未読メッセージはありません。'
+                      : 'メッセージ履歴はありません。'}
+                </p>
               ) : (
-                conversations.map((conversation) => {
+                visibleConversations.map((conversation) => {
                   const lastMsg = conversation.items[conversation.items.length - 1];
                   const isSelected = selectedLineUserId === conversation.lineUserId;
                   const friend = friends[conversation.lineUserId];
@@ -732,9 +1040,11 @@ export const MarketingLineInboxView: React.FC<MarketingLineInboxViewProps> = ({
                       className={`w-full rounded-xl p-3 text-left transition cursor-pointer border flex items-start gap-3 ${
                         isSelected
                           ? 'bg-emerald-50 border-emerald-300 shadow-xs ring-1 ring-emerald-300/40'
-                          : unreadCount > 0
-                            ? 'bg-white border-emerald-200 hover:bg-emerald-50/40 shadow-2xs'
-                            : 'bg-slate-50/70 border-slate-200 hover:bg-slate-100/80 hover:border-slate-300'
+                          : conversation.awaitingReply
+                            ? 'bg-rose-50/40 border-rose-200 hover:bg-rose-50 shadow-2xs'
+                            : unreadCount > 0
+                              ? 'bg-white border-emerald-200 hover:bg-emerald-50/40 shadow-2xs'
+                              : 'bg-slate-50/70 border-slate-200 hover:bg-slate-100/80 hover:border-slate-300'
                       }`}
                     >
                       <div className="shrink-0 mt-0.5">
@@ -752,9 +1062,16 @@ export const MarketingLineInboxView: React.FC<MarketingLineInboxViewProps> = ({
                       </div>
                       <div className="min-w-0 flex-1">
                         <div className="flex items-center justify-between gap-1">
-                          <span className={`truncate text-xs ${unreadCount > 0 ? 'font-bold text-slate-950' : 'font-bold text-slate-800'}`}>
-                            {displayName}
-                          </span>
+                          <div className="flex items-center gap-1 min-w-0">
+                            <span className={`truncate text-xs ${unreadCount > 0 || conversation.awaitingReply ? 'font-bold text-slate-950' : 'font-bold text-slate-800'}`}>
+                              {displayName}
+                            </span>
+                            {conversation.awaitingReply && (
+                              <span className="shrink-0 px-1.5 py-0.2 rounded bg-rose-100 border border-rose-300 text-rose-800 text-[9px] font-extrabold">
+                                要返信
+                              </span>
+                            )}
+                          </div>
                           <span className={`text-[10px] shrink-0 ${unreadCount > 0 ? 'text-emerald-700 font-semibold' : 'text-slate-400'}`}>
                             {new Date(lastMsg?.received_at || '').toLocaleString('ja-JP', { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' })}
                           </span>
@@ -765,7 +1082,7 @@ export const MarketingLineInboxView: React.FC<MarketingLineInboxViewProps> = ({
                           </div>
                         )}
                         <div className="flex items-center justify-between gap-2 mt-1">
-                          <div className={`truncate text-xs ${unreadCount > 0 ? 'font-semibold text-slate-900' : 'text-slate-600'}`}>
+                          <div className={`truncate text-xs ${unreadCount > 0 || conversation.awaitingReply ? 'font-semibold text-slate-900' : 'text-slate-600'}`}>
                             {lastMsg?.body || '（本文なし）'}
                           </div>
                           {unreadCount > 0 && (
@@ -848,6 +1165,33 @@ export const MarketingLineInboxView: React.FC<MarketingLineInboxViewProps> = ({
               </div>
             ) : (
               <>
+                {activeConversation.awaitingReply && (
+                  <div className="mt-2.5 flex flex-wrap items-center justify-between gap-2 rounded-xl border border-rose-200 bg-rose-50 px-3 py-2 text-xs">
+                    <span className="font-semibold text-rose-800">
+                      お客様からのメッセージ後にまだ手動返信がありません（要返信）
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => dismissAwaitingReply(activeConversation.lineUserId, activeConversation.latestInboundAt)}
+                      className="inline-flex items-center gap-1 rounded-lg border border-rose-300 bg-white hover:bg-rose-100 px-2.5 py-1 text-[11px] font-bold text-rose-800 transition cursor-pointer"
+                    >
+                      <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
+                      <span>返信不要・対応済みにする</span>
+                    </button>
+                  </div>
+                )}
+                {activeConversation.awaitingDismissed && (
+                  <div className="mt-2.5 flex flex-wrap items-center justify-between gap-2 rounded-xl border border-slate-200 bg-slate-50 px-3 py-1.5 text-[11px] text-slate-600">
+                    <span>返信不要として対応済みにしています</span>
+                    <button
+                      type="button"
+                      onClick={() => restoreAwaitingReply(activeConversation.lineUserId)}
+                      className="font-semibold text-rose-700 hover:underline cursor-pointer"
+                    >
+                      要返信に戻す
+                    </button>
+                  </div>
+                )}
                 <div className="mt-3 flex-1 max-h-[460px] space-y-2.5 overflow-auto rounded-xl bg-slate-50 p-4 border border-slate-200">
                   {activeConversation.items.map((message) => {
                     const activeFriend = friends[selectedLineUserId];
@@ -968,8 +1312,13 @@ export const MarketingLineInboxView: React.FC<MarketingLineInboxViewProps> = ({
           <div className="grid gap-5 xl:grid-cols-[280px_1fr]">
             <section className="rounded-2xl border border-slate-200 bg-white p-4 shadow-xs">
               <div className="flex items-center justify-between gap-2">
-                <h3 className="font-bold text-slate-900 flex items-center gap-2">
+                <h3 className="font-bold text-slate-900 flex items-center gap-2 flex-wrap">
                   <span>受信した相手</span>
+                  {awaitingReplyCount > 0 && (
+                    <span className="px-2 py-0.5 rounded-full bg-rose-500 text-white text-[11px] font-bold">
+                      要返信 {awaitingReplyCount}名
+                    </span>
+                  )}
                   {totalUnread > 0 && (
                     <span className="px-2 py-0.5 rounded-full bg-emerald-500 text-white text-[11px] font-bold">
                       未読 {totalUnread}件
@@ -986,11 +1335,37 @@ export const MarketingLineInboxView: React.FC<MarketingLineInboxViewProps> = ({
                   </button>
                 )}
               </div>
+              <div className="mt-2.5 flex flex-wrap items-center gap-1.5">
+                <button
+                  type="button"
+                  onClick={() => setConversationFilter('all')}
+                  className={`px-2.5 py-1 rounded-md text-xs font-semibold transition cursor-pointer ${
+                    conversationFilter === 'all' ? 'bg-slate-800 text-white' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                  }`}
+                >
+                  すべて
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setConversationFilter('awaiting')}
+                  className={`px-2.5 py-1 rounded-md text-xs font-semibold transition cursor-pointer ${
+                    conversationFilter === 'awaiting'
+                      ? 'bg-rose-600 text-white'
+                      : 'bg-rose-50 text-rose-700 border border-rose-200 hover:bg-rose-100'
+                  }`}
+                >
+                  要返信 ({awaitingReplyCount})
+                </button>
+              </div>
               <div className="mt-3 max-h-[560px] space-y-1 overflow-auto">
-                {conversations.length === 0 ? (
-                  <p className="text-sm text-slate-400 py-4 text-center">Webhookで受信したメッセージはここに表示されます。</p>
+                {visibleConversations.length === 0 ? (
+                  <p className="text-sm text-slate-400 py-4 text-center">
+                    {conversationFilter === 'awaiting'
+                      ? '現在「要返信」の相手はいません。'
+                      : 'Webhookで受信したメッセージはここに表示されます。'}
+                  </p>
                 ) : (
-                  conversations.map((conversation) => {
+                  visibleConversations.map((conversation) => {
                     const friend = friends[conversation.lineUserId];
                     const displayName = friend?.display_name || conversation.lineUserId;
                     const unreadCount = conversation.unreadCount;
@@ -1001,10 +1376,17 @@ export const MarketingLineInboxView: React.FC<MarketingLineInboxViewProps> = ({
                           setSelectedLineUserId(conversation.lineUserId);
                           void markConversationRead(conversation.lineUserId);
                         }}
-                        className={'w-full rounded-lg p-3 text-left transition cursor-pointer border ' + (selectedLineUserId === conversation.lineUserId ? 'bg-purple-50 border-purple-200 shadow-xs' : 'border-transparent hover:bg-slate-50')}
+                        className={'w-full rounded-lg p-3 text-left transition cursor-pointer border ' + (selectedLineUserId === conversation.lineUserId ? 'bg-purple-50 border-purple-200 shadow-xs' : conversation.awaitingReply ? 'border-rose-200 bg-rose-50/40 hover:bg-rose-50' : 'border-transparent hover:bg-slate-50')}
                       >
                         <div className="flex items-center justify-between gap-2">
-                          <div className="truncate text-xs font-semibold text-slate-600">{displayName}</div>
+                          <div className="flex items-center gap-1.5 min-w-0">
+                            <span className="truncate text-xs font-semibold text-slate-700">{displayName}</span>
+                            {conversation.awaitingReply && (
+                              <span className="shrink-0 px-1.5 py-0.2 rounded bg-rose-100 border border-rose-300 text-rose-800 text-[10px] font-bold">
+                                要返信
+                              </span>
+                            )}
+                          </div>
                           {unreadCount > 0 && (
                             <span
                               aria-label={`未読 ${unreadCount}件`}
@@ -1014,7 +1396,7 @@ export const MarketingLineInboxView: React.FC<MarketingLineInboxViewProps> = ({
                             </span>
                           )}
                         </div>
-                        <div className={`truncate text-sm mt-0.5 ${unreadCount > 0 ? 'font-bold text-slate-950' : 'font-medium text-slate-800'}`}>{conversation.items[conversation.items.length - 1]?.body || '（本文なし）'}</div>
+                        <div className={`truncate text-sm mt-0.5 ${unreadCount > 0 || conversation.awaitingReply ? 'font-bold text-slate-950' : 'font-medium text-slate-800'}`}>{conversation.items[conversation.items.length - 1]?.body || '（本文なし）'}</div>
                         <div className="text-[10px] text-slate-400 mt-1">{new Date(conversation.items[conversation.items.length - 1]?.received_at || '').toLocaleString()}</div>
                       </button>
                     );

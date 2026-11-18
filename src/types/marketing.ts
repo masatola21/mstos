@@ -4,6 +4,7 @@ export type MarketingTrigger =
   | 'line_registered'
   | 'diagnosis_invited'
   | 'diagnosis_completed'
+  | 'material_requested'
   | 'report_approved'
   | 'report_sent'
   | 'meeting_completed'

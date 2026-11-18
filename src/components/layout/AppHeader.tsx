@@ -16,11 +16,21 @@ import {
 import { useAuth } from '../../context/AuthContext';
 import { UnifiedNavTab } from '../UnifiedNavbar';
 
+export interface InboxAlertSummary {
+  lineUnread: number;
+  lineAwaitingReply: number;
+  emailUnread: number;
+  formsReceived: number;
+  totalAttentionCount: number;
+}
+
 interface AppHeaderProps {
   currentTab: UnifiedNavTab;
   onSelectTab: (tab: UnifiedNavTab) => void;
   onOpenMobileSidebar: () => void;
   pendingApprovalsCount: number;
+  inboxAlertSummary?: InboxAlertSummary;
+  onOpenInboxChannel?: (channel: 'line' | 'email' | 'forms') => void;
   workspaceSyncStatus: 'loading' | 'saving' | 'saved' | 'error' | 'conflict';
   workspaceSaveError?: string;
   onOpenQuickAiDrawer: () => void;
@@ -34,6 +44,8 @@ export const AppHeader: React.FC<AppHeaderProps> = ({
   onSelectTab,
   onOpenMobileSidebar,
   pendingApprovalsCount,
+  inboxAlertSummary,
+  onOpenInboxChannel,
   workspaceSyncStatus,
   workspaceSaveError,
   onOpenQuickAiDrawer,
@@ -151,13 +163,40 @@ export const AppHeader: React.FC<AppHeaderProps> = ({
           className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-medium border transition-colors cursor-pointer ${
             currentTab === 'inbox_hub'
               ? 'bg-purple-50 text-purple-700 border-purple-200 font-bold'
-              : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-50'
+              : (inboxAlertSummary?.totalAttentionCount || 0) > 0
+                ? 'bg-rose-50/70 text-rose-900 border-rose-200 hover:bg-rose-100/70 font-semibold'
+                : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-50'
           }`}
-          title="全チャネルの未対応メッセージ・反響を確認"
+          title={
+            inboxAlertSummary
+              ? `未対応アラート合計 ${inboxAlertSummary.totalAttentionCount}件（LINE要返信: ${inboxAlertSummary.lineAwaitingReply}名 / メール未読: ${inboxAlertSummary.emailUnread}件 / フォーム未対応: ${inboxAlertSummary.formsReceived}件）`
+              : '全チャネルの未対応メッセージ・反響を確認'
+          }
         >
-          <Inbox className="w-3.5 h-3.5 text-purple-600" />
+          <Inbox className={`w-3.5 h-3.5 ${(inboxAlertSummary?.totalAttentionCount || 0) > 0 ? 'text-rose-600' : 'text-purple-600'}`} />
           <span className="hidden sm:inline">受信トレイ</span>
+          {(inboxAlertSummary?.totalAttentionCount || 0) > 0 && (
+            <span className="px-1.5 py-0.2 rounded-full bg-rose-600 text-white text-[10px] font-bold leading-4">
+              {inboxAlertSummary!.totalAttentionCount > 99 ? '99+' : inboxAlertSummary!.totalAttentionCount}
+            </span>
+          )}
         </button>
+
+        {/* LINE要返信アラート */}
+        {(inboxAlertSummary?.lineAwaitingReply || 0) > 0 && (
+          <button
+            type="button"
+            onClick={() => {
+              if (onOpenInboxChannel) onOpenInboxChannel('line');
+              else onSelectTab('inbox_hub');
+            }}
+            className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs font-bold bg-rose-50 text-rose-800 border border-rose-300 hover:bg-rose-100 transition-colors cursor-pointer"
+            title={`LINEで手動返信待ちのお客様が ${inboxAlertSummary!.lineAwaitingReply} 名います（クリックして開く）`}
+          >
+            <Bell className="w-3.5 h-3.5 text-rose-600 animate-pulse" />
+            <span>LINE要返信 {inboxAlertSummary!.lineAwaitingReply}</span>
+          </button>
+        )}
 
         {/* Quick Calendar Jump */}
         <button

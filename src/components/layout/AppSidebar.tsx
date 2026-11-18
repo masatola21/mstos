@@ -51,6 +51,7 @@ interface AppSidebarProps {
   currentTab: UnifiedNavTab;
   onSelectTab: (tab: UnifiedNavTab) => void;
   pendingApprovalsCount: number;
+  inboxAttentionCount?: number;
   isOpenMobile: boolean;
   onCloseMobile: () => void;
   onOpenConfig: () => void;
@@ -65,6 +66,7 @@ export const AppSidebar: React.FC<AppSidebarProps> = ({
   currentTab,
   onSelectTab,
   pendingApprovalsCount,
+  inboxAttentionCount = 0,
   isOpenMobile,
   onCloseMobile,
   onOpenConfig,
@@ -263,14 +265,21 @@ export const AppSidebar: React.FC<AppSidebarProps> = ({
             <button
               type="button"
               onClick={() => handleItemClick('inbox_hub')}
-              className={`w-full flex items-center gap-3 px-3 py-2 rounded-lg text-xs sm:text-sm font-semibold transition-colors cursor-pointer ${
+              className={`w-full flex items-center justify-between px-3 py-2 rounded-lg text-xs sm:text-sm font-semibold transition-colors cursor-pointer ${
                 isTabActive('inbox_hub')
                   ? 'bg-purple-50 text-purple-700 font-bold border border-purple-200/80 shadow-xs'
                   : 'text-slate-700 hover:bg-slate-100/80 hover:text-slate-900'
               }`}
             >
-              <Inbox className={`w-4 h-4 ${isTabActive('inbox_hub') ? 'text-purple-600' : 'text-slate-400'}`} />
-              <span>📥 統合受信トレイ</span>
+              <div className="flex items-center gap-3">
+                <Inbox className={`w-4 h-4 ${isTabActive('inbox_hub') ? 'text-purple-600' : 'text-slate-400'}`} />
+                <span>📥 統合受信トレイ</span>
+              </div>
+              {inboxAttentionCount > 0 && (
+                <span className="px-1.5 py-0.5 text-[10px] font-bold rounded-full bg-rose-100 text-rose-800 border border-rose-200">
+                  {inboxAttentionCount > 99 ? '99+' : inboxAttentionCount}
+                </span>
+              )}
             </button>
 
             <button

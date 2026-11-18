@@ -221,6 +221,9 @@ export const MarketingEmailInboxView: React.FC<MarketingEmailInboxViewProps> = (
         headers: { 'Content-Type': 'application/json', ...headers },
         body: JSON.stringify({ ids, isRead }),
       });
+      if (typeof window !== 'undefined') {
+        window.dispatchEvent(new CustomEvent('mst_inbox_counts_updated'));
+      }
     } catch {
       // non-blocking
     }
@@ -247,6 +250,9 @@ export const MarketingEmailInboxView: React.FC<MarketingEmailInboxViewProps> = (
         headers: { 'Content-Type': 'application/json', ...headers },
         body: JSON.stringify({ markAll: true, ids: unreadIds, isRead: true }),
       });
+      if (typeof window !== 'undefined') {
+        window.dispatchEvent(new CustomEvent('mst_inbox_counts_updated'));
+      }
     } catch {
       // non-blocking
     }

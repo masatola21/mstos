@@ -1,5 +1,17 @@
 
 import { getSalesEmailTemplate, getNurturingStepTemplate } from '../../utils/salesOutreachTemplates';
+import {
+  MST_DIAGNOSIS_STARTER_SCENARIOS,
+  MST_MATERIAL_FOLLOWUP_STARTER_SCENARIOS,
+  MST_POST_MEETING_STARTER_SCENARIOS,
+  isPostDealStageTrigger,
+  mergeStarterScenarioBatch,
+} from '../../utils/followupStarterScenarios';
+export {
+  MST_DIAGNOSIS_STARTER_SCENARIOS,
+  MST_MATERIAL_FOLLOWUP_STARTER_SCENARIOS,
+  MST_POST_MEETING_STARTER_SCENARIOS,
+};
 
 export const MST_OUTREACH_STARTER_SCENARIOS: Omit<MarketingScenario, 'id' | 'updatedAt'>[] = [1, 2, 3, 4, 5].map((step) => {
   const tpl = getSalesEmailTemplate(step);
@@ -181,110 +193,6 @@ export const MST_CARE_STARTER_SCENARIOS: Omit<MarketingScenario, 'id' | 'updated
 export const MST_DIRECT_CONSULT_STARTER_SCENARIO: Omit<MarketingScenario, 'id' | 'updatedAt'> =
   MST_CONSULT_STARTER_SCENARIOS[1];
 
-// 分岐 A: 3分無料経営診断（HP簡易診断結果即時表示 × 教育フォロー → 商談案内 ※詳細レポート・提案書は商談後のみ送付）
-export const MST_DIAGNOSIS_STARTER_SCENARIOS: Omit<MarketingScenario, 'id' | 'updatedAt'>[] = [
-  {
-    name: '【A1・未回答教育】1日後：まだお済みでない方へ（その場で簡易診断結果が出ます）',
-    trigger: 'tag_added',
-    targetTag: '選択:診断',
-    channel: 'line',
-    audience: '「選択:診断」タグ（HP診断未送信者のみ）',
-    waitMinutes: 1440,
-    emailSubject: '',
-    emailBody: '',
-    messageBody:
-      '{recipient_name} 様\n有限会社MSTの大橋です。\n\n昨日は無料経営診断をお選びいただきありがとうございました！\n多くの企業様で課題となる「人手不足・利益が残らない悩み」は、実は人ではなく【業務の配管（仕組み）の詰まり】が原因であることがほとんどです。\n\nホームページの選択式チェック（約3分）にご回答いただくと、送信直後にその場で【簡易診断結果（ボトルネック傾向・最初の一手）】をご確認いただけますので、お時間のある際にぜひお試しください。',
-    lineMessageType: 'flex',
-    lineImageUrl: '',
-    linePreviewImageUrl: '',
-    flexAltText: '【3分無料診断】回答直後に簡易診断結果をご確認いただけます',
-    flexTitle: '📊 3分で「簡易診断結果」を即時表示',
-    flexBody:
-      '{recipient_name} 様\n業務や利益のボトルネック傾向が約3分で分かり、回答直後にホームページ上で【簡易診断結果】をご確認いただけます（無料）。',
-    flexButtonLabel: '3分簡易診断を始める',
-    flexButtonUrl: '{link_url}',
-    status: 'draft',
-    automationEnabled: false,
-    stopOnBooking: true,
-    stopOnDeal: true,
-    consentBasis: 'LINE診断ルート選択時の配信同意に基づく',
-  },
-  {
-    name: '【A2・簡易結果の解説】1日後：簡易診断結果の見方と最初の急所',
-    trigger: 'diagnosis_completed',
-    channel: 'line',
-    audience: 'HP診断送信済み・商談未予約者',
-    waitMinutes: 1440,
-    emailSubject: '',
-    emailBody: '',
-    messageBody:
-      '{recipient_name} 様\n有限会社MSTの大橋真人です。\n\n先日は「3分無料経営診断」へのご回答ありがとうございました！ホームページ上に表示された【簡易診断結果】はご覧いただけましたでしょうか？\n\n簡易診断では「いまどこに詰まりが出やすいか」の傾向を整理しています。\nなお、御社の実情に合わせた【詳細な診断レポート・改善提案書】は、直接お話を伺った上で「30分のオンライン商談を実施された方限定」で商談後に作成・お渡ししております。\n\n▼ 無料オンライン商談（30分）の日程を選ぶ\n{booking_url}',
-    lineMessageType: 'flex',
-    lineImageUrl: '',
-    linePreviewImageUrl: '',
-    flexAltText: '【簡易診断結果の解説】最初の改善候補と詳細レポートのご案内',
-    flexTitle: '🔎 簡易診断結果の活かし方',
-    flexBody:
-      '{recipient_name} 様\nHP上の簡易診断結果で把握した傾向をもとに、どこから着手すべきかを30分の無料商談で一緒に整理しませんか？（詳細な診断レポート・提案書は商談後に作成・進呈しております）',
-    flexButtonLabel: '30分商談の日程を選ぶ',
-    flexButtonUrl: '{booking_url}',
-    status: 'draft',
-    automationEnabled: false,
-    stopOnBooking: true,
-    stopOnDeal: true,
-    consentBasis: '診断フォーム回答時の同意に基づく',
-  },
-  {
-    name: '【A3・事例教育×商談案内】3日後：仕組み化事例 ＆ 詳細レポート付き商談',
-    trigger: 'diagnosis_completed',
-    channel: 'line',
-    audience: 'HP診断送信済み・商談未予約者',
-    waitMinutes: 4320,
-    emailSubject: '',
-    emailBody: '',
-    messageBody:
-      '{recipient_name} 様\n有限会社MSTの大橋真人です。\n\n先日の簡易診断に続き、同規模の企業様が「請求・見積・顧客情報の二重入力の解消」や「集客〜商談の導線接続」から小さく着手し、手元に利益が残る体制を整えた改善事例をご案内しております。\n\n30分のオンライン商談では、簡易診断の結果をベースに「御社が最初に直すべき1点」を絞り込み、商談後に御社専用の【詳細診断レポート・改善提案書】を進呈しております。\n\n▼ 個別商談の日程を選ぶ\n{booking_url}',
-    lineMessageType: 'flex',
-    lineImageUrl: '',
-    linePreviewImageUrl: '',
-    flexAltText: '【改善事例】簡易診断から仕組み化に着手した事例＆詳細レポートのご案内',
-    flexTitle: '💡 仕組み化の事例 ＆ 個別商談',
-    flexBody:
-      '{recipient_name} 様\n簡易診断で見えたボトルネックを現場に負担なく解消した他社事例をご紹介。商談を実施された方限定で、商談後に「詳細診断レポート＆改善提案書」をお渡ししています。',
-    flexButtonLabel: '詳細レポート付き商談を予約',
-    flexButtonUrl: '{booking_url}',
-    status: 'draft',
-    automationEnabled: false,
-    stopOnBooking: true,
-    stopOnDeal: true,
-    consentBasis: '診断フォーム回答時の同意に基づく',
-  },
-  {
-    name: '【A4・最終商談案内】7日後：簡易診断後1週間・30分無料個別相談のご案内',
-    trigger: 'diagnosis_completed',
-    channel: 'line',
-    audience: 'HP診断送信済み・商談未予約者',
-    waitMinutes: 10080,
-    emailSubject: '',
-    emailBody: '',
-    messageBody:
-      '{recipient_name} 様\n有限会社MSTの大橋真人です。\n\n簡易診断をご回答いただいてから1週間が経ちました。もし「結果を見て気になっているが、日々の対応に追われて進められていない」という場合は、30分の無料オンライン相談をご活用ください。\n\n現状の優先順位を整理した上で、商談後に御社専用の【詳細診断レポート・改善提案書】をお届けいたします。\n\n▼ 相談枠の確認・ご予約はこちら\n{booking_url}',
-    lineMessageType: 'flex',
-    lineImageUrl: '',
-    linePreviewImageUrl: '',
-    flexAltText: '【最終案内】簡易診断後の30分無料個別相談（詳細レポート進呈）',
-    flexTitle: '🗓️ 30分無料・個別作戦会議のご案内',
-    flexBody:
-      '{recipient_name} 様\n簡易診断から1週間が経過しました。まずは30分のオンライン商談で改善の優先順位を整理しませんか？（詳細診断レポート・提案書は商談実施後に進呈）',
-    flexButtonLabel: '今月の相談枠を確認する',
-    flexButtonUrl: '{booking_url}',
-    status: 'draft',
-    automationEnabled: false,
-    stopOnBooking: true,
-    stopOnDeal: true,
-    consentBasis: '診断フォーム回答時の同意に基づく',
-  },
-];
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { getSupabase } from '../../lib/supabaseClient';
 import { InlineDeleteButton } from '../InlineDeleteButton';
@@ -316,6 +224,7 @@ interface Props {
 const triggerOptions: Array<{ value: MarketingTrigger; label: string }> = [
   { value: 'prospect_selected', label: '営業対象に選ばれた時' },
   { value: 'lead_created', label: '見込み客が登録された時' },
+  { value: 'material_requested', label: '資料請求フォーム送信時' },
   { value: 'outreach_first_sent', label: '営業メール第1通を送った時（2通目以降を自動送信）' },
   { value: 'line_registered', label: 'LINE登録された時' },
   { value: 'diagnosis_invited', label: '診断案内を送った時' },
@@ -410,9 +319,13 @@ const emptyScenario = (): Omit<MarketingScenario, 'id' | 'updatedAt'> => ({
 export function getScenarioSortKey(scenario: MarketingScenario): { categoryOrder: number; stepNumber: number; waitMinutes: number; name: string } {
   const name = scenario.name || '';
   
-  // カテゴリ優先度: 1. 分岐A(診断), 2. 分岐B(個別相談), 3. 分岐C(介護開業), 4. 共通教育(ストーリー), 5. 営業メール, 99. その他
+  // カテゴリ優先度: 1. 分岐A(診断), 2. 分岐B(個別相談), 3. 分岐C(介護開業), 4. 共通教育(ストーリー), 5. 営業メール, 6. 資料請求フォロー, 7. 面談・提案後フォロー, 99. その他
   let categoryOrder = 99;
-  if (name.includes('【A') || name.includes('診断') || name.includes('【1. 初回') || name.includes('【2. 診断') || name.includes('【3. レポート') || name.includes('【4. 3日') || name.includes('【5. 7日') || scenario.trigger.startsWith('diagnosis_') || scenario.trigger.startsWith('report_')) {
+  if (scenario.trigger === 'material_requested' || name.includes('【資料請求')) {
+    categoryOrder = 6;
+  } else if (isPostDealStageTrigger(scenario.trigger) || name.includes('【面談後') || name.includes('【レポート後') || name.includes('【提案後')) {
+    categoryOrder = 7;
+  } else if (name.includes('【A') || name.includes('診断') || name.includes('【1. 初回') || name.includes('【2. 診断') || name.includes('【3. レポート') || name.includes('【4. 3日') || name.includes('【5. 7日') || scenario.trigger.startsWith('diagnosis_') || scenario.trigger.startsWith('report_')) {
     categoryOrder = 1;
   } else if (name.includes('【B') || (name.includes('個別相談') && !name.includes('介護'))) {
     categoryOrder = 2;
@@ -591,7 +504,7 @@ export const MarketingAutomationPrototypeView: React.FC<Props> = ({ scenarios, o
     [scenarios]
   );
   const triggerLabel = useMemo(() => Object.fromEntries(triggerOptions.map((option) => [option.value, option.label])) as Record<MarketingTrigger, string>, []);
-  const supportedAutomationTriggers = new Set<MarketingTrigger>(['prospect_selected','lead_created','outreach_first_sent','line_registered','diagnosis_invited','diagnosis_completed','meeting_completed','tag_added','booking_created','retainer_period','deal_stage_changed','deal_won','report_approved','report_sent','proposal_approved','proposal_sent','contract_sent','contract_signed','invoice_due','invoice_overdue','project_milestone']);
+  const supportedAutomationTriggers = new Set<MarketingTrigger>(['prospect_selected','lead_created','material_requested','outreach_first_sent','line_registered','diagnosis_invited','diagnosis_completed','meeting_completed','tag_added','booking_created','retainer_period','deal_stage_changed','deal_won','report_approved','report_sent','proposal_approved','proposal_sent','contract_sent','contract_signed','invoice_due','invoice_overdue','project_milestone']);
 
   const duplicateCount = useMemo(() => {
     const names = new Set<string>();
@@ -603,65 +516,12 @@ export const MarketingAutomationPrototypeView: React.FC<Props> = ({ scenarios, o
     return dupes;
   }, [scenarios]);
 
-  const LEGACY_BRANCH_A_PREFIXES = [
-    '【1. 初回',
-    '【2. 診断',
-    '【3. レポート',
-    '【4. 3日',
-    '【5. 7日',
-    '【A1・教育リマインド】',
-    '【A2・診断直後】',
-    '【A3・レポート送付】',
-    '【A4・3日後教育】',
-    '【A5・7日後商談案内】',
-  ];
-
   const mergeStarterScenarios = (
     presets: Omit<MarketingScenario, 'id' | 'updatedAt'>[],
     options?: { replaceLegacyBranchA?: boolean }
   ): { merged: MarketingScenario[]; addedCount: number; updatedCount: number } => {
-    const now = Date.now();
-    const baseList = options?.replaceLegacyBranchA
-      ? scenarios.filter((s) => !LEGACY_BRANCH_A_PREFIXES.some((prefix) => (s.name || '').startsWith(prefix)))
-      : [...scenarios];
-
-    const existingByName = new Map<string, MarketingScenario>();
-    baseList.forEach((s) => existingByName.set(s.name.trim(), s));
-
-    let addedCount = 0;
-    let updatedCount = 0;
-    const updatedList = [...baseList];
-
-    presets.forEach((preset, index) => {
-      const pName = preset.name.trim();
-      const existing = existingByName.get(pName);
-      if (existing) {
-        const targetIndex = updatedList.findIndex((s) => s.id === existing.id || s.name.trim() === pName);
-        if (targetIndex !== -1) {
-          updatedList[targetIndex] = {
-            ...existing,
-            ...preset,
-            updatedAt: now,
-          };
-          updatedCount++;
-        }
-      } else {
-        let hash = 0;
-        for (let i = 0; i < pName.length; i++) hash = ((hash << 5) - hash) + pName.charCodeAt(i);
-        const stableId = `starter-${preset.channel}-${Math.abs(hash).toString(36)}-${index}`;
-
-        const newScenario: MarketingScenario = {
-          ...preset,
-          id: stableId,
-          updatedAt: now + index * 10,
-        };
-        updatedList.unshift(newScenario);
-        existingByName.set(pName, newScenario);
-        addedCount++;
-      }
-    });
-
-    return { merged: sortScenarios(deduplicateMarketingScenarios(updatedList)), addedCount, updatedCount };
+    const { merged, addedCount, updatedCount } = mergeStarterScenarioBatch(scenarios, presets, options);
+    return { merged: sortScenarios(deduplicateMarketingScenarios(merged)), addedCount, updatedCount };
   };
 
   const deduplicateScenarios = () => {
@@ -690,7 +550,19 @@ export const MarketingAutomationPrototypeView: React.FC<Props> = ({ scenarios, o
   const applyDiagnosisStarterSet = () => {
     const { merged, addedCount, updatedCount } = mergeStarterScenarios(MST_DIAGNOSIS_STARTER_SCENARIOS, { replaceLegacyBranchA: true });
     onScenariosChange(merged);
-    setNotice(`分岐A「簡易診断結果→教育→商談案内（全4本）」を反映しました（新規導入: ${addedCount}件、最新更新: ${updatedCount}件）。`);
+    setNotice(`分岐A「簡易診断結果→教育→商談案内（LINE+メール対応・全4本）」を反映しました（新規導入: ${addedCount}件、最新更新: ${updatedCount}件）。`);
+  };
+
+  const applyMaterialFollowupStarterSet = () => {
+    const { merged, addedCount, updatedCount } = mergeStarterScenarios(MST_MATERIAL_FOLLOWUP_STARTER_SCENARIOS);
+    onScenariosChange(merged);
+    setNotice(`資料請求後の自動追客（1・3・7日後／LINE+メール全3本）を反映しました（新規導入: ${addedCount}件、最新更新: ${updatedCount}件）。`);
+  };
+
+  const applyPostMeetingStarterSet = () => {
+    const { merged, addedCount, updatedCount } = mergeStarterScenarios(MST_POST_MEETING_STARTER_SCENARIOS);
+    onScenariosChange(merged);
+    setNotice(`面談後・レポート・提案書送付後フォロー（LINE+メール全4本）を反映しました（新規導入: ${addedCount}件、最新更新: ${updatedCount}件）。`);
   };
 
   const applyOutreachStarterSet = () => {
@@ -717,6 +589,8 @@ export const MarketingAutomationPrototypeView: React.FC<Props> = ({ scenarios, o
   const applyAllStarterSets = () => {
     const allPresets = [
       ...MST_DIAGNOSIS_STARTER_SCENARIOS,
+      ...MST_MATERIAL_FOLLOWUP_STARTER_SCENARIOS,
+      ...MST_POST_MEETING_STARTER_SCENARIOS,
       ...MST_CONSULT_STARTER_SCENARIOS,
       ...MST_CARE_STARTER_SCENARIOS,
       ...MST_OUTREACH_STARTER_SCENARIOS,
@@ -724,7 +598,7 @@ export const MarketingAutomationPrototypeView: React.FC<Props> = ({ scenarios, o
     ];
     const { merged, addedCount, updatedCount } = mergeStarterScenarios(allPresets, { replaceLegacyBranchA: true });
     onScenariosChange(merged);
-    setNotice(`公式プリセット全${allPresets.length}本を反映しました（新規導入: ${addedCount}件、最新更新: ${updatedCount}件）。何回押しても重複しません。`);
+    setNotice(`公式プリセット全${allPresets.length}本（診断後・資料請求後・面談/提案後を含む）を反映しました（新規導入: ${addedCount}件、最新更新: ${updatedCount}件）。何回押しても重複しません。`);
   };
   const startNew = () => {
     const newStep: MarketingScenario = {
@@ -951,6 +825,8 @@ export const MarketingAutomationPrototypeView: React.FC<Props> = ({ scenarios, o
           onOpenJobs={() => setActiveTab('jobs')}
           onApplyAllStarterSets={applyAllStarterSets}
           onApplyDiagnosisStarterSet={applyDiagnosisStarterSet}
+          onApplyMaterialStarterSet={applyMaterialFollowupStarterSet}
+          onApplyPostMeetingStarterSet={applyPostMeetingStarterSet}
           onApplyOutreachStarterSet={applyOutreachStarterSet}
           onApplyLineNurturingStarterSet={applyLineNurturingStarterSet}
           onApplyDirectConsultStarterSet={applyDirectConsultStarterSet}

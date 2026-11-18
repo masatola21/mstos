@@ -114,6 +114,7 @@ export const UnifiedInboxView: React.FC<UnifiedInboxViewProps> = ({
   const [counts, setCounts] = useState({
     lineTotal: 0,
     lineUnread: 0,
+    lineAwaitingReply: 0,
     emailTotal: 0,
     emailUnread: 0,
     formsTotal: 0,
@@ -195,9 +196,19 @@ export const UnifiedInboxView: React.FC<UnifiedInboxViewProps> = ({
 
       let emailTotal: number = emailRes.count || 0;
       let emailUnread = 0;
+      let lineAwaitingReply = 0;
       try {
         const authHeaders = await getAuthHeaders();
-        const emailApiRes = await fetch('/api/inbox/email/messages?countOnly=1', { headers: authHeaders });
+        const [emailApiRes, summaryRes] = await Promise.all([
+          fetch('/api/inbox/email/messages?countOnly=1', { headers: authHeaders }),
+          fetch('/api/inbox/summary', { headers: authHeaders }).catch(() => null),
+        ]);
+        if (summaryRes && summaryRes.ok) {
+          const summaryData = await summaryRes.json().catch(() => ({}));
+          if (typeof summaryData.lineAwaitingReply === 'number') {
+            lineAwaitingReply = summaryData.lineAwaitingReply;
+          }
+        }
         if (emailApiRes.ok) {
           const emailData = await emailApiRes.json();
           if (!emailTotal && typeof emailData.count === 'number') {
@@ -220,6 +231,7 @@ export const UnifiedInboxView: React.FC<UnifiedInboxViewProps> = ({
       const next = {
         lineTotal: (lineTotalRes.count as number | null) || 0,
         lineUnread: (lineUnreadRes.count as number | null) || 0,
+        lineAwaitingReply,
         emailTotal,
         emailUnread,
         formsTotal: (subTotalRes.count as number | null) || 0,
@@ -229,6 +241,7 @@ export const UnifiedInboxView: React.FC<UnifiedInboxViewProps> = ({
       setCounts((prev) =>
         prev.lineTotal === next.lineTotal &&
         prev.lineUnread === next.lineUnread &&
+        prev.lineAwaitingReply === next.lineAwaitingReply &&
         prev.emailTotal === next.emailTotal &&
         prev.emailUnread === next.emailUnread &&
         prev.formsTotal === next.formsTotal &&
@@ -818,6 +831,15 @@ export const UnifiedInboxView: React.FC<UnifiedInboxViewProps> = ({
           }`}>
             未読 {counts.lineUnread}件
           </span>
+          {counts.lineAwaitingReply > 0 && (
+            <span className={`px-2 py-0.5 rounded-full text-[11px] font-bold ${
+              activeChannel === 'line'
+                ? 'bg-rose-300 text-rose-950'
+                : 'bg-rose-100 text-rose-800 border border-rose-300'
+            }`}>
+              要返信 {counts.lineAwaitingReply}名
+            </span>
+          )}
         </button>
 
         <button
@@ -1531,6 +1553,9 @@ export const UnifiedInboxView: React.FC<UnifiedInboxViewProps> = ({
           onNavigateContacts={() => onNavigateTab('contacts')}
           onUnreadCountChange={(unread) =>
             setCounts((prev) => (prev.lineUnread === unread ? prev : { ...prev, lineUnread: unread }))
+          }
+          onAwaitingReplyCountChange={(awaiting) =>
+            setCounts((prev) => (prev.lineAwaitingReply === awaiting ? prev : { ...prev, lineAwaitingReply: awaiting }))
           }
         />
       )}

@@ -5,7 +5,7 @@ import { LineMessagePreview } from '../LineMessagePreview';
 import { InlineDeleteButton } from '../InlineDeleteButton';
 import { renderPlaceholders, PLACEHOLDER_SAMPLE_VALUES } from '../../utils/placeholders';
 import { PlaceholderAssist } from '../common/PlaceholderAssist';
-import { appendEmailFooter } from '../../../server/emailFooter';
+import { EmailHtmlPreviewCard } from '../common/EmailHtmlPreviewCard';
 
 export type Channel = 'email' | 'line';
 export type LineType = 'text' | 'image' | 'flex' | 'video';
@@ -888,11 +888,11 @@ export const CommunicationTemplateLibraryView: React.FC = () => {
                         {renderPlaceholders(subject || '（件名未設定）', PLACEHOLDER_SAMPLE_VALUES)}
                       </div>
                     </div>
-                    <div className="p-4 whitespace-pre-wrap leading-relaxed text-slate-800 text-xs font-sans max-h-[520px] overflow-y-auto">
-                      {appendEmailFooter(
-                        renderPlaceholders(body || '（本文未設定）', PLACEHOLDER_SAMPLE_VALUES),
-                        { senderEmail: 'contact@mstcorp.info' }
-                      )}
+                    <div className="p-4 text-xs font-sans max-h-[520px] overflow-y-auto">
+                      <EmailHtmlPreviewCard
+                        body={renderPlaceholders(body || '（本文未設定）', PLACEHOLDER_SAMPLE_VALUES)}
+                        senderEmail="contact@mstcorp.info"
+                      />
                     </div>
                   </div>
                 ) : (

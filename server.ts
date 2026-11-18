@@ -20,7 +20,8 @@ import {
   resolveOneShotOutreachDraft,
 } from './src/utils/salesOutreachTemplates.js';
 import { generateDocumentPdf } from './server/pdfService.js';
-import { appendEmailFooter } from './server/emailFooter.js';
+import { prepareEmailPayloadContent } from './server/emailFooter.js';
+import { shouldStopScenarioForDeal } from './src/utils/followupStarterScenarios.js';
 import { classifyBottleneck } from './server/diagnosisAnalysis.js';
 import { DRAFT_CHAPTERS, DRAFT_SYSTEM_INSTRUCTION, buildProposalDraftPrompt, sanitizeDraftContext, cleanDraftOutput, type DraftChapter } from './server/proposalDraftBuilder.js';
 import {
@@ -49,6 +50,19 @@ import {
   getRichMenuLayoutConfig,
   getRichMenuLayoutAreas,
 } from './src/utils/lineRichMenuLayouts.js';
+import {
+  DEFAULT_LINE_ALERT_EMAIL,
+  type LineInboundAlertSettings,
+  normalizeLineInboundAlertSettings,
+  shouldSendLineInboundAlert,
+  buildLineInboundAlertEmailPayload,
+  deliverLineInboundAlertEmail,
+  isValidAlertEmail,
+} from './server/lineInboundAlert.js';
+import {
+  isLineConversationAwaitingReply,
+  isLineMessageUnread,
+} from './src/utils/inboxReadState.js';
 
 dotenv.config();
 
@@ -1061,6 +1075,109 @@ export async function getEmailBackupForwardSettings(ownerId?: string | null): Pr
   return { address: defaultAddress, enabled: false };
 }
 
+const memoryLineAlertSettings: Record<string, LineInboundAlertSettings> = {};
+
+export async function resolveDefaultLineAlertEmail(ownerId?: string | null): Promise<string> {
+  try {
+    const backup = await getEmailBackupForwardSettings(ownerId);
+    if (backup?.address && isValidAlertEmail(backup.address)) {
+      return backup.address.trim().toLowerCase();
+    }
+  } catch {}
+  if (ownerId && lineSupabase) {
+    try {
+      const { data: userRes } = await lineSupabase.auth.admin.getUserById(ownerId);
+      const authEmail = userRes?.user?.email?.trim().toLowerCase();
+      if (authEmail && isValidAlertEmail(authEmail)) return authEmail;
+    } catch {}
+  }
+  return DEFAULT_LINE_ALERT_EMAIL;
+}
+
+export async function getLineInboundAlertSettings(ownerId?: string | null): Promise<LineInboundAlertSettings> {
+  const defaultEmail = await resolveDefaultLineAlertEmail(ownerId);
+  if (ownerId && memoryLineAlertSettings[ownerId]) {
+    return memoryLineAlertSettings[ownerId];
+  }
+  if (!lineSupabase) {
+    return normalizeLineInboundAlertSettings(null, defaultEmail);
+  }
+  try {
+    const targetKey = ownerId ? `line_inbound_alert_${ownerId}` : 'line_inbound_alert_default';
+    const { data } = await lineSupabase
+      .from('automation_controls')
+      .select('reason, paused')
+      .eq('target', targetKey)
+      .maybeSingle();
+    if (data?.reason) {
+      const parsed = typeof data.reason === 'string' ? JSON.parse(data.reason) : data.reason;
+      const settings = normalizeLineInboundAlertSettings(
+        {
+          ...parsed,
+          enabled: data.paused !== undefined ? !data.paused : parsed?.enabled,
+        },
+        defaultEmail,
+      );
+      if (ownerId) memoryLineAlertSettings[ownerId] = settings;
+      return settings;
+    }
+  } catch {}
+  return normalizeLineInboundAlertSettings(null, defaultEmail);
+}
+
+export async function saveLineInboundAlertSettings(
+  ownerId: string,
+  rawSettings: Partial<LineInboundAlertSettings>,
+): Promise<LineInboundAlertSettings> {
+  const fallbackEmail = await resolveDefaultLineAlertEmail(ownerId);
+  const normalized = normalizeLineInboundAlertSettings(rawSettings, fallbackEmail);
+  memoryLineAlertSettings[ownerId] = normalized;
+
+  if (lineSupabase) {
+    try {
+      const targetKey = `line_inbound_alert_${ownerId}`;
+      const payload = JSON.stringify({
+        email: normalized.email,
+        mode: normalized.mode,
+        enabled: normalized.enabled,
+      });
+      const nowIso = new Date().toISOString();
+      const { data: existingCtrl } = await lineSupabase
+        .from('automation_controls')
+        .select('id')
+        .eq('target', targetKey)
+        .maybeSingle();
+
+      if (existingCtrl?.id) {
+        await lineSupabase
+          .from('automation_controls')
+          .update({
+            paused: !normalized.enabled,
+            reason: payload,
+            updated_by: ownerId,
+            updated_at: nowIso,
+          })
+          .eq('id', existingCtrl.id);
+      } else {
+        await lineSupabase
+          .from('automation_controls')
+          .insert({
+            target: targetKey,
+            paused: !normalized.enabled,
+            reason: payload,
+            updated_by: ownerId,
+            updated_at: nowIso,
+          });
+      }
+    } catch (err: any) {
+      console.warn('[LineInboundAlert] Save warning:', err?.message || err);
+    }
+  }
+
+  return normalized;
+}
+
+
 interface LineUserProfile {
   displayName?: string;
   pictureUrl?: string;
@@ -1633,6 +1750,64 @@ async function processLineInboxAndAutoReply(event: any, contact: any, eventId: s
       })()
     );
   }
+  // 5. 管理者へのLINE受信即時メール通知（LINEユーザーへの返信完了後にバックグラウンド実行）
+  if (ownerId) {
+    postReplyTasks.push(
+      (async () => {
+        try {
+          const emailKey = process.env.RESEND_API_KEY || '';
+          if (!emailKey) return;
+          const alertSettings = await getLineInboundAlertSettings(ownerId);
+          const check = shouldSendLineInboundAlert({
+            settings: alertSettings,
+            matchedRuleName: matchedRule?.name || null,
+          });
+          if (!check.shouldSend) return;
+
+          let senderName = String(contact?.full_name || '').trim();
+          if (!senderName && lineSupabase) {
+            const { data: friendRow } = await lineSupabase
+              .from('line_friends')
+              .select('display_name')
+              .eq('line_user_id', userId)
+              .maybeSingle();
+            if (friendRow?.display_name) {
+              senderName = String(friendRow.display_name).trim();
+            }
+          }
+          if (!senderName) {
+            senderName = `LINE友だち (${userId.slice(0, 8)}...)`;
+          }
+
+          const sender = await resolveEmailSender(ownerId);
+          const appUrl = (process.env.PUBLIC_APP_URL || '').trim().replace(/\/$/, '');
+          const payload = buildLineInboundAlertEmailPayload({
+            senderName,
+            companyName: contact?.company_name || null,
+            lineUserId: userId,
+            messageText,
+            receivedAt,
+            matchedRuleName: matchedRule?.name || null,
+            autoReplyText: sentOk ? inboxBody : null,
+            inboxUrl: appUrl || undefined,
+          });
+
+          const delivery = await deliverLineInboundAlertEmail({
+            resendApiKey: emailKey,
+            fromString: sender.fromString,
+            toEmail: alertSettings.email,
+            payload,
+          });
+          if (!delivery.success) {
+            console.warn('[LineInboundAlert] Email notification failed:', delivery.error);
+          }
+        } catch (alertErr: any) {
+          console.warn('[LineInboundAlert] Unexpected error:', alertErr?.message || alertErr);
+        }
+      })()
+    );
+  }
+
   if (postReplyTasks.length > 0) {
     await Promise.allSettled(postReplyTasks);
   }
@@ -2714,7 +2889,10 @@ async function enqueueScenariosForContact(
 
     const matchedScenarios = scenarios.filter((s: any) => {
       const cfg = s.config || {};
-      const isEnabled = cfg.automationEnabled === true || cfg.status === 'prepared' || cfg.status === 'active';
+      const isEnabled =
+        cfg.automationEnabled === false
+          ? false
+          : (cfg.automationEnabled === true || cfg.status === 'prepared' || cfg.status === 'active');
       if (!isEnabled || cfg.trigger !== triggerName || (onlyOwnerId && s.owner_id !== onlyOwnerId)) {
         return false;
       }
@@ -4728,11 +4906,12 @@ async function processMarketingAutomationJobs(options: { forceImmediate?: boolea
         // 2-1. メールの返信があれば停止（email_inbox_messages の受信確認）
         if (job.channel === 'email' && contact.email) {
           const normalizedEmail = contact.email.trim().toLowerCase();
+          const emailBaselineAt = job.created_at || scenarioCreatedAt;
           const { data: emailReplies } = await lineSupabase.from('email_inbox_messages')
             .select('id,from_email,received_at')
             .eq('owner_id', job.owner_id)
             .ilike('from_email', `%${normalizedEmail}%`)
-            .gte('received_at', scenarioCreatedAt)
+            .gte('received_at', emailBaselineAt)
             .limit(1);
           if (emailReplies && emailReplies.length > 0) {
             await lineSupabase.from('marketing_automation_jobs').update({
@@ -4836,42 +5015,41 @@ async function processMarketingAutomationJobs(options: { forceImmediate?: boolea
           }
         }
 
-        // 2-4. stopOnDeal: 会社の商談成約/受注 または 連絡先リードのステータス商談化以上で停止
+        // 2-4. stopOnDeal: 商談前フォローは商談化/成約で停止、面談・レポート・提案書フォローは成約/受注/失注/見送りで停止
         if (scenarioConfig.stopOnDeal) {
-          let hasDeal = false;
-          let dealReason = '';
+          let dealProposalStatus: string | null = null;
+          let leadStatus: string | null = null;
 
-          // 会社の進行中でない商談（成約または受注）
           if (contact.company_id) {
             const { data: closedDeals } = await lineSupabase.from('deals')
               .select('id,proposal_status,updated_at')
               .eq('company_id', contact.company_id)
-              .in('proposal_status', ['成約', '受注', 'won', 'closed_won'])
-              .gte('updated_at', scenarioCreatedAt)
+              .in('proposal_status', ['成約', '受注', 'won', 'closed_won', '失注', '見送り', 'lost'])
+              .gte('updated_at', job.created_at || scenarioCreatedAt)
               .limit(1);
             if (closedDeals && closedDeals.length > 0) {
-              hasDeal = true;
-              dealReason = `成約・受注済みのため停止（商談ステータス: ${closedDeals[0].proposal_status}）`;
+              dealProposalStatus = closedDeals[0].proposal_status;
             }
           }
 
-          // 連絡先に紐付くリードのステータスが '商談化' 以上
-          if (!hasDeal) {
-            const { data: dealLeads } = await lineSupabase.from('leads')
-              .select('id,status,updated_at')
-              .eq('contact_id', contact.id)
-              .in('status', ['商談化', '成約', '受注'])
-              .limit(1);
-            if (dealLeads && dealLeads.length > 0) {
-              hasDeal = true;
-              dealReason = `商談化のため停止（リードステータス: ${dealLeads[0].status}）`;
-            }
+          const { data: dealLeads } = await lineSupabase.from('leads')
+            .select('id,status,updated_at')
+            .eq('contact_id', contact.id)
+            .in('status', ['商談化', '成約', '受注', '失注', '見送り'])
+            .limit(1);
+          if (dealLeads && dealLeads.length > 0) {
+            leadStatus = dealLeads[0].status;
           }
 
-          if (hasDeal) {
+          const dealStopCheck = shouldStopScenarioForDeal({
+            trigger: scenarioConfig.trigger || '',
+            dealProposalStatus,
+            leadStatus,
+          });
+          if (dealStopCheck.stop) {
             await lineSupabase.from('marketing_automation_jobs').update({
               status: 'skipped',
-              error_message: dealReason || '商談化・成約済みのため停止',
+              error_message: dealStopCheck.reason || '商談化・成約済みのため停止',
               updated_at: new Date().toISOString(),
             }).eq('id', job.id);
             continue;
@@ -4915,7 +5093,12 @@ async function processMarketingAutomationJobs(options: { forceImmediate?: boolea
           }
 
           const unsubscribeUrl = createEmailUnsubscribeUrl(contact.id);
-          const response = await fetch('https://api.resend.com/emails',{method:'POST',headers:{Authorization:'Bearer '+emailKey,'Content-Type':'application/json'},body:JSON.stringify({from:emailFrom,to:[recipientAddress],subject:emailSubject,text:appendEmailFooter(body,{senderEmail:(emailFrom.match(/<([^<>]+)>/)?.[1]||emailFrom).trim(),unsubscribeUrl}),headers:{'List-Unsubscribe':`<${unsubscribeUrl}>`,'List-Unsubscribe-Post':'List-Unsubscribe=One-Click'}})});
+          const emailPayload = prepareEmailPayloadContent(body, {
+            senderEmail: (emailFrom.match(/<([^<>]+)>/)?.[1] || emailFrom).trim(),
+            unsubscribeUrl,
+            logoUrl: process.env.EMAIL_SIGNATURE_LOGO_URL,
+          });
+          const response = await fetch('https://api.resend.com/emails',{method:'POST',headers:{Authorization:'Bearer '+emailKey,'Content-Type':'application/json'},body:JSON.stringify({from:emailFrom,to:[recipientAddress],subject:emailSubject,text:emailPayload.text,html:emailPayload.html,headers:{'List-Unsubscribe':`<${unsubscribeUrl}>`,'List-Unsubscribe-Post':'List-Unsubscribe=One-Click'}})});
           const result = await response.json().catch(()=>({})) as {id?:string;message?:string};
           if (!response.ok || !result.id) throw new Error(result.message||'メール送信に失敗しました。');
           providerMessageId=result.id;
@@ -6116,6 +6299,10 @@ app.post('/api/marketing/test-send', requireAuth, async (req, res) => {
       const resolvedBody = resolved.personalize(scenarioConfig.emailBody || scenarioConfig.messageBody || '');
       const emailBodyText = `【※ 管理者向け実機テスト送信】\n宛先: ${adminEmail}\n差出人: ${emailFrom}\n--------------------------------------------------\n\n${resolvedBody}\n\n--------------------------------------------------\n※ 特定電子メール法 配信停止リンク確認:\n配信停止: ${appUrl || 'https://os.mstcorp.info'}/unsubscribe?demo=admin_preview`;
 
+      const emailPayload = prepareEmailPayloadContent(emailBodyText, {
+        senderEmail: (String(emailFrom).match(/<([^<>]+)>/)?.[1] || String(emailFrom)).trim(),
+        logoUrl: process.env.EMAIL_SIGNATURE_LOGO_URL,
+      });
       const response = await fetch('https://api.resend.com/emails', {
         method: 'POST',
         headers: { Authorization: 'Bearer ' + emailKey, 'Content-Type': 'application/json' },
@@ -6123,8 +6310,9 @@ app.post('/api/marketing/test-send', requireAuth, async (req, res) => {
           from: emailFrom,
           to: [adminEmail],
           subject: emailSubject,
-          // 本番送信と同じ署名が付いた状態を確認できるよう、テスト送信にも共通署名を付ける
-          text: appendEmailFooter(emailBodyText, { senderEmail: (String(emailFrom).match(/<([^<>]+)>/)?.[1] || String(emailFrom)).trim() }),
+          // 本番送信と同じロゴ入りHTML署名＋テキスト署名が付いた状態を確認できるよう、テスト送信にも共通署名を付ける
+          text: emailPayload.text,
+          html: emailPayload.html,
           ...(replyTo ? { reply_to: replyTo } : {}),
         }),
       });
@@ -6449,6 +6637,7 @@ app.post('/api/communications/send', async (req, res) => {
       return res.status(409).json({ status: 'canceled', error: reason });
     }
     let providerMessageId = '';
+    let sentDocumentType: string | null = null;
     if (row.channel === 'email') {
       const emailKey = process.env.RESEND_API_KEY || '';
       const configuredFrom = process.env.RESEND_FROM_EMAIL || '';
@@ -6470,7 +6659,11 @@ app.post('/api/communications/send', async (req, res) => {
       const emailFrom = `${fromName.replace(/"/g, '')} <${fromEmail}>`;
       const isTransactional = isTransactionalOutboxEmail(row);
       const unsubscribeUrl = isTransactional ? '' : createEmailUnsubscribeUrl(contact.id);
-      const emailText = appendEmailFooter(String(row.body_text || ''), { senderEmail: fromEmail, unsubscribeUrl });
+      const emailPayload = prepareEmailPayloadContent(String(row.body_text || ''), {
+        senderEmail: fromEmail,
+        unsubscribeUrl,
+        logoUrl: process.env.EMAIL_SIGNATURE_LOGO_URL,
+      });
 
       let attachments: Array<{ filename: string; content: string }> | undefined = undefined;
       if (row.document_id) {
@@ -6482,6 +6675,7 @@ app.post('/api/communications/send', async (req, res) => {
             .maybeSingle();
 
           if (docData) {
+            sentDocumentType = docData.document_type || null;
             let docCompanyName = '';
             if (docData.company_id) {
               const { data: comp } = await lineSupabase
@@ -6512,7 +6706,8 @@ app.post('/api/communications/send', async (req, res) => {
           from: emailFrom,
           to: [contact.email],
           subject: row.subject || '',
-          text: emailText,
+          text: emailPayload.text,
+          html: emailPayload.html,
           ...(attachments && attachments.length > 0 ? { attachments } : {}),
           ...(unsubscribeUrl ? { headers: { 'List-Unsubscribe': `<${unsubscribeUrl}>`, 'List-Unsubscribe-Post': 'List-Unsubscribe=One-Click' } } : {}),
           ...(replyTo ? { reply_to: replyTo } : {}),
@@ -6569,6 +6764,32 @@ app.post('/api/communications/send', async (req, res) => {
       status: 'sent', sent_at: sentAt, provider_message_id: providerMessageId, error_message: null, updated_at: sentAt,
     }).eq('id', outboxId).eq('owner_id', authData.user.id);
     if (updateError) throw updateError;
+
+    // 書類送付（診断レポート・提案書・契約書）完了時に対応する自動フォローを起動
+    if (row.document_id && contact.id) {
+      try {
+        let resolvedDocType = sentDocumentType;
+        if (!resolvedDocType) {
+          const { data: sentDoc } = await lineSupabase
+            .from('customer_documents')
+            .select('document_type')
+            .eq('id', row.document_id)
+            .maybeSingle();
+          resolvedDocType = sentDoc?.document_type || null;
+        }
+        const docType = String(resolvedDocType || '').toLowerCase();
+        if (docType === 'diagnosis_report' || docType.includes('report')) {
+          await enqueueScenariosForContact(contact.id, 'report_sent', authData.user.id);
+        } else if (docType === 'proposal' || docType.includes('proposal')) {
+          await enqueueScenariosForContact(contact.id, 'proposal_sent', authData.user.id);
+        } else if (docType === 'contract' || docType.includes('contract')) {
+          await enqueueScenariosForContact(contact.id, 'contract_sent', authData.user.id);
+        }
+      } catch (docTriggerErr) {
+        console.warn('[Send] Document post-send automation trigger warning:', docTriggerErr);
+      }
+    }
+
     return res.json({ status: 'sent', providerMessageId });
   } catch (error) {
     const message = error instanceof Error ? error.message : '送信に失敗しました。';
@@ -7439,7 +7660,8 @@ app.post(
           tagsToAssign.push('診断受検済み');
         }
         // 2. 資料請求時
-        if (slug === 'material-download' || inquiryType === '資料請求') {
+        const isMaterialRequestTag = slug === 'material-download' || inquiryType === '資料請求' || inquiryType.startsWith('資料請求');
+        if (isMaterialRequestTag) {
           tagsToAssign.push('資料請求');
         }
         // 3. 正規化済みの utm_source がある場合（HP直接除外）
@@ -7470,9 +7692,13 @@ app.post(
       console.warn('[AutoTag] Tag automation exception (non-fatal):', tagErr?.message);
     }
 
+    const isMaterialDownload = slug === 'material-download' || inquiryType === '資料請求' || inquiryType.startsWith('資料請求');
     if (contact?.id) {
       if (form.form_type === 'diagnosis') {
         await enqueueScenariosForContact(contact.id, 'diagnosis_completed');
+      } else if (isMaterialDownload) {
+        await enqueueScenariosForContact(contact.id, 'material_requested');
+        await enqueueScenariosForContact(contact.id, 'lead_created');
       } else {
         await enqueueScenariosForContact(contact.id, 'lead_created');
       }
@@ -7617,7 +7843,11 @@ app.post(
         // 署名は送信直前に共通処理で付ける（他のメールと同じ形式。受付完了は取引メールなので配信停止リンクなし）
         const rawBodyText = customNotificationText || `${name} 様\n\n有限会社MST代表の大橋真人です。\nこの度は「${form.name || '無料診断'}」にご回答いただき誠にありがとうございます。\n\n送信直後にホームページ画面へ表示いたしました【簡易診断結果】はご覧いただけましたでしょうか？\n■ 今回の簡易診断タイプ：${quickBottleneck?.typeTitle || '経営ボトルネック簡易診断'}\n${quickBottleneck?.firstStep ? `■ 最初に着手したい候補：${quickBottleneck.firstStep}\n` : ''}\nより詳細な【個別診断レポート】および【改善提案書】につきましては、机上の空論を避け御社の実情に合った内容でお届けするため、30分のオンライン商談を実施いただいた方限定で商談後に作成・ご送付しております。${bookingPrompt}\n\n--------------------------------------------------\n有限会社MST\n代表取締役: 大橋真人\n〒503-0981 岐阜県大垣市桧町127番地\n--------------------------------------------------`;
 
-        const bodyText = appendEmailFooter(rawBodyText, { senderEmail: (emailFrom.match(/<([^<>]+)>/)?.[1] || emailFrom).trim() });
+        const emailPayload = prepareEmailPayloadContent(rawBodyText, {
+          senderEmail: (emailFrom.match(/<([^<>]+)>/)?.[1] || emailFrom).trim(),
+          logoUrl: process.env.EMAIL_SIGNATURE_LOGO_URL,
+        });
+        const bodyText = emailPayload.text;
 
         let emailStatus: 'sent' | 'queued' | 'failed' = 'queued';
         let sentAt: string | null = null;
@@ -7633,7 +7863,8 @@ app.post(
                 from: emailFrom,
                 to: [contact.email],
                 subject,
-                text: bodyText,
+                text: emailPayload.text,
+                html: emailPayload.html,
               }),
             });
             const payload = await emailResponse.json().catch(() => ({})) as { id?: string; message?: string };
@@ -8209,6 +8440,88 @@ app.post('/api/meetings/extra-questions', requireAuth, async (req, res) => {
   }
 });
 
+// 商談完了時の自動フォロー起動（面談お礼・検討状況お伺いステップの予約）
+app.post('/api/meetings/complete', requireAuth, async (req, res) => {
+  if (!lineSupabase) return res.status(503).json({ error: 'DB接続が設定されていません。' });
+  const user = (req as any).user;
+  const diagnosisId = typeof req.body?.diagnosisId === 'string' && UUID_PATTERN.test(req.body.diagnosisId)
+    ? req.body.diagnosisId
+    : null;
+  const companyId = typeof req.body?.companyId === 'string' && req.body.companyId.trim()
+    ? req.body.companyId.trim()
+    : null;
+
+  try {
+    let contactId: string | null = null;
+    let resolvedCompanyId: string | null = companyId;
+    let resolvedLeadId: string | null = null;
+
+    if (diagnosisId) {
+      const { data: diag } = await lineSupabase
+        .from('diagnoses')
+        .select('id, company_id, lead_id')
+        .eq('id', diagnosisId)
+        .maybeSingle();
+      if (diag) {
+        if (!resolvedCompanyId && diag.company_id) resolvedCompanyId = String(diag.company_id);
+        if (diag.lead_id) resolvedLeadId = String(diag.lead_id);
+      }
+    }
+
+    if (resolvedLeadId) {
+      const { data: leadRow } = await lineSupabase
+        .from('leads')
+        .select('contact_id')
+        .eq('id', resolvedLeadId)
+        .maybeSingle();
+      if (leadRow?.contact_id) contactId = String(leadRow.contact_id);
+    }
+
+    if (!contactId && diagnosisId) {
+      const { data: sub } = await lineSupabase
+        .from('diagnosis_submissions')
+        .select('contact_id, lead_id')
+        .or(`id.eq.${diagnosisId}${resolvedLeadId ? `,lead_id.eq.${resolvedLeadId}` : ''}`)
+        .limit(1)
+        .maybeSingle();
+      if (sub?.contact_id) contactId = String(sub.contact_id);
+    }
+
+    if (!contactId && resolvedCompanyId) {
+      const { data: companyLead } = await lineSupabase
+        .from('leads')
+        .select('contact_id')
+        .eq('company_id', resolvedCompanyId)
+        .not('contact_id', 'is', null)
+        .order('updated_at', { ascending: false })
+        .limit(1)
+        .maybeSingle();
+      if (companyLead?.contact_id) {
+        contactId = String(companyLead.contact_id);
+      } else {
+        const { data: companyContact } = await lineSupabase
+          .from('contacts')
+          .select('id')
+          .eq('company_id', resolvedCompanyId)
+          .order('updated_at', { ascending: false })
+          .limit(1)
+          .maybeSingle();
+        if (companyContact?.id) contactId = String(companyContact.id);
+      }
+    }
+
+    if (!contactId) {
+      return res.json({ success: true, contactId: null, scheduledFollowups: 0 });
+    }
+
+    const scheduledFollowups = await enqueueScenariosForContact(contactId, 'meeting_completed', user?.id);
+    return res.json({ success: true, contactId, scheduledFollowups });
+  } catch (err: any) {
+    console.warn('[Meetings/Complete] Non-fatal followup enqueue error:', err?.message || err);
+    return res.status(500).json({ error: err?.message || '面談完了後のフォロー予約に失敗しました。' });
+  }
+});
+
 // ─── 受信トレイの削除（テスト回答・受信メールの整理用） ───
 function parseDeleteIds(body: any): string[] | null {
   const ids = Array.isArray(body?.ids) ? body.ids.map((value: unknown) => String(value)) : [];
@@ -8771,6 +9084,233 @@ app.post('/api/inbox/email/settings', requireAuth, async (req, res) => {
     backupForwardAddress: finalBackupAddress,
     backupForwardEnabled: finalBackupEnabled,
   });
+});
+
+// LINE受信即時メール通知設定の取得
+app.get('/api/line/alert-settings', requireAuth, async (req, res) => {
+  const user = (req as any).user;
+  try {
+    const [settings, resolvedDefaultEmail] = await Promise.all([
+      getLineInboundAlertSettings(user.id),
+      resolveDefaultLineAlertEmail(user.id),
+    ]);
+    return res.json({
+      settings,
+      resolvedDefaultEmail,
+      resendConfigured: Boolean(process.env.RESEND_API_KEY),
+    });
+  } catch (err: any) {
+    return res.status(500).json({ error: err?.message || 'LINE通知設定を取得できませんでした。' });
+  }
+});
+
+// LINE受信即時メール通知設定の保存
+app.post('/api/line/alert-settings', requireAuth, async (req, res) => {
+  const user = (req as any).user;
+  const enabled = typeof req.body?.enabled === 'boolean' ? req.body.enabled : true;
+  const email = typeof req.body?.email === 'string' ? req.body.email.trim().toLowerCase() : '';
+  const mode = req.body?.mode === 'unmatched_only' ? 'unmatched_only' : 'all';
+
+  if (enabled && (!email || !isValidAlertEmail(email))) {
+    return res.status(400).json({ error: '通知先のメールアドレスを正しく入力してください。' });
+  }
+  if (email && !isValidAlertEmail(email)) {
+    return res.status(400).json({ error: 'メールアドレスの形式が正しくありません。' });
+  }
+
+  try {
+    const saved = await saveLineInboundAlertSettings(user.id, { enabled, email, mode });
+    return res.json({ success: true, settings: saved });
+  } catch (err: any) {
+    return res.status(500).json({ error: err?.message || 'LINE通知設定を保存できませんでした。' });
+  }
+});
+
+// LINE受信即時メール通知のテスト送信
+app.post('/api/line/test-alert', requireAuth, async (req, res) => {
+  const user = (req as any).user;
+  const emailKey = process.env.RESEND_API_KEY || '';
+  if (!emailKey) return res.status(503).json({ error: 'RESEND_API_KEY が未設定です。' });
+
+  try {
+    const currentSettings = await getLineInboundAlertSettings(user.id);
+    const targetEmail =
+      typeof req.body?.email === 'string' && req.body.email.trim()
+        ? req.body.email.trim().toLowerCase()
+        : currentSettings.email;
+
+    if (!isValidAlertEmail(targetEmail)) {
+      return res.status(400).json({ error: '有効な通知先メールアドレスを指定してください。' });
+    }
+
+    const sender = await resolveEmailSender(user.id);
+    const appUrl = (process.env.PUBLIC_APP_URL || '').trim().replace(/\/$/, '');
+    const payload = buildLineInboundAlertEmailPayload({
+      senderName: 'テストLINE友だち（サンプル）',
+      companyName: 'サンプル株式会社',
+      lineUserId: 'U_test_preview',
+      messageText: 'こんにちは！来週あたりに業務改善の個別相談を希望したいのですが、日程調整できますか？',
+      receivedAt: new Date().toISOString(),
+      matchedRuleName: null,
+      autoReplyText: '受付確認メッセージ自動送信済み',
+      inboxUrl: appUrl || undefined,
+      isTest: true,
+    });
+
+    const delivery = await deliverLineInboundAlertEmail({
+      resendApiKey: emailKey,
+      fromString: sender.fromString,
+      toEmail: targetEmail,
+      payload,
+    });
+    if (!delivery.success) {
+      return res.status(500).json({ error: delivery.error || 'テスト通知の送信に失敗しました。' });
+    }
+
+    return res.json({ success: true, resendMessageId: delivery.resendMessageId, targetEmail });
+  } catch (err: any) {
+    return res.status(500).json({ error: err?.message || 'LINEテスト通知中にエラーが発生しました。' });
+  }
+});
+
+// OS全体ヘッダー・ダッシュボード用の統合受信サマリー（LINE未読・要返信・メール未読・フォーム未対応）
+app.get('/api/inbox/summary', requireAuth, async (req, res) => {
+  if (!lineSupabase) return res.status(503).json({ error: 'DB接続が設定されていません。' });
+  const user = (req as any).user;
+
+  try {
+    const [lineRes, friendsRes, subCountRes, emailRes] = await Promise.all([
+      lineSupabase
+        .from('line_inbox_messages')
+        .select('id,line_event_id,direction,line_user_id,body,status,received_at')
+        .eq('owner_id', user.id)
+        .order('received_at', { ascending: false })
+        .limit(400),
+      lineSupabase
+        .from('line_friends')
+        .select('line_user_id,display_name'),
+      lineSupabase
+        .from('diagnosis_submissions')
+        .select('id', { count: 'exact', head: true })
+        .eq('status', 'received'),
+      lineSupabase
+        .from('email_inbox_messages')
+        .select('id,from_email,subject,received_at,is_read')
+        .eq('owner_id', user.id)
+        .order('received_at', { ascending: false })
+        .limit(200),
+    ]);
+
+    const friendNames = new Map<string, string>();
+    if (Array.isArray(friendsRes.data)) {
+      for (const f of friendsRes.data as any[]) {
+        if (f.line_user_id && f.display_name) {
+          friendNames.set(String(f.line_user_id), String(f.display_name));
+        }
+      }
+    }
+
+    const lineMessages = Array.isArray(lineRes.data) ? (lineRes.data as any[]) : [];
+    const groupedLine = new Map<string, any[]>();
+    let lineUnread = 0;
+    let latestLineInbound: {
+      id: string;
+      lineEventId: string;
+      lineUserId: string;
+      displayName: string;
+      body: string;
+      receivedAt: string;
+    } | null = null;
+
+    for (const msg of lineMessages) {
+      if (isLineMessageUnread(msg)) lineUnread += 1;
+      if (!latestLineInbound && msg.direction === 'inbound') {
+        const luid = String(msg.line_user_id || '');
+        latestLineInbound = {
+          id: String(msg.id),
+          lineEventId: String(msg.line_event_id || msg.id),
+          lineUserId: luid,
+          displayName: friendNames.get(luid) || `LINE友だち (${luid.slice(0, 8)}...)`,
+          body: String(msg.body || ''),
+          receivedAt: String(msg.received_at || ''),
+        };
+      }
+      if (!msg.line_user_id) continue;
+      const arr = groupedLine.get(msg.line_user_id);
+      if (arr) arr.push(msg);
+      else groupedLine.set(msg.line_user_id, [msg]);
+    }
+
+    const awaitingConversations: Array<{
+      lineUserId: string;
+      displayName: string;
+      lastInboundBody: string;
+      lastInboundAt: string;
+      unreadCount: number;
+    }> = [];
+
+    for (const [luid, items] of groupedLine.entries()) {
+      if (isLineConversationAwaitingReply(items)) {
+        const sortedAsc = [...items].sort(
+          (a, b) => Date.parse(String(a.received_at || '')) - Date.parse(String(b.received_at || '')),
+        );
+        const latestInbound = [...sortedAsc].reverse().find((m) => m.direction === 'inbound');
+        const unreadForUser = sortedAsc.filter((m) => isLineMessageUnread(m)).length;
+        awaitingConversations.push({
+          lineUserId: luid,
+          displayName: friendNames.get(luid) || `LINE友だち (${luid.slice(0, 8)}...)`,
+          lastInboundBody: String(latestInbound?.body || ''),
+          lastInboundAt: String(latestInbound?.received_at || ''),
+          unreadCount: unreadForUser,
+        });
+      }
+    }
+
+    awaitingConversations.sort(
+      (a, b) => Date.parse(b.lastInboundAt || '') - Date.parse(a.lastInboundAt || ''),
+    );
+
+    let emailUnread = 0;
+    let latestEmailUnread: {
+      id: string;
+      fromEmail: string;
+      subject: string;
+      receivedAt: string;
+    } | null = null;
+
+    if (!emailRes.error && Array.isArray(emailRes.data)) {
+      for (const em of emailRes.data as any[]) {
+        if (em.is_read === false) {
+          emailUnread += 1;
+          if (!latestEmailUnread) {
+            latestEmailUnread = {
+              id: String(em.id),
+              fromEmail: String(em.from_email || ''),
+              subject: String(em.subject || '(件名なし)'),
+              receivedAt: String(em.received_at || ''),
+            };
+          }
+        }
+      }
+    }
+
+    const formsReceived = Number(subCountRes.count || 0);
+    const lineAwaitingReply = awaitingConversations.length;
+    const totalAttentionCount = lineAwaitingReply + emailUnread + formsReceived;
+
+    return res.json({
+      lineUnread,
+      lineAwaitingReply,
+      emailUnread,
+      formsReceived,
+      totalAttentionCount,
+      latestLineInbound,
+      latestEmailUnread,
+      awaitingConversations: awaitingConversations.slice(0, 10),
+    });
+  } catch (err: any) {
+    return res.status(500).json({ error: err?.message || '受信サマリーを取得できませんでした。' });
+  }
 });
 
 // メール受信診断（MXレコード確認・Webhook状態・設定状態の診断情報を提供）

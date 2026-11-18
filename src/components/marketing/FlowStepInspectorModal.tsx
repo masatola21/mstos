@@ -28,7 +28,7 @@ import { UNIFIED_TAG_MASTER } from '../../constants/tagMaster';
 import { QUESTIONNAIRE_V1 } from '../../constants/questionnaire';
 import { getSupabase } from '../../lib/supabaseClient';
 import { ONE_SHOT_SCENARIO_ID, getOneShotOutreachTemplate } from '../../utils/salesOutreachTemplates';
-import { appendEmailFooter } from '../../../server/emailFooter';
+import { EmailHtmlPreviewCard } from '../common/EmailHtmlPreviewCard';
 import { PlaceholderAssist } from '../common/PlaceholderAssist';
 import { ScenarioDryRunModal } from './ScenarioDryRunModal';
 
@@ -45,8 +45,12 @@ const TRIGGER_LABELS: Record<string, string> = {
   tag_added: '指定タグが付いた時',
   line_registered: 'LINE友だち追加時',
   diagnosis_completed: '無料診断の回答完了時',
+  material_requested: '資料請求フォーム送信時',
+  meeting_completed: '面談完了時',
   report_approved: '診断レポート承認時',
   report_sent: '診断レポート送付時',
+  proposal_approved: '提案書承認時',
+  proposal_sent: '提案書送付時',
   lead_created: '見込み客登録時',
   outreach_first_sent: '営業メール第1通送信時',
   booking_created: '個別相談予約時',
@@ -251,16 +255,22 @@ export const FlowStepInspectorModal: React.FC<FlowStepInspectorModalProps> = ({
   }, [flexButtonUrl, messageBody, emailBody]);
 
   const handleSave = () => {
+    const initialDays = Math.round((scenario.waitMinutes || 0) / 1440);
+    const resolvedWaitMinutes =
+      waitDaysInput === initialDays && (scenario.waitMinutes || 0) > 0 && (scenario.waitMinutes || 0) < 1440
+        ? scenario.waitMinutes
+        : waitDaysInput * 1440;
     const updated: MarketingScenario = {
       ...scenario,
       name: name.trim() || scenario.name,
       channel,
       trigger,
       targetTag: trigger === 'tag_added' ? targetTag.trim() || undefined : undefined,
-      waitMinutes: waitDaysInput * 1440,
+      waitMinutes: resolvedWaitMinutes,
       sendTimeWindow,
       preferredSendTime: preferredSendTime.trim() || '',
       automationEnabled,
+      status: automationEnabled ? 'prepared' : 'draft',
       stopOnBooking,
       stopOnDeal,
       consentBasis,
@@ -411,13 +421,10 @@ export const FlowStepInspectorModal: React.FC<FlowStepInspectorModalProps> = ({
     [emailSubject, previewValues]
   );
 
-  const renderedEmailBodyWithFooter = useMemo(() => {
-    const raw = renderPlaceholders(emailBody || messageBody || '(本文未設定)', previewValues);
-    return appendEmailFooter(raw, {
-      senderEmail: 'contact@mstcorp.info',
-      unsubscribeUrl: 'https://corp.mstcorp.info/unsubscribe（送信時に自動発行）',
-    });
-  }, [emailBody, messageBody, previewValues]);
+  const renderedEmailBodyRaw = useMemo(
+    () => renderPlaceholders(emailBody || messageBody || '(本文未設定)', previewValues),
+    [emailBody, messageBody, previewValues]
+  );
 
   // ═══════════════════════════════════════════════════════════════
   // 専用シンプルUI: 単発営業メール（一発直球提案）テンプレート編集
@@ -544,8 +551,12 @@ export const FlowStepInspectorModal: React.FC<FlowStepInspectorModalProps> = ({
                   </div>
                   <div className="font-bold text-slate-900 text-sm">{renderedEmailSubject}</div>
                 </div>
-                <div className="p-4 flex-1 overflow-y-auto whitespace-pre-wrap leading-relaxed text-slate-800 text-xs font-sans">
-                  {renderedEmailBodyWithFooter}
+                <div className="p-4 flex-1 overflow-y-auto text-xs font-sans">
+                  <EmailHtmlPreviewCard
+                    body={renderedEmailBodyRaw}
+                    senderEmail="contact@mstcorp.info"
+                    unsubscribeUrl="https://corp.mstcorp.info/unsubscribe（送信時に自動発行）"
+                  />
                 </div>
               </div>
             </div>
@@ -713,7 +724,11 @@ export const FlowStepInspectorModal: React.FC<FlowStepInspectorModalProps> = ({
                       className="w-16 bg-white border border-slate-200 rounded-lg px-2 py-1.5 text-xs text-slate-900 font-mono text-center font-bold focus:outline-none focus:border-purple-500"
                     />
                     <span className="text-slate-600 whitespace-nowrap">
-                      {waitDaysInput === 0 ? '日後（即時）' : '日後'}
+                      {waitDaysInput === 0 && (scenario.waitMinutes || 0) > 0 && (scenario.waitMinutes || 0) < 1440
+                        ? `${Math.max(1, Math.round((scenario.waitMinutes || 0) / 60))}時間後`
+                        : waitDaysInput === 0
+                        ? '日後（即時）'
+                        : '日後'}
                     </span>
                   </div>
                 </div>
@@ -743,8 +758,12 @@ export const FlowStepInspectorModal: React.FC<FlowStepInspectorModalProps> = ({
                       <option value="tag_added">指定タグが付いた時</option>
                       <option value="line_registered">LINE友だち追加時</option>
                       <option value="diagnosis_completed">無料診断の回答完了時</option>
+                      <option value="material_requested">資料請求フォーム送信時</option>
+                      <option value="meeting_completed">面談完了時</option>
                       <option value="report_approved">診断レポート承認時</option>
                       <option value="report_sent">診断レポート送付時</option>
+                      <option value="proposal_approved">提案書承認時</option>
+                      <option value="proposal_sent">提案書送付時</option>
                       <option value="lead_created">見込み客登録時</option>
                       <option value="outreach_first_sent">営業メール第1通送信時</option>
                       <option value="booking_created">個別相談予約時</option>
@@ -1075,8 +1094,12 @@ export const FlowStepInspectorModal: React.FC<FlowStepInspectorModalProps> = ({
                         <span className="text-[10px] text-slate-500 block">件名</span>
                         <div className="font-bold text-slate-900 text-xs">{renderedEmailSubject}</div>
                       </div>
-                      <div className="p-4 whitespace-pre-wrap leading-relaxed text-slate-800 text-xs font-sans max-h-96 overflow-y-auto">
-                        {renderedEmailBodyWithFooter}
+                      <div className="p-4 text-xs font-sans max-h-96 overflow-y-auto">
+                        <EmailHtmlPreviewCard
+                          body={renderedEmailBodyRaw}
+                          senderEmail="contact@mstcorp.info"
+                          unsubscribeUrl="https://corp.mstcorp.info/unsubscribe（送信時に自動発行）"
+                        />
                       </div>
                     </div>
                   </div>

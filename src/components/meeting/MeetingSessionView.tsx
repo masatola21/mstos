@@ -130,7 +130,28 @@ export const MeetingSessionView: React.FC<Props> = ({ diagnosisId, companyId, co
     w.document.open(); w.document.write(renderMeetingShareHtml(report, companyName)); w.document.close();
   };
 
-  const complete = async () => { if (await save('completed')) { setStatus('completed'); setMessage('商談を完了にしました。提案書を作ると、この内容が商談メモに入ります。'); } };
+  const complete = async () => {
+    if (await save('completed')) {
+      setStatus('completed');
+      let followupNote = '';
+      try {
+        const res = await fetch('/api/meetings/complete', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', ...(await getAuthHeaders()) },
+          body: JSON.stringify({ diagnosisId, companyId }),
+        });
+        if (res.ok) {
+          const data = await res.json().catch(() => ({})) as { scheduledFollowups?: number };
+          if (typeof data.scheduledFollowups === 'number' && data.scheduledFollowups > 0) {
+            followupNote = `面談後お礼フォロー（${data.scheduledFollowups}件）も自動予約しました。`;
+          }
+        }
+      } catch {
+        // フォロー予約失敗でも商談完了自体は維持する
+      }
+      setMessage(`商談を完了にしました。提案書を作ると、この内容が商談メモに入ります。${followupNote}`);
+    }
+  };
 
   const close = async () => { if (dirty.current) await save(); onClose(); };
   const area = 'w-full rounded-lg border border-slate-300 p-2 text-sm';

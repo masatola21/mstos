@@ -2,6 +2,8 @@ import React, { useState, useEffect, useRef, Suspense } from 'react';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import { UnifiedNavbar, UnifiedNavTab } from './components/UnifiedNavbar';
 import { AppShell } from './components/layout/AppShell';
+import type { InboxAlertSummary } from './components/layout/AppHeader';
+import { useVisiblePolling } from './hooks/useInboxRealtime';
 import { Dashboard } from './components/Dashboard';
 const TableManager = React.lazy(() => import('./components/TableManager').then((m) => ({ default: m.TableManager })));
 const DiagnosisManager = React.lazy(() => import('./components/DiagnosisManager').then((m) => ({ default: m.DiagnosisManager })));
@@ -390,12 +392,24 @@ function AppContent() {
   const [inboxTargetChannel, setInboxTargetChannel] = useState<'line' | 'email' | 'forms' | undefined>(undefined);
   const [acquisitionTargetTab, setAcquisitionTargetTab] = useState<string | undefined>(undefined);
 
+  const [inboxAlertSummary, setInboxAlertSummary] = useState<InboxAlertSummary>({
+    lineUnread: 0,
+    lineAwaitingReply: 0,
+    emailUnread: 0,
+    formsReceived: 0,
+    totalAttentionCount: 0,
+  });
+  const inboxBaselineReadyRef = useRef(false);
+  const lastSeenLineEventIdRef = useRef<string>('');
+  const lastSeenEmailUnreadRef = useRef<number>(0);
+
   const isPopStateRef = useRef(false);
 
   const handleNavigateWorkspaceTab = (
     tab: UnifiedNavTab | string,
     options?: {
       inboxChannel?: 'line' | 'email' | 'forms';
+      lineUserId?: string;
       acquisitionTab?: string;
       studioMode?: 'broadcast' | 'dm_sales';
       context?: any;
@@ -415,6 +429,9 @@ function AppContent() {
       try {
         localStorage.setItem('unified_inbox_active_channel', options.inboxChannel);
       } catch {}
+    }
+    if (options?.lineUserId) {
+      setLineInboxContact({ contactId: '', lineUserId: options.lineUserId });
     }
     if (options?.acquisitionTab) {
       setAcquisitionTargetTab(options.acquisitionTab);
@@ -462,6 +479,69 @@ function AppContent() {
   const [workspaceReady, setWorkspaceReady] = useState(false);
   const [workspaceSyncStatus, setWorkspaceSyncStatus] = useState<'loading' | 'saving' | 'saved' | 'error' | 'conflict'>('loading');
   const [workspaceSaveError, setWorkspaceSaveError] = useState('');
+
+  const refreshInboxSummary = async () => {
+    if (!user) return;
+    try {
+      const headers = await getAuthHeaders();
+      const res = await fetch('/api/inbox/summary', { headers });
+      if (!res.ok) return;
+      const data = await res.json();
+      const next: InboxAlertSummary = {
+        lineUnread: Number(data.lineUnread || 0),
+        lineAwaitingReply: Number(data.lineAwaitingReply || 0),
+        emailUnread: Number(data.emailUnread || 0),
+        formsReceived: Number(data.formsReceived || 0),
+        totalAttentionCount: Number(data.totalAttentionCount || 0),
+      };
+      setInboxAlertSummary((prev) =>
+        prev.lineUnread === next.lineUnread &&
+        prev.lineAwaitingReply === next.lineAwaitingReply &&
+        prev.emailUnread === next.emailUnread &&
+        prev.formsReceived === next.formsReceived &&
+        prev.totalAttentionCount === next.totalAttentionCount
+          ? prev
+          : next,
+      );
+
+      const latestLineId = String(data.latestLineInbound?.lineEventId || '');
+      if (!inboxBaselineReadyRef.current) {
+        inboxBaselineReadyRef.current = true;
+        lastSeenLineEventIdRef.current = latestLineId;
+        lastSeenEmailUnreadRef.current = next.emailUnread;
+        return;
+      }
+
+      if (latestLineId && latestLineId !== lastSeenLineEventIdRef.current) {
+        lastSeenLineEventIdRef.current = latestLineId;
+        const sender = String(data.latestLineInbound?.displayName || 'LINE友だち');
+        const snippet = String(data.latestLineInbound?.body || '').replace(/\s+/g, ' ').trim().slice(0, 36);
+        showToast(`💬 LINE新着（${sender}）: ${snippet || 'メッセージが届きました'}`, 'info');
+      } else if (next.emailUnread > lastSeenEmailUnreadRef.current && data.latestEmailUnread) {
+        const from = String(data.latestEmailUnread.fromEmail || '');
+        const subj = String(data.latestEmailUnread.subject || '(件名なし)').slice(0, 36);
+        showToast(`✉️ 新着メール（${from}）: ${subj}`, 'info');
+      }
+      lastSeenEmailUnreadRef.current = next.emailUnread;
+    } catch {
+      // non-blocking
+    }
+  };
+
+  useEffect(() => {
+    if (!user || !workspaceReady) return;
+    inboxBaselineReadyRef.current = false;
+    void refreshInboxSummary();
+    const onUpdated = () => {
+      void refreshInboxSummary();
+    };
+    window.addEventListener('mst_inbox_counts_updated', onUpdated);
+    return () => {
+      window.removeEventListener('mst_inbox_counts_updated', onUpdated);
+    };
+  }, [user?.id, workspaceReady]);
+
+  useVisiblePolling(refreshInboxSummary, 45_000, Boolean(user && workspaceReady));
 
   const workspaceSyncEnabledRef = useRef(false);
 
@@ -2527,6 +2607,8 @@ function AppContent() {
         handleNavigateWorkspaceTab(tab);
       }}
       pendingApprovalsCount={approvals.filter((a) => a.status === 'pending').length}
+      inboxAlertSummary={inboxAlertSummary}
+      onOpenInboxChannel={(channel) => handleNavigateWorkspaceTab('inbox_hub', { inboxChannel: channel })}
       workspaceSyncStatus={workspaceSyncStatus}
       workspaceSaveError={workspaceSaveError}
       pageAssistantEmoji={pageAssistantMode.avatarEmoji}
@@ -2543,9 +2625,9 @@ function AppContent() {
         {/* ================= SECTION 1: MST AI経営OS ================= */}
         {(currentTab === 'mst_dashboard' || currentTab === 'inflow_dashboard') && (
           <Dashboard
-            onNavigateTab={(tab) => {
+            onNavigateTab={(tab, options) => {
               if (tab === 'diagnoses') setCurrentTab('mst_diagnoses');
-              else setCurrentTab(tab as UnifiedNavTab);
+              else handleNavigateWorkspaceTab(tab, options);
             }}
             onOpenCreate={handleOpenCreate}
             onOpenRls={() => setIsRlsOpen(true)}
