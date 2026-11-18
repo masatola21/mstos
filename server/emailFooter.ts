@@ -225,7 +225,7 @@ export function prepareEmailPayloadContent(
     '  <meta name="viewport" content="width=device-width,initial-scale=1.0" />',
     '</head>',
     '<body style="margin:0;padding:0;background-color:#ffffff;font-family:-apple-system,BlinkMacSystemFont,\'Hiragino Sans\',\'Hiragino Kaku Gothic ProN\',\'Yu Gothic\',Meiryo,sans-serif;color:#1e293b;font-size:14px;line-height:1.75;">',
-    '  <div style="max-width:600px;margin:0 auto;padding:12px 4px 20px 4px;">',
+    '  <div style="max-width:680px;margin:0;padding:12px 0 20px 0;">',
     bodyHtml,
     signatureHtml,
     unsubscribeHtml,
