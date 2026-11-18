@@ -7,6 +7,7 @@ interface EmailHtmlPreviewCardProps {
   unsubscribeUrl?: string;
   embeddedDocument?: {
     title?: string;
+    documentType?: string;
     bodyHtml?: string | null;
     docUrl?: string;
     pdfUrl?: string;
@@ -43,42 +44,6 @@ export const EmailHtmlPreviewCard: React.FC<EmailHtmlPreviewCardProps> = ({
         {cleanBody}
       </div>
 
-      {embeddedDocument && sanitizedDocHtml && (
-        <div className="mt-6 rounded-xl border border-slate-300 bg-white overflow-hidden shadow-2xs">
-          <div className="bg-slate-50 border-b border-slate-200 px-4 py-3 space-y-2">
-            <div className="text-xs font-bold text-slate-900">
-              送付書類：{embeddedDocument.title || '書類'}
-            </div>
-            <div className="flex flex-wrap gap-2">
-              {embeddedDocument.docUrl && (
-                <a
-                  href={embeddedDocument.docUrl}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="inline-block px-3.5 py-1.5 rounded-lg bg-emerald-600 text-white text-xs font-bold no-underline"
-                >
-                  Web上で内容を確認・お申し込み
-                </a>
-              )}
-              {embeddedDocument.pdfUrl && (
-                <a
-                  href={embeddedDocument.pdfUrl}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="inline-block px-3.5 py-1.5 rounded-lg bg-white border border-slate-300 text-slate-800 text-xs font-bold no-underline"
-                >
-                  PDFをダウンロード（印刷・保存用）
-                </a>
-              )}
-            </div>
-          </div>
-          <div
-            className="p-4 text-xs leading-relaxed text-slate-900 overflow-x-auto"
-            dangerouslySetInnerHTML={{ __html: sanitizedDocHtml }}
-          />
-        </div>
-      )}
-
       {shouldIncludeSignature && (
         <div className="mt-6 pt-4 border-t border-slate-300 flex items-center gap-3.5">
           <div className="shrink-0 bg-white border border-slate-200 rounded-lg px-2.5 py-1.5 shadow-2xs">
@@ -109,6 +74,44 @@ export const EmailHtmlPreviewCard: React.FC<EmailHtmlPreviewCardProps> = ({
               </div>
             )}
           </div>
+        </div>
+      )}
+
+      {embeddedDocument && sanitizedDocHtml && (
+        <div className="mt-6 rounded-xl border border-slate-300 bg-white overflow-hidden shadow-2xs">
+          <div className="bg-slate-50 border-b border-slate-200 px-4 py-3 space-y-2">
+            <div className="text-xs font-bold text-slate-900">
+              送付書類：{embeddedDocument.title || '書類'}
+            </div>
+            <div className="flex flex-wrap gap-2">
+              {embeddedDocument.docUrl && (
+                <a
+                  href={embeddedDocument.docUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-block px-3.5 py-1.5 rounded-lg bg-emerald-600 text-white text-xs font-bold no-underline"
+                >
+                  {embeddedDocument.documentType === 'invoice' || embeddedDocument.documentType === 'monthly_report'
+                    ? 'Web上で内容を確認・受領連絡'
+                    : 'Web上で内容を確認・お申し込み'}
+                </a>
+              )}
+              {embeddedDocument.pdfUrl && (
+                <a
+                  href={embeddedDocument.pdfUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-block px-3.5 py-1.5 rounded-lg bg-white border border-slate-300 text-slate-800 text-xs font-bold no-underline"
+                >
+                  PDFをダウンロード（印刷・保存用）
+                </a>
+              )}
+            </div>
+          </div>
+          <div
+            className="p-4 text-xs leading-relaxed text-slate-900 overflow-x-auto"
+            dangerouslySetInnerHTML={{ __html: sanitizedDocHtml }}
+          />
         </div>
       )}
 

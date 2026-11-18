@@ -733,14 +733,15 @@ assert.ok(careBothReply.bodyText.includes('https://timerex.net/s/mst/care'));
 assert.ok(careBothReply.bodyText.includes('資料と相談両方お願いします'));
 console.log('  ✓ passed');
 
-console.log('Test 33: prepareEmailPayloadContent places embeddedHtmlSection before signature and vercel.json routes /docs to /api');
+console.log('Test 33: prepareEmailPayloadContent places body -> signature -> embeddedHtmlSection');
 const docEmail = prepareEmailPayloadContent('書類をご確認ください。\nhttps://os.mstcorp.info/docs/test-doc-id', {
   senderEmail: 'contact@mstcorp.info',
   embeddedHtmlSection: '<div id="doc-preview-card"><h1>業務委託基本契約書</h1></div>',
 });
 assert.ok(docEmail.html.includes('id="doc-preview-card"'));
 assert.ok(docEmail.html.includes('max-width:760px'));
-assert.ok(docEmail.html.indexOf('id="doc-preview-card"') < docEmail.html.indexOf('桧町127番地'));
+assert.ok(docEmail.html.indexOf('書類をご確認ください。') < docEmail.html.indexOf('桧町127番地'));
+assert.ok(docEmail.html.indexOf('桧町127番地') < docEmail.html.indexOf('id="doc-preview-card"'));
 assert.ok(!docEmail.text.includes('<div id="doc-preview-card">'));
 console.log('  ✓ passed');
 

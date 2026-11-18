@@ -170,10 +170,13 @@ const seed = [
 const documentMessage = (type: string | undefined, channel: DeliveryChannel, deliveryFormat: DocumentDeliveryFormat = 'web_link') => {
   const hi = '{お名前} 様';
   const intro = 'お世話になっております。有限会社MSTです。';
-  const details = '書類名：{書類名}\nWeb確認・お申し込みURL：{書類URL}\nPDFダウンロードURL：{PDFダウンロードURL}';
+  const isReceiptOnly = type === 'invoice' || type === 'monthly_report';
+  const details = isReceiptOnly
+    ? '書類名：{書類名}\nWeb確認・受領連絡URL：{書類URL}\nPDFダウンロードURL：{PDFダウンロードURL}'
+    : '書類名：{書類名}\nWeb確認・お申し込みURL：{書類URL}\nPDFダウンロードURL：{PDFダウンロードURL}';
   const attachDesc = (label: string) =>
     deliveryFormat === 'pdf_attachment'
-      ? `${label}（PDF）を添付いたしましたので、ご確認のほどよろしくお願い申し上げます。\n下記Web確認ページからも内容の確認・お申し込みが可能です。`
+      ? `${label}（PDF）を添付いたしましたので、ご確認のほどよろしくお願い申し上げます。\n下記Web確認ページからも${isReceiptOnly ? '内容の確認・受領連絡' : '内容の確認・お申し込み'}が可能です。`
       : `${label}をお送りいたします。本メール末尾の書面プレビュー、または下記のWeb確認ページ・PDFダウンロードURLよりご確認ください。`;
   const messages: Record<string, { subject: string; body: string; line: string }> = {
     proposal: {
@@ -182,9 +185,9 @@ const documentMessage = (type: string | undefined, channel: DeliveryChannel, del
       line: hi + '\n診断結果・ご提案書をお送りします。下記より内容をご確認ください。\n{書類名}\n{書類URL}',
     },
     diagnosis_report: {
-      subject: '【診断レポートのご送付】{書類名}｜{会社名} 様',
-      body: hi + '\n\n' + intro + '\n\n' + attachDesc('診断結果レポート') + '\n\n' + details,
-      line: hi + '\n診断レポートをお送りします。結果と今後の進め方をご確認ください。\n{書類名}\n{書類URL}',
+      subject: '【診断レポート兼ご提案書のご送付】{書類名}｜{会社名} 様',
+      body: hi + '\n\n' + intro + '\n\n' + attachDesc('診断レポート兼ご提案書') + '\n\n' + details,
+      line: hi + '\n診断レポート兼ご提案書をお送りします。結果と今後の進め方をご確認ください。\n{書類名}\n{書類URL}',
     },
     contract: {
       subject: '【契約内容のご確認・同意のお願い】{書類名}｜{会社名} 様',
@@ -218,7 +221,12 @@ const documentMessage = (type: string | undefined, channel: DeliveryChannel, del
     invoice: {
       subject: '【請求書のご送付】{書類名}｜{会社名} 様',
       body: hi + '\n\n' + intro + '\n\n' + attachDesc('請求書') + '\n\n' + details,
-      line: hi + '\n請求書をお送りします。金額・お支払期日・振込先をご確認ください。\n{書類名}\n{書類URL}',
+      line: hi + '\n請求書をお送りします。金額・お支払期日・振込先をご確認のうえ、Web確認ページより受領連絡をお願いいたします。\n{書類名}\n{書類URL}',
+    },
+    monthly_report: {
+      subject: '【月次報告書のご送付】{書類名}｜{会社名} 様',
+      body: hi + '\n\n' + intro + '\n\n' + attachDesc('月次報告書') + '\n\n' + details,
+      line: hi + '\n月次報告書をお送りします。内容をご確認のうえ、Web確認ページより受領連絡をお願いいたします。\n{書類名}\n{書類URL}',
     },
   };
   const message = messages[type || ''] || {
@@ -2350,6 +2358,7 @@ export const CommunicationSendCenter: React.FC<Props> = ({
                               kind === 'document' && doc && documentDeliveryFormat === 'web_link'
                                 ? {
                                     title: doc.title,
+                                    documentType: documentCategory(doc),
                                     bodyHtml: doc.body_html,
                                     docUrl: vals.document_url,
                                     pdfUrl: vals.document_pdf_url,

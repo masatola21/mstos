@@ -218,7 +218,7 @@ export const PublicDocumentApplyView: React.FC<PublicDocumentApplyViewProps> = (
               : rawDocType === 'report'
                 ? 'diagnosis_report'
                 : rawDocType;
-        const isReceiptOnly = effectiveType === 'invoice' || effectiveType === 'diagnosis_report' || effectiveType === 'monthly_report';
+        const isReceiptOnly = effectiveType === 'invoice' || effectiveType === 'monthly_report';
 
         if (isReceiptOnly) {
           const { error: recErr } = await supabase.from('customer_documents').update({
@@ -226,7 +226,7 @@ export const PublicDocumentApplyView: React.FC<PublicDocumentApplyViewProps> = (
             consent_method: 'web_apply',
             consent_recorded_at: nowIso,
             consent_user_agent: typeof navigator !== 'undefined' ? navigator.userAgent : '',
-            consent_evidence_text: '上記書類の内容を確認し、受領したことを通知します。',
+            consent_evidence_text: '上記書類の内容を確認し、受領したことを連絡します。',
             updated_at: nowIso,
           }).eq('id', documentId);
           if (recErr) {
@@ -426,6 +426,18 @@ export const PublicDocumentApplyView: React.FC<PublicDocumentApplyViewProps> = (
     );
   }
 
+  const rawDocTypeGlobal = String(doc?.documentType || '');
+  const docTitleGlobal = String(doc?.title || '');
+  const effectiveDocTypeGlobal =
+    (rawDocTypeGlobal === 'proposal' || rawDocTypeGlobal === 'other') && /見積/.test(docTitleGlobal)
+      ? 'estimate'
+      : (rawDocTypeGlobal === 'diagnosis_report' || rawDocTypeGlobal === 'report' || rawDocTypeGlobal === 'proposal' || rawDocTypeGlobal === 'other') && /(月次|月報)/.test(docTitleGlobal)
+        ? 'monthly_report'
+        : rawDocTypeGlobal === 'report'
+          ? 'diagnosis_report'
+          : rawDocTypeGlobal;
+  const isReceiptDocGlobal = effectiveDocTypeGlobal === 'invoice' || effectiveDocTypeGlobal === 'monthly_report';
+
   return (
     <div className="min-h-screen bg-slate-950 text-slate-100 flex flex-col selection:bg-emerald-500 selection:text-white">
       {/* 印刷用スタイル */}
@@ -445,7 +457,9 @@ export const PublicDocumentApplyView: React.FC<PublicDocumentApplyViewProps> = (
           </div>
           <div>
             <div className="text-sm font-bold text-white tracking-wide">有限会社MST</div>
-            <div className="text-[10px] text-slate-400">公式Web申込・電子承諾ポータル</div>
+            <div className="text-[10px] text-slate-400">
+              {isReceiptDocGlobal ? '公式Web確認・受領連絡ページ' : '公式Web申込・電子承諾ポータル'}
+            </div>
           </div>
         </div>
 
@@ -470,7 +484,7 @@ export const PublicDocumentApplyView: React.FC<PublicDocumentApplyViewProps> = (
 
       {/* メインコンテンツ */}
       <main className="flex-1 max-w-4xl w-full mx-auto p-4 sm:p-8 space-y-6">
-        {/* 成約完了バナー */}
+        {/* 成約/受領完了バナー */}
         {applied && (
           <div className="no-print rounded-2xl border border-emerald-500/40 bg-gradient-to-br from-emerald-950/80 via-slate-900 to-slate-900 p-6 sm:p-8 shadow-2xl relative overflow-hidden">
             <div className="absolute top-0 right-0 w-64 h-64 bg-emerald-500/10 rounded-full blur-3xl pointer-events-none" />
@@ -481,25 +495,36 @@ export const PublicDocumentApplyView: React.FC<PublicDocumentApplyViewProps> = (
               <div className="space-y-2">
                 <div className="flex flex-wrap items-center gap-2">
                   <span className="px-2.5 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 text-[11px] font-bold border border-emerald-500/40">
-                    成約・お申し込み完了
+                    {isReceiptDocGlobal ? '受領連絡完了' : '成約・お申し込み完了'}
                   </span>
-                  {resultDealId && (
+                  {resultDealId && !isReceiptDocGlobal && (
                     <span className="text-xs font-mono text-slate-400">
                       商談管理番号: {resultDealId}
                     </span>
                   )}
                 </div>
                 <h1 className="text-xl sm:text-2xl font-bold text-white tracking-tight">
-                  お申し込み誠にありがとうございます！
+                  {isReceiptDocGlobal ? '内容確認・受領のご連絡ありがとうございます' : 'お申し込み誠にありがとうございます！'}
                 </h1>
                 <p className="text-xs sm:text-sm text-slate-300 leading-relaxed">
-                  本提案・見積内容でのお申し込みが正常に受理され、システム上で<strong className="text-emerald-400 font-semibold">「即時成約（受注）」</strong>として確定いたしました。<br />
-                  担当責任者（大橋真人）より、初回キックオフおよび今後の進め方について折り返しご連絡差し上げます。
+                  {isReceiptDocGlobal ? (
+                    <>
+                      本書面の確認・受領連絡が正常に受け付けられました。<br />
+                      控えが必要な場合は、上部の「PDFダウンロード」または下記の印刷ボタンより保存してください。
+                    </>
+                  ) : (
+                    <>
+                      本提案・見積内容でのお申し込みが正常に受理され、システム上で<strong className="text-emerald-400 font-semibold">「即時成約（受注）」</strong>として確定いたしました。<br />
+                      担当責任者（大橋真人）より、初回キックオフおよび今後の進め方について折り返しご連絡差し上げます。
+                    </>
+                  )}
                 </p>
                 <div className="flex flex-wrap items-center gap-2 text-xs text-emerald-300 bg-emerald-950/50 border border-emerald-500/30 rounded-xl px-3.5 py-2">
                   <ShieldCheck className="w-4 h-4 text-emerald-400 shrink-0" />
                   <span>
-                    電子合意エビデンス記録済（承諾日時: {consentInfo?.recordedAt ? new Date(consentInfo.recordedAt).toLocaleString('ja-JP') : new Date().toLocaleString('ja-JP')} / 方式: Web即時合意・改ざん防止ログ保持）
+                    {isReceiptDocGlobal
+                      ? `確認・受領記録済（記録日時: ${consentInfo?.recordedAt ? new Date(consentInfo.recordedAt).toLocaleString('ja-JP') : new Date().toLocaleString('ja-JP')}）`
+                      : `電子合意エビデンス記録済（承諾日時: ${consentInfo?.recordedAt ? new Date(consentInfo.recordedAt).toLocaleString('ja-JP') : new Date().toLocaleString('ja-JP')} / 方式: Web即時合意・改ざん防止ログ保持）`}
                   </span>
                 </div>
                 <div className="pt-2 flex flex-wrap gap-3">
@@ -508,7 +533,7 @@ export const PublicDocumentApplyView: React.FC<PublicDocumentApplyViewProps> = (
                     className="px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-semibold text-xs flex items-center gap-1.5 shadow-lg shadow-emerald-600/30 transition-all cursor-pointer"
                   >
                     <Printer className="w-3.5 h-3.5" />
-                    <span>成約控えを印刷・PDF保存</span>
+                    <span>{isReceiptDocGlobal ? '確認控えを印刷・PDF保存' : '成約控えを印刷・PDF保存'}</span>
                   </button>
                 </div>
               </div>
@@ -539,19 +564,10 @@ export const PublicDocumentApplyView: React.FC<PublicDocumentApplyViewProps> = (
           />
         </div>
 
-        {/* Web申込CTAセクション（未成約の場合に表示） */}
+        {/* Web申込 / 受領連絡CTAセクション */}
         {!applied && (() => {
-          const rawDocType = String(doc?.documentType || '');
-          const docTitle = String(doc?.title || '');
-          const effectiveType =
-            (rawDocType === 'proposal' || rawDocType === 'other') && /見積/.test(docTitle)
-              ? 'estimate'
-              : (rawDocType === 'diagnosis_report' || rawDocType === 'report' || rawDocType === 'proposal' || rawDocType === 'other') && /(月次|月報)/.test(docTitle)
-                ? 'monthly_report'
-                : rawDocType === 'report'
-                  ? 'diagnosis_report'
-                  : rawDocType;
-          const isReceiptDoc = effectiveType === 'invoice' || effectiveType === 'diagnosis_report' || effectiveType === 'monthly_report';
+          const effectiveType = effectiveDocTypeGlobal;
+          const isReceiptDoc = isReceiptDocGlobal;
           return (
           <div id="apply-cta-section" className="no-print rounded-2xl border-2 border-emerald-500/50 bg-gradient-to-b from-slate-900 to-slate-950 p-6 sm:p-8 shadow-2xl space-y-6">
             <div className="flex items-start gap-4">
@@ -561,20 +577,20 @@ export const PublicDocumentApplyView: React.FC<PublicDocumentApplyViewProps> = (
               <div className="space-y-1">
                 <div className="flex items-center gap-2">
                   <span className="px-2.5 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 text-[11px] font-bold border border-emerald-500/40">
-                    {isReceiptDoc ? '内容のご確認・受領手続き' : 'ワンタップオンライン発注'}
+                    {isReceiptDoc ? '内容確認・受領連絡' : 'ワンタップオンライン発注'}
                   </span>
-                  <span className="text-xs text-slate-400">{isReceiptDoc ? '受領確認システム' : '即時成約システム'}</span>
+                  <span className="text-xs text-slate-400">{isReceiptDoc ? '受領連絡システム' : '即時成約システム'}</span>
                 </div>
                 <h2 className="text-xl font-bold text-white tracking-tight">
                   {effectiveType === 'contract'
                     ? '契約内容に同意して申し込む（締結確定）'
                     : isReceiptDoc
-                      ? '内容のご確認・受領を完了する'
+                      ? '内容を確認して受領連絡を送る'
                       : 'この内容で申し込む（発注を確定する）'}
                 </h2>
                 <p className="text-xs sm:text-sm text-slate-300 leading-relaxed">
                   {isReceiptDoc
-                    ? '上記の内容をご確認いただき、必要に応じて上部の「PDFダウンロード」より保存のうえ、下記より受領確認をお送りください。'
+                    ? '上記の内容をご確認いただき、必要に応じて上部の「PDFダウンロード」より保存のうえ、下記より受領完了のご連絡をお送りください。'
                     : (
                       <>
                         上記のお見積もり・契約・ご提案内容をご確認いただき、よろしければ下記よりお申し込みください。<br className="hidden sm:inline" />
@@ -592,7 +608,7 @@ export const PublicDocumentApplyView: React.FC<PublicDocumentApplyViewProps> = (
               </div>
             )}
 
-            {/* 同意チェック */}
+            {/* 同意/確認チェック */}
             <div className="rounded-xl border border-slate-800 bg-slate-900/60 p-4">
               <label className="flex items-start gap-3 cursor-pointer">
                 <input
@@ -603,17 +619,17 @@ export const PublicDocumentApplyView: React.FC<PublicDocumentApplyViewProps> = (
                 />
                 <span className="text-xs text-slate-300 leading-relaxed">
                   {isReceiptDoc
-                    ? '上記書類の内容を確認し、受領したことを通知します。'
+                    ? '上記書類の内容を確認し、受領したことを連絡します。'
                     : '上記の内容（金額、委託範囲、支払条件等）を確認し、本内容での発注および申し込みに同意します。'}
                 </span>
               </label>
             </div>
 
-            {/* 申込ボタン */}
+            {/* 申込 / 受領連絡ボタン */}
             <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-4 pt-2">
               <div className="flex items-center gap-2 text-xs text-slate-400">
                 <ShieldCheck className="w-4 h-4 text-emerald-400" />
-                <span>有限会社MST SSL暗号化セキュア成約システム</span>
+                <span>{isReceiptDoc ? '有限会社MST セキュア確認システム' : '有限会社MST SSL暗号化セキュア成約システム'}</span>
               </div>
 
               <button
@@ -629,11 +645,11 @@ export const PublicDocumentApplyView: React.FC<PublicDocumentApplyViewProps> = (
                 {submitting ? (
                   <>
                     <Loader2 className="w-4 h-4 animate-spin" />
-                    <span>成約処理中…</span>
+                    <span>{isReceiptDoc ? '送信中…' : '成約処理中…'}</span>
                   </>
                 ) : (
                   <>
-                    <span>この内容で申し込む</span>
+                    <span>{isReceiptDoc ? '内容確認・受領完了を連絡する' : 'この内容で申し込む'}</span>
                     <ArrowRight className="w-4 h-4" />
                   </>
                 )}
@@ -653,8 +669,12 @@ export const PublicDocumentApplyView: React.FC<PublicDocumentApplyViewProps> = (
                 <Sparkles className="w-5 h-5" />
               </div>
               <div>
-                <h3 className="font-bold text-white text-base">お申し込みの最終確認</h3>
-                <p className="text-xs text-slate-400">成約の確定手続き</p>
+                <h3 className="font-bold text-white text-base">
+                  {isReceiptDocGlobal ? '受領連絡の確認' : 'お申し込みの最終確認'}
+                </h3>
+                <p className="text-xs text-slate-400">
+                  {isReceiptDocGlobal ? '内容確認・受領連絡の送信' : '成約の確定手続き'}
+                </p>
               </div>
             </div>
 
@@ -672,7 +692,9 @@ export const PublicDocumentApplyView: React.FC<PublicDocumentApplyViewProps> = (
             </div>
 
             <p className="text-xs text-slate-300 leading-relaxed">
-              「確定して申し込む」を押すと、即座に商談が起票され成約（受注）として受理されます。よろしいですか？
+              {isReceiptDocGlobal
+                ? '「受領連絡を送信」を押すと、内容確認・受領完了の記録が保存され担当者へ通知されます。よろしいですか？'
+                : '「確定して申し込む」を押すと、即座に商談が起票され成約（受注）として受理されます。よろしいですか？'}
             </p>
 
             <div className="flex justify-end gap-3 pt-2">
@@ -688,7 +710,7 @@ export const PublicDocumentApplyView: React.FC<PublicDocumentApplyViewProps> = (
                 onClick={handleExecuteApply}
                 className="px-5 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs shadow-lg shadow-emerald-600/30 transition-all cursor-pointer"
               >
-                確定して申し込む
+                {isReceiptDocGlobal ? '受領連絡を送信' : '確定して申し込む'}
               </button>
             </div>
           </div>

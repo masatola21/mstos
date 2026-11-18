@@ -7193,6 +7193,11 @@ app.post('/api/communications/send', async (req, res) => {
                 .replace(/https?:\/\/[^"'\s]+\/(?:apply|docs)\/preview|\/(?:apply|docs)\/preview/g, `${viewUrl}#apply-cta-section`)
                 .replace(/href="\/(docs|apply)\/([^"]+)"/gi, (_m, _p, targetId) => `href="${docBaseUrl ? `${docBaseUrl}/docs/${targetId}` : `/docs/${targetId}`}"`);
 
+              const isReceiptOnlyEmailDoc = sentDocumentType === 'invoice' || sentDocumentType === 'monthly_report';
+              const docWebButtonLabel = isReceiptOnlyEmailDoc
+                ? 'Web上で内容を確認・受領連絡'
+                : 'Web上で内容を確認・お申し込み';
+
               embeddedHtmlSection = [
                 '<div style="margin:24px 0 12px 0;border:1px solid #cbd5e1;border-radius:12px;overflow:hidden;background-color:#ffffff;">',
                 '  <div style="background-color:#f8fafc;border-bottom:1px solid #e2e8f0;padding:14px 18px;">',
@@ -7200,7 +7205,7 @@ app.post('/api/communications/send', async (req, res) => {
                 '    <table role="presentation" cellpadding="0" cellspacing="0" border="0" style="border-collapse:collapse;">',
                 '      <tr>',
                 '        <td style="padding:0 8px 0 0;">',
-                `          <a href="${viewUrl}" target="_blank" rel="noopener noreferrer" style="display:inline-block;padding:8px 16px;border-radius:7px;background-color:#059669;color:#ffffff;text-decoration:none;font-size:12px;font-weight:700;">Web上で内容を確認・お申し込み</a>`,
+                `          <a href="${viewUrl}" target="_blank" rel="noopener noreferrer" style="display:inline-block;padding:8px 16px;border-radius:7px;background-color:#059669;color:#ffffff;text-decoration:none;font-size:12px;font-weight:700;">${docWebButtonLabel}</a>`,
                 '        </td>',
                 '        <td style="padding:0;">',
                 `          <a href="${pdfDlUrl}" target="_blank" rel="noopener noreferrer" style="display:inline-block;padding:8px 16px;border-radius:7px;background-color:#ffffff;border:1px solid #cbd5e1;color:#0f172a;text-decoration:none;font-size:12px;font-weight:700;">PDFをダウンロード（印刷・保存用）</a>`,
@@ -11290,7 +11295,7 @@ function renderPublicDocumentHtmlPage(doc: any, companyName: string): string {
   const encodedId = encodeURIComponent(docId);
   const title = String(doc.title || 'ご案内書類');
   const docType = resolveEffectiveCustomerDocumentType(doc.document_type, title);
-  const isReceiptOnly = docType === 'invoice' || docType === 'diagnosis_report' || docType === 'monthly_report';
+  const isReceiptOnly = docType === 'invoice' || docType === 'monthly_report';
   const hasConsented = Boolean(doc.consent_recorded_at) || (!isReceiptOnly && doc.status === 'approved' && Boolean(doc.deal_id));
   const consentDateLabel = doc.consent_recorded_at
     ? new Date(doc.consent_recorded_at).toLocaleString('ja-JP')
@@ -11298,22 +11303,22 @@ function renderPublicDocumentHtmlPage(doc: any, companyName: string): string {
   const cleanedBodyHtml = String(doc.body_html || '')
     .replace(/https?:\/\/[^"'\s]+\/(?:apply|docs)\/[^"'\s]+|\/(?:apply|docs)\/[^"'\s]+/g, '#apply-cta-section');
 
-  const ctaBadge = isReceiptOnly ? '内容のご確認・受領手続き' : 'Webオンラインお申し込み・電子合意';
+  const ctaBadge = isReceiptOnly ? '内容確認・受領連絡' : 'Webオンラインお申し込み・電子合意';
   const ctaHeading = docType === 'contract'
     ? '契約内容に同意して申し込む（締結確定）'
     : isReceiptOnly
-      ? '内容のご確認・受領を完了する'
+      ? '内容を確認して受領連絡を送る'
       : 'この内容で申し込む（発注を確定する）';
   const ctaDescription = isReceiptOnly
-    ? '上記の書類内容をご確認のうえ、必要に応じて右上の「PDFダウンロード」より保存いただき、下記より確認完了をお知らせください。'
+    ? '上記の書類内容をご確認のうえ、必要に応じて右上の「PDFダウンロード」より保存いただき、下記より受領完了のご連絡をお送りください。'
     : '上記の書類内容（金額・内容・条件等）をご確認のうえ、よろしければ下記にチェックを入れてお申し込みください。Web上での確定記録が保存されます。';
   const checkLabel = isReceiptOnly
-    ? '上記書類の内容を確認し、受領したことを通知します。'
+    ? '上記書類の内容を確認し、受領したことを連絡します。'
     : '上記の内容（金額、委託範囲、支払条件等）を確認し、本内容での発注・契約締結に同意します。';
-  const submitButtonLabel = isReceiptOnly ? '内容確認・受領を完了する' : 'この内容で申し込む';
-  const completedTitle = isReceiptOnly ? 'ご確認ありがとうございます' : 'お申し込み・ご同意が完了しています';
+  const submitButtonLabel = isReceiptOnly ? '内容確認・受領完了を連絡する' : 'この内容で申し込む';
+  const completedTitle = isReceiptOnly ? '内容確認・受領のご連絡ありがとうございます' : 'お申し込み・ご同意が完了しています';
   const completedDesc = isReceiptOnly
-    ? '本書面のご確認記録は保存されています。必要な場合は上部の「PDFダウンロード」より控えを保存してください。'
+    ? '本書面の確認・受領記録は保存されています。必要な場合は上部の「PDFダウンロード」より控えを保存してください。'
     : '本書類での発注・ご契約手続きは確定済みです。担当責任者（有限会社MST）より改めてご連絡いたします。';
 
   return `<!DOCTYPE html>
@@ -11374,7 +11379,7 @@ function renderPublicDocumentHtmlPage(doc: any, companyName: string): string {
       <div class="brand-badge">MST</div>
       <div>
         <div class="brand-name">有限会社MST</div>
-        <div class="brand-sub">公式Web確認・お申し込みページ</div>
+        <div class="brand-sub">${escapePublicDocHtml(isReceiptOnly ? '公式Web確認・受領連絡ページ' : '公式Web確認・お申し込みページ')}</div>
       </div>
     </div>
     <div class="actions">
@@ -11385,7 +11390,7 @@ function renderPublicDocumentHtmlPage(doc: any, companyName: string): string {
 
   <main class="container">
     <div id="completed-banner" class="banner-ok no-print" style="display:${hasConsented ? 'block' : 'none'};">
-      <span class="pill">${escapePublicDocHtml(isReceiptOnly ? '確認完了' : 'お申し込み完了')}</span>
+      <span class="pill">${escapePublicDocHtml(isReceiptOnly ? '受領連絡完了' : 'お申し込み完了')}</span>
       <h2>${escapePublicDocHtml(completedTitle)}</h2>
       <p>${escapePublicDocHtml(completedDesc)}${consentDateLabel ? `（記録日時: ${escapePublicDocHtml(consentDateLabel)}）` : ''}</p>
     </div>
@@ -11420,11 +11425,11 @@ function renderPublicDocumentHtmlPage(doc: any, companyName: string): string {
 
   <div id="confirm-modal" class="modal-backdrop no-print" role="dialog" aria-modal="true">
     <div class="modal-card">
-      <h3>最終確認</h3>
-      <p>「${escapePublicDocHtml(title)}」についてお手続きを確定します。よろしいですか？</p>
+      <h3>${escapePublicDocHtml(isReceiptOnly ? '受領連絡の確認' : '最終確認')}</h3>
+      <p>「${escapePublicDocHtml(title)}」について${isReceiptOnly ? '内容確認・受領連絡を送信します。よろしいですか？' : 'お手続きを確定します。よろしいですか？'}</p>
       <div class="modal-actions">
         <button type="button" id="cancel-modal-btn" class="btn">キャンセル</button>
-        <button type="button" id="confirm-apply-btn" class="btn btn-primary">確定して送信</button>
+        <button type="button" id="confirm-apply-btn" class="btn btn-primary">${escapePublicDocHtml(isReceiptOnly ? '受領連絡を送信' : '確定して送信')}</button>
       </div>
     </div>
   </div>
@@ -11631,12 +11636,14 @@ app.post('/api/public/documents/:id/apply', async (req, res) => {
     if (!doc) return res.status(404).json({ error: '書類が見つかりません。' });
 
     const effectiveDocType = resolveEffectiveCustomerDocumentType(doc.document_type, doc.title);
-    const isReceiptOnly = ['invoice', 'diagnosis_report', 'monthly_report'].includes(effectiveDocType);
+    const isReceiptOnly = ['invoice', 'monthly_report'].includes(effectiveDocType);
     const forwardedHeader = req.headers['x-forwarded-for'];
     const clientIp = (typeof forwardedHeader === 'string' ? forwardedHeader.split(',')[0].trim() : Array.isArray(forwardedHeader) ? forwardedHeader[0] : req.socket.remoteAddress) || '';
     const userAgent = (req.headers['user-agent'] as string) || '';
     const consentMethod = req.body?.consentMethod || 'web_apply';
-    const consentEvidenceText = req.body?.consentEvidenceText || '上記の内容（金額、委託範囲、支払条件等）を確認し、本内容での発注および申し込みに同意します。';
+    const consentEvidenceText = req.body?.consentEvidenceText || (isReceiptOnly
+      ? '上記書類の内容を確認し、受領したことを連絡します。'
+      : '上記の内容（金額、委託範囲、支払条件等）を確認し、本内容での発注および申し込みに同意します。');
     const nowIso = new Date().toISOString();
     const todayStr = nowIso.slice(0, 10);
 
