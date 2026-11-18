@@ -862,7 +862,7 @@ export const DocumentTemplateView: React.FC<DocumentTemplateViewProps> = ({
       result = result.replace(regex, formatProposalVal(key, val || (isProposal ? proposalEmptyText(key, proposalKind) : '')));
     });
     const activeDocId = savedDocIds[currentTemplate.id] || autosavedDocumentIds.current[currentTemplate.id] || 'preview';
-    const applyUrl = `${window.location.origin}/apply/${encodeURIComponent(activeDocId)}`;
+    const applyUrl = `${window.location.origin}/docs/${encodeURIComponent(activeDocId)}`;
 
     if (isProposal) {
       result = result.replace(/{{(\w+)}}/g, (_whole, key) => (key === 'apply_url' ? applyUrl : escapeHtml(proposalEmptyText(key, proposalKind))));
@@ -989,6 +989,10 @@ export const DocumentTemplateView: React.FC<DocumentTemplateViewProps> = ({
         autosavedDocumentIds.current[templateId] = data.id;
         setSavedDocIds((prev) => ({ ...prev, [templateId]: data.id }));
         setHasStartedDocument(true);
+        const resolvedHtml = payload.body_html.replace(/\/(?:apply|docs)\/preview/g, `/docs/${encodeURIComponent(data.id)}`);
+        if (resolvedHtml !== payload.body_html) {
+          await supabase.from('customer_documents').update({ body_html: resolvedHtml }).eq('id', data.id);
+        }
         setSaveMessage(opts?.status === 'draft' ? '作成中の書類として保存しました。' : '確定書類（送付可能）として保存しました。');
         return data.id;
       }
@@ -1047,6 +1051,10 @@ export const DocumentTemplateView: React.FC<DocumentTemplateViewProps> = ({
             autosavedDocumentIds.current[templateId] = data.id;
             setSavedDocIds((prev) => ({ ...prev, [templateId]: data.id }));
             setHasStartedDocument(true);
+            const resolvedHtml = payload.body_html.replace(/\/(?:apply|docs)\/preview/g, `/docs/${encodeURIComponent(data.id)}`);
+            if (resolvedHtml !== payload.body_html) {
+              await supabase.from('customer_documents').update({ body_html: resolvedHtml }).eq('id', data.id);
+            }
           }
         } catch (e: any) {
           console.error('Error auto-saving before send center:', e);
@@ -1169,7 +1177,7 @@ export const DocumentTemplateView: React.FC<DocumentTemplateViewProps> = ({
 
           {(savedDocIds[currentTemplate.id] || autosavedDocumentIds.current[currentTemplate.id]) && (() => {
             const activeDocId = savedDocIds[currentTemplate.id] || autosavedDocumentIds.current[currentTemplate.id];
-            const applyUrl = `${window.location.origin}/apply/${encodeURIComponent(activeDocId)}`;
+            const applyUrl = `${window.location.origin}/docs/${encodeURIComponent(activeDocId)}`;
             return (
               <>
                 <button

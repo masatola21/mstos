@@ -71,11 +71,24 @@ export const PublicDocumentApplyView: React.FC<PublicDocumentApplyViewProps> = (
         if (!fetchedDoc) {
           const supabase = getSupabase();
           if (supabase) {
-            const { data: dbDoc, error: dbErr } = await supabase
+            let dbDoc: any = null;
+            let dbErr: any = null;
+            const fullRes = await supabase
               .from('customer_documents')
-              .select('id, title, document_type, status, body_html, company_id, lead_id, contact_id, deal_id, consent_recorded_at, consent_method, created_at, updated_at')
+              .select('*')
               .eq('id', documentId)
               .maybeSingle();
+            dbDoc = fullRes.data;
+            dbErr = fullRes.error;
+            if (dbErr) {
+              const basicRes = await supabase
+                .from('customer_documents')
+                .select('id, title, document_type, status, body_html, company_id, created_at')
+                .eq('id', documentId)
+                .maybeSingle();
+              dbDoc = basicRes.data;
+              dbErr = basicRes.error;
+            }
 
             if (!dbErr && dbDoc) {
               let companyName = '';
@@ -512,11 +525,21 @@ export const PublicDocumentApplyView: React.FC<PublicDocumentApplyViewProps> = (
                   <span className="text-xs text-slate-400">即時成約システム</span>
                 </div>
                 <h2 className="text-xl font-bold text-white tracking-tight">
-                  この内容で申し込む（発注を確定する）
+                  {doc?.documentType === 'contract'
+                    ? '契約内容に同意して申し込む（締結確定）'
+                    : doc?.documentType === 'invoice' || doc?.documentType === 'diagnosis_report' || doc?.documentType === 'monthly_report'
+                      ? '内容のご確認・受領を完了する'
+                      : 'この内容で申し込む（発注を確定する）'}
                 </h2>
                 <p className="text-xs sm:text-sm text-slate-300 leading-relaxed">
-                  上記のお見積もり・提案内容をご確認いただき、よろしければ下記よりお申し込みください。<br className="hidden sm:inline" />
-                  Web上で確定された瞬間に商談が起票され、正式に成約手続きが行われます。
+                  {doc?.documentType === 'invoice' || doc?.documentType === 'diagnosis_report' || doc?.documentType === 'monthly_report'
+                    ? '上記の内容をご確認いただき、必要に応じて上部の「PDFダウンロード」より保存のうえ、下記より受領確認をお送りください。'
+                    : (
+                      <>
+                        上記のお見積もり・契約・ご提案内容をご確認いただき、よろしければ下記よりお申し込みください。<br className="hidden sm:inline" />
+                        Web上で確定された瞬間に手続きが完了し、担当責任者へ通知されます。
+                      </>
+                    )}
                 </p>
               </div>
             </div>
@@ -538,7 +561,9 @@ export const PublicDocumentApplyView: React.FC<PublicDocumentApplyViewProps> = (
                   className="mt-0.5 h-4 w-4 rounded border-slate-700 bg-slate-950 text-emerald-500 focus:ring-emerald-400"
                 />
                 <span className="text-xs text-slate-300 leading-relaxed">
-                  上記の内容（金額、委託範囲、支払条件等）を確認し、本内容での発注および申し込みに同意します。
+                  {doc?.documentType === 'invoice' || doc?.documentType === 'diagnosis_report' || doc?.documentType === 'monthly_report'
+                    ? '上記書類の内容を確認し、受領したことを通知します。'
+                    : '上記の内容（金額、委託範囲、支払条件等）を確認し、本内容での発注および申し込みに同意します。'}
                 </span>
               </label>
             </div>

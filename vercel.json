@@ -9,6 +9,14 @@
       "destination": "/api"
     },
     {
+      "source": "/docs/:id",
+      "destination": "/api/public/documents/:id/view"
+    },
+    {
+      "source": "/apply/:id",
+      "destination": "/api/public/documents/:id/view"
+    },
+    {
       "source": "/(.*)",
       "destination": "/index.html"
     }

@@ -7150,13 +7150,13 @@ app.post('/api/communications/send', async (req, res) => {
       const documentDeliveryFormat: 'web_link' | 'html_attachment' | 'pdf_attachment' =
         req.body?.documentDeliveryFormat === 'pdf_attachment'
           ? 'pdf_attachment'
-          : req.body?.documentDeliveryFormat === 'html_attachment'
-            ? 'html_attachment'
-            : 'web_link';
+          : req.body?.documentDeliveryFormat === 'web_link'
+            ? 'web_link'
+            : 'html_attachment';
       let attachments: Array<{ filename: string; content: string }> | undefined = undefined;
       // 重要書類送信（source_type === 'customer_document'）時のみ対象書類を参照し、
-      // 送付形式（デフォルト: web_link で添付なし）に応じて添付ファイルを制御する
-      // ※ .pdf を直接メール添付するとGmailのGoogleドライブビューアで電子署名リクエストが表示されるため、標準はリンク送付（web_link）
+      // 送付形式（デフォルト: html_attachment）に応じて添付ファイルを制御する
+      // ※ .pdf を直接メール添付するとGmailのGoogleドライブビューアで電子署名リクエストが表示されるため、標準はHTML書類添付＋Web確認・PDFダウンロードURL
       if (row.document_id && row.source_type === 'customer_document') {
         try {
           const { data: docData } = await lineSupabase
@@ -7186,8 +7186,16 @@ app.post('/api/communications/send', async (req, res) => {
                 },
               ];
             } else if (documentDeliveryFormat === 'html_attachment') {
+              const reqProto = String(req.headers['x-forwarded-proto'] || req.protocol || 'https').split(',')[0].trim() || 'https';
+              const reqHost = String(req.headers['x-forwarded-host'] || req.headers.host || '').split(',')[0].trim();
+              const reqOrigin = String(req.headers.origin || '').trim().replace(/\/$/, '');
+              const docBaseUrl = (reqOrigin || (reqHost ? `${reqProto}://${reqHost}` : '') || process.env.PUBLIC_APP_URL || '').replace(/\/$/, '');
               const escapedTitle = (docData.title || '書類').replace(/[&<>"']/g, (c: string) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c] || c));
-              const standaloneHtml = `<!DOCTYPE html><html lang="ja"><head><meta charset="utf-8" /><meta name="viewport" content="width=device-width, initial-scale=1.0" /><title>${escapedTitle}</title><style>body{margin:24px auto;max-width:840px;padding:0 16px;background:#ffffff;color:#0f172a;font-family:-apple-system,BlinkMacSystemFont,"Hiragino Kaku Gothic ProN","Hiragino Sans",Meiryo,sans-serif;line-height:1.7;}@media print{body{margin:0;padding:0;}}</style></head><body>${String(docData.body_html || '')}</body></html>`;
+              const viewUrl = docBaseUrl ? `${docBaseUrl}/docs/${encodeURIComponent(docData.id)}` : `/docs/${encodeURIComponent(docData.id)}`;
+              const pdfDlUrl = docBaseUrl ? `${docBaseUrl}/api/public/documents/${encodeURIComponent(docData.id)}/pdf?download=1` : `/api/public/documents/${encodeURIComponent(docData.id)}/pdf?download=1`;
+              const safeBodyHtml = String(docData.body_html || '').replace(/https?:\/\/[^"'\s]+\/(?:apply|docs)\/preview|\/(?:apply|docs)\/preview/g, `${viewUrl}#apply-cta-section`);
+              const actionBar = `<div class="no-print" style="margin:0 0 20px 0;padding:12px 16px;background:#f8fafc;border:1px solid #e2e8f0;border-radius:10px;display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:10px;font-size:12px;"><div style="font-weight:700;color:#0f172a;">有限会社MST｜書類閲覧ファイル</div><div style="display:flex;flex-wrap:wrap;gap:8px;"><a href="${pdfDlUrl}" style="display:inline-block;padding:7px 14px;border-radius:7px;background:#059669;color:#ffffff;text-decoration:none;font-weight:700;">PDFダウンロード</a><a href="${viewUrl}" style="display:inline-block;padding:7px 14px;border-radius:7px;background:#ffffff;border:1px solid #cbd5e1;color:#0f172a;text-decoration:none;font-weight:700;">Web確認・お申し込みページ</a><button type="button" onclick="window.print()" style="padding:7px 12px;border-radius:7px;background:#ffffff;border:1px solid #cbd5e1;color:#334155;font-weight:600;cursor:pointer;">印刷 / PDF保存</button></div></div>`;
+              const standaloneHtml = `<!DOCTYPE html><html lang="ja"><head><meta charset="utf-8" /><meta name="viewport" content="width=device-width, initial-scale=1.0" /><title>${escapedTitle}｜有限会社MST</title><style>body{margin:24px auto;max-width:860px;padding:0 16px;background:#ffffff;color:#0f172a;font-family:-apple-system,BlinkMacSystemFont,"Hiragino Kaku Gothic ProN","Hiragino Sans",Meiryo,sans-serif;line-height:1.7;}@media print{body{margin:0;padding:0;}.no-print{display:none!important;}}</style></head><body>${actionBar}${safeBodyHtml}</body></html>`;
               attachments = [
                 {
                   filename: `${safeTitle}.html`,
@@ -11198,17 +11206,318 @@ app.post('/api/billing/recurring-generate', async (req, res) => {
 });
 
 // ─── 公開書類・Web申込・自動成約 API ───
+function escapePublicDocHtml(raw: unknown): string {
+  return String(raw || '')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+
+async function fetchPublicCustomerDocument(id: string): Promise<{ doc: any | null; error: any | null }> {
+  if (!lineSupabase) return { doc: null, error: new Error('書類配信サーバーが設定されていません。') };
+  const fullRes = await lineSupabase
+    .from('customer_documents')
+    .select('*')
+    .eq('id', id)
+    .maybeSingle();
+  if (!fullRes.error) {
+    return { doc: fullRes.data || null, error: null };
+  }
+  const basicRes = await lineSupabase
+    .from('customer_documents')
+    .select('id, title, document_type, status, body_html, company_id, created_at')
+    .eq('id', id)
+    .maybeSingle();
+  return { doc: basicRes.data || null, error: basicRes.error || null };
+}
+
+function renderPublicDocumentErrorHtml(title: string, message: string): string {
+  return `<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>${escapePublicDocHtml(title)}｜有限会社MST</title>
+  <style>
+    body{margin:0;min-height:100vh;display:flex;align-items:center;justify-content:center;padding:24px;background:#f8fafc;color:#0f172a;font-family:-apple-system,BlinkMacSystemFont,"Hiragino Kaku Gothic ProN","Hiragino Sans",Meiryo,sans-serif;}
+    .card{max-width:440px;width:100%;background:#fff;border:1px solid #e2e8f0;border-radius:16px;padding:32px;text-align:center;box-shadow:0 10px 30px rgba(15,23,42,.06);}
+    h1{font-size:18px;margin:0 0 10px;color:#0f172a;}
+    p{font-size:14px;color:#475569;line-height:1.7;margin:0 0 24px;}
+    a{display:inline-block;padding:10px 20px;border-radius:10px;background:#0f172a;color:#fff;text-decoration:none;font-size:13px;font-weight:700;}
+  </style>
+</head>
+<body>
+  <div class="card">
+    <h1>${escapePublicDocHtml(title)}</h1>
+    <p>${escapePublicDocHtml(message)}</p>
+    <a href="https://corp.mstcorp.info/">有限会社MST 公式サイトへ</a>
+  </div>
+</body>
+</html>`;
+}
+
+function renderPublicDocumentHtmlPage(doc: any, companyName: string): string {
+  const docId = String(doc.id || '');
+  const encodedId = encodeURIComponent(docId);
+  const title = String(doc.title || 'ご案内書類');
+  const docType = String(doc.document_type || 'other');
+  const isReceiptOnly = docType === 'invoice' || docType === 'diagnosis_report' || docType === 'monthly_report';
+  const hasConsented = Boolean(doc.consent_recorded_at) || (!isReceiptOnly && doc.status === 'approved' && Boolean(doc.deal_id));
+  const consentDateLabel = doc.consent_recorded_at
+    ? new Date(doc.consent_recorded_at).toLocaleString('ja-JP')
+    : '';
+  const cleanedBodyHtml = String(doc.body_html || '')
+    .replace(/https?:\/\/[^"'\s]+\/(?:apply|docs)\/[^"'\s]+|\/(?:apply|docs)\/[^"'\s]+/g, '#apply-cta-section');
+
+  const ctaBadge = isReceiptOnly ? '内容のご確認・受領手続き' : 'Webオンラインお申し込み・電子合意';
+  const ctaHeading = docType === 'contract'
+    ? '契約内容に同意して申し込む（締結確定）'
+    : isReceiptOnly
+      ? '内容のご確認・受領を完了する'
+      : 'この内容で申し込む（発注を確定する）';
+  const ctaDescription = isReceiptOnly
+    ? '上記の書類内容をご確認のうえ、必要に応じて右上の「PDFダウンロード」より保存いただき、下記より確認完了をお知らせください。'
+    : '上記の書類内容（金額・内容・条件等）をご確認のうえ、よろしければ下記にチェックを入れてお申し込みください。Web上での確定記録が保存されます。';
+  const checkLabel = isReceiptOnly
+    ? '上記書類の内容を確認し、受領したことを通知します。'
+    : '上記の内容（金額、委託範囲、支払条件等）を確認し、本内容での発注・契約締結に同意します。';
+  const submitButtonLabel = isReceiptOnly ? '内容確認・受領を完了する' : 'この内容で申し込む';
+  const completedTitle = isReceiptOnly ? 'ご確認ありがとうございます' : 'お申し込み・ご同意が完了しています';
+  const completedDesc = isReceiptOnly
+    ? '本書面のご確認記録は保存されています。必要な場合は上部の「PDFダウンロード」より控えを保存してください。'
+    : '本書類での発注・ご契約手続きは確定済みです。担当責任者（有限会社MST）より改めてご連絡いたします。';
+
+  return `<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>${escapePublicDocHtml(title)}｜有限会社MST</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; }
+    body { margin: 0; background: #f1f5f9; color: #0f172a; font-family: -apple-system, BlinkMacSystemFont, "Hiragino Kaku Gothic ProN", "Hiragino Sans", "Yu Gothic", Meiryo, sans-serif; line-height: 1.7; }
+    .header { position: sticky; top: 0; z-index: 30; background: rgba(255,255,255,0.96); backdrop-filter: blur(8px); border-bottom: 1px solid #e2e8f0; padding: 12px 20px; display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 12px; }
+    .brand { display: flex; align-items: center; gap: 10px; }
+    .brand-badge { width: 34px; height: 34px; border-radius: 9px; background: #059669; color: #fff; font-weight: 800; font-size: 12px; display: flex; align-items: center; justify-content: center; letter-spacing: 0.04em; }
+    .brand-name { font-size: 14px; font-weight: 800; color: #0f172a; line-height: 1.2; }
+    .brand-sub { font-size: 11px; color: #64748b; }
+    .actions { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+    .btn { display: inline-flex; align-items: center; gap: 6px; padding: 8px 14px; border-radius: 8px; font-size: 12px; font-weight: 700; text-decoration: none; cursor: pointer; border: 1px solid #cbd5e1; background: #fff; color: #0f172a; transition: background .15s; }
+    .btn:hover { background: #f8fafc; }
+    .btn-primary { background: #059669; border-color: #059669; color: #fff; }
+    .btn-primary:hover { background: #047857; }
+    .btn-primary:disabled { background: #94a3b8; border-color: #94a3b8; cursor: not-allowed; }
+    .container { max-width: 880px; margin: 24px auto 48px; padding: 0 16px; }
+    .banner-ok { margin-bottom: 20px; background: #ecfdf5; border: 1px solid #6ee7b7; border-radius: 14px; padding: 20px 24px; color: #064e3b; }
+    .banner-ok h2 { margin: 4px 0 6px; font-size: 18px; color: #065f46; }
+    .banner-ok p { margin: 0; font-size: 13px; color: #047857; }
+    .pill { display: inline-block; padding: 2px 10px; border-radius: 999px; font-size: 11px; font-weight: 700; background: #d1fae5; color: #065f46; }
+    .sheet { background: #fff; border: 1px solid #e2e8f0; border-radius: 14px; box-shadow: 0 8px 28px rgba(15,23,42,.05); overflow: hidden; }
+    .sheet-meta { background: #f8fafc; border-bottom: 1px solid #e2e8f0; padding: 12px 24px; display: flex; flex-wrap: wrap; justify-content: space-between; gap: 8px; font-size: 12px; color: #475569; }
+    .sheet-body { padding: 28px 24px; overflow-x: auto; }
+    @media (min-width: 640px) { .sheet-body { padding: 40px 44px; } }
+    .cta-box { margin-top: 24px; background: #fff; border: 2px solid #10b981; border-radius: 14px; padding: 24px; box-shadow: 0 8px 24px rgba(16,185,129,.08); }
+    .cta-box h2 { margin: 8px 0 6px; font-size: 18px; color: #0f172a; }
+    .cta-box p { margin: 0 0 16px; font-size: 13px; color: #475569; }
+    .agree-label { display: flex; align-items: flex-start; gap: 10px; background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 10px; padding: 14px; font-size: 13px; color: #1e293b; cursor: pointer; }
+    .agree-label input { margin-top: 4px; width: 16px; height: 16px; accent-color: #059669; }
+    .cta-footer { margin-top: 16px; display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 12px; }
+    .error-msg { display: none; margin-top: 12px; padding: 10px 14px; border-radius: 8px; background: #fef2f2; border: 1px solid #fecaca; color: #b91c1c; font-size: 12px; }
+    .footer { text-align: center; padding: 24px 16px; font-size: 12px; color: #64748b; }
+    .modal-backdrop { display: none; position: fixed; inset: 0; z-index: 50; background: rgba(15,23,42,.55); align-items: center; justify-content: center; padding: 16px; }
+    .modal-backdrop.open { display: flex; }
+    .modal-card { max-width: 440px; width: 100%; background: #fff; border-radius: 14px; padding: 24px; box-shadow: 0 20px 50px rgba(15,23,42,.2); }
+    .modal-card h3 { margin: 0 0 8px; font-size: 16px; color: #0f172a; }
+    .modal-card p { margin: 0 0 16px; font-size: 13px; color: #475569; }
+    .modal-actions { display: flex; justify-content: flex-end; gap: 8px; }
+    @media print {
+      body { background: #fff; }
+      .no-print { display: none !important; }
+      .container { max-width: 100%; margin: 0; padding: 0; }
+      .sheet { border: none; box-shadow: none; border-radius: 0; }
+      .sheet-body { padding: 0; }
+    }
+  </style>
+</head>
+<body>
+  <header class="header no-print">
+    <div class="brand">
+      <div class="brand-badge">MST</div>
+      <div>
+        <div class="brand-name">有限会社MST</div>
+        <div class="brand-sub">公式Web確認・お申し込みページ</div>
+      </div>
+    </div>
+    <div class="actions">
+      <a class="btn btn-primary" href="/api/public/documents/${encodedId}/pdf?download=1" download>PDFダウンロード</a>
+      <button type="button" class="btn" onclick="window.print()">印刷 / PDF保存</button>
+    </div>
+  </header>
+
+  <main class="container">
+    <div id="completed-banner" class="banner-ok no-print" style="display:${hasConsented ? 'block' : 'none'};">
+      <span class="pill">${escapePublicDocHtml(isReceiptOnly ? '確認完了' : 'お申し込み完了')}</span>
+      <h2>${escapePublicDocHtml(completedTitle)}</h2>
+      <p>${escapePublicDocHtml(completedDesc)}${consentDateLabel ? `（記録日時: ${escapePublicDocHtml(consentDateLabel)}）` : ''}</p>
+    </div>
+
+    <div class="sheet">
+      <div class="sheet-meta no-print">
+        <span><strong>書類名:</strong> ${escapePublicDocHtml(title)}</span>
+        ${companyName ? `<span><strong>宛先:</strong> ${escapePublicDocHtml(companyName)} 御中</span>` : ''}
+      </div>
+      <div class="sheet-body" id="document-body-root">
+        ${cleanedBodyHtml}
+      </div>
+    </div>
+
+    ${hasConsented ? '' : `
+    <section id="apply-cta-section" class="cta-box no-print">
+      <span class="pill">${escapePublicDocHtml(ctaBadge)}</span>
+      <h2>${escapePublicDocHtml(ctaHeading)}</h2>
+      <p>${escapePublicDocHtml(ctaDescription)}</p>
+      <label class="agree-label">
+        <input type="checkbox" id="agree-checkbox" />
+        <span>${escapePublicDocHtml(checkLabel)}</span>
+      </label>
+      <div id="apply-error" class="error-msg"></div>
+      <div class="cta-footer">
+        <span style="font-size:12px;color:#64748b;">有限会社MST セキュア確認システム</span>
+        <button type="button" id="open-confirm-btn" class="btn btn-primary" disabled>${escapePublicDocHtml(submitButtonLabel)}</button>
+      </div>
+    </section>
+    `}
+  </main>
+
+  <div id="confirm-modal" class="modal-backdrop no-print" role="dialog" aria-modal="true">
+    <div class="modal-card">
+      <h3>最終確認</h3>
+      <p>「${escapePublicDocHtml(title)}」についてお手続きを確定します。よろしいですか？</p>
+      <div class="modal-actions">
+        <button type="button" id="cancel-modal-btn" class="btn">キャンセル</button>
+        <button type="button" id="confirm-apply-btn" class="btn btn-primary">確定して送信</button>
+      </div>
+    </div>
+  </div>
+
+  <footer class="footer no-print">
+    &copy; ${new Date().getFullYear()} 有限会社MST All rights reserved.
+  </footer>
+
+  <script>
+    (function () {
+      var agree = document.getElementById('agree-checkbox');
+      var openBtn = document.getElementById('open-confirm-btn');
+      var modal = document.getElementById('confirm-modal');
+      var cancelBtn = document.getElementById('cancel-modal-btn');
+      var confirmBtn = document.getElementById('confirm-apply-btn');
+      var errBox = document.getElementById('apply-error');
+      var ctaSection = document.getElementById('apply-cta-section');
+      var completedBanner = document.getElementById('completed-banner');
+
+      if (agree && openBtn) {
+        agree.addEventListener('change', function () {
+          openBtn.disabled = !agree.checked;
+        });
+        openBtn.addEventListener('click', function () {
+          if (modal) modal.classList.add('open');
+        });
+      }
+      if (cancelBtn && modal) {
+        cancelBtn.addEventListener('click', function () {
+          modal.classList.remove('open');
+        });
+      }
+      document.addEventListener('click', function (e) {
+        var target = e.target && e.target.closest ? e.target.closest('.web-apply-box a') : null;
+        if (!target) return;
+        e.preventDefault();
+        if (agree && openBtn) {
+          agree.checked = true;
+          openBtn.disabled = false;
+        }
+        if (ctaSection && ctaSection.scrollIntoView) {
+          ctaSection.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        }
+      });
+      if (confirmBtn) {
+        confirmBtn.addEventListener('click', function () {
+          confirmBtn.disabled = true;
+          confirmBtn.textContent = '送信中…';
+          if (errBox) errBox.style.display = 'none';
+          fetch('/api/public/documents/${encodedId}/apply', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              consentMethod: 'web_apply',
+              consentEvidenceText: ${JSON.stringify(checkLabel)}
+            })
+          }).then(function (res) {
+            return res.json().then(function (data) { return { ok: res.ok, data: data }; });
+          }).then(function (result) {
+            if (!result.ok || !result.data || !result.data.success) {
+              throw new Error((result.data && result.data.error) || 'お手続きを完了できませんでした。');
+            }
+            if (modal) modal.classList.remove('open');
+            if (ctaSection) ctaSection.style.display = 'none';
+            if (completedBanner) {
+              completedBanner.style.display = 'block';
+              completedBanner.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            }
+          }).catch(function (err) {
+            if (modal) modal.classList.remove('open');
+            confirmBtn.disabled = false;
+            confirmBtn.textContent = '確定して送信';
+            if (errBox) {
+              errBox.textContent = (err && err.message) || '送信に失敗しました。';
+              errBox.style.display = 'block';
+            }
+          });
+        });
+      }
+    })();
+  </script>
+</body>
+</html>`;
+}
+
+app.get(['/api/public/documents/:id/view', '/docs/:id', '/apply/:id'], async (req, res) => {
+  const id = String(req.params.id || '');
+  res.setHeader('Content-Type', 'text/html; charset=utf-8');
+  res.setHeader('Cache-Control', 'no-store');
+  if (!lineSupabase) {
+    return res.status(503).send(renderPublicDocumentErrorHtml('一時的に表示できません', '書類配信サーバーの設定を確認中です。'));
+  }
+  if (!isPublicUuid(id)) {
+    return res.status(404).send(renderPublicDocumentErrorHtml('書類を表示できません', 'URLの書類IDが見つかりませんでした。送付されたメール内のリンクをご確認ください。'));
+  }
+  try {
+    const { doc, error } = await fetchPublicCustomerDocument(id);
+    if (error) throw error;
+    if (!doc) {
+      return res.status(404).send(renderPublicDocumentErrorHtml('書類が見つかりません', 'お探しの書類は削除されたか、URLが誤っている可能性があります。'));
+    }
+    let companyName = '';
+    if (doc.company_id) {
+      const { data: company } = await lineSupabase.from('companies').select('company_name').eq('id', doc.company_id).maybeSingle();
+      if (company?.company_name) companyName = company.company_name;
+    }
+    return res.status(200).send(renderPublicDocumentHtmlPage(doc, companyName));
+  } catch (err) {
+    console.error('Public document HTML view failed:', err instanceof Error ? err.message : 'unknown error');
+    return res.status(500).send(renderPublicDocumentErrorHtml('書類を読み込めませんでした', '時間をおいて再度アクセスするか、メール内のPDFダウンロードURLをご利用ください。'));
+  }
+});
+
 app.get('/api/public/documents/:id', async (req, res) => {
   if (!lineSupabase) return res.status(503).json({ error: '書類配信サーバーが設定されていません。' });
   const id = req.params.id;
   if (!isPublicUuid(id)) return res.status(400).json({ error: '書類IDが無効です。' });
 
   try {
-    const { data: doc, error } = await lineSupabase
-      .from('customer_documents')
-      .select('id, title, document_type, status, body_html, company_id, lead_id, contact_id, deal_id, consent_recorded_at, consent_method, created_at, updated_at')
-      .eq('id', id)
-      .maybeSingle();
+    const { doc, error } = await fetchPublicCustomerDocument(id);
 
     if (error) throw error;
     if (!doc) return res.status(404).json({ error: '書類が見つかりません。' });
@@ -11289,14 +11598,43 @@ app.post('/api/public/documents/:id/apply', async (req, res) => {
   if (!isPublicUuid(id)) return res.status(400).json({ error: '書類IDが無効です。' });
 
   try {
-    const { data: doc, error: docError } = await lineSupabase
-      .from('customer_documents')
-      .select('id, title, document_type, status, body_html, company_id, lead_id, contact_id, deal_id, owner_id')
-      .eq('id', id)
-      .maybeSingle();
+    const { doc, error: docError } = await fetchPublicCustomerDocument(id);
 
     if (docError) throw docError;
     if (!doc) return res.status(404).json({ error: '書類が見つかりません。' });
+
+    const isReceiptOnly = ['invoice', 'diagnosis_report', 'monthly_report'].includes(String(doc.document_type || ''));
+    const forwardedHeader = req.headers['x-forwarded-for'];
+    const clientIp = (typeof forwardedHeader === 'string' ? forwardedHeader.split(',')[0].trim() : Array.isArray(forwardedHeader) ? forwardedHeader[0] : req.socket.remoteAddress) || '';
+    const userAgent = (req.headers['user-agent'] as string) || '';
+    const consentMethod = req.body?.consentMethod || 'web_apply';
+    const consentEvidenceText = req.body?.consentEvidenceText || '上記の内容（金額、委託範囲、支払条件等）を確認し、本内容での発注および申し込みに同意します。';
+    const nowIso = new Date().toISOString();
+    const todayStr = nowIso.slice(0, 10);
+
+    if (isReceiptOnly) {
+      const { error: recErr } = await lineSupabase.from('customer_documents').update({
+        status: 'approved',
+        consent_method: consentMethod,
+        consent_recorded_at: nowIso,
+        consent_ip: clientIp,
+        consent_user_agent: userAgent,
+        consent_evidence_text: consentEvidenceText,
+        updated_at: nowIso,
+      }).eq('id', doc.id);
+      if (recErr) {
+        await lineSupabase.from('customer_documents').update({ status: 'approved' }).eq('id', doc.id);
+      }
+      return res.json({
+        success: true,
+        dealId: doc.deal_id || null,
+        companyId: doc.company_id || null,
+        consentRecordedAt: nowIso,
+        consentMethod,
+        consentIp: clientIp,
+        message: '書類の内容確認・受領を受け付けました。',
+      });
+    }
 
     // 既に承認・成約済みの場合は既存の商談IDを返す
     if (doc.status === 'approved' && doc.deal_id) {
@@ -11351,13 +11689,6 @@ app.post('/api/public/documents/:id/apply', async (req, res) => {
       }
     }
 
-    const forwardedHeader = req.headers['x-forwarded-for'];
-    const clientIp = (typeof forwardedHeader === 'string' ? forwardedHeader.split(',')[0].trim() : Array.isArray(forwardedHeader) ? forwardedHeader[0] : req.socket.remoteAddress) || '';
-    const userAgent = (req.headers['user-agent'] as string) || '';
-    const consentMethod = req.body?.consentMethod || 'web_apply';
-    const consentEvidenceText = req.body?.consentEvidenceText || '上記の内容（金額、委託範囲、支払条件等）を確認し、本内容での発注および申し込みに同意します。';
-    const nowIso = new Date().toISOString();
-    const todayStr = nowIso.slice(0, 10);
     let finalDealId = doc.deal_id;
 
     const evidenceLog = [
@@ -11373,12 +11704,17 @@ app.post('/api/public/documents/:id/apply', async (req, res) => {
     if (finalDealId) {
       const { data: currentDeal } = await lineSupabase.from('deals').select('id, memo').eq('id', finalDealId).maybeSingle();
       const newMemo = [currentDeal?.memo, evidenceLog].filter(Boolean).join('\n\n');
-      await lineSupabase.from('deals').update({
+      const { error: dealUpdErr } = await lineSupabase.from('deals').update({
         proposal_status: '成約',
-        status: 'won',
         memo: newMemo,
         updated_at: nowIso,
       }).eq('id', finalDealId);
+      if (dealUpdErr) {
+        await lineSupabase.from('deals').update({
+          proposal_status: '成約',
+          memo: newMemo,
+        }).eq('id', finalDealId);
+      }
     } else {
       finalDealId = 'DEAL-WEB-' + Date.now().toString(36).toUpperCase() + '-' + Math.random().toString(36).slice(2, 6).toUpperCase();
       const { error: insertDealErr } = await lineSupabase.from('deals').insert({
@@ -11397,7 +11733,7 @@ app.post('/api/public/documents/:id/apply', async (req, res) => {
     }
 
     // 書類のステータス更新 (approved = 承認・成約完了) および電子承諾ログの記録
-    await lineSupabase.from('customer_documents').update({
+    const { error: docUpdErr } = await lineSupabase.from('customer_documents').update({
       status: 'approved',
       deal_id: finalDealId,
       company_id: resolvedCompanyId,
@@ -11408,6 +11744,12 @@ app.post('/api/public/documents/:id/apply', async (req, res) => {
       consent_evidence_text: consentEvidenceText,
       updated_at: nowIso,
     }).eq('id', doc.id);
+    if (docUpdErr) {
+      await lineSupabase.from('customer_documents').update({
+        status: 'approved',
+        company_id: resolvedCompanyId,
+      }).eq('id', doc.id);
+    }
 
     // 契約書レコード（customer_contracts）の作成または承諾更新
     try {
@@ -11418,7 +11760,7 @@ app.post('/api/public/documents/:id/apply', async (req, res) => {
         .maybeSingle();
 
       if (existingContract) {
-        await lineSupabase.from('customer_contracts').update({
+        const { error: ctrUpdErr } = await lineSupabase.from('customer_contracts').update({
           status: 'signed',
           consent_method: consentMethod,
           consent_recorded_at: nowIso,
@@ -11427,8 +11769,11 @@ app.post('/api/public/documents/:id/apply', async (req, res) => {
           consent_evidence_text: consentEvidenceText,
           updated_at: nowIso,
         }).eq('id', existingContract.id);
+        if (ctrUpdErr) {
+          await lineSupabase.from('customer_contracts').update({ status: 'signed' }).eq('id', existingContract.id);
+        }
       } else {
-        await lineSupabase.from('customer_contracts').insert({
+        const { error: ctrInsErr } = await lineSupabase.from('customer_contracts').insert({
           company_id: resolvedCompanyId,
           contact_id: doc.contact_id || null,
           deal_id: finalDealId,
@@ -11447,6 +11792,19 @@ app.post('/api/public/documents/:id/apply', async (req, res) => {
           created_at: nowIso,
           updated_at: nowIso,
         });
+        if (ctrInsErr) {
+          await lineSupabase.from('customer_contracts').insert({
+            company_id: resolvedCompanyId,
+            deal_id: finalDealId,
+            document_id: doc.id,
+            title: doc.title ? `${doc.title}（電子合意）` : 'Web申込契約合意',
+            contract_type: 'service_agreement',
+            amount: totalAmount > 0 ? totalAmount : 0,
+            status: 'signed',
+            start_date: todayStr,
+            notes: evidenceLog,
+          });
+        }
       }
     } catch (contractErr) {
       console.warn('Customer contract consent sync warning:', contractErr);

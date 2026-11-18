@@ -82,7 +82,7 @@ const seed = [
     category: 'document',
     channel: 'email',
     subject: '【書類送付】{書類名}｜{会社名} 様',
-    body_text: '{お名前} 様\n\nお世話になっております。有限会社MSTです。\n\n下記のWeb確認ページより書類「{書類名}」の内容をご確認いただけます（ページ上からPDFのダウンロードやWebでのお申し込みも可能です）。\n\n書類名：{書類名}\nWeb確認・お申し込みURL：{書類URL}\nPDFダウンロードURL：{PDFダウンロードURL}\n\nご不明点やご質問がございましたら、本メールにご返信ください。',
+    body_text: '{お名前} 様\n\nお世話になっております。有限会社MSTです。\n\n書類「{書類名}」をお送りいたします。添付のHTML書類ファイル（ブラウザで開いて確認・印刷可能）、または下記のWeb確認ページ・PDFダウンロードURLよりご確認ください。\n\n書類名：{書類名}\nWeb確認・お申し込みURL：{書類URL}\nPDFダウンロードURL：{PDFダウンロードURL}\n\nご不明点やご質問がございましたら、本メールにご返信ください。',
   },
   {
     category: 'document',
@@ -172,7 +172,7 @@ const documentMessage = (type: string | undefined, channel: DeliveryChannel, del
     deliveryFormat === 'pdf_attachment'
       ? `${label}（PDF）を添付いたしましたので、ご確認のほどよろしくお願い申し上げます。\n下記Web確認ページからも内容の確認・お申し込みが可能です。`
       : deliveryFormat === 'html_attachment'
-      ? `${label}をお送りいたします。添付のHTML書類ファイル（ブラウザでそのまま閲覧・印刷可能）または下記Web確認ページよりご確認ください。`
+      ? `${label}をお送りいたします。添付のHTML書類ファイル（ブラウザでそのまま閲覧・印刷可能）、または下記のWeb確認ページ・PDFダウンロードURLよりご確認ください。`
       : `下記のWeb確認ページより${label}の内容をご確認いただけます（ページ上からPDFの直接ダウンロードおよびWebでのお申し込みも可能です）。`;
   const messages: Record<string, { subject: string; body: string; line: string }> = {
     proposal: {
@@ -228,11 +228,14 @@ const documentMessage = (type: string | undefined, channel: DeliveryChannel, del
   return channel === 'email' ? { category: 'document', channel, subject: message.subject, body_text: message.body } : { category: 'document', channel, subject: '', body_text: message.line };
 };
 
-const isStaleLegacyDocumentTemplate = (row: any, deliveryFormat: DocumentDeliveryFormat = 'web_link'): boolean => {
+const isStaleLegacyDocumentTemplate = (row: any, deliveryFormat: DocumentDeliveryFormat = 'html_attachment'): boolean => {
   if (!row || typeof row !== 'object') return false;
   const text = `${String(row.subject || '')}\n${String(row.body_text || '')}`;
   if (/下記リンクよりWeb上でも/.test(text)) return true;
   if (deliveryFormat !== 'pdf_attachment' && /PDFを添付いたしました|同じPDFファイルをご確認いただけます|PDF確認URL：/.test(text)) {
+    return true;
+  }
+  if (deliveryFormat === 'html_attachment' && /下記のWeb確認ページより.+内容をご確認いただけます（ページ上からPDF/.test(text)) {
     return true;
   }
   return false;
@@ -277,7 +280,7 @@ export const CommunicationSendCenter: React.FC<Props> = ({
   const [channel, setChannel] = useState<Channel>(initialChannel || 'email');
   const [templateChannel, setTemplateChannel] = useState<DeliveryChannel>(initialChannel === 'line' ? 'line' : 'email');
   const [documentType, setDocumentType] = useState<DocumentType>('estimate');
-  const [documentDeliveryFormat, setDocumentDeliveryFormat] = useState<DocumentDeliveryFormat>('web_link');
+  const [documentDeliveryFormat, setDocumentDeliveryFormat] = useState<DocumentDeliveryFormat>('html_attachment');
   const [previewDocModal, setPreviewDocModal] = useState<any | null>(null);
   const [contacts, setContacts] = useState<Contact[]>([]);
   const [docs, setDocs] = useState<any[]>([]);
@@ -421,6 +424,9 @@ export const CommunicationSendCenter: React.FC<Props> = ({
       ? url.trim() || bookingUrl || DEFAULT_TIMEREX_URL
       : url.trim();
 
+  const docViewUrl = doc ? window.location.origin + '/docs/' + encodeURIComponent(doc.id) : '';
+  const safeCustomDocUrl = kind === 'document' && url.trim() && /\/(?:docs|apply|api\/public\/documents)\//.test(url.trim()) ? url.trim() : '';
+
   const vals: Record<string, string> = {
     ビデオツール名: videoTool === 'zoom' ? 'Zoom' : 'Google Meet',
     video_tool_name: videoTool === 'zoom' ? 'Zoom' : 'Google Meet',
@@ -428,7 +434,7 @@ export const CommunicationSendCenter: React.FC<Props> = ({
     会社名: companies[contact?.company_id || ''] || '貴社',
     フォーム名: form?.name || 'フォーム',
     書類名: doc?.title || '書類',
-    書類URL: url.trim() || (doc ? window.location.origin + '/docs/' + encodeURIComponent(doc.id) : ''),
+    書類URL: safeCustomDocUrl || docViewUrl,
     PDFダウンロードURL: doc ? window.location.origin + '/api/public/documents/' + encodeURIComponent(doc.id) + '/pdf?download=1' : '',
     書類本文: '',
     面談予約URL: bookingUrl || DEFAULT_TIMEREX_URL,
@@ -440,7 +446,7 @@ export const CommunicationSendCenter: React.FC<Props> = ({
     company_name: companies[contact?.company_id || ''] || '貴社',
     form_title: form?.name || 'フォーム',
     document_title: doc?.title || '書類',
-    document_url: url.trim() || (doc ? window.location.origin + '/docs/' + encodeURIComponent(doc.id) : ''),
+    document_url: safeCustomDocUrl || docViewUrl,
     pdf_download_url: doc ? window.location.origin + '/api/public/documents/' + encodeURIComponent(doc.id) + '/pdf?download=1' : '',
     document_content: '',
     booking_url: bookingUrl || DEFAULT_TIMEREX_URL,
@@ -1552,9 +1558,9 @@ export const CommunicationSendCenter: React.FC<Props> = ({
                         onChange={(e) => setDocumentDeliveryFormat(e.target.value as DocumentDeliveryFormat)}
                         className="rounded-lg border border-purple-300 bg-white px-2.5 py-1 text-[11px] font-semibold text-slate-800 focus:border-purple-600 focus:outline-none"
                       >
-                        <option value="web_link">Web確認URL＋PDFダウンロードリンク（添付なし・Drive電子署名回避／推奨）</option>
-                        <option value="html_attachment">HTMLファイル（.html）をメール添付＋Web確認URL</option>
-                        <option value="pdf_attachment">PDF（.pdf）をメール直接添付（GmailでDrive署名表示あり）</option>
+                        <option value="html_attachment">HTML書類（.html）添付＋Web確認・PDF保存URL（Drive電子署名回避／推奨）</option>
+                        <option value="web_link">Web確認URL＋PDFダウンロードリンク（添付なし・Drive電子署名回避）</option>
+                        <option value="pdf_attachment">PDF（.pdf）をメール直接添付（※Gmail側でDrive署名表示が出る場合あり）</option>
                       </select>
                     </div>
                   )}
@@ -1836,17 +1842,17 @@ export const CommunicationSendCenter: React.FC<Props> = ({
                                 onChange={(e) => setDocumentDeliveryFormat(e.target.value as DocumentDeliveryFormat)}
                                 className="mt-1 block w-full rounded-lg border border-slate-300 bg-slate-50 px-2.5 py-2 text-xs font-medium text-slate-900 focus:border-purple-600 focus:bg-white focus:outline-none"
                               >
-                                <option value="web_link">Web確認・申込URL ＋ PDF直接ダウンロードリンク（添付なし・Drive電子署名が出ない／推奨）</option>
-                                <option value="html_attachment">HTML書類（.html）をメール添付 ＋ Web確認・申込URL（Drive電子署名が出ない）</option>
-                                <option value="pdf_attachment">PDF（.pdf）をメール直接添付（従来方式・GmailでDrive電子署名が出る場合あり）</option>
+                                <option value="html_attachment">HTML書類（.html）添付 ＋ Web確認・PDF保存URL（Drive電子署名が出ない／推奨）</option>
+                                <option value="web_link">Web確認・申込URL ＋ PDF直接ダウンロードURL（添付なし・Drive電子署名が出ない）</option>
+                                <option value="pdf_attachment">PDF（.pdf）をメール直接添付（※Gmail側でDrive電子署名が表示される場合あり）</option>
                               </select>
                             </label>
                             <p className="text-[11px] text-slate-500 leading-relaxed">
-                              {documentDeliveryFormat === 'web_link'
-                                ? '※ メールにPDFを直接添付しないため、Gmail上でGoogleドライブの「電子署名をリクエスト」は表示されません。相手先はWebページ上で閲覧・Web申込・PDF直接ダウンロードが可能です。'
-                                : documentDeliveryFormat === 'html_attachment'
-                                ? '※ PDF形式ではなくブラウザで開けるHTMLファイルとして添付するため、GoogleドライブのPDF電子署名機能は表示されません。'
-                                : '※ 従来どおりA4 PDFファイルをメール添付します。受信側がGmailで添付を開くとGoogleドライブの電子署名メニューが表示される場合があります。'}
+                              {documentDeliveryFormat === 'html_attachment'
+                                ? '※ ブラウザでそのまま開けるHTML書類ファイルを添付します（Gmailで開いてもGoogleドライブのPDF電子署名UIは表示されず、メール内のWeb確認URL・PDF保存URLからいつでもPDF保存も可能です）。'
+                                : documentDeliveryFormat === 'web_link'
+                                ? '※ メールにファイルを添付せず、Web確認・申込URLとPDF直接ダウンロードリンクを送付します（Googleドライブの電子署名表示を完全に回避）。'
+                                : '※ A4 PDFファイルを直接メール添付します。受信側のGmail仕様により、Gmail上でPDFを開いた際にGoogleドライブの「電子署名をリクエスト」が表示される場合があります。'}
                             </p>
                           </div>
                         )}
