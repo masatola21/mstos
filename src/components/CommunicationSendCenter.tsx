@@ -261,7 +261,13 @@ export const CommunicationSendCenter: React.FC<Props> = ({
   const [docs, setDocs] = useState<any[]>([]);
   const [forms, setForms] = useState<any[]>([]);
   const [bookingUrl, setBookingUrl] = useState('');
-  const [videoTool, setVideoTool] = useState<'google_meet' | 'zoom'>('google_meet');
+  const [videoTool, setVideoTool] = useState<'google_meet' | 'zoom'>(() => {
+    try {
+      const saved = localStorage.getItem('mst_video_tool');
+      if (saved === 'zoom' || saved === 'google_meet') return saved;
+    } catch {}
+    return 'google_meet';
+  });
   const [companies, setCompanies] = useState<Record<string, string>>({});
   const [companyIndustries, setCompanyIndustries] = useState<Record<string, string>>({});
   const [salesStep, setSalesStep] = useState<number>(0);
@@ -461,7 +467,7 @@ export const CommunicationSendCenter: React.FC<Props> = ({
       db.from('communication_templates').select('*'),
       db.from('companies').select('id,company_name,industry'),
       db.from('diagnosis_forms').select('id,name,public_slug,form_type,status').eq('status', 'published').order('created_at', { ascending: false }),
-      db.from('sales_workspace_settings').select('booking_page_url,video_conference_tool').maybeSingle(),
+      db.from('sales_workspace_settings').select('booking_page_url').maybeSingle(),
       db.from('email_send_settings').select('sender_name,sender_email,reply_to_email').maybeSingle(),
       db.from('line_auto_reply_templates').select('*').order('created_at', { ascending: false }),
       db.from('marketing_automation_scenarios').select('scenario_id,config'),
@@ -475,9 +481,12 @@ export const CommunicationSendCenter: React.FC<Props> = ({
         if (emailSettings.error) throw emailSettings.error;
         setForms(f.data || []);
         setBookingUrl(settings.data?.booking_page_url || '');
-        const vt = (settings.data as any)?.video_conference_tool;
-        if (vt === 'zoom') setVideoTool('zoom');
-        else setVideoTool('google_meet');
+        try {
+          const savedVt = localStorage.getItem('mst_video_tool');
+          if (savedVt === 'zoom' || savedVt === 'google_meet') {
+            setVideoTool(savedVt);
+          }
+        } catch {}
         setSenderSettings({
           fromName: emailSettings.data?.sender_name || '有限会社MST｜経営・業務改善支援',
           fromEmail: emailSettings.data?.sender_email || 'contact@mstcorp.info',
@@ -1236,6 +1245,48 @@ export const CommunicationSendCenter: React.FC<Props> = ({
                       {kind === 'document' ? '共有可能な書類URL' : kind === 'deal' || kind === 'customer_meeting' ? 'この案内専用URL（空欄なら共通予約URL）' : 'フォーム・案内URL'}
                       <input value={url} onChange={(e) => setUrl(e.target.value)} className="mt-1 block w-full rounded-xl border border-slate-200 bg-white p-2.5 text-xs text-slate-900 focus:border-purple-600 focus:outline-none shadow-2xs" placeholder="https://..." />
                     </label>
+
+                    {/* 面談案内時のビデオ会議ツール切り替え（Google Meet / Zoom） */}
+                    {(kind === 'deal' || kind === 'customer_meeting') && (
+                      <div className="md:col-span-2 flex flex-wrap items-center justify-between gap-2.5 p-3 rounded-xl bg-purple-50/70 border border-purple-200">
+                        <div className="flex items-center gap-2 text-xs">
+                          <span className="font-bold text-purple-900">面談ビデオツール:</span>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setVideoTool('google_meet');
+                              try { localStorage.setItem('mst_video_tool', 'google_meet'); } catch {}
+                              setBody((prev) => prev.replace(/Zoom/g, 'Google Meet'));
+                            }}
+                            className={`px-3 py-1 rounded-lg border text-xs font-bold transition cursor-pointer ${
+                              videoTool === 'google_meet'
+                                ? 'bg-purple-600 text-white border-purple-600 shadow-2xs'
+                                : 'bg-white text-slate-700 border-slate-300 hover:bg-slate-50'
+                            }`}
+                          >
+                            Google Meet
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setVideoTool('zoom');
+                              try { localStorage.setItem('mst_video_tool', 'zoom'); } catch {}
+                              setBody((prev) => prev.replace(/Google Meet|Meet/g, 'Zoom'));
+                            }}
+                            className={`px-3 py-1 rounded-lg border text-xs font-bold transition cursor-pointer ${
+                              videoTool === 'zoom'
+                                ? 'bg-purple-600 text-white border-purple-600 shadow-2xs'
+                                : 'bg-white text-slate-700 border-slate-300 hover:bg-slate-50'
+                            }`}
+                          >
+                            Zoom
+                          </button>
+                        </div>
+                        <span className="text-[11px] text-slate-500">
+                          TimeRex共通予約URL: <span className="font-mono text-purple-700 font-semibold">{bookingUrl || '未設定'}</span>
+                        </span>
+                      </div>
+                    )}
                     {/* 差出人設定 */}
                     {(channel === 'email' || channel === 'both') && (
                       <>

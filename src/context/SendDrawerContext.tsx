@@ -100,13 +100,9 @@ export const SendDrawerProvider: React.FC<{ children: React.ReactNode }> = ({ ch
     }
   }, []);
 
-  const closeSendDrawer = useCallback((force = false) => {
-    if (!force && isDraftDirty) {
-      setShowConfirmClose(true);
-      return;
-    }
+  const closeSendDrawer = useCallback((_force = false) => {
     executeClose();
-  }, [isDraftDirty, executeClose]);
+  }, [executeClose]);
 
   // Handle browser back button (popstate)
   useEffect(() => {

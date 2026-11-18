@@ -285,6 +285,33 @@ export const TasksView: React.FC<TasksViewProps> = ({
     }
   };
 
+  const [deletingSystemTaskId, setDeletingSystemTaskId] = useState<string | null>(null);
+
+  const handleDeleteSystemTask = async (taskId: string, taskTitle: string) => {
+    if (!window.confirm(`自動起票タスク「${taskTitle}」を削除しますか？`)) return;
+    setDeletingSystemTaskId(taskId);
+    setSystemTaskActionError(null);
+    try {
+      const supabase = getSupabase();
+      if (!supabase) {
+        throw new Error('Supabaseクライアントを初期化できませんでした。');
+      }
+      const { error } = await supabase
+        .from('tasks')
+        .delete()
+        .eq('id', taskId);
+
+      if (error) {
+        throw error;
+      }
+      setSystemTasks((prev) => prev.filter((t) => t.id !== taskId));
+    } catch (err: any) {
+      setSystemTaskActionError(`タスクの削除に失敗しました: ${err?.message || '不明なエラー'}`);
+    } finally {
+      setDeletingSystemTaskId(null);
+    }
+  };
+
   const activeSystemTasks = systemTasks.filter((t) => t.status !== 'done' && t.status !== 'completed');
 
   const getSystemPriorityBadge = (p?: string | null) => {
@@ -849,20 +876,36 @@ export const TasksView: React.FC<TasksViewProps> = ({
                         )}
                       </div>
 
-                      <button
-                        type="button"
-                        onClick={() => void handleCompleteSystemTask(st.id)}
-                        disabled={completingSystemTaskId === st.id}
-                        className="inline-flex items-center gap-1.5 px-3 py-1 rounded-lg bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-200 text-xs font-semibold cursor-pointer shadow-2xs transition-colors self-end sm:self-auto disabled:opacity-50"
-                        title="このタスクを完了状態に更新します"
-                      >
-                        {completingSystemTaskId === st.id ? (
-                          <Loader2 className="w-3.5 h-3.5 animate-spin text-emerald-700" />
-                        ) : (
-                          <CheckCircle2 className="w-3.5 h-3.5 text-emerald-700" />
-                        )}
-                        <span>完了にする</span>
-                      </button>
+                      <div className="flex items-center gap-1.5 self-end sm:self-auto">
+                        <button
+                          type="button"
+                          onClick={() => void handleCompleteSystemTask(st.id)}
+                          disabled={completingSystemTaskId === st.id || deletingSystemTaskId === st.id}
+                          className="inline-flex items-center gap-1.5 px-3 py-1 rounded-lg bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-200 text-xs font-semibold cursor-pointer shadow-2xs transition-colors disabled:opacity-50"
+                          title="このタスクを完了状態に更新します"
+                        >
+                          {completingSystemTaskId === st.id ? (
+                            <Loader2 className="w-3.5 h-3.5 animate-spin text-emerald-700" />
+                          ) : (
+                            <CheckCircle2 className="w-3.5 h-3.5 text-emerald-700" />
+                          )}
+                          <span>完了にする</span>
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => void handleDeleteSystemTask(st.id, st.title)}
+                          disabled={completingSystemTaskId === st.id || deletingSystemTaskId === st.id}
+                          className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200 text-xs font-semibold cursor-pointer shadow-2xs transition-colors disabled:opacity-50"
+                          title="この自動起票タスクを削除します"
+                        >
+                          {deletingSystemTaskId === st.id ? (
+                            <Loader2 className="w-3.5 h-3.5 animate-spin text-rose-600" />
+                          ) : (
+                            <Trash2 className="w-3.5 h-3.5 text-rose-600" />
+                          )}
+                          <span>削除</span>
+                        </button>
+                      </div>
                     </div>
 
                     <div>
