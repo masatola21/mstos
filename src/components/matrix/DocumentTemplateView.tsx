@@ -437,23 +437,73 @@ export const DocumentTemplateView: React.FC<DocumentTemplateViewProps> = ({
     return () => { cancelled = true; };
   }, [companyId, leadId, dealId, contactId, selectedTemplateId, paymentMode, populateSeq]);
 
-  // When switching unified template, load its default variables and reset custom override
+  // テンプレート切り替え時の変数引き継ぎマッピング（提案書 ⇄ 見積書・契約書・請求書）
   const handleSelectTemplate = (rawId: string) => {
     const id = normalizeTemplateId(rawId);
     setSelectedTemplateId(id);
     setCustomHtmlOverride(null);
     const today = todayJst();
     const defaults = getTemplateDefaultValues(id, today, paymentMode, invoiceSubtype);
-    setVariableValues((prev) => ({
-      ...defaults,
-      ...prev,
-      ...defaults,
-      client_company: prev.client_company || defaults.client_company || '',
-      issue_date: formatDocumentDate(today),
-      due_date: id === 'tpl-proposal-report'
-        ? defaults.due_date
-        : formatDocumentDate(id.includes('estimate') ? addOneMonthDate(today) : invoiceDueDate(today)),
-    }));
+
+    setVariableValues((prev) => {
+      // 共通・基本情報の引き継ぎ
+      const company = prev.client_company || prev.customer_company || defaults.client_company || '';
+      const rep = prev.client_name || prev.customer_rep || defaults.client_name || '';
+      const title = prev.proposal_title || prev.project_name || defaults.proposal_title || '';
+      const serviceName = prev.p2_service_name || prev.project_name || defaults.project_name || '';
+
+      // 金額の引き継ぎ
+      const subtotal = prev.p4_subtotal || prev.subtotal_amount || defaults.subtotal_amount || '';
+      const tax = prev.p4_tax || prev.tax_amount || defaults.tax_amount || '';
+      const total = prev.p4_total || prev.total_amount || defaults.total_amount || '';
+      const initialFee = prev.p4_initial_fee || prev.initial_fee || '';
+      const monthlyFee = prev.p4_monthly_fee || prev.monthly_fee || '';
+      const paymentTerms = prev.p6_payment_terms || prev.payment_terms || defaults.payment_terms || '';
+      const contractPeriod = prev.p6_contract_period || prev.contract_period || defaults.contract_period || '';
+
+      const next: Record<string, string> = {
+        ...defaults,
+        ...prev,
+        client_company: company,
+        customer_company: company,
+        client_name: rep,
+        customer_rep: rep,
+        proposal_title: title,
+        project_name: serviceName,
+        issue_date: prev.issue_date || formatDocumentDate(today),
+        due_date: id === 'tpl-proposal-report'
+          ? (prev.due_date || defaults.due_date)
+          : formatDocumentDate(id.includes('estimate') ? addOneMonthDate(today) : invoiceDueDate(today)),
+      };
+
+      // 切り替え先が見積書・契約書・請求書の場合
+      if (id !== 'tpl-proposal-report') {
+        if (subtotal) next.subtotal_amount = subtotal;
+        if (tax) next.tax_amount = tax;
+        if (total) {
+          next.total_amount = total;
+          next.total_project_amount = subtotal || total;
+        }
+        if (initialFee) next.initial_fee = initialFee;
+        if (monthlyFee) next.monthly_fee = monthlyFee;
+        if (paymentTerms) next.payment_terms = paymentTerms;
+        if (contractPeriod) next.contract_period = contractPeriod;
+        if (serviceName) next.project_name = serviceName;
+      } else {
+        // 切り替え先が提案書の場合
+        if (serviceName) next.p2_service_name = serviceName;
+        if (subtotal) next.p4_subtotal = subtotal;
+        if (tax) next.p4_tax = tax;
+        if (total) next.p4_total = total;
+        if (initialFee) next.p4_initial_fee = initialFee;
+        if (monthlyFee) next.p4_monthly_fee = monthlyFee;
+        if (paymentTerms) next.p6_payment_terms = paymentTerms;
+        if (contractPeriod) next.p6_contract_period = contractPeriod;
+      }
+
+      return next;
+    });
+
     setIsEditingTemplate(false);
   };
 
