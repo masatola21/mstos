@@ -481,7 +481,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
           id: `lead_uncontacted_${lead.id}`,
           type: 'urgent_lead',
           title: `反響即応: ${lead.companyName} からの新規問い合わせ`,
-          subtitle: `希望内容: ${lead.service_type || lead.inquiry_type || '資料請求/相談'} | 優先手段: ${lead.priority_channel || 'LINE/メール'}`,
+          subtitle: `希望内容: ${lead.inquiry_type || lead.service_type || '資料請求/相談'} | 優先手段: ${lead.priority_channel || 'LINE/メール'}`,
           urgency: 'critical',
           timeLabel: '要即時対応',
           targetCompany: lead.companyName,
@@ -1515,7 +1515,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
                           </span>
                         </div>
                         <p className="text-[11px] text-slate-500 mt-0.5 truncate">
-                          {lead.service_type || lead.inquiry_type || lead.source || '反響問い合わせ'}
+                          {lead.inquiry_type || lead.service_type || lead.source || '反響問い合わせ'}
                         </p>
                       </div>
 

@@ -62,7 +62,11 @@ import {
   WelcomePatternBConfig,
 } from './MarketingLineSettingsView';
 import { upgradeLegacyMstUrl, OFFICIAL_VERCEL_URLS } from '../../utils/marketingStorage';
-import { isLegacyBranchAScenarioName, isPostDealStageTrigger } from '../../utils/followupStarterScenarios';
+import {
+  FUNNEL_ORCHESTRATION_RULES,
+  isLegacyBranchAScenarioName,
+  isPostDealStageTrigger,
+} from '../../utils/followupStarterScenarios';
 import { getSupabase } from '../../lib/supabaseClient';
 import { FlowStepInspectorModal } from './FlowStepInspectorModal';
 import { UNIFIED_TAG_MASTER, MasterTag } from '../../constants/tagMaster';
@@ -1931,7 +1935,7 @@ export const MarketingFlowStudio: React.FC<MarketingFlowStudioProps> = ({
                     { id: 'all', label: 'すべて' },
                     { id: 'line', label: 'LINE' },
                     { id: 'email', label: 'メール' },
-                    { id: 'both', label: 'LINE+メール' },
+                    { id: 'both', label: 'LINE優先（メール補完）' },
                   ] as const
                 ).map((item) => (
                   <button
@@ -2006,7 +2010,7 @@ export const MarketingFlowStudio: React.FC<MarketingFlowStudioProps> = ({
                                 : 'bg-purple-50 text-purple-700 border border-purple-200'
                             }`}
                           >
-                            {s.channel === 'line' ? 'LINE' : s.channel === 'email' ? 'メール' : 'LINE+メール'}
+                            {s.channel === 'line' ? 'LINE' : s.channel === 'email' ? 'メール' : 'LINE優先'}
                           </span>
                         </td>
                         <td className="p-3 font-mono text-[11px] text-slate-600 whitespace-nowrap">
@@ -4192,14 +4196,14 @@ export const MarketingFlowStudio: React.FC<MarketingFlowStudioProps> = ({
                   <h3 className="text-base font-bold text-slate-900 flex items-center gap-2 flex-wrap">
                     教育ステップ（共通ストーリー7話ナーチャリング）
                     <span className="text-[10px] px-2 py-0.5 rounded bg-purple-100 text-purple-800 border border-purple-200 font-bold">
-                      LINE+メール両対応
+                      LINE優先・未連携時のみメール（二重送信なし）
                     </span>
                     <span className="text-[10px] px-2 py-0.5 rounded bg-indigo-100 text-indigo-800 border border-indigo-300 font-bold">
-                      2日後から3日おき自動配信
+                      2日〜20日後（3日おき・10:00頃）
                     </span>
                   </h3>
                   <p className="text-xs text-slate-500 mt-1">
-                    友だち追加の【2日後】から3日おきに創業実話・改善事例を配信し、最終的に30分個別相談（{`{booking_url}`}）へつなげます。途中でLINE返信・診断回答・予約が入ると自動停止します。
+                    友だち追加の【2日後】から3日おきに創業実話〜仕組み化の全体像をお届けし、3分経営診断（{`{link_url}`}）や30分個別相談（{`{booking_url}`}）へ繋げます。分岐フォロー・返信・診断回答・資料請求・面談予約・成約と連動して自動整理されます。
                   </p>
                 </div>
               </div>
@@ -4223,6 +4227,35 @@ export const MarketingFlowStudio: React.FC<MarketingFlowStudioProps> = ({
                     <span>共通教育7話を最新化</span>
                   </button>
                 )}
+              </div>
+            </div>
+
+            {/* 教育ステップ配信ルール ＆ 全導線連動仕様 */}
+            <div className="rounded-xl border border-indigo-200/80 bg-indigo-50/40 p-4 space-y-3">
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <div className="flex items-center gap-2 text-xs font-bold text-indigo-950">
+                  <ShieldCheck className="w-4 h-4 text-indigo-600" />
+                  <span>教育ステップの配信ルール ＆ 全導線の自動連動設計</span>
+                </div>
+                <span className="text-[11px] font-mono text-indigo-700 bg-white px-2.5 py-0.5 rounded-md border border-indigo-200">
+                  第1話(2日) → 第2話(5日) → 第3話(8日) → 第4話(11日) → 第5話(14日) → 第6話(17日) → 第7話(20日)
+                </span>
+              </div>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-2.5">
+                {FUNNEL_ORCHESTRATION_RULES.map((rule) => (
+                  <div
+                    key={rule.id}
+                    className="bg-white rounded-xl border border-indigo-100 p-3 space-y-1 shadow-2xs"
+                  >
+                    <div className="flex items-center justify-between gap-2">
+                      <span className="text-xs font-bold text-slate-900">{rule.title}</span>
+                      <span className="text-[10px] px-1.5 py-0.5 rounded bg-indigo-50 text-indigo-700 border border-indigo-200 font-semibold shrink-0">
+                        {rule.badge}
+                      </span>
+                    </div>
+                    <p className="text-[11px] text-slate-600 leading-relaxed">{rule.description}</p>
+                  </div>
+                ))}
               </div>
             </div>
 
@@ -4270,7 +4303,7 @@ export const MarketingFlowStudio: React.FC<MarketingFlowStudioProps> = ({
                                       ? 'LINE'
                                       : matchedScenario?.channel === 'email'
                                       ? 'メール'
-                                      : 'LINE+メール'}
+                                      : 'LINE優先（メール補完）'}
                                   </span>
                                   <span className="font-bold text-slate-900 text-sm">
                                     {matchedScenario?.name || tpl.name}
@@ -4341,11 +4374,13 @@ export const MarketingFlowStudio: React.FC<MarketingFlowStudioProps> = ({
                                     flexBody: '',
                                     flexButtonLabel: '',
                                     flexButtonUrl: '',
-                                    status: 'draft' as const,
-                                    automationEnabled: false,
+                                    status: 'prepared' as const,
+                                    automationEnabled: true,
+                                    sendTimeWindow: '09:00-20:00',
+                                    preferredSendTime: '10:00',
                                     stopOnBooking: true,
                                     stopOnDeal: true,
-                                    consentBasis: 'LINE友だち登録時の同意に基づく',
+                                    consentBasis: '配信同意に基づく（LINE優先・未連携時メール自動切替）',
                                     updatedAt: Date.now(),
                                   };
                                   handleOpenInspector(target);

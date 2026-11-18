@@ -28,6 +28,7 @@ import {
 import { getSupabase, getAuthHeaders } from '../../lib/supabaseClient';
 import { UnifiedNavTab } from '../UnifiedNavbar';
 import { MarketingLineInboxView } from '../marketing/MarketingLineInboxView';
+import { resolveConsultationInquiryType } from '../../utils/leadClassification';
 import { MarketingEmailInboxView } from '../marketing/MarketingEmailInboxView';
 import { useSendDrawer } from '../../context/SendDrawerContext';
 import { useVisiblePolling } from '../../hooks/useInboxRealtime';
@@ -517,13 +518,21 @@ export const UnifiedInboxView: React.FC<UnifiedInboxViewProps> = ({
       }
 
       // 3. Insert Lead (with fallback for schema mismatch)
+      const subCategory = getSubmissionCategory(sub);
+      const ans = (sub.answers || {}) as Record<string, unknown>;
+      const derivedInquiryType =
+        subCategory === 'diagnosis'
+          ? 'ボトルネック診断'
+          : subCategory === 'material'
+            ? '資料請求'
+            : resolveConsultationInquiryType({ answers: ans });
       const leadPayload: Record<string, any> = {
         company_id: companyId,
         contact_id: contactId || null,
-        source: 'Webフォーム',
-        status: '新規',
-        service_type: formMeta?.name || 'フォーム回答',
-        notes: `【フォーム・診断回答より自動リード化】\n会社名: ${effectiveCompName}\n回答者: ${sub.respondent_name || '未記入'} (${sub.respondent_email || 'メール未記入'})\n受付日時: ${new Date(sub.submitted_at).toLocaleString('ja-JP')}`,
+        source: subCategory === 'diagnosis' ? 'HP：経営診断' : subCategory === 'material' ? 'HP：資料請求' : 'HP：お問い合わせ',
+        status: subCategory === 'diagnosis' ? '診断申込' : subCategory === 'material' ? '資料請求' : '相談申込',
+        inquiry_type: derivedInquiryType,
+        notes: `【フォーム・診断回答より自動リード化】\n【希望内容】${derivedInquiryType}\n会社名: ${effectiveCompName}\n回答者: ${sub.respondent_name || '未記入'} (${sub.respondent_email || 'メール未記入'})\n受付日時: ${new Date(sub.submitted_at).toLocaleString('ja-JP')}\n${JSON.stringify(ans).slice(0, 2000)}`,
         first_registered_at: new Date().toISOString(),
         last_contacted_at: new Date().toISOString(),
       };

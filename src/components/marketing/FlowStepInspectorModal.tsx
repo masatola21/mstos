@@ -616,7 +616,7 @@ export const FlowStepInspectorModal: React.FC<FlowStepInspectorModalProps> = ({
             <div className="flex items-center gap-2 text-xs text-slate-500">
               <span className="font-semibold text-purple-700">配信ステップの編集・点検</span>
               <span>·</span>
-              <span>{channel === 'line' ? 'LINE' : channel === 'email' ? 'メール' : 'LINE ＋ メール'}</span>
+              <span>{channel === 'line' ? 'LINE' : channel === 'email' ? 'メール' : 'LINE優先（メール補完）'}</span>
               <span>·</span>
               <span>{waitDaysInput === 0 ? '即時' : `${waitDaysInput}日後`}</span>
             </div>
@@ -708,7 +708,7 @@ export const FlowStepInspectorModal: React.FC<FlowStepInspectorModalProps> = ({
                   >
                     <option value="line">LINEのみ</option>
                     <option value="email">メールのみ</option>
-                    <option value="both">LINE ＋ メール</option>
+                    <option value="both">LINE優先 ＋ 未連携時はメール（二重送信なし）</option>
                   </select>
                 </div>
 

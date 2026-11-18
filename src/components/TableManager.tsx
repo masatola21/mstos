@@ -1401,7 +1401,10 @@ export const TableManager: React.FC<TableManagerProps> = ({
 
                         // 希望内容（問合せ・反響種別）のレンダリング
                         if (colKey === 'inquiry_type' || colKey === 'service_type') {
-                          const inquiryVal = String(val || item.inquiry_type || item.service_type || '');
+                          const inquiryVal =
+                            colKey === 'inquiry_type'
+                              ? String(item.inquiry_type || val || item.service_type || '')
+                              : String(val || item.service_type || item.inquiry_type || '');
                           return (
                             <td key={colKey} className="py-3 px-4 whitespace-nowrap">
                               {inquiryVal ? (

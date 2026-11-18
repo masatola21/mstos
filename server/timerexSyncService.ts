@@ -12,6 +12,7 @@
  * - contact_tags: tags with '個別相談予約済み' (auto-pauses nurture reminders)
  * - tasks (タスク): creates a high-priority task for staff
  */
+import { cancelSupersededQueuedJobs } from './funnelOrchestration.js';
 
 export interface TimeRexBookingInfo {
   guestName: string;
@@ -421,6 +422,15 @@ export async function syncTimeRexBookingToCrm(
         }
       } catch (tagErr) {
         console.warn('[TimeRexSync] Tag insert warning:', tagErr);
+      }
+
+      try {
+        await cancelSupersededQueuedJobs(db, {
+          contactId,
+          trigger: 'booking_created',
+        });
+      } catch (cancelErr) {
+        console.warn('[TimeRexSync] Queue cancellation warning:', cancelErr);
       }
     }
 

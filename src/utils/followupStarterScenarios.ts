@@ -54,6 +54,222 @@ export function shouldStopScenarioForDeal(params: {
 }
 
 // ---------------------------------------------------------------------------
+// 0. 全導線の自動連動・配信制御ルール（UI説明とサーバー実行ロジックの単一正本）
+// ---------------------------------------------------------------------------
+export type FunnelPhase =
+  | 'line_welcome_branch'
+  | 'education_nurturing'
+  | 'diagnosis_followup'
+  | 'material_followup'
+  | 'booking_confirm'
+  | 'post_meeting'
+  | 'post_contract'
+  | 'sales_outreach'
+  | 'other';
+
+export interface FunnelOrchestrationRuleSummary {
+  id: string;
+  title: string;
+  badge: string;
+  description: string;
+}
+
+export const FUNNEL_ORCHESTRATION_RULES: readonly FunnelOrchestrationRuleSummary[] = [
+  {
+    id: 'line_first_email_fallback',
+    title: 'LINE優先・未連携時のみメール（二重配信ゼロ）',
+    badge: 'チャネル最適化',
+    description:
+      '「LINE＋メール」設定のシナリオは、有効なLINE友だち（ブロック解除なし・配信同意あり）にはLINEのみを配信し、LINE未連携・ブロック時は自動でメールへ切り替えます。同一ステップを同じ相手へLINE・メール同時に二重送信しません。',
+  },
+  {
+    id: 'day2_overlap_guard',
+    title: '分岐B/C・A1との2日目重複を自動回避',
+    badge: '教育7話 連動',
+    description:
+      'LINE登録で「選択:個別相談」「介護保険外開業」「選択:診断」ルートに入った相手には、1日後（B1/C1/A1）と3日後（B2/C2）の直後フォローが優先されるため、間の2日目の【第1話】を自動スキップして5日目の第2話から滑らかに接続します。',
+  },
+  {
+    id: 'stage_handoff_cancellation',
+    title: '次の段階へ進んだら手前の追客を自動停止',
+    badge: 'ステージ進行連動',
+    description:
+      '診断完了・資料請求・TimeRex/フォーム面談予約・面談完了・提案送付・Web契約締結のイベント発生時、手前フェーズの未送信ジョブを自動停止して次フェーズのフォローだけを残します。',
+  },
+  {
+    id: 'cross_channel_reply_stop',
+    title: 'LINE・メールどちらへの返信でも即停止',
+    badge: '全チャネル返信検知',
+    description:
+      '顧客がLINEトークまたはメールのどちらかに返信した時点で、予約待ちの教育・追客ジョブ（LINE・メール両方）を即座に自動停止し、有人対応へ切り替えます。',
+  },
+] as const;
+
+export function classifyScenarioFunnelPhase(cfg: {
+  trigger?: string | null;
+  targetTag?: string | null;
+  name?: string | null;
+}): FunnelPhase {
+  const trigger = String(cfg.trigger || '').trim();
+  const targetTag = String(cfg.targetTag || '').trim();
+  const name = String(cfg.name || '').trim();
+
+  if (trigger === 'line_registered') {
+    return 'education_nurturing';
+  }
+  if (trigger === 'diagnosis_completed' || (trigger === 'tag_added' && targetTag === '選択:診断')) {
+    return 'diagnosis_followup';
+  }
+  if (trigger === 'material_requested') {
+    return 'material_followup';
+  }
+  if (trigger === 'tag_added' && (targetTag === '選択:個別相談' || targetTag === '介護保険外開業')) {
+    return 'line_welcome_branch';
+  }
+  if (trigger === 'booking_created') {
+    return 'booking_confirm';
+  }
+  if (isPostDealStageTrigger(trigger)) {
+    return 'post_meeting';
+  }
+  if (trigger === 'contract_signed' || trigger === 'contract_sent' || trigger === 'deal_won') {
+    return 'post_contract';
+  }
+  if (trigger === 'outreach_first_sent' || trigger === 'prospect_selected' || trigger === 'lead_created') {
+    return 'sales_outreach';
+  }
+  if (name.includes('【第') && name.includes('話')) {
+    return 'education_nurturing';
+  }
+  return 'other';
+}
+
+export function getSupersededPhasesOnEvent(event: {
+  trigger: string;
+  tagName?: string | null;
+}): {
+  cancelPhases: FunnelPhase[];
+  cancelSpecificTargets?: Array<{ trigger: string; targetTag?: string }>;
+  excludeTargetTags?: string[];
+  reason: string;
+} {
+  const trigger = String(event.trigger || '').trim();
+  const tagName = String(event.tagName || '').trim();
+
+  if (trigger === 'contract_signed' || trigger === 'deal_won') {
+    return {
+      cancelPhases: [
+        'line_welcome_branch',
+        'education_nurturing',
+        'diagnosis_followup',
+        'material_followup',
+        'booking_confirm',
+        'post_meeting',
+        'sales_outreach',
+      ],
+      reason: 'ご契約締結・成約のため、商談前および商談後の自動フォローを停止',
+    };
+  }
+
+  if (isPostDealStageTrigger(trigger)) {
+    return {
+      cancelPhases: [
+        'line_welcome_branch',
+        'education_nurturing',
+        'diagnosis_followup',
+        'material_followup',
+        'booking_confirm',
+        'sales_outreach',
+      ],
+      reason: '面談・商談フェーズへ進行したため、商談前の自動フォローを停止',
+    };
+  }
+
+  if (trigger === 'booking_created' || (trigger === 'tag_added' && tagName === '個別相談予約済み')) {
+    return {
+      cancelPhases: [
+        'line_welcome_branch',
+        'education_nurturing',
+        'diagnosis_followup',
+        'material_followup',
+        'sales_outreach',
+      ],
+      reason: '面談日程の予約が確定したため、商談前の教育・追客フォローを自動停止',
+    };
+  }
+
+  if (trigger === 'diagnosis_completed') {
+    return {
+      cancelPhases: ['education_nurturing', 'sales_outreach'],
+      cancelSpecificTargets: [{ trigger: 'tag_added', targetTag: '選択:診断' }],
+      reason: '無料経営診断の回答が完了したため、未回答リマインド・教育ステップ・営業追客を停止（診断後フォローA2〜A4へ切替）',
+    };
+  }
+
+  if (trigger === 'material_requested') {
+    return {
+      cancelPhases: ['education_nurturing', 'sales_outreach'],
+      reason: '資料請求フォームを受信したため、一般教育・営業追客を停止（資料請求後フォローへ切替）',
+    };
+  }
+
+  if (trigger === 'tag_added' && ['選択:診断', '選択:個別相談', '介護保険外開業'].includes(tagName)) {
+    const otherBranches = ['選択:診断', '選択:個別相談', '介護保険外開業'].filter((t) => t !== tagName);
+    return {
+      cancelPhases: [],
+      cancelSpecificTargets: otherBranches.map((t) => ({ trigger: 'tag_added', targetTag: t })),
+      reason: `LINE分岐「${tagName}」を選択したため、別分岐の未送信フォローを整理`,
+    };
+  }
+
+  return { cancelPhases: [], reason: '' };
+}
+
+/**
+ * LINE分岐ルート（選択:個別相談 / 介護保険外開業 / 選択:診断）に入った連絡先に対して、
+ * 1日後・3日後の分岐フォローと重なる教育ステップ第1話（2日後）のみをスキップし、
+ * 5日目の第2話以降は配信できるようにする。
+ */
+export function isOverlappingEducationStepForBranch(
+  cfg: { trigger?: string | null; name?: string | null; waitMinutes?: number | null },
+  activeBranchTags: readonly string[]
+): boolean {
+  if (classifyScenarioFunnelPhase(cfg) !== 'education_nurturing') return false;
+  const hasBranch = activeBranchTags.some((t) =>
+    t === '選択:個別相談' || t === '介護保険外開業' || t === '選択:診断'
+  );
+  if (!hasBranch) return false;
+  const waitMinutes = Number(cfg.waitMinutes || 0);
+  const name = String(cfg.name || '');
+  return waitMinutes === 2880 || name.includes('【第1話】') || name.includes('第1話');
+}
+
+/**
+ * 配信チャネルの決定（LINE優先・未連携時はメール／二重送信を行わない）
+ */
+export function resolvePreferredDeliveryChannels(params: {
+  channelSetting?: string | null;
+  hasLineDeliverable: boolean;
+  hasEmail: boolean;
+}): ('line' | 'email')[] {
+  const mode = String(params.channelSetting || 'both').trim();
+  if (mode === 'line') {
+    return params.hasLineDeliverable ? ['line'] : [];
+  }
+  if (mode === 'email') {
+    return params.hasEmail ? ['email'] : [];
+  }
+  // 'both': LINEが届く相手にはLINEのみを送り、LINE不可（未登録・ブロック・オプトアウト）の相手にはメールを送る
+  if (params.hasLineDeliverable) {
+    return ['line'];
+  }
+  if (params.hasEmail) {
+    return ['email'];
+  }
+  return [];
+}
+
+// ---------------------------------------------------------------------------
 // 1. 分岐A: 3分無料経営診断 フォロー（LINE + メール両対応）
 // ---------------------------------------------------------------------------
 export const MST_DIAGNOSIS_STARTER_SCENARIOS: Omit<MarketingScenario, 'id' | 'updatedAt'>[] = [

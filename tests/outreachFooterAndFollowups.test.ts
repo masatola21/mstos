@@ -14,6 +14,7 @@ import {
 } from '../server/publicFormReply';
 import {
   ONE_SHOT_SCENARIO_NAME,
+  getNurturingStepTemplate,
   getOneShotOutreachTemplate,
   getSalesEmailTemplate,
   resolveOneShotOutreachDraft,
@@ -22,6 +23,9 @@ import {
 } from '../src/utils/salesOutreachTemplates';
 import { calculateDueAt } from '../src/utils/automationRuleUtils';
 import {
+  MST_CARE_STARTER_SCENARIOS,
+  MST_CONSULT_STARTER_SCENARIOS,
+  MST_LINE_NURTURING_STARTER_SCENARIOS,
   MST_OUTREACH_STARTER_SCENARIOS,
   getScenarioSortKey,
   sortScenarios,
@@ -30,10 +34,19 @@ import {
   MST_DIAGNOSIS_STARTER_SCENARIOS,
   MST_MATERIAL_FOLLOWUP_STARTER_SCENARIOS,
   MST_POST_MEETING_STARTER_SCENARIOS,
+  classifyScenarioFunnelPhase,
+  getSupersededPhasesOnEvent,
   isLegacyBranchAScenarioName,
+  isOverlappingEducationStepForBranch,
   mergeStarterScenarioBatch,
+  resolvePreferredDeliveryChannels,
   shouldStopScenarioForDeal,
 } from '../src/utils/followupStarterScenarios';
+import {
+  classifyConsultationTheme,
+  deduceLeadInquiryType,
+  resolveConsultationInquiryType,
+} from '../src/utils/leadClassification';
 
 console.log('=== Running Outreach Footer & Follow-up Tests ===');
 
@@ -398,6 +411,131 @@ const alertFailed = buildConsultationAdminAlertEmail({
 });
 assert.ok(alertFailed.subject.includes('至急対応・自動返信未完'));
 assert.ok(alertFailed.text.includes('HTTP 500'));
+console.log('  ✓ passed');
+
+console.log('Test 23: consultation topic faithfully reflects homepage form selection even when legacy DB values or URLs exist');
+assert.equal(classifyConsultationTheme('集客・マーケティングについて'), '集客・マーケティング');
+assert.equal(classifyConsultationTheme('https://corp.mstcorp.info/visit?submit=1\nLP: website'), '経営相談');
+assert.equal(
+  classifyConsultationTheme('業務効率化・IT自動化について相談したい'),
+  '業務効率化・IT/自動化'
+);
+assert.equal(
+  resolveConsultationInquiryType({
+    answers: { topic: '集客・マーケティングについて', website_url: 'https://example.com/visit' },
+    fallbackText: '集客を増やしたい',
+  }),
+  '集客・マーケティングについて'
+);
+assert.equal(
+  resolveConsultationInquiryType({
+    answers: { inquiryType: 'consultation', service_interest: '補助金・事業再構築の活用について' },
+    fallbackText: 'IT補助金について',
+  }),
+  '補助金・事業再構築の活用について'
+);
+assert.equal(
+  deduceLeadInquiryType({
+    inquiry_type: '経営相談',
+    service_type: '業務効率化・IT/自動化',
+    source: 'HP：お問い合わせ',
+    status: '相談申込',
+    notes: '[申込 1] HP：お問い合わせ\n【流入詳細】LP: https://corp.mstcorp.info/visit\n{"service_interest":"集客・マーケティングについて"}',
+  }),
+  '集客・マーケティングについて'
+);
+assert.equal(
+  deduceLeadInquiryType({
+    inquiry_type: '業務効率化・IT/自動化',
+    source: 'HP：お問い合わせ',
+    status: '相談申込',
+    notes: '[申込 2] HP：お問い合わせ\n{"service_interest":"集客・マーケティングについて"}',
+  }),
+  '集客・マーケティングについて'
+);
+console.log('  ✓ passed');
+
+console.log('Test 24: Education Steps 1-7 have clean salutations, no legacy footer, and soft CTAs');
+for (let step = 1; step <= 7; step++) {
+  const tpl = getNurturingStepTemplate(step);
+  assert.ok(!tpl.emailBody.startsWith(' 様'), `step ${step} email salutation`);
+  assert.ok(!tpl.lineBody.startsWith(' 様'), `step ${step} line salutation`);
+  assert.ok(!tpl.emailBody.includes('（貴社）') && !tpl.emailBody.includes('（{company_name}）'), `step ${step} no awkward company parens`);
+  assert.ok(!tpl.emailBody.includes('桧町127番地') && !tpl.emailBody.includes('配信停止'), `step ${step} no hardcoded signature/unsub`);
+  const blankFallback = getNurturingStepTemplate(step, '');
+  assert.ok(blankFallback.emailBody.startsWith('ご担当者 様'));
+  assert.ok(blankFallback.lineBody.startsWith('ご担当者 様'));
+}
+console.log('  ✓ passed');
+
+console.log('Test 25: Education 7 steps and Branch B/C starter presets are enabled and scheduled cleanly');
+assert.equal(MST_LINE_NURTURING_STARTER_SCENARIOS.length, 7);
+assert.deepEqual(
+  MST_LINE_NURTURING_STARTER_SCENARIOS.map((s) => s.waitMinutes / 1440),
+  [2, 5, 8, 11, 14, 17, 20]
+);
+for (const s of [
+  ...MST_LINE_NURTURING_STARTER_SCENARIOS,
+  ...MST_CONSULT_STARTER_SCENARIOS,
+  ...MST_CARE_STARTER_SCENARIOS,
+]) {
+  assert.equal(s.status, 'prepared');
+  assert.equal(s.automationEnabled, true);
+  assert.equal(s.stopOnBooking, true);
+  assert.equal(s.stopOnDeal, true);
+  assert.equal(s.preferredSendTime, '10:00');
+  assert.equal(s.sendTimeWindow, '09:00-20:00');
+}
+console.log('  ✓ passed');
+
+console.log('Test 26: resolvePreferredDeliveryChannels uses LINE-first with Email fallback and zero double-blast');
+assert.deepEqual(
+  resolvePreferredDeliveryChannels({ channelSetting: 'both', hasLineDeliverable: true, hasEmail: true }),
+  ['line']
+);
+assert.deepEqual(
+  resolvePreferredDeliveryChannels({ channelSetting: 'both', hasLineDeliverable: false, hasEmail: true }),
+  ['email']
+);
+assert.deepEqual(
+  resolvePreferredDeliveryChannels({ channelSetting: 'both', hasLineDeliverable: false, hasEmail: false }),
+  []
+);
+assert.deepEqual(
+  resolvePreferredDeliveryChannels({ channelSetting: 'line', hasLineDeliverable: false, hasEmail: true }),
+  []
+);
+assert.deepEqual(
+  resolvePreferredDeliveryChannels({ channelSetting: 'email', hasLineDeliverable: true, hasEmail: true }),
+  ['email']
+);
+console.log('  ✓ passed');
+
+console.log('Test 27: funnel phase classification, superseded cancellations, and Day-2 overlap guard');
+assert.equal(classifyScenarioFunnelPhase(MST_LINE_NURTURING_STARTER_SCENARIOS[0]), 'education_nurturing');
+assert.equal(classifyScenarioFunnelPhase(MST_DIAGNOSIS_STARTER_SCENARIOS[0]), 'diagnosis_followup');
+assert.equal(classifyScenarioFunnelPhase(MST_DIAGNOSIS_STARTER_SCENARIOS[1]), 'diagnosis_followup');
+assert.equal(classifyScenarioFunnelPhase(MST_MATERIAL_FOLLOWUP_STARTER_SCENARIOS[0]), 'material_followup');
+assert.equal(classifyScenarioFunnelPhase(MST_CONSULT_STARTER_SCENARIOS[0]), 'line_welcome_branch');
+assert.equal(classifyScenarioFunnelPhase(MST_POST_MEETING_STARTER_SCENARIOS[0]), 'post_meeting');
+
+const onBooking = getSupersededPhasesOnEvent({ trigger: 'booking_created' });
+assert.ok(onBooking.cancelPhases.includes('education_nurturing'));
+assert.ok(onBooking.cancelPhases.includes('diagnosis_followup'));
+assert.ok(onBooking.cancelPhases.includes('material_followup'));
+assert.ok(!onBooking.cancelPhases.includes('post_meeting'));
+
+const onContract = getSupersededPhasesOnEvent({ trigger: 'contract_signed' });
+assert.ok(onContract.cancelPhases.includes('post_meeting'));
+assert.ok(onContract.cancelPhases.includes('education_nurturing'));
+
+const onDiag = getSupersededPhasesOnEvent({ trigger: 'diagnosis_completed' });
+assert.ok(onDiag.cancelPhases.includes('education_nurturing'));
+assert.ok(onDiag.cancelSpecificTargets?.some((t) => t.trigger === 'tag_added' && t.targetTag === '選択:診断'));
+
+assert.equal(isOverlappingEducationStepForBranch(MST_LINE_NURTURING_STARTER_SCENARIOS[0], ['選択:個別相談']), true);
+assert.equal(isOverlappingEducationStepForBranch(MST_LINE_NURTURING_STARTER_SCENARIOS[1], ['選択:個別相談']), false);
+assert.equal(isOverlappingEducationStepForBranch(MST_LINE_NURTURING_STARTER_SCENARIOS[0], []), false);
 console.log('  ✓ passed');
 
 console.log('=== All Outreach Footer & Follow-up Tests Passed! ===');

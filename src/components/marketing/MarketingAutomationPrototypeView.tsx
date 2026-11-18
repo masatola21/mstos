@@ -50,17 +50,17 @@ export const MST_OUTREACH_STARTER_SCENARIOS: Omit<MarketingScenario, 'id' | 'upd
 
 export const MST_LINE_NURTURING_STARTER_SCENARIOS: Omit<MarketingScenario, 'id' | 'updatedAt'>[] = [1, 2, 3, 4, 5, 6, 7].map((step) => {
   const tpl = getNurturingStepTemplate(step);
-  // 友だち追加直後はウェルカム3択Flexを送るため、ストーリー教育は2日後から3日おきに配信（面談予約・返信で自動停止）
+  // 友だち追加直後はウェルカム3択Flexを送るため、ストーリー教育は2日後から3日おきに配信（面談予約・返信・診断/資料完了で自動停止）
   const waitMinutes = ((step - 1) * 3 + 2) * 24 * 60;
   return {
     name: tpl.name,
     trigger: 'line_registered' as MarketingTrigger,
     channel: 'both' as MarketingChannel,
-    audience: 'すべての見込み客（相談予約・返信で停止）',
+    audience: 'LINE登録済み・未予約の見込み客（LINE優先／未連携時はメール・二重送信なし）',
     waitMinutes,
     emailSubject: tpl.emailSubject,
-    emailBody: tpl.emailBody.replace(/\{\{diagnostic_url\}\}/g, '{link_url}').replace(/\{recipient_name\}/g, '{recipient_name}').replace(/\{company_name\}/g, '{company_name}'),
-    messageBody: tpl.lineBody.replace(/\{\{diagnostic_url\}\}/g, '{link_url}').replace(/様 様/g, '{recipient_name} 様'),
+    emailBody: tpl.emailBody,
+    messageBody: tpl.lineBody,
     lineMessageType: 'text',
     lineImageUrl: '',
     linePreviewImageUrl: '',
@@ -69,13 +69,13 @@ export const MST_LINE_NURTURING_STARTER_SCENARIOS: Omit<MarketingScenario, 'id' 
     flexBody: '',
     flexButtonLabel: '',
     flexButtonUrl: '',
-    status: 'draft',
-    automationEnabled: false,
+    status: 'prepared',
+    automationEnabled: true,
     sendTimeWindow: '09:00-20:00',
     preferredSendTime: '10:00',
     stopOnBooking: true,
     stopOnDeal: true,
-    consentBasis: '配信同意に基づく（LINEおよびメルマガ配信対応）',
+    consentBasis: '配信同意に基づく（LINE優先・未連携時メール自動切替）',
   };
 });
 
@@ -100,8 +100,10 @@ export const MST_CONSULT_STARTER_SCENARIOS: Omit<MarketingScenario, 'id' | 'upda
     flexBody: '',
     flexButtonLabel: '',
     flexButtonUrl: '',
-    status: 'draft',
-    automationEnabled: false,
+    status: 'prepared',
+    automationEnabled: true,
+    sendTimeWindow: '09:00-20:00',
+    preferredSendTime: '10:00',
     stopOnBooking: true,
     stopOnDeal: true,
     consentBasis: 'LINE個別相談ボタン選択時の同意に基づく',
@@ -111,7 +113,7 @@ export const MST_CONSULT_STARTER_SCENARIOS: Omit<MarketingScenario, 'id' | 'upda
     trigger: 'tag_added',
     targetTag: '選択:個別相談',
     channel: 'both',
-    audience: '「選択:個別相談」タグ（予約未完了）',
+    audience: '「選択:個別相談」タグ（予約未完了・LINE優先／メール補完）',
     waitMinutes: 4320,
     emailSubject: '【MST】30分無料オンライン個別相談のご案内（日程調整）',
     emailBody:
@@ -127,8 +129,10 @@ export const MST_CONSULT_STARTER_SCENARIOS: Omit<MarketingScenario, 'id' | 'upda
       '{recipient_name} 様\n文字でまとめるのが大変な場合は、30分のオンラインで一緒にお悩みを整理しませんか？他社事例を踏まえ、最初の改善ステップをご提案します。',
     flexButtonLabel: '無料相談の日程を選ぶ',
     flexButtonUrl: '{booking_url}',
-    status: 'draft',
-    automationEnabled: false,
+    status: 'prepared',
+    automationEnabled: true,
+    sendTimeWindow: '09:00-20:00',
+    preferredSendTime: '10:00',
     stopOnBooking: true,
     stopOnDeal: true,
     consentBasis: 'LINE個別相談ボタン選択時の同意に基づく',
@@ -156,8 +160,10 @@ export const MST_CARE_STARTER_SCENARIOS: Omit<MarketingScenario, 'id' | 'updated
     flexBody: '',
     flexButtonLabel: '',
     flexButtonUrl: '',
-    status: 'draft',
-    automationEnabled: false,
+    status: 'prepared',
+    automationEnabled: true,
+    sendTimeWindow: '09:00-20:00',
+    preferredSendTime: '10:00',
     stopOnBooking: true,
     stopOnDeal: true,
     consentBasis: 'LINE介護保険外開業相談選択時の同意に基づく',
@@ -167,7 +173,7 @@ export const MST_CARE_STARTER_SCENARIOS: Omit<MarketingScenario, 'id' | 'updated
     trigger: 'tag_added',
     targetTag: '介護保険外開業',
     channel: 'both',
-    audience: '「介護保険外開業」タグ（予約未完了）',
+    audience: '「介護保険外開業」タグ（予約未完了・LINE優先／メール補完）',
     waitMinutes: 4320,
     emailSubject: '【MST】介護保険外サービス開業・30分無料個別作戦会議のご案内',
     emailBody:
@@ -183,8 +189,10 @@ export const MST_CARE_STARTER_SCENARIOS: Omit<MarketingScenario, 'id' | 'updated
       '{recipient_name} 様\n直営「アシスタ大垣」の実務データをもとに、貴社に合わせたメニュー設計・集客導線を30分で一緒に具体化しませんか？',
     flexButtonLabel: '無料開業相談を予約する',
     flexButtonUrl: '{booking_url}',
-    status: 'draft',
-    automationEnabled: false,
+    status: 'prepared',
+    automationEnabled: true,
+    sendTimeWindow: '09:00-20:00',
+    preferredSendTime: '10:00',
     stopOnBooking: true,
     stopOnDeal: true,
     consentBasis: 'LINE介護保険外開業相談選択時の同意に基づく',
@@ -247,7 +255,7 @@ const triggerOptions: Array<{ value: MarketingTrigger; label: string }> = [
   { value: 'project_milestone', label: '構築工程の節目に到達した時' },
   { value: 'manual', label: '手動で開始' },
 ];
-const channelLabels: Record<MarketingChannel, string> = { line: 'LINE', email: 'メール', both: 'LINE + メール' };
+const channelLabels: Record<MarketingChannel, string> = { line: 'LINE', email: 'メール', both: 'LINE優先（メール補完）' };
 const lineMessageLabels: Record<MarketingLineMessageType, string> = { text: 'テキスト', image: '画像', video: '動画', flex: 'Flex' };
 
 const workflowStages = [

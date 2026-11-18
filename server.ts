@@ -29,7 +29,19 @@ import {
   extractConsultationDetailsText,
   hasCoreDiagnosisAnswers,
 } from './server/publicFormReply.js';
-import { shouldStopScenarioForDeal } from './src/utils/followupStarterScenarios.js';
+import {
+  classifyScenarioFunnelPhase,
+  isOverlappingEducationStepForBranch,
+  shouldStopScenarioForDeal,
+} from './src/utils/followupStarterScenarios.js';
+import { resolveConsultationInquiryType } from './src/utils/leadClassification.js';
+import {
+  cancelSupersededQueuedJobs,
+  getContactBranchTags,
+  hasContactAlreadyProgressedBeyondNurturing,
+  isLineFriendDeliverable,
+  resolveContactDeliveryChannels,
+} from './server/funnelOrchestration.js';
 import { classifyBottleneck } from './server/diagnosisAnalysis.js';
 import { DRAFT_CHAPTERS, DRAFT_SYSTEM_INSTRUCTION, buildProposalDraftPrompt, sanitizeDraftContext, cleanDraftOutput, type DraftChapter } from './server/proposalDraftBuilder.js';
 import {
@@ -1717,11 +1729,10 @@ async function processLineInboxAndAutoReply(event: any, contact: any, eventId: s
           .from('marketing_automation_jobs')
           .update({
             status: 'skipped',
-            error_message: '顧客側からのLINE返信アクションがあったため自動ステップシナリオを停止（個別チャット対応へ移行）',
+            error_message: '顧客側からのLINE返信アクションがあったため自動ステップシナリオを停止（LINE・メール共通／個別チャット対応へ移行）',
             updated_at: receivedAt,
           })
           .eq('contact_id', contact.id)
-          .eq('channel', 'line')
           .eq('status', 'queued')
           .then(() => {}, (err) => console.warn('[LineAutoReply] Scenario auto-pause warning:', err))
       : Promise.resolve(),
@@ -3033,10 +3044,17 @@ async function enqueueScenariosForContact(
   try {
     const { data: contact, error: contactErr } = await lineSupabase
       .from('contacts')
-      .select('id, full_name, email, line_user_id, company_id')
+      .select('id, full_name, email, line_user_id, company_id, email_consent_status')
       .eq('id', contactId)
       .maybeSingle();
     if (contactErr || !contact) return 0;
+
+    // 次ステージ進行時は手前フェーズの待機中ジョブを自動停止
+    await cancelSupersededQueuedJobs(lineSupabase, {
+      contactId: contact.id,
+      trigger: triggerName,
+      tagName: options?.tagName,
+    });
 
     const { data: scenarios, error: scenErr } = await lineSupabase
       .from('marketing_automation_scenarios')
@@ -3061,18 +3079,43 @@ async function enqueueScenariosForContact(
 
     if (matchedScenarios.length === 0) return 0;
 
+    const needsProgressionCheck =
+      triggerName === 'line_registered' ||
+      (triggerName === 'tag_added' && options?.tagName === '選択:診断');
+    const progressionState = needsProgressionCheck
+      ? await hasContactAlreadyProgressedBeyondNurturing(lineSupabase, contact.id, contact.company_id)
+      : { progressed: false, reason: '' };
+    const activeBranchTags = await getContactBranchTags(lineSupabase, contact);
+    const resolvedChannelsCache = new Map<string, ('line' | 'email')[]>();
+
     let enqueued = 0;
     const nowMs = Date.now();
     for (const s of matchedScenarios) {
       const cfg = s.config || {};
-      const channelSetting = cfg.channel || 'both';
-      const targetChannels: ('line' | 'email')[] = [];
-      if ((channelSetting === 'both' || channelSetting === 'line') && contact.line_user_id) {
-        targetChannels.push('line');
+      const phase = classifyScenarioFunnelPhase(cfg);
+
+      // 既に診断済み・資料請求済み・予約済み・商談進行済みの相手には汎用教育/未回答リマインドを開始しない
+      if (
+        progressionState.progressed &&
+        (phase === 'education_nurturing' || (cfg.trigger === 'tag_added' && cfg.targetTag === '選択:診断'))
+      ) {
+        continue;
       }
-      if ((channelSetting === 'both' || channelSetting === 'email') && contact.email) {
-        targetChannels.push('email');
+
+      // 分岐B/C・A1（1日後・3日後）と教育ステップ第1話（2日後）の重複を回避
+      if (isOverlappingEducationStepForBranch(cfg, activeBranchTags)) {
+        continue;
       }
+
+      // LINE優先・未連携時のみメール（二重送信しない）
+      const channelSetting = String(cfg.channel || 'both').trim();
+      let targetChannels = resolvedChannelsCache.get(channelSetting);
+      if (!targetChannels) {
+        const eligibility = await resolveContactDeliveryChannels(lineSupabase, contact, channelSetting);
+        targetChannels = eligibility.preferredChannels;
+        resolvedChannelsCache.set(channelSetting, targetChannels);
+      }
+      if (targetChannels.length === 0) continue;
 
       const waitMinutes = Number(cfg.waitMinutes || 0);
       const effectivePreferredTime = options?.preferredSendTimeOverride !== undefined
@@ -3932,6 +3975,9 @@ app.post('/api/email/webhook', express.raw({ type: 'application/json', limit: '2
             console.log('[ResendWebhook] TimeRex booking notification detected:', booking.guestName, booking.meetingDate);
             const syncResult = await syncTimeRexBookingToCrm(booking, lineSupabase, integration.owner_id);
             console.log('[ResendWebhook] TimeRex sync completed:', syncResult);
+            if (syncResult.success && syncResult.contactId) {
+              await enqueueScenariosForContact(syncResult.contactId, 'booking_created', integration.owner_id);
+            }
           }
         }
       } catch (timerexErr: any) {
@@ -3940,7 +3986,7 @@ app.post('/api/email/webhook', express.raw({ type: 'application/json', limit: '2
     }
   }
 
-  // ★ 相手側からのアクション（メール返信）があった場合、配信予定の自動シナリオジョブ（メール）を自動停止
+  // ★ 相手側からのアクション（メール返信）があった場合、配信予定の自動シナリオジョブ（メール・LINE両方）を自動停止
   // （機械的自動配信をストップし、個別メール・有人対応へ自動で切り替え）
   try {
     const rawSender = String(message.from || event.data?.from || '');
@@ -3958,11 +4004,10 @@ app.post('/api/email/webhook', express.raw({ type: 'application/json', limit: '2
           .from('marketing_automation_jobs')
           .update({
             status: 'skipped',
-            error_message: '顧客側からのメール返信アクションがあったため自動ステップシナリオを停止（個別メール対応へ移行）',
+            error_message: '顧客側からのメール返信アクションがあったため自動ステップシナリオを停止（メール・LINE共通／個別メール対応へ移行）',
             updated_at: new Date().toISOString(),
           })
           .in('contact_id', contactIds)
-          .eq('channel', 'email')
           .eq('status', 'queued');
       }
     }
@@ -5061,21 +5106,21 @@ async function processMarketingAutomationJobs(options: { forceImmediate?: boolea
           continue;
         }
 
-        // 2. 停止条件の実装
+        // 2. 停止条件の実装（LINE/メール全チャネル共通で返信停止）
         // 2-1. メールの返信があれば停止（email_inbox_messages の受信確認）
-        if (job.channel === 'email' && contact.email) {
+        const replyBaselineAt = job.created_at || scenarioCreatedAt;
+        if (contact.email) {
           const normalizedEmail = contact.email.trim().toLowerCase();
-          const emailBaselineAt = job.created_at || scenarioCreatedAt;
           const { data: emailReplies } = await lineSupabase.from('email_inbox_messages')
             .select('id,from_email,received_at')
             .eq('owner_id', job.owner_id)
             .ilike('from_email', `%${normalizedEmail}%`)
-            .gte('received_at', emailBaselineAt)
+            .gte('received_at', replyBaselineAt)
             .limit(1);
           if (emailReplies && emailReplies.length > 0) {
             await lineSupabase.from('marketing_automation_jobs').update({
               status: 'skipped',
-              error_message: 'メール返信があったため停止（個別返信対応へ移行）',
+              error_message: 'メール返信があったため停止（個別対応へ移行）',
               updated_at: new Date().toISOString(),
             }).eq('id', job.id);
             continue;
@@ -5102,18 +5147,34 @@ async function processMarketingAutomationJobs(options: { forceImmediate?: boolea
         }
 
         // 2-2. LINE返信があれば停止（ジョブ作成日時以降の line_inbox_messages 受信確認）
-        if (job.channel === 'line' && contact.line_user_id) {
-          const lineBaselineAt = job.created_at || scenarioCreatedAt;
+        if (contact.line_user_id) {
           const { data: lineReplies } = await lineSupabase.from('line_inbox_messages')
             .select('id,received_at')
             .eq('line_user_id', contact.line_user_id)
             .eq('direction', 'inbound')
-            .gte('received_at', lineBaselineAt)
+            .gte('received_at', replyBaselineAt)
             .limit(1);
           if (lineReplies && lineReplies.length > 0) {
             await lineSupabase.from('marketing_automation_jobs').update({
               status: 'skipped',
               error_message: 'LINE返信があったため停止（個別チャット対応へ移行）',
+              updated_at: new Date().toISOString(),
+            }).eq('id', job.id);
+            continue;
+          }
+        }
+
+        // 2-2b. 共通教育ステップ実行直前チェック: すでに診断・資料・予約・商談へ進んでいればスキップ
+        if (classifyScenarioFunnelPhase(scenarioConfig) === 'education_nurturing') {
+          const progressionCheck = await hasContactAlreadyProgressedBeyondNurturing(
+            lineSupabase,
+            contact.id,
+            contact.company_id
+          );
+          if (progressionCheck.progressed) {
+            await lineSupabase.from('marketing_automation_jobs').update({
+              status: 'skipped',
+              error_message: progressionCheck.reason,
               updated_at: new Date().toISOString(),
             }).eq('id', job.id);
             continue;
@@ -5215,8 +5276,40 @@ async function processMarketingAutomationJobs(options: { forceImmediate?: boolea
           }
         }
 
+        // 実行時チャネル確認（LINE不可時に channel === 'both' ならメールへ自動切替）
+        let effectiveChannel: 'line' | 'email' = job.channel === 'email' ? 'email' : 'line';
+        let effectiveSubject: string | null = job.subject || null;
+        let effectiveBodyText: string = String(job.body_text || '');
+        let effectiveLinePayload: any = job.line_message_payload || null;
+
+        if (effectiveChannel === 'line') {
+          const lineDeliverable = await isLineFriendDeliverable(lineSupabase, contact);
+          if (!lineDeliverable) {
+            const scenarioChannelMode = String(scenarioConfig.channel || 'both').trim();
+            const canFallbackToEmail =
+              scenarioChannelMode === 'both' &&
+              Boolean(contact.email) &&
+              contact.email_consent_status !== 'opted_out' &&
+              Boolean(String(scenarioConfig.emailBody || '').trim());
+            if (canFallbackToEmail) {
+              effectiveChannel = 'email';
+              effectiveSubject = String(scenarioConfig.emailSubject || job.subject || '【MST】ご案内').trim();
+              effectiveBodyText = String(scenarioConfig.emailBody || '');
+              effectiveLinePayload = null;
+            } else {
+              throw new Error('LINEの友だち状態または配信同意を確認できません。');
+            }
+          }
+        }
+
         // 1. 差し込みの解決（共通の仕組み resolveMessageVars）
-        const resolved = await loadMessageVarContext(job.owner_id, contact, { ...job, config: scenarioConfig });
+        const resolved = await loadMessageVarContext(job.owner_id, contact, {
+          ...job,
+          channel: effectiveChannel,
+          body_text: effectiveBodyText,
+          line_message_payload: effectiveLinePayload,
+          config: scenarioConfig,
+        });
 
         if (resolved.error) {
           throw new Error(resolved.error);
@@ -5224,25 +5317,33 @@ async function processMarketingAutomationJobs(options: { forceImmediate?: boolea
 
         const { personalize, personalizeJson } = resolved;
 
-        const recipientAddress = job.channel === 'email' ? String(contact.email || '') : String(contact.line_user_id || '');
+        const recipientAddress = effectiveChannel === 'email' ? String(contact.email || '') : String(contact.line_user_id || '');
         if (!recipientAddress) throw new Error('送信先がありません。');
         const { data: outbox, error: outboxError } = await lineSupabase.from('communication_outbox').insert({
-          owner_id:job.owner_id, channel:job.channel, recipient_contact_id:contact.id, recipient_address:recipientAddress,
-          subject:job.channel==='email'?personalize(job.subject):null, body_text:job.body_text,
-          line_message_payload:job.channel==='line'?job.line_message_payload:null,
-          company_id:contact.company_id||null, source_type:'marketing_automation', source_id:job.id,
-          status:'queued', consent_confirmed_at:new Date().toISOString(), consent_basis:job.consent_basis,
+          owner_id: job.owner_id,
+          channel: effectiveChannel,
+          recipient_contact_id: contact.id,
+          recipient_address: recipientAddress,
+          subject: effectiveChannel === 'email' ? personalize(effectiveSubject || '') : null,
+          body_text: effectiveBodyText,
+          line_message_payload: effectiveChannel === 'line' ? effectiveLinePayload : null,
+          company_id: contact.company_id || null,
+          source_type: 'marketing_automation',
+          source_id: job.id,
+          status: 'queued',
+          consent_confirmed_at: new Date().toISOString(),
+          consent_basis: job.consent_basis,
         }).select('id').single();
         if (outboxError || !outbox) throw new Error('送信履歴を作成できません。');
         outboxId = outbox.id;
         await lineSupabase.from('communication_outbox').update({status:'sending',updated_at:new Date().toISOString()}).eq('id',outboxId);
         let providerMessageId = '';
-        if (job.channel === 'email') {
+        if (effectiveChannel === 'email') {
           const emailKey = process.env.RESEND_API_KEY || '';
           const emailFrom = process.env.RESEND_FROM_EMAIL || '';
           if (!emailKey || !emailFrom) throw new Error('メール配信サービスの設定がありません。');
-          const body = personalize(job.body_text);
-          const emailSubject = personalize(job.subject || '');
+          const body = personalize(effectiveBodyText);
+          const emailSubject = personalize(effectiveSubject || '');
 
           // 未解決の差し込み項目チェック（{xxx}が本文・件名に残ったまま送信しない）
           const unresolvedInBody = checkUnresolvedPlaceholders(body);
@@ -5261,11 +5362,9 @@ async function processMarketingAutomationJobs(options: { forceImmediate?: boolea
           const result = await response.json().catch(()=>({})) as {id?:string;message?:string};
           if (!response.ok || !result.id) throw new Error(result.message||'メール送信に失敗しました。');
           providerMessageId=result.id;
-        } else if (job.channel === 'line') {
+        } else if (effectiveChannel === 'line') {
           if (!lineChannelAccessToken) throw new Error('LINE送信トークンが未設定です。');
-          const {data:friend,error:friendError}=await lineSupabase.from('line_friends').select('status,consent_status').eq('line_user_id',recipientAddress).maybeSingle();
-          if(friendError||!friend||friend.status!=='active'||friend.consent_status!=='opted_in')throw new Error('LINEの友だち状態または配信同意を確認できません。');
-          const requested=job.line_message_payload&&typeof job.line_message_payload==='object'?job.line_message_payload as {type?:string;originalContentUrl?:string;previewImageUrl?:string;altText?:string;contents?:unknown}:null;
+          const requested=effectiveLinePayload&&typeof effectiveLinePayload==='object'?effectiveLinePayload as {type?:string;originalContentUrl?:string;previewImageUrl?:string;altText?:string;contents?:unknown}:null;
           let message: any;
           if (requested?.type === 'video' || requested?.type === 'image') {
             const originalUrl=personalize(String(requested.originalContentUrl||''));
@@ -7295,6 +7394,28 @@ app.post(
       'company_name',
       'service_interest',
       'serviceInterest',
+      'q_service_interest',
+      'consultation_topic',
+      'q_consultation_topic',
+      'consultation_theme',
+      'q_consultation_theme',
+      'topic',
+      'q_topic',
+      'theme',
+      'q_theme',
+      'selected_topic',
+      'selected_service',
+      'selected_option',
+      'inquiry_topic',
+      'desired_content',
+      'hope',
+      'q_inquiry_type',
+      'inquiry_type',
+      'inquiryType',
+      'interest',
+      'q_interest',
+      'subject',
+      'category',
       'message',
       'notes',
       'inquiry',
@@ -7304,14 +7425,17 @@ app.post(
       'details',
       'preferred_date',
       'preferred_time',
+      'meeting_date',
+      'booking_url',
     ]);
     const allowedQuestionIds = new Set(questionIds);
     if (form.form_type !== 'consultation' && configuredQuestions.length > 0 && Object.keys(answers).some((key) => !allowedQuestionIds.has(key) && !SYSTEM_META_ANSWER_KEYS.has(key))) {
       return res.status(400).json({ error: 'フォームの設問が更新されています。ページを再読み込みして再入力してください。' });
     }
-    const cleanAnswers = configuredQuestions.length > 0
-      ? Object.fromEntries(Object.entries(answers).filter(([key]) => allowedQuestionIds.has(key) || SYSTEM_META_ANSWER_KEYS.has(key)))
-      : answers;
+    const cleanAnswers =
+      configuredQuestions.length > 0 && form.form_type !== 'consultation'
+        ? Object.fromEntries(Object.entries(answers).filter(([key]) => allowedQuestionIds.has(key) || SYSTEM_META_ANSWER_KEYS.has(key)))
+        : answers;
     const requiredQuestionIds = (configuredQuestions as any[])
       .filter((question) => question?.required && typeof question.id === 'string')
       .map((question) => question.id as string);
@@ -7608,27 +7732,28 @@ app.post(
         inquiryType = '資料請求';
       }
     } else if (slug === 'contact-inquiry') {
-      const rawInterest = String(cleanAnswers.service_interest || (body.customFields as any)?.service_interest || '').trim();
-      if (rawInterest.includes('全体') || rawInterest.includes('利益改善')) {
-        inquiryType = '経営全体・利益改善';
-      } else if (rawInterest.includes('業務効率化') || rawInterest.includes('自動化') || rawInterest.includes('IT')) {
-        inquiryType = '業務効率化・IT/自動化';
-      } else if (rawInterest.includes('集客') || rawInterest.includes('マーケティング')) {
-        inquiryType = '集客・マーケティング';
-      } else if (rawInterest.includes('介護保険外') || rawInterest.includes('開業')) {
-        inquiryType = '介護保険外開業';
-      } else {
-        inquiryType = rawInterest || '経営相談';
-      }
+      inquiryType = resolveConsultationInquiryType({
+        answers: cleanAnswers,
+        customFields: body.customFields as Record<string, unknown> | undefined,
+        fallbackText: [
+          userNotes,
+          typeof cleanAnswers.consultation_message === 'string' ? cleanAnswers.consultation_message : '',
+          typeof cleanAnswers.message === 'string' ? cleanAnswers.message : '',
+        ].filter(Boolean).join('\n'),
+      });
     } else if (slug === 'care-package-inquiry') {
       inquiryType = carePackageChoice || '開業相談';
     } else if (utm.inquiryType === 'consultation' || form.form_type === 'consultation' || form.form_type === 'meeting') {
-      const rawInterest = String(cleanAnswers.service_interest || (body.customFields as any)?.service_interest || '').trim();
-      if (rawInterest.includes('介護保険外') || rawInterest.includes('開業')) {
-        inquiryType = '介護保険外開業';
-      } else {
-        inquiryType = rawInterest || form.name || '経営相談';
-      }
+      const resolvedTopic = resolveConsultationInquiryType({
+        answers: cleanAnswers,
+        customFields: body.customFields as Record<string, unknown> | undefined,
+        fallbackText: [
+          userNotes,
+          typeof cleanAnswers.consultation_message === 'string' ? cleanAnswers.consultation_message : '',
+          typeof cleanAnswers.message === 'string' ? cleanAnswers.message : '',
+        ].filter(Boolean).join('\n'),
+      });
+      inquiryType = resolvedTopic !== '経営相談' ? resolvedTopic : (form.name || '経営相談');
     } else {
       inquiryType = form.name || 'Webフォーム反響';
     }
@@ -7751,13 +7876,6 @@ app.post(
       leadStatus = '資料請求';
     }
 
-    // リード獲得段階では検討サービス種別は未確定（商談時に判断）。お問い合わせで選択されたテーマのみ参考保持。
-    let formServiceType: string | null = null;
-    if (slug === 'contact-inquiry') {
-      const rawInterest = String(cleanAnswers.service_interest || (body.customFields as any)?.service_interest || '').trim();
-      if (rawInterest) formServiceType = rawInterest;
-    }
-
     // 流入元詳細（utm, referrer, landing page）と請求資料の構造化メモ
     const requestMarker = `[申込 ${requestId}]`;
     const inflowLabel = normalizedUtm.source ? getInflowLabel(normalizedUtm.source) : '';
@@ -7860,7 +7978,7 @@ app.post(
           last_contacted_at: new Date().toISOString(),
           ...(resolvedCompanyId && !lead.company_id ? { company_id: resolvedCompanyId } : {}),
           ...(meetingDate ? { meeting_date: meetingDate } : {}),
-          ...(inquiryType ? { inquiry_type: inquiryType } : {}),
+          ...(inquiryType ? { inquiry_type: inquiryType, service_type: null } : {}),
           ...(['新規', 'ヒアリング済'].includes(lead.status) ? { status: leadStatus } : {}),
         }, lead.id);
       }
@@ -7876,7 +7994,7 @@ app.post(
         last_contacted_at: new Date().toISOString(),
         ...(meetingDate ? { meeting_date: meetingDate } : {}),
         notes: noteEntry,
-        ...(inquiryType ? { inquiry_type: inquiryType } : {}),
+        ...(inquiryType ? { inquiry_type: inquiryType, service_type: null } : {}),
       });
     }
 
@@ -7986,7 +8104,9 @@ app.post(
 
     const isMaterialDownload = notificationKind === 'material_download' || (notificationKind === 'care_package' && (inquiryType === '資料請求' || inquiryType === '両方希望'));
     if (contact?.id) {
-      if (isActualDiagnosis) {
+      if (meetingDate) {
+        await enqueueScenariosForContact(contact.id, 'booking_created');
+      } else if (isActualDiagnosis) {
         await enqueueScenariosForContact(contact.id, 'diagnosis_completed');
       } else if (isMaterialDownload) {
         await enqueueScenariosForContact(contact.id, 'material_requested');
@@ -11019,12 +11139,34 @@ app.post('/api/public/documents/:id/apply', async (req, res) => {
       }
     }
 
-    // リードのステータス更新
+    // リードのステータス更新および契約締結後トリガーの起動（未送信追客の自動停止）
+    let resolvedContractContactId: string | null = doc.contact_id ? String(doc.contact_id) : null;
     if (doc.lead_id) {
+      const { data: leadRow } = await lineSupabase
+        .from('leads')
+        .select('contact_id')
+        .eq('id', doc.lead_id)
+        .maybeSingle();
+      if (!resolvedContractContactId && leadRow?.contact_id) {
+        resolvedContractContactId = String(leadRow.contact_id);
+      }
       await lineSupabase.from('leads').update({
         status: '成約',
         last_contacted_at: nowIso,
       }).eq('id', doc.lead_id);
+    }
+    if (!resolvedContractContactId && resolvedCompanyId) {
+      const { data: companyContact } = await lineSupabase
+        .from('contacts')
+        .select('id')
+        .eq('company_id', resolvedCompanyId)
+        .order('updated_at', { ascending: false })
+        .limit(1)
+        .maybeSingle();
+      if (companyContact?.id) resolvedContractContactId = String(companyContact.id);
+    }
+    if (resolvedContractContactId) {
+      await enqueueScenariosForContact(resolvedContractContactId, 'contract_signed');
     }
 
     // 社内向け通知タスクの起票
@@ -11627,7 +11769,12 @@ app.post('/api/calendar/fetch-ical', async (req, res) => {
         const booking = parseTimeRexCalendarEvent(ev);
         if (booking) {
           const res = await syncTimeRexBookingToCrm(booking, lineSupabase, authData.user.id);
-          if (res.success) syncedTimeRexCount++;
+          if (res.success) {
+            syncedTimeRexCount++;
+            if (res.contactId) {
+              await enqueueScenariosForContact(res.contactId, 'booking_created', authData.user.id);
+            }
+          }
         }
       }
     } catch (calSyncErr) {
@@ -11677,6 +11824,9 @@ app.post('/api/timerex/sync-inbox-history', requireAuth, async (req, res) => {
           const syncRes = await syncTimeRexBookingToCrm(booking, lineSupabase, user.id);
           if (syncRes.success) {
             syncedCount++;
+            if (syncRes.contactId) {
+              await enqueueScenariosForContact(syncRes.contactId, 'booking_created', user.id);
+            }
             syncedList.push({
               guestName: booking.guestName,
               meetingDate: booking.meetingDate,
@@ -11726,6 +11876,9 @@ app.post('/api/timerex/webhook', async (req, res) => {
 
     const sysOwnerId = await resolveSystemOwnerId();
     const result = await syncTimeRexBookingToCrm(booking, lineSupabase, sysOwnerId);
+    if (result.success && result.contactId) {
+      await enqueueScenariosForContact(result.contactId, 'booking_created', sysOwnerId || undefined);
+    }
     return res.json({ success: true, result });
   } catch (err: any) {
     console.error('[TimeRexWebhook] Exception:', err);
