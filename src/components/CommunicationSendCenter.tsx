@@ -21,7 +21,7 @@ type Kind = 'document' | 'form' | 'diagnosis' | 'deal' | 'customer_meeting' | 'a
 type Channel = 'email' | 'line' | 'both';
 type DeliveryChannel = 'email' | 'line';
 type DocumentType = 'estimate' | 'invoice' | 'contract' | 'proposal' | 'diagnosis_report' | 'monthly_report' | 'other';
-type DocumentDeliveryFormat = 'web_link' | 'html_attachment' | 'pdf_attachment';
+type DocumentDeliveryFormat = 'web_link' | 'pdf_attachment';
 type Contact = { id: string; full_name: string; email?: string | null; line_user_id?: string | null; company_id?: string | null };
 
 type Props = {
@@ -85,7 +85,7 @@ const seed = [
     category: 'document',
     channel: 'email',
     subject: '【書類送付】{書類名}｜{会社名} 様',
-    body_text: '{お名前} 様\n\nお世話になっております。有限会社MSTです。\n\n書類「{書類名}」をお送りいたします。添付のHTML書類ファイル（ブラウザで開いて確認・印刷可能）、または下記のWeb確認ページ・PDFダウンロードURLよりご確認ください。\n\n書類名：{書類名}\nWeb確認・お申し込みURL：{書類URL}\nPDFダウンロードURL：{PDFダウンロードURL}\n\nご不明点やご質問がございましたら、本メールにご返信ください。',
+    body_text: '{お名前} 様\n\nお世話になっております。有限会社MSTです。\n\n書類「{書類名}」をお送りいたします。メール本文内の書類内容、または下記のWeb確認ページ・PDFダウンロードURLよりご確認ください。\n\n書類名：{書類名}\nWeb確認・お申し込みURL：{書類URL}\nPDFダウンロードURL：{PDFダウンロードURL}\n\nご不明点やご質問がございましたら、本メールにご返信ください。',
   },
   {
     category: 'document',
@@ -174,9 +174,7 @@ const documentMessage = (type: string | undefined, channel: DeliveryChannel, del
   const attachDesc = (label: string) =>
     deliveryFormat === 'pdf_attachment'
       ? `${label}（PDF）を添付いたしましたので、ご確認のほどよろしくお願い申し上げます。\n下記Web確認ページからも内容の確認・お申し込みが可能です。`
-      : deliveryFormat === 'html_attachment'
-      ? `${label}をお送りいたします。添付のHTML書類ファイル（ブラウザでそのまま閲覧・印刷可能）、または下記のWeb確認ページ・PDFダウンロードURLよりご確認ください。`
-      : `下記のWeb確認ページより${label}の内容をご確認いただけます（ページ上からPDFの直接ダウンロードおよびWebでのお申し込みも可能です）。`;
+      : `${label}をお送りいたします。本メール末尾の書面プレビュー、または下記のWeb確認ページ・PDFダウンロードURLよりご確認ください。`;
   const messages: Record<string, { subject: string; body: string; line: string }> = {
     proposal: {
       subject: '【ご提案書の送付】{書類名}｜{会社名} 様',
@@ -231,14 +229,11 @@ const documentMessage = (type: string | undefined, channel: DeliveryChannel, del
   return channel === 'email' ? { category: 'document', channel, subject: message.subject, body_text: message.body } : { category: 'document', channel, subject: '', body_text: message.line };
 };
 
-const isStaleLegacyDocumentTemplate = (row: any, deliveryFormat: DocumentDeliveryFormat = 'html_attachment'): boolean => {
+const isStaleLegacyDocumentTemplate = (row: any, deliveryFormat: DocumentDeliveryFormat = 'web_link'): boolean => {
   if (!row || typeof row !== 'object') return false;
   const text = `${String(row.subject || '')}\n${String(row.body_text || '')}`;
-  if (/下記リンクよりWeb上でも/.test(text)) return true;
+  if (/下記リンクよりWeb上でも|添付のHTML書類ファイル|HTML書類（\.html）/.test(text)) return true;
   if (deliveryFormat !== 'pdf_attachment' && /PDFを添付いたしました|同じPDFファイルをご確認いただけます|PDF確認URL：/.test(text)) {
-    return true;
-  }
-  if (deliveryFormat === 'html_attachment' && /下記のWeb確認ページより.+内容をご確認いただけます（ページ上からPDF/.test(text)) {
     return true;
   }
   return false;
@@ -283,7 +278,7 @@ export const CommunicationSendCenter: React.FC<Props> = ({
   const [channel, setChannel] = useState<Channel>(initialChannel || 'email');
   const [templateChannel, setTemplateChannel] = useState<DeliveryChannel>(initialChannel === 'line' ? 'line' : 'email');
   const [documentType, setDocumentType] = useState<DocumentType>('estimate');
-  const [documentDeliveryFormat, setDocumentDeliveryFormat] = useState<DocumentDeliveryFormat>('html_attachment');
+  const [documentDeliveryFormat, setDocumentDeliveryFormat] = useState<DocumentDeliveryFormat>('web_link');
   const [previewDocModal, setPreviewDocModal] = useState<any | null>(null);
   const [contacts, setContacts] = useState<Contact[]>([]);
   const [docs, setDocs] = useState<any[]>([]);
@@ -1528,9 +1523,7 @@ export const CommunicationSendCenter: React.FC<Props> = ({
                       <span className="font-bold text-purple-950 truncate">{doc.title}</span>
                       <span className="text-[10px] px-1.5 py-0.2 rounded font-semibold bg-white border border-purple-200 text-purple-700 shrink-0">
                         {documentDeliveryFormat === 'web_link'
-                          ? 'Web閲覧＋DLリンク送付'
-                          : documentDeliveryFormat === 'html_attachment'
-                          ? 'HTMLファイル添付'
+                          ? 'メール内表示＋Web/PDFリンク'
                           : 'PDF直接添付'}
                       </span>
                     </div>
@@ -1561,8 +1554,7 @@ export const CommunicationSendCenter: React.FC<Props> = ({
                         onChange={(e) => setDocumentDeliveryFormat(e.target.value as DocumentDeliveryFormat)}
                         className="rounded-lg border border-purple-300 bg-white px-2.5 py-1 text-[11px] font-semibold text-slate-800 focus:border-purple-600 focus:outline-none"
                       >
-                        <option value="html_attachment">HTML書類（.html）添付＋Web確認・PDF保存URL（Drive電子署名回避／推奨）</option>
-                        <option value="web_link">Web確認URL＋PDFダウンロードリンク（添付なし・Drive電子署名回避）</option>
+                        <option value="web_link">メール本文に書類表示＋Web確認・PDFダウンロードURL（Drive電子署名なし／推奨）</option>
                         <option value="pdf_attachment">PDF（.pdf）をメール直接添付（※Gmail側でDrive署名表示が出る場合あり）</option>
                       </select>
                     </div>
@@ -1809,9 +1801,7 @@ export const CommunicationSendCenter: React.FC<Props> = ({
                               <span className="text-[11px] text-slate-500 block truncate">
                                 {contact?.company_id && companies[contact.company_id] ? `${companies[contact.company_id]} 宛` : ''} ·{' '}
                                 {documentDeliveryFormat === 'web_link'
-                                  ? 'Web確認・申込URL ＋ PDFダウンロードURL送付（メール添付なし）'
-                                  : documentDeliveryFormat === 'html_attachment'
-                                  ? 'HTML書類ファイル（.html）添付 ＋ Web確認URL送付'
+                                  ? 'メール内書類プレビュー ＋ Web確認URL ＋ PDFダウンロードURL送付'
                                   : 'PDFファイル直接添付 ＋ Web確認URL送付'}
                               </span>
                             </div>
@@ -1845,16 +1835,13 @@ export const CommunicationSendCenter: React.FC<Props> = ({
                                 onChange={(e) => setDocumentDeliveryFormat(e.target.value as DocumentDeliveryFormat)}
                                 className="mt-1 block w-full rounded-lg border border-slate-300 bg-slate-50 px-2.5 py-2 text-xs font-medium text-slate-900 focus:border-purple-600 focus:bg-white focus:outline-none"
                               >
-                                <option value="html_attachment">HTML書類（.html）添付 ＋ Web確認・PDF保存URL（Drive電子署名が出ない／推奨）</option>
-                                <option value="web_link">Web確認・申込URL ＋ PDF直接ダウンロードURL（添付なし・Drive電子署名が出ない）</option>
+                                <option value="web_link">メール本文に書類表示 ＋ Web確認・PDFダウンロードURL（Drive電子署名なし／推奨）</option>
                                 <option value="pdf_attachment">PDF（.pdf）をメール直接添付（※Gmail側でDrive電子署名が表示される場合あり）</option>
                               </select>
                             </label>
                             <p className="text-[11px] text-slate-500 leading-relaxed">
-                              {documentDeliveryFormat === 'html_attachment'
-                                ? '※ ブラウザでそのまま開けるHTML書類ファイルを添付します（Gmailで開いてもGoogleドライブのPDF電子署名UIは表示されず、メール内のWeb確認URL・PDF保存URLからいつでもPDF保存も可能です）。'
-                                : documentDeliveryFormat === 'web_link'
-                                ? '※ メールにファイルを添付せず、Web確認・申込URLとPDF直接ダウンロードリンクを送付します（Googleドライブの電子署名表示を完全に回避）。'
+                              {documentDeliveryFormat === 'web_link'
+                                ? '※ 添付ファイルでのソースコード表示やGoogleドライブの電子署名表示を防ぎ、メール本文内に整形済みの書類プレビューとWeb確認ボタン・PDF直接ダウンロードボタンを表示します。'
                                 : '※ A4 PDFファイルを直接メール添付します。受信側のGmail仕様により、Gmail上でPDFを開いた際にGoogleドライブの「電子署名をリクエスト」が表示される場合があります。'}
                             </p>
                           </div>
@@ -2316,9 +2303,7 @@ export const CommunicationSendCenter: React.FC<Props> = ({
                           <span className="font-semibold text-purple-900 truncate">{doc.title}</span>
                           <span className="inline-block px-1.5 py-0.5 rounded bg-purple-200 text-purple-900 font-bold text-[10px]">
                             {documentDeliveryFormat === 'web_link'
-                              ? 'Web閲覧＋DLリンク（添付なし）'
-                              : documentDeliveryFormat === 'html_attachment'
-                              ? 'HTMLファイル添付'
+                              ? 'メール内書類表示＋Web/PDFリンク'
                               : 'PDF直接添付'}
                           </span>
                         </div>
@@ -2361,6 +2346,16 @@ export const CommunicationSendCenter: React.FC<Props> = ({
                             body={rawPreview}
                             senderEmail={senderSettings.fromEmail || 'contact@mstcorp.info'}
                             unsubscribeUrl={isTransactionalPreview ? undefined : '（送信時に連絡先専用の配信停止URLを自動付与）'}
+                            embeddedDocument={
+                              kind === 'document' && doc && documentDeliveryFormat === 'web_link'
+                                ? {
+                                    title: doc.title,
+                                    bodyHtml: doc.body_html,
+                                    docUrl: vals.document_url,
+                                    pdfUrl: vals.document_pdf_url,
+                                  }
+                                : null
+                            }
                           />
                         );
                       })()}

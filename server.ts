@@ -7141,22 +7141,16 @@ app.post('/api/communications/send', async (req, res) => {
       const emailFrom = `${fromName.replace(/"/g, '')} <${fromEmail}>`;
       const isTransactional = isTransactionalOutboxEmail(row);
       const unsubscribeUrl = isTransactional ? '' : createEmailUnsubscribeUrl(contact.id);
-      const emailPayload = prepareEmailPayloadContent(String(row.body_text || ''), {
-        senderEmail: fromEmail,
-        unsubscribeUrl,
-        logoUrl: process.env.EMAIL_SIGNATURE_LOGO_URL,
-      });
 
-      const documentDeliveryFormat: 'web_link' | 'html_attachment' | 'pdf_attachment' =
-        req.body?.documentDeliveryFormat === 'pdf_attachment'
-          ? 'pdf_attachment'
-          : req.body?.documentDeliveryFormat === 'web_link'
-            ? 'web_link'
-            : 'html_attachment';
+      const documentDeliveryFormat: 'web_link' | 'pdf_attachment' =
+        req.body?.documentDeliveryFormat === 'pdf_attachment' ? 'pdf_attachment' : 'web_link';
       let attachments: Array<{ filename: string; content: string }> | undefined = undefined;
-      // 重要書類送信（source_type === 'customer_document'）時のみ対象書類を参照し、
-      // 送付形式（デフォルト: html_attachment）に応じて添付ファイルを制御する
-      // ※ .pdf を直接メール添付するとGmailのGoogleドライブビューアで電子署名リクエストが表示されるため、標準はHTML書類添付＋Web確認・PDFダウンロードURL
+      let embeddedHtmlSection = '';
+
+      // 重要書類送信（source_type === 'customer_document'）時:
+      // - デフォルト（web_link）: raw .html 添付（Gmail上でソースコード丸見えになる）や .pdf 添付（Googleドライブの電子署名UIが出る）を避け、
+      //   メール本文内に整形済み書類プレビューカード＋Web確認ボタン＋PDFダウンロードボタンを直接描画する
+      // - pdf_attachment 指定時のみ .pdf を添付する
       if (row.document_id && row.source_type === 'customer_document') {
         try {
           const { data: docData } = await lineSupabase
@@ -7185,29 +7179,51 @@ app.post('/api/communications/send', async (req, res) => {
                   content: pdfBuffer.toString('base64'),
                 },
               ];
-            } else if (documentDeliveryFormat === 'html_attachment') {
+            } else {
               const reqProto = String(req.headers['x-forwarded-proto'] || req.protocol || 'https').split(',')[0].trim() || 'https';
               const reqHost = String(req.headers['x-forwarded-host'] || req.headers.host || '').split(',')[0].trim();
               const reqOrigin = String(req.headers.origin || '').trim().replace(/\/$/, '');
-              const docBaseUrl = (reqOrigin || (reqHost ? `${reqProto}://${reqHost}` : '') || process.env.PUBLIC_APP_URL || '').replace(/\/$/, '');
+              const docBaseUrl = (reqOrigin || (reqHost ? `${reqProto}://${reqHost}` : '') || process.env.PUBLIC_APP_URL || process.env.APP_URL || '').replace(/\/$/, '');
               const escapedTitle = (docData.title || '書類').replace(/[&<>"']/g, (c: string) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c] || c));
               const viewUrl = docBaseUrl ? `${docBaseUrl}/docs/${encodeURIComponent(docData.id)}` : `/docs/${encodeURIComponent(docData.id)}`;
               const pdfDlUrl = docBaseUrl ? `${docBaseUrl}/api/public/documents/${encodeURIComponent(docData.id)}/pdf?download=1` : `/api/public/documents/${encodeURIComponent(docData.id)}/pdf?download=1`;
-              const safeBodyHtml = String(docData.body_html || '').replace(/https?:\/\/[^"'\s]+\/(?:apply|docs)\/preview|\/(?:apply|docs)\/preview/g, `${viewUrl}#apply-cta-section`);
-              const actionBar = `<div class="no-print" style="margin:0 0 20px 0;padding:12px 16px;background:#f8fafc;border:1px solid #e2e8f0;border-radius:10px;display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:10px;font-size:12px;"><div style="font-weight:700;color:#0f172a;">有限会社MST｜書類閲覧ファイル</div><div style="display:flex;flex-wrap:wrap;gap:8px;"><a href="${pdfDlUrl}" style="display:inline-block;padding:7px 14px;border-radius:7px;background:#059669;color:#ffffff;text-decoration:none;font-weight:700;">PDFダウンロード</a><a href="${viewUrl}" style="display:inline-block;padding:7px 14px;border-radius:7px;background:#ffffff;border:1px solid #cbd5e1;color:#0f172a;text-decoration:none;font-weight:700;">Web確認・お申し込みページ</a><button type="button" onclick="window.print()" style="padding:7px 12px;border-radius:7px;background:#ffffff;border:1px solid #cbd5e1;color:#334155;font-weight:600;cursor:pointer;">印刷 / PDF保存</button></div></div>`;
-              const standaloneHtml = `<!DOCTYPE html><html lang="ja"><head><meta charset="utf-8" /><meta name="viewport" content="width=device-width, initial-scale=1.0" /><title>${escapedTitle}｜有限会社MST</title><style>body{margin:24px auto;max-width:860px;padding:0 16px;background:#ffffff;color:#0f172a;font-family:-apple-system,BlinkMacSystemFont,"Hiragino Kaku Gothic ProN","Hiragino Sans",Meiryo,sans-serif;line-height:1.7;}@media print{body{margin:0;padding:0;}.no-print{display:none!important;}}</style></head><body>${actionBar}${safeBodyHtml}</body></html>`;
-              attachments = [
-                {
-                  filename: `${safeTitle}.html`,
-                  content: Buffer.from(standaloneHtml, 'utf8').toString('base64'),
-                },
-              ];
+              const safeBodyHtml = String(docData.body_html || '')
+                .replace(/<script\b[^>]*>[\s\S]*?<\/script>/gi, '')
+                .replace(/\son\w+=(?:"[^"]*"|'[^']*'|[^\s>]+)/gi, '')
+                .replace(/https?:\/\/[^"'\s]+\/(?:apply|docs)\/preview|\/(?:apply|docs)\/preview/g, `${viewUrl}#apply-cta-section`)
+                .replace(/href="\/(docs|apply)\/([^"]+)"/gi, (_m, _p, targetId) => `href="${docBaseUrl ? `${docBaseUrl}/docs/${targetId}` : `/docs/${targetId}`}"`);
+
+              embeddedHtmlSection = [
+                '<div style="margin:24px 0 12px 0;border:1px solid #cbd5e1;border-radius:12px;overflow:hidden;background-color:#ffffff;">',
+                '  <div style="background-color:#f8fafc;border-bottom:1px solid #e2e8f0;padding:14px 18px;">',
+                `    <div style="font-size:13px;font-weight:700;color:#0f172a;margin:0 0 10px 0;">送付書類：${escapedTitle}</div>`,
+                '    <table role="presentation" cellpadding="0" cellspacing="0" border="0" style="border-collapse:collapse;">',
+                '      <tr>',
+                '        <td style="padding:0 8px 0 0;">',
+                `          <a href="${viewUrl}" target="_blank" rel="noopener noreferrer" style="display:inline-block;padding:8px 16px;border-radius:7px;background-color:#059669;color:#ffffff;text-decoration:none;font-size:12px;font-weight:700;">Web上で内容を確認・お申し込み</a>`,
+                '        </td>',
+                '        <td style="padding:0;">',
+                `          <a href="${pdfDlUrl}" target="_blank" rel="noopener noreferrer" style="display:inline-block;padding:8px 16px;border-radius:7px;background-color:#ffffff;border:1px solid #cbd5e1;color:#0f172a;text-decoration:none;font-size:12px;font-weight:700;">PDFをダウンロード（印刷・保存用）</a>`,
+                '        </td>',
+                '      </tr>',
+                '    </table>',
+                '  </div>',
+                `  <div style="padding:20px;background-color:#ffffff;color:#0f172a;font-size:13px;line-height:1.7;">${safeBodyHtml}</div>`,
+                '</div>',
+              ].join('\n');
             }
           }
         } catch (docAttachErr) {
           console.error('[SendEmail] Document attachment preparation warning:', docAttachErr);
         }
       }
+
+      const emailPayload = prepareEmailPayloadContent(String(row.body_text || ''), {
+        senderEmail: fromEmail,
+        unsubscribeUrl,
+        logoUrl: process.env.EMAIL_SIGNATURE_LOGO_URL,
+        embeddedHtmlSection,
+      });
 
       const response = await fetch('https://api.resend.com/emails', {
         method: 'POST',

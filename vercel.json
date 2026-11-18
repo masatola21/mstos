@@ -10,11 +10,11 @@
     },
     {
       "source": "/docs/:id",
-      "destination": "/api/public/documents/:id/view"
+      "destination": "/api"
     },
     {
       "source": "/apply/:id",
-      "destination": "/api/public/documents/:id/view"
+      "destination": "/api"
     },
     {
       "source": "/(.*)",

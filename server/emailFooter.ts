@@ -192,7 +192,7 @@ export function buildHtmlUnsubscribeBlock(unsubscribeUrl?: string): string {
 
 export function prepareEmailPayloadContent(
   body: string,
-  opts: { senderEmail: string; unsubscribeUrl?: string; logoUrl?: string },
+  opts: { senderEmail: string; unsubscribeUrl?: string; logoUrl?: string; embeddedHtmlSection?: string },
 ): {
   bodyWithoutLegacySignature: string;
   shouldIncludeSignature: boolean;
@@ -212,10 +212,12 @@ export function prepareEmailPayloadContent(
   }
 
   const bodyHtml = formatPlainBodyAsEmailHtml(cleanBody);
+  const embeddedHtmlSection = String(opts.embeddedHtmlSection || '').trim();
   const signatureHtml = shouldIncludeSignature
     ? buildHtmlSenderSignature({ senderEmail: opts.senderEmail, logoUrl: opts.logoUrl })
     : '';
   const unsubscribeHtml = buildHtmlUnsubscribeBlock(opts.unsubscribeUrl);
+  const maxWidth = embeddedHtmlSection ? '760px' : '680px';
 
   const html = [
     '<!DOCTYPE html>',
@@ -225,10 +227,11 @@ export function prepareEmailPayloadContent(
     '  <meta name="viewport" content="width=device-width,initial-scale=1.0" />',
     '</head>',
     '<body style="margin:0;padding:0;background-color:#ffffff;font-family:-apple-system,BlinkMacSystemFont,\'Hiragino Sans\',\'Hiragino Kaku Gothic ProN\',\'Yu Gothic\',Meiryo,sans-serif;color:#1e293b;font-size:14px;line-height:1.75;text-align:left;">',
-    '  <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" align="left" style="margin:0;padding:0;border-collapse:collapse;text-align:left;max-width:680px;">',
+    `  <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" align="left" style="margin:0;padding:0;border-collapse:collapse;text-align:left;max-width:${maxWidth};">`,
     '    <tr>',
     '      <td align="left" style="margin:0;padding:12px 0 20px 0;text-align:left;font-family:-apple-system,BlinkMacSystemFont,\'Hiragino Sans\',\'Hiragino Kaku Gothic ProN\',\'Yu Gothic\',Meiryo,sans-serif;color:#1e293b;font-size:14px;line-height:1.75;">',
     bodyHtml,
+    embeddedHtmlSection,
     signatureHtml,
     unsubscribeHtml,
     '      </td>',
