@@ -115,19 +115,19 @@ const seed = [
     category: 'deal',
     channel: 'email',
     subject: '【商談日程のご案内】{会社名} 様',
-    body_text: '{お名前} 様\n\nお世話になっております。有限会社MSTです。\n\n商談の日程調整についてご案内いたします。下記予約ページから、ご都合のよい日時をお選びください。\n{案内URL}\n\n予約確定後、Googleカレンダーに予定が登録され、Google Meetの情報が案内されます。\nご不明点は本メールにご返信ください。',
+    body_text: '{お名前} 様\n\nお世話になっております。有限会社MSTです。\n\n商談の日程調整についてご案内いたします。下記予約ページから、ご都合のよい日時をお選びください。\n{案内URL}\n\n予約確定後、Googleカレンダーに予定が登録され、{ビデオツール名}の情報が案内されます。\nご不明点は本メールにご返信ください。',
   },
   {
     category: 'deal',
     channel: 'line',
     subject: '',
-    body_text: '{お名前} 様\n商談の日程はこちらからお選びください。\n{案内URL}\n予約確定後、GoogleカレンダーとMeetの情報が案内されます。',
+    body_text: '{お名前} 様\n商談の日程はこちらからお選びください。\n{案内URL}\n予約確定後、Googleカレンダーと{ビデオツール名}の情報が案内されます。',
   },
   {
     category: 'customer_meeting',
     channel: 'email',
     subject: '【顧客面談の日程調整】{会社名} 様',
-    body_text: '{お名前} 様\n\nお世話になっております。有限会社MSTです。\n\n次回のお打ち合わせ日程をご案内いたします。下記予約ページから、ご都合のよい日時をお選びください。\n{案内URL}\n\n予約確定後、Googleカレンダーに予定が登録され、Google Meetの情報が案内されます。\nご不明点は本メールにご返信ください。',
+    body_text: '{お名前} 様\n\nお世話になっております。有限会社MSTです。\n\n次回のお打ち合わせ日程をご案内いたします。下記予約ページから、ご都合のよい日時をお選びください。\n{案内URL}\n\n予約確定後、Googleカレンダーに予定が登録され、{ビデオツール名}の情報が案内されます。\nご不明点は本メールにご返信ください。',
   },
   {
     category: 'customer_meeting',
@@ -261,6 +261,7 @@ export const CommunicationSendCenter: React.FC<Props> = ({
   const [docs, setDocs] = useState<any[]>([]);
   const [forms, setForms] = useState<any[]>([]);
   const [bookingUrl, setBookingUrl] = useState('');
+  const [videoTool, setVideoTool] = useState<'google_meet' | 'zoom'>('google_meet');
   const [companies, setCompanies] = useState<Record<string, string>>({});
   const [companyIndustries, setCompanyIndustries] = useState<Record<string, string>>({});
   const [salesStep, setSalesStep] = useState<number>(0);
@@ -384,6 +385,8 @@ export const CommunicationSendCenter: React.FC<Props> = ({
       : url.trim();
 
   const vals: Record<string, string> = {
+    ビデオツール名: videoTool === 'zoom' ? 'Zoom' : 'Google Meet',
+    video_tool_name: videoTool === 'zoom' ? 'Zoom' : 'Google Meet',
     お名前: contact?.full_name || 'ご担当者',
     会社名: companies[contact?.company_id || ''] || '貴社',
     フォーム名: form?.name || 'フォーム',
@@ -458,7 +461,7 @@ export const CommunicationSendCenter: React.FC<Props> = ({
       db.from('communication_templates').select('*'),
       db.from('companies').select('id,company_name,industry'),
       db.from('diagnosis_forms').select('id,name,public_slug,form_type,status').eq('status', 'published').order('created_at', { ascending: false }),
-      db.from('sales_workspace_settings').select('booking_page_url').maybeSingle(),
+      db.from('sales_workspace_settings').select('booking_page_url,video_conference_tool').maybeSingle(),
       db.from('email_send_settings').select('sender_name,sender_email,reply_to_email').maybeSingle(),
       db.from('line_auto_reply_templates').select('*').order('created_at', { ascending: false }),
       db.from('marketing_automation_scenarios').select('scenario_id,config'),
@@ -472,6 +475,9 @@ export const CommunicationSendCenter: React.FC<Props> = ({
         if (emailSettings.error) throw emailSettings.error;
         setForms(f.data || []);
         setBookingUrl(settings.data?.booking_page_url || '');
+        const vt = (settings.data as any)?.video_conference_tool;
+        if (vt === 'zoom') setVideoTool('zoom');
+        else setVideoTool('google_meet');
         setSenderSettings({
           fromName: emailSettings.data?.sender_name || '有限会社MST｜経営・業務改善支援',
           fromEmail: emailSettings.data?.sender_email || 'contact@mstcorp.info',
@@ -1873,9 +1879,37 @@ export const CommunicationSendCenter: React.FC<Props> = ({
                   )}
 
                   {(kind === 'deal' || kind === 'customer_meeting') && (
-                    <p className="md:col-span-2 text-xs text-slate-500">
-                      共通Google予約ページ: <span className="text-purple-700 font-mono font-medium">{bookingUrl || '未設定'}</span>
-                    </p>
+                    <div className="md:col-span-2 flex flex-wrap items-center gap-3">
+                      <p className="text-xs text-slate-500">
+                        共通予約ページ: <span className="text-purple-700 font-mono font-medium">{bookingUrl || '未設定'}</span>
+                      </p>
+                      <div className="flex items-center gap-2 text-xs">
+                        <span className="text-slate-500 font-medium">ビデオ会議:</span>
+                        <button
+                          type="button"
+                          onClick={() => setVideoTool('google_meet')}
+                          className={`px-2.5 py-1 rounded-lg border text-xs font-semibold transition cursor-pointer ${
+                            videoTool === 'google_meet'
+                              ? 'bg-blue-600 text-white border-blue-600'
+                              : 'bg-white text-slate-600 border-slate-300 hover:bg-slate-50'
+                          }`}
+                        >
+                          Google Meet
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setVideoTool('zoom')}
+                          className={`px-2.5 py-1 rounded-lg border text-xs font-semibold transition cursor-pointer ${
+                            videoTool === 'zoom'
+                              ? 'bg-blue-600 text-white border-blue-600'
+                              : 'bg-white text-slate-600 border-slate-300 hover:bg-slate-50'
+                          }`}
+                        >
+                          Zoom
+                        </button>
+                        <span className="text-slate-400 text-[11px]">（TimeRex側の設定と合わせてください）</span>
+                      </div>
+                    </div>
                   )}
 
                   {channel === 'both' && (

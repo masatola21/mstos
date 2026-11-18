@@ -1085,17 +1085,19 @@ export const TasksView: React.FC<TasksViewProps> = ({
                           type="button"
                           onClick={() => openEditModal(task)}
                           title="編集"
-                          className="p-1.5 rounded-lg text-slate-400 hover:text-slate-800 hover:bg-slate-100 cursor-pointer transition-colors"
+                          className="inline-flex items-center gap-1 px-2 py-1 rounded-lg text-slate-500 hover:text-slate-800 hover:bg-slate-100 border border-transparent hover:border-slate-200 cursor-pointer transition-colors text-[11px] font-medium"
                         >
-                          <Edit2 className="w-3.5 h-3.5" />
+                          <Edit2 className="w-3 h-3" />
+                          <span>編集</span>
                         </button>
                         <button
                           type="button"
                           onClick={() => setTaskToDelete(task)}
                           title="削除"
-                          className="p-1.5 rounded-lg text-slate-400 hover:text-rose-600 hover:bg-slate-100 cursor-pointer transition-colors"
+                          className="inline-flex items-center gap-1 px-2 py-1 rounded-lg text-rose-500 hover:text-rose-700 hover:bg-rose-50 border border-transparent hover:border-rose-200 cursor-pointer transition-colors text-[11px] font-medium"
                         >
-                          <Trash2 className="w-3.5 h-3.5" />
+                          <Trash2 className="w-3 h-3" />
+                          <span>削除</span>
                         </button>
                       </div>
                     </div>

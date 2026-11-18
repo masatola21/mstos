@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react';
+﻿import React, { useMemo, useState } from 'react';
 import {
   AlertCircle,
   AlertTriangle,
@@ -449,29 +449,29 @@ ${rawResearch.slice(0, 30000)}`;
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/75 p-3 sm:p-5 backdrop-blur-xs animate-fade-in">
-      <div className="flex max-h-[92vh] w-full max-w-5xl flex-col overflow-hidden rounded-2xl border border-slate-700 bg-slate-950 shadow-2xl">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 p-3 sm:p-5 backdrop-blur-xs animate-fade-in">
+      <div className="flex max-h-[92vh] w-full max-w-5xl flex-col overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-2xl">
         {/* Header */}
-        <header className="flex items-start justify-between border-b border-slate-800 p-5 bg-slate-900/60">
+        <header className="flex items-start justify-between border-b border-slate-200 p-5 bg-slate-50/70">
           <div>
             <div className="flex items-center gap-2">
-              <span className="p-1.5 rounded-lg bg-indigo-500/20 text-indigo-400 border border-indigo-500/30">
+              <span className="p-1.5 rounded-lg bg-indigo-100 text-indigo-700 border border-indigo-200">
                 <Sparkles className="h-4 w-4" />
               </span>
-              <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-indigo-900/60 text-indigo-300 border border-indigo-700/50">
+              <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-indigo-50 text-indigo-700 border border-indigo-200">
                 AI営業開拓リスト取込
               </span>
             </div>
-            <h2 className="mt-1 text-base sm:text-lg font-bold text-white">
+            <h2 className="mt-1 text-base sm:text-lg font-bold text-slate-900">
               見込み企業リストの取り込み ＆ バッチ登録
             </h2>
-            <p className="mt-0.5 text-xs text-slate-400">
+            <p className="mt-0.5 text-xs text-slate-500">
               AI（ChatGPT / Gemini / Claude）で調査・出力した新規企業リストを、重複チェック（社名・ドメイン・メール）およびメール検証を経て一括登録します。
             </p>
           </div>
           <button
             onClick={onClose}
-            className="rounded-lg p-1.5 text-slate-400 hover:bg-slate-800 hover:text-white transition cursor-pointer"
+            className="rounded-lg p-1.5 text-slate-500 hover:bg-slate-100 hover:text-slate-900 transition cursor-pointer"
             aria-label="閉じる"
           >
             <X className="h-5 w-5" />
@@ -479,10 +479,10 @@ ${rawResearch.slice(0, 30000)}`;
         </header>
 
         {/* Content Body */}
-        <div className="flex-1 space-y-5 overflow-y-auto p-5 text-xs text-slate-300">
+        <div className="flex-1 space-y-5 overflow-y-auto p-5 text-xs text-slate-700">
           {error && (
-            <div className="flex gap-2 rounded-xl border border-rose-500/40 bg-rose-950/40 p-3.5 text-rose-200">
-              <AlertCircle className="h-4 w-4 shrink-0 text-rose-400 mt-0.5" />
+            <div className="flex gap-2 rounded-xl border border-rose-200 bg-rose-50 p-3.5 text-rose-700">
+              <AlertCircle className="h-4 w-4 shrink-0 text-rose-600 mt-0.5" />
               <div>
                 <p className="font-bold">取り込みエラー</p>
                 <p className="mt-0.5">{error}</p>
@@ -491,36 +491,36 @@ ${rawResearch.slice(0, 30000)}`;
           )}
 
           {notice && (
-            <div className="flex gap-2 rounded-xl border border-emerald-500/40 bg-emerald-950/30 p-3.5 text-emerald-200 font-bold">
-              <CheckCircle2 className="h-4 w-4 shrink-0 text-emerald-400 mt-0.5" />
+            <div className="flex gap-2 rounded-xl border border-emerald-200 bg-emerald-50 p-3.5 text-emerald-700 font-bold">
+              <CheckCircle2 className="h-4 w-4 shrink-0 text-emerald-600 mt-0.5" />
               <span>{notice}</span>
             </div>
           )}
 
           {/* Step 1: Batch Configuration */}
-          <section className="rounded-xl border border-slate-800 bg-slate-900/50 p-4 space-y-3">
-            <div className="flex items-center gap-2 font-bold text-slate-200 text-xs">
+          <section className="rounded-xl border border-slate-200 bg-slate-50/60 p-4 space-y-3">
+            <div className="flex items-center gap-2 font-bold text-slate-800 text-xs">
               <Building2 className="w-4 h-4 text-indigo-400" />
               <span>取込バッチ基本情報（メール営業の絞り込み単位になります）</span>
             </div>
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
               <div>
-                <label className="block text-[11px] text-slate-400 font-semibold mb-1">リスト名（取込バッチ名）</label>
+                <label className="block text-[11px] text-slate-600 font-semibold mb-1">リスト名（取込バッチ名）</label>
                 <input
                   type="text"
                   value={batchName}
                   onChange={(e) => setBatchName(e.target.value)}
                   placeholder="例: AI開拓_製造業_20261107"
-                  className="w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-1.5 text-xs text-slate-100 focus:border-indigo-500 focus:outline-none"
+                  className="w-full rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs text-slate-800 focus:border-indigo-500 focus:outline-none"
                 />
               </div>
 
               <div>
-                <label className="block text-[11px] text-slate-400 font-semibold mb-1">取込元AI</label>
+                <label className="block text-[11px] text-slate-600 font-semibold mb-1">取込元AI</label>
                 <select
                   value={sourceAi}
                   onChange={(e) => setSourceAi(e.target.value as any)}
-                  className="w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-1.5 text-xs text-slate-100 focus:border-indigo-500 focus:outline-none"
+                  className="w-full rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs text-slate-800 focus:border-indigo-500 focus:outline-none"
                 >
                   <option value="ChatGPT">ChatGPT (OpenAI)</option>
                   <option value="Claude">Claude (Anthropic)</option>
@@ -531,11 +531,11 @@ ${rawResearch.slice(0, 30000)}`;
               </div>
 
               <div>
-                <label className="block text-[11px] text-slate-400 font-semibold mb-1">重複検知時の処理</label>
+                <label className="block text-[11px] text-slate-600 font-semibold mb-1">重複検知時の処理</label>
                 <select
                   value={duplicateHandling}
                   onChange={(e) => setDuplicateHandling(e.target.value as any)}
-                  className="w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-1.5 text-xs text-slate-100 focus:border-indigo-500 focus:outline-none"
+                  className="w-full rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs text-slate-800 focus:border-indigo-500 focus:outline-none"
                 >
                   <option value="skip">重複時はスキップ（新規企業のみ登録）</option>
                   <option value="update">重複時は最新データで更新（上書き）</option>
@@ -546,14 +546,14 @@ ${rawResearch.slice(0, 30000)}`;
 
           {/* Step 2: Input Modes Navigation */}
           <section className="space-y-3">
-            <div className="flex flex-wrap items-center gap-1.5 border-b border-slate-800 pb-2">
+            <div className="flex flex-wrap items-center gap-1.5 border-b border-slate-200 pb-2">
               <button
                 type="button"
                 onClick={() => setActiveTab('json')}
                 className={`px-3 py-1.5 rounded-lg text-xs font-bold transition cursor-pointer flex items-center gap-1.5 ${
                   activeTab === 'json'
                     ? 'bg-indigo-600 text-white shadow-xs'
-                    : 'bg-slate-900 text-slate-400 hover:text-white hover:bg-slate-800'
+                    : 'bg-white text-slate-500 border border-slate-200 hover:text-slate-800 hover:bg-slate-50'
                 }`}
               >
                 <FileText className="w-3.5 h-3.5" />
@@ -566,7 +566,7 @@ ${rawResearch.slice(0, 30000)}`;
                 className={`px-3 py-1.5 rounded-lg text-xs font-bold transition cursor-pointer flex items-center gap-1.5 ${
                   activeTab === 'table_paste'
                     ? 'bg-indigo-600 text-white shadow-xs'
-                    : 'bg-slate-900 text-slate-400 hover:text-white hover:bg-slate-800'
+                    : 'bg-white text-slate-500 border border-slate-200 hover:text-slate-800 hover:bg-slate-50'
                 }`}
               >
                 <FileSpreadsheet className="w-3.5 h-3.5" />
@@ -579,7 +579,7 @@ ${rawResearch.slice(0, 30000)}`;
                 className={`px-3 py-1.5 rounded-lg text-xs font-bold transition cursor-pointer flex items-center gap-1.5 ${
                   activeTab === 'csv_file'
                     ? 'bg-indigo-600 text-white shadow-xs'
-                    : 'bg-slate-900 text-slate-400 hover:text-white hover:bg-slate-800'
+                    : 'bg-white text-slate-500 border border-slate-200 hover:text-slate-800 hover:bg-slate-50'
                 }`}
               >
                 <Upload className="w-3.5 h-3.5" />
@@ -592,7 +592,7 @@ ${rawResearch.slice(0, 30000)}`;
                 className={`px-3 py-1.5 rounded-lg text-xs font-bold transition cursor-pointer flex items-center gap-1.5 ${
                   activeTab === 'ai_unstructured'
                     ? 'bg-purple-600 text-white shadow-xs'
-                    : 'bg-slate-900 text-slate-400 hover:text-white hover:bg-slate-800'
+                    : 'bg-white text-slate-500 border border-slate-200 hover:text-slate-800 hover:bg-slate-50'
                 }`}
               >
                 <Sparkles className="w-3.5 h-3.5 text-purple-300" />
@@ -602,9 +602,9 @@ ${rawResearch.slice(0, 30000)}`;
 
             {/* TAB 1: JSON */}
             {activeTab === 'json' && (
-              <div className="rounded-xl border border-slate-800 bg-slate-900/60 p-4 space-y-3">
+              <div className="rounded-xl border border-slate-200 bg-white p-4 space-y-3">
                 <div className="flex items-center justify-between">
-                  <p className="text-xs font-semibold text-slate-200">
+                  <p className="text-xs font-semibold text-slate-800">
                     ChatGPT / Claude / Gemini が出力した JSON 配列を貼り付けてください
                   </p>
                   <button
@@ -623,7 +623,7 @@ ${rawResearch.slice(0, 30000)}`;
   }
 ]`);
                     }}
-                    className="text-[11px] text-indigo-400 hover:text-indigo-300 font-bold cursor-pointer"
+                    className="text-[11px] text-indigo-600 hover:text-indigo-700 font-bold cursor-pointer"
                   >
                     サンプルJSONを挿入
                   </button>
@@ -633,13 +633,13 @@ ${rawResearch.slice(0, 30000)}`;
                   onChange={(e) => setJsonInput(e.target.value)}
                   rows={6}
                   placeholder='[{"company_name": "...", "email": "info@...", "industry": "...", "website": "https://...", "contact_person": "...", "source_url": "..."}]'
-                  className="w-full rounded-xl border border-slate-700 bg-slate-950 p-3 font-mono text-xs leading-5 text-slate-100 placeholder:text-slate-600 focus:border-indigo-500 focus:outline-none"
+                  className="w-full rounded-xl border border-slate-200 bg-white p-3 font-mono text-xs leading-5 text-slate-800 placeholder:text-slate-400 focus:border-indigo-500 focus:outline-none"
                 />
                 <button
                   type="button"
                   onClick={handleParseJson}
                   disabled={isProcessing || !jsonInput.trim()}
-                  className="flex items-center gap-2 rounded-lg bg-indigo-600 hover:bg-indigo-700 px-4 py-2 text-xs font-bold text-white disabled:opacity-50 transition cursor-pointer"
+                  className="flex items-center gap-2 rounded-lg bg-indigo-600 hover:bg-indigo-700 px-4 py-2 text-xs font-bold text-slate-900 disabled:opacity-50 transition cursor-pointer"
                 >
                   {isProcessing ? <Loader2 className="h-4 w-4 animate-spin" /> : <Sparkles className="h-4 w-4" />}
                   <span>JSONを解析して重複チェック実行</span>
@@ -649,8 +649,8 @@ ${rawResearch.slice(0, 30000)}`;
 
             {/* TAB 2: Table Paste */}
             {activeTab === 'table_paste' && (
-              <div className="rounded-xl border border-slate-800 bg-slate-900/60 p-4 space-y-3">
-                <p className="text-xs font-semibold text-slate-200">
+              <div className="rounded-xl border border-slate-200 bg-white p-4 space-y-3">
+                <p className="text-xs font-semibold text-slate-800">
                   スプレッドシートやExcelからヘッダー（会社名、メール、業種、URL等）ごとコピーして貼り付けてください（タブ区切りTSV）
                 </p>
                 <textarea
@@ -658,13 +658,13 @@ ${rawResearch.slice(0, 30000)}`;
                   onChange={(e) => setTablePasteInput(e.target.value)}
                   rows={6}
                   placeholder={`会社名\tメール\t業種\tURL\t担当者\t住所\t根拠URL\n株式会社サンプル\tcontact@sample.jp\tサービス業\thttps://sample.jp\t山田太郎\t東京都\thttps://sample.jp/about`}
-                  className="w-full rounded-xl border border-slate-700 bg-slate-950 p-3 font-mono text-xs leading-5 text-slate-100 placeholder:text-slate-600 focus:border-indigo-500 focus:outline-none"
+                  className="w-full rounded-xl border border-slate-200 bg-white p-3 font-mono text-xs leading-5 text-slate-800 placeholder:text-slate-400 focus:border-indigo-500 focus:outline-none"
                 />
                 <button
                   type="button"
                   onClick={handleParseTable}
                   disabled={isProcessing || !tablePasteInput.trim()}
-                  className="flex items-center gap-2 rounded-lg bg-indigo-600 hover:bg-indigo-700 px-4 py-2 text-xs font-bold text-white disabled:opacity-50 transition cursor-pointer"
+                  className="flex items-center gap-2 rounded-lg bg-indigo-600 hover:bg-indigo-700 px-4 py-2 text-xs font-bold text-slate-900 disabled:opacity-50 transition cursor-pointer"
                 >
                   {isProcessing ? <Loader2 className="h-4 w-4 animate-spin" /> : <FileSpreadsheet className="h-4 w-4" />}
                   <span>表データを解析して重複チェック実行</span>
@@ -674,10 +674,10 @@ ${rawResearch.slice(0, 30000)}`;
 
             {/* TAB 3: CSV File Upload */}
             {activeTab === 'csv_file' && (
-              <div className="rounded-xl border border-slate-800 bg-slate-900/60 p-6 space-y-3 text-center">
-                <div className="max-w-md mx-auto border-2 border-dashed border-slate-700 rounded-xl p-6 hover:border-indigo-500 transition cursor-pointer">
-                  <Upload className="w-8 h-8 text-slate-400 mx-auto mb-2" />
-                  <p className="text-xs font-bold text-slate-200">CSVまたはTSVファイルを選択</p>
+              <div className="rounded-xl border border-slate-200 bg-white p-6 space-y-3 text-center">
+                <div className="max-w-md mx-auto border-2 border-dashed border-slate-300 rounded-xl p-6 hover:border-indigo-500 transition cursor-pointer">
+                  <Upload className="w-8 h-8 text-slate-500 mx-auto mb-2" />
+                  <p className="text-xs font-bold text-slate-800">CSVまたはTSVファイルを選択</p>
                   <p className="text-[11px] text-slate-500 mt-1">1行目に会社名、メール、業種などのヘッダー行が必要です</p>
                   <input
                     type="file"
@@ -686,7 +686,7 @@ ${rawResearch.slice(0, 30000)}`;
                     className="mt-3 text-xs text-slate-400 file:mr-2 file:rounded-md file:border-0 file:bg-indigo-600 file:px-3 file:py-1 file:text-xs file:font-semibold file:text-white cursor-pointer"
                   />
                   {uploadedFileName && (
-                    <p className="mt-2 text-xs font-bold text-emerald-400">選択中: {uploadedFileName}</p>
+                    <p className="mt-2 text-xs font-bold text-emerald-600">選択中: {uploadedFileName}</p>
                   )}
                 </div>
               </div>
@@ -694,8 +694,8 @@ ${rawResearch.slice(0, 30000)}`;
 
             {/* TAB 4: AI Unstructured Text */}
             {activeTab === 'ai_unstructured' && (
-              <div className="rounded-xl border border-slate-800 bg-slate-900/60 p-4 space-y-3">
-                <p className="text-xs font-semibold text-slate-200">
+              <div className="rounded-xl border border-slate-200 bg-white p-4 space-y-3">
+                <p className="text-xs font-semibold text-slate-800">
                   外部AIの調査レポートや文章をそのまま貼り付けて社内AIで構造化・抽出します
                 </p>
                 <textarea
@@ -704,13 +704,13 @@ ${rawResearch.slice(0, 30000)}`;
                   rows={6}
                   maxLength={30000}
                   placeholder="会社名・営業メール・業種・Webサイト・調査根拠などを含むAIの出力を貼り付け"
-                  className="w-full rounded-xl border border-slate-700 bg-slate-950 p-3 text-xs leading-5 text-slate-100 placeholder:text-slate-600 focus:border-indigo-500 focus:outline-none"
+                  className="w-full rounded-xl border border-slate-200 bg-white p-3 text-xs leading-5 text-slate-800 placeholder:text-slate-400 focus:border-indigo-500 focus:outline-none"
                 />
                 <button
                   type="button"
                   onClick={handleParseUnstructuredAi}
                   disabled={isProcessing || !rawResearch.trim()}
-                  className="flex items-center gap-2 rounded-lg bg-purple-600 hover:bg-purple-700 px-4 py-2 text-xs font-bold text-white disabled:opacity-50 transition cursor-pointer"
+                  className="flex items-center gap-2 rounded-lg bg-purple-600 hover:bg-purple-700 px-4 py-2 text-xs font-bold text-slate-900 disabled:opacity-50 transition cursor-pointer"
                 >
                   {isProcessing ? <Loader2 className="h-4 w-4 animate-spin" /> : <Sparkles className="h-4 w-4" />}
                   <span>社内AIで解析・候補抽出（最大50社）</span>
@@ -721,13 +721,13 @@ ${rawResearch.slice(0, 30000)}`;
 
           {/* Step 3: Candidates Preview & Duplicate Inspection */}
           {candidates.length > 0 && (
-            <section className="space-y-3 pt-2 border-t border-slate-800">
+            <section className="space-y-3 pt-2 border-t border-slate-200">
               <div className="flex flex-wrap items-center justify-between gap-2">
                 <div className="flex items-center gap-2">
-                  <h3 className="text-sm font-bold text-white">
+                  <h3 className="text-sm font-bold text-slate-900">
                     取込プレビュー ＆ 重複点検（{candidates.length}件）
                   </h3>
-                  <span className="text-xs text-indigo-300 font-bold bg-indigo-950/60 border border-indigo-700/50 px-2 py-0.5 rounded-full">
+                  <span className="text-xs text-indigo-700 font-bold bg-indigo-50 border border-indigo-200 px-2 py-0.5 rounded-full">
                     登録対象: {selectedCount}件
                   </span>
                 </div>
@@ -740,7 +740,7 @@ ${rawResearch.slice(0, 30000)}`;
                         prev.map((c) => ({ ...c, selected: duplicateHandling === 'update' || !c.duplicate_company_id }))
                       )
                     }
-                    className="text-[11px] text-slate-400 hover:text-white cursor-pointer"
+                    className="text-[11px] text-slate-500 hover:text-slate-800 cursor-pointer"
                   >
                     対象全選択
                   </button>
@@ -748,7 +748,7 @@ ${rawResearch.slice(0, 30000)}`;
                   <button
                     type="button"
                     onClick={() => setCandidates((prev) => prev.map((c) => ({ ...c, selected: false })))}
-                    className="text-[11px] text-slate-400 hover:text-white cursor-pointer"
+                    className="text-[11px] text-slate-500 hover:text-slate-800 cursor-pointer"
                   >
                     選択解除
                   </button>
@@ -765,8 +765,8 @@ ${rawResearch.slice(0, 30000)}`;
                       key={`${candidate.company_name}-${index}`}
                       className={`rounded-xl border p-3.5 transition ${
                         isDup
-                          ? 'border-amber-500/40 bg-amber-950/20'
-                          : 'border-slate-800 bg-slate-900/60'
+                          ? 'border-amber-200 bg-amber-50'
+                          : 'border-slate-200 bg-slate-50'
                       }`}
                     >
                       <div className="flex gap-3 items-start">
@@ -783,28 +783,28 @@ ${rawResearch.slice(0, 30000)}`;
 
                         <div className="min-w-0 flex-1 space-y-1.5 text-xs">
                           <div className="flex flex-wrap items-center gap-2">
-                            <span className="font-bold text-white text-sm">
+                            <span className="font-bold text-slate-900 text-sm">
                               {candidate.company_name}
                             </span>
 
                             {candidate.duplicate_reason && (
-                              <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-amber-900/60 text-amber-200 border border-amber-600/40">
+                              <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-amber-50 text-amber-700 border border-amber-200">
                                 {candidate.duplicate_reason}
                               </span>
                             )}
 
                             {candidate.existing_company_id && (
-                              <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-sky-900/60 text-sky-200 border border-sky-600/40">
+                              <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-sky-50 text-sky-700 border border-sky-200">
                                 既存会社利用 ({candidate.existing_company_id})
                               </span>
                             )}
                           </div>
 
-                          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-x-3 gap-y-1 text-slate-300 text-[11px]">
+                          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-x-3 gap-y-1 text-slate-700 text-[11px]">
                             <div className="flex items-center gap-1.5 truncate">
-                              <Mail className="w-3.5 h-3.5 text-slate-400 shrink-0" />
+                              <Mail className="w-3.5 h-3.5 text-slate-500 shrink-0" />
                               {candidate.email ? (
-                                <span className={isEmailInvalid ? 'text-rose-400 font-bold' : 'text-slate-200'}>
+                                <span className={isEmailInvalid ? 'text-rose-600 font-bold' : 'text-slate-700'}>
                                   {candidate.email} {isEmailInvalid && '⚠️メール形式不正'}
                                 </span>
                               ) : (
@@ -813,7 +813,7 @@ ${rawResearch.slice(0, 30000)}`;
                             </div>
 
                             <div className="flex items-center gap-1.5 truncate">
-                              <User className="w-3.5 h-3.5 text-slate-400 shrink-0" />
+                              <User className="w-3.5 h-3.5 text-slate-500 shrink-0" />
                               <span>{candidate.contact_person || '担当者未設定'}</span>
                             </div>
 
@@ -824,10 +824,10 @@ ${rawResearch.slice(0, 30000)}`;
                           </div>
 
                           {(candidate.website || candidate.address) && (
-                            <div className="text-[11px] text-slate-400 flex flex-wrap gap-x-3">
+                            <div className="text-[11px] text-slate-500 flex flex-wrap gap-x-3">
                               {candidate.website && (
                                 <span className="truncate max-w-xs">
-                                  URL: <a href={candidate.website} target="_blank" rel="noreferrer" className="text-indigo-400 underline">{candidate.website}</a>
+                                  URL: <a href={candidate.website} target="_blank" rel="noreferrer" className="text-indigo-600 underline">{candidate.website}</a>
                                 </span>
                               )}
                               {candidate.address && <span>住所: {candidate.address}</span>}
@@ -835,10 +835,10 @@ ${rawResearch.slice(0, 30000)}`;
                           )}
 
                           {candidate.reason && (
-                            <p className="text-[11px] text-slate-400 bg-slate-950/60 p-2 rounded-lg leading-relaxed">
+                            <p className="text-[11px] text-slate-600 bg-slate-50 border border-slate-100 p-2 rounded-lg leading-relaxed">
                               {candidate.reason}
                               {candidate.source_url && (
-                                <> · <a href={candidate.source_url} target="_blank" rel="noreferrer" className="text-sky-400 underline">根拠URL</a></>
+                                <> · <a href={candidate.source_url} target="_blank" rel="noreferrer" className="text-sky-600 underline">根拠URL</a></>
                               )}
                             </p>
                           )}
@@ -853,9 +853,9 @@ ${rawResearch.slice(0, 30000)}`;
         </div>
 
         {/* Footer */}
-        <footer className="flex shrink-0 flex-wrap items-center justify-between gap-3 border-t border-slate-800 bg-slate-950 p-4">
-          <div className="text-[11px] text-slate-400 flex items-center gap-2">
-            <Info className="w-4 h-4 text-indigo-400 shrink-0" />
+        <footer className="flex shrink-0 flex-wrap items-center justify-between gap-3 border-t border-slate-200 bg-slate-50/80 p-4">
+          <div className="text-[11px] text-slate-600 flex items-center gap-2">
+            <Info className="w-4 h-4 text-indigo-600 shrink-0" />
             <span>
               バッチ名「{batchName}」で登録され、メール営業でバッチ指定配信・特定電子メール法準拠オプトアウトが可能です。
             </span>
@@ -865,7 +865,7 @@ ${rawResearch.slice(0, 30000)}`;
             <button
               type="button"
               onClick={onClose}
-              className="rounded-xl border border-slate-700 px-4 py-2 text-xs font-semibold text-slate-300 hover:bg-slate-800 transition cursor-pointer"
+              className="rounded-xl border border-slate-200 px-4 py-2 text-xs font-semibold text-slate-600 hover:bg-slate-100 transition cursor-pointer"
             >
               キャンセル
             </button>
@@ -874,7 +874,7 @@ ${rawResearch.slice(0, 30000)}`;
                 type="button"
                 onClick={importSelected}
                 disabled={isSaving || selectedCount === 0}
-                className="flex items-center gap-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 px-5 py-2 text-xs font-bold text-white disabled:opacity-50 transition cursor-pointer shadow-xs"
+                className="flex items-center gap-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 px-5 py-2 text-xs font-bold text-slate-900 disabled:opacity-50 transition cursor-pointer shadow-xs"
               >
                 {isSaving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Check className="h-4 w-4" />}
                 <span>選択した {selectedCount}社 をバッチ登録</span>
