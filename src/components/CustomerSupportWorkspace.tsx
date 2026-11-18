@@ -115,6 +115,7 @@ interface Props {
   tasks: TaskItem[];
   onCreateTask: (task: Omit<TaskItem, 'id' | 'createdAt' | 'updatedAt'>) => void;
   onUpdateTask: (task: TaskItem) => void;
+  onDeleteTask?: (taskId: string) => void | Promise<void>;
   onRefresh: () => Promise<void>;
   onAddMilestone: (engagement: Row, title: string, dueDate?: string) => Promise<void>;
   onCompleteMilestone: (engagement: Row, milestoneId: string) => Promise<void>;
@@ -124,7 +125,7 @@ interface Props {
 
 export const CustomerSupportWorkspace: React.FC<Props> = ({
   companyId, initialSection, companies, engagements, invoices, tasks,
-  onCreateTask, onUpdateTask, onRefresh, onAddMilestone, onCompleteMilestone,
+  onCreateTask, onUpdateTask, onDeleteTask, onRefresh, onAddMilestone, onCompleteMilestone,
   onDeleteMilestone, onToggleMilestone,
 }) => {
   const [selectedId, setSelectedId] = useState('');
@@ -550,6 +551,28 @@ export const CustomerSupportWorkspace: React.FC<Props> = ({
     });
   };
 
+  const handleDeleteTask = async (taskId: string, taskTitle?: string) => {
+    if (!window.confirm(`タスク「${taskTitle || '選択したタスク'}」を削除しますか？`)) return;
+    try {
+      if (onDeleteTask) {
+        await onDeleteTask(taskId);
+      } else {
+        const supabase = getSupabase();
+        if (supabase) {
+          await supabase.from('tasks').delete().eq('id', taskId);
+        }
+      }
+      if (editingTaskId === taskId) {
+        setEditingTaskId('');
+        setTaskDraft(EMPTY_TASK);
+      }
+      setNotice('タスクを削除しました。');
+      await onRefresh();
+    } catch (err: any) {
+      setError(err?.message || 'タスクの削除に失敗しました。');
+    }
+  };
+
   const addMilestone = async (event: React.FormEvent) => {
     event.preventDefault();
     if (!selected || !milestoneDraft.trim()) return;
@@ -788,7 +811,29 @@ export const CustomerSupportWorkspace: React.FC<Props> = ({
             <label className="block text-xs font-semibold text-slate-700">状態<select value={taskDraft.status} onChange={(event) => setTaskDraft({ ...taskDraft, status: event.target.value as TaskItem['status'] })} className="mt-1 w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs text-slate-900 focus:outline-none focus:border-purple-600 shadow-2xs">{Object.entries(TASK_STATUS_LABELS).filter(([key]) => key !== 'pending_approval').map(([key, label]) => <option key={key} value={key}>{label}</option>)}</select></label>
             <label className="block text-xs font-semibold text-slate-700">優先度<select value={taskDraft.priority} onChange={(event) => setTaskDraft({ ...taskDraft, priority: event.target.value as Priority })} className="mt-1 w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs text-slate-900 focus:outline-none focus:border-purple-600 shadow-2xs"><option value="high">高</option><option value="medium">中</option><option value="low">低</option></select></label>
             <label className="block text-xs font-semibold text-slate-700">詳細<textarea rows={3} value={taskDraft.description} onChange={(event) => setTaskDraft({ ...taskDraft, description: event.target.value })} className="mt-1 w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs text-slate-900 focus:outline-none focus:border-purple-600 shadow-2xs" /></label>
-            <div className="flex gap-2"><button className="rounded-xl bg-purple-600 hover:bg-purple-700 px-4 py-2 text-xs font-bold text-white shadow-xs shadow-purple-600/20 cursor-pointer">{editingTaskId ? '変更を保存' : 'タスクを登録'}</button>{editingTaskId && <button type="button" onClick={() => openTaskEditor()} className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-semibold text-slate-600 hover:bg-slate-50 cursor-pointer">新規入力へ</button>}</div>
+            <div className="flex flex-wrap items-center gap-2">
+              <button className="rounded-xl bg-purple-600 hover:bg-purple-700 px-4 py-2 text-xs font-bold text-white shadow-xs shadow-purple-600/20 cursor-pointer">
+                {editingTaskId ? '変更を保存' : 'タスクを登録'}
+              </button>
+              {editingTaskId && (
+                <>
+                  <button
+                    type="button"
+                    onClick={() => void handleDeleteTask(editingTaskId, taskDraft.title)}
+                    className="rounded-xl border border-rose-200 bg-rose-50 px-3 py-2 text-xs font-semibold text-rose-700 hover:bg-rose-100 cursor-pointer"
+                  >
+                    タスクを削除
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => openTaskEditor()}
+                    className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-semibold text-slate-600 hover:bg-slate-50 cursor-pointer"
+                  >
+                    新規入力へ
+                  </button>
+                </>
+              )}
+            </div>
           </form>
           <div className="space-y-3">
             <div className="flex flex-wrap items-center justify-between gap-2"><h4 className="font-bold text-slate-900 text-sm">未完了 {companyTasks.length}件 · 期限超過 {overdueTasks.length}件</h4><ClipboardList className="h-4 w-4 text-slate-400" /></div>
@@ -797,7 +842,19 @@ export const CustomerSupportWorkspace: React.FC<Props> = ({
               {supportTasks.filter((task) => (task.taskOwnerSide || 'mst') === side).length === 0 ? <p className="text-xs text-slate-400">タスクはありません。</p> :
                 <ul className="divide-y divide-slate-100">{supportTasks.filter((task) => (task.taskOwnerSide || 'mst') === side).map((task) => <li key={task.id} className="py-2.5">
                   <div className="flex flex-wrap items-start justify-between gap-2"><div><div className={'text-xs font-semibold ' + (task.status === 'completed' ? 'text-emerald-700 line-through' : 'text-slate-800')}>{task.title}</div><div className="mt-1 text-[11px] text-slate-500">{task.supportAssigneeName || task.assignee?.name || '担当未設定'} · 期限 {task.dueDate || '未設定'} · 優先度 {task.priority === 'high' ? '高' : task.priority === 'low' ? '低' : '中'}{task.dueDate && task.dueDate < new Date().toISOString().slice(0, 10) && task.status !== 'completed' ? ' · 期限超過' : ''}</div>{task.description && <p className="mt-1 whitespace-pre-wrap text-xs text-slate-600">{task.description}</p>}</div>
-                  <div className="flex items-center gap-2"><select aria-label={task.title + 'の状態'} value={task.status} onChange={(event) => setTaskStatus(task, event.target.value as TaskItem['status'])} className="rounded-lg border border-slate-200 bg-white px-2 py-1 text-xs text-slate-800 focus:outline-none focus:border-purple-600 shadow-2xs">{Object.entries(TASK_STATUS_LABELS).map(([key, label]) => <option key={key} value={key}>{label}</option>)}</select><button type="button" onClick={() => openTaskEditor(task)} className="rounded-lg border border-purple-200 bg-purple-50 px-2 py-1 text-xs font-semibold text-purple-700 hover:bg-purple-100 cursor-pointer shadow-2xs">編集</button></div>
+                  <div className="flex items-center gap-1.5">
+                    <select aria-label={task.title + 'の状態'} value={task.status} onChange={(event) => setTaskStatus(task, event.target.value as TaskItem['status'])} className="rounded-lg border border-slate-200 bg-white px-2 py-1 text-xs text-slate-800 focus:outline-none focus:border-purple-600 shadow-2xs">{Object.entries(TASK_STATUS_LABELS).map(([key, label]) => <option key={key} value={key}>{label}</option>)}</select>
+                    <button type="button" onClick={() => openTaskEditor(task)} className="rounded-lg border border-purple-200 bg-purple-50 px-2 py-1 text-xs font-semibold text-purple-700 hover:bg-purple-100 cursor-pointer shadow-2xs">編集</button>
+                    <button
+                      type="button"
+                      onClick={() => void handleDeleteTask(task.id, task.title)}
+                      className="p-1 rounded-lg border border-slate-200 bg-white hover:bg-rose-50 hover:text-rose-600 hover:border-rose-200 text-slate-400 transition cursor-pointer shadow-2xs"
+                      title={`タスク「${task.title}」を削除`}
+                      aria-label={`タスク「${task.title}」を削除`}
+                    >
+                      <Trash2 className="h-3.5 w-3.5" />
+                    </button>
+                  </div>
                   </div>
                 </li>)}</ul>}
             </section>)}

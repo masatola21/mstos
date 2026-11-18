@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { Mail, MailOpen, Reply, Send, RefreshCw, Settings, Trash2, CheckCircle2, AlertTriangle, AlertCircle, Copy, ShieldCheck, Activity, Sparkles, Globe, HelpCircle, Info, X, FileText, Maximize2, Minimize2 } from 'lucide-react';
+import { Mail, MailOpen, Reply, Send, RefreshCw, Settings, Trash2, CheckCircle2, AlertTriangle, AlertCircle, Copy, ShieldCheck, Activity, Sparkles, Globe, HelpCircle, Info, X, FileText, Maximize2, Minimize2, Ban, ShieldAlert } from 'lucide-react';
 import { getSupabase, getAuthHeaders } from '../../lib/supabaseClient';
 import { useSendDrawer } from '../../context/SendDrawerContext';
 import { useInboxRealtime } from '../../hooks/useInboxRealtime';
@@ -152,6 +152,116 @@ export const MarketingEmailInboxView: React.FC<MarketingEmailInboxViewProps> = (
   const [simSubject, setSimSubject] = useState('【業務改善の相談】システム導入と業務自動化について');
   const [simBody, setSimBody] = useState('有限会社MST 大橋様\n\nお世話になっております。業務改善について相談させていただけますでしょうか。\n\n株式会社テストクライアント\n担当: 田中 太郎');
   const [simulating, setSimulating] = useState(false);
+
+  // 迷惑メール・受信拒否リスト状態
+  type BlocklistItem = {
+    id: string;
+    pattern: string;
+    match_type: 'address' | 'domain';
+    reason?: string;
+    created_at: string;
+  };
+  const [blocklist, setBlocklist] = useState<BlocklistItem[]>([]);
+  const [loadingBlocklist, setLoadingBlocklist] = useState(false);
+  const [showBlocklistModal, setShowBlocklistModal] = useState(false);
+  const [newBlockPattern, setNewBlockPattern] = useState('');
+  const [newBlockReason, setNewBlockReason] = useState('迷惑メール・営業DM');
+
+  const loadBlocklist = async () => {
+    setLoadingBlocklist(true);
+    try {
+      const authHeaders = await getAuthHeaders();
+      const res = await fetch('/api/email/blocklist', { headers: { ...authHeaders } });
+      if (res.ok) {
+        const data = await res.json();
+        setBlocklist(data.blocklist || []);
+      }
+    } catch (err) {
+      console.warn('Failed to load blocklist:', err);
+    } finally {
+      setLoadingBlocklist(false);
+    }
+  };
+
+  const handleBlockSender = async (rawSender: string) => {
+    const parsed = parseSender(rawSender);
+    const targetEmail = (parsed.address || rawSender).trim().toLowerCase();
+    if (!targetEmail) return;
+
+    const domain = targetEmail.includes('@') ? '@' + targetEmail.split('@')[1] : '';
+    const confirmMsg = `送信元「${targetEmail}」を受信拒否（迷惑メール登録）しますか？\n\n・今後このアドレスからのメールは自動でブロック（破棄）されます。\n・受信トレイにあるこの送信者からのメールも合わせて削除します。\n\n（※ドメイン全体「${domain}」をまとめて拒否したい場合は、受信拒否リスト管理画面から登録できます）`;
+
+    if (!window.confirm(confirmMsg)) return;
+
+    setBusy(true);
+    setError('');
+    setNotice('');
+    try {
+      const authHeaders = await getAuthHeaders();
+      const res = await fetch('/api/email/blocklist', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', ...authHeaders },
+        body: JSON.stringify({
+          pattern: targetEmail,
+          match_type: 'address',
+          reason: '受信箱からのワンクリック迷惑メール拒否',
+          delete_existing: true,
+        }),
+      });
+      const result = await res.json();
+      if (!res.ok) throw new Error(result.error || '受信拒否の登録に失敗しました。');
+
+      setNotice(`「${targetEmail}」を受信拒否リストに追加しました。受信トレイから ${result.deletedExistingCount || 0} 件の関連メールを削除しました。`);
+      setSelected(null);
+      await Promise.all([load(), loadBlocklist()]);
+    } catch (err: any) {
+      setError(err?.message || '受信拒否の登録に失敗しました。');
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const handleRemoveBlock = async (id: string, pattern: string) => {
+    if (!window.confirm(`「${pattern}」の受信拒否を解除しますか？`)) return;
+    try {
+      const authHeaders = await getAuthHeaders();
+      const res = await fetch(`/api/email/blocklist/${id}`, {
+        method: 'DELETE',
+        headers: { ...authHeaders },
+      });
+      if (!res.ok) throw new Error('解除に失敗しました。');
+      setNotice(`「${pattern}」の受信拒否を解除しました。`);
+      await loadBlocklist();
+    } catch (err: any) {
+      setError(err?.message || '解除に失敗しました。');
+    }
+  };
+
+  const handleAddCustomBlock = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const pattern = newBlockPattern.trim().toLowerCase();
+    if (!pattern) return;
+    try {
+      const authHeaders = await getAuthHeaders();
+      const res = await fetch('/api/email/blocklist', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', ...authHeaders },
+        body: JSON.stringify({
+          pattern,
+          match_type: pattern.startsWith('@') ? 'domain' : 'address',
+          reason: newBlockReason.trim() || '迷惑メール・営業DM',
+          delete_existing: true,
+        }),
+      });
+      const result = await res.json();
+      if (!res.ok) throw new Error(result.error || '登録に失敗しました。');
+      setNotice(`「${pattern}」を受信拒否リストに追加しました。`);
+      setNewBlockPattern('');
+      await Promise.all([load(), loadBlocklist()]);
+    } catch (err: any) {
+      setError(err?.message || '登録に失敗しました。');
+    }
+  };
 
   // 未保存の変更があるかどうか判定
   const isDirty =
@@ -418,6 +528,7 @@ export const MarketingEmailInboxView: React.FC<MarketingEmailInboxViewProps> = (
 
   useEffect(() => {
     void load();
+    void loadBlocklist();
   }, [db]);
 
   // 自動更新: Supabase Realtime を主役にし、接続できないときだけ30秒間隔の差分ポーリングに切り替える。
@@ -808,6 +919,18 @@ export const MarketingEmailInboxView: React.FC<MarketingEmailInboxViewProps> = (
             >
               <Sparkles className="h-3 w-3 text-purple-600" />
               <span>テスト受信シミュレート</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                setShowBlocklistModal(true);
+                void loadBlocklist();
+              }}
+              className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg border border-rose-200 bg-rose-50/60 hover:bg-rose-100 text-rose-800 text-xs font-semibold shadow-2xs transition cursor-pointer"
+              title="迷惑メールの受信拒否リスト（ブラックリスト）を確認・設定します"
+            >
+              <Ban className="h-3 w-3 text-rose-600" />
+              <span>受信拒否 ({blocklist.length})</span>
             </button>
             <button
               type="button"
@@ -1250,6 +1373,16 @@ export const MarketingEmailInboxView: React.FC<MarketingEmailInboxViewProps> = (
                       <Reply className="h-4 w-4" />
                       <span>返信する（ドロワー）</span>
                     </button>
+                    <button
+                      type="button"
+                      onClick={() => handleBlockSender(selected.from_email)}
+                      disabled={busy}
+                      className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-rose-50 hover:bg-rose-100 text-rose-700 text-xs font-bold border border-rose-200 shadow-xs cursor-pointer transition disabled:opacity-50"
+                      title="この送信者を受信拒否（迷惑メール）に登録し、既存メールも破棄します"
+                    >
+                      <Ban className="h-4 w-4 text-rose-600" />
+                      <span>迷惑メール拒否</span>
+                    </button>
                   </div>
                 </div>
 
@@ -1375,6 +1508,19 @@ export const MarketingEmailInboxView: React.FC<MarketingEmailInboxViewProps> = (
                   </button>
                   <button
                     type="button"
+                    onClick={() => {
+                      setIsBodyExpanded(false);
+                      handleBlockSender(selected.from_email);
+                    }}
+                    disabled={busy}
+                    className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-rose-50 hover:bg-rose-100 text-rose-700 text-xs font-bold border border-rose-200 cursor-pointer transition whitespace-nowrap shrink-0 disabled:opacity-50"
+                    title="この送信者を受信拒否（迷惑メール）に登録し、既存メールも破棄します"
+                  >
+                    <Ban className="h-4 w-4 text-rose-600" />
+                    <span>迷惑メール拒否</span>
+                  </button>
+                  <button
+                    type="button"
                     onClick={() => setIsBodyExpanded(false)}
                     className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-slate-300 bg-white hover:bg-slate-100 text-slate-800 text-xs font-bold cursor-pointer transition whitespace-nowrap shrink-0"
                   >
@@ -1391,6 +1537,160 @@ export const MarketingEmailInboxView: React.FC<MarketingEmailInboxViewProps> = (
                       ? '本文を読み込めませんでした。もう一度メールを選択してください。'
                       : bodyTextOf(selected) || '(本文なし)'}
                 </pre>
+              </div>
+            </div>
+          </div>,
+          document.body
+        )}
+
+      {/* 受信拒否（迷惑メール）管理モーダル */}
+      {showBlocklistModal &&
+        typeof document !== 'undefined' &&
+        createPortal(
+          <div
+            className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs"
+            onClick={(e) => {
+              if (e.target === e.currentTarget) setShowBlocklistModal(false);
+            }}
+          >
+            <div className="bg-white rounded-2xl shadow-2xl max-w-2xl w-full max-h-[85vh] flex flex-col overflow-hidden animate-in fade-in zoom-in-95 duration-150 border border-slate-200">
+              {/* ヘッダー */}
+              <div className="px-6 py-4 border-b border-slate-200 bg-linear-to-r from-rose-50 via-white to-slate-50 flex items-center justify-between">
+                <div className="flex items-center gap-2.5">
+                  <div className="p-2 rounded-xl bg-rose-100 text-rose-700">
+                    <ShieldAlert className="h-5 w-5" />
+                  </div>
+                  <div>
+                    <h3 className="text-base font-bold text-slate-900">受信拒否（迷惑メール）リスト</h3>
+                    <p className="text-xs text-slate-500">登録されたアドレス・ドメインからのメールは受信時に自動破棄されます</p>
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setShowBlocklistModal(false)}
+                  className="p-1.5 rounded-lg text-slate-400 hover:text-slate-600 hover:bg-slate-100 transition cursor-pointer"
+                >
+                  <X className="h-5 w-5" />
+                </button>
+              </div>
+
+              {/* 手動追加フォーム */}
+              <div className="p-5 border-b border-slate-200 bg-slate-50/70">
+                <form onSubmit={handleAddCustomBlock} className="space-y-3">
+                  <div className="text-xs font-bold text-slate-700 flex items-center gap-1.5">
+                    <span>新規ブロック追加</span>
+                    <span className="text-[11px] font-normal text-slate-500">
+                      （特定アドレスまたは「@ドメイン」を指定）
+                    </span>
+                  </div>
+                  <div className="grid grid-cols-1 sm:grid-cols-12 gap-2">
+                    <div className="sm:col-span-6">
+                      <input
+                        type="text"
+                        value={newBlockPattern}
+                        onChange={(e) => setNewBlockPattern(e.target.value)}
+                        placeholder="例: spammer@bad.com または @spam-domain.com"
+                        className="w-full px-3 py-2 text-xs rounded-lg border border-slate-300 focus:outline-hidden focus:ring-2 focus:ring-rose-500 bg-white"
+                        required
+                      />
+                    </div>
+                    <div className="sm:col-span-4">
+                      <input
+                        type="text"
+                        value={newBlockReason}
+                        onChange={(e) => setNewBlockReason(e.target.value)}
+                        placeholder="理由（例: 営業DM・迷惑）"
+                        className="w-full px-3 py-2 text-xs rounded-lg border border-slate-300 focus:outline-hidden focus:ring-2 focus:ring-rose-500 bg-white"
+                      />
+                    </div>
+                    <div className="sm:col-span-2">
+                      <button
+                        type="submit"
+                        disabled={!newBlockPattern.trim()}
+                        className="w-full py-2 px-3 rounded-lg bg-rose-600 hover:bg-rose-700 text-white text-xs font-bold transition shadow-xs cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed whitespace-nowrap"
+                      >
+                        追加
+                      </button>
+                    </div>
+                  </div>
+                  <p className="text-[11px] text-slate-500">
+                    ※ 追加すると、受信トレイ内にある該当送信元の既存メールも自動的に一括削除されます。
+                  </p>
+                </form>
+              </div>
+
+              {/* 一覧 */}
+              <div className="flex-1 min-h-0 overflow-y-auto p-5">
+                <div className="flex items-center justify-between mb-3">
+                  <span className="text-xs font-bold text-slate-700">登録済みパターン（{blocklist.length}件）</span>
+                  <button
+                    type="button"
+                    onClick={() => void loadBlocklist()}
+                    className="inline-flex items-center gap-1 text-[11px] text-slate-500 hover:text-slate-800 cursor-pointer"
+                  >
+                    <RefreshCw className={`h-3 w-3 ${loadingBlocklist ? 'animate-spin' : ''}`} />
+                    <span>再読み込み</span>
+                  </button>
+                </div>
+
+                {loadingBlocklist && blocklist.length === 0 ? (
+                  <div className="py-8 text-center text-xs text-slate-400">読み込み中...</div>
+                ) : blocklist.length === 0 ? (
+                  <div className="py-10 text-center">
+                    <ShieldCheck className="h-8 w-8 text-slate-300 mx-auto mb-2" />
+                    <p className="text-xs text-slate-500 font-medium">現在、受信拒否リストに登録されているアドレスはありません。</p>
+                    <p className="text-[11px] text-slate-400 mt-1">迷惑メールを受信した際は、詳細画面の「迷惑メール拒否」ボタンから即座に追加できます。</p>
+                  </div>
+                ) : (
+                  <div className="divide-y divide-slate-100 border border-slate-200 rounded-xl overflow-hidden bg-white">
+                    {blocklist.map((item) => (
+                      <div key={item.id} className="p-3.5 flex items-center justify-between gap-3 hover:bg-slate-50/60 transition">
+                        <div className="min-w-0 flex-1">
+                          <div className="flex items-center gap-2">
+                            <span className="font-mono text-xs font-bold text-slate-900 truncate">
+                              {item.pattern}
+                            </span>
+                            <span
+                              className={`text-[10px] font-semibold px-2 py-0.5 rounded-full border ${
+                                item.match_type === 'domain' || item.pattern.startsWith('@')
+                                  ? 'bg-amber-50 text-amber-700 border-amber-200'
+                                  : 'bg-rose-50 text-rose-700 border-rose-200'
+                              }`}
+                            >
+                              {item.match_type === 'domain' || item.pattern.startsWith('@')
+                                ? 'ドメイン全体ブロック'
+                                : 'アドレス個別ブロック'}
+                            </span>
+                          </div>
+                          <div className="text-[11px] text-slate-500 mt-0.5 flex items-center gap-2">
+                            <span>理由: {item.reason || '未指定'}</span>
+                            <span>•</span>
+                            <span>登録日: {new Date(item.created_at).toLocaleDateString('ja-JP')}</span>
+                          </div>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => void handleRemoveBlock(item.id, item.pattern)}
+                          className="px-2.5 py-1 text-xs font-semibold text-rose-600 hover:text-rose-800 hover:bg-rose-50 rounded-lg border border-transparent hover:border-rose-200 transition cursor-pointer shrink-0"
+                          title="受信拒否を解除します"
+                        >
+                          解除
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              {/* フッター */}
+              <div className="px-6 py-3 border-t border-slate-200 bg-slate-50 flex items-center justify-end">
+                <button
+                  type="button"
+                  onClick={() => setShowBlocklistModal(false)}
+                  className="px-4 py-2 rounded-xl bg-slate-800 hover:bg-slate-900 text-white text-xs font-bold transition shadow-xs cursor-pointer"
+                >
+                  閉じる
+                </button>
               </div>
             </div>
           </div>,

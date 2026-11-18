@@ -4037,6 +4037,34 @@ app.post('/api/email/webhook', express.raw({ type: 'application/json', limit: '2
   const message = emailResult.data && typeof emailResult.data === 'object' ? emailResult.data : emailResult;
 
   for (const integration of matched) {
+    // 迷惑メール・拒否リスト判定（合致した場合は受信箱保存・バックアップ転送を自動ブロック）
+    const rawFrom = String(message.from || event.data.from || '');
+    const cleanSender = extractEmailAddress(rawFrom);
+    const senderDomain = cleanSender.includes('@') ? '@' + cleanSender.split('@')[1] : '';
+
+    try {
+      const { data: blockedRules } = await lineSupabase
+        .from('email_blocklist')
+        .select('pattern, match_type')
+        .eq('owner_id', integration.owner_id);
+
+      const isBlocked = (blockedRules || []).some((b: any) => {
+        const p = String(b.pattern || '').trim().toLowerCase();
+        if (b.match_type === 'domain' || p.startsWith('@')) {
+          const checkDomain = p.startsWith('@') ? p : '@' + p;
+          return cleanSender.endsWith(checkDomain) || senderDomain === checkDomain;
+        }
+        return cleanSender === p;
+      });
+
+      if (isBlocked) {
+        console.log(`[ResendWebhook] Blocked spam email from ${cleanSender} (matched blocklist)`);
+        continue; // 受信箱保存と転送をスキップ
+      }
+    } catch (blockErr) {
+      console.warn('[ResendWebhook] Error checking email blocklist:', blockErr);
+    }
+
     // 2-8-6: 重複受信チェック（新規行の場合のみバックアップ転送を行う）
     const { data: existingMessage } = await lineSupabase
       .from('email_inbox_messages')
@@ -9505,6 +9533,97 @@ app.post('/api/email/test-backup-forward', requireAuth, async (req, res) => {
   } catch (err: any) {
     console.error('[TestBackupForward] Failed to send test forward:', err);
     return res.status(500).json({ error: err?.message || 'テスト送信中にエラーが発生しました。' });
+  }
+});
+
+// 迷惑メール・拒否リスト一覧の取得
+app.get('/api/email/blocklist', requireAuth, async (req, res) => {
+  if (!lineSupabase) return res.status(503).json({ error: 'DB接続が設定されていません。' });
+  const user = (req as any).user;
+  try {
+    const { data, error } = await lineSupabase
+      .from('email_blocklist')
+      .select('*')
+      .eq('owner_id', user.id)
+      .order('created_at', { ascending: false });
+    if (error) {
+      if (error.code === '42P01') return res.json({ blocklist: [] });
+      throw error;
+    }
+    return res.json({ blocklist: data || [] });
+  } catch (err: any) {
+    console.error('[GetBlocklist] Error:', err);
+    return res.status(500).json({ error: err?.message || 'ブロックリストの取得に失敗しました。' });
+  }
+});
+
+// 迷惑メール・拒否リストへの追加（＋既存メールの削除オプション）
+app.post('/api/email/blocklist', requireAuth, async (req, res) => {
+  if (!lineSupabase) return res.status(503).json({ error: 'DB接続が設定されていません。' });
+  const user = (req as any).user;
+  const rawPattern = String(req.body?.pattern || '').trim().toLowerCase();
+  const matchType = req.body?.match_type === 'domain' || rawPattern.startsWith('@') ? 'domain' : 'address';
+  const reason = String(req.body?.reason || '迷惑メール・スパム').trim();
+  const deleteExisting = Boolean(req.body?.delete_existing);
+
+  if (!rawPattern) {
+    return res.status(400).json({ error: '拒否するメールアドレスまたはドメインを指定してください。' });
+  }
+
+  try {
+    const { data, error } = await lineSupabase
+      .from('email_blocklist')
+      .upsert(
+        { owner_id: user.id, pattern: rawPattern, match_type: matchType, reason },
+        { onConflict: 'owner_id,pattern' }
+      )
+      .select()
+      .single();
+
+    if (error) {
+      if (error.code === '42P01') {
+        return res.status(500).json({ error: 'email_blocklist テーブルが存在しません。マイグレーションを適用してください。' });
+      }
+      throw error;
+    }
+
+    let deletedCount = 0;
+    if (deleteExisting) {
+      // 既存の受信メールからこのアドレスのメールを削除
+      const { data: delData } = await lineSupabase
+        .from('email_inbox_messages')
+        .delete()
+        .eq('owner_id', user.id)
+        .ilike('from_email', `%${rawPattern}%`)
+        .select('id');
+      deletedCount = delData?.length || 0;
+    }
+
+    return res.json({ success: true, item: data, deletedExistingCount: deletedCount });
+  } catch (err: any) {
+    console.error('[AddBlocklist] Error:', err);
+    return res.status(500).json({ error: err?.message || 'ブロックリストへの登録に失敗しました。' });
+  }
+});
+
+// 迷惑メール・拒否リストからの解除
+app.delete('/api/email/blocklist/:id', requireAuth, async (req, res) => {
+  if (!lineSupabase) return res.status(503).json({ error: 'DB接続が設定されていません。' });
+  const user = (req as any).user;
+  const id = req.params.id;
+
+  try {
+    const { error } = await lineSupabase
+      .from('email_blocklist')
+      .delete()
+      .eq('id', id)
+      .eq('owner_id', user.id);
+
+    if (error) throw error;
+    return res.json({ success: true });
+  } catch (err: any) {
+    console.error('[DeleteBlocklist] Error:', err);
+    return res.status(500).json({ error: err?.message || 'ブロックリストからの削除に失敗しました。' });
   }
 });
 
