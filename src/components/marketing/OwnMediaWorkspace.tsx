@@ -3,7 +3,7 @@ import { getSupabase, getAuthHeaders } from '../../lib/supabaseClient';
 import { Plus, Save, Trash2, Sparkles, RefreshCw, Globe, ExternalLink, Send, CheckCircle2, AlertCircle, Wrench, FileText, ArrowRight, Code2, Zap, Layers, Pencil, TrendingUp, BarChart2, Edit3, ChevronRight, Upload, Key, FileSpreadsheet, HelpCircle, X } from 'lucide-react';
 import { MEDIA_TEMPLATE_ARTICLES } from '../../data/mediaTemplateArticles';
 import { HpProductListingManager } from './HpProductListingManager';
-import { parseSeoCsv, type ParseCsvResult } from '../../utils/seoCsvParser';
+import { parseSeoCsv, resolvePageInfo, type ParseCsvResult } from '../../utils/seoCsvParser';
 
 type Kind = 'media' | 'article' | 'product' | 'seo' | 'rewrite' | 'attribution';
 type Row = {
@@ -435,12 +435,12 @@ export const OwnMediaWorkspace: React.FC<{
       const today = new Date().toISOString().slice(0, 10);
       const newRows: Row[] = csvParsed.rows.map((row, idx) => {
         const id = `seo-csv-${Date.now()}-${idx}-${Math.random().toString(36).slice(2, 6)}`;
-        const targetLabel = row.targetType === 'query' ? `クエリ: ${row.target}` : (row.matchedArticleTitle || row.target);
+        const displayLabel = row.resolvedTitle || (row.targetType === 'query' ? `🔍 ${row.target}` : (row.matchedArticleTitle || row.target));
         return {
           user_id: userId,
           id,
           record_type: 'seo' as Kind,
-          title: `${today} ${targetLabel.slice(0, 36)}`,
+          title: `${today} ${displayLabel.slice(0, 40)}`,
           product_id: null,
           status: null,
           payload: {
@@ -451,7 +451,9 @@ export const OwnMediaWorkspace: React.FC<{
             ctr: `${row.ctr}%`,
             source: 'csv',
             pageUrl: row.targetType === 'page' ? row.target : '',
+            cleanPath: row.cleanPath || '',
             query: row.targetType === 'query' ? row.target : '',
+            resolvedTitle: displayLabel,
             memo: `Search Console CSVより一括取り込み（${row.targetType === 'query' ? '検索クエリ' : 'ページ別'}）`,
           },
           updated_at: new Date().toISOString(),
@@ -526,23 +528,26 @@ export const OwnMediaWorkspace: React.FC<{
       const today = new Date().toISOString().slice(0, 10);
       const newRows: Row[] = data.rows.map((r, idx) => {
         const target = r.keys?.[0] || '';
-        const matched = rows.find((a) => a.record_type === 'article' && a.payload?.slug && target.includes(String(a.payload.slug)));
+        const resolved = resolvePageInfo(target, articles);
         const id = `seo-gsc-${Date.now()}-${idx}-${Math.random().toString(36).slice(2, 6)}`;
         return {
           user_id: userId,
           id,
           record_type: 'seo' as Kind,
-          title: `${today} ${(matched?.title || target).slice(0, 36)}`,
+          title: `${today} ${resolved.displayName.slice(0, 40)}`,
           product_id: null,
           status: null,
           payload: {
-            articleId: matched?.id || '',
+            articleId: resolved.matchedArticleId || '',
             impressions: String(r.impressions),
             clicks: String(r.clicks),
             avgPosition: String(r.position),
             ctr: `${r.ctr}%`,
             source: 'gsc_api',
             pageUrl: target,
+            cleanPath: resolved.cleanPath,
+            pageType: resolved.pageType,
+            resolvedTitle: resolved.displayName,
             memo: `Search Console API自動同期（${data.startDate}〜${data.endDate}）`,
           },
           updated_at: new Date().toISOString(),
@@ -1808,25 +1813,85 @@ export const OwnMediaWorkspace: React.FC<{
                       <div className="space-y-3">
                         {seoList.map((r) => {
                           const linkedArticle = articles.find((a) => a.id === r.payload.articleId);
+                          const resolved = resolvePageInfo(r.payload.pageUrl || r.payload.query || r.title, articles);
+                          const finalArticle = linkedArticle || (resolved.matchedArticleId ? articles.find((a) => a.id === resolved.matchedArticleId) : undefined);
+                          const displayTitle = finalArticle?.title || resolved.displayName || r.title;
+                          const dateMatch = r.title.match(/^\d{4}-\d{2}-\d{2}/);
+                          const recordDate = dateMatch ? dateMatch[0] : (r.updated_at ? r.updated_at.slice(0, 10) : '');
+                          const fullUrl = r.payload.pageUrl || resolved.fullUrl;
+                          const cleanPath = resolved.cleanPath || (fullUrl ? fullUrl.replace(/^https?:\/\/[^\/]+/, '') : '');
+
                           const imp = Number(r.payload.impressions || 0);
                           const clicks = Number(r.payload.clicks || 0);
                           const ctr = imp > 0 ? ((clicks / imp) * 100).toFixed(1) + '%' : '-';
                           const pos = r.payload.avgPosition ? Number(r.payload.avgPosition).toFixed(1) : '-';
                           const ctrNum = imp > 0 ? (clicks / imp) * 100 : 0;
                           const needsRewrite = Number(pos) >= 3 && Number(pos) <= 15 && ctrNum < 3;
+
+                          const badgeStyle =
+                            resolved.pageType === 'article' || finalArticle
+                              ? 'bg-purple-50 text-purple-700 border-purple-200'
+                              : resolved.pageType === 'home'
+                              ? 'bg-blue-50 text-blue-700 border-blue-200'
+                              : resolved.pageType === 'media_index'
+                              ? 'bg-indigo-50 text-indigo-700 border-indigo-200'
+                              : resolved.pageType === 'service'
+                              ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
+                              : resolved.pageType === 'query'
+                              ? 'bg-amber-50 text-amber-700 border-amber-200'
+                              : 'bg-slate-100 text-slate-700 border-slate-200';
+
                           return (
                             <article key={r.id} className={`rounded-2xl border bg-white p-4 shadow-xs ${needsRewrite ? 'border-orange-200' : 'border-slate-200'}`}>
                               <div className="flex justify-between items-start gap-2">
-                                <div className="min-w-0">
-                                  <div className="flex items-center gap-2 flex-wrap">
-                                    <h4 className="font-bold text-slate-900 text-sm">{r.title}</h4>
+                                <div className="min-w-0 flex-1">
+                                  <div className="flex items-center gap-1.5 flex-wrap mb-1">
+                                    <span className={`inline-flex items-center rounded-md border px-2 py-0.5 text-[10px] font-bold ${badgeStyle}`}>
+                                      {finalArticle ? '自社記事' : resolved.typeLabel}
+                                    </span>
+                                    {recordDate && (
+                                      <span className="text-[11px] font-mono text-slate-400">
+                                        {recordDate}
+                                      </span>
+                                    )}
+                                    {r.payload.source === 'gsc_api' && (
+                                      <span className="inline-flex items-center rounded-md bg-emerald-50 border border-emerald-200 px-1.5 py-0.2 text-[9px] font-bold text-emerald-700">
+                                        GSC自動同期
+                                      </span>
+                                    )}
+                                    {r.payload.source === 'csv' && (
+                                      <span className="inline-flex items-center rounded-md bg-slate-100 border border-slate-200 px-1.5 py-0.2 text-[9px] font-bold text-slate-600">
+                                        CSV
+                                      </span>
+                                    )}
                                     {needsRewrite && (
                                       <span className="inline-flex items-center gap-1 rounded-full bg-orange-50 border border-orange-200 px-2 py-0.5 text-[10px] font-bold text-orange-700">
                                         ⚠ リライト推奨
                                       </span>
                                     )}
                                   </div>
-                                  {linkedArticle && <p className="text-[11px] text-slate-400 mt-0.5">記事: {linkedArticle.title}</p>}
+                                  <h4 className="font-bold text-slate-900 text-sm leading-snug">
+                                    {displayTitle}
+                                  </h4>
+                                  {cleanPath && (
+                                    <div className="flex items-center gap-1.5 mt-1 text-[11px] text-slate-400">
+                                      <span className="font-mono text-slate-500 truncate max-w-[280px] sm:max-w-[420px]" title={cleanPath}>
+                                        {cleanPath}
+                                      </span>
+                                      {fullUrl && (
+                                        <a
+                                          href={fullUrl}
+                                          target="_blank"
+                                          rel="noreferrer"
+                                          className="inline-flex items-center gap-0.5 text-purple-600 hover:text-purple-800 hover:underline shrink-0"
+                                          title="実際のページをブラウザで開く"
+                                        >
+                                          <ExternalLink className="h-3 w-3" />
+                                          <span className="text-[10px]">ページを開く</span>
+                                        </a>
+                                      )}
+                                    </div>
+                                  )}
                                 </div>
                                 <div className="flex gap-2 shrink-0">
                                   {needsRewrite && !form && (
@@ -1834,8 +1899,8 @@ export const OwnMediaWorkspace: React.FC<{
                                       type="button"
                                       onClick={() => {
                                         setSeoSubMode('rewrite');
-                                        setTitle(`【リライト】${linkedArticle?.title || r.title}`);
-                                        setPayload({ articleId: r.payload.articleId || '', change: `順位${pos}位・CTR${ctr}のため改善が必要。` });
+                                        setTitle(`【リライト】${finalArticle?.title || displayTitle}`);
+                                        setPayload({ articleId: finalArticle?.id || r.payload.articleId || '', change: `順位${pos}位・CTR${ctr}のため改善が必要。` });
                                         setEditing(null);
                                         setForm(true);
                                       }}
@@ -2201,8 +2266,15 @@ export const OwnMediaWorkspace: React.FC<{
                       <tbody className="divide-y divide-slate-100 text-slate-700">
                         {csvParsed.rows.slice(0, 50).map((r, i) => (
                           <tr key={i} className="hover:bg-purple-50/30">
-                            <td className="py-1.5 px-3 truncate max-w-[200px]" title={r.target}>
-                              {r.target}
+                            <td className="py-1.5 px-3 max-w-[220px]" title={r.target}>
+                              <div className="font-semibold text-slate-900 truncate">
+                                {r.resolvedTitle || r.target}
+                              </div>
+                              {r.cleanPath && r.cleanPath !== r.resolvedTitle && (
+                                <div className="text-[10px] text-slate-400 font-mono truncate">
+                                  {r.cleanPath}
+                                </div>
+                              )}
                             </td>
                             <td className="py-1.5 px-2 text-right font-mono">{r.impressions.toLocaleString()}</td>
                             <td className="py-1.5 px-2 text-right font-mono font-bold text-purple-700">{r.clicks.toLocaleString()}</td>

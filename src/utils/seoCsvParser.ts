@@ -11,6 +11,176 @@ export interface ParsedSeoRow {
   ctr: number;           // パーセント（例: 5.2）
   matchedArticleId?: string;
   matchedArticleTitle?: string;
+  resolvedTitle?: string; // 人間が読みやすいページ名（例: 🏠 トップページ、記事タイトル）
+  cleanPath?: string;     // 正規化されたパス（例: /media/dx-support）
+}
+
+export interface ResolvedPageInfo {
+  displayName: string;
+  cleanPath: string;
+  pageType: 'article' | 'home' | 'media_index' | 'service' | 'contact' | 'query' | 'other';
+  typeLabel: string;
+  matchedArticleId?: string;
+  matchedArticleTitle?: string;
+  fullUrl?: string;
+}
+
+/**
+ * ページURL または 検索クエリから、人間が直感的に理解できるページ名・種別を解決する
+ */
+export function resolvePageInfo(
+  targetOrUrl: string,
+  articles: Array<{ id: string; title: string; payload?: { slug?: string } }> = []
+): ResolvedPageInfo {
+  const raw = (targetOrUrl || '').trim();
+  if (!raw) {
+    return { displayName: '未指定', cleanPath: '', pageType: 'other', typeLabel: '不明' };
+  }
+
+  // 1. 検索クエリ判定（URL形式でない一般的な文字列）
+  const isUrlLike = raw.startsWith('http://') || raw.startsWith('https://') || raw.startsWith('/') || raw.includes('.html');
+  if (!isUrlLike && !raw.includes('/')) {
+    return {
+      displayName: `🔍 ${raw}`,
+      cleanPath: raw,
+      pageType: 'query',
+      typeLabel: '検索クエリ',
+    };
+  }
+
+  // 2. URLの解析とパス抽出
+  let pathname = raw;
+  let fullUrl: string | undefined;
+
+  try {
+    if (raw.startsWith('http://') || raw.startsWith('https://')) {
+      fullUrl = raw;
+      const parsed = new URL(raw);
+      pathname = parsed.pathname;
+    }
+  } catch {
+    pathname = raw;
+  }
+
+  // URLデコード（日本語スラッグ対応）
+  try {
+    pathname = decodeURIComponent(pathname);
+  } catch {}
+
+  // パスの末尾スラッシュの正規化
+  const cleanPath = pathname.length > 1 && pathname.endsWith('/') ? pathname.slice(0, -1) : pathname;
+  const lowerPath = cleanPath.toLowerCase();
+
+  // 3. トップページ判定
+  if (lowerPath === '' || lowerPath === '/' || lowerPath === '/index' || lowerPath === '/index.html') {
+    return {
+      displayName: '🏠 トップページ（ホーム）',
+      cleanPath: '/',
+      pageType: 'home',
+      typeLabel: 'トップページ',
+      fullUrl,
+    };
+  }
+
+  // 4. メディア・お役立ち情報一覧
+  if (lowerPath === '/media' || lowerPath === '/blog' || lowerPath === '/media/index' || lowerPath === '/news') {
+    return {
+      displayName: '📚 お役立ち情報・記事一覧',
+      cleanPath,
+      pageType: 'media_index',
+      typeLabel: 'メディア一覧',
+      fullUrl,
+    };
+  }
+
+  // 5. サービス紹介ページ
+  if (lowerPath === '/service' || lowerPath === '/services' || lowerPath.startsWith('/services/') || lowerPath.startsWith('/service/')) {
+    const sub = cleanPath.split('/').filter(Boolean).slice(1).join('/');
+    const subLabel = sub ? ` (${sub})` : '';
+    return {
+      displayName: `💼 サービス紹介${subLabel}`,
+      cleanPath,
+      pageType: 'service',
+      typeLabel: 'サービス',
+      fullUrl,
+    };
+  }
+
+  // 6. お問い合わせ
+  if (lowerPath === '/contact' || lowerPath.startsWith('/contact')) {
+    return {
+      displayName: '✉️ お問い合わせ',
+      cleanPath,
+      pageType: 'contact',
+      typeLabel: 'お問い合わせ',
+      fullUrl,
+    };
+  }
+
+  // 7. 会社概要・特商法など
+  if (lowerPath === '/company' || lowerPath === '/about' || lowerPath.startsWith('/company')) {
+    return {
+      displayName: '🏢 会社概要',
+      cleanPath,
+      pageType: 'other',
+      typeLabel: '会社情報',
+      fullUrl,
+    };
+  }
+  if (lowerPath === '/privacy' || lowerPath.includes('privacy')) {
+    return {
+      displayName: '📜 プライバシーポリシー',
+      cleanPath,
+      pageType: 'other',
+      typeLabel: '規約',
+      fullUrl,
+    };
+  }
+
+  // 8. 自社記事とのマッチング
+  // パスの末尾セグメントをスラッグ候補とする（例: /media/ai-consulting -> ai-consulting）
+  const segments = cleanPath.split('/').filter(Boolean);
+  const slugFromUrl = segments[segments.length - 1] || '';
+
+  const matched = articles.find((a) => {
+    const slug = (a.payload?.slug || '').trim();
+    if (!slug) return false;
+    let decodedSlug = slug;
+    try {
+      decodedSlug = decodeURIComponent(slug);
+    } catch {}
+
+    // 完全一致
+    if (slugFromUrl === slug || slugFromUrl === decodedSlug) return true;
+    // URLの末尾またはパス内にスラッグが含まれるか
+    if (cleanPath.endsWith(`/${slug}`) || cleanPath.endsWith(`/${decodedSlug}`)) return true;
+    if (raw.includes(`/${slug}`) || raw.includes(`/${decodedSlug}`)) return true;
+    // タイトルが含まれるか
+    if (a.title && (cleanPath.includes(a.title) || raw.includes(encodeURIComponent(a.title)))) return true;
+    return false;
+  });
+
+  if (matched) {
+    return {
+      displayName: `📄 ${matched.title}`,
+      cleanPath,
+      pageType: 'article',
+      typeLabel: '自社記事',
+      matchedArticleId: matched.id,
+      matchedArticleTitle: matched.title,
+      fullUrl,
+    };
+  }
+
+  // 9. 記事にはマッチしなかった一般ページ
+  const prettyName = slugFromUrl ? `📄 /${slugFromUrl}` : cleanPath;
+  return {
+    displayName: prettyName,
+    cleanPath,
+    pageType: 'other',
+    typeLabel: '一般ページ',
+    fullUrl,
+  };
 }
 
 export interface ParseCsvResult {
@@ -126,34 +296,25 @@ export function parseSeoCsv(
     }
     const avgPosition = posIdx !== -1 ? parseFloat(cols[posIdx]?.replace(/,/g, '') || '0') || 0 : 0;
 
-    // 自社記事とのマッチング判定（URLまたはスラッグ、タイトルとの一致）
-    let matchedArticleId: string | undefined;
-    let matchedArticleTitle: string | undefined;
-
-    const matched = articles.find((a) => {
-      const slug = a.payload?.slug;
-      if (slug && rawTarget.includes(slug)) return true;
-      if (a.title && (rawTarget.includes(a.title) || a.title.includes(rawTarget))) return true;
-      return false;
-    });
-
-    if (matched) {
-      matchedArticleId = matched.id;
-      matchedArticleTitle = matched.title;
-    }
+    // ページURL/クエリの人間可読な名前・種別と、自社記事とのマッチング判定
+    const resolved = resolvePageInfo(rawTarget, articles);
+    const matchedArticleId = resolved.matchedArticleId;
+    const matchedArticleTitle = resolved.matchedArticleTitle;
 
     totalImp += impressions;
     totalClicks += clicks;
 
     parsedRows.push({
       target: rawTarget,
-      targetType,
+      targetType: resolved.pageType === 'query' ? 'query' : targetType,
       impressions,
       clicks,
       avgPosition: Math.round(avgPosition * 10) / 10,
       ctr: Math.round(ctr * 10) / 10,
       matchedArticleId,
       matchedArticleTitle,
+      resolvedTitle: resolved.displayName,
+      cleanPath: resolved.cleanPath,
     });
   }
 

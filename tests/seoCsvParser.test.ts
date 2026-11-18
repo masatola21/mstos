@@ -1,4 +1,4 @@
-import { parseSeoCsv } from '../src/utils/seoCsvParser';
+import { parseSeoCsv, resolvePageInfo } from '../src/utils/seoCsvParser';
 
 function assert(c: boolean, m: string) { if (!c) throw new Error(`Assertion failed: ${m}`); }
 
@@ -21,6 +21,7 @@ assert(result.rows[0].avgPosition === 3.8, 'position 3.8');
 assert(result.rows[0].matchedArticleId === 'art-1', 'matched article 1');
 assert(result.rows[1].matchedArticleId === 'art-2', 'matched article 2');
 assert(result.rows[2].matchedArticleId === undefined, 'unmatched article 3');
+assert(result.rows[0].resolvedTitle === '📄 DX業務効率化の完全ガイド', 'resolvedTitle for article');
 assert(result.totalClicks === 250, 'total clicks 250');
 assert(result.totalImpressions === 4980, 'total impressions 4980');
 
@@ -31,5 +32,19 @@ https://corp.mstcorp.info/posts/dx-efficiency,100,"1,500",6.67%,4.0
 const resultJp = parseSeoCsv(sampleJp, mockArticles);
 assert(resultJp.rows.length === 1, 'jp 1 row');
 assert(resultJp.rows[0].impressions === 1500, 'jp impressions parsed with comma');
+
+// resolvePageInfo のテスト
+const homeInfo = resolvePageInfo('https://corp.mstcorp.info/', mockArticles);
+assert(homeInfo.pageType === 'home', 'home type');
+assert(homeInfo.displayName.includes('トップページ'), 'home display name');
+
+const mediaInfo = resolvePageInfo('https://corp.mstcorp.info/media', mockArticles);
+assert(mediaInfo.pageType === 'media_index', 'media index type');
+
+const contactInfo = resolvePageInfo('https://corp.mstcorp.info/contact/', mockArticles);
+assert(contactInfo.pageType === 'contact', 'contact type');
+
+const queryInfo = resolvePageInfo('dx 業務効率化 ツール', mockArticles);
+assert(queryInfo.pageType === 'query', 'query type');
 
 console.log('seoCsvParser.test.ts: all assertions passed!');
