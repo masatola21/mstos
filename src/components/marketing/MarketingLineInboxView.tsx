@@ -31,7 +31,14 @@ type Tag={id:string;name:string};
 type ReplyTemplate={id:string;name:string;reply_type:'text'|'image'|'flex'|'video';payload:Record<string,unknown>};
 const LINE_TEMPLATE_BUCKET='mst-line-message-assets';
 const MAX_LINE_TEMPLATE_FILE_BYTES=20*1024*1024;
-type LineFriend = { line_user_id: string; display_name: string | null; picture_url: string | null };
+type LineFriend = {
+  line_user_id: string;
+  display_name: string | null;
+  picture_url: string | null;
+  contact_id?: string | null;
+  status?: string | null;
+  consent_status?: string | null;
+};
 type ChannelIntegration={owner_id:string;bot_user_id:string;auto_reply_enabled:boolean};
 
 export interface MarketingLineInboxViewProps {
@@ -97,6 +104,7 @@ export const MarketingLineInboxView: React.FC<MarketingLineInboxViewProps> = ({
   }, [isChatExpanded]);
   useEffect(()=>{if(initialLineUserId)setSelectedLineUserId(initialLineUserId)},[initialLineUserId]);
   const [busy,setBusy]=useState(false);
+  const [linkingFormUser,setLinkingFormUser]=useState(false);
   const [error,setError]=useState('');
   const [notice,setNotice]=useState('');
   const [conversationFilter, setConversationFilter] = useState<'all' | 'awaiting' | 'unread'>('all');
@@ -196,14 +204,20 @@ export const MarketingLineInboxView: React.FC<MarketingLineInboxViewProps> = ({
     const {data:auth}=await db.auth.getUser();
     if(!auth.user){setError('ログインしてください。');return}
     setOwnerId(auth.user.id);
-    const [m,r,t,i,templateResult,fResult,contactsRes]=await Promise.all([
+    const headersPromise = getAuthHeaders().catch(() => ({}));
+    const [m,r,t,i,templateResult,fResult,contactsRes,dismissedRes]=await Promise.all([
       db.from('line_inbox_messages').select('*').order('received_at',{ascending:false}).limit(500),
       db.from('line_auto_reply_rules').select('*').order('priority',{ascending:true}),
       db.from('contact_tags').select('id,name').order('name'),
       db.from('line_channel_integrations').select('owner_id,bot_user_id,auto_reply_enabled').maybeSingle(),
       db.from('line_auto_reply_templates').select('*').order('created_at',{ascending:false}),
-      db.from('line_friends').select('line_user_id,display_name,picture_url'),
+      db.from('line_friends').select('line_user_id,display_name,picture_url,contact_id,status,consent_status'),
       db.from('contacts').select('id,line_user_id').not('line_user_id','is',null),
+      headersPromise.then((headers) =>
+        fetch('/api/line/awaiting-dismissed', { headers })
+          .then((res) => (res.ok ? res.json() : null))
+          .catch(() => null),
+      ),
     ]);
     const missing=[m,r,i,templateResult].find(x=>x.error&&x.error.code==='PGRST205');
     if(missing){setError('受信箱・自動返信用のDBマイグレーションが未適用です。supabase/migrations/20261019130000_line_inbox_autoreply.sql、20261020140000_line_auto_reply_rich_messages.sql、20261020150000_line_auto_reply_templates.sql を適用してください。');return}
@@ -228,6 +242,11 @@ export const MarketingLineInboxView: React.FC<MarketingLineInboxViewProps> = ({
         if(c.line_user_id) cMap[c.line_user_id]=c.id;
       }
       setContactsByLineUser(cMap);
+    }
+    if (dismissedRes?.dismissedMap && typeof dismissedRes.dismissedMap === 'object') {
+      const serverMap = dismissedRes.dismissedMap as Record<string, string>;
+      setDismissedAwaitingMap(serverMap);
+      saveDismissedLineAwaitingMap(serverMap);
     }
   };
 
@@ -447,21 +466,43 @@ export const MarketingLineInboxView: React.FC<MarketingLineInboxViewProps> = ({
     }
   }, [awaitingReplyCount]);
 
-  const dismissAwaitingReply = (lineUserId: string, latestInboundAt: string | null) => {
+  const syncDismissedAwaitingToServer = async (lineUserId: string, dismissedUntil: string | null) => {
+    try {
+      const headers = await getAuthHeaders();
+      const res = await fetch('/api/line/awaiting-dismissed', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', ...headers },
+        body: JSON.stringify({ lineUserId, dismissedUntil }),
+      });
+      if (res.ok) {
+        const data = await res.json().catch(() => null);
+        if (data?.dismissedMap && typeof data.dismissedMap === 'object') {
+          setDismissedAwaitingMap(data.dismissedMap);
+          saveDismissedLineAwaitingMap(data.dismissedMap);
+        }
+      }
+    } catch {
+      // non-blocking fallback to local state
+    } finally {
+      notifyGlobalInboxUpdated();
+    }
+  };
+
+  const dismissAwaitingReply = async (lineUserId: string, latestInboundAt: string | null) => {
     const stamp = latestInboundAt || new Date().toISOString();
     const next = { ...dismissedAwaitingMap, [lineUserId]: stamp };
     setDismissedAwaitingMap(next);
     saveDismissedLineAwaitingMap(next);
-    notifyGlobalInboxUpdated();
     setNotice('このトークを「対応済み（返信不要）」にしました。新しい受信があれば自動で要返信に戻ります。');
+    await syncDismissedAwaitingToServer(lineUserId, stamp);
   };
 
-  const restoreAwaitingReply = (lineUserId: string) => {
+  const restoreAwaitingReply = async (lineUserId: string) => {
     const next = { ...dismissedAwaitingMap };
     delete next[lineUserId];
     setDismissedAwaitingMap(next);
     saveDismissedLineAwaitingMap(next);
-    notifyGlobalInboxUpdated();
+    await syncDismissedAwaitingToServer(lineUserId, null);
   };
 
   const connect=async()=>{
@@ -602,16 +643,110 @@ export const MarketingLineInboxView: React.FC<MarketingLineInboxViewProps> = ({
     if(e)setError(e.message);else if(!deleted)setError('削除対象が見つからないか、削除権限がありません。');else await load();
   };
 
+  const activeConversation=conversations.find(x=>x.lineUserId===selectedLineUserId);
+  const activeFriendRecord = selectedLineUserId ? friends[selectedLineUserId] : undefined;
+  const conversationContactId =
+    activeConversation?.items.find((m) => Boolean(m.contact_id))?.contact_id ||
+    activeFriendRecord?.contact_id ||
+    (selectedLineUserId ? contactsByLineUser[selectedLineUserId] : undefined) ||
+    undefined;
+  const isFriendSendStopped = Boolean(
+    activeFriendRecord &&
+    (activeFriendRecord.status === 'blocked' ||
+      activeFriendRecord.status === 'unfollowed' ||
+      activeFriendRecord.consent_status === 'opted_out'),
+  );
+
+  const ensureLineFriendContact = async (lineUserId: string) => {
+    const headers = await getAuthHeaders();
+    const res = await fetch('/api/line/friends/ensure-contact', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', ...headers },
+      body: JSON.stringify({ lineUserId }),
+    });
+    const payload = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      throw new Error(payload.error || 'LINE友だちと連絡先の紐付けに失敗しました。');
+    }
+    if (payload.contactId) {
+      setContactsByLineUser((prev) => ({ ...prev, [lineUserId]: String(payload.contactId) }));
+      setFriends((prev) => ({
+        ...prev,
+        [lineUserId]: {
+          line_user_id: lineUserId,
+          display_name: payload.displayName ?? prev[lineUserId]?.display_name ?? null,
+          picture_url: payload.pictureUrl ?? prev[lineUserId]?.picture_url ?? null,
+          contact_id: String(payload.contactId),
+          status: payload.friendStatus ?? prev[lineUserId]?.status ?? null,
+          consent_status: payload.consentStatus ?? prev[lineUserId]?.consent_status ?? null,
+        },
+      }));
+    }
+    return payload as {
+      contactId?: string;
+      friendStatus?: string;
+      consentStatus?: string;
+      canSendLine?: boolean;
+    };
+  };
+
+  const ensureContactAndOpenForm = async (lineUserId: string, closeExpanded = false) => {
+    setError('');
+    const currentFriend = friends[lineUserId];
+    const existingContactId =
+      activeConversation?.items.find((m) => Boolean(m.contact_id))?.contact_id ||
+      currentFriend?.contact_id ||
+      contactsByLineUser[lineUserId];
+
+    if (
+      existingContactId &&
+      currentFriend?.status === 'active' &&
+      currentFriend?.consent_status === 'opted_in'
+    ) {
+      if (closeExpanded) setIsChatExpanded(false);
+      openSendDrawer({ channel: 'line', kind: 'form', contactId: existingContactId });
+      return;
+    }
+
+    setLinkingFormUser(true);
+    try {
+      const ensured = await ensureLineFriendContact(lineUserId);
+      if (!ensured.canSendLine) {
+        setError('この友だちはブロックまたは配信停止状態のため、LINEからフォームを送信できません。');
+        return;
+      }
+      if (!ensured.contactId) {
+        setError('CRM連絡先の紐付けを確認できませんでした。');
+        return;
+      }
+      if (closeExpanded) setIsChatExpanded(false);
+      openSendDrawer({ channel: 'line', kind: 'form', contactId: ensured.contactId });
+    } catch (err: any) {
+      setError(err?.message || 'フォーム送信の準備に失敗しました。');
+    } finally {
+      setLinkingFormUser(false);
+    }
+  };
+
   const sendReply=async()=>{
     if(!db||!selectedLineUserId||!replyDraft.trim())return;
-    const latest=messages.filter(x=>x.line_user_id===selectedLineUserId).find(x=>x.direction==='inbound');
-    const contactId=latest?.contact_id;
-    if(!contactId){setError('CRM連絡先に紐づかないLINEユーザーには返信できません。');return}
     setBusy(true);setError('');setNotice('');
     try{
       const {data:session}=await db.auth.getSession();
       const token=session.session?.access_token;
       if(!token)throw new Error('ログイン状態を確認できません。');
+
+      let contactId = conversationContactId;
+      const currentFriend = friends[selectedLineUserId];
+      if (!contactId || currentFriend?.status !== 'active' || currentFriend?.consent_status !== 'opted_in') {
+        const ensured = await ensureLineFriendContact(selectedLineUserId);
+        contactId = ensured.contactId;
+        if (!ensured.canSendLine) {
+          throw new Error('この友だちはブロックまたは配信停止状態のため返信できません。');
+        }
+      }
+      if(!contactId)throw new Error('CRM連絡先に紐づかないLINEユーザーには返信できません。');
+
       const {data:friend,error:friendError}=await db.from('line_friends').select('status,consent_status').eq('line_user_id',selectedLineUserId).maybeSingle();
       if(friendError)throw friendError;
       if(!friend||friend.status!=='active'||friend.consent_status!=='opted_in')throw new Error('LINE友だち状態と配信同意を確認できないため返信できません。');
@@ -624,27 +759,24 @@ export const MarketingLineInboxView: React.FC<MarketingLineInboxViewProps> = ({
       const response=await fetch('/api/communications/send',{method:'POST',headers:{'Content-Type':'application/json',Authorization:'Bearer '+token},body:JSON.stringify({outboxId:outbox.id})});
       const result=await response.json().catch(()=>({}));
       if(!response.ok||result.status!=='sent')throw new Error(result.error||'返信を送信できませんでした。');
-      const {error:saveError}=await db.from('line_inbox_messages').insert({
+      const {error:saveError}=await db.from('line_inbox_messages').upsert({
         owner_id:ownerId,line_event_id:'manual-'+outbox.id,direction:'outbound',contact_id:contactId,
         line_user_id:selectedLineUserId,message_type:'text',body:replyDraft.trim(),status:'sent',received_at:new Date().toISOString(),
-      });
+      },{onConflict:'owner_id,line_event_id,direction',ignoreDuplicates:true});
       if(saveError)throw saveError;
       if(dismissedAwaitingMap[selectedLineUserId]){
         const nextMap={...dismissedAwaitingMap};
         delete nextMap[selectedLineUserId];
         setDismissedAwaitingMap(nextMap);
         saveDismissedLineAwaitingMap(nextMap);
+        await syncDismissedAwaitingToServer(selectedLineUserId, null);
+      } else {
+        notifyGlobalInboxUpdated();
       }
-      setReplyDraft('');setNotice('返信を送信しました。');await load();notifyGlobalInboxUpdated();
+      setReplyDraft('');setNotice('返信を送信しました。');await load();
     }catch(e:any){setError(e.message||'返信に失敗しました。')}
     finally{setBusy(false)}
   };
-
-  const activeConversation=conversations.find(x=>x.lineUserId===selectedLineUserId);
-  const conversationContactId =
-    activeConversation?.items.find((m) => Boolean(m.contact_id))?.contact_id ||
-    (selectedLineUserId ? contactsByLineUser[selectedLineUserId] : undefined) ||
-    undefined;
 
   const expandedChatPortal =
     isChatExpanded &&
@@ -683,17 +815,21 @@ export const MarketingLineInboxView: React.FC<MarketingLineInboxViewProps> = ({
                 <div className="flex items-center gap-2 shrink-0">
                   <button
                     type="button"
-                    disabled={!conversationContactId}
+                    disabled={!selectedLineUserId || linkingFormUser || isFriendSendStopped}
+                    title={
+                      isFriendSendStopped
+                        ? 'ブロックまたは配信停止状態のためフォームを送れません'
+                        : 'このLINE友だちにフォーム案内を送信します'
+                    }
                     onClick={() => {
-                      if (conversationContactId) {
-                        setIsChatExpanded(false);
-                        openSendDrawer({ channel: 'line', kind: 'form', contactId: conversationContactId });
+                      if (selectedLineUserId) {
+                        void ensureContactAndOpenForm(selectedLineUserId, true);
                       }
                     }}
                     className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-emerald-300 bg-emerald-50 hover:bg-emerald-100 text-emerald-800 text-xs font-bold transition disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer whitespace-nowrap shrink-0"
                   >
                     <FileText className="h-3.5 w-3.5 text-emerald-600" />
-                    <span>フォームを送る</span>
+                    <span>{linkingFormUser ? '準備中…' : 'フォームを送る'}</span>
                   </button>
                   <button
                     type="button"
@@ -705,6 +841,34 @@ export const MarketingLineInboxView: React.FC<MarketingLineInboxViewProps> = ({
                   </button>
                 </div>
               </div>
+
+              {activeConversation.awaitingReply && (
+                <div className="px-5 py-2 border-b border-rose-200 bg-rose-50 flex flex-wrap items-center justify-between gap-2 text-xs shrink-0">
+                  <span className="font-semibold text-rose-800">
+                    お客様からのメッセージ後にまだ手動返信がありません（要返信）
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => void dismissAwaitingReply(activeConversation.lineUserId, activeConversation.latestInboundAt)}
+                    className="inline-flex items-center gap-1 rounded-lg border border-rose-300 bg-white hover:bg-rose-100 px-2.5 py-1 text-[11px] font-bold text-rose-800 transition cursor-pointer"
+                  >
+                    <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
+                    <span>返信不要・対応済みにする</span>
+                  </button>
+                </div>
+              )}
+              {activeConversation.awaitingDismissed && (
+                <div className="px-5 py-1.5 border-b border-slate-200 bg-slate-50 flex flex-wrap items-center justify-between gap-2 text-[11px] text-slate-600 shrink-0">
+                  <span>返信不要として対応済みにしています</span>
+                  <button
+                    type="button"
+                    onClick={() => void restoreAwaitingReply(activeConversation.lineUserId)}
+                    className="font-semibold text-rose-700 hover:underline cursor-pointer"
+                  >
+                    要返信に戻す
+                  </button>
+                </div>
+              )}
 
               <div className="flex-1 min-h-0 overflow-y-auto bg-slate-50 p-4 sm:p-6 space-y-3">
                 {activeConversation.items.map((message) => {
@@ -1133,17 +1297,21 @@ export const MarketingLineInboxView: React.FC<MarketingLineInboxViewProps> = ({
                     </div>
                     <button
                       type="button"
-                      disabled={!conversationContactId}
-                      title={!conversationContactId ? '連絡先に紐づいていないため送れません' : 'このLINE友だちにフォーム案内を送信します'}
+                      disabled={!selectedLineUserId || linkingFormUser || isFriendSendStopped}
+                      title={
+                        isFriendSendStopped
+                          ? 'ブロックまたは配信停止状態のためフォームを送れません'
+                          : 'このLINE友だちにフォーム案内を送信します'
+                      }
                       onClick={() => {
-                        if (conversationContactId) {
-                          openSendDrawer({ channel: 'line', kind: 'form', contactId: conversationContactId });
+                        if (selectedLineUserId) {
+                          void ensureContactAndOpenForm(selectedLineUserId, false);
                         }
                       }}
                       className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg border border-emerald-300 bg-emerald-50 hover:bg-emerald-100 text-emerald-800 text-xs font-bold shadow-2xs transition disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer whitespace-nowrap shrink-0"
                     >
                       <FileText className="h-3.5 w-3.5 text-emerald-600" />
-                      <span>フォームを送る</span>
+                      <span>{linkingFormUser ? '準備中…' : 'フォームを送る'}</span>
                     </button>
                     <button
                       type="button"
@@ -1172,7 +1340,7 @@ export const MarketingLineInboxView: React.FC<MarketingLineInboxViewProps> = ({
                     </span>
                     <button
                       type="button"
-                      onClick={() => dismissAwaitingReply(activeConversation.lineUserId, activeConversation.latestInboundAt)}
+                      onClick={() => void dismissAwaitingReply(activeConversation.lineUserId, activeConversation.latestInboundAt)}
                       className="inline-flex items-center gap-1 rounded-lg border border-rose-300 bg-white hover:bg-rose-100 px-2.5 py-1 text-[11px] font-bold text-rose-800 transition cursor-pointer"
                     >
                       <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
@@ -1185,7 +1353,7 @@ export const MarketingLineInboxView: React.FC<MarketingLineInboxViewProps> = ({
                     <span>返信不要として対応済みにしています</span>
                     <button
                       type="button"
-                      onClick={() => restoreAwaitingReply(activeConversation.lineUserId)}
+                      onClick={() => void restoreAwaitingReply(activeConversation.lineUserId)}
                       className="font-semibold text-rose-700 hover:underline cursor-pointer"
                     >
                       要返信に戻す
@@ -1411,17 +1579,21 @@ export const MarketingLineInboxView: React.FC<MarketingLineInboxViewProps> = ({
                   <div className="flex items-center gap-2">
                     <button
                       type="button"
-                      disabled={!conversationContactId}
-                      title={!conversationContactId ? '連絡先に紐づいていないため送れません' : 'このLINE友だちにフォーム案内を送信します'}
+                      disabled={!selectedLineUserId || linkingFormUser || isFriendSendStopped}
+                      title={
+                        isFriendSendStopped
+                          ? 'ブロックまたは配信停止状態のためフォームを送れません'
+                          : 'このLINE友だちにフォーム案内を送信します'
+                      }
                       onClick={() => {
-                        if (conversationContactId) {
-                          openSendDrawer({ channel: 'line', kind: 'form', contactId: conversationContactId });
+                        if (selectedLineUserId) {
+                          void ensureContactAndOpenForm(selectedLineUserId, false);
                         }
                       }}
                       className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg border border-emerald-300 bg-emerald-50 hover:bg-emerald-100 text-emerald-800 text-xs font-semibold shadow-2xs transition disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer whitespace-nowrap shrink-0"
                     >
                       <FileText className="h-3.5 w-3.5 text-emerald-600" />
-                      <span>フォームを送る</span>
+                      <span>{linkingFormUser ? '準備中…' : 'フォームを送る'}</span>
                     </button>
                     <button
                       type="button"
@@ -1439,6 +1611,33 @@ export const MarketingLineInboxView: React.FC<MarketingLineInboxViewProps> = ({
                 <p className="mt-4 text-sm text-slate-400">左から相手を選択してください。</p>
               ) : (
                 <>
+                  {activeConversation.awaitingReply && (
+                    <div className="mt-2.5 flex flex-wrap items-center justify-between gap-2 rounded-xl border border-rose-200 bg-rose-50 px-3 py-2 text-xs">
+                      <span className="font-semibold text-rose-800">
+                        お客様からのメッセージ後にまだ手動返信がありません（要返信）
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => void dismissAwaitingReply(activeConversation.lineUserId, activeConversation.latestInboundAt)}
+                        className="inline-flex items-center gap-1 rounded-lg border border-rose-300 bg-white hover:bg-rose-100 px-2.5 py-1 text-[11px] font-bold text-rose-800 transition cursor-pointer"
+                      >
+                        <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
+                        <span>返信不要・対応済みにする</span>
+                      </button>
+                    </div>
+                  )}
+                  {activeConversation.awaitingDismissed && (
+                    <div className="mt-2.5 flex flex-wrap items-center justify-between gap-2 rounded-xl border border-slate-200 bg-slate-50 px-3 py-1.5 text-[11px] text-slate-600">
+                      <span>返信不要として対応済みにしています</span>
+                      <button
+                        type="button"
+                        onClick={() => void restoreAwaitingReply(activeConversation.lineUserId)}
+                        className="font-semibold text-rose-700 hover:underline cursor-pointer"
+                      >
+                        要返信に戻す
+                      </button>
+                    </div>
+                  )}
                   <div className="mt-3 max-h-[420px] space-y-2 overflow-auto rounded-xl bg-slate-50 p-4 border border-slate-200">
                     {activeConversation.items.map((message) => (
                       <div

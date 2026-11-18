@@ -21,7 +21,7 @@ import {
 } from 'lucide-react';
 import { Contact, TableKey } from '../types/database';
 import { fetchTableData, deleteTableRecord } from '../services/dataService';
-import { getSupabase } from '../lib/supabaseClient';
+import { getAuthHeaders, getSupabase } from '../lib/supabaseClient';
 import { RecordFormModal } from './RecordFormModal';
 import { InlineDeleteButton } from './InlineDeleteButton';
 import { UNIFIED_TAG_MASTER, TAG_CATEGORIES, MasterTag } from '../constants/tagMaster';
@@ -418,6 +418,34 @@ export const ContactsLineHub: React.FC<Props> = ({
       await toggleTagOnFriend(friendId, targetTag.id, hasTag, 'operator');
     } catch (err: any) {
       setError('タグ操作エラー: ' + (err.message || '処理に失敗しました'));
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const linkLineFriendToContact = async (lineUserId: string) => {
+    setSaving(true);
+    setError('');
+    setNotice('');
+    try {
+      const headers = await getAuthHeaders();
+      const res = await fetch('/api/line/friends/ensure-contact', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', ...headers },
+        body: JSON.stringify({ lineUserId }),
+      });
+      const payload = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        throw new Error(payload.error || 'LINE友だちの紐付けに失敗しました。');
+      }
+      setNotice(
+        payload.canSendLine
+          ? `「${payload.displayName || payload.fullName || lineUserId}」を連絡先に紐付け、LINE配信可能として確認しました。`
+          : `「${payload.displayName || payload.fullName || lineUserId}」を連絡先に紐付けました。`,
+      );
+      await load();
+    } catch (err: any) {
+      setError(err?.message || 'LINE友だちの紐付けに失敗しました。');
     } finally {
       setSaving(false);
     }
@@ -1060,6 +1088,34 @@ export const ContactsLineHub: React.FC<Props> = ({
                           <span className="text-xs text-slate-900 font-semibold">
                             {friend.display_name || '名前未取得'}
                           </span>
+                          <span
+                            className={`rounded-full px-2 py-0.5 text-[10px] font-semibold border ${
+                              friend.consent_status === 'opted_in'
+                                ? 'bg-emerald-50 border-emerald-200 text-emerald-700'
+                                : friend.consent_status === 'opted_out'
+                                  ? 'bg-rose-50 border-rose-200 text-rose-700'
+                                  : 'bg-amber-50 border-amber-200 text-amber-700'
+                            }`}
+                          >
+                            {friend.consent_status === 'opted_in'
+                              ? '配信同意: あり'
+                              : friend.consent_status === 'opted_out'
+                                ? '配信同意: 停止'
+                                : '配信同意: 未確認'}
+                          </span>
+                          {friend.consent_status !== 'opted_in' &&
+                            friend.consent_status !== 'opted_out' &&
+                            friend.status !== 'blocked' &&
+                            friend.status !== 'unfollowed' && (
+                              <button
+                                type="button"
+                                disabled={saving}
+                                onClick={() => void linkLineFriendToContact(friend.line_user_id)}
+                                className="rounded-md border border-amber-300 bg-white hover:bg-amber-50 px-2 py-0.5 text-[10px] font-semibold text-amber-800 transition cursor-pointer disabled:opacity-40"
+                              >
+                                状態を確認して送信可にする
+                              </button>
+                            )}
                         </div>
                         <InlineDeleteButton
                           onConfirm={async () => {
@@ -1317,7 +1373,19 @@ export const ContactsLineHub: React.FC<Props> = ({
                     </div>
                   ))}
                   {!person.contact && (
-                    <p className="mt-2 text-xs text-amber-600 font-medium">連絡先プロフィール未紐付け</p>
+                    <div className="mt-2 flex flex-wrap items-center gap-2">
+                      <p className="text-xs text-amber-600 font-medium">連絡先プロフィール未紐付け</p>
+                      {person.lineFriends[0] && (
+                        <button
+                          type="button"
+                          disabled={saving}
+                          onClick={() => void linkLineFriendToContact(person.lineFriends[0].line_user_id)}
+                          className="rounded-lg border border-amber-300 bg-amber-50 hover:bg-amber-100 px-2.5 py-1 text-[11px] font-semibold text-amber-800 transition cursor-pointer disabled:opacity-40"
+                        >
+                          連絡先に登録・紐付け
+                        </button>
+                      )}
+                    </div>
                   )}
                 </div>
 

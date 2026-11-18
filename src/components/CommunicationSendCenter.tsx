@@ -684,7 +684,25 @@ export const CommunicationSendCenter: React.FC<Props> = ({
       if (targets.includes('line')) {
         const { data: friend, error: friendError } = await db.from('line_friends').select('status,consent_status').eq('line_user_id', contact.line_user_id).maybeSingle();
         if (friendError) throw friendError;
-        if (!friend || friend.status !== 'active' || friend.consent_status !== 'opted_in') throw Error('LINEの友だち状態と配信同意を確認できません。');
+        const isStopped =
+          friend &&
+          (friend.status === 'blocked' ||
+            friend.status === 'unfollowed' ||
+            friend.consent_status === 'opted_out');
+        if (isStopped) {
+          throw Error('この連絡先はブロックまたは配信停止状態のためLINE送信できません。');
+        }
+        if (!friend || friend.status !== 'active' || friend.consent_status !== 'opted_in') {
+          const ensureRes = await fetch('/api/line/friends/ensure-contact', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + sessionData.session.access_token },
+            body: JSON.stringify({ lineUserId: contact.line_user_id }),
+          });
+          const ensured = await ensureRes.json().catch(() => ({}));
+          if (!ensureRes.ok || !ensured.canSendLine) {
+            throw Error(ensured.error || 'LINEの友だち状態と配信同意を確認できません。');
+          }
+        }
       }
       const rows = targets.map((target) => {
         const targetTemplate = target === 'email' && selectedEmailTemplate ? selectedEmailTemplate : resolveTemplate(target);
@@ -766,6 +784,9 @@ export const CommunicationSendCenter: React.FC<Props> = ({
       }
       if (allOk && kind === 'sales_outreach') setAutoFollowups(false);
       if (allOk) {
+        if (targets.includes('line') && typeof window !== 'undefined') {
+          window.dispatchEvent(new CustomEvent('mst_inbox_counts_updated'));
+        }
         onDraftChange?.(false);
         onSent?.({ ok: true, summary });
       } else {

@@ -109,11 +109,15 @@ export const LINE_AUTOMATED_OUTBOUND_PREFIXES = [
   'welcome-',
   'postback-',
   'reply-',
+  'rule-reply-',
   'reply-postback-',
   'alert-postback-',
   'care-q-',
   'sub-',
+  'broadcast-',
 ] as const;
+
+export const LINE_RULE_RESOLVED_PREFIX = 'rule-reply-';
 
 export const LINE_AWAITING_DISMISSED_STORAGE_KEY = 'mst_line_awaiting_dismissed_v1';
 
@@ -121,6 +125,7 @@ export interface LineAwaitingMessageLike {
   line_user_id?: string | null;
   line_event_id?: string | null;
   direction: 'inbound' | 'outbound' | string;
+  body?: string | null;
   received_at?: string | null;
 }
 
@@ -139,6 +144,74 @@ export function isManualLineOutboundMessage(message: {
   line_event_id?: string | null;
 }): boolean {
   return message.direction === 'outbound' && !isAutomatedLineOutboundMessage(message);
+}
+
+const NO_REPLY_QUESTION_OR_REQUEST_RE =
+  /[?？]|教えて|お願い|相談|質問|希望|予約|日程|いつ|どこ|いくら|どう|でき|可能|確認したい|知りたい|検討|見積|資料|連絡/;
+
+const NO_REPLY_EXACT_PHRASES = new Set([
+  'ありがとう',
+  'ありがとうございます',
+  'ありがとうございました',
+  'どうもありがとうございます',
+  '誠にありがとうございます',
+  '感謝します',
+  '感謝いたします',
+  '承知',
+  '承知です',
+  '承知しました',
+  '承知いたしました',
+  'かしこまりました',
+  '了解',
+  '了解です',
+  '了解しました',
+  '了解いたしました',
+  'りょ',
+  'りょうかい',
+  '確認しました',
+  '確認いたしました',
+  '拝見しました',
+  '拝見いたしました',
+  '受け取りました',
+  '受領しました',
+  '受領いたしました',
+  'お疲れ様です',
+  'お疲れさまです',
+  'おつかれさまです',
+  '失礼します',
+  '失礼いたします',
+  'ok',
+  'okay',
+  'thanks',
+  'thank you',
+  'thankyou',
+  'got it',
+  'roger',
+  '[スタンプ]',
+]);
+
+/**
+ * 「ありがとうございます」「承知しました」「OK」などの短いお礼・了解のみで、
+ * 新たな質問や対応依頼を含まない受信メッセージかを判定する。
+ */
+export function isLineNoReplyInboundText(body?: string | null): boolean {
+  if (typeof body !== 'string') return false;
+  const trimmed = body.normalize('NFKC').trim();
+  if (!trimmed || trimmed.length > 40) return false;
+  if (NO_REPLY_QUESTION_OR_REQUEST_RE.test(trimmed)) return false;
+
+  const normalized = trimmed
+    .toLowerCase()
+    .replace(/[\s!！。．.、,〜~♪♡♥★☆🙇🙏👍👌😊😄🎉✨]+$/gu, '')
+    .replace(/^[\s🙇🙏👍👌😊😄🎉✨]+/gu, '')
+    .trim();
+
+  if (!normalized) {
+    // 絵文字リアクション単体（👍 / 🙇 / 🙏 等）は返信不要とみなす
+    return /^[🙇🙏👍👌🙆‍♂️🙆‍♀️🙆😊😄🎉✨]+$/u.test(trimmed.replace(/\s+/g, ''));
+  }
+
+  return NO_REPLY_EXACT_PHRASES.has(normalized);
 }
 
 export function getLatestLineInboundAt(
@@ -161,34 +234,56 @@ export function getLatestLineInboundAt(
 
 /**
  * LINEトークが「要返信（ボールがこちらにある状態）」かを判定する。
- * - 顧客からの受信(inbound)が1件以上あること
- * - 最後の「手動返信(outbound かつ 自動送信プレフィックス以外)」より後に顧客からの受信があること
- *   （自動返信の reply-... 等だけでは「手動対応済み」にせず、要返信として残す）
- * - 「返信不要で対応済み」にした場合は、その時点の最新受信時刻以降の新しい受信が来るまで除外する
+ * - 自動返信ルールで応答済みの受信（rule-reply-{eventId} が存在）や、
+ *   「ありがとうございます」「承知しました」等の返信不要な短文のみは要返信にしない
+ * - 汎用自動受付返信（reply-...）や一斉配信（broadcast-...）だけでは「手動対応済み」にせず、要返信として残す
+ * - 手動返信（manual-... 等）が最新の要返信受信以降に送られていれば解消する
+ * - 「返信不要で対応済み」にした場合は、その時点以降の新しい要返信受信が来るまで除外する
  */
 export function isLineConversationAwaitingReply(
   messages: readonly LineAwaitingMessageLike[],
   dismissedUntil?: string | number | null,
 ): boolean {
-  let latestInboundMs = -1;
-  let hasInbound = false;
+  const ruleResolvedEventIds = new Set<string>();
   let latestManualOutboundMs = -1;
   let hasManualOutbound = false;
 
   for (const m of messages) {
-    const ms = Date.parse(String(m.received_at || ''));
-    const safeMs = Number.isFinite(ms) ? ms : 0;
-    if (m.direction === 'inbound') {
-      hasInbound = true;
-      if (safeMs >= latestInboundMs) latestInboundMs = safeMs;
-    } else if (isManualLineOutboundMessage(m)) {
+    if (m.direction !== 'outbound') continue;
+    const eventId = String(m.line_event_id || '').trim();
+    if (eventId.startsWith(LINE_RULE_RESOLVED_PREFIX)) {
+      const targetInboundId = eventId.slice(LINE_RULE_RESOLVED_PREFIX.length);
+      if (targetInboundId) ruleResolvedEventIds.add(targetInboundId);
+      continue;
+    }
+    if (isManualLineOutboundMessage(m)) {
+      const ms = Date.parse(String(m.received_at || ''));
+      const safeMs = Number.isFinite(ms) ? ms : 0;
       hasManualOutbound = true;
       if (safeMs >= latestManualOutboundMs) latestManualOutboundMs = safeMs;
     }
   }
 
-  if (!hasInbound) return false;
-  if (hasManualOutbound && latestManualOutboundMs >= latestInboundMs) {
+  let latestActionableInboundMs = -1;
+  let hasActionableInbound = false;
+
+  for (const m of messages) {
+    if (m.direction !== 'inbound') continue;
+    const eventId = String(m.line_event_id || '').trim();
+    if (eventId && ruleResolvedEventIds.has(eventId)) {
+      continue;
+    }
+    if (isLineNoReplyInboundText(m.body)) {
+      continue;
+    }
+    const ms = Date.parse(String(m.received_at || ''));
+    const safeMs = Number.isFinite(ms) ? ms : 0;
+    hasActionableInbound = true;
+    if (safeMs >= latestActionableInboundMs) latestActionableInboundMs = safeMs;
+  }
+
+  if (!hasActionableInbound) return false;
+  if (hasManualOutbound && latestManualOutboundMs >= latestActionableInboundMs) {
     return false;
   }
 
@@ -197,7 +292,7 @@ export function isLineConversationAwaitingReply(
       typeof dismissedUntil === 'number'
         ? dismissedUntil
         : Date.parse(String(dismissedUntil));
-    if (Number.isFinite(dismissedMs) && dismissedMs >= latestInboundMs) {
+    if (Number.isFinite(dismissedMs) && dismissedMs >= latestActionableInboundMs) {
       return false;
     }
   }

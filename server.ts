@@ -68,6 +68,8 @@ import {
 import {
   isLineConversationAwaitingReply,
   isLineMessageUnread,
+  isLineNoReplyInboundText,
+  LINE_RULE_RESOLVED_PREFIX,
 } from './src/utils/inboxReadState.js';
 
 dotenv.config();
@@ -1183,6 +1185,97 @@ export async function saveLineInboundAlertSettings(
   return normalized;
 }
 
+const memoryLineAwaitingDismissed: Record<string, Record<string, string>> = {};
+
+function normalizeLineAwaitingDismissedMap(raw: unknown): Record<string, string> {
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return {};
+  const out: Record<string, string> = {};
+  for (const [k, v] of Object.entries(raw as Record<string, unknown>)) {
+    if (typeof k === 'string' && typeof v === 'string' && k.trim() && v.trim()) {
+      out[k.trim()] = v.trim();
+    }
+  }
+  return out;
+}
+
+export async function getLineAwaitingDismissedMap(ownerId?: string | null): Promise<Record<string, string>> {
+  if (!ownerId) return {};
+  if (memoryLineAwaitingDismissed[ownerId]) {
+    return { ...memoryLineAwaitingDismissed[ownerId] };
+  }
+  if (!lineSupabase) return {};
+  try {
+    const targetKey = `line_awaiting_dismissed_${ownerId}`;
+    const { data } = await lineSupabase
+      .from('automation_controls')
+      .select('reason')
+      .eq('target', targetKey)
+      .maybeSingle();
+    if (data?.reason) {
+      const parsed = typeof data.reason === 'string' ? JSON.parse(data.reason) : data.reason;
+      const normalized = normalizeLineAwaitingDismissedMap(parsed);
+      memoryLineAwaitingDismissed[ownerId] = normalized;
+      return { ...normalized };
+    }
+  } catch {}
+  return {};
+}
+
+export async function saveLineAwaitingDismissedEntry(
+  ownerId: string,
+  lineUserId: string,
+  dismissedUntil: string | null,
+): Promise<Record<string, string>> {
+  const current = await getLineAwaitingDismissedMap(ownerId);
+  const next = { ...current };
+  const cleanUid = lineUserId.trim();
+  if (cleanUid) {
+    if (dismissedUntil && dismissedUntil.trim()) {
+      next[cleanUid] = dismissedUntil.trim();
+    } else {
+      delete next[cleanUid];
+    }
+  }
+  memoryLineAwaitingDismissed[ownerId] = next;
+
+  if (lineSupabase) {
+    try {
+      const targetKey = `line_awaiting_dismissed_${ownerId}`;
+      const payload = JSON.stringify(next);
+      const nowIso = new Date().toISOString();
+      const { data: existingCtrl } = await lineSupabase
+        .from('automation_controls')
+        .select('id')
+        .eq('target', targetKey)
+        .maybeSingle();
+
+      if (existingCtrl?.id) {
+        await lineSupabase
+          .from('automation_controls')
+          .update({
+            reason: payload,
+            updated_by: ownerId,
+            updated_at: nowIso,
+          })
+          .eq('id', existingCtrl.id);
+      } else {
+        await lineSupabase
+          .from('automation_controls')
+          .insert({
+            target: targetKey,
+            paused: false,
+            reason: payload,
+            updated_by: ownerId,
+            updated_at: nowIso,
+          });
+      }
+    } catch (err: any) {
+      console.warn('[LineAwaitingDismissed] Save warning:', err?.message || err);
+    }
+  }
+  return { ...next };
+}
+
 
 interface LineUserProfile {
   displayName?: string;
@@ -1723,7 +1816,7 @@ async function processLineInboxAndAutoReply(event: any, contact: any, eventId: s
       Promise.resolve(
         lineSupabase.from('line_inbox_messages').upsert({
           owner_id: ownerId,
-          line_event_id: `reply-${eventId}`,
+          line_event_id: matchedRule ? `${LINE_RULE_RESOLVED_PREFIX}${eventId}` : `reply-${eventId}`,
           direction: 'outbound',
           contact_id: contact?.id || null,
           line_user_id: userId,
@@ -3349,6 +3442,9 @@ async function processLineWebhookEvent(event: any, botUserId = '') {
         update.unfollowed_at = eventTime;
         update.consent_status = 'opted_out';
       } else if (event.type === 'message') {
+        update.last_message_at = eventTime;
+        update.consent_status = 'opted_in';
+      } else if (event.type === 'postback') {
         update.last_message_at = eventTime;
         update.consent_status = 'opted_in';
       }
@@ -6771,6 +6867,40 @@ app.post('/api/communications/send', async (req, res) => {
     }).eq('id', outboxId).eq('owner_id', authData.user.id);
     if (updateError) throw updateError;
 
+    // 1対1のLINE送信（フォーム案内・書類送付・個別通知等）を履歴に記録し、要返信フラグも解消させる
+    if (row.channel === 'line' && contact.line_user_id) {
+      try {
+        const isBroadcast = row.source_type === 'marketing_broadcast' || row.source_type === 'marketing_outreach';
+        const reqPayload = row.line_message_payload && typeof row.line_message_payload === 'object'
+          ? row.line_message_payload as { type?: string; altText?: string }
+          : null;
+        const msgType = reqPayload?.type && ['image', 'video', 'flex', 'text'].includes(reqPayload.type)
+          ? reqPayload.type
+          : 'text';
+        const inboxBody =
+          msgType === 'image'
+            ? '[画像メッセージ]'
+            : msgType === 'video'
+              ? '[動画メッセージ]'
+              : msgType === 'flex'
+                ? (reqPayload?.altText ? `[Flexメッセージ: ${reqPayload.altText}]` : (row.body_text || '[Flexメッセージ]'))
+                : String(row.body_text || '');
+        await lineSupabase.from('line_inbox_messages').upsert({
+          owner_id: authData.user.id,
+          line_event_id: isBroadcast ? `broadcast-${outboxId}` : `manual-${outboxId}`,
+          direction: 'outbound',
+          contact_id: contact.id,
+          line_user_id: contact.line_user_id,
+          message_type: msgType,
+          body: inboxBody,
+          status: 'sent',
+          received_at: sentAt,
+        }, { onConflict: 'owner_id,line_event_id,direction', ignoreDuplicates: true });
+      } catch (inboxSyncErr) {
+        console.warn('[SendLine] Inbox history sync warning:', inboxSyncErr);
+      }
+    }
+
     // 書類送付（診断レポート・提案書・契約書）完了時に対応する自動フォローを起動
     if (row.document_id && contact.id) {
       try {
@@ -7259,11 +7389,24 @@ app.post(
           contact = updatedContact;
         }
 
-        // LINE友だち情報が関連付いている場合は名前を同期
+        // LINE友だち情報が関連付いている場合は名前・配信同意を同期
         if (contact?.line_user_id) {
-          await lineSupabase.from('line_friends')
-            .update({ display_name: name, contact_id: contact.id })
-            .eq('line_user_id', contact.line_user_id);
+          const { data: existingLf } = await lineSupabase
+            .from('line_friends')
+            .select('status, consent_status')
+            .eq('line_user_id', contact.line_user_id)
+            .maybeSingle();
+          const keepStopped =
+            existingLf?.consent_status === 'opted_out' ||
+            existingLf?.status === 'blocked' ||
+            existingLf?.status === 'unfollowed';
+          await lineSupabase.from('line_friends').upsert({
+            line_user_id: contact.line_user_id,
+            display_name: name,
+            contact_id: contact.id,
+            ...(keepStopped ? {} : { status: 'active', consent_status: 'opted_in' }),
+            ...(existingLf ? {} : { source: 'public_form' }),
+          }, { onConflict: 'line_user_id' });
         }
       } catch (cUpdateErr) {
         console.warn('[PublicForm] Contact update exception (non-fatal):', cUpdateErr);
@@ -7296,11 +7439,20 @@ app.post(
         }
 
         if (contact && lineUserId) {
+          const { data: existingLf } = await lineSupabase
+            .from('line_friends')
+            .select('status, consent_status')
+            .eq('line_user_id', lineUserId)
+            .maybeSingle();
+          const keepStopped =
+            existingLf?.consent_status === 'opted_out' ||
+            existingLf?.status === 'blocked' ||
+            existingLf?.status === 'unfollowed';
           await lineSupabase.from('line_friends').upsert({
             contact_id: contact.id,
             line_user_id: lineUserId,
             display_name: name,
-            status: 'active',
+            ...(keepStopped ? {} : { status: 'active', consent_status: 'opted_in' }),
             source: 'public_form',
           }, { onConflict: 'line_user_id' });
         }
@@ -9287,13 +9439,203 @@ app.post('/api/line/test-alert', requireAuth, async (req, res) => {
   }
 });
 
+// LINE要返信「対応済み（返信不要）」状態の取得・更新（全端末同期）
+app.get('/api/line/awaiting-dismissed', requireAuth, async (req, res) => {
+  const user = (req as any).user;
+  try {
+    const dismissedMap = await getLineAwaitingDismissedMap(user.id);
+    return res.json({ dismissedMap });
+  } catch (err: any) {
+    return res.status(500).json({ error: err?.message || 'LINE対応済み状態を取得できませんでした。' });
+  }
+});
+
+app.post('/api/line/awaiting-dismissed', requireAuth, async (req, res) => {
+  const user = (req as any).user;
+  const lineUserId = typeof req.body?.lineUserId === 'string' ? req.body.lineUserId.trim() : '';
+  const dismissedUntil = typeof req.body?.dismissedUntil === 'string' && req.body.dismissedUntil.trim()
+    ? req.body.dismissedUntil.trim()
+    : null;
+  if (!lineUserId) {
+    return res.status(400).json({ error: 'lineUserId が必要です。' });
+  }
+  try {
+    const dismissedMap = await saveLineAwaitingDismissedEntry(user.id, lineUserId, dismissedUntil);
+    return res.json({ dismissedMap });
+  } catch (err: any) {
+    return res.status(500).json({ error: err?.message || 'LINE対応済み状態を更新できませんでした。' });
+  }
+});
+
+// LINE友だちとCRM連絡先・配信同意状態を自動紐付け／補完（フォーム送信・個別返信前処理）
+app.post('/api/line/friends/ensure-contact', requireAuth, async (req, res) => {
+  if (!lineSupabase) return res.status(503).json({ error: 'DB接続が設定されていません。' });
+  const lineUserId = typeof req.body?.lineUserId === 'string' ? req.body.lineUserId.trim() : '';
+  if (!lineUserId) {
+    return res.status(400).json({ error: 'lineUserId が必要です。' });
+  }
+
+  try {
+    const [friendRes, contactByLuidRes, msgSampleRes] = await Promise.all([
+      lineSupabase
+        .from('line_friends')
+        .select('id, contact_id, line_user_id, display_name, picture_url, status, consent_status')
+        .eq('line_user_id', lineUserId)
+        .maybeSingle(),
+      lineSupabase
+        .from('contacts')
+        .select('id, full_name, email, phone, company_id, line_user_id')
+        .eq('line_user_id', lineUserId)
+        .maybeSingle(),
+      lineSupabase
+        .from('line_inbox_messages')
+        .select('id, contact_id')
+        .eq('line_user_id', lineUserId)
+        .limit(1),
+    ]);
+
+    const existingFriend = friendRes.data as {
+      id: string;
+      contact_id: string | null;
+      line_user_id: string;
+      display_name: string | null;
+      picture_url: string | null;
+      status: string | null;
+      consent_status: string | null;
+    } | null;
+
+    let contact = contactByLuidRes.data as {
+      id: string;
+      full_name: string | null;
+      email: string | null;
+      phone: string | null;
+      company_id: string | null;
+      line_user_id: string | null;
+    } | null;
+
+    if (!contact && existingFriend?.contact_id) {
+      const { data: contactById } = await lineSupabase
+        .from('contacts')
+        .select('id, full_name, email, phone, company_id, line_user_id')
+        .eq('id', existingFriend.contact_id)
+        .maybeSingle();
+      if (contactById) contact = contactById;
+    }
+
+    const isExplicitlyStopped = Boolean(
+      existingFriend &&
+      (existingFriend.status === 'blocked' ||
+        existingFriend.status === 'unfollowed' ||
+        existingFriend.consent_status === 'opted_out'),
+    );
+
+    const needsProfileFetch = !contact || !existingFriend?.display_name || (!isExplicitlyStopped && (existingFriend?.status !== 'active' || existingFriend?.consent_status !== 'opted_in'));
+    const profile = needsProfileFetch ? await getLineUserProfile(lineUserId) : null;
+    const profileName = profile?.displayName?.trim() || undefined;
+    const profilePicture = profile?.pictureUrl?.trim() || undefined;
+
+    if (contact) {
+      if (!contact.line_user_id) {
+        const { data: updatedContact } = await lineSupabase
+          .from('contacts')
+          .update({ line_user_id: lineUserId })
+          .eq('id', contact.id)
+          .select('id, full_name, email, phone, company_id, line_user_id')
+          .maybeSingle();
+        if (updatedContact) contact = updatedContact;
+      }
+    } else {
+      const contactName = profileName || existingFriend?.display_name?.trim() || 'LINE友だち';
+      const { data: inserted, error: insertError } = await lineSupabase
+        .from('contacts')
+        .insert({
+          line_user_id: lineUserId,
+          full_name: contactName,
+          source: 'line_inbox',
+        })
+        .select('id, full_name, email, phone, company_id, line_user_id')
+        .maybeSingle();
+
+      if (insertError?.code === '23505') {
+        const { data: raced } = await lineSupabase
+          .from('contacts')
+          .select('id, full_name, email, phone, company_id, line_user_id')
+          .eq('line_user_id', lineUserId)
+          .maybeSingle();
+        contact = raced || null;
+      } else if (insertError) {
+        throw insertError;
+      } else {
+        contact = inserted || null;
+      }
+    }
+
+    if (!contact) {
+      return res.status(500).json({ error: 'CRM連絡先を作成・取得できませんでした。' });
+    }
+
+    const hasInboxHistory = Array.isArray(msgSampleRes.data) && msgSampleRes.data.length > 0;
+    const verifiedActiveFriend = !isExplicitlyStopped && Boolean(
+      profile ||
+      existingFriend?.status === 'active' ||
+      hasInboxHistory,
+    );
+
+    const nextStatus = isExplicitlyStopped
+      ? (existingFriend?.status || 'blocked')
+      : verifiedActiveFriend
+        ? 'active'
+        : (existingFriend?.status || 'unknown');
+    const nextConsent = isExplicitlyStopped
+      ? (existingFriend?.consent_status || 'opted_out')
+      : verifiedActiveFriend
+        ? 'opted_in'
+        : (existingFriend?.consent_status || 'unknown');
+
+    const friendUpsert: Record<string, unknown> = {
+      line_user_id: lineUserId,
+      contact_id: contact.id,
+      status: nextStatus,
+      consent_status: nextConsent,
+    };
+    const resolvedDisplayName = profileName || existingFriend?.display_name || contact.full_name;
+    if (resolvedDisplayName) friendUpsert.display_name = resolvedDisplayName;
+    if (profilePicture || existingFriend?.picture_url) {
+      friendUpsert.picture_url = profilePicture || existingFriend?.picture_url;
+    }
+
+    await lineSupabase
+      .from('line_friends')
+      .upsert(friendUpsert, { onConflict: 'line_user_id' });
+
+    await lineSupabase
+      .from('line_inbox_messages')
+      .update({ contact_id: contact.id })
+      .eq('line_user_id', lineUserId)
+      .is('contact_id', null);
+
+    return res.json({
+      contactId: contact.id,
+      lineUserId,
+      fullName: contact.full_name,
+      displayName: resolvedDisplayName || null,
+      pictureUrl: profilePicture || existingFriend?.picture_url || null,
+      friendStatus: nextStatus,
+      consentStatus: nextConsent,
+      canSendLine: nextStatus === 'active' && nextConsent === 'opted_in',
+    });
+  } catch (err: any) {
+    return res.status(500).json({ error: err?.message || 'LINE友だちと連絡先の紐付けに失敗しました。' });
+  }
+});
+
 // OS全体ヘッダー・ダッシュボード用の統合受信サマリー（LINE未読・要返信・メール未読・フォーム未対応）
 app.get('/api/inbox/summary', requireAuth, async (req, res) => {
   if (!lineSupabase) return res.status(503).json({ error: 'DB接続が設定されていません。' });
   const user = (req as any).user;
 
   try {
-    const [lineRes, friendsRes, subCountRes, emailRes] = await Promise.all([
+    const [lineRes, friendsRes, subCountRes, emailRes, dismissedMap] = await Promise.all([
       lineSupabase
         .from('line_inbox_messages')
         .select('id,line_event_id,direction,line_user_id,body,status,received_at')
@@ -9313,6 +9655,7 @@ app.get('/api/inbox/summary', requireAuth, async (req, res) => {
         .eq('owner_id', user.id)
         .order('received_at', { ascending: false })
         .limit(200),
+      getLineAwaitingDismissedMap(user.id),
     ]);
 
     const friendNames = new Map<string, string>();
@@ -9364,11 +9707,20 @@ app.get('/api/inbox/summary', requireAuth, async (req, res) => {
     }> = [];
 
     for (const [luid, items] of groupedLine.entries()) {
-      if (isLineConversationAwaitingReply(items)) {
+      if (isLineConversationAwaitingReply(items, dismissedMap[luid])) {
         const sortedAsc = [...items].sort(
           (a, b) => Date.parse(String(a.received_at || '')) - Date.parse(String(b.received_at || '')),
         );
-        const latestInbound = [...sortedAsc].reverse().find((m) => m.direction === 'inbound');
+        const ruleResolvedIds = new Set(
+          sortedAsc
+            .filter((m) => m.direction === 'outbound' && String(m.line_event_id || '').startsWith(LINE_RULE_RESOLVED_PREFIX))
+            .map((m) => String(m.line_event_id || '').slice(LINE_RULE_RESOLVED_PREFIX.length))
+            .filter(Boolean),
+        );
+        const reversedInbound = [...sortedAsc].reverse().filter((m) => m.direction === 'inbound');
+        const latestInbound =
+          reversedInbound.find((m) => !ruleResolvedIds.has(String(m.line_event_id || '')) && !isLineNoReplyInboundText(m.body)) ||
+          reversedInbound[0];
         const unreadForUser = sortedAsc.filter((m) => isLineMessageUnread(m)).length;
         awaitingConversations.push({
           lineUserId: luid,
@@ -9421,6 +9773,7 @@ app.get('/api/inbox/summary', requireAuth, async (req, res) => {
       latestLineInbound,
       latestEmailUnread,
       awaitingConversations: awaitingConversations.slice(0, 10),
+      lineAwaitingDismissedMap: dismissedMap,
     });
   } catch (err: any) {
     return res.status(500).json({ error: err?.message || '受信サマリーを取得できませんでした。' });
