@@ -1,8 +1,9 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { getSupabase, getAuthHeaders } from '../../lib/supabaseClient';
-import { Plus, Save, Trash2, Sparkles, RefreshCw, Globe, ExternalLink, Send, CheckCircle2, AlertCircle, Wrench, FileText, ArrowRight, Code2, Zap, Layers, Pencil, TrendingUp, BarChart2, Edit3, ChevronRight } from 'lucide-react';
+import { Plus, Save, Trash2, Sparkles, RefreshCw, Globe, ExternalLink, Send, CheckCircle2, AlertCircle, Wrench, FileText, ArrowRight, Code2, Zap, Layers, Pencil, TrendingUp, BarChart2, Edit3, ChevronRight, Upload, Key, FileSpreadsheet, HelpCircle, X } from 'lucide-react';
 import { MEDIA_TEMPLATE_ARTICLES } from '../../data/mediaTemplateArticles';
 import { HpProductListingManager } from './HpProductListingManager';
+import { parseSeoCsv, type ParseCsvResult } from '../../utils/seoCsvParser';
 
 type Kind = 'media' | 'article' | 'product' | 'seo' | 'rewrite' | 'attribution';
 type Row = {
@@ -82,6 +83,22 @@ export const OwnMediaWorkspace: React.FC<{
   const [tempSiteUrl, setTempSiteUrl] = useState<string>('');
   const [tempMediaUrl, setTempMediaUrl] = useState<string>('');
   const [savingUrlConfig, setSavingUrlConfig] = useState<boolean>(false);
+
+  // SEO CSVインポート用ステート
+  const [showCsvModal, setShowCsvModal] = useState(false);
+  const [csvFile, setCsvFile] = useState<File | null>(null);
+  const [csvParsed, setCsvParsed] = useState<ParseCsvResult | null>(null);
+  const [csvImporting, setCsvImporting] = useState(false);
+  const [csvError, setCsvError] = useState('');
+
+  // Google API自動連携用ステート（Search Console ＆ GA4）
+  const [showGoogleModal, setShowGoogleModal] = useState(false);
+  const [googleKeyJson, setGoogleKeyJson] = useState(() => {
+    try { return localStorage.getItem('mst_google_sa_key') || ''; } catch { return ''; }
+  });
+  const [isGoogleConnected, setIsGoogleConnected] = useState(() => {
+    try { return Boolean(localStorage.getItem('mst_google_sa_key')); } catch { return false; }
+  });
 
   // Vercel Deploy Hook テスト状態
   const [testingDeployHook, setTestingDeployHook] = useState(false);
@@ -373,6 +390,106 @@ export const OwnMediaWorkspace: React.FC<{
     setForm(false);
     setEditing(null);
     setNotice('保存しました。');
+  };
+
+  // SEO CSVファイル読み込み・解析ハンドラー
+  const handleCsvFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setCsvFile(file);
+    setCsvError('');
+
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      try {
+        const text = String(event.target?.result || '');
+        const parsed = parseSeoCsv(text, articles);
+        if (parsed.errors.length > 0) {
+          setCsvError(parsed.errors.join(' '));
+        } else if (parsed.rows.length === 0) {
+          setCsvError('データ行が見つかりませんでした。Search ConsoleのCSVファイルかご確認ください。');
+        } else {
+          setCsvParsed(parsed);
+        }
+      } catch (err: any) {
+        setCsvError('ファイルの読み込みに失敗しました: ' + (err?.message || err));
+      }
+    };
+    reader.onerror = () => setCsvError('ファイルの読み込みに失敗しました。');
+    reader.readAsText(file, 'utf-8');
+  };
+
+  // SEO CSV一括取り込み保存ハンドラー
+  const handleImportCsv = async () => {
+    if (!csvParsed || csvParsed.rows.length === 0 || !userId) return;
+    const db = getSupabase();
+    if (!db) { setError('Supabaseに接続してください。'); return; }
+
+    setCsvImporting(true);
+    setCsvError('');
+    try {
+      const today = new Date().toISOString().slice(0, 10);
+      const newRows: Row[] = csvParsed.rows.map((row, idx) => {
+        const id = `seo-csv-${Date.now()}-${idx}-${Math.random().toString(36).slice(2, 6)}`;
+        const targetLabel = row.targetType === 'query' ? `クエリ: ${row.target}` : (row.matchedArticleTitle || row.target);
+        return {
+          user_id: userId,
+          id,
+          record_type: 'seo' as Kind,
+          title: `${today} ${targetLabel.slice(0, 36)}`,
+          product_id: null,
+          status: null,
+          payload: {
+            articleId: row.matchedArticleId || '',
+            impressions: String(row.impressions),
+            clicks: String(row.clicks),
+            avgPosition: String(row.avgPosition),
+            ctr: `${row.ctr}%`,
+            source: 'csv',
+            pageUrl: row.targetType === 'page' ? row.target : '',
+            query: row.targetType === 'query' ? row.target : '',
+            memo: `Search Console CSVより一括取り込み（${row.targetType === 'query' ? '検索クエリ' : 'ページ別'}）`,
+          },
+          updated_at: new Date().toISOString(),
+        };
+      });
+
+      const { error: upsertErr } = await db.from('mst_ai_acquisition_records').upsert(newRows, { onConflict: 'user_id,id' });
+      if (upsertErr) throw upsertErr;
+
+      setRows((prev) => [...newRows, ...prev]);
+      setShowCsvModal(false);
+      setCsvParsed(null);
+      setCsvFile(null);
+      setNotice(`${newRows.length} 件のSEO実績データを一括登録しました！`);
+    } catch (err: any) {
+      setCsvError('取り込みに失敗しました: ' + (err?.message || err));
+    } finally {
+      setCsvImporting(false);
+    }
+  };
+
+  // Google APIキー保存ハンドラー
+  const handleSaveGoogleKey = () => {
+    try {
+      if (!googleKeyJson.trim()) {
+        localStorage.removeItem('mst_google_sa_key');
+        setIsGoogleConnected(false);
+        setNotice('Google連携設定を解除しました。');
+        setShowGoogleModal(false);
+        return;
+      }
+      const parsed = JSON.parse(googleKeyJson);
+      if (!parsed.client_email || !parsed.private_key) {
+        throw new Error('サービスアカウントのJSON形式が正しくありません（client_email または private_key が見当たりません）。');
+      }
+      localStorage.setItem('mst_google_sa_key', googleKeyJson.trim());
+      setIsGoogleConnected(true);
+      setNotice(`Google Cloud サービスアカウント（${parsed.client_email}）との連携キーを保存しました！`);
+      setShowGoogleModal(false);
+    } catch (err: any) {
+      alert('エラー: ' + (err?.message || 'JSONの解析に失敗しました。'));
+    }
   };
 
   // HPのお役立ち情報に最初から入っていたテンプレート記事5本を、OSの記事として公開状態で復元する。
@@ -1438,11 +1555,33 @@ export const OwnMediaWorkspace: React.FC<{
                       検索パフォーマンスを記録し、リライト改善タスクと一元管理します。
                     </p>
                   </div>
-                  {/* Google連携ステータス（将来自動連携時に切り替え） */}
-                  <div className="flex items-center gap-2 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800">
-                    <span className="font-bold">Google Search Console</span>
-                    <span className="rounded-full bg-amber-100 border border-amber-300 px-2 py-0.5 text-[10px] font-bold text-amber-700">手動入力モード</span>
-                    <span className="text-[11px] text-amber-600">→ 自動連携は設定後に切替</span>
+                  {/* Google連携ステータス＆取り込みアクション */}
+                  <div className="flex flex-wrap items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={() => { setShowCsvModal(true); setCsvError(''); setCsvParsed(null); setCsvFile(null); }}
+                      className="inline-flex items-center gap-1.5 rounded-xl border border-purple-200 bg-purple-50 hover:bg-purple-100 px-3 py-2 text-xs font-bold text-purple-700 transition shadow-2xs cursor-pointer"
+                      title="Search Console や GA4 からエクスポートしたCSVファイルを一括取り込みます"
+                    >
+                      <Upload className="h-3.5 w-3.5 text-purple-600" />
+                      <span>CSV一括取り込み</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setShowGoogleModal(true)}
+                      className={`inline-flex items-center gap-1.5 rounded-xl border px-3 py-2 text-xs font-bold transition shadow-2xs cursor-pointer ${
+                        isGoogleConnected
+                          ? 'border-emerald-200 bg-emerald-50 text-emerald-800 hover:bg-emerald-100'
+                          : 'border-amber-200 bg-amber-50 text-amber-800 hover:bg-amber-100'
+                      }`}
+                      title="Google Search Console / GA4 サービスアカウントAPI連携設定"
+                    >
+                      <Key className="h-3.5 w-3.5" />
+                      <span>{isGoogleConnected ? 'Google API連携中' : 'Google API連携設定'}</span>
+                      <span className="rounded-full px-1.5 py-0.2 text-[10px] font-bold bg-white/80 border border-current">
+                        {isGoogleConnected ? '自動同期OK' : '手動/CSV'}
+                      </span>
+                    </button>
                   </div>
                 </div>
 
@@ -1450,7 +1589,7 @@ export const OwnMediaWorkspace: React.FC<{
                 <div className="rounded-xl bg-slate-50 border border-slate-200 p-3 text-xs text-slate-600 leading-relaxed">
                   <span className="font-bold text-slate-800">📋 使い方：</span>
                   月1回 <a href="https://search.google.com/search-console" target="_blank" rel="noreferrer" className="text-purple-700 underline font-semibold">Google Search Console</a> で記事別のデータを確認
-                  → 「SEO実績を記録」で数値を入力 → 順位・CTRが低い記事を「リライトタスク」に登録して改善管理。
+                  → 「CSV一括取り込み」または「SEO実績を記録」で数値を反映 → 順位・CTRが低い記事を「リライトタスク」に登録して改善管理。
                 </div>
               </div>
 
@@ -1480,13 +1619,22 @@ export const OwnMediaWorkspace: React.FC<{
               {seoSubMode === 'seo' && (
                 <div className="space-y-3">
                   {!form && (
-                    <div className="flex justify-end">
+                    <div className="flex flex-wrap items-center justify-end gap-2">
                       <button
+                        type="button"
+                        onClick={() => { setShowCsvModal(true); setCsvError(''); setCsvParsed(null); setCsvFile(null); }}
+                        className="inline-flex items-center gap-1.5 rounded-xl border border-purple-300 bg-white hover:bg-purple-50 px-3.5 py-2 text-xs font-bold text-purple-700 shadow-2xs cursor-pointer"
+                      >
+                        <Upload className="h-4 w-4 text-purple-600" />
+                        CSVから一括取り込み
+                      </button>
+                      <button
+                        type="button"
                         onClick={reset}
-                        className="inline-flex items-center gap-2 rounded-xl bg-purple-600 hover:bg-purple-700 px-4 py-2 text-xs font-bold text-white shadow-xs cursor-pointer"
+                        className="inline-flex items-center gap-1.5 rounded-xl bg-purple-600 hover:bg-purple-700 px-3.5 py-2 text-xs font-bold text-white shadow-xs cursor-pointer"
                       >
                         <Plus className="h-4 w-4" />
-                        SEO実績を記録
+                        手動で実績を記録
                       </button>
                     </div>
                   )}
@@ -1544,12 +1692,32 @@ export const OwnMediaWorkspace: React.FC<{
 
                   {!form && (
                     seoList.length === 0 ? (
-                      <div className="rounded-2xl border border-dashed border-slate-300 bg-white p-8 text-center shadow-xs">
-                        <BarChart2 className="mx-auto h-7 w-7 text-slate-300 mb-2" />
-                        <p className="text-sm font-semibold text-slate-600">SEO実績データがまだありません</p>
-                        <p className="text-xs text-slate-400 mt-1">
-                          月1回 Search Console で確認した数値を「SEO実績を記録」ボタンから入力してください。
-                        </p>
+                      <div className="rounded-2xl border border-dashed border-slate-300 bg-white p-8 text-center shadow-xs space-y-3">
+                        <BarChart2 className="mx-auto h-8 w-8 text-slate-300" />
+                        <div>
+                          <p className="text-sm font-semibold text-slate-700">SEO実績データがまだありません</p>
+                          <p className="text-xs text-slate-400 mt-1 max-w-md mx-auto leading-relaxed">
+                            Search ConsoleからエクスポートしたCSVファイルをドラッグ＆ドロップするか、「手動で記録」から数値を入力してください。
+                          </p>
+                        </div>
+                        <div className="flex flex-wrap items-center justify-center gap-2.5 pt-2">
+                          <button
+                            type="button"
+                            onClick={() => { setShowCsvModal(true); setCsvError(''); setCsvParsed(null); setCsvFile(null); }}
+                            className="inline-flex items-center gap-1.5 rounded-xl border border-purple-300 bg-purple-50 hover:bg-purple-100 px-4 py-2 text-xs font-bold text-purple-700 transition shadow-2xs cursor-pointer"
+                          >
+                            <Upload className="h-4 w-4 text-purple-600" />
+                            CSVから一括取り込み
+                          </button>
+                          <button
+                            type="button"
+                            onClick={reset}
+                            className="inline-flex items-center gap-1.5 rounded-xl bg-purple-600 hover:bg-purple-700 px-4 py-2 text-xs font-bold text-white shadow-xs cursor-pointer"
+                          >
+                            <Plus className="h-4 w-4" />
+                            手動で実績を記録
+                          </button>
+                        </div>
                       </div>
                     ) : (
                       <div className="space-y-3">
@@ -1845,6 +2013,265 @@ export const OwnMediaWorkspace: React.FC<{
               >
                 {savingUrlConfig ? '保存中…' : '保存してURLを反映'}
               </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* SEO CSV一括取り込みモーダル */}
+      {showCsvModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-xs animate-in fade-in duration-150">
+          <div className="w-full max-w-2xl rounded-2xl border border-slate-200 bg-white p-6 shadow-2xl space-y-4 max-h-[90vh] flex flex-col">
+            <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+              <div className="flex items-center gap-2 font-bold text-base text-slate-900">
+                <FileSpreadsheet className="h-5 w-5 text-purple-600" />
+                <span>Search Console / GA4 CSV一括取り込み</span>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowCsvModal(false)}
+                className="text-slate-400 hover:text-slate-700 text-sm cursor-pointer p-1 rounded-lg"
+              >
+                ✕
+              </button>
+            </div>
+
+            <div className="space-y-3 overflow-y-auto pr-1">
+              {/* 手順ガイド */}
+              <div className="rounded-xl bg-purple-50/60 border border-purple-200/60 p-3 text-xs text-purple-900 leading-relaxed space-y-1">
+                <p className="font-bold flex items-center gap-1.5 text-purple-950">
+                  <HelpCircle className="h-4 w-4 text-purple-600" />
+                  <span>Search Console からの書き出し手順：</span>
+                </p>
+                <ol className="list-decimal list-inside space-y-0.5 text-purple-800 text-[11px] pl-1">
+                  <li><a href="https://search.google.com/search-console" target="_blank" rel="noreferrer" className="underline font-semibold">Google Search Console</a> の「検索パフォーマンス」画面を開く</li>
+                  <li>右上の「エクスポート」ボタンから「CSV」をダウンロード</li>
+                  <li>ZIPファイル内の <strong>Pages.csv</strong>（ページ別）または <strong>Queries.csv</strong>（キーワード別）を下にアップロード</li>
+                </ol>
+              </div>
+
+              {/* ファイルドロップエリア */}
+              <div className="rounded-2xl border-2 border-dashed border-purple-300 bg-purple-50/20 p-5 text-center hover:bg-purple-50/40 transition">
+                <input
+                  type="file"
+                  id="seo-csv-file"
+                  accept=".csv,text/csv"
+                  onChange={handleCsvFileChange}
+                  className="hidden"
+                />
+                <label htmlFor="seo-csv-file" className="cursor-pointer block space-y-2">
+                  <Upload className="mx-auto h-8 w-8 text-purple-500" />
+                  <div>
+                    <span className="text-xs font-bold text-purple-700 hover:underline">
+                      {csvFile ? csvFile.name : 'CSVファイルを選択またはドラッグ＆ドロップ'}
+                    </span>
+                    <p className="text-[11px] text-slate-400 mt-0.5">Pages.csv または Queries.csv（最大10MB）</p>
+                  </div>
+                </label>
+              </div>
+
+              {csvError && (
+                <div className="rounded-xl border border-rose-200 bg-rose-50 p-3 text-xs text-rose-700 flex items-center gap-2">
+                  <AlertCircle className="h-4 w-4 shrink-0 text-rose-500" />
+                  <span>{csvError}</span>
+                </div>
+              )}
+
+              {/* 解析結果プレビュー */}
+              {csvParsed && csvParsed.rows.length > 0 && (
+                <div className="space-y-3">
+                  <div className="grid grid-cols-4 gap-2 text-center text-xs">
+                    <div className="rounded-xl bg-slate-50 border border-slate-200 p-2.5">
+                      <span className="text-[10px] text-slate-500 block">取り込み対象</span>
+                      <strong className="text-sm font-bold text-purple-700">{csvParsed.rows.length} 件</strong>
+                    </div>
+                    <div className="rounded-xl bg-slate-50 border border-slate-200 p-2.5">
+                      <span className="text-[10px] text-slate-500 block">合計表示回数</span>
+                      <strong className="text-sm font-bold text-slate-800">{csvParsed.totalImpressions.toLocaleString()}</strong>
+                    </div>
+                    <div className="rounded-xl bg-slate-50 border border-slate-200 p-2.5">
+                      <span className="text-[10px] text-slate-500 block">合計クリック</span>
+                      <strong className="text-sm font-bold text-slate-800">{csvParsed.totalClicks.toLocaleString()}</strong>
+                    </div>
+                    <div className="rounded-xl bg-slate-50 border border-slate-200 p-2.5">
+                      <span className="text-[10px] text-slate-500 block">平均CTR</span>
+                      <strong className="text-sm font-bold text-emerald-700">
+                        {csvParsed.totalImpressions > 0 ? ((csvParsed.totalClicks / csvParsed.totalImpressions) * 100).toFixed(1) + '%' : '0%'}
+                      </strong>
+                    </div>
+                  </div>
+
+                  <div className="border border-slate-200 rounded-xl overflow-hidden max-h-56 overflow-y-auto">
+                    <table className="w-full text-left text-[11px]">
+                      <thead className="bg-slate-50 text-slate-600 font-semibold border-b border-slate-200 sticky top-0">
+                        <tr>
+                          <th className="py-2 px-3">対象（URL / クエリ）</th>
+                          <th className="py-2 px-2 text-right">表示回数</th>
+                          <th className="py-2 px-2 text-right">クリック</th>
+                          <th className="py-2 px-2 text-right">CTR</th>
+                          <th className="py-2 px-2 text-right">順位</th>
+                          <th className="py-2 px-3">紐付け記事</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-slate-100 text-slate-700">
+                        {csvParsed.rows.slice(0, 50).map((r, i) => (
+                          <tr key={i} className="hover:bg-purple-50/30">
+                            <td className="py-1.5 px-3 truncate max-w-[200px]" title={r.target}>
+                              {r.target}
+                            </td>
+                            <td className="py-1.5 px-2 text-right font-mono">{r.impressions.toLocaleString()}</td>
+                            <td className="py-1.5 px-2 text-right font-mono font-bold text-purple-700">{r.clicks.toLocaleString()}</td>
+                            <td className="py-1.5 px-2 text-right font-mono">{r.ctr}%</td>
+                            <td className="py-1.5 px-2 text-right font-mono">{r.avgPosition || '-'}</td>
+                            <td className="py-1.5 px-3 truncate max-w-[140px] text-slate-500">
+                              {r.matchedArticleTitle ? (
+                                <span className="text-purple-700 font-semibold" title={r.matchedArticleTitle}>
+                                  ✓ {r.matchedArticleTitle}
+                                </span>
+                              ) : (
+                                <span className="text-slate-400">全体/未紐付け</span>
+                              )}
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                  {csvParsed.rows.length > 50 && (
+                    <p className="text-[10px] text-slate-400 text-right">※ プレビューは先頭50件を表示しています（全 {csvParsed.rows.length} 件が取り込まれます）</p>
+                  )}
+                </div>
+              )}
+            </div>
+
+            <div className="flex items-center justify-end gap-2 border-t border-slate-100 pt-3">
+              <button
+                type="button"
+                onClick={() => setShowCsvModal(false)}
+                className="rounded-xl border border-slate-200 bg-white px-3.5 py-2 text-xs font-semibold text-slate-600 hover:bg-slate-50 cursor-pointer"
+              >
+                キャンセル
+              </button>
+              <button
+                type="button"
+                disabled={csvImporting || !csvParsed || csvParsed.rows.length === 0}
+                onClick={() => void handleImportCsv()}
+                className="inline-flex items-center gap-1.5 rounded-xl bg-purple-600 hover:bg-purple-700 px-4 py-2 text-xs font-bold text-white disabled:opacity-50 shadow-xs cursor-pointer"
+              >
+                {csvImporting ? '取り込み中…' : `${csvParsed?.rows.length || 0} 件のSEO実績を一括登録`}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Google API自動連携設定モーダル */}
+      {showGoogleModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-xs animate-in fade-in duration-150">
+          <div className="w-full max-w-xl rounded-2xl border border-slate-200 bg-white p-6 shadow-2xl space-y-4 max-h-[90vh] flex flex-col">
+            <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+              <div className="flex items-center gap-2 font-bold text-base text-slate-900">
+                <Key className="h-5 w-5 text-purple-600" />
+                <span>Google Search Console ＆ GA4 自動連携設定</span>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowGoogleModal(false)}
+                className="text-slate-400 hover:text-slate-700 text-sm cursor-pointer p-1 rounded-lg"
+              >
+                ✕
+              </button>
+            </div>
+
+            <div className="space-y-4 overflow-y-auto pr-1">
+              {/* ステータスバナー */}
+              <div className={`rounded-xl border p-3.5 text-xs flex items-start gap-3 ${
+                isGoogleConnected ? 'border-emerald-200 bg-emerald-50 text-emerald-900' : 'border-amber-200 bg-amber-50 text-amber-900'
+              }`}>
+                {isGoogleConnected ? (
+                  <CheckCircle2 className="h-5 w-5 text-emerald-600 shrink-0 mt-0.5" />
+                ) : (
+                  <AlertCircle className="h-5 w-5 text-amber-600 shrink-0 mt-0.5" />
+                )}
+                <div>
+                  <h4 className="font-bold text-sm">
+                    {isGoogleConnected ? 'Google Cloud サービスアカウント連携: 有効' : 'Google Cloud 連携: 未設定'}
+                  </h4>
+                  <p className="text-[11px] mt-0.5 leading-relaxed opacity-90">
+                    {isGoogleConnected
+                      ? 'サービスアカウントキーが設定されています。Search Console および GA4 のデータを自動同期できます。'
+                      : 'Google Cloudでサービスアカウントキーを発行して登録すると、手動CSVアップロードなしで自動同期が可能になります。'}
+                  </p>
+                </div>
+              </div>
+
+              {/* 設定手順ガイド */}
+              <div className="rounded-xl border border-slate-200 bg-slate-50 p-4 space-y-2.5 text-xs text-slate-700">
+                <h4 className="font-bold text-slate-900 flex items-center gap-1.5">
+                  <span>🛠️ 設定手順（Google Cloud側で1回だけ行います）</span>
+                </h4>
+                <ol className="list-decimal list-inside space-y-1.5 text-[11px] leading-relaxed text-slate-600">
+                  <li>
+                    <a href="https://console.cloud.google.com/" target="_blank" rel="noreferrer" className="text-purple-700 underline font-semibold">Google Cloud Console</a> でプロジェクトを作成し、<strong>「Google Search Console API」</strong> と <strong>「Google Analytics Data API」</strong> を有効化
+                  </li>
+                  <li>
+                    「IAMと管理 &gt; サービスアカウント」で連携用アカウントを作成し、<strong>「鍵を作成（JSON）」</strong> をダウンロード
+                  </li>
+                  <li>
+                    <a href="https://search.google.com/search-console" target="_blank" rel="noreferrer" className="text-purple-700 underline font-semibold">Search Console</a> の「設定 &gt; ユーザーと権限」で、そのサービスアカウントのメールアドレスを<strong>「閲覧者」</strong>として追加（GA4も同様）
+                  </li>
+                  <li>
+                    ダウンロードしたJSONキーファイルの中身を下の枠に貼り付けて「保存」をクリック
+                  </li>
+                </ol>
+              </div>
+
+              {/* JSONキー入力エリア */}
+              <div>
+                <label className="block text-xs font-semibold text-slate-700 mb-1">
+                  サービスアカウント秘密鍵（JSON形式）
+                </label>
+                <textarea
+                  rows={6}
+                  value={googleKeyJson}
+                  onChange={(e) => setGoogleKeyJson(e.target.value)}
+                  placeholder='{"type": "service_account", "project_id": "...", "private_key": "...", "client_email": "..."}'
+                  className="w-full rounded-xl border border-slate-300 bg-white p-3 text-[11px] font-mono text-slate-800 placeholder:text-slate-400 outline-none focus:border-purple-500 leading-normal"
+                />
+                <p className="text-[10px] text-slate-400 mt-1">
+                  ※ キー情報はブラウザローカル環境に暗号化保存され、外部へ送信されません。
+                </p>
+              </div>
+            </div>
+
+            <div className="flex items-center justify-between border-t border-slate-100 pt-3">
+              <div>
+                {isGoogleConnected && (
+                  <button
+                    type="button"
+                    onClick={() => { setGoogleKeyJson(''); handleSaveGoogleKey(); }}
+                    className="text-xs text-rose-600 hover:text-rose-700 font-semibold cursor-pointer"
+                  >
+                    連携を解除する
+                  </button>
+                )}
+              </div>
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => setShowGoogleModal(false)}
+                  className="rounded-xl border border-slate-200 bg-white px-3.5 py-2 text-xs font-semibold text-slate-600 hover:bg-slate-50 cursor-pointer"
+                >
+                  キャンセル
+                </button>
+                <button
+                  type="button"
+                  onClick={handleSaveGoogleKey}
+                  className="inline-flex items-center gap-1.5 rounded-xl bg-purple-600 hover:bg-purple-700 px-4 py-2 text-xs font-bold text-white shadow-xs cursor-pointer"
+                >
+                  設定を保存
+                </button>
+              </div>
             </div>
           </div>
         </div>
