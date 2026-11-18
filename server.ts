@@ -3979,6 +3979,15 @@ app.post('/api/email/webhook', express.raw({ type: 'application/json', limit: '2
     }
   } else {
     integrations = fullIntegRes.data || [];
+    for (const item of integrations) {
+      if (!item.backup_forward_address) {
+        const fb = await getEmailBackupForwardSettings(item.owner_id);
+        item.backup_forward_address = fb.address;
+        if (!item.backup_forward_enabled && fb.enabled) {
+          item.backup_forward_enabled = fb.enabled;
+        }
+      }
+    }
   }
 
   let matched = (integrations || []).filter((entry: any) => {
@@ -8588,10 +8597,12 @@ app.post(
       }
     }
 
-    // 管理者向けタスク起票（レポート承認通知 / 資料URL未設定警告 / Web相談メール返信タスク）＋ Web相談の管理者メール通知
+    // 管理者向けタスク起票（レポート承認通知 / 資料URL未設定警告 / Web相談メール返信タスク）
+    let resolvedFormOwnerId: string | null = sysOwnerId || null;
     if (lineSupabase) {
       try {
         const formTaskOwnerId = sysOwnerId || await resolveSystemOwnerId((form as any)?.owner_id);
+        resolvedFormOwnerId = formTaskOwnerId || null;
         if (!formTaskOwnerId) {
           console.error('[PublicForm] タスク起票スキップ: owner_id が解決できませんでした (form:', form?.name, slug, ')');
         } else {
@@ -8644,67 +8655,68 @@ app.post(
           if (responseTaskErr) {
             console.error('[PublicForm] フォーム回答対応タスク起票エラー:', responseTaskErr.message, responseTaskErr.code);
           }
-
-          // すべての公開フォーム（診断・お問い合わせ・資料請求・開業パッケージ等）送信を個人のメール宛てにもバックアップ送信
-          if (process.env.RESEND_API_KEY) {
-            try {
-              const resolvedSender = await resolveEmailSender(formTaskOwnerId);
-              const adminFrom = (process.env.RESEND_FROM_EMAIL || resolvedSender.fromString || '').trim();
-              const adminSenderAddr = (adminFrom.match(/<([^<>]+)>/)?.[1] || resolvedSender.senderEmail || adminFrom).trim().toLowerCase();
-              const backupRecipients = await resolvePublicFormBackupRecipients(formTaskOwnerId, [adminSenderAddr]);
-              if (backupRecipients.length > 0 && adminFrom) {
-                const appUrl = (process.env.PUBLIC_APP_URL || '').trim().replace(/\/$/, '');
-                const questionLabels: Record<string, string> = {};
-                for (const q of configuredQuestions as any[]) {
-                  if (q?.id && q?.label) questionLabels[String(q.id)] = String(q.label);
-                }
-                const adminBackup = buildPublicFormAdminBackupEmail({
-                  notificationKind,
-                  formName: form.name,
-                  slug,
-                  name,
-                  companyName,
-                  email: recipientEmail,
-                  phone,
-                  inquiryType,
-                  consultationText,
-                  preferredDateText,
-                  answers: cleanAnswers,
-                  questionLabels,
-                  quickBottleneck,
-                  requestedMaterials: resolvedMaterials,
-                  hearAbout: hearAboutAnswer || null,
-                  utmDetails: utmDetails || null,
-                  lineAutoReplySent: lineAutoReplyOk,
-                  emailAutoReplySent: shouldSendEmailReply,
-                  emailAutoReplyStatus: emailStatus,
-                  emailAutoReplyError: emailErrorMessage,
-                  appUrl: appUrl || null,
-                });
-                const adminRes = await fetch('https://api.resend.com/emails', {
-                  method: 'POST',
-                  headers: { Authorization: `Bearer ${process.env.RESEND_API_KEY}`, 'Content-Type': 'application/json' },
-                  body: JSON.stringify({
-                    from: adminFrom,
-                    to: backupRecipients,
-                    headers: { 'X-MST-Backup-Copy': '1' },
-                    ...(recipientEmail ? { reply_to: recipientEmail } : {}),
-                    subject: adminBackup.subject,
-                    text: adminBackup.text,
-                  }),
-                });
-                if (!adminRes.ok) {
-                  const errBody = await adminRes.text().catch(() => '');
-                  console.warn('[PublicForm] Form backup alert email warning:', adminRes.status, errBody);
-                }
-              }
-            } catch (adminMailErr: any) {
-              console.warn('[PublicForm] Form backup alert exception:', adminMailErr?.message || adminMailErr);
-            }
-          }
         }
       } catch (taskErr) {
         console.warn('Task auto-creation warning:', taskErr);
+      }
+    }
+
+    // すべての公開フォーム（診断・お問い合わせ・資料請求・開業パッケージ等）送信を個人のメール宛てにもバックアップ送信
+    // （owner_id未解決時でも DEFAULT_LINE_ALERT_EMAIL へフォールバックして必ず控えを届ける）
+    if (process.env.RESEND_API_KEY) {
+      try {
+        const resolvedSender = await resolveEmailSender(resolvedFormOwnerId);
+        const adminFrom = (process.env.RESEND_FROM_EMAIL || resolvedSender.fromString || '').trim();
+        const adminSenderAddr = (adminFrom.match(/<([^<>]+)>/)?.[1] || resolvedSender.senderEmail || adminFrom).trim().toLowerCase();
+        const backupRecipients = await resolvePublicFormBackupRecipients(resolvedFormOwnerId, [adminSenderAddr]);
+        if (backupRecipients.length > 0 && adminFrom) {
+          const appUrl = (process.env.PUBLIC_APP_URL || '').trim().replace(/\/$/, '');
+          const questionLabels: Record<string, string> = {};
+          for (const q of configuredQuestions as any[]) {
+            if (q?.id && q?.label) questionLabels[String(q.id)] = String(q.label);
+          }
+          const adminBackup = buildPublicFormAdminBackupEmail({
+            notificationKind,
+            formName: form.name,
+            slug,
+            name,
+            companyName,
+            email: recipientEmail,
+            phone,
+            inquiryType,
+            consultationText,
+            preferredDateText,
+            answers: cleanAnswers,
+            questionLabels,
+            quickBottleneck,
+            requestedMaterials: resolvedMaterials,
+            hearAbout: hearAboutAnswer || null,
+            utmDetails: utmDetails || null,
+            lineAutoReplySent: lineAutoReplyOk,
+            emailAutoReplySent: shouldSendEmailReply,
+            emailAutoReplyStatus: emailStatus,
+            emailAutoReplyError: emailErrorMessage,
+            appUrl: appUrl || null,
+          });
+          const adminRes = await fetch('https://api.resend.com/emails', {
+            method: 'POST',
+            headers: { Authorization: `Bearer ${process.env.RESEND_API_KEY}`, 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              from: adminFrom,
+              to: backupRecipients,
+              headers: { 'X-MST-Backup-Copy': '1' },
+              ...(recipientEmail ? { reply_to: recipientEmail } : {}),
+              subject: adminBackup.subject,
+              text: adminBackup.text,
+            }),
+          });
+          if (!adminRes.ok) {
+            const errBody = await adminRes.text().catch(() => '');
+            console.warn('[PublicForm] Form backup alert email warning:', adminRes.status, errBody);
+          }
+        }
+      } catch (adminMailErr: any) {
+        console.warn('[PublicForm] Form backup alert exception:', adminMailErr?.message || adminMailErr);
       }
     }
 

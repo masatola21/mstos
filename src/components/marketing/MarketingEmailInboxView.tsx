@@ -317,6 +317,7 @@ export const MarketingEmailInboxView: React.FC<MarketingEmailInboxViewProps> = (
     let fwdAddress = 'mst.shikumikaizen@gmail.com';
     let fwdEnabled = false;
     let loadedMessages: InboxMessage[] = [];
+    let apiLoaded = false;
 
     try {
       const headers = await getAuthHeaders();
@@ -324,6 +325,7 @@ export const MarketingEmailInboxView: React.FC<MarketingEmailInboxViewProps> = (
       if (res.ok) {
         const apiData = await res.json();
         if (apiData.success) {
+          apiLoaded = true;
           inAddress = apiData.inboundAddress || 'contact@mstcorp.info';
           fwdAddress = apiData.backupForwardAddress || 'mst.shikumikaizen@gmail.com';
           fwdEnabled = Boolean(apiData.backupForwardEnabled);
@@ -348,14 +350,16 @@ export const MarketingEmailInboxView: React.FC<MarketingEmailInboxViewProps> = (
     const resolvedIn = inAddress || 'contact@mstcorp.info';
     const resolvedFwd = fwdAddress || 'mst.shikumikaizen@gmail.com';
 
-    // 画面遷移から戻ってきた時にも保存されていた設定を確実に保持
+    // サーバー設定の取得に失敗した時だけ localStorage をフォールバック参照する（取得成功時はサーバー状態を正とする）
     let finalFwdEnabled = fwdEnabled;
-    try {
-      const stored = localStorage.getItem('mst_email_backup_enabled');
-      if (stored === 'true') {
-        finalFwdEnabled = true;
-      }
-    } catch {}
+    if (!apiLoaded) {
+      try {
+        const stored = localStorage.getItem('mst_email_backup_enabled');
+        if (stored === 'true') {
+          finalFwdEnabled = true;
+        }
+      } catch {}
+    }
 
     setAddress(resolvedIn);
     setBackupAddress(resolvedFwd);
