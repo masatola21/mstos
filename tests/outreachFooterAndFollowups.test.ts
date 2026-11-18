@@ -15,11 +15,16 @@ import {
   INDUSTRY_MESSAGES,
 } from '../src/utils/salesOutreachTemplates';
 import { calculateDueAt } from '../src/utils/automationRuleUtils';
-import { MST_OUTREACH_STARTER_SCENARIOS } from '../src/components/marketing/MarketingAutomationPrototypeView';
+import {
+  MST_OUTREACH_STARTER_SCENARIOS,
+  getScenarioSortKey,
+  sortScenarios,
+} from '../src/components/marketing/MarketingAutomationPrototypeView';
 import {
   MST_DIAGNOSIS_STARTER_SCENARIOS,
   MST_MATERIAL_FOLLOWUP_STARTER_SCENARIOS,
   MST_POST_MEETING_STARTER_SCENARIOS,
+  isLegacyBranchAScenarioName,
   mergeStarterScenarioBatch,
   shouldStopScenarioForDeal,
 } from '../src/utils/followupStarterScenarios';
@@ -280,6 +285,49 @@ const secondApply = mergeStarterScenarioBatch(firstApply.merged, [
 assert.equal(secondApply.addedCount, 0);
 assert.equal(secondApply.updatedCount, 11);
 assert.equal(secondApply.merged.length, 11);
+console.log('  ✓ passed');
+
+console.log('Test 19: isLegacyBranchAScenarioName identifies legacy numeric & old A-pattern scenarios without false positives');
+assert.equal(isLegacyBranchAScenarioName('【1. 初回お礼＋診断誘導】'), true);
+assert.equal(isLegacyBranchAScenarioName('【2. 診断後のフォロー】'), true);
+assert.equal(isLegacyBranchAScenarioName('【3. レポート送付】'), true);
+assert.equal(isLegacyBranchAScenarioName('【4. 3日後教育】'), true);
+assert.equal(isLegacyBranchAScenarioName('【5. 7日後商談案内】'), true);
+assert.equal(isLegacyBranchAScenarioName('【A1・教育リマインド】1日後：テスト'), true);
+assert.equal(isLegacyBranchAScenarioName('【A1・未回答教育】1日後：なぜ「利益と時間」が同時に減るのか？'), false);
+assert.equal(isLegacyBranchAScenarioName('【A4・商談案内】7日後：他社の改善事例と無料壁打ちのご案内'), false);
+assert.equal(isLegacyBranchAScenarioName('【第1通】初期アプローチメール'), false);
+assert.equal(isLegacyBranchAScenarioName('【第1話】物語のはじまり'), false);
+assert.equal(isLegacyBranchAScenarioName('【資料請求①】1日後：資料ご確認のお伺い'), false);
+
+const legacyMix = [
+  { ...MST_DIAGNOSIS_STARTER_SCENARIOS[0], id: 'old-1', name: '【1. 初回お礼】', updatedAt: 100 },
+  { ...MST_DIAGNOSIS_STARTER_SCENARIOS[1], id: 'old-2', name: '【2. 診断ご案内】', updatedAt: 100 },
+  { ...MST_DIAGNOSIS_STARTER_SCENARIOS[2], id: 'old-3', name: '【3. レポート自動送付】', updatedAt: 100 },
+];
+const cleanedMerge = mergeStarterScenarioBatch(legacyMix, MST_DIAGNOSIS_STARTER_SCENARIOS, {
+  replaceLegacyBranchA: true,
+  nowMs: 3000,
+});
+assert.equal(cleanedMerge.merged.length, 4);
+assert.ok(cleanedMerge.merged.every((s) => !isLegacyBranchAScenarioName(s.name)));
+console.log('  ✓ passed');
+
+console.log('Test 20: sortScenarios places official A1-A4 strictly before legacy Branch A numeric items');
+const unsorted = [
+  { ...MST_DIAGNOSIS_STARTER_SCENARIOS[0], id: 'leg-2', name: '【2. 診断リマインド】', updatedAt: 1 },
+  { ...MST_DIAGNOSIS_STARTER_SCENARIOS[3], id: 'new-4', updatedAt: 1 },
+  { ...MST_DIAGNOSIS_STARTER_SCENARIOS[0], id: 'leg-1', name: '【1. 初回案内】', updatedAt: 1 },
+  { ...MST_DIAGNOSIS_STARTER_SCENARIOS[0], id: 'new-1', updatedAt: 1 },
+  { ...MST_DIAGNOSIS_STARTER_SCENARIOS[2], id: 'new-3', updatedAt: 1 },
+  { ...MST_DIAGNOSIS_STARTER_SCENARIOS[1], id: 'new-2', updatedAt: 1 },
+];
+const sorted = sortScenarios(unsorted);
+assert.deepEqual(
+  sorted.map((s) => s.id),
+  ['new-1', 'new-2', 'new-3', 'new-4', 'leg-1', 'leg-2']
+);
+assert.ok(getScenarioSortKey(unsorted[3]).stepNumber < getScenarioSortKey(unsorted[2]).stepNumber);
 console.log('  ✓ passed');
 
 console.log('=== All Outreach Footer & Follow-up Tests Passed! ===');

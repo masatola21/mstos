@@ -62,7 +62,7 @@ import {
   WelcomePatternBConfig,
 } from './MarketingLineSettingsView';
 import { upgradeLegacyMstUrl, OFFICIAL_VERCEL_URLS } from '../../utils/marketingStorage';
-import { isPostDealStageTrigger } from '../../utils/followupStarterScenarios';
+import { isLegacyBranchAScenarioName, isPostDealStageTrigger } from '../../utils/followupStarterScenarios';
 import { getSupabase } from '../../lib/supabaseClient';
 import { FlowStepInspectorModal } from './FlowStepInspectorModal';
 import { UNIFIED_TAG_MASTER, MasterTag } from '../../constants/tagMaster';
@@ -1294,25 +1294,61 @@ export const MarketingFlowStudio: React.FC<MarketingFlowStudioProps> = ({
     s.name.includes('【レポート後') ||
     s.name.includes('【提案後');
 
+  const isSalesOutreachScenario = (s: MarketingScenario) =>
+    s.id === ONE_SHOT_SCENARIO_ID ||
+    s.name.includes('一発直球') ||
+    s.name.includes('営業メール') ||
+    s.name.includes('【営業') ||
+    s.trigger === 'outreach_first_sent' ||
+    (s.channel === 'email' &&
+      (s.trigger === 'lead_created' || (s.trigger === 'manual' && /^【第\d+通/.test(s.name || ''))));
+
   // シナリオの分類（重複なく分岐A / B / C / 共通教育 / 営業メール / 資料請求後 / 面談・提案後へ振り分け）
   const diagnosisScenarios = useMemo(() => {
-    return scenarios.filter(s =>
-      !isMaterialFollowupScenario(s) &&
-      !isPostMeetingFollowupScenario(s) &&
-      (
-        s.name.includes('【A') ||
-        s.name.includes('診断') ||
-        s.trigger.startsWith('diagnosis_') ||
-        s.trigger.startsWith('report_') ||
-        s.targetTag === '選択:診断' ||
-        s.name.includes('【1. 初回') ||
-        s.name.includes('【2. 診断') ||
-        s.name.includes('【3. レポート') ||
-        s.name.includes('【4. 3日') ||
-        s.name.includes('【5. 7日')
+    const extractStepNumber = (name: string) => {
+      const m = (name || '').match(/[【［\[A]*\s*(\d+)/) || (name || '').match(/(\d+)/);
+      return m ? parseInt(m[1], 10) : 999;
+    };
+    return scenarios
+      .filter(s =>
+        !isMaterialFollowupScenario(s) &&
+        !isPostMeetingFollowupScenario(s) &&
+        !isSalesOutreachScenario(s) &&
+        (
+          s.name.includes('【A') ||
+          s.name.includes('診断') ||
+          s.trigger.startsWith('diagnosis_') ||
+          s.trigger.startsWith('report_') ||
+          s.targetTag === '選択:診断' ||
+          isLegacyBranchAScenarioName(s.name || '')
+        )
       )
-    );
+      .sort((a, b) => {
+        const legacyA = isLegacyBranchAScenarioName(a.name || '') ? 1 : 0;
+        const legacyB = isLegacyBranchAScenarioName(b.name || '') ? 1 : 0;
+        if (legacyA !== legacyB) return legacyA - legacyB;
+        const stepA = extractStepNumber(a.name || '');
+        const stepB = extractStepNumber(b.name || '');
+        if (stepA !== stepB) return stepA - stepB;
+        return (a.waitMinutes || 0) - (b.waitMinutes || 0);
+      });
   }, [scenarios]);
+
+  const legacyDiagnosisScenarios = useMemo(
+    () => diagnosisScenarios.filter((s) => isLegacyBranchAScenarioName(s.name || '')),
+    [diagnosisScenarios]
+  );
+
+  const handleCleanupLegacyDiagnosisScenarios = () => {
+    if (onApplyDiagnosisStarterSet) {
+      onApplyDiagnosisStarterSet();
+      return;
+    }
+    const cleaned = scenarios.filter((s) => !isLegacyBranchAScenarioName(s.name || ''));
+    onScenariosChange(cleaned);
+    setKeywordNotice('旧バージョンの分岐Aシナリオを削除しました。');
+    setTimeout(() => setKeywordNotice(''), 4000);
+  };
 
   const consultScenarios = useMemo(() => {
     return scenarios.filter(s =>
@@ -1376,12 +1412,7 @@ export const MarketingFlowStudio: React.FC<MarketingFlowStudioProps> = ({
     return scenarios.filter(s =>
       s.id !== ONE_SHOT_SCENARIO_ID &&
       !s.name.includes('一発直球') &&
-      (
-        s.name.includes('営業メール') ||
-        s.name.includes('【営業') ||
-        (s.channel === 'email' && s.trigger === 'lead_created') ||
-        s.trigger === 'outreach_first_sent'
-      )
+      isSalesOutreachScenario(s)
     );
   }, [scenarios]);
 
@@ -3080,18 +3111,57 @@ export const MarketingFlowStudio: React.FC<MarketingFlowStudioProps> = ({
                 </div>
               ) : (
                 <div className="space-y-3">
-                  {diagnosisScenarios.map((scenario, index) => (
+                  {legacyDiagnosisScenarios.length > 0 && (
+                    <div className="p-3.5 rounded-xl border border-amber-300 bg-amber-50/90 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                      <div className="flex items-start gap-2.5 text-xs text-amber-950">
+                        <AlertCircle className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
+                        <div className="space-y-0.5">
+                          <p className="font-bold">
+                            旧バージョン（数字パターン等 {legacyDiagnosisScenarios.length}件）が残っているため表示されています
+                          </p>
+                          <p className="text-[11px] text-amber-900 leading-relaxed">
+                            現在は<strong>新バージョン（A1〜A4）のみ稼働</strong>させればOKです（両方ONにすると二重配信になります）。下のボタンで旧パターンをまとめて整理できます。
+                          </p>
+                        </div>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={handleCleanupLegacyDiagnosisScenarios}
+                        className="px-3.5 py-2 bg-amber-600 hover:bg-amber-700 text-white rounded-lg text-xs font-bold transition cursor-pointer inline-flex items-center gap-1.5 shadow-xs shrink-0"
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                        <span>旧パターンを削除してA1〜A4だけに整理</span>
+                      </button>
+                    </div>
+                  )}
+
+                  {diagnosisScenarios.map((scenario, index) => {
+                    const isLegacy = isLegacyBranchAScenarioName(scenario.name || '');
+                    return (
                     <div
                       key={scenario.id}
-                      className="bg-slate-50/60 border border-slate-200 hover:border-emerald-300 rounded-xl p-4 flex flex-col md:flex-row md:items-center justify-between gap-3 transition shadow-2xs"
+                      className={`rounded-xl p-4 flex flex-col md:flex-row md:items-center justify-between gap-3 transition shadow-2xs border ${
+                        isLegacy
+                          ? 'bg-amber-50/40 border-amber-200/90 opacity-85 hover:border-amber-300'
+                          : 'bg-slate-50/60 border-slate-200 hover:border-emerald-300'
+                      }`}
                     >
                       <div className="flex items-start gap-3">
-                        <span className="w-6 h-6 rounded-full bg-emerald-100 text-emerald-800 font-bold text-xs flex items-center justify-center shrink-0 mt-0.5 border border-emerald-300">
+                        <span className={`w-6 h-6 rounded-full font-bold text-xs flex items-center justify-center shrink-0 mt-0.5 border ${
+                          isLegacy
+                            ? 'bg-amber-100 text-amber-800 border-amber-300'
+                            : 'bg-emerald-100 text-emerald-800 border-emerald-300'
+                        }`}>
                           {index + 1}
                         </span>
                         <div className="space-y-1">
                           <div className="flex items-center gap-2 flex-wrap">
                             <span className="font-bold text-slate-900 text-sm">{scenario.name}</span>
+                            {isLegacy && (
+                              <span className="text-[10px] px-2 py-0.5 rounded bg-amber-100 text-amber-900 border border-amber-300 font-bold">
+                                旧バージョン（停止推奨）
+                              </span>
+                            )}
                             <span className="text-[10px] px-2 py-0.5 rounded bg-slate-100 text-slate-600 border border-slate-200 font-mono">
                               {scenario.waitMinutes === 0 ? '即時実行' : `${Math.round(scenario.waitMinutes / 1440)}日後`}
                             </span>
@@ -3156,9 +3226,21 @@ export const MarketingFlowStudio: React.FC<MarketingFlowStudioProps> = ({
                           <ShieldCheck className="w-3.5 h-3.5 text-purple-200" />
                           <span>点検・編集</span>
                         </button>
+
+                        {isLegacy && (
+                          <button
+                            type="button"
+                            onClick={() => handleDeleteInspectorScenario(scenario.id)}
+                            className="p-2 bg-white hover:bg-rose-50 text-rose-600 rounded-lg text-xs border border-rose-200 transition cursor-pointer shadow-2xs"
+                            title="旧シナリオを削除"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </button>
+                        )}
                       </div>
                     </div>
-                  ))}
+                    );
+                  })}
                 </div>
               )}
             </div>

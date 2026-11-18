@@ -4,6 +4,7 @@ import {
   MST_DIAGNOSIS_STARTER_SCENARIOS,
   MST_MATERIAL_FOLLOWUP_STARTER_SCENARIOS,
   MST_POST_MEETING_STARTER_SCENARIOS,
+  isLegacyBranchAScenarioName,
   isPostDealStageTrigger,
   mergeStarterScenarioBatch,
 } from '../../utils/followupStarterScenarios';
@@ -325,7 +326,22 @@ export function getScenarioSortKey(scenario: MarketingScenario): { categoryOrder
     categoryOrder = 6;
   } else if (isPostDealStageTrigger(scenario.trigger) || name.includes('【面談後') || name.includes('【レポート後') || name.includes('【提案後')) {
     categoryOrder = 7;
-  } else if (name.includes('【A') || name.includes('診断') || name.includes('【1. 初回') || name.includes('【2. 診断') || name.includes('【3. レポート') || name.includes('【4. 3日') || name.includes('【5. 7日') || scenario.trigger.startsWith('diagnosis_') || scenario.trigger.startsWith('report_')) {
+  } else if (
+    scenario.id === 'one-shot-outreach' ||
+    name.includes('一発直球') ||
+    scenario.trigger === 'outreach_first_sent' ||
+    name.includes('営業メール') ||
+    /^【第\d+通/.test(name) ||
+    (scenario.channel === 'email' && scenario.trigger === 'lead_created')
+  ) {
+    categoryOrder = 5;
+  } else if (
+    name.includes('【A') ||
+    name.includes('診断') ||
+    isLegacyBranchAScenarioName(name) ||
+    scenario.trigger.startsWith('diagnosis_') ||
+    scenario.trigger.startsWith('report_')
+  ) {
     categoryOrder = 1;
   } else if (name.includes('【B') || (name.includes('個別相談') && !name.includes('介護'))) {
     categoryOrder = 2;
@@ -333,8 +349,6 @@ export function getScenarioSortKey(scenario: MarketingScenario): { categoryOrder
     categoryOrder = 3;
   } else if (name.includes('ストーリー') || name.includes('大橋') || name.includes('ナーチャリング') || name.includes('話】')) {
     categoryOrder = 4;
-  } else if (name.includes('営業メール') || name.includes('【第') || (scenario.channel === 'email' && scenario.trigger === 'lead_created')) {
-    categoryOrder = 5;
   }
 
   // ステップ番号の抽出（例: 【A1 / 【B2 / 第1話 / ステップ1 など）
@@ -342,6 +356,10 @@ export function getScenarioSortKey(scenario: MarketingScenario): { categoryOrder
   const numMatch = name.match(/[【［\[第ABCステップ]*\s*(\d+)/) || name.match(/(\d+)/);
   if (numMatch) {
     stepNumber = parseInt(numMatch[1], 10);
+  }
+  if (categoryOrder === 1 && isLegacyBranchAScenarioName(name)) {
+    // 旧数字パターン（1〜5）や旧A1〜A5は現行A1〜A4の後ろにまとめて表示し、交互混在を防ぐ
+    stepNumber += 100;
   }
 
   return {

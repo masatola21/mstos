@@ -388,6 +388,15 @@ export const LEGACY_BRANCH_A_PREFIXES = [
   '【A5・7日後商談案内】',
 ];
 
+export function isLegacyBranchAScenarioName(name: string): boolean {
+  const trimmed = (name || '').trim();
+  if (!trimmed) return false;
+  return (
+    LEGACY_BRANCH_A_PREFIXES.some((prefix) => trimmed.startsWith(prefix)) ||
+    /^【[1-5][\.．、・:\s]/.test(trimmed)
+  );
+}
+
 export function mergeStarterScenarioBatch(
   existingScenarios: MarketingScenario[],
   presets: Omit<MarketingScenario, 'id' | 'updatedAt'>[],
@@ -395,7 +404,7 @@ export function mergeStarterScenarioBatch(
 ): { merged: MarketingScenario[]; addedCount: number; updatedCount: number } {
   const now = options?.nowMs ?? Date.now();
   const baseList = options?.replaceLegacyBranchA
-    ? existingScenarios.filter((s) => !LEGACY_BRANCH_A_PREFIXES.some((prefix) => (s.name || '').startsWith(prefix)))
+    ? existingScenarios.filter((s) => !isLegacyBranchAScenarioName(s.name || ''))
     : [...existingScenarios];
 
   const existingByName = new Map<string, MarketingScenario>();
