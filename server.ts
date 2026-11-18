@@ -1089,11 +1089,11 @@ export async function getEmailBackupForwardSettings(ownerId?: string | null): Pr
 
   // 2. Fallback to automation_controls
   try {
-    const targetKey = ownerId ? `email_backup_forward_${ownerId}` : 'email_backup_forward_default';
+    const targetId = ownerId ? `email_backup_forward_${ownerId}` : 'email_backup_forward_default';
     const { data } = await lineSupabase
       .from('automation_controls')
       .select('reason, paused')
-      .eq('target', targetKey)
+      .or(`id.eq.${targetId},target.eq.${targetId}`)
       .maybeSingle();
     if (data?.reason) {
       const parsed = typeof data.reason === 'string' ? JSON.parse(data.reason) : data.reason;
@@ -1286,11 +1286,11 @@ export async function getLineAwaitingDismissedMap(ownerId?: string | null): Prom
   }
   if (!lineSupabase) return {};
   try {
-    const targetKey = `line_awaiting_dismissed_${ownerId}`;
+    const targetId = `line_awaiting_dismissed_${ownerId}`;
     const { data } = await lineSupabase
       .from('automation_controls')
       .select('reason')
-      .eq('target', targetKey)
+      .or(`id.eq.${targetId},target.eq.${targetId}`)
       .maybeSingle();
     if (data?.reason) {
       const parsed = typeof data.reason === 'string' ? JSON.parse(data.reason) : data.reason;
@@ -1321,35 +1321,20 @@ export async function saveLineAwaitingDismissedEntry(
 
   if (lineSupabase) {
     try {
-      const targetKey = `line_awaiting_dismissed_${ownerId}`;
+      const targetId = `line_awaiting_dismissed_${ownerId}`;
       const payload = JSON.stringify(next);
       const nowIso = new Date().toISOString();
-      const { data: existingCtrl } = await lineSupabase
-        .from('automation_controls')
-        .select('id')
-        .eq('target', targetKey)
-        .maybeSingle();
 
-      if (existingCtrl?.id) {
-        await lineSupabase
-          .from('automation_controls')
-          .update({
-            reason: payload,
-            updated_by: ownerId,
-            updated_at: nowIso,
-          })
-          .eq('id', existingCtrl.id);
-      } else {
-        await lineSupabase
-          .from('automation_controls')
-          .insert({
-            target: targetKey,
-            paused: false,
-            reason: payload,
-            updated_by: ownerId,
-            updated_at: nowIso,
-          });
-      }
+      await lineSupabase
+        .from('automation_controls')
+        .upsert({
+          id: targetId,
+          target: 'send',
+          paused: false,
+          reason: payload,
+          updated_by: ownerId,
+          updated_at: nowIso,
+        }, { onConflict: 'id' });
 
       // 対応済みにした場合、DB上の該当ユーザーの受信メッセージも status = 'read' に更新して永続化
       if (dismissedUntil && cleanUid) {
@@ -9916,40 +9901,23 @@ app.post('/api/inbox/email/settings', requireAuth, async (req, res) => {
 
   // Persist backup forward settings into fallback automation_controls safely
   try {
-    const targetKey = `email_backup_forward_${user.id}`;
+    const targetId = `email_backup_forward_${user.id}`;
     const payload = JSON.stringify({
       address: finalBackupAddress,
       enabled: finalBackupEnabled,
     });
     const nowIso = new Date().toISOString();
 
-    const { data: existingCtrl } = await lineSupabase
+    await lineSupabase
       .from('automation_controls')
-      .select('id')
-      .eq('target', targetKey)
-      .maybeSingle();
-
-    if (existingCtrl?.id) {
-      await lineSupabase
-        .from('automation_controls')
-        .update({
-          paused: !finalBackupEnabled,
-          reason: payload,
-          updated_by: user.id,
-          updated_at: nowIso,
-        })
-        .eq('id', existingCtrl.id);
-    } else {
-      await lineSupabase
-        .from('automation_controls')
-        .insert({
-          target: targetKey,
-          paused: !finalBackupEnabled,
-          reason: payload,
-          updated_by: user.id,
-          updated_at: nowIso,
-        });
-    }
+      .upsert({
+        id: targetId,
+        target: 'send',
+        paused: !finalBackupEnabled,
+        reason: payload,
+        updated_by: user.id,
+        updated_at: nowIso,
+      }, { onConflict: 'id' });
   } catch (ctrlErr: any) {
     console.warn('[inbox/email/settings] Fallback save to automation_controls warning:', ctrlErr?.message || ctrlErr);
   }

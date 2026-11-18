@@ -1283,7 +1283,8 @@ export const CommunicationSendCenter: React.FC<Props> = ({
                           </button>
                         </div>
                         <span className="text-[11px] text-slate-500">
-                          TimeRex共通予約URL: <span className="font-mono text-purple-700 font-semibold">{bookingUrl || '未設定'}</span>
+                          予約URL: <span className="font-mono text-purple-700 font-semibold">{bookingUrl || 'https://timerex.net/s/mst.shikumikaizen_b173/4ac78e37'}</span>
+                          {!bookingUrl && <span className="text-[10px] text-slate-400 ml-1">（標準TimeRex）</span>}
                         </span>
                       </div>
                     )}
@@ -1932,7 +1933,8 @@ export const CommunicationSendCenter: React.FC<Props> = ({
                   {(kind === 'deal' || kind === 'customer_meeting') && (
                     <div className="md:col-span-2 flex flex-wrap items-center gap-3">
                       <p className="text-xs text-slate-500">
-                        共通予約ページ: <span className="text-purple-700 font-mono font-medium">{bookingUrl || '未設定'}</span>
+                        予約ページURL: <span className="text-purple-700 font-mono font-medium">{bookingUrl || 'https://timerex.net/s/mst.shikumikaizen_b173/4ac78e37'}</span>
+                        {!bookingUrl && <span className="text-[10px] text-slate-400 ml-1">（標準TimeRex）</span>}
                       </p>
                       <div className="flex items-center gap-2 text-xs">
                         <span className="text-slate-500 font-medium">ビデオ会議:</span>
