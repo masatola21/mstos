@@ -21,6 +21,12 @@ import {
 } from './src/utils/salesOutreachTemplates.js';
 import { generateDocumentPdf } from './server/pdfService.js';
 import { prepareEmailPayloadContent } from './server/emailFooter.js';
+import {
+  buildConsultationAdminAlertEmail,
+  buildConsultationInstantReply,
+  classifyPublicFormNotificationKind,
+  extractConsultationDetailsText,
+} from './server/publicFormReply.js';
 import { shouldStopScenarioForDeal } from './src/utils/followupStarterScenarios.js';
 import { classifyBottleneck } from './server/diagnosisAnalysis.js';
 import { DRAFT_CHAPTERS, DRAFT_SYSTEM_INSTRUCTION, buildProposalDraftPrompt, sanitizeDraftContext, cleanDraftOutput, type DraftChapter } from './server/proposalDraftBuilder.js';
@@ -7736,8 +7742,29 @@ app.post(
       ? `\n\n▼ 30分無料オンライン商談（改善作戦会議）の日程予約はこちら\n${bookingUrl}\n\n※さらに踏み込んだ【詳細診断レポート・改善提案書】は、30分商談を実施いただいた方限定で商談後に作成・ご送付しております。`
       : '\n\n※詳細な【個別診断レポート・改善提案書】は、商談を実施いただいた方限定で商談後に作成・ご送付しております。担当者より日程のご案内をお届けいたします。';
 
+    const notificationKind = classifyPublicFormNotificationKind({
+      slug,
+      formType: form.form_type,
+      inquiryType,
+      isCarePackage,
+    });
+    const isConsultationInquiry = notificationKind === 'consultation_inquiry';
+    const { consultationText, preferredDateText } = extractConsultationDetailsText({
+      userNotes,
+      answers: cleanAnswers,
+    });
+    const outboxSourceType =
+      notificationKind === 'material_download'
+        ? 'material_download'
+        : notificationKind === 'care_package'
+          ? 'care_package_inquiry'
+          : notificationKind === 'consultation_inquiry'
+            ? 'contact_inquiry'
+            : 'diagnosis_submission';
+
     let customNotificationText = '';
-    if (isCarePackage) {
+    let consultationReplySubject = '';
+    if (notificationKind === 'care_package') {
       if (inquiryType === '資料請求') {
         customNotificationText = `【MST】「介護保険外サービス開業パッケージ」資料請求を承りました。\n\n${name} 様\n資料請求いただき誠にありがとうございます！\n\n` +
           (materialReady
@@ -7760,16 +7787,33 @@ app.post(
         }
         customNotificationText = parts.join('\n\n');
       }
-    } else if (slug === 'material-download' || inquiryType === '資料請求') {
+    } else if (notificationKind === 'material_download') {
       // 一般資料請求のメール・LINE通知
       const materialListText = effectiveMaterialUrls
         ? `ご請求いただいた資料は、以下のURLより今すぐご確認・ダウンロードいただけます。\n\n${effectiveMaterialUrls}\n\n※ダウンロード期限はございませんので、いつでもお見返しいただけます。`
         : '現在、最新版資料の送付準備中となっております。担当者より折り返しご案内をお送りいたします。';
 
       customNotificationText = `【MST】資料請求を受け付けました。\n\n${name} 様\nこの度は資料をご請求いただき誠にありがとうございます！\n\n${materialListText}${bookingPrompt}`;
+    } else if (notificationKind === 'consultation_inquiry') {
+      const consultationReply = buildConsultationInstantReply({
+        name,
+        companyName,
+        inquiryType,
+        consultationText,
+        preferredDateText,
+        bookingUrl: bookingReady ? bookingUrl : null,
+      });
+      consultationReplySubject = consultationReply.emailSubject;
+      customNotificationText = consultationReply.bodyText;
     }
 
-    if (contact.line_user_id && lineChannelAccessToken) {
+    const sysOwnerId = lineSupabase ? await resolveSystemOwnerId((form as any)?.owner_id) : null;
+    const recipientEmail = (email || contact.email || '').trim().toLowerCase();
+    const shouldSendLineReply = Boolean(contact.line_user_id && lineChannelAccessToken);
+    // Web相談・お問い合わせはメール返信が必須のため、LINE連携済みの連絡先でもメール即時受付を省略しない
+    const shouldSendEmailReply = Boolean(recipientEmail) && (isConsultationInquiry || !shouldSendLineReply);
+
+    if (shouldSendLineReply) {
       try {
         const lineMsg = {
           type: 'text',
@@ -7788,7 +7832,6 @@ app.post(
           console.error('[PublicForm] LINE auto confirmation push failed:', lineErrorMessage);
         }
         if (lineSupabase) {
-          const sysOwnerId = await resolveSystemOwnerId((form as any)?.owner_id);
           if (sysOwnerId) {
             await lineSupabase.from('line_inbox_messages').insert({
               owner_id: sysOwnerId,
@@ -7802,22 +7845,21 @@ app.post(
               received_at: new Date().toISOString(),
             });
           }
-          const outboxSourceType = slug === 'material-download' || inquiryType?.includes('資料請求')
-            ? 'material_download'
-            : isCarePackage
-              ? 'care_package_inquiry'
-              : 'diagnosis_submission';
           const outboxPayload: any = {
             channel: 'line',
             recipient_contact_id: contact.id,
             recipient_address: contact.line_user_id,
-            subject: '【LINE自動返信】' + (form.name || '資料・受付案内'),
+            subject: isConsultationInquiry
+              ? '【LINE自動返信】Web相談・お問い合わせ受付完了'
+              : '【LINE自動返信】' + (form.name || '資料・受付案内'),
             body_text: lineMsg.text,
             status: lineOk ? 'sent' : 'failed',
             sent_at: lineOk ? new Date().toISOString() : null,
             ...(lineErrorMessage ? { error_message: lineErrorMessage } : {}),
             consent_confirmed_at: new Date().toISOString(),
-            consent_basis: '資料請求・フォーム受付（トランザクショナル配信）',
+            consent_basis: isConsultationInquiry
+              ? 'Web相談・お問い合わせ受付（トランザクショナル配信）'
+              : '資料請求・フォーム受付（トランザクショナル配信）',
             source_type: outboxSourceType,
             source_id: submission.id,
             company_id: resolvedCompanyId,
@@ -7831,28 +7873,35 @@ app.post(
       } catch (linePushErr) {
         console.warn('LINE auto confirmation push warning:', linePushErr);
       }
-    } else if (contact.email) {
+    }
+
+    let emailStatus: 'sent' | 'queued' | 'failed' = 'queued';
+    let emailErrorMessage: string | null = null;
+    if (shouldSendEmailReply) {
       try {
         const emailKey = process.env.RESEND_API_KEY || '';
-        const emailFrom = process.env.RESEND_FROM_EMAIL || '';
-        const subject = isCarePackage
-          ? `【MST】「介護保険外サービス開業パッケージ」${inquiryType || 'お問い合わせ'}の受付完了`
-          : slug === 'material-download' || inquiryType?.includes('資料請求')
-            ? `【MST】資料請求の受付完了（ダウンロードリンクのご案内）`
-            : `【MST】「${form.name || '無料診断'}」簡易診断結果の確認 ＆ 個別商談のご案内`;
+        const resolvedSender = await resolveEmailSender(sysOwnerId);
+        const emailFrom = (process.env.RESEND_FROM_EMAIL || resolvedSender.fromString || '').trim();
+        const senderAddr = (emailFrom.match(/<([^<>]+)>/)?.[1] || resolvedSender.senderEmail || emailFrom).trim();
+        const subject =
+          notificationKind === 'care_package'
+            ? `【MST】「介護保険外サービス開業パッケージ」${inquiryType || 'お問い合わせ'}の受付完了`
+            : notificationKind === 'material_download'
+              ? '【MST】資料請求の受付完了（ダウンロードリンクのご案内）'
+              : notificationKind === 'consultation_inquiry'
+                ? consultationReplySubject
+                : `【MST】「${form.name || '無料診断'}」簡易診断結果の確認 ＆ 個別商談のご案内`;
         // 署名は送信直前に共通処理で付ける（他のメールと同じ形式。受付完了は取引メールなので配信停止リンクなし）
         const rawBodyText = customNotificationText || `${name} 様\n\n有限会社MST代表の大橋真人です。\nこの度は「${form.name || '無料診断'}」にご回答いただき誠にありがとうございます。\n\n送信直後にホームページ画面へ表示いたしました【簡易診断結果】はご覧いただけましたでしょうか？\n■ 今回の簡易診断タイプ：${quickBottleneck?.typeTitle || '経営ボトルネック簡易診断'}\n${quickBottleneck?.firstStep ? `■ 最初に着手したい候補：${quickBottleneck.firstStep}\n` : ''}\nより詳細な【個別診断レポート】および【改善提案書】につきましては、机上の空論を避け御社の実情に合った内容でお届けするため、30分のオンライン商談を実施いただいた方限定で商談後に作成・ご送付しております。${bookingPrompt}\n\n--------------------------------------------------\n有限会社MST\n代表取締役: 大橋真人\n〒503-0981 岐阜県大垣市桧町127番地\n--------------------------------------------------`;
 
         const emailPayload = prepareEmailPayloadContent(rawBodyText, {
-          senderEmail: (emailFrom.match(/<([^<>]+)>/)?.[1] || emailFrom).trim(),
+          senderEmail: senderAddr,
           logoUrl: process.env.EMAIL_SIGNATURE_LOGO_URL,
         });
         const bodyText = emailPayload.text;
 
-        let emailStatus: 'sent' | 'queued' | 'failed' = 'queued';
         let sentAt: string | null = null;
         let providerMessageId: string | null = null;
-        let emailErrorMessage: string | null = null;
 
         if (emailKey && emailFrom) {
           try {
@@ -7861,7 +7910,8 @@ app.post(
               headers: { Authorization: `Bearer ${emailKey}`, 'Content-Type': 'application/json' },
               body: JSON.stringify({
                 from: emailFrom,
-                to: [contact.email],
+                to: [recipientEmail],
+                ...(resolvedSender.replyToEmail ? { reply_to: resolvedSender.replyToEmail } : {}),
                 subject,
                 text: emailPayload.text,
                 html: emailPayload.html,
@@ -7884,19 +7934,14 @@ app.post(
           }
         } else {
           emailStatus = 'queued';
+          emailErrorMessage = !emailKey ? 'RESEND_API_KEY未設定' : 'RESEND_FROM_EMAIL未設定';
         }
 
         if (lineSupabase) {
-          const sysOwnerId = await resolveSystemOwnerId((form as any)?.owner_id);
-          const outboxSourceType = slug === 'material-download' || inquiryType?.includes('資料請求')
-            ? 'material_download'
-            : isCarePackage
-              ? 'care_package_inquiry'
-              : 'diagnosis_submission';
           const outboxPayload: any = {
             channel: 'email',
             recipient_contact_id: contact.id,
-            recipient_address: contact.email,
+            recipient_address: recipientEmail,
             subject,
             body_text: bodyText,
             status: emailStatus,
@@ -7904,7 +7949,9 @@ app.post(
             ...(providerMessageId ? { provider_message_id: providerMessageId } : {}),
             ...(emailErrorMessage ? { error_message: emailErrorMessage } : {}),
             consent_confirmed_at: new Date().toISOString(),
-            consent_basis: '資料請求・フォーム受付（トランザクショナル配信）',
+            consent_basis: isConsultationInquiry
+              ? 'Web相談・お問い合わせ受付（トランザクショナル配信）'
+              : '資料請求・フォーム受付（トランザクショナル配信）',
             source_type: outboxSourceType,
             source_id: submission.id,
             company_id: resolvedCompanyId,
@@ -7915,15 +7962,17 @@ app.post(
             console.error('[PublicForm] Failed to insert Email communication_outbox:', outboxErr);
           }
         }
-      } catch (emailErr) {
+      } catch (emailErr: any) {
+        emailStatus = 'failed';
+        emailErrorMessage = emailErr?.message || 'メール自動返信例外';
         console.warn('Email auto confirmation warning:', emailErr);
       }
     }
 
-    // 管理者向けタスク起票（レポート承認通知 / 資料URL未設定警告）
+    // 管理者向けタスク起票（レポート承認通知 / 資料URL未設定警告 / Web相談メール返信タスク）＋ Web相談の管理者メール通知
     if (lineSupabase) {
       try {
-        const formTaskOwnerId = await resolveSystemOwnerId((form as any)?.owner_id);
+        const formTaskOwnerId = sysOwnerId || await resolveSystemOwnerId((form as any)?.owner_id);
         if (!formTaskOwnerId) {
           console.error('[PublicForm] タスク起票スキップ: owner_id が解決できませんでした (form:', form?.name, slug, ')');
         } else {
@@ -7940,16 +7989,81 @@ app.post(
               console.error('[PublicForm] 資料URL未設定警告タスク起票エラー:', warningTaskErr.message, warningTaskErr.code);
             }
           }
+
+          const taskTitle = isConsultationInquiry
+            ? `【要対応・Web相談（メール返信）】${name} 様（${companyName || '個人'}）`
+            : `【要対応・${isCarePackage ? '開業パッケージ申込' : slug === 'material-download' ? '資料請求' : 'レポート承認'}】${name} 様（${companyName || '個人'}）の回答`;
+
+          const autoEmailStatusText = shouldSendEmailReply
+            ? emailStatus === 'sent'
+              ? '自動受付メール送信済み'
+              : `自動受付メール未完了（${emailStatus}${emailErrorMessage ? `: ${emailErrorMessage}` : ''}）— 至急メール返信してください`
+            : '自動受付メール対象外';
+
+          const taskDescription = isConsultationInquiry
+            ? [
+                `HP「${form.name}」よりWeb相談・お問い合わせが届きました。内容を確認のうえ、${recipientEmail} 宛てに個別メール返信を行ってください。`,
+                `■ 相談種別: ${inquiryType || '経営相談'}`,
+                `■ 返信先メール: ${recipientEmail}`,
+                ...(phone ? [`■ 電話番号: ${phone}`] : []),
+                ...(preferredDateText ? [`■ ご希望日時: ${preferredDateText}`] : []),
+                `■ 即時自動返信: ${autoEmailStatusText}`,
+                `■ 相談内容:\n${consultationText || '（自由記述なし）'}`,
+              ].join('\n')
+            : `フォーム「${form.name}」の回答（希望: ${inquiryType || '未指定'}${requestedMaterialText ? ` / ${requestedMaterialText}` : ''}）が届きました。内容を確認し、案内または面談日程の調整を行ってください。`;
+
           const { error: responseTaskErr } = await lineSupabase.from('tasks').insert({
             owner_id: formTaskOwnerId,
-            title: `【要対応・${isCarePackage ? '開業パッケージ申込' : slug === 'material-download' ? '資料請求' : 'レポート承認'}】${name} 様（${companyName || '個人'}）の回答`,
-            description: `フォーム「${form.name}」の回答（希望: ${inquiryType || '未指定'}${requestedMaterialText ? ` / ${requestedMaterialText}` : ''}）が届きました。内容を確認し、案内または面談日程の調整を行ってください。`,
+            title: taskTitle,
+            description: taskDescription,
             status: 'todo',
-            priority: 'high',
+            priority: isConsultationInquiry && emailStatus !== 'sent' ? 'urgent' : 'high',
             due_date: new Date().toISOString().slice(0, 10),
           });
           if (responseTaskErr) {
             console.error('[PublicForm] フォーム回答対応タスク起票エラー:', responseTaskErr.message, responseTaskErr.code);
+          }
+
+          // Web相談（contact-inquiry 等）は返信漏れ防止のため管理者宛てにも即時アラートメールを送信（reply_to にお客様メールを設定）
+          if (isConsultationInquiry && process.env.RESEND_API_KEY) {
+            try {
+              const adminEmail = await resolveDefaultLineAlertEmail(formTaskOwnerId);
+              const resolvedSender = await resolveEmailSender(formTaskOwnerId);
+              const adminFrom = (process.env.RESEND_FROM_EMAIL || resolvedSender.fromString || '').trim();
+              if (adminEmail && adminFrom) {
+                const appUrl = (process.env.PUBLIC_APP_URL || '').trim().replace(/\/$/, '');
+                const adminAlert = buildConsultationAdminAlertEmail({
+                  name,
+                  companyName,
+                  email: recipientEmail,
+                  phone,
+                  inquiryType,
+                  consultationText,
+                  preferredDateText,
+                  formName: form.name,
+                  emailAutoReplyStatus: emailStatus,
+                  emailAutoReplyError: emailErrorMessage,
+                  appUrl: appUrl || null,
+                });
+                const adminRes = await fetch('https://api.resend.com/emails', {
+                  method: 'POST',
+                  headers: { Authorization: `Bearer ${process.env.RESEND_API_KEY}`, 'Content-Type': 'application/json' },
+                  body: JSON.stringify({
+                    from: adminFrom,
+                    to: [adminEmail],
+                    ...(recipientEmail ? { reply_to: recipientEmail } : {}),
+                    subject: adminAlert.subject,
+                    text: adminAlert.text,
+                  }),
+                });
+                if (!adminRes.ok) {
+                  const errBody = await adminRes.text().catch(() => '');
+                  console.warn('[PublicForm] Consultation admin alert email warning:', adminRes.status, errBody);
+                }
+              }
+            } catch (adminMailErr: any) {
+              console.warn('[PublicForm] Consultation admin alert exception:', adminMailErr?.message || adminMailErr);
+            }
           }
         }
       } catch (taskErr) {

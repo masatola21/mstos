@@ -7,6 +7,12 @@ import {
   SENDER_PROFILE,
 } from '../server/emailFooter';
 import {
+  buildConsultationAdminAlertEmail,
+  buildConsultationInstantReply,
+  classifyPublicFormNotificationKind,
+  extractConsultationDetailsText,
+} from '../server/publicFormReply';
+import {
   ONE_SHOT_SCENARIO_NAME,
   getOneShotOutreachTemplate,
   getSalesEmailTemplate,
@@ -328,6 +334,70 @@ assert.deepEqual(
   ['new-1', 'new-2', 'new-3', 'new-4', 'leg-1', 'leg-2']
 );
 assert.ok(getScenarioSortKey(unsorted[3]).stepNumber < getScenarioSortKey(unsorted[2]).stepNumber);
+console.log('  ✓ passed');
+
+console.log('Test 21: contact-inquiry classifies as consultation_inquiry and builds dedicated non-diagnosis instant reply');
+assert.equal(
+  classifyPublicFormNotificationKind({ slug: 'contact-inquiry', formType: 'consultation', inquiryType: '経営全体・利益改善', isCarePackage: false }),
+  'consultation_inquiry'
+);
+assert.equal(
+  classifyPublicFormNotificationKind({ slug: 'material-download', formType: 'consultation', inquiryType: '資料請求', isCarePackage: false }),
+  'material_download'
+);
+assert.equal(
+  classifyPublicFormNotificationKind({ slug: 'business-diagnosis', formType: 'diagnosis', inquiryType: 'ボトルネック診断', isCarePackage: false }),
+  'diagnosis'
+);
+
+const details = extractConsultationDetailsText({
+  userNotes: '利益率改善について相談したいです。',
+  answers: { message: '利益率改善について相談したいです。', preferred_date: '来週火曜 午後' },
+});
+assert.equal(details.consultationText, '利益率改善について相談したいです。');
+assert.equal(details.preferredDateText, '来週火曜 午後');
+
+const instantReply = buildConsultationInstantReply({
+  name: '山田太郎',
+  companyName: '株式会社テスト',
+  inquiryType: '経営全体・利益改善',
+  consultationText: details.consultationText,
+  preferredDateText: details.preferredDateText,
+  bookingUrl: 'https://timerex.net/s/mst/example',
+});
+assert.ok(instantReply.emailSubject.includes('Web相談・お問い合わせを受け付けました'));
+assert.ok(!instantReply.bodyText.includes('簡易診断結果'));
+assert.ok(instantReply.bodyText.includes('1営業日以内'));
+assert.ok(instantReply.bodyText.includes('利益率改善について相談したいです。'));
+const signedConsultationEmail = prepareEmailPayloadContent(instantReply.bodyText, { senderEmail: 'contact@mstcorp.info' });
+assert.ok(signedConsultationEmail.text.includes('Mail: contact@mstcorp.info'));
+assert.ok(!signedConsultationEmail.text.includes('配信停止はこちら'));
+console.log('  ✓ passed');
+
+console.log('Test 22: buildConsultationAdminAlertEmail surfaces failure status and reply details cleanly');
+const alertSent = buildConsultationAdminAlertEmail({
+  name: '山田太郎',
+  companyName: '株式会社テスト',
+  email: 'yamada@example.com',
+  inquiryType: '業務効率化',
+  consultationText: '請求業務の自動化相談',
+  emailAutoReplyStatus: 'sent',
+});
+assert.ok(alertSent.subject.includes('要メール返信・Web相談'));
+assert.ok(alertSent.text.includes('yamada@example.com'));
+assert.ok(alertSent.text.includes('送信済み'));
+
+const alertFailed = buildConsultationAdminAlertEmail({
+  name: '山田太郎',
+  companyName: '株式会社テスト',
+  email: 'yamada@example.com',
+  inquiryType: '業務効率化',
+  consultationText: '請求業務の自動化相談',
+  emailAutoReplyStatus: 'failed',
+  emailAutoReplyError: 'HTTP 500',
+});
+assert.ok(alertFailed.subject.includes('至急対応・自動返信未完'));
+assert.ok(alertFailed.text.includes('HTTP 500'));
 console.log('  ✓ passed');
 
 console.log('=== All Outreach Footer & Follow-up Tests Passed! ===');
