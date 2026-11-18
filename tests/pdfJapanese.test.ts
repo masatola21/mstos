@@ -66,6 +66,17 @@ const docs = [
   },
 ];
 
+const monthlyReportHtml = docs.find((d) => d.type === 'monthly_report')!.html;
+assert(!monthlyReportHtml.includes('創出時間（削減効果）') && !monthlyReportHtml.includes('約 24 時間'), '月次報告書に根拠のない時間削減カードが残っていない');
+assert(
+  monthlyReportHtml.includes('1. 今月の総括・成果') &&
+    monthlyReportHtml.includes('2. 主な実施内容') &&
+    monthlyReportHtml.includes('3. 来月の予定・お願い事項'),
+  '月次報告書がシンプル3項目構成になっている',
+);
+const monthlyBlocks = parseHtmlToBlocks(monthlyReportHtml);
+assert(monthlyBlocks.some((b) => b.type === 'h1' && b.text?.includes('月次業務改善・伴走支援レポート')), '月次報告書のタイトルh1が抽出できる');
+
 for (const d of docs) {
   const buf = await generateDocumentPdf(
     { id: '11111111-2222-3333-4444-555555555555', title: d.title, document_type: d.type, body_html: d.html, created_at: '2026-11-13T00:00:00Z' },

@@ -148,11 +148,20 @@ export const DocumentTemplateView: React.FC<DocumentTemplateViewProps> = ({
   // Variable inputs state
   const [variableValues, setVariableValues] = useState<Record<string, string>>(() => {
     const today = todayJst();
-    const activeId = initialDocumentType === 'invoice' 
-      ? 'tpl-unified-invoice' 
-      : initialDealId 
-      ? 'tpl-unified-estimate' 
-      : 'tpl-proposal-report';
+    const activeId =
+      initialDocumentType === 'proposal'
+        ? 'tpl-proposal-report'
+        : initialDocumentType === 'invoice'
+          ? 'tpl-unified-invoice'
+          : initialDocumentType === 'estimate'
+            ? 'tpl-unified-estimate'
+            : initialDocumentType === 'contract'
+              ? 'tpl-unified-contract'
+              : initialDocumentType === 'monthly_report'
+                ? 'tpl-monthly-report-01'
+                : initialDealId
+                  ? 'tpl-unified-estimate'
+                  : 'tpl-proposal-report';
     return getTemplateDefaultValues(activeId, today, 'lump_sum', 'lump_sum');
   });
 
@@ -1578,7 +1587,10 @@ export const DocumentTemplateView: React.FC<DocumentTemplateViewProps> = ({
                 {/* Form fields for template variables */}
                 {currentTemplate.variables.map((v) => {
                   const isProposal = currentTemplate.id === 'tpl-proposal-report';
-                  const multiline = isProposal && MULTILINE_KEYS.has(v.key);
+                  const isMonthlyReport = currentTemplate.id === 'tpl-monthly-report-01';
+                  const multiline =
+                    (isProposal && MULTILINE_KEYS.has(v.key)) ||
+                    (isMonthlyReport && ['monthly_summary', 'accomplishments', 'next_actions'].includes(v.key));
                   const canDraft = isProposal && Boolean(DRAFTABLE_KEYS[v.key]);
                   const notice = draftNotices[v.key];
                   const fieldClass = 'w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs text-slate-900 focus:outline-none focus:border-purple-600 focus:bg-white transition-colors shadow-2xs';
@@ -1609,7 +1621,7 @@ export const DocumentTemplateView: React.FC<DocumentTemplateViewProps> = ({
                         <textarea
                           value={variableValues[v.key] ?? ''}
                           onChange={(e) => handleVariableChange(v.key, e.target.value)}
-                          rows={v.key.startsWith('d') || v.key.startsWith('p_') || v.key === 'p1_policy' || v.key === 'p3_roadmap' ? 5 : 3}
+                          rows={v.key.startsWith('d') || v.key.startsWith('p_') || v.key === 'p1_policy' || v.key === 'p3_roadmap' ? 5 : isMonthlyReport && v.key !== 'monthly_summary' ? 4 : 3}
                           className={`${fieldClass} leading-relaxed resize-y`}
                           placeholder={placeholder}
                         />

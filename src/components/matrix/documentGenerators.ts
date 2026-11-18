@@ -490,51 +490,43 @@ export function getInvoiceHtml(subtype: InvoiceSubtype): string {
 </div>`;
 }
 
-// 5. 月次業務報告書 HTML
+// 5. 月次業務報告書 HTML（シンプルA4・1ページ最適構成）
 export function getMonthlyReportHtml(): string {
-  return `<div style="font-family: Arial, sans-serif; max-width: 800px; margin: 0 auto; padding: 40px; color: #1e293b; line-height: 1.8;">
-  <div style="display:flex; justify-content:space-between; align-items:flex-start; border-bottom:2px solid #0f172a; padding-bottom:12px; margin-bottom:24px;">
-    <div>
-      <span style="background:#0284c7; color:white; font-size:11px; font-weight:bold; padding:2px 8px; border-radius:4px;">月次定例報告</span>
-      <h1 style="margin:6px 0 0 0; font-size:22px; color:#0f172a;">{{report_title}}</h1>
-      <p style="margin:4px 0 0 0; font-size:13px; color:#64748b;">対象年月: {{target_month}}</p>
+  return `<div style="font-family: Arial, sans-serif; max-width: 760px; margin: 0 auto; padding: 36px 40px; color: #1e293b; line-height: 1.75;">
+  <div style="border-bottom: 2px solid #0f172a; padding-bottom: 14px; margin-bottom: 22px;">
+    <div style="display: flex; justify-content: space-between; align-items: center; gap: 12px; font-size: 12px; color: #64748b; margin-bottom: 8px;">
+      <div>
+        <span style="background: #0f172a; color: #ffffff; font-size: 10px; font-weight: bold; padding: 2px 8px; border-radius: 4px; margin-right: 8px;">月次定例報告</span>
+        <span>対象年月: <strong style="color: #0f172a;">{{target_month}}</strong></span>
+      </div>
+      <div style="text-align: right; white-space: nowrap;">
+        <span>発行日: {{issue_date}}</span>
+        <span style="margin-left: 10px; font-weight: bold; color: #0f172a;">有限会社MST（大橋真人）</span>
+      </div>
     </div>
-    <div style="text-align:right; font-size:12px; color:#64748b;">
-      <p style="margin:0;">発行日: {{issue_date}}</p>
-      <p style="margin:2px 0 0 0; font-weight:bold; color:#0f172a;">有限会社MST（大橋真人）</p>
-    </div>
+    <h1 style="margin: 0; font-size: 20px; font-weight: 800; color: #0f172a; line-height: 1.35; letter-spacing: 0.02em;">{{report_title}}</h1>
   </div>
 
-  <p style="font-size:16px; margin:0 0 20px 0;"><strong>{{client_company}}</strong> 御中</p>
+  <p style="font-size: 15px; margin: 0 0 20px 0;"><strong>{{client_company}}</strong> 御中</p>
 
-  <div style="background:#f0f9ff; border:1px solid #bae6fd; border-radius:8px; padding:16px 20px; margin-bottom:24px;">
-    <h3 style="margin:0 0 8px 0; font-size:14px; color:#0369a1; font-weight:bold;">1. 当月サマリー</h3>
-    <p style="margin:0; font-size:13px; color:#0c4a6e;">{{monthly_summary}}</p>
+  <div style="margin-bottom: 20px;">
+    <h3 style="margin: 0 0 8px 0; font-size: 14px; color: #0f172a; font-weight: bold; border-left: 4px solid #0284c7; padding-left: 8px;">1. 今月の総括・成果</h3>
+    <div style="background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 12px 16px; font-size: 13px; color: #1e293b; white-space: pre-wrap;">{{monthly_summary}}</div>
   </div>
 
-  <div style="margin-bottom:24px;">
-    <h3 style="margin:0 0 10px 0; font-size:14px; color:#0f172a; font-weight:bold; border-left:4px solid #0284c7; padding-left:8px;">2. 主な実施実績</h3>
-    <div style="background:#f8fafc; border:1px solid #e2e8f0; border-radius:8px; padding:14px 18px; font-size:13px; color:#334155; white-space:pre-wrap;">{{accomplishments}}</div>
+  <div style="margin-bottom: 20px;">
+    <h3 style="margin: 0 0 8px 0; font-size: 14px; color: #0f172a; font-weight: bold; border-left: 4px solid #0284c7; padding-left: 8px;">2. 主な実施内容</h3>
+    <div style="background: #ffffff; border: 1px solid #e2e8f0; border-radius: 8px; padding: 12px 16px; font-size: 13px; color: #334155; white-space: pre-wrap;">{{accomplishments}}</div>
   </div>
 
-  <div style="display:grid; grid-template-columns:1fr 1fr; gap:16px; margin-bottom:24px;">
-    <div style="background:#f0fdf4; border:1px solid #bbf7d0; border-radius:8px; padding:14px 18px;">
-      <h4 style="margin:0 0 4px 0; font-size:12px; color:#166534; font-weight:bold;">創出時間（削減効果）</h4>
-      <p style="margin:0; font-size:22px; font-weight:bold; color:#15803d;">約 {{hours_saved}} 時間 / 月</p>
-    </div>
-    <div style="background:#f8fafc; border:1px solid #e2e8f0; border-radius:8px; padding:14px 18px;">
-      <h4 style="margin:0 0 4px 0; font-size:12px; color:#475569; font-weight:bold;">KPI・成果指標</h4>
-      <p style="margin:0; font-size:13px; color:#1e293b;">{{metrics_kpi}}</p>
-    </div>
+  <div style="margin-bottom: 24px;">
+    <h3 style="margin: 0 0 8px 0; font-size: 14px; color: #0f172a; font-weight: bold; border-left: 4px solid #0284c7; padding-left: 8px;">3. 来月の予定・お願い事項</h3>
+    <div style="background: #ffffff; border: 1px solid #e2e8f0; border-radius: 8px; padding: 12px 16px; font-size: 13px; color: #334155; white-space: pre-wrap;">{{next_actions}}</div>
   </div>
 
-  <div style="margin-bottom:24px;">
-    <h3 style="margin:0 0 10px 0; font-size:14px; color:#0f172a; font-weight:bold; border-left:4px solid #0284c7; padding-left:8px;">3. 次月アクション計画</h3>
-    <div style="background:#f8fafc; border:1px solid #e2e8f0; border-radius:8px; padding:14px 18px; font-size:13px; color:#334155; white-space:pre-wrap;">{{next_actions}}</div>
-  </div>
-
-  <div style="border-top:1px solid #e2e8f0; padding-top:16px; font-size:12px; color:#64748b;">
-    <p style="margin:0;">有限会社MST ｜ 〒503-0981 岐阜県大垣市桧町127番地 ｜ 代表取締役 大橋真人</p>
+  <div style="border-top: 1px solid #e2e8f0; padding-top: 12px; font-size: 11px; color: #64748b; display: flex; justify-content: space-between; gap: 12px;">
+    <span>有限会社MST ｜ 代表取締役 大橋真人</span>
+    <span>〒503-0981 岐阜県大垣市桧町127番地</span>
   </div>
 </div>`;
 }
@@ -666,20 +658,18 @@ export const CORE_TEMPLATES: DocTemplate[] = [
     type: 'monthly_report',
     stepNum: 'STEP 5',
     title: '月次業務報告書',
-    subtitle: '月次定例・伴走支援の成果指標と翌月アクション報告',
-    description: '月次定例ミーティングで活用する業務進捗・成果指標・来月アクションの報告ひな形',
-    badge: '伴走支援',
+    subtitle: '今月の総括・実施内容・来月予定を1枚で報告',
+    description: '定例報告に必要な3項目（総括・実施内容・来月予定）に絞ったシンプルな月次報告ひな形',
+    badge: 'シンプル3項目',
     htmlContent: getMonthlyReportHtml(),
     variables: [
       { key: 'client_company', label: '宛先企業名', defaultValue: '' },
-      { key: 'report_title', label: '報告書タイトル', defaultValue: '月次業務改善・伴走支援レポート' },
       { key: 'target_month', label: '対象年月', defaultValue: '' },
-      { key: 'monthly_summary', label: '当月サマリー', defaultValue: '' },
-      { key: 'accomplishments', label: '主な実施実績', defaultValue: '' },
-      { key: 'hours_saved', label: '月間創出時間（h）', defaultValue: '20' },
-      { key: 'metrics_kpi', label: 'KPI実績・成果', defaultValue: '' },
-      { key: 'next_actions', label: '次月アクション', defaultValue: '' },
       { key: 'issue_date', label: '発行日', defaultValue: '' },
+      { key: 'report_title', label: '報告書タイトル', defaultValue: '月次業務改善・伴走支援レポート' },
+      { key: 'monthly_summary', label: '1. 今月の総括・成果', defaultValue: '' },
+      { key: 'accomplishments', label: '2. 主な実施内容', defaultValue: '' },
+      { key: 'next_actions', label: '3. 来月の予定・お願い事項', defaultValue: '' },
     ],
   },
 ];
@@ -766,11 +756,9 @@ export const getTemplateDefaultValues = (
       ...common,
       report_title: '月次業務改善・伴走支援レポート',
       target_month: `${today.slice(0, 4)}年${today.slice(5, 7)}月度`,
-      monthly_summary: '今月は請求書発行および顧客面談調整の自動化ラインを本番稼働させ、二重入力作業の削減を達成しました。',
-      accomplishments: '・LINE友だち登録後の自動アンケート配信およびCRM連携稼働\n・請求書発行および送付ステータス自動更新の実装\n・定期経営ミーティング（月2回）の実施とボトルネックの優先順位付け',
-      hours_saved: '24',
-      metrics_kpi: '商談化率 18%向上 / 問い合わせ対応リードタイム 65%短縮',
-      next_actions: '・次月は見直し後の業務フローにおける関係者定着状況の確認\n・定期請求の自動集計レポートの構築',
+      monthly_summary: '請求・顧客対応まわりの自動化フローを稼働させ、二重入力や確認の手間を解消しました。',
+      accomplishments: '・LINE／Webフォームからの顧客データ自動連携の本番稼働\n・請求書発行〜送付ステータス管理の仕組み化\n・月次定例ミーティングの実施と業務課題の優先順位整理',
+      next_actions: '・新フローの現場定着確認と必要に応じた微調整\n・次フェーズ対象業務（集計・定例レポート）の設計着手',
     };
   }
 
