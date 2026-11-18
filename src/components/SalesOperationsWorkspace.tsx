@@ -209,7 +209,7 @@ export const SalesOperationsWorkspace: React.FC<Props> = ({ tab, initialOpsTab, 
     let cancelled = false;
     void supabase.from('deals').select('*').eq('id', dealId).maybeSingle().then(({data}) => {
       if (cancelled || !data) return;
-      setRecordTitle(data.deal_name || data.proposal_plan_name || (activeOpsTab === 'invoices' ? '請求書' : '契約書'));
+      setRecordTitle(data.proposal_plan_name || (activeOpsTab === 'invoices' ? '請求書' : '契約書'));
       setRecordAmount(data.total_amount == null ? '' : String(data.total_amount));
       setRecordProductId(data.product_id || '');
       setRecordCompany(data.company_id || '');
@@ -247,7 +247,7 @@ export const SalesOperationsWorkspace: React.FC<Props> = ({ tab, initialOpsTab, 
           supabase.from('customer_contracts').select('*').order('created_at', { ascending: false }),
           supabase.from('customer_invoices').select('*').order('created_at', { ascending: false }),
           supabase.from('products').select('id,product_name,product_type,status').order('product_name'),
-          supabase.from('deals').select('id,company_id,product_id,deal_name,proposal_plan_name,total_amount,proposal_status').order('created_at', { ascending: false }),
+          supabase.from('deals').select('id,company_id,product_id,proposal_plan_name,total_amount,proposal_status').order('created_at', { ascending: false }),
           supabase.from('customer_documents').select('id,title,document_type,status,company_id,deal_id,lead_id,created_at,updated_at').order('created_at', { ascending: false }).limit(200),
         ]);
         if (recordsResult.error) throw recordsResult.error;
@@ -960,7 +960,7 @@ export const SalesOperationsWorkspace: React.FC<Props> = ({ tab, initialOpsTab, 
                 <option value="other">その他契約</option>
               </select>
             </label>
-            <label className="text-xs font-semibold text-slate-700">関連商談（任意）<select value={recordDealId} onChange={(e)=>{ const id=e.target.value; setRecordDealId(id); const deal=deals.find((item)=>item.id===id); if (deal) { setRecordCompany(deal.company_id || ''); setRecordProductId(deal.product_id || ''); if (deal.proposal_plan_name) setRecordTitle(deal.proposal_plan_name); if (deal.total_amount != null) setRecordAmount(String(deal.total_amount)); } }} className="mt-1 w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs text-slate-900 focus:border-purple-600 focus:outline-none shadow-2xs"><option value="">商談を選択しない</option>{deals.filter((deal)=>!(companyId || recordCompany) || deal.company_id===(companyId || recordCompany)).map((deal)=><option key={deal.id} value={deal.id}>{deal.proposal_plan_name || deal.deal_name || deal.id}</option>)}</select></label>
+            <label className="text-xs font-semibold text-slate-700">関連商談（任意）<select value={recordDealId} onChange={(e)=>{ const id=e.target.value; setRecordDealId(id); const deal=deals.find((item)=>item.id===id); if (deal) { setRecordCompany(deal.company_id || ''); setRecordProductId(deal.product_id || ''); if (deal.proposal_plan_name) setRecordTitle(deal.proposal_plan_name); if (deal.total_amount != null) setRecordAmount(String(deal.total_amount)); } }} className="mt-1 w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs text-slate-900 focus:border-purple-600 focus:outline-none shadow-2xs"><option value="">商談を選択しない</option>{deals.filter((deal)=>!(companyId || recordCompany) || deal.company_id===(companyId || recordCompany)).map((deal)=><option key={deal.id} value={deal.id}>{deal.proposal_plan_name || deal.id}</option>)}</select></label>
           </>
         )}
 
@@ -986,7 +986,7 @@ export const SalesOperationsWorkspace: React.FC<Props> = ({ tab, initialOpsTab, 
                 <option value="one_time">単発請求（スポット開発・構築支援）</option>
               </select>
             </label>
-            <label className="text-xs font-semibold text-slate-700">関連商談（任意・初回/単発発行用）<select value={recordDealId} onChange={(e)=>{ const id=e.target.value; setRecordDealId(id); const deal=deals.find((item)=>item.id===id); if (deal) { setRecordCompany(deal.company_id || ''); setRecordProductId(deal.product_id || ''); if (deal.proposal_plan_name) setRecordTitle(deal.proposal_plan_name); if (deal.total_amount != null) setRecordAmount(String(deal.total_amount)); } }} className="mt-1 w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs text-slate-900 focus:border-purple-600 focus:outline-none shadow-2xs"><option value="">商談を選択しない</option>{deals.filter((deal)=>!(companyId || recordCompany) || deal.company_id===(companyId || recordCompany)).map((deal)=><option key={deal.id} value={deal.id}>{deal.proposal_plan_name || deal.deal_name || deal.id}</option>)}</select></label>
+            <label className="text-xs font-semibold text-slate-700">関連商談（任意・初回/単発発行用）<select value={recordDealId} onChange={(e)=>{ const id=e.target.value; setRecordDealId(id); const deal=deals.find((item)=>item.id===id); if (deal) { setRecordCompany(deal.company_id || ''); setRecordProductId(deal.product_id || ''); if (deal.proposal_plan_name) setRecordTitle(deal.proposal_plan_name); if (deal.total_amount != null) setRecordAmount(String(deal.total_amount)); } }} className="mt-1 w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs text-slate-900 focus:border-purple-600 focus:outline-none shadow-2xs"><option value="">商談を選択しない</option>{deals.filter((deal)=>!(companyId || recordCompany) || deal.company_id===(companyId || recordCompany)).map((deal)=><option key={deal.id} value={deal.id}>{deal.proposal_plan_name || deal.id}</option>)}</select></label>
             <label className="text-xs font-semibold text-slate-700">関連契約（任意）<select value={recordContractId} onChange={(e)=>{ const id=e.target.value; setRecordContractId(id); const contract=savedContracts.find((item)=>item.id===id); if(contract){ setRecordCompany(contract.company_id || ''); setRecordProductId(contract.product_id || ''); if (contract.amount != null) setRecordAmount(String(contract.amount)); } }} className="mt-1 w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs text-slate-900 focus:border-purple-600 focus:outline-none shadow-2xs"><option value="">契約を選択しない</option>{savedContracts.filter((contract)=>!(companyId || recordCompany) || contract.company_id===(companyId || recordCompany)).map((contract)=><option key={contract.id} value={contract.id}>{contract.title}</option>)}</select></label>
           </>
         )}
@@ -1361,8 +1361,8 @@ export const SalesOperationsWorkspace: React.FC<Props> = ({ tab, initialOpsTab, 
                         {linkedDeal && (
                           <div className="flex items-center gap-1">
                             <span className="text-[10px] text-slate-600 font-medium">商談:</span>
-                            <span className="truncate max-w-[120px] font-semibold text-slate-800" title={linkedDeal.deal_name || linkedDeal.proposal_plan_name}>
-                              {linkedDeal.proposal_plan_name || linkedDeal.deal_name || '商談'}
+                            <span className="truncate max-w-[120px] font-semibold text-slate-800" title={linkedDeal.proposal_plan_name}>
+                              {linkedDeal.proposal_plan_name || '商談'}
                             </span>
                             <span className={`text-[9px] px-1 py-0.2 rounded font-bold ${
                               linkedDeal.proposal_status === '成約'
