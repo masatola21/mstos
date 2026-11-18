@@ -10,8 +10,6 @@ import {
   Check, 
   Sliders, 
   FileCode,
-  ExternalLink,
-  Link2,
   Calculator,
   BarChart3,
   Send,
@@ -21,7 +19,9 @@ import {
   Save,
   CheckCircle2,
   Sparkles,
-  ClipboardList
+  ClipboardList,
+  ExternalLink,
+  Link2
 } from 'lucide-react';
 import { MeetingSessionView } from '../meeting/MeetingSessionView';
 import {
@@ -204,18 +204,20 @@ export const DocumentTemplateView: React.FC<DocumentTemplateViewProps> = ({
           setTemplateStatus('最新の統合テンプレート（5種）を読み込みました。'); 
           return; 
         }
-        // Always prioritize the 5 unified templates
+        // Always prioritize the 5 unified templates and sync stale rows in DB
         setTemplates(DEFAULT_TEMPLATES);
-        if (data?.length === 0) {
-          const defaults = DEFAULT_TEMPLATES.map((template) => ({
-            template_key: template.id,
-            document_type: template.type === 'report' ? 'diagnosis_report' : template.type,
-            title: template.title,
-            description: template.description,
-            body_html: template.htmlContent,
-            variables: template.variables,
-          }));
+        const defaults = DEFAULT_TEMPLATES.map((template) => ({
+          template_key: template.id,
+          document_type: template.type === 'report' ? 'diagnosis_report' : template.type,
+          title: template.title,
+          description: template.description,
+          body_html: template.htmlContent,
+          variables: template.variables,
+        }));
+        if (!data || data.length === 0) {
           await supabase.from('customer_document_templates').insert(defaults);
+        } else {
+          await supabase.from('customer_document_templates').upsert(defaults, { onConflict: 'template_key' }).select('template_key').then(() => undefined, () => undefined);
         }
       } catch {
         setTemplates(DEFAULT_TEMPLATES);
@@ -859,29 +861,18 @@ export const DocumentTemplateView: React.FC<DocumentTemplateViewProps> = ({
       // 提案書: 空の項目は、必須なら「【未入力】」、それ以外は決めた代替文を出す
       result = result.replace(regex, formatProposalVal(key, val || (isProposal ? proposalEmptyText(key, proposalKind) : '')));
     });
-    if (isProposal) {
-      result = result.replace(/{{(\w+)}}/g, (whole, key) => (key === 'apply_url' ? whole : escapeHtml(proposalEmptyText(key, proposalKind))));
-    }
+    const activeDocId = savedDocIds[currentTemplate.id] || autosavedDocumentIds.current[currentTemplate.id] || 'preview';
+    const applyUrl = `${window.location.origin}/apply/${encodeURIComponent(activeDocId)}`;
 
-    const currentDocId = savedDocIds[currentTemplate.id] || autosavedDocumentIds.current[currentTemplate.id];
-    const applyUrl = currentDocId
-      ? `${window.location.origin}/apply/${currentDocId}`
-      : 'javascript:alert("書類の申込URLを発行中です。右上の「確認待ち保存」をクリックしてください。");';
+    if (isProposal) {
+      result = result.replace(/{{(\w+)}}/g, (_whole, key) => (key === 'apply_url' ? applyUrl : escapeHtml(proposalEmptyText(key, proposalKind))));
+    }
     result = result.replace(/{{apply_url}}/g, applyUrl);
 
-    // If proposal/estimate, guarantee Web Application CTA box
-    if (['proposal', 'report', 'estimate'].includes(currentTemplate.type) || currentTemplate.id === 'tpl-unified-estimate' || currentTemplate.id === 'tpl-proposal-report') {
-      if (!result.includes('web-apply-box')) {
-        const ctaHtml = `<div class="web-apply-box" style="margin-top: 40px; padding: 24px; border: 2px solid #10b981; border-radius: 12px; background: #f0fdf4; text-align: center;">
-  <p style="font-weight: bold; font-size: 16px; color: #065f46; margin: 0 0 6px 0;">【Web申込・オンライン即時成約】</p>
-  <p style="font-size: 13px; color: #047857; margin: 0 0 16px 0;">上記のお見積・ご提案内容にご承諾いただける場合は、Web上でワンタップで申し込み・ご成約いただけます。</p>
-  <a href="${applyUrl}" ${currentDocId ? 'target="_blank" rel="noopener noreferrer"' : ''} style="display: inline-block; background: #059669; color: #ffffff; padding: 12px 32px; border-radius: 8px; font-weight: bold; font-size: 15px; text-decoration: none; box-shadow: 0 4px 6px -1px rgba(16,185,129,0.3);">👉 この内容で申し込む</a>
-</div>`;
-        const lastDivIndex = result.lastIndexOf('</div>');
-        if (lastDivIndex !== -1) {
-          result = result.slice(0, lastDivIndex) + ctaHtml + '\n</div>' + result.slice(lastDivIndex + 6);
-        }
-      }
+    if (!isProposal && !result.includes('web-apply-box') && (currentTemplate.type === 'estimate' || currentTemplate.type === 'contract')) {
+      const boxHtml = `<div class="web-apply-box" style="margin-top:24px; padding:16px; background:#ecfdf5; border:1px solid #a7f3d0; border-radius:8px; text-align:center;"><p style="margin:0 0 6px 0; font-weight:bold; color:#065f46; font-size:14px;">Webでのお申し込み</p><p style="margin:0 0 12px 0; font-size:12px; color:#047857;">同意いただいた記録が残ります。</p><a href="${applyUrl}" style="display:inline-block; background:#059669; color:#ffffff; padding:10px 26px; border-radius:6px; text-decoration:none; font-weight:bold; font-size:13px;">この内容で申し込む</a></div>`;
+      const lastDivIdx = result.lastIndexOf('</div>');
+      result = lastDivIdx >= 0 ? `${result.slice(0, lastDivIdx)}${boxHtml}${result.slice(lastDivIdx)}` : `${result}${boxHtml}`;
     }
 
     return result;
@@ -914,7 +905,7 @@ export const DocumentTemplateView: React.FC<DocumentTemplateViewProps> = ({
         const { data, error } = await supabase.from('customer_documents')
           .update(payload)
           .eq('id', existingId)
-          .eq('status', 'awaiting_approval')
+          .in('status', ['draft', 'awaiting_approval', 'approved'])
           .select('id')
           .maybeSingle();
         if (!error && data) {
@@ -1023,6 +1014,12 @@ export const DocumentTemplateView: React.FC<DocumentTemplateViewProps> = ({
       const savedDocId = await saveProposalDraft('approved');
       if (savedDocId) {
         docIdToUse = savedDocId;
+      }
+    } else if (docIdToUse) {
+      // 既存の書類でも編集済みの最新HTMLを保存してから送信ドロワーを開く
+      const updatedId = await handleManualSave();
+      if (updatedId) {
+        docIdToUse = updatedId;
       }
     }
 
@@ -1170,36 +1167,37 @@ export const DocumentTemplateView: React.FC<DocumentTemplateViewProps> = ({
             </button>
           )}
 
-          {(savedDocIds[currentTemplate.id] || autosavedDocumentIds.current[currentTemplate.id]) && (
-            <>
-              <button
-                type="button"
-                onClick={() => {
-                  const docId = savedDocIds[currentTemplate.id] || autosavedDocumentIds.current[currentTemplate.id];
-                  if (!docId) return;
-                  const url = `${window.location.origin}/apply/${docId}`;
-                  navigator.clipboard.writeText(url);
-                  setCopiedApplyUrl(true);
-                  setTimeout(() => setCopiedApplyUrl(false), 2500);
-                }}
-                className="px-3 py-1.5 rounded-md bg-emerald-600 hover:bg-emerald-700 text-white font-medium text-xs flex items-center gap-1.5 transition-all cursor-pointer"
-                title="顧客に送信するワンタップ申込用URLをコピーします"
-              >
-                <Link2 className="w-3.5 h-3.5" />
-                <span>{copiedApplyUrl ? 'コピー完了' : 'Web申込URL'}</span>
-              </button>
-
-              <a
-                href={`/apply/${savedDocIds[currentTemplate.id] || autosavedDocumentIds.current[currentTemplate.id]}`}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="px-3 py-1.5 rounded-md border border-slate-200 bg-white hover:bg-slate-50 text-slate-700 font-medium text-xs flex items-center gap-1.5 transition-all"
-              >
-                <ExternalLink className="w-3.5 h-3.5 text-slate-500" />
-                <span className="hidden sm:inline">申込プレビュー</span>
-              </a>
-            </>
-          )}
+          {(savedDocIds[currentTemplate.id] || autosavedDocumentIds.current[currentTemplate.id]) && (() => {
+            const activeDocId = savedDocIds[currentTemplate.id] || autosavedDocumentIds.current[currentTemplate.id];
+            const applyUrl = `${window.location.origin}/apply/${encodeURIComponent(activeDocId)}`;
+            return (
+              <>
+                <button
+                  type="button"
+                  onClick={() => {
+                    navigator.clipboard.writeText(applyUrl);
+                    setCopiedApplyUrl(true);
+                    setTimeout(() => setCopiedApplyUrl(false), 2000);
+                  }}
+                  className="px-3 py-1.5 rounded-md border border-emerald-200 bg-emerald-50 hover:bg-emerald-100 text-emerald-800 font-medium text-xs flex items-center gap-1.5 transition-all cursor-pointer"
+                  title="顧客に送るWeb申込・書類確認ページのURLをコピー"
+                >
+                  {copiedApplyUrl ? <Check className="w-3.5 h-3.5 text-emerald-600" /> : <Link2 className="w-3.5 h-3.5 text-emerald-600" />}
+                  <span>{copiedApplyUrl ? '申込URLをコピーしました' : 'Web申込URL'}</span>
+                </button>
+                <a
+                  href={applyUrl}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="px-3 py-1.5 rounded-md border border-slate-200 bg-white hover:bg-slate-50 text-slate-700 font-medium text-xs flex items-center gap-1.5 transition-all"
+                  title="顧客が見るWeb申込・書類確認ページを開く"
+                >
+                  <ExternalLink className="w-3.5 h-3.5 text-slate-500" />
+                  <span>申込プレビュー</span>
+                </a>
+              </>
+            );
+          })()}
 
           <button
             type="button"

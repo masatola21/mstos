@@ -66,7 +66,7 @@ for (const k of KINDS) {
     last = i;
   }
   assert(!h.includes('商談で確認すること'), `${k}: D6(社内用)は載せない`);
-  assert(h.includes('web-apply-box') && h.includes('{{apply_url}}'), `${k}: お申し込みボタンを含む`);
+  assert(h.includes('web-apply-box') && h.includes('{{apply_url}}'), `${k}: Web申込ボタンあり`);
 }
 
 // すべての変数が定義済み

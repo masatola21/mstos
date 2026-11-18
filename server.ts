@@ -2070,7 +2070,7 @@ async function processLinePostback(event: any, contact: any, eventId: string, bo
     if (appUrl) {
       try {
         const token = createCarePackageFormToken(contact?.id || null, userId, requestType);
-        formUrl = `${appUrl}/forms/care-package-inquiry?t=${encodeURIComponent(token)}`;
+        formUrl = `${appUrl}/f/care-package-inquiry?t=${encodeURIComponent(token)}`;
         tokenCreated = true;
       } catch (tokenErr) {
         console.error('[LINE Postback] Failed to generate care package form token:', tokenErr);
@@ -4637,6 +4637,9 @@ app.post('/api/cms/wordpress-post', requireAuth, async (req, res) => {
 });
 
 app.get('/api/email/unsubscribe', (req, res) => {
+  if (req.query.demo === 'admin_preview') {
+    return res.type('html').send('<!doctype html><html lang="ja"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>メール配信停止（テスト確認）</title><main style="font-family:sans-serif;max-width:520px;margin:48px auto;padding:24px;border:1px solid #e2e8f0;border-radius:12px;"><h1>メール配信停止（管理者テスト確認）</h1><p>本番送信時は、宛先ごとに発行された専用URLから配信停止手続きが行われます。</p></main></html>');
+  }
   const token = typeof req.query.t === 'string' ? req.query.t : '';
   if (!verifyEmailUnsubscribeToken(token)) return res.status(400).type('html').send('<!doctype html><html lang="ja"><meta charset="utf-8"><title>配信停止</title><h1>リンクを確認できません</h1><p>配信停止リンクが無効です。</p></html>');
   return res.type('html').send(`<!doctype html><html lang="ja"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>メール配信停止</title><main><h1>メール配信停止</h1><p>このメールアドレスへの営業・案内メールの配信を停止します。</p><form method="post" action="/api/email/unsubscribe?t=${token}"><input type="hidden" name="t" value="${token}"><button type="submit">配信を停止する</button></form></main></html>`);
@@ -4955,10 +4958,13 @@ function resolveMessageVars(
   }
   const resolvedMaterialUrl = formMaterialUrl || `${appBaseUrl || 'https://corp.mstcorp.info'}/materials`;
 
-  // {document_url}: その連絡先の、最新の承認済みの書類の公開URL（/docs/<書類ID>）
+  // {document_url}: その連絡先の、最新の承認済み/送信済み書類のWeb確認・お申し込みURL（/docs/<書類ID>）
   const resolvedDocUrl = (appBaseUrl && ownerSettings?.latestApprovedDoc?.id)
     ? `${appBaseUrl}/docs/${encodeURIComponent(ownerSettings.latestApprovedDoc.id)}`
-    : `${appBaseUrl || 'https://corp.mstcorp.info'}/company`;
+    : 'https://corp.mstcorp.info/company';
+  const resolvedPdfDownloadUrl = (appBaseUrl && ownerSettings?.latestApprovedDoc?.id)
+    ? `${appBaseUrl}/api/public/documents/${encodeURIComponent(ownerSettings.latestApprovedDoc.id)}/pdf?download=1`
+    : 'https://corp.mstcorp.info/company';
 
   // {link_url}: 診断フォームの公開URL。連絡先IDと LINE のユーザーID を含める（?cid=<contactId>&luid=<lineUserId>）
   const formSlug = ownerSettings?.defaultForm?.public_slug || 'business-diagnosis';
@@ -4986,6 +4992,7 @@ function resolveMessageVars(
     booking_url: resolvedBookingUrl,
     material_url: resolvedMaterialUrl,
     document_url: resolvedDocUrl,
+    pdf_download_url: resolvedPdfDownloadUrl,
     link_url: resolvedLinkUrl,
   });
 
@@ -5057,9 +5064,10 @@ async function loadMessageVarContext(
   if (contact?.company_id) {
     const { data: docData } = await lineSupabase
       .from('customer_documents')
-      .select('id,title,status,created_at')
+      .select('id,title,status,created_at,updated_at')
       .eq('company_id', contact.company_id)
-      .eq('status', 'approved')
+      .in('status', ['approved', 'sent'])
+      .order('updated_at', { ascending: false })
       .order('created_at', { ascending: false })
       .limit(1)
       .maybeSingle();
@@ -5068,9 +5076,10 @@ async function loadMessageVarContext(
   if (!latestApprovedDoc && ownerId) {
     const { data: fallbackDoc } = await lineSupabase
       .from('customer_documents')
-      .select('id,title,status,created_at')
+      .select('id,title,status,created_at,updated_at')
       .eq('owner_id', ownerId)
-      .eq('status', 'approved')
+      .in('status', ['approved', 'sent'])
+      .order('updated_at', { ascending: false })
       .order('created_at', { ascending: false })
       .limit(1)
       .maybeSingle();
@@ -6193,7 +6202,7 @@ app.post('/api/marketing/dry-run', requireAuth, async (req, res) => {
         : Promise.resolve({ data: { id: 'CID-PREVIEW', company_name: 'サンプル株式会社' } }),
       lineSupabase.from('sales_workspace_settings').select('booking_page_url').eq('owner_id', authUser.id).maybeSingle(),
       lineSupabase.from('diagnosis_forms').select('id,name,public_slug,definition,form_type,status').eq('status', 'published').limit(10),
-      lineSupabase.from('customer_documents').select('id,title,status').eq('owner_id', authUser.id).eq('status', 'approved').limit(1).maybeSingle(),
+      lineSupabase.from('customer_documents').select('id,title,status,updated_at,created_at').eq('owner_id', authUser.id).in('status', ['approved', 'sent']).order('updated_at', { ascending: false }).order('created_at', { ascending: false }).limit(1).maybeSingle(),
       contact.line_user_id && !contact.line_user_id.startsWith('U_SAMPLE_')
         ? lineSupabase.from('line_friends').select('status,consent_status,display_name').eq('line_user_id', contact.line_user_id).maybeSingle()
         : Promise.resolve({ data: { status: 'active', consent_status: 'opted_in', display_name: contact.full_name } }),
@@ -6543,7 +6552,7 @@ app.post('/api/marketing/prospects/trigger-outreach', requireAuth, async (req, r
 
       const diagUrl = diagForm?.public_slug
         ? `${appUrl}/f/${encodeURIComponent(diagForm.public_slug)}?cid=${encodeURIComponent(targetContact.id)}`
-        : `${appUrl}/diagnosis`;
+        : 'https://corp.mstcorp.info/diagnosis';
       const consentBasis = '特定電子メール法に基づく業務改善情報の提供（オプトアウト明記）';
 
       if (mode === 'one_shot') {
@@ -6735,7 +6744,7 @@ app.post('/api/marketing/test-send', requireAuth, async (req, res) => {
       const [salesSettingsRes, pubFormsRes, docRes] = await Promise.all([
         lineSupabase.from('sales_workspace_settings').select('booking_page_url').eq('owner_id', authUser.id).maybeSingle(),
         lineSupabase.from('diagnosis_forms').select('id,name,public_slug,definition,form_type,status').eq('status', 'published').limit(10),
-        lineSupabase.from('customer_documents').select('id,title,status').eq('owner_id', authUser.id).eq('status', 'approved').limit(1).maybeSingle(),
+        lineSupabase.from('customer_documents').select('id,title,status,updated_at,created_at').eq('owner_id', authUser.id).in('status', ['approved', 'sent']).order('updated_at', { ascending: false }).order('created_at', { ascending: false }).limit(1).maybeSingle(),
       ]);
 
       const salesSettings = salesSettingsRes.data;
@@ -6768,7 +6777,7 @@ app.post('/api/marketing/test-send', requireAuth, async (req, res) => {
 
       const emailSubject = `[管理者テスト送信] ` + resolved.personalize(scenarioConfig.emailSubject || 'ステップ配信テスト');
       const resolvedBody = resolved.personalize(scenarioConfig.emailBody || scenarioConfig.messageBody || '');
-      const emailBodyText = `【※ 管理者向け実機テスト送信】\n宛先: ${adminEmail}\n差出人: ${emailFrom}\n--------------------------------------------------\n\n${resolvedBody}\n\n--------------------------------------------------\n※ 特定電子メール法 配信停止リンク確認:\n配信停止: ${appUrl || 'https://os.mstcorp.info'}/unsubscribe?demo=admin_preview`;
+      const emailBodyText = `【※ 管理者向け実機テスト送信】\n宛先: ${adminEmail}\n差出人: ${emailFrom}\n--------------------------------------------------\n\n${resolvedBody}\n\n--------------------------------------------------\n※ 特定電子メール法 配信停止リンク確認:\n配信停止: ${appUrl || 'https://os.mstcorp.info'}/api/email/unsubscribe?demo=admin_preview`;
 
       const emailPayload = prepareEmailPayloadContent(emailBodyText, {
         senderEmail: (String(emailFrom).match(/<([^<>]+)>/)?.[1] || String(emailFrom)).trim(),
@@ -6901,9 +6910,10 @@ app.post('/api/marketing/test-send', requireAuth, async (req, res) => {
     let latestApprovedDoc: any = null;
     if (contact.company_id) {
       const { data: docData } = await lineSupabase.from('customer_documents')
-        .select('id,title,status,created_at')
+        .select('id,title,status,created_at,updated_at')
         .eq('company_id', contact.company_id)
-        .eq('status', 'approved')
+        .in('status', ['approved', 'sent'])
+        .order('updated_at', { ascending: false })
         .order('created_at', { ascending: false })
         .limit(1)
         .maybeSingle();
@@ -6911,9 +6921,10 @@ app.post('/api/marketing/test-send', requireAuth, async (req, res) => {
     }
     if (!latestApprovedDoc) {
       const { data: fallbackDoc } = await lineSupabase.from('customer_documents')
-        .select('id,title,status,created_at')
+        .select('id,title,status,created_at,updated_at')
         .eq('owner_id', authUser.id)
-        .eq('status', 'approved')
+        .in('status', ['approved', 'sent'])
+        .order('updated_at', { ascending: false })
         .order('created_at', { ascending: false })
         .limit(1)
         .maybeSingle();
@@ -7136,8 +7147,16 @@ app.post('/api/communications/send', async (req, res) => {
         logoUrl: process.env.EMAIL_SIGNATURE_LOGO_URL,
       });
 
+      const documentDeliveryFormat: 'web_link' | 'html_attachment' | 'pdf_attachment' =
+        req.body?.documentDeliveryFormat === 'pdf_attachment'
+          ? 'pdf_attachment'
+          : req.body?.documentDeliveryFormat === 'html_attachment'
+            ? 'html_attachment'
+            : 'web_link';
       let attachments: Array<{ filename: string; content: string }> | undefined = undefined;
-      // 重要書類送信（source_type === 'customer_document'）の場合のみ、PDFを自動生成して添付する（診断フォームや面談案内に誤添付されるのを100%防止）
+      // 重要書類送信（source_type === 'customer_document'）時のみ対象書類を参照し、
+      // 送付形式（デフォルト: web_link で添付なし）に応じて添付ファイルを制御する
+      // ※ .pdf を直接メール添付するとGmailのGoogleドライブビューアで電子署名リクエストが表示されるため、標準はリンク送付（web_link）
       if (row.document_id && row.source_type === 'customer_document') {
         try {
           const { data: docData } = await lineSupabase
@@ -7148,26 +7167,37 @@ app.post('/api/communications/send', async (req, res) => {
 
           if (docData) {
             sentDocumentType = docData.document_type || null;
-            let docCompanyName = '';
-            if (docData.company_id) {
-              const { data: comp } = await lineSupabase
-                .from('companies')
-                .select('company_name')
-                .eq('id', docData.company_id)
-                .maybeSingle();
-              docCompanyName = comp?.company_name || '';
-            }
-            const pdfBuffer = await generateDocumentPdf(docData, docCompanyName);
             const safeTitle = (docData.title || 'document').replace(/[\r\n/\\:*?"<>|]/g, '_').trim();
-            attachments = [
-              {
-                filename: `${safeTitle}.pdf`,
-                content: pdfBuffer.toString('base64'),
-              },
-            ];
+            if (documentDeliveryFormat === 'pdf_attachment') {
+              let docCompanyName = '';
+              if (docData.company_id) {
+                const { data: comp } = await lineSupabase
+                  .from('companies')
+                  .select('company_name')
+                  .eq('id', docData.company_id)
+                  .maybeSingle();
+                docCompanyName = comp?.company_name || '';
+              }
+              const pdfBuffer = await generateDocumentPdf(docData, docCompanyName);
+              attachments = [
+                {
+                  filename: `${safeTitle}.pdf`,
+                  content: pdfBuffer.toString('base64'),
+                },
+              ];
+            } else if (documentDeliveryFormat === 'html_attachment') {
+              const escapedTitle = (docData.title || '書類').replace(/[&<>"']/g, (c: string) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c] || c));
+              const standaloneHtml = `<!DOCTYPE html><html lang="ja"><head><meta charset="utf-8" /><meta name="viewport" content="width=device-width, initial-scale=1.0" /><title>${escapedTitle}</title><style>body{margin:24px auto;max-width:840px;padding:0 16px;background:#ffffff;color:#0f172a;font-family:-apple-system,BlinkMacSystemFont,"Hiragino Kaku Gothic ProN","Hiragino Sans",Meiryo,sans-serif;line-height:1.7;}@media print{body{margin:0;padding:0;}}</style></head><body>${String(docData.body_html || '')}</body></html>`;
+              attachments = [
+                {
+                  filename: `${safeTitle}.html`,
+                  content: Buffer.from(standaloneHtml, 'utf8').toString('base64'),
+                },
+              ];
+            }
           }
-        } catch (pdfErr) {
-          console.error('[SendEmail] Document PDF generation warning:', pdfErr);
+        } catch (docAttachErr) {
+          console.error('[SendEmail] Document attachment preparation warning:', docAttachErr);
         }
       }
 
@@ -11242,8 +11272,9 @@ app.get(['/api/public/documents/:id/pdf', '/api/documents/:id/pdf'], async (req,
 
     const pdfBuffer = await generateDocumentPdf(doc, companyName);
     const safeTitle = (doc.title || 'document').replace(/[\r\n/\\:*?"<>|]/g, '_').trim();
+    const forceDownload = req.query?.download === '1' || req.query?.download === 'true';
     res.setHeader('Content-Type', 'application/pdf');
-    res.setHeader('Content-Disposition', `inline; filename*=UTF-8''${encodeURIComponent(safeTitle)}.pdf`);
+    res.setHeader('Content-Disposition', `${forceDownload ? 'attachment' : 'inline'}; filename*=UTF-8''${encodeURIComponent(safeTitle)}.pdf`);
     res.setHeader('Cache-Control', 'no-store');
     return res.send(pdfBuffer);
   } catch (error) {

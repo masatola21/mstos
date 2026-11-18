@@ -374,10 +374,10 @@ export const PublicDocumentApplyView: React.FC<PublicDocumentApplyViewProps> = (
           <h2 className="text-lg font-bold text-white mb-2">書類を表示できません</h2>
           <p className="text-sm text-slate-400 mb-6">{error}</p>
           <a
-            href="/"
+            href="https://corp.mstcorp.info/"
             className="inline-block px-5 py-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-semibold transition-all"
           >
-            トップページへ戻る
+            有限会社MST 公式サイトへ
           </a>
         </div>
       </div>
@@ -407,7 +407,15 @@ export const PublicDocumentApplyView: React.FC<PublicDocumentApplyViewProps> = (
           </div>
         </div>
 
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-2 sm:gap-3">
+          <a
+            href={`/api/public/documents/${encodeURIComponent(documentId)}/pdf?download=1`}
+            download
+            className="px-3.5 py-1.5 rounded-lg border border-emerald-500/40 bg-emerald-950/60 hover:bg-emerald-900/70 text-xs font-semibold text-emerald-200 flex items-center gap-1.5 transition-all"
+          >
+            <FileText className="w-3.5 h-3.5 text-emerald-400" />
+            <span>PDFダウンロード</span>
+          </a>
           <button
             onClick={handlePrint}
             className="px-3.5 py-1.5 rounded-lg border border-slate-700 bg-slate-800 hover:bg-slate-700 text-xs font-medium text-slate-200 flex items-center gap-1.5 transition-all cursor-pointer"

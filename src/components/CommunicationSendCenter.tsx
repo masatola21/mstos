@@ -21,6 +21,7 @@ type Kind = 'document' | 'form' | 'diagnosis' | 'deal' | 'customer_meeting' | 'a
 type Channel = 'email' | 'line' | 'both';
 type DeliveryChannel = 'email' | 'line';
 type DocumentType = 'estimate' | 'invoice' | 'contract' | 'proposal' | 'diagnosis_report' | 'monthly_report' | 'other';
+type DocumentDeliveryFormat = 'web_link' | 'html_attachment' | 'pdf_attachment';
 type Contact = { id: string; full_name: string; email?: string | null; line_user_id?: string | null; company_id?: string | null };
 
 type Props = {
@@ -81,7 +82,7 @@ const seed = [
     category: 'document',
     channel: 'email',
     subject: '【書類送付】{書類名}｜{会社名} 様',
-    body_text: '{お名前} 様\n\nお世話になっております。有限会社MSTです。\n\n下記の書類（PDF）を添付いたしましたので、ご確認のほどよろしくお願い申し上げます。\nまた、下記URLよりWeb上でも内容をご確認・お手続きいただけます。\n\n書類名：{書類名}\n確認URL：{書類URL}\n\nご不明点やご質問がございましたら、本メールにご返信ください。',
+    body_text: '{お名前} 様\n\nお世話になっております。有限会社MSTです。\n\n下記のWeb確認ページより書類「{書類名}」の内容をご確認いただけます（ページ上からPDFのダウンロードやWebでのお申し込みも可能です）。\n\n書類名：{書類名}\nWeb確認・お申し込みURL：{書類URL}\nPDFダウンロードURL：{PDFダウンロードURL}\n\nご不明点やご質問がございましたら、本メールにご返信ください。',
   },
   {
     category: 'document',
@@ -163,19 +164,25 @@ const seed = [
   },
 ];
 
-const documentMessage = (type: string | undefined, channel: DeliveryChannel) => {
+const documentMessage = (type: string | undefined, channel: DeliveryChannel, deliveryFormat: DocumentDeliveryFormat = 'web_link') => {
   const hi = '{お名前} 様';
   const intro = 'お世話になっております。有限会社MSTです。';
-  const details = '書類名：{書類名}\n確認URL：{書類URL}';
+  const details = '書類名：{書類名}\nWeb確認・お申し込みURL：{書類URL}\nPDFダウンロードURL：{PDFダウンロードURL}';
+  const attachDesc = (label: string) =>
+    deliveryFormat === 'pdf_attachment'
+      ? `${label}（PDF）を添付いたしましたので、ご確認のほどよろしくお願い申し上げます。\n下記Web確認ページからも内容の確認・お申し込みが可能です。`
+      : deliveryFormat === 'html_attachment'
+      ? `${label}をお送りいたします。添付のHTML書類ファイル（ブラウザでそのまま閲覧・印刷可能）または下記Web確認ページよりご確認ください。`
+      : `下記のWeb確認ページより${label}の内容をご確認いただけます（ページ上からPDFの直接ダウンロードおよびWebでのお申し込みも可能です）。`;
   const messages: Record<string, { subject: string; body: string; line: string }> = {
     proposal: {
       subject: '【ご提案書の送付】{書類名}｜{会社名} 様',
-      body: hi + '\n\n' + intro + '\n\n診断結果・ご提案書（PDF）を添付いたしましたので、ご確認のほどよろしくお願い申し上げます。\nまた、下記リンクよりWeb上でも内容をご確認いただけます。ご不明点やご希望がございましたらお知らせください。\n\n' + details,
-      line: hi + '\n診断結果・ご提案書をお送りします。内容をご確認ください。\n{書類名}\n{書類URL}',
+      body: hi + '\n\n' + intro + '\n\n' + attachDesc('診断結果・ご提案書') + '\n\n' + details,
+      line: hi + '\n診断結果・ご提案書をお送りします。下記より内容をご確認ください。\n{書類名}\n{書類URL}',
     },
     diagnosis_report: {
       subject: '【診断レポートのご送付】{書類名}｜{会社名} 様',
-      body: hi + '\n\n' + intro + '\n\n診断結果をまとめたレポート（PDF）を添付いたしましたので、ご確認のほどよろしくお願い申し上げます。\nまた、下記リンクよりWeb上でも結果と今後の進め方をご確認いただけます。\n\n' + details,
+      body: hi + '\n\n' + intro + '\n\n' + attachDesc('診断結果レポート') + '\n\n' + details,
       line: hi + '\n診断レポートをお送りします。結果と今後の進め方をご確認ください。\n{書類名}\n{書類URL}',
     },
     contract: {
@@ -184,39 +191,51 @@ const documentMessage = (type: string | undefined, channel: DeliveryChannel) => 
         hi +
         '\n\n' +
         intro +
-        '\n\n業務委託基本契約書（PDF）を添付いたしましたので、ご確認のほどよろしくお願い申し上げます。\nまた、下記リンクよりWeb上でも契約内容をご確認いただけます。\n\n' +
+        '\n\n' +
+        attachDesc('業務委託基本契約書') +
+        '\n\n' +
         details +
         '\n\n' +
         '━━━━━━━━━━━━━━━━━━━━━━━━━━\n' +
-        '■ メール返信による契約合意のお願い\n' +
+        '■ Webお申し込み・またはメール返信による契約合意\n' +
         '━━━━━━━━━━━━━━━━━━━━━━━━━━\n' +
-        '契約内容をご確認いただき、問題がございませんでしたら、契約締結の権限をお持ちの方より本メールへそのままご返信をお願いいたします。\n\n' +
-        '【ご返信いただく文面】\n' +
+        'Web確認ページ内の「この内容で申し込む」ボタンからお手続きいただくか、契約締結の権限をお持ちの方より本メールへそのままご返信をお願いいたします。\n\n' +
+        '【メール返信いただく場合の文面】\n' +
         '「{会社名}を代表して、契約書『{書類名}』の内容を確認し、有限会社MSTとの契約締結に同意します。\n' +
         '氏名：［氏名］\n' +
         '役職：［役職］」\n\n' +
         '※内容に修正希望がある場合は、同意文ではなく修正箇所をご返信ください。\n' +
-        '※返信を確認後、契約状態を締結済みに更新します。ご返信いただいたメールと契約書は契約記録として保存します。\n\n' +
+        '※確認後、契約状態を締結済みに更新し契約記録として保存します。\n\n' +
         'ご確認のほど、何卒よろしくお願い申し上げます。',
-      line: hi + '\n契約書をお送りします。内容をご確認ください。同意いただける場合は、契約締結の権限をお持ちの方からメールで明示的にご返信ください。\n{書類名}\n{書類URL}',
+      line: hi + '\n契約書をお送りします。内容をご確認のうえ、Web申込ボタンまたは契約権限をお持ちの方からのメール返信にてご承諾ください。\n{書類名}\n{書類URL}',
     },
     estimate: {
       subject: '【お見積書の送付】{書類名}｜{会社名} 様',
-      body: hi + '\n\n' + intro + '\n\nお見積書（PDF）を添付いたしましたので、ご確認のほどよろしくお願い申し上げます。\nまた、下記リンクよりWeb上でもお見積金額・有効期限・ご提案内容をご確認いただけます。内容の調整やご不明点がございましたらお知らせください。\n\n' + details,
+      body: hi + '\n\n' + intro + '\n\n' + attachDesc('お見積書') + '\n\n' + details,
       line: hi + '\nお見積書をお送りします。金額・有効期限・内容をご確認ください。\n{書類名}\n{書類URL}',
     },
     invoice: {
       subject: '【請求書のご送付】{書類名}｜{会社名} 様',
-      body: hi + '\n\n' + intro + '\n\n請求書（PDF）を添付いたしましたので、ご確認のほどよろしくお願い申し上げます。\nまた、下記リンクよりWeb上でも請求金額・お支払期日・振込先などの記載をご確認いただけます。お手続きのほどよろしくお願いいたします。\n\n' + details,
+      body: hi + '\n\n' + intro + '\n\n' + attachDesc('請求書') + '\n\n' + details,
       line: hi + '\n請求書をお送りします。金額・お支払期日・振込先をご確認ください。\n{書類名}\n{書類URL}',
     },
   };
   const message = messages[type || ''] || {
     subject: '【書類のご送付】{書類名}｜{会社名} 様',
-    body: hi + '\n\n' + intro + '\n\n書類（PDF）を添付いたしましたので、ご確認のほどよろしくお願い申し上げます。\nまた、下記リンクよりWeb上でも内容をご確認いただけます。ご不明点がございましたらお知らせください。\n\n' + details,
+    body: hi + '\n\n' + intro + '\n\n' + attachDesc('書類') + '\n\n' + details,
     line: hi + '\n書類をお送りします。内容をご確認ください。\n{書類名}\n{書類URL}',
   };
   return channel === 'email' ? { category: 'document', channel, subject: message.subject, body_text: message.body } : { category: 'document', channel, subject: '', body_text: message.line };
+};
+
+const isStaleLegacyDocumentTemplate = (row: any, deliveryFormat: DocumentDeliveryFormat = 'web_link'): boolean => {
+  if (!row || typeof row !== 'object') return false;
+  const text = `${String(row.subject || '')}\n${String(row.body_text || '')}`;
+  if (/下記リンクよりWeb上でも/.test(text)) return true;
+  if (deliveryFormat !== 'pdf_attachment' && /PDFを添付いたしました|同じPDFファイルをご確認いただけます|PDF確認URL：/.test(text)) {
+    return true;
+  }
+  return false;
 };
 
 const contractReplySection = '【メール返信による契約合意】\n契約内容に同意いただける場合は、契約締結の権限をお持ちの方から、このメールへの返信で次の文面をお送りください。\n\n「{会社名}を代表して、契約書『{書類名}』の内容を確認し、有限会社MSTとの契約締結に同意します。氏名：［氏名］　役職：［役職］」\n\n内容に修正希望がある場合は、同意文ではなく修正箇所をご返信ください。返信を確認後、契約状態を締結済みに更新します。ご返信いただいたメールと契約書は契約記録として保存してください。';
@@ -258,6 +277,7 @@ export const CommunicationSendCenter: React.FC<Props> = ({
   const [channel, setChannel] = useState<Channel>(initialChannel || 'email');
   const [templateChannel, setTemplateChannel] = useState<DeliveryChannel>(initialChannel === 'line' ? 'line' : 'email');
   const [documentType, setDocumentType] = useState<DocumentType>('estimate');
+  const [documentDeliveryFormat, setDocumentDeliveryFormat] = useState<DocumentDeliveryFormat>('web_link');
   const [previewDocModal, setPreviewDocModal] = useState<any | null>(null);
   const [contacts, setContacts] = useState<Contact[]>([]);
   const [docs, setDocs] = useState<any[]>([]);
@@ -340,14 +360,12 @@ export const CommunicationSendCenter: React.FC<Props> = ({
   const templateKey = templateKeyFor(templateChannel);
   const resolveTemplate = (deliveryChannel: DeliveryChannel) => {
     const key = templateKeyFor(deliveryChannel);
-    const savedForItem = [...templates].reverse().find((x) => x.template_key === key);
+    const savedForItem = [...templates].reverse().find((x) => x.template_key === key && !isStaleLegacyDocumentTemplate(x, documentDeliveryFormat));
     if (savedForItem) return savedForItem;
     if (kind === 'document') {
-      const savedByType = [...templates].reverse().find((x) => x.template_key === 'document_' + activeDocumentType + '_' + deliveryChannel);
+      const savedByType = [...templates].reverse().find((x) => x.template_key === 'document_' + activeDocumentType + '_' + deliveryChannel && !isStaleLegacyDocumentTemplate(x, documentDeliveryFormat));
       if (savedByType) return savedByType;
-      const savedGeneric = [...templates].reverse().find((x) => x.template_key === 'document_' + deliveryChannel);
-      if (savedGeneric) return savedGeneric;
-      return documentMessage(activeDocumentType, deliveryChannel);
+      return documentMessage(activeDocumentType, deliveryChannel, documentDeliveryFormat);
     }
     return [...templates].reverse().find((x) => x.template_key === kind + '_' + deliveryChannel || (x.category === kind && x.channel === deliveryChannel)) || seed.find((x) => x.category === kind && x.channel === deliveryChannel);
   };
@@ -411,6 +429,7 @@ export const CommunicationSendCenter: React.FC<Props> = ({
     フォーム名: form?.name || 'フォーム',
     書類名: doc?.title || '書類',
     書類URL: url.trim() || (doc ? window.location.origin + '/docs/' + encodeURIComponent(doc.id) : ''),
+    PDFダウンロードURL: doc ? window.location.origin + '/api/public/documents/' + encodeURIComponent(doc.id) + '/pdf?download=1' : '',
     書類本文: '',
     面談予約URL: bookingUrl || DEFAULT_TIMEREX_URL,
     案内URL: currentLinkUrl,
@@ -422,6 +441,7 @@ export const CommunicationSendCenter: React.FC<Props> = ({
     form_title: form?.name || 'フォーム',
     document_title: doc?.title || '書類',
     document_url: url.trim() || (doc ? window.location.origin + '/docs/' + encodeURIComponent(doc.id) : ''),
+    pdf_download_url: doc ? window.location.origin + '/api/public/documents/' + encodeURIComponent(doc.id) + '/pdf?download=1' : '',
     document_content: '',
     booking_url: bookingUrl || DEFAULT_TIMEREX_URL,
     link_url: currentLinkUrl,
@@ -476,7 +496,7 @@ export const CommunicationSendCenter: React.FC<Props> = ({
     if (!db) return;
     Promise.all([
       db.from('contacts').select('id,full_name,email,line_user_id,company_id').order('full_name'),
-      db.from('customer_documents').select('id,title,status,document_type,company_id,contact_id,body_html').order('created_at', { ascending: false }).limit(1000),
+      db.from('customer_documents').select('id,title,status,document_type,company_id,contact_id,body_html,created_at,updated_at').order('updated_at', { ascending: false }).order('created_at', { ascending: false }).limit(1000),
       db.from('communication_templates').select('*'),
       db.from('companies').select('id,company_name,industry'),
       db.from('diagnosis_forms').select('id,name,public_slug,form_type,status').eq('status', 'published').order('created_at', { ascending: false }),
@@ -609,7 +629,7 @@ export const CommunicationSendCenter: React.FC<Props> = ({
       setSubject(tmpl.subject || '');
       setBody(kind === 'document' && activeDocumentType === 'contract' && templateChannel === 'email' ? ensureContractReplySection(templateBody) : templateBody);
     }
-  }, [kind, channel, templateKey, templates, doc?.id, templateChannel]);
+  }, [kind, channel, templateKey, templates, doc?.id, templateChannel, documentDeliveryFormat]);
 
   const applySalesStep = (stepNum: number, c = contact, oneShotOverride = customOneShotConfig) => {
     const compName = c?.company_id ? companies[c.company_id] || '貴社' : '貴社';
@@ -802,7 +822,10 @@ export const CommunicationSendCenter: React.FC<Props> = ({
           const response = await fetch('/api/communications/send', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + sessionData.session!.access_token },
-            body: JSON.stringify({ outboxId: row.id }),
+            body: JSON.stringify({
+              outboxId: row.id,
+              ...(kind === 'document' && row.channel === 'email' ? { documentDeliveryFormat } : {}),
+            }),
           });
           const result = await response.json().catch(() => ({}));
           return { channel: row.channel, ok: response.ok && result.status === 'sent', message: result.error || '' };
@@ -1489,33 +1512,52 @@ export const CommunicationSendCenter: React.FC<Props> = ({
 
               {/* ④ 添付書類サマリー（ドロワー表示用） */}
               {kind === 'document' && doc && (
-                <div className="rounded-xl border border-purple-200 bg-purple-50/70 p-2.5 flex flex-wrap items-center justify-between gap-2 text-xs">
-                  <div className="flex items-center gap-2 min-w-0">
-                    <Paperclip className="w-4 h-4 text-purple-600 shrink-0" />
-                    <span className="font-bold text-purple-950 truncate">{doc.title}</span>
-                    <span className="text-[10px] px-1.5 py-0.2 rounded font-semibold bg-white border border-purple-200 text-purple-700 shrink-0">
-                      PDF自動添付
-                    </span>
+                <div className="rounded-xl border border-purple-200 bg-purple-50/70 p-2.5 space-y-2 text-xs">
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <div className="flex items-center gap-2 min-w-0">
+                      <Paperclip className="w-4 h-4 text-purple-600 shrink-0" />
+                      <span className="font-bold text-purple-950 truncate">{doc.title}</span>
+                      <span className="text-[10px] px-1.5 py-0.2 rounded font-semibold bg-white border border-purple-200 text-purple-700 shrink-0">
+                        {documentDeliveryFormat === 'web_link'
+                          ? 'Web閲覧＋DLリンク送付'
+                          : documentDeliveryFormat === 'html_attachment'
+                          ? 'HTMLファイル添付'
+                          : 'PDF直接添付'}
+                      </span>
+                    </div>
+                    <div className="flex items-center gap-1.5 shrink-0">
+                      <a
+                        href={`/api/documents/${encodeURIComponent(doc.id)}/pdf?download=1`}
+                        download
+                        className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-white border border-slate-300 text-slate-700 hover:bg-slate-50 text-xs font-semibold cursor-pointer shadow-2xs"
+                      >
+                        <FileText className="w-3.5 h-3.5 text-slate-500" />
+                        <span>PDF保存</span>
+                      </a>
+                      <button
+                        type="button"
+                        onClick={() => setPreviewDocModal(doc)}
+                        className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-white border border-purple-300 text-purple-800 hover:bg-purple-100/80 text-xs font-bold cursor-pointer shadow-2xs"
+                      >
+                        <Eye className="w-3.5 h-3.5 text-purple-600" />
+                        <span>書類プレビュー</span>
+                      </button>
+                    </div>
                   </div>
-                  <div className="flex items-center gap-1.5 shrink-0">
-                    <a
-                      href={`/api/documents/${encodeURIComponent(doc.id)}/pdf`}
-                      target="_blank"
-                      rel="noreferrer"
-                      className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-white border border-slate-300 text-slate-700 hover:bg-slate-50 text-xs font-semibold cursor-pointer shadow-2xs"
-                    >
-                      <FileText className="w-3.5 h-3.5 text-slate-500" />
-                      <span>PDF確認</span>
-                    </a>
-                    <button
-                      type="button"
-                      onClick={() => setPreviewDocModal(doc)}
-                      className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-white border border-purple-300 text-purple-800 hover:bg-purple-100/80 text-xs font-bold cursor-pointer shadow-2xs"
-                    >
-                      <Eye className="w-3.5 h-3.5 text-purple-600" />
-                      <span>書類プレビュー</span>
-                    </button>
-                  </div>
+                  {channel !== 'line' && (
+                    <div className="flex flex-wrap items-center gap-2 pt-1 border-t border-purple-200/70">
+                      <span className="text-[11px] font-bold text-purple-900">送付形式:</span>
+                      <select
+                        value={documentDeliveryFormat}
+                        onChange={(e) => setDocumentDeliveryFormat(e.target.value as DocumentDeliveryFormat)}
+                        className="rounded-lg border border-purple-300 bg-white px-2.5 py-1 text-[11px] font-semibold text-slate-800 focus:border-purple-600 focus:outline-none"
+                      >
+                        <option value="web_link">Web確認URL＋PDFダウンロードリンク（添付なし・Drive電子署名回避／推奨）</option>
+                        <option value="html_attachment">HTMLファイル（.html）をメール添付＋Web確認URL</option>
+                        <option value="pdf_attachment">PDF（.pdf）をメール直接添付（GmailでDrive署名表示あり）</option>
+                      </select>
+                    </div>
+                  )}
                 </div>
               )}
 
@@ -1756,20 +1798,24 @@ export const CommunicationSendCenter: React.FC<Props> = ({
                                 </span>
                               </div>
                               <span className="text-[11px] text-slate-500 block truncate">
-                                {contact?.company_id && companies[contact.company_id] ? `${companies[contact.company_id]} 宛` : ''} · PDF自動添付 &amp; Web確認URL自動挿入
+                                {contact?.company_id && companies[contact.company_id] ? `${companies[contact.company_id]} 宛` : ''} ·{' '}
+                                {documentDeliveryFormat === 'web_link'
+                                  ? 'Web確認・申込URL ＋ PDFダウンロードURL送付（メール添付なし）'
+                                  : documentDeliveryFormat === 'html_attachment'
+                                  ? 'HTML書類ファイル（.html）添付 ＋ Web確認URL送付'
+                                  : 'PDFファイル直接添付 ＋ Web確認URL送付'}
                               </span>
                             </div>
                           </div>
                           <div className="flex items-center gap-2 shrink-0">
                             <a
-                              href={`/api/documents/${encodeURIComponent(doc.id)}/pdf`}
-                              target="_blank"
-                              rel="noreferrer"
+                              href={`/api/documents/${encodeURIComponent(doc.id)}/pdf?download=1`}
+                              download
                               className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-white border border-slate-300 text-slate-700 hover:bg-slate-50 text-xs font-bold transition-colors cursor-pointer shadow-2xs"
-                              title="メールに添付されるPDFファイルをダウンロード確認"
+                              title="PDFファイルを直接ダウンロード確認"
                             >
                               <FileText className="w-3.5 h-3.5 text-slate-500" />
-                              <span>PDF確認</span>
+                              <span>PDF保存</span>
                             </a>
                             <button
                               type="button"
@@ -1781,10 +1827,29 @@ export const CommunicationSendCenter: React.FC<Props> = ({
                             </button>
                           </div>
                         </div>
-                        <div className="rounded-lg bg-purple-100/70 px-3 py-1.5 text-[11px] text-purple-950 flex items-center gap-1.5">
-                          <span className="font-bold">📎 自動PDF添付:</span>
-                          <span>メール送信時、この書類のA4 PDFが自動生成されて添付ファイルとして送信されます（Web確認URLも本文に記載）。</span>
-                        </div>
+                        {channel !== 'line' && (
+                          <div className="rounded-xl border border-purple-200 bg-white p-3 space-y-1.5">
+                            <label className="block text-[11px] font-bold text-slate-800">
+                              メール送付形式（Googleドライブの電子署名表示を回避）
+                              <select
+                                value={documentDeliveryFormat}
+                                onChange={(e) => setDocumentDeliveryFormat(e.target.value as DocumentDeliveryFormat)}
+                                className="mt-1 block w-full rounded-lg border border-slate-300 bg-slate-50 px-2.5 py-2 text-xs font-medium text-slate-900 focus:border-purple-600 focus:bg-white focus:outline-none"
+                              >
+                                <option value="web_link">Web確認・申込URL ＋ PDF直接ダウンロードリンク（添付なし・Drive電子署名が出ない／推奨）</option>
+                                <option value="html_attachment">HTML書類（.html）をメール添付 ＋ Web確認・申込URL（Drive電子署名が出ない）</option>
+                                <option value="pdf_attachment">PDF（.pdf）をメール直接添付（従来方式・GmailでDrive電子署名が出る場合あり）</option>
+                              </select>
+                            </label>
+                            <p className="text-[11px] text-slate-500 leading-relaxed">
+                              {documentDeliveryFormat === 'web_link'
+                                ? '※ メールにPDFを直接添付しないため、Gmail上でGoogleドライブの「電子署名をリクエスト」は表示されません。相手先はWebページ上で閲覧・Web申込・PDF直接ダウンロードが可能です。'
+                                : documentDeliveryFormat === 'html_attachment'
+                                ? '※ PDF形式ではなくブラウザで開けるHTMLファイルとして添付するため、GoogleドライブのPDF電子署名機能は表示されません。'
+                                : '※ 従来どおりA4 PDFファイルをメール添付します。受信側がGmailで添付を開くとGoogleドライブの電子署名メニューが表示される場合があります。'}
+                            </p>
+                          </div>
+                        )}
                       </div>
                     ) : availableDocs.length === 0 ? (
                       <div className="text-[11px] text-amber-700 bg-amber-50 border border-amber-200 rounded-lg p-2.5 flex items-center justify-between gap-2">
@@ -2238,22 +2303,25 @@ export const CommunicationSendCenter: React.FC<Props> = ({
                       <div className="mt-2 flex items-center justify-between gap-2 rounded-lg border border-purple-200 bg-purple-50/70 px-3 py-2 text-xs text-slate-800">
                         <div className="flex items-center gap-2 min-w-0">
                           <Paperclip className="h-3.5 w-3.5 text-purple-600 shrink-0" />
-                          <span className="font-bold text-slate-900 shrink-0">添付書類:</span>
+                          <span className="font-bold text-slate-900 shrink-0">送付書類:</span>
                           <span className="font-semibold text-purple-900 truncate">{doc.title}</span>
                           <span className="inline-block px-1.5 py-0.5 rounded bg-purple-200 text-purple-900 font-bold text-[10px]">
-                            PDF自動添付
+                            {documentDeliveryFormat === 'web_link'
+                              ? 'Web閲覧＋DLリンク（添付なし）'
+                              : documentDeliveryFormat === 'html_attachment'
+                              ? 'HTMLファイル添付'
+                              : 'PDF直接添付'}
                           </span>
                         </div>
                         <div className="flex items-center gap-1.5 shrink-0">
                           <a
-                            href={`/api/documents/${encodeURIComponent(doc.id)}/pdf`}
-                            target="_blank"
-                            rel="noreferrer"
+                            href={`/api/documents/${encodeURIComponent(doc.id)}/pdf?download=1`}
+                            download
                             className="inline-flex items-center gap-1 px-2.5 py-1 rounded-md bg-white border border-slate-300 text-slate-700 hover:bg-slate-50 text-xs font-semibold cursor-pointer shadow-2xs transition-colors"
-                            title="添付PDFの事前確認"
+                            title="PDFファイルの事前保存確認"
                           >
                             <FileText className="w-3.5 h-3.5 text-slate-500" />
-                            <span>PDF確認</span>
+                            <span>PDF保存</span>
                           </a>
                           <button
                             type="button"

@@ -100,4 +100,5 @@ try {
   if (e?.code === 'ENOENT') console.log('pdftotext がないため、文字の読み取り確認は省略');
   else throw e;
 } finally { fs.rmSync(f, { force: true }); }
+
 console.log('pdfJapanese.test.ts: all assertions passed');

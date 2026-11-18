@@ -208,11 +208,10 @@ export const DocumentPreviewModal: React.FC<DocumentPreviewModalProps> = ({
           <div className="flex items-center gap-2 shrink-0">
             {doc && (
               <a
-                href={`/api/documents/${encodeURIComponent(doc.id)}/pdf`}
-                target="_blank"
-                rel="noreferrer"
+                href={`/api/documents/${encodeURIComponent(doc.id)}/pdf?download=1`}
+                download
                 className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-slate-200 bg-white hover:bg-slate-50 text-slate-700 text-xs font-semibold transition-colors shadow-2xs"
-                title="PDFファイルを直接ダウンロード・確認"
+                title="PDFファイルを直接ダウンロード・確認（Googleドライブ非経由）"
               >
                 <FileText className="w-3.5 h-3.5 text-purple-600" />
                 <span className="hidden sm:inline">PDFダウンロード</span>
@@ -224,7 +223,7 @@ export const DocumentPreviewModal: React.FC<DocumentPreviewModalProps> = ({
                 target="_blank"
                 rel="noreferrer"
                 className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-slate-200 bg-white hover:bg-slate-50 text-slate-700 text-xs font-semibold transition-colors shadow-2xs"
-                title="新しいタブで公開用閲覧画面を開く"
+                title="Web書類・お申し込みページを新しいタブで開く"
               >
                 <ExternalLink className="w-3.5 h-3.5 text-purple-600" />
                 <span className="hidden sm:inline">公開ページを開く</span>
@@ -267,7 +266,7 @@ export const DocumentPreviewModal: React.FC<DocumentPreviewModalProps> = ({
               </div>
             )}
             <div className="text-[11px] text-purple-700 font-medium">
-              ※ メール送信時、この書類のPDFファイルが自動添付され、本文にもセキュア閲覧URL（{'{書類URL}'}）が自動挿入されます
+              ※ Web確認・お申し込みページURL（{'{書類URL}'}）からPDFダウンロードおよびWeb申込が行えます
             </div>
           </div>
 

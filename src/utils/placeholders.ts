@@ -62,6 +62,14 @@ export const PLACEHOLDER_DEFS: readonly PlaceholderDefinition[] = [
     aliases: ['レポートURL', '共有URL', 'document_url'],
   },
   {
+    key: 'PDFダウンロードURL',
+    label: 'PDFダウンロードURL',
+    enKey: 'pdf_download_url',
+    description: '書類PDFの直接ダウンロードURL（Googleドライブ非経由）',
+    sampleValue: 'https://example.com/api/public/documents/doc_123/pdf?download=1',
+    aliases: ['pdf_download_url'],
+  },
+  {
     key: '資料URL',
     label: '資料URL',
     enKey: 'material_url',
@@ -115,6 +123,10 @@ export const CANONICAL_ALIAS_MAP: Record<string, string> = {
   '共有URL': 'document_url',
   'document_url': 'document_url',
 
+  // PDFダウンロードURL
+  'PDFダウンロードURL': 'pdf_download_url',
+  'pdf_download_url': 'pdf_download_url',
+
   // 書類本文
   '書類本文': 'document_content',
   'document_content': 'document_content',
@@ -166,6 +178,9 @@ export const PLACEHOLDER_SAMPLE_VALUES: Record<string, string> = {
   'レポートURL': 'https://example.com/docs/doc_123',
   '共有URL': 'https://example.com/docs/doc_123',
   'document_url': 'https://example.com/docs/doc_123',
+
+  'PDFダウンロードURL': 'https://example.com/api/public/documents/doc_123/pdf?download=1',
+  'pdf_download_url': 'https://example.com/api/public/documents/doc_123/pdf?download=1',
 
   '書類本文': 'ご提案内容をご確認ください。',
   'document_content': 'ご提案内容をご確認ください。',

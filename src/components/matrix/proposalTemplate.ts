@@ -209,12 +209,7 @@ export function getProposalReportHtml(kind: ProposalKind = 'spot_build'): string
   ${section(t('P4'), `<table style="width:100%; border-collapse:collapse; font-size:13px;">\n${p4Rows(kind)}\n</table>`)}
   ${section(t('P5'), `<p style="margin:0 0 8px 0; font-size:12px; color:#64748b;">ご提案内容は、以下の前提・対象外にもとづきます。前提と異なる場合は、内容や費用を見直すことがあります。</p>${sub('お客様にお願いすること')}${text('p5_requests')}${sub(P5_LABEL[kind])}${text('p5_prerequisites')}${sub('対象外')}${text('p5_exclusions')}`)}
   ${section(t('P6'), `${sub('お支払い条件')}${text('p6_payment_terms')}${needsPeriod ? `${sub('契約期間')}${text('p6_contract_period')}` : ''}`)}
-  ${section(t('P7'), `<p style="margin:0 0 12px 0; font-size:13px; color:#334155;">ご提案内容にご同意いただける場合は、下のボタンからお申し込みください。内容のご確認やご相談も、お気軽にご連絡ください。</p>
-  <div class="web-apply-box" style="padding:20px; border:2px solid #10b981; border-radius:12px; background:#f0fdf4; text-align:center;">
-    <p style="font-weight:bold; font-size:15px; color:#065f46; margin:0 0 6px 0;">Webでのお申し込み</p>
-    <p style="font-size:12px; color:#047857; margin:0 0 14px 0;">内容をご確認のうえ、同意いただいた記録が残ります。</p>
-    <a href="{{apply_url}}" style="display:inline-block; background:#059669; color:#ffffff; padding:12px 32px; border-radius:8px; font-weight:bold; font-size:15px; text-decoration:none;">この内容で申し込む</a>
-  </div>`)}
+  ${section(t('P7'), `<p style="margin:0 0 10px 0; font-size:13px; color:#334155;">ご提案内容にご同意いただける場合は、下のボタンからお申し込みください。</p><div class="web-apply-box" style="margin-top:12px; padding:16px; background:#ecfdf5; border:1px solid #a7f3d0; border-radius:8px; text-align:center;"><p style="margin:0 0 6px 0; font-weight:bold; color:#065f46; font-size:14px;">Webでのお申し込み</p><p style="margin:0 0 12px 0; font-size:12px; color:#047857;">同意いただいた記録が残ります。</p><a href="{{apply_url}}" style="display:inline-block; background:#059669; color:#ffffff; padding:10px 26px; border-radius:6px; text-decoration:none; font-weight:bold; font-size:13px;">この内容で申し込む</a></div>`)}
 
   <div style="margin-top:32px; padding-top:14px; border-top:1px solid #cbd5e1; font-size:11px; color:#64748b; line-height:1.7;">
     <p style="margin:0;">有効期限: {{due_date}}(この日を過ぎた場合は、内容を改めてご確認ください)</p>
