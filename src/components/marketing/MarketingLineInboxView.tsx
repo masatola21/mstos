@@ -245,8 +245,10 @@ export const MarketingLineInboxView: React.FC<MarketingLineInboxViewProps> = ({
     }
     if (dismissedRes?.dismissedMap && typeof dismissedRes.dismissedMap === 'object') {
       const serverMap = dismissedRes.dismissedMap as Record<string, string>;
-      setDismissedAwaitingMap(serverMap);
-      saveDismissedLineAwaitingMap(serverMap);
+      const localMap = loadDismissedLineAwaitingMap();
+      const mergedMap = { ...localMap, ...serverMap };
+      setDismissedAwaitingMap(mergedMap);
+      saveDismissedLineAwaitingMap(mergedMap);
     }
   };
 
@@ -488,11 +490,31 @@ export const MarketingLineInboxView: React.FC<MarketingLineInboxViewProps> = ({
     }
   };
 
-  const dismissAwaitingReply = async (lineUserId: string, latestInboundAt: string | null) => {
-    const stamp = latestInboundAt || new Date().toISOString();
+  const dismissAwaitingReply = async (lineUserId: string, _latestInboundAt?: string | null) => {
+    // 現在時刻より1秒未来のスタンプにし、直前の受信日時とのミリ秒誤差による復活を確実に防止
+    const stamp = new Date(Date.now() + 1000).toISOString();
     const next = { ...dismissedAwaitingMap, [lineUserId]: stamp };
     setDismissedAwaitingMap(next);
     saveDismissedLineAwaitingMap(next);
+
+    // ローカルステート上の受信メッセージも status = 'read' に更新して二重防御
+    setMessages((prev) =>
+      prev.map((m) =>
+        m.line_user_id === lineUserId && m.direction === 'inbound' && m.status !== 'read'
+          ? { ...m, status: 'read' }
+          : m
+      )
+    );
+
+    // DB上の受信メッセージも status = 'read' に永続化
+    if (db && lineUserId) {
+      void db
+        .from('line_inbox_messages')
+        .update({ status: 'read' })
+        .eq('line_user_id', lineUserId)
+        .eq('direction', 'inbound');
+    }
+
     setNotice('このトークを「対応済み（返信不要）」にしました。新しい受信があれば自動で要返信に戻ります。');
     await syncDismissedAwaitingToServer(lineUserId, stamp);
   };

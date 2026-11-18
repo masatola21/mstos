@@ -1974,6 +1974,70 @@ export const MarketingFlowStudio: React.FC<MarketingFlowStudioProps> = ({
       {/* テーブル表示モード: 全ステップ一覧 ＆ 導線グループ整理 */}
       {viewMode === 'table' && (
         <div className="space-y-4 animate-fade-in">
+
+          {/* 🔗 配信導線URL設定状況カード */}
+          <div className="bg-blue-50 border border-blue-200 rounded-2xl p-4">
+            <div className="flex items-center gap-2 mb-3">
+              <ExternalLink className="w-4 h-4 text-blue-600 shrink-0" />
+              <span className="text-sm font-bold text-blue-900">🔗 配信導線URL設定状況</span>
+              <span className="text-xs text-blue-600 ml-1">— 各ステップに正しく導線URLが入っているか確認できます</span>
+            </div>
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2.5">
+              <a
+                href="https://corp.mstcorp.info/diagnosis"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="flex items-start gap-2.5 bg-white border border-blue-100 rounded-xl px-3 py-2.5 hover:border-blue-300 hover:shadow-sm transition group"
+              >
+                <span className="text-lg leading-none mt-0.5">🔍</span>
+                <div className="min-w-0">
+                  <div className="text-xs font-bold text-slate-800 group-hover:text-blue-700">診断ページ</div>
+                  <div className="text-[11px] text-slate-500 truncate">corp.mstcorp.info/diagnosis</div>
+                  <div className="text-[10px] text-blue-600 mt-0.5 font-mono">{'{link_url}'}</div>
+                </div>
+              </a>
+              <a
+                href="https://corp.mstcorp.info/materials"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="flex items-start gap-2.5 bg-white border border-blue-100 rounded-xl px-3 py-2.5 hover:border-blue-300 hover:shadow-sm transition group"
+              >
+                <span className="text-lg leading-none mt-0.5">📄</span>
+                <div className="min-w-0">
+                  <div className="text-xs font-bold text-slate-800 group-hover:text-blue-700">資料請求ページ</div>
+                  <div className="text-[11px] text-slate-500 truncate">corp.mstcorp.info/materials</div>
+                  <div className="text-[10px] text-blue-600 mt-0.5 font-mono">{'{material_url}'}</div>
+                </div>
+              </a>
+              <a
+                href="https://corp.mstcorp.info/contact"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="flex items-start gap-2.5 bg-white border border-blue-100 rounded-xl px-3 py-2.5 hover:border-blue-300 hover:shadow-sm transition group"
+              >
+                <span className="text-lg leading-none mt-0.5">💬</span>
+                <div className="min-w-0">
+                  <div className="text-xs font-bold text-slate-800 group-hover:text-blue-700">相談・お問い合わせ</div>
+                  <div className="text-[11px] text-slate-500 truncate">corp.mstcorp.info/contact</div>
+                  <div className="text-[10px] text-slate-400 mt-0.5 font-mono">直接URL記載</div>
+                </div>
+              </a>
+              <a
+                href="https://timerex.net/s/mst.shikumikaizen_b173/4ac78e37"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="flex items-start gap-2.5 bg-white border border-blue-100 rounded-xl px-3 py-2.5 hover:border-blue-300 hover:shadow-sm transition group"
+              >
+                <span className="text-lg leading-none mt-0.5">📅</span>
+                <div className="min-w-0">
+                  <div className="text-xs font-bold text-slate-800 group-hover:text-blue-700">TimeRex 面談予約</div>
+                  <div className="text-[11px] text-slate-500 truncate">timerex.net/.../4ac78e37</div>
+                  <div className="text-[10px] text-blue-600 mt-0.5 font-mono">{'{booking_url}'}</div>
+                </div>
+              </a>
+            </div>
+          </div>
+
           {/* 重複・旧シナリオ整理クイックバー */}
           {(duplicateCount > 0 || legacyDiagnosisScenarios.length > 0 || legacyPostMeetingScenarios.length > 0) && (
             <div className="bg-amber-50 border border-amber-200 rounded-2xl p-3.5 flex flex-col sm:flex-row sm:items-center justify-between gap-3">

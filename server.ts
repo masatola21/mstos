@@ -1350,6 +1350,15 @@ export async function saveLineAwaitingDismissedEntry(
             updated_at: nowIso,
           });
       }
+
+      // 対応済みにした場合、DB上の該当ユーザーの受信メッセージも status = 'read' に更新して永続化
+      if (dismissedUntil && cleanUid) {
+        await lineSupabase
+          .from('line_inbox_messages')
+          .update({ status: 'read' })
+          .eq('line_user_id', cleanUid)
+          .eq('direction', 'inbound');
+      }
     } catch (err: any) {
       console.warn('[LineAwaitingDismissed] Save warning:', err?.message || err);
     }

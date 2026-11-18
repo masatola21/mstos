@@ -18,6 +18,8 @@ import {
   BookOpen,
   HelpCircle,
   Filter,
+  ChevronDown,
+  ChevronUp,
 } from 'lucide-react';
 import { Contact, TableKey } from '../types/database';
 import { fetchTableData, deleteTableRecord } from '../services/dataService';
@@ -90,6 +92,7 @@ export const ContactsLineHub: React.FC<Props> = ({
   const [filter, setFilter] = useState<FilterMode>(initialFilter);
   const [selectedTagFilter, setSelectedTagFilter] = useState<string | null>(null);
   const [tagCategoryFilter, setTagCategoryFilter] = useState<string>('all');
+  const [isTagFilterOpen, setIsTagFilterOpen] = useState(false);
   const [newTagName, setNewTagName] = useState('');
   const [topNewTagName, setTopNewTagName] = useState('');
   const [pickerSearch, setPickerSearch] = useState('');
@@ -792,51 +795,80 @@ export const ContactsLineHub: React.FC<Props> = ({
           </div>
         </div>
 
-        {/* 🏷️ タグカテゴリ切替 & 絞り込みバー */}
-        <div className="border-b border-slate-200 bg-white px-4 py-2.5 text-xs space-y-2">
+        {/* 🏷️ タグ辞書絞り込みバー（必要な時だけ開閉できるコンパクトアコーディオン） */}
+        <div className="border-b border-slate-200 bg-white px-4 py-2 text-xs">
           <div className="flex flex-wrap items-center justify-between gap-2">
-            <div className="flex items-center gap-1.5 text-slate-700 font-semibold shrink-0">
-              <Tag className="h-3.5 w-3.5 text-purple-600" />
-              <span>タグ辞書絞り込み:</span>
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={() => setIsTagFilterOpen((prev) => !prev)}
+                className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 bg-slate-50 hover:bg-purple-50 hover:border-purple-200 px-2.5 py-1 text-xs font-semibold text-slate-700 hover:text-purple-700 transition cursor-pointer"
+                title="タグ辞書による絞り込みパネルを開閉します"
+              >
+                <Tag className="h-3.5 w-3.5 text-purple-600" />
+                <span>タグ辞書絞り込み</span>
+                {isTagFilterOpen ? (
+                  <ChevronUp className="h-3.5 w-3.5 text-slate-400" />
+                ) : (
+                  <ChevronDown className="h-3.5 w-3.5 text-slate-400" />
+                )}
+              </button>
+
+              {/* 絞り込み中のタグがあればコンパクトに常時表示 */}
+              {selectedTagFilter && (
+                <div className="inline-flex items-center gap-1 rounded-full bg-purple-50 border border-purple-200 px-2.5 py-0.5 text-xs text-purple-800 font-bold">
+                  <span>🏷️ 絞り込み中: {tags.find((t) => t.id === selectedTagFilter)?.name || '選択タグ'}</span>
+                  <button
+                    type="button"
+                    onClick={() => setSelectedTagFilter(null)}
+                    className="ml-1 text-purple-400 hover:text-purple-900 cursor-pointer font-bold"
+                    title="絞り込みを解除"
+                  >
+                    ×
+                  </button>
+                </div>
+              )}
             </div>
-            {/* カテゴリタブ */}
-            <div className="flex flex-wrap items-center gap-1">
-              {[
-                { key: 'all', label: 'すべて' },
-                { key: 'inflow', label: '📌 流入・選択' },
-                { key: 'action', label: '🚀 行動・進捗' },
-                { key: 'crm_status', label: '💼 CRM・停止条件' },
-                { key: 'custom', label: '🏷️ 独自タグ' },
-              ].map((cat) => (
-                <button
-                  key={cat.key}
-                  type="button"
-                  onClick={() => setTagCategoryFilter(cat.key)}
-                  className={`px-2.5 py-1 rounded-lg text-xs font-medium transition cursor-pointer ${
-                    tagCategoryFilter === cat.key
-                      ? 'bg-purple-50 text-purple-700 border border-purple-200 font-bold'
-                      : 'text-slate-600 hover:text-slate-900 hover:bg-slate-50'
-                  }`}
-                >
-                  {cat.label}
-                </button>
-              ))}
-            </div>
+            {isTagFilterOpen && (
+              <div className="flex flex-wrap items-center gap-1">
+                {[
+                  { key: 'all', label: 'すべて' },
+                  { key: 'inflow', label: '📌 流入・選択' },
+                  { key: 'action', label: '🚀 行動・進捗' },
+                  { key: 'crm_status', label: '💼 CRM・停止条件' },
+                  { key: 'custom', label: '🏷️ 独自タグ' },
+                ].map((cat) => (
+                  <button
+                    key={cat.key}
+                    type="button"
+                    onClick={() => setTagCategoryFilter(cat.key)}
+                    className={`px-2 py-0.5 rounded-md text-[11px] font-medium transition cursor-pointer ${
+                      tagCategoryFilter === cat.key
+                        ? 'bg-purple-50 text-purple-700 border border-purple-200 font-bold'
+                        : 'text-slate-600 hover:text-slate-900 hover:bg-slate-50'
+                    }`}
+                  >
+                    {cat.label}
+                  </button>
+                ))}
+              </div>
+            )}
           </div>
 
-          {/* タグ一覧ピル */}
-          <div className="flex flex-wrap items-center gap-1.5 pt-1">
-            <button
-              type="button"
-              onClick={() => setSelectedTagFilter(null)}
-              className={`rounded-full px-3 py-1 text-xs font-medium transition cursor-pointer ${
-                selectedTagFilter === null
-                  ? 'bg-purple-600 text-white font-bold shadow-xs'
-                  : 'border border-slate-200 bg-white text-slate-700 hover:bg-slate-50'
-              }`}
-            >
-              全タグ表示 ({people.length})
-            </button>
+          {/* 開いている時だけタグ一覧ピルを表示 */}
+          {isTagFilterOpen && (
+            <div className="flex flex-wrap items-center gap-1.5 pt-2 border-t border-slate-100 mt-2">
+              <button
+                type="button"
+                onClick={() => setSelectedTagFilter(null)}
+                className={`rounded-full px-3 py-1 text-xs font-medium transition cursor-pointer ${
+                  selectedTagFilter === null
+                    ? 'bg-purple-600 text-white font-bold shadow-xs'
+                    : 'border border-slate-200 bg-white text-slate-700 hover:bg-slate-50'
+                }`}
+              >
+                全タグ表示 ({people.length})
+              </button>
             {filteredTags.map((tag) => {
               const count = tagCounts.get(tag.id) || 0;
               const isSelected = selectedTagFilter === tag.id;
@@ -923,7 +955,8 @@ export const ContactsLineHub: React.FC<Props> = ({
               </button>
             </form>
           </div>
-        </div>
+        )}
+      </div>
 
         {selectedTagFilter && (
           <div className="flex items-center justify-between border-b border-purple-200 bg-purple-50/70 px-4 py-2 text-xs text-purple-900">
@@ -1014,62 +1047,82 @@ export const ContactsLineHub: React.FC<Props> = ({
               return (
                 <article
                   key={person.id}
-                  className={`flex flex-wrap items-start gap-3 p-4 transition hover:bg-slate-50/60 ${
+                  className={`p-3.5 transition hover:bg-slate-50/60 border-b border-slate-100 last:border-b-0 ${
                     hasActivePicker ? 'relative z-30 bg-purple-50/30' : 'relative z-0'
                   }`}
                 >
-                <input
-                  aria-label={person.name + 'を選択'}
-                  type="checkbox"
-                  checked={selectedPeople.includes(person.id)}
-                  onChange={() => togglePerson(person.id)}
-                  className="mt-1 accent-purple-600 cursor-pointer"
-                />
-                <div className="min-w-0 flex-1">
-                  <div className="flex flex-wrap items-center gap-2">
-                    <h2 className="truncate text-sm font-bold text-slate-900">{person.name}</h2>
-                    {person.lineFriends.length ? (
-                      <span className="inline-flex items-center gap-1 rounded-full bg-emerald-50 border border-emerald-200 px-2 py-0.5 text-[10px] font-semibold text-emerald-700">
-                        <Wifi className="h-3 w-3" />
-                        LINE連携 {person.lineFriends.length}
-                      </span>
-                    ) : (
-                      <span className="inline-flex items-center gap-1 rounded-full bg-slate-100 border border-slate-200 px-2 py-0.5 text-[10px] text-slate-500">
-                        <WifiOff className="h-3 w-3" />
-                        LINE未連携
-                      </span>
-                    )}
-                    {person.companyName && (
-                      <span className="rounded-full bg-slate-100 border border-slate-200 px-2.5 py-0.5 text-[10px] font-medium text-slate-700">
-                        {person.companyName}
-                      </span>
-                    )}
-                  </div>
-                  <div className="mt-1 flex flex-wrap gap-x-4 gap-y-1 text-xs text-slate-500">
-                    {person.email && <span>{person.email}</span>}
-                    {person.phone && <span>{person.phone}</span>}
-                  </div>
-                  {person.contact && (
-                    <div className="mt-2 flex flex-wrap items-center gap-2">
-                      <span className="text-[11px] text-slate-500 font-medium">メール配信状態:</span>
-                      <select
-                        aria-label={person.name + 'のメール配信状態'}
-                        value={String(person.contact.email_consent_status || 'unknown')}
-                        onChange={(event) =>
-                          void changeEmailConsent(
-                            person.contact!,
-                            event.target.value as 'unknown' | 'opted_in' | 'opted_out'
-                          )
-                        }
-                        disabled={saving}
-                        className="rounded-lg border border-slate-200 bg-white px-2 py-1 text-[11px] text-slate-700 disabled:opacity-50 outline-none focus:border-purple-500 shadow-2xs cursor-pointer"
-                      >
-                        <option value="unknown">未確認</option>
-                        <option value="opted_in">配信可</option>
-                        <option value="opted_out">配信停止</option>
-                      </select>
+                  <div className="flex flex-col lg:flex-row lg:items-start justify-between gap-3">
+                    {/* 左側: チェックボックス ＋ 連絡先プロフィール */}
+                    <div className="flex items-start gap-2.5 min-w-[240px] lg:max-w-[32%] shrink-0">
+                      <input
+                        aria-label={person.name + 'を選択'}
+                        type="checkbox"
+                        checked={selectedPeople.includes(person.id)}
+                        onChange={() => togglePerson(person.id)}
+                        className="mt-1 accent-purple-600 cursor-pointer"
+                      />
+                      <div className="min-w-0 flex-1">
+                        <div className="flex flex-wrap items-center gap-1.5">
+                          <h2 className="truncate text-sm font-bold text-slate-900">{person.name}</h2>
+                          {person.companyName && (
+                            <span className="rounded-full bg-slate-100 border border-slate-200 px-2 py-0.2 text-[10px] font-medium text-slate-700 truncate max-w-[140px]" title={person.companyName}>
+                              {person.companyName}
+                            </span>
+                          )}
+                          {!person.lineFriends.length && (
+                            <span className="inline-flex items-center gap-0.5 rounded-full bg-slate-100 border border-slate-200 px-1.5 py-0.2 text-[9px] text-slate-500">
+                              <WifiOff className="h-2.5 w-2.5" />
+                              LINE未連携
+                            </span>
+                          )}
+                        </div>
+                        <div className="mt-0.5 flex flex-wrap gap-x-3 gap-y-0.5 text-xs text-slate-500">
+                          {person.email && <span className="truncate max-w-[180px]">{person.email}</span>}
+                          {person.phone && <span>{person.phone}</span>}
+                        </div>
+                        {person.contact && (
+                          <div className="mt-1.5 flex items-center gap-1.5 text-[11px] text-slate-500">
+                            <span>メール:</span>
+                            <select
+                              aria-label={person.name + 'のメール配信状態'}
+                              value={String(person.contact.email_consent_status || 'unknown')}
+                              onChange={(event) =>
+                                void changeEmailConsent(
+                                  person.contact!,
+                                  event.target.value as 'unknown' | 'opted_in' | 'opted_out'
+                                )
+                              }
+                              disabled={saving}
+                              className="rounded-md border border-slate-200 bg-white px-1.5 py-0.5 text-[10px] text-slate-700 disabled:opacity-50 outline-none focus:border-purple-500 shadow-2xs cursor-pointer"
+                            >
+                              <option value="unknown">未確認</option>
+                              <option value="opted_in">配信可</option>
+                              <option value="opted_out">配信停止</option>
+                            </select>
+                          </div>
+                        )}
+                        {!person.contact && (
+                          <div className="mt-1 flex items-center gap-1.5">
+                            <span className="text-[10px] text-amber-600 font-medium">連絡先未紐付け</span>
+                            {person.lineFriends[0] && (
+                              <button
+                                type="button"
+                                disabled={saving}
+                                onClick={() => void linkLineFriendToContact(person.lineFriends[0].line_user_id)}
+                                className="rounded border border-amber-300 bg-amber-50 hover:bg-amber-100 px-1.5 py-0.5 text-[10px] font-semibold text-amber-800 transition cursor-pointer disabled:opacity-40"
+                              >
+                                紐付け
+                              </button>
+                            )}
+                          </div>
+                        )}
+                      </div>
                     </div>
-                  )}
+
+                    {/* 中央・右側: LINE連携情報 ＆ タグ（横に並んでコンパクトに！） */}
+                    <div className="min-w-0 flex-1">
+                      {person.lineFriends.length > 0 ? (
+                        <div className="space-y-1.5">
 
                   {/* LINE友だち情報 & タグ表示 */}
                   {person.lineFriends.map((friend) => (
@@ -1372,73 +1425,68 @@ export const ContactsLineHub: React.FC<Props> = ({
                       </div>
                     </div>
                   ))}
-                  {!person.contact && (
-                    <div className="mt-2 flex flex-wrap items-center gap-2">
-                      <p className="text-xs text-amber-600 font-medium">連絡先プロフィール未紐付け</p>
-                      {person.lineFriends[0] && (
-                        <button
-                          type="button"
-                          disabled={saving}
-                          onClick={() => void linkLineFriendToContact(person.lineFriends[0].line_user_id)}
-                          className="rounded-lg border border-amber-300 bg-amber-50 hover:bg-amber-100 px-2.5 py-1 text-[11px] font-semibold text-amber-800 transition cursor-pointer disabled:opacity-40"
-                        >
-                          連絡先に登録・紐付け
-                        </button>
-                      )}
-                    </div>
-                  )}
                 </div>
+              ) : (
+                <div className="py-1">
+                  <span className="inline-flex items-center gap-1 text-[11px] text-slate-400">
+                    <WifiOff className="h-3 w-3" />
+                    LINE未連携（友だち追加時に自動連携されます）
+                  </span>
+                </div>
+              )}
+            </div>
 
-                {/* アクションボタン */}
-                <div className="flex shrink-0 flex-wrap items-center gap-2">
-                  {person.contact && person.email && (
-                    <button
-                      onClick={() =>
-                        onOpenEmailSend?.(
-                          person.contact!.id,
-                          person.contact!.company_id || undefined
-                        )
-                      }
-                      className="flex items-center gap-1 rounded-lg bg-purple-50 border border-purple-200 px-2.5 py-1.5 text-xs font-semibold text-purple-700 hover:bg-purple-100 cursor-pointer transition shadow-2xs"
-                    >
-                      <Mail className="h-3.5 w-3.5" />
-                      <span>メール作成</span>
-                    </button>
-                  )}
-                  {person.contact &&
-                    person.lineFriends.map((friend) => (
-                      <button
-                        key={friend.id}
-                        onClick={() =>
-                          onOpenLineInbox?.(person.contact!.id, friend.line_user_id)
-                        }
-                        className="flex items-center gap-1 rounded-lg bg-emerald-50 border border-emerald-200 px-2.5 py-1.5 text-xs font-semibold text-emerald-700 hover:bg-emerald-100 cursor-pointer transition shadow-2xs"
-                      >
-                        <MessageCircle className="h-3.5 w-3.5" />
-                        <span>LINE受信箱</span>
-                      </button>
-                    ))}
-                  {person.contact && (
-                    <button
-                      onClick={() => setEditingContact(person.contact || null)}
-                      className="flex items-center gap-1 rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-50 cursor-pointer transition shadow-2xs"
-                    >
-                      <Pencil className="h-3.5 w-3.5" />
-                      <span>編集</span>
-                    </button>
-                  )}
-                  <InlineDeleteButton
-                    onConfirm={() => void deletePerson(person)}
-                    warning={`「${person.name}」を削除しますか？`}
-                    confirmLabel="削除確定"
-                    className="flex items-center gap-1 rounded-lg border border-rose-200 bg-rose-50 px-2.5 py-1.5 text-xs font-semibold text-rose-700 hover:bg-rose-100 transition cursor-pointer shadow-2xs"
-                    ariaLabel={`「${person.name}」を削除`}
+            {/* 右端: アクションボタン */}
+            <div className="flex shrink-0 lg:flex-row flex-wrap items-center gap-1.5 pt-1 lg:pt-0">
+              {person.contact && person.email && (
+                <button
+                  onClick={() =>
+                    onOpenEmailSend?.(
+                      person.contact!.id,
+                      person.contact!.company_id || undefined
+                    )
+                  }
+                  className="flex items-center gap-1 rounded-lg bg-purple-50 border border-purple-200 px-2.5 py-1 text-xs font-semibold text-purple-700 hover:bg-purple-100 cursor-pointer transition shadow-2xs"
+                >
+                  <Mail className="h-3.5 w-3.5" />
+                  <span>メール</span>
+                </button>
+              )}
+              {person.contact &&
+                person.lineFriends.map((friend) => (
+                  <button
+                    key={friend.id}
+                    onClick={() =>
+                      onOpenLineInbox?.(person.contact!.id, friend.line_user_id)
+                    }
+                    className="flex items-center gap-1 rounded-lg bg-emerald-50 border border-emerald-200 px-2.5 py-1 text-xs font-semibold text-emerald-700 hover:bg-emerald-100 cursor-pointer transition shadow-2xs"
                   >
-                    <Trash2 className="h-3.5 w-3.5" />
-                    <span>削除</span>
-                  </InlineDeleteButton>
-                </div>
-              </article>
+                    <MessageCircle className="h-3.5 w-3.5" />
+                    <span>LINEチャット</span>
+                  </button>
+                ))}
+              {person.contact && (
+                <button
+                  onClick={() => setEditingContact(person.contact || null)}
+                  className="flex items-center gap-1 rounded-lg border border-slate-200 bg-white px-2.5 py-1 text-xs font-medium text-slate-700 hover:bg-slate-50 cursor-pointer transition shadow-2xs"
+                >
+                  <Pencil className="h-3.5 w-3.5" />
+                  <span>編集</span>
+                </button>
+              )}
+              <InlineDeleteButton
+                onConfirm={() => void deletePerson(person)}
+                warning={`「${person.name}」を削除しますか？`}
+                confirmLabel="削除確定"
+                className="flex items-center gap-1 rounded-lg border border-rose-200 bg-rose-50 px-2.5 py-1 text-xs font-semibold text-rose-700 hover:bg-rose-100 transition cursor-pointer shadow-2xs"
+                ariaLabel={`「${person.name}」を削除`}
+              >
+                <Trash2 className="h-3.5 w-3.5" />
+                <span>削除</span>
+              </InlineDeleteButton>
+            </div>
+          </div>
+        </article>
               );
             })}
           </div>
