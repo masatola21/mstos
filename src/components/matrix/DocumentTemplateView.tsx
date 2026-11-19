@@ -363,6 +363,13 @@ export const DocumentTemplateView: React.FC<DocumentTemplateViewProps> = ({
         ? '毎月末日締め翌月末日振込（最低6ヶ月契約・自動更新条項あり）'
         : deal?.memo || '月末締め翌月末日振込（翌月末日一括払い）';
 
+      const hasExplicitFees = initialFee > 0 || monthlyFee > 0;
+      const effectiveInitial = hasExplicitFees ? initialFee : 300000;
+      const effectiveMonthly = hasExplicitFees ? monthlyFee : 100000;
+      const initialTax = Math.floor(effectiveInitial * 0.1);
+      const monthlyTax = Math.floor(effectiveMonthly * 0.1);
+      const effectiveInst = calculateInstallmentAmounts(subtotal, paymentMode === 'installments_6' ? 6 : 3);
+
       const values: Record<string, string> = {
         client_company: company?.company_name || '',
         client_name: contact?.full_name || company?.contact_name || '',
@@ -386,14 +393,14 @@ export const DocumentTemplateView: React.FC<DocumentTemplateViewProps> = ({
         total_amount: total > 0 ? total.toLocaleString('ja-JP') : '',
         subtotal_amount: subtotal > 0 ? subtotal.toLocaleString('ja-JP') : '',
         tax_amount: tax > 0 ? tax.toLocaleString('ja-JP') : '',
-        initial_fee: initialFee > 0 ? initialFee.toLocaleString('ja-JP') : '300,000',
-        initial_fee_tax: initialFee > 0 ? Math.floor(initialFee * 0.1).toLocaleString('ja-JP') : '30,000',
-        initial_fee_tax_included: initialFee > 0 ? Math.floor(initialFee * 1.1).toLocaleString('ja-JP') : '330,000',
-        monthly_fee: monthlyFee > 0 ? monthlyFee.toLocaleString('ja-JP') : '100,000',
-        monthly_fee_tax: monthlyFee > 0 ? Math.floor(monthlyFee * 0.1).toLocaleString('ja-JP') : '10,000',
-        monthly_fee_tax_included: monthlyFee > 0 ? Math.floor(monthlyFee * 1.1).toLocaleString('ja-JP') : '110,000',
-        monthly_amount: monthlyFee > 0 ? monthlyFee.toLocaleString('ja-JP') : '100,000',
-        tax_included_amount: monthlyFee > 0 ? Math.floor(monthlyFee * 1.1).toLocaleString('ja-JP') : '110,000',
+        initial_fee: effectiveInitial.toLocaleString('ja-JP'),
+        initial_fee_tax: initialTax.toLocaleString('ja-JP'),
+        initial_fee_tax_included: (effectiveInitial + initialTax).toLocaleString('ja-JP'),
+        monthly_fee: effectiveMonthly.toLocaleString('ja-JP'),
+        monthly_fee_tax: monthlyTax.toLocaleString('ja-JP'),
+        monthly_fee_tax_included: (effectiveMonthly + monthlyTax).toLocaleString('ja-JP'),
+        monthly_amount: effectiveMonthly.toLocaleString('ja-JP'),
+        tax_included_amount: (effectiveMonthly + monthlyTax).toLocaleString('ja-JP'),
         deposit_rate: '50',
         deposit_subtotal: mb.depositSubtotal > 0 ? mb.depositSubtotal.toLocaleString('ja-JP') : '',
         deposit_tax: mb.depositTax > 0 ? mb.depositTax.toLocaleString('ja-JP') : '',
@@ -403,10 +410,10 @@ export const DocumentTemplateView: React.FC<DocumentTemplateViewProps> = ({
         completion_tax: mb.completionTax > 0 ? mb.completionTax.toLocaleString('ja-JP') : '',
         completion_total: mb.completionTotalWithTax > 0 ? mb.completionTotalWithTax.toLocaleString('ja-JP') : '',
         installment_number: '1',
-        installment_count: '3',
-        installment_subtotal: inst.installments[0]?.subtotal ? inst.installments[0].subtotal.toLocaleString('ja-JP') : '',
-        installment_tax: inst.installments[0]?.tax ? inst.installments[0].tax.toLocaleString('ja-JP') : '',
-        installment_amount: inst.installments[0]?.totalWithTax ? inst.installments[0].totalWithTax.toLocaleString('ja-JP') : '',
+        installment_count: String(paymentMode === 'installments_6' ? 6 : 3),
+        installment_subtotal: effectiveInst.installments[0]?.subtotal ? effectiveInst.installments[0].subtotal.toLocaleString('ja-JP') : '',
+        installment_tax: effectiveInst.installments[0]?.tax ? effectiveInst.installments[0].tax.toLocaleString('ja-JP') : '',
+        installment_amount: effectiveInst.installments[0]?.totalWithTax ? effectiveInst.installments[0].totalWithTax.toLocaleString('ja-JP') : '',
         invoice_number: invoiceNumber,
         item_name_1: deal?.proposal_plan_name || deal?.deal_name || productName || 'サービス提供費',
         item_qty_1: '1', 
@@ -601,6 +608,52 @@ export const DocumentTemplateView: React.FC<DocumentTemplateViewProps> = ({
             next.due_date = formatDocumentDate(addDaysToIsoDate(iso, PROPOSAL_VALID_DAYS));
           }
         }
+      } else if (selectedTemplateId !== 'tpl-monthly-report-01') {
+        // 見積書・契約書・請求書: 税抜金額変更時に消費税・税込金額・分割/手付残金を連動再計算
+        if (key === 'initial_fee' || key === 'monthly_fee') {
+          const initial = parseYen(next.initial_fee);
+          const monthly = parseYen(next.monthly_fee);
+          const initialTax = Math.floor(initial * 0.1);
+          const monthlyTax = Math.floor(monthly * 0.1);
+          next.initial_fee_tax = formatYen(initialTax);
+          next.initial_fee_tax_included = formatYen(initial + initialTax);
+          next.monthly_fee_tax = formatYen(monthlyTax);
+          next.monthly_fee_tax_included = formatYen(monthly + monthlyTax);
+
+          const isSubFromInitMonthly =
+            paymentMode === 'hybrid_setup_retainer' ||
+            paymentMode === 'retainer' ||
+            (selectedTemplateId === 'tpl-unified-invoice' && (invoiceSubtype === 'hybrid_setup_retainer' || invoiceSubtype === 'retainer'));
+          if (isSubFromInitMonthly) {
+            const sub =
+              selectedTemplateId === 'tpl-unified-invoice' && invoiceSubtype === 'retainer'
+                ? monthly
+                : initial + monthly;
+            const tax = Math.floor(sub * 0.1);
+            next.subtotal_amount = formatYen(sub);
+            next.tax_amount = formatYen(tax);
+            next.total_amount = formatYen(sub + tax);
+            next.total_project_amount = formatYen(sub);
+          }
+        } else if (key === 'subtotal_amount') {
+          const sub = parseYen(next.subtotal_amount);
+          const tax = Math.floor(sub * 0.1);
+          const mb = calculateMilestoneAmounts(sub, 0.5);
+          const instCount = paymentMode === 'installments_6' ? 6 : 3;
+          const inst = calculateInstallmentAmounts(sub, instCount);
+          next.tax_amount = formatYen(tax);
+          next.total_amount = formatYen(sub + tax);
+          next.total_project_amount = formatYen(sub);
+          next.deposit_subtotal = formatYen(mb.depositSubtotal);
+          next.deposit_tax = formatYen(mb.depositTax);
+          next.deposit_total = formatYen(mb.depositTotalWithTax);
+          next.completion_subtotal = formatYen(mb.completionSubtotal);
+          next.completion_tax = formatYen(mb.completionTax);
+          next.completion_total = formatYen(mb.completionTotalWithTax);
+          next.installment_subtotal = formatYen(inst.installments[0]?.subtotal ?? 0);
+          next.installment_tax = formatYen(inst.installments[0]?.tax ?? 0);
+          next.installment_amount = formatYen(inst.installments[0]?.totalWithTax ?? 0);
+        }
       }
       return next;
     });
@@ -636,13 +689,19 @@ export const DocumentTemplateView: React.FC<DocumentTemplateViewProps> = ({
     } else if (mode === 'retainer') {
       const monthly = parseNum(variableValues.monthly_fee) || 100000;
       const initial = parseNum(variableValues.initial_fee) || 0;
+      const initialTax = Math.floor(initial * 0.1);
+      const monthlyTax = Math.floor(monthly * 0.1);
       const sub = monthly + initial;
       const tax = Math.floor(sub * 0.1);
       const total = sub + tax;
       setVariableValues((prev) => ({
         ...prev,
         monthly_fee: monthly.toLocaleString('ja-JP'),
+        monthly_fee_tax: monthlyTax.toLocaleString('ja-JP'),
+        monthly_fee_tax_included: (monthly + monthlyTax).toLocaleString('ja-JP'),
         initial_fee: initial > 0 ? initial.toLocaleString('ja-JP') : '0',
+        initial_fee_tax: initialTax.toLocaleString('ja-JP'),
+        initial_fee_tax_included: (initial + initialTax).toLocaleString('ja-JP'),
         payment_terms: '毎月末日締め翌月末日振込（月額顧問契約・最低契約期間6ヶ月・自動更新条項あり）',
         due_date: formatDocumentDate(selectedTemplateId.includes('estimate') ? oneMonthLater : nextMonthEnd),
         cost_breakdown: initial > 0 ? `初期費用 ${initial.toLocaleString('ja-JP')}円 / 月額顧問料 ${monthly.toLocaleString('ja-JP')}円` : `月額顧問料 ${monthly.toLocaleString('ja-JP')}円`,

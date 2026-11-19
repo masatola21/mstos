@@ -101,4 +101,21 @@ try {
   else throw e;
 } finally { fs.rmSync(f, { force: true }); }
 
+// 5. 御見積書 6パターンすべてで「税抜／税込」表記と金額変数が整合していること
+for (const mode of ['lump_sum', 'retainer', 'hybrid_setup_retainer', 'milestone', 'installments_3', 'installments_6'] as const) {
+  const vals = getTemplateDefaultValues('tpl-unified-estimate', '2026-11-13', mode, 'lump_sum');
+  const html = fill(getEstimateHtml(mode), vals);
+  assert(!/\{\{[^}]+\}\}/.test(html), `御見積書(${mode})に未置換の変数が残っていない`);
+  assert(html.includes('税抜') && html.includes('税込'), `御見積書(${mode})に税抜・税込の両方が明記されている`);
+  if (mode === 'retainer') {
+    assert(html.includes('月額顧問料（税抜）') && html.includes('初期構築費用（税抜）'), '月額顧問のバナー見出しが税抜表示になっている');
+    assert(html.includes('月々 ￥100,000 円') && html.includes('税込 ¥110,000 円/月'), '月額顧問の税抜/税込額が一致している');
+  }
+  if (mode === 'installments_3' || mode === 'installments_6') {
+    const expectedSub = mode === 'installments_6' ? '¥50,000 円 / 回' : '¥100,000 円 / 回';
+    const expectedTaxInc = mode === 'installments_6' ? '(税込 ¥55,000 円 / 回)' : '(税込 ¥110,000 円 / 回)';
+    assert(html.includes(expectedSub) && html.includes(expectedTaxInc), `分割(${mode})の明細に税抜と税込が正しく併記されている`);
+  }
+}
+
 console.log('pdfJapanese.test.ts: all assertions passed');
