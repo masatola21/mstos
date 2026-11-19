@@ -299,12 +299,19 @@ async function runTests() {
         message: 'WORKSPACE_CONFLICT',
       },
     };
-    // 6. 409単独判定の除外、および 23505（一意制約違反）の非競合判定
-    assert(isWorkspaceConflictError({ status: 409, message: 'Conflict' }) === false, 'status 409 alone must NOT match');
-    assert(isWorkspaceConflictError({ code: '409', message: 'Conflict' }) === false, 'code 409 alone must NOT match');
-    assert(isWorkspaceConflictError({ code: '23505', message: 'duplicate key value violates unique constraint' }) === false, 'code 23505 must NOT match as conflict');
+    assert(isWorkspaceConflictError(deepWrapped) === true, 'Deep wrapped error must match');
 
-    console.log('  -> PASSED: All conflict representations (code, message, wrapped, nested) matched correctly, 409 and 23505 properly excluded.\n');
+    // 6. PostgREST 14 の PT409 / HTTP 409 競合検知、および 23505（一意制約違反）の非競合判定
+    assert(isWorkspaceConflictError('PT409') === true, 'Plain PT409 string must match');
+    assert(isWorkspaceConflictError({ code: 'PT409', message: 'Conflict' }) === true, 'code PT409 must match');
+    assert(isWorkspaceConflictError({ status: 409, message: 'Conflict' }) === true, 'status 409 must match for PostgREST 14 runaway protection');
+    assert(isWorkspaceConflictError({ code: '409', message: 'Conflict' }) === true, 'code 409 must match for PostgREST 14 runaway protection');
+    assert(isWorkspaceConflictError({ code: '23505', message: 'duplicate key value violates unique constraint' }) === false, 'code 23505 must NOT match as conflict');
+    assert(isWorkspaceConflictError({ status: 409, code: '23505', message: 'duplicate key value violates unique constraint' }) === false, 'HTTP 409 with 23505 unique constraint must NOT match as conflict');
+    assert(isWorkspaceConflictError({ status: 409, message: 'duplicate key value violates unique constraint' }) === false, 'HTTP 409 with duplicate key message must NOT match as conflict');
+    assert(isWorkspaceConflictError(new Error('Validation failed for date 2026-04-09 (4096 bytes)')) === false, 'Unrelated digits containing 409 must NOT match as conflict');
+
+    console.log('  -> PASSED: All conflict representations (code, message, wrapped, nested, PT409/409) matched correctly, and 23505 properly excluded.\n');
   }
 
   // --------------------------------------------------------------------------

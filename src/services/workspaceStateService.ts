@@ -1015,22 +1015,40 @@ export function isNonRetryableFatalError(error: unknown): boolean {
   return false;
 }
 
+const CONFLICT_409_TEXT_PATTERN =
+  /(?:^|\b(?:http|status|code|conflict|error|postgrest|failed)\b[^\n]{0,24})\b409\b|\b409\b[^\n]{0,24}\bconflict\b|\(409\)/i;
+
 export function isWorkspaceConflictError(error: unknown): boolean {
   if (!error) return false;
   if (typeof error === 'string') {
-    return error.includes('WORKSPACE_CONFLICT') || error.includes('40001') || error.includes('PT409') || error.includes('409');
+    if (error.includes('23505') || /duplicate key value violates unique constraint/i.test(error)) {
+      if (!error.includes('WORKSPACE_CONFLICT') && !error.includes('40001')) {
+        return false;
+      }
+    }
+    return (
+      error.includes('WORKSPACE_CONFLICT') ||
+      error.includes('40001') ||
+      error.includes('PT409') ||
+      CONFLICT_409_TEXT_PATTERN.test(error.trim())
+    );
   }
   if (typeof error !== 'object') return false;
 
   const err = error as Record<string, unknown>;
-  const code = String(err.code ?? (err.error as any)?.code ?? (err.cause as any)?.code ?? '').trim();
-  const message = String(err.message ?? (err.error as any)?.message ?? (err.cause as any)?.message ?? '');
-  const details = String(err.details ?? (err.error as any)?.details ?? (err.cause as any)?.details ?? '');
-  const hint = String(err.hint ?? (err.error as any)?.hint ?? (err.cause as any)?.hint ?? '');
-  const status = Number(err.status ?? (err.error as any)?.status ?? (err.cause as any)?.status ?? 0);
+  const code = String(err.code ?? (err.error as any)?.code ?? (err.cause as any)?.code ?? (err.originalError as any)?.code ?? '').trim();
+  const message = String(err.message ?? (err.error as any)?.message ?? (err.cause as any)?.message ?? (err.originalError as any)?.message ?? '');
+  const details = String(err.details ?? (err.error as any)?.details ?? (err.cause as any)?.details ?? (err.originalError as any)?.details ?? '');
+  const hint = String(err.hint ?? (err.error as any)?.hint ?? (err.cause as any)?.hint ?? (err.originalError as any)?.hint ?? '');
+  const status = Number(err.status ?? (err.error as any)?.status ?? (err.cause as any)?.status ?? (err.originalError as any)?.status ?? 0);
 
-  // 23505（一意制約違反）は競合ではないため除外（既存の自動リカバリ経路で処理）
-  if (code === '23505') {
+  // 23505（一意制約違反）は PostgREST が HTTP 409 を伴って返す場合があるため、409判定より先に除外（既存の自動リカバリ経路で処理）
+  const isUniqueViolation =
+    code === '23505' ||
+    message.includes('23505') ||
+    details.includes('23505') ||
+    /duplicate key value violates unique constraint/i.test(`${message} ${details}`);
+  if (isUniqueViolation && !`${code} ${message} ${details} ${hint}`.includes('WORKSPACE_CONFLICT') && code !== '40001') {
     return false;
   }
 
@@ -1046,7 +1064,7 @@ export function isWorkspaceConflictError(error: unknown): boolean {
     message.includes('WORKSPACE_CONFLICT') ||
     message.includes('40001') ||
     message.includes('PT409') ||
-    message.includes('409') ||
+    CONFLICT_409_TEXT_PATTERN.test(message) ||
     details.includes('WORKSPACE_CONFLICT') ||
     details.includes('40001') ||
     details.includes('PT409') ||
@@ -1070,7 +1088,7 @@ export function isWorkspaceConflictError(error: unknown): boolean {
 
   try {
     const str = String(error);
-    if (str.includes('WORKSPACE_CONFLICT') || str.includes('40001')) {
+    if (str.includes('WORKSPACE_CONFLICT') || str.includes('40001') || str.includes('PT409')) {
       return true;
     }
   } catch {}

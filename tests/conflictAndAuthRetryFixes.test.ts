@@ -15,12 +15,14 @@ async function runTests() {
   console.log('Test 1: isWorkspaceConflictError detection');
   {
     assert(isWorkspaceConflictError({ code: '40001', message: 'error' }), 'Must detect code 40001');
-    assert(!isWorkspaceConflictError({ status: 409, message: 'Conflict' }), 'Must NOT detect status 409 alone');
-    assert(!isWorkspaceConflictError({ code: '409', message: 'Conflict' }), 'Must NOT detect code 409 alone');
+    assert(isWorkspaceConflictError({ code: 'PT409', message: 'Conflict' }), 'Must detect code PT409');
+    assert(isWorkspaceConflictError({ status: 409, message: 'Conflict' }), 'Must detect status 409');
+    assert(isWorkspaceConflictError({ code: '409', message: 'Conflict' }), 'Must detect code 409');
     assert(isWorkspaceConflictError({ code: 'P0001', message: 'ERROR: WORKSPACE_CONFLICT' }), 'Must detect P0001 + WORKSPACE_CONFLICT');
     assert(isWorkspaceConflictError({ details: 'WORKSPACE_CONFLICT' }), 'Must detect details WORKSPACE_CONFLICT');
     assert(isWorkspaceConflictError('WORKSPACE_CONFLICT (40001)'), 'Must detect string WORKSPACE_CONFLICT');
     assert(!isWorkspaceConflictError({ code: '23505', message: 'duplicate key' }), 'Must NOT detect 23505 duplicate key');
+    assert(!isWorkspaceConflictError({ status: 409, code: '23505', message: 'duplicate key value violates unique constraint' }), 'Must NOT detect 409 + 23505 duplicate key');
     assert(!isWorkspaceConflictError(null), 'Must return false for null');
     console.log('  -> PASSED: All conflict error structures correctly detected.\n');
   }
