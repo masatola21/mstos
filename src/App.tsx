@@ -4,12 +4,12 @@ import { UnifiedNavbar, UnifiedNavTab } from './components/UnifiedNavbar';
 import { AppShell } from './components/layout/AppShell';
 import type { InboxAlertSummary } from './components/layout/AppHeader';
 import { useVisiblePolling } from './hooks/useInboxRealtime';
-import { Dashboard } from './components/Dashboard';
+const Dashboard = React.lazy(() => import('./components/Dashboard').then((m) => ({ default: m.Dashboard })));
 const TableManager = React.lazy(() => import('./components/TableManager').then((m) => ({ default: m.TableManager })));
 const DiagnosisManager = React.lazy(() => import('./components/DiagnosisManager').then((m) => ({ default: m.DiagnosisManager })));
 const PublicIntakeForm = React.lazy(() => import('./components/PublicIntakeForm').then((m) => ({ default: m.PublicIntakeForm })));
 const PublicDocumentApplyView = React.lazy(() => import('./components/PublicDocumentApplyView').then((m) => ({ default: m.PublicDocumentApplyView })));
-import { AuthScreen } from './components/AuthScreen';
+const AuthScreen = React.lazy(() => import('./components/AuthScreen').then((m) => ({ default: m.AuthScreen })));
 const ConfigGuideModal = React.lazy(() => import('./components/ConfigGuideModal').then((m) => ({ default: m.ConfigGuideModal })));
 const RlsGuideModal = React.lazy(() => import('./components/RlsGuideModal').then((m) => ({ default: m.RlsGuideModal })));
 const RecordFormModal = React.lazy(() => import('./components/RecordFormModal').then((m) => ({ default: m.RecordFormModal })));
@@ -47,8 +47,9 @@ const AiPresetsAutomationsHub = React.lazy(() => import('./components/matrix/AiP
 const ContactsLineHub = React.lazy(() => import('./components/ContactsLineHub').then((m) => ({ default: m.ContactsLineHub })));
 const IntegratedCalendarWorkspace = React.lazy(() => import('./components/calendar/IntegratedCalendarWorkspace').then((m) => ({ default: m.IntegratedCalendarWorkspace })));
 const UnifiedInboxView = React.lazy(() => import('./components/inbox/UnifiedInboxView').then((m) => ({ default: m.UnifiedInboxView })));
+const QuickPresidentDrawer = React.lazy(() => import('./components/matrix/QuickPresidentDrawer').then((m) => ({ default: m.QuickPresidentDrawer })));
 import { SendDrawerProvider, useSendDrawer } from './context/SendDrawerContext';
-import { QuickPresidentDrawer, getPageAssistantProfile } from './components/matrix/QuickPresidentDrawer';
+import { getPageAssistantProfile } from './utils/pageAssistantProfiles';
 
 // Storage and Types
 import {
@@ -2581,12 +2582,16 @@ function AppContent() {
   // 認証前は業務データを一切表示せず、ログイン画面のみを表示
   if (!user) {
     return (
-      <>
+      <Suspense fallback={
+        <div className="min-h-screen bg-slate-950 flex flex-col items-center justify-center text-slate-300 space-y-3">
+          <Loader2 className="w-8 h-8 animate-spin text-blue-500" />
+          <p className="text-sm font-semibold tracking-wide">MST AI経営OS ログイン準備中...</p>
+        </div>
+      }>
         <AuthScreen 
           onOpenConfig={() => openModalWithHistory('config')} 
           onOpenRls={() => openModalWithHistory('rls')} 
         />
-        <Suspense fallback={null}>
         <ConfigGuideModal
           isOpen={isConfigOpen}
           onClose={() => closeModalWithHistory('config')}
@@ -2596,7 +2601,6 @@ function AppContent() {
           onClose={() => closeModalWithHistory('rls')}
         />
       </Suspense>
-      </>
     );
   }
 

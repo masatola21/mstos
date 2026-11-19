@@ -1018,7 +1018,7 @@ export function isNonRetryableFatalError(error: unknown): boolean {
 export function isWorkspaceConflictError(error: unknown): boolean {
   if (!error) return false;
   if (typeof error === 'string') {
-    return error.includes('WORKSPACE_CONFLICT') || error.includes('40001');
+    return error.includes('WORKSPACE_CONFLICT') || error.includes('40001') || error.includes('PT409') || error.includes('409');
   }
   if (typeof error !== 'object') return false;
 
@@ -1027,23 +1027,32 @@ export function isWorkspaceConflictError(error: unknown): boolean {
   const message = String(err.message ?? (err.error as any)?.message ?? (err.cause as any)?.message ?? '');
   const details = String(err.details ?? (err.error as any)?.details ?? (err.cause as any)?.details ?? '');
   const hint = String(err.hint ?? (err.error as any)?.hint ?? (err.cause as any)?.hint ?? '');
+  const status = Number(err.status ?? (err.error as any)?.status ?? (err.cause as any)?.status ?? 0);
 
   // 23505（一意制約違反）は競合ではないため除外（既存の自動リカバリ経路で処理）
   if (code === '23505') {
     return false;
   }
 
-  // SQLSTATE 40001 または 'WORKSPACE_CONFLICT' の文字列だけを競合とする
-  // （code === '409' などの単独判定は含めない）
+  // SQLSTATE 40001 / PT409 / HTTP 409、または 'WORKSPACE_CONFLICT' を競合とする
+  // （PostgREST 14 での無限リトライ暴走防止のため PT409 / 409 の判定を確実に含む）
   if (
     code === '40001' ||
     code.includes('40001') ||
+    code === 'PT409' ||
+    code.includes('PT409') ||
+    code === '409' ||
+    status === 409 ||
     message.includes('WORKSPACE_CONFLICT') ||
     message.includes('40001') ||
+    message.includes('PT409') ||
+    message.includes('409') ||
     details.includes('WORKSPACE_CONFLICT') ||
     details.includes('40001') ||
+    details.includes('PT409') ||
     hint.includes('WORKSPACE_CONFLICT') ||
-    hint.includes('40001')
+    hint.includes('40001') ||
+    hint.includes('PT409')
   ) {
     return true;
   }
