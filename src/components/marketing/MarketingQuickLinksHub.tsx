@@ -56,66 +56,66 @@ export interface MediumPreset {
 export const TRACKING_MEDIA_PRESETS: MediumPreset[] = [
   {
     id: 'hp_blog',
-    name: 'HP・ブログ記亁E,
+    name: 'HP・ブログ記事',
     category: 'Owned / Blog',
-    badge: '記亁E,
+    badge: '記事',
     badgeColor: 'bg-emerald-50 text-emerald-700 border-emerald-200',
-    description: '公式HPコラムめE��説記事から�E誘導用',
+    description: '公式HPコラムや解説記事からの誘導用',
     utmSource: 'hp_blog',
     utmMedium: 'article',
   },
   {
     id: 'sns',
-    name: 'SNS�E�Enstagram・Threads・Facebook・LinkedIn等�Eプロフィール�E�E,
+    name: 'SNS（Instagram・Threads・Facebook・LinkedIn等のプロフィール）',
     category: 'Social',
     badge: 'SNS',
     badgeColor: 'bg-sky-50 text-sky-700 border-sky-200',
-    description: '各SNSのプロフィールリンクめE��常投稿用',
+    description: '各SNSのプロフィールリンクや通常投稿用',
     utmSource: 'sns',
     utmMedium: 'social',
   },
   {
     id: 'line',
-    name: 'LINE�E��E信・リチE��メニュー�E�E,
+    name: 'LINE（配信・リッチメニュー）',
     category: 'Chat / CRM',
     badge: 'LINE',
     badgeColor: 'bg-emerald-50 text-emerald-700 border-emerald-200',
-    description: 'LINE公式アカウント�E信めE��チE��メニュー用',
+    description: 'LINE公式アカウント配信やリッチメニュー用',
     utmSource: 'line',
     utmMedium: 'chat',
   },
   {
     id: 'email',
-    name: 'メール�E�営業・教育スチE��プ！E,
+    name: 'メール（営業・教育ステップ）',
     category: 'Direct',
     badge: 'メール',
     badgeColor: 'bg-cyan-50 text-cyan-700 border-cyan-200',
-    description: '個別営業メールめE��ルマガ・案�E斁E��用',
+    description: '個別営業メールやメルマガ・案内文面用',
     utmSource: 'email',
     utmMedium: 'email',
   },
   {
     id: 'material',
-    name: '賁E���E�賁E��請求�E啁E��E��E��冁E�Eリンク�E�QR�E�E,
+    name: '資料（資料請求・商談資料内のリンク／QR）',
     category: 'Document',
-    badge: '賁E��',
+    badge: '資料',
     badgeColor: 'bg-amber-50 text-amber-700 border-amber-200',
-    description: '提案書・ダウンロード賁E��・名刺QR等用',
+    description: '提案書・ダウンロード資料・名刺QR等用',
     utmSource: 'material',
     utmMedium: 'document',
   },
 ];
 
 const COMMON_MEDIUM_TYPES = [
-  { value: 'social', label: 'social�E�ENS投稿・プロフ！E },
-  { value: 'article', label: 'article�E�記事�EオウンドメチE��ア�E�E },
-  { value: 'short_video', label: 'short_video�E�EikTok・リール等！E },
-  { value: 'video', label: 'video�E�EouTube動画・概要欁E��E },
-  { value: 'chat', label: 'chat�E�EINE・チャチE��・DM�E�E },
-  { value: 'offline_qr', label: 'offline_qr�E�紙チラシ・名刺・POP�E�E },
-  { value: 'email', label: 'email�E�メルマガ・スチE��プ�E信�E�E },
-  { value: 'cpc', label: 'cpc�E�Eeb庁E��・リスチE��ング�E�E },
-  { value: 'referral', label: 'referral�E�外部紹介�E提携パ�Eトナー�E�E },
+  { value: 'social', label: 'social（SNS投稿・プロフ）' },
+  { value: 'article', label: 'article（記事・オウンドメディア）' },
+  { value: 'short_video', label: 'short_video（TikTok・リール等）' },
+  { value: 'video', label: 'video（YouTube動画・概要欄）' },
+  { value: 'chat', label: 'chat（LINE・チャット・DM）' },
+  { value: 'offline_qr', label: 'offline_qr（紙チラシ・名刺・POP）' },
+  { value: 'email', label: 'email（メルマガ・ステップ配信）' },
+  { value: 'cpc', label: 'cpc（Web広告・リスティング）' },
+  { value: 'referral', label: 'referral（外部紹介・提携パートナー）' },
 ];
 
 const ICON_MAP = {
@@ -130,61 +130,62 @@ const ICON_MAP = {
 type IconKey = keyof typeof ICON_MAP;
 
 const BADGE_COLOR_OPTIONS = [
-  { label: 'エメラルド（記事�Eブログ�E�E, value: 'bg-emerald-50 text-emerald-700 border-emerald-200' },
-  { label: 'スカイ�E�E / Twitter�E�E, value: 'bg-sky-50 text-sky-700 border-sky-200' },
-  { label: 'ピンク�E�Enstagram�E�E, value: 'bg-pink-50 text-pink-700 border-pink-200' },
-  { label: 'グリーン�E�EINE�E�E, value: 'bg-emerald-50 text-emerald-700 border-emerald-200' },
-  { label: 'アンバ�E�E�紙チラシ・QR�E�E, value: 'bg-amber-50 text-amber-700 border-amber-200' },
-  { label: 'パ�Eプル�E�庁E��・LP�E�E, value: 'bg-purple-50 text-purple-700 border-purple-200' },
-  { label: 'ローズ�E�動画・YouTube�E�E, value: 'bg-rose-50 text-rose-700 border-rose-200' },
-  { label: 'シアン�E�メール・予紁E��E, value: 'bg-cyan-50 text-cyan-700 border-cyan-200' },
-  { label: 'ブルー�E�提携・外部�E�E, value: 'bg-blue-50 text-blue-700 border-blue-200' },
+  { label: 'エメラルド（記事・ブログ）', value: 'bg-emerald-50 text-emerald-700 border-emerald-200' },
+  { label: 'スカイ（X / Twitter）', value: 'bg-sky-50 text-sky-700 border-sky-200' },
+  { label: 'ピンク（Instagram）', value: 'bg-pink-50 text-pink-700 border-pink-200' },
+  { label: 'グリーン（LINE）', value: 'bg-emerald-50 text-emerald-700 border-emerald-200' },
+  { label: 'アンバー（紙チラシ・QR）', value: 'bg-amber-50 text-amber-700 border-amber-200' },
+  { label: 'パープル（広告・LP）', value: 'bg-purple-50 text-purple-700 border-purple-200' },
+  { label: 'ローズ（動画・YouTube）', value: 'bg-rose-50 text-rose-700 border-rose-200' },
+  { label: 'シアン（メール・予約）', value: 'bg-cyan-50 text-cyan-700 border-cyan-200' },
+  { label: 'ブルー（提携・外部）', value: 'bg-blue-50 text-blue-700 border-blue-200' },
 ];
 
 export const MarketingQuickLinksHub: React.FC = () => {
   const origin = typeof window !== 'undefined' ? window.location.origin : 'https://mstos.app';
 
-  // 初期チE��ォルトリンク定義�E�Eercel公式HP・診断・個別相諁E�E作戦会議を�E頭に配置�E�E  const defaultLinks: OfficialLinkItem[] = useMemo(() => [
+  // 初期デフォルトリンク定義（Vercel公式HP・診断・個別相談・作戦会議を先頭に配置）
+  const defaultLinks: OfficialLinkItem[] = useMemo(() => [
     {
       id: 'diagnosis',
-      title: '3刁E��料�Eトルネック診断',
-      description: '公式HP上�E自動診断フォーム�E�経営・業務�E急所と改喁E�E方箋を特定！E,
+      title: '3分無料ボトルネック診断',
+      description: '公式HP上の自動診断フォーム（経営・業務の急所と改善処方箋を特定）',
       url: OFFICIAL_VERCEL_URLS.diagnosis,
-      badge: '高�E紁E��',
+      badge: '高成約率',
       badgeColor: 'bg-purple-50 text-purple-700 border-purple-200',
       iconName: 'sparkles',
     },
     {
       id: 'care_consult',
-      title: '介護保険外サービス開業・個別相諁E,
-      description: '介護保険外開業パッケージ専用LP・お申し込みペ�Eジ',
+      title: '介護保険外サービス開業・個別相談',
+      description: '介護保険外開業パッケージ専用LP・お申し込みページ',
       url: OFFICIAL_VERCEL_URLS.care_consult,
-      badge: '高額パチE��ージ直絁E,
+      badge: '高額パッケージ直結',
       badgeColor: 'bg-emerald-50 text-emerald-700 border-emerald-200',
       iconName: 'file-text',
     },
     {
       id: 'booking',
-      title: '30刁E��料作戦会議�E�面諁E��程予紁E��E,
-      description: '対面営業めE��諁E��に案�Eするオンライン面諁E��レンダー',
+      title: '30分無料作戦会議（面談日程予約）',
+      description: '対面営業や相談後に案内するオンライン面談カレンダー',
       url: 'https://timerex.net/s/mstcorp/c3dd3eea',
-      badge: '啁E��E��衁E,
+      badge: '商談直行',
       badgeColor: 'bg-cyan-50 text-cyan-700 border-cyan-200',
       iconName: 'calendar',
     },
     {
       id: 'material_download',
-      title: '経営改喁E��務ガイチE賁E��請汁E,
-      description: '公式HPの賁E��ダウンロード�E会社概要請求�Eージ',
+      title: '経営改善実務ガイド 資料請求',
+      description: '公式HPの資料ダウンロード・会社概要請求ページ',
       url: OFFICIAL_VERCEL_URLS.material_download,
-      badge: '賁E��請汁E,
+      badge: '資料請求',
       badgeColor: 'bg-amber-50 text-amber-700 border-amber-200',
       iconName: 'file-text',
     },
     {
       id: 'line_add',
       title: '公式LINE 友だち追加リンク',
-      description: 'LINE公式アカウント友だち追加�E�※流�E允E��測不可�E�E,
+      description: 'LINE公式アカウント友だち追加（※流入元計測不可）',
       url: 'https://line.me/R/ti/p/@mst_management',
       badge: '友だち追加',
       badgeColor: 'bg-emerald-50 text-emerald-700 border-emerald-200',
@@ -192,8 +193,8 @@ export const MarketingQuickLinksHub: React.FC = () => {
     },
     {
       id: 'media_top',
-      title: '自社オウンドメチE��ア / コーポレーチEP',
-      description: '会社概要�E専門コラム・チE��タル啁E��の本拠地',
+      title: '自社オウンドメディア / コーポレートHP',
+      description: '会社概要・専門コラム・デジタル商品の本拠地',
       url: OFFICIAL_VERCEL_URLS.media_top,
       badge: 'HP直接',
       badgeColor: 'bg-purple-50 text-purple-700 border-purple-200',
@@ -209,7 +210,8 @@ export const MarketingQuickLinksHub: React.FC = () => {
 
   const [copiedKey, setCopiedKey] = useState<string | null>(null);
   
-  // 施策�E企画名（任意設定、�E期�E折りたたみ�E�E  const [campaignName, setCampaignName] = useState<string>('');
+  // 施策・企画名（任意設定、初期は折りたたみ）
+  const [campaignName, setCampaignName] = useState<string>('');
   const [showCampaignOption, setShowCampaignOption] = useState<boolean>(false);
   const [showMediaManagement, setShowMediaManagement] = useState<boolean>(false);
   const [showUtmGuide, setShowUtmGuide] = useState<boolean>(false);
@@ -218,7 +220,8 @@ export const MarketingQuickLinksHub: React.FC = () => {
   const [feedbackMessage, setFeedbackMessage] = useState<string | null>(null);
   const [selectedMatrixLinkId, setSelectedMatrixLinkId] = useState<string>('diagnosis');
 
-  // 1. 公式リンク編雁E��モーダル状慁E  const [isEditModalOpen, setIsEditModalOpen] = useState(false);
+  // 1. 公式リンク編集用モーダル状態
+  const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const [editingItem, setEditingItem] = useState<OfficialLinkItem | null>(null);
   const [editTitle, setEditTitle] = useState('');
   const [editUrl, setEditUrl] = useState('');
@@ -228,7 +231,8 @@ export const MarketingQuickLinksHub: React.FC = () => {
   const [editIconName, setEditIconName] = useState<IconKey>('link');
   const [editError, setEditError] = useState('');
 
-  // 2. 媒体別設定編雁E��モーダル状態（媒体名、説明、utm_source、utm_medium、バチE��の編雁E�E新規追加�E�E  const [isMediaModalOpen, setIsMediaModalOpen] = useState(false);
+  // 2. 媒体別設定編集用モーダル状態（媒体名、説明、utm_source、utm_medium、バッジの編集・新規追加）
+  const [isMediaModalOpen, setIsMediaModalOpen] = useState(false);
   const [editingMedia, setEditingMedia] = useState<MediumPreset | null>(null);
   const [mediaFormName, setMediaFormName] = useState('');
   const [mediaFormDescription, setMediaFormDescription] = useState('');
@@ -238,7 +242,8 @@ export const MarketingQuickLinksHub: React.FC = () => {
   const [mediaFormBadgeColor, setMediaFormBadgeColor] = useState(BADGE_COLOR_OPTIONS[0].value);
   const [mediaFormError, setMediaFormError] = useState('');
 
-  // 3. 削除・リセチE��確認モーダル状態！Eindow.confirmの代替でiframe安忁E��作！E  const [confirmDialog, setConfirmDialog] = useState<{
+  // 3. 削除・リセット確認モーダル状態（window.confirmの代替でiframe安心動作）
+  const [confirmDialog, setConfirmDialog] = useState<{
     isOpen: boolean;
     title: string;
     message: string;
@@ -250,7 +255,8 @@ export const MarketingQuickLinksHub: React.FC = () => {
     onConfirm: () => {},
   });
 
-  // チE�Eタの初回読み込み�E�ローカルストレージ優先、Supabase同期�E�E  useEffect(() => {
+  // データの初回読み込み（ローカルストレージ優先、Supabase同期）
+  useEffect(() => {
     let isMounted = true;
 
     const loadData = async () => {
@@ -263,17 +269,19 @@ export const MarketingQuickLinksHub: React.FC = () => {
         }
       }
 
-      // 媒体�EリセチE��の読み込み�E�新5媒体への自動�Eイグレーション対応！E      const localStoredMedia = loadStoredTrackingMedia<MediumPreset>(TRACKING_MEDIA_PRESETS);
+      // 媒体プリセットの読み込み（新5媒体への自動マイグレーション対応）
+      const localStoredMedia = loadStoredTrackingMedia<MediumPreset>(TRACKING_MEDIA_PRESETS);
       if (localStoredMedia && localStoredMedia.length > 0 && isMounted) {
         setMediaList(localStoredMedia);
       }
 
-      // Supabaseからリモート同朁E      try {
+      // Supabaseからリモート同期
+      try {
         const supabase = getSupabase();
         if (supabase) {
           const { data: auth } = await supabase.auth.getUser();
           if (auth.user) {
-            // リンク設定�E読み込み
+            // リンク設定の読み込み
             const { data: linkData } = await supabase
               .from('mst_ai_acquisition_records')
               .select('payload')
@@ -291,7 +299,7 @@ export const MarketingQuickLinksHub: React.FC = () => {
                   user_id: auth.user.id,
                   id: 'mst_official_hub_links',
                   record_type: 'funnel_hub_config',
-                  title: '雁E��動線�E式URLハブ設宁E,
+                  title: '集客動線公式URLハブ設定',
                   payload: { links: migratedLinks },
                   updated_at: new Date().toISOString(),
                 }, { onConflict: 'user_id,id' });
@@ -301,7 +309,8 @@ export const MarketingQuickLinksHub: React.FC = () => {
               }
             }
 
-            // 媒体設定�E読み込み�E�リモート�E旧設定も新5媒体＋カスタムに自動�Eイグレーション�E�E            const { data: mediaData } = await supabase
+            // 媒体設定の読み込み（リモートの旧設定も新5媒体＋カスタムに自動マイグレーション）
+            const { data: mediaData } = await supabase
               .from('mst_ai_acquisition_records')
               .select('payload')
               .eq('user_id', auth.user.id)
@@ -328,7 +337,7 @@ export const MarketingQuickLinksHub: React.FC = () => {
     };
   }, [defaultLinks]);
 
-  // 公式リンクの保存�Eルパ�E
+  // 公式リンクの保存ヘルパー
   const persistLinks = async (updatedLinks: OfficialLinkItem[]) => {
     setLinks(updatedLinks);
     saveStoredOfficialLinks(updatedLinks);
@@ -342,7 +351,7 @@ export const MarketingQuickLinksHub: React.FC = () => {
             user_id: auth.user.id,
             id: 'mst_official_hub_links',
             record_type: 'funnel_hub_config',
-            title: '雁E��動線�E式URLハブ設宁E,
+            title: '集客動線公式URLハブ設定',
             payload: { links: updatedLinks },
             updated_at: new Date().toISOString(),
           }, { onConflict: 'user_id,id' });
@@ -353,7 +362,7 @@ export const MarketingQuickLinksHub: React.FC = () => {
     }
   };
 
-  // 媒体設定�E保存�Eルパ�E
+  // 媒体設定の保存ヘルパー
   const persistMedia = async (updatedMedia: MediumPreset[]) => {
     setMediaList(updatedMedia);
     saveStoredTrackingMedia(updatedMedia);
@@ -367,7 +376,7 @@ export const MarketingQuickLinksHub: React.FC = () => {
             user_id: auth.user.id,
             id: 'mst_official_hub_media',
             record_type: 'funnel_hub_config',
-            title: '雁E��動線媒体別設宁E,
+            title: '集客動線媒体別設定',
             payload: { media: updatedMedia },
             updated_at: new Date().toISOString(),
           }, { onConflict: 'user_id,id' });
@@ -384,7 +393,8 @@ export const MarketingQuickLinksHub: React.FC = () => {
     setTimeout(() => setCopiedKey(null), 2000);
   };
 
-  // 高機�EUTMリンクビルダー�E�キャンペ�Eン名�E持E��がある時�Eみ付与！E  const buildUtmUrl = (baseUrl: string, source: string, campaign?: string, mediumParam?: string) => {
+  // 高機能UTMリンクビルダー（キャンペーン名は指定がある時のみ付与）
+  const buildUtmUrl = (baseUrl: string, source: string, campaign?: string, mediumParam?: string) => {
     if (!baseUrl) return '';
     const trimmed = baseUrl.trim();
     let fullUrl = trimmed;
@@ -405,17 +415,19 @@ export const MarketingQuickLinksHub: React.FC = () => {
     return `${fullUrl}${separator}${params.toString()}`;
   };
 
-  // マトリクス全媒体�E一括コピ�E処琁E  const handleCopyAllMatrixUrls = (link: OfficialLinkItem) => {
+  // マトリクス全媒体の一括コピー処理
+  const handleCopyAllMatrixUrls = (link: OfficialLinkItem) => {
     const lines = mediaList.map((preset) => {
       const url = buildUtmUrl(link.url, preset.utmSource, campaignName, preset.utmMedium);
-      return `、E{preset.name}】！E{preset.description}�E�\n${url}`;
+      return `【${preset.name}】（${preset.description}）\n${url}`;
     });
     const header = `▼ ${link.title}\n公式URL: ${link.url}\n${campaignName.trim() ? `企画タグ: ${campaignName.trim()}\n` : ''}----------------------------------------\n`;
     const fullText = header + lines.join('\n\n');
     copyToClipboard(fullText, 'matrix_all');
   };
 
-  // 公式リンク編雁E��ーダルを開ぁE  const handleOpenEdit = (item: OfficialLinkItem) => {
+  // 公式リンク編集モーダルを開く
+  const handleOpenEdit = (item: OfficialLinkItem) => {
     setEditingItem(item);
     setEditTitle(item.title);
     setEditUrl(item.url);
@@ -427,29 +439,31 @@ export const MarketingQuickLinksHub: React.FC = () => {
     setIsEditModalOpen(true);
   };
 
-  // 公式リンク新規追加モーダルを開ぁE  const handleOpenCreate = () => {
+  // 公式リンク新規追加モーダルを開く
+  const handleOpenCreate = () => {
     setEditingItem(null);
     setEditTitle('');
     setEditUrl('');
     setEditDescription('');
-    setEditBadge('公式導緁E);
+    setEditBadge('公式導線');
     setEditBadgeColor(BADGE_COLOR_OPTIONS[0].value);
     setEditIconName('link');
     setEditError('');
     setIsEditModalOpen(true);
   };
 
-  // 公式リンクの保孁E  const handleSaveModal = async (e: React.FormEvent) => {
+  // 公式リンクの保存
+  const handleSaveModal = async (e: React.FormEvent) => {
     e.preventDefault();
     const trimmedUrl = editUrl.trim();
     const trimmedTitle = editTitle.trim();
 
     if (!trimmedTitle) {
-      setEditError('リンク名（タイトル�E�を入力してください、E);
+      setEditError('リンク名（タイトル）を入力してください。');
       return;
     }
     if (!trimmedUrl) {
-      setEditError('URLを�E力してください、E);
+      setEditError('URLを入力してください。');
       return;
     }
 
@@ -463,7 +477,7 @@ export const MarketingQuickLinksHub: React.FC = () => {
             title: trimmedTitle,
             url: trimmedUrl,
             description: editDescription.trim(),
-            badge: editBadge.trim() || '公式導緁E,
+            badge: editBadge.trim() || '公式導線',
             badgeColor: editBadgeColor,
             iconName: editIconName,
             updatedAt: new Date().toISOString(),
@@ -471,21 +485,21 @@ export const MarketingQuickLinksHub: React.FC = () => {
         }
         return link;
       });
-      setFeedbackMessage(`、E{trimmedTitle}」�EURLを更新しました。下�E流�E追跡リンクにも即時反映されました。`);
+      setFeedbackMessage(`「${trimmedTitle}」のURLを更新しました。下の流入追跡リンクにも即時反映されました。`);
     } else {
       const newItem: OfficialLinkItem = {
         id: `custom_link_${Date.now()}`,
         title: trimmedTitle,
         url: trimmedUrl,
         description: editDescription.trim(),
-        badge: editBadge.trim() || '新規導緁E,
+        badge: editBadge.trim() || '新規導線',
         badgeColor: editBadgeColor,
         iconName: editIconName,
         isCustom: true,
         updatedAt: new Date().toISOString(),
       };
       updatedLinks = [...links, newItem];
-      setFeedbackMessage(`新しい公式リンク、E{trimmedTitle}」を追加しました。`);
+      setFeedbackMessage(`新しい公式リンク「${trimmedTitle}」を追加しました。`);
     }
 
     await persistLinks(updatedLinks);
@@ -493,14 +507,14 @@ export const MarketingQuickLinksHub: React.FC = () => {
     setTimeout(() => setFeedbackMessage(null), 4000);
   };
 
-  // 公式リンクのリセチE��・削除
+  // 公式リンクのリセット・削除
   const handleResetSingleLink = async (linkId: string) => {
     const original = defaultLinks.find((d) => d.id === linkId);
     if (!original) return;
 
     const updated = links.map((l) => (l.id === linkId ? { ...original } : l));
     await persistLinks(updated);
-    setFeedbackMessage(`、E{original.title}」を初期設定に戻しました。`);
+    setFeedbackMessage(`「${original.title}」を初期設定に戻しました。`);
     setIsEditModalOpen(false);
     setTimeout(() => setFeedbackMessage(null), 4000);
   };
@@ -508,13 +522,13 @@ export const MarketingQuickLinksHub: React.FC = () => {
   const handleResetAllToDefaults = () => {
     setConfirmDialog({
       isOpen: true,
-      title: '公式リンクの初期匁E,
-      message: 'すべての公式リンクのURLと設定を初期状態に戻しますか�E�（�E作�EカスタムURLはリセチE��されます！E,
+      title: '公式リンクの初期化',
+      message: 'すべての公式リンクのURLと設定を初期状態に戻しますか？（自作のカスタムURLはリセットされます）',
       onConfirm: async () => {
         clearStoredOfficialLinks();
         await persistLinks(defaultLinks);
         setConfirmDialog((prev) => ({ ...prev, isOpen: false }));
-        setFeedbackMessage('すべての公式リンク設定を初期状態にリセチE��しました、E);
+        setFeedbackMessage('すべての公式リンク設定を初期状態にリセットしました。');
         setTimeout(() => setFeedbackMessage(null), 4000);
       },
     });
@@ -524,18 +538,18 @@ export const MarketingQuickLinksHub: React.FC = () => {
     setConfirmDialog({
       isOpen: true,
       title: 'リンクの削除',
-      message: `公式リンク、E{title}」を削除しますか�E�`,
+      message: `公式リンク「${title}」を削除しますか？`,
       onConfirm: async () => {
         const updated = links.filter((l) => l.id !== linkId);
         await persistLinks(updated);
         setConfirmDialog((prev) => ({ ...prev, isOpen: false }));
-        setFeedbackMessage(`、E{title}」を削除しました。`);
+        setFeedbackMessage(`「${title}」を削除しました。`);
         setTimeout(() => setFeedbackMessage(null), 4000);
       },
     });
   };
 
-  // ── 媒体編雁E�E新規追加のハンドラー ──
+  // ── 媒体編集・新規追加のハンドラー ──
   const handleOpenEditMedia = (preset: MediumPreset) => {
     setEditingMedia(preset);
     setMediaFormName(preset.name);
@@ -554,7 +568,7 @@ export const MarketingQuickLinksHub: React.FC = () => {
     setMediaFormDescription('');
     setMediaFormSource('');
     setMediaFormMedium('social');
-    setMediaFormBadge('媒佁E);
+    setMediaFormBadge('媒体');
     setMediaFormBadgeColor(BADGE_COLOR_OPTIONS[1].value);
     setMediaFormError('');
     setIsMediaModalOpen(true);
@@ -566,11 +580,11 @@ export const MarketingQuickLinksHub: React.FC = () => {
     const trimmedSource = mediaFormSource.trim().toLowerCase().replace(/[^a-z0-9_-]/g, '_');
 
     if (!trimmedName) {
-      setMediaFormError('媒体名�E�表示名）を入力してください、E);
+      setMediaFormError('媒体名（表示名）を入力してください。');
       return;
     }
     if (!trimmedSource) {
-      setMediaFormError('流�E允E��グ�E�Etm_source�E�を半角英数字で入力してください、E);
+      setMediaFormError('流入元タグ（utm_source）を半角英数字で入力してください。');
       return;
     }
 
@@ -584,13 +598,13 @@ export const MarketingQuickLinksHub: React.FC = () => {
             description: mediaFormDescription.trim(),
             utmSource: trimmedSource,
             utmMedium: mediaFormMedium.trim() || 'social',
-            badge: mediaFormBadge.trim() || '媒佁E,
+            badge: mediaFormBadge.trim() || '媒体',
             badgeColor: mediaFormBadgeColor,
           };
         }
         return m;
       });
-      setFeedbackMessage(`媒体、E{trimmedName}」�E設定を更新しました。追跡リンクも即座に再生成されます。`);
+      setFeedbackMessage(`媒体「${trimmedName}」の設定を更新しました。追跡リンクも即座に再生成されます。`);
     } else {
       const newMedia: MediumPreset = {
         id: `custom_media_${Date.now()}`,
@@ -598,13 +612,13 @@ export const MarketingQuickLinksHub: React.FC = () => {
         description: mediaFormDescription.trim(),
         utmSource: trimmedSource,
         utmMedium: mediaFormMedium.trim() || 'social',
-        badge: mediaFormBadge.trim() || '媒佁E,
+        badge: mediaFormBadge.trim() || '媒体',
         badgeColor: mediaFormBadgeColor,
         category: 'Custom',
         isCustom: true,
       };
       updated = [...mediaList, newMedia];
-      setFeedbackMessage(`新規媒体、E{trimmedName}」を追加しました。`);
+      setFeedbackMessage(`新規媒体「${trimmedName}」を追加しました。`);
     }
 
     await persistMedia(updated);
@@ -615,13 +629,13 @@ export const MarketingQuickLinksHub: React.FC = () => {
   const handleDeleteMedia = (mediaId: string, mediaName: string) => {
     setConfirmDialog({
       isOpen: true,
-      title: '媒体�E削除',
-      message: `媒体、E{mediaName}」を一覧から削除しますか�E�`,
+      title: '媒体の削除',
+      message: `媒体「${mediaName}」を一覧から削除しますか？`,
       onConfirm: async () => {
         const updated = mediaList.filter((m) => m.id !== mediaId);
         await persistMedia(updated);
         setConfirmDialog((prev) => ({ ...prev, isOpen: false }));
-        setFeedbackMessage(`、E{mediaName}」を削除しました。`);
+        setFeedbackMessage(`「${mediaName}」を削除しました。`);
         setTimeout(() => setFeedbackMessage(null), 4000);
       },
     });
@@ -630,19 +644,20 @@ export const MarketingQuickLinksHub: React.FC = () => {
   const handleResetMediaToDefaults = () => {
     setConfirmDialog({
       isOpen: true,
-      title: '媒体一覧の初期匁E,
-      message: '媒体一覧を�E期設定！Eote、X、Instagram、LINE、チラシQRなど基本10媒体）に戻しますか�E�E,
+      title: '媒体一覧の初期化',
+      message: '媒体一覧を初期設定（note、X、Instagram、LINE、チラシQRなど基本10媒体）に戻しますか？',
       onConfirm: async () => {
         clearStoredTrackingMedia();
         await persistMedia(TRACKING_MEDIA_PRESETS);
         setConfirmDialog((prev) => ({ ...prev, isOpen: false }));
-        setFeedbackMessage('媒体設定を初期状態にリセチE��しました、E);
+        setFeedbackMessage('媒体設定を初期状態にリセットしました。');
         setTimeout(() => setFeedbackMessage(null), 4000);
       },
     });
   };
 
-  // チE��ォルト値から変更されてぁE��か判宁E  const isCustomized = (item: OfficialLinkItem) => {
+  // デフォルト値から変更されているか判定
+  const isCustomized = (item: OfficialLinkItem) => {
     const original = defaultLinks.find((d) => d.id === item.id);
     if (!original) return true;
     return original.url !== item.url || original.title !== item.title;
@@ -652,7 +667,7 @@ export const MarketingQuickLinksHub: React.FC = () => {
 
   return (
     <div className="space-y-6">
-      {/* 案�Eト�EスチE/ フィードバチE��バナー */}
+      {/* 案内トースト / フィードバックバナー */}
       {feedbackMessage && (
         <div className="flex items-center gap-2.5 rounded-xl border border-emerald-500/40 bg-emerald-950/60 p-3.5 text-sm text-emerald-200 shadow-lg animate-in fade-in duration-200">
           <CheckCircle2 className="h-5 w-5 text-emerald-400 shrink-0" />
@@ -660,15 +675,17 @@ export const MarketingQuickLinksHub: React.FC = () => {
         </div>
       )}
 
-      {/* ── 1. 自社公式リンク一覧�E�ERLハブ�E�E── */}
+      {/* ── 1. 自社公式リンク一覧（URLハブ） ── */}
       <section className="space-y-3">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div>
             <h2 className="text-base font-bold text-slate-900 flex items-center gap-2">
               <Link2 className="h-5 w-5 text-purple-700" />
-              自社公式リンク一覧�E�ERLハブ�E�E            </h2>
+              自社公式リンク一覧（URLハブ）
+            </h2>
             <p className="mt-0.5 text-xs text-slate-500">
-              診断フォーム・個別相諁E�ELINE・予紁E��レンダー・HPなどのマスターURLです。編雁E��ると、下�E媒体別リンクも�E動連動します、E            </p>
+              診断フォーム・個別相談・LINE・予約カレンダー・HPなどのマスターURLです。編集すると、下の媒体別リンクも自動連動します。
+            </p>
           </div>
           <div className="flex items-center gap-2">
             <button
@@ -683,10 +700,11 @@ export const MarketingQuickLinksHub: React.FC = () => {
               type="button"
               onClick={handleResetAllToDefaults}
               className="inline-flex items-center gap-1 rounded-lg border border-slate-200 bg-white hover:bg-slate-50 px-2.5 py-1.5 text-xs text-slate-600 hover:text-slate-900 transition shadow-xs"
-              title="初期設定に戻ぁE
+              title="初期設定に戻す"
             >
               <RotateCcw className="h-3.5 w-3.5" />
-              初期値に戻ぁE            </button>
+              初期値に戻す
+            </button>
           </div>
         </div>
 
@@ -736,16 +754,17 @@ export const MarketingQuickLinksHub: React.FC = () => {
                       target="_blank"
                       rel="noopener noreferrer"
                       className="text-xs text-slate-500 hover:text-slate-800 inline-flex items-center gap-1 font-medium"
-                      title="実際のリンクを開ぁE��確誁E
+                      title="実際のリンクを開いて確認"
                     >
-                      確誁E<ExternalLink className="h-3 w-3" />
+                      確認 <ExternalLink className="h-3 w-3" />
                     </a>
                     <button
                       type="button"
                       onClick={() => handleOpenEdit(item)}
                       className="text-xs text-purple-700 hover:text-purple-800 inline-flex items-center gap-1 font-semibold hover:underline"
                     >
-                      <Pencil className="h-3 w-3" /> 編雁E                    </button>
+                      <Pencil className="h-3 w-3" /> 編集
+                    </button>
                     {item.isCustom && (
                       <button
                         type="button"
@@ -769,10 +788,11 @@ export const MarketingQuickLinksHub: React.FC = () => {
                   >
                     {isCopied ? (
                       <>
-                        <Check className="h-3.5 w-3.5" /> コピ�E完亁E                      </>
+                        <Check className="h-3.5 w-3.5" /> コピー完了
+                      </>
                     ) : (
                       <>
-                        <Copy className="h-3.5 w-3.5" /> コピ�E
+                        <Copy className="h-3.5 w-3.5" /> コピー
                       </>
                     )}
                   </button>
@@ -781,7 +801,7 @@ export const MarketingQuickLinksHub: React.FC = () => {
             );
           })}
 
-          {/* 新規�E式URL追加カーチE*/}
+          {/* 新規公式URL追加カード */}
           <button
             type="button"
             onClick={handleOpenCreate}
@@ -790,37 +810,40 @@ export const MarketingQuickLinksHub: React.FC = () => {
             <div className="h-8 w-8 rounded-full bg-purple-100 flex items-center justify-center text-purple-700 group-hover:bg-purple-700 group-hover:text-white transition">
               <Plus className="h-4 w-4" />
             </div>
-            <span className="text-xs font-bold text-slate-700 group-hover:text-purple-700">�E�E新規リンクを追加</span>
-            <span className="text-[11px] text-slate-500">外部LPめE��フォームを登録</span>
+            <span className="text-xs font-bold text-slate-700 group-hover:text-purple-700">＋ 新規リンクを追加</span>
+            <span className="text-[11px] text-slate-500">外部LPや別フォームを登録</span>
           </button>
         </div>
       </section>
 
-      {/* ── 2. 媒体別 流�E追跡リンク発行！EスチE��プ操佁E�E�E5媒体�E期表示�E�E── */}
+      {/* ── 2. 媒体別 流入追跡リンク発行（2ステップ操作 ＆ 5媒体初期表示） ── */}
       <section className="rounded-2xl border border-slate-200 bg-white p-5 sm:p-6 space-y-5 shadow-xs">
-        {/* 注意喚起バナー�E�E行表示�E�E*/}
+        {/* 注意喚起バナー（1行表示） */}
         <div className="flex items-center gap-2 rounded-xl border border-amber-200 bg-amber-50/90 px-4 py-3 text-xs text-amber-900 shadow-2xs">
           <AlertCircle className="h-4 w-4 shrink-0 text-amber-600" />
           <span className="font-medium">
-            友だち追加�E�Eine.me�E��EURLは流�E允E��計測できません。診断フォームを�E口にすると流�E允E��残ります、E          </span>
+            友だち追加（line.me）のURLは流入元を計測できません。診断フォームを入口にすると流入元が残ります。
+          </span>
         </div>
 
-        {/* セクション見�EぁE*/}
+        {/* セクション見出し */}
         <div>
           <h3 className="text-base font-bold text-slate-900 flex items-center gap-2">
             <Share2 className="h-5 w-5 text-purple-700" />
-            媒体別 流�E追跡リンク発衁E          </h3>
+            媒体別 流入追跡リンク発行
+          </h3>
           <p className="mt-0.5 text-xs text-slate-500">
-            ペ�Eジを選んで媒体カード�E「コピ�E」を押すだけで、各流�E允E��自動計測する追跡リンクを取得できます、E          </p>
+            ページを選んで媒体カードの「コピー」を押すだけで、各流入元を自動計測する追跡リンクを取得できます。
+          </p>
         </div>
 
-        {/* 【スチE��チE1】リンクを作るペ�Eジを選ぶ */}
+        {/* 【ステップ 1】リンクを作るページを選ぶ */}
         <div className="space-y-2">
           <div className="flex items-center gap-2">
             <span className="inline-flex h-5 w-5 items-center justify-center rounded-full bg-purple-700 text-[11px] font-bold text-white shadow-2xs">
               1
             </span>
-            <span className="text-xs font-bold text-slate-800">リンクを作るペ�Eジを選ぶ:</span>
+            <span className="text-xs font-bold text-slate-800">リンクを作るページを選ぶ:</span>
           </div>
           <div className="flex flex-wrap gap-2">
             {links.map((link) => {
@@ -843,21 +866,21 @@ export const MarketingQuickLinksHub: React.FC = () => {
           </div>
         </div>
 
-        {/* 【スチE��チE2】媒体カード�E「コピ�E」を押ぁE*/}
+        {/* 【ステップ 2】媒体カードの「コピー」を押す */}
         <div className="space-y-3 pt-1">
           <div className="flex flex-wrap items-center justify-between gap-2">
             <div className="flex items-center gap-2">
               <span className="inline-flex h-5 w-5 items-center justify-center rounded-full bg-purple-700 text-[11px] font-bold text-white shadow-2xs">
                 2
               </span>
-              <span className="text-xs font-bold text-slate-800">媒体カード�E「コピ�E」を押ぁE</span>
+              <span className="text-xs font-bold text-slate-800">媒体カードの「コピー」を押す:</span>
             </div>
             <span className="text-[11px] text-slate-500">
               発行対象: <strong className="text-purple-700">{activeMatrixLink?.title}</strong>
             </span>
           </div>
 
-          {/* 媒体カード一覧�E��E朁E媒体�E吁E��ード�E媒体名、用途�E一言、コピ�Eボタンのみ�E�E*/}
+          {/* 媒体カード一覧（初期5媒体・各カードは媒体名、用途の一言、コピーボタンのみ） */}
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
             {mediaList.map((preset) => {
               const utmUrl = buildUtmUrl(activeMatrixLink.url, preset.utmSource, campaignName, preset.utmMedium);
@@ -876,12 +899,13 @@ export const MarketingQuickLinksHub: React.FC = () => {
                       </span>
                       {preset.isCustom && (
                         <span className="text-[9px] px-1 py-0.5 rounded bg-purple-50 text-purple-700 border border-purple-200 font-medium">
-                          追加媒佁E                        </span>
+                          追加媒体
+                        </span>
                       )}
                     </div>
                     <h4 className="font-bold text-sm text-slate-900">{preset.name}</h4>
                     <p className="mt-1 text-xs text-slate-500 leading-snug line-clamp-1">
-                      {preset.description || '用途メモなぁE}
+                      {preset.description || '用途メモなし'}
                     </p>
                   </div>
 
@@ -892,7 +916,7 @@ export const MarketingQuickLinksHub: React.FC = () => {
                         onClick={() => setExpandedCardId(isExpanded ? null : preset.id)}
                         className="text-[11px] text-slate-500 hover:text-purple-700 inline-flex items-center gap-0.5 cursor-pointer font-medium"
                       >
-                        <span>{isExpanded ? 'URLを隠ぁE : 'URL全斁E��確誁E}</span>
+                        <span>{isExpanded ? 'URLを隠す' : 'URL全文を確認'}</span>
                         {isExpanded ? <ChevronUp className="h-3 w-3" /> : <ChevronDown className="h-3 w-3" />}
                       </button>
 
@@ -907,10 +931,11 @@ export const MarketingQuickLinksHub: React.FC = () => {
                       >
                         {isCopied ? (
                           <>
-                            <Check className="h-3.5 w-3.5" /> コピ�E完亁E                          </>
+                            <Check className="h-3.5 w-3.5" /> コピー完了
+                          </>
                         ) : (
                           <>
-                            <Copy className="h-3.5 w-3.5" /> コピ�E
+                            <Copy className="h-3.5 w-3.5" /> コピー
                           </>
                         )}
                       </button>
@@ -926,7 +951,7 @@ export const MarketingQuickLinksHub: React.FC = () => {
                             rel="noopener noreferrer"
                             className="inline-flex items-center gap-1 text-[10px] text-slate-500 hover:text-slate-800 font-sans"
                           >
-                            ブラウザでチE��ト表示 <ExternalLink className="h-3 w-3" />
+                            ブラウザでテスト表示 <ExternalLink className="h-3 w-3" />
                           </a>
                         </div>
                       </div>
@@ -940,7 +965,7 @@ export const MarketingQuickLinksHub: React.FC = () => {
 
         {/* ── 初期状態では折りたたむ詳細設定群 ── */}
         <div className="space-y-2 pt-3 border-t border-slate-100">
-          {/* 1. 企画タグ�E�Etm_campaign�E�E*/}
+          {/* 1. 企画タグ（utm_campaign） */}
           <div className="rounded-xl border border-slate-200 bg-slate-50/70 p-3">
             <div className="flex items-center justify-between">
               <button
@@ -949,7 +974,7 @@ export const MarketingQuickLinksHub: React.FC = () => {
                 className="inline-flex items-center gap-1.5 text-xs text-slate-700 hover:text-purple-700 transition font-medium cursor-pointer"
               >
                 <Tag className="h-3.5 w-3.5 text-slate-500" />
-                <span>企画タグ�E�Etm_campaign�E�を設定する（任意！E/span>
+                <span>企画タグ（utm_campaign）を設定する（任意）</span>
                 {campaignName.trim() && (
                   <span className="ml-1 text-[10px] font-mono bg-purple-100 text-purple-800 border border-purple-200 px-1.5 py-0.5 rounded">
                     適用中: {campaignName.trim()}
@@ -971,15 +996,15 @@ export const MarketingQuickLinksHub: React.FC = () => {
             {showCampaignOption && (
               <div className="mt-3 p-3 rounded-lg border border-slate-200 bg-white space-y-2 animate-in fade-in duration-150">
                 <div className="flex items-center justify-between">
-                  <span className="text-[11px] text-slate-700 font-semibold">企画タグ�E�Etm_campaign�E�E</span>
-                  <span className="text-[10px] text-slate-500">空欁E�E場合�EスチE��リした基本URLが発行されまぁE/span>
+                  <span className="text-[11px] text-slate-700 font-semibold">企画タグ（utm_campaign）:</span>
+                  <span className="text-[10px] text-slate-500">空欄の場合はスッキリした基本URLが発行されます</span>
                 </div>
                 <div className="flex items-center gap-2">
                   <input
                     type="text"
                     value={campaignName}
                     onChange={(e) => setCampaignName(e.target.value)}
-                    placeholder="侁E spring2026, opening_fair �E�空欁E��OK�E�E
+                    placeholder="例: spring2026, opening_fair （空欄でOK）"
                     className="flex-1 rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-xs text-slate-800 font-mono focus:border-purple-500 focus:ring-1 focus:ring-purple-500 focus:outline-none"
                   />
                   {campaignName && (
@@ -996,7 +1021,7 @@ export const MarketingQuickLinksHub: React.FC = () => {
             )}
           </div>
 
-          {/* 2. 媒体�E追加・編雁E�E削除、「�E期媒体に戻す、E*/}
+          {/* 2. 媒体の追加・編集・削除、「初期媒体に戻す」 */}
           <div className="rounded-xl border border-slate-200 bg-slate-50/70 p-3">
             <button
               type="button"
@@ -1005,7 +1030,7 @@ export const MarketingQuickLinksHub: React.FC = () => {
             >
               <div className="flex items-center gap-1.5">
                 <SlidersHorizontal className="h-3.5 w-3.5 text-slate-500" />
-                <span>媒体�Eカスタマイズ�E�追加・編雁E�E削除・初期値リセチE���E�E/span>
+                <span>媒体のカスタマイズ（追加・編集・削除・初期値リセット）</span>
               </div>
               {showMediaManagement ? <ChevronUp className="h-3.5 w-3.5" /> : <ChevronDown className="h-3.5 w-3.5" />}
             </button>
@@ -1014,7 +1039,8 @@ export const MarketingQuickLinksHub: React.FC = () => {
               <div className="mt-3 p-3.5 rounded-lg border border-slate-200 bg-white space-y-3 animate-in fade-in duration-150">
                 <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-100 pb-2.5">
                   <span className="text-xs font-bold text-slate-800">
-                    登録済み媒体一覧�E��E {mediaList.length} 件�E�E                  </span>
+                    登録済み媒体一覧（全 {mediaList.length} 件）
+                  </span>
                   <div className="flex items-center gap-2">
                     <button
                       type="button"
@@ -1027,19 +1053,19 @@ export const MarketingQuickLinksHub: React.FC = () => {
                       type="button"
                       onClick={() => handleCopyAllMatrixUrls(activeMatrixLink)}
                       className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-semibold transition shadow-xs cursor-pointer"
-                      title="全媒体�EURLを改行区刁E��でまとめてコピ�E"
+                      title="全媒体のURLを改行区切りでまとめてコピー"
                     >
                       {copiedKey === 'matrix_all' ? <Check className="h-3.5 w-3.5" /> : <FileSpreadsheet className="h-3.5 w-3.5" />}
-                      <span>全媒体まとめてコピ�E</span>
+                      <span>全媒体まとめてコピー</span>
                     </button>
                     <button
                       type="button"
                       onClick={handleResetMediaToDefaults}
                       className="inline-flex items-center gap-1 text-xs text-slate-600 hover:text-slate-900 border border-slate-200 bg-white hover:bg-slate-50 px-2 py-1.5 rounded-lg transition shadow-xs cursor-pointer"
-                      title="基本5媒体にリセチE��"
+                      title="基本5媒体にリセット"
                     >
                       <RotateCcw className="h-3 w-3" />
-                      <span>初期媒体に戻ぁE/span>
+                      <span>初期媒体に戻す</span>
                     </button>
                   </div>
                 </div>
@@ -1062,7 +1088,7 @@ export const MarketingQuickLinksHub: React.FC = () => {
                           type="button"
                           onClick={() => handleOpenEditMedia(m)}
                           className="p-1 rounded text-slate-500 hover:text-purple-700 hover:bg-purple-50 transition cursor-pointer"
-                          title="編雁E
+                          title="編集"
                         >
                           <Pencil className="h-3.5 w-3.5" />
                         </button>
@@ -1082,7 +1108,7 @@ export const MarketingQuickLinksHub: React.FC = () => {
             )}
           </div>
 
-          {/* 3. 仕絁E��の解説 */}
+          {/* 3. 仕組みの解説 */}
           <div className="rounded-xl border border-slate-200 bg-slate-50/70 p-3">
             <button
               type="button"
@@ -1091,7 +1117,7 @@ export const MarketingQuickLinksHub: React.FC = () => {
             >
               <div className="flex items-center gap-1.5">
                 <HelpCircle className="h-3.5 w-3.5 text-slate-500" />
-                <span>仕絁E��と流�E計測の解説</span>
+                <span>仕組みと流入計測の解説</span>
               </div>
               {showUtmGuide ? <ChevronUp className="h-3.5 w-3.5" /> : <ChevronDown className="h-3.5 w-3.5" />}
             </button>
@@ -1100,23 +1126,26 @@ export const MarketingQuickLinksHub: React.FC = () => {
               <div className="mt-3 p-4 rounded-lg border border-purple-200 bg-purple-50/60 text-xs text-slate-700 space-y-3 animate-in fade-in duration-200">
                 <div className="flex items-center gap-2 text-purple-900 font-bold text-xs border-b border-purple-200 pb-2">
                   <Info className="h-4 w-4 shrink-0 text-purple-700" />
-                  <span>流�E追跡と自動タグ付与�E仕絁E��</span>
+                  <span>流入追跡と自動タグ付与の仕組み</span>
                 </div>
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-3 text-[11px] leading-relaxed">
                   <div className="rounded-lg bg-white p-3 border border-purple-100 shadow-xs">
                     <span className="font-bold text-slate-900 block mb-1">1. URL自動正規化</span>
                     <p className="text-slate-600">
-                      URL末尾の <code className="bg-slate-100 px-1 py-0.5 rounded text-purple-700 font-mono">?utm_source=sns</code> などを小文字英数字へ自動正規化。リードメモに「流�E: SNS」と明記されます、E                    </p>
+                      URL末尾の <code className="bg-slate-100 px-1 py-0.5 rounded text-purple-700 font-mono">?utm_source=sns</code> などを小文字英数字へ自動正規化。リードメモに「流入: SNS」と明記されます。
+                    </p>
                   </div>
                   <div className="rounded-lg bg-white p-3 border border-purple-100 shadow-xs">
-                    <span className="font-bold text-slate-900 block mb-1">2. LINEタグ自動付丁E/span>
+                    <span className="font-bold text-slate-900 block mb-1">2. LINEタグ自動付与</span>
                     <p className="text-slate-600">
-                      LINE連携済みの顧客がフォームを送信すると、「診断受検済み」と「流�E:SNS」タグが重褁E��く�E動で付与されます、E                    </p>
+                      LINE連携済みの顧客がフォームを送信すると、「診断受検済み」と「流入:SNS」タグが重複なく自動で付与されます。
+                    </p>
                   </div>
                   <div className="rounded-lg bg-white p-3 border border-purple-100 shadow-xs">
                     <span className="font-bold text-slate-900 block mb-1">3. 初期5媒体と拡張性</span>
                     <p className="text-slate-600">
-                      日常運用はHPブログ・SNS・LINE・メール・賁E��の5媒体に雁E��E��庁E��めE��部紹介などは「新規媒体を追加」からいつでも拡張できます、E                    </p>
+                      日常運用はHPブログ・SNS・LINE・メール・資料の5媒体に集約。広告や外部紹介などは「新規媒体を追加」からいつでも拡張できます。
+                    </p>
                   </div>
                 </div>
               </div>
@@ -1125,7 +1154,7 @@ export const MarketingQuickLinksHub: React.FC = () => {
         </div>
       </section>
 
-      {/* ── 1. 公式リンク 編雁E/ 追加モーダル ── */}
+      {/* ── 1. 公式リンク 編集 / 追加モーダル ── */}
       {isEditModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 p-4 backdrop-blur-xs animate-in fade-in duration-200">
           <div className="relative w-full max-w-lg rounded-2xl border border-slate-200 bg-white p-5 sm:p-6 shadow-xl space-y-4">
@@ -1134,13 +1163,13 @@ export const MarketingQuickLinksHub: React.FC = () => {
                 <div className="flex items-center gap-2">
                   <Link2 className="h-5 w-5 text-purple-700" />
                   <h3 className="text-base font-bold text-slate-900">
-                    {editingItem ? `、E{editingItem.title}」�E公式URL編雁E : '新規�E式URLの登録'}
+                    {editingItem ? `「${editingItem.title}」の公式URL編集` : '新規公式URLの登録'}
                   </h3>
                 </div>
                 <p className="mt-1 text-[11px] text-slate-500">
                   {editingItem 
-                    ? '実運用の正しいURLを�E力してください。保存すると媒体別追跡リンクも即座に自動更新されます、E 
-                    : '自社のLP、個別相諁E��ォーム、LINE登録リンクなどの公式URLを登録します、E}
+                    ? '実運用の正しいURLを入力してください。保存すると媒体別追跡リンクも即座に自動更新されます。' 
+                    : '自社のLP、個別相談フォーム、LINE登録リンクなどの公式URLを登録します。'}
                 </p>
               </div>
               <button
@@ -1162,14 +1191,14 @@ export const MarketingQuickLinksHub: React.FC = () => {
             <form onSubmit={handleSaveModal} className="space-y-3.5 text-xs">
               <div>
                 <label className="text-slate-700 font-semibold block mb-1">
-                  リンク名�Eタイトル <span className="text-rose-500">*</span>
+                  リンク名・タイトル <span className="text-rose-500">*</span>
                 </label>
                 <input
                   type="text"
                   required
                   value={editTitle}
                   onChange={(e) => setEditTitle(e.target.value)}
-                  placeholder="侁E 3刁E��料�Eトルネック診断"
+                  placeholder="例: 3分無料ボトルネック診断"
                   className="w-full rounded-lg border border-slate-300 bg-white p-2.5 text-slate-900 focus:border-purple-500 focus:ring-1 focus:ring-purple-500 focus:outline-none text-xs"
                 />
               </div>
@@ -1188,7 +1217,8 @@ export const MarketingQuickLinksHub: React.FC = () => {
                       }}
                       className="text-[11px] text-purple-700 hover:underline font-medium"
                     >
-                      初期URLを呼び出ぁE                    </button>
+                      初期URLを呼び出す
+                    </button>
                   )}
                 </div>
                 <input
@@ -1196,32 +1226,33 @@ export const MarketingQuickLinksHub: React.FC = () => {
                   required
                   value={editUrl}
                   onChange={(e) => setEditUrl(e.target.value)}
-                  placeholder="https://example.com/your-form また�E /f/your-slug"
+                  placeholder="https://example.com/your-form または /f/your-slug"
                   className="w-full rounded-lg border border-slate-300 bg-white p-2.5 text-slate-900 font-mono focus:border-purple-500 focus:ring-1 focus:ring-purple-500 focus:outline-none text-xs"
                 />
                 <p className="mt-1 text-[11px] text-slate-500">
-                  ※ 外部URL�E�Ettps://...�E�また�Eアプリ冁E��ス�E�Ef/...�E�どちらでも設定可能です、E                </p>
+                  ※ 外部URL（https://...）またはアプリ内パス（/f/...）どちらでも設定可能です。
+                </p>
               </div>
 
               <div>
-                <label className="text-slate-700 font-semibold block mb-1">説明文・用途（任意！E/label>
+                <label className="text-slate-700 font-semibold block mb-1">説明文・用途（任意）</label>
                 <textarea
                   rows={2}
                   value={editDescription}
                   onChange={(e) => setEditDescription(e.target.value)}
-                  placeholder="侁E LINEスチE��プ�E信めE��ログ末尾から誘導する本命フォーム"
+                  placeholder="例: LINEステップ配信やブログ末尾から誘導する本命フォーム"
                   className="w-full rounded-lg border border-slate-300 bg-white p-2.5 text-slate-900 focus:border-purple-500 focus:ring-1 focus:ring-purple-500 focus:outline-none text-xs"
                 />
               </div>
 
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="text-slate-700 font-semibold block mb-1">バッジ表訁E/label>
+                  <label className="text-slate-700 font-semibold block mb-1">バッジ表記</label>
                   <input
                     type="text"
                     value={editBadge}
                     onChange={(e) => setEditBadge(e.target.value)}
-                    placeholder="侁E 高�E紁E��, 啁E��E��衁E
+                    placeholder="例: 高成約率, 商談直行"
                     className="w-full rounded-lg border border-slate-300 bg-white p-2 text-slate-900 focus:border-purple-500 focus:ring-1 focus:ring-purple-500 focus:outline-none text-xs"
                   />
                 </div>
@@ -1249,7 +1280,8 @@ export const MarketingQuickLinksHub: React.FC = () => {
                     onClick={() => handleResetSingleLink(editingItem.id)}
                     className="inline-flex items-center gap-1 text-xs text-slate-500 hover:text-amber-700 font-medium"
                   >
-                    <RotateCcw className="h-3.5 w-3.5" /> こ�Eリンクを�E期値に戻ぁE                  </button>
+                    <RotateCcw className="h-3.5 w-3.5" /> このリンクを初期値に戻す
+                  </button>
                 ) : <span />}
 
                 <div className="flex items-center gap-2">
@@ -1264,7 +1296,7 @@ export const MarketingQuickLinksHub: React.FC = () => {
                     type="submit"
                     className="rounded-lg bg-purple-700 hover:bg-purple-800 px-4 py-1.5 text-xs font-semibold text-white transition shadow-xs"
                   >
-                    {editingItem ? '変更を保存すめE : '公式URLを登録する'}
+                    {editingItem ? '変更を保存する' : '公式URLを登録する'}
                   </button>
                 </div>
               </div>
@@ -1273,7 +1305,7 @@ export const MarketingQuickLinksHub: React.FC = () => {
         </div>
       )}
 
-      {/* ── 2. 媒体設定（名称・用途�Eタグ�E�編雁E/ 新規追加モーダル ── */}
+      {/* ── 2. 媒体設定（名称・用途・タグ）編集 / 新規追加モーダル ── */}
       {isMediaModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 p-4 backdrop-blur-xs animate-in fade-in duration-200">
           <div className="relative w-full max-w-lg rounded-2xl border border-slate-200 bg-white p-5 sm:p-6 shadow-xl space-y-4">
@@ -1282,11 +1314,12 @@ export const MarketingQuickLinksHub: React.FC = () => {
                 <div className="flex items-center gap-2">
                   <Settings2 className="h-5 w-5 text-purple-700" />
                   <h3 className="text-base font-bold text-slate-900">
-                    {editingMedia ? `媒体設定�E編雁E��E{editingMedia.name}�E�` : '新規媒体�E追加'}
+                    {editingMedia ? `媒体設定の編集（${editingMedia.name}）` : '新規媒体の追加'}
                   </h3>
                 </div>
                 <p className="mt-1 text-[11px] text-slate-500">
-                  媒体名めE��途メモ、E��客台帳へ記録される流�E允E��別タグ�E�Etm_source�E�を設定できます、E                </p>
+                  媒体名や用途メモ、顧客台帳へ記録される流入元識別タグ（utm_source）を設定できます。
+                </p>
               </div>
               <button
                 type="button"
@@ -1314,7 +1347,7 @@ export const MarketingQuickLinksHub: React.FC = () => {
                   required
                   value={mediaFormName}
                   onChange={(e) => setMediaFormName(e.target.value)}
-                  placeholder="侁E TikTok�E�ショート動画�E�E Threads�E�日常発信�E�E 、E��E��携允E
+                  placeholder="例: TikTok（ショート動画）, Threads（日常発信）, 〇〇提携先"
                   className="w-full rounded-lg border border-slate-300 bg-white p-2.5 text-slate-900 focus:border-purple-500 focus:ring-1 focus:ring-purple-500 focus:outline-none text-xs"
                 />
               </div>
@@ -1322,22 +1355,23 @@ export const MarketingQuickLinksHub: React.FC = () => {
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div>
                   <label className="text-slate-700 font-semibold block mb-1">
-                    流�E允E��グ�E�Etm_source�E�E<span className="text-rose-500">*</span>
+                    流入元タグ（utm_source） <span className="text-rose-500">*</span>
                   </label>
                   <input
                     type="text"
                     required
                     value={mediaFormSource}
                     onChange={(e) => setMediaFormSource(e.target.value)}
-                    placeholder="侁E tiktok, threads, seminar"
+                    placeholder="例: tiktok, threads, seminar"
                     className="w-full rounded-lg border border-slate-300 bg-white p-2 text-slate-900 font-mono focus:border-purple-500 focus:ring-1 focus:ring-purple-500 focus:outline-none text-xs"
                   />
-                  <span className="text-[10px] text-slate-500 mt-0.5 block">※ 半角英数字�Eアンダースコア</span>
+                  <span className="text-[10px] text-slate-500 mt-0.5 block">※ 半角英数字・アンダースコア</span>
                 </div>
 
                 <div>
                   <label className="text-slate-700 font-semibold block mb-1">
-                    媒体種別�E�Etm_medium�E�E                  </label>
+                    媒体種別（utm_medium）
+                  </label>
                   <select
                     value={mediaFormMedium}
                     onChange={(e) => setMediaFormMedium(e.target.value)}
@@ -1353,24 +1387,24 @@ export const MarketingQuickLinksHub: React.FC = () => {
               </div>
 
               <div>
-                <label className="text-slate-700 font-semibold block mb-1">用途�E運用のメモ�E�任意！E/label>
+                <label className="text-slate-700 font-semibold block mb-1">用途・運用のメモ（任意）</label>
                 <input
                   type="text"
                   value={mediaFormDescription}
                   onChange={(e) => setMediaFormDescription(e.target.value)}
-                  placeholder="侁E プロフィールのリンクチE��ーめE��画の固定コメントに配置"
+                  placeholder="例: プロフィールのリンクツリーや動画の固定コメントに配置"
                   className="w-full rounded-lg border border-slate-300 bg-white p-2.5 text-slate-900 focus:border-purple-500 focus:ring-1 focus:ring-purple-500 focus:outline-none text-xs"
                 />
               </div>
 
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="text-slate-700 font-semibold block mb-1">バッジ表訁E/label>
+                  <label className="text-slate-700 font-semibold block mb-1">バッジ表記</label>
                   <input
                     type="text"
                     value={mediaFormBadge}
                     onChange={(e) => setMediaFormBadge(e.target.value)}
-                    placeholder="侁E 動画, SNS, 外部"
+                    placeholder="例: 動画, SNS, 外部"
                     className="w-full rounded-lg border border-slate-300 bg-white p-2 text-slate-900 focus:border-purple-500 focus:ring-1 focus:ring-purple-500 focus:outline-none text-xs"
                   />
                 </div>
@@ -1390,11 +1424,11 @@ export const MarketingQuickLinksHub: React.FC = () => {
                 </div>
               </div>
 
-              {/* リアルタイム生�EURLプレビュー */}
+              {/* リアルタイム生成URLプレビュー */}
               <div className="rounded-xl border border-purple-200 bg-purple-50/50 p-3 space-y-1">
                 <div className="flex items-center gap-1.5 text-purple-900 font-semibold text-[11px]">
                   <Share2 className="h-3.5 w-3.5 text-purple-700" />
-                  <span>こ�E媒体設定で発行されるURLプレビュー:</span>
+                  <span>この媒体設定で発行されるURLプレビュー:</span>
                 </div>
                 <div className="rounded bg-white p-2 font-mono text-[10px] text-purple-950 truncate border border-purple-100">
                   {buildUtmUrl(
@@ -1405,7 +1439,8 @@ export const MarketingQuickLinksHub: React.FC = () => {
                   )}
                 </div>
                 <p className="text-[10px] text-slate-500">
-                  ※ 顧客カルチE�E流�E允E��は「{mediaFormName || '媒体名'}�E�EmediaFormSource.trim() || 'source'}�E�」として記録されます、E                </p>
+                  ※ 顧客カルテの流入元には「{mediaFormName || '媒体名'}（{mediaFormSource.trim() || 'source'}）」として記録されます。
+                </p>
               </div>
 
               {/* ボタンエリア */}
@@ -1429,7 +1464,7 @@ export const MarketingQuickLinksHub: React.FC = () => {
         </div>
       )}
 
-      {/* ── 削除・初期化�Eインライン確認ダイアログ�E�Eframeでも安�E動作！E── */}
+      {/* ── 削除・初期化のインライン確認ダイアログ（iframeでも安全動作） ── */}
       {confirmDialog.isOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 p-4 backdrop-blur-xs animate-in fade-in duration-150">
           <div className="w-full max-w-sm rounded-xl border border-slate-200 bg-white p-5 shadow-xl space-y-3">
@@ -1448,7 +1483,8 @@ export const MarketingQuickLinksHub: React.FC = () => {
                 onClick={confirmDialog.onConfirm}
                 className="rounded-lg bg-rose-600 hover:bg-rose-700 px-3.5 py-1.5 text-xs font-semibold text-white transition shadow-xs"
               >
-                実行すめE              </button>
+                実行する
+              </button>
             </div>
           </div>
         </div>

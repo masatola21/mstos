@@ -120,12 +120,12 @@ export interface KeywordAutoReply {
 
 const RICHMENU_LINE_CONSULT_RULE: KeywordAutoReply = {
   id: 'kw-richmenu-line-consult',
-  name: '縲舌Μ繝・メ繝｡繝九Η繝ｼ縲銑INE逶ｸ隲・ち繝・・譎・,
-  matchText: '縲伸INE縺ｧ逶ｸ隲・＠縺溘＞縲・,
+  name: '【リッチメニュー】LINE相談タップ時',
+  matchText: '【LINEで相談したい】',
   matchMode: 'exact',
   replyText:
-    '{recipient_name} 讒禄n縺ゅｊ縺後→縺・＃縺悶＞縺ｾ縺呻ｼ∵怏髯蝉ｼ夂､ｾMST縺ｮ螟ｧ讖狗悄莠ｺ縺ｧ縺吶・n\n縺皮嶌隲・・螳ｹ繧偵◎縺ｮ縺ｾ縺ｾ縺薙・LINE縺ｫ縺企√ｊ縺上□縺輔＞・井ｸ險繧・ｮ・擅譖ｸ縺阪〒繧ょ､ｧ荳亥､ｫ縺ｧ縺呻ｼ峨ら｢ｺ隱肴ｬ｡隨ｬ縲∝次蜑・4譎る俣莉･蜀・↓諡・ｽ薙ｈ繧顔峩謗･縺碑ｿ比ｿ｡縺・◆縺励∪縺吶・n\n笆ｼ 霑ｷ繧上ｌ縺溘ｉ逡ｪ蜿ｷ縺�縺代〒繧ゅ←縺・◇\n竭� 邨悟霧蜈ｨ闊ｬ繝ｻ蛻ｩ逶翫ｒ谿九☆莉慕ｵ・∩縺･縺上ｊ\n竭｡ 讌ｭ蜍吶・蜉ｹ邇・喧繝ｻ謇倶ｽ懈･ｭ縺ｮ蜑頑ｸ媾n竭｢ 莉玖ｭｷ菫晞匱螟悶し繝ｼ繝薙せ縺ｮ髢区･ｭ繝ｻ蜿守寢蛹暴n竭｣ 縺昴・莉厄ｼ医＞縺ｾ豌励↓縺ｪ縺｣縺ｦ縺・ｋ縺薙→・噂n\n窶ｻ縺頑･縺弱〒逶ｴ謗･縺願ｩｱ縺輔ｌ縺溘＞譁ｹ縺ｯ縲・0蛻・┌譁吶が繝ｳ繝ｩ繧､繝ｳ髱｢隲・ｂ縺比ｺ育ｴ・＞縺溘□縺代∪縺吶・n{booking_url}',
-  tag: '驕ｸ謚・蛟句挨逶ｸ隲・,
+    '{recipient_name} 様\nありがとうございます！有限会社MSTの大橋真人です。\n\nご相談内容をそのままこのLINEにお送りください（一言や箇条書きでも大丈夫です）。確認次第、原則24時間以内に担当より直接ご返信いたします。\n\n▼ 迷われたら番号だけでもどうぞ\n① 経営全般・利益を残す仕組みづくり\n② 業務の効率化・手作業の削減\n③ 介護保険外サービスの開業・収益化\n④ その他（いま気になっていること）\n\n※お急ぎで直接お話されたい方は、30分無料オンライン面談もご予約いただけます。\n{booking_url}',
+  tag: '選択:個別相談',
   targetBranch: 'consult',
   enabled: true,
 };
@@ -134,51 +134,51 @@ const DEFAULT_KEYWORD_RULES: KeywordAutoReply[] = [
   RICHMENU_LINE_CONSULT_RULE,
   {
     id: 'kw-diagnosis',
-    name: '縲瑚ｨｺ譁ｭ縲阪檎ｵ悟霧險ｺ譁ｭ縲埼∽ｿ｡譎・,
-    matchText: '險ｺ譁ｭ',
+    name: '「診断」「経営診断」送信時',
+    matchText: '診断',
     matchMode: 'contains',
-    replyText: '辟｡譁咏ｵ悟霧險ｺ譁ｭ縺ｮ縺疲｡亥・縺ｧ縺吶・n莉･荳九・URL繧医ｊ邏・蛻・〒縺泌屓遲斐＞縺溘□縺代∪縺吶ょ屓遲泌女鬆伜ｾ後∝､ｧ讖狗悄莠ｺ繧医ｊ蟆ゆｻｻ繝ｬ繝昴・繝医ｒ縺雁ｱ翫￠縺励∪縺吶・n\n笆ｼ 3蛻・┌譁咏ｵ悟霧險ｺ譁ｭ縺ｯ縺薙■繧噂n{link_url}',
-    tag: '驕ｸ謚・險ｺ譁ｭ',
+    replyText: '無料経営診断のご案内です。\n以下のURLより約3分でご回答いただけます。回答受領後、大橋真人より専任レポートをお届けします。\n\n▼ 3分無料経営診断はこちら\n{link_url}',
+    tag: '選択:診断',
     targetBranch: 'diagnosis',
     enabled: true,
   },
   {
     id: 'kw-consult',
-    name: '縲檎嶌隲・阪碁擇隲・阪御ｺ育ｴ・埼∽ｿ｡譎・,
-    matchText: '逶ｸ隲・,
+    name: '「相談」「面談」「予約」送信時',
+    matchText: '相談',
     matchMode: 'contains',
-    replyText: '蛟句挨逶ｸ隲・・縺泌ｸ梧悍縺ゅｊ縺後→縺・＃縺悶＞縺ｾ縺呻ｼ―n荳玖ｨ倥・譌･遞玖ｪｿ謨ｴ繧ｫ繝ｬ繝ｳ繝繝ｼ繧医ｊ縲√＃驛ｽ蜷医・繧医＞譌･譎ゅｒ縺企∈縺ｳ縺上□縺輔＞・・0蛻・・繧ｪ繝ｳ繝ｩ繧､繝ｳ・峨・n\n笆ｼ 髱｢隲・律遞九・驕ｸ謚槭・縺薙■繧噂n{booking_url}',
-    tag: '驕ｸ謚・蛟句挨逶ｸ隲・,
+    replyText: '個別相談のご希望ありがとうございます！\n下記の日程調整カレンダーより、ご都合のよい日時をお選びください（30分・オンライン）。\n\n▼ 面談日程の選択はこちら\n{booking_url}',
+    tag: '選択:個別相談',
     targetBranch: 'consult',
     enabled: true,
   },
   {
     id: 'kw-care',
-    name: '縲御ｻ玖ｭｷ縲阪御ｿ晞匱螟悶阪碁幕讌ｭ縲埼∽ｿ｡譎・,
-    matchText: '莉玖ｭｷ',
+    name: '「介護」「保険外」「開業」送信時',
+    matchText: '介護',
     matchMode: 'contains',
-    replyText: '莉玖ｭｷ菫晞匱螟悶し繝ｼ繝薙せ縺ｮ髢区･ｭ繝ｻ莠区･ｭ螻暮幕縺ｫ縺､縺・※縺ｮ縺皮嶌隲・≠繧翫′縺ｨ縺・＃縺悶＞縺ｾ縺呻ｼ―n閾ｪ雋ｻ繝ｪ繝上ン繝ｪ繝ｻ閾ｪ雋ｻ逵玖ｭｷ遲峨・遶九■荳翫￡縺ｧ縺ｯ縲∵署萓帙Γ繝九Η繝ｼ縺ｮ險ｭ險医→蝨ｰ蝓滄寔螳｢縺梧・蜉溘・骰ｵ縺ｨ縺ｪ繧翫∪縺吶・n\n蟆ゆｻｻ繝√・繝�繧医ｊ譛驕ｩ縺ｪ髢区･ｭ繝代ャ繧ｱ繝ｼ繧ｸ譯亥・繧偵♀螻翫￠縺励∪縺吶・,
-    tag: '莉玖ｭｷ菫晞匱螟夜幕讌ｭ',
+    replyText: '介護保険外サービスの開業・事業展開についてのご相談ありがとうございます！\n自費リハビリ・自費看護等の立ち上げでは、提供メニューの設計と地域集客が成功の鍵となります。\n\n専任チームより最適な開業パッケージ案内をお届けします。',
+    tag: '介護保険外開業',
     targetBranch: 'care',
     enabled: true,
   },
   {
     id: 'kw-pricing',
-    name: '縲梧侭驥代阪瑚ｲｻ逕ｨ縲阪御ｾ｡譬ｼ縲埼∽ｿ｡譎・,
-    matchText: '譁咎≡',
+    name: '「料金」「費用」「価格」送信時',
+    matchText: '料金',
     matchMode: 'contains',
-    replyText: 'MST縺ｮ繧ｵ繝ｼ繝薙せ譁咎≡繝ｻ蝣ｱ驟ｬ菴鍋ｳｻ縺ｫ縺､縺・※縺ｮ縺雁撫縺・粋繧上○縺ゅｊ縺後→縺・＃縺悶＞縺ｾ縺吶・n\n莨∵･ｭ縺ｮ隕乗ｨ｡繧・隼蝟・ヵ繧ｧ繝ｼ繧ｺ縺ｫ蠢懊§縺滓怦鬘阪・繝ｩ繝ｳ縺翫ｈ縺ｳ謌先棡騾｣蜍戊ｨｭ險医ｒ縺皮畑諢上＠縺ｦ縺翫ｊ縺ｾ縺吶・n縺ｾ縺壹・雋ｴ遉ｾ縺ｮ迴ｾ迥ｶ繧偵・蛻・┌譁呵ｨｺ譁ｭ縲代∪縺溘・縲・0蛻・┌譁吶が繝ｳ繝ｩ繧､繝ｳ逶ｸ隲・代↓縺ｦ縺願◇縺九○縺上□縺輔＞縲・n\n笆ｼ 3蛻・┌譁呵ｨｺ譁ｭ\n{link_url}',
-    tag: '髢｢蠢・譁咎≡',
+    replyText: 'MSTのサービス料金・報酬体系についてのお問い合わせありがとうございます。\n\n企業の規模や改善フェーズに応じた月額プランおよび成果連動設計をご用意しております。\nまずは貴社の現状を【3分無料診断】または【30分無料オンライン相談】にてお聞かせください。\n\n▼ 3分無料診断\n{link_url}',
+    tag: '関心:料金',
     targetBranch: 'general',
     enabled: true,
   },
   {
     id: 'kw-material',
-    name: '縲瑚ｳ・侭縲阪後ヱ繝ｳ繝輔Ξ繝・ヨ縲埼∽ｿ｡譎・,
-    matchText: '雉・侭',
+    name: '「資料」「パンフレット」送信時',
+    matchText: '資料',
     matchMode: 'contains',
-    replyText: 'MST縺ｮ莨夂､ｾ譯亥・繝ｻ繧ｵ繝ｼ繝薙せ讎りｦ∬ｳ・侭縺ｮ縺碑ｫ区ｱゅ≠繧翫′縺ｨ縺・＃縺悶＞縺ｾ縺吶・n荳玖ｨ倥Μ繝ｳ繧ｯ繧医ｊ譛譁ｰ縺ｮ莨夂､ｾ讎りｦ￣DF繧帝夢隕ｧ縺・◆縺�縺代∪縺吶・n\n笆ｼ 莨夂､ｾ譯亥・繝ｻ繧ｵ繝ｼ繝薙せ雉・侭\nhttps://corp.mstcorp.info/materials',
-    tag: '雉・侭隲区ｱ・,
+    replyText: 'MSTの会社案内・サービス概要資料のご請求ありがとうございます。\n下記リンクより最新の会社概要PDFを閲覧いただけます。\n\n▼ 会社案内・サービス資料\nhttps://corp.mstcorp.info/materials',
+    tag: '資料請求',
     targetBranch: 'general',
     enabled: true,
   },
@@ -207,19 +207,20 @@ export const MarketingFlowStudio: React.FC<MarketingFlowStudioProps> = ({
   const [expandedBranch, setExpandedBranch] = useState<'diagnosis' | 'consult' | 'care' | 'all'>('all');
   const [previewModalScenario, setPreviewModalScenario] = useState<ScenarioPreviewInfo | null>(null);
 
-  // 笏笏笏 LINE繧ｦ繧ｧ繝ｫ繧ｫ繝�繝ｻ蛻・ｲ舌ヱ繧ｿ繝ｼ繝ｳA/B險ｭ螳夂畑迥ｶ諷具ｼ亥腰荳縺ｮ豁｣譛ｬ / Single source of truth・・笏笏笏
-  const [welcomeHeading, setWelcomeHeading] = useState('螟ｧ讖狗悄莠ｺ縺ｧ縺吶・);
-  const [welcomeSubheading, setWelcomeSubheading] = useState('LINE逋ｻ骭ｲ縺ゅｊ縺後→縺・＃縺悶＞縺ｾ縺吶・);
+  // ─── LINEウェルカム・分岐パターンA/B設定用状態（単一の正本 / Single source of truth） ───
+  const [welcomeHeading, setWelcomeHeading] = useState('大橋真人です。');
+  const [welcomeSubheading, setWelcomeSubheading] = useState('LINE登録ありがとうございます。');
   const [welcomeIntro, setWelcomeIntro] = useState(
-    'MST縺ｧ縺ｯ縲∽ｸｭ蟆丈ｼ∵･ｭ縺ｮ\n縲檎ｵ悟霧縺ｮ莉慕ｵ・∩蛹姪怜茜逶頑隼蝟・阪→\n莉玖ｭｷ菫晞匱螟悶し繝ｼ繝薙せ縺ｮ髢区･ｭ繧呈髪謠ｴ縺励※縺・∪縺吶・
+    'MSTでは、中小企業の\n「経営の仕組み化×利益改善」と\n介護保険外サービスの開業を支援しています。'
   );
-  const [welcomeQuestion, setWelcomeQuestion] = useState('縺ｾ縺壹√←縺ｮ繧医≧縺ｪ縺皮嶌隲・ｒ縺泌ｸ梧悍縺ｧ縺吶°・・);
-  const [welcomeInstruction, setWelcomeInstruction] = useState('縺泌ｸ梧悍縺ｫ霑代＞繧ゅ・繧偵♀驕ｸ縺ｳ縺上□縺輔＞');
+  const [welcomeQuestion, setWelcomeQuestion] = useState('まず、どのようなご相談をご希望ですか？');
+  const [welcomeInstruction, setWelcomeInstruction] = useState('ご希望に近いものをお選びください');
 
-  // 驕ｸ謚櫁い・医・繧ｿ繝ｳ譁・擇繝ｻ繧｢繧ｯ繧ｷ繝ｧ繝ｳ繝ｻ濶ｲ・・  const [welcomeChoices, setWelcomeChoices] = useState<Array<WelcomeChoice & { actionType?: 'postback' | 'uri'; uri?: string; color?: string }>>([
-    { id: 'diagnosis', label: '�投 3蛻・┌譁咏ｵ悟霧險ｺ譁ｭ繧貞女縺代ｋ', tag: '驕ｸ謚・險ｺ譁ｭ', route: 'form', formSlug: 'business-diagnosis', actionType: 'postback', color: '#10B981' },
-    { id: 'consult', label: '�欄・・邨悟霧謾ｹ蝟・↓縺､縺・※蛟句挨逶ｸ隲・☆繧・, tag: '驕ｸ謚・蛟句挨逶ｸ隲・, route: 'chat', actionType: 'postback', color: '#1E3A5F' },
-    { id: 'care', label: '�諺 莉玖ｭｷ菫晞匱螟悶し繝ｼ繝薙せ縺ｮ髢区･ｭ逶ｸ隲・, tag: '莉玖ｭｷ菫晞匱螟夜幕讌ｭ', route: 'care_interactive', actionType: 'postback', color: '#0284C7' },
+  // 選択肢（ボタン文面・アクション・色）
+  const [welcomeChoices, setWelcomeChoices] = useState<Array<WelcomeChoice & { actionType?: 'postback' | 'uri'; uri?: string; color?: string }>>([
+    { id: 'diagnosis', label: '📊 3分無料経営診断を受ける', tag: '選択:診断', route: 'form', formSlug: 'business-diagnosis', actionType: 'postback', color: '#10B981' },
+    { id: 'consult', label: '🗓️ 経営改善について個別相談する', tag: '選択:個別相談', route: 'chat', actionType: 'postback', color: '#1E3A5F' },
+    { id: 'care', label: '🌿 介護保険外サービスの開業相談', tag: '介護保険外開業', route: 'care_interactive', actionType: 'postback', color: '#0284C7' },
   ]);
   const [patternDiagnosisConfig, setPatternDiagnosisConfig] = useState<WelcomePatternDiagnosisConfig>(DEFAULT_WELCOME_PATTERN_DIAGNOSIS);
   const [patternAConfig, setPatternAConfig] = useState<WelcomePatternAConfig>(DEFAULT_WELCOME_PATTERN_A);
@@ -240,12 +241,12 @@ export const MarketingFlowStudio: React.FC<MarketingFlowStudioProps> = ({
   const [welcomeNotice, setWelcomeNotice] = useState('');
   const [welcomeError, setWelcomeError] = useState('');
   
-  // Flex邱ｨ髮・Δ繝ｼ繝・ 'visual' (蜷・�・岼・・・繧ｿ繝ｳ險ｭ螳・ | 'json' (Flex Bubble/Carousel JSON逶ｴ謗･邱ｨ髮・
+  // Flex編集モード: 'visual' (各項目＆ボタン設定) | 'json' (Flex Bubble/Carousel JSON直接編集)
   const [flexEditMode, setFlexEditMode] = useState<'visual' | 'json'>('visual');
   const [customFlexJson, setCustomFlexJson] = useState<string>('');
   const [previewType, setPreviewType] = useState<'card' | 'line_official'>('card');
 
-  // 繝薙ず繝･繧｢繝ｫ險ｭ螳壹°繧鵜INE Flex Bubble JSON繧堤ｵ・∩遶九※繧矩未謨ｰ
+  // ビジュアル設定からLINE Flex Bubble JSONを組み立てる関数
   const buildFlexBubbleFromVisual = (
     heading: string,
     subheading: string,
@@ -260,14 +261,14 @@ export const MarketingFlowStudio: React.FC<MarketingFlowStudioProps> = ({
       const action = isUri
         ? {
             type: 'uri',
-            label: (c.label || `驕ｸ謚櫁い ${i + 1}`).slice(0, 20),
+            label: (c.label || `選択肢 ${i + 1}`).slice(0, 20),
             uri: (c.uri || 'https://corp.mstcorp.info').trim(),
           }
         : {
             type: 'postback',
-            label: (c.label || `驕ｸ謚櫁い ${i + 1}`).slice(0, 20),
+            label: (c.label || `選択肢 ${i + 1}`).slice(0, 20),
             data: c.tag ? `tag=${encodeURIComponent(c.tag)}&wc=${c.id}` : `wc=${c.id}`,
-            displayText: c.label || `驕ｸ謚櫁い ${i + 1}`,
+            displayText: c.label || `選択肢 ${i + 1}`,
           };
 
       return {
@@ -289,7 +290,7 @@ export const MarketingFlowStudio: React.FC<MarketingFlowStudioProps> = ({
     if (instruction.trim()) textItems.push({ type: 'text', text: instruction, size: 'sm', align: 'center', color: '#64748B', margin: 'sm', wrap: true });
 
     if (textItems.length === 0 && buttons.length === 0) {
-      textItems.push({ type: 'text', text: '蜿九□縺｡霑ｽ蜉�縺ゅｊ縺後→縺・＃縺悶＞縺ｾ縺吶・, size: 'md', align: 'center', color: '#1E293B', wrap: true });
+      textItems.push({ type: 'text', text: '友だち追加ありがとうございます。', size: 'md', align: 'center', color: '#1E293B', wrap: true });
     }
 
     return {
@@ -306,11 +307,11 @@ export const MarketingFlowStudio: React.FC<MarketingFlowStudioProps> = ({
     };
   };
 
-  // 蛻・ｲ植・郁ｨｺ譁ｭ譯亥・繧ｫ繝ｼ繝会ｼ峨・繝ｬ繝薙Η繝ｼ逕ｨFlex逕滓・
+  // 分岐A（診断案内カード）プレビュー用Flex生成
   const buildPatternDiagnosisFlexBubble = (cfg: WelcomePatternDiagnosisConfig) => {
-    const sampleName = PLACEHOLDER_SAMPLE_VALUES.recipient_name || '譬ｪ蠑丈ｼ夂､ｾ繧ｵ繝ｳ繝励Ν 諡・ｽ楢・;
+    const sampleName = PLACEHOLDER_SAMPLE_VALUES.recipient_name || '株式会社サンプル 担当者';
     const bodyText = renderPlaceholders(cfg.body, { ...PLACEHOLDER_SAMPLE_VALUES, recipient_name: sampleName });
-    const btnLabel = (cfg.buttonLabel || '險ｺ譁ｭ繧貞ｧ九ａ繧具ｼ育ｴ・蛻・ｼ・).trim().slice(0, 20);
+    const btnLabel = (cfg.buttonLabel || '診断を始める（約3分）').trim().slice(0, 20);
     const targetUri = upgradeLegacyMstUrl(cfg.diagnosisUrl || OFFICIAL_VERCEL_URLS.diagnosis, 'diagnosis') || OFFICIAL_VERCEL_URLS.diagnosis;
     return {
       type: 'bubble',
@@ -319,7 +320,7 @@ export const MarketingFlowStudio: React.FC<MarketingFlowStudioProps> = ({
         layout: 'vertical',
         spacing: 'md',
         contents: [
-          { type: 'text', text: cfg.title || '�投 3蛻・┌譁咏ｵ悟霧險ｺ譁ｭ', weight: 'bold', size: 'lg', color: '#1E293B', wrap: true },
+          { type: 'text', text: cfg.title || '📊 3分無料経営診断', weight: 'bold', size: 'lg', color: '#1E293B', wrap: true },
           { type: 'text', text: bodyText, size: 'sm', color: '#475569', wrap: true },
         ],
       },
@@ -342,9 +343,9 @@ export const MarketingFlowStudio: React.FC<MarketingFlowStudioProps> = ({
     };
   };
 
-  // 繝代ち繝ｼ繝ｳA繝励Ξ繝薙Η繝ｼ逕ｨFlex逕滓・
+  // パターンAプレビュー用Flex生成
   const buildPatternAFlexBubble = (cfg: WelcomePatternAConfig) => {
-    const sampleName = PLACEHOLDER_SAMPLE_VALUES.recipient_name || '譬ｪ蠑丈ｼ夂､ｾ繧ｵ繝ｳ繝励Ν 諡・ｽ楢・;
+    const sampleName = PLACEHOLDER_SAMPLE_VALUES.recipient_name || '株式会社サンプル 担当者';
     const greetingText = renderPlaceholders(cfg.greetingBody, { ...PLACEHOLDER_SAMPLE_VALUES, recipient_name: sampleName });
     const bookingLabel = (cfg.bookingButtonLabel || '').trim().slice(0, 20);
     return {
@@ -354,7 +355,7 @@ export const MarketingFlowStudio: React.FC<MarketingFlowStudioProps> = ({
         layout: 'vertical',
         spacing: 'md',
         contents: [
-          { type: 'text', text: cfg.title || '�欄・・邨悟霧謾ｹ蝟・・蛟句挨逶ｸ隲・, weight: 'bold', size: 'lg', color: '#1E293B', wrap: true },
+          { type: 'text', text: cfg.title || '🗓️ 経営改善の個別相談', weight: 'bold', size: 'lg', color: '#1E293B', wrap: true },
           { type: 'text', text: greetingText, size: 'sm', color: '#334155', wrap: true },
           {
             type: 'box',
@@ -394,9 +395,9 @@ export const MarketingFlowStudio: React.FC<MarketingFlowStudioProps> = ({
     };
   };
 
-  // 繝代ち繝ｼ繝ｳB繝励Ξ繝薙Η繝ｼ逕ｨFlex逕滓・
+  // パターンBプレビュー用Flex生成
   const buildPatternBFlexBubble = (cfg: WelcomePatternBConfig, step: 'q1' | 'q2' | 'completion') => {
-    const sampleName = PLACEHOLDER_SAMPLE_VALUES.recipient_name || '譬ｪ蠑丈ｼ夂､ｾ繧ｵ繝ｳ繝励Ν 諡・ｽ楢・;
+    const sampleName = PLACEHOLDER_SAMPLE_VALUES.recipient_name || '株式会社サンプル 担当者';
     if (step === 'q1') {
       const greetingText = renderPlaceholders(cfg.q1.greeting, { ...PLACEHOLDER_SAMPLE_VALUES, recipient_name: sampleName });
       return {
@@ -418,7 +419,7 @@ export const MarketingFlowStudio: React.FC<MarketingFlowStudioProps> = ({
               margin: idx === 0 ? 'md' : 'sm',
               action: {
                 type: 'postback',
-                label: (c.label || `驕ｸ謚櫁い${idx + 1}`).slice(0, 20),
+                label: (c.label || `選択肢${idx + 1}`).slice(0, 20),
                 data: `care_q1=${c.value}`,
                 displayText: c.displayText || c.label,
               },
@@ -428,7 +429,7 @@ export const MarketingFlowStudio: React.FC<MarketingFlowStudioProps> = ({
       };
     }
     if (step === 'q2') {
-      const sampleQ1 = cfg.q1.choices[0]?.label || '譌｢蟄倥・莉玖ｭｷ繝ｻ遖冗･我ｺ区･ｭ閠・;
+      const sampleQ1 = cfg.q1.choices[0]?.label || '既存の介護・福祉事業者';
       const introText = (cfg.q2.introTemplate || '').replace(/\{q1_label\}/g, sampleQ1);
       return {
         type: 'bubble',
@@ -447,7 +448,7 @@ export const MarketingFlowStudio: React.FC<MarketingFlowStudioProps> = ({
               margin: idx === 0 ? 'md' : 'sm',
               action: {
                 type: 'postback',
-                label: (c.label || `繝・・繝・{idx + 1}`).slice(0, 20),
+                label: (c.label || `テーマ${idx + 1}`).slice(0, 20),
                 data: `care_q2=existing:${c.value}`,
                 displayText: c.displayText || c.label,
               },
@@ -456,8 +457,8 @@ export const MarketingFlowStudio: React.FC<MarketingFlowStudioProps> = ({
         },
       };
     }
-    const sampleQ1 = cfg.q1.choices[0]?.label || '譌｢蟄倥・莉玖ｭｷ繝ｻ遖冗･我ｺ区･ｭ閠・;
-    const sampleQ2 = cfg.q2.choices[0]?.label || '蜿守寢繝｢繝・Ν繝ｻ譁咎≡險ｭ螳・;
+    const sampleQ1 = cfg.q1.choices[0]?.label || '既存の介護・福祉事業者';
+    const sampleQ2 = cfg.q2.choices[0]?.label || '収益モデル・料金設定';
     const footerButtons: any[] = [];
     if ((cfg.completion.pdfButtonLabel || '').trim()) {
       footerButtons.push({
@@ -501,8 +502,8 @@ export const MarketingFlowStudio: React.FC<MarketingFlowStudioProps> = ({
             paddingAll: 'md',
             margin: 'sm',
             contents: [
-              { type: 'text', text: `繝ｻ迴ｾ蝨ｨ縺ｮ迥ｶ豕・ ${sampleQ1}`, size: 'xs', color: '#0369A1', weight: 'bold', wrap: true },
-              { type: 'text', text: `繝ｻ髢｢蠢・ユ繝ｼ繝・ ${sampleQ2}`, size: 'xs', color: '#0369A1', weight: 'bold', margin: 'xs', wrap: true },
+              { type: 'text', text: `・現在の状況: ${sampleQ1}`, size: 'xs', color: '#0369A1', weight: 'bold', wrap: true },
+              { type: 'text', text: `・関心テーマ: ${sampleQ2}`, size: 'xs', color: '#0369A1', weight: 'bold', margin: 'xs', wrap: true },
             ],
           },
           { type: 'text', text: cfg.completion.body, size: 'xs', color: '#475569', wrap: true, margin: 'sm' },
@@ -521,7 +522,7 @@ export const MarketingFlowStudio: React.FC<MarketingFlowStudioProps> = ({
     };
   };
 
-  // Flex JSON 縺ｮ讒区枚讀懆ｨｼ
+  // Flex JSON の構文検証
   const isValidFlexJson = useMemo(() => {
     if (!customFlexJson.trim()) return true;
     try {
@@ -541,7 +542,8 @@ export const MarketingFlowStudio: React.FC<MarketingFlowStudioProps> = ({
     }
   }, [customFlexJson]);
 
-  // Supabase / API 縺九ｉ繧ｦ繧ｧ繝ｫ繧ｫ繝�險ｭ螳壹ｒ繝ｭ繝ｼ繝会ｼ亥腰荳豁｣譛ｬ: __welcome__・・  useEffect(() => {
+  // Supabase / API からウェルカム設定をロード（単一正本: __welcome__）
+  useEffect(() => {
     if (!db) return;
     const isColMissingErr = (err: any) =>
       err?.code === 'PGRST204' ||
@@ -616,12 +618,12 @@ export const MarketingFlowStudio: React.FC<MarketingFlowStudioProps> = ({
               return { ...c, route: 'chat' };
             }
             if (c?.id === 'care') {
-              const legacyLabels = ['�諺 莉玖ｭｷ菫晞匱螟悶し繝ｼ繝薙せ髢区･ｭ繧堤衍繧・, '�諺 莉玖ｭｷ菫晞匱螟悶し繝ｼ繝薙せ髢区･ｭ繝代ャ繧ｱ繝ｼ繧ｸ縺ｫ縺､縺・※遏･繧・, '莉玖ｭｷ菫晞匱螟悶し繝ｼ繝薙せ髢区･ｭ繝代ャ繧ｱ繝ｼ繧ｸ縺ｫ縺､縺・※遏･繧・];
-              const legacyTags = ['care:髢区･ｭ逶ｸ隲・, '驕ｸ謚・髢区･ｭ繝代ャ繧ｱ繝ｼ繧ｸ'];
+              const legacyLabels = ['🌿 介護保険外サービス開業を知る', '🌿 介護保険外サービス開業パッケージについて知る', '介護保険外サービス開業パッケージについて知る'];
+              const legacyTags = ['care:開業相談', '選択:開業パッケージ'];
               return {
                 ...c,
-                label: legacyLabels.includes(c.label) ? '�諺 莉玖ｭｷ菫晞匱螟悶し繝ｼ繝薙せ縺ｮ髢区･ｭ逶ｸ隲・ : c.label,
-                tag: legacyTags.includes(c.tag) || !c.tag ? '莉玖ｭｷ菫晞匱螟夜幕讌ｭ' : c.tag,
+                label: legacyLabels.includes(c.label) ? '🌿 介護保険外サービスの開業相談' : c.label,
+                tag: legacyTags.includes(c.tag) || !c.tag ? '介護保険外開業' : c.tag,
                 route: c.route === 'template' ? 'care_interactive' : c.route,
               };
             }
@@ -666,7 +668,7 @@ export const MarketingFlowStudio: React.FC<MarketingFlowStudioProps> = ({
           });
         }
       } else if (typeof data.reply_text === 'string' && data.reply_text.trim()) {
-        // 繝・く繧ｹ繝亥ｽ｢蠑上・譌ｧ繧ｦ繧ｧ繝ｫ繧ｫ繝�縺檎峩謗･險ｭ螳壹＆繧後※縺・◆蝣ｴ蜷医ｂ繝励Ξ繝薙Η繝ｼ縺ｸ蜿肴丐
+        // テキスト形式の旧ウェルカムが直接設定されていた場合もプレビューへ反映
         setWelcomeIntro(data.reply_text.trim());
       }
     };
@@ -700,7 +702,7 @@ export const MarketingFlowStudio: React.FC<MarketingFlowStudioProps> = ({
               }
             }
           } catch {
-            // API譛ｪ謗･邯壽凾縺ｯ逶ｴ謗･Supabase繧ｯ繧ｨ繝ｪ縺ｫ繝輔か繝ｼ繝ｫ繝舌ャ繧ｯ
+            // API未接続時は直接Supabaseクエリにフォールバック
           }
         }
 
@@ -734,7 +736,7 @@ export const MarketingFlowStudio: React.FC<MarketingFlowStudioProps> = ({
           .select('id, name, match_text')
           .eq('owner_id', ownerId)
           .eq('enabled', true)
-          .in('match_text', ['蜿九□縺｡霑ｽ蜉�', '繧ｦ繧ｧ繝ｫ繧ｫ繝�', '縺ゅ＞縺輔▽', '謖ｨ諡ｶ']);
+          .in('match_text', ['友だち追加', 'ウェルカム', 'あいさつ', '挨拶']);
         if (Array.isArray(legacyRows)) {
           setConflictingLegacyRules(legacyRows);
         }
@@ -745,7 +747,8 @@ export const MarketingFlowStudio: React.FC<MarketingFlowStudioProps> = ({
     void loadWelcome();
   }, [db]);
 
-  // 繧ｦ繧ｧ繝ｫ繧ｫ繝�・・・蟯舌ヱ繧ｿ繝ｼ繝ｳA/B險ｭ螳壹・荳諡ｬ菫晏ｭ假ｼ亥腰荳縺ｮ豁｣譛ｬ縺ｫ邨ｱ蜷井ｿ晏ｭ假ｼ・  const handleSaveWelcome = async (successMessage?: string, overrideEnabled?: boolean) => {
+  // ウェルカム＆分岐パターンA/B設定の一括保存（単一の正本に統合保存）
+  const handleSaveWelcome = async (successMessage?: string, overrideEnabled?: boolean) => {
     if (!db) return;
     setWelcomeSaving(true);
     setWelcomeNotice('');
@@ -754,7 +757,7 @@ export const MarketingFlowStudio: React.FC<MarketingFlowStudioProps> = ({
       const { data: sessionData } = await db.auth.getSession();
       const ownerId = sessionData.session?.user?.id;
       const token = sessionData.session?.access_token;
-      if (!ownerId) throw new Error('繝ｭ繧ｰ繧､繝ｳ繧ｻ繝・す繝ｧ繝ｳ縺瑚ｦ九▽縺九ｊ縺ｾ縺帙ｓ');
+      if (!ownerId) throw new Error('ログインセッションが見つかりません');
 
       const effectiveEnabled = overrideEnabled !== undefined ? overrideEnabled : welcomeEnabled;
 
@@ -765,7 +768,7 @@ export const MarketingFlowStudio: React.FC<MarketingFlowStudioProps> = ({
         try {
           parsedJson = JSON.parse(customFlexJson);
         } catch (jsonErr: any) {
-          throw new Error('Flex JSON縺ｮ讒区枚繧ｨ繝ｩ繝ｼ縺ｧ縺吶よｭ｣縺励＞JSON繧貞・蜉帙＠縺ｦ縺上□縺輔＞: ' + (jsonErr?.message || ''));
+          throw new Error('Flex JSONの構文エラーです。正しいJSONを入力してください: ' + (jsonErr?.message || ''));
         }
         if (parsedJson?.type === 'flex' && parsedJson?.contents && ['bubble', 'carousel'].includes(parsedJson.contents.type)) {
           parsedCustomEnvelopeAltText = typeof parsedJson.altText === 'string' ? parsedJson.altText.trim() : '';
@@ -773,7 +776,7 @@ export const MarketingFlowStudio: React.FC<MarketingFlowStudioProps> = ({
         } else if (parsedJson && typeof parsedJson === 'object' && ['bubble', 'carousel'].includes(parsedJson.type)) {
           finalContents = parsedJson;
         } else {
-          throw new Error('Flex JSON縺ｮ繝ｫ繝ｼ繝郁ｦ∫ｴ�縺ｯ "type": "bubble" 縺ｾ縺溘・ "carousel"・医∪縺溘・ "type": "flex" + contents・峨〒縺ゅｋ蠢・ｦ√′縺ゅｊ縺ｾ縺吶・);
+          throw new Error('Flex JSONのルート要素は "type": "bubble" または "carousel"（または "type": "flex" + contents）である必要があります。');
         }
       } else {
         finalContents = buildFlexBubbleFromVisual(
@@ -808,8 +811,8 @@ export const MarketingFlowStudio: React.FC<MarketingFlowStudioProps> = ({
       };
 
       const altText = flexEditMode === 'json'
-        ? (parsedCustomEnvelopeAltText || extractFirstTextFromFlex(finalContents) || '蜿九□縺｡霑ｽ蜉�縺ゅｊ縺後→縺・＃縺悶＞縺ｾ縺・).slice(0, 400)
-        : ([welcomeHeading, welcomeSubheading].filter((s) => s && s.trim()).join(' ') || '蜿九□縺｡霑ｽ蜉�縺ゅｊ縺後→縺・＃縺悶＞縺ｾ縺・).slice(0, 400);
+        ? (parsedCustomEnvelopeAltText || extractFirstTextFromFlex(finalContents) || '友だち追加ありがとうございます').slice(0, 400)
+        : ([welcomeHeading, welcomeSubheading].filter((s) => s && s.trim()).join(' ') || '友だち追加ありがとうございます').slice(0, 400);
 
       const normalizedPatternDiagnosis: WelcomePatternDiagnosisConfig = {
         ...patternDiagnosisConfig,
@@ -871,7 +874,7 @@ export const MarketingFlowStudio: React.FC<MarketingFlowStudioProps> = ({
           savedViaApi = true;
         } else if (apiResp.status !== 404 && apiResp.status !== 503) {
           const errJson = await apiResp.json().catch(() => ({}));
-          throw new Error(errJson?.error || `繧ｵ繝ｼ繝舌・菫晏ｭ倥お繝ｩ繝ｼ (${apiResp.status})`);
+          throw new Error(errJson?.error || `サーバー保存エラー (${apiResp.status})`);
         }
       }
 
@@ -879,7 +882,7 @@ export const MarketingFlowStudio: React.FC<MarketingFlowStudioProps> = ({
         const nowIso = new Date().toISOString();
         const rowData = {
           owner_id: ownerId,
-          name: '蜿九□縺｡霑ｽ蜉�繧ｦ繧ｧ繝ｫ繧ｫ繝�Flex繝｡繝・そ繝ｼ繧ｸ',
+          name: '友だち追加ウェルカムFlexメッセージ',
           match_mode: 'exact',
           match_text: '__welcome__',
           reply_type: 'flex',
@@ -891,7 +894,7 @@ export const MarketingFlowStudio: React.FC<MarketingFlowStudioProps> = ({
         };
         const baseRowData = {
           owner_id: ownerId,
-          name: '蜿九□縺｡霑ｽ蜉�繧ｦ繧ｧ繝ｫ繧ｫ繝�Flex繝｡繝・そ繝ｼ繧ｸ',
+          name: '友だち追加ウェルカムFlexメッセージ',
           match_mode: 'exact',
           match_text: '__welcome__',
           reply_text: JSON.stringify(payload),
@@ -958,14 +961,14 @@ export const MarketingFlowStudio: React.FC<MarketingFlowStudioProps> = ({
 
       setWelcomeLoadedFromDb(true);
       setActiveWelcomeSource(effectiveEnabled ? 'welcome_rule' : 'welcome_disabled');
-      setWelcomeNotice(successMessage || 'LINE繧ｦ繧ｧ繝ｫ繧ｫ繝�繝ｻ蛻・ｲ占ｿ比ｿ｡險ｭ螳壹ｒ菫晏ｭ倥＠縺ｾ縺励◆・´INE蜈ｬ蠑上い繧ｫ繧ｦ繝ｳ繝医∈蜊ｳ譎ょ渚譏�縺輔ｌ縺ｾ縺吶・);
+      setWelcomeNotice(successMessage || 'LINEウェルカム・分岐返信設定を保存しました！LINE公式アカウントへ即時反映されます。');
       setIsEditingWelcome(false);
       setIsEditingPatternDiagnosis(false);
       setIsEditingPatternA(false);
       setIsEditingPatternB(false);
       setTimeout(() => setWelcomeNotice(''), 5000);
     } catch (err: any) {
-      setWelcomeError(`菫晏ｭ倥お繝ｩ繝ｼ: ${err?.message || '荳肴・縺ｪ繧ｨ繝ｩ繝ｼ'}`);
+      setWelcomeError(`保存エラー: ${err?.message || '不明なエラー'}`);
     } finally {
       setWelcomeSaving(false);
     }
@@ -975,8 +978,8 @@ export const MarketingFlowStudio: React.FC<MarketingFlowStudioProps> = ({
     setWelcomeEnabled(nextEnabled);
     await handleSaveWelcome(
       nextEnabled
-        ? '蜿九□縺｡霑ｽ蜉�繧ｦ繧ｧ繝ｫ繧ｫ繝�繝｡繝・そ繝ｼ繧ｸ縺ｮ閾ｪ蜍暮∽ｿ｡繧呈怏蜉ｹ縺ｫ縺励※菫晏ｭ倥＠縺ｾ縺励◆縲・
-        : '蜿九□縺｡霑ｽ蜉�繧ｦ繧ｧ繝ｫ繧ｫ繝�繝｡繝・そ繝ｼ繧ｸ縺ｮ閾ｪ蜍暮∽ｿ｡繧貞●豁｢縺励∪縺励◆縲・,
+        ? '友だち追加ウェルカムメッセージの自動送信を有効にして保存しました。'
+        : '友だち追加ウェルカムメッセージの自動送信を停止しました。',
       nextEnabled
     );
   };
@@ -1004,21 +1007,22 @@ export const MarketingFlowStudio: React.FC<MarketingFlowStudioProps> = ({
           .from('line_auto_reply_rules')
           .update({ enabled: false, updated_at: new Date().toISOString() })
           .eq('owner_id', ownerId)
-          .in('match_text', ['蜿九□縺｡霑ｽ蜉�', '繧ｦ繧ｧ繝ｫ繧ｫ繝�', '縺ゅ＞縺輔▽', '謖ｨ諡ｶ'])
+          .in('match_text', ['友だち追加', 'ウェルカム', 'あいさつ', '挨拶'])
           .eq('enabled', true);
         if (error) throw error;
       }
       setConflictingLegacyRules([]);
-      setWelcomeNotice('譌ｧ繧ｦ繧ｧ繝ｫ繧ｫ繝�髢｢騾｣繝ｫ繝ｼ繝ｫ繧貞●豁｢縺励∪縺励◆縲ゆｻ雁ｾ後・LINE繝ｻ繝｡繝ｼ繝ｫ閾ｪ蜍暮・菫｡縺ｮ險ｭ螳壹・縺ｿ縺碁∽ｿ｡縺輔ｌ縺ｾ縺吶・);
+      setWelcomeNotice('旧ウェルカム関連ルールを停止しました。今後はLINE・メール自動配信の設定のみが送信されます。');
       setTimeout(() => setWelcomeNotice(''), 5000);
     } catch (err: any) {
-      setWelcomeError(`譌ｧ繝ｫ繝ｼ繝ｫ蛛懈ｭ｢繧ｨ繝ｩ繝ｼ: ${err?.message || '荳肴・縺ｪ繧ｨ繝ｩ繝ｼ'}`);
+      setWelcomeError(`旧ルール停止エラー: ${err?.message || '不明なエラー'}`);
     } finally {
       setDisablingLegacy(false);
     }
   };
 
-  // 繧ｭ繝ｼ繝ｯ繝ｼ繝芽・蜍募ｿ懃ｭ斐Ν繝ｼ繝ｫ逕ｨ迥ｶ諷・  const [keywordRules, setKeywordRules] = useState<KeywordAutoReply[]>(DEFAULT_KEYWORD_RULES);
+  // キーワード自動応答ルール用状態
+  const [keywordRules, setKeywordRules] = useState<KeywordAutoReply[]>(DEFAULT_KEYWORD_RULES);
   const [isEditingKeywordModal, setIsEditingKeywordModal] = useState(false);
   const [editingRule, setEditingRule] = useState<KeywordAutoReply | null>(null);
   const [ruleName, setRuleName] = useState('');
@@ -1029,7 +1033,7 @@ export const MarketingFlowStudio: React.FC<MarketingFlowStudioProps> = ({
   const [ruleTargetBranch, setRuleTargetBranch] = useState<'diagnosis' | 'consult' | 'care' | 'general'>('general');
   const [keywordNotice, setKeywordNotice] = useState('');
 
-  // Supabase line_auto_reply_rules 縺ｮ蜷梧悄
+  // Supabase line_auto_reply_rules の同期
   useEffect(() => {
     if (!db) return;
     const fetchRules = async () => {
@@ -1043,12 +1047,12 @@ export const MarketingFlowStudio: React.FC<MarketingFlowStudioProps> = ({
         if (!error && data && data.length > 0) {
           const mapped: KeywordAutoReply[] = data.map((r: any) => ({
             id: r.id,
-            name: r.name || `縲・{r.match_text}縲阪∈縺ｮ蠢懃ｭ覗,
+            name: r.name || `「${r.match_text}」への応答`,
             matchText: r.match_text,
             matchMode: r.match_mode || 'contains',
             replyText: r.reply_text || '',
             tag: r.tag_id || '',
-            targetBranch: (r.name?.includes('險ｺ譁ｭ') ? 'diagnosis' : r.name?.includes('逶ｸ隲・) ? 'consult' : r.name?.includes('莉玖ｭｷ') ? 'care' : 'general') as any,
+            targetBranch: (r.name?.includes('診断') ? 'diagnosis' : r.name?.includes('相談') ? 'consult' : r.name?.includes('介護') ? 'care' : 'general') as any,
             enabled: r.enabled ?? true,
           }));
           setKeywordRules(mapped);
@@ -1060,13 +1064,14 @@ export const MarketingFlowStudio: React.FC<MarketingFlowStudioProps> = ({
     void fetchRules();
   }, [db]);
 
-  // 繧ｭ繝ｼ繝ｯ繝ｼ繝峨Ν繝ｼ繝ｫ縺ｮ菫晏ｭ・  const handleSaveKeywordRule = async (e: React.FormEvent) => {
+  // キーワードルールの保存
+  const handleSaveKeywordRule = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!ruleKeyword.trim() || !ruleReply.trim()) return;
 
     const newRule: KeywordAutoReply = {
       id: editingRule?.id || `kw-${Date.now()}`,
-      name: ruleName.trim() || `縲・{ruleKeyword.trim()}縲阪∈縺ｮ蠢懃ｭ覗,
+      name: ruleName.trim() || `「${ruleKeyword.trim()}」への応答`,
       matchText: ruleKeyword.trim(),
       matchMode: ruleMode,
       replyText: ruleReply.trim(),
@@ -1102,7 +1107,7 @@ export const MarketingFlowStudio: React.FC<MarketingFlowStudioProps> = ({
             ? await db.from('line_auto_reply_rules').update(rowPayload).eq('id', newRule.id).select('id').single()
             : await db.from('line_auto_reply_rules').insert(rowPayload).select('id').single();
           if (res.error) {
-            setWelcomeError(`繧ｭ繝ｼ繝ｯ繝ｼ繝峨Ν繝ｼ繝ｫ菫晏ｭ倥お繝ｩ繝ｼ: ${res.error.message}`);
+            setWelcomeError(`キーワードルール保存エラー: ${res.error.message}`);
             return;
           }
           if (res.data?.id && res.data.id !== newRule.id) {
@@ -1111,12 +1116,12 @@ export const MarketingFlowStudio: React.FC<MarketingFlowStudioProps> = ({
         }
       } catch (err: any) {
         console.warn('Supabase rule save warning:', err);
-        setWelcomeError(`繧ｭ繝ｼ繝ｯ繝ｼ繝峨Ν繝ｼ繝ｫ菫晏ｭ倥お繝ｩ繝ｼ: ${err?.message || '荳肴・縺ｪ繧ｨ繝ｩ繝ｼ'}`);
+        setWelcomeError(`キーワードルール保存エラー: ${err?.message || '不明なエラー'}`);
         return;
       }
     }
 
-    setKeywordNotice(`繧ｭ繝ｼ繝ｯ繝ｼ繝芽・蜍募ｿ懃ｭ斐・{newRule.matchText}縲阪ｒ菫晏ｭ倥＠縺ｾ縺励◆縲Ａ);
+    setKeywordNotice(`キーワード自動応答「${newRule.matchText}」を保存しました。`);
     setTimeout(() => setKeywordNotice(''), 4000);
     setIsEditingKeywordModal(false);
     setEditingRule(null);
@@ -1154,7 +1159,7 @@ export const MarketingFlowStudio: React.FC<MarketingFlowStudioProps> = ({
           };
           const res = await db.from('line_auto_reply_rules').insert(rowPayload).select('id').single();
           if (res.error) {
-            setWelcomeError(`繝ｪ繝・メ繝｡繝九Η繝ｼ逕ｨ繝ｫ繝ｼ繝ｫ縺ｮ逋ｻ骭ｲ繧ｨ繝ｩ繝ｼ: ${res.error.message}`);
+            setWelcomeError(`リッチメニュー用ルールの登録エラー: ${res.error.message}`);
             return;
           }
           if (res.data?.id) {
@@ -1163,7 +1168,7 @@ export const MarketingFlowStudio: React.FC<MarketingFlowStudioProps> = ({
         }
       } catch (err: any) {
         console.warn('Rich menu consult rule insert warning:', err);
-        setWelcomeError(`繝ｪ繝・メ繝｡繝九Η繝ｼ逕ｨ繝ｫ繝ｼ繝ｫ縺ｮ逋ｻ骭ｲ繧ｨ繝ｩ繝ｼ: ${err?.message || '荳肴・縺ｪ繧ｨ繝ｩ繝ｼ'}`);
+        setWelcomeError(`リッチメニュー用ルールの登録エラー: ${err?.message || '不明なエラー'}`);
         return;
       }
     }
@@ -1172,7 +1177,7 @@ export const MarketingFlowStudio: React.FC<MarketingFlowStudioProps> = ({
       const filtered = prev.filter((r) => r.matchText.trim() !== RICHMENU_LINE_CONSULT_RULE.matchText);
       return [createdRule, ...filtered];
     });
-    setKeywordNotice(`繝ｪ繝・メ繝｡繝九Η繝ｼ縲鍬INE逶ｸ隲・咲畑繝ｫ繝ｼ繝ｫ・・{RICHMENU_LINE_CONSULT_RULE.matchText}・峨ｒ逋ｻ骭ｲ縺励∪縺励◆縲Ａ);
+    setKeywordNotice(`リッチメニュー「LINE相談」用ルール（${RICHMENU_LINE_CONSULT_RULE.matchText}）を登録しました。`);
     setTimeout(() => setKeywordNotice(''), 4000);
   };
 
@@ -1187,7 +1192,7 @@ export const MarketingFlowStudio: React.FC<MarketingFlowStudioProps> = ({
         console.warn('Rule delete error:', err);
       }
     }
-    setKeywordNotice(`繧ｭ繝ｼ繝ｯ繝ｼ繝峨・{target?.matchText || ''}縲阪ｒ蜑企勁縺励∪縺励◆縲Ａ);
+    setKeywordNotice(`キーワード「${target?.matchText || ''}」を削除しました。`);
     setTimeout(() => setKeywordNotice(''), 3000);
   };
 
@@ -1208,7 +1213,7 @@ export const MarketingFlowStudio: React.FC<MarketingFlowStudioProps> = ({
         .update({ enabled: toggled, updated_at: new Date().toISOString() })
         .eq('id', ruleId);
       if (error) {
-        setWelcomeError(`繝ｫ繝ｼ繝ｫ蛻・崛繧ｨ繝ｩ繝ｼ: ${error.message}`);
+        setWelcomeError(`ルール切替エラー: ${error.message}`);
       }
       return;
     }
@@ -1233,7 +1238,7 @@ export const MarketingFlowStudio: React.FC<MarketingFlowStudioProps> = ({
         .select('id')
         .single();
       if (res.error) {
-        setWelcomeError(`繝ｫ繝ｼ繝ｫ菫晏ｭ倥お繝ｩ繝ｼ: ${res.error.message}`);
+        setWelcomeError(`ルール保存エラー: ${res.error.message}`);
         return;
       }
       if (res.data?.id) {
@@ -1242,7 +1247,7 @@ export const MarketingFlowStudio: React.FC<MarketingFlowStudioProps> = ({
         );
       }
     } catch (err: any) {
-      setWelcomeError(`繝ｫ繝ｼ繝ｫ菫晏ｭ倥お繝ｩ繝ｼ: ${err?.message || '荳肴・縺ｪ繧ｨ繝ｩ繝ｼ'}`);
+      setWelcomeError(`ルール保存エラー: ${err?.message || '不明なエラー'}`);
     }
   };
 
@@ -1268,7 +1273,7 @@ export const MarketingFlowStudio: React.FC<MarketingFlowStudioProps> = ({
     setIsEditingKeywordModal(true);
   };
 
-  // 繝薙Η繝ｼ繝｢繝ｼ繝牙・繧頑崛縺・ 'flow' (繝薙ず繝･繧｢繝ｫ蟆守ｷ壹・繝・・) 縺ｾ縺溘・ 'table' (蜈ｨ繧ｹ繝・ャ繝嶺ｸ隕ｧ繝・・繝悶Ν)
+  // ビューモード切り替え: 'flow' (ビジュアル導線マップ) または 'table' (全ステップ一覧テーブル)
   const [viewMode, setViewModeState] = useState<'flow' | 'table'>(() => {
     try {
       const saved = localStorage.getItem('marketing_flow_view_mode') as 'flow' | 'table' | null;
@@ -1292,7 +1297,8 @@ export const MarketingFlowStudio: React.FC<MarketingFlowStudioProps> = ({
   const [isStarterOpen, setIsStarterOpen] = useState(false);
   const [showOutreachSpec, setShowOutreachSpec] = useState(false);
 
-  // 繧ｹ繝・ャ繝励う繝ｳ繧ｹ繝壹け繧ｿ繝ｼ / 邱ｨ髮・Δ繝ｼ繝繝ｫ迥ｶ諷・  const [inspectorScenario, setInspectorScenario] = useState<MarketingScenario | null>(null);
+  // ステップインスペクター / 編集モーダル状態
+  const [inspectorScenario, setInspectorScenario] = useState<MarketingScenario | null>(null);
   const [isInspectorOpen, setIsInspectorOpen] = useState(false);
 
   const sortedAllScenarios = useMemo(() => sortScenarios(scenarios), [scenarios]);
@@ -1365,28 +1371,29 @@ export const MarketingFlowStudio: React.FC<MarketingFlowStudioProps> = ({
   }, [filteredTableScenarios]);
 
   const isMaterialFollowupScenario = (s: MarketingScenario) =>
-    s.trigger === 'material_requested' || s.name.includes('縲占ｳ・侭隲区ｱ・);
+    s.trigger === 'material_requested' || s.name.includes('【資料請求');
 
   const isPostMeetingFollowupScenario = (s: MarketingScenario) =>
     isPostDealStageTrigger(s.trigger) ||
-    s.name.includes('縲宣擇隲・ｾ・) ||
-    s.name.includes('縲先署譯域嶌騾∽ｻ伜ｾ・) ||
-    s.name.includes('縲舌Ξ繝昴・繝茨ｼ・署譯域嶌') ||
-    s.name.includes('縲舌Ξ繝昴・繝亥ｾ・) ||
-    s.name.includes('縲先署譯亥ｾ・);
+    s.name.includes('【面談後') ||
+    s.name.includes('【提案書送付後') ||
+    s.name.includes('【レポート＆提案書') ||
+    s.name.includes('【レポート後') ||
+    s.name.includes('【提案後');
 
   const isSalesOutreachScenario = (s: MarketingScenario) =>
     s.id === ONE_SHOT_SCENARIO_ID ||
-    s.name.includes('荳逋ｺ逶ｴ逅・) ||
-    s.name.includes('蝟ｶ讌ｭ繝｡繝ｼ繝ｫ') ||
-    s.name.includes('縲仙霧讌ｭ') ||
+    s.name.includes('一発直球') ||
+    s.name.includes('営業メール') ||
+    s.name.includes('【営業') ||
     s.trigger === 'outreach_first_sent' ||
     (s.channel === 'email' &&
-      (s.trigger === 'lead_created' || (s.trigger === 'manual' && /^縲千ｬｬ\d+騾・.test(s.name || ''))));
+      (s.trigger === 'lead_created' || (s.trigger === 'manual' && /^【第\d+通/.test(s.name || ''))));
 
-  // 繧ｷ繝翫Μ繧ｪ縺ｮ蛻・｡橸ｼ磯㍾隍・↑縺丞・蟯植 / B / C / 蜈ｱ騾壽蕗閧ｲ / 蝟ｶ讌ｭ繝｡繝ｼ繝ｫ / 雉・侭隲区ｱょｾ・/ 髱｢隲・・謠先｡亥ｾ後∈謖ｯ繧雁・縺托ｼ・  const diagnosisScenarios = useMemo(() => {
+  // シナリオの分類（重複なく分岐A / B / C / 共通教育 / 営業メール / 資料請求後 / 面談・提案後へ振り分け）
+  const diagnosisScenarios = useMemo(() => {
     const extractStepNumber = (name: string) => {
-      const m = (name || '').match(/[縲撰ｼｻ\[A]*\s*(\d+)/) || (name || '').match(/(\d+)/);
+      const m = (name || '').match(/[【［\[A]*\s*(\d+)/) || (name || '').match(/(\d+)/);
       return m ? parseInt(m[1], 10) : 999;
     };
     return scenarios
@@ -1395,11 +1402,11 @@ export const MarketingFlowStudio: React.FC<MarketingFlowStudioProps> = ({
         !isPostMeetingFollowupScenario(s) &&
         !isSalesOutreachScenario(s) &&
         (
-          s.name.includes('縲植') ||
-          s.name.includes('險ｺ譁ｭ') ||
+          s.name.includes('【A') ||
+          s.name.includes('診断') ||
           s.trigger.startsWith('diagnosis_') ||
           s.trigger.startsWith('report_') ||
-          s.targetTag === '驕ｸ謚・險ｺ譁ｭ' ||
+          s.targetTag === '選択:診断' ||
           isLegacyBranchAScenarioName(s.name || '')
         )
       )
@@ -1426,7 +1433,7 @@ export const MarketingFlowStudio: React.FC<MarketingFlowStudioProps> = ({
     }
     const cleaned = scenarios.filter((s) => !isLegacyBranchAScenarioName(s.name || ''));
     onScenariosChange(cleaned);
-    setKeywordNotice('譌ｧ繝舌・繧ｸ繝ｧ繝ｳ縺ｮ蛻・ｲ植繧ｷ繝翫Μ繧ｪ繧貞炎髯､縺励∪縺励◆縲・);
+    setKeywordNotice('旧バージョンの分岐Aシナリオを削除しました。');
     setTimeout(() => setKeywordNotice(''), 4000);
   };
 
@@ -1434,17 +1441,17 @@ export const MarketingFlowStudio: React.FC<MarketingFlowStudioProps> = ({
     return scenarios.filter(s =>
       !isMaterialFollowupScenario(s) &&
       !isPostMeetingFollowupScenario(s) &&
-      (s.name.includes('縲殖') ||
-        s.name.includes('逶ｴ逶ｸ隲・) ||
-        s.name.includes('蛟句挨逶ｸ隲・) ||
-        s.name.includes('髱｢隲・) ||
-        s.targetTag === '驕ｸ謚・蛟句挨逶ｸ隲・ ||
+      (s.name.includes('【B') ||
+        s.name.includes('直相談') ||
+        s.name.includes('個別相談') ||
+        s.name.includes('面談') ||
+        s.targetTag === '選択:個別相談' ||
         s.trigger.includes('booking') ||
         s.trigger.includes('meeting')) &&
-      !s.name.includes('險ｺ譁ｭ') &&
-      !s.name.includes('莉玖ｭｷ') &&
-      !s.name.includes('縲植') &&
-      !s.name.includes('縲燭')
+      !s.name.includes('診断') &&
+      !s.name.includes('介護') &&
+      !s.name.includes('【A') &&
+      !s.name.includes('【C')
     );
   }, [scenarios]);
 
@@ -1475,38 +1482,39 @@ export const MarketingFlowStudio: React.FC<MarketingFlowStudioProps> = ({
 
   const careScenarios = useMemo(() => {
     return scenarios.filter(s =>
-      s.name.includes('縲燭') ||
-      s.name.includes('莉玖ｭｷ') ||
-      s.name.includes('菫晞匱螟・) ||
-      s.name.includes('髢区･ｭ') ||
-      s.targetTag === '莉玖ｭｷ菫晞匱螟夜幕讌ｭ'
+      s.name.includes('【C') ||
+      s.name.includes('介護') ||
+      s.name.includes('保険外') ||
+      s.name.includes('開業') ||
+      s.targetTag === '介護保険外開業'
     );
   }, [scenarios]);
 
   const oneShotScenario = useMemo(() => {
     return scenarios.find(
-      (s) => s.id === ONE_SHOT_SCENARIO_ID || s.name.includes('荳逋ｺ逶ｴ逅・)
+      (s) => s.id === ONE_SHOT_SCENARIO_ID || s.name.includes('一発直球')
     ) || null;
   }, [scenarios]);
 
   const outreachScenarios = useMemo(() => {
     return scenarios.filter(s =>
       s.id !== ONE_SHOT_SCENARIO_ID &&
-      !s.name.includes('荳逋ｺ逶ｴ逅・) &&
+      !s.name.includes('一発直球') &&
       isSalesOutreachScenario(s)
     );
   }, [scenarios]);
 
   const nurturingScenarios = useMemo(() => {
     return scenarios.filter(s =>
-      s.name.includes('繧ｹ繝医・繝ｪ繝ｼ') ||
-      s.name.includes('繝翫・繝√Ε繝ｪ繝ｳ繧ｰ') ||
-      s.name.includes('隧ｱ縲・) ||
-      s.name.includes('螟ｧ讖・)
+      s.name.includes('ストーリー') ||
+      s.name.includes('ナーチャリング') ||
+      s.name.includes('話】') ||
+      s.name.includes('大橋')
     );
   }, [scenarios]);
 
-  // 繧､繝ｳ繧ｹ繝壹け繧ｿ繝ｼ繧帝幕縺・  const handleOpenInspector = (scenario: MarketingScenario) => {
+  // インスペクターを開く
+  const handleOpenInspector = (scenario: MarketingScenario) => {
     setInspectorScenario(scenario);
     setIsInspectorOpen(true);
   };
@@ -1518,7 +1526,7 @@ export const MarketingFlowStudio: React.FC<MarketingFlowStudioProps> = ({
       name: ONE_SHOT_SCENARIO_NAME,
       trigger: 'manual',
       channel: 'email',
-      audience: '譛ｪ謗･隗ｦ縺ｮ隕玖ｾｼ縺ｿ莨∵･ｭ・井ｸ逋ｺ逶ｴ逅・署譯茨ｼ・,
+      audience: '未接触の見込み企業（一発直球提案）',
       waitMinutes: 0,
       emailSubject: rawDefault.subject,
       emailBody: rawDefault.body,
@@ -1537,13 +1545,14 @@ export const MarketingFlowStudio: React.FC<MarketingFlowStudioProps> = ({
       preferredSendTime: '',
       stopOnBooking: true,
       stopOnDeal: true,
-      consentBasis: '迚ｹ螳夐崕蟄舌Γ繝ｼ繝ｫ豕輔↓蝓ｺ縺･縺乗･ｭ蜍呎隼蝟・ュ蝣ｱ縺ｮ謠蝉ｾ幢ｼ医が繝励ヨ繧｢繧ｦ繝域・險假ｼ・,
+      consentBasis: '特定電子メール法に基づく業務改善情報の提供（オプトアウト明記）',
       updatedAt: Date.now(),
     };
     handleOpenInspector(target);
   };
 
-  // 譁ｰ隕上せ繝・ャ繝嶺ｽ懈・・育樟蝨ｨ髢九＞縺ｦ縺・ｋ繝医Λ繝・け繝ｻ蛻・ｲ舌↓蜷医ｏ縺帙※蛻晄悄險ｭ螳夲ｼ・  const handleCreateNewStep = () => {
+  // 新規ステップ作成（現在開いているトラック・分岐に合わせて初期設定）
+  const handleCreateNewStep = () => {
     const isOutreach = activeTrack === 'sales_outreach';
     const isNurturing = activeTrack === 'story_nurturing';
     const isInboundMaterial = activeTrack === 'inbound_material';
@@ -1560,25 +1569,25 @@ export const MarketingFlowStudio: React.FC<MarketingFlowStudioProps> = ({
       ? 'tag_added'
       : 'line_registered';
     const defaultTargetTag = isConsult
-      ? '驕ｸ謚・蛟句挨逶ｸ隲・
+      ? '選択:個別相談'
       : isCare
-      ? '莉玖ｭｷ菫晞匱螟夜幕讌ｭ'
+      ? '介護保険外開業'
       : isDiagnosis
-      ? '驕ｸ謚・險ｺ譁ｭ'
+      ? '選択:診断'
       : undefined;
     const defaultName = isOutreach
-      ? '縲仙霧讌ｭ繝｡繝ｼ繝ｫ縲第･ｭ蜍呎隼蝟・・莉慕ｵ・∩蛹悶・縺疲｡亥・'
+      ? '【営業メール】業務改善・仕組み化のご案内'
       : isInboundMaterial
-      ? '縲占ｳ・侭隲区ｱゅ代ヵ繧ｩ繝ｭ繝ｼ驟堺ｿ｡繧ｹ繝・ャ繝・
+      ? '【資料請求】フォロー配信ステップ'
       : isNurturing
-      ? '縲仙・騾壽蕗閧ｲ繝ｻ霑ｽ蜉�隧ｱ縲代せ繝医・繝ｪ繝ｼ繝輔か繝ｭ繝ｼ驟堺ｿ｡'
+      ? '【共通教育・追加話】ストーリーフォロー配信'
       : isConsult
-      ? '縲殖繝ｻ隕ｪ霄ｫ繝輔か繝ｭ繝ｼ縲大句挨逶ｸ隲・・縺疲｡亥・'
+      ? '【B・親身フォロー】個別相談のご案内'
       : isCare
-      ? '縲燭繝ｻ蟆る摩謨呵ご縲台ｻ玖ｭｷ菫晞匱螟夜幕讌ｭ縺ｮ縺疲｡亥・'
+      ? '【C・専門教育】介護保険外開業のご案内'
       : isDiagnosis
-      ? '縲植繝ｻ謨呵ご縲醍┌譁咏ｵ悟霧險ｺ譁ｭ繝輔か繝ｭ繝ｼ'
-      : '縲伸INE縲代ヵ繧ｩ繝ｭ繝ｼ驟堺ｿ｡繧ｹ繝・ャ繝・;
+      ? '【A・教育】無料経営診断フォロー'
+      : '【LINE】フォロー配信ステップ';
 
     const newStep: MarketingScenario = {
       id: `step-${Date.now()}`,
@@ -1586,49 +1595,51 @@ export const MarketingFlowStudio: React.FC<MarketingFlowStudioProps> = ({
       trigger: defaultTrigger,
       targetTag: defaultTargetTag,
       channel: defaultChannel,
-      audience: isOutreach ? '譛ｪ謗･隗ｦ縺ｮ隕玖ｾｼ縺ｿ莨∵･ｭ' : isInboundMaterial ? '雉・侭隲区ｱり・ｼ郁ｿ比ｿ｡繝ｻ莠育ｴ・〒蛛懈ｭ｢・・ : 'LINE蜿九□縺｡隕玖ｾｼ縺ｿ螳｢',
+      audience: isOutreach ? '未接触の見込み企業' : isInboundMaterial ? '資料請求者（返信・予約で停止）' : 'LINE友だち見込み客',
       waitMinutes: isOutreach ? 0 : 1440,
-      emailSubject: isOutreach || isNurturing || isInboundMaterial ? '縲先怏髯蝉ｼ夂､ｾMST縲題ｳ・侭縺ｮ縺皮｢ｺ隱阪≠繧翫′縺ｨ縺・＃縺悶＞縺ｾ縺・ : '',
-      emailBody: isOutreach || isNurturing || isInboundMaterial ? '{recipient_name} 讒禄n\n譛蛾剞莨夂､ｾMST縺ｮ螟ｧ讖九〒縺吶・n縺碑ｫ区ｱゅ＞縺溘□縺・◆雉・侭縺ｯ縺頑焔蜈・〒縺碑ｦｧ縺・◆縺�縺代∪縺励◆縺ｧ縺励ｇ縺・°縲・ : '',
-      messageBody: !isOutreach ? '{recipient_name} 讒禄n縺疲｡亥・繧偵♀螻翫￠縺・◆縺励∪縺吶・n\n笆ｼ30蛻・┌譁吶が繝ｳ繝ｩ繧､繝ｳ逶ｸ隲・・縺薙■繧噂n{booking_url}' : '',
+      emailSubject: isOutreach || isNurturing || isInboundMaterial ? '【有限会社MST】資料のご確認ありがとうございます' : '',
+      emailBody: isOutreach || isNurturing || isInboundMaterial ? '{recipient_name} 様\n\n有限会社MSTの大橋です。\nご請求いただいた資料はお手元でご覧いただけましたでしょうか。' : '',
+      messageBody: !isOutreach ? '{recipient_name} 様\nご案内をお届けいたします。\n\n▼30分無料オンライン相談はこちら\n{booking_url}' : '',
       lineMessageType: isInboundMaterial ? 'text' : 'flex',
       lineImageUrl: '',
       linePreviewImageUrl: '',
-      flexAltText: '縲舌＃譯亥・縲第･ｭ蜍呎隼蝟・・蛟句挨逶ｸ隲・,
-      flexTitle: '譁ｰ縺励＞縺疲｡亥・',
-      flexBody: '{recipient_name} 讒禄n縺疲｡亥・繧偵♀螻翫￠縺・◆縺励∪縺吶・,
-      flexButtonLabel: '30蛻・嶌隲・ｒ莠育ｴ・☆繧・,
+      flexAltText: '【ご案内】業務改善・個別相談',
+      flexTitle: '新しいご案内',
+      flexBody: '{recipient_name} 様\nご案内をお届けいたします。',
+      flexButtonLabel: '30分相談を予約する',
       flexButtonUrl: '{booking_url}',
       status: 'draft',
       automationEnabled: false,
       stopOnBooking: true,
       stopOnDeal: true,
-      consentBasis: isOutreach ? '迚ｹ螳夐崕蟄舌Γ繝ｼ繝ｫ豕輔↓蝓ｺ縺･縺乗･ｭ蜍呎隼蝟・ュ蝣ｱ縺ｮ謠蝉ｾ・ : isInboundMaterial ? '雉・侭隲区ｱゅヵ繧ｩ繝ｼ繝�騾∽ｿ｡譎ゅ・蜷梧э縺ｫ蝓ｺ縺･縺・ : 'LINE蜿九□縺｡逋ｻ骭ｲ譎ゅ・蜷梧э縺ｫ蝓ｺ縺･縺・,
+      consentBasis: isOutreach ? '特定電子メール法に基づく業務改善情報の提供' : isInboundMaterial ? '資料請求フォーム送信時の同意に基づく' : 'LINE友だち登録時の同意に基づく',
       updatedAt: Date.now(),
     };
     setInspectorScenario(newStep);
     setIsInspectorOpen(true);
   };
 
-  // 繧､繝ｳ繧ｹ繝壹け繧ｿ繝ｼ縺九ｉ縺ｮ菫晏ｭ・  const handleSaveInspectorScenario = (saved: MarketingScenario) => {
+  // インスペクターからの保存
+  const handleSaveInspectorScenario = (saved: MarketingScenario) => {
     const exists = scenarios.some(s => s.id === saved.id);
     const updated = exists
       ? scenarios.map(s => s.id === saved.id ? saved : s)
       : [saved, ...scenarios];
     onScenariosChange(updated);
-    setKeywordNotice(`繧ｹ繝・ャ繝励・{saved.name}縲阪・險ｭ螳壹ｒ菫晏ｭ倥＠縺ｾ縺励◆縲Ａ);
+    setKeywordNotice(`ステップ「${saved.name}」の設定を保存しました。`);
     setTimeout(() => setKeywordNotice(''), 4000);
   };
 
-  // 繧､繝ｳ繧ｹ繝壹け繧ｿ繝ｼ縺九ｉ縺ｮ蜑企勁
+  // インスペクターからの削除
   const handleDeleteInspectorScenario = (scenarioId: string) => {
     const updated = scenarios.filter(s => s.id !== scenarioId);
     onScenariosChange(updated);
-    setKeywordNotice('繧ｹ繝・ャ繝励ｒ蜑企勁縺励∪縺励◆縲・);
+    setKeywordNotice('ステップを削除しました。');
     setTimeout(() => setKeywordNotice(''), 3000);
   };
 
-  // 繝医げ繝ｫ閾ｪ蜍暮・菫｡縺ｮ譛牙柑蛹厄ｼ井ｸ譎ょ●豁｢譎ゅ・ status 繧・draft 縺ｫ謌ｻ縺励※繧ｵ繝ｼ繝舌・繧ｨ繝ｳ繧ｭ繝･繝ｼ繧堤｢ｺ螳溘↓豁｢繧√ｋ・・  const toggleScenarioAutomation = (scenarioId: string, currentStatus: boolean) => {
+  // トグル自動配信の有効化（一時停止時は status も draft に戻してサーバーエンキューを確実に止める）
+  const toggleScenarioAutomation = (scenarioId: string, currentStatus: boolean) => {
     const nextEnabled = !currentStatus;
     const updated = scenarios.map(s => {
       if (s.id === scenarioId) {
@@ -1667,33 +1678,35 @@ export const MarketingFlowStudio: React.FC<MarketingFlowStudioProps> = ({
       {welcomeError && (
         <div role="alert" className="rounded-xl border border-rose-200 bg-rose-50 p-3 text-xs font-medium text-rose-800 flex items-center justify-between">
           <span>{welcomeError}</span>
-          <button type="button" onClick={() => setWelcomeError('')} className="text-rose-600 font-bold px-1 cursor-pointer">笨・/button>
+          <button type="button" onClick={() => setWelcomeError('')} className="text-rose-600 font-bold px-1 cursor-pointer">✕</button>
         </div>
       )}
 
       {welcomeNotice && (
         <div role="status" className="rounded-xl border border-emerald-200 bg-emerald-50 p-3 text-xs font-medium text-emerald-800 flex items-center justify-between">
           <span>{welcomeNotice}</span>
-          <button type="button" onClick={() => setWelcomeNotice('')} className="text-emerald-600 font-bold px-1 cursor-pointer">笨・/button>
+          <button type="button" onClick={() => setWelcomeNotice('')} className="text-emerald-600 font-bold px-1 cursor-pointer">✕</button>
         </div>
       )}
 
       {keywordNotice && (
         <div role="status" className="rounded-xl border border-emerald-200 bg-emerald-50 p-3 text-xs font-medium text-emerald-800 flex items-center justify-between">
           <span>{keywordNotice}</span>
-          <button type="button" onClick={() => setKeywordNotice('')} className="text-emerald-600 font-bold px-1 cursor-pointer">笨・/button>
+          <button type="button" onClick={() => setKeywordNotice('')} className="text-emerald-600 font-bold px-1 cursor-pointer">✕</button>
         </div>
       )}
 
-      {/* 繧ｳ繝ｳ繝医Ο繝ｼ繝ｫ繝倥ャ繝繝ｼ・・ン繝･繝ｼ蛻・ｊ譖ｿ縺・*/}
+      {/* コントロールヘッダー＆ビュー切り替え */}
       <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-xs space-y-3.5">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div className="flex items-center gap-2.5">
             <GitBranch className="w-4 h-4 text-purple-600 shrink-0" />
             <h2 className="text-sm font-bold text-slate-900">
-              驟堺ｿ｡繧ｷ繝翫Μ繧ｪ ・・蟆守ｷ夂ｮ｡逅・            </h2>
+              配信シナリオ ＆ 導線管理
+            </h2>
             <span className="text-xs text-slate-500 hidden sm:inline">
-              ・郁ｿ比ｿ｡繝ｻ莠育ｴ・′蜈･繧九→閾ｪ蜍暮・菫｡縺ｯ蜊ｳ譎ょ●豁｢縺励∪縺呻ｼ・            </span>
+              （返信・予約が入ると自動配信は即時停止します）
+            </span>
           </div>
 
           <div className="flex flex-wrap items-center gap-2 shrink-0">
@@ -1705,7 +1718,7 @@ export const MarketingFlowStudio: React.FC<MarketingFlowStudioProps> = ({
                   className="inline-flex items-center gap-1.5 rounded-lg bg-slate-50 hover:bg-slate-100 border border-slate-200 px-3 py-1.5 text-xs font-semibold text-slate-700 transition cursor-pointer whitespace-nowrap"
                 >
                   <Zap className="h-3.5 w-3.5 text-purple-600" />
-                  <span>蛻晄悄繧ｻ繝・ヨ繝ｻ謨ｴ逅・/span>
+                  <span>初期セット・整理</span>
                   {duplicateCount > 0 && (
                     <span className="w-2 h-2 rounded-full bg-amber-500" />
                   )}
@@ -1714,7 +1727,7 @@ export const MarketingFlowStudio: React.FC<MarketingFlowStudioProps> = ({
 
                 {isStarterOpen && (
                   <div className="absolute right-0 top-full mt-1.5 w-72 rounded-xl bg-white border border-slate-200 shadow-lg p-2.5 z-30 space-y-1.5">
-                    <div className="text-[11px] font-bold text-slate-400 px-2 py-0.5">繝励Μ繧ｻ繝・ヨ繝ｻ陬懷勧謫堺ｽ・/div>
+                    <div className="text-[11px] font-bold text-slate-400 px-2 py-0.5">プリセット・補助操作</div>
                     {duplicateCount > 0 && onDeduplicateScenarios && (
                       <button
                         type="button"
@@ -1723,9 +1736,9 @@ export const MarketingFlowStudio: React.FC<MarketingFlowStudioProps> = ({
                       >
                         <span className="flex items-center gap-1.5">
                           <Trash2 className="h-3.5 w-3.5" />
-                          <span>驥崎､・す繝翫Μ繧ｪ繧呈紛逅・/span>
+                          <span>重複シナリオを整理</span>
                         </span>
-                        <span className="text-[10px] px-1.5 py-0.5 rounded bg-amber-200 text-amber-900">{duplicateCount}莉ｶ</span>
+                        <span className="text-[10px] px-1.5 py-0.5 rounded bg-amber-200 text-amber-900">{duplicateCount}件</span>
                       </button>
                     )}
                     {onApplyAllStarterSets && (
@@ -1735,7 +1748,7 @@ export const MarketingFlowStudio: React.FC<MarketingFlowStudioProps> = ({
                         className="w-full flex items-center gap-2 px-2.5 py-1.5 rounded-lg text-xs font-semibold text-slate-700 hover:bg-purple-50 hover:text-purple-700 transition cursor-pointer text-left"
                       >
                         <Zap className="h-3.5 w-3.5 text-purple-600 shrink-0" />
-                        <span>蜈ｨ蜈ｬ蠑上・繝ｪ繧ｻ繝・ヨ繧呈怙譁ｰ蛹・/span>
+                        <span>全公式プリセットを最新化</span>
                       </button>
                     )}
                     {onApplyDiagnosisStarterSet && (
@@ -1745,7 +1758,7 @@ export const MarketingFlowStudio: React.FC<MarketingFlowStudioProps> = ({
                         className="w-full flex items-center gap-2 px-2.5 py-1.5 rounded-lg text-xs font-semibold text-slate-700 hover:bg-emerald-50 hover:text-emerald-700 transition cursor-pointer text-left"
                       >
                         <MessageCircle className="h-3.5 w-3.5 text-emerald-600 shrink-0" />
-                        <span>蛻・ｲ植: 邁｡譏楢ｨｺ譁ｭﾃ玲蕗閧ｲ4譛ｬ繧帝←逕ｨ</span>
+                        <span>分岐A: 簡易診断×教育4本を適用</span>
                       </button>
                     )}
                     {onApplyMaterialStarterSet && (
@@ -1755,7 +1768,7 @@ export const MarketingFlowStudio: React.FC<MarketingFlowStudioProps> = ({
                         className="w-full flex items-center gap-2 px-2.5 py-1.5 rounded-lg text-xs font-semibold text-slate-700 hover:bg-teal-50 hover:text-teal-700 transition cursor-pointer text-left"
                       >
                         <BookOpen className="h-3.5 w-3.5 text-teal-600 shrink-0" />
-                        <span>雉・侭隲区ｱょｾ・ 閾ｪ蜍戊ｿｽ螳｢3譛ｬ繧帝←逕ｨ</span>
+                        <span>資料請求後: 自動追客3本を適用</span>
                       </button>
                     )}
                     {onApplyPostMeetingStarterSet && (
@@ -1765,7 +1778,7 @@ export const MarketingFlowStudio: React.FC<MarketingFlowStudioProps> = ({
                         className="w-full flex items-center gap-2 px-2.5 py-1.5 rounded-lg text-xs font-semibold text-slate-700 hover:bg-amber-50 hover:text-amber-700 transition cursor-pointer text-left"
                       >
                         <UserCheck className="h-3.5 w-3.5 text-amber-600 shrink-0" />
-                        <span>髱｢隲・・謠先｡亥ｾ・ 邨ｱ蜷医ヵ繧ｩ繝ｭ繝ｼ3譛ｬ繧帝←逕ｨ</span>
+                        <span>面談・提案後: 統合フォロー3本を適用</span>
                       </button>
                     )}
                     {onApplyDirectConsultStarterSet && (
@@ -1775,7 +1788,7 @@ export const MarketingFlowStudio: React.FC<MarketingFlowStudioProps> = ({
                         className="w-full flex items-center gap-2 px-2.5 py-1.5 rounded-lg text-xs font-semibold text-slate-700 hover:bg-sky-50 hover:text-sky-700 transition cursor-pointer text-left"
                       >
                         <Calendar className="h-3.5 w-3.5 text-sky-600 shrink-0" />
-                        <span>蛻・ｲ殖繝ｻC: 逶ｸ隲・・莉玖ｭｷ繝輔か繝ｭ繝ｼ驕ｩ逕ｨ</span>
+                        <span>分岐B・C: 相談・介護フォロー適用</span>
                       </button>
                     )}
                     {onApplyLineNurturingStarterSet && (
@@ -1785,7 +1798,7 @@ export const MarketingFlowStudio: React.FC<MarketingFlowStudioProps> = ({
                         className="w-full flex items-center gap-2 px-2.5 py-1.5 rounded-lg text-xs font-semibold text-slate-700 hover:bg-purple-50 hover:text-purple-700 transition cursor-pointer text-left"
                       >
                         <BookOpen className="h-3.5 w-3.5 text-purple-600 shrink-0" />
-                        <span>蜈ｱ騾壽蕗閧ｲ: 繧ｹ繝医・繝ｪ繝ｼ7隧ｱ繧帝←逕ｨ</span>
+                        <span>共通教育: ストーリー7話を適用</span>
                       </button>
                     )}
                     {onApplyOutreachStarterSet && (
@@ -1795,7 +1808,7 @@ export const MarketingFlowStudio: React.FC<MarketingFlowStudioProps> = ({
                         className="w-full flex items-center gap-2 px-2.5 py-1.5 rounded-lg text-xs font-semibold text-slate-700 hover:bg-blue-50 hover:text-blue-700 transition cursor-pointer text-left"
                       >
                         <Mail className="h-3.5 w-3.5 text-blue-600 shrink-0" />
-                        <span>蝟ｶ讌ｭ繝｡繝ｼ繝ｫ5谿ｵ髫弱ｒ驕ｩ逕ｨ</span>
+                        <span>営業メール5段階を適用</span>
                       </button>
                     )}
                   </div>
@@ -1805,14 +1818,15 @@ export const MarketingFlowStudio: React.FC<MarketingFlowStudioProps> = ({
           </div>
         </div>
 
-        {/* 繧ｷ繝翫Μ繧ｪ0莉ｶ譎ゅ・蛻晄悄繧ｻ繝・ヨ繧｢繝・・譯亥・ */}
+        {/* シナリオ0件時の初期セットアップ案内 */}
         {scenarios.length === 0 && (
           <div className="rounded-xl border border-dashed border-purple-300 bg-purple-50/40 p-5 text-slate-800 space-y-3">
             <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
               <div>
-                <h3 className="text-sm font-bold text-slate-900">驟堺ｿ｡繧ｷ繝翫Μ繧ｪ縺ｮ蛻晄悄繧ｻ繝・ヨ繧｢繝・・</h3>
+                <h3 className="text-sm font-bold text-slate-900">配信シナリオの初期セットアップ</h3>
                 <p className="text-xs text-slate-600 mt-1">
-                  蜈ｬ蠑上せ繧ｿ繝ｼ繧ｿ繝ｼ繧ｻ繝・ヨ・・INE逶ｸ隲・・謨呵ご繝輔Ο繝ｼ縲∝霧讌ｭ繝｡繝ｼ繝ｫ5谿ｵ髫弱↑縺ｩ・峨ｒ驕ｩ逕ｨ縺吶ｋ縺九∵眠隕上せ繝・ャ繝励ｒ菴懈・縺励※縺上□縺輔＞縲・                </p>
+                  公式スターターセット（LINE相談・教育フロー、営業メール5段階など）を適用するか、新規ステップを作成してください。
+                </p>
               </div>
               <div className="flex flex-wrap items-center gap-2">
                 {onApplyAllStarterSets && (
@@ -1822,7 +1836,7 @@ export const MarketingFlowStudio: React.FC<MarketingFlowStudioProps> = ({
                     className="inline-flex items-center gap-1.5 rounded-lg bg-purple-600 hover:bg-purple-700 px-3.5 py-2 text-xs font-bold text-white transition cursor-pointer"
                   >
                     <Zap className="h-3.5 w-3.5" />
-                    <span>蜈ｬ蠑上・繝ｪ繧ｻ繝・ヨ繧剃ｸ諡ｬ驕ｩ逕ｨ</span>
+                    <span>公式プリセットを一括適用</span>
                   </button>
                 )}
                 <button
@@ -1831,14 +1845,14 @@ export const MarketingFlowStudio: React.FC<MarketingFlowStudioProps> = ({
                   className="inline-flex items-center gap-1.5 rounded-lg bg-white hover:bg-slate-50 border border-slate-300 px-3.5 py-2 text-xs font-bold text-slate-700 transition cursor-pointer"
                 >
                   <Plus className="h-3.5 w-3.5" />
-                  <span>譁ｰ隕丈ｽ懈・</span>
+                  <span>新規作成</span>
                 </button>
               </div>
             </div>
           </div>
         )}
 
-        {/* 5縺､縺ｮ陦ｨ遉ｺ蛻・ｊ譖ｿ縺医ち繝・*/}
+        {/* 5つの表示切り替えタブ */}
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-2">
           <button
             type="button"
@@ -1852,13 +1866,14 @@ export const MarketingFlowStudio: React.FC<MarketingFlowStudioProps> = ({
             <div className="min-w-0">
               <div className={`flex items-center gap-1.5 font-bold text-xs ${viewMode === 'table' ? 'text-purple-900' : 'text-slate-800'}`}>
                 <Table className={`w-3.5 h-3.5 shrink-0 ${viewMode === 'table' ? 'text-purple-600' : 'text-slate-400'}`} />
-                <span className="truncate">蜈ｨ繧ｹ繝・ャ繝嶺ｸ隕ｧ</span>
+                <span className="truncate">全ステップ一覧</span>
               </div>
               <div className="text-[11px] text-slate-500 mt-0.5 truncate">
-                讀懃ｴ｢繝ｻON/OFF繝ｻ蜊倡匱邱ｨ髮・              </div>
+                検索・ON/OFF・単発編集
+              </div>
             </div>
             <span className={`text-[11px] font-bold px-2 py-0.5 rounded shrink-0 ml-2 ${viewMode === 'table' ? 'bg-purple-100 text-purple-800' : 'bg-slate-100 text-slate-600'}`}>
-              {scenarios.length}莉ｶ
+              {scenarios.length}件
             </span>
           </button>
 
@@ -1874,10 +1889,10 @@ export const MarketingFlowStudio: React.FC<MarketingFlowStudioProps> = ({
             <div className="min-w-0">
               <div className={`flex items-center gap-1.5 font-bold text-xs ${activeTrack === 'line_welcome' && viewMode === 'flow' ? 'text-emerald-900' : 'text-slate-800'}`}>
                 <MessageCircle className={`w-3.5 h-3.5 shrink-0 ${activeTrack === 'line_welcome' && viewMode === 'flow' ? 'text-emerald-600' : 'text-slate-400'}`} />
-                <span className="truncate">LINE蟆守ｷ壹・險ｺ譁ｭ蠕・/span>
+                <span className="truncate">LINE導線・診断後</span>
               </div>
               <div className="text-[11px] text-slate-500 mt-0.5 truncate">
-                繧ｦ繧ｧ繝ｫ繧ｫ繝�繝ｻ蛻・ｲ植/B/C
+                ウェルカム・分岐A/B/C
               </div>
             </div>
             <span className={`text-[11px] font-bold px-2 py-0.5 rounded shrink-0 ml-2 ${activeTrack === 'line_welcome' && viewMode === 'flow' ? 'bg-emerald-100 text-emerald-800' : 'bg-slate-100 text-slate-600'}`}>
@@ -1897,13 +1912,14 @@ export const MarketingFlowStudio: React.FC<MarketingFlowStudioProps> = ({
             <div className="min-w-0">
               <div className={`flex items-center gap-1.5 font-bold text-xs ${activeTrack === 'inbound_material' && viewMode === 'flow' ? 'text-teal-900' : 'text-slate-800'}`}>
                 <UserCheck className={`w-3.5 h-3.5 shrink-0 ${activeTrack === 'inbound_material' && viewMode === 'flow' ? 'text-teal-600' : 'text-slate-400'}`} />
-                <span className="truncate">雉・侭繝ｻ髱｢隲・・謠先｡亥ｾ・/span>
+                <span className="truncate">資料・面談・提案後</span>
               </div>
               <div className="text-[11px] text-slate-500 mt-0.5 truncate">
-                閾ｪ蜍戊ｿｽ螳｢6繧ｹ繝・ャ繝・              </div>
+                自動追客6ステップ
+              </div>
             </div>
             <span className={`text-[11px] font-bold px-2 py-0.5 rounded shrink-0 ml-2 ${activeTrack === 'inbound_material' && viewMode === 'flow' ? 'bg-teal-100 text-teal-800' : 'bg-slate-100 text-slate-600'}`}>
-              {materialFollowupScenarios.length + postMeetingScenarios.length}譛ｬ
+              {materialFollowupScenarios.length + postMeetingScenarios.length}本
             </span>
           </button>
 
@@ -1919,14 +1935,14 @@ export const MarketingFlowStudio: React.FC<MarketingFlowStudioProps> = ({
             <div className="min-w-0">
               <div className={`flex items-center gap-1.5 font-bold text-xs ${activeTrack === 'story_nurturing' && viewMode === 'flow' ? 'text-indigo-900' : 'text-slate-800'}`}>
                 <BookOpen className={`w-3.5 h-3.5 shrink-0 ${activeTrack === 'story_nurturing' && viewMode === 'flow' ? 'text-indigo-600' : 'text-slate-400'}`} />
-                <span className="truncate">謨呵ご繧ｹ繝・ャ繝・/span>
+                <span className="truncate">教育ステップ</span>
               </div>
               <div className="text-[11px] text-slate-500 mt-0.5 truncate">
-                蜈ｱ騾壹せ繝医・繝ｪ繝ｼ7隧ｱ
+                共通ストーリー7話
               </div>
             </div>
             <span className={`text-[11px] font-bold px-2 py-0.5 rounded shrink-0 ml-2 ${activeTrack === 'story_nurturing' && viewMode === 'flow' ? 'bg-indigo-100 text-indigo-800' : 'bg-slate-100 text-slate-600'}`}>
-              {nurturingScenarios.length || 7}隧ｱ
+              {nurturingScenarios.length || 7}話
             </span>
           </button>
 
@@ -1942,29 +1958,29 @@ export const MarketingFlowStudio: React.FC<MarketingFlowStudioProps> = ({
             <div className="min-w-0">
               <div className={`flex items-center gap-1.5 font-bold text-xs ${activeTrack === 'sales_outreach' && viewMode === 'flow' ? 'text-blue-900' : 'text-slate-800'}`}>
                 <Mail className={`w-3.5 h-3.5 shrink-0 ${activeTrack === 'sales_outreach' && viewMode === 'flow' ? 'text-blue-600' : 'text-slate-400'}`} />
-                <span className="truncate">蝟ｶ讌ｭ繝｡繝ｼ繝ｫ・・谿ｵ髫趣ｼ・/span>
+                <span className="truncate">営業メール（5段階）</span>
               </div>
               <div className="text-[11px] text-slate-500 mt-0.5 truncate">
-                蜊倡匱繝ｻ閾ｪ蜍戊ｿｽ螳｢
+                単発・自動追客
               </div>
             </div>
             <span className={`text-[11px] font-bold px-2 py-0.5 rounded shrink-0 ml-2 ${activeTrack === 'sales_outreach' && viewMode === 'flow' ? 'bg-blue-100 text-blue-800' : 'bg-slate-100 text-slate-600'}`}>
-              {outreachScenarios.length}莉ｶ
+              {outreachScenarios.length}件
             </span>
           </button>
         </div>
       </div>
 
-      {/* 繝・・繝悶Ν陦ｨ遉ｺ繝｢繝ｼ繝・ 蜈ｨ繧ｹ繝・ャ繝嶺ｸ隕ｧ ・・蟆守ｷ壹げ繝ｫ繝ｼ繝玲紛逅・*/}
+      {/* テーブル表示モード: 全ステップ一覧 ＆ 導線グループ整理 */}
       {viewMode === 'table' && (
         <div className="space-y-4 animate-fade-in">
 
-          {/* �迫 驟堺ｿ｡蟆守ｷ啅RL險ｭ螳夂憾豕√き繝ｼ繝・*/}
+          {/* 🔗 配信導線URL設定状況カード */}
           <div className="bg-blue-50 border border-blue-200 rounded-2xl p-4">
             <div className="flex items-center gap-2 mb-3">
               <ExternalLink className="w-4 h-4 text-blue-600 shrink-0" />
-              <span className="text-sm font-bold text-blue-900">�迫 驟堺ｿ｡蟆守ｷ啅RL險ｭ螳夂憾豕・/span>
-              <span className="text-xs text-blue-600 ml-1">窶・蜷・せ繝・ャ繝励↓豁｣縺励￥蟆守ｷ啅RL縺悟・縺｣縺ｦ縺・ｋ縺狗｢ｺ隱阪〒縺阪∪縺・/span>
+              <span className="text-sm font-bold text-blue-900">🔗 配信導線URL設定状況</span>
+              <span className="text-xs text-blue-600 ml-1">— 各ステップに正しく導線URLが入っているか確認できます</span>
             </div>
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2.5">
               <a
@@ -1973,9 +1989,9 @@ export const MarketingFlowStudio: React.FC<MarketingFlowStudioProps> = ({
                 rel="noopener noreferrer"
                 className="flex items-start gap-2.5 bg-white border border-blue-100 rounded-xl px-3 py-2.5 hover:border-blue-300 hover:shadow-sm transition group"
               >
-                <span className="text-lg leading-none mt-0.5">�剥</span>
+                <span className="text-lg leading-none mt-0.5">🔍</span>
                 <div className="min-w-0">
-                  <div className="text-xs font-bold text-slate-800 group-hover:text-blue-700">險ｺ譁ｭ繝壹・繧ｸ</div>
+                  <div className="text-xs font-bold text-slate-800 group-hover:text-blue-700">診断ページ</div>
                   <div className="text-[11px] text-slate-500 truncate">corp.mstcorp.info/diagnosis</div>
                   <div className="text-[10px] text-blue-600 mt-0.5 font-mono">{'{link_url}'}</div>
                 </div>
@@ -1986,9 +2002,9 @@ export const MarketingFlowStudio: React.FC<MarketingFlowStudioProps> = ({
                 rel="noopener noreferrer"
                 className="flex items-start gap-2.5 bg-white border border-blue-100 rounded-xl px-3 py-2.5 hover:border-blue-300 hover:shadow-sm transition group"
               >
-                <span className="text-lg leading-none mt-0.5">�塘</span>
+                <span className="text-lg leading-none mt-0.5">📄</span>
                 <div className="min-w-0">
-                  <div className="text-xs font-bold text-slate-800 group-hover:text-blue-700">雉・侭隲区ｱゅ・繝ｼ繧ｸ</div>
+                  <div className="text-xs font-bold text-slate-800 group-hover:text-blue-700">資料請求ページ</div>
                   <div className="text-[11px] text-slate-500 truncate">corp.mstcorp.info/materials</div>
                   <div className="text-[10px] text-blue-600 mt-0.5 font-mono">{'{material_url}'}</div>
                 </div>
@@ -1999,11 +2015,11 @@ export const MarketingFlowStudio: React.FC<MarketingFlowStudioProps> = ({
                 rel="noopener noreferrer"
                 className="flex items-start gap-2.5 bg-white border border-blue-100 rounded-xl px-3 py-2.5 hover:border-blue-300 hover:shadow-sm transition group"
               >
-                <span className="text-lg leading-none mt-0.5">�町</span>
+                <span className="text-lg leading-none mt-0.5">💬</span>
                 <div className="min-w-0">
-                  <div className="text-xs font-bold text-slate-800 group-hover:text-blue-700">逶ｸ隲・・縺雁撫縺・粋繧上○</div>
+                  <div className="text-xs font-bold text-slate-800 group-hover:text-blue-700">相談・お問い合わせ</div>
                   <div className="text-[11px] text-slate-500 truncate">corp.mstcorp.info/contact</div>
-                  <div className="text-[10px] text-slate-400 mt-0.5 font-mono">逶ｴ謗･URL險倩ｼ・/div>
+                  <div className="text-[10px] text-slate-400 mt-0.5 font-mono">直接URL記載</div>
                 </div>
               </a>
               <a
@@ -2012,31 +2028,31 @@ export const MarketingFlowStudio: React.FC<MarketingFlowStudioProps> = ({
                 rel="noopener noreferrer"
                 className="flex items-start gap-2.5 bg-white border border-blue-100 rounded-xl px-3 py-2.5 hover:border-blue-300 hover:shadow-sm transition group"
               >
-                <span className="text-lg leading-none mt-0.5">�套</span>
+                <span className="text-lg leading-none mt-0.5">📅</span>
                 <div className="min-w-0">
-                  <div className="text-xs font-bold text-slate-800 group-hover:text-blue-700">TimeRex 髱｢隲・ｺ育ｴ・/div>
-                  <div className="text-[11px] text-slate-500 truncate">timerex.net/s/mstcorp/c3dd3eea</div>
+                  <div className="text-xs font-bold text-slate-800 group-hover:text-blue-700">TimeRex 面談予約</div>
+                  <div className="text-[11px] text-slate-500 truncate">timerex.net/.../4ac78e37</div>
                   <div className="text-[10px] text-blue-600 mt-0.5 font-mono">{'{booking_url}'}</div>
                 </div>
               </a>
             </div>
           </div>
 
-          {/* 驥崎､・・譌ｧ繧ｷ繝翫Μ繧ｪ謨ｴ逅・け繧､繝・け繝舌・ */}
+          {/* 重複・旧シナリオ整理クイックバー */}
           {(duplicateCount > 0 || legacyDiagnosisScenarios.length > 0 || legacyPostMeetingScenarios.length > 0) && (
             <div className="bg-amber-50 border border-amber-200 rounded-2xl p-3.5 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
               <div className="flex items-start sm:items-center gap-2 text-xs text-amber-900">
                 <AlertCircle className="w-4 h-4 text-amber-600 shrink-0 mt-0.5 sm:mt-0" />
                 <div>
-                  <span className="font-bold">謨ｴ逅・庄閭ｽ縺ｪ繧ｷ繝翫Μ繧ｪ縺瑚ｦ九▽縺九ｊ縺ｾ縺励◆・・/span>
+                  <span className="font-bold">整理可能なシナリオが見つかりました：</span>
                   <span className="text-amber-800">
                     {[
-                      duplicateCount > 0 ? `驥崎､・${duplicateCount}莉ｶ` : '',
-                      legacyDiagnosisScenarios.length > 0 ? `譌ｧ蛻・ｲ植 ${legacyDiagnosisScenarios.length}莉ｶ` : '',
-                      legacyPostMeetingScenarios.length > 0 ? `譌ｧ髱｢隲・謠先｡亥ｾ・${legacyPostMeetingScenarios.length}莉ｶ` : '',
+                      duplicateCount > 0 ? `重複 ${duplicateCount}件` : '',
+                      legacyDiagnosisScenarios.length > 0 ? `旧分岐A ${legacyDiagnosisScenarios.length}件` : '',
+                      legacyPostMeetingScenarios.length > 0 ? `旧面談/提案後 ${legacyPostMeetingScenarios.length}件` : '',
                     ]
                       .filter(Boolean)
-                      .join(' ・・')}
+                      .join(' ／ ')}
                   </span>
                 </div>
               </div>
@@ -2048,7 +2064,7 @@ export const MarketingFlowStudio: React.FC<MarketingFlowStudioProps> = ({
                     className="px-3 py-1.5 bg-amber-600 hover:bg-amber-700 text-white rounded-lg text-xs font-bold flex items-center gap-1.5 cursor-pointer whitespace-nowrap"
                   >
                     <Trash2 className="w-3.5 h-3.5" />
-                    <span>驥崎､・ｒ謨ｴ逅・ｼ・duplicateCount}莉ｶ・・/span>
+                    <span>重複を整理（{duplicateCount}件）</span>
                   </button>
                 )}
                 {legacyDiagnosisScenarios.length > 0 && (
@@ -2057,7 +2073,8 @@ export const MarketingFlowStudio: React.FC<MarketingFlowStudioProps> = ({
                     onClick={handleCleanupLegacyDiagnosisScenarios}
                     className="px-3 py-1.5 bg-white hover:bg-amber-100 text-amber-900 border border-amber-300 rounded-lg text-xs font-bold cursor-pointer whitespace-nowrap"
                   >
-                    蛻・ｲ植繧呈怙譁ｰ4譛ｬ縺ｸ謨ｴ逅・                  </button>
+                    分岐Aを最新4本へ整理
+                  </button>
                 )}
                 {legacyPostMeetingScenarios.length > 0 && onApplyPostMeetingStarterSet && (
                   <button
@@ -2065,22 +2082,24 @@ export const MarketingFlowStudio: React.FC<MarketingFlowStudioProps> = ({
                     onClick={onApplyPostMeetingStarterSet}
                     className="px-3 py-1.5 bg-white hover:bg-amber-100 text-amber-900 border border-amber-300 rounded-lg text-xs font-bold cursor-pointer whitespace-nowrap"
                   >
-                    髱｢隲・・謠先｡亥ｾ後ｒ3譛ｬ縺ｸ邨ｱ蜷・                  </button>
+                    面談・提案後を3本へ統合
+                  </button>
                 )}
               </div>
             </div>
           )}
 
-          {/* 蜊倡匱蝟ｶ讌ｭ繝｡繝ｼ繝ｫ・井ｸ逋ｺ逶ｴ逅・署譯茨ｼ峨け繧､繝・け邱ｨ髮・ヰ繝ｼ */}
+          {/* 単発営業メール（一発直球提案）クイック編集バー */}
           {(tableTrackFilter === 'all' || tableTrackFilter === 'sales_outreach') &&
             (tableChannelFilter === 'all' || tableChannelFilter === 'email') && (
               <div className="bg-white border border-purple-200 rounded-2xl p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                 <div className="min-w-0">
                   <div className="flex items-center gap-2 flex-wrap">
                     <span className="text-[11px] font-bold px-2 py-0.5 rounded bg-blue-50 text-blue-700 border border-blue-200">
-                      蜊倡匱蝟ｶ讌ｭ繝｡繝ｼ繝ｫ・域焔蜍穂ｸ逋ｺ謠先｡茨ｼ・                    </span>
+                      単発営業メール（手動一発提案）
+                    </span>
                     <span className="text-xs text-slate-500">
-                      {oneShotScenario ? '繧ｫ繧ｹ繧ｿ繝�邱ｨ髮・ｸ医∩' : '讓呎ｺ悶ユ繝ｳ繝励Ξ繝ｼ繝井ｽｿ逕ｨ荳ｭ'}
+                      {oneShotScenario ? 'カスタム編集済み' : '標準テンプレート使用中'}
                     </span>
                   </div>
                   <div className="text-sm font-bold text-slate-900 truncate mt-1">
@@ -2095,7 +2114,7 @@ export const MarketingFlowStudio: React.FC<MarketingFlowStudioProps> = ({
                       className="px-3 py-1.5 bg-white hover:bg-slate-50 text-slate-600 border border-slate-200 rounded-lg text-xs font-semibold flex items-center gap-1 cursor-pointer whitespace-nowrap"
                     >
                       <RotateCcw className="w-3.5 h-3.5" />
-                      <span>讓呎ｺ悶↓謌ｻ縺・/span>
+                      <span>標準に戻す</span>
                     </button>
                   )}
                   <button
@@ -2104,14 +2123,14 @@ export const MarketingFlowStudio: React.FC<MarketingFlowStudioProps> = ({
                     className="px-3.5 py-1.5 bg-purple-600 hover:bg-purple-700 text-white rounded-lg text-xs font-bold flex items-center gap-1.5 cursor-pointer whitespace-nowrap"
                   >
                     <Edit3 className="w-3.5 h-3.5" />
-                    <span>繝・Φ繝励Ξ繝ｼ繝医ｒ邱ｨ髮・/span>
+                    <span>テンプレートを編集</span>
                   </button>
                 </div>
               </div>
             )}
 
           <div className="bg-white border border-slate-200 rounded-2xl p-5 shadow-xs space-y-4">
-            {/* 蟆守ｷ壹・繧ｫ繝・ざ繝ｪ蛻･繝輔ぅ繝ｫ繧ｿ繝ｼ */}
+            {/* 導線・カテゴリ別フィルター */}
             <div className="flex flex-wrap items-center gap-1.5 border-b border-slate-100 pb-3">
               <button
                 type="button"
@@ -2122,7 +2141,7 @@ export const MarketingFlowStudio: React.FC<MarketingFlowStudioProps> = ({
                     : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
                 }`}
               >
-                <span>縺吶∋縺ｦ</span>
+                <span>すべて</span>
                 <span className={`text-[10px] px-1.5 py-0.2 rounded ${tableTrackFilter === 'all' ? 'bg-white/20 text-white' : 'bg-white text-slate-600'}`}>
                   {scenarios.length}
                 </span>
@@ -2153,16 +2172,16 @@ export const MarketingFlowStudio: React.FC<MarketingFlowStudioProps> = ({
               })}
             </div>
 
-            {/* 蟐剃ｽ薙・迥ｶ諷九・陦ｨ遉ｺ蠖｢蠑上・讀懃ｴ｢繝舌・ */}
+            {/* 媒体・状態・表示形式・検索バー */}
             <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-3 border-b border-slate-100 pb-3">
               <div className="flex flex-wrap items-center gap-2">
                 <div className="flex flex-wrap items-center gap-1">
                   {(
                     [
-                      { id: 'all', label: '蜈ｨ蟐剃ｽ・ },
+                      { id: 'all', label: '全媒体' },
                       { id: 'line', label: 'LINE' },
-                      { id: 'email', label: '繝｡繝ｼ繝ｫ' },
-                      { id: 'both', label: 'LINE蜆ｪ蜈茨ｼ医Γ繝ｼ繝ｫ陬懷ｮ鯉ｼ・ },
+                      { id: 'email', label: 'メール' },
+                      { id: 'both', label: 'LINE優先（メール補完）' },
                     ] as const
                   ).map((item) => (
                     <button
@@ -2185,9 +2204,9 @@ export const MarketingFlowStudio: React.FC<MarketingFlowStudioProps> = ({
                 <div className="flex items-center gap-1">
                   {(
                     [
-                      { id: 'all', label: '蜈ｨ迥ｶ諷・ },
-                      { id: 'active', label: '遞ｼ蜒堺ｸｭ' },
-                      { id: 'paused', label: '蛛懈ｭ｢荳ｭ' },
+                      { id: 'all', label: '全状態' },
+                      { id: 'active', label: '稼働中' },
+                      { id: 'paused', label: '停止中' },
                     ] as const
                   ).map((st) => (
                     <button
@@ -2215,10 +2234,10 @@ export const MarketingFlowStudio: React.FC<MarketingFlowStudioProps> = ({
                       ? 'bg-purple-50 border-purple-200 text-purple-800'
                       : 'bg-white border-slate-200 text-slate-600 hover:bg-slate-50'
                   }`}
-                  title="蟆守ｷ壹＃縺ｨ縺ｮ隕句・縺励〒縺ｾ縺ｨ繧√ｋ縺九・壹＠荳隕ｧ縺ｧ陦ｨ遉ｺ縺吶ｋ縺九ｒ蛻・ｊ譖ｿ縺医∪縺・
+                  title="導線ごとの見出しでまとめるか、通し一覧で表示するかを切り替えます"
                 >
                   <ListFilter className="w-3.5 h-3.5" />
-                  <span>{tableGroupByTrack ? '蟆守ｷ壹げ繝ｫ繝ｼ繝苓｡ｨ遉ｺ' : '繝輔Λ繝・ヨ陦ｨ遉ｺ'}</span>
+                  <span>{tableGroupByTrack ? '導線グループ表示' : 'フラット表示'}</span>
                 </button>
 
                 <div className="relative w-full sm:w-64">
@@ -2227,14 +2246,14 @@ export const MarketingFlowStudio: React.FC<MarketingFlowStudioProps> = ({
                     type="text"
                     value={tableSearch}
                     onChange={(e) => setTableSearch(e.target.value)}
-                    placeholder="繧ｹ繝・ャ繝怜錐繝ｻ譚｡莉ｶ繝ｻ譛ｬ譁・〒讀懃ｴ｢..."
+                    placeholder="ステップ名・条件・本文で検索..."
                     className="w-full bg-slate-50 border border-slate-200 rounded-xl pl-9 pr-8 py-1.5 text-xs text-slate-900 placeholder-slate-400 focus:outline-none focus:border-purple-500 focus:bg-white"
                   />
                   {tableSearch && (
                     <button
                       type="button"
                       onClick={() => setTableSearch('')}
-                      aria-label="讀懃ｴ｢繧偵け繝ｪ繧｢"
+                      aria-label="検索をクリア"
                       className="absolute right-2.5 top-2 text-slate-400 hover:text-slate-600 cursor-pointer"
                     >
                       <X className="w-3.5 h-3.5" />
@@ -2247,7 +2266,8 @@ export const MarketingFlowStudio: React.FC<MarketingFlowStudioProps> = ({
             {filteredTableScenarios.length === 0 ? (
               <div className="py-10 text-center space-y-3">
                 <p className="text-xs text-slate-500">
-                  迴ｾ蝨ｨ縺ｮ譚｡莉ｶ縺ｫ荳閾ｴ縺吶ｋ繧ｹ繝・ャ繝励・隕九▽縺九ｊ縺ｾ縺帙ｓ縺ｧ縺励◆縲・                </p>
+                  現在の条件に一致するステップは見つかりませんでした。
+                </p>
                 {(tableTrackFilter !== 'all' ||
                   tableChannelFilter !== 'all' ||
                   tableStatusFilter !== 'all' ||
@@ -2263,7 +2283,7 @@ export const MarketingFlowStudio: React.FC<MarketingFlowStudioProps> = ({
                     className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-slate-100 hover:bg-slate-200 text-xs font-semibold text-slate-700 cursor-pointer"
                   >
                     <RotateCcw className="w-3.5 h-3.5" />
-                    <span>邨槭ｊ霎ｼ縺ｿ繧偵Μ繧ｻ繝・ヨ</span>
+                    <span>絞り込みをリセット</span>
                   </button>
                 )}
               </div>
@@ -2272,13 +2292,13 @@ export const MarketingFlowStudio: React.FC<MarketingFlowStudioProps> = ({
                 <table className="w-full text-left text-xs">
                   <thead className="bg-slate-50 text-slate-600 font-bold border-b border-slate-200">
                     <tr>
-                      <th className="p-3">繧ｹ繝・ャ繝怜錐</th>
-                      <th className="p-3 whitespace-nowrap">髢句ｧ区擅莉ｶ</th>
-                      <th className="p-3 whitespace-nowrap">蟐剃ｽ・/th>
-                      <th className="p-3 whitespace-nowrap">繧ｿ繧､繝溘Φ繧ｰ</th>
-                      <th className="p-3 whitespace-nowrap">閾ｪ蜍募●豁｢</th>
-                      <th className="p-3 whitespace-nowrap">遞ｼ蜒・/th>
-                      <th className="p-3 text-right whitespace-nowrap">謫堺ｽ・/th>
+                      <th className="p-3">ステップ名</th>
+                      <th className="p-3 whitespace-nowrap">開始条件</th>
+                      <th className="p-3 whitespace-nowrap">媒体</th>
+                      <th className="p-3 whitespace-nowrap">タイミング</th>
+                      <th className="p-3 whitespace-nowrap">自動停止</th>
+                      <th className="p-3 whitespace-nowrap">稼働</th>
+                      <th className="p-3 text-right whitespace-nowrap">操作</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-100 text-slate-700">
@@ -2305,7 +2325,7 @@ export const MarketingFlowStudio: React.FC<MarketingFlowStudioProps> = ({
                                   </div>
                                   <div className="flex items-center gap-2">
                                     <span className="text-[11px] font-semibold text-slate-700">
-                                      {sectionActiveCount} / {section.items.length}莉ｶ 遞ｼ蜒堺ｸｭ
+                                      {sectionActiveCount} / {section.items.length}件 稼働中
                                     </span>
                                     <button
                                       type="button"
@@ -2315,12 +2335,12 @@ export const MarketingFlowStudio: React.FC<MarketingFlowStudioProps> = ({
                                       {sectionAllActive ? (
                                         <>
                                           <Pause className="w-3 h-3 text-slate-500" />
-                                          <span>荳諡ｬ蛛懈ｭ｢</span>
+                                          <span>一括停止</span>
                                         </>
                                       ) : (
                                         <>
                                           <Play className="w-3 h-3 text-emerald-600 fill-emerald-600" />
-                                          <span>荳諡ｬON</span>
+                                          <span>一括ON</span>
                                         </>
                                       )}
                                     </button>
@@ -2351,7 +2371,8 @@ export const MarketingFlowStudio: React.FC<MarketingFlowStudioProps> = ({
                                     )}
                                     {isLegacyRow && (
                                       <span className="px-1.5 py-0.5 rounded bg-amber-100 text-amber-800 border border-amber-300 text-[10px] font-bold shrink-0">
-                                        譌ｧ險ｭ螳・                                      </span>
+                                        旧設定
+                                      </span>
                                     )}
                                     <button
                                       type="button"
@@ -2362,7 +2383,7 @@ export const MarketingFlowStudio: React.FC<MarketingFlowStudioProps> = ({
                                     </button>
                                   </div>
                                   <div className="text-[11px] text-slate-500 line-clamp-1 mt-0.5">
-                                    {s.flexTitle || s.messageBody || s.emailSubject || '譁・擇譛ｪ險ｭ螳・}
+                                    {s.flexTitle || s.messageBody || s.emailSubject || '文面未設定'}
                                   </div>
                                 </td>
                                 <td className="p-3 text-[11px] text-slate-600 whitespace-nowrap">
@@ -2381,8 +2402,8 @@ export const MarketingFlowStudio: React.FC<MarketingFlowStudioProps> = ({
                                     {s.channel === 'line'
                                       ? 'LINE'
                                       : s.channel === 'email'
-                                      ? '繝｡繝ｼ繝ｫ'
-                                      : 'LINE蜆ｪ蜈茨ｼ医Γ繝ｼ繝ｫ陬懷ｮ鯉ｼ・}
+                                      ? 'メール'
+                                      : 'LINE優先（メール補完）'}
                                   </span>
                                 </td>
                                 <td className="p-3 whitespace-nowrap">
@@ -2391,7 +2412,7 @@ export const MarketingFlowStudio: React.FC<MarketingFlowStudioProps> = ({
                                   </div>
                                   {isPlanAStory && (
                                     <div className="text-[10px] text-indigo-600 mt-0.5">
-                                      蛻・ｲ舌・Web蠕後・+3縲・譌･
+                                      分岐・Web後は+3〜9日
                                     </div>
                                   )}
                                 </td>
@@ -2413,7 +2434,7 @@ export const MarketingFlowStudio: React.FC<MarketingFlowStudioProps> = ({
                                     ) : (
                                       <Pause className="w-3 h-3 text-slate-500" />
                                     )}
-                                    <span>{s.automationEnabled ? '遞ｼ蜒堺ｸｭ' : '蛛懈ｭ｢荳ｭ'}</span>
+                                    <span>{s.automationEnabled ? '稼働中' : '停止中'}</span>
                                   </button>
                                 </td>
                                 <td className="p-3 text-right whitespace-nowrap">
@@ -2423,7 +2444,7 @@ export const MarketingFlowStudio: React.FC<MarketingFlowStudioProps> = ({
                                     className="px-3 py-1.5 bg-purple-600 hover:bg-purple-700 text-white rounded-lg font-bold inline-flex items-center gap-1.5 cursor-pointer transition whitespace-nowrap"
                                   >
                                     <Edit3 className="w-3.5 h-3.5" />
-                                    <span>邱ｨ髮・・轤ｹ讀・/span>
+                                    <span>編集・点検</span>
                                   </button>
                                 </td>
                               </tr>
@@ -2440,17 +2461,18 @@ export const MarketingFlowStudio: React.FC<MarketingFlowStudioProps> = ({
         </div>
       )}
 
-      {/* 笊絶武笊絶武笊絶武笊絶武笊絶武笊絶武笊絶武笊絶武笊絶武笊絶武笊絶武笊絶武笊絶武笊絶武笊絶武笊絶武笊絶武笊絶武笊絶武笊絶武笊絶武笊絶武笊絶武笊絶武笊絶武笊絶武笊絶武笊絶武笊絶武笊絶武笊絶武笊・*/}
-      {/* 繝医Λ繝・け 1: �導 LINE蜿九□縺｡蟆守ｷ夲ｼ医え繧ｧ繝ｫ繧ｫ繝�・玖ｨｺ譁ｭ繝ｻ逶ｸ隲・ヵ繧ｩ繝ｭ繝ｼ・・*/}
-      {/* 笊絶武笊絶武笊絶武笊絶武笊絶武笊絶武笊絶武笊絶武笊絶武笊絶武笊絶武笊絶武笊絶武笊絶武笊絶武笊絶武笊絶武笊絶武笊絶武笊絶武笊絶武笊絶武笊絶武笊絶武笊絶武笊絶武笊絶武笊絶武笊絶武笊絶武笊絶武笊・*/}
+      {/* ═══════════════════════════════════════════════════════════════ */}
+      {/* トラック 1: 📱 LINE友だち導線（ウェルカム＋診断・相談フォロー） */}
+      {/* ═══════════════════════════════════════════════════════════════ */}
       {viewMode === 'flow' && activeTrack === 'line_welcome' && (
         <div className="space-y-6">
-          {/* 螳牙・繧ｹ繝医ャ繝代・邁｡貎斐ヰ繝翫・ */}
+          {/* 安全ストッパー簡潔バナー */}
           <div className="bg-emerald-50/70 border border-emerald-200 rounded-xl px-4 py-2.5 flex flex-wrap items-center justify-between gap-2 text-xs text-emerald-900">
             <div className="flex items-center gap-2">
               <ShieldCheck className="w-4 h-4 text-emerald-600 shrink-0" />
               <span>
-                LINE蜿九□縺｡縺九ｉ霑比ｿ｡繝ｻ髱｢隲・ｺ育ｴ・′蜈･繧九→縲∽ｻ･髯阪・閾ｪ蜍暮・菫｡縺ｯ蜊ｳ譎ょ●豁｢縺励∪縺吶・              </span>
+                LINE友だちから返信・面談予約が入ると、以降の自動配信は即時停止します。
+              </span>
             </div>
             {onOpenInbox && (
               <button
@@ -2458,13 +2480,13 @@ export const MarketingFlowStudio: React.FC<MarketingFlowStudioProps> = ({
                 onClick={onOpenInbox}
                 className="inline-flex items-center gap-1 px-2.5 py-1 bg-white hover:bg-emerald-100 text-emerald-800 border border-emerald-300 font-bold rounded-lg transition text-xs shrink-0 cursor-pointer whitespace-nowrap"
               >
-                <span>邨ｱ蜷亥女菫｡邂ｱ繧帝幕縺・/span>
+                <span>統合受信箱を開く</span>
                 <ArrowRight className="w-3 h-3" />
               </button>
             )}
           </div>
 
-          {/* 蜈･蜿｣ 竭�: LINE蜿九□縺｡霑ｽ蜉� 繧ｦ繧ｧ繝ｫ繧ｫ繝�繝｡繝・そ繝ｼ繧ｸ・育ｵｱ荳豁｣譛ｬ繧ｨ繝・ぅ繧ｿ・・*/}
+          {/* 入口 ①: LINE友だち追加 ウェルカムメッセージ（統一正本エディタ） */}
           <div className="bg-white border border-slate-200 rounded-2xl overflow-hidden shadow-xs">
             <div className="bg-emerald-50/70 p-5 border-b border-slate-200 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
               <div className="flex items-center gap-3">
@@ -2474,23 +2496,25 @@ export const MarketingFlowStudio: React.FC<MarketingFlowStudioProps> = ({
                 <div>
                   <div className="flex items-center gap-2 flex-wrap">
                     <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-emerald-100 text-emerald-800 border border-emerald-300">
-                      縲仙・蜿｣竭�繝ｻ邨ｱ荳豁｣譛ｬ縲銑INE蜿九□縺｡霑ｽ蜉�逶ｴ蠕鯉ｼ亥叉譎る∽ｿ｡・・                    </span>
+                      【入口①・統一正本】LINE友だち追加直後（即時送信）
+                    </span>
                     {welcomeLoadedFromDb && welcomeRuleId ? (
                       <span className={`text-[10px] font-bold px-2 py-0.5 rounded border ${
                         welcomeEnabled
                           ? 'bg-emerald-600 text-white border-emerald-700'
                           : 'bg-slate-200 text-slate-700 border-slate-300'
                       }`}>
-                        {welcomeEnabled ? '笨・菫晏ｭ俶ｸ医∩繝ｻ閾ｪ蜍暮・菫｡險ｭ螳壹ｒ蜿肴丐荳ｭ' : '蛛懈ｭ｢荳ｭ・郁・蜍暮∽ｿ｡OFF・・}
+                        {welcomeEnabled ? '✓ 保存済み・自動配信設定を反映中' : '停止中（自動送信OFF）'}
                       </span>
                     ) : (
                       <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-amber-100 text-amber-800 border border-amber-300">
-                        譛ｪ菫晏ｭ假ｼ亥・譛溘・繝ｬ繝薙Η繝ｼ陦ｨ遉ｺ荳ｭ・・                      </span>
+                        未保存（初期プレビュー表示中）
+                      </span>
                     )}
-                    <span className="text-xs text-slate-500">Flex繧ｫ繝ｼ繝会ｼ・螟ｧ逶ｸ隲・Γ繝九Η繝ｼ蛻・ｲ撰ｼ・/span>
+                    <span className="text-xs text-slate-500">Flexカード（3大相談メニュー分岐）</span>
                   </div>
                   <h3 className="text-base font-bold text-slate-900 mt-0.5">
-                    蜿九□縺｡霑ｽ蜉�繧ｦ繧ｧ繝ｫ繧ｫ繝�繝｡繝・そ繝ｼ繧ｸ
+                    友だち追加ウェルカムメッセージ
                   </h3>
                 </div>
               </div>
@@ -2504,7 +2528,7 @@ export const MarketingFlowStudio: React.FC<MarketingFlowStudioProps> = ({
                     onChange={(e) => void handleToggleWelcomeEnabled(e.target.checked)}
                     className="rounded accent-emerald-600"
                   />
-                  <span>閾ｪ蜍暮∽ｿ｡譛牙柑</span>
+                  <span>自動送信有効</span>
                 </label>
                 <button
                   type="button"
@@ -2512,7 +2536,7 @@ export const MarketingFlowStudio: React.FC<MarketingFlowStudioProps> = ({
                   className="inline-flex items-center gap-1.5 px-3.5 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold transition cursor-pointer shadow-xs"
                 >
                   <Edit3 className="w-3.5 h-3.5 text-emerald-200" />
-                  <span>{isEditingWelcome ? '繝励Ξ繝薙Η繝ｼ縺ｫ謌ｻ繧・ : '繧ｦ繧ｧ繝ｫ繧ｫ繝�譁・擇繧堤ｷｨ髮・}</span>
+                  <span>{isEditingWelcome ? 'プレビューに戻る' : 'ウェルカム文面を編集'}</span>
                 </button>
               </div>
             </div>
@@ -2520,53 +2544,58 @@ export const MarketingFlowStudio: React.FC<MarketingFlowStudioProps> = ({
             {!welcomeRuleId && (
               <div className="px-5 py-3 bg-amber-50 border-b border-amber-200 flex flex-col sm:flex-row sm:items-center justify-between gap-2 text-xs text-amber-900">
                 <span>
-                  迴ｾ蝨ｨ縺薙・逕ｻ髱｢縺ｮ險ｭ螳壹・縺ｾ縺�DB縺ｸ遒ｺ螳壻ｿ晏ｭ倥＆繧後※縺・∪縺帙ｓ・井ｿ晏ｭ倥☆繧九∪縺ｧ縺ｯ繧ｷ繧ｹ繝・Β讓呎ｺ悶・繧ｦ繧ｧ繝ｫ繧ｫ繝�繧ｫ繝ｼ繝峨∪縺溘・譌｢蟄倥・閾ｪ蜍戊ｿ比ｿ｡繝ｫ繝ｼ繝ｫ縺碁∽ｿ｡縺輔ｌ縺ｾ縺呻ｼ峨・                </span>
+                  現在この画面の設定はまだDBへ確定保存されていません（保存するまではシステム標準のウェルカムカードまたは既存の自動返信ルールが送信されます）。
+                </span>
                 <button
                   type="button"
                   disabled={welcomeSaving}
-                  onClick={() => void handleSaveWelcome('迴ｾ蝨ｨ縺ｮLINE繝ｻ繝｡繝ｼ繝ｫ閾ｪ蜍暮・菫｡繧ｦ繧ｧ繝ｫ繧ｫ繝�險ｭ螳壹ｒDB縺ｫ遒ｺ螳壻ｿ晏ｭ倥＠縺ｾ縺励◆・・)}
+                  onClick={() => void handleSaveWelcome('現在のLINE・メール自動配信ウェルカム設定をDBに確定保存しました！')}
                   className="shrink-0 px-3 py-1.5 rounded-lg bg-amber-600 hover:bg-amber-700 text-white font-bold text-xs transition cursor-pointer disabled:opacity-50"
                 >
-                  {welcomeSaving ? '蜿肴丐荳ｭ窶ｦ' : '縺薙・險ｭ螳壹ｒ菫晏ｭ倥＠縺ｦLINE縺ｫ蜿肴丐'}
+                  {welcomeSaving ? '反映中…' : 'この設定を保存してLINEに反映'}
                 </button>
               </div>
             )}
 
             <div className="px-5 py-2.5 bg-slate-50 border-b border-slate-200 flex flex-col sm:flex-row sm:items-center justify-between gap-2 text-[11px] text-slate-600">
               <span>
-                窶ｻ 繝悶Ο繝・け隗｣髯､繧・眠隕剰ｿｽ蜉�譎ゅ↓LINE縺九ｉ縲梧・縺ｮ謖ｨ諡ｶ繝｡繝・そ繝ｼ繧ｸ縲阪′螻翫￥蝣ｴ蜷医・縲・                <strong className="text-slate-800">LINE Official Account Manager・郁ｨｭ螳・竊・蠢懃ｭ碑ｨｭ螳・竊・縺ゅ＞縺輔▽繝｡繝・そ繝ｼ繧ｸ・峨ｒ縲後が繝輔・/strong>
-                縺ｫ縺励※縺上□縺輔＞・域悽繧ｷ繧ｹ繝・Β縺ｮWebhook驟堺ｿ｡縺ｨ驥崎､・・遶ｶ蜷医☆繧九・繧帝亟縺弱∪縺呻ｼ峨・              </span>
+                ※ ブロック解除や新規追加時にLINEから「昔の挨拶メッセージ」が届く場合は、
+                <strong className="text-slate-800">LINE Official Account Manager（設定 → 応答設定 → あいさつメッセージ）を「オフ」</strong>
+                にしてください（本システムのWebhook配信と重複・競合するのを防ぎます）。
+              </span>
               {lastWelcomeLog?.body && (
                 <span className="shrink-0 font-mono text-[10px] text-slate-500 bg-white border border-slate-200 rounded px-2 py-0.5">
-                  逶ｴ霑鷹∽ｿ｡: {lastWelcomeLog.body.slice(0, 32)}
+                  直近送信: {lastWelcomeLog.body.slice(0, 32)}
                 </span>
               )}
             </div>
 
             {activeWelcomeSource === 'legacy_keyword_rule' && !welcomeRuleId && (
               <div className="px-5 py-2.5 bg-amber-50/70 border-b border-amber-200 text-[11px] text-amber-900 font-medium">
-                迴ｾ蝨ｨ縲∵立繧ｭ繝ｼ繝ｯ繝ｼ繝芽・蜍募ｿ懃ｭ斐Ν繝ｼ繝ｫ蛛ｴ縺梧怏蜉ｹ縺ｮ縺溘ａ縺昴■繧峨′騾∽ｿ｡蟇ｾ雎｡縺ｧ縺吶ゅ後％縺ｮ險ｭ螳壹ｒ菫晏ｭ倥＠縺ｦLINE縺ｫ蜿肴丐縲阪ｒ謚ｼ縺吶→譛ｬ逕ｻ髱｢縺ｮ險ｭ螳壹′譛蜆ｪ蜈医↓縺ｪ繧翫∪縺吶・              </div>
+                現在、旧キーワード自動応答ルール側が有効のためそちらが送信対象です。「この設定を保存してLINEに反映」を押すと本画面の設定が最優先になります。
+              </div>
             )}
 
             {conflictingLegacyRules.length > 0 && (
               <div className="px-5 py-3 bg-sky-50 border-b border-sky-200 flex flex-col sm:flex-row sm:items-center justify-between gap-2 text-xs text-sky-900">
                 <span>
-                  蛻･縺ｮ閾ｪ蜍戊ｿ比ｿ｡繝ｫ繝ｼ繝ｫ・・conflictingLegacyRules.map((r) => `縲・{r.match_text}縲港).join('繝ｻ')}・峨′譛牙柑縺ｫ縺ｪ縺｣縺ｦ縺・∪縺吶ゆｸ願ｨ倥・縲鍬INE繝ｻ繝｡繝ｼ繝ｫ閾ｪ蜍暮・菫｡縲崎ｨｭ螳壹′譛蜆ｪ蜈医＆繧後∪縺吶′縲∽ｸ崎ｦ√↑譌ｧ繝ｫ繝ｼ繝ｫ繧貞●豁｢縺ｧ縺阪∪縺吶・                </span>
+                  別の自動返信ルール（{conflictingLegacyRules.map((r) => `「${r.match_text}」`).join('・')}）が有効になっています。上記の「LINE・メール自動配信」設定が最優先されますが、不要な旧ルールを停止できます。
+                </span>
                 <button
                   type="button"
                   disabled={disablingLegacy}
                   onClick={() => void handleDisableLegacyWelcomeRules()}
                   className="shrink-0 px-3 py-1.5 rounded-lg border border-sky-300 bg-white hover:bg-sky-100 text-sky-800 font-bold text-xs transition cursor-pointer disabled:opacity-50"
                 >
-                  {disablingLegacy ? '蛛懈ｭ｢荳ｭ窶ｦ' : '譌ｧ繝ｫ繝ｼ繝ｫ繧貞●豁｢縺吶ｋ'}
+                  {disablingLegacy ? '停止中…' : '旧ルールを停止する'}
                 </button>
               </div>
             )}
 
-            {/* 繧ｦ繧ｧ繝ｫ繧ｫ繝�邱ｨ髮・ヵ繧ｩ繝ｼ繝� */}
+            {/* ウェルカム編集フォーム */}
             {isEditingWelcome && (
               <div className="p-5 bg-slate-50/80 border-b border-slate-200 space-y-4 text-xs animate-fade-in">
-                {/* 邱ｨ髮・Δ繝ｼ繝牙・繧頑崛縺医ち繝・*/}
+                {/* 編集モード切り替えタブ */}
                 <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-200 pb-3">
                   <div className="flex items-center gap-2">
                     <button
@@ -2577,7 +2606,7 @@ export const MarketingFlowStudio: React.FC<MarketingFlowStudioProps> = ({
                       }`}
                     >
                       <LayoutTemplate className="w-3.5 h-3.5" />
-                      <span>�耳 繝薙ず繝･繧｢繝ｫ繝ｻ繝懊ち繝ｳ險ｭ螳・/span>
+                      <span>🎨 ビジュアル・ボタン設定</span>
                     </button>
                     <button
                       type="button"
@@ -2600,14 +2629,14 @@ export const MarketingFlowStudio: React.FC<MarketingFlowStudioProps> = ({
                       }`}
                     >
                       <Code className="w-3.5 h-3.5" />
-                      <span>�捗 Flex JSON逶ｴ謗･邱ｨ髮・ｼ亥ｮ悟・閾ｪ逕ｱ・・/span>
+                      <span>💻 Flex JSON直接編集（完全自由）</span>
                     </button>
                   </div>
 
                   {flexEditMode === 'json' && (
                     <div className="flex items-center gap-2">
                       <span className={`text-[11px] font-bold px-2 py-0.5 rounded ${isValidFlexJson ? 'bg-emerald-100 text-emerald-800' : 'bg-rose-100 text-rose-800'}`}>
-                        {isValidFlexJson ? '笨・JSON讒区枚豁｣蟶ｸ' : '笞�・・JSON讒区枚繧ｨ繝ｩ繝ｼ'}
+                        {isValidFlexJson ? '✓ JSON構文正常' : '⚠️ JSON構文エラー'}
                       </span>
                       <button
                         type="button"
@@ -2624,7 +2653,7 @@ export const MarketingFlowStudio: React.FC<MarketingFlowStudioProps> = ({
                         }}
                         className="text-[11px] text-slate-500 hover:text-slate-900 underline cursor-pointer"
                       >
-                        繝薙ず繝･繧｢繝ｫ險ｭ螳壹°繧牙・逕滓・
+                        ビジュアル設定から再生成
                       </button>
                     </div>
                   )}
@@ -2634,70 +2663,72 @@ export const MarketingFlowStudio: React.FC<MarketingFlowStudioProps> = ({
                   <>
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                       <div>
-                        <label className="font-bold text-slate-700 block mb-1">蟾ｮ蜃ｺ莠ｺ繝ｻ隕句・縺暦ｼ亥､ｪ蟄怜､ｧ・・/label>
+                        <label className="font-bold text-slate-700 block mb-1">差出人・見出し（太字大）</label>
                         <input
                           type="text"
                           value={welcomeHeading}
                           onChange={(e) => setWelcomeHeading(e.target.value)}
                           className="w-full bg-white border border-slate-200 rounded-lg px-3 py-2 text-slate-900 text-xs focus:outline-none focus:border-purple-500"
-                          placeholder="螟ｧ讖狗悄莠ｺ縺ｧ縺吶・
+                          placeholder="大橋真人です。"
                         />
                       </div>
                       <div>
-                        <label className="font-bold text-slate-700 block mb-1">繧ｵ繝冶ｦ句・縺暦ｼ域肩諡ｶ・・/label>
+                        <label className="font-bold text-slate-700 block mb-1">サブ見出し（挨拶）</label>
                         <input
                           type="text"
                           value={welcomeSubheading}
                           onChange={(e) => setWelcomeSubheading(e.target.value)}
                           className="w-full bg-white border border-slate-200 rounded-lg px-3 py-2 text-slate-900 text-xs focus:outline-none focus:border-purple-500"
-                          placeholder="LINE逋ｻ骭ｲ縺ゅｊ縺後→縺・＃縺悶＞縺ｾ縺吶・
+                          placeholder="LINE登録ありがとうございます。"
                         />
                       </div>
                     </div>
 
                     <div>
-                      <label className="font-bold text-slate-700 block mb-1">閾ｪ蟾ｱ邏ｹ莉九・莠区･ｭ邏ｹ莉区枚</label>
+                      <label className="font-bold text-slate-700 block mb-1">自己紹介・事業紹介文</label>
                       <textarea
                         rows={6}
                         value={welcomeIntro}
                         onChange={(e) => setWelcomeIntro(e.target.value)}
                         className="w-full min-h-[130px] bg-white border border-slate-200 rounded-lg p-3 text-slate-900 text-sm leading-relaxed focus:outline-none focus:border-purple-500 resize-y"
-                        placeholder="MST縺ｧ縺ｯ縲∽ｸｭ蟆丈ｼ∵･ｭ縺ｮ縲檎ｵ悟霧縺ｮ莉慕ｵ・∩蛹姪怜茜逶頑隼蝟・阪→莉玖ｭｷ菫晞匱螟悶し繝ｼ繝薙せ縺ｮ髢区･ｭ繧呈髪謠ｴ縺励※縺・∪縺吶・
+                        placeholder="MSTでは、中小企業の「経営の仕組み化×利益改善」と介護保険外サービスの開業を支援しています。"
                       />
                     </div>
 
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                       <div>
-                        <label className="font-bold text-slate-700 block mb-1">蝠上＞縺九￠譁・擇・亥､ｧ・・/label>
+                        <label className="font-bold text-slate-700 block mb-1">問いかけ文面（大）</label>
                         <input
                           type="text"
                           value={welcomeQuestion}
                           onChange={(e) => setWelcomeQuestion(e.target.value)}
                           className="w-full bg-white border border-slate-200 rounded-lg px-3 py-2 text-slate-900 text-xs focus:outline-none focus:border-purple-500"
-                          placeholder="縺ｾ縺壹√←縺ｮ繧医≧縺ｪ縺皮嶌隲・ｒ縺泌ｸ梧悍縺ｧ縺吶°・・
+                          placeholder="まず、どのようなご相談をご希望ですか？"
                         />
                       </div>
                       <div>
-                        <label className="font-bold text-slate-700 block mb-1">陬懆ｶｳ隱伜ｰ取枚髱｢・亥ｰ擾ｼ・/label>
+                        <label className="font-bold text-slate-700 block mb-1">補足誘導文面（小）</label>
                         <input
                           type="text"
                           value={welcomeInstruction}
                           onChange={(e) => setWelcomeInstruction(e.target.value)}
                           className="w-full bg-white border border-slate-200 rounded-lg px-3 py-2 text-slate-900 text-xs focus:outline-none focus:border-purple-500"
-                          placeholder="縺泌ｸ梧悍縺ｫ霑代＞繧ゅ・繧偵♀驕ｸ縺ｳ縺上□縺輔＞"
+                          placeholder="ご希望に近いものをお選びください"
                         />
                       </div>
                     </div>
 
-                    {/* Flex繝懊ち繝ｳ・磯∈謚櫁い・峨・繝阪・繧ｸ繝｣繝ｼ */}
+                    {/* Flexボタン（選択肢）マネージャー */}
                     <div className="space-y-3 pt-3 border-t border-slate-200">
                       <div className="flex items-center justify-between">
                         <div>
                           <h5 className="font-bold text-slate-900 text-xs flex items-center gap-1.5">
                             <Sparkles className="w-3.5 h-3.5 text-emerald-600" />
-                            Flex繧｢繧ｯ繧ｷ繝ｧ繝ｳ繝懊ち繝ｳ險ｭ螳夲ｼ医ち繝・・譎ゅ・蜍穂ｽ懊・蛻・ｲ舌・繧ｫ繝ｩ繝ｼ・・                          </h5>
+                            Flexアクションボタン設定（タップ時の動作・分岐・カラー）
+                          </h5>
                           <p className="text-[11px] text-slate-500">
-                            繝懊ち繝ｳ譁・擇・・INE隕丞ｮ・ 譛螟ｧ20譁・ｭ暦ｼ峨√ち繝・・譎ゅ・蜍穂ｽ懶ｼ医ち繧ｰ莉倅ｸ趣ｼ酋RL繝ｪ繝ｳ繧ｯ・峨∬レ譎ｯ濶ｲ繧定・逕ｱ縺ｫ螟画峩繝ｻ霑ｽ蜉�縺ｧ縺阪∪縺吶・                          </p>
+                            ボタン文面（LINE規定: 最大20文字）、タップ時の動作（タグ付与／URLリンク）、背景色を自由に変更・追加できます。
+                          </p>
                         </div>
                         {welcomeChoices.length < 4 && (
                           <button
@@ -2705,8 +2736,8 @@ export const MarketingFlowStudio: React.FC<MarketingFlowStudioProps> = ({
                             onClick={() => {
                               const newChoice = {
                                 id: `choice-${Date.now()}`,
-                                label: `譁ｰ縺励＞驕ｸ謚櫁い ${welcomeChoices.length + 1}`,
-                                tag: `驕ｸ謚・繧ｫ繧ｹ繧ｿ繝�${welcomeChoices.length + 1}`,
+                                label: `新しい選択肢 ${welcomeChoices.length + 1}`,
+                                tag: `選択:カスタム${welcomeChoices.length + 1}`,
                                 route: 'template' as const,
                                 actionType: 'postback' as const,
                                 color: '#8B5CF6',
@@ -2716,7 +2747,7 @@ export const MarketingFlowStudio: React.FC<MarketingFlowStudioProps> = ({
                             className="px-2.5 py-1 bg-white hover:bg-slate-100 text-emerald-700 rounded-lg text-xs font-bold border border-emerald-300 flex items-center gap-1 cursor-pointer transition shadow-2xs"
                           >
                             <Plus className="w-3 h-3" />
-                            <span>繝懊ち繝ｳ霑ｽ蜉�</span>
+                            <span>ボタン追加</span>
                           </button>
                         )}
                       </div>
@@ -2729,7 +2760,7 @@ export const MarketingFlowStudio: React.FC<MarketingFlowStudioProps> = ({
                                 <span className="w-4 h-4 rounded-full bg-slate-100 text-[10px] flex items-center justify-center text-slate-600 font-mono">
                                   {index + 1}
                                 </span>
-                                繝懊ち繝ｳ {index + 1}
+                                ボタン {index + 1}
                               </span>
                               {welcomeChoices.length > 1 && (
                                 <button
@@ -2738,7 +2769,7 @@ export const MarketingFlowStudio: React.FC<MarketingFlowStudioProps> = ({
                                     setWelcomeChoices(welcomeChoices.filter((_, i) => i !== index));
                                   }}
                                   className="p-1 text-slate-400 hover:text-rose-600 cursor-pointer transition"
-                                  title="縺薙・繝懊ち繝ｳ繧貞炎髯､"
+                                  title="このボタンを削除"
                                 >
                                   <Trash2 className="w-3.5 h-3.5" />
                                 </button>
@@ -2747,7 +2778,7 @@ export const MarketingFlowStudio: React.FC<MarketingFlowStudioProps> = ({
 
                             <div className="grid grid-cols-1 md:grid-cols-12 gap-2 text-xs">
                               <div className="md:col-span-5">
-                                <label className="text-[11px] text-slate-500 block mb-0.5">陦ｨ遉ｺ譁・擇・・INE隕丞ｮ・ 譛螟ｧ20譁・ｭ暦ｼ・/label>
+                                <label className="text-[11px] text-slate-500 block mb-0.5">表示文面（LINE規定: 最大20文字）</label>
                                 <input
                                   type="text"
                                   maxLength={20}
@@ -2758,12 +2789,12 @@ export const MarketingFlowStudio: React.FC<MarketingFlowStudioProps> = ({
                                     setWelcomeChoices(next);
                                   }}
                                   className="w-full bg-slate-50 border border-slate-200 rounded-lg px-2.5 py-1.5 text-slate-900 text-xs focus:bg-white focus:outline-none focus:border-purple-500"
-                                  placeholder="萓・ �投 3蛻・┌譁咏ｵ悟霧險ｺ譁ｭ繧貞女縺代ｋ"
+                                  placeholder="例: 📊 3分無料経営診断を受ける"
                                 />
                               </div>
 
                               <div className="md:col-span-3">
-                                <label className="text-[11px] text-slate-500 block mb-0.5">繧｢繧ｯ繧ｷ繝ｧ繝ｳ遞ｮ蛻･</label>
+                                <label className="text-[11px] text-slate-500 block mb-0.5">アクション種別</label>
                                 <select
                                   value={choice.actionType || (choice.route === 'form' && choice.formSlug?.startsWith('http') ? 'uri' : 'postback')}
                                   onChange={(e) => {
@@ -2773,14 +2804,14 @@ export const MarketingFlowStudio: React.FC<MarketingFlowStudioProps> = ({
                                   }}
                                   className="w-full bg-slate-50 border border-slate-200 rounded-lg px-2 py-1.5 text-slate-900 text-xs focus:bg-white focus:outline-none focus:border-purple-500"
                                 >
-                                  <option value="postback">繝昴せ繝医ヰ繝・け・医ち繧ｰ莉倅ｸ弱・繧ｷ繝翫Μ繧ｪ襍ｷ蜍包ｼ・/option>
-                                  <option value="uri">URL繧帝幕縺擾ｼ・eb繝壹・繧ｸ繝ｻ繧ｫ繝ｬ繝ｳ繝繝ｼ・・/option>
+                                  <option value="postback">ポストバック（タグ付与・シナリオ起動）</option>
+                                  <option value="uri">URLを開く（Webページ・カレンダー）</option>
                                 </select>
                               </div>
 
                               <div className="md:col-span-4">
                                 <label className="text-[11px] text-slate-500 block mb-0.5">
-                                  {choice.actionType === 'uri' ? '驕ｷ遘ｻ蜈・RL・・ttps://縲懶ｼ・ : '莉倅ｸ弱ち繧ｰ・・RM繝ｻ繧ｷ繝翫Μ繧ｪ騾｣蜍包ｼ・}
+                                  {choice.actionType === 'uri' ? '遷移先URL（https://〜）' : '付与タグ（CRM・シナリオ連動）'}
                                 </label>
                                 {choice.actionType === 'uri' ? (
                                   <input
@@ -2804,22 +2835,22 @@ export const MarketingFlowStudio: React.FC<MarketingFlowStudioProps> = ({
                                       setWelcomeChoices(next);
                                     }}
                                     className="w-full bg-slate-50 border border-slate-200 rounded-lg px-2.5 py-1.5 text-slate-900 text-xs font-mono focus:bg-white focus:outline-none focus:border-purple-500"
-                                    placeholder="萓・ 驕ｸ謚・險ｺ譁ｭ"
+                                    placeholder="例: 選択:診断"
                                   />
                                 )}
                               </div>
                             </div>
 
-                            {/* 繝懊ち繝ｳ繧ｫ繝ｩ繝ｼ驕ｸ謚槭ヱ繝ｬ繝・ヨ */}
+                            {/* ボタンカラー選択パレット */}
                             <div className="flex items-center gap-2 pt-1">
-                              <span className="text-[11px] text-slate-500 font-medium">閭梧勹濶ｲ:</span>
+                              <span className="text-[11px] text-slate-500 font-medium">背景色:</span>
                               {[
-                                { color: '#10B981', label: '繧ｨ繝｡繝ｩ繝ｫ繝・ },
-                                { color: '#1E3A5F', label: '繝阪う繝薙・' },
-                                { color: '#0284C7', label: '繧ｹ繧ｫ繧､繝悶Ν繝ｼ' },
-                                { color: '#8B5CF6', label: '繝代・繝励Ν' },
-                                { color: '#E11D48', label: '繝ｭ繝ｼ繧ｺ' },
-                                { color: '#F59E0B', label: '繧｢繝ｳ繝舌・' },
+                                { color: '#10B981', label: 'エメラルド' },
+                                { color: '#1E3A5F', label: 'ネイビー' },
+                                { color: '#0284C7', label: 'スカイブルー' },
+                                { color: '#8B5CF6', label: 'パープル' },
+                                { color: '#E11D48', label: 'ローズ' },
+                                { color: '#F59E0B', label: 'アンバー' },
                               ].map((c) => (
                                 <button
                                   key={c.color}
@@ -2848,13 +2879,14 @@ export const MarketingFlowStudio: React.FC<MarketingFlowStudioProps> = ({
                     </div>
                   </>
                 ) : (
-                  /* JSON逶ｴ謗･邱ｨ髮・Δ繝ｼ繝・*/
+                  /* JSON直接編集モード */
                   <div className="space-y-2">
                     <div className="flex items-center justify-between text-xs">
                       <label className="font-bold text-slate-700">
-                        LINE Flex Bubble / Carousel JSON 螳夂ｾｩ・・INE Messaging API貅匁侠・・                      </label>
+                        LINE Flex Bubble / Carousel JSON 定義（LINE Messaging API準拠）
+                      </label>
                       <span className="text-slate-500 text-[11px]">
-                        header, hero(逕ｻ蜒・, body, footer, boxes, buttons 繧貞ｮ悟・閾ｪ逕ｱ縺ｫ險倩ｿｰ蜿ｯ閭ｽ
+                        header, hero(画像), body, footer, boxes, buttons を完全自由に記述可能
                       </span>
                     </div>
                     <textarea
@@ -2866,7 +2898,7 @@ export const MarketingFlowStudio: React.FC<MarketingFlowStudioProps> = ({
                       spellCheck={false}
                     />
                     <div className="flex items-center justify-between text-[11px] text-slate-500">
-                      <span>繝偵Φ繝・ LINE Bot Designer遲峨〒菴懈・縺励◆Flex Message JSON繧偵◎縺ｮ縺ｾ縺ｾ雋ｼ繧贋ｻ倥￠繧峨ｌ縺ｾ縺吶・/span>
+                      <span>ヒント: LINE Bot Designer等で作成したFlex Message JSONをそのまま貼り付けられます。</span>
                       <button
                         type="button"
                         onClick={() => {
@@ -2882,7 +2914,7 @@ export const MarketingFlowStudio: React.FC<MarketingFlowStudioProps> = ({
                         }}
                         className="text-purple-600 hover:text-purple-700 underline cursor-pointer"
                       >
-                        繝薙ず繝･繧｢繝ｫ險ｭ螳壹・迴ｾ蝨ｨ縺ｮ蜀・ｮｹ縺ｧ荳頑嶌縺阪Μ繧ｻ繝・ヨ
+                        ビジュアル設定の現在の内容で上書きリセット
                       </button>
                     </div>
                   </div>
@@ -2894,7 +2926,7 @@ export const MarketingFlowStudio: React.FC<MarketingFlowStudioProps> = ({
                     onClick={() => setIsEditingWelcome(false)}
                     className="px-4 py-2 bg-white hover:bg-slate-100 text-slate-700 border border-slate-200 rounded-lg text-xs cursor-pointer transition font-medium"
                   >
-                    繧ｭ繝｣繝ｳ繧ｻ繝ｫ
+                    キャンセル
                   </button>
                   <button
                     type="button"
@@ -2903,13 +2935,13 @@ export const MarketingFlowStudio: React.FC<MarketingFlowStudioProps> = ({
                     className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-lg text-xs transition cursor-pointer flex items-center gap-1.5 shadow-xs disabled:opacity-50"
                   >
                     <Save className="w-3.5 h-3.5" />
-                    <span>{welcomeSaving ? '菫晏ｭ倅ｸｭ窶ｦ' : '菫晏ｭ倥＠縺ｦLINE縺ｫ蜿肴丐'}</span>
+                    <span>{welcomeSaving ? '保存中…' : '保存してLINEに反映'}</span>
                   </button>
                 </div>
               </div>
             )}
 
-            {/* 繝励Ξ繝薙Η繝ｼ陦ｨ遉ｺ */}
+            {/* プレビュー表示 */}
             <div className="p-5 grid grid-cols-1 lg:grid-cols-12 gap-6 bg-slate-50/50">
               <div className="lg:col-span-5 flex flex-col items-center space-y-3">
                 <div className="flex items-center gap-2 bg-white p-1 rounded-lg border border-slate-200 text-xs self-center shadow-2xs">
@@ -2920,7 +2952,7 @@ export const MarketingFlowStudio: React.FC<MarketingFlowStudioProps> = ({
                       previewType === 'card' ? 'bg-emerald-600 text-white shadow-xs' : 'text-slate-600 hover:text-slate-900'
                     }`}
                   >
-                    �導 繧ｹ繝槭・UI
+                    📱 スマホUI
                   </button>
                   <button
                     type="button"
@@ -2929,7 +2961,7 @@ export const MarketingFlowStudio: React.FC<MarketingFlowStudioProps> = ({
                       previewType === 'line_official' ? 'bg-purple-600 text-white shadow-xs' : 'text-slate-600 hover:text-slate-900'
                     }`}
                   >
-                    �剥 LINE蜈ｬ蠑剰｡ｨ遉ｺ
+                    🔍 LINE公式表示
                   </button>
                 </div>
 
@@ -2951,7 +2983,7 @@ export const MarketingFlowStudio: React.FC<MarketingFlowStudioProps> = ({
                                 welcomeChoices
                               ),
                       }}
-                      title="蜿九□縺｡霑ｽ蜉�譎ゅえ繧ｧ繝ｫ繧ｫ繝�Flex繝励Ξ繝薙Η繝ｼ"
+                      title="友だち追加時ウェルカムFlexプレビュー"
                     />
                   </div>
                 ) : (
@@ -2978,11 +3010,11 @@ export const MarketingFlowStudio: React.FC<MarketingFlowStudioProps> = ({
                             key={choice.id || idx}
                             type="button"
                             onClick={() => {
-                              if (choice.id === 'diagnosis' || choice.tag?.includes('險ｺ譁ｭ')) {
+                              if (choice.id === 'diagnosis' || choice.tag?.includes('診断')) {
                                 setExpandedBranch(expandedBranch === 'diagnosis' ? 'all' : 'diagnosis');
-                              } else if (choice.id === 'consult' || choice.tag?.includes('逶ｸ隲・)) {
+                              } else if (choice.id === 'consult' || choice.tag?.includes('相談')) {
                                 setExpandedBranch(expandedBranch === 'consult' ? 'all' : 'consult');
-                              } else if (choice.id === 'care' || choice.tag?.includes('莉玖ｭｷ')) {
+                              } else if (choice.id === 'care' || choice.tag?.includes('介護')) {
                                 setExpandedBranch(expandedBranch === 'care' ? 'all' : 'care');
                               }
                             }}
@@ -3004,54 +3036,57 @@ export const MarketingFlowStudio: React.FC<MarketingFlowStudioProps> = ({
                   <div className="flex items-center justify-between gap-2 flex-wrap">
                     <h4 className="font-bold text-slate-900 flex items-center gap-2 text-sm">
                       <Sparkles className="w-4 h-4 text-emerald-600" />
-                      LINE蟆守ｷ壹・蜈ｨ菴楢ｨｭ險茨ｼ夊ｦｪ霄ｫ縺ｪ逶ｸ隲・ﾃ・謨呵ご 竊・譛邨ゅざ繝ｼ繝ｫ・亥膚隲・｡亥・・・                    </h4>
+                      LINE導線の全体設計：親身な相談 × 教育 → 最終ゴール（商談案内）
+                    </h4>
                     <span className="text-[11px] font-bold px-2.5 py-0.5 rounded-full bg-amber-50 text-amber-800 border border-amber-200">
-                      �識 譛邨ゅざ繝ｼ繝ｫ: 30蛻・句挨逶ｸ隲・・蝠・ｫ・ｺ育ｴ・                    </span>
+                      🎯 最終ゴール: 30分個別相談・商談予約
+                    </span>
                   </div>
                   <p className="text-slate-500 leading-relaxed">
-                    蛻晄律縺ｮ繧ｦ繧ｧ繝ｫ繧ｫ繝�3謚槭〒闊亥袖縺ｫ蜷医ｏ縺帙◆蛻・ｲ撰ｼ・/B/C・峨∈謖ｯ繧雁・縺代∵悴驕ｸ謚槭・蜿九□縺｡繧・､懆ｨ惹ｸｭ縺ｮ隕玖ｾｼ縺ｿ螳｢縺ｯ縲・譌･蠕後°繧峨・蜈ｱ騾壹せ繝医・繝ｪ繝ｼ謨呵ご・・隧ｱ・峨阪〒閧ｲ謌舌＠縺ｦ蝠・ｫ・∈縺､縺ｪ縺弱∪縺吶・                  </p>
+                    初日のウェルカム3択で興味に合わせた分岐（A/B/C）へ振り分け、未選択の友だちや検討中の見込み客は「2日後からの共通ストーリー教育（7話）」で育成して商談へつなぎます。
+                  </p>
                   <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2 pt-1">
                     <button
                       type="button"
                       onClick={() => setExpandedBranch('diagnosis')}
                       className="p-2.5 rounded-lg bg-emerald-50 border border-emerald-200 text-emerald-900 text-left hover:border-emerald-400 transition cursor-pointer"
                     >
-                      <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-emerald-200/70 text-emerald-900">謨呵ご繝ｫ繝ｼ繝・/span>
-                      <span className="font-bold block mt-1">A. 邁｡譏楢ｨｺ譁ｭﾃ玲蕗閧ｲ・・譛ｬ・・/span>
-                      <span className="text-[11px] opacity-85 block">繝ｬ繝昴・繝医・蝠・ｫ・ｾ後・縺ｿ</span>
+                      <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-emerald-200/70 text-emerald-900">教育ルート</span>
+                      <span className="font-bold block mt-1">A. 簡易診断×教育（4本）</span>
+                      <span className="text-[11px] opacity-85 block">レポートは商談後のみ</span>
                     </button>
                     <button
                       type="button"
                       onClick={() => setExpandedBranch('consult')}
                       className="p-2.5 rounded-lg bg-purple-50 border border-purple-200 text-purple-900 text-left hover:border-purple-400 transition cursor-pointer"
                     >
-                      <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-purple-200/70 text-purple-900">隕ｪ霄ｫ縺ｪ逶ｸ隲・Ν繝ｼ繝・/span>
-                      <span className="font-bold block mt-1">B. 蛟句挨逶ｸ隲・ｼ医ヱ繧ｿ繝ｼ繝ｳA・・/span>
-                      <span className="text-[11px] opacity-85 block">繧ｿ繧ｰ: 驕ｸ謚・蛟句挨逶ｸ隲・/span>
+                      <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-purple-200/70 text-purple-900">親身な相談ルート</span>
+                      <span className="font-bold block mt-1">B. 個別相談（パターンA）</span>
+                      <span className="text-[11px] opacity-85 block">タグ: 選択:個別相談</span>
                     </button>
                     <button
                       type="button"
                       onClick={() => setExpandedBranch('care')}
                       className="p-2.5 rounded-lg bg-sky-50 border border-sky-200 text-sky-900 text-left hover:border-sky-400 transition cursor-pointer"
                     >
-                      <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-sky-200/70 text-sky-900">逶ｸ隲・怜ｰる摩謨呵ご</span>
-                      <span className="font-bold block mt-1">C. 莉玖ｭｷ髢区･ｭ・医ヱ繧ｿ繝ｼ繝ｳB・・/span>
-                      <span className="text-[11px] opacity-85 block">繧ｿ繧ｰ: 莉玖ｭｷ菫晞匱螟夜幕讌ｭ</span>
+                      <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-sky-200/70 text-sky-900">相談×専門教育</span>
+                      <span className="font-bold block mt-1">C. 介護開業（パターンB）</span>
+                      <span className="text-[11px] opacity-85 block">タグ: 介護保険外開業</span>
                     </button>
                     <button
                       type="button"
                       onClick={() => { setActiveTrack('story_nurturing'); setViewMode('flow'); }}
                       className="p-2.5 rounded-lg bg-indigo-50 border border-indigo-200 text-indigo-900 text-left hover:border-indigo-400 transition cursor-pointer"
                     >
-                      <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-indigo-200/70 text-indigo-900">謨呵ご繧ｹ繝・ャ繝励ち繝悶∈</span>
-                      <span className="font-bold block mt-1">蜈ｱ騾壹せ繝医・繝ｪ繝ｼ・・隧ｱ・・/span>
-                      <span className="text-[11px] opacity-85 block">譛ｪ霑比ｿ｡繝ｻ譛ｪ莠育ｴ・・ｒ閧ｲ謌・竊・/span>
+                      <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-indigo-200/70 text-indigo-900">教育ステップタブへ</span>
+                      <span className="font-bold block mt-1">共通ストーリー（7話）</span>
+                      <span className="text-[11px] opacity-85 block">未返信・未予約者を育成 →</span>
                     </button>
                   </div>
                 </div>
 
                 <div className="flex items-center gap-2 pt-1 flex-wrap">
-                  <span className="text-slate-500 font-medium">陦ｨ遉ｺ繝輔ぅ繝ｫ繧ｿ:</span>
+                  <span className="text-slate-500 font-medium">表示フィルタ:</span>
                   <button
                     type="button"
                     onClick={() => setExpandedBranch('all')}
@@ -3059,7 +3094,7 @@ export const MarketingFlowStudio: React.FC<MarketingFlowStudioProps> = ({
                       expandedBranch === 'all' ? 'bg-purple-600 text-white shadow-xs' : 'bg-white border border-slate-200 text-slate-700 hover:bg-slate-100'
                     }`}
                   >
-                    縺吶∋縺ｦ陦ｨ遉ｺ
+                    すべて表示
                   </button>
                   <button
                     type="button"
@@ -3068,7 +3103,7 @@ export const MarketingFlowStudio: React.FC<MarketingFlowStudioProps> = ({
                       expandedBranch === 'diagnosis' ? 'bg-emerald-600 text-white shadow-xs' : 'bg-white border border-slate-200 text-slate-700 hover:bg-slate-100'
                     }`}
                   >
-                    A: 險ｺ譁ｭﾃ玲蕗閧ｲ
+                    A: 診断×教育
                   </button>
                   <button
                     type="button"
@@ -3077,7 +3112,7 @@ export const MarketingFlowStudio: React.FC<MarketingFlowStudioProps> = ({
                       expandedBranch === 'consult' ? 'bg-purple-600 text-white shadow-xs' : 'bg-white border border-slate-200 text-slate-700 hover:bg-slate-100'
                     }`}
                   >
-                    B: 蛟句挨逶ｸ隲・A)
+                    B: 個別相談(A)
                   </button>
                   <button
                     type="button"
@@ -3086,14 +3121,14 @@ export const MarketingFlowStudio: React.FC<MarketingFlowStudioProps> = ({
                       expandedBranch === 'care' ? 'bg-sky-600 text-white shadow-xs' : 'bg-white border border-slate-200 text-slate-700 hover:bg-slate-100'
                     }`}
                   >
-                    C: 莉玖ｭｷ髢区･ｭ(B)
+                    C: 介護開業(B)
                   </button>
                 </div>
               </div>
             </div>
           </div>
 
-          {/* 蜈･蜿｣ 竭｡: 笞｡ 繧ｭ繝ｼ繝ｯ繝ｼ繝芽・蜍募ｿ懃ｭ斐す繝翫Μ繧ｪ */}
+          {/* 入口 ②: ⚡ キーワード自動応答シナリオ */}
           <div className="bg-white border border-amber-200 rounded-2xl p-5 shadow-xs space-y-4">
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-amber-100 pb-3">
               <div className="flex items-center gap-3">
@@ -3103,11 +3138,13 @@ export const MarketingFlowStudio: React.FC<MarketingFlowStudioProps> = ({
                 <div>
                   <div className="flex items-center gap-2">
                     <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-amber-100 text-amber-800 border border-amber-300">
-                      縲仙・蜿｣竭｡縲鷹｡ｧ螳｢縺九ｉ縺ｮ繧ｭ繝ｼ繝ｯ繝ｼ繝蛾∽ｿ｡譎・                    </span>
-                    <span className="text-xs text-slate-500">繝ｪ繧｢繝ｫ繧ｿ繧､繝�閾ｪ蜍募ｿ懃ｭ・・・繧ｿ繧ｰ莉倅ｸ・/span>
+                      【入口②】顧客からのキーワード送信時
+                    </span>
+                    <span className="text-xs text-slate-500">リアルタイム自動応答 ＆ タグ付与</span>
                   </div>
                   <h3 className="text-base font-bold text-slate-900 mt-0.5">
-                    繧ｭ繝ｼ繝ｯ繝ｼ繝芽・蜍募ｿ懃ｭ斐す繝翫Μ繧ｪ・・keywordRules.length}莉ｶ逋ｻ骭ｲ・・                  </h3>
+                    キーワード自動応答シナリオ（{keywordRules.length}件登録）
+                  </h3>
                 </div>
               </div>
 
@@ -3121,7 +3158,7 @@ export const MarketingFlowStudio: React.FC<MarketingFlowStudioProps> = ({
                     className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold transition shadow-xs cursor-pointer"
                   >
                     <Zap className="w-3.5 h-3.5" />
-                    <span>繝ｪ繝・メ繝｡繝九Η繝ｼ縲鍬INE逶ｸ隲・咲畑繧堤匳骭ｲ</span>
+                    <span>リッチメニュー「LINE相談」用を登録</span>
                   </button>
                 )}
                 <button
@@ -3130,7 +3167,7 @@ export const MarketingFlowStudio: React.FC<MarketingFlowStudioProps> = ({
                   className="inline-flex items-center gap-1.5 px-3.5 py-1.5 bg-amber-600 hover:bg-amber-700 text-white rounded-xl text-xs font-bold transition shadow-xs cursor-pointer"
                 >
                   <Plus className="w-3.5 h-3.5" />
-                  <span>譁ｰ縺励＞繧ｭ繝ｼ繝ｯ繝ｼ繝牙ｿ懃ｭ斐ｒ霑ｽ蜉�</span>
+                  <span>新しいキーワード応答を追加</span>
                 </button>
               </div>
             </div>
@@ -3154,7 +3191,7 @@ export const MarketingFlowStudio: React.FC<MarketingFlowStudioProps> = ({
                             : 'bg-amber-100 text-amber-800 border-amber-200'
                         }`}
                       >
-                        {rule.matchMode === 'exact' ? `縲・{rule.matchText}縲阪→螳悟・荳閾ｴ` : `縲・{rule.matchText}縲阪ｒ蜷ｫ繧`}
+                        {rule.matchMode === 'exact' ? `「${rule.matchText}」と完全一致` : `「${rule.matchText}」を含む`}
                       </span>
                     </div>
                     <p className="text-xs text-slate-700 line-clamp-3 whitespace-pre-line bg-white p-2.5 rounded-lg border border-amber-100 shadow-2xs">
@@ -3165,11 +3202,12 @@ export const MarketingFlowStudio: React.FC<MarketingFlowStudioProps> = ({
                   <div className="flex items-center justify-between pt-2 border-t border-amber-100 text-xs">
                     <div className="flex items-center gap-1.5">
                       <span className="text-[11px] text-emerald-700 font-mono font-medium">
-                        {rule.tag ? `繧ｿ繧ｰ: ${rule.tag}` : '繧ｿ繧ｰ縺ｪ縺・}
+                        {rule.tag ? `タグ: ${rule.tag}` : 'タグなし'}
                       </span>
                       {rule.id.startsWith('kw-') && (
                         <span className="text-[10px] px-1.5 py-0.5 rounded bg-slate-100 text-slate-500 border border-slate-200">
-                          譛ｪ菫晏ｭ・                        </span>
+                          未保存
+                        </span>
                       )}
                     </div>
                     <div className="flex items-center gap-1.5">
@@ -3180,13 +3218,13 @@ export const MarketingFlowStudio: React.FC<MarketingFlowStudioProps> = ({
                           rule.enabled ? 'bg-emerald-100 text-emerald-800 border border-emerald-300' : 'bg-slate-100 text-slate-600 border border-slate-200'
                         }`}
                       >
-                        {rule.enabled ? '譛牙柑' : '辟｡蜉ｹ'}
+                        {rule.enabled ? '有効' : '無効'}
                       </button>
                       <button
                         type="button"
                         onClick={() => openEditKeywordModal(rule)}
                         className="p-1.5 rounded-lg bg-purple-600 hover:bg-purple-700 text-white cursor-pointer shadow-2xs transition"
-                        title="邱ｨ髮・
+                        title="編集"
                       >
                         <Edit3 className="w-3.5 h-3.5" />
                       </button>
@@ -3194,7 +3232,7 @@ export const MarketingFlowStudio: React.FC<MarketingFlowStudioProps> = ({
                         type="button"
                         onClick={() => handleDeleteKeywordRule(rule.id)}
                         className="p-1.5 rounded-lg bg-slate-100 hover:bg-rose-100 text-slate-500 hover:text-rose-700 cursor-pointer border border-slate-200 transition"
-                        title="蜑企勁"
+                        title="削除"
                       >
                         <Trash2 className="w-3.5 h-3.5" />
                       </button>
@@ -3205,7 +3243,7 @@ export const MarketingFlowStudio: React.FC<MarketingFlowStudioProps> = ({
             </div>
           </div>
 
-          {/* 蛻・ｲ・A: �投 3蛻・┌譁咏ｵ悟霧險ｺ譁ｭ ﾃ・謨呵ご繝ｫ繝ｼ繝・竊・蝠・ｫ・｡亥・ */}
+          {/* 分岐 A: 📊 3分無料経営診断 × 教育ルート → 商談案内 */}
           {(expandedBranch === 'all' || expandedBranch === 'diagnosis') && (
             <div className="bg-white border border-slate-200 rounded-2xl p-5 space-y-4 shadow-xs">
               <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-100 pb-3">
@@ -3215,14 +3253,17 @@ export const MarketingFlowStudio: React.FC<MarketingFlowStudioProps> = ({
                   </span>
                   <div>
                     <h4 className="text-base font-bold text-slate-900 flex items-center gap-2 flex-wrap">
-                      蛻・ｲ・A: �投 3蛻・┌譁咏ｵ悟霧險ｺ譁ｭ・・P邁｡譏鍋ｵ先棡蜊ｳ譎・竊・謨呵ご 竊・蝠・ｫ・｡亥・・・                      <span className="text-[10px] px-2 py-0.5 rounded bg-emerald-100 text-emerald-800 border border-emerald-300 font-bold">
-                        謨呵ご繝ｻ邁｡譏楢ｨｺ譁ｭ繝ｫ繝ｼ繝・                      </span>
+                      分岐 A: 📊 3分無料経営診断（HP簡易結果即時 → 教育 → 商談案内）
+                      <span className="text-[10px] px-2 py-0.5 rounded bg-emerald-100 text-emerald-800 border border-emerald-300 font-bold">
+                        教育・簡易診断ルート
+                      </span>
                       <span className="text-xs px-2 py-0.5 rounded bg-emerald-50 text-emerald-700 border border-emerald-200">
-                        {diagnosisScenarios.length} 繧ｹ繝・ャ繝礼匳骭ｲ荳ｭ
+                        {diagnosisScenarios.length} ステップ登録中
                       </span>
                     </h4>
                     <p className="text-xs text-slate-500">
-                      譛ｪ蝗樒ｭ斐Μ繝槭う繝ｳ繝・笏笏竊・HP騾∽ｿ｡縺ｧ縲千ｰ｡譏楢ｨｺ譁ｭ邨先棡縲大叉譎り｡ｨ遉ｺ 笏笏竊・1縲・譌･蠕梧蕗閧ｲ繝ｻ蝠・ｫ・｡亥・ 笏笏竊・蝠・ｫ・ｾ後↓縺疲署譯域嶌・郁ｨｺ譁ｭ邨先棡・区署譯茨ｼ蛾∽ｻ・                    </p>
+                      未回答リマインド ──→ HP送信で【簡易診断結果】即時表示 ──→ 1〜7日後教育・商談案内 ──→ 商談後にご提案書（診断結果＋提案）送付
+                    </p>
                   </div>
                 </div>
 
@@ -3233,60 +3274,69 @@ export const MarketingFlowStudio: React.FC<MarketingFlowStudioProps> = ({
                     className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-xs font-bold transition cursor-pointer shadow-xs shrink-0"
                   >
                     <Zap className="w-3.5 h-3.5 text-emerald-200" />
-                    <span>邁｡譏楢ｨｺ譁ｭﾃ玲蕗閧ｲ4譛ｬ繧呈怙譁ｰ蛹・/span>
+                    <span>簡易診断×教育4本を最新化</span>
                   </button>
                 )}
               </div>
 
-              {/* 蛻・ｲ植 蜈ｨ菴薙ヵ繝ｭ繝ｼ謨ｴ逅・き繝ｼ繝会ｼ・P邁｡譏楢ｨｺ譁ｭ 縲・蝠・ｫ・ｾ碁剞螳壹＃謠先｡域嶌騾∽ｻ倥・蠅・阜・・*/}
+              {/* 分岐A 全体フロー整理カード（HP簡易診断 〜 商談後限定ご提案書送付の境界） */}
               <div className="rounded-xl border border-emerald-200 bg-emerald-50/40 p-4 space-y-3 text-xs">
                 <div className="flex items-center justify-between flex-wrap gap-2">
                   <span className="font-bold text-emerald-950 flex items-center gap-1.5">
                     <CheckCircle2 className="w-4 h-4 text-emerald-600" />
-                    蛻・ｲ植縺ｮ螳溷漁繝輔Ο繝ｼ・育ｰ｡譏鍋ｵ先棡縺ｨ隧ｳ邏ｰ險ｺ譁ｭ蜈･繧翫＃謠先｡域嶌縺ｮ蛻・ｊ蛻・￠・・                  </span>
+                    分岐Aの実務フロー（簡易結果と詳細診断入りご提案書の切り分け）
+                  </span>
                   <span className="text-[10px] px-2 py-0.5 rounded bg-white text-emerald-800 border border-emerald-200 font-bold">
-                    譛ｪ蝠・ｫ・・∈縺ｯ隧ｳ邏ｰ險ｺ譁ｭ蜈･繧翫＃謠先｡域嶌縺ｮ閾ｪ蜍暮∽ｻ倥↑縺・                  </span>
+                    未商談者へは詳細診断入りご提案書の自動送付なし
+                  </span>
                 </div>
                 <div className="grid grid-cols-1 md:grid-cols-4 gap-2.5">
                   <div className="p-2.5 rounded-lg bg-white border border-emerald-100 space-y-1">
-                    <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-slate-100 text-slate-700">竭� 譛ｪ蝗樒ｭ疲凾</span>
-                    <p className="font-bold text-slate-900">HP險ｺ譁ｭ縺ｸ隱伜ｰ・/p>
+                    <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-slate-100 text-slate-700">① 未回答時</span>
+                    <p className="font-bold text-slate-900">HP診断へ誘導</p>
                     <p className="text-[11px] text-slate-500 leading-relaxed">
-                      繧ｿ繧ｰ縲碁∈謚・險ｺ譁ｭ縲阪〒1譌･蠕後↓謨呵ご繝ｪ繝槭う繝ｳ繝会ｼ亥屓遲疲ｸ医∩縺ｮ蝣ｴ蜷医・閾ｪ蜍募●豁｢・峨・                    </p>
+                      タグ「選択:診断」で1日後に教育リマインド（回答済みの場合は自動停止）。
+                    </p>
                   </div>
                   <div className="p-2.5 rounded-lg bg-white border border-emerald-200 space-y-1">
-                    <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-emerald-100 text-emerald-800">竭｡ HP騾∽ｿ｡逶ｴ蠕鯉ｼ郁・蜍包ｼ・/span>
-                    <p className="font-bold text-emerald-900">邁｡譏楢ｨｺ譁ｭ邨先棡繧貞叉譎り｡ｨ遉ｺ</p>
+                    <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-emerald-100 text-emerald-800">② HP送信直後（自動）</span>
+                    <p className="font-bold text-emerald-900">簡易診断結果を即時表示</p>
                     <p className="text-[11px] text-slate-600 leading-relaxed">
-                      HP逕ｻ髱｢縺ｫ繝懊ヨ繝ｫ繝阪ャ繧ｯ蛯ｾ蜷代ｒ蜊ｳ譎り｡ｨ遉ｺ縲・INE/繝｡繝ｼ繝ｫ縺ｧ繧らｵ先棡遒ｺ隱搾ｼ句膚隲・｡亥・繧帝∽ｻ倥・                    </p>
+                      HP画面にボトルネック傾向を即時表示。LINE/メールでも結果確認＋商談案内を送付。
+                    </p>
                   </div>
                   <div className="p-2.5 rounded-lg bg-white border border-emerald-100 space-y-1">
-                    <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-amber-100 text-amber-800">竭｢ 1縲・譌･蠕鯉ｼ域悴莠育ｴ・・縺ｿ・・/span>
-                    <p className="font-bold text-slate-900">邁｡譏鍋ｵ先棡隗｣隱ｬ 竊・蝠・ｫ・｡亥・</p>
+                    <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-amber-100 text-amber-800">③ 1〜7日後（未予約のみ）</span>
+                    <p className="font-bold text-slate-900">簡易結果解説 → 商談案内</p>
                     <p className="text-[11px] text-slate-500 leading-relaxed">
-                      邁｡譏鍋ｵ先棡縺ｮ隕区婿繝ｻ莠倶ｾ区蕗閧ｲ縺九ｉ30蛻・膚隲・∈隱伜ｰ弱ょ膚隲・ｺ育ｴ・・LINE霑比ｿ｡縺ｧ閾ｪ蜍募●豁｢縲・                    </p>
+                      簡易結果の見方・事例教育から30分商談へ誘導。商談予約・LINE返信で自動停止。
+                    </p>
                   </div>
                   <div className="p-2.5 rounded-lg bg-slate-900 text-white border border-slate-800 space-y-1">
-                    <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-amber-500 text-slate-950">竭｣ 蝠・ｫ・ｾ鯉ｼ亥膚隲・・・縺ｿ・・/span>
-                    <p className="font-bold text-white">縺疲署譯域嶌・郁ｨｺ譁ｭ邨先棡・区署譯茨ｼ蛾∽ｻ・/p>
+                    <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-amber-500 text-slate-950">④ 商談後（商談者のみ）</span>
+                    <p className="font-bold text-white">ご提案書（診断結果＋提案）送付</p>
                     <p className="text-[11px] text-slate-300 leading-relaxed">
-                      蝠・ｫ・ｒ螳滓命縺輔ｌ縺滓婿髯仙ｮ壹〒縲∝膚隲・ｾ後↓諡・ｽ楢・′騾∽ｿ｡繧ｻ繝ｳ繧ｿ繝ｼ遲峨°繧牙句挨縺ｫ縺企√ｊ縺励∪縺吶・                    </p>
+                      商談を実施された方限定で、商談後に担当者が送信センター等から個別にお送りします。
+                    </p>
                   </div>
                 </div>
               </div>
 
-              {/* 蛻・ｲ植 繧ｿ繝・・逶ｴ蠕後・蜊ｳ譎りｿ比ｿ｡・郁ｨｺ譁ｭ譯亥・繧ｫ繝ｼ繝会ｼ峨う繝ｳ繝ｩ繧､繝ｳ險ｭ螳・& 繝励Ξ繝薙Η繝ｼ */}
+              {/* 分岐A タップ直後の即時返信（診断案内カード）インライン設定 & プレビュー */}
               <div className="rounded-xl border border-emerald-200 bg-emerald-50/40 p-4 space-y-4">
                 <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
                   <div className="space-y-0.5">
                     <div className="flex items-center gap-2 flex-wrap">
                       <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-emerald-600 text-white">
-                        繧ｿ繝・・逶ｴ蠕後・蜊ｳ譎りｿ比ｿ｡・域怙蛻昴・1逋ｺ逶ｮ・・                      </span>
+                        タップ直後の即時返信（最初の1発目）
+                      </span>
                       <span className="text-xs font-bold text-slate-900">
-                        3蛻・┌譁咏ｵ悟霧險ｺ譁ｭ 譯亥・繧ｫ繝ｼ繝会ｼ医・繝ｼ繝�繝壹・繧ｸ險ｺ譁ｭ繝ｪ繝ｳ繧ｯ・・                      </span>
+                        3分無料経営診断 案内カード（ホームページ診断リンク）
+                      </span>
                     </div>
                     <p className="text-[11px] text-slate-600">
-                      縲交沒・3蛻・┌譁咏ｵ悟霧險ｺ譁ｭ繧貞女縺代ｋ縲阪・繧ｿ繝ｳ縺梧款縺輔ｌ縺溽椪髢薙↓霑比ｿ｡縺輔ｌ縲√・繧ｿ繝ｳ繧呈款縺吶→繧ｳ繝ｼ繝昴Ξ繝ｼ繝・P縺ｮ險ｺ譁ｭ繝壹・繧ｸ縺ｸ驕ｷ遘ｻ縺励∪縺吶・                    </p>
+                      「📊 3分無料経営診断を受ける」ボタンが押された瞬間に返信され、ボタンを押すとコーポレートHPの診断ページへ遷移します。
+                    </p>
                   </div>
                   <button
                     type="button"
@@ -3298,7 +3348,7 @@ export const MarketingFlowStudio: React.FC<MarketingFlowStudioProps> = ({
                     }`}
                   >
                     <Edit3 className="w-3.5 h-3.5" />
-                    <span>{isEditingPatternDiagnosis ? '險ｺ譁ｭ繧ｫ繝ｼ繝臥ｷｨ髮・ｒ髢峨§繧・ : '笨搾ｸ・險ｺ譁ｭ譯亥・繧ｫ繝ｼ繝峨ｒ邱ｨ髮・}</span>
+                    <span>{isEditingPatternDiagnosis ? '診断カード編集を閉じる' : '✍️ 診断案内カードを編集'}</span>
                   </button>
                 </div>
 
@@ -3306,7 +3356,7 @@ export const MarketingFlowStudio: React.FC<MarketingFlowStudioProps> = ({
                   <div className="grid grid-cols-1 lg:grid-cols-12 gap-5 pt-2 border-t border-emerald-200/70">
                     <div className="lg:col-span-7 space-y-3 text-xs">
                       <div>
-                        <label className="font-bold text-slate-700 block mb-1">繧ｫ繝ｼ繝芽ｦ句・縺・/label>
+                        <label className="font-bold text-slate-700 block mb-1">カード見出し</label>
                         <input
                           type="text"
                           value={patternDiagnosisConfig.title}
@@ -3316,7 +3366,8 @@ export const MarketingFlowStudio: React.FC<MarketingFlowStudioProps> = ({
                       </div>
                       <div>
                         <label className="font-bold text-slate-700 block mb-1">
-                          譯亥・繝｡繝・そ繝ｼ繧ｸ・・code className="text-emerald-700">{'{recipient_name}'}</code> 蟾ｮ縺苓ｾｼ縺ｿ蜿ｯ・・                        </label>
+                          案内メッセージ（<code className="text-emerald-700">{'{recipient_name}'}</code> 差し込み可）
+                        </label>
                         <textarea
                           rows={7}
                           value={patternDiagnosisConfig.body}
@@ -3326,22 +3377,23 @@ export const MarketingFlowStudio: React.FC<MarketingFlowStudioProps> = ({
                       </div>
                       <div>
                         <div className="flex items-center justify-between mb-1">
-                          <label className="font-bold text-slate-700">CTA繝懊ち繝ｳ繝ｩ繝吶Ν・・0譁・ｭ嶺ｻ･蜀・ｼ・/label>
+                          <label className="font-bold text-slate-700">CTAボタンラベル（20文字以内）</label>
                           <span className={`text-[10px] font-mono ${patternDiagnosisConfig.buttonLabel.length > 20 ? 'text-rose-600 font-bold' : 'text-slate-400'}`}>
-                            {patternDiagnosisConfig.buttonLabel.length} / 20譁・ｭ・                          </span>
+                            {patternDiagnosisConfig.buttonLabel.length} / 20文字
+                          </span>
                         </div>
                         <input
                           type="text"
                           maxLength={20}
                           value={patternDiagnosisConfig.buttonLabel}
                           onChange={(e) => setPatternDiagnosisConfig((prev) => ({ ...prev, buttonLabel: e.target.value }))}
-                          placeholder="萓・ 險ｺ譁ｭ繧貞ｧ九ａ繧具ｼ育ｴ・蛻・ｼ・
+                          placeholder="例: 診断を始める（約3分）"
                           className="w-full bg-white border border-slate-200 rounded-lg px-3 py-2 text-slate-900 focus:outline-none focus:border-emerald-500"
                         />
                       </div>
                       <div>
                         <div className="flex items-center justify-between mb-1">
-                          <label className="font-bold text-slate-700">驕ｷ遘ｻ蜈・RL・域悽逡ｪ繝帙・繝�繝壹・繧ｸ險ｺ譁ｭ・・/label>
+                          <label className="font-bold text-slate-700">遷移先URL（本番ホームページ診断）</label>
                           <button
                             type="button"
                             onClick={() =>
@@ -3352,7 +3404,8 @@ export const MarketingFlowStudio: React.FC<MarketingFlowStudioProps> = ({
                             }
                             className="text-[11px] text-emerald-700 hover:text-emerald-800 underline cursor-pointer font-medium"
                           >
-                            蜈ｬ蠑秋P險ｺ譁ｭURL繧定ｨｭ螳・                          </button>
+                            公式HP診断URLを設定
+                          </button>
                         </div>
                         <input
                           type="url"
@@ -3362,10 +3415,12 @@ export const MarketingFlowStudio: React.FC<MarketingFlowStudioProps> = ({
                           className="w-full bg-white border border-slate-200 rounded-lg px-3 py-2 text-slate-900 font-mono text-xs focus:outline-none focus:border-emerald-500"
                         />
                         <p className="text-[11px] text-slate-500 mt-1">
-                          窶ｻ 騾∽ｿ｡譎ゅ↓縺ｯ閾ｪ蜍輔〒 <code className="bg-white px-1 rounded border border-slate-200">?source=line&amp;luid=...&amp;cid=...</code> 縺御ｻ倅ｸ弱＆繧後∝屓遲碑・・CRM繝ｻLINE縺ｨ邏蝉ｻ倥″縺ｾ縺吶・                        </p>
+                          ※ 送信時には自動で <code className="bg-white px-1 rounded border border-slate-200">?source=line&amp;luid=...&amp;cid=...</code> が付与され、回答者のCRM・LINEと紐付きます。
+                        </p>
                         {/\.run\.app|\/f\/business-diagnosis|\/forms\/business-diagnosis/i.test(patternDiagnosisConfig.diagnosisUrl || '') && (
                           <p className="text-[11px] text-amber-700 bg-amber-50 border border-amber-200 rounded px-2 py-1 mt-1">
-                            譌ｧOS逕ｨURL縺悟・蜉帙＆繧後※縺・∪縺吶ゆｿ晏ｭ俶凾縺ｫ閾ｪ蜍慕噪縺ｫ蜈ｬ蠑上・繝ｼ繝�繝壹・繧ｸ・・OFFICIAL_VERCEL_URLS.diagnosis}・峨∈螟画鋤縺輔ｌ縺ｾ縺吶・                          </p>
+                            旧OS用URLが入力されています。保存時に自動的に公式ホームページ（{OFFICIAL_VERCEL_URLS.diagnosis}）へ変換されます。
+                          </p>
                         )}
                       </div>
                       <div className="flex items-center justify-between pt-2">
@@ -3374,23 +3429,24 @@ export const MarketingFlowStudio: React.FC<MarketingFlowStudioProps> = ({
                           onClick={() => setPatternDiagnosisConfig(DEFAULT_WELCOME_PATTERN_DIAGNOSIS)}
                           className="text-slate-500 hover:text-slate-800 underline cursor-pointer text-[11px]"
                         >
-                          蛻晄悄繝・Φ繝励Ξ繝ｼ繝医↓謌ｻ縺・                        </button>
+                          初期テンプレートに戻す
+                        </button>
                         <div className="flex items-center gap-2">
                           <button
                             type="button"
                             onClick={() => setIsEditingPatternDiagnosis(false)}
                             className="px-3.5 py-1.5 bg-white hover:bg-slate-100 text-slate-700 border border-slate-200 rounded-lg text-xs font-medium cursor-pointer"
                           >
-                            繧ｭ繝｣繝ｳ繧ｻ繝ｫ
+                            キャンセル
                           </button>
                           <button
                             type="button"
                             disabled={welcomeSaving}
-                            onClick={() => void handleSaveWelcome('蛻・ｲ植・・蛻・┌譁咏ｵ悟霧險ｺ譁ｭ譯亥・繧ｫ繝ｼ繝会ｼ峨・險ｭ螳壹ｒ菫晏ｭ倥＠縺ｾ縺励◆・・)}
+                            onClick={() => void handleSaveWelcome('分岐A（3分無料経営診断案内カード）の設定を保存しました！')}
                             className="px-4 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-lg text-xs transition cursor-pointer inline-flex items-center gap-1.5 shadow-xs disabled:opacity-50"
                           >
                             <Save className="w-3.5 h-3.5" />
-                            <span>{welcomeSaving ? '菫晏ｭ倅ｸｭ窶ｦ' : '菫晏ｭ倥＠縺ｦLINE縺ｫ蜿肴丐'}</span>
+                            <span>{welcomeSaving ? '保存中…' : '保存してLINEに反映'}</span>
                           </button>
                         </div>
                       </div>
@@ -3401,10 +3457,10 @@ export const MarketingFlowStudio: React.FC<MarketingFlowStudioProps> = ({
                         <LineMessagePreview
                           type="flex"
                           payload={{
-                            altText: `縲・蛻・┌譁咏ｵ悟霧險ｺ譁ｭ縲・{patternDiagnosisConfig.title}`,
+                            altText: `【3分無料経営診断】${patternDiagnosisConfig.title}`,
                             contents: buildPatternDiagnosisFlexBubble(patternDiagnosisConfig),
                           }}
-                          title="蛻・ｲ植 險ｺ譁ｭ譯亥・繝励Ξ繝薙Η繝ｼ"
+                          title="分岐A 診断案内プレビュー"
                         />
                       </div>
                     </div>
@@ -3415,15 +3471,16 @@ export const MarketingFlowStudio: React.FC<MarketingFlowStudioProps> = ({
                       <div className="flex items-center justify-between gap-2">
                         <span className="font-bold text-slate-900">{patternDiagnosisConfig.title}</span>
                         <span className="text-[10px] px-2 py-0.5 rounded bg-emerald-50 text-emerald-700 border border-emerald-200 font-bold">
-                          繧ｿ繧ｰ縲碁∈謚・險ｺ譁ｭ縲堺ｻ倅ｸ・                        </span>
+                          タグ「選択:診断」付与
+                        </span>
                       </div>
                       <p className="text-slate-600 whitespace-pre-line line-clamp-3 leading-relaxed">
                         {patternDiagnosisConfig.body}
                       </p>
                       <div className="p-2 rounded bg-emerald-50/70 border border-emerald-100 text-[11px] text-emerald-900 space-y-0.5">
-                        <div className="font-bold">繝懊ち繝ｳ: 縲鶏patternDiagnosisConfig.buttonLabel}縲・/div>
+                        <div className="font-bold">ボタン: 「{patternDiagnosisConfig.buttonLabel}」</div>
                         <div className="font-mono text-[10px] text-emerald-700 break-all">
-                          驕ｷ遘ｻ蜈・ {patternDiagnosisConfig.diagnosisUrl}
+                          遷移先: {patternDiagnosisConfig.diagnosisUrl}
                         </div>
                       </div>
                     </div>
@@ -3431,10 +3488,10 @@ export const MarketingFlowStudio: React.FC<MarketingFlowStudioProps> = ({
                       <LineMessagePreview
                         type="flex"
                         payload={{
-                          altText: `縲・蛻・┌譁咏ｵ悟霧險ｺ譁ｭ縲・{patternDiagnosisConfig.title}`,
+                          altText: `【3分無料経営診断】${patternDiagnosisConfig.title}`,
                           contents: buildPatternDiagnosisFlexBubble(patternDiagnosisConfig),
                         }}
-                        title="蛻・ｲ植 螳滓ｩ溘う繝｡繝ｼ繧ｸ"
+                        title="分岐A 実機イメージ"
                       />
                     </div>
                   </div>
@@ -3443,7 +3500,7 @@ export const MarketingFlowStudio: React.FC<MarketingFlowStudioProps> = ({
 
               {diagnosisScenarios.length === 0 ? (
                 <div className="p-6 bg-slate-50 rounded-xl border border-dashed border-slate-200 text-center space-y-3">
-                  <p className="text-xs text-slate-500">蛻・ｲ植・育ｰ｡譏楢ｨｺ譁ｭﾃ玲蕗閧ｲ・峨・繧ｷ繝翫Μ繧ｪ縺後∪縺�逋ｻ骭ｲ縺輔ｌ縺ｦ縺・∪縺帙ｓ縲・/p>
+                  <p className="text-xs text-slate-500">分岐A（簡易診断×教育）のシナリオがまだ登録されていません。</p>
                   {onApplyDiagnosisStarterSet && (
                     <button
                       type="button"
@@ -3451,7 +3508,7 @@ export const MarketingFlowStudio: React.FC<MarketingFlowStudioProps> = ({
                       className="px-3.5 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-xs font-bold transition cursor-pointer inline-flex items-center gap-1.5 shadow-xs"
                     >
                       <Plus className="w-3.5 h-3.5" />
-                      <span>邁｡譏楢ｨｺ譁ｭﾃ玲蕗閧ｲ4譛ｬ縺ｮ讓呎ｺ悶す繝翫Μ繧ｪ繧貞渚譏�縺吶ｋ</span>
+                      <span>簡易診断×教育4本の標準シナリオを反映する</span>
                     </button>
                   )}
                 </div>
@@ -3463,9 +3520,11 @@ export const MarketingFlowStudio: React.FC<MarketingFlowStudioProps> = ({
                         <AlertCircle className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
                         <div className="space-y-0.5">
                           <p className="font-bold">
-                            譌ｧ繝舌・繧ｸ繝ｧ繝ｳ・域焚蟄励ヱ繧ｿ繝ｼ繝ｳ遲・{legacyDiagnosisScenarios.length}莉ｶ・峨′谿九▲縺ｦ縺・ｋ縺溘ａ陦ｨ遉ｺ縺輔ｌ縺ｦ縺・∪縺・                          </p>
+                            旧バージョン（数字パターン等 {legacyDiagnosisScenarios.length}件）が残っているため表示されています
+                          </p>
                           <p className="text-[11px] text-amber-900 leading-relaxed">
-                            迴ｾ蝨ｨ縺ｯ<strong>譁ｰ繝舌・繧ｸ繝ｧ繝ｳ・・1縲廣4・峨・縺ｿ遞ｼ蜒・/strong>縺輔○繧後・OK縺ｧ縺呻ｼ井ｸ｡譁ｹON縺ｫ縺吶ｋ縺ｨ莠碁㍾驟堺ｿ｡縺ｫ縺ｪ繧翫∪縺呻ｼ峨ゆｸ九・繝懊ち繝ｳ縺ｧ譌ｧ繝代ち繝ｼ繝ｳ繧偵∪縺ｨ繧√※謨ｴ逅・〒縺阪∪縺吶・                          </p>
+                            現在は<strong>新バージョン（A1〜A4）のみ稼働</strong>させればOKです（両方ONにすると二重配信になります）。下のボタンで旧パターンをまとめて整理できます。
+                          </p>
                         </div>
                       </div>
                       <button
@@ -3474,7 +3533,7 @@ export const MarketingFlowStudio: React.FC<MarketingFlowStudioProps> = ({
                         className="px-3.5 py-2 bg-amber-600 hover:bg-amber-700 text-white rounded-lg text-xs font-bold transition cursor-pointer inline-flex items-center gap-1.5 shadow-xs shrink-0"
                       >
                         <Trash2 className="w-3.5 h-3.5" />
-                        <span>譌ｧ繝代ち繝ｼ繝ｳ繧貞炎髯､縺励※A1縲廣4縺�縺代↓謨ｴ逅・/span>
+                        <span>旧パターンを削除してA1〜A4だけに整理</span>
                       </button>
                     </div>
                   )}
@@ -3503,28 +3562,29 @@ export const MarketingFlowStudio: React.FC<MarketingFlowStudioProps> = ({
                             <span className="font-bold text-slate-900 text-sm">{scenario.name}</span>
                             {isLegacy && (
                               <span className="text-[10px] px-2 py-0.5 rounded bg-amber-100 text-amber-900 border border-amber-300 font-bold">
-                                譌ｧ繝舌・繧ｸ繝ｧ繝ｳ・亥●豁｢謗ｨ螂ｨ・・                              </span>
+                                旧バージョン（停止推奨）
+                              </span>
                             )}
                             <span className="text-[10px] px-2 py-0.5 rounded bg-slate-100 text-slate-600 border border-slate-200 font-mono">
-                              {scenario.waitMinutes === 0 ? '蜊ｳ譎ょｮ溯｡・ : `${Math.round(scenario.waitMinutes / 1440)}譌･蠕形}
+                              {scenario.waitMinutes === 0 ? '即時実行' : `${Math.round(scenario.waitMinutes / 1440)}日後`}
                             </span>
                             {scenario.trigger === 'tag_added' && scenario.targetTag && (
                               <span className="text-[10px] px-2 py-0.5 rounded bg-amber-50 text-amber-800 border border-amber-200 font-mono">
-                                繧ｿ繧ｰ: {scenario.targetTag}
+                                タグ: {scenario.targetTag}
                               </span>
                             )}
                             <span className="text-[10px] px-2 py-0.5 rounded bg-emerald-50 text-emerald-700 border border-emerald-200 font-medium">
                               {scenario.channel === 'both'
-                                ? 'LINE・九Γ繝ｼ繝ｫ'
+                                ? 'LINE＋メール'
                                 : scenario.channel === 'email'
-                                ? '繝｡繝ｼ繝ｫ縺ｮ縺ｿ'
+                                ? 'メールのみ'
                                 : scenario.lineMessageType === 'flex'
-                                ? 'LINE Flex繧ｫ繝ｼ繝・
-                                : 'LINE繝・く繧ｹ繝・}
+                                ? 'LINE Flexカード'
+                                : 'LINEテキスト'}
                             </span>
                           </div>
                           <p className="text-xs text-slate-500 line-clamp-1">
-                            {scenario.flexTitle || scenario.messageBody || scenario.emailSubject || '譁・擇譛ｪ險ｭ螳・}
+                            {scenario.flexTitle || scenario.messageBody || scenario.emailSubject || '文面未設定'}
                           </p>
                         </div>
                       </div>
@@ -3542,12 +3602,12 @@ export const MarketingFlowStudio: React.FC<MarketingFlowStudioProps> = ({
                           {scenario.automationEnabled ? (
                             <>
                               <Play className="w-3.5 h-3.5 text-emerald-600 fill-emerald-600" />
-                              <span>閾ｪ蜍募ｮ溯｡御ｸｭ</span>
+                              <span>自動実行中</span>
                             </>
                           ) : (
                             <>
                               <Pause className="w-3.5 h-3.5 text-slate-400" />
-                              <span>荳譎ょ●豁｢荳ｭ</span>
+                              <span>一時停止中</span>
                             </>
                           )}
                         </button>
@@ -3556,7 +3616,7 @@ export const MarketingFlowStudio: React.FC<MarketingFlowStudioProps> = ({
                           type="button"
                           onClick={() => setPreviewModalScenario(scenario)}
                           className="p-2 bg-white hover:bg-slate-100 text-slate-700 rounded-lg text-xs border border-slate-200 transition cursor-pointer shadow-2xs"
-                          title="譁・擇繝励Ξ繝薙Η繝ｼ"
+                          title="文面プレビュー"
                         >
                           <Eye className="w-3.5 h-3.5" />
                         </button>
@@ -3567,7 +3627,7 @@ export const MarketingFlowStudio: React.FC<MarketingFlowStudioProps> = ({
                           className="px-3 py-1.5 bg-purple-600 hover:bg-purple-700 text-white rounded-lg text-xs font-bold transition cursor-pointer flex items-center gap-1 shadow-xs"
                         >
                           <ShieldCheck className="w-3.5 h-3.5 text-purple-200" />
-                          <span>轤ｹ讀懊・邱ｨ髮・/span>
+                          <span>点検・編集</span>
                         </button>
 
                         {isLegacy && (
@@ -3575,7 +3635,7 @@ export const MarketingFlowStudio: React.FC<MarketingFlowStudioProps> = ({
                             type="button"
                             onClick={() => handleDeleteInspectorScenario(scenario.id)}
                             className="p-2 bg-white hover:bg-rose-50 text-rose-600 rounded-lg text-xs border border-rose-200 transition cursor-pointer shadow-2xs"
-                            title="譌ｧ繧ｷ繝翫Μ繧ｪ繧貞炎髯､"
+                            title="旧シナリオを削除"
                           >
                             <Trash2 className="w-3.5 h-3.5" />
                           </button>
@@ -3589,7 +3649,7 @@ export const MarketingFlowStudio: React.FC<MarketingFlowStudioProps> = ({
             </div>
           )}
 
-          {/* 蛻・ｲ・B: �町 邨悟霧謾ｹ蝟・・蛟句挨逶ｸ隲・舌ヱ繧ｿ繝ｼ繝ｳA・夊ｦｪ霄ｫ縺ｪ逶ｸ隲・Ν繝ｼ繝・竊・蝠・ｫ・｡亥・縲・*/}
+          {/* 分岐 B: 💬 経営改善・個別相談【パターンA：親身な相談ルート → 商談案内】 */}
           {(expandedBranch === 'all' || expandedBranch === 'consult') && (
             <div className="bg-white border border-slate-200 rounded-2xl p-5 space-y-4 shadow-xs">
               <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-100 pb-3">
@@ -3599,13 +3659,16 @@ export const MarketingFlowStudio: React.FC<MarketingFlowStudioProps> = ({
                   </span>
                   <div>
                     <h4 className="text-base font-bold text-slate-900 flex items-center gap-2 flex-wrap">
-                      蛻・ｲ・B: �町 邨悟霧謾ｹ蝟・・蛟句挨逶ｸ隲・ｼ医ヱ繧ｿ繝ｼ繝ｳA・夊ｦｪ霄ｫ縺ｪ逶ｸ隲・竊・蝠・ｫ・｡亥・・・                      <span className="text-[10px] px-2 py-0.5 rounded bg-purple-100 text-purple-800 border border-purple-300 font-bold">
-                        隕ｪ霄ｫ縺ｪ逶ｸ隲・Ν繝ｼ繝・                      </span>
+                      分岐 B: 💬 経営改善・個別相談（パターンA：親身な相談 → 商談案内）
+                      <span className="text-[10px] px-2 py-0.5 rounded bg-purple-100 text-purple-800 border border-purple-300 font-bold">
+                        親身な相談ルート
+                      </span>
                       <span className="text-xs px-2 py-0.5 rounded bg-purple-50 text-purple-700 border border-purple-200">
-                        蠕檎ｶ・{consultScenarios.length} 繧ｹ繝・ャ繝・                      </span>
+                        後続 {consultScenarios.length} ステップ
+                      </span>
                     </h4>
                     <p className="text-xs text-slate-500">
-                      縲悟句挨逶ｸ隲・☆繧九阪ち繝・・・医ち繧ｰ: 驕ｸ謚・蛟句挨逶ｸ隲・ｼ・笏笏竊・蜊ｳ譎ゅ舌ヱ繧ｿ繝ｼ繝ｳA縲醍峩騾壹≠縺・＆縺､ 笏笏竊・1譌･蠕・隕ｪ霄ｫ繝輔か繝ｭ繝ｼ 笏笏竊・3譌･蠕・蝠・ｫ・｡亥・
+                      「個別相談する」タップ（タグ: 選択:個別相談） ──→ 即時【パターンA】直通あいさつ ──→ 1日後 親身フォロー ──→ 3日後 商談案内
                     </p>
                   </div>
                 </div>
@@ -3617,23 +3680,26 @@ export const MarketingFlowStudio: React.FC<MarketingFlowStudioProps> = ({
                     className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-purple-600 hover:bg-purple-700 text-white rounded-lg text-xs font-bold transition cursor-pointer shadow-xs shrink-0"
                   >
                     <Zap className="w-3.5 h-3.5 text-purple-200" />
-                    <span>逶ｸ隲・・莉玖ｭｷ繝輔か繝ｭ繝ｼ繧呈怙譁ｰ蛹・/span>
+                    <span>相談・介護フォローを最新化</span>
                   </button>
                 )}
               </div>
 
-              {/* 繝代ち繝ｼ繝ｳA 繧､繝ｳ繝ｩ繧､繝ｳ險ｭ螳・& 繝励Ξ繝薙Η繝ｼ */}
+              {/* パターンA インライン設定 & プレビュー */}
               <div className="rounded-xl border border-purple-200 bg-purple-50/40 p-4 space-y-4">
                 <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
                   <div className="space-y-0.5">
                     <div className="flex items-center gap-2 flex-wrap">
                       <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-purple-600 text-white">
-                        繧ｿ繝・・逶ｴ蠕後・蜊ｳ譎りｿ比ｿ｡・医ヱ繧ｿ繝ｼ繝ｳA・・                      </span>
+                        タップ直後の即時返信（パターンA）
+                      </span>
                       <span className="text-xs font-bold text-slate-900">
-                        LINE逶ｴ騾壹メ繝｣繝・ヨ蛟句挨逶ｸ隲・き繝ｼ繝・                      </span>
+                        LINE直通チャット個別相談カード
+                      </span>
                     </div>
                     <p className="text-[11px] text-slate-600">
-                      縲檎ｵ悟霧謾ｹ蝟・↓縺､縺・※蛟句挨逶ｸ隲・☆繧九阪・繧ｿ繝ｳ縺梧款縺輔ｌ縺溽椪髢薙↓霑比ｿ｡縺輔ｌ縲，RM縺ｫ譛ｪ蟇ｾ蠢懊Μ繝ｼ繝峨ｒ閾ｪ蜍戊ｵｷ逾ｨ縺励∪縺吶・                    </p>
+                      「経営改善について個別相談する」ボタンが押された瞬間に返信され、CRMに未対応リードを自動起票します。
+                    </p>
                   </div>
                   <button
                     type="button"
@@ -3645,7 +3711,7 @@ export const MarketingFlowStudio: React.FC<MarketingFlowStudioProps> = ({
                     }`}
                   >
                     <Edit3 className="w-3.5 h-3.5" />
-                    <span>{isEditingPatternA ? '繝代ち繝ｼ繝ｳA邱ｨ髮・ｒ髢峨§繧・ : '笨搾ｸ・繝代ち繝ｼ繝ｳA譁・擇繧堤ｷｨ髮・}</span>
+                    <span>{isEditingPatternA ? 'パターンA編集を閉じる' : '✍️ パターンA文面を編集'}</span>
                   </button>
                 </div>
 
@@ -3653,7 +3719,7 @@ export const MarketingFlowStudio: React.FC<MarketingFlowStudioProps> = ({
                   <div className="grid grid-cols-1 lg:grid-cols-12 gap-5 pt-2 border-t border-purple-200/70">
                     <div className="lg:col-span-7 space-y-3 text-xs">
                       <div>
-                        <label className="font-bold text-slate-700 block mb-1">繧ｫ繝ｼ繝芽ｦ句・縺・/label>
+                        <label className="font-bold text-slate-700 block mb-1">カード見出し</label>
                         <input
                           type="text"
                           value={patternAConfig.title}
@@ -3663,7 +3729,8 @@ export const MarketingFlowStudio: React.FC<MarketingFlowStudioProps> = ({
                       </div>
                       <div>
                         <label className="font-bold text-slate-700 block mb-1">
-                          蟆主・繝ｻ謖ｨ諡ｶ譁・ｼ・code className="text-purple-700">{'{recipient_name}'}</code> 蟾ｮ縺苓ｾｼ縺ｿ蜿ｯ・・                        </label>
+                          導入・挨拶文（<code className="text-purple-700">{'{recipient_name}'}</code> 差し込み可）
+                        </label>
                         <textarea
                           rows={7}
                           value={patternAConfig.greetingBody}
@@ -3673,7 +3740,7 @@ export const MarketingFlowStudio: React.FC<MarketingFlowStudioProps> = ({
                       </div>
                       <div className="p-3 bg-white rounded-lg border border-slate-200 space-y-2.5">
                         <div>
-                          <label className="font-bold text-slate-700 block mb-1">繝偵い繝ｪ繝ｳ繧ｰ蝠上＞縺九￠・亥ｼｷ隱ｿ繝懊ャ繧ｯ繧ｹ蜀・ｼ・/label>
+                          <label className="font-bold text-slate-700 block mb-1">ヒアリング問いかけ（強調ボックス内）</label>
                           <textarea
                             rows={3}
                             value={patternAConfig.promptTitle}
@@ -3682,7 +3749,7 @@ export const MarketingFlowStudio: React.FC<MarketingFlowStudioProps> = ({
                           />
                         </div>
                         <div>
-                          <label className="font-bold text-slate-700 block mb-1">逶ｸ隲・ｾ九ユ繧ｭ繧ｹ繝茨ｼ郁｣懆ｶｳ・・/label>
+                          <label className="font-bold text-slate-700 block mb-1">相談例テキスト（補足）</label>
                           <input
                             type="text"
                             value={patternAConfig.promptExamples}
@@ -3692,7 +3759,7 @@ export const MarketingFlowStudio: React.FC<MarketingFlowStudioProps> = ({
                         </div>
                       </div>
                       <div>
-                        <label className="font-bold text-slate-700 block mb-1">荳矩Κ譯亥・繝｡繝・そ繝ｼ繧ｸ</label>
+                        <label className="font-bold text-slate-700 block mb-1">下部案内メッセージ</label>
                         <textarea
                           rows={3}
                           value={patternAConfig.footerNote}
@@ -3702,16 +3769,17 @@ export const MarketingFlowStudio: React.FC<MarketingFlowStudioProps> = ({
                       </div>
                       <div>
                         <div className="flex items-center justify-between mb-1">
-                          <label className="font-bold text-slate-700">蝠・ｫ・ｺ育ｴ・・繧ｿ繝ｳ繝ｩ繝吶Ν・・`{booking_url}`} 縺ｸ繝ｪ繝ｳ繧ｯ繝ｻ20譁・ｭ嶺ｻ･蜀・ｼ・/label>
+                          <label className="font-bold text-slate-700">商談予約ボタンラベル（{`{booking_url}`} へリンク・20文字以内）</label>
                           <span className={`text-[10px] font-mono ${patternAConfig.bookingButtonLabel.length > 20 ? 'text-rose-600 font-bold' : 'text-slate-400'}`}>
-                            {patternAConfig.bookingButtonLabel.length} / 20譁・ｭ・                          </span>
+                            {patternAConfig.bookingButtonLabel.length} / 20文字
+                          </span>
                         </div>
                         <input
                           type="text"
                           maxLength={20}
                           value={patternAConfig.bookingButtonLabel}
                           onChange={(e) => setPatternAConfig((prev) => ({ ...prev, bookingButtonLabel: e.target.value }))}
-                          placeholder="遨ｺ谺・↓縺吶ｋ縺ｨ繝懊ち繝ｳ繧定｡ｨ遉ｺ縺励∪縺帙ｓ・井ｾ・ �欄・・30蛻・が繝ｳ繝ｩ繧､繝ｳ逶ｸ隲・ｺ育ｴ・ｼ・
+                          placeholder="空欄にするとボタンを表示しません（例: 🗓️ 30分オンライン相談予約）"
                           className="w-full bg-white border border-slate-200 rounded-lg px-3 py-2 text-slate-900 focus:outline-none focus:border-purple-500"
                         />
                       </div>
@@ -3721,23 +3789,24 @@ export const MarketingFlowStudio: React.FC<MarketingFlowStudioProps> = ({
                           onClick={() => setPatternAConfig(DEFAULT_WELCOME_PATTERN_A)}
                           className="text-slate-500 hover:text-slate-800 underline cursor-pointer text-[11px]"
                         >
-                          蛻晄悄繝・Φ繝励Ξ繝ｼ繝医↓謌ｻ縺・                        </button>
+                          初期テンプレートに戻す
+                        </button>
                         <div className="flex items-center gap-2">
                           <button
                             type="button"
                             onClick={() => setIsEditingPatternA(false)}
                             className="px-3.5 py-1.5 bg-white hover:bg-slate-100 text-slate-700 border border-slate-200 rounded-lg text-xs font-medium cursor-pointer"
                           >
-                            繧ｭ繝｣繝ｳ繧ｻ繝ｫ
+                            キャンセル
                           </button>
                           <button
                             type="button"
                             disabled={welcomeSaving}
-                            onClick={() => void handleSaveWelcome('繝代ち繝ｼ繝ｳA・育ｵ悟霧謾ｹ蝟・・蛟句挨逶ｸ隲・ｼ峨・險ｭ螳壹ｒ菫晏ｭ倥＠縺ｾ縺励◆・・)}
+                            onClick={() => void handleSaveWelcome('パターンA（経営改善・個別相談）の設定を保存しました！')}
                             className="px-4 py-1.5 bg-purple-600 hover:bg-purple-700 text-white font-bold rounded-lg text-xs transition cursor-pointer inline-flex items-center gap-1.5 shadow-xs disabled:opacity-50"
                           >
                             <Save className="w-3.5 h-3.5" />
-                            <span>{welcomeSaving ? '菫晏ｭ倅ｸｭ窶ｦ' : '菫晏ｭ倥＠縺ｦLINE縺ｫ蜿肴丐'}</span>
+                            <span>{welcomeSaving ? '保存中…' : '保存してLINEに反映'}</span>
                           </button>
                         </div>
                       </div>
@@ -3748,10 +3817,10 @@ export const MarketingFlowStudio: React.FC<MarketingFlowStudioProps> = ({
                         <LineMessagePreview
                           type="flex"
                           payload={{
-                            altText: `縲仙句挨逶ｸ隲・・{patternAConfig.title}`,
+                            altText: `【個別相談】${patternAConfig.title}`,
                             contents: buildPatternAFlexBubble(patternAConfig),
                           }}
-                          title="繝代ち繝ｼ繝ｳA LINE繝励Ξ繝薙Η繝ｼ"
+                          title="パターンA LINEプレビュー"
                         />
                       </div>
                     </div>
@@ -3762,7 +3831,7 @@ export const MarketingFlowStudio: React.FC<MarketingFlowStudioProps> = ({
                       <div className="flex items-center justify-between gap-2">
                         <span className="font-bold text-slate-900">{patternAConfig.title}</span>
                         <span className="text-[10px] px-2 py-0.5 rounded bg-emerald-50 text-emerald-700 border border-emerald-200 font-bold">
-                          繧ｿ繧ｰ縲碁∈謚・蛟句挨逶ｸ隲・搾ｼ・繝ｪ繝ｼ繝芽ｵｷ逾ｨ
+                          タグ「選択:個別相談」＆ リード起票
                         </span>
                       </div>
                       <p className="text-slate-600 whitespace-pre-line line-clamp-3 leading-relaxed">
@@ -3773,7 +3842,7 @@ export const MarketingFlowStudio: React.FC<MarketingFlowStudioProps> = ({
                       </div>
                       {patternAConfig.bookingButtonLabel && (
                         <div className="text-[11px] text-purple-700 font-medium">
-                          荳矩ΚCTA繝懊ち繝ｳ: 縲鶏patternAConfig.bookingButtonLabel}縲・竊・{'{booking_url}'}
+                          下部CTAボタン: 「{patternAConfig.bookingButtonLabel}」 → {'{booking_url}'}
                         </div>
                       )}
                     </div>
@@ -3781,25 +3850,26 @@ export const MarketingFlowStudio: React.FC<MarketingFlowStudioProps> = ({
                       <LineMessagePreview
                         type="flex"
                         payload={{
-                          altText: `縲仙句挨逶ｸ隲・・{patternAConfig.title}`,
+                          altText: `【個別相談】${patternAConfig.title}`,
                           contents: buildPatternAFlexBubble(patternAConfig),
                         }}
-                        title="繝代ち繝ｼ繝ｳA 螳滓ｩ溘う繝｡繝ｼ繧ｸ"
+                        title="パターンA 実機イメージ"
                       />
                     </div>
                   </div>
                 )}
               </div>
 
-              {/* 繝代ち繝ｼ繝ｳA縺ｮ蠕後・閾ｪ蜍輔ヵ繧ｩ繝ｭ繝ｼ・域悴霑比ｿ｡譎ゅ・縺ｿ・・*/}
+              {/* パターンAの後の自動フォロー（未返信時のみ） */}
               <div className="space-y-2">
                 <div className="flex items-center justify-between flex-wrap gap-2 text-xs">
                   <span className="font-bold text-slate-800">
-                    蠕檎ｶ壹・閾ｪ蜍輔ヵ繧ｩ繝ｭ繝ｼ繝ｻ蝠・ｫ・｡亥・・医♀螳｢讒倥°繧芽ｿ比ｿ｡繝ｻ莠育ｴ・′縺ゅｌ縺ｰ閾ｪ蜍募●豁｢・・                  </span>
+                    後続の自動フォロー・商談案内（お客様から返信・予約があれば自動停止）
+                  </span>
                 </div>
                 {consultScenarios.length === 0 ? (
                   <div className="p-5 bg-slate-50 rounded-xl border border-dashed border-slate-200 text-center space-y-2">
-                    <p className="text-xs text-slate-500">蛻・ｲ殖縺ｮ蠕檎ｶ壹ヵ繧ｩ繝ｭ繝ｼ繧ｷ繝翫Μ繧ｪ縺後∪縺�逋ｻ骭ｲ縺輔ｌ縺ｦ縺・∪縺帙ｓ縲・/p>
+                    <p className="text-xs text-slate-500">分岐Bの後続フォローシナリオがまだ登録されていません。</p>
                     {onApplyDirectConsultStarterSet && (
                       <button
                         type="button"
@@ -3807,7 +3877,7 @@ export const MarketingFlowStudio: React.FC<MarketingFlowStudioProps> = ({
                         className="px-3.5 py-2 bg-purple-600 hover:bg-purple-700 text-white rounded-lg text-xs font-bold transition cursor-pointer inline-flex items-center gap-1.5 shadow-xs"
                       >
                         <Plus className="w-3.5 h-3.5" />
-                        <span>隕ｪ霄ｫ繝輔か繝ｭ繝ｼ繝ｻ蝠・ｫ・｡亥・縺ｮ讓呎ｺ悶す繝翫Μ繧ｪ繧貞渚譏�縺吶ｋ</span>
+                        <span>親身フォロー・商談案内の標準シナリオを反映する</span>
                       </button>
                     )}
                   </div>
@@ -3826,19 +3896,19 @@ export const MarketingFlowStudio: React.FC<MarketingFlowStudioProps> = ({
                             <div className="flex items-center gap-2 flex-wrap">
                               <span className="font-bold text-slate-900 text-sm">{scenario.name}</span>
                               <span className="text-[10px] px-2 py-0.5 rounded bg-slate-100 text-slate-600 border border-slate-200 font-mono">
-                                {scenario.waitMinutes === 0 ? '蜊ｳ譎ょｮ溯｡・ : `${Math.round(scenario.waitMinutes / 1440)}譌･蠕形}
+                                {scenario.waitMinutes === 0 ? '即時実行' : `${Math.round(scenario.waitMinutes / 1440)}日後`}
                               </span>
                               {scenario.trigger === 'tag_added' && scenario.targetTag && (
                                 <span className="text-[10px] px-2 py-0.5 rounded bg-amber-50 text-amber-800 border border-amber-200 font-mono">
-                                  繧ｿ繧ｰ: {scenario.targetTag}
+                                  タグ: {scenario.targetTag}
                                 </span>
                               )}
                               <span className="text-[10px] px-2 py-0.5 rounded bg-purple-50 text-purple-700 border border-purple-200 font-medium">
-                                {scenario.channel === 'line' ? 'LINE' : scenario.channel === 'email' ? '繝｡繝ｼ繝ｫ' : 'LINE+繝｡繝ｼ繝ｫ'}
+                                {scenario.channel === 'line' ? 'LINE' : scenario.channel === 'email' ? 'メール' : 'LINE+メール'}
                               </span>
                             </div>
                             <p className="text-xs text-slate-500 line-clamp-1">
-                              {scenario.flexTitle || scenario.messageBody || scenario.emailSubject || '譁・擇譛ｪ險ｭ螳・}
+                              {scenario.flexTitle || scenario.messageBody || scenario.emailSubject || '文面未設定'}
                             </p>
                           </div>
                         </div>
@@ -3856,12 +3926,12 @@ export const MarketingFlowStudio: React.FC<MarketingFlowStudioProps> = ({
                             {scenario.automationEnabled ? (
                               <>
                                 <Play className="w-3.5 h-3.5 text-emerald-600 fill-emerald-600" />
-                                <span>閾ｪ蜍募ｮ溯｡御ｸｭ</span>
+                                <span>自動実行中</span>
                               </>
                             ) : (
                               <>
                                 <Pause className="w-3.5 h-3.5 text-slate-400" />
-                                <span>荳譎ょ●豁｢荳ｭ</span>
+                                <span>一時停止中</span>
                               </>
                             )}
                           </button>
@@ -3870,7 +3940,7 @@ export const MarketingFlowStudio: React.FC<MarketingFlowStudioProps> = ({
                             type="button"
                             onClick={() => setPreviewModalScenario(scenario)}
                             className="p-2 bg-white hover:bg-slate-100 text-slate-700 rounded-lg text-xs border border-slate-200 transition cursor-pointer shadow-2xs"
-                            title="譁・擇繝励Ξ繝薙Η繝ｼ"
+                            title="文面プレビュー"
                           >
                             <Eye className="w-3.5 h-3.5" />
                           </button>
@@ -3881,7 +3951,7 @@ export const MarketingFlowStudio: React.FC<MarketingFlowStudioProps> = ({
                             className="px-3 py-1.5 bg-purple-600 hover:bg-purple-700 text-white rounded-lg text-xs font-bold transition cursor-pointer flex items-center gap-1 shadow-xs"
                           >
                             <ShieldCheck className="w-3.5 h-3.5 text-purple-200" />
-                            <span>轤ｹ讀懊・邱ｨ髮・/span>
+                            <span>点検・編集</span>
                           </button>
                         </div>
                       </div>
@@ -3892,7 +3962,7 @@ export const MarketingFlowStudio: React.FC<MarketingFlowStudioProps> = ({
             </div>
           )}
 
-          {/* 蛻・ｲ・C: �諺 莉玖ｭｷ菫晞匱螟悶し繝ｼ繝薙せ髢区･ｭ縲舌ヱ繧ｿ繝ｼ繝ｳB・・蝠上ヲ繧｢繝ｪ繝ｳ繧ｰ ﾃ・蟆る摩謨呵ご 竊・蝠・ｫ・｡亥・縲・*/}
+          {/* 分岐 C: 🌿 介護保険外サービス開業【パターンB：2問ヒアリング × 専門教育 → 商談案内】 */}
           {(expandedBranch === 'all' || expandedBranch === 'care') && (
             <div className="bg-white border border-slate-200 rounded-2xl p-5 space-y-4 shadow-xs">
               <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-100 pb-3">
@@ -3902,13 +3972,16 @@ export const MarketingFlowStudio: React.FC<MarketingFlowStudioProps> = ({
                   </span>
                   <div>
                     <h4 className="text-base font-bold text-slate-900 flex items-center gap-2 flex-wrap">
-                      蛻・ｲ・C: �諺 莉玖ｭｷ菫晞匱螟悶し繝ｼ繝薙せ髢区･ｭ・医ヱ繧ｿ繝ｼ繝ｳB・・蝠上ヲ繧｢繝ｪ繝ｳ繧ｰ ﾃ・蟆る摩謨呵ご 竊・蝠・ｫ・｡亥・・・                      <span className="text-[10px] px-2 py-0.5 rounded bg-sky-100 text-sky-800 border border-sky-300 font-bold">
-                        逶ｸ隲・怜ｰる摩謨呵ご繝ｫ繝ｼ繝・                      </span>
+                      分岐 C: 🌿 介護保険外サービス開業（パターンB：2問ヒアリング × 専門教育 → 商談案内）
+                      <span className="text-[10px] px-2 py-0.5 rounded bg-sky-100 text-sky-800 border border-sky-300 font-bold">
+                        相談×専門教育ルート
+                      </span>
                       <span className="text-xs px-2 py-0.5 rounded bg-sky-50 text-sky-700 border border-sky-200">
-                        蠕檎ｶ・{careScenarios.length} 繧ｹ繝・ャ繝・                      </span>
+                        後続 {careScenarios.length} ステップ
+                      </span>
                     </h4>
                     <p className="text-xs text-slate-500">
-                      縲碁幕讌ｭ逶ｸ隲・阪ち繝・・・医ち繧ｰ: 莉玖ｭｷ菫晞匱螟夜幕讌ｭ・・笏笏竊・蜊ｳ譎ゅ舌ヱ繧ｿ繝ｼ繝ｳB縲漸1迥ｶ豕≫・Q2繝・・繝樞・螳御ｺ・き繝ｼ繝・笏笏竊・1譌･蠕・莠倶ｾ区蕗閧ｲ 笏笏竊・3譌･蠕・蝠・ｫ・｡亥・
+                      「開業相談」タップ（タグ: 介護保険外開業） ──→ 即時【パターンB】Q1状況→Q2テーマ→完了カード ──→ 1日後 事例教育 ──→ 3日後 商談案内
                     </p>
                   </div>
                 </div>
@@ -3920,23 +3993,26 @@ export const MarketingFlowStudio: React.FC<MarketingFlowStudioProps> = ({
                     className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-sky-600 hover:bg-sky-700 text-white rounded-lg text-xs font-bold transition cursor-pointer shadow-xs shrink-0"
                   >
                     <Zap className="w-3.5 h-3.5 text-sky-200" />
-                    <span>逶ｸ隲・・莉玖ｭｷ繝輔か繝ｭ繝ｼ繧呈怙譁ｰ蛹・/span>
+                    <span>相談・介護フォローを最新化</span>
                   </button>
                 )}
               </div>
 
-              {/* 繝代ち繝ｼ繝ｳB 繧､繝ｳ繝ｩ繧､繝ｳ險ｭ螳・& 繝励Ξ繝薙Η繝ｼ・・1 / Q2 / 螳御ｺ・ｼ・*/}
+              {/* パターンB インライン設定 & プレビュー（Q1 / Q2 / 完了） */}
               <div className="rounded-xl border border-sky-200 bg-sky-50/40 p-4 space-y-4">
                 <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
                   <div className="space-y-0.5">
                     <div className="flex items-center gap-2 flex-wrap">
                       <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-sky-600 text-white">
-                        繧ｿ繝・・逶ｴ蠕後・2蝠上け繧､繝・け繝偵い繝ｪ繝ｳ繧ｰ・医ヱ繧ｿ繝ｼ繝ｳB・・                      </span>
+                        タップ直後の2問クイックヒアリング（パターンB）
+                      </span>
                       <span className="text-xs font-bold text-slate-900">
-                        Q1・育樟蝨ｨ縺ｮ迥ｶ豕・ｼ・竊・Q2・磯未蠢・ユ繝ｼ繝橸ｼ・竊・螳御ｺ・き繝ｼ繝会ｼ・膚隲・ｰ守ｷ・                      </span>
+                        Q1（現在の状況） → Q2（関心テーマ） → 完了カード＆商談導線
+                      </span>
                     </div>
                     <p className="text-[11px] text-slate-600">
-                      2繧ｿ繝・・縺ｧ鬘ｧ螳｢縺ｮ迥ｶ豕√・髢｢蠢・ｒCRM縺ｸ險倬鹸縺励▽縺､縲∫峩蝟ｶ莠区･ｭ縲後い繧ｷ繧ｹ繧ｿ螟ｧ蝙｣縲阪・螳溷漁繝弱え繝上え縺ｨ蝠・ｫ・・雉・侭URL繧呈｡亥・縺励∪縺吶・                    </p>
+                      2タップで顧客の状況・関心をCRMへ記録しつつ、直営事業「アシスタ大垣」の実務ノウハウと商談・資料URLを案内します。
+                    </p>
                   </div>
                   <button
                     type="button"
@@ -3948,11 +4024,11 @@ export const MarketingFlowStudio: React.FC<MarketingFlowStudioProps> = ({
                     }`}
                   >
                     <Edit3 className="w-3.5 h-3.5" />
-                    <span>{isEditingPatternB ? '繝代ち繝ｼ繝ｳB邱ｨ髮・ｒ髢峨§繧・ : '笨搾ｸ・繝代ち繝ｼ繝ｳB繧堤ｷｨ髮・}</span>
+                    <span>{isEditingPatternB ? 'パターンB編集を閉じる' : '✍️ パターンBを編集'}</span>
                   </button>
                 </div>
 
-                {/* Q1 / Q2 / 螳御ｺ・ち繝門・繧頑崛縺・*/}
+                {/* Q1 / Q2 / 完了タブ切り替え */}
                 <div className="flex items-center gap-1.5 bg-white p-1 rounded-lg border border-sky-200 w-fit text-xs">
                   <button
                     type="button"
@@ -3961,7 +4037,8 @@ export const MarketingFlowStudio: React.FC<MarketingFlowStudioProps> = ({
                       patternBEditTab === 'q1' ? 'bg-sky-600 text-white shadow-2xs' : 'text-slate-600 hover:bg-slate-100'
                     }`}
                   >
-                    竭� Q1 迴ｾ蝨ｨ縺ｮ迥ｶ豕・                  </button>
+                    ① Q1 現在の状況
+                  </button>
                   <button
                     type="button"
                     onClick={() => setPatternBEditTab('q2')}
@@ -3969,7 +4046,8 @@ export const MarketingFlowStudio: React.FC<MarketingFlowStudioProps> = ({
                       patternBEditTab === 'q2' ? 'bg-sky-600 text-white shadow-2xs' : 'text-slate-600 hover:bg-slate-100'
                     }`}
                   >
-                    竭｡ Q2 髢｢蠢・ユ繝ｼ繝・                  </button>
+                    ② Q2 関心テーマ
+                  </button>
                   <button
                     type="button"
                     onClick={() => setPatternBEditTab('completion')}
@@ -3977,7 +4055,8 @@ export const MarketingFlowStudio: React.FC<MarketingFlowStudioProps> = ({
                       patternBEditTab === 'completion' ? 'bg-sky-600 text-white shadow-2xs' : 'text-slate-600 hover:bg-slate-100'
                     }`}
                   >
-                    竭｢ 螳御ｺ・き繝ｼ繝会ｼ・膚隲・ｰ守ｷ・                  </button>
+                    ③ 完了カード＆商談導線
+                  </button>
                 </div>
 
                 {isEditingPatternB ? (
@@ -3986,7 +4065,7 @@ export const MarketingFlowStudio: React.FC<MarketingFlowStudioProps> = ({
                       {patternBEditTab === 'q1' && (
                         <>
                           <div>
-                            <label className="font-bold text-slate-700 block mb-1">Q1 繧ｫ繝ｼ繝芽ｦ句・縺・/label>
+                            <label className="font-bold text-slate-700 block mb-1">Q1 カード見出し</label>
                             <input
                               type="text"
                               value={patternBConfig.q1.title}
@@ -4001,7 +4080,8 @@ export const MarketingFlowStudio: React.FC<MarketingFlowStudioProps> = ({
                           </div>
                           <div>
                             <label className="font-bold text-slate-700 block mb-1">
-                              Q1 謖ｨ諡ｶ繝ｻ蟆主・譁・ｼ・code className="text-sky-700">{'{recipient_name}'}</code> 蟾ｮ縺苓ｾｼ縺ｿ蜿ｯ・・                            </label>
+                              Q1 挨拶・導入文（<code className="text-sky-700">{'{recipient_name}'}</code> 差し込み可）
+                            </label>
                             <textarea
                               rows={6}
                               value={patternBConfig.q1.greeting}
@@ -4015,7 +4095,7 @@ export const MarketingFlowStudio: React.FC<MarketingFlowStudioProps> = ({
                             />
                           </div>
                           <div>
-                            <label className="font-bold text-slate-700 block mb-1">Q1 雉ｪ蝠剰ｦ句・縺・/label>
+                            <label className="font-bold text-slate-700 block mb-1">Q1 質問見出し</label>
                             <input
                               type="text"
                               value={patternBConfig.q1.question}
@@ -4029,13 +4109,13 @@ export const MarketingFlowStudio: React.FC<MarketingFlowStudioProps> = ({
                             />
                           </div>
                           <div className="space-y-2">
-                            <label className="font-bold text-slate-700 block">Q1 驕ｸ謚櫁い繝懊ち繝ｳ・亥推20譁・ｭ嶺ｻ･蜀・ｼ・/label>
+                            <label className="font-bold text-slate-700 block">Q1 選択肢ボタン（各20文字以内）</label>
                             {patternBConfig.q1.choices.map((c, idx) => (
                               <div key={c.value} className="p-2.5 bg-white rounded-lg border border-slate-200 space-y-2">
                                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                                   <div>
                                     <div className="flex items-center justify-between text-[11px] mb-0.5">
-                                      <span className="text-slate-500 font-medium">繝懊ち繝ｳ陦ｨ遉ｺ譁・ｭ・/span>
+                                      <span className="text-slate-500 font-medium">ボタン表示文字</span>
                                       <span className={`font-mono ${c.label.length > 20 ? 'text-rose-600 font-bold' : 'text-slate-400'}`}>
                                         {c.label.length}/20
                                       </span>
@@ -4058,7 +4138,7 @@ export const MarketingFlowStudio: React.FC<MarketingFlowStudioProps> = ({
                                     />
                                   </div>
                                   <div>
-                                    <span className="text-slate-500 font-medium text-[11px] block mb-0.5">鬘ｧ螳｢蛛ｴ騾∽ｿ｡繝・く繧ｹ繝・/span>
+                                    <span className="text-slate-500 font-medium text-[11px] block mb-0.5">顧客側送信テキスト</span>
                                     <input
                                       type="text"
                                       value={c.displayText}
@@ -4077,7 +4157,7 @@ export const MarketingFlowStudio: React.FC<MarketingFlowStudioProps> = ({
                                   </div>
                                 </div>
                                 <div className="flex items-center gap-1.5">
-                                  <span className="text-[11px] text-slate-500">濶ｲ:</span>
+                                  <span className="text-[11px] text-slate-500">色:</span>
                                   {['#0284C7', '#1E3A5F', '#10B981', '#8B5CF6'].map((col) => (
                                     <button
                                       key={col}
@@ -4107,7 +4187,7 @@ export const MarketingFlowStudio: React.FC<MarketingFlowStudioProps> = ({
                       {patternBEditTab === 'q2' && (
                         <>
                           <div>
-                            <label className="font-bold text-slate-700 block mb-1">Q2 繧ｫ繝ｼ繝芽ｦ句・縺・/label>
+                            <label className="font-bold text-slate-700 block mb-1">Q2 カード見出し</label>
                             <input
                               type="text"
                               value={patternBConfig.q2.title}
@@ -4122,7 +4202,8 @@ export const MarketingFlowStudio: React.FC<MarketingFlowStudioProps> = ({
                           </div>
                           <div>
                             <label className="font-bold text-slate-700 block mb-1">
-                              Q2 譯亥・譁・ｼ・code className="text-sky-700">{'{q1_label}'}</code> 縺ｫQ1縺ｮ蝗樒ｭ斐′蜈･繧翫∪縺呻ｼ・                            </label>
+                              Q2 案内文（<code className="text-sky-700">{'{q1_label}'}</code> にQ1の回答が入ります）
+                            </label>
                             <textarea
                               rows={6}
                               value={patternBConfig.q2.introTemplate}
@@ -4136,12 +4217,12 @@ export const MarketingFlowStudio: React.FC<MarketingFlowStudioProps> = ({
                             />
                           </div>
                           <div className="space-y-2">
-                            <label className="font-bold text-slate-700 block">Q2 繝・・繝樣∈謚櫁い・亥推20譁・ｭ嶺ｻ･蜀・ｼ・/label>
+                            <label className="font-bold text-slate-700 block">Q2 テーマ選択肢（各20文字以内）</label>
                             {patternBConfig.q2.choices.map((c, idx) => (
                               <div key={c.value} className="p-2.5 bg-white rounded-lg border border-slate-200 grid grid-cols-1 sm:grid-cols-2 gap-2">
                                 <div>
                                   <div className="flex items-center justify-between text-[11px] mb-0.5">
-                                    <span className="text-slate-500 font-medium">繝懊ち繝ｳ陦ｨ遉ｺ譁・ｭ・/span>
+                                    <span className="text-slate-500 font-medium">ボタン表示文字</span>
                                     <span className={`font-mono ${c.label.length > 20 ? 'text-rose-600 font-bold' : 'text-slate-400'}`}>
                                       {c.label.length}/20
                                     </span>
@@ -4164,7 +4245,7 @@ export const MarketingFlowStudio: React.FC<MarketingFlowStudioProps> = ({
                                   />
                                 </div>
                                 <div>
-                                  <span className="text-slate-500 font-medium text-[11px] block mb-0.5">鬘ｧ螳｢蛛ｴ騾∽ｿ｡繝・く繧ｹ繝・/span>
+                                  <span className="text-slate-500 font-medium text-[11px] block mb-0.5">顧客側送信テキスト</span>
                                   <input
                                     type="text"
                                     value={c.displayText}
@@ -4190,7 +4271,7 @@ export const MarketingFlowStudio: React.FC<MarketingFlowStudioProps> = ({
                       {patternBEditTab === 'completion' && (
                         <>
                           <div>
-                            <label className="font-bold text-slate-700 block mb-1">螳御ｺ・き繝ｼ繝芽ｦ句・縺・/label>
+                            <label className="font-bold text-slate-700 block mb-1">完了カード見出し</label>
                             <input
                               type="text"
                               value={patternBConfig.completion.title}
@@ -4204,7 +4285,7 @@ export const MarketingFlowStudio: React.FC<MarketingFlowStudioProps> = ({
                             />
                           </div>
                           <div>
-                            <label className="font-bold text-slate-700 block mb-1">螳御ｺ・凾縺ｮ謖ｨ諡ｶ譁・/label>
+                            <label className="font-bold text-slate-700 block mb-1">完了時の挨拶文</label>
                             <textarea
                               rows={3}
                               value={patternBConfig.completion.greeting}
@@ -4218,7 +4299,7 @@ export const MarketingFlowStudio: React.FC<MarketingFlowStudioProps> = ({
                             />
                           </div>
                           <div>
-                            <label className="font-bold text-slate-700 block mb-1">繧｢繝峨ヰ繧､繧ｹ繝ｻ莉雁ｾ後・譯亥・譁・/label>
+                            <label className="font-bold text-slate-700 block mb-1">アドバイス・今後の案内文</label>
                             <textarea
                               rows={6}
                               value={patternBConfig.completion.body}
@@ -4235,7 +4316,7 @@ export const MarketingFlowStudio: React.FC<MarketingFlowStudioProps> = ({
                             <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                               <div>
                                 <div className="flex items-center justify-between text-[11px] mb-0.5">
-                                  <span className="font-bold text-slate-700">雉・侭PDF繝懊ち繝ｳ譁・ｨ</span>
+                                  <span className="font-bold text-slate-700">資料PDFボタン文言</span>
                                   <span className={`font-mono ${patternBConfig.completion.pdfButtonLabel.length > 20 ? 'text-rose-600 font-bold' : 'text-slate-400'}`}>
                                     {patternBConfig.completion.pdfButtonLabel.length}/20
                                   </span>
@@ -4254,7 +4335,7 @@ export const MarketingFlowStudio: React.FC<MarketingFlowStudioProps> = ({
                                 />
                               </div>
                               <div>
-                                <span className="font-bold text-slate-700 text-[11px] block mb-0.5">雉・侭PDF URL・育ｩｺ谺・凾縺ｯ譌｢螳啅RL・・/span>
+                                <span className="font-bold text-slate-700 text-[11px] block mb-0.5">資料PDF URL（空欄時は既定URL）</span>
                                 <input
                                   type="url"
                                   value={patternBConfig.completion.pdfButtonUrl}
@@ -4271,7 +4352,7 @@ export const MarketingFlowStudio: React.FC<MarketingFlowStudioProps> = ({
                             </div>
                             <div>
                               <div className="flex items-center justify-between text-[11px] mb-0.5">
-                                <span className="font-bold text-slate-700">蝠・ｫ・ｺ育ｴ・・繧ｿ繝ｳ譁・ｨ・・`{booking_url}`} 縺ｸ繝ｪ繝ｳ繧ｯ・・/span>
+                                <span className="font-bold text-slate-700">商談予約ボタン文言（{`{booking_url}`} へリンク）</span>
                                 <span className={`font-mono ${patternBConfig.completion.bookingButtonLabel.length > 20 ? 'text-rose-600 font-bold' : 'text-slate-400'}`}>
                                   {patternBConfig.completion.bookingButtonLabel.length}/20
                                 </span>
@@ -4286,7 +4367,7 @@ export const MarketingFlowStudio: React.FC<MarketingFlowStudioProps> = ({
                                     completion: { ...prev.completion, bookingButtonLabel: e.target.value },
                                   }))
                                 }
-                                placeholder="萓・ �欄・・30蛻・┌譁咎幕讌ｭ逶ｸ隲・ｒ莠育ｴ・
+                                placeholder="例: 🗓️ 30分無料開業相談を予約"
                                 className="w-full bg-slate-50 border border-slate-200 rounded px-2.5 py-1.5 text-slate-900"
                               />
                             </div>
@@ -4300,23 +4381,24 @@ export const MarketingFlowStudio: React.FC<MarketingFlowStudioProps> = ({
                           onClick={() => setPatternBConfig(DEFAULT_WELCOME_PATTERN_B)}
                           className="text-slate-500 hover:text-slate-800 underline cursor-pointer text-[11px]"
                         >
-                          蛻晄悄繝・Φ繝励Ξ繝ｼ繝医↓謌ｻ縺・                        </button>
+                          初期テンプレートに戻す
+                        </button>
                         <div className="flex items-center gap-2">
                           <button
                             type="button"
                             onClick={() => setIsEditingPatternB(false)}
                             className="px-3.5 py-1.5 bg-white hover:bg-slate-100 text-slate-700 border border-slate-200 rounded-lg text-xs font-medium cursor-pointer"
                           >
-                            繧ｭ繝｣繝ｳ繧ｻ繝ｫ
+                            キャンセル
                           </button>
                           <button
                             type="button"
                             disabled={welcomeSaving}
-                            onClick={() => void handleSaveWelcome('繝代ち繝ｼ繝ｳB・井ｻ玖ｭｷ菫晞匱螟夜幕讌ｭ 2蝠上ヲ繧｢繝ｪ繝ｳ繧ｰ・峨・險ｭ螳壹ｒ菫晏ｭ倥＠縺ｾ縺励◆・・)}
+                            onClick={() => void handleSaveWelcome('パターンB（介護保険外開業 2問ヒアリング）の設定を保存しました！')}
                             className="px-4 py-1.5 bg-sky-600 hover:bg-sky-700 text-white font-bold rounded-lg text-xs transition cursor-pointer inline-flex items-center gap-1.5 shadow-xs disabled:opacity-50"
                           >
                             <Save className="w-3.5 h-3.5" />
-                            <span>{welcomeSaving ? '菫晏ｭ倅ｸｭ窶ｦ' : '菫晏ｭ倥＠縺ｦLINE縺ｫ蜿肴丐'}</span>
+                            <span>{welcomeSaving ? '保存中…' : '保存してLINEに反映'}</span>
                           </button>
                         </div>
                       </div>
@@ -4327,10 +4409,10 @@ export const MarketingFlowStudio: React.FC<MarketingFlowStudioProps> = ({
                         <LineMessagePreview
                           type="flex"
                           payload={{
-                            altText: `縲蝉ｻ玖ｭｷ菫晞匱螟夜幕讌ｭ縲・{patternBEditTab.toUpperCase()}`,
+                            altText: `【介護保険外開業】${patternBEditTab.toUpperCase()}`,
                             contents: buildPatternBFlexBubble(patternBConfig, patternBEditTab),
                           }}
-                          title={`繝代ち繝ｼ繝ｳB (${patternBEditTab === 'q1' ? 'Q1' : patternBEditTab === 'q2' ? 'Q2' : '螳御ｺ・き繝ｼ繝・}) 繝励Ξ繝薙Η繝ｼ`}
+                          title={`パターンB (${patternBEditTab === 'q1' ? 'Q1' : patternBEditTab === 'q2' ? 'Q2' : '完了カード'}) プレビュー`}
                         />
                       </div>
                     </div>
@@ -4343,7 +4425,7 @@ export const MarketingFlowStudio: React.FC<MarketingFlowStudioProps> = ({
                           {patternBEditTab === 'q1' ? patternBConfig.q1.title : patternBEditTab === 'q2' ? patternBConfig.q2.title : patternBConfig.completion.title}
                         </span>
                         <span className="text-[10px] px-2 py-0.5 rounded bg-sky-50 text-sky-700 border border-sky-200 font-bold">
-                          繧ｿ繧ｰ縲御ｻ玖ｭｷ菫晞匱螟夜幕讌ｭ縲搾ｼ・繝ｪ繝ｼ繝芽・蜍慕匳骭ｲ
+                          タグ「介護保険外開業」＆ リード自動登録
                         </span>
                       </div>
                       {patternBEditTab === 'q1' && (
@@ -4374,8 +4456,8 @@ export const MarketingFlowStudio: React.FC<MarketingFlowStudioProps> = ({
                         <div className="space-y-1.5 text-slate-600">
                           <p className="line-clamp-2">{patternBConfig.completion.body}</p>
                           <div className="flex flex-wrap gap-2 text-[11px] text-sky-700 font-medium">
-                            {patternBConfig.completion.pdfButtonLabel && <span>雉・侭: 縲鶏patternBConfig.completion.pdfButtonLabel}縲・/span>}
-                            {patternBConfig.completion.bookingButtonLabel && <span>蝠・ｫ・ｺ育ｴ・ 縲鶏patternBConfig.completion.bookingButtonLabel}縲・/span>}
+                            {patternBConfig.completion.pdfButtonLabel && <span>資料: 「{patternBConfig.completion.pdfButtonLabel}」</span>}
+                            {patternBConfig.completion.bookingButtonLabel && <span>商談予約: 「{patternBConfig.completion.bookingButtonLabel}」</span>}
                           </div>
                         </div>
                       )}
@@ -4384,25 +4466,26 @@ export const MarketingFlowStudio: React.FC<MarketingFlowStudioProps> = ({
                       <LineMessagePreview
                         type="flex"
                         payload={{
-                          altText: `縲蝉ｻ玖ｭｷ菫晞匱螟夜幕讌ｭ縲・{patternBEditTab.toUpperCase()}`,
+                          altText: `【介護保険外開業】${patternBEditTab.toUpperCase()}`,
                           contents: buildPatternBFlexBubble(patternBConfig, patternBEditTab),
                         }}
-                        title={`繝代ち繝ｼ繝ｳB 螳滓ｩ溘う繝｡繝ｼ繧ｸ (${patternBEditTab === 'q1' ? 'Q1' : patternBEditTab === 'q2' ? 'Q2' : '螳御ｺ・き繝ｼ繝・})`}
+                        title={`パターンB 実機イメージ (${patternBEditTab === 'q1' ? 'Q1' : patternBEditTab === 'q2' ? 'Q2' : '完了カード'})`}
                       />
                     </div>
                   </div>
                 )}
               </div>
 
-              {/* 繝代ち繝ｼ繝ｳB縺ｮ蠕後・蟆る摩謨呵ご繝ｻ蝠・ｫ・｡亥・ */}
+              {/* パターンBの後の専門教育・商談案内 */}
               <div className="space-y-2">
                 <div className="flex items-center justify-between flex-wrap gap-2 text-xs">
                   <span className="font-bold text-slate-800">
-                    蠕檎ｶ壹・蟆る摩謨呵ご繝ｻ蝠・ｫ・｡亥・・医♀螳｢讒倥°繧芽ｿ比ｿ｡繝ｻ莠育ｴ・′縺ゅｌ縺ｰ閾ｪ蜍募●豁｢・・                  </span>
+                    後続の専門教育・商談案内（お客様から返信・予約があれば自動停止）
+                  </span>
                 </div>
                 {careScenarios.length === 0 ? (
                   <div className="p-5 bg-slate-50 rounded-xl border border-dashed border-slate-200 text-center space-y-2">
-                    <p className="text-xs text-slate-500">蛻・ｲ燭・井ｻ玖ｭｷ髢区･ｭ・峨・蠕檎ｶ壹す繝翫Μ繧ｪ縺後∪縺�逋ｻ骭ｲ縺輔ｌ縺ｦ縺・∪縺帙ｓ縲・/p>
+                    <p className="text-xs text-slate-500">分岐C（介護開業）の後続シナリオがまだ登録されていません。</p>
                     {onApplyDirectConsultStarterSet && (
                       <button
                         type="button"
@@ -4410,7 +4493,7 @@ export const MarketingFlowStudio: React.FC<MarketingFlowStudioProps> = ({
                         className="px-3.5 py-2 bg-sky-600 hover:bg-sky-700 text-white rounded-lg text-xs font-bold transition cursor-pointer inline-flex items-center gap-1.5 shadow-xs"
                       >
                         <Plus className="w-3.5 h-3.5" />
-                        <span>莉玖ｭｷ髢区･ｭ縺ｮ蟆る摩謨呵ご繝ｻ蝠・ｫ・｡亥・繧貞渚譏�縺吶ｋ</span>
+                        <span>介護開業の専門教育・商談案内を反映する</span>
                       </button>
                     )}
                   </div>
@@ -4429,19 +4512,19 @@ export const MarketingFlowStudio: React.FC<MarketingFlowStudioProps> = ({
                             <div className="flex items-center gap-2 flex-wrap">
                               <span className="font-bold text-slate-900 text-sm">{scenario.name}</span>
                               <span className="text-[10px] px-2 py-0.5 rounded bg-slate-100 text-slate-600 border border-slate-200 font-mono">
-                                {scenario.waitMinutes === 0 ? '蜊ｳ譎ょｮ溯｡・ : `${Math.round(scenario.waitMinutes / 1440)}譌･蠕形}
+                                {scenario.waitMinutes === 0 ? '即時実行' : `${Math.round(scenario.waitMinutes / 1440)}日後`}
                               </span>
                               {scenario.trigger === 'tag_added' && scenario.targetTag && (
                                 <span className="text-[10px] px-2 py-0.5 rounded bg-amber-50 text-amber-800 border border-amber-200 font-mono">
-                                  繧ｿ繧ｰ: {scenario.targetTag}
+                                  タグ: {scenario.targetTag}
                                 </span>
                               )}
                               <span className="text-[10px] px-2 py-0.5 rounded bg-sky-50 text-sky-700 border border-sky-200 font-medium">
-                                {scenario.channel === 'line' ? 'LINE' : scenario.channel === 'email' ? '繝｡繝ｼ繝ｫ' : 'LINE+繝｡繝ｼ繝ｫ'}
+                                {scenario.channel === 'line' ? 'LINE' : scenario.channel === 'email' ? 'メール' : 'LINE+メール'}
                               </span>
                             </div>
                             <p className="text-xs text-slate-500 line-clamp-1">
-                              {scenario.flexTitle || scenario.messageBody || scenario.emailSubject || '譁・擇譛ｪ險ｭ螳・}
+                              {scenario.flexTitle || scenario.messageBody || scenario.emailSubject || '文面未設定'}
                             </p>
                           </div>
                         </div>
@@ -4459,12 +4542,12 @@ export const MarketingFlowStudio: React.FC<MarketingFlowStudioProps> = ({
                             {scenario.automationEnabled ? (
                               <>
                                 <Play className="w-3.5 h-3.5 text-emerald-600 fill-emerald-600" />
-                                <span>閾ｪ蜍募ｮ溯｡御ｸｭ</span>
+                                <span>自動実行中</span>
                               </>
                             ) : (
                               <>
                                 <Pause className="w-3.5 h-3.5 text-slate-400" />
-                                <span>荳譎ょ●豁｢荳ｭ</span>
+                                <span>一時停止中</span>
                               </>
                             )}
                           </button>
@@ -4473,7 +4556,7 @@ export const MarketingFlowStudio: React.FC<MarketingFlowStudioProps> = ({
                             type="button"
                             onClick={() => setPreviewModalScenario(scenario)}
                             className="p-2 bg-white hover:bg-slate-100 text-slate-700 rounded-lg text-xs border border-slate-200 transition cursor-pointer shadow-2xs"
-                            title="譁・擇繝励Ξ繝薙Η繝ｼ"
+                            title="文面プレビュー"
                           >
                             <Eye className="w-3.5 h-3.5" />
                           </button>
@@ -4484,7 +4567,7 @@ export const MarketingFlowStudio: React.FC<MarketingFlowStudioProps> = ({
                             className="px-3 py-1.5 bg-sky-600 hover:bg-sky-700 text-white rounded-lg text-xs font-bold transition cursor-pointer flex items-center gap-1 shadow-xs"
                           >
                             <ShieldCheck className="w-3.5 h-3.5 text-sky-200" />
-                            <span>轤ｹ讀懊・邱ｨ髮・/span>
+                            <span>点検・編集</span>
                           </button>
                         </div>
                       </div>
@@ -4497,9 +4580,9 @@ export const MarketingFlowStudio: React.FC<MarketingFlowStudioProps> = ({
         </div>
       )}
 
-      {/* 笊絶武笊絶武笊絶武笊絶武笊絶武笊絶武笊絶武笊絶武笊絶武笊絶武笊絶武笊絶武笊絶武笊絶武笊絶武笊絶武笊絶武笊絶武笊絶武笊絶武笊絶武笊絶武笊絶武笊絶武笊絶武笊絶武笊絶武笊絶武笊絶武笊絶武笊絶武笊・*/}
-      {/* 繝医Λ繝・け 2: �当 謨呵ご繧ｹ繝・ャ繝暦ｼ亥・騾壹せ繝医・繝ｪ繝ｼ7隧ｱ / LINE+繝｡繝ｼ繝ｫ・・  */}
-      {/* 笊絶武笊絶武笊絶武笊絶武笊絶武笊絶武笊絶武笊絶武笊絶武笊絶武笊絶武笊絶武笊絶武笊絶武笊絶武笊絶武笊絶武笊絶武笊絶武笊絶武笊絶武笊絶武笊絶武笊絶武笊絶武笊絶武笊絶武笊絶武笊絶武笊絶武笊絶武笊・*/}
+      {/* ═══════════════════════════════════════════════════════════════ */}
+      {/* トラック 2: 📖 教育ステップ（共通ストーリー7話 / LINE+メール）   */}
+      {/* ═══════════════════════════════════════════════════════════════ */}
       {viewMode === 'flow' && activeTrack === 'story_nurturing' && (
         <div className="space-y-5 animate-fade-in">
           <div className="bg-white border border-indigo-200 rounded-2xl p-5 space-y-4 shadow-xs">
@@ -4510,14 +4593,17 @@ export const MarketingFlowStudio: React.FC<MarketingFlowStudioProps> = ({
                 </span>
                 <div>
                   <h3 className="text-base font-bold text-slate-900 flex items-center gap-2 flex-wrap">
-                    謨呵ご繧ｹ繝・ャ繝暦ｼ亥・騾壹せ繝医・繝ｪ繝ｼ7隧ｱ繝翫・繝√Ε繝ｪ繝ｳ繧ｰ繝ｻA譯茨ｼ・                    <span className="text-[10px] px-2 py-0.5 rounded bg-purple-100 text-purple-800 border border-purple-200 font-bold">
-                      LINE蜆ｪ蜈医・譛ｪ騾｣謳ｺ譎ゅ・繝｡繝ｼ繝ｫ驟堺ｿ｡
+                    教育ステップ（共通ストーリー7話ナーチャリング・A案）
+                    <span className="text-[10px] px-2 py-0.5 rounded bg-purple-100 text-purple-800 border border-purple-200 font-bold">
+                      LINE優先・未連携時はメール配信
                     </span>
                     <span className="text-[10px] px-2 py-0.5 rounded bg-indigo-100 text-indigo-800 border border-indigo-300 font-bold">
-                      辟｡蜿榊ｿ・譌･縲・/ 蛻・ｲ・譌･縲・/ 險ｺ譁ｭ繝ｻ雉・侭11譌･縲・                    </span>
+                      無反応2日〜 / 分岐7日〜 / 診断・資料11日〜
+                    </span>
                   </h3>
                   <p className="text-xs text-slate-500 mt-1">
-                    繧ｦ繧ｧ繝ｫ繧ｫ繝�辟｡蜿榊ｿ懊・縲・譌･蠕後代°繧峨∝句挨逶ｸ隲・・莉玖ｭｷ繝ｻ險ｺ譁ｭ繝ｻ雉・侭隲区ｱゅ・Web逶ｸ隲・ヵ繧ｩ繝ｼ繝�邨檎罰縺ｮ譁ｹ縺ｯ蜷・峩蠕後ヵ繧ｩ繝ｭ繝ｼ螳御ｺ・・縲・譌･蠕後代°繧・譌･縺翫″縺ｫ謨呵ご7隧ｱ繧偵♀螻翫￠縺励∪縺呻ｼ・INE譛ｪ騾｣謳ｺ縺ｮWeb邨檎罰繧ゅΓ繝ｼ繝ｫ縺ｧ閾ｪ蜍暮・菫｡・丈ｺ育ｴ・・霑比ｿ｡縺ｧ蛛懈ｭ｢・峨・                  </p>
+                    ウェルカム無反応は【2日後】から、個別相談・介護・診断・資料請求・Web相談フォーム経由の方は各直後フォロー完了の【4日後】から3日おきに教育7話をお届けします（LINE未連携のWeb経由もメールで自動配信／予約・返信で停止）。
+                  </p>
                 </div>
               </div>
 
@@ -4528,7 +4614,7 @@ export const MarketingFlowStudio: React.FC<MarketingFlowStudioProps> = ({
                   className="inline-flex items-center gap-1.5 px-3 py-2 bg-white hover:bg-slate-50 text-slate-700 border border-slate-200 rounded-xl text-xs font-bold transition cursor-pointer"
                 >
                   <Plus className="w-3.5 h-3.5" />
-                  <span>謨呵ご繧ｹ繝・ャ繝励ｒ霑ｽ蜉�</span>
+                  <span>教育ステップを追加</span>
                 </button>
                 {onApplyLineNurturingStarterSet && (
                   <button
@@ -4537,21 +4623,22 @@ export const MarketingFlowStudio: React.FC<MarketingFlowStudioProps> = ({
                     className="inline-flex items-center gap-1.5 px-3.5 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-bold transition shadow-xs cursor-pointer"
                   >
                     <Zap className="w-3.5 h-3.5" />
-                    <span>蜈ｱ騾壽蕗閧ｲ7隧ｱ繧呈怙譁ｰ蛹・/span>
+                    <span>共通教育7話を最新化</span>
                   </button>
                 )}
               </div>
             </div>
 
-            {/* 謨呵ご繧ｹ繝・ャ繝鈴・菫｡繝ｫ繝ｼ繝ｫ ・・蜈ｨ蟆守ｷ夐｣蜍穂ｻ墓ｧ・*/}
+            {/* 教育ステップ配信ルール ＆ 全導線連動仕様 */}
             <div className="rounded-xl border border-indigo-200/80 bg-indigo-50/40 p-4 space-y-3">
               <div className="flex flex-wrap items-center justify-between gap-2">
                 <div className="flex items-center gap-2 text-xs font-bold text-indigo-950">
                   <ShieldCheck className="w-4 h-4 text-indigo-600" />
-                  <span>謨呵ご繧ｹ繝・ャ繝励・驟堺ｿ｡繝ｫ繝ｼ繝ｫ・・譯茨ｼ夐聞譛溯ご謌仙梛・会ｼ・蜈ｨ蟆守ｷ夐｣蜍・/span>
+                  <span>教育ステップの配信ルール（A案：長期育成型）＆ 全導線連動</span>
                 </div>
                 <span className="text-[11px] font-mono text-indigo-700 bg-white px-2.5 py-0.5 rounded-md border border-indigo-200">
-                  蝓ｺ貅・ 2譌･縲・0譌･・亥・蟯殖/C: 7譌･縲・5譌･ ・・險ｺ譁ｭ繝ｻ雉・侭: 11譌･縲・9譌･・・                </span>
+                  基準: 2日〜20日（分岐B/C: 7日〜25日 ／ 診断・資料: 11日〜29日）
+                </span>
               </div>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-2.5">
                 {FUNNEL_ORCHESTRATION_RULES.map((rule) => (
@@ -4576,7 +4663,7 @@ export const MarketingFlowStudio: React.FC<MarketingFlowStudioProps> = ({
                 const matchedEntries = [1, 2, 3, 4, 5, 6, 7].map((stepNum) => ({
                   stepNum,
                   matchedScenario:
-                    nurturingScenarios.find((s) => s.name.includes(`隨ｬ${stepNum}隧ｱ`)) ||
+                    nurturingScenarios.find((s) => s.name.includes(`第${stepNum}話`)) ||
                     nurturingScenarios.find((s) => s.name.includes(String(stepNum))),
                 }));
                 const matchedIds = new Set(
@@ -4589,7 +4676,7 @@ export const MarketingFlowStudio: React.FC<MarketingFlowStudioProps> = ({
                     {matchedEntries.map(({ stepNum, matchedScenario }) => {
                       const tpl = getNurturingStepTemplate(stepNum);
                       const waitDaysNum = (stepNum - 1) * 3 + 2;
-                      const waitDays = `${waitDaysNum}譌･蠕形;
+                      const waitDays = `${waitDaysNum}日後`;
 
                       return (
                         <div
@@ -4604,9 +4691,9 @@ export const MarketingFlowStudio: React.FC<MarketingFlowStudioProps> = ({
                               <div>
                                 <div className="flex items-center gap-2 flex-wrap">
                                   <span className="text-[11px] px-2 py-0.5 rounded bg-indigo-50 text-indigo-700 border border-indigo-200 font-bold font-mono">
-                                    隨ｬ{stepNum}隧ｱ ({waitDays}
+                                    第{stepNum}話 ({waitDays}
                                     {(matchedScenario?.preferredSendTime ?? '10:00')
-                                      ? ` ﾂｷ ${matchedScenario?.preferredSendTime || '10:00'}鬆チ
+                                      ? ` · ${matchedScenario?.preferredSendTime || '10:00'}頃`
                                       : ''}
                                     )
                                   </span>
@@ -4614,15 +4701,15 @@ export const MarketingFlowStudio: React.FC<MarketingFlowStudioProps> = ({
                                     {matchedScenario?.channel === 'line'
                                       ? 'LINE'
                                       : matchedScenario?.channel === 'email'
-                                      ? '繝｡繝ｼ繝ｫ'
-                                      : 'LINE蜆ｪ蜈茨ｼ医Γ繝ｼ繝ｫ陬懷ｮ鯉ｼ・}
+                                      ? 'メール'
+                                      : 'LINE優先（メール補完）'}
                                   </span>
                                   <span className="font-bold text-slate-900 text-sm">
                                     {matchedScenario?.name || tpl.name}
                                   </span>
                                 </div>
                                 <p className="text-xs text-slate-500 mt-0.5 line-clamp-1">
-                                  莉ｶ蜷・ {matchedScenario?.emailSubject || tpl.emailSubject}
+                                  件名: {matchedScenario?.emailSubject || tpl.emailSubject}
                                 </p>
                               </div>
                             </div>
@@ -4645,7 +4732,7 @@ export const MarketingFlowStudio: React.FC<MarketingFlowStudioProps> = ({
                                   ) : (
                                     <Pause className="w-3 h-3 text-slate-500" />
                                   )}
-                                  <span>{matchedScenario.automationEnabled ? '閾ｪ蜍募ｮ溯｡御ｸｭ' : '荳譎ょ●豁｢荳ｭ'}</span>
+                                  <span>{matchedScenario.automationEnabled ? '自動実行中' : '一時停止中'}</span>
                                 </button>
                               )}
 
@@ -4660,7 +4747,7 @@ export const MarketingFlowStudio: React.FC<MarketingFlowStudioProps> = ({
                                   });
                                 }}
                                 className="p-2 bg-white hover:bg-slate-100 text-slate-700 rounded-lg text-xs border border-slate-200 transition cursor-pointer shadow-2xs"
-                                title="譁・擇繝励Ξ繝薙Η繝ｼ"
+                                title="文面プレビュー"
                               >
                                 <Eye className="w-3.5 h-3.5" />
                               </button>
@@ -4673,7 +4760,7 @@ export const MarketingFlowStudio: React.FC<MarketingFlowStudioProps> = ({
                                     name: tpl.name,
                                     trigger: 'line_registered' as const,
                                     channel: 'both' as const,
-                                    audience: '縺吶∋縺ｦ縺ｮ隕玖ｾｼ縺ｿ螳｢',
+                                    audience: 'すべての見込み客',
                                     waitMinutes: waitDaysNum * 1440,
                                     emailSubject: tpl.emailSubject,
                                     emailBody: tpl.emailBody,
@@ -4692,7 +4779,7 @@ export const MarketingFlowStudio: React.FC<MarketingFlowStudioProps> = ({
                                     preferredSendTime: '10:00',
                                     stopOnBooking: true,
                                     stopOnDeal: true,
-                                    consentBasis: '驟堺ｿ｡蜷梧э縺ｫ蝓ｺ縺･縺擾ｼ・INE蜆ｪ蜈医・譛ｪ騾｣謳ｺ譎ゅΓ繝ｼ繝ｫ閾ｪ蜍募・譖ｿ・・,
+                                    consentBasis: '配信同意に基づく（LINE優先・未連携時メール自動切替）',
                                     updatedAt: Date.now(),
                                   };
                                   handleOpenInspector(target);
@@ -4700,7 +4787,7 @@ export const MarketingFlowStudio: React.FC<MarketingFlowStudioProps> = ({
                                 className="px-3 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-xs font-bold transition flex items-center gap-1 cursor-pointer shadow-xs"
                               >
                                 <ShieldCheck className="w-3.5 h-3.5 text-indigo-200" />
-                                <span>轤ｹ讀懊・邱ｨ髮・/span>
+                                <span>点検・編集</span>
                               </button>
                             </div>
                           </div>
@@ -4716,19 +4803,19 @@ export const MarketingFlowStudio: React.FC<MarketingFlowStudioProps> = ({
                         <div className="min-w-0">
                           <div className="flex items-center gap-2 flex-wrap">
                             <span className="text-[11px] px-2 py-0.5 rounded bg-indigo-50 text-indigo-700 border border-indigo-200 font-bold font-mono">
-                              {scenario.waitMinutes === 0 ? '蜊ｳ譎・ : `${Math.round(scenario.waitMinutes / 1440)}譌･蠕形}
+                              {scenario.waitMinutes === 0 ? '即時' : `${Math.round(scenario.waitMinutes / 1440)}日後`}
                             </span>
                             <span className="text-[10px] px-1.5 py-0.5 rounded bg-purple-50 text-purple-700 border border-purple-200 font-semibold">
                               {scenario.channel === 'line'
                                 ? 'LINE'
                                 : scenario.channel === 'email'
-                                ? '繝｡繝ｼ繝ｫ'
-                                : 'LINE+繝｡繝ｼ繝ｫ'}
+                                ? 'メール'
+                                : 'LINE+メール'}
                             </span>
                             <span className="font-bold text-slate-900 text-sm">{scenario.name}</span>
                           </div>
                           <p className="text-xs text-slate-500 mt-0.5 line-clamp-1">
-                            {scenario.emailSubject || scenario.messageBody || '譁・擇譛ｪ險ｭ螳・}
+                            {scenario.emailSubject || scenario.messageBody || '文面未設定'}
                           </p>
                         </div>
                         <div className="flex items-center gap-2 self-end sm:self-auto shrink-0">
@@ -4746,7 +4833,7 @@ export const MarketingFlowStudio: React.FC<MarketingFlowStudioProps> = ({
                             ) : (
                               <Pause className="w-3 h-3 text-slate-500" />
                             )}
-                            <span>{scenario.automationEnabled ? '閾ｪ蜍募ｮ溯｡御ｸｭ' : '荳譎ょ●豁｢荳ｭ'}</span>
+                            <span>{scenario.automationEnabled ? '自動実行中' : '一時停止中'}</span>
                           </button>
                           <button
                             type="button"
@@ -4754,7 +4841,7 @@ export const MarketingFlowStudio: React.FC<MarketingFlowStudioProps> = ({
                             className="px-3 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-xs font-bold transition flex items-center gap-1 cursor-pointer shadow-xs"
                           >
                             <ShieldCheck className="w-3.5 h-3.5 text-indigo-200" />
-                            <span>轤ｹ讀懊・邱ｨ髮・/span>
+                            <span>点検・編集</span>
                           </button>
                         </div>
                       </div>
@@ -4767,19 +4854,21 @@ export const MarketingFlowStudio: React.FC<MarketingFlowStudioProps> = ({
         </div>
       )}
 
-      {/* 笊絶武笊絶武笊絶武笊絶武笊絶武笊絶武笊絶武笊絶武笊絶武笊絶武笊絶武笊絶武笊絶武笊絶武笊絶武笊絶武笊絶武笊絶武笊絶武笊絶武笊絶武笊絶武笊絶武笊絶武笊絶武笊絶武笊絶武笊絶武笊絶武笊絶武笊絶武笊・*/}
-      {/* 繝医Λ繝・け 2: 笨会ｸ・蝟ｶ讌ｭ繝｡繝ｼ繝ｫ・亥腰逋ｺ繝・Φ繝励Ξ繝ｼ繝・・・5谿ｵ髫弱せ繝・ャ繝暦ｼ・    */}
-      {/* 笊絶武笊絶武笊絶武笊絶武笊絶武笊絶武笊絶武笊絶武笊絶武笊絶武笊絶武笊絶武笊絶武笊絶武笊絶武笊絶武笊絶武笊絶武笊絶武笊絶武笊絶武笊絶武笊絶武笊絶武笊絶武笊絶武笊絶武笊絶武笊絶武笊絶武笊絶武笊・*/}
+      {/* ═══════════════════════════════════════════════════════════════ */}
+      {/* トラック 2: ✉️ 営業メール（単発テンプレート ＆ 5段階ステップ）     */}
+      {/* ═══════════════════════════════════════════════════════════════ */}
       {viewMode === 'flow' && activeTrack === 'sales_outreach' && (
         <div className="space-y-5 animate-fade-in">
-          {/* 繧ｳ繝ｳ繝代け繝医↑繝倥ャ繝繝ｼ ・・繝ｫ繝ｼ繝ｫ遒ｺ隱阪ヨ繧ｰ繝ｫ */}
+          {/* コンパクトなヘッダー ＆ ルール確認トグル */}
           <div className="bg-white border border-slate-200 rounded-2xl p-4 space-y-3">
             <div className="flex flex-wrap items-center justify-between gap-3">
               <div>
                 <h3 className="text-sm font-bold text-slate-900">
-                  蝟ｶ讌ｭ繝｡繝ｼ繝ｫ繝・Φ繝励Ξ繝ｼ繝茨ｼ亥腰逋ｺ謠先｡・・・5谿ｵ髫手ｿｽ螳｢・・                </h3>
+                  営業メールテンプレート（単発提案 ＆ 5段階追客）
+                </h3>
                 <p className="text-xs text-slate-500 mt-0.5">
-                  3譌･縺翫″閾ｪ蜍暮・菫｡・・9:00縲・8:00・峨・霑比ｿ｡繧・ｺ育ｴ・′蜈･繧九→谿九ｊ縺ｮ閾ｪ蜍暮∽ｿ｡縺ｯ蜊ｳ譎ょ●豁｢縺励∪縺吶・                </p>
+                  3日おき自動配信（09:00〜18:00）・返信や予約が入ると残りの自動送信は即時停止します。
+                </p>
               </div>
               <div className="flex flex-wrap items-center gap-2">
                 <button
@@ -4787,7 +4876,7 @@ export const MarketingFlowStudio: React.FC<MarketingFlowStudioProps> = ({
                   onClick={() => setShowOutreachSpec((v) => !v)}
                   className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-slate-50 hover:bg-slate-100 text-slate-700 border border-slate-200 rounded-lg text-xs font-semibold transition cursor-pointer whitespace-nowrap"
                 >
-                  <span>驟堺ｿ｡莉墓ｧ倥・讌ｭ遞ｮ蛻･繧ｵ繝ｳ繝励Ν</span>
+                  <span>配信仕様・業種別サンプル</span>
                   {showOutreachSpec ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
                 </button>
                 {onApplyOutreachStarterSet && (
@@ -4797,7 +4886,7 @@ export const MarketingFlowStudio: React.FC<MarketingFlowStudioProps> = ({
                     className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-xs font-bold transition cursor-pointer whitespace-nowrap"
                   >
                     <Zap className="w-3.5 h-3.5" />
-                    <span>5谿ｵ髫弱ｒ讓呎ｺ匁枚髱｢縺ｫ譖ｴ譁ｰ</span>
+                    <span>5段階を標準文面に更新</span>
                   </button>
                 )}
               </div>
@@ -4807,19 +4896,21 @@ export const MarketingFlowStudio: React.FC<MarketingFlowStudioProps> = ({
               <div className="pt-3 border-t border-slate-200 space-y-3">
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-3 text-xs">
                   <div className="p-3 rounded-xl bg-slate-50 border border-slate-200 space-y-1">
-                    <div className="font-bold text-slate-900">髢句ｧ九ち繧､繝溘Φ繧ｰ</div>
+                    <div className="font-bold text-slate-900">開始タイミング</div>
                     <div className="text-slate-600">
-                      隕玖ｾｼ縺ｿ莨∵･ｭ繝ｪ繧ｹ繝医°繧蛾∽ｿ｡縺励◆譎ゑｼ・縲・騾夂岼縺ｯ隨ｬ1騾夐∽ｿ｡蠕後・縺ｿ襍ｷ蜍包ｼ・                    </div>
+                      見込み企業リストから送信した時（2〜5通目は第1通送信後のみ起動）
+                    </div>
                   </div>
                   <div className="p-3 rounded-xl bg-slate-50 border border-slate-200 space-y-1">
-                    <div className="font-bold text-slate-900">驟堺ｿ｡繧ｹ繧ｱ繧ｸ繝･繝ｼ繝ｫ</div>
+                    <div className="font-bold text-slate-900">配信スケジュール</div>
                     <div className="text-slate-600">
-                      0譌･逶ｮ 竊・3譌･蠕・竊・6譌･蠕・竊・9譌･蠕・竊・12譌･蠕鯉ｼ・0:00鬆・・09:00縲・8:00・・                    </div>
+                      0日目 → 3日後 → 6日後 → 9日後 → 12日後（10:00頃・09:00〜18:00）
+                    </div>
                   </div>
                   <div className="p-3 rounded-xl bg-slate-50 border border-slate-200 space-y-1">
-                    <div className="font-bold text-slate-900">閾ｪ蜍募●豁｢譚｡莉ｶ</div>
+                    <div className="font-bold text-slate-900">自動停止条件</div>
                     <div className="text-slate-600">
-                      霑比ｿ｡繝ｻ險ｺ譁ｭ蝗樒ｭ斐・髱｢隲・ｺ育ｴ・・驟堺ｿ｡蛛懈ｭ｢繝ｻ荳埼＃繧呈､懃衍縺励◆迸ｬ髢薙↓蛛懈ｭ｢
+                      返信・診断回答・面談予約・配信停止・不達を検知した瞬間に停止
                     </div>
                   </div>
                 </div>
@@ -4827,19 +4918,19 @@ export const MarketingFlowStudio: React.FC<MarketingFlowStudioProps> = ({
                 <div className="p-3.5 bg-slate-50 border border-slate-200 rounded-xl space-y-2.5">
                   <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
                     <span className="text-xs font-bold text-slate-800">
-                      讌ｭ遞ｮ蛻･縺ｮ閾ｪ蜍募ｷｮ縺苓ｾｼ縺ｿ譁・ｾ九ｒ遒ｺ隱・
+                      業種別の自動差し込み文例を確認:
                     </span>
                     <select
                       value={selectedIndustry}
                       onChange={(e) => setSelectedIndustry(e.target.value)}
                       className="bg-white border border-slate-200 rounded-lg px-3 py-1.5 text-xs text-slate-800 font-medium focus:border-blue-500 cursor-pointer"
                     >
-                      <optgroup label="驥咲せ5讌ｭ遞ｮ">
+                      <optgroup label="重点5業種">
                         {PRIORITY_INDUSTRY_KEYS.map((ind) => (
                           <option key={ind} value={ind}>{ind}</option>
                         ))}
                       </optgroup>
-                      <optgroup label="縺昴・莉悶・讌ｭ遞ｮ">
+                      <optgroup label="その他の業種">
                         {Object.keys(INDUSTRY_MESSAGES)
                           .filter((ind) => !(PRIORITY_INDUSTRY_KEYS as readonly string[]).includes(ind))
                           .map((ind) => (
@@ -4850,11 +4941,11 @@ export const MarketingFlowStudio: React.FC<MarketingFlowStudioProps> = ({
                   </div>
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-xs">
                     <div className="p-3 rounded-lg bg-white border border-slate-200 space-y-1">
-                      <span className="text-rose-700 font-bold block">隨ｬ1騾壹・隱ｲ鬘後Γ繝・そ繝ｼ繧ｸ・・selectedIndustry}・・/span>
+                      <span className="text-rose-700 font-bold block">第1通の課題メッセージ（{selectedIndustry}）</span>
                       <p className="text-slate-600 leading-relaxed text-[11px]">{getIndustryMessage(selectedIndustry, 'problem')}</p>
                     </div>
                     <div className="p-3 rounded-lg bg-white border border-slate-200 space-y-1">
-                      <span className="text-emerald-700 font-bold block">隨ｬ3騾壹・繝｡繝ｪ繝・ヨ繝｡繝・そ繝ｼ繧ｸ・・selectedIndustry}・・/span>
+                      <span className="text-emerald-700 font-bold block">第3通のメリットメッセージ（{selectedIndustry}）</span>
                       <p className="text-slate-600 leading-relaxed text-[11px]">{getIndustryMessage(selectedIndustry, 'benefit')}</p>
                     </div>
                   </div>
@@ -4863,12 +4954,12 @@ export const MarketingFlowStudio: React.FC<MarketingFlowStudioProps> = ({
             )}
           </div>
 
-          {/* 蜊倡匱: 荳逋ｺ逶ｴ逅・署譯茨ｼ育､ｾ螟門承閻包ｼ峨ユ繝ｳ繝励Ξ繝ｼ繝育ｷｨ髮・せ繝ｭ繝・ヨ */}
+          {/* 単発: 一発直球提案（社外右腕）テンプレート編集スロット */}
           {(() => {
             const sampleDraft = resolveOneShotOutreachDraft(
               oneShotScenario,
-              '繧ｵ繝ｳ繝励Ν譬ｪ蠑丈ｼ夂､ｾ',
-              '螻ｱ逕ｰ 螟ｪ驛・,
+              'サンプル株式会社',
+              '山田 太郎',
               selectedIndustry,
               'https://corp.mstcorp.info/diagnosis'
             );
@@ -4879,16 +4970,17 @@ export const MarketingFlowStudio: React.FC<MarketingFlowStudioProps> = ({
                   <div className="min-w-0">
                     <div className="flex items-center gap-2 flex-wrap">
                       <span className="text-xs font-bold text-purple-800">
-                        蜊倡匱蝟ｶ讌ｭ繝｡繝ｼ繝ｫ・井ｸ逋ｺ逶ｴ逅・署譯茨ｼ・                      </span>
+                        単発営業メール（一発直球提案）
+                      </span>
                       <span className="text-[11px] text-slate-500">
-                        ﾂｷ {isCustomized ? '繧ｫ繧ｹ繧ｿ繝�邱ｨ髮・ｸ医∩' : '讓呎ｺ悶ユ繝ｳ繝励Ξ繝ｼ繝井ｽｿ逕ｨ荳ｭ'}
+                        · {isCustomized ? 'カスタム編集済み' : '標準テンプレート使用中'}
                       </span>
                     </div>
                     <h4 className="text-sm font-bold text-slate-900 mt-0.5">
                       {ONE_SHOT_SCENARIO_NAME}
                     </h4>
                     <div className="text-xs text-slate-600 mt-0.5 truncate">
-                      莉ｶ蜷・ {sampleDraft.subject}
+                      件名: {sampleDraft.subject}
                     </div>
                   </div>
 
@@ -4898,10 +4990,10 @@ export const MarketingFlowStudio: React.FC<MarketingFlowStudioProps> = ({
                         type="button"
                         onClick={() => handleDeleteInspectorScenario(oneShotScenario!.id)}
                         className="px-3 py-1.5 bg-white hover:bg-slate-50 text-slate-600 rounded-lg text-xs font-semibold border border-slate-200 transition flex items-center gap-1.5 cursor-pointer whitespace-nowrap"
-                        title="繧ｫ繧ｹ繧ｿ繝�邱ｨ髮・ｒ隗｣髯､縺励※蛻晄悄縺ｮ讓呎ｺ悶ユ繝ｳ繝励Ξ繝ｼ繝医↓謌ｻ縺励∪縺・
+                        title="カスタム編集を解除して初期の標準テンプレートに戻します"
                       >
                         <RotateCcw className="w-3.5 h-3.5 text-slate-500" />
-                        <span>讓呎ｺ悶↓謌ｻ縺・/span>
+                        <span>標準に戻す</span>
                       </button>
                     )}
                     <button
@@ -4910,7 +5002,7 @@ export const MarketingFlowStudio: React.FC<MarketingFlowStudioProps> = ({
                       className="px-3.5 py-1.5 bg-purple-600 hover:bg-purple-700 text-white rounded-lg text-xs font-bold transition flex items-center gap-1.5 cursor-pointer shadow-xs whitespace-nowrap"
                     >
                       <Edit3 className="w-3.5 h-3.5" />
-                      <span>繝・Φ繝励Ξ繝ｼ繝育ｷｨ髮・/span>
+                      <span>テンプレート編集</span>
                     </button>
                   </div>
                 </div>
@@ -4923,12 +5015,12 @@ export const MarketingFlowStudio: React.FC<MarketingFlowStudioProps> = ({
             );
           })()}
 
-          {/* 5繧ｹ繝・ャ繝励・繧ｿ繧､繝�繝ｩ繧､繝ｳ繧ｫ繝ｼ繝・*/}
+          {/* 5ステップのタイムラインカード */}
           <div className="space-y-3">
             {[1, 2, 3, 4, 5].map((stepNum) => {
-              const draft = getSalesEmailTemplate(stepNum, '繧ｵ繝ｳ繝励Ν譬ｪ蠑丈ｼ夂､ｾ', '螻ｱ逕ｰ 螟ｪ驛・, selectedIndustry, 'https://corp.mstcorp.info/diagnosis');
-              const waitDays = stepNum === 1 ? '0譌･逶ｮ・亥・蝗橸ｼ・ : `${(stepNum - 1) * 3}譌･蠕形;
-              const matchedScenario = outreachScenarios.find(s => s.id !== ONE_SHOT_SCENARIO_ID && !s.name.includes('荳逋ｺ逶ｴ逅・) && s.name.includes(String(stepNum)));
+              const draft = getSalesEmailTemplate(stepNum, 'サンプル株式会社', '山田 太郎', selectedIndustry, 'https://corp.mstcorp.info/diagnosis');
+              const waitDays = stepNum === 1 ? '0日目（初回）' : `${(stepNum - 1) * 3}日後`;
+              const matchedScenario = outreachScenarios.find(s => s.id !== ONE_SHOT_SCENARIO_ID && !s.name.includes('一発直球') && s.name.includes(String(stepNum)));
               const displaySubject = matchedScenario?.emailSubject || draft.subject;
               const displayBody = matchedScenario?.emailBody || draft.body;
 
@@ -4945,14 +5037,14 @@ export const MarketingFlowStudio: React.FC<MarketingFlowStudioProps> = ({
                       <div className="min-w-0">
                         <div className="flex items-center gap-2 flex-wrap">
                           <span className="text-xs font-bold text-blue-700">
-                            隨ｬ{stepNum}騾・ﾂｷ {waitDays}{stepNum > 1 && (matchedScenario?.preferredSendTime ?? '10:00') ? ` (${matchedScenario?.preferredSendTime || '10:00'}鬆・` : ''}
+                            第{stepNum}通 · {waitDays}{stepNum > 1 && (matchedScenario?.preferredSendTime ?? '10:00') ? ` (${matchedScenario?.preferredSendTime || '10:00'}頃)` : ''}
                           </span>
                           <span className="text-sm font-bold text-slate-900 truncate">
                             {matchedScenario?.name || draft.name}
                           </span>
                         </div>
                         <div className="text-xs text-slate-600 mt-0.5 truncate">
-                          莉ｶ蜷・ {displaySubject}
+                          件名: {displaySubject}
                         </div>
                       </div>
                     </div>
@@ -4969,7 +5061,7 @@ export const MarketingFlowStudio: React.FC<MarketingFlowStudioProps> = ({
                           }`}
                         >
                           {matchedScenario.automationEnabled ? <Play className="w-3 h-3 fill-emerald-600 text-emerald-600" /> : <Pause className="w-3 h-3 text-slate-500" />}
-                          <span>{matchedScenario.automationEnabled ? '遞ｼ蜒堺ｸｭ' : '蛛懈ｭ｢荳ｭ'}</span>
+                          <span>{matchedScenario.automationEnabled ? '稼働中' : '停止中'}</span>
                         </button>
                       )}
 
@@ -4981,7 +5073,7 @@ export const MarketingFlowStudio: React.FC<MarketingFlowStudioProps> = ({
                             name: draft.name,
                             trigger: 'lead_created' as const,
                             channel: 'email' as const,
-                            audience: '譛ｪ謗･隗ｦ縺ｮ隕玖ｾｼ縺ｿ莨∵･ｭ',
+                            audience: '未接触の見込み企業',
                             waitMinutes: (stepNum - 1) * 3 * 1440,
                             emailSubject: draft.subject,
                             emailBody: draft.body,
@@ -4998,7 +5090,7 @@ export const MarketingFlowStudio: React.FC<MarketingFlowStudioProps> = ({
                             automationEnabled: false,
                             stopOnBooking: true,
                             stopOnDeal: true,
-                            consentBasis: '迚ｹ螳夐崕蟄舌Γ繝ｼ繝ｫ豕輔↓蝓ｺ縺･縺乗･ｭ蜍呎隼蝟・ュ蝣ｱ縺ｮ謠蝉ｾ・,
+                            consentBasis: '特定電子メール法に基づく業務改善情報の提供',
                             updatedAt: Date.now(),
                           };
                           handleOpenInspector(target);
@@ -5006,7 +5098,7 @@ export const MarketingFlowStudio: React.FC<MarketingFlowStudioProps> = ({
                         className="px-3.5 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-xs font-bold transition flex items-center gap-1.5 cursor-pointer whitespace-nowrap"
                       >
                         <Edit3 className="w-3.5 h-3.5" />
-                        <span>邱ｨ髮・・繝励Ξ繝薙Η繝ｼ</span>
+                        <span>編集・プレビュー</span>
                       </button>
                     </div>
                   </div>
@@ -5022,26 +5114,29 @@ export const MarketingFlowStudio: React.FC<MarketingFlowStudioProps> = ({
         </div>
       )}
 
-      {/* 笊絶武笊絶武笊絶武笊絶武笊絶武笊絶武笊絶武笊絶武笊絶武笊絶武笊絶武笊絶武笊絶武笊絶武笊絶武笊絶武笊絶武笊絶武笊絶武笊絶武笊絶武笊絶武笊絶武笊絶武笊絶武笊絶武笊絶武笊絶武笊絶武笊絶武笊絶武笊・*/}
-      {/* 繝医Λ繝・け 3: �祷 雉・侭隲区ｱょｾ・・・�､・髱｢隲・・謠先｡域嶌騾∽ｻ伜ｾ後ヵ繧ｩ繝ｭ繝ｼ      */}
-      {/* 笊絶武笊絶武笊絶武笊絶武笊絶武笊絶武笊絶武笊絶武笊絶武笊絶武笊絶武笊絶武笊絶武笊絶武笊絶武笊絶武笊絶武笊絶武笊絶武笊絶武笊絶武笊絶武笊絶武笊絶武笊絶武笊絶武笊絶武笊絶武笊絶武笊絶武笊絶武笊・*/}
+      {/* ═══════════════════════════════════════════════════════════════ */}
+      {/* トラック 3: 📘 資料請求後 ＆ 🤝 面談・提案書送付後フォロー      */}
+      {/* ═══════════════════════════════════════════════════════════════ */}
       {viewMode === 'flow' && activeTrack === 'inbound_material' && (
         <div className="space-y-6 animate-fade-in">
-          {/* 繧ｻ繧ｯ繧ｷ繝ｧ繝ｳ 1: 雉・侭隲区ｱょｾ後・閾ｪ蜍戊ｿｽ螳｢・・譌･蠕後・3譌･蠕後・7譌･蠕鯉ｼ・*/}
+          {/* セクション 1: 資料請求後の自動追客（1日後・3日後・7日後） */}
           <div className="bg-white border border-teal-200 rounded-2xl p-5 shadow-xs space-y-4">
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-100 pb-3">
               <div className="space-y-1">
                 <div className="flex items-center gap-2 flex-wrap">
                   <span className="text-[11px] font-bold px-2 py-0.5 rounded bg-teal-100 text-teal-800 border border-teal-200">
-                    雉・侭隲区ｱょｾ・                  </span>
+                    資料請求後
+                  </span>
                   <h3 className="text-base font-bold text-slate-900">
-                    雉・侭隲区ｱょｾ後・閾ｪ蜍戊ｿｽ螳｢・・譌･蠕後・3譌･蠕後・7譌･蠕鯉ｼ・                  </h3>
+                    資料請求後の自動追客（1日後・3日後・7日後）
+                  </h3>
                   <span className="text-xs px-2 py-0.5 rounded bg-slate-100 text-slate-700 font-semibold">
-                    {materialFollowupScenarios.filter((s) => s.automationEnabled).length}/{materialFollowupScenarios.length}莉ｶ 遞ｼ蜒堺ｸｭ
+                    {materialFollowupScenarios.filter((s) => s.automationEnabled).length}/{materialFollowupScenarios.length}件 稼働中
                   </span>
                 </div>
                 <p className="text-xs text-slate-500">
-                  雉・侭隲区ｱゅヵ繧ｩ繝ｼ繝�騾∽ｿ｡譎ゅ↓襍ｷ蜍輔＠縲´INE・九Γ繝ｼ繝ｫ縺ｮ荳｡譁ｹ縺ｧ閾ｪ蜍輔ヵ繧ｩ繝ｭ繝ｼ縺励∪縺呻ｼ育嶌謇九°繧峨・霑比ｿ｡繝ｻ蝠・ｫ・ｺ育ｴ・・蝠・ｫ・喧縺ｧ蜊ｳ蛛懈ｭ｢・峨・                </p>
+                  資料請求フォーム送信時に起動し、LINE＋メールの両方で自動フォローします（相手からの返信・商談予約・商談化で即停止）。
+                </p>
               </div>
 
               <div className="flex flex-wrap items-center gap-2 shrink-0">
@@ -5057,12 +5152,12 @@ export const MarketingFlowStudio: React.FC<MarketingFlowStudioProps> = ({
                     {materialFollowupScenarios.every((s) => s.automationEnabled) ? (
                       <>
                         <Pause className="w-3.5 h-3.5 text-slate-500" />
-                        <span>荳諡ｬ蛛懈ｭ｢</span>
+                        <span>一括停止</span>
                       </>
                     ) : (
                       <>
                         <Play className="w-3.5 h-3.5 text-teal-600 fill-teal-600" />
-                        <span>荳諡ｬON</span>
+                        <span>一括ON</span>
                       </>
                     )}
                   </button>
@@ -5073,7 +5168,7 @@ export const MarketingFlowStudio: React.FC<MarketingFlowStudioProps> = ({
                   className="inline-flex items-center gap-1 px-3 py-1.5 bg-white hover:bg-slate-50 text-slate-700 border border-slate-200 rounded-lg text-xs font-semibold transition cursor-pointer whitespace-nowrap"
                 >
                   <Plus className="w-3.5 h-3.5" />
-                  <span>繧ｹ繝・ャ繝苓ｿｽ蜉�</span>
+                  <span>ステップ追加</span>
                 </button>
                 {onApplyMaterialStarterSet && (
                   <button
@@ -5082,7 +5177,7 @@ export const MarketingFlowStudio: React.FC<MarketingFlowStudioProps> = ({
                     className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-teal-600 hover:bg-teal-700 text-white rounded-lg text-xs font-bold transition cursor-pointer shadow-xs whitespace-nowrap"
                   >
                     <Zap className="w-3.5 h-3.5 text-teal-200" />
-                    <span>蟆主・ / 譛譁ｰ蛹・/span>
+                    <span>導入 / 最新化</span>
                   </button>
                 )}
               </div>
@@ -5091,7 +5186,8 @@ export const MarketingFlowStudio: React.FC<MarketingFlowStudioProps> = ({
             {materialFollowupScenarios.length === 0 ? (
               <div className="p-6 bg-teal-50/40 rounded-xl border border-dashed border-teal-200 text-center space-y-3">
                 <p className="text-xs text-slate-600">
-                  雉・侭隲区ｱょｾ後・閾ｪ蜍戊ｿｽ螳｢繧ｹ繝・ャ繝暦ｼ・譌･蠕鯉ｼ夊ｳ・侭遒ｺ隱・竊・3譌･蠕鯉ｼ壻ｺ倶ｾ具ｼ・嶌隲・竊・7譌･蠕鯉ｼ壽怙邨ゅ♀莨ｺ縺・ｼ峨′縺ｾ縺�逋ｻ骭ｲ縺輔ｌ縺ｦ縺・∪縺帙ｓ縲・                </p>
+                  資料請求後の自動追客ステップ（1日後：資料確認 → 3日後：事例＆相談 → 7日後：最終お伺い）がまだ登録されていません。
+                </p>
                 {onApplyMaterialStarterSet && (
                   <button
                     type="button"
@@ -5099,7 +5195,7 @@ export const MarketingFlowStudio: React.FC<MarketingFlowStudioProps> = ({
                     className="inline-flex items-center gap-1.5 px-4 py-2 bg-teal-600 hover:bg-teal-700 text-white rounded-lg text-xs font-bold transition cursor-pointer shadow-xs"
                   >
                     <Zap className="w-3.5 h-3.5" />
-                    <span>雉・侭隲区ｱゅヵ繧ｩ繝ｭ繝ｼ3譛ｬ繧貞ｰ主・縺吶ｋ</span>
+                    <span>資料請求フォロー3本を導入する</span>
                   </button>
                 )}
               </div>
@@ -5118,15 +5214,15 @@ export const MarketingFlowStudio: React.FC<MarketingFlowStudioProps> = ({
                         <div className="flex items-center gap-2 flex-wrap">
                           <span className="font-bold text-slate-900 text-sm">{scenario.name}</span>
                           <span className="text-[10px] px-2 py-0.5 rounded bg-white text-slate-700 border border-slate-200 font-mono">
-                            {scenario.waitMinutes === 0 ? '蜊ｳ譎・ : `${Math.round(scenario.waitMinutes / 1440)}譌･蠕形}
-                            {scenario.preferredSendTime ? ` (${scenario.preferredSendTime}鬆・` : ''}
+                            {scenario.waitMinutes === 0 ? '即時' : `${Math.round(scenario.waitMinutes / 1440)}日後`}
+                            {scenario.preferredSendTime ? ` (${scenario.preferredSendTime}頃)` : ''}
                           </span>
                           <span className="text-[10px] px-2 py-0.5 rounded bg-teal-50 text-teal-800 border border-teal-200 font-medium">
-                            {scenario.channel === 'both' ? 'LINE・九Γ繝ｼ繝ｫ' : scenario.channel === 'email' ? '繝｡繝ｼ繝ｫ縺ｮ縺ｿ' : 'LINE縺ｮ縺ｿ'}
+                            {scenario.channel === 'both' ? 'LINE＋メール' : scenario.channel === 'email' ? 'メールのみ' : 'LINEのみ'}
                           </span>
                         </div>
                         <p className="text-xs text-slate-500 truncate">
-                          莉ｶ蜷・ {scenario.emailSubject || scenario.flexTitle || scenario.messageBody || '譛ｪ險ｭ螳・}
+                          件名: {scenario.emailSubject || scenario.flexTitle || scenario.messageBody || '未設定'}
                         </p>
                       </div>
                     </div>
@@ -5144,12 +5240,12 @@ export const MarketingFlowStudio: React.FC<MarketingFlowStudioProps> = ({
                         {scenario.automationEnabled ? (
                           <>
                             <Play className="w-3 h-3 text-emerald-600 fill-emerald-600" />
-                            <span>閾ｪ蜍募ｮ溯｡御ｸｭ</span>
+                            <span>自動実行中</span>
                           </>
                         ) : (
                           <>
                             <Pause className="w-3 h-3 text-slate-400" />
-                            <span>荳譎ょ●豁｢荳ｭ</span>
+                            <span>一時停止中</span>
                           </>
                         )}
                       </button>
@@ -5157,7 +5253,7 @@ export const MarketingFlowStudio: React.FC<MarketingFlowStudioProps> = ({
                         type="button"
                         onClick={() => setPreviewModalScenario(scenario)}
                         className="p-2 bg-white hover:bg-slate-100 text-slate-700 rounded-lg text-xs border border-slate-200 transition cursor-pointer"
-                        title="譁・擇繝励Ξ繝薙Η繝ｼ"
+                        title="文面プレビュー"
                       >
                         <Eye className="w-3.5 h-3.5" />
                       </button>
@@ -5167,7 +5263,7 @@ export const MarketingFlowStudio: React.FC<MarketingFlowStudioProps> = ({
                         className="px-3 py-1.5 bg-purple-600 hover:bg-purple-700 text-white rounded-lg text-xs font-bold transition cursor-pointer flex items-center gap-1 shadow-xs whitespace-nowrap"
                       >
                         <ShieldCheck className="w-3.5 h-3.5 text-purple-200" />
-                        <span>轤ｹ讀懊・邱ｨ髮・/span>
+                        <span>点検・編集</span>
                       </button>
                     </div>
                   </div>
@@ -5176,22 +5272,24 @@ export const MarketingFlowStudio: React.FC<MarketingFlowStudioProps> = ({
             )}
           </div>
 
-          {/* 繧ｻ繧ｯ繧ｷ繝ｧ繝ｳ 2: 髱｢隲・ｾ後・隧ｳ邏ｰ繝ｬ繝昴・繝医・謠先｡域嶌騾∽ｻ伜ｾ後・閾ｪ蜍輔ヵ繧ｩ繝ｭ繝ｼ */}
+          {/* セクション 2: 面談後・詳細レポート・提案書送付後の自動フォロー */}
           <div className="bg-white border border-amber-200 rounded-2xl p-5 shadow-xs space-y-4">
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-100 pb-3">
               <div className="space-y-1">
                 <div className="flex items-center gap-2 flex-wrap">
                   <span className="text-[11px] font-bold px-2 py-0.5 rounded bg-amber-100 text-amber-800 border border-amber-200">
-                    蝠・ｫ・・謠先｡亥ｾ・                  </span>
+                    商談・提案後
+                  </span>
                   <h3 className="text-base font-bold text-slate-900">
-                    髱｢隲・ｾ後・縺疲署譯域嶌騾∽ｻ伜ｾ後・閾ｪ蜍輔ヵ繧ｩ繝ｭ繝ｼ
+                    面談後・ご提案書送付後の自動フォロー
                   </h3>
                   <span className="text-xs px-2 py-0.5 rounded bg-slate-100 text-slate-700 font-semibold">
-                    {postMeetingScenarios.filter((s) => s.automationEnabled).length}/{postMeetingScenarios.length}莉ｶ 遞ｼ蜒堺ｸｭ
+                    {postMeetingScenarios.filter((s) => s.automationEnabled).length}/{postMeetingScenarios.length}件 稼働中
                   </span>
                 </div>
                 <p className="text-xs text-slate-500">
-                  縲悟膚隲・ｮ御ｺ・阪ｄ縲後＃謠先｡域嶌・郁ｨｺ譁ｭ邨先棡・区署譯茨ｼ峨・騾∽ｿ｡縲阪ｒ襍ｷ轤ｹ縺ｫ閾ｪ蜍暮・菫｡縲ゆｸ・ｸ繝ｬ繝昴・繝医・謠先｡域嶌縺ｮ荳｡譁ｹ縺碁∽ｻ倥＆繧後※繧・譌･蠕後・7譌･蠕後・1騾壹・縺ｿ騾∽ｿ｡縺輔ｌ縲∬ｿ比ｿ｡縺ｾ縺溘・謌千ｴ・・螟ｱ豕ｨ縺ｧ閾ｪ蜍募●豁｢縺励∪縺吶・                </p>
+                  「商談完了」や「ご提案書（診断結果＋提案）の送信」を起点に自動配信。万一レポート・提案書の両方が送付されても3日後・7日後は1通のみ送信され、返信または成約・失注で自動停止します。
+                </p>
               </div>
 
               <div className="flex flex-wrap items-center gap-2 shrink-0">
@@ -5207,12 +5305,12 @@ export const MarketingFlowStudio: React.FC<MarketingFlowStudioProps> = ({
                     {postMeetingScenarios.every((s) => s.automationEnabled) ? (
                       <>
                         <Pause className="w-3.5 h-3.5 text-slate-500" />
-                        <span>荳諡ｬ蛛懈ｭ｢</span>
+                        <span>一括停止</span>
                       </>
                     ) : (
                       <>
                         <Play className="w-3.5 h-3.5 text-amber-600 fill-amber-600" />
-                        <span>荳諡ｬON</span>
+                        <span>一括ON</span>
                       </>
                     )}
                   </button>
@@ -5224,7 +5322,7 @@ export const MarketingFlowStudio: React.FC<MarketingFlowStudioProps> = ({
                     className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-amber-600 hover:bg-amber-700 text-white rounded-lg text-xs font-bold transition cursor-pointer shadow-xs whitespace-nowrap"
                   >
                     <Zap className="w-3.5 h-3.5 text-amber-100" />
-                    <span>蟆主・ / 譛譁ｰ蛹・/span>
+                    <span>導入 / 最新化</span>
                   </button>
                 )}
               </div>
@@ -5233,7 +5331,8 @@ export const MarketingFlowStudio: React.FC<MarketingFlowStudioProps> = ({
             {postMeetingScenarios.length === 0 ? (
               <div className="p-6 bg-amber-50/40 rounded-xl border border-dashed border-amber-200 text-center space-y-3">
                 <p className="text-xs text-slate-600">
-                  髱｢隲・ｾ鯉ｼ・譎る俣蠕後♀遉ｼ・峨・縺疲署譯域嶌騾∽ｻ伜ｾ鯉ｼ・譌･蠕後・7譌･蠕鯉ｼ峨・邨ｱ蜷医ヵ繧ｩ繝ｭ繝ｼ縺後∪縺�逋ｻ骭ｲ縺輔ｌ縺ｦ縺・∪縺帙ｓ縲・                </p>
+                  面談後（2時間後お礼）・ご提案書送付後（3日後・7日後）の統合フォローがまだ登録されていません。
+                </p>
                 {onApplyPostMeetingStarterSet && (
                   <button
                     type="button"
@@ -5241,7 +5340,7 @@ export const MarketingFlowStudio: React.FC<MarketingFlowStudioProps> = ({
                     className="inline-flex items-center gap-1.5 px-4 py-2 bg-amber-600 hover:bg-amber-700 text-white rounded-lg text-xs font-bold transition cursor-pointer shadow-xs"
                   >
                     <Zap className="w-3.5 h-3.5" />
-                    <span>髱｢隲・・謠先｡亥ｾ後ヵ繧ｩ繝ｭ繝ｼ3譛ｬ繧貞ｰ主・縺吶ｋ</span>
+                    <span>面談・提案後フォロー3本を導入する</span>
                   </button>
                 )}
               </div>
@@ -5250,24 +5349,24 @@ export const MarketingFlowStudio: React.FC<MarketingFlowStudioProps> = ({
                 {postMeetingScenarios.map((scenario, idx) => {
                   const triggerLabelText =
                     scenario.trigger === 'meeting_completed'
-                      ? '髱｢隲・ｮ御ｺ・凾'
+                      ? '面談完了時'
                       : scenario.trigger === 'report_or_proposal_sent'
-                      ? '謠先｡域嶌繝ｻ繝ｬ繝昴・繝磯∽ｻ俶凾・育ｵｱ蜷茨ｼ・
+                      ? '提案書・レポート送付時（統合）'
                       : scenario.trigger === 'report_sent'
-                      ? '繝ｬ繝昴・繝磯∽ｻ俶凾'
+                      ? 'レポート送付時'
                       : scenario.trigger === 'report_approved'
-                      ? '繝ｬ繝昴・繝域価隱肴凾'
+                      ? 'レポート承認時'
                       : scenario.trigger === 'proposal_sent'
-                      ? '謠先｡域嶌騾∽ｻ俶凾'
+                      ? '提案書送付時'
                       : scenario.trigger === 'proposal_approved'
-                      ? '謠先｡域嶌謇ｿ隱肴凾'
-                      : '謇句虚';
+                      ? '提案書承認時'
+                      : '手動';
                   const waitText =
                     scenario.waitMinutes === 0
-                      ? '蜊ｳ譎・
+                      ? '即時'
                       : scenario.waitMinutes < 1440
-                      ? `${Math.max(1, Math.round(scenario.waitMinutes / 60))}譎る俣蠕形
-                      : `${Math.round(scenario.waitMinutes / 1440)}譌･蠕形;
+                      ? `${Math.max(1, Math.round(scenario.waitMinutes / 60))}時間後`
+                      : `${Math.round(scenario.waitMinutes / 1440)}日後`;
                   return (
                     <div
                       key={scenario.id}
@@ -5285,14 +5384,14 @@ export const MarketingFlowStudio: React.FC<MarketingFlowStudioProps> = ({
                             </span>
                             <span className="text-[10px] px-2 py-0.5 rounded bg-white text-slate-700 border border-slate-200 font-mono">
                               {waitText}
-                              {scenario.waitMinutes >= 1440 && scenario.preferredSendTime ? ` (${scenario.preferredSendTime}鬆・` : ''}
+                              {scenario.waitMinutes >= 1440 && scenario.preferredSendTime ? ` (${scenario.preferredSendTime}頃)` : ''}
                             </span>
                             <span className="text-[10px] px-2 py-0.5 rounded bg-slate-100 text-slate-700 border border-slate-200 font-medium">
-                              {scenario.channel === 'both' ? 'LINE・九Γ繝ｼ繝ｫ' : scenario.channel === 'email' ? '繝｡繝ｼ繝ｫ縺ｮ縺ｿ' : 'LINE縺ｮ縺ｿ'}
+                              {scenario.channel === 'both' ? 'LINE＋メール' : scenario.channel === 'email' ? 'メールのみ' : 'LINEのみ'}
                             </span>
                           </div>
                           <p className="text-xs text-slate-500 truncate">
-                            莉ｶ蜷・ {scenario.emailSubject || scenario.messageBody || '譛ｪ險ｭ螳・}
+                            件名: {scenario.emailSubject || scenario.messageBody || '未設定'}
                           </p>
                         </div>
                       </div>
@@ -5310,12 +5409,12 @@ export const MarketingFlowStudio: React.FC<MarketingFlowStudioProps> = ({
                           {scenario.automationEnabled ? (
                             <>
                               <Play className="w-3 h-3 text-emerald-600 fill-emerald-600" />
-                              <span>閾ｪ蜍募ｮ溯｡御ｸｭ</span>
+                              <span>自動実行中</span>
                             </>
                           ) : (
                             <>
                               <Pause className="w-3 h-3 text-slate-400" />
-                              <span>荳譎ょ●豁｢荳ｭ</span>
+                              <span>一時停止中</span>
                             </>
                           )}
                         </button>
@@ -5323,7 +5422,7 @@ export const MarketingFlowStudio: React.FC<MarketingFlowStudioProps> = ({
                           type="button"
                           onClick={() => setPreviewModalScenario(scenario)}
                           className="p-2 bg-white hover:bg-slate-100 text-slate-700 rounded-lg text-xs border border-slate-200 transition cursor-pointer"
-                          title="譁・擇繝励Ξ繝薙Η繝ｼ"
+                          title="文面プレビュー"
                         >
                           <Eye className="w-3.5 h-3.5" />
                         </button>
@@ -5333,7 +5432,7 @@ export const MarketingFlowStudio: React.FC<MarketingFlowStudioProps> = ({
                           className="px-3 py-1.5 bg-purple-600 hover:bg-purple-700 text-white rounded-lg text-xs font-bold transition cursor-pointer flex items-center gap-1 shadow-xs whitespace-nowrap"
                         >
                           <ShieldCheck className="w-3.5 h-3.5 text-purple-200" />
-                          <span>轤ｹ讀懊・邱ｨ髮・/span>
+                          <span>点検・編集</span>
                         </button>
                       </div>
                     </div>
@@ -5347,7 +5446,7 @@ export const MarketingFlowStudio: React.FC<MarketingFlowStudioProps> = ({
 
 
 
-      {/* 繧ｭ繝ｼ繝ｯ繝ｼ繝芽ｿｽ蜉�繝ｻ邱ｨ髮・Δ繝ｼ繝繝ｫ */}
+      {/* キーワード追加・編集モーダル */}
       {isEditingKeywordModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs animate-fade-in">
           <div className="bg-white border border-slate-200 rounded-2xl max-w-2xl w-full shadow-2xl overflow-hidden flex flex-col">
@@ -5355,7 +5454,7 @@ export const MarketingFlowStudio: React.FC<MarketingFlowStudioProps> = ({
               <div className="flex items-center gap-2">
                 <Zap className="w-5 h-5 text-amber-600" />
                 <h3 className="font-bold text-slate-900 text-sm">
-                  {editingRule ? '繧ｭ繝ｼ繝ｯ繝ｼ繝芽・蜍募ｿ懃ｭ斐ｒ邱ｨ髮・ : '譁ｰ縺励＞繧ｭ繝ｼ繝ｯ繝ｼ繝芽・蜍募ｿ懃ｭ斐ｒ霑ｽ蜉�'}
+                  {editingRule ? 'キーワード自動応答を編集' : '新しいキーワード自動応答を追加'}
                 </h3>
               </div>
               <button
@@ -5369,75 +5468,75 @@ export const MarketingFlowStudio: React.FC<MarketingFlowStudioProps> = ({
 
             <form onSubmit={handleSaveKeywordRule} className="p-6 space-y-4 text-xs">
               <div>
-                <label className="font-bold text-slate-700 block mb-1">邂｡逅・錐遘ｰ</label>
+                <label className="font-bold text-slate-700 block mb-1">管理名称</label>
                 <input
                   type="text"
                   value={ruleName}
                   onChange={(e) => setRuleName(e.target.value)}
-                  placeholder="萓・ 縲瑚ｨｺ譁ｭ縲埼∽ｿ｡譎・
+                  placeholder="例: 「診断」送信時"
                   className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-slate-900 focus:bg-white focus:outline-none focus:border-amber-500"
                 />
               </div>
 
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="font-bold text-slate-700 block mb-1">蜿榊ｿ懊く繝ｼ繝ｯ繝ｼ繝・*</label>
+                  <label className="font-bold text-slate-700 block mb-1">反応キーワード *</label>
                   <input
                     type="text"
                     required
                     value={ruleKeyword}
                     onChange={(e) => setRuleKeyword(e.target.value)}
-                    placeholder="萓・ 險ｺ譁ｭ"
+                    placeholder="例: 診断"
                     className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-slate-900 font-mono focus:bg-white focus:outline-none focus:border-amber-500"
                   />
                 </div>
                 <div>
-                  <label className="font-bold text-slate-700 block mb-1">繝槭ャ繝∵婿蠑・/label>
+                  <label className="font-bold text-slate-700 block mb-1">マッチ方式</label>
                   <select
                     value={ruleMode}
                     onChange={(e) => setRuleMode(e.target.value as any)}
                     className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-slate-900 focus:bg-white focus:outline-none focus:border-amber-500"
                   >
-                    <option value="contains">驛ｨ蛻・ｸ閾ｴ・亥性繧縺ｨ縺搾ｼ・/option>
-                    <option value="exact">螳悟・荳閾ｴ・井ｸ閾ｴ縺ｮ縺ｿ・・/option>
+                    <option value="contains">部分一致（含むとき）</option>
+                    <option value="exact">完全一致（一致のみ）</option>
                   </select>
                 </div>
               </div>
 
               <div>
-                <label className="font-bold text-slate-700 block mb-1">閾ｪ蜍戊ｿ比ｿ｡縺吶ｋ繝｡繝・そ繝ｼ繧ｸ譁・擇 *</label>
+                <label className="font-bold text-slate-700 block mb-1">自動返信するメッセージ文面 *</label>
                 <textarea
                   rows={8}
                   required
                   value={ruleReply}
                   onChange={(e) => setRuleReply(e.target.value)}
-                  placeholder="霑比ｿ｡縺吶ｋ譁・ｫ�繧貞・蜉帙＠縺ｦ縺上□縺輔＞縲・link_url} 繧・{booking_url} 縺悟茜逕ｨ縺ｧ縺阪∪縺吶・
+                  placeholder="返信する文章を入力してください。{link_url} や {booking_url} が利用できます。"
                   className="w-full min-h-[180px] bg-slate-50 border border-slate-200 rounded-xl p-3.5 text-sm text-slate-900 font-sans leading-relaxed focus:bg-white focus:outline-none focus:border-amber-500 resize-y"
                 />
               </div>
 
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="font-bold text-slate-700 block mb-1">閾ｪ蜍穂ｻ倅ｸ弱☆繧九ち繧ｰ</label>
+                  <label className="font-bold text-slate-700 block mb-1">自動付与するタグ</label>
                   <input
                     type="text"
                     value={ruleTag}
                     onChange={(e) => setRuleTag(e.target.value)}
-                    placeholder="萓・ 驕ｸ謚・險ｺ譁ｭ"
+                    placeholder="例: 選択:診断"
                     className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-slate-900 font-mono text-emerald-700 focus:bg-white focus:outline-none focus:border-amber-500"
                   />
                 </div>
                 <div>
-                  <label className="font-bold text-slate-700 block mb-1">騾｣蜍輔☆繧句ｰ守ｷ壼・蟯・/label>
+                  <label className="font-bold text-slate-700 block mb-1">連動する導線分岐</label>
                   <select
                     value={ruleTargetBranch}
                     onChange={(e) => setRuleTargetBranch(e.target.value as any)}
                     className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-slate-900 focus:bg-white focus:outline-none focus:border-amber-500"
                   >
-                    <option value="diagnosis">A: 3蛻・┌譁咏ｵ悟霧險ｺ譁ｭ</option>
-                    <option value="consult">B: 邨悟霧蛟句挨逶ｸ隲・/option>
-                    <option value="care">C: 莉玖ｭｷ髢区･ｭ繝代ャ繧ｱ繝ｼ繧ｸ</option>
-                    <option value="general">荳闊ｬ蝠上＞蜷医ｏ縺・/option>
+                    <option value="diagnosis">A: 3分無料経営診断</option>
+                    <option value="consult">B: 経営個別相談</option>
+                    <option value="care">C: 介護開業パッケージ</option>
+                    <option value="general">一般問い合わせ</option>
                   </select>
                 </div>
               </div>
@@ -5448,20 +5547,21 @@ export const MarketingFlowStudio: React.FC<MarketingFlowStudioProps> = ({
                   onClick={() => setIsEditingKeywordModal(false)}
                   className="px-4 py-2 bg-white hover:bg-slate-100 text-slate-700 border border-slate-200 rounded-xl font-bold cursor-pointer transition"
                 >
-                  繧ｭ繝｣繝ｳ繧ｻ繝ｫ
+                  キャンセル
                 </button>
                 <button
                   type="submit"
                   className="px-5 py-2 bg-amber-600 hover:bg-amber-700 text-white font-bold rounded-xl shadow-xs transition cursor-pointer"
                 >
-                  菫晏ｭ倥☆繧・                </button>
+                  保存する
+                </button>
               </div>
             </form>
           </div>
         </div>
       )}
 
-      {/* 譁・擇繝励Ξ繝薙Η繝ｼ繝｢繝ｼ繝繝ｫ */}
+      {/* 文面プレビューモーダル */}
       {previewModalScenario && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs animate-fade-in">
           <div className="bg-white border border-slate-200 rounded-2xl max-w-xl w-full shadow-2xl overflow-hidden flex flex-col max-h-[85vh]">
@@ -5484,14 +5584,14 @@ export const MarketingFlowStudio: React.FC<MarketingFlowStudioProps> = ({
             <div className="p-6 overflow-y-auto space-y-4 text-xs font-mono">
               {previewModalScenario.emailSubject && (
                 <div className="p-3 bg-slate-50 rounded-xl border border-slate-200">
-                  <span className="text-slate-500 text-[11px] block mb-1 font-sans font-medium">莉ｶ蜷・</span>
+                  <span className="text-slate-500 text-[11px] block mb-1 font-sans font-medium">件名:</span>
                   <p className="text-slate-900 font-bold">{previewModalScenario.emailSubject}</p>
                 </div>
               )}
 
               {previewModalScenario.emailBody && (
                 <div className="p-3 bg-slate-50 rounded-xl border border-slate-200">
-                  <span className="text-slate-500 text-[11px] block mb-1 font-sans font-medium">繝｡繝ｼ繝ｫ譛ｬ譁・</span>
+                  <span className="text-slate-500 text-[11px] block mb-1 font-sans font-medium">メール本文:</span>
                   <pre className="text-slate-800 whitespace-pre-wrap leading-relaxed font-mono">
                     {previewModalScenario.emailBody}
                   </pre>
@@ -5500,7 +5600,7 @@ export const MarketingFlowStudio: React.FC<MarketingFlowStudioProps> = ({
 
               {previewModalScenario.messageBody && (
                 <div className="p-3 bg-slate-50 rounded-xl border border-slate-200">
-                  <span className="text-slate-500 text-[11px] block mb-1 font-sans font-medium">LINE繝｡繝・そ繝ｼ繧ｸ譛ｬ譁・</span>
+                  <span className="text-slate-500 text-[11px] block mb-1 font-sans font-medium">LINEメッセージ本文:</span>
                   <pre className="text-slate-800 whitespace-pre-wrap leading-relaxed font-mono">
                     {previewModalScenario.messageBody}
                   </pre>
@@ -5514,13 +5614,14 @@ export const MarketingFlowStudio: React.FC<MarketingFlowStudioProps> = ({
                 onClick={() => setPreviewModalScenario(null)}
                 className="px-4 py-2 bg-white hover:bg-slate-100 text-slate-700 border border-slate-200 rounded-xl text-xs font-bold transition cursor-pointer shadow-2xs"
               >
-                髢峨§繧・              </button>
+                閉じる
+              </button>
             </div>
           </div>
         </div>
       )}
 
-      {/* 隧ｳ邏ｰ繧､繝ｳ繧ｹ繝壹け繧ｿ繝ｼ繝｢繝ｼ繝繝ｫ */}
+      {/* 詳細インスペクターモーダル */}
       {inspectorScenario && (
         <FlowStepInspectorModal
           isOpen={isInspectorOpen}

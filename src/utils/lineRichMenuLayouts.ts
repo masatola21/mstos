@@ -43,63 +43,63 @@ export interface RichMenuLayoutConfig {
 export const RICH_MENU_LAYOUTS: RichMenuLayoutConfig[] = [
   {
     id: 'split-2-1-3',
-    label: '5刁E���E�丁E:1・丁E�E�E,
-    description: '左上特大1667ÁE43�E�右丁E33ÁE43�E�下段3枠�E�診断・予紁E��け！E,
+    label: '5分割（上2:1・下3）',
+    description: '左上特大1667×843＋右上833×843＋下段3枠（診断・予約向け）',
     cellCount: 5,
     recommended: true,
   },
   {
     id: 'split-2-3',
-    label: '5刁E���E�丁E・丁E 坁E��！E,
-    description: '上段2枠坁E��！E250ÁE43�E�＋下段3枠坁E��！E33ÁE43�E�E,
+    label: '5分割（上2・下3 均等）',
+    description: '上段2枠均等（1250×843）＋下段3枠均等（833×843）',
     cellCount: 5,
   },
   {
     id: 'grid-2x3',
-    label: '6刁E���E�EÁE�E�E,
-    description: '2刁EÁE3衁E,
+    label: '6分割（2×3）',
+    description: '2列 × 3行',
     cellCount: 6,
   },
   {
     id: 'grid-3x2',
-    label: '6刁E���E�EÁE�E�E,
-    description: '3刁EÁE2衁E,
+    label: '6分割（3×2）',
+    description: '3列 × 2行',
     cellCount: 6,
   },
   {
     id: 'grid-2x2',
-    label: '4刁E���E�EÁE�E�E,
-    description: '2刁EÁE2衁E,
+    label: '4分割（2×2）',
+    description: '2列 × 2行',
     cellCount: 4,
   },
   {
     id: 'columns-3',
-    label: '3刁E���E�左右�E�E,
-    description: '3刁EÁE1衁E,
+    label: '3分割（左右）',
+    description: '3列 × 1行',
     cellCount: 3,
   },
   {
     id: 'rows-3',
-    label: '3刁E���E�上下！E,
-    description: '1刁EÁE3衁E,
+    label: '3分割（上下）',
+    description: '1列 × 3行',
     cellCount: 3,
   },
   {
     id: 'columns-2',
-    label: '2刁E���E�左右�E�E,
-    description: '2刁EÁE1衁E,
+    label: '2分割（左右）',
+    description: '2列 × 1行',
     cellCount: 2,
   },
   {
     id: 'rows-2',
-    label: '2刁E���E�上下！E,
-    description: '1刁EÁE2衁E,
+    label: '2分割（上下）',
+    description: '1列 × 2行',
     cellCount: 2,
   },
   {
     id: 'single',
-    label: '1刁E���E��E面�E�E,
-    description: '1刁EÁE1行！E500ÁE686�E�E,
+    label: '1分割（全面）',
+    description: '1列 × 1行（2500×1686）',
     cellCount: 1,
   },
 ];
@@ -153,7 +153,8 @@ export function getRichMenuLayoutAreas(layoutId: RichMenuLayoutId): RichMenuBoun
       return buildUniformGridBounds(3, 2);
     case 'split-2-1-3':
       return [
-        // ① 上段左�E�特大枠 2:1�E�E        { x: 0, y: 0, width: 1667, height: halfH },
+        // ① 上段左（特大枠 2:1）
+        { x: 0, y: 0, width: 1667, height: halfH },
         // ② 上段右
         { x: 1667, y: 0, width: 833, height: halfH },
         // ③ 下段左
@@ -165,8 +166,10 @@ export function getRichMenuLayoutAreas(layoutId: RichMenuLayoutId): RichMenuBoun
       ];
     case 'split-2-3':
       return [
-        // ① 上段左�E�均筁E1:1�E�E        { x: 0, y: 0, width: 1250, height: halfH },
-        // ② 上段右�E�均筁E1:1�E�E        { x: 1250, y: 0, width: 1250, height: halfH },
+        // ① 上段左（均等 1:1）
+        { x: 0, y: 0, width: 1250, height: halfH },
+        // ② 上段右（均等 1:1）
+        { x: 1250, y: 0, width: 1250, height: halfH },
         // ③ 下段左
         { x: 0, y: halfH, width: thirdW1, height: bottomH },
         // ④ 下段中央
@@ -199,34 +202,34 @@ export function createMstRecommendedRichMenuPreset(bookingUrl?: string): {
 } {
   const safeBookingUrl = (bookingUrl || '').trim() || DEFAULT_MST_BOOKING_URL;
   return {
-    title: 'MST公式リチE��メニュー',
+    title: 'MST公式リッチメニュー',
     chatBarText: 'メニュー',
     layout: 'split-2-1-3',
     actions: [
       {
         type: 'uri',
-        label: '3刁E��料経営診断',
+        label: '3分無料経営診断',
         value: DEFAULT_MST_DIAGNOSIS_URL,
       },
       {
         type: 'uri',
-        label: '30刁E��料面諁E��紁E,
+        label: '30分無料面談予約',
         value: safeBookingUrl,
       },
       {
         type: 'uri',
-        label: '介護保険外開業専用ペ�Eジ',
+        label: '介護保険外開業専用ページ',
         value: DEFAULT_MST_CARE_LP_URL,
       },
       {
         type: 'uri',
-        label: '公式メチE��ア',
+        label: '公式メディア',
         value: DEFAULT_MST_HP_URL,
       },
       {
         type: 'message',
-        label: 'LINE相諁E,
-        value: '【LINEで相諁E��たい、E,
+        label: 'LINE相談',
+        value: '【LINEで相談したい】',
       },
     ],
   };
