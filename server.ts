@@ -8608,177 +8608,184 @@ app.post(
     // Webフォーム完了画面では入力メールアドレス宛ての受付・資料・診断結果メール送信を案内しているため、メール入力時はLINE連携済みでも自動送信を省略しない
     const shouldSendEmailReply = Boolean(recipientEmail);
     let lineAutoReplyOk = false;
-
-    if (shouldSendLineReply) {
-      try {
-        const lineText = lineNotificationText || customNotificationText;
-        const lineMsg = {
-          type: 'text',
-          text: lineText,
-        };
-        const lineResponse = await fetch('https://api.line.me/v2/bot/message/push', {
-          method: 'POST',
-          headers: { Authorization: `Bearer ${lineChannelAccessToken}`, 'Content-Type': 'application/json' },
-          body: JSON.stringify({ to: contact.line_user_id, messages: [lineMsg] }),
-        });
-        const lineOk = lineResponse.ok;
-        lineAutoReplyOk = lineOk;
-        let lineErrorMessage: string | null = null;
-        if (!lineOk) {
-          const lineErrPayload = await lineResponse.json().catch(() => ({})) as { message?: string };
-          lineErrorMessage = lineErrPayload.message || `LINE送信エラー (HTTP ${lineResponse.status})`;
-          console.error('[PublicForm] LINE auto confirmation push failed:', lineErrorMessage);
-        }
-        if (lineSupabase) {
-          if (sysOwnerId) {
-            await lineSupabase.from('line_inbox_messages').insert({
-              owner_id: sysOwnerId,
-              line_event_id: `sub-${submission.id}`,
-              direction: 'outbound',
-              contact_id: contact.id,
-              line_user_id: contact.line_user_id,
-              message_type: 'text',
-              body: lineMsg.text,
-              status: lineOk ? 'sent' : 'failed',
-              received_at: new Date().toISOString(),
-            });
-          }
-          const outboxPayload: any = {
-            channel: 'line',
-            recipient_contact_id: contact.id,
-            recipient_address: contact.line_user_id,
-            subject: isConsultationInquiry
-              ? '【LINE自動返信】Web相談・お問い合わせ受付完了'
-              : '【LINE自動返信】' + (form.name || '資料・受付案内'),
-            body_text: lineMsg.text,
-            status: lineOk ? 'sent' : 'failed',
-            sent_at: lineOk ? new Date().toISOString() : null,
-            ...(lineErrorMessage ? { error_message: lineErrorMessage } : {}),
-            consent_confirmed_at: new Date().toISOString(),
-            consent_basis: isConsultationInquiry
-              ? 'Web相談・お問い合わせ受付（トランザクショナル配信）'
-              : '資料請求・フォーム受付（トランザクショナル配信）',
-            source_type: outboxSourceType,
-            source_id: submission.id,
-            company_id: resolvedCompanyId,
-          };
-          if (sysOwnerId) outboxPayload.owner_id = sysOwnerId;
-          const { error: outboxErr } = await lineSupabase.from('communication_outbox').insert(outboxPayload);
-          if (outboxErr) {
-            console.error('[PublicForm] Failed to insert LINE communication_outbox:', outboxErr);
-          }
-        }
-      } catch (linePushErr) {
-        console.warn('LINE auto confirmation push warning:', linePushErr);
-      }
-    }
-
-    let emailStatus: 'sent' | 'queued' | 'failed' = 'queued';
+    let emailStatus = 'queued' as 'sent' | 'queued' | 'failed';
     let emailErrorMessage: string | null = null;
-    if (shouldSendEmailReply) {
-      try {
-        const emailKey = process.env.RESEND_API_KEY || '';
-        const resolvedSender = await resolveEmailSender(sysOwnerId);
-        const emailFrom = (process.env.RESEND_FROM_EMAIL || resolvedSender.fromString || '').trim();
-        const senderAddr = (emailFrom.match(/<([^<>]+)>/)?.[1] || resolvedSender.senderEmail || emailFrom).trim();
-        const subject = replyEmailSubject;
-        // 署名は送信直前に共通処理で付ける（他のメールと同じ形式。受付完了は取引メールなので配信停止リンクなし）
-        const fallbackConsultationReply = !isActualDiagnosis
-          ? buildConsultationInstantReply({
-              name,
-              companyName,
-              inquiryType,
-              consultationText,
-              preferredDateText,
-              bookingUrl: bookingReady ? bookingUrl : null,
-            }).bodyText
-          : '';
-        const rawBodyText = customNotificationText || fallbackConsultationReply;
 
-        const emailPayload = prepareEmailPayloadContent(rawBodyText, {
-          senderEmail: senderAddr,
-          logoUrl: process.env.EMAIL_SIGNATURE_LOGO_URL,
-        });
-        const bodyText = emailPayload.text;
-
-        let sentAt: string | null = null;
-        let providerMessageId: string | null = null;
-
-        if (emailKey && emailFrom) {
-          try {
-            const emailResponse = await fetch('https://api.resend.com/emails', {
-              method: 'POST',
-              headers: { Authorization: `Bearer ${emailKey}`, 'Content-Type': 'application/json' },
-              body: JSON.stringify({
-                from: emailFrom,
-                to: [recipientEmail],
-                ...(resolvedSender.replyToEmail ? { reply_to: resolvedSender.replyToEmail } : {}),
-                subject,
-                text: emailPayload.text,
-                html: emailPayload.html,
-              }),
-            });
-            const payload = await emailResponse.json().catch(() => ({})) as { id?: string; message?: string };
-            if (emailResponse.ok && payload.id) {
-              emailStatus = 'sent';
-              sentAt = new Date().toISOString();
-              providerMessageId = payload.id;
-            } else {
-              emailStatus = 'failed';
-              emailErrorMessage = payload.message || `メール送信エラー (HTTP ${emailResponse.status})`;
-              console.error('[PublicForm] Email auto confirmation failed:', emailErrorMessage);
-            }
-          } catch (fetchErr: any) {
-            emailStatus = 'failed';
-            emailErrorMessage = fetchErr?.message || 'メール送信ネットワークエラー';
-            console.error('[PublicForm] Email auto confirmation network error:', fetchErr);
-          }
-        } else {
-          emailStatus = 'queued';
-          emailErrorMessage = !emailKey ? 'RESEND_API_KEY未設定' : 'RESEND_FROM_EMAIL未設定';
-        }
-
-        if (lineSupabase) {
-          const outboxPayload: any = {
-            channel: 'email',
-            recipient_contact_id: contact.id,
-            recipient_address: recipientEmail,
-            subject,
-            body_text: bodyText,
-            status: emailStatus,
-            sent_at: sentAt,
-            ...(providerMessageId ? { provider_message_id: providerMessageId } : {}),
-            ...(emailErrorMessage ? { error_message: emailErrorMessage } : {}),
-            consent_confirmed_at: new Date().toISOString(),
-            consent_basis: isConsultationInquiry
-              ? 'Web相談・お問い合わせ受付（トランザクショナル配信）'
-              : '資料請求・フォーム受付（トランザクショナル配信）',
-            source_type: outboxSourceType,
-            source_id: submission.id,
-            company_id: resolvedCompanyId,
+    // 【高速化】LINE自動返信とメール自動返信を並列実行して直列待ち時間を大幅短縮
+    await Promise.all([
+      (async () => {
+        if (!shouldSendLineReply) return;
+        try {
+          const lineText = lineNotificationText || customNotificationText;
+          const lineMsg = {
+            type: 'text',
+            text: lineText,
           };
-          if (sysOwnerId) outboxPayload.owner_id = sysOwnerId;
-          const { error: outboxErr } = await lineSupabase.from('communication_outbox').insert(outboxPayload);
-          if (outboxErr) {
-            console.error('[PublicForm] Failed to insert Email communication_outbox:', outboxErr);
+          const lineResponse = await fetch('https://api.line.me/v2/bot/message/push', {
+            method: 'POST',
+            headers: { Authorization: `Bearer ${lineChannelAccessToken}`, 'Content-Type': 'application/json' },
+            body: JSON.stringify({ to: contact.line_user_id, messages: [lineMsg] }),
+          });
+          const lineOk = lineResponse.ok;
+          lineAutoReplyOk = lineOk;
+          let lineErrorMessage: string | null = null;
+          if (!lineOk) {
+            const lineErrPayload = await lineResponse.json().catch(() => ({})) as { message?: string };
+            lineErrorMessage = lineErrPayload.message || `LINE送信エラー (HTTP ${lineResponse.status})`;
+            console.error('[PublicForm] LINE auto confirmation push failed:', lineErrorMessage);
           }
+          if (lineSupabase) {
+            if (sysOwnerId) {
+              await lineSupabase.from('line_inbox_messages').insert({
+                owner_id: sysOwnerId,
+                line_event_id: `sub-${submission.id}`,
+                direction: 'outbound',
+                contact_id: contact.id,
+                line_user_id: contact.line_user_id,
+                message_type: 'text',
+                body: lineMsg.text,
+                status: lineOk ? 'sent' : 'failed',
+                received_at: new Date().toISOString(),
+              });
+            }
+            const outboxPayload: any = {
+              channel: 'line',
+              recipient_contact_id: contact.id,
+              recipient_address: contact.line_user_id,
+              subject: isConsultationInquiry
+                ? '【LINE自動返信】Web相談・お問い合わせ受付完了'
+                : '【LINE自動返信】' + (form.name || '資料・受付案内'),
+              body_text: lineMsg.text,
+              status: lineOk ? 'sent' : 'failed',
+              sent_at: lineOk ? new Date().toISOString() : null,
+              ...(lineErrorMessage ? { error_message: lineErrorMessage } : {}),
+              consent_confirmed_at: new Date().toISOString(),
+              consent_basis: isConsultationInquiry
+                ? 'Web相談・お問い合わせ受付（トランザクショナル配信）'
+                : '資料請求・フォーム受付（トランザクショナル配信）',
+              source_type: outboxSourceType,
+              source_id: submission.id,
+              company_id: resolvedCompanyId,
+            };
+            if (sysOwnerId) outboxPayload.owner_id = sysOwnerId;
+            const { error: outboxErr } = await lineSupabase.from('communication_outbox').insert(outboxPayload);
+            if (outboxErr) {
+              console.error('[PublicForm] Failed to insert LINE communication_outbox:', outboxErr);
+            }
+          }
+        } catch (linePushErr) {
+          console.warn('LINE auto confirmation push warning:', linePushErr);
         }
-      } catch (emailErr: any) {
-        emailStatus = 'failed';
-        emailErrorMessage = emailErr?.message || 'メール自動返信例外';
-        console.warn('Email auto confirmation warning:', emailErr);
-      }
-    }
+      })(),
+      (async () => {
+        if (!shouldSendEmailReply) return;
+        try {
+          const emailKey = process.env.RESEND_API_KEY || '';
+          const resolvedSender = await resolveEmailSender(sysOwnerId);
+          const emailFrom = (process.env.RESEND_FROM_EMAIL || resolvedSender.fromString || '').trim();
+          const senderAddr = (emailFrom.match(/<([^<>]+)>/)?.[1] || resolvedSender.senderEmail || emailFrom).trim();
+          const subject = replyEmailSubject;
+          // 署名は送信直前に共通処理で付ける（他のメールと同じ形式。受付完了は取引メールなので配信停止リンクなし）
+          const fallbackConsultationReply = !isActualDiagnosis
+            ? buildConsultationInstantReply({
+                name,
+                companyName,
+                inquiryType,
+                consultationText,
+                preferredDateText,
+                bookingUrl: bookingReady ? bookingUrl : null,
+              }).bodyText
+            : '';
+          const rawBodyText = customNotificationText || fallbackConsultationReply;
 
-    // 管理者向けタスク起票（レポート承認通知 / 資料URL未設定警告 / Web相談メール返信タスク）
+          const emailPayload = prepareEmailPayloadContent(rawBodyText, {
+            senderEmail: senderAddr,
+            logoUrl: process.env.EMAIL_SIGNATURE_LOGO_URL,
+          });
+          const bodyText = emailPayload.text;
+
+          let sentAt: string | null = null;
+          let providerMessageId: string | null = null;
+
+          if (emailKey && emailFrom) {
+            try {
+              const emailResponse = await fetch('https://api.resend.com/emails', {
+                method: 'POST',
+                headers: { Authorization: `Bearer ${emailKey}`, 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                  from: emailFrom,
+                  to: [recipientEmail],
+                  ...(resolvedSender.replyToEmail ? { reply_to: resolvedSender.replyToEmail } : {}),
+                  subject,
+                  text: emailPayload.text,
+                  html: emailPayload.html,
+                }),
+              });
+              const payload = await emailResponse.json().catch(() => ({})) as { id?: string; message?: string };
+              if (emailResponse.ok && payload.id) {
+                emailStatus = 'sent';
+                sentAt = new Date().toISOString();
+                providerMessageId = payload.id;
+              } else {
+                emailStatus = 'failed';
+                emailErrorMessage = payload.message || `メール送信エラー (HTTP ${emailResponse.status})`;
+                console.error('[PublicForm] Email auto confirmation failed:', emailErrorMessage);
+              }
+            } catch (fetchErr: any) {
+              emailStatus = 'failed';
+              emailErrorMessage = fetchErr?.message || 'メール送信ネットワークエラー';
+              console.error('[PublicForm] Email auto confirmation network error:', fetchErr);
+            }
+          } else {
+            emailStatus = 'queued';
+            emailErrorMessage = !emailKey ? 'RESEND_API_KEY未設定' : 'RESEND_FROM_EMAIL未設定';
+          }
+
+          if (lineSupabase) {
+            const outboxPayload: any = {
+              channel: 'email',
+              recipient_contact_id: contact.id,
+              recipient_address: recipientEmail,
+              subject,
+              body_text: bodyText,
+              status: emailStatus,
+              sent_at: sentAt,
+              ...(providerMessageId ? { provider_message_id: providerMessageId } : {}),
+              ...(emailErrorMessage ? { error_message: emailErrorMessage } : {}),
+              consent_confirmed_at: new Date().toISOString(),
+              consent_basis: isConsultationInquiry
+                ? 'Web相談・お問い合わせ受付（トランザクショナル配信）'
+                : '資料請求・フォーム受付（トランザクショナル配信）',
+              source_type: outboxSourceType,
+              source_id: submission.id,
+              company_id: resolvedCompanyId,
+            };
+            if (sysOwnerId) outboxPayload.owner_id = sysOwnerId;
+            const { error: outboxErr } = await lineSupabase.from('communication_outbox').insert(outboxPayload);
+            if (outboxErr) {
+              console.error('[PublicForm] Failed to insert Email communication_outbox:', outboxErr);
+            }
+          }
+        } catch (emailErr: any) {
+          emailStatus = 'failed';
+          emailErrorMessage = emailErr?.message || 'メール自動返信例外';
+          console.warn('Email auto confirmation warning:', emailErr);
+        }
+      })(),
+    ]);
+
+    // 【高速化】管理者向けタスク起票 ＆ 管理者向けバックアップ通知メールを並列実行
     let resolvedFormOwnerId: string | null = sysOwnerId || null;
-    if (lineSupabase) {
-      try {
-        const formTaskOwnerId = sysOwnerId || await resolveSystemOwnerId((form as any)?.owner_id);
-        resolvedFormOwnerId = formTaskOwnerId || null;
-        if (!formTaskOwnerId) {
-          console.error('[PublicForm] タスク起票スキップ: owner_id が解決できませんでした (form:', form?.name, slug, ')');
-        } else {
+    await Promise.all([
+      (async () => {
+        if (!lineSupabase) return;
+        try {
+          const formTaskOwnerId = sysOwnerId || await resolveSystemOwnerId((form as any)?.owner_id);
+          resolvedFormOwnerId = formTaskOwnerId || null;
+          if (!formTaskOwnerId) {
+            console.error('[PublicForm] タスク起票スキップ: owner_id が解決できませんでした (form:', form?.name, slug, ')');
+            return;
+          }
           if (isMaterialDownload && !materialReady) {
             const { error: warningTaskErr } = await lineSupabase.from('tasks').insert({
               owner_id: formTaskOwnerId,
@@ -8828,70 +8835,69 @@ app.post(
           if (responseTaskErr) {
             console.error('[PublicForm] フォーム回答対応タスク起票エラー:', responseTaskErr.message, responseTaskErr.code);
           }
+        } catch (taskErr) {
+          console.warn('Task auto-creation warning:', taskErr);
         }
-      } catch (taskErr) {
-        console.warn('Task auto-creation warning:', taskErr);
-      }
-    }
-
-    // すべての公開フォーム（診断・お問い合わせ・資料請求・開業パッケージ等）送信を個人のメール宛てにもバックアップ送信
-    // （owner_id未解決時でも DEFAULT_LINE_ALERT_EMAIL へフォールバックして必ず控えを届ける）
-    if (process.env.RESEND_API_KEY) {
-      try {
-        const resolvedSender = await resolveEmailSender(resolvedFormOwnerId);
-        const adminFrom = (process.env.RESEND_FROM_EMAIL || resolvedSender.fromString || '').trim();
-        const adminSenderAddr = (adminFrom.match(/<([^<>]+)>/)?.[1] || resolvedSender.senderEmail || adminFrom).trim().toLowerCase();
-        const backupRecipients = await resolvePublicFormBackupRecipients(resolvedFormOwnerId, [adminSenderAddr]);
-        if (backupRecipients.length > 0 && adminFrom) {
-          const appUrl = (process.env.PUBLIC_APP_URL || '').trim().replace(/\/$/, '');
-          const questionLabels: Record<string, string> = {};
-          for (const q of configuredQuestions as any[]) {
-            if (q?.id && q?.label) questionLabels[String(q.id)] = String(q.label);
+      })(),
+      (async () => {
+        if (!process.env.RESEND_API_KEY) return;
+        try {
+          const formOwnerId = sysOwnerId || await resolveSystemOwnerId((form as any)?.owner_id);
+          const resolvedSender = await resolveEmailSender(formOwnerId);
+          const adminFrom = (process.env.RESEND_FROM_EMAIL || resolvedSender.fromString || '').trim();
+          const adminSenderAddr = (adminFrom.match(/<([^<>]+)>/)?.[1] || resolvedSender.senderEmail || adminFrom).trim().toLowerCase();
+          const backupRecipients = await resolvePublicFormBackupRecipients(formOwnerId, [adminSenderAddr]);
+          if (backupRecipients.length > 0 && adminFrom) {
+            const appUrl = (process.env.PUBLIC_APP_URL || '').trim().replace(/\/$/, '');
+            const questionLabels: Record<string, string> = {};
+            for (const q of configuredQuestions as any[]) {
+              if (q?.id && q?.label) questionLabels[String(q.id)] = String(q.label);
+            }
+            const adminBackup = buildPublicFormAdminBackupEmail({
+              notificationKind,
+              formName: form.name,
+              slug,
+              name,
+              companyName,
+              email: recipientEmail,
+              phone,
+              inquiryType,
+              consultationText,
+              preferredDateText,
+              answers: cleanAnswers,
+              questionLabels,
+              quickBottleneck,
+              requestedMaterials: resolvedMaterials,
+              hearAbout: hearAboutAnswer || null,
+              utmDetails: utmDetails || null,
+              lineAutoReplySent: lineAutoReplyOk,
+              emailAutoReplySent: shouldSendEmailReply,
+              emailAutoReplyStatus: emailStatus,
+              emailAutoReplyError: emailErrorMessage,
+              appUrl: appUrl || null,
+            });
+            const adminRes = await fetch('https://api.resend.com/emails', {
+              method: 'POST',
+              headers: { Authorization: `Bearer ${process.env.RESEND_API_KEY}`, 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                from: adminFrom,
+                to: backupRecipients,
+                headers: { 'X-MST-Backup-Copy': '1' },
+                ...(recipientEmail ? { reply_to: recipientEmail } : {}),
+                subject: adminBackup.subject,
+                text: adminBackup.text,
+              }),
+            });
+            if (!adminRes.ok) {
+              const errBody = await adminRes.text().catch(() => '');
+              console.warn('[PublicForm] Form backup alert email warning:', adminRes.status, errBody);
+            }
           }
-          const adminBackup = buildPublicFormAdminBackupEmail({
-            notificationKind,
-            formName: form.name,
-            slug,
-            name,
-            companyName,
-            email: recipientEmail,
-            phone,
-            inquiryType,
-            consultationText,
-            preferredDateText,
-            answers: cleanAnswers,
-            questionLabels,
-            quickBottleneck,
-            requestedMaterials: resolvedMaterials,
-            hearAbout: hearAboutAnswer || null,
-            utmDetails: utmDetails || null,
-            lineAutoReplySent: lineAutoReplyOk,
-            emailAutoReplySent: shouldSendEmailReply,
-            emailAutoReplyStatus: emailStatus,
-            emailAutoReplyError: emailErrorMessage,
-            appUrl: appUrl || null,
-          });
-          const adminRes = await fetch('https://api.resend.com/emails', {
-            method: 'POST',
-            headers: { Authorization: `Bearer ${process.env.RESEND_API_KEY}`, 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              from: adminFrom,
-              to: backupRecipients,
-              headers: { 'X-MST-Backup-Copy': '1' },
-              ...(recipientEmail ? { reply_to: recipientEmail } : {}),
-              subject: adminBackup.subject,
-              text: adminBackup.text,
-            }),
-          });
-          if (!adminRes.ok) {
-            const errBody = await adminRes.text().catch(() => '');
-            console.warn('[PublicForm] Form backup alert email warning:', adminRes.status, errBody);
-          }
+        } catch (adminMailErr: any) {
+          console.warn('[PublicForm] Form backup alert exception:', adminMailErr?.message || adminMailErr);
         }
-      } catch (adminMailErr: any) {
-        console.warn('[PublicForm] Form backup alert exception:', adminMailErr?.message || adminMailErr);
-      }
-    }
+      })(),
+    ]);
 
     return res.status(201).json({
       success: true,
