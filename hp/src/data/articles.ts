@@ -124,14 +124,24 @@ export async function getLiveArticles(): Promise<Article[]> {
         relatedService: p.relatedServiceName
           ? {
               name: p.relatedServiceName,
-              href: p.relatedServiceHref || '/services',
+              href: normalizeInternalHref(p.relatedServiceHref || '/services/'),
             }
           : {
               name: '経営戦略・利益改善顧問',
-              href: '/services/strategy',
+              href: '/services/strategy/',
             },
       };
     });
 
   return remoteArticles;
+}
+
+function normalizeInternalHref(href: string): string {
+  if (!href.startsWith('/')) return href;
+  const [pathAndQuery, hash = ''] = href.split('#');
+  const [pathname, query = ''] = pathAndQuery.split('?');
+  if (!pathname || pathname === '/' || pathname.endsWith('/') || /\.[a-z0-9]+$/i.test(pathname)) {
+    return href;
+  }
+  return `${pathname}/${query ? `?${query}` : ''}${hash ? `#${hash}` : ''}`;
 }

@@ -580,7 +580,7 @@ export default function DiagnosisForm() {
           </div>
 
           <div className="text-xs text-gray-500 leading-relaxed bg-sand-50/70 p-3.5 rounded-xl border border-sand-200">
-            診断結果の送付および関連する情報提供にのみ利用いたします。電話によるしつこい営業は一切行いません。詳細は当社の<a href="/privacy" target="_blank" className="text-brand-700 underline font-semibold">プライバシーポリシー</a>をご確認ください。
+            診断結果の送付および関連する情報提供にのみ利用いたします。電話によるしつこい営業は一切行いません。詳細は当社の<a href="/privacy/" target="_blank" className="text-brand-700 underline font-semibold">プライバシーポリシー</a>をご確認ください。
           </div>
 
           <div className="flex justify-between items-center pt-2">

@@ -46,7 +46,17 @@ export async function getLiveProducts(): Promise<Product[]> {
         statusType,
         desc: p.desc || '',
         price: p.price || '',
-        href: p.href || undefined,
+        href: p.href ? normalizeInternalHref(p.href) : undefined,
       };
     });
+}
+
+function normalizeInternalHref(href: string): string {
+  if (!href.startsWith('/')) return href;
+  const [pathAndQuery, hash = ''] = href.split('#');
+  const [pathname, query = ''] = pathAndQuery.split('?');
+  if (!pathname || pathname === '/' || pathname.endsWith('/') || /\.[a-z0-9]+$/i.test(pathname)) {
+    return href;
+  }
+  return `${pathname}/${query ? `?${query}` : ''}${hash ? `#${hash}` : ''}`;
 }

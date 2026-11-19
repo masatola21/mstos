@@ -7,11 +7,11 @@ const { currentPath = '/' } = Astro.props;
 
 const navLinks = [
   { name: 'ホーム', href: '/' },
-  { name: 'サービス一覧', href: '/services' },
-  { name: 'お役立ちメディア', href: '/media' },
-  { name: '商品・ツール', href: '/products' },
-  { name: '資料請求', href: '/materials' },
-  { name: '会社概要', href: '/company' },
+  { name: 'サービス一覧', href: '/services/' },
+  { name: 'お役立ちメディア', href: '/media/' },
+  { name: '商品・ツール', href: '/products/' },
+  { name: '資料請求', href: '/materials/' },
+  { name: '会社概要', href: '/company/' },
 ];
 ---
 
@@ -53,7 +53,7 @@ const navLinks = [
       <!-- デスクトップ CTAボタン群（3分診断を最優先配置） -->
       <div class="hidden sm:flex items-center gap-2.5">
         <a
-          href="/diagnosis"
+          href="/diagnosis/"
           class="inline-flex items-center gap-1.5 px-3.5 py-2 text-xs font-bold text-amber-950 bg-amber-400 hover:bg-amber-300 rounded-lg shadow-sm transition-all duration-200 hover:shadow-md hover:scale-[1.02]"
         >
           <span>📊</span>
@@ -86,7 +86,7 @@ const navLinks = [
         </a>
 
         <a
-          href="/contact"
+          href="/contact/"
           class="inline-flex items-center justify-center px-3.5 py-2 text-xs font-bold text-white bg-brand-900 rounded-lg hover:bg-brand-800 transition-colors shadow-sm"
         >
           お問い合わせ
@@ -96,7 +96,7 @@ const navLinks = [
       <!-- モバイル ヘッダー右端（診断ボタン ＋ ハンバーガー） -->
       <div class="flex items-center gap-2 lg:hidden">
         <a
-          href="/diagnosis"
+          href="/diagnosis/"
           class="inline-flex items-center gap-1 px-3 py-1.5 text-xs font-bold text-amber-950 bg-amber-400 rounded-lg shadow-sm"
         >
           <span>📊</span>
@@ -155,7 +155,7 @@ const navLinks = [
       <!-- 診断ハイライトバナー（ドロワー内最上部） -->
       <div class="p-4 pb-2">
         <a
-          href="/diagnosis"
+          href="/diagnosis/"
           class="block p-4 rounded-2xl bg-gradient-to-br from-amber-400 via-amber-300 to-amber-500 text-slate-950 shadow-md hover:shadow-lg transition group border border-amber-300"
         >
           <div class="flex items-center gap-1.5 text-[10px] font-black uppercase tracking-wider text-amber-900">
@@ -222,7 +222,7 @@ const navLinks = [
       </a>
 
       <a
-        href="/contact"
+        href="/contact/"
         class="w-full py-3 px-4 bg-brand-900 hover:bg-brand-800 text-white font-bold text-xs rounded-xl text-center block transition shadow-sm"
       >
         お問い合わせ・ご相談窓口

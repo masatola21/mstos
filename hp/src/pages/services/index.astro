@@ -11,7 +11,7 @@ const coreServices = [
     icon: `<svg xmlns="http://www.w3.org/2000/svg" class="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.5"><path stroke-linecap="round" stroke-linejoin="round" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"/></svg>`,
     desc: '経営者の右腕として、経営課題の整理から現場の業務改善まで、会社全体を見渡して伴走します。利益構造の改善・戦略立案はもちろん、業務フローの属人化解消や効率化も含めて一緒に取り組みます。',
     target: '売上はあるが利益が残らない企業、業務の非効率や属人化に悩みながら経営全体の相談相手が欲しい経営者',
-    href: '/services/strategy',
+    href: '/services/strategy/',
   },
   {
     id: 'it-dx',
@@ -21,7 +21,7 @@ const coreServices = [
     icon: `<svg xmlns="http://www.w3.org/2000/svg" class="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.5"><path stroke-linecap="round" stroke-linejoin="round" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"/><path stroke-linecap="round" stroke-linejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/></svg>`,
     desc: '業務プロセスの分析、改善計画の策定、業務効率化、身の丈に合ったIT・DX・生成AI活用の設計と継続支援を行います。IT・DX・AIの活用に特化した専門顧問として、ツール選定・要件整理・定着支援を中心に扱います。',
     target: 'ITツールやAIを具体的に業務へ組み込みたい企業、DX推進の専門的な伴走が欲しい企業',
-    href: '/services/it-dx',
+    href: '/services/it-dx/',
   },
 ];
 
@@ -34,7 +34,7 @@ const implementationServices = [
     badge: '主要サービス（実装）',
     icon: `<svg xmlns="http://www.w3.org/2000/svg" class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.5"><path stroke-linecap="round" stroke-linejoin="round" d="M8 9l3 3-3 3m5 0h3M5 20h14a2 2 0 002-2V6a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"/></svg>`,
     desc: '社内の手作業をなくす業務自動化（GAS/API）はもちろん、ITが苦手な現場スタッフでもスマホで迷わず操作できる「現場直結の専用アプリ」をスピード構築。現場のデータが本社管理へリアルタイムに連動する仕組みを整えます。',
-    href: '/services/system',
+    href: '/services/system/',
   },
   {
     id: 'marketing',
@@ -43,7 +43,7 @@ const implementationServices = [
     badge: '主要サービス（実装）',
     icon: `<svg xmlns="http://www.w3.org/2000/svg" class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.5"><path stroke-linecap="round" stroke-linejoin="round" d="M11 3.055A9.001 9.001 0 1020.945 13H11V3.055z"/><path stroke-linecap="round" stroke-linejoin="round" d="M20.488 9H15V3.512A9.025 9.025 0 0120.488 9z"/></svg>`,
     desc: 'ターゲット、商品、販売戦略に合わせて、認知から問い合わせ・商談・成約までの導線を設計・構築。紹介頼みを脱却し、見込み客が継続して集まる基盤を整えます。',
-    href: '/services/marketing',
+    href: '/services/marketing/',
   },
 ];
 ---
@@ -159,7 +159,7 @@ const implementationServices = [
                 <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M14 5l7 7m0 0l-7 7m7-7H3"/></svg>
               </a>
               <a
-                href={`/contact?service=${s.id}`}
+                href={`/contact/?service=${s.id}`}
                 class="text-xs font-bold text-brand-900 bg-white px-3.5 py-1.5 rounded-lg border border-sand-300 hover:bg-brand-50 transition"
               >
                 相談する
@@ -218,7 +218,7 @@ const implementationServices = [
                 <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M14 5l7 7m0 0l-7 7m7-7H3"/></svg>
               </a>
               <a
-                href={`/contact?service=${s.id}`}
+                href={`/contact/?service=${s.id}`}
                 class="text-xs font-bold text-slate-700 hover:text-brand-900 underline"
               >
                 構築を相談する →
@@ -253,14 +253,14 @@ const implementationServices = [
           </div>
           <div class="pt-6 border-t border-sand-200 mt-6 flex items-center justify-between">
             <a
-              href="/services/new-business"
+              href="/services/new-business/"
               class="inline-flex items-center gap-1.5 text-xs font-bold text-brand-700 hover:text-brand-900"
             >
               <span>サービス詳細を見る</span>
               <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M14 5l7 7m0 0l-7 7m7-7H3"/></svg>
             </a>
             <a
-              href="/contact?service=new-business"
+              href="/contact/?service=new-business"
               class="text-xs font-bold text-slate-700 hover:text-brand-900 underline"
             >
               相談する →
@@ -298,7 +298,7 @@ const implementationServices = [
               <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"/></svg>
             </a>
             <a
-              href="/services/care-package"
+              href="/services/care-package/"
               class="py-3 px-4 bg-white/10 hover:bg-white/20 text-white text-xs font-semibold rounded-xl text-center transition border border-white/20"
             >
               サイト内概要
@@ -512,13 +512,13 @@ const implementationServices = [
       </p>
       <div class="pt-4 flex flex-col sm:flex-row justify-center gap-4">
         <a
-          href="/contact"
+          href="/contact/"
           class="px-8 py-3.5 bg-brand-900 hover:bg-brand-800 text-white font-bold rounded-xl text-sm transition shadow"
         >
           共通相談フォームから問い合わせる
         </a>
         <a
-          href="/diagnosis"
+          href="/diagnosis/"
           class="px-8 py-3.5 bg-amber-400 hover:bg-amber-300 text-slate-950 font-black rounded-xl text-sm shadow transition hover:scale-105 flex items-center justify-center gap-2"
         >
           <span>📊 3分ボトルネック無料診断を受ける →</span>

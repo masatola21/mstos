@@ -93,7 +93,7 @@ const articles = await getLiveArticles();
                 </div>
 
                 <h2 class="text-lg font-bold font-serif text-slate-900 group-hover:text-brand-600 transition-colors leading-snug">
-                  <a href={`/media/${article.slug}`}>
+                  <a href={`/media/${article.slug}/`}>
                     {article.title}
                   </a>
                 </h2>
@@ -108,7 +108,7 @@ const articles = await getLiveArticles();
                   関連: <strong class="text-slate-800">{article.relatedService.name}</strong>
                 </span>
                 <a
-                  href={`/media/${article.slug}`}
+                  href={`/media/${article.slug}/`}
                   class="inline-flex items-center gap-1 text-xs font-bold text-brand-700 group-hover:translate-x-1 transition-transform"
                 >
                   <span>記事を読む</span>
@@ -140,13 +140,13 @@ const articles = await getLiveArticles();
         </div>
         <div class="flex flex-col sm:flex-row gap-4 shrink-0">
           <a
-            href="/diagnosis"
+            href="/diagnosis/"
             class="px-6 py-3.5 bg-brand-900 hover:bg-brand-800 text-white font-bold rounded-xl text-xs sm:text-sm shadow transition text-center"
           >
             無料ボトルネック診断
           </a>
           <a
-            href="/materials"
+            href="/materials/"
             class="px-6 py-3.5 bg-white hover:bg-sand-50 text-slate-900 font-bold rounded-xl text-xs sm:text-sm border border-sand-300 transition text-center"
           >
             経営改善資料請求

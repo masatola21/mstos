@@ -301,7 +301,7 @@ export default function ContactForm() {
 
       {/* 個人情報取り扱い */}
       <div className="text-xs text-gray-500 leading-relaxed bg-sand-50/70 p-3.5 rounded-xl border border-sand-200">
-        ご入力いただいた情報は、お問い合わせ対応および面談日程のご案内のためにのみ利用いたします。詳細は当社の<a href="/privacy" target="_blank" className="text-brand-700 underline font-semibold">プライバシーポリシー</a>をご確認ください。
+        ご入力いただいた情報は、お問い合わせ対応および面談日程のご案内のためにのみ利用いたします。詳細は当社の<a href="/privacy/" target="_blank" className="text-brand-700 underline font-semibold">プライバシーポリシー</a>をご確認ください。
       </div>
 
       {/* 送信ボタン */}

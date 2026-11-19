@@ -97,7 +97,7 @@ const { article } = Astro.props;
             </div>
             <div class="pt-4">
               <a
-                href={`/diagnosis?source=media_${article.slug}`}
+                href={`/diagnosis/?source=media_${article.slug}`}
                 class="block w-full py-2.5 bg-brand-900 text-white text-xs font-bold text-center rounded-lg hover:bg-brand-800 transition"
               >
                 診断を受ける
@@ -114,7 +114,7 @@ const { article } = Astro.props;
             </div>
             <div class="pt-4">
               <a
-                href={`/materials?source=media_${article.slug}`}
+                href={`/materials/?source=media_${article.slug}`}
                 class="block w-full py-2.5 bg-brand-900 text-white text-xs font-bold text-center rounded-lg hover:bg-brand-800 transition"
               >
                 資料をダウンロード
@@ -144,7 +144,7 @@ const { article } = Astro.props;
 
         <div class="text-center pt-4">
           <a
-            href={`/contact?source=media_${article.slug}`}
+            href={`/contact/?source=media_${article.slug}`}
             class="text-xs text-brand-700 underline font-semibold hover:text-brand-900"
           >
             または共通問い合わせフォームから相談する →

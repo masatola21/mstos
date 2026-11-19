@@ -40,7 +40,7 @@ const allServices = [
     imageAlt: '経営戦略・利益構造分析と意思決定支援の顧問セッション風景',
     desc: '社長の右腕として、案件別・現場別の粗利管理や採算構造の可視化を支援。どんぶり勘定から脱却し、利益を意識した意思決定ができる体制をつくります。',
     target: '建設・工事・清掃・請負など、「忙しいのに手元にお金が残らない」「案件ごとの原価が正確に掴めない」企業様',
-    href: '/services/strategy',
+    href: '/services/strategy/',
   },
   {
     num: '02',
@@ -51,7 +51,7 @@ const allServices = [
     imageAlt: '現場のIT・DX・生成AIワークフロー設計と運用定着支援風景',
     desc: '業務プロセスの棚卸しと標準化を行い、社長や特定スタッフへの依存を解消。身の丈に合ったIT・AI活用と現場の自走定着を継続支援します。',
     target: '「社長が現場管理から事務まで兼任してパンクしている」「社員が増えても業務が回らない」現場・人材活用型企業様',
-    href: '/services/it-dx',
+    href: '/services/it-dx/',
   },
   {
     num: '03',
@@ -62,7 +62,7 @@ const allServices = [
     imageAlt: 'GAS・専用Webアプリ・API連携による業務自動化システムの開発風景',
     desc: 'Googleスプレッドシート/GASから現場専用Webアプリ、API連携まで。Excelやツールの分断を解消し、手作業・二重転記を減らす仕組みを直接開発。',
     target: '「既存システムはあるが連携していない」「現場と事務所で二重入力が発生している」企業様',
-    href: '/services/system',
+    href: '/services/system/',
   },
   {
     num: '04',
@@ -73,7 +73,7 @@ const allServices = [
     imageAlt: 'マルチチャネル集客・公式LINE・成約ファネルの導線設計風景',
     desc: 'ポータルサイトや紹介頼みから脱却し、LINE公式・Web集客・成約ファネルを設計。見込み客獲得からリピート・LTV向上までを仕組み化します。',
     target: 'エステ・美容・整体・ジムなど、「広告費が高止まりしている」「リピート率を高めたい」店舗型サービス企業様',
-    href: '/services/marketing',
+    href: '/services/marketing/',
   },
 ];
 
@@ -238,7 +238,7 @@ const steps = [
             <div class="flex flex-col sm:flex-row items-stretch sm:items-center gap-3.5 sm:gap-4">
               <!-- 主CTA: 無料経営ボトルネック診断 -->
               <a
-                href="/diagnosis"
+                href="/diagnosis/"
                 class="px-8 py-4 rounded-xl bg-gradient-to-r from-amber-400 via-amber-500 to-amber-600 hover:from-amber-300 hover:to-amber-500 text-slate-950 font-black text-sm sm:text-base text-center shadow-xl hover:shadow-2xl hover:scale-[1.02] transition-all duration-200 flex items-center justify-center gap-2.5 active:scale-[0.99] group"
               >
                 <span>無料経営ボトルネック診断（3分・全5問）</span>
@@ -249,7 +249,7 @@ const steps = [
 
               <!-- 副導線: 個別相談・お問い合わせ -->
               <a
-                href="/contact"
+                href="/contact/"
                 class="px-6 py-4 rounded-xl bg-white/10 hover:bg-white/20 border border-white/25 text-white font-medium text-xs sm:text-sm text-center shadow transition-all duration-200 flex items-center justify-center gap-2 backdrop-blur-md active:scale-[0.99]"
               >
                 <span>個別相談・お問い合わせ</span>
@@ -354,7 +354,7 @@ const steps = [
             </p>
           </div>
           <div class="pt-2.5 border-t border-brand-800/80 mt-3 sm:mt-0">
-            <a href="/company#practice" class="text-xs font-bold text-amber-300 hover:text-amber-200 hover:underline inline-flex items-center gap-2">
+            <a href="/company/#practice" class="text-xs font-bold text-amber-300 hover:text-amber-200 hover:underline inline-flex items-center gap-2">
               <img
                 src="/images/mst-os-icon.svg"
                 alt=""
@@ -768,7 +768,7 @@ const steps = [
         <!-- 診断CTAボタン -->
         <div class="text-center pt-2 space-y-3">
           <a
-            href="/diagnosis"
+            href="/diagnosis/"
             class="inline-flex items-center justify-center gap-3 px-10 py-5 bg-gradient-to-r from-amber-400 via-amber-500 to-amber-600 hover:from-amber-300 hover:to-amber-500 text-slate-950 font-black rounded-2xl text-base sm:text-lg transition shadow-2xl hover:scale-[1.02] active:scale-[0.99] group"
           >
             <span>無料で自社のボトルネックを診断する（3分）</span>
@@ -896,7 +896,7 @@ const steps = [
                 <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M14 5l7 7m0 0l-7 7m7-7H3"/></svg>
               </a>
               <a
-                href={`/contact?service=${s.num}`}
+                href={`/contact/?service=${s.num}`}
                 class="text-xs font-bold text-slate-950 bg-white hover:bg-amber-300 px-3 py-1.5 rounded-lg transition duration-200 shadow-sm"
               >
                 相談する
@@ -934,7 +934,7 @@ const steps = [
               <svg class="w-4 h-4 group-hover:translate-x-1 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"/></svg>
             </a>
             <a
-              href="/care-package"
+              href="/care-package/"
               class="py-4 px-5 bg-white/10 hover:bg-white/20 text-white text-xs font-semibold rounded-xl text-center transition border border-white/20 flex items-center justify-center"
             >
               サイト内概要
@@ -950,7 +950,7 @@ const steps = [
           Google Workspace / GAS を活用した低コスト自動化から、現場専用Webアプリ構築まで、貴社の規模・IT成熟度に応じた最適な技術構成をご提案します。
         </p>
         <div class="pt-2">
-          <a href="/services/system" class="text-xs font-bold text-amber-300 hover:underline">
+          <a href="/services/system/" class="text-xs font-bold text-amber-300 hover:underline">
             システム構築・自動化の実装詳細はこちら →
           </a>
         </div>
@@ -1007,7 +1007,7 @@ const steps = [
           </h2>
         </div>
         <a
-          href="/media"
+          href="/media/"
           class="text-xs sm:text-sm font-bold text-brand-700 hover:text-brand-900 inline-flex items-center gap-1 group"
         >
           <span>すべての記事を見る</span>
@@ -1018,7 +1018,7 @@ const steps = [
       <div class="grid grid-cols-1 md:grid-cols-3 gap-6 sm:gap-8">
         {liveArticles.slice(0, 3).map((art) => (
           <a
-            href={`/media/${art.slug}`}
+            href={`/media/${art.slug}/`}
             class="bg-sand-50 rounded-2xl border border-sand-300 overflow-hidden hover:shadow-lg transition-all group flex flex-col justify-between"
           >
             <div class="relative h-48 overflow-hidden border-b border-sand-200 bg-sand-200">
@@ -1096,7 +1096,7 @@ const steps = [
 
           <div class="pt-6 border-t border-amber-200 mt-6">
             <a
-              href="/diagnosis"
+              href="/diagnosis/"
               class="block w-full py-4 bg-gradient-to-r from-amber-400 via-amber-500 to-amber-600 hover:from-amber-300 hover:to-amber-500 text-slate-950 text-xs sm:text-sm font-black text-center rounded-xl transition shadow-md hover:scale-[1.02]"
             >
               診断を開始する（無料・3分） →
@@ -1123,7 +1123,7 @@ const steps = [
 
           <div class="pt-6 border-t border-sand-200 mt-6">
             <a
-              href="/materials"
+              href="/materials/"
               class="block w-full py-3.5 bg-brand-900 hover:bg-brand-800 text-white text-xs font-bold text-center rounded-xl transition shadow"
             >
               資料をダウンロード（無料） →
@@ -1167,7 +1167,7 @@ const steps = [
               <span>LINEで気軽に質問・事前相談する</span>
             </a>
             <div class="text-[10px] text-gray-400 text-center pt-1 font-light">
-              ※事前にお問い合わせ内容を送信したい方は <a href="/contact" class="text-brand-700 underline">フォーム</a> からも受付中
+              ※事前にお問い合わせ内容を送信したい方は <a href="/contact/" class="text-brand-700 underline">フォーム</a> からも受付中
             </div>
           </div>
         </div>
@@ -1207,7 +1207,7 @@ const steps = [
             
             <div class="pt-3 border-t border-sand-200">
               <a
-                href="/company"
+                href="/company/"
                 class="inline-flex items-center gap-1.5 text-xs sm:text-sm font-bold text-brand-700 hover:text-brand-900 group"
               >
                 <span>代表メッセージ・創業からの詳しい歩みはこちら（会社概要）</span>
@@ -1267,7 +1267,7 @@ const steps = [
       <div class="pt-4 flex flex-col sm:flex-row justify-center items-center gap-4">
         <!-- メインCTA -->
         <a
-          href="/diagnosis"
+          href="/diagnosis/"
           class="w-full sm:w-auto px-8 py-4 bg-gradient-to-r from-amber-400 via-amber-500 to-amber-600 hover:from-amber-300 hover:to-amber-500 text-slate-950 font-black rounded-xl text-sm sm:text-base transition shadow-xl hover:scale-[1.02] flex items-center justify-center gap-2"
         >
           <span>無料経営ボトルネック診断（3分）</span>
@@ -1286,7 +1286,7 @@ const steps = [
       </div>
 
       <div class="pt-2 text-[11px] text-slate-400">
-        面談日程を直接カレンダーで選びたい方は <a href="https://timerex.net/s/mstcorp/c3dd3eea" target="_blank" rel="noopener noreferrer" class="text-amber-300 underline">オンライン面談予約（TimeRex）</a>、文字でのお問い合わせ・資料請求をご希望の方は <a href="/contact" class="text-amber-300 underline">お問い合わせフォーム</a> または <a href="/materials" class="text-amber-300 underline">資料請求ページ</a> をご利用ください。
+        面談日程を直接カレンダーで選びたい方は <a href="https://timerex.net/s/mstcorp/c3dd3eea" target="_blank" rel="noopener noreferrer" class="text-amber-300 underline">オンライン面談予約（TimeRex）</a>、文字でのお問い合わせ・資料請求をご希望の方は <a href="/contact/" class="text-amber-300 underline">お問い合わせフォーム</a> または <a href="/materials/" class="text-amber-300 underline">資料請求ページ</a> をご利用ください。
       </div>
     </div>
   </section>
