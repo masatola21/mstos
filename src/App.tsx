@@ -3366,10 +3366,35 @@ function AppContent() {
 export default function App() {
   const publicDocMatch = window.location.pathname.match(/^\/(?:apply|docs)\/([^/]+)\/?$/i);
   if (publicDocMatch) {
-    return <Suspense fallback={<ViewLoadingFallback />}><PublicDocumentApplyView documentId={publicDocMatch[1]} /></Suspense>;
+    let docId = publicDocMatch[1];
+    try { docId = decodeURIComponent(docId); } catch { /* keep raw */ }
+    return (
+      <Suspense fallback={<div className="min-h-screen bg-slate-950 flex items-center justify-center"><Loader2 className="w-8 h-8 animate-spin text-emerald-400" /></div>}>
+        <PublicDocumentApplyView documentId={docId} />
+      </Suspense>
+    );
   }
 
-  const publicFormMatch = window.location.pathname.match(/^\/f\/([^/]+)\/?$/);
+  if (/^\/unsubscribe\/?$/i.test(window.location.pathname)) {
+    const params = new URLSearchParams(window.location.search || '');
+    const token = params.get('t') || '';
+    if (token) {
+      window.location.replace(`/api/email/unsubscribe?t=${encodeURIComponent(token)}`);
+      return null;
+    }
+    return (
+      <main className="min-h-screen bg-slate-50 flex items-center justify-center p-6">
+        <div className="max-w-md w-full rounded-2xl border border-slate-200 bg-white p-6 text-center shadow-xs space-y-2">
+          <h1 className="text-lg font-bold text-slate-900">メール配信停止（確認ページ）</h1>
+          <p className="text-sm text-slate-600">
+            配信停止をご希望の場合は、お送りしたメール末尾に記載の専用配信停止リンクをご利用ください。
+          </p>
+        </div>
+      </main>
+    );
+  }
+
+  const publicFormMatch = window.location.pathname.match(/^\/(?:f|forms)\/([^/]+)\/?$/i);
   if (publicFormMatch) {
     let slug = publicFormMatch[1];
     try { slug = decodeURIComponent(slug); } catch { /* Keep the raw path segment for the server's validation. */ }
@@ -3391,6 +3416,13 @@ export default function App() {
       return null;
     }
     return <Suspense fallback={<ViewLoadingFallback />}><PublicIntakeForm slug={slug} /></Suspense>;
+  }
+
+  const corpRouteMatch = window.location.pathname.match(/^\/(company|diagnosis|materials|contact|privacy)\/?$/i);
+  if (corpRouteMatch) {
+    const corpPath = `/${corpRouteMatch[1].toLowerCase()}`;
+    window.location.replace('https://corp.mstcorp.info' + corpPath + (window.location.search || ''));
+    return null;
   }
 
   return (

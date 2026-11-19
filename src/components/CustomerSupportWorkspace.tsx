@@ -927,7 +927,17 @@ export const CustomerSupportWorkspace: React.FC<Props> = ({
           <section className="rounded-2xl border border-slate-200 bg-white p-4 shadow-2xs">
             <h4 className="mb-3 flex items-center gap-2 font-bold text-slate-900 text-sm"><FileText className="h-4 w-4 text-purple-600" />顧客への納品物・提出物</h4>
             {documents.length === 0 ? <p className="text-xs text-slate-400 py-4 text-center">この顧客に紐付く書類はありません。</p> : <ul className="divide-y divide-slate-100">{documents.map((document) => {
-              const typeLabel = ({ proposal: '提案書（診断＋提案）', diagnosis_report: '診断レポート', estimate: '見積書', contract: '契約書', invoice: '請求書', monthly_report: '月次報告書', other: 'その他' } as Record<string, string>)[document.document_type] || document.document_type;
+              const rawType = String(document.document_type || '');
+              const titleText = String(document.title || '');
+              const effectiveType =
+                (rawType === 'proposal' || rawType === 'other') && /見積/.test(titleText)
+                  ? 'estimate'
+                  : (rawType === 'diagnosis_report' || rawType === 'report' || rawType === 'proposal' || rawType === 'other') && /(月次|月報)/.test(titleText)
+                    ? 'monthly_report'
+                    : rawType === 'report'
+                      ? 'diagnosis_report'
+                      : rawType;
+              const typeLabel = ({ proposal: '提案書（診断＋提案）', diagnosis_report: '診断レポート', estimate: '見積書', contract: '契約書', invoice: '請求書', monthly_report: '月次報告書', other: 'その他' } as Record<string, string>)[effectiveType] || effectiveType;
               const statusLabel = ({ draft: '作成中', awaiting_approval: '承認待ち', approved: '確定（送付可能）', sent: '送信済み', archived: '保管' } as Record<string, string>)[document.status] || document.status;
               return <li key={document.id} className="flex flex-wrap items-center justify-between gap-2 py-2.5"><div><div className="text-xs font-bold text-slate-900">{document.title}</div><div className="text-[11px] text-slate-500">{typeLabel} · {displayDate(document.created_at)}</div></div><span className="rounded-full bg-slate-100 px-2.5 py-0.5 text-[10px] font-semibold text-slate-700">{statusLabel}</span></li>;
             })}</ul>}

@@ -795,7 +795,31 @@ export const SalesOperationsWorkspace: React.FC<Props> = ({ tab, initialOpsTab, 
 
                   <div className="flex flex-wrap items-center gap-2 text-xs text-slate-500">
                     <span className="rounded-md bg-purple-50 border border-purple-200 px-2 py-0.5 text-[10px] text-purple-700 font-semibold">
-                      {doc.document_type === 'diagnosis_report' ? '診断レポート' : doc.document_type === 'proposal' ? '提案書（診断＋提案）' : doc.document_type === 'estimate' ? '見積書' : doc.document_type === 'contract' ? '契約書' : doc.document_type === 'invoice' ? '請求書' : doc.document_type === 'monthly_report' ? '月次報告書' : doc.document_type}
+                      {(() => {
+                        const rawType = String(doc.document_type || '');
+                        const titleText = String(doc.title || '');
+                        const effectiveType =
+                          (rawType === 'proposal' || rawType === 'other') && /見積/.test(titleText)
+                            ? 'estimate'
+                            : (rawType === 'diagnosis_report' || rawType === 'report' || rawType === 'proposal' || rawType === 'other') && /(月次|月報)/.test(titleText)
+                              ? 'monthly_report'
+                              : rawType === 'report'
+                                ? 'diagnosis_report'
+                                : rawType;
+                        return effectiveType === 'diagnosis_report'
+                          ? '診断レポート'
+                          : effectiveType === 'proposal'
+                            ? '提案書（診断＋提案）'
+                            : effectiveType === 'estimate'
+                              ? '見積書'
+                              : effectiveType === 'contract'
+                                ? '契約書'
+                                : effectiveType === 'invoice'
+                                  ? '請求書'
+                                  : effectiveType === 'monthly_report'
+                                    ? '月次報告書'
+                                    : effectiveType;
+                      })()}
                     </span>
                     <span>{new Date(doc.created_at).toLocaleString('ja-JP')}</span>
                     <span>·</span>

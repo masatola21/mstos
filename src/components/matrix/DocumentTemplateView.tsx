@@ -10,8 +10,6 @@ import {
   Check, 
   Sliders, 
   FileCode,
-  ExternalLink,
-  Link2,
   Calculator,
   BarChart3,
   Send,
@@ -21,7 +19,9 @@ import {
   Save,
   CheckCircle2,
   Sparkles,
-  ClipboardList
+  ClipboardList,
+  ExternalLink,
+  Link2
 } from 'lucide-react';
 import { MeetingSessionView } from '../meeting/MeetingSessionView';
 import {
@@ -73,6 +73,27 @@ const escapeHtml = (value: string) => value.replace(/[&<>"']/g, (char) => {
   const replacements: Record<string, string> = { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' };
   return replacements[char] || char;
 });
+
+function documentTypeFallbackCandidates(primary: string): string[] {
+  switch (primary) {
+    case 'estimate':
+      return ['estimate', 'proposal', 'other'];
+    case 'monthly_report':
+      return ['monthly_report', 'diagnosis_report', 'report', 'proposal', 'other'];
+    case 'diagnosis_report':
+      return ['diagnosis_report', 'report', 'proposal', 'other'];
+    case 'report':
+      return ['report', 'diagnosis_report', 'proposal', 'other'];
+    default:
+      return [primary, 'proposal', 'other'].filter((v, i, a) => a.indexOf(v) === i);
+  }
+}
+
+function isDocumentTypeCheckViolation(err: any): boolean {
+  const code = String(err?.code || '');
+  const msg = String(err?.message || '');
+  return code === '23514' || /customer_documents_document_type_check|document_type_check/i.test(msg);
+}
 
 const DEFAULT_TEMPLATES: DocTemplate[] = CORE_TEMPLATES;
 
@@ -204,18 +225,20 @@ export const DocumentTemplateView: React.FC<DocumentTemplateViewProps> = ({
           setTemplateStatus('最新の統合テンプレート（5種）を読み込みました。'); 
           return; 
         }
-        // Always prioritize the 5 unified templates
+        // Always prioritize the 5 unified templates and sync stale rows in DB
         setTemplates(DEFAULT_TEMPLATES);
-        if (data?.length === 0) {
-          const defaults = DEFAULT_TEMPLATES.map((template) => ({
-            template_key: template.id,
-            document_type: template.type === 'report' ? 'diagnosis_report' : template.type,
-            title: template.title,
-            description: template.description,
-            body_html: template.htmlContent,
-            variables: template.variables,
-          }));
+        const defaults = DEFAULT_TEMPLATES.map((template) => ({
+          template_key: template.id,
+          document_type: template.type === 'report' ? 'diagnosis_report' : template.type,
+          title: template.title,
+          description: template.description,
+          body_html: template.htmlContent,
+          variables: template.variables,
+        }));
+        if (!data || data.length === 0) {
           await supabase.from('customer_document_templates').insert(defaults);
+        } else {
+          await supabase.from('customer_document_templates').upsert(defaults, { onConflict: 'template_key' }).select('template_key').then(() => undefined, () => undefined);
         }
       } catch {
         setTemplates(DEFAULT_TEMPLATES);
@@ -340,6 +363,13 @@ export const DocumentTemplateView: React.FC<DocumentTemplateViewProps> = ({
         ? '毎月末日締め翌月末日振込（最低6ヶ月契約・自動更新条項あり）'
         : deal?.memo || '月末締め翌月末日振込（翌月末日一括払い）';
 
+      const hasExplicitFees = initialFee > 0 || monthlyFee > 0;
+      const effectiveInitial = hasExplicitFees ? initialFee : 300000;
+      const effectiveMonthly = hasExplicitFees ? monthlyFee : 100000;
+      const initialTax = Math.floor(effectiveInitial * 0.1);
+      const monthlyTax = Math.floor(effectiveMonthly * 0.1);
+      const effectiveInst = calculateInstallmentAmounts(subtotal, paymentMode === 'installments_6' ? 6 : 3);
+
       const values: Record<string, string> = {
         client_company: company?.company_name || '',
         client_name: contact?.full_name || company?.contact_name || '',
@@ -363,14 +393,14 @@ export const DocumentTemplateView: React.FC<DocumentTemplateViewProps> = ({
         total_amount: total > 0 ? total.toLocaleString('ja-JP') : '',
         subtotal_amount: subtotal > 0 ? subtotal.toLocaleString('ja-JP') : '',
         tax_amount: tax > 0 ? tax.toLocaleString('ja-JP') : '',
-        initial_fee: initialFee > 0 ? initialFee.toLocaleString('ja-JP') : '300,000',
-        initial_fee_tax: initialFee > 0 ? Math.floor(initialFee * 0.1).toLocaleString('ja-JP') : '30,000',
-        initial_fee_tax_included: initialFee > 0 ? Math.floor(initialFee * 1.1).toLocaleString('ja-JP') : '330,000',
-        monthly_fee: monthlyFee > 0 ? monthlyFee.toLocaleString('ja-JP') : '100,000',
-        monthly_fee_tax: monthlyFee > 0 ? Math.floor(monthlyFee * 0.1).toLocaleString('ja-JP') : '10,000',
-        monthly_fee_tax_included: monthlyFee > 0 ? Math.floor(monthlyFee * 1.1).toLocaleString('ja-JP') : '110,000',
-        monthly_amount: monthlyFee > 0 ? monthlyFee.toLocaleString('ja-JP') : '100,000',
-        tax_included_amount: monthlyFee > 0 ? Math.floor(monthlyFee * 1.1).toLocaleString('ja-JP') : '110,000',
+        initial_fee: effectiveInitial.toLocaleString('ja-JP'),
+        initial_fee_tax: initialTax.toLocaleString('ja-JP'),
+        initial_fee_tax_included: (effectiveInitial + initialTax).toLocaleString('ja-JP'),
+        monthly_fee: effectiveMonthly.toLocaleString('ja-JP'),
+        monthly_fee_tax: monthlyTax.toLocaleString('ja-JP'),
+        monthly_fee_tax_included: (effectiveMonthly + monthlyTax).toLocaleString('ja-JP'),
+        monthly_amount: effectiveMonthly.toLocaleString('ja-JP'),
+        tax_included_amount: (effectiveMonthly + monthlyTax).toLocaleString('ja-JP'),
         deposit_rate: '50',
         deposit_subtotal: mb.depositSubtotal > 0 ? mb.depositSubtotal.toLocaleString('ja-JP') : '',
         deposit_tax: mb.depositTax > 0 ? mb.depositTax.toLocaleString('ja-JP') : '',
@@ -380,10 +410,10 @@ export const DocumentTemplateView: React.FC<DocumentTemplateViewProps> = ({
         completion_tax: mb.completionTax > 0 ? mb.completionTax.toLocaleString('ja-JP') : '',
         completion_total: mb.completionTotalWithTax > 0 ? mb.completionTotalWithTax.toLocaleString('ja-JP') : '',
         installment_number: '1',
-        installment_count: '3',
-        installment_subtotal: inst.installments[0]?.subtotal ? inst.installments[0].subtotal.toLocaleString('ja-JP') : '',
-        installment_tax: inst.installments[0]?.tax ? inst.installments[0].tax.toLocaleString('ja-JP') : '',
-        installment_amount: inst.installments[0]?.totalWithTax ? inst.installments[0].totalWithTax.toLocaleString('ja-JP') : '',
+        installment_count: String(paymentMode === 'installments_6' ? 6 : 3),
+        installment_subtotal: effectiveInst.installments[0]?.subtotal ? effectiveInst.installments[0].subtotal.toLocaleString('ja-JP') : '',
+        installment_tax: effectiveInst.installments[0]?.tax ? effectiveInst.installments[0].tax.toLocaleString('ja-JP') : '',
+        installment_amount: effectiveInst.installments[0]?.totalWithTax ? effectiveInst.installments[0].totalWithTax.toLocaleString('ja-JP') : '',
         invoice_number: invoiceNumber,
         item_name_1: deal?.proposal_plan_name || deal?.deal_name || productName || 'サービス提供費',
         item_qty_1: '1', 
@@ -578,6 +608,52 @@ export const DocumentTemplateView: React.FC<DocumentTemplateViewProps> = ({
             next.due_date = formatDocumentDate(addDaysToIsoDate(iso, PROPOSAL_VALID_DAYS));
           }
         }
+      } else if (selectedTemplateId !== 'tpl-monthly-report-01') {
+        // 見積書・契約書・請求書: 税抜金額変更時に消費税・税込金額・分割/手付残金を連動再計算
+        if (key === 'initial_fee' || key === 'monthly_fee') {
+          const initial = parseYen(next.initial_fee);
+          const monthly = parseYen(next.monthly_fee);
+          const initialTax = Math.floor(initial * 0.1);
+          const monthlyTax = Math.floor(monthly * 0.1);
+          next.initial_fee_tax = formatYen(initialTax);
+          next.initial_fee_tax_included = formatYen(initial + initialTax);
+          next.monthly_fee_tax = formatYen(monthlyTax);
+          next.monthly_fee_tax_included = formatYen(monthly + monthlyTax);
+
+          const isSubFromInitMonthly =
+            paymentMode === 'hybrid_setup_retainer' ||
+            paymentMode === 'retainer' ||
+            (selectedTemplateId === 'tpl-unified-invoice' && (invoiceSubtype === 'hybrid_setup_retainer' || invoiceSubtype === 'retainer'));
+          if (isSubFromInitMonthly) {
+            const sub =
+              selectedTemplateId === 'tpl-unified-invoice' && invoiceSubtype === 'retainer'
+                ? monthly
+                : initial + monthly;
+            const tax = Math.floor(sub * 0.1);
+            next.subtotal_amount = formatYen(sub);
+            next.tax_amount = formatYen(tax);
+            next.total_amount = formatYen(sub + tax);
+            next.total_project_amount = formatYen(sub);
+          }
+        } else if (key === 'subtotal_amount') {
+          const sub = parseYen(next.subtotal_amount);
+          const tax = Math.floor(sub * 0.1);
+          const mb = calculateMilestoneAmounts(sub, 0.5);
+          const instCount = paymentMode === 'installments_6' ? 6 : 3;
+          const inst = calculateInstallmentAmounts(sub, instCount);
+          next.tax_amount = formatYen(tax);
+          next.total_amount = formatYen(sub + tax);
+          next.total_project_amount = formatYen(sub);
+          next.deposit_subtotal = formatYen(mb.depositSubtotal);
+          next.deposit_tax = formatYen(mb.depositTax);
+          next.deposit_total = formatYen(mb.depositTotalWithTax);
+          next.completion_subtotal = formatYen(mb.completionSubtotal);
+          next.completion_tax = formatYen(mb.completionTax);
+          next.completion_total = formatYen(mb.completionTotalWithTax);
+          next.installment_subtotal = formatYen(inst.installments[0]?.subtotal ?? 0);
+          next.installment_tax = formatYen(inst.installments[0]?.tax ?? 0);
+          next.installment_amount = formatYen(inst.installments[0]?.totalWithTax ?? 0);
+        }
       }
       return next;
     });
@@ -613,13 +689,19 @@ export const DocumentTemplateView: React.FC<DocumentTemplateViewProps> = ({
     } else if (mode === 'retainer') {
       const monthly = parseNum(variableValues.monthly_fee) || 100000;
       const initial = parseNum(variableValues.initial_fee) || 0;
+      const initialTax = Math.floor(initial * 0.1);
+      const monthlyTax = Math.floor(monthly * 0.1);
       const sub = monthly + initial;
       const tax = Math.floor(sub * 0.1);
       const total = sub + tax;
       setVariableValues((prev) => ({
         ...prev,
         monthly_fee: monthly.toLocaleString('ja-JP'),
+        monthly_fee_tax: monthlyTax.toLocaleString('ja-JP'),
+        monthly_fee_tax_included: (monthly + monthlyTax).toLocaleString('ja-JP'),
         initial_fee: initial > 0 ? initial.toLocaleString('ja-JP') : '0',
+        initial_fee_tax: initialTax.toLocaleString('ja-JP'),
+        initial_fee_tax_included: (initial + initialTax).toLocaleString('ja-JP'),
         payment_terms: '毎月末日締め翌月末日振込（月額顧問契約・最低契約期間6ヶ月・自動更新条項あり）',
         due_date: formatDocumentDate(selectedTemplateId.includes('estimate') ? oneMonthLater : nextMonthEnd),
         cost_breakdown: initial > 0 ? `初期費用 ${initial.toLocaleString('ja-JP')}円 / 月額顧問料 ${monthly.toLocaleString('ja-JP')}円` : `月額顧問料 ${monthly.toLocaleString('ja-JP')}円`,
@@ -859,29 +941,18 @@ export const DocumentTemplateView: React.FC<DocumentTemplateViewProps> = ({
       // 提案書: 空の項目は、必須なら「【未入力】」、それ以外は決めた代替文を出す
       result = result.replace(regex, formatProposalVal(key, val || (isProposal ? proposalEmptyText(key, proposalKind) : '')));
     });
-    if (isProposal) {
-      result = result.replace(/{{(\w+)}}/g, (whole, key) => (key === 'apply_url' ? whole : escapeHtml(proposalEmptyText(key, proposalKind))));
-    }
+    const activeDocId = savedDocIds[currentTemplate.id] || autosavedDocumentIds.current[currentTemplate.id] || 'preview';
+    const applyUrl = `${window.location.origin}/docs/${encodeURIComponent(activeDocId)}`;
 
-    const currentDocId = savedDocIds[currentTemplate.id] || autosavedDocumentIds.current[currentTemplate.id];
-    const applyUrl = currentDocId
-      ? `${window.location.origin}/apply/${currentDocId}`
-      : 'javascript:alert("書類の申込URLを発行中です。右上の「確認待ち保存」をクリックしてください。");';
+    if (isProposal) {
+      result = result.replace(/{{(\w+)}}/g, (_whole, key) => (key === 'apply_url' ? applyUrl : escapeHtml(proposalEmptyText(key, proposalKind))));
+    }
     result = result.replace(/{{apply_url}}/g, applyUrl);
 
-    // If proposal/estimate, guarantee Web Application CTA box
-    if (['proposal', 'report', 'estimate'].includes(currentTemplate.type) || currentTemplate.id === 'tpl-unified-estimate' || currentTemplate.id === 'tpl-proposal-report') {
-      if (!result.includes('web-apply-box')) {
-        const ctaHtml = `<div class="web-apply-box" style="margin-top: 40px; padding: 24px; border: 2px solid #10b981; border-radius: 12px; background: #f0fdf4; text-align: center;">
-  <p style="font-weight: bold; font-size: 16px; color: #065f46; margin: 0 0 6px 0;">【Web申込・オンライン即時成約】</p>
-  <p style="font-size: 13px; color: #047857; margin: 0 0 16px 0;">上記のお見積・ご提案内容にご承諾いただける場合は、Web上でワンタップで申し込み・ご成約いただけます。</p>
-  <a href="${applyUrl}" ${currentDocId ? 'target="_blank" rel="noopener noreferrer"' : ''} style="display: inline-block; background: #059669; color: #ffffff; padding: 12px 32px; border-radius: 8px; font-weight: bold; font-size: 15px; text-decoration: none; box-shadow: 0 4px 6px -1px rgba(16,185,129,0.3);">👉 この内容で申し込む</a>
-</div>`;
-        const lastDivIndex = result.lastIndexOf('</div>');
-        if (lastDivIndex !== -1) {
-          result = result.slice(0, lastDivIndex) + ctaHtml + '\n</div>' + result.slice(lastDivIndex + 6);
-        }
-      }
+    if (!isProposal && !result.includes('web-apply-box') && (currentTemplate.type === 'estimate' || currentTemplate.type === 'contract')) {
+      const boxHtml = `<div class="web-apply-box" style="margin-top:24px; padding:16px; background:#ecfdf5; border:1px solid #a7f3d0; border-radius:8px; text-align:center;"><p style="margin:0 0 6px 0; font-weight:bold; color:#065f46; font-size:14px;">Webでのお申し込み</p><p style="margin:0 0 12px 0; font-size:12px; color:#047857;">同意いただいた記録が残ります。</p><a href="${applyUrl}" style="display:inline-block; background:#059669; color:#ffffff; padding:10px 26px; border-radius:6px; text-decoration:none; font-weight:bold; font-size:13px;">この内容で申し込む</a></div>`;
+      const lastDivIdx = result.lastIndexOf('</div>');
+      result = lastDivIdx >= 0 ? `${result.slice(0, lastDivIdx)}${boxHtml}${result.slice(lastDivIdx)}` : `${result}${boxHtml}`;
     }
 
     return result;
@@ -911,14 +982,18 @@ export const DocumentTemplateView: React.FC<DocumentTemplateViewProps> = ({
       const save = previousQueue.catch(() => undefined).then(async () => {
         const supabase = getSupabase();
         if (!supabase) return;
-        const { data, error } = await supabase.from('customer_documents')
-          .update(payload)
-          .eq('id', existingId)
-          .eq('status', 'awaiting_approval')
-          .select('id')
-          .maybeSingle();
-        if (!error && data) {
-          setSaveMessage('保存済み書類の内容を自動更新しました。');
+        for (const candidateType of documentTypeFallbackCandidates(documentType)) {
+          const { data, error } = await supabase.from('customer_documents')
+            .update({ ...payload, document_type: candidateType })
+            .eq('id', existingId)
+            .in('status', ['draft', 'awaiting_approval', 'approved'])
+            .select('id')
+            .maybeSingle();
+          if (!error) {
+            if (data) setSaveMessage('保存済み書類の内容を自動更新しました。');
+            break;
+          }
+          if (!isDocumentTypeCheckViolation(error)) break;
         }
       });
       autosaveQueues.current[templateId] = save;
@@ -960,6 +1035,50 @@ export const DocumentTemplateView: React.FC<DocumentTemplateViewProps> = ({
     setTimeout(() => setCopied(false), 2000);
   };
 
+  const persistCustomerDocument = async (
+    supabase: NonNullable<ReturnType<typeof getSupabase>>,
+    existingId: string | undefined,
+    payload: {
+      document_type: string;
+      title: string;
+      body_html: string;
+      company_id: string | null;
+      contact_id: string | null;
+      lead_id: string | null;
+      deal_id: string | null;
+    },
+    statusOverride?: 'draft' | 'approved',
+  ): Promise<{ id: string; inserted: boolean }> => {
+    const candidates = documentTypeFallbackCandidates(payload.document_type);
+    let lastError: any = null;
+    for (const candidateType of candidates) {
+      if (existingId) {
+        const updateBody = statusOverride
+          ? { ...payload, document_type: candidateType, status: statusOverride }
+          : { ...payload, document_type: candidateType };
+        const { error } = await supabase.from('customer_documents').update(updateBody).eq('id', existingId);
+        if (!error) return { id: existingId, inserted: false };
+        lastError = error;
+        if (!isDocumentTypeCheckViolation(error)) throw error;
+      } else {
+        const { data, error } = await supabase.from('customer_documents')
+          .insert({ ...payload, document_type: candidateType, status: statusOverride ?? 'approved' })
+          .select('id')
+          .single();
+        if (!error && data?.id) {
+          const resolvedHtml = payload.body_html.replace(/\/(?:apply|docs)\/preview/g, `/docs/${encodeURIComponent(data.id)}`);
+          if (resolvedHtml !== payload.body_html) {
+            await supabase.from('customer_documents').update({ body_html: resolvedHtml }).eq('id', data.id);
+          }
+          return { id: data.id, inserted: true };
+        }
+        lastError = error || new Error('書類IDを取得できませんでした。');
+        if (!isDocumentTypeCheckViolation(error)) throw lastError;
+      }
+    }
+    throw lastError || new Error('書類を保存できませんでした。');
+  };
+
   const handleManualSave = async (opts?: { status?: 'draft' | 'approved' }): Promise<string | null> => {
     const supabase = getSupabase();
     if (!supabase) {
@@ -981,26 +1100,16 @@ export const DocumentTemplateView: React.FC<DocumentTemplateViewProps> = ({
     setSaveMessage('書類を保存しています…');
     try {
       const existingId = autosavedDocumentIds.current[templateId];
-      if (existingId) {
-        const { error } = await supabase.from('customer_documents')
-          .update(opts?.status ? { ...payload, status: opts.status } : payload)
-          .eq('id', existingId);
-        if (error) throw error;
-        setSavedDocIds((prev) => ({ ...prev, [templateId]: existingId }));
-        setSaveMessage('書類を更新しました。');
-        return existingId;
-      } else {
-        const { data, error } = await supabase.from('customer_documents')
-          .insert({ ...payload, status: opts?.status ?? 'approved' })
-          .select('id')
-          .single();
-        if (error || !data?.id) throw error || new Error('書類IDを取得できませんでした。');
-        autosavedDocumentIds.current[templateId] = data.id;
-        setSavedDocIds((prev) => ({ ...prev, [templateId]: data.id }));
+      const saved = await persistCustomerDocument(supabase, existingId, payload, opts?.status);
+      autosavedDocumentIds.current[templateId] = saved.id;
+      setSavedDocIds((prev) => ({ ...prev, [templateId]: saved.id }));
+      if (saved.inserted) {
         setHasStartedDocument(true);
         setSaveMessage(opts?.status === 'draft' ? '作成中の書類として保存しました。' : '確定書類（送付可能）として保存しました。');
-        return data.id;
+      } else {
+        setSaveMessage('書類を更新しました。');
       }
+      return saved.id;
     } catch (e: any) {
       setSaveMessage(`保存エラー: ${e.message}`);
     } finally {
@@ -1024,6 +1133,12 @@ export const DocumentTemplateView: React.FC<DocumentTemplateViewProps> = ({
       if (savedDocId) {
         docIdToUse = savedDocId;
       }
+    } else if (docIdToUse) {
+      // 既存の書類でも編集済みの最新HTMLを保存してから送信ドロワーを開く
+      const updatedId = await handleManualSave();
+      if (updatedId) {
+        docIdToUse = updatedId;
+      }
     }
 
     if (!docIdToUse) {
@@ -1041,18 +1156,14 @@ export const DocumentTemplateView: React.FC<DocumentTemplateViewProps> = ({
             lead_id: leadId || null,
             deal_id: dealId || null,
           };
-          const { data, error } = await supabase.from('customer_documents')
-            .insert({ ...payload, status: 'approved' })
-            .select('id')
-            .single();
-          if (!error && data?.id) {
-            docIdToUse = data.id;
-            autosavedDocumentIds.current[templateId] = data.id;
-            setSavedDocIds((prev) => ({ ...prev, [templateId]: data.id }));
-            setHasStartedDocument(true);
-          }
+          const saved = await persistCustomerDocument(supabase, undefined, payload, 'approved');
+          docIdToUse = saved.id;
+          autosavedDocumentIds.current[templateId] = saved.id;
+          setSavedDocIds((prev) => ({ ...prev, [templateId]: saved.id }));
+          setHasStartedDocument(true);
         } catch (e: any) {
           console.error('Error auto-saving before send center:', e);
+          setSaveMessage(`保存エラー: ${e?.message || '書類保存に失敗しました'}`);
         } finally {
           setIsSavingDocument(false);
         }
@@ -1170,36 +1281,37 @@ export const DocumentTemplateView: React.FC<DocumentTemplateViewProps> = ({
             </button>
           )}
 
-          {(savedDocIds[currentTemplate.id] || autosavedDocumentIds.current[currentTemplate.id]) && (
-            <>
-              <button
-                type="button"
-                onClick={() => {
-                  const docId = savedDocIds[currentTemplate.id] || autosavedDocumentIds.current[currentTemplate.id];
-                  if (!docId) return;
-                  const url = `${window.location.origin}/apply/${docId}`;
-                  navigator.clipboard.writeText(url);
-                  setCopiedApplyUrl(true);
-                  setTimeout(() => setCopiedApplyUrl(false), 2500);
-                }}
-                className="px-3 py-1.5 rounded-md bg-emerald-600 hover:bg-emerald-700 text-white font-medium text-xs flex items-center gap-1.5 transition-all cursor-pointer"
-                title="顧客に送信するワンタップ申込用URLをコピーします"
-              >
-                <Link2 className="w-3.5 h-3.5" />
-                <span>{copiedApplyUrl ? 'コピー完了' : 'Web申込URL'}</span>
-              </button>
-
-              <a
-                href={`/apply/${savedDocIds[currentTemplate.id] || autosavedDocumentIds.current[currentTemplate.id]}`}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="px-3 py-1.5 rounded-md border border-slate-200 bg-white hover:bg-slate-50 text-slate-700 font-medium text-xs flex items-center gap-1.5 transition-all"
-              >
-                <ExternalLink className="w-3.5 h-3.5 text-slate-500" />
-                <span className="hidden sm:inline">申込プレビュー</span>
-              </a>
-            </>
-          )}
+          {(savedDocIds[currentTemplate.id] || autosavedDocumentIds.current[currentTemplate.id]) && (() => {
+            const activeDocId = savedDocIds[currentTemplate.id] || autosavedDocumentIds.current[currentTemplate.id];
+            const applyUrl = `${window.location.origin}/docs/${encodeURIComponent(activeDocId)}`;
+            return (
+              <>
+                <button
+                  type="button"
+                  onClick={() => {
+                    navigator.clipboard.writeText(applyUrl);
+                    setCopiedApplyUrl(true);
+                    setTimeout(() => setCopiedApplyUrl(false), 2000);
+                  }}
+                  className="px-3 py-1.5 rounded-md border border-emerald-200 bg-emerald-50 hover:bg-emerald-100 text-emerald-800 font-medium text-xs flex items-center gap-1.5 transition-all cursor-pointer"
+                  title="顧客に送るWeb申込・書類確認ページのURLをコピー"
+                >
+                  {copiedApplyUrl ? <Check className="w-3.5 h-3.5 text-emerald-600" /> : <Link2 className="w-3.5 h-3.5 text-emerald-600" />}
+                  <span>{copiedApplyUrl ? '申込URLをコピーしました' : 'Web申込URL'}</span>
+                </button>
+                <a
+                  href={applyUrl}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="px-3 py-1.5 rounded-md border border-slate-200 bg-white hover:bg-slate-50 text-slate-700 font-medium text-xs flex items-center gap-1.5 transition-all"
+                  title="顧客が見るWeb申込・書類確認ページを開く"
+                >
+                  <ExternalLink className="w-3.5 h-3.5 text-slate-500" />
+                  <span>申込プレビュー</span>
+                </a>
+              </>
+            );
+          })()}
 
           <button
             type="button"

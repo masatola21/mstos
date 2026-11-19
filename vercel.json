@@ -9,6 +9,14 @@
       "destination": "/api"
     },
     {
+      "source": "/docs/:id",
+      "destination": "/api"
+    },
+    {
+      "source": "/apply/:id",
+      "destination": "/api"
+    },
+    {
       "source": "/(.*)",
       "destination": "/index.html"
     }
