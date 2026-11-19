@@ -2301,7 +2301,8 @@ async function processLinePostback(event: any, contact: any, eventId: string, bo
         }
       }
     }
-    return bookingUrl && /^https?:\/\//i.test(bookingUrl) ? bookingUrl : '';
+    const officialBookingUrl = 'https://timerex.net/s/mstcorp/c3dd3eea';
+    return bookingUrl && /^https?:\/\//i.test(bookingUrl) ? bookingUrl : officialBookingUrl;
   };
 
   // 2.5 介護保険外サービス パターンB (2問クイックヒアリング postback)
@@ -2812,6 +2813,9 @@ async function processLinePostback(event: any, contact: any, eventId: string, bo
             break;
           }
         }
+      }
+      if (!bookingUrl) {
+        bookingUrl = 'https://timerex.net/s/mstcorp/c3dd3eea';
       }
 
       if (bookingUrl && /^https?:\/\//i.test(bookingUrl)) {
