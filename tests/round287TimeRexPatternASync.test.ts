@@ -7,6 +7,8 @@ import {
   parseTimeRexEmail,
   parseTimeRexCalendarEvent,
   syncTimeRexBookingToCrm,
+  isMeetingOverdueForCompletionCheck,
+  checkOverdueMeetingCompletionReminders,
   type TimeRexBookingInfo,
 } from '../server/timerexSyncService.js';
 
@@ -352,5 +354,76 @@ console.log('Test 4: syncTimeRexBookingToCrm (confirmed, dedup, non-downgrade, r
   );
 
   console.log('  ✓ syncTimeRexBookingToCrm passed all assertions');
+
+  // Test 5: isMeetingOverdueForCompletionCheck
+  console.log('Test 5: isMeetingOverdueForCompletionCheck');
+  const nowCheck = new Date('2026-11-20T15:30:00+09:00');
+  assert(!isMeetingOverdueForCompletionCheck('2026-11-20', '15:00', nowCheck), 'Within 60m grace window -> false');
+  assert(isMeetingOverdueForCompletionCheck('2026-11-20', '14:00', nowCheck), '90m past start -> true');
+  assert(!isMeetingOverdueForCompletionCheck('2026-11-20', null, nowCheck), 'Missing time defaults to 18:00 JST -> false at 15:30');
+  assert(
+    isMeetingOverdueForCompletionCheck('2026-11-20', null, new Date('2026-11-20T19:30:00+09:00')),
+    'Missing time at 19:30 JST -> true'
+  );
+  assert(!isMeetingOverdueForCompletionCheck('2026-11-01', '10:00', nowCheck), '> 14 days old stale meeting -> false');
+  console.log('  ✓ isMeetingOverdueForCompletionCheck passed');
+
+  // Test 6: checkOverdueMeetingCompletionReminders
+  console.log('Test 6: checkOverdueMeetingCompletionReminders');
+  mockDbState.tasks = [];
+  mockDbState.leads = [
+    {
+      id: 'lead-overdue',
+      owner_id: 'user-owner-1',
+      contact_id: 'cnt-overdue',
+      company_id: 'comp-overdue',
+      status: '面談予約済',
+      meeting_date: '2026-11-20',
+      meeting_start_time: '13:00',
+      company: { company_name: '遅延テスト株式会社' },
+      contact: { full_name: '高橋 一郎' },
+    },
+    {
+      id: 'lead-already-done',
+      owner_id: 'user-owner-1',
+      status: '面談実施済',
+      meeting_date: '2026-11-20',
+      meeting_start_time: '10:00',
+      contact: { full_name: '完了済み太郎' },
+    },
+  ];
+  mockDbState.deals = [
+    {
+      id: 'deal-linked',
+      owner_id: 'user-owner-1',
+      lead_id: 'lead-overdue',
+      company_id: 'comp-overdue',
+      proposal_status: '日程確定',
+      meeting_date: '2026-11-20',
+      company: { company_name: '遅延テスト株式会社' },
+    },
+    {
+      id: 'deal-standalone',
+      owner_id: 'user-owner-1',
+      lead_id: null,
+      company_id: 'comp-standalone',
+      proposal_status: '初回面談',
+      proposal_plan_name: '業務自動化提案',
+      meeting_date: '2026-11-19',
+      company: { company_name: '未完了商談有限会社' },
+    },
+  ];
+
+  const reminderPass1 = await checkOverdueMeetingCompletionReminders(mockDb, nowCheck);
+  assert.strictEqual(reminderPass1.created, 2, 'Should create 1 task for lead+linked deal and 1 for standalone deal');
+  assert.ok(mockDbState.tasks.some((t) => t.title.includes('【面談完了確認】高橋 一郎 様（2026-11-20 13:00）')));
+  assert.ok(mockDbState.tasks.some((t) => t.title.includes('【面談完了確認】未完了商談有限会社 様（2026-11-19）')));
+
+  // Mark tasks done and re-run check -> must NOT recreate!
+  mockDbState.tasks.forEach((t) => { t.status = 'done'; });
+  const reminderPass2 = await checkOverdueMeetingCompletionReminders(mockDb, nowCheck);
+  assert.strictEqual(reminderPass2.created, 0, 'Must NOT recreate completion check task even after marked done');
+  console.log('  ✓ checkOverdueMeetingCompletionReminders passed');
+
   console.log('\n=== All Round 2-8-7 TimeRex Pattern A Sync Tests Passed! ===\n');
 })();

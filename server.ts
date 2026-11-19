@@ -10,7 +10,13 @@ import { promises as dnsPromises } from 'node:dns';
 import fs from 'node:fs';
 import { createClient } from '@supabase/supabase-js';
 import { parseIcalendar } from './server/icalParser.js';
-import { isTimeRexEmail, parseTimeRexEmail, parseTimeRexCalendarEvent, syncTimeRexBookingToCrm } from './server/timerexSyncService.js';
+import {
+  isTimeRexEmail,
+  parseTimeRexEmail,
+  parseTimeRexCalendarEvent,
+  syncTimeRexBookingToCrm,
+  checkOverdueMeetingCompletionReminders,
+} from './server/timerexSyncService.js';
 import { calculateBillingAmount, determineContractMonthlyFee, isContractAlreadyBilled, getEndOfNextMonthDate } from './src/utils/billingUtils.js';
 import { calculateExponentialBackoff, shouldSkipAutomationDelivery, checkSendTimeWindow, calculateDueAt, type SendTimeWindowCheck } from './src/utils/automationRuleUtils.js';
 import {
@@ -5745,9 +5751,23 @@ app.all('/api/cron/marketing-automation', async (req, res) => {
 
   try {
     const processed = await processMarketingAutomationJobs();
+    const [calSyncRes, overdueRes] = await Promise.all([
+      runScheduledGoogleCalendarSync().catch((err) => {
+        console.warn('[Cron] Scheduled Google Calendar sync warning:', err);
+        return { syncedCalendars: 0, syncedBookings: 0 };
+      }),
+      lineSupabase
+        ? checkOverdueMeetingCompletionReminders(lineSupabase).catch((err) => {
+            console.warn('[Cron] Overdue meeting check warning:', err);
+            return { checked: 0, created: 0 };
+          })
+        : Promise.resolve({ checked: 0, created: 0 }),
+    ]);
     return res.json({
       success: true,
       processedJobs: processed,
+      calendarSyncedCount: calSyncRes.syncedBookings,
+      completionReminderTasksCreated: overdueRes.created,
       timestamp: new Date().toISOString(),
     });
   } catch (error) {
@@ -12824,37 +12844,21 @@ app.post('/api/calendar/fetch-ical', async (req, res) => {
 
     const { calendarName, events } = parseIcalendar(icsText);
 
-    // TimeRex カレンダー予定の自動検知とリード・商談自動同期 (Pattern A)
-    // ※ 本日以降のアクティブ予定のみ同期（過去予定で完了済み商談を巻き戻さない）
-    let syncedTimeRexCount = 0;
-    const todayJstStr = new Date(Date.now() + 9 * 60 * 60 * 1000).toISOString().slice(0, 10);
-    const ownerHostEmail = authData.user.email ? [String(authData.user.email).toLowerCase()] : [];
-    try {
-      for (const ev of events) {
-        if (ev.date < todayJstStr) continue;
-        const booking = parseTimeRexCalendarEvent(ev, ownerHostEmail);
-        if (booking) {
-          const resSync = await syncTimeRexBookingToCrm(booking, lineSupabase, authData.user.id);
-          if (resSync.success && resSync.action !== 'skipped_no_change') {
-            syncedTimeRexCount++;
-            if (
-              resSync.contactId &&
-              (booking.bookingAction === 'confirmed' || booking.bookingAction === 'rescheduled')
-            ) {
-              await enqueueScenariosForContact(resSync.contactId, 'booking_created', authData.user.id);
-            }
-          }
-        }
-      }
-    } catch (calSyncErr) {
-      console.warn('[fetch-ical] TimeRex calendar sync warning:', calSyncErr);
-    }
+    const syncedEventsResult = await syncTimeRexEventsFromIcalEvents(events, authData.user.id, authData.user.email || null);
+
+    await saveGoogleCalendarSyncConfig({
+      ownerId: authData.user.id,
+      ownerEmail: authData.user.email || null,
+      icalUrl,
+      calendarName,
+      lastSyncedAt: new Date().toISOString(),
+    });
 
     return res.json({
       success: true,
       calendarName,
       count: events.length,
-      syncedTimeRexCount,
+      syncedTimeRexCount: syncedEventsResult,
       events,
     });
   } catch (err: any) {
@@ -12863,6 +12867,186 @@ app.post('/api/calendar/fetch-ical', async (req, res) => {
       return res.status(504).json({ error: 'カレンダーの読み込みがタイムアウトしました。通信環境をご確認ください。' });
     }
     return res.status(500).json({ error: err.message || 'カレンダー予定の同期に失敗しました。' });
+  }
+});
+
+interface SavedGoogleCalendarConfig {
+  ownerId: string;
+  ownerEmail: string | null;
+  icalUrl: string;
+  calendarName: string;
+  lastSyncedAt: string | null;
+}
+
+const CALENDAR_ICAL_CONTROL_TARGET = 'google_calendar_ical';
+const SCHEDULED_CALENDAR_MIN_INTERVAL_MS = 4 * 60 * 1000;
+
+async function syncTimeRexEventsFromIcalEvents(
+  events: Array<{ title: string; date: string; startTime?: string; endTime?: string; meetUrl?: string; notes?: string; status?: string }>,
+  ownerId: string,
+  ownerEmail: string | null
+): Promise<number> {
+  if (!lineSupabase) return 0;
+  let syncedTimeRexCount = 0;
+  const todayJstStr = new Date(Date.now() + 9 * 60 * 60 * 1000).toISOString().slice(0, 10);
+  const ownerHostEmail = ownerEmail ? [String(ownerEmail).toLowerCase()] : [];
+  try {
+    for (const ev of events) {
+      if (ev.date < todayJstStr) continue;
+      const booking = parseTimeRexCalendarEvent(ev, ownerHostEmail);
+      if (booking) {
+        const resSync = await syncTimeRexBookingToCrm(booking, lineSupabase, ownerId);
+        if (resSync.success && resSync.action !== 'skipped_no_change') {
+          syncedTimeRexCount++;
+          if (
+            resSync.contactId &&
+            (booking.bookingAction === 'confirmed' || booking.bookingAction === 'rescheduled')
+          ) {
+            await enqueueScenariosForContact(resSync.contactId, 'booking_created', ownerId);
+          }
+        }
+      }
+    }
+  } catch (calSyncErr) {
+    console.warn('[CalendarSync] TimeRex calendar sync warning:', calSyncErr);
+  }
+  return syncedTimeRexCount;
+}
+
+async function saveGoogleCalendarSyncConfig(config: SavedGoogleCalendarConfig): Promise<void> {
+  if (!lineSupabase || !config.ownerId) return;
+  try {
+    await lineSupabase.from('automation_controls').upsert(
+      {
+        id: `google_calendar_ical_${config.ownerId}`,
+        target: CALENDAR_ICAL_CONTROL_TARGET,
+        paused: false,
+        reason: JSON.stringify({
+          ownerId: config.ownerId,
+          ownerEmail: config.ownerEmail,
+          icalUrl: config.icalUrl,
+          calendarName: config.calendarName,
+          lastSyncedAt: config.lastSyncedAt || new Date().toISOString(),
+        }),
+        updated_by: config.ownerEmail || config.ownerId,
+        updated_at: new Date().toISOString(),
+      },
+      { onConflict: 'id' }
+    );
+  } catch (err) {
+    console.warn('[CalendarSync] Persist config warning:', err);
+  }
+}
+
+async function loadGoogleCalendarSyncConfig(ownerId: string): Promise<SavedGoogleCalendarConfig | null> {
+  if (!lineSupabase || !ownerId) return null;
+  try {
+    const { data } = await lineSupabase
+      .from('automation_controls')
+      .select('reason, paused, updated_at')
+      .eq('id', `google_calendar_ical_${ownerId}`)
+      .maybeSingle();
+    if (!data || data.paused || !data.reason) return null;
+    const parsed = typeof data.reason === 'string' ? JSON.parse(data.reason) : data.reason;
+    if (!parsed?.icalUrl) return null;
+    return {
+      ownerId: parsed.ownerId || ownerId,
+      ownerEmail: parsed.ownerEmail || null,
+      icalUrl: String(parsed.icalUrl),
+      calendarName: String(parsed.calendarName || '事業用Googleカレンダー'),
+      lastSyncedAt: parsed.lastSyncedAt || data.updated_at || null,
+    };
+  } catch {
+    return null;
+  }
+}
+
+async function runScheduledGoogleCalendarSync(): Promise<{ syncedCalendars: number; syncedBookings: number }> {
+  if (!lineSupabase) return { syncedCalendars: 0, syncedBookings: 0 };
+  let syncedCalendars = 0;
+  let syncedBookings = 0;
+  try {
+    const { data: configs } = await lineSupabase
+      .from('automation_controls')
+      .select('id, reason, paused, updated_at')
+      .eq('target', CALENDAR_ICAL_CONTROL_TARGET)
+      .eq('paused', false)
+      .limit(20);
+
+    for (const row of configs || []) {
+      try {
+        if (!row.reason) continue;
+        const parsed = typeof row.reason === 'string' ? JSON.parse(row.reason) : row.reason;
+        const icalUrl = String(parsed?.icalUrl || '').trim();
+        const ownerId = String(parsed?.ownerId || String(row.id).replace(/^google_calendar_ical_/, '')).trim();
+        if (!icalUrl || !ownerId || isDisallowedSsrfUrl(icalUrl)) continue;
+
+        const lastMs = parsed?.lastSyncedAt ? Date.parse(String(parsed.lastSyncedAt)) : 0;
+        if (lastMs && Date.now() - lastMs < SCHEDULED_CALENDAR_MIN_INTERVAL_MS) {
+          continue;
+        }
+
+        const controller = new AbortController();
+        const timeout = setTimeout(() => controller.abort(), 12000);
+        const response = await fetch(icalUrl, {
+          signal: controller.signal,
+          headers: {
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) MST-AI-OS-Calendar/1.0',
+            Accept: 'text/calendar, text/plain, */*',
+          },
+        }).finally(() => clearTimeout(timeout));
+        if (!response.ok) continue;
+
+        const icsText = await response.text();
+        if (!icsText.includes('BEGIN:VCALENDAR')) continue;
+
+        const { calendarName, events } = parseIcalendar(icsText);
+        const bookings = await syncTimeRexEventsFromIcalEvents(events, ownerId, parsed?.ownerEmail || null);
+        syncedCalendars++;
+        syncedBookings += bookings;
+
+        await saveGoogleCalendarSyncConfig({
+          ownerId,
+          ownerEmail: parsed?.ownerEmail || null,
+          icalUrl,
+          calendarName,
+          lastSyncedAt: new Date().toISOString(),
+        });
+      } catch (singleErr) {
+        console.warn('[CalendarSync] Scheduled single feed warning:', singleErr);
+      }
+    }
+  } catch (err) {
+    console.warn('[CalendarSync] Scheduled calendar sync warning:', err);
+  }
+  return { syncedCalendars, syncedBookings };
+}
+
+app.get('/api/calendar/sync-config', requireAuth, async (req, res) => {
+  const user = (req as any).user;
+  const saved = await loadGoogleCalendarSyncConfig(String(user?.id || ''));
+  if (!saved) {
+    return res.json({ configured: false });
+  }
+  return res.json({
+    configured: true,
+    icalUrl: saved.icalUrl,
+    calendarName: saved.calendarName,
+    lastSyncedAt: saved.lastSyncedAt,
+  });
+});
+
+app.delete('/api/calendar/sync-config', requireAuth, async (req, res) => {
+  if (!lineSupabase) return res.status(503).json({ error: 'DB接続が設定されていません。' });
+  const user = (req as any).user;
+  try {
+    await lineSupabase
+      .from('automation_controls')
+      .update({ paused: true, updated_at: new Date().toISOString() })
+      .eq('id', `google_calendar_ical_${user.id}`);
+    return res.json({ success: true });
+  } catch (err: any) {
+    return res.status(500).json({ error: err?.message || 'カレンダー同期設定の解除に失敗しました。' });
   }
 });
 
@@ -13048,6 +13232,12 @@ async function startStandaloneServer() {
   const runMarketingAutomationLoop = async () => {
     try {
       const processedCount = await processMarketingAutomationJobs();
+      await Promise.all([
+        runScheduledGoogleCalendarSync().catch(() => ({ syncedCalendars: 0, syncedBookings: 0 })),
+        lineSupabase
+          ? checkOverdueMeetingCompletionReminders(lineSupabase).catch(() => ({ checked: 0, created: 0 }))
+          : Promise.resolve({ checked: 0, created: 0 }),
+      ]);
       if (processedCount > 0) {
         // ジョブが処理された場合は基本間隔（2分）にリセット
         currentMarketingPollIntervalMs = MIN_MARKETING_POLL_INTERVAL_MS;

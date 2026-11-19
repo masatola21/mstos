@@ -46,7 +46,9 @@ import {
   clearGoogleCalendarSync,
   fetchGoogleCalendarFromIcal,
   parseIcalStringClient,
-  syncTimeRexFromInboxHistory
+  syncTimeRexFromInboxHistory,
+  fetchServerGoogleSyncConfig,
+  clearServerGoogleSyncConfig
 } from '../../services/calendarService';
 import type { GoogleSyncedEvent } from '../../types/calendar';
 import { todayJst } from '../../utils/date';
@@ -190,19 +192,28 @@ export const IntegratedCalendarWorkspace: React.FC<Props> = ({
     setEventCompleteFeedback(null);
   }, [selectedEvent?.id]);
 
-  // Background auto-sync of Google Calendar if iCal URL is set
+  // Background auto-sync of Google Calendar (local cache OR server-saved iCal URL)
   useEffect(() => {
-    const storedUrl = getStoredGoogleIcalUrl();
-    if (storedUrl) {
-      void (async () => {
-        const res = await fetchGoogleCalendarFromIcal(storedUrl);
-        if (res.success) {
-          setGoogleEvents(res.events);
-          setGoogleSyncInfo(getGoogleCalendarSyncInfo());
-          if (res.syncedTimeRexCount && res.syncedTimeRexCount > 0) void fetchData();
+    void (async () => {
+      let targetUrl = getStoredGoogleIcalUrl();
+      if (!targetUrl) {
+        const serverConfig = await fetchServerGoogleSyncConfig();
+        if (serverConfig.configured && serverConfig.icalUrl) {
+          targetUrl = serverConfig.icalUrl;
+          setGoogleIcalUrl(targetUrl);
+          setSyncUrlInput(targetUrl);
         }
-      })();
-    }
+      }
+      if (!targetUrl) return;
+      const res = await fetchGoogleCalendarFromIcal(targetUrl);
+      if (res.success) {
+        setGoogleEvents(res.events);
+        setGoogleIcalUrl(targetUrl);
+        setSyncUrlInput(targetUrl);
+        setGoogleSyncInfo(getGoogleCalendarSyncInfo());
+        if (res.syncedTimeRexCount && res.syncedTimeRexCount > 0) void fetchData();
+      }
+    })();
   }, []);
 
   const handleSyncTimeRexInbox = async () => {
@@ -306,11 +317,12 @@ export const IntegratedCalendarWorkspace: React.FC<Props> = ({
   const handleClearGoogleSync = () => {
     if (window.confirm('Googleカレンダーの同期設定を解除し、取り込んだ予定を削除しますか？')) {
       clearGoogleCalendarSync();
+      void clearServerGoogleSyncConfig();
       setGoogleEvents([]);
       setGoogleIcalUrl('');
       setSyncUrlInput('');
       setGoogleSyncInfo({ lastSync: null, calendarName: '事業用Googleカレンダー' });
-      setSyncStatusMsg({ type: 'info', text: 'Googleカレンダーの同期を解除しました。' });
+      setSyncStatusMsg({ type: 'info', text: 'Googleカレンダーの同期（サーバー定期自動同期を含む）を解除しました。' });
     }
   };
 
@@ -1739,7 +1751,7 @@ export const IntegratedCalendarWorkspace: React.FC<Props> = ({
                   安心の独立同期（ブラウザ認証ポップアップ不要）
                 </p>
                 <p className="text-[11px] text-sky-800 leading-relaxed">
-                  現在AI Studioをご利用中の個人Googleアカウントとは一切連動しません。事業用Googleカレンダーの「iCal形式の秘密のアドレス」を使用するため、個人情報が漏洩したり混同されたりする心配なく、事業の予定のみを統合カレンダーへ重ねて表示できます。
+                  現在AI Studioをご利用中の個人Googleアカウントとは一切連動しません。事業用Googleカレンダーの「iCal形式の秘密のアドレス」を使用するため、個人情報が漏洩したり混同されたりする心配なく、事業の予定のみを統合カレンダーへ重ねて表示できます。さらに「今すぐ同期する」で保存するとサーバーにも安全に記憶され、画面を閉じていても約5分〜の定期実行でTimeRex予定をCRMへ自動同期します。
                 </p>
               </div>
             </div>

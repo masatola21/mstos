@@ -367,7 +367,14 @@ const DEAL_CLOSED_STATUSES = new Set(['成約', '受注', '失注', '見送り',
 
 async function ensureTaskDeduplicated(
   db: any,
-  params: { title: string; dedupNeedle: string; description: string; dueDate?: string | null; ownerId?: string | null }
+  params: {
+    title: string;
+    dedupNeedle: string;
+    description: string;
+    dueDate?: string | null;
+    ownerId?: string | null;
+    skipIfDoneExists?: boolean;
+  }
 ) {
   try {
     const { data: existingTasks } = await db
@@ -376,9 +383,11 @@ async function ensureTaskDeduplicated(
       .ilike('title', `%${params.dedupNeedle}%`)
       .limit(5);
 
-    const alreadyExists = (existingTasks || []).some(
-      (t: any) => t.title === params.title || (t.status !== 'done' && String(t.title || '').includes(params.dedupNeedle))
-    );
+    const alreadyExists = (existingTasks || []).some((t: any) => {
+      const title = String(t.title || '');
+      if (params.skipIfDoneExists && title.includes(params.dedupNeedle)) return true;
+      return title === params.title || (t.status !== 'done' && title.includes(params.dedupNeedle));
+    });
     if (alreadyExists) return false;
 
     const taskPayload: any = {
@@ -793,4 +802,121 @@ export async function syncTimeRexBookingToCrm(
       action: 'skipped_no_change',
     };
   }
+}
+
+/**
+ * Checks in JST (UTC+9) whether a scheduled meeting has passed its start time + grace window
+ * and falls within the active lookback window (default: 14 days).
+ */
+export function isMeetingOverdueForCompletionCheck(
+  meetingDate: string | null | undefined,
+  meetingStartTime?: string | null,
+  nowDate: Date = new Date(),
+  graceMinutes: number = 60,
+  maxAgeDays: number = 14
+): boolean {
+  const cleanDate = String(meetingDate || '').trim();
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(cleanDate)) return false;
+
+  const cleanTime = /^\d{1,2}:\d{2}/.test(String(meetingStartTime || '').trim())
+    ? String(meetingStartTime).trim().slice(0, 5).padStart(5, '0')
+    : '18:00';
+
+  const meetingUtcMs = Date.parse(`${cleanDate}T${cleanTime}:00+09:00`);
+  if (Number.isNaN(meetingUtcMs)) return false;
+
+  const nowMs = nowDate.getTime();
+  const elapsedMs = nowMs - meetingUtcMs;
+  if (elapsedMs < graceMinutes * 60_000) return false;
+  if (elapsedMs > maxAgeDays * 86_400_000) return false;
+  return true;
+}
+
+/**
+ * Scans booked leads ('面談予約済') and open scheduled deals ('日程確定', '初回面談')
+ * whose meeting datetime has passed, and raises ONE deduplicated staff reminder task
+ * ('【面談完了確認】...') so no post-meeting follow-up is forgotten while preventing false sends.
+ */
+export async function checkOverdueMeetingCompletionReminders(
+  db: any,
+  nowDate: Date = new Date()
+): Promise<{ checked: number; created: number }> {
+  if (!db) return { checked: 0, created: 0 };
+
+  let checked = 0;
+  let created = 0;
+
+  try {
+    const [{ data: bookedLeads }, { data: scheduledDeals }] = await Promise.all([
+      db
+        .from('leads')
+        .select('id, owner_id, contact_id, company_id, status, meeting_date, meeting_start_time, company:companies(company_name), contact:contacts(full_name)')
+        .eq('status', '面談予約済')
+        .limit(100),
+      db
+        .from('deals')
+        .select('id, owner_id, lead_id, company_id, proposal_status, proposal_plan_name, meeting_date, company:companies(company_name)')
+        .in('proposal_status', ['日程確定', '初回面談'])
+        .limit(100),
+    ]);
+
+    const processedLeadIds = new Set<string>();
+    const processedCompanyDates = new Set<string>();
+
+    for (const lead of bookedLeads || []) {
+      if (!lead.meeting_date) continue;
+      checked++;
+      if (!isMeetingOverdueForCompletionCheck(lead.meeting_date, lead.meeting_start_time, nowDate)) {
+        continue;
+      }
+      processedLeadIds.add(String(lead.id));
+      if (lead.company_id) {
+        processedCompanyDates.add(`${lead.company_id}::${lead.meeting_date}`);
+      }
+
+      const contactName = lead.contact?.full_name || lead.company?.company_name || 'お客様';
+      const timeLabel = lead.meeting_start_time ? ` ${String(lead.meeting_start_time).slice(0, 5)}` : '';
+      const inserted = await ensureTaskDeduplicated(db, {
+        title: `【面談完了確認】${contactName} 様（${lead.meeting_date}${timeLabel}）`,
+        dedupNeedle: `【面談完了確認】${contactName} 様（${lead.meeting_date}`,
+        description:
+          `予約していた面談日時（${lead.meeting_date}${timeLabel}）が経過しました。\n` +
+          `■ 面談が実施・完了した場合：リード／商談詳細またはカレンダーの「商談完了・お礼フォロー起動」を押してください（ステータスが「面談実施済／面談完了」になり、お礼フォローメールが自動予約されます）。\n` +
+          `■ 日程再調整・キャンセルとなった場合：ステータスを「再調整待ち」または「日程再調整」に変更してください。`,
+        dueDate: lead.meeting_date,
+        ownerId: lead.owner_id || null,
+        skipIfDoneExists: true,
+      });
+      if (inserted) created++;
+    }
+
+    for (const deal of scheduledDeals || []) {
+      if (!deal.meeting_date) continue;
+      if (deal.lead_id && processedLeadIds.has(String(deal.lead_id))) continue;
+      if (deal.company_id && processedCompanyDates.has(`${deal.company_id}::${deal.meeting_date}`)) continue;
+
+      checked++;
+      if (!isMeetingOverdueForCompletionCheck(deal.meeting_date, null, nowDate)) {
+        continue;
+      }
+
+      const targetName = deal.company?.company_name || deal.proposal_plan_name || '商談案件';
+      const inserted = await ensureTaskDeduplicated(db, {
+        title: `【面談完了確認】${targetName} 様（${deal.meeting_date}）`,
+        dedupNeedle: `【面談完了確認】${targetName} 様（${deal.meeting_date}`,
+        description:
+          `商談予定日（${deal.meeting_date}）が経過しました。\n` +
+          `■ 面談が実施・完了した場合：商談詳細またはカレンダーの「商談完了・お礼フォロー起動」を押して「面談完了」＆お礼フォローを起動してください。\n` +
+          `■ 未実施・変更の場合：ステータスを「日程再調整」または「保留」等へ更新してください。`,
+        dueDate: deal.meeting_date,
+        ownerId: deal.owner_id || null,
+        skipIfDoneExists: true,
+      });
+      if (inserted) created++;
+    }
+  } catch (err) {
+    console.warn('[TimeRexSync] checkOverdueMeetingCompletionReminders warning:', err);
+  }
+
+  return { checked, created };
 }

@@ -185,6 +185,45 @@ export async function syncTimeRexFromInboxHistory(): Promise<{
   }
 }
 
+export async function fetchServerGoogleSyncConfig(): Promise<{
+  configured: boolean;
+  icalUrl?: string;
+  calendarName?: string;
+  lastSyncedAt?: string | null;
+}> {
+  try {
+    const authHeaders = await getAuthHeaders();
+    if (!authHeaders.Authorization) return { configured: false };
+    const res = await fetch('/api/calendar/sync-config', {
+      method: 'GET',
+      headers: { ...authHeaders },
+    });
+    if (!res.ok) return { configured: false };
+    const data = await res.json().catch(() => ({}));
+    return {
+      configured: Boolean(data.configured && data.icalUrl),
+      icalUrl: typeof data.icalUrl === 'string' ? data.icalUrl : undefined,
+      calendarName: typeof data.calendarName === 'string' ? data.calendarName : undefined,
+      lastSyncedAt: typeof data.lastSyncedAt === 'string' ? data.lastSyncedAt : null,
+    };
+  } catch {
+    return { configured: false };
+  }
+}
+
+export async function clearServerGoogleSyncConfig(): Promise<void> {
+  try {
+    const authHeaders = await getAuthHeaders();
+    if (!authHeaders.Authorization) return;
+    await fetch('/api/calendar/sync-config', {
+      method: 'DELETE',
+      headers: { ...authHeaders },
+    });
+  } catch {
+    // non-blocking
+  }
+}
+
 /**
  * Google カレンダー 1-Click 追加用 URL を生成
  * ユーザーの Google カレンダー Web 画面が開き、タイトル・日時・対象企業・アジェンダが自動入力されます。
