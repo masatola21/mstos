@@ -490,8 +490,8 @@ export const TableManager: React.FC<TableManagerProps> = ({
   const kanbanColumns = React.useMemo(() => {
     const statusField = currentTable === 'deals' ? 'proposal_status' : currentTable === 'customers' ? 'contract_status' : 'status';
     const defaultCols: Record<string, string[]> = {
-      deals: ['新規', '提案中', '見積提出', '成約', '失注', '保留'],
-      leads: ['新規', '相談申込', '資料請求', '診断申込', 'ヒアリング済', '商談化', '失注・対象外'],
+      deals: ['日程確定', '初回面談', '面談完了', '要件提案', '見積提示', '最終交渉', '成約', '受注', '失注', '保留'],
+      leads: ['新規', '相談申込', '資料請求', '診断申込', '面談予約済', '再調整待ち', '面談実施済', 'ヒアリング済', '商談化', '成約', '失注・対象外'],
       prospects: ['未接触', 'アプローチ中', '検討中', '商談化', '保留'],
       customers: ['active', '契約中', '更新中', '解約'],
     };

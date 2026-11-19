@@ -428,8 +428,12 @@ export const TABLE_CONFIGS: Record<TableKey, TableConfig> = {
           { value: '相談申込', label: '相談申込' },
           { value: '資料請求', label: '資料請求' },
           { value: '診断申込', label: '診断申込' },
+          { value: '面談予約済', label: '面談予約済' },
+          { value: '再調整待ち', label: '再調整待ち' },
+          { value: '面談実施済', label: '面談実施済' },
           { value: 'ヒアリング済', label: 'ヒアリング済' },
           { value: '商談化', label: '商談化' },
+          { value: '成約', label: '成約' },
           { value: '失注・対象外', label: '失注・対象外' }
         ]
       },
@@ -525,12 +529,18 @@ export const TABLE_CONFIGS: Record<TableKey, TableConfig> = {
         label: '提案ステータス',
         type: 'select',
         options: [
+          { value: '日程確定', label: '日程確定' },
           { value: '初回面談', label: '初回面談' },
+          { value: '面談完了', label: '面談完了' },
           { value: '要件提案', label: '要件提案' },
           { value: '見積提示', label: '見積提示' },
           { value: '最終交渉', label: '最終交渉' },
+          { value: '成約', label: '成約' },
           { value: '受注', label: '受注' },
-          { value: '失注', label: '失注' }
+          { value: '保留', label: '保留' },
+          { value: '日程再調整', label: '日程再調整' },
+          { value: '失注', label: '失注' },
+          { value: '見送り', label: '見送り' }
         ]
       },
       { key: 'product_id', label: '提案商品', type: 'fk_product' },

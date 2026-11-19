@@ -25,9 +25,10 @@ import {
   Upload,
   Download,
   HelpCircle,
-  Info
+  Info,
+  Mail
 } from 'lucide-react';
-import { getSupabase } from '../../lib/supabaseClient';
+import { getSupabase, getAuthHeaders } from '../../lib/supabaseClient';
 import type { CalendarItem, CustomCalendarEvent, CalendarEventCategory } from '../../types/calendar';
 import type { ManagedInvoice, ManagedContract } from '../../types/matrix';
 import type { TaskItem } from '../../types';
@@ -44,7 +45,8 @@ import {
   getGoogleCalendarSyncInfo,
   clearGoogleCalendarSync,
   fetchGoogleCalendarFromIcal,
-  parseIcalStringClient
+  parseIcalStringClient,
+  syncTimeRexFromInboxHistory
 } from '../../services/calendarService';
 import type { GoogleSyncedEvent } from '../../types/calendar';
 import { todayJst } from '../../utils/date';
@@ -134,9 +136,13 @@ export const IntegratedCalendarWorkspace: React.FC<Props> = ({
   const [syncUrlInput, setSyncUrlInput] = useState(() => getStoredGoogleIcalUrl());
   const [syncLoading, setSyncLoading] = useState(false);
   const [syncStatusMsg, setSyncStatusMsg] = useState<{ type: 'success' | 'error' | 'info'; text: string } | null>(null);
+  const [timeRexSyncing, setTimeRexSyncing] = useState(false);
+  const [timeRexSyncMsg, setTimeRexSyncMsg] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
 
   // Modals
   const [selectedEvent, setSelectedEvent] = useState<CalendarItem | null>(null);
+  const [completingEventMeeting, setCompletingEventMeeting] = useState(false);
+  const [eventCompleteFeedback, setEventCompleteFeedback] = useState<{ ok: boolean; text: string } | null>(null);
   const [isNewEventModalOpen, setIsNewEventModalOpen] = useState(false);
   const [newEventDate, setNewEventDate] = useState(todayJst());
   const [newEventTitle, setNewEventTitle] = useState('');
@@ -180,6 +186,10 @@ export const IntegratedCalendarWorkspace: React.FC<Props> = ({
     void fetchData();
   }, []);
 
+  useEffect(() => {
+    setEventCompleteFeedback(null);
+  }, [selectedEvent?.id]);
+
   // Background auto-sync of Google Calendar if iCal URL is set
   useEffect(() => {
     const storedUrl = getStoredGoogleIcalUrl();
@@ -194,6 +204,69 @@ export const IntegratedCalendarWorkspace: React.FC<Props> = ({
       })();
     }
   }, []);
+
+  const handleSyncTimeRexInbox = async () => {
+    setTimeRexSyncing(true);
+    setTimeRexSyncMsg(null);
+    try {
+      const res = await syncTimeRexFromInboxHistory();
+      if (!res.success) {
+        setTimeRexSyncMsg({ type: 'error', text: res.error || 'TimeRexメール同期に失敗しました。' });
+        return;
+      }
+      if (res.syncedCount > 0) void fetchData();
+      setTimeRexSyncMsg({
+        type: 'success',
+        text: `TimeRexメール同期完了: 検出 ${res.detectedTimeRexEmails}件 ／ CRM反映 ${res.syncedCount}件`,
+      });
+    } catch (err: any) {
+      setTimeRexSyncMsg({ type: 'error', text: err?.message || 'TimeRexメール同期エラー' });
+    } finally {
+      setTimeRexSyncing(false);
+    }
+  };
+
+  const handleCompleteCalendarMeeting = async (ev: CalendarItem) => {
+    setCompletingEventMeeting(true);
+    setEventCompleteFeedback(null);
+    try {
+      const rawText = `${ev.title || ''}\n${ev.notes || ''}`;
+      const emails = rawText.match(/[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/g) || [];
+      const guestEmail = emails.find((e) => {
+        const lower = e.toLowerCase();
+        return !lower.endsWith('@mstcorp.info') && !lower.includes('timerex') && !lower.includes('noreply') && !lower.includes('no-reply');
+      });
+      const headers = await getAuthHeaders();
+      const res = await fetch('/api/meetings/complete', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', ...headers },
+        body: JSON.stringify({
+          companyId: ev.companyId || undefined,
+          dealId: ev.linkContext?.dealId || undefined,
+          leadId: ev.linkContext?.leadId || undefined,
+          guestEmail,
+        }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.error || '商談完了処理に失敗しました。');
+      const parts: string[] = [];
+      if (data.leadUpdated || data.dealUpdated) parts.push('ステータス更新');
+      if (data.tagAdded) parts.push('「相談実施済み」タグ付与');
+      if (typeof data.tasksCompleted === 'number' && data.tasksCompleted > 0) parts.push(`準備タスク${data.tasksCompleted}件完了`);
+      if (typeof data.scheduledFollowups === 'number' && data.scheduledFollowups > 0) {
+        parts.push(`面談後お礼フォロー${data.scheduledFollowups}件予約`);
+      }
+      setEventCompleteFeedback({
+        ok: true,
+        text: `面談完了・お礼フォロー連携を実行しました${parts.length > 0 ? `（${parts.join('・')}）` : ''}。`,
+      });
+      void fetchData();
+    } catch (err: any) {
+      setEventCompleteFeedback({ ok: false, text: err?.message || '面談完了処理に失敗しました。' });
+    } finally {
+      setCompletingEventMeeting(false);
+    }
+  };
 
   // Google Calendar Sync Actions
   const handlePerformGoogleSync = async () => {
@@ -613,6 +686,17 @@ export const IntegratedCalendarWorkspace: React.FC<Props> = ({
         {/* Action buttons */}
         <div className="flex flex-wrap items-center gap-2">
           <button
+            type="button"
+            onClick={() => void handleSyncTimeRexInbox()}
+            disabled={timeRexSyncing}
+            className="px-3 py-1.5 rounded-md bg-sky-50 hover:bg-sky-100 text-sky-800 border border-sky-200 font-medium text-xs transition flex items-center gap-1.5 cursor-pointer disabled:opacity-50"
+            title="受信トレイのTimeRex通知メール（予約・変更・キャンセル）をリード・商談へ反映します"
+          >
+            <Mail className={`w-3.5 h-3.5 text-sky-600 ${timeRexSyncing ? 'animate-pulse' : ''}`} />
+            <span>{timeRexSyncing ? 'TimeRex同期中...' : 'TimeRexメール同期'}</span>
+          </button>
+
+          <button
             onClick={() => {
               setSyncStatusMsg(null);
               setSyncUrlInput(googleIcalUrl);
@@ -652,6 +736,25 @@ export const IntegratedCalendarWorkspace: React.FC<Props> = ({
           </button>
         </div>
       </div>
+
+      {timeRexSyncMsg && (
+        <div
+          className={`px-3.5 py-2 rounded-xl border text-xs flex items-center justify-between gap-2 ${
+            timeRexSyncMsg.type === 'success'
+              ? 'bg-emerald-50 border-emerald-200 text-emerald-800'
+              : 'bg-rose-50 border-rose-200 text-rose-800'
+          }`}
+        >
+          <span>{timeRexSyncMsg.text}</span>
+          <button
+            type="button"
+            onClick={() => setTimeRexSyncMsg(null)}
+            className="p-0.5 rounded hover:bg-black/5 cursor-pointer"
+          >
+            <X className="w-3.5 h-3.5" />
+          </button>
+        </div>
+      )}
 
       {/* View Mode & Month Navigation Bar Card */}
       <div className="bg-white border border-slate-200 rounded-xl p-4 shadow-xs">
@@ -1230,9 +1333,39 @@ export const IntegratedCalendarWorkspace: React.FC<Props> = ({
               )}
             </div>
 
+            {/* Event Completion Feedback */}
+            {eventCompleteFeedback && (
+              <div
+                className={`mt-4 px-3 py-2 rounded-xl border text-xs flex items-center gap-2 ${
+                  eventCompleteFeedback.ok
+                    ? 'bg-emerald-50 border-emerald-200 text-emerald-800'
+                    : 'bg-rose-50 border-rose-200 text-rose-800'
+                }`}
+              >
+                <CheckCircle2 className="w-4 h-4 shrink-0" />
+                <span>{eventCompleteFeedback.text}</span>
+              </div>
+            )}
+
             {/* Action Buttons */}
             <div className="mt-5 flex flex-wrap items-center justify-between gap-3">
-              <div className="flex items-center gap-2">
+              <div className="flex flex-wrap items-center gap-2">
+                {/* Meeting Complete & Auto-Followup Trigger */}
+                {(selectedEvent.category === 'deal' ||
+                  (selectedEvent.category === 'google' &&
+                    /timerex|面談|相談|mtg|打ち合わせ/i.test(`${selectedEvent.title} ${selectedEvent.notes || ''}`))) && (
+                  <button
+                    type="button"
+                    disabled={completingEventMeeting}
+                    onClick={() => void handleCompleteCalendarMeeting(selectedEvent)}
+                    className="px-3.5 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-semibold text-xs transition shadow-sm flex items-center gap-1.5 cursor-pointer disabled:opacity-50"
+                    title="面談実施済・面談完了への更新と面談後お礼自動フォローメールを予約します"
+                  >
+                    <CheckCircle2 className="w-3.5 h-3.5" />
+                    <span>{completingEventMeeting ? '処理中...' : '商談完了・お礼フォロー起動'}</span>
+                  </button>
+                )}
+
                 {/* Google Calendar 1-Click Sync */}
                 <a
                   href={buildGoogleCalendarUrl({

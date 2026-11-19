@@ -144,7 +144,9 @@ export async function hasContactAlreadyProgressedBeyondNurturing(
     const progressedLead = (leadRes.data || []).find(
       (l: any) =>
         Boolean(l.meeting_date) ||
-        ['面談予約済', '商談化', '成約', '受注', '失注', '見送り'].includes(String(l.status || '').trim())
+        ['面談予約済', '面談実施済', 'ヒアリング済', '商談化', '成約', '受注', '失注', '見送り', '失注・対象外'].includes(
+          String(l.status || '').trim()
+        )
     );
     if (progressedLead) {
       return {
@@ -175,9 +177,23 @@ export async function hasContactAlreadyProgressedBeyondNurturing(
       const progressedDeal = (deals || []).find(
         (d: any) =>
           Boolean(d.meeting_date) ||
-          ['日程確定', '商談中', '提案中', '見積提示', '成約', '受注', '失注', '見送り', 'won', 'lost'].includes(
-            String(d.proposal_status || '').trim()
-          )
+          [
+            '日程確定',
+            '初回面談',
+            '面談完了',
+            '要件提案',
+            '商談中',
+            '提案中',
+            '見積提示',
+            '見積提出',
+            '最終交渉',
+            '成約',
+            '受注',
+            '失注',
+            '見送り',
+            'won',
+            'lost',
+          ].includes(String(d.proposal_status || '').trim())
       );
       if (progressedDeal) {
         return {

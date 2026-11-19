@@ -1,6 +1,9 @@
 import assert from 'node:assert';
 import {
   isTimeRexEmail,
+  isHostOrSystemEmail,
+  extractGuestEmailFromText,
+  classifyTimeRexEmailAction,
   parseTimeRexEmail,
   parseTimeRexCalendarEvent,
   syncTimeRexBookingToCrm,
@@ -9,8 +12,8 @@ import {
 
 console.log('=== Running Round 2-8-7 TimeRex Pattern A Sync Tests ===\n');
 
-// Test 1: isTimeRexEmail detection
-console.log('Test 1: isTimeRexEmail');
+// Test 1: isTimeRexEmail & host exclusion
+console.log('Test 1: isTimeRexEmail & host email exclusion');
 assert(
   isTimeRexEmail('no-reply@timerex.net', '【TimeRex】日程調整が完了しました', '大橋様 予定が確定しました'),
   'Should detect official TimeRex email'
@@ -20,13 +23,36 @@ assert(
   'Should detect forwarded TimeRex email'
 );
 assert(
+  isTimeRexEmail('noreply@timerex.net', '【TimeRex】予定がキャンセルされました', 'ゲスト予定キャンセル'),
+  'Should detect TimeRex cancellation email'
+);
+assert(
+  isTimeRexEmail('noreply@timerex.net', '【TimeRex】日程が変更されました', '予定が変更されました'),
+  'Should detect TimeRex reschedule email'
+);
+assert(
   !isTimeRexEmail('client@example.com', 'お見積書の件について', 'お世話になっております。見積もりをお願いします。'),
   'Should not false-positive on regular client email'
 );
-console.log('  ✓ isTimeRexEmail passed');
+assert(isHostOrSystemEmail('ohashi@mstcorp.info'), 'Should exclude @mstcorp.info domain emails');
+assert(isHostOrSystemEmail('contact@mstcorp.info'), 'Should exclude contact@mstcorp.info');
+assert(isHostOrSystemEmail('mst.shikumikaizen@gmail.com'), 'Should exclude legacy host gmail');
+assert(!isHostOrSystemEmail('guest@client-corp.jp'), 'Should accept guest email');
 
-// Test 2: parseTimeRexEmail parsing
-console.log('Test 2: parseTimeRexEmail');
+const hostFirstText = `
+ホスト: ohashi@mstcorp.info
+主催者メール: info@mstcorp.info
+メールアドレス: guest.client@example.co.jp
+`;
+assert.strictEqual(
+  extractGuestEmailFromText(hostFirstText),
+  'guest.client@example.co.jp',
+  'Should ignore @mstcorp.info host emails even when listed before guest email'
+);
+console.log('  ✓ isTimeRexEmail & host exclusion passed');
+
+// Test 2: parseTimeRexEmail parsing (confirmed, rescheduled, cancelled, reminder)
+console.log('Test 2: parseTimeRexEmail & classifyTimeRexEmailAction');
 const sampleEmailBody = `
 大橋真人 様
 
@@ -54,6 +80,7 @@ Google Meet: https://meet.google.com/abc-defg-hij
 
 const parsed = parseTimeRexEmail('【TimeRex】日程調整が完了しました', sampleEmailBody);
 assert(parsed !== null, 'Email should be parsed successfully');
+assert.strictEqual(parsed.bookingAction, 'confirmed');
 assert.strictEqual(parsed.guestName, '山田 太郎');
 assert.strictEqual(parsed.guestEmail, 'yamada.taro@example.co.jp');
 assert.strictEqual(parsed.meetingDate, '2026-11-20');
@@ -64,9 +91,32 @@ assert.strictEqual(parsed.phone, '090-1234-5678');
 assert.strictEqual(parsed.meetUrl, 'https://meet.google.com/abc-defg-hij');
 assert.strictEqual(parsed.eventName, '【30分】無料個別相談');
 assert.ok(parsed.memo?.includes('経営効率化'), 'Memo should contain comment');
-console.log('  ✓ parseTimeRexEmail passed');
 
-// Test 3: parseTimeRexCalendarEvent parsing
+const cancelParsed = parseTimeRexEmail(
+  '【TimeRex】予定がキャンセルされました',
+  '大橋様\n以下の予定がキャンセルされました。\nゲスト: 山田太郎 (yamada.taro@example.co.jp)\n日時: 2026年11月20日(金) 14:00 - 14:30'
+);
+assert(cancelParsed !== null, 'Cancel email should be parsed');
+assert.strictEqual(cancelParsed.bookingAction, 'cancelled');
+assert.strictEqual(cancelParsed.guestEmail, 'yamada.taro@example.co.jp');
+
+const reschedParsed = parseTimeRexEmail(
+  '【TimeRex】日程が変更されました',
+  '変更後の日時: 2026年11月28日(土) 11:00 - 11:30\nメールアドレス: yamada.taro@example.co.jp\n氏名: 山田 太郎'
+);
+assert(reschedParsed !== null, 'Reschedule email should be parsed');
+assert.strictEqual(reschedParsed.bookingAction, 'rescheduled');
+assert.strictEqual(reschedParsed.meetingDate, '2026-11-28');
+assert.strictEqual(reschedParsed.meetingStartTime, '11:00');
+
+assert.strictEqual(
+  classifyTimeRexEmailAction('【TimeRex】まもなく開始の予定があります', 'リマインド通知です'),
+  'reminder',
+  'Should classify reminder email'
+);
+console.log('  ✓ parseTimeRexEmail & classifyTimeRexEmailAction passed');
+
+// Test 3: parseTimeRexCalendarEvent parsing & cancellation status
 console.log('Test 3: parseTimeRexCalendarEvent');
 const sampleCalEvent = {
   title: '【TimeRex】佐藤花子 様',
@@ -74,7 +124,7 @@ const sampleCalEvent = {
   startTime: '10:00',
   endTime: '10:30',
   meetUrl: 'https://meet.google.com/xyz-uvwx-rst',
-  notes: 'ゲスト: 佐藤 花子 (sato.hanako@example.com)\nコメント: 介護保険外サービスの開業について',
+  notes: '主催: ohashi@mstcorp.info\nゲスト: 佐藤 花子 (sato.hanako@example.com)\nコメント: 介護保険外サービスの開業について',
 };
 
 const calParsed = parseTimeRexCalendarEvent(sampleCalEvent);
@@ -84,10 +134,15 @@ assert.strictEqual(calParsed.guestEmail, 'sato.hanako@example.com');
 assert.strictEqual(calParsed.meetingDate, '2026-11-22');
 assert.strictEqual(calParsed.meetingStartTime, '10:00');
 assert.strictEqual(calParsed.meetUrl, 'https://meet.google.com/xyz-uvwx-rst');
+assert.strictEqual(calParsed.bookingAction, 'confirmed');
+
+const calCancelled = parseTimeRexCalendarEvent({ ...sampleCalEvent, status: 'CANCELLED' });
+assert(calCancelled !== null);
+assert.strictEqual(calCancelled.bookingAction, 'cancelled');
 console.log('  ✓ parseTimeRexCalendarEvent passed');
 
-// Test 4: syncTimeRexBookingToCrm mock execution
-console.log('Test 4: syncTimeRexBookingToCrm');
+// Test 4+: syncTimeRexBookingToCrm mock execution
+console.log('Test 4: syncTimeRexBookingToCrm (confirmed, dedup, non-downgrade, reschedule, cancel, reminder)');
 (async () => {
   const mockDbState: {
     contacts: any[];
@@ -96,6 +151,7 @@ console.log('Test 4: syncTimeRexBookingToCrm');
     contact_tags: any[];
     tasks: any[];
     companies: any[];
+    marketing_automation_jobs: any[];
   } = {
     contacts: [
       { id: 'cnt-1', full_name: '既存リード客', email: 'lead.customer@example.com', company_id: 'comp-1' },
@@ -109,22 +165,37 @@ console.log('Test 4: syncTimeRexBookingToCrm');
     companies: [
       { id: 'comp-1', company_name: '既存株式会社' },
     ],
+    marketing_automation_jobs: [],
   };
 
   const createMockQuery = (table: string) => {
-    let selectedCols = '*';
     const filters: Array<(row: any) => boolean> = [];
-    let isSingle = false;
     let limitCount: number | null = null;
-    let orderCol: string | null = null;
-    let orderAsc = true;
+    let isDelete = false;
 
     const builder: any = {
-      select: (cols: string) => { selectedCols = cols; return builder; },
-      eq: (col: string, val: any) => { filters.push((r) => r[col] === val); return builder; },
-      ilike: (col: string, val: string) => { filters.push((r) => String(r[col] || '').toLowerCase() === val.toLowerCase()); return builder; },
+      select: (_cols: string) => builder,
+      eq: (col: string, val: any) => {
+        filters.push((r) => r[col] === val);
+        return builder;
+      },
+      neq: (col: string, val: any) => {
+        filters.push((r) => r[col] !== val);
+        return builder;
+      },
+      in: (col: string, vals: any[]) => {
+        filters.push((r) => vals.includes(r[col]));
+        return builder;
+      },
+      ilike: (col: string, val: string) => {
+        const needle = val.replace(/%/g, '').toLowerCase();
+        filters.push((r) => {
+          const v = String(r[col] || '').toLowerCase();
+          return val.includes('%') ? v.includes(needle) : v === needle;
+        });
+        return builder;
+      },
       or: (condition: string) => {
-        // Simple mock for contact_id eq
         const match = condition.match(/contact_id\.eq\.([^\s,]+)/);
         if (match) {
           const cid = match[1];
@@ -132,12 +203,15 @@ console.log('Test 4: syncTimeRexBookingToCrm');
         }
         return builder;
       },
-      order: (col: string, opt?: { ascending?: boolean }) => {
-        orderCol = col;
-        orderAsc = opt?.ascending ?? true;
+      order: (_col: string, _opt?: { ascending?: boolean }) => builder,
+      limit: (n: number) => {
+        limitCount = n;
         return builder;
       },
-      limit: (n: number) => { limitCount = n; return builder; },
+      delete: () => {
+        isDelete = true;
+        return builder;
+      },
       maybeSingle: async () => {
         const rows = (mockDbState as any)[table].filter((r: any) => filters.every((f) => f(r)));
         return { data: rows[0] || null, error: null };
@@ -155,16 +229,26 @@ console.log('Test 4: syncTimeRexBookingToCrm');
           }),
         };
       },
-      update: (payload: any) => {
-        return {
-          eq: async (col: string, val: any) => {
-            const rows = (mockDbState as any)[table].filter((r: any) => r[col] === val);
-            rows.forEach((r: any) => Object.assign(r, payload));
-            return { data: rows, error: null };
-          },
-        };
-      },
+      update: (payload: any) => ({
+        eq: async (col: string, val: any) => {
+          const rows = (mockDbState as any)[table].filter((r: any) => r[col] === val);
+          rows.forEach((r: any) => Object.assign(r, payload));
+          return { data: rows, error: null };
+        },
+        in: async (col: string, vals: any[]) => {
+          const rows = (mockDbState as any)[table].filter((r: any) => vals.includes(r[col]));
+          rows.forEach((r: any) => Object.assign(r, payload));
+          return { data: rows, error: null };
+        },
+      }),
       then: (resolve: any) => {
+        if (isDelete) {
+          const arr = (mockDbState as any)[table] as any[];
+          const kept = arr.filter((r) => !filters.every((f) => f(r)));
+          (mockDbState as any)[table] = kept;
+          resolve({ data: null, error: null });
+          return;
+        }
         let rows = (mockDbState as any)[table].filter((r: any) => filters.every((f) => f(r)));
         if (limitCount) rows = rows.slice(0, limitCount);
         resolve({ data: rows, error: null });
@@ -177,6 +261,7 @@ console.log('Test 4: syncTimeRexBookingToCrm');
     from: (table: string) => createMockQuery(table),
   };
 
+  // 4a. Initial booking confirmation
   const bookingToSync: TimeRexBookingInfo = {
     guestName: '既存リード客',
     guestEmail: 'lead.customer@example.com',
@@ -191,27 +276,81 @@ console.log('Test 4: syncTimeRexBookingToCrm');
   assert(syncResult.success, 'Sync must succeed');
   assert.strictEqual(syncResult.leadId, 'lead-1');
   assert(syncResult.dealId, 'Deal ID must be created');
+  assert.strictEqual(syncResult.action, 'updated_lead_and_created_deal');
 
-  // Verify Lead was updated to '面談予約済'
   const updatedLead = mockDbState.leads.find((l) => l.id === 'lead-1');
   assert.strictEqual(updatedLead.status, '面談予約済', 'Lead status must become 面談予約済');
   assert.strictEqual(updatedLead.meeting_date, '2026-11-25', 'Lead meeting date must match');
 
-  // Verify Deal was created in pipeline
   const createdDeal = mockDbState.deals.find((d) => d.id === syncResult.dealId);
   assert(createdDeal, 'Deal must exist in deals table');
   assert.strictEqual(createdDeal.proposal_status, '日程確定', 'Deal proposal_status must be 日程確定');
   assert.strictEqual(createdDeal.meeting_date, '2026-11-25', 'Deal meeting_date must match');
-  assert.strictEqual(createdDeal.lead_id, 'lead-1', 'Deal must link to lead_id');
 
-  // Verify Tag was applied
   const tag = mockDbState.contact_tags.find((t) => t.contact_id === 'cnt-1' && t.tag_id === '個別相談予約済み');
   assert(tag, '個別相談予約済み tag must be attached');
+  assert.strictEqual(mockDbState.tasks.length, 1, 'One prep task should be created');
 
-  // Verify Task was created
-  const task = mockDbState.tasks.find((t) => t.title.includes('TimeRex面談予約'));
-  assert(task, 'Staff task must be created');
+  // 4b. Re-running same booking sync must deduplicate task & return skipped_no_change
+  const duplicateSync = await syncTimeRexBookingToCrm(bookingToSync, mockDb, 'user-owner-1');
+  assert.strictEqual(duplicateSync.action, 'skipped_no_change', 'Repeat sync must not report changes');
+  assert.strictEqual(mockDbState.tasks.length, 1, 'Duplicate prep task must not be created');
 
-  console.log('  ✓ syncTimeRexBookingToCrm passed');
+  // 4c. Reminder email must not modify progressed stage or add tasks
+  updatedLead.status = '面談実施済';
+  createdDeal.proposal_status = '見積提示';
+  createdDeal.memo = '重要商談メモ（絶対に消えないこと）';
+  const reminderResult = await syncTimeRexBookingToCrm(
+    { ...bookingToSync, bookingAction: 'reminder' },
+    mockDb,
+    'user-owner-1'
+  );
+  assert.strictEqual(reminderResult.action, 'reminder_acknowledged');
+  assert.strictEqual(updatedLead.status, '面談実施済');
+  assert.strictEqual(createdDeal.proposal_status, '見積提示');
+  assert.strictEqual(mockDbState.tasks.length, 1);
+
+  // 4d. Non-downgrade protection: re-syncing confirmed booking must NOT overwrite 見積提示 / 面談実施済 or erase memo
+  const repeatConfirmedResult = await syncTimeRexBookingToCrm(
+    { ...bookingToSync, bookingAction: 'confirmed', sourceType: 'calendar' },
+    mockDb,
+    'user-owner-1'
+  );
+  assert(repeatConfirmedResult.success);
+  assert.strictEqual(updatedLead.status, '面談実施済', 'Progressed lead status must NOT downgrade');
+  assert.strictEqual(createdDeal.proposal_status, '見積提示', 'Progressed deal status must NOT downgrade');
+  assert.ok(createdDeal.memo.includes('重要商談メモ（絶対に消えないこと）'), 'Existing deal memo must be preserved');
+
+  // 4e. Reschedule updates date & creates reschedule task
+  updatedLead.status = '面談予約済';
+  createdDeal.proposal_status = '日程確定';
+  const reschedResult = await syncTimeRexBookingToCrm(
+    { ...bookingToSync, meetingDate: '2026-11-29', meetingStartTime: '16:30', bookingAction: 'rescheduled' },
+    mockDb,
+    'user-owner-1'
+  );
+  assert.strictEqual(reschedResult.action, 'rescheduled');
+  assert.strictEqual(updatedLead.meeting_date, '2026-11-29');
+  assert.strictEqual(createdDeal.meeting_date, '2026-11-29');
+  assert.strictEqual(mockDbState.tasks.length, 2, 'Reschedule task for new date should be created');
+
+  // 4f. Cancellation moves lead->再調整待ち, deal->日程再調整, deletes booking tag, creates cancel task
+  const cancelResult = await syncTimeRexBookingToCrm(
+    { ...bookingToSync, meetingDate: '2026-11-29', meetingStartTime: '16:30', bookingAction: 'cancelled' },
+    mockDb,
+    'user-owner-1'
+  );
+  assert.strictEqual(cancelResult.action, 'cancelled');
+  assert.strictEqual(updatedLead.status, '再調整待ち', 'Cancelled booking must move lead to 再調整待ち');
+  assert.strictEqual(updatedLead.meeting_date, null, 'Cancelled booking must clear lead meeting_date');
+  assert.strictEqual(createdDeal.proposal_status, '日程再調整', 'Cancelled booking must move deal to 日程再調整');
+  assert.strictEqual(createdDeal.meeting_date, null, 'Cancelled booking must clear deal meeting_date');
+  assert.strictEqual(mockDbState.contact_tags.length, 0, '個別相談予約済み tag must be removed on cancel');
+  assert.ok(
+    mockDbState.tasks.some((t) => t.title.includes('【TimeRexキャンセル対応】')),
+    'Cancellation task must be created'
+  );
+
+  console.log('  ✓ syncTimeRexBookingToCrm passed all assertions');
   console.log('\n=== All Round 2-8-7 TimeRex Pattern A Sync Tests Passed! ===\n');
 })();

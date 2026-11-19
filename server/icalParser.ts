@@ -14,6 +14,7 @@ export interface ParsedIcalEvent {
   notes?: string;
   calendarName?: string;
   rawUid?: string;
+  status?: string;
 }
 
 function unescapeIcalText(text: string): string {
@@ -140,6 +141,7 @@ export function parseIcalendar(icsString: string): { calendarName: string; event
           notes: currentEvent.notes,
           calendarName,
           rawUid: currentEvent.rawUid,
+          status: currentEvent.status,
         });
       }
       inEvent = false;
@@ -162,6 +164,10 @@ export function parseIcalendar(icsString: string): { calendarName: string; event
       case 'UID':
         currentEvent.rawUid = valuePart;
         currentEvent.id = `google-${valuePart.replace(/[^a-zA-Z0-9_-]/g, '_').slice(0, 60)}`;
+        break;
+
+      case 'STATUS':
+        currentEvent.status = unescapeIcalText(valuePart).toUpperCase();
         break;
 
       case 'SUMMARY':

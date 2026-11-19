@@ -33,8 +33,8 @@ export function isPostDealStageTrigger(trigger: string): boolean {
 }
 
 const CLOSED_DEAL_STATUSES = ['成約', '受注', 'won', 'closed_won', '失注', '見送り', 'lost'];
-const PRE_MEETING_STOP_LEAD_STATUSES = ['商談化', '成約', '受注'];
-const POST_MEETING_STOP_LEAD_STATUSES = ['成約', '受注', '失注', '見送り'];
+const PRE_MEETING_STOP_LEAD_STATUSES = ['商談化', '成約', '受注', '失注', '見送り', '失注・対象外'];
+const POST_MEETING_STOP_LEAD_STATUSES = ['成約', '受注', '失注', '見送り', '失注・対象外'];
 
 /**
  * stopOnDeal が有効なシナリオを停止すべきかを判定する。
@@ -817,11 +817,11 @@ export const MST_POST_MEETING_STARTER_SCENARIOS: Omit<MarketingScenario, 'id' | 
     channel: 'both',
     audience: '個別面談を完了したお客様（返信・成約で自動停止）',
     waitMinutes: 120,
-    emailSubject: '本日は貴重なお時間をいただきありがとうございました｜有限会社MST',
+    emailSubject: '個別面談のお礼と今後のご案内｜有限会社MST',
     emailBody:
-      '{recipient_name} 様\n\n有限会社MSTの大橋真人です。\n本日はお忙しい中、オンラインでの個別面談にお時間をいただき誠にありがとうございました。\n\n本日お伺いいたしました現場の状況や課題感をもとに、現在内容を整理しております。\nお約束しておりました資料・ご提案の準備が整い次第、改めてお送りいたしますので、今しばらくお待ちくださいませ。\n\nなお、面談後に「これも補足しておきたい」「社内でこんな話が出た」という点がございましたら、このまま本メールへのご返信にてお気軽にお知らせください。\n\n引き続き、どうぞよろしくお願い申し上げます。',
+      '{recipient_name} 様\n\n有限会社MSTの大橋真人です。\nこのたびはお忙しい中、オンラインでの個別面談にお時間をいただき誠にありがとうございました。\n\nお打ち合わせにてお伺いいたしました現場の状況や課題感をもとに、現在ご提案内容を整理しております。\nお約束しておりました資料・ご提案の準備が整い次第、改めてお送りいたしますので、今しばらくお待ちくださいませ。\n\nなお、面談後に「これも補足しておきたい」「社内でこんな話が出た」という点がございましたら、このまま本メールへのご返信にてお気軽にお知らせください。\n\n引き続き、どうぞよろしくお願い申し上げます。',
     messageBody:
-      '{recipient_name} 様\n有限会社MSTの大橋真人です。\n\n本日はお忙しい中、お打ち合わせのお時間をいただき誠にありがとうございました！\n\nお伺いした内容をもとに整理・準備を進めておりますので、まとまり次第またご連絡いたします。\n補足やご質問などございましたら、いつでもこのままLINEへお送りください。',
+      '{recipient_name} 様\n有限会社MSTの大橋真人です。\n\nこのたびはお忙しい中、お打ち合わせのお時間をいただき誠にありがとうございました！\n\nお伺いした内容をもとに整理・準備を進めておりますので、まとまり次第またご連絡いたします。\n補足やご質問などございましたら、いつでもこのままLINEへお送りください。',
     lineMessageType: 'text',
     lineImageUrl: '',
     linePreviewImageUrl: '',
@@ -832,7 +832,7 @@ export const MST_POST_MEETING_STARTER_SCENARIOS: Omit<MarketingScenario, 'id' | 
     flexButtonUrl: '',
     status: 'prepared',
     automationEnabled: true,
-    sendTimeWindow: '09:00-20:00',
+    sendTimeWindow: '09:00-21:00',
     preferredSendTime: '',
     stopOnBooking: false,
     stopOnDeal: true,

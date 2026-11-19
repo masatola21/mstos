@@ -1,9 +1,10 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { Mail, MailOpen, Reply, Send, RefreshCw, Settings, Trash2, CheckCircle2, AlertTriangle, AlertCircle, Copy, ShieldCheck, Activity, Sparkles, Globe, HelpCircle, Info, X, FileText, Maximize2, Minimize2, Ban, ShieldAlert } from 'lucide-react';
+import { Mail, MailOpen, Reply, Send, RefreshCw, Settings, Trash2, CheckCircle2, AlertTriangle, AlertCircle, Copy, ShieldCheck, Activity, Sparkles, Globe, HelpCircle, Info, X, FileText, Maximize2, Minimize2, Ban, ShieldAlert, CalendarCheck } from 'lucide-react';
 import { getSupabase, getAuthHeaders } from '../../lib/supabaseClient';
 import { useSendDrawer } from '../../context/SendDrawerContext';
 import { useInboxRealtime } from '../../hooks/useInboxRealtime';
+import { syncTimeRexFromInboxHistory } from '../../services/calendarService';
 import {
   newestReceivedAt,
   removeMessages,
@@ -62,6 +63,26 @@ function parseSender(raw: string): { name: string; address: string } {
   return { name: '', address: text };
 }
 
+function getTimeRexInboxBadge(m: InboxMessage): { label: string; className: string } | null {
+  const from = (m.from_email || '').toLowerCase();
+  const subject = (m.subject || '').toLowerCase();
+  const looksLikeTimeRex =
+    from.includes('timerex') ||
+    subject.includes('timerex') ||
+    /日程(?:確定|調整完了|変更|キャンセル)|日時(?:確定|変更)|予約(?:完了|確定|変更|キャンセル)/.test(m.subject || '');
+  if (!looksLikeTimeRex) return null;
+  if (/キャンセル|取消|cancel/.test(subject)) {
+    return { label: 'TimeRex キャンセル', className: 'bg-rose-50 text-rose-700 border-rose-200' };
+  }
+  if (/変更|再調整|resched/.test(subject)) {
+    return { label: 'TimeRex 変更', className: 'bg-amber-50 text-amber-700 border-amber-200' };
+  }
+  if (/リマインド|まもなく|間もなく|reminder/.test(subject)) {
+    return { label: 'TimeRex リマインド', className: 'bg-slate-100 text-slate-600 border-slate-200' };
+  }
+  return { label: 'TimeRex 予約', className: 'bg-sky-50 text-sky-700 border-sky-200' };
+}
+
 export interface MarketingEmailInboxViewProps {
   onNavigateSendCenter?: () => void;
   onUnreadCountChange?: (unreadCount: number) => void;
@@ -75,6 +96,7 @@ export const MarketingEmailInboxView: React.FC<MarketingEmailInboxViewProps> = (
   const { openSendDrawer } = useSendDrawer();
   const [ownerId, setOwnerId] = useState('');
   const [isBodyExpanded, setIsBodyExpanded] = useState(false);
+  const [syncingTimeRex, setSyncingTimeRex] = useState(false);
 
   useEffect(() => {
     if (!isBodyExpanded) return;
@@ -791,6 +813,26 @@ export const MarketingEmailInboxView: React.FC<MarketingEmailInboxViewProps> = (
     }
   };
 
+  const handleSyncTimeRexHistory = async () => {
+    setSyncingTimeRex(true);
+    setError('');
+    setNotice('');
+    try {
+      const res = await syncTimeRexFromInboxHistory();
+      if (!res.success) {
+        setError(res.error || 'TimeRexメールのCRM同期に失敗しました。');
+        return;
+      }
+      setNotice(
+        `TimeRex履歴をCRM同期しました（検出 ${res.detectedTimeRexEmails}件 ／ リード・商談・タスク反映 ${res.syncedCount}件）`
+      );
+    } catch (err: any) {
+      setError(err?.message || 'TimeRex履歴同期中にエラーが発生しました。');
+    } finally {
+      setSyncingTimeRex(false);
+    }
+  };
+
   return (
     <div className="space-y-4">
       {/* 受信設定および控え転送（Gmailコピー）統合設定ツールバー */}
@@ -910,7 +952,17 @@ export const MarketingEmailInboxView: React.FC<MarketingEmailInboxViewProps> = (
               <span>リアルタイム受信中（自動更新）</span>
             </span>
           </div>
-          <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center gap-2">
+            <button
+              type="button"
+              disabled={syncingTimeRex}
+              onClick={() => void handleSyncTimeRexHistory()}
+              className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg border border-sky-200 bg-sky-50 hover:bg-sky-100 text-sky-800 text-xs font-semibold shadow-2xs transition cursor-pointer disabled:opacity-50"
+              title="受信トレイ内のTimeRex通知メール（予約・変更・キャンセル）からリード・商談・タスクを最新化します"
+            >
+              <CalendarCheck className={`h-3 w-3 text-sky-600 ${syncingTimeRex ? 'animate-pulse' : ''}`} />
+              <span>{syncingTimeRex ? 'TimeRex同期中...' : 'TimeRex履歴をCRM同期'}</span>
+            </button>
             <button
               type="button"
               onClick={() => setShowSimulateModal(true)}
@@ -1208,6 +1260,7 @@ export const MarketingEmailInboxView: React.FC<MarketingEmailInboxViewProps> = (
               const sender = senderOf(m.from_email);
               const isRead = isEmailMessageRead(m, localReadIds);
               const isSelected = selected?.id === m.id;
+              const timeRexBadge = getTimeRexInboxBadge(m);
               return (
                 <div
                   key={m.id}
@@ -1236,6 +1289,11 @@ export const MarketingEmailInboxView: React.FC<MarketingEmailInboxViewProps> = (
                             className="inline-block w-2 h-2 rounded-full bg-sky-500 shrink-0"
                             title="未読"
                           />
+                        )}
+                        {timeRexBadge && (
+                          <span className={`shrink-0 px-1.5 py-0.5 rounded text-[10px] font-semibold border ${timeRexBadge.className}`}>
+                            {timeRexBadge.label}
+                          </span>
                         )}
                         <div
                           className={`truncate text-sm ${

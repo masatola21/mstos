@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { getSupabase } from '../lib/supabaseClient';
+import { getSupabase, getAuthHeaders } from '../lib/supabaseClient';
 import { TableKey, TABLE_CONFIGS } from '../types/database';
 import { formatJapaneseDate, formatJapaneseDateTime } from '../utils/date';
 import { 
@@ -60,6 +60,8 @@ export const RecordDetailModal: React.FC<RecordDetailModalProps> = ({
     formAnswers: Record<string, unknown>;
   } | null>(null);
   const [meetingModalOpen, setMeetingModalOpen] = useState(false);
+  const [completingMeeting, setCompletingMeeting] = useState(false);
+  const [meetingCompleteResult, setMeetingCompleteResult] = useState<{ ok: boolean; text: string } | null>(null);
 
   const fetchCommunicationHistory = async () => {
     if (!record) return;
@@ -105,6 +107,7 @@ export const RecordDetailModal: React.FC<RecordDetailModalProps> = ({
     let cancelled = false;
     setLinkedMeetingCtx(null);
     setMeetingModalOpen(false);
+    setMeetingCompleteResult(null);
     if (!['leads', 'deals', 'customers'].includes(tableKey)) return () => { cancelled = true; };
     const supabase = getSupabase();
     if (!supabase) return () => { cancelled = true; };
@@ -141,6 +144,44 @@ export const RecordDetailModal: React.FC<RecordDetailModalProps> = ({
     })();
     return () => { cancelled = true; };
   }, [record?.id, record?.company_id, record?.lead_id, tableKey]);
+
+  const handleCompleteMeetingAndFollowup = async () => {
+    if (!record || completingMeeting) return;
+    setCompletingMeeting(true);
+    setMeetingCompleteResult(null);
+    try {
+      const headers = await getAuthHeaders();
+      const res = await fetch('/api/meetings/complete', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', ...headers },
+        body: JSON.stringify({
+          diagnosisId: linkedMeetingCtx?.diagnosisId || undefined,
+          leadId: tableKey === 'leads' ? String(record.id) : record.lead_id ? String(record.lead_id) : undefined,
+          dealId: tableKey === 'deals' ? String(record.id) : record.deal_id ? String(record.deal_id) : undefined,
+          companyId: record.company_id ? String(record.company_id) : undefined,
+          contactId: record.contact_id ? String(record.contact_id) : (tableKey === 'contacts' ? String(record.id) : undefined),
+          guestEmail: record.email || record.contact?.email || undefined,
+        }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.error || '面談完了・フォロー起動に失敗しました。');
+      const details: string[] = [];
+      if (data.leadUpdated || data.dealUpdated) details.push('ステータス更新');
+      if (data.tagAdded) details.push('「相談実施済み」タグ付与');
+      if (typeof data.tasksCompleted === 'number' && data.tasksCompleted > 0) details.push(`準備タスク${data.tasksCompleted}件完了`);
+      if (typeof data.scheduledFollowups === 'number' && data.scheduledFollowups > 0) {
+        details.push(`面談後お礼フォロー${data.scheduledFollowups}件を自動予約`);
+      }
+      setMeetingCompleteResult({
+        ok: true,
+        text: `面談完了・お礼フォロー連携を実行しました${details.length > 0 ? `（${details.join('・')}）` : ''}。`,
+      });
+    } catch (err: any) {
+      setMeetingCompleteResult({ ok: false, text: err?.message || '面談完了・フォロー起動に失敗しました。' });
+    } finally {
+      setCompletingMeeting(false);
+    }
+  };
 
   // 標準フィールド一覧のキー
   const knownFieldKeys = new Set(config.fields.map(f => f.key));
@@ -667,6 +708,23 @@ export const RecordDetailModal: React.FC<RecordDetailModalProps> = ({
           )}
         </div>
 
+        {meetingCompleteResult && (
+          <div
+            className={`mx-6 mb-3 px-3.5 py-2.5 rounded-xl border text-xs flex items-center gap-2 ${
+              meetingCompleteResult.ok
+                ? 'bg-emerald-50 border-emerald-200 text-emerald-800'
+                : 'bg-rose-50 border-rose-200 text-rose-800'
+            }`}
+          >
+            {meetingCompleteResult.ok ? (
+              <CheckCircle2 className="w-4 h-4 shrink-0 text-emerald-600" />
+            ) : (
+              <AlertTriangle className="w-4 h-4 shrink-0 text-rose-600" />
+            )}
+            <span>{meetingCompleteResult.text}</span>
+          </div>
+        )}
+
         {/* Footer Actions - STRICTLY NO DELETE BUTTON */}
         <div className="px-6 py-4 border-t border-slate-200 bg-slate-50 flex items-center justify-between">
           <span className="text-xs text-slate-400">
@@ -787,6 +845,18 @@ export const RecordDetailModal: React.FC<RecordDetailModalProps> = ({
                 </>
               );
             })()}
+            {['leads', 'deals'].includes(tableKey) && (
+              <button
+                type="button"
+                disabled={completingMeeting}
+                onClick={() => void handleCompleteMeetingAndFollowup()}
+                className="px-3 py-1.5 rounded-lg text-xs font-semibold bg-emerald-600 hover:bg-emerald-700 text-white transition-colors flex items-center gap-1.5 cursor-pointer shadow-2xs disabled:opacity-50"
+                title="面談実施済・面談完了への更新、タグ付与、準備タスク完了、面談後お礼フォローメール予約を一括実行します"
+              >
+                {completingMeeting ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <CheckCircle2 className="w-3.5 h-3.5" />}
+                <span>{completingMeeting ? '処理中...' : '商談完了・お礼フォロー起動'}</span>
+              </button>
+            )}
             {linkedMeetingCtx && (
               <button
                 type="button"

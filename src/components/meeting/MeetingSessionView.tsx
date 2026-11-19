@@ -133,7 +133,7 @@ export const MeetingSessionView: React.FC<Props> = ({ diagnosisId, companyId, co
   const complete = async () => {
     if (await save('completed')) {
       setStatus('completed');
-      let followupNote = '';
+      const details: string[] = [];
       try {
         const res = await fetch('/api/meetings/complete', {
           method: 'POST',
@@ -141,15 +141,25 @@ export const MeetingSessionView: React.FC<Props> = ({ diagnosisId, companyId, co
           body: JSON.stringify({ diagnosisId, companyId }),
         });
         if (res.ok) {
-          const data = await res.json().catch(() => ({})) as { scheduledFollowups?: number };
+          const data = await res.json().catch(() => ({})) as {
+            scheduledFollowups?: number;
+            leadUpdated?: boolean;
+            dealUpdated?: boolean;
+            tagAdded?: boolean;
+            tasksCompleted?: number;
+          };
+          if (data.leadUpdated || data.dealUpdated) details.push('ステータスを「面談実施済／面談完了」へ更新');
+          if (data.tagAdded) details.push('タグ「相談実施済み」を付与');
+          if (typeof data.tasksCompleted === 'number' && data.tasksCompleted > 0) details.push(`準備タスク${data.tasksCompleted}件を完了`);
           if (typeof data.scheduledFollowups === 'number' && data.scheduledFollowups > 0) {
-            followupNote = `面談後お礼フォロー（${data.scheduledFollowups}件）も自動予約しました。`;
+            details.push(`面談後お礼フォロー${data.scheduledFollowups}件を予約`);
           }
         }
       } catch {
         // フォロー予約失敗でも商談完了自体は維持する
       }
-      setMessage(`商談を完了にしました。提案書を作ると、この内容が商談メモに入ります。${followupNote}`);
+      const extraNote = details.length > 0 ? `（${details.join('・')}）` : '';
+      setMessage(`商談を完了にしました。提案書を作ると、この内容が商談メモに入ります。${extraNote}`);
     }
   };
 

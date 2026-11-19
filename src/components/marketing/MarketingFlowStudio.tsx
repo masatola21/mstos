@@ -2031,7 +2031,7 @@ export const MarketingFlowStudio: React.FC<MarketingFlowStudioProps> = ({
                 <span className="text-lg leading-none mt-0.5">📅</span>
                 <div className="min-w-0">
                   <div className="text-xs font-bold text-slate-800 group-hover:text-blue-700">TimeRex 面談予約</div>
-                  <div className="text-[11px] text-slate-500 truncate">timerex.net/.../4ac78e37</div>
+                  <div className="text-[11px] text-slate-500 truncate">timerex.net/s/mstcorp/c3dd3eea</div>
                   <div className="text-[10px] text-blue-600 mt-0.5 font-mono">{'{booking_url}'}</div>
                 </div>
               </a>

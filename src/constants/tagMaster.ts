@@ -172,7 +172,7 @@ export const UNIFIED_TAG_MASTER: MasterTag[] = [
     category: 'action',
     categoryLabel: '行動・進捗',
     color: '#8b5cf6',
-    description: 'TimeRex等で個別相談・面談確定時に手動で付与（予約促進リマインド自動停止）',
+    description: 'TimeRex等での個別相談・面談確定時に自動付与（または手動付与／予約促進リマインド自動停止）',
     isExitConditionDefault: true,
   },
   {

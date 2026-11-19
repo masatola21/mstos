@@ -1,4 +1,4 @@
-import { getSupabase } from '../lib/supabaseClient';
+import { getSupabase, getAuthHeaders } from '../lib/supabaseClient';
 import { TableKey, Company, Product, Lead, Prospect, Deal, Customer, Diagnosis, AiReport, DiagnosisStatus } from '../types/database';
 import { executeDealWonAutomation } from './dealWonAutomationService';
 import { matrixService } from './matrixService';
@@ -792,6 +792,24 @@ export async function updateRecord(
       cleanPayload.updated_at = new Date().toISOString();
     }
 
+    // ステータス実遷移を検知するため更新前のステータスを取得（leads / deals のみ）
+    let previousStatus: string | undefined;
+    if (tableKey === 'leads' && 'status' in cleanPayload) {
+      const { data: prevRow } = await supabase
+        .from('leads')
+        .select('status')
+        .eq('id', id)
+        .maybeSingle();
+      previousStatus = String(prevRow?.status || '');
+    } else if (tableKey === 'deals' && 'proposal_status' in cleanPayload) {
+      const { data: prevRow } = await supabase
+        .from('deals')
+        .select('proposal_status')
+        .eq('id', id)
+        .maybeSingle();
+      previousStatus = String(prevRow?.proposal_status || '');
+    }
+
     // 商品テーブルの場合、柔軟価格設定をローカル/matrixServiceに退避保存
     if (tableKey === 'products') {
       const prodId = String(id);
@@ -865,10 +883,61 @@ export async function updateRecord(
       }
     }
 
+    const notifyStageEndpoint = async (path: string, body: Record<string, unknown>) => {
+      try {
+        const headers = await getAuthHeaders();
+        await fetch(path, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', ...headers },
+          body: JSON.stringify(body),
+        });
+      } catch (err) {
+        console.warn(`CRM stage automation (${path}) warning:`, err);
+      }
+    };
+
     if (tableKey === 'deals' && (cleanPayload.proposal_status === '成約' || cleanPayload.proposal_status === 'Won')) {
       void executeDealWonAutomation(String(id)).catch((err) => {
         console.warn('Auto deal-won automation warning on update:', err);
       });
+    }
+
+    if (tableKey === 'leads' && 'status' in cleanPayload) {
+      const nextStatus = String(cleanPayload.status || '').trim();
+      if (nextStatus && previousStatus !== nextStatus) {
+        if (nextStatus === '面談実施済' || nextStatus === 'ヒアリング済') {
+          void notifyStageEndpoint('/api/meetings/complete', {
+            leadId: String(id),
+            companyId: data?.company_id || cleanPayload.company_id || null,
+            contactId: data?.contact_id || cleanPayload.contact_id || null,
+            skipStatusUpdate: true,
+          });
+        } else if (['失注', '見送り', '失注・対象外', '面談予約済', '再調整待ち', '成約'].includes(nextStatus)) {
+          void notifyStageEndpoint('/api/crm/stage-transition', {
+            tableKey: 'leads',
+            recordId: String(id),
+            newStatus: nextStatus,
+          });
+        }
+      }
+    } else if (tableKey === 'deals' && 'proposal_status' in cleanPayload) {
+      const nextStatus = String(cleanPayload.proposal_status || '').trim();
+      if (nextStatus && previousStatus !== nextStatus) {
+        if (nextStatus === '面談完了') {
+          void notifyStageEndpoint('/api/meetings/complete', {
+            dealId: String(id),
+            companyId: data?.company_id || cleanPayload.company_id || null,
+            leadId: data?.lead_id || cleanPayload.lead_id || null,
+            skipStatusUpdate: true,
+          });
+        } else if (['失注', '見送り', '失注・対象外', 'キャンセル', '日程再調整', '日程確定', '成約', '受注', 'Won'].includes(nextStatus)) {
+          void notifyStageEndpoint('/api/crm/stage-transition', {
+            tableKey: 'deals',
+            recordId: String(id),
+            newStatus: nextStatus,
+          });
+        }
+      }
     }
 
     return { data };

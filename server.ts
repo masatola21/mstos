@@ -4180,21 +4180,27 @@ app.post('/api/email/webhook', express.raw({ type: 'application/json', limit: '2
       }
     }
 
-    // TimeRex 予約通知メールの自動検知とリード・商談パイプライン自動同期 (Pattern A)
-    if (isNew) {
+    // TimeRex 予約通知メール（確定・日程変更・キャンセル・リマインド）の自動検知とリード・商談パイプライン自動同期 (Pattern A)
+    const rawFromForTimeRex = String(message.from || event.data?.from || '');
+    const rawSubjForTimeRex = String(message.subject || event.data?.subject || '');
+    const rawBodyForTimeRex = String(message.text || '');
+    const isIncomingTimeRex = isTimeRexEmail(rawFromForTimeRex, rawSubjForTimeRex, rawBodyForTimeRex);
+
+    if (isNew && isIncomingTimeRex) {
       try {
-        const rawFrom = String(message.from || event.data.from || '');
-        const rawSubj = String(message.subject || event.data.subject || '');
-        const rawBody = String(message.text || '');
-        if (isTimeRexEmail(rawFrom, rawSubj, rawBody)) {
-          const booking = parseTimeRexEmail(rawSubj, rawBody, String(message.html || ''));
-          if (booking) {
-            console.log('[ResendWebhook] TimeRex booking notification detected:', booking.guestName, booking.meetingDate);
-            const syncResult = await syncTimeRexBookingToCrm(booking, lineSupabase, integration.owner_id);
-            console.log('[ResendWebhook] TimeRex sync completed:', syncResult);
-            if (syncResult.success && syncResult.contactId) {
-              await enqueueScenariosForContact(syncResult.contactId, 'booking_created', integration.owner_id);
-            }
+        const hostEmails = [integration.inbound_address, integration.backup_forward_address].filter(Boolean) as string[];
+        const booking = parseTimeRexEmail(rawSubjForTimeRex, rawBodyForTimeRex, String(message.html || ''), hostEmails);
+        if (booking) {
+          console.log('[ResendWebhook] TimeRex notification detected:', booking.bookingAction, booking.guestName, booking.meetingDate);
+          const syncResult = await syncTimeRexBookingToCrm(booking, lineSupabase, integration.owner_id);
+          console.log('[ResendWebhook] TimeRex sync completed:', syncResult);
+          if (
+            syncResult.success &&
+            syncResult.contactId &&
+            syncResult.action !== 'skipped_no_change' &&
+            (booking.bookingAction === 'confirmed' || booking.bookingAction === 'rescheduled')
+          ) {
+            await enqueueScenariosForContact(syncResult.contactId, 'booking_created', integration.owner_id);
           }
         }
       } catch (timerexErr: any) {
@@ -4204,28 +4210,32 @@ app.post('/api/email/webhook', express.raw({ type: 'application/json', limit: '2
   }
 
   // ★ 相手側からのアクション（メール返信）があった場合、配信予定の自動シナリオジョブ（メール・LINE両方）を自動停止
-  // （機械的自動配信をストップし、個別メール・有人対応へ自動で切り替え）
+  // （※ TimeRexのシステム通知メール・リマインドは顧客返信と誤認しないよう除外）
   try {
     const rawSender = String(message.from || event.data?.from || '');
-    const senderMatch = rawSender.match(/<([^>]+)>/) || rawSender.match(/([^\s<]+@[^\s>]+)/);
-    const senderEmail = (senderMatch ? senderMatch[1] : rawSender).trim().toLowerCase();
-    if (senderEmail) {
-      const { data: matchedContacts } = await lineSupabase
-        .from('contacts')
-        .select('id')
-        .ilike('email', senderEmail);
+    const rawSubj = String(message.subject || event.data?.subject || '');
+    const rawBody = String(message.text || '');
+    if (!isTimeRexEmail(rawSender, rawSubj, rawBody)) {
+      const senderMatch = rawSender.match(/<([^>]+)>/) || rawSender.match(/([^\s<]+@[^\s>]+)/);
+      const senderEmail = (senderMatch ? senderMatch[1] : rawSender).trim().toLowerCase();
+      if (senderEmail && !senderEmail.includes('timerex')) {
+        const { data: matchedContacts } = await lineSupabase
+          .from('contacts')
+          .select('id')
+          .ilike('email', senderEmail);
 
-      if (matchedContacts && matchedContacts.length > 0) {
-        const contactIds = matchedContacts.map((c: any) => c.id);
-        await lineSupabase
-          .from('marketing_automation_jobs')
-          .update({
-            status: 'skipped',
-            error_message: '顧客側からのメール返信アクションがあったため自動ステップシナリオを停止（メール・LINE共通／個別メール対応へ移行）',
-            updated_at: new Date().toISOString(),
-          })
-          .in('contact_id', contactIds)
-          .eq('status', 'queued');
+        if (matchedContacts && matchedContacts.length > 0) {
+          const contactIds = matchedContacts.map((c: any) => c.id);
+          await lineSupabase
+            .from('marketing_automation_jobs')
+            .update({
+              status: 'skipped',
+              error_message: '顧客側からのメール返信アクションがあったため自動ステップシナリオを停止（メール・LINE共通／個別メール対応へ移行）',
+              updated_at: new Date().toISOString(),
+            })
+            .in('contact_id', contactIds)
+            .eq('status', 'queued');
+        }
       }
     }
   } catch (emailPauseErr) {
@@ -5341,6 +5351,7 @@ async function processMarketingAutomationJobs(options: { forceImmediate?: boolea
             .select('id,from_email,received_at')
             .eq('owner_id', job.owner_id)
             .ilike('from_email', `%${normalizedEmail}%`)
+            .not('from_email', 'ilike', '%timerex%')
             .gte('received_at', replyBaselineAt)
             .limit(1);
           if (emailReplies && emailReplies.length > 0) {
@@ -7334,30 +7345,93 @@ app.post('/api/communications/send', async (req, res) => {
       }
     }
 
-    // 書類送付（診断レポート・提案書・契約書）完了時に対応する自動フォローを起動
+    // 書類送付（診断レポート・提案書・契約書）完了時に対応する自動フォローを起動＆CRM進捗タグ・商談ステージを自動同期
     const sourceTypeLower = String(row.source_type || '').toLowerCase();
     if ((row.document_id || sourceTypeLower === 'diagnosis_report') && contact.id) {
       try {
         let resolvedDocType = sentDocumentType;
-        if (!resolvedDocType && row.document_id) {
+        let sentDocMeta: { company_id?: string | null; deal_id?: string | null; lead_id?: string | null } | null = null;
+        if (row.document_id) {
           const { data: sentDoc } = await lineSupabase
             .from('customer_documents')
-            .select('document_type, title')
+            .select('document_type, title, company_id, deal_id, lead_id')
             .eq('id', row.document_id)
             .maybeSingle();
-          resolvedDocType = sentDoc?.document_type
-            ? resolveEffectiveCustomerDocumentType(sentDoc.document_type, sentDoc.title)
-            : null;
+          if (sentDoc) {
+            sentDocMeta = sentDoc;
+            if (!resolvedDocType && sentDoc.document_type) {
+              resolvedDocType = resolveEffectiveCustomerDocumentType(sentDoc.document_type, sentDoc.title);
+            }
+          }
         }
         if (!resolvedDocType && sourceTypeLower === 'diagnosis_report') {
           resolvedDocType = 'diagnosis_report';
         }
         const docType = String(resolvedDocType || '').toLowerCase();
-        if (docType === 'diagnosis_report' || docType.includes('report')) {
+        const isReport = docType === 'diagnosis_report' || docType.includes('report');
+        const isProposal = docType === 'proposal' || docType === 'quote' || docType === 'estimate';
+        const isContract = docType === 'contract' || docType.includes('contract');
+
+        // 対応する連絡先タグを自動付与（存在しない場合のみ）
+        const tagsToAttach: string[] = [];
+        if (isReport) tagsToAttach.push('診断レポート送付済');
+        if (isProposal || isReport) tagsToAttach.push('提案書提示済み');
+        for (const tagName of tagsToAttach) {
+          const { data: existingTag } = await lineSupabase
+            .from('contact_tags')
+            .select('id')
+            .eq('contact_id', contact.id)
+            .eq('tag_id', tagName)
+            .maybeSingle();
+          if (!existingTag) {
+            await lineSupabase.from('contact_tags').insert({
+              owner_id: authData.user.id,
+              contact_id: contact.id,
+              tag_id: tagName,
+              created_at: sentAt,
+            });
+          }
+        }
+
+        // 紐づく商談のステージを安全に前進（手前ステージの時のみ。成約・失注等は上書きしない）
+        const targetDealId = sentDocMeta?.deal_id || null;
+        const targetCompanyId = sentDocMeta?.company_id || contact.company_id || null;
+        const targetLeadId = sentDocMeta?.lead_id || null;
+        let activeDeal: any = null;
+        if (targetDealId) {
+          const { data: d } = await lineSupabase.from('deals').select('id, proposal_status').eq('id', targetDealId).maybeSingle();
+          activeDeal = d;
+        } else if (targetLeadId) {
+          const { data: d } = await lineSupabase.from('deals').select('id, proposal_status').eq('lead_id', targetLeadId).order('created_at', { ascending: false }).limit(1).maybeSingle();
+          activeDeal = d;
+        } else if (targetCompanyId) {
+          const { data: d } = await lineSupabase.from('deals').select('id, proposal_status').eq('company_id', targetCompanyId).order('created_at', { ascending: false }).limit(1).maybeSingle();
+          activeDeal = d;
+        }
+
+        if (activeDeal?.id) {
+          const currentStage = String(activeDeal.proposal_status || '').trim();
+          const todayJst = new Date(Date.now() + 9 * 60 * 60 * 1000).toISOString().slice(0, 10);
+          if ((isReport || isProposal) && ['', '新規', '日程確定', '初回面談', '面談完了', '日程再調整'].includes(currentStage)) {
+            await lineSupabase.from('deals').update({
+              proposal_status: docType === 'quote' || docType === 'estimate' ? '見積提示' : '要件提案',
+              proposal_created: true,
+              proposal_date: todayJst,
+              updated_at: sentAt,
+            }).eq('id', activeDeal.id);
+          } else if (isContract && !['最終交渉', '成約', '受注', '失注', '見送り'].includes(currentStage)) {
+            await lineSupabase.from('deals').update({
+              proposal_status: '最終交渉',
+              updated_at: sentAt,
+            }).eq('id', activeDeal.id);
+          }
+        }
+
+        if (isReport) {
           await enqueueScenariosForContact(contact.id, 'report_sent', authData.user.id);
         } else if (docType === 'proposal') {
           await enqueueScenariosForContact(contact.id, 'proposal_sent', authData.user.id);
-        } else if (docType === 'contract' || docType.includes('contract')) {
+        } else if (isContract) {
           await enqueueScenariosForContact(contact.id, 'contract_sent', authData.user.id);
         }
       } catch (docTriggerErr) {
@@ -9282,7 +9356,7 @@ app.post('/api/meetings/extra-questions', requireAuth, async (req, res) => {
   }
 });
 
-// 商談完了時の自動フォロー起動（面談お礼・検討状況お伺いステップの予約）
+// 商談完了時のステータス進行・タグ付与・準備タスク完了・自動フォロー起動（面談お礼・検討状況お伺い）
 app.post('/api/meetings/complete', requireAuth, async (req, res) => {
   if (!lineSupabase) return res.status(503).json({ error: 'DB接続が設定されていません。' });
   const user = (req as any).user;
@@ -9292,11 +9366,26 @@ app.post('/api/meetings/complete', requireAuth, async (req, res) => {
   const companyId = typeof req.body?.companyId === 'string' && req.body.companyId.trim()
     ? req.body.companyId.trim()
     : null;
+  const inputLeadId = typeof req.body?.leadId === 'string' && req.body.leadId.trim()
+    ? req.body.leadId.trim()
+    : null;
+  const inputDealId = typeof req.body?.dealId === 'string' && req.body.dealId.trim()
+    ? req.body.dealId.trim()
+    : null;
+  const inputContactId = typeof req.body?.contactId === 'string' && UUID_PATTERN.test(req.body.contactId)
+    ? req.body.contactId
+    : null;
+  const guestEmail = typeof req.body?.guestEmail === 'string' && req.body.guestEmail.includes('@')
+    ? req.body.guestEmail.trim().toLowerCase()
+    : null;
+  const skipStatusUpdate = req.body?.skipStatusUpdate === true;
+  const notesSummary = typeof req.body?.notesSummary === 'string' ? req.body.notesSummary.trim() : '';
 
   try {
-    let contactId: string | null = null;
+    let contactId: string | null = inputContactId;
     let resolvedCompanyId: string | null = companyId;
-    let resolvedLeadId: string | null = null;
+    let resolvedLeadId: string | null = inputLeadId;
+    let resolvedDealId: string | null = inputDealId;
 
     if (diagnosisId) {
       const { data: diag } = await lineSupabase
@@ -9306,17 +9395,45 @@ app.post('/api/meetings/complete', requireAuth, async (req, res) => {
         .maybeSingle();
       if (diag) {
         if (!resolvedCompanyId && diag.company_id) resolvedCompanyId = String(diag.company_id);
-        if (diag.lead_id) resolvedLeadId = String(diag.lead_id);
+        if (!resolvedLeadId && diag.lead_id) resolvedLeadId = String(diag.lead_id);
+      }
+    }
+
+    if (resolvedDealId) {
+      const { data: dealRow } = await lineSupabase
+        .from('deals')
+        .select('id, company_id, lead_id')
+        .eq('id', resolvedDealId)
+        .maybeSingle();
+      if (dealRow) {
+        if (!resolvedCompanyId && dealRow.company_id) resolvedCompanyId = String(dealRow.company_id);
+        if (!resolvedLeadId && dealRow.lead_id) resolvedLeadId = String(dealRow.lead_id);
       }
     }
 
     if (resolvedLeadId) {
       const { data: leadRow } = await lineSupabase
         .from('leads')
-        .select('contact_id')
+        .select('id, contact_id, company_id')
         .eq('id', resolvedLeadId)
         .maybeSingle();
-      if (leadRow?.contact_id) contactId = String(leadRow.contact_id);
+      if (leadRow) {
+        if (!contactId && leadRow.contact_id) contactId = String(leadRow.contact_id);
+        if (!resolvedCompanyId && leadRow.company_id) resolvedCompanyId = String(leadRow.company_id);
+      }
+    }
+
+    if (!contactId && guestEmail) {
+      const { data: matchedByEmail } = await lineSupabase
+        .from('contacts')
+        .select('id, company_id')
+        .ilike('email', guestEmail)
+        .limit(1)
+        .maybeSingle();
+      if (matchedByEmail?.id) {
+        contactId = String(matchedByEmail.id);
+        if (!resolvedCompanyId && matchedByEmail.company_id) resolvedCompanyId = String(matchedByEmail.company_id);
+      }
     }
 
     if (!contactId && diagnosisId) {
@@ -9327,12 +9444,13 @@ app.post('/api/meetings/complete', requireAuth, async (req, res) => {
         .limit(1)
         .maybeSingle();
       if (sub?.contact_id) contactId = String(sub.contact_id);
+      if (!resolvedLeadId && sub?.lead_id) resolvedLeadId = String(sub.lead_id);
     }
 
     if (!contactId && resolvedCompanyId) {
       const { data: companyLead } = await lineSupabase
         .from('leads')
-        .select('contact_id')
+        .select('id, contact_id')
         .eq('company_id', resolvedCompanyId)
         .not('contact_id', 'is', null)
         .order('updated_at', { ascending: false })
@@ -9340,6 +9458,7 @@ app.post('/api/meetings/complete', requireAuth, async (req, res) => {
         .maybeSingle();
       if (companyLead?.contact_id) {
         contactId = String(companyLead.contact_id);
+        if (!resolvedLeadId) resolvedLeadId = String(companyLead.id);
       } else {
         const { data: companyContact } = await lineSupabase
           .from('contacts')
@@ -9352,15 +9471,228 @@ app.post('/api/meetings/complete', requireAuth, async (req, res) => {
       }
     }
 
+    // リードID・商談IDが未解決なら連絡先・会社から補完
+    if (!resolvedLeadId && contactId) {
+      const { data: fallbackLead } = await lineSupabase
+        .from('leads')
+        .select('id')
+        .eq('contact_id', contactId)
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .maybeSingle();
+      if (fallbackLead?.id) resolvedLeadId = String(fallbackLead.id);
+    }
+
+    if (!resolvedDealId && (resolvedLeadId || resolvedCompanyId)) {
+      const dq = lineSupabase.from('deals').select('id');
+      if (resolvedLeadId) dq.eq('lead_id', resolvedLeadId);
+      else if (resolvedCompanyId) dq.eq('company_id', resolvedCompanyId);
+      const { data: fallbackDeal } = await dq.order('created_at', { ascending: false }).limit(1).maybeSingle();
+      if (fallbackDeal?.id) resolvedDealId = String(fallbackDeal.id);
+    }
+
+    const nowIso = new Date().toISOString();
+    let leadUpdated = false;
+    let dealUpdated = false;
+    let tagAdded = false;
+    let tasksCompleted = 0;
+
+    // 1. CRMステータス進行（後戻りしない安全更新）
+    if (!skipStatusUpdate) {
+      if (resolvedLeadId) {
+        const { data: currentLead } = await lineSupabase
+          .from('leads')
+          .select('id, status, notes')
+          .eq('id', resolvedLeadId)
+          .maybeSingle();
+        const leadStatus = String(currentLead?.status || '').trim();
+        if (currentLead && ['', '新規', '相談申込', '資料請求', '診断申込', '面談予約済', '再調整待ち'].includes(leadStatus)) {
+          const nextNotes = notesSummary
+            ? `${currentLead.notes || ''}\n\n[面談完了メモ] ${notesSummary}`.trim().slice(-12_000)
+            : currentLead.notes;
+          await lineSupabase
+            .from('leads')
+            .update({
+              status: '面談実施済',
+              last_contacted_at: nowIso,
+              ...(notesSummary ? { notes: nextNotes } : {}),
+            })
+            .eq('id', resolvedLeadId);
+          leadUpdated = true;
+        }
+      }
+
+      if (resolvedDealId) {
+        const { data: currentDeal } = await lineSupabase
+          .from('deals')
+          .select('id, proposal_status, memo')
+          .eq('id', resolvedDealId)
+          .maybeSingle();
+        const dealStatus = String(currentDeal?.proposal_status || '').trim();
+        if (currentDeal && ['', '新規', '日程確定', '初回面談', '日程再調整'].includes(dealStatus)) {
+          const nextMemo = notesSummary
+            ? `${currentDeal.memo || ''}\n[面談完了] ${notesSummary}`.trim().slice(-12_000)
+            : currentDeal.memo;
+          await lineSupabase
+            .from('deals')
+            .update({
+              proposal_status: '面談完了',
+              updated_at: nowIso,
+              ...(notesSummary ? { memo: nextMemo } : {}),
+            })
+            .eq('id', resolvedDealId);
+          dealUpdated = true;
+        }
+      }
+    }
+
+    // 2. タグ付与「相談実施済み」 & TimeRex準備タスク自動完了
+    if (contactId) {
+      try {
+        const { data: contactRow } = await lineSupabase
+          .from('contacts')
+          .select('full_name')
+          .eq('id', contactId)
+          .maybeSingle();
+
+        const { data: existingTag } = await lineSupabase
+          .from('contact_tags')
+          .select('id')
+          .eq('contact_id', contactId)
+          .eq('tag_id', '相談実施済み')
+          .maybeSingle();
+        if (!existingTag) {
+          await lineSupabase.from('contact_tags').insert({
+            owner_id: user?.id || null,
+            contact_id: contactId,
+            tag_id: '相談実施済み',
+            created_at: nowIso,
+          });
+          tagAdded = true;
+        }
+
+        if (contactRow?.full_name) {
+          const { data: openTasks } = await lineSupabase
+            .from('tasks')
+            .select('id')
+            .ilike('title', `%TimeRex%${contactRow.full_name}%`)
+            .neq('status', 'done')
+            .limit(5);
+          if (openTasks && openTasks.length > 0) {
+            const taskIds = openTasks.map((t: any) => t.id);
+            await lineSupabase
+              .from('tasks')
+              .update({ status: 'done', updated_at: nowIso })
+              .in('id', taskIds);
+            tasksCompleted = taskIds.length;
+          }
+        }
+      } catch (tagTaskErr) {
+        console.warn('[Meetings/Complete] Tag/Task sync warning:', tagTaskErr);
+      }
+    }
+
     if (!contactId) {
-      return res.json({ success: true, contactId: null, scheduledFollowups: 0 });
+      return res.json({
+        success: true,
+        contactId: null,
+        leadId: resolvedLeadId,
+        dealId: resolvedDealId,
+        leadUpdated,
+        dealUpdated,
+        tagAdded,
+        tasksCompleted,
+        scheduledFollowups: 0,
+      });
     }
 
     const scheduledFollowups = await enqueueScenariosForContact(contactId, 'meeting_completed', user?.id);
-    return res.json({ success: true, contactId, scheduledFollowups });
+    return res.json({
+      success: true,
+      contactId,
+      leadId: resolvedLeadId,
+      dealId: resolvedDealId,
+      leadUpdated,
+      dealUpdated,
+      tagAdded,
+      tasksCompleted,
+      scheduledFollowups,
+    });
   } catch (err: any) {
     console.warn('[Meetings/Complete] Non-fatal followup enqueue error:', err?.message || err);
     return res.status(500).json({ error: err?.message || '面談完了後のフォロー予約に失敗しました。' });
+  }
+});
+
+// 手動ステータス変更時（失注・見送り・商談化など）に待機中の自動フォローを即時停止・同期する
+app.post('/api/crm/stage-transition', requireAuth, async (req, res) => {
+  if (!lineSupabase) return res.status(503).json({ error: 'DB接続が設定されていません。' });
+  const tableKey = String(req.body?.tableKey || '');
+  const recordId = String(req.body?.recordId || '').trim();
+  const newStatus = String(req.body?.newStatus || '').trim();
+  if (!tableKey || !recordId || !newStatus) {
+    return res.status(400).json({ error: 'tableKey, recordId, newStatus are required.' });
+  }
+
+  try {
+    const contactIds = new Set<string>();
+    if (tableKey === 'leads') {
+      const { data: leadRow } = await lineSupabase
+        .from('leads')
+        .select('contact_id')
+        .eq('id', recordId)
+        .maybeSingle();
+      if (leadRow?.contact_id) contactIds.add(String(leadRow.contact_id));
+    } else if (tableKey === 'deals') {
+      const { data: dealRow } = await lineSupabase
+        .from('deals')
+        .select('lead_id, company_id')
+        .eq('id', recordId)
+        .maybeSingle();
+      if (dealRow?.lead_id) {
+        const { data: lr } = await lineSupabase.from('leads').select('contact_id').eq('id', dealRow.lead_id).maybeSingle();
+        if (lr?.contact_id) contactIds.add(String(lr.contact_id));
+      }
+      if (contactIds.size === 0 && dealRow?.company_id) {
+        const { data: contacts } = await lineSupabase.from('contacts').select('id').eq('company_id', dealRow.company_id).limit(5);
+        (contacts || []).forEach((c: any) => contactIds.add(String(c.id)));
+      }
+    }
+
+    let cancelledJobs = 0;
+    const isClosedLost = ['失注', '見送り', '失注・対象外', 'lost', 'キャンセル'].includes(newStatus);
+    const isDealWon = ['成約', '受注', 'won', 'closed_won'].includes(newStatus);
+    const isMeetingBooked = ['面談予約済', '日程確定'].includes(newStatus);
+
+    for (const cid of contactIds) {
+      if (isClosedLost) {
+        const { data: queued } = await lineSupabase
+          .from('marketing_automation_jobs')
+          .select('id')
+          .eq('contact_id', cid)
+          .eq('status', 'queued');
+        if (queued && queued.length > 0) {
+          await lineSupabase
+            .from('marketing_automation_jobs')
+            .update({
+              status: 'skipped',
+              error_message: `CRMステータスが「${newStatus}」へ変更されたため自動フォローを停止`,
+              updated_at: new Date().toISOString(),
+            })
+            .in('id', queued.map((q: any) => q.id));
+          cancelledJobs += queued.length;
+        }
+      } else if (isDealWon) {
+        cancelledJobs += await cancelSupersededQueuedJobs(lineSupabase, { contactId: cid, trigger: 'deal_won' });
+      } else if (isMeetingBooked) {
+        cancelledJobs += await cancelSupersededQueuedJobs(lineSupabase, { contactId: cid, trigger: 'booking_created' });
+      }
+    }
+
+    return res.json({ success: true, contactCount: contactIds.size, cancelledJobs });
+  } catch (err: any) {
+    console.warn('[CRM/StageTransition] Warning:', err?.message || err);
+    return res.status(500).json({ error: err?.message || 'ステージ連携に失敗しました。' });
   }
 });
 
@@ -12493,16 +12825,23 @@ app.post('/api/calendar/fetch-ical', async (req, res) => {
     const { calendarName, events } = parseIcalendar(icsText);
 
     // TimeRex カレンダー予定の自動検知とリード・商談自動同期 (Pattern A)
+    // ※ 本日以降のアクティブ予定のみ同期（過去予定で完了済み商談を巻き戻さない）
     let syncedTimeRexCount = 0;
+    const todayJstStr = new Date(Date.now() + 9 * 60 * 60 * 1000).toISOString().slice(0, 10);
+    const ownerHostEmail = authData.user.email ? [String(authData.user.email).toLowerCase()] : [];
     try {
       for (const ev of events) {
-        const booking = parseTimeRexCalendarEvent(ev);
+        if (ev.date < todayJstStr) continue;
+        const booking = parseTimeRexCalendarEvent(ev, ownerHostEmail);
         if (booking) {
-          const res = await syncTimeRexBookingToCrm(booking, lineSupabase, authData.user.id);
-          if (res.success) {
+          const resSync = await syncTimeRexBookingToCrm(booking, lineSupabase, authData.user.id);
+          if (resSync.success && resSync.action !== 'skipped_no_change') {
             syncedTimeRexCount++;
-            if (res.contactId) {
-              await enqueueScenariosForContact(res.contactId, 'booking_created', authData.user.id);
+            if (
+              resSync.contactId &&
+              (booking.bookingAction === 'confirmed' || booking.bookingAction === 'rescheduled')
+            ) {
+              await enqueueScenariosForContact(resSync.contactId, 'booking_created', authData.user.id);
             }
           }
         }
@@ -12527,7 +12866,7 @@ app.post('/api/calendar/fetch-ical', async (req, res) => {
   }
 });
 
-// TimeRex 過去受信メールの一括スキャン・同期エンドポイント
+// TimeRex 過去受信メールの一括スキャン・同期エンドポイント（時系列古い順で再生し最新状態を正確に反映）
 app.post('/api/timerex/sync-inbox-history', requireAuth, async (req, res) => {
   if (!lineSupabase) return res.status(503).json({ error: 'DB接続が設定されていません。' });
   const user = (req as any).user;
@@ -12542,24 +12881,33 @@ app.post('/api/timerex/sync-inbox-history', requireAuth, async (req, res) => {
 
     if (msgError) throw msgError;
 
+    const todayJstStr = new Date(Date.now() + 9 * 60 * 60 * 1000).toISOString().slice(0, 10);
+    const ownerHostEmail = user?.email ? [String(user.email).toLowerCase()] : [];
+    const chronologicalMessages = [...(messages || [])].reverse();
+
     let detectedCount = 0;
     let syncedCount = 0;
     const syncedList: any[] = [];
 
-    for (const msg of (messages || [])) {
+    for (const msg of chronologicalMessages) {
       if (isTimeRexEmail(msg.from_email || '', msg.subject || '', msg.text_body || '')) {
         detectedCount++;
-        const booking = parseTimeRexEmail(msg.subject || '', msg.text_body || '', msg.html_body || '');
+        const booking = parseTimeRexEmail(msg.subject || '', msg.text_body || '', msg.html_body || '', ownerHostEmail);
         if (booking) {
           const syncRes = await syncTimeRexBookingToCrm(booking, lineSupabase, user.id);
-          if (syncRes.success) {
+          if (syncRes.success && syncRes.action !== 'skipped_no_change' && syncRes.action !== 'reminder_acknowledged') {
             syncedCount++;
-            if (syncRes.contactId) {
+            if (
+              syncRes.contactId &&
+              (booking.bookingAction === 'confirmed' || booking.bookingAction === 'rescheduled') &&
+              booking.meetingDate >= todayJstStr
+            ) {
               await enqueueScenariosForContact(syncRes.contactId, 'booking_created', user.id);
             }
             syncedList.push({
               guestName: booking.guestName,
               meetingDate: booking.meetingDate,
+              bookingAction: booking.bookingAction,
               action: syncRes.action,
               leadId: syncRes.leadId,
               dealId: syncRes.dealId,
@@ -12587,26 +12935,39 @@ app.post('/api/timerex/webhook', async (req, res) => {
   if (!lineSupabase) return res.status(503).json({ error: 'DB接続が設定されていません。' });
   try {
     const payload = req.body || {};
+    const rawEventType = String(payload.event_type || payload.status || payload.action || '').toLowerCase();
+    const bookingAction = rawEventType.includes('cancel')
+      ? 'cancelled'
+      : rawEventType.includes('resched') || rawEventType.includes('update') || rawEventType.includes('change')
+      ? 'rescheduled'
+      : 'confirmed';
+
     const booking: any = {
       guestName: payload.guest_name || payload.name || payload.guestName || '予約ゲスト',
       guestEmail: (payload.guest_email || payload.email || payload.guestEmail || '').trim().toLowerCase(),
-      meetingDate: payload.meeting_date || payload.date || payload.start_time?.slice(0, 10),
+      meetingDate: payload.meeting_date || payload.date || payload.start_time?.slice(0, 10) || '',
       meetingStartTime: payload.start_time ? payload.start_time.slice(11, 16) : payload.startTime,
       meetingEndTime: payload.end_time ? payload.end_time.slice(11, 16) : payload.endTime,
       companyName: payload.company_name || payload.companyName,
       meetUrl: payload.meet_url || payload.meeting_url || payload.meetUrl,
       eventName: payload.event_name || payload.eventName || 'TimeRex面談',
       memo: payload.memo || payload.comment,
+      bookingAction,
       sourceType: 'webhook',
     };
 
-    if (!booking.guestEmail || !booking.meetingDate) {
+    if (!booking.guestEmail || (!booking.meetingDate && bookingAction !== 'cancelled')) {
       return res.status(400).json({ error: 'guestEmail and meetingDate are required.' });
     }
 
     const sysOwnerId = await resolveSystemOwnerId();
     const result = await syncTimeRexBookingToCrm(booking, lineSupabase, sysOwnerId);
-    if (result.success && result.contactId) {
+    if (
+      result.success &&
+      result.contactId &&
+      result.action !== 'skipped_no_change' &&
+      (bookingAction === 'confirmed' || bookingAction === 'rescheduled')
+    ) {
       await enqueueScenariosForContact(result.contactId, 'booking_created', sysOwnerId || undefined);
     }
     return res.json({ success: true, result });
