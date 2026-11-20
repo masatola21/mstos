@@ -22,6 +22,7 @@ export const BRANCH_EDUCATION_DELAY_DAYS = {
   diagnosis_completed: 9,
   material_requested: 9,
   public_form_consultation: 3,
+  consultation_human_reply: 2,
 } as const;
 
 export function getEducationStartDayForShift(shiftDays: number): number {
@@ -102,7 +103,7 @@ export const FUNNEL_ORCHESTRATION_RULES: readonly FunnelOrchestrationRuleSummary
     title: 'A案（長期育成型）：分岐・Web経由は直後フォロー完了後に教育7話へ合流',
     badge: '教育7話 長期育成',
     description:
-      'ウェルカム無反応は2日後から教育7話を開始。一方、分岐B/C（7日後〜）、診断・資料請求後（11日後〜）、Web相談フォーム（5日後〜）に入った未予約・未返信の方には直後フォロー完了の約4日後から教育7話を配信します（LINE未連携時はメール補完）。',
+      'ウェルカム無反応は2日後から教育7話を開始。一方、個別相談への人の返信から4日反応がない方（4日後〜）、分岐B/C（7日後〜）、診断・資料請求後（11日後〜）、未対応Web相談フォーム（5日後〜）の未予約・未返信の方には直後フォロー完了後に教育7話を自動配信します（LINE未連携時はメール補完）。',
   },
   {
     id: 'unified_post_meeting_followup',
@@ -241,6 +242,13 @@ export function getSupersededPhasesOnEvent(event: {
       cancelPhases: ['education_nurturing'],
       cancelSpecificTargets: otherBranches.map((t) => ({ trigger: 'tag_added', targetTag: t })),
       reason: `LINE分岐「${tagName}」を選択したため、別分岐および分岐前スケジュールの未送信ジョブを整理`,
+    };
+  }
+
+  if (trigger === 'consultation_human_replied') {
+    return {
+      cancelPhases: ['education_nurturing'],
+      reason: '人の返信送信に伴い、未送信の教育ステップを「返信4日後〜」へ再スケジュールするため整理',
     };
   }
 
@@ -405,7 +413,7 @@ export const SCENARIO_TRIGGER_LABELS: Record<string, string> = {
   lead_created: '見込み客登録時',
   material_requested: '資料請求送信時',
   outreach_first_sent: '営業第1通送信時',
-  line_registered: 'LINE友だち追加時',
+  line_registered: 'LINE登録された時 ＋ フォロー4日後',
   diagnosis_invited: '診断案内送信時',
   diagnosis_completed: '無料診断完了時',
   report_or_proposal_sent: 'ご提案書・レポート送付時（統合）',
@@ -930,15 +938,91 @@ export function isLegacyPostMeetingScenarioName(name: string): boolean {
   return LEGACY_POST_MEETING_PREFIXES.some((prefix) => trimmed.startsWith(prefix));
 }
 
+export function isLegacyBranchBScenario(
+  s: Pick<MarketingScenario, 'name' | 'trigger' | 'targetTag'>
+): boolean {
+  const name = (s.name || '').trim();
+  const trigger = String(s.trigger || '').trim();
+  if (!name) return false;
+  if (name.includes('直相談')) return true;
+  if (trigger === 'lead_created' && (name.includes('【B') || name.includes('個別相談'))) {
+    return true;
+  }
+  return false;
+}
+
+const ELIGIBLE_HUMAN_REPLY_SOURCE_TYPES = new Set([
+  'announcement_announcement',
+  'freeform_announcement',
+  'deal_invitation',
+  'form_announcement',
+  'diagnosis_announcement',
+  'line_reply',
+]);
+
+export function isEligibleSourceTypeForConsultationHumanReply(sourceType?: string | null): boolean {
+  const normalized = String(sourceType || '').trim().toLowerCase();
+  if (!normalized) return false;
+  return ELIGIBLE_HUMAN_REPLY_SOURCE_TYPES.has(normalized);
+}
+
+const NON_CONSULTATION_HUMAN_REPLY_LEAD_STATUSES = new Set([
+  '資料請求',
+  '診断申込',
+  '面談予約済',
+  '面談実施済',
+  'ヒアリング済',
+  '商談化',
+  '成約',
+  '受注',
+  '失注',
+  '見送り',
+  '失注・対象外',
+]);
+
+export function isConsultationLeadEligibleForHumanReplyEducation(params: {
+  hasProgressedBeyondNurturing: boolean;
+  isExistingCustomer: boolean;
+  latestLeadStatus?: string | null;
+  latestLeadSource?: string | null;
+  branchTags?: readonly string[];
+}): boolean {
+  if (params.hasProgressedBeyondNurturing || params.isExistingCustomer) {
+    return false;
+  }
+  const status = String(params.latestLeadStatus || '').trim();
+  if (status && NON_CONSULTATION_HUMAN_REPLY_LEAD_STATUSES.has(status)) {
+    return false;
+  }
+  const tags = params.branchTags || [];
+  const hasConsultBranchTag = tags.includes('選択:個別相談') || tags.includes('介護保険外開業');
+  if (status === '相談申込' || hasConsultBranchTag) {
+    return true;
+  }
+  if (status === '未対応') {
+    const src = String(params.latestLeadSource || '').trim();
+    return src.includes('LINE') || src.includes('HP') || src.includes('フォーム') || src.includes('相談');
+  }
+  return false;
+}
+
 export function mergeStarterScenarioBatch(
   existingScenarios: MarketingScenario[],
   presets: Omit<MarketingScenario, 'id' | 'updatedAt'>[],
-  options?: { replaceLegacyBranchA?: boolean; replaceLegacyPostMeeting?: boolean; nowMs?: number }
+  options?: {
+    replaceLegacyBranchA?: boolean;
+    replaceLegacyBranchB?: boolean;
+    replaceLegacyPostMeeting?: boolean;
+    nowMs?: number;
+  }
 ): { merged: MarketingScenario[]; addedCount: number; updatedCount: number } {
   const now = options?.nowMs ?? Date.now();
   const shouldReplacePostMeeting =
     options?.replaceLegacyPostMeeting ??
     presets.some((p) => p.trigger === 'report_or_proposal_sent');
+  const shouldReplaceBranchB =
+    options?.replaceLegacyBranchB ??
+    presets.some((p) => p.trigger === 'tag_added' && p.targetTag === '選択:個別相談');
   const extractStoryEp = (s: { name?: string; trigger?: string }) => {
     if (s.trigger !== 'line_registered') return null;
     const m = /^【第([1-7])話(?:[・\s]*最終話)?】/.exec((s.name || '').trim());
@@ -951,6 +1035,7 @@ export function mergeStarterScenarioBatch(
   const baseList = existingScenarios.filter((s) => {
     const nm = (s.name || '').trim();
     if (options?.replaceLegacyBranchA && isLegacyBranchAScenarioName(nm)) return false;
+    if (shouldReplaceBranchB && isLegacyBranchBScenario(s) && !presetNames.has(nm)) return false;
     if (shouldReplacePostMeeting && isLegacyPostMeetingScenarioName(nm)) return false;
     const ep = extractStoryEp(s);
     if (ep !== null && presetStoryEpisodes.has(ep) && !presetNames.has(nm)) {

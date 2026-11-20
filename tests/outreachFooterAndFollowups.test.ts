@@ -45,7 +45,10 @@ import {
   formatScenarioWaitMinutes,
   getEducationStartDayForShift,
   getSupersededPhasesOnEvent,
+  isConsultationLeadEligibleForHumanReplyEducation,
+  isEligibleSourceTypeForConsultationHumanReply,
   isLegacyBranchAScenarioName,
+  isLegacyBranchBScenario,
   isLegacyPostMeetingScenarioName,
   isOverlappingEducationStepForBranch,
   mergeStarterScenarioBatch,
@@ -743,6 +746,110 @@ assert.ok(docEmail.html.includes('max-width:760px'));
 assert.ok(docEmail.html.indexOf('書類をご確認ください。') < docEmail.html.indexOf('桧町127番地'));
 assert.ok(docEmail.html.indexOf('桧町127番地') < docEmail.html.indexOf('id="doc-preview-card"'));
 assert.ok(!docEmail.text.includes('<div id="doc-preview-card">'));
+console.log('  ✓ passed');
+
+console.log('Test 34: Human reply to consultation leads shifts education steps to Day 4+ and excludes non-consultation leads');
+assert.equal(getEducationStartDayForShift(BRANCH_EDUCATION_DELAY_DAYS.consultation_human_reply), 4);
+const onHumanReply = getSupersededPhasesOnEvent({ trigger: 'consultation_human_replied' });
+assert.deepEqual(onHumanReply.cancelPhases, ['education_nurturing']);
+
+assert.equal(isEligibleSourceTypeForConsultationHumanReply('announcement_announcement'), true);
+assert.equal(isEligibleSourceTypeForConsultationHumanReply('freeform_announcement'), true);
+assert.equal(isEligibleSourceTypeForConsultationHumanReply('deal_invitation'), true);
+assert.equal(isEligibleSourceTypeForConsultationHumanReply('line_reply'), true);
+assert.equal(isEligibleSourceTypeForConsultationHumanReply('sales_outreach'), false);
+assert.equal(isEligibleSourceTypeForConsultationHumanReply('customer_document'), false);
+assert.equal(isEligibleSourceTypeForConsultationHumanReply('marketing_broadcast'), false);
+assert.equal(isEligibleSourceTypeForConsultationHumanReply('customer_meeting_invitation'), false);
+
+assert.equal(
+  isConsultationLeadEligibleForHumanReplyEducation({
+    hasProgressedBeyondNurturing: false,
+    isExistingCustomer: false,
+    latestLeadStatus: '相談申込',
+    latestLeadSource: 'HP：相談・問い合わせ',
+    branchTags: [],
+  }),
+  true
+);
+assert.equal(
+  isConsultationLeadEligibleForHumanReplyEducation({
+    hasProgressedBeyondNurturing: false,
+    isExistingCustomer: false,
+    latestLeadStatus: '未対応',
+    latestLeadSource: 'LINE公式',
+    branchTags: ['選択:個別相談'],
+  }),
+  true
+);
+assert.equal(
+  isConsultationLeadEligibleForHumanReplyEducation({
+    hasProgressedBeyondNurturing: true,
+    isExistingCustomer: false,
+    latestLeadStatus: '相談申込',
+  }),
+  false
+);
+assert.equal(
+  isConsultationLeadEligibleForHumanReplyEducation({
+    hasProgressedBeyondNurturing: false,
+    isExistingCustomer: true,
+    latestLeadStatus: '相談申込',
+  }),
+  false
+);
+assert.equal(
+  isConsultationLeadEligibleForHumanReplyEducation({
+    hasProgressedBeyondNurturing: false,
+    isExistingCustomer: false,
+    latestLeadStatus: '資料請求',
+  }),
+  false
+);
+assert.equal(
+  isConsultationLeadEligibleForHumanReplyEducation({
+    hasProgressedBeyondNurturing: false,
+    isExistingCustomer: false,
+    latestLeadStatus: '診断申込',
+  }),
+  false
+);
+assert.equal(
+  isConsultationLeadEligibleForHumanReplyEducation({
+    hasProgressedBeyondNurturing: false,
+    isExistingCustomer: false,
+    latestLeadStatus: '新規',
+    latestLeadSource: '見込み企業リスト',
+    branchTags: [],
+  }),
+  false
+);
+console.log('  ✓ passed');
+
+console.log('Test 35: Legacy Branch B (直相談 / lead_created) is detected and cleaned up cleanly');
+const legacyDirectConsult = {
+  ...MST_CONSULT_STARTER_SCENARIOS[1],
+  id: 'legacy-direct-consult',
+  name: '【B】直相談フォロー（見込み客登録時）',
+  trigger: 'lead_created' as const,
+  targetTag: undefined,
+  updatedAt: 1000,
+};
+assert.equal(isLegacyBranchBScenario(legacyDirectConsult), true);
+assert.equal(isLegacyBranchBScenario(MST_CONSULT_STARTER_SCENARIOS[0]), false);
+assert.equal(isLegacyBranchBScenario(MST_CONSULT_STARTER_SCENARIOS[1]), false);
+
+const mergedConsult = mergeStarterScenarioBatch(
+  [legacyDirectConsult],
+  MST_CONSULT_STARTER_SCENARIOS,
+  { nowMs: 5000 }
+);
+assert.equal(mergedConsult.merged.length, MST_CONSULT_STARTER_SCENARIOS.length);
+assert.ok(!mergedConsult.merged.some((s) => s.name.includes('直相談')));
+console.log('  ✓ passed');
+
+console.log('Test 36: line_registered trigger label clearly shows follow-up +4 days timing');
+assert.equal(formatScenarioTriggerLabel('line_registered'), 'LINE登録された時 ＋ フォロー4日後');
 console.log('  ✓ passed');
 
 console.log('=== All Outreach Footer & Follow-up Tests Passed! ===');

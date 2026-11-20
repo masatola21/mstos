@@ -47,6 +47,7 @@ import {
 import { resolveConsultationInquiryType } from './src/utils/leadClassification.js';
 import {
   cancelSupersededQueuedJobs,
+  checkConsultationHumanReplyEligibility,
   computeContactEducationDelayShiftDays,
   getContactBranchTags,
   hasContactAlreadyProgressedBeyondNurturing,
@@ -3094,6 +3095,8 @@ async function enqueueScenariosForContact(
         resolvedEducationShiftDays = BRANCH_EDUCATION_DELAY_DAYS.diagnosis_completed;
       } else if (triggerName === 'material_requested') {
         resolvedEducationShiftDays = BRANCH_EDUCATION_DELAY_DAYS.material_requested;
+      } else if (triggerName === 'consultation_human_replied') {
+        resolvedEducationShiftDays = BRANCH_EDUCATION_DELAY_DAYS.consultation_human_reply;
       } else if (triggerName === 'tag_added' && options?.tagName) {
         if (options.tagName === '選択:個別相談') resolvedEducationShiftDays = BRANCH_EDUCATION_DELAY_DAYS['選択:個別相談'];
         else if (options.tagName === '介護保険外開業') resolvedEducationShiftDays = BRANCH_EDUCATION_DELAY_DAYS['介護保険外開業'];
@@ -3249,13 +3252,18 @@ async function enqueueScenariosForContact(
       }
 
       // 教育ステップは既に配信済み・配信中・予約済みの話数を二重スケジュールしない
+      // （consultation_human_replied は手前で未送信 queued を停止したうえで「返信4日後〜」へ再スケジュール可能にする）
       if (phase === 'education_nurturing') {
+        const blockingStatuses =
+          triggerName === 'consultation_human_replied'
+            ? ['processing', 'sent']
+            : ['queued', 'processing', 'sent'];
         const { data: existingEdu } = await lineSupabase
           .from('marketing_automation_jobs')
           .select('id')
           .eq('contact_id', contact.id)
           .eq('scenario_id', s.scenario_id)
-          .in('status', ['queued', 'processing', 'sent'])
+          .in('status', blockingStatuses)
           .limit(1)
           .maybeSingle();
         if (existingEdu) {
@@ -3381,22 +3389,27 @@ async function enqueueScenariosForContact(
           continue;
         }
 
-        // 【重複防止 2】直近2分以内に投入された同一コンタクト・シナリオ・チャネルのジョブがあればスキップ
-        const twoMinutesAgo = new Date(Date.now() - 2 * 60 * 1000).toISOString();
-        const { data: recentJob } = await lineSupabase
-          .from('marketing_automation_jobs')
-          .select('id')
-          .eq('contact_id', contact.id)
-          .eq('scenario_id', s.scenario_id)
-          .eq('channel', ch)
-          .gte('created_at', twoMinutesAgo)
-          .limit(1)
-          .maybeSingle();
+        // 【重複防止 2】直近2分以内に投入された同一コンタクト・シナリオ・チャネルの有効ジョブがあればスキップ
+        // （手前で skipped 整理済みの教育再スケジュールを阻害しないよう queued/processing/sent のみ対象）
+        if (triggerName !== 'consultation_human_replied') {
+          const twoMinutesAgo = new Date(Date.now() - 2 * 60 * 1000).toISOString();
+          const { data: recentJob } = await lineSupabase
+            .from('marketing_automation_jobs')
+            .select('id')
+            .eq('contact_id', contact.id)
+            .eq('scenario_id', s.scenario_id)
+            .eq('channel', ch)
+            .in('status', ['queued', 'processing', 'sent'])
+            .gte('created_at', twoMinutesAgo)
+            .limit(1)
+            .maybeSingle();
 
-        if (recentJob) {
-          continue;
+          if (recentJob) {
+            continue;
+          }
         }
 
+        const nowIso = new Date(nowMs).toISOString();
         const eventKey = isDelayedEducation
           ? `education_delayed:${triggerName}:${contact.id}:${s.scenario_id}:${ch}`
           : isUnifiedPostMeeting
@@ -3418,7 +3431,13 @@ async function enqueueScenariosForContact(
             consent_basis: consentBasis,
             due_at: dueAt,
             status: 'queued',
-          }, { onConflict: 'owner_id,event_key', ignoreDuplicates: true });
+            error_message: null,
+            created_at: nowIso,
+            updated_at: nowIso,
+          }, {
+            onConflict: 'owner_id,event_key',
+            ignoreDuplicates: triggerName !== 'consultation_human_replied',
+          });
 
         if (!insErr) enqueued++;
       }
@@ -7530,6 +7549,22 @@ app.post('/api/communications/send', async (req, res) => {
         }
       } catch (docTriggerErr) {
         console.warn('[Send] Document post-send automation trigger warning:', docTriggerErr);
+      }
+    } else if (!row.document_id && sourceTypeLower !== 'diagnosis_report' && contact.id) {
+      // 個別相談リード（HP相談フォーム / LINE個別相談・介護相談）へ人が2通目以降の返信を送った場合、
+      // 未予約・未契約であれば「人の返信から4日後〜」で教育ステップ7話を再スケジュールする（さらに返信/予約が来れば即停止）
+      try {
+        const replyCheck = await checkConsultationHumanReplyEligibility(lineSupabase, {
+          contactId: contact.id,
+          companyId: contact.company_id,
+          sourceType: row.source_type,
+          documentId: row.document_id,
+        });
+        if (replyCheck.eligible) {
+          await enqueueScenariosForContact(contact.id, 'consultation_human_replied', authData.user.id);
+        }
+      } catch (humanReplyErr) {
+        console.warn('[Send] Consultation human-reply education trigger warning:', humanReplyErr);
       }
     }
 

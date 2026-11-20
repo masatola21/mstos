@@ -2,6 +2,8 @@ import type { SupabaseClient } from '@supabase/supabase-js';
 import {
   classifyScenarioFunnelPhase,
   getSupersededPhasesOnEvent,
+  isConsultationLeadEligibleForHumanReplyEducation,
+  isEligibleSourceTypeForConsultationHumanReply,
   resolvePreferredDeliveryChannels,
 } from '../src/utils/followupStarterScenarios.js';
 
@@ -334,5 +336,79 @@ export async function cancelSupersededQueuedJobs(
   } catch (err) {
     console.warn('[FunnelOrchestration] cancelSupersededQueuedJobs warning:', err);
     return 0;
+  }
+}
+
+/**
+ * Web/LINE個別相談のリードへ人が手動返信（1対1送信）を送った際、
+ * 「人の返信から4日後に反応がない方だけ教育7話を開始」の対象になるかを判定する。
+ */
+export async function checkConsultationHumanReplyEligibility(
+  db: SupabaseClient,
+  params: {
+    contactId: string;
+    companyId?: string | null;
+    sourceType?: string | null;
+    documentId?: string | null;
+  }
+): Promise<{ eligible: boolean; reason: string }> {
+  if (!params.contactId) {
+    return { eligible: false, reason: '連絡先IDが未指定のため除外' };
+  }
+  if (params.documentId) {
+    return { eligible: false, reason: '重要書類送信のため個別相談返信トリガーから除外' };
+  }
+  if (!isEligibleSourceTypeForConsultationHumanReply(params.sourceType)) {
+    return { eligible: false, reason: `対象外の送信種別(${params.sourceType || 'unknown'})` };
+  }
+
+  try {
+    const [progression, branchTags, leadRes, customerRes] = await Promise.all([
+      hasContactAlreadyProgressedBeyondNurturing(db, params.contactId, params.companyId),
+      getContactBranchTags(db, { id: params.contactId }),
+      db
+        .from('leads')
+        .select('status, source, company_id')
+        .eq('contact_id', params.contactId)
+        .order('created_at', { ascending: false })
+        .limit(5),
+      params.companyId
+        ? db.from('customers').select('id').eq('company_id', params.companyId).limit(1)
+        : Promise.resolve({ data: [] as any[] }),
+    ]);
+
+    const latestLead = leadRes.data?.[0];
+    let isExistingCustomer = Boolean(customerRes.data && customerRes.data.length > 0);
+    if (!isExistingCustomer && latestLead?.company_id && latestLead.company_id !== params.companyId) {
+      const { data: leadCust } = await db
+        .from('customers')
+        .select('id')
+        .eq('company_id', latestLead.company_id)
+        .limit(1);
+      isExistingCustomer = Boolean(leadCust && leadCust.length > 0);
+    }
+
+    const eligible = isConsultationLeadEligibleForHumanReplyEducation({
+      hasProgressedBeyondNurturing: progression.progressed,
+      isExistingCustomer,
+      latestLeadStatus: latestLead?.status,
+      latestLeadSource: latestLead?.source,
+      branchTags,
+    });
+
+    if (!eligible) {
+      return {
+        eligible: false,
+        reason: progression.progressed
+          ? progression.reason
+          : isExistingCustomer
+          ? '既存顧客のため教育ステップ対象外'
+          : `リードステータス(${latestLead?.status || 'なし'})が個別相談返信フォロー対象外`,
+      };
+    }
+    return { eligible: true, reason: '個別相談リードへの有人返信を確認（4日後から教育7話へ合流）' };
+  } catch (err) {
+    console.warn('[FunnelOrchestration] checkConsultationHumanReplyEligibility warning:', err);
+    return { eligible: false, reason: '判定中にエラーが発生したためスキップ' };
   }
 }

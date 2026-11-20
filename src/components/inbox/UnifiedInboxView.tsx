@@ -31,7 +31,7 @@ import { MarketingLineInboxView } from '../marketing/MarketingLineInboxView';
 import { resolveConsultationInquiryType } from '../../utils/leadClassification';
 import { MarketingEmailInboxView } from '../marketing/MarketingEmailInboxView';
 import { useSendDrawer } from '../../context/SendDrawerContext';
-import { useVisiblePolling } from '../../hooks/useInboxRealtime';
+import { useInboxRealtime, useVisiblePolling } from '../../hooks/useInboxRealtime';
 import { MeetingSessionView } from '../meeting/MeetingSessionView';
 import { countUnreadEmails, loadLocalReadEmailIds } from '../../utils/inboxReadState';
 
@@ -256,10 +256,13 @@ export const UnifiedInboxView: React.FC<UnifiedInboxViewProps> = ({
   };
 
   // Load Form Submissions & Definitions & Customer Status
-  const loadSubmissions = async () => {
+  const loadSubmissions = async (opts?: { silent?: boolean }) => {
     if (!db) return;
-    setLoadingSubmissions(true);
-    setSubmissionError('');
+    const silent = Boolean(opts?.silent);
+    if (!silent) {
+      setLoadingSubmissions(true);
+      setSubmissionError('');
+    }
     try {
       const [subRes, formRes, custRes] = await Promise.all([
         db.from('diagnosis_submissions').select('*').order('submitted_at', { ascending: false }).limit(200),
@@ -268,7 +271,7 @@ export const UnifiedInboxView: React.FC<UnifiedInboxViewProps> = ({
       ]);
 
       if (subRes.error) {
-        setSubmissionError(`回答一覧を取得できませんでした: ${subRes.error.message}`);
+        if (!silent) setSubmissionError(`回答一覧を取得できませんでした: ${subRes.error.message}`);
       } else {
         const loaded = (subRes.data || []) as SubmissionItem[];
         setSubmissions(loaded);
@@ -283,7 +286,7 @@ export const UnifiedInboxView: React.FC<UnifiedInboxViewProps> = ({
             .eq('is_latest', true);
           if (reportRes.error) {
             console.warn('ai_reports load failed:', reportRes.error.message);
-            setSubmissionError(`診断レポートの作成状況を取得できませんでした: ${reportRes.error.message}`);
+            if (!silent) setSubmissionError(`診断レポートの作成状況を取得できませんでした: ${reportRes.error.message}`);
           } else {
             const versions: Record<string, number> = {};
             (reportRes.data || []).forEach((row: any) => {
@@ -308,9 +311,9 @@ export const UnifiedInboxView: React.FC<UnifiedInboxViewProps> = ({
         setCustomerCompanyIds(new Set(custRes.data.map((c: any) => c.company_id).filter(Boolean)));
       }
     } catch (err: any) {
-      setSubmissionError(err.message || 'データ取得エラー');
+      if (!silent) setSubmissionError(err.message || 'データ取得エラー');
     } finally {
-      setLoadingSubmissions(false);
+      if (!silent) setLoadingSubmissions(false);
     }
   };
 
@@ -319,8 +322,58 @@ export const UnifiedInboxView: React.FC<UnifiedInboxViewProps> = ({
     void loadSubmissions();
   }, []);
 
-  // バッジ集計の自動更新: 60秒ごと。タブが非表示の間は止まり、表示に戻ったときに更新する。
-  useVisiblePolling(loadCounts, 60_000);
+  const didMountChannelRef = useRef(false);
+  useEffect(() => {
+    if (!didMountChannelRef.current) {
+      didMountChannelRef.current = true;
+      return;
+    }
+    if (activeChannel === 'forms') {
+      void loadSubmissions({ silent: true });
+    }
+  }, [activeChannel]);
+
+  const prevFormsCountRef = useRef<{ total: number; received: number } | null>(null);
+  useEffect(() => {
+    const prev = prevFormsCountRef.current;
+    prevFormsCountRef.current = { total: counts.formsTotal, received: counts.formsReceived };
+    if (!prev) return;
+    if (
+      activeChannel === 'forms' &&
+      (prev.total !== counts.formsTotal || prev.received !== counts.formsReceived)
+    ) {
+      void loadSubmissions({ silent: true });
+    }
+  }, [counts.formsTotal, counts.formsReceived, activeChannel]);
+
+  // 自動更新: フォーム・無料診断回答（diagnosis_submissions）を Realtime で即時反映し、
+  // 未接続時は30秒間隔（タブ非表示中は停止）で同期する。
+  useInboxRealtime({
+    db,
+    channelName: 'forms_inbox_realtime_sync',
+    table: 'diagnosis_submissions',
+    onInsert: () => {
+      void loadCounts();
+      void loadSubmissions({ silent: true });
+    },
+    onUpdate: () => {
+      void loadCounts();
+      void loadSubmissions({ silent: true });
+    },
+    onDelete: () => {
+      void loadCounts();
+      void loadSubmissions({ silent: true });
+    },
+    onSync: async () => {
+      await Promise.all([loadCounts(), loadSubmissions({ silent: true })]);
+    },
+    fallbackIntervalMs: 30_000,
+  });
+
+  // LINE・メールを含むバッジ集計全体の定期更新（60秒ごと・表示中のみ）
+  useVisiblePolling(() => {
+    void loadCounts();
+  }, 60_000);
 
   // 診断フォームの回答から、AIが診断レポート(D0〜D5)を自動作成する。提案書は商談後に別の操作で作る
   const handleGenerateReport = async (sub: SubmissionItem, force = false): Promise<void> => {

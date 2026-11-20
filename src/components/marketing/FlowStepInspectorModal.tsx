@@ -43,7 +43,7 @@ interface FlowStepInspectorModalProps {
 
 const TRIGGER_LABELS: Record<string, string> = {
   tag_added: '指定タグが付いた時',
-  line_registered: 'LINE友だち追加時',
+  line_registered: 'LINE登録された時 ＋ フォロー4日後',
   diagnosis_completed: '無料診断の回答完了時',
   material_requested: '資料請求フォーム送信時',
   meeting_completed: '面談完了時',
@@ -757,7 +757,7 @@ export const FlowStepInspectorModal: React.FC<FlowStepInspectorModalProps> = ({
                       className="w-full bg-white border border-slate-200 rounded-lg px-2.5 py-1.5 text-xs text-slate-900 focus:outline-none focus:border-purple-500"
                     >
                       <option value="tag_added">指定タグが付いた時</option>
-                      <option value="line_registered">LINE友だち追加時</option>
+                      <option value="line_registered">LINE登録された時 ＋ フォロー4日後</option>
                       <option value="diagnosis_completed">無料診断の回答完了時</option>
                       <option value="material_requested">資料請求フォーム送信時</option>
                       <option value="meeting_completed">面談完了時</option>
@@ -771,6 +771,11 @@ export const FlowStepInspectorModal: React.FC<FlowStepInspectorModalProps> = ({
                       <option value="booking_created">個別相談予約時</option>
                       <option value="manual">手動開始</option>
                     </select>
+                    {trigger === 'line_registered' && (
+                      <p className="mt-1 text-[10px] text-indigo-700 leading-relaxed">
+                        ※ 無反応は2日後〜、LINE分岐（B/C）・人の返信後・診断/資料請求後は各フォロー完了の約4日後から自動合流します（LINE未連携時はメール配信）。
+                      </p>
+                    )}
                   </div>
 
                   {trigger === 'tag_added' ? (

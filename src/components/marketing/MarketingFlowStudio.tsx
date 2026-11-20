@@ -72,6 +72,7 @@ import {
   formatScenarioTriggerLabel,
   formatScenarioWaitMinutes,
   isLegacyBranchAScenarioName,
+  isLegacyBranchBScenario,
   isLegacyPostMeetingScenarioName,
   isPostDealStageTrigger,
   sortScenarios,
@@ -1455,6 +1456,22 @@ export const MarketingFlowStudio: React.FC<MarketingFlowStudioProps> = ({
     );
   }, [scenarios]);
 
+  const legacyConsultScenarios = useMemo(
+    () => consultScenarios.filter((s) => isLegacyBranchBScenario(s)),
+    [consultScenarios]
+  );
+
+  const handleCleanupLegacyConsultScenarios = () => {
+    if (onApplyDirectConsultStarterSet) {
+      onApplyDirectConsultStarterSet();
+      return;
+    }
+    const cleaned = scenarios.filter((s) => !isLegacyBranchBScenario(s));
+    onScenariosChange(cleaned);
+    setKeywordNotice('旧バージョンの分岐Bシナリオ（「直相談」等）を削除しました。');
+    setTimeout(() => setKeywordNotice(''), 4000);
+  };
+
   const materialFollowupScenarios = useMemo(() => {
     return scenarios
       .filter(isMaterialFollowupScenario)
@@ -2354,6 +2371,7 @@ export const MarketingFlowStudio: React.FC<MarketingFlowStudioProps> = ({
                             const trackMeta = SCENARIO_TRACK_META[classifyScenarioTrack(s)];
                             const isLegacyRow =
                               isLegacyBranchAScenarioName(s.name || '') ||
+                              isLegacyBranchBScenario(s) ||
                               isLegacyPostMeetingScenarioName(s.name || '');
                             const isPlanAStory = s.trigger === 'line_registered';
                             const waitLabel = formatScenarioWaitMinutes(s.waitMinutes);
@@ -2412,7 +2430,7 @@ export const MarketingFlowStudio: React.FC<MarketingFlowStudioProps> = ({
                                   </div>
                                   {isPlanAStory && (
                                     <div className="text-[10px] text-indigo-600 mt-0.5">
-                                      分岐・Web後は+3〜9日
+                                      無反応2日 / 人の返信・フォロー完了4日後
                                     </div>
                                   )}
                                 </td>
@@ -3866,7 +3884,33 @@ export const MarketingFlowStudio: React.FC<MarketingFlowStudioProps> = ({
                   <span className="font-bold text-slate-800">
                     後続の自動フォロー・商談案内（お客様から返信・予約があれば自動停止）
                   </span>
+                  <span className="text-[11px] text-slate-500">
+                    ※ 「タグ: 選択:個別相談」はLINE分岐専用です（Web個別相談は即返信 → 人の返信4日後に教育7話へ自動合流）
+                  </span>
                 </div>
+                {legacyConsultScenarios.length > 0 && (
+                  <div className="p-3.5 rounded-xl border border-amber-300 bg-amber-50/90 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                    <div className="flex items-start gap-2.5 text-xs text-amber-950">
+                      <AlertCircle className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
+                      <div className="space-y-0.5">
+                        <p className="font-bold">
+                          旧バージョンのステップ（直相談 / 見込み客登録時 等 {legacyConsultScenarios.length}件）が残っています
+                        </p>
+                        <p className="text-[11px] text-amber-900 leading-relaxed">
+                          「見込み客登録時（lead_created）」のまま稼働すると、経営改善以外の見込み客にも誤配信されるリスクがあります。現在はタグ条件の<strong>【B1・B2】のみ稼働</strong>させればOKです。
+                        </p>
+                      </div>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={handleCleanupLegacyConsultScenarios}
+                      className="px-3.5 py-2 bg-amber-600 hover:bg-amber-700 text-white rounded-lg text-xs font-bold transition cursor-pointer inline-flex items-center gap-1.5 shadow-xs shrink-0"
+                    >
+                      <Trash2 className="w-3.5 h-3.5" />
+                      <span>旧「直相談」を削除して新B1・B2に整理</span>
+                    </button>
+                  </div>
+                )}
                 {consultScenarios.length === 0 ? (
                   <div className="p-5 bg-slate-50 rounded-xl border border-dashed border-slate-200 text-center space-y-2">
                     <p className="text-xs text-slate-500">分岐Bの後続フォローシナリオがまだ登録されていません。</p>
@@ -3883,28 +3927,47 @@ export const MarketingFlowStudio: React.FC<MarketingFlowStudioProps> = ({
                   </div>
                 ) : (
                   <div className="space-y-3">
-                    {consultScenarios.map((scenario, index) => (
+                    {consultScenarios.map((scenario, index) => {
+                      const isLegacyConsult = isLegacyBranchBScenario(scenario);
+                      return (
                       <div
                         key={scenario.id}
-                        className="bg-slate-50/60 border border-slate-200 hover:border-purple-300 rounded-xl p-4 flex flex-col md:flex-row md:items-center justify-between gap-3 transition shadow-2xs"
+                        className={`rounded-xl p-4 flex flex-col md:flex-row md:items-center justify-between gap-3 transition shadow-2xs border ${
+                          isLegacyConsult
+                            ? 'bg-amber-50/40 border-amber-200/90 opacity-90 hover:border-amber-300'
+                            : 'bg-slate-50/60 border-slate-200 hover:border-purple-300'
+                        }`}
                       >
                         <div className="flex items-start gap-3">
-                          <span className="w-6 h-6 rounded-full bg-purple-100 text-purple-800 font-bold text-xs flex items-center justify-center shrink-0 mt-0.5 border border-purple-300">
+                          <span className={`w-6 h-6 rounded-full font-bold text-xs flex items-center justify-center shrink-0 mt-0.5 border ${
+                            isLegacyConsult
+                              ? 'bg-amber-100 text-amber-800 border-amber-300'
+                              : 'bg-purple-100 text-purple-800 border-purple-300'
+                          }`}>
                             {index + 1}
                           </span>
                           <div className="space-y-1">
                             <div className="flex items-center gap-2 flex-wrap">
                               <span className="font-bold text-slate-900 text-sm">{scenario.name}</span>
+                              {isLegacyConsult && (
+                                <span className="text-[10px] px-2 py-0.5 rounded bg-amber-100 text-amber-900 border border-amber-300 font-bold">
+                                  旧設定（削除推奨）
+                                </span>
+                              )}
                               <span className="text-[10px] px-2 py-0.5 rounded bg-slate-100 text-slate-600 border border-slate-200 font-mono">
                                 {scenario.waitMinutes === 0 ? '即時実行' : `${Math.round(scenario.waitMinutes / 1440)}日後`}
                               </span>
-                              {scenario.trigger === 'tag_added' && scenario.targetTag && (
+                              {scenario.trigger === 'tag_added' && scenario.targetTag ? (
                                 <span className="text-[10px] px-2 py-0.5 rounded bg-amber-50 text-amber-800 border border-amber-200 font-mono">
-                                  タグ: {scenario.targetTag}
+                                  LINEタグ: {scenario.targetTag}
+                                </span>
+                              ) : (
+                                <span className="text-[10px] px-2 py-0.5 rounded bg-slate-100 text-slate-700 border border-slate-200 font-mono">
+                                  {formatScenarioTriggerLabel(scenario.trigger, scenario.targetTag)}
                                 </span>
                               )}
                               <span className="text-[10px] px-2 py-0.5 rounded bg-purple-50 text-purple-700 border border-purple-200 font-medium">
-                                {scenario.channel === 'line' ? 'LINE' : scenario.channel === 'email' ? 'メール' : 'LINE+メール'}
+                                {scenario.channel === 'line' ? 'LINE' : scenario.channel === 'email' ? 'メール' : 'LINE優先（メール補完）'}
                               </span>
                             </div>
                             <p className="text-xs text-slate-500 line-clamp-1">
@@ -3953,9 +4016,21 @@ export const MarketingFlowStudio: React.FC<MarketingFlowStudioProps> = ({
                             <ShieldCheck className="w-3.5 h-3.5 text-purple-200" />
                             <span>点検・編集</span>
                           </button>
+
+                          {isLegacyConsult && (
+                            <button
+                              type="button"
+                              onClick={() => handleDeleteInspectorScenario(scenario.id)}
+                              className="p-2 bg-white hover:bg-rose-50 text-rose-600 rounded-lg text-xs border border-rose-200 transition cursor-pointer shadow-2xs"
+                              title="旧「直相談」シナリオを削除"
+                            >
+                              <Trash2 className="w-3.5 h-3.5" />
+                            </button>
+                          )}
                         </div>
                       </div>
-                    ))}
+                      );
+                    })}
                   </div>
                 )}
               </div>
@@ -4598,11 +4673,11 @@ export const MarketingFlowStudio: React.FC<MarketingFlowStudioProps> = ({
                       LINE優先・未連携時はメール配信
                     </span>
                     <span className="text-[10px] px-2 py-0.5 rounded bg-indigo-100 text-indigo-800 border border-indigo-300 font-bold">
-                      無反応2日〜 / 分岐7日〜 / 診断・資料11日〜
+                      無反応2日〜 / 人の返信4日後〜 / 分岐7日〜 / 診断・資料11日〜
                     </span>
                   </h3>
                   <p className="text-xs text-slate-500 mt-1">
-                    ウェルカム無反応は【2日後】から、個別相談・介護・診断・資料請求・Web相談フォーム経由の方は各直後フォロー完了の【4日後】から3日おきに教育7話をお届けします（LINE未連携のWeb経由もメールで自動配信／予約・返信で停止）。
+                    ウェルカム無反応は【2日後】から、個別相談への人の返信後に反応がない方・各分岐／診断／資料請求完了の方は【フォロー4日後】から3日おきに教育7話をお届けします（LINE未連携のWeb経由もメールで自動配信／予約・返信で停止）。
                   </p>
                 </div>
               </div>
@@ -4637,7 +4712,7 @@ export const MarketingFlowStudio: React.FC<MarketingFlowStudioProps> = ({
                   <span>教育ステップの配信ルール（A案：長期育成型）＆ 全導線連動</span>
                 </div>
                 <span className="text-[11px] font-mono text-indigo-700 bg-white px-2.5 py-0.5 rounded-md border border-indigo-200">
-                  基準: 2日〜20日（分岐B/C: 7日〜25日 ／ 診断・資料: 11日〜29日）
+                  基準: 2日〜20日（人の返信後: 4日〜 ／ 分岐B/C: 7日〜 ／ 診断・資料: 11日〜）
                 </span>
               </div>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-2.5">
@@ -4696,6 +4771,9 @@ export const MarketingFlowStudio: React.FC<MarketingFlowStudioProps> = ({
                                       ? ` · ${matchedScenario?.preferredSendTime || '10:00'}頃`
                                       : ''}
                                     )
+                                  </span>
+                                  <span className="text-[10px] px-2 py-0.5 rounded bg-emerald-50 text-emerald-700 border border-emerald-200 font-semibold">
+                                    {formatScenarioTriggerLabel(matchedScenario?.trigger || 'line_registered', matchedScenario?.targetTag)}
                                   </span>
                                   <span className="text-[10px] px-1.5 py-0.5 rounded bg-purple-50 text-purple-700 border border-purple-200 font-semibold">
                                     {matchedScenario?.channel === 'line'
