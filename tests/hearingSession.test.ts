@@ -2,7 +2,8 @@
 /** ユニットテスト: ヒアリングシート定数・面談メモ整理・商談用の表示 */
 import {
   sanitizeCoreAnswers, sanitizeExtraQuestions, customerIntentFrom, answeredCount, composeMeetingMemo,
-  emptyCoreAnswers, SUMMARY_KEY, DECISIONS_KEY, MAX_EXTRA_QUESTIONS,
+  extractProposalHintsFromHearing,
+  emptyCoreAnswers, REQUIRED_QUESTIONS, FLOW_NOTE_QUESTIONS, MEMO_KEY, SUMMARY_KEY, DECISIONS_KEY, MAX_EXTRA_QUESTIONS,
 } from '../src/constants/hearingSheet.js';
 import {
   parseOrganizedNotes, parseExtraQuestions, buildOrganizePrompt, buildSupportMeetingOrganizePrompt,
@@ -12,16 +13,36 @@ import { renderMeetingShareHtml } from '../src/utils/meetingShare.js';
 
 function assert(c: boolean, m: string) { if (!c) throw new Error(`Assertion failed: ${m}`); }
 
+// slimmed structure (5 required + 3 flowNote)
+assert(REQUIRED_QUESTIONS.length === 5, 'required questions slimmed to 5');
+assert(FLOW_NOTE_QUESTIONS.length === 3, 'flow note questions slimmed to 3');
+
 // sanitize
 const a = sanitizeCoreAnswers({ q02: ' 請求 ', t01: 'bogus', t02: 'single', evil: 'x', q03: 5 });
 assert(a.q02 === '請求' && a.t01 === '' && a.t02 === 'single' && a.q03 === '5' && !('evil' in a), 'sanitize');
 assert(customerIntentFrom(sanitizeCoreAnswers({ t01: 'retainer' })) === 'retainer', 'intent');
 assert(customerIntentFrom(emptyCoreAnswers()) === null, 'intent null');
-assert(answeredCount(sanitizeCoreAnswers({ q02: 'a', q03: 'b' })) === 2, 'count');
+assert(answeredCount(sanitizeCoreAnswers({ q02: 'a', q03: 'b', q08: '来月開始希望' })) === 2, 'count ignores flowNote q08');
 const ex = sanitizeExtraQuestions(Array.from({ length: 8 }, (_, i) => ({ q: `q${i}`, a: '' })).concat([{ q: '', a: 'x' }]));
 assert(ex.length === MAX_EXTRA_QUESTIONS, 'extra max 5');
-const memo = composeMeetingMemo(sanitizeCoreAnswers({ q02: '請求書作成', t01: 'hybrid', [SUMMARY_KEY]: '要約です', [DECISIONS_KEY]: '・来月開始' }));
-assert(memo.includes('請求書作成') && memo.includes('構築+伴走') && memo.includes('商談の要約') && memo.includes('要約です') && memo.includes('商談での合意事項') && memo.includes('来月開始') && !memo.includes('q05'), 'memo');
+const memo = composeMeetingMemo(sanitizeCoreAnswers({ q02: '請求書作成', q09: '社長決裁', t01: 'hybrid', [SUMMARY_KEY]: '要約です', [DECISIONS_KEY]: '・来月開始' }));
+assert(memo.includes('請求書作成') && memo.includes('社長決裁') && memo.includes('構築+伴走') && memo.includes('商談の要約') && memo.includes('要約です') && memo.includes('商談での合意事項') && memo.includes('来月開始') && !memo.includes('q05'), 'memo');
+const freeMemoOnly = composeMeetingMemo(sanitizeCoreAnswers({ [MEMO_KEY]: '来月から着手したいとのこと' }));
+assert(freeMemoOnly.includes('商談メモ（フリー記入）') && freeMemoOnly.includes('来月から着手したいとのこと'), 'free memo fallback');
+
+// hints extraction for proposal P3 metrics & P5
+const hints = extractProposalHintsFromHearing(sanitizeCoreAnswers({
+  q02: '請求発行',
+  q04: 'スプレッドシート',
+  q06: '月末の締め作業を翌営業日に終える',
+  q07: '総務の佐藤さん',
+  q08: '来月開始希望。基幹システム改修は対象外。',
+  [DECISIONS_KEY]: '・初期は請求フローのみ対象とし、他部署展開は別途見積り',
+}));
+assert(hints.p3_metrics.includes('月末の締め作業を翌営業日に終える') && hints.p3_metrics.includes('請求発行'), 'extract metrics hint');
+assert(hints.p5_requests_note.includes('スプレッドシート') && hints.p5_requests_note.includes('総務の佐藤さん'), 'extract requests hint');
+assert(hints.p5_prerequisites_note.includes('来月開始希望'), 'extract prerequisites hint');
+assert(hints.p5_exclusions_note.includes('基幹システム改修は対象外') && hints.p5_exclusions_note.includes('別途見積り') && !hints.p5_exclusions_note.includes('来月開始希望'), 'extract exclusions only');
 
 // organize
 const json = '前置き ```json\n{"summary":"s","decisions":["d"],"todos":["t"],"answers":{"q02":"請求","t01":"nope","zzz":"x"}}\n```';
@@ -35,7 +56,7 @@ threw = false;
 try { extractJsonObject('not json'); } catch (e) { threw = e instanceof MeetingNotesFormatError; }
 assert(threw, 'bad json rejected');
 const salesPrompt = buildOrganizePrompt('sales', 'TRANSCRIPT');
-assert(salesPrompt.includes('TRANSCRIPT') && salesPrompt.includes('"q10"') && !salesPrompt.includes('"todos"'), 'sales prompt omits todos');
+assert(salesPrompt.includes('TRANSCRIPT') && salesPrompt.includes('"q08"') && !salesPrompt.includes('"todos"'), 'sales prompt omits todos');
 
 // support meeting organize
 const supportPrompt = buildSupportMeetingOrganizePrompt('定例文字起こし');

@@ -16,6 +16,7 @@ import {
   type ProposalKind,
   type ProposalPaymentMode,
 } from '../../constants/proposalChapters';
+import { extractProposalHintsFromHearing, type CoreAnswers } from '../../constants/hearingSheet';
 
 export const PROPOSAL_DOCUMENT_TITLE = '経営・業務改善 ご提案書';
 
@@ -67,10 +68,104 @@ export const MULTILINE_KEYS: ReadonlySet<string> = new Set([
 ]);
 
 /** AIで下書きを作れる欄 → 章(サーバーの /api/proposals/draft-chapter に渡す) */
-export const DRAFTABLE_KEYS: Readonly<Record<string, 'P1' | 'P3'>> = {
+export const DRAFTABLE_KEYS: Readonly<
+  Record<string, 'P1' | 'P3' | 'P3_METRICS' | 'P5_REQUESTS' | 'P5_PREREQUISITES' | 'P5_EXCLUSIONS'>
+> = {
   p1_policy: 'P1',
   p3_roadmap: 'P3',
+  p3_metrics: 'P3_METRICS',
+  p5_requests: 'P5_REQUESTS',
+  p5_prerequisites: 'P5_PREREQUISITES',
+  p5_exclusions: 'P5_EXCLUSIONS',
 };
+
+/** P5（お客様にお願いすること・前提・対象外）の標準初期文（型別） */
+export function defaultP5For(kind: ProposalKind): {
+  requests: string;
+  prerequisites: string;
+  exclusions: string;
+} {
+  const requests =
+    kind === 'retainer'
+      ? [
+          '・対象業務に関する資料・画面・既存ツールの設定情報のご共有',
+          '・社内ご担当者様1名以上のアサインおよび定例・確認事項へのご対応',
+          '・合意した改善施策の社内テスト・運用定着へのご協力',
+        ].join('\n')
+      : [
+          '・対象業務に関する資料・画面・既存ツールの情報および検証用権限のご共有',
+          '・社内ご担当者様1名以上のアサインおよび確認事項・質問へのご回答',
+          '・導入時のテスト運用および検収確認へのご協力',
+        ].join('\n');
+
+  const prerequisites =
+    kind === 'spot_build'
+      ? [
+          '・ご提示の費用・スケジュールは、事前にお伺いした業務範囲およびツール環境を前提としています。',
+          '・仕様確定後の大幅な機能追加や対象業務の拡大は、別途お見積りのうえご相談いたします。',
+          '・本構築の検収完了をもって導入フェーズの完了とし、以降の追加改修や継続支援は別途契約となります。',
+        ].join('\n')
+      : kind === 'retainer'
+      ? [
+          '・月次定例およびチャット等での伴走相談を対象とし、社内作業の実行主体は原則として貴社ご担当者様となります。',
+          '・個別ツールの新規開発や外部システム連携の本実装が発生する場合は、別途お見積りのうえ対応いたします。',
+          '・契約期間・解約条件は「P6 お支払い条件・契約期間」の記載に準じます。',
+        ].join('\n')
+      : [
+          '・初期構築フェーズの検収完了後、月次伴走フェーズへ移行いたします。',
+          '・構築範囲外の追加開発や他部署への展開が発生する場合は、別途お見積りのうえご相談いたします。',
+          '・伴走契約の契約期間・解約条件は「P6 お支払い条件・契約期間」の記載に準じます。',
+        ].join('\n');
+
+  const exclusions = [
+    '・本ご提案書「P2 提供内容・成果物」に記載のない業務および他部署への横展開',
+    '・既存基幹システムや他社製パッケージのソースコード改修、ハードウェア・サーバー等の調達',
+    '・SNS運用代行、広告出稿運用、法務／税務／労務に関する専門的判断および代理申請',
+  ].join('\n');
+
+  return { requests, prerequisites, exclusions };
+}
+
+const ALL_P5_KINDS: readonly ProposalKind[] = ['spot_build', 'retainer', 'hybrid'];
+
+/** 現在の入力値が、いずれかの型のP5初期文そのまま（未カスタマイズ）かを判定する */
+export function isDefaultP5Value(
+  key: 'p5_requests' | 'p5_prerequisites' | 'p5_exclusions',
+  value: string,
+): boolean {
+  const normalized = String(value || '').trim();
+  if (!normalized) return true;
+  const field = key === 'p5_requests' ? 'requests' : key === 'p5_prerequisites' ? 'prerequisites' : 'exclusions';
+  return ALL_P5_KINDS.some((k) => defaultP5For(k)[field].trim() === normalized);
+}
+
+/**
+ * 商談シートの回答と提案の型から、P3 確認指標・P5（お願い事項／前提条件／対象外）の初期値を組み立てる。
+ */
+export function buildInitialProposalFromHearing(
+  kind: ProposalKind,
+  answers: CoreAnswers,
+): {
+  p3_metrics: string;
+  p5_requests: string;
+  p5_prerequisites: string;
+  p5_exclusions: string;
+} {
+  const base = defaultP5For(kind);
+  const hints = extractProposalHintsFromHearing(answers);
+  return {
+    p3_metrics: hints.p3_metrics,
+    p5_requests: hints.p5_requests_note
+      ? `${base.requests}\n\n【商談シートより】\n${hints.p5_requests_note}`
+      : base.requests,
+    p5_prerequisites: hints.p5_prerequisites_note
+      ? `${base.prerequisites}\n\n【商談シートより】\n${hints.p5_prerequisites_note}`
+      : base.prerequisites,
+    p5_exclusions: hints.p5_exclusions_note
+      ? `【商談で確認した対象外範囲】\n${hints.p5_exclusions_note}\n\n【標準の対象外事項】\n${base.exclusions}`
+      : base.exclusions,
+  };
+}
 
 /** 型ごとに、空のままだと「【未入力】」と出す項目(仕様書 §3 の「承認不可」の章) */
 export function requiredKeysFor(kind: ProposalKind): string[] {

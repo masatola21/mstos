@@ -11,6 +11,8 @@ import {
   Building2,
   FileText
 } from 'lucide-react';
+import { executeDealWonAutomation } from '../services/dealWonAutomationService';
+import { appendUniqueNote, resolveNonDowngradingLeadStatus } from '../utils/crmPipelineFlow';
 
 interface PublicDocument {
   id: string;
@@ -254,13 +256,41 @@ export const PublicDocumentApplyView: React.FC<PublicDocumentApplyViewProps> = (
           targetCompanyId = firstComp?.id || 'COMP-DEFAULT';
         }
 
-        if (doc?.dealId) {
+        // 既存商談の検索（doc.dealId -> doc.leadId -> targetCompanyId の順で重複作成を防止）
+        let resolvedExistingDealId: string | null = doc?.dealId || null;
+        if (!resolvedExistingDealId && doc?.leadId) {
+          const { data: leadDeal } = await supabase
+            .from('deals')
+            .select('id')
+            .eq('lead_id', doc.leadId)
+            .order('updated_at', { ascending: false })
+            .limit(1)
+            .maybeSingle();
+          if (leadDeal?.id) resolvedExistingDealId = String(leadDeal.id);
+        }
+        if (!resolvedExistingDealId && targetCompanyId) {
+          const { data: compDeal } = await supabase
+            .from('deals')
+            .select('id')
+            .eq('company_id', targetCompanyId)
+            .order('updated_at', { ascending: false })
+            .limit(1)
+            .maybeSingle();
+          if (compDeal?.id) resolvedExistingDealId = String(compDeal.id);
+        }
+
+        if (resolvedExistingDealId) {
           // 既存商談を成約に更新
-          appliedDealId = doc.dealId;
-          const { data: curDeal } = await supabase.from('deals').select('memo').eq('id', appliedDealId).maybeSingle();
-          const memo = [curDeal?.memo, `【Web申込】顧客がWeb上で「この内容で申し込む」をタップして即時成約（日時: ${nowIso}）`].filter(Boolean).join('\n');
+          appliedDealId = resolvedExistingDealId;
+          const { data: curDeal } = await supabase.from('deals').select('memo, total_amount').eq('id', appliedDealId).maybeSingle();
+          const memo = appendUniqueNote(
+            curDeal?.memo,
+            `【Web申込】顧客がWeb上で「この内容で申し込む」をタップして即時成約（日時: ${nowIso} / 書類: ${doc?.title || documentId}）`
+          );
           await supabase.from('deals').update({
             proposal_status: '成約',
+            ...(totalAmount > 0 && !curDeal?.total_amount ? { total_amount: totalAmount } : {}),
+            ...(doc?.leadId ? { lead_id: doc.leadId } : {}),
             memo,
             updated_at: nowIso,
           }).eq('id', appliedDealId);
@@ -284,6 +314,7 @@ export const PublicDocumentApplyView: React.FC<PublicDocumentApplyViewProps> = (
 
         const consentEvidenceText = '上記の内容（金額、委託範囲、支払条件等）を確認し、本内容での発注および申し込みに同意します。';
         const userAgentStr = typeof navigator !== 'undefined' ? navigator.userAgent : '';
+        const isContractDoc = effectiveType === 'contract';
 
         // 書類ステータスを approved に更新（電子承諾ログも保存）
         await supabase.from('customer_documents').update({
@@ -297,21 +328,26 @@ export const PublicDocumentApplyView: React.FC<PublicDocumentApplyViewProps> = (
           updated_at: nowIso,
         }).eq('id', documentId);
 
-        // 契約書テーブルに電子合意レコードを記録
+        // 契約書テーブルに電子合意レコードを記録（契約書の承認時のみ signed、提案書・見積書申込時は draft で契約手続き待ち）
         try {
           const { data: existingContract } = await supabase
             .from('customer_contracts')
-            .select('id')
+            .select('id, status')
             .or(`document_id.eq.${documentId},deal_id.eq.${appliedDealId}`)
             .maybeSingle();
 
           if (existingContract) {
+            const nextContractStatus = isContractDoc
+              ? 'signed'
+              : (['signed', 'active', 'effective', 'in_force'].includes(String(existingContract.status || '').toLowerCase()) ? existingContract.status : 'draft');
             await supabase.from('customer_contracts').update({
-              status: 'signed',
-              consent_method: 'web_apply',
-              consent_recorded_at: nowIso,
-              consent_user_agent: userAgentStr,
-              consent_evidence_text: consentEvidenceText,
+              status: nextContractStatus,
+              ...(isContractDoc ? {
+                consent_method: 'web_apply',
+                consent_recorded_at: nowIso,
+                consent_user_agent: userAgentStr,
+                consent_evidence_text: consentEvidenceText,
+              } : {}),
               updated_at: nowIso,
             }).eq('id', existingContract.id);
           } else {
@@ -320,10 +356,10 @@ export const PublicDocumentApplyView: React.FC<PublicDocumentApplyViewProps> = (
               contact_id: (doc as any)?.contact_id || null,
               deal_id: appliedDealId,
               document_id: documentId,
-              title: doc?.title ? `${doc.title}（電子合意）` : 'Web申込契約合意',
+              title: doc?.title ? `${doc.title}${isContractDoc ? '（電子合意）' : '（申込控）'}` : 'Web申込契約合意',
               contract_type: 'service_agreement',
               amount: totalAmount > 0 ? totalAmount : 0,
-              status: 'signed',
+              status: isContractDoc ? 'signed' : 'draft',
               start_date: todayStr,
               consent_method: 'web_apply',
               consent_recorded_at: nowIso,
@@ -338,27 +374,40 @@ export const PublicDocumentApplyView: React.FC<PublicDocumentApplyViewProps> = (
           console.warn('Customer contract fallback consent sync warning:', contractErr);
         }
 
+        // 成約自動化（顧客・請求・顧問構築支援の不足分を自動起票）
+        if (appliedDealId) {
+          await executeDealWonAutomation(appliedDealId).catch((autoErr) => {
+            console.warn('Deal won automation fallback warning:', autoErr);
+          });
+        }
+
         setConsentInfo({ recordedAt: nowIso });
 
-        // 顧客マスタに登録
+        // 顧客マスタに登録（契約書同意なら「契約中」、提案書・見積書申込なら「申込済み」）
         if (targetCompanyId) {
-          const { data: existingCust } = await supabase.from('customers').select('id').eq('company_id', targetCompanyId).maybeSingle();
+          const { data: existingCust } = await supabase.from('customers').select('id, contract_status').eq('company_id', targetCompanyId).maybeSingle();
           if (!existingCust) {
             await supabase.from('customers').insert({
               company_id: targetCompanyId,
-              contract_status: '契約中',
+              contract_status: isContractDoc ? '契約中' : '申込済み',
               contract_start_date: todayStr,
-              memo: `Web申込（商談ID: ${appliedDealId}）により自動成約登録`,
+              memo: `Web申込（商談ID: ${appliedDealId}）により自動登録`,
               created_at: nowIso,
               last_updated_at: nowIso,
             });
+          } else if (isContractDoc && (!existingCust.contract_status || existingCust.contract_status === '申込済み')) {
+            await supabase.from('customers').update({
+              contract_status: '契約中',
+              last_updated_at: nowIso,
+            }).eq('id', existingCust.id);
           }
         }
 
         // リードステータスを成約に更新
         if (doc?.leadId) {
+          const { data: leadRow } = await supabase.from('leads').select('status').eq('id', doc.leadId).maybeSingle();
           await supabase.from('leads').update({
-            status: '成約',
+            status: resolveNonDowngradingLeadStatus(leadRow?.status, '成約'),
             last_contacted_at: nowIso,
           }).eq('id', doc.leadId);
         }

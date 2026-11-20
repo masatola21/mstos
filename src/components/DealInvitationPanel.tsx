@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { getSupabase } from '../lib/supabaseClient';
 import { CalendarDays, CheckCircle2, Copy, Loader2, Mail, MessageCircle, Save } from 'lucide-react';
+import { LinkifiedText } from './common/LinkifiedText';
 
 type Deal = {
   id: string;
@@ -204,8 +205,8 @@ export const DealInvitationPanel: React.FC = () => {
       <div className='space-y-3'>
         <div className='rounded-lg border border-slate-800 bg-slate-950 p-3'>
           <div className='flex items-center justify-between gap-2'><div className='text-xs font-semibold text-slate-300'>送信前プレビュー · {channel==='both'?'メール・LINE':channel==='line'?'LINE':'メール'}</div><button type='button' onClick={()=>void copyPreview()} className='flex items-center gap-1 rounded border border-slate-700 px-2 py-1 text-[11px] text-slate-300'><Copy className='h-3 w-3'/>コピー</button></div>
-          {channel!=='line' && <><div className='mt-3 text-xs text-slate-500'>件名：{subject}</div><pre className='mt-2 max-h-64 overflow-auto whitespace-pre-wrap rounded bg-slate-900 p-3 text-xs leading-5 text-slate-200'>{emailBody}</pre></>}
-          {channel!=='email' && <pre className='mt-3 max-h-64 overflow-auto whitespace-pre-wrap rounded bg-slate-900 p-3 text-xs leading-5 text-slate-200'>{lineBody}</pre>}
+          {channel!=='line' && <><div className='mt-3 text-xs text-slate-500'>件名：{subject}</div><pre className='mt-2 max-h-64 overflow-auto whitespace-pre-wrap rounded bg-slate-900 p-3 text-xs leading-5 text-slate-200'><LinkifiedText text={emailBody} linkClassName='underline text-sky-300 hover:text-sky-200 break-all' /></pre></>}
+          {channel!=='email' && <pre className='mt-3 max-h-64 overflow-auto whitespace-pre-wrap rounded bg-slate-900 p-3 text-xs leading-5 text-slate-200'><LinkifiedText text={lineBody} linkClassName='underline text-sky-300 hover:text-sky-200 break-all' /></pre>}
           {selectedContact && <div className='mt-2 space-y-1 text-[11px] text-slate-500'><div>メール：{selectedContact.email || '未登録'}</div><div>LINE：{selectedContact.line_user_id ? '連携済み（友だち状態・同意を送信前に確認）' : '未連携'}</div></div>}
         </div>
         <div className='rounded-lg border border-slate-800 bg-slate-950 p-3'><h3 className='text-xs font-semibold text-slate-300'>最近の商談案内依頼</h3>{history.length===0?<p className='mt-2 text-xs text-slate-500'>まだありません。</p>:<ul className='mt-2 divide-y divide-slate-800'>{history.slice(0,8).map((item)=><li key={item.id} className='flex flex-wrap justify-between gap-2 py-2 text-[11px]'><span className='text-slate-300'>{deals.find((deal)=>deal.id===item.deal_id)?.proposal_plan_name || item.deal_id} · {item.channel} · {item.recipient_address}</span><span className='text-slate-500'>{item.status} · {new Date(item.created_at).toLocaleString('ja-JP')}</span></li>)}</ul>}</div>

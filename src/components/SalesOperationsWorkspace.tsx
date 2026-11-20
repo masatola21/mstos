@@ -16,6 +16,7 @@ import {
 import { getEndOfNextMonthDate } from '../utils/billingUtils';
 import { formatJapaneseDate } from '../utils/date';
 import { ensureCustomerRegisteredFromPaidInvoice } from '../services/paidInvoiceCustomerSync';
+import { executeDealWonAutomation, reconcilePendingWonDeals } from '../services/dealWonAutomationService';
 
 type WorkspaceTab = 'segments' | 'documents' | 'operations';
 type Segment = { id: string; name: string; entity_type: string; conditions: { field?: string; value?: string } | null; created_at: string };
@@ -240,6 +241,10 @@ export const SalesOperationsWorkspace: React.FC<Props> = ({ tab, initialOpsTab, 
         if (!companyResult.error) setCompanies(companyResult.data || []);
         setDocuments(docs.data || []);
       } else {
+        const reconciled = await reconcilePendingWonDeals(supabase, { companyId: companyId || undefined, limit: 20 });
+        if (reconciled.completedCount > 0) {
+          setNotice((prev) => prev || `未連携だった成約商談（${reconciled.completedCount}件）の契約・請求・顧問構築支援データを自動反映しました。`);
+        }
         let recordsQuery = supabase.from(selectedOps.table).select('*').order('created_at', { ascending: false });
         if (companyId) recordsQuery = recordsQuery.eq('company_id', companyId);
         const [recordsResult, companyResult, contractsResult, invoicesResult, productsResult, dealsResult, documentsResult] = await Promise.all([
@@ -404,12 +409,44 @@ export const SalesOperationsWorkspace: React.FC<Props> = ({ tab, initialOpsTab, 
       if(record.status!=='signed') {
         onContractSigned?.({id:sourceId,title:record.title||'契約書',companyId:record.company_id||undefined,companyName,amount:record.amount==null?undefined:Number(record.amount)});
       }
-      if(record.company_id) {
+      if (record.company_id) {
+        const { data: existingCust } = await supabase
+          .from('customers')
+          .select('id, contract_status')
+          .eq('company_id', record.company_id)
+          .maybeSingle();
+        if (!existingCust) {
+          await supabase.from('customers').insert({
+            company_id: record.company_id,
+            contract_status: '契約中',
+            contract_start_date: record.start_date || localDateString(),
+            memo: `契約「${record.title || '契約書'}」締結に伴い自動登録`,
+            last_updated_at: nowIso,
+          });
+        } else if (!existingCust.contract_status || existingCust.contract_status === '申込済み') {
+          await supabase.from('customers').update({
+            contract_status: '契約中',
+            last_updated_at: nowIso,
+          }).eq('id', existingCust.id);
+        }
+      }
+      if (record.deal_id) {
         await supabase.from('deals')
           .update({ proposal_status: '成約', updated_at: nowIso })
-          .eq('company_id', record.company_id)
+          .eq('id', record.deal_id)
           .neq('proposal_status', '成約');
+        await executeDealWonAutomation(String(record.deal_id));
+      } else if(record.company_id) {
+        const { data: updatedDeals } = await supabase.from('deals')
+          .update({ proposal_status: '成約', updated_at: nowIso })
+          .eq('company_id', record.company_id)
+          .neq('proposal_status', '成約')
+          .select('id');
+        for (const d of updatedDeals || []) {
+          await executeDealWonAutomation(String(d.id));
+        }
       }
+      setNotice('契約ステータスを「締結済み」に更新し、顧客台帳を「契約中」へ同期しました。');
     }
     if(activeOpsTab==='invoices' && status==='paid') {
       const paidDate = updatePayload.paid_at || record.paid_at || localDateString();
@@ -422,18 +459,25 @@ export const SalesOperationsWorkspace: React.FC<Props> = ({ tab, initialOpsTab, 
         paidDate,
       });
       const resolvedCompanyId = custSync.companyId || record.company_id;
+      const linkedDealIds = new Set<string>();
+      const linkedDealId = record.deal_id || record.payload?.deal_id;
+      if (linkedDealId) linkedDealIds.add(String(linkedDealId));
       if(resolvedCompanyId) {
-        await supabase.from('deals')
+        const { data: updatedDeals } = await supabase.from('deals')
           .update({ proposal_status: '成約', updated_at: nowIso })
           .eq('company_id', resolvedCompanyId)
-          .neq('proposal_status', '成約');
+          .neq('proposal_status', '成約')
+          .select('id');
+        for (const d of updatedDeals || []) linkedDealIds.add(String(d.id));
       }
-      const linkedDealId = record.deal_id || record.payload?.deal_id;
       if (linkedDealId) {
         await supabase.from('deals')
           .update({ proposal_status: '成約', updated_at: nowIso })
           .eq('id', linkedDealId)
           .neq('proposal_status', '成約');
+      }
+      for (const wonDealId of linkedDealIds) {
+        await executeDealWonAutomation(wonDealId);
       }
       if (custSync.status === 'created') {
         setNotice('入金済みに更新し、未登録だった顧客を顧客台帳へ「契約中」として自動登録しました。');

@@ -6,8 +6,8 @@ export function getStatusBadgeClass(status: string | null | undefined): string {
   const s = String(status || '').trim();
   if (!s) return 'bg-slate-100 text-slate-600 border-slate-200';
 
-  // 成功・受注・成約・締結・有効（緑）
-  if (/^(成約|受注|締結|締結済み|有効|完了|レポート発行|レポート発行済|回答完了|公開中|配信中|有)$/.test(s)) {
+  // 成功・受注・成約・締結・契約中・有効（緑）
+  if (/^(成約|受注|締結|締結済み|契約中|契約済み|有効|完了|レポート発行|レポート発行済|回答完了|公開中|配信中|有)$/.test(s)) {
     return 'bg-emerald-50 text-emerald-800 border-emerald-200/80 font-semibold';
   }
 
@@ -26,8 +26,8 @@ export function getStatusBadgeClass(status: string | null | undefined): string {
     return 'bg-purple-50 text-purple-700 border-purple-200/80 font-semibold';
   }
 
-  // 検討中・確認待ち・再調整・保留（黄・アンバー）
-  if (/^(日程再調整|再調整待ち|検討中|確認待ち|未確認|未着手|追客中|診断希望|診断案内済み|承認待ち|保留|確認中|修正依頼)$/.test(s)) {
+  // 検討中・確認待ち・再調整・保留・申込済み（黄・アンバー）
+  if (/^(日程再調整|再調整待ち|検討中|確認待ち|未確認|未着手|追客中|診断希望|診断案内済み|承認待ち|保留|確認中|修正依頼|申込済み)$/.test(s)) {
     return 'bg-amber-50 text-amber-800 border-amber-200/80 font-semibold';
   }
 

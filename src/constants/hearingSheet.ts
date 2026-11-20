@@ -33,14 +33,24 @@ export const HEARING_QUESTIONS: readonly HearingQuestion[] = [
   { id: 'q05', label: '過去に改善を試した経験と、うまくいかなかった理由', why: '提案の方向づけ', chapters: ['P1'], flowNote: true },
   { id: 'q06', label: '3〜6か月後にどうなっていたいか', why: 'ゴールの設定', chapters: ['P3'] },
   { id: 'q07', label: '導入後に運用する社内担当者は誰か', why: '自走化の前提', chapters: ['P5'], flowNote: true },
-  { id: 'q08', label: '希望時期・予算感', why: '規模と期間の調整', chapters: ['P3', 'P4'] },
-  { id: 'q09', label: '決裁者と判断のタイミング', why: '次のステップの設計', chapters: ['P7'], flowNote: true },
-  { id: 'q10', label: '支払いの希望(一括・分割・月額)と、対象外にしたい範囲', why: '条件の確定', chapters: ['P5', 'P6'] },
+  {
+    id: 'q08',
+    label: '希望時期・予算感・支払いの希望・決裁者／判断タイミング・対象外にしたい範囲',
+    why: '導入時期・支払条件・社内決裁・今回やらないこと（対象外範囲）を流れの中で確認',
+    chapters: ['P3', 'P4', 'P5', 'P6', 'P7'],
+    flowNote: true,
+  },
 ];
 
-/** 必ず聞く質問（個別入力欄を出す） */
+/** 過去の保存データ（core_v1初期版）を壊さないための後方互換キー */
+const LEGACY_QUESTIONS: readonly { id: string; label: string }[] = [
+  { id: 'q09', label: '決裁者と判断のタイミング' },
+  { id: 'q10', label: '支払いの希望(一括・分割・月額)と、対象外にしたい範囲' },
+];
+
+/** 必ず聞く質問（個別入力欄を出す・5問） */
 export const REQUIRED_QUESTIONS = HEARING_QUESTIONS.filter((q) => !q.flowNote);
-/** 流れの中で確認する項目（まとめてメモ欄に入力） */
+/** 流れの中で確認する内容（3項目） */
 export const FLOW_NOTE_QUESTIONS = HEARING_QUESTIONS.filter((q) => q.flowNote);
 
 /** 型の判断用(別枠)。t01 はお客様の意向、t02 は課題の広がり、t03 は継続相談の頻度。 */
@@ -64,8 +74,9 @@ export const HEARING_TYPE_QUESTIONS = {
 } as const;
 
 export const CORE_QUESTION_IDS = HEARING_QUESTIONS.map((q) => q.id);
+export const LEGACY_QUESTION_IDS = LEGACY_QUESTIONS.map((q) => q.id);
 export const TYPE_QUESTION_IDS = ['t01', 't02', 't03'] as const;
-export const ALL_ANSWER_IDS: readonly string[] = [...CORE_QUESTION_IDS, ...TYPE_QUESTION_IDS];
+export const ALL_ANSWER_IDS: readonly string[] = [...CORE_QUESTION_IDS, ...LEGACY_QUESTION_IDS, ...TYPE_QUESTION_IDS];
 
 /** 面談メモなど、質問に属さない値は、core_answers の中で先頭が _ のキーに入れる(DBの列は増やさない) */
 export const MEMO_KEY = '_memo';
@@ -120,20 +131,24 @@ export function customerIntentFrom(answers: CoreAnswers): ProposalKind | null {
   return T01_VALUES.includes(answers.t01) ? (answers.t01 as ProposalKind) : null;
 }
 
-/** 回答済みの数（必須7問のみカウント。flowNote の3問は除外） */
+/** 回答済みの数（必須5問のみカウント。flowNote の3項目は除外） */
 export function answeredCount(answers: CoreAnswers): number {
   return REQUIRED_QUESTIONS.map((q) => q.id).filter((id) => (answers[id] || '').trim()).length;
 }
 
 /**
  * 提案書の「商談メモ」(AI下書きの材料)に取り込む文章を作る。
- * 回答のある質問だけを「質問: 回答」で並べる。面談メモの要約・決定事項があれば付ける。
+ * 回答のある質問だけを「質問: 回答」で並べる。面談メモの要約・決定事項・フリーメモがあれば付ける。
  */
 export function composeMeetingMemo(answers: CoreAnswers, extra: ExtraQuestion[] = []): string {
   const lines: string[] = [];
   for (const q of HEARING_QUESTIONS) {
     const a = (answers[q.id] || '').trim();
     if (a) lines.push(`${q.label}\n→ ${a}`);
+  }
+  for (const lq of LEGACY_QUESTIONS) {
+    const a = (answers[lq.id] || '').trim();
+    if (a) lines.push(`${lq.label}\n→ ${a}`);
   }
   const intent = HEARING_TYPE_QUESTIONS.t01.options.find((o) => o.value === answers.t01);
   if (intent) lines.push(`${HEARING_TYPE_QUESTIONS.t01.label}\n→ ${intent.label}`);
@@ -143,5 +158,78 @@ export function composeMeetingMemo(answers: CoreAnswers, extra: ExtraQuestion[] 
   for (const e of extra) if (e.a) lines.push(`${e.q}\n→ ${e.a}`);
   if ((answers[SUMMARY_KEY] || '').trim()) lines.push(`商談の要約\n→ ${answers[SUMMARY_KEY].trim()}`);
   if ((answers[DECISIONS_KEY] || '').trim()) lines.push(`商談での合意事項\n→ ${answers[DECISIONS_KEY].trim()}`);
+  if (!(answers[SUMMARY_KEY] || '').trim() && !(answers[DECISIONS_KEY] || '').trim() && (answers[MEMO_KEY] || '').trim()) {
+    lines.push(`商談メモ（フリー記入）\n→ ${answers[MEMO_KEY].trim().slice(0, 2000)}`);
+  }
   return lines.join('\n\n');
 }
+
+export interface ProposalHintsFromHearing {
+  p3_metrics: string;
+  p5_requests_note: string;
+  p5_prerequisites_note: string;
+  p5_exclusions_note: string;
+}
+
+const EXCLUSION_CLAUSE_RE = /対象外|やらない|含めない|範囲外|除く|除外|別途/;
+
+/**
+ * 商談シートの回答から、提案書の P3（確認指標）・P5（お願い事項／前提条件／対象外）へ
+ * そのまま反映できるヒントを抽出する。
+ */
+export function extractProposalHintsFromHearing(answers: CoreAnswers): ProposalHintsFromHearing {
+  const goal = (answers.q06 || '').trim();
+  const bottleneck = (answers.q02 || '').trim();
+  const workload = (answers.q03 || '').trim();
+  const tools = (answers.q04 || '').trim();
+  const owner = (answers.q07 || '').trim();
+  const flowConditions = (answers.q08 || '').trim();
+  const legacyDecisionTiming = (answers.q09 || '').trim();
+  const legacyPaymentExclusion = (answers.q10 || '').trim();
+  const decisions = (answers[DECISIONS_KEY] || '').trim();
+
+  const metricsLines: string[] = [];
+  if (goal) metricsLines.push(`・目指すゴール（3〜6か月後）：${goal}`);
+  if (bottleneck) {
+    metricsLines.push(`・改善対象業務（${bottleneck}）：作業所要時間・手戻り／確認工数の推移`);
+  } else if (workload) {
+    metricsLines.push(`・現状負荷（${workload}）に対する業務時間・処理件数の変化`);
+  }
+  if (decisions) {
+    const kpiLine = decisions
+      .split(/\r?\n/)
+      .map((l) => l.trim())
+      .find((l) => /指標|KPI|目標|削減|時間|件数|率/.test(l));
+    if (kpiLine) metricsLines.push(`・商談確認メモ：${kpiLine.replace(/^[・\-*]\s*/, '')}`);
+  }
+
+  const reqNotes: string[] = [];
+  if (tools) reqNotes.push(`・現行ツール（${tools}）の設定情報・検証用アカウント（権限）のご共有`);
+  if (owner) reqNotes.push(`・社内ご担当者様（${owner}）との定例確認・運用テストのご協力`);
+
+  const preNotes: string[] = [];
+  if (flowConditions) preNotes.push(`・商談確認条件：${flowConditions}`);
+  if (legacyDecisionTiming) preNotes.push(`・決裁・判断時期：${legacyDecisionTiming}`);
+  if (decisions) preNotes.push(`・商談での合意事項：\n${decisions}`);
+
+  const excNotes: string[] = [];
+  for (const raw of [flowConditions, legacyPaymentExclusion, decisions]) {
+    if (!raw) continue;
+    const matchedLines = raw
+      .split(/\r?\n|(?<=。)/)
+      .map((s) => s.trim())
+      .filter((s) => s && EXCLUSION_CLAUSE_RE.test(s));
+    for (const line of matchedLines) {
+      const clean = line.replace(/^[・\-*]\s*/, '');
+      if (clean && !excNotes.includes(`・${clean}`)) excNotes.push(`・${clean}`);
+    }
+  }
+
+  return {
+    p3_metrics: metricsLines.join('\n'),
+    p5_requests_note: reqNotes.join('\n'),
+    p5_prerequisites_note: preNotes.join('\n'),
+    p5_exclusions_note: excNotes.join('\n'),
+  };
+}
+

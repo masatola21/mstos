@@ -45,7 +45,7 @@ function salesSchema(): string {
   const core = HEARING_QUESTIONS.map((q) => `    "${q.id}": "${q.label}への回答(話されていなければ空)"`).join(',\n');
   const t = HEARING_TYPE_QUESTIONS;
   return `{
-  "summary": "商談の要約(ヒアリング10問に入りきらない背景・温度感など5文以内)",
+  "summary": "商談の要約(ヒアリング項目に入りきらない背景・温度感など5文以内)",
   "decisions": ["商談での合意事項(見積・範囲・時期など、提案書へ転記する前提条件を1件ずつ)"],
   "answers": {
 ${core},

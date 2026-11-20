@@ -1,12 +1,13 @@
 import React, { useState, useEffect } from 'react';
 import { TableKey, TABLE_CONFIGS } from '../types/database';
-import { deleteTableRecord, fetchTableData, updateRecord, bulkDeleteTableRecords, cleanDummyData, DataFetchError } from '../services/dataService';
+import { deleteTableRecord, fetchTableData, updateRecord, bulkDeleteTableRecords, cleanDummyData, consolidateDuplicateCrmRows, DataFetchError } from '../services/dataService';
 import { InlineDeleteButton } from './InlineDeleteButton';
 import { RecordDetailModal } from './RecordDetailModal';
 import { RecordFormModal } from './RecordFormModal';
 import { StageTransitionModal, TransitionType } from './StageTransitionModal';
 import { ProspectResearchImportModal } from './ProspectResearchImportModal';
 import { getStatusBadgeClass } from '../utils/statusBadges';
+import { getDealFlowSteps, getLeadFlowSteps, PipelineFlowStep } from '../utils/crmPipelineFlow';
 import { Customer } from '../types/database';
 import { formatJapaneseDate, formatJapaneseDateTime } from '../utils/date';
 import { 
@@ -53,6 +54,57 @@ interface TableManagerProps {
   onOpenCustomerWorkspace?: (companyId: string, destination: 'documents' | 'operations' | 'support_meetings' | 'diagnoses' | 'forms' | 'send', recordContext?: { tableKey: TableKey; recordId: string; leadId?: string; contactId?: string }) => void;
 }
 
+const PipelineStepMiniBar: React.FC<{ steps: PipelineFlowStep[]; compact?: boolean }> = ({ steps, compact = false }) => {
+  return (
+    <div
+      className={`flex items-center ${compact ? 'gap-1' : 'gap-1.5'} select-none`}
+      title={steps.map((s) => `${s.label}:${s.state === 'done' ? '完了' : s.state === 'current' ? '現在' : s.state === 'paused' ? '保留/調整中' : s.state === 'lost' ? '失注/見送り' : '未'}`).join(' → ')}
+    >
+      {steps.map((step, idx) => {
+        const dotClass =
+          step.state === 'done'
+            ? 'bg-emerald-500 text-white border-emerald-600'
+            : step.state === 'current'
+            ? 'bg-purple-600 text-white border-purple-700 ring-2 ring-purple-200'
+            : step.state === 'paused'
+            ? 'bg-amber-400 text-amber-950 border-amber-500'
+            : step.state === 'lost'
+            ? 'bg-rose-500 text-white border-rose-600'
+            : 'bg-slate-200 text-slate-400 border-slate-300';
+
+        const textClass =
+          step.state === 'done'
+            ? 'text-emerald-700 font-semibold'
+            : step.state === 'current'
+            ? 'text-purple-800 font-bold'
+            : step.state === 'paused'
+            ? 'text-amber-700 font-semibold'
+            : step.state === 'lost'
+            ? 'text-rose-700 font-semibold'
+            : 'text-slate-400';
+
+        const lineClass = step.state === 'done' ? 'bg-emerald-400' : 'bg-slate-200';
+
+        return (
+          <React.Fragment key={step.key}>
+            <div className="flex flex-col items-center gap-0.5 min-w-0">
+              <span className={`w-3.5 h-3.5 rounded-full border text-[8px] font-bold flex items-center justify-center leading-none ${dotClass}`}>
+                {step.state === 'done' ? '✓' : idx + 1}
+              </span>
+              <span className={`${compact ? 'text-[9px]' : 'text-[10px]'} leading-none whitespace-nowrap ${textClass}`}>
+                {step.label}
+              </span>
+            </div>
+            {idx < steps.length - 1 && (
+              <div className={`h-0.5 ${compact ? 'w-2' : 'w-3'} rounded-full -mt-3 shrink-0 ${lineClass}`} />
+            )}
+          </React.Fragment>
+        );
+      })}
+    </div>
+  );
+};
+
 export const TableManager: React.FC<TableManagerProps> = ({
   currentTable,
   onTableChange,
@@ -84,6 +136,7 @@ export const TableManager: React.FC<TableManagerProps> = ({
   // 一括操作・エラーバナー・全削除整理状態
   const [rowActionError, setRowActionError] = useState<string | null>(null);
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
+  const [isConsolidatingDuplicates, setIsConsolidatingDuplicates] = useState(false);
   const [isBulkDeleting, setIsBulkDeleting] = useState(false);
   const [bulkDeleteModalMode, setBulkDeleteModalMode] = useState<'selected' | 'all_current' | null>(null);
   const [bulkDeleteDocs, setBulkDeleteDocs] = useState(true);
@@ -541,7 +594,7 @@ export const TableManager: React.FC<TableManagerProps> = ({
       deals: ['日程確定', '初回面談', '面談完了', '要件提案', '見積提示', '最終交渉', '成約', '受注', '失注', '保留'],
       leads: ['新規', '相談申込', '資料請求', '診断申込', '面談予約済', '再調整待ち', '面談実施済', 'ヒアリング済', '商談化', '成約', '失注・対象外'],
       prospects: ['未接触', 'アプローチ中', '検討中', '商談化', '保留'],
-      customers: ['active', '契約中', '更新中', '解約'],
+      customers: ['申込済み', '契約中', 'トライアル', '更新交渉中', '解約', 'active', '更新中'],
     };
     const base = defaultCols[currentTable] || [];
     const discovered = Array.from(
@@ -549,6 +602,50 @@ export const TableManager: React.FC<TableManagerProps> = ({
     );
     return Array.from(new Set([...base, ...discovered]));
   }, [currentTable, data]);
+
+  // 同じ会社IDの重複行検知（リード / 商談）
+  const duplicateCompanySummary = React.useMemo(() => {
+    if (currentTable !== 'leads' && currentTable !== 'deals') {
+      return { duplicateCompanyCount: 0, extraRowCount: 0, sampleNames: [] as string[] };
+    }
+    const counts = new Map<string, { count: number; name: string }>();
+    for (const row of data) {
+      const cid = String(row.company_id || '').trim();
+      if (!cid) continue;
+      const cur = counts.get(cid);
+      const label = row.company?.company_name || row.company_name || cid;
+      if (cur) {
+        cur.count += 1;
+      } else {
+        counts.set(cid, { count: 1, name: String(label) });
+      }
+    }
+    const dups = Array.from(counts.values()).filter((v) => v.count > 1);
+    return {
+      duplicateCompanyCount: dups.length,
+      extraRowCount: dups.reduce((sum, d) => sum + (d.count - 1), 0),
+      sampleNames: dups.slice(0, 3).map((d) => d.name),
+    };
+  }, [currentTable, data]);
+
+  const handleConsolidateDuplicates = async () => {
+    if (currentTable !== 'leads' && currentTable !== 'deals') return;
+    setIsConsolidatingDuplicates(true);
+    setRowActionError(null);
+    const res = await consolidateDuplicateCrmRows(currentTable);
+    setIsConsolidatingDuplicates(false);
+    if (res.error) {
+      setRowActionError(res.error);
+      return;
+    }
+    await loadData();
+    setSuccessBanner(
+      res.removedRows > 0
+        ? `同じ会社IDの重複 ${res.mergedCompanies}社分（余剰 ${res.removedRows}行）を1行に統合し、メモ・工程・書類リンクを引き継ぎました。`
+        : '統合対象の重複レコードはありませんでした。'
+    );
+    window.setTimeout(() => setSuccessBanner(null), 6000);
+  };
 
   return (
     <div className="space-y-6 animate-fade-in pb-12">
@@ -868,6 +965,43 @@ export const TableManager: React.FC<TableManagerProps> = ({
         </div>
       )}
 
+      {/* Same-company duplicate detection banner (leads / deals) */}
+      {!loading && duplicateCompanySummary.duplicateCompanyCount > 0 && (
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 px-4 py-3 rounded-xl bg-amber-50 border border-amber-200 text-amber-950 text-xs shadow-xs">
+          <div className="space-y-0.5">
+            <div className="font-bold flex items-center gap-1.5 text-amber-900">
+              <AlertCircle className="w-4 h-4 text-amber-600 shrink-0" />
+              <span>
+                同じ会社（company_id）の重複行が {duplicateCompanySummary.duplicateCompanyCount}社分（計 +{duplicateCompanySummary.extraRowCount}行）見つかりました
+              </span>
+            </div>
+            <p className="text-[11px] text-amber-800">
+              対象例: {duplicateCompanySummary.sampleNames.join('、')}
+              {duplicateCompanySummary.duplicateCompanyCount > 3 ? ' など' : ''}
+              。1社1行に統合すると、最新の進行工程・メモ・書類リンクを残したまま整理できます。
+            </p>
+          </div>
+          <button
+            type="button"
+            disabled={isConsolidatingDuplicates}
+            onClick={() => void handleConsolidateDuplicates()}
+            className="px-3.5 py-2 rounded-lg bg-amber-600 hover:bg-amber-700 disabled:opacity-50 text-white font-bold text-xs whitespace-nowrap shrink-0 flex items-center gap-1.5 shadow-2xs transition-colors cursor-pointer"
+          >
+            {isConsolidatingDuplicates ? (
+              <>
+                <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                <span>統合中...</span>
+              </>
+            ) : (
+              <>
+                <Layers className="w-3.5 h-3.5" />
+                <span>同じ会社の重複を1行に統合</span>
+              </>
+            )}
+          </button>
+        </div>
+      )}
+
       {/* =========================================================================
           DISTINCT STATE RENDERING:
           1. Loading (読み込み中)
@@ -1092,6 +1226,19 @@ export const TableManager: React.FC<TableManagerProps> = ({
                                 </div>
                               </div>
                             </div>
+
+                            {(currentTable === 'deals' || currentTable === 'leads') && (
+                              <div className="pt-1 overflow-x-auto no-scrollbar">
+                                <PipelineStepMiniBar
+                                  compact
+                                  steps={
+                                    currentTable === 'deals'
+                                      ? getDealFlowSteps(item.proposal_status)
+                                      : getLeadFlowSteps(item.status)
+                                  }
+                                />
+                              </div>
+                            )}
 
                           {/* Amounts & Indicators */}
                           <div className="flex items-center justify-between text-xs pt-1 border-t border-slate-100">
@@ -1459,13 +1606,28 @@ export const TableManager: React.FC<TableManagerProps> = ({
                           );
                         }
 
-                        // ステータスバッジ
+                        // ステータスバッジ + リード/商談 1行5ステップ工程進捗
                         if (['status', 'proposal_status', 'contract_status'].includes(colKey) && val) {
+                          const showFlow =
+                            (currentTable === 'deals' && colKey === 'proposal_status') ||
+                            (currentTable === 'leads' && colKey === 'status');
                           return (
-                            <td key={colKey} className="py-3 px-4 whitespace-nowrap">
-                              <span className={`inline-block px-2.5 py-0.5 rounded-full text-[11px] font-medium border ${getStatusBadgeClass(String(val))}`}>
-                                {String(val)}
-                              </span>
+                            <td key={colKey} className="py-2.5 px-4 whitespace-nowrap">
+                              <div className="space-y-1.5">
+                                <span className={`inline-block px-2.5 py-0.5 rounded-full text-[11px] font-medium border ${getStatusBadgeClass(String(val))}`}>
+                                  {String(val)}
+                                </span>
+                                {showFlow && (
+                                  <PipelineStepMiniBar
+                                    compact
+                                    steps={
+                                      currentTable === 'deals'
+                                        ? getDealFlowSteps(String(val))
+                                        : getLeadFlowSteps(String(val))
+                                    }
+                                  />
+                                )}
+                              </div>
                             </td>
                           );
                         }
@@ -1768,7 +1930,19 @@ export const TableManager: React.FC<TableManagerProps> = ({
                 </div>
 
                 {/* Sub details */}
-                <div className="space-y-1 text-xs text-slate-500">
+                <div className="space-y-1.5 text-xs text-slate-500">
+                  {(currentTable === 'deals' || currentTable === 'leads') && (
+                    <div className="py-1 overflow-x-auto no-scrollbar">
+                      <PipelineStepMiniBar
+                        compact
+                        steps={
+                          currentTable === 'deals'
+                            ? getDealFlowSteps(item.proposal_status)
+                            : getLeadFlowSteps(item.status)
+                        }
+                      />
+                    </div>
+                  )}
                   {item.company_id && (
                     <div className="flex items-center gap-1.5">
                       <Building2 className="w-3.5 h-3.5 text-purple-600 shrink-0" />

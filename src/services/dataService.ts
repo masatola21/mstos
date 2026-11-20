@@ -3,6 +3,13 @@ import { TableKey, Company, Product, Lead, Prospect, Deal, Customer, Diagnosis, 
 import { executeDealWonAutomation } from './dealWonAutomationService';
 import { matrixService } from './matrixService';
 import { deduceLeadInquiryType } from '../utils/leadClassification';
+import {
+  resolveNonDowngradingLeadStatus,
+  resolveNonDowngradingDealStatus,
+  appendUniqueNote,
+  getLeadStatusRank,
+  getDealStatusRank,
+} from '../utils/crmPipelineFlow';
 
 export type ErrorType = 'PERMISSION_DENIED' | 'SCHEMA_MISMATCH' | 'CONNECTION_ERROR' | 'NOT_CONFIGURED' | 'UNKNOWN';
 
@@ -697,17 +704,328 @@ export async function cleanDummyData(
   }
 }
 
+export async function findExistingLeadForCompanyOrContact(
+  companyId?: string | null,
+  contactId?: string | null
+): Promise<Lead | null> {
+  const supabase = getSupabase();
+  if (!supabase) return null;
+
+  const cleanContactId = contactId ? String(contactId).trim() : '';
+  const cleanCompanyId = companyId ? String(companyId).trim() : '';
+
+  if (cleanContactId) {
+    const { data: byContact } = await supabase
+      .from('leads')
+      .select('*')
+      .eq('contact_id', cleanContactId)
+      .order('updated_at', { ascending: false })
+      .order('created_at', { ascending: false })
+      .limit(10);
+    if (byContact && byContact.length > 0) {
+      return [...byContact].sort((a: any, b: any) => {
+        const r = getLeadStatusRank(b.status) - getLeadStatusRank(a.status);
+        if (r !== 0) return r;
+        return new Date(b.updated_at || b.created_at || 0).getTime() - new Date(a.updated_at || a.created_at || 0).getTime();
+      })[0] as Lead;
+    }
+  }
+
+  if (cleanCompanyId) {
+    const { data: byCompany } = await supabase
+      .from('leads')
+      .select('*')
+      .eq('company_id', cleanCompanyId)
+      .order('updated_at', { ascending: false })
+      .order('created_at', { ascending: false })
+      .limit(20);
+    if (byCompany && byCompany.length > 0) {
+      return [...byCompany].sort((a: any, b: any) => {
+        const r = getLeadStatusRank(b.status) - getLeadStatusRank(a.status);
+        if (r !== 0) return r;
+        return new Date(b.updated_at || b.created_at || 0).getTime() - new Date(a.updated_at || a.created_at || 0).getTime();
+      })[0] as Lead;
+    }
+  }
+
+  return null;
+}
+
+export async function findExistingDealForCompanyOrLead(
+  companyId?: string | null,
+  leadId?: string | null
+): Promise<Deal | null> {
+  const supabase = getSupabase();
+  if (!supabase) return null;
+
+  const cleanLeadId = leadId ? String(leadId).trim() : '';
+  const cleanCompanyId = companyId ? String(companyId).trim() : '';
+
+  if (cleanLeadId) {
+    const { data: byLead } = await supabase
+      .from('deals')
+      .select('*')
+      .eq('lead_id', cleanLeadId)
+      .order('updated_at', { ascending: false })
+      .order('created_at', { ascending: false })
+      .limit(10);
+    if (byLead && byLead.length > 0) {
+      return [...byLead].sort((a: any, b: any) => {
+        const r = getDealStatusRank(b.proposal_status) - getDealStatusRank(a.proposal_status);
+        if (r !== 0) return r;
+        const wonDiff = (b.won_automation_completed_at ? 1 : 0) - (a.won_automation_completed_at ? 1 : 0);
+        if (wonDiff !== 0) return wonDiff;
+        return new Date(b.updated_at || b.created_at || 0).getTime() - new Date(a.updated_at || a.created_at || 0).getTime();
+      })[0] as Deal;
+    }
+  }
+
+  if (cleanCompanyId) {
+    const { data: byCompany } = await supabase
+      .from('deals')
+      .select('*')
+      .eq('company_id', cleanCompanyId)
+      .order('updated_at', { ascending: false })
+      .order('created_at', { ascending: false })
+      .limit(20);
+    if (byCompany && byCompany.length > 0) {
+      return [...byCompany].sort((a: any, b: any) => {
+        const r = getDealStatusRank(b.proposal_status) - getDealStatusRank(a.proposal_status);
+        if (r !== 0) return r;
+        const wonDiff = (b.won_automation_completed_at ? 1 : 0) - (a.won_automation_completed_at ? 1 : 0);
+        if (wonDiff !== 0) return wonDiff;
+        return new Date(b.updated_at || b.created_at || 0).getTime() - new Date(a.updated_at || a.created_at || 0).getTime();
+      })[0] as Deal;
+    }
+  }
+
+  return null;
+}
+
+export async function consolidateDuplicateCrmRows(
+  tableKey: 'leads' | 'deals'
+): Promise<{
+  mergedCompanies: number;
+  removedRows: number;
+  error?: string;
+}> {
+  const supabase = getSupabase();
+  if (!supabase) {
+    return { mergedCompanies: 0, removedRows: 0, error: 'Supabaseが初期化されていません。' };
+  }
+
+  try {
+    const { data: rows, error } = await supabase.from(tableKey).select('*');
+    if (error) {
+      return { mergedCompanies: 0, removedRows: 0, error: parseSupabaseError(error).message };
+    }
+    if (!rows || rows.length === 0) {
+      return { mergedCompanies: 0, removedRows: 0 };
+    }
+
+    const byCompany = new Map<string, any[]>();
+    for (const row of rows) {
+      const cid = String(row.company_id || '').trim();
+      if (!cid) continue;
+      const list = byCompany.get(cid) || [];
+      list.push(row);
+      byCompany.set(cid, list);
+    }
+
+    let mergedCompanies = 0;
+    let removedRows = 0;
+
+    for (const [, group] of byCompany.entries()) {
+      if (group.length <= 1) continue;
+
+      const sorted = [...group].sort((a, b) => {
+        if (tableKey === 'deals') {
+          const rankDiff = getDealStatusRank(b.proposal_status) - getDealStatusRank(a.proposal_status);
+          if (rankDiff !== 0) return rankDiff;
+          const wonDiff = (b.won_automation_completed_at ? 1 : 0) - (a.won_automation_completed_at ? 1 : 0);
+          if (wonDiff !== 0) return wonDiff;
+        } else {
+          const rankDiff = getLeadStatusRank(b.status) - getLeadStatusRank(a.status);
+          if (rankDiff !== 0) return rankDiff;
+        }
+        return new Date(b.updated_at || b.created_at || 0).getTime() - new Date(a.updated_at || a.created_at || 0).getTime();
+      });
+
+      const canonical = sorted[0];
+      const duplicates = sorted.slice(1);
+      const dupIds = duplicates.map((d) => String(d.id));
+
+      if (tableKey === 'leads') {
+        let mergedStatus = canonical.status || '新規';
+        let mergedNotes = canonical.notes || '';
+        const mergedPatch: Record<string, any> = {
+          contact_id: canonical.contact_id || null,
+          line_user_id: canonical.line_user_id || null,
+          interested_product_id: canonical.interested_product_id || null,
+          service_type: canonical.service_type || null,
+          inquiry_type: canonical.inquiry_type || null,
+          meeting_date: canonical.meeting_date || null,
+          meeting_start_time: canonical.meeting_start_time || null,
+          priority_channel: canonical.priority_channel || null,
+          source: canonical.source || null,
+        };
+
+        for (const dup of duplicates) {
+          mergedStatus = resolveNonDowngradingLeadStatus(mergedStatus, dup.status);
+          mergedNotes = appendUniqueNote(mergedNotes, dup.notes);
+          for (const key of Object.keys(mergedPatch)) {
+            if (!mergedPatch[key] && dup[key]) {
+              mergedPatch[key] = dup[key];
+            }
+          }
+        }
+        mergedPatch.status = mergedStatus;
+        mergedPatch.notes = mergedNotes || null;
+
+        await updateRecord('leads', canonical.id, mergedPatch);
+
+        await Promise.allSettled([
+          supabase.from('deals').update({ lead_id: canonical.id }).in('lead_id', dupIds),
+          supabase.from('diagnoses').update({ lead_id: canonical.id }).in('lead_id', dupIds),
+          supabase.from('customer_documents').update({ lead_id: canonical.id }).in('lead_id', dupIds),
+          supabase.from('communication_outbox').update({ lead_id: canonical.id }).in('lead_id', dupIds),
+        ]);
+      } else {
+        let mergedStatus = canonical.proposal_status || '初回面談';
+        let mergedMemo = canonical.memo || '';
+        const mergedPatch: Record<string, any> = {
+          lead_id: canonical.lead_id || null,
+          contact_id: canonical.contact_id || null,
+          product_id: canonical.product_id || null,
+          proposal_plan_template_id: canonical.proposal_plan_template_id || null,
+          proposal_plan_name: canonical.proposal_plan_name || null,
+          proposal_type: canonical.proposal_type || null,
+          initial_fee: canonical.initial_fee ?? null,
+          monthly_fee: canonical.monthly_fee ?? null,
+          total_amount: canonical.total_amount ?? null,
+          proposal_date: canonical.proposal_date || null,
+          meeting_date: canonical.meeting_date || null,
+          meeting_start_time: canonical.meeting_start_time || null,
+          won_automation_completed_at: canonical.won_automation_completed_at || null,
+        };
+
+        for (const dup of duplicates) {
+          mergedStatus = resolveNonDowngradingDealStatus(mergedStatus, dup.proposal_status);
+          mergedMemo = appendUniqueNote(mergedMemo, dup.memo);
+          for (const key of Object.keys(mergedPatch)) {
+            if ((mergedPatch[key] === null || mergedPatch[key] === undefined || mergedPatch[key] === '') &&
+                dup[key] !== null && dup[key] !== undefined && dup[key] !== '') {
+              mergedPatch[key] = dup[key];
+            }
+          }
+        }
+        mergedPatch.proposal_status = mergedStatus;
+        mergedPatch.memo = mergedMemo || null;
+
+        await updateRecord('deals', canonical.id, mergedPatch);
+
+        await Promise.allSettled([
+          supabase.from('customer_contracts').update({ deal_id: canonical.id }).in('deal_id', dupIds),
+          supabase.from('customer_documents').update({ deal_id: canonical.id }).in('deal_id', dupIds),
+          supabase.from('communication_outbox').update({ deal_id: canonical.id }).in('deal_id', dupIds),
+        ]);
+      }
+
+      const delRes = await bulkDeleteTableRecords(tableKey, dupIds, {
+        force: true,
+        deleteDocuments: false,
+        deleteLinkedCrm: false,
+      });
+      if (delRes.successCount > 0) {
+        mergedCompanies += 1;
+        removedRows += delRes.successCount;
+      } else {
+        // Direct fallback if admin API unavailable
+        const { data: directDel } = await supabase.from(tableKey).delete().in('id', dupIds).select('id');
+        if (directDel && directDel.length > 0) {
+          mergedCompanies += 1;
+          removedRows += directDel.length;
+        }
+      }
+    }
+
+    if (removedRows > 0) {
+      emitCrmDataChanged({ tableKey });
+    }
+    return { mergedCompanies, removedRows };
+  } catch (err: any) {
+    return { mergedCompanies: 0, removedRows: 0, error: err?.message || '重複統合中にエラーが発生しました。' };
+  }
+}
+
 // 新規レコード追加
 export async function insertRecord(
   tableKey: TableKey,
   payload: Record<string, any>
-): Promise<{ data?: any; error?: DataFetchError }> {
+): Promise<{ data?: any; error?: DataFetchError; mergedExisting?: boolean }> {
   const supabase = getSupabase();
   if (!supabase) {
     return { error: { type: 'NOT_CONFIGURED', message: 'Supabaseが初期化されていません。' } };
   }
 
   try {
+    const { __allowDuplicate, ...cleanInputPayload } = payload;
+    payload = cleanInputPayload;
+
+    // 会社ごとに1件の重複防止・既存レコードへの統合 (leads / deals)
+    if (!__allowDuplicate && tableKey === 'leads' && (payload.company_id || payload.contact_id)) {
+      const existingLead = await findExistingLeadForCompanyOrContact(payload.company_id, payload.contact_id);
+      if (existingLead?.id) {
+        const mergedPatch: Record<string, any> = {
+          company_id: existingLead.company_id || payload.company_id || null,
+          contact_id: existingLead.contact_id || payload.contact_id || null,
+          line_user_id: existingLead.line_user_id || payload.line_user_id || null,
+          source: existingLead.source || payload.source || null,
+          inquiry_type: payload.inquiry_type || existingLead.inquiry_type || null,
+          service_type: payload.service_type || existingLead.service_type || null,
+          interested_product_id: payload.interested_product_id || existingLead.interested_product_id || null,
+          priority_channel: payload.priority_channel || existingLead.priority_channel || null,
+          meeting_date: payload.meeting_date || existingLead.meeting_date || null,
+          meeting_start_time: payload.meeting_start_time || existingLead.meeting_start_time || null,
+          status: resolveNonDowngradingLeadStatus(existingLead.status, payload.status),
+          notes: appendUniqueNote(existingLead.notes, payload.notes) || null,
+          last_contacted_at: payload.last_contacted_at || existingLead.last_contacted_at || null,
+        };
+        const updated = await updateRecord('leads', existingLead.id, mergedPatch);
+        return { ...updated, mergedExisting: true };
+      }
+    }
+
+    if (!__allowDuplicate && tableKey === 'deals' && (payload.company_id || payload.lead_id)) {
+      const existingDeal = await findExistingDealForCompanyOrLead(payload.company_id, payload.lead_id);
+      if (existingDeal?.id) {
+        const mergedPatch: Record<string, any> = {
+          company_id: existingDeal.company_id || payload.company_id || null,
+          lead_id: existingDeal.lead_id || payload.lead_id || null,
+          contact_id: existingDeal.contact_id || payload.contact_id || null,
+          proposal_plan_name: payload.proposal_plan_name || existingDeal.proposal_plan_name || null,
+          proposal_plan_template_id: payload.proposal_plan_template_id || existingDeal.proposal_plan_template_id || null,
+          proposal_type: payload.proposal_type || existingDeal.proposal_type || null,
+          proposal_status: resolveNonDowngradingDealStatus(existingDeal.proposal_status, payload.proposal_status),
+          product_id: payload.product_id || existingDeal.product_id || null,
+          initial_fee: payload.initial_fee ?? existingDeal.initial_fee ?? null,
+          monthly_fee: payload.monthly_fee ?? existingDeal.monthly_fee ?? null,
+          total_amount: payload.total_amount ?? existingDeal.total_amount ?? null,
+          proposal_date: existingDeal.proposal_date || payload.proposal_date || null,
+          meeting_date: payload.meeting_date || existingDeal.meeting_date || null,
+          meeting_start_time: payload.meeting_start_time || existingDeal.meeting_start_time || null,
+          memo: appendUniqueNote(existingDeal.memo, payload.memo) || null,
+        };
+        const updated = await updateRecord('deals', existingDeal.id, mergedPatch);
+        if (['成約', '受注', 'Won'].includes(mergedPatch.proposal_status)) {
+          void executeDealWonAutomation(String(existingDeal.id)).catch((err) => {
+            console.warn('Auto deal-won automation warning on merged deal:', err);
+          });
+        }
+        return { ...updated, mergedExisting: true };
+      }
+    }
+
     // 会社ごとに1件の制約チェック (customers)
     if (tableKey === 'customers' && payload.company_id) {
       const { data: existing } = await supabase

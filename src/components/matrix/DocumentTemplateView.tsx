@@ -52,9 +52,24 @@ import {
   PROPOSAL_KIND_LABELS,
   PROPOSAL_VALID_DAYS,
 } from '../../constants/proposalChapters';
-import { proposalEmptyText, defaultPaymentTermsFor, requiredKeysFor, MULTILINE_KEYS, DRAFTABLE_KEYS } from './proposalTemplate';
+import {
+  proposalEmptyText,
+  defaultPaymentTermsFor,
+  defaultP5For,
+  isDefaultP5Value,
+  buildInitialProposalFromHearing,
+  requiredKeysFor,
+  MULTILINE_KEYS,
+  DRAFTABLE_KEYS,
+} from './proposalTemplate';
 import { calcProposalFees, parseYen, formatYen } from '../../utils/proposalFees';
-import { composeMeetingMemo, sanitizeCoreAnswers, sanitizeExtraQuestions, customerIntentFrom } from '../../constants/hearingSheet';
+import {
+  composeMeetingMemo,
+  sanitizeCoreAnswers,
+  sanitizeExtraQuestions,
+  customerIntentFrom,
+  type CoreAnswers,
+} from '../../constants/hearingSheet';
 import { buildProposalDraftRow, approvalBlockers } from '../../utils/proposalDraftRecord';
 
 export type { DocTemplateType, DocTemplate, PaymentMode, InvoiceSubtype };
@@ -150,6 +165,7 @@ export const DocumentTemplateView: React.FC<DocumentTemplateViewProps> = ({
   // 提案書の下書き(proposal_drafts)。テーブル未作成なら、保存せず従来どおり画面だけで使える。
   const [draftCtx, setDraftCtx] = useState<{ diagnosisId: string; hearingSheetId: string | null; intent: any } | null>(null);
   const [meetingCtx, setMeetingCtx] = useState<{ diagnosisId: string; companyId: string | null; companyName: string; formAnswers: Record<string, unknown> } | null>(null);
+  const [hearingCoreAnswers, setHearingCoreAnswers] = useState<CoreAnswers | null>(null);
   const [meetingModalOpen, setMeetingModalOpen] = useState(false);
   const [populateSeq, setPopulateSeq] = useState(0);
   const refreshMeetingMemoRef = useRef(false);
@@ -387,11 +403,13 @@ export const DocumentTemplateView: React.FC<DocumentTemplateViewProps> = ({
       let hearingMemo = '';
       let hearingSheetId: string | null = null;
       let hearingIntent: any = null;
+      let hearingCore: CoreAnswers | null = null;
       let savedDraft: any = null;
       if (diagnosis?.id) {
         const hs = await supabase.from('hearing_sheets').select('id,core_answers,extra_questions').eq('diagnosis_id', diagnosis.id).order('created_at', { ascending: false }).limit(1).maybeSingle();
         if (!hs.error && hs.data) {
           const core = sanitizeCoreAnswers(hs.data.core_answers);
+          hearingCore = core;
           hearingMemo = composeMeetingMemo(core, sanitizeExtraQuestions(hs.data.extra_questions));
           hearingSheetId = hs.data.id;
           hearingIntent = customerIntentFrom(core);
@@ -410,6 +428,7 @@ export const DocumentTemplateView: React.FC<DocumentTemplateViewProps> = ({
       }
       if (!cancelled) {
         setDraftCtx(diagnosis?.id ? { diagnosisId: diagnosis.id, hearingSheetId, intent: hearingIntent } : null);
+        setHearingCoreAnswers(hearingCore);
         setMeetingCtx(diagnosis?.id ? {
           diagnosisId: diagnosis.id,
           companyId: resolvedCompanyId || diagnosis.company_id || null,
@@ -527,9 +546,23 @@ export const DocumentTemplateView: React.FC<DocumentTemplateViewProps> = ({
         ceo_before: '日々の火消しや業務処理に追われ、会社の改善や戦略を考える時間が奪われている',
         ceo_after: '現場から解放され、本来向き合うべき「経営判断」「人材育成」「次の一手（新規事業）」に集中できる',
       };
-      // 提案書: 診断の章(D0〜D5)・サービス名・商談の金額は、空の欄にだけ入れる(担当者の入力を上書きしない)
+      // 提案書: 診断の章(D0〜D5)・サービス名・P5標準文・商談ヒント・商談の金額は、空または初期文の欄にだけ入れる(担当者の入力を上書きしない)
       const proposalSeed: Record<string, string> = {};
       if (selectedTemplateId === 'tpl-proposal-report') {
+        const effectiveMode = (savedDraft?.payment_mode || paymentMode) as PaymentMode;
+        const effectiveKind = kindFromPaymentMode(effectiveMode);
+        if (hearingCore) {
+          const hinted = buildInitialProposalFromHearing(effectiveKind, hearingCore);
+          if (hinted.p3_metrics) proposalSeed.p3_metrics = hinted.p3_metrics;
+          proposalSeed.p5_requests = hinted.p5_requests;
+          proposalSeed.p5_prerequisites = hinted.p5_prerequisites;
+          proposalSeed.p5_exclusions = hinted.p5_exclusions;
+        } else {
+          const p5Defaults = defaultP5For(effectiveKind);
+          proposalSeed.p5_requests = p5Defaults.requests;
+          proposalSeed.p5_prerequisites = p5Defaults.prerequisites;
+          proposalSeed.p5_exclusions = p5Defaults.exclusions;
+        }
         if (hearingMemo) proposalSeed.p_meeting_notes = hearingMemo;
         if (deal?.proposal_plan_name) proposalSeed.proposal_title = String(deal.proposal_plan_name);
         if (productName) proposalSeed.p2_service_name = productName;
@@ -559,7 +592,10 @@ export const DocumentTemplateView: React.FC<DocumentTemplateViewProps> = ({
         const next = { ...prev, ...values };
         for (const [k, v] of Object.entries(proposalSeed)) {
           if (!v) continue;
-          if ((k === 'p_meeting_notes' && shouldForceRefreshMemo) || !String(prev[k] || '').trim()) {
+          const isUntouchedP5 =
+            (k === 'p5_requests' || k === 'p5_prerequisites' || k === 'p5_exclusions') &&
+            isDefaultP5Value(k, prev[k] || '');
+          if ((k === 'p_meeting_notes' && shouldForceRefreshMemo) || isUntouchedP5 || !String(prev[k] || '').trim()) {
             next[k] = v;
           }
         }
@@ -665,6 +701,7 @@ export const DocumentTemplateView: React.FC<DocumentTemplateViewProps> = ({
             deliverables: variableValues.p2_deliverables,
             monthlySupport: variableValues.p2_monthly_support,
             policy: variableValues.p1_policy,
+            roadmap: variableValues.p3_roadmap,
             meetingNotes: variableValues.p_meeting_notes,
           },
         }),
@@ -678,6 +715,20 @@ export const DocumentTemplateView: React.FC<DocumentTemplateViewProps> = ({
     } finally {
       setDraftingKey(null);
     }
+  };
+
+  const handleApplyHearingHintsToProposal = () => {
+    if (!hearingCoreAnswers || selectedTemplateId !== 'tpl-proposal-report') return;
+    const hinted = buildInitialProposalFromHearing(kindFromPaymentMode(paymentMode), hearingCoreAnswers);
+    setHasStartedDocument(true);
+    setVariableValues((prev) => ({
+      ...prev,
+      p3_metrics: hinted.p3_metrics || prev.p3_metrics || '',
+      p5_requests: hinted.p5_requests,
+      p5_prerequisites: hinted.p5_prerequisites,
+      p5_exclusions: hinted.p5_exclusions,
+    }));
+    setSaveMessage('商談シートの回答を P3 確認指標・P5（お願い事項／前提条件／対象外）へ反映しました。');
   };
 
   const handleVariableChange = (key: string, value: string) => {
@@ -760,7 +811,14 @@ export const DocumentTemplateView: React.FC<DocumentTemplateViewProps> = ({
     setCustomHtmlOverride(null); // allow dynamic generator to re-render table/clauses
     if (selectedTemplateId === 'tpl-proposal-report') {
       // 提案書: 型は支払い方式から決まる。金額は商談で決めた値だけを使うので、ここでは書き換えない。
-      setVariableValues((prev) => ({ ...prev, p6_payment_terms: defaultPaymentTermsFor(mode) }));
+      const nextP5 = defaultP5For(kindFromPaymentMode(mode));
+      setVariableValues((prev) => ({
+        ...prev,
+        p6_payment_terms: defaultPaymentTermsFor(mode),
+        p5_requests: isDefaultP5Value('p5_requests', prev.p5_requests || '') ? nextP5.requests : prev.p5_requests,
+        p5_prerequisites: isDefaultP5Value('p5_prerequisites', prev.p5_prerequisites || '') ? nextP5.prerequisites : prev.p5_prerequisites,
+        p5_exclusions: isDefaultP5Value('p5_exclusions', prev.p5_exclusions || '') ? nextP5.exclusions : prev.p5_exclusions,
+      }));
       return;
     }
     const parseNum = (v?: string) => Number((v || '').replace(/[^\d]/g, '')) || 0;
@@ -1143,25 +1201,48 @@ export const DocumentTemplateView: React.FC<DocumentTemplateViewProps> = ({
     },
     statusOverride?: 'draft' | 'approved',
   ): Promise<{ id: string; inserted: boolean }> => {
-    const candidates = documentTypeFallbackCandidates(payload.document_type);
+    let resolvedDealId = payload.deal_id;
+    if (!resolvedDealId && payload.lead_id) {
+      const { data: leadDeal } = await supabase
+        .from('deals')
+        .select('id')
+        .eq('lead_id', payload.lead_id)
+        .order('updated_at', { ascending: false })
+        .limit(1)
+        .maybeSingle();
+      if (leadDeal?.id) resolvedDealId = String(leadDeal.id);
+    }
+    if (!resolvedDealId && payload.company_id) {
+      const { data: companyDeal } = await supabase
+        .from('deals')
+        .select('id')
+        .eq('company_id', payload.company_id)
+        .order('updated_at', { ascending: false })
+        .limit(1)
+        .maybeSingle();
+      if (companyDeal?.id) resolvedDealId = String(companyDeal.id);
+    }
+    const normalizedPayload = { ...payload, deal_id: resolvedDealId };
+
+    const candidates = documentTypeFallbackCandidates(normalizedPayload.document_type);
     let lastError: any = null;
     for (const candidateType of candidates) {
       if (existingId) {
         const updateBody = statusOverride
-          ? { ...payload, document_type: candidateType, status: statusOverride }
-          : { ...payload, document_type: candidateType };
+          ? { ...normalizedPayload, document_type: candidateType, status: statusOverride }
+          : { ...normalizedPayload, document_type: candidateType };
         const { error } = await supabase.from('customer_documents').update(updateBody).eq('id', existingId);
         if (!error) return { id: existingId, inserted: false };
         lastError = error;
         if (!isDocumentTypeCheckViolation(error)) throw error;
       } else {
         const { data, error } = await supabase.from('customer_documents')
-          .insert({ ...payload, document_type: candidateType, status: statusOverride ?? 'approved' })
+          .insert({ ...normalizedPayload, document_type: candidateType, status: statusOverride ?? 'approved' })
           .select('id')
           .single();
         if (!error && data?.id) {
-          const resolvedHtml = payload.body_html.replace(/\/(?:apply|docs)\/preview/g, `/docs/${encodeURIComponent(data.id)}`);
-          if (resolvedHtml !== payload.body_html) {
+          const resolvedHtml = normalizedPayload.body_html.replace(/\/(?:apply|docs)\/preview/g, `/docs/${encodeURIComponent(data.id)}`);
+          if (resolvedHtml !== normalizedPayload.body_html) {
             await supabase.from('customer_documents').update({ body_html: resolvedHtml }).eq('id', data.id);
           }
           return { id: data.id, inserted: true };
@@ -1693,19 +1774,30 @@ export const DocumentTemplateView: React.FC<DocumentTemplateViewProps> = ({
                         <Sparkles className="w-4 h-4 text-blue-600" />
                         <span>診断の結果（D0〜D5）＋ ご提案（P1〜P7）</span>
                       </div>
-                      <button
-                        type="button"
-                        disabled={!meetingCtx}
-                        onClick={() => setMeetingModalOpen(true)}
-                        className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-slate-800 hover:bg-slate-900 text-white text-[11px] font-semibold disabled:opacity-45 disabled:cursor-not-allowed cursor-pointer transition whitespace-nowrap"
-                        title={meetingCtx ? 'ヒアリング回答・商談要約・合意事項を確認・編集して提案書へ反映します' : '紐付く診断レコードがある企業・リードを選択すると商談シートを開けます'}
-                      >
-                        <ClipboardList className="w-3.5 h-3.5" />
-                        <span>商談シートを開く</span>
-                      </button>
+                      <div className="flex flex-wrap items-center gap-1.5">
+                        <button
+                          type="button"
+                          disabled={!hearingCoreAnswers}
+                          onClick={handleApplyHearingHintsToProposal}
+                          className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg border border-blue-300 bg-white hover:bg-blue-50 text-blue-800 text-[11px] font-semibold disabled:opacity-45 disabled:cursor-not-allowed cursor-pointer transition whitespace-nowrap"
+                          title={hearingCoreAnswers ? '商談シートのゴール・ツール・条件・対象外範囲を P3確認指標 と P5 に反映します' : '保存済みの商談シートがあると反映できます'}
+                        >
+                          <span>指標・P5へ反映</span>
+                        </button>
+                        <button
+                          type="button"
+                          disabled={!meetingCtx}
+                          onClick={() => setMeetingModalOpen(true)}
+                          className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-slate-800 hover:bg-slate-900 text-white text-[11px] font-semibold disabled:opacity-45 disabled:cursor-not-allowed cursor-pointer transition whitespace-nowrap"
+                          title={meetingCtx ? 'ヒアリング回答・商談要約・合意事項を確認・編集して提案書へ反映します' : '紐付く診断レコードがある企業・リードを選択すると商談シートを開けます'}
+                        >
+                          <ClipboardList className="w-3.5 h-3.5" />
+                          <span>商談シートを開く</span>
+                        </button>
+                      </div>
                     </div>
                     <p className="text-[11px] text-blue-800 leading-relaxed">
-                      下の「お支払い方式」を選ぶと、提案の型（現在: {PROPOSAL_KIND_LABELS[kindFromPaymentMode(paymentMode)]}）に合わせて項目が切り替わります。金額・サービス名・期間は、商談で決めた値だけを入力してください。未入力の必須項目は、書類に「【未入力】」と表示されます。
+                      下の「お支払い方式」を選ぶと、提案の型（現在: {PROPOSAL_KIND_LABELS[kindFromPaymentMode(paymentMode)]}）に合わせて項目とP5標準文が切り替わります。P1・P3（ロードマップ／確認指標）・P5（お願い／前提／対象外）は「AIで下書き」も使えます。
                     </p>
                   </div>
                 )}

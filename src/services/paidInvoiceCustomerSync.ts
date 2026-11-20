@@ -137,7 +137,7 @@ export async function ensureCustomerRegisteredFromPaidInvoice(
   try {
     const { data: existingCustomer, error: lookupError } = await supabase
       .from('customers')
-      .select('id')
+      .select('id, contract_status')
       .eq('company_id', companyId)
       .maybeSingle();
 
@@ -151,6 +151,16 @@ export async function ensureCustomerRegisteredFromPaidInvoice(
     }
 
     if (existingCustomer?.id) {
+      const currentStatus = String(existingCustomer.contract_status || '').trim();
+      if (!currentStatus || currentStatus === '申込済み') {
+        await supabase
+          .from('customers')
+          .update({
+            contract_status: '契約中',
+            last_updated_at: new Date().toISOString(),
+          })
+          .eq('id', existingCustomer.id);
+      }
       return {
         status: 'already_exists',
         companyId,

@@ -2818,7 +2818,7 @@ export const CommunicationSendCenter: React.FC<Props> = ({
                                     documentType: documentCategory(doc),
                                     bodyHtml: doc.body_html,
                                     docUrl: vals.document_url,
-                                    pdfUrl: vals.document_pdf_url,
+                                    pdfUrl: vals.pdf_download_url || vals.PDFダウンロードURL,
                                   }
                                 : null
                             }
@@ -2836,7 +2836,7 @@ export const CommunicationSendCenter: React.FC<Props> = ({
                     <div className="flex items-center gap-2 text-xs">
                       <MessageSquare className="h-4 w-4 text-emerald-600 shrink-0" />
                       <span className="font-bold text-slate-900">LINE送信プレビュー</span>
-                      <span className="text-slate-600 text-xs">（宛先: {contact?.full_name} 様）</span>
+                      <span className="text-slate-600 text-xs">（宛先: {effectiveContact?.full_name || 'ご担当者'} 様）</span>
                     </div>
                     <span className="rounded-full bg-emerald-50 border border-emerald-200 px-2.5 py-0.5 text-emerald-700 font-bold text-[10px]">
                       LINE Messaging API 送信

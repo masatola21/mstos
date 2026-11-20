@@ -35,7 +35,7 @@ const FlexNode: React.FC<{ node: any; index?: number }> = ({ node, index = 0 }) 
       overflow: 'hidden',
       marginTop: spacing[node.margin] || undefined,
       lineHeight: 1.45,
-    }}>{String(node.text || '')}</div>;
+    }}><LinkifiedText text={String(node.text || '')} /></div>;
   }
   if (node.type === 'image') {
     if (!node.url) return <div key={index} className="rounded bg-slate-200 p-4 text-center text-xs text-slate-500">画像URL未設定</div>;
@@ -45,14 +45,35 @@ const FlexNode: React.FC<{ node: any; index?: number }> = ({ node, index = 0 }) 
   if (node.type === 'button') {
     const action = node.action || {};
     const isLink = node.style === 'link';
+    const actionUri = action.type === 'uri' && typeof action.uri === 'string' && /^https?:\/\//i.test(action.uri.trim())
+      ? action.uri.trim()
+      : '';
+    const buttonStyle = {
+      marginTop: spacing[node.margin] || '8px',
+      backgroundColor: isLink ? 'transparent' : (node.color || '#2563eb'),
+    };
+    const buttonClassName = `block rounded-lg px-3 py-2 text-center text-sm font-semibold ${isLink ? 'text-blue-700 underline' : 'text-white'}`;
+    if (actionUri) {
+      return (
+        <a
+          key={index}
+          href={actionUri}
+          target="_blank"
+          rel="noopener noreferrer"
+          onClick={(e) => e.stopPropagation()}
+          className={`${buttonClassName} hover:opacity-90 transition-opacity no-underline`}
+          style={buttonStyle}
+          title={actionUri}
+        >
+          {String(action.label || 'ボタン')}
+        </a>
+      );
+    }
     return (
       <div
         key={index}
-        className={`rounded-lg px-3 py-2 text-center text-sm font-semibold ${isLink ? 'text-blue-700 underline' : 'text-white'}`}
-        style={{
-          marginTop: spacing[node.margin] || '8px',
-          backgroundColor: isLink ? 'transparent' : (node.color || '#2563eb'),
-        }}
+        className={buttonClassName}
+        style={buttonStyle}
       >
         {String(action.label || 'ボタン')}
       </div>

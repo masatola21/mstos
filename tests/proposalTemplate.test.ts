@@ -16,6 +16,9 @@ import {
   proposalEmptyText,
   PROPOSAL_MISSING_MARK,
   defaultPaymentTermsFor,
+  defaultP5For,
+  isDefaultP5Value,
+  buildInitialProposalFromHearing,
   placeholdersIn,
 } from '../src/components/matrix/proposalTemplate.js';
 import {
@@ -111,6 +114,22 @@ eq(d.issue_date, '2026年11月12日', '発行日');
 eq(d.due_date, '2026年12月12日', '有効期限は発行日から30日(11/12 + 30日)');
 eq(d.p6_payment_terms, defaultPaymentTermsFor('lump_sum'), 'お支払い条件の初期文');
 eq(getTemplateDefaultValues('tpl-proposal-report', '2026-11-12', 'retainer', 'lump_sum').p6_payment_terms, defaultPaymentTermsFor('retainer'), '伴走の初期文');
+eq(d.p5_requests, defaultP5For('spot_build').requests, 'P5 お客様にお願いすることの標準初期文');
+eq(d.p5_prerequisites, defaultP5For('spot_build').prerequisites, 'P5 前提・条件の標準初期文');
+eq(d.p5_exclusions, defaultP5For('spot_build').exclusions, 'P5 対象外の標準初期文');
+assert(isDefaultP5Value('p5_prerequisites', defaultP5For('retainer').prerequisites), '未編集P5判定: 伴走初期文');
+assert(!isDefaultP5Value('p5_prerequisites', 'カスタム前提条件'), '未編集P5判定: 手動編集済みはfalse');
+const hinted = buildInitialProposalFromHearing('hybrid', {
+  q02: '請求書の転記',
+  q04: 'freee, LINE',
+  q06: '月次締めを3日短縮',
+  q07: '経理の田中様',
+  q08: '来月開始希望。SNS運用代行は対象外',
+  _decisions: '初期構築後に伴走へ移行',
+});
+assert(hinted.p3_metrics.includes('月次締めを3日短縮') && hinted.p3_metrics.includes('請求書の転記'), '商談シートからP3確認指標を組み立てる');
+assert(hinted.p5_requests.includes('freee, LINE') && hinted.p5_requests.includes('経理の田中様'), '商談シートからP5お願い事項を補強');
+assert(hinted.p5_exclusions.includes('SNS運用代行は対象外') && hinted.p5_exclusions.includes('標準の対象外事項'), '商談シートの対象外と標準文を併記');
 assert(!Object.values(d).some((v) => /月\s*\d+\s*[〜~-]?\s*\d*\s*時間/.test(String(v))), '初期値に「月○時間」がない');
 eq(PROPOSAL_VALID_DAYS, 30, '有効日数は30');
 

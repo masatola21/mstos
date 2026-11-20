@@ -584,7 +584,8 @@ export const TABLE_CONFIGS: Record<TableKey, TableConfig> = {
         label: '契約ステータス',
         type: 'select',
         options: [
-          { value: '契約中', label: '契約中' },
+          { value: '申込済み', label: '申込済み（契約締結待ち）' },
+          { value: '契約中', label: '契約中（契約締結済み）' },
           { value: 'トライアル', label: 'トライアル' },
           { value: '更新交渉中', label: '更新交渉中' },
           { value: '解約', label: '解約' }

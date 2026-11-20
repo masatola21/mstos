@@ -1,5 +1,6 @@
 import React from 'react';
 import { SENDER_PROFILE, stripTrailingLegacySignature } from '../../../server/emailFooter';
+import { LinkifiedText } from './LinkifiedText';
 
 interface EmailHtmlPreviewCardProps {
   body: string;
@@ -41,7 +42,7 @@ export const EmailHtmlPreviewCard: React.FC<EmailHtmlPreviewCardProps> = ({
   return (
     <div className={`text-slate-800 ${className}`}>
       <div className="whitespace-pre-wrap leading-relaxed">
-        {cleanBody}
+        <LinkifiedText text={cleanBody} />
       </div>
 
       {shouldIncludeSignature && (
@@ -64,13 +65,26 @@ export const EmailHtmlPreviewCard: React.FC<EmailHtmlPreviewCardProps> = ({
             </div>
             <div className="truncate">
               HP:{' '}
-              <span className="text-sky-700 underline">
+              <a
+                href={SENDER_PROFILE.website}
+                target="_blank"
+                rel="noopener noreferrer"
+                onClick={(e) => e.stopPropagation()}
+                className="text-sky-700 underline hover:text-sky-900"
+              >
                 {SENDER_PROFILE.website}
-              </span>
+              </a>
             </div>
             {mail && (
               <div className="truncate">
-                Mail: <span className="text-sky-700 underline">{mail}</span>
+                Mail:{' '}
+                <a
+                  href={`mailto:${mail}`}
+                  onClick={(e) => e.stopPropagation()}
+                  className="text-sky-700 underline hover:text-sky-900"
+                >
+                  {mail}
+                </a>
               </div>
             )}
           </div>
@@ -119,7 +133,15 @@ export const EmailHtmlPreviewCard: React.FC<EmailHtmlPreviewCardProps> = ({
         <div className="mt-3.5 pt-2.5 border-t border-dashed border-slate-200 text-[11px] text-slate-500 break-all">
           配信停止はこちら:{' '}
           {isHttpUnsub ? (
-            <span className="underline">{cleanUnsub}</span>
+            <a
+              href={cleanUnsub}
+              target="_blank"
+              rel="noopener noreferrer"
+              onClick={(e) => e.stopPropagation()}
+              className="underline text-sky-700 hover:text-sky-900"
+            >
+              {cleanUnsub}
+            </a>
           ) : (
             <span>{cleanUnsub}</span>
           )}

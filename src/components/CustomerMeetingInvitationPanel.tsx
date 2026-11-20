@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { getSupabase } from '../lib/supabaseClient';
 import { CalendarDays, Loader2, Mail, Save } from 'lucide-react';
+import { LinkifiedText } from './common/LinkifiedText';
 
 type Customer = {
   id: string;
@@ -154,7 +155,7 @@ export const CustomerMeetingInvitationPanel: React.FC = () => {
         <button type="button" onClick={()=>void requestSend()} disabled={submitting || !selectedCustomer || !selectedContact?.email} className="flex items-center gap-2 rounded-lg bg-indigo-600 px-4 py-2.5 text-sm font-semibold text-white disabled:opacity-50">{submitting?<Loader2 className="h-4 w-4 animate-spin"/>:<Mail className="h-4 w-4"/>}送信承認を申請</button>
       </div>
       <div className="space-y-3">
-        <div className="rounded-lg border border-slate-800 bg-slate-950 p-3"><div className="text-xs font-semibold text-slate-300">メール文プレビュー</div><div className="mt-2 text-xs text-slate-400">件名：{subject}</div><pre className="mt-2 max-h-[32rem] overflow-auto whitespace-pre-wrap font-sans text-xs leading-6 text-slate-200">{emailBody}</pre></div>
+        <div className="rounded-lg border border-slate-800 bg-slate-950 p-3"><div className="text-xs font-semibold text-slate-300">メール文プレビュー</div><div className="mt-2 text-xs text-slate-400">件名：{subject}</div><pre className="mt-2 max-h-[32rem] overflow-auto whitespace-pre-wrap font-sans text-xs leading-6 text-slate-200"><LinkifiedText text={emailBody} linkClassName="underline text-sky-300 hover:text-sky-200 break-all" /></pre></div>
         <section className="rounded-lg border border-slate-800 bg-slate-950 p-3"><h3 className="mb-2 text-xs font-semibold text-slate-300">案内履歴</h3>{history.length===0?<p className="text-xs text-slate-500">まだ案内履歴はありません。</p>:<ul className="divide-y divide-slate-800">{history.map((row)=><li key={row.id} className="py-2 text-xs"><div className="flex justify-between gap-2"><span className="text-slate-200">{row.subject || row.recipient_address}</span><span className="text-slate-400">{row.status}</span></div><div className="mt-1 text-slate-500">{new Date(row.created_at).toLocaleString('ja-JP')} · {row.recipient_address}</div></li>)}</ul>}</section>
       </div>
     </div>}

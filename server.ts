@@ -104,6 +104,11 @@ import {
   isLineNoReplyInboundText,
   LINE_RULE_RESOLVED_PREFIX,
 } from './src/utils/inboxReadState.js';
+import {
+  resolveNonDowngradingLeadStatus,
+  resolveNonDowngradingDealStatus,
+  appendUniqueNote,
+} from './src/utils/crmPipelineFlow.js';
 
 dotenv.config();
 
@@ -2496,21 +2501,47 @@ async function processLinePostback(event: any, contact: any, eventId: string, bo
       // 2. leads テーブルに未対応リードとして登録（ダッシュボードの「反響即応」へ自動連動）
       const noteContent = `【LINE介護保険外開業ヒアリング完了】\n・現在の状況: ${q1Label}\n・知りたいテーマ: ${q2Label}\n・希望連絡手段: LINEトーク`;
       try {
-        const { data: existingLead } = await lineSupabase
+        let existingLead: any = null;
+        const { data: byLine } = await lineSupabase
           .from('leads')
-          .select('id, notes')
+          .select('id, status, notes, company_id, contact_id')
           .eq('line_user_id', userId)
           .order('created_at', { ascending: false })
           .limit(1)
           .maybeSingle();
+        existingLead = byLine || null;
+
+        if (!existingLead && contact?.id) {
+          const { data: byContact } = await lineSupabase
+            .from('leads')
+            .select('id, status, notes, company_id, contact_id')
+            .eq('contact_id', contact.id)
+            .order('created_at', { ascending: false })
+            .limit(1)
+            .maybeSingle();
+          existingLead = byContact || null;
+        }
+        if (!existingLead && contact?.company_id) {
+          const { data: byCompany } = await lineSupabase
+            .from('leads')
+            .select('id, status, notes, company_id, contact_id')
+            .eq('company_id', contact.company_id)
+            .order('created_at', { ascending: false })
+            .limit(1)
+            .maybeSingle();
+          existingLead = byCompany || null;
+        }
 
         if (existingLead) {
           await lineSupabase.from('leads').update({
+            ...(contact?.company_id && !existingLead.company_id ? { company_id: contact.company_id } : {}),
+            ...(contact?.id && !existingLead.contact_id ? { contact_id: contact.id } : {}),
+            line_user_id: userId,
             service_type: '介護保険外サービス開業パッケージ',
             inquiry_type: '介護保険外開業',
-            status: '未対応',
+            status: resolveNonDowngradingLeadStatus(existingLead.status, '未対応'),
             priority_channel: 'LINE',
-            notes: (existingLead.notes ? existingLead.notes + '\n\n' : '') + noteContent,
+            notes: appendUniqueNote(existingLead.notes, noteContent),
             updated_at: new Date().toISOString(),
           }).eq('id', existingLead.id);
         } else {
@@ -3086,22 +3117,48 @@ async function processLinePostback(event: any, contact: any, eventId: string, bo
       postReplyTasks.push(
         (async () => {
           try {
-            const { data: existingLead } = await lineSupabase!
+            let existingLead: any = null;
+            const { data: byLine } = await lineSupabase!
               .from('leads')
-              .select('id, notes')
+              .select('id, status, notes, company_id, contact_id')
               .eq('line_user_id', userId)
               .order('created_at', { ascending: false })
               .limit(1)
               .maybeSingle();
+            existingLead = byLine || null;
+
+            if (!existingLead && contact?.id) {
+              const { data: byContact } = await lineSupabase!
+                .from('leads')
+                .select('id, status, notes, company_id, contact_id')
+                .eq('contact_id', contact.id)
+                .order('created_at', { ascending: false })
+                .limit(1)
+                .maybeSingle();
+              existingLead = byContact || null;
+            }
+            if (!existingLead && contact?.company_id) {
+              const { data: byCompany } = await lineSupabase!
+                .from('leads')
+                .select('id, status, notes, company_id, contact_id')
+                .eq('company_id', contact.company_id)
+                .order('created_at', { ascending: false })
+                .limit(1)
+                .maybeSingle();
+              existingLead = byCompany || null;
+            }
 
             const leadNote = '【LINE個別相談希望】大橋代表からのLINE直通チャット相談を案内済み。返信待ち。';
             if (existingLead) {
               await lineSupabase!.from('leads').update({
+                ...(contact?.company_id && !existingLead.company_id ? { company_id: contact.company_id } : {}),
+                ...(contact?.id && !existingLead.contact_id ? { contact_id: contact.id } : {}),
+                line_user_id: userId,
                 service_type: '経営改善・個別相談',
                 inquiry_type: '経営改善・個別相談',
-                status: '未対応',
+                status: resolveNonDowngradingLeadStatus(existingLead.status, '未対応'),
                 priority_channel: 'LINE',
-                notes: (existingLead.notes ? existingLead.notes + '\n\n' : '') + leadNote,
+                notes: appendUniqueNote(existingLead.notes, leadNote),
                 updated_at: new Date().toISOString(),
               }).eq('id', existingLead.id);
             } else {
@@ -8788,15 +8845,25 @@ app.post(
 
     let existingLeads: any[] | null = preExistingLeadsRes?.data || null;
     if (preExistingLeadsRes?.error) throw preExistingLeadsRes.error;
-    if (!existingLeads && contact.id) {
+    if ((!existingLeads || existingLeads.length === 0) && contact.id) {
       const { data: fetchedLeads, error: leadLookupError } = await lineSupabase
         .from('leads')
-        .select('id, notes, source, status, service_type, meeting_date, company_id')
+        .select('id, notes, source, status, service_type, meeting_date, company_id, contact_id')
         .eq('contact_id', contact.id)
         .order('created_at', { ascending: false })
         .limit(1);
       if (leadLookupError) throw leadLookupError;
       existingLeads = fetchedLeads;
+    }
+    if ((!existingLeads || existingLeads.length === 0) && resolvedCompanyId) {
+      const { data: companyLeads, error: compLeadErr } = await lineSupabase
+        .from('leads')
+        .select('id, notes, source, status, service_type, meeting_date, company_id, contact_id')
+        .eq('company_id', resolvedCompanyId)
+        .order('created_at', { ascending: false })
+        .limit(1);
+      if (compLeadErr) throw compLeadErr;
+      existingLeads = companyLeads;
     }
 
     // スキーマ互換性担保: leads テーブルのカラム不一致時に安全に再試行
@@ -8846,24 +8913,25 @@ app.post(
       throw new Error('リードの保存に失敗しました');
     };
 
-    let lead: any = existingLeads?.[0];
-    if (lead && !['新規', 'ヒアリング済'].includes(lead.status)) lead = undefined;
+    const lead: any = existingLeads?.[0];
     let leadId = '';
     const meetingDate = typeof cleanAnswers.meeting_date === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(cleanAnswers.meeting_date)
       ? cleanAnswers.meeting_date
       : null;
     if (lead) {
       leadId = lead.id;
-      if (typeof lead.notes !== 'string' || !lead.notes.includes(requestMarker)) {
-        const notes = [lead.notes, noteEntry].filter(Boolean).join('\n\n').slice(-12_000);
+      const resolvedStatus = resolveNonDowngradingLeadStatus(lead.status, leadStatus);
+      if (typeof lead.notes !== 'string' || !lead.notes.includes(requestMarker) || resolvedStatus !== lead.status || (resolvedCompanyId && !lead.company_id)) {
+        const notes = appendUniqueNote(lead.notes, noteEntry);
         leadId = await safeUpsertLead(true, {
           notes,
-          source: leadSource,
+          source: lead.source || leadSource,
           last_contacted_at: new Date().toISOString(),
           ...(resolvedCompanyId && !lead.company_id ? { company_id: resolvedCompanyId } : {}),
+          ...(contact.id && !lead.contact_id ? { contact_id: contact.id } : {}),
           ...(meetingDate ? { meeting_date: meetingDate } : {}),
           ...(inquiryType ? { inquiry_type: inquiryType, service_type: null } : {}),
-          ...(['新規', 'ヒアリング済'].includes(lead.status) ? { status: leadStatus } : {}),
+          ...(resolvedStatus !== lead.status ? { status: resolvedStatus } : {}),
         }, lead.id);
       }
     } else {
@@ -9851,11 +9919,11 @@ app.post('/api/diagnosis-submissions/:id/generate-report', requireAuth, async (r
   }
 });
 
-// 提案書の章(P1 方針 / P3 ロードマップ)のAI下書き。サービス名・金額・期間はAIに決めさせない。
+// 提案書の章(P1・P3・確認指標・P5)のAI下書き。サービス名・金額・期間はAIに決めさせない。
 app.post('/api/proposals/draft-chapter', requireAuth, async (req, res) => {
   const chapter = String(req.body?.chapter || '') as DraftChapter;
   const kind = String(req.body?.kind || '');
-  if (!DRAFT_CHAPTERS.includes(chapter)) return res.status(400).json({ error: '下書きを作れるのは、P1(方針)とP3(ロードマップ)です。' });
+  if (!DRAFT_CHAPTERS.includes(chapter)) return res.status(400).json({ error: '下書きを作れるのは、P1・P3（ロードマップ／確認指標）・P5（お願い事項／前提条件／対象外）です。' });
   if (!['spot_build', 'retainer', 'hybrid'].includes(kind)) return res.status(400).json({ error: '提案の型が正しくありません。' });
 
   try {
@@ -13026,7 +13094,29 @@ app.post('/api/public/documents/:id/apply', async (req, res) => {
       }
     }
 
-    let finalDealId = doc.deal_id;
+    const docOwnerId = await resolveSystemOwnerId(doc.owner_id);
+
+    let finalDealId = doc.deal_id || null;
+    if (!finalDealId && doc.lead_id) {
+      const { data: leadDeal } = await lineSupabase
+        .from('deals')
+        .select('id')
+        .eq('lead_id', doc.lead_id)
+        .order('updated_at', { ascending: false })
+        .limit(1)
+        .maybeSingle();
+      if (leadDeal?.id) finalDealId = leadDeal.id;
+    }
+    if (!finalDealId && resolvedCompanyId) {
+      const { data: companyDeal } = await lineSupabase
+        .from('deals')
+        .select('id')
+        .eq('company_id', resolvedCompanyId)
+        .order('updated_at', { ascending: false })
+        .limit(1)
+        .maybeSingle();
+      if (companyDeal?.id) finalDealId = companyDeal.id;
+    }
 
     const evidenceLog = [
       '【Web申込・電子承諾エビデンス】',
@@ -13037,18 +13127,27 @@ app.post('/api/public/documents/:id/apply', async (req, res) => {
       '・合意文面: ' + consentEvidenceText,
     ].join('\n');
 
-    // 商談の更新または自動起票
+    // 商談の更新または自動起票（1社1商談への重複統合を保証）
+    let currentDealRow: any = null;
     if (finalDealId) {
-      const { data: currentDeal } = await lineSupabase.from('deals').select('id, memo').eq('id', finalDealId).maybeSingle();
-      const newMemo = [currentDeal?.memo, evidenceLog].filter(Boolean).join('\n\n');
+      const { data: currentDeal } = await lineSupabase
+        .from('deals')
+        .select('id, memo, total_amount, initial_fee, monthly_fee, product_id, proposal_plan_name, proposal_status')
+        .eq('id', finalDealId)
+        .maybeSingle();
+      currentDealRow = currentDeal || null;
+      const newMemo = appendUniqueNote(currentDeal?.memo, evidenceLog);
+      const nextDealStatus = resolveNonDowngradingDealStatus(currentDeal?.proposal_status, '成約');
       const { error: dealUpdErr } = await lineSupabase.from('deals').update({
-        proposal_status: '成約',
+        proposal_status: nextDealStatus,
+        ...(totalAmount > 0 && !currentDeal?.total_amount ? { total_amount: totalAmount } : {}),
+        ...(doc.lead_id ? { lead_id: doc.lead_id } : {}),
         memo: newMemo,
         updated_at: nowIso,
       }).eq('id', finalDealId);
       if (dealUpdErr) {
         await lineSupabase.from('deals').update({
-          proposal_status: '成約',
+          proposal_status: nextDealStatus,
           memo: newMemo,
         }).eq('id', finalDealId);
       }
@@ -13088,37 +13187,66 @@ app.post('/api/public/documents/:id/apply', async (req, res) => {
       }).eq('id', doc.id);
     }
 
-    // 契約書レコード（customer_contracts）の作成または承諾更新
+    // 会社名・金額解決（契約・請求・顧問構築支援の自動起票に使用）
+    const { data: compData } = await lineSupabase.from('companies').select('company_name').eq('id', resolvedCompanyId).maybeSingle();
+    const compLabel = compData?.company_name || '顧客企業';
+    const dealTitle = currentDealRow?.proposal_plan_name || doc.title || 'Web申込プラン';
+    const resolvedTotalAmount = Number(currentDealRow?.total_amount || totalAmount || 0);
+    const resolvedInitialFee = Number(currentDealRow?.initial_fee || 0);
+    const resolvedMonthlyFee = Number(currentDealRow?.monthly_fee || 0);
+    const firstInvoiceAmount = resolvedInitialFee > 0 ? resolvedInitialFee : resolvedTotalAmount;
+    const taxAmount = firstInvoiceAmount > 0 ? Math.floor(firstInvoiceAmount * 0.1) : 0;
+    const dueDate = getEndOfNextMonthDate(new Date());
+    const scheduleNote = resolvedMonthlyFee > 0
+      ? `月額費用: ¥${resolvedMonthlyFee.toLocaleString('ja-JP')}（税抜 / 税込 ¥${Math.floor(resolvedMonthlyFee * 1.1).toLocaleString('ja-JP')}・毎月末日締め翌月末日振込）`
+      : `スポット契約（一括払い・支払期日: ${dueDate}）`;
+
+    // 契約書レコード（customer_contracts）の作成または承諾更新（owner_id 必須付与）
+    const isContractDoc = effectiveDocType === 'contract';
+    let resolvedContractId: string | null = null;
     try {
       const { data: existingContract } = await lineSupabase
         .from('customer_contracts')
-        .select('id')
+        .select('id, status')
         .or(`document_id.eq.${doc.id},deal_id.eq.${finalDealId}`)
         .maybeSingle();
 
-      if (existingContract) {
+      if (existingContract?.id) {
+        resolvedContractId = existingContract.id;
+        const alreadySigned = ['signed', 'active', 'effective', 'in_force'].includes(String(existingContract.status || '').toLowerCase());
+        const nextContractStatus = isContractDoc ? 'signed' : (alreadySigned ? existingContract.status : 'draft');
         const { error: ctrUpdErr } = await lineSupabase.from('customer_contracts').update({
-          status: 'signed',
-          consent_method: consentMethod,
-          consent_recorded_at: nowIso,
-          consent_ip: clientIp,
-          consent_user_agent: userAgent,
-          consent_evidence_text: consentEvidenceText,
+          status: nextContractStatus,
+          deal_id: finalDealId,
+          ...(isContractDoc ? {
+            document_id: doc.id,
+            consent_method: consentMethod,
+            consent_recorded_at: nowIso,
+            consent_ip: clientIp,
+            consent_user_agent: userAgent,
+            consent_evidence_text: consentEvidenceText,
+          } : {}),
           updated_at: nowIso,
         }).eq('id', existingContract.id);
         if (ctrUpdErr) {
-          await lineSupabase.from('customer_contracts').update({ status: 'signed' }).eq('id', existingContract.id);
+          await lineSupabase.from('customer_contracts').update({ status: nextContractStatus }).eq('id', existingContract.id);
         }
-      } else {
-        const { error: ctrInsErr } = await lineSupabase.from('customer_contracts').insert({
+      } else if (docOwnerId) {
+        const newContractUuid = crypto.randomUUID();
+        const contractPayload = {
+          id: newContractUuid,
+          legacy_id: newContractUuid,
+          owner_id: docOwnerId,
           company_id: resolvedCompanyId,
           contact_id: doc.contact_id || null,
+          product_id: currentDealRow?.product_id || null,
           deal_id: finalDealId,
           document_id: doc.id,
-          title: doc.title ? `${doc.title}（電子合意）` : 'Web申込契約合意',
-          contract_type: 'service_agreement',
-          amount: totalAmount > 0 ? totalAmount : 0,
-          status: 'signed',
+          counterparty_name: compLabel,
+          title: doc.title ? `${doc.title}${isContractDoc ? '（電子合意）' : '（申込控）'}` : 'Web申込契約合意',
+          contract_type: resolvedMonthlyFee > 0 ? 'retainer' : 'service_agreement',
+          amount: resolvedTotalAmount,
+          status: isContractDoc ? 'signed' : 'draft',
           start_date: todayStr,
           consent_method: consentMethod,
           consent_recorded_at: nowIso,
@@ -13128,42 +13256,244 @@ app.post('/api/public/documents/:id/apply', async (req, res) => {
           notes: evidenceLog,
           created_at: nowIso,
           updated_at: nowIso,
-        });
-        if (ctrInsErr) {
-          await lineSupabase.from('customer_contracts').insert({
-            company_id: resolvedCompanyId,
-            deal_id: finalDealId,
-            document_id: doc.id,
-            title: doc.title ? `${doc.title}（電子合意）` : 'Web申込契約合意',
-            contract_type: 'service_agreement',
-            amount: totalAmount > 0 ? totalAmount : 0,
-            status: 'signed',
-            start_date: todayStr,
-            notes: evidenceLog,
-          });
+        };
+        const { data: ctrIns, error: ctrInsErr } = await lineSupabase
+          .from('customer_contracts')
+          .insert(contractPayload)
+          .select('id')
+          .single();
+
+        if (!ctrInsErr && ctrIns?.id) {
+          resolvedContractId = ctrIns.id;
+        } else {
+          const { data: ctrRetry, error: ctrRetryErr } = await lineSupabase
+            .from('customer_contracts')
+            .insert({
+              id: newContractUuid,
+              legacy_id: newContractUuid,
+              owner_id: docOwnerId,
+              company_id: resolvedCompanyId,
+              deal_id: finalDealId,
+              document_id: doc.id,
+              counterparty_name: compLabel,
+              title: doc.title ? `${doc.title}${isContractDoc ? '（電子合意）' : '（申込控）'}` : 'Web申込契約合意',
+              contract_type: resolvedMonthlyFee > 0 ? 'retainer' : 'service_agreement',
+              amount: resolvedTotalAmount,
+              status: isContractDoc ? 'signed' : 'draft',
+              start_date: todayStr,
+              notes: evidenceLog,
+            })
+            .select('id')
+            .single();
+          if (!ctrRetryErr && ctrRetry?.id) {
+            resolvedContractId = ctrRetry.id;
+          } else {
+            console.error('[DocumentApply] customer_contracts insert error:', ctrRetryErr?.message || ctrInsErr?.message);
+          }
         }
+      } else {
+        console.warn('[DocumentApply] customer_contracts skipped: docOwnerId could not be resolved');
       }
     } catch (contractErr) {
       console.warn('Customer contract consent sync warning:', contractErr);
     }
 
-    // 顧客マスタ (customers) への登録（1社1件）
+    // 初回請求書（customer_invoices + invoice document draft）および顧問・構築支援（customer_service_engagements）を自動起票
+    let resolvedInvoiceId: string | null = null;
+    let resolvedEngagementId: string | null = null;
+    if (docOwnerId && resolvedCompanyId) {
+      try {
+        if (resolvedContractId) {
+          const { data: existingInv } = await lineSupabase
+            .from('customer_invoices')
+            .select('id')
+            .eq('contract_id', resolvedContractId)
+            .limit(1);
+          if (existingInv?.[0]?.id) resolvedInvoiceId = existingInv[0].id;
+        }
+
+        if (!resolvedInvoiceId) {
+          const invoiceNumber = `INV-${todayStr.replaceAll('-', '')}-${crypto.randomUUID().slice(0, 6).toUpperCase()}`;
+          let invoiceDocId: string | null = null;
+          try {
+            const invoiceHtml = `
+              <div style="font-family: sans-serif; padding: 30px; line-height: 1.8; color: #1e293b;">
+                <h1 style="text-align: center; border-bottom: 2px solid #0f172a; padding-bottom: 10px;">御 請 求 書</h1>
+                <p style="text-align: right;">請求番号: ${invoiceNumber}<br>発行日: ${todayStr}</p>
+                <p style="font-size: 18px;"><strong>${compLabel} 御中</strong></p>
+                <p>下記の通りご請求申し上げます。</p>
+                <div style="background: #f8fafc; border: 1px solid #cbd5e1; padding: 15px; border-radius: 8px; margin-bottom: 20px;">
+                  <table style="width: 100%; border-collapse: collapse; font-size: 14px;">
+                    <tr>
+                      <td style="padding: 6px 0; color: #64748b;">小計（税抜）:</td>
+                      <td style="padding: 6px 0; text-align: right; font-weight: bold;">¥${firstInvoiceAmount.toLocaleString('ja-JP')}</td>
+                    </tr>
+                    <tr>
+                      <td style="padding: 6px 0; color: #64748b; border-bottom: 1px solid #cbd5e1;">消費税（10%）:</td>
+                      <td style="padding: 6px 0; text-align: right; font-weight: bold; border-bottom: 1px solid #cbd5e1;">¥${taxAmount.toLocaleString('ja-JP')}</td>
+                    </tr>
+                    <tr>
+                      <td style="padding: 10px 0 4px 0; font-size: 18px; font-weight: bold; color: #0f172a;">ご請求金額合計（税込）:</td>
+                      <td style="padding: 10px 0 4px 0; text-align: right; font-size: 20px; font-weight: 800; color: #1e3a8a;">¥${(firstInvoiceAmount + taxAmount).toLocaleString('ja-JP')}</td>
+                    </tr>
+                  </table>
+                </div>
+                <p style="margin-top: 20px;">お支払期日: <strong>${dueDate}（翌月末日）</strong></p>
+                <p>振込先口座: ドコモSMTBネット銀行 法人第一支店 普通 2223730（口座名義：有限会社MST）</p>
+              </div>
+            `;
+            const { data: invDoc } = await lineSupabase
+              .from('customer_documents')
+              .insert({
+                owner_id: docOwnerId,
+                document_type: 'invoice',
+                title: `${compLabel} · 初回請求書（${invoiceNumber}）`,
+                body_html: invoiceHtml,
+                company_id: resolvedCompanyId,
+                deal_id: finalDealId,
+                lead_id: doc.lead_id || null,
+                status: 'draft',
+              })
+              .select('id')
+              .maybeSingle();
+            if (invDoc?.id) invoiceDocId = invDoc.id;
+          } catch (invDocErr) {
+            console.warn('[DocumentApply] invoice doc draft warning:', invDocErr);
+          }
+
+          const newInvoiceUuid = crypto.randomUUID();
+          const { data: invRow, error: invErr } = await lineSupabase
+            .from('customer_invoices')
+            .insert({
+              id: newInvoiceUuid,
+              legacy_id: newInvoiceUuid,
+              owner_id: docOwnerId,
+              company_id: resolvedCompanyId,
+              contact_id: doc.contact_id || null,
+              product_id: currentDealRow?.product_id || null,
+              contract_id: resolvedContractId,
+              document_id: invoiceDocId,
+              title: `${dealTitle} 初回ご請求書`,
+              invoice_number: invoiceNumber,
+              amount: firstInvoiceAmount,
+              tax_amount: taxAmount,
+              issue_date: todayStr,
+              due_date: dueDate,
+              status: 'draft',
+              recipient_name: compLabel,
+              notes: `Web申込（商談ID: ${finalDealId}）に伴い自動起票。支払期日: ${dueDate}。`,
+            })
+            .select('id')
+            .single();
+          if (!invErr && invRow?.id) {
+            resolvedInvoiceId = invRow.id;
+          } else {
+            console.error('[DocumentApply] customer_invoices insert error:', invErr?.message);
+          }
+        }
+      } catch (invErr) {
+        console.warn('[DocumentApply] invoice auto-generation warning:', invErr);
+      }
+
+      try {
+        if (resolvedContractId) {
+          const { data: existingEng } = await lineSupabase
+            .from('customer_service_engagements')
+            .select('id')
+            .eq('contract_id', resolvedContractId)
+            .limit(1);
+          if (existingEng?.[0]?.id) resolvedEngagementId = existingEng[0].id;
+        }
+        if (!resolvedEngagementId) {
+          const { data: existingDealEng } = await lineSupabase
+            .from('customer_service_engagements')
+            .select('id')
+            .eq('company_id', resolvedCompanyId)
+            .ilike('notes', `%商談ID: ${finalDealId}%`)
+            .limit(1);
+          if (existingDealEng?.[0]?.id) resolvedEngagementId = existingDealEng[0].id;
+        }
+
+        if (!resolvedEngagementId) {
+          const milestones = [
+            { id: crypto.randomUUID(), phase: 1, title: '初回キックオフ・現状詳細ヒアリング', target_period: '第1週〜第2週', status: 'pending' },
+            { id: crypto.randomUUID(), phase: 2, title: '急所業務の自動化・仕組み化の構築', target_period: '第1ヶ月〜第2ヶ月', status: 'pending' },
+            { id: crypto.randomUUID(), phase: 3, title: '運用定着支援・定期顧問レビュー', target_period: '第3ヶ月以降', status: 'pending' },
+          ];
+          const supportDetails = {
+            purpose: `${dealTitle}の目標達成・運用定着支援`,
+            startedAt: todayStr,
+            phase: '初期導入・キックオフ準備',
+            progressStatus: 'active',
+            summary: scheduleNote,
+          };
+          const baseEngagementPayload: Record<string, any> = {
+            owner_id: docOwnerId,
+            company_id: resolvedCompanyId,
+            contact_id: doc.contact_id || null,
+            contract_id: resolvedContractId,
+            service_type: resolvedMonthlyFee > 0 ? 'retainer' : 'implementation_support',
+            title: `【伴走サポート】${compLabel} 様 · ${dealTitle}`,
+            status: 'active',
+            milestone_data: milestones,
+            support_details: supportDetails,
+            notes: `Web申込成約（商談ID: ${finalDealId}）に伴い自動起票。${scheduleNote}`,
+          };
+          let { data: engRow, error: engErr } = await lineSupabase
+            .from('customer_service_engagements')
+            .insert(baseEngagementPayload)
+            .select('id')
+            .single();
+          if (engErr && /support_details/i.test(String(engErr.message || ''))) {
+            const { support_details: _ignored, ...withoutSupportDetails } = baseEngagementPayload;
+            const retryEng = await lineSupabase
+              .from('customer_service_engagements')
+              .insert(withoutSupportDetails)
+              .select('id')
+              .single();
+            engRow = retryEng.data;
+            engErr = retryEng.error;
+          }
+          if (!engErr && engRow?.id) {
+            resolvedEngagementId = engRow.id;
+          } else {
+            console.error('[DocumentApply] customer_service_engagements insert error:', engErr?.message);
+          }
+        }
+      } catch (engOuterErr) {
+        console.warn('[DocumentApply] engagement auto-generation warning:', engOuterErr);
+      }
+    }
+
+    if (resolvedContractId && resolvedInvoiceId && resolvedEngagementId && finalDealId) {
+      await lineSupabase
+        .from('deals')
+        .update({ won_automation_completed_at: nowIso })
+        .eq('id', finalDealId);
+    }
+
+    // 顧客マスタ (customers) への登録・昇格（契約書同意なら「契約中」、提案書・見積書申込なら「申込済み」）
     if (resolvedCompanyId) {
       const { data: existingCustomer } = await lineSupabase
         .from('customers')
-        .select('id')
+        .select('id, contract_status')
         .eq('company_id', resolvedCompanyId)
         .maybeSingle();
 
       if (!existingCustomer) {
         await lineSupabase.from('customers').insert({
           company_id: resolvedCompanyId,
-          contract_status: '契約中',
+          contract_status: isContractDoc ? '契約中' : '申込済み',
           contract_start_date: todayStr,
-          memo: 'Web申込（商談ID: ' + finalDealId + '）により自動成約登録',
+          memo: 'Web申込（商談ID: ' + finalDealId + '）により自動登録',
           created_at: nowIso,
           last_updated_at: nowIso,
         });
+      } else if (isContractDoc && (!existingCustomer.contract_status || existingCustomer.contract_status === '申込済み')) {
+        await lineSupabase.from('customers').update({
+          contract_status: '契約中',
+          last_updated_at: nowIso,
+        }).eq('id', existingCustomer.id);
       }
     }
 
@@ -13172,14 +13502,14 @@ app.post('/api/public/documents/:id/apply', async (req, res) => {
     if (doc.lead_id) {
       const { data: leadRow } = await lineSupabase
         .from('leads')
-        .select('contact_id')
+        .select('contact_id, status')
         .eq('id', doc.lead_id)
         .maybeSingle();
       if (!resolvedContractContactId && leadRow?.contact_id) {
         resolvedContractContactId = String(leadRow.contact_id);
       }
       await lineSupabase.from('leads').update({
-        status: '成約',
+        status: resolveNonDowngradingLeadStatus(leadRow?.status, '成約'),
         last_contacted_at: nowIso,
       }).eq('id', doc.lead_id);
     }
@@ -13199,16 +13529,13 @@ app.post('/api/public/documents/:id/apply', async (req, res) => {
 
     // 社内向け通知タスクの起票
     try {
-      const docOwnerId = await resolveSystemOwnerId(doc.owner_id);
       if (!docOwnerId) {
         console.error('[DocumentApply] 成約タスク起票スキップ: owner_id が解決できませんでした (docId: ' + doc.id + ')');
       } else {
-        const { data: compData } = await lineSupabase.from('companies').select('company_name').eq('id', resolvedCompanyId).maybeSingle();
-        const compLabel = compData?.company_name || '顧客企業';
         const { error: applyTaskErr } = await lineSupabase.from('tasks').insert({
           owner_id: docOwnerId,
           title: '【🎉即時成約】' + compLabel + ' 様よりWeb申込・発注を受領しました',
-          description: '書類「' + doc.title + '」のWeb申込ボタンより発注が確定し、商談（' + finalDealId + '）が即座に「成約」となりました。金額: ' + (totalAmount > 0 ? totalAmount.toLocaleString('ja-JP') + '円' : '未定') + '。初回キックオフや契約締結手続きを進めてください。',
+          description: '書類「' + doc.title + '」のWeb申込ボタンより発注が確定し、商談（' + finalDealId + '）が即座に「成約」となりました。金額: ' + (resolvedTotalAmount > 0 ? resolvedTotalAmount.toLocaleString('ja-JP') + '円' : '未定') + '。初回キックオフや契約締結手続きを進めてください。',
           status: 'todo',
           priority: 'high',
           due_date: todayStr,
@@ -13226,10 +13553,13 @@ app.post('/api/public/documents/:id/apply', async (req, res) => {
       success: true,
       dealId: finalDealId,
       companyId: resolvedCompanyId,
+      customerContractStatus: isContractDoc ? '契約中' : '申込済み',
       consentRecordedAt: nowIso,
       consentMethod,
       consentIp: clientIp,
-      message: 'お申し込みを受け付けました。電子承諾ログを記録し、成約が確定いたしました。',
+      message: isContractDoc
+        ? '契約書への電子同意を受け付け、契約中として正式確定いたしました。'
+        : 'お申し込みを受け付けました。電子承諾ログを記録いたしました（続いて契約書締結へ進みます）。',
     });
   } catch (error) {
     console.error('Public document apply failed:', error instanceof Error ? error.message : 'unknown error');

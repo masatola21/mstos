@@ -20,7 +20,7 @@ import { PROPOSAL_VARIABLES, MULTILINE_KEYS, DRAFTABLE_KEYS } from '../src/compo
 function assert(c: boolean, m: string) { if (!c) throw new Error(`Assertion failed: ${m}`); }
 const eq = (a: unknown, b: unknown, m: string) => assert(JSON.stringify(a) === JSON.stringify(b), `${m} (actual: ${JSON.stringify(a)})`);
 
-eq([...DRAFT_CHAPTERS], ['P1', 'P3'], '下書きの対象はP1とP3だけ');
+eq([...DRAFT_CHAPTERS], ['P1', 'P3', 'P3_METRICS', 'P5_REQUESTS', 'P5_PREREQUISITES', 'P5_EXCLUSIONS'], '下書きの対象はP1・P3・確認指標・P5');
 
 // プロンプト
 const ctx = {
@@ -52,11 +52,25 @@ assert(buildProposalDraftPrompt('P3', 'spot_build', ctx).includes('構築のス�
 const empty = buildProposalDraftPrompt('P1', 'retainer', {});
 assert(empty.includes('情報がありません') && !empty.includes('■ サービス名'), '情報が無い項目は見出しごと省く');
 
+assert(!empty.includes('■ ロードマップ'), '情報が無い場合はロードマップ見出しを省く');
+
+// 確認指標とP5の下書きプロンプト
+const metricsCtx = { ...ctx, roadmap: 'ステップ1：請求連携（【期間: 要入力】）' };
+const p3m = buildProposalDraftPrompt('P3_METRICS', 'hybrid', metricsCtx);
+assert(p3m.includes('P3 確認指標') && p3m.includes('ロードマップ') && p3m.includes('ステップ1：請求連携'), '確認指標プロンプトにロードマップが渡る');
+const p5r = buildProposalDraftPrompt('P5_REQUESTS', 'spot_build', metricsCtx);
+assert(p5r.includes('P5 お客様にお願いすること') && p5r.includes('請求書の二重入力を減らしたい'), 'P5お願い事項プロンプト');
+const p5p = buildProposalDraftPrompt('P5_PREREQUISITES', 'retainer', metricsCtx);
+assert(p5p.includes('P5 前提・条件') && p5p.includes('「伴走」'), 'P5前提条件プロンプト');
+const p5e = buildProposalDraftPrompt('P5_EXCLUSIONS', 'spot_build', metricsCtx);
+assert(p5e.includes('P5 対象外') && p5e.includes('対象外にしたい範囲'), 'P5対象外プロンプト');
+
 // 入力の整形
-const s = sanitizeDraftContext({ companyName: 'a'.repeat(500), serviceName: 123, meetingNotes: 'x'.repeat(10000), diagnosis: null, evil: '<script>' });
+const s = sanitizeDraftContext({ companyName: 'a'.repeat(500), serviceName: 123, meetingNotes: 'x'.repeat(10000), roadmap: 'r'.repeat(4000), diagnosis: null, evil: '<script>' });
 assert(s.companyName.length === 200, '会社名は200字まで');
 eq(s.serviceName, '123', '文字列に直す');
 assert(s.meetingNotes.length === 3000, 'メモは3000字まで');
+assert(s.roadmap?.length === 3000, 'ロードマップは3000字まで');
 eq(s.diagnosis, { d0: '', d2: '', d3: '', d5: '' }, '診断が無くても落ちない');
 assert(!('evil' in s), '想定外の項目は捨てる');
 eq(sanitizeDraftContext(undefined).policy, '', 'undefined でも落ちない');

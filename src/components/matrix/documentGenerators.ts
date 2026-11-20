@@ -13,6 +13,7 @@ import {
   PROPOSAL_VARIABLES,
   PROPOSAL_DOCUMENT_TITLE,
   defaultPaymentTermsFor,
+  defaultP5For,
 } from './proposalTemplate';
 import { kindFromPaymentMode, addDaysToIsoDate, PROPOSAL_VALID_DAYS } from '../../constants/proposalChapters';
 
@@ -776,11 +777,15 @@ export const getTemplateDefaultValues = (
   if (normId === 'tpl-proposal-report') {
     // 金額・期間・サービス名・支払い条件は商談で決めた値だけを使う。初期値は空(サンプルの会社名・金額も入れない)。
     const fromVariables = Object.fromEntries(PROPOSAL_VARIABLES.map((v) => [v.key, v.defaultValue]));
+    const p5Defaults = defaultP5For(kindFromPaymentMode(paymentMode));
     return {
       ...common,
       ...fromVariables,
       issue_date: formatDocumentDate(today),
       due_date: formatDocumentDate(addDaysToIsoDate(today, PROPOSAL_VALID_DAYS)),
+      p5_requests: p5Defaults.requests,
+      p5_prerequisites: p5Defaults.prerequisites,
+      p5_exclusions: p5Defaults.exclusions,
       p6_payment_terms: defaultPaymentTermsFor(paymentMode),
     };
   }

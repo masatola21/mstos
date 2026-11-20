@@ -202,17 +202,16 @@ export const MeetingSessionView: React.FC<Props> = ({ diagnosisId, companyId, co
             </label>
           ))}
 
-          {/* 流れの中で確認する内容（まとめてメモ欄） */}
-          <div className="rounded-xl border border-slate-200 bg-slate-50 p-3 space-y-2">
-            <p className="text-sm font-medium text-slate-700">流れの中で確認する内容</p>
-            <ul className="text-xs text-slate-500 space-y-0.5 list-disc list-inside">
-              {FLOW_NOTE_QUESTIONS.map((q) => (
-                <li key={q.id}>{q.label}<span className="ml-1 text-slate-400">（{q.why}）</span></li>
-              ))}
-            </ul>
+          {/* 流れの中で確認する内容（まとめて任意メモ・3項目） */}
+          <div className="rounded-xl border border-slate-200 bg-slate-50 p-3 space-y-2.5">
+            <div>
+              <p className="text-sm font-medium text-slate-700">流れの中で確認する内容（任意メモ）</p>
+              <p className="text-[11px] text-slate-500">会話の中で自然に出た内容だけで構いません（対象外範囲＝今回やらないこと／見積対象外の線引き）。</p>
+            </div>
             {FLOW_NOTE_QUESTIONS.map((q) => (
               <label key={q.id} className="block">
-                <span className="text-xs font-semibold text-slate-600">{q.label}</span>
+                <span className="text-xs font-semibold text-slate-700">{q.label}</span>
+                <span className="ml-2 text-[11px] text-slate-400">{q.why}</span>
                 <textarea className={area} rows={2} value={answers[q.id] || ''} onChange={(e) => setAnswer(q.id, e.target.value)} />
               </label>
             ))}
@@ -235,10 +234,13 @@ export const MeetingSessionView: React.FC<Props> = ({ diagnosisId, companyId, co
             <textarea className={area} rows={2} value={answers.t03 || ''} onChange={(e) => setAnswer('t03', e.target.value)} /></label>
         </section>
 
-        <section className="space-y-3">
-          <div className="flex items-center justify-between">
-            <h3 className="font-bold text-sm">AIの追加質問(最大{MAX_EXTRA_QUESTIONS}問・社内用)</h3>
-            <button type="button" onClick={suggestExtra} disabled={busy !== '' || extra.length >= MAX_EXTRA_QUESTIONS} className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg border text-xs disabled:opacity-50">
+        <section className="space-y-2.5">
+          <div className="flex items-start justify-between gap-3">
+            <div>
+              <h3 className="font-bold text-sm">AIの追加質問(最大{MAX_EXTRA_QUESTIONS}問・社内用)</h3>
+              <p className="text-[11px] text-slate-500">事前の診断回答だけでは曖昧な点や、商談でもう一段詳しく聞きたい点をAIが提案します（必要な時だけ押してください）。</p>
+            </div>
+            <button type="button" onClick={suggestExtra} disabled={busy !== '' || extra.length >= MAX_EXTRA_QUESTIONS} className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg border text-xs disabled:opacity-50 shrink-0 cursor-pointer">
               {busy === 'extra' ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Sparkles className="w-3.5 h-3.5" />}質問を提案
             </button>
           </div>
@@ -251,23 +253,23 @@ export const MeetingSessionView: React.FC<Props> = ({ diagnosisId, companyId, co
         <section className="space-y-3 border-t pt-4">
           <div className="flex flex-wrap items-center justify-between gap-2">
             <div>
-              <h3 className="font-bold text-sm">文字起こしからAI整理（商談ヒアリング＋提案書メモ）</h3>
-              <p className="text-xs text-slate-500">Zoom や Google Meet の文字起こしをそのまま貼り付けます。録画・文字起こしをする場合は、事前にお客様へ伝えて同意を得てください。</p>
+              <h3 className="font-bold text-sm">商談メモ・文字起こし（フリーメモ兼AI整理スペース）</h3>
+              <p className="text-xs text-slate-500">商談中のメモを自由に残せます。文字起こしを貼り付けて「AIで整理して空欄へ反映」を押すと、上の空欄・要約・合意事項へ自動振り分けもできます（録画・文字起こし時は事前同意を取得してください）。</p>
             </div>
             <button type="button" onClick={organize} disabled={busy !== '' || (answers[MEMO_KEY] || '').trim().length < 20} className="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg bg-emerald-600 text-white text-xs font-semibold disabled:opacity-50 shrink-0 cursor-pointer">
               {busy === 'organize' ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Sparkles className="w-3.5 h-3.5" />}AIで整理して空欄へ反映
             </button>
           </div>
-          <textarea className={area} rows={7} placeholder="ここに文字起こしを貼り付け（20文字以上）" value={answers[MEMO_KEY] || ''} onChange={(e) => setAnswer(MEMO_KEY, e.target.value)} />
+          <textarea className={area} rows={6} placeholder="商談中のメモを自由に入力するか、文字起こし（20文字以上）を貼り付けてください" value={answers[MEMO_KEY] || ''} onChange={(e) => setAnswer(MEMO_KEY, e.target.value)} />
           <div className="grid gap-3 md:grid-cols-2">
             <label className="block">
               <span className="text-sm font-medium">商談の要約（提案書へ自動転記）</span>
-              <span className="block text-[11px] text-slate-500 mb-1">ヒアリング10問に入りきらない背景・温度感など</span>
+              <span className="block text-[11px] text-slate-500 mb-1">質問欄に入りきらない背景・温度感など</span>
               <textarea className={area} rows={3} value={answers[SUMMARY_KEY] || ''} onChange={(e) => setAnswer(SUMMARY_KEY, e.target.value)} />
             </label>
             <label className="block">
               <span className="text-sm font-medium">商談での合意事項（提案書へ自動転記）</span>
-              <span className="block text-[11px] text-slate-500 mb-1">見積条件・対象範囲・希望時期など提案書の前提となる合意</span>
+              <span className="block text-[11px] text-slate-500 mb-1">見積条件・今回やる範囲／やらない範囲・希望時期など</span>
               <textarea className={area} rows={3} value={answers[DECISIONS_KEY] || ''} onChange={(e) => setAnswer(DECISIONS_KEY, e.target.value)} />
             </label>
           </div>

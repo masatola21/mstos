@@ -728,7 +728,7 @@ export async function syncTimeRexBookingToCrm(
       }
     }
 
-    // Load existing Lead & Deal
+    // Load existing Lead & Deal (check contact/lead first, then fallback to company_id so company rows never duplicate)
     let leadId = '';
     let existingLeads: any[] | null = null;
     if (contactId) {
@@ -739,7 +739,8 @@ export async function syncTimeRexBookingToCrm(
         .order('created_at', { ascending: false })
         .limit(1);
       existingLeads = data;
-    } else if (companyId) {
+    }
+    if ((!existingLeads || existingLeads.length === 0) && companyId) {
       const { data } = await db
         .from('leads')
         .select('id, notes, status, company_id, meeting_date, meeting_start_time')
@@ -754,13 +755,27 @@ export async function syncTimeRexBookingToCrm(
 
     let dealId = '';
     let existingDeal: any = null;
-    if (leadId || companyId) {
-      const dealQuery = db.from('deals').select('id, proposal_status, meeting_date, memo');
-      if (leadId) dealQuery.eq('lead_id', leadId);
-      else if (companyId) dealQuery.eq('company_id', companyId);
-      const { data: existingDeals } = await dealQuery.limit(1);
+    if (leadId) {
+      const { data: existingDeals } = await db
+        .from('deals')
+        .select('id, proposal_status, meeting_date, memo, lead_id, company_id')
+        .eq('lead_id', leadId)
+        .order('updated_at', { ascending: false })
+        .limit(1);
       if (existingDeals && existingDeals.length > 0) {
         existingDeal = existingDeals[0];
+        dealId = existingDeal.id;
+      }
+    }
+    if (!existingDeal && companyId) {
+      const { data: companyDeals } = await db
+        .from('deals')
+        .select('id, proposal_status, meeting_date, memo, lead_id, company_id')
+        .eq('company_id', companyId)
+        .order('updated_at', { ascending: false })
+        .limit(1);
+      if (companyDeals && companyDeals.length > 0) {
+        existingDeal = companyDeals[0];
         dealId = existingDeal.id;
       }
     }

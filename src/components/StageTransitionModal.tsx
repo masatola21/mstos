@@ -1,15 +1,18 @@
 import React, { useState, useEffect } from 'react';
-import { Company, Product, Lead, Customer } from '../types/database';
+import { Company, Product, Lead, Customer, Deal } from '../types/database';
 import { ProposalPlanTemplatePicker } from './ProposalPlanTemplatePicker';
 import { todayJst, formatJapaneseDate, formatJapaneseDateTime } from '../utils/date';
 import type { ProposalPlanTemplate } from './ProposalPlanTemplatePicker';
 import { 
   fetchProductsList, 
   fetchCompaniesList,
-  fetchCustomerByCompanyId, 
+  fetchCustomerByCompanyId,
+  findExistingLeadForCompanyOrContact,
+  findExistingDealForCompanyOrLead,
   insertRecord,
   updateRecord
 } from '../services/dataService';
+import { resolveNonDowngradingLeadStatus } from '../utils/crmPipelineFlow';
 import { executeDealWonAutomation } from '../services/dealWonAutomationService';
 import { 
   X, 
@@ -52,9 +55,11 @@ export const StageTransitionModal: React.FC<StageTransitionModalProps> = ({
   // Products for Deal conversion
   const [products, setProducts] = useState<Product[]>([]);
 
-  // Existing customer check for Deal -> Customer conversion
+  // Existing record checks to avoid duplicating rows for the same company
   const [existingCustomer, setExistingCustomer] = useState<Customer | null>(null);
   const [checkingCustomer, setCheckingCustomer] = useState(false);
+  const [existingLead, setExistingLead] = useState<Lead | null>(null);
+  const [existingDeal, setExistingDeal] = useState<Deal | null>(null);
 
   // Form states for target record creation
   // For Prospect -> Lead
@@ -77,7 +82,7 @@ export const StageTransitionModal: React.FC<StageTransitionModalProps> = ({
   const [meetingDate, setMeetingDate] = useState('');
 
   // For Deal -> Customer
-  const [contractStatus, setContractStatus] = useState('契約中');
+  const [contractStatus, setContractStatus] = useState('申込済み');
   const [contractStartDate, setContractStartDate] = useState(todayJst());
   const [customerMemo, setCustomerMemo] = useState('');
 
@@ -90,6 +95,9 @@ export const StageTransitionModal: React.FC<StageTransitionModalProps> = ({
     if (!isOpen || !sourceRecord) return;
     setErrorMessage(null);
     setIsSubmitting(false);
+    setExistingCustomer(null);
+    setExistingLead(null);
+    setExistingDeal(null);
 
     if (type === 'prospect_to_lead') {
       setLeadSource(sourceRecord.source || '見込みアプローチ');
@@ -98,6 +106,9 @@ export const StageTransitionModal: React.FC<StageTransitionModalProps> = ({
       setPriorityChannel(sourceRecord.approach_method === 'LINE' ? 'LINE' : 'メール');
       setLeadStatus('新規');
       setLeadNotes(sourceRecord.memo ? `【見込み時メモ引継ぎ】\n${sourceRecord.memo}` : '');
+      if (companyId) {
+        void findExistingLeadForCompanyOrContact(companyId).then(setExistingLead);
+      }
       void fetchProductsList().then((prods) => {
         setProducts(prods);
         const suggestedId = sourceRecord.recommended_product_id || sourceRecord.product_id || '';
@@ -126,6 +137,10 @@ export const StageTransitionModal: React.FC<StageTransitionModalProps> = ({
       setProposalStatus('初回面談');
       setDealMemo(sourceRecord.notes ? `【リード相談引継ぎ】\n${sourceRecord.notes}` : '');
       setMeetingDate(sourceRecord.meeting_date || '');
+
+      if (companyId || sourceRecord.id) {
+        void findExistingDealForCompanyOrLead(companyId, sourceRecord.id).then(setExistingDeal);
+      }
 
       void fetchProductsList().then((prods) => {
         setProducts(prods);
@@ -162,7 +177,7 @@ export const StageTransitionModal: React.FC<StageTransitionModalProps> = ({
         }
       });
     } else if (type === 'deal_to_customer') {
-      setContractStatus('契約中');
+      setContractStatus('申込済み');
       setContractStartDate(new Date().toISOString().split('T')[0]);
       setCustomerMemo(sourceRecord.proposal_plan_name ? `商談「${sourceRecord.proposal_plan_name}」受注に伴う契約登録` : '');
 
@@ -262,6 +277,13 @@ export const StageTransitionModal: React.FC<StageTransitionModalProps> = ({
           return;
         }
 
+        if (sourceRecord?.id) {
+          const nextLeadStatus = resolveNonDowngradingLeadStatus(sourceRecord.status, '商談化');
+          if (nextLeadStatus !== sourceRecord.status) {
+            await updateRecord('leads', sourceRecord.id, { status: nextLeadStatus });
+          }
+        }
+
         onSuccess('deals', res.data?.id);
         onClose();
       } else if (type === 'deal_to_customer') {
@@ -304,15 +326,15 @@ export const StageTransitionModal: React.FC<StageTransitionModalProps> = ({
   const titles: Record<TransitionType, { title: string; subtitle: string; icon: React.ReactNode; buttonText: string }> = {
     prospect_to_lead: {
       title: '見込み企業からリードへ進める',
-      subtitle: 'アプローチ対象の見込み企業を案件化リードとして登録します',
+      subtitle: 'アプローチ対象の見込み企業を案件化リードとして登録・統合します',
       icon: <Layers className="w-5 h-5 text-blue-600" />,
-      buttonText: 'リードを作成して進める',
+      buttonText: existingLead ? '既存のリードに統合して進める' : 'リードを作成して進める',
     },
     lead_to_deal: {
       title: 'リードから商談を作成する',
-      subtitle: '個別相談リードを具体的な提案・商談パイプラインへ引き継ぎます',
+      subtitle: '個別相談リードを商談パイプラインへ引き継ぎます（1社1商談で重複防止）',
       icon: <Briefcase className="w-5 h-5 text-purple-600" />,
-      buttonText: '商談を作成する',
+      buttonText: existingDeal ? '既存の商談を更新して引き継ぐ' : '商談を作成する',
     },
     deal_to_customer: {
       title: '商談から顧客として登録する',
@@ -437,6 +459,18 @@ export const StageTransitionModal: React.FC<StageTransitionModalProps> = ({
                ========================================================================= */}
             {type === 'prospect_to_lead' && (
               <div className="space-y-4">
+                {existingLead && (
+                  <div className="p-3.5 rounded-xl bg-amber-50 border border-amber-200 text-xs text-amber-900 space-y-1">
+                    <div className="font-bold text-amber-900 flex items-center gap-1.5">
+                      <Info className="w-3.5 h-3.5 text-amber-600" />
+                      <span>この会社には既にリードが存在します（重複作成を自動防止）</span>
+                    </div>
+                    <p className="leading-relaxed text-[11px] text-amber-800">
+                      既存リード（<span className="font-mono">{existingLead.id}</span> / 現在ステータス: <strong>{existingLead.status}</strong>）を1行のまま更新・統合します（ステータスを後戻りさせずメモを引き継ぎます）。
+                    </p>
+                  </div>
+                )}
+
                 {/* Operational Limitation Notice */}
                 <div className="p-3.5 rounded-xl bg-slate-50 border border-slate-200 text-xs text-slate-600 space-y-1">
                   <div className="font-semibold text-slate-700 flex items-center gap-1.5">
@@ -542,6 +576,18 @@ export const StageTransitionModal: React.FC<StageTransitionModalProps> = ({
                ========================================================================= */}
             {type === 'lead_to_deal' && (
               <div className="space-y-4">
+                {existingDeal && (
+                  <div className="p-3.5 rounded-xl bg-amber-50 border border-amber-200 text-xs text-amber-900 space-y-1">
+                    <div className="font-bold text-amber-900 flex items-center gap-1.5">
+                      <Info className="w-3.5 h-3.5 text-amber-600" />
+                      <span>この会社には既に商談レコードが存在します（重複作成を自動防止）</span>
+                    </div>
+                    <p className="leading-relaxed text-[11px] text-amber-800">
+                      既存商談「<strong>{existingDeal.proposal_plan_name || existingDeal.id}</strong>」（現在ステータス: <strong>{existingDeal.proposal_status}</strong>）に内容・メモを統合し、1行で工程を追えるように更新します。
+                    </p>
+                  </div>
+                )}
+
                 <div className="p-3.5 rounded-xl bg-emerald-50 border border-emerald-200 text-xs text-emerald-800 space-y-1">
                   <div className="font-semibold text-emerald-900 flex items-center gap-1.5">
                     <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
@@ -835,6 +881,7 @@ export const StageTransitionModal: React.FC<StageTransitionModalProps> = ({
                           onChange={(e) => setContractStatus(e.target.value)}
                           className="w-full px-3 py-2 rounded-xl bg-white border border-slate-300 text-slate-800 text-xs outline-none focus:border-purple-600 focus:ring-1 focus:ring-purple-600 shadow-2xs"
                         >
+                          <option value="申込済み">申込済み（提案・見積合意／契約書締結待ち）</option>
                           <option value="契約中">契約中（正式契約締結済）</option>
                           <option value="トライアル">トライアル（試用期間・先行利用）</option>
                           <option value="更新交渉中">更新交渉中</option>

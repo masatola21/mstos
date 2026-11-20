@@ -133,6 +133,23 @@ function createMockSupabase(initialState?: {
     console.log('  ✓ Skips cleanly when customer already exists');
   }
 
+  // 2b. Existing customer with 申込済み -> promotes to 契約中 upon paid invoice
+  {
+    const { state, supabase } = createMockSupabase({
+      companies: [{ id: 'CID-102', company_name: '申込済み顧客株式会社' }],
+      customers: [{ id: 'cust-applied', company_id: 'CID-102', contract_status: '申込済み', memo: '提案書申込' }],
+    });
+    const res = await ensureCustomerRegisteredFromPaidInvoice(supabase, {
+      companyId: 'CID-102',
+      invoiceTitle: '初回ご請求',
+      invoiceNumber: 'INV-20261120-003',
+      paidDate: '2026-11-20',
+    });
+    assert.strictEqual(res.status, 'already_exists');
+    assert.strictEqual(state.customers[0].contract_status, '契約中');
+    console.log('  ✓ Promotes 申込済み customer to 契約中 on paid invoice');
+  }
+
   // 3. No companyId on invoice, matches existing company by recipientName -> backfills & registers customer
   {
     const invUuid = '11111111-1111-1111-1111-111111111111';

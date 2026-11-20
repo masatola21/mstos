@@ -8,8 +8,15 @@
 
 import { PROPOSAL_KIND_LABELS, markdownToPlainText, type ProposalKind } from '../src/constants/proposalChapters.js';
 
-export type DraftChapter = 'P1' | 'P3';
-export const DRAFT_CHAPTERS: readonly DraftChapter[] = ['P1', 'P3'];
+export type DraftChapter = 'P1' | 'P3' | 'P3_METRICS' | 'P5_REQUESTS' | 'P5_PREREQUISITES' | 'P5_EXCLUSIONS';
+export const DRAFT_CHAPTERS: readonly DraftChapter[] = [
+  'P1',
+  'P3',
+  'P3_METRICS',
+  'P5_REQUESTS',
+  'P5_PREREQUISITES',
+  'P5_EXCLUSIONS',
+];
 
 export interface ProposalDraftContext {
   companyName?: string;
@@ -20,6 +27,8 @@ export interface ProposalDraftContext {
   monthlySupport?: string;
   /** P3 の下書きでは、決まった P1 の方針も渡す */
   policy?: string;
+  /** 確認指標やP5の下書きでは、P3のロードマップも参照できる */
+  roadmap?: string;
   /** 商談でお聞きした内容(担当者のメモ) */
   meetingNotes?: string;
 }
@@ -37,6 +46,7 @@ export function sanitizeDraftContext(raw: any): ProposalDraftContext {
     deliverables: clip(raw?.deliverables),
     monthlySupport: clip(raw?.monthlySupport),
     policy: clip(raw?.policy),
+    roadmap: clip(raw?.roadmap),
     meetingNotes: clip(raw?.meetingNotes),
   };
 }
@@ -72,14 +82,28 @@ function section(label: string, value?: string): string {
   return v ? `■ ${label}\n${v}\n` : '';
 }
 
-/** 章ごとのプロンプトを組み立てる */
-export function buildProposalDraftPrompt(chapter: DraftChapter, kind: ProposalKind, ctx: ProposalDraftContext): string {
+function taskPromptFor(chapter: DraftChapter, kind: ProposalKind): string {
   const kindLabel = PROPOSAL_KIND_LABELS[kind];
   const guide = KIND_GUIDE[kind];
-  const task =
-    chapter === 'P1'
-      ? `提案書の「提案の型と方針」の本文の下書きを結論から簡潔に書いてください。提案の型は「${kindLabel}」です。${guide.p1}\n診断パートとの重複説明や前置きは省き、1文目で方針の結論を述べたうえで、理由・要点を箇条書き（2〜3点）で合計150〜220字程度に簡潔にまとめてください。`
-      : `提案書の「ロードマップ」の本文の下書きを結論から簡潔に書いてください。提案の型は「${kindLabel}」です。内容は、${guide.p3}\n最初に全体の進め方の結論を1文で短く示し、3〜4つのステップに分けて、各ステップを「ステップ名（【期間: 要入力】）：取り組むこと ／ できあがるもの」の1〜2行（各40〜70字目安・全体250〜350字程度）で簡潔に書きます。期間と回数は書かず、「【期間: 要入力】」と残します。`;
+  switch (chapter) {
+    case 'P1':
+      return `提案書の「提案の型と方針」の本文の下書きを結論から簡潔に書いてください。提案の型は「${kindLabel}」です。${guide.p1}\n診断パートとの重複説明や前置きは省き、1文目で方針の結論を述べたうえで、理由・要点を箇条書き（2〜3点）で合計150〜220字程度に簡潔にまとめてください。`;
+    case 'P3':
+      return `提案書の「ロードマップ」の本文の下書きを結論から簡潔に書いてください。提案の型は「${kindLabel}」です。内容は、${guide.p3}\n最初に全体の進め方の結論を1文で短く示し、3〜4つのステップに分けて、各ステップを「ステップ名（【期間: 要入力】）：取り組むこと ／ できあがるもの」の1〜2行（各40〜70字目安・全体250〜350字程度）で簡潔に書きます。期間と回数は書かず、「【期間: 要入力】」と残します。`;
+    case 'P3_METRICS':
+      return `提案書の「P3 確認指標」の下書きを書いてください。提案の型は「${kindLabel}」です。\n商談メモにある「3〜6か月後の理想・ゴール」や「手放したい業務」、診断の「急所（D3）」、ロードマップをもとに、導入・改善がうまく進んでいるかを一緒に確認する指標（KPI）を「・指標名：何を見てどう判断するか」の箇条書き（3〜4点・合計150〜250字程度）で提案してください。具体的な数値目標（「○時間削減」など）は作らず、計測・確認する観点だけを書きます。`;
+    case 'P5_REQUESTS':
+      return `提案書の「P5 お客様にお願いすること」の下書きを書いてください。提案の型は「${kindLabel}」です。\n商談メモにある「今使っているツール」「社内担当者」「対象業務」や「成果物・支援内容」をもとに、導入・運用を進めるうえで貴社へご協力いただきたい事項を「・〇〇のご共有／ご協力」の箇条書き（3〜4点・合計120〜220字程度）で簡潔に整理してください。`;
+    case 'P5_PREREQUISITES':
+      return `提案書の「P5 前提・条件」の下書きを書いてください。提案の型は「${kindLabel}」です。\n商談メモにある「希望時期・予算感・支払方法・決裁／判断時期」「合意事項」「使用ツール」および提案の型（${kindLabel}）を踏まえ、本提案が成立する前提・条件を箇条書き（3〜4点・合計150〜250字程度）で簡潔に書いてください。確定していない期間や金額は書かず、必要なら「【○○: 要入力】」として残してください。`;
+    case 'P5_EXCLUSIONS':
+      return `提案書の「P5 対象外」の下書きを書いてください。提案の型は「${kindLabel}」です。\n商談メモにある「対象外にしたい範囲」「合意事項」や「P2 提供内容・成果物」をもとに、今回あえて対象外とする範囲（別途見積り・次フェーズ扱いとなる範囲）を箇条書き（2〜4点・合計120〜220字程度）で誤解のないように明確に書いてください。商談メモに対象外の明記がない場合は、提案内容に照らして一般的な範囲外の例（既存基幹の改修、他部署展開など）を補ってください。`;
+  }
+}
+
+/** 章ごとのプロンプトを組み立てる */
+export function buildProposalDraftPrompt(chapter: DraftChapter, kind: ProposalKind, ctx: ProposalDraftContext): string {
+  const task = taskPromptFor(chapter, kind);
 
   const info = [
     section('宛先', ctx.companyName),
@@ -91,7 +115,8 @@ export function buildProposalDraftPrompt(chapter: DraftChapter, kind: ProposalKi
     section('サービス名', ctx.serviceName),
     section('成果物の一覧', ctx.deliverables),
     section('月次の支援内容', ctx.monthlySupport),
-    chapter === 'P3' ? section('決まった提案の方針', ctx.policy) : '',
+    chapter !== 'P1' ? section('決まった提案の方針', ctx.policy) : '',
+    chapter !== 'P1' && chapter !== 'P3' ? section('ロードマップ', ctx.roadmap) : '',
   ].join('\n');
 
   return `${task}\n\n${RULES}\n\n【参考にする情報】\n${info.trim() || '(情報がありません。決まっていない項目は「要入力」と残してください)'}\n`;
