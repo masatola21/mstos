@@ -439,7 +439,11 @@ async function ensureTaskDeduplicated(
       created_at: new Date().toISOString(),
     };
     if (params.ownerId) taskPayload.owner_id = params.ownerId;
-    await db.from('tasks').insert(taskPayload);
+    const insertRes: any = await db.from('tasks').insert(taskPayload);
+    if (insertRes?.error) {
+      console.warn('[TimeRexSync] Task insert error:', insertRes.error.message || insertRes.error);
+      return false;
+    }
     return true;
   } catch (taskErr) {
     console.warn('[TimeRexSync] Task dedup/insert warning:', taskErr);
@@ -849,7 +853,11 @@ export async function syncTimeRexBookingToCrm(
     // 5. Create Deduplicated Staff Task for Meeting Preparation
     const taskPrefix = actionKind === 'rescheduled' ? '【TimeRex日程変更】' : '【TimeRex面談予約】';
     const taskTitle = `${taskPrefix}${contactName} 様（${booking.meetingDate} ${booking.meetingStartTime || ''}）`;
-    const taskDedupNeedle = `${contactName} 様（${booking.meetingDate}`;
+    const timeSuffix = booking.meetingStartTime ? ` ${booking.meetingStartTime}` : '';
+    const taskDedupNeedle =
+      actionKind === 'rescheduled'
+        ? `${taskPrefix}${contactName} 様（${booking.meetingDate}${timeSuffix}`
+        : `${contactName} 様（${booking.meetingDate}${timeSuffix}`;
     const taskDesc = `TimeRexより面談日程が${actionKind === 'rescheduled' ? '変更' : '確定'}しました。\nゲスト: ${contactName} 様（${cleanEmail}）\n日時: ${booking.meetingDate} ${booking.meetingStartTime || ''} 〜 ${booking.meetingEndTime || ''}\nWeb会議: ${booking.meetUrl || 'カレンダー参照'}\n備考: ${booking.memo || 'なし'}`;
 
     const taskInserted = await ensureTaskDeduplicated(db, {

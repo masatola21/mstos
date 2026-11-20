@@ -4363,16 +4363,19 @@ app.post('/api/email/webhook', express.raw({ type: 'application/json', limit: '2
     // TimeRex 予約通知メール（確定・日程変更・キャンセル・リマインド）の自動検知とリード・商談パイプライン自動同期 (Pattern A)
     const rawFromForTimeRex = String(message.from || event.data?.from || '');
     const rawSubjForTimeRex = String(message.subject || event.data?.subject || '');
-    const rawBodyForTimeRex = String(message.text || '');
+    const rawBodyForTimeRex =
+      String(message.text || '').trim() ||
+      String(message.html || '').replace(/<[^>]+>/g, ' ').trim();
     const isIncomingTimeRex = isTimeRexEmail(rawFromForTimeRex, rawSubjForTimeRex, rawBodyForTimeRex);
 
     if (isNew && isIncomingTimeRex) {
       try {
         const hostEmails = [integration.inbound_address, integration.backup_forward_address].filter(Boolean) as string[];
-        const booking = parseTimeRexEmail(rawSubjForTimeRex, rawBodyForTimeRex, String(message.html || ''), hostEmails);
+        const booking = parseTimeRexEmail(rawSubjForTimeRex, String(message.text || ''), String(message.html || ''), hostEmails);
         if (booking) {
+          const webhookOwnerId = await resolveSystemOwnerId(integration.owner_id);
           console.log('[ResendWebhook] TimeRex notification detected:', booking.bookingAction, booking.guestName, booking.meetingDate);
-          const syncResult = await syncTimeRexBookingToCrm(booking, lineSupabase, integration.owner_id);
+          const syncResult = await syncTimeRexBookingToCrm(booking, lineSupabase, webhookOwnerId);
           console.log('[ResendWebhook] TimeRex sync completed:', syncResult);
           if (
             syncResult.success &&
@@ -4380,7 +4383,7 @@ app.post('/api/email/webhook', express.raw({ type: 'application/json', limit: '2
             syncResult.action !== 'skipped_no_change' &&
             (booking.bookingAction === 'confirmed' || booking.bookingAction === 'rescheduled')
           ) {
-            await enqueueScenariosForContact(syncResult.contactId, 'booking_created', integration.owner_id);
+            await enqueueScenariosForContact(syncResult.contactId, 'booking_created', webhookOwnerId || undefined);
           }
         }
       } catch (timerexErr: any) {
