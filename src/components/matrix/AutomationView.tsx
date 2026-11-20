@@ -110,7 +110,7 @@ export const AutomationView: React.FC<AutomationViewProps> = ({
   const [newDesc, setNewDesc] = useState('');
   const [newTrigger, setNewTrigger] = useState<AutomationTriggerEvent>('deal_won');
   const [newAiMode, setNewAiMode] = useState<AutomationAiMode>('prepare');
-  const [newApproval, setNewApproval] = useState<AutomationApprovalPolicy>('always');
+  const [newApproval, setNewApproval] = useState<AutomationApprovalPolicy>('none');
   const [newDueDays, setNewDueDays] = useState(3);
   const [newWorkModeId, setNewWorkModeId] = useState<AutomationRule['workModeId']>('customer_product');
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
@@ -388,6 +388,11 @@ export const AutomationView: React.FC<AutomationViewProps> = ({
                       )}
                     </div>
                     <p className="mt-0.5 text-xs text-slate-500 leading-normal">{rule.description}</p>
+                    {(rule.id === 'workflow-diagnosis-submitted' || rule.id === 'workflow-invoice-overdue') && (
+                      <p className="mt-1 text-[11px] font-medium text-purple-700">
+                        標準通知はタスク画面上部の「システム自動起票」に一本化済み（下部へ重複起票しません）
+                      </p>
+                    )}
                   </div>
                 </div>
                 <div className="flex items-center gap-2 shrink-0">

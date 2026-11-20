@@ -615,7 +615,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
           onToggleComplete: () => {
             toggleActionComplete(`task_${t.id}`);
             if (onUpdateTask) {
-              onUpdateTask({ ...t, status: t.status === 'completed' ? 'in_progress' : 'completed' });
+              onUpdateTask({ ...t, status: t.status === 'completed' ? 'waiting' : 'completed' });
             }
           },
         });

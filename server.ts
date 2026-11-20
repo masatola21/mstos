@@ -9319,6 +9319,13 @@ app.post(
                 ? 'LINE自動返信送信済み'
                 : '自動受付メール対象外';
 
+            const contextLines = [
+              `■ 申込者: ${name} 様（${companyName || '個人'} / ${recipientEmail}）`,
+              `■ 回答ID: ${submission.id}`,
+              ...(resolvedCompanyId ? [`■ 企業ID: ${resolvedCompanyId}`] : []),
+              ...(leadId ? [`■ リードID: ${leadId}`] : []),
+            ];
+
             const taskDescription = isConsultationInquiry
               ? [
                   `HP「${form.name}」よりWeb相談・お問い合わせが届きました。内容を確認のうえ、${recipientEmail} 宛てに個別メール返信を行ってください。`,
@@ -9328,8 +9335,18 @@ app.post(
                   ...(preferredDateText ? [`■ ご希望日時: ${preferredDateText}`] : []),
                   `■ 即時自動返信: ${autoEmailStatusText}`,
                   `■ 相談内容:\n${consultationText || '（自由記述なし）'}`,
+                  ...contextLines,
                 ].join('\n')
-              : `フォーム「${form.name}」の回答（希望: ${inquiryType || '未指定'}${requestedMaterialText ? ` / ${requestedMaterialText}` : ''}）が届きました。内容を確認し、案内または面談日程の調整を行ってください。`;
+              : notificationKind === 'diagnosis'
+                ? [
+                    `フォーム「${form.name}」の無料診断回答が届きました。タスク上の「AI診断レポート作成」または受信トレイから診断レポートを作成し、書類画面で確認・承認してください。`,
+                    ...(inquiryType ? [`■ 希望: ${inquiryType}`] : []),
+                    ...contextLines,
+                  ].join('\n')
+                : [
+                    `フォーム「${form.name}」の回答（希望: ${inquiryType || '未指定'}${requestedMaterialText ? ` / ${requestedMaterialText}` : ''}）が届きました。内容を確認し、案内または面談日程の調整を行ってください。`,
+                    ...contextLines,
+                  ].join('\n');
 
             taskInserts.push(
               lineSupabase.from('tasks').insert({

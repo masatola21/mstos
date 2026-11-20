@@ -160,11 +160,11 @@ const INITIAL_TOOLS: ManagedToolAsset[] = [];
 
 // --- 標準AI自動化・承認ルール（未接続の設定テンプレート） ---
 const INITIAL_AUTOMATIONS: AutomationRule[] = [
-  { id: 'workflow-diagnosis-submitted', name: '診断回答の確認・分析', description: '診断フォームの回答を整理し、課題・追加確認事項・改善案をまとめる。', triggerEvent: 'diagnosis_submitted', aiMode: 'prepare', approvalPolicy: 'always', isEnabled: false, taskDueInDays: 3, workModeId: 'diagnosis' },
-  { id: 'workflow-deal-won', name: '商談成約後の準備', description: '成約した商談から契約・キックオフの準備項目を作成する。顧客への連絡前に担当者が確認する。', triggerEvent: 'deal_won', aiMode: 'prepare', approvalPolicy: 'external_actions', isEnabled: false, taskDueInDays: 3, workModeId: 'customer_product' },
-  { id: 'workflow-contract-signed', name: '契約締結後の請求準備', description: '締結済み契約をもとに請求内容の初稿を準備し、発行前に担当者が確認する。', triggerEvent: 'contract_signed', aiMode: 'prepare', approvalPolicy: 'always', isEnabled: false, taskDueInDays: 3, workModeId: 'customer_product' },
-  { id: 'workflow-invoice-overdue', name: '請求期限超過の対応案', description: '期限を過ぎた請求を検出し、社内通知や顧客への連絡案を作成する。', triggerEvent: 'invoice_overdue', aiMode: 'suggest', approvalPolicy: 'always', isEnabled: false, taskDueInDays: 1, workModeId: 'president' },
-  { id: 'workflow-project-milestone', name: '支援マイルストーンの振り返り', description: '支援の節目に進捗・課題を要約し、次の対応案を提示する。', triggerEvent: 'project_milestone', aiMode: 'suggest', approvalPolicy: 'external_actions', isEnabled: false, taskDueInDays: 3, workModeId: 'customer_product' },
+  { id: 'workflow-diagnosis-submitted', name: '診断回答の確認・分析', description: '※ 標準の通知とAI診断レポート作成はタスク画面上部の「システム自動起票」に集約済みです。', triggerEvent: 'diagnosis_submitted', aiMode: 'prepare', approvalPolicy: 'none', isEnabled: false, taskDueInDays: 3, workModeId: 'diagnosis' },
+  { id: 'workflow-deal-won', name: '商談成約後の準備', description: '成約した商談から契約・キックオフの準備項目を作成する。', triggerEvent: 'deal_won', aiMode: 'prepare', approvalPolicy: 'none', isEnabled: false, taskDueInDays: 3, workModeId: 'customer_product' },
+  { id: 'workflow-contract-signed', name: '契約締結後の請求準備', description: '締結済み契約をもとに請求内容の初稿を準備する。', triggerEvent: 'contract_signed', aiMode: 'prepare', approvalPolicy: 'none', isEnabled: false, taskDueInDays: 3, workModeId: 'customer_product' },
+  { id: 'workflow-invoice-overdue', name: '請求期限超過の対応案', description: '※ 標準の支払督促アラートはタスク画面上部の「システム自動起票」に集約済みです。', triggerEvent: 'invoice_overdue', aiMode: 'suggest', approvalPolicy: 'none', isEnabled: false, taskDueInDays: 1, workModeId: 'president' },
+  { id: 'workflow-project-milestone', name: '支援マイルストーンの振り返り', description: '支援の節目に進捗・課題を要約し、次の対応案を提示する。', triggerEvent: 'project_milestone', aiMode: 'suggest', approvalPolicy: 'none', isEnabled: false, taskDueInDays: 3, workModeId: 'customer_product' },
 ];
 
 export function normalizeAutomationRules(value: unknown): AutomationRule[] {
@@ -196,7 +196,7 @@ export function normalizeAutomationRules(value: unknown): AutomationRule[] {
     description: item.description || '',
     triggerEvent: item.triggerEvent,
     aiMode: item.aiMode || 'prepare',
-    approvalPolicy: item.approvalPolicy || 'always',
+    approvalPolicy: item.approvalPolicy || 'none',
     isEnabled: Boolean(item.isEnabled),
     taskDueInDays: Number.isFinite(Number(item.taskDueInDays)) ? Math.min(90, Math.max(1, Math.floor(Number(item.taskDueInDays)))) : 3,
     workModeId: item.workModeId || 'customer_product',

@@ -139,6 +139,7 @@ import {
 } from './types/matrix';
 
 import { generateBusinessSummaryContext } from './services/businessSummaryService';
+import { shouldCreateAutomationLowerTask, resolveCompletedTaskState } from './utils/taskManualCommands';
 
 
 const ViewLoadingFallback: React.FC = () => (
@@ -772,6 +773,7 @@ function AppContent() {
   const [customLists, setCustomLists] = useState<CustomListDefinition[]>(() => matrixService.loadCustomLists());
   const [automations, setAutomations] = useState<AutomationRule[]>(() => matrixService.loadAutomations());
   const automationSubmissionHandlerRef = useRef<(event: DiagnosisSubmissionAutomationEvent) => boolean>(() => false);
+  const hasCustomDiagnosisAutomationRef = useRef(false);
   const processedDiagnosisSubmissionIdsRef = useRef<Set<string>>(new Set());
   const [marketingScenarios, setMarketingScenarios] = useState<MarketingScenario[]>(() => loadMarketingScenarios());
 
@@ -1427,8 +1429,11 @@ function AppContent() {
     setTokenUsageRecords(loadTokenUsageRecords());
   };
 
-  const handleRunAssignedTask = async (task: TaskItem) => {
-    if (task.status === 'pending_approval') throw new Error('このタスクは承認待ちです。承認または却下後に再実行できます。');
+  const handleRunAssignedTask = async (task: TaskItem, options?: { signal?: AbortSignal }) => {
+    const signal = options?.signal;
+    if (signal?.aborted) {
+      throw new DOMException('Aborted', 'AbortError');
+    }
     if (taskExecutionInProgress.current) throw new Error('別の担当AIタスクを実行中です。完了後にもう一度お試しください。');
     taskExecutionInProgress.current = true;
     try {
@@ -1447,6 +1452,9 @@ function AppContent() {
       .filter((approval) => approval.taskId === task.id && approval.status === 'rejected')
       .sort((a, b) => (b.resolvedAt || b.createdAt) - (a.resolvedAt || a.createdAt))[0];
     const relatedRecordContext = await loadTaskRelatedContext(task);
+    if (signal?.aborted) {
+      throw new DOMException('Aborted', 'AbortError');
+    }
     const prompt = [
       `担当タスク: ${task.title}`,
       relatedRecordContext ? `関連する業務情報:\n${relatedRecordContext}` : '',
@@ -1471,11 +1479,15 @@ function AppContent() {
       workModeId,
       task.assignee.type === 'custom_ai' ? 'custom' : workModeId === 'president' ? 'president' : 'role'
     );
+    if (signal?.aborted) {
+      throw new DOMException('Aborted', 'AbortError');
+    }
 
     const authHeaders = await getAuthHeaders();
     const response = await fetch('/api/chat', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', ...authHeaders },
+      signal,
       body: JSON.stringify({
         messages: [{ role: 'user', content: prompt }],
         character: { ...agentCharacter, userProfile },
@@ -1523,14 +1535,14 @@ function AppContent() {
     const sourceAutomationRule = task.sourceAutomationId
       ? automations.find((rule) => rule.id === task.sourceAutomationId)
       : undefined;
-    const requiresArtifactApproval = !task.sourceAutomationId || !sourceAutomationRule || sourceAutomationRule.approvalPolicy === 'always';
+    const requiresArtifactApproval = sourceAutomationRule?.approvalPolicy === 'always';
     const updatedTask: TaskItem = {
       ...task,
-      status: requiresArtifactApproval ? 'pending_approval' : 'completed',
+      status: requiresArtifactApproval ? 'pending_approval' : 'waiting',
       automationAutoRun: false,
       resultNotes: requiresArtifactApproval
         ? `${resolvedMode.name}の成果物を確認してください。承認後にナレッジへ登録されます。`
-        : 'AI草案をタスクに保存しました。顧客への連絡・外部処理は実行していません。',
+        : `${resolvedMode.name}が成果物を作成しました。内容を確認し、問題なければ「完了にする」を押してください。`,
       draftArtifact,
       updatedAt: now,
     };
@@ -1559,8 +1571,8 @@ function AppContent() {
         : `タスク「${task.title}」のAI成果物レビューが承認待ちです`, resolvedMode.name);
     }
     recordActivityLog('task_updated', sourceAutomationRule
-      ? `自動化実行:「${sourceAutomationRule.name}」が${resolvedMode.name}でタスク「${task.title}」の草案を作成しました`
-      : `${resolvedMode.name}がタスク「${task.title}」を実行し、レビュー用成果物を保存しました`, resolvedMode.name);
+      ? `自動化実行:「${sourceAutomationRule.name}」が${resolvedMode.name}でタスク「${task.title}」の成果物を作成しました`
+      : `${resolvedMode.name}がタスク「${task.title}」を実行し、成果物を保存しました`, resolvedMode.name);
     setActivityLogs(loadActivityLogs());
     } finally {
       taskExecutionInProgress.current = false;
@@ -1831,17 +1843,55 @@ function AppContent() {
 
   const handleUpdateTask = (updatedTask: TaskItem) => {
     const oldTask = tasks.find((t) => t.id === updatedTask.id);
-    const updated = tasks.map((t) => (t.id === updatedTask.id ? updatedTask : t));
+    if (updatedTask.status === 'completed') {
+      const resolution = resolveCompletedTaskState({
+        task: updatedTask,
+        existingKnowledge: knowledgeItems,
+        existingApprovals: approvals,
+      });
+      const updated = tasks.map((t) => (t.id === updatedTask.id ? resolution.updatedTask : t));
+      setTasks(updated);
+      saveTasks(updated);
+
+      if (resolution.savedKnowledge) {
+        setKnowledgeItems(resolution.knowledgeItems);
+        saveKnowledgeItems(resolution.knowledgeItems);
+      }
+      if (resolution.resolvedApprovalCount > 0) {
+        setApprovals(resolution.approvals);
+        saveApprovals(resolution.approvals);
+      }
+
+      if (oldTask && oldTask.status !== 'completed') {
+        recordActivityLog(
+          'task_status_changed',
+          resolution.savedKnowledge
+            ? `タスク「${updatedTask.title}」を完了し、成果物をナレッジ「${resolution.savedKnowledge.title}」に保存しました`
+            : `タスク「${updatedTask.title}」が完了になりました`,
+          '人間'
+        );
+      } else {
+        recordActivityLog('task_updated', `タスク「${updatedTask.title}」が更新されました`, '人間');
+      }
+      setActivityLogs(loadActivityLogs());
+      return;
+    }
+
+    const normalizedTask: TaskItem =
+      oldTask?.status === 'completed'
+        ? { ...updatedTask, completedAt: undefined }
+        : updatedTask;
+    const updated = tasks.map((t) => (t.id === updatedTask.id ? normalizedTask : t));
     setTasks(updated);
     saveTasks(updated);
-    if (oldTask && oldTask.status !== updatedTask.status) {
+    if (oldTask && oldTask.status !== normalizedTask.status) {
       recordActivityLog(
         'task_status_changed',
-        `タスク「${updatedTask.title}」の状態が【${updatedTask.status}】に変更されました`,
+        `タスク「${normalizedTask.title}」の状態が【${normalizedTask.status}】に変更されました`,
         '人間'
       );
     } else {
-      recordActivityLog('task_updated', `タスク「${updatedTask.title}」が更新されました`, '人間');
+      recordActivityLog('task_updated', `タスク「${normalizedTask.title}」が更新されました`, '人間');
     }
     setActivityLogs(loadActivityLogs());
   };
@@ -2498,9 +2548,9 @@ function AppContent() {
     workModeId: string;
     relatedRecord?: TaskItem['relatedRecord'];
   }) => {
-    // 標準ルールIDまたは同じtriggerEventを持つ有効なカスタムルールをすべて起動する
+    // 標準ルールIDまたは同じtriggerEventを持つ有効なカスタムルールを起動する（上部アラート集約済みプリセットは下部重複起票しない）
     const matchingRules = automations.filter(
-      (item) => item.isEnabled && (item.id === input.ruleId || item.triggerEvent === input.triggerEvent)
+      (item) => shouldCreateAutomationLowerTask(item) && (item.id === input.ruleId || item.triggerEvent === input.triggerEvent)
     );
     if (matchingRules.length === 0) return false;
 
@@ -2571,6 +2621,9 @@ function AppContent() {
     });
   };
   automationSubmissionHandlerRef.current = handleDiagnosisSubmissionAutomation;
+  hasCustomDiagnosisAutomationRef.current = automations.some(
+    (rule) => rule.triggerEvent === 'diagnosis_submitted' && shouldCreateAutomationLowerTask(rule)
+  );
 
   const handleAddContract = (c: Omit<ManagedContract, 'id' | 'createdAt' | 'updatedAt'>) => {
     const created = matrixService.addContract(c);
@@ -2861,6 +2914,7 @@ function AppContent() {
 
     const catchUpMissedSubmissions = async () => {
       if (isCatchingUp) return;
+      if (!hasCustomDiagnosisAutomationRef.current) return;
       isCatchingUp = true;
       try {
         const { data: diagnosisForms, error: formsError } = await supabase
@@ -3467,6 +3521,7 @@ function AppContent() {
             onClearActivityLogs={handleClearActivityLogs}
             initialSection={selectedTaskWorkspaceSection}
             onSectionChange={setSelectedTaskWorkspaceSection}
+            onNavigateTab={(tab, options) => handleNavigateWorkspaceTab(tab, options)}
           />
         )}
 

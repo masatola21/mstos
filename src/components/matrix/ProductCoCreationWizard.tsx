@@ -243,7 +243,7 @@ export const ProductCoCreationWizard: React.FC<ProductCoCreationWizardProps> = (
       projectId: newProject.id,
       title: t.title,
       description: t.description,
-      status: idx === 0 ? 'in_progress' : 'waiting',
+      status: 'waiting',
       priority: t.priority,
       workArea: 'product_development',
       sourceCategory: 'business_operations',
@@ -258,7 +258,7 @@ export const ProductCoCreationWizard: React.FC<ProductCoCreationWizardProps> = (
         name: character?.name || 'AI社長',
       },
       dueDate: dateAfterDaysJst((idx + 1) * 7),
-      completionCriteria: '成果物の納品と社内承認完了',
+      completionCriteria: '成果物の確認とタスク完了',
       createdAt: Date.now(),
       updatedAt: Date.now(),
     }));

@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
   CheckSquare,
   ClipboardCopy,
@@ -21,8 +21,14 @@ import {
   ChevronDown,
   Search,
   RefreshCw,
+  Sparkles,
+  Mail,
+  Calendar,
+  FileText,
+  Square,
+  ExternalLink,
 } from 'lucide-react';
-import { getSupabase } from '../../lib/supabaseClient';
+import { getSupabase, getAuthHeaders } from '../../lib/supabaseClient';
 import {
   TaskItem,
   Project,
@@ -40,6 +46,19 @@ import {
 import { ApprovalsView } from './ApprovalsView';
 import { AI_WORK_MODES, RoleAIOverrides, resolveWorkMode } from '../../data/aiWorkModes';
 import { todayJst } from '../../utils/date';
+import {
+  MANUAL_COMMAND_OPTIONS,
+  ManualTaskCommandId,
+  SpecificManualTaskCommandId,
+  DiagnosisSubmissionSummary,
+  classifySystemTaskCommand,
+  classifyWorkspaceTaskCommand,
+  isImportantManualSystemTask,
+  isImportantManualWorkspaceTask,
+  getManualCommandOption,
+  extractTaskContextRefs,
+  findMatchingSubmissionForTask,
+} from '../../utils/taskManualCommands';
 
 const TASK_WORK_AREAS: { value: TaskWorkArea; label: string }[] = [
   { value: 'sales_customer', label: '営業・顧客' },
@@ -88,7 +107,7 @@ interface TasksViewProps {
   onDeleteTask: (id: string) => Promise<void> | void;
   onDeleteCompletedTasks?: () => Promise<void> | void;
   onBatchDeleteTasks?: (taskIds: string[], reason: string) => Promise<void> | void;
-  onRunTask: (task: TaskItem) => Promise<void>;
+  onRunTask: (task: TaskItem, options?: { signal?: AbortSignal }) => Promise<void>;
   onUploadAttachment: (taskId: string, file: File) => Promise<WorkspaceAttachment>;
   onDownloadAttachment: (attachment: WorkspaceAttachment) => Promise<Blob>;
   onDeleteAttachment: (attachment: WorkspaceAttachment) => Promise<void>;
@@ -105,6 +124,7 @@ interface TasksViewProps {
   onClearActivityLogs?: () => void;
   initialSection?: 'tasks' | 'approvals' | 'logs';
   onSectionChange?: (section: 'tasks' | 'approvals' | 'logs') => void;
+  onNavigateTab?: (tab: string, options?: any) => void;
 }
 
 export const TasksView: React.FC<TasksViewProps> = ({
@@ -136,6 +156,7 @@ export const TasksView: React.FC<TasksViewProps> = ({
   onClearActivityLogs,
   initialSection = 'tasks',
   onSectionChange,
+  onNavigateTab,
 }) => {
   const [activeSection, setActiveSection] = useState<'tasks' | 'approvals' | 'logs'>(initialSection);
   useEffect(() => setActiveSection(initialSection), [initialSection]);
@@ -183,6 +204,22 @@ export const TasksView: React.FC<TasksViewProps> = ({
   const [filterWorkArea, setFilterWorkArea] = useState<string>('all');
   const [filterTaskKind, setFilterTaskKind] = useState<string>('all');
   const [searchQuery, setSearchQuery] = useState('');
+  const [taskFocusMode, setTaskFocusMode] = useState<'all' | 'important_manual'>(() => {
+    try {
+      const saved = localStorage.getItem('mst_tasks_focus_mode');
+      return saved === 'important_manual' ? 'important_manual' : 'all';
+    } catch {
+      return 'all';
+    }
+  });
+  const [manualCommandFilter, setManualCommandFilter] = useState<ManualTaskCommandId>('all');
+
+  const handleSelectFocusMode = (mode: 'all' | 'important_manual') => {
+    setTaskFocusMode(mode);
+    try {
+      localStorage.setItem('mst_tasks_focus_mode', mode);
+    } catch {}
+  };
 
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingTask, setEditingTask] = useState<TaskItem | null>(null);
@@ -219,7 +256,10 @@ export const TasksView: React.FC<TasksViewProps> = ({
   const [resultNotes, setResultNotes] = useState('');
   const [artifactUrl, setArtifactUrl] = useState('');
   const [runningTaskIds, setRunningTaskIds] = useState<Set<string>>(() => new Set());
+  const taskRunControllersRef = useRef<Map<string, AbortController>>(new Map());
+  const [taskActionNotice, setTaskActionNotice] = useState<string | null>(null);
   const [expandedDraftTaskIds, setExpandedDraftTaskIds] = useState<Set<string>>(() => new Set());
+  const [copiedDraftTaskId, setCopiedDraftTaskId] = useState<string | null>(null);
   const [isUploadingAttachment, setIsUploadingAttachment] = useState(false);
   const [attachmentError, setAttachmentError] = useState('');
 
@@ -245,6 +285,73 @@ export const TasksView: React.FC<TasksViewProps> = ({
   } | null>(null);
   const [isBulkDeletingSystemTasks, setIsBulkDeletingSystemTasks] = useState(false);
 
+  // Diagnosis Submission & AI Report Generation Context
+  const [diagnosisSubmissions, setDiagnosisSubmissions] = useState<DiagnosisSubmissionSummary[]>([]);
+  const [diagnosisFormIds, setDiagnosisFormIds] = useState<Set<string>>(() => new Set());
+  const [reportVersions, setReportVersions] = useState<Record<string, number>>({});
+  const [reportingSubmissionIds, setReportingSubmissionIds] = useState<string[]>([]);
+  const reportControllersRef = useRef<Map<string, AbortController>>(new Map());
+  const [reportNotice, setReportNotice] = useState<{ text: string; companyId?: string | null } | null>(null);
+  const [reportError, setReportError] = useState<string | null>(null);
+
+  useEffect(() => {
+    return () => {
+      reportControllersRef.current.forEach((ctrl) => ctrl.abort());
+      reportControllersRef.current.clear();
+      taskRunControllersRef.current.forEach((ctrl) => ctrl.abort());
+      taskRunControllersRef.current.clear();
+    };
+  }, []);
+
+  const loadSubmissionReportContext = async (supabase: NonNullable<ReturnType<typeof getSupabase>>) => {
+    try {
+      const [subRes, formRes] = await Promise.all([
+        supabase
+          .from('diagnosis_submissions')
+          .select('id,form_id,company_id,lead_id,diagnosis_id,status,respondent_name,respondent_company_name,respondent_email,submitted_at')
+          .order('submitted_at', { ascending: false })
+          .limit(150),
+        supabase
+          .from('diagnosis_forms')
+          .select('id,name,form_type,public_slug'),
+      ]);
+
+      if (!formRes.error && Array.isArray(formRes.data)) {
+        const diagIds = new Set<string>();
+        formRes.data.forEach((f: any) => {
+          if (f?.form_type === 'diagnosis' || f?.public_slug === 'business-diagnosis' || String(f?.name || '').includes('診断')) {
+            diagIds.add(String(f.id));
+          }
+        });
+        setDiagnosisFormIds(diagIds);
+      }
+
+      if (!subRes.error && Array.isArray(subRes.data)) {
+        const loaded = subRes.data as DiagnosisSubmissionSummary[];
+        setDiagnosisSubmissions(loaded);
+        const diagnosisIds = Array.from(new Set(loaded.map((s) => s.diagnosis_id).filter(Boolean))) as string[];
+        if (diagnosisIds.length > 0) {
+          const reportRes = await supabase
+            .from('ai_reports')
+            .select('diagnosis_id,version')
+            .in('diagnosis_id', diagnosisIds)
+            .eq('is_latest', true);
+          if (!reportRes.error && Array.isArray(reportRes.data)) {
+            const versions: Record<string, number> = {};
+            reportRes.data.forEach((row: any) => {
+              versions[String(row.diagnosis_id)] = Number(row.version) || 1;
+            });
+            setReportVersions(versions);
+          }
+        } else {
+          setReportVersions({});
+        }
+      }
+    } catch {
+      // ignore auxiliary metadata errors so task list remains available
+    }
+  };
+
   const loadSystemTasks = async () => {
     setSystemTasksLoading(true);
     setSystemTasksError(null);
@@ -264,6 +371,7 @@ export const TasksView: React.FC<TasksViewProps> = ({
         throw error;
       }
       setSystemTasks((data || []) as SystemTask[]);
+      void loadSubmissionReportContext(supabase);
     } catch (err: any) {
       setSystemTasksError(err?.message || '不明なエラー');
     } finally {
@@ -274,6 +382,84 @@ export const TasksView: React.FC<TasksViewProps> = ({
   useEffect(() => {
     void loadSystemTasks();
   }, []);
+
+  const handleGenerateReportFromTask = async (sub: DiagnosisSubmissionSummary, force = false) => {
+    setReportingSubmissionIds((prev) => (prev.includes(sub.id) ? prev : [...prev, sub.id]));
+    setReportNotice(null);
+    setReportError(null);
+    const controller = new AbortController();
+    reportControllersRef.current.set(sub.id, controller);
+    try {
+      const headers = await getAuthHeaders();
+      const response = await fetch(`/api/diagnosis-submissions/${encodeURIComponent(sub.id)}/generate-report`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', ...headers },
+        signal: controller.signal,
+        body: JSON.stringify({ force }),
+      });
+      const result = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        throw new Error(result.error || 'AI診断レポートを作成できませんでした。');
+      }
+
+      const displayName = sub.respondent_company_name || sub.respondent_name || '回答者';
+      const targetCompanyId = result.companyId || sub.company_id;
+
+      if (result.alreadyExists) {
+        setReportVersions((prev) => ({
+          ...prev,
+          [String(result.diagnosisId)]: Number(result.reportVersion) || 1,
+        }));
+        setDiagnosisSubmissions((prev) =>
+          prev.map((item) => (item.id === sub.id ? { ...item, diagnosis_id: result.diagnosisId } : item))
+        );
+        setReportNotice({
+          text: `「${displayName}」の診断レポートは既に作成済み（v${result.reportVersion || 1}）です。書類画面で確認できます。`,
+          companyId: targetCompanyId,
+        });
+        return;
+      }
+
+      setDiagnosisSubmissions((prev) =>
+        prev.map((item) =>
+          item.id === sub.id
+            ? {
+                ...item,
+                diagnosis_id: result.diagnosisId,
+                status: item.status === 'received' ? 'reviewing' : item.status,
+              }
+            : item
+        )
+      );
+      setReportVersions((prev) => ({
+        ...prev,
+        [String(result.diagnosisId)]: Number(result.version) || 1,
+      }));
+      setReportNotice({
+        text: `「${displayName}」のAI診断レポート（v${result.version}）を作成しました。書類画面で内容を確認・承認してください。${result.documentSynced ? '' : '（書類台帳への登録だけ失敗しました）'}`,
+        companyId: targetCompanyId,
+      });
+    } catch (err: any) {
+      if (err?.name === 'AbortError' || controller.signal.aborted) {
+        const displayName = sub.respondent_company_name || sub.respondent_name || '回答者';
+        setReportNotice({ text: `「${displayName}」のAI診断レポート作成を中断しました。` });
+        return;
+      }
+      setReportError(err?.message || 'AI診断レポートを作成できませんでした。');
+    } finally {
+      reportControllersRef.current.delete(sub.id);
+      setReportingSubmissionIds((prev) => prev.filter((id) => id !== sub.id));
+    }
+  };
+
+  const handleCancelReportFromTask = (subId: string) => {
+    const ctrl = reportControllersRef.current.get(subId);
+    if (ctrl) {
+      ctrl.abort();
+      reportControllersRef.current.delete(subId);
+    }
+    setReportingSubmissionIds((prev) => prev.filter((id) => id !== subId));
+  };
 
   const handleCompleteSystemTask = async (taskId: string) => {
     setCompletingSystemTaskId(taskId);
@@ -434,7 +620,7 @@ export const TasksView: React.FC<TasksViewProps> = ({
     setRelatedRecordId(task.relatedRecord?.id || '');
     setRelatedRecordLabel(task.relatedRecord?.label || '');
     setPriority(task.priority);
-    setStatus(task.status);
+    setStatus(task.status === 'completed' ? 'completed' : 'waiting');
     setCompletionCriteria(task.completionCriteria || '');
     setResultNotes(task.resultNotes || '');
     setArtifactUrl(task.artifactUrl || '');
@@ -552,10 +738,7 @@ export const TasksView: React.FC<TasksViewProps> = ({
     }
 
     if (editingTask) {
-      let nextStatus = status;
-      if (status === 'completed' && assignee.type !== 'human' && assignee.type !== 'external_ai') {
-        nextStatus = editingTask.status === 'completed' ? 'in_progress' : editingTask.status;
-      }
+      const nextStatus: TaskStatus = status === 'completed' ? 'completed' : 'waiting';
       onUpdateTask({
         ...editingTask,
         title: title.trim(),
@@ -568,6 +751,7 @@ export const TasksView: React.FC<TasksViewProps> = ({
         relatedRecord: relatedRecordType === 'none' ? undefined : { type: relatedRecordType, id: relatedRecordId.trim() || undefined, label: relatedRecordLabel.trim() || undefined },
         priority,
         status: nextStatus,
+        completedAt: nextStatus === 'completed' ? (editingTask.completedAt || Date.now()) : undefined,
         assignee,
         completionCriteria: completionCriteria.trim(),
         resultNotes: resultNotes.trim(),
@@ -610,20 +794,17 @@ export const TasksView: React.FC<TasksViewProps> = ({
   };
 
   const handleQuickStatusChange = (task: TaskItem, newStatus: TaskStatus) => {
-    if (newStatus === 'completed' && task.assignee.type !== 'human' && task.assignee.type !== 'external_ai') return;
-    if (newStatus === 'completed' && task.assignee.type === 'external_ai' && !task.resultNotes?.trim() && !task.artifactUrl && !task.attachments?.length) {
-      alert('外部AIの回答を成果メモに貼り付けるか、成果物を添付してから完了にしてください。');
-      return;
-    }
     if (newStatus === 'pending_approval') {
       setApprovalModalTask(task);
       setApprovalReason(`タスク「${task.title}」の完了条件を満たしたため、結果の承認を求めます。`);
       return;
     }
+    const now = Date.now();
     onUpdateTask({
       ...task,
       status: newStatus,
-      updatedAt: Date.now(),
+      completedAt: newStatus === 'completed' ? (task.completedAt || now) : undefined,
+      updatedAt: now,
     });
   };
 
@@ -634,12 +815,22 @@ export const TasksView: React.FC<TasksViewProps> = ({
   };
 
   const runTask = async (task: TaskItem) => {
+    const controller = new AbortController();
+    taskRunControllersRef.current.set(task.id, controller);
+    setTaskActionNotice(null);
     setRunningTaskIds((current) => new Set(current).add(task.id));
     try {
-      await onRunTask(task);
+      await onRunTask(task, { signal: controller.signal });
+      setExpandedDraftTaskIds((current) => new Set(current).add(task.id));
+      setTaskActionNotice(`タスク「${task.title}」のAI成果物を作成しました。内容を確認し、問題なければ「完了にする」を押してください。`);
     } catch (error) {
+      if ((error instanceof Error && error.name === 'AbortError') || controller.signal.aborted) {
+        setTaskActionNotice(`タスク「${task.title}」のAI実行を停止しました。`);
+        return;
+      }
       alert(error instanceof Error ? error.message : 'AIの実行に失敗しました。');
     } finally {
+      taskRunControllersRef.current.delete(task.id);
       setRunningTaskIds((current) => {
         const next = new Set(current);
         next.delete(task.id);
@@ -648,12 +839,78 @@ export const TasksView: React.FC<TasksViewProps> = ({
     }
   };
 
+  const cancelRunTask = (task: TaskItem) => {
+    const controller = taskRunControllersRef.current.get(task.id);
+    if (controller) {
+      controller.abort();
+      taskRunControllersRef.current.delete(task.id);
+    }
+    setRunningTaskIds((current) => {
+      const next = new Set(current);
+      next.delete(task.id);
+      return next;
+    });
+    setTaskActionNotice(`タスク「${task.title}」のAI実行を停止しました。`);
+  };
+
+  const commandCounts = useMemo(() => {
+    const counts: Record<SpecificManualTaskCommandId, number> = {
+      generate_diagnosis_report: 0,
+      reply_consultation: 0,
+      confirm_meeting: 0,
+      material_and_contract: 0,
+      billing_or_warning: 0,
+      general_manual: 0,
+    };
+    activeSystemTasks.forEach((st) => {
+      const cmd = classifySystemTaskCommand(st);
+      counts[cmd] += 1;
+    });
+    tasks.forEach((t) => {
+      if (t.status === 'completed') return;
+      const cmd = classifyWorkspaceTaskCommand(t);
+      if (cmd) counts[cmd] += 1;
+    });
+    return counts;
+  }, [activeSystemTasks, tasks]);
+
+  const importantManualCount = useMemo(() => {
+    const sysCount = activeSystemTasks.filter((st) => isImportantManualSystemTask(st)).length;
+    const wsCount = tasks.filter((t) => isImportantManualWorkspaceTask(t)).length;
+    return sysCount + wsCount;
+  }, [activeSystemTasks, tasks]);
+
+  const filteredSystemTasks = useMemo(() => {
+    return activeSystemTasks.filter((st) => {
+      if (taskFocusMode === 'important_manual' && !isImportantManualSystemTask(st)) {
+        return false;
+      }
+      if (manualCommandFilter !== 'all' && classifySystemTaskCommand(st) !== manualCommandFilter) {
+        return false;
+      }
+      if (searchQuery.trim()) {
+        const q = searchQuery.toLowerCase();
+        const matchTitle = st.title.toLowerCase().includes(q);
+        const matchDesc = (st.description || '').toLowerCase().includes(q);
+        if (!matchTitle && !matchDesc) return false;
+      }
+      return true;
+    });
+  }, [activeSystemTasks, taskFocusMode, manualCommandFilter, searchQuery]);
+
   const filteredTasks = tasks.filter((t) => {
+    if (taskFocusMode === 'important_manual' && !isImportantManualWorkspaceTask(t)) return false;
+    if (manualCommandFilter !== 'all') {
+      const cmd = classifyWorkspaceTaskCommand(t);
+      if (cmd !== manualCommandFilter) return false;
+    }
     if (filterProject === 'none' && t.projectId && projects.some((project) => project.id === t.projectId)) return false;
     if (filterProject !== 'all' && filterProject !== 'none' && t.projectId !== filterProject) return false;
     if (filterWorkArea !== 'all' && (t.workArea || 'project') !== filterWorkArea) return false;
     if (filterTaskKind !== 'all' && (t.taskKind || 'response') !== filterTaskKind) return false;
-    if (filterStatus !== 'all' && t.status !== filterStatus) return false;
+    if (filterStatus === 'incomplete' && t.status === 'completed') return false;
+    if (filterStatus === 'completed' && t.status !== 'completed') return false;
+    if (filterStatus !== 'all' && filterStatus !== 'incomplete' && filterStatus !== 'completed' && t.status !== filterStatus) return false;
     if (filterAssignee !== 'all') {
       if (filterAssignee === 'human' && t.assignee.type !== 'human') return false;
       if (filterAssignee === 'external_ai' && t.assignee.type !== 'external_ai') return false;
@@ -673,39 +930,235 @@ export const TasksView: React.FC<TasksViewProps> = ({
     return true;
   });
 
-  const getStatusBadge = (st: TaskStatus) => {
-    switch (st) {
-      case 'waiting':
-        return (
-          <span className="flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-slate-100 text-slate-700 border border-slate-200">
-            <Clock className="w-3 h-3 text-slate-500" /> 待機中
-          </span>
-        );
-      case 'in_progress':
-        return (
-          <span className="flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-blue-50 text-blue-700 border border-blue-200 animate-pulse">
-            <span className="w-1.5 h-1.5 rounded-full bg-blue-600" /> 進行中
-          </span>
-        );
-      case 'pending_approval':
-        return (
-          <span className="flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-amber-50 text-amber-800 border border-amber-200">
-            <ShieldCheck className="w-3 h-3 text-amber-600" /> 承認待ち
-          </span>
-        );
-      case 'completed':
-        return (
-          <span className="flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-emerald-50 text-emerald-800 border border-emerald-200">
-            <CheckCircle2 className="w-3 h-3 text-emerald-600" /> 完了
-          </span>
-        );
-      case 'blocked':
-        return (
-          <span className="flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-rose-50 text-rose-800 border border-rose-200">
-            <AlertTriangle className="w-3 h-3 text-rose-600" /> 問題あり
-          </span>
-        );
+  const renderCommandIcon = (cmd: SpecificManualTaskCommandId, className = 'w-3.5 h-3.5') => {
+    switch (cmd) {
+      case 'generate_diagnosis_report':
+        return <Sparkles className={className} />;
+      case 'reply_consultation':
+        return <Mail className={className} />;
+      case 'confirm_meeting':
+        return <Calendar className={className} />;
+      case 'material_and_contract':
+        return <FileText className={className} />;
+      case 'billing_or_warning':
+        return <AlertTriangle className={className} />;
+      case 'general_manual':
+      default:
+        return <User className={className} />;
     }
+  };
+
+  const renderManualActionButtons = (params: {
+    command: SpecificManualTaskCommandId | null;
+    title: string;
+    description?: string | null;
+    matchedSub: DiagnosisSubmissionSummary | null;
+    companyId?: string | null;
+    leadId?: string | null;
+  }) => {
+    const { command, title, description, matchedSub, companyId, leadId } = params;
+    if (!command) return null;
+
+    const refs = extractTaskContextRefs(`${title}\n${description || ''}`);
+    const resolvedCompanyId = matchedSub?.company_id || companyId || refs.companyId || undefined;
+    const resolvedLeadId = matchedSub?.lead_id || leadId || refs.leadId || undefined;
+
+    if (command === 'generate_diagnosis_report') {
+      if (!matchedSub) {
+        return (
+          <div className="flex flex-wrap items-center gap-1.5">
+            {onNavigateTab && (
+              <button
+                type="button"
+                onClick={() =>
+                  onNavigateTab('inbox_hub', {
+                    inboxChannel: 'forms',
+                    context: resolvedCompanyId || resolvedLeadId ? { companyId: resolvedCompanyId, leadId: resolvedLeadId } : undefined,
+                  })
+                }
+                className="inline-flex items-center gap-1.5 px-3 py-1 rounded-lg bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-200 text-xs font-semibold cursor-pointer transition-colors"
+                title="受信トレイの無料診断回答一覧を開いてレポートを作成します"
+              >
+                <Sparkles className="w-3.5 h-3.5 text-emerald-600" />
+                <span>診断回答を開く（レポート作成へ）</span>
+              </button>
+            )}
+          </div>
+        );
+      }
+
+      const busy = reportingSubmissionIds.includes(matchedSub.id);
+      const reportVersion = matchedSub.diagnosis_id ? reportVersions[matchedSub.diagnosis_id] : undefined;
+      const alreadyCreated = Boolean(reportVersion);
+      const needsCompany = !matchedSub.company_id;
+
+      return (
+        <div className="flex flex-wrap items-center gap-1.5">
+          {busy ? (
+            <>
+              <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-lg bg-emerald-50 text-xs font-semibold text-emerald-800 border border-emerald-200">
+                <RefreshCw className="w-3.5 h-3.5 text-emerald-600 animate-spin" />
+                <span>AIが作成中…</span>
+              </span>
+              <button
+                type="button"
+                onClick={() => handleCancelReportFromTask(matchedSub.id)}
+                className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-rose-50 hover:bg-rose-100 text-xs font-semibold text-rose-700 border border-rose-200 transition cursor-pointer"
+                title="レポート作成を中断します"
+              >
+                <Square className="w-3 h-3 fill-current" />
+                <span>停止</span>
+              </button>
+            </>
+          ) : alreadyCreated ? (
+            <>
+              {onNavigateTab && (
+                <button
+                  type="button"
+                  onClick={() =>
+                    onNavigateTab('document_templates', {
+                      context: resolvedCompanyId ? { companyId: resolvedCompanyId } : undefined,
+                    })
+                  }
+                  className="inline-flex items-center gap-1.5 px-3 py-1 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-xs font-semibold text-white transition cursor-pointer"
+                  title="作成済みのAI診断レポートを書類画面で確認・承認します"
+                >
+                  <CheckCircle2 className="w-3.5 h-3.5 text-emerald-100" />
+                  <span>作成済み（v{reportVersion}）・書類確認</span>
+                </button>
+              )}
+              <button
+                type="button"
+                onClick={() => void handleGenerateReportFromTask(matchedSub, true)}
+                className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-white hover:bg-slate-50 text-[11px] font-medium text-slate-600 border border-slate-200 transition cursor-pointer"
+                title="AI診断レポートを最新版として再生成します"
+              >
+                <RefreshCw className="w-3 h-3" />
+                <span>再生成</span>
+              </button>
+            </>
+          ) : (
+            <button
+              type="button"
+              disabled={needsCompany}
+              onClick={() => void handleGenerateReportFromTask(matchedSub)}
+              className="inline-flex items-center gap-1.5 px-3 py-1 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-xs font-semibold text-white transition cursor-pointer disabled:cursor-not-allowed disabled:opacity-50"
+              title={
+                needsCompany
+                  ? '会社が紐付いていません。先に「受信トレイで確認」から反響リードに登録してください'
+                  : 'この診断回答からAI診断レポートを直接作成します'
+              }
+            >
+              <Sparkles className="w-3.5 h-3.5" />
+              <span>AI診断レポート作成</span>
+            </button>
+          )}
+          {onNavigateTab && (
+            <button
+              type="button"
+              onClick={() =>
+                onNavigateTab('inbox_hub', {
+                  inboxChannel: 'forms',
+                  context: resolvedCompanyId || resolvedLeadId ? { companyId: resolvedCompanyId, leadId: resolvedLeadId } : undefined,
+                })
+              }
+              className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-white hover:bg-slate-50 text-xs font-medium text-slate-700 border border-slate-200 transition cursor-pointer"
+              title="受信トレイでフォーム回答の詳細を確認します"
+            >
+              <ExternalLink className="w-3 h-3 text-slate-500" />
+              <span>{needsCompany ? '受信トレイで紐付け' : '回答詳細'}</span>
+            </button>
+          )}
+        </div>
+      );
+    }
+
+    if (!onNavigateTab) return null;
+
+    if (command === 'reply_consultation') {
+      return (
+        <button
+          type="button"
+          onClick={() =>
+            onNavigateTab('inbox_hub', {
+              inboxChannel: 'forms',
+              context: resolvedCompanyId || resolvedLeadId ? { companyId: resolvedCompanyId, leadId: resolvedLeadId } : undefined,
+            })
+          }
+          className="inline-flex items-center gap-1.5 px-3 py-1 rounded-lg bg-white hover:bg-slate-50 text-xs font-semibold text-slate-700 border border-slate-200 transition cursor-pointer"
+        >
+          <Mail className="w-3.5 h-3.5 text-purple-600" />
+          <span>受信トレイで返信・確認</span>
+        </button>
+      );
+    }
+
+    if (command === 'confirm_meeting') {
+      return (
+        <button
+          type="button"
+          onClick={() => onNavigateTab('unified_calendar')}
+          className="inline-flex items-center gap-1.5 px-3 py-1 rounded-lg bg-white hover:bg-slate-50 text-xs font-semibold text-slate-700 border border-slate-200 transition cursor-pointer"
+        >
+          <Calendar className="w-3.5 h-3.5 text-purple-600" />
+          <span>カレンダー・面談確認へ</span>
+        </button>
+      );
+    }
+
+    if (command === 'billing_or_warning') {
+      const isMaterialUrlWarning = title.includes('未設定警告') || (description || '').includes('資料URL');
+      return (
+        <button
+          type="button"
+          onClick={() => onNavigateTab(isMaterialUrlWarning ? 'mst_diagnoses' : 'customer_operations')}
+          className="inline-flex items-center gap-1.5 px-3 py-1 rounded-lg bg-rose-50 hover:bg-rose-100 text-xs font-semibold text-rose-800 border border-rose-200 transition cursor-pointer"
+        >
+          <AlertTriangle className="w-3.5 h-3.5 text-rose-600" />
+          <span>{isMaterialUrlWarning ? '資料URL・フォーム設定へ' : '請求・顧客管理へ'}</span>
+        </button>
+      );
+    }
+
+    if (command === 'material_and_contract') {
+      const isContractOrWin = title.includes('即時成約') || title.includes('契約締結');
+      return (
+        <button
+          type="button"
+          onClick={() =>
+            isContractOrWin
+              ? onNavigateTab('document_templates', {
+                  context: resolvedCompanyId ? { companyId: resolvedCompanyId } : undefined,
+                })
+              : onNavigateTab('inbox_hub', {
+                  inboxChannel: 'forms',
+                  context: resolvedCompanyId || resolvedLeadId ? { companyId: resolvedCompanyId, leadId: resolvedLeadId } : undefined,
+                })
+          }
+          className="inline-flex items-center gap-1.5 px-3 py-1 rounded-lg bg-white hover:bg-slate-50 text-xs font-semibold text-slate-700 border border-slate-200 transition cursor-pointer"
+        >
+          <FileText className="w-3.5 h-3.5 text-purple-600" />
+          <span>{isContractOrWin ? '書類・契約管理へ' : '受信トレイで確認'}</span>
+        </button>
+      );
+    }
+
+    return null;
+  };
+
+  const getStatusBadge = (st: TaskStatus) => {
+    if (st === 'completed') {
+      return (
+        <span className="flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-emerald-50 text-emerald-800 border border-emerald-200">
+          <CheckCircle2 className="w-3 h-3 text-emerald-600" /> 完了
+        </span>
+      );
+    }
+    return (
+      <span className="flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-slate-100 text-slate-700 border border-slate-200">
+        <Clock className="w-3 h-3 text-slate-500" /> 未完了
+      </span>
+    );
   };
 
   const getAssigneeBadge = (assignee: TaskItem['assignee']) => {
@@ -825,25 +1278,172 @@ export const TasksView: React.FC<TasksViewProps> = ({
 
       {activeSection === 'tasks' && (
         <>
-          {/* システム自動起票枠 */}
-          <section className="rounded-2xl border border-purple-200/90 bg-linear-to-r from-purple-50/40 via-white to-indigo-50/30 p-4 sm:p-5 shadow-xs space-y-3">
-            <div className="flex items-center justify-between gap-3">
+          {/* 重要な手動タスク分離 ＆ 手動操作コマンド絞り込みバー */}
+          <section className="rounded-xl border border-slate-200 bg-white p-4 space-y-3">
+            <div className="flex flex-col md:flex-row md:items-center justify-between gap-3">
+              <div className="flex items-center gap-2 flex-wrap">
+                <div className="inline-flex items-center gap-1 p-1 bg-slate-100 rounded-lg">
+                  <button
+                    type="button"
+                    onClick={() => handleSelectFocusMode('important_manual')}
+                    className={`px-3 py-1.5 rounded-md text-xs font-semibold transition-colors cursor-pointer whitespace-nowrap tabular-nums ${
+                      taskFocusMode === 'important_manual'
+                        ? 'bg-white text-slate-900 shadow-2xs'
+                        : 'text-slate-600 hover:text-slate-900'
+                    }`}
+                  >
+                    重要な手動タスクのみ ({importantManualCount})
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => handleSelectFocusMode('all')}
+                    className={`px-3 py-1.5 rounded-md text-xs font-semibold transition-colors cursor-pointer whitespace-nowrap tabular-nums ${
+                      taskFocusMode === 'all'
+                        ? 'bg-white text-slate-900 shadow-2xs'
+                        : 'text-slate-600 hover:text-slate-900'
+                    }`}
+                  >
+                    すべて表示 ({activeSystemTasks.length + tasks.length})
+                  </button>
+                </div>
+                {taskFocusMode === 'important_manual' && (
+                  <span className="text-[11px] text-slate-500">
+                    優先度「至急・高」または人手によるレポート作成・返信・確認が必要なタスクのみ表示中
+                  </span>
+                )}
+              </div>
+
               <div className="flex items-center gap-2">
-                <span className="flex items-center justify-center w-6 h-6 rounded-lg bg-purple-600 text-white shadow-2xs">
+                <div className="relative min-w-[220px] flex-1 md:w-64">
+                  <Search className="w-3.5 h-3.5 text-slate-400 absolute left-3 top-2.5" />
+                  <input
+                    type="text"
+                    value={searchQuery}
+                    onChange={(e) => setSearchQuery(e.target.value)}
+                    placeholder="顧客名・メール・タスク名で検索..."
+                    className="w-full rounded-lg bg-white border border-slate-200 pl-8 pr-3 py-1.5 text-xs text-slate-800 placeholder-slate-400 focus:outline-none focus:border-purple-500 focus:ring-1 focus:ring-purple-500"
+                  />
+                </div>
+                {(taskFocusMode !== 'all' || manualCommandFilter !== 'all' || searchQuery.trim()) && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      handleSelectFocusMode('all');
+                      setManualCommandFilter('all');
+                      setSearchQuery('');
+                    }}
+                    className="px-2.5 py-1.5 rounded-lg border border-slate-200 bg-white hover:bg-slate-50 text-[11px] font-medium text-slate-600 cursor-pointer whitespace-nowrap"
+                  >
+                    条件リセット
+                  </button>
+                )}
+              </div>
+            </div>
+
+            <div className="pt-2 border-t border-slate-100 flex items-center gap-1.5 flex-wrap">
+              <span className="text-[11px] font-semibold text-slate-500 mr-1 flex items-center gap-1">
+                <Filter className="w-3 h-3" />
+                <span>手動操作コマンド:</span>
+              </span>
+              <button
+                type="button"
+                onClick={() => setManualCommandFilter('all')}
+                className={`px-2.5 py-1 rounded-lg text-xs font-medium transition-colors cursor-pointer whitespace-nowrap tabular-nums border ${
+                  manualCommandFilter === 'all'
+                    ? 'bg-slate-900 text-white border-slate-900'
+                    : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-50 hover:text-slate-900'
+                }`}
+              >
+                全コマンド
+              </button>
+              {MANUAL_COMMAND_OPTIONS.map((opt) => {
+                const count = commandCounts[opt.id] || 0;
+                const active = manualCommandFilter === opt.id;
+                return (
+                  <button
+                    key={opt.id}
+                    type="button"
+                    onClick={() => setManualCommandFilter(active ? 'all' : opt.id)}
+                    title={opt.description}
+                    className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-medium transition-colors cursor-pointer whitespace-nowrap tabular-nums border ${
+                      active
+                        ? 'bg-purple-600 text-white border-purple-600'
+                        : 'bg-white text-slate-700 border-slate-200 hover:bg-slate-50'
+                    }`}
+                  >
+                    {renderCommandIcon(opt.id, `w-3.5 h-3.5 ${active ? 'text-white' : opt.id === 'generate_diagnosis_report' ? 'text-emerald-600' : opt.id === 'billing_or_warning' ? 'text-rose-600' : 'text-slate-500'}`)}
+                    <span>{opt.label}</span>
+                    <span className={`text-[10px] font-mono ${active ? 'text-purple-100' : 'text-slate-400'}`}>
+                      {count}
+                    </span>
+                  </button>
+                );
+              })}
+            </div>
+          </section>
+
+          {/* AI診断レポート作成の通知・エラーバナー */}
+          {reportNotice && (
+            <div className="rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-xs text-emerald-900 flex flex-wrap items-center justify-between gap-2">
+              <div className="flex items-center gap-2 font-medium">
+                <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
+                <span>{reportNotice.text}</span>
+              </div>
+              <div className="flex items-center gap-2 shrink-0">
+                {onNavigateTab && (
+                  <button
+                    type="button"
+                    onClick={() =>
+                      onNavigateTab('document_templates', {
+                        context: reportNotice.companyId ? { companyId: reportNotice.companyId } : undefined,
+                      })
+                    }
+                    className="px-3 py-1 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white font-semibold cursor-pointer transition-colors"
+                  >
+                    書類を確認する
+                  </button>
+                )}
+                <button
+                  type="button"
+                  onClick={() => setReportNotice(null)}
+                  className="p-1 text-emerald-700 hover:text-emerald-900 cursor-pointer"
+                >
+                  <X className="w-3.5 h-3.5" />
+                </button>
+              </div>
+            </div>
+          )}
+
+          {reportError && (
+            <div role="alert" className="rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-xs text-rose-800 flex items-center justify-between gap-2">
+              <span className="font-medium">{reportError}</span>
+              <button
+                type="button"
+                onClick={() => setReportError(null)}
+                className="p-1 text-rose-600 hover:text-rose-900 cursor-pointer"
+              >
+                <X className="w-3.5 h-3.5" />
+              </button>
+            </div>
+          )}
+
+          {/* システム自動起票枠 */}
+          <section className="rounded-xl border border-slate-200 bg-white p-4 sm:p-5 space-y-3">
+            <div className="flex items-center justify-between gap-3 flex-wrap">
+              <div className="flex items-center gap-2 flex-wrap">
+                <span className="flex items-center justify-center w-6 h-6 rounded-lg bg-purple-600 text-white">
                   <Bot className="w-3.5 h-3.5" />
                 </span>
-                <h2 className="text-sm font-bold text-slate-900 flex items-center gap-2">
+                <h2 className="text-sm font-bold text-slate-900 flex items-center gap-2 tabular-nums">
                   <span>システム自動起票</span>
-                  <span className={`px-2 py-0.5 rounded-full text-[11px] font-bold ${
-                    activeSystemTasks.length > 0
-                      ? 'bg-purple-600 text-white'
-                      : 'bg-slate-100 text-slate-600 border border-slate-200'
-                  }`}>
-                    {activeSystemTasks.length}件
+                  <span className="text-xs font-semibold text-slate-500">
+                    {filteredSystemTasks.length !== activeSystemTasks.length
+                      ? `${filteredSystemTasks.length} / ${activeSystemTasks.length}件`
+                      : `${activeSystemTasks.length}件`}
                   </span>
                 </h2>
                 <span className="text-[11px] text-slate-500 hidden sm:inline">
-                  （支払督促・資料URL未設定警告・フォーム申込要対応など）
+                  支払督促 · 資料URL警告 · 診断レポート作成 · Web相談返信 · TimeRex面談確認
                 </span>
               </div>
 
@@ -924,43 +1524,57 @@ export const TasksView: React.FC<TasksViewProps> = ({
                 <Loader2 className="w-4 h-4 animate-spin text-purple-600" />
                 <span>自動起票タスクを確認中…</span>
               </div>
-            ) : activeSystemTasks.length === 0 ? (
-              <div className="py-3 px-3.5 rounded-xl bg-white/80 border border-slate-200/60 text-xs text-slate-500 text-center">
-                現在、対応が必要な未完了のシステム自動起票タスクはありません。
+            ) : filteredSystemTasks.length === 0 ? (
+              <div className="py-3 px-3.5 rounded-xl bg-slate-50 border border-slate-200/80 text-xs text-slate-500 text-center">
+                {activeSystemTasks.length === 0
+                  ? '現在、対応が必要な未完了のシステム自動起票タスクはありません。'
+                  : '現在の絞り込み条件に一致するシステム自動起票タスクはありません。'}
               </div>
             ) : (
               <div className="space-y-2.5">
-                <div className="flex items-center justify-between gap-2 px-3 py-1.5 rounded-xl bg-white/90 border border-slate-200/80 text-xs">
+                <div className="flex items-center justify-between gap-2 px-3 py-1.5 rounded-xl bg-slate-50 border border-slate-200/80 text-xs">
                   <label className="inline-flex items-center gap-2 font-semibold text-slate-700 cursor-pointer select-none">
                     <input
                       type="checkbox"
-                      checked={activeSystemTasks.length > 0 && activeSystemTasks.every((t) => selectedSystemTaskIds.includes(t.id))}
+                      checked={filteredSystemTasks.length > 0 && filteredSystemTasks.every((t) => selectedSystemTaskIds.includes(t.id))}
                       onChange={(e) => {
                         if (e.target.checked) {
-                          setSelectedSystemTaskIds(activeSystemTasks.map((t) => t.id));
+                          setSelectedSystemTaskIds(filteredSystemTasks.map((t) => t.id));
                         } else {
                           setSelectedSystemTaskIds([]);
                         }
                       }}
                       className="rounded border-slate-300 text-purple-600 focus:ring-purple-500 cursor-pointer"
                     />
-                    <span>未完了の自動起票タスク全{activeSystemTasks.length}件を選択</span>
+                    <span>表示中の自動起票タスク全{filteredSystemTasks.length}件を選択</span>
                   </label>
                   {selectedSystemTaskIds.length > 0 && (
                     <span className="text-purple-700 font-bold">{selectedSystemTaskIds.length}件選択中</span>
                   )}
                 </div>
-                {activeSystemTasks.map((st) => {
+                {filteredSystemTasks.map((st) => {
                   const isSysSelected = selectedSystemTaskIds.includes(st.id);
+                  const sysCommand = classifySystemTaskCommand(st);
+                  const sysCmdMeta = getManualCommandOption(sysCommand);
+                  const matchedSub =
+                    sysCommand === 'generate_diagnosis_report' || sysCommand === 'reply_consultation' || sysCommand === 'material_and_contract'
+                      ? findMatchingSubmissionForTask({
+                          systemTask: st,
+                          submissions: diagnosisSubmissions,
+                          diagnosisFormIds,
+                          preferDiagnosisOnly: sysCommand === 'generate_diagnosis_report',
+                        })
+                      : null;
+
                   return (
                   <div
                     key={st.id}
-                    className={`p-3 sm:p-4 rounded-xl bg-white border shadow-2xs transition-all space-y-2 ${
-                      isSysSelected ? 'border-purple-400 bg-purple-50/20' : 'border-slate-200/90 hover:border-purple-300'
+                    className={`p-3 sm:p-4 rounded-xl bg-white border transition-all space-y-2.5 ${
+                      isSysSelected ? 'border-purple-400 bg-purple-50/20' : 'border-slate-200 hover:border-slate-300'
                     }`}
                   >
                     <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
-                      <div className="flex items-center gap-2 flex-wrap">
+                      <div className="flex items-center gap-2 flex-wrap text-[11px] text-slate-500 tabular-nums">
                         <input
                           type="checkbox"
                           checked={isSysSelected}
@@ -975,24 +1589,34 @@ export const TasksView: React.FC<TasksViewProps> = ({
                           className="rounded border-slate-300 text-purple-600 focus:ring-purple-500 cursor-pointer shrink-0"
                         />
                         {getSystemPriorityBadge(st.priority)}
-                        {st.due_date && (
-                          <span className="rounded bg-slate-100 px-2 py-0.5 text-[10px] text-slate-600 border border-slate-200 font-medium">
-                            期限: {st.due_date}
+                        {sysCmdMeta && (
+                          <span className="inline-flex items-center gap-1 font-semibold text-slate-700">
+                            {renderCommandIcon(sysCommand, 'w-3 h-3 text-slate-500')}
+                            <span>{sysCmdMeta.shortLabel}</span>
                           </span>
                         )}
+                        {st.due_date && (
+                          <>
+                            <span aria-hidden="true">·</span>
+                            <span>期限: {st.due_date}</span>
+                          </>
+                        )}
                         {st.created_at && (
-                          <span className="text-[10px] text-slate-400">
-                            作成: {new Date(st.created_at).toLocaleString('ja-JP', { year: 'numeric', month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' })}
-                          </span>
+                          <>
+                            <span aria-hidden="true">·</span>
+                            <span>
+                              作成: {new Date(st.created_at).toLocaleString('ja-JP', { year: 'numeric', month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' })}
+                            </span>
+                          </>
                         )}
                       </div>
 
-                      <div className="flex items-center gap-1.5 self-end sm:self-auto">
+                      <div className="flex items-center gap-1.5 self-end sm:self-auto flex-wrap">
                         <button
                           type="button"
                           onClick={() => void handleCompleteSystemTask(st.id)}
                           disabled={completingSystemTaskId === st.id || deletingSystemTaskId === st.id || isBulkDeletingSystemTasks}
-                          className="inline-flex items-center gap-1.5 px-3 py-1 rounded-lg bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-200 text-xs font-semibold cursor-pointer shadow-2xs transition-colors disabled:opacity-50"
+                          className="inline-flex items-center gap-1.5 px-3 py-1 rounded-lg bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-200 text-xs font-semibold cursor-pointer transition-colors disabled:opacity-50"
                           title="このタスクを完了状態に更新します"
                         >
                           {completingSystemTaskId === st.id ? (
@@ -1006,7 +1630,7 @@ export const TasksView: React.FC<TasksViewProps> = ({
                           type="button"
                           onClick={() => setSystemDeleteConfirm({ mode: 'single', ids: [st.id], title: st.title })}
                           disabled={completingSystemTaskId === st.id || deletingSystemTaskId === st.id || isBulkDeletingSystemTasks}
-                          className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200 text-xs font-semibold cursor-pointer shadow-2xs transition-colors disabled:opacity-50"
+                          className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200 text-xs font-semibold cursor-pointer transition-colors disabled:opacity-50"
                           title="この自動起票タスクを削除します"
                         >
                           {deletingSystemTaskId === st.id ? (
@@ -1023,8 +1647,20 @@ export const TasksView: React.FC<TasksViewProps> = ({
                       <h3 className="text-xs sm:text-sm font-bold text-slate-900 leading-snug">
                         {st.title}
                       </h3>
+
+                      {/* 直接実行できる手動操作コマンド */}
+                      <div className="mt-2 flex flex-wrap items-center gap-2">
+                        {renderManualActionButtons({
+                          command: sysCommand,
+                          title: st.title,
+                          description: st.description,
+                          matchedSub,
+                          companyId: st.company_id,
+                        })}
+                      </div>
+
                       {st.description && (
-                        <div className="mt-1.5">
+                        <div className="mt-2">
                           <button
                             type="button"
                             onClick={() => {
@@ -1055,19 +1691,11 @@ export const TasksView: React.FC<TasksViewProps> = ({
               </div>
             )}
           </section>
-          {/* Search & Filter Bar */}
-          <div className="p-4 rounded-2xl bg-white border border-slate-200 shadow-2xs flex flex-wrap items-center gap-3 text-xs">
-            {/* Search input */}
-            <div className="relative flex-1 min-w-[200px]">
-              <Search className="w-3.5 h-3.5 text-slate-400 absolute left-3 top-2.5" />
-              <input
-                type="text"
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                placeholder="タスク名、メモ、担当者で検索..."
-                className="w-full rounded-xl bg-white border border-slate-200 pl-8 pr-3 py-1.5 text-xs text-slate-800 placeholder-slate-400 focus:outline-none focus:border-purple-500 focus:ring-1 focus:ring-purple-500"
-              />
-            </div>
+          {/* 通常・業務タスク（詳細絞り込み） */}
+          <div className="p-4 rounded-xl bg-white border border-slate-200 flex flex-wrap items-center gap-3 text-xs">
+            <span className="text-xs font-bold text-slate-800 mr-1 tabular-nums">
+              業務タスク ({filteredTasks.length} / {tasks.length}件)
+            </span>
 
             {/* Status Filter */}
             <div className="flex items-center gap-1.5">
@@ -1078,11 +1706,8 @@ export const TasksView: React.FC<TasksViewProps> = ({
                 className="rounded-xl bg-white border border-slate-200 px-2.5 py-1.5 text-xs text-slate-700 focus:outline-none focus:border-purple-500 cursor-pointer shadow-2xs"
               >
                 <option value="all">すべて ({tasks.length})</option>
-                <option value="waiting">待機中 ({tasks.filter(t => t.status === 'waiting').length})</option>
-                <option value="in_progress">進行中 ({tasks.filter(t => t.status === 'in_progress').length})</option>
-                <option value="pending_approval">承認待ち ({tasks.filter(t => t.status === 'pending_approval').length})</option>
+                <option value="incomplete">未完了 ({tasks.filter(t => t.status !== 'completed').length})</option>
                 <option value="completed">完了 ({tasks.filter(t => t.status === 'completed').length})</option>
-                <option value="blocked">問題あり ({tasks.filter(t => t.status === 'blocked').length})</option>
               </select>
             </div>
 
@@ -1202,34 +1827,65 @@ export const TasksView: React.FC<TasksViewProps> = ({
             </div>
           )}
 
-          {/* Tasks List */}
-          {filteredTasks.length === 0 ? (
-            <div className="p-10 rounded-2xl bg-white border border-slate-200 text-center space-y-3 shadow-xs">
-              <CheckSquare className="w-8 h-8 text-slate-400 mx-auto" />
-              <h3 className="text-sm font-bold text-slate-800">該当するタスクがありません</h3>
-              <p className="text-xs text-slate-500 max-w-md mx-auto">
-                条件を変更するか、右上の「新規タスクを作成」ボタンからタスクを登録してください。
-              </p>
+          {taskActionNotice && (
+            <div className="rounded-xl border border-purple-200 bg-purple-50 px-3.5 py-2.5 text-xs text-purple-900 flex items-center justify-between gap-2">
+              <span className="font-medium">{taskActionNotice}</span>
               <button
                 type="button"
-                onClick={openCreateModal}
-                className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-purple-600 hover:bg-purple-700 text-white text-xs font-bold transition-all shadow-xs cursor-pointer"
+                onClick={() => setTaskActionNotice(null)}
+                className="p-1 text-purple-500 hover:text-purple-800 cursor-pointer"
+                aria-label="通知を閉じる"
               >
-                <Plus className="w-3.5 h-3.5" />
-                <span>新しいタスクを登録する</span>
+                <X className="w-3.5 h-3.5" />
               </button>
             </div>
+          )}
+
+          {/* Tasks List */}
+          {filteredTasks.length === 0 ? (
+            filteredSystemTasks.length > 0 && (taskFocusMode !== 'all' || manualCommandFilter !== 'all' || searchQuery.trim() !== '') ? (
+              <div className="px-4 py-3 rounded-xl bg-slate-50 border border-slate-200 text-xs text-slate-500 text-center">
+                現在の絞り込み条件に一致する通常・業務タスクはありません（上の「システム自動起票」に表示されています）。
+              </div>
+            ) : (
+              <div className="p-10 rounded-xl bg-white border border-slate-200 text-center space-y-3">
+                <CheckSquare className="w-8 h-8 text-slate-400 mx-auto" />
+                <h3 className="text-sm font-bold text-slate-800">該当するタスクがありません</h3>
+                <p className="text-xs text-slate-500 max-w-md mx-auto">
+                  条件を変更するか、右上の「新規タスクを作成」ボタンからタスクを登録してください。
+                </p>
+                <button
+                  type="button"
+                  onClick={openCreateModal}
+                  className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-purple-600 hover:bg-purple-700 text-white text-xs font-bold transition-all cursor-pointer"
+                >
+                  <Plus className="w-3.5 h-3.5" />
+                  <span>新しいタスクを登録する</span>
+                </button>
+              </div>
+            )
           ) : (
             <div className="space-y-3">
               {filteredTasks.map((task) => {
                 const project = projects.find((p) => p.id === task.projectId);
                 const isTaskSelected = selectedTaskIds.includes(task.id);
+                const wsCommand = classifyWorkspaceTaskCommand(task);
+                const wsCmdMeta = getManualCommandOption(wsCommand);
+                const wsMatchedSub =
+                  wsCommand === 'generate_diagnosis_report' || wsCommand === 'reply_consultation' || wsCommand === 'material_and_contract'
+                    ? findMatchingSubmissionForTask({
+                        workspaceTask: task,
+                        submissions: diagnosisSubmissions,
+                        diagnosisFormIds,
+                        preferDiagnosisOnly: wsCommand === 'generate_diagnosis_report',
+                      })
+                    : null;
 
                 return (
                   <div
                     key={task.id}
-                    className={`p-4 sm:p-5 rounded-2xl bg-white border transition-all space-y-3 shadow-xs group ${
-                      isTaskSelected ? 'border-purple-400 bg-purple-50/20' : 'border-slate-200 hover:border-purple-300'
+                    className={`p-4 sm:p-5 rounded-xl bg-white border transition-all space-y-3 group ${
+                      isTaskSelected ? 'border-purple-400 bg-purple-50/20' : 'border-slate-200 hover:border-slate-300'
                     }`}
                   >
                     {/* Header Row */}
@@ -1250,39 +1906,44 @@ export const TasksView: React.FC<TasksViewProps> = ({
                         />
                         {getStatusBadge(task.status)}
                         {getAssigneeBadge(task.assignee)}
-                        <span className="rounded bg-slate-100 px-2 py-0.5 text-[10px] text-slate-600 border border-slate-200 font-medium">
+                        {wsCmdMeta && (
+                          <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-slate-700">
+                            {renderCommandIcon(wsCommand!, 'w-3 h-3 text-slate-500')}
+                            <span>{wsCmdMeta.shortLabel}</span>
+                          </span>
+                        )}
+                        <span className="text-[11px] text-slate-500">
                           {TASK_WORK_AREAS.find((item) => item.value === (task.workArea || 'project'))?.label || 'プロジェクト'}
-                        </span>
-                        <span className="rounded bg-slate-100 px-2 py-0.5 text-[10px] text-slate-600 border border-slate-200 font-medium">
+                          {' · '}
                           {TASK_KINDS.find((item) => item.value === (task.taskKind || 'response'))?.label || '対応'}
                         </span>
                         {task.dueDate && (
-                          <span className={`rounded px-2 py-0.5 text-[10px] font-semibold ${
+                          <span className={`text-[11px] font-semibold tabular-nums ${
                             task.dueDate < todayJst() && task.status !== 'completed'
-                              ? 'bg-rose-50 text-rose-700 border border-rose-200'
-                              : 'bg-slate-100 text-slate-600 border border-slate-200'
+                              ? 'text-rose-700'
+                              : 'text-slate-500'
                           }`}>
                             期限: {task.dueDate}
                           </span>
                         )}
                         {task.relatedRecord?.label && (
-                          <span className="rounded bg-purple-50 text-purple-700 border border-purple-200 px-2 py-0.5 text-[10px] font-medium">
+                          <span className="text-[11px] font-medium text-purple-700">
                             関連: {task.relatedRecord.label}
                           </span>
                         )}
                         <span
-                          className={`px-2 py-0.5 rounded text-[10px] font-bold ${
+                          className={`text-[11px] font-bold ${
                             task.priority === 'high'
-                              ? 'bg-rose-50 text-rose-700 border border-rose-200'
+                              ? 'text-rose-700'
                               : task.priority === 'medium'
-                              ? 'bg-amber-50 text-amber-700 border border-amber-200'
-                              : 'bg-slate-100 text-slate-600 border border-slate-200'
+                              ? 'text-amber-700'
+                              : 'text-slate-500'
                           }`}
                         >
                           優先度: {task.priority === 'high' ? '高' : task.priority === 'medium' ? '中' : '低'}
                         </span>
                         {project && (
-                          <span className="text-[11px] text-slate-600 flex items-center gap-1 bg-slate-50 px-2 py-0.5 rounded border border-slate-200 font-medium">
+                          <span className="text-[11px] text-slate-600 flex items-center gap-1 font-medium">
                             <Briefcase className="w-3 h-3 text-purple-600" />
                             {project.name}
                           </span>
@@ -1353,6 +2014,21 @@ export const TasksView: React.FC<TasksViewProps> = ({
                           {task.description}
                         </p>
                       )}
+                      {wsCommand && wsCommand !== 'general_manual' && (
+                        <div className="mt-2.5 flex flex-wrap items-center gap-2">
+                          {renderManualActionButtons({
+                            command: wsCommand,
+                            title: task.title,
+                            description: task.description,
+                            matchedSub: wsMatchedSub,
+                            companyId:
+                              task.relatedRecord?.type === 'company' || task.relatedRecord?.type === 'customer'
+                                ? task.relatedRecord.id
+                                : undefined,
+                            leadId: task.relatedRecord?.type === 'lead' ? task.relatedRecord.id : undefined,
+                          })}
+                        </div>
+                      )}
                       {task.assignee.type === 'external_ai' && (
                         <div className="mt-2 flex flex-wrap items-center gap-2">
                           <button
@@ -1368,14 +2044,26 @@ export const TasksView: React.FC<TasksViewProps> = ({
                       )}
                       {task.draftArtifact && expandedDraftTaskIds.has(task.id) && (
                         <section className="mt-3 rounded-xl border border-purple-200 bg-purple-50/30 overflow-hidden">
-                          <div className="px-3 py-2 border-b border-purple-200 text-xs font-bold text-purple-900">
-                            レビュー用成果物（承認前）
+                          <div className="px-3 py-2 border-b border-purple-200 flex items-center justify-between gap-2">
+                            <span className="text-xs font-bold text-purple-900">AI作成の成果物</span>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                void navigator.clipboard.writeText(task.draftArtifact?.content || '');
+                                setCopiedDraftTaskId(task.id);
+                                window.setTimeout(() => setCopiedDraftTaskId((prev) => (prev === task.id ? null : prev)), 2000);
+                              }}
+                              className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-white hover:bg-purple-50 text-[11px] font-semibold text-purple-700 border border-purple-200 cursor-pointer"
+                            >
+                              <ClipboardCopy className="w-3 h-3" />
+                              <span>{copiedDraftTaskId === task.id ? 'コピー済み' : '内容をコピー'}</span>
+                            </button>
                           </div>
                           <div className="max-h-[520px] overflow-y-auto p-4 text-sm text-slate-800 bg-white font-mono whitespace-pre-wrap break-words">
                             {task.draftArtifact.content}
                           </div>
-                          <p className="px-3 py-2 border-t border-purple-100 text-[11px] text-slate-500">
-                            承認画面で確認・承認するとナレッジに登録されます。
+                          <p className="px-3 py-2 border-t border-purple-100 text-[11px] text-slate-600">
+                            内容を確認し、問題なければ「完了にする」を押してください（完了時にナレッジへ自動保存されます）。
                           </p>
                         </section>
                       )}
@@ -1434,62 +2122,59 @@ export const TasksView: React.FC<TasksViewProps> = ({
                       </div>
                     )}
 
-                    {/* Bottom Quick Status Transition Buttons */}
+                    {/* Bottom Actions: Manual AI Request (+ Immediate Stop) & 1-Click Completion */}
                     <div className="flex flex-wrap items-center justify-between gap-2 pt-2 border-t border-slate-100 text-xs">
-                      <span className="text-[11px] text-slate-400">
+                      <span className="text-[11px] text-slate-400 tabular-nums">
                         更新: {new Date(task.updatedAt).toLocaleString('ja-JP', { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' })}
                       </span>
 
                       <div className="flex items-center gap-1.5 flex-wrap">
-                        <span className="text-[11px] text-slate-400 mr-1">状態変更:</span>
-                        {task.status !== 'pending_approval' && (task.assignee.type === 'role_ai' || task.assignee.type === 'ai_ceo' || task.assignee.type === 'custom_ai') && (
+                        {task.status !== 'completed' ? (
+                          <>
+                            {(task.assignee.type === 'role_ai' || task.assignee.type === 'ai_ceo' || task.assignee.type === 'custom_ai') && (
+                              runningTaskIds.has(task.id) ? (
+                                <>
+                                  <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-lg bg-purple-50 text-purple-800 border border-purple-200 text-[11px] font-semibold">
+                                    <Loader2 className="w-3 h-3 animate-spin text-purple-600" />
+                                    <span>AIが実行中…</span>
+                                  </span>
+                                  <button
+                                    type="button"
+                                    onClick={() => cancelRunTask(task)}
+                                    className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200 text-[11px] font-semibold cursor-pointer transition-colors"
+                                    title="AIの実行をその場で停止します"
+                                  >
+                                    <Square className="w-3 h-3 fill-current" />
+                                    <span>停止</span>
+                                  </button>
+                                </>
+                              ) : (
+                                <button
+                                  type="button"
+                                  onClick={() => void runTask(task)}
+                                  className="inline-flex items-center gap-1 px-3 py-1 rounded-lg bg-purple-600 hover:bg-purple-700 text-white text-[11px] font-semibold cursor-pointer shadow-2xs transition-colors"
+                                >
+                                  <Bot className="w-3 h-3" />
+                                  <span>{task.draftArtifact ? 'AIに再依頼' : '担当AIに依頼'}</span>
+                                </button>
+                              )
+                            )}
+                            <button
+                              type="button"
+                              onClick={() => handleQuickStatusChange(task, 'completed')}
+                              className="inline-flex items-center gap-1 px-3 py-1 rounded-lg bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-200 text-[11px] font-semibold cursor-pointer transition-colors"
+                            >
+                              <CheckCircle2 className="w-3 h-3 text-emerald-700" />
+                              <span>完了にする</span>
+                            </button>
+                          </>
+                        ) : (
                           <button
                             type="button"
-                            disabled={runningTaskIds.has(task.id)}
-                            onClick={() => void runTask(task)}
-                            className="inline-flex items-center gap-1 px-3 py-1 rounded-lg bg-purple-600 hover:bg-purple-700 disabled:opacity-50 text-white text-[11px] font-semibold cursor-pointer shadow-2xs transition-colors"
+                            onClick={() => handleQuickStatusChange(task, 'waiting')}
+                            className="px-2.5 py-1 rounded-lg bg-slate-50 hover:bg-slate-100 text-slate-600 border border-slate-200 text-[11px] font-medium cursor-pointer transition-colors"
                           >
-                            {runningTaskIds.has(task.id) ? <Loader2 className="w-3 h-3 animate-spin" /> : <Bot className="w-3 h-3" />}
-                            {runningTaskIds.has(task.id) ? '実行中…' : '担当AIに依頼'}
-                          </button>
-                        )}
-                        {task.status !== 'in_progress' && (
-                          <button
-                            type="button"
-                            onClick={() => handleQuickStatusChange(task, 'in_progress')}
-                            className="px-2.5 py-1 rounded-lg bg-blue-50 hover:bg-blue-100 text-blue-700 border border-blue-200 text-[11px] font-semibold cursor-pointer transition-colors"
-                          >
-                            着手 (進行中へ)
-                          </button>
-                        )}
-
-                        {task.status !== 'pending_approval' && task.status !== 'completed' && (
-                          <button
-                            type="button"
-                            onClick={() => handleQuickStatusChange(task, 'pending_approval')}
-                            className="px-2.5 py-1 rounded-lg bg-purple-50 hover:bg-purple-100 text-purple-700 border border-purple-200 text-[11px] font-semibold cursor-pointer transition-colors"
-                          >
-                            承認を申請
-                          </button>
-                        )}
-
-                        {task.status !== 'completed' && (task.assignee.type === 'human' || task.assignee.type === 'external_ai') && (
-                          <button
-                            type="button"
-                            onClick={() => handleQuickStatusChange(task, 'completed')}
-                            className="px-2.5 py-1 rounded-lg bg-emerald-50 hover:bg-emerald-100 text-emerald-700 border border-emerald-200 text-[11px] font-semibold cursor-pointer transition-colors"
-                          >
-                            完了にする
-                          </button>
-                        )}
-
-                        {task.status !== 'blocked' && (
-                          <button
-                            type="button"
-                            onClick={() => handleQuickStatusChange(task, 'blocked')}
-                            className="px-2.5 py-1 rounded-lg bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200 text-[11px] font-semibold cursor-pointer transition-colors"
-                          >
-                            問題あり
+                            未完了に戻す
                           </button>
                         )}
                       </div>
@@ -1633,15 +2318,12 @@ export const TasksView: React.FC<TasksViewProps> = ({
                         状態
                       </label>
                       <select
-                        value={status}
+                        value={status === 'completed' ? 'completed' : 'waiting'}
                         onChange={(e) => setStatus(e.target.value as TaskStatus)}
                         className="w-full rounded-xl bg-white border border-slate-200 px-3 py-2 text-xs text-slate-800 focus:outline-none focus:border-purple-500 cursor-pointer shadow-2xs"
                       >
-                        <option value="waiting">待機中</option>
-                        <option value="in_progress">進行中</option>
-                        <option value="pending_approval">承認待ち</option>
+                        <option value="waiting">未完了</option>
                         <option value="completed">完了</option>
-                        <option value="blocked">問題あり</option>
                       </select>
                     </div>
                   </div>
